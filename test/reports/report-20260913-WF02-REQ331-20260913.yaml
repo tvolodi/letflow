@@ -1,0 +1,116 @@
+run_id: WF02-REQ331-20260913
+agent: TEST-RUNNER
+workflow: WF-02 (Requirement Implementation), Step 4 -- Test run
+timestamp_utc: "2026-09-13T06:44:37Z"
+branch: feature/WF02-REQ331-20260913
+head_commit: b628042e9c5fc1256b40e683864a70b24657e548 (pre-commit, this run's own commit follows)
+prior_commit: null
+
+git_state:
+  clean_tree_before_run: false
+  note: >
+    All changes uncommitted at task start: ELIXIR-DEV's implementation of
+    the generic deadline-driven record-transition sweep --
+    lib/letflow/scheduler/record_deadline_sweep.ex (new),
+    lib/letflow/scheduler/poller.ex (modified -- eighth per-tenant sweep
+    added), and TEST-DESIGNER's
+    test/letflow/scheduler/record_deadline_sweep_test.exs (new, 4 tests).
+    Already passed SECURITY-REVIEWER (PASS), REVIEWER (PASS), and
+    TEST-DESIGN-VALIDATOR (PASS, full AC-to-test mapping confirmed, 4/4
+    tests green). This run's own change: none to application/test code --
+    a fresh full-suite run plus this report.
+
+environment:
+  docker_compose: "letflow-postgres-1 and letflow-keycloak-1 already running (docker compose up -d, no-op). No .env LETFLOW_DB_PORT override present; default port 5462 in effect."
+
+backend_suite:
+  command: "scripts/test_parallel.sh"
+  partitions: 16
+  parallelism_source: "N=16 (source: nproc)"
+  result: "PASS -- clean on first run, no failures, no flakes observed."
+  output: |
+    test_parallel: N=16 (source: nproc)
+    test_parallel: pre-compiling MIX_ENV=test (single compile, before any partition launches)
+    test_parallel: TEST_POOL_SIZE=5 (computed: N=16, max_connections=100, superuser_reserved=3, headroom=10, nonpool_reserve=5)
+    test_parallel: seeding 16 per-partition build paths from _build/test (sequential)
+    partition 1: 235 tests, 0 properties, 0 failures, exit 0
+    partition 2: 233 tests, 0 properties, 0 failures, exit 0
+    partition 3: 296 tests, 2 properties, 0 failures, exit 0
+    partition 4: 314 tests, 2 properties, 0 failures, exit 0
+    partition 5: 306 tests, 0 properties, 0 failures, exit 0
+    partition 6: 222 tests, 0 properties, 0 failures, exit 0
+    partition 7: 353 tests, 0 properties, 0 failures, exit 0
+    partition 8: 240 tests, 1 property, 0 failures, exit 0
+    partition 9: 161 tests, 0 properties, 0 failures, exit 0
+    partition 10: 275 tests, 0 properties, 0 failures, exit 0
+    partition 11: 234 tests, 0 properties, 0 failures, exit 0
+    partition 12: 146 tests, 0 properties, 0 failures, exit 0
+    partition 13: 347 tests, 0 properties, 0 failures, exit 0
+    partition 14: 216 tests, 0 properties, 0 failures, exit 0
+    partition 15: 245 tests, 1 property, 0 failures, exit 0
+    partition 16: 295 tests, 0 properties, 0 failures, exit 0
+    ---
+    combined: 4118 tests, 6 properties, 0 failures (4124/4124 passed)
+  failures: []
+
+req331_specific_checks:
+  - check: "test/letflow/scheduler/record_deadline_sweep_test.exs's 4 tests, included in the full partition run above"
+    result: "All 4 passed, no failures attributed to this file in any partition. One of the four ('AC-4/AC-9 SKIP LOCKED' describe block) deliberately runs async: false for a real two-connection concurrency race proving FOR UPDATE SKIP LOCKED excludes an already-locked row rather than blocking -- expected and correct per TEST-DESIGN-VALIDATOR's prior sign-off, not a bug."
+
+letflow_check:
+  command: "mix letflow.check"
+  result:
+    exit_code: 0
+    key_lines: |
+      mix letflow.check.test: OK -- isolated :lua_wallclock_race run also passed clean.
+      [exited with code 0]
+  unrelated_noise: >
+    Console output included two pre-existing Elixir type-checker warnings
+    (Letflow.Engine.Wasm.ModuleRegistryTest, lines ~366/370,
+    incompatible-types warnings on deliberately-invalid nil/42 inputs to
+    register/1's FunctionClauseError guard test). These are compiler
+    diagnostics on intentional negative-test inputs, not failures -- exit
+    code 0, no REQ-331 files involved.
+
+tripwire_check:
+  file: "test/letflow/simulation/req207_vortex_test.exs"
+  purpose: >
+    Confirm REQ-331's title ("A generic deadline-driven record transition
+    sweep on the existing Scheduler.Poller -- configured entity type,
+    datetime field and status transition, with no domain vocabulary
+    anywhere in it") against the tripwire's word-bounded regex,
+    ~r/title:.*\bentit(y|ies)\b/i, matched line-by-line against
+    docs/requirements.yaml. The phrase "configured entity type" in the
+    title does match \bentit(y|ies)\b, so this DOES trip the tripwire.
+  finding: >
+    Already handled, on a different, already-merged branch/PR. `git log
+    --all --oneline -- test/letflow/simulation/req207_vortex_test.exs`
+    shows commit 67b861ad "fix(REQ-207): admit REQ-329/REQ-331 to
+    vortex-entity title-regex allowlist" on main (merged via #1325,
+    consistent with chore/REQ331-blocked-20260913). The current working
+    copy of req207_vortex_test.exs (this branch, based on that main) already
+    contains REQ-331 in the unconditional `allowed_ids` MapSet (around line
+    1516), with a full triage comment: REQ-331 is bucket B, a sweep added
+    to the EXISTING lib/letflow/scheduler/poller.ex (no new GenServer, no
+    new supervisor child, no second ticker), touches no
+    lib/letflow/routers/entities.ex route and does not touch
+    POST /entities/query -- the route this scenario's six :gui steps
+    depend on -- so admission is correct and unconditional, not a tier-2
+    (pending_only_ids) case. No action needed by TEST-RUNNER.
+  verification_command: "mix test test/letflow/simulation/req207_vortex_test.exs --no-color (standalone)"
+  result: "Included in the full 16-partition run above; no failures attributed to this file. Not re-run standalone since the full-suite run already covers it clean."
+
+verdict: PASS
+verdict_reasoning: >
+  4124/4124 tests passed across a clean single 16-partition run, first
+  attempt, no flakes observed. mix letflow.check passed with exit code 0
+  on the only run needed. The req207_vortex_test.exs entity-title
+  tripwire does fire on REQ-331's title text, but was already triaged and
+  admitted to allowed_ids on an earlier, already-merged branch (commit
+  67b861ad, PR #1325) -- confirmed present in this branch's working copy
+  of the file, confirmed green in this run's full suite. No test-code or
+  application-code changes were needed from TEST-RUNNER this run.
+next_action: >
+  Report PASS to ORCH along with this run's commit. ORCH handles
+  push/PR; RELEASE-VALIDATOR re-runs the suite independently rather than
+  trusting this report.

@@ -293,3 +293,68 @@ history:
       frontend work. REQ-340/REQ-342/REQ-343 inherit the same gap and
       are blocked in turn. Proceeding to REQ-338 (no dependency on
       REQ-336) while ISS-0648 is queued for its own fix cycle.
+  - req: REQ-338
+    event: done
+    agent: DOC-UPDATER
+    at: "2026-09-13T16:52:43Z"
+    note: >
+      REQ-338 (queue task 634) implemented via FRONTEND-DEV: hand-written
+      candidate exam-taking UI wired to REQ-335's session routes and
+      REQ-333's anti-cheat signal route -- start/eligibility screen
+      (REQ-332's six distinct eligibility errors rendered as distinct
+      translated messages), an in-progress screen with autosave-on-answer
+      via saveAnswer and a countdown re-anchored to the server's
+      remaining_seconds on every save response (never a free-running
+      client timer), a submit/result screen distinguishing a
+      grading_pending state (never a numeric score) from a fully-graded
+      result, and anti-cheat signal wiring for all three signal types
+      (tab_switch/visibilitychange, blur, fullscreen_exit/fullscreenchange)
+      via reportEvent, handling all three server responses (log/warn/
+      submit -- an auto-submit response transitions to the result view
+      using the server's own response and tears down the listeners).
+
+      AMBIGUITY ESCAPE (assignment question): chose option (a) -- the exam
+      list screen lists every exam whose status is active, matching
+      check_assigned/3's current documented no-op honestly, with
+      prominent provisional-pending-decision-record copy rendered in the
+      list screen (proven by test). Quoting lib/letflow/exam/session.ex's
+      own moduledoc FINDING section as the basis: "No `exam_assignment`
+      entity exists anywhere in this tenant's schema... authoring a new
+      entity definition here would be out of ELIXIR-DEV's/this
+      requirement's scope..., so `check_assigned/3` below is a documented
+      no-op -- every candidate is currently treated as assigned."
+
+      SCOPED-OUT GAP, CORRECTLY FILED, NOT PAPERED OVER: short-text
+      question answers cannot be captured at all -- REQ-332's
+      autosave_answer/4 answer_attrs and upsert_answer/6 have no
+      text_answer field anywhere in the write path (session.ex's own
+      saved_answer type and session_answer.json's schema both declare
+      text_answer, but nothing ever writes it). ExamSessionPage correctly
+      shows a "not yet supported" note for short-text questions rather
+      than silently offering a text input that would fail to save. Filed
+      as ISS-0650 (MAJOR, backend gap in REQ-332's write path, not a
+      frontend defect).
+
+      REQ-336 COUPLING DEFECT CAUGHT AND FIXED: RELEASE-VALIDATOR's first
+      pass caught a real structural defect -- REQ-338's own files had an
+      accidental compile-time dependency on REQ-336's (still-blocked,
+      uncommitted) entities.ts and entitiesMessages.ts. FRONTEND-DEV fixed
+      it by making REQ-338 fully self-contained: a self-contained
+      queryExamRecords implementation in web/src/api/exam.ts (no import
+      from entities.ts) and a self-contained locale resolver in
+      web/src/i18n/examMessages.ts (no import from entitiesMessages.ts),
+      proven to compile standalone by temporarily removing REQ-336's files
+      and re-running the build. REVIEWER re-confirmed the fix clean;
+      RELEASE-VALIDATOR gave final PASS.
+
+      Pipeline: FRONTEND-DEV implement -> REVIEWER PASS -> TEST-DESIGNER
+      (confirmed coverage complete, no extension needed) ->
+      TEST-DESIGN-VALIDATOR PASS -> TEST-RUNNER (`npm run check` 550/550
+      green) -> RELEASE-VALIDATOR caught the REQ-336 coupling defect ->
+      FRONTEND-DEV fixed -> REVIEWER re-confirmed clean -> RELEASE-VALIDATOR
+      final PASS.
+
+      docs/requirements.yaml flipped pending -> done. No
+      docs/migration/stage-N-*.md update required by REQ-338's own
+      acceptance criteria -- the stage-10 bucket-C inventory correction is
+      REQ-339's own separate, still-pending scope.

@@ -127,4 +127,9 @@ export const queryKeys = {
     detail: (moduleId: string, version: string) => [...queryKeys.modules.all, 'detail', moduleId, version] as const,
     shares: (moduleId: string) => [...queryKeys.modules.all, 'shares', moduleId] as const,
   },
+
+  exam: {
+    all: ['exam'] as const,
+    session: (sessionId: string) => [...queryKeys.exam.all, 'session', sessionId] as const,
+  },
 }

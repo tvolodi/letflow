@@ -1496,7 +1496,39 @@ defmodule Letflow.Simulation.Req207VortexTest do
           # on S8's :gui-dispatch stub.
           "REQ-326",
           "REQ-327",
-          "REQ-328"
+          "REQ-328",
+          # REQ-329, admitted 2026-09-13 -- same shape as REQ-326/327/328
+          # directly above: bucket A per decision 0022 (description's own
+          # first line: "AUTHORS PACK CONTENT" -- session/session_question/
+          # session_answer/session_event/session_question_score entity
+          # definitions), owner REQ-ANALYST, `status: pending` at admission
+          # time. `git diff --name-only` on feature/WF02-REQ329-20260913
+          # confirms the change lands ONLY under
+          # priv/packs/bilimbaga/entity_definitions/ and
+          # test/letflow/packs/bilimbaga_entity_definitions_test.exs -- no
+          # lib/letflow/routers/, no lib/letflow/entities/, no
+          # lib/letflow/api/, no route added to or removed from
+          # Letflow.Routers.Entities. Does not mount, extend or read
+          # through any HTTP route this scenario's six :gui steps depend
+          # on. Disposition unaffected: still BLOCKED_ON_DEPENDENCY on S8's
+          # :gui-dispatch stub.
+          "REQ-329",
+          # REQ-331, admitted 2026-09-13, unconditionally rather than via
+          # the pending-only tier -- unlike REQ-310/311, this one does NOT
+          # build the entity HTTP surface even once it lands. Bucket B: a
+          # generic deadline-driven record-transition sweep added to the
+          # EXISTING lib/letflow/scheduler/poller.ex (own acceptance
+          # criteria: "no new GenServer module, no new supervisor child, no
+          # second ticker"). It writes through Letflow.Entities.Records'
+          # existing transactional contract but mounts no route, extends no
+          # route, and does not touch Letflow.Routers.Entities or
+          # POST /entities/query -- the route this scenario's six :gui
+          # steps depend on. `status: pending` at admission time (also
+          # `depends_on: [REQ-330]`), same basis as REQ-309's precedent
+          # above ("shipped permission vocabulary only, which its own scope
+          # fence confirms builds no route"). Disposition unaffected either
+          # way -- still BLOCKED_ON_DEPENDENCY on S8's :gui-dispatch stub.
+          "REQ-331"
         ])
 
       # SECOND-TIER ALLOWLIST -- admitted ONLY WHILE `status: pending`.

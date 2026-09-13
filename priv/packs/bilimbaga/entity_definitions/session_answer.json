@@ -1,0 +1,62 @@
+{
+  "name": "session_answer",
+  "display_name": "Session Answer",
+  "description": "FR-BB36 AC-5 -- ports session_answers from c:\\Users\\tvolo\\dev\\ai-dala\\BilimBaga\\backend\\migrations\\015_session_tables.up.sql. Product spec: corporate_exam_platform_roadmap.md section 3.6. FIELD-LEVEL NOTES. session_id is :string, queried: true, required: true, foreign_keys entry fk_session_answer_session_id against session. question_id is :string, queried: true, required: true, foreign_keys entry fk_session_answer_question_id against question. selected_option_ids is :json, queried: false, required: false -- an array of selected option UUIDs; Rule 3 forbids a :json field being queried and nothing needs to filter on it. text_answer is :string, queried: false, required: false (source nullable TEXT) -- this is a candidate's own free-text answer, NOT localized content: it is not authored prose meant to be shown in multiple locales, it is a per-answer string keyed to one candidate's submission, so :string is correct here and :localized_text is not, unlike question.stem or exam.title. saved_at is :datetime, queried: false, required: true (source DEFAULT NOW()). time_spent_seconds is :integer, queried: false, required: true (source DEFAULT 0, CHECK time_spent_seconds >= 0, relocated below). CONSTRAINT: constraints entry uq_session_answer_session_id_question_id, type unique, over (session_id, question_id) -- this expresses the source's UNIQUE (session_id, question_id), which is the upsert key the source's SaveAnswer path relies on to overwrite a candidate's prior answer to the same question rather than duplicate a row; it also matches the composite-natural-key convention REQ-326/REQ-327 established, though here the source itself used UNIQUE rather than a composite PK. ON DELETE: session_id's FK is CASCADE in the source and RESTRICT in Letflow (ddl.ex:675, decision 0025) -- a divergence; question_id's FK is RESTRICT in the source already, so Letflow's fixed RESTRICT matches. Both rows are in the seven-row table in README-constraints.md. OMISSIONS. No id, created_at or updated_at field is declared, for the usual cross-subsystem reason. No created_by field is declared -- the source table has none; the answering candidate is already session_id -> session.user_id, and the event stream's actor_id answers who wrote this specific record. CONSTRAINTS NOT EXPRESSIBLE HERE: the source's time_spent_seconds CHECK (time_spent_seconds >= 0) is relocated to README-constraints.md with what is lost by relocating it. TIMESTAMPTZ: saved_at was TIMESTAMPTZ in the source; ddl.ex:318 maps :datetime to timestamp(6) without time zone, dropping the offset -- recorded in README-constraints.md alongside the other datetime columns; saved_at does not carry the same correctness stakes as session.expires_at, but the mapping is identical and is recorded there rather than treated as a separate note.",
+  "fields": [
+    {
+      "name": "session_id",
+      "type": "string",
+      "queried": true,
+      "required": true
+    },
+    {
+      "name": "question_id",
+      "type": "string",
+      "queried": true,
+      "required": true
+    },
+    {
+      "name": "selected_option_ids",
+      "type": "json",
+      "queried": false,
+      "required": false
+    },
+    {
+      "name": "text_answer",
+      "type": "string",
+      "queried": false,
+      "required": false
+    },
+    {
+      "name": "saved_at",
+      "type": "datetime",
+      "queried": false,
+      "required": true
+    },
+    {
+      "name": "time_spent_seconds",
+      "type": "integer",
+      "queried": false,
+      "required": true
+    }
+  ],
+  "foreign_keys": [
+    {
+      "name": "fk_session_answer_session_id",
+      "field": "session_id",
+      "references_entity": "session"
+    },
+    {
+      "name": "fk_session_answer_question_id",
+      "field": "question_id",
+      "references_entity": "question"
+    }
+  ],
+  "constraints": [
+    {
+      "name": "uq_session_answer_session_id_question_id",
+      "type": "unique",
+      "fields": ["session_id", "question_id"]
+    }
+  ]
+}

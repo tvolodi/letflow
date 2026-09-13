@@ -1,0 +1,117 @@
+run_id: WF02-REQ329-20260913
+agent: TEST-RUNNER
+workflow: WF-02 (Requirement Implementation), Step 4 -- Test run
+timestamp_utc: "2026-09-13T04:56:24Z"
+branch: feature/WF02-REQ329-20260913
+head_commit: c4bcdcdd (pre-commit, this run's own commit follows)
+prior_commit: null
+
+git_state:
+  clean_tree_before_run: false
+  note: >
+    All changes uncommitted at task start: ELIXIR-DEV's five new REQ-329
+    entity-definition JSON files plus the updated
+    README-constraints.md, TEST-DESIGNER's extended
+    test/letflow/packs/bilimbaga_entity_definitions_test.exs, and ORCH's
+    own direct fix to test/letflow/simulation/req207_vortex_test.exs
+    (triaging REQ-329 and REQ-331 into the tripwire's allowed_ids).
+    Already passed REVIEWER (PASS) and TEST-DESIGN-VALIDATOR (PASS after
+    one rework round on the moduledoc). This run's own change: reformatted
+    bilimbaga_entity_definitions_test.exs with `mix format` to satisfy
+    `mix format --check-formatted` (see format_fix below) -- no
+    assertion/logic content changed, confirmed by diff.
+
+format_fix:
+  finding: >
+    First `mix letflow.check` run failed at the `mix format
+    --check-formatted` gate: the "none of the three declares a field
+    named id" test's `for filename <- [...]` list literal in
+    test/letflow/packs/bilimbaga_entity_definitions_test.exs was written
+    on one long line exceeding the formatter's line-length rule.
+  action_taken: "Ran `mix format test/letflow/packs/bilimbaga_entity_definitions_test.exs`. Diffed the result against the pre-format working tree: only whitespace/line-wrapping changed (the for-loop's list literal wrapped to 3 lines plus a blank line), no assertion or logic text touched."
+  verification: "Second `mix letflow.check` run passed the format gate with no complaint."
+
+environment:
+  docker_compose: "letflow-postgres-1 and letflow-keycloak-1 already running (docker compose up -d, no-op). No .env LETFLOW_DB_PORT override present; default port 5462 in effect."
+
+backend_suite:
+  command: "scripts/test_parallel.sh"
+  partitions: 16
+  parallelism_source: "N=16 (source: nproc)"
+  result: "PASS -- clean on first run, no failures, no flakes observed (the ISS-0224 ColumnPromotionTest/ServiceCatalogTest pattern named in the briefing did not recur this run)."
+  output: |
+    test_parallel: N=16 (source: nproc)
+    test_parallel: pre-compiling MIX_ENV=test (single compile, before any partition launches)
+    test_parallel: TEST_POOL_SIZE=5 (computed: N=16, max_connections=100, superuser_reserved=3, headroom=10, nonpool_reserve=5)
+    test_parallel: seeding 16 per-partition build paths from _build/test (sequential)
+    partition 1: 241 tests, 0 properties, 0 failures, exit 0
+    partition 2: 240 tests, 0 properties, 0 failures, exit 0
+    partition 3: 285 tests, 4 properties, 0 failures, exit 0
+    partition 4: 326 tests, 0 properties, 0 failures, exit 0
+    partition 5: 303 tests, 0 properties, 0 failures, exit 0
+    partition 6: 252 tests, 0 properties, 0 failures, exit 0
+    partition 7: 302 tests, 0 properties, 0 failures, exit 0
+    partition 8: 249 tests, 1 property, 0 failures, exit 0
+    partition 9: 208 tests, 0 properties, 0 failures, exit 0
+    partition 10: 267 tests, 0 properties, 0 failures, exit 0
+    partition 11: 199 tests, 0 properties, 0 failures, exit 0
+    partition 12: 162 tests, 0 properties, 0 failures, exit 0
+    partition 13: 342 tests, 0 properties, 0 failures, exit 0
+    partition 14: 237 tests, 1 property, 0 failures, exit 0
+    partition 15: 226 tests, 0 properties, 0 failures, exit 0
+    partition 16: 275 tests, 0 properties, 0 failures, exit 0
+    ---
+    combined: 4114 tests, 6 properties, 0 failures (4120/4120 passed)
+  failures: []
+
+tripwire_check:
+  file: "test/letflow/simulation/req207_vortex_test.exs"
+  purpose: "ORCH already triaged REQ-329 and REQ-331 into allowed_ids directly (both real, live, currently-necessary fixes -- not re-derived by this agent)."
+  command: "mix test test/letflow/simulation/req207_vortex_test.exs --no-color (standalone, isolated)"
+  result: "Result: 4 passed (0 failures) -- confirmed green, no changes needed."
+
+letflow_check:
+  command: "mix letflow.check"
+  first_run: "FAILED at mix format --check-formatted gate on test/letflow/packs/bilimbaga_entity_definitions_test.exs (see format_fix above)."
+  second_run:
+    exit_code: 0
+    result: "PASS -- all gates green, including its own internal full-suite run."
+    key_lines: |
+      letflow.lint_handoffs: OK -- 0 new violations across 2486 handoff files under "handoffs" (25 pre-existing grandfathered, traced to ISS-0190).
+      letflow.check_async_sandbox_reachability: OK -- 78 async:true test file(s) scanned under "test", 0 reach Sandbox.mode/2 (0 permitted, verified exceptions), 0 new violations.
+      letflow.check_issue_refs -- 327 file(s) under docs/issues/: OK -- every cross-reference is prefixed and well-formed.
+      combined: 4114 tests, 6 properties, 0 failures (4120/4120 passed)
+      mix letflow.check.test: OK -- no test failures, no ISS-0069 warnings (16 partitions).
+      mix letflow.check.test: OK -- 5/5 isolated wasm_hang tests passed, each in its own subprocess.
+      mix letflow.check.test: OK -- isolated :lua_wallclock_race run also passed clean.
+  unrelated_noise: >
+    Second run's console output included pre-existing Elixir type-checker
+    warnings (Letflow.Engine.Wasm.ModuleRegistryTest, lines ~366/370,
+    incompatible-types warnings on deliberately-invalid test inputs to
+    register/1's FunctionClauseError guard). These are compiler
+    diagnostics on intentional negative-test inputs, not failures --
+    exit code 0, no REQ-329 files involved.
+
+req329_specific_checks:
+  - check: "priv/packs/bilimbaga/entity_definitions/{session,session_question,session_answer,session_event,session_question_score}.json load and validate via the real Letflow.Entities.Definition.Validator (not mocked)"
+    result: "Covered by test/letflow/packs/bilimbaga_entity_definitions_test.exs, included in the full partition run above, no failures attributed."
+  - check: "session.status enum shape, session.expires_at queried:true, session_question/session_answer/session_question_score natural-key unique constraints, session_event naming and event_type enum"
+    result: "All covered by TEST-DESIGNER's REQ-329-specific describe blocks in the same file; all passed."
+  - check: "Letflow.Simulation.Req207VortexTest tripwire stayed green after ORCH's direct allowed_ids fix"
+    result: "PASS, 4/4 (see tripwire_check above)."
+
+verdict: PASS
+verdict_reasoning: >
+  4120/4120 tests passed across a clean single 16-partition run, with no
+  flakes observed at all (the known ISS-0224 ColumnPromotionTest/
+  ServiceCatalogTest pattern did not recur, so no isolation re-run was
+  needed for it). mix letflow.check failed once on a pure formatting
+  issue in the test file (line-length in a list literal), fixed with
+  `mix format` and confirmed content-neutral by diff; the second run
+  passed every gate including its own internal full-suite re-run. The
+  req207_vortex_test.exs tripwire, already fixed directly by ORCH before
+  this run, was independently confirmed green (4/4) rather than assumed.
+next_action: >
+  Report PASS to ORCH, including the head commit this run adds. ORCH
+  handles push/PR; RELEASE-VALIDATOR re-runs the suite independently
+  rather than trusting this report.

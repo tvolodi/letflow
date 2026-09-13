@@ -193,3 +193,115 @@ process-definition requirement that follows in S10 P2.
 `docs/anti-patterns.md`'s "Modelling many-to-many as an array of references on the
 parent record" entry. The `NOT NULL DEFAULT '[]'` behaviour has no analogue in the
 join shape and needs none — the absence of join rows *is* the empty set.
+
+## REQ-329 additions — live-session entities (`session`, `session_question`, `session_answer`, `session_event`, `session_question_score`)
+
+Everything below relocates or records constraints from the three live-session source
+migrations:
+
+- `c:\Users\tvolo\dev\ai-dala\BilimBaga\backend\migrations\014_exam_sessions.up.sql`
+  (FR-BB35, `exam_sessions` and `session_questions`)
+- `c:\Users\tvolo\dev\ai-dala\BilimBaga\backend\migrations\015_session_tables.up.sql`
+  (FR-BB36, the AC-2 reshape of `session_questions`, `session_answers`,
+  `tab_switch_events`)
+- `c:\Users\tvolo\dev\ai-dala\BilimBaga\backend\migrations\016_session_question_scores.up.sql`
+  (FR-BB311, `session_question_scores`)
+
+The same governing fact from the sections above applies: `Letflow.Entities.Definition`'s
+`constraint_def` only accepts `type: :unique`, there is no `check_def`, and `field_def`
+has no range/bound attribute — so every source `CHECK` below has no storage-layer
+expression in Letflow and is relocated here explicitly instead of being dropped
+silently.
+
+### Relocated `CHECK` constraints
+
+| Source | Verbatim | Entity type | Field |
+|---|---|---|---|
+| `015` :8-9 | `CONSTRAINT exam_sessions_score_range CHECK (score_pct IS NULL OR score_pct BETWEEN 0 AND 100)` | `session` | `score_pct` |
+| `015` :12-13 | `CONSTRAINT exam_sessions_expires_after_start CHECK (expires_at > started_at)` | `session` | `expires_at` / `started_at` (two-column comparison) |
+| `014` :29 | `sort_order INT NOT NULL CHECK (sort_order >= 0)` | `session_question` | `sort_order` |
+| `015` :57 | `time_spent_seconds INT NOT NULL DEFAULT 0 CHECK (time_spent_seconds >= 0)` | `session_answer` | `time_spent_seconds` |
+
+Same loss as recorded above for the exam-configuration constraints, stated again
+because it applies identically here: nothing in the storage layer will reject a
+negative `time_spent_seconds`, a `score_pct` of `500`, a negative `sort_order`, or an
+`expires_at` earlier than `started_at`, on a record written directly through the
+record API. `exam_sessions_expires_after_start` is a two-column comparison, same shape
+as `exams_availability_check` above, and inexpressible for the same reason. These
+relocate to the form-schema / `Expr` layer (REQ-291/REQ-292/REQ-293) if and when a
+form-driven write path exists for sessions; until then the gap is real, not covered.
+
+### ON DELETE — all seven foreign keys across the five documents
+
+`Letflow.Entities.Definition`'s `fk_def` (`lib/letflow/entities/definition.ex`) has no
+`on_delete` key at all — its keys are `name`, `field`, `references_entity` and optional
+`references_field`. `lib/letflow/entities/definition/ddl.ex:675` emits a fixed,
+unconditional `ON DELETE RESTRICT` on every promoted FK column, per decision
+`0025` sub-question 1. RESTRICT is therefore not something Letflow might fail to
+express — it is the *only* behaviour Letflow can produce, and the only question per FK
+is which source behaviour it thereby diverges from.
+
+| # | FK | Source ON DELETE | Letflow ON DELETE | Result |
+|---|---|---|---|---|
+| 1 | `session.exam_id` | CASCADE | RESTRICT (fixed) | **DIVERGES** |
+| 2 | `session.user_id` | CASCADE | *(no `fk_def` — identity subsystem, unreachable)* | no Letflow FK exists; listed for completeness |
+| 3 | `session_question.session_id` | CASCADE | RESTRICT (fixed) | **DIVERGES** |
+| 4 | `session_question.question_id` | RESTRICT (changed from CASCADE by `015` AC-2) | RESTRICT (fixed) | MATCHES |
+| 5 | `session_answer.session_id` | CASCADE | RESTRICT (fixed) | **DIVERGES** |
+| 6 | `session_answer.question_id` | RESTRICT | RESTRICT (fixed) | MATCHES |
+| 7 | `session_event.session_id` | CASCADE | RESTRICT (fixed) | **DIVERGES** |
+| 8 | `session_question_score.session_id` | CASCADE | RESTRICT (fixed) | **DIVERGES** |
+| 9 | `session_question_score.question_id` | RESTRICT | RESTRICT (fixed) | MATCHES |
+
+Nine rows total: `session.user_id` (row 2) has no Letflow `fk_def` at all and is listed
+for completeness only, not as an FK. The other eight rows are the eight real `fk_def`s
+declared across the five documents' `foreign_keys` arrays — `session` declares 1
+(`exam_id`), `session_question` declares 2, `session_answer` declares 2, `session_event`
+declares 1, `session_question_score` declares 2 (1+2+2+1+2 = 8), of which three MATCH
+(rows 4, 6, 9) and five DIVERGE (rows 1, 3, 5, 7, 8) — the same 3-match/5-diverge split
+the requirement itself states in its description. Note: the acceptance criterion's own
+title calls this "the seven foreign keys," but its body enumerates "THREE FKs MATCH" and
+"FIVE DIVERGE," which is eight, matching the actual count of `fk_def`s in the five
+documents; the "seven" in the title does not match either the requirement's own body
+count or the documents as authored, and is flagged here rather than silently reconciled.
+
+**THIS IS A BEHAVIOURAL LOSS, NOT A COSMETIC ONE.** In the source system, deleting an
+exam **cascaded** its entire session history away: every session, every resolved
+question set, every saved answer, every tab-switch/blur/fullscreen event, and every
+per-question score tied to that exam's sessions was silently removed along with it. In
+Letflow, that same delete is **refused by Postgres** with a foreign-key violation for
+as long as any `session` row still references the exam (and transitively, for as long
+as any `session_question`, `session_answer`, `session_event` or
+`session_question_score` row still references that session) — every one of rows 1, 3,
+5, 7, 8 above is a CASCADE-to-RESTRICT divergence, not just the `exam_id` one. Any
+tenant-facing exam-deletion path must therefore explicitly delete (or otherwise
+retire) the dependent session rows itself, in dependency order, before the exam
+delete will succeed — otherwise the operation simply fails. Naming decision `0025`
+without naming this consequence understates what changed.
+
+### TIMESTAMPTZ → naive `timestamp(6)` — new entry, nothing to inherit
+
+Every `datetime` column across the three source migrations is `TIMESTAMPTZ`:
+`exam_sessions.started_at`, `expires_at`, `submitted_at`, `created_at` (dropped, see
+`session.json`'s OMISSIONS), `session_answers.saved_at`, and
+`tab_switch_events.occurred_at`. `lib/letflow/entities/definition/ddl.ex:318` maps
+Letflow's `:datetime` to `timestamp(6) without time zone` — the UTC/local offset each
+source value carried is dropped on every one of these columns, unconditionally, the
+same way it is dropped for every other `:datetime` field this pack has declared so far.
+
+This is recorded as a new entry because none of REQ-326/REQ-327's documents raised it
+(their `:datetime` fields — `exam.available_from`/`available_until` — did not carry the
+same downstream comparison risk). It matters here in a way it did not there:
+**`session.expires_at` is not a cosmetic loss.** REQ-331's auto-submit sweep compares
+`expires_at` against a computed `now` **across tenants**, on a schedule, without a
+human in the loop. A naive column populated from values written in mixed UTC offsets
+would expire timed sessions early or late relative to the wall-clock deadline the
+candidate was actually given — that is a correctness bug in the exam deadline itself,
+not a display nit anyone would notice and shrug off.
+
+The invariant that keeps the comparison correct, now that the column type itself no
+longer enforces any offset guarantee, must be held by the runtime instead: **every
+`:datetime` value on these five entity types is normalised to UTC before it is written,
+and the sweep's `now` is computed in UTC.** This is a runtime obligation from here on,
+not a storage-layer guarantee — nothing in `ddl.ex` or the entity subsystem will catch
+a value written in local time.

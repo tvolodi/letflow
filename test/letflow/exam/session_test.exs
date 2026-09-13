@@ -753,4 +753,106 @@ defmodule Letflow.Exam.SessionTest do
                Session.get_session_for_user(session_view.id, candidate_id, schema_b)
     end
   end
+
+  # ---------------------------------------------------------------------
+  # ISS-0631 -- session_status_atom/1 (replaces two unsafe
+  # String.to_existing_atom/1 call sites, session.ex:865/911)
+  # ---------------------------------------------------------------------
+
+  describe "ISS-0631 -- session status atom mapping" do
+    test "create/3 on a fresh session maps the persisted \"in_progress\" status to :in_progress" do
+      # Functional regression test for the happy path -- NOT by itself proof
+      # that the fix removed the load-order dependency (every other test in
+      # this suite that touches session status runs in the same BEAM
+      # instance and will already have interned :in_progress regardless of
+      # whether this fix is correct). See the structural test below for the
+      # test that actually proves that property.
+      %{schema_name: schema} = tenant("iss0631-in-progress")
+      %{exam: exam} = build_minimal_exam!(schema)
+
+      assert {:ok, session_view} = Session.create(Ecto.UUID.generate(), exam.record_id, schema)
+      assert session_view.status == :in_progress
+    end
+
+    test "auto_submitted: finalize_expired/3 on a still-open session maps the persisted status to :auto_submitted" do
+      %{schema_name: schema} = tenant("iss0631-auto-submitted")
+      %{exam: exam, questions: [{question_id, correct_id, _wrong}]} = build_minimal_exam!(schema)
+      candidate_id = Ecto.UUID.generate()
+
+      assert {:ok, session_view} = Session.create(candidate_id, exam.record_id, schema)
+
+      assert {:ok, _} =
+               Session.autosave_answer(
+                 session_view.id,
+                 candidate_id,
+                 %{
+                   question_id: question_id,
+                   selected_option_ids: [correct_id],
+                   time_spent_seconds: 5
+                 },
+                 schema
+               )
+
+      deadline = DateTime.utc_now()
+
+      assert {:ok, outcome} = Session.finalize_expired(session_view.id, deadline, schema)
+      assert outcome.status == :auto_submitted
+    end
+
+    test "a corrupted persisted status string raises FunctionClauseError, not ArgumentError" do
+      # Proves the "clear, explicit error" acceptance criterion: seeding a
+      # status the entity definition's enum would never actually produce,
+      # bypassing application-level validation, so get_session_for_user/3
+      # reaches session_status_atom/1 with a string matching none of its
+      # four clauses. Asserting the *specific* exception module is what
+      # distinguishes "fixed" from "still calls String.to_existing_atom" --
+      # both crash on a bad string, only the fixed version raises
+      # FunctionClauseError instead of the opaque ArgumentError the old
+      # to_existing_atom/1 call site produced.
+      %{schema_name: schema} = tenant("iss0631-corrupted-status")
+      %{exam: exam} = build_minimal_exam!(schema)
+      candidate_id = Ecto.UUID.generate()
+
+      assert {:ok, session_view} = Session.create(candidate_id, exam.record_id, schema)
+
+      assert {:ok, session} =
+               Letflow.Entities.Record.Latest.get(session_view.id, "session", schema)
+
+      corrupted_attrs = Map.put(session.field_values, "status", "not_a_real_status")
+
+      # Write directly against the entity_record_latest projection via its
+      # own structural changeset -- Letflow.Entities.Records.update_record/2
+      # enforces the entity definition's JSON-schema enum and would (rightly)
+      # reject this value, so this bypasses that application-level
+      # validation on purpose to seed a row session_status_atom/1 should
+      # never see in a correctly-behaving system.
+      assert {:ok, _} =
+               session
+               |> Letflow.Entities.Record.Latest.update_changeset(%{
+                 field_values: corrupted_attrs
+               })
+               |> Letflow.Repo.update(prefix: schema)
+
+      assert_raise FunctionClauseError, fn ->
+        Session.get_session_for_user(session_view.id, candidate_id, schema)
+      end
+    end
+
+    test "structural: session.ex no longer calls String.to_existing_atom/1 or String.to_atom/1 anywhere" do
+      # This is the only test that can *honestly* prove the load-order
+      # dependency is gone: every runtime test in this suite shares one BEAM
+      # instance, so by the time any of them runs, :in_progress and the
+      # other three status atoms are already interned as a side effect of
+      # earlier tests -- a runtime test cannot distinguish "the fix removed
+      # the dependency" from "the atom happened to already be interned by an
+      # earlier test in the same run." Reading the module's own source text
+      # and asserting neither unsafe conversion appears anywhere proves the
+      # structural change directly, which is *why* the load-order dependency
+      # is gone -- not a stylistic lint.
+      source = File.read!(Path.join(File.cwd!(), "lib/letflow/exam/session.ex"))
+
+      refute source =~ "to_existing_atom"
+      refute source =~ "to_atom("
+    end
+  end
 end

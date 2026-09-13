@@ -169,3 +169,30 @@
 
 
 history:
+  - req: REQ-335
+    event: started
+    agent: ORCH
+    at: "2026-09-13T13:45:15Z"
+    note: >
+      Claimed letflow-queue task 632 (GH#1336, S10 P4, bucket C route
+      surface). Owner ELIXIR-DEV, deliberately deviating from P4's
+      FRONTEND-DEV default per the requirement's own owner-rationale
+      paragraph: the entire deliverable is a new lib/letflow/routers/
+      module plus new lib/letflow/api/authorization.ex permission
+      atoms plus tenant-prefix-scoped calls into lib/letflow/exam/ --
+      none of it touches web/. Build Letflow.Routers.ExamSessions (or
+      a clearer name ELIXIR-DEV settles on), mounted at the normal
+      authenticated /api/v1 forward, NOT decision 0028's
+      unauthenticated capability-handle pattern (a candidate sitting
+      an exam is an authenticated tenant user). Covers exactly session
+      start/autosave/submit/anti-cheat-signal plus a session-state
+      read, delegating to REQ-332's Letflow.Exam.Session and REQ-333's
+      Letflow.Exam.AntiCheat -- no new runtime logic. No CODE-DESIGNER
+      gate (matches REQ-310/311's precedent, route surface over an
+      already-designed shape) UNLESS the is_correct/answer-key
+      redaction open question this requirement flags turns out
+      genuinely undecided, in which case ELIXIR-DEV must stop and
+      escalate to CODE-DESIGNER rather than guess. Explicitly excludes
+      the manual grading-queue admin workflow, adaptive selection, and
+      cross-session history views -- none of their runtimes exist.
+      Dispatching to ELIXIR-DEV.

@@ -26,6 +26,8 @@ import OnboardingResultPage from '@/pages/admin/onboarding/OnboardingResultPage'
 import TenantsPage from '@/pages/admin/tenants/TenantsPage'
 import EditTenantPage from '@/pages/admin/tenants/EditTenantPage'
 import ServicesPage from '@/pages/admin/services/ServicesPage'
+import ExamListPage from '@/pages/exam/ExamListPage'
+import ExamSessionPage from '@/pages/exam/ExamSessionPage'
 
 export const router = createBrowserRouter([
   {
@@ -73,6 +75,8 @@ export const router = createBrowserRouter([
       { path: 'admin/modules', element: <ProcessModulesPage /> },
       { path: 'dlq', element: <DlqPage /> },
       { path: 'webhooks', element: <WebhooksPage /> },
+      { path: 'exam', element: <ExamListPage /> },
+      { path: 'exam/:examId/session', element: <ExamSessionPage /> },
     ],
   },
 ])

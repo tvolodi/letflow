@@ -23781,7 +23781,7 @@ requirements:
     title: Hand-written candidate exam-taking UI -- start, in-progress question flow with autosave and a live countdown, submit, result -- wired to REQ-335's session routes and REQ-333's anti-cheat signal route, with the "which exams can I take" question answered honestly against the current no-op assignment check (S10 P4, bucket C client)
     owner: FRONTEND-DEV
     impl_order: 634  # letflow-queue task id, written back at WF-01 Step 3; depends_on mirrored as real queue edges
-    status: pending
+    status: done
     stage: S10
     description: >
       bucket: C (client) -- explicitly HAND-WRITTEN, not generated, per

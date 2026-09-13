@@ -372,3 +372,100 @@ history:
       reachable by any TASK_WORKER-scoped tenant user, not only exam
       candidates -- broader exposure than REQ-335's own scope, closed
       before shipping.
+  - req: REQ-338
+    event: done
+    agent: DOC-UPDATER
+    at: "2026-09-13T19:27:01Z"
+    note: >
+      REQ-338 (hand-written candidate exam-taking UI -- start screen,
+      in-progress question flow with autosave and server-reanchored
+      countdown, submit, result -- wired to REQ-335's exam-session
+      routes and REQ-333's anti-cheat signal route) implemented on
+      feature/WF02-REQ338-20260914, superseding the abandoned
+      feature/WF02-REQ338-20260913 branch (commit 78e0146e, left
+      unmerged -- its web/src/api/exam.ts, web/src/api/queryKeys.ts and
+      web/src/pages/exam/ExamListPage.tsx were an earlier, CI-failing
+      attempt, since fully rewritten). Delivered: web/src/api/exam.ts
+      (startSession/saveAnswer/submitSession/getSessionState/
+      reportEvent wrapping REQ-335's real routes), web/src/types/exam.ts,
+      web/src/utils/examErrors.ts, web/src/hooks/useAntiCheatSignals.ts
+      (visibilitychange/blur/fullscreenchange -> REQ-333's
+      tab_switch/blur/fullscreen_exit, torn down on unmount/leaving the
+      in-progress screen), web/src/i18n/examMessages.ts +
+      ExamIntlProvider.tsx (kk/ru/en, no hard-coded English, grep-proven),
+      web/src/pages/exam/ExamListPage.tsx and ExamSessionPage.tsx, plus
+      their test suites and the exam.ts/i18n-grep test suites, and the
+      additive exam-only hunks in web/src/router.tsx (two new routes)
+      and web/src/api/queryKeys.ts (the `exam` key group, staged
+      separately from REQ-336's own `entities` key group via `git add
+      -p`, verified via `git diff --cached` before commit).
+
+      Ambiguity escape (this requirement's own mandatory close-out
+      statement): chose OPTION (a) -- list every exam whose status is
+      active, matching check_assigned/3's actual current no-op
+      behaviour honestly, with the list screen's own copy stating
+      PROMINENTLY that this is provisional pending an assignment
+      decision record. Basis, quoted verbatim from
+      lib/letflow/exam/session.ex's moduledoc "FINDING" section: "the
+      'assignment' eligibility check cannot be truthfully implemented
+      ... `check_assigned/3` below is a documented no-op -- every
+      candidate is currently treated as assigned. `:not_assigned`
+      remains declared in `eligibility_error()` for interface-shape
+      fidelity with the design doc, but is unreachable in this
+      implementation." The provisional-pending-decision-record copy
+      rendered in ExamListPage is asserted present by its own test.
+
+      ISS-0650 (MAJOR, queue task 650, GH-1356) discovered and correctly
+      scoped OUT of this requirement while implementing it: REQ-332's
+      Session.autosave_answer/4 and upsert_answer/6 have no
+      text_answer field anywhere in the write path, so a short-text
+      question's answer can never be captured or graded regardless of
+      what a client sends. Confirmed not a frontend gap --
+      ExamSessionPage correctly shows a "not yet supported" note for
+      short-text questions rather than offering a text input that would
+      silently fail to save. Filed as its own backend issue rather than
+      worked around here; REQ-338's own acceptance criteria for
+      grading_pending / short-text handling are satisfied against the
+      backend's actual (incomplete) capability, not a client-side
+      shim.
+
+      REQ-336 coupling defect found and fully fixed across two rounds
+      during this close-out. REQ-336 (generic admin-CRUD engine) and
+      REQ-338 share two files (web/src/router.tsx, web/src/api/
+      queryKeys.ts) plus additions inside web/src/types/api.ts and
+      web/src/api/client.ts that belong to REQ-336 alone -- both
+      requirements' uncommitted work sat in the same working tree after
+      REQ-336 was blocked on ISS-0648 (pack-install unique-constraint
+      gap) and preserved rather than discarded. First close-out attempt
+      committed REQ-338's own new files plus the router.tsx/queryKeys.ts
+      hunks but MISSED that REQ-336 had also added shared-file type/
+      queryKey scaffolding beyond the `entities` key group and a
+      `putWithHeaders` client helper -- a partial fix that would have
+      left REQ-336's own additions half-committed under REQ-338's
+      commit. Reworked: re-diffed the full working tree against main,
+      confirmed via `git diff --cached` that ONLY REQ-338's own new
+      files and the exam-only hunks in router.tsx/queryKeys.ts were
+      staged, then independently verified the result by stripping every
+      REQ-336 file (entities.ts, components/entities/, pages/entities/,
+      entityFieldToFormField.ts, entitiesMessages.ts,
+      EntitiesIntlProvider.tsx, entities-i18n-grep.test.ts,
+      api/__tests__/entities.test.ts) AND REQ-336's own hunks in the two
+      shared files, and confirming REQ-338 builds and its own test
+      suite (`npm run check`) passes standalone against main with
+      REQ-336 entirely absent. REQ-336's own uncommitted work (including
+      its shared-file hunks) was left untouched in the working tree
+      throughout, to resume once ISS-0648 lands.
+
+      Reviewed twice by REVIEWER (once for the implementation, once for
+      the router.tsx/queryKeys.ts decoupling fix) -- both PASS.
+      Independently re-confirmed PASS by REVIEWER after a branch-name
+      collision recovery (the abandoned feature/WF02-REQ338-20260913
+      name from the earlier buggy attempt, superseded here by
+      feature/WF02-REQ338-20260914 since ISS-0648's unrelated fix had
+      been sharing the same working directory in the interim and has
+      since fully merged, confirmed clean on main). TEST-DESIGNER/
+      TEST-DESIGN-VALIDATOR/TEST-RUNNER completed; `npm run check`
+      inside web/ reported 502+48 tests passing. RELEASE-VALIDATOR
+      independently confirmed every acceptance criterion satisfied.
+
+      docs/requirements.yaml flipped pending -> done.

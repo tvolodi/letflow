@@ -530,6 +530,52 @@ history:
       and QueryStateBoundary.
 
       docs/requirements.yaml flipped pending -> done.
+  - req: SCOPE-CHANGE
+    event: done
+    agent: ORCH
+    at: "2026-09-13T21:16:59Z"
+    note: >
+      ISS-0652 (queue task 652, GH#1360) resolved via
+      fix/ISS-0652-20260913 (commit 1e5bff6f). Centralized the fix:
+      wrapped record_id in type(field(...), Ecto.UUID) at all three
+      select sites in Letflow.Entities.Query.Compiler
+      (select_entity_row/1, primary_entity_row_select_dynamic/0,
+      joined_entity_row_select_dynamic/2) -- the same idiom the module
+      already uses elsewhere for schemaless-binding type casts
+      (json_cast_dynamic/2), confirmed by REVIEWER as matching
+      existing precedent rather than introducing a new one. Removed
+      the now-redundant normalise_record_id/1 helper in
+      lib/letflow/routers/entities.ex.
+
+      Confirmed (grep + git log -S) that the normalize_record_id/1
+      helper the issue's own filing named in lib/letflow/exam/session.ex
+      never actually existed in this checkout -- a discrepancy in the
+      issue's own text, not a code defect; session.ex's record_id
+      reads were already fixed for free by the centralized Compiler
+      fix. Survey for other undiscovered copy-pasted workarounds found
+      none in production code, only two test files manually decoding
+      the raw binary, both updated.
+
+      SECURITY-REVIEWER found and confirmed a genuine incidental fix:
+      the same defect had silently broken
+      Letflow.Exam.Session.build_option_states/4's record_id-keyed
+      Map.has_key?/2 lookup against caller-supplied string
+      option_ids -- would have surfaced once answer_option was ever a
+      promoted per-type table. This fix repairs that for free.
+
+      Pipeline: ELIXIR-DEV -> SECURITY-REVIEWER PASS (fast-pass gate,
+      confirmed no tenant-scoping code touched, confirmed the removed
+      helper is behavior-equivalent, confirmed the regression test is
+      genuine by reverting the fix and reproducing 2 failures) ->
+      REVIEWER PASS (confirmed idiom, confirmed the issue-text
+      discrepancy, independently re-ran the workaround survey) ->
+      TEST-RUNNER confirmed a full mix letflow.check run clean except
+      three pre-existing, environment-only failures.
+
+      docs/issues/ISS-0652.yaml flipped open -> resolved (a sibling
+      session filed the docs record for this issue independently,
+      concurrently with this fix; composed at this Step Final rebase
+      rather than overwritten -- see that file's own history).
   - req: REQ-340
     event: done
     agent: DOC-UPDATER

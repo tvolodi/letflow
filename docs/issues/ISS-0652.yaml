@@ -25,12 +25,13 @@ description: >
   precedent. ELIXIR-DEV found the identical exposure in
   Letflow.Exam.Session.upsert_answer/5 (a raw binary record_id from a
   promoted session_answer row crashed Jason.encode!/2 downstream) and
-  applied the SAME fix locally as a private normalize_record_id/1 in
-  session.ex (lines 1060-1063), rather than centralizing it in
-  Compiler.select_entity_row/1 itself, since a central fix was out of
-  ISS-0648's own scope. anti_cheat.ex was checked and confirmed NOT
-  exposed (it only ever reads session.record_id, never a promoted entity
-  type's row directly).
+  believed it had applied the SAME fix locally as a private
+  normalize_record_id/1 in session.ex -- corrected during this issue's
+  own fix cycle: that helper never actually existed in session.ex;
+  session.ex's record_id reads flow through Compiler/Latest output and
+  needed no separate local fix. anti_cheat.ex was checked and confirmed
+  NOT exposed (it only ever reads session.record_id, never a promoted
+  entity type's row directly).
 
   This is now the SECOND independent call site with its own copy-pasted
   fix for what is really one root-cause defect in
@@ -38,15 +39,58 @@ description: >
 
   FIX DIRECTION: centralize the fix in Query.Compiler.select_entity_row/1
   itself (cast record_id to a string there, at the source, matching its
-  own @type entity_row's promise), then remove both now-redundant local
-  normalise_record_id/1 (entities.ex) and normalize_record_id/1
-  (session.ex) helpers, so future consumers of Compiler's output don't
-  need to rediscover and re-patch this same defect a third time (as
-  ISS-0649/ISS-0651 already predict for other row-shape assumptions).
+  own @type entity_row's promise), then remove the now-redundant local
+  normalise_record_id/1 (entities.ex) helper, so future consumers of
+  Compiler's output don't need to rediscover and re-patch this same
+  defect a third time (as ISS-0649/ISS-0651 already predict for other
+  row-shape assumptions).
 affected_files:
   - lib/letflow/entities/query/compiler.ex
   - lib/letflow/routers/entities.ex
-  - lib/letflow/exam/session.ex
 queue_ref: Q-652
 github_ref: GH-1360
-status: open
+status: resolved
+resolved_by: ORCH
+resolved_in_run: fix/ISS-0652-20260913
+resolved_at: "2026-09-13T21:30:00Z"
+resolution_note: >
+  Centralized the fix at the source: wrapped record_id in
+  type(field(...), Ecto.UUID) at all three select sites in
+  Letflow.Entities.Query.Compiler (select_entity_row/1,
+  primary_entity_row_select_dynamic/0, joined_entity_row_select_dynamic/2)
+  -- the same idiom the module already uses elsewhere for schemaless-
+  binding type casts (json_cast_dynamic/2). This matches how
+  Letflow.Entities.Record.Latest's real Ecto schema already auto-casts
+  the same column.
+
+  Removed the now-redundant normalise_record_id/1 helper in
+  lib/letflow/routers/entities.ex; both call sites now read
+  entity_row.record_id directly. Confirmed (grep + git log -S) that
+  the normalize_record_id/1 helper this issue's own description named
+  in lib/letflow/exam/session.ex never actually existed in this
+  checkout -- a discrepancy in the issue's own filing, not a code
+  defect; session.ex's record_id reads were already fixed for free by
+  the centralized Compiler fix.
+
+  Survey for other undiscovered copy-pasted workarounds (grep for
+  select_entity_row, entity_row, Ecto.UUID.load!, and the 16-byte
+  binary pattern): found none in production code, only two test files
+  manually decoding the raw binary for comparison, both updated to
+  assert direct string equality.
+
+  SECURITY-REVIEWER found and confirmed a genuine incidental fix: the
+  same defect had silently broken Letflow.Exam.Session.build_option_states/4's
+  record_id-keyed Map.has_key?/2 lookup against caller-supplied string
+  option_ids -- a bug that would have surfaced once answer_option was
+  ever a promoted per-type table. This fix repairs that for free.
+
+  Pipeline: ELIXIR-DEV -> SECURITY-REVIEWER PASS (fast-pass gate,
+  confirmed no tenant-scoping code touched, confirmed the removed
+  helper is behavior-equivalent, confirmed the regression test is
+  genuine by reverting the fix and reproducing 2 failures) -> REVIEWER
+  PASS (confirmed the Ecto type/2 idiom matches existing precedent in
+  the same module, confirmed the issue-text discrepancy, independently
+  re-ran the workaround survey) -> TEST-RUNNER confirmed a full mix
+  letflow.check run clean except three pre-existing, environment-only
+  failures (two rust-toolchain-absence, one parallel-load tenant
+  contention flake).

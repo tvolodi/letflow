@@ -1,0 +1,56 @@
+{
+  "name": "session_question",
+  "display_name": "Session Question",
+  "description": "FR-BB35 -- ports session_questions from c:\\Users\\tvolo\\dev\\ai-dala\\BilimBaga\\backend\\migrations\\014_exam_sessions.up.sql AS RESHAPED by 015_session_tables.up.sql's AC-2 ALTERs. Product spec: corporate_exam_platform_roadmap.md section 3.6. FIELD-LEVEL NOTES. session_id is :string, queried: true, required: true, foreign_keys entry fk_session_question_session_id against session. question_id is :string, queried: true, required: true, foreign_keys entry fk_session_question_question_id against question. sort_order is :integer, queried: false, required: true (source CHECK sort_order >= 0, relocated -- see below). options_order is :json, queried: false, required: true -- an ordered array of option UUIDs; Rule 3 forbids a :json field being queried and nothing here needs to filter on it. options_order materialises a RESOLVED, SHUFFLED question set fixed at session creation, which combined with session.seed is what makes a session's question order reproducible. question_version_id is :string, queried: false, required: false (source nullable UUID added by 015's ALTER TABLE ADD COLUMN IF NOT EXISTS question_version_id). CONSTRAINT: constraints entry uq_session_question_session_id_question_id, type unique, over (session_id, question_id) -- this expresses 015's composite PRIMARY KEY (session_id, question_id) the convention-compliant way, without declaring a primary key, because the record subsystem already owns record identity; the same convention REQ-326 and REQ-327 established for their own join entities. 015 also DROPPED the surrogate id column and the old UNIQUE (session_id, sort_order), replacing them with this composite PK -- the unique constraint above is the accurate port of the CURRENT (post-015) shape, not of 014's original UNIQUE (session_id, sort_order), which no longer exists in the source. ON DELETE, DELIBERATE SOURCE CHANGE: 015 deliberately changed question_id's FK from ON DELETE CASCADE (014's original) to ON DELETE RESTRICT, so that deleting a question can no longer silently rewrite a sat exam's resolved question set. Letflow reaches the same RESTRICT behaviour for free, because lib/letflow/entities/definition/ddl.ex:675 emits a fixed, unconditional ON DELETE RESTRICT on every promoted FK regardless of what fk_def declares (decision 0025 sub-question 1) -- fk_def itself (lib/letflow/entities/definition.ex) has no on_delete key at all. session_id's FK, by contrast, is CASCADE in the source and RESTRICT in Letflow, a genuine divergence -- see the seven-row ON DELETE table in README-constraints.md, which covers both FKs on this entity type. OMISSIONS. No id, created_at or updated_at field is declared, for the usual cross-subsystem reason: the record subsystem owns identity and the event store owns the timeline. No created_by field is declared -- the source table never had one. CONSTRAINTS NOT EXPRESSIBLE HERE: the source's sort_order CHECK (sort_order >= 0) is relocated to README-constraints.md with what is lost by relocating it. TIMESTAMPTZ: this entity type has no datetime column (options_order is JSON, not a timestamp), so the TIMESTAMPTZ-to-naive divergence recorded in README-constraints.md does not apply here; it is listed there against the four other documents' datetime columns.",
+  "fields": [
+    {
+      "name": "session_id",
+      "type": "string",
+      "queried": true,
+      "required": true
+    },
+    {
+      "name": "question_id",
+      "type": "string",
+      "queried": true,
+      "required": true
+    },
+    {
+      "name": "sort_order",
+      "type": "integer",
+      "queried": false,
+      "required": true
+    },
+    {
+      "name": "options_order",
+      "type": "json",
+      "queried": false,
+      "required": true
+    },
+    {
+      "name": "question_version_id",
+      "type": "string",
+      "queried": false,
+      "required": false
+    }
+  ],
+  "foreign_keys": [
+    {
+      "name": "fk_session_question_session_id",
+      "field": "session_id",
+      "references_entity": "session"
+    },
+    {
+      "name": "fk_session_question_question_id",
+      "field": "question_id",
+      "references_entity": "question"
+    }
+  ],
+  "constraints": [
+    {
+      "name": "uq_session_question_session_id_question_id",
+      "type": "unique",
+      "fields": ["session_id", "question_id"]
+    }
+  ]
+}

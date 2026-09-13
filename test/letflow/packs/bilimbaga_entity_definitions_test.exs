@@ -1,7 +1,9 @@
 defmodule Letflow.Packs.BilimbagaEntityDefinitionsTest do
   @moduledoc """
-  Verifies the five bucket-A entity-definition documents authored under
-  `priv/packs/bilimbaga/entity_definitions/` (REQ-326) against the real
+  Verifies the ten bucket-A entity-definition documents authored under
+  `priv/packs/bilimbaga/entity_definitions/` -- REQ-326's five, and REQ-329's
+  five live-session documents (session, session_question, session_answer,
+  session_event, session_question_score) -- against the real
   `Letflow.Entities.Definition.Validator.validate/1` -- not a re-implemented
   or mocked validator. Each document is loaded from `priv/` at runtime via
   `Application.app_dir/2`, JSON-decoded with `Jason`, and translated from
@@ -9,6 +11,12 @@ defmodule Letflow.Packs.BilimbagaEntityDefinitionsTest do
   shape the validator requires, mirroring the static whitelist translation
   `Letflow.Definitions.SolutionPack`'s `atomize_definition_json/1` performs
   on the same bytes at install time (REQ-328).
+
+  REQ-327's five exam-configuration documents (exam, exam_section,
+  exam_question_rule, exam_question_rule_tag, exam_manual_question) are
+  deliberately NOT covered here -- they already have their own dedicated
+  coverage in `test/letflow/packs/bilimbaga_exam_definitions_test.exs`, and
+  duplicating that here would be redundant.
 
   Pure module, no `Letflow.Repo`/`Ecto.Sandbox` dependency -- `async: true`.
   """
@@ -24,7 +32,12 @@ defmodule Letflow.Packs.BilimbagaEntityDefinitionsTest do
     "tag" => "tag.json",
     "question" => "question.json",
     "answer_option" => "answer_option.json",
-    "question_tag" => "question_tag.json"
+    "question_tag" => "question_tag.json",
+    "session" => "session.json",
+    "session_question" => "session_question.json",
+    "session_answer" => "session_answer.json",
+    "session_event" => "session_event.json",
+    "session_question_score" => "session_question_score.json"
   }
 
   @name_format_regex ~r/^[a-z][a-z0-9_]{0,63}$/
@@ -288,6 +301,104 @@ defmodule Letflow.Packs.BilimbagaEntityDefinitionsTest do
       definition = load_definition!("tag.json")
       f = field(definition, "name")
       assert f.type == :string
+    end
+  end
+
+  # ---------------------------------------------------------------------------
+  # REQ-329 AC -- session.status declares exactly the four enum values, and
+  # session.expires_at is queried: true (REQ-331's auto-submit sweep depends
+  # on it having an indexed predicate to scan).
+  # ---------------------------------------------------------------------------
+
+  describe "session-specific field shape (REQ-329)" do
+    test "session.status is :enum with exactly [in_progress, submitted, auto_submitted, grading_pending]" do
+      definition = load_definition!("session.json")
+      f = field(definition, "status")
+      assert f.type == :enum
+      assert f.enum_values == ["in_progress", "submitted", "auto_submitted", "grading_pending"]
+    end
+
+    test "session.expires_at is queried: true" do
+      definition = load_definition!("session.json")
+      f = field(definition, "expires_at")
+      assert f.queried == true
+    end
+  end
+
+  # ---------------------------------------------------------------------------
+  # REQ-329 AC (also true of REQ-326/327's ten) -- no document declares an
+  # id, created_at, updated_at or created_by field: the record subsystem
+  # owns record identity and the event store owns the timeline.
+  # ---------------------------------------------------------------------------
+
+  describe "no document declares record-identity or timeline fields" do
+    test "none of the ten documents declares id, created_at, updated_at or created_by" do
+      for {_entity_name, filename} <- @entity_files do
+        definition = load_definition!(filename)
+        field_names = Enum.map(definition.fields, & &1.name)
+
+        for forbidden <- ["id", "created_at", "updated_at", "created_by"] do
+          refute forbidden in field_names,
+                 "#{filename}: declares forbidden field #{forbidden}"
+        end
+      end
+    end
+  end
+
+  # ---------------------------------------------------------------------------
+  # REQ-329 AC -- session_question, session_answer and session_question_score
+  # each express their source's composite PRIMARY KEY (or, for
+  # session_answer, its source UNIQUE) as a `constraints` entry of type
+  # :unique over the two-field natural key, NOT as a declared primary key.
+  # ---------------------------------------------------------------------------
+
+  describe "session join entities express their natural key as a unique constraint" do
+    test "session_question carries a constraints entry of type unique over [session_id, question_id]" do
+      definition = load_definition!("session_question.json")
+      assert [%{type: :unique, fields: ["session_id", "question_id"]}] = definition.constraints
+    end
+
+    test "session_answer carries a constraints entry of type unique over [session_id, question_id]" do
+      definition = load_definition!("session_answer.json")
+      assert [%{type: :unique, fields: ["session_id", "question_id"]}] = definition.constraints
+    end
+
+    test "session_question_score carries a constraints entry of type unique over [session_id, question_id]" do
+      definition = load_definition!("session_question_score.json")
+      assert [%{type: :unique, fields: ["session_id", "question_id"]}] = definition.constraints
+    end
+
+    test "none of the three declares a field named id" do
+      for filename <- [
+            "session_question.json",
+            "session_answer.json",
+            "session_question_score.json"
+          ] do
+        definition = load_definition!(filename)
+
+        refute Enum.any?(definition.fields, &(&1.name == "id")),
+               "#{filename}: declares a field named id where a constraints entry is expected instead"
+      end
+    end
+  end
+
+  # ---------------------------------------------------------------------------
+  # REQ-329 AC -- session_event is named session_event, not tab_switch_event,
+  # and declares the added event_type field with its three enum values.
+  # ---------------------------------------------------------------------------
+
+  describe "session_event naming and added event_type field (REQ-329)" do
+    test "session_event's own name field is session_event, not tab_switch_event" do
+      definition = load_definition!("session_event.json")
+      assert definition.name == "session_event"
+    end
+
+    test "session_event declares event_type as :enum with exactly [tab_switch, blur, fullscreen_exit]" do
+      definition = load_definition!("session_event.json")
+      f = field(definition, "event_type")
+      assert f != nil
+      assert f.type == :enum
+      assert f.enum_values == ["tab_switch", "blur", "fullscreen_exit"]
     end
   end
 end

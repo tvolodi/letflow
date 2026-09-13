@@ -456,8 +456,13 @@ defmodule Letflow.Packs.BilimbagaPackInstallTest do
         end
 
       IO.puts("\n=== REQ-328 question category_id FK-violation (verbatim) ===")
+
       IO.puts(
-        inspect(question_category_fk_error, pretty: true, limit: :infinity, printable_limit: :infinity)
+        inspect(question_category_fk_error,
+          pretty: true,
+          limit: :infinity,
+          printable_limit: :infinity
+        )
       )
 
       IO.puts("=== end question category_id FK-violation ===\n")
@@ -561,7 +566,9 @@ defmodule Letflow.Packs.BilimbagaPackInstallTest do
                  schema
                )
 
-      assert {:ok, read_rule} = Latest.get(exam_question_rule.record_id, "exam_question_rule", schema)
+      assert {:ok, read_rule} =
+               Latest.get(exam_question_rule.record_id, "exam_question_rule", schema)
+
       assert read_rule.field_values["exam_id"] == exam.record_id
 
       orphan_exam_id = Ecto.UUID.generate()

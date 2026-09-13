@@ -23917,7 +23917,7 @@ requirements:
     title: Populate the stage-10 bucket-C inventory with P4's web/src/pages/exam/ modules, correct the P4 phase-table exit-condition note, and record the exam_assignment gap as a standing open question rather than a P4-local footnote (S10, doc bookkeeping)
     owner: DOC-UPDATER
     impl_order: 638  # letflow-queue task id, written back at WF-01 Step 3; depends_on mirrored as real queue edges
-    status: pending
+    status: done
     stage: S10
     description: >
       bucket: not applicable -- stage bookkeeping, same shape and same

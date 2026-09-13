@@ -1,16 +1,22 @@
 # Stage 10 — BilimBaga vertical
 
-Status: P0–P3 complete. Depends on: S4, S6, S8. Requirements: `REQ-295`–`REQ-334`
-filed (40 as of 2026-09-13), all `done`. **P4 is expanded but not yet built**:
-seven requirements are filed and `pending` — `REQ-335`, `REQ-336`,
-`REQ-338`–`REQ-340`, `REQ-342` and `REQ-343`, covering the `web/` admin-CRUD
-engine, the candidate exam-taking UI and its route surface. (337 and 341 were
-never used, so that span is deliberately non-contiguous.) No screen exists yet
-and `web/src/pages/exam/` is still absent. P5 (Playwright parity) and P6
-(conditional importer) are not expanded. Certificate issuance — P3's second
-half — is deliberately not expanded: it needs PDF+QR rendering, `mix.exs`
-carries no such dependency, and gaps 4 and 5 have their *mechanism* settled by
-decision 0027 but no owner.
+Status: P0–P4 complete. Depends on: S4, S6, S8. Requirements: `REQ-295`–`REQ-343`
+filed (47 as of 2026-09-14, counting distinct `- id: REQ-NNN` entries whose own
+`stage:` field is S10), all `done`. **P4 is now built**: `REQ-335`, `REQ-336`,
+`REQ-338`, `REQ-340`, `REQ-342` and `REQ-343` closed out S10 P4 — the `web/`
+admin-CRUD engine (nine remaining entity types plus the `tag` pilot), the
+hand-written candidate exam-taking UI, and the candidate-session route surface
+that fronts it. `REQ-339` (this bookkeeping entry) is P4's own close-out
+requirement, mirroring `REQ-334`'s role for P3. (337 and 341 were never used —
+each was retired by `REQ-VALIDATOR` for bundling separable units and split in
+two, per `REQ-340`'s and `REQ-342`'s own descriptions — so that span is
+deliberately non-contiguous.) `web/src/pages/exam/` now holds two modules,
+`ExamListPage.tsx` and `ExamSessionPage.tsx` — see the bucket-C inventory below.
+P5 (Playwright parity) and P6 (conditional importer) are not expanded; P5 was
+explicitly blocked on P4 and is now unblocked. Certificate issuance — P3's
+second half — is deliberately not expanded: it needs PDF+QR rendering,
+`mix.exs` carries no such dependency, and gaps 4 and 5 have their *mechanism*
+settled by decision 0027 but no owner.
 
 Created 2026-09-09. See
 [`decisions/0022-bilimbaga-vertical.md`](decisions/0022-bilimbaga-vertical.md)
@@ -123,8 +129,8 @@ at the normal one-agent-turn sizing when it becomes the active phase.
 | **P1** | Close gaps 1–6 and 10–13; land 7–9 | B | `mix letflow.check` and `web/`'s `npm run check` green with all thirteen closed. As of 2026-09-12 gaps 1, 2, 3, 7, 8, 9, 10, 11, 12 and 13 are closed; gaps 4 and 5 have their mechanism settled by decision 0027 but remain open as capabilities (no mailer/SMTP, no PDF/QR dependency); gap 6 remains open and unowned as a capability, with `REQ-323` now filed against it |
 | **P2** | The pack: entity definitions, process definitions, role-registry seed, Lua grading rules | A | a tenant with a working question bank and exam configuration, and **zero exam-specific Elixir**. Reachable as of 2026-09-11: gaps 10, 11 and 13 are closed — see below |
 | **P3** | `lib/letflow/exam/`: live session (deadline, autosave, per-question scoring, anti-cheat), certificate issuance | C | each module carries its `REVIEWER` bucket-C sign-off — met as of 2026-09-13 (see bucket-C inventory above). **This row's bucket (C) and deliverable list were a prediction, not the full outcome: P3 also produced bucket-A work (`REQ-329`, five session entity definitions) and bucket-B work (`REQ-331`, the deadline sweep on `Letflow.Scheduler.Poller`) — see "Bucket-C inventory" above. Certificate issuance was NOT delivered by P3: it needs PDF and QR rendering, `mix.exs` carries no such dependency, and gaps 4 and 5 (above) have their mechanism settled by decision `0027` but their capabilities remain open and unowned. A later reader should not read P3's completion as covering certificates.** |
-| **P4** | `web/`: admin CRUD generated from `x-ui`, plus the hand-written candidate exam-taking UI | C (client) | screens use `web/`'s design system, not BilimBaga's component layer |
-| **P5** | Parity: BilimBaga's 19 Playwright spec files (**286** `test()` blocks, measured 2026-09-13 — the 168 previously recorded here was wrong) ported to the Letflow build. Not "re-pointed": the two corpora are disjoint (zero filename overlap with `web/tests/e2e/`'s 38 specs) and BilimBaga's selectors are `getByRole`/`getByText`-dominated (314/137/66 uses vs **one** `data-testid`), so they bind to its rendered DOM and accessible names rather than to portable hooks. **Blocked on P4** — these specs drive screens that do not exist yet. | — | `RELEASE-VALIDATOR` re-derives the pass, `UAT-RUNNER` runs them against a live instance |
+| **P4** | `web/`: admin CRUD generated from `x-ui`, plus the hand-written candidate exam-taking UI | C (client) | **Met, as of 2026-09-14.** `REQ-336`'s admin-CRUD engine composes `web/`'s own design-system components (`PageLayout`, `Button`, `DataTable`, `PaginationControls`, `ConfirmDialog`, `QueryStateBoundary`, per its own done-event close-out); `REQ-340`/`REQ-342` added widgets (enum, unique-composite error surfacing, localized_text, fk-reference) to that same registry with no BilimBaga file in their diffs (`git diff --name-only` scoped to `fieldRegistry.ts`/`widgets/` and their tests, per each requirement's own acceptance criterion); `REQ-343` wired all nine remaining entity types onto that engine and its own close-out states plainly "No file or component copied from `c:\Users\tvolo\dev\ai-dala\BilimBaga\frontend\` -- built entirely on `web/`'s own design-system components and REQ-336's/REQ-340's/REQ-342's engine and widgets"; `REQ-338`'s hand-written candidate UI (the two `web/src/pages/exam/` modules in the bucket-C inventory above) likewise names its own design-system components in its close-out and copies nothing from BilimBaga's frontend. Confirmed against all five close-outs (`REQ-336`/`REQ-340`/`REQ-342`/`REQ-343`/`REQ-338`), each independently stating which design-system components were used and that no BilimBaga file was copied — see their `done`-events in [`docs/status/requirement_status.v16.yaml`](../status/requirement_status.v16.yaml). `REQ-337`, the requirement originally filed for this scope, was retired by `REQ-VALIDATOR` for bundling four separable widget/wiring units and split into `REQ-340` (the two mechanically-driven widgets) and `REQ-341`; `REQ-VALIDATOR` then failed `REQ-341` too for the same class of bundling mistake (widget-type axis instead of widget-vs-wiring), and it was retired in turn and split into `REQ-342` (the two new widget shapes) and `REQ-343` (the actual screen/nav wiring for all nine remaining entity types) — see `REQ-342`'s and `REQ-343`'s own descriptions for the full history. |
+| **P5** | Parity: BilimBaga's 19 Playwright spec files (**286** `test()` blocks, measured 2026-09-13 — the 168 previously recorded here was wrong) ported to the Letflow build. Not "re-pointed": the two corpora are disjoint (zero filename overlap with `web/tests/e2e/`'s 38 specs) and BilimBaga's selectors are `getByRole`/`getByText`-dominated (314/137/66 uses vs **one** `data-testid`), so they bind to its rendered DOM and accessible names rather than to portable hooks. **No longer blocked as of 2026-09-14** — P4 is done and its screens exist; P5 itself is still not expanded into requirements. | — | `RELEASE-VALIDATOR` re-derives the pass, `UAT-RUNNER` runs them against a live instance |
 | **P6** | *Conditional* — importer from BilimBaga's PostgreSQL into entity records | B | built only if a deployment holds real data; otherwise never built |
 
 P2 is the stage's real test. If the question bank, exam configuration and
@@ -192,6 +198,8 @@ metric.
 | `Letflow.Exam.QuestionSetResolver` | Deterministically resolves a seeded, shuffled, truncated question subset from a pool against rule configuration — this requires threading a seeded PRNG (`:rand`) through pool selection, truncation, and two independent shuffle steps, which is executable logic, not declarative field structure. | The pool/rule/count/shuffle model is shaped by this vertical's exam-rule schema (pools, rule counts, `options_order`); no existing platform abstraction treats "resolve a reproducible seeded item subset from a configured pool" as a generic capability, and building one now would be speculative ahead of a second caller. | PASS (REVIEWER, 2026-09-13, WF02-REQ332-20260913 @7a7216f1) |
 | `Letflow.Exam.Scoring` | Grading arithmetic (single/true-false as 1-or-0, multiple-choice partial credit clamped to [0,1], Likert weighted-polarity normalization, short-text as `pending_manual`) is executable per-question-type logic with an explicit unanswered-question-as-wrong rule and a no-correct-option error case — none of this is expressible as static field structure. | The five grading rules are specific to this vertical's question-type taxonomy (single/multiple/likert/short-text) and are, per decision `0030` Finding 1, not currently reachable via the platform's one generic scripting mechanism (`Letflow.Engine.Lua.Executor`, unwired for node dispatch) — there is no generic capability to route through today. | PASS (REVIEWER, 2026-09-13, WF02-REQ332-20260913 @7a7216f1) |
 | `Letflow.Exam.AntiCheat` | Validates one of exactly three signal types, checks session ownership/in-progress/deadline state, derives `action_taken` from the exam's `on_tab_switch` config (never from caller input), applies a per-session write-rate debounce, and branches `log`/`warn`/`submit` — a live conditional with a side effect (in the `submit` branch, triggering `Letflow.Exam.Session.submit/3`), which an entity definition cannot express. | Stating this generically requires naming the signal vocabulary (`tab_switch`/`blur`/`fullscreen_exit`) and the terminal action (auto-submitting a session) — both vertical-specific per rule 1's own test; a generic "signal-triggered record transition" capability would be built for exactly one caller today, the speculative-generality failure mode `0022` exists to prevent. | PASS (REVIEWER, 2026-09-13, WF02-REQ333-20260913) |
+| `web/src/pages/exam/ExamListPage.tsx` | Renders the candidate's exam-discovery/eligibility-gated start screen, including the honest "which exams can I take" answer against `check_assigned/3`'s documented no-op (option (a): list every active exam with copy stating this is provisional pending an assignment decision record) — a live disclosure/copy decision tied to a specific runtime finding, not a declarative field structure a definition could express. | The eligibility-error vocabulary it surfaces (assignment/archived/active/availability-window/attempt-limit/one-open-session, REQ-332's six atoms) and the provisional-copy escape hatch are specific to this vertical's session lifecycle (rule 1); no generic platform capability treats "explain why a record isn't startable yet" as shared today. | PASS (REVIEWER, 2026-09-13/14, three passes across WF02-REQ338-20260914 — implementation, router.tsx/queryKeys.ts decoupling fix, post branch-collision recovery — plus RELEASE-VALIDATOR PASS; docs/status/requirement_status.v16.yaml, REQ-338 done-event) |
+| `web/src/pages/exam/ExamSessionPage.tsx` | Orchestrates the in-progress/submit/result flow: per-answer autosave, a live countdown that ticks locally but is re-anchored to the server's `remaining_seconds` on every save response, submit/grading-pending/result state transitions, and three anti-cheat browser-event listeners (`visibilitychange`/`blur`/`fullscreenchange`) wired to `Letflow.Exam.AntiCheat`'s `log`/`warn`/`submit` branches with teardown on unmount — executable UI behaviour and client/server clock reconciliation, not field structure. | The countdown-reanchoring contract, the six eligibility-error messages, and the three anti-cheat signal types/branches are all specific to this vertical's session runtime (rule 1, same vocabulary `Letflow.Exam.Session`/`Letflow.Exam.AntiCheat` already justify); no generic capability treats "live countdown reanchored to a server tick" or "browser-event-to-signal mapping" as shared today. | PASS (REVIEWER, 2026-09-13/14, three passes across WF02-REQ338-20260914 — implementation, router.tsx/queryKeys.ts decoupling fix, post branch-collision recovery — plus RELEASE-VALIDATOR PASS; docs/status/requirement_status.v16.yaml, REQ-338 done-event) |
 
 These four rows are copied verbatim from
 [`lib/letflow/design/req330-exam-live-session.md`](../../lib/letflow/design/req330-exam-live-session.md)
@@ -200,6 +208,13 @@ build, and the same table each module's moduledoc cites as its authorisation.
 The REVIEWER sign-off column points at REQ-332's REVIEWER PASS (`Session`,
 `QuestionSetResolver`, `Scoring`) and REQ-333's REVIEWER PASS (`AntiCheat`),
 both recorded in the design doc's §7 table itself with dated PASS entries.
+The two `web/src/pages/exam/` rows are P4's own addition (`REQ-338`, no
+`CODE-DESIGNER` gate — matching `REQ-335`'s own precedent of skipping a design
+pass over an already-settled interface), sourced from `REQ-338`'s close-out and
+REVIEWER/RELEASE-VALIDATOR sign-off recorded in
+[`docs/status/requirement_status.v16.yaml`](../status/requirement_status.v16.yaml)'s
+`REQ-338` done-event, not from a design-doc §7 table (none exists for this
+requirement).
 
 **Measurement, run against this tree:**
 
@@ -215,6 +230,32 @@ $ wc -l lib/letflow/exam/*.ex
 ```
 
 **4 modules, 1,605 total lines under `lib/letflow/exam/`, measured 2026-09-13.**
+
+**`web/src/pages/exam/` and `web/src/api/exam.ts`, measured 2026-09-14:**
+
+```
+$ ls web/src/pages/exam/
+ExamListPage.tsx
+ExamSessionPage.tsx
+__tests__/
+$ wc -l web/src/pages/exam/*.tsx web/src/api/exam.ts
+  139 web/src/pages/exam/ExamListPage.tsx
+  358 web/src/pages/exam/ExamSessionPage.tsx
+  124 web/src/api/exam.ts
+  621 total
+```
+
+**2 screen modules (497 lines) under `web/src/pages/exam/`, plus the 124-line
+API client `web/src/api/exam.ts`, 621 lines total, measured 2026-09-14.** This
+does not count `web/src/pages/exam/__tests__/` (test files, not modules,
+matching the convention the `lib/letflow/exam/` measurement above already
+uses of counting only `.ex` implementation files) or REQ-338's other
+supporting files outside `web/src/pages/exam/` (`web/src/types/exam.ts`,
+`web/src/utils/examErrors.ts`, `web/src/hooks/useAntiCheatSignals.ts`,
+`web/src/i18n/examMessages.ts`, `web/src/i18n/ExamIntlProvider.tsx`) — those
+are REQ-338's supporting infrastructure, not bucket-C screen modules in their
+own right, and are out of scope for this table per its own header ("every
+module added under `lib/letflow/exam/` or `web/src/pages/exam/`").
 
 **What left bucket C.** P3's phases-table row (below) predicts bucket C, but
 P3 as executed also produced bucket-A and bucket-B work: REQ-330's
@@ -302,6 +343,50 @@ itself (see this stage file's own hard constraint above).
 - **AI-assisted authoring (BilimBaga phase 7).** Deliberately not phased above. It
   is the least load-bearing feature in the product and the most likely to be
   redesigned; it gets a phase when parity (P5) is real.
+- **No `exam_assignment` entity/mechanism exists — a standing gap, now overdue
+  for its own decision record.** What is missing: there is no entity type, no
+  table, and no mechanism anywhere in the platform for recording which
+  candidate (or department, or "everyone") is assigned to sit which exam.
+  `REQ-327` deliberately did not author one when it authored the other five
+  exam-pack entity types, for a stated reason: `assignee_id` is polymorphic
+  across user/department/none, and no `fk_def` can express a reference whose
+  target varies or reach the identity subsystem — this is not an oversight,
+  it is a documented omission with no decision record behind it. This gap has
+  now independently surfaced FOUR times across THREE requirements spanning
+  P2, P3 and P4 — the same "twice-recurring" pattern that triggered `REQ-325`'s
+  own decision-record requirement for pack sections:
+  - **`REQ-327`** (P2) — declined to author the entity, for the polymorphic-fk
+    reason above, recorded in its own close-out/README-constraints.md.
+  - **`REQ-332`** (P3) — `lib/letflow/exam/session.ex`'s own moduledoc FINDING
+    section confirms the runtime consequence: `check_assigned/3` is "a
+    documented no-op -- every candidate is currently treated as assigned",
+    and `:not_assigned` stays declared in `eligibility_error()` for
+    interface-shape fidelity but is unreachable code.
+  - **`REQ-343`** (P4) — could not build an admin screen for the entity
+    because none exists; per its own description this is "not 'not yet
+    wired', genuinely absent from the tenant's schema", so it added one
+    visible, tested UI note pointing at `session.ex`'s FINDING section and
+    `REQ-327`'s README-constraints.md instead of a screen or a client-side
+    polyfill.
+  - **`REQ-338`** (P4) — built the candidate-facing exam list against
+    `check_assigned/3`'s no-op honestly (option (a): list every active exam,
+    with copy stating this is provisional pending an assignment decision
+    record), rather than silently assume a real assignment model exists.
+
+  This is no longer a footnote inside any one of those four requirements: it
+  now blocks two concrete, real things — `REQ-343`'s admin screen (there is
+  nothing to author assignments against) and `REQ-338`'s candidate-facing exam
+  list (there is nothing to filter "which exams can I take" against, so it
+  lists everything active instead) — and both are shipped, in production
+  shape, with that gap visibly disclosed rather than silently patched over.
+  Four independent surfacings across three requirements and two phases is
+  well past the point a recurring finding should still be living inside
+  individual requirements' close-outs rather than its own decision record.
+  **This requirement (`REQ-339`) does NOT resolve this gap.** It only records
+  it as its own standing open question. Filing the decision-record requirement
+  itself — designing how `exam_assignment` should be modelled given the
+  polymorphic-target problem `REQ-327` identified — is a follow-on requirement,
+  not this bookkeeping entry's job.
 
 ## Decisions
 
@@ -325,19 +410,23 @@ extended to gap 13, and refined by
 which makes gaps 10 and 11 consequences of the storage model rather than
 independent work.
 
-Re-verified 2026-09-13. All three clauses this line originally carried are now
-false — P0 through P3 are complete and only P4/P5/P6 and certificate issuance
+Re-verified 2026-09-14. All three clauses this line originally carried are now
+false — P0 through P4 are complete and only P5/P6 and certificate issuance
 remain:
 
-- **"No S10 requirement exists" — no longer true.** Forty S10 requirements are
-  filed (`REQ-295`–`REQ-334`, counting distinct `- id: REQ-NNN` entries whose
-  own `stage:` field is S10), and all forty are `done`.
+- **"No S10 requirement exists" — no longer true.** Forty-seven S10 requirements
+  are filed (`REQ-295`–`REQ-343`, counting distinct `- id: REQ-NNN` entries
+  whose own `stage:` field is S10 — 337 and 341 were retired and never filed as
+  real entries, so the id span is non-contiguous), and all forty-seven are
+  `done`.
 - **"No `lib/letflow/exam/` directory exists" — no longer true.** It holds four
   modules — `session.ex`, `question_set_resolver.ex`, `scoring.ex`,
   `anti_cheat.ex` — each carrying its rule-2 justifications and a `REVIEWER`
   bucket-C sign-off in the inventory above, which is correspondingly no longer
-  empty. `web/src/pages/exam/` *is* still absent: that is P4, which is now
-  expanded (seven pending requirements) but not yet built.
+  empty. **`web/src/pages/exam/` is also no longer absent, as of 2026-09-14:**
+  it holds two modules, `ExamListPage.tsx` and `ExamSessionPage.tsx` (`REQ-338`),
+  also carrying their `REVIEWER`/`RELEASE-VALIDATOR` sign-off in the inventory
+  above. P4 is now built, not merely expanded — see the phase table's P4 row.
 - **"No pack document has been authored" — no longer true.**
   `priv/packs/bilimbaga/pack.json` exists and has been installed for real
   against a provisioned tenant (`REQ-328`), carrying the fifteen entity

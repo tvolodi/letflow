@@ -657,4 +657,100 @@ defmodule Letflow.Entities.RecordsTest do
       refute File.exists?(Path.expand("../../../lib/letflow/routers/entity_records.ex", __DIR__))
     end
   end
+
+  # ---------------------------------------------------------------------------------
+  # ISS-0624 / GH#1311 regression -- `Records`'s private `field_document/1`
+  # only carried `name`/`type`/`required`/`enum_values` when reconstructing a
+  # field map from the persisted, string-keyed `definition_json`, silently
+  # dropping `locales`/`search_strategy`/`decimal_precision`/`decimal_scale`.
+  # A `:localized_text` field then reached
+  # `Record.Validator.field_subschema/1`'s `%{type: :localized_text, locales:
+  # locales}` clause (added by ISS-0617) with no `locales` key at all, so
+  # `create_record/2` raised `FunctionClauseError` on EVERY write against a
+  # definition declaring one -- end to end, through the real
+  # `create_definition/2` -> `activate_definition/3` -> `create_record/2`
+  # path, not just `Record.Validator.build_record_schema/1` called directly
+  # with a hand-built map that already had `locales` (ISS-0617's own test
+  # file only ever did the latter, which is why this gap went uncaught).
+  # ---------------------------------------------------------------------------------
+
+  describe "ISS-0624 -- field_document/1 carries locales/decimal_precision/decimal_scale through create_record/2" do
+    test "create_record/2 succeeds (does not raise) for a definition with a :localized_text field, and the value round-trips" do
+      %{schema_name: schema} = provisioned_tenant()
+
+      create_active_definition!(schema, %{
+        fields: [
+          %{name: "customer_name", type: :string, required: true},
+          %{name: "bio", type: :localized_text, locales: ["en", "fr"]}
+        ]
+      })
+
+      assert {:ok, %{record: created}} =
+               Records.create_record(
+                 create_attrs(%{
+                   field_values: %{
+                     "customer_name" => "Acme",
+                     "bio" => %{"en" => "Hello", "fr" => "Bonjour"}
+                   }
+                 }),
+                 schema
+               )
+
+      assert created.field_values == %{
+               "customer_name" => "Acme",
+               "bio" => %{"en" => "Hello", "fr" => "Bonjour"}
+             }
+
+      [persisted] = Repo.all(Latest, prefix: schema)
+      assert persisted.field_values["bio"] == %{"en" => "Hello", "fr" => "Bonjour"}
+    end
+
+    test "create_record/2 succeeds (does not raise) for a definition with a :decimal field, and the value round-trips" do
+      %{schema_name: schema} = provisioned_tenant()
+
+      create_active_definition!(schema, %{
+        fields: [
+          %{name: "customer_name", type: :string, required: true},
+          %{name: "price", type: :decimal, decimal_precision: 10, decimal_scale: 2}
+        ]
+      })
+
+      assert {:ok, %{record: created}} =
+               Records.create_record(
+                 create_attrs(%{
+                   field_values: %{"customer_name" => "Acme", "price" => 19.99}
+                 }),
+                 schema
+               )
+
+      assert created.field_values["price"] == 19.99
+    end
+
+    test "a definition with BOTH a :localized_text and a :decimal field allows create_record/2 to succeed for either alone" do
+      %{schema_name: schema} = provisioned_tenant()
+
+      create_active_definition!(schema, %{
+        fields: [
+          %{name: "customer_name", type: :string, required: true},
+          %{name: "bio", type: :localized_text, locales: ["en"]},
+          %{name: "price", type: :decimal, decimal_precision: 6, decimal_scale: 2}
+        ]
+      })
+
+      assert {:ok, %{record: created}} =
+               Records.create_record(
+                 create_attrs(%{
+                   field_values: %{
+                     "customer_name" => "Acme",
+                     "bio" => %{"en" => "Hello"},
+                     "price" => 5.5
+                   }
+                 }),
+                 schema
+               )
+
+      assert created.field_values["bio"] == %{"en" => "Hello"}
+      assert created.field_values["price"] == 5.5
+    end
+  end
 end

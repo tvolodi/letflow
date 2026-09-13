@@ -337,51 +337,114 @@ defmodule Letflow.Packs.BilimbagaPackInstallTest do
 
       promote!(tenant_id, "exam_manual_question", "sort_order", "bigint")
 
-      # ---- 6a. THE BLOCKER, ASSERTED RATHER THAN NARRATED -----------------
+      # ---- 6a. ISS-0624 IS FIXED -- THE :localized_text WRITE PATH WORKS --
       #
-      # ISS-0624 (raised by this requirement): a record write against ANY
-      # definition carrying a `:localized_text` field raises FunctionClauseError
-      # out of `Letflow.Entities.Record.Validator.field_subschema/1`.
-      #
-      # Root cause -- `lib/letflow/entities/records.ex`'s `field_document/1`
-      # (around line 576) rebuilds each field from the persisted JSONB carrying
-      # only `name`, `type`, `required` and `enum_values`. It DROPS `locales`.
-      # The `:localized_text` clause `field_subschema/1` gained in ISS-0617
-      # matches on `%{type: :localized_text, locales: locales}`, so the
-      # locales-less map that converter produces matches no clause at all.
-      #
-      # The persisted `definition_json` DOES carry `locales` -- verified by
-      # inspecting the inserted row -- so nothing is lost in storage; the
-      # defect is purely in this one converter.
-      #
-      # This is NOT pack content and NOT specific to BilimBaga: a minimal
-      # hand-built definition with a single `%{type: :localized_text,
-      # locales: ["en"]}` field reproduces it identically. ISS-0617's own
-      # tests never caught it because they call `build_record_schema/1`
-      # directly with a hand-built field map that already has `locales`; they
-      # never go through `Records.create_record/2`. This requirement is that
-      # path's first real end-to-end exercise.
-      #
-      # Per REQ-328's finding clause, this test does NOT patch
-      # `records.ex`, does NOT patch the validator, and does NOT weaken
-      # `category.json` / `question.json` / `exam.json` by dropping their
-      # `:localized_text` fields. It asserts the CURRENT behaviour, so that the
-      # day `field_document/1` learns to carry `locales`, THIS assertion fails
-      # loudly and whoever fixes it is pointed straight at the writes below
-      # that are waiting to be re-enabled.
-      localized_write =
+      # ISS-0624 (raised by this requirement) used to make a record write
+      # against ANY definition carrying a `:localized_text` field raise
+      # FunctionClauseError out of
+      # `Letflow.Entities.Record.Validator.field_subschema/1`, because
+      # `lib/letflow/entities/records.ex`'s `field_document/1` rebuilt each
+      # field from the persisted JSONB without `locales`. That converter now
+      # carries `locales` through (see its own moduledoc comment), so the
+      # writes below -- category.name, question.stem, exam.title, each with
+      # all three of kk/ru/en -- are real, asserted successes, not a
+      # documented crash.
+      assert {:ok, %{record: category}} =
+               Records.create_record(
+                 %{
+                   entity_type: "category",
+                   field_values: %{
+                     "name" => %{
+                       "kk" => "Qauipsizdik sanasy",
+                       "ru" => "Osoznannaya bezopasnost",
+                       "en" => "Security Awareness"
+                     },
+                     "track" => "security",
+                     "sort_order" => 1
+                   },
+                   actor_id: actor_id,
+                   idempotency_key: Ecto.UUID.generate()
+                 },
+                 schema
+               )
+
+      IO.puts("\n=== REQ-328 category :localized_text write (verbatim) ===")
+      IO.puts(inspect(category, pretty: true, limit: :infinity, printable_limit: :infinity))
+      IO.puts("=== end category write ===\n")
+
+      assert {:ok, read_category} = Latest.get(category.record_id, "category", schema)
+
+      assert read_category.field_values["name"] == %{
+               "kk" => "Qauipsizdik sanasy",
+               "ru" => "Osoznannaya bezopasnost",
+               "en" => "Security Awareness"
+             }
+
+      # ---- 6b. tag, question, question_tag, exam and exam_question_rule --
+      # all exercised for real against the installed-and-activated
+      # definitions.
+      tag = create_record!(schema, "tag", %{"name" => "passwords"})
+      other_tag = create_record!(schema, "tag", %{"name" => "unrelated"})
+
+      assert {:ok, read_tag} = Latest.get(tag.record_id, "tag", schema)
+      assert read_tag.field_values["name"] == "passwords"
+
+      # ---- 6c. THE PROMOTED FK IS A REAL POSTGRES REFERENCES -------------
+      # (i) a question naming category.record_id is accepted, its
+      #     :localized_text stem round-trips with all three locales; (ii) a
+      #     question naming a nonexistent category_id is REJECTED by the
+      #     database, not merely by application validation.
+      assert {:ok, %{record: question}} =
+               Records.create_record(
+                 %{
+                   entity_type: "question",
+                   field_values: %{
+                     "category_id" => category.record_id,
+                     "difficulty" => "easy",
+                     "type" => "single",
+                     "default_locale" => "kk",
+                     "status" => "draft",
+                     "version" => 1,
+                     "stem" => %{
+                       "kk" => "Qupiya soz degenimiz ne?",
+                       "ru" => "Chto takoe parol?",
+                       "en" => "What is a password?"
+                     }
+                   },
+                   actor_id: actor_id,
+                   idempotency_key: Ecto.UUID.generate()
+                 },
+                 schema
+               )
+
+      IO.puts("\n=== REQ-328 question :localized_text write (verbatim) ===")
+      IO.puts(inspect(question, pretty: true, limit: :infinity, printable_limit: :infinity))
+      IO.puts("=== end question write ===\n")
+
+      assert {:ok, read_question} = Latest.get(question.record_id, "question", schema)
+      assert read_question.field_values["category_id"] == category.record_id
+
+      assert read_question.field_values["stem"] == %{
+               "kk" => "Qupiya soz degenimiz ne?",
+               "ru" => "Chto takoe parol?",
+               "en" => "What is a password?"
+             }
+
+      orphan_category_id = Ecto.UUID.generate()
+
+      question_category_fk_error =
         try do
           Records.create_record(
             %{
-              entity_type: "category",
+              entity_type: "question",
               field_values: %{
-                "name" => %{
-                  "kk" => "Qauipsizdik sanasy",
-                  "ru" => "Osoznannaya bezopasnost",
-                  "en" => "Security Awareness"
-                },
-                "track" => "security",
-                "sort_order" => 1
+                "category_id" => orphan_category_id,
+                "difficulty" => "easy",
+                "type" => "single",
+                "default_locale" => "kk",
+                "status" => "draft",
+                "version" => 1,
+                "stem" => %{"kk" => "a", "ru" => "b", "en" => "c"}
               },
               actor_id: actor_id,
               idempotency_key: Ecto.UUID.generate()
@@ -392,33 +455,23 @@ defmodule Letflow.Packs.BilimbagaPackInstallTest do
           exception -> {:raised, exception}
         end
 
-      IO.puts("\n=== REQ-328 ISS-0624 localized_text write blocker (verbatim) ===")
-      IO.puts(inspect(localized_write, pretty: true, limit: :infinity))
-      IO.puts("=== end ISS-0624 blocker ===\n")
+      IO.puts("\n=== REQ-328 question category_id FK-violation (verbatim) ===")
 
-      assert {:raised,
-              %FunctionClauseError{
-                module: Letflow.Entities.Record.Validator,
-                function: :field_subschema,
-                arity: 1
-              }} =
-               localized_write,
-             "ISS-0624 appears to be FIXED. Re-enable the :localized_text record " <>
-               "writes in this test (category.name, question.stem with all three " <>
-               "of kk/ru/en, exam.title) and delete this assertion -- REQ-328's " <>
-               "acceptance criteria require them."
+      IO.puts(
+        inspect(question_category_fk_error,
+          pretty: true,
+          limit: :infinity,
+          printable_limit: :infinity
+        )
+      )
 
-      # ---- 6b. EVERYTHING NOT BLOCKED BY ISS-0624 IS STILL EXERCISED ------
-      # tag, question_tag and exam_question_rule carry no :localized_text
-      # field, so the FK proof, the through-join and REQ-327's half all run
-      # for real against the installed-and-activated definitions.
-      tag = create_record!(schema, "tag", %{"name" => "passwords"})
-      other_tag = create_record!(schema, "tag", %{"name" => "unrelated"})
+      IO.puts("=== end question category_id FK-violation ===\n")
 
-      assert {:ok, read_tag} = Latest.get(tag.record_id, "tag", schema)
-      assert read_tag.field_values["name"] == "passwords"
+      assert fk_violation?(question_category_fk_error),
+             "expected a Postgres foreign_key_violation for a nonexistent category_id, got: " <>
+               inspect(question_category_fk_error)
 
-      # ---- 6c. THE FK CONSTRAINT ACTUALLY BITES ---------------------------
+      # ---- 6d. THE FK CONSTRAINT ACTUALLY BITES (question_tag -> tag) ----
       # question_tag.tag_id is a promoted uuid column carrying a real Postgres
       # REFERENCES (REQ-298). A join row naming a tag that does not exist must
       # be rejected by the database, not merely by application validation.
@@ -448,12 +501,76 @@ defmodule Letflow.Packs.BilimbagaPackInstallTest do
              "expected a Postgres foreign_key_violation for a nonexistent tag_id, got: " <>
                inspect(fk_error)
 
-      # ---- 6d. REQ-327's half: an exam_question_rule referencing a real
-      #          exam. `exam` itself carries :localized_text (title), so its
-      #          own record write is blocked by ISS-0624 -- but the rule's
-      #          exam_id FK column and its own write path are not, and the FK
-      #          is proven above on the same mechanism.
-      #          A rule with a nonexistent exam_id must be rejected too.
+      # Now the REAL join row, linking the real question created above to the
+      # real "passwords" tag -- this is what section 6f's through-join query
+      # resolves against.
+      _question_tag =
+        create_record!(schema, "question_tag", %{
+          "question_id" => question.record_id,
+          "tag_id" => tag.record_id
+        })
+
+      # ---- 6e. exam, and an exam_question_rule referencing it, plus the
+      #          orphan-exam_id rejection (REQ-327's half) --------------
+      assert {:ok, %{record: exam}} =
+               Records.create_record(
+                 %{
+                   entity_type: "exam",
+                   field_values: %{
+                     "title" => %{
+                       "kk" => "Qauipsizdik emtihany",
+                       "ru" => "Ekzamen po bezopasnosti",
+                       "en" => "Security Exam"
+                     },
+                     "status" => "draft",
+                     "time_limit_minutes" => 60,
+                     "passing_score_pct" => 70.0,
+                     "max_attempts" => 3,
+                     "shuffle_questions" => false,
+                     "shuffle_options" => false,
+                     "show_answers" => "after_completion",
+                     "on_tab_switch" => "warn",
+                     "certificate_enabled" => false
+                   },
+                   actor_id: actor_id,
+                   idempotency_key: Ecto.UUID.generate()
+                 },
+                 schema
+               )
+
+      IO.puts("\n=== REQ-328 exam :localized_text write (verbatim) ===")
+      IO.puts(inspect(exam, pretty: true, limit: :infinity, printable_limit: :infinity))
+      IO.puts("=== end exam write ===\n")
+
+      assert {:ok, read_exam} = Latest.get(exam.record_id, "exam", schema)
+
+      assert read_exam.field_values["title"] == %{
+               "kk" => "Qauipsizdik emtihany",
+               "ru" => "Ekzamen po bezopasnosti",
+               "en" => "Security Exam"
+             }
+
+      assert {:ok, %{record: exam_question_rule}} =
+               Records.create_record(
+                 %{
+                   entity_type: "exam_question_rule",
+                   field_values: %{
+                     "exam_id" => exam.record_id,
+                     "mode" => "random",
+                     "count" => 5,
+                     "sort_order" => 0
+                   },
+                   actor_id: actor_id,
+                   idempotency_key: Ecto.UUID.generate()
+                 },
+                 schema
+               )
+
+      assert {:ok, read_rule} =
+               Latest.get(exam_question_rule.record_id, "exam_question_rule", schema)
+
+      assert read_rule.field_values["exam_id"] == exam.record_id
+
       orphan_exam_id = Ecto.UUID.generate()
 
       rule_fk_error =
@@ -484,14 +601,12 @@ defmodule Letflow.Packs.BilimbagaPackInstallTest do
              "expected a foreign_key_violation for a nonexistent exam_id, got: " <>
                inspect(rule_fk_error)
 
-      # ---- 6e. REQ-300's `through` many-to-many join COMPILES and RUNS ----
-      # question -> question_tag -> tag. The relation resolves against the
-      # installed definitions' own fk_defs, and the query executes against the
-      # real promoted tables. Zero rows is the correct result here: no question
-      # record exists, because every question carries a :localized_text stem
-      # and is blocked by ISS-0624. The join SHAPE -- which is what REQ-326
-      # chose over a tag_ids array, and what this criterion is about -- is
-      # proven by the compile succeeding and the query executing.
+      # ---- 6f. REQ-300's `through` many-to-many join RETURNS THE TAGGED
+      #          QUESTION -- question -> question_tag -> tag, resolved
+      #          against the installed definitions' own fk_defs and executed
+      #          against the real promoted tables. A real question_tag join
+      #          row now exists (6d), so this must return exactly the tagged
+      #          question, with the "unrelated" tag excluded.
       request = %{
         entity_type: "question",
         filters: [%{field: "difficulty", op: :eq, value: "easy"}],
@@ -506,7 +621,12 @@ defmodule Letflow.Packs.BilimbagaPackInstallTest do
       IO.puts("rows: " <> inspect(rows, pretty: true, limit: :infinity, printable_limit: 400))
       IO.puts("=== end through-join ===\n")
 
-      assert is_list(rows)
+      assert [row] = rows
+      assert Ecto.UUID.load!(row.primary.record_id) == question.record_id
+      assert row.primary.field_values["difficulty"] == "easy"
+      assert Ecto.UUID.load!(row["tag"].record_id) == tag.record_id
+      assert row["tag"].field_values["name"] == "passwords"
+      refute row["tag"].field_values["name"] == other_tag.field_values["name"]
 
       # And the same join over a tag-side filter, to show the far hop really is
       # wired to the tag table and not merely accepted by the compiler.
@@ -516,11 +636,8 @@ defmodule Letflow.Packs.BilimbagaPackInstallTest do
       }
 
       assert {:ok, tag_side_query} = Compiler.compile(tag_side_request, schema)
-      assert is_list(Repo.all(tag_side_query, prefix: schema))
-
-      # Keep the unused bindings honest -- these exist to document what the
-      # blocked half would have used.
-      assert is_binary(other_tag.record_id)
+      assert [tag_side_row] = Repo.all(tag_side_query, prefix: schema)
+      assert Ecto.UUID.load!(tag_side_row["tag"].record_id) == tag.record_id
     end
   end
 

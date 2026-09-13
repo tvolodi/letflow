@@ -3141,8 +3141,38 @@ volumes:
     path: docs/status/requirement_status.v15.yaml
     status: current
     opened: 2026-09-12
-    entries: 13
+    entries: 15
     note: >
+      Recounted to 15 on WF03-ISS0624-20260912's Step Final SECOND
+      rebase, which conflicted at this file's tail between this run's
+      own already-composed note (previous recount: 14) and its own
+      later REQ-328 addendum note (independently computed as 13 before
+      the two saw each other, since both were composed from the SAME
+      run in sequence). docs/status/requirement_status.v15.yaml's own
+      tail required manual composition -- ISS-0623's close-out
+      done-event (23:39:02Z) sorted before this run's own REQ-328
+      addendum revised-event (23:50:31Z), both independent appends
+      with no overlapping lines. Recounted directly from `grep -c
+      "^  - req:" docs/status/requirement_status.v15.yaml` = 15
+      on-disk entries, rather than carrying forward either side's
+      independently-computed 13/14, per this note's own
+      recount-every-time rule. 653 lines / 37680 bytes, well under the
+      roll ceiling.
+      Recounted to 14 on WF03-ISS0624-20260912's Step Final rebase,
+      which conflicted at this file's tail between this run's own
+      already-composed note (previous recount: 12) and DOC-UPDATER's
+      own ISS-0623 close-out note (independently computed as 13,
+      before either side saw the other). docs/status/
+      requirement_status.v15.yaml's own tail required manual
+      composition -- ISS-0623's started-event (20:26:16Z), then this
+      run's ISS-0624 done-event (22:56:11Z, chronologically between
+      ISS-0623's started and done), then ISS-0623's own done-event
+      (23:39:02Z), all independent appends with no overlapping lines.
+      Recounted directly from `grep -c "^  - req:"
+      docs/status/requirement_status.v15.yaml` = 14 on-disk entries,
+      rather than carrying forward either side's independently-computed
+      12/13, per this note's own recount-every-time rule. 625 lines /
+      36078 bytes, well under the roll ceiling.
       Incremented to 13 by DOC-UPDATER's own ISS-0623 close-out
       done-event append (issue/ISS-0623-20260913, Step 6) -- `grep -c
       "^  - req:" docs/status/requirement_status.v15.yaml` = 13

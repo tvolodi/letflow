@@ -173,6 +173,47 @@ defmodule Letflow.Exam.SessionTest do
                Session.create(candidate_id, exam.record_id, schema)
     end
 
+    test "two CONCURRENT create/3 calls for the same candidate+exam produce exactly one session (fails if the exam-row lock is removed)" do
+      %{schema_name: schema} = tenant("req332-create-concurrent")
+      %{exam: exam} = build_minimal_exam!(schema, exam_attrs: %{"max_attempts" => 1})
+      candidate_id = Ecto.UUID.generate()
+
+      tasks =
+        for _ <- 1..2 do
+          Task.async(fn -> Session.create(candidate_id, exam.record_id, schema) end)
+        end
+
+      results = Task.await_many(tasks, 15_000)
+
+      # Exactly one of the two concurrent calls materializes a session; the
+      # other observes it (via the now-serialized exam-row lock,
+      # `lock_exam_row/2`) and is correctly rejected as an already-open
+      # session -- not both succeeding, which is what REVIEWER's finding
+      # (WF02-REQ332-20260913) showed was possible before `create_with_seed/4`
+      # ran inside `Repo.transaction/1` with that lock.
+      assert Enum.count(results, &match?({:ok, _session_view}, &1)) == 1
+      assert Enum.count(results, &(&1 == {:error, :session_already_open})) == 1
+
+      import Ecto.Query
+
+      session_rows =
+        Repo.all(
+          from(r in Letflow.Entities.Record.Latest,
+            where:
+              r.entity_type == "session" and
+                fragment("?->>?", r.field_values, "user_id") == ^candidate_id
+          ),
+          prefix: schema
+        )
+
+      # Exactly one `session` row was materialized for this candidate/exam --
+      # if `lock("FOR UPDATE")` were removed from `lock_exam_row/2`, both
+      # concurrent transactions could observe zero existing sessions
+      # simultaneously and both materialize one, doubling this count and
+      # silently violating the one-open-session/attempt-limit invariant.
+      assert length(session_rows) == 1
+    end
+
     test "eligible candidate creates a real, materialized session" do
       %{schema_name: schema} = tenant("req332-elig-happy")
       %{exam: exam} = build_minimal_exam!(schema)

@@ -32,10 +32,13 @@ defmodule Letflow.Exam.Session do
 
   This is a plain module with ordinary functions over `Letflow.Entities.Records`/
   `Letflow.Entities.Query`, exactly like `Letflow.Engine`'s own
-  "Process-vs-row decision." Concurrency at `submit/3` is arbitrated by a
-  real Postgres row lock (`lock("FOR UPDATE")`, the same idiom
-  `lib/letflow/event_store.ex`'s `lock_and_increment_sequence/3` already
-  uses), never by an in-memory process.
+  "Process-vs-row decision." Concurrency at `submit/3`/`finalize_expired/3`
+  (via `lock_session_row/2`) and at `create/3` (via `lock_exam_row/2`) is
+  arbitrated by a real Postgres row lock (`lock("FOR UPDATE")`, the same
+  idiom `lib/letflow/event_store.ex`'s `lock_and_increment_sequence/3`
+  already uses), never by an in-memory process. See `create_with_seed/4`'s
+  own comment for why `create/3`'s lock is taken on the `exam` row rather
+  than a `session` row.
 
   ## Data lives in bucket A -- no migration, no Ecto schema here
 
@@ -110,6 +113,7 @@ defmodule Letflow.Exam.Session do
   alias Letflow.Exam.QuestionSetResolver
   alias Letflow.Exam.Scoring
   alias Letflow.Repo
+  alias Letflow.TenantProvisioning
 
   @type eligibility_error ::
           :not_assigned
@@ -179,18 +183,48 @@ defmodule Letflow.Exam.Session do
   # contract) -- lets tests prove seeded reproducibility end-to-end without
   # depending on the internally-drawn random seed. `create/3` is a thin
   # wrapper over this function with a freshly drawn seed.
+  #
+  # REVIEWER finding (WF02-REQ332-20260913 rework): the whole eligibility
+  # -check-then-materialize pipeline now runs inside one `Repo.transaction/1`
+  # that opens by taking a real Postgres row lock (`lock("FOR UPDATE")`,
+  # `lock_exam_row/2` below) on the `exam` entity's own `entity_record_latest`
+  # row for `exam_id` -- the same idiom `lock_session_row/2` already uses for
+  # `submit/3`/`finalize_expired/3`, just scoped to the exam row rather than
+  # a session row (no `session` row exists yet at create-time to lock: that
+  # is exactly the row this call is about to create). Two concurrent
+  # `create/3` calls for the same `exam_id` now serialize on that lock, so
+  # the second call's "no open session" / "attempts exhausted" read
+  # (`query_all("session", ...)` below) is guaranteed to observe the first
+  # call's write before deciding -- closing the race REVIEWER identified
+  # (both callers reading zero sessions before either wrote one). This is
+  # intentionally coarser-grained than a per-`(candidate_id, exam_id)` lock
+  # (it serializes *all* candidates starting the same exam concurrently, not
+  # just the same candidate racing themselves) because no
+  # per-`(candidate_id, exam_id)` row/unique-constraint exists in the schema
+  # to lock on instead, and adding one is a migration/entity-definition
+  # change outside this requirement's authorized scope (REQ-329/
+  # CODE-DESIGNER territory, per REVIEWER's own instruction). Correctness
+  # over concurrency: a brief lock held for one exam-start's eligibility
+  # checks plus materialization is an acceptable trade here.
   @spec create_with_seed(String.t(), String.t(), String.t(), integer()) ::
-          {:ok, session_view()} | {:error, eligibility_error()}
+          {:ok, session_view()} | {:error, eligibility_error() | term()}
   def create_with_seed(candidate_id, exam_id, prefix, seed) do
-    with {:ok, exam} <- fetch_exam(exam_id, prefix),
+    Repo.transaction(fn -> create_txn(candidate_id, exam_id, prefix, seed) end)
+  end
+
+  defp create_txn(candidate_id, exam_id, prefix, seed) do
+    with {:ok, exam} <- lock_exam_row(exam_id, prefix),
          :ok <- check_assigned(candidate_id, exam_id, prefix),
          :ok <- check_exam_status(exam),
          :ok <- check_availability_window(exam),
          {:ok, existing_sessions} <-
            query_all("session", [eq("exam_id", exam_id), eq("user_id", candidate_id)], prefix),
          :ok <- check_attempts_exhausted(existing_sessions, fv(exam, "max_attempts")),
-         :ok <- check_no_open_session(existing_sessions) do
-      materialize_session(candidate_id, exam_id, exam, prefix, seed)
+         :ok <- check_no_open_session(existing_sessions),
+         {:ok, session_view} <- materialize_session(candidate_id, exam_id, exam, prefix, seed) do
+      session_view
+    else
+      {:error, reason} -> Repo.rollback(reason)
     end
   end
 
@@ -353,14 +387,22 @@ defmodule Letflow.Exam.Session do
   # why these are not their own module)
   # =======================================================================
 
-  defp fetch_exam(exam_id, prefix) do
-    case Latest.get(exam_id, "exam", prefix) do
-      {:ok, exam} -> {:ok, exam}
-      # No enumerated `eligibility_error()` atom exists for "exam not
-      # found" -- treated as not-active, the closest real member of the
-      # union (an exam that does not exist cannot be active either).
-      {:error, :not_found} -> {:error, :exam_not_active}
-      {:error, :invalid_schema_name} = error -> error
+  # Locked replacement for the plain `Latest.get/3` read `fetch_exam/2` used
+  # to do -- same `:not_found` -> `:exam_not_active` mapping and same
+  # `:invalid_schema_name` passthrough (mirrors `Latest.get/3`'s own guard),
+  # but taken with `lock("FOR UPDATE")` so `create_txn/4`'s whole
+  # eligibility-check-plus-materialize sequence serializes per `exam_id`.
+  # See `create_with_seed/4`'s moduledoc-style comment above for why this
+  # exam-row lock, not a `lock_session_row/2`-style session-row lock, is
+  # what closes REVIEWER's create/3 race.
+  defp lock_exam_row(exam_id, prefix) do
+    with {:ok, _tenant_id} <- TenantProvisioning.tenant_id_for_schema_name(prefix) do
+      query = from(r in Latest, where: r.entity_type == "exam" and r.record_id == ^exam_id)
+
+      case query |> Ecto.Query.lock("FOR UPDATE") |> Repo.one(prefix: prefix) do
+        nil -> {:error, :exam_not_active}
+        row -> {:ok, row}
+      end
     end
   end
 

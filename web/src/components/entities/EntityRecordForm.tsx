@@ -28,6 +28,11 @@ import type { DynamicFormValue } from '@/types/forms'
 import { entityFieldToFormField } from '@/utils/entityFieldToFormField'
 import { renderFormField } from '@/components/forms/FieldFactory'
 import { Button } from '@/components/ui/Button'
+// REQ-342 — registers the entity-localized-text/entity-fk-reference widgets
+// into the shared fieldRegistry as a side effect. Imported here (rather than
+// only from main.tsx) because these two widgets are entity-definition-driven
+// and only ever reached through EntityRecordForm's own rendering path.
+import '@/components/entities/entityWidgetRegistry'
 
 export interface EntityRecordFormProps {
   definition: EntityDefinition
@@ -139,8 +144,9 @@ export function EntityRecordForm(props: EntityRecordFormProps) {
       )}
 
       {fields.map((field) => {
+        const fkDef = definition.definition.foreign_keys?.find((fk) => fk.field === field.name)
         const taskFormField = {
-          ...entityFieldToFormField(field),
+          ...entityFieldToFormField(field, fkDef),
           title: fieldTitles[field.name] ?? field.name,
         }
         const registerReturn = form.register(field.name, { required: taskFormField.required })

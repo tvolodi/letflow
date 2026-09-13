@@ -622,3 +622,51 @@ history:
       exam_manual_question.
 
       docs/requirements.yaml flipped pending -> done.
+  - req: REQ-342
+    event: done
+    agent: DOC-UPDATER
+    at: "2026-09-13T22:14:10Z"
+    note: >
+      REQ-342 (the localized_text and foreign-key-reference widgets for
+      the admin-CRUD engine's field registry, proven against real field
+      shapes from all nine remaining BilimBaga entity types via targeted
+      component tests -- no entity screen, nav, or routing wiring, that
+      being REQ-343's job) completed. Two genuinely new widgets built:
+      localized_text (a per-locale tab/stacked-field group posting one
+      {"kk":...,"ru":...,"en":...} value, proven against question.stem,
+      category.name and exam_section.title) and a fk-reference extension
+      to the existing searchableSelect.tsx (a searchable select resolving
+      a human-readable label via a real POST /entities/query call rather
+      than the raw record_id, proven against question.category_id ->
+      category, exam_section.exam_id -> exam, and
+      exam_question_rule_tag.tag_id -> tag). New files:
+      web/src/components/entities/entityWidgetRegistry.ts,
+      web/src/components/forms/widgets/localizedText.tsx, plus their test
+      suites (EntityRecordForm.fkReference.test.tsx,
+      EntityRecordForm.localizedText.test.tsx, entityWidgetRegistry.test.ts,
+      localizedTextAndFkReference.i18nGrep.test.ts). Modified:
+      EntityRecordForm.tsx, searchableSelect.tsx, entitiesMessages.ts,
+      forms.ts, entityFieldToFormField.ts.
+
+      FRONTEND-DEV found and fixed a real react-hook-form bug during
+      development: the fk-reference widget had register/ref and onBlur
+      wired directly onto the visible combobox input, so a blur event
+      (e.g. focus moving to the submit button) overwrote the selected
+      record_id with the displayed label text, corrupting the field's
+      real value. Fixed by making a hidden input the sole RHF-registered
+      element holding the real record_id, with the visible combobox
+      driving it via setValue rather than being registered itself. This
+      fix carries genuine mutation-tested regression coverage:
+      TEST-DESIGNER reverted the fix, confirmed the exact record_id/label
+      corruption reproduced and the regression test failed, then
+      re-applied the fix and confirmed clean.
+
+      Pipeline: FRONTEND-DEV implementation -> REVIEWER PASS ->
+      TEST-DESIGNER (mutation-tested the blur-bug regression coverage for
+      real, as above) -> TEST-DESIGN-VALIDATOR PASS -> TEST-RUNNER
+      (`npm run check`: 519+48 tests passing) -> RELEASE-VALIDATOR PASS
+      (independently re-verified all acceptance criteria against real
+      code and the committed entity-definition JSON, and independently
+      traced the blur-bug fix mechanics rather than trusting the report).
+
+      docs/requirements.yaml flipped pending -> done.

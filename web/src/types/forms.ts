@@ -55,6 +55,25 @@ export interface TaskFormField {
    * absent together (matches the server's own %{"expression"=>_, "message"=>_}
    * pairing — never one without the other). */
   crossFieldValidation?: { expression: string; message: string }
+
+  /**
+   * REQ-342 — the locale set an entity `:localized_text` field declares
+   * (`Letflow.Entities.Definition`'s field_def `locales`, e.g.
+   * `["kk","ru","en"]`). Consumed only by the `entity-localized-text`
+   * registry widget; `undefined` for every other field type.
+   */
+  locales?: string[]
+
+  /**
+   * REQ-342 — set only when this field is one side of an
+   * `EntityFkDef` (`definition.foreign_keys`): the entity type name the
+   * field's value refers to (`references_entity`). Consumed only by the
+   * `entity-fk-reference` registry widget, which resolves it against the
+   * referenced entity's own active definition/records — this bridge does
+   * not itself know what a human-readable label for that entity looks
+   * like.
+   */
+  referencesEntity?: string
 }
 
 export interface ValidationError {

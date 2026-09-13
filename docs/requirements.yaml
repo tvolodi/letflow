@@ -24127,7 +24127,7 @@ requirements:
     title: Add the localized_text and foreign-key-reference widgets to the admin-CRUD engine's field registry, proven against real field shapes from all nine remaining BilimBaga entity types via targeted component tests only -- no screen or wiring (S10 P4, bucket C client)
     owner: FRONTEND-DEV
     impl_order: 636  # letflow-queue task id, written back at WF-01 Step 3; depends_on mirrored as real queue edges
-    status: pending
+    status: done
     stage: S10
     description: >
       bucket: C (client). REQ-337 was retired for bundling four separable

@@ -3433,8 +3433,20 @@ volumes:
     path: docs/status/requirement_status.v16.yaml
     status: current
     opened: 2026-09-13
-    entries: 10
+    entries: 11
     note: >
+      Recounted to 11 by WF02-REQ342-20260914 (DOC-UPDATER)'s Step Final
+      rebase, which found v16.yaml itself auto-merged cleanly (this
+      branch's own REQ-342 done-event append landed at the file's tail
+      after main's independently-landed ISS-0652/REQ-340 composition, no
+      overlapping lines) but conflicted here on the declared count
+      between main's own 10 (fix/ISS-0652-20260913's fourth Step Final
+      recount) and this branch's own 9 (computed against a base
+      predating that composition). Recounted directly from `grep -c
+      "^  - req:" docs/status/requirement_status.v16.yaml` = 11 rather
+      than carrying forward either side's stale 9/10, per this note's
+      own recount-every-time rule. 672 lines / 39060 bytes, well under
+      the roll ceiling.
       Recounted to 10 at fix/ISS-0652-20260913's fourth Step Final
       rebase, composing main's own REQ-340 done-event (independently
       computed as 8) with this branch's own ISS-0652 done-event

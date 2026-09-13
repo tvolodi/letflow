@@ -1047,6 +1047,30 @@ history:
       back to status: open. Deferring REQ-334 until REQ-333 reaches
       done; will re-poll the queue rather than re-claim 630 in the
       meantime.
+  - req: SCOPE-CHANGE
+    event: started
+    agent: ORCH
+    at: "2026-09-13T09:29:24Z"
+    note: >
+      Claimed letflow-queue task 631 (WF-03 issue ISS-0631, GitHub
+      #1330): lib/letflow/exam/session.ex:911's session_view/1 calls
+      String.to_existing_atom on the persisted "in_progress" status
+      string, but :in_progress appears nowhere in lib/ as an executed
+      atom literal (only inside @type specs), so Session.create/3's
+      success or ArgumentError crash depends on incidental BEAM atom-
+      table load order rather than the code's own structure. Found
+      live by ELIXIR-DEV while writing REQ-333's tests, in an isolated
+      parallel test partition where nothing else had interned the
+      atom yet; worked around only in the test file, not fixed in
+      production code (out of REQ-333's scope -- session.ex belongs to
+      REQ-332). Fix direction already clear and precedented: replace
+      with an explicit status_atom/1-style mapper, matching this same
+      module's own existing idiom for exactly this problem
+      (question_type_atom/1 line 918, polarity_atom/1 line 924).
+      Dispatching ISSUE-FIXER to confirm/extend the diagnosis (and
+      audit outcome_from_session/1's similar-shaped atoms per the
+      issue's own suggestion) before routing to CODE-DESIGNER/
+      ELIXIR-DEV for the actual fix.
   - req: REQ-333
     event: done
     agent: ORCH
@@ -1178,3 +1202,78 @@ history:
       quoted in DOC-UPDATER's own report rather than re-appended.
       docs/requirements.yaml flipped pending -> done for REQ-334
       itself. This closes out S10 P3.
+  - req: SCOPE-CHANGE
+    event: done
+    agent: ORCH
+    at: "2026-09-13T12:31:22Z"
+    note: >
+      ISS-0631 (queue task 631, GH#1330) fixed via
+      issue/ISS-0631-20260913 (commit 5007186e), PR #1333. Added
+      session_status_atom/1 to lib/letflow/exam/session.ex, an
+      explicit closed-clause mapper for the four valid session
+      statuses (in_progress/submitted/auto_submitted/grading_pending),
+      matching this same module's own existing idiom
+      (question_type_atom/1, polarity_atom/1). Replaces both
+      String.to_existing_atom/1 call sites the issue named
+      (session_view/1 at line 911 and outcome_from_session/1 at line
+      865), removing the BEAM atom-table load-order dependency and
+      turning a corrupted persisted status into a FunctionClauseError
+      instead of the previous opaque ArgumentError.
+
+      Session interrupted mid-pipeline by a power outage after the
+      design gate (commits 2a496434/2fe3f87e) but before commit;
+      ELIXIR-DEV's implementation and TEST-DESIGNER's tests survived
+      uncommitted in the working tree and were verified intact on
+      resume: `mix compile` clean, `mix test
+      test/letflow/exam/session_test.exs` 30/30 passing (4 new --
+      happy path, auto-submit path, corrupted-status raises the
+      specific FunctionClauseError type, and a structural test
+      grepping session.ex's own source for the absence of
+      to_existing_atom/to_atom).
+
+      Merging PR #1333 hit a real conflict with main (REQ-333/REQ-334
+      landed first, both appending to this same v15.yaml tail and its
+      index note) -- resolved by composing both sides in `at:`
+      timestamp order (SCOPE-CHANGE started 09:29:24Z, before REQ-333
+      done 09:51:21Z) with no reordering needed, same pattern as this
+      volume's earlier REQ-333/REQ-334 conflict resolutions. No
+      overlap with REQ-333/REQ-334's own changes: REQ-333 built
+      AntiCheat (a different module) and explicitly left session.ex
+      untouched, filing this issue rather than fixing it in scope.
+      docs/requirements.yaml carries no entry for ISS-0631 (issue
+      tracked in docs/issues/ISS-0631.yaml, not requirements.yaml);
+      no requirement status flip applies here.
+# ─────────────────────────────────────────────────────────────────────────────
+# VOLUME 15 — CLOSED 2026-09-13. DO NOT APPEND TO THIS FILE.
+# This volume holds the complete requirement run history from 2026-09-12 through
+# 2026-09-13 (32 entries, 1245 frozen-prefix lines / 1278 total lines with this
+# closure footer). It is frozen: every line above this
+# comment is preserved byte-for-byte. Closed at issue/ISS-0631-20260913's own
+# ISS-0631 done-event append, which brought this file to 1245 lines -- over its
+# declared roll_rule ceiling (max_lines: 1200) -- confirmed via `wc -l` on the
+# working-tree file per this volume's own "WHEN THIS VOLUME IS FULL" procedure.
+# Reads of this volume are TARGETED reads only -- a line range or a pattern
+# match, never a whole-file read. Use whichever your shell has:
+#   Read tool with offset/limit (works everywhere), or
+#   Bash:       grep -n PATTERN FILE   /   sed -n 'START,ENDp' FILE
+#   PowerShell: Select-String -Path FILE -Pattern PATTERN
+#               (Get-Content FILE)[START..END]
+#
+# NEW ENTRIES GO TO THE CURRENT VOLUME. Find it in:
+#   docs/status/requirement_status.index.yaml
+# which, as of this closure, names:
+#   docs/status/requirement_status.v16.yaml
+#
+# Why this file was closed: ORCH's own ISS-0631 done-event append (appended
+# while resolving this PR's merge conflict with main's already-merged
+# REQ-333/REQ-334 appends to this same file) brought the on-disk count to 32
+# entries across 1245 lines -- over the roll ceiling. No entry above this
+# footer was moved, edited or deleted.
+#
+# KNOWN ANOMALIES IN THIS VOLUME: this volume's tail (REQ-333 started through
+# REQ-334 done, plus this SCOPE-CHANGE done entry) was composed across a real
+# three-way merge conflict between issue/ISS-0631-20260913 and origin/main
+# (REQ-333/REQ-334 landed on main first). Resolved by ordering the conflicting
+# entries by their own `at:` timestamps with no reordering needed -- same
+# pattern as this volume's own earlier REQ-333/REQ-334 conflict resolutions
+# recorded in the index's volume-15 note history.

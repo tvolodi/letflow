@@ -862,7 +862,7 @@ defmodule Letflow.Exam.Session do
   # See this module's moduledoc's second flagged gap: the raw sums are
   # reconstructed, not replayed, on the idempotent path.
   defp outcome_from_session(session) do
-    status = String.to_existing_atom(fv(session, "status"))
+    status = session_status_atom(fv(session, "status"))
     percentage = to_float(fv(session, "score_pct") || 0)
 
     %{
@@ -908,12 +908,19 @@ defmodule Letflow.Exam.Session do
       id: session.record_id,
       exam_id: fv(session, "exam_id"),
       candidate_id: fv(session, "user_id"),
-      status: String.to_existing_atom(fv(session, "status")),
+      status: session_status_atom(fv(session, "status")),
       seed: fv(session, "seed"),
       started_at: parse_dt!(fv(session, "started_at")),
       expires_at: parse_dt!(fv(session, "expires_at"))
     }
   end
+
+  @spec session_status_atom(String.t()) ::
+          :in_progress | :submitted | :auto_submitted | :grading_pending
+  defp session_status_atom("in_progress"), do: :in_progress
+  defp session_status_atom("submitted"), do: :submitted
+  defp session_status_atom("auto_submitted"), do: :auto_submitted
+  defp session_status_atom("grading_pending"), do: :grading_pending
 
   defp question_type_atom("single"), do: :single
   defp question_type_atom("multiple"), do: :multiple

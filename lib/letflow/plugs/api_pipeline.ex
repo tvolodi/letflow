@@ -153,6 +153,14 @@ defmodule Letflow.Plugs.ApiPipeline do
   forward("/admin/services", to: Letflow.Routers.AdminServices)
   forward("/entities", to: Letflow.Routers.Entities)
 
+  # REQ-335 -- the candidate-facing exam-session HTTP surface REQ-332/REQ-333
+  # left unbuilt. Mounted the same way as every other authenticated
+  # tenant-scoped sub-router above -- NOT a public/unauthenticated route
+  # (decision 0028's capability-handle pattern does not apply here: a
+  # candidate sitting an exam is an authenticated tenant user). See
+  # Letflow.Routers.ExamSessions' own moduledoc for the route table.
+  forward("/exam-sessions", to: Letflow.Routers.ExamSessions)
+
   match _ do
     Letflow.Api.Response.not_found(conn)
   end

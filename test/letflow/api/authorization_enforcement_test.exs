@@ -64,7 +64,12 @@ defmodule Letflow.Api.AuthorizationEnforcementTest do
     # @mount_prefix is what makes this router checked at all -- a router
     # absent from either is simply never walked and the suite stays green
     # while the surface goes unverified.
-    Letflow.Routers.Entities
+    Letflow.Routers.Entities,
+    # REQ-335 -- Letflow.Routers.ExamSessions' five routes each declare a
+    # policy key REQ-335 itself backed with a real endpoint_policy_key/2
+    # clause, so every one resolves through the normal path above and none
+    # is (or may be) added to @allowlist.
+    Letflow.Routers.ExamSessions
   ]
 
   # `Letflow.Plugs.ApiPipeline`'s own `forward/2` mount prefix per router
@@ -95,7 +100,8 @@ defmodule Letflow.Api.AuthorizationEnforcementTest do
     Letflow.Routers.Promotions => "/promotions",
     Letflow.Routers.Services => "/services",
     Letflow.Routers.AdminServices => "/admin/services",
-    Letflow.Routers.Entities => "/entities"
+    Letflow.Routers.Entities => "/entities",
+    Letflow.Routers.ExamSessions => "/exam-sessions"
   }
 
   # {method, path_template, reason} -- a route whose declared policy key is

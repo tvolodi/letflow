@@ -103,6 +103,17 @@ defmodule Letflow.Exam.Session do
 
   No certificate module, no PDF/QR dependency, no placeholder. See
   `mix.exs`'s unchanged dependency list.
+
+  ## REQ-335 addition -- `get_session_state_for_user/3`
+
+  REQ-335 (the HTTP route surface REQ-332/REQ-333 left unbuilt) added this
+  one read-composition function so `Letflow.Routers.ExamSessions`' session-
+  state route stays a thin composition layer with no execution semantics of
+  its own, matching that requirement's own scope note. No new bucket-C
+  reasoning is added by it -- it reuses this module's own private
+  `query_all/3`/`fv/2`/`question_type_atom/1` helpers and adds no new
+  eligibility rule, write path, or state transition. See that function's own
+  `@doc` for the redaction decision it implements.
   """
 
   import Ecto.Query, only: [from: 2]
@@ -253,6 +264,155 @@ defmodule Letflow.Exam.Session do
       {:error, :invalid_schema_name} = error ->
         error
     end
+  end
+
+  # -----------------------------------------------------------------------
+  # get_session_state_for_user/3 (REQ-335)
+  # -----------------------------------------------------------------------
+
+  @type question_state :: %{
+          question_id: String.t(),
+          sort_order: integer(),
+          type: :single | :multiple | :true_false | :likert | :short_text,
+          stem: term(),
+          options: [%{id: String.t(), text: term()}]
+        }
+
+  @type saved_answer :: %{
+          selected_option_ids: [String.t()],
+          text_answer: String.t() | nil,
+          time_spent_seconds: non_neg_integer() | nil,
+          saved_at: String.t() | nil
+        }
+
+  @type session_state_view :: %{
+          session: session_view(),
+          remaining_seconds: non_neg_integer(),
+          questions: [question_state()],
+          answers: %{String.t() => saved_answer()}
+        }
+
+  @doc """
+  REQ-335 -- `Letflow.Routers.ExamSessions`' session-state read route calls
+  this, not `get_session_for_user/3` alone, because a candidate resuming a
+  session needs the materialised question set to render it, not just the
+  session envelope. Ownership is delegated entirely to
+  `get_session_for_user/3` (same `:session_not_found`/`:not_owner` errors,
+  same 404-not-403 shape).
+
+  ## REQ-335's own redaction decision, implemented here (not via FieldGrants)
+
+  Every question/option field is HAND-SELECTED, never delegated to a generic
+  entity-record serializer: `question_state/0` carries only `question_id`,
+  `sort_order`, `type` and `stem` from `question` (never `explanation`,
+  which narrates the correct answer, nor `difficulty`/`category_id`/
+  `status`/`version`, which add nothing a candidate needs); each option
+  carries only `id` and `text` from `answer_option` (never `is_correct`,
+  `likert_weight` or `likert_polarity`). `Letflow.Entities.Query.FieldGrants`
+  (REQ-231) was considered and rejected for this route: it redacts fields
+  within ONE `Letflow.Entities.Query.Compiler` result page for ONE entity
+  type, but this response is a hand-composed view joining four entity types
+  (`session`, `session_question`, `question`, `answer_option`,
+  `session_answer`) with no single query result for a `FieldGrants` call to
+  redact — and per `answer_option.json`'s own field-level note, this pack
+  does not configure an `entity_field_restrictions` row for `is_correct`
+  today, so a `FieldGrants`-based route would currently leak it outright.
+  Hand-selecting fields makes leaking `is_correct` a compile-time-visible
+  omission rather than a runtime configuration dependency.
+  """
+  @spec get_session_state_for_user(
+          session_id :: String.t(),
+          user_id :: String.t(),
+          prefix :: String.t()
+        ) :: {:ok, session_state_view()} | {:error, :session_not_found | :not_owner}
+  def get_session_state_for_user(session_id, user_id, prefix) do
+    with {:ok, session} <- get_session_for_user(session_id, user_id, prefix),
+         {:ok, session_questions} <-
+           query_all("session_question", [eq("session_id", session_id)], prefix),
+         sorted_questions = Enum.sort_by(session_questions, &fv(&1, "sort_order")),
+         {:ok, questions} <- build_question_states(sorted_questions, prefix),
+         {:ok, session_answers} <-
+           query_all("session_answer", [eq("session_id", session_id)], prefix) do
+      {:ok,
+       %{
+         session: session,
+         remaining_seconds: DateTime.diff(session.expires_at, utc_now(), :second) |> max(0),
+         questions: questions,
+         answers: answer_map(session_answers)
+       }}
+    end
+  end
+
+  defp build_question_states(session_questions, prefix) do
+    session_questions
+    |> Enum.reduce_while({:ok, []}, fn session_question, {:ok, acc} ->
+      case build_question_state(session_question, prefix) do
+        {:ok, question_state} -> {:cont, {:ok, [question_state | acc]}}
+        {:error, _reason} = error -> {:halt, error}
+      end
+    end)
+    |> case do
+      {:ok, rows} -> {:ok, Enum.reverse(rows)}
+      {:error, _reason} = error -> error
+    end
+  end
+
+  defp build_question_state(session_question, prefix) do
+    question_id = fv(session_question, "question_id")
+
+    case Latest.get(question_id, "question", prefix) do
+      {:ok, question} ->
+        type = question_type_atom(fv(question, "type"))
+        option_ids = fv(session_question, "options_order") || []
+
+        with {:ok, options} <- build_option_states(type, question_id, option_ids, prefix) do
+          {:ok,
+           %{
+             question_id: question_id,
+             sort_order: fv(session_question, "sort_order"),
+             type: type,
+             stem: fv(question, "stem"),
+             options: options
+           }}
+        end
+
+      {:error, :not_found} ->
+        {:error, {:question_not_found, question_id}}
+
+      {:error, :invalid_schema_name} = error ->
+        error
+    end
+  end
+
+  defp build_option_states(:short_text, _question_id, _option_ids, _prefix), do: {:ok, []}
+
+  defp build_option_states(_type, question_id, option_ids, prefix) do
+    with {:ok, option_records} <-
+           query_all("answer_option", [eq("question_id", question_id)], prefix) do
+      by_id = Map.new(option_records, &{&1.record_id, &1})
+
+      options =
+        option_ids
+        |> Enum.filter(&Map.has_key?(by_id, &1))
+        |> Enum.map(fn option_id ->
+          option = Map.fetch!(by_id, option_id)
+          %{id: option_id, text: fv(option, "text")}
+        end)
+
+      {:ok, options}
+    end
+  end
+
+  defp answer_map(session_answers) do
+    Map.new(session_answers, fn answer ->
+      {fv(answer, "question_id"),
+       %{
+         selected_option_ids: fv(answer, "selected_option_ids") || [],
+         text_answer: fv(answer, "text_answer"),
+         time_spent_seconds: fv(answer, "time_spent_seconds"),
+         saved_at: fv(answer, "saved_at")
+       }}
+    end)
   end
 
   # -----------------------------------------------------------------------

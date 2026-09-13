@@ -1,0 +1,60 @@
+id: ISS-0646
+title: REQ-335 grants candidate exam-session permissions to :TASK_WORKER, conflating two distinct actor classes under one role
+discovered_by: REVIEWER
+discovered_in_run: WF02-REQ335-20260913
+discovered_at: "2026-09-13T14:15:28Z"
+severity: MINOR
+description: >
+  lib/letflow/routers/exam_sessions.ex (REQ-335) mints five new permission
+  atoms (:ExamSessionStart, :ExamSessionSave, :ExamSessionSubmit,
+  :ExamSessionReportEvent, :ExamSessionRead) for the candidate-facing exam
+  session API, and grants them to :TASK_WORKER because
+  Letflow.Api.Authorization's role set (decision 0013) is a closed 5-role
+  enum with no CANDIDATE role, and minting one was judged out of REQ-335's
+  own scope.
+
+  REVIEWER PASSed REQ-335 with this as an explicit non-blocking finding,
+  since REQ-335's own text correctly forecloses deciding a new role by
+  stealth and the router's moduledoc documents the tradeoff rather than
+  hiding it. But the risk is real and should be tracked: granting
+  :ExamSession* to :TASK_WORKER means an internal staff member holding
+  :TASK_WORKER implicitly gains exam-candidate capabilities (low risk,
+  bounded to their own sessions by ownership checks), and more importantly
+  an external exam candidate implicitly gains real internal-BPM
+  capabilities that have nothing to do with sitting an exam: TasksRead,
+  TasksComplete, EntitiesQuery, EntitiesAggregate, AttachmentsRead,
+  EntitiesDefinitionsRead. Nothing in REQ-335's diff constrains a
+  candidate's token to only the exam grant.
+
+  This is a materially different risk shape than the R-Co-ported precedent
+  decision 0013 discusses (assigning a permission ahead of its consuming
+  route), which never conflated two distinct external/internal actor
+  classes under one role.
+
+  RECOMMENDED FIX DIRECTION: either an addendum to decision 0013 accepting
+  this as a deliberate interim tradeoff with a stated exit condition, or a
+  new requirement introducing a real CANDIDATE role (or an equivalent
+  narrower scoping mechanism) before the BilimBaga exam vertical goes
+  further -- specifically before REQ-338's candidate UI ships or before any
+  real IdP issues :TASK_WORKER to actual exam candidates in a tenant that
+  also has staff task-workers.
+
+  RELATED, MORE CONCRETE FINDING: ISS-0647 (filed independently by the
+  session that landed REQ-335, PR #1353) identifies one specific,
+  higher-severity instance of this same role-conflation risk --
+  TASK_WORKER's pre-existing EntitiesQuery/EntitiesAggregate grant may let
+  a candidate read question.is_correct directly via the generic
+  POST /entities/query route, bypassing REQ-335's own hand-redacted exam
+  session response entirely. ISS-0647 is not yet confirmed as a live
+  exploit and is scoped to that one concrete path; this issue (ISS-0646)
+  covers the broader architectural question of whether TASK_WORKER should
+  keep serving both actor classes at all. Resolving ISS-0647 does not by
+  itself close this issue, and resolving this issue (e.g. introducing a
+  real CANDIDATE role) would likely close ISS-0647 as a side effect.
+affected_files:
+  - lib/letflow/routers/exam_sessions.ex
+  - lib/letflow/api/authorization.ex
+  - docs/migration/decisions/0013-authorization-role-set.md
+queue_ref: Q-646
+github_ref: GH-1351
+status: open

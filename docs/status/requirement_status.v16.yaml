@@ -264,6 +264,21 @@ history:
       REVIEWER-confirmed.
 
       docs/requirements.yaml flipped pending -> done.
+  - req: SCOPE-CHANGE
+    event: started
+    agent: ORCH
+    at: "2026-09-13T15:49:56Z"
+    note: >
+      Claimed letflow-queue task 647 (ISS-0647, GH#1352) -- self-filed
+      during REQ-335's SECURITY-REVIEWER pass. Fact-finding first, per
+      the issue's own acceptance criteria: empirically prove whether a
+      TASK_WORKER-scoped POST /entities/query against question/
+      answer_option currently returns is_correct (a pre-existing
+      permission grant predating REQ-335, not introduced by it). If
+      reachable, apply a fix (FieldGrants/entity_field_restrictions row
+      or a scope narrowing) with a regression test; if not reachable,
+      state why and quote the guard. Dispatching to ELIXIR-DEV given
+      the real code-tracing/test-writing work involved.
   - req: REQ-336
     event: blocked
     agent: ORCH

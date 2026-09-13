@@ -3433,13 +3433,31 @@ volumes:
     path: docs/status/requirement_status.v16.yaml
     status: current
     opened: 2026-09-13
-    entries: 3
+    entries: 4
     note: >
+      Recounted to 4 at fix/ISS-0647-20260913's Step Final rebase,
+      which conflicted at this file's tail between main's own REQ-336
+      blocked-event append (independently computed as 3) and this
+      branch's own ISS-0647 started-event append (also independently
+      computed as 3, from a base predating REQ-336's blocked-event).
+      Both appends land at the same v16.yaml tail position with no
+      overlapping lines -- ISS-0647's own started-event (15:49:56Z)
+      sorts before REQ-336's blocked-event (16:13:04Z), so it was
+      composed first rather than appended after. Recounted directly
+      from `grep -c "^  - req:" docs/status/requirement_status.v16.yaml`
+      = 4 rather than carrying forward either side's
+      independently-computed 3, per this note's own recount-every-time
+      rule. 310 lines, well under the roll ceiling.
       Incremented to 3 by ORCH's own REQ-336 blocked-event append
       (ISS-0648 discovered, queue task 633 released back to open) --
       `grep -c "^  - req:" docs/status/requirement_status.v16.yaml` = 3
       on-disk entries; 295 lines / 17329 bytes, well under the roll
       ceiling. No rebase conflict on this file.
+      Incremented to 3 by ORCH's own ISS-0647 started-event append
+      (SCOPE-CHANGE, fix/ISS-0647-20260913) -- `grep -c "^  - req:"
+      docs/status/requirement_status.v16.yaml` = 3 on-disk entries;
+      281 lines, well under the roll ceiling. No rebase conflict on
+      this file.
       Incremented to 2 by ORCH's own REQ-335 done-event append (Step
       Final, WF02-REQ335-20260913) -- `grep -c "^  - req:"
       docs/status/requirement_status.v16.yaml` = 2 on-disk entries;

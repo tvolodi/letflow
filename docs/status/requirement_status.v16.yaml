@@ -622,6 +622,30 @@ history:
       exam_manual_question.
 
       docs/requirements.yaml flipped pending -> done.
+  - req: SCOPE-CHANGE
+    event: started
+    agent: ORCH
+    at: "2026-09-13T21:57:13Z"
+    note: >
+      Claimed letflow-queue task 651 (ISS-0651, GH#1359, S3) --
+      same defect family as ISS-0652 but in
+      Letflow.Entities.Query.Cursor. build_next_cursor/2 and
+      read_sort_value/2 pattern-match %Letflow.Entities.Record.Latest{}
+      specifically, no bare-map fallback for Compiler.entity_row()'s
+      plain-map shape -- unlike field_grants.ex's redact_item/2 and
+      routers/entities.ex's query_item_map/1, which REQ-300/ISS-0600
+      already generalized for both shapes. Reachable via
+      Cursor.paginate/5 against the generic keyset-paginated
+      entity-query route. Not a one-line relax like ISS-0648's fv/2
+      fix: entity_row() has no :id field the way %Latest{} does
+      (record_id is the analog), so this needs an explicit design
+      decision on what the cursor's id/sort-value components read from
+      a promoted-table row, confirmed against the real field keyset
+      pagination needs for monotonic stability -- then generalized the
+      same way the two existing precedent functions were, not a third
+      pattern. Dispatching to ELIXIR-DEV with instructions to document
+      the design decision as part of the fix, escalating to
+      CODE-DESIGNER only if genuinely undecidable.
   - req: REQ-342
     event: done
     agent: DOC-UPDATER

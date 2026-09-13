@@ -1,11 +1,16 @@
 # Stage 10 — BilimBaga vertical
 
 Status: P0–P3 complete. Depends on: S4, S6, S8. Requirements: `REQ-295`–`REQ-334`
-filed (40 as of 2026-09-13), all `done`. P4 (`web/` screens), P5 (Playwright
-parity) and P6 (conditional importer) are not expanded yet, and certificate
-issuance — P3's second half — is deliberately not expanded: it needs PDF+QR
-rendering, `mix.exs` carries no such dependency, and gaps 4 and 5 have their
-*mechanism* settled by decision 0027 but no owner.
+filed (40 as of 2026-09-13), all `done`. **P4 is expanded but not yet built**:
+seven requirements are filed and `pending` — `REQ-335`, `REQ-336`,
+`REQ-338`–`REQ-340`, `REQ-342` and `REQ-343`, covering the `web/` admin-CRUD
+engine, the candidate exam-taking UI and its route surface. (337 and 341 were
+never used, so that span is deliberately non-contiguous.) No screen exists yet
+and `web/src/pages/exam/` is still absent. P5 (Playwright parity) and P6
+(conditional importer) are not expanded. Certificate issuance — P3's second
+half — is deliberately not expanded: it needs PDF+QR rendering, `mix.exs`
+carries no such dependency, and gaps 4 and 5 have their *mechanism* settled by
+decision 0027 but no owner.
 
 Created 2026-09-09. See
 [`decisions/0022-bilimbaga-vertical.md`](decisions/0022-bilimbaga-vertical.md)

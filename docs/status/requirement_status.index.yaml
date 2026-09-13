@@ -3433,8 +3433,23 @@ volumes:
     path: docs/status/requirement_status.v16.yaml
     status: current
     opened: 2026-09-13
-    entries: 4
+    entries: 5
     note: >
+      Recounted to 5 at fix/ISS-0647-20260913's second (Step Final
+      close-out) rebase, which conflicted at this file's tail between
+      main's own already-composed 4-count note (from the first
+      conflict, above) and this branch's own ISS-0647 done-event
+      append (independently computed as 4 against a base predating
+      REQ-336's blocked-event). Both appends land at the same v16.yaml
+      tail position with no overlapping lines -- composed order there
+      is REQ-336 blocked (16:13:04Z) then ISS-0647 done (18:30:49Z),
+      already correct by `at:` timestamp with no reordering needed --
+      so only this index file's declared count and narrative needed
+      manual composition. Recounted directly from `grep -c
+      "^  - req:" docs/status/requirement_status.v16.yaml` = 5 rather
+      than carrying forward either side's independently-computed 4,
+      per this note's own recount-every-time rule. 374 lines / 21307
+      bytes, well under the roll ceiling.
       Recounted to 4 at fix/ISS-0647-20260913's Step Final rebase,
       which conflicted at this file's tail between main's own REQ-336
       blocked-event append (independently computed as 3) and this
@@ -3453,6 +3468,11 @@ volumes:
       `grep -c "^  - req:" docs/status/requirement_status.v16.yaml` = 3
       on-disk entries; 295 lines / 17329 bytes, well under the roll
       ceiling. No rebase conflict on this file.
+      Incremented to 4 by ORCH's own ISS-0647 done-event append
+      (SCOPE-CHANGE, fix/ISS-0647-20260913) -- `grep -c "^  - req:"
+      docs/status/requirement_status.v16.yaml` = 4 on-disk entries;
+      345 lines / 19561 bytes, well under the roll ceiling. No rebase
+      conflict on this file.
       Incremented to 3 by ORCH's own ISS-0647 started-event append
       (SCOPE-CHANGE, fix/ISS-0647-20260913) -- `grep -c "^  - req:"
       docs/status/requirement_status.v16.yaml` = 3 on-disk entries;

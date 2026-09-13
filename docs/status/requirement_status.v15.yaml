@@ -1110,3 +1110,30 @@ history:
       REVIEWER PASS sign-off -- P3's stage-file exit condition ("each
       module carries its REVIEWER bucket-C sign-off") is met.
       docs/requirements.yaml flipped pending -> done.
+  - req: REQ-334
+    event: started
+    agent: ORCH
+    at: "2026-09-13T10:08:38Z"
+    note: >
+      Claimed letflow-queue task 630 (GH#1321, S10, stage-10 bucket-C
+      inventory bookkeeping -- not a bucket deliverable itself).
+      Populate docs/migration/stage-10-bilimbaga-vertical.md's
+      bucket-C inventory table with one row per module actually under
+      lib/letflow/exam/ (Session, QuestionSetResolver, Scoring,
+      AntiCheat), copying REQ-330's rule-2 sentences verbatim and
+      pointing at each module's real REVIEWER sign-off; report total
+      module/line count with a quoted command; record what LEFT bucket
+      C (REQ-329's five entity definitions to bucket A, REQ-331's
+      deadline sweep to bucket B) against P3's phases-table row
+      predicting bucket C; close the anti-cheat open question with a
+      pointer to REQ-330's decision record (annotated, not deleted);
+      record certificate issuance as NOT delivered and why; state
+      whether REQ-330 overturned any REQ-ANALYST starting verdict;
+      leave decision 0022 itself unmodified. Also flip REQ-329 through
+      REQ-333's status entries in docs/requirements.yaml (already done
+      individually at each requirement's own close-out -- this task
+      verifies and, if any drifted, corrects) and append their
+      status-history events (already appended individually -- this
+      task's own acceptance criteria require the close-out to quote
+      them, not necessarily append new ones for already-recorded
+      events). Dispatching to DOC-UPDATER.

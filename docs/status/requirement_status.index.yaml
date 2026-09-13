@@ -3141,8 +3141,14 @@ volumes:
     path: docs/status/requirement_status.v15.yaml
     status: current
     opened: 2026-09-12
-    entries: 28
+    entries: 29
     note: >
+      Incremented to 29 by ORCH's own REQ-334 started-event append
+      (Step 00, WF02-REQ334-20260913) -- `grep -c "^  - req:"
+      docs/status/requirement_status.v15.yaml` = 29 on-disk entries;
+      1139 lines / 65308 bytes -- approaching but still under the roll
+      ceiling (1200 lines / 120000 bytes). No rebase conflict on this
+      file.
       Recounted to 28 at feature/WF02-REQ333-20260913's second (Step
       Final close-out) rebase, which conflicted at this file's tail
       between main's own already-composed 27-count note (from the

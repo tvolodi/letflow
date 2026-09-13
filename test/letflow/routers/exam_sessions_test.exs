@@ -94,7 +94,7 @@ defmodule Letflow.Routers.ExamSessionsTest do
 
   defp iso(%DateTime{} = dt), do: DateTime.to_iso8601(dt)
 
-  defp create_exam!(schema, attrs \\ %{}) do
+  defp create_exam!(schema, attrs) do
     defaults = %{
       "title" => %{"en" => "Exam"},
       "status" => "active",

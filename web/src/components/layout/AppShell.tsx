@@ -31,6 +31,20 @@ const NAV_ITEMS: NavItem[] = [
   { to: '/admin/onboarding/new', label: 'Register Tenant', roles: ['PLATFORM_ADMIN'] },
   { to: '/admin/tenants',       label: 'Tenants',          roles: ['PLATFORM_ADMIN'] },
   { to: '/admin/services',       label: 'Services',         roles: ['PLATFORM_ADMIN'] },
+  // REQ-343: question-bank/exam admin screens. Gated to the two roles that
+  // actually hold Letflow.Api.Authorization's :EntitiesRecordsWrite
+  // permission (REQ-309's role matrix) -- PLATFORM_ADMIN (catch-all) and
+  // PROCESS_OPERATOR. PROCESS_DESIGNER holds :EntitiesDefinitionsWrite but
+  // NOT :EntitiesRecordsWrite, and TASK_WORKER holds neither, so a member of
+  // either role could not actually create/edit/delete a record here even if
+  // shown the nav entry. There is no dedicated "question-bank editor" role
+  // in Letflow.Api.Authorization.roles() to gate on instead:
+  // priv/packs/bilimbaga/pack.json's manifest.required_roles
+  // ("examiner", "department_admin", ...) is read-only advisory only (see
+  // priv/packs/bilimbaga/README.md and REQ-325) and creates no real,
+  // frontend-visible role -- citing the same role-registry checklist
+  // REQ-328's pack install established, rather than inventing a role name.
+  { to: '/admin/bilimbaga',      label: 'Question Bank',    roles: ['PLATFORM_ADMIN', 'PROCESS_OPERATOR'] },
 ]
 
 export function AppShell() {

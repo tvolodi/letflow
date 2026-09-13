@@ -32,6 +32,11 @@ const JSX_FILES_TO_CHECK = [
   'components/entities/EntityRecordForm.tsx',
   'pages/entities/TagListPage.tsx',
   'i18n/EntitiesIntlProvider.tsx',
+  // REQ-343: the generic admin-CRUD screen and the BilimBaga admin section
+  // wiring it replaces nine hand-copied pages with.
+  'pages/entities/EntityCrudPage.tsx',
+  'pages/admin/bilimbaga/BilimBagaAdminPage.tsx',
+  'pages/admin/bilimbaga/BilimBagaEntityRoute.tsx',
 ]
 
 // Matches a JSX text node: `>` then a capitalised/alphabetic run of 3+ chars

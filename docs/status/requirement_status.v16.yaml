@@ -670,3 +670,75 @@ history:
       traced the blur-bug fix mechanics rather than trusting the report).
 
       docs/requirements.yaml flipped pending -> done.
+  - req: REQ-343
+    event: done
+    agent: DOC-UPDATER
+    at: "2026-09-13T22:53:16Z"
+    note: >
+      REQ-343 (wire full list/create/edit/delete screens, nav and
+      role-gated routing for all nine remaining BilimBaga entity types
+      onto REQ-336's admin-CRUD engine, using REQ-340's/REQ-342's
+      widgets) completed -- the FINAL piece of S10 P4. This closes out
+      ALL of S10 P4: REQ-335, REQ-336, REQ-338, REQ-340, REQ-342 and
+      REQ-343 are now all done.
+
+      FRONTEND-DEV built one generic component, EntityCrudPage.tsx,
+      reused across all nine remaining entity types (category,
+      question, answer_option, question_tag, exam, exam_section,
+      exam_question_rule, exam_question_rule_tag,
+      exam_manual_question) rather than nine duplicated per-entity
+      pages -- new web/src/config/bilimbagaEntities.ts supplies the
+      per-entity configuration the shared component reads. New nav
+      shell: web/src/pages/admin/bilimbaga/BilimBagaAdminPage.tsx and
+      BilimBagaEntityRoute.tsx, wired into web/src/router.tsx and
+      web/src/components/layout/AppShell.tsx.
+
+      All three requirement-mandated gaps were recorded, each with
+      real test coverage rather than a comment: (1) answer_option's
+      is_correct field-grant -- the admin form displays and allows
+      setting is_correct, close-out states this is the authoring
+      surface (question-bank editor), distinct from REQ-335's/
+      REQ-338's candidate-facing redaction question; (2)
+      category.parent_id / question.parent_id -- neither field exists
+      on the entity definition today (REQ-326 deliberately did not
+      author them), so no screen/field/workaround was added; proven by
+      web/src/__tests__/bilimbaga-parent-id-exam-assignment-grep.test.ts
+      grepping the new web/ files for parent_id and finding no
+      rendered form field or mocked entity; (3) exam_assignment -- no
+      entity type exists to build a screen for (REQ-327 deliberately
+      did not author it, assignee_id being polymorphic); the exam-admin
+      section's own UI carries a one-line visible note pointing at
+      lib/letflow/exam/session.ex's FINDING section and REQ-327's
+      README-constraints.md, asserted present by the same grep test's
+      companion rendering test.
+
+      Nav role-gating verified against lib/letflow/api/authorization.ex's
+      real permission matrix: PLATFORM_ADMIN and PROCESS_OPERATOR hold
+      :EntitiesRecordsWrite and see the new admin nav entry;
+      PROCESS_DESIGNER and TASK_WORKER do not hold it and do not see
+      the entry, proven by web/src/components/layout/__tests__/
+      AppShell.bilimbaga.test.tsx against the real permission atoms
+      rather than a mocked role list.
+
+      REVIEWER PASS with one narrow i18n fix applied and re-verified:
+      a hard-coded Yes/No boolean-formatting string in the generic
+      form/list rendering was caught, routed through the react-intl
+      catalog (web/src/i18n/entitiesMessages.ts, kk/ru/en), and
+      re-verified clean by REVIEWER on the fixed commit.
+
+      Pipeline: FRONTEND-DEV implementation -> REVIEWER PASS (i18n fix
+      applied and re-verified) -> TEST-DESIGNER (added the missing grep
+      test for the parent_id/exam_assignment gap,
+      web/src/__tests__/bilimbaga-parent-id-exam-assignment-grep.test.ts)
+      -> TEST-DESIGN-VALIDATOR PASS -> TEST-RUNNER (`npm run check`:
+      547+48 tests passing) -> RELEASE-VALIDATOR PASS (independently
+      re-verified every acceptance criterion against real code,
+      including the role-gating permissions in
+      lib/letflow/api/authorization.ex).
+
+      No file or component copied from
+      c:\Users\tvolo\dev\ai-dala\BilimBaga\frontend\ -- built entirely
+      on web/'s own design-system components and REQ-336's/REQ-340's/
+      REQ-342's engine and widgets.
+
+      docs/requirements.yaml flipped pending -> done.

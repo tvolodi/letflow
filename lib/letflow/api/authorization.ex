@@ -130,6 +130,28 @@ defmodule Letflow.Api.Authorization do
   `:EntitiesAttachmentsManage`; list/get-content (read) map to
   `:EntitiesAttachmentsRead`, matching REQ-212's own manage/read split. See
   design §7 (OQ-2) for the role matrix.
+
+  ## `ExamSession*` (REQ-335) — genuinely new, not pre-ported, and CANDIDATE-reachable
+
+  Five new atoms for `Letflow.Routers.ExamSessions`'s five routes
+  (`:ExamSessionStart`, `:ExamSessionRead`, `:ExamSessionSave`,
+  `:ExamSessionSubmit`, `:ExamSessionReportEvent`), each with a real
+  `endpoint_policy_key/2` clause and an identity `required_permission/1`
+  clause, the same shape as `Entities*` above.
+
+  Unlike every `Entities*` addition above, these are granted to
+  `:TASK_WORKER` (this codebase's only non-privileged, ordinary-tenant-user
+  role — the five roles this module ports have no dedicated `:CANDIDATE`
+  role, and REQ-330/REQ-332/REQ-333 never introduced one) rather than left
+  `PLATFORM_ADMIN`-only: a candidate sitting an exam is an ordinary
+  authenticated tenant user reaching their OWN session (every delegate call
+  is additionally ownership-checked inside `Letflow.Exam.Session`/
+  `Letflow.Exam.AntiCheat` themselves, ownership never being a function of
+  role), so gating these atoms to `PLATFORM_ADMIN`-only would lock every
+  candidate out of their own exam. `:PROCESS_DESIGNER`/`:PROCESS_OPERATOR`
+  deliberately do NOT gain these permissions — sitting an exam is not part of
+  either role's existing grant shape, and `PLATFORM_ADMIN`'s catch-all
+  already covers an operator who also needs to probe a session.
   """
 
   @type role ::
@@ -169,6 +191,11 @@ defmodule Letflow.Api.Authorization do
           | :EntitiesRecordsImport
           | :EntitiesAttachmentsManage
           | :EntitiesAttachmentsRead
+          | :ExamSessionStart
+          | :ExamSessionRead
+          | :ExamSessionSave
+          | :ExamSessionSubmit
+          | :ExamSessionReportEvent
 
   @type access_decision_kind :: :Allow | :Deny403 | :AllowWithRowFilter
 
@@ -215,6 +242,11 @@ defmodule Letflow.Api.Authorization do
           | :EntitiesRecordsImport
           | :EntitiesAttachmentsManage
           | :EntitiesAttachmentsRead
+          | :ExamSessionStart
+          | :ExamSessionRead
+          | :ExamSessionSave
+          | :ExamSessionSubmit
+          | :ExamSessionReportEvent
           | :Unknown
 
   @type task_row_scope :: :all | {:own_user_and_groups, String.t()}
@@ -250,7 +282,12 @@ defmodule Letflow.Api.Authorization do
     :EntitiesRecordsExportUnredacted,
     :EntitiesRecordsImport,
     :EntitiesAttachmentsManage,
-    :EntitiesAttachmentsRead
+    :EntitiesAttachmentsRead,
+    :ExamSessionStart,
+    :ExamSessionRead,
+    :ExamSessionSave,
+    :ExamSessionSubmit,
+    :ExamSessionReportEvent
   ]
 
   @doc "All five `Role` values, R-Co's exact names. See `roles_from_strings/1` for untrusted-input conversion."
@@ -258,7 +295,7 @@ defmodule Letflow.Api.Authorization do
   def roles, do: @roles
 
   @doc """
-  All twenty-nine `Permission` values — R-Co's fourteen, plus REQ-075's
+  All thirty-four `Permission` values — R-Co's fourteen, plus REQ-075's
   `:TenantsManage`, plus REQ-076's `:RolesManage`, plus REQ-212's
   `:AttachmentsManage`/`:AttachmentsRead`, plus ISS-0389's
   `:InstancesAdvanceTimer`, plus REQ-309's four entity-subsystem permissions
@@ -267,7 +304,9 @@ defmodule Letflow.Api.Authorization do
   `:EntitiesAggregate`, plus REQ-318's three entity-record export/import
   permissions (`:EntitiesRecordsExport`, `:EntitiesRecordsExportUnredacted`,
   `:EntitiesRecordsImport`), plus REQ-317's `:EntitiesAttachmentsManage`/
-  `:EntitiesAttachmentsRead`.
+  `:EntitiesAttachmentsRead`, plus REQ-335's five exam-session-route
+  permissions (`:ExamSessionStart`, `:ExamSessionRead`, `:ExamSessionSave`,
+  `:ExamSessionSubmit`, `:ExamSessionReportEvent`).
 
   The stated count is asserted against `length(permissions())` by
   `test/letflow/api/authorization_test.exs` (REQ-309 AC1), computed rather than
@@ -617,6 +656,24 @@ defmodule Letflow.Api.Authorization do
       ),
       do: :EntitiesAttachmentsManage
 
+  # REQ-335 — Letflow.Routers.ExamSessions' five routes, mounted at
+  # /exam-sessions (Letflow.Plugs.ApiPipeline). Each atom is candidate-
+  # reachable (this module's moduledoc "ExamSession*" section states why) and
+  # each delegate additionally re-checks ownership inside
+  # Letflow.Exam.Session/Letflow.Exam.AntiCheat themselves — this matrix only
+  # answers "may this role reach this route," never "is this the caller's own
+  # session."
+  def endpoint_policy_key("POST", "/exam-sessions"), do: :ExamSessionStart
+  def endpoint_policy_key("GET", "/exam-sessions/:id"), do: :ExamSessionRead
+
+  def endpoint_policy_key("PUT", "/exam-sessions/:id/answers/:question_id"),
+    do: :ExamSessionSave
+
+  def endpoint_policy_key("POST", "/exam-sessions/:id/submit"), do: :ExamSessionSubmit
+
+  def endpoint_policy_key("POST", "/exam-sessions/:id/events"),
+    do: :ExamSessionReportEvent
+
   def endpoint_policy_key(_method, _path), do: :Unknown
 
   @doc """
@@ -733,6 +790,14 @@ defmodule Letflow.Api.Authorization do
   def required_permission(:EntitiesAttachmentsManage), do: :EntitiesAttachmentsManage
   def required_permission(:EntitiesAttachmentsRead), do: :EntitiesAttachmentsRead
 
+  # REQ-335 — identity clauses (policy-key name == permission name), same
+  # shape as Entities* above.
+  def required_permission(:ExamSessionStart), do: :ExamSessionStart
+  def required_permission(:ExamSessionRead), do: :ExamSessionRead
+  def required_permission(:ExamSessionSave), do: :ExamSessionSave
+  def required_permission(:ExamSessionSubmit), do: :ExamSessionSubmit
+  def required_permission(:ExamSessionReportEvent), do: :ExamSessionReportEvent
+
   def required_permission(:Unknown), do: :MetricsRead
 
   @doc "Ports `hasPermission/2` (L171-176) exactly."
@@ -837,7 +902,21 @@ defmodule Letflow.Api.Authorization do
         # REQ-317 (design §7 OQ-2 role matrix): read only -- no write-class
         # entity permission at all is granted to this role, mirroring its
         # existing instance-scoped :AttachmentsRead-only grant.
-        :EntitiesAttachmentsRead
+        :EntitiesAttachmentsRead,
+        # REQ-335: TASK_WORKER is this module's only non-privileged,
+        # ordinary-tenant-user role, and a candidate sitting an exam is
+        # exactly that -- an authenticated tenant user with no
+        # process-design/operator authority. All five exam-session route
+        # permissions are granted here (this module's moduledoc
+        # "ExamSession*" section states why PLATFORM_ADMIN-only would be
+        # wrong); ownership of the specific session is enforced inside
+        # Letflow.Exam.Session/Letflow.Exam.AntiCheat themselves, never by
+        # this role grant.
+        :ExamSessionStart,
+        :ExamSessionRead,
+        :ExamSessionSave,
+        :ExamSessionSubmit,
+        :ExamSessionReportEvent
       ]
 
   def role_allows?(:AGENT_RUNNER, _permission), do: false

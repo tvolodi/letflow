@@ -1,0 +1,67 @@
+id: ISS-0647
+title: TASK_WORKER's existing EntitiesQuery/EntitiesAggregate grant may let a candidate read question.is_correct directly via the generic POST /entities/query route, bypassing REQ-335's hand-redacted exam session route
+discovered_by: SECURITY-REVIEWER
+discovered_in_run: WF02-REQ335-20260913
+discovered_at: "2026-09-13T14:58:50Z"
+severity: MAJOR
+description: >
+  Found while SECURITY-REVIEWER reviewed REQ-335 (the exam-session HTTP
+  route surface). REQ-335's GET /exam-sessions/:id route hand-assembles
+  its response to explicitly exclude question.is_correct and other
+  answer-key fields -- verified structurally safe: an explicit field
+  allowlist built via named map literals, not a passthrough of any
+  entity record's full field_values, confirmed by tracing every field
+  in Letflow.Exam.Session.get_session_state_for_user/3 back to its
+  source.
+
+  However, TASK_WORKER -- this codebase's only non-privileged,
+  ordinary-tenant-user role (there is no dedicated CANDIDATE role, and
+  REQ-335's five new ExamSession* permission atoms were granted to
+  this same role) -- ALREADY held EntitiesQuery and EntitiesAggregate
+  permissions before REQ-335, predating this change entirely
+  (confirmed via `git diff main...HEAD -- lib/letflow/api/authorization.ex`
+  showing only the five new atoms added to TASK_WORKER's existing
+  clause; EntitiesQuery/EntitiesAggregate were already there).
+
+  If those pre-existing permissions let a TASK_WORKER-scoped caller
+  hit the generic POST /entities/query route directly against the
+  `question` or `answer_option` entity types, they could read
+  is_correct (and any other field) completely unredacted -- bypassing
+  REQ-335's careful hand-assembly on the dedicated exam-session route
+  entirely. REQ-335's own careful redaction work only closes ONE path
+  to this data; if the generic query route is also reachable with the
+  same role, the data is not actually protected.
+
+  NOT YET CONFIRMED AS A LIVE EXPLOIT: this is SECURITY-REVIEWER's
+  reasoned-from-permissions finding, not an empirically reproduced
+  read. The permission grant existing does not by itself prove the
+  route returns the field -- there could be another guard (a route-
+  level restriction, a FieldGrants row this description's own author
+  didn't check for, or an entity-type-level access restriction)
+  already in place. That is exactly why acceptance criterion 1 demands
+  an empirical test before anything else.
+
+  Severity MAJOR (pending confirmation): if reachable, this is a
+  real answer-key leak to any authenticated tenant user with the
+  TASK_WORKER role, not just exam candidates -- broader exposure than
+  REQ-335's own scope. No security exposure is claimed as confirmed
+  live yet; severity may be downgraded to LOW/closed as "already
+  guarded" if the fact-finding step in acceptance criterion 1 shows
+  the field is not actually reachable.
+
+  FIX DIRECTION (if confirmed reachable): an entity_field_restrictions/
+  FieldGrants row for is_correct on the question and answer_option
+  entity types (the pack currently has none configured for this field,
+  per REQ-335's own investigation during its redaction-mechanism
+  decision), or narrowing TASK_WORKER's EntitiesQuery scope, or another
+  mechanism -- to be decided by whoever picks this up, gated by
+  SECURITY-REVIEWER, with a regression test proving the field is no
+  longer reachable via the generic query route.
+affected_files:
+  - lib/letflow/api/authorization.ex
+  - lib/letflow/entities/query/field_grants.ex
+  - priv/packs/bilimbaga/entity_definitions/question.json
+  - priv/packs/bilimbaga/entity_definitions/answer_option.json
+queue_ref: Q-647
+github_ref: GH-1352
+status: open

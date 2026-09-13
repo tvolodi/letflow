@@ -1528,7 +1528,39 @@ defmodule Letflow.Simulation.Req207VortexTest do
           # above ("shipped permission vocabulary only, which its own scope
           # fence confirms builds no route"). Disposition unaffected either
           # way -- still BLOCKED_ON_DEPENDENCY on S8's :gui-dispatch stub.
-          "REQ-331"
+          "REQ-331",
+          # REQ-336, admitted 2026-09-13. `status: pending` at admission
+          # time (filing builds nothing). Owner FRONTEND-DEV, bucket C
+          # (client) -- a generic admin-CRUD screen engine entirely under
+          # web/src/, driven by an entity definition already served over
+          # the existing POST /entities/query route (REQ-311). It adds no
+          # backend route, no lib/letflow/routers/ change, and does not
+          # touch Letflow.Routers.Entities or the :gui-dispatch stub this
+          # scenario's six steps depend on -- it is a consumer of the
+          # already-built backend surface, not a change to it. Disposition
+          # unaffected -- still BLOCKED_ON_DEPENDENCY on S8's :gui-dispatch
+          # stub.
+          "REQ-336",
+          # REQ-338/339/340/342/343, admitted 2026-09-13, filed together
+          # as part of S10 P4's registration batch. `status: pending` at
+          # admission time (filing builds nothing). REQ-338/340/342/343
+          # are owner FRONTEND-DEV, bucket C (client) -- the candidate
+          # exam-taking UI and admin-CRUD field-registry/screen-wiring
+          # work, entirely under web/src/, consuming REQ-335's exam-
+          # session routes and REQ-311's existing POST /entities/query
+          # -- none adds a backend route or touches
+          # Letflow.Routers.Entities. REQ-339 is owner DOC-UPDATER, pure
+          # stage-file bookkeeping (bucket-C inventory update), same
+          # basis as REQ-334's own precedent two entries above this
+          # scenario's tripwire (filing/doc-only, zero lib/ footprint).
+          # None of the five touches the :gui-dispatch stub this
+          # scenario's six steps depend on. Disposition unaffected --
+          # still BLOCKED_ON_DEPENDENCY on S8's :gui-dispatch stub.
+          "REQ-338",
+          "REQ-339",
+          "REQ-340",
+          "REQ-342",
+          "REQ-343"
         ])
 
       # SECOND-TIER ALLOWLIST -- admitted ONLY WHILE `status: pending`.

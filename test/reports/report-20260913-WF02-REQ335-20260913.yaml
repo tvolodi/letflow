@@ -1,0 +1,143 @@
+run_id: WF02-REQ335-20260913
+agent: TEST-RUNNER
+workflow: WF-02 (Requirement Implementation), Step 4 -- Test run
+timestamp_utc: "2026-09-13T15:34:24Z"
+branch: feature/WF02-REQ335-20260913
+head_commit: 0bd205f5
+req335_commit: 262ed233
+note_on_head: >
+  Branch head (0bd205f5) is two commits past REQ-335's own feature commit
+  (262ed233 "feat(REQ-335): candidate-facing exam-session HTTP route
+  surface") -- 56652286 (fix(REQ-207): vortex allowlist for new S10 P4
+  reqs) and 0bd205f5 (chore(ORCH): file ISS-0647) landed on top. Both are
+  unrelated bookkeeping/allowlist commits, already verified passing per
+  the briefing. This run tests the branch as it currently stands.
+
+git_state:
+  clean_tree_before_run: true
+
+environment:
+  toolchain: "Elixir 1.20.3 (compiled with Erlang/OTP 29) via asdf shims (not on default PATH in this shell -- required `source ~/.asdf/asdf.sh`). letflow.check_toolchain reports Elixir/OTP as matching .tool-versions; Rust rustc 1.97.1 present and matching in this environment (unlike some prior sandboxes)."
+  docker_compose: "sudo docker compose up -d -- letflow-1-postgres-1 and letflow-1-keycloak-1 already Running, no-op. .env sets LETFLOW_DB_PORT=5463."
+  deps: "deps/ already fetched -- no network access needed this run."
+
+commands_run:
+  - "mix format --check-formatted -- exit 0, no output (fully formatted)."
+  - "mix letflow.check -- full repository, all steps (see below). Run TWICE: first attempt raced against a second concurrent invocation I mistakenly launched before the first had finished (see caveat below); a clean third, fully isolated run is the one reported here."
+
+caveat_on_earlier_runs: >
+  My first invocation of `mix letflow.check` exceeded this tool's 120s/600s
+  foreground timeouts and was auto-backgrounded by the harness. Believing
+  it was still safe to wait, I launched a second `mix letflow.check`
+  concurrently while the first was still running its test partitions. Both
+  ran the full 8-partition suite against the same Postgres container at
+  the same time, doubling connection demand (2 x N=8 x pool_size=10 = 160
+  against Postgres's max_connections=100), which produced a large batch of
+  `DBConnection.ConnectionError` / `Postgrex.Error 53300 too_many_connections`
+  failures (41 and 43 failures respectively across the two concurrent
+  runs, spanning TenantConfigTest, EntitiesAggregateTest, DDLTest,
+  TenantStatusTest, ServiceCatalogReaperTest, TenantSchemaReaperTest,
+  ApiPipelineIntegrationTest, ApiPipelineIntegrationTest, and others).
+  This was a self-inflicted environment artifact from running two full
+  suites concurrently, NOT a code defect -- confirmed by re-running once,
+  alone, after verifying no `mix test`/`beam.smp` process was still
+  running (`ps aux`), which reproduced cleanly with 0 failures across all
+  8 partitions. The first (solo, non-concurrent) backgrounded run had
+  ALSO already completed cleanly with 4199/4199 passed before I made the
+  concurrency mistake -- its only failure was the real ISS-0069 finding
+  below. Reported here so this mistake is visible rather than silently
+  dropped; it should not be read as evidence of test-suite flakiness.
+
+letflow_check:
+  command: "mix letflow.check"
+  exit_code: 1
+  steps_before_test:
+    - "letflow.check_toolchain: OK -- Elixir 1.20.3 / OTP 29 / Rust rustc 1.97.1 matches .tool-versions."
+    - "letflow.check_requirements_registration: OK -- 311 entries = 309 registered + 2 deferred (REQ-223/224, pre-existing, unrelated) + 0 unclassified."
+    - "letflow.check_req_id_collision: OK -- no REQ-NNN id collision with origin/main."
+    - "letflow.check_deferral_staleness: OK (advisory stage-activity report only, no gate failure)."
+    - "letflow.lint_handoffs: OK -- 0 new violations across 2486 handoff files (25 pre-existing grandfathered)."
+    - "letflow.check_async_sandbox_reachability: OK -- 80 async:true test files scanned, 0 violations."
+    - "letflow.check_issue_refs: OK -- 329 files under docs/issues/, every cross-reference well-formed."
+    - "format --check-formatted: passed silently (confirmed independently too, see commands_run)."
+    - "compile --warnings-as-errors: passed silently (no warnings, no errors)."
+  test_step:
+    command: "letflow.check.test -> scripts/test_parallel.sh (8-way, N=8 from nproc)"
+    partitions: 8
+    output: |
+      test_parallel: N=8 (source: nproc)
+      test_parallel: TEST_POOL_SIZE=10 (computed: N=8, max_connections=100, superuser_reserved=3, headroom=10, nonpool_reserve=5)
+      partition 1: 394 tests, 2 properties, 0 failures, exit 0
+      partition 2: 490 tests, 0 properties, 0 failures, exit 0
+      partition 3: 605 tests, 0 properties, 0 failures, exit 0
+      partition 4: 539 tests, 1 property, 0 failures, exit 0
+      partition 5: 667 tests, 0 properties, 0 failures, exit 0
+      partition 6: 431 tests, 0 properties, 0 failures, exit 0
+      partition 7: 479 tests, 2 properties, 0 failures, exit 0
+      partition 8: 588 tests, 1 property, 0 failures, exit 0
+      ---
+      combined: 4193 tests, 6 properties, 0 failures (4199/4199 passed)
+    real_test_result: "4199/4199 passed, 0 failures, across all 8 partitions. Reproduced identically on two separate solo (non-concurrent) runs."
+    gate_failure_after_tests: >
+      ** (Mix) mix letflow.check.test: FAILED -- "default values for the
+      optional arguments" warning found (ISS-0069's own class recurring):
+        [partition 1]     warning: default values for the optional
+        arguments in the private function create_exam!/2 are never used
+      Partition logs: /tmp/letflow_test_parallel.apLR8W
+
+finding:
+  severity: REAL -- blocking, not environmental
+  location: "test/letflow/routers/exam_sessions_test.exs:97"
+  detail: >
+    `defp create_exam!(schema, attrs \\ %{})` declares a default value for
+    `attrs`, but the file's only call site
+    (`build_minimal_exam!/2` at line 153: `create_exam!(schema, exam_attrs)`)
+    always passes `attrs` explicitly -- there is no arity-1 call anywhere
+    in this file. Confirmed by grep: `create_exam!(` appears exactly twice
+    in the file, once as the definition and once as this fully-applied
+    call. The compiler is therefore correct that the default is dead code,
+    and `mix letflow.check.test`'s ISS-0069 warning-class gate correctly
+    fails the build on it (this is the same warning class ISS-0069 was
+    filed to catch, recurring here in a new file).
+  fix_owner: TEST-DESIGNER (this is test code, not application code -- REQ-332/REQ-333's lib/letflow/exam/ modules are unaffected)
+  suggested_fix: >
+    Either drop the default (`defp create_exam!(schema, attrs)`) since
+    every call site already supplies attrs, or add a genuine arity-1 call
+    site if an argument-less call was intended. The former is the minimal,
+    correct fix given the current test file's usage pattern.
+
+comparison_to_briefing_baseline: >
+  The known pre-existing flakes named in the briefing (rust-pin
+  CheckToolchainTest :enoent, ColumnPromotionTest AC1 parallel-load flake)
+  did NOT appear in either clean solo run -- rustc is actually present and
+  matching in this environment, and ColumnPromotionTest showed 0 failures
+  in all 8 partitions both times. Nothing under test/letflow/routers/,
+  test/letflow/exam/, test/letflow/api/, tenant isolation, or the vortex
+  simulation test failed as an actual test -- the vortex test
+  (req207_vortex_test.exs) is presumably folded into one of the 8
+  partitions with 0 reported failures, consistent with the briefing's
+  note that its allowlist fix (commit 56652286) already made it pass. The
+  ONE real, non-environmental problem is the ISS-0069 compiler-warning
+  gate failure described above.
+
+verdict: FAIL -- mix letflow.check does not pass; one real, fixable finding blocks merge
+verdict_reasoning: >
+  All 4199 tests pass with 0 failures, and `mix format --check-formatted`
+  exits 0 with no diffs, so the code itself (both REQ-335's router and its
+  test assertions) is functionally correct and properly formatted. However
+  `mix letflow.check`'s combined exit code is 1, and unlike the briefing's
+  named environmental flakes, this branch's actual root cause is a real
+  static-analysis gate (ISS-0069's dead-default-argument warning) firing
+  on a genuine, non-flaky issue in
+  test/letflow/routers/exam_sessions_test.exs -- it fires identically on
+  every clean run, not intermittently, and traces to a specific line this
+  branch's own test file introduced. This must be treated as a real,
+  potentially blocking finding per the instructions, not dismissed as
+  known noise.
+next_action: >
+  Do not merge yet. Route back to TEST-DESIGNER (or ELIXIR-DEV picking up
+  the one-line test fix, whichever this project's workflow prefers for a
+  test-file-only compiler-warning fix) to remove the dead default on
+  create_exam!/2 in test/letflow/routers/exam_sessions_test.exs:97, then
+  re-run mix letflow.check to confirm a clean 0-exit before RELEASE-VALIDATOR
+  re-verification.

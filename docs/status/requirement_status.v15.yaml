@@ -1003,6 +1003,31 @@ history:
       once a (candidate_id, exam_id)-scoped lock target exists.
 
       docs/requirements.yaml flipped pending -> done.
+  - req: REQ-333
+    event: started
+    agent: ORCH
+    at: "2026-09-13T08:00:09Z"
+    note: >
+      Claimed letflow-queue task 629 (GH#1320, S10 P3, bucket C policy +
+      bucket A storage). Checked REQ-333's own enforced ambiguity
+      escape first: REQ-330's design doc section 5 DOES name the
+      storage shape specifically enough to build without interpretation
+      -- session_event entity records (REQ-329), written through
+      Letflow.Entities.Records, chosen over raw EventStore events or an
+      aggregate counter (decision 0030 Finding 2) -- and DOES specify
+      the write-amplification mitigation: record_signal/4 reads the
+      session's most recent session_event.occurred_at via an ordinary
+      Letflow.Entities.Query read and rejects a signal inside a
+      configured debounce window. Ambiguity escape does NOT apply;
+      proceeding, not blocking. Build Letflow.Exam.AntiCheat (the
+      fourth module in REQ-330's rule-2 table, PENDING sign-off) --
+      validates exactly three signal types (tab_switch/blur/
+      fullscreen_exit), derives action_taken from the exam's
+      on_tab_switch config (never from caller input, per service.go
+      AC-10 -- the security-relevant property), branches log/warn/
+      submit (submit triggers Letflow.Exam.Session.submit/3), and
+      enforces the debounce window. No HTTP route, no new permission
+      atom. Dispatching to ELIXIR-DEV.
   - req: REQ-334
     event: blocked
     agent: ORCH

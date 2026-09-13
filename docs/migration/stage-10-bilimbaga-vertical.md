@@ -1,7 +1,16 @@
 # Stage 10 — BilimBaga vertical
 
-Status: P1 in progress. Depends on: S4, S6, S8. Requirements: `REQ-295`–`REQ-323`
-filed (29 as of 2026-09-12); P2 onward not expanded yet.
+Status: P0–P3 complete. Depends on: S4, S6, S8. Requirements: `REQ-295`–`REQ-334`
+filed (40 as of 2026-09-13), all `done`. **P4 is expanded but not yet built**:
+seven requirements are filed and `pending` — `REQ-335`, `REQ-336`,
+`REQ-338`–`REQ-340`, `REQ-342` and `REQ-343`, covering the `web/` admin-CRUD
+engine, the candidate exam-taking UI and its route surface. (337 and 341 were
+never used, so that span is deliberately non-contiguous.) No screen exists yet
+and `web/src/pages/exam/` is still absent. P5 (Playwright parity) and P6
+(conditional importer) are not expanded. Certificate issuance — P3's second
+half — is deliberately not expanded: it needs PDF+QR rendering, `mix.exs`
+carries no such dependency, and gaps 4 and 5 have their *mechanism* settled by
+decision 0027 but no owner.
 
 Created 2026-09-09. See
 [`decisions/0022-bilimbaga-vertical.md`](decisions/0022-bilimbaga-vertical.md)
@@ -316,19 +325,19 @@ extended to gap 13, and refined by
 which makes gaps 10 and 11 consequences of the storage model rather than
 independent work.
 
-No implementation sign-off yet. Re-verified 2026-09-11, one clause of the three
-this line originally carried is still true:
+Re-verified 2026-09-13. All three clauses this line originally carried are now
+false — P0 through P3 are complete and only P4/P5/P6 and certificate issuance
+remain:
 
-- **"No S10 requirement exists" — no longer true.** Twenty-nine S10 requirements
-  are filed (`REQ-295`–`REQ-323`, counting distinct `- id: REQ-NNN` entries whose
-  own `stage:` field is S10); `REQ-322` (this requirement) and `REQ-323` are
-  `pending`, the rest are `done`.
-- **"No `lib/letflow/exam/` directory exists" — still true**, and
-  `web/src/pages/exam/` does not exist either (`ls lib/letflow/exam/` and
-  `ls web/src/pages/exam/` both fail with "No such file or directory"). The
-  bucket-C inventory above is correspondingly still empty, which is the intended
-  state this early.
-- **"No pack document has been authored" — still true.** The pack *format* now
-  carries entity definitions (`REQ-303`–`REQ-306`), but no BilimBaga pack
-  document has been written against it (no such file exists under `lib/` or
-  elsewhere in the tree); that is P2 work.
+- **"No S10 requirement exists" — no longer true.** Forty S10 requirements are
+  filed (`REQ-295`–`REQ-334`, counting distinct `- id: REQ-NNN` entries whose
+  own `stage:` field is S10), and all forty are `done`.
+- **"No `lib/letflow/exam/` directory exists" — no longer true.** It holds four
+  modules — `session.ex`, `question_set_resolver.ex`, `scoring.ex`,
+  `anti_cheat.ex` — each carrying its rule-2 justifications and a `REVIEWER`
+  bucket-C sign-off in the inventory above, which is correspondingly no longer
+  empty. `web/src/pages/exam/` *is* still absent: that is P4, unexpanded.
+- **"No pack document has been authored" — no longer true.**
+  `priv/packs/bilimbaga/pack.json` exists and has been installed for real
+  against a provisioned tenant (`REQ-328`), carrying the fifteen entity
+  definition documents under `priv/packs/bilimbaga/entity_definitions/`.

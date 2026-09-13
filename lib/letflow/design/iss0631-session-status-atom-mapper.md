@@ -17,9 +17,10 @@ into the atom table. Whether `:in_progress` is already interned when
 guarantees. `outcome_from_session/1`'s three atoms (`:submitted`, `:auto_submitted`,
 `:grading_pending`) are accidentally safe today only because they also appear as
 executed literals elsewhere in this same module (confirmed: `:auto_submitted` at line
-376, `:submitted` at line 336/743, `:grading_pending` at line 336/873) — a fragile
-safety net that a future edit removing any of those three anchor lines would silently
-break.
+376, `:submitted` at line 743, `:grading_pending` at line 873 — line 336 itself is a
+*string*-literal guard, `in ["submitted", "auto_submitted", "grading_pending"]`, not an
+executed atom literal, and is not part of this evidence) — a fragile safety net that a
+future edit removing any of those three anchor lines would silently break.
 
 I re-read `lib/letflow/exam/session.ex` in full on this branch (clean tree, one
 bookkeeping commit `5ad92b39` ahead of `ae2b808b`) and confirm both call sites and all
@@ -92,8 +93,8 @@ issue's own audit finding: `outcome_from_session/1`'s current safety is exactly 
 fragile, accidental kind ISSUE-FIXER flagged and *recommended* fixing in the same pass,
 precisely so a
 later removal of one of the three anchor literals (`:auto_submitted` at line 376,
-`:submitted` at line 336/743, `:grading_pending` at line 336/873) can't silently
-reintroduce this exact bug in the other call site. Fixing only one call site would leave
+`:submitted` at line 743, `:grading_pending` at line 873) can't silently reintroduce
+this exact bug in the other call site. Fixing only one call site would leave
 that recommendation unaddressed for no scope-discipline reason — this is not a case of
 "the fix does more than the issue asked and risks scope creep," it's the same one-line
 root cause (an implicit-load-order-dependent atom conversion on the same field) appearing
@@ -201,6 +202,15 @@ than probabilistically.
    comment exactly this reasoning, so a future reader doesn't mistake it for an
    arbitrary style-lint test.
 
+   Optional stronger alternative TEST-DESIGNER may consider instead of (or alongside)
+   the source-text grep: inspect the compiled BEAM object code's call graph directly
+   (e.g. disassemble the `Elixir.Letflow.Exam.Session` module's abstract/core-Erlang or
+   raw beam chunks and assert no call to `'Elixir.String':to_existing_atom/1` or
+   `to_atom/1` appears) — this is robust to comments/formatting/string-literal
+   coincidences in a way a plain source grep is not, at the cost of more test
+   machinery. The source-grep approach above is not wrong and is sufficient for this
+   fix's risk level; this is a strictly-more-robust option, not a required one.
+
 3. **Error-shape test** (covers acceptance criterion 3, §3 above): call
    `session_status_atom/1` — or, since it's private, exercise it through a public entry
    point with a corrupted persisted status (e.g. seed a `session` entity row with
@@ -219,10 +229,15 @@ than probabilistically.
    `outcome_from_session/1`'s public callers, asserting each maps to the expected atom.
    Existing REQ-332 tests may already cover most of these incidentally through
    `create/3`/`submit/3`/`finalize_expired/3` — TEST-DESIGNER should check for overlap
-   before adding duplicate coverage, but the `"grading_pending"` value (no code path
-   currently sets it via `update_session_after_submit/4`, since no grading-pending
-   producer exists yet per the moduledoc) likely needs a directly-seeded row, same
-   technique as test 3.
+   before adding duplicate coverage. `"grading_pending"` IS reachable via a normal
+   functional test, not via seeding a corrupted row: `Letflow.Exam.Scoring.build_outcome/3`
+   (`lib/letflow/exam/scoring.ex:233-234`) sets `status: :grading_pending` whenever the
+   scored session includes at least one `:short_text` question, and that outcome flows
+   through `score_and_persist/3` into `update_session_after_submit/4`
+   (`session.ex:835-859`) via the normal `submit/3`/`finalize_expired/3` path — so the
+   test for this value is: submit a session containing a short-text question, then
+   assert the persisted/returned status round-trips to `:grading_pending` through
+   `session_status_atom/1`. No direct entity seeding is needed for this one.
 
 ## 5. Invariants preserved
 

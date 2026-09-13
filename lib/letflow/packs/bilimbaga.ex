@@ -52,13 +52,24 @@ defmodule Letflow.Packs.Bilimbaga do
 
   Every place in this codebase that provisions the REAL bilimbaga
   `question`/`answer_option` entity definitions into a tenant schema must
-  call `seed_answer_key_field_restrictions!/1` immediately after activating
-  them. Today that is exactly one place:
-  `Letflow.ExamFixtures.provisioned_tenant_with_exam_definitions/1`. A
-  future real production installer for this pack (none exists yet -- see
-  `test/letflow/packs/bilimbaga_pack_install_test.exs`'s own "no production
-  module is modified by this requirement" note, which was true only because
-  no such installer existed at the time) must do the same.
+  call `seed_answer_key_field_restrictions!/1`. Two places do:
+
+    - `Letflow.Definitions.SolutionPack.install/3` (the real, production
+      `POST /solution-packs/install` path) -- via its private
+      `seed_pack_specific_field_restrictions/2` hook inside `run_install/5`,
+      conditioned on the installed entity types covering this pack's
+      answer-key entity types. This is the fix for the gap this moduledoc
+      used to describe as still open: a real tenant installing this pack
+      through the live API previously got zero protection, because the only
+      caller was the test helper below. See
+      `test/letflow/definitions/solution_pack_bilimbaga_field_restrictions_test.exs`
+      for the end-to-end regression test proving this path now works
+      without any test-only seeding call.
+    - `Letflow.ExamFixtures.provisioned_tenant_with_exam_definitions/1`, a
+      TEST helper that provisions the same entity definitions directly
+      (bypassing `install/3`) for tests that don't need the full pack-install
+      flow. This alone is NOT sufficient production protection -- it never
+      was; that was the exact gap ISS-0647's rework closed above.
   """
 
   alias Letflow.Repo

@@ -264,3 +264,32 @@ history:
       REVIEWER-confirmed.
 
       docs/requirements.yaml flipped pending -> done.
+  - req: REQ-336
+    event: blocked
+    agent: ORCH
+    at: "2026-09-13T16:13:04Z"
+    note: >
+      Claimed letflow-queue task 633 cleanly (no sibling collision) and
+      dispatched FRONTEND-DEV, which built the full admin-CRUD engine
+      (web/src/api/entities.ts, EntityRecordForm.tsx, TagListPage.tsx,
+      i18n catalog) against the tag pilot entity, 474/474 web/ tests
+      passing. REVIEWER then found a genuine BLOCKER-severity backend gap
+      while checking REQ-336's own duplicate-tag acceptance criterion:
+      pack-installed entity types' declared unique constraints
+      (tag.json's uq_tag_name included) are never actually enforced --
+      column promotion, the only mechanism that materializes a
+      constraint into real DDL, is never triggered at pack-install time.
+      Empirically proven (a throwaway test created two "tag" records
+      with an identical name in the same tenant; both succeeded with
+      distinct record_ids, no error). Filed as ISS-0648 (queue task 648,
+      GH#1354, BLOCKER). REQ-336's own AC4 ("creating a tag with a
+      duplicate name surfaces the API's real 409/422") cannot be
+      genuinely verified until ISS-0648 is fixed -- the frontend's
+      error-shape handling is correct but never actually exercised
+      against a real failure today. Released queue task 633 back to
+      status: open rather than sitting on it. REQ-336's implementation
+      is preserved uncommitted in the working tree (not discarded) --
+      resuming this run once ISS-0648 lands rather than redoing the
+      frontend work. REQ-340/REQ-342/REQ-343 inherit the same gap and
+      are blocked in turn. Proceeding to REQ-338 (no dependency on
+      REQ-336) while ISS-0648 is queued for its own fix cycle.

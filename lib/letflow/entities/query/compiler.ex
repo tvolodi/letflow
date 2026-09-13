@@ -984,9 +984,18 @@ defmodule Letflow.Entities.Query.Compiler do
     end
   end
 
+  # `record_id` is wrapped in `type/2` because this query runs against a
+  # SCHEMALESS `from(table_name)` binding (a per-type promoted table) --
+  # with no `Ecto.Schema` field declaration to tell Ecto the column is a
+  # uuid, the raw Postgrex driver value (a 16-byte binary) would otherwise
+  # come back unloaded, contradicting this module's own `entity_row()`
+  # type (`record_id: String.t()`). `type(field(r, :record_id), Ecto.UUID)`
+  # tells Ecto the column's real type so it loads/casts it exactly the way
+  # a real `field(:record_id, Ecto.UUID)` schema declaration would --
+  # matching what `entity_record_latest`'s `Latest` schema gets for free.
   defp select_entity_row(query) do
     select(query, [r], %{
-      record_id: field(r, :record_id),
+      record_id: type(field(r, :record_id), Ecto.UUID),
       field_values: field(r, :field_values),
       deleted: field(r, :deleted),
       entity_def_version: field(r, :entity_def_version),
@@ -1130,10 +1139,14 @@ defmodule Letflow.Entities.Query.Compiler do
     end)
   end
 
+  # Same `type/2` reasoning as `select_entity_row/1` above -- a joined
+  # binding can equally be a schemaless per-type-table source, so
+  # `record_id` is always wrapped regardless of which physical table this
+  # particular binding turns out to read from.
   defp primary_entity_row_select_dynamic do
     dynamic([], %{
       primary: %{
-        record_id: field(as(:primary), :record_id),
+        record_id: type(field(as(:primary), :record_id), Ecto.UUID),
         field_values: field(as(:primary), :field_values),
         deleted: field(as(:primary), :deleted),
         entity_def_version: field(as(:primary), :entity_def_version),
@@ -1147,7 +1160,7 @@ defmodule Letflow.Entities.Query.Compiler do
   defp joined_entity_row_select_dynamic(exposed_key, alias_atom) do
     dynamic([], %{
       ^exposed_key => %{
-        record_id: field(as(^alias_atom), :record_id),
+        record_id: type(field(as(^alias_atom), :record_id), Ecto.UUID),
         field_values: field(as(^alias_atom), :field_values),
         deleted: field(as(^alias_atom), :deleted),
         entity_def_version: field(as(^alias_atom), :entity_def_version),

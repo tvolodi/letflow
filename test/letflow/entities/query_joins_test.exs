@@ -364,15 +364,13 @@ defmodule Letflow.Entities.QueryJoinsTest do
 
       assert {:ok, query} = Compiler.compile(request, schema)
 
-      # A per-type-table-sourced select reads `record_id` back as a raw
-      # 16-byte binary (no Ecto.Schema type info on a schemaless binding to
-      # auto-load it) -- decoded here via Ecto.UUID.load!/1 for the
-      # comparison; the row's own `field_values` (always the read-side
-      # payload, promoted or not, design §0) is unaffected by this either
-      # way.
+      # A per-type-table-sourced select casts `record_id` back to a real
+      # string via `type/2` in `Compiler`'s select (ISS-0652) -- the row's
+      # own `field_values` (always the read-side payload, promoted or not,
+      # design §0) is unaffected by this either way.
       assert [row] = Repo.all(query, prefix: schema)
       assert row.primary.field_values["stem"] == "linked question"
-      assert Ecto.UUID.load!(row["tag_m2m"].record_id) == t1.record_id
+      assert row["tag_m2m"].record_id == t1.record_id
       assert row["tag_m2m"].field_values["label"] == "math"
     end
   end
@@ -708,6 +706,50 @@ defmodule Letflow.Entities.QueryJoinsTest do
 
       assert {:ok, query} = Compiler.compile(sort_request, schema)
       assert [%{field_values: %{"batch_code" => "b"}}] = Repo.all(query, prefix: schema)
+    end
+  end
+
+  # ---------------------------------------------------------------------------------
+  # ISS-0652 -- `select_entity_row/1` (the PLAIN, non-join per-type-table
+  # compile path) must return `record_id` as a real `String.t()`, exactly
+  # as `entity_row()`'s own `@type` promises, not the raw 16-byte binary a
+  # schemaless `from(table_name)` select would otherwise hand back
+  # unloaded. Two independent call sites (`entities.ex`'s
+  # `normalise_record_id/1`) had already copy-pasted a local decode
+  # workaround around this defect instead of it being fixed at the source
+  # -- this proves the source itself is now fixed, so no caller needs to
+  # decode anything.
+  # ---------------------------------------------------------------------------------
+
+  describe "ISS-0652 regression -- select_entity_row/1 casts record_id to a string" do
+    test "a plain (non-join) query against a promoted per-type table returns record_id as a real String.t()" do
+      %{tenant_id: tenant_id, schema_name: schema} = provisioned_tenant()
+
+      create_active_definition!(schema, %{
+        name: "question",
+        display_name: "Question",
+        fields: [%{name: "stem", type: :string, queried: true}]
+      })
+
+      promote_and_create_table!(schema, tenant_id, "question", "stem", "text")
+
+      question = create_record!(schema, "question", %{"stem" => "2 + 2 = ?"})
+
+      request = %{
+        entity_type: "question",
+        filters: [%{field: "stem", op: :eq, value: "2 + 2 = ?"}]
+      }
+
+      assert {:ok, query} = Compiler.compile(request, schema)
+      assert [row] = Repo.all(query, prefix: schema)
+
+      # The defect this regression guards: a raw, un-cast uuid column comes
+      # back from Postgrex as a 16-byte binary, not a 36-character string --
+      # asserting both the type AND the exact value closes that gap.
+      assert is_binary(row.record_id)
+      assert byte_size(row.record_id) == 36
+      assert row.record_id == question.record_id
+      assert row.field_values["stem"] == "2 + 2 = ?"
     end
   end
 end

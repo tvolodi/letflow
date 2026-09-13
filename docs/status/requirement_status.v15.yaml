@@ -825,3 +825,25 @@ history:
       gap, not a permanent defect, matching the REQ-328/REQ-327
       precedent). Deferring REQ-331 until REQ-330 reaches done; will
       re-poll the queue rather than re-claim 627 in the meantime.
+  - req: REQ-331
+    event: started
+    agent: ORCH
+    at: "2026-09-13T05:39:39Z"
+    note: >
+      Re-claimed letflow-queue task 627 -- REQ-330 (design record) is
+      now status: done, merged via PR #1323 (commit afcea13b).
+      Confirmed REQ-330's own verdict on this behaviour BEFORE
+      dispatching, per this requirement's own acceptance criterion:
+      lib/letflow/design/req330-exam-live-session.md section 2, "Verdict:
+      bucket B -- CONFIRMED, not overturned." Build an eighth per-tenant
+      sweep on the existing lib/letflow/scheduler/poller.ex (no new
+      GenServer/supervisor child/ticker), matching the existing seven
+      sweeps' conventions (fresh config read per tick,
+      Admission.global_cap/0 read live, per-tenant failure isolation via
+      try/rescue), with FOR UPDATE SKIP LOCKED concurrency, per-record
+      transaction isolation, and the completion timestamp set to the
+      deadline value (not sweep time) -- porting BilimBaga's
+      autojob.go/FR-BB310 behaviour without any of the six forbidden
+      domain words (exam, session, question, candidate, submit, grade).
+      INV-1 applies; SECURITY-REVIEWER gates it. Dispatching to
+      ELIXIR-DEV.

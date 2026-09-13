@@ -23419,7 +23419,7 @@ requirements:
     title: Populate the stage-10 bucket-C inventory with P3's first entries and record the A/B reclassifications, closing 0022 rule 3's measurement loop
     owner: DOC-UPDATER
     impl_order: 630  # letflow-queue task id, written back at WF-01 Step 3. Queue depends_on edges were NOT mirrored (registered before predecessor ids were known; letflow-queue exposes no update endpoint -- same limitation as ISS-0613). docs/requirements.yaml is authoritative for ordering.
-    status: pending
+    status: done
     stage: S10
     description: >
       bucket: not applicable -- this is stage bookkeeping, not a deliverable

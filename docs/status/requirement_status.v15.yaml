@@ -1137,3 +1137,44 @@ history:
       task's own acceptance criteria require the close-out to quote
       them, not necessarily append new ones for already-recorded
       events). Dispatching to DOC-UPDATER.
+  - req: REQ-334
+    event: done
+    agent: ORCH
+    at: "2026-09-13T10:13:16Z"
+    note: >
+      REQ-334 (queue task 630, GH#1321) implemented via
+      feature/WF02-REQ334-20260913 (commit 3001a018), docs-only, by
+      DOC-UPDATER. docs/migration/stage-10-bilimbaga-vertical.md's
+      bucket-C inventory table replaced "(none yet)" with one row per
+      module actually under lib/letflow/exam/ (Session,
+      QuestionSetResolver, Scoring, AntiCheat), rule-2 sentences copied
+      verbatim from lib/letflow/design/req330-exam-live-session.md
+      section 7, REVIEWER sign-off column pointing at REQ-332's and
+      REQ-333's real dated PASS entries in that same table. Measured
+      against the real tree and quoted: `ls lib/letflow/exam/` (4
+      files) and `wc -l lib/letflow/exam/*.ex` (309+109+246+941 = 1605
+      total lines), dated 2026-09-13.
+
+      Recorded what left bucket C: REQ-329's five session entities to
+      bucket A, REQ-331's deadline sweep to bucket B -- P3's
+      phases-table row predicted bucket C but P3 as executed also
+      produced bucket-A and bucket-B work, held for four of six
+      behaviours REQ-330 analyzed. Anti-cheat's open question marked
+      ANSWERED with a pointer to decision 0030, original question text
+      kept and annotated, matching decision 0027's precedent style.
+      Certificate issuance recorded as NOT delivered by P3 and why
+      (needs PDF/QR rendering, mix.exs carries no such dependency,
+      gaps 4/5 mechanism-settled by decision 0027 but capabilities
+      open and unowned). Overturned-verdicts finding: none of REQ-330's
+      five bucket verdicts reversed REQ-ANALYST's starting position
+      (design doc section 6's own explicit statement), but decision
+      0030's Finding 1 (the Lua-grading-rules gap against decision
+      0022's own bucket table) is named as a real, non-reversal finding
+      worth keeping visible. decision 0022 confirmed untouched (`git
+      diff --name-only` quoted by DOC-UPDATER, shows only the stage
+      file). REQ-329 through REQ-333 confirmed already status: done in
+      docs/requirements.yaml with no drift found; their five
+      status-history done-events already present in this volume are
+      quoted in DOC-UPDATER's own report rather than re-appended.
+      docs/requirements.yaml flipped pending -> done for REQ-334
+      itself. This closes out S10 P3.

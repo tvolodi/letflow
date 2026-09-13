@@ -372,6 +372,23 @@ history:
       reachable by any TASK_WORKER-scoped tenant user, not only exam
       candidates -- broader exposure than REQ-335's own scope, closed
       before shipping.
+  - req: SCOPE-CHANGE
+    event: started
+    agent: ORCH
+    at: "2026-09-13T19:22:16Z"
+    note: >
+      Claimed letflow-queue task 652 (ISS-0652, GH#1360, S3) --
+      centralization fix. Query.Compiler.select_entity_row/1 returns
+      record_id as a raw 16-byte UUID binary for a per-type-table row,
+      contradicting its own entity_row() @type promise of String.t().
+      Two independent call sites (lib/letflow/routers/entities.ex's
+      normalise_record_id/1, lib/letflow/exam/session.ex's
+      normalize_record_id/1) already copy-pasted the identical local
+      fix rather than centralizing it -- same root-cause defect class
+      as ISS-0649/ISS-0651. Fix: cast record_id to a string at the
+      source in select_entity_row/1 itself, remove both now-redundant
+      local helpers, survey for any other undiscovered copy-pasted
+      workaround. Dispatching to ELIXIR-DEV.
   - req: REQ-338
     event: done
     agent: DOC-UPDATER

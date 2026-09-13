@@ -3433,13 +3433,39 @@ volumes:
     path: docs/status/requirement_status.v16.yaml
     status: current
     opened: 2026-09-13
-    entries: 8
+    entries: 9
     note: >
+      Recounted to 9 at fix/ISS-0652-20260913's third Step Final
+      rebase, which found v16.yaml itself auto-merged cleanly (main's
+      REQ-340 done-event landed after this file's own tail, no
+      overlapping lines with this branch's own content) but conflicted
+      here on the declared count between main's own 8 (DOC-UPDATER's
+      REQ-340 done-event append) and this branch's own 8 (from the
+      prior Step Final rebase's composition, computed before REQ-340
+      landed). Recounted directly from `grep -c "^  - req:"
+      docs/status/requirement_status.v16.yaml` = 9 rather than
+      carrying forward either side's stale 8, per this note's own
+      recount-every-time rule. 578 lines, well under the roll ceiling.
       Incremented to 8 by DOC-UPDATER's own REQ-340 done-event append
       (Step 6) -- `grep -c "^  - req:"
       docs/status/requirement_status.v16.yaml` = 8 on-disk entries; 561
       lines / 32762 bytes, well under the roll ceiling. No rebase
       conflict on this file at the time it was written.
+      Recounted to 8 at fix/ISS-0652-20260913's Step Final rebase,
+      which conflicted at this file's tail between main's own
+      REQ-338/REQ-336 done-event pair (independently computed as 7)
+      and this branch's own ISS-0652 started-event append
+      (independently computed as 6, from a base predating both
+      done-events). Composed in chronological `at:` order -- ISS-0652
+      started (19:22:16Z) sorts between REQ-338's own started-event
+      (already in this volume) and REQ-338's done-event (19:27:01Z),
+      so it was reordered into that position; REQ-336's done-event
+      (20:55:45Z) sorts last and needed no reordering. Recounted
+      directly from `grep -c "^  - req:"
+      docs/status/requirement_status.v16.yaml` = 8 rather than
+      carrying forward either side's independently-computed 6/7, per
+      this note's own recount-every-time rule. 532 lines, well under
+      the roll ceiling.
       Incremented to 7 by DOC-UPDATER's own REQ-336 done-event append
       (Step 6) -- `grep -c "^  - req:"
       docs/status/requirement_status.v16.yaml` = 7 on-disk entries; 515
@@ -3450,6 +3476,11 @@ volumes:
       docs/status/requirement_status.v16.yaml` = 6 on-disk entries; 471
       lines / 27573 bytes, well under the roll ceiling. No rebase
       conflict on this file at the time it was written.
+      Incremented to 6 by ORCH's own ISS-0652 started-event append
+      (SCOPE-CHANGE, fix/ISS-0652-20260913) -- `grep -c "^  - req:"
+      docs/status/requirement_status.v16.yaml` = 6 on-disk entries;
+      391 lines, well under the roll ceiling. No rebase conflict on
+      this file.
       Recounted to 5 at fix/ISS-0647-20260913's second (Step Final
       close-out) rebase, which conflicted at this file's tail between
       main's own already-composed 4-count note (from the first

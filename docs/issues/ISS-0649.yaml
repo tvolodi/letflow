@@ -1,0 +1,43 @@
+id: ISS-0649
+title: dual_write_promoted_columns/3 stops writing to a promoted entity type's table once its ColumnPromotion reaches active, silently regressing constraint enforcement after cutover
+discovered_by: CODE-DESIGNER
+discovered_in_run: WF03-ISS0648-20260913
+discovered_at: "2026-09-13T16:45:00Z"
+severity: MAJOR
+description: >
+  Found while designing the fix for ISS-0648 (pack entity unique constraints
+  never enforced). Records.dual_write_promoted_columns/3 and
+  TenantProvisioning.column_promotions_in_flight/2 only write to a promoted
+  entity type's per-entity-type table (e.g. entity_tag) during an explicit
+  rebuild_projection/2 replay (backfill), never on an ordinary live
+  create/update once the ColumnPromotion row reaches status: active. This
+  contradicts decision 0024 section 3 step 3's stated intent -- a SINGLE
+  write to the promoted column continuing after cutover, not a ZERO write.
+
+  Consequence: if a promotion for a constrained entity type (any fix to
+  ISS-0648, or REQ-299/300's future query-performance work) is ever driven
+  all the way through to active status, that entity type's constraint
+  enforcement (and typed-column query correctness) silently regresses for
+  every write after cutover -- new records stop landing in the table that
+  carries the real UNIQUE index, so duplicates are silently accepted again,
+  exactly like ISS-0648's own original bug, just reintroduced at a later
+  lifecycle stage.
+
+  ISS-0648's own fix avoids triggering this by design (it deliberately
+  parks promotions at ddl_applied and never activates them), so this is
+  independent, not fixed by that work, and will resurface the moment
+  anything else drives a promotion to active.
+
+  FIX DIRECTION: correct dual_write_promoted_columns/3 (and/or
+  column_promotions_in_flight/2's gating) to keep writing to the promoted
+  column on every live write once a promotion is active, matching decision
+  0024 section 3 step 3's actual stated design, rather than treating
+  active as a signal to stop writing to the legacy path AND stop writing
+  to the new path.
+affected_files:
+  - lib/letflow/entities/records.ex
+  - lib/letflow/tenant_provisioning.ex
+  - docs/migration/decisions/0024-entity-promotion-ddl-execution.md
+queue_ref: Q-649
+github_ref: GH-1355
+status: open

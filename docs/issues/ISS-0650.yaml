@@ -1,0 +1,51 @@
+id: ISS-0650
+title: Short-text exam questions cannot be answered -- Session.autosave_answer/4's answer_attrs and upsert_answer/6 have no text_answer field at all
+discovered_by: FRONTEND-DEV
+discovered_in_run: WF02-REQ338-20260913
+discovered_at: "2026-09-13T16:55:00Z"
+severity: MAJOR
+description: >
+  Found by FRONTEND-DEV while implementing REQ-338 (candidate exam-taking
+  UI): REQ-335's exam-session HTTP routes wrap
+  Letflow.Exam.Session.autosave_answer/4, whose answer_attrs type
+  (lib/letflow/exam/session.ex line 166) is
+  %{question_id, selected_option_ids, time_spent_seconds} -- no
+  text_answer field exists anywhere in the input path.
+
+  Confirmed by reading the implementation directly: check_answer_shape/2
+  (line 799) for a :short_text question only validates that
+  selected_option_ids is EMPTY (count == 0 passes, count > 0 fails) --
+  there is no branch that accepts or validates free-text content.
+  upsert_answer/6 (line 820) builds its write attrs map with
+  session_id/question_id/selected_option_ids/saved_at/time_spent_seconds
+  only -- text_answer is never included, so it is always left unset
+  regardless of what a caller might try to send.
+
+  Meanwhile lib/letflow/exam/session.ex's own saved_answer type (line
+  281-286, added for REQ-335's session-state read route) DOES declare
+  text_answer: String.t() | nil, and session_answer.json (REQ-329)
+  declares the field in its schema, and REQ-332's Scoring module marks a
+  short_text answer pending_manual for human grading -- but there is
+  nothing for a human grader to grade, because the candidate's actual
+  text was never captured anywhere in the write path.
+
+  This is not a frontend gap: web/'s ExamSessionPage (REQ-338) correctly
+  shows a "not yet supported" note for short-text questions rather than
+  silently offering a text input that would fail to save, per REQ-338's
+  own close-out. The gap is entirely in REQ-332's autosave_answer/4
+  implementation.
+
+  FIX DIRECTION: extend answer_attrs to accept an optional text_answer
+  field, branch check_answer_shape/2's :short_text case to validate
+  text_answer presence/shape instead of (or in addition to) the
+  empty-selected_option_ids check, and extend upsert_answer/6 to write
+  it. Also confirm submit/3 and the Scoring module's pending_manual path
+  correctly reads the now-populated text_answer rather than assuming it
+  will always be nil.
+affected_files:
+  - lib/letflow/exam/session.ex
+  - lib/letflow/exam/scoring.ex
+  - web/src/pages/exam/ExamSessionPage.tsx
+queue_ref: Q-650
+github_ref: GH-1356
+status: open

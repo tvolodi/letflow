@@ -314,11 +314,24 @@ defmodule Letflow.Exam.Session do
   type, but this response is a hand-composed view joining four entity types
   (`session`, `session_question`, `question`, `answer_option`,
   `session_answer`) with no single query result for a `FieldGrants` call to
-  redact — and per `answer_option.json`'s own field-level note, this pack
-  does not configure an `entity_field_restrictions` row for `is_correct`
-  today, so a `FieldGrants`-based route would currently leak it outright.
-  Hand-selecting fields makes leaking `is_correct` a compile-time-visible
-  omission rather than a runtime configuration dependency.
+  redact. Hand-selecting fields makes leaking `is_correct` a compile-time-
+  visible omission rather than a runtime configuration dependency.
+
+  ISS-0647 (SECURITY-REVIEWER): this hand-redaction only ever protected
+  THIS route. `TASK_WORKER` -- the role REQ-335 grants every exam-session
+  permission to -- already held `:EntitiesQuery`/`:EntitiesAggregate`
+  before REQ-335 existed, and until ISS-0647's fix, this pack configured
+  no `entity_field_restrictions` row for `is_correct`/`likert_weight`/
+  `likert_polarity`/`explanation` at all -- so a candidate could read every
+  one of them in clear via the GENERIC `POST /entities/query` route
+  directly against `question`/`answer_option`, entirely bypassing this
+  function's own careful field selection. `Letflow.Packs.Bilimbaga.
+  seed_answer_key_field_restrictions!/1` now seeds exactly those four
+  `entity_field_restrictions` rows wherever this pack's real entity
+  definitions are provisioned, closing that second path — see that
+  module's moduledoc for the full account. This function's own
+  hand-selection is left unchanged and stays defense-in-depth; it was
+  never the vulnerable half.
   """
   @spec get_session_state_for_user(
           session_id :: String.t(),

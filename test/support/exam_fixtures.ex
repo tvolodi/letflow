@@ -71,6 +71,17 @@ defmodule Letflow.ExamFixtures do
       create_active_definition!(schema_name, load_definition!(entity_type))
     end
 
+    # ISS-0647: this is the one place in this codebase that stands up the
+    # real bilimbaga `question`/`answer_option` entity definitions for
+    # actual use -- so this is where the pack's answer-key field
+    # restrictions get seeded too, per
+    # `Letflow.Packs.Bilimbaga`'s own moduledoc "Callers" section. Without
+    # this, every exam-suite test built on this fixture would exercise a
+    # tenant where `is_correct`/`likert_weight`/`likert_polarity`/
+    # `explanation` are reachable in clear via the generic
+    # `POST /entities/query` route for any TASK_WORKER-scoped caller.
+    :ok = Letflow.Packs.Bilimbaga.seed_answer_key_field_restrictions!(schema_name)
+
     %{tenant_id: tenant.id, schema_name: schema_name}
   end
 

@@ -1003,6 +1003,31 @@ history:
       once a (candidate_id, exam_id)-scoped lock target exists.
 
       docs/requirements.yaml flipped pending -> done.
+  - req: REQ-333
+    event: started
+    agent: ORCH
+    at: "2026-09-13T08:00:09Z"
+    note: >
+      Claimed letflow-queue task 629 (GH#1320, S10 P3, bucket C policy +
+      bucket A storage). Checked REQ-333's own enforced ambiguity
+      escape first: REQ-330's design doc section 5 DOES name the
+      storage shape specifically enough to build without interpretation
+      -- session_event entity records (REQ-329), written through
+      Letflow.Entities.Records, chosen over raw EventStore events or an
+      aggregate counter (decision 0030 Finding 2) -- and DOES specify
+      the write-amplification mitigation: record_signal/4 reads the
+      session's most recent session_event.occurred_at via an ordinary
+      Letflow.Entities.Query read and rejects a signal inside a
+      configured debounce window. Ambiguity escape does NOT apply;
+      proceeding, not blocking. Build Letflow.Exam.AntiCheat (the
+      fourth module in REQ-330's rule-2 table, PENDING sign-off) --
+      validates exactly three signal types (tab_switch/blur/
+      fullscreen_exit), derives action_taken from the exam's
+      on_tab_switch config (never from caller input, per service.go
+      AC-10 -- the security-relevant property), branches log/warn/
+      submit (submit triggers Letflow.Exam.Session.submit/3), and
+      enforces the debounce window. No HTTP route, no new permission
+      atom. Dispatching to ELIXIR-DEV.
   - req: REQ-334
     event: blocked
     agent: ORCH
@@ -1046,3 +1071,209 @@ history:
       audit outcome_from_session/1's similar-shaped atoms per the
       issue's own suggestion) before routing to CODE-DESIGNER/
       ELIXIR-DEV for the actual fix.
+  - req: REQ-333
+    event: done
+    agent: ORCH
+    at: "2026-09-13T09:51:21Z"
+    note: >
+      REQ-333 (queue task 629, GH#1320) implemented via
+      feature/WF02-REQ333-20260913 (commits 3c3a9712/953d6adf). Built
+      Letflow.Exam.AntiCheat (309 lines) -- the fourth and final module
+      REQ-330's rule-2 table authorised. Storage per decision 0030
+      Finding 2's verbatim conclusion: session_event entity records
+      (REQ-329) via Letflow.Entities.Records, not raw EventStore
+      events or an aggregate counter. Ambiguity escape checked first
+      and did NOT apply -- REQ-330 named the storage shape and the
+      debounce mitigation specifically enough to build without
+      interpretation.
+
+      record_signal/4 accepts exactly three signal types
+      (tab_switch/blur/fullscreen_exit); action_taken is derived
+      SOLELY from the exam's on_tab_switch config -- no action_taken
+      parameter exists anywhere in the public function signature, the
+      strongest form of service.go AC-10's guarantee (verified by
+      SECURITY-REVIEWER tracing the code, not just reading the test);
+      ownership/in-progress/deadline guards run before any write;
+      log/warn/submit branches all tested end-to-end including submit
+      actually transitioning the session's real stored status; the
+      debounce mitigation (reads the session's most recent
+      session_event.occurred_at via an ordinary Letflow.Entities.Query
+      read, rejects inside a configured window) is proven by a
+      repeated-signal test, not asserted. No HTTP route, no new
+      permission atom, no migration. grep for
+      gen_statem/GenServer/Registry across all four lib/letflow/exam/
+      modules returns nothing.
+
+      Pipeline: ELIXIR-DEV (60 tests total across test/letflow/exam/)
+      -> SECURITY-REVIEWER PASS (independently traced the AC-10
+      guarantee to its strongest form, verified INV-1 via a real
+      cross-tenant test, flagged the debounce check-then-insert as
+      non-atomic under concurrent requests from one session -- bounded
+      amplification, non-blocking) -> REVIEWER PASS (confirmed
+      idiomatic consistency with session.ex's sibling modules,
+      confirmed no cheap idiomatic fix exists for the debounce race
+      without inventing new entity-subsystem machinery, agreed
+      non-blocking; signed off design doc Section 7's fourth and final
+      row) -> TEST-RUNNER independently confirmed a full mix
+      letflow.check run clean except the two pre-existing,
+      environment-only rust-toolchain failures.
+
+      ELIXIR-DEV also surfaced a genuine pre-existing bug in REQ-332's
+      already-merged session.ex (String.to_existing_atom on a status
+      atom never used as an executed literal elsewhere -- a
+      load-order-dependent ArgumentError risk) while writing this
+      requirement's tests. Correctly left session.ex untouched (out of
+      REQ-333's authorised scope) and filed it as ISS-0631 (queue task
+      631, GH#1330) instead of silently working around it in
+      production code; SECURITY-REVIEWER and REVIEWER both confirmed
+      AntiCheat's own submit path does not exercise the fragile code
+      path.
+
+      With this requirement done, all four rows in REQ-330's rule-2
+      table (Session, QuestionSetResolver, Scoring, AntiCheat) carry a
+      REVIEWER PASS sign-off -- P3's stage-file exit condition ("each
+      module carries its REVIEWER bucket-C sign-off") is met.
+      docs/requirements.yaml flipped pending -> done.
+  - req: REQ-334
+    event: started
+    agent: ORCH
+    at: "2026-09-13T10:08:38Z"
+    note: >
+      Claimed letflow-queue task 630 (GH#1321, S10, stage-10 bucket-C
+      inventory bookkeeping -- not a bucket deliverable itself).
+      Populate docs/migration/stage-10-bilimbaga-vertical.md's
+      bucket-C inventory table with one row per module actually under
+      lib/letflow/exam/ (Session, QuestionSetResolver, Scoring,
+      AntiCheat), copying REQ-330's rule-2 sentences verbatim and
+      pointing at each module's real REVIEWER sign-off; report total
+      module/line count with a quoted command; record what LEFT bucket
+      C (REQ-329's five entity definitions to bucket A, REQ-331's
+      deadline sweep to bucket B) against P3's phases-table row
+      predicting bucket C; close the anti-cheat open question with a
+      pointer to REQ-330's decision record (annotated, not deleted);
+      record certificate issuance as NOT delivered and why; state
+      whether REQ-330 overturned any REQ-ANALYST starting verdict;
+      leave decision 0022 itself unmodified. Also flip REQ-329 through
+      REQ-333's status entries in docs/requirements.yaml (already done
+      individually at each requirement's own close-out -- this task
+      verifies and, if any drifted, corrects) and append their
+      status-history events (already appended individually -- this
+      task's own acceptance criteria require the close-out to quote
+      them, not necessarily append new ones for already-recorded
+      events). Dispatching to DOC-UPDATER.
+  - req: REQ-334
+    event: done
+    agent: ORCH
+    at: "2026-09-13T10:13:16Z"
+    note: >
+      REQ-334 (queue task 630, GH#1321) implemented via
+      feature/WF02-REQ334-20260913 (commit 3001a018), docs-only, by
+      DOC-UPDATER. docs/migration/stage-10-bilimbaga-vertical.md's
+      bucket-C inventory table replaced "(none yet)" with one row per
+      module actually under lib/letflow/exam/ (Session,
+      QuestionSetResolver, Scoring, AntiCheat), rule-2 sentences copied
+      verbatim from lib/letflow/design/req330-exam-live-session.md
+      section 7, REVIEWER sign-off column pointing at REQ-332's and
+      REQ-333's real dated PASS entries in that same table. Measured
+      against the real tree and quoted: `ls lib/letflow/exam/` (4
+      files) and `wc -l lib/letflow/exam/*.ex` (309+109+246+941 = 1605
+      total lines), dated 2026-09-13.
+
+      Recorded what left bucket C: REQ-329's five session entities to
+      bucket A, REQ-331's deadline sweep to bucket B -- P3's
+      phases-table row predicted bucket C but P3 as executed also
+      produced bucket-A and bucket-B work, held for four of six
+      behaviours REQ-330 analyzed. Anti-cheat's open question marked
+      ANSWERED with a pointer to decision 0030, original question text
+      kept and annotated, matching decision 0027's precedent style.
+      Certificate issuance recorded as NOT delivered by P3 and why
+      (needs PDF/QR rendering, mix.exs carries no such dependency,
+      gaps 4/5 mechanism-settled by decision 0027 but capabilities
+      open and unowned). Overturned-verdicts finding: none of REQ-330's
+      five bucket verdicts reversed REQ-ANALYST's starting position
+      (design doc section 6's own explicit statement), but decision
+      0030's Finding 1 (the Lua-grading-rules gap against decision
+      0022's own bucket table) is named as a real, non-reversal finding
+      worth keeping visible. decision 0022 confirmed untouched (`git
+      diff --name-only` quoted by DOC-UPDATER, shows only the stage
+      file). REQ-329 through REQ-333 confirmed already status: done in
+      docs/requirements.yaml with no drift found; their five
+      status-history done-events already present in this volume are
+      quoted in DOC-UPDATER's own report rather than re-appended.
+      docs/requirements.yaml flipped pending -> done for REQ-334
+      itself. This closes out S10 P3.
+  - req: SCOPE-CHANGE
+    event: done
+    agent: ORCH
+    at: "2026-09-13T12:31:22Z"
+    note: >
+      ISS-0631 (queue task 631, GH#1330) fixed via
+      issue/ISS-0631-20260913 (commit 5007186e), PR #1333. Added
+      session_status_atom/1 to lib/letflow/exam/session.ex, an
+      explicit closed-clause mapper for the four valid session
+      statuses (in_progress/submitted/auto_submitted/grading_pending),
+      matching this same module's own existing idiom
+      (question_type_atom/1, polarity_atom/1). Replaces both
+      String.to_existing_atom/1 call sites the issue named
+      (session_view/1 at line 911 and outcome_from_session/1 at line
+      865), removing the BEAM atom-table load-order dependency and
+      turning a corrupted persisted status into a FunctionClauseError
+      instead of the previous opaque ArgumentError.
+
+      Session interrupted mid-pipeline by a power outage after the
+      design gate (commits 2a496434/2fe3f87e) but before commit;
+      ELIXIR-DEV's implementation and TEST-DESIGNER's tests survived
+      uncommitted in the working tree and were verified intact on
+      resume: `mix compile` clean, `mix test
+      test/letflow/exam/session_test.exs` 30/30 passing (4 new --
+      happy path, auto-submit path, corrupted-status raises the
+      specific FunctionClauseError type, and a structural test
+      grepping session.ex's own source for the absence of
+      to_existing_atom/to_atom).
+
+      Merging PR #1333 hit a real conflict with main (REQ-333/REQ-334
+      landed first, both appending to this same v15.yaml tail and its
+      index note) -- resolved by composing both sides in `at:`
+      timestamp order (SCOPE-CHANGE started 09:29:24Z, before REQ-333
+      done 09:51:21Z) with no reordering needed, same pattern as this
+      volume's earlier REQ-333/REQ-334 conflict resolutions. No
+      overlap with REQ-333/REQ-334's own changes: REQ-333 built
+      AntiCheat (a different module) and explicitly left session.ex
+      untouched, filing this issue rather than fixing it in scope.
+      docs/requirements.yaml carries no entry for ISS-0631 (issue
+      tracked in docs/issues/ISS-0631.yaml, not requirements.yaml);
+      no requirement status flip applies here.
+# ─────────────────────────────────────────────────────────────────────────────
+# VOLUME 15 — CLOSED 2026-09-13. DO NOT APPEND TO THIS FILE.
+# This volume holds the complete requirement run history from 2026-09-12 through
+# 2026-09-13 (32 entries, 1245 frozen-prefix lines / 1278 total lines with this
+# closure footer). It is frozen: every line above this
+# comment is preserved byte-for-byte. Closed at issue/ISS-0631-20260913's own
+# ISS-0631 done-event append, which brought this file to 1245 lines -- over its
+# declared roll_rule ceiling (max_lines: 1200) -- confirmed via `wc -l` on the
+# working-tree file per this volume's own "WHEN THIS VOLUME IS FULL" procedure.
+# Reads of this volume are TARGETED reads only -- a line range or a pattern
+# match, never a whole-file read. Use whichever your shell has:
+#   Read tool with offset/limit (works everywhere), or
+#   Bash:       grep -n PATTERN FILE   /   sed -n 'START,ENDp' FILE
+#   PowerShell: Select-String -Path FILE -Pattern PATTERN
+#               (Get-Content FILE)[START..END]
+#
+# NEW ENTRIES GO TO THE CURRENT VOLUME. Find it in:
+#   docs/status/requirement_status.index.yaml
+# which, as of this closure, names:
+#   docs/status/requirement_status.v16.yaml
+#
+# Why this file was closed: ORCH's own ISS-0631 done-event append (appended
+# while resolving this PR's merge conflict with main's already-merged
+# REQ-333/REQ-334 appends to this same file) brought the on-disk count to 32
+# entries across 1245 lines -- over the roll ceiling. No entry above this
+# footer was moved, edited or deleted.
+#
+# KNOWN ANOMALIES IN THIS VOLUME: this volume's tail (REQ-333 started through
+# REQ-334 done, plus this SCOPE-CHANGE done entry) was composed across a real
+# three-way merge conflict between issue/ISS-0631-20260913 and origin/main
+# (REQ-333/REQ-334 landed on main first). Resolved by ordering the conflicting
+# entries by their own `at:` timestamps with no reordering needed -- same
+# pattern as this volume's own earlier REQ-333/REQ-334 conflict resolutions
+# recorded in the index's volume-15 note history.

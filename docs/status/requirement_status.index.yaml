@@ -3139,22 +3139,97 @@ volumes:
 
   - volume: 15
     path: docs/status/requirement_status.v15.yaml
-    status: current
+    status: closed
     opened: 2026-09-12
-    entries: 27
+    closed: 2026-09-13
+    entries: 32
+    lines: 1278
+    bytes_working_tree: 74715
+    frozen_prefix_lines: 1245
+    frozen_prefix_sha256: "23c8df1211f1f694feab21962eae389b79a2e1b09eef200f9ba55c7a18c6812d"
     note: >
+      Closed by ORCH at issue/ISS-0631-20260913's own ISS-0631 done-event
+      append (32nd entry, SCOPE-CHANGE), which brought the file to 1245
+      frozen-prefix lines -- over the 1,200-line roll ceiling. Closure footer
+      appended per the roll rule; `frozen_prefix_sha256` computed via
+      `sha256sum` BEFORE the footer was appended, over exactly the 1245
+      frozen-prefix lines. Successor: docs/status/requirement_status.v16.yaml.
+      This append landed while resolving a real merge conflict against
+      origin/main (REQ-333/REQ-334 had already merged and appended to this
+      same file's tail): resolved by composing both branches' entries in
+      `at:` timestamp order with no reordering needed (SCOPE-CHANGE started
+      09:29:24Z precedes REQ-333 done 09:51:21Z), then appending the
+      ISS-0631 done-event on top of the composed tail, which is what pushed
+      the file over the ceiling. Recount verified directly from `grep -c
+      "^  - req:" docs/status/requirement_status.v15.yaml` = 32 rather than
+      carrying forward either branch's independently-computed count, per
+      this note's own recount-every-time rule.
       Incremented to 27 by ORCH's own ISS-0631 started-event append
       (SCOPE-CHANGE, queue task 631) -- `grep -c "^  - req:"
       docs/status/requirement_status.v15.yaml` = 27 on-disk entries;
       1048 lines / 61247 bytes -- approaching but still under the roll
       ceiling (1200 lines / 120000 bytes). No rebase conflict on this
       file.
+      Incremented to 30 by ORCH's own REQ-334 done-event append (Step
+      Final, WF02-REQ334-20260913) -- `grep -c "^  - req:"
+      docs/status/requirement_status.v15.yaml` = 30 on-disk entries;
+      1180 lines / 67692 bytes -- close to the 1200-line roll ceiling,
+      the NEXT append to this volume will very likely need to roll it.
+      No rebase conflict on this file.
+      Incremented to 29 by ORCH's own REQ-334 started-event append
+      (Step 00, WF02-REQ334-20260913) -- `grep -c "^  - req:"
+      docs/status/requirement_status.v15.yaml` = 29 on-disk entries;
+      1139 lines / 65308 bytes -- approaching but still under the roll
+      ceiling (1200 lines / 120000 bytes). No rebase conflict on this
+      file.
+      Recounted to 28 at feature/WF02-REQ333-20260913's second (Step
+      Final close-out) rebase, which conflicted at this file's tail
+      between main's own already-composed 27-count note (from the
+      first conflict, above) and this branch's own REQ-333 done-event
+      append (independently computed as 27 against a base predating
+      REQ-334's blocked-event). Both appends land at the same v15.yaml
+      tail position with no overlapping lines -- composed order there
+      is REQ-334 blocked (08:29:39Z) then REQ-333 done (09:51:21Z),
+      already correct by `at:` timestamp with no reordering needed --
+      so only this index file's declared count and narrative needed
+      manual composition. Recounted directly from `grep -c
+      "^  - req:" docs/status/requirement_status.v15.yaml` = 28 rather
+      than carrying forward either side's independently-computed 27,
+      per this note's own recount-every-time rule. 1112 lines / 63758
+      bytes, well under the roll ceiling.
+      Recounted to 27 at feature/WF02-REQ333-20260913's first Step
+      Final rebase, which conflicted at this file's tail between
+      main's own REQ-334 blocked-event append (independently computed
+      as 26, appended after REQ-333's own started-event which already
+      sat unmoved in v15.yaml) and this branch's own REQ-333
+      started-event append (also independently computed as 26, from a
+      base predating REQ-334's blocked-event). Both appends target the
+      same v15.yaml tail position with no overlapping lines -- the
+      composed order there is REQ-333 started (08:00:09Z) then REQ-334
+      blocked (08:29:39Z), already correct by `at:` timestamp with no
+      reordering needed -- so only this index file's declared count
+      and narrative needed manual composition. Recounted directly from
+      `grep -c "^  - req:" docs/status/requirement_status.v15.yaml` =
+      27 rather than carrying forward either side's
+      independently-computed 26, per this note's own
+      recount-every-time rule. 1049 lines / 60262 bytes, well under
+      the roll ceiling.
       Incremented to 26 by ORCH's own REQ-334 blocked-event append
       (direct-action, dependency REQ-333 not yet done) -- `grep -c
       "^  - req:" docs/status/requirement_status.v15.yaml` = 26
       on-disk entries; 1024 lines / 59874 bytes -- approaching but
       still under the roll ceiling (1200 lines / 120000 bytes). No
       rebase conflict on this file.
+      Incremented to 27 by ORCH's own REQ-333 done-event append (Step
+      Final, WF02-REQ333-20260913) -- `grep -c "^  - req:"
+      docs/status/requirement_status.v15.yaml` = 27 on-disk entries;
+      1093 lines / 62739 bytes, well under the roll ceiling. No rebase
+      conflict on this file.
+      Incremented to 26 by ORCH's own REQ-333 started-event append
+      (Step 00, WF02-REQ333-20260913) -- `grep -c "^  - req:"
+      docs/status/requirement_status.v15.yaml` = 26 on-disk entries;
+      1030 lines / well under the roll ceiling. No rebase conflict on
+      this file.
       Recounted to 25 at feature/WF02-REQ332-20260913's Step Final
       SECOND rebase, which conflicted at this file's tail between
       main's own already-composed 24-count note (from the first
@@ -3353,6 +3428,19 @@ volumes:
       `roll_rule.on_exceed` procedure -- diffed against volume 14's
       original header to confirm only those fields changed. `entries:`
       will be incremented per HOW-TO-APPEND step 6 as real appends land.
+
+  - volume: 16
+    path: docs/status/requirement_status.v16.yaml
+    status: current
+    opened: 2026-09-13
+    entries: 0
+    note: >
+      Opened by ORCH at issue/ISS-0631-20260913's Step Final rebase,
+      successor to volume 15. Created with volume 15's header text verbatim
+      (volume number, opening date and predecessor path updated) and an
+      empty `history:` list, per this index's `roll_rule.on_exceed`
+      procedure. `entries:` will be incremented per HOW-TO-APPEND step 6 as
+      real appends land.
 
 
 known_anomalies:

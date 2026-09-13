@@ -1,0 +1,81 @@
+id: ISS-0631
+title: Letflow.Exam.Session.session_view/1 calls String.to_existing_atom on "in_progress", the one session status that is never an executed atom literal anywhere in lib/ -- ArgumentError risk
+discovered_by: ELIXIR-DEV
+discovered_in_run: WF02-REQ333-20260913
+discovered_at: "2026-09-13T09:18:26Z"
+severity: MAJOR
+description: >
+  lib/letflow/exam/session.ex:911's session_view/1 (used by create/3,
+  create_with_seed/4's success path, and get_session_for_user/3) does:
+
+    status: String.to_existing_atom(fv(session, "status"))
+
+  The stored value at the moment a session is created is the string
+  literal "in_progress" (session.ex:490). String.to_existing_atom/1
+  raises ArgumentError unless the atom :in_progress has ALREADY been
+  interned into the running BEAM node's atom table by some other
+  code path.
+
+  :in_progress appears as a literal EXECUTED atom nowhere in lib/
+  outside of lib/letflow/exam/session.ex itself -- and inside that
+  file it appears only inside @type specs (session_view() at line 149,
+  the submit outcome type at line 138), never as a runtime value any
+  branch actually constructs or pattern-matches against. Elixir
+  typespec atoms are compiled into the module's "Types" BEAM chunk as
+  metadata; they are not guaranteed to be interned into the atom table
+  merely by the module being loaded -- that happens lazily only if
+  something introspects the typespec (e.g. via Code.Typespec), which
+  nothing in this codebase does at runtime.
+
+  CONSEQUENCE: whether Letflow.Exam.Session.create/3 succeeds or
+  raises ArgumentError on ITS VERY FIRST CALL in a given BEAM node's
+  lifetime depends on incidental load order -- specifically, on
+  whether any other already-loaded module happens to have referenced
+  the atom :in_progress as an executed literal first (which none
+  currently do). This is not deterministic from the code's own
+  structure; it is an accident of what else has run first.
+
+  REPRODUCED: ELIXIR-DEV hit this live while writing REQ-333's
+  'submit' policy-branch test in an isolated test partition under
+  `mix letflow.check.test`'s parallel partitioning, where no other
+  test had yet caused :in_progress to be interned. Worked around it
+  IN THE TEST FILE ONLY (test/letflow/exam/anti_cheat_test.exs's
+  build_gradeable_session!/2, one explicit String.to_atom("in_progress")
+  call with a comment) rather than touching session.ex, since fixing
+  production code was outside REQ-333's authorized scope (REQ-330's
+  rule-2 table authorizes AntiCheat only for REQ-333; session.ex is
+  REQ-332's authorized module).
+
+  Severity MAJOR: no data loss, no security exposure, fails closed
+  (raises loudly) -- but it is a real, non-deterministic crash risk on
+  the tenant-facing session-start/session-read path (Session.create/3,
+  create_with_seed/4, get_session_for_user/3), and "non-deterministic
+  depending on load order" is a worse failure mode than a
+  deterministic one because it can pass in dev/every test run that
+  happens to load session.ex after some unrelated module, and still
+  fail unpredictably in production depending on supervision-tree
+  startup order or hot-code-reload timing.
+
+  FIX DIRECTION: replace the bare String.to_existing_atom(fv(session,
+  "status")) at session.ex:911 (and check outcome_from_session/1 at
+  line 865, which does the same thing for
+  submitted/auto_submitted/grading_pending -- those three DO appear as
+  executed literals elsewhere in this same file, e.g. line 376's
+  status_override: :auto_submitted and line 743's %{status: :submitted},
+  so they are almost certainly safe today, but auditing both call
+  sites together closes the whole class rather than a single symptom)
+  with an explicit mapper function, matching the existing idiom this
+  same module already uses for exactly this problem:
+  question_type_atom/1 (line 918) and polarity_atom/1 (line 924) both
+  map a persisted string to a known atom via explicit function clauses
+  rather than String.to_existing_atom/to_atom. A status_atom/1 of the
+  same shape removes the load-order dependency entirely and gives an
+  explicit, closed enumeration of legal values (a stray/corrupted
+  status string then raises FunctionClauseError with a clear message
+  instead of the more opaque ArgumentError from to_existing_atom, or
+  can be mapped to a domain error tuple).
+affected_files:
+  - lib/letflow/exam/session.ex
+queue_ref: Q-631
+github_ref: GH-1330
+status: open

@@ -78,4 +78,27 @@ affected_files:
   - lib/letflow/exam/session.ex
 queue_ref: Q-631
 github_ref: GH-1330
-status: open
+status: resolved
+resolved_by: ORCH
+resolved_in_run: chore/close-iss0631-record-20260913
+resolved_at: "2026-09-13T18:05:00Z"
+resolution_note: >
+  Fixed on main by PR #1333 (commit ee9bfde8), which replaced the bare
+  String.to_existing_atom/1 in session_view/1 with an explicit
+  session_status_atom/1 mapper carrying one clause per status and NO
+  catch-all -- so an unrecognised status raises FunctionClauseError
+  (fail-loud) rather than either minting an atom or silently passing a
+  wrong value through. Verified independently before closing this
+  record: zero to_existing_atom/String.to_atom calls remain anywhere in
+  lib/letflow/exam/, the four clauses are exhaustive over the documented
+  status set, and the fix shipped with +102 lines of regression test in
+  test/letflow/exam/session_test.exs plus a design record at
+  lib/letflow/design/iss0631-session-status-atom-mapper.md.
+  mix test test/letflow/exam/ -> 64 passed.
+
+  THIS RECORD WAS THE ONLY BOOKKEEPING LEFT: the fix merged at
+  12:48Z but the local record still read status: open, and queue task
+  631 sat locked by tvolodi-orch for 238 minutes with zero commits
+  pushed since the fix and no branch in flight -- a dead lock over
+  finished work. The lock was released as done in the same pass. All
+  other ISS-06xx records were already resolved.

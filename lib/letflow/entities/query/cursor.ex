@@ -39,14 +39,36 @@ defmodule Letflow.Entities.Query.Cursor do
   `{:error, :resume_key_arity_mismatch}` rather than a silently wrong resume
   point.
 
-  ## The `id` tiebreaker (design §2.3)
+  ## The `record_id` tiebreaker (design §2.3, revised by ISS-0651)
 
-  `entity_record_latest.id` (the table's binary UUID primary key) is
-  appended as an implicit final ascending sort key to every compiled query
-  this module executes, in addition to whatever `sort` the caller
-  specified -- this is `Cursor`'s own addition on top of
-  `Compiler.compile/2`'s returned query, not a change to
-  `Compiler`/`Allowlist`.
+  `record_id` (the entity's own UUID identity column) is appended as an
+  implicit final ascending sort key to every compiled query this module
+  executes, in addition to whatever `sort` the caller specified -- this is
+  `Cursor`'s own addition on top of `Compiler.compile/2`'s returned query,
+  not a change to `Compiler`/`Allowlist`.
+
+  This was originally `entity_record_latest.id` (that table's own surrogate
+  binary-UUID primary key), which does the job for an unpromoted entity
+  type's `%Letflow.Entities.Record.Latest{}` rows. ISS-0651 found that a
+  promoted entity type's per-type table query (`Compiler.entity_row()`'s
+  plain-map shape) is a *schemaless* `from(table_name)` binding whose
+  `select_entity_row/1` projection never includes `:id` at all -- so while
+  the physical `"id"` column exists on both table shapes (per
+  `Letflow.Entities.Definition.DDL`'s `PRIMARY KEY ("id")`), a per-type-table
+  result row has no way to report its own `id` value back to
+  `build_next_cursor/2` without `Compiler` selecting an extra column this
+  design does not touch. `record_id` is used instead of `id` for both
+  shapes uniformly: it is present in `entity_row()`'s fixed field set
+  (unlike `id`), it is a real `Ecto.UUID`-typed column on both table shapes
+  (so the same `maybe_dump/2` dump-before-comparison handling applies
+  unchanged), and it is unique within the scope every compiled query here
+  already guarantees -- `compile_plain/5`'s `:latest` branch always adds a
+  `where(entity_type == ^entity_type)` filter (`entity_record_latest`'s own
+  unique constraint is `(entity_type, record_id)`, so `record_id` alone is
+  unique once that filter is in place), and a per-type table carries its own
+  `UNIQUE (record_id)` constraint table-wide. `record_id` therefore satisfies
+  the same total-order/stability requirement `id` did, for both row shapes,
+  with no `Compiler`/`Allowlist` change.
   """
 
   import Ecto.Query
@@ -103,7 +125,8 @@ defmodule Letflow.Entities.Query.Cursor do
        `length(sort) + 1` -- `{:error, :resume_key_arity_mismatch}`
        otherwise.
     5. Build the row-wise resume filter and add it to `compiled_query`, add
-       the implicit `id` ascending tiebreak order, add `limit(page_size + 1)`.
+       the implicit `record_id` ascending tiebreak order (ISS-0651: was
+       `id`), add `limit(page_size + 1)`.
     6. `Repo.all(query, prefix: prefix)`, split off the possible extra row,
        and -- if a next page exists -- mint the next cursor.
   """
@@ -114,7 +137,7 @@ defmodule Letflow.Entities.Query.Cursor do
           opts :: paginate_opts(),
           prefix :: String.t()
         ) ::
-          {:ok, Pagination.Page.t(Latest.t())}
+          {:ok, Pagination.Page.t(Latest.t() | Letflow.Entities.Query.Compiler.entity_row())}
           | {:error, :page_size_too_large}
           | {:error, :invalid_cursor}
           | {:error, :wrong_endpoint}
@@ -132,7 +155,7 @@ defmodule Letflow.Entities.Query.Cursor do
       rows =
         compiled_query
         |> apply_resume_filter(resume_terms)
-        |> order_by([r], asc: r.id)
+        |> order_by([r], asc: r.record_id)
         |> limit(^(page_size + 1))
         |> Repo.all(prefix: prefix)
 
@@ -251,7 +274,12 @@ defmodule Letflow.Entities.Query.Cursor do
           |> Enum.zip(casted_values)
           |> Enum.map(fn {term, value} -> Map.put(term, :value, value) end)
 
-        id_term = %{dir: :asc, value: id_str, ecto_type: :binary_id, dyn: dynamic([r], r.id)}
+        id_term = %{
+          dir: :asc,
+          value: id_str,
+          ecto_type: :binary_id,
+          dyn: dynamic([r], r.record_id)
+        }
 
         {:ok, sort_terms ++ [id_term]}
       else
@@ -344,8 +372,8 @@ defmodule Letflow.Entities.Query.Cursor do
   # interpolation rather than written inline, so Ecto's own compile-time
   # dump-on-cast step (the one that would normally turn a UUID string into
   # the raw 16-byte binary Postgrex requires for a `:binary_id`/`Ecto.UUID`
-  # column) never runs for `^value` here -- confirmed empirically: the `id`
-  # tiebreak comparison reached Postgrex as an un-dumped string without
+  # column) never runs for `^value` here -- confirmed empirically: the
+  # `record_id` tiebreak comparison reached Postgrex as an un-dumped string without
   # this. `maybe_dump/2` performs that dump explicitly wherever it matters.
   defp field_eq(dyn, value, ecto_type), do: dynamic(^dyn == ^maybe_dump(ecto_type, value))
   defp field_cmp(dyn, :desc, value, ecto_type), do: dynamic(^dyn < ^maybe_dump(ecto_type, value))
@@ -365,8 +393,17 @@ defmodule Letflow.Entities.Query.Cursor do
 
   defp split_page(rows, _page_size), do: {rows, false}
 
-  defp build_next_cursor(%Latest{id: id} = row, resolved_sort) do
+  # ISS-0651: `row` reaches here as either a `%Latest{}` struct
+  # (unpromoted entity type) or a `Compiler.entity_row()` plain map
+  # (promoted, per-type-table entity type) -- the same two shapes
+  # `FieldGrants.redact_item/2` and `Letflow.Routers.Entities`'s
+  # `query_item_map/1` already branch on. `record_id` (not `id`; see this
+  # module's moduledoc "The `record_id` tiebreaker") is read via the exact
+  # same two-clause idiom those functions use, rather than inventing a
+  # third pattern.
+  defp build_next_cursor(row, resolved_sort) do
     mint_time_us = System.system_time(:microsecond)
+    record_id = read_record_id(row)
 
     resume_values =
       Enum.map(resolved_sort, fn term ->
@@ -375,12 +412,15 @@ defmodule Letflow.Entities.Query.Cursor do
         |> encode_component(term.type)
       end)
 
-    resume_key_json = Jason.encode!(resume_values ++ [id])
+    resume_key_json = Jason.encode!(resume_values ++ [record_id])
 
     @cursor_prefix
     |> Pagination.build_raw_cursor(mint_time_us, resume_key_json)
     |> Pagination.encode_cursor()
   end
+
+  defp read_record_id(%Latest{record_id: record_id}), do: record_id
+  defp read_record_id(%{record_id: record_id} = row) when is_map(row), do: record_id
 
   defp read_sort_value(%{source: :typed_column, name: name}, row) do
     {column_atom, _type} = Map.fetch!(Allowlist.typed_columns(), name)
@@ -388,6 +428,11 @@ defmodule Letflow.Entities.Query.Cursor do
   end
 
   defp read_sort_value(%{source: :json_field, name: name}, %Latest{field_values: field_values}) do
+    Map.fetch!(field_values, name)
+  end
+
+  defp read_sort_value(%{source: :json_field, name: name}, %{field_values: field_values} = row)
+       when is_map(row) do
     Map.fetch!(field_values, name)
   end
 

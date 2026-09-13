@@ -24011,7 +24011,7 @@ requirements:
     title: Add the two mechanically-driven widgets -- enum select, unique-composite constraint error surfacing -- to the admin-CRUD engine's field registry, proven against real field/constraint shapes from all nine remaining BilimBaga entity types (S10 P4, bucket C client)
     owner: FRONTEND-DEV
     impl_order: 635  # letflow-queue task id, written back at WF-01 Step 3; depends_on mirrored as real queue edges
-    status: pending
+    status: done
     stage: S10
     description: >
       bucket: C (client). This is the first of two requirements replacing

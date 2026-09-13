@@ -742,3 +742,62 @@ history:
       REQ-342's engine and widgets.
 
       docs/requirements.yaml flipped pending -> done.
+  - req: REQ-339
+    event: done
+    agent: DOC-UPDATER
+    at: "2026-09-13T23:01:45Z"
+    note: >
+      REQ-339 (populate the stage-10 bucket-C inventory with P4's
+      web/src/pages/exam/ modules, correct the P4 phase-table exit
+      condition, and record the exam_assignment gap as a standing open
+      question) completed -- pure documentation, no code change. THIS
+      CLOSES OUT ALL OF S10 P4: REQ-335, REQ-336, REQ-338, REQ-339,
+      REQ-340, REQ-342 and REQ-343 are now all done.
+
+      ONE (inventory): added two rows to docs/migration/
+      stage-10-bilimbaga-vertical.md's bucket-C inventory table --
+      web/src/pages/exam/ExamListPage.tsx and ExamSessionPage.tsx --
+      sourced from REQ-338's own done-event close-out (this volume,
+      above) rather than invented, since REQ-338 had no CODE-DESIGNER
+      gate and so no design-doc section 7 table to copy from.
+
+      TWO (measure): `ls web/src/pages/exam/` shows ExamListPage.tsx,
+      ExamSessionPage.tsx, __tests__/; `wc -l web/src/pages/exam/*.tsx
+      web/src/api/exam.ts` = 139 + 358 + 124 = 621 total (497 lines
+      across the two page modules, 124 in the API client), measured
+      2026-09-14. Both commands and their real output are quoted in the
+      stage file.
+
+      THREE (P4 exit condition): marked MET as of 2026-09-14 against
+      REQ-336's/REQ-340's/REQ-342's/REQ-343's/REQ-338's actual
+      close-outs, each independently naming its web/ design-system
+      components and stating no BilimBaga frontend file was copied
+      (quoted in the stage file). Cited REQ-340/REQ-342/REQ-343 wherever
+      the stage file previously named REQ-337/REQ-341, with the retire-
+      and-split history stated accurately (REQ-337 -> REQ-340/REQ-341;
+      REQ-341 -> REQ-342/REQ-343, both REQ-VALIDATOR FAILs for bundling
+      widget-type work with wiring).
+
+      FOUR (exam_assignment gap): added a new, standalone entry to the
+      stage file's "Open questions" section (not merged into an existing
+      one) naming REQ-327, REQ-332, REQ-343 and REQ-338 as the four
+      places this gap surfaced, quoting session.ex's FINDING verbatim,
+      and stating plainly this requirement does NOT resolve it -- a
+      decision-record requirement is a follow-on, not this entry's job.
+
+      decisions/0022-bilimbaga-vertical.md was NOT touched --
+      `git diff --name-only` confirmed to show only
+      docs/migration/stage-10-bilimbaga-vertical.md, docs/requirements.yaml
+      and this run-history append.
+
+      REQ-335, REQ-336, REQ-338, REQ-340, REQ-342 and REQ-343 were
+      verified already `status: done` in docs/requirements.yaml (no
+      drift found, none rewritten) and their own status-history
+      done-events were confirmed already present in this same volume
+      (requirement_status.v16.yaml) rather than re-appended: REQ-335 done
+      2026-09-13T15:37:08Z, REQ-338 done 2026-09-13T19:27:01Z, REQ-336
+      done 2026-09-13T20:55:45Z, REQ-340 done 2026-09-13T21:32:34Z,
+      REQ-342 done 2026-09-13T22:14:10Z, REQ-343 done
+      2026-09-13T22:53:16Z.
+
+      docs/requirements.yaml flipped pending -> done for REQ-339 only.

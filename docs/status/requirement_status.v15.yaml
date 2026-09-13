@@ -757,3 +757,21 @@ history:
       GitHub mirror issue #1316 with an evidence comment citing the PR
       and TEST-RUNNER's results. docs/requirements.yaml flipped
       pending -> done. Local main synced to the merge commit.
+  - req: REQ-331
+    event: blocked
+    agent: ORCH
+    at: "2026-09-13T05:10:57Z"
+    note: >
+      Claimed letflow-queue task 627 via get_next_task, twice (queue
+      does not track depends_on, so it kept re-offering 627 once
+      released). REQ-331 is explicitly "GATED ON REQ-330" per its own
+      description -- REQ-330 (task 626, design record deciding which
+      P3 behaviours are bucket B vs. bucket C) is still status: pending
+      in docs/requirements.yaml, and confirmed locked by a different
+      agent when probed directly (POST /tasks/626/lock -> "task is
+      locked by a different agent"), so REQ-330 is in flight elsewhere,
+      not merely unclaimed. No code changes made. Released queue task
+      627 back to status: open (not "blocked" -- temporary ordering
+      gap, not a permanent defect, matching the REQ-328/REQ-327
+      precedent). Deferring REQ-331 until REQ-330 reaches done; will
+      re-poll the queue rather than re-claim 627 in the meantime.

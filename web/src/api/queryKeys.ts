@@ -121,6 +121,13 @@ export const queryKeys = {
     context: (reviewId: string) => [...queryKeys.promotions.all, 'context', reviewId] as const,
   },
 
+  entities: {
+    all: ['entities'] as const,
+    definition: (entityType: string) => [...queryKeys.entities.all, 'definition', entityType] as const,
+    records: (entityType: string, filters?: { cursor?: string; page_size?: number }) =>
+      [...queryKeys.entities.all, 'records', entityType, filters ?? {}] as const,
+  },
+
   modules: {
     all: ['modules'] as const,
     list: (filters?: { cursor?: string; page_size?: number }) => [...queryKeys.modules.all, 'list', filters ?? {}] as const,

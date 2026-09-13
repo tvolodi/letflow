@@ -232,6 +232,15 @@ export const client = {
       body: body instanceof FormData ? body : JSON.stringify(body),
     })
   },
+  /** PUT with caller-supplied extra headers — mirrors postWithHeaders (used
+   *  for If-Match on an optimistic-concurrency update; REQ-336). */
+  putWithHeaders<T>(path: string, body: unknown, extraHeaders: Record<string, string>): Promise<T> {
+    return request<T>(path, {
+      method: 'PUT',
+      headers: extraHeaders,
+      body: JSON.stringify(body),
+    })
+  },
   patch<T>(path: string, body?: unknown): Promise<T> {
     return request<T>(path, {
       method: 'PATCH',

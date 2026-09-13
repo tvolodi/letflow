@@ -94,6 +94,7 @@ defmodule Letflow.Entities.Records do
 
   alias Ecto.Multi
   alias Letflow.Entities.Definition.DDL
+  alias Letflow.Entities.Definition.Validator.Violation
   alias Letflow.Entities.Definitions
   alias Letflow.Entities.EntityDefinition
   alias Letflow.Entities.EntityTypeInstance
@@ -131,7 +132,7 @@ defmodule Letflow.Entities.Records do
 
   @type command_error ::
           {:error, {:definition_not_found, entity_type :: String.t()}}
-          | {:error, {:record_payload_invalid, Validator.violations()}}
+          | {:error, {:record_payload_invalid, Validator.violations() | [Violation.t()]}}
           | {:error, {:record_not_found, record_id :: Ecto.UUID.t()}}
           | {:error, {:record_already_deleted, record_id :: Ecto.UUID.t()}}
           | {:error, :tenant_not_provisioned}
@@ -403,10 +404,76 @@ defmodule Letflow.Entities.Records do
       sql = build_upsert_sql(ctx.prefix, table_name, all_columns, uuid_columns)
 
       case Repo.query(sql, all_values, prefix: ctx.prefix) do
-        {:ok, _result} -> {:ok, :written}
-        {:error, reason} -> {:error, reason}
+        {:ok, _result} ->
+          {:ok, :written}
+
+        {:error,
+         %Postgrex.Error{postgres: %{code: :unique_violation, constraint: constraint_name}}} ->
+          {:error,
+           {:record_payload_invalid, unique_violation_from_constraint(ctx, constraint_name)}}
+
+        {:error, reason} ->
+          {:error, reason}
       end
     end
+  end
+
+  # REVIEWER finding (re-verifying REQ-336 AC4 after ISS-0648): a genuine
+  # duplicate-value write to a promoted-column entity table (e.g. two "tag"
+  # records with the same name, now that ISS-0648 makes uq_tag_name real)
+  # raised/returned a raw %Postgrex.Error{} through the bare `Repo.query/3`
+  # above, which `interpret_result/1`'s catch-all clause and
+  # `render_record_command/3`'s own final catch-all (entities.ex, "INV-8
+  # catch-all, no detail") then turned into a bare 500 -- no field-level
+  # detail the frontend could use. Translated here into the SAME
+  # `{:record_payload_invalid, violations}` shape
+  # `validate_field_values/2`'s inner schema check already produces, so it
+  # is caught by `render_record_command/3`'s ALREADY-EXISTING 422 branch
+  # (entities.ex:1214-1222) -- no router change needed.
+  #
+  # Reuses `Letflow.Entities.Definition.Validator.Violation` (list `path`)
+  # rather than `Letflow.Entities.Record.Validator`'s own `ValidationFailure`
+  # (single JSON-Pointer-string `field_path`) specifically because
+  # `violation_map/1` (entities.ex:2450-2465) already renders a
+  # `Violation.path` as a JSON array of field names -- the wire shape
+  # `web/src/components/entities/__tests__/EntityRecordForm.errors.test.tsx`
+  # expects (`path: ['name']`), not a JSON-Pointer string. `violation_map/1`'s
+  # own `@spec` already declares this union
+  # (`DefinitionViolation.t() | ValidationFailure.t()`), so this is not a new
+  # shape the router has to learn.
+  defp unique_violation_from_constraint(ctx, constraint_name) do
+    case constraint_fields(ctx.definition, constraint_name) do
+      [] ->
+        [%Violation{rule: :unique, path: [], message: "this value has already been taken"}]
+
+      fields ->
+        [%Violation{rule: :unique, path: fields, message: unique_violation_message(fields)}]
+    end
+  end
+
+  # `ctx.definition.definition_json`'s own `"constraints"` list is the single
+  # source of truth for constraint_name -> fields: it is the EXACT list
+  # `Letflow.Entities.Definition.DDL.unique_constraint_clauses/1` compiled
+  # into the literal `CONSTRAINT "<name>" UNIQUE (<fields>)` clause that
+  # created this constraint in the first place (both the fresh-CREATE-TABLE
+  # path and `Letflow.TenantProvisioning.execute_add_constraint/3`'s retrofit
+  # path build that clause from this same function) -- so the constraint
+  # Postgres just reported by this exact name is guaranteed to have been
+  # declared with exactly these fields. No string-parsing of
+  # `constraint_name` itself, and generalizes to a composite constraint
+  # (REQ-336/REQ-340's `question_tag`-shaped `[question_id, tag_id]` case)
+  # for free -- `fields` is just whatever list this constraint_def declared.
+  defp constraint_fields(%EntityDefinition{definition_json: json}, constraint_name) do
+    json
+    |> Map.get("constraints", [])
+    |> Enum.find_value([], fn
+      %{"name" => ^constraint_name, "fields" => fields} -> fields
+      _ -> nil
+    end)
+  end
+
+  defp unique_violation_message(fields) do
+    "#{Enum.join(fields, ", ")} has already been taken"
   end
 
   defp promoted_column_pair(

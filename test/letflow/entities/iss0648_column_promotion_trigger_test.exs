@@ -156,7 +156,13 @@ defmodule Letflow.Entities.ISS0648ColumnPromotionTriggerTest do
       first = create_record!(schema, "tag", %{"name" => "duplicate-test"})
       assert first.field_values["name"] == "duplicate-test"
 
-      assert {:error, _reason} =
+      # REVIEWER finding (re-verifying REQ-336 AC4): the second duplicate
+      # write must surface as the SAME {:record_payload_invalid, violations}
+      # shape the inner field-validation check already produces -- never a
+      # raw %Postgrex.Error{} / bare {:error, reason} that would only ever
+      # map to a 500 at the router. See
+      # lib/letflow/entities/records.ex's `unique_violation_from_constraint/2`.
+      assert {:error, {:record_payload_invalid, [violation]}} =
                Records.create_record(
                  %{
                    entity_type: "tag",
@@ -166,6 +172,12 @@ defmodule Letflow.Entities.ISS0648ColumnPromotionTriggerTest do
                  },
                  schema
                )
+
+      assert %Letflow.Entities.Definition.Validator.Violation{
+               rule: :unique,
+               path: ["name"],
+               message: "name has already been taken"
+             } = violation
     end
   end
 
@@ -207,7 +219,11 @@ defmodule Letflow.Entities.ISS0648ColumnPromotionTriggerTest do
 
       create_record!(schema, "question_tag", %{"question_id" => question_id, "tag_id" => tag_id})
 
-      assert {:error, _reason} =
+      # Composite constraint (REQ-336/REQ-340 scope) -- the same
+      # `{:record_payload_invalid, violations}` translation must generalize
+      # to a multi-column `path`, not just the single-column `tag` case
+      # above.
+      assert {:error, {:record_payload_invalid, [violation]}} =
                Records.create_record(
                  %{
                    entity_type: "question_tag",
@@ -217,6 +233,11 @@ defmodule Letflow.Entities.ISS0648ColumnPromotionTriggerTest do
                  },
                  schema
                )
+
+      assert %Letflow.Entities.Definition.Validator.Violation{
+               rule: :unique,
+               path: ["question_id", "tag_id"]
+             } = violation
 
       # A DIFFERENT pair must still be accepted -- only the exact duplicate
       # pair is rejected.

@@ -23171,7 +23171,7 @@ requirements:
     title: Implement the live-session runtime under lib/letflow/exam/ -- start, autosave, submit and score -- with each module carrying the rule-2 justification REQ-330 authorised for it
     owner: ELIXIR-DEV
     impl_order: 628  # letflow-queue task id, written back at WF-01 Step 3. Queue depends_on edges were NOT mirrored (registered before predecessor ids were known; letflow-queue exposes no update endpoint -- same limitation as ISS-0613). docs/requirements.yaml is authoritative for ordering.
-    status: pending
+    status: done
     stage: S10
     description: >
       bucket: C. THIS IS THE FIRST CODE EVER TO LAND IN lib/letflow/exam/,

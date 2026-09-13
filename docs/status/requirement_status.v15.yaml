@@ -942,3 +942,64 @@ history:
       Released queue task 629 back to status: open. Deferring REQ-333
       until REQ-332 reaches done; will re-poll the queue rather than
       re-claim 629 in the meantime.
+  - req: REQ-332
+    event: done
+    agent: ORCH
+    at: "2026-09-13T07:02:32Z"
+    note: >
+      REQ-332 (queue task 628, GH#1319) implemented via
+      feature/WF02-REQ332-20260913 (commits 47c88222/7a7216f1/2d35a29b).
+      Built exactly the three modules REQ-330's rule-2 table authorised:
+      lib/letflow/exam/session.ex (~894 lines), question_set_resolver.ex
+      (109 lines), scoring.ex (246 lines) -- 1,249 total lines, matching
+      the module-set REQ-330 authorised exactly (Letflow.Exam.AntiCheat
+      left unbuilt, REQ-333's scope). No migration, no Ecto schema --
+      all reads/writes go through Letflow.Entities.Records/Query against
+      REQ-329's five session entity types. Autosave uses the ordinary
+      write path per REQ-330's confirmed bucket-C conclusion. No
+      gen_statem/GenServer/Registry anywhere in lib/letflow/exam/
+      (grep confirmed empty by both ELIXIR-DEV and REVIEWER
+      independently).
+
+      Pipeline: ELIXIR-DEV implemented with 45 new tests (seeded
+      question-set reproducibility, session-snapshot isolation, all six
+      eligibility checks -- five real, one (:not_assigned) an honestly
+      documented no-op pending an exam_assignment entity that does not
+      exist yet -- server-side deadline enforcement, answer-shape
+      validation, scoring arithmetic for every rule including the
+      no-correct-option error case and the short-text
+      grading_pending path, submit idempotency and a genuine
+      concurrent-submit row-lock test) -> SECURITY-REVIEWER PASS
+      (independently ran the suite, verified INV-1 tenant isolation via
+      two real cross-tenant/cross-candidate tests, verified server-side
+      deadline enforcement and ownership-before-write ordering,
+      confirmed the submit-lock test proves a genuine lock not a lucky
+      interleaving; flagged the :not_assigned gap and an unlocked
+      concurrent create/3 race as non-blocking follow-ups) ->
+      REVIEWER FAIL then PASS (first pass found the concurrent create/3
+      race SECURITY-REVIEWER had flagged as a follow-up was in fact
+      undocumented anywhere, unlike the honestly-recorded :not_assigned
+      finding -- required either a real fix or explicit documentation;
+      ELIXIR-DEV chose a real fix, wrapping create/3 in a transaction
+      with a new lock_exam_row/2 FOR-UPDATE lock mirroring submit/3's
+      existing lock_session_row/2, plus a new concurrent-create test;
+      REVIEWER's re-check empirically disabled the lock, confirmed the
+      new test fails exactly as predicted, restored it, confirmed green,
+      then signed off lib/letflow/design/req330-exam-live-session.md's
+      Section 7 table for all three modules, flagging the resulting
+      exam-level (not candidate+exam-level) lock granularity as a
+      non-blocking scale follow-up) -> TEST-RUNNER independently
+      confirmed a full mix letflow.check run clean except the two
+      pre-existing, environment-only rust-toolchain failures (report:
+      test/reports/report-20260913-WF02-REQ332-20260913.yaml).
+
+      Two non-blocking follow-ups carried forward for a later
+      requirement/REQ-ANALYST: (1) the :not_assigned eligibility check
+      is a documented no-op until an exam_assignment entity is
+      authored -- an unassigned candidate can currently start/complete
+      a session for any active in-window exam in their own tenant; (2)
+      create/3's exam-row lock serialises ALL candidates starting the
+      same exam concurrently, a possible throughput bottleneck at scale
+      once a (candidate_id, exam_id)-scoped lock target exists.
+
+      docs/requirements.yaml flipped pending -> done.

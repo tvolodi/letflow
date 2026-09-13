@@ -23513,6 +23513,7 @@ requirements:
   - id: REQ-335
     title: HTTP route surface for the candidate-facing exam session API -- start, autosave, submit, anti-cheat signal -- the surface REQ-332 and REQ-333 explicitly left unbuilt (S10 P4, bucket C)
     owner: ELIXIR-DEV
+    impl_order: 632  # letflow-queue task id, written back at WF-01 Step 3; depends_on mirrored as real queue edges
     status: pending
     stage: S10
     description: >
@@ -23656,6 +23657,7 @@ requirements:
   - id: REQ-336
     title: Generic admin-CRUD screen engine in web/ driven by an entity definition -- list, create, edit, delete -- proven against one pilot BilimBaga entity type before it is pointed at the rest (S10 P4, bucket C client)
     owner: FRONTEND-DEV
+    impl_order: 633  # letflow-queue task id, written back at WF-01 Step 3; depends_on mirrored as real queue edges
     status: pending
     stage: S10
     description: >
@@ -23778,6 +23780,7 @@ requirements:
   - id: REQ-338
     title: Hand-written candidate exam-taking UI -- start, in-progress question flow with autosave and a live countdown, submit, result -- wired to REQ-335's session routes and REQ-333's anti-cheat signal route, with the "which exams can I take" question answered honestly against the current no-op assignment check (S10 P4, bucket C client)
     owner: FRONTEND-DEV
+    impl_order: 634  # letflow-queue task id, written back at WF-01 Step 3; depends_on mirrored as real queue edges
     status: pending
     stage: S10
     description: >
@@ -23913,6 +23916,7 @@ requirements:
   - id: REQ-339
     title: Populate the stage-10 bucket-C inventory with P4's web/src/pages/exam/ modules, correct the P4 phase-table exit-condition note, and record the exam_assignment gap as a standing open question rather than a P4-local footnote (S10, doc bookkeeping)
     owner: DOC-UPDATER
+    impl_order: 638  # letflow-queue task id, written back at WF-01 Step 3; depends_on mirrored as real queue edges
     status: pending
     stage: S10
     description: >
@@ -24006,6 +24010,7 @@ requirements:
   - id: REQ-340
     title: Add the two mechanically-driven widgets -- enum select, unique-composite constraint error surfacing -- to the admin-CRUD engine's field registry, proven against real field/constraint shapes from all nine remaining BilimBaga entity types (S10 P4, bucket C client)
     owner: FRONTEND-DEV
+    impl_order: 635  # letflow-queue task id, written back at WF-01 Step 3; depends_on mirrored as real queue edges
     status: pending
     stage: S10
     description: >
@@ -24121,6 +24126,7 @@ requirements:
   - id: REQ-342
     title: Add the localized_text and foreign-key-reference widgets to the admin-CRUD engine's field registry, proven against real field shapes from all nine remaining BilimBaga entity types via targeted component tests only -- no screen or wiring (S10 P4, bucket C client)
     owner: FRONTEND-DEV
+    impl_order: 636  # letflow-queue task id, written back at WF-01 Step 3; depends_on mirrored as real queue edges
     status: pending
     stage: S10
     description: >
@@ -24219,6 +24225,7 @@ requirements:
   - id: REQ-343
     title: Wire full list/create/edit/delete screens, nav and role-gated routing for all nine remaining BilimBaga entity types onto the admin-CRUD engine, using REQ-340's and REQ-342's widgets -- recording the is_correct field-grant, self-referential parent_id, and exam_assignment admin-screen gaps rather than papering over them (S10 P4, bucket C client)
     owner: FRONTEND-DEV
+    impl_order: 637  # letflow-queue task id, written back at WF-01 Step 3; depends_on mirrored as real queue edges
     status: pending
     stage: S10
     description: >

@@ -113,7 +113,7 @@ at the normal one-agent-turn sizing when it becomes the active phase.
 | **P0** | This stage file, decision 0022, an `FR-BB` index reconstructed from its actual citation sites, and the `FR-BB` → `REQ-xxx` translation with a bucket declared on each | — | every S10 requirement is filed and `REQ-VALIDATOR`-passed |
 | **P1** | Close gaps 1–6 and 10–13; land 7–9 | B | `mix letflow.check` and `web/`'s `npm run check` green with all thirteen closed. As of 2026-09-12 gaps 1, 2, 3, 7, 8, 9, 10, 11, 12 and 13 are closed; gaps 4 and 5 have their mechanism settled by decision 0027 but remain open as capabilities (no mailer/SMTP, no PDF/QR dependency); gap 6 remains open and unowned as a capability, with `REQ-323` now filed against it |
 | **P2** | The pack: entity definitions, process definitions, role-registry seed, Lua grading rules | A | a tenant with a working question bank and exam configuration, and **zero exam-specific Elixir**. Reachable as of 2026-09-11: gaps 10, 11 and 13 are closed — see below |
-| **P3** | `lib/letflow/exam/`: live session (deadline, autosave, per-question scoring, anti-cheat), certificate issuance | C | each module carries its `REVIEWER` bucket-C sign-off |
+| **P3** | `lib/letflow/exam/`: live session (deadline, autosave, per-question scoring, anti-cheat), certificate issuance | C | each module carries its `REVIEWER` bucket-C sign-off — met as of 2026-09-13 (see bucket-C inventory above). **This row's bucket (C) and deliverable list were a prediction, not the full outcome: P3 also produced bucket-A work (`REQ-329`, five session entity definitions) and bucket-B work (`REQ-331`, the deadline sweep on `Letflow.Scheduler.Poller`) — see "Bucket-C inventory" above. Certificate issuance was NOT delivered by P3: it needs PDF and QR rendering, `mix.exs` carries no such dependency, and gaps 4 and 5 (above) have their mechanism settled by decision `0027` but their capabilities remain open and unowned. A later reader should not read P3's completion as covering certificates.** |
 | **P4** | `web/`: admin CRUD generated from `x-ui`, plus the hand-written candidate exam-taking UI | C (client) | screens use `web/`'s design system, not BilimBaga's component layer |
 | **P5** | Parity: BilimBaga's 19 Playwright spec files (168 `test()` blocks) re-pointed at the Letflow build | — | `RELEASE-VALIDATOR` re-derives the pass, `UAT-RUNNER` runs them against a live instance |
 | **P6** | *Conditional* — importer from BilimBaga's PostgreSQL into entity records | B | built only if a deployment holds real data; otherwise never built |
@@ -179,17 +179,97 @@ metric.
 
 | Module | Why not A (a definition) | Why not B (generic) | REVIEWER sign-off |
 |---|---|---|---|
-| *(none yet)* | | | |
+| `Letflow.Exam.Session` | Orchestrates a stateful, multi-step write sequence (eligibility checks in a fixed order, seeded materialization, ownership-checked autosave/submit) with server-authoritative deadline comparison against wall-clock time — an entity definition has no execution semantics and cannot run a multi-step `with`-chain or compare against `DateTime.utc_now()`. | The eligibility rule set (assignment, exam-active/archived, availability window, attempt limits, one-open-session) and the ownership/deadline guards are all specific to this vertical's session-lifecycle vocabulary (0022 rule 1); nothing outside this vertical shares this exact rule set today. | PASS (REVIEWER, 2026-09-13, WF02-REQ332-20260913 @7a7216f1) |
+| `Letflow.Exam.QuestionSetResolver` | Deterministically resolves a seeded, shuffled, truncated question subset from a pool against rule configuration — this requires threading a seeded PRNG (`:rand`) through pool selection, truncation, and two independent shuffle steps, which is executable logic, not declarative field structure. | The pool/rule/count/shuffle model is shaped by this vertical's exam-rule schema (pools, rule counts, `options_order`); no existing platform abstraction treats "resolve a reproducible seeded item subset from a configured pool" as a generic capability, and building one now would be speculative ahead of a second caller. | PASS (REVIEWER, 2026-09-13, WF02-REQ332-20260913 @7a7216f1) |
+| `Letflow.Exam.Scoring` | Grading arithmetic (single/true-false as 1-or-0, multiple-choice partial credit clamped to [0,1], Likert weighted-polarity normalization, short-text as `pending_manual`) is executable per-question-type logic with an explicit unanswered-question-as-wrong rule and a no-correct-option error case — none of this is expressible as static field structure. | The five grading rules are specific to this vertical's question-type taxonomy (single/multiple/likert/short-text) and are, per decision `0030` Finding 1, not currently reachable via the platform's one generic scripting mechanism (`Letflow.Engine.Lua.Executor`, unwired for node dispatch) — there is no generic capability to route through today. | PASS (REVIEWER, 2026-09-13, WF02-REQ332-20260913 @7a7216f1) |
+| `Letflow.Exam.AntiCheat` | Validates one of exactly three signal types, checks session ownership/in-progress/deadline state, derives `action_taken` from the exam's `on_tab_switch` config (never from caller input), applies a per-session write-rate debounce, and branches `log`/`warn`/`submit` — a live conditional with a side effect (in the `submit` branch, triggering `Letflow.Exam.Session.submit/3`), which an entity definition cannot express. | Stating this generically requires naming the signal vocabulary (`tab_switch`/`blur`/`fullscreen_exit`) and the terminal action (auto-submitting a session) — both vertical-specific per rule 1's own test; a generic "signal-triggered record transition" capability would be built for exactly one caller today, the speculative-generality failure mode `0022` exists to prevent. | PASS (REVIEWER, 2026-09-13, WF02-REQ333-20260913) |
+
+These four rows are copied verbatim from
+[`lib/letflow/design/req330-exam-live-session.md`](../../lib/letflow/design/req330-exam-live-session.md)
+§7's rule-2 table — the module set REQ-332 and REQ-333 were authorised to
+build, and the same table each module's moduledoc cites as its authorisation.
+The REVIEWER sign-off column points at REQ-332's REVIEWER PASS (`Session`,
+`QuestionSetResolver`, `Scoring`) and REQ-333's REVIEWER PASS (`AntiCheat`),
+both recorded in the design doc's §7 table itself with dated PASS entries.
+
+**Measurement, run against this tree:**
+
+```
+$ ls lib/letflow/exam/
+anti_cheat.ex  question_set_resolver.ex  scoring.ex  session.ex
+$ wc -l lib/letflow/exam/*.ex
+  309 lib/letflow/exam/anti_cheat.ex
+  109 lib/letflow/exam/question_set_resolver.ex
+  246 lib/letflow/exam/scoring.ex
+  941 lib/letflow/exam/session.ex
+ 1605 total
+```
+
+**4 modules, 1,605 total lines under `lib/letflow/exam/`, measured 2026-09-13.**
+
+**What left bucket C.** P3's phases-table row (below) predicts bucket C, but
+P3 as executed also produced bucket-A and bucket-B work: REQ-330's
+re-derivation moved the five session entities into bucket A as pack-content
+entity definitions (`REQ-329`, `priv/packs/bilimbaga/entity_definitions/`),
+and moved auto-submission of expired sessions into bucket B as a generic
+deadline-driven sweep on the existing `Letflow.Scheduler.Poller`
+(`REQ-331`, `lib/letflow/scheduler/record_deadline_sweep.ex`). Only the four
+modules in the table above actually landed as bucket-C code. The phase label
+is a prediction; it held for four of the six behaviours REQ-330 analyzed and
+did not hold for two, which is recorded here rather than only in the
+individual requirements' own close-outs.
+
+**Overturned verdicts.** `lib/letflow/design/req330-exam-live-session.md` §6
+states explicitly: "No verdict overturns a starting position into a DIFFERENT
+bucket than REQ-ANALYST proposed" — every one of the five behaviours
+REQ-330 re-derived landed in the same bucket the starting position named
+(deadline enforcement split A/C, auto-submission B, autosave C, scoring C,
+anti-cheat split A/C). None was reversed. That said, one confirmation was
+reached on materially different grounds than the starting position assumed
+and is worth naming here even though it is not a bucket reversal: decision
+[0030](decisions/0030-exam-session-p3-bucket-verdicts.md)'s Finding 1 found
+that decision `0022`'s own bucket table classifies "Lua grading rules ship in
+the pack" as bucket A, but no node-dispatch path in
+`lib/letflow/engine/transition.ex` reaches `Letflow.Engine.Lua.Executor`
+today — that mechanism does not exist in the shipped platform, and never
+existed in the BilimBaga reference implementation either (`grading.go` hard-codes
+its five rules in Go). Per-question scoring's bucket-C confirmation therefore
+rests on a newly-found reason (no generic mechanism to route through), not on
+the starting position's original framing. This is a genuine gap between
+`0022`'s text and the platform, filed in `0030`, not corrected in `0022`
+itself (see this stage file's own hard constraint above).
 
 ## Open questions, recorded rather than answered early
 
-- **Anti-cheat scope.** BilimBaga's roadmap includes tab-focus and timing signals.
-  Whether these are entity-record events, `Letflow.EventStore` events, or neither
-  is a P3 design question; deciding it now would pre-empt gap 1's route shape.
-- **Where a pack's Lua grading rules are audited.** `Letflow.Engine.LuaScriptAudit`
-  exists for service-task scripts. Whether pack-supplied grading scripts pass
-  through the same audit path, or need their own, is a P2 design question with a
-  `SECURITY-REVIEWER` interest.
+- **Anti-cheat scope — ANSWERED by decision
+  [0030](decisions/0030-exam-session-p3-bucket-verdicts.md).** Signals are
+  entity-record events (the `session_event` entity, REQ-329), written
+  through `Letflow.Entities.Records`, not raw `Letflow.EventStore` events
+  and not an aggregate counter — chosen to preserve per-event
+  `occurred_at` and reuse REQ-329's existing storage rather than stranding
+  it. The shared write-amplification exposure this and every other
+  high-frequency entity write carries is mitigated by a per-session
+  debounce inside `Letflow.Exam.AntiCheat`, not by a different storage
+  shape. *(Original question, kept for record: "BilimBaga's roadmap
+  includes tab-focus and timing signals. Whether these are entity-record
+  events, `Letflow.EventStore` events, or neither is a P3 design question;
+  deciding it now would pre-empt gap 1's route shape.")*
+- **Where a pack's Lua grading rules are audited — still open, now
+  explicitly conditioned.** Decision
+  [0030](decisions/0030-exam-session-p3-bucket-verdicts.md) found that
+  `0022`'s bucket table row classifying "Lua grading rules" as bucket A is
+  not realizable today — no node-dispatch path in
+  `lib/letflow/engine/transition.ex` reaches `Letflow.Engine.Lua.Executor`,
+  and `Letflow.Engine.LuaScriptAudit.execute_script_for_audit/6` has no
+  caller. P3 (`REQ-332`) scores exam questions with bucket-C Elixir
+  arithmetic (`Letflow.Exam.Scoring`) instead of waiting on this gap. This
+  audit-path question remains open and is moot until a future, unscheduled
+  requirement wires a real `:SCRIPT`/`:LUA` node-dispatch path into
+  `Letflow.Engine.Transition`. *(Original question, kept for record:
+  "`Letflow.Engine.LuaScriptAudit` exists for service-task scripts. Whether
+  pack-supplied grading scripts pass through the same audit path, or need
+  their own, is a P2 design question with a `SECURITY-REVIEWER`
+  interest.")*
 - **Whether `service_catalog_entries` in a pack document unblocks here — and who
   now owns that policy. ANSWERED by
   [decision 0027](decisions/0027-solution-pack-service-catalog-install-policy.md).**

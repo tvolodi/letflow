@@ -648,9 +648,9 @@ defmodule Letflow.Packs.BilimbagaPackInstallTest do
       IO.puts("=== end through-join ===\n")
 
       assert [row] = rows
-      assert Ecto.UUID.load!(row.primary.record_id) == question.record_id
+      assert row.primary.record_id == question.record_id
       assert row.primary.field_values["difficulty"] == "easy"
-      assert Ecto.UUID.load!(row["tag"].record_id) == tag.record_id
+      assert row["tag"].record_id == tag.record_id
       assert row["tag"].field_values["name"] == "passwords"
       refute row["tag"].field_values["name"] == other_tag.field_values["name"]
 
@@ -663,7 +663,7 @@ defmodule Letflow.Packs.BilimbagaPackInstallTest do
 
       assert {:ok, tag_side_query} = Compiler.compile(tag_side_request, schema)
       assert [tag_side_row] = Repo.all(tag_side_query, prefix: schema)
-      assert Ecto.UUID.load!(tag_side_row["tag"].record_id) == tag.record_id
+      assert tag_side_row["tag"].record_id == tag.record_id
     end
   end
 

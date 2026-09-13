@@ -2182,7 +2182,7 @@ defmodule Letflow.Routers.Entities do
 
   defp export_record_map(%{field_values: _field_values} = entity_row) do
     %{
-      "record_id" => normalise_record_id(entity_row.record_id),
+      "record_id" => entity_row.record_id,
       "field_values" => entity_row.field_values,
       "deleted" => entity_row.deleted
     }
@@ -2339,27 +2339,20 @@ defmodule Letflow.Routers.Entities do
   defp joined_key_string(entity_type) when is_binary(entity_type), do: entity_type
 
   # Same allowlist record_map/1 applies to a %Latest{}, so a promotion is
-  # not observable in a response body.
-  #
-  # ⛔ `record_id` needs normalising and `%Latest{}`'s does not: Latest
-  # declares it `Ecto.UUID`, so Ecto loads it as the canonical string, but
-  # Compiler.select_entity_row/1 selects the per-type table's column through
-  # a SCHEMALESS query with no :uuid type information -- it comes back as
-  # the raw 16-byte binary. Left alone, that would reach Jason as invalid
-  # UTF-8 and the same record would render differently depending on whether
-  # its entity type happened to have been promoted.
+  # not observable in a response body. `Compiler.select_entity_row/1`
+  # (and the joined-select equivalents) now cast `record_id` to a real
+  # `String.t()` at the query source (ISS-0652) -- it is always a string
+  # here regardless of whether this row came from `entity_record_latest`
+  # or a promoted per-type table, so no local normalisation is needed.
   defp entity_row_map(entity_row) do
     %{
-      "record_id" => normalise_record_id(entity_row.record_id),
+      "record_id" => entity_row.record_id,
       "field_values" => entity_row.field_values,
       "deleted" => entity_row.deleted,
       "entity_def_version" => encode_entity_def_version(entity_row.entity_def_version),
       "last_event_global_seq" => entity_row.last_event_global_seq
     }
   end
-
-  defp normalise_record_id(<<_::binary-size(16)>> = raw), do: Ecto.UUID.load!(raw)
-  defp normalise_record_id(record_id) when is_binary(record_id), do: record_id
 
   defp encode_entity_def_version(nil), do: nil
 

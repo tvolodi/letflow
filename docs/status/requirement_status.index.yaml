@@ -3141,8 +3141,14 @@ volumes:
     path: docs/status/requirement_status.v15.yaml
     status: current
     opened: 2026-09-12
-    entries: 26
+    entries: 27
     note: >
+      Incremented to 27 by ORCH's own ISS-0631 started-event append
+      (SCOPE-CHANGE, queue task 631) -- `grep -c "^  - req:"
+      docs/status/requirement_status.v15.yaml` = 27 on-disk entries;
+      1048 lines / 61247 bytes -- approaching but still under the roll
+      ceiling (1200 lines / 120000 bytes). No rebase conflict on this
+      file.
       Incremented to 26 by ORCH's own REQ-334 blocked-event append
       (direct-action, dependency REQ-333 not yet done) -- `grep -c
       "^  - req:" docs/status/requirement_status.v15.yaml` = 26

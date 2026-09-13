@@ -1022,3 +1022,27 @@ history:
       back to status: open. Deferring REQ-334 until REQ-333 reaches
       done; will re-poll the queue rather than re-claim 630 in the
       meantime.
+  - req: SCOPE-CHANGE
+    event: started
+    agent: ORCH
+    at: "2026-09-13T09:29:24Z"
+    note: >
+      Claimed letflow-queue task 631 (WF-03 issue ISS-0631, GitHub
+      #1330): lib/letflow/exam/session.ex:911's session_view/1 calls
+      String.to_existing_atom on the persisted "in_progress" status
+      string, but :in_progress appears nowhere in lib/ as an executed
+      atom literal (only inside @type specs), so Session.create/3's
+      success or ArgumentError crash depends on incidental BEAM atom-
+      table load order rather than the code's own structure. Found
+      live by ELIXIR-DEV while writing REQ-333's tests, in an isolated
+      parallel test partition where nothing else had interned the
+      atom yet; worked around only in the test file, not fixed in
+      production code (out of REQ-333's scope -- session.ex belongs to
+      REQ-332). Fix direction already clear and precedented: replace
+      with an explicit status_atom/1-style mapper, matching this same
+      module's own existing idiom for exactly this problem
+      (question_type_atom/1 line 918, polarity_atom/1 line 924).
+      Dispatching ISSUE-FIXER to confirm/extend the diagnosis (and
+      audit outcome_from_session/1's similar-shaped atoms per the
+      issue's own suggestion) before routing to CODE-DESIGNER/
+      ELIXIR-DEV for the actual fix.

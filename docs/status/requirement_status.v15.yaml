@@ -714,3 +714,46 @@ history:
       Dispatching to ELIXIR-DEV given the real validator-execution
       work involved, despite the nominal REQ-ANALYST owner field,
       matching the REQ-326/327/328 precedent.
+  - req: REQ-329
+    event: done
+    agent: DOC-UPDATER
+    at: "2026-09-13T04:58:22Z"
+    note: >
+      Close-out for run WF02-REQ329-20260913 (queue task 625, GH#1316),
+      branch feature/WF02-REQ329-20260913 (commit 98decbd8). Authored
+      five new entity-definition documents under
+      priv/packs/bilimbaga/entity_definitions/ -- session,
+      session_question, session_answer, session_event,
+      session_question_score -- porting BilimBaga's migrations
+      014/015/016. All five independently pass the real
+      Letflow.Entities.Definition.Validator.validate/1. Recorded in
+      README-constraints.md: the ON-DELETE divergence table (8 real
+      FKs, 3 matching and 5 diverging against Letflow's fixed RESTRICT)
+      and the TIMESTAMPTZ/expires_at invariant. session_event's
+      deliberate event_type addition beyond its tab_switch_events
+      source is honestly labeled as an addition, not silently ported.
+
+      REVIEWER independently re-verified every claim against the
+      actual BilimBaga source files (the three migrations plus
+      service.go/repository.go) and confirmed a genuine discrepancy in
+      the requirement's own acceptance-criteria text (title says
+      "seven FKs," body enumerates eight) was correctly flagged rather
+      than silently reconciled either way. Test coverage extended in
+      the existing test/letflow/packs/bilimbaga_entity_definitions_test.exs
+      (one narrow rework round fixed a false-coverage claim in that
+      file's own moduledoc, per TEST-DESIGN-VALIDATOR). Gated PASS by
+      REVIEWER and (after that one rework round) TEST-DESIGN-VALIDATOR.
+
+      TEST-RUNNER verified a full green suite (4120/4120 passed) plus
+      a clean `mix letflow.check` on this branch. ORCH separately found
+      and fixed a live, currently-necessary tripwire triage in
+      test/letflow/simulation/req207_vortex_test.exs for both REQ-329
+      and the concurrently-filed REQ-331 -- both admitted to the
+      unconditional allowed_ids tier, since neither touches the entity
+      HTTP query surface.
+
+      Pushed the branch, opened the PR, waited for CI green, confirmed
+      mergeStateStatus CLEAN, squash-merged, deleted the branch, closed
+      GitHub mirror issue #1316 with an evidence comment citing the PR
+      and TEST-RUNNER's results. docs/requirements.yaml flipped
+      pending -> done. Local main synced to the merge commit.

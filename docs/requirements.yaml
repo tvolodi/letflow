@@ -22685,7 +22685,7 @@ requirements:
     title: Author the five live-session entity definitions (session, session_question, session_answer, session_event, session_question_score) under priv/packs/bilimbaga/entity_definitions/ (S10 P3, bucket A)
     owner: REQ-ANALYST
     impl_order: 625  # letflow-queue task id, written back at WF-01 Step 3.
-    status: pending
+    status: done
     stage: S10
     description: >
       bucket: A. BUCKET TEST PERFORMED, AND THIS IS THE FINDING THAT MATTERS

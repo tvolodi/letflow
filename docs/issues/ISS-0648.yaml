@@ -70,4 +70,4 @@ affected_files:
   - priv/packs/bilimbaga/entity_definitions/tag.json
 queue_ref: Q-648
 github_ref: GH-1354
-status: open
+status: resolved

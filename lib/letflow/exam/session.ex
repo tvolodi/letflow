@@ -843,7 +843,7 @@ defmodule Letflow.Exam.Session do
           Records.update_record(
             %{
               entity_type: "session_answer",
-              record_id: existing.record_id,
+              record_id: normalize_record_id(existing.record_id),
               field_values: attrs,
               actor_id: user_id,
               idempotency_key: Ecto.UUID.generate()
@@ -1038,7 +1038,29 @@ defmodule Letflow.Exam.Session do
   # Shared plumbing
   # =======================================================================
 
-  defp fv(%Latest{field_values: field_values}, key), do: Map.get(field_values, key)
+  defp fv(%{field_values: field_values}, key), do: Map.get(field_values, key)
+
+  # ISS-0648 companion finding (beyond the design doc's own §2.2.1 scope,
+  # empirically discovered while proving acceptance criterion 12): once an
+  # entity type is promoted to a real per-entity-type table,
+  # `Letflow.Entities.Query.Compiler`'s `select_entity_row/1` returns
+  # `record_id` as the RAW 16-byte UUID binary Postgrex hands back for an
+  # untyped schemaless `select` -- never cast to the hyphenated string form
+  # `Compiler.entity_row()`'s own `@type` already promises
+  # (`record_id: String.t()`). `upsert_answer/5` below passes an existing
+  # `session_answer` row's `record_id` (session_answer is one of this fix's
+  # own §4 blast-radius entity types) straight into
+  # `Records.update_record/2`, which later fails encoding it as JSON for the
+  # event payload -- confirmed empirically:
+  # `test/letflow/exam/session_test.exs`'s "a second save on the same
+  # question upserts, not duplicates" test raised `Jason.EncodeError`
+  # against exactly this raw binary once session_answer started being
+  # promoted (this fix's own trigger). This is NOT a new mechanism: it is
+  # the identical normalization `lib/letflow/routers/entities.ex`'s own
+  # `normalise_record_id/1` already applies for exactly this reason
+  # (REQ-300/ISS-0600) -- reused here rather than re-invented.
+  defp normalize_record_id(<<_::binary-size(16)>> = raw), do: Ecto.UUID.load!(raw)
+  defp normalize_record_id(record_id) when is_binary(record_id), do: record_id
 
   defp eq(field, value), do: %{field: field, op: :eq, value: value}
 

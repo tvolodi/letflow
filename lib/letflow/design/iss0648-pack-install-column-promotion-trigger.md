@@ -3,10 +3,18 @@
 Status: design for CODE-DESIGN-VALIDATOR review. Fixes ISS-0648
 (`docs/issues/ISS-0648.yaml`, BLOCKER, discovered by REVIEWER during REQ-336).
 Touches `lib/letflow/entities/definitions.ex`,
-`lib/letflow/tenant_provisioning.ex`, and (one small hardening item)
-`lib/letflow/entities/definition/ddl.ex`. Does not touch
+`lib/letflow/tenant_provisioning.ex`, (one small hardening item)
+`lib/letflow/entities/definition/ddl.ex`, and — per REVIEWER's confirmed
+finding below (§2.2 correction) — `lib/letflow/exam/session.ex` and
+`lib/letflow/exam/anti_cheat.ex`. Does not touch
 `lib/letflow/definitions/solution_pack_install.ex` or `solution_pack.ex` — see
 §1 for why the trigger point is deliberately not there.
+
+**Correction (post-REVIEWER, before CODE-DESIGN-VALIDATOR re-review):** §2.2's
+original text below contained a factually wrong safety claim. It has been
+struck through and replaced in place, not silently edited — see §2.2 for the
+correction itself, §2.2.1 for the companion fix this adds to scope, and
+acceptance criterion 12 for the new proof obligation.
 
 ## 0. Re-verification performed before choosing a direction
 
@@ -241,8 +249,11 @@ decision and is stated explicitly rather than left implicit:
   `backfilled`/`active`, so `query_eligible` never becomes `true` for them —
   which is fine, because nothing in this fix's scope needs `Allowlist` to
   treat the attribute as a `:typed_column` (that is REQ-299/300's territory,
-  unrelated to constraint enforcement, and Allowlist already treats it as an
-  ordinary `:json_field` otherwise, which is correct and unaffected).
+  unrelated to constraint enforcement).
+  ~~Allowlist already treats it as an ordinary `:json_field` otherwise, which
+  is correct and unaffected.~~ **Struck through — this claim is wrong; see
+  §2.2.1 immediately below for what REVIEWER actually found and the
+  companion fix it requires.**
   **This is flagged as its own follow-up issue, not fixed here** — filed as
   ISS-0649 below (§7) — because fixing `dual_write_promoted_columns/3` to
   keep writing at `"active"` is a change to a live, already-shipped write
@@ -251,6 +262,132 @@ decision and is stated explicitly rather than left implicit:
   RELEASE-VALIDATOR/REVIEWER should confirm this fix's acceptance criteria
   (§6) hold with promotions parked at `ddl_applied` specifically, not assume
   the state machine's "later" states.
+
+### 2.2.1 Correction: the row-shape read path, not just filter/sort, is affected — and it broke a real caller
+
+**What the struck-through claim got wrong.** "Allowlist already treats it as
+an ordinary `:json_field`... unaffected" is true only for the *filter/sort*
+path (`Allowlist.load/2`'s classification of a `:json_field` vs.
+`:typed_column`, consumed by `build_all_filter_dynamics/3`/`build_all_order_bys/3`)
+— that much of the original claim is correct as far as it goes. It did **not**
+account for the **row-shape** read path, which is a separate concern already
+switched by REQ-300 (already shipped, not part of this fix) independently of
+filter/sort classification: `Letflow.Entities.Query.Compiler.resolve_binding_source/2`
+resolves an entity type's `primary_source` to `{:per_type_table, table_name}`
+**the instant a per-type table exists for it** — which, after this fix's
+`ensure_column_promotions/2` reaches `ddl_applied`, is true for every entity
+type in §4's blast-radius table. Once that happens, `compile_plain/5`
+(`compiler.ex:960-985`) takes the `{:per_type_table, table_name}` branch and
+pipes the query through `select_entity_row/1` (`compiler.ex:987-997`), which
+`select/3`-projects a **plain map** — `%{record_id:, field_values:, deleted:,
+entity_def_version:, last_event_global_seq:, inserted_at:, updated_at:}` —
+**never a `%Letflow.Entities.Record.Latest{}` struct.** This is REQ-300's own
+already-shipped, already-reviewed contract; this fix does not change it. What
+this fix changes is which entity types actually have a per-type table to
+route through it, for the first time, at `ddl_applied` rather than only at
+`active`/`backfilled`.
+
+**Empirically confirmed regression.** `Letflow.Exam.Session.fv/2`
+(`session.ex:1041`) and `Letflow.Exam.AntiCheat`'s identically-shaped private
+helper (`anti_cheat.ex:297`) both pattern-match `defp fv(%Latest{field_values:
+field_values}, key)` — a struct-specific clause, with no bare-map fallback
+clause beneath it (unlike `field_grants.ex`'s `redact_item/2`, which already
+carries exactly such a fallback from ISS-0600, or `routers/entities.ex`'s
+`query_item_map/1`, generalized to accept both shapes under the same
+REQ-300/ISS-0600 work). Both `fv/2` helpers are reached via each module's own
+`query_all/3`, which calls `Compiler.compile/2` then `Repo.all/2` directly —
+no allowlist/redaction layer sits between the compiled query and `fv/2`.
+`session_question`, `session_answer`, `exam_question_rule`, and
+`session_question_score` are all in this fix's own §4 blast-radius table.
+Once any of them is promoted to `ddl_applied` (which this fix's own
+`ensure_column_promotions/2` now does at activation), every subsequent read
+through `fv/2` for that entity type receives the plain-map shape and raises
+`FunctionClauseError` — confirmed live: **`mix test test/letflow/exam/`
+produced 42 failures, all this exact crash**, once REVIEWER exercised this
+fix's own blast radius against the real `fv/2` call sites.
+
+**Companion fix, added to this design's own scope (not a separate issue) —
+required because it is this fix's own blast radius that turns REQ-300's
+already-shipped row-shape contract from latent to load-bearing for these two
+files, the same reasoning §6 already applies to the backfill-crash rescue:**
+
+- `lib/letflow/exam/session.ex:1041`: relax
+  `defp fv(%Latest{field_values: field_values}, key), do: Map.get(field_values, key)`
+  to `defp fv(%{field_values: field_values}, key), do: Map.get(field_values, key)`.
+- `lib/letflow/exam/anti_cheat.ex:297`: the identical change to its own
+  `fv/2` clause, same before/after signature.
+- **Why this loses nothing** (REVIEWER-confirmed): `fv/2` in both files never
+  performed deleted-record filtering or any other `%Latest{}`-specific
+  behavior beyond reading `field_values` — it is a bare accessor. `Record.Latest`'s
+  schema and `select_entity_row/1`'s plain-map output both carry a
+  `field_values` key with equivalent contents for `fv/2`'s purposes (the
+  per-type table's `field_values` column is the same dual-written JSONB
+  `Records.dual_write_promoted_columns/3` keeps current — see §2.2 above).
+  This is the architecturally correct generalization per REQ-300's own
+  already-shipped contract, not a workaround bolted on for this fix.
+- Neither `session.ex` nor `anti_cheat.ex` is in this design's original
+  §"Touches" list; both are added to it (top of this document) as a direct
+  consequence of this correction.
+
+**Further exposure check (REVIEWER only checked `lib/letflow/exam/`;
+CODE-DESIGNER re-checked the rest of `lib/letflow/` for this correction):**
+grepped every `%Letflow.Entities.Record.Latest{`/`%Latest{` struct-pattern
+match under `lib/letflow/` against a value that could originate from
+`Compiler`/`Repo.all` output for one of §4's 9 entity types.
+
+- `lib/letflow/entities/query/field_grants.ex:138` (`redact_item/2`) — **not
+  exposed.** Already carries a bare-map fallback clause at line 142
+  (`defp redact_item(%{field_values: field_values} = item, restriction_set)
+  when is_map(item)`), added under ISS-0600
+  (`lib/letflow/design/iss0600-field-grants-per-type-table-row-shape.md`).
+  Clause ordering already puts the `%Latest{}` clause first, correctly.
+- `lib/letflow/routers/entities.ex` (`query_item_map/1` line 2327,
+  `entity_row_map/1` line 2351, `record_map/1` line 2390) — **not exposed.**
+  Already generalized under the same REQ-300/ISS-0600 work: `query_item_map/1`
+  has a distinct `%{field_values: _}` clause (line 2329) beneath its
+  `%Latest{}` clause (line 2327) specifically to handle
+  `Compiler.entity_row()`, with its own moduledoc comment naming all three
+  shapes that can reach it (unpromoted `%Latest{}`, promoted `entity_row()`,
+  and joined rows).
+- `lib/letflow/entities/records.ex` (lines 307, 467, 497, 550, 553) and
+  `lib/letflow/entities/record/projector.ex:276` — **not exposed.** These
+  match on the *write* path's own `Ecto.Multi`/insert results
+  (`upsert_record_latest`), which always produce a real `%Latest{}` via a
+  direct Ecto insert into `entity_record_latest` — never routed through
+  `Compiler`/`select_entity_row/1`. Out of this fix's blast radius by
+  construction, not by luck: promotion changes how a row is *read*
+  (query-time), not how `entity_record_latest` itself is written.
+- **`lib/letflow/entities/query/cursor.ex:368` (`build_next_cursor/2`,
+  matching `%Latest{id: id} = row`) and `cursor.ex:390` (`read_sort_value/2`,
+  matching `%Latest{field_values: field_values}`) — genuinely exposed, a
+  second site beyond the two `lib/letflow/exam/` ones, and NOT yet fixed by
+  this design.** `Cursor.paginate/5` (`cursor.ex:124`) consumes
+  `Compiler.compile/2`'s output directly, the same compiled query
+  `resolve_binding_source/2` switches to `{:per_type_table, table_name}` for.
+  `Cursor.paginate/5` backs the generic keyset-paginated entity-query route in
+  `lib/letflow/routers/entities.ex`, which is reachable for any of §4's 9
+  entity types once promoted. Unlike `field_grants.ex`/`routers/entities.ex`,
+  neither `build_next_cursor/2` nor `read_sort_value/2` has a bare-map
+  fallback clause, and `build_next_cursor/2`'s pattern additionally reads an
+  `:id` field `select_entity_row/1`'s projection does not even select — so a
+  paginated query (with a keyset cursor requested) against a promoted entity
+  type would raise `FunctionClauseError` the same way `fv/2` did, on the
+  first page needing a `next_cursor` minted, or on any `:json_field`-sourted
+  sort term. **This is out of this design's own scope to fix** — it is not
+  reachable through anything `Letflow.Exam.*`'s own `query_all/3` calls
+  (which call `Repo.all/2` directly, never `Cursor.paginate/5`), so it is not
+  part of *this* fix's empirically-confirmed regression, and fixing it
+  requires its own review of `Cursor`'s row-shape contract (does `id` need to
+  come from `record_id` for a per-type-table row? does every `:json_field`
+  sort term need the same bare-map generalization `read_sort_value/2`'s
+  `:typed_column` clause already tolerates via `Map.fetch!(row, column_atom)`,
+  which works for either shape?) — a correctly-scoped fix, not a one-line
+  relax like `fv/2`'s. **Filed as a new follow-up, ISS-0651, added to §7
+  below.** REVIEWER/RELEASE-VALIDATOR should confirm ISS-0651 is filed and
+  that no acceptance criterion of *this* design (ISS-0648) is read as
+  requiring `Cursor`'s paths to be fixed — they are not, since nothing in
+  this fix's own acceptance criteria (§6/§Acceptance criteria) exercises
+  keyset pagination against a promoted entity type.
 
 ### 2.3 What happens on failure: never blocks activation, always loud
 
@@ -584,6 +721,21 @@ reasoning above for why bundling them in would be disproportionate):
   latent gap where a constrained-but-not-queried field would produce
   DDL referencing a non-existent column. Zero entity types in the current
   corpus trigger this; recommended as defensive hardening, not a blocker.
+- **ISS-0651** (§2.2.1): `Letflow.Entities.Query.Cursor.build_next_cursor/2`
+  (`cursor.ex:368`) and `read_sort_value/2` (`cursor.ex:390`) pattern-match
+  `%Letflow.Entities.Record.Latest{}` specifically, with no bare-map fallback
+  for `Compiler.entity_row()` — unlike `field_grants.ex`'s `redact_item/2` and
+  `routers/entities.ex`'s `query_item_map/1`, which REQ-300/ISS-0600 already
+  generalized. Reachable via `Cursor.paginate/5`, which the generic
+  keyset-paginated entity-query route consumes directly against
+  `Compiler.compile/2`'s output — so a keyset-paginated query against any of
+  this fix's §4 entity types, once promoted, will raise `FunctionClauseError`
+  the same way `Letflow.Exam`'s `fv/2` did. Not fixed by this design (out of
+  its own blast radius — nothing `Letflow.Exam.*` does routes through
+  `Cursor`), and not a one-line relax like `fv/2`'s: needs its own review of
+  where `build_next_cursor/2`'s `id` component should come from for a
+  per-type-table row (which has no `:id` field in `select_entity_row/1`'s
+  projection). REVIEWER should confirm this gets filed.
 
 ## Acceptance criteria for the following ELIXIR-DEV implementation turn
 
@@ -648,3 +800,23 @@ reasoning above for why bundling them in would be disproportionate):
     showing no `lib/letflow/definitions/solution_pack*.ex` file touched,
     matching this design's §1 scope fence.
 11. `mix letflow.check` passes, with real output quoted.
+12. No `Letflow.Exam.*` consumer of `Letflow.Entities.Query.Compiler` output
+    assumes a `%Letflow.Entities.Record.Latest{}` struct specifically —
+    proven by a real test exercising `query_all/3` (or equivalent) against a
+    promoted entity type. Concretely: `lib/letflow/exam/session.ex:1041` and
+    `lib/letflow/exam/anti_cheat.ex:297`'s `fv/2` clauses are relaxed from
+    `defp fv(%Latest{field_values: field_values}, key)` to
+    `defp fv(%{field_values: field_values}, key)` (§2.2.1), and a regression
+    test activates a real §4 entity type (`session_question` is the
+    recommended fixture — already in the blast-radius table and already
+    exercised by `Letflow.Exam.Session`), creates two real
+    `session_question` records in a real provisioned test tenant so the
+    entity type is genuinely promoted to `ddl_applied` and reads route
+    through `select_entity_row/1`'s plain-map shape, then calls whatever
+    `Letflow.Exam.Session` function reads them via its own `query_all/3`
+    path and asserts it returns successfully (not a raised
+    `FunctionClauseError`) with the expected `field_values` visible through
+    `fv/2`. This criterion's test must fail against the pre-fix `fv/2`
+    clauses (i.e. it is a genuine regression test for the crash REVIEWER
+    found empirically — `mix test test/letflow/exam/` producing 42 failures
+    before this criterion's fix lands) and pass after.

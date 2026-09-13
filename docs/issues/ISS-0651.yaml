@@ -1,0 +1,41 @@
+id: ISS-0651
+title: Cursor.build_next_cursor/2 and read_sort_value/2 pattern-match %Record.Latest{} specifically, with no bare-map fallback for a promoted entity type's plain-map query result
+discovered_by: CODE-DESIGNER
+discovered_in_run: WF03-ISS0648-20260913
+discovered_at: "2026-09-13T17:15:00Z"
+severity: MAJOR
+description: >
+  Found by CODE-DESIGNER while amending the ISS-0648 design doc
+  (activate_definition/4 auto-triggers column promotion for entity types
+  with a declared unique constraint).
+  Letflow.Entities.Query.Cursor.build_next_cursor/2 (cursor.ex:368) and
+  read_sort_value/2 (cursor.ex:390) pattern-match
+  %Letflow.Entities.Record.Latest{} specifically, with no bare-map
+  fallback for Compiler.entity_row() -- unlike field_grants.ex's
+  redact_item/2 and routers/entities.ex's query_item_map/1, which
+  REQ-300/ISS-0600 already generalized to handle both shapes.
+
+  This is reachable via Cursor.paginate/5, which the generic
+  keyset-paginated entity-query route consumes directly against
+  Compiler.compile/2's output. Consequence: a keyset-paginated query
+  against any entity type that gets a per-type promoted table (any of
+  ISS-0648's blast-radius list, or any future promotion) will raise
+  FunctionClauseError the same way Letflow.Exam.Session.fv/2 did before
+  ISS-0648's own companion fix.
+
+  NOT fixed by ISS-0648's fix -- out of its blast radius, since nothing
+  Letflow.Exam.* routes through Cursor (it calls Repo.all/2 directly) --
+  and NOT a simple one-line relax like fv/2's: it needs its own review of
+  where build_next_cursor/2's id component should come from for a
+  per-type-table row, since select_entity_row/1's projection (record_id,
+  field_values, deleted, entity_def_version, last_event_global_seq,
+  inserted_at, updated_at) has no :id field the way %Latest{} does
+  (record_id is the equivalent key, but confirm the cursor's actual field
+  semantics before assuming a direct rename is sufficient).
+affected_files:
+  - lib/letflow/entities/query/cursor.ex
+  - lib/letflow/entities/query/field_grants.ex
+  - lib/letflow/routers/entities.ex
+queue_ref: Q-651
+github_ref: GH-1359
+status: open

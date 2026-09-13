@@ -23509,3 +23509,823 @@ requirements:
       - REQ-331
       - REQ-332
       - REQ-333
+
+  - id: REQ-335
+    title: HTTP route surface for the candidate-facing exam session API -- start, autosave, submit, anti-cheat signal -- the surface REQ-332 and REQ-333 explicitly left unbuilt (S10 P4, bucket C)
+    owner: ELIXIR-DEV
+    status: pending
+    stage: S10
+    description: >
+      bucket: C. Names session/exam vocabulary throughout by necessity (0022
+      rule 1's own test: it cannot be stated without saying "session"), so it
+      is not B; it is a thin composition layer with no execution semantics of
+      its own (it delegates every check to Letflow.Exam.Session and
+      Letflow.Exam.AntiCheat, which already carry their own rule-2
+      justifications from REQ-330), so unlike those two modules this one adds
+      no NEW bucket-C reasoning -- it is filed separately because a route
+      module is a distinct artefact from the runtime it fronts, the same
+      separation REQ-308/REQ-310/REQ-311 drew between
+      Letflow.Entities.{Definitions,Records} (gap 1's runtime) and
+      Letflow.Routers.Entities (gap 1's route surface).
+      .
+      OWNER RATIONALE -- WHY THIS IS ELIXIR-DEV AND NOT FRONTEND-DEV, DESPITE
+      THIS BEING FILED UNDER P4. The dispatching instruction that produced
+      this batch specified owner: FRONTEND-DEV for all of P4's requirements.
+      This one entry deviates from that, deliberately and for a reason
+      REQ-VALIDATOR should weigh rather than accept on say-so: this
+      requirement's entire deliverable is a new module under
+      lib/letflow/routers/, new permission atoms in
+      lib/letflow/api/authorization.ex, and (per INV-1) tenant-prefix-scoped
+      calls into lib/letflow/exam/ -- none of it touches web/, and
+      FRONTEND-DEV's roster entry (docs/agents/AGENT_SYSTEM.md,
+      .claude/agents/frontend-dev.md) scopes it to web/ and wiring to
+      Letflow's API, not to writing the API itself. REQ-333's own text
+      states plainly that "the route surface for the candidate-facing
+      session API is its own requirement" without naming an owner; this
+      requirement is that one, and giving it to FRONTEND-DEV would mean a
+      role with no lib/letflow/ mandate authoring router modules and minting
+      permission atoms, which SECURITY-REVIEWER should reject on scope
+      grounds alone even if the code were otherwise correct. Filed here
+      because P4 is where the gap became load-bearing (REQ-338, the
+      candidate UI, cannot be built without it), not because it is
+      FRONTEND-DEV's work.
+      .
+      WHY THIS COULD NOT HAVE BEEN FILED IN P3. REQ-332's and REQ-333's own
+      scope fences say so explicitly: REQ-332 lists "any HTTP route or web/
+      screen" under "NOT covered here... (P4 and a separate requirement)",
+      and REQ-333's last line reads "This requirement produces the runtime
+      function only." Both runtime modules exist and are `done`; this
+      requirement is the first to call them from an HTTP boundary.
+      .
+      SOURCE. backend/internal/sessions/handler.go, whose route comments
+      name the exact reference surface: CreateSession (`POST
+      /api/v1/portal/exams/:id/sessions`, FR-BB35), SaveAnswer (`POST
+      /api/v1/portal/sessions/:id/answers` -- inferred from context; the
+      handler comment omits the path but FR-BB37 and roadmap 3.7 name the
+      behaviour), ReportEvent (`POST /api/v1/portal/sessions/:id/events`,
+      FR-BB38), SubmitSession (`POST /api/v1/portal/sessions/:id/submit`,
+      FR-BB39), GetSessionState (`GET /api/v1/portal/sessions/:id`, no
+      FR-BB tag), GetSessionResult (`GET
+      /api/v1/portal/sessions/:id/result`, FR-BB41). Re-verify SaveAnswer's
+      actual path against handler.go's routing registration (likely
+      cmd/server or a routes.go this description has not opened) rather
+      than trusting the inferred path above.
+      .
+      EXPLICITLY OUT OF SCOPE, AND WHY. HandleListGradingQueue,
+      HandleGetGradingDetail and HandleGradeAnswer (FR-BB42, the manual
+      short-text grading admin workflow) are NOT covered: REQ-332 built
+      Letflow.Exam.Scoring to mark a short-text answer pending_manual and
+      stop there -- there is no admin grading-queue runtime to route to,
+      and building one is not this requirement's job. GetNextQuestion
+      (FR-BB72, adaptive selection) and HandleGetMyResults/GetExamHistory
+      (FR-BB41/FR-BB46, cross-session history) are also out of scope: the
+      stage file names adaptive selection as an unimplemented bucket-C
+      behaviour with its own future requirement, and history/results-list
+      views were never part of REQ-330's five analysed behaviours. Routing
+      to a runtime that does not exist would mean writing the runtime
+      inside this requirement, which is a route-surface requirement, not a
+      runtime one -- follow REQ-308's own precedent of routing to what
+      exists and filing what does not as its own gap.
+      .
+      MOUNTING. Follow Letflow.Routers.Entities' own precedent exactly:
+      module Letflow.Routers.ExamSessions (or the name CODE-DESIGNER-free
+      judgement settles on if a clearer one exists -- this requirement does
+      not go through CODE-DESIGNER, see below), mounted under Letflow's
+      normal authenticated /api/v1 forward (lib/letflow/router.ex), NOT as
+      a public/unauthenticated route -- decision 0028's capability-handle
+      pattern is for certificate verification (gap 6, REQ-323, still
+      unimplemented) and does not apply here; a candidate sitting an exam is
+      an authenticated tenant user.
+      .
+      PERMISSION ATOMS. Mint new atoms in lib/letflow/api/authorization.ex
+      following :Entities* naming (e.g. :ExamSessionStart, :ExamSessionSave,
+      :ExamSessionSubmit, :ExamSessionReportEvent, :ExamSessionRead -- exact
+      names are this requirement's to settle, not prescribed here) rather
+      than reusing an existing atom shaped for a different resource. State
+      in the moduledoc why a candidate-role-scoped atom set is correct here
+      (a candidate must reach these routes; PLATFORM_ADMIN-only atoms would
+      lock candidates out of their own exam).
+      .
+      NO CODE-DESIGNER GATE. This is small enough, and constrained enough by
+      REQ-330's and REQ-332's/REQ-333's already-settled interfaces, to size
+      as a single ELIXIR-DEV turn without a separate design artefact --
+      matching how REQ-310/REQ-311 (route surface over an already-designed
+      REQ-308 shape) also skipped a fresh design pass. If implementation
+      surfaces a genuine design question this description does not resolve
+      (in particular: how GetSessionState's response shape should redact
+      is_correct and other answer-key fields from the candidate -- see the
+      open question below), STOP and escalate to CODE-DESIGNER rather than
+      deciding it inline.
+      .
+      OPEN QUESTION THIS REQUIREMENT MUST NOT SILENTLY RESOLVE. GetSessionState
+      and GetSessionResult return a session's materialised question set,
+      which was built from session_question and session_answer entity
+      records -- but the underlying question and answer_option records
+      carry is_correct and other answer-key fields a candidate must never
+      see. Letflow.Entities.Query.FieldGrants (REQ-231) exists for exactly
+      this and 0022's reasoning section 1 already maps is_correct to it, but
+      whether this route's handler must configure a field grant, or must
+      instead hand-assemble the response from only the fields it explicitly
+      selects (never delegating to a generic entity-record serializer that
+      could leak the whole row), is a real design choice with a security
+      consequence. State which was chosen and why; if genuinely undecided
+      after reading FieldGrants' own moduledoc, STOP and escalate rather
+      than guessing which is safer.
+      .
+      TENANT ISOLATION AND OWNERSHIP. Every route resolves the calling
+      candidate from the authenticated token (INV-1 and INV-8 apply) and
+      passes through to Letflow.Exam.Session's own ownership checks rather
+      than trusting a path parameter; a candidate requesting another
+      candidate's session_id must get the same 404 Letflow.Exam.Session
+      itself returns for "not yours", not a 403 that would confirm the
+      session_id exists.
+    acceptance_criteria:
+      - "a new router module exists under lib/letflow/routers/, mounted at the normal authenticated /api/v1 forward in lib/letflow/router.ex (not as a public/unauthenticated route), with a route table in its moduledoc in the same shape as Letflow.Routers.Entities' own table: handler, method/path, delegate, permission, response codes"
+      - "the route surface covers exactly session start, autosave, submit and anti-cheat signal reporting, delegating to Letflow.Exam.Session.create/3 (or its actual REQ-332 function name), the autosave function, the submit function and Letflow.Exam.AntiCheat's reporting function respectively -- named precisely in the close-out against the actual function signatures, not paraphrased"
+      - "a session-state read route exists returning the candidate's own in-progress session (remaining seconds clamped at zero, per REQ-332's autosave contract) WITHOUT exposing is_correct or any other answer-key field, and the close-out states explicitly which of the two mitigations in this description's open-question paragraph was chosen -- a configured FieldGrants restriction or a hand-assembled response selecting only safe fields -- and why. A response built by delegating to a generic entity-record serializer with no redaction step FAILS this criterion regardless of which mitigation is named"
+      - "new permission atoms are minted in lib/letflow/api/authorization.ex following the :Entities* naming precedent, each resolving through a real endpoint_policy_key/2 clause -- proven by test/letflow/api/authorization_enforcement_test.exs (or its successor) showing none of the new routes is on the allowlist and none evaluates :Unknown. The moduledoc states why a candidate-reachable permission set is correct here"
+      - "a test proves a candidate cannot reach another candidate's session through any of these routes -- the same 404-not-403 shape Letflow.Exam.Session's own ownership check returns, proven by asserting the exact status/body rather than only 'not 200'"
+      - "a test proves a session in one tenant is invisible to a request scoped to another tenant (INV-1), and SECURITY-REVIEWER signs off specifically on the is_correct/answer-key redaction question and on tenant isolation"
+      - "HandleListGradingQueue/HandleGetGradingDetail/HandleGradeAnswer (FR-BB42), GetNextQuestion (FR-BB72) and GetExamHistory/HandleGetMyResults (FR-BB41/FR-BB46) are explicitly NOT routed, and the close-out states in one sentence each why: no admin grading-queue runtime exists yet, adaptive selection is unimplemented per the stage file, and cross-session history/results views were outside REQ-330's five analysed behaviours"
+      - "`mix letflow.check` runs in full and its final result is quoted verbatim. If the toolchain or database is unavailable, that is stated with the actual error text and the requirement is reported BLOCKED rather than assumed passing"
+      - "REVIEWER signs off, and the close-out states explicitly whether this requirement's actual owner (ELIXIR-DEV, per this description's owner-rationale paragraph) versus the FRONTEND-DEV default the P4 dispatch specified was itself flagged to REVIEWER as a scope question worth a standing note, rather than silently overridden a second time downstream"
+    depends_on:
+      - REQ-332
+      - REQ-333
+
+  - id: REQ-336
+    title: Generic admin-CRUD screen engine in web/ driven by an entity definition -- list, create, edit, delete -- proven against one pilot BilimBaga entity type before it is pointed at the rest (S10 P4, bucket C client)
+    owner: FRONTEND-DEV
+    status: pending
+    stage: S10
+    description: >
+      bucket: C (client-side; per this stage file's P4 row, "C (client)").
+      This is the FIRST time web/ generates a CRUD screen from an entity
+      definition rather than hand-writing one -- gap 7 (REQ-284,
+      REQ-291-REQ-293) closed the BACKEND half (the closed x-ui widget
+      vocabulary and Expr evaluators) and web/ already has a fieldRegistry
+      and widget set for TASK FORMS (web/src/components/forms/fieldRegistry.ts,
+      FieldFactory.tsx, widgets/), built for form_schema rendering
+      (REQ-286). Nothing in web/ today reads an
+      Letflow.Entities.Definition.t() document and renders a list/create/
+      edit screen from it -- `grep -rl "x-ui\|fieldRegistry\|entity_definition" web/src`
+      returns only the task-forms machinery, and there is no
+      web/src/api/entities.ts, no web/src/pages carrying an entities/ or
+      admin CRUD directory keyed by entity type. Re-verify this against the
+      tree before starting; it is stated as of 2026-09-13.
+      .
+      WHY THIS IS FILED AS ITS OWN PILOT REQUIREMENT RATHER THAN "BUILD ALL
+      NINE SCREENS". Nine entity types (category, tag, question,
+      answer_option, question_tag, exam, exam_section, exam_question_rule,
+      exam_manual_question -- REQ-326/REQ-327's authored set) is too much
+      surface for one agent turn, and building all nine before the generator
+      itself is proven would mean discovering the generator's design flaws
+      nine times over. This requirement builds the reusable engine and
+      proves it end-to-end against exactly ONE pilot entity type;
+      REQ-340/REQ-342/REQ-343 then point the same engine at the remaining
+      nine.
+      .
+      PILOT ENTITY: tag. Chosen because it is the simplest of the nine --
+      REQ-326's tag.json has exactly one field (name, :string, required,
+      unique) and no foreign keys -- so the pilot exercises list/create/
+      edit/delete and the unique-constraint validation path without also
+      having to solve localized_text, enum, fk-reference or json-array
+      widgets in the same requirement. Those are
+      REQ-340's/REQ-342's/REQ-343's problem, against an engine this
+      requirement has already proven works.
+      .
+      THE REAL API SURFACE THIS MUST BE BUILT AGAINST -- READ
+      lib/letflow/routers/entities.ex's route table IN FULL BEFORE DESIGNING
+      ANYTHING, because it does NOT offer the routes a naive REST-CRUD
+      assumption would expect. There is NO `GET /entities/records/:entity_type`
+      list route and NO `GET /entities/records/:entity_type/:record_id`
+      single-record route. The only read path is `POST /entities/query`
+      (Letflow.Entities.Query.Compiler, cursor-paginated via
+      Letflow.Entities.Query.Cursor). CONCRETELY: "list tags" is a
+      POST /entities/query body naming entity_type "tag" with no filter and
+      a page_size; "get one tag to populate an edit form" is the SAME route
+      with a filter selecting that one record_id (there is no cheaper way
+      to fetch a single record today). Write and DOCUMENT this in the new
+      API client rather than assuming a GET-by-id exists -- a client that
+      calls a route this router does not expose fails at build/lint time,
+      not silently. Definition metadata (field list, types, required-ness,
+      enum_values) comes from `GET /entities/definitions/active/:name`.
+      Create is `POST /entities/records/:entity_type`, update
+      `PUT /entities/records/:entity_type/:record_id`, delete
+      `DELETE /entities/records/:entity_type/:record_id`.
+      .
+      NEW API CLIENT MODULE. web/src/api/entities.ts, following
+      web/src/api/definitions.ts's own shape exactly (a plain object of
+      named functions wrapping `client.get/post/put/delete` from
+      web/src/api/client.ts, typed request/response shapes in
+      web/src/types/api.ts) -- not a new client abstraction. Functions
+      needed: getActiveDefinition(entityType), queryRecords(entityType,
+      query), createRecord(entityType, fieldValues),
+      updateRecord(entityType, recordId, fieldValues, ifMatch?),
+      deleteRecord(entityType, recordId). Note update_record's route table
+      row lists 409 as a real response (optimistic-concurrency conflict,
+      the same X-Resource-Version / If-Match shape client.ts's request()
+      already special-cases for PD-08) -- wire the edit screen's save path
+      through that existing 409 handling rather than reinventing conflict
+      detection.
+      .
+      SCREEN SHAPE, USING web/'s DESIGN SYSTEM (docs/frontend/design-system.md)
+      -- NOT BILIMBAGA'S REACT COMPONENTS. This is P4's own exit condition
+      ("screens use web/'s design system, not BilimBaga's component layer")
+      and it is falsifiable: no file from
+      c:\Users\tvolo\dev\ai-dala\BilimBaga\frontend\ is copied or ported
+      verbatim; every component used is either an existing web/ component
+      or a new one built to design-system.md's tokens. Build: a list page
+      (table, pagination via the query route's cursor, a create button), a
+      create/edit form generated from the definition's fields via
+      web/src/components/forms/fieldRegistry.ts's existing widget
+      vocabulary (a :string field maps to the same text-input widget a
+      form_schema :string field would use -- REUSE the registry, do not
+      fork it), client-side validation from the definition's own
+      constraints (required, unique -- surfaced as a form error on the
+      real 422/409 the API returns, not guessed client-side), and a delete
+      action with a confirmation step.
+      .
+      i18n. Every label, button and error message goes through react-intl
+      (REQ-285, decision 0021) with kk/ru/en message catalogs -- no
+      hard-coded English string in a component this requirement adds.
+      .
+      OUT OF SCOPE FOR THIS REQUIREMENT. Routing/nav-menu wiring for the
+      other nine entity types (REQ-343). Any BilimBaga-specific field
+      widget (localized_text tabs, fk-reference searchable-select, enum
+      dropdown, json array editor) beyond what tag.json actually needs --
+      REQ-340/REQ-342 build those against types that need them. The candidate
+      exam-taking UI (REQ-338) is a hand-written screen, not a generated
+      one, and does not depend on this engine at all.
+    acceptance_criteria:
+      - "web/src/api/entities.ts exists, follows definitions.ts's shape (named functions over client.get/post/put/delete), and its functions are the ones this description names -- no GET-by-id or GET-list function is defined, because no such route exists; a function claiming to be one FAILS this criterion"
+      - "a list screen for the tag entity type renders real records fetched via POST /entities/query against a running or test-doubled API, paginates using the query route's cursor (not a client-side slice of one page), and offers a create action"
+      - "a create/edit form for tag is generated from GET /entities/definitions/active/tag's real field list via web/src/components/forms/fieldRegistry.ts's existing widget vocabulary -- the same registry function form_schema rendering uses, proven by a test asserting the tag name field renders through the SAME widget component a :string form_schema field would, not a parallel implementation"
+      - "creating a tag with a duplicate name surfaces the API's real 409/422 (whichever Letflow.Entities.Records.create_record/2 actually returns for the unique constraint) as a form-level error, proven by a test that hits the real error shape rather than asserting a client-guessed validation message"
+      - "editing a tag exercises the optimistic-concurrency path: a test simulates a 409 with X-Resource-Version and asserts the edit form surfaces a conflict state using client.ts's existing PD-08 handling, not a new conflict mechanism"
+      - "deleting a tag requires an explicit confirmation step before DELETE /entities/records/tag/:record_id fires, proven by a test that the delete call is NOT made on the first click"
+      - "every string rendered by a component this requirement adds is sourced from a react-intl message catalog covering kk, ru and en -- a grep for a hard-coded English string literal in JSX text content across the new files returns no hit outside message-catalog files themselves, quoted with the command"
+      - "no file or component is copied from c:\\Users\\tvolo\\dev\\ai-dala\\BilimBaga\\frontend\\ -- the close-out states this and names which web/ design-system components were used instead (docs/frontend/design-system.md's own component list)"
+      - "`npm run check` (or web/'s equivalent full lint+typecheck+test command per README) runs in full inside web/ and its final result is quoted verbatim. If unavailable, that is stated explicitly per core-directives' no-speculation rule"
+    depends_on:
+      - REQ-284
+      - REQ-291
+      - REQ-292
+      - REQ-293
+      - REQ-311
+      - REQ-326
+
+  - id: REQ-338
+    title: Hand-written candidate exam-taking UI -- start, in-progress question flow with autosave and a live countdown, submit, result -- wired to REQ-335's session routes and REQ-333's anti-cheat signal route, with the "which exams can I take" question answered honestly against the current no-op assignment check (S10 P4, bucket C client)
+    owner: FRONTEND-DEV
+    status: pending
+    stage: S10
+    description: >
+      bucket: C (client) -- explicitly HAND-WRITTEN, not generated, per
+      P4's own phase-table wording ("the hand-written candidate
+      exam-taking UI"), because a timed, autosaving, anti-cheat-instrumented
+      exam-taking flow is behaviour, not a CRUD form over a definition; the
+      generic admin-CRUD engine (REQ-336, and REQ-340/REQ-342/REQ-343 which
+      point it at the remaining entity types) does not apply here. This requirement
+      has no build-order dependency on that engine -- see the NOT A REAL
+      DEPENDENCY note below.
+      .
+      HARD DEPENDENCY, NOT YET FILED AT THE TIME THIS DESCRIPTION WAS
+      WRITTEN: REQ-335, the HTTP route surface over Letflow.Exam.Session and
+      Letflow.Exam.AntiCheat. This requirement cannot be implemented until
+      REQ-335 is done -- there is no route to call today. If REQ-335 is
+      re-scoped or its route shapes change before this requirement is
+      picked up, re-read REQ-335's own close-out rather than this
+      description's route-shape assumptions below, which are necessarily
+      speculative ahead of REQ-335's actual implementation.
+      .
+      NOT A REAL DEPENDENCY: REQ-336. An earlier draft of this requirement
+      listed REQ-336 (the generic admin-CRUD engine) in depends_on.
+      REQ-336's own text states plainly that this candidate-facing UI "does
+      not depend on this engine at all" -- it is hand-written, not
+      generated. Every place below that used to say "same as REQ-336" was
+      borrowing a convention (the no-BilimBaga-file-copy rule, the i18n
+      grep-and-quote standard), not reusing a build artefact REQ-336
+      produces, so those references now cite docs/frontend/design-system.md
+      and docs/agents/instructions/core-directives.md directly instead.
+      REQ-336 is removed from depends_on accordingly.
+      .
+      SOURCE. backend/internal/sessions/service.go's CreateSession (FR-BB35,
+      roadmap 3.5), SaveAnswer (FR-BB37, roadmap 3.7), SubmitSession
+      (FR-BB39, roadmap 3.9) and ReportEvent (FR-BB38, roadmap 3.8), plus
+      whatever frontend UX roadmap 3.5-3.9 describes for the portal
+      exam-taking flow -- read the roadmap sections directly; this
+      description does not restate their UX prose. Do NOT port
+      BilimBaga's frontend components -- P4's own phase-table exit
+      condition ("screens use web/'s design system, not BilimBaga's
+      component layer") and docs/frontend/design-system.md both state this
+      directly: read the roadmap and the Go handlers for BEHAVIOUR, build
+      the screen against web/'s design system.
+      .
+      NEW API CLIENT MODULE. web/src/api/exam.ts, following
+      web/src/api/definitions.ts's shape, wrapping REQ-335's actual routes
+      once they exist: startSession(examId), saveAnswer(sessionId,
+      questionId, answer), submitSession(sessionId), getSessionState
+      (sessionId), reportEvent(sessionId, eventType). Exact function
+      signatures follow REQ-335's actual route/body shapes, not invented
+      ahead of them.
+      .
+      SCREENS. (1) A start/eligibility screen: attempting to start surfaces
+      Letflow.Exam.Session's actual eligibility errors (not assigned,
+      archived, not active, outside availability window, attempts
+      exhausted, already has an open session) as distinct, translated
+      messages -- not one generic "cannot start" string, proven against
+      REQ-332's real error atoms. (2) An in-progress screen: one question
+      at a time (or the full set, per whatever roadmap 3.6/3.7 UX this
+      requirement's executor reads and cites), autosaving on answer change
+      via saveAnswer, and a countdown built from the remaining_seconds
+      value REQ-332's autosave response carries -- CLIENT-SIDE COUNTDOWN
+      TICKS LOCALLY BETWEEN SAVES BUT IS RE-ANCHORED TO THE SERVER'S
+      remaining_seconds ON EVERY SAVE RESPONSE, never left to drift from a
+      client-only timer, because REQ-332's own server-authoritative-clock
+      property is exactly what this screen must not undermine. (3) A
+      submit confirmation and result screen, showing the score, or a
+      "grading pending" state per REQ-332's grading_pending status when the
+      session contains a short-text question -- do not show a numeric
+      score for a session in grading_pending.
+      .
+      ANTI-CHEAT SIGNAL WIRING. Register visibilitychange, blur and
+      fullscreenchange listeners while a session is in progress, mapping
+      each to REQ-333's three accepted signal types (tab_switch, blur,
+      fullscreen_exit) via reportEvent, and handle the three possible
+      server responses -- log (no visible UI change), warn (surface the
+      warning with the running count REQ-333's warn branch returns), submit
+      (the server auto-submitted; the screen must transition to the result
+      view using the server's response, NOT keep the in-progress screen
+      alive believing the session is still open). Listeners are torn down
+      on unmount and on leaving the in-progress screen, so a candidate
+      browsing a different tab AFTER submitting does not keep generating
+      signal reports.
+      .
+      THE ASSIGNMENT QUESTION -- AN HONEST ANSWER, NOT A SILENT ONE. THE
+      SAME AMBIGUITY-ESCAPE STANDARD REQ-333's ACCEPTANCE CRITERIA USED
+      APPLIES HERE. "Which exams does this candidate see as available to
+      start" needs a list source, and the honest answer, stated plainly
+      rather than assumed: lib/letflow/exam/session.ex's own moduledoc
+      records that `check_assigned/3` is CURRENTLY a documented no-op --
+      "every candidate is currently treated as assigned" -- because no
+      exam_assignment entity exists (REQ-327's deliberate omission) and no
+      decision record has settled how assignment should be modelled. TWO
+      CONSISTENT OPTIONS, NEITHER OF WHICH IS A DECISION THIS REQUIREMENT
+      GETS TO MAKE SILENTLY: (a) list every exam whose status is active
+      (matching the no-op's actual current behaviour honestly -- a
+      candidate who is "treated as assigned" to everything sees a list
+      consistent with that), stating PROMINENTLY in the screen's own
+      copy/design that this is provisional pending an assignment decision
+      record, so a later fix to check_assigned/3 does not silently strand a
+      stale "shows everything" list screen; or (b) treat "which exams can I
+      take" as itself blocked and report this requirement BLOCKED rather
+      than build a list screen against an undecided model. THE AMBIGUITY
+      ESCAPE, ENFORCED: before building the list screen, the executor
+      states IN THE CLOSE-OUT which of (a) or (b) it chose and why, quoting
+      session.ex's FINDING section verbatim. Choosing (a) without stating
+      it is provisional, or silently inventing a THIRD shape (a fake
+      assignment concept the platform does not have), FAILS this
+      criterion. This does not block starting a KNOWN exam_id directly
+      (e.g. from an admin-shared link) -- only the discovery/listing screen
+      is affected.
+      .
+      i18n. Same standard as decision 0021 and REQ-285 (also the standard
+      REQ-336 independently follows for its own screens): every string
+      through react-intl, kk/ru/en, no hard-coded English.
+    acceptance_criteria:
+      - "web/src/api/exam.ts exists, wraps REQ-335's actual routes (named and cited by their real path in the close-out, not the speculative paths in this description), and its functions match this description's five named operations or the close-out states exactly how REQ-335's real shape differed"
+      - "the start screen surfaces each of REQ-332's six distinct eligibility errors as a distinct translated message -- proven by six tests, one per error atom, asserting a distinct rendered message per error rather than one generic failure state"
+      - "a test proves the countdown is re-anchored to the server's remaining_seconds on every save response rather than free-running from a client timer -- simulate a save response with a remaining_seconds value and assert the displayed countdown matches it exactly immediately after, not asymptotically"
+      - "a test proves autosave fires on answer change and the UI reflects the save (not a fire-and-forget with no feedback), and a test proves a save rejected for a past-deadline session (REQ-332's server-side deadline enforcement) surfaces as a terminal state, not a retry loop"
+      - "a test proves a session that lands in grading_pending (any short-text question) renders a 'pending' result state and NEVER a numeric score, distinguishing it from a fully-graded submitted session's result view"
+      - "each of the three anti-cheat signal types (tab_switch via visibilitychange, blur, fullscreen_exit via fullscreenchange) is wired to reportEvent, proven by a test per signal type dispatching the browser event and asserting the correct signal type in the request body"
+      - "a test proves the 'submit' branch response (auto-submit) transitions the UI to the result view using the server's own response rather than continuing to show the in-progress screen, and a test proves listeners are removed after that transition (dispatching another browser event afterward triggers no further reportEvent call)"
+      - "the close-out states explicitly which of options (a) or (b) in this description's assignment-question paragraph was chosen, quotes lib/letflow/exam/session.ex's FINDING section verbatim as the basis, and -- if (a) -- shows the provisional-pending-decision-record copy actually rendered in the list screen, proven by a test asserting that text is present. Silently building an exam list with no such statement FAILS this criterion regardless of which option's behaviour was implemented"
+      - "no BilimBaga frontend file is copied or ported verbatim -- the close-out names which web/ design-system components were used for the exam-taking flow instead"
+      - "every string is sourced from a react-intl message catalog covering kk/ru/en (decision 0021, REQ-285) -- proven by a grep for a hard-coded English string literal in JSX text content across the new files, quoted with the command, per core-directives.md's no-speculation rule"
+      - "`npm run check` (or web/'s equivalent) runs in full and its final result is quoted verbatim, or BLOCKED is reported with the real error text"
+    depends_on:
+      - REQ-335
+      - REQ-332
+      - REQ-333
+
+  - id: REQ-339
+    title: Populate the stage-10 bucket-C inventory with P4's web/src/pages/exam/ modules, correct the P4 phase-table exit-condition note, and record the exam_assignment gap as a standing open question rather than a P4-local footnote (S10, doc bookkeeping)
+    owner: DOC-UPDATER
+    status: pending
+    stage: S10
+    description: >
+      bucket: not applicable -- stage bookkeeping, same shape and same
+      reason as REQ-334, which closed this exact loop for P3.
+      .
+      OWNER RATIONALE -- ANOTHER DEVIATION FROM THE P4 DISPATCH'S
+      owner: FRONTEND-DEV DEFAULT, FOLLOWING REQ-334's OWN PRECEDENT. REQ-334
+      is P3's bookkeeping requirement and its owner is DOC-UPDATER despite
+      P3 overall being ELIXIR-DEV's phase, because flipping requirement
+      status, appending status-history events and updating
+      docs/migration/stage-10-bilimbaga-vertical.md is DOC-UPDATER's
+      roster-defined job (docs/agents/AGENT_SYSTEM.md), not the phase
+      owner's. This requirement follows that same precedent for P4 rather
+      than inheriting FRONTEND-DEV by default.
+      .
+      WHAT THIS REQUIREMENT DOES, MIRRORING REQ-334's FOUR JOBS FOR P4.
+      .
+      ONE -- INVENTORY. Add one row per bucket-C module actually landed
+      under web/src/pages/exam/ (or wherever REQ-338 actually put the
+      candidate exam-taking screens -- the stage file's bucket-C inventory
+      table already anticipates "or web/src/pages/exam/" language) to the
+      stage file's bucket-C inventory table, in the same four-column shape
+      (Module | Why not A | Why not B | REVIEWER sign-off), sourced from
+      REQ-338's own close-out and REVIEWER sign-off, not invented.
+      .
+      TWO -- MEASURE. Run and quote the actual file/line count under
+      web/src/pages/exam/ (and web/src/api/exam.ts), the same
+      `ls`/`wc -l`-shaped measurement the stage file already carries for
+      lib/letflow/exam/.
+      .
+      THREE -- CORRECT THE P4 EXIT CONDITION AGAINST WHAT WAS ACTUALLY
+      BUILT. The phase table's P4 row states the exit condition as
+      "screens use web/'s design system, not BilimBaga's component layer"
+      -- confirm this against REQ-336/REQ-340/REQ-342/REQ-343/REQ-338's
+      close-outs (each states which design-system components were used and
+      that no BilimBaga file was copied) and mark it met, or state
+      specifically what fell short. REQ-337, the requirement originally
+      filed for this scope, was retired by REQ-VALIDATOR for being oversized
+      and split into REQ-340 (the two mechanically-driven widgets -- enum,
+      unique-composite) and REQ-341 (the two new widget shapes plus the
+      actual screen/nav wiring); REQ-VALIDATOR then failed REQ-341 too for
+      the same class of bundling mistake, and it was retired in turn and
+      split again into REQ-342 (the two new widget shapes -- localized_text,
+      fk-reference) and REQ-343 (the actual screen/nav wiring for all nine
+      remaining entity types and the exam_assignment note below); cite
+      REQ-340/REQ-342/REQ-343 wherever this stage file still names REQ-337
+      or REQ-341.
+      .
+      FOUR -- RECORD THE exam_assignment GAP AS A STANDING OPEN QUESTION,
+      NOT A FOOTNOTE INSIDE ONE REQUIREMENT. REQ-327, REQ-332's
+      session.ex FINDING, REQ-343 and REQ-338 all independently ran into
+      the same gap (no exam_assignment entity, check_assigned/3 is a
+      no-op, REQ-338 built its candidate-facing exam list against a
+      provisional reading of that no-op). This has now surfaced FOUR
+      times across three requirements spanning P2, P3 and P4 -- the exact
+      "twice-recurring" pattern that triggered REQ-325's decision-record
+      requirement for pack sections. Add it to the stage file's own "Open
+      questions" section as its own entry (not merged into an existing
+      one), stating: what is missing (an exam_assignment entity/mechanism),
+      every place it surfaced (cite REQ-327, REQ-332, REQ-343, REQ-338 by
+      number), and that it now blocks two concrete, real things --
+      REQ-343's admin screen and REQ-338's candidate-facing exam list --
+      making it overdue for its own decision record rather than another
+      requirement's incidental finding. State plainly that this
+      requirement does NOT resolve it -- filing the decision-record
+      requirement itself is a follow-on, not this bookkeeping entry's job.
+      .
+      DO NOT edit decision 0022. Any finding that contradicts 0022's text
+      belongs in a future decision record, pointed at from here, exactly
+      as REQ-334 handled the Lua-grading finding.
+      .
+      Also flip REQ-335, REQ-336, REQ-338, REQ-340, REQ-342 and REQ-343's
+      status entries and append their status-history events per CLAUDE.md's
+      after-finishing procedure, with real UTC timestamps from the clock.
+    acceptance_criteria:
+      - "the stage file's bucket-C inventory table carries one row per module actually present under web/src/pages/exam/, verified by listing the directory and comparing, both quoted. A module in the tree absent from the table, or a table row naming a module that does not exist, FAILS this criterion"
+      - "the total module/screen count and line count under web/src/pages/exam/ (and web/src/api/exam.ts) are stated with the date measured, with the command and its output quoted"
+      - "the P4 phase-table row's exit condition is explicitly marked met or not-met against REQ-336/REQ-340/REQ-342/REQ-343/REQ-338's actual close-outs, quoting which design-system components were used and confirming no BilimBaga frontend file was copied, and the close-out states that REQ-337 was retired and replaced by REQ-340/REQ-341, and that REQ-341 was itself then retired and replaced by REQ-342/REQ-343"
+      - "a new, standalone entry in the stage file's 'Open questions' section records the exam_assignment gap, naming REQ-327, REQ-332, REQ-343 and REQ-338 as every place it surfaced, and states plainly that it is not resolved here and needs its own decision-record requirement"
+      - "docs/migration/decisions/0022-bilimbaga-vertical.md is not modified -- `git diff --name-only` shows it unchanged, quoted with the command"
+      - "REQ-335, REQ-336, REQ-338, REQ-340, REQ-342 and REQ-343 have their status flipped in docs/requirements.yaml and one status-history event appended each to the current run-history volume found via docs/status/requirement_status.index.yaml, each carrying a real UTC timestamp read from the clock, quoted in the close-out"
+    depends_on:
+      - REQ-335
+      - REQ-336
+      - REQ-340
+      - REQ-342
+      - REQ-343
+      - REQ-338
+
+  - id: REQ-340
+    title: Add the two mechanically-driven widgets -- enum select, unique-composite constraint error surfacing -- to the admin-CRUD engine's field registry, proven against real field/constraint shapes from all nine remaining BilimBaga entity types (S10 P4, bucket C client)
+    owner: FRONTEND-DEV
+    status: pending
+    stage: S10
+    description: >
+      bucket: C (client). This is the first of two requirements replacing
+      REQ-337, which REQ-VALIDATOR failed for bundling four separable
+      widget/wiring units (each with its own "does something already solve
+      this" investigation) into one oversized requirement. This one covers
+      the two widgets REQ-VALIDATOR characterised as "no new visual
+      pattern" -- an enum select and unique-composite error surfacing --
+      built once in web/src/components/forms/fieldRegistry.ts and proven
+      against real field/constraint shapes drawn from across the full
+      remaining entity set. REQ-342 covers the two genuinely new widget
+      shapes (localized_text, foreign-key reference); REQ-343 covers the
+      actual screen/nav wiring for all nine entities, depending on both
+      this requirement and REQ-342 for the widgets it reuses. (REQ-337 was
+      first retired and split into REQ-340/REQ-341; REQ-VALIDATOR then
+      failed REQ-341 for the same bundling mistake, and it was retired in
+      turn and split into REQ-342/REQ-343.)
+      .
+      A CORRECTION REQ-337 CARRIED: NINE REMAINING ENTITY TYPES, NOT EIGHT.
+      REQ-337's title and description both said "eight" and listed
+      category, question, answer_option, question_tag (REQ-326) plus exam,
+      exam_section, exam_question_rule, exam_manual_question (REQ-327) --
+      omitting exam_question_rule_tag entirely, the join entity type
+      REQ-327 authored to replace exam_question_rule.tag_ids (see REQ-327's
+      description, "THE tag_ids JSONB COLUMN IS NOT PORTED AS A FIELD").
+      REQ-326 authors five entity types (category, tag, question,
+      answer_option, question_tag) and REQ-327 authors five more (exam,
+      exam_section, exam_question_rule, exam_question_rule_tag,
+      exam_manual_question) -- ten total, minus REQ-336's tag pilot, is
+      NINE remaining, not eight. This requirement and both REQ-342 and
+      REQ-343 use the corrected count of nine; re-verify against REQ-326's
+      and REQ-327's
+      own field lists before starting, rather than trusting this
+      restatement.
+      .
+      CHECK FOR EXISTING COVERAGE FIRST. web/src/components/forms/
+      fieldRegistry.ts and widgets/ already serve form_schema rendering
+      (REQ-286) -- run `grep -rl "enum\|:enum" web/src/components/forms`
+      before writing anything, because if form_schema already has an enum
+      widget, this requirement's enum work is a reuse-and-verify job
+      against entity definitions, not a new-widget job. State in the
+      close-out which was true.
+      .
+      ENUM WIDGET. A select/dropdown whose option list is read from the
+      field definition's own enum_values (from `GET
+      /entities/definitions/active/:name`), never a hard-coded list
+      duplicating what that response already carries. Register it in
+      fieldRegistry.ts the same way REQ-336 registered the pilot's
+      :string widget -- one registry entry, reused by every :enum field
+      across every entity, not a per-entity fork. Prove it against real
+      enum_values drawn from at least three different entities' real enum
+      fields: question.difficulty (["easy","medium","hard"]),
+      exam.show_answers (["never","after_completion","after_all_attempts"])
+      and exam_question_rule.mode (["manual","random"]) -- these are read
+      from REQ-326's and REQ-327's actual committed definition documents
+      under priv/packs/bilimbaga/entity_definitions/, not invented values.
+      .
+      UNIQUE-COMPOSITE ERROR SURFACING. REQ-336 already proved that a
+      single-column unique violation (tag.name) surfaces the API's real
+      409/422 as a form-level error through client.ts's existing error
+      path. This requirement's job is narrower than building a new
+      mechanism: prove that SAME path also surfaces a composite-unique
+      violation's error shape correctly, with no new client-side
+      validation logic added. Exercise it against at least two of the real
+      composite constraints REQ-326/REQ-327 declared: question_tag's
+      unique over [question_id, tag_id] and exam_section's unique over
+      [exam_id, sort_order] (or exam_question_rule's own [exam_id,
+      sort_order], or exam_manual_question's [rule_id, question_id] --
+      any two of the four qualify as long as the test hits the real
+      error shape Letflow.Entities.Records.create_record/2 actually
+      returns, not a client-guessed one).
+      .
+      HOW THIS IS PROVEN WITHOUT FULL ENTITY SCREENS. Every one of the
+      nine remaining entity types needs localized_text or a foreign-key
+      reference widget in addition to whatever enum/unique-composite
+      fields it has (re-verify this against REQ-326's and REQ-327's field
+      lists -- none of the nine is purely enum/unique-composite), so this
+      requirement does not build complete list/create/edit/delete screens
+      for any of them; REQ-343 does that, reusing this requirement's and
+      REQ-342's registry entries. Prove the enum widget and the composite-unique
+      error path against minimal, targeted form renders driven by the
+      real definition responses named above (a component test rendering
+      fieldRegistry's output for one field or one create-record call, not
+      a full page) -- the same level of proof REQ-336 used for its own
+      pilot widget before any full screen existed.
+      .
+      OUT OF SCOPE FOR THIS REQUIREMENT. The localized_text and
+      foreign-key-reference widgets (REQ-342). Any entity screen, any
+      nav/routing wiring, the is_correct field-grant note, the
+      self-referential parent_id gap, and the exam_assignment admin-screen
+      gap note -- all REQ-343's, because none of them can be resolved
+      without the widgets REQ-342 builds and the actual screens REQ-343
+      wires.
+      .
+      i18n. Every label and error message this requirement's components
+      render goes through react-intl (REQ-285, decision 0021) with kk/ru/en
+      catalogs -- no hard-coded English string.
+    acceptance_criteria:
+      - "the close-out states explicitly, with the grep command and its output quoted, whether web/src/components/forms/fieldRegistry.ts or widgets/ already had enum support for form_schema before this requirement, and whether the enum widget added or reused here is the same registry function form_schema rendering uses"
+      - "the enum widget's option list is read from the field's own enum_values in the definition response, not hard-coded -- proven by a test that renders the widget against three different real enum fields (question.difficulty, exam.show_answers, exam_question_rule.mode, values taken from the actual committed JSON under priv/packs/bilimbaga/entity_definitions/) and asserts the rendered options match each field's real enum_values"
+      - "changing a mocked definition's enum_values changes the rendered options to match, proven by a test that swaps the mocked value list and re-asserts"
+      - "a test proves a composite-unique violation surfaces through the exact same error-display path REQ-336 built for tag's single-column case, exercised against at least two of question_tag's [question_id,tag_id], exam_section's [exam_id,sort_order], exam_question_rule's [exam_id,sort_order] or exam_manual_question's [rule_id,question_id], with no new client-side uniqueness-checking mechanism added to the diff"
+      - "no entity list/create/edit/delete screen, nav entry, or routing change exists anywhere in the diff -- `git diff --name-only` is quoted and shows only fieldRegistry.ts/widgets/ additions and their tests"
+      - "the close-out states the corrected entity count (nine remaining, not eight) and names all nine by type, citing REQ-326 and REQ-327 by id for the five-and-five split"
+      - "every string rendered by a component this requirement adds is sourced from a react-intl message catalog covering kk, ru and en -- a grep for a hard-coded English string literal in JSX text content across the new files returns no hit outside message-catalog files themselves, quoted with the command"
+      - "`npm run check` (or web/'s equivalent full lint+typecheck+test command per README) runs in full inside web/ and its final result is quoted verbatim, or the requirement is reported BLOCKED with the real error text if the toolchain is unavailable"
+    depends_on:
+      - REQ-336
+      - REQ-326
+      - REQ-327
+
+  - id: REQ-342
+    title: Add the localized_text and foreign-key-reference widgets to the admin-CRUD engine's field registry, proven against real field shapes from all nine remaining BilimBaga entity types via targeted component tests only -- no screen or wiring (S10 P4, bucket C client)
+    owner: FRONTEND-DEV
+    status: pending
+    stage: S10
+    description: >
+      bucket: C (client). REQ-337 was retired for bundling four separable
+      widget/wiring units into one oversized requirement and split into
+      REQ-340 (the two mechanically-driven widgets) and REQ-341 (the two
+      new widget shapes plus all nine entities' screen/nav wiring plus
+      three gap-note obligations). REQ-VALIDATOR then failed REQ-341 too,
+      for the same class of mistake one level down: "REQ-ANALYST split
+      REQ-337 along the wrong axis (widget-type instead of
+      widget-vs-wiring), leaving all the actual bulk (9x screen wiring)
+      crammed into REQ-341 alongside two new widgets." This requirement is
+      REQ-341's widget half, split along the widget-vs-wiring axis to match
+      REQ-340's own shape exactly: build and prove the two genuinely new
+      widget shapes via targeted component tests, with no entity screen,
+      nav entry, or routing change anywhere in the diff. REQ-343 is the
+      wiring half -- the full list/create/edit/delete screens, nav/routing,
+      role-gating, and the three gap-note obligations (is_correct,
+      parent_id, exam_assignment), which are genuinely properties of the
+      finished screens, not of these widgets. REQ-341 is retired.
+      .
+      THE NINE REMAINING ENTITY TYPES (corrected count -- REQ-337 said
+      "eight" and omitted exam_question_rule_tag; REQ-340 already carries
+      this correction). REQ-326 authors five (category, tag, question,
+      answer_option, question_tag) and REQ-327 authors five more (exam,
+      exam_section, exam_question_rule, exam_question_rule_tag,
+      exam_manual_question) -- ten total, minus REQ-336's tag pilot, is
+      nine remaining: category, question, answer_option, question_tag,
+      exam, exam_section, exam_question_rule, exam_question_rule_tag,
+      exam_manual_question. Re-verify against REQ-326's and REQ-327's own
+      field lists before starting.
+      .
+      LOCALIZED_TEXT (category.name, question.stem, question.explanation,
+      answer_option.text, exam.title, exam.description,
+      exam_section.title). REQ-301's platform shape is one blob-stored
+      value with a generated column per locale; the form widget needed is
+      a per-locale tab or stacked-field group (kk/ru/en, matching
+      REQ-285's locale set) editing one JSON value, not three separate
+      top-level fields -- a field posting {"kk": "...", "ru": "...",
+      "en": "..."} as the field's single value, per
+      Letflow.Entities.Definition's :localized_text shape. CHECK
+      web/src/components/forms/widgets/ first for existing localized_text
+      support before adding a new registry entry; if form_schema already
+      needs localized_text, extend that widget rather than forking it, and
+      state which was true in the close-out.
+      .
+      FOREIGN-KEY REFERENCE (question.category_id, answer_option.question_id,
+      question_tag.question_id/tag_id, exam_section.exam_id,
+      exam_question_rule.exam_id/section_id/category_id,
+      exam_question_rule_tag.rule_id/tag_id,
+      exam_manual_question.rule_id/question_id -- read REQ-326's and
+      REQ-327's field lists for the exact set, including
+      exam_question_rule_tag, which REQ-337 omitted). A searchable-select
+      resolving a human-readable label (e.g. category.track/name,
+      question.stem's plain-text preview) rather than exposing the raw
+      record_id, fetched via POST /entities/query against the referenced
+      entity_type filtered by a search term.
+      web/src/components/forms/widgets/searchableSelect.tsx already exists
+      for form_schema fk-shaped fields -- CHECK WHETHER IT ALREADY SOLVES
+      THIS before writing a second implementation; if it is task-form-shaped
+      in a way that does not generalize to an entity fk reference, extend
+      it rather than forking it, and state which was necessary.
+      .
+      HOW THIS IS PROVEN WITHOUT ANY ENTITY SCREEN. Prove both widgets
+      against minimal, targeted component renders and requests driven by
+      the real definition responses named above (a component test
+      rendering fieldRegistry's output for one field, or one create-record
+      call, not a full page) -- the same level of proof REQ-336 used for
+      its own pilot widget before any full screen existed, and REQ-340 used
+      for enum/unique-composite. REQ-343 wires the actual nine screens,
+      reusing this requirement's and REQ-340's registry entries; it is not
+      this requirement's job to build any of them.
+      .
+      OUT OF SCOPE FOR THIS REQUIREMENT. Any entity screen, any nav/routing
+      wiring, the is_correct field-grant note, the self-referential
+      parent_id gap, and the exam_assignment admin-screen gap note -- all
+      REQ-343's, because none of them can be resolved without the finished
+      screens REQ-343 wires, and none of them is a property of these
+      widgets themselves.
+      .
+      i18n. Every label and error message this requirement's components
+      render goes through react-intl (REQ-285, decision 0021) with kk/ru/en
+      catalogs -- no hard-coded English string.
+    acceptance_criteria:
+      - "the localized_text widget posts a single field value shaped as {\"kk\":...,\"ru\":...,\"en\":...} matching Letflow.Entities.Definition's :localized_text shape, proven by a test asserting the actual request body for question.stem, and the close-out states whether fieldRegistry.ts already had a localized_text widget for form_schema or one was added here"
+      - "the foreign-key reference widget resolves a human-readable label via a real POST /entities/query call against the referenced entity type, not the raw record_id, for at least question.category_id, exam_section.exam_id and exam_question_rule_tag.tag_id -- and the close-out states whether web/src/components/forms/widgets/searchableSelect.tsx was reused or extended, and why"
+      - "no entity list/create/edit/delete screen, nav entry, or routing change exists anywhere in the diff -- `git diff --name-only` is quoted and shows only fieldRegistry.ts/widgets/ additions and their tests"
+      - "the close-out names all nine remaining entity types by type, citing REQ-326 and REQ-327 by id for the five-and-five split, matching REQ-340's corrected count"
+      - "every string rendered by a component this requirement adds is sourced from a react-intl message catalog covering kk, ru and en -- a grep for a hard-coded English string literal in JSX text content across the new files returns no hit outside message-catalog files themselves, quoted with the command"
+      - "`npm run check` (or web/'s equivalent full lint+typecheck+test command per README) runs in full inside web/ and its final result is quoted verbatim, or the requirement is reported BLOCKED with the real error text if the toolchain is unavailable"
+    depends_on:
+      - REQ-336
+      - REQ-326
+      - REQ-327
+
+  - id: REQ-343
+    title: Wire full list/create/edit/delete screens, nav and role-gated routing for all nine remaining BilimBaga entity types onto the admin-CRUD engine, using REQ-340's and REQ-342's widgets -- recording the is_correct field-grant, self-referential parent_id, and exam_assignment admin-screen gaps rather than papering over them (S10 P4, bucket C client)
+    owner: FRONTEND-DEV
+    status: pending
+    stage: S10
+    description: >
+      bucket: C (client). This is the wiring half of the widget-vs-wiring
+      split that replaced REQ-341 (see REQ-342's description for the full
+      history: REQ-337 was retired and split into REQ-340/REQ-341;
+      REQ-VALIDATOR then failed REQ-341 for the same class of mistake --
+      splitting along widget-type instead of widget-vs-wiring, leaving all
+      nine screens' worth of wiring crammed in alongside two new widgets.
+      REQ-342 is the widget half; this requirement is where the actual
+      screens land, using REQ-336's engine, REQ-340's enum/unique-composite
+      widgets, and REQ-342's localized_text/fk-reference widgets -- there
+      is no entity that REQ-336/REQ-340/REQ-342 alone finishes screen-wise,
+      because every one of the nine needs localized_text or a
+      foreign-key-reference field in addition to whatever REQ-340 covers
+      for it (re-verify against REQ-326's/REQ-327's field lists before
+      starting). REQ-341 is retired; this and REQ-342 are its replacement.
+      .
+      THE NINE REMAINING ENTITY TYPES: category, question, answer_option,
+      question_tag (REQ-326); exam, exam_section, exam_question_rule,
+      exam_question_rule_tag, exam_manual_question (REQ-327).
+      .
+      WIRE ALL NINE ENTITY SCREENS. Point REQ-336's engine, together with
+      REQ-340's enum/unique-composite widgets and REQ-342's
+      localized_text/fk-reference widgets, at all nine remaining entity
+      types. Each gets a working list/create/edit/delete screen built
+      exactly as REQ-336's pilot proved (POST /entities/query for list and
+      single-record fetch, GET /entities/definitions/active/:name for
+      field metadata, POST/PUT/DELETE /entities/records/:entity_type for
+      writes), using web/'s design system, not BilimBaga's component
+      layer -- no file from c:\Users\tvolo\dev\ai-dala\BilimBaga\frontend\
+      is copied or ported verbatim.
+      .
+      IS_CORRECT FIELD-GRANT AWARENESS. answer_option.is_correct is the
+      field 0022's reasoning maps to Letflow.Entities.Query.FieldGrants
+      redaction for candidate-facing reads (REQ-231). THIS admin screen is
+      NOT candidate-facing -- it is the authoring surface a question-bank
+      editor uses, and it must show and let an editor set is_correct, or
+      the answer-key could never be authored at all. State this explicitly
+      in the close-out so a later reviewer does not mistake "admin CRUD
+      shows is_correct" for a redaction bug; the redaction question belongs
+      to REQ-338's candidate-facing session reads (see REQ-335's own open
+      question about GetSessionState), not to this requirement.
+      .
+      SELF-REFERENTIAL parent_id -- category.parent_id and
+      question.parent_id, REQ-324 lifted the platform-side restriction but
+      REQ-326 explicitly did NOT author these two fields into the
+      definitions (its own README-constraints.md records this as an open
+      item, "a follow-on requirement adds parent_id plus its fk_def once
+      REQ-324 is done"). NEITHER FIELD EXISTS ON THE DEFINITION TODAY, so
+      neither can appear on a generated screen. Do not add a client-side
+      workaround (no fake tree UI over an unmodelled field); build the
+      screens flat, and state in the close-out that a category tree /
+      question-version-lineage UI is blocked on that still-open definition
+      change, not on anything this requirement controls.
+      .
+      THE exam_assignment GAP -- STATE IT, DO NOT SOLVE IT AND DO NOT SKIP
+      STATING IT. REQ-327 deliberately did NOT author an exam_assignment
+      entity type (its own close-out records the reason: assignee_id is
+      polymorphic across user/department/none, and no fk_def can express a
+      reference whose target varies or reach the identity subsystem).
+      lib/letflow/exam/session.ex's own moduledoc FINDING section confirms
+      the consequence at the runtime layer: `check_assigned/3` is "a
+      documented no-op -- every candidate is currently treated as
+      assigned", and that no-op is unreachable code path
+      (:not_assigned stays declared but is never returned). CONSEQUENCE FOR
+      THIS REQUIREMENT: there is no exam_assignment entity type to generate
+      an admin CRUD screen for, at all -- not "not yet wired", genuinely
+      absent from the tenant's schema. Build no screen for it, add no
+      client-side polyfill (no fake assignment list backed by a made-up
+      entity), and instead add one line to the exam admin section's own
+      nav/landing describing this as a known, deliberate gap pending a
+      decision record, with a pointer to lib/letflow/exam/session.ex's
+      FINDING section and REQ-327's README-constraints.md. THIS IS AN
+      ESCALATION, NOT A REQUEST FOR THIS REQUIREMENT TO DESIGN THE MISSING
+      ENTITY -- that is REQ-ANALYST/CODE-DESIGNER work against a real
+      decision record, out of scope here. REQ-339 records this same gap as
+      a standing open question in the stage file; this requirement's job is
+      only to surface the note in the UI and cite the same two sources.
+      .
+      NAV AND ROUTING. Add the nine screens under a single admin section
+      (e.g. web/src/pages/admin/bilimbaga/ or wherever
+      docs/frontend/design-system.md's admin nav convention places a new
+      module -- follow the existing web/src/pages/admin/ layout, do not
+      invent a second admin shell) with role-gated visibility matching the
+      routes' own permission atoms (REQ-309's Entities* atoms plus whatever
+      role the tenant's manifest.required_roles seed names for a
+      question-bank editor -- REQ-328's pack install established the
+      role-registry checklist; cite it rather than inventing a role name).
+      .
+      i18n. Every label, button and error message goes through react-intl
+      (REQ-285, decision 0021) with kk/ru/en message catalogs -- no
+      hard-coded English string in a component this requirement adds.
+    acceptance_criteria:
+      - "all nine remaining entity types (category, question, answer_option, question_tag, exam, exam_section, exam_question_rule, exam_question_rule_tag, exam_manual_question) have a working list/create/edit/delete screen built on REQ-336's engine plus REQ-340's and REQ-342's widgets -- proven by one test per entity type exercising create-then-list-then-edit-then-delete against the real or test-doubled /entities routes"
+      - "answer_option's admin form displays and allows setting is_correct, and the close-out states in one sentence why this is correct (authoring surface, not candidate-facing) and distinguishes it from REQ-335's/REQ-338's candidate-facing redaction question"
+      - "no screen, field, or client-side workaround for category.parent_id, question.parent_id, or exam_assignment exists anywhere in the diff -- a grep for parent_id and exam_assignment across the new web/ files is quoted, and any hit is inside a comment/copy string describing the gap, never a rendered form field or a mocked entity"
+      - "the exam-admin section's own UI carries a visible, one-line note about the exam_assignment gap, pointing at lib/letflow/exam/session.ex's FINDING section and REQ-327's README-constraints.md by path -- proven by a test asserting the note renders, not just that the description says it should"
+      - "the new screens are reachable from web/'s existing admin nav shell (not a second, parallel admin shell), gated by real permission checks matching the underlying routes' atoms -- proven by a test that a role lacking the relevant Entities* permission does not see the nav entry, citing REQ-328's pack install as the source of the role-registry checklist"
+      - "no file or component is copied from c:\\Users\\tvolo\\dev\\ai-dala\\BilimBaga\\frontend\\ -- the close-out states this and names which web/ design-system components were used instead"
+      - "every string rendered by a component this requirement adds is sourced from a react-intl message catalog covering kk, ru and en -- a grep for a hard-coded English string literal in JSX text content across the new files returns no hit outside message-catalog files themselves, quoted with the command"
+      - "`npm run check` (or web/'s equivalent) runs in full and its final result is quoted verbatim, or the requirement is reported BLOCKED with the real error text if the toolchain is unavailable"
+    depends_on:
+      - REQ-336
+      - REQ-340
+      - REQ-342
+      - REQ-326
+      - REQ-327
+      - REQ-328
+      - REQ-332

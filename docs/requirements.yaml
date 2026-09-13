@@ -24226,7 +24226,7 @@ requirements:
     title: Wire full list/create/edit/delete screens, nav and role-gated routing for all nine remaining BilimBaga entity types onto the admin-CRUD engine, using REQ-340's and REQ-342's widgets -- recording the is_correct field-grant, self-referential parent_id, and exam_assignment admin-screen gaps rather than papering over them (S10 P4, bucket C client)
     owner: FRONTEND-DEV
     impl_order: 637  # letflow-queue task id, written back at WF-01 Step 3; depends_on mirrored as real queue edges
-    status: pending
+    status: done
     stage: S10
     description: >
       bucket: C (client). This is the wiring half of the widget-vs-wiring

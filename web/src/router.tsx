@@ -28,6 +28,8 @@ import EditTenantPage from '@/pages/admin/tenants/EditTenantPage'
 import ServicesPage from '@/pages/admin/services/ServicesPage'
 import ExamListPage from '@/pages/exam/ExamListPage'
 import ExamSessionPage from '@/pages/exam/ExamSessionPage'
+import BilimBagaAdminPage from '@/pages/admin/bilimbaga/BilimBagaAdminPage'
+import BilimBagaEntityRoute from '@/pages/admin/bilimbaga/BilimBagaEntityRoute'
 
 export const router = createBrowserRouter([
   {
@@ -73,6 +75,8 @@ export const router = createBrowserRouter([
       { path: 'admin/tenants/:slug/edit', element: <EditTenantPage /> },
       { path: 'admin/services', element: <ServicesPage /> },
       { path: 'admin/modules', element: <ProcessModulesPage /> },
+      { path: 'admin/bilimbaga', element: <BilimBagaAdminPage /> },
+      { path: 'admin/bilimbaga/:entityType', element: <BilimBagaEntityRoute /> },
       { path: 'dlq', element: <DlqPage /> },
       { path: 'webhooks', element: <WebhooksPage /> },
       { path: 'exam', element: <ExamListPage /> },

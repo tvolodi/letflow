@@ -1,0 +1,98 @@
+// @vitest-environment jsdom
+/**
+ * REQ-343 AC5 — the "Question Bank" nav entry (routing to
+ * /admin/bilimbaga) is gated by real role checks matching
+ * Letflow.Api.Authorization's :EntitiesRecordsWrite grant (REQ-309's role
+ * matrix: PLATFORM_ADMIN and PROCESS_OPERATOR hold it; PROCESS_DESIGNER and
+ * TASK_WORKER do not). A role lacking that permission must not see the nav
+ * entry. Mirrors AppShell.branding.test.tsx's own mocking pattern
+ * (useAuth/client.get mocked directly — DIRECTIVE T-2, no msw/raw-fetch).
+ */
+import { afterEach, describe, expect, it, vi } from 'vitest'
+import { render, screen, cleanup, waitFor } from '@testing-library/react'
+import { MemoryRouter } from 'react-router-dom'
+import * as jestDomMatchers from '@testing-library/jest-dom/matchers'
+import type { UserSession } from '@/types/api'
+
+expect.extend(jestDomMatchers)
+
+vi.mock('@tanstack/react-query', () => ({
+  useQuery: vi.fn(() => ({ data: undefined })),
+}))
+
+vi.mock('@/auth/AuthContext', () => ({
+  useAuth: vi.fn(),
+}))
+
+vi.mock('@/api/client', () => ({
+  client: { get: vi.fn(() => Promise.resolve({ items: [] })) },
+}))
+
+function sessionWithRoles(roles: string[]): UserSession {
+  return {
+    token: 'tok',
+    display_name: 'Test User',
+    roles,
+    loginSource: null,
+    tenant_slug: 'acme',
+    tenant_display_name: 'Acme Co',
+    tenant_id: 'tid-acme',
+    tenant_type: 'production',
+    production_tenant_display_name: null,
+  }
+}
+
+afterEach(() => {
+  cleanup()
+  vi.restoreAllMocks()
+})
+
+async function renderAppShellAs(roles: string[]) {
+  vi.resetModules()
+
+  const { useAuth } = await import('@/auth/AuthContext')
+  vi.mocked(useAuth).mockReturnValue({
+    session: sessionWithRoles(roles),
+    isAuthenticated: true,
+    isLoading: false,
+    loginSource: null,
+    login: vi.fn(),
+    logout: vi.fn(),
+    setSession: vi.fn(),
+  })
+
+  const { BrandingProvider } = await import('@/theming/BrandingProvider')
+  const { AppShell } = await import('../AppShell')
+
+  render(
+    <MemoryRouter initialEntries={['/instances']}>
+      <BrandingProvider>
+        <AppShell />
+      </BrandingProvider>
+    </MemoryRouter>,
+  )
+}
+
+describe('REQ-343 AC5 — Question Bank nav entry role gating', () => {
+  it('PLATFORM_ADMIN sees the nav entry', async () => {
+    await renderAppShellAs(['PLATFORM_ADMIN'])
+    await waitFor(() => expect(screen.getByText('Question Bank')).toBeInTheDocument())
+  })
+
+  it('PROCESS_OPERATOR (holds :EntitiesRecordsWrite) sees the nav entry', async () => {
+    await renderAppShellAs(['PROCESS_OPERATOR'])
+    await waitFor(() => expect(screen.getByText('Question Bank')).toBeInTheDocument())
+  })
+
+  it('PROCESS_DESIGNER (no :EntitiesRecordsWrite) does NOT see the nav entry', async () => {
+    await renderAppShellAs(['PROCESS_DESIGNER'])
+    await waitFor(() => expect(screen.getByText('Definitions')).toBeInTheDocument())
+    expect(screen.queryByText('Question Bank')).not.toBeInTheDocument()
+  })
+
+  it('TASK_WORKER does NOT see the nav entry', async () => {
+    await renderAppShellAs(['TASK_WORKER'])
+    await waitFor(() => expect(screen.getByText('My Tasks')).toBeInTheDocument())
+    expect(screen.queryByText('Question Bank')).not.toBeInTheDocument()
+  })
+})

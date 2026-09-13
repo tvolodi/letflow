@@ -898,3 +898,28 @@ history:
       confirmed). TEST-RUNNER verified a full green suite (4124/4124
       passed) plus a clean `mix letflow.check` on this branch.
       docs/requirements.yaml flipped pending -> done.
+  - req: REQ-333
+    event: blocked
+    agent: ORCH
+    at: "2026-09-13T06:59:26Z"
+    note: >
+      Claimed letflow-queue task 629 via get_next_task. Checked
+      REQ-333's own enforced "ambiguity escape" first: REQ-330's design
+      doc (lib/letflow/design/req330-exam-live-session.md section 5)
+      DOES specifically name the storage shape (entity-record events
+      via the session_event entity REQ-329 defines, written through
+      Letflow.Entities.Records, per decision 0030 Finding 2) and the
+      write-amplification mitigation (a configured debounce window on
+      session_event.occurred_at) -- so the ambiguity escape does NOT
+      apply; REQ-333 is not blocked on that count. However, REQ-333's
+      own acceptance criteria hard-require the 'submit' branch to
+      "auto-submit AND SCORE the session" -- scoring is REQ-332's
+      deliverable (lib/letflow/exam/ does not exist yet on disk;
+      confirmed via `ls`), and REQ-332 (queue task 628) is `status:
+      pending` and locked by a different agent (confirmed via direct
+      POST /tasks/628/lock probe), so it is in flight elsewhere, not
+      merely unclaimed. This is a real dependency the queue's own
+      depends_on: [] field does not capture. No code changes made.
+      Released queue task 629 back to status: open. Deferring REQ-333
+      until REQ-332 reaches done; will re-poll the queue rather than
+      re-claim 629 in the meantime.

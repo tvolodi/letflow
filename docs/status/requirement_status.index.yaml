@@ -3141,8 +3141,13 @@ volumes:
     path: docs/status/requirement_status.v15.yaml
     status: current
     opened: 2026-09-12
-    entries: 22
+    entries: 23
     note: >
+      Incremented to 23 by ORCH's own REQ-333 blocked-event append
+      (direct-action, dependency REQ-332 not yet done) -- `grep -c
+      "^  - req:" docs/status/requirement_status.v15.yaml` = 23
+      on-disk entries; 925 lines / 54090 bytes, well under the roll
+      ceiling. No rebase conflict on this file.
       Incremented to 22 by DOC-UPDATER's own REQ-331 done-event append
       (close-out for WF02-REQ331-20260913) --
       `grep -c "^  - req:" docs/status/requirement_status.v15.yaml` =

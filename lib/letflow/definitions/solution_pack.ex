@@ -179,6 +179,7 @@ defmodule Letflow.Definitions.SolutionPack do
   alias Letflow.Definitions.SolutionPackInstall
   alias Letflow.Engine.VariableSchema
   alias Letflow.Entities.EntityDefinition
+  alias Letflow.Packs.Bilimbaga
   alias Letflow.Repo
   alias Letflow.TenantProvisioning
 
@@ -387,7 +388,15 @@ defmodule Letflow.Definitions.SolutionPack do
        `{:error, :duplicate_pack_install}`.
     6. `Letflow.Definitions.create/2` per packed definition, with
        `name: process_key` and `created_by: actor_id`, recording the
-       `source_definition_id -> new_definition_id` mapping.
+       `source_definition_id -> new_definition_id` mapping, then
+       `Letflow.Entities.Definitions.create_definition/2` per packed entity
+       definition (`:inactive`-only, 0026 §2).
+    6a. ISS-0647: if the entity types just created in step 6 cover both
+       entity types `Letflow.Packs.Bilimbaga`'s answer-key fields are
+       declared against, seed that pack's `entity_field_restrictions` rows
+       (`seed_pack_specific_field_restrictions/2`) -- the one
+       pack-identity-conditioned branch in this otherwise-generic installer;
+       see that function's own comment for why.
     PROVENANCE (historical, not current decision authority):
     7. `Letflow.Definitions.register_variable_schemas/3` — **the single shared
        insert path into `variable_schemas`, which REQ-082's import also
@@ -953,6 +962,7 @@ defmodule Letflow.Definitions.SolutionPack do
            {:ok, installed} <- create_packed_definitions(parsed.definitions, actor_id, opts),
            {:ok, installed_entities} <-
              create_packed_entity_definitions(parsed.entity_definitions, actor_id, opts),
+           :ok <- seed_pack_specific_field_restrictions(installed_entities, opts),
            {:ok, written, warnings} <- register_packed_schemas(installed, decoded_schemas, opts) do
         %{
           pack_id: parsed.pack_id,
@@ -1048,6 +1058,58 @@ defmodule Letflow.Definitions.SolutionPack do
       {:ok, acc} -> {:ok, Enum.reverse(acc)}
       {:error, _reason} = error -> error
     end
+  end
+
+  # ISS-0647 -- narrow, pack-specific glue: if this install's entity
+  # definitions cover every entity type `Letflow.Packs.Bilimbaga`'s
+  # answer-key fields are declared against ("question" and
+  # "answer_option"), seed that pack's `entity_field_restrictions` rows in
+  # this same transaction, right after the entity definitions they protect
+  # are created. This is the ONLY bilimbaga-aware branch in this module --
+  # every other step above and below stays generic (0026/0027/0029). Matched
+  # by installed entity-TYPE name rather than by a stable pack identifier
+  # because `install/3` has no other stable pack-identity concept today:
+  # `parsed.pack_id` is freshly `Ecto.UUID.generate/0`'d per `export/3` call
+  # (see the packing helpers above), not a fixed catalog id a future install
+  # of the same pack would repeat. `MapSet.subset?/2` (not a bare
+  # intersection check) so an unrelated pack that merely happens to define
+  # one of these two entity type names -- but not both -- does not trigger
+  # this pack's restrictions.
+  #
+  # `Letflow.Entities.Query.FieldGrants.load_restrictions/3` matches
+  # `entity_field_restrictions` rows purely by `entity_type` string with no
+  # join to `entity_definitions`/its `status` column (see that module), so
+  # this seeding is meaningful immediately even though
+  # `create_packed_entity_definitions/3` above leaves every row it creates
+  # `:inactive`-only (0026 §2) -- no `activate_definition/4` call needed
+  # here or added anywhere in this module.
+  #
+  # FUTURE MAINTAINER NOTE (ISS-0647 REVIEWER, 2026-09-13): this
+  # match-by-entity-type-name approach is only sound while bilimbaga is the
+  # ONE pack in the repo defining both `question` and `answer_option`. If a
+  # second, unrelated pack ever defines both of those same entity-type
+  # names, its install would ALSO silently trigger bilimbaga's field
+  # restrictions (a false positive -- harmless, since a restriction on a
+  # field that pack doesn't expose is a no-op, but still not what this
+  # branch intends). Before that happens, switch this match to a stable
+  # pack identifier once `install/3` gains one, rather than entity-type-name
+  # matching.
+  defp seed_pack_specific_field_restrictions(installed_entities, opts) do
+    installed_entity_types =
+      installed_entities
+      |> Enum.map(fn {_packed, %EntityDefinition{name: name}} -> name end)
+      |> MapSet.new()
+
+    bilimbaga_entity_types =
+      Bilimbaga.answer_key_fields()
+      |> Enum.map(fn {entity_type, _field_name} -> entity_type end)
+      |> MapSet.new()
+
+    if MapSet.subset?(bilimbaga_entity_types, installed_entity_types) do
+      Bilimbaga.seed_answer_key_field_restrictions!(prefix(opts))
+    end
+
+    :ok
   end
 
   # Step 7 -- the ONLY write into `variable_schemas`, and it goes through

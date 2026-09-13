@@ -264,6 +264,21 @@ history:
       REVIEWER-confirmed.
 
       docs/requirements.yaml flipped pending -> done.
+  - req: SCOPE-CHANGE
+    event: started
+    agent: ORCH
+    at: "2026-09-13T15:49:56Z"
+    note: >
+      Claimed letflow-queue task 647 (ISS-0647, GH#1352) -- self-filed
+      during REQ-335's SECURITY-REVIEWER pass. Fact-finding first, per
+      the issue's own acceptance criteria: empirically prove whether a
+      TASK_WORKER-scoped POST /entities/query against question/
+      answer_option currently returns is_correct (a pre-existing
+      permission grant predating REQ-335, not introduced by it). If
+      reachable, apply a fix (FieldGrants/entity_field_restrictions row
+      or a scope narrowing) with a regression test; if not reachable,
+      state why and quote the guard. Dispatching to ELIXIR-DEV given
+      the real code-tracing/test-writing work involved.
   - req: REQ-336
     event: blocked
     agent: ORCH
@@ -293,3 +308,67 @@ history:
       frontend work. REQ-340/REQ-342/REQ-343 inherit the same gap and
       are blocked in turn. Proceeding to REQ-338 (no dependency on
       REQ-336) while ISS-0648 is queued for its own fix cycle.
+  - req: SCOPE-CHANGE
+    event: done
+    agent: ORCH
+    at: "2026-09-13T18:30:49Z"
+    note: >
+      ISS-0647 (queue task 647, GH#1352) resolved via
+      fix/ISS-0647-20260913 (commits 80bca0f1/9b12c537/cd2120a1).
+      Fact-finding confirmed the leak was live, not theoretical: a
+      real HTTP-stack test against real Postgres showed a
+      TASK_WORKER-scoped POST /entities/query returning
+      question.explanation and answer_option.is_correct/
+      likert_weight/likert_polarity in clear. The FieldGrants
+      redaction mechanism already existed and was already wired into
+      the generic query routes -- only the entity_field_restrictions
+      DATA was missing.
+
+      First fix attempt (80bca0f1) seeded the restriction rows only
+      from test/support/exam_fixtures.ex -- a test helper.
+      SECURITY-REVIEWER correctly FAILed this, tracing the real
+      production path (POST /solution-packs/install ->
+      SolutionPack.install/3) and finding zero references to the
+      seeding function there, meaning a real tenant installing the
+      pack today got zero protection -- the leak this issue was filed
+      to close was still live in reality despite a passing test suite.
+      SECURITY-REVIEWER also found ELIXIR-DEV's "kept generic per
+      decisions 0026/0027/0029" scope rationale did not hold up: those
+      decisions govern the pack-document's closed section-key struct,
+      not the installer function's internal behavior.
+
+      Reworked (9b12c537): seed_pack_specific_field_restrictions/2
+      added directly inside SolutionPack.run_install/5's own
+      transaction, using the same prefix(opts) helper every other
+      step uses, matched via MapSet.subset?/2 of
+      Bilimbaga.answer_key_fields/0's entity types against the
+      install's actual entity-type set -- the one bilimbaga-aware
+      branch in an otherwise generic installer. Verified
+      FieldGrants.load_restrictions/3 reads entity_field_restrictions
+      by entity_type string alone (no join to entity_definitions'
+      status column) before relying on that claim, confirming
+      install-time seeding is meaningful even though entity
+      definitions stay :inactive per 0026. New end-to-end test
+      installs the real committed priv/packs/bilimbaga/pack.json via
+      SolutionPack.install/3 and never calls the seeding function
+      directly, then proves redaction through a real
+      POST /entities/query call.
+
+      Pipeline: ELIXIR-DEV -> SECURITY-REVIEWER FAIL then PASS (first
+      pass found the test-fixture-only gap; second pass independently
+      traced the real call chain and confirmed the rework genuinely
+      closes it) -> REVIEWER PASS (confirmed the decision-record
+      reading, confirmed no pack-hook/callback mechanism already
+      exists to prefer over the inline branch, confirmed the test is
+      non-tautological; flagged one non-blocking nit -- a
+      future-maintainer comment for the entity-type-name-matching
+      edge case once a second pack exists -- added directly by ORCH).
+      Full mix test: 4207-4209/4209 passed depending on run, only
+      pre-existing rust-toolchain-absence failures and one confirmed
+      parallel-execution-only flake.
+
+      docs/issues/ISS-0647.yaml flipped open -> resolved. Fixed a
+      real, live, previously-undetected answer-key data leak
+      reachable by any TASK_WORKER-scoped tenant user, not only exam
+      candidates -- broader exposure than REQ-335's own scope, closed
+      before shipping.

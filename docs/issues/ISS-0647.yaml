@@ -64,4 +64,37 @@ affected_files:
   - priv/packs/bilimbaga/entity_definitions/answer_option.json
 queue_ref: Q-647
 github_ref: GH-1352
-status: open
+status: resolved
+resolved_by: ORCH
+resolved_in_run: fix/ISS-0647-20260913
+resolved_at: "2026-09-13T18:56:00Z"
+resolution_note: >
+  Confirmed real and fixed. Fact-finding (ELIXIR-DEV, real HTTP-stack
+  test against real Postgres): a TASK_WORKER-scoped POST /entities/query
+  DID return question.explanation and answer_option.is_correct/
+  likert_weight/likert_polarity in clear -- the leak was live, not
+  theoretical. Root cause: the FieldGrants redaction mechanism already
+  existed and was already wired into the generic query routes, but no
+  entity_field_restrictions row existed for these four fields.
+
+  First fix attempt seeded the restriction rows only from
+  test/support/exam_fixtures.ex (a test helper) -- SECURITY-REVIEWER
+  correctly FAILed this, tracing the real production path
+  (POST /solution-packs/install -> SolutionPack.install/3) and finding
+  zero references to the seeding function, meaning a real tenant
+  installing the pack today got zero protection. Reworked: added
+  seed_pack_specific_field_restrictions/2 directly inside
+  SolutionPack.run_install/5's own transaction, matched by
+  MapSet.subset?/2 of Bilimbaga.answer_key_fields/0's entity types
+  against the install's actual entity-type set -- the one
+  bilimbaga-aware branch in an otherwise generic installer, verified
+  by SECURITY-REVIEWER's second pass via a genuine end-to-end test
+  that installs the real committed pack.json and never calls the
+  seeding function directly. REVIEWER PASS added a non-blocking
+  future-maintainer comment guarding the entity-type-name-matching
+  edge case for when a second pack lands.
+
+  Full mix test suite: 4207-4209/4209 passed depending on run, only
+  pre-existing rust-toolchain-absence failures and one confirmed
+  parallel-execution-only flake (passes clean serially).
+

@@ -38,4 +38,57 @@ affected_files:
   - lib/letflow/routers/entities.ex
 queue_ref: Q-651
 github_ref: GH-1359
-status: open
+status: resolved
+resolved_by: ORCH
+resolved_in_run: fix/ISS-0651-20260913
+resolved_at: "2026-09-13T23:59:00Z"
+resolution_note: >
+  Design decision: build_next_cursor/2 previously embedded row.id (the
+  entity_record_latest surrogate primary key) as the cursor's tiebreak
+  component -- but Compiler.select_entity_row/1's fixed projection for
+  a promoted per-type table has no :id field at all. Investigation
+  found this was not a one-line rename: the QUERY COMPOSITION side
+  (paginate/5's order_by, build_resume_terms/2's id_term dynamic) also
+  referenced the physical id column, so fixing only the row-reading
+  side would have embedded record_id in the cursor while SQL still
+  filtered on id -- a silently wrong resume point, not a crash.
+  Switched the tiebreak field uniformly to record_id on both sides.
+  Verified safe (not merely asserted) by SECURITY-REVIEWER directly
+  against migration/DDL source: entity_record_latest has a genuine
+  UNIQUE(entity_type, record_id) constraint (with entity_type always
+  filtered), and every promoted per-type table has its own genuine
+  table-wide UNIQUE(record_id) constraint -- record_id is unique
+  within every compiled query's own scope on both row shapes.
+
+  Generalized read_record_id/1 (new, two-clause struct-then-bare-map
+  dispatch) and read_sort_value/2's :json_field clause following the
+  exact precedent idiom already established by
+  field_grants.ex's redact_item/2 and routers/entities.ex's
+  query_item_map/1 -- no third pattern invented.
+
+  A separate, related defect was found and correctly scoped OUT
+  rather than silently folded in or ignored: resolved_sort_term/2 (a
+  different function in the same module) raises KeyError when sorting
+  by a promoted entity type's own promoted business column, because
+  it only knows the fixed structural-7 columns via
+  Allowlist.typed_columns/0. Filed separately as ISS-0653 (queue task
+  653, GH#1370); the regression test here deliberately routes its
+  sort through the :json_field path (documented in the test) to avoid
+  triggering it, rather than silently avoiding it undocumented.
+
+  New regression test proves keyset pagination across three real pages
+  against a promoted per-type table: distinct/non-overlapping
+  record_ids across pages, correct ordering, next_cursor == nil only
+  on the final page. Confirmed non-tautological by SECURITY-REVIEWER
+  and REVIEWER independently reasoning that reverting the fix would
+  reproduce a crash on the first page-1-to-page-2 transition.
+
+  Pipeline: ELIXIR-DEV -> SECURITY-REVIEWER PASS (independently
+  verified the uniqueness-constraint claims against actual
+  migration/DDL source rather than accepting them, confirmed no
+  tenant-scoping predicate touched) -> REVIEWER PASS (confirmed the
+  idiom matches the two precedent functions exactly, confirmed the
+  moduledoc documents the uniqueness invariant a future reader must
+  preserve, confirmed the ISS-0653 scope decision) -> TEST-RUNNER
+  confirmed a full mix letflow.check run clean except the pre-existing
+  rust-toolchain-absence failures.

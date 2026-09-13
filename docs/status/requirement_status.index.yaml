@@ -3433,8 +3433,24 @@ volumes:
     path: docs/status/requirement_status.v16.yaml
     status: current
     opened: 2026-09-13
-    entries: 14
+    entries: 15
     note: >
+      Recounted to 15 at fix/ISS-0651-20260913's second (Step Final
+      close-out) rebase, which conflicted at this file's tail between
+      main's own already-composed 14-count note (from the first
+      conflict, above) and this branch's own ISS-0651 done-event
+      append (independently computed as 12 against a base predating
+      REQ-342/REQ-343/REQ-339's done-events). Both appends land at the
+      same v16.yaml tail position with no overlapping lines -- composed
+      order there is REQ-342 done, REQ-343 done, REQ-339 done, then
+      ISS-0651 done (23:51:02Z, sorting last), already correct by
+      `at:` timestamp with no reordering needed -- so only this index
+      file's declared count and narrative needed manual composition.
+      Recounted directly from `grep -c "^  - req:"
+      docs/status/requirement_status.v16.yaml` = 15 rather than
+      carrying forward either side's independently-computed 12/14, per
+      this note's own recount-every-time rule. 874 lines, well under
+      the roll ceiling.
       Recounted to 14 at fix/ISS-0651-20260913's Step Final rebase,
       which conflicted at this file's tail between main's own
       REQ-342/REQ-343/REQ-339 done-event chain (independently computed
@@ -3476,6 +3492,11 @@ volumes:
       than carrying forward either side's stale 9/10, per this note's
       own recount-every-time rule. 672 lines / 39060 bytes, well under
       the roll ceiling.
+      Incremented to 12 by ORCH's own ISS-0651 done-event append
+      (SCOPE-CHANGE, fix/ISS-0651-20260913) -- `grep -c "^  - req:"
+      docs/status/requirement_status.v16.yaml` = 12 on-disk entries;
+      695 lines / 39477 bytes, well under the roll ceiling. No rebase
+      conflict on this file.
       Incremented to 11 by ORCH's own ISS-0651 started-event append
       (SCOPE-CHANGE, fix/ISS-0651-20260913) -- `grep -c "^  - req:"
       docs/status/requirement_status.v16.yaml` = 11 on-disk entries;

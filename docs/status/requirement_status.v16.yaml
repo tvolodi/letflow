@@ -825,3 +825,50 @@ history:
       2026-09-13T22:53:16Z.
 
       docs/requirements.yaml flipped pending -> done for REQ-339 only.
+  - req: SCOPE-CHANGE
+    event: done
+    agent: ORCH
+    at: "2026-09-13T23:51:02Z"
+    note: >
+      ISS-0651 (queue task 651, GH#1359) resolved via
+      fix/ISS-0651-20260913 (commit 08a859d0). build_next_cursor/2 had
+      embedded row.id (entity_record_latest's surrogate PK) as the
+      cursor tiebreak, but a promoted per-type table's
+      Compiler.entity_row() has no :id field at all -- and the query-
+      composition side (paginate/5's order_by, build_resume_terms/2's
+      id_term dynamic) also referenced the physical id column, so a
+      row-reading-only fix would have embedded record_id in the cursor
+      while SQL still filtered on id, a silently wrong resume point
+      rather than a crash. Switched the tiebreak uniformly to
+      record_id on both sides. SECURITY-REVIEWER independently
+      verified the uniqueness reasoning against actual migration/DDL
+      source (not the PR's own claim): entity_record_latest's genuine
+      UNIQUE(entity_type, record_id) constraint (with entity_type
+      always filtered) and every promoted per-type table's genuine
+      table-wide UNIQUE(record_id) constraint. New read_record_id/1
+      helper and read_sort_value/2's :json_field clause follow the
+      exact two-clause struct-then-bare-map idiom already established
+      by field_grants.ex's redact_item/2 and routers/entities.ex's
+      query_item_map/1 -- no third pattern.
+
+      A related but distinct defect (resolved_sort_term/2, a different
+      function, raises KeyError sorting by a promoted business column)
+      was correctly scoped out and filed separately as ISS-0653 (queue
+      task 653, GH#1370) rather than folded in or silently avoided --
+      the regression test's routing around it via the :json_field path
+      is documented in the test itself.
+
+      New regression test proves keyset pagination across three real
+      pages against a promoted per-type table: distinct/non-
+      overlapping record_ids, correct ordering, next_cursor == nil
+      only on the final page.
+
+      Pipeline: ELIXIR-DEV -> SECURITY-REVIEWER PASS (verified the
+      uniqueness claims against actual schema source, confirmed no
+      tenant-scoping predicate touched) -> REVIEWER PASS (confirmed
+      idiom match, confirmed the moduledoc documents the invariant a
+      future reader must preserve, confirmed the ISS-0653 scope
+      decision) -> TEST-RUNNER confirmed a full mix letflow.check run
+      clean except the pre-existing rust-toolchain-absence failures.
+
+      docs/issues/ISS-0651.yaml flipped open -> resolved.

@@ -127,4 +127,14 @@ export const queryKeys = {
     detail: (moduleId: string, version: string) => [...queryKeys.modules.all, 'detail', moduleId, version] as const,
     shares: (moduleId: string) => [...queryKeys.modules.all, 'shares', moduleId] as const,
   },
+
+  exam: {
+    all: ['exam'] as const,
+    session: (sessionId: string) => [...queryKeys.exam.all, 'session', sessionId] as const,
+    /** ExamListPage's own list key (REQ-338) — deliberately not
+     *  `queryKeys.entities.records(...)`: that group is REQ-336's own
+     *  addition and REQ-338 does not depend on REQ-336 (see
+     *  web/src/api/exam.ts's own moduledoc). */
+    list: (filters?: { page_size?: number }) => [...queryKeys.exam.all, 'list', filters ?? {}] as const,
+  },
 }

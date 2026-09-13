@@ -6521,6 +6521,27 @@
       "backfilled": false,
       "last_known_step": "Step Final PASS -- merge pending.",
       "note": "Final close-out for REQ-328 (queue task 622, GH#1303), correcting ORCH's own earlier oversight. PR #1312 correctly left REQ-328 pending, blocked on ISS-0624 (Records.field_document/1 dropping locales, breaking :localized_text writes end-to-end) -- an honest escalation, not a workaround. ISS-0624 is now fixed and its own addendum completed REQ-328's deferred test coverage. All acceptance criteria independently re-verified satisfied on main: mix test test/letflow/packs/bilimbaga_pack_install_test.exs -> 5 passed, covering the real install_result map, the inactive-then-activate sequence, both FK-violation proofs, the localized_text round-trip, and the through-join returning the tagged question. No production module touched. docs/requirements.yaml flipped pending -> done, GH#1303 to be closed, queue task 622 to be released done."
+    },
+    {
+      "run_id": "WF02-REQ330-20260913",
+      "workflow_id": "WF-02",
+      "requirement_id": "REQ-330",
+      "issue_id": null,
+      "queue_task_id": 626,
+      "queue_agent_id": "letflow-orch",
+      "github_issue_number": 1317,
+      "status": "COMPLETED",
+      "owned_modules": [
+        "docs/migration/decisions/",
+        "lib/letflow/design/"
+      ],
+      "branch_name": "feature/WF02-REQ330-20260913",
+      "started_at": "2026-09-13T04:03:33Z",
+      "lock_released_at": null,
+      "released_lock": false,
+      "backfilled": false,
+      "last_known_step": "Step Final PASS -- merge pending.",
+      "note": "REQ-330 (queue task 626, GH#1317, no depends_on) -- design record classifying S10 P3's five live-exam-session behaviours: deadline enforcement (storage=A, enforcement=C), auto-submission (bucket B via Letflow.Scheduler.Poller), autosave (bucket C, measured write-amplification finding flagged for REQ-332), per-question scoring (bucket C, on a newly-found basis that decision 0022's Lua-grading claim isn't realized today -- recorded as a decision-record finding, 0022 left byte-identical), anti-cheat (storage=A via session_event records, policy=C, answering the stage file's open question). Proposes 4 modules under lib/letflow/exam/ with rule-2 justification rows. No implementation code. Pipeline: CODE-DESIGNER -> CODE-DESIGN-VALIDATOR FAIL then PASS (node-type miscount + missing citation, fixed) -> SECURITY-REVIEWER PASS (flagged autosave capacity gap and anti-cheat debounce status as follow-ups) -> REVIEWER PASS (confirmed no silent re-decision of 0022, independently re-examined the QuestionSetResolver bucket-C call)."
     }
   ]
 }

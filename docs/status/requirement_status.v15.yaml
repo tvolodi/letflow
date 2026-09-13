@@ -714,6 +714,56 @@ history:
       Dispatching to ELIXIR-DEV given the real validator-execution
       work involved, despite the nominal REQ-ANALYST owner field,
       matching the REQ-326/327/328 precedent.
+  - req: REQ-330
+    event: done
+    agent: ORCH
+    at: "2026-09-13T04:23:39Z"
+    note: >
+      REQ-330 (queue task 626, GH#1317, no depends_on) implemented via
+      feature/WF02-REQ330-20260913: design record classifying S10 P3's
+      five live-exam-session behaviours -- deadline enforcement (SPLIT:
+      storage bucket A via session.expires_at, enforcement bucket C;
+      TIMER-node hypothesis tested and fails, Scheduler.Timer.
+      arm_changeset/2 requires :instance_id, decision 0022 confirms the
+      exam session is not a process instance); auto-submission of
+      expired sessions (bucket B -- Letflow.Scheduler.Poller already
+      the right shape, expressible without naming the exam domain,
+      REQ-331's premise stands); autosave (bucket C, measured not
+      asserted -- EntityTypeInstance's one-row-per-entity-TYPE and
+      EventStore's lock("FOR UPDATE") on instance_sequence quoted,
+      concluded within capacity at ~33 writes/sec exam-realistic
+      scale, but SECURITY-REVIEWER flagged the lack of server-side
+      rate limiting as an unaddressed gap for REQ-332); per-question
+      scoring (bucket C on a newly-found basis -- decision 0022's "Lua
+      grading rules ship in the pack" claim is NOT realized today, no
+      node-dispatch path in transition.ex's eight node_type values
+      reaches Letflow.Engine.Lua.Executor, recorded as a finding
+      rather than silently patched into 0022's own text); anti-cheat
+      signal capture (SPLIT: storage bucket A via session_event entity
+      records chosen over raw EventStore events or an aggregate
+      counter, policy bucket C, answering the stage file's own open
+      question). Proposes 4 modules under lib/letflow/exam/ (Session,
+      QuestionSetResolver, Scoring, AntiCheat), each with a rule-2
+      justification table row. No implementation code, no file under
+      lib/letflow/exam/ created.
+
+      Pipeline: CODE-DESIGNER -> CODE-DESIGN-VALIDATOR FAIL then PASS
+      (first pass caught a factual node-type miscount carried into
+      both documents and a missing FR-BB source citation for deadline
+      enforcement; both fixed and reconfirmed) -> SECURITY-REVIEWER
+      PASS (confirmed tenant-isolation via prefix parameters on every
+      proposed @spec, confirmed the Lua-dispatch gap is a genuine
+      absent path not a half-wired mechanism, flagged the autosave
+      capacity gap and the anti-cheat debounce's unimplemented-but-real
+      status as follow-ups for REQ-332/REQ-333) -> REVIEWER PASS
+      (confirmed no silent re-decision of 0022, confirmed the stage
+      file's anti-cheat open question is genuinely answered not
+      restated, independently re-verified both corrected defects,
+      independently re-examined QuestionSetResolver's bucket-C
+      justification specifically rather than rubber-stamping it).
+      Scope fence held -- only the two design-record files plus
+      docs/requirements.yaml status bookkeeping. docs/requirements.yaml
+      flipped pending -> done.
   - req: REQ-329
     event: done
     agent: DOC-UPDATER

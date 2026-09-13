@@ -513,3 +513,49 @@ history:
       and QueryStateBoundary.
 
       docs/requirements.yaml flipped pending -> done.
+  - req: REQ-340
+    event: done
+    agent: DOC-UPDATER
+    at: "2026-09-13T21:32:34Z"
+    note: >
+      REQ-340 (the two mechanically-driven widgets -- enum select,
+      unique-composite constraint error surfacing -- for the admin-CRUD
+      engine's field registry) completed as a reuse-and-verify job, no
+      new production code needed. FRONTEND-DEV's investigation ran the
+      requirement's own mandated check first: `grep -rl "enum\|:enum"
+      web/src/components/forms` found the enum widget already lives in
+      FieldFactory.renderFormField's builtin switch (fieldType ===
+      'select' && fieldDef.enum), and REQ-336's existing
+      entityFieldToFormField.ts already bridges an entity :enum field
+      onto that same rendering path -- so no new fieldRegistry.ts or
+      widgets/ code was required. Two new test files supply the proof
+      the acceptance criteria demand: EntityRecordForm.enumWidget.test.tsx
+      (renders the shared widget against real enum_values from
+      question.difficulty, exam.show_answers and
+      exam_question_rule.mode, drawn from the actual committed
+      definition documents under priv/packs/bilimbaga/entity_definitions/,
+      and proves changing a mocked definition's enum_values changes the
+      rendered options) and EntityRecordForm.compositeUnique.test.tsx
+      (proves REQ-336's existing composite-unique error-display path
+      correctly surfaces question_tag's and exam_section's real
+      composite constraint violations, with no new client-side
+      validation logic added).
+
+      Pipeline: FRONTEND-DEV investigation -> REVIEWER PASS ->
+      TEST-DESIGNER (confirmatory, no coverage gaps found) ->
+      TEST-DESIGN-VALIDATOR PASS -> TEST-RUNNER (`npm run check`:
+      508+48 tests passing) -> RELEASE-VALIDATOR PASS (independently
+      re-verified all 8 acceptance criteria against real code and the
+      actual committed entity-definition JSON).
+
+      Corrected entity count restated per this requirement's own
+      close-out obligation: nine remaining, not eight -- REQ-326's five
+      (category, question, answer_option, question_tag, and tag itself
+      already piloted by REQ-336) plus REQ-327's five (exam,
+      exam_section, exam_question_rule, exam_question_rule_tag,
+      exam_manual_question), minus REQ-336's tag pilot, leaves nine:
+      category, question, answer_option, question_tag, exam,
+      exam_section, exam_question_rule, exam_question_rule_tag,
+      exam_manual_question.
+
+      docs/requirements.yaml flipped pending -> done.

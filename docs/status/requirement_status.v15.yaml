@@ -1003,3 +1003,22 @@ history:
       once a (candidate_id, exam_id)-scoped lock target exists.
 
       docs/requirements.yaml flipped pending -> done.
+  - req: REQ-334
+    event: blocked
+    agent: ORCH
+    at: "2026-09-13T08:29:39Z"
+    note: >
+      Claimed letflow-queue task 630 via get_next_task -- REQ-332 just
+      landed (merged, PR #1328), which unblocked REQ-333 (queue task
+      629), but 629 is now locked by a different agent (confirmed via
+      direct POST /tasks/629/lock probe), in flight elsewhere. REQ-334
+      itself hard-requires "one row per module actually created by
+      REQ-332 AND REQ-333" in its bucket-C inventory update (acceptance
+      criterion 1) -- REQ-333 is still status: pending, so the module
+      list this requirement must inventory is incomplete. Attempting it
+      now would either omit REQ-333's modules (failing the requirement's
+      own completeness criterion) or require redoing the work once
+      REQ-333 lands. No code/doc changes made. Released queue task 630
+      back to status: open. Deferring REQ-334 until REQ-333 reaches
+      done; will re-poll the queue rather than re-claim 630 in the
+      meantime.

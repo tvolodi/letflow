@@ -1003,6 +1003,31 @@ history:
       once a (candidate_id, exam_id)-scoped lock target exists.
 
       docs/requirements.yaml flipped pending -> done.
+  - req: REQ-333
+    event: started
+    agent: ORCH
+    at: "2026-09-13T08:00:09Z"
+    note: >
+      Claimed letflow-queue task 629 (GH#1320, S10 P3, bucket C policy +
+      bucket A storage). Checked REQ-333's own enforced ambiguity
+      escape first: REQ-330's design doc section 5 DOES name the
+      storage shape specifically enough to build without interpretation
+      -- session_event entity records (REQ-329), written through
+      Letflow.Entities.Records, chosen over raw EventStore events or an
+      aggregate counter (decision 0030 Finding 2) -- and DOES specify
+      the write-amplification mitigation: record_signal/4 reads the
+      session's most recent session_event.occurred_at via an ordinary
+      Letflow.Entities.Query read and rejects a signal inside a
+      configured debounce window. Ambiguity escape does NOT apply;
+      proceeding, not blocking. Build Letflow.Exam.AntiCheat (the
+      fourth module in REQ-330's rule-2 table, PENDING sign-off) --
+      validates exactly three signal types (tab_switch/blur/
+      fullscreen_exit), derives action_taken from the exam's
+      on_tab_switch config (never from caller input, per service.go
+      AC-10 -- the security-relevant property), branches log/warn/
+      submit (submit triggers Letflow.Exam.Session.submit/3), and
+      enforces the debounce window. No HTTP route, no new permission
+      atom. Dispatching to ELIXIR-DEV.
   - req: REQ-334
     event: blocked
     agent: ORCH
@@ -1022,3 +1047,66 @@ history:
       back to status: open. Deferring REQ-334 until REQ-333 reaches
       done; will re-poll the queue rather than re-claim 630 in the
       meantime.
+  - req: REQ-333
+    event: done
+    agent: ORCH
+    at: "2026-09-13T09:51:21Z"
+    note: >
+      REQ-333 (queue task 629, GH#1320) implemented via
+      feature/WF02-REQ333-20260913 (commits 3c3a9712/953d6adf). Built
+      Letflow.Exam.AntiCheat (309 lines) -- the fourth and final module
+      REQ-330's rule-2 table authorised. Storage per decision 0030
+      Finding 2's verbatim conclusion: session_event entity records
+      (REQ-329) via Letflow.Entities.Records, not raw EventStore
+      events or an aggregate counter. Ambiguity escape checked first
+      and did NOT apply -- REQ-330 named the storage shape and the
+      debounce mitigation specifically enough to build without
+      interpretation.
+
+      record_signal/4 accepts exactly three signal types
+      (tab_switch/blur/fullscreen_exit); action_taken is derived
+      SOLELY from the exam's on_tab_switch config -- no action_taken
+      parameter exists anywhere in the public function signature, the
+      strongest form of service.go AC-10's guarantee (verified by
+      SECURITY-REVIEWER tracing the code, not just reading the test);
+      ownership/in-progress/deadline guards run before any write;
+      log/warn/submit branches all tested end-to-end including submit
+      actually transitioning the session's real stored status; the
+      debounce mitigation (reads the session's most recent
+      session_event.occurred_at via an ordinary Letflow.Entities.Query
+      read, rejects inside a configured window) is proven by a
+      repeated-signal test, not asserted. No HTTP route, no new
+      permission atom, no migration. grep for
+      gen_statem/GenServer/Registry across all four lib/letflow/exam/
+      modules returns nothing.
+
+      Pipeline: ELIXIR-DEV (60 tests total across test/letflow/exam/)
+      -> SECURITY-REVIEWER PASS (independently traced the AC-10
+      guarantee to its strongest form, verified INV-1 via a real
+      cross-tenant test, flagged the debounce check-then-insert as
+      non-atomic under concurrent requests from one session -- bounded
+      amplification, non-blocking) -> REVIEWER PASS (confirmed
+      idiomatic consistency with session.ex's sibling modules,
+      confirmed no cheap idiomatic fix exists for the debounce race
+      without inventing new entity-subsystem machinery, agreed
+      non-blocking; signed off design doc Section 7's fourth and final
+      row) -> TEST-RUNNER independently confirmed a full mix
+      letflow.check run clean except the two pre-existing,
+      environment-only rust-toolchain failures.
+
+      ELIXIR-DEV also surfaced a genuine pre-existing bug in REQ-332's
+      already-merged session.ex (String.to_existing_atom on a status
+      atom never used as an executed literal elsewhere -- a
+      load-order-dependent ArgumentError risk) while writing this
+      requirement's tests. Correctly left session.ex untouched (out of
+      REQ-333's authorised scope) and filed it as ISS-0631 (queue task
+      631, GH#1330) instead of silently working around it in
+      production code; SECURITY-REVIEWER and REVIEWER both confirmed
+      AntiCheat's own submit path does not exercise the fragile code
+      path.
+
+      With this requirement done, all four rows in REQ-330's rule-2
+      table (Session, QuestionSetResolver, Scoring, AntiCheat) carry a
+      REVIEWER PASS sign-off -- P3's stage-file exit condition ("each
+      module carries its REVIEWER bucket-C sign-off") is met.
+      docs/requirements.yaml flipped pending -> done.

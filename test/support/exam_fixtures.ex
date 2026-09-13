@@ -1,11 +1,12 @@
 defmodule Letflow.ExamFixtures do
   @moduledoc """
-  Shared REQ-332 test fixture: provisions a real tenant schema and installs
-  just enough of the bilimbaga entity definitions (`exam`, `question`,
-  `answer_option`, `exam_question_rule`, `session`, `session_question`,
-  `session_answer`, `session_question_score`) for
+  Shared REQ-332/REQ-333 test fixture: provisions a real tenant schema and
+  installs just enough of the bilimbaga entity definitions (`exam`,
+  `question`, `answer_option`, `exam_question_rule`, `session`,
+  `session_question`, `session_answer`, `session_question_score`,
+  `session_event`) for
   `Letflow.Exam.Session`/`Letflow.Exam.QuestionSetResolver`/
-  `Letflow.Exam.Scoring` integration tests, without a full
+  `Letflow.Exam.Scoring`/`Letflow.Exam.AntiCheat` integration tests, without a full
   `Letflow.Definitions.SolutionPack.install/3` (no column promotion, no
   per-type table -- every field this suite filters on is already
   `queried: true` in the real `priv/packs/bilimbaga/entity_definitions/*.json`
@@ -29,7 +30,8 @@ defmodule Letflow.ExamFixtures do
   @definitions_dir Path.join([File.cwd!(), "priv", "packs", "bilimbaga", "entity_definitions"])
 
   @entity_types ~w(exam question answer_option exam_question_rule
-                    session session_question session_answer session_question_score)
+                    session session_question session_answer session_question_score
+                    session_event)
 
   @doc """
   Provisions a fresh tenant schema, seeds event types, and activates every

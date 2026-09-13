@@ -6562,6 +6562,26 @@
       "backfilled": false,
       "last_known_step": "Step Final PASS -- merge pending.",
       "note": "REQ-332 (queue task 628, GH#1319) -- implemented the live-session runtime under lib/letflow/exam/: Letflow.Exam.Session, Letflow.Exam.QuestionSetResolver, Letflow.Exam.Scoring, exactly the three modules REQ-330's rule-2 table authorised (Letflow.Exam.AntiCheat is REQ-333's scope). 1,249 lines total. No migration, no Ecto schema -- all reads/writes through Letflow.Entities.Records/Query against REQ-329's five session entity types. Autosave uses the ordinary write path per REQ-330's confirmed bucket-C conclusion. No gen_statem/GenServer/Registry anywhere (grep confirmed empty, verified independently by both ELIXIR-DEV and REVIEWER). Pipeline: ELIXIR-DEV (45 tests: seeded reproducibility, session-snapshot isolation, eligibility checks, server-side deadline enforcement, answer-shape validation, scoring arithmetic incl. no-correct-option error and short-text grading_pending, submit idempotency+concurrency) -> SECURITY-REVIEWER PASS (verified INV-1 via real cross-tenant/cross-candidate tests, flagged the :not_assigned no-op and an unlocked concurrent create/3 race as non-blocking follow-ups) -> REVIEWER FAIL then PASS (the concurrent create/3 race SECURITY-REVIEWER flagged was undocumented, unlike the honestly-recorded :not_assigned finding; ELIXIR-DEV fixed it with a real lock_exam_row/2 FOR-UPDATE lock plus a new test; REVIEWER empirically confirmed the test fails when the lock is removed, then signed off req330-exam-live-session.md Section 7's table for all three modules) -> TEST-RUNNER confirmed a full mix letflow.check run clean except two pre-existing environment-only rust-toolchain failures. Two non-blocking follow-ups carried forward for a later requirement: (1) :not_assigned eligibility gap pending an exam_assignment entity; (2) create/3's exam-level lock granularity is a possible throughput bottleneck at scale."
+    },
+    {
+      "run_id": "WF02-REQ333-20260913",
+      "workflow_id": "WF-02",
+      "requirement_id": "REQ-333",
+      "issue_id": null,
+      "queue_task_id": 629,
+      "queue_agent_id": "ai-dala-orch",
+      "github_issue_number": 1320,
+      "status": "COMPLETED",
+      "owned_modules": [
+        "lib/letflow/exam/"
+      ],
+      "branch_name": "feature/WF02-REQ333-20260913",
+      "started_at": "2026-09-13T08:00:09Z",
+      "lock_released_at": null,
+      "released_lock": false,
+      "backfilled": false,
+      "last_known_step": "Step Final PASS -- merge pending.",
+      "note": "REQ-333 (queue task 629, GH#1320) -- implemented Letflow.Exam.AntiCheat (309 lines), the fourth and final module REQ-330's rule-2 table authorised. Storage per decision 0030 Finding 2: session_event entity records via Letflow.Entities.Records. Ambiguity escape checked first, did not apply -- REQ-330 named the storage shape and debounce mitigation specifically enough to build without interpretation. action_taken derived solely from the exam's on_tab_switch config -- no action_taken parameter exists in the public function signature at all, the strongest form of service.go AC-10's guarantee. Debounce mitigation (reads the session's most recent session_event.occurred_at, rejects inside a configured window) proven by a repeated-signal test. No HTTP route, no new permission atom, no migration. Pipeline: ELIXIR-DEV (60 tests total across test/letflow/exam/) -> SECURITY-REVIEWER PASS (independently traced the AC-10 guarantee, verified INV-1, flagged the debounce check-then-insert as non-atomic under concurrent requests -- bounded amplification, non-blocking) -> REVIEWER PASS (confirmed idiomatic consistency, confirmed no cheap fix exists for the debounce race without inventing new entity-subsystem machinery, signed off design doc Section 7's fourth and final row) -> TEST-RUNNER confirmed a full mix letflow.check run clean except two pre-existing environment-only rust-toolchain failures. ELIXIR-DEV also surfaced a genuine pre-existing bug in REQ-332's already-merged session.ex (String.to_existing_atom load-order hazard) while writing tests; correctly left it untouched (out of REQ-333's authorised scope) and filed it as ISS-0631 (queue task 631, GH#1330) instead. With this requirement done, all four rows in REQ-330's rule-2 table carry a REVIEWER PASS sign-off -- P3's stage-file exit condition is met."
     }
   ]
 }

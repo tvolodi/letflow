@@ -1,0 +1,73 @@
+id: ISS-0648
+title: Pack-installed entity types' declared unique constraints are never enforced -- column promotion that materializes them is never triggered at install time
+discovered_by: REVIEWER
+discovered_in_run: WF02-REQ336-20260913
+discovered_at: "2026-09-13T16:34:00Z"
+severity: BLOCKER
+description: >
+  Empirically confirmed by REVIEWER while reviewing REQ-336 (S10 P4
+  admin-CRUD engine, pilot entity: tag). tag.json declares a uq_tag_name
+  unique constraint on ["name"], and
+  Letflow.Entities.Definition.DDL.unique_constraint_clauses/1 correctly
+  compiles that into a real "CONSTRAINT ... UNIQUE (name)" clause -- but
+  that DDL is only ever emitted by create_and_populate_entity_table/3
+  (lib/letflow/tenant_provisioning.ex ~line 1448), which itself only runs
+  inside run_column_promotion/1, triggered exclusively by an explicit
+  TenantProvisioning.register_column_promotion/4 + run_column_promotion/1
+  call pair. Neither activate_definition/4 nor
+  lib/letflow/definitions/solution_pack_install.ex (grepped, no match)
+  ever calls either of those for a pack-installed entity type.
+
+  Consequence: a normally pack-installed entity type (tag included) never
+  gets its promoted-column table (e.g. entity_tag) created at all;
+  Letflow.Entities.Records.create_record/2 writes only to the generic
+  JSONB entity_record_latest.field_values column, which carries no unique
+  index on any field. Records.ex's only :unique constraint check in its
+  error-mapping path is uq_event_sequence (event ordering), unrelated to
+  entity-level field uniqueness -- there is no application-level
+  (Elixir-side) uniqueness check either, so nothing catches this at any
+  layer.
+
+  EMPIRICAL PROOF: a throwaway ExUnit test provisioned a real tenant,
+  activated the real tag entity definition, and called create_record/2
+  twice with identical field_values %{"name" => "duplicate-test"}. Both
+  calls returned {:ok, ...} with is_duplicate: false and two DISTINCT
+  record_ids -- no error, no violation, silent duplicate acceptance.
+
+  BLAST RADIUS: this is not specific to tag or to BilimBaga. ANY entity
+  definition (in any pack, in any tenant) that declares a
+  constraints: [{type: unique, ...}] entry gets a false sense of
+  enforcement -- the definition JSON documents a guarantee the running
+  system does not provide, for every unique constraint on every
+  pack-installed entity type across the whole platform, unless something
+  has separately and explicitly registered+run column promotion for that
+  specific entity type (which appears to be an opt-in, per-entity-type,
+  manual mechanism today, not something pack installation does
+  automatically).
+
+  FIX DIRECTION (not decided here, needs a design pass): either (a)
+  solution_pack_install.ex (or activate_definition/4) automatically
+  registers and runs column promotion for every entity type that declares
+  at least one unique constraint, as part of normal pack installation --
+  likely the more architecturally consistent fix, but needs to confirm
+  column promotion is safe/cheap enough to run unconditionally at install
+  time and doesn't have its own prerequisites this path doesn't satisfy;
+  or (b) a generic, promotion-independent uniqueness check added to
+  Letflow.Entities.Records.create_record/2's own validation path (checking
+  entity_record_latest.field_values ->> constraint fields via a query
+  before insert, or a partial/expression unique index on the JSONB
+  column) -- likely simpler but a different mechanism than the one entity
+  definitions already declare and may not compose cleanly with the
+  constraint_def's existing DDL-based design. Whoever picks this up
+  should read REQ-298's original constraint_def design intent first to
+  judge which fix direction the platform's existing architecture actually
+  intends.
+affected_files:
+  - lib/letflow/tenant_provisioning.ex
+  - lib/letflow/entities/definition/ddl.ex
+  - lib/letflow/entities/records.ex
+  - lib/letflow/definitions/solution_pack_install.ex
+  - priv/packs/bilimbaga/entity_definitions/tag.json
+queue_ref: Q-648
+github_ref: GH-1354
+status: open

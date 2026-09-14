@@ -1,0 +1,36 @@
+id: ISS-0654
+title: ExamSessionPage's forced anti-cheat auto-submit can discard an uncommitted short_text textarea edit that never reached blur
+discovered_by: REVIEWER
+discovered_in_run: WF03-ISS0650-20260914
+discovered_at: "2026-09-14T03:41:35Z"
+severity: MINOR
+description: >
+  Found by REVIEWER while reviewing ISS-0650's frontend half (the
+  short-text answer autosave wiring). web/src/pages/exam/
+  ExamSessionPage.tsx's short_text question type stores an in-progress
+  edit in local textDraft state and only sends it to the backend (via
+  saveAnswer) on the textarea's onBlur event -- unlike option-based
+  question types, which save synchronously on every click and so
+  never hold uncommitted local state.
+
+  useAntiCheatSignals' handleAntiCheatOutcome (around lines 187-197)
+  can flip the page's phase straight to 'result' from a signal
+  callback (e.g. the exam's on_tab_switch policy set to 'submit')
+  with no user interaction and thus no blur event -- discarding
+  whatever text was in the textarea at that moment, silently, since it
+  was never sent to the server and never entered the answers state.
+
+  This is a genuine data-loss edge case introduced specifically by
+  adding draft state where none existed before; option-based answers
+  have no equivalent risk since they save immediately on interaction.
+
+  Narrow window (requires an anti-cheat forced-submit racing an
+  unsaved keystroke in a short-text question specifically), not a
+  blocker for ISS-0650 itself (REVIEWER PASSed that fix), but a real
+  gap worth closing.
+affected_files:
+  - web/src/pages/exam/ExamSessionPage.tsx
+  - web/src/hooks/useAntiCheatSignals.ts
+queue_ref: Q-654
+github_ref: GH-1373
+status: open

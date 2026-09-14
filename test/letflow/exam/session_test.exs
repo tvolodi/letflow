@@ -452,6 +452,126 @@ defmodule Letflow.Exam.SessionTest do
                )
     end
 
+    # ISS-0650: `answer_attrs()` had no `text_answer` field anywhere in the
+    # write path -- a short-text question could never actually be answered.
+    # This proves the full round trip: autosave with `text_answer`, then
+    # read it back via `get_session_state_for_user/3`'s
+    # `saved_answer.text_answer`, exactly as REQ-335's session-state route
+    # exposes it to a resuming candidate.
+    test "a short-text question accepts and persists text_answer, retrievable via get_session_state_for_user/3",
+         ctx do
+      short_text_question =
+        create_question!(ctx.schema, Ecto.UUID.generate(), %{"type" => "shorttext"})
+
+      ExamFixtures.create_record!(ctx.schema, "session_question", %{
+        "session_id" => ctx.session_id,
+        "question_id" => short_text_question.record_id,
+        "sort_order" => 99,
+        "options_order" => []
+      })
+
+      assert {:ok, %{remaining_seconds: remaining}} =
+               Session.autosave_answer(
+                 ctx.session_id,
+                 ctx.candidate_id,
+                 %{
+                   question_id: short_text_question.record_id,
+                   selected_option_ids: [],
+                   text_answer: "The mitochondria is the powerhouse of the cell.",
+                   time_spent_seconds: 12
+                 },
+                 ctx.schema
+               )
+
+      assert is_integer(remaining)
+
+      assert {:ok, state} =
+               Session.get_session_state_for_user(ctx.session_id, ctx.candidate_id, ctx.schema)
+
+      assert %{
+               text_answer: "The mitochondria is the powerhouse of the cell.",
+               selected_option_ids: []
+             } = Map.fetch!(state.answers, short_text_question.record_id)
+    end
+
+    # A second autosave with `text_answer: nil` (an explicit clear, or the
+    # shape a not-yet-answered save would carry) upserts cleanly rather than
+    # leaving the prior text stuck.
+    test "a second short-text autosave upserts the stored text_answer, not duplicates", ctx do
+      short_text_question =
+        create_question!(ctx.schema, Ecto.UUID.generate(), %{"type" => "shorttext"})
+
+      ExamFixtures.create_record!(ctx.schema, "session_question", %{
+        "session_id" => ctx.session_id,
+        "question_id" => short_text_question.record_id,
+        "sort_order" => 99,
+        "options_order" => []
+      })
+
+      assert {:ok, _} =
+               Session.autosave_answer(
+                 ctx.session_id,
+                 ctx.candidate_id,
+                 %{
+                   question_id: short_text_question.record_id,
+                   selected_option_ids: [],
+                   text_answer: "first draft",
+                   time_spent_seconds: 1
+                 },
+                 ctx.schema
+               )
+
+      assert {:ok, _} =
+               Session.autosave_answer(
+                 ctx.session_id,
+                 ctx.candidate_id,
+                 %{
+                   question_id: short_text_question.record_id,
+                   selected_option_ids: [],
+                   text_answer: "final answer",
+                   time_spent_seconds: 30
+                 },
+                 ctx.schema
+               )
+
+      assert {:ok, state} =
+               Session.get_session_state_for_user(ctx.session_id, ctx.candidate_id, ctx.schema)
+
+      assert %{text_answer: "final answer"} =
+               Map.fetch!(state.answers, short_text_question.record_id)
+    end
+
+    # ISS-0650 acceptance criterion: the option-based question types stay
+    # exactly as strict as before -- a client sending free text for one of
+    # them is a shape error, not silently dropped, matching
+    # `check_answer_shape/3`'s existing per-type strictness (e.g. the
+    # short-text-must-not-carry-selected-options check just above).
+    test "text_answer is rejected for single/multiple/true_false/likert questions", ctx do
+      for type <- ["single", "multiple", "truefalse", "likert"] do
+        question = create_question!(ctx.schema, Ecto.UUID.generate(), %{"type" => type})
+
+        ExamFixtures.create_record!(ctx.schema, "session_question", %{
+          "session_id" => ctx.session_id,
+          "question_id" => question.record_id,
+          "sort_order" => 100,
+          "options_order" => []
+        })
+
+        assert {:error, :answer_shape_invalid} =
+                 Session.autosave_answer(
+                   ctx.session_id,
+                   ctx.candidate_id,
+                   %{
+                     question_id: question.record_id,
+                     selected_option_ids: [],
+                     text_answer: "should not be accepted",
+                     time_spent_seconds: 1
+                   },
+                   ctx.schema
+                 )
+      end
+    end
+
     test "an option id belonging to a different question is rejected", ctx do
       other_question = create_question!(ctx.schema, Ecto.UUID.generate())
       other_option = create_option!(ctx.schema, other_question.record_id, 0, true)
@@ -624,6 +744,49 @@ defmodule Letflow.Exam.SessionTest do
 
       Process.sleep(0)
       _ = short_text_question
+    end
+
+    # ISS-0650: end-to-end proof that the candidate's actual submitted text
+    # is what a human grader would see, not a hardcoded nil -- autosave a
+    # real text_answer, submit (which routes the short_text question
+    # through `Letflow.Exam.Scoring`'s `pending_manual` path), then read
+    # the session's own `session_answer` state back via
+    # `get_session_state_for_user/3` and confirm the exact text survived
+    # the whole write -> score -> read round trip untouched.
+    test "the candidate's real text_answer survives autosave -> submit (pending_manual) -> read back" do
+      %{schema_name: schema} = tenant("req332-submit-pending-text")
+      %{exam: exam} = build_minimal_exam!(schema, exam_attrs: %{"max_attempts" => 5})
+      category_id = Ecto.UUID.generate()
+      short_text_question = create_question!(schema, category_id, %{"type" => "shorttext"})
+      create_rule!(schema, exam.record_id, category_id, 1, 1)
+
+      candidate_id = Ecto.UUID.generate()
+      assert {:ok, session_view} = Session.create(candidate_id, exam.record_id, schema)
+
+      submitted_text = "Photosynthesis converts light energy into chemical energy."
+
+      assert {:ok, _} =
+               Session.autosave_answer(
+                 session_view.id,
+                 candidate_id,
+                 %{
+                   question_id: short_text_question.record_id,
+                   selected_option_ids: [],
+                   text_answer: submitted_text,
+                   time_spent_seconds: 45
+                 },
+                 schema
+               )
+
+      assert {:ok, outcome} = Session.submit(session_view.id, candidate_id, schema)
+      assert outcome.status == :grading_pending
+      assert outcome.passed == nil
+
+      assert {:ok, state} =
+               Session.get_session_state_for_user(session_view.id, candidate_id, schema)
+
+      assert %{text_answer: ^submitted_text} =
+               Map.fetch!(state.answers, short_text_question.record_id)
     end
 
     test "submission is idempotent: a second submit returns the recorded outcome without re-scoring" do

@@ -273,6 +273,61 @@ defmodule Letflow.Routers.ExamSessionsTest do
     end
   end
 
+  # ── ISS-0650: short-text autosave through the real HTTP PUT route ────────
+
+  describe "short-text autosave (ISS-0650)" do
+    test "PUT .../answers/:question_id with text_answer persists it, readable back via GET .../:id" do
+      tenant = tenant("req335-shorttext")
+      ctx = candidate_ctx(tenant)
+
+      category_id = Ecto.UUID.generate()
+      exam = create_exam!(tenant.schema_name, %{})
+      question = create_question!(tenant.schema_name, category_id, %{"type" => "shorttext"})
+      create_rule!(tenant.schema_name, exam.record_id, category_id, 1)
+
+      %{"session" => %{"id" => session_id}} = start_session!(ctx, exam.record_id)
+
+      autosave_conn =
+        request(
+          "PUT",
+          "/api/v1/exam-sessions/#{session_id}/answers/#{question.record_id}",
+          ctx,
+          %{
+            "text_answer" => "The mitochondria is the powerhouse of the cell.",
+            "time_spent_seconds" => 8
+          }
+        )
+
+      assert autosave_conn.status == 200
+
+      state_conn = request("GET", "/api/v1/exam-sessions/#{session_id}", ctx)
+      assert state_conn.status == 200
+      state = json(state_conn)
+
+      assert [answer] = Map.values(state["answers"])
+      assert answer["text_answer"] == "The mitochondria is the powerhouse of the cell."
+      assert answer["selected_option_ids"] == []
+    end
+
+    test "PUT .../answers/:question_id rejects text_answer for a single-choice question with 400" do
+      tenant = tenant("req335-shorttext-reject")
+      ctx = candidate_ctx(tenant)
+
+      %{exam: exam, question_id: question_id} = build_minimal_exam!(tenant.schema_name)
+      %{"session" => %{"id" => session_id}} = start_session!(ctx, exam.record_id)
+
+      conn =
+        request(
+          "PUT",
+          "/api/v1/exam-sessions/#{session_id}/answers/#{question_id}",
+          ctx,
+          %{"text_answer" => "should not be accepted", "time_spent_seconds" => 1}
+        )
+
+      assert conn.status == 400
+    end
+  end
+
   # ── Redaction: is_correct/likert_weight/likert_polarity/explanation never appear ──
 
   describe "GetSessionState redaction" do

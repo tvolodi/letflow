@@ -215,6 +215,84 @@ describe('REQ-338 AC5 — grading_pending vs a fully-graded result', () => {
   })
 })
 
+describe('ISS-0650 — short_text question renders a real text input, wired through autosave', () => {
+  function shortTextSessionState(overrides: Partial<ExamSessionStateResponse> = {}): ExamSessionStateResponse {
+    return sessionState({
+      questions: [
+        {
+          question_id: 'q1',
+          sort_order: 1,
+          type: 'short_text',
+          stem: 'What is the capital of France?',
+          options: [],
+        },
+      ],
+      ...overrides,
+    })
+  }
+
+  it('renders a real textarea, not the old "not yet supported" placeholder', async () => {
+    mockedExamApi.startSession.mockResolvedValue(shortTextSessionState())
+
+    renderPage()
+
+    await screen.findByTestId('exam-session-page')
+    expect(screen.getByTestId('exam-short-text-input')).toBeInTheDocument()
+    expect(screen.queryByTestId('exam-short-text-unsupported')).not.toBeInTheDocument()
+  })
+
+  it('displays a previously-saved text_answer on load', async () => {
+    mockedExamApi.startSession.mockResolvedValue(
+      shortTextSessionState({
+        answers: {
+          q1: { selected_option_ids: [], text_answer: 'Paris', time_spent_seconds: 10, saved_at: '2026-09-13T00:00:00Z' },
+        },
+      }),
+    )
+
+    renderPage()
+
+    const textarea = await screen.findByTestId('exam-short-text-input')
+    expect((textarea as HTMLTextAreaElement).value).toBe('Paris')
+  })
+
+  it('autosaves on blur with the correct text_answer payload', async () => {
+    mockedExamApi.startSession.mockResolvedValue(shortTextSessionState())
+    mockedExamApi.saveAnswer.mockResolvedValue({ remaining_seconds: 42 })
+
+    renderPage()
+    await screen.findByTestId('exam-session-page')
+
+    const textarea = await screen.findByTestId('exam-short-text-input')
+    fireEvent.change(textarea, { target: { value: 'Paris' } })
+    fireEvent.blur(textarea)
+
+    await waitFor(() => expect(mockedExamApi.saveAnswer).toHaveBeenCalledTimes(1))
+    expect(mockedExamApi.saveAnswer).toHaveBeenCalledWith(
+      'session-1',
+      'q1',
+      expect.objectContaining({ selected_option_ids: [], text_answer: 'Paris' }),
+    )
+  })
+
+  it('does not autosave on blur when the text has not changed from the saved value', async () => {
+    mockedExamApi.startSession.mockResolvedValue(
+      shortTextSessionState({
+        answers: {
+          q1: { selected_option_ids: [], text_answer: 'Paris', time_spent_seconds: 10, saved_at: '2026-09-13T00:00:00Z' },
+        },
+      }),
+    )
+
+    renderPage()
+    const textarea = await screen.findByTestId('exam-short-text-input')
+    fireEvent.blur(textarea)
+
+    await new Promise((resolve) => setTimeout(resolve, 0))
+    expect(mockedExamApi.saveAnswer).not.toHaveBeenCalled()
+  })
+})
+
 describe('REQ-338 AC6/AC7 — anti-cheat signal wiring and teardown', () => {
   it('visibilitychange -> tab_switch', async () => {
     mockedExamApi.startSession.mockResolvedValue(sessionState())

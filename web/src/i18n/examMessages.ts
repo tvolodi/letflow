@@ -80,8 +80,8 @@ export const examMessages: Record<ExamUiLocale, Record<string, string>> = {
     'exam.session.expired.body': 'The time allowed for this exam has run out. Your last saved answers were kept.',
     'exam.session.autoSubmitted.warning':
       'A suspicious activity signal was detected and this session was automatically submitted.',
-    'exam.session.shortTextUnsupported':
-      'Free-text answers cannot be autosaved yet -- the exam-session API does not carry a text field for this question type.',
+    'exam.session.shortTextPlaceholder': 'Type your answer here…',
+    'exam.session.shortTextLabel': 'Your answer',
     'exam.session.prevQuestion': 'Previous',
     'exam.session.nextQuestion': 'Next',
 
@@ -126,8 +126,8 @@ export const examMessages: Record<ExamUiLocale, Record<string, string>> = {
     'exam.session.expired.body': 'Время, отведённое на этот экзамен, закончилось. Ваши последние сохранённые ответы сохранены.',
     'exam.session.autoSubmitted.warning':
       'Обнаружен сигнал подозрительной активности, и эта сессия была автоматически завершена.',
-    'exam.session.shortTextUnsupported':
-      'Текстовые ответы пока нельзя сохранять автоматически -- API экзаменационной сессии не передаёт текстовое поле для этого типа вопроса.',
+    'exam.session.shortTextPlaceholder': 'Введите ваш ответ здесь…',
+    'exam.session.shortTextLabel': 'Ваш ответ',
     'exam.session.prevQuestion': 'Назад',
     'exam.session.nextQuestion': 'Далее',
 
@@ -170,8 +170,8 @@ export const examMessages: Record<ExamUiLocale, Record<string, string>> = {
     'exam.session.expired.body': 'Бұл емтиханға берілген уақыт аяқталды. Соңғы сақталған жауаптарыңыз сақталды.',
     'exam.session.autoSubmitted.warning':
       'Күдікті белсенділік сигналы анықталды, және бұл сессия автоматты түрде аяқталды.',
-    'exam.session.shortTextUnsupported':
-      'Мәтіндік жауаптарды әзірге автоматты сақтау мүмкін емес -- емтихан сессиясының API-і бұл сұрақ түрі үшін мәтін өрісін бермейді.',
+    'exam.session.shortTextPlaceholder': 'Жауабыңызды осында теріңіз…',
+    'exam.session.shortTextLabel': 'Сіздің жауабыңыз',
     'exam.session.prevQuestion': 'Артқа',
     'exam.session.nextQuestion': 'Алға',
 

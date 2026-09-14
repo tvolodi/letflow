@@ -48,4 +48,59 @@ affected_files:
   - web/src/pages/exam/ExamSessionPage.tsx
 queue_ref: Q-650
 github_ref: GH-1356
-status: open
+status: resolved
+resolved_by: ORCH
+resolved_in_run: fix/ISS-0650-20260914
+resolved_at: "2026-09-14T04:13:00Z"
+resolution_note: >
+  Fixed end to end, backend then frontend.
+
+  Backend (commit 0332bf8f): check_answer_shape/2 -> /3 now validates
+  text_answer -- nil or a string for :short_text, must be nil for
+  every other question type (hard rejection with
+  :answer_shape_invalid, not silent-drop). upsert_answer/6 -> /7
+  writes text_answer into session_answer's field_values when present,
+  OMITTING the key entirely (not writing an explicit nil) when absent
+  -- session_answer.json declares the field required: false but not
+  nullable, so an explicit nil fails validation; omission also
+  correctly clears a prior answer via Records.update_record/2's
+  full-replacement write semantics. Scoring.score_question/2's
+  :short_text clause now threads text_answer into the returned
+  per_question_score map instead of discarding it, so the
+  pending_manual result actually carries something for a human grader
+  to grade.
+
+  A companion fix beyond the issue's own listed affected_files was
+  required and applied: lib/letflow/routers/exam_sessions.ex's PUT
+  .../answers/:question_id route and @autosave_schema had no
+  text_answer field in the request-body schema at all -- without it,
+  no real HTTP client could ever have reached the fixed backend path.
+  REVIEWER confirmed this was a genuine correction to the issue's own
+  scope estimate, not scope creep.
+
+  Frontend (commit 696d902e): ExamSessionPage.tsx's static "not yet
+  supported" placeholder replaced with a real controlled textarea --
+  restores a previously-saved text_answer on load, autosaves on blur
+  (guarded against redundant no-op saves), i18n'd in en/ru/kk. New
+  tests confirm the real input renders, autosave payload shape,
+  restore-on-load, and the i18n-grep guard.
+
+  Pipeline: ELIXIR-DEV (backend) -> SECURITY-REVIEWER PASS (traced
+  text_answer through validation before the write path with no
+  bypass, verified the omit-vs-nil distinction against
+  Records.update_record/2's actual full-replacement semantics,
+  confirmed cross-type rejection is real and tested; flagged an
+  unbounded text_answer string length as a non-blocking hardening
+  note) -> REVIEWER PASS (backend: agreed deferring the length cap is
+  correct given existing unbounded-string precedent in the same
+  router layer and the global 2MiB body ceiling; confirmed the router
+  companion fix was a genuine scope correction) -> FRONTEND-DEV
+  (frontend) -> REVIEWER PASS (frontend: confirmed type/shape fidelity
+  against the real backend schema, confirmed the no-op guard's
+  baseline is correct, confirmed i18n discipline; found and reported a
+  genuine narrow edge case -- an anti-cheat forced-submit can discard
+  an uncommitted textarea edit that never reached blur -- filed
+  separately as ISS-0654 rather than blocking this fix) -> TEST-RUNNER
+  confirmed both mix letflow.check and npm run check clean except
+  pre-existing environment-only/probabilistic flakes, none touching
+  exam or router test paths.

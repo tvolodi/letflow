@@ -99,6 +99,24 @@ describe('REQ-338 AC1 — examApi hits REQ-335s real route table', () => {
     expect(JSON.parse(init.body as string)).toEqual({ selected_option_ids: ['opt-1'], time_spent_seconds: 5 })
   })
 
+  it('saveAnswer -> ISS-0650: carries text_answer in the body when supplied', async () => {
+    const fetchSpy = vi.fn().mockImplementation(() => jsonResponse({ remaining_seconds: 42 }))
+    window.fetch = fetchSpy as unknown as typeof window.fetch
+
+    await examApi.saveAnswer('session-1', 'question-1', {
+      selected_option_ids: [],
+      time_spent_seconds: 5,
+      text_answer: 'Paris',
+    })
+
+    const [, init] = fetchSpy.mock.calls[0] as [string, RequestInit]
+    expect(JSON.parse(init.body as string)).toEqual({
+      selected_option_ids: [],
+      time_spent_seconds: 5,
+      text_answer: 'Paris',
+    })
+  })
+
   it('submitSession -> POST /api/v1/exam-sessions/:id/submit', async () => {
     const fetchSpy = vi.fn().mockImplementation(() => jsonResponse({ status: 'submitted', total_score: 1, total_max_score: 1, percentage: 100, passed: true }))
     window.fetch = fetchSpy as unknown as typeof window.fetch

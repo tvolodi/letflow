@@ -63,13 +63,19 @@ defmodule Letflow.Exam.Scoring do
           }
         }
 
-  @type answer_row :: %{selected_option_ids: [String.t()]} | nil
+  @type answer_row ::
+          %{
+            required(:selected_option_ids) => [String.t()],
+            optional(:text_answer) => String.t() | nil
+          }
+          | nil
 
   @type per_question_score :: %{
-          question_id: String.t(),
-          score: float(),
-          max_score: float(),
-          grading_status: :graded | :pending_manual
+          required(:question_id) => String.t(),
+          required(:score) => float(),
+          required(:max_score) => float(),
+          required(:grading_status) => :graded | :pending_manual,
+          optional(:text_answer) => String.t() | nil
         }
 
   @type submission_outcome :: %{
@@ -136,13 +142,24 @@ defmodule Letflow.Exam.Scoring do
     {:ok, graded(question.question_id, score, 1.0)}
   end
 
-  def score_question(%{type: :short_text} = question, _answer) do
+  def score_question(%{type: :short_text} = question, answer) do
+    # ISS-0650: the candidate's submitted `text_answer` is carried straight
+    # through into the per-question result -- never scored (there is no
+    # scoring rule for free text), but no longer dropped either, so the
+    # `:pending_manual` grading_status this clause always returns has an
+    # actual answer attached for whatever reads it next, not a hardcoded
+    # `nil`. `answer` is `nil` for an unanswered question (this module's own
+    # "unanswered = wrong, not skipped" rule) -- `text_answer` is `nil` in
+    # that case too.
+    text_answer = text_answer_of(answer)
+
     {:ok,
      %{
        question_id: question.question_id,
        score: 0.0,
        max_score: 1.0,
-       grading_status: :pending_manual
+       grading_status: :pending_manual,
+       text_answer: text_answer
      }}
   end
 
@@ -192,6 +209,10 @@ defmodule Letflow.Exam.Scoring do
 
   defp selected_ids(nil), do: []
   defp selected_ids(%{selected_option_ids: ids}), do: ids || []
+
+  defp text_answer_of(nil), do: nil
+  defp text_answer_of(%{text_answer: text_answer}), do: text_answer
+  defp text_answer_of(_answer), do: nil
 
   defp ensure_correct_option(question) do
     if Map.get(question, :correct_option_ids, []) == [] do

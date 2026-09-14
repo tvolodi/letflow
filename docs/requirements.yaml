@@ -25066,6 +25066,14 @@ requirements:
     status: pending
     stage: S10
     description: >
+      ORCH PIN (registration, 2026-09-14): this record's number is PINNED
+      to 0032. REQ-353 is pinned to 0031 in the same pass. See REQ-353's
+      matching note for why pinning is done here rather than left to the
+      acceptance criteria alone. Highest existing record at pin time was
+      0030, verified by `ls`. The read-back check the acceptance criteria
+      require still applies in full -- the citation written into the stage
+      file must come from the created filename, not from this pin.
+      .
       bucket: A if the verdict is "serve it" (a candidate's own session
       history is an entity-record query over the `session` entity type,
       which already exists -- see THE DECISIVE TECHNICAL FACT below), B if
@@ -25512,6 +25520,17 @@ requirements:
     status: pending
     stage: S10
     description: >
+      ORCH PIN (registration, 2026-09-14): this record's number is PINNED
+      to 0031. REQ-350 is pinned to 0032 in the same pass. Both entries
+      previously deferred to an `ls docs/migration/decisions/` at filing
+      time, which narrows but cannot close a concurrent-allocation race --
+      two hosts can `ls` simultaneously and both read the same free number
+      before either commits. Highest existing record at pin time was 0030,
+      verified by `ls`. Still run the `ls` check the acceptance criteria
+      require: if 0031 is taken by the time this executes, a third party
+      allocated it, so take the next genuinely free number AND propagate it
+      to every citation, exactly as those criteria already demand.
+      .
       bucket: not applicable -- this requirement produces a decision
       record about the bucket rule itself, and declaring a bucket for it
       would be circular. It adds no module under lib/letflow/exam/ or

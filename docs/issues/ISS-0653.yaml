@@ -33,4 +33,50 @@ affected_files:
   - lib/letflow/entities/query/cursor.ex
 queue_ref: Q-653
 github_ref: GH-1370
-status: open
+status: resolved
+resolved_by: ORCH
+resolved_in_run: fix/ISS-0653-20260914
+resolved_at: "2026-09-14T02:26:00Z"
+resolution_note: >
+  Third and final fix in this defect family (after ISS-0651,
+  ISS-0652). resolved_sort_term/2's :typed_column clause previously
+  did Map.fetch!(Allowlist.typed_columns(), name) unconditionally --
+  the fixed structural-7 columns only -- raising KeyError for a
+  genuinely promoted business column. Generalized by mirroring an
+  ALREADY-REVIEWED-AND-MERGED pattern in a different module,
+  Letflow.Entities.Query.Compiler's build_order_by/3: a fixed-7 hit
+  keeps the original field(r, ^column_atom) path; a miss builds
+  dynamic([r], fragment("?", literal(^name))). read_sort_value/2's
+  :typed_column clause gets the same dispatch, falling through to a
+  new read_promoted_column_value/2 helper (two-clause %Latest{}/
+  plain-map dispatch, matching FieldGrants.redact_item/2's precedent)
+  that reads the value from field_values for the cursor-encoding side.
+
+  No new design decision was needed: Compiler had already solved this
+  exact same-shaped problem twice (once for filter dynamics, once for
+  sorting), so ELIXIR-DEV mirrored the existing, reviewed pattern
+  rather than inventing a fourth one.
+
+  SECURITY-REVIEWER independently verified fragment("?", literal(^name))
+  is Ecto's own safe identifier-quoting macro (not string
+  interpolation), traced name's provenance back to a server-built
+  allowlist map derived from the tenant's own stored entity
+  definitions (never raw caller input), and confirmed no
+  tenant-scoping predicate was touched. REVIEWER confirmed the idiom
+  matches Compiler's precedent exactly, confirmed read_promoted_column_value/2
+  matches the struct-then-plain-map dispatch already established by
+  read_record_id/1 (ISS-0651) and FieldGrants.redact_item/2, and
+  grepped the whole module to confirm no fourth instance of this
+  defect class remains -- this closes the entire ISS-0651/0652/0653
+  defect family in Letflow.Entities.Query.Cursor.
+
+  New regression test proves sorting a keyset-paginated query by a
+  promoted business column's real typed/generated-column form (not
+  the :json_field fallback) works correctly across three real pages,
+  with source: :typed_column explicitly asserted to confirm the
+  promoted-column path is genuinely exercised. ELIXIR-DEV verified
+  the test reproduces the original KeyError when the fix is reverted.
+
+  Pipeline: ELIXIR-DEV -> SECURITY-REVIEWER PASS -> REVIEWER PASS ->
+  TEST-RUNNER confirmed a full mix letflow.check run clean except the
+  pre-existing rust-toolchain-absence failures.

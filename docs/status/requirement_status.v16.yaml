@@ -872,3 +872,62 @@ history:
       clean except the pre-existing rust-toolchain-absence failures.
 
       docs/issues/ISS-0651.yaml flipped open -> resolved.
+  - req: SCOPE-CHANGE
+    event: started
+    agent: ORCH
+    at: "2026-09-14T00:11:35Z"
+    note: >
+      Claimed letflow-queue task 653 (ISS-0653, GH#1370, S3) -- self-
+      filed while resolving ISS-0651. Third and final function in this
+      same defect family in Letflow.Entities.Query.Cursor:
+      resolved_sort_term/2's :typed_column clause resolves a sort
+      column atom via Allowlist.typed_columns/0, which only knows the
+      fixed structural-7 columns plus entity_record_latest's own typed
+      columns -- not a promoted entity type's own promoted business
+      columns. Sorting a keyset-paginated query by a genuinely
+      promoted business column raises KeyError. ISS-0651's own
+      regression test had to route around this via the :json_field
+      path to avoid tripping it. Fix: generalize resolved_sort_term/2
+      to resolve a promoted business column's real typed column,
+      following the same struct-vs-plain-map/promoted-vs-structural
+      precedent ISS-0651/ISS-0652 already established. Dispatching to
+      ELIXIR-DEV.
+  - req: SCOPE-CHANGE
+    event: done
+    agent: ORCH
+    at: "2026-09-14T02:06:46Z"
+    note: >
+      ISS-0653 (queue task 653, GH#1370) resolved via
+      fix/ISS-0653-20260914 (commit 8ecaf4e3) -- the third and final
+      fix in this defect family (after ISS-0651, ISS-0652), all in
+      Letflow.Entities.Query.Cursor. resolved_sort_term/2's
+      :typed_column clause previously did Map.fetch!(Allowlist.
+      typed_columns(), name) unconditionally, raising KeyError for a
+      genuinely promoted business column. Generalized by mirroring an
+      ALREADY-REVIEWED-AND-MERGED pattern in a different module,
+      Compiler.build_order_by/3 -- no new design decision needed, since
+      Compiler had already solved this exact same-shaped problem
+      twice. read_sort_value/2's :typed_column clause gets the same
+      dispatch, falling through to a new read_promoted_column_value/2
+      helper matching FieldGrants.redact_item/2's precedent.
+
+      SECURITY-REVIEWER verified fragment("?", literal(^name)) is
+      Ecto's own safe identifier-quoting macro, traced name's
+      provenance to a server-built allowlist map (never raw caller
+      input), confirmed no tenant-scoping predicate touched. REVIEWER
+      confirmed the idiom matches Compiler's precedent exactly and
+      grepped the whole module confirming no fourth instance of this
+      defect class remains -- this closes the entire ISS-0651/0652/
+      0653 defect family in Cursor.
+
+      New regression test proves sorting by a promoted business
+      column's real typed/generated-column form (not the :json_field
+      fallback) works correctly across three real pages, with
+      source: :typed_column explicitly asserted to confirm the
+      promoted-column path is genuinely exercised.
+
+      Pipeline: ELIXIR-DEV -> SECURITY-REVIEWER PASS -> REVIEWER PASS
+      -> TEST-RUNNER confirmed a full mix letflow.check run clean
+      except the pre-existing rust-toolchain-absence failures.
+
+      docs/issues/ISS-0653.yaml flipped open -> resolved.

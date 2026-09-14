@@ -793,6 +793,123 @@ defmodule Letflow.Entities.QueryCursorFieldGrantsTest do
   end
 
   # ---------------------------------------------------------------------------------
+  # ISS-0653 -- Cursor.resolved_sort_term/2's :typed_column clause resolved
+  # a sort column atom via Allowlist.typed_columns/0 (the fixed
+  # structural-7 table only), raising KeyError the moment a caller sorted
+  # by a genuinely promoted business column (e.g. "customer_name" once
+  # promoted, per this describe block's own fixture below) -- the third
+  # function in this module with the same "not generalized for a promoted
+  # per-type-table entity type" defect class ISS-0651/ISS-0652 already
+  # found twice. read_sort_value/2's :typed_column clause had the identical
+  # gap one step downstream (it would only ever be reached once
+  # resolved_sort_term/2 stopped crashing first): the promoted column's own
+  # value is never selected onto entity_row() by
+  # Compiler.select_entity_row/1 (fixed structural-7 projection only), so
+  # it is read back out of field_values instead -- the same underlying
+  # data, since DDL.promoted_columns/1 emits every ordinary promoted column
+  # as `GENERATED ALWAYS AS (...) STORED` computed FROM field_values.
+  #
+  # Unlike ISS-0651's own regression test (which had to sort by "age", a
+  # :json_field, specifically to dodge this exact bug), this sorts by
+  # "customer_name" -- promoted to a REAL physical `text` column by this
+  # describe block's own setup -- so `Allowlist.load/2` resolves it
+  # `source: :typed_column`, the precise shape that used to raise
+  # KeyError. Proves correctness across THREE pages (not merely
+  # "does not crash"): distinct, correctly-ordered, non-overlapping pages,
+  # and a correct "no more pages" signal at the end.
+  # ---------------------------------------------------------------------------------
+
+  describe "ISS-0653 -- keyset pagination sorted by a promoted business column" do
+    setup do
+      %{tenant_id: tenant_id, schema_name: schema} = provisioned_tenant()
+
+      create_active_definition!(schema, %{
+        name: "promoted_sorter",
+        display_name: "Promoted Sorter",
+        fields: [
+          %{name: "customer_name", type: :string, required: true, queried: true}
+        ]
+      })
+
+      promote_and_create_table!(schema, tenant_id, "promoted_sorter", "customer_name", "text")
+
+      %{schema: schema}
+    end
+
+    test "sorting by the promoted column's typed/generated-column form works correctly across at least two pages",
+         %{schema: schema} do
+      fixtures = ["Eve", "Dave", "Carol", "Bob", "Alice"]
+
+      for name <- fixtures do
+        create_record_for!(schema, "promoted_sorter", %{"customer_name" => name})
+      end
+
+      request = %{
+        entity_type: "promoted_sorter",
+        sort: [%{field: "customer_name", dir: :asc}]
+      }
+
+      assert {:ok, compiled_query} = Compiler.compile(request, schema)
+      assert {:ok, allowlist} = Allowlist.load("promoted_sorter", schema)
+
+      # Confirm the setup produced the shape this test needs: "customer_name"
+      # resolves :typed_column via its REAL, promoted physical column, not
+      # :json_field -- otherwise this test would not exercise ISS-0653 at
+      # all.
+      assert %{source: :typed_column} = Map.fetch!(allowlist, "customer_name")
+
+      assert [%{field_values: _} = sample_row | _] = Repo.all(compiled_query, prefix: schema)
+      refute match?(%Latest{}, sample_row)
+
+      expected_order = Enum.sort(fixtures)
+
+      opts1 = %{page_size: 2, cursor: nil}
+
+      assert {:ok, page1} =
+               Cursor.paginate(request, compiled_query, allowlist, opts1, schema)
+
+      assert length(page1.items) == 2
+      refute is_nil(page1.next_cursor)
+
+      opts2 = %{page_size: 2, cursor: page1.next_cursor}
+
+      assert {:ok, page2} =
+               Cursor.paginate(request, compiled_query, allowlist, opts2, schema)
+
+      assert length(page2.items) == 2
+      refute is_nil(page2.next_cursor)
+
+      opts3 = %{page_size: 2, cursor: page2.next_cursor}
+
+      assert {:ok, page3} =
+               Cursor.paginate(request, compiled_query, allowlist, opts3, schema)
+
+      assert length(page3.items) == 1
+      assert page3.next_cursor == nil
+
+      pages = [page1, page2, page3]
+
+      for page <- pages, item <- page.items do
+        refute match?(%Latest{}, item)
+        assert Map.has_key?(item, :record_id)
+      end
+
+      # Distinct, non-overlapping records across all pages -- not just
+      # "does not crash".
+      record_ids = Enum.flat_map(pages, fn page -> Enum.map(page.items, & &1.record_id) end)
+      assert length(record_ids) == length(fixtures)
+      assert length(Enum.uniq(record_ids)) == length(fixtures)
+
+      actual_order =
+        pages
+        |> Enum.flat_map(& &1.items)
+        |> Enum.map(fn item -> Map.fetch!(item.field_values, "customer_name") end)
+
+      assert actual_order == expected_order
+    end
+  end
+
+  # ---------------------------------------------------------------------------------
   # AC4 -- no route or controller file added or modified by this
   # requirement. Structural check, RE-DERIVED 2026-09-11 because the
   # feature it was waiting for landed.

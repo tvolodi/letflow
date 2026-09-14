@@ -1,0 +1,40 @@
+id: ISS-0664
+title: "EntityCrudPage e2e tests flake once a tag/entity table accumulates >25 soft-deleted rows -- fixed PAGE_SIZE=25 with no explicit sort combined with a query that does not filter deleted rows can push a freshly created record off page 1"
+discovered_by: TEST-DESIGNER
+discovered_in_run: issue/ISS-0662-20260914
+discovered_at: "2026-09-14T14:32:53Z"
+severity: MINOR
+description: >
+  Discovered during ISS-0662's regression-test rework while writing
+  web/tests/e2e/iss-0662-entity-crud-click-freeze.e2e.spec.ts. Intermittent
+  test failures ("entity-delete-<id> element not found") were traced to: the
+  dev tag entity table's POST /api/v1/entities/query never filters out
+  deleted:true rows, and web/src/pages/entities/EntityCrudPage.tsx uses a
+  fixed PAGE_SIZE = 25 with no explicit sort order. As soft-deleted rows
+  accumulate in a shared dev/test tenant (a realistic scenario after
+  repeated e2e runs, which is exactly how this was found), a freshly
+  created record can land off page 1 by whatever implicit UUID/insertion
+  ordering the query returns, making any test that creates a record and
+  immediately expects to find/interact with it on the first page flaky.
+
+  Not fixed as part of ISS-0662 -- out of scope for that fix, and not
+  diagnosed further (root cause traced to the query/pagination interaction
+  described above, but no fix design attempted).
+
+  Two candidate fixes not evaluated in depth: (a) POST
+  /api/v1/entities/query should filter deleted:false by default unless a
+  caller explicitly asks for deleted rows, (b) EntityCrudPage could sort by
+  created_at desc so newly-created records reliably appear on page 1
+  regardless of accumulated deleted rows.
+
+  Real user impact plausible beyond tests: an admin managing a long-lived
+  entity list with many deletions over time could see the same off-page
+  surprise for a just-created record if (a) is the actual gap (deleted rows
+  still counting toward pagination math) -- this needs verification, not
+  just the test-flakiness angle.
+affected_files:
+  - web/src/pages/entities/EntityCrudPage.tsx
+  - web/tests/e2e/iss-0662-entity-crud-click-freeze.e2e.spec.ts
+queue_ref: Q-664
+github_ref: GH-1399
+status: open

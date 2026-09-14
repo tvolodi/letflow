@@ -3,8 +3,65 @@ title: "A trusted click on EntityCrudPage's create/cancel buttons freezes the re
 discovered_by: FRONTEND-DEV
 discovered_in_run: feat/REQ-347-20260914
 discovered_at: "2026-09-14T12:10:04Z"
-severity: MINOR
+severity: MAJOR
+severity_note: >
+  Escalated from MINOR to MAJOR by ISSUE-FIXER's diagnosis
+  (issue/ISS-0662-20260914) after direct reproduction confirmed this is a
+  genuine full-renderer freeze reachable by any real user interaction (mouse
+  click OR keyboard Enter/Space), not a Playwright-synthetic-event artifact --
+  see corrected_description below.
+corrected_at: "2026-09-14T13:10:00Z"
 description: >
+  CORRECTED 2026-09-14 by ISSUE-FIXER's diagnosis (issue/ISS-0662-20260914).
+  This record's original filing understated both the scope and the real-user
+  impact -- both corrected below; the original text follows for the audit
+  trail.
+
+  WHAT IS ACTUALLY TRUE (re-derived by direct reproduction, not assumed).
+  ANY real, UA-generated (trusted) click or keyboard activation (mouse click,
+  or Tab+Enter/Space) on ANY state-changing action button on EntityCrudPage
+  -- not just entity-create-action and the form's Cancel button, but also a
+  row's Delete action (entity-delete-*, which never touches EntityRecordForm
+  at all) -- freezes the entire browser tab's main thread. Confirmed genuine
+  main-thread lockup, not a CDP/Playwright artifact: an unrelated CDP call
+  (page.evaluate, Profiler.stop) issued on a separate channel while the
+  freeze was in progress also hung for the full duration. dispatchEvent("click")
+  on the same elements completes cleanly in milliseconds with no freeze at
+  all (independently re-confirmed by racing responsiveness probes
+  concurrently with it).
+
+  RULED OUT, WITH EVIDENCE: native form submission (every Button.tsx instance
+  is type="button", no default action exists regardless of event origin);
+  mouse hit-testing/coordinates (keyboard Enter reproduces it with no mouse
+  involved); a JS infinite/recursive-setState loop (the exact same onClick
+  handler runs to completion in milliseconds when invoked via dispatchEvent);
+  a global document/window-level listener (grepped, only unrelated hit is
+  HistoryScrubber.tsx); an explicit isTrusted check (none exists anywhere in
+  web/src); the shared Button/PageLayout components generally (the same
+  Button.click() on f2-definition-list.e2e.spec.ts's unrelated "New
+  Definition" button resolves in ~84ms with no freeze).
+
+  LEADING HYPOTHESIS, NOT YET CONFIRMED: EntityCrudPage.tsx is wrapped in
+  EntitiesIntlProvider (web/src/i18n/EntitiesIntlProvider.tsx), documented as
+  the ONLY real react-intl <IntlProvider> in the app (every other consumer
+  uses createIntl() imperatively) -- the most structurally distinctive
+  difference between this page and the unaffected DefinitionListPage. A real
+  UA-dispatched click drives React's synchronous discrete-event-priority
+  update path through this nested provider's re-render; a script
+  dispatchEvent call never enters Chromium's native input pipeline/compositor
+  thread at all, which is consistent with the observed on/off behavior. Not
+  confirmed by a CPU profile -- Profiler.stop itself hung during the freeze,
+  so pinning the exact call stack needs a real Chrome DevTools trace outside
+  a sandboxed CDP session.
+
+  REAL USER IMPACT: CONFIRMED, not Playwright-specific. Any admin user
+  performing a genuine mouse click or keyboard activation on any
+  state-changing action button on any /admin/bilimbaga/:entityType screen
+  will freeze that browser tab.
+
+  --- ORIGINAL FILING TEXT (2026-09-14T12:10:04Z), retained for the audit
+  trail; superseded by the corrected statement above ---
+
   Discovered during REQ-347's e2e-spec-porting run while writing Playwright
   specs against /admin/bilimbaga/:entityType. A real (trusted) Locator.click()
   on EntityCrudPage's entity-create-action button, and on EntityRecordForm's
@@ -43,11 +100,15 @@ description: >
   concluding either way.
 affected_files:
   - web/src/pages/entities/EntityCrudPage.tsx
-  - web/src/pages/entities/EntityRecordForm.tsx
+  - web/src/i18n/EntitiesIntlProvider.tsx
+  - web/src/components/entities/EntityRecordForm.tsx
   - web/tests/e2e/categories.e2e.spec.ts
   - web/tests/e2e/tags.e2e.spec.ts
   - web/tests/e2e/question-bank.e2e.spec.ts
   - web/tests/e2e/exam-lifecycle.e2e.spec.ts
 queue_ref: Q-662
 github_ref: GH-1392
-status: open
+status: in_progress
+diagnosed_by: ISSUE-FIXER
+diagnosed_in_run: issue/ISS-0662-20260914
+diagnosed_at: "2026-09-14T13:10:00Z"

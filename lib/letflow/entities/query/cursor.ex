@@ -229,17 +229,53 @@ defmodule Letflow.Entities.Query.Cursor do
     end
   end
 
+  # ISS-0653: `name` is either one of `Allowlist.typed_columns/0`'s fixed
+  # structural-7 entries (present on both row shapes, and on `Latest`'s own
+  # `Ecto.Schema` declaration) or a genuinely promoted business column
+  # (`Allowlist.load/2` only ever marks a non-fixed-7 name `:typed_column`
+  # once its own per-type table AND that specific column physically exist --
+  # see that function's own moduledoc). A promoted name can never reach here
+  # for a `:latest`-bound primary (same gating `Compiler.build_filter_dynamic/3`'s
+  # own moduledoc note relies on), so the fragment path below is only ever
+  # exercised against a schemaless per-type-table query. Mirrors
+  # `Compiler.build_order_by/3`'s own `:typed_column` dispatch exactly --
+  # same `Map.fetch(Allowlist.typed_columns(), field_name)` split, same
+  # `fragment("?", literal(^field_name))` reference for the promoted branch
+  # -- rather than inventing a fourth pattern in this module.
   defp resolved_sort_term(%{dir: dir}, %{source: :typed_column, name: name} = field) do
-    {column_atom, _type} = Map.fetch!(Allowlist.typed_columns(), name)
+    case Map.fetch(Allowlist.typed_columns(), name) do
+      {:ok, {column_atom, _type}} ->
+        %{
+          name: name,
+          dir: dir,
+          source: :typed_column,
+          type: field.type,
+          ecto_type: Latest.__schema__(:type, column_atom),
+          dyn: dynamic([r], field(r, ^column_atom))
+        }
 
-    %{
-      name: name,
-      dir: dir,
-      source: :typed_column,
-      type: field.type,
-      ecto_type: Latest.__schema__(:type, column_atom),
-      dyn: dynamic([r], field(r, ^column_atom))
-    }
+      :error ->
+        # No `Ecto.Schema` declaration exists for a promoted column (the
+        # per-type table is a schemaless `from(table_name)` binding), so
+        # there is no `Latest.__schema__(:type, ...)`-equivalent lookup
+        # available here -- `ecto_type: nil` (the same "no dump needed"
+        # value `:json_field` terms already use) matches
+        # `Compiler.promoted_column_dynamic/3`'s own established precedent
+        # of comparing the raw decoded value against the fragment-referenced
+        # column with no `Ecto.UUID.dump!/1`-style pre-dump step, for every
+        # promoted field type this design considered (REQ-300 does not special
+        # -case an FK-promoted column's physical `uuid` type for filter
+        # comparisons either -- see `Compiler`'s own `fk_column_pg_type/2`
+        # note; this module does not re-decide that here).
+        %{
+          name: name,
+          dir: dir,
+          source: :typed_column,
+          type: field.type,
+          ecto_type: nil,
+          dyn: dynamic([r], fragment("?", literal(^name)))
+        }
+    end
   end
 
   defp resolved_sort_term(%{dir: dir}, %{source: :json_field, name: name, type: type}) do
@@ -422,9 +458,20 @@ defmodule Letflow.Entities.Query.Cursor do
   defp read_record_id(%Latest{record_id: record_id}), do: record_id
   defp read_record_id(%{record_id: record_id} = row) when is_map(row), do: record_id
 
+  # ISS-0653: a promoted business column's own value is never selected onto
+  # the row by `Compiler.select_entity_row/1` (which projects only the
+  # fixed structural-7 field set for a per-type-table query) -- it is,
+  # however, always readable from `field_values`, since
+  # `Letflow.Entities.Definition.DDL.promoted_columns/1` emits every
+  # ordinary promoted column as `GENERATED ALWAYS AS (...) STORED` computed
+  # FROM `field_values` (never the reverse), so the two never disagree.
+  # Falls through to the same `field_values`-keyed read `:json_field` terms
+  # already use just below, rather than inventing a third read strategy.
   defp read_sort_value(%{source: :typed_column, name: name}, row) do
-    {column_atom, _type} = Map.fetch!(Allowlist.typed_columns(), name)
-    Map.fetch!(row, column_atom)
+    case Map.fetch(Allowlist.typed_columns(), name) do
+      {:ok, {column_atom, _type}} -> Map.fetch!(row, column_atom)
+      :error -> read_promoted_column_value(name, row)
+    end
   end
 
   defp read_sort_value(%{source: :json_field, name: name}, %Latest{field_values: field_values}) do
@@ -433,6 +480,14 @@ defmodule Letflow.Entities.Query.Cursor do
 
   defp read_sort_value(%{source: :json_field, name: name}, %{field_values: field_values} = row)
        when is_map(row) do
+    Map.fetch!(field_values, name)
+  end
+
+  defp read_promoted_column_value(name, %Latest{field_values: field_values}) do
+    Map.fetch!(field_values, name)
+  end
+
+  defp read_promoted_column_value(name, %{field_values: field_values} = row) when is_map(row) do
     Map.fetch!(field_values, name)
   end
 

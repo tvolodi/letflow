@@ -284,8 +284,6 @@ Exact query plan, case-by-case against §7's table:
 **Round-trip 1 (always runs, regardless of `handle`'s shape):**
 
 ```elixir
-handle_hash = :crypto.hash(:sha256, handle) |> Base.encode16(case: :lower)
-
 from(h in Handle,
   join: t in Letflow.Identity.Tenant, on: t.id == h.tenant_id,
   where: h.handle_hash == ^handle_hash,
@@ -293,6 +291,18 @@ from(h in Handle,
 )
 |> Repo.one()
 ```
+
+(Shown only to fix the exact join shape and column selection — the surrounding hashing
+step and the caller that invokes this query are not specified by this fragment;
+ELIXIR-DEV writes the actual function body. A prose description could name "a join from
+`public_read_handles` to `tenants` on `tenant_id`, selecting the handle row plus the
+tenant's `status`," but the precise `join`/`where`/`select` shape — in particular that
+`tenant_status` rides along on this same query rather than a second one — is the one
+thing AC-6's round-trip count depends on, so it is shown exactly rather than paraphrased.)
+
+`handle_hash` going into the `where` clause is computed as `:crypto.hash(:sha256, handle)
+|> Base.encode16(case: :lower)` — the same hashing idiom as §5's writer — before this
+query runs, unconditionally, for every value of `handle` (see the paragraph below).
 
 `Repo.one/1` returns `nil` or `%{handle: %Handle{}, tenant_status: atom()}`. **No
 `prefix:` option anywhere in this query** — both `public_read_handles` and `tenants` are
@@ -319,16 +329,21 @@ requirement automatic rather than something to remember).
 **Round-trip 2 (only reached on the last row above):**
 
 ```elixir
-{kind_string, projection_module} = <kind registry lookup, §7 below — already
-                                     performed once at dispatch, reused here, not
-                                     re-fetched>
-schema = projection_module.schema()
-
 case Letflow.TenantProvisioning.schema_name_for_tenant(handle.tenant_id) do
   {:ok, prefix} -> Repo.get(schema, handle.resource_id, prefix: prefix)
-  {:error, :invalid_tenant_id} -> nil  # treated as case 6 below -- never raises (INV-8)
+  {:error, :invalid_tenant_id} -> nil
 end
 ```
+
+(Shown only to fix that `Repo.get/3` — not a second `from/select` query — is the exact
+shape of round-trip 2, and that an `:invalid_tenant_id` result is folded into the same
+`nil`-means-case-6 path rather than raising; no other logic is specified here and
+ELIXIR-DEV writes the actual function body. In prose: the kind registry's projection
+module (already looked up once at dispatch per §8, not re-fetched here) supplies the
+target schema via its `schema/0` callback; the tenant's schema prefix is resolved via
+`Letflow.TenantProvisioning.schema_name_for_tenant/1`; on `{:error, :invalid_tenant_id}`
+the lookup yields no resource — treated identically to a `nil` `Repo.get/3` result — so
+this branch never raises (INV-8).)
 
 | Result | Verdict |
 |---|---|
@@ -368,29 +383,23 @@ guard.
 
 ## 8. Kind registration — config shape and lookup
 
-```elixir
-# config/config.exs (or config/runtime.exs, per environment)
-config :letflow, :public_read_kinds, %{
-  # "kind_string" => ProjectionModule
-}
+The application config key `:public_read_kinds`, under the `:letflow` app, holds one map
+value: `%{kind_string :: String.t() => projection_module :: module()}`. Two config
+files carry an entry for it:
 
-# config/test.exs only (test-only fixture, §10)
-config :letflow, :public_read_kinds, %{
-  "public-read-fixture" => Letflow.PublicReadFixtureSupport.Projection
-}
-```
+- `config/config.exs` (or `config/runtime.exs`, per environment) — defaults to `%{}`
+  when no kind is registered in a given environment.
+- `config/test.exs` only — carries the one test-only fixture entry (§10):
+  `"public-read-fixture" => Letflow.PublicReadFixtureSupport.Projection`.
 
 Lookup, performed once per request inside `Letflow.Routers.PublicRead`'s `get`
 clause, **before** calling `resolve/2` (so an unregistered kind costs the promised zero
 round-trips, per req323 §4.3/§6 point 3):
 
-```elixir
-@spec fetch_kind(kind :: String.t()) :: {:ok, module()} | :error
-def fetch_kind(kind) do
-  Application.fetch_env!(:letflow, :public_read_kinds)
-  |> Map.fetch(kind)
-end
-```
+- `@spec fetch_kind(kind :: String.t()) :: {:ok, module()} | :error`
+- Behaviour: reads the `:public_read_kinds` config map via `Application.fetch_env!/2`,
+  then looks up `kind` in that map via `Map.fetch/2`, returning whichever of
+  `Map.fetch/2`'s own two result shapes it gets back.
 
 `Application.fetch_env!/2` is called on the **config key itself** (`:public_read_kinds`),
 which always exists (defaulting to `%{}` in `config/config.exs` if no kind is registered
@@ -414,11 +423,12 @@ Test mechanism (not application code): a named telemetry handler attached to
 (named function, not an anonymous closure, filtering `self() == test_pid` because the
 event name is node-global) — reused verbatim, not reinvented.
 
-```elixir
-def handle_query_telemetry(_event, _measurements, metadata, test_pid) do
-  if self() == test_pid, do: send(test_pid, {:query_fired, metadata.query})
-end
-```
+- `@spec handle_query_telemetry(event :: [atom()], measurements :: map(), metadata :: map(), test_pid :: pid()) :: :ok`
+- Behaviour: when called in the process identified by `test_pid`, sends
+  `{:query_fired, metadata.query}` to that same process; otherwise does nothing — the
+  `self() == test_pid` guard exists because `[:letflow, :repo, :query]` is a node-global
+  event name and would otherwise also fire for queries issued by unrelated concurrent
+  tests.
 
 **Transaction-control statements — stated explicitly, per AC-6's requirement:**
 `BEGIN`/`COMMIT` DO fire their own `[:letflow, :repo, :query]` events in this app's Ecto
@@ -629,24 +639,29 @@ via this route, whichever its own design prefers.
 Mounted under `Letflow.Plugs.ApiPipeline` (tenant-scoped, authenticated — this is
 **not** a public route and mounts nowhere near `/api/public`):
 
-```elixir
-# lib/letflow/plugs/api_pipeline.ex
-forward("/public-read-handles", to: Letflow.Routers.PublicReadHandles)
-```
+`Letflow.Plugs.ApiPipeline` (`lib/letflow/plugs/api_pipeline.ex`) gains one additional
+forward: the path `/public-read-handles`, target `Letflow.Routers.PublicReadHandles` —
+the same `forward(path, to: module)` shape every other sub-router in that pipeline
+already uses.
 
 ```elixir
 defmodule Letflow.Routers.PublicReadHandles do
   use Letflow.Api.AuthorizedRouter
 
   authz_post "/", :PublicReadHandlesIssue do
-    # body: %{"kind" => String.t(), "resource_id" => Ecto.UUID.t(), "expires_at" => String.t() | nil}
-    # tenant_id taken from conn.assigns.auth_context.tenant_id (never from the body --
-    # INV-1: this route's own tenant scoping is the ordinary authenticated-path one,
-    # unrelated to the public route's handle-based scoping)
-    # calls Letflow.PublicRead.issue_handle/4, responds 201 with %{"handle" => plaintext}
   end
 end
 ```
+
+(Shown only to fix the route macro shape — `use Letflow.Api.AuthorizedRouter` plus one
+`authz_post path, permission_atom do ... end` clause, matching this framework's existing
+authorized-router convention — not the body ELIXIR-DEV writes inside it. In prose, that
+body: reads `%{"kind" => String.t(), "resource_id" => Ecto.UUID.t(), "expires_at" =>
+String.t() | nil}` from the request; takes `tenant_id` from
+`conn.assigns.auth_context.tenant_id` only, never from the request body (INV-1 — this
+route's own tenant scoping is the ordinary authenticated-path one, unrelated to the
+public route's handle-based scoping); calls `Letflow.PublicRead.issue_handle/4`; responds
+`201` with `%{"handle" => plaintext}`.)
 
 `kind` in the request body is **not** validated against the kind registry (§8) by this
 route — a kind need not yet have a projection registered at the moment a handle is

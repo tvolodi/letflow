@@ -14,6 +14,12 @@ defmodule Letflow.Supervisor.Infrastructure do
   see that item's own note below for placement/ordering (no dependency
   either direction, same as `Letflow.Admission`).
 
+  REQ-352 (design `req352-unauthenticated-read-platform.md` §11.3) adds one
+  further child, `Letflow.Plugs.PublicReadRateLimit.Bucket`, bringing the
+  total to 19 -- placed directly after `Letflow.Metrics.Registry`, the same
+  "leaf, independently-startable, no ordering dependency" placement
+  reasoning that child's own comment above already states.
+
   ## Children, in order
 
   1. `Letflow.Repo`
@@ -21,41 +27,42 @@ defmodule Letflow.Supervisor.Infrastructure do
   3. `Oidcc.ProviderConfiguration.Worker`
   4. `Letflow.Registry` (generic `Registry`)
   5. `Letflow.Metrics.Registry`
-  6. `Letflow.Admission`
-  7. `Letflow.InstanceSupervisor`
-  8. `Letflow.SandboxPool.TaskSupervisor`
-  9. `Letflow.SandboxPool`
-  10. `Letflow.Engine.PluginTaskSupervisor`
-  11. `Letflow.Engine.Wasm.InvocationLease`
-  12. `Letflow.Engine.PluginRegistry`
-  13. `Letflow.Engine.Lua.TaskSupervisor`
-  14. `Letflow.Engine.Wasm.ModuleRegistryTaskSupervisor`
-  15. `Letflow.Engine.Wasm.CapabilityGateTaskSupervisor`
-  16. `Letflow.Engine.Wasm.ModuleVersionRegistry`
-  17. `Letflow.Engine.Wasm.ModuleVersionRegistryTaskSupervisor`
-  18. `Letflow.Obs.Alerts.TaskSupervisor`
+  6. `Letflow.Plugs.PublicReadRateLimit.Bucket`
+  7. `Letflow.Admission`
+  8. `Letflow.InstanceSupervisor`
+  9. `Letflow.SandboxPool.TaskSupervisor`
+  10. `Letflow.SandboxPool`
+  11. `Letflow.Engine.PluginTaskSupervisor`
+  12. `Letflow.Engine.Wasm.InvocationLease`
+  13. `Letflow.Engine.PluginRegistry`
+  14. `Letflow.Engine.Lua.TaskSupervisor`
+  15. `Letflow.Engine.Wasm.ModuleRegistryTaskSupervisor`
+  16. `Letflow.Engine.Wasm.CapabilityGateTaskSupervisor`
+  17. `Letflow.Engine.Wasm.ModuleVersionRegistry`
+  18. `Letflow.Engine.Wasm.ModuleVersionRegistryTaskSupervisor`
+  19. `Letflow.Obs.Alerts.TaskSupervisor`
 
   ## Ordering guarantees preserved (both load-bearing, unchanged from
   `Letflow.Application`'s own prior flat list)
 
-    * ISS-0224: child 8 (`SandboxPool.TaskSupervisor`) precedes child 9
+    * ISS-0224: child 9 (`SandboxPool.TaskSupervisor`) precedes child 10
       (`{Letflow.SandboxPool, []}`) -- unchanged relative order. Every
       `SandboxPool` DB operation runs under this `Task.Supervisor` via
       `Task.Supervisor.async_nolink/3`; registering it after its dependant
       would leave a window in which a `claim/2` call exits `:noproc` inside
       a pool callback and kills the pool.
-    * ISS-0429: child 18 (`Obs.Alerts.TaskSupervisor`) is the LAST child of
+    * ISS-0429: child 19 (`Obs.Alerts.TaskSupervisor`) is the LAST child of
       this supervisor. Its "must precede either Poller's first tick"
       guarantee is now a SUPERVISOR-BOUNDARY guarantee, not merely a
       list-position fact: `Letflow.Supervisor.Pollers` is started only
       after this entire module's own `Supervisor.start_link/3` call (from
       `Letflow.Application.start/2`) has returned `{:ok, pid}`, which
-      happens only once every one of these 18 children -- including this
+      happens only once every one of these 19 children -- including this
       last one -- has itself finished starting. No interleaving is
       possible between this supervisor's last child starting and
       `Letflow.Supervisor.Pollers`' first child starting, since an entire
       supervisor boundary sits between them.
-    * ISS-0418: child 11 (`Engine.Wasm.InvocationLease`) has no ordering
+    * ISS-0418: child 12 (`Engine.Wasm.InvocationLease`) has no ordering
       dependency in either direction, mirroring `Letflow.Admission`'s own
       "no ordering dependency" precedent (see that module's moduledoc) --
       its `init/1` reads only static application config, makes no `Repo`
@@ -63,6 +70,12 @@ defmodule Letflow.Supervisor.Infrastructure do
       process. Placed directly after `PluginTaskSupervisor` as a
       readability choice (both are WASM/plugin-dispatch infrastructure),
       not a correctness requirement.
+    * REQ-352: child 6 (`Plugs.PublicReadRateLimit.Bucket`) has no ordering
+      dependency in either direction, mirroring `Letflow.Metrics.Registry`'s
+      own "leaf, independently-startable" precedent immediately above it --
+      its `init/1` creates a fresh named ETS table and reads no other
+      supervised process. Placed directly after `Metrics.Registry` as a
+      readability choice, not a correctness requirement.
 
   ## `Letflow.InstanceSupervisor` placement
 
@@ -74,8 +87,8 @@ defmodule Letflow.Supervisor.Infrastructure do
   ## Task.Supervisor sprawl review (REQ-220, closes ISS-0425 part 3)
 
   This supervisor owns 7 separate `Task.Supervisor`s (unaffected by ISS-0418's
-  `InvocationLease` addition, which is an ordinary `GenServer`, not a
-  `Task.Supervisor`). RECOMMENDATION: KEEP
+  `InvocationLease` addition or REQ-352's `PublicReadRateLimit.Bucket`
+  addition, both ordinary `GenServer`s, not `Task.Supervisor`s). RECOMMENDATION: KEEP
   ALL 7 SEPARATE. None share a crash domain or a resource-contention
   profile that would make consolidation meaningfully safer or cheaper, and
   each pairing a reader might plausibly propose merging already has a
@@ -170,6 +183,14 @@ defmodule Letflow.Supervisor.Infrastructure do
       # mirroring the Wasm.ModuleVersionRegistry placement precedent below ("order
       # between these two is not load-bearing").
       Letflow.Metrics.Registry,
+      # REQ-352 (design req352-unauthenticated-read-platform.md §11.3): the
+      # ETS-backed token bucket behind Letflow.Plugs.PublicReadRateLimit. A
+      # leaf, independently-startable component with no startup-order
+      # dependents, mirroring Letflow.Metrics.Registry's own placement
+      # reasoning directly above -- the table must survive for the life of
+      # the node, but nothing else needs to look it up during its own
+      # init/1.
+      Letflow.Plugs.PublicReadRateLimit.Bucket,
       # REQ-216 (design req216-admission-control-core.md §4): the global +
       # per-tenant admission-control counting semaphore. NO ordering
       # dependency in either direction -- see Letflow.Admission's own
@@ -251,8 +272,8 @@ defmodule Letflow.Supervisor.Infrastructure do
       # first :tick runs with ZERO delay (`Process.send_after(self(), :tick, 0)` in
       # poller.ex's init/1) and, from that very first tick, can dispatch to this
       # supervisor via fire_hooks/4 -- since Letflow.Supervisor.Pollers only starts
-      # after this ENTIRE supervisor (all 18 children, ISS-0418's InvocationLease
-      # addition included) has finished starting, this
+      # after this ENTIRE supervisor (all 19 children, ISS-0418's InvocationLease
+      # and REQ-352's PublicReadRateLimit.Bucket additions included) has finished starting, this
       # name is guaranteed registered before any Poller's first tick can run,
       # matching the ISS-0429 guarantee restated in this module's own moduledoc.
       {Task.Supervisor, name: Letflow.Obs.Alerts.TaskSupervisor}

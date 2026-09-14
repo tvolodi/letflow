@@ -161,6 +161,14 @@ defmodule Letflow.Plugs.ApiPipeline do
   # Letflow.Routers.ExamSessions' own moduledoc for the route table.
   forward("/exam-sessions", to: Letflow.Routers.ExamSessions)
 
+  # REQ-352 -- the generic, kind-agnostic authenticated issue path for
+  # Letflow.PublicRead.issue_handle/4 (design §13.2). Mounted the same way
+  # as every other authenticated tenant-scoped sub-router above -- NOT the
+  # public /api/public mount (decision 0028's capability-handle pattern is
+  # the READ side; this is the ordinary authenticated WRITE side that mints
+  # a handle). See Letflow.Routers.PublicReadHandles' own moduledoc.
+  forward("/public-read-handles", to: Letflow.Routers.PublicReadHandles)
+
   match _ do
     Letflow.Api.Response.not_found(conn)
   end

@@ -19,13 +19,14 @@ defmodule Letflow.Api.AuthorizationTest do
   alias Letflow.Api.Authorization.AccessContext
 
   describe "acceptance criterion 1 — exact Role and Permission enumeration" do
-    test "roles/0 returns exactly R-Co's five Role values" do
+    test "roles/0 returns exactly R-Co's five Role values plus ISS-0646's CANDIDATE" do
       assert Authorization.roles() == [
                :PLATFORM_ADMIN,
                :PROCESS_DESIGNER,
                :PROCESS_OPERATOR,
                :TASK_WORKER,
-               :AGENT_RUNNER
+               :AGENT_RUNNER,
+               :CANDIDATE
              ]
     end
 
@@ -558,10 +559,19 @@ defmodule Letflow.Api.AuthorizationTest do
         EntitiesDefinitionsWrite: false,
         EntitiesRecordsWrite: false,
         EntitiesQuery: false
+      },
+      # ISS-0646: CANDIDATE (added after REQ-309) holds none of these four --
+      # its only grant is REQ-335's five ExamSession* permissions, same
+      # "holds nothing here" shape as AGENT_RUNNER above.
+      CANDIDATE: %{
+        EntitiesDefinitionsRead: false,
+        EntitiesDefinitionsWrite: false,
+        EntitiesRecordsWrite: false,
+        EntitiesQuery: false
       }
     }
 
-    test "the grid covers every role x every new permission -- 20 pairs, none missing" do
+    test "the grid covers every role x every new permission -- 24 pairs, none missing" do
       assert Map.keys(@new_permission_grid) |> Enum.sort() ==
                Authorization.roles() |> Enum.sort()
 
@@ -570,7 +580,7 @@ defmodule Letflow.Api.AuthorizationTest do
             {permission, _} <- by_permission,
             do: permission
 
-      assert length(pairs) == 20
+      assert length(pairs) == 24
 
       for {role, by_permission} <- @new_permission_grid do
         assert Enum.sort(Map.keys(by_permission)) == Enum.sort(@req309_permissions),
@@ -578,7 +588,7 @@ defmodule Letflow.Api.AuthorizationTest do
       end
     end
 
-    test "role_allows?/2 matches the grid for all 20 role/permission pairs" do
+    test "role_allows?/2 matches the grid for all 24 role/permission pairs" do
       for {role, by_permission} <- @new_permission_grid,
           {permission, expected} <- by_permission do
         actual = Authorization.role_allows?(role, permission)
@@ -678,10 +688,15 @@ defmodule Letflow.Api.AuthorizationTest do
         :TasksComplete,
         :AttachmentsRead
       ],
-      AGENT_RUNNER: []
+      AGENT_RUNNER: [],
+      # ISS-0646: CANDIDATE (added after REQ-309) holds none of these
+      # nineteen pre-existing permissions -- its only grant is REQ-335's five
+      # ExamSession* permissions, same "holds nothing here" shape as
+      # AGENT_RUNNER above.
+      CANDIDATE: []
     }
 
-    test "the regression grid is complete: 5 roles x 19 pre-existing permissions = 95 pairs" do
+    test "the regression grid is complete: 6 roles x 19 pre-existing permissions = 114 pairs" do
       assert length(@pre_req309_permissions) == 19
       assert Enum.sort(Map.keys(@pre_req309_allowed)) == Enum.sort(Authorization.roles())
 
@@ -706,7 +721,7 @@ defmodule Letflow.Api.AuthorizationTest do
       assert Enum.take(live, length(expected_prefix)) == expected_prefix
 
       pair_count = length(Authorization.roles()) * length(@pre_req309_permissions)
-      assert pair_count == 95
+      assert pair_count == 114
     end
 
     test "all 95 pre-existing role/permission pairs return exactly what they returned before REQ-309" do
@@ -1045,10 +1060,14 @@ defmodule Letflow.Api.AuthorizationTest do
         :EntitiesDefinitionsRead,
         :EntitiesQuery
       ],
-      AGENT_RUNNER: []
+      AGENT_RUNNER: [],
+      # ISS-0646: CANDIDATE (added after REQ-315) holds none of these
+      # twenty-three pre-existing permissions -- see the REQ-309 AC5 grid's
+      # comment above for the same reasoning.
+      CANDIDATE: []
     }
 
-    test "the regression grid is complete: 5 roles x 23 pre-existing permissions = 115 pairs" do
+    test "the regression grid is complete: 6 roles x 23 pre-existing permissions = 138 pairs" do
       assert length(@pre_req315_permissions) == 23
       assert Enum.sort(Map.keys(@pre_req315_allowed)) == Enum.sort(Authorization.roles())
 
@@ -1070,7 +1089,7 @@ defmodule Letflow.Api.AuthorizationTest do
       assert Enum.take(live, length(expected_prefix)) == expected_prefix
 
       pair_count = length(Authorization.roles()) * length(@pre_req315_permissions)
-      assert pair_count == 115
+      assert pair_count == 138
     end
 
     test "all 115 pre-existing role/permission pairs return exactly what they returned before REQ-315" do
@@ -1413,10 +1432,14 @@ defmodule Letflow.Api.AuthorizationTest do
       PROCESS_DESIGNER: %{EntitiesAttachmentsManage: false, EntitiesAttachmentsRead: true},
       PROCESS_OPERATOR: %{EntitiesAttachmentsManage: true, EntitiesAttachmentsRead: true},
       TASK_WORKER: %{EntitiesAttachmentsManage: false, EntitiesAttachmentsRead: true},
-      AGENT_RUNNER: %{EntitiesAttachmentsManage: false, EntitiesAttachmentsRead: false}
+      AGENT_RUNNER: %{EntitiesAttachmentsManage: false, EntitiesAttachmentsRead: false},
+      # ISS-0646: CANDIDATE (added after REQ-317) holds neither of these two
+      # permissions -- its only grant is REQ-335's five ExamSession*
+      # permissions, same "holds nothing here" shape as AGENT_RUNNER above.
+      CANDIDATE: %{EntitiesAttachmentsManage: false, EntitiesAttachmentsRead: false}
     }
 
-    test "the grid covers every role x both new permissions -- 10 pairs, none missing" do
+    test "the grid covers every role x both new permissions -- 12 pairs, none missing" do
       assert Map.keys(@req317_grid) |> Enum.sort() == Authorization.roles() |> Enum.sort()
 
       pairs =
@@ -1424,7 +1447,7 @@ defmodule Letflow.Api.AuthorizationTest do
             {permission, _} <- by_permission,
             do: permission
 
-      assert length(pairs) == 10
+      assert length(pairs) == 12
 
       for {role, by_permission} <- @req317_grid do
         assert Enum.sort(Map.keys(by_permission)) == Enum.sort(@req317_permissions),
@@ -1677,10 +1700,14 @@ defmodule Letflow.Api.AuthorizationTest do
         :EntitiesQuery,
         :EntitiesAggregate
       ],
-      AGENT_RUNNER: []
+      AGENT_RUNNER: [],
+      # ISS-0646: CANDIDATE (added after REQ-317) holds none of these
+      # twenty-four pre-existing permissions -- see the REQ-309 AC5 grid's
+      # comment above for the same reasoning.
+      CANDIDATE: []
     }
 
-    test "the regression grid is complete: 5 roles x 24 pre-existing permissions = 120 pairs" do
+    test "the regression grid is complete: 6 roles x 24 pre-existing permissions = 144 pairs" do
       assert length(@pre_req317_permissions) == 24
       assert Enum.sort(Map.keys(@pre_req317_allowed)) == Enum.sort(Authorization.roles())
 
@@ -1703,7 +1730,7 @@ defmodule Letflow.Api.AuthorizationTest do
       assert Enum.take(live, length(@pre_req317_permissions)) == @pre_req317_permissions
 
       pair_count = length(Authorization.roles()) * length(@pre_req317_permissions)
-      assert pair_count == 120
+      assert pair_count == 144
     end
 
     test "all 120 pre-existing role/permission pairs return exactly what they returned before REQ-317" do
@@ -1752,6 +1779,144 @@ defmodule Letflow.Api.AuthorizationTest do
                "GET",
                "/entities/records/:entity_type/:record_id/attachments/:attachment_id/extra"
              ) == :Unknown
+    end
+  end
+
+  # ==========================================================================
+  # ISS-0646 — CANDIDATE must hold exactly REQ-335's five ExamSession*
+  # permissions and NOTHING else. The various per-requirement regression
+  # grids above (REQ-309/315/317/318) each transcribe CANDIDATE's expected
+  # row as empty/false, but several of those grids' actual pair-checking
+  # loops iterate only a hardcoded 5-role list ([:PLATFORM_ADMIN,
+  # :PROCESS_DESIGNER, :PROCESS_OPERATOR, :TASK_WORKER, :AGENT_RUNNER]) that
+  # predates CANDIDATE and was never widened to include it -- so CANDIDATE's
+  # "denied" row is asserted as DATA in those grids' maps but never actually
+  # exercised against role_allows?/2 for several permissions, most notably
+  # :EntitiesAggregate (REQ-315) and all three REQ-318 export/import atoms.
+  # This is the one test in the suite that walks the LIVE, FULL
+  # permissions/0 list (all of them, whatever the count is at the time this
+  # runs) against CANDIDATE, so no future permission addition can silently
+  # slip through ungated for this role -- exactly the risk ISS-0646's own
+  # description calls out by name (TasksRead, TasksComplete, EntitiesQuery,
+  # EntitiesAggregate, AttachmentsRead, EntitiesDefinitionsRead).
+  # ==========================================================================
+
+  describe "ISS-0646 — CANDIDATE denied every permission outside its five ExamSession* grants" do
+    @candidate_permissions [
+      :ExamSessionStart,
+      :ExamSessionRead,
+      :ExamSessionSave,
+      :ExamSessionSubmit,
+      :ExamSessionReportEvent
+    ]
+
+    test "role_allows?/2 grants CANDIDATE exactly the five ExamSession* permissions, denying every other live permission" do
+      all_permissions = Authorization.permissions()
+
+      # Sanity: the five ExamSession* atoms are themselves real, live
+      # permissions -- if this ever failed, the denial loop below would be
+      # vacuously true for them.
+      for permission <- @candidate_permissions do
+        assert permission in all_permissions,
+               "expected #{inspect(permission)} to be a real permission"
+      end
+
+      for permission <- all_permissions do
+        expected = permission in @candidate_permissions
+        actual = Authorization.role_allows?(:CANDIDATE, permission)
+
+        assert actual == expected,
+               "role_allows?(:CANDIDATE, #{inspect(permission)}) returned #{inspect(actual)}, " <>
+                 "expected #{inspect(expected)} -- CANDIDATE must hold exactly the five " <>
+                 "ExamSession* permissions and nothing else (ISS-0646, decision 0013 addendum)"
+      end
+    end
+
+    test "evaluate_access/2 agrees: CANDIDATE gets Allow for all five ExamSession* policy keys" do
+      # evaluate_access/2's second argument is an endpoint POLICY KEY (what
+      # endpoint_policy_key/2 returns), not a raw Permission atom -- the two
+      # only coincide where required_permission/1 has an identity clause, as
+      # it does for all five ExamSession* atoms (authorization.ex:801-805).
+      # Using Authorization.permissions() here directly would be wrong: most
+      # entries (e.g. :DefinitionsWrite) are never valid policy keys, only
+      # the resulting permission, and evaluate_access/2 raises for them.
+      for permission <- @candidate_permissions do
+        ctx = %AccessContext{user_id: "candidate-1", roles: [:CANDIDATE]}
+        decision = Authorization.evaluate_access(ctx, permission)
+
+        assert decision.kind == :Allow,
+               "evaluate_access(roles: [:CANDIDATE], #{inspect(permission)}) returned " <>
+                 "#{inspect(decision.kind)}, expected :Allow"
+      end
+    end
+
+    test "evaluate_access/2 agrees: CANDIDATE gets Deny403 for a representative policy key from every other permission family" do
+      # One real endpoint policy key per pre-existing/other-requirement
+      # permission family, so this exercises the full evaluate_access/2 path
+      # (policy key -> required_permission/1 -> role_allows?/2), not just
+      # role_allows?/2 in isolation.
+      # :MetricsRead is deliberately excluded here -- evaluate_access/2 hard-
+      # codes it to always Allow regardless of role (line ~700, a pre-
+      # existing R-Co-ported quirk with its own "endpoint == :MetricsRead"
+      # branch), so it is not a real role-gated example and would fail this
+      # test for every role, not just CANDIDATE.
+      other_policy_keys = [
+        :DefinitionsCreate,
+        :DefinitionsRead,
+        :InstancesStart,
+        :InstancesCancel,
+        :InstancesRead,
+        :InstancesAdvanceTimer,
+        :TasksList,
+        :TasksComplete,
+        :TasksAssign,
+        :UsersManage,
+        :TokensManage,
+        :AuditRead,
+        :DlqReadRetryDiscard,
+        :WebhookSubscriptionsManage,
+        :TenantsManage,
+        :RolesManage,
+        :AttachmentsManage,
+        :AttachmentsRead,
+        :EntitiesDefinitionsRead,
+        :EntitiesDefinitionsWrite,
+        :EntitiesRecordsWrite,
+        :EntitiesQuery,
+        :EntitiesAggregate,
+        :EntitiesRecordsExport,
+        :EntitiesRecordsExportUnredacted,
+        :EntitiesRecordsImport,
+        :EntitiesAttachmentsManage,
+        :EntitiesAttachmentsRead
+      ]
+
+      for permission <- other_policy_keys do
+        ctx = %AccessContext{user_id: "candidate-1", roles: [:CANDIDATE]}
+        decision = Authorization.evaluate_access(ctx, permission)
+
+        assert decision.kind == :Deny403,
+               "evaluate_access(roles: [:CANDIDATE], #{inspect(permission)}) returned " <>
+                 "#{inspect(decision.kind)}, expected :Deny403"
+      end
+    end
+
+    test "the specific permissions ISS-0646 named as the conflation risk are all denied to CANDIDATE" do
+      # Transcribed directly from ISS-0646's own description of what a
+      # candidate must NOT implicitly gain: TasksRead, TasksComplete,
+      # EntitiesQuery, EntitiesAggregate, AttachmentsRead,
+      # EntitiesDefinitionsRead.
+      for permission <- [
+            :TasksRead,
+            :TasksComplete,
+            :EntitiesQuery,
+            :EntitiesAggregate,
+            :AttachmentsRead,
+            :EntitiesDefinitionsRead
+          ] do
+        refute Authorization.role_allows?(:CANDIDATE, permission),
+               "ISS-0646 regression: CANDIDATE must not hold #{inspect(permission)}"
+      end
     end
   end
 end

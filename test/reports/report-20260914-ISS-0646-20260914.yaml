@@ -1,0 +1,71 @@
+run_id: ISS-0646-20260914
+agent: TEST-RUNNER
+workflow: ad-hoc full-gate verification (ISS-0646 CANDIDATE role, ORCH-requested)
+timestamp_utc: "2026-09-14T06:49:02Z"
+branch: main
+head_commit: 61487e19
+note_on_scope: >
+  Uncommitted-in-working-tree change (not yet committed): lib/letflow/api/authorization.ex,
+  lib/letflow/routers/exam_sessions.ex, priv/keycloak/realms/bpm-default.json,
+  test/letflow/api/authorization_test.exs, test/letflow/routers/exam_sessions_test.exs.
+  Requested explicitly as the FULL `mix letflow.check` gate (not a targeted subset),
+  because a new role in an enum used across many test files can have cascading effects
+  beyond what SECURITY-REVIEWER/REVIEWER/TEST-DESIGNER/TEST-DESIGN-VALIDATOR already checked.
+
+environment:
+  docker_compose: "letflow-postgres-1 and letflow-keycloak-1 already Running (no-op)."
+  host_cores: 16 (nproc), which is significant -- see caveat below.
+
+commands_run:
+  - "MIX_ENV=test mix letflow.check (N=16, default nproc-derived parallelism) -- exit 1, see caveat."
+  - "TEST_PARALLEL_N=8 bash scripts/test_parallel.sh -- exit 0, 4238/4238 passed, 0 failures (isolated diagnostic re-run)."
+  - "TEST_PARALLEL_N=8 MIX_ENV=test mix letflow.check -- exit 0, full gate clean."
+
+caveat_on_first_run_N16: >
+  The first full-gate run used this host's auto-detected N=16 (nproc=16). It failed with
+  8 test failures, all in Letflow.TenantSchemaReaperTest (3), Letflow.ServiceCatalogReaperTest
+  (4), and Letflow.Engine.Lua.ExecutorTest's :lua_wallclock_race partition-integrity test (1),
+  plus two partitions (3 and 14) that crashed outright during `ecto.create` ("The database for
+  Letflow.Repo couldn't be created: killed"). None of the 8 failures were in
+  Authorization/ExamSessions/CANDIDATE-role code or tests. Root cause confirmed in the captured
+  log: repeated `Postgrex.Error 53300 too_many_connections` and DBConnection queue-timeout
+  errors -- i.e. real Postgres connection exhaustion, not application logic. This matches
+  scripts/test_parallel.sh's own documented, pre-existing caveat (lines ~111-176: at N=16 the
+  computed/clamped TEST_POOL_SIZE budget against Postgres's default max_connections=100 is
+  already razor-thin, and the script's own warning text says to reduce TEST_PARALLEL_N if
+  "too_many_connections" is hit). Verified isolation first (`ps aux` showed no other
+  mix/beam process before or during the run, ruling out a second concurrent invocation from
+  another workspace/session sharing this Postgres container). Confirmed non-regression by
+  re-running the same suite at TEST_PARALLEL_N=8 twice (once standalone via
+  scripts/test_parallel.sh, once via the full `mix letflow.check` gate): both times 0
+  failures. This is the same pre-existing environmental class of flake this project already
+  tracks for tenant_provisioning/column_promotion_test.exs:172 (which did NOT occur in either
+  run here) -- not a regression introduced by this diff.
+
+letflow_check_clean_run:
+  command: "TEST_PARALLEL_N=8 MIX_ENV=test mix letflow.check"
+  exit_code: 0
+  steps:
+    - "letflow.check_toolchain: Rust off-pin warning only (rustc 1.93.1 vs expected 1.97.1) -- documented as non-gating, never changes exit code."
+    - "letflow.check_requirements_registration: OK -- 311 entries = 309 registered + 2 deferred (REQ-223/224, pre-existing, unrelated)."
+    - "letflow.check_req_id_collision: OK -- no REQ-NNN id collision with origin/main."
+    - "letflow.check_deferral_staleness: OK (advisory only)."
+    - "letflow.lint_handoffs: OK -- 0 new violations across 2486 handoff files (25 pre-existing grandfathered)."
+    - "letflow.check_async_sandbox_reachability: OK -- 80 async:true test files scanned, 0 violations."
+    - "letflow.check_issue_refs: OK -- every cross-reference well-formed."
+    - "format --check-formatted: passed silently (0 diffs)."
+    - "compile --warnings-as-errors: passed silently (0 warnings, 0 errors)."
+    - "letflow.check.test main suite (N=8): \"combined: 4232 tests, 6 properties, 0 failures (4238/4238 passed)\"; \"mix letflow.check.test: OK -- no test failures, no ISS-0069 warnings (8 partitions)\"."
+    - "letflow.check.test :wasm_hang isolated subprocesses: \"OK -- 5/5 isolated wasm_hang tests passed, each in its own subprocess.\""
+    - "letflow.check.test :lua_wallclock_race isolated subprocess: \"OK -- isolated :lua_wallclock_race run also passed clean.\""
+
+verdict: PASS
+verdict_reasoning: >
+  Full `mix letflow.check` gate exits 0 clean (all static checks, format, compile
+  --warnings-as-errors, and the full 4238-test suite including the isolated wasm_hang and
+  lua_wallclock_race subprocesses). No test under test/letflow/api/authorization_test.exs,
+  test/letflow/routers/exam_sessions_test.exs, or anywhere in the wider suite failed once
+  Postgres connection exhaustion (an N=16-on-this-16-core-host artifact, self-documented in
+  scripts/test_parallel.sh, unrelated to the diff) was ruled out by re-running at N=8. The new
+  CANDIDATE role enum value did not cascade any failures into other test files.
+next_action: "Clear to proceed to RELEASE-VALIDATOR's independent re-verification."

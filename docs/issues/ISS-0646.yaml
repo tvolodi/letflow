@@ -57,4 +57,48 @@ affected_files:
   - docs/migration/decisions/0013-authorization-role-set.md
 queue_ref: Q-646
 github_ref: GH-1351
-status: open
+status: resolved
+resolved_by: DOC-UPDATER
+resolved_in_run: fix/ISS-0646-20260914
+resolved_at: "2026-09-14T07:18:38Z"
+resolution_note: >
+  Resolved by introducing a real CANDIDATE role rather than accepting the
+  TASK_WORKER conflation as a permanent tradeoff, per this issue's own
+  RECOMMENDED FIX DIRECTION. decision 0013 (authorization-role-set) grows
+  an addendum recording the role set as six, not five, and states the
+  rationale for a distinct external-candidate actor class rather than
+  reusing an internal-staff role.
+
+  lib/letflow/api/authorization.ex gained the :CANDIDATE role atom,
+  role_from_string/1 recognizes it, and role_allows?/2 grants it exactly
+  the five ExamSession* permissions (ExamSessionStart, ExamSessionSave,
+  ExamSessionSubmit, ExamSessionReportEvent, ExamSessionRead) that
+  REQ-335 had minted onto TASK_WORKER -- TASK_WORKER no longer carries
+  them, closing the conflation this issue was filed against.
+  lib/letflow/routers/exam_sessions.ex's moduledoc "Permission
+  vocabulary" section was corrected to name CANDIDATE as the intended
+  role. priv/keycloak/realms/bpm-default.json gained the CANDIDATE realm
+  role so a real IdP can issue it.
+
+  Pipeline: ELIXIR-DEV implementation -> CODE-DESIGN-VALIDATOR FAIL then
+  PASS (one correction round on the design doc,
+  lib/letflow/design/iss0646-candidate-role.md, already committed to
+  main in a prior commit) -> SECURITY-REVIEWER PASS -> REVIEWER PASS ->
+  TEST-DESIGNER closed an exhaustive-coverage gap (the regression grid
+  and roles/0 assertions needed updating for the sixth role) ->
+  TEST-RUNNER confirmed the full suite clean, 4238/4238 at
+  TEST_PARALLEL_N=8.
+
+  test/letflow/api/authorization_test.exs's roles/0 assertion now
+  expects six values and five regression-grid entries were updated to
+  include CANDIDATE; a new ISS-0646 describe block asserts CANDIDATE
+  holds exactly the five ExamSession* permissions and nothing else.
+  test/letflow/routers/exam_sessions_test.exs's candidate_ctx/1 helper
+  now mints a CANDIDATE-role token, and a new test asserts a
+  TASK_WORKER-scoped request against the exam-session routes now
+  receives 403, proving the conflation is genuinely closed rather than
+  merely redocumented.
+
+  ISS-0647's broader architectural question (whether TASK_WORKER should
+  keep serving both actor classes at all) is resolved as a side effect:
+  TASK_WORKER no longer holds any ExamSession* permission.

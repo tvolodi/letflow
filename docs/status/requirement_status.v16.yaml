@@ -1110,3 +1110,48 @@ history:
       to this diff.
 
       docs/issues/ISS-0649.yaml flipped open -> resolved.
+  - req: SCOPE-CHANGE
+    event: done
+    agent: DOC-UPDATER
+    at: "2026-09-14T07:18:56Z"
+    note: >
+      ISS-0646 (queue task 646, GH#1351) resolved via
+      fix/ISS-0646-20260914 -- introduced a real `CANDIDATE` role rather
+      than accepting REQ-335's TASK_WORKER conflation as a permanent
+      tradeoff, per the issue's own RECOMMENDED FIX DIRECTION.
+      decision 0013 (authorization-role-set) gained an addendum
+      recording the role set as six, not five, with both
+      SECURITY-REVIEWER and REVIEWER sign-off sections filled in as
+      dated PASS verdicts. lib/letflow/api/authorization.ex gained the
+      :CANDIDATE role atom, role_from_string/1 recognizes it, and
+      role_allows?/2 grants it exactly the five ExamSession*
+      permissions (Start/Save/Submit/ReportEvent/Read) that had been
+      minted onto TASK_WORKER -- TASK_WORKER no longer carries them.
+      lib/letflow/routers/exam_sessions.ex's moduledoc "Permission
+      vocabulary" section corrected to name CANDIDATE.
+      priv/keycloak/realms/bpm-default.json gained the CANDIDATE realm
+      role.
+
+      Pipeline: ELIXIR-DEV implementation -> CODE-DESIGN-VALIDATOR FAIL
+      then PASS (one correction round on
+      lib/letflow/design/iss0646-candidate-role.md, already committed
+      to main in a prior commit) -> SECURITY-REVIEWER PASS -> REVIEWER
+      PASS -> TEST-DESIGNER closed an exhaustive-coverage gap (the
+      six-role regression grid and roles/0 assertions) -> TEST-RUNNER
+      confirmed the full suite clean, 4238/4238 at TEST_PARALLEL_N=8.
+      test/letflow/api/authorization_test.exs's roles/0 now asserts six
+      values, five regression-grid entries updated with CANDIDATE, and
+      a new ISS-0646 describe block asserts CANDIDATE holds exactly the
+      five ExamSession* permissions and nothing else.
+      test/letflow/routers/exam_sessions_test.exs's candidate_ctx/1 now
+      mints a CANDIDATE-role token, plus a new test proving a
+      TASK_WORKER-scoped request against the exam-session routes now
+      receives 403.
+
+      docs/issues/ISS-0646.yaml flipped open -> resolved. Resolves
+      ISS-0646's own broader architectural question and closes
+      ISS-0647's underlying role-conflation risk as a side effect
+      (TASK_WORKER no longer holds any ExamSession* permission). No
+      requirements.yaml entry maps to this issue (issue-only, no
+      queue_ref/github_ref cross-reference to a requirement id), so
+      docs/requirements.yaml was not touched by this close-out.

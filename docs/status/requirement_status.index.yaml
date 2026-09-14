@@ -3433,8 +3433,20 @@ volumes:
     path: docs/status/requirement_status.v16.yaml
     status: current
     opened: 2026-09-13
-    entries: 23
+    entries: 24
     note: >
+      Recounted to 24 by DOC-UPDATER's own ISS-0646 done-event append
+      (SCOPE-CHANGE, fix/ISS-0646-20260914), composed at Step Final
+      onto ORCH's own concurrently-landed ISS-0649 started+done pair
+      (this run's working tree had been created against a
+      pre-ISS-0649 base) -- `grep -c "^  - req:"
+      docs/status/requirement_status.v16.yaml` = 24 on-disk entries
+      after composition (ISS-0649 started 04:23:00Z, ISS-0649 done
+      05:25:00Z, ISS-0646 done 07:18:56Z, all already in correct
+      chronological order, no reordering needed); 1157 lines / 65820
+      bytes, well under the roll ceiling. Recounted from the composed
+      file per the recount-every-time rule rather than carrying
+      forward either side's independently-computed 22/23.
       Incremented to 23 by ORCH's own ISS-0649 done-event append
       (SCOPE-CHANGE, fix/ISS-0649-20260914) -- `grep -c "^  - req:"
       docs/status/requirement_status.v16.yaml` = 23 on-disk entries;

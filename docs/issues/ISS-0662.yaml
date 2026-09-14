@@ -1,0 +1,53 @@
+id: ISS-0662
+title: "A trusted click on EntityCrudPage's create/cancel buttons freezes the renderer -- Playwright mousedown/mouseup on entity-create-action or the form's Cancel button never resolves"
+discovered_by: FRONTEND-DEV
+discovered_in_run: feat/REQ-347-20260914
+discovered_at: "2026-09-14T12:10:04Z"
+severity: MINOR
+description: >
+  Discovered during REQ-347's e2e-spec-porting run while writing Playwright
+  specs against /admin/bilimbaga/:entityType. A real (trusted) Locator.click()
+  on EntityCrudPage's entity-create-action button, and on EntityRecordForm's
+  Cancel button (inside the entity-form-modal), hangs indefinitely --
+  page.mouse.up() never resolves after the mousedown half of the synthesized
+  click sequence. Locator.dispatchEvent("click") on the exact same element
+  completes instantly and the app behaves correctly (modal opens/closes as
+  expected).
+
+  This is specific to EntityCrudPage's buttons, not Playwright or the shared
+  Button component generally: a real trusted click on a comparable button
+  elsewhere in the app (f2-definition-list.e2e.spec.ts's "New Definition"
+  button) completes normally in ~1s.
+
+  Suspected cause (NOT diagnosed, not measured): something in
+  EntityCrudPage's click handler, or an effect/render triggered by it, may
+  block the JS event loop or enter a synchronous re-render loop long enough
+  for Playwright's synthetic mouseup dispatch to time out. This is a guess,
+  stated as such -- no root cause has been established.
+
+  Worked around in the new e2e specs via dispatchEvent("click") instead of
+  click(), documented inline as a "CLICK MECHANISM NOTE" in each affected
+  spec file (web/tests/e2e/categories.e2e.spec.ts, tags.e2e.spec.ts,
+  question-bank.e2e.spec.ts, exam-lifecycle.e2e.spec.ts).
+
+  REAL USER IMPACT UNKNOWN. If this reproduces with a genuine mouse click in
+  a real browser (not just Playwright's synthetic event), every admin user
+  creating or cancelling an entity-CRUD record via BilimBaga's generic admin
+  screens could be affected. If it is a Playwright-synthetic-event-specific
+  artifact (e.g. an event listener that checks isTrusted or reacts
+  differently to a raw mousedown-then-mouseup sequence vs. a single click
+  event), it may not affect real users at all. Needs actual diagnosis:
+  reproduce with a real mouse click in a real browser session, and/or read
+  EntityCrudPage.tsx and EntityRecordForm.tsx for the create/cancel button's
+  onClick handler and everything it synchronously triggers, before
+  concluding either way.
+affected_files:
+  - web/src/pages/entities/EntityCrudPage.tsx
+  - web/src/pages/entities/EntityRecordForm.tsx
+  - web/tests/e2e/categories.e2e.spec.ts
+  - web/tests/e2e/tags.e2e.spec.ts
+  - web/tests/e2e/question-bank.e2e.spec.ts
+  - web/tests/e2e/exam-lifecycle.e2e.spec.ts
+queue_ref: Q-662
+github_ref: GH-1392
+status: open

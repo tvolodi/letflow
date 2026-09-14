@@ -1,0 +1,53 @@
+id: ISS-0675
+title: "docs/migration/stage-10-bilimbaga-vertical.md references a 'this file's own hard constraint' at lines 331 and 605 that was never written"
+discovered_by: CODE-DESIGNER
+discovered_in_run: WF02-REQ353-20260915
+discovered_at: "2026-09-15T00:00:00Z"
+severity: MINOR
+description: >
+  Discovered while authoring decision 0032 (REQ-353, bucket rule 2 scope
+  amendment). docs/migration/stage-10-bilimbaga-vertical.md contains two
+  back-references to "this file's own hard constraint" -- line 331 ("this is a
+  genuine gap between 0022's text and the platform, filed in 0030, not
+  corrected in 0022 itself (see this stage file's own hard constraint
+  above)") and line 605 ("An amendment stating it is to be filed as its own
+  requirement rather than edited into 0022 in place, following the precedent
+  of decision 0030's Finding 1 and this file's own hard constraint").
+
+  Re-derived independently, three ways, that no such constraint is actually
+  stated anywhere in this file or elsewhere in docs/:
+  1. `grep -rn -i "hard constraint" docs/` returns exactly these two hits,
+     both back-references, no statement of the constraint itself.
+  2. Reading the surrounding passages (lines ~320-332, ~595-606) directly
+     finds no paragraph stating such a rule under this or any other name.
+  3. `git log --all --oneline -S "hard constraint" --
+     docs/migration/stage-10-bilimbaga-vertical.md` returns exactly two
+     commits: f8258b5b (REQ-334, introduced the line-331 reference) and
+     91a8a8b0 (the 2026-09-14 P5 rule-2 adjudication, introduced the
+     line-605 reference). Neither commit -- nor any other -- ever added the
+     referenced constraint text itself.
+
+  The real precedent both references likely intended is decision 0030's own
+  "Consequences" scope fence ("0022's bucket table is not edited by this
+  record") plus REVIEWER's 2026-09-13 sign-off endorsing that shape ("a
+  disagreement with standing text becomes a decision-record finding, not a
+  quiet edit") -- a real, load-bearing rule, just recorded in 0030 and its
+  REVIEWER sign-off rather than in this stage file. Decision 0032 (REQ-353)
+  cites that real precedent instead of the dangling reference for its own
+  filing-choice justification, so this issue is about the stage file's own
+  two dangling pointers, not about any decision currently depending on the
+  nonexistent text.
+
+  FIX DIRECTION: rewrite both back-references to point at the real
+  precedent (decision 0030's Consequences section + REVIEWER's 2026-09-13
+  sign-off), or remove them if the surrounding sentence reads fine without
+  the pointer. This is DOC-UPDATER's file surface (stage-10-bilimbaga-vertical.md),
+  not something REQ-353's own decision record touches -- REQ-353's scope
+  fence is decision 0022 (left byte-identical) plus authoring a new
+  decision record; correcting a dangling reference in the stage file is a
+  separate, smaller fix.
+affected_files:
+  - docs/migration/stage-10-bilimbaga-vertical.md
+queue_ref: Q-675
+github_ref: GH-1413
+status: open

@@ -46,6 +46,7 @@ import { PaginationControls } from '@/components/ui/PaginationControls'
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog'
 import { QueryStateBoundary } from '@/components/ui/QueryStateBoundary'
 import { classifyError, type RendererState } from '@/utils/classifyError'
+import { deferClickState } from '@/utils/deferClickState'
 import { EntityRecordForm } from '@/components/entities/EntityRecordForm'
 import { EntitiesIntlProvider } from '@/i18n/EntitiesIntlProvider'
 import { entitiesMessages, resolveUiLocale } from '@/i18n/entitiesMessages'
@@ -180,16 +181,27 @@ function EntityCrudPageInner({ entityType }: EntityCrudPageProps) {
   const hasNextPage = recordsQuery.data?.next_cursor != null
 
   const openCreate = () => {
-    setFormError(null)
-    setModal({ kind: 'create' })
+    deferClickState(() => {
+      setFormError(null)
+      setModal({ kind: 'create' })
+    })
   }
   const openEdit = (record: EntityRecord) => {
-    setFormError(null)
-    setModal({ kind: 'edit', record })
+    deferClickState(() => {
+      setFormError(null)
+      setModal({ kind: 'edit', record })
+    })
   }
   const closeModal = () => {
-    setModal(null)
-    setFormError(null)
+    deferClickState(() => {
+      setModal(null)
+      setFormError(null)
+    })
+  }
+  const openDeleteConfirm = (record: EntityRecord) => {
+    deferClickState(() => {
+      setDeleteTarget(record)
+    })
   }
 
   const handleSubmit = (fieldValues: Record<string, unknown>) => {
@@ -206,7 +218,10 @@ function EntityCrudPageInner({ entityType }: EntityCrudPageProps) {
 
   const confirmDelete = () => {
     if (!deleteTarget) return
-    deleteMutation.mutate(deleteTarget.record_id)
+    const recordId = deleteTarget.record_id
+    deferClickState(() => {
+      deleteMutation.mutate(recordId)
+    })
   }
 
   const columns: DataTableColumn<EntityRecord>[] = useMemo(() => {
@@ -236,7 +251,7 @@ function EntityCrudPageInner({ entityType }: EntityCrudPageProps) {
               variant="danger"
               size="sm"
               data-testid={`entity-delete-${row.record_id}`}
-              onClick={() => setDeleteTarget(row)}
+              onClick={() => openDeleteConfirm(row)}
             >
               {intl.formatMessage({ id: 'entities.crud.list.deleteAction' })}
             </Button>
@@ -340,7 +355,7 @@ function EntityCrudPageInner({ entityType }: EntityCrudPageProps) {
           confirmVariant="danger"
           isLoading={deleteMutation.isPending}
           onConfirm={confirmDelete}
-          onCancel={() => setDeleteTarget(null)}
+          onCancel={() => deferClickState(() => setDeleteTarget(null))}
         />
       </PageLayout>
     </div>

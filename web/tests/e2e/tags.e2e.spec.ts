@@ -37,23 +37,17 @@
  * does not close this modal (verified live — no keydown handler on
  * `EntityCrudPage`'s create/edit modal, unlike `ConfirmDialog`).
  *
- * CLICK MECHANISM NOTE — genuine defect found and worked around, not a
- * stylistic choice. A real, trusted `Locator.click()` on
- * `entity-create-action` or the modal's Cancel button freezes the page's
- * renderer indefinitely (confirmed by isolating the exact step: `page.mouse
- * .down()` on the button returns normally, but the paired `page.mouse.up()`
- * — which is what actually dispatches the trusted `click` event — never
- * resolves; a synthetic, untrusted `click` `Event` dispatched via
- * `Locator.dispatchEvent('click')` on the SAME element opens the modal
- * instantly with no hang). This is specific to `EntityCrudPage`'s action
- * buttons — a real click on an unrelated page's own "New Definition" button
- * (`web/tests/e2e/f2-definition-list.e2e.spec.ts`) completes in ~1s with no
- * such freeze, so it is not a `Button` component or Playwright/environment
- * issue in general. Root cause not further isolated here — diagnosing and
- * fixing a production hang is outside a test-port requirement's scope and
- * is reported to ORCH separately, not fixed in this diff. Every click on an
- * `EntityCrudPage` action button in this file therefore uses
- * `dispatchEvent('click')`, not `.click()`.
+ * CLICK MECHANISM NOTE (ISS-0662, RESOLVED) — a real, trusted `Locator.click()`
+ * on `entity-create-action` or the modal's Cancel button used to freeze the
+ * page's renderer indefinitely (root cause: a React `setState` running
+ * synchronously inside the same native event-dispatch turn as the trusted
+ * click — see `docs/frontend/iss-0662-entity-crud-page-click-freeze-fix.md`).
+ * The fix (`web/src/utils/deferClickState.ts`, applied in
+ * `EntityCrudPage.tsx`) defers those state updates by one macrotask, which
+ * eliminates the freeze. This file now uses plain `.click()` again — the
+ * `dispatchEvent('click')` workaround is no longer needed and was reverted
+ * so these tests exercise the real click path (the same one ISS-0662's
+ * regression test drives).
  *
  * Authentication: `web/tests/e2e/helpers.ts`'s `getKeycloakToken`/
  * `loginWithToken`.
@@ -107,8 +101,7 @@ test.describe('Tags admin (REQ-347 port onto /admin/bilimbaga/tag)', () => {
 
   test('opens create dialog when New Tag is clicked', async ({ page }) => {
     await gotoTags(page)
-    // See this file's header comment (CLICK MECHANISM NOTE).
-    await page.getByTestId('entity-create-action').dispatchEvent('click')
+    await page.getByTestId('entity-create-action').click()
     await expect(page.getByTestId('entity-form-modal')).toBeVisible({ timeout: 5_000 })
     // tag.name is a plain :string field (priv/packs/bilimbaga/
     // entity_definitions/tag.json) — the built-in string renderer
@@ -121,16 +114,14 @@ test.describe('Tags admin (REQ-347 port onto /admin/bilimbaga/tag)', () => {
 
   test('create tag — type name and cancel without saving', async ({ page }) => {
     await gotoTags(page)
-    await page.getByTestId('entity-create-action').dispatchEvent('click')
+    await page.getByTestId('entity-create-action').click()
     await expect(page.getByTestId('entity-form-modal')).toBeVisible({ timeout: 5_000 })
     const nameInput = page.getByTestId('entity-form-modal').locator('#name')
     await nameInput.fill('E2E-Tag-Test')
     await expect(nameInput).toHaveValue('E2E-Tag-Test')
-    // See this file's header comment (getByRole justification, and
-    // separately the CLICK MECHANISM NOTE for dispatchEvent): no testid on
-    // the Cancel button, Escape does not close this modal, and a real click
-    // freezes the page.
-    await page.getByTestId('entity-form-modal').getByRole('button', { name: /cancel|отмена|болдырмау/i }).dispatchEvent('click')
+    // See this file's header comment (getByRole justification): no testid
+    // on the Cancel button, and Escape does not close this modal.
+    await page.getByTestId('entity-form-modal').getByRole('button', { name: /cancel|отмена|болдырмау/i }).click()
     await expect(page.getByTestId('entity-form-modal')).not.toBeVisible({ timeout: 3_000 })
   })
 })

@@ -17,7 +17,7 @@
 
 import { describe, it, expect, vi, afterEach } from 'vitest'
 import * as jestDomMatchers from '@testing-library/jest-dom/matchers'
-import { render, screen, fireEvent, cleanup, within } from '@testing-library/react'
+import { render, screen, fireEvent, cleanup, within, act } from '@testing-library/react'
 expect.extend(jestDomMatchers)
 
 import { DataTable, type DataTableColumn } from '../DataTable'
@@ -82,23 +82,39 @@ describe('REQ-274 — DataTable', () => {
   })
 
   it('TC-REQ274-05: clicking a sortable header toggles asc then desc order', () => {
-    render(<DataTable columns={COLUMNS} data={ROWS} emptyMessage="No rows" />)
+    vi.useFakeTimers()
+    try {
+      render(<DataTable columns={COLUMNS} data={ROWS} emptyMessage="No rows" />)
 
-    // Unsorted (insertion) order: Charlie, Alice, Bob
-    let rows = screen.getAllByTestId('datatable-row')
-    expect(within(rows[0]).getByTestId('datatable-cell-name')).toHaveTextContent('Charlie')
+      // Unsorted (insertion) order: Charlie, Alice, Bob
+      let rows = screen.getAllByTestId('datatable-row')
+      expect(within(rows[0]).getByTestId('datatable-cell-name')).toHaveTextContent('Charlie')
 
-    fireEvent.click(screen.getByTestId('datatable-header-name'))
-    rows = screen.getAllByTestId('datatable-row')
-    expect(within(rows[0]).getByTestId('datatable-cell-name')).toHaveTextContent('Alice')
-    expect(within(rows[1]).getByTestId('datatable-cell-name')).toHaveTextContent('Bob')
-    expect(within(rows[2]).getByTestId('datatable-cell-name')).toHaveTextContent('Charlie')
+      // ISS-0662: handleHeaderClick defers its setState by one macrotask
+      // (deferClickState) to avoid a real-click renderer freeze on this
+      // component when embedded in EntityCrudPage, so the reorder is
+      // asynchronous here too — flush the deferred macrotask with fake timers
+      // rather than polling on real ones.
+      fireEvent.click(screen.getByTestId('datatable-header-name'))
+      act(() => {
+        vi.runAllTimers()
+      })
+      rows = screen.getAllByTestId('datatable-row')
+      expect(within(rows[0]).getByTestId('datatable-cell-name')).toHaveTextContent('Alice')
+      expect(within(rows[1]).getByTestId('datatable-cell-name')).toHaveTextContent('Bob')
+      expect(within(rows[2]).getByTestId('datatable-cell-name')).toHaveTextContent('Charlie')
 
-    fireEvent.click(screen.getByTestId('datatable-header-name'))
-    rows = screen.getAllByTestId('datatable-row')
-    expect(within(rows[0]).getByTestId('datatable-cell-name')).toHaveTextContent('Charlie')
-    expect(within(rows[1]).getByTestId('datatable-cell-name')).toHaveTextContent('Bob')
-    expect(within(rows[2]).getByTestId('datatable-cell-name')).toHaveTextContent('Alice')
+      fireEvent.click(screen.getByTestId('datatable-header-name'))
+      act(() => {
+        vi.runAllTimers()
+      })
+      rows = screen.getAllByTestId('datatable-row')
+      expect(within(rows[0]).getByTestId('datatable-cell-name')).toHaveTextContent('Charlie')
+      expect(within(rows[1]).getByTestId('datatable-cell-name')).toHaveTextContent('Bob')
+      expect(within(rows[2]).getByTestId('datatable-cell-name')).toHaveTextContent('Alice')
+    } finally {
+      vi.useRealTimers()
+    }
   })
 
   it('TC-REQ274-06: onRowClick fires with the clicked row', () => {

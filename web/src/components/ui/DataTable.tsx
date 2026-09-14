@@ -23,6 +23,7 @@ import {
 } from '@tanstack/react-table'
 import { ChevronUp, ChevronDown, Inbox } from 'lucide-react'
 import { SkeletonLayout } from './SkeletonLayout'
+import { deferClickState } from '@/utils/deferClickState'
 
 export interface DataTableColumn<TRow> {
   id: string
@@ -81,11 +82,14 @@ export function DataTable<TRow>(props: DataTableProps<TRow>): React.ReactElement
 
   function handleHeaderClick(col: DataTableColumn<TRow>): void {
     if (!col.sortable) return
-    setSortState((prev) => {
-      if (prev.columnId !== col.id) {
-        return { columnId: col.id, direction: 'asc' }
-      }
-      return { columnId: col.id, direction: prev.direction === 'asc' ? 'desc' : 'asc' }
+    // ISS-0662: deferred by one macrotask — see web/src/utils/deferClickState.ts.
+    deferClickState(() => {
+      setSortState((prev) => {
+        if (prev.columnId !== col.id) {
+          return { columnId: col.id, direction: 'asc' }
+        }
+        return { columnId: col.id, direction: prev.direction === 'asc' ? 'desc' : 'asc' }
+      })
     })
   }
 

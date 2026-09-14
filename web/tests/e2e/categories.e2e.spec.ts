@@ -34,23 +34,17 @@
  *      the only way to close it, matching the source test's own literal
  *      intent ("close without saving").
  *
- * CLICK MECHANISM NOTE — genuine defect found and worked around, not a
- * stylistic choice. A real, trusted `Locator.click()` on
- * `entity-create-action` or the modal's Cancel button freezes the page's
- * renderer indefinitely (confirmed by isolating the exact step: `page.mouse
- * .down()` on the button returns normally, but the paired `page.mouse.up()`
- * — which is what actually dispatches the trusted `click` event — never
- * resolves; a synthetic, untrusted `click` `Event` dispatched via
- * `Locator.dispatchEvent('click')` on the SAME element opens the modal
- * instantly with no hang). This is specific to `EntityCrudPage`'s action
- * buttons — a real click on an unrelated page's own "New Definition" button
- * (`web/tests/e2e/f2-definition-list.e2e.spec.ts`) completes in ~1s with no
- * such freeze, so it is not a `Button` component or Playwright/environment
- * issue in general. Root cause not further isolated here — diagnosing and
- * fixing a production hang is outside a test-port requirement's scope and
- * is reported to ORCH separately, not fixed in this diff. Every click on an
- * `EntityCrudPage` action button in this file therefore uses
- * `dispatchEvent('click')`, not `.click()`.
+ * CLICK MECHANISM NOTE (ISS-0662, RESOLVED) — a real, trusted `Locator.click()`
+ * on `entity-create-action` or the modal's Cancel button used to freeze the
+ * page's renderer indefinitely (root cause: a React `setState` running
+ * synchronously inside the same native event-dispatch turn as the trusted
+ * click — see `docs/frontend/iss-0662-entity-crud-page-click-freeze-fix.md`).
+ * The fix (`web/src/utils/deferClickState.ts`, applied in
+ * `EntityCrudPage.tsx`) defers those state updates by one macrotask, which
+ * eliminates the freeze. This file now uses plain `.click()` again — the
+ * `dispatchEvent('click')` workaround is no longer needed and was reverted
+ * so these tests exercise the real click path (the same one ISS-0662's
+ * regression test drives).
  *
  * Authentication: `web/tests/e2e/helpers.ts`'s `getKeycloakToken`/
  * `loginWithToken` (real Keycloak password grant against `admin-user`, the
@@ -107,8 +101,7 @@ test.describe('Categories admin (REQ-347 port onto /admin/bilimbaga/category)', 
 
   test('opens the create modal when New Category is clicked', async ({ page }) => {
     await gotoCategories(page)
-    // See this file's header comment (CLICK MECHANISM NOTE).
-    await page.getByTestId('entity-create-action').dispatchEvent('click')
+    await page.getByTestId('entity-create-action').click()
     await expect(page.getByTestId('entity-form-modal')).toBeVisible({ timeout: 5_000 })
     // See this file's header comment: additive ARIA-role check on the same
     // modal the testid assertion above already located.
@@ -117,7 +110,7 @@ test.describe('Categories admin (REQ-347 port onto /admin/bilimbaga/category)', 
 
   test('create modal has a name input field', async ({ page }) => {
     await gotoCategories(page)
-    await page.getByTestId('entity-create-action').dispatchEvent('click')
+    await page.getByTestId('entity-create-action').click()
     await expect(page.getByTestId('entity-form-modal')).toBeVisible({ timeout: 5_000 })
     // category.name is :localized_text (priv/packs/bilimbaga/entity_definitions/
     // category.json) — the localized-text widget renders one input per locale,
@@ -130,7 +123,7 @@ test.describe('Categories admin (REQ-347 port onto /admin/bilimbaga/category)', 
     // Close without saving — see this file's header comment (getByRole
     // justification #2): the Cancel button has no data-testid, and Escape
     // does not close this modal.
-    await page.getByTestId('entity-form-modal').getByRole('button', { name: /cancel|отмена|болдырмау/i }).dispatchEvent('click')
+    await page.getByTestId('entity-form-modal').getByRole('button', { name: /cancel|отмена|болдырмау/i }).click()
     await expect(page.getByTestId('entity-form-modal')).not.toBeVisible({ timeout: 3_000 })
   })
 })

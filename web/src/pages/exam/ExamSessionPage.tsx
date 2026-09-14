@@ -35,14 +35,18 @@
  *  continuing to show the in-progress screen) -- which also flips `enabled`
  *  to false, tearing the listeners down (see the hook's own doc comment).
  *
- *  Known gap, flagged rather than silently worked around: REQ-335's
- *  `@autosave_schema` (lib/letflow/routers/exam_sessions.ex) and
- *  `Letflow.Exam.Session.answer_attrs()` carry no `text_answer` field at
- *  all -- there is currently no route-level way to persist a short-text
- *  answer's actual text through autosave. This screen renders a short-text
- *  question's stem but does not offer a text input that would silently fail
- *  to save; it shows an explicit "not yet supported" note instead. Routed to
- *  ORCH/CODE-DESIGNER as a follow-on gap, not shimmed around here.
+ *  SHORT-TEXT QUESTIONS (ISS-0650). `@autosave_schema`
+ *  (lib/letflow/routers/exam_sessions.ex) and
+ *  `Letflow.Exam.Session.answer_attrs()` now carry an optional `text_answer`
+ *  field, so this screen renders a real controlled textarea for a
+ *  `short_text` question instead of the earlier placeholder note. It
+ *  restores any previously-saved `text_answer` on load/question-change, and
+ *  autosaves through the SAME `saveAnswer` call every other question type
+ *  uses -- fired on blur (not on every keystroke, unlike the
+ *  immediate-on-click option types, to avoid a network round-trip per
+ *  character) with `selected_option_ids: []` and `text_answer` set, which
+ *  `Session.check_answer_shape/3` validates is only ever sent for a
+ *  `short_text` question.
  */
 
 import { useCallback, useEffect, useRef, useState } from 'react'
@@ -120,14 +124,28 @@ function ExamSessionPageInner() {
 
   const currentQuestion: ExamQuestionState | undefined = session?.questions[questionIndex]
 
+  // Local, uncommitted draft of the current short_text question's textarea
+  // value -- keystrokes update this only; `saveAnswer` (on blur) is what
+  // actually autosaves. Re-synced from the restored `answers` state whenever
+  // the visible question changes, so navigating away and back shows the
+  // last-saved text, not a stale draft from a previous question.
+  const [textDraft, setTextDraft] = useState<string>('')
+  useEffect(() => {
+    if (currentQuestion?.type === 'short_text') {
+      setTextDraft(answers[currentQuestion.question_id]?.text_answer ?? '')
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentQuestion?.question_id])
+
   const saveAnswer = useCallback(
-    (question: ExamQuestionState, selectedOptionIds: string[]) => {
+    (question: ExamQuestionState, selectedOptionIds: string[], textAnswer?: string) => {
       if (!session) return
       setSaveStatus('saving')
       examApi
         .saveAnswer(session.session.id, question.question_id, {
           selected_option_ids: selectedOptionIds,
           time_spent_seconds: answers[question.question_id]?.time_spent_seconds ?? 0,
+          ...(question.type === 'short_text' ? { text_answer: textAnswer ?? '' } : {}),
         })
         .then((response) => {
           // Re-anchor to the server's value directly -- not asymptotically.
@@ -136,7 +154,8 @@ function ExamSessionPageInner() {
             ...prev,
             [question.question_id]: {
               selected_option_ids: selectedOptionIds,
-              text_answer: prev[question.question_id]?.text_answer ?? null,
+              text_answer:
+                question.type === 'short_text' ? (textAnswer ?? '') : (prev[question.question_id]?.text_answer ?? null),
               time_spent_seconds: prev[question.question_id]?.time_spent_seconds ?? 0,
               saved_at: new Date().toISOString(),
             },
@@ -163,6 +182,12 @@ function ExamSessionPageInner() {
         : [...current, optionId]
       : [optionId]
     saveAnswer(question, next)
+  }
+
+  const handleTextAnswerBlur = (question: ExamQuestionState) => {
+    const previouslySaved = answers[question.question_id]?.text_answer ?? ''
+    if (textDraft === previouslySaved) return
+    saveAnswer(question, [], textDraft)
   }
 
   const handleAntiCheatOutcome = useCallback(
@@ -293,9 +318,29 @@ function ExamSessionPageInner() {
             <h3>{currentQuestion.stem}</h3>
 
             {currentQuestion.type === 'short_text' ? (
-              <p data-testid="exam-short-text-unsupported">
-                {intl.formatMessage({ id: 'exam.session.shortTextUnsupported' })}
-              </p>
+              <div>
+                <label htmlFor={`exam-short-text-${currentQuestion.question_id}`} style={{ display: 'block', marginBottom: 'var(--space-2)' }}>
+                  {intl.formatMessage({ id: 'exam.session.shortTextLabel' })}
+                </label>
+                <textarea
+                  id={`exam-short-text-${currentQuestion.question_id}`}
+                  data-testid="exam-short-text-input"
+                  value={textDraft}
+                  placeholder={intl.formatMessage({ id: 'exam.session.shortTextPlaceholder' })}
+                  onChange={(e) => setTextDraft(e.target.value)}
+                  onBlur={() => handleTextAnswerBlur(currentQuestion)}
+                  rows={5}
+                  style={{
+                    width: '100%',
+                    padding: 'var(--space-2) var(--space-3)',
+                    border: '1px solid var(--color-neutral-400)',
+                    borderRadius: 'var(--radius-md)',
+                    fontSize: '.9rem',
+                    fontFamily: 'inherit',
+                    boxSizing: 'border-box',
+                  }}
+                />
+              </div>
             ) : (
               <div>
                 {currentQuestion.options.map((option) => {

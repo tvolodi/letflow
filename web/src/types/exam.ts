@@ -81,4 +81,10 @@ export interface AntiCheatSignalOutcome {
 export interface SaveAnswerBody {
   selected_option_ids?: string[]
   time_spent_seconds: number
+  /** ISS-0650: a `short_text` question's free-text answer. Optional --
+   *  absent for every other question type's autosave; the backend
+   *  (`Letflow.Exam.Session.check_answer_shape/3`) rejects a non-nil value
+   *  sent for any of them, so callers must only set this when
+   *  `question.type === 'short_text'`. */
+  text_answer?: string
 }

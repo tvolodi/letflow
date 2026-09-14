@@ -270,4 +270,50 @@ history:
 
       Merged via PR #1390 (feat/REQ-346-20260914). letflow-queue task
       658 released status: done.
+  - req: REQ-347
+    event: done
+    agent: ORCH
+    at: "2026-09-14T12:35:00Z"
+    note: >
+      Claimed letflow-queue task 659 (depends_on REQ-344, REQ-343, both
+      done). FRONTEND-DEV ported categories.spec.ts (5/5), tags.spec.ts
+      (5/6), question-bank.spec.ts (2/7), exam-lifecycle.spec.ts (6/8)
+      onto /admin/bilimbaga/:entityType (EntityCrudPage) as new
+      web/tests/e2e/*.e2e.spec.ts files, rewritten against
+      entity-crud-page/entity-create-action/entity-form-modal testids.
+      tags.spec.ts's port was conditional on ISS-0655's fix (tag wired
+      into BILIMBAGA_ENTITY_TYPES, TagListPage.tsx deleted) --
+      independently re-verified reachable by both FRONTEND-DEV and
+      REVIEWER before porting; no router.tsx change. Dropped tests
+      documented per-file with specific missing behaviour (no search
+      box, no wizard route, no badge styling, no Import/AI-Generate);
+      no test.skip/test.fixme.
+
+      Incidental discovery filed, not fixed in this run: ISS-0662
+      (queue task 662, GH#1392) -- a real trusted click on
+      EntityCrudPage's create/cancel buttons freezes the renderer;
+      dispatchEvent("click") works and was used as a narrow, documented
+      workaround in the four new spec files. Filed per ISSUE_QUEUE.md
+      since it didn't block this run's own acceptance criteria; real
+      user impact (vs. Playwright-synthetic-event artifact) left
+      undiagnosed, explicitly stated as such.
+
+      All 18 ported tests run live against Keycloak+Postgres:
+      18/18 passed under --workers=1 (matching CI); a flake seen only
+      under --workers=4 attributed to concurrent spec-file exam-list
+      mutation, not a port defect -- REVIEWER independently judged this
+      attribution plausible given the affected assertion's actual
+      query shape.
+
+      Pipeline: FRONTEND-DEV -> SECURITY-REVIEWER PASS (test-file-only
+      + one docs/issues record, no tenant-data path; credentials/data
+      paths spot-checked as pre-existing conventions, nothing new) ->
+      REVIEWER PASS (scope clean -- exactly 5 expected files; every AC
+      verified against actual file content, not just the report;
+      tags reachability and the dispatchEvent workaround's narrow
+      scope both independently re-checked).
+
+      Merged via PR #1393 (feat/REQ-347-20260914). letflow-queue task
+      659 released status: done.
+
 

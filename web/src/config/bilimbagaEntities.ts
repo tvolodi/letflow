@@ -1,14 +1,16 @@
 /** bilimbagaEntities — REQ-343
  *
- *  The nine remaining BilimBaga entity types this requirement wires screens
- *  for (REQ-326: category, question, answer_option, question_tag; REQ-327:
- *  exam, exam_section, exam_question_rule, exam_question_rule_tag,
- *  exam_manual_question). This is DATA, not a tenth hand-written screen: one
- *  generic component (`web/src/pages/entities/EntityCrudPage.tsx`, itself a
- *  direct descendant of REQ-336's `TagListPage.tsx` pilot) is parameterized
- *  by `entityType` from this list, rather than duplicating the pilot's
- *  ~280-line list/create/edit/delete screen nine times. A single dynamic
- *  route (`/admin/bilimbaga/:entityType` in web/src/router.tsx) renders it.
+ *  All ten BilimBaga admin-manageable entity types this requirement wires
+ *  screens for (REQ-326: category, question, answer_option, question_tag,
+ *  tag; REQ-327: exam, exam_section, exam_question_rule,
+ *  exam_question_rule_tag, exam_manual_question). This is DATA, not an
+ *  eleventh hand-written screen: one generic component
+ *  (`web/src/pages/entities/EntityCrudPage.tsx`, the direct descendant of
+ *  REQ-336's original `TagListPage.tsx` pilot for `tag` -- since superseded
+ *  and removed, see ISS-0655) is parameterized by `entityType` from this
+ *  list, rather than duplicating a hand-written list/create/edit/delete
+ *  screen ten times. A single dynamic route (`/admin/bilimbaga/:entityType`
+ *  in web/src/router.tsx) renders it.
  *
  *  GAP NOTE — self-referential parent_id (see this requirement's own
  *  close-out for the full statement). category.parent_id and
@@ -41,6 +43,7 @@ export const BILIMBAGA_ENTITY_TYPES: BilimBagaEntityConfig[] = [
   { entityType: 'exam_question_rule' },
   { entityType: 'exam_question_rule_tag' },
   { entityType: 'exam_manual_question' },
+  { entityType: 'tag' },
 ]
 
 export function isBilimBagaEntityType(entityType: string | undefined): boolean {

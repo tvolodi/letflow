@@ -72,6 +72,8 @@ describe('REQ-343 AC3 — grep for parent_id/exam_assignment across the new web/
   it('BILIMBAGA_ENTITY_TYPES (the nav/route source of truth) never names an exam_assignment entity', async () => {
     const { BILIMBAGA_ENTITY_TYPES } = await import('@/config/bilimbagaEntities')
     expect(BILIMBAGA_ENTITY_TYPES.map((e) => e.entityType)).not.toContain('exam_assignment')
-    expect(BILIMBAGA_ENTITY_TYPES).toHaveLength(9)
+    // ISS-0655: ten admin-manageable pack entity types, not nine -- `tag`
+    // was missing and has been added back.
+    expect(BILIMBAGA_ENTITY_TYPES).toHaveLength(10)
   })
 })

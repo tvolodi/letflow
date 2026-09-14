@@ -72,3 +72,52 @@ affected_files:
   - web/src/router.tsx
 queue_ref: Q-655
 github_ref: GH-1377
+status: resolved
+resolved_by: ORCH
+resolved_in_run: fix/ISS-0655-20260914
+resolved_at: "2026-09-14T07:16:00Z"
+resolution_note: >
+  Implemented FIX DIRECTION (a) from this record's corrected diagnosis,
+  independently arrived at the same remedy on a separate WF-03 run
+  (fix/ISS-0655-20260914, commit 4277f9a4) before this record's
+  correction (f1f3fb30) was pulled in -- reconciled on rebase, no further
+  code change needed since (a) is exactly what shipped.
+
+  Added { entityType: 'tag' } to BILIMBAGA_ENTITY_TYPES, corrected the
+  header comment's stale "nine"/REQ-326/REQ-327 arithmetic. Deleted
+  TagListPage.tsx (the superseded pilot screen) and its own test file
+  after grepping and confirming zero remaining functional references
+  (route, import, render path) -- only comment/doc prose, matching this
+  record's own "imported by NOTHING that renders" finding. EntityCrudPage
+  is entity-agnostic by construction, so the one new config-list entry
+  makes it handle tag fully.
+
+  i18n catalog updated: added entities.entityType.tag, removed the now
+  orphaned entities.tag.list.*/.field.name/.delete.* keys (confirmed
+  zero remaining references), kept .form.submitError/.conflictError
+  since EntityRecordForm.tsx consumes those generically for every
+  entity type, not just tag.
+
+  REGRESSION GUARD satisfied at two layers: bilimbagaEntities.test.ts
+  reads the real priv/packs/bilimbaga/entity_definitions/ directory off
+  disk and asserts every admin-manageable type (all pack entity types
+  minus the five runtime-state session*.json types) has a
+  BILIMBAGA_ENTITY_TYPES entry, plus the reverse -- would have caught
+  the original bug. BilimBagaEntityRoute.test.tsx mounts the route for
+  every configured type, proving each renders EntityCrudPage not 404,
+  with an explicit tag regression case. Two other tests with stale
+  hard-coded toHaveLength(9) assertions fixed to 10.
+
+  Pipeline: FRONTEND-DEV -> REVIEWER PASS (confirmed minimal scope via
+  git diff --stat -- 11 files, +211/-532; independently grepped and
+  confirmed TagListPage.tsx's deletion was correct not premature;
+  confirmed the removed i18n keys were genuinely orphaned and the kept
+  ones genuinely generic/shared; confirmed the new tests'
+  admin-manageable-vs-runtime-state split is a defensible architectural
+  rule, not coincidental; ran the full npm run check live -- type-check
+  clean, lint clean, 567 tests + 48 guard tests passed, production
+  build succeeded). SECURITY-REVIEWER correctly skipped -- MINOR
+  frontend-only fix, no tenant-data-path implications (matches ISS-0654
+  precedent).
+
+  letflow-queue task 655 released status: done.

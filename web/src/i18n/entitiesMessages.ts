@@ -63,33 +63,17 @@ export function resolveUiLocale(candidates?: readonly string[]): EntitiesUiLocal
   return ENTITIES_UI_FALLBACK_LOCALE
 }
 
-/** Message ids used by this requirement's tag list/create/edit/delete
- *  screens. Every id below has all three locales populated -- no id is
- *  English-only. */
+/** Message ids used by this requirement's entity admin screens. Every id
+ *  below has all three locales populated -- no id is English-only. */
 export const entitiesMessages: Record<EntitiesUiLocale, Record<string, string>> = {
   en: {
-    'entities.tag.list.title': 'Tags',
-    'entities.tag.list.createAction': 'New tag',
-    'entities.tag.list.emptyMessage': 'No tags found.',
-    'entities.tag.list.column.name': 'Name',
-    'entities.tag.list.column.actions': 'Actions',
-    'entities.tag.field.name': 'Name',
-    'entities.tag.list.editAction': 'Edit',
-    'entities.tag.list.deleteAction': 'Delete',
-    'entities.tag.list.loadError': 'Failed to load tags.',
-    'entities.tag.form.createTitle': 'New tag',
-    'entities.tag.form.editTitle': 'Edit tag',
-    'entities.tag.form.submitCreate': 'Create',
-    'entities.tag.form.submitUpdate': 'Save',
-    'entities.tag.form.cancel': 'Cancel',
+    // NOTE: these two ids are named after REQ-336's tag pilot but are used
+    // generically by the shared EntityRecordForm for every entity type
+    // (see web/src/components/entities/EntityRecordForm.tsx) -- kept as-is,
+    // renaming is out of scope for ISS-0655.
     'entities.tag.form.submitError': 'Could not save this tag.',
     'entities.tag.form.conflictError':
       'This tag was changed by someone else while you were editing. Reload and try again.',
-    'entities.tag.delete.confirmTitle': 'Delete this tag?',
-    'entities.tag.delete.confirmBody': 'This action cannot be undone.',
-    'entities.tag.delete.confirmAction': 'Delete',
-    'entities.tag.delete.cancelAction': 'Cancel',
-    'entities.tag.delete.error': 'Failed to delete this tag.',
     'entities.pagination.previous': 'Previous',
     'entities.pagination.next': 'Next',
     'entities.widgets.localizedText.groupLabel': 'Text by language',
@@ -175,6 +159,7 @@ export const entitiesMessages: Record<EntitiesUiLocale, Record<string, string>> 
     'entities.entityType.exam_question_rule': 'Question Rules',
     'entities.entityType.exam_question_rule_tag': 'Rule Tags',
     'entities.entityType.exam_manual_question': 'Manual Questions',
+    'entities.entityType.tag': 'Tags',
 
     // Admin landing page (REQ-343).
     'entities.admin.landing.title': 'Question Bank & Exams',
@@ -184,28 +169,9 @@ export const entitiesMessages: Record<EntitiesUiLocale, Record<string, string>> 
       'Known gap: there is no screen here to assign an exam to specific candidates. BilimBaga never modelled an exam_assignment entity type (see priv/packs/bilimbaga/entity_definitions/README-constraints.md), so lib/letflow/exam/session.ex documents check_assigned/3 as a permanent no-op — every candidate is currently treated as assigned — until a decision record resolves this.',
   },
   ru: {
-    'entities.tag.list.title': 'Теги',
-    'entities.tag.list.createAction': 'Новый тег',
-    'entities.tag.list.emptyMessage': 'Теги не найдены.',
-    'entities.tag.list.column.name': 'Название',
-    'entities.tag.list.column.actions': 'Действия',
-    'entities.tag.field.name': 'Название',
-    'entities.tag.list.editAction': 'Изменить',
-    'entities.tag.list.deleteAction': 'Удалить',
-    'entities.tag.list.loadError': 'Не удалось загрузить теги.',
-    'entities.tag.form.createTitle': 'Новый тег',
-    'entities.tag.form.editTitle': 'Изменить тег',
-    'entities.tag.form.submitCreate': 'Создать',
-    'entities.tag.form.submitUpdate': 'Сохранить',
-    'entities.tag.form.cancel': 'Отмена',
     'entities.tag.form.submitError': 'Не удалось сохранить этот тег.',
     'entities.tag.form.conflictError':
       'Этот тег был изменён кем-то другим, пока вы его редактировали. Обновите страницу и повторите попытку.',
-    'entities.tag.delete.confirmTitle': 'Удалить этот тег?',
-    'entities.tag.delete.confirmBody': 'Это действие нельзя отменить.',
-    'entities.tag.delete.confirmAction': 'Удалить',
-    'entities.tag.delete.cancelAction': 'Отмена',
-    'entities.tag.delete.error': 'Не удалось удалить этот тег.',
     'entities.pagination.previous': 'Назад',
     'entities.pagination.next': 'Вперёд',
     'entities.widgets.localizedText.groupLabel': 'Текст по языкам',
@@ -283,6 +249,7 @@ export const entitiesMessages: Record<EntitiesUiLocale, Record<string, string>> 
     'entities.entityType.exam_question_rule': 'Правила подбора вопросов',
     'entities.entityType.exam_question_rule_tag': 'Теги правил',
     'entities.entityType.exam_manual_question': 'Вопросы вручную',
+    'entities.entityType.tag': 'Теги',
 
     'entities.admin.landing.title': 'Банк вопросов и экзамены',
     'entities.admin.landing.intro':
@@ -291,28 +258,9 @@ export const entitiesMessages: Record<EntitiesUiLocale, Record<string, string>> 
       'Известное ограничение: здесь нет экрана для назначения экзамена конкретным кандидатам. В BilimBaga тип сущности exam_assignment никогда не моделировался (см. priv/packs/bilimbaga/entity_definitions/README-constraints.md), поэтому lib/letflow/exam/session.ex документирует check_assigned/3 как постоянную заглушку — сейчас каждый кандидат считается назначенным — до тех пор, пока это не будет решено отдельной decision record.',
   },
   kk: {
-    'entities.tag.list.title': 'Тегтер',
-    'entities.tag.list.createAction': 'Жаңа тег',
-    'entities.tag.list.emptyMessage': 'Тегтер табылмады.',
-    'entities.tag.list.column.name': 'Атауы',
-    'entities.tag.list.column.actions': 'Әрекеттер',
-    'entities.tag.field.name': 'Атауы',
-    'entities.tag.list.editAction': 'Өзгерту',
-    'entities.tag.list.deleteAction': 'Жою',
-    'entities.tag.list.loadError': 'Тегтерді жүктеу мүмкін болмады.',
-    'entities.tag.form.createTitle': 'Жаңа тег',
-    'entities.tag.form.editTitle': 'Тегті өзгерту',
-    'entities.tag.form.submitCreate': 'Құру',
-    'entities.tag.form.submitUpdate': 'Сақтау',
-    'entities.tag.form.cancel': 'Бас тарту',
     'entities.tag.form.submitError': 'Бұл тегті сақтау мүмкін болмады.',
     'entities.tag.form.conflictError':
       'Сіз өңдеп жатқан кезде бұл тегті басқа біреу өзгертті. Бетті қайта жүктеп, әрекетті қайталаңыз.',
-    'entities.tag.delete.confirmTitle': 'Бұл тегті жоясыз ба?',
-    'entities.tag.delete.confirmBody': 'Бұл әрекетті болдырмау мүмкін емес.',
-    'entities.tag.delete.confirmAction': 'Жою',
-    'entities.tag.delete.cancelAction': 'Бас тарту',
-    'entities.tag.delete.error': 'Бұл тегті жою мүмкін болмады.',
     'entities.pagination.previous': 'Артқа',
     'entities.pagination.next': 'Алға',
     'entities.widgets.localizedText.groupLabel': 'Тіл бойынша мәтін',
@@ -390,6 +338,7 @@ export const entitiesMessages: Record<EntitiesUiLocale, Record<string, string>> 
     'entities.entityType.exam_question_rule': 'Сұрақ таңдау ережелері',
     'entities.entityType.exam_question_rule_tag': 'Ереже тегтері',
     'entities.entityType.exam_manual_question': 'Қолмен таңдалған сұрақтар',
+    'entities.entityType.tag': 'Тегтер',
 
     'entities.admin.landing.title': 'Сұрақтар банкі және емтихандар',
     'entities.admin.landing.intro':

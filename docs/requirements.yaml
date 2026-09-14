@@ -25059,3 +25059,875 @@ requirements:
     depends_on:
       - REQ-345
       - REQ-346
+  - id: REQ-350
+    title: Settle by decision record whether Letflow serves a candidate results-LIST surface at all (GetExamHistory/HandleGetMyResults, FR-BB41/FR-BB46) -- the half REQ-335's scope fence deliberately left open, and the only half the P5 evidence does NOT already settle (S10 P5 follow-up, product scope)
+    owner: CODE-DESIGNER
+    impl_order: 0  # PLACEHOLDER -- ORCH overwrites at WF-01 Step 3
+    status: pending
+    stage: S10
+    description: >
+      bucket: A if the verdict is "serve it" (a candidate's own session
+      history is an entity-record query over the `session` entity type,
+      which already exists -- see THE DECISIVE TECHNICAL FACT below), B if
+      the verdict is that a generic "records owned by the calling user"
+      read belongs in the entities subsystem, and no bucket at all if the
+      verdict is "do not serve it". JUSTIFICATION FOR NOT DECLARING C: this
+      requirement authors a decision record under
+      docs/migration/decisions/, not a module under lib/letflow/exam/, so
+      it adds nothing to decision 0022 rule 3's directory-scoped size
+      metric, and REVIEWER's 2026-09-14 rule-2 adjudication in
+      docs/migration/stage-10-bilimbaga-vertical.md's "## REVIEWER
+      sign-off" applies directly: rule 2 gates MODULES that had a real A/B
+      alternative, and a decision record was never a candidate for A or B.
+      NOTE FOR REQ-VALIDATOR AND REVIEWER: if this record's own verdict is
+      to build a results-list, the requirement that implements it will need
+      its own bucket declaration and, should it ship executable code under
+      lib/letflow/exam/, its own per-entry rule-2 sign-off. This
+      requirement does not pre-authorize that and must not write that
+      sign-off itself.
+      .
+      WHY THIS IS A DECISION REQUIREMENT AND NOT AN IMPLEMENTATION ONE, AND
+      WHY IT IS NOT A REQUIREMENT WHOSE ONLY OUTPUT IS ANOTHER REQUIREMENT.
+      The deliverable is a ratified decision record that binds every later
+      stage, in the same way decisions 0027 and 0030 closed their own
+      standing open questions -- not a ticket. The companion requirement
+      REQ-351 already ships the half of this gap the evidence settles
+      (durable access to a candidate's OWN single result, frontend-only,
+      no new backend route), and it does not depend on this record. So
+      this requirement is not a gate in front of work that could otherwise
+      proceed; it is the adjudication of the one half that genuinely
+      cannot be decided by a porting or implementation turn without
+      silently overturning REQ-335's recorded scope fence.
+      .
+      THE STANDING OPEN QUESTION THIS CLOSES, verbatim in
+      docs/migration/stage-10-bilimbaga-vertical.md under "## Open
+      questions, recorded rather than answered early", the bullet
+      beginning "No way to view a past exam result -- surfaced twice
+      during P5, recorded here before it surfaces a third time." Its
+      closing sentences are the mandate: "Deciding whether Letflow should
+      route GetSessionResult, a results-list, or neither is a product-scope
+      question that P5 must not settle by side effect. It needs its own
+      requirement once REQ-349 reports how much of the result-side corpus
+      is actually unportable without it." REQ-349 is now done and has
+      reported; those numbers are below. Update that bullet in place to
+      point at this record when it lands, following the "ANSWERED by
+      decision NNNN" form the other resolved bullets in that same section
+      already use, and preserving the original question text as those
+      bullets do.
+      .
+      THE SCOPE FENCE THIS RECORD MAY OVERTURN -- AND IT IS THE ONLY THING
+      THAT MAY. lib/letflow/routers/exam_sessions.ex's moduledoc states,
+      under "Deliberately NOT routed here, and why (REQ-335's own scope
+      fence)": "**Cross-session history / results-list views**
+      (`GetExamHistory`/`HandleGetMyResults`, FR-BB41/FR-BB46) -- outside
+      REQ-330's five analysed behaviours (start, autosave, submit,
+      anti-cheat signal, and this route's own state read); `GetSessionResult`
+      is also not routed here for the same reason -- a *result* view is a
+      sixth behaviour this requirement's own dependency chain (REQ-330's
+      five) never authorized, not a subset of the *state* read this module
+      does implement." That was a CORRECT REQ-335 scope decision, not a
+      defect, and this record must say so explicitly rather than treating
+      it as an oversight to be corrected.
+      .
+      THE EVIDENCE THAT MUST DRIVE THE VERDICT, MEASURED NOT ESTIMATED.
+      REQ-349 (done) ported the result-side corpus and the P5 close-out in
+      docs/migration/stage-10-bilimbaga-vertical.md ("## P5 close-out --
+      REQ-348, 2026-09-14") reports 34 of 168 corpus test() blocks ported
+      and passing, with 90 whole-file NO-COUNTERPART. Of the 134 not
+      ported, the blocks unportable SPECIFICALLY because no results surface
+      exists are: my-results.spec.ts 6 of 6 (cross-session results-LIST
+      view); exam-result.spec.ts 1 of 5 (the result-by-id deep link -- the
+      other 4 ported by driving the live flow); and 2 of
+      employee-portal.spec.ts's 5 drops (the View-Result CTA and the "My
+      Results" page; its other 3 drops -- Start-modal open/cancel and the
+      Continue CTA -- are unrelated surfaces and must NOT be counted here).
+      That is NINE of 168 blocks, about 5.4 percent, and only 7 of the 9
+      are whole-file blocked. THE RECORD MUST STATE THIS NUMBER AND REASON
+      FROM IT HONESTLY. Nine tests is a small number and is NOT on its own
+      a mandate to build; "do not serve it, and record why" is a fully
+      legitimate verdict that this requirement passes just as cleanly as
+      "serve it". Do not inflate the figure, and do not re-derive it as
+      larger by folding in drops that have other causes.
+      .
+      THE DECISIVE TECHNICAL FACT, ALREADY VERIFIED -- USE IT, DO NOT
+      RE-DERIVE IT, AND DO NOT CONTRADICT IT WITHOUT SHOWING CONTRARY CODE.
+      A candidate's own results-list is expressible through machinery that
+      ALREADY EXISTS, which is what makes this a product-scope question
+      rather than a platform-capability one.
+      priv/packs/bilimbaga/entity_definitions/session.json declares user_id
+      queried true, exam_id queried true and status queried true (its four
+      enum values being in_progress, submitted, auto_submitted,
+      grading_pending), and declares the index idx_session_user_exam_status
+      over (user_id, exam_id, status). Letflow.Exam.Session's own private
+      query_all/3 helper (lib/letflow/exam/session.ex:1130) already
+      compiles exactly this shape of filtered read through
+      Letflow.Entities.Query.Compiler. So a "sessions belonging to the
+      calling candidate, filtered by status" read needs no new query
+      capability.
+      .
+      THE CONSTRAINT THAT MUST SHAPE ANY "SERVE IT" VERDICT, and the reason
+      a naive results-list design would fail at the gate: in that same
+      session.json, submitted_at, score_pct and passed are ALL declared
+      queried false. They can therefore be RETURNED in a row but can never
+      be filtered on or sorted by through the entity query DSL. A results
+      list "sorted by date, most recent first" or "filtered to failed
+      attempts only" is therefore NOT expressible against the definition as
+      it stands -- it would require either flipping those fields to queried
+      true in the pack definition (a pack change with its own migration
+      consequences, since Letflow.Entities.Definition.Validator and
+      lib/letflow/entities/definition/ddl.ex drive real DDL from these
+      flags) or sorting in memory after the read. The record must state
+      which of these it chooses, or state that it declines to serve the
+      list at all.
+      .
+      WHAT THE RECORD MUST DECIDE, EXPLICITLY, EACH WITH ITS OWN REASONING.
+      (1) Whether Letflow serves a cross-session results-LIST for the
+      calling candidate at all. (2) If yes, whether it is a new route on
+      Letflow.Routers.ExamSessions or a plain entity-records query the SPA
+      already has a route for -- note web/src/api/exam.ts already calls
+      POST /entities/query directly for the exam list screen, which is a
+      real precedent either way. (3) Whether FR-BB41 GetExamHistory
+      (history across exams) and FR-BB46 HandleGetMyResults (the
+      candidate's own results) are one surface or two, since REQ-335's
+      fence names them together but they are distinct behaviours in the
+      source. (4) What happens to the sort/filter constraint above. (5)
+      Whether an admin-facing view of OTHER candidates' results is in or
+      out of scope -- it is a different permission question entirely
+      (ExamSessionRead is granted to the CANDIDATE role per
+      exam_sessions.ex's own permission-vocabulary section) and the record
+      must not leave it ambiguous.
+      .
+      WHAT THIS REQUIREMENT MUST NOT DO. Do NOT implement a route, handler,
+      screen or spec -- this is a design/decision turn and its only code-
+      adjacent output is the decision record plus the stage-file bullet
+      update. Do NOT decide the single-result-by-id question: REQ-351 owns
+      that half and the evidence already settles it. Do NOT write the
+      rule-2 sign-off for any future bucket-C implementation requirement
+      this record's verdict may call for -- flag that it will be needed and
+      leave it to REVIEWER.
+    acceptance_criteria:
+      - "a new decision record exists under docs/migration/decisions/ following the numbering and section shape of the existing records in that directory (0027 and 0030 are the closest precedents, both closing a standing open question from this same stage file), and its number does not collide with an existing file in that directory"
+      - "the record states an unambiguous verdict on each of the five numbered questions in this requirement's description -- results-list yes/no, route-vs-entity-query, FR-BB41-vs-FR-BB46 as one surface or two, the queried:false sort/filter constraint, and admin-vs-candidate scope -- with no question left implicit"
+      - "the record quotes lib/letflow/routers/exam_sessions.ex's scope-fence text verbatim and states explicitly that REQ-335's decision was correct at the time rather than a defect"
+      - "the record states the measured figure of 9 of 168 corpus blocks blocked specifically by the missing results surface, breaks it down as my-results 6 + exam-result 1 + employee-portal 2, and explicitly excludes employee-portal's other 3 drops as having unrelated causes"
+      - "the record addresses the queried:false status of submitted_at, score_pct and passed in priv/packs/bilimbaga/entity_definitions/session.json and states what a serve-it verdict would do about sorting and filtering, or states that the verdict is not-to-serve and the constraint is therefore moot"
+      - "if the verdict is to serve a results-list, the record names which bucket the implementing work falls in under decision 0022 and states that a per-entry REVIEWER rule-2 sign-off is required if that work ships executable code under lib/letflow/exam/ -- without writing that sign-off"
+      - "the standing open-question bullet in docs/migration/stage-10-bilimbaga-vertical.md beginning 'No way to view a past exam result' is updated in place to cite this record, in the same 'ANSWERED by decision NNNN' form the other answered bullets in that section use, preserving the original question text"
+      - "`git diff --name-only` shows no file added or modified under lib/letflow/, web/src/, web/tests/e2e/ or priv/packs/ -- this requirement produces a decision record and a stage-file edit only"
+      - "the record states whether a not-to-serve verdict is revisitable and under what trigger, so a future stage does not have to re-litigate it from scratch"
+    depends_on:
+      - REQ-335
+      - REQ-349
+  - id: REQ-351
+    title: Make a candidate's OWN just-submitted exam result durably viewable by loading an existing session on mount instead of unconditionally starting a new one -- the half of the results-surface gap the P5 evidence already settles, frontend-only, no new backend route (S10 P5 follow-up)
+    owner: FRONTEND-DEV
+    impl_order: 0  # PLACEHOLDER -- ORCH overwrites at WF-01 Step 3
+    status: pending
+    stage: S10
+    description: >
+      bucket: C (exam-specific client runtime). JUSTIFICATION on decision
+      0022 rule 1: this work cannot be stated without naming exams and
+      sessions -- it changes web/src/pages/exam/ExamSessionPage.tsx and adds
+      a route under web/src/router.tsx serving an exam session -- so rule 1
+      excludes B. ON RULE 2 AND RULE 3, AND THIS IS THE PART REQ-VALIDATOR
+      AND REVIEWER SHOULD CHECK CLOSELY: this requirement ships NO
+      executable code under lib/letflow/exam/ and adds NO module there, so
+      it does not grow rule 3's directory-scoped size metric on the Elixir
+      side. It DOES touch web/src/pages/exam/, which rule 3's inventory in
+      docs/migration/stage-10-bilimbaga-vertical.md does measure (currently
+      two screen modules, 497 lines). Per REVIEWER's 2026-09-14 rule-2
+      adjudication in that file's "## REVIEWER sign-off", rule 2 gates
+      modules that had a real A/B alternative; the precedent on record is
+      REQ-338's two screens, which DID carry a per-entry sign-off. THIS
+      REQUIREMENT THEREFORE FLAGS THAT IT NEEDS A PER-ENTRY RULE-2 SIGN-OFF
+      FROM REVIEWER before it is registered, and deliberately does not
+      write one for itself. If it adds no new screen module but only
+      modifies ExamSessionPage.tsx, REVIEWER may find rule 2 does not reach
+      it; that finding is REVIEWER's to make, not this requirement's.
+      .
+      WHY THIS GOES STRAIGHT TO IMPLEMENTATION WITH NO DESIGN REQUIREMENT
+      IN FRONT OF IT. The product question for THIS half is already settled
+      by evidence, not by judgement: the backend read it needs is ALREADY
+      ROUTED and already ownership-checked, and the client function that
+      calls it ALREADY EXISTS. Nothing about serving a candidate their own
+      just-submitted result requires a new product-scope decision, a new
+      route, or a new permission. The genuinely unsettled half -- a
+      cross-session results-LIST -- is fenced off into REQ-350 and this
+      requirement neither depends on it nor pre-empts it. Adding a design
+      requirement in front of this one would be the reflex REQ-ANALYST is
+      instructed not to default to.
+      .
+      THE THREE FACTS THAT MAKE THIS FRONTEND-ONLY, ALL VERIFIED IN CODE.
+      (1) GET /exam-sessions/:id is one of the five routes that DO exist on
+      Letflow.Routers.ExamSessions, delegating to
+      Letflow.Exam.Session.get_session_state_for_user/3. (2) That function
+      (lib/letflow/exam/session.ex:342) enforces ownership itself: its spec
+      returns {:error, :session_not_found | :not_owner}, so a candidate
+      cannot read another candidate's session, and no new authorization
+      work is needed. (3) web/src/api/exam.ts:96 already defines
+      examApi.getSessionState(sessionId) against exactly that route -- and
+      NO COMPONENT CALLS IT. The gap is purely that nothing on the client
+      ever loads an existing session.
+      .
+      THE DEFECT TO FIX, PRECISELY LOCATED.
+      web/src/pages/exam/ExamSessionPage.tsx's mount effect (:112-127)
+      calls examApi.startSession(examId) UNCONDITIONALLY, guarded only by
+      startedRef, with no branch that loads an existing session. The
+      consequence, recorded in the stage file's own open-question bullet,
+      is that navigating to a session URL does not open that session -- it
+      starts a NEW one. The result phase is set at exactly two sites, both
+      inside the live flow: :226 (anti-cheat forced submit) and :253
+      (handleSubmit). The three result testids all live inside one render
+      guard at :291 (`if (phase.kind === 'result')`): exam-result-page
+      (:295), exam-result-pending (:298), exam-result-score (:303).
+      .
+      WHAT TO BUILD. A route that opens an EXISTING session by id and
+      renders its result phase without starting anything -- the natural
+      shape is a sibling of the existing exam/:examId/session route in
+      web/src/router.tsx:82-83 (which today serves exactly `exam` and
+      `exam/:examId/session` and nothing else), reusing the result-phase
+      rendering that already exists rather than duplicating it. On mount
+      that route reads the session through examApi.getSessionState, and
+      MUST NOT call startSession under any code path. The existing
+      exam/:examId/session route's unconditional-start behaviour is correct
+      for starting an exam and must not be broken; this is an addition, not
+      a rewrite of that flow.
+      .
+      THE SCORING RULE THAT DECIDES WHICH TESTID RENDERS, AND IT IS NOT
+      NEGOTIABLE. lib/letflow/exam/scoring.ex:255-257: if ANY question in
+      the session is :short_text, build_outcome/3 forces the whole session
+      to :grading_pending and leaves passed as nil. So a session of
+      REQ-345's MIXED exam can only ever render exam-result-pending, and
+      only REQ-345's second, shorttext-free exam can render
+      exam-result-score. Any test asserting a score against the mixed exam
+      is a test that cannot pass.
+      .
+      THE SCOPE FENCE THIS REQUIREMENT MUST NOT CROSS. Do NOT route
+      GetSessionResult as a new backend behaviour, do NOT add a
+      results-LIST of any kind, and do NOT modify
+      lib/letflow/routers/exam_sessions.ex. Reading an existing session
+      through the ALREADY-ROUTED GET /exam-sessions/:id is not a breach of
+      REQ-335's fence -- that route is one of the five REQ-330's dependency
+      chain authorized, and its moduledoc names "this route's own state
+      read" as in scope. Rendering that state as a result is a client
+      concern. Whether a distinct server-side result view or a results-list
+      should exist AT ALL is REQ-350's question and must not be settled
+      here by side effect.
+      .
+      TEST EXPECTATIONS, AND WHAT THEY HONESTLY UNBLOCK. This closes the
+      result-by-id half of the gap, which accounts for 1 of the 9
+      results-surface-blocked corpus blocks (exam-result.spec.ts's
+      result-by-id deep link, dropped by REQ-349 per the P5 close-out
+      table). It does NOT unblock my-results.spec.ts's 6 blocks or
+      employee-portal.spec.ts's 2, which need the results-LIST REQ-350
+      adjudicates. Do not claim otherwise in the close-out. Any new
+      Playwright spec lives under web/tests/e2e/ matching **/*.e2e.spec.ts
+      or Playwright will not collect it, and authenticates through
+      web/tests/e2e/helpers.ts's getKeycloakToken/loginWithToken.
+    acceptance_criteria:
+      - "a route exists in web/src/router.tsx that opens an existing exam session by id, and `npx playwright test --list` or an equivalent quoted command shows the new spec collected"
+      - "the new view calls examApi.getSessionState and never examApi.startSession -- a grep for startSession across the new/changed component files is quoted and shows it absent from the by-id path, and the close-out names the file:line of each call site"
+      - "a Playwright spec drives REQ-345's shorttext-free exam through start-answer-submit, then navigates AWAY to the new by-id route in the same browser session and asserts exam-result-page and exam-result-score are rendered from the loaded session rather than from in-memory phase state, with the full `npx playwright test` output for that file quoted verbatim including the pass/fail tally"
+      - "a second spec (or a second block in the same file) does the same against REQ-345's MIXED exam and asserts exam-result-pending renders and exam-result-score does NOT, citing lib/letflow/exam/scoring.ex:255-257 as the reason in a comment"
+      - "a spec asserts that a candidate requesting another candidate's session id does not receive that session's content -- the close-out states the observed HTTP status and quotes get_session_state_for_user/3's {:error, :not_owner} path in lib/letflow/exam/session.ex as the mechanism"
+      - "`git diff --name-only` shows NO modification to lib/letflow/routers/exam_sessions.ex and no file added or changed anywhere under lib/letflow/ -- the whole change is web/ only"
+      - "the existing exam/:examId/session start flow still works: the pre-existing exam-taking and exam-result e2e specs are re-run unchanged and their full output is quoted, showing no regression in the unconditional-start behaviour at ExamSessionPage.tsx:112-127"
+      - "no spec in the diff is marked test.skip or test.fixme, and a grep for both across the changed spec files is quoted returning no hit"
+      - "the close-out states that this requirement closes 1 of the 9 results-surface-blocked corpus blocks and explicitly does NOT claim to unblock my-results.spec.ts's 6 or employee-portal.spec.ts's 2, naming REQ-350 as the requirement that adjudicates those"
+      - "the close-out flags that a per-entry REVIEWER rule-2 sign-off under decision 0022 was required before registration, and records REVIEWER's finding -- whether rule 2 was found to reach this requirement or not -- rather than asserting a sign-off this requirement wrote itself"
+    depends_on:
+      - REQ-338
+      - REQ-345
+      - REQ-349
+  - id: REQ-353
+    title: File the amendment that states bucket rule 2's own scope -- as a NEW decision record amending 0022 by reference, not an in-place edit -- so the P5 rule-2 adjudication stops being the governing precedent (S10, decision record)
+    owner: CODE-DESIGNER
+    impl_order: 0  # PLACEHOLDER -- ORCH overwrites at WF-01 Step 3
+    status: pending
+    stage: S10
+    description: >
+      bucket: not applicable -- this requirement produces a decision
+      record about the bucket rule itself, and declaring a bucket for it
+      would be circular. It adds no module under lib/letflow/exam/ or
+      web/src/pages/exam/, so it does not grow rule 3's size metric.
+      Same "declares no bucket" shape as REQ-334, REQ-339 and REQ-348,
+      for a different reason: those are stage bookkeeping, this is
+      governance of the rule the buckets are declared under.
+      .
+      OWNER RATIONALE -- CODE-DESIGNER, NOT DOC-UPDATER, AND THE
+      DISTINCTION IS NOT COSMETIC. DOC-UPDATER's roster-defined job
+      (docs/agents/AGENT_SYSTEM.md line 47) is updating
+      docs/requirements.yaml status, requirement_status volumes, README.md
+      and "any stage/decision doc a requirement's acceptance criteria
+      named" -- i.e. transcribing a decision someone else already made.
+      This requirement AUTHORS a new decision record, which is the same
+      deliverable shape as REQ-303 (produced 0026), REQ-325 (produced
+      0029) and REQ-330 (produced 0030) -- all three owner CODE-DESIGNER.
+      AGENT_SYSTEM.md's artifact table (line 145) lists decision records
+      as writable by "any agent, REVIEWER sign-off", so the owner is
+      settled by what the deliverable IS, not by directory. The clause
+      set below has to be derived against 0022's and the stage file's
+      actual wording and can overturn REVIEWER's proposed phrasing where
+      it does not match; that is design work, not transcription.
+      .
+      WHY THIS EXISTS. During S10 P5, REQ-VALIDATOR raised that four P5
+      requirements declared bucket C on rule 1's test while none carried
+      the rule-2 REVIEWER sign-off that rule 2 requires -- and silently
+      skipping rule 2 is the one thing 0022 forbids. REVIEWER adjudicated
+      it on 2026-09-14 (docs/migration/stage-10-bilimbaga-vertical.md's
+      "## REVIEWER sign-off" section, the entry headed "2026-09-14 --
+      REVIEWER, rule-2 adjudication for P5 (REQ-344-REQ-349)", committed
+      in 91a8a8b0) and found rule 2 does NOT reach acceptance-test
+      artefacts, because rule 2 asks why a *behaviour* is not expressible
+      as a definition and not generalisable as a platform capability, and
+      a Playwright spec was never a candidate for either. That entry's
+      own closing paragraph, "Consequence for 0022", states the problem
+      in one sentence -- "Rule 2 does not state its own scope, which is
+      why this came up at all" -- and says the amendment "is to be filed
+      as its own requirement rather than edited into 0022 in place".
+      THIS IS THAT REQUIREMENT. Until it lands, the stage-file entry is
+      the governing precedent, which is the wrong home for a rule that
+      binds every future S10-and-later bucket declaration: a stage file
+      is a stage's own record, and a reader checking what rule 2 means
+      will read 0022, not another stage's sign-off log.
+      .
+      FILE IT AS A NEW RECORD, NOT AN EDIT TO 0022 -- AND THE STATED
+      REASON FOR THAT MUST BE THE REAL ONE. Create
+      docs/migration/decisions/00NN-<slug>.md where 00NN is the next free
+      number: 0030 is the highest that exists as of this filing, so 0031
+      unless another requirement has taken it first -- run
+      `ls docs/migration/decisions/` and use the next genuinely free
+      number rather than assuming 0031. Leave
+      docs/migration/decisions/0022-bilimbaga-vertical.md BYTE-IDENTICAL;
+      prove it with `git diff --name-only` showing 0022 absent from the
+      diff.
+      .
+      A CORRECTION THIS REQUIREMENT MUST MAKE RATHER THAN INHERIT, AND
+      REQ-VALIDATOR SHOULD CHECK IT INDEPENDENTLY. Both the stage file
+      (line 550) and this requirement's own dispatch describe the filing
+      choice as following "this file's own hard constraint". THAT
+      CONSTRAINT DOES NOT EXIST AS STANDING TEXT. Verified three ways
+      against the tree on 2026-09-14: (1) `grep -rn -i "hard constraint"
+      docs/` returns, within stage-10-bilimbaga-vertical.md, exactly two
+      hits -- line 296 ("see this stage file's own hard constraint
+      above") and line 550 ("this file's own hard constraint") -- both of
+      which are BACK-REFERENCES to a constraint, not a statement of one;
+      (2) reading all 644 lines of that file finds no paragraph stating
+      such a rule, under that name or any other; (3)
+      `git log --all --oneline -S "hard constraint" --
+      docs/migration/stage-10-bilimbaga-vertical.md` returns exactly two
+      commits, f8258b5b (REQ-334, which added line 296's back-reference)
+      and 91a8a8b0 (the P5 adjudication, which added line 550's) -- so
+      both references were introduced as pointers and the thing pointed
+      at was never written. Line 296 appears to have meant 0030's own
+      scope fence (0030 "Consequences": "0022's bucket table is not
+      edited by this record", leaving 0022 byte-identical), which is a
+      real, load-bearing precedent -- it is simply recorded in 0030 and
+      in REVIEWER's 2026-09-13 sign-off on it, not in the stage file.
+      RE-DERIVE THIS YOURSELF rather than trusting this paragraph. If it
+      holds, the new record must cite the precedent that actually exists
+      (0030's Finding 1 and its byte-identical scope fence, plus
+      REVIEWER's 2026-09-13 PASS endorsing that shape as "the proper
+      shape: a disagreement with standing text becomes a decision-record
+      finding, not a quiet edit") and must NOT cite a nonexistent stage
+      file constraint. Separately report the dangling references at lines
+      296 and 550 to ORCH per docs/agents/protocols/ISSUE_QUEUE.md -- do
+      not fix the stage file here (that is DOC-UPDATER's file surface and
+      a separate change), do not allocate an issue id yourself, and do
+      not let the finding die in this requirement's close-out.
+      .
+      SO THE FILING CHOICE IS JUSTIFIED ON ITS MERITS, NOT ON A
+      CONSTRAINT. State the reasoning in the record: (a) 0030 set the
+      precedent that a gap between 0022's text and reality is filed as a
+      named finding in its own record, with 0022 left byte-identical, and
+      REVIEWER signed that shape off on 2026-09-13; (b) an amendment
+      history is more legible as a chain of dated records than as
+      silently revised text -- a reader who has already read 0022 has no
+      way to learn it changed if it changes in place, whereas a new
+      record appears in the directory listing; (c) 0022 is REVIEWER-signed
+      as of 2026-09-09, and editing signed text in place would put text
+      0022's sign-off never covered inside a record that reads as signed.
+      Note that (c) is the reason that generalises beyond this case.
+      .
+      THE AMENDMENT'S CONTENT -- FIVE CLAUSES, EACH VERIFIED AGAINST
+      SOURCE WORDING BEFORE RESTATING. REVIEWER's proposed text is in the
+      adjudication entry and is SOURCE MATERIAL, NOT TEXT TO PASTE. For
+      each clause, quote the 0022 or stage-file wording it rests on and
+      confirm it says what the clause claims; if any does not, the record
+      says so and states the corrected clause rather than reproducing the
+      proposal:
+      .
+      ONE -- RULE 2 GATES MODULES THAT HAD A GENUINE A/B ALTERNATIVE.
+      Check against 0022's rule 2 as written: "Bucket C requires REVIEWER
+      sign-off that A and B were tried first. The sign-off states, in one
+      sentence each, why the behaviour is not expressible as a definition
+      and not generalisable as a platform capability."
+      .
+      TWO -- IT DOES NOT GATE ACCEPTANCE-TEST ARTEFACTS, WHICH TAKE THE
+      BUCKET OF THE SURFACE THEY EXERCISE. REQ-306 is the precedent (a
+      TEST-DESIGNER requirement that took the bucket of the thing under
+      test with no separate sign-off) -- read REQ-306's actual entry in
+      docs/requirements.yaml and confirm it does what the adjudication
+      says before citing it.
+      .
+      THREE -- THE TEST IS WHETHER THE A/B QUESTION HAS A POSSIBLE
+      ANSWER. The adjudication's own formulation: a Playwright spec "was
+      never a candidate for either", so "the question has no possible
+      answer" and "a question with no possible answer is not a gate".
+      .
+      FOUR -- TEST FIXTURES THAT SHIP EXECUTABLE CODE ARE ON THE MODULE
+      SIDE AND DO REQUIRE A PER-ENTRY SIGN-OFF. REQ-345 is the worked
+      example and already carries its sign-off inline; cite it, and state
+      that the line falls at executable code, not at the docs/ or
+      test-directory boundary.
+      .
+      FIVE -- RULE 3'S METRIC IS DIRECTORY-SCOPED, SO A RULE-2-EXEMPT
+      ARTEFACT ADDS NO INVENTORY ROW, AND A PHASE THAT ADDS NONE RECORDS
+      THAT IN PROSE. Verify against the stage file's own measurement
+      convention (its bucket-C inventory header scopes the table to
+      "every module added under lib/letflow/exam/ or
+      web/src/pages/exam/", and the measurement block excludes
+      web/src/pages/exam/__tests__/ as "test files, not modules"). The
+      prose half matters because P5 added a real exam-specific corpus
+      while the inventory stayed at four modules / 1,605 lines and two
+      screens / 497 lines -- a reader must not read an unchanged
+      inventory as a phase having added nothing exam-specific.
+      .
+      RECORD THAT THE CLASS-WIDE SIGN-OFF WAS DECLINED, AND WHY. The
+      adjudication considered and DECLINED a class-wide rule-2 sign-off
+      covering test artefacts as a category, on the ground that "rule 2's
+      force comes from per-thing justification, and signing off a
+      category would establish that categories can be waved through". The
+      new record must carry this, because it is the difference between
+      narrowing rule 2's scope (what this amendment does) and weakening
+      it (what it must not do).
+      .
+      DO NOT RE-DECIDE ANYTHING ELSE. This record amends rule 2's SCOPE
+      only. It does not touch rule 1 or rule 3's substance, the bucket
+      table, the vertical-not-fork decision, or 0030's still-open finding
+      that 0022's "Lua grading rules ship in the pack" row is stale --
+      that correction remains unowned and this record must not fold it
+      in. Flag it as still outstanding in the record's "what this does
+      not decide" section.
+      .
+      GATES. A decision record needs REVIEWER sign-off before it is
+      authoritative (0022's rule 2 is REVIEWER's own gate, and this
+      amendment changes what that gate reaches). Leave the REVIEWER
+      section as an explicit PENDING placeholder for the REVIEWER pass to
+      fill in, exactly as 0029 and 0030 did -- do not write REVIEWER's
+      verdict on its behalf. No SECURITY-REVIEWER section is required:
+      this record touches no tenant data path, no route, no migration and
+      no secret, and it should say so in one line rather than leaving a
+      placeholder nobody will fill.
+    acceptance_criteria:
+      - "a new file docs/migration/decisions/00NN-<slug>.md exists, where 00NN is the next free number verified by quoting `ls docs/migration/decisions/` -- and its title states that it amends 0022's bucket rule 2 by stating that rule's scope"
+      - "docs/migration/decisions/0022-bilimbaga-vertical.md is byte-identical to main -- proven by quoting `git diff --name-only` (against main) and showing 0022 is absent from the output"
+      - "the record carries all five clauses -- (1) rule 2 gates modules that had a genuine A/B alternative, (2) it does not gate acceptance-test artefacts, which take the bucket of the surface they exercise, (3) the test is whether the A/B question has a possible answer, (4) test fixtures shipping executable code are on the module side and need a per-entry sign-off, (5) rule 3's metric is directory-scoped so a rule-2-exempt artefact adds no inventory row, and a phase that adds none records that in prose"
+      - "each of the five clauses quotes the 0022 or stage-file wording it rests on, and states explicitly whether that source wording supports the clause as REVIEWER proposed it or required correction -- no clause is restated from the adjudication without such a check"
+      - "the record states that a class-wide rule-2 sign-off was considered and declined, quoting the adjudication's reason that rule 2's force comes from per-thing justification"
+      - "the record cites REQ-306 as the precedent for clause (2) and REQ-345 as the worked example for clause (4), and the close-out confirms each was read in docs/requirements.yaml rather than taken from the adjudication's characterisation of it"
+      - "the existence of the stage file's referenced-but-absent 'hard constraint' is re-derived independently and its result stated with the commands and output that settle it -- covering at minimum a grep for the phrase across docs/ and `git log --all -S` on docs/migration/stage-10-bilimbaga-vertical.md -- and if it is confirmed absent, the record cites decision 0030's byte-identical scope fence and REVIEWER's 2026-09-13 sign-off on it as the real precedent instead, naming no stage-file constraint"
+      - "if the 'hard constraint' is confirmed absent, the dangling references at stage-10-bilimbaga-vertical.md lines 296 and 550 are reported to ORCH per docs/agents/protocols/ISSUE_QUEUE.md -- the close-out records that the finding was reported, and `git diff --name-only` shows docs/migration/stage-10-bilimbaga-vertical.md was NOT modified by this requirement and no issue id was self-allocated"
+      - "the record's REVIEWER sign-off section exists as an explicit PENDING placeholder, unfilled, and the close-out states that no REVIEWER verdict was written on REVIEWER's behalf"
+      - "the record states in one line why no SECURITY-REVIEWER section is required (no tenant data path, route, migration or secret is touched) rather than leaving an empty placeholder"
+      - "the record's 'what this does not decide' section explicitly names 0030's still-open finding that 0022's 'auto-grading rules ... ships in the pack' bucket-A row is stale, and states that this record does not correct it"
+      - "`git diff --name-only` shows no file under lib/, web/, priv/ or test/ was touched -- this requirement produces one new markdown file and this requirements.yaml entry's own status flip, nothing else"
+    depends_on:
+      - REQ-348
+
+  - id: REQ-354
+    title: "Decision record: choose the PDF-rendering and QR-encoding dependencies for Letflow, with candidates, licences and maintenance status evaluated -- mix.exs carries neither today, and S10 gap 5 has a settled mechanism but no library choice on record"
+    owner: CODE-DESIGNER
+    impl_order: 0  # PLACEHOLDER -- ORCH overwrites at WF-01 Step 3
+    status: pending
+    stage: S10
+    description: >
+      bucket: B. JUSTIFICATION -- "render a PDF document" and "encode a
+      string as a QR image" are tenant-agnostic capabilities useful to any
+      vertical; neither can only be stated by naming exams, so bucket rule 1
+      does not force C. The deliverable is a decision record plus a design
+      artefact, and it adds no module under lib/letflow/exam/, so rule 3's
+      size metric is unchanged. Per decision 0022 rule 1 this artefact must
+      not name the vertical that motivated it -- cite S10 gap 5 by number, in
+      the same way lib/letflow/design/req323-unauthenticated-read-pattern.md
+      cites S10 gap 6 and passes its own rule-1 vocabulary check (that
+      document's section 13).
+      .
+      WHY THIS IS FIRST, AND WHY IT IS A DECISION RECORD RATHER THAN AN
+      IMPLEMENTATION CHOICE. docs/migration/stage-10-bilimbaga-vertical.md
+      states certificate issuance is deliberately not expanded because it
+      needs PDF+QR rendering and mix.exs carries no such dependency
+      (re-verified 2026-09-12 in the gap-5 row, and re-verified again while
+      drafting this entry -- mix.exs's deps/0 lists ecto_sql, postgrex, plug,
+      bandit, jason, telemetry, stream_data, yaml_elixir, ueberauth_oidcc,
+      lua and wasmex, and nothing that renders a PDF or encodes a QR code).
+      Decision 0027 settles the MECHANISM by which a needed service_catalog
+      entry is provisioned (out-of-band via POST /service-catalog, never
+      through a pack) but settles nothing about which libraries Letflow
+      links. CLAUDE.md forbids quietly adopting a framework/library choice
+      that contradicts one on record, and forbids silently re-deciding what a
+      decision record settled; there is no record naming a PDF or QR library,
+      so the choice is unmade rather than made-elsewhere, and making it
+      inside an implementation requirement would be exactly the silent
+      adoption that rule exists to prevent. REQ-355, REQ-356 and REQ-357 all
+      depend on this entry and none of them may name a library until it
+      lands.
+      .
+      WHAT TO PRODUCE. A decision record under
+      docs/migration/decisions/ (next free number, checked against the
+      directory at write time -- 0030 is the highest today), plus a design
+      artefact under lib/letflow/design/ if the record alone cannot carry the
+      integration shape. The record must evaluate REAL, NAMED candidate
+      libraries for each of the two capabilities -- not a single
+      pre-selected one -- and for each candidate state its licence, its last
+      release date, its maintenance status, whether it is pure Elixir/Erlang
+      or wraps a native binary or NIF, and what it adds to the transitive
+      dependency tree. The two capabilities may be satisfied by two separate
+      libraries or one; say which and why. The record must also decide the
+      no-new-dependency options on their merits rather than by omission:
+      rendering PDF bytes directly without a library, and shelling out to an
+      external binary, are both real candidates and both must be evaluated
+      and explicitly accepted or rejected with a reason. The precedent for
+      how a new top-level dependency is justified and flagged in this project
+      is mix.exs's own telemetry, yaml_elixir and wasmex entries, each of
+      which carries an inline comment naming its requirement, its design
+      section and its REVIEWER sign-off requirement -- follow that form.
+      .
+      THIS REQUIREMENT ADDS NO DEPENDENCY TO mix.exs AND WRITES NO RENDERING
+      CODE. It decides and records. REQ-356 is what actually edits mix.exs,
+      against this record. Stating that boundary explicitly because the
+      REQ-056 failure mode decision 0028 names -- shipping a backing thing
+      with no producer -- has a mirror here: a dependency added ahead of the
+      code that uses it is dead weight in the tree and in the licence
+      surface.
+      .
+      OPEN QUESTION TO CARRY, NOT TO RESOLVE HERE. Whether the renderer runs
+      in-process or behind a service_catalog entry provisioned per decision
+      0027 is a deployment-shape question this record should state and may
+      answer, but it must not be answered by silently assuming the
+      in-process form; 0027 settled that a pack may never carry such an
+      entry, not that one is or is not needed.
+    acceptance_criteria:
+      - "a new file exists under docs/migration/decisions/ whose number is the next free one at write time, verified by listing that directory in the close-out and quoting the listing"
+      - "at least two real, named candidate libraries are evaluated for PDF rendering and at least two for QR encoding, each with licence, last release date, maintenance status, pure-Elixir/Erlang-vs-native-NIF classification, and transitive-dependency impact stated per candidate"
+      - "the no-new-dependency alternatives -- emitting PDF bytes without a library, and invoking an external binary -- are each explicitly evaluated and explicitly accepted or rejected with a stated reason, not omitted"
+      - "exactly one choice per capability is recorded as the decision, with the justification naming why each rejected candidate lost"
+      - "a decision-0022 rule-1 vocabulary check is run over every file this requirement adds and its verbatim output is quoted -- the grep must return no hit in prose, identifiers or examples, matching the form of lib/letflow/design/req323-unauthenticated-read-pattern.md section 13"
+      - "`git diff --name-only` shows no modification to mix.exs, mix.lock, or any file under lib/letflow/exam/ -- this requirement decides and records, it does not add the dependency"
+      - "the record states whether the renderer is intended to run in-process or behind a decision-0027 service_catalog entry, and if it defers that, records it as a named open question rather than leaving it unstated"
+    depends_on: []
+
+  - id: REQ-355
+    title: "Certificate issuance: author the certificate entity definition and the idempotent issue-on-first-request context module gated on submitted+passed+certificate_enabled, capturing a branding snapshot at issuance time (S10 P3, certificate issuance)"
+    owner: ELIXIR-DEV
+    impl_order: 0  # PLACEHOLDER -- ORCH overwrites at WF-01 Step 3
+    status: pending
+    stage: S10
+    description: >
+      bucket: C for the context module, A for the entity definition. The
+      definition half is pack content in the shape REQ-329 already
+      established under priv/packs/bilimbaga/entity_definitions/ and is
+      bucket A by the same reasoning as the five session entity types there.
+      The context module half is C on rule 1 -- its eligibility rule set
+      (session submitted, session passed, exam certificate_enabled) cannot be
+      stated without naming exams -- and it ships executable code under
+      lib/letflow/exam/.
+      .
+      NEEDS A PER-ENTRY RULE-2 SIGN-OFF, WHICH THIS ENTRY DOES NOT CONTAIN
+      AND MUST NOT. REVIEWER's 2026-09-14 rule-2 adjudication in
+      docs/migration/stage-10-bilimbaga-vertical.md's "## REVIEWER sign-off"
+      section establishes that rule 2 gates MODULES with a real A/B
+      alternative, and that shipping executable code under lib/letflow/exam/
+      is what makes the gate bite (its "Finding: rule 2 does reach REQ-345"
+      half). This requirement ships such a module, so it needs its own
+      sign-off with the two one-sentence answers rule 2 requires, and that
+      sign-off is REVIEWER's to write, not REQ-ANALYST's. FLAGGED HERE AS
+      REQUIRED AND DELIBERATELY LEFT BLANK. The honest A/B question REVIEWER
+      must answer: a certificate record is largely declarative and its
+      issuance is close to an ordinary entity-record create, so "why is this
+      not simply bucket A pack content plus the existing
+      Letflow.Entities.Records write surface" is a real question with a real
+      candidate answer, not a formality.
+      .
+      SIZE CONTRIBUTION TO RULE 3'S METRIC. The stage file's bucket-C
+      inventory measures modules and lines under lib/letflow/exam/ (4
+      modules, 1,605 lines as of 2026-09-13) and under web/src/pages/exam/.
+      This requirement adds ONE module under lib/letflow/exam/, taking that
+      directory to 5 modules; the inventory table and its measurement block
+      must both be updated by this requirement's close-out, since growth
+      there is the stage's primary health metric and an unchanged table would
+      misreport it.
+      .
+      WHAT EXISTS AND WHAT DOES NOT, VERIFIED. There is NO certificate entity
+      definition -- priv/packs/bilimbaga/entity_definitions/ holds sixteen
+      files and none is a certificate. The inputs the issuance rule needs all
+      exist already: session.json carries status, score_pct and passed;
+      exam.json carries certificate_enabled (boolean, required, queried
+      false, at exam.json:88-92). Tenant branding lives in the Tenant
+      schema's settings field and is surfaced by
+      lib/letflow/routers/tenant_config.ex's branding_from_settings/1 as
+      three explicitly-named keys.
+      .
+      PORT SOURCE. c:\Users\tvolo\dev\ai-dala\BilimBaga\backend\internal\certificates\
+      (FR-BB43, migration 019_certificates.up.sql, spec
+      docs/requirements/FR-BB43.Certificate-generation.md). Port the
+      BEHAVIOUR, not the Go code, per this stage's own "the Go code does not
+      transfer" rule. The behaviour to port, from service.go's GetOrCreate:
+      guards in a fixed order (ownership unless admin, status must be
+      submitted, exam must have certificate_enabled, session must have
+      passed), then return-existing-if-already-issued, then capture a
+      branding snapshot and insert. Idempotency in the source is an
+      ON CONFLICT (session_id) DO NOTHING upsert against a UNIQUE session_id
+      -- reproduce that guarantee through whatever the entity-records write
+      surface actually supports, and if it cannot express it, say so and
+      state what was done instead rather than silently shipping a
+      read-then-write race.
+      .
+      THE PASSED-IS-NOT-ALWAYS-KNOWN CONSTRAINT, WHICH THIS REQUIREMENT MUST
+      HANDLE EXPLICITLY. lib/letflow/exam/scoring.ex:255-257 forces status
+      :grading_pending and passed: nil whenever a session contains ANY
+      :short_text question. So "passed" is a three-valued field -- true,
+      false, or not yet determinable -- and a certificate is issuable only in
+      the first case. A grading_pending session is NOT a failed session and
+      must not be refused as though it were; it is a session whose outcome
+      does not exist yet. The source's AC-3 collapses these by treating
+      "passed = false or passed is null" as one SESSION_NOT_PASSED error;
+      that collapse is wrong for Letflow, because the manual short-text
+      grading queue does not exist here (lib/letflow/routers/exam_sessions.ex's
+      own scope fence says so), which means a grading_pending session can
+      never later become passed and the candidate is owed an honest
+      distinction rather than a "you failed" message. Distinguish the two
+      cases in the returned error, and state in the close-out what a
+      grading_pending session is told.
+      .
+      THE BRANDING SNAPSHOT IS LOAD-BEARING, NOT DECORATION. The source
+      captures branding INTO the certificate row at first issuance precisely
+      so later branding changes do not alter already-issued certificates
+      (FR-BB43 AC-9, and model.go's TemplateSnapshot comment). Preserve that
+      property: read branding at issuance and store it on the record; never
+      re-read live branding when re-rendering an already-issued certificate.
+      .
+      SCOPE FENCE. This requirement does NOT render a PDF, does NOT encode a
+      QR code, does NOT add a dependency to mix.exs, and does NOT add the
+      public verification route. It produces the entity definition, the
+      context module, and an authenticated route by which a candidate
+      requests issuance for their own session. Rendering is REQ-356;
+      verification is REQ-357.
+    acceptance_criteria:
+      - "a certificate entity definition exists under priv/packs/bilimbaga/entity_definitions/ carrying at minimum the session reference, an issued-at timestamp, the candidate name, the exam title, the score percentage, and the branding snapshot -- and the pack installs successfully against a provisioned tenant with the new definition present, with the install output quoted"
+      - "issuance is refused for a session whose status is not submitted, for a session whose exam has certificate_enabled false, and for a session whose passed is false -- each refusal asserted separately by a test naming which guard fired"
+      - "a session whose passed is nil because it contains a short_text question (scoring.ex:255-257) is refused with an error DISTINCT from the passed-false refusal, and a test asserts the two errors differ rather than asserting only that both are refusals"
+      - "issuing twice for the same session yields exactly one certificate record and the same record both times -- asserted by a test that calls the issue path twice and counts records, not by inspecting the implementation"
+      - "a candidate cannot issue or fetch a certificate for a session belonging to another user -- asserted by a test, and the refusal is indistinguishable from the not-found response per INV-5"
+      - "the branding snapshot is read at first issuance and stored on the record; a test mutates tenant branding after issuance, re-reads the certificate, and asserts the stored snapshot is unchanged"
+      - "the stage file's bucket-C inventory table gains a row for the new module with its why-not-A and why-not-B justifications, and the measurement block's module count and line count are re-run and updated with real `ls`/`wc -l` output quoted"
+      - "this entry's required per-entry rule-2 sign-off is obtained from REVIEWER and recorded before merge -- the close-out names where it is recorded and quotes it"
+      - "`mix test` and `mix compile --warnings-as-errors` both pass with real output quoted"
+      - "`git diff --name-only` shows no change to mix.exs and no new file that renders a PDF or encodes a QR code -- that is REQ-356's scope"
+    depends_on:
+      - REQ-354
+
+  - id: REQ-356
+    title: "Render the certificate document and its embedded verification QR code from an issued certificate record, adding the REQ-354-chosen dependencies to mix.exs, and serve it from the authenticated download route (S10 P3, certificate issuance)"
+    owner: ELIXIR-DEV
+    impl_order: 0  # PLACEHOLDER -- ORCH overwrites at WF-01 Step 3
+    status: pending
+    stage: S10
+    description: >
+      bucket: C. JUSTIFICATION on rule 1 -- the rendered artefact is a
+      certificate of completion for a passed exam, laying out a candidate
+      name, an exam title and a score, and it cannot be described without
+      naming exams. The generic halves (turning a document description into
+      PDF bytes, turning a string into a QR image) are the LIBRARIES chosen
+      by REQ-354, not code this requirement writes; what this requirement
+      writes is the exam-specific template and the wiring, which is C.
+      .
+      NEEDS A PER-ENTRY RULE-2 SIGN-OFF, FLAGGED AND DELIBERATELY NOT
+      WRITTEN HERE, on the same basis as REQ-355: it ships executable code
+      under lib/letflow/exam/ and rule 2 therefore reaches it per REVIEWER's
+      2026-09-14 adjudication. The real A/B question for REVIEWER: a
+      certificate layout is close to a document template, and Letflow has a
+      form-schema/definition tradition, so "why is the template not
+      declarative pack content rendered by a generic renderer" is a genuine
+      bucket-A candidate that must be answered rather than waved past.
+      .
+      SIZE CONTRIBUTION TO RULE 3'S METRIC. Adds a further module under
+      lib/letflow/exam/ on top of REQ-355's, taking the directory to 6
+      modules. The inventory table and the measurement block must be
+      re-measured and updated again in this requirement's close-out. Two
+      requirements in a row growing this directory is exactly the movement
+      rule 3 exists to make visible, and it should be visible rather than
+      batched into a single later edit.
+      .
+      THIS REQUIREMENT IS WHERE THE DEPENDENCY ACTUALLY LANDS. It adds to
+      mix.exs the libraries REQ-354's record chose, and no others. If
+      implementation reveals the chosen library cannot do what the record
+      assumed, STOP and report it as a finding that reopens REQ-354's record
+      -- do not substitute a different library, which would be exactly the
+      silent re-deciding of a decision record CLAUDE.md forbids. The mix.exs
+      entry must carry an inline comment naming this requirement, REQ-354's
+      record, and its REVIEWER sign-off requirement, in the same form the
+      existing telemetry, yaml_elixir and wasmex entries use.
+      .
+      PORT SOURCE, FOR LAYOUT AND CONTENT ONLY.
+      c:\Users\tvolo\dev\ai-dala\BilimBaga\backend\internal\certificates\pdf.go
+      (FR-BB44, called from FR-BB43). Its content set: a header carrying the
+      tenant logo or company name, a title, the candidate name, the exam
+      title, the score and issue date, a signatory block, and a QR code in
+      the footer alongside the verification URL in text. Note two properties
+      of the source worth preserving and one worth questioning. Preserve:
+      the QR encodes a verification URL built from a configured base URL
+      plus the verification code, and the same URL also appears as readable
+      text so the certificate is verifiable without a QR scanner. Preserve:
+      the document is regenerated on every request from the stored record
+      rather than stored as bytes (FR-BB43's own Notes section states this
+      explicitly, and its Out of Scope section rules out storing PDF
+      binaries). Question rather than copy: the source hardcodes its own
+      product name into the header, which is wrong for a multi-tenant
+      platform -- use the snapshotted branding.
+      .
+      STORAGE -- DO NOT INVENT ONE. The source stores no PDF bytes at all
+      and regenerates on each request, and that is the shape to follow
+      unless it proves unworkable. If this requirement concludes bytes must
+      be persisted, the home is the EXISTING entity-record attachments work,
+      not a new mechanism: Letflow.Repository.EntityAttachments
+      (REQ-316/REQ-317, both done) is the context module for attachments on
+      an entity record, with upload/2, list/2, get/2, get_content/2 and
+      delete/2, all taking a caller-supplied prefix, and four routes already
+      mounted under /entities/records/:entity_type/:record_id/attachments.
+      Letflow.Repository.Attachments is the INSTANCE-attachment sibling and
+      is the wrong home -- a certificate hangs off an entity record, not a
+      workflow instance. State which of the two shapes was chosen and why.
+      .
+      THE RENDERED DOCUMENT IS A DISCLOSURE SURFACE. It carries a candidate's
+      name and score and is downloadable as a file that leaves the platform.
+      Include only what the certificate must display; it must not carry
+      internal identifiers, the tenant id, or any field beyond those the
+      certificate record snapshotted.
+    acceptance_criteria:
+      - "mix.exs gains exactly the dependencies REQ-354's decision record names and no others -- the diff of mix.exs is quoted, and each added entry carries an inline comment naming this requirement and that record, matching the form of the existing telemetry/yaml_elixir/wasmex entries"
+      - "a test renders a document from a fixture certificate record and asserts the output is a non-empty binary whose leading bytes are the chosen format's magic number -- not merely that the call returned :ok"
+      - "the rendered document contains the candidate name, the exam title, the score and the issue date drawn from the certificate record, each asserted individually"
+      - "the QR code encodes a verification URL built from a configured base URL plus the record's verification code, and a test decodes or otherwise asserts the encoded payload matches that URL exactly -- asserting only that a QR image was produced is insufficient"
+      - "the same verification URL appears as readable text in the document as well as in the QR code, asserted by a test"
+      - "branding in the rendered document comes from the certificate record's stored snapshot, never from a live tenant-branding read -- proven by a test that mutates live branding after issuance and asserts the re-rendered document is unchanged"
+      - "the close-out states whether document bytes are stored or regenerated per request, and if stored, names Letflow.Repository.EntityAttachments as the mechanism and states why the instance-attachment sibling was not used"
+      - "the stage file's bucket-C inventory and its `ls`/`wc -l` measurement block are re-run and updated with real output quoted, reflecting this requirement's added module on top of REQ-355's"
+      - "this entry's required per-entry rule-2 sign-off is obtained from REVIEWER and recorded before merge -- the close-out names where it is recorded and quotes it"
+      - "if the chosen library proves unable to do what REQ-354's record assumed, that is reported as a finding reopening that record and NO substitute library is adopted -- the close-out states explicitly that this did or did not occur"
+      - "`mix test` and `mix compile --warnings-as-errors` both pass with real output quoted"
+    depends_on:
+      - REQ-354
+      - REQ-355
+
+  - id: REQ-357
+    title: "Build the public unauthenticated certificate-verification route as the first instance of decision 0028's capability-handle pattern -- the handle registry, its writer, the rate limiter and one projection module, closing S10 gap 6 (S10 P3, certificate issuance)"
+    owner: ELIXIR-DEV
+    impl_order: 0  # PLACEHOLDER -- ORCH overwrites at WF-01 Step 3
+    status: pending
+    stage: S10
+    description: >
+      bucket: B for the pattern machinery, C for the projection. The mount,
+      the router, the public_read_handles registry, the rate limiter and the
+      refusal path are all domain-neutral platform capability that decision
+      0028 already specifies as "fixed platform machinery" reusable by every
+      future unauthenticated read, and are bucket B -- none of them names an
+      exam. Only the projection module and its kind string are
+      certificate-specific, and those are C. Per decision 0022 rule 1, the
+      bucket-B files must not name the vertical: the router, the registry
+      schema and the limiter carry no exam vocabulary, exactly as
+      lib/letflow/design/req323-unauthenticated-read-pattern.md's own
+      section 13 vocabulary check requires of the design they implement.
+      .
+      HARD SECURITY-REVIEWER GATE. This is a tenant-data-path change that
+      establishes a route reading inside a tenant schema with NO
+      authenticated principal. It is the change class SECURITY-REVIEWER
+      exists to gate, and decision 0028's own Consequences section names the
+      first /api/public instance as "a named SECURITY-REVIEWER hard gate."
+      .
+      THE PATTERN IS ALREADY DESIGNED -- DO NOT INVENT A DIFFERENT ONE.
+      REQ-323 is done and produced
+      lib/letflow/design/req323-unauthenticated-read-pattern.md plus
+      docs/migration/decisions/0028-unauthenticated-read-boundary.md, both
+      already SECURITY-REVIEWER-PASSed and REVIEWER-PASSed. The stage file's
+      gap-6 row records the design as closed with implementation "not yet
+      filed"; this requirement is that implementation. Build it from those
+      two documents without re-deriving the mount point, the resolution
+      mechanism or the response allowlist. The seven conditions binding the
+      implementing requirement are enumerated verbatim in the design's
+      section 12 SECURITY-REVIEWER verdict and are restated as acceptance
+      criteria below.
+      .
+      WHY THE SOURCE'S OWN VERIFY ENDPOINT MUST NOT BE COPIED, AND THIS IS
+      THE SHARPEST POINT IN THIS ENTRY. BilimBaga's endpoint is
+      GET /api/v1/verify/:code where code is the certificate's
+      verification_code, a UUID v4 generated by Postgres
+      (019_certificates.up.sql), and its FR-BB43 AC-7 requires it to return
+      HTTP 200 with valid:true for a known code and HTTP 200 with
+      valid:false for an unknown one, never 404. That contract is
+      INCOMPATIBLE with decision 0028 in two independent ways, and the
+      Letflow route must follow 0028, not the source. First, 0028's
+      standing prohibition is ONE refusal: every non-success outcome returns
+      an identical 404 application/problem+json, and a response that varies
+      its body by whether the input resolved is the oracle the pattern
+      exists to prevent -- valid:false IS that varying body. Second, a
+      128-bit UUID is not the pattern's credential: 0028 requires 32 bytes
+      of strong_rand_bytes rendered URL-safe base64, drawn-and-stored rather
+      than derived, and stored as SHA-256 only. The source's own FR-BB43
+      Notes section concedes the weakness by asking for a rate limit "to
+      prevent enumeration attacks"; 0028 closes it structurally instead.
+      A later reader must not restore the valid:false shape for parity with
+      the source.
+      .
+      WHAT THIS MEANS FOR THE USER-VISIBLE BEHAVIOUR, STATED SO IT IS NOT
+      DISCOVERED LATE. Under 0028, a verifier who scans a QR code for a
+      revoked, expired or unknown certificate gets an indistinguishable 404
+      rather than a "not valid" answer. That is the intended behaviour and
+      is the accepted bounded inference 0028 section 3 already records, not
+      a defect to design around.
+      .
+      THE REGISTRY MUST LAND WITH ITS WRITER. 0028's standing prohibitions
+      require public_read_handles to land with its first writer, not ahead
+      of one -- the REQ-056 failure mode of a table with no producer. So
+      this requirement ships BOTH the migration and the authenticated
+      issue path that writes a handle row when a certificate is issued.
+      The design's OQ-1 leaves the issue path's permission atom
+      deliberately undesigned and assigns it to the requirement that needs
+      the first instance -- that is this one, so choose it, and state the
+      choice and its reasoning rather than inheriting one.
+      .
+      THE RATE LIMITER IS A PRECONDITION OF MOUNTING, NOT A FOLLOW-ON.
+      0028's point 6 and the design's section 5 both state this. There is no
+      rate limiter in the tree today -- the Letflow.Plugs.RateLimit row in
+      lib/letflow/plugs/api_pipeline.ex is a deferred-plugs TABLE ROW, not a
+      mount. Keyed on conn.remote_ip, never on an attacker-settable
+      forwarded header, plus a global bucket, enforced as the first plug
+      inside the public router and BEFORE resolution so a 429 is
+      input-independent. Whether this reuses a by-then-landed
+      Letflow.Plugs.RateLimit or is a new module is the design's OQ-2 and is
+      this requirement's to decide; state which and why.
+      .
+      SCOPE FENCE. This requirement does not add a frontend verification
+      screen. It closes gap 6 at the HTTP layer.
+    acceptance_criteria:
+      - "a single `forward` for the public mount is declared on Letflow.Router AFTER the existing public mounts and BEFORE the /api/v1 forward, and a test asserts an unauthenticated request to it is not rejected by Letflow.Plugs.AuthPipeline"
+      - "the handle is 32 bytes of :crypto.strong_rand_bytes rendered URL-safe base64, stored as SHA-256 only -- a test asserts the stored column never equals the issued handle, and a grep over the diff confirms the plaintext handle is never logged"
+      - "the public_read_handles migration and the authenticated writer that populates it land in the SAME diff -- `git diff --name-only` is quoted showing both, satisfying 0028's land-with-its-writer prohibition"
+      - "every one of decision 0028's ten refusal cases -- malformed handle, unknown handle, revoked, expired, kind-mismatched, resource deleted, resource unpublishable, unregistered kind, wrong method, deactivated tenant -- returns a byte-identical 404 application/problem+json, asserted case by case by a test that compares full response bodies to each other, not merely each to 404"
+      - "no response from this route class is ever 401 or 403, asserted by a test sweeping every refusal case and failing on either status"
+      - "resolution performs exactly one database round-trip before any refusal decision and exactly two on success, and the deactivated-tenant check is folded into the first query as a join rather than a second lookup -- proven by counting queries in a test, not by inspection"
+      - "a malformed handle does NOT short-circuit ahead of the first query -- a test asserts a syntactically invalid handle still performs the registry read"
+      - "the rate limiter ships in the same diff as the mount, is keyed on conn.remote_ip, never on a forwarded header absent a trusted-proxy config, and is enforced before resolution -- a test asserts a limited caller receives 429 for a VALID handle as well as an invalid one, proving input-independence"
+      - "Cache-Control: private, no-store, Referrer-Policy: no-referrer and X-Robots-Tag: noindex, nofollow are all set on the success response, asserted by a test"
+      - "the response envelope carries exactly the three top-level keys decision 0028 fixes, and the projection is a hand-built map with literal named keys -- a test asserts the exact key set, and the close-out justifies each field of the projection against INV-2 by naming why an anonymous holder of a forwarded link is entitled to it"
+      - "the projection carries no tenant id, no internal record id and no candidate identifier beyond what the certificate is meant to display -- asserted by a test on the exact key set"
+      - "the source's valid:false response shape is NOT implemented, and the close-out states explicitly that decision 0028's single-refusal rule was followed in preference to FR-BB43's AC-7"
+      - "the permission atom for the authenticated issue path (design OQ-1) is chosen, minted and stated with its reasoning in the close-out rather than inherited"
+      - "the close-out states whether the limiter is a new module or a reuse (design OQ-2) and why"
+      - "a decision-0022 rule-1 vocabulary check is run over the bucket-B files this requirement adds -- the router, the registry schema and the limiter -- and its verbatim output is quoted showing no exam vocabulary in them"
+      - "SECURITY-REVIEWER PASSes this change against INV-1, INV-2, INV-4, INV-5 and INV-8 by name, and the seven conditions enumerated in req323-unauthenticated-read-pattern.md section 12 are each checked and each result recorded"
+      - "`mix test` and `mix compile --warnings-as-errors` both pass with real output quoted"
+    depends_on:
+      - REQ-354
+      - REQ-355
+      - REQ-356

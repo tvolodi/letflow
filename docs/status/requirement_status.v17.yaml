@@ -409,5 +409,5 @@ history:
       hits inside doc-comments only, not executable code, matching
       established precedent).
 
-      Merged via PR #1397 (feat/REQ-349-20260914). letflow-queue task
+      Merged via PR #1395 (feat/REQ-349-20260914). letflow-queue task
       660 released status: done.

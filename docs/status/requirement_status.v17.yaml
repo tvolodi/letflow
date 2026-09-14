@@ -842,3 +842,30 @@ history:
       evidence comment quoting the before/after text at both locations.
       letflow-queue task 675 released status: done under agent_id
       tvolodi-orch.
+  - req: REQ-354
+    event: done
+    agent: DOC-UPDATER
+    at: "2026-09-14T23:56:15Z"
+    note: >
+      Closed out REQ-354 (letflow-queue task 670, GH#1406). Confirmed
+      docs/migration/decisions/0033-pdf-qr-rendering-dependencies.md
+      carries a filled-in REVIEWER sign-off (PASS, 2026-09-15) rather
+      than a PENDING placeholder: PDF rendering choice `pdf` (option P1)
+      over `chromic_pdf` (option P2) -- both real, named, licensed
+      candidates evaluated with release date/maintenance/pure-Elixir-vs-
+      native classification/transitive impact; QR encoding choice
+      `eqrcode` (option Q1) over `qr_code` (option Q2) on the same basis.
+      Both chosen libraries are pure-Elixir, MIT-licensed, zero
+      transitive footprint. No-new-dependency alternatives (hand-rolled
+      PDF bytes; shelling out to an external binary for either
+      capability) evaluated and rejected on stated grounds, not omitted.
+      Renderer runs in-process (no service_catalog entry needed) as a
+      direct consequence of both libraries being pure Elixir with no
+      external binary/NIF. Decision-0022 rule-1 vocabulary check re-run
+      by REVIEWER and confirmed clean (one hit, the grep pattern's own
+      literal text). Did not re-review REVIEWER's verdict, per this
+      run's own instruction that it is final. Flipped
+      docs/requirements.yaml's REQ-354 status pending -> done. Closed
+      GH#1406 with an evidence comment summarizing the decision.
+      letflow-queue task 670 released status: done under agent_id
+      tvolodi-orch.

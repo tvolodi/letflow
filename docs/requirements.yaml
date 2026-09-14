@@ -25736,7 +25736,7 @@ requirements:
     title: "Decision record: choose the PDF-rendering and QR-encoding dependencies for Letflow, with candidates, licences and maintenance status evaluated -- mix.exs carries neither today, and S10 gap 5 has a settled mechanism but no library choice on record"
     owner: CODE-DESIGNER
     impl_order: 670
-    status: pending
+    status: done
     stage: S10
     description: >
       bucket: B. JUSTIFICATION -- "render a PDF document" and "encode a

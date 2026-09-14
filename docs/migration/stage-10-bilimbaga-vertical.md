@@ -431,3 +431,72 @@ remain:
   `priv/packs/bilimbaga/pack.json` exists and has been installed for real
   against a provisioned tenant (`REQ-328`), carrying the fifteen entity
   definition documents under `priv/packs/bilimbaga/entity_definitions/`.
+
+**2026-09-14 — `REVIEWER`, rule-2 adjudication for P5 (`REQ-344`–`REQ-349`).**
+Raised by `REQ-VALIDATOR` rather than failed over, correctly: the P5
+requirements declare bucket C on rule 1's test (they cannot be stated without
+naming exams) and none carried a rule-2 sign-off. *(This adjudication was
+written against `REQ-344`–`REQ-348`, before `REQ-346`'s split created
+`REQ-349`. `REQ-349` ships only Playwright specs and so falls under the same
+non-reaching finding as `REQ-346`; the enumeration here is corrected
+accordingly, and no other part of the adjudication is affected.)*
+
+**Finding: rule 2 does not reach `REQ-344`, `REQ-346`, `REQ-347` or
+`REQ-349`.** Rule 2 gates modules that had a real A/B alternative — its own
+text asks why a *behaviour* is not expressible as a definition and not
+generalisable as a platform capability, and every sign-off on record
+(`req330-exam-live-session.md` §7's four modules, `REQ-338`'s two screens)
+attaches to a module whose §7 entry authorises it to be built. A Playwright
+spec and an inventory document were never candidates for A or B; the question
+has no possible answer, so the gate has nothing to bite on. `REQ-306` is the
+precedent on the other side — a `TEST-DESIGNER` requirement that took the
+bucket of the thing under test with no separate sign-off. These four are C by
+rule 1 and registerable as filed. A class-wide sign-off was considered and
+**declined**: rule 2's force comes from per-thing justification, and signing
+off a category would establish that categories can be waved through. Not
+reaching them is the cleaner finding than reaching them with a weakened rule.
+
+**Finding: rule 2 does reach `REQ-345`, which needs a per-entry sign-off and
+has one here.** `REQ-345` ships executable code (a mix seed task writing exam
+records through `Letflow.Entities`), and its A/B question has real answers,
+which is the proof the gate applies. Its originally-filed bucket line was also
+self-undermining — it justified C on rule 1 while describing the deliverable as
+"pack/definition-driven seed data plus a mix task", putting the C-ness entirely
+on the task half it did not justify. Sign-off, per rule 2's one-sentence-each
+form:
+
+- *Why not A:* the fixture's records are bucket-A-shaped (entity records
+  against pack-defined definitions), but a definition has no execution
+  semantics — it cannot perform the idempotent create-or-resolve convergence
+  that re-running the seed requires, which is executable logic.
+- *Why not B:* a generic "seed fixture records for a named entity set" mix task
+  is a plausible platform capability and is the honest B candidate, but it
+  would be built for exactly one caller today; generalising ahead of a second
+  is the speculative-generality failure mode `0022` exists to prevent, and the
+  same reason `QuestionSetResolver` and `AntiCheat` are C. Revisit if a second
+  vertical needs a seeded fixture.
+
+**PASS** on rule 2 for all five. `REQ-348` declares no bucket (stage
+bookkeeping, matching `REQ-334` and `REQ-339`) and is unaffected.
+
+**Rule 3 does not bite, verified against this file's own measurement text.**
+The metric is directory-scoped — `ls`/`wc -l` over `lib/letflow/exam/*.ex` and
+`web/src/pages/exam/*.tsx` — and this file already excludes
+`web/src/pages/exam/__tests__/` as "test files, not modules." Specs under
+`web/tests/e2e/`, a document under `docs/testing/`, and a mix task outside both
+directories fall outside the metric, the last of these by directory rather than
+by kind. **P5 adds no bucket-C inventory rows, and the inventory stays at four
+modules / 1,605 lines under `lib/letflow/exam/` and two screen modules /
+497 lines under `web/src/pages/exam/`.** That is an honest reading, not a
+loophole: an exam-specific acceptance corpus is not the failure mode rule 3
+detects (the platform quietly becoming an exam engine) — per `0022` reasoning
+§5 it is the independent evidence the generic platform hosts the vertical. A
+reader must not read the unchanged inventory as P5 having added nothing
+exam-specific; P5's exam-specific output is its ported spec corpus, measured by
+`REQ-348`'s parity figure, not by this table.
+
+**Consequence for `0022`.** Rule 2 does not state its own scope, which is why
+this came up at all. An amendment stating it is to be filed as its own
+requirement rather than edited into `0022` in place, following the precedent of
+decision `0030`'s Finding 1 and this file's own hard constraint; until it
+lands, this entry is the governing precedent.

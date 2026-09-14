@@ -180,14 +180,23 @@ defmodule Letflow.PublicRead do
             :not_found
 
           resource ->
-            handle_meta = %{issued_at: handle.inserted_at, kind: handle.kind}
+            # `Handle.inserted_at` is stored via the schema's bare `timestamps()`
+            # (naive_datetime, no `:utc_datetime_usec` override -- see
+            # Letflow.PublicRead.Handle's field list) -- this app's established
+            # naive-datetime-as-UTC idiom (matches Letflow.Routers.Identity's own
+            # `iso8601/1` private helper) converts it to a real DateTime.t() once,
+            # here, before it is handed to a projection's `handle_meta()` (which the
+            # Letflow.PublicRead.Projection behaviour types as DateTime.t()) or
+            # encoded for the response envelope.
+            issued_at = DateTime.from_naive!(handle.inserted_at, "Etc/UTC")
+            handle_meta = %{issued_at: issued_at, kind: handle.kind}
 
             case projection_module.project(resource, handle_meta) do
               {:ok, data} ->
                 {:ok,
                  %{
                    "kind" => kind,
-                   "issued_at" => DateTime.to_iso8601(handle.inserted_at),
+                   "issued_at" => DateTime.to_iso8601(issued_at),
                    "data" => data
                  }}
 

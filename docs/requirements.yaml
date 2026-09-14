@@ -24835,7 +24835,7 @@ requirements:
     title: Close S10 P5 -- RELEASE-VALIDATOR re-derives the ported parity suite's pass independently and UAT-RUNNER runs it against a live instance, both quoting real output, and the stage file records the measured parity against the no-counterpart set (S10 P5, close-out)
     owner: RELEASE-VALIDATOR
     impl_order: 661
-    status: pending
+    status: done
     stage: S10
     description: >
       bucket: not applicable -- stage bookkeeping and independent

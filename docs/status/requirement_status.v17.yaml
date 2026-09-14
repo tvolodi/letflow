@@ -411,3 +411,65 @@ history:
 
       Merged via PR #1395 (feat/REQ-349-20260914). letflow-queue task
       660 released status: done.
+  - req: REQ-348
+    event: started
+    agent: RELEASE-VALIDATOR
+    at: "2026-09-14T13:00:00Z"
+    note: >
+      Claimed letflow-queue task 661 (depends_on REQ-346, REQ-347, REQ-349,
+      all done). Read REQ-348's full text, REQ-344's triage doc, and the
+      stage file's P5 row before acting -- both halves (RELEASE-VALIDATOR
+      re-run, UAT-RUNNER live pass) required, neither satisfiable by citing
+      REQ-346/347/349's own reported results.
+  - req: REQ-348
+    event: done
+    agent: RELEASE-VALIDATOR
+    at: "2026-09-14T13:35:25Z"
+    note: >
+      Independently re-ran the full ported suite (web/tests/e2e/
+      {categories,tags,question-bank,exam-lifecycle,employee-portal,
+      exam-taking,exam-result}.e2e.spec.ts, 34 test() blocks) live against
+      this checkout's own running instance, multiple times -- not citing
+      REQ-346/347/349's own reports. Verified REQ-345's seeded fixture
+      present via real `POST /api/v1/entities/query` before accepting any
+      candidate-side pass. Diagnosed and corrected two of its own
+      environment mistakes before treating any run as authoritative: (1)
+      setting VITE_API_BASE_URL absolute triggered a real browser CORS
+      preflight rejection bypassing Vite's dev proxy -- corrected by
+      leaving it unset; (2) repeated local runs against this one
+      persistent dev database exhausted admin-user's max_attempts against
+      both REQ-345 fixture exams (check_attempts_exhausted counts
+      soft-deleted sessions too) -- restored via a real
+      PUT /api/v1/entities/records/exam/:id (max_attempts only), confirmed
+      via ci.yml that real CI always starts from a fresh database so this
+      is not CI-relevant. Clean run: 32 passed, 2 flaky (passed on
+      Playwright's own configured retry), exit 0.
+
+      Separately dispatched UAT-RUNNER against the same live instance
+      (Letflow :4000, Keycloak :8093, Postgres :5462, REQ-345's fixture
+      seeded) -- its own real HTTP liveness/fixture check, and its own
+      Playwright run, quoted verbatim in the stage file. Its first run
+      correctly reported RED (the attempts-exhaustion cause, before the
+      fix was shared); its second run after the fix: candidate flow
+      (employee-portal/exam-taking/exam-result) passed cleanly, admin CRUD
+      flow (categories/tags/question-bank) passed cleanly, with one
+      failure + one flake in exam-lifecycle.e2e.spec.ts matching a third,
+      pre-diagnosed local-database-pollution mechanism (EntityCrudPage's
+      records query has no deleted:false filter; dozens of soft-deleted
+      historical exam rows from today's own repeated runs occasionally
+      push a freshly-created row off page 1's 25-row window) -- filed as
+      ISS-0663 (GH-1396, Q-663), confirmed not to reproduce against a
+      fresh database, attributed rather than hidden.
+
+      Measured parity: 34/168 corpus test() blocks (REQ-344's corrected
+      count) ported and passing. Full per-file accounting against all 19
+      corpus files written into docs/migration/stage-10-bilimbaga-vertical.md's
+      new "P5 close-out" section, naming every non-ported spec's
+      disposition (no-counterpart surface, or deferred as redundant with
+      a dedicated file already covering its portable sub-assertions, for
+      full-walkthrough.spec.ts). Stage file's P5 row and exit-condition
+      cell updated to reflect both required independent re-verifications
+      done.
+
+      No test skipped, retried-until-green by narrowing scope, or deleted
+      to force a pass.

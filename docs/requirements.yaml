@@ -25062,7 +25062,7 @@ requirements:
   - id: REQ-350
     title: Settle by decision record whether Letflow serves a candidate results-LIST surface at all (GetExamHistory/HandleGetMyResults, FR-BB41/FR-BB46) -- the half REQ-335's scope fence deliberately left open, and the only half the P5 evidence does NOT already settle (S10 P5 follow-up, product scope)
     owner: CODE-DESIGNER
-    impl_order: 0  # PLACEHOLDER -- ORCH overwrites at WF-01 Step 3
+    impl_order: 666
     status: pending
     stage: S10
     description: >
@@ -25239,7 +25239,7 @@ requirements:
   - id: REQ-351
     title: Make a candidate's OWN just-submitted exam result durably viewable by loading an existing session on mount instead of unconditionally starting a new one -- the half of the results-surface gap the P5 evidence already settles, frontend-only, no new backend route (S10 P5 follow-up)
     owner: FRONTEND-DEV
-    impl_order: 0  # PLACEHOLDER -- ORCH overwrites at WF-01 Step 3
+    impl_order: 667
     status: pending
     stage: S10
     description: >
@@ -25404,7 +25404,7 @@ requirements:
   - id: REQ-352
     title: "Build decision 0028's unauthenticated-read platform machinery -- the /api/public mount, the Plug.Router sub-router, the public_read_handles registry and its authenticated writer, the ETS token-bucket rate limiter and the ten-case byte-identical refusal path -- with no projection and no vertical vocabulary (S10 gap 6, bucket B)"
     owner: ELIXIR-DEV
-    impl_order: 0  # PLACEHOLDER -- ORCH overwrites at WF-01 Step 3
+    impl_order: 668
     status: pending
     stage: S10
     description: >
@@ -25516,7 +25516,7 @@ requirements:
   - id: REQ-353
     title: File the amendment that states bucket rule 2's own scope -- as a NEW decision record amending 0022 by reference, not an in-place edit -- so the P5 rule-2 adjudication stops being the governing precedent (S10, decision record)
     owner: CODE-DESIGNER
-    impl_order: 0  # PLACEHOLDER -- ORCH overwrites at WF-01 Step 3
+    impl_order: 669
     status: pending
     stage: S10
     description: >
@@ -25723,7 +25723,7 @@ requirements:
   - id: REQ-354
     title: "Decision record: choose the PDF-rendering and QR-encoding dependencies for Letflow, with candidates, licences and maintenance status evaluated -- mix.exs carries neither today, and S10 gap 5 has a settled mechanism but no library choice on record"
     owner: CODE-DESIGNER
-    impl_order: 0  # PLACEHOLDER -- ORCH overwrites at WF-01 Step 3
+    impl_order: 670
     status: pending
     stage: S10
     description: >
@@ -25805,7 +25805,7 @@ requirements:
   - id: REQ-355
     title: "Certificate issuance: author the certificate entity definition and the idempotent issue-on-first-request context module gated on submitted+passed+certificate_enabled, capturing a branding snapshot at issuance time (S10 P3, certificate issuance)"
     owner: ELIXIR-DEV
-    impl_order: 0  # PLACEHOLDER -- ORCH overwrites at WF-01 Step 3
+    impl_order: 671
     status: pending
     stage: S10
     description: >
@@ -25924,7 +25924,7 @@ requirements:
   - id: REQ-356
     title: "Render the certificate document and its embedded verification QR code from an issued certificate record, adding the REQ-354-chosen dependencies to mix.exs, and serve it from the authenticated download route (S10 P3, certificate issuance)"
     owner: ELIXIR-DEV
-    impl_order: 0  # PLACEHOLDER -- ORCH overwrites at WF-01 Step 3
+    impl_order: 672
     status: pending
     stage: S10
     description: >
@@ -26026,7 +26026,7 @@ requirements:
   - id: REQ-357
     title: "Register the certificate projection as decision 0028's first real public-read kind -- the projection module, its kind string, and the handle issued on the authenticated certificate path -- closing S10 gap 6's vertical half (S10 P3, certificate issuance)"
     owner: ELIXIR-DEV
-    impl_order: 0  # PLACEHOLDER -- ORCH overwrites at WF-01 Step 3
+    impl_order: 673
     status: pending
     stage: S10
     description: >

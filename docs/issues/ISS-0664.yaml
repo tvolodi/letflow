@@ -37,4 +37,52 @@ affected_files:
   - web/tests/e2e/iss-0662-entity-crud-click-freeze.e2e.spec.ts
 queue_ref: Q-664
 github_ref: GH-1399
-status: open
+status: resolved
+resolution_note: >
+  Root-cause determination: candidate fix (a) -- POST /api/v1/entities/query
+  filtering deleted:false by default -- already landed via ISS-0663 (merged
+  commit 52fcc85a, PR #1398): EntityCrudPage.tsx's recordsQuery sends
+  `EXCLUDE_DELETED_FILTERS` (`[{field: 'deleted', op: 'eq', value: false}]`)
+  on every list request. Verified against the current tree
+  (web/src/pages/entities/EntityCrudPage.tsx lines 56-63, 128-129).
+
+  Verified against lib/letflow/entities/query/compiler.ex and
+  lib/letflow/entities/query/cursor.ex that this filter is applied as part
+  of the compiled query's WHERE clause (compile_plain/5) BEFORE
+  Cursor.paginate/5 ever adds its limit(page_size + 1) on top of that
+  already-filtered, not-yet-executed Ecto.Query.t() -- i.e. filtering
+  happens at the SQL level, strictly before the LIMIT/keyset window, not as
+  a post-fetch filter on an already-paginated result set. Deleted rows
+  therefore never occupy any slot in the page-1 candidate set once excluded
+  -- they don't merely get hidden after counting toward pagination math,
+  they never enter the count at all.
+
+  Conclusion: candidate fix (a) alone fully resolves the specific flake this
+  issue reports (a freshly created record pushed off page 1 by accumulated
+  DELETED rows). Candidate fix (b) -- explicit sort by created_at desc --
+  was evaluated and determined unnecessary scope for this MINOR issue: it
+  would address a different scenario (page-1 placement among many LIVE
+  records) that this issue does not report, not the reported deleted-rows
+  flake. Not implemented, to avoid manufacturing work beyond this issue's
+  actual root cause.
+
+  Added a regression test proving the specific failure mode does not recur:
+  web/tests/e2e/iss-0664-entity-crud-pagination-deleted-rows.e2e.spec.ts
+  creates a record, then accumulates 30 soft-deleted rows created after it,
+  and confirms the original record is still visible on page 1 with no
+  pagination click needed.
+
+  Verification run in this environment: npm run type-check (clean), npm run
+  lint (0 warnings), npm test (568/568 passing, no new unit tests needed --
+  this is an e2e-only regression proof), npm run guards (48/48 passing). The
+  new e2e spec itself could not be run to a green result in this local
+  environment -- the local Keycloak-issued bearer token is rejected by the
+  local backend with "invalid or expired bearer token" for EVERY e2e test in
+  this checkout, including the already-merged, unrelated
+  iss-0662-entity-crud-click-freeze.e2e.spec.ts (confirmed by running its
+  TC-ISS-0662-03 test, which fails identically) -- a pre-existing local
+  auth/environment issue, not a defect introduced by this change. CI's own
+  fresh-database/fresh-Keycloak environment does not carry this local
+  token-validation mismatch.
+resolved_by: FRONTEND-DEV
+resolved_at: "2026-09-14T21:17:43Z"

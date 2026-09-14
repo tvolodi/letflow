@@ -1048,3 +1048,65 @@ history:
       guard tests passed, clean production build).
 
       docs/issues/ISS-0654.yaml flipped open -> resolved.
+  - req: SCOPE-CHANGE
+    event: started
+    agent: ORCH
+    at: "2026-09-14T04:23:00Z"
+    note: >
+      Claimed letflow-queue task 649 (ISS-0649, GH#1355, S3) -- self-filed
+      by CODE-DESIGNER during ISS-0648's design pass.
+      TenantProvisioning.column_promotions_in_flight/2's status filter
+      excludes "active", so Records.dual_write_promoted_columns/3 stops
+      writing to a promoted entity type's per-entity-type table entirely
+      once its ColumnPromotion reaches active -- contradicting decision
+      0024 section 3 step 3's stated intent of a single write continuing
+      after cutover, not zero. Consequence if unfixed: any promotion
+      driven to active (e.g. future REQ-299/300 work) silently regresses
+      that entity type's UNIQUE constraint enforcement for every write
+      after cutover, reintroducing ISS-0648's own bug at a later
+      lifecycle stage. Tenant-data-path change -- full pipeline
+      (ELIXIR-DEV -> SECURITY-REVIEWER -> REVIEWER -> TEST-RUNNER)
+      dispatched.
+  - req: SCOPE-CHANGE
+    event: done
+    agent: ORCH
+    at: "2026-09-14T05:25:00Z"
+    note: >
+      ISS-0649 (queue task 649, GH#1355) resolved via
+      fix/ISS-0649-20260914. column_promotions_in_flight/2 renamed to
+      column_promotions_for_table_write/2, status filter expanded to
+      include "active" alongside the existing ddl_applied/backfilling/
+      backfilled -- Records.dual_write_promoted_columns/3's single call
+      site now keeps writing full rows to the promoted per-entity-type
+      table forever after cutover.
+
+      Confirmed against decision 0024 section 3 step 3 (independently
+      re-read by both SECURITY-REVIEWER and REVIEWER): active only
+      stops dual-writing the attribute into entity_record_latest's own
+      field_values blob, not the per-entity-type table's own row, which
+      is documented elsewhere as unconditional. The separate
+      column_promotion_dual_write?/3 (field_values blob dual-write) and
+      query_eligible (REQ-299/300's read-path :typed_column dispatch)
+      are both untouched and confirmed independent.
+
+      New test drives a real ColumnPromotion through register ->
+      run_column_promotion -> backfill_column_promotion ->
+      activate_column_promotion to active, then proves via a real
+      Records.create_record/2 call that a post-activation write still
+      lands in the per-entity-type table and a duplicate value against
+      the unique-constrained column still fails, with a raw-SQL
+      row-count check confirming no phantom row.
+
+      Pipeline: ELIXIR-DEV -> SECURITY-REVIEWER PASS (INV-1/INV-7/INV-8
+      confirmed, independently re-ran affected tests plus the full mix
+      letflow.check: 627/629, only pre-existing rustc-absent
+      toolchain-check failures) -> REVIEWER PASS (confirmed rename
+      clarity and scope minimality via git diff --stat, independently
+      re-read decision 0024 and the iss0648 design doc's own
+      pre-registered ISS-0649 fix direction, both matching the diff) ->
+      TEST-RUNNER ran the full 8-way-partitioned mix letflow.check
+      (~4234 tests+properties): 4232 passed, 2 failures, both the same
+      pre-existing rustc-absent CheckToolchainTest failures, unrelated
+      to this diff.
+
+      docs/issues/ISS-0649.yaml flipped open -> resolved.

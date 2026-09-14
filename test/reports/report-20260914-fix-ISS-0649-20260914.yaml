@@ -1,0 +1,124 @@
+run_id: fix-ISS-0649-20260914
+agent: TEST-RUNNER
+workflow: WF-02 (Requirement Implementation) Step 4 / WF-04 Step 1 -- Test run
+timestamp_utc: "2026-09-14T05:03:07Z"
+branch: fix/ISS-0649-20260914
+head_commit: 9a754fbf
+issue: >
+  ISS-0649 (queue task 649, github_issue_number 1355) -- Letflow.TenantProvisioning's
+  `column_promotions_in_flight/2` renamed to `column_promotions_for_table_write/2` and
+  its status filter widened from ["ddl_applied", "backfilling", "backfilled"] to also
+  include "active", so Letflow.Entities.Records.dual_write_promoted_columns/3 keeps
+  writing to a promoted entity type's per-tenant physical table forever after cutover
+  instead of silently stopping once the promotion reaches "active". This call site sits
+  on every entity create/update write path when any column promotions exist for the
+  tenant/entity type. Change is uncommitted in the current worktree (not yet
+  committed/pushed to fix/ISS-0649-20260914). Both SECURITY-REVIEWER and REVIEWER
+  already PASSed this change; REVIEWER specifically required a full-suite run (not a
+  file-scoped one) because of the write-path breadth of the call site.
+
+git_state:
+  clean_tree_before_run: false
+  note: >
+    Working tree carries the ISS-0649 fix as uncommitted changes on top of
+    fix/ISS-0649-20260914 (which is otherwise even with main -- no prior commits on
+    the branch). Ran the full suite against this uncommitted working tree, as
+    instructed, rather than waiting for a commit.
+  uncommitted_diff:
+    - lib/letflow/entities/records.ex
+    - lib/letflow/tenant_provisioning.ex
+    - test/letflow/tenant_provisioning/constraint_fk_activation_test.exs
+
+environment:
+  toolchain: "Elixir 1.20.3 (compiled with Erlang/OTP 29) via asdf shims (required `source ~/.asdf/asdf.sh`; not on default PATH in this shell). letflow.check_toolchain: Elixir/OTP match .tool-versions. Rust: pin expects 1.97.1, `rustc` not found/runnable in this sandbox -- reported as a WARNING only by check_toolchain (never gates the build), but it does make the two CheckToolchainTest 'rust pin' unit tests fail (see finding below)."
+  docker_compose: "letflow-1-postgres-1 and letflow-1-keycloak-1 already Up/healthy (postgres 10 days, keycloak 3 weeks) -- `docker compose up -d` (unprivileged) failed with 'permission denied .../docker.sock'; `sudo docker compose up -d` confirmed both containers already running/healthy, so no action was needed. .env sets LETFLOW_DB_PORT=5463, matching the running postgres container's published port."
+  deps: "mix deps.get run explicitly this session -- network access available, all dependencies fetched successfully before the check."
+
+commands_run:
+  - "MIX_ENV=test mix letflow.check -- full repository, single run, run to completion in the foreground (416.2s test phase plus pre/post static-check steps). Not backgrounded, not polled via Monitor -- awaited synchronously in one call."
+
+letflow_check:
+  command: "mix letflow.check"
+  exit_code: 1
+  steps_before_test:
+    - "letflow.check_toolchain: WARNING only (Rust rustc not found/runnable) -- does not gate, exit code unaffected."
+    - "letflow.check_requirements_registration: OK -- 311 entries = 309 registered + 2 deferred (REQ-223/224, pre-existing, unrelated to this fix) + 0 unclassified."
+    - "letflow.check_req_id_collision: OK -- no REQ-NNN id collision with origin/main."
+    - "letflow.check_deferral_staleness: OK (advisory stage-activity report only, no gate failure)."
+    - "letflow.lint_handoffs: OK -- 0 new violations across 2486 handoff files under handoffs (25 pre-existing grandfathered, traced to ISS-0190)."
+    - "letflow.check_async_sandbox_reachability: OK -- 80 async:true test files scanned under test, 0 reach Sandbox.mode/2, 0 new violations."
+    - "letflow.check_issue_refs: OK -- every cross-reference is prefixed and well-formed."
+  test_step:
+    command: "letflow.check.test -> scripts/test_parallel.sh (8-way, N=8 from nproc)"
+    partitions: 8
+    output: |
+      test_parallel: TEST_PARALLEL_GROUP=tp3840778 (shared by all 8 partitions)
+      partition 1: 417 tests, 3 properties, 0 failures, exit 0
+      partition 2: 440 tests, 0 properties, 0 failures, exit 0
+      partition 3: 625 tests, 0 properties, 0 failures, exit 0
+      partition 4: 429 tests, 2 properties, 0 failures, exit 0
+      partition 5: 620 tests, 0 properties, 0 failures, exit 0
+      partition 6: 607 tests, 0 properties, 0 failures, exit 0
+      partition 7: 628 tests, 1 property, 2 failures, exit 2
+      partition 8: 462 tests, 0 properties, 0 failures, exit 0
+      ---
+      combined: 4228 tests, 6 properties, 2 failures (4232/4234 passed)
+    real_test_result: "4232/4234 tests+properties passed (combined total across all 8 partitions). 2 failures, both in partition 7, both in Mix.Tasks.Letflow.CheckToolchainTest ('rust pin' tests). No other partition reported any failure."
+
+failing_tests:
+  - test: "test rust pin (REQ-165) a mismatched rust pin reports a MISMATCH row naming expected and running (Mix.Tasks.Letflow.CheckToolchainTest)"
+    location: "test/mix/tasks/letflow_check_toolchain_test.exs:289"
+    error: "** (ErlangError) Erlang error: :enoent -- System.cmd(\"rustc\", [\"--version\"], [stderr_to_stdout: true]) at lib/system.ex:1141, via running_rust_raw/0 (line 69) and running_rust_version/0 (line 76)"
+  - test: "test rust pin (REQ-165) a matching rust pin reports OK with no mismatch (Mix.Tasks.Letflow.CheckToolchainTest)"
+    location: "test/mix/tasks/letflow_check_toolchain_test.exs:274"
+    error: "** (ErlangError) Erlang error: :enoent -- same System.cmd(\"rustc\", ...) call, same stacktrace shape"
+
+attribution:
+  method: "form (a) -- diff-membership check per core-directives.md 'Failure Attribution Is Structural, Never By Count-Matching'"
+  evidence: >
+    The uncommitted diff touches exactly 3 files: lib/letflow/entities/records.ex,
+    lib/letflow/tenant_provisioning.ex, and
+    test/letflow/tenant_provisioning/constraint_fk_activation_test.exs. Neither the
+    failing module (test/mix/tasks/letflow_check_toolchain_test.exs) nor its
+    dependency (the presence/absence of a `rustc` binary on PATH) appears anywhere in
+    that diff. The failure's root cause -- `rustc` genuinely absent/unrunnable in this
+    sandbox's PATH -- is independently confirmed by letflow.check_toolchain's own
+    WARNING line above and by the identical :enoent from
+    System.cmd("rustc", ["--version"], ...). This is exactly the flake class named in
+    this run's own briefing ("Mix.Tasks.Letflow.CheckToolchainTest's 'rust pin' tests
+    fail with :enoent because rustc/cargo are not installed in this sandbox --
+    unrelated to this diff"), and matches the same 2-failure signature both
+    SECURITY-REVIEWER and REVIEWER already confirmed for this same run.
+  conclusion: PRE-EXISTING / ENVIRONMENTAL. Not a regression from this branch. Not blocking.
+
+new_or_changed_test_module_result: >
+  test/letflow/tenant_provisioning/constraint_fk_activation_test.exs (the test file
+  this branch modifies for ISS-0649) reported 0 failures in the partition it ran in
+  and does not appear in any partition's failure list. No test under
+  test/letflow/tenant_provisioning/, test/letflow/entities/, or any other directory
+  touching promoted-column dual-write, entity create/update, exam, or session paths
+  failed anywhere across all 8 partitions -- confirmed by grepping the aggregate
+  output and all partition failure markers. The only 2 failures anywhere in the
+  4234-test/property combined run are the two CheckToolchainTest cases above, which
+  are unrelated to entity writes, tenant provisioning, or column promotion.
+
+verdict: "PASS (with one attributed, non-blocking, pre-existing environmental gap)"
+verdict_reasoning: >
+  mix letflow.check's combined exit code is 1, but the only two failing tests are
+  Mix.Tasks.Letflow.CheckToolchainTest's rust-pin unit tests, which fail solely
+  because this sandbox has no runnable `rustc` binary -- an environment-provisioning
+  gap unrelated to ISS-0649's actual change (lib/letflow/tenant_provisioning.ex's
+  column_promotions_for_table_write/2 rename+filter widening and
+  lib/letflow/entities/records.ex's dual_write_promoted_columns/3 call site), and
+  structurally confirmed absent from this branch's diff. Every other letflow.check
+  gate (requirements registration, req-id collision, deferral staleness, handoff
+  lint, async-sandbox-reachability, issue-ref lint) passed. All 4232 non-toolchain-
+  flake tests/properties passed across all 8 partitions, including every test
+  exercising promoted-column dual-write, entity create/update, and tenant
+  provisioning -- the exact interaction surface REVIEWER flagged this full run to
+  catch. This matches exactly the 2-failure signature both SECURITY-REVIEWER and
+  REVIEWER already confirmed for this run. This branch is ready to merge as far as
+  TEST-RUNNER's own gate is concerned; RELEASE-VALIDATOR should independently
+  re-run the suite itself before treating this as fully closed, per this project's
+  "every producing step has a validating step" rule.
+next_action: "Route to RELEASE-VALIDATOR for independent re-verification and merge."

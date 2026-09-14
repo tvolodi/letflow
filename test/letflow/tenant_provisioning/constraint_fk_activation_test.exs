@@ -874,7 +874,7 @@ defmodule Letflow.TenantProvisioning.ConstraintFkActivationTest do
 
       # promote_and_create_table! runs run_column_promotion/1, landing the
       # promotion at status "ddl_applied" -- one of the
-      # column_promotions_in_flight/2 statuses, so the very next
+      # column_promotions_for_table_write/2 statuses, so the very next
       # create_record!/3 call below dual-writes through
       # Records.dual_write_promoted_columns/3, the real production Multi
       # step, not a test-only shortcut.
@@ -917,7 +917,7 @@ defmodule Letflow.TenantProvisioning.ConstraintFkActivationTest do
       # moment ANY field on this entity type gets its first CREATE TABLE, so
       # the physical column already exists once "misc" is promoted below.
       # It is NOT yet tracked by its own `ColumnPromotion` row, though --
-      # `column_promotions_in_flight/2` only returns rows individually
+      # `column_promotions_for_table_write/2` only returns rows individually
       # registered via `register_column_promotion/4`, so the live dual-write
       # this test's own `create_record!/3` call triggers (for "misc") does
       # NOT also write "customer_id" -- it stays NULL on the physical row
@@ -990,6 +990,82 @@ defmodule Letflow.TenantProvisioning.ConstraintFkActivationTest do
                invoice_record.record_id,
                "customer_id"
              ) == customer_record.record_id
+    end
+  end
+
+  # ---------------------------------------------------------------------------------
+  # ISS-0649 -- once a ColumnPromotion reaches "active", Records.create_record/2
+  # must keep writing full rows to the promoted per-entity-type table, and its
+  # UNIQUE constraint must keep rejecting a duplicate. Before this fix,
+  # TenantProvisioning.column_promotions_in_flight/2's status filter excluded
+  # "active", so Records.dual_write_promoted_columns/3 returned {:ok, :skipped}
+  # for every write once a promotion completed, silently disabling the
+  # per-entity-type table's own constraint enforcement (and leaving the table's
+  # rows stale) for that entity type forever after. Decision record 0024 §3
+  # step 3 only retires the entity_record_latest.field_values blob dual-write
+  # at "active" -- it does not say to stop writing the per-entity-type table's
+  # own row (0024 §3 step 1: that write is unconditional/single, not zero).
+  # ---------------------------------------------------------------------------------
+
+  describe "ISS-0649 -- promoted per-entity-type table keeps being written once ColumnPromotion is active" do
+    test "create_record/2 still writes full rows post-activation, and the unique constraint still rejects a duplicate" do
+      %{tenant_id: tenant_id, schema_name: schema} = provisioned_tenant()
+
+      create_active_definition!(schema, %{
+        name: "sku_activefix",
+        display_name: "SKU Activefix",
+        fields: [%{name: "code", type: :string, queried: true}],
+        constraints: [%{name: "uq_sku_activefix_code", type: :unique, fields: ["code"]}]
+      })
+
+      table_name =
+        promote_and_create_table!(schema, tenant_id, "sku_activefix", "code", "text")
+
+      assert %ColumnPromotion{id: promotion_id, status: "ddl_applied"} =
+               Repo.get_by!(ColumnPromotion,
+                 tenant_id: tenant_id,
+                 entity_type: "sku_activefix",
+                 attribute: "code"
+               )
+
+      # Drive the promotion all the way to "active" -- the exact production
+      # lifecycle (register -> ddl_applied -> backfilled -> active), not a
+      # hand-set status.
+      assert {:ok, %ColumnPromotion{status: "backfilled"}} =
+               TenantProvisioning.backfill_column_promotion(promotion_id)
+
+      assert {:ok, %ColumnPromotion{status: "active", query_eligible: true}} =
+               TenantProvisioning.activate_column_promotion(promotion_id)
+
+      # A create_record/2 call made AFTER activation must still land a full
+      # row (structural columns + the promoted "code" column) in the
+      # per-entity-type table -- not only in entity_record_latest.field_values.
+      first_record = create_record!(schema, "sku_activefix", %{"code" => "SKU-1"})
+
+      assert entity_table_column_as_text(schema, table_name, first_record.record_id, "code") ==
+               "SKU-1"
+
+      # And the per-entity-type table's own UNIQUE constraint must still be
+      # enforced against a live write through the real create_record/2 path
+      # -- this is the regression ISS-0648 fixed, reintroduced at a later
+      # lifecycle stage if column_promotions_for_table_write/2 ever excludes
+      # "active" again.
+      assert {:error, {:record_payload_invalid, _reason}} =
+               Records.create_record(
+                 %{
+                   entity_type: "sku_activefix",
+                   field_values: %{"code" => "SKU-1"},
+                   actor_id: Ecto.UUID.generate(),
+                   idempotency_key: Ecto.UUID.generate()
+                 },
+                 schema
+               )
+
+      # Sanity: the duplicate was rejected before a second row was ever
+      # inserted into the per-entity-type table (not merely rejected at the
+      # entity_record_latest layer, which has no such constraint).
+      sql = ~s|SELECT count(*) FROM "#{schema}"."#{table_name}" WHERE "code" = 'SKU-1'|
+      assert %Postgrex.Result{rows: [[1]]} = Repo.query!(sql)
     end
   end
 end

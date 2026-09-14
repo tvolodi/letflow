@@ -195,7 +195,9 @@ defmodule Mix.Tasks.Letflow.Seed.ExamFixturesTest do
 
       questions = records(schema, "question")
       mixed_qs = Enum.filter(questions, &(field(&1, "category_id") == mixed_cat.record_id))
-      scoreable_qs = Enum.filter(questions, &(field(&1, "category_id") == scoreable_cat.record_id))
+
+      scoreable_qs =
+        Enum.filter(questions, &(field(&1, "category_id") == scoreable_cat.record_id))
 
       assert length(mixed_qs) == 5
       assert length(scoreable_qs) == 3

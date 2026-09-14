@@ -931,3 +931,25 @@ history:
       except the pre-existing rust-toolchain-absence failures.
 
       docs/issues/ISS-0653.yaml flipped open -> resolved.
+  - req: SCOPE-CHANGE
+    event: started
+    agent: ORCH
+    at: "2026-09-14T02:20:53Z"
+    note: >
+      Claimed letflow-queue task 650 (ISS-0650, GH#1356, S10, MAJOR) --
+      self-filed by FRONTEND-DEV during REQ-338. Letflow.Exam.Session.
+      autosave_answer/4's answer_attrs and upsert_answer/6 have no
+      text_answer field at all -- a short_text exam question can never
+      be answered regardless of what a client sends, even though
+      saved_answer's own type (REQ-335) already declares text_answer,
+      session_answer.json (REQ-329) already declares the field in its
+      schema, and REQ-332's Scoring module already marks a short_text
+      answer pending_manual for human grading with nothing for a human
+      grader to actually grade. Fix direction: extend answer_attrs to
+      accept an optional text_answer, branch check_answer_shape/2's
+      :short_text case to validate it, extend upsert_answer/6 to write
+      it, confirm submit/3/Scoring's pending_manual path reads the
+      real value, then wire REQ-338's ExamSessionPage.tsx's "not yet
+      supported" placeholder to a real text input through the now-
+      complete autosave path. Backend first (ELIXIR-DEV), then
+      frontend (FRONTEND-DEV) once the write path is real.

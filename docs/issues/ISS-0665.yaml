@@ -1,0 +1,55 @@
+id: ISS-0665
+title: "Stage-10 bucket-C inventory is stale -- rule 3's primary health metric understates lib/letflow/exam/ by 273 lines"
+discovered_by: REQ-VALIDATOR
+discovered_in_run: WF01-STEP2-REQ354-357-20260914
+discovered_at: "2026-09-14T12:40:00Z"
+severity: MINOR
+description: >
+  docs/migration/stage-10-bilimbaga-vertical.md's bucket-C inventory
+  records "4 modules, 1,605 total lines under lib/letflow/exam/,
+  measured 2026-09-13", quoting an `ls` and `wc -l` block.
+
+  Re-measured 2026-09-14, the same directory reads 1,878 lines:
+
+    anti_cheat.ex             309  (unchanged)
+    question_set_resolver.ex  109  (unchanged)
+    scoring.ex                246 -> 267   (+21)
+    session.ex                941 -> 1193  (+252)
+    total                   1,605 -> 1,878 (+273, 17%)
+
+  Module count is still 4 and is correct.
+
+  WHY IT MATTERS. Decision 0022 rule 3 makes bucket-C inventory growth
+  THE primary health metric for this stage -- the signal that detects
+  the platform quietly becoming an exam engine rather than a generic
+  BPM platform hosting a vertical. A metric that silently understates
+  itself by 17% is not performing that function. The whole point of
+  rule 3 is that someone reading the table can see movement; a stale
+  table shows none.
+
+  THE GROWTH IS LEGITIMATE AND TRACEABLE, which is worth stating so
+  this is not mistaken for smuggled scope: 7ab9f9d1 (ISS-0650,
+  short-text answers end to end), 794d1983 (ISS-0648), e19db8a8
+  (ISS-0647), 5f9817ee (REQ-335). All landed after the 2026-09-13
+  measurement. Nothing was added improperly; the record simply was not
+  re-run.
+
+  DISCOVERED BY REQ-VALIDATOR during WF-01 Step 2 on REQ-354..REQ-357,
+  whose descriptions cite the 1,605 baseline. Those citations are being
+  corrected to 1,878 in the same rework pass, but the stage file itself
+  is out of that pass's scope and no in-flight requirement fixes it --
+  which is why this is filed rather than folded in.
+
+  FIX DIRECTION: re-run both measurement blocks, update the
+  lib/letflow/exam/ figures AND the web/src/pages/exam/ figures (which
+  carry their own 2026-09-14 measurement and should be re-verified in
+  the same pass), and re-date each. Then consider whether the inventory
+  should state that its figures are a snapshot requiring re-measurement
+  at each phase close -- this is the second time stage-10 bookkeeping
+  has gone stale behind concurrent sibling work, the first being the
+  header block corrected in 1897e84d. A metric nobody is obliged to
+  re-run at a defined moment will keep drifting.
+affected_files:
+  - docs/migration/stage-10-bilimbaga-vertical.md
+queue_ref: Q-665
+github_ref: GH-1401

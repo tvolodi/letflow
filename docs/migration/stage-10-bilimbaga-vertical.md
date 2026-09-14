@@ -10,8 +10,11 @@ that fronts it. `REQ-339` (this bookkeeping entry) is P4's own close-out
 requirement, mirroring `REQ-334`'s role for P3. (337 and 341 were never used —
 each was retired by `REQ-VALIDATOR` for bundling separable units and split in
 two, per `REQ-340`'s and `REQ-342`'s own descriptions — so that span is
-deliberately non-contiguous.) `web/src/pages/exam/` now holds two modules,
-`ExamListPage.tsx` and `ExamSessionPage.tsx` — see the bucket-C inventory below.
+deliberately non-contiguous.) `web/src/pages/exam/` now holds four modules,
+`ExamListPage.tsx`, `ExamSessionPage.tsx`, `ExamResultView.tsx` and
+`ExamSessionResultPage.tsx` (the last two added by `REQ-351`, PENDING its own
+required per-entry `REVIEWER` rule-2 adjudication) — see the bucket-C
+inventory below.
 **P5 is met as of 2026-09-14**: expanded into `REQ-344`–`REQ-349` and closed the
 same day — triage (`REQ-344`), the two-exam seeded fixture (`REQ-345`),
 candidate-side, entity-CRUD-admin and result-side ports (`REQ-346`, `REQ-347`,
@@ -206,8 +209,10 @@ metric.
 | `Letflow.Exam.AntiCheat` | Validates one of exactly three signal types, checks session ownership/in-progress/deadline state, derives `action_taken` from the exam's `on_tab_switch` config (never from caller input), applies a per-session write-rate debounce, and branches `log`/`warn`/`submit` — a live conditional with a side effect (in the `submit` branch, triggering `Letflow.Exam.Session.submit/3`), which an entity definition cannot express. | Stating this generically requires naming the signal vocabulary (`tab_switch`/`blur`/`fullscreen_exit`) and the terminal action (auto-submitting a session) — both vertical-specific per rule 1's own test; a generic "signal-triggered record transition" capability would be built for exactly one caller today, the speculative-generality failure mode `0022` exists to prevent. | PASS (REVIEWER, 2026-09-13, WF02-REQ333-20260913) |
 | `web/src/pages/exam/ExamListPage.tsx` | Renders the candidate's exam-discovery/eligibility-gated start screen, including the honest "which exams can I take" answer against `check_assigned/3`'s documented no-op (option (a): list every active exam with copy stating this is provisional pending an assignment decision record) — a live disclosure/copy decision tied to a specific runtime finding, not a declarative field structure a definition could express. | The eligibility-error vocabulary it surfaces (assignment/archived/active/availability-window/attempt-limit/one-open-session, REQ-332's six atoms) and the provisional-copy escape hatch are specific to this vertical's session lifecycle (rule 1); no generic platform capability treats "explain why a record isn't startable yet" as shared today. | PASS (REVIEWER, 2026-09-13/14, three passes across WF02-REQ338-20260914 — implementation, router.tsx/queryKeys.ts decoupling fix, post branch-collision recovery — plus RELEASE-VALIDATOR PASS; docs/status/requirement_status.v16.yaml, REQ-338 done-event) |
 | `web/src/pages/exam/ExamSessionPage.tsx` | Orchestrates the in-progress/submit/result flow: per-answer autosave, a live countdown that ticks locally but is re-anchored to the server's `remaining_seconds` on every save response, submit/grading-pending/result state transitions, and three anti-cheat browser-event listeners (`visibilitychange`/`blur`/`fullscreenchange`) wired to `Letflow.Exam.AntiCheat`'s `log`/`warn`/`submit` branches with teardown on unmount — executable UI behaviour and client/server clock reconciliation, not field structure. | The countdown-reanchoring contract, the six eligibility-error messages, and the three anti-cheat signal types/branches are all specific to this vertical's session runtime (rule 1, same vocabulary `Letflow.Exam.Session`/`Letflow.Exam.AntiCheat` already justify); no generic capability treats "live countdown reanchored to a server tick" or "browser-event-to-signal mapping" as shared today. | PASS (REVIEWER, 2026-09-13/14, three passes across WF02-REQ338-20260914 — implementation, router.tsx/queryKeys.ts decoupling fix, post branch-collision recovery — plus RELEASE-VALIDATOR PASS; docs/status/requirement_status.v16.yaml, REQ-338 done-event) |
+| `web/src/pages/exam/ExamResultView.tsx` | `REQ-351`. The result-phase rendering extracted out of `ExamSessionPage.tsx` (same three testids/one render guard) so a session's result can be rendered identically whether it came from the LIVE start-answer-submit flow's in-memory `ExamSubmissionOutcome` or from a session LOADED by id via `GET /exam-sessions/:id` — a reuse/sharing decision over executable rendering logic, not a declarative field structure. | Its branching (`grading_pending` vs. scored, `passed` boolean, the pending-vs-score message ids) is this vertical's own `ExamSubmissionOutcome` shape and scoring vocabulary (rule 1, same basis `ExamSessionPage.tsx`'s own row already argues); no generic capability renders "an exam-shaped outcome." | **PENDING** — `REQ-351` itself flags that a per-entry `REVIEWER` rule-2 sign-off under decision 0022 is required before this requirement is registered done; not written here (REVIEWER's own step, not FRONTEND-DEV's) |
+| `web/src/pages/exam/ExamSessionResultPage.tsx` | `REQ-351`. Opens an EXISTING exam session by id (`examApi.getSessionState` only, never `startSession`) and renders its result phase via `ExamResultView` — a distinct mount/data-loading behaviour (a session-state fetch plus a load/error/pending/score-unavailable state machine) from `ExamSessionPage.tsx`'s unconditional-start mount, not a declarative field structure. | The honest A/B question REVIEWER must answer, per REQ-351's own text: a "load a record by id and render it read-only" screen is close to a generic capability, so whether this is actually a bucket-B candidate (a generic entity-record detail view) rather than bucket C is a real question, not a formality. | **PENDING** — same as `ExamResultView.tsx` above; REQ-351's own required rule-2 adjudication, not self-certified here |
 
-These four rows are copied verbatim from
+The first four rows are copied verbatim from
 [`lib/letflow/design/req330-exam-live-session.md`](../../lib/letflow/design/req330-exam-live-session.md)
 §7's rule-2 table — the module set REQ-332 and REQ-333 were authorised to
 build, and the same table each module's moduledoc cites as its authorisation.
@@ -220,7 +225,14 @@ pass over an already-settled interface), sourced from `REQ-338`'s close-out and
 REVIEWER/RELEASE-VALIDATOR sign-off recorded in
 [`docs/status/requirement_status.v16.yaml`](../status/requirement_status.v16.yaml)'s
 `REQ-338` done-event, not from a design-doc §7 table (none exists for this
-requirement).
+requirement). The last two `web/src/pages/exam/` rows (`ExamResultView.tsx`,
+`ExamSessionResultPage.tsx`) are `REQ-351`'s own addition, likewise with no
+`CODE-DESIGNER` gate (REQ-351's own text: the backend read it needs was
+already routed and ownership-checked, so nothing required a new design pass)
+— their `REVIEWER` sign-off is **PENDING** as of this table's own 2026-09-15
+re-measurement below; REQ-351's own text requires a per-entry rule-2
+adjudication before it can be registered done, and that adjudication is
+REVIEWER's step, not written here.
 
 **Measurement, run against this tree.** These figures are a snapshot, not a
 standing guarantee — this table has already gone stale twice behind
@@ -244,33 +256,45 @@ $ wc -l lib/letflow/exam/*.ex
 `session.ex` 941→1193, `anti_cheat.ex` and `question_set_resolver.ex`
 unchanged; see `ISS-0665`).
 
-**`web/src/pages/exam/` and `web/src/api/exam.ts`, measured 2026-09-15:**
+**`web/src/pages/exam/` and `web/src/api/exam.ts`, RE-measured 2026-09-15
+(REQ-351):**
 
 ```
 $ ls web/src/pages/exam/
 ExamListPage.tsx
+ExamResultView.tsx
 ExamSessionPage.tsx
+ExamSessionResultPage.tsx
 __tests__/
 $ wc -l web/src/pages/exam/*.tsx web/src/api/exam.ts
   139 web/src/pages/exam/ExamListPage.tsx
-  464 web/src/pages/exam/ExamSessionPage.tsx
+   59 web/src/pages/exam/ExamResultView.tsx
+  441 web/src/pages/exam/ExamSessionPage.tsx
+  173 web/src/pages/exam/ExamSessionResultPage.tsx
   124 web/src/api/exam.ts
-  727 total
+  936 total
 ```
 
-**2 screen modules (603 lines) under `web/src/pages/exam/`, plus the 124-line
-API client `web/src/api/exam.ts`, 727 lines total, measured 2026-09-15** (up
-from 621 at the 2026-09-14 measurement: `ExamListPage.tsx` unchanged at 139,
-`ExamSessionPage.tsx` 358→464; see `ISS-0665`). This does not count
-`web/src/pages/exam/__tests__/` (test files, not modules, matching the
-convention the `lib/letflow/exam/` measurement above already uses of counting
-only `.ex` implementation files) or REQ-338's other supporting files outside
-`web/src/pages/exam/` (`web/src/types/exam.ts`, `web/src/utils/examErrors.ts`,
+**4 screen modules (812 lines) under `web/src/pages/exam/`, plus the 124-line
+API client `web/src/api/exam.ts`, 936 lines total, measured 2026-09-15
+(REQ-351)** — up from 2 modules/603 lines (727 total with the API client) at
+the prior same-day measurement: `ExamListPage.tsx` unchanged at 139;
+`ExamSessionPage.tsx` 464→441 (REQ-351 EXTRACTED its result-phase render
+block, :311-339 in the prior measurement, into the new `ExamResultView.tsx`
+rather than adding to it — a net decrease, not new behaviour); plus two
+wholly new modules, `ExamResultView.tsx` (59 lines, the shared result-phase
+render extracted out of `ExamSessionPage.tsx`) and
+`ExamSessionResultPage.tsx` (173 lines, REQ-351's own by-id result screen).
+This does not count `web/src/pages/exam/__tests__/` (test files, not
+modules, matching the convention the `lib/letflow/exam/` measurement above
+already uses of counting only `.ex` implementation files) or REQ-338's/
+REQ-351's other supporting files outside `web/src/pages/exam/`
+(`web/src/types/exam.ts`, `web/src/utils/examErrors.ts`,
 `web/src/hooks/useAntiCheatSignals.ts`, `web/src/i18n/examMessages.ts`,
-`web/src/i18n/ExamIntlProvider.tsx`) — those are REQ-338's supporting
-infrastructure, not bucket-C screen modules in their own right, and are out
-of scope for this table per its own header ("every module added under
-`lib/letflow/exam/` or `web/src/pages/exam/`").
+`web/src/i18n/ExamIntlProvider.tsx`, `web/src/router.tsx`) — those are
+supporting infrastructure, not bucket-C screen modules in their own right,
+and are out of scope for this table per its own header ("every module added
+under `lib/letflow/exam/` or `web/src/pages/exam/`").
 
 **What left bucket C.** P3's phases-table row (below) predicts bucket C, but
 P3 as executed also produced bucket-A and bucket-B work: REQ-330's
@@ -558,8 +582,14 @@ directories fall outside the metric, the last of these by directory rather than
 by kind. **P5 adds no bucket-C inventory rows, and the inventory stays at four
 modules under `lib/letflow/exam/` and two screen modules under
 `web/src/pages/exam/`** (line counts drift between measurements per
-`ISS-0665` — see the inventory table above for the current figures). That is
-an honest reading, not a
+`ISS-0665` — see the inventory table above for the current figures). *This
+finding is as of P5's own close (2026-09-14); `REQ-351`, filed and
+implemented the following day, adds two more `web/src/pages/exam/` modules
+(`ExamResultView.tsx`, `ExamSessionResultPage.tsx`, PENDING their own
+required rule-2 adjudication) — see the inventory table's 2026-09-15
+re-measurement above for the current count. P5's own four-and-two figures are
+left standing here as the accurate snapshot of that phase's own close, not
+retroactively edited.* That is an honest reading, not a
 loophole: an exam-specific acceptance corpus is not the failure mode rule 3
 detects (the platform quietly becoming an exam engine) — per `0022` reasoning
 §5 it is the independent evidence the generic platform hosts the vertical. A

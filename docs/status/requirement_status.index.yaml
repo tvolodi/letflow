@@ -3431,10 +3431,36 @@ volumes:
 
   - volume: 16
     path: docs/status/requirement_status.v16.yaml
-    status: current
+    status: closed
     opened: 2026-09-13
-    entries: 24
+    closed: 2026-09-14
+    entries: 26
+    lines: 1242
+    bytes_working_tree: 70775
+    frozen_prefix_lines: 1208
+    frozen_prefix_sha256: "ffffd57b41e81cb5bc711ae4a991d1effc4ce8de8e3fc0abb6dc6db10974d101"
     note: >
+      Closed by ORCH while resolving issue/ISS-0646-candidate-role-20260914's
+      PR #1384 merge conflict against main (a sibling session's ISS-0655
+      SCOPE-CHANGE started+done pair had already merged and appended to this
+      same file's tail) -- composed both branches' entries in `at:` timestamp
+      order (ISS-0655 started 06:47:07Z, ISS-0655 done 07:18:00Z, both before
+      this branch's own ISS-0646 done 07:18:56Z, already correct order, no
+      reordering needed) -- `grep -c "^  - req:"
+      docs/status/requirement_status.v16.yaml` = 26 on-disk entries after
+      composition, 1208 lines -- over the 1,200-line roll ceiling, confirmed
+      via `wc -l` on the working-tree file. Closure footer appended per the
+      roll rule; `frozen_prefix_sha256` computed BEFORE the footer was
+      appended, over exactly the 1208 frozen-prefix lines, using this file's
+      documented normalised-line-terminator digest (each line's trailing
+      "\n" then "\r" trimmed, single "\n" re-appended, per design §8) rather
+      than a raw `sha256sum` of the CRLF working-tree bytes -- this session's
+      checkout is CRLF, and a raw sha256sum over CRLF bytes does not match
+      A6's own computation, which normalises before hashing.
+      Successor: docs/status/requirement_status.v17.yaml, created with volume
+      16's header text verbatim (volume number, opening date and predecessor
+      path updated) and an empty `history:` list -- diffed against volume 16's
+      original header to confirm only those fields changed.
       Recounted to 24 by DOC-UPDATER's own ISS-0646 done-event append
       (SCOPE-CHANGE, fix/ISS-0646-20260914), composed at Step Final
       onto ORCH's own concurrently-landed ISS-0649 started+done pair
@@ -3687,6 +3713,20 @@ volumes:
       empty `history:` list, per this index's `roll_rule.on_exceed`
       procedure. `entries:` will be incremented per HOW-TO-APPEND step 6 as
       real appends land.
+
+  - volume: 17
+    path: docs/status/requirement_status.v17.yaml
+    status: current
+    opened: 2026-09-14
+    entries: 0
+    note: >
+      Opened by ORCH while resolving issue/ISS-0646-candidate-role-20260914's
+      PR #1384 merge conflict against main, successor to volume 16. Created
+      with volume 16's header text verbatim (volume number, opening date and
+      predecessor path updated) and an empty `history:` list, per this
+      index's `roll_rule.on_exceed` procedure -- diffed against volume 16's
+      original header to confirm only those fields changed. `entries:` will
+      be incremented per HOW-TO-APPEND step 6 as real appends land.
 
 
 known_anomalies:

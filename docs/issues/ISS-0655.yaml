@@ -1,65 +1,74 @@
 id: ISS-0655
-title: "'tag' is an authored, installed pack entity type with no admin screen -- absent from BILIMBAGA_ENTITY_TYPES, so /admin/bilimbaga/tag 404s"
+title: "The 'tag' entity type is unreachable in the running app -- TagListPage.tsx is imported by nothing, and tag is (correctly) not in BILIMBAGA_ENTITY_TYPES, so no route renders it"
 discovered_by: ORCH
 discovered_in_run: P5-expansion-survey-20260914
 discovered_at: "2026-09-14T09:40:00Z"
+corrected_at: "2026-09-14T10:25:00Z"
 severity: MINOR
 description: >
-  REQ-326 authored TEN entity definitions, tag.json among them
-  (priv/packs/bilimbaga/entity_definitions/tag.json: name "tag", one
-  field "name", porting FR-BB21's tags table). It installs with the pack
-  like every other type.
+  CORRECTION NOTICE. This record's first version asserted that `tag` was
+  wrongly omitted from BILIMBAGA_ENTITY_TYPES and that the fix was to add
+  a list entry. That diagnosis was wrong and is retracted here. The
+  omission is deliberate and correct; the reachability gap is real but
+  has a different cause. The corrected statement follows. The wrong
+  version was committed as 8a17e93c and is superseded by this one.
 
-  But web/src/config/bilimbagaEntities.ts's BILIMBAGA_ENTITY_TYPES lists
-  only NINE: category, question, answer_option, question_tag, exam,
-  exam_section, exam_question_rule, exam_question_rule_tag,
-  exam_manual_question. "tag" is not among them, and that file's own
-  header comment says "the nine remaining BilimBaga entity types" while
-  enumerating REQ-326's contribution as four -- REQ-326 actually
-  authored five, including tag.
+  WHAT IS ACTUALLY TRUE. priv/packs/bilimbaga/entity_definitions/tag.json
+  exists and installs with the pack -- ten authored entity types among
+  the CRUD-manageable set. web/src/config/bilimbagaEntities.ts lists
+  nine and omits tag. That omission is CORRECT: the file's own header
+  says "the nine remaining BilimBaga entity types" and enumerates them
+  as REQ-326's four (category, question, answer_option, question_tag)
+  plus REQ-327's five (exam, exam_section, exam_question_rule,
+  exam_question_rule_tag, exam_manual_question). tag is absent because
+  it was REQ-336's PILOT and got its own hand-written screen,
+  web/src/pages/entities/TagListPage.tsx, before REQ-343 generalized
+  that pilot into the entity-agnostic EntityCrudPage. tag is not a
+  missed tenth item in a list of ten.
 
-  CONSEQUENCE, traced through the code: BilimBagaEntityRoute
-  (web/src/pages/admin/bilimbaga/BilimBagaEntityRoute.tsx) calls
-  isBilimBagaEntityType(entityType) and, when it returns false, renders
-  NotFoundInner instead of EntityCrudPage. So /admin/bilimbaga/tag
-  404s. Ten pack entity types are authored and installed; nine are
-  reachable through the admin UI. A tenant can hold tag records -- the
-  type installs, records write -- with no screen to manage them.
+  THE REAL GAP. TagListPage.tsx is imported by NOTHING that renders.
+  grep -rn "TagListPage" web/src web/tests returns only: two moduledoc
+  prose mentions (bilimbagaEntities.ts:8, EntityCrudPage.tsx:5), the
+  file's own definition, its own unit test
+  (__tests__/TagListPage.test.tsx), and an i18n grep-test path list
+  (__tests__/entities-i18n-grep.test.ts:33). web/src/router.tsx contains
+  no reference to tag or TagListPage at all. So the pilot screen exists,
+  compiles, and is unit-tested, but no route reaches it -- the tag
+  management UI is dead in the running application.
 
-  WHY THIS LOOKS LIKE AN OVERSIGHT RATHER THAN A DECISION: "tag" was
-  REQ-336's PILOT entity. web/src/pages/entities/TagListPage.tsx is the
-  ~280-line list/create/edit/delete screen that REQ-343 then
-  generalized into the entity-agnostic EntityCrudPage. When the pilot
-  was generalized, tag was dropped from the wired list rather than
-  carried across. TagListPage.tsx still exists but is now referenced
-  ONLY in moduledoc prose (bilimbagaEntities.ts:8 and
-  EntityCrudPage.tsx:5) -- no route, no import, no render path outside
-  its own test file. Nothing in REQ-343's description states an intent
-  to exclude tag; it consistently frames the work as "the nine
-  remaining".
+  CONSEQUENCE: a tenant can hold tag records (the type installs, records
+  write) with no screen to manage them, and /admin/bilimbaga/tag 404s
+  via BilimBagaEntityRoute's isBilimBagaEntityType guard falling through
+  to NotFoundInner. It also blocks porting BilimBaga's tags.spec.ts
+  (6 tests, targeting /admin/tags) during S10 P5.
 
-  EntityCrudPage is entity-agnostic by construction -- it renders
-  whatever fields GET /entities/definitions/active/:name returns -- so
-  tag needs no special handling. A single list entry would make it work.
+  Severity MINOR: no data loss, no security exposure, fails closed to a
+  404. But an authored, installed entity type has no reachable UI, and
+  a ~280-line unit-tested screen is dead code that a future reader may
+  wire in preference to the generic path.
 
-  Severity MINOR: no data loss, no security exposure, nothing crashes
-  (the route fails closed to a 404). But an authored, installed entity
-  type is unmanageable through the UI that exists precisely to manage
-  it, and the discrepancy is invisible unless someone counts definition
-  files against the config list.
+  FIX DIRECTIONS, and the choice is a real one:
+  (a) Delete TagListPage.tsx as superseded and add { entityType: 'tag' }
+      to BILIMBAGA_ENTITY_TYPES, letting EntityCrudPage serve tag at
+      /admin/bilimbaga/tag like the other nine. EntityCrudPage is
+      entity-agnostic -- it renders whatever fields
+      GET /entities/definitions/active/:name returns -- so tag needs no
+      special handling. This collapses two code paths into one.
+  (b) Route TagListPage.tsx explicitly, retaining the pilot. Costs a
+      permanent near-duplicate of EntityCrudPage.
+  (a) is preferred: it removes the duplicate rather than entrenching it.
+      Whichever is chosen, the header comment's "nine remaining"
+      arithmetic must be restated so the list's intent stays legible.
 
-  FIX DIRECTION: add { entityType: 'tag' } to BILIMBAGA_ENTITY_TYPES and
-  correct the header comment's "nine"/REQ-326-authored-four arithmetic.
-  Then decide TagListPage.tsx's fate explicitly -- either delete it as
-  superseded dead code, or state why the pilot is retained; leaving an
-  unrouted near-duplicate of EntityCrudPage invites a future reader to
-  wire the wrong one. Add a test asserting every admin-manageable entity
-  definition has a BILIMBAGA_ENTITY_TYPES entry so the two lists cannot
-  silently diverge again -- note session*.json are runtime state, not
-  admin-CRUD surfaces, so the test must encode which types are expected
-  to be manageable rather than assuming all fifteen definition files.
+  REGRESSION GUARD: add a test asserting every admin-manageable entity
+  definition resolves to a reachable route. Note session*.json
+  (session, session_answer, session_event, session_question,
+  session_question_score) are runtime state, not admin-CRUD surfaces, so
+  the test must encode which of the 15 definition files are expected to
+  be manageable rather than assuming all of them are.
 affected_files:
   - web/src/config/bilimbagaEntities.ts
   - web/src/pages/entities/TagListPage.tsx
+  - web/src/router.tsx
 queue_ref: Q-655
 github_ref: GH-1377

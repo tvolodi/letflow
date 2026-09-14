@@ -24462,7 +24462,7 @@ requirements:
     title: Provide a deterministic seeded exam fixture for e2e runs -- TWO published exams (a mixed one carrying a shorttext question, and a scoreable one carrying none) plus one started-and-submitted session driven through REQ-335's routes, in the bpm-default tenant -- since mix letflow.seed provisions the tenant only (S10 P5, test fixture)
     owner: ELIXIR-DEV
     impl_order: 657
-    status: pending
+    status: done
     stage: S10
     description: >
       bucket: C. JUSTIFICATION -- THE MIX TASK, NOT THE SEED DATA, IS

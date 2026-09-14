@@ -1,11 +1,11 @@
 /** BilimBagaEntityRoute — REQ-343
  *
  *  Thin route adapter: reads `:entityType` from the URL and, when it names
- *  one of the nine remaining BilimBaga entity types
+ *  one of the ten admin-manageable BilimBaga entity types
  *  (web/src/config/bilimbagaEntities.ts), renders the generic
  *  `EntityCrudPage` against it. This is the ONLY per-request wiring point —
  *  there is no per-entity-type page component, matching this requirement's
- *  "generic component, not nine hand-copied pages" approach.
+ *  "generic component, not ten hand-copied pages" approach.
  */
 
 import { useParams } from 'react-router-dom'

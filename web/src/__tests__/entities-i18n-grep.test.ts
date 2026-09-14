@@ -7,11 +7,16 @@
  *
  *   grep -nE ">[A-Za-z][A-Za-z '.-]{2,}<" \
  *     web/src/components/entities/EntityRecordForm.tsx \
- *     web/src/pages/entities/TagListPage.tsx \
  *     web/src/i18n/EntitiesIntlProvider.tsx
  *
  * (message-catalog files -- web/src/i18n/entitiesMessages.ts -- are
  * deliberately excluded: THEY are the source of the strings, not a hit.)
+ *
+ * ISS-0655: REQ-336's `TagListPage.tsx` pilot was removed as superseded dead
+ * code once `tag` was wired into the generic `EntityCrudPage` path (it was
+ * already generalized by REQ-343 for the other nine entity types; `tag` was
+ * the one dropped from that generalization). Removed from the file list
+ * below along with it.
  *
  * It also asserts entitiesMessages itself carries all three locales for
  * every id, so the catalog side of the AC is checked, not only the "no
@@ -30,7 +35,6 @@ const SRC_ROOT = path.resolve(__dirname, '..')
 // web/src/types/api.ts (no JSX in any of them).
 const JSX_FILES_TO_CHECK = [
   'components/entities/EntityRecordForm.tsx',
-  'pages/entities/TagListPage.tsx',
   'i18n/EntitiesIntlProvider.tsx',
   // REQ-343: the generic admin-CRUD screen and the BilimBaga admin section
   // wiring it replaces nine hand-copied pages with.

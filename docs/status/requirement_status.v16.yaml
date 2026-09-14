@@ -1110,3 +1110,54 @@ history:
       to this diff.
 
       docs/issues/ISS-0649.yaml flipped open -> resolved.
+  - req: SCOPE-CHANGE
+    event: started
+    agent: ORCH
+    at: "2026-09-14T06:47:07Z"
+    note: >
+      Claimed letflow-queue task 655 (ISS-0655, GH#1377, S10). MINOR
+      frontend-only gap: web/src/config/bilimbagaEntities.ts's
+      BILIMBAGA_ENTITY_TYPES lists only nine entity types, missing
+      "tag" -- a real, installed pack entity type authored by REQ-326.
+      Consequence: /admin/bilimbaga/tag 404s despite tag records
+      existing and being writable. Root cause: tag was REQ-336's pilot
+      entity for the generic admin-CRUD engine; REQ-343 generalized the
+      pilot into entity-agnostic EntityCrudPage and wired the other
+      nine types to it but dropped tag instead of carrying it across.
+      No docs/issues/ISS-0655.yaml record existed yet (queue task only)
+      -- filing it as part of this close-out. Frontend-only, no
+      tenant-data-path implications -- FRONTEND-DEV -> REVIEWER
+      pipeline dispatched (SECURITY-REVIEWER skipped, matches ISS-0654
+      precedent).
+  - req: SCOPE-CHANGE
+    event: done
+    agent: ORCH
+    at: "2026-09-14T07:18:00Z"
+    note: >
+      ISS-0655 (queue task 655, GH#1377) resolved via
+      fix/ISS-0655-20260914 (commit 4277f9a4). Added
+      { entityType: 'tag' } to BILIMBAGA_ENTITY_TYPES, corrected the
+      stale header-comment count. TagListPage.tsx (the superseded
+      hand-built pilot screen) and its test deleted after confirming no
+      remaining functional references. i18n catalog updated: added
+      entities.entityType.tag, removed orphaned entities.tag.list.*/
+      .field.name/.delete.* keys, kept .form.submitError/.conflictError
+      since EntityRecordForm.tsx consumes those generically for every
+      entity type. New regression tests at two layers
+      (bilimbagaEntities.test.ts reading the real pack entity
+      definitions off disk; BilimBagaEntityRoute.test.tsx mounting the
+      route per type) -- would have caught the original bug. Two other
+      tests' stale hard-coded toHaveLength(9) assertions fixed to 10.
+
+      Pipeline: FRONTEND-DEV -> REVIEWER PASS (confirmed minimal scope,
+      11 files +211/-532; independently grepped and confirmed
+      TagListPage.tsx's deletion was correct not premature; confirmed
+      i18n key hygiene; confirmed the new tests' admin-manageable-vs-
+      runtime-state split is a defensible architectural rule; ran the
+      full npm run check live -- type-check clean, lint clean, 567
+      tests + 48 guard tests passed, production build succeeded).
+      SECURITY-REVIEWER correctly skipped -- MINOR frontend-only fix,
+      no tenant-data-path implications.
+
+      docs/issues/ISS-0655.yaml filed and flipped straight to resolved
+      (no prior open record existed).

@@ -953,3 +953,48 @@ history:
       supported" placeholder to a real text input through the now-
       complete autosave path. Backend first (ELIXIR-DEV), then
       frontend (FRONTEND-DEV) once the write path is real.
+  - req: SCOPE-CHANGE
+    event: done
+    agent: ORCH
+    at: "2026-09-14T03:53:37Z"
+    note: >
+      ISS-0650 (queue task 650, GH#1356, MAJOR) resolved via
+      fix/ISS-0650-20260914 (commits 0332bf8f, 696d902e) -- fixed end
+      to end, backend then frontend. Backend: check_answer_shape/2 ->
+      /3 validates text_answer (nil/string for :short_text, hard
+      rejection for every other type); upsert_answer/6 -> /7 writes it
+      when present, omits the key when absent (matches
+      session_answer.json's required:false-but-not-nullable schema
+      and correctly clears a prior answer via full-replacement write
+      semantics); Scoring.score_question/2's :short_text clause now
+      threads the real text into pending_manual instead of discarding
+      it. A companion fix beyond the issue's own listed scope was
+      required and applied: lib/letflow/routers/exam_sessions.ex's PUT
+      route/@autosave_schema had no text_answer field at all, so no
+      real HTTP client could ever have reached the backend fix --
+      REVIEWER confirmed this was a genuine scope correction, not
+      creep. Frontend: ExamSessionPage.tsx's static placeholder
+      replaced with a real controlled textarea (restore-on-load,
+      autosave-on-blur with a no-op guard, i18n'd in en/ru/kk).
+
+      Pipeline: ELIXIR-DEV -> SECURITY-REVIEWER PASS (traced
+      text_answer through validation with no bypass, verified the
+      omit-vs-nil distinction against real full-replacement semantics,
+      confirmed cross-type rejection is real and tested; flagged an
+      unbounded string-length as non-blocking) -> REVIEWER PASS
+      (backend: agreed deferring the length cap is correct given
+      existing precedent; confirmed the router companion fix was
+      genuine) -> FRONTEND-DEV -> REVIEWER PASS (frontend: confirmed
+      type/shape fidelity against the real backend schema, confirmed
+      the no-op guard's baseline, confirmed i18n discipline; found and
+      reported a genuine narrow edge case -- an anti-cheat forced-
+      submit can discard an uncommitted textarea edit that never
+      reached blur -- filed separately as ISS-0654 rather than
+      blocking) -> TEST-RUNNER confirmed both mix letflow.check and
+      npm run check clean except pre-existing environment-only/
+      probabilistic flakes, none touching exam or router paths.
+
+      docs/issues/ISS-0650.yaml flipped open -> resolved. A short-text
+      exam question can now actually be answered end to end, closing
+      a real functional gap that made REQ-332's pending_manual grading
+      path for that question type entirely unreachable.

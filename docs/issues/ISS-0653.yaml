@@ -1,0 +1,36 @@
+id: ISS-0653
+title: Query.Cursor.resolved_sort_term/2's :typed_column clause raises KeyError when sorting a promoted entity type by its own promoted business column
+discovered_by: ELIXIR-DEV
+discovered_in_run: WF03-ISS0651-20260913
+discovered_at: "2026-09-13T23:22:12Z"
+severity: MINOR
+description: >
+  Found by ELIXIR-DEV while implementing ISS-0651's Cursor
+  keyset-pagination fix for promoted per-type-table entity rows.
+  lib/letflow/entities/query/cursor.ex's resolved_sort_term/2
+  :typed_column clause (around line 209) resolves a sort column atom
+  via Letflow.Entities.Query.Allowlist.typed_columns/0, which only
+  enumerates the fixed structural-7 columns (record_id, field_values,
+  deleted, entity_def_version, last_event_global_seq, inserted_at,
+  updated_at) plus entity_record_latest's own typed columns -- it does
+  NOT know about a promoted entity type's own promoted business
+  columns (e.g. a tag's name column once promoted). Sorting a
+  keyset-paginated query by a genuinely promoted business column
+  therefore raises KeyError rather than resolving the column, the same
+  class of not-generalized-for-both-shapes defect ISS-0651/ISS-0652
+  already found twice in sibling functions (field_grants.ex,
+  routers/entities.ex, cursor.ex's own build_next_cursor/2 and
+  read_sort_value/2).
+
+  Distinct from ISS-0651's own named scope (build_next_cursor/2 and
+  read_sort_value/2 only) -- this is a third function in the same
+  module with a related but separate gap. Reproduced narrowly:
+  ISS-0651's own regression test had to route its promoted-column sort
+  through the :json_field path (an 0023 additive-declare-then-promote
+  sequence) specifically to avoid tripping this bug, rather than
+  sorting by the promoted column's typed form directly.
+affected_files:
+  - lib/letflow/entities/query/cursor.ex
+queue_ref: Q-653
+github_ref: GH-1370
+status: open

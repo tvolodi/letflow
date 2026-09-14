@@ -627,6 +627,172 @@ defmodule Letflow.Entities.QueryCursorFieldGrantsTest do
   end
 
   # ---------------------------------------------------------------------------------
+  # ISS-0651 -- Cursor.build_next_cursor/2 and read_sort_value/2 crashed
+  # with FunctionClauseError on a promoted per-type-table row (a bare
+  # Compiler.entity_row() map), since both previously only matched a
+  # %Latest{} struct -- the same shape gap ISS-0600 already fixed for
+  # FieldGrants.redact_item/2 above. This block proves keyset pagination
+  # over MULTIPLE pages against a real promoted per-type table: distinct,
+  # correctly-ordered, non-overlapping pages, and a correct "no more
+  # pages" signal at the end -- not merely "does not crash".
+  #
+  # Sorts by "age" only, which resolves `source: :json_field` -- the
+  # `read_sort_value/2` clause that previously had no bare-map fallback
+  # and is this issue's actual crash site. NOT "customer_name" even
+  # though this describe block's own setup promotes it: sorting by a
+  # genuinely promoted (non-structural) `:typed_column` field is a
+  # SEPARATE, pre-existing bug this test discovered while writing it --
+  # `resolved_sort_term/2`'s `:typed_column` clause (cursor.ex ~line 209)
+  # resolves the column atom via `Allowlist.typed_columns/0` (the fixed
+  # structural-7 table only), which does not contain a promoted business
+  # column name like "customer_name" and raises `KeyError`. That bug is
+  # outside ISS-0651's own scope (which names only `build_next_cursor/2`
+  # and `read_sort_value/2`) -- flagged separately below and left
+  # unfixed here rather than silently folded into this change.
+  #
+  # For this same reason "age" cannot simply be declared alongside
+  # "customer_name" from the start either: `DDL.promoted_columns/1`
+  # promotes EVERY `queried: true` field of the definition active at
+  # table-creation time in one shot, so a single-version definition with
+  # both fields queried would give "age" a real physical column too,
+  # making it resolve `:typed_column` and hit the very bug this test is
+  # trying to route around. Instead this uses 0023's own
+  # additive-declare-then-promote sequence (also `Allowlist.load/2`'s own
+  # documented scenario): v1 declares only "customer_name" (queried) and
+  # is promoted, creating the table with just that one physical column;
+  # v2 then adds "age" (queried) WITHOUT ever registering/running a
+  # column promotion for it, so it stays `source: :json_field`, backed by
+  # the per-type table's own `field_values` jsonb catch-all column.
+  # ---------------------------------------------------------------------------------
+
+  describe "ISS-0651 -- keyset pagination against a promoted per-type-table entity type" do
+    setup do
+      %{tenant_id: tenant_id, schema_name: schema} = provisioned_tenant()
+
+      create_active_definition!(schema, %{
+        name: "promoted_pager",
+        display_name: "Promoted Pager",
+        fields: [
+          %{name: "customer_name", type: :string, required: true, queried: true}
+        ]
+      })
+
+      promote_and_create_table!(schema, tenant_id, "promoted_pager", "customer_name", "text")
+
+      # v2: additive declare of "age", never promoted -- stays json_field.
+      assert {:ok, _entity_definition} =
+               Definitions.create_definition(
+                 %{
+                   definition: %{
+                     name: "promoted_pager",
+                     display_name: "Promoted Pager",
+                     fields: [
+                       %{name: "customer_name", type: :string, required: true, queried: true},
+                       %{name: "age", type: :integer, queried: true}
+                     ]
+                   },
+                   created_by: Ecto.UUID.generate()
+                 },
+                 schema
+               )
+
+      assert {:ok, %{status: :active}} =
+               Definitions.activate_definition(
+                 "promoted_pager",
+                 Ecto.UUID.generate(),
+                 "go-live-v2",
+                 schema
+               )
+
+      %{schema: schema}
+    end
+
+    test "next_cursor round-trips through every page with no repeated or skipped records, promoted-table shape",
+         %{schema: schema} do
+      fixtures = [
+        {"Eve", 1},
+        {"Dave", 2},
+        {"Carol", 3},
+        {"Bob", 4},
+        {"Alice", 5}
+      ]
+
+      for {name, age} <- fixtures do
+        create_record_for!(schema, "promoted_pager", %{"customer_name" => name, "age" => age})
+      end
+
+      request = %{
+        entity_type: "promoted_pager",
+        sort: [%{field: "age", dir: :asc}]
+      }
+
+      assert {:ok, compiled_query} = Compiler.compile(request, schema)
+      assert {:ok, allowlist} = Allowlist.load("promoted_pager", schema)
+
+      # Confirm the setup produced the shape this test needs: "age"
+      # resolves :json_field (the read_sort_value/2 clause this fix
+      # touches), not :typed_column.
+      assert %{source: :json_field} = Map.fetch!(allowlist, "age")
+
+      # Confirm this really is the promoted, bare-map entity_row() shape,
+      # not %Latest{} -- otherwise this test would not exercise ISS-0651
+      # at all.
+      assert [%{field_values: _} = sample_row | _] = Repo.all(compiled_query, prefix: schema)
+      refute match?(%Latest{}, sample_row)
+
+      expected_order = [
+        {"Eve", 1},
+        {"Dave", 2},
+        {"Carol", 3},
+        {"Bob", 4},
+        {"Alice", 5}
+      ]
+
+      opts1 = %{page_size: 2, cursor: nil}
+      assert {:ok, page1} = Cursor.paginate(request, compiled_query, allowlist, opts1, schema)
+
+      assert length(page1.items) == 2
+      refute is_nil(page1.next_cursor)
+
+      opts2 = %{page_size: 2, cursor: page1.next_cursor}
+      assert {:ok, page2} = Cursor.paginate(request, compiled_query, allowlist, opts2, schema)
+
+      assert length(page2.items) == 2
+      refute is_nil(page2.next_cursor)
+
+      opts3 = %{page_size: 2, cursor: page2.next_cursor}
+      assert {:ok, page3} = Cursor.paginate(request, compiled_query, allowlist, opts3, schema)
+
+      assert length(page3.items) == 1
+      assert page3.next_cursor == nil
+
+      pages = [page1, page2, page3]
+
+      # Every item is the promoted entity_row() map shape, never %Latest{}.
+      for page <- pages, item <- page.items do
+        refute match?(%Latest{}, item)
+        assert Map.has_key?(item, :record_id)
+      end
+
+      # Page 1 and page 2 (and 3) are distinct, non-overlapping records --
+      # the acceptance bar this test exists to satisfy, not just
+      # "does not crash".
+      record_ids = Enum.flat_map(pages, fn page -> Enum.map(page.items, & &1.record_id) end)
+      assert length(record_ids) == length(fixtures)
+      assert length(Enum.uniq(record_ids)) == length(fixtures)
+
+      actual_order =
+        pages
+        |> Enum.flat_map(& &1.items)
+        |> Enum.map(fn item ->
+          {Map.fetch!(item.field_values, "customer_name"), Map.fetch!(item.field_values, "age")}
+        end)
+
+      assert actual_order == expected_order
+    end
+  end
+
+  # ---------------------------------------------------------------------------------
   # AC4 -- no route or controller file added or modified by this
   # requirement. Structural check, RE-DERIVED 2026-09-11 because the
   # feature it was waiting for landed.

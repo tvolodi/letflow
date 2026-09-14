@@ -3433,8 +3433,39 @@ volumes:
     path: docs/status/requirement_status.v16.yaml
     status: current
     opened: 2026-09-13
-    entries: 13
+    entries: 15
     note: >
+      Recounted to 15 at fix/ISS-0651-20260913's second (Step Final
+      close-out) rebase, which conflicted at this file's tail between
+      main's own already-composed 14-count note (from the first
+      conflict, above) and this branch's own ISS-0651 done-event
+      append (independently computed as 12 against a base predating
+      REQ-342/REQ-343/REQ-339's done-events). Both appends land at the
+      same v16.yaml tail position with no overlapping lines -- composed
+      order there is REQ-342 done, REQ-343 done, REQ-339 done, then
+      ISS-0651 done (23:51:02Z, sorting last), already correct by
+      `at:` timestamp with no reordering needed -- so only this index
+      file's declared count and narrative needed manual composition.
+      Recounted directly from `grep -c "^  - req:"
+      docs/status/requirement_status.v16.yaml` = 15 rather than
+      carrying forward either side's independently-computed 12/14, per
+      this note's own recount-every-time rule. 874 lines, well under
+      the roll ceiling.
+      Recounted to 14 at fix/ISS-0651-20260913's Step Final rebase,
+      which conflicted at this file's tail between main's own
+      REQ-342/REQ-343/REQ-339 done-event chain (independently computed
+      as 13) and this branch's own ISS-0651 started-event append
+      (independently computed as 11, from a base predating that
+      chain). Composed in chronological `at:` order -- ISS-0651
+      started (21:57:13Z) sorts between REQ-340's own done-event
+      (already in this volume) and REQ-342's done-event (22:14:10Z),
+      so it was reordered into that position; REQ-343 (22:53:16Z) and
+      REQ-339 (23:01:45Z) sort last and needed no reordering.
+      Recounted directly from `grep -c "^  - req:"
+      docs/status/requirement_status.v16.yaml` = 14 rather than
+      carrying forward either side's independently-computed 11/13, per
+      this note's own recount-every-time rule. 827 lines, well under
+      the roll ceiling.
       Incremented to 13 by DOC-UPDATER's own REQ-339 done-event append
       (pure documentation, no code change) -- `grep -c "^  - req:"
       docs/status/requirement_status.v16.yaml` = 13 on-disk entries;
@@ -3461,6 +3492,16 @@ volumes:
       than carrying forward either side's stale 9/10, per this note's
       own recount-every-time rule. 672 lines / 39060 bytes, well under
       the roll ceiling.
+      Incremented to 12 by ORCH's own ISS-0651 done-event append
+      (SCOPE-CHANGE, fix/ISS-0651-20260913) -- `grep -c "^  - req:"
+      docs/status/requirement_status.v16.yaml` = 12 on-disk entries;
+      695 lines / 39477 bytes, well under the roll ceiling. No rebase
+      conflict on this file.
+      Incremented to 11 by ORCH's own ISS-0651 started-event append
+      (SCOPE-CHANGE, fix/ISS-0651-20260913) -- `grep -c "^  - req:"
+      docs/status/requirement_status.v16.yaml` = 11 on-disk entries;
+      648 lines, well under the roll ceiling. No rebase conflict on
+      this file.
       Recounted to 10 at fix/ISS-0652-20260913's fourth Step Final
       rebase, composing main's own REQ-340 done-event (independently
       computed as 8) with this branch's own ISS-0652 done-event

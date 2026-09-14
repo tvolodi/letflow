@@ -1,0 +1,74 @@
+id: ISS-0674
+title: "GET /exam-sessions/:id never returns score_pct/passed, so REQ-351's by-id result screen cannot render exam-result-score for a submitted/scoreable session"
+discovered_by: REVIEWER
+discovered_in_run: WF02-REQ351-20260915
+discovered_at: "2026-09-15T00:00:00Z"
+severity: MAJOR
+description: >
+  REQ-351 (PR #1411, branch feature/WF02-REQ351-20260915) built a by-id exam-
+  result screen (web/src/pages/exam/ExamSessionResultPage.tsx) that opens an
+  existing session via GET /exam-sessions/:id
+  (Letflow.Exam.Session.get_session_state_for_user/3). That route's
+  underlying private session_view/1 (lib/letflow/exam/session.ex:1151-1160)
+  maps only id/exam_id/candidate_id/status/seed/started_at/expires_at out of
+  the session record -- never score_pct or passed -- even though
+  submit_session's own outcome_from_session/1 helper
+  (session.ex:1087-1098) proves both fields are already persisted on the
+  record once a session reaches submitted/auto_submitted
+  (priv/packs/bilimbaga/entity_definitions/session.json declares both
+  fields, marked queried:false -- readable, just not filterable/sortable).
+
+  REQ-351's own acceptance criteria required this by-id screen to render
+  exam-result-page + exam-result-score for REQ-345's shorttext-free
+  ("scoreable") exam when navigated to after a real submit. FRONTEND-DEV
+  correctly refused to fabricate the score client-side (this project's own
+  scope forbids a shim over a backend contract mismatch) and left that one
+  scenario entirely unimplemented, flagging the gap explicitly in the PR
+  body rather than working around it or silently claiming success.
+
+  REVIEWER independently re-verified this (WF02-REQ351-20260915 close-out;
+  full adjudication in docs/migration/stage-10-bilimbaga-vertical.md's
+  "REVIEWER sign-off" section, 2026-09-15 entry) and additionally judged
+  that extending session_view/1 to also carry score_pct/passed is NOT a
+  minor, same-PR-sized completion: lib/letflow/routers/exam_sessions.ex's
+  own moduledoc states, verbatim, that "a *result* view is a sixth
+  behaviour this requirement's own dependency chain (REQ-330's five) never
+  authorized, not a subset of the *state* read this module does
+  implement." Adding the outcome fields to the existing state-read route
+  would deliver exactly that reserved behaviour through a side door
+  (same route, but a materially different behaviour: "tell the candidate
+  their result"), which is the kind of side-effect scope settlement this
+  stage's own P5 section already warns against for exactly this
+  results-surface question. This therefore needs a real decision, not a
+  quick field addition.
+
+  FIX DIRECTION (either is acceptable, needs a decision first): (a) a
+  decision record settling whether/how a candidate's own already-persisted
+  score becomes readable -- widening GET /exam-sessions/:id's response, or
+  routing a dedicated result read once REQ-350's results-list question
+  (decision 0031) is further acted on -- followed by an ELIXIR-DEV
+  requirement implementing whichever shape is chosen, then a FRONTEND-DEV
+  follow-up wiring ExamSessionResultPage.tsx's score_unavailable branch to
+  render the real score; or (b) an explicit decision that this stays
+  unserved for now and REQ-351's score_unavailable fallback is the
+  intended, permanent behaviour -- in which case REQ-351's third
+  acceptance-criterion bullet in docs/requirements.yaml needs a
+  corresponding correction so it stops describing an outcome the project
+  has decided not to build.
+
+  REQ-351 itself is NOT blocked pending this issue's resolution for merge
+  purposes -- its two working screens (ExamResultView.tsx,
+  ExamSessionResultPage.tsx) are real, regression-free improvements closing
+  1 of 9 results-surface-blocked corpus blocks, and PR #1411 was merged as-
+  is. REQ-351's own requirement status is recorded as `blocked` (not
+  `done`) in docs/requirements.yaml pending this issue, since one of its
+  twelve acceptance criteria is genuinely unmet and not fixable within its
+  own scope fence (no lib/letflow/ changes permitted).
+affected_files:
+  - lib/letflow/exam/session.ex
+  - lib/letflow/routers/exam_sessions.ex
+  - web/src/pages/exam/ExamSessionResultPage.tsx
+  - docs/requirements.yaml
+queue_ref: Q-674
+github_ref: GH-1412
+status: open

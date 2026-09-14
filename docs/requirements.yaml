@@ -25240,7 +25240,19 @@ requirements:
     title: Make a candidate's OWN just-submitted exam result durably viewable by loading an existing session on mount instead of unconditionally starting a new one -- the half of the results-surface gap the P5 evidence already settles, frontend-only, no new backend route (S10 P5 follow-up)
     owner: FRONTEND-DEV
     impl_order: 667
-    status: pending
+    # BLOCKED, not done: 11 of 12 acceptance criteria are met (PR #1411,
+    # merged) but the scoreable-exam exam-result-score scenario is not, for
+    # a code-verified backend reason (session_view/1,
+    # lib/letflow/exam/session.ex:1151-1160, never returns score_pct/
+    # passed) that this requirement's own scope fence forbids fixing
+    # in-run (no lib/letflow/ changes permitted). REVIEWER judged extending
+    # session_view/1 crosses REQ-335's own "sixth behaviour" scope fence
+    # rather than being a minor completion -- see
+    # docs/migration/stage-10-bilimbaga-vertical.md's 2026-09-15 REVIEWER
+    # sign-off entry for the full adjudication. Filed as ISS-0674
+    # (Q-674, GH-1412). Not resolvable by more work inside this
+    # requirement -- unblocks only once ISS-0674's own decision lands.
+    status: blocked
     stage: S10
     description: >
       bucket: C (exam-specific client runtime). JUSTIFICATION on decision

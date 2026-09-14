@@ -12,8 +12,8 @@ each was retired by `REQ-VALIDATOR` for bundling separable units and split in
 two, per `REQ-340`'s and `REQ-342`'s own descriptions — so that span is
 deliberately non-contiguous.) `web/src/pages/exam/` now holds four modules,
 `ExamListPage.tsx`, `ExamSessionPage.tsx`, `ExamResultView.tsx` and
-`ExamSessionResultPage.tsx` (the last two added by `REQ-351`, PENDING its own
-required per-entry `REVIEWER` rule-2 adjudication) — see the bucket-C
+`ExamSessionResultPage.tsx` (the last two added by `REQ-351`, `REVIEWER`
+rule-2 PASS 2026-09-15) — see the bucket-C
 inventory below.
 **P5 is met as of 2026-09-14**: expanded into `REQ-344`–`REQ-349` and closed the
 same day — triage (`REQ-344`), the two-exam seeded fixture (`REQ-345`),
@@ -209,8 +209,8 @@ metric.
 | `Letflow.Exam.AntiCheat` | Validates one of exactly three signal types, checks session ownership/in-progress/deadline state, derives `action_taken` from the exam's `on_tab_switch` config (never from caller input), applies a per-session write-rate debounce, and branches `log`/`warn`/`submit` — a live conditional with a side effect (in the `submit` branch, triggering `Letflow.Exam.Session.submit/3`), which an entity definition cannot express. | Stating this generically requires naming the signal vocabulary (`tab_switch`/`blur`/`fullscreen_exit`) and the terminal action (auto-submitting a session) — both vertical-specific per rule 1's own test; a generic "signal-triggered record transition" capability would be built for exactly one caller today, the speculative-generality failure mode `0022` exists to prevent. | PASS (REVIEWER, 2026-09-13, WF02-REQ333-20260913) |
 | `web/src/pages/exam/ExamListPage.tsx` | Renders the candidate's exam-discovery/eligibility-gated start screen, including the honest "which exams can I take" answer against `check_assigned/3`'s documented no-op (option (a): list every active exam with copy stating this is provisional pending an assignment decision record) — a live disclosure/copy decision tied to a specific runtime finding, not a declarative field structure a definition could express. | The eligibility-error vocabulary it surfaces (assignment/archived/active/availability-window/attempt-limit/one-open-session, REQ-332's six atoms) and the provisional-copy escape hatch are specific to this vertical's session lifecycle (rule 1); no generic platform capability treats "explain why a record isn't startable yet" as shared today. | PASS (REVIEWER, 2026-09-13/14, three passes across WF02-REQ338-20260914 — implementation, router.tsx/queryKeys.ts decoupling fix, post branch-collision recovery — plus RELEASE-VALIDATOR PASS; docs/status/requirement_status.v16.yaml, REQ-338 done-event) |
 | `web/src/pages/exam/ExamSessionPage.tsx` | Orchestrates the in-progress/submit/result flow: per-answer autosave, a live countdown that ticks locally but is re-anchored to the server's `remaining_seconds` on every save response, submit/grading-pending/result state transitions, and three anti-cheat browser-event listeners (`visibilitychange`/`blur`/`fullscreenchange`) wired to `Letflow.Exam.AntiCheat`'s `log`/`warn`/`submit` branches with teardown on unmount — executable UI behaviour and client/server clock reconciliation, not field structure. | The countdown-reanchoring contract, the six eligibility-error messages, and the three anti-cheat signal types/branches are all specific to this vertical's session runtime (rule 1, same vocabulary `Letflow.Exam.Session`/`Letflow.Exam.AntiCheat` already justify); no generic capability treats "live countdown reanchored to a server tick" or "browser-event-to-signal mapping" as shared today. | PASS (REVIEWER, 2026-09-13/14, three passes across WF02-REQ338-20260914 — implementation, router.tsx/queryKeys.ts decoupling fix, post branch-collision recovery — plus RELEASE-VALIDATOR PASS; docs/status/requirement_status.v16.yaml, REQ-338 done-event) |
-| `web/src/pages/exam/ExamResultView.tsx` | `REQ-351`. The result-phase rendering extracted out of `ExamSessionPage.tsx` (same three testids/one render guard) so a session's result can be rendered identically whether it came from the LIVE start-answer-submit flow's in-memory `ExamSubmissionOutcome` or from a session LOADED by id via `GET /exam-sessions/:id` — a reuse/sharing decision over executable rendering logic, not a declarative field structure. | Its branching (`grading_pending` vs. scored, `passed` boolean, the pending-vs-score message ids) is this vertical's own `ExamSubmissionOutcome` shape and scoring vocabulary (rule 1, same basis `ExamSessionPage.tsx`'s own row already argues); no generic capability renders "an exam-shaped outcome." | **PENDING** — `REQ-351` itself flags that a per-entry `REVIEWER` rule-2 sign-off under decision 0022 is required before this requirement is registered done; not written here (REVIEWER's own step, not FRONTEND-DEV's) |
-| `web/src/pages/exam/ExamSessionResultPage.tsx` | `REQ-351`. Opens an EXISTING exam session by id (`examApi.getSessionState` only, never `startSession`) and renders its result phase via `ExamResultView` — a distinct mount/data-loading behaviour (a session-state fetch plus a load/error/pending/score-unavailable state machine) from `ExamSessionPage.tsx`'s unconditional-start mount, not a declarative field structure. | The honest A/B question REVIEWER must answer, per REQ-351's own text: a "load a record by id and render it read-only" screen is close to a generic capability, so whether this is actually a bucket-B candidate (a generic entity-record detail view) rather than bucket C is a real question, not a formality. | **PENDING** — same as `ExamResultView.tsx` above; REQ-351's own required rule-2 adjudication, not self-certified here |
+| `web/src/pages/exam/ExamResultView.tsx` | `REQ-351`. The result-phase rendering extracted out of `ExamSessionPage.tsx` (same three testids/one render guard) so a session's result can be rendered identically whether it came from the LIVE start-answer-submit flow's in-memory `ExamSubmissionOutcome` or from a session LOADED by id via `GET /exam-sessions/:id` — a reuse/sharing decision over executable rendering logic, not a declarative field structure. | Its branching (`grading_pending` vs. scored, `passed` boolean, the pending-vs-score message ids) is this vertical's own `ExamSubmissionOutcome` shape and scoring vocabulary (rule 1, same basis `ExamSessionPage.tsx`'s own row already argues); no generic capability renders "an exam-shaped outcome." | **PASS** (REVIEWER, 2026-09-15, WF02-REQ351-20260915 — bucket C confirmed, extraction reuse, no speculative plumbing; see this file's "REVIEWER sign-off" section) |
+| `web/src/pages/exam/ExamSessionResultPage.tsx` | `REQ-351`. Opens an EXISTING exam session by id (`examApi.getSessionState` only, never `startSession`) and renders its result phase via `ExamResultView` — a distinct mount/data-loading behaviour (a session-state fetch plus a load/error/pending/score-unavailable state machine) from `ExamSessionPage.tsx`'s unconditional-start mount, not a declarative field structure. | The honest A/B question REVIEWER must answer, per REQ-351's own text: a "load a record by id and render it read-only" screen is close to a generic capability, so whether this is actually a bucket-B candidate (a generic entity-record detail view) rather than bucket C is a real question, not a formality. | **PASS** (REVIEWER, 2026-09-15, WF02-REQ351-20260915 — the domain-specific `ExamSubmissionOutcome`/session-status branching answers the A/B question C; see this file's "REVIEWER sign-off" section. Note: the requirement itself is **not** fully done — its scoreable-exam acceptance criterion is unmet for an unrelated backend-gap reason, `ISS-0674`) |
 
 The first four rows are copied verbatim from
 [`lib/letflow/design/req330-exam-live-session.md`](../../lib/letflow/design/req330-exam-live-session.md)
@@ -229,10 +229,12 @@ requirement). The last two `web/src/pages/exam/` rows (`ExamResultView.tsx`,
 `ExamSessionResultPage.tsx`) are `REQ-351`'s own addition, likewise with no
 `CODE-DESIGNER` gate (REQ-351's own text: the backend read it needs was
 already routed and ownership-checked, so nothing required a new design pass)
-— their `REVIEWER` sign-off is **PENDING** as of this table's own 2026-09-15
-re-measurement below; REQ-351's own text requires a per-entry rule-2
-adjudication before it can be registered done, and that adjudication is
-REVIEWER's step, not written here.
+— their `REVIEWER` rule-2 sign-off is **PASS**, recorded 2026-09-15 in this
+file's own "REVIEWER sign-off" section below (bucket C confirmed for both
+modules). That PASS is on rule 2/idiom/supervision/scope for the code itself
+only; `REQ-351` as a whole is not fully done — its scoreable-exam acceptance
+criterion is unmet for a code-verified backend-gap reason unrelated to rule 2,
+filed as `ISS-0674` (see the sign-off section for the full adjudication).
 
 **Measurement, run against this tree.** These figures are a snapshot, not a
 standing guarantee — this table has already gone stale twice behind
@@ -585,8 +587,8 @@ modules under `lib/letflow/exam/` and two screen modules under
 `ISS-0665` — see the inventory table above for the current figures). *This
 finding is as of P5's own close (2026-09-14); `REQ-351`, filed and
 implemented the following day, adds two more `web/src/pages/exam/` modules
-(`ExamResultView.tsx`, `ExamSessionResultPage.tsx`, PENDING their own
-required rule-2 adjudication) — see the inventory table's 2026-09-15
+(`ExamResultView.tsx`, `ExamSessionResultPage.tsx`, `REVIEWER` rule-2 PASS
+2026-09-15) — see the inventory table's 2026-09-15
 re-measurement above for the current count. P5's own four-and-two figures are
 left standing here as the accurate snapshot of that phase's own close, not
 retroactively edited.* That is an honest reading, not a
@@ -602,6 +604,120 @@ this came up at all. An amendment stating it is to be filed as its own
 requirement rather than edited into `0022` in place, following the precedent of
 decision `0030`'s Finding 1 and this file's own hard constraint; until it
 lands, this entry is the governing precedent.
+
+**2026-09-15 — `REVIEWER`, rule-2 adjudication for `REQ-351` (`ExamResultView.tsx`,
+`ExamSessionResultPage.tsx`).** `REQ-351` itself flagged that it needed a
+per-entry sign-off before registration and deliberately did not write one for
+itself, per this file's own precedent for `REQ-338`'s two screens. Adjudicated
+by reading the diff directly (`web/src/pages/exam/ExamResultView.tsx`,
+`web/src/pages/exam/ExamSessionResultPage.tsx`, `web/src/router.tsx`,
+`web/tests/e2e/exam-result-by-id.e2e.spec.ts`), not by trusting FRONTEND-DEV's
+own report.
+
+**Finding: bucket C, not B — the honest A/B question REQ-351 posed has a real
+answer.** `ExamSessionResultPage.tsx` is, on its surface, "load a record by id
+and render it read-only," which is close enough to a generic capability that
+the question deserved asking rather than waving through. It fails rule 1's
+generic-statement test anyway: the component's own state machine
+(`loading`/`not_found`/`pending`/`score_unavailable`) and its terminal render
+branch are keyed to `ExamSubmissionOutcome`'s exam-specific shape
+(`status: grading_pending`, `passed`, the `scoring.ex:255-257` forcing rule)
+and to `session.status`'s exam-specific vocabulary
+(`in_progress`/`submitted`/`auto_submitted`/`grading_pending`) — the same
+vocabulary `ExamSessionPage.tsx`'s and `ExamListPage.tsx`'s own rows above
+already establish as C-justifying. A generic "entity-record detail view"
+could render `session`'s raw field values, but could not know that
+`grading_pending` means "show the pending message, never a score" or that a
+short-text question forces that state platform-wide — that branching logic is
+exam domain knowledge, not a declarative field structure. No second caller
+wants this behaviour today; building a generic version now would be the
+speculative-generality failure mode `0022` exists to prevent, the same basis
+already used for `QuestionSetResolver`/`AntiCheat`/the P5 seed task above.
+
+**Finding: rule 2 reaches both modules, and PASSES.** `ExamResultView.tsx` is
+a pure extraction (identical testids/markup/message ids moved out of
+`ExamSessionPage.tsx`, a net decrease in `ExamSessionPage.tsx`'s own line
+count per the inventory re-measurement above) — reuse across two legitimate
+callers, not new
+abstraction reached for ahead of need; it does not smuggle in speculative
+plumbing (no new props beyond `outcome`/`onBackToList`, no generic
+"render-any-outcome-shaped-thing" indirection). `ExamSessionResultPage.tsx`'s
+own A/B answer is above. Both **PASS**.
+
+**Finding: no supervision or OTP-idiom concern — this is frontend-only.**
+`git diff --name-only` confirms no file under `lib/letflow/` changed; nothing
+here touches `Letflow.InstanceSupervisor` or any gen_statem/GenServer boundary.
+
+**Finding: the required scoreable-exam acceptance criterion is genuinely
+unmet, and that is correctly reported rather than papered over.** `REQ-351`'s
+third acceptance-criterion bullet requires a spec proving `exam-result-page`
+and `exam-result-score` render from a LOADED session for `REQ-345`'s
+shorttext-free exam. No such scenario exists anywhere in the diff — not
+attempted, not stubbed, not xfailed. This is not a partial implementation of
+that criterion; it is the criterion's complete absence, and FRONTEND-DEV's own
+PR body states so explicitly rather than claiming otherwise. The cause is
+real and code-verified: `Letflow.Exam.Session`'s private `session_view/1`
+(`lib/letflow/exam/session.ex:1151-1160`) maps only
+`id/exam_id/candidate_id/status/seed/started_at/expires_at` out of the
+session record into `GET /exam-sessions/:id`'s response, never `score_pct` or
+`passed` — even though `submit_session`'s own `outcome_from_session/1`
+helper (`session.ex:1087-1098`) proves both fields are already persisted on
+the record by the time a session reaches `submitted`/`auto_submitted`.
+Fabricating them client-side is correctly refused.
+
+**Adjudication: extending `session_view/1` to also carry `score_pct`/`passed`
+would cross `REQ-335`'s scope fence — this is Option B, not Option A.**
+`lib/letflow/routers/exam_sessions.ex`'s own moduledoc, quoted verbatim: *"a
+*result* view is a sixth behaviour this requirement's own dependency chain
+(REQ-330's five) never authorized, not a subset of the *state* read this
+module does implement."* That sentence draws its line precisely at the
+distinction between a session's *operational* state (status, timing,
+ownership — what `session_view/1` returns today) and its *outcome* (score,
+pass/fail) — and it names the outcome half, specifically, as the thing
+`REQ-335`'s authors declined to authorize. Adding `score_pct`/`passed` to
+`session_view/1`'s response would deliver exactly that outcome data through
+the existing route rather than through a new one, which is a difference in
+mechanism, not in substance: the route stays the same, but the *behaviour*
+the route now performs — "tell the candidate their result" — is the one the
+moduledoc explicitly reserved. `REQ-351`'s own text anticipated only "this
+route's own state read" being reused, not an expanded version of that read
+carrying the very fields the fence names. Calling this "minor" because it is
+same-route, additive, and already-persisted would let exactly the kind of
+side-effect scope settlement this stage file's own P5 section already warns
+against ("a product-scope question that P5 must not settle by side effect")
+happen one field at a time. **Verdict: this needs a real decision — whether
+`GET /exam-sessions/:id` should be widened to carry result data, or whether a
+dedicated result read is the right shape once `REQ-350`'s results-list
+question resolves — not a same-PR field addition.** Filed as `ISS-0674`
+(`GH-1412`, `Q-674`); see that record for the full account. `REQ-350`'s own
+results-list adjudication (decision `0031`) is the natural place this
+question gets folded in, since both turn on the same "what does a result
+surface look like" question, but that is a call for whoever picks up
+`ISS-0674`, not asserted here.
+
+**Overall: PASS on rule 2/idiom/supervision/scope for the code that was
+built; the requirement is not fully done against its own acceptance
+criteria.** 11 of `REQ-351`'s 12 acceptance-criterion bullets are met on
+direct re-verification of the diff (route exists; `startSession` absent from
+the by-id path, grep-confirmed; the mixed-exam pending scenario passes; the
+not-owner scenario passes and matches `get_session_state_for_user/3`'s
+`{:error, :not_owner}` path; `git diff --name-only` touches nothing under
+`lib/letflow/`; the pre-existing exam-taking/exam-result specs re-run
+unchanged per the PR's own quoted 15/15 combined run; no `test.skip`/
+`test.fixme` in the diff, grep-confirmed; the 1-of-9-corpus-blocks framing is
+stated correctly and does not overclaim; this rule-2 sign-off was correctly
+requested rather than self-certified; the URL-PROVISIONAL statement is
+present and names `REQ-350` by id; the bucket-C inventory re-measurement
+above is accurate). The twelfth — the scoreable-exam `exam-result-score`
+scenario — is not met, for the code-verified backend-gap reason above, and is
+not fixable within this requirement's own scope fence (no `lib/letflow/`
+changes permitted). Recorded as `REQ-351` status `blocked` rather than
+`done`, pending `ISS-0674`; see `docs/status/requirement_status.index.yaml`
+for the close-out event. Merging `web/src/pages/exam/ExamResultView.tsx` and
+`ExamSessionResultPage.tsx` as-is is still correct despite the open
+criterion: they are real, working, honestly-scoped improvements (they close 1
+of the 9 results-surface-blocked corpus blocks) that regress nothing and do
+not need to wait on `ISS-0674`'s resolution.
 
 ## P5 close-out — `REQ-348`, 2026-09-14
 

@@ -3431,10 +3431,56 @@ volumes:
 
   - volume: 16
     path: docs/status/requirement_status.v16.yaml
-    status: current
+    status: closed
     opened: 2026-09-13
-    entries: 23
+    closed: 2026-09-14
+    entries: 27
+    lines: 1274
+    bytes_working_tree: 71591
+    frozen_prefix_lines: 1233
+    frozen_prefix_sha256: "f6cce139d16c1e853711ad26e04f7ae3229cc0368784d3441a0943a18ee893d1"
     note: >
+      Closed by ORCH while resolving issue/ISS-0646-candidate-role-20260914's
+      PR #1384 merge conflict against main, across TWO conflict rounds on this
+      same file. Round 1 (26 entries, 1208 lines): a sibling session's
+      ISS-0655 SCOPE-CHANGE started+done pair had already merged and appended
+      to this file's tail -- composed both branches' entries in `at:`
+      timestamp order (ISS-0655 started 06:47:07Z, ISS-0655 done 07:18:00Z,
+      both before this branch's own ISS-0646 done 07:18:56Z, already correct
+      order, no reordering needed) and closed/rolled to volume 17 on that
+      basis. Round 2 (27 entries, 1233 lines), discovered before round 1's
+      close ever reached a merge -- a further sibling REQ-344 done-event
+      append (08:05:00Z) had ALSO landed on main in the interim: recomposed
+      by inserting REQ-344's entry (chronologically last of the three) before
+      re-deriving the closure footer/counts/digest from scratch against the
+      correct 27-entry composition, rather than layering a second roll on top
+      of round 1's premature one -- `grep -c "^  - req:"
+      docs/status/requirement_status.v16.yaml` = 27 on-disk entries after
+      composition, 1233 lines -- over the 1,200-line roll ceiling, confirmed
+      via `wc -l` on the working-tree file. Closure footer appended per the
+      roll rule; `frozen_prefix_sha256` computed BEFORE the footer was
+      appended, over exactly the 1233 frozen-prefix lines, using this file's
+      documented normalised-line-terminator digest (each line's trailing
+      "\n" then "\r" trimmed, single "\n" re-appended, per design §8) rather
+      than a raw `sha256sum` of the CRLF working-tree bytes -- this session's
+      checkout is CRLF, and a raw sha256sum over CRLF bytes does not match
+      A6's own computation, which normalises before hashing.
+      Successor: docs/status/requirement_status.v17.yaml, created with volume
+      16's header text verbatim (volume number, opening date and predecessor
+      path updated) and an empty `history:` list -- diffed against volume 16's
+      original header to confirm only those fields changed.
+      Recounted to 24 by DOC-UPDATER's own ISS-0646 done-event append
+      (SCOPE-CHANGE, fix/ISS-0646-20260914), composed at Step Final
+      onto ORCH's own concurrently-landed ISS-0649 started+done pair
+      (this run's working tree had been created against a
+      pre-ISS-0649 base) -- `grep -c "^  - req:"
+      docs/status/requirement_status.v16.yaml` = 24 on-disk entries
+      after composition (ISS-0649 started 04:23:00Z, ISS-0649 done
+      05:25:00Z, ISS-0646 done 07:18:56Z, all already in correct
+      chronological order, no reordering needed); 1157 lines / 65820
+      bytes, well under the roll ceiling. Recounted from the composed
+      file per the recount-every-time rule rather than carrying
+      forward either side's independently-computed 22/23.
       Incremented to 23 by ORCH's own ISS-0649 done-event append
       (SCOPE-CHANGE, fix/ISS-0649-20260914) -- `grep -c "^  - req:"
       docs/status/requirement_status.v16.yaml` = 23 on-disk entries;
@@ -3675,6 +3721,20 @@ volumes:
       empty `history:` list, per this index's `roll_rule.on_exceed`
       procedure. `entries:` will be incremented per HOW-TO-APPEND step 6 as
       real appends land.
+
+  - volume: 17
+    path: docs/status/requirement_status.v17.yaml
+    status: current
+    opened: 2026-09-14
+    entries: 0
+    note: >
+      Opened by ORCH while resolving issue/ISS-0646-candidate-role-20260914's
+      PR #1384 merge conflict against main, successor to volume 16. Created
+      with volume 16's header text verbatim (volume number, opening date and
+      predecessor path updated) and an empty `history:` list, per this
+      index's `roll_rule.on_exceed` procedure -- diffed against volume 16's
+      original header to confirm only those fields changed. `entries:` will
+      be incremented per HOW-TO-APPEND step 6 as real appends land.
 
 
 known_anomalies:

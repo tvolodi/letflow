@@ -55,18 +55,17 @@ defmodule Letflow.Routers.ExamSessions do
 
   `ExamSessionStart`/`ExamSessionRead`/`ExamSessionSave`/`ExamSessionSubmit`/
   `ExamSessionReportEvent` (minted in `Letflow.Api.Authorization`, following
-  the `Entities*` naming precedent) are granted to `:TASK_WORKER` --
-  this authorization matrix's only non-privileged, ordinary-tenant-user
-  role; there is no dedicated `:CANDIDATE` role anywhere in
-  `Letflow.Api.Authorization`, and minting one is outside a route-surface
-  requirement's scope. A candidate sitting an exam is exactly that: an
-  ordinary authenticated tenant user reaching their OWN session. Gating
-  these atoms `PLATFORM_ADMIN`-only would lock every candidate out of their
-  own exam. See `Letflow.Api.Authorization`'s own moduledoc "ExamSession*"
-  section for the full reasoning, and its `endpoint_policy_key/2` clauses
-  for the five real matrix entries backing these atoms (proven by
-  `test/letflow/api/authorization_enforcement_test.exs` -- none is on that
-  test's allowlist, none evaluates `:Unknown`).
+  the `Entities*` naming precedent) are granted to `:CANDIDATE` -- a
+  dedicated role added by ISS-0646 (see decision 0013's addendum) holding
+  exactly these five permissions and nothing else, via
+  `Letflow.Api.Authorization`'s `role_allows?(:CANDIDATE, ...)` clause. A
+  candidate sitting an exam is exactly that: an ordinary authenticated
+  tenant user reaching their OWN session. `TASK_WORKER` no longer holds
+  these permissions. See `Letflow.Api.Authorization`'s own moduledoc
+  "ExamSession*" section for the full reasoning, and its
+  `endpoint_policy_key/2` clauses for the five real matrix entries backing
+  these atoms (proven by `test/letflow/api/authorization_enforcement_test.exs`
+  -- none is on that test's allowlist, none evaluates `:Unknown`).
 
   ## Ownership and tenant isolation (INV-1, INV-5, INV-8)
 

@@ -139,19 +139,16 @@ defmodule Letflow.Api.Authorization do
   `endpoint_policy_key/2` clause and an identity `required_permission/1`
   clause, the same shape as `Entities*` above.
 
-  Unlike every `Entities*` addition above, these are granted to
-  `:TASK_WORKER` (this codebase's only non-privileged, ordinary-tenant-user
-  role — the five roles this module ports have no dedicated `:CANDIDATE`
-  role, and REQ-330/REQ-332/REQ-333 never introduced one) rather than left
-  `PLATFORM_ADMIN`-only: a candidate sitting an exam is an ordinary
-  authenticated tenant user reaching their OWN session (every delegate call
-  is additionally ownership-checked inside `Letflow.Exam.Session`/
-  `Letflow.Exam.AntiCheat` themselves, ownership never being a function of
-  role), so gating these atoms to `PLATFORM_ADMIN`-only would lock every
-  candidate out of their own exam. `:PROCESS_DESIGNER`/`:PROCESS_OPERATOR`
-  deliberately do NOT gain these permissions — sitting an exam is not part of
-  either role's existing grant shape, and `PLATFORM_ADMIN`'s catch-all
-  already covers an operator who also needs to probe a session.
+  `CANDIDATE` (added by ISS-0646, see decision 0013's addendum) is a new,
+  dedicated role holding exactly these five permissions and nothing else;
+  `TASK_WORKER` no longer holds them. A candidate sitting an exam is an
+  ordinary authenticated tenant user reaching their OWN session (every
+  delegate call is additionally ownership-checked inside
+  `Letflow.Exam.Session`/`Letflow.Exam.AntiCheat` themselves, ownership never
+  being a function of role). `:PROCESS_DESIGNER`/`:PROCESS_OPERATOR`
+  continue to not hold them, for the same reason as before — sitting an exam
+  is not part of either role's existing grant shape; `PLATFORM_ADMIN`'s
+  catch-all still covers an operator who also needs to probe a session.
   """
 
   @type role ::
@@ -160,6 +157,7 @@ defmodule Letflow.Api.Authorization do
           | :PROCESS_OPERATOR
           | :TASK_WORKER
           | :AGENT_RUNNER
+          | :CANDIDATE
 
   @type permission ::
           :DefinitionsWrite
@@ -251,7 +249,14 @@ defmodule Letflow.Api.Authorization do
 
   @type task_row_scope :: :all | {:own_user_and_groups, String.t()}
 
-  @roles [:PLATFORM_ADMIN, :PROCESS_DESIGNER, :PROCESS_OPERATOR, :TASK_WORKER, :AGENT_RUNNER]
+  @roles [
+    :PLATFORM_ADMIN,
+    :PROCESS_DESIGNER,
+    :PROCESS_OPERATOR,
+    :TASK_WORKER,
+    :AGENT_RUNNER,
+    :CANDIDATE
+  ]
 
   @permissions [
     :DefinitionsWrite,
@@ -290,7 +295,7 @@ defmodule Letflow.Api.Authorization do
     :ExamSessionReportEvent
   ]
 
-  @doc "All five `Role` values, R-Co's exact names. See `roles_from_strings/1` for untrusted-input conversion."
+  @doc "All six `Role` values, R-Co's exact names plus ISS-0646's `CANDIDATE`. See `roles_from_strings/1` for untrusted-input conversion."
   @spec roles() :: [role()]
   def roles, do: @roles
 
@@ -365,6 +370,7 @@ defmodule Letflow.Api.Authorization do
   defp role_from_string("PROCESS_OPERATOR"), do: :PROCESS_OPERATOR
   defp role_from_string("TASK_WORKER"), do: :TASK_WORKER
   defp role_from_string("AGENT_RUNNER"), do: :AGENT_RUNNER
+  defp role_from_string("CANDIDATE"), do: :CANDIDATE
   defp role_from_string(_other), do: nil
 
   @doc """
@@ -902,22 +908,24 @@ defmodule Letflow.Api.Authorization do
         # REQ-317 (design §7 OQ-2 role matrix): read only -- no write-class
         # entity permission at all is granted to this role, mirroring its
         # existing instance-scoped :AttachmentsRead-only grant.
-        :EntitiesAttachmentsRead,
-        # REQ-335: TASK_WORKER is this module's only non-privileged,
-        # ordinary-tenant-user role, and a candidate sitting an exam is
-        # exactly that -- an authenticated tenant user with no
-        # process-design/operator authority. All five exam-session route
-        # permissions are granted here (this module's moduledoc
-        # "ExamSession*" section states why PLATFORM_ADMIN-only would be
-        # wrong); ownership of the specific session is enforced inside
-        # Letflow.Exam.Session/Letflow.Exam.AntiCheat themselves, never by
-        # this role grant.
+        :EntitiesAttachmentsRead
+      ]
+
+  def role_allows?(:AGENT_RUNNER, _permission), do: false
+
+  # ISS-0646 (decision 0013 addendum): CANDIDATE is a dedicated role for
+  # external exam candidates, holding exactly REQ-335's five exam-session
+  # route permissions and nothing else. TASK_WORKER no longer holds these
+  # (see this module's moduledoc "ExamSession*" section) -- ownership of the
+  # specific session is still enforced inside Letflow.Exam.Session/
+  # Letflow.Exam.AntiCheat themselves, never by this role grant.
+  def role_allows?(:CANDIDATE, permission),
+    do:
+      permission in [
         :ExamSessionStart,
         :ExamSessionRead,
         :ExamSessionSave,
         :ExamSessionSubmit,
         :ExamSessionReportEvent
       ]
-
-  def role_allows?(:AGENT_RUNNER, _permission), do: false
 end

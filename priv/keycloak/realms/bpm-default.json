@@ -13,7 +13,8 @@
       { "name": "PROCESS_DESIGNER" },
       { "name": "PROCESS_OPERATOR" },
       { "name": "TASK_WORKER" },
-      { "name": "AGENT_RUNNER" }
+      { "name": "AGENT_RUNNER" },
+      { "name": "CANDIDATE" }
     ]
   },
   "clients": [

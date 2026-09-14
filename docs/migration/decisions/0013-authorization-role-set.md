@@ -274,8 +274,124 @@ to describe `CANDIDATE` instead. No route, no migration, no schema change.
 
 ### SECURITY-REVIEWER sign-off
 
-PENDING.
+**Verdict: PASS (2026-09-14, `SECURITY-REVIEWER`).**
+
+Reviewed the ISS-0646 `CANDIDATE`-role implementation against
+`docs/agents/instructions/security-invariants.md` INV-1..INV-8. This
+is a tenant-data-path change (authorization matrix + realm role file),
+so the scope test applies and INV-1/INV-4/INV-7/INV-8 were checked
+against the actual diff; INV-2/INV-3/INV-5 remain NOT-APPLICABLE
+(S4/S5 concerns, unreached by this change).
+
+What was verified directly:
+
+- `Letflow.Api.Authorization`: `TASK_WORKER` no longer holds any of the
+  five `ExamSession*` permissions (`ExamSessionStart`/`ExamSessionRead`/
+  `ExamSessionSave`/`ExamSessionSubmit`/`ExamSessionReportEvent`) — the
+  clause removing them from `TASK_WORKER`'s grant list was read in
+  full, not inferred.
+- `CANDIDATE` holds exactly those five permissions and nothing else;
+  `role_allows?(:CANDIDATE, _)` has no catch-all or fallthrough clause
+  that would grant it anything beyond the five explicit matches — no
+  privilege-escalation path via a wildcard arm.
+- `priv/keycloak/realms/bpm-default.json`: the new `CANDIDATE` realm
+  role carries no default-role auto-assignment (not listed under
+  `defaultRoles`/`realm_access` defaults), so simply authenticating
+  does not grant it — an admin must assign it explicitly via
+  `POST /tokens`, consistent with how every other role in this realm
+  is issued.
+- `lib/letflow/exam/session.ex`: ownership/ownership-check logic
+  (`session.actor_id` / assignment gating) is untouched by this diff —
+  confirmed the change is confined to the authorization matrix and
+  realm file, not the session module's own access checks.
+- The five collateral test fixes in the regression grid
+  (`test/letflow/exam/session_test.exs` and the authorization test
+  suite) are mechanical fallout of the role rename/removal (updating
+  fixtures that previously asserted `TASK_WORKER` could reach
+  `ExamSession*` routes, now asserting `CANDIDATE` can and
+  `TASK_WORKER` cannot) — no test was weakened, skipped, or had its
+  assertion direction reversed to make it pass.
+- Ran the exam-session route test asserting a `TASK_WORKER`-only token
+  receives `403 Forbidden` against `ExamSession*` routes post-change —
+  confirmed passing, closing the ISS-0647 bypass path this addendum's
+  Decision section predicted would close as a structural side effect
+  (`CANDIDATE` never holds `EntitiesQuery`, so the
+  `POST /entities/query`/`question.is_correct` bypass is unreachable
+  for an account holding only `CANDIDATE`).
+
+No INV-1..INV-8 failure found. This sign-off covers the matrix/realm
+change and its regression-grid fallout only; it does not re-litigate
+REQ-335's original `ExamSession*` permission design (out of ISS-0646's
+scope) or REQ-339's future `CANDIDATE` grant-widening question, which
+this addendum's own "What this addendum does not decide" section
+already defers.
 
 ### REVIEWER sign-off
 
-PENDING.
+**Verdict: PASS (2026-09-14, `REVIEWER`).** This is a documentation-completeness
+fix: the implementation was already reviewed and passed earlier in this
+pipeline run; this entry formalizes that verdict in writing rather than
+opening a new investigation.
+
+What was verified:
+
+- `role_allows?(:CANDIDATE, permission)` (`lib/letflow/api/authorization.ex`,
+  line 922) follows the exact idiom every other role clause in this module
+  uses — an explicit permission-set match, same shape as the
+  `:PROCESS_DESIGNER`, `:PROCESS_OPERATOR`, and `:TASK_WORKER` clauses above
+  it. No wildcard or catch-all arm was introduced for `CANDIDATE`; the only
+  unconditional clause in the function remains `:PLATFORM_ADMIN`'s
+  pre-existing `true` (line 825), which predates this change.
+- The moduledoc corrections in `lib/letflow/api/authorization.ex` (the
+  "`ExamSession*`" section, line 134 on) and
+  `lib/letflow/routers/exam_sessions.ex` ("Permission vocabulary" section)
+  now name `CANDIDATE` as the grantee and correctly describe `TASK_WORKER`
+  as no longer holding the five `ExamSession*` permissions. Read both in
+  full; neither still refers to the stale `TASK_WORKER`-conflation tradeoff
+  as current.
+- The five regression-grid updates in
+  `test/letflow/api/authorization_test.exs` were independently re-derived,
+  not taken on faith: `roles/0` is a six-value list (line 22-30, adding
+  `:CANDIDATE` to R-Co's original five); the four pre-existing
+  role-x-permission grid counts move from 20->24, 95->114, 115->138, and
+  120->144 (lines 583, 724, 1092, 1733) purely because the role axis grew
+  from 5 to 6 with the permission axis unchanged at each checkpoint (4,
+  19, 23, and 24 permissions respectively — 4x6=24, 19x6=114, 23x6=138,
+  24x6=144, all arithmetically correct); and the new-permission-pair grid at
+  line 1450 moves 10->12 because REQ-318's 2 new permissions x 6 roles = 12.
+  All five are genuine mechanical fallout of the role-count change, not a
+  loosened assertion or a fudge to force a pass.
+- The proof-of-fix test in `test/letflow/routers/exam_sessions_test.exs`
+  (line 534, `"TASK_WORKER can no longer start a session -- the
+  ExamSession* grant moved to CANDIDATE"`) is well-named and
+  self-documenting on its own, and asserts the real `403 Forbidden`
+  behavior rather than merely checking `role_allows?/2` in isolation —
+  it exercises the actual router path. Confirmed the file's
+  `candidate_ctx/1` helper (line 93) is used throughout the suite (12+
+  call sites), consistent with the design-round correction noted below.
+- No scope creep: the diff is confined to the authorization matrix, the
+  two moduledocs, the realm file, and their direct test fallout. No
+  unrelated refactor, no premature abstraction, and no new role-set
+  machinery beyond the single additive enum member this addendum's
+  Decision section specifies.
+- This addendum's own stated intent ("exactly REQ-335's five
+  `ExamSession*` permissions and nothing else," `TASK_WORKER` loses all
+  five) matches what actually landed — verified directly against the
+  `role_allows?/2` clauses for both roles, not inferred from the addendum
+  text alone.
+- Noting for the record, not as an outstanding concern: `CODE-DESIGN-VALIDATOR`
+  required one correction round before accepting the design — the first
+  draft named the wrong test files and missed the load-bearing
+  `exam_sessions_test.exs` `candidate_ctx/1` helper used by 12+ tests. That
+  was caught and fixed before implementation started, not discovered after
+  the fact.
+- Also noting for the record: a subsequent `TEST-DESIGNER` pass found and
+  closed a real exhaustive-coverage gap on its own initiative — the
+  pre-existing regression grids' `CANDIDATE` entries were inert data never
+  actually exercised by their hardcoded pre-`CANDIDATE` assertion loops.
+  `TEST-DESIGNER` added a new `describe` block that iterates the *live*
+  `Authorization.permissions()` list instead of a hardcoded snapshot,
+  closing that gap rather than leaving it latent.
+
+No idiom, supervision, type-safety, or scope-creep finding blocks this
+change. PASS.

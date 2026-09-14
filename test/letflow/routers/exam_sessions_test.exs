@@ -90,7 +90,7 @@ defmodule Letflow.Routers.ExamSessionsTest do
     }
   end
 
-  defp candidate_ctx(tenant), do: user_ctx(tenant, ["TASK_WORKER"])
+  defp candidate_ctx(tenant), do: user_ctx(tenant, ["CANDIDATE"])
 
   defp iso(%DateTime{} = dt), do: DateTime.to_iso8601(dt)
 
@@ -506,7 +506,7 @@ defmodule Letflow.Routers.ExamSessionsTest do
   # ── Permission matrix ────────────────────────────────────────────────────
 
   describe "role gating" do
-    test "PROCESS_DESIGNER (no TASK_WORKER, no PLATFORM_ADMIN) is forbidden from starting a session" do
+    test "PROCESS_DESIGNER (no CANDIDATE, no PLATFORM_ADMIN) is forbidden from starting a session" do
       tenant = tenant("req335-role-designer")
       %{exam: exam} = build_minimal_exam!(tenant.schema_name)
       ctx = user_ctx(tenant, ["PROCESS_DESIGNER"])
@@ -515,13 +515,29 @@ defmodule Letflow.Routers.ExamSessionsTest do
       assert conn.status == 403
     end
 
-    test "TASK_WORKER (the candidate role) can start a session" do
+    test "CANDIDATE (the candidate role) can start a session" do
       tenant = tenant("req335-role-taskworker")
       %{exam: exam} = build_minimal_exam!(tenant.schema_name)
       ctx = candidate_ctx(tenant)
 
       conn = request("POST", "/api/v1/exam-sessions", ctx, %{"exam_id" => exam.record_id})
       assert conn.status == 201
+    end
+
+    # ISS-0646: proves the fix, not just the addition -- TASK_WORKER must no
+    # longer reach ExamSession* routes now that the permission moved to the
+    # new, dedicated CANDIDATE role (decision 0013 addendum, design
+    # lib/letflow/design/iss0646-candidate-role.md §4b). Without this test,
+    # a regression that granted CANDIDATE the five permissions "alongside"
+    # TASK_WORKER instead of "instead of" TASK_WORKER would pass every other
+    # test in this file.
+    test "TASK_WORKER can no longer start a session -- the ExamSession* grant moved to CANDIDATE" do
+      tenant = tenant("req335-role-taskworker-removed")
+      %{exam: exam} = build_minimal_exam!(tenant.schema_name)
+      ctx = user_ctx(tenant, ["TASK_WORKER"])
+
+      conn = request("POST", "/api/v1/exam-sessions", ctx, %{"exam_id" => exam.record_id})
+      assert conn.status == 403
     end
   end
 end

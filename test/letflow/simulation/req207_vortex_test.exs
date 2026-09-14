@@ -1662,7 +1662,26 @@ defmodule Letflow.Simulation.Req207VortexTest do
       # scenario's disposition, and per this tier's own purpose, landed code
       # gets re-derived here rather than silently waved into allowed_ids.
       # All six are `status: pending` at admission time.
-      pending_only_ids = ["REQ-315", "REQ-316", "REQ-317", "REQ-318", "REQ-319", "REQ-320"]
+      #
+      # REQ-347 (S10 P5, filed 2026-09-14, owner FRONTEND-DEV, `status:
+      # pending`): "Port the entity-CRUD-backed admin parity specs ... onto
+      # /admin/bilimbaga/:entityType as *.e2e.spec.ts". Its title matches the
+      # word-bounded entity/entities check, but per its own description it is
+      # a Playwright test-spec port under web/ -- it does not touch
+      # Letflow.Routers.Entities, does not add a backend route, and does not
+      # touch the S8 :gui-dispatch stub this scenario's six steps depend on.
+      # Admitted here (not allowed_ids) per this tier's own contract: it is
+      # not yet triaged as landed/done, so it is armed rather than waved
+      # through. Re-derive when it flips to done.
+      pending_only_ids = [
+        "REQ-315",
+        "REQ-316",
+        "REQ-317",
+        "REQ-318",
+        "REQ-319",
+        "REQ-320",
+        "REQ-347"
+      ]
 
       refute Enum.empty?(entity_title_matches),
              "Expected at least 1 title: match for word-bounded entity/entities (REQ-207's own), got none"

@@ -372,3 +372,95 @@ describe('REQ-338 AC6/AC7 — anti-cheat signal wiring and teardown', () => {
     expect(mockedExamApi.reportEvent).toHaveBeenCalledTimes(1)
   })
 })
+
+describe('ISS-0654 — forced anti-cheat submit flushes an uncommitted short_text draft first', () => {
+  function shortTextSessionState(overrides: Partial<ExamSessionStateResponse> = {}): ExamSessionStateResponse {
+    return sessionState({
+      questions: [
+        {
+          question_id: 'q1',
+          sort_order: 1,
+          type: 'short_text',
+          stem: 'What is the capital of France?',
+          options: [],
+        },
+      ],
+      ...overrides,
+    })
+  }
+
+  it('awaits the flushed saveAnswer to completion before reportEvent is called, and the draft reaches the server', async () => {
+    mockedExamApi.startSession.mockResolvedValue(shortTextSessionState())
+
+    const order: string[] = []
+    mockedExamApi.saveAnswer.mockImplementation(async () => {
+      order.push('saveAnswer:start')
+      // Deliberately slow, so a real race (flush fired-and-forgotten) would
+      // let reportEvent's own resolution race ahead of this instead of
+      // waiting for it.
+      await new Promise((resolve) => setTimeout(resolve, 20))
+      order.push('saveAnswer:resolved')
+      return { remaining_seconds: 42 }
+    })
+    mockedExamApi.reportEvent.mockImplementation(async () => {
+      order.push('reportEvent:called')
+      return {
+        action_taken: 'submit',
+        event_count: 1,
+        warning: false,
+        submission: { status: 'submitted', total_score: 0, total_max_score: 10, percentage: 0, passed: false },
+      }
+    })
+
+    renderPage()
+    await screen.findByTestId('exam-session-page')
+
+    const textarea = await screen.findByTestId('exam-short-text-input')
+    // Keystroke only -- no blur on the textarea itself, matching the bug:
+    // the candidate is still typing when the forced signal fires.
+    fireEvent.change(textarea, { target: { value: 'Paris' } })
+
+    // A browser-level signal (e.g. the tab-switch/window-blur REQ-333
+    // listens for) fires with no textarea blur in between.
+    window.dispatchEvent(new Event('blur'))
+
+    await screen.findByTestId('exam-result-page')
+
+    // The uncommitted draft was flushed through the SAME saveAnswer call
+    // handleTextAnswerBlur uses, with the correct short_text payload shape.
+    expect(mockedExamApi.saveAnswer).toHaveBeenCalledWith(
+      'session-1',
+      'q1',
+      expect.objectContaining({ selected_option_ids: [], text_answer: 'Paris' }),
+    )
+    expect(mockedExamApi.reportEvent).toHaveBeenCalledWith('session-1', 'blur')
+
+    // No race: the flush's saveAnswer fully resolved BEFORE reportEvent (the
+    // call that can trigger the forced submit) was ever invoked.
+    expect(order).toEqual(['saveAnswer:start', 'saveAnswer:resolved', 'reportEvent:called'])
+  })
+
+  it('does not call saveAnswer again on a forced submit when the draft already matches the saved value', async () => {
+    mockedExamApi.startSession.mockResolvedValue(
+      shortTextSessionState({
+        answers: {
+          q1: { selected_option_ids: [], text_answer: 'Paris', time_spent_seconds: 10, saved_at: '2026-09-13T00:00:00Z' },
+        },
+      }),
+    )
+    mockedExamApi.reportEvent.mockResolvedValue({
+      action_taken: 'submit',
+      event_count: 1,
+      warning: false,
+      submission: { status: 'submitted', total_score: 0, total_max_score: 10, percentage: 0, passed: false },
+    })
+
+    renderPage()
+    await screen.findByTestId('exam-short-text-input')
+
+    window.dispatchEvent(new Event('blur'))
+
+    await screen.findByTestId('exam-result-page')
+    expect(mockedExamApi.saveAnswer).not.toHaveBeenCalled()
+  })
+})

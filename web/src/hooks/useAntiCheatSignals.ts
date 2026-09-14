@@ -9,9 +9,27 @@
  *  cleanup function removes every listener, so no further browser event can
  *  trigger a `reportEvent` call after that point — the requirement's own
  *  teardown acceptance criterion.
+ *
+ *  FLUSH-BEFORE-REPORT (ISS-0654). A signal's outcome can carry
+ *  `action_taken: 'submit'` — the server already folded the submission into
+ *  its handling of THIS `reportEvent` call, so whatever the candidate last
+ *  had saved is exactly what gets graded. `ExamSessionPage`'s short_text
+ *  question type holds an uncommitted keystroke draft client-side
+ *  (`textDraft`) that only reaches the server on the textarea's `onBlur` --
+ *  an event a forced, signal-driven submit never waits for. The optional
+ *  `flushBeforeReport` callback lets the caller synchronously-await any such
+ *  pending save; it is invoked and its promise is awaited BEFORE
+ *  `examApi.reportEvent` fires, so a flush-triggered `saveAnswer` always
+ *  resolves (or rejects) strictly before the anti-cheat report reaches the
+ *  server, never racing it. It is read through a ref (`flushRef`) rather
+ *  than sitting in this effect's own dependency array so that its identity
+ *  changing on every keystroke (it closes over the live draft) does not tear
+ *  down and re-attach the listeners on every keystroke -- only `sessionId`,
+ *  `enabled`, and `onOutcome` changing does that, matching the doc comment
+ *  above.
  */
 
-import { useEffect } from 'react'
+import { useEffect, useRef } from 'react'
 import { examApi } from '@/api/exam'
 import type { AntiCheatSignalOutcome, AntiCheatSignalType } from '@/types/exam'
 
@@ -19,13 +37,24 @@ export function useAntiCheatSignals(
   sessionId: string | null,
   enabled: boolean,
   onOutcome: (outcome: AntiCheatSignalOutcome, type: AntiCheatSignalType) => void,
+  flushBeforeReport?: () => Promise<void> | void,
 ): void {
+  const flushRef = useRef(flushBeforeReport)
+  useEffect(() => {
+    flushRef.current = flushBeforeReport
+  }, [flushBeforeReport])
+
   useEffect(() => {
     if (!sessionId || !enabled) return undefined
 
     function report(type: AntiCheatSignalType) {
-      void examApi
-        .reportEvent(sessionId as string, type)
+      const flushed = flushRef.current ? Promise.resolve(flushRef.current()) : Promise.resolve()
+      void flushed
+        .catch(() => {
+          // A failed flush is not a reason to withhold the anti-cheat
+          // signal itself -- report proceeds either way.
+        })
+        .then(() => examApi.reportEvent(sessionId as string, type))
         .then((outcome) => onOutcome(outcome, type))
         .catch(() => {
           // Anti-cheat reporting failures are non-fatal to the candidate's

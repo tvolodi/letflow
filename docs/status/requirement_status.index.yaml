@@ -3726,7 +3726,7 @@ volumes:
     path: docs/status/requirement_status.v17.yaml
     status: current
     opened: 2026-09-14
-    entries: 3
+    entries: 5
     note: >
       Opened by ORCH while resolving issue/ISS-0646-candidate-role-20260914's
       PR #1384 merge conflict against main, successor to volume 16. Created

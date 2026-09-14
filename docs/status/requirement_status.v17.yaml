@@ -317,3 +317,97 @@ history:
       659 released status: done.
 
 
+  - req: REQ-349
+    event: started
+    agent: FRONTEND-DEV
+    at: "2026-09-14T12:29:00Z"
+    note: >
+      Claimed letflow-queue task 660 (depends_on REQ-345, REQ-346, both
+      done). Read the full requirement text (highly prescriptive: the
+      three result testids exam-result-page/exam-result-pending/
+      exam-result-score in web/src/pages/exam/ExamSessionPage.tsx are
+      reachable only by driving the live start->answer->submit flow;
+      REQ-345's own seeded submitted session cannot back any ported
+      spec because no screen opens a session by id). Read REQ-345's
+      exam_fixtures moduledoc for the two seeded exams' exact titles,
+      question stems, and passing_score_pct. Brought up the local dev
+      stack (Keycloak+Postgres already running via docker compose;
+      started `mix run --no-halt`; installed/activated the bilimbaga
+      entity definitions and ran `mix letflow.seed.exam_fixtures`) to
+      verify live rather than merely against a build.
+  - req: REQ-349
+    event: done
+    agent: FRONTEND-DEV
+    at: "2026-09-14T12:52:00Z"
+    note: >
+      Ported BilimBaga's exam-result.spec.ts (5 blocks) and
+      my-results.spec.ts (6 blocks) -- 11 source blocks total -- as one
+      new file, web/tests/e2e/exam-result.e2e.spec.ts: 4 ported (01, 02,
+      03, with 05 folded into 01's describe block rather than given its
+      own live session) + 7 dropped (04, and all 6 of
+      my-results.spec.ts, which targets a /portal results-list view
+      lib/letflow/routers/exam_sessions.ex's own scope-fence moduledoc
+      excludes by name: "Cross-session history / results-list views
+      (GetExamHistory/HandleGetMyResults, FR-BB41/FR-BB46) ... 
+      GetSessionResult is also not routed here for the same reason").
+      Every ported test drives the live flow in one browser session
+      (start -> answer -> submit) against one of REQ-345's two seeded
+      exams -- "REQ-345 E2E Mixed Exam" for exam-result-pending (its
+      shorttext question forces grading_pending regardless of answers,
+      scoring.ex:255/257) and "REQ-345 E2E Scoreable Exam" for
+      exam-result-score, both Passed (R1/R2/R3 answered per the
+      fixture's documented correct options) and Not passed (R1/R2
+      answered incorrectly, R3 left unanswered -- the fixture's own
+      documented failing combination, 0.0/3.0 = 0% < the 60% threshold)
+      -- never by navigating to a pre-existing session. No route,
+      handler or screen added; git diff --name-only against origin/main
+      shows only the new spec file changed.
+
+      Found and fixed one local-environment-only misconfiguration while
+      verifying live, not part of the port's diff: web/.env.local had
+      VITE_API_BASE_URL pointed at an absolute backend URL, which routes
+      every API call through a real browser CORS preflight that
+      web/src/api/client.ts's x-bpm-user-id header isn't allow-listed
+      for in lib/letflow/plugs/cors.ex's @allow_headers (only
+      "authorization, content-type") -- REQ-346/347's own live
+      verification runs never hit this because their local env used the
+      empty-string default, which routes calls through Vite's dev-server
+      proxy instead of a cross-origin browser fetch. Reverted
+      web/.env.local (gitignored, not in this diff) to the empty
+      default rather than touching cors.ex's allow-list, since fixing a
+      real CORS gap that a browser client actually needs is a
+      tenant-data-path/API change outside a test-porting requirement's
+      scope -- flagged here for a follow-up requirement, not fixed in
+      passing.
+
+      Live run against Keycloak+Postgres+REQ-345's seeded fixtures, two
+      full runs for stability: 4/4 passed each time
+      (`npx playwright test tests/e2e/exam-result.e2e.spec.ts`), no
+      leaked in_progress sessions after either run. `npx playwright test
+      --list` collects exactly the 4 tests. Required greps all clean:
+      no getSessionState, no test.skip/test.fixme, no
+      /api/v1/auth/login or global-setup reference in the new file (the
+      file's own doc-comment mentions /portal/results/login only while
+      explaining what BilimBaga's unported source did, same accepted
+      pattern as REQ-346's merged exam-taking.e2e.spec.ts). `npm run
+      type-check`/`lint` clean, `npm test` 567/567, `npm run guards`
+      48/48.
+
+      Open question flagged for ORCH, not resolved here: whether Letflow
+      should serve a candidate result/results-list surface at all --
+      REQ-335 fenced it out deliberately and no decision record in
+      docs/migration/decisions/ settles it.
+
+      Pipeline: FRONTEND-DEV -> SECURITY-REVIEWER skipped (test-artifact
+      -only, no tenant-data-path change, matching REQ-346/REQ-347
+      precedent) -> REVIEWER PASS (scope confirmed clean via git diff;
+      classification header verified against the real scope-fence text
+      word for word; live-flow discipline verified via grep and manual
+      read; exam-content click order cross-checked against
+      letflow.seed.exam_fixtures.ex's own moduledoc; pattern consistency
+      with exam-taking.e2e.spec.ts confirmed; the /portal/login grep
+      hits inside doc-comments only, not executable code, matching
+      established precedent).
+
+      Merged via PR #1397 (feat/REQ-349-20260914). letflow-queue task
+      660 released status: done.

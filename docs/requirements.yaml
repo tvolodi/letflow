@@ -24900,7 +24900,7 @@ requirements:
     title: Port the result-surface BilimBaga parity specs (exam-result, my-results) by DRIVING THE LIVE start-answer-submit FLOW to the result phase -- the only way exam-result-page/pending/score are reachable -- classifying each source test and dropping what has no counterpart rather than authoring a failing spec or adding a route (S10 P5, test artefacts)
     owner: FRONTEND-DEV
     impl_order: 660
-    status: pending
+    status: done
     stage: S10
     description: >
       bucket: C (client test artefacts). JUSTIFICATION: identical to

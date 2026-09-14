@@ -3726,7 +3726,7 @@ volumes:
     path: docs/status/requirement_status.v17.yaml
     status: current
     opened: 2026-09-14
-    entries: 2
+    entries: 3
     note: >
       Opened by ORCH while resolving issue/ISS-0646-candidate-role-20260914's
       PR #1384 merge conflict against main, successor to volume 16. Created
@@ -3738,8 +3738,11 @@ volumes:
       on-disk count after finding REQ-345's own done-event append (landed
       earlier this session) had not updated this field, then added
       REQ-346's own done-event append in the same commit -- 2 on-disk
-      `- req:` entries in requirement_status.v17.yaml, recounted via
-      `grep -c "^  - req:"` per this note's recount-every-time rule.
+      `- req:` entries in requirement_status.v17.yaml at that point,
+      recounted via `grep -c "^  - req:"` per this note's
+      recount-every-time rule.
+      Incremented to 3 by ORCH's own REQ-347 done-event append -- 3
+      on-disk `- req:` entries in requirement_status.v17.yaml.
 
 
 known_anomalies:

@@ -24459,7 +24459,7 @@ requirements:
       - REQ-343
 
   - id: REQ-345
-    title: Provide a deterministic seeded exam fixture for e2e runs -- a published exam with one question per supported type, plus one started-and-submitted session driven through REQ-335's routes, in the bpm-default tenant -- since mix letflow.seed provisions the tenant only (S10 P5, test fixture)
+    title: Provide a deterministic seeded exam fixture for e2e runs -- TWO published exams (a mixed one carrying a shorttext question, and a scoreable one carrying none) plus one started-and-submitted session driven through REQ-335's routes, in the bpm-default tenant -- since mix letflow.seed provisions the tenant only (S10 P5, test fixture)
     owner: ELIXIR-DEV
     impl_order: 0  # PLACEHOLDER -- ORCH overwrites at WF-01 Step 3
     status: pending
@@ -24475,9 +24475,13 @@ requirements:
       lib/letflow/exam/ runtime module, so it does not grow the bucket-C
       size metric rule 3 measures.
       .
-      RULE-2 SIGN-OFF (REVIEWER, 2026-09-14 P5 rule-2 adjudication; to be
-      recorded in docs/migration/stage-10-bilimbaga-vertical.md's REVIEWER
-      sign-off section). Why not A: the fixture's records are
+      RULE-2 SIGN-OFF (REVIEWER, 2026-09-14 P5 rule-2 adjudication,
+      recorded in docs/migration/stage-10-bilimbaga-vertical.md's
+      "## REVIEWER sign-off" section under the heading "2026-09-14 --
+      REVIEWER, rule-2 adjudication for P5 (REQ-344-REQ-349)", committed
+      in 91a8a8b0. That entry's "Finding: rule 2 does reach REQ-345"
+      carries the two bullets restated here, and its PASS line covers this
+      requirement by name. Why not A: the fixture's records are
       bucket-A-shaped (entity records against pack-defined definitions),
       but a definition has no execution semantics -- it cannot perform the
       idempotent create-or-resolve convergence that re-running the seed
@@ -24497,13 +24501,16 @@ requirements:
       exam-lifecycle.spec.ts and my-results.spec.ts reference the same
       fixture by title. BilimBaga supplied it from its own
       frontend/e2e/fixtures/seed.ts via a global-setup.ts that Letflow
-      has no counterpart to. Without an equivalent, REQ-347's ported
+      has no counterpart to. Without an equivalent, REQ-346's ported
       candidate specs have nothing deterministic to assert against, and
-      will be flaky or vacuous.
+      will be flaky or vacuous. (REQ-346 is the candidate-side port and
+      the consumer here; REQ-347 is the entity-CRUD admin port and does
+      not depend on this fixture.)
       .
       WHAT TO BUILD. A repeatable, idempotent seed path that creates, in
-      the bpm-default tenant, one published/active exam plus the question
-      and answer_option records it needs, via the real entity-records
+      the bpm-default tenant, the TWO published/active exams specified
+      below plus the question and answer_option records they need, via the
+      real entity-records
       write surface the pack already defines -- NOT by direct SQL INSERT
       and NOT by a hand-rolled second write path that bypasses
       Letflow.Entities. Re-running it must converge rather than duplicate
@@ -24512,7 +24519,7 @@ requirements:
       ships a sibling task is an implementation choice; state which was
       chosen and why in the close-out.
       .
-      DETERMINISM IS THE POINT. The exam's title and its questions'
+      DETERMINISM IS THE POINT. Each exam's title and its questions'
       identifying content must be fixed and documented, so a spec can
       assert on them by name. Pick the concrete question types from what
       the pack's question.json actually declares (read
@@ -24520,22 +24527,91 @@ requirements:
       type enum -- do not assume BilimBaga's five
       single/multiple/truefalse/shorttext/likert carry over unchanged, and
       state in the close-out which types Letflow's definition actually
-      supports and which of BilimBaga's have no counterpart).
+      supports and which of BilimBaga's have no counterpart). Note the
+      spelling difference that matters when you write the seed: the pack
+      enum's member is "shorttext" (no underscore), which
+      lib/letflow/exam/session.ex:1174
+      (`defp question_type_atom("shorttext"), do: :short_text`) maps to the
+      :short_text atom that lib/letflow/exam/scoring.ex:255 tests. Those
+      two spellings are the same type; do not treat them as two types, and
+      state which spelling you assert on where.
       .
-      A SUBMITTED SESSION IS PART OF THE FIXTURE, NOT A LATER CONCERN.
-      Seeding a published exam alone is not enough for the result/history
-      surface REQ-349 ports against. BilimBaga's own fixture
-      (c:\Users\tvolo\dev\ai-dala\BilimBaga\frontend\e2e\fixtures\seed.ts)
-      seeds TWO exams -- "E2E Mixed Exam" (one question per type) and
-      "E2E ShortText Exam", the latter with a pre-submitted session created
-      by its startSession/submitSession pair at step 6 -- precisely because
-      exam-result.spec.ts's own header requires that the "E2E ShortText
-      Exam" have a submitted (pending-grading) session, and
-      my-results.spec.ts asserts on a seeded ShortText Exam session's rows.
-      Read that fixture rather than inferring its shape from this
-      paragraph. Seed the equivalent here: at least one session that has
-      been started and submitted, so a result view has something real to
-      render.
+      SEED TWO EXAMS, NOT ONE -- AND THE SECOND ONE IS NOT OPTIONAL. The
+      two exist to reach two different terminal result screens, and
+      neither can reach the other's:
+      .
+      EXAM 1, THE MIXED EXAM -- one question per supported type, exactly
+      as BilimBaga's "E2E Mixed Exam" is shaped. BECAUSE IT CONTAINS A
+      shorttext QUESTION, THE WHOLE SESSION CAN ONLY EVER REACH
+      grading_pending. lib/letflow/exam/scoring.ex:255 is
+      `if Enum.any?(questions, &(&1.type == :short_text)), do:
+      :grading_pending, else: :submitted` -- the test is over ANY question
+      in the session, not over the one being graded -- and :257 is
+      `passed = if status == :submitted, do: percentage >=
+      passing_threshold, else: nil`, so this exam's session necessarily
+      persists passed: nil and renders the pending branch. This exam
+      therefore exercises the exam-result-pending testid and can NEVER
+      exercise exam-result-score. That is a property of the fixture's
+      shape, not a limitation of any spec written against it, and it is
+      why one exam alone is not enough.
+      .
+      EXAM 2, THE SCOREABLE EXAM -- NO shorttext question at all: draw its
+      questions only from the pack enum's single, multiple and truefalse
+      members (likert is also non-shorttext, but its weighted-polarity
+      scoring makes a deliberately-chosen score harder to reason about;
+      if you include it, document the arithmetic). This is the ONLY exam
+      that makes a score, a percentage and a Passed/Failed verdict
+      reachable, because only a session with no :short_text question
+      reaches status :submitted and a non-nil passed at scoring.ex:255-257.
+      Its passing_score_pct -- a per-exam field, see
+      priv/packs/bilimbaga/entity_definitions/exam.json, read at submit
+      time by lib/letflow/exam/session.ex:1034-1038's
+      passing_threshold_for/2 from the exam record itself -- must be fixed,
+      documented, and DELIBERATELY CHOSEN so that a spec can both clear it
+      and miss it by answering questions differently: i.e. the question set
+      and the threshold together must admit at least one answer
+      combination scoring at or above it and at least one scoring below
+      it. Work the arithmetic out in the close-out and show both
+      combinations. Making Passed and Failed both drivable is the entire
+      point of this second exam; a threshold of 0 or 100, or a single
+      question that makes only one verdict achievable, defeats it.
+      .
+      A SUBMITTED SESSION IS ALSO PART OF THE FIXTURE -- BUT BE HONEST
+      ABOUT WHAT IT CAN AND CANNOT BE ASSERTED THROUGH. Seed one session
+      that has been started and submitted, against the mixed exam, as
+      BilimBaga's own fixture does
+      (c:\Users\tvolo\dev\ai-dala\BilimBaga\frontend\e2e\fixtures\seed.ts
+      seeds TWO exams -- "E2E Mixed Exam" and "E2E ShortText Exam" -- the
+      latter carrying a pre-submitted session created by its
+      startSession/submitSession pair; read that fixture rather than
+      inferring its shape from this paragraph).
+      .
+      THE JUSTIFICATION IS NOT "SO A RESULT VIEW HAS SOMETHING TO RENDER."
+      IT CANNOT BE, AND AN EARLIER REVISION OF THIS REQUIREMENT WAS WRONG
+      TO SAY SO. A seeded submitted session is unreachable from every
+      rendered Letflow screen. web/src/pages/exam/ExamSessionPage.tsx:112-127
+      is a mount effect that calls examApi.startSession(examId)
+      UNCONDITIONALLY, guarded only by startedRef -- there is no branch
+      anywhere in that component that loads an EXISTING session, and
+      examApi.getSessionState (web/src/api/exam.ts:96) is called by no
+      component at all (its only references are its own definition, its API
+      unit test, and a vi.fn() mock in ExamSessionPage.test.tsx).
+      web/src/router.tsx:82-83 serves exactly two exam routes, `exam` and
+      `exam/:examId/session`, with no result-by-id and no results-list
+      route. So navigating a browser at a seeded session is impossible: the
+      session route starts a NEW session instead.
+      .
+      WHAT THE SEEDED SESSION IS ACTUALLY GOOD FOR, AND THE ONLY CLAIM TO
+      MAKE FOR IT: it is assertable over raw HTTP ONLY -- GET
+      /exam-sessions/:id, the route REQ-335 built and
+      lib/letflow/routers/exam_sessions.ex:139 serves -- and never through
+      any rendered screen. It proves the submit path persists what
+      session.json declares (status, score_pct, passed) and gives an
+      API-level assertion target. Keep it for that reason and state that
+      reason; do not justify it as backing a result view. REQ-346's own
+      text already records that it does not consume this session, and
+      REQ-349 consumes the seeded EXAMS rather than this session -- see
+      REQ-349's own dependency note.
       .
       DRIVE THE SESSION THROUGH REQ-335's REAL ROUTES. Create it with
       POST /exam-sessions and finish it with POST /exam-sessions/:id/submit
@@ -24551,15 +24627,21 @@ requirements:
       BE HONEST ABOUT WHAT "SCORED" CAN MEAN HERE. submit/3 scores the
       session and persists score_pct/passed onto the session record
       (priv/packs/bilimbaga/entity_definitions/session.json declares
-      status, score_pct and passed). But Letflow.Exam.Scoring marks a
-      short-text answer grading_status: :pending_manual and stops -- no
-      admin grading runtime exists (REQ-335's own scope fence says so) --
-      so a session over short-text questions alone submits to a
-      pending-grading outcome, not a Passed/Failed one. State in the
-      close-out which of the two the seeded session actually reaches, and
-      seed whichever question types are needed for the fixture to be
-      deterministic. Do NOT manufacture a graded outcome by writing
-      score_pct or passed directly to make a badge appear.
+      status, score_pct and passed -- verified: those three fields are
+      really there). But Letflow.Exam.Scoring marks a short-text answer
+      grading_status: :pending_manual and stops -- no admin grading runtime
+      exists (REQ-335's own scope fence says so) -- and scoring.ex:255's
+      test is over ANY question in the session, so the mixed exam's
+      session reaches a pending-grading outcome with passed: nil, while
+      only the second, shorttext-free exam can reach a Passed/Failed one.
+      The seeded submitted session is against the mixed exam and therefore
+      reaches the former; state that explicitly in the close-out, quoting
+      its persisted status, score_pct and passed. Do NOT manufacture a
+      graded outcome by writing score_pct or passed directly to make a
+      badge appear, and do NOT "fix" the pending outcome by removing the
+      shorttext question from the mixed exam -- that question is the
+      point of the mixed exam, and the second exam is how a score becomes
+      reachable.
       .
       OUT OF SCOPE. No assignment of the exam to a candidate: the
       exam_assignment gap is a standing open question in the stage file
@@ -24573,11 +24655,15 @@ requirements:
       starting its session; that step has no Letflow counterpart and is
       deliberately dropped, not overlooked.
     acceptance_criteria:
-      - "running the seed path twice in a row against the same database succeeds both times and leaves exactly one copy of the fixture exam AND one copy of the seeded submitted session -- both runs' output is quoted verbatim, and a POST /api/v1/entities/query result showing a single matching exam record and a single matching session record is quoted after the second run"
+      - "running the seed path twice in a row against the same database succeeds both times and leaves exactly one copy of EACH of the two fixture exams AND one copy of the seeded submitted session -- both runs' output is quoted verbatim, and a POST /api/v1/entities/query result showing exactly one matching record for each of the two exam titles and a single matching session record is quoted after the second run"
+      - "two exams are seeded and the close-out names both titles: a mixed exam carrying one question per supported type INCLUDING a shorttext question, and a second exam carrying NO shorttext question (its questions drawn only from the pack enum's single/multiple/truefalse, or likert with its arithmetic documented) -- the seeded type list for each exam is quoted from a POST /api/v1/entities/query result, not merely asserted in prose"
+      - "the close-out states, citing lib/letflow/exam/scoring.ex:255 and :257, that the mixed exam's session can only reach status grading_pending with passed: nil and therefore can never produce a score, and that the second exam is what makes a non-nil passed reachable"
+      - "the second exam's passing_score_pct is fixed, documented in the task's @moduledoc, and quoted in the close-out -- together with the worked arithmetic for TWO concrete answer combinations over its seeded questions, one scoring at or above the threshold and one scoring below it, demonstrating that both Passed and Failed are drivable against this exam"
       - "the seeded session is created via POST /exam-sessions and finished via POST /exam-sessions/:id/submit -- the close-out quotes both real HTTP responses, and `git diff` contains no direct write to the session table and no call path that bypasses Letflow.Exam.Session"
       - "the seeded session's persisted status, score_pct and passed are quoted after the second seed run, and the close-out states explicitly whether the session reached a graded or a pending-manual outcome and why -- with no direct write of score_pct or passed anywhere in the diff"
       - "the seeded exam and the seeded session are both created through real write paths -- Letflow.Entities for the exam, REQ-335's routes for the session -- not direct SQL; `git diff` contains no INSERT statement targeting an entity records table"
-      - "the fixture's exam title and each seeded question's identifying content are fixed, documented in the task's @moduledoc, and quoted in the close-out so a spec can assert on them by name"
+      - "both fixture exams' titles and each seeded question's identifying content are fixed, documented in the task's @moduledoc, and quoted in the close-out so a spec can assert on them by name"
+      - "the close-out states plainly that the seeded submitted session is assertable over raw HTTP only -- via GET /exam-sessions/:id -- and through no rendered screen, citing web/src/pages/exam/ExamSessionPage.tsx:112-127's unconditional startSession mount effect as the reason, and does not claim the session backs any result view"
       - "the close-out names which question types priv/packs/bilimbaga/entity_definitions/question.json actually declares, and states explicitly which of BilimBaga's five types have no Letflow counterpart"
       - "no exam_assignment record, table, or client-side substitute appears anywhere in the diff -- a grep for exam_assignment across the diff is quoted and any hit is a comment describing the gap"
       - "`mix test` runs in full and its final result is quoted verbatim, or the requirement is reported BLOCKED with the real error text if the toolchain is unavailable"
@@ -24803,7 +24889,7 @@ requirements:
       - REQ-349
 
   - id: REQ-349
-    title: Port the result-surface BilimBaga parity specs (exam-result, my-results) against what ExamSessions actually routes -- classifying each source test and dropping what has no counterpart rather than authoring a failing spec or adding a route (S10 P5, test artefacts)
+    title: Port the result-surface BilimBaga parity specs (exam-result, my-results) by DRIVING THE LIVE start-answer-submit FLOW to the result phase -- the only way exam-result-page/pending/score are reachable -- classifying each source test and dropping what has no counterpart rather than authoring a failing spec or adding a route (S10 P5, test artefacts)
     owner: FRONTEND-DEV
     impl_order: 0  # PLACEHOLDER -- ORCH overwrites at WF-01 Step 3
     status: pending
@@ -24843,14 +24929,64 @@ requirements:
       my-results.spec.ts targets FR-BB46 by name and is therefore aimed
       squarely at the behaviour that fence excludes.
       .
-      CLASSIFY EVERY SOURCE TEST AGAINST WHAT IS ACTUALLY ROUTED. For each
-      of the 11 blocks, decide and record one of: ported (name the Letflow
-      route and data-testid it targets), or dropped (name the specific
-      missing surface -- a results-list endpoint, a result view, a
-      cross-session history read -- and say so plainly). GET
-      /exam-sessions/:id returns a submitted session's own state and is a
-      real surface; a results-LIST across sessions is not. Do not blur the
-      two.
+      THE SECOND FENCE, AND THE ONE THAT ACTUALLY DECIDES HOW YOU PORT:
+      THE RESULT SCREEN IS REACHABLE ONLY AS THE TERMINAL PHASE OF A LIVE
+      SESSION. The router fence above is correct but incomplete -- it says
+      what the BACKEND does not serve. This one says what the FRONTEND can
+      actually be driven to, and it is the binding constraint.
+      .
+      There are exactly three result data-testids, all in
+      web/src/pages/exam/ExamSessionPage.tsx, all inside one render guard
+      at :291 (`if (phase.kind === 'result')`): exam-result-page (:295),
+      exam-result-pending (:298) and exam-result-score (:303). The score
+      branch renders the score, the percentage and the Passed/Failed
+      message; the pending branch renders the grading-pending copy.
+      .
+      `phase` is set to 'result' at exactly TWO sites, both inside the
+      live flow: :226 (`setPhase({ kind: 'result', outcome:
+      outcome.submission })`, the anti-cheat forced submit) and :253
+      (`setPhase({ kind: 'result', outcome })`, handleSubmit). There is no
+      third. And the mount effect at :112-127 calls
+      examApi.startSession(examId) UNCONDITIONALLY, guarded only by
+      startedRef -- no branch anywhere loads an existing session, and
+      examApi.getSessionState (web/src/api/exam.ts:96) is called by no
+      component at all. web/src/router.tsx:82-83 serves exactly two exam
+      routes, `exam` and `exam/:examId/session` -- no result-by-id route,
+      no results-list route.
+      .
+      CONSEQUENCE, AND IT IS THE POINT OF THIS REQUIREMENT: a seeded
+      submitted session is unreachable from every rendered screen.
+      Navigating to the session route does not open it -- it starts a NEW
+      session. Therefore a ported spec REACHES A RESULT ONLY BY DRIVING
+      THE LIVE FLOW IN ONE BROWSER SESSION: start the exam, answer its
+      questions, submit, and assert on the result phase that follows. Do
+      NOT write a spec that navigates to a seeded session and asserts on
+      it; that spec cannot pass, and authoring it would be authoring a
+      failing spec.
+      .
+      CLASSIFY EVERY SOURCE TEST AGAINST WHAT IS ACTUALLY ROUTED AND
+      ACTUALLY REACHABLE. For each of the 11 blocks, decide and record one
+      of: ported (name the Letflow route and data-testid it targets, and
+      say that it drives the live flow), or dropped (name the specific
+      missing surface -- a results-list endpoint, a result-by-id view, a
+      cross-session history read, or a seeded session no screen can open
+      -- and say so plainly). GET /exam-sessions/:id returns a submitted
+      session's own state and is a real surface AT THE HTTP LEVEL, but no
+      screen renders it; a results-LIST across sessions is not a surface at
+      all. Do not blur the three.
+      .
+      WHICH RESULT TESTID IS REACHABLE DEPENDS ON WHICH EXAM YOU START,
+      AND BOTH ARE REACHABLE. REQ-345 seeds two exams. Starting and
+      submitting the MIXED exam reaches exam-result-pending and never
+      exam-result-score, because it carries a shorttext question and
+      lib/letflow/exam/scoring.ex:255 forces the whole session to
+      :grading_pending (:257 then leaves passed nil). Starting and
+      submitting REQ-345's SECOND, shorttext-free exam is what reaches
+      exam-result-score, with its documented passing_score_pct chosen so
+      that answering deliberately well clears it and answering
+      deliberately badly misses it -- so Passed and Failed are both
+      drivable. A spec asserting a score against the mixed exam is a spec
+      that cannot pass; pick the exam that matches the assertion.
       .
       THREE THINGS THAT ARE NOT ALLOWED, AND THIS IS THE POINT OF THE
       REQUIREMENT. Do NOT author a failing spec. Do NOT author a skipped
@@ -24877,18 +25013,35 @@ requirements:
       that both source specs lean on BilimBaga's storage-state and its
       /api/v1/auth/login, neither of which Letflow serves.
       .
-      DEPENDS ON THE SUBMITTED SESSION, NOT MERELY THE EXAM. Unlike
-      REQ-346, these specs need REQ-345's started-and-submitted session:
-      exam-result.spec.ts's header requires the seeded ShortText exam to
-      have a submitted (pending-grading) session, and my-results.spec.ts
-      asserts on a seeded session's rows. Assert against REQ-345's
-      documented session state -- including whether it is graded or
-      pending-manual -- rather than against whatever is in the database.
+      WHAT THIS REQUIREMENT ACTUALLY NEEDS FROM REQ-345, AND WHAT IT DOES
+      NOT. The dependency on REQ-345 is KEPT, but for the SEEDED EXAMS
+      ONLY: the live flow has to start against a real published exam whose
+      title and question content are fixed and documented, and it needs
+      BOTH of REQ-345's exams -- the mixed one to drive
+      exam-result-pending, the shorttext-free one to drive
+      exam-result-score and, via its documented passing_score_pct, both
+      the Passed and the Failed rendering.
+      .
+      THIS REQUIREMENT DOES NOT CONSUME REQ-345's SUBMITTED SESSION. An
+      earlier revision said it did, reasoning that exam-result.spec.ts's
+      header requires a pre-submitted session and my-results.spec.ts
+      asserts on a seeded session's rows. Both statements are true OF THE
+      BILIMBAGA SOURCE, and both are unportable here for the reason given
+      above: no Letflow screen can open a seeded session, so no ported
+      spec can assert on one through the UI. REQ-345's submitted session
+      remains useful at the HTTP level and REQ-345 justifies it on those
+      terms; it is simply not what these specs assert against. Assert
+      against REQ-345's documented EXAM content, and against the result
+      phase your own live run produces -- never against whatever happens
+      to be in the database.
     acceptance_criteria:
       - "every new spec file lives under web/tests/e2e/ and its name ends in .e2e.spec.ts -- proven by `npx playwright test --list` collecting them, with the collected list quoted verbatim"
       - "all 11 source test() blocks (exam-result 5, my-results 6) are individually classified as ported or dropped in the close-out -- every dropped block names the specific missing Letflow surface, and the counts of ported and dropped sum to the re-measured total"
       - "the close-out quotes lib/letflow/routers/exam_sessions.ex's scope-fence text and states, per dropped block, which part of it applies"
-      - "the ported specs run against a live instance with Keycloak and Postgres up and REQ-345's submitted session present -- the session's presence and its persisted status/score_pct/passed are quoted before the run -- and the full `npx playwright test` output for exactly these files is quoted verbatim including the pass/fail tally"
+      - "the ported specs run against a live instance with Keycloak and Postgres up and BOTH of REQ-345's seeded exams present -- each exam's presence, title and seeded question types are quoted before the run -- and the full `npx playwright test` output for exactly these files is quoted verbatim including the pass/fail tally"
+      - "every ported spec reaches its result assertion by driving the live flow in one browser session -- starting the exam, answering, submitting -- and the close-out names, per ported block, which of exam-result-page, exam-result-pending and exam-result-score it asserts on and which of REQ-345's two exams it starts against"
+      - "no ported spec attempts to open a pre-existing session: a grep for getSessionState across the new spec files only (`git grep -nE \"getSessionState\" -- 'web/tests/e2e/*.e2e.spec.ts'`) is quoted and returns no hit, and the close-out confirms no spec navigates directly to a seeded session id"
+      - "at least one ported spec asserts exam-result-score against REQ-345's shorttext-free exam, or the close-out states explicitly why that testid remained unreachable in this run despite that exam existing"
       - "if zero blocks turn out to be portable, that is stated explicitly as the result with its reasoning, and no spec file is created merely to have produced one"
       - "no spec in the diff is marked test.skip or test.fixme, and a grep for both across the new files is quoted returning no hit"
       - "`git diff --name-only` shows no modification to lib/letflow/routers/exam_sessions.ex, to web/src/router.tsx, or to any file under lib/letflow/ -- no route, handler or screen was added to make a spec pass"

@@ -460,6 +460,14 @@ remain:
   whose own `stage:` field is S10 — 337 and 341 were retired and never filed as
   real entries, so the id span is non-contiguous), and all forty-seven are
   `done`.
+
+  *Superseded later the same day, 2026-09-14, and left standing rather than
+  rewritten so the sequence stays legible: P5 was expanded into `REQ-344`–`REQ-349`
+  and closed within hours of this re-verification, so the figures above are a
+  snapshot from earlier that day, not the current state. S10 now carries **53**
+  requirements spanning `REQ-295`–`REQ-349` (same 337/341 gap), all `done`, and
+  only P6 and certificate issuance remain outstanding — not P5. See this file's
+  header and the "P5 close-out" section for the current reading.*
 - **"No `lib/letflow/exam/` directory exists" — no longer true.** It holds four
   modules — `session.ex`, `question_set_resolver.ex`, `scoring.ex`,
   `anti_cheat.ex` — each carrying its rule-2 justifications and a `REVIEWER`

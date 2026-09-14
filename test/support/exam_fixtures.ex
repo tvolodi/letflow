@@ -34,6 +34,23 @@ defmodule Letflow.ExamFixtures do
                     session session_question session_answer session_question_score
                     session_event)
 
+  # `category` is deliberately NOT in `@entity_types` above: every EXISTING
+  # caller of `provisioned_tenant_with_exam_definitions/1`
+  # (`session_test.exs`, `query_joins_test.exs`, `exam_sessions_test.exs`'s
+  # own `build_minimal_exam!/2`) passes a bare `Ecto.UUID.generate()` as a
+  # question's `category_id` field value -- a raw, never-activated,
+  # never-dereferenced foreign value -- and none of those suites ever writes
+  # a real `category` entity record. `activate_exam_definitions!/1` below
+  # DOES need it activated: `Mix.Tasks.Letflow.Seed.ExamFixtures` creates
+  # real `category` entity records via `Letflow.Entities.Records.create_record/2`,
+  # which requires an ACTIVE `category` definition to exist first
+  # (`{:definition_not_found, "category"}` otherwise -- confirmed empirically
+  # while writing `letflow.seed.exam_fixtures_test.exs`). Kept as a separate
+  # list, not folded into `@entity_types`, so this addition cannot change
+  # behavior for any of `provisioned_tenant_with_exam_definitions/1`'s
+  # existing callers.
+  @extra_entity_types_for_exam_fixtures_task ~w(category)
+
   @doc """
   Provisions a fresh tenant schema, seeds event types, and activates every
   entity definition this suite needs -- real definitions read directly from
@@ -83,7 +100,38 @@ defmodule Letflow.ExamFixtures do
     assert {:ok, _applied_versions} = TenantProvisioning.replay_migrations(tenant.id)
     assert {:ok, _seed_result} = Letflow.Entities.EventTypes.seed!(schema_name)
 
-    for entity_type <- @entity_types do
+    activate_exam_definitions!(schema_name)
+
+    %{tenant_id: tenant.id, schema_name: schema_name}
+  end
+
+  @doc """
+  Activates this fixture's full exam entity-definition set (`@entity_types`)
+  into an ALREADY-provisioned tenant schema named `schema_name`.
+
+  Unlike `provisioned_tenant_with_exam_definitions/1`, this does not create a
+  tenant, provision a schema, seed event types, or set
+  `Ecto.Adapters.SQL.Sandbox` mode -- the caller owns tenant/schema lifecycle
+  and Sandbox mode itself. Added for
+  `test/mix/tasks/letflow.seed.exam_fixtures_test.exs` (REQ-345), which needs
+  the SPECIFIC `bpm-default` tenant/schema `mix letflow.seed` provisions (a
+  fixed, hardcoded realm, not one `Letflow.TenantFixture`/this module's own
+  `insert_tenant!/1` can produce -- both mint a fixture-generated unique
+  slug), so it cannot use `provisioned_tenant_with_exam_definitions/1`
+  wholesale but still needs the exact same real
+  `priv/packs/bilimbaga/entity_definitions/*.json` definitions activated
+  before `Mix.Tasks.Letflow.Seed.ExamFixtures.run/1` can write any exam
+  content -- `mix letflow.seed` alone provisions the tenant schema and
+  replays its migrations only; it installs no entity definition at all
+  (its own `@moduledoc` says so plainly). Reuses the exact same
+  `create_active_definition!/2`/`load_definition!/1` machinery
+  `provisioned_tenant_with_exam_definitions/1` itself uses, so both callers
+  get byte-identical real pack definitions, not two independently
+  hand-maintained copies.
+  """
+  @spec activate_exam_definitions!(schema_name :: String.t()) :: :ok
+  def activate_exam_definitions!(schema_name) do
+    for entity_type <- @entity_types ++ @extra_entity_types_for_exam_fixtures_task do
       create_active_definition!(schema_name, load_definition!(entity_type))
     end
 
@@ -98,7 +146,7 @@ defmodule Letflow.ExamFixtures do
     # `POST /entities/query` route for any TASK_WORKER-scoped caller.
     :ok = Letflow.Packs.Bilimbaga.seed_answer_key_field_restrictions!(schema_name)
 
-    %{tenant_id: tenant.id, schema_name: schema_name}
+    :ok
   end
 
   @doc "Creates a record via `Letflow.Entities.Records.create_record/2`, asserting success."

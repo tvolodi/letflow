@@ -169,3 +169,53 @@
 
 
 history:
+  - req: REQ-345
+    event: done
+    agent: ORCH
+    at: "2026-09-14T10:35:00Z"
+    note: >
+      Claimed letflow-queue task 657. Full WF-02 pipeline: CODE-DESIGNER
+      produced lib/letflow/design/req345-exam-e2e-seed-fixture.md ->
+      CODE-DESIGN-VALIDATOR PASS (independently re-verified every cited
+      source line and the scoring arithmetic) -> ELIXIR-DEV implemented
+      lib/mix/tasks/letflow.seed.exam_fixtures.ex, idempotently seeding
+      a 5-question mixed exam (incl. a shorttext question, forcing
+      grading_pending/passed:nil per scoring.ex:255/257), a 3-question
+      scoreable exam (passing_score_pct 60.0, both Pass and Fail
+      combinations worked out), and one submitted session driven
+      through REQ-335's real POST /exam-sessions +
+      POST /exam-sessions/:id/submit routes, all entity writes via
+      Letflow.Entities.Records.create_record/2 with content-derived
+      idempotency keys, no direct SQL, no exam_assignment -> real dev-DB
+      runs (twice, no duplication, quoted output) -> SECURITY-REVIEWER
+      PASS (tenant isolation via threaded prefix, token plaintext never
+      persisted, in-process Router.call/2 dispatch goes through the
+      real auth pipeline) -> REVIEWER PASS (scope clean, two
+      implementation deviations from the design's literal pseudocode
+      verified legitimate, non-blocking TOCTOU note on concurrent
+      session-dedup for this single-operator dev tool) -> TEST-DESIGNER
+      wrote test/mix/tasks/letflow.seed.exam_fixtures_test.exs (5
+      tests, self-sufficient fixtures via a new
+      ExamFixtures.activate_exam_definitions!/1 helper) ->
+      TEST-DESIGN-VALIDATOR PASS (every unit-testable AC covered,
+      re-ran the suite itself).
+
+      Semantic-conflict caught and fixed by ORCH at Step Final rebase:
+      ISS-0646 merged to main concurrently (a sibling session) and
+      moved all five ExamSession* permissions off TASK_WORKER onto a
+      new CANDIDATE role -- REQ-345's branch had minted a TASK_WORKER
+      token for its session-driving seed candidate, which would have
+      403'd against current main. Fixed to CANDIDATE, re-verified live
+      (POST /exam-sessions now 201, all 5 tests re-run green).
+
+      Flagged, not fixed (out of REQ-345's own scope): the task
+      requires entity definitions already installed in the target
+      schema -- a bare `mix letflow.seed` provisions the tenant only,
+      with zero definitions, so `mix letflow.seed.exam_fixtures` fails
+      `{:definition_not_found, "category"}` against a genuinely fresh
+      environment. Worth a follow-up requirement before REQ-346/347's
+      e2e specs need this fixture in CI.
+
+      Merged via PR #1388 (feat/REQ-345-20260914). CI green (backend +
+      frontend gates, backend ~10min). letflow-queue task 657 released
+      status: done.

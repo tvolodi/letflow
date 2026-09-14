@@ -25141,9 +25141,16 @@ requirements:
       employee-portal.spec.ts's 5 drops (the View-Result CTA and the "My
       Results" page; its other 3 drops -- Start-modal open/cancel and the
       Continue CTA -- are unrelated surfaces and must NOT be counted here).
-      That is NINE of 168 blocks, about 5.4 percent, and only 7 of the 9
-      are whole-file blocked. THE RECORD MUST STATE THIS NUMBER AND REASON
-      FROM IT HONESTLY. Nine tests is a small number and is NOT on its own
+      That is NINE of 168 blocks, about 5.4 percent. Of those nine, SIX
+      are whole-file blocked (my-results.spec.ts, 0 of 6 ported); the
+      other three are within-file drops from files that DID port in part
+      (exam-result.spec.ts ported 4 of 5, employee-portal.spec.ts ported
+      3 of 8). Do not restate this as "7 of the 9 are whole-file
+      blocked" -- that figure is false and was corrected here on
+      2026-09-14 against the P5 close-out table in
+      docs/migration/stage-10-bilimbaga-vertical.md; re-derive it from
+      that table rather than from any earlier draft of this entry. THE
+      RECORD MUST STATE THIS NUMBER AND REASON FROM IT HONESTLY. Nine tests is a small number and is NOT on its own
       a mandate to build; "do not serve it, and record why" is a fully
       legitimate verdict that this requirement passes just as cleanly as
       "serve it". Do not inflate the figure, and do not re-derive it as
@@ -25206,13 +25213,16 @@ requirements:
       this record's verdict may call for -- flag that it will be needed and
       leave it to REVIEWER.
     acceptance_criteria:
-      - "a new decision record exists under docs/migration/decisions/ following the numbering and section shape of the existing records in that directory (0027 and 0030 are the closest precedents, both closing a standing open question from this same stage file), and its number does not collide with an existing file in that directory"
+      - "a new decision record exists under docs/migration/decisions/ following the numbering and section shape of the existing records in that directory (0027 and 0030 are the closest precedents, both closing a standing open question from this same stage file)"
+      - "the record's number is allocated by running `ls docs/migration/decisions/` AT WRITE TIME, immediately before creating the file, and taking the lowest free number at that moment -- 0030 is the highest that existed when this entry was drafted, but REQ-353 is registerable in parallel and also allocates a record, so 0031 may already be taken by the time this runs. The listing and the number taken from it are both quoted in the close-out. If the intended number is found taken, the next free one is used instead and that substitution is stated explicitly rather than silently overwriting or reusing another requirement's record"
       - "the record states an unambiguous verdict on each of the five numbered questions in this requirement's description -- results-list yes/no, route-vs-entity-query, FR-BB41-vs-FR-BB46 as one surface or two, the queried:false sort/filter constraint, and admin-vs-candidate scope -- with no question left implicit"
       - "the record quotes lib/letflow/routers/exam_sessions.ex's scope-fence text verbatim and states explicitly that REQ-335's decision was correct at the time rather than a defect"
       - "the record states the measured figure of 9 of 168 corpus blocks blocked specifically by the missing results surface, breaks it down as my-results 6 + exam-result 1 + employee-portal 2, and explicitly excludes employee-portal's other 3 drops as having unrelated causes"
+      - "where the record characterises how those 9 blocks are distributed across files, it states that SIX are whole-file blocked (my-results.spec.ts, 0 of 6 ported) and the other three are within-file drops from partly-ported files (exam-result.spec.ts 4 of 5 ported, employee-portal.spec.ts 3 of 8 ported), each figure re-derived from the P5 close-out table in docs/migration/stage-10-bilimbaga-vertical.md and the table row quoted -- the figure 'seven whole-file blocked' is false and must not appear"
       - "the record addresses the queried:false status of submitted_at, score_pct and passed in priv/packs/bilimbaga/entity_definitions/session.json and states what a serve-it verdict would do about sorting and filtering, or states that the verdict is not-to-serve and the constraint is therefore moot"
       - "if the verdict is to serve a results-list, the record names which bucket the implementing work falls in under decision 0022 and states that a per-entry REVIEWER rule-2 sign-off is required if that work ships executable code under lib/letflow/exam/ -- without writing that sign-off"
-      - "the standing open-question bullet in docs/migration/stage-10-bilimbaga-vertical.md beginning 'No way to view a past exam result' is updated in place to cite this record, in the same 'ANSWERED by decision NNNN' form the other answered bullets in that section use, preserving the original question text"
+      - "the standing open-question bullet in docs/migration/stage-10-bilimbaga-vertical.md beginning 'No way to view a past exam result' is updated in place to cite this record, in the same 'ANSWERED by decision NNNN' form the other answered bullets in that section use, preserving the original question text -- and the NNNN it names is the number THIS requirement actually allocated and wrote, read back from the created filename rather than from the number originally intended, so the citation can never point at a record this requirement did not author"
+      - "the close-out quotes the created record's filename and the stage-file citation line side by side, showing the two numbers match -- this is the check that catches a concurrent allocation having moved the number between the two writes"
       - "`git diff --name-only` shows no file added or modified under lib/letflow/, web/src/, web/tests/e2e/ or priv/packs/ -- this requirement produces a decision record and a stage-file edit only"
       - "the record states whether a not-to-serve verdict is revisitable and under what trigger, so a future stage does not have to re-litigate it from scratch"
     depends_on:
@@ -25229,21 +25239,45 @@ requirements:
       0022 rule 1: this work cannot be stated without naming exams and
       sessions -- it changes web/src/pages/exam/ExamSessionPage.tsx and adds
       a route under web/src/router.tsx serving an exam session -- so rule 1
-      excludes B. ON RULE 2 AND RULE 3, AND THIS IS THE PART REQ-VALIDATOR
-      AND REVIEWER SHOULD CHECK CLOSELY: this requirement ships NO
-      executable code under lib/letflow/exam/ and adds NO module there, so
-      it does not grow rule 3's directory-scoped size metric on the Elixir
-      side. It DOES touch web/src/pages/exam/, which rule 3's inventory in
+      excludes B.
+      .
+      THE DELIVERABLE IS DETERMINED HERE, NOT LEFT OPEN: THIS REQUIREMENT
+      ADDS ONE NEW SCREEN MODULE under web/src/pages/exam/. It does NOT
+      satisfy itself by modifying ExamSessionPage.tsx alone. The reason is
+      structural rather than stylistic: ExamSessionPage.tsx's mount effect
+      unconditionally calls startSession (:112-127), and this requirement's
+      own acceptance criteria forbid the by-id path from ever reaching
+      startSession under any code path. Folding a never-start path into
+      the same component that exists to start would put two opposite mount
+      behaviours behind one conditional in a component whose
+      unconditional-start behaviour this requirement is separately required
+      not to regress. A sibling screen module that reuses the existing
+      result-phase rendering is the shape. An earlier draft of this entry
+      left this undetermined; REQ-VALIDATOR correctly failed that, because
+      REVIEWER cannot make a rule-2 finding against a deliverable nobody
+      has decided the shape of.
+      .
+      ON RULE 2 AND RULE 3, AND THIS IS THE PART REQ-VALIDATOR AND REVIEWER
+      SHOULD CHECK CLOSELY: this requirement ships NO executable code under
+      lib/letflow/exam/ and adds NO module there, so it does not grow rule
+      3's directory-scoped size metric on the Elixir side. It DOES add a
+      module under web/src/pages/exam/, which rule 3's inventory in
       docs/migration/stage-10-bilimbaga-vertical.md does measure (currently
-      two screen modules, 497 lines). Per REVIEWER's 2026-09-14 rule-2
+      two screen modules, 497 lines, measured 2026-09-14) -- so that
+      inventory goes to THREE screen modules and must be re-measured by
+      this requirement's close-out. Per REVIEWER's 2026-09-14 rule-2
       adjudication in that file's "## REVIEWER sign-off", rule 2 gates
       modules that had a real A/B alternative; the precedent on record is
-      REQ-338's two screens, which DID carry a per-entry sign-off. THIS
-      REQUIREMENT THEREFORE FLAGS THAT IT NEEDS A PER-ENTRY RULE-2 SIGN-OFF
-      FROM REVIEWER before it is registered, and deliberately does not
-      write one for itself. If it adds no new screen module but only
-      modifies ExamSessionPage.tsx, REVIEWER may find rule 2 does not reach
-      it; that finding is REVIEWER's to make, not this requirement's.
+      REQ-338's two screens, which DID carry a per-entry sign-off. Because
+      this requirement now definitely adds a screen module rather than
+      possibly adding one, rule 2 reaches it on the same basis REQ-338's
+      screens were reached. THIS REQUIREMENT THEREFORE FLAGS THAT IT NEEDS
+      A PER-ENTRY RULE-2 SIGN-OFF FROM REVIEWER before it is registered,
+      and deliberately does not write one for itself. The honest A/B
+      question REVIEWER must answer: a "load a record by id and render it
+      read-only" screen is close to a generic capability, so "why is this
+      not a generic entity-record detail view" is a real bucket-B candidate
+      with a real answer, not a formality.
       .
       WHY THIS GOES STRAIGHT TO IMPLEMENTATION WITH NO DESIGN REQUIREMENT
       IN FRONT OF IT. The product question for THIS half is already settled
@@ -25293,6 +25327,24 @@ requirements:
       for starting an exam and must not be broken; this is an addition, not
       a rewrite of that flow.
       .
+      THE URL SHAPE IS PROVISIONAL, AND THIS IS THE PART THAT MUST NOT BE
+      SETTLED BY SIDE EFFECT. REQ-350's numbered questions (2) and (3) may
+      decide that Letflow serves a cross-session results-LIST, and may
+      decide whether FR-BB41 and FR-BB46 are one surface or two. If a list
+      is served, THIS route becomes that list's detail view, and a detail
+      view's URL is normally derived from its parent collection's -- so
+      fixing this route's URL here unilaterally would pre-empt a verdict
+      REQ-350 owns. The stage file's own open-question bullet says the
+      results-surface question "is a product-scope question that P5 must
+      not settle by side effect", and that applies to a URL as much as to
+      a route. So: choose a URL that works standalone, ship it, and record
+      it as PROVISIONAL and renameable -- do not treat it as a fixed
+      contract, do not document it anywhere as the settled results URL,
+      and do not let any test or consumer depend on its exact spelling in
+      a way that would make a later rename expensive. This requirement
+      does not depend on REQ-350 and must not wait for it; it simply must
+      not foreclose it.
+      .
       THE SCORING RULE THAT DECIDES WHICH TESTID RENDERS, AND IT IS NOT
       NEGOTIABLE. lib/letflow/exam/scoring.ex:255-257: if ANY question in
       the session is :short_text, build_outcome/3 forces the whole session
@@ -25335,10 +25387,126 @@ requirements:
       - "no spec in the diff is marked test.skip or test.fixme, and a grep for both across the changed spec files is quoted returning no hit"
       - "the close-out states that this requirement closes 1 of the 9 results-surface-blocked corpus blocks and explicitly does NOT claim to unblock my-results.spec.ts's 6 or employee-portal.spec.ts's 2, naming REQ-350 as the requirement that adjudicates those"
       - "the close-out flags that a per-entry REVIEWER rule-2 sign-off under decision 0022 was required before registration, and records REVIEWER's finding -- whether rule 2 was found to reach this requirement or not -- rather than asserting a sign-off this requirement wrote itself"
+      - "the close-out states in one sentence that the new route's URL shape is PROVISIONAL pending REQ-350's numbered questions (2) and (3), naming REQ-350 by id, and states that if REQ-350's verdict is to serve a results-list this route is that list's detail view and its URL may be renamed by the requirement that implements the list -- so no results-list URL verdict is pre-empted here"
+      - "the stage file's bucket-C inventory entry for web/src/pages/exam/ is re-measured and updated from two screen modules (497 lines, measured 2026-09-14) to include this requirement's added screen module, with real `ls`/`wc -l` output quoted -- an unchanged inventory would misreport rule 3's primary health metric"
     depends_on:
       - REQ-338
       - REQ-345
       - REQ-349
+  - id: REQ-352
+    title: "Build decision 0028's unauthenticated-read platform machinery -- the /api/public mount, the Plug.Router sub-router, the public_read_handles registry and its authenticated writer, the ETS token-bucket rate limiter and the ten-case byte-identical refusal path -- with no projection and no vertical vocabulary (S10 gap 6, bucket B)"
+    owner: ELIXIR-DEV
+    impl_order: 0  # PLACEHOLDER -- ORCH overwrites at WF-01 Step 3
+    status: pending
+    stage: S10
+    description: >
+      bucket: B, wholly. Every deliverable here is domain-neutral platform
+      capability that decision 0028 specifies as "fixed platform machinery"
+      reusable by every future unauthenticated read: the mount, the
+      sub-router, the handle registry and its writer, the limiter, the
+      refusal path and the kind-registration mechanism. None of them names
+      an exam, a certificate or any other vertical concept. Per decision
+      0022 rule 1 the files this requirement adds must not name the
+      vertical at all, exactly as
+      lib/letflow/design/req323-unauthenticated-read-pattern.md's own
+      section 13 vocabulary check requires of the design they implement.
+      Because this is bucket B and adds no module under lib/letflow/exam/
+      or web/src/pages/exam/, it adds no row to rule 3's directory-scoped
+      inventory and needs no per-entry rule-2 sign-off -- rule 2 gates
+      bucket-C modules that had a real A/B alternative, and this work IS
+      the B alternative.
+      .
+      WHY THIS EXISTS AS ITS OWN REQUIREMENT. It was split out of REQ-357
+      on 2026-09-14 after REQ-VALIDATOR found that entry carried 17
+      acceptance criteria partitioning cleanly along its own declared
+      bucket boundary -- the B machinery here, the C projection there.
+      REQ-357 keeps its id and retains the certificate-specific half.
+      .
+      THE PATTERN IS ALREADY DESIGNED -- DO NOT INVENT A DIFFERENT ONE.
+      REQ-323 is done and produced
+      lib/letflow/design/req323-unauthenticated-read-pattern.md plus
+      docs/migration/decisions/0028-unauthenticated-read-boundary.md, both
+      already SECURITY-REVIEWER-PASSed and REVIEWER-PASSed. Build from
+      those two documents without re-deriving the mount point, the
+      resolution mechanism or the response allowlist. The design's section
+      1 and decision 0028's point 1 already fix the public route shape as
+      GET /api/public/<kind>/:handle -- take it from there rather than
+      choosing one.
+      .
+      WHY THE REGISTRY'S WRITER LANDS HERE AND NOT WITH THE PROJECTION,
+      AND THIS IS THE LOAD-BEARING SPLIT DECISION. Decision 0028's
+      standing prohibitions require public_read_handles to land with its
+      first writer, not ahead of one -- the REQ-056 failure mode of a
+      table with no producer. That prohibition forbids separating the
+      migration from the writer; it does NOT dictate which side of a
+      B/C split they land on, only that they land together. They belong
+      HERE, on the B side, because the writer is itself generic: it mints
+      32 bytes of strong_rand_bytes, hashes them, and inserts a row whose
+      every column (handle_hash, tenant_id, kind, resource_id, expires_at,
+      revoked_at) is domain-neutral. Its only vertical-specific inputs are
+      the kind string and the resource_id it is HANDED by its caller. So
+      the writer names no exam and passes rule 1 cleanly, and putting it
+      on the C side would drag generic registry machinery into a
+      certificate-specific requirement for no reason. This also keeps the
+      design's OQ-1 permission atom with the write path it gates, rather
+      than stranding the atom in one requirement and the route it guards
+      in another.
+      .
+      WHAT THIS MEANS CONCRETELY: this requirement ships the migration,
+      the Ecto schema for the registry, and an authenticated, authorized
+      issue path that writes a handle row for a caller-supplied
+      {kind, resource_id} pair. The design's OQ-1 leaves that path's
+      permission atom deliberately undesigned and assigns it to the
+      requirement that needs the first instance -- that is this one, so
+      choose it, mint it, and state the choice and its reasoning rather
+      than inheriting one.
+      .
+      THE RATE LIMITER IS A PRECONDITION OF MOUNTING, NOT A FOLLOW-ON.
+      0028's point 6 and the design's section 5 both state this. THERE IS
+      NO RATE LIMITER IN THE TREE TODAY -- the Letflow.Plugs.RateLimit
+      reference at lib/letflow/plugs/api_pipeline.ex:59 is a deferred-plugs
+      TABLE ROW, not a mount, and lib/letflow/plugs/ contains no
+      rate-limit module. So this requirement writes one. Token bucket over
+      ETS, keyed on conn.remote_ip and never on an attacker-settable
+      forwarded header absent a trusted-proxy config, plus a separate
+      tighter global bucket, enforced as the FIRST plug inside the public
+      sub-router and BEFORE resolution so that a 429 is input-independent.
+      Whether this reuses a by-then-landed Letflow.Plugs.RateLimit or is a
+      new module is the design's OQ-2 and is this requirement's to decide;
+      state which and why.
+      .
+      THE ROUTER MUST STAY GENERIC. Kinds register a
+      {kind_string, projection_module} pair in application config, read at
+      request time via Application.fetch_env!/2 per the design's section
+      4.5. The sub-router must contain NO resource-type-specific branch --
+      adding a kind touches config plus one new projection module, never
+      the router. This requirement registers NO kind of its own; it ships
+      the registration mechanism and proves it with a test-only fixture
+      kind that names no vertical. REQ-357 registers the first real kind.
+      .
+      SCOPE FENCE. This requirement ships no projection module, no kind
+      string for any real resource, and no frontend. It closes gap 6's
+      platform half at the HTTP layer.
+    acceptance_criteria:
+      - "a single `forward` for the public mount is declared on Letflow.Router AFTER the existing public mounts and BEFORE the /api/v1 forward, at the path decision 0028 point 1 and the design's section 1 already fix, and a test asserts an unauthenticated request to it is not rejected by Letflow.Plugs.AuthPipeline"
+      - "the handle is 32 bytes of :crypto.strong_rand_bytes rendered URL-safe base64, stored as SHA-256 only -- a test asserts the stored column never equals the issued handle, and a grep over the diff confirms the plaintext handle is never logged"
+      - "the public_read_handles migration and the authenticated writer that populates it land in the SAME diff -- `git diff --name-only` is quoted showing both, satisfying 0028's land-with-its-writer prohibition"
+      - "every one of decision 0028's ten refusal cases -- malformed handle, unknown handle, revoked, expired, kind-mismatched, resource deleted, resource unpublishable, unregistered kind, wrong method, deactivated tenant -- returns a byte-identical 404 application/problem+json, asserted case by case by a test that compares full response bodies to each other, not merely each to 404"
+      - "no response from this route class is ever 401 or 403, asserted by a test sweeping every refusal case and failing on either status"
+      - "resolution performs exactly one database round-trip before any refusal decision and exactly two on success, and the deactivated-tenant check is folded into the first query as a join rather than a second lookup. The count is proven by a test that COUNTS QUERIES THROUGH AN EXPLICIT MECHANISM, not by inspection and not by a bare assertion: attach a :telemetry handler to the [:letflow, :repo, :query] event for the duration of the request and count the events it receives, or an equivalent mechanism the close-out names and shows the wiring for. The close-out states explicitly whether transaction-control statements (BEGIN/COMMIT/ROLLBACK) are counted toward the one/two totals -- if the chosen mechanism observes them, the assertion must either exclude them by matching on the query source or state the adjusted expected totals; an assertion whose expected number silently depends on whether a transaction wrapped the read is not a definitive test"
+      - "a malformed handle does NOT short-circuit ahead of the first query -- a test asserts a syntactically invalid handle still performs the registry read, counted by the same mechanism"
+      - "the rate limiter ships in the same diff as the mount, is keyed on conn.remote_ip, never on a forwarded header absent a trusted-proxy config, and is enforced before resolution -- a test asserts a limited caller receives 429 for a VALID handle as well as an invalid one, proving input-independence"
+      - "Cache-Control: private, no-store, Referrer-Policy: no-referrer and X-Robots-Tag: noindex, nofollow are all set on the success response, asserted by a test"
+      - "the kind-registration mechanism reads {kind_string, projection_module} pairs via Application.fetch_env!/2 at request time, and a test proves the router dispatches to a registered test-only fixture kind and 404s an unregistered one -- a grep over the router's own source is quoted showing no resource-type-specific branch and no hardcoded kind string"
+      - "the permission atom for the authenticated issue path (design OQ-1) is chosen, minted and stated with its reasoning in the close-out rather than inherited"
+      - "the close-out states whether the limiter is a new module or a reuse (design OQ-2) and why"
+      - "a decision-0022 rule-1 vocabulary check is run over EVERY file this requirement adds -- the router, the registry schema, the migration, the writer and the limiter -- and its verbatim output is quoted showing no vertical vocabulary in any of them, matching the form of req323-unauthenticated-read-pattern.md section 13"
+      - "SECURITY-REVIEWER PASSes this change against INV-1, INV-2, INV-4, INV-5 and INV-8 by name, and the seven conditions enumerated in req323-unauthenticated-read-pattern.md section 12 are each checked and each result recorded"
+      - "`mix test` and `mix compile --warnings-as-errors` both pass with real output quoted"
+    depends_on:
+      - REQ-354
+      - REQ-355
+
   - id: REQ-353
     title: File the amendment that states bucket rule 2's own scope -- as a NEW decision record amending 0022 by reference, not an in-place edit -- so the P5 rule-2 adjudication stops being the governing precedent (S10, decision record)
     owner: CODE-DESIGNER
@@ -25650,13 +25818,22 @@ requirements:
       candidate answer, not a formality.
       .
       SIZE CONTRIBUTION TO RULE 3'S METRIC. The stage file's bucket-C
-      inventory measures modules and lines under lib/letflow/exam/ (4
-      modules, 1,605 lines as of 2026-09-13) and under web/src/pages/exam/.
-      This requirement adds ONE module under lib/letflow/exam/, taking that
+      inventory measures modules and lines under lib/letflow/exam/ and
+      under web/src/pages/exam/. The CURRENT measured baseline under
+      lib/letflow/exam/ is 4 modules, 1,878 lines (anti_cheat 309,
+      question_set_resolver 109, scoring 267, session 1193). NOTE THAT THE
+      STAGE FILE'S OWN INVENTORY IS STALE AND DISAGREES: it records 4
+      modules / 1,605 lines measured 2026-09-13, which is 273 lines behind
+      -- scoring grew 246 to 267 and session grew 941 to 1193 after that
+      measurement. That staleness is being filed separately and is NOT
+      this requirement's defect to discover or its bug to fix; an
+      implementer must not treat the discrepancy as a finding of its own.
+      Re-measure from the tree rather than trusting either figure. This
+      requirement adds ONE module under lib/letflow/exam/, taking that
       directory to 5 modules; the inventory table and its measurement block
-      must both be updated by this requirement's close-out, since growth
-      there is the stage's primary health metric and an unchanged table would
-      misreport it.
+      must both be updated by this requirement's close-out against a fresh
+      measurement, since growth there is the stage's primary health metric
+      and an unchanged table would misreport it.
       .
       WHAT EXISTS AND WHAT DOES NOT, VERIFIED. There is NO certificate entity
       definition -- priv/packs/bilimbaga/entity_definitions/ holds sixteen
@@ -25753,11 +25930,20 @@ requirements:
       .
       SIZE CONTRIBUTION TO RULE 3'S METRIC. Adds a further module under
       lib/letflow/exam/ on top of REQ-355's, taking the directory to 6
-      modules. The inventory table and the measurement block must be
-      re-measured and updated again in this requirement's close-out. Two
-      requirements in a row growing this directory is exactly the movement
-      rule 3 exists to make visible, and it should be visible rather than
-      batched into a single later edit.
+      modules. The CURRENT measured baseline before REQ-355's addition is 4
+      modules, 1,878 lines under lib/letflow/exam/ (anti_cheat 309,
+      question_set_resolver 109, scoring 267, session 1193). NOTE THAT THE
+      STAGE FILE'S OWN INVENTORY IS STALE AND DISAGREES: it records 4
+      modules / 1,605 lines measured 2026-09-13, which is 273 lines behind
+      -- scoring grew 246 to 267 and session grew 941 to 1193 after that
+      measurement. That staleness is being filed separately and is NOT this
+      requirement's defect to discover or its bug to fix; an implementer
+      must not treat the discrepancy as a finding of its own. Re-measure
+      from the tree rather than trusting either figure. The inventory table
+      and the measurement block must be re-measured and updated again in
+      this requirement's close-out. Two requirements in a row growing this
+      directory is exactly the movement rule 3 exists to make visible, and
+      it should be visible rather than batched into a single later edit.
       .
       THIS REQUIREMENT IS WHERE THE DEPENDENCY ACTUALLY LANDS. It adds to
       mix.exs the libraries REQ-354's record chose, and no others. If
@@ -25821,29 +26007,49 @@ requirements:
       - REQ-355
 
   - id: REQ-357
-    title: "Build the public unauthenticated certificate-verification route as the first instance of decision 0028's capability-handle pattern -- the handle registry, its writer, the rate limiter and one projection module, closing S10 gap 6 (S10 P3, certificate issuance)"
+    title: "Register the certificate projection as decision 0028's first real public-read kind -- the projection module, its kind string, and the handle issued on the authenticated certificate path -- closing S10 gap 6's vertical half (S10 P3, certificate issuance)"
     owner: ELIXIR-DEV
     impl_order: 0  # PLACEHOLDER -- ORCH overwrites at WF-01 Step 3
     status: pending
     stage: S10
     description: >
-      bucket: B for the pattern machinery, C for the projection. The mount,
-      the router, the public_read_handles registry, the rate limiter and the
-      refusal path are all domain-neutral platform capability that decision
-      0028 already specifies as "fixed platform machinery" reusable by every
-      future unauthenticated read, and are bucket B -- none of them names an
-      exam. Only the projection module and its kind string are
-      certificate-specific, and those are C. Per decision 0022 rule 1, the
-      bucket-B files must not name the vertical: the router, the registry
-      schema and the limiter carry no exam vocabulary, exactly as
-      lib/letflow/design/req323-unauthenticated-read-pattern.md's own
-      section 13 vocabulary check requires of the design they implement.
+      bucket: C. Only the projection module and its kind string are
+      certificate-specific; everything else this route class needs is
+      bucket-B machinery REQ-352 already ships. Per decision 0022 rule 1
+      this half CANNOT be stated without naming certificates and exams --
+      the projection's field set IS the certificate's display surface --
+      which is exactly why it is C and why it could not stay bundled with
+      the domain-neutral machinery.
       .
-      HARD SECURITY-REVIEWER GATE. This is a tenant-data-path change that
-      establishes a route reading inside a tenant schema with NO
-      authenticated principal. It is the change class SECURITY-REVIEWER
-      exists to gate, and decision 0028's own Consequences section names the
-      first /api/public instance as "a named SECURITY-REVIEWER hard gate."
+      NEEDS A PER-ENTRY RULE-2 SIGN-OFF, FLAGGED AND DELIBERATELY NOT
+      WRITTEN HERE, on the same basis as REQ-355 and REQ-356: it ships
+      executable code under lib/letflow/exam/ and rule 2 therefore reaches
+      it per REVIEWER's 2026-09-14 adjudication. The real A/B question for
+      REVIEWER: a projection is a hand-built field allowlist over one
+      record, and REQ-352's registration mechanism is explicitly generic, so
+      "why is this not a declarative field allowlist in config rather than a
+      module" is a genuine bucket-B candidate that must be answered rather
+      than waved past.
+      .
+      WHY THIS WAS SPLIT. REQ-VALIDATOR found on 2026-09-14 that this
+      entry's original 17 acceptance criteria partitioned cleanly along its
+      own declared bucket boundary. The B machinery -- the mount, the
+      sub-router, the public_read_handles registry and its writer, the
+      limiter, the ten-case refusal path and the kind-registration
+      mechanism -- moved to REQ-352. This entry keeps its id and the
+      certificate-specific half. THE REGISTRY AND ITS WRITER ARE NOT HERE:
+      decision 0028's land-with-its-writer prohibition binds them together,
+      and both land in REQ-352, because the writer is generic in every
+      column it writes and takes its only vertical input (the kind string
+      and resource_id) from its caller. See REQ-352's description for that
+      reasoning in full.
+      .
+      HARD SECURITY-REVIEWER GATE. This remains a tenant-data-path change:
+      it decides what an anonymous holder of a forwarded link can read out
+      of a tenant schema. REQ-352 gates the mechanism; this entry gates the
+      DISCLOSURE. Decision 0028's own Consequences section names the first
+      /api/public instance as "a named SECURITY-REVIEWER hard gate", and
+      the projection's field set is the substance of that gate.
       .
       THE PATTERN IS ALREADY DESIGNED -- DO NOT INVENT A DIFFERENT ONE.
       REQ-323 is done and produced
@@ -25851,12 +26057,11 @@ requirements:
       docs/migration/decisions/0028-unauthenticated-read-boundary.md, both
       already SECURITY-REVIEWER-PASSed and REVIEWER-PASSed. The stage file's
       gap-6 row records the design as closed with implementation "not yet
-      filed"; this requirement is that implementation. Build it from those
-      two documents without re-deriving the mount point, the resolution
-      mechanism or the response allowlist. The seven conditions binding the
-      implementing requirement are enumerated verbatim in the design's
-      section 12 SECURITY-REVIEWER verdict and are restated as acceptance
-      criteria below.
+      filed"; REQ-352 and this requirement together are that implementation.
+      Implement the projection against the design's section 4.4 behaviour
+      contract and its three-key envelope without re-deriving either. The
+      handle this requirement causes to be issued is minted through
+      REQ-352's writer -- do not write a second issue path.
       .
       WHY THE SOURCE'S OWN VERIFY ENDPOINT MUST NOT BE COPIED, AND THIS IS
       THE SHARPEST POINT IN THIS ENTRY. BilimBaga's endpoint is
@@ -25886,48 +26091,33 @@ requirements:
       is the accepted bounded inference 0028 section 3 already records, not
       a defect to design around.
       .
-      THE REGISTRY MUST LAND WITH ITS WRITER. 0028's standing prohibitions
-      require public_read_handles to land with its first writer, not ahead
-      of one -- the REQ-056 failure mode of a table with no producer. So
-      this requirement ships BOTH the migration and the authenticated
-      issue path that writes a handle row when a certificate is issued.
-      The design's OQ-1 leaves the issue path's permission atom
-      deliberately undesigned and assigns it to the requirement that needs
-      the first instance -- that is this one, so choose it, and state the
-      choice and its reasoning rather than inheriting one.
-      .
-      THE RATE LIMITER IS A PRECONDITION OF MOUNTING, NOT A FOLLOW-ON.
-      0028's point 6 and the design's section 5 both state this. There is no
-      rate limiter in the tree today -- the Letflow.Plugs.RateLimit row in
-      lib/letflow/plugs/api_pipeline.ex is a deferred-plugs TABLE ROW, not a
-      mount. Keyed on conn.remote_ip, never on an attacker-settable
-      forwarded header, plus a global bucket, enforced as the first plug
-      inside the public router and BEFORE resolution so a 429 is
-      input-independent. Whether this reuses a by-then-landed
-      Letflow.Plugs.RateLimit or is a new module is the design's OQ-2 and is
-      this requirement's to decide; state which and why.
+      WHERE THE HANDLE COMES FROM. A certificate's handle is minted by
+      REQ-352's authenticated writer, under the permission atom REQ-352
+      chooses, at the point the certificate is issued on REQ-355's
+      authenticated issue path. This requirement wires that call and
+      supplies the kind string and resource_id; it does NOT add a second
+      issue path, a second permission atom, or a second registry write
+      surface. If REQ-352's writer turns out not to express what this
+      requirement needs, report that as a finding against REQ-352 rather
+      than working around it with a local write.
       .
       SCOPE FENCE. This requirement does not add a frontend verification
-      screen. It closes gap 6 at the HTTP layer.
+      screen, does not touch the mount, the sub-router, the limiter or the
+      refusal path, and does not write the registry migration. It closes
+      gap 6's vertical half: one registered kind and its disclosure
+      surface.
     acceptance_criteria:
-      - "a single `forward` for the public mount is declared on Letflow.Router AFTER the existing public mounts and BEFORE the /api/v1 forward, and a test asserts an unauthenticated request to it is not rejected by Letflow.Plugs.AuthPipeline"
-      - "the handle is 32 bytes of :crypto.strong_rand_bytes rendered URL-safe base64, stored as SHA-256 only -- a test asserts the stored column never equals the issued handle, and a grep over the diff confirms the plaintext handle is never logged"
-      - "the public_read_handles migration and the authenticated writer that populates it land in the SAME diff -- `git diff --name-only` is quoted showing both, satisfying 0028's land-with-its-writer prohibition"
-      - "every one of decision 0028's ten refusal cases -- malformed handle, unknown handle, revoked, expired, kind-mismatched, resource deleted, resource unpublishable, unregistered kind, wrong method, deactivated tenant -- returns a byte-identical 404 application/problem+json, asserted case by case by a test that compares full response bodies to each other, not merely each to 404"
-      - "no response from this route class is ever 401 or 403, asserted by a test sweeping every refusal case and failing on either status"
-      - "resolution performs exactly one database round-trip before any refusal decision and exactly two on success, and the deactivated-tenant check is folded into the first query as a join rather than a second lookup -- proven by counting queries in a test, not by inspection"
-      - "a malformed handle does NOT short-circuit ahead of the first query -- a test asserts a syntactically invalid handle still performs the registry read"
-      - "the rate limiter ships in the same diff as the mount, is keyed on conn.remote_ip, never on a forwarded header absent a trusted-proxy config, and is enforced before resolution -- a test asserts a limited caller receives 429 for a VALID handle as well as an invalid one, proving input-independence"
-      - "Cache-Control: private, no-store, Referrer-Policy: no-referrer and X-Robots-Tag: noindex, nofollow are all set on the success response, asserted by a test"
       - "the response envelope carries exactly the three top-level keys decision 0028 fixes, and the projection is a hand-built map with literal named keys -- a test asserts the exact key set, and the close-out justifies each field of the projection against INV-2 by naming why an anonymous holder of a forwarded link is entitled to it"
       - "the projection carries no tenant id, no internal record id and no candidate identifier beyond what the certificate is meant to display -- asserted by a test on the exact key set"
+      - "the projection module implements the design's section 4.4 behaviour and is PURE -- no Repo call, no Application read, no clock read -- asserted by a grep over the module quoted in the close-out, since a querying projection would break REQ-352's round-trip count, which is an INV-5 property"
       - "the source's valid:false response shape is NOT implemented, and the close-out states explicitly that decision 0028's single-refusal rule was followed in preference to FR-BB43's AC-7"
-      - "the permission atom for the authenticated issue path (design OQ-1) is chosen, minted and stated with its reasoning in the close-out rather than inherited"
-      - "the close-out states whether the limiter is a new module or a reuse (design OQ-2) and why"
-      - "a decision-0022 rule-1 vocabulary check is run over the bucket-B files this requirement adds -- the router, the registry schema and the limiter -- and its verbatim output is quoted showing no exam vocabulary in them"
-      - "SECURITY-REVIEWER PASSes this change against INV-1, INV-2, INV-4, INV-5 and INV-8 by name, and the seven conditions enumerated in req323-unauthenticated-read-pattern.md section 12 are each checked and each result recorded"
+      - "the certificate kind is registered through REQ-352's Application.fetch_env!/2 registration mechanism and the router is NOT edited to accommodate it -- `git diff --name-only` is quoted showing the public sub-router absent from the diff"
+      - "a handle is minted for a certificate through REQ-352's authenticated writer at issuance, and an end-to-end test resolves that handle through the public route and receives the projection -- the close-out states that no second issue path, permission atom or registry write surface was added"
+      - "a certificate in a state the projection declines to publish returns the same byte-identical 404 as an unknown handle, asserted by a test comparing the two full response bodies to each other"
+      - "SECURITY-REVIEWER PASSes this change against INV-1, INV-2, INV-4, INV-5 and INV-8 by name, with the projection's field set as the substance of the review, and the seven conditions enumerated in req323-unauthenticated-read-pattern.md section 12 are each checked and each result recorded"
+      - "this entry's required per-entry rule-2 sign-off is obtained from REVIEWER and recorded before merge -- the close-out names where it is recorded and quotes it"
+      - "the stage file's bucket-C inventory and its `ls`/`wc -l` measurement block are re-run and updated with real output quoted, reflecting this requirement's added module"
       - "`mix test` and `mix compile --warnings-as-errors` both pass with real output quoted"
     depends_on:
-      - REQ-354
+      - REQ-352
       - REQ-355
-      - REQ-356

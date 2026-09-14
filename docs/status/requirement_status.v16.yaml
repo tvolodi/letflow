@@ -872,3 +872,23 @@ history:
       clean except the pre-existing rust-toolchain-absence failures.
 
       docs/issues/ISS-0651.yaml flipped open -> resolved.
+  - req: SCOPE-CHANGE
+    event: started
+    agent: ORCH
+    at: "2026-09-14T00:11:35Z"
+    note: >
+      Claimed letflow-queue task 653 (ISS-0653, GH#1370, S3) -- self-
+      filed while resolving ISS-0651. Third and final function in this
+      same defect family in Letflow.Entities.Query.Cursor:
+      resolved_sort_term/2's :typed_column clause resolves a sort
+      column atom via Allowlist.typed_columns/0, which only knows the
+      fixed structural-7 columns plus entity_record_latest's own typed
+      columns -- not a promoted entity type's own promoted business
+      columns. Sorting a keyset-paginated query by a genuinely
+      promoted business column raises KeyError. ISS-0651's own
+      regression test had to route around this via the :json_field
+      path to avoid tripping it. Fix: generalize resolved_sort_term/2
+      to resolve a promoted business column's real typed column,
+      following the same struct-vs-plain-map/promoted-vs-structural
+      precedent ISS-0651/ISS-0652 already established. Dispatching to
+      ELIXIR-DEV.

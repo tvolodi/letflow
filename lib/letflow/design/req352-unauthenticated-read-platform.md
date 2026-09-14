@@ -64,7 +64,10 @@ projection** for any real resource (that is REQ-357, bucket C).
 | `priv/repo/migrations/<ts>_create_public_read_handles.exs` | — | The migration (global schema, no `prefix`). |
 | `config/config.exs` (edit, not new) | — | Registers `:public_read_kinds` config key; test fixture entry added only in `config/test.exs`. |
 
-No module under `lib/letflow/exam/` or `web/src/pages/exam/` is added or touched.
+No directory outside those listed in §1 (`lib/letflow/routers/`, `lib/letflow/public_read/`,
+`lib/letflow/plugs/`, `priv/repo/migrations/`, `config/`) is added or touched — in
+particular, no vertical-specific directory anywhere under `lib/letflow/` or `web/src/pages/`
+gains a module from this requirement.
 
 ---
 
@@ -117,40 +120,39 @@ Global table, default (`public`) schema — same convention as `tenants`
 `Letflow.TenantProvisioning`'s `@tenant_scoped_migration_manifest`/`tenant_scoped_migrations/0`
 list).
 
-```elixir
-# Letflow.Repo.Migrations.CreatePublicReadHandles
-#
-# GLOBAL TABLE -- not tenant-scoped. See lib/letflow/design/req352-... §3 and
-# docs/migration/decisions/0028-unauthenticated-read-boundary.md. This table is the
-# lookup that DECIDES which tenant schema to enter, so it cannot itself live inside
-# one -- same reasoning as `tenants`. Deliberately excluded from
-# Letflow.TenantProvisioning's tenant-scoped migration manifest.
-#
-# Lands together with its first writer (Letflow.PublicRead.issue_handle/4, this same
-# diff) per 0028's standing prohibition -- the REQ-056 "table with no producer"
-# failure mode.
-defmodule Letflow.Repo.Migrations.CreatePublicReadHandles do
-  use Ecto.Migration
+Header-comment content ELIXIR-DEV's migration must carry (stated as prose, not as a code
+block, since the migration itself is implementation code this document does not write):
+a note that this is a **global table, not tenant-scoped**, that it is the lookup that
+decides which tenant schema to enter (so it cannot itself live inside one — same
+reasoning as `tenants`), that it is deliberately excluded from
+`Letflow.TenantProvisioning`'s tenant-scoped migration manifest, and that it lands
+together with its first writer (`Letflow.PublicRead.issue_handle/4`, this same diff) per
+0028's standing prohibition — the REQ-056 "table with no producer" failure mode.
 
-  def change do
-    create table(:public_read_handles, primary_key: false) do
-      add :id, :binary_id, primary_key: true
-      add :handle_hash, :string, null: false
-      add :tenant_id, references(:tenants, type: :binary_id, on_delete: :delete_all), null: false
-      add :kind, :string, null: false
-      add :resource_id, :binary_id, null: false
-      add :expires_at, :utc_datetime_usec
-      add :revoked_at, :utc_datetime_usec
+Table spec, `public_read_handles`, `primary_key: false` (an explicit `:id` column below
+supplies the primary key instead of the schema-default integer key):
 
-      timestamps()
-    end
+| Column | Type | Constraints |
+|---|---|---|
+| `id` | `:binary_id` | primary key |
+| `handle_hash` | `:string` | `null: false` |
+| `tenant_id` | `:binary_id` | `null: false`, FK → `tenants.id`, `on_delete: :delete_all` |
+| `kind` | `:string` | `null: false` |
+| `resource_id` | `:binary_id` | `null: false` |
+| `expires_at` | `:utc_datetime_usec` | nullable |
+| `revoked_at` | `:utc_datetime_usec` | nullable |
+| `inserted_at` / `updated_at` | timestamps | per `timestamps()` convention |
 
-    create unique_index(:public_read_handles, [:handle_hash])
-    create index(:public_read_handles, [:tenant_id])
-    create index(:public_read_handles, [:kind, :resource_id])
-  end
-end
-```
+Indexes:
+
+| Columns | Kind |
+|---|---|
+| `[:handle_hash]` | unique |
+| `[:tenant_id]` | non-unique |
+| `[:kind, :resource_id]` | non-unique |
+
+No `prefix:` option anywhere in this table's definition (global schema, matching
+`tenants`'s own migration).
 
 **Column-type decision, stated explicitly since req323 §3.5 left it open (`bytea`
 suggested there, not fixed):** `handle_hash` is `:string` (hex-encoded SHA-256, 64 ASCII
@@ -172,9 +174,9 @@ must not be reachable in the first place if this cascade holds).
 
 `index(:public_read_handles, [:kind, :resource_id])`: supports revocation/lookup by
 "which handles exist for this resource" from the authenticated side (e.g. "does this
-certificate already have a live handle" — an idempotency question OQ-3 in req323 leaves
-open, but the index costs nothing to add now and nothing to redesign later if a future
-kind's issue path needs it).
+`{kind, resource_id}` pair already have a live handle" — an idempotency question OQ-3 in
+req323 leaves open, but the index costs nothing to add now and nothing to redesign later
+if a future kind's issue path needs it).
 
 **Not added, deliberately:** no partial index on `revoked_at IS NULL` or
 `expires_at > now()` — liveness is evaluated in application code from the row already
@@ -184,40 +186,33 @@ fetched (§4), never re-queried, so no index serves a second query that must not
 
 ## 4. `Letflow.PublicRead.Handle` — the Ecto schema
 
-```elixir
-defmodule Letflow.PublicRead.Handle do
-  use Ecto.Schema
-  import Ecto.Changeset
+Backing table: `public_read_handles` (§3). Primary key: `{:id, :binary_id,
+autogenerate: true}`.
 
-  @type t :: %__MODULE__{
-          id: Ecto.UUID.t(),
-          handle_hash: String.t(),
-          tenant_id: Ecto.UUID.t(),
-          kind: String.t(),
-          resource_id: Ecto.UUID.t(),
-          expires_at: DateTime.t() | nil,
-          revoked_at: DateTime.t() | nil,
-          inserted_at: DateTime.t(),
-          updated_at: DateTime.t()
-        }
+Field list (Ecto type, matching §3's column types exactly):
 
-  @primary_key {:id, :binary_id, autogenerate: true}
-  schema "public_read_handles" do
-    field(:handle_hash, :string)
-    field(:tenant_id, Ecto.UUID)
-    field(:kind, :string)
-    field(:resource_id, Ecto.UUID)
-    field(:expires_at, :utc_datetime_usec)
-    field(:revoked_at, :utc_datetime_usec)
-    timestamps()
-  end
+| Field | Ecto type |
+|---|---|
+| `id` | `:binary_id` |
+| `handle_hash` | `:string` |
+| `tenant_id` | `Ecto.UUID` |
+| `kind` | `:string` |
+| `resource_id` | `Ecto.UUID` |
+| `expires_at` | `:utc_datetime_usec` |
+| `revoked_at` | `:utc_datetime_usec` |
+| `inserted_at` / `updated_at` | via `timestamps()` |
 
-  @spec insert_changeset(t(), map()) :: Ecto.Changeset.t()
-  # casts :handle_hash, :tenant_id, :kind, :resource_id, :expires_at;
-  # validate_required [:handle_hash, :tenant_id, :kind, :resource_id];
-  # unique_constraint(:handle_hash) backing the migration's unique index.
-end
-```
+No `belongs_to`/association fields (see the paragraph below §4's field list).
+
+`@type t/0`: a struct type over exactly the fields above, `expires_at`/`revoked_at`
+typed as `DateTime.t() | nil`, the rest non-nullable per §3's `null: false` constraints.
+
+`insert_changeset/2` — signature and invariants only:
+
+- `@spec insert_changeset(t(), map()) :: Ecto.Changeset.t()`
+- Casts: `:handle_hash`, `:tenant_id`, `:kind`, `:resource_id`, `:expires_at`.
+- Required: `:handle_hash`, `:tenant_id`, `:kind`, `:resource_id`.
+- Constraint: `unique_constraint(:handle_hash)`, backing the migration's unique index.
 
 No association to `Letflow.Identity.Tenant` is declared (`belongs_to`) — the schema holds
 the FK column only. A `belongs_to`/preload is unnecessary machinery: every read path
@@ -506,6 +501,12 @@ end
    **before** `plug(:match)` runs, so no resolution work ever begins for a limited
    request (AC-8's input-independence requirement).
 
+**Test plan (AC-8):** a test issues N+1 requests within the bucket window using a VALID
+handle from a fixture (the §10 test-only kind) and asserts the (N+1)th response is 429,
+proving the limiter fires before/independently of resolution succeeding — i.e. that a
+handle which would otherwise resolve successfully is still refused once its bucket is
+exhausted, in the same manner as AC-1/AC-2/AC-10's test plans are stated.
+
 `@global_capacity`/`@ip_capacity`/refill rates are module attributes sourced from
 application config (`config :letflow, Letflow.Plugs.PublicReadRateLimit, ip_capacity: ...`),
 not hardcoded literals, so they are tunable per environment without a code change.
@@ -667,7 +668,7 @@ should not add one.
 | 5 | §7's table — no row emits 401/403; §2's success/failure dispatch only ever calls `send_json(200, ...)` or `not_found/1`. |
 | 6 | §6 (exact query plan: 1 round-trip pre-refusal via the joined query, 2 on success via the joined query + `Repo.get/3`), §9 (telemetry counting mechanism, transaction-control statements explicitly addressed — none fire on the resolution path). |
 | 7 | §6, §7 case 1 — hashing is unconditional; no branch exists to short-circuit ahead of it. |
-| 8 | §11 (limiter: keyed on `conn.remote_ip`, enforced first in `PublicRead`'s chain, before `:match`; 429 fires identically for a valid handle, per §11.2 step 3's ordering). |
+| 8 | §11 (limiter: keyed on `conn.remote_ip`, enforced first in `PublicRead`'s chain, before `:match`; 429 fires identically for a valid handle, per §11.2 step 3's ordering); test plan in §11.2. |
 | 9 | §12 (three headers, set identically on every response). |
 | 10 | §8 (config shape + `fetch_kind/1`), §2 (router has no kind-specific branch — grep target named), §10 (test-only fixture kind + its own 404 test). |
 | 11 | §13.1 — `:PublicReadHandlesIssue`, minted and justified. |
@@ -679,17 +680,38 @@ should not add one.
 
 ## 15. Decision 0022 rule 1 — vocabulary check
 
-Every file this requirement adds is listed in §1. Applied check:
+Every file this requirement adds is listed in §1. Since none of them exist as files yet
+(design stage only), the check runs textually over this design document's own prose and
+every identifier it proposes — exactly as req323 §13 performed its check on itself before
+any code existed, and using the same term list and flags (`-rnwiE`, word-boundary) it
+used:
 
 ```
-$ grep -rniE "exam|exams|certificate|certificates|certification|candidate|candidates|quiz|grading|grader|proctor|bilimbaga|student|teacher|course|diploma|assessment" \
-    <planned file list from §1, once they exist>
+$ grep -rnwiE "exam|exams|certificate|certificates|certification|candidate|candidates|quiz|grading|grader|proctor|bilimbaga|student|teacher|course|diploma|assessment" \
+    lib/letflow/design/req352-unauthenticated-read-platform.md
 ```
 
-Run textually over this design document's own prose and every identifier it proposes
-(the files themselves do not exist yet — this document is the check performed on its own
-planned content, exactly as req323 §13 performed its check on itself before any code
-existed):
+Re-run against this document as it now stands (post-rework): **two hits, both of them
+this section's own two grep-pattern literals on their own command lines** (this command's
+line, plus the narrower command's line below, since its shorter term list is a subset of
+this one's and so also matches its own citation of that subset). Zero hits anywhere in the
+prose, identifiers, or examples — the same class of result, by the same method, req323
+§13 reports for itself.
+
+A second, narrower term list was also run — the exact list named in the rework
+instruction that flagged §3's former illustrative example (a vertical-specific noun this
+document no longer uses anywhere, having been replaced with a vocabulary-neutral
+`{kind, resource_id}` phrasing):
+
+```
+$ grep -rnwiE "exam|exams|certificate|certificates|candidate|candidates|assessment|assessments" \
+    lib/letflow/design/req352-unauthenticated-read-platform.md
+```
+
+Same result: two hits, the same two command lines above (each contains bare words this
+narrower list also matches), and nothing else. Both runs confirm rule 1 is met, with every
+remaining hit being one grep pattern's own literal citation on a command line in this
+section — never a hit in prose, an identifier, or an example.
 
 - Module names: `Letflow.Routers.PublicRead`, `Letflow.PublicRead`,
   `Letflow.PublicRead.Handle`, `Letflow.PublicRead.Projection`,
@@ -700,9 +722,6 @@ existed):
   `handle_hash`, `tenant_id`, `kind`, `resource_id`, `expires_at`, `revoked_at`,
   `:PublicReadHandlesIssue` — none contains a vertical term.
 - The one test-only kind string, `"public-read-fixture"`, is deliberately generic.
-- Zero hits found in this document's own prose against the pattern above, other than the
-  pattern's own literal in this section — same result req323 §13 reported for itself, by
-  the same method.
 
 A reader of this document cannot tell which vertical motivated it. That is the test rule
 1 sets, and it is met.

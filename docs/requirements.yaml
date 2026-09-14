@@ -24676,7 +24676,7 @@ requirements:
     title: Port the exam-listing and exam-taking BilimBaga parity specs (employee-portal, exam-taking) onto /exam and /exam/:examId/session as *.e2e.spec.ts rewritten against Letflow data-testid hooks (S10 P5, test artefacts)
     owner: FRONTEND-DEV
     impl_order: 658
-    status: pending
+    status: done
     stage: S10
     description: >
       bucket: C (client test artefacts). JUSTIFICATION: identical to

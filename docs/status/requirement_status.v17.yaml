@@ -219,3 +219,55 @@ history:
       Merged via PR #1388 (feat/REQ-345-20260914). CI green (backend +
       frontend gates, backend ~10min). letflow-queue task 657 released
       status: done.
+  - req: REQ-346
+    event: done
+    agent: ORCH
+    at: "2026-09-14T11:40:00Z"
+    note: >
+      Claimed letflow-queue task 658 (depends_on REQ-344, REQ-345, both
+      done). FRONTEND-DEV ported employee-portal.spec.ts (3/8 real
+      counterparts) and exam-taking.spec.ts (9/11) onto /exam and
+      /exam/:examId/session as web/tests/e2e/employee-portal.e2e.spec.ts
+      and exam-taking.e2e.spec.ts, rewritten against real data-testid
+      hooks, auth via the existing helpers.ts Keycloak flow. Dropped
+      tests documented per-file with the specific missing behaviour (no
+      navigator grid, no flag control, no confirm modal); no
+      test.skip/test.fixme used.
+
+      Unblock-Everything fix landed in the same run: porting
+      exam-taking.spec.ts surfaced a real crash in
+      ExamSessionPage.tsx -- it rendered localized-text fields
+      (stem, option.text) as raw objects instead of resolved strings,
+      and used a stale question-type enum (single_choice/multi_choice)
+      that doesn't match the real backend enum (single/multiple/
+      true_false/likert/short_text). This blocked 100% of REQ-346's
+      required exam-taking port, so fixed within this run per
+      core-directives.md rather than filed separately.
+      CODE-DESIGNER -> docs/frontend/exam-session-localized-fields-fix.md
+      (reusing the existing resolveUiLocale helper from
+      entitiesMessages.ts) -> FRONTEND-DEV implemented + fixed
+      ExamSessionPage.test.tsx's stale fixtures (22/22 passing).
+
+      Both new specs run live against Keycloak+Postgres+REQ-345's seeded
+      fixtures: employee-portal 3/3, exam-taking 9/9, both quoted
+      verbatim in the implementer's handoff. `npm run check` (full
+      guard suite + production build) clean throughout.
+
+      Pipeline: FRONTEND-DEV -> SECURITY-REVIEWER PASS (pure
+      client-side rendering/type fix consuming an already tenant-scoped
+      response; no XSS -- normal JSX text-child rendering; e2e specs
+      use the existing dev-Keycloak fixture-account convention already
+      used by ~20 other specs, no hardcoded secret) -> REVIEWER PASS
+      (scope clean -- exactly the 5 expected files; fix narrowly scoped
+      to the design; test.describe.serial justified by a real
+      one-open-session-per-candidate backend constraint, consistent
+      with existing e2e precedent). REVIEWER flagged one documentation
+      gap -- the close-out claimed zero getByRole uses when there were
+      actually 5 (Previous/Next paging, dialog-absence assertion), all
+      legitimate since ExamSessionPage.tsx exposes no testid for those
+      elements -- fixed by ORCH before merge: added a per-instance
+      justification block to the spec file's own header comment.
+
+      Merged via PR #1390 (feat/REQ-346-20260914). letflow-queue task
+      658 released status: done.
+

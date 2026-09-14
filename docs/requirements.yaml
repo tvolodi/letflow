@@ -24340,7 +24340,7 @@ requirements:
   - id: REQ-344
     title: Triage all 19 BilimBaga Playwright spec files against Letflow's actual routes and testids, classifying each PORTABLE-NOW / PORTABLE-AFTER-<named gap> / NO-COUNTERPART -- and correct the stage file's 286 test()-block figure, which is unreproducible (S10 P5, test artefacts)
     owner: TEST-DESIGNER
-    impl_order: 0  # PLACEHOLDER -- ORCH overwrites at WF-01 Step 3
+    impl_order: 656
     status: pending
     stage: S10
     description: >
@@ -24461,7 +24461,7 @@ requirements:
   - id: REQ-345
     title: Provide a deterministic seeded exam fixture for e2e runs -- TWO published exams (a mixed one carrying a shorttext question, and a scoreable one carrying none) plus one started-and-submitted session driven through REQ-335's routes, in the bpm-default tenant -- since mix letflow.seed provisions the tenant only (S10 P5, test fixture)
     owner: ELIXIR-DEV
-    impl_order: 0  # PLACEHOLDER -- ORCH overwrites at WF-01 Step 3
+    impl_order: 657
     status: pending
     stage: S10
     description: >
@@ -24675,7 +24675,7 @@ requirements:
   - id: REQ-346
     title: Port the exam-listing and exam-taking BilimBaga parity specs (employee-portal, exam-taking) onto /exam and /exam/:examId/session as *.e2e.spec.ts rewritten against Letflow data-testid hooks (S10 P5, test artefacts)
     owner: FRONTEND-DEV
-    impl_order: 0  # PLACEHOLDER -- ORCH overwrites at WF-01 Step 3
+    impl_order: 658
     status: pending
     stage: S10
     description: >
@@ -24765,7 +24765,7 @@ requirements:
   - id: REQ-347
     title: Port the entity-CRUD-backed admin parity specs (categories, tags, question-bank, exam-lifecycle) onto /admin/bilimbaga/:entityType as *.e2e.spec.ts rewritten against the entity-crud data-testid hooks (S10 P5, test artefacts)
     owner: FRONTEND-DEV
-    impl_order: 0  # PLACEHOLDER -- ORCH overwrites at WF-01 Step 3
+    impl_order: 659
     status: pending
     stage: S10
     description: >
@@ -24834,7 +24834,7 @@ requirements:
   - id: REQ-348
     title: Close S10 P5 -- RELEASE-VALIDATOR re-derives the ported parity suite's pass independently and UAT-RUNNER runs it against a live instance, both quoting real output, and the stage file records the measured parity against the no-counterpart set (S10 P5, close-out)
     owner: RELEASE-VALIDATOR
-    impl_order: 0  # PLACEHOLDER -- ORCH overwrites at WF-01 Step 3
+    impl_order: 661
     status: pending
     stage: S10
     description: >
@@ -24899,7 +24899,7 @@ requirements:
   - id: REQ-349
     title: Port the result-surface BilimBaga parity specs (exam-result, my-results) by DRIVING THE LIVE start-answer-submit FLOW to the result phase -- the only way exam-result-page/pending/score are reachable -- classifying each source test and dropping what has no counterpart rather than authoring a failing spec or adding a route (S10 P5, test artefacts)
     owner: FRONTEND-DEV
-    impl_order: 0  # PLACEHOLDER -- ORCH overwrites at WF-01 Step 3
+    impl_order: 660
     status: pending
     stage: S10
     description: >

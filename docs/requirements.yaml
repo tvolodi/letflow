@@ -24699,8 +24699,12 @@ requirements:
       into REQ-349. They share BilimBaga's /portal URL prefix with these
       two but not a target surface: they assert on a *result* and a
       *results-list* view, which is the surface REQ-335 deliberately did
-      not route, and they need a pre-submitted session rather than merely
-      a published exam. Bundling all four made one agent turn port ~1,050
+      not route. (An earlier revision added "and they need a pre-submitted
+      session rather than merely a published exam" -- that is no longer
+      true: REQ-349 was reframed to drive the live start-to-submit flow,
+      so what it needs from REQ-345 is the SECOND, shorttext-free exam and
+      its chosen passing_score_pct, not a pre-submitted session.) Bundling
+      all four made one agent turn port ~1,050
       source lines and adjudicate a missing-surface question at the same
       time. Port only the two named above here.
       .
@@ -24740,8 +24744,12 @@ requirements:
       DEPENDS ON THE SEEDED FIXTURE. These specs need REQ-345's published
       exam present -- its documented title and question content -- and
       assert on that rather than on whatever happens to be in the
-      database. They do NOT need REQ-345's submitted session; that is
-      REQ-349's requirement.
+      database. They do NOT need REQ-345's submitted session -- and
+      neither does any other requirement through the UI: REQ-349
+      explicitly disclaims it too. REQ-345 justifies seeding it as a
+      raw-HTTP assertion target (GET /exam-sessions/:id), proving the
+      submit path persists what session.json declares; no rendered screen
+      can display it.
     acceptance_criteria:
       - "every new spec file lives under web/tests/e2e/ and its name ends in .e2e.spec.ts -- proven by `npx playwright test --list` collecting them, with the collected list quoted verbatim"
       - "the ported specs run against a live instance with Keycloak and Postgres up and REQ-345's published fixture exam present (verified and quoted before the run), and the full `npx playwright test` output for exactly these files is quoted verbatim including the pass/fail tally"

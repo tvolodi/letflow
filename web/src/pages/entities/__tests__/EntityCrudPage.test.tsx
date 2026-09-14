@@ -1,18 +1,23 @@
 // @vitest-environment jsdom
 /**
  * REQ-343 AC1 — one create-then-list-then-edit-then-delete test per each of
- * the nine remaining BilimBaga entity types, all exercising the SAME
- * generic `EntityCrudPage` component (not nine hand-written page files) —
- * proving the "generic component, not nine hand-copied pages" reuse claim
- * actually works for every entity shape: a plain-field entity (category),
- * an fk-reference + enum + localized_text entity (question), a
+ * the ten admin-manageable BilimBaga entity types, all exercising the SAME
+ * generic `EntityCrudPage` component (not ten hand-written page files) —
+ * proving the "generic component, not ten hand-copied pages" reuse claim
+ * actually works for every entity shape: a plain-field entity (category,
+ * tag), an fk-reference + enum + localized_text entity (question), a
  * composite-unique join entity (question_tag), the is_correct
  * field-grant-aware entity (answer_option), and the remaining five exam*
  * types.
  *
- * Mirrors web/src/pages/entities/__tests__/TagListPage.test.tsx's own
- * mocking pattern (useQuery/useMutation mocked directly, no msw/raw-fetch —
- * DIRECTIVE T-2).
+ * ISS-0655: `tag` was REQ-336's original hand-built pilot
+ * (`TagListPage.tsx`, since removed as superseded dead code) and was
+ * dropped rather than carried across when REQ-343 generalized the other
+ * nine types into this component. Its case below closes that gap and is
+ * this test suite's regression coverage for it.
+ *
+ * Mocking pattern: useQuery/useMutation mocked directly, no msw/raw-fetch —
+ * DIRECTIVE T-2.
  */
 import { describe, it, expect, vi, afterEach } from 'vitest'
 import * as jestDomMatchers from '@testing-library/jest-dom/matchers'
@@ -169,6 +174,13 @@ const CASES: Case[] = [
     sampleFieldValues: { rule_id: 'rule-1', question_id: 'q-1', sort_order: 2 },
     primaryField: 'sort_order',
     primaryCellText: '2',
+  },
+  {
+    entityType: 'tag',
+    fields: [{ name: 'name', type: 'string', required: true, queried: true }],
+    sampleFieldValues: { name: 'security' },
+    primaryField: 'name',
+    primaryCellText: 'security',
   },
 ]
 

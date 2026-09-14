@@ -53,3 +53,22 @@ affected_files:
   - docs/migration/stage-10-bilimbaga-vertical.md
 queue_ref: Q-665
 github_ref: GH-1401
+status: resolved
+resolution_note: >
+  Re-measured lib/letflow/exam/ and web/src/pages/exam/ fresh on 2026-09-15
+  (not trusting even this issue's own 2026-09-14 numbers, which had already
+  drifted further): lib/letflow/exam/ is now 1,878 lines across 4 modules
+  (anti_cheat.ex 309, question_set_resolver.ex 109, scoring.ex 267,
+  session.ex 1193 -- matching this issue's 2026-09-14 figures exactly, no
+  further drift there). web/src/pages/exam/ + web/src/api/exam.ts moved
+  further, from 621 to 727 lines (ExamListPage.tsx unchanged at 139,
+  ExamSessionPage.tsx grew 358 -> 464, exam.ts unchanged at 124) --
+  discovered only by re-measuring rather than trusting the issue's own
+  2026-09-14 snapshot. docs/migration/stage-10-bilimbaga-vertical.md's
+  bucket-C inventory table updated with both fresh figures, re-dated to
+  2026-09-15, and a second stale reference to the old 1,605/497 figures in
+  the P5 rule-3 narrative (further down the same file) corrected to point
+  at the table instead of repeating a number that will drift again. Added a
+  one-line caption above the measurement blocks stating these figures are a
+  snapshot requiring re-measurement at each phase close, since this is the
+  second time this exact table has gone stale.

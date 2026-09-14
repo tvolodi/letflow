@@ -222,7 +222,11 @@ REVIEWER/RELEASE-VALIDATOR sign-off recorded in
 `REQ-338` done-event, not from a design-doc §7 table (none exists for this
 requirement).
 
-**Measurement, run against this tree:**
+**Measurement, run against this tree.** These figures are a snapshot, not a
+standing guarantee — this table has already gone stale twice behind
+concurrent sibling work (the header block corrected in `1897e84d`, and the
+line counts corrected here in `ISS-0665`); re-run both blocks below at each
+phase close rather than trusting the last-recorded numbers.
 
 ```
 $ ls lib/letflow/exam/
@@ -230,14 +234,17 @@ anti_cheat.ex  question_set_resolver.ex  scoring.ex  session.ex
 $ wc -l lib/letflow/exam/*.ex
   309 lib/letflow/exam/anti_cheat.ex
   109 lib/letflow/exam/question_set_resolver.ex
-  246 lib/letflow/exam/scoring.ex
-  941 lib/letflow/exam/session.ex
- 1605 total
+  267 lib/letflow/exam/scoring.ex
+ 1193 lib/letflow/exam/session.ex
+ 1878 total
 ```
 
-**4 modules, 1,605 total lines under `lib/letflow/exam/`, measured 2026-09-13.**
+**4 modules, 1,878 total lines under `lib/letflow/exam/`, measured 2026-09-15**
+(up from 1,605 at the 2026-09-13 measurement: `scoring.ex` 246→267,
+`session.ex` 941→1193, `anti_cheat.ex` and `question_set_resolver.ex`
+unchanged; see `ISS-0665`).
 
-**`web/src/pages/exam/` and `web/src/api/exam.ts`, measured 2026-09-14:**
+**`web/src/pages/exam/` and `web/src/api/exam.ts`, measured 2026-09-15:**
 
 ```
 $ ls web/src/pages/exam/
@@ -246,22 +253,24 @@ ExamSessionPage.tsx
 __tests__/
 $ wc -l web/src/pages/exam/*.tsx web/src/api/exam.ts
   139 web/src/pages/exam/ExamListPage.tsx
-  358 web/src/pages/exam/ExamSessionPage.tsx
+  464 web/src/pages/exam/ExamSessionPage.tsx
   124 web/src/api/exam.ts
-  621 total
+  727 total
 ```
 
-**2 screen modules (497 lines) under `web/src/pages/exam/`, plus the 124-line
-API client `web/src/api/exam.ts`, 621 lines total, measured 2026-09-14.** This
-does not count `web/src/pages/exam/__tests__/` (test files, not modules,
-matching the convention the `lib/letflow/exam/` measurement above already
-uses of counting only `.ex` implementation files) or REQ-338's other
-supporting files outside `web/src/pages/exam/` (`web/src/types/exam.ts`,
-`web/src/utils/examErrors.ts`, `web/src/hooks/useAntiCheatSignals.ts`,
-`web/src/i18n/examMessages.ts`, `web/src/i18n/ExamIntlProvider.tsx`) — those
-are REQ-338's supporting infrastructure, not bucket-C screen modules in their
-own right, and are out of scope for this table per its own header ("every
-module added under `lib/letflow/exam/` or `web/src/pages/exam/`").
+**2 screen modules (603 lines) under `web/src/pages/exam/`, plus the 124-line
+API client `web/src/api/exam.ts`, 727 lines total, measured 2026-09-15** (up
+from 621 at the 2026-09-14 measurement: `ExamListPage.tsx` unchanged at 139,
+`ExamSessionPage.tsx` 358→464; see `ISS-0665`). This does not count
+`web/src/pages/exam/__tests__/` (test files, not modules, matching the
+convention the `lib/letflow/exam/` measurement above already uses of counting
+only `.ex` implementation files) or REQ-338's other supporting files outside
+`web/src/pages/exam/` (`web/src/types/exam.ts`, `web/src/utils/examErrors.ts`,
+`web/src/hooks/useAntiCheatSignals.ts`, `web/src/i18n/examMessages.ts`,
+`web/src/i18n/ExamIntlProvider.tsx`) — those are REQ-338's supporting
+infrastructure, not bucket-C screen modules in their own right, and are out
+of scope for this table per its own header ("every module added under
+`lib/letflow/exam/` or `web/src/pages/exam/`").
 
 **What left bucket C.** P3's phases-table row (below) predicts bucket C, but
 P3 as executed also produced bucket-A and bucket-B work: REQ-330's
@@ -535,8 +544,10 @@ The metric is directory-scoped — `ls`/`wc -l` over `lib/letflow/exam/*.ex` and
 `web/tests/e2e/`, a document under `docs/testing/`, and a mix task outside both
 directories fall outside the metric, the last of these by directory rather than
 by kind. **P5 adds no bucket-C inventory rows, and the inventory stays at four
-modules / 1,605 lines under `lib/letflow/exam/` and two screen modules /
-497 lines under `web/src/pages/exam/`.** That is an honest reading, not a
+modules under `lib/letflow/exam/` and two screen modules under
+`web/src/pages/exam/`** (line counts drift between measurements per
+`ISS-0665` — see the inventory table above for the current figures). That is
+an honest reading, not a
 loophole: an exam-specific acceptance corpus is not the failure mode rule 3
 detects (the platform quietly becoming an exam engine) — per `0022` reasoning
 §5 it is the independent evidence the generic platform hosts the vertical. A

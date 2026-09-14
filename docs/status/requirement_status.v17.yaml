@@ -519,3 +519,39 @@ history:
       Merged via PR #1398 (squash), merge commit 52fcc85a on main, CI green
       (backend + frontend gates). Closed GH#1396 with an evidence comment.
       letflow-queue task 663 released status: done.
+  - req: SCOPE-CHANGE
+    event: done
+    agent: ORCH
+    at: "2026-09-14T21:10:23Z"
+    note: >
+      ISS-0665 (queue task 665, GH#1401) -- docs/migration/stage-10-bilimbaga-vertical.md's
+      bucket-C inventory table was stale: its lib/letflow/exam/ measurement
+      (2026-09-13, 1,605 lines) understated the real tree by 273 lines after
+      legitimate growth from ISS-0650/0648/0647/REQ-335. Re-measured fresh
+      against this checkout (not trusting even the issue's own 2026-09-14
+      re-measurement, on the chance of further drift): lib/letflow/exam/ =
+      1,878 lines / 4 modules (matches the issue's 2026-09-14 figures
+      exactly -- anti_cheat.ex 309, question_set_resolver.ex 109, scoring.ex
+      267, session.ex 1193, no further movement there); web/src/pages/exam/ +
+      web/src/api/exam.ts had drifted further still, 621 -> 727 lines
+      (ExamListPage.tsx unchanged 139, ExamSessionPage.tsx grew 358 -> 464,
+      exam.ts unchanged 124) -- a genuine third drift caught only by
+      re-measuring rather than trusting the cited 2026-09-14 snapshot.
+
+      Updated the stage file's bucket-C inventory table with both fresh
+      figures, re-dated to 2026-09-15, corrected a second stale reference to
+      the old 1,605/497 numbers in the P5 rule-3 narrative further down the
+      same file to point at the table instead of repeating a figure that
+      will drift again, and added a one-line caption noting these figures
+      are a snapshot requiring re-measurement at each phase close (this
+      table has now gone stale three times counting the header-block fix
+      under 1897e84d).
+
+      Doc-only change (docs/migration/stage-10-bilimbaga-vertical.md,
+      docs/issues/ISS-0665.yaml) -- no application code touched.
+
+      Merged direct to main (no PR): pure bookkeeping/measurement
+      correction, no code path affected, matching this project's own
+      precedent for doc-only fixes. Closed GH#1401 with an evidence comment
+      quoting the fresh measurement. letflow-queue task 665 released
+      status: done.

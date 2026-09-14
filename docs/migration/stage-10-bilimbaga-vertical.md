@@ -1,8 +1,8 @@
 # Stage 10 — BilimBaga vertical
 
-Status: P0–P4 complete. Depends on: S4, S6, S8. Requirements: `REQ-295`–`REQ-343`
-filed (47 as of 2026-09-14, counting distinct `- id: REQ-NNN` entries whose own
-`stage:` field is S10), all `done`. **P4 is now built**: `REQ-335`, `REQ-336`,
+Status: P0–P5 complete. Depends on: S4, S6, S8. Requirements: `REQ-295`–`REQ-349`
+filed (53 as of 2026-09-14, counting distinct `- id: REQ-NNN` entries whose own
+`stage:` field is S10), all `done`. **P4 is built**: `REQ-335`, `REQ-336`,
 `REQ-338`, `REQ-340`, `REQ-342` and `REQ-343` closed out S10 P4 — the `web/`
 admin-CRUD engine (nine remaining entity types plus the `tag` pilot), the
 hand-written candidate exam-taking UI, and the candidate-session route surface
@@ -12,11 +12,17 @@ each was retired by `REQ-VALIDATOR` for bundling separable units and split in
 two, per `REQ-340`'s and `REQ-342`'s own descriptions — so that span is
 deliberately non-contiguous.) `web/src/pages/exam/` now holds two modules,
 `ExamListPage.tsx` and `ExamSessionPage.tsx` — see the bucket-C inventory below.
-P5 (Playwright parity) and P6 (conditional importer) are not expanded; P5 was
-explicitly blocked on P4 and is now unblocked. Certificate issuance — P3's
-second half — is deliberately not expanded: it needs PDF+QR rendering,
-`mix.exs` carries no such dependency, and gaps 4 and 5 have their *mechanism*
-settled by decision 0027 but no owner.
+**P5 is met as of 2026-09-14**: expanded into `REQ-344`–`REQ-349` and closed the
+same day — triage (`REQ-344`), the two-exam seeded fixture (`REQ-345`),
+candidate-side, entity-CRUD-admin and result-side ports (`REQ-346`, `REQ-347`,
+`REQ-349`), and `REQ-348`'s close-out with both independent re-verifications.
+Seven ported spec files now live under `web/tests/e2e/`; 34 of `REQ-344`'s
+corrected 168-test corpus are ported and passing, with the remaining 134
+accounted for file by file — see the P5 phase row and the "P5 close-out"
+section below. P6 (conditional importer) is not expanded. Certificate
+issuance — P3's second half — is deliberately not expanded: it needs PDF+QR
+rendering, `mix.exs` carries no such dependency, and gaps 4 and 5 have their
+*mechanism* settled by decision 0027 but no owner.
 
 Created 2026-09-09. See
 [`decisions/0022-bilimbaga-vertical.md`](decisions/0022-bilimbaga-vertical.md)

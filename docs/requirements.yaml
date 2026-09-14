@@ -25503,9 +25503,7 @@ requirements:
       - "a decision-0022 rule-1 vocabulary check is run over EVERY file this requirement adds -- the router, the registry schema, the migration, the writer and the limiter -- and its verbatim output is quoted showing no vertical vocabulary in any of them, matching the form of req323-unauthenticated-read-pattern.md section 13"
       - "SECURITY-REVIEWER PASSes this change against INV-1, INV-2, INV-4, INV-5 and INV-8 by name, and the seven conditions enumerated in req323-unauthenticated-read-pattern.md section 12 are each checked and each result recorded"
       - "`mix test` and `mix compile --warnings-as-errors` both pass with real output quoted"
-    depends_on:
-      - REQ-354
-      - REQ-355
+    depends_on: []
 
   - id: REQ-353
     title: File the amendment that states bucket rule 2's own scope -- as a NEW decision record amending 0022 by reference, not an in-place edit -- so the P5 rule-2 adjudication stops being the governing precedent (S10, decision record)

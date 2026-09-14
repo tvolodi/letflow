@@ -1,0 +1,44 @@
+id: ISS-0663
+title: "EntityCrudPage's default records list doesn't filter out soft-deleted rows"
+discovered_by: RELEASE-VALIDATOR
+discovered_in_run: REQ-348-20260914
+discovered_at: "2026-09-14T13:33:38Z"
+severity: MINOR
+description: >
+  Discovered during REQ-348's S10 P5 close-out re-verification. `EntityCrudPage.tsx`'s
+  `recordsQuery` calls `entitiesApi.queryRecords(entityType, { cursor, page_size:
+  PAGE_SIZE })` (web/src/pages/entities/EntityCrudPage.tsx:105-106) with no `filters`
+  argument. `POST /api/v1/entities/query` has no implicit `deleted:false` default
+  (confirmed by reading lib/letflow/entities/query/compiler.ex -- no default `deleted`
+  predicate is injected unless the caller supplies one), so already-deleted records are
+  returned and rendered in the admin list/table alongside live ones, and count toward
+  pagination.
+
+  Verified live against a real instance: `POST /api/v1/entities/query
+  {"entity_type":"exam","page_size":25}` (bearer token, bpm-default tenant) returned
+  mostly `"deleted":true` historical exam records dominating page 1, with only 2
+  `"deleted":false` rows mixed in among ~40 deleted ones accumulated from repeated local
+  e2e test runs (each exam-lifecycle.e2e.spec.ts run creates-then-deletes a throwaway
+  exam record via the real API; the deletes are soft-deletes that remain queryable
+  forever).
+
+  This directly caused intermittent, reproducible failures in this same close-out's own
+  re-verification runs of exam-lifecycle.e2e.spec.ts (a newly-created draft/archived exam
+  row occasionally falls off page 1's 25-row window because dozens of soft-deleted rows
+  from earlier local runs crowd it out, and the test only checks page 1) -- root-caused
+  and worked around for REQ-348's close-out evidence (attributed, not hidden), but the
+  underlying UI gap is real and will recur for any long-lived tenant that accumulates
+  deleted records. Does not reproduce against a fresh database (CI always starts from
+  one per .github/workflows/ci.yml's ecto.create/ecto.migrate-per-run), so it is not a
+  CI-blocking defect today, but is a genuine display gap in the generic entity-CRUD
+  engine.
+
+  Not diagnosed further and not fixed here -- filed per ISSUE_QUEUE.md as a defect
+  noticed incidentally outside REQ-348's own scope (stage bookkeeping / independent test
+  re-verification).
+affected_files:
+  - web/src/pages/entities/EntityCrudPage.tsx
+  - web/src/api/entities.ts
+queue_ref: Q-663
+github_ref: GH-1396
+status: open

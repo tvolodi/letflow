@@ -164,9 +164,10 @@ defmodule Letflow.Exam.Session do
         }
 
   @type answer_attrs :: %{
-          question_id: String.t(),
-          selected_option_ids: [String.t()],
-          time_spent_seconds: non_neg_integer()
+          required(:question_id) => String.t(),
+          required(:selected_option_ids) => [String.t()],
+          required(:time_spent_seconds) => non_neg_integer(),
+          optional(:text_answer) => String.t() | nil
         }
 
   # -----------------------------------------------------------------------
@@ -439,6 +440,14 @@ defmodule Letflow.Exam.Session do
   to this question. Response always carries `remaining_seconds` clamped at
   zero -- the client clock never satisfies this, since no client-supplied
   timestamp is ever accepted (roadmap 3.7).
+
+  ISS-0650: `text_answer` is the free-text answer for a `:short_text`
+  question -- optional in `answer_attrs()` (a map missing the key behaves
+  exactly like one carrying `text_answer: nil`) so every existing caller
+  that never sends it keeps working unchanged. `check_answer_shape/3`
+  rejects a non-nil `text_answer` for every OTHER question type, and rejects
+  a non-nil/non-binary `text_answer` for `:short_text` -- see that
+  function.
   """
   @spec autosave_answer(
           session_id :: String.t(),
@@ -453,9 +462,11 @@ defmodule Letflow.Exam.Session do
           question_id: question_id,
           selected_option_ids: selected_option_ids,
           time_spent_seconds: time_spent_seconds
-        },
+        } = attrs,
         prefix
       ) do
+    text_answer = Map.get(attrs, :text_answer)
+
     with :ok <- check_non_negative(time_spent_seconds),
          {:ok, session} <- fetch_session(session_id, prefix),
          :ok <- check_owner(session, user_id),
@@ -463,13 +474,14 @@ defmodule Letflow.Exam.Session do
          :ok <- check_deadline(session),
          {:ok, session_question} <- fetch_session_question(session_id, question_id, prefix),
          {:ok, question} <- fetch_question_for_autosave(question_id, prefix),
-         :ok <- check_answer_shape(question, selected_option_ids),
+         :ok <- check_answer_shape(question, selected_option_ids, text_answer),
          :ok <- check_options_belong(session_question, selected_option_ids),
          :ok <-
            upsert_answer(
              session_id,
              question_id,
              selected_option_ids,
+             text_answer,
              time_spent_seconds,
              user_id,
              prefix
@@ -809,14 +821,32 @@ defmodule Letflow.Exam.Session do
     end
   end
 
-  defp check_answer_shape(question, selected_option_ids) do
+  # ISS-0650: `:short_text` now validates `text_answer` instead of (in
+  # addition to) the pre-existing "selected_option_ids must be empty" rule
+  # -- a short-text question never carries selected options, so that check
+  # stays. Every OTHER type rejects a non-nil `text_answer` outright: a
+  # client sending free text for a single/multiple/true_false/likert
+  # question is a shape error, not something to silently drop, matching
+  # this function's existing strict-shape-per-type intent.
+  defp check_answer_shape(question, selected_option_ids, text_answer) do
     type = question_type_atom(fv(question, "type"))
     count = length(selected_option_ids || [])
 
     cond do
-      type == :short_text and count > 0 -> {:error, :answer_shape_invalid}
-      type in [:single, :true_false] and count > 1 -> {:error, :answer_shape_invalid}
-      true -> :ok
+      type == :short_text and count > 0 ->
+        {:error, :answer_shape_invalid}
+
+      type == :short_text and not is_nil(text_answer) and not is_binary(text_answer) ->
+        {:error, :answer_shape_invalid}
+
+      type != :short_text and not is_nil(text_answer) ->
+        {:error, :answer_shape_invalid}
+
+      type in [:single, :true_false] and count > 1 ->
+        {:error, :answer_shape_invalid}
+
+      true ->
+        :ok
     end
   end
 
@@ -834,17 +864,34 @@ defmodule Letflow.Exam.Session do
          session_id,
          question_id,
          selected_option_ids,
+         text_answer,
          time_spent_seconds,
          user_id,
          prefix
        ) do
-    attrs = %{
+    # ISS-0650: `text_answer` (:string, required: false in the entity
+    # definition -- session_answer.json) is a JSON-SCHEMA-optional field,
+    # not a nullable one: the generated schema has no `null` in its `type`,
+    # so a present-but-`nil` value fails `Letflow.Entities.Validator`'s
+    # `/text_answer` type check even though an ABSENT key passes (that is
+    # exactly what `required: false` means). The key is therefore only
+    # added when there is a real value -- this is also correct for
+    # `Records.update_record/2`'s full-replacement write (moduledoc "Updates
+    # ... with a full replacement field_values"): omitting the key on a
+    # later save genuinely clears a prior text answer, it does not leave a
+    # stale one behind.
+    base_attrs = %{
       "session_id" => session_id,
       "question_id" => question_id,
       "selected_option_ids" => selected_option_ids || [],
       "saved_at" => iso8601(utc_now()),
       "time_spent_seconds" => time_spent_seconds
     }
+
+    attrs =
+      if is_nil(text_answer),
+        do: base_attrs,
+        else: Map.put(base_attrs, "text_answer", text_answer)
 
     case query_all(
            "session_answer",
@@ -928,7 +975,10 @@ defmodule Letflow.Exam.Session do
       answers_by_qid =
         Map.new(session_answers, fn answer ->
           {fv(answer, "question_id"),
-           %{selected_option_ids: fv(answer, "selected_option_ids") || []}}
+           %{
+             selected_option_ids: fv(answer, "selected_option_ids") || [],
+             text_answer: fv(answer, "text_answer")
+           }}
         end)
 
       session_questions

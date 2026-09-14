@@ -290,11 +290,15 @@ defmodule Letflow.Routers.ExamSessions do
   # `PUT .../answers/:questionId` shape. `selected_option_ids` defaults to
   # `[]` when absent (a short-text question's autosave carries none), never
   # to `nil` -- Session.autosave_answer/4's own answer_attrs() map pattern
-  # requires the key present.
+  # requires the key present. ISS-0650: `text_answer` (a short-text
+  # question's free-text answer) is genuinely optional -- absent for every
+  # OTHER question type's autosave, and `Session.check_answer_shape/3`
+  # rejects a non-nil value sent for any of them.
 
   @autosave_schema [
     %FieldConstraint{name: "selected_option_ids", required: false, type: :array},
-    %FieldConstraint{name: "time_spent_seconds", required: true, type: :integer}
+    %FieldConstraint{name: "time_spent_seconds", required: true, type: :integer},
+    %FieldConstraint{name: "text_answer", required: false, type: :string}
   ]
 
   defp handle_autosave_answer(conn, raw_session_id, question_id) do
@@ -307,7 +311,8 @@ defmodule Letflow.Routers.ExamSessions do
       answer_attrs = %{
         question_id: question_id,
         selected_option_ids: Map.get(attrs, "selected_option_ids", []),
-        time_spent_seconds: Map.fetch!(attrs, "time_spent_seconds")
+        time_spent_seconds: Map.fetch!(attrs, "time_spent_seconds"),
+        text_answer: Map.get(attrs, "text_answer")
       }
 
       render_autosave(

@@ -108,6 +108,42 @@ defmodule Letflow.Exam.ScoringTest do
 
       assert score2 == 0.0
     end
+
+    # ISS-0650: before this fix, `Letflow.Exam.Session.upsert_answer/6`
+    # never wrote `text_answer` anywhere, so no caller of
+    # `score_question/2` could ever observe anything but a hardcoded `nil`
+    # for it -- there was nothing for a human grader to grade. This proves
+    # the candidate's actual submitted text now flows all the way into the
+    # `:pending_manual` result, not just that scoring numerically ignores
+    # it.
+    test "the candidate's actual text_answer is carried into the pending_manual result, not a hardcoded nil" do
+      question = %{question_id: "q8", type: :short_text}
+
+      assert {:ok, %{grading_status: :pending_manual, text_answer: "Paris is the capital."}} =
+               Scoring.score_question(question, %{
+                 selected_option_ids: [],
+                 text_answer: "Paris is the capital."
+               })
+    end
+
+    test "an unanswered short_text question carries text_answer: nil, not a crash" do
+      question = %{question_id: "q8", type: :short_text}
+
+      assert {:ok, %{grading_status: :pending_manual, text_answer: nil}} =
+               Scoring.score_question(question, nil)
+
+      assert {:ok, %{grading_status: :pending_manual, text_answer: nil}} =
+               Scoring.score_question(question, %{selected_option_ids: []})
+    end
+
+    test "score_session/3 threads text_answer through for a short_text question inside a full session" do
+      question = %{question_id: "q1", type: :short_text}
+      answers = %{"q1" => %{selected_option_ids: [], text_answer: "my real answer"}}
+
+      assert {:ok, %{per_question: [scored]}} = Scoring.score_session([question], answers, 60.0)
+      assert scored.text_answer == "my real answer"
+      assert scored.grading_status == :pending_manual
+    end
   end
 
   describe "unanswered = wrong, not skipped" do

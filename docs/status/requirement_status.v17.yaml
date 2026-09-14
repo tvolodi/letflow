@@ -641,6 +641,22 @@ history:
       commit to follow this entry. letflow-queue task 666 released
       status: done.
 
+  - req: REQ-352
+    event: started
+    agent: ORCH
+    at: 2026-09-14T22:11:09Z
+    note: >
+      Claimed letflow-queue task 668 (GH#1404, agent_id orch-session-issueloop).
+      Step 00 git setup: pulled main to 262b2a1e (fast-forward, picked up
+      ISS-0664/ISS-0665 docs work landed by a concurrent session), branched
+      feature/WF02-REQ352-20260914, pushed. Builds decision 0028's
+      unauthenticated-read platform machinery (bucket B): /api/public mount,
+      Plug.Router sub-router, public_read_handles registry + writer, ETS
+      token-bucket rate limiter, ten-case byte-identical refusal path. Design
+      pattern already fixed by REQ-323 (lib/letflow/design/req323-unauthenticated-read-pattern.md,
+      decision 0028) -- CODE-DESIGNER builds from it rather than re-deriving.
+      Routing to CODE-DESIGNER next.
+
   - req: REQ-351
     event: blocked
     agent: REVIEWER

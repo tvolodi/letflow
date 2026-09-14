@@ -3726,7 +3726,7 @@ volumes:
     path: docs/status/requirement_status.v17.yaml
     status: current
     opened: 2026-09-14
-    entries: 7
+    entries: 8
     note: >
       Opened by ORCH while resolving issue/ISS-0646-candidate-role-20260914's
       PR #1384 merge conflict against main, successor to volume 16. Created
@@ -3743,6 +3743,13 @@ volumes:
       recount-every-time rule.
       Incremented to 3 by ORCH's own REQ-347 done-event append -- 3
       on-disk `- req:` entries in requirement_status.v17.yaml.
+      Incremented to 8 by ORCH's own SCOPE-CHANGE (ISS-0663) done-event
+      append -- `grep -c "^  - req:" docs/status/requirement_status.v17.yaml`
+      = 8 on-disk entries at that point (folding in the intervening
+      REQ-349 started+done and REQ-348 started+done appends, which had
+      landed without their own index-note increments), per this note's own
+      recount-every-time rule. `wc -l`/`wc -c` = 521 lines / 29754 bytes,
+      well under the roll ceiling, no roll triggered.
 
 
 known_anomalies:

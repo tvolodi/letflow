@@ -473,3 +473,49 @@ history:
 
       No test skipped, retried-until-green by narrowing scope, or deleted
       to force a pass.
+  - req: SCOPE-CHANGE
+    event: done
+    agent: ORCH
+    at: "2026-09-14T13:47:15Z"
+    note: >
+      ISS-0663 (queue task 663, GH#1396) -- EntityCrudPage's default records
+      list did not filter out soft-deleted rows: `POST /entities/query`
+      injects no implicit `deleted:false` default
+      (lib/letflow/entities/query/compiler.ex), so soft-deleted records
+      polluted the admin list/pagination for every BilimBaga entity type this
+      generic component serves. Discovered by RELEASE-VALIDATOR during
+      REQ-348's close-out.
+
+      Fixed frontend-only per ISSUE-FIXER's diagnosis: FRONTEND-DEV added an
+      explicit `{ field: 'deleted', op: 'eq', value: false }` filter clause
+      to EntityCrudPage.tsx's default recordsQuery (both the queryFn call and
+      the queryKey, so cache identity matches the actual request shape),
+      following the existing per-screen filter convention (ExamListPage.tsx's
+      explicit status:'active'). No backend file touched -- `deleted` is an
+      allowlisted structural column
+      (lib/letflow/entities/query/allowlist.ex) directly filterable via
+      `eq`, and a backend-level default would risk breaking legitimate
+      callers (export paths in lib/letflow/routers/entities.ex) that need to
+      see deleted rows. Regression test added to
+      EntityCrudPage.test.tsx proving the filter is sent and reflected in
+      the queryKey.
+
+      Verified: npm run type-check (clean), npm run lint (0 warnings), npm
+      test -- --run (568/568 passing), npm run guards (48/48 passing).
+
+      Pipeline: FRONTEND-DEV -> SECURITY-REVIEWER skipped (no
+      tenant-scoping/auth/response-shaping change, only narrows an already
+      tenant-scoped read, matching ISS-0654/REQ-346/347 precedent) ->
+      REVIEWER PASS (confirmed skip correct; frontend pattern consistency
+      independently verified against ExamListPage.tsx; no scope creep --
+      no generic default-filter abstraction introduced for one screen; type
+      reuse via existing EntityQueryFilterClause; queryKeys.ts widening
+      minimal and correctly scoped).
+
+      Noted but explicitly out of scope: ExamListPage.tsx has the same
+      latent gap (no `deleted` filter) but is a separate file, not in
+      ISS-0663's own affected_files -- not fixed here.
+
+      Merged via PR #1398 (squash), merge commit 52fcc85a on main, CI green
+      (backend + frontend gates). Closed GH#1396 with an evidence comment.
+      letflow-queue task 663 released status: done.

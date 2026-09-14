@@ -41,4 +41,29 @@ affected_files:
   - web/src/api/entities.ts
 queue_ref: Q-663
 github_ref: GH-1396
-status: open
+status: resolved
+resolution_note: >
+  Fixed frontend-only in web/src/pages/entities/EntityCrudPage.tsx: the default
+  recordsQuery now sends an explicit `{ field: 'deleted', op: 'eq', value: false }`
+  filter clause (added to both the queryFn call and the queryKey, so cache identity
+  matches the actual request shape), following this codebase's existing per-screen
+  filter convention (ExamListPage.tsx's explicit status:'active'). No backend file
+  touched -- `deleted` is an allowlisted structural column
+  (lib/letflow/entities/query/allowlist.ex) directly filterable via `eq`, and a
+  backend-level default would risk breaking legitimate callers (export paths in
+  lib/letflow/routers/entities.ex) that need to see deleted rows.
+
+  Regression test added to web/src/pages/entities/__tests__/EntityCrudPage.test.tsx
+  ("ISS-0663 -- default records list excludes soft-deleted rows") proving the filter
+  is sent on the default query and reflected in the queryKey.
+
+  Verified: npm run type-check (clean), npm run lint (0 warnings), npm test -- --run
+  (568/568 passing), npm run guards (48/48 passing). REVIEWER PASS
+  (SECURITY-REVIEWER skip confirmed correct -- no tenant-scoping/auth/response-shaping
+  change, only narrows an already-tenant-scoped read).
+
+  Merged via PR #1398 (squash), merge commit 52fcc85a on main.
+
+  Noted but explicitly out of scope: ExamListPage.tsx has the same latent gap (no
+  `deleted` filter) but is a separate file, not in this issue's affected_files -- not
+  fixed here.

@@ -1161,3 +1161,29 @@ history:
 
       docs/issues/ISS-0655.yaml filed and flipped straight to resolved
       (no prior open record existed).
+  - req: REQ-344
+    event: done
+    agent: ORCH
+    at: "2026-09-14T08:05:00Z"
+    note: >
+      Claimed letflow-queue task 656 after get_next_task fell through to
+      the requirement backlog (no eligible issue-type task at the time).
+      Dispatched to FRONTEND-DEV, which produced
+      docs/testing/REQ-344-bilimbaga-parity-triage.md classifying all 19
+      BilimBaga Playwright spec files (168 test() blocks, independently
+      re-verified by ORCH via the same three grep methods before
+      merging: line-anchored, raw-occurrence, word-boundary, all 168)
+      against Letflow's real routes/data-testid hooks -- PORTABLE-NOW,
+      PORTABLE-AFTER-<named REQ>, or NO-COUNTERPART, per-test where a
+      file spans categories. Corrected
+      docs/migration/stage-10-bilimbaga-vertical.md's P5 row from an
+      unreproducible 286 to the measured 168. Re-derived the
+      tag-reachability finding live against current main (post-ISS-0655,
+      merged immediately prior in this same session): TagListPage.tsx no
+      longer exists, /admin/bilimbaga/tag is reachable via
+      EntityCrudPage -- ORCH independently confirmed this by grep before
+      merging. No code touched; `git diff --name-only` verified limited
+      to the two docs files. Merged via PR #1386
+      (feat/REQ-344-20260914), CI green (backend + frontend gates).
+      letflow-queue task 656 released status: done.
+

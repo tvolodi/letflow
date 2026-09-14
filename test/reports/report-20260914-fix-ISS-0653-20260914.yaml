@@ -1,0 +1,109 @@
+run_id: fix-ISS-0653-20260914
+agent: TEST-RUNNER
+workflow: WF-02 (Requirement Implementation) Step 4 / WF-04 Step 1 -- Test run
+timestamp_utc: "2026-09-14T02:03:49Z"
+branch: fix/ISS-0653-20260914
+head_commit: 8ecaf4e3
+issue: ISS-0653 -- Letflow.Entities.Query.Cursor.resolved_sort_term/2 generalized to
+  resolve a promoted business column instead of raising KeyError. Third and final fix
+  in the ISS-0651/ISS-0652/ISS-0653 defect family; the first two are already merged.
+  Branch already PASSed SECURITY-REVIEWER and REVIEWER per the briefing.
+
+git_state:
+  clean_tree_before_run: true
+  diff_vs_main:
+    - docs/status/requirement_status.index.yaml
+    - docs/status/requirement_status.v16.yaml
+    - lib/letflow/entities/query/cursor.ex
+    - test/letflow/entities/query_cursor_field_grants_test.exs
+
+environment:
+  toolchain: "Elixir 1.20.3 (compiled with Erlang/OTP 29) via asdf shims (required `source ~/.asdf/asdf.sh`; not on default PATH in this shell). letflow.check_toolchain: Elixir/OTP match .tool-versions. Rust: pin expects 1.97.1, `rustc` not found/runnable in this sandbox -- reported as a WARNING only by check_toolchain (never gates the build), but it does make the two CheckToolchainTest 'rust pin' unit tests fail (see finding below)."
+  docker_compose: "letflow-1-postgres-1 and letflow-1-keycloak-1 already Up/healthy (postgres 9 days, keycloak 2 weeks) -- no action needed. `docker compose up -d` itself failed with 'permission denied .../docker.sock' for this shell (not in the docker group), but since both containers were already running and healthy this did not block the run. .env sets LETFLOW_DB_PORT=5463, matching the running postgres container's published port."
+  deps: "deps/ already fetched -- no network access needed this run."
+
+commands_run:
+  - "mix letflow.check -- full repository, single run, run to completion in the foreground (422.6s test phase, ~7 additional minutes for the static-check steps and pre-compile). Not backgrounded, not polled via Monitor."
+
+letflow_check:
+  command: "mix letflow.check"
+  exit_code: 1
+  steps_before_test:
+    - "letflow.check_toolchain: WARNING only (Rust rustc not found) -- does not gate, exit code unaffected."
+    - "letflow.check_requirements_registration: OK -- 311 entries = 309 registered + 2 deferred (REQ-223/224, pre-existing, unrelated) + 0 unclassified."
+    - "letflow.check_req_id_collision: OK -- no REQ-NNN id collision with origin/main."
+    - "letflow.check_deferral_staleness: OK (advisory stage-activity report only, no gate failure)."
+    - "letflow.lint_handoffs: OK -- 0 new violations across 2486 handoff files (25 pre-existing grandfathered)."
+    - "letflow.check_async_sandbox_reachability: OK -- 80 async:true test files scanned, 0 violations."
+    - "letflow.check_issue_refs: OK -- 336 files under docs/issues/, every cross-reference well-formed."
+    - "format --check-formatted: passed silently, no diffs (exit 0)."
+    - "compile --warnings-as-errors: passed silently, no warnings, no errors."
+  test_step:
+    command: "letflow.check.test -> scripts/test_parallel.sh (8-way, N=8 from nproc)"
+    partitions: 8
+    output: |
+      test_parallel: N=8 (source: nproc)
+      test_parallel: TEST_POOL_SIZE=10 (computed: N=8, max_connections=100, superuser_reserved=3, headroom=10, nonpool_reserve=5)
+      partition 1: 414 tests, 3 properties, 0 failures, exit 0
+      partition 2: 436 tests, 0 properties, 0 failures, exit 0
+      partition 3: 625 tests, 0 properties, 0 failures, exit 0
+      partition 4: 427 tests, 2 properties, 0 failures, exit 0
+      partition 5: 620 tests, 0 properties, 0 failures, exit 0
+      partition 6: 607 tests, 0 properties, 0 failures, exit 0
+      partition 7: 627 tests, 1 property, 2 failures, exit 2
+      partition 8: 462 tests, 0 properties, 0 failures, exit 0
+      ---
+      combined: 4218 tests, 6 properties, 2 failures (4222/4224 passed)
+    real_test_result: "4222/4224 tests+properties passed. 2 failures, both in partition 7, both in Mix.Tasks.Letflow.CheckToolchainTest ('rust pin' tests)."
+
+failing_tests:
+  - test: "test rust pin (REQ-165) a matching rust pin reports OK with no mismatch (Mix.Tasks.Letflow.CheckToolchainTest)"
+    location: "test/mix/tasks/letflow_check_toolchain_test.exs:274"
+    error: "** (ErlangError) Erlang error: :enoent -- System.cmd(\"rustc\", [\"--version\"], [stderr_to_stdout: true]) at lib/system.ex:1141, via running_rust_raw/0 (line 69) and running_rust_version/0 (line 76)"
+  - test: "test rust pin (REQ-165) a mismatched rust pin reports a MISMATCH row naming expected and running (Mix.Tasks.Letflow.CheckToolchainTest)"
+    location: "test/mix/tasks/letflow_check_toolchain_test.exs:289"
+    error: "** (ErlangError) Erlang error: :enoent -- same System.cmd(\"rustc\", ...) call, same stacktrace shape"
+
+attribution:
+  method: "form (a) -- diff-membership check per core-directives.md 'Failure Attribution Is Structural, Never By Count-Matching'"
+  evidence: >
+    `git diff --name-only main...HEAD` (see git_state.diff_vs_main above) touches
+    exactly 4 files: docs/status/requirement_status.index.yaml,
+    docs/status/requirement_status.v16.yaml, lib/letflow/entities/query/cursor.ex,
+    and test/letflow/entities/query_cursor_field_grants_test.exs. Neither the failing
+    module (test/mix/tasks/letflow_check_toolchain_test.exs) nor its dependency (the
+    presence/absence of a `rustc` binary on PATH) appears anywhere in that diff. The
+    failure's root cause -- `rustc` genuinely absent from this sandbox's PATH,
+    independently confirmed by letflow.check_toolchain's own WARNING line above and
+    by the same :enoent from System.cmd("rustc", ["--version"], ...) -- is an
+    environment-provisioning fact orthogonal to ISS-0653's Cursor change. This is
+    also exactly the flake class named in this run's own briefing
+    ("Mix.Tasks.Letflow.CheckToolchainTest's 'rust pin' tests, rustc not installed
+    in this sandbox").
+  conclusion: PRE-EXISTING / ENVIRONMENTAL. Not a regression from this branch. Not blocking.
+
+new_or_changed_test_module_result: >
+  test/letflow/entities/query_cursor_field_grants_test.exs (the test file this branch
+  adds/extends for ISS-0653's own change) reported 0 failures in the partition it ran
+  in (partition 7) and does not appear in any partition's failure list. No test under
+  test/letflow/entities/ or test/letflow/routers/ failed anywhere across all 8
+  partitions -- confirmed by grepping all 8 partition logs for failure markers tied to
+  those directories; the only 2 failures anywhere are the two CheckToolchainTest cases
+  above.
+
+verdict: "PASS (with one attributed, non-blocking, pre-existing environmental gap)"
+verdict_reasoning: >
+  mix letflow.check's combined exit code is 1, but the only two failing tests are
+  Mix.Tasks.Letflow.CheckToolchainTest's rust-pin unit tests, which fail solely
+  because this sandbox has no `rustc` binary installed -- an environment-provisioning
+  gap unrelated to ISS-0653's actual change (lib/letflow/entities/query/cursor.ex and
+  its test file), structurally confirmed absent from this branch's diff against main.
+  format --check-formatted passed with no diffs; compile --warnings-as-errors passed
+  with 0 warnings; every other letflow.check gate (requirements registration, req-id
+  collision, deferral staleness, handoff lint, async-sandbox-reachability, issue-ref
+  lint) passed. All 4222 non-toolchain-flake tests passed, including the new/extended
+  entities test coverage for this fix. This branch is ready to merge as far as
+  TEST-RUNNER's own gate is concerned; RELEASE-VALIDATOR should independently
+  re-confirm rustc's absence in its own environment before treating this as fully
+  closed, per this project's "every producing step has a validating step" rule.
+next_action: "Route to RELEASE-VALIDATOR for independent re-verification."

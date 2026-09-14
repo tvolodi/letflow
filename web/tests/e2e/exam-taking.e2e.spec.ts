@@ -47,6 +47,20 @@
  *     neither a warning banner nor any dialog — there is no modal anywhere
  *     in this UI regardless of outcome.
  *
+ * SELECTOR NOTE — 5 getByRole uses, each because no data-testid hook exists
+ * for that element (REQ-346's AC requires this stated per-instance, not just
+ * asserted in aggregate):
+ *   - `getByRole('button', { name: 'Previous' })` (x2, in the paging helper
+ *     used by tests 01/08) — ExamSessionPage.tsx's Previous button carries no
+ *     testid.
+ *   - `getByRole('button', { name: 'Next' })` (x2, same helper) — same
+ *     reason, the Next button.
+ *   - `getByRole('dialog')` (test 09, asserting none renders) — there is no
+ *     `exam-*` testid for "no modal exists"; role="dialog" is the only
+ *     selector that can assert this negative.
+ * All other selectors in this file are getByTestId against the real
+ * exam-* hooks named in REQ-346.
+ *
  * SESSION-PER-PAGE CONSTRAINT (why these tests share one page, serially).
  * `ExamSessionPage.tsx`'s mount effect calls `examApi.startSession`
  * unconditionally on every navigation to the route (see

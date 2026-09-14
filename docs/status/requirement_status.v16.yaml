@@ -1206,20 +1206,46 @@ history:
       requirements.yaml entry maps to this issue (issue-only, no
       queue_ref/github_ref cross-reference to a requirement id), so
       docs/requirements.yaml was not touched by this close-out.
+  - req: REQ-344
+    event: done
+    agent: ORCH
+    at: "2026-09-14T08:05:00Z"
+    note: >
+      Claimed letflow-queue task 656 after get_next_task fell through to
+      the requirement backlog (no eligible issue-type task at the time).
+      Dispatched to FRONTEND-DEV, which produced
+      docs/testing/REQ-344-bilimbaga-parity-triage.md classifying all 19
+      BilimBaga Playwright spec files (168 test() blocks, independently
+      re-verified by ORCH via the same three grep methods before
+      merging: line-anchored, raw-occurrence, word-boundary, all 168)
+      against Letflow's real routes/data-testid hooks -- PORTABLE-NOW,
+      PORTABLE-AFTER-<named REQ>, or NO-COUNTERPART, per-test where a
+      file spans categories. Corrected
+      docs/migration/stage-10-bilimbaga-vertical.md's P5 row from an
+      unreproducible 286 to the measured 168. Re-derived the
+      tag-reachability finding live against current main (post-ISS-0655,
+      merged immediately prior in this same session): TagListPage.tsx no
+      longer exists, /admin/bilimbaga/tag is reachable via
+      EntityCrudPage -- ORCH independently confirmed this by grep before
+      merging. No code touched; `git diff --name-only` verified limited
+      to the two docs files. Merged via PR #1386
+      (feat/REQ-344-20260914), CI green (backend + frontend gates).
+      letflow-queue task 656 released status: done.
 # ─────────────────────────────────────────────────────────────────────────────
 # VOLUME 16 — CLOSED 2026-09-14. DO NOT APPEND TO THIS FILE.
 # This volume holds the complete requirement run history from 2026-09-13 through
-# 2026-09-14 (26 entries, 1208 frozen-prefix lines with this closure footer). It
+# 2026-09-14 (27 entries, 1233 frozen-prefix lines with this closure footer). It
 # is frozen: every line above this comment is preserved byte-for-byte. Closed
 # while resolving issue/ISS-0646-candidate-role-20260914's PR merge conflict
 # against main (a sibling session's ISS-0655 SCOPE-CHANGE started+done pair had
-# already landed on main and appended to this same file's tail) -- composing
-# both branches' entries in `at:` timestamp order (ISS-0655 started 06:47:07Z,
-# ISS-0655 done 07:18:00Z, both before this branch's own ISS-0646 done
-# 07:18:56Z, already correct order, no reordering needed) brought this file to
-# 1208 lines -- over its declared roll_rule ceiling (max_lines: 1200) --
-# confirmed via `wc -l` on the working-tree file per this volume's own "WHEN
-# THIS VOLUME IS FULL" procedure.
+# already landed on main and appended to this same file's tail, and -- on a
+# SECOND merge-conflict round for the same PR -- a further sibling REQ-344
+# done-event append had also landed) -- composing all three appends in `at:`
+# timestamp order (ISS-0655 started 06:47:07Z, ISS-0655 done 07:18:00Z, this
+# branch's own ISS-0646 done 07:18:56Z, REQ-344 done 08:05:00Z, already correct
+# order, no reordering needed) brought this file to 1233 lines -- over its
+# declared roll_rule ceiling (max_lines: 1200) -- confirmed via `wc -l` on the
+# working-tree file per this volume's own "WHEN THIS VOLUME IS FULL" procedure.
 # Reads of this volume are TARGETED reads only -- a line range or a pattern
 # match, never a whole-file read. Use whichever your shell has:
 #   Read tool with offset/limit (works everywhere), or
@@ -1232,11 +1258,17 @@ history:
 # which, as of this closure, names:
 #   docs/status/requirement_status.v17.yaml
 #
-# Why this file was closed: composing the ISS-0655/ISS-0646 merge-conflict tail
-# (described above) brought the on-disk count to 26 entries across 1208 lines --
-# over the roll ceiling. No entry above this footer was moved, edited or
-# deleted.
+# Why this file was closed: composing the ISS-0655/ISS-0646/REQ-344
+# merge-conflict tail (described above) brought the on-disk count to 27
+# entries across 1233 lines -- over the roll ceiling. No entry above this
+# footer was moved, edited or deleted.
 #
 # KNOWN ANOMALIES IN THIS VOLUME: none beyond the merge-conflict composition
 # described above, resolved by `at:` timestamp ordering with no reordering
-# needed, same pattern as volume 15's own closure.
+# needed, same pattern as volume 15's own closure. This volume's closure was
+# itself revised once, in place, before being pushed downstream: the first
+# closure attempt (26 entries, 1208 lines) was prepared against a base that did
+# not yet include REQ-344's concurrently-landed append, discovered on a second
+# merge-conflict round for the same PR before anything downstream depended on
+# the first closure -- so the footer/counts/digest were recomputed against the
+# correct 27-entry composition rather than layering a second roll on top.

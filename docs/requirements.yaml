@@ -24341,7 +24341,7 @@ requirements:
     title: Triage all 19 BilimBaga Playwright spec files against Letflow's actual routes and testids, classifying each PORTABLE-NOW / PORTABLE-AFTER-<named gap> / NO-COUNTERPART -- and correct the stage file's 286 test()-block figure, which is unreproducible (S10 P5, test artefacts)
     owner: TEST-DESIGNER
     impl_order: 656
-    status: pending
+    status: done
     stage: S10
     description: >
       bucket: C (client test artefacts). JUSTIFICATION: these are the

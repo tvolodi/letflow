@@ -3434,24 +3434,32 @@ volumes:
     status: closed
     opened: 2026-09-13
     closed: 2026-09-14
-    entries: 26
-    lines: 1242
-    bytes_working_tree: 70775
-    frozen_prefix_lines: 1208
-    frozen_prefix_sha256: "ffffd57b41e81cb5bc711ae4a991d1effc4ce8de8e3fc0abb6dc6db10974d101"
+    entries: 27
+    lines: 1274
+    bytes_working_tree: 71591
+    frozen_prefix_lines: 1233
+    frozen_prefix_sha256: "f6cce139d16c1e853711ad26e04f7ae3229cc0368784d3441a0943a18ee893d1"
     note: >
       Closed by ORCH while resolving issue/ISS-0646-candidate-role-20260914's
-      PR #1384 merge conflict against main (a sibling session's ISS-0655
-      SCOPE-CHANGE started+done pair had already merged and appended to this
-      same file's tail) -- composed both branches' entries in `at:` timestamp
-      order (ISS-0655 started 06:47:07Z, ISS-0655 done 07:18:00Z, both before
-      this branch's own ISS-0646 done 07:18:56Z, already correct order, no
-      reordering needed) -- `grep -c "^  - req:"
-      docs/status/requirement_status.v16.yaml` = 26 on-disk entries after
-      composition, 1208 lines -- over the 1,200-line roll ceiling, confirmed
+      PR #1384 merge conflict against main, across TWO conflict rounds on this
+      same file. Round 1 (26 entries, 1208 lines): a sibling session's
+      ISS-0655 SCOPE-CHANGE started+done pair had already merged and appended
+      to this file's tail -- composed both branches' entries in `at:`
+      timestamp order (ISS-0655 started 06:47:07Z, ISS-0655 done 07:18:00Z,
+      both before this branch's own ISS-0646 done 07:18:56Z, already correct
+      order, no reordering needed) and closed/rolled to volume 17 on that
+      basis. Round 2 (27 entries, 1233 lines), discovered before round 1's
+      close ever reached a merge -- a further sibling REQ-344 done-event
+      append (08:05:00Z) had ALSO landed on main in the interim: recomposed
+      by inserting REQ-344's entry (chronologically last of the three) before
+      re-deriving the closure footer/counts/digest from scratch against the
+      correct 27-entry composition, rather than layering a second roll on top
+      of round 1's premature one -- `grep -c "^  - req:"
+      docs/status/requirement_status.v16.yaml` = 27 on-disk entries after
+      composition, 1233 lines -- over the 1,200-line roll ceiling, confirmed
       via `wc -l` on the working-tree file. Closure footer appended per the
       roll rule; `frozen_prefix_sha256` computed BEFORE the footer was
-      appended, over exactly the 1208 frozen-prefix lines, using this file's
+      appended, over exactly the 1233 frozen-prefix lines, using this file's
       documented normalised-line-terminator digest (each line's trailing
       "\n" then "\r" trimmed, single "\n" re-appended, per design §8) rather
       than a raw `sha256sum` of the CRLF working-tree bytes -- this session's

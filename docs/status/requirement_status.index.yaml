@@ -3726,11 +3726,11 @@ volumes:
     path: docs/status/requirement_status.v17.yaml
     status: current
     opened: 2026-09-14
-    entries: 9
+    entries: 10
     note: >
-      Incremented to 9 by ORCH's own SCOPE-CHANGE (ISS-0665) done-event
-      append -- `grep -c "^  - req:" docs/status/requirement_status.v17.yaml`
-      = 9 on-disk entries. `wc -l`/`wc -c` = 557 lines / 31809 bytes, well
+      Incremented to 10 by FRONTEND-DEV's own SCOPE-CHANGE (ISS-0664)
+      done-event append -- `grep -c "^  - req:" docs/status/requirement_status.v17.yaml`
+      = 10 on-disk entries. `wc -l`/`wc -c` = 609 lines / 34921 bytes, well
       under the roll ceiling, no roll triggered.
 
       Opened by ORCH while resolving issue/ISS-0646-candidate-role-20260914's

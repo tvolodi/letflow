@@ -555,3 +555,55 @@ history:
       precedent for doc-only fixes. Closed GH#1401 with an evidence comment
       quoting the fresh measurement. letflow-queue task 665 released
       status: done.
+  - req: SCOPE-CHANGE
+    event: done
+    agent: FRONTEND-DEV
+    at: "2026-09-14T21:21:39Z"
+    note: >
+      ISS-0664 (queue task 664, GH#1399) -- EntityCrudPage e2e tests flake
+      once a tag/entity table accumulates >25 soft-deleted rows, discovered
+      by TEST-DESIGNER during ISS-0662's regression-test rework. Two
+      candidate fixes were named, not evaluated: (a) filter deleted:false by
+      default, (b) explicit sort by created_at desc.
+
+      Confirmed candidate (a) already landed via ISS-0663 (merged commit
+      52fcc85a, PR #1398): EntityCrudPage.tsx's recordsQuery sends
+      EXCLUDE_DELETED_FILTERS on every list request. Read
+      lib/letflow/entities/query/compiler.ex and
+      lib/letflow/entities/query/cursor.ex to confirm this filter is applied
+      as part of the compiled query's WHERE clause (compile_plain/5)
+      strictly BEFORE Cursor.paginate/5 ever applies its
+      limit(page_size + 1) -- filtering happens at the SQL level, before the
+      LIMIT/keyset window, not as a post-fetch filter on an
+      already-paginated result set. Deleted rows therefore never occupy any
+      page-1 slot once excluded. Determination: (a) alone fully resolves the
+      reported flake; candidate (b) addresses a different, unreported
+      scenario (page-1 placement among many live records) and was judged
+      unnecessary scope for a MINOR issue -- not implemented.
+
+      No application code changed. Added a real e2e regression test proving
+      the specific failure mode does not recur:
+      web/tests/e2e/iss-0664-entity-crud-pagination-deleted-rows.e2e.spec.ts
+      creates a record, accumulates 30 soft-deleted rows after it, and
+      confirms the record is still visible on page 1. Could not be run to a
+      green result in this local dev environment (local Keycloak-issued
+      bearer tokens are rejected by the local backend for every e2e test in
+      this checkout right now, confirmed by re-running the already-merged,
+      unrelated iss-0662 suite's TC-ISS-0662-03 and getting the identical
+      failure) -- a pre-existing local environment issue, not introduced by
+      this change; CI's fresh environment does not carry it.
+      `npm run type-check`/`lint`/`test` (568/568)/`guards` (48/48) all
+      clean.
+
+      Pipeline: FRONTEND-DEV -> SECURITY-REVIEWER skipped (test-file-only +
+      docs/issue-tracking YAML, no tenant-data-path/API/response-shaping
+      change -- narrower than ISS-0663 itself) -> REVIEWER PASS
+      (independently re-verified the root-cause claim against the actual
+      compiler.ex/cursor.ex code, confirmed scope via git diff main --stat,
+      confirmed the SECURITY-REVIEWER skip is legitimate, sanity-checked the
+      new test's cleanup/teardown and convention match against
+      iss-0662-entity-crud-click-freeze.e2e.spec.ts).
+
+      Merged via PR #1410 (squash), merge commit 15c0607b on main. CI green
+      (backend + frontend gates). Closed GH#1399 with an evidence comment.
+      letflow-queue task 664 released status: done.

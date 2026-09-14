@@ -24336,3 +24336,392 @@ requirements:
       - REQ-327
       - REQ-328
       - REQ-332
+
+  - id: REQ-344
+    title: Triage all 19 BilimBaga Playwright spec files against Letflow's actual routes and testids, classifying each PORTABLE-NOW / PORTABLE-AFTER-<named gap> / NO-COUNTERPART -- and correct the stage file's 286 test()-block figure, which is unreproducible (S10 P5, test artefacts)
+    owner: TEST-DESIGNER
+    impl_order: 0  # PLACEHOLDER -- ORCH overwrites at WF-01 Step 3
+    status: pending
+    stage: S10
+    description: >
+      bucket: C (client test artefacts). JUSTIFICATION: these are the
+      acceptance corpus for the exam vertical specifically -- every spec
+      asserts on question banks, exam sessions, grading and candidate
+      portals. Bucket rule 1 forbids a bucket-B requirement from naming
+      exams; this requirement cannot be stated without naming them, so by
+      0022's own test it is C, not B. It produces no lib/letflow/ module
+      and no generic platform capability, so it adds nothing to the
+      stage file's bucket-C size metric (rule 3), which measures
+      lib/letflow/exam/.
+      .
+      WHY A TRIAGE PASS COMES FIRST. P5's phase row says BilimBaga's
+      specs are "ported to the Letflow build", not re-pointed, and the
+      two corpora are disjoint. The blocking fact is that the URL
+      surfaces do not match: the specs navigate to /portal,
+      /portal/results, /login, /admin/questions, /admin/exams,
+      /admin/grading, /admin/settings/branding, /admin/tags,
+      /admin/categories, /admin/users, /admin/dashboard,
+      /admin/departments, /admin/audit and /change-password, while
+      web/src/router.tsx serves none of /portal, /login,
+      /admin/questions, /admin/exams, /admin/grading,
+      /admin/settings/branding, /admin/tags, /admin/categories,
+      /admin/dashboard, /admin/departments or /change-password. Until
+      each spec is classified against a concrete Letflow route and
+      testid, "port the specs" is not a sizable unit of work. This
+      requirement is deliberately shaped after REQ-122
+      (docs/testing/REQ-122-e2e-inventory.md, 553 lines), which did the
+      same job for Letflow's own 37 specs.
+      .
+      THE COUNT IS WRONG IN THE STAGE FILE AND THIS REQUIREMENT FIXES IT.
+      docs/migration/stage-10-bilimbaga-vertical.md's P5 row states "286
+      test() blocks, measured 2026-09-13 -- the 168 previously recorded
+      here was wrong". 286 is not reproducible from the corpus. Counting
+      c:\Users\tvolo\dev\ai-dala\BilimBaga\frontend\e2e\**\*.spec.ts by
+      three independent grep methods (line-anchored `^\s*test\(`, raw
+      `test(` occurrences, and word-boundary `(^|[^.[:alnum:]_])test\(`)
+      and by a separate PowerShell regex pass each returns exactly 168
+      across the 19 files. There is no hidden multiplier: test.only,
+      test.skip, test.fixme, test.step, test.beforeEach and test.afterEach
+      all occur ZERO times; BilimBaga's playwright.config.ts declares
+      exactly ONE project (chromium), so executed-test count cannot be a
+      multiple of the static count; and the only four for-loops
+      (accessibility.spec.ts:66, full-walkthrough.spec.ts:240 and :536,
+      question-editor.spec.ts:25) iterate INSIDE a single test() body
+      rather than generating test blocks. decisions/0022-bilimbaga-vertical.md
+      independently states 168 twice and is REVIEWER-signed. Re-derive
+      the count yourself rather than trusting either figure, then correct
+      the stage file's P5 row to whatever you actually measure, quoting
+      the command and its output. If you somehow reproduce 286, say so
+      with the command that produced it -- do not silently adopt this
+      requirement's 168.
+      .
+      PER-FILE COUNTS MEASURED 2026-09-14 (re-verify, do not trust):
+      full-walkthrough 22, question-management 20, user-management 18,
+      exam-taking 11, ai-grading 9, exam-wizard 9, employee-portal 8,
+      exam-lifecycle 8, accessibility 7, admin-grading 7, question-bank 7,
+      question-editor 7, my-results 6, tags 6, auth 5, categories 5,
+      exam-result 5, branding 4, loyalty-narrative 4.
+      .
+      CLASSIFY EVERY SPEC. For each of the 19 files emit one entry:
+      PORTABLE-NOW (a real Letflow route and real data-testid hooks exist
+      today -- name both), PORTABLE-AFTER-<named gap> (name the specific
+      missing route, screen, testid or fixture, and the REQ id or issue
+      that would supply it), or NO-COUNTERPART (no Letflow surface exists
+      and none is planned under S10 -- say what happens to the spec
+      instead). Per-file granularity is the honest floor; go per-test
+      only where one file splits across categories (full-walkthrough.spec.ts
+      spans 16 distinct URLs and certainly does).
+      .
+      SELECTOR REWRITE IS NOT OPTIONAL AND MUST BE STATED AS SUCH.
+      BilimBaga's specs use getByRole (301), locator( (134), getByText
+      (66) and getByLabel (16) against exactly ONE data-testid, so they
+      bind to its rendered DOM and accessible names. Letflow's P4 screens
+      expose data-testid hooks instead (exam-list, exam-list-empty,
+      exam-list-page, exam-list-provisional-notice, exam-session-page,
+      exam-save-status, exam-submit-action, exam-result-page,
+      exam-result-score, exam-result-pending, exam-anticheat-warning,
+      exam-expired, exam-short-text-input, exam-starting, exam-start-error
+      in web/src/pages/exam/; entity-crud-page, entity-create-action,
+      entity-form-modal, tag-list-page, tag-create-action, tag-form-modal
+      in web/src/pages/entities/). The inventory must state per PORTABLE
+      entry that the spec is REWRITTEN against testids, not retargeted by
+      changing a baseURL or a config value.
+      .
+      THE tag REACHABILITY FINDING -- CHECK IT, REPORT IT, DO NOT FIX IT.
+      web/src/config/bilimbagaEntities.ts lists NINE entity types and
+      omits `tag`. That omission is correct and deliberate -- the list is
+      "the nine REMAINING" types and tag was REQ-336's pilot, with its own
+      web/src/pages/entities/TagListPage.tsx and a real
+      priv/packs/bilimbaga/entity_definitions/tag.json. The actual finding
+      is different and is a genuine gap: grep shows TagListPage is
+      imported by NOTHING in web/src/router.tsx, so the tag screen is
+      unreachable in the running app, while BilimBaga's tags.spec.ts (6
+      tests) targets /admin/tags. Verify this independently. If it holds,
+      classify tags.spec.ts accordingly and report the unreachable-screen
+      finding to ORCH for filing per ISSUE_QUEUE.md -- do not add a route,
+      do not modify the router, and do not allocate an issue id yourself.
+      .
+      DO NOT AUTHOR OR MODIFY ANY SPEC. This requirement produces an
+      inventory document only, following REQ-122's AC4 precedent exactly.
+      Porting is REQ-345/REQ-347's job.
+    acceptance_criteria:
+      - "docs/testing/REQ-344-bilimbaga-parity-triage.md exists and classifies all 19 BilimBaga spec files as PORTABLE-NOW / PORTABLE-AFTER-<named gap> / NO-COUNTERPART, each with either the concrete Letflow route AND data-testid it would target, or the specific reason no counterpart exists"
+      - "the total test() block count is re-measured with a quoted command and its verbatim output, the per-file breakdown is given for all 19 files, and docs/migration/stage-10-bilimbaga-vertical.md's P5 row is corrected to the measured figure -- if the measurement contradicts the 286 currently recorded there, the correction is made and the discrepancy stated explicitly"
+      - "every PORTABLE-AFTER entry names the specific missing route, screen, testid or fixture, plus the REQ id or issue that would supply it -- no entry says only 'blocked' or 'needs work'"
+      - "every NO-COUNTERPART entry states what happens to that spec (deferred against a named blocker, or reported to ORCH as a gap) and explicitly does NOT propose porting it into a failing spec"
+      - "the document states, per PORTABLE entry, that the spec must be rewritten against Letflow data-testid hooks rather than retargeted by configuration, citing BilimBaga's 301 getByRole / 1 data-testid split"
+      - "the TagListPage reachability question is checked and its answer recorded with the grep output that settles it -- and `git diff --name-only` shows no modification to web/src/router.tsx"
+      - "`git diff --name-only` shows no modification to any file under web/tests/e2e/ and no new or changed *.e2e.spec.ts anywhere"
+    depends_on:
+      - REQ-338
+      - REQ-343
+
+  - id: REQ-345
+    title: Provide a deterministic seeded exam fixture for e2e runs -- a published exam with one question per supported type in the bpm-default tenant -- since mix letflow.seed provisions the tenant only (S10 P5, test fixture)
+    owner: ELIXIR-DEV
+    impl_order: 0  # PLACEHOLDER -- ORCH overwrites at WF-01 Step 3
+    status: pending
+    stage: S10
+    description: >
+      bucket: C. JUSTIFICATION: the fixture's content is entirely
+      exam-domain -- an exam, its sections, its questions and answer
+      options. It cannot be described without naming exams, so bucket
+      rule 1 excludes B. It is delivered as pack/definition-driven seed
+      data plus a mix task, not as a new lib/letflow/exam/ runtime
+      module, so it does not grow the bucket-C size metric rule 3
+      measures.
+      .
+      WHY THIS EXISTS. lib/mix/tasks/letflow.seed.ex provisions the
+      bpm-default tenant and replays its migrations -- that is all it
+      does. It creates no exam, no question and no answer option. Every
+      candidate-facing BilimBaga spec assumes a seeded, published exam:
+      exam-taking.spec.ts's own header states the "E2E Mixed Exam" (5
+      questions, one per type) must exist and be assigned, and
+      exam-lifecycle.spec.ts and my-results.spec.ts reference the same
+      fixture by title. BilimBaga supplied it from its own
+      frontend/e2e/fixtures/seed.ts via a global-setup.ts that Letflow
+      has no counterpart to. Without an equivalent, REQ-347's ported
+      candidate specs have nothing deterministic to assert against, and
+      will be flaky or vacuous.
+      .
+      WHAT TO BUILD. A repeatable, idempotent seed path that creates, in
+      the bpm-default tenant, one published/active exam plus the question
+      and answer_option records it needs, via the real entity-records
+      write surface the pack already defines -- NOT by direct SQL INSERT
+      and NOT by a hand-rolled second write path that bypasses
+      Letflow.Entities. Re-running it must converge rather than duplicate
+      or error, exactly as mix letflow.seed's own create-or-resolve
+      pattern does. Whether it extends mix letflow.seed with a flag or
+      ships a sibling task is an implementation choice; state which was
+      chosen and why in the close-out.
+      .
+      DETERMINISM IS THE POINT. The exam's title and its questions'
+      identifying content must be fixed and documented, so a spec can
+      assert on them by name. Pick the concrete question types from what
+      the pack's question.json actually declares (read
+      priv/packs/bilimbaga/entity_definitions/question.json for the real
+      type enum -- do not assume BilimBaga's five
+      single/multiple/truefalse/shorttext/likert carry over unchanged, and
+      state in the close-out which types Letflow's definition actually
+      supports and which of BilimBaga's have no counterpart).
+      .
+      OUT OF SCOPE. No assignment of the exam to a candidate: the
+      exam_assignment gap is a standing open question in the stage file
+      with no entity behind it, and check_assigned/3 in
+      lib/letflow/exam/session.ex is a documented no-op treating every
+      candidate as assigned. Seed the exam only; do not invent an
+      assignment record, and do not paper over that gap.
+    acceptance_criteria:
+      - "running the seed path twice in a row against the same database succeeds both times and leaves exactly one copy of the fixture exam -- both runs' output is quoted verbatim, and a POST /entities/query result showing a single matching exam record is quoted after the second run"
+      - "the seeded exam is created through Letflow.Entities' real record-write path, not direct SQL -- `git diff` contains no INSERT statement targeting an entity records table"
+      - "the fixture's exam title and each seeded question's identifying content are fixed, documented in the task's @moduledoc, and quoted in the close-out so a spec can assert on them by name"
+      - "the close-out names which question types priv/packs/bilimbaga/entity_definitions/question.json actually declares, and states explicitly which of BilimBaga's five types have no Letflow counterpart"
+      - "no exam_assignment record, table, or client-side substitute appears anywhere in the diff -- a grep for exam_assignment across the diff is quoted and any hit is a comment describing the gap"
+      - "`mix test` runs in full and its final result is quoted verbatim, or the requirement is reported BLOCKED with the real error text if the toolchain is unavailable"
+    depends_on:
+      - REQ-328
+      - REQ-332
+
+  - id: REQ-346
+    title: Port the candidate-side BilimBaga parity specs (employee-portal, exam-taking, exam-result, my-results) onto /exam and /exam/:examId/session as *.e2e.spec.ts rewritten against Letflow data-testid hooks (S10 P5, test artefacts)
+    owner: FRONTEND-DEV
+    impl_order: 0  # PLACEHOLDER -- ORCH overwrites at WF-01 Step 3
+    status: pending
+    stage: S10
+    description: >
+      bucket: C (client test artefacts). JUSTIFICATION: identical to
+      REQ-344's -- these specs assert on exam sessions, candidate
+      results and answer submission, and cannot be stated without naming
+      exams, so bucket rule 1 excludes B. They add no lib/letflow/exam/
+      module, so they do not grow rule 3's size metric.
+      .
+      THE FOUR SOURCE SPECS, all in
+      c:\Users\tvolo\dev\ai-dala\BilimBaga\frontend\e2e\:
+      employee-portal.spec.ts (8 test() blocks), exam-taking.spec.ts (11),
+      exam-result.spec.ts (5), my-results.spec.ts (6) -- 30 blocks
+      measured 2026-09-14; re-verify against REQ-344's inventory, which
+      is authoritative once it lands. These four are grouped because they
+      share a single navigation surface: every one targets /portal and
+      /portal/results and nothing else, so they map onto the same two
+      Letflow routes and can be ported in one pass.
+      .
+      THE TARGET SURFACE EXISTS TODAY. web/src/router.tsx serves `exam`
+      (ExamListPage) and `exam/:examId/session` (ExamSessionPage), with
+      real hooks: exam-list, exam-list-empty, exam-list-page,
+      exam-list-provisional-notice, exam-session-page, exam-save-status,
+      exam-submit-action, exam-result-page, exam-result-score,
+      exam-result-pending, exam-anticheat-warning, exam-expired,
+      exam-short-text-input, exam-starting, exam-start-error. Neither
+      /portal nor /login exists anywhere in web/src -- grep returns
+      nothing -- so navigation is rewritten, never merely re-pointed.
+      .
+      REWRITE, DO NOT TRANSLITERATE. The source specs use getByRole,
+      getByText and raw locator() against BilimBaga's DOM and its
+      accessible names. Bind the ported specs to the data-testid hooks
+      above. A ported spec that reaches for a BilimBaga heading string or
+      an accessible name that Letflow's screens do not render is not a
+      port, it is a spec that will fail for the wrong reason.
+      .
+      PORT ONLY WHAT HAS A COUNTERPART. Where a source test asserts
+      behaviour Letflow's candidate screens genuinely do not have, do NOT
+      author a failing or skipped spec to preserve the count. Drop it and
+      record it in the close-out with the specific missing behaviour.
+      Parity is measured by REQ-344's classification, not by matching 30.
+      .
+      HARNESS CONSTRAINTS, NON-NEGOTIABLE. Every ported spec lives under
+      web/tests/e2e/ and its filename matches
+      web/playwright.config.ts's testMatch pattern **/*.e2e.spec.ts, or
+      Playwright will not collect it and the spec will silently never
+      run. Authenticate via the existing web/tests/e2e/helpers.ts
+      (getKeycloakToken/loginWithToken against BPM_IDP_BASE_URL and
+      BPM_IDP_CLIENT_ID) rather than porting BilimBaga's global-setup.ts
+      storage-state mechanism, which depends on a /login route and a
+      /api/v1/auth/login endpoint Letflow does not serve.
+      .
+      DEPENDS ON THE SEEDED FIXTURE. These specs assert against the exam
+      REQ-345 seeds; assert on its documented title and question content
+      rather than on whatever happens to be in the database.
+    acceptance_criteria:
+      - "every new spec file lives under web/tests/e2e/ and its name ends in .e2e.spec.ts -- proven by `npx playwright test --list` collecting them, with the collected list quoted verbatim"
+      - "the ported specs run against a live instance with Keycloak and Postgres up plus REQ-345's fixture seeded, and the full `npx playwright test` output for exactly these files is quoted verbatim including the pass/fail tally"
+      - "no ported spec navigates to /portal, /portal/results or /login -- a grep for those three strings across the new spec files is quoted and returns no hit"
+      - "each ported spec selects elements via the data-testid hooks named in this requirement; a grep showing getByTestId/[data-testid] usage in the new files is quoted, and any remaining getByRole use is justified per-instance in the close-out"
+      - "authentication goes through web/tests/e2e/helpers.ts's getKeycloakToken/loginWithToken -- no new login helper, no ported global-setup.ts, and no reference to /api/v1/auth/login appears in the diff"
+      - "the close-out lists every source test() block that was deliberately NOT ported, each with the specific Letflow behaviour that is missing -- and no spec in the diff is marked test.skip or test.fixme to stand in for one"
+      - "`git diff --name-only` shows no change to any pre-existing file under web/tests/e2e/ other than additions of new spec files"
+    depends_on:
+      - REQ-344
+      - REQ-345
+
+  - id: REQ-347
+    title: Port the entity-CRUD-backed admin parity specs (categories, tags, question-bank, exam-lifecycle) onto /admin/bilimbaga/:entityType as *.e2e.spec.ts rewritten against the entity-crud data-testid hooks (S10 P5, test artefacts)
+    owner: FRONTEND-DEV
+    impl_order: 0  # PLACEHOLDER -- ORCH overwrites at WF-01 Step 3
+    status: pending
+    stage: S10
+    description: >
+      bucket: C (client test artefacts). JUSTIFICATION: as REQ-344 --
+      these specs assert on question banks, categories, tags and exam
+      configuration; they cannot be stated without naming exams, so
+      bucket rule 1 excludes B, and they add no lib/letflow/exam/ module.
+      .
+      THE FOUR SOURCE SPECS, all in
+      c:\Users\tvolo\dev\ai-dala\BilimBaga\frontend\e2e\:
+      categories.spec.ts (5 test() blocks, targets /admin/categories),
+      tags.spec.ts (6, /admin/tags), question-bank.spec.ts (7,
+      /admin/questions), exam-lifecycle.spec.ts (8, /admin/exams) -- 26
+      blocks measured 2026-09-14; re-verify against REQ-344's inventory.
+      These four are grouped because each is a list/create/edit/delete
+      exercise over one entity type, which is exactly what REQ-343's
+      generic screen provides. The other admin specs are NOT in this
+      batch: question-management (20), question-editor (7), exam-wizard
+      (9), admin-grading (7), ai-grading (9) and branding (4) target
+      bespoke authoring, grading and settings surfaces that generic
+      entity CRUD does not provide -- REQ-344 classifies their fate.
+      .
+      THE TARGET SURFACE. web/src/router.tsx serves
+      `admin/bilimbaga/:entityType` -> EntityCrudPage, covering the nine
+      types in web/src/config/bilimbagaEntities.ts (answer_option,
+      category, exam, exam_manual_question, exam_question_rule,
+      exam_question_rule_tag, exam_section, question, question_tag), with
+      hooks entity-crud-page, entity-create-action and
+      entity-form-modal. None of /admin/categories, /admin/tags,
+      /admin/questions or /admin/exams exists in Letflow, so all
+      navigation is rewritten to /admin/bilimbaga/<type>.
+      .
+      tags.spec.ts IS CONDITIONAL ON REQ-344's REACHABILITY FINDING.
+      `tag` is deliberately absent from bilimbagaEntities.ts because it
+      was REQ-336's pilot with its own TagListPage.tsx, but that page
+      appears to be imported by nothing in router.tsx, which would make
+      the tag screen unreachable. If REQ-344 confirms that, port
+      tags.spec.ts only if a route exists by then; otherwise defer it
+      against REQ-344's filed finding and say so in the close-out. Do NOT
+      add a route to web/src/router.tsx to make the spec pass -- that is
+      production wiring, not test work, and it belongs to whatever
+      requirement ORCH files against the finding.
+      .
+      REWRITE, DO NOT TRANSLITERATE, and PORT ONLY WHAT HAS A
+      COUNTERPART -- both exactly as REQ-346 states them. A source test
+      asserting on a bespoke authoring affordance that generic entity CRUD
+      does not offer is dropped and recorded, never converted into a
+      failing or skipped spec to preserve the count.
+      .
+      HARNESS CONSTRAINTS, NON-NEGOTIABLE. Same as REQ-346: every spec
+      lives under web/tests/e2e/ and matches **/*.e2e.spec.ts or
+      Playwright will not collect it; authentication goes through
+      web/tests/e2e/helpers.ts, not a ported global-setup.ts.
+    acceptance_criteria:
+      - "every new spec file lives under web/tests/e2e/ and its name ends in .e2e.spec.ts -- proven by `npx playwright test --list` collecting them, with the collected list quoted verbatim"
+      - "the ported specs run against a live instance with Keycloak and Postgres up, and the full `npx playwright test` output for exactly these files is quoted verbatim including the pass/fail tally"
+      - "no ported spec navigates to /admin/categories, /admin/tags, /admin/questions or /admin/exams -- a grep for those four paths across the new spec files is quoted and returns no hit; navigation targets /admin/bilimbaga/<entityType>"
+      - "each ported spec selects elements via entity-crud-page / entity-create-action / entity-form-modal testids; the grep showing that usage is quoted"
+      - "tags.spec.ts is either ported against a real reachable route or explicitly deferred citing REQ-344's reachability finding -- and `git diff --name-only` shows no modification to web/src/router.tsx either way"
+      - "the close-out lists every source test() block deliberately NOT ported with the specific missing Letflow behaviour, and no spec in the diff is marked test.skip or test.fixme to stand in for one"
+      - "`git diff --name-only` shows no change to any pre-existing file under web/tests/e2e/ other than additions of new spec files"
+    depends_on:
+      - REQ-344
+      - REQ-343
+
+  - id: REQ-348
+    title: Close S10 P5 -- RELEASE-VALIDATOR re-derives the ported parity suite's pass independently and UAT-RUNNER runs it against a live instance, both quoting real output, and the stage file records the measured parity against the no-counterpart set (S10 P5, close-out)
+    owner: RELEASE-VALIDATOR
+    impl_order: 0  # PLACEHOLDER -- ORCH overwrites at WF-01 Step 3
+    status: pending
+    stage: S10
+    description: >
+      bucket: not applicable -- stage bookkeeping and independent
+      verification, the same shape and the same reason as REQ-334 for P3
+      and REQ-339 for P4. It produces no pack document, no platform
+      capability and no exam runtime module.
+      .
+      P5's EXIT CONDITION NAMES BOTH ROLES AND THIS REQUIREMENT CARRIES
+      BOTH. docs/migration/stage-10-bilimbaga-vertical.md's P5 row states
+      the exit condition as "RELEASE-VALIDATOR re-derives the pass,
+      UAT-RUNNER runs them against a live instance". Both halves are
+      required here, and neither may be satisfied by citing REQ-346's or
+      REQ-347's own reported results -- core-directives.md's "Every
+      producing step has a validating step" makes a producer's claim of
+      a pass not itself evidence of one. RELEASE-VALIDATOR re-runs the
+      suite itself; UAT-RUNNER exercises it against a real running
+      instance with real HTTP and real database state.
+      .
+      RE-DERIVE UNDER THE CONDITIONS THE PROPERTY IS ABOUT. A green run
+      against an empty database, or one where the fixture silently failed
+      to seed, is a passing run of a different test -- the ported
+      candidate specs are about a real seeded exam being listed, started,
+      answered and scored. Confirm REQ-345's fixture is actually present
+      before treating any candidate-side pass as evidence, and quote the
+      check.
+      .
+      RECORD PARITY HONESTLY, INCLUDING WHAT WAS NEVER PORTED. P5's
+      deliverable is parity against BilimBaga's corpus, and a meaningful
+      number of source specs have no Letflow counterpart -- on the
+      2026-09-14 reading, branding (targets /admin/settings/branding,
+      which does not exist), question-management/question-editor/exam-wizard
+      (a bespoke /admin/questions and /admin/exams/new authoring surface
+      generic entity CRUD does not provide), admin-grading and ai-grading
+      (a /admin/grading surface and an AI-authoring tier that S10 has
+      deliberately not phased -- the stage file's own open questions place
+      AI-assisted authoring after parity), auth and accessibility (bound
+      to /login and /change-password, neither of which exists), and
+      full-walkthrough (spans 16 URLs across all of the above).
+      REQ-344's inventory is authoritative for the real set. The stage
+      file must end up stating the measured parity as a ratio of ported
+      and passing blocks to the corpus total, with the no-counterpart
+      remainder named and attributed -- not a bare "P5 complete".
+      .
+      DO NOT MANUFACTURE PARITY. If the ported suite does not pass, report
+      it red with the real output; do not skip, retry-until-green, or
+      quietly narrow the selected file set to produce a pass. Any spec
+      that cannot pass for a real product reason is reported to ORCH for
+      filing per ISSUE_QUEUE.md, not deleted.
+    acceptance_criteria:
+      - "RELEASE-VALIDATOR independently re-runs the full ported parity suite (REQ-346's and REQ-347's spec files) and quotes the verbatim `npx playwright test` output including the pass/fail tally -- the report explicitly states it re-ran the suite rather than citing REQ-346's or REQ-347's reported result"
+      - "UAT-RUNNER executes the same suite against a live running instance (Letflow up, Keycloak up, Postgres up, REQ-345's fixture seeded) and quotes its verbatim output plus the concrete evidence the instance was live -- a real HTTP response from the running backend, not a stubbed route"
+      - "the presence of REQ-345's seeded fixture is verified and quoted before any candidate-side pass is accepted as evidence"
+      - "docs/migration/stage-10-bilimbaga-vertical.md's P5 row records the measured parity as ported-and-passing test() blocks over the corpus total (using REQ-344's corrected count, not the 286 currently recorded), and names the no-counterpart remainder spec by spec"
+      - "every source spec not ported is attributed in the stage file to a named reason -- no counterpart surface, a filed gap, or a deferred follow-on -- with no spec left unaccounted for between REQ-344's 19 and the ported set"
+      - "if any ported spec fails, the failure is reported with its real output and attributed per core-directives.md's structural-attribution rule, and the requirement is not reported done on a red suite"
+    depends_on:
+      - REQ-346
+      - REQ-347

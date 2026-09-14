@@ -21,7 +21,7 @@
  */
 import { describe, it, expect, vi, afterEach } from 'vitest'
 import * as jestDomMatchers from '@testing-library/jest-dom/matchers'
-import { render, screen, cleanup, fireEvent } from '@testing-library/react'
+import { render, screen, cleanup, fireEvent, act } from '@testing-library/react'
 expect.extend(jestDomMatchers)
 
 vi.mock('@tanstack/react-query', () => ({
@@ -256,31 +256,52 @@ afterEach(() => {
 
 describe.each(CASES)('REQ-343 AC1 — EntityCrudPage generic CRUD for entity_type=$entityType', (c) => {
   it('lists the real record, opens create, opens edit, and requires confirmation before delete', () => {
-    const { deleteMutateSpy } = installMocksFor(c)
+    vi.useFakeTimers()
+    try {
+      const { deleteMutateSpy } = installMocksFor(c)
 
-    render(<EntityCrudPage entityType={c.entityType} />)
+      render(<EntityCrudPage entityType={c.entityType} />)
 
-    // LIST: the real record's formatted cell value is rendered.
-    expect(screen.getByText(c.primaryCellText)).toBeInTheDocument()
+      // LIST: the real record's formatted cell value is rendered.
+      expect(screen.getByText(c.primaryCellText)).toBeInTheDocument()
 
-    // CREATE: opens the generic form modal.
-    fireEvent.click(screen.getByTestId('entity-create-action'))
-    expect(screen.getByTestId('entity-form-modal')).toBeInTheDocument()
-    expect(screen.getByTestId('entity-record-form')).toBeInTheDocument()
+      // CREATE: opens the generic form modal. ISS-0662: the click handler
+      // defers its setState by one macrotask (deferClickState) to avoid a
+      // real-click renderer freeze, so the modal appears asynchronously —
+      // flush the deferred macrotask with fake timers rather than polling
+      // on real ones.
+      fireEvent.click(screen.getByTestId('entity-create-action'))
+      act(() => {
+        vi.runAllTimers()
+      })
+      expect(screen.getByTestId('entity-form-modal')).toBeInTheDocument()
+      expect(screen.getByTestId('entity-record-form')).toBeInTheDocument()
 
-    // EDIT: opens the same form modal, pre-populated (implicitly, via
-    // EntityRecordForm's own initialValues prop — covered by REQ-336's
-    // EntityRecordForm suite).
-    fireEvent.click(screen.getByTestId(`entity-edit-${'r1'}`))
-    expect(screen.getByTestId('entity-form-modal')).toBeInTheDocument()
+      // EDIT: opens the same form modal, pre-populated (implicitly, via
+      // EntityRecordForm's own initialValues prop — covered by REQ-336's
+      // EntityRecordForm suite).
+      fireEvent.click(screen.getByTestId(`entity-edit-${'r1'}`))
+      act(() => {
+        vi.runAllTimers()
+      })
+      expect(screen.getByTestId('entity-form-modal')).toBeInTheDocument()
 
-    // DELETE: first click only opens ConfirmDialog -- no DELETE call yet.
-    fireEvent.click(screen.getByTestId(`entity-delete-r1`))
-    expect(deleteMutateSpy).not.toHaveBeenCalled()
-    expect(screen.getByTestId('confirm-dialog')).toBeInTheDocument()
+      // DELETE: first click only opens ConfirmDialog -- no DELETE call yet.
+      fireEvent.click(screen.getByTestId(`entity-delete-r1`))
+      act(() => {
+        vi.runAllTimers()
+      })
+      expect(deleteMutateSpy).not.toHaveBeenCalled()
+      expect(screen.getByTestId('confirm-dialog')).toBeInTheDocument()
 
-    fireEvent.click(screen.getByTestId('confirm-dialog-confirm'))
-    expect(deleteMutateSpy).toHaveBeenCalledWith('r1')
+      fireEvent.click(screen.getByTestId('confirm-dialog-confirm'))
+      act(() => {
+        vi.runAllTimers()
+      })
+      expect(deleteMutateSpy).toHaveBeenCalledWith('r1')
+    } finally {
+      vi.useRealTimers()
+    }
   })
 })
 
@@ -326,16 +347,24 @@ describe('ISS-0663 — default records list excludes soft-deleted rows', () => {
 
 describe('REQ-343 AC2 — answer_option is_correct field-grant awareness', () => {
   it("renders answer_option's is_correct field in the admin create/edit form (this IS the authoring surface, not the candidate-facing exam UI)", () => {
-    const answerOptionCase = CASES.find((c) => c.entityType === 'answer_option')!
-    installMocksFor(answerOptionCase)
+    vi.useFakeTimers()
+    try {
+      const answerOptionCase = CASES.find((c) => c.entityType === 'answer_option')!
+      installMocksFor(answerOptionCase)
 
-    render(<EntityCrudPage entityType="answer_option" />)
-    fireEvent.click(screen.getByTestId('entity-create-action'))
+      render(<EntityCrudPage entityType="answer_option" />)
+      fireEvent.click(screen.getByTestId('entity-create-action'))
+      act(() => {
+        vi.runAllTimers()
+      })
 
-    const form = screen.getByTestId('entity-record-form')
-    // is_correct is a :boolean field -> renders as a checkbox input somewhere
-    // in the generated form; it is neither hidden nor omitted.
-    const checkbox = form.querySelector('input[type="checkbox"]')
-    expect(checkbox).not.toBeNull()
+      const form = screen.getByTestId('entity-record-form')
+      // is_correct is a :boolean field -> renders as a checkbox input somewhere
+      // in the generated form; it is neither hidden nor omitted.
+      const checkbox = form.querySelector('input[type="checkbox"]')
+      expect(checkbox).not.toBeNull()
+    } finally {
+      vi.useRealTimers()
+    }
   })
 })

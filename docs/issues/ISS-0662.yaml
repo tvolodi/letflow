@@ -3,8 +3,65 @@ title: "A trusted click on EntityCrudPage's create/cancel buttons freezes the re
 discovered_by: FRONTEND-DEV
 discovered_in_run: feat/REQ-347-20260914
 discovered_at: "2026-09-14T12:10:04Z"
-severity: MINOR
+severity: MAJOR
+severity_note: >
+  Escalated from MINOR to MAJOR by ISSUE-FIXER's diagnosis
+  (issue/ISS-0662-20260914) after direct reproduction confirmed this is a
+  genuine full-renderer freeze reachable by any real user interaction (mouse
+  click OR keyboard Enter/Space), not a Playwright-synthetic-event artifact --
+  see corrected_description below.
+corrected_at: "2026-09-14T13:10:00Z"
 description: >
+  CORRECTED 2026-09-14 by ISSUE-FIXER's diagnosis (issue/ISS-0662-20260914).
+  This record's original filing understated both the scope and the real-user
+  impact -- both corrected below; the original text follows for the audit
+  trail.
+
+  WHAT IS ACTUALLY TRUE (re-derived by direct reproduction, not assumed).
+  ANY real, UA-generated (trusted) click or keyboard activation (mouse click,
+  or Tab+Enter/Space) on ANY state-changing action button on EntityCrudPage
+  -- not just entity-create-action and the form's Cancel button, but also a
+  row's Delete action (entity-delete-*, which never touches EntityRecordForm
+  at all) -- freezes the entire browser tab's main thread. Confirmed genuine
+  main-thread lockup, not a CDP/Playwright artifact: an unrelated CDP call
+  (page.evaluate, Profiler.stop) issued on a separate channel while the
+  freeze was in progress also hung for the full duration. dispatchEvent("click")
+  on the same elements completes cleanly in milliseconds with no freeze at
+  all (independently re-confirmed by racing responsiveness probes
+  concurrently with it).
+
+  RULED OUT, WITH EVIDENCE: native form submission (every Button.tsx instance
+  is type="button", no default action exists regardless of event origin);
+  mouse hit-testing/coordinates (keyboard Enter reproduces it with no mouse
+  involved); a JS infinite/recursive-setState loop (the exact same onClick
+  handler runs to completion in milliseconds when invoked via dispatchEvent);
+  a global document/window-level listener (grepped, only unrelated hit is
+  HistoryScrubber.tsx); an explicit isTrusted check (none exists anywhere in
+  web/src); the shared Button/PageLayout components generally (the same
+  Button.click() on f2-definition-list.e2e.spec.ts's unrelated "New
+  Definition" button resolves in ~84ms with no freeze).
+
+  LEADING HYPOTHESIS, NOT YET CONFIRMED: EntityCrudPage.tsx is wrapped in
+  EntitiesIntlProvider (web/src/i18n/EntitiesIntlProvider.tsx), documented as
+  the ONLY real react-intl <IntlProvider> in the app (every other consumer
+  uses createIntl() imperatively) -- the most structurally distinctive
+  difference between this page and the unaffected DefinitionListPage. A real
+  UA-dispatched click drives React's synchronous discrete-event-priority
+  update path through this nested provider's re-render; a script
+  dispatchEvent call never enters Chromium's native input pipeline/compositor
+  thread at all, which is consistent with the observed on/off behavior. Not
+  confirmed by a CPU profile -- Profiler.stop itself hung during the freeze,
+  so pinning the exact call stack needs a real Chrome DevTools trace outside
+  a sandboxed CDP session.
+
+  REAL USER IMPACT: CONFIRMED, not Playwright-specific. Any admin user
+  performing a genuine mouse click or keyboard activation on any
+  state-changing action button on any /admin/bilimbaga/:entityType screen
+  will freeze that browser tab.
+
+  --- ORIGINAL FILING TEXT (2026-09-14T12:10:04Z), retained for the audit
+  trail; superseded by the corrected statement above ---
+
   Discovered during REQ-347's e2e-spec-porting run while writing Playwright
   specs against /admin/bilimbaga/:entityType. A real (trusted) Locator.click()
   on EntityCrudPage's entity-create-action button, and on EntityRecordForm's
@@ -43,11 +100,84 @@ description: >
   concluding either way.
 affected_files:
   - web/src/pages/entities/EntityCrudPage.tsx
-  - web/src/pages/entities/EntityRecordForm.tsx
+  - web/src/i18n/EntitiesIntlProvider.tsx
+  - web/src/components/entities/EntityRecordForm.tsx
   - web/tests/e2e/categories.e2e.spec.ts
   - web/tests/e2e/tags.e2e.spec.ts
   - web/tests/e2e/question-bank.e2e.spec.ts
   - web/tests/e2e/exam-lifecycle.e2e.spec.ts
 queue_ref: Q-662
 github_ref: GH-1392
-status: open
+status: resolved
+resolved_by: ORCH
+resolved_in_run: issue/ISS-0662-20260914
+resolved_at: "2026-09-14T15:00:00Z"
+diagnosed_by: ISSUE-FIXER
+diagnosed_in_run: issue/ISS-0662-20260914
+diagnosed_at: "2026-09-14T13:10:00Z"
+resolution_note: >
+  ROOT CAUSE NOT FULLY EXPLAINED, BUT THE DEFECT IS REMOVED AND PROVEN BY A
+  FAIL-THEN-PASS REGRESSION TEST -- this is a `resolved` per
+  ISSUE_QUEUE.md's vocabulary (a real defect existed, a change removes it,
+  a regression test proves it), even though the deep Chromium/React
+  mechanism behind "why a real trusted click's synchronous setState during
+  the native event-dispatch turn freezes the tab" remains unconfirmed.
+  CODE-DESIGNER falsified the leading EntitiesIntlProvider hypothesis
+  empirically (the freeze reproduces identically on the delete path, which
+  touches no react-intl code and never mounts EntityRecordForm) and, via 13
+  targeted experiments, confirmed that deferring the same state update by
+  one macrotask (setTimeout(fn, 0)) eliminates the freeze with correct
+  resulting UI state -- verified independently on two unrelated components
+  (EntityCrudPage, DataTable).
+
+  FIX: web/src/utils/deferClickState.ts (new, a setTimeout(fn, 0) wrapper),
+  applied ONLY to the empirically-implicated handlers -- EntityCrudPage.tsx's
+  openCreate/openEdit/closeModal/openDeleteConfirm/confirmDelete/ConfirmDialog
+  onCancel, and DataTable.tsx's sort-header click -- not defensively spread
+  elsewhere (pagination handlers explicitly untouched, never shown to have
+  the bug). A second commit closed a double-submission race the first fix
+  introduced (SECURITY-REVIEWER PASS-WITH-NOTES caught it): confirmDelete now
+  sets a synchronous useRef guard (deleteInFlightRef) before scheduling the
+  deferred delete, so a second real click/Enter within the same macrotask
+  window no-ops instead of firing a second DELETE.
+
+  REGRESSION TEST: web/tests/e2e/iss-0662-entity-crud-click-freeze.e2e.spec.ts,
+  5 tests, each a REAL trusted gesture (hover+mousedown+mouseup, never
+  dispatchEvent) with a bounded 5s timeout AND a correct-end-state assertion.
+  Fail-then-pass proven twice over three TEST-DESIGN-VALIDATOR rounds: at
+  commit a88fc67b (parent of the first fix), all 5 fail with the bounded
+  "did not resolve within 5000ms" message; at the tip, all 5 pass in
+  ~1-2s each. TC-05 (the double-submit test) independently re-confirmed to
+  fail specifically against 14b04903-without-0bf883fc (2 DELETEs fired, not
+  1), proving it discriminates the race-fix specifically. Two rework rounds
+  closed real test-data leaks TEST-DESIGN-VALIDATOR found and reproduced
+  itself (TC-03, then TC-05, each creating a tag record with no
+  unconditional cleanup) -- both now use a recordIdToCleanUp/afterEach
+  mechanism proven, via a deliberate sabotage-then-revert test, to clean up
+  even on a genuine mid-test failure.
+
+  KNOWN LIMITATION, NOT A REGRESSION: as of this resolution, the shared dev
+  tenant's tag table has accumulated ~64 soft-deleted rows from this
+  session's own extensive today-long testing (0 active, all deleted:true),
+  and EntityCrudPage's fixed PAGE_SIZE=25 with a query that does not filter
+  deleted rows makes a freshly-created record intermittently fall off page 1
+  in THIS specific polluted dev database -- filed separately as ISS-0664
+  (not fixed here, out of scope for this issue). This flakiness is a
+  pre-existing pagination/query defect exposed by accumulated test data, not
+  a defect in this fix's own logic -- confirmed by direct query
+  (`select count(*) ... where entity_type='tag'` = 64 total, 0 with
+  deleted=false) attributing it structurally per core-directives.md's
+  Failure Attribution rule (route 3: a demonstrated mechanism outside this
+  branch, evidenced by measurement). A fresh database (e.g. any environment
+  without this session's accumulated dev-tenant history) would not
+  reproduce it, and three earlier TEST-DESIGN-VALIDATOR passes did get
+  clean 5/5 runs before the backlog grew this large.
+
+  Pipeline: ISSUE-FIXER (diagnosis, direct reproduction, severity escalated
+  MINOR -> MAJOR) -> CODE-DESIGNER (empirical root-cause investigation,
+  design) -> CODE-DESIGN-VALIDATOR PASS -> FRONTEND-DEV (fix + race-fix) ->
+  SECURITY-REVIEWER PASS-WITH-NOTES (caught the race, addressed same run) ->
+  REVIEWER PASS -> TEST-DESIGNER (3 rounds, 2 legitimate rework FAILs from
+  TEST-DESIGN-VALIDATOR, both closed) -> TEST-DESIGN-VALIDATOR PASS (3rd
+  round, independently re-ran fail-then-pass, cleanup-under-real-failure,
+  and static checks).

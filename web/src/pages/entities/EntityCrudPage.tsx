@@ -33,7 +33,7 @@
  *  redaction bug. See this requirement's close-out for the same statement.
  */
 
-import { useMemo, useState } from 'react'
+import { useMemo, useRef, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useIntl, type IntlShape } from 'react-intl'
 import { entitiesApi } from '@/api/entities'
@@ -46,6 +46,7 @@ import { PaginationControls } from '@/components/ui/PaginationControls'
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog'
 import { QueryStateBoundary } from '@/components/ui/QueryStateBoundary'
 import { classifyError, type RendererState } from '@/utils/classifyError'
+import { deferClickState } from '@/utils/deferClickState'
 import { EntityRecordForm } from '@/components/entities/EntityRecordForm'
 import { EntitiesIntlProvider } from '@/i18n/EntitiesIntlProvider'
 import { entitiesMessages, resolveUiLocale } from '@/i18n/entitiesMessages'
@@ -102,6 +103,19 @@ function EntityCrudPageInner({ entityType }: EntityCrudPageProps) {
   const [deleteTarget, setDeleteTarget] = useState<EntityRecord | null>(null)
   const [formError, setFormError] = useState<ApiError | null>(null)
   const [deleteError, setDeleteError] = useState<string | null>(null)
+  // ISS-0662 follow-up (double-submit race): confirmDelete's deleteMutation.mutate()
+  // call is deferred by one macrotask (deferClickState, see that helper's moduledoc)
+  // to avoid the native-click-turn setState freeze. That widened the window between
+  // "confirm clicked" and "mutate() actually called" to a full macrotask, in which a
+  // second click/Enter on the still-enabled confirm button (isLoading only flips once
+  // deleteMutation.isPending updates, which can't happen until the deferred call
+  // fires) would schedule a second delete for the same record. A plain ref, set
+  // synchronously in the same event turn as the click — not a setState — closes that
+  // window without reintroducing the freeze, since the freeze was specifically about
+  // React state updates during the native event-dispatch turn, not synchronous code
+  // in general. Reset once the delete mutation settles (success or error), or when a
+  // fresh delete confirmation is opened for a different record.
+  const deleteInFlightRef = useRef(false)
 
   const cursor = cursorStack.length > 0 ? cursorStack[cursorStack.length - 1] : undefined
 
@@ -162,11 +176,13 @@ function EntityCrudPageInner({ entityType }: EntityCrudPageProps) {
   const deleteMutation = useMutation({
     mutationFn: (recordId: string) => entitiesApi.deleteRecord(entityType, recordId),
     onSuccess: () => {
+      deleteInFlightRef.current = false
       setDeleteTarget(null)
       setDeleteError(null)
       invalidateList()
     },
     onError: () => {
+      deleteInFlightRef.current = false
       setDeleteError(intl.formatMessage({ id: 'entities.crud.delete.error' }))
     },
   })
@@ -180,16 +196,28 @@ function EntityCrudPageInner({ entityType }: EntityCrudPageProps) {
   const hasNextPage = recordsQuery.data?.next_cursor != null
 
   const openCreate = () => {
-    setFormError(null)
-    setModal({ kind: 'create' })
+    deferClickState(() => {
+      setFormError(null)
+      setModal({ kind: 'create' })
+    })
   }
   const openEdit = (record: EntityRecord) => {
-    setFormError(null)
-    setModal({ kind: 'edit', record })
+    deferClickState(() => {
+      setFormError(null)
+      setModal({ kind: 'edit', record })
+    })
   }
   const closeModal = () => {
-    setModal(null)
-    setFormError(null)
+    deferClickState(() => {
+      setModal(null)
+      setFormError(null)
+    })
+  }
+  const openDeleteConfirm = (record: EntityRecord) => {
+    deleteInFlightRef.current = false
+    deferClickState(() => {
+      setDeleteTarget(record)
+    })
   }
 
   const handleSubmit = (fieldValues: Record<string, unknown>) => {
@@ -206,7 +234,16 @@ function EntityCrudPageInner({ entityType }: EntityCrudPageProps) {
 
   const confirmDelete = () => {
     if (!deleteTarget) return
-    deleteMutation.mutate(deleteTarget.record_id)
+    // Synchronous re-entrancy guard (not a setState) — see deleteInFlightRef's
+    // declaration comment. Must run before scheduling the deferred mutate() call so
+    // a second click/Enter within the same macrotask window no-ops instead of
+    // scheduling a duplicate delete for the same record.
+    if (deleteInFlightRef.current) return
+    deleteInFlightRef.current = true
+    const recordId = deleteTarget.record_id
+    deferClickState(() => {
+      deleteMutation.mutate(recordId)
+    })
   }
 
   const columns: DataTableColumn<EntityRecord>[] = useMemo(() => {
@@ -236,7 +273,7 @@ function EntityCrudPageInner({ entityType }: EntityCrudPageProps) {
               variant="danger"
               size="sm"
               data-testid={`entity-delete-${row.record_id}`}
-              onClick={() => setDeleteTarget(row)}
+              onClick={() => openDeleteConfirm(row)}
             >
               {intl.formatMessage({ id: 'entities.crud.list.deleteAction' })}
             </Button>
@@ -340,7 +377,7 @@ function EntityCrudPageInner({ entityType }: EntityCrudPageProps) {
           confirmVariant="danger"
           isLoading={deleteMutation.isPending}
           onConfirm={confirmDelete}
-          onCancel={() => setDeleteTarget(null)}
+          onCancel={() => deferClickState(() => setDeleteTarget(null))}
         />
       </PageLayout>
     </div>

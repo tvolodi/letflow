@@ -46,7 +46,9 @@ defmodule Mix.Tasks.Letflow.Seed.ExamFixtures do
       pipeline test/letflow/routers/exam_sessions_test.exs itself dispatches
       through), authenticated as a dedicated seed candidate user
       ("req345.candidate@example.com" / username "req345-e2e-candidate") minted
-      a TASK_WORKER-role token via Letflow.Identity.create_token/3. No answers
+      a CANDIDATE-role token via Letflow.Identity.create_token/3 (ISS-0646
+      moved ExamSession* permissions off TASK_WORKER onto this dedicated
+      role -- a TASK_WORKER token can no longer drive an exam session). No answers
       are autosaved before submit — unanswered questions score 0 per
       scoring.ex's "unanswered = wrong, not skipped" rule, which changes
       nothing about this session's outcome (it is grading_pending regardless,
@@ -165,7 +167,7 @@ defmodule Mix.Tasks.Letflow.Seed.ExamFixtures do
     candidate = resolve_candidate_user!(prefix)
 
     {:ok, %{plaintext: token_plaintext}} =
-      Identity.create_token(candidate.id, %{roles: ["TASK_WORKER"], expires_at: nil},
+      Identity.create_token(candidate.id, %{roles: ["CANDIDATE"], expires_at: nil},
         prefix: prefix
       )
 

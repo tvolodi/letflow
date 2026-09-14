@@ -40,4 +40,58 @@ affected_files:
   - docs/migration/decisions/0024-entity-promotion-ddl-execution.md
 queue_ref: Q-649
 github_ref: GH-1355
-status: open
+status: resolved
+resolved_by: ORCH
+resolved_in_run: fix/ISS-0649-20260914
+resolved_at: "2026-09-14T05:20:00Z"
+resolution_note: >
+  TenantProvisioning.column_promotions_in_flight/2 renamed to
+  column_promotions_for_table_write/2 and its status filter expanded from
+  ["ddl_applied", "backfilling", "backfilled"] to also include "active" --
+  so Records.dual_write_promoted_columns/3's single call site keeps
+  writing full rows (structural + promoted columns) to a promoted entity
+  type's per-entity-type table forever after cutover, instead of
+  silently stopping at active.
+
+  Confirmed against decision 0024 section 3 step 3 (re-read directly by
+  both SECURITY-REVIEWER and REVIEWER, independently): the transition to
+  active only stops dual-writing the attribute into
+  entity_record_latest's own field_values blob going forward -- it does
+  not say to stop writing the per-entity-type table's own row, which
+  step 1 documents as unconditional/single. The separate
+  column_promotion_dual_write?/3 (governing the field_values blob
+  dual-write) and query_eligible (REQ-299/300's :typed_column vs
+  :json_field read-path dispatch) are both untouched and confirmed
+  independent -- this fix only affects the live write path, not read
+  routing.
+
+  New test in
+  test/letflow/tenant_provisioning/constraint_fk_activation_test.exs
+  (describe "ISS-0649 ...") drives a real ColumnPromotion through
+  register -> run_column_promotion -> backfill_column_promotion ->
+  activate_column_promotion to active, then proves via a real
+  Records.create_record/2 call that (a) a post-activation write still
+  lands in the per-entity-type table and (b) a duplicate value against
+  the unique-constrained column still fails, with a raw-SQL row-count
+  check confirming the duplicate never landed.
+
+  REQ-299 and REQ-300 (both status: done) confirmed unaffected -- they
+  own the read-path :typed_column/:json_field dispatch via the separate
+  query_eligible flag, with no callers overlapping this fix's write-path
+  functions.
+
+  Pipeline: ELIXIR-DEV -> SECURITY-REVIEWER PASS (INV-1 tenant isolation,
+  INV-7 no SQL string interpolation, INV-8 no unhandled crashes all
+  confirmed; independently re-ran affected tests and the full mix
+  letflow.check, 627/629 with only the pre-existing rustc-absent
+  toolchain-check failures) -> REVIEWER PASS (confirmed rename improves
+  clarity and disambiguates from column_promotion_dual_write?/3 and
+  column_promotion_query_eligible?/3 in the new moduledoc; confirmed
+  minimal scope via git diff --stat; independently re-read decision 0024
+  section 3 step 3 and the iss0648 design doc's own pre-registered
+  ISS-0649 fix direction, both matching the actual diff) -> TEST-RUNNER
+  ran the full mix letflow.check suite (8-way partitioned, ~4234
+  tests+properties): 4232 passed, 2 failures, both the same pre-existing
+  rustc-absent CheckToolchainTest failures, unrelated to this diff
+  (git diff --name-only confirms only the three files above changed).
+

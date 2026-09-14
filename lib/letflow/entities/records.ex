@@ -342,9 +342,9 @@ defmodule Letflow.Entities.Records do
           {:ok, :skipped | :written} | {:error, term()}
   defp dual_write_promoted_columns(_repo, changes, ctx) do
     with {:ok, tenant_id} <- TenantProvisioning.tenant_id_for_schema_name(ctx.prefix) do
-      case TenantProvisioning.column_promotions_in_flight(tenant_id, ctx.entity_type) do
+      case TenantProvisioning.column_promotions_for_table_write(tenant_id, ctx.entity_type) do
         [] -> {:ok, :skipped}
-        in_flight -> write_entity_table_row(in_flight, changes, ctx)
+        promotions -> write_entity_table_row(promotions, changes, ctx)
       end
     end
   end
@@ -352,13 +352,16 @@ defmodule Letflow.Entities.Records do
   # The per-entity-type table is guaranteed to exist already (a
   # ColumnPromotion row past "pending" implies ensure_entity_table/2 already
   # ran for it) -- issues one INSERT ... ON CONFLICT (record_id) DO UPDATE,
-  # populating every column named by an in-flight ColumnPromotion row from
-  # ctx.field_values plus the same structural columns
-  # upsert_record_latest/3 itself already writes to entity_record_latest.
-  # `field_values` is written into the per-entity-type table's own jsonb
-  # column unconditionally (0024 §3 step 1) -- independent of any single
-  # attribute's own dual-write flag.
-  defp write_entity_table_row(in_flight, changes, ctx) do
+  # populating every column named by a `promotions` ColumnPromotion row
+  # (status in ["ddl_applied", "backfilling", "backfilled", "active"] --
+  # ISS-0649: "active" is included deliberately, see
+  # `column_promotions_for_table_write/2`'s moduledoc) from ctx.field_values
+  # plus the same structural columns upsert_record_latest/3 itself already
+  # writes to entity_record_latest. `field_values` is written into the
+  # per-entity-type table's own jsonb column unconditionally (0024 §3 step
+  # 1) -- independent of any single attribute's own dual-write flag, and
+  # regardless of whether the promotion has reached "active".
+  defp write_entity_table_row(promotions, changes, ctx) do
     with {:ok, table_name} <- TenantProvisioning.table_name_for_entity_type(ctx.entity_type) do
       unless DDL.valid_identifier?(table_name) do
         raise ArgumentError, "invalid per-entity-type table_name: #{inspect(table_name)}"
@@ -368,7 +371,7 @@ defmodule Letflow.Entities.Records do
       global_seq = fetch_global_seq(changes)
       deleted = ctx.kind == :delete
 
-      promoted_pairs = Enum.map(in_flight, &promoted_column_pair(&1, ctx.field_values))
+      promoted_pairs = Enum.map(promotions, &promoted_column_pair(&1, ctx.field_values))
 
       structural_columns = [
         "id",
@@ -396,7 +399,7 @@ defmodule Letflow.Entities.Records do
       all_values = structural_values ++ Enum.map(promoted_pairs, &elem(&1, 1))
 
       uuid_columns =
-        in_flight
+        promotions
         |> Enum.filter(&(&1.pg_type == "uuid"))
         |> Enum.map(& &1.column_name)
         |> MapSet.new()

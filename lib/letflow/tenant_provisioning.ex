@@ -2272,23 +2272,48 @@ defmodule Letflow.TenantProvisioning do
   end
 
   @doc """
-  Every `ColumnPromotion` row for `(tenant_id, entity_type)` currently
-  mid-promotion (`status in ["ddl_applied", "backfilling", "backfilled"]`).
-  Used by `Letflow.Entities.Records`'s new `:dual_write_promoted_columns`
-  Multi step (design doc §8) -- the live write path does not otherwise know
-  which attributes might be mid-promotion, so it asks for the whole set in
-  one query rather than calling `column_promotion_dual_write?/3` once per
-  possible attribute name.
+  Every `ColumnPromotion` row for `(tenant_id, entity_type)` whose
+  per-entity-type Postgres table row should be written (inserted/updated) on
+  the current create/update, i.e. `status in ["ddl_applied", "backfilling",
+  "backfilled", "active"]`. Used by `Letflow.Entities.Records`'s
+  `:dual_write_promoted_columns` Multi step (design doc §8) -- the live
+  write path does not otherwise know which attributes have a promoted
+  column, so it asks for the whole set in one query rather than calling
+  `column_promotion_dual_write?/3` once per possible attribute name.
+
+  Deliberately named for what it is used for, not "in flight": `"active"`
+  is included on purpose. ISS-0649 fixed a bug where this query excluded
+  `"active"`, which made `dual_write_promoted_columns/3` stop writing to the
+  promoted per-entity-type table forever once a promotion completed --
+  silently dropping that table's own UNIQUE/FK constraint enforcement for
+  every later create/update. Decision record
+  `docs/migration/decisions/0024-entity-promotion-ddl-execution.md` §3 step
+  3 only retires the *`field_values` blob* dual-write on the `backfilled` ->
+  `active` transition ("stop dual-writing the attribute into `field_values`
+  going forward"); it does not say to stop writing the per-entity-type
+  table's own row, which stays a single, unconditional write per §3 step 1
+  and this module's own moduledoc note above `write_entity_table_row/3` in
+  `records.ex`. Do not narrow this status list back down without re-reading
+  that section.
+
+  This is intentionally a different question from `column_promotion_dual_write?/3`
+  (which governs the separate, still-`"active"`-excluding decision of
+  whether to *also* keep writing this attribute into
+  `entity_record_latest.field_values`) and from `query_eligible` (which
+  governs `Letflow.Entities.Query.Allowlist`/`Compiler`'s read-path
+  `:typed_column` vs `:json_field` dispatch, REQ-299/300's concern) -- all
+  three flags move independently off the same `ColumnPromotion` row.
   """
-  @spec column_promotions_in_flight(tenant_id :: Ecto.UUID.t(), entity_type :: String.t()) :: [
-          ColumnPromotion.t()
-        ]
-  def column_promotions_in_flight(tenant_id, entity_type) do
+  @spec column_promotions_for_table_write(
+          tenant_id :: Ecto.UUID.t(),
+          entity_type :: String.t()
+        ) :: [ColumnPromotion.t()]
+  def column_promotions_for_table_write(tenant_id, entity_type) do
     query =
       from(cp in ColumnPromotion,
         where:
           cp.tenant_id == ^tenant_id and cp.entity_type == ^entity_type and
-            cp.status in ["ddl_applied", "backfilling", "backfilled"]
+            cp.status in ["ddl_applied", "backfilling", "backfilled", "active"]
       )
 
     Repo.all(query)

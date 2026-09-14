@@ -25063,7 +25063,7 @@ requirements:
     title: Settle by decision record whether Letflow serves a candidate results-LIST surface at all (GetExamHistory/HandleGetMyResults, FR-BB41/FR-BB46) -- the half REQ-335's scope fence deliberately left open, and the only half the P5 evidence does NOT already settle (S10 P5 follow-up, product scope)
     owner: CODE-DESIGNER
     impl_order: 666
-    status: pending
+    status: done
     stage: S10
     description: >
       ORCH PIN (registration, 2026-09-14): this record's number is PINNED

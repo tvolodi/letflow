@@ -3726,7 +3726,7 @@ volumes:
     path: docs/status/requirement_status.v17.yaml
     status: current
     opened: 2026-09-14
-    entries: 10
+    entries: 11
     note: >
       Incremented to 10 by FRONTEND-DEV's own SCOPE-CHANGE (ISS-0664)
       done-event append -- `grep -c "^  - req:" docs/status/requirement_status.v17.yaml`

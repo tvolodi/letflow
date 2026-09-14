@@ -607,3 +607,36 @@ history:
       Merged via PR #1410 (squash), merge commit 15c0607b on main. CI green
       (backend + frontend gates). Closed GH#1399 with an evidence comment.
       letflow-queue task 664 released status: done.
+
+  - req: REQ-350
+    event: done
+    agent: REVIEWER
+    at: 2026-09-14T21:29:32Z
+    note: >
+      Verified CODE-DESIGNER's decision record 0031 (docs/migration/decisions/0031-candidate-results-list-scope.md)
+      against every acceptance criterion independently, not on self-report:
+      allocation-note number (0031, confirmed newest via `ls`, no origin/main
+      or concurrent REQ-353 collision -- REQ-353 still status: pending), all
+      five required questions answered unambiguously (results-list NOT served
+      today; route-vs-entity-query moot but answered; FR-BB41/FR-BB46 one
+      surface; queried:false sort/filter constraint addressed; admin scope
+      explicitly out), lib/letflow/routers/exam_sessions.ex's scope-fence
+      quote verified verbatim, the 9/168 figure (my-results 6 + exam-result 1
+      + employee-portal 2) re-derived against stage-10's own "P5 close-out --
+      REQ-348" table and matched exactly, the false "seven whole-file
+      blocked" figure confirmed absent, the 6-whole-file/3-within-file split
+      confirmed, priv/packs/bilimbaga/entity_definitions/session.json's
+      submitted_at/score_pct/passed confirmed queried:false by direct read,
+      no bucket-C rule-2 sign-off written (correctly deferred), stage-file
+      bullet uses the "ANSWERED by decision NNNN" form with matching number
+      and preserved original question text, diff scope confirmed
+      docs-only (docs/migration/decisions/ + stage-10-bilimbaga-vertical.md
+      only), revisitability trigger stated. SECURITY-REVIEWER skipped by
+      REVIEWER's own explicit judgment -- docs-only, no tenant-data-path/
+      route/schema/code change of any kind. REVIEWER filled in the record's
+      own SECURITY-REVIEWER-skip and REVIEWER-PASS sign-off sections in
+      place of the CODE-DESIGNER-left PENDING placeholders. Closed GH#1402
+      with an evidence comment. Pushed directly to main (docs-only,
+      no PR/CI needed, matching this session's established precedent),
+      commit to follow this entry. letflow-queue task 666 released
+      status: done.

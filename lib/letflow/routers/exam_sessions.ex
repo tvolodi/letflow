@@ -470,7 +470,9 @@ defmodule Letflow.Routers.ExamSessions do
          status: status,
          seed: seed,
          started_at: started_at,
-         expires_at: expires_at
+         expires_at: expires_at,
+         score_pct: score_pct,
+         passed: passed
        }) do
     %{
       "id" => id,
@@ -479,7 +481,9 @@ defmodule Letflow.Routers.ExamSessions do
       "status" => Atom.to_string(status),
       "seed" => seed,
       "started_at" => DateTime.to_iso8601(started_at),
-      "expires_at" => DateTime.to_iso8601(expires_at)
+      "expires_at" => DateTime.to_iso8601(expires_at),
+      "score_pct" => score_pct,
+      "passed" => passed
     }
   end
 

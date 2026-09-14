@@ -20,6 +20,14 @@ export interface ExamSessionView {
   seed: number
   started_at: string
   expires_at: string
+  /** ISS-0674: `null` while `in_progress`; a persisted `float` for
+   *  `submitted`/`auto_submitted`/`grading_pending` once
+   *  `update_session_after_submit/4` has run. */
+  score_pct: number | null
+  /** ISS-0674: `null` while `in_progress` or `grading_pending` (pass/fail is
+   *  not yet a decided fact until manual grading completes); the persisted
+   *  boolean for `submitted`/`auto_submitted`. */
+  passed: boolean | null
 }
 
 /** A `:localized_text` field's raw wire value -- a map of locale code to

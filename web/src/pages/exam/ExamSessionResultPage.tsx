@@ -22,38 +22,20 @@
  *  `web/src/router.tsx` should be read as fixing `/exam/sessions/:sessionId/
  *  result` as a permanent contract.
  *
- *  THE TRACKED GAP THIS FILE DOES NOT WORK AROUND. `GET /exam-sessions/:id`
+ *  SCORE RENDERING (ISS-0674, closed). `GET /exam-sessions/:id`
  *  (`Letflow.Exam.Session.get_session_state_for_user/3`, wrapped by
- *  `examApi.getSessionState`) returns `session_state_view()` --
- *  `{session, remaining_seconds, questions, answers}` -- and
- *  `session_view()` itself (lib/letflow/exam/session.ex:1151-1160) carries
- *  only `id/exam_id/candidate_id/status/seed/started_at/expires_at`. It
- *  never carries `total_score`/`total_max_score`/`percentage`/`passed` --
- *  those live only in `ExamSubmissionOutcome`, produced by
- *  `POST /exam-sessions/:id/submit`'s response or by
- *  `Letflow.Exam.Session`'s own private `outcome_from_session/1` helper
- *  (session.ex:1087-1098, used only inside `submit_session`'s idempotent
- *  re-submit path -- never reachable from the GET route). The backend's own
- *  moduledoc names this precisely: "a *result* view is a sixth behaviour
- *  this requirement's own dependency chain (REQ-330's five) never
- *  authorized, not a subset of the *state* read this module does
- *  implement" (lib/letflow/routers/exam_sessions.ex, "Deliberately NOT
- *  routed here" section).
- *
- *  So: for a `grading_pending` session, `session.status` alone is enough to
- *  render `exam-result-pending` honestly (no score field is ever displayed
- *  in that branch -- see `ExamResultView`). For a `submitted`/
- *  `auto_submitted` session, this screen cannot honestly construct the
- *  `total_score`/`percentage`/`passed` triple `exam-result-score` displays,
- *  and REFUSES to fabricate one -- see this project's own FRONTEND-DEV
- *  scope ("never a shim that normalises a backend contract mismatch").
- *  Instead it renders `exam-result-scoreUnavailable`, a distinct,
- *  honestly-labelled state, and the gap is reported in REQ-351's close-out
- *  as a follow-up for ELIXIR-DEV (extend `session_view`/
- *  `session_state_json` to surface the session's own persisted `score_pct`/
- *  `passed` once status is no longer `in_progress` -- NOT built here, since
- *  this requirement's own scope fence forbids touching anything under
- *  `lib/letflow/`).
+ *  `examApi.getSessionState`) now returns `score_pct`/`passed` on the
+ *  `session` object (`session_view/1`, lib/letflow/exam/session.ex, and
+ *  `session_view_json/1`, lib/letflow/routers/exam_sessions.ex -- see
+ *  `lib/letflow/design/iss0674-session-view-score-fields.md` for the full
+ *  field semantics this was gated on). `score_pct`/`passed` are `null` for
+ *  an `in_progress` session, `passed` is additionally `null` for a
+ *  `grading_pending` session (score_pct is present but pass/fail is not yet
+ *  a decided fact), and both carry real values for `submitted`/
+ *  `auto_submitted`. This screen reads those fields directly off
+ *  `response.session` and renders `exam-result-score` via `ExamResultView`
+ *  for `submitted`/`auto_submitted` sessions -- no shim, no client-side
+ *  recomputation of the score itself.
  */
 
 import { useEffect, useState } from 'react'
@@ -70,6 +52,7 @@ type LoadState =
   | { kind: 'loading' }
   | { kind: 'not_found' }
   | { kind: 'pending'; outcome: ExamSubmissionOutcome }
+  | { kind: 'score'; outcome: ExamSubmissionOutcome }
   | { kind: 'score_unavailable' }
 
 function ExamSessionResultPageInner() {
@@ -102,11 +85,26 @@ function ExamSessionResultPageInner() {
               passed: null,
             },
           })
+        } else if (
+          (response.session.status === 'submitted' || response.session.status === 'auto_submitted') &&
+          response.session.score_pct !== null &&
+          response.session.passed !== null
+        ) {
+          setState({
+            kind: 'score',
+            outcome: {
+              status: response.session.status,
+              total_score: response.session.score_pct,
+              total_max_score: 100.0,
+              percentage: response.session.score_pct,
+              passed: response.session.passed,
+            },
+          })
         } else {
-          // 'submitted' | 'auto_submitted' | 'in_progress' -- none of these
-          // carry the score fields this session-state read never returns.
-          // See this file's top doc comment for why this is a tracked
-          // backend gap rather than something worked around here.
+          // 'in_progress', or a 'submitted'/'auto_submitted' session whose
+          // score fields are unexpectedly still null (should not happen per
+          // ISS-0674's persisted-write guarantee, but this screen never
+          // fabricates a score it cannot honestly construct).
           setState({ kind: 'score_unavailable' })
         }
       })
@@ -160,7 +158,7 @@ function ExamSessionResultPageInner() {
     )
   }
 
-  // state.kind === 'pending'
+  // state.kind === 'pending' | 'score'
   return <ExamResultView outcome={state.outcome} onBackToList={() => navigate('/exam')} />
 }
 

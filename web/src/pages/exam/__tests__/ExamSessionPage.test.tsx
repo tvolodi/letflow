@@ -60,6 +60,8 @@ function sessionState(overrides: Partial<ExamSessionStateResponse> = {}): ExamSe
       seed: 1,
       started_at: '2026-09-13T00:00:00Z',
       expires_at: '2026-09-13T01:00:00Z',
+      score_pct: null,
+      passed: null,
     },
     remaining_seconds: 100,
     questions: [

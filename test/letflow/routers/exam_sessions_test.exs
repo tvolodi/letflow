@@ -219,6 +219,10 @@ defmodule Letflow.Routers.ExamSessionsTest do
       session_id = started["session"]["id"]
       assert started["session"]["status"] == "in_progress"
       assert started["session"]["exam_id"] == exam.record_id
+      # ISS-0674: score_pct/passed render as JSON null (key present, not
+      # omitted) while the session is still :in_progress.
+      assert started["session"]["score_pct"] == nil
+      assert started["session"]["passed"] == nil
       assert is_integer(started["remaining_seconds"])
       assert [%{"question_id" => ^question_id}] = started["questions"]
 
@@ -256,6 +260,15 @@ defmodule Letflow.Routers.ExamSessionsTest do
       submit_conn = request("POST", "/api/v1/exam-sessions/#{session_id}/submit", ctx)
       assert submit_conn.status == 200
       assert %{"status" => "submitted", "passed" => true} = json(submit_conn)
+
+      # ISS-0674: re-reading the session after submit (e.g. a page reload)
+      # now surfaces the same score/passed facts through the GET route.
+      reread_conn = request("GET", "/api/v1/exam-sessions/#{session_id}", ctx)
+      assert reread_conn.status == 200
+      reread_session = json(reread_conn)["session"]
+      assert reread_session["status"] == "submitted"
+      assert reread_session["score_pct"] == 100.0
+      assert reread_session["passed"] == true
     end
 
     test "an invalid anti-cheat signal type is rejected with 400, never reaching AntiCheat's own domain check silently" do

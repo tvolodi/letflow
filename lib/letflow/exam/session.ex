@@ -160,7 +160,9 @@ defmodule Letflow.Exam.Session do
           status: :in_progress | :submitted | :auto_submitted | :grading_pending,
           seed: integer(),
           started_at: DateTime.t(),
-          expires_at: DateTime.t()
+          expires_at: DateTime.t(),
+          score_pct: float() | nil,
+          passed: boolean() | nil
         }
 
   @type answer_attrs :: %{
@@ -1093,7 +1095,7 @@ defmodule Letflow.Exam.Session do
       total_score: percentage,
       total_max_score: 100.0,
       percentage: percentage,
-      passed: if(status == :grading_pending, do: nil, else: fv(session, "passed"))
+      passed: passed_for_status(status, session)
     }
   end
 
@@ -1149,14 +1151,19 @@ defmodule Letflow.Exam.Session do
   defp ok_or_error({:error, _reason} = error), do: error
 
   defp session_view(session) do
+    status = session_status_atom(fv(session, "status"))
+    raw_score_pct = fv(session, "score_pct")
+
     %{
       id: session.record_id,
       exam_id: fv(session, "exam_id"),
       candidate_id: fv(session, "user_id"),
-      status: session_status_atom(fv(session, "status")),
+      status: status,
       seed: fv(session, "seed"),
       started_at: parse_dt!(fv(session, "started_at")),
-      expires_at: parse_dt!(fv(session, "expires_at"))
+      expires_at: parse_dt!(fv(session, "expires_at")),
+      score_pct: if(is_nil(raw_score_pct), do: nil, else: to_float(raw_score_pct)),
+      passed: passed_for_status(status, session)
     }
   end
 
@@ -1166,6 +1173,29 @@ defmodule Letflow.Exam.Session do
   defp session_status_atom("submitted"), do: :submitted
   defp session_status_atom("auto_submitted"), do: :auto_submitted
   defp session_status_atom("grading_pending"), do: :grading_pending
+
+  # Shared by `outcome_from_session/1` and `session_view/1`: a `passed` fact
+  # is only a decided fact once a session lands in :submitted/:auto_submitted.
+  # `:grading_pending` is not decided (short-text answers await manual
+  # grading). `:in_progress` empirically is not either -- unlike `score_pct`
+  # (`required: false` in the entity definition, genuinely absent until
+  # `update_session_after_submit/4` first writes it), `passed` is
+  # `required: true` (source column `NOT NULL DEFAULT FALSE`), so
+  # `create/3` persists the same `false` placeholder at session creation
+  # that `update_session_after_submit/4` later writes for a pending outcome
+  # (`outcome.passed || false`) -- there is no "absent" state for this field
+  # to fall back on, only "decided" vs. "placeholder." Both non-decided
+  # statuses must therefore be handled explicitly here, not just
+  # `:grading_pending`, or `:in_progress` would leak the DB's placeholder
+  # `false` as if it were a real value (this file's own design doc
+  # under-specified this -- confirmed empirically via
+  # `test/letflow/exam/session_test.exs`'s ISS-0674 `:in_progress` case).
+  @spec passed_for_status(:in_progress | :submitted | :auto_submitted | :grading_pending, map()) ::
+          boolean() | nil
+  defp passed_for_status(status, _session) when status in [:in_progress, :grading_pending],
+    do: nil
+
+  defp passed_for_status(_status, session), do: fv(session, "passed")
 
   defp question_type_atom("single"), do: :single
   defp question_type_atom("multiple"), do: :multiple

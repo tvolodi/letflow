@@ -1093,4 +1093,92 @@ defmodule Letflow.Exam.SessionTest do
       assert state.questions |> Enum.map(& &1.sort_order) |> Enum.uniq() |> length() == 2
     end
   end
+
+  # ---------------------------------------------------------------------
+  # ISS-0674: session_view/1 exposes score_pct/passed across all four
+  # statuses, so GET /exam-sessions/:id can render a candidate's own
+  # already-computed result on a later reload (see
+  # lib/letflow/design/iss0674-session-view-score-fields.md).
+  # ---------------------------------------------------------------------
+
+  describe "ISS-0674 -- session_view/1 score_pct/passed" do
+    test ":in_progress -- both fields are nil (score_pct never persisted yet)" do
+      %{schema_name: schema} = tenant("iss0674-in-progress")
+      %{exam: exam} = build_minimal_exam!(schema)
+      candidate_id = Ecto.UUID.generate()
+
+      assert {:ok, session_view} = Session.create(candidate_id, exam.record_id, schema)
+      assert session_view.status == :in_progress
+      assert session_view.score_pct == nil
+      assert session_view.passed == nil
+    end
+
+    test ":submitted -- score_pct/passed carry the real persisted values on a later read" do
+      %{schema_name: schema} = tenant("iss0674-submitted")
+
+      %{exam: exam, questions: [{question_id, correct_id, _wrong_id}]} =
+        build_minimal_exam!(schema)
+
+      candidate_id = Ecto.UUID.generate()
+
+      assert {:ok, session_view} = Session.create(candidate_id, exam.record_id, schema)
+
+      assert {:ok, _} =
+               Session.autosave_answer(
+                 session_view.id,
+                 candidate_id,
+                 %{
+                   question_id: question_id,
+                   selected_option_ids: [correct_id],
+                   time_spent_seconds: 5
+                 },
+                 schema
+               )
+
+      assert {:ok, outcome} = Session.submit(session_view.id, candidate_id, schema)
+      assert outcome.status == :submitted
+
+      assert {:ok, reread} = Session.get_session_for_user(session_view.id, candidate_id, schema)
+      assert reread.status == :submitted
+      assert reread.score_pct == 100.0
+      assert reread.passed == true
+    end
+
+    test ":auto_submitted -- score_pct/passed carry the real persisted values on a later read" do
+      %{schema_name: schema} = tenant("iss0674-auto-submitted")
+      %{exam: exam} = build_minimal_exam!(schema)
+      candidate_id = Ecto.UUID.generate()
+
+      assert {:ok, session_view} = Session.create(candidate_id, exam.record_id, schema)
+      # No autosave at all -- every question grades as wrong.
+
+      deadline = DateTime.utc_now()
+      assert {:ok, outcome} = Session.finalize_expired(session_view.id, deadline, schema)
+      assert outcome.status == :auto_submitted
+
+      assert {:ok, reread} = Session.get_session_for_user(session_view.id, candidate_id, schema)
+      assert reread.status == :auto_submitted
+      assert reread.score_pct == 0.0
+      assert reread.passed == false
+    end
+
+    test ":grading_pending -- score_pct is present but passed stays nil (not yet a decided fact)" do
+      %{schema_name: schema} = tenant("iss0674-grading-pending")
+      %{exam: exam} = build_minimal_exam!(schema, exam_attrs: %{"max_attempts" => 5})
+      category_id = Ecto.UUID.generate()
+      create_question!(schema, category_id, %{"type" => "shorttext"})
+      create_rule!(schema, exam.record_id, category_id, 1, 1)
+
+      candidate_id = Ecto.UUID.generate()
+      assert {:ok, session_view} = Session.create(candidate_id, exam.record_id, schema)
+
+      assert {:ok, outcome} = Session.submit(session_view.id, candidate_id, schema)
+      assert outcome.status == :grading_pending
+
+      assert {:ok, reread} = Session.get_session_for_user(session_view.id, candidate_id, schema)
+      assert reread.status == :grading_pending
+      assert reread.score_pct == 0.0
+      assert reread.passed == nil
+    end
+  end
 end

@@ -7,27 +7,22 @@
  * `examApi.getSessionState` and renders its result phase WITHOUT ever calling
  * `examApi.startSession`.
  *
- * TWO OF THE THREE REQUIRED SCENARIOS ARE HERE. REQ-351's own acceptance
- * criteria ask for three live scenarios: (1) a shorttext-free ("scoreable")
- * exam rendering `exam-result-score` from a LOADED session, (2) the MIXED
- * exam rendering `exam-result-pending` (never `exam-result-score`) from a
- * LOADED session, (3) a not-owner request not receiving another candidate's
- * session content. Scenario (2) and (3) are implemented below and PASS for
- * real, verified live. Scenario (1) is NOT implemented here -- see
- * `ExamSessionResultPage.tsx`'s own top-of-file doc comment and REQ-351's
- * close-out for why: `GET /exam-sessions/:id` (`session_state_json`,
- * `session_view` -- lib/letflow/exam/session.ex:1151-1160) never returns
- * `total_score`/`total_max_score`/`percentage`/`passed`; those fields exist
- * ONLY in `ExamSubmissionOutcome`, produced by `POST /exam-sessions/:id/
- * submit`'s response or by `outcome_from_session/1`
- * (lib/letflow/exam/session.ex:1087-1098), which is private and reachable
- * only from `submit_session`'s own idempotent re-submit path -- never from
- * the GET route. Constructing `exam-result-score` from the by-id route today
- * would mean fabricating score data client-side, which this project's own
- * FRONTEND-DEV scope forbids ("never a shim that normalises a backend
- * contract mismatch"). This is a genuine, code-verified backend gap, not a
- * client omission -- flagged in REQ-351's close-out as a follow-up for
- * ELIXIR-DEV, not worked around here.
+ * ALL THREE REQUIRED SCENARIOS ARE HERE. REQ-351's own acceptance criteria
+ * ask for three live scenarios: (1) a shorttext-free ("scoreable") exam
+ * rendering `exam-result-score` from a LOADED session, (2) the MIXED exam
+ * rendering `exam-result-pending` (never `exam-result-score`) from a LOADED
+ * session, (3) a not-owner request not receiving another candidate's session
+ * content. All three are implemented below and PASS for real, verified live.
+ *
+ * Scenario (1) landed later than (2)/(3): `GET /exam-sessions/:id`
+ * originally never returned `total_score`/`total_max_score`/`percentage`/
+ * `passed` on a loaded session -- see ISS-0674
+ * (`lib/letflow/design/iss0674-session-view-score-fields.md`), which added
+ * `score_pct`/`passed` to `session_view/1`/`session_view_json/1`
+ * specifically so this by-id read route could surface a candidate's own
+ * already-decided score without a client-side shim. `ExamSessionResultPage.tsx`
+ * reads those two fields directly off `response.session` for `submitted`/
+ * `auto_submitted` sessions.
  *
  * FIXTURE DEPENDENCY (REQ-345), same as exam-result.e2e.spec.ts /
  * exam-taking.e2e.spec.ts: `LETFLOW_DEV_DB_CONFIRMED=1 mix
@@ -153,6 +148,105 @@ async function discoverOwnCandidateId(request: APIRequestContext, token: string,
   })
   return body.session.candidate_id
 }
+
+/** Navigates the LIVE exam session UI to the question whose currently
+ *  visible stem contains `stemSubstring` -- identifying a question by its
+ *  real, distinct seeded stem text rather than by position, since the
+ *  fixture exam's `exam_question_rule` uses `mode: "random"`. Copied from
+ *  `exam-result.e2e.spec.ts`'s own identically-named helper (not shared
+ *  across files in this suite). */
+async function goToQuestionByStem(page: Page, stemSubstring: string, maxQuestions: number): Promise<void> {
+  const prevButton = page.getByRole('button', { name: 'Previous' })
+  for (let i = 0; i < maxQuestions; i++) {
+    if (await prevButton.isDisabled()) break
+    await prevButton.click()
+  }
+
+  const heading = page.locator('[data-testid^="exam-question-"] h3')
+  const nextButton = page.getByRole('button', { name: 'Next' })
+  for (let i = 0; i < maxQuestions; i++) {
+    const text = await heading.textContent()
+    if (text?.includes(stemSubstring)) return
+    if (await nextButton.isDisabled()) break
+    await nextButton.click()
+  }
+  throw new Error(`goToQuestionByStem: no question containing "${stemSubstring}" found within ${maxQuestions} questions`)
+}
+
+// ---------------------------------------------------------------------------
+// 'Exam Result by id — score (scoreable exam, ISS-0674)'
+// ---------------------------------------------------------------------------
+
+test.describe.serial('Exam Result by id — score (scoreable exam, ISS-0674)', () => {
+  let context: BrowserContext
+  let page: Page
+  let token: string
+  let scoreableExamId: string
+
+  test.beforeAll(async ({ browser, request }) => {
+    token = await getKeycloakToken(request, 'admin-user', 'admin-pass')
+    const exams = await queryActiveExams(request, token)
+    scoreableExamId = findExamByTitle(exams, 'REQ-345 E2E Scoreable Exam')
+    await submitOpenSessionsForExam(request, token, scoreableExamId)
+
+    context = await browser.newContext()
+    page = await context.newPage()
+    await loginWithToken(page, token)
+  })
+
+  test.afterAll(async ({ request }) => {
+    await submitOpenSessionsForExam(request, token, scoreableExamId)
+    await context?.close()
+  })
+
+  test('starting, answering every question correctly, submitting, then navigating to the by-id route in the SAME browser session renders exam-result-score (Passed) from the LOADED session', async () => {
+    const startResponse = page.waitForResponse(
+      (res) => res.url().includes('/api/v1/exam-sessions') && !res.url().includes('/answers/') && res.request().method() === 'POST',
+    )
+    await page.goto(`/exam/${scoreableExamId}/session`, { waitUntil: 'domcontentloaded' })
+    await expect(page.getByTestId('exam-session-page')).toBeVisible({ timeout: 15_000 })
+
+    const startBody = (await (await startResponse).json()) as { session: { id: string } }
+    const sessionId = startBody.session.id
+    expect(sessionId, 'startSession response must carry session.id').toBeTruthy()
+
+    await goToQuestionByStem(page, '(single)', 3)
+    // R1: option A (sort_order 0) is the documented correct option.
+    await page.locator('[data-testid^="exam-option-"]').first().click()
+    await expect(page.getByTestId('exam-save-status')).toHaveText('Saved', { timeout: 8_000 })
+
+    await goToQuestionByStem(page, '(truefalse)', 3)
+    // R2: option "True" (sort_order 0) is the documented correct option.
+    await page.locator('[data-testid^="exam-option-"]').first().click()
+    await expect(page.getByTestId('exam-save-status')).toHaveText('Saved', { timeout: 8_000 })
+
+    await goToQuestionByStem(page, '(multiple)', 3)
+    // R3: options A and B (sort_order 0 and 1) are the documented correct
+    // pair out of A/B/C.
+    const r3options = page.locator('[data-testid^="exam-option-"]')
+    await r3options.nth(0).click()
+    await expect(page.getByTestId('exam-save-status')).toHaveText('Saved', { timeout: 8_000 })
+    await r3options.nth(1).click()
+    await expect(page.getByTestId('exam-save-status')).toHaveText('Saved', { timeout: 8_000 })
+
+    await page.getByTestId('exam-submit-action').click()
+    await expect(page.getByTestId('exam-result-page')).toBeVisible({ timeout: 15_000 })
+    await expect(page.getByTestId('exam-result-score')).toBeVisible()
+
+    // Now navigate AWAY, in the SAME page/browser session, to the new by-id
+    // route -- a fresh mount, fresh getSessionState call, no in-memory
+    // `phase` state carried over from the live-submit flow above. This is
+    // the part ISS-0674 makes possible: before it, this reload landed on
+    // `exam-result-scoreUnavailable` because the GET route never returned
+    // `score_pct`/`passed`.
+    await page.goto(`/exam/sessions/${sessionId}/result`, { waitUntil: 'domcontentloaded' })
+
+    await expect(page.getByTestId('exam-result-page')).toBeVisible({ timeout: 15_000 })
+    await expect(page.getByTestId('exam-result-score')).toBeVisible()
+    await expect(page.getByTestId('exam-result-scoreUnavailable')).toHaveCount(0)
+    await expect(page.getByText('Passed', { exact: true })).toBeVisible()
+  })
+})
 
 // ---------------------------------------------------------------------------
 // 'Exam Result by id — pending (mixed exam)'

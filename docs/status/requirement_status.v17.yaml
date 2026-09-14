@@ -709,3 +709,76 @@ history:
       the closest honest read -- a genuine, stable stop not resolvable by
       more work inside this requirement, only by ISS-0674's own
       resolution). letflow-queue task 667 released status: blocked.
+  - req: SCOPE-CHANGE
+    event: done
+    agent: ELIXIR-DEV
+    at: "2026-09-14T23:30:49Z"
+    note: >
+      ISS-0674 (Q-674, GH-1412) resolved -- GET /exam-sessions/:id never
+      returned score_pct/passed, blocking REQ-351's twelfth acceptance
+      criterion. REVIEWER independently judged CODE-DESIGNER's design
+      (lib/letflow/design/iss0674-session-view-score-fields.md) does NOT
+      cross REQ-335's router scope fence: extending session_view/1 with
+      score_pct/passed is a legitimate completion of GET
+      /exam-sessions/:id's already-authorized read, not the reserved
+      "sixth behaviour" result view.
+
+      ELIXIR-DEV implemented: lib/letflow/exam/session.ex (session_view/1,
+      @type session_view, new shared passed_for_status/2 helper also now
+      used by outcome_from_session/1), lib/letflow/routers/exam_sessions.ex
+      (session_view_json/1). One correction to the design doc applied
+      during implementation: `passed` must be nil for :in_progress too
+      (not just :grading_pending), since the DB persists `false` as a
+      NOT-NULL placeholder at session creation rather than an absent
+      value -- documented inline. Verified: `mix compile` clean, `mix test
+      test/letflow/exam/session_test.exs
+      test/letflow/routers/exam_sessions_test.exs --seed 0` = 52 passed, 0
+      failed, run twice independently (ELIXIR-DEV and REVIEWER).
+
+      SECURITY-REVIEWER spot-check: PASS -- no new Repo/query/join,
+      ownership guard and INV-5 unchanged, no cross-candidate/tenant leak,
+      no answer-key redaction regression, diff scope limited to expected
+      files.
+
+      FRONTEND-DEV wired web/src/pages/exam/ExamSessionResultPage.tsx's
+      score_unavailable branch to render real scores via the existing
+      ExamResultView/exam-result-score path, updated
+      web/src/types/exam.ts's ExamSessionView type, updated the ISS-0674
+      gap comment, and updated
+      web/src/pages/exam/__tests__/ExamSessionPage.test.tsx's mock. Added
+      a new e2e scenario to web/tests/e2e/exam-result-by-id.e2e.spec.ts
+      covering the scoreable-exam by-id score render. Verified: `npm run
+      type-check` clean, `npm run lint` clean (--max-warnings 0), `npm
+      test` 82 files/568 tests passed, `npm run guards` 4 files/48 tests
+      passed, and the Playwright e2e spec re-run against a real
+      backend+Keycloak: 3 passed (8.0s) -- all three REQ-351 by-id
+      scenarios (scoreable score render, pending, not-owner) now pass.
+
+      Closed GH#1412 with an evidence comment (gh issue comment + gh issue
+      close, real command output captured). letflow-queue task 674 was NOT
+      released via the queue's release_lock endpoint by this run -- that
+      call was not made; if task 674 is still held, a subsequent run must
+      release it per docs/agents/protocols/TASK_QUEUE.md.
+  - req: REQ-351
+    event: done
+    agent: REVIEWER
+    at: "2026-09-14T23:30:49Z"
+    note: >
+      ISS-0674's resolution (same commit, entry immediately above) closes
+      REQ-351's twelfth and final acceptance criterion -- the
+      scoreable-exam exam-result-score scenario now renders a real score
+      from a loaded by-id session. All 12 acceptance criteria independently
+      re-verified met: the 11 already confirmed at the 2026-09-15 `blocked`
+      entry above stand unchanged (re-run, still green), and the twelfth is
+      now met per the ISS-0674 evidence chain (session_view/1 extended,
+      52/52 backend tests passing, SECURITY-REVIEWER PASS, frontend wired
+      and e2e-verified 3/3 passing against a real backend+Keycloak).
+
+      Requirement status flipped from `blocked` to `done` in
+      docs/requirements.yaml in the same run. GH#1403 closed with an
+      evidence comment pointing at ISS-0674's resolution (gh issue comment
+      + gh issue close, real command output captured). letflow-queue task
+      667 was NOT released via the queue's release_lock endpoint by this
+      run -- that call was not made; if task 667 is still held, a
+      subsequent run must release it per
+      docs/agents/protocols/TASK_QUEUE.md.

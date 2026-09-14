@@ -47,6 +47,19 @@
  *  character) with `selected_option_ids: []` and `text_answer` set, which
  *  `Session.check_answer_shape/3` validates is only ever sent for a
  *  `short_text` question.
+ *
+ *  FLUSH-BEFORE-FORCED-SUBMIT (ISS-0654). A `short_text` textarea's
+ *  uncommitted keystrokes only reach the server on `onBlur`, but
+ *  `useAntiCheatSignals`' `submit`-outcome can flip `phase` to 'result' from
+ *  a browser-event callback (e.g. `on_tab_switch: 'submit'`) with no blur in
+ *  between, which would otherwise silently drop the draft. `maybeSaveDraft`
+ *  below holds the one save-if-changed check shared by both call sites:
+ *  `handleTextAnswerBlur` (the normal blur path) and the `flushBeforeReport`
+ *  callback passed into `useAntiCheatSignals` (the forced-submit path,
+ *  invoked once per browser signal). The hook AWAITS that callback's promise
+ *  before calling `examApi.reportEvent`, so the flush's `saveAnswer` always
+ *  resolves on the server strictly before the anti-cheat report that may
+ *  trigger the forced submit -- no race between the two network calls.
  */
 
 import { useCallback, useEffect, useRef, useState } from 'react'
@@ -138,10 +151,10 @@ function ExamSessionPageInner() {
   }, [currentQuestion?.question_id])
 
   const saveAnswer = useCallback(
-    (question: ExamQuestionState, selectedOptionIds: string[], textAnswer?: string) => {
-      if (!session) return
+    (question: ExamQuestionState, selectedOptionIds: string[], textAnswer?: string): Promise<void> => {
+      if (!session) return Promise.resolve()
       setSaveStatus('saving')
-      examApi
+      return examApi
         .saveAnswer(session.session.id, question.question_id, {
           selected_option_ids: selectedOptionIds,
           time_spent_seconds: answers[question.question_id]?.time_spent_seconds ?? 0,
@@ -173,6 +186,21 @@ function ExamSessionPageInner() {
     [session, answers],
   )
 
+  // Shared save-if-changed check (ISS-0654): the one thing both
+  // `handleTextAnswerBlur` (normal blur path) and the anti-cheat
+  // `flushBeforeReport` callback (forced-submit path) need -- skip the
+  // network call when the draft matches what is already saved, otherwise
+  // fire the SAME `saveAnswer` both paths already use and return its promise
+  // so the caller can await completion.
+  const maybeSaveDraft = useCallback(
+    (question: ExamQuestionState, draft: string): Promise<void> => {
+      const previouslySaved = answers[question.question_id]?.text_answer ?? ''
+      if (draft === previouslySaved) return Promise.resolve()
+      return saveAnswer(question, [], draft)
+    },
+    [answers, saveAnswer],
+  )
+
   const handleOptionToggle = (question: ExamQuestionState, optionId: string) => {
     const isMulti = question.type === 'multi_choice'
     const current = answers[question.question_id]?.selected_option_ids ?? []
@@ -185,9 +213,7 @@ function ExamSessionPageInner() {
   }
 
   const handleTextAnswerBlur = (question: ExamQuestionState) => {
-    const previouslySaved = answers[question.question_id]?.text_answer ?? ''
-    if (textDraft === previouslySaved) return
-    saveAnswer(question, [], textDraft)
+    void maybeSaveDraft(question, textDraft)
   }
 
   const handleAntiCheatOutcome = useCallback(
@@ -204,7 +230,22 @@ function ExamSessionPageInner() {
     [],
   )
 
-  useAntiCheatSignals(session?.session.id ?? null, phase.kind === 'in_progress', handleAntiCheatOutcome)
+  // ISS-0654: flush any uncommitted short_text draft BEFORE the anti-cheat
+  // hook's `reportEvent` call fires -- see this hook's own doc comment for
+  // why it is read through a ref rather than a dependency, and this file's
+  // top-of-file "FLUSH-BEFORE-FORCED-SUBMIT" comment for why this must be
+  // awaited rather than fired-and-forgotten.
+  const flushTextDraftBeforeAntiCheatReport = useCallback((): Promise<void> => {
+    if (!currentQuestion || currentQuestion.type !== 'short_text') return Promise.resolve()
+    return maybeSaveDraft(currentQuestion, textDraft)
+  }, [currentQuestion, textDraft, maybeSaveDraft])
+
+  useAntiCheatSignals(
+    session?.session.id ?? null,
+    phase.kind === 'in_progress',
+    handleAntiCheatOutcome,
+    flushTextDraftBeforeAntiCheatReport,
+  )
 
   const handleSubmit = () => {
     if (!session) return

@@ -3433,8 +3433,18 @@ volumes:
     path: docs/status/requirement_status.v16.yaml
     status: current
     opened: 2026-09-13
-    entries: 19
+    entries: 21
     note: >
+      Incremented to 21 by ORCH's own ISS-0654 done-event append
+      (SCOPE-CHANGE, fix/ISS-0654-20260914) -- `grep -c "^  - req:"
+      docs/status/requirement_status.v16.yaml` = 21 on-disk entries;
+      1050 lines / 58854 bytes, well under the roll ceiling. No rebase
+      conflict on this file.
+      Incremented to 20 by ORCH's own ISS-0654 started-event append
+      (SCOPE-CHANGE, fix/ISS-0654-20260914) -- `grep -c "^  - req:"
+      docs/status/requirement_status.v16.yaml` = 20 on-disk entries;
+      1016 lines -- approaching but still under the roll ceiling. No
+      rebase conflict on this file.
       Incremented to 19 by ORCH's own ISS-0650 done-event append
       (SCOPE-CHANGE, fix/ISS-0650-20260914) -- `grep -c "^  - req:"
       docs/status/requirement_status.v16.yaml` = 19 on-disk entries;

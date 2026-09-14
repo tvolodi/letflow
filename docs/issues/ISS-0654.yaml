@@ -33,4 +33,51 @@ affected_files:
   - web/src/hooks/useAntiCheatSignals.ts
 queue_ref: Q-654
 github_ref: GH-1373
-status: open
+status: resolved
+resolved_by: ORCH
+resolved_in_run: fix/ISS-0654-20260914
+resolved_at: "2026-09-14T04:42:00Z"
+resolution_note: >
+  useAntiCheatSignals.ts's report/1 gained an optional
+  flushBeforeReport callback, invoked and AWAITED before
+  examApi.reportEvent is called -- so a flush-triggered save always
+  completes on the server strictly before the anti-cheat report that
+  may carry a forced submit, no race. Read through a flushRef (kept in
+  sync via a separate lightweight effect) rather than the main
+  listener-attach effect's dependency array, specifically so the
+  window/anti-cheat event listeners are not torn down and reattached
+  on every keystroke (the flush closure changes identity each
+  keystroke, closing over textDraft).
+
+  ExamSessionPage.tsx extracted the existing blur-save's "only save if
+  changed" check into a shared maybeSaveDraft/2 helper, used by both
+  the pre-existing handleTextAnswerBlur and a new
+  flushTextDraftBeforeAntiCheatReport callback. saveAnswer now returns
+  its promise chain (previously fire-and-forget) so callers can await
+  completion.
+
+  The flush is unconditional -- fires before every anti-cheat report,
+  regardless of signal type or eventual outcome -- confirmed by
+  REVIEWER as structurally necessary rather than merely conservative:
+  the server, not the client, decides whether a signal resolves to
+  'submit', so the client cannot gate the flush on outcome type in
+  advance; cost is bounded by maybeSaveDraft's own no-op guard.
+
+  New test proves genuine ordering, not a timing coincidence: mocks
+  saveAnswer to resolve only after a real 20ms macrotask delay and
+  reportEvent to resolve synchronously, then asserts the call-order
+  array is [save:start, save:resolved, report:called] -- REVIEWER
+  traced that removing the await would make report:called land before
+  save:resolved (microtask/synchronous timing beats a real macrotask
+  delay), so this genuinely fails without the fix. A second test
+  proves the no-op guard: a forced submit with an already-saved,
+  unchanged draft triggers zero spurious saveAnswer calls.
+
+  Pipeline: FRONTEND-DEV -> REVIEWER PASS (independently traced the
+  flushRef pattern for stale-closure safety, traced the race-proof
+  test's actual failure mode if the fix were reverted, confirmed the
+  no-op guard test is genuine, confirmed the unconditional-flush scope
+  is correct not merely conservative; ran the full npm run check suite
+  live -- 554 tests + 48 guard tests passed, clean production build).
+
+  docs/issues/ISS-0654.yaml flipped open -> resolved.

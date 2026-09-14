@@ -998,3 +998,53 @@ history:
       exam question can now actually be answered end to end, closing
       a real functional gap that made REQ-332's pending_manual grading
       path for that question type entirely unreachable.
+  - req: SCOPE-CHANGE
+    event: started
+    agent: ORCH
+    at: "2026-09-14T04:05:04Z"
+    note: >
+      Claimed letflow-queue task 654 (ISS-0654, GH#1373, S10) -- self-
+      filed by REVIEWER during ISS-0650's frontend review. Pure
+      frontend fix: ExamSessionPage.tsx's short_text question type
+      stores an in-progress edit in local textDraft state, only saved
+      to the backend on the textarea's onBlur. useAntiCheatSignals'
+      forced-submit outcome can flip phase straight to 'result' from a
+      signal callback with no blur ever firing, silently discarding an
+      uncommitted edit. Fix: flush the draft (save it) before or as
+      part of the forced submission, without introducing a network
+      race between the flush-save and the submit call. Dispatching to
+      FRONTEND-DEV.
+  - req: SCOPE-CHANGE
+    event: done
+    agent: ORCH
+    at: "2026-09-14T04:13:57Z"
+    note: >
+      ISS-0654 (queue task 654, GH#1373) resolved via
+      fix/ISS-0654-20260914 (commit c5eac5cc). useAntiCheatSignals.ts's
+      report/1 gained an optional flushBeforeReport callback, awaited
+      before examApi.reportEvent is called -- a flush-save always
+      completes strictly before the anti-cheat report that may carry
+      a forced submit, no race. Read via a flushRef (kept in sync by a
+      separate effect) rather than the listener-attach effect's own
+      deps, so the anti-cheat listeners aren't torn down/reattached
+      every keystroke. ExamSessionPage.tsx extracted the existing
+      no-op-guarded blur-save check into a shared maybeSaveDraft/2
+      helper used by both the pre-existing blur handler and the new
+      flush callback.
+
+      New test proves genuine save-before-report ordering (not a
+      timing coincidence): mocks a real macrotask-delayed save against
+      a synchronous report call and asserts the call-order array --
+      REVIEWER independently traced that removing the await would
+      flip this order. A second test proves the no-op guard fires zero
+      spurious saves when the draft already matches the saved value.
+
+      Pipeline: FRONTEND-DEV -> REVIEWER PASS (independently traced
+      the flushRef pattern for stale-closure safety, traced the
+      race-proof test's actual failure mode on revert, confirmed the
+      unconditional-flush-before-every-report scope is structurally
+      correct since the client cannot know a report's outcome in
+      advance; ran the full npm run check suite live -- 554 tests + 48
+      guard tests passed, clean production build).
+
+      docs/issues/ISS-0654.yaml flipped open -> resolved.

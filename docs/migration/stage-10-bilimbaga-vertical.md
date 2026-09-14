@@ -343,6 +343,41 @@ itself (see this stage file's own hard constraint above).
 - **AI-assisted authoring (BilimBaga phase 7).** Deliberately not phased above. It
   is the least load-bearing feature in the product and the most likely to be
   redesigned; it gets a phase when parity (P5) is real.
+- **No way to view a past exam result — surfaced twice during P5, recorded here
+  before it surfaces a third time.** A candidate can sit an exam and see the
+  outcome, but only in the browser session that submitted it. There is no way
+  to view a result afterwards, and no way to see a list of past results at all.
+  The gap is in both tiers, and each half was found independently:
+  - *Backend.* `lib/letflow/routers/exam_sessions.ex`'s own scope fence
+    deliberately does not route `GetExamHistory`/`HandleGetMyResults`
+    (FR-BB41/FR-BB46), nor `GetSessionResult` — the last named explicitly as
+    "a sixth behaviour this requirement's own dependency chain (`REQ-330`'s
+    five) never authorized." That was a correct scope decision for `REQ-335`,
+    not a defect.
+  - *Frontend.* `web/src/pages/exam/ExamSessionPage.tsx`'s mount effect calls
+    `startSession` unconditionally (`:112-127`) with no branch that loads an
+    existing session, and the result phase is set at exactly two sites, both
+    inside the live flow (`:226` anti-cheat forced submit, `:253`
+    `handleSubmit`). `examApi.getSessionState` exists (`web/src/api/exam.ts:96`)
+    but **no component calls it**. `web/src/router.tsx:82-83` serves only
+    `exam` and `exam/:examId/session` — no result-by-id route, no results-list.
+
+  Consequence, and the reason this is recorded rather than left implicit: a
+  seeded submitted session is unreachable from every rendered screen, so it can
+  be asserted on over raw HTTP and nowhere else. This is what makes
+  BilimBaga's `my-results.spec.ts` and `exam-result.spec.ts` only partly
+  portable — `REQ-349` classifies each of their blocks against what is actually
+  reachable, and is explicitly forbidden from adding a route to make a spec
+  pass. Compounding it, `Letflow.Exam.Scoring` forces `grading_pending` /
+  `passed: nil` whenever a session contains **any** `short_text` question
+  (`scoring.ex:255-257`), so a one-question-per-type fixture can never exercise
+  the `exam-result-score` branch at all; `REQ-345` therefore seeds a second,
+  short-text-free exam specifically to make that branch reachable.
+
+  Deciding whether Letflow should route `GetSessionResult`, a results-list, or
+  neither is a product-scope question that P5 must not settle by side effect.
+  It needs its own requirement once `REQ-349` reports how much of the
+  result-side corpus is actually unportable without it.
 - **No `exam_assignment` entity/mechanism exists — a standing gap, now overdue
   for its own decision record.** What is missing: there is no entity type, no
   table, and no mechanism anywhere in the platform for recording which

@@ -28,6 +28,7 @@ import EditTenantPage from '@/pages/admin/tenants/EditTenantPage'
 import ServicesPage from '@/pages/admin/services/ServicesPage'
 import ExamListPage from '@/pages/exam/ExamListPage'
 import ExamSessionPage from '@/pages/exam/ExamSessionPage'
+import ExamSessionResultPage from '@/pages/exam/ExamSessionResultPage'
 import BilimBagaAdminPage from '@/pages/admin/bilimbaga/BilimBagaAdminPage'
 import BilimBagaEntityRoute from '@/pages/admin/bilimbaga/BilimBagaEntityRoute'
 
@@ -81,6 +82,14 @@ export const router = createBrowserRouter([
       { path: 'webhooks', element: <WebhooksPage /> },
       { path: 'exam', element: <ExamListPage /> },
       { path: 'exam/:examId/session', element: <ExamSessionPage /> },
+      // REQ-351: opens an EXISTING session by id (getSessionState only,
+      // never startSession). URL is PROVISIONAL -- see
+      // ExamSessionResultPage.tsx's own doc comment: REQ-350 may later
+      // decide Letflow serves a results-list, in which case this becomes
+      // that list's detail view and its URL may be renamed by the
+      // requirement that implements the list. Do not depend on this exact
+      // spelling as a settled contract.
+      { path: 'exam/sessions/:sessionId/result', element: <ExamSessionResultPage /> },
     ],
   },
 ])

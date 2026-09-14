@@ -640,3 +640,72 @@ history:
       no PR/CI needed, matching this session's established precedent),
       commit to follow this entry. letflow-queue task 666 released
       status: done.
+
+  - req: REQ-351
+    event: blocked
+    agent: REVIEWER
+    at: 2026-09-15T00:00:00Z
+    note: >
+      Reviewed PR #1411 (branch feature/WF02-REQ351-20260915) against every
+      acceptance criterion directly from the diff, not from FRONTEND-DEV's
+      own report: 11 of 12 met on independent re-verification (route exists
+      in web/src/router.tsx; startSession absent from the by-id path,
+      grep-confirmed against ExamSessionResultPage.tsx/ExamResultView.tsx;
+      the mixed-exam by-id spec renders exam-result-pending and never
+      exam-result-score, citing scoring.ex:255-257; the not-owner spec
+      observes a real 404 and quotes get_session_state_for_user/3's
+      {:error, :not_owner} path (session.ex:342); `git diff --name-only`
+      touches nothing under lib/letflow/; the pre-existing exam-taking (9)
+      and exam-result (4) e2e specs re-run with no regression per the PR's
+      own quoted 15/15 combined run; no test.skip/test.fixme anywhere in
+      the diff, grep-confirmed; the close-out correctly states this closes
+      1 of 9 results-surface-blocked corpus blocks and names REQ-350 for
+      the other 8; the required per-entry rule-2 sign-off was correctly
+      requested rather than self-certified; the URL-PROVISIONAL statement
+      names REQ-350 by id; the stage-10 bucket-C inventory was re-measured
+      with real ls/wc -l output (2 modules/603 lines -> 4 modules/812
+      lines, web/src/pages/exam/ total 936 lines with the API client).
+
+      REVIEWER's own rule-2 adjudication (docs/migration/stage-10-bilimbaga-vertical.md,
+      "REVIEWER sign-off" section, 2026-09-15 entry): bucket C confirmed for
+      both new modules (ExamResultView.tsx, ExamSessionResultPage.tsx) --
+      the honest bucket-B question REQ-351 posed has a real answer, but the
+      component's state machine is keyed to ExamSubmissionOutcome's
+      exam-specific shape and session-status vocabulary, which a generic
+      entity-record detail view could not express. PASS on rule 2 for both
+      (pure extraction reuse, no speculative plumbing). No supervision/OTP
+      concern -- frontend-only change.
+
+      The twelfth criterion -- a spec proving exam-result-page and
+      exam-result-score render from a LOADED session for REQ-345's
+      shorttext-free exam -- is genuinely unmet, not merely partially
+      built: no such scenario exists anywhere in the diff, and FRONTEND-DEV
+      correctly said so rather than fabricating a pass. Root cause,
+      verified directly: Letflow.Exam.Session's private session_view/1
+      (lib/letflow/exam/session.ex:1151-1160) never maps score_pct/passed
+      into GET /exam-sessions/:id's response, even though
+      outcome_from_session/1 (session.ex:1087-1098) proves both are already
+      persisted on the record once submitted. REVIEWER judged that
+      extending session_view/1 to carry those fields is NOT a minor,
+      same-PR completion -- lib/letflow/routers/exam_sessions.ex's own
+      moduledoc states verbatim that "a *result* view is a sixth behaviour
+      ... not a subset of the *state* read this module does implement",
+      and adding score/passed to the existing state-read route would
+      deliver exactly that reserved behaviour through a side door. This is
+      Option B: a real product/scope decision, not a quick ELIXIR-DEV
+      fix-up. Filed ISS-0674 (Q-674, GH-1412) with the full fix-direction
+      options rather than looping FRONTEND-DEV or ELIXIR-DEV against a gap
+      neither can close within its own scope fence.
+
+      PR #1411 merged as-is despite the open criterion -- the two shipped
+      modules are real, regression-free, and close 1 of 9
+      results-surface-blocked corpus blocks; there is no reason to hold
+      working, correctly-scoped code hostage to a separate decision. Merge
+      commit on main to follow this entry. GH#1403 left OPEN with a comment
+      recording the partial-completion verdict and a pointer to ISS-0674
+      (GH#1412); it is not closed because REQ-351's own acceptance criteria
+      are not fully met. Requirement status set to `blocked` in
+      docs/requirements.yaml (schema has no `partial` value; `blocked` is
+      the closest honest read -- a genuine, stable stop not resolvable by
+      more work inside this requirement, only by ISS-0674's own
+      resolution). letflow-queue task 667 released status: blocked.

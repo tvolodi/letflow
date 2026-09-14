@@ -72,6 +72,7 @@ import { PageLayout } from '@/components/ui/PageLayout'
 import { Button } from '@/components/ui/Button'
 import { ExamIntlProvider } from '@/i18n/ExamIntlProvider'
 import { resolveUiLocale } from '@/i18n/entitiesMessages'
+import { ExamResultView } from './ExamResultView'
 import type {
   AntiCheatSignalOutcome,
   ExamAnswerState,
@@ -309,33 +310,9 @@ function ExamSessionPageInner() {
   }
 
   if (phase.kind === 'result') {
-    const { outcome } = phase
-    const isPending = outcome.status === 'grading_pending'
-    return (
-      <div data-testid="exam-result-page">
-        <PageLayout title={intl.formatMessage({ id: 'exam.result.title' })}>
-          {isPending ? (
-            <div data-testid="exam-result-pending">
-              <h2>{intl.formatMessage({ id: 'exam.result.gradingPending.title' })}</h2>
-              <p>{intl.formatMessage({ id: 'exam.result.gradingPending.body' })}</p>
-            </div>
-          ) : (
-            <div data-testid="exam-result-score">
-              <p>
-                {intl.formatMessage(
-                  { id: 'exam.result.score' },
-                  { score: outcome.total_score, maxScore: outcome.total_max_score, percentage: outcome.percentage },
-                )}
-              </p>
-              <p>{intl.formatMessage({ id: outcome.passed ? 'exam.result.passed' : 'exam.result.failed' })}</p>
-            </div>
-          )}
-          <Button variant="secondary" size="md" onClick={() => navigate('/exam')}>
-            {intl.formatMessage({ id: 'exam.result.backToList' })}
-          </Button>
-        </PageLayout>
-      </div>
-    )
+    // REQ-351: extracted into ExamResultView so this live-flow render and
+    // ExamSessionResultPage.tsx's by-id render share one implementation.
+    return <ExamResultView outcome={phase.outcome} onBackToList={() => navigate('/exam')} />
   }
 
   // phase.kind === 'in_progress'

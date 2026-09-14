@@ -50,4 +50,14 @@ affected_files:
   - docs/migration/stage-10-bilimbaga-vertical.md
 queue_ref: Q-675
 github_ref: GH-1413
-status: open
+status: resolved
+resolution_note: >
+  Rewrote both dangling "this file's own hard constraint" back-references in
+  docs/migration/stage-10-bilimbaga-vertical.md (lines 331 and 605) to point
+  at the real precedent instead: decision 0030's "Consequences" section
+  ("`0022`'s bucket table is not edited by this record") and REVIEWER's
+  2026-09-13 sign-off on it ("a disagreement with standing text becomes a
+  decision-record finding, not a quiet edit"), both read verbatim from
+  docs/migration/decisions/0030-exam-session-p3-bucket-verdicts.md before
+  writing the replacement text. No other change to either passage's
+  surrounding meaning. Fixed by DOC-UPDATER, 2026-09-14/15.

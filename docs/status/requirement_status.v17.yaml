@@ -807,3 +807,38 @@ history:
       stage-file references reported as ISS-0675 rather than fixed
       in-scope). letflow-queue task 669 released status: done under
       agent_id tvolodi-orch.
+  - req: SCOPE-CHANGE
+    event: done
+    agent: DOC-UPDATER
+    at: "2026-09-14T23:46:24Z"
+    note: >
+      ISS-0675 (queue task 675, GH#1413) resolved -- docs/migration/stage-10-bilimbaga-vertical.md
+      contained two back-references to "this file's own hard constraint"
+      (lines 331, 605) that pointed at text never actually written anywhere
+      in the file or docs/ tree, discovered by CODE-DESIGNER while authoring
+      decision 0032. Re-derived the dangling state independently before
+      touching anything: `grep -rn -i "hard constraint" docs/` returns only
+      these two back-references, no statement of the constraint; the
+      surrounding passages (lines ~320-332, ~595-606) contain no such rule
+      under any name.
+
+      Read decision 0030's actual "Consequences" section and REVIEWER's
+      actual 2026-09-13 sign-off text before rewriting, so the replacement
+      references are accurate rather than plausible-sounding. Rewrote both
+      pointers to cite the real precedent: decision 0030's "Consequences"
+      bullet ("`0022`'s bucket table is not edited by this record") and
+      REVIEWER's 2026-09-13 sign-off on it ("a disagreement with standing
+      text becomes a decision-record finding, not a quiet edit"). Kept both
+      surrounding sentences' meaning intact -- only the dangling pointer's
+      target changed, not the surrounding argument.
+
+      docs/issues/ISS-0675.yaml flipped open -> resolved with a resolution
+      note. Docs-only change (docs/migration/stage-10-bilimbaga-vertical.md,
+      docs/issues/ISS-0675.yaml) -- no application code touched. Fetched
+      origin/main first and confirmed no divergence/conflicts on the hot
+      files (requirement_status.v17.yaml, requirements.yaml, the stage file
+      itself) before pushing direct to main, matching this session's
+      established precedent for pure docs fixes. Closed GH#1413 with an
+      evidence comment quoting the before/after text at both locations.
+      letflow-queue task 675 released status: done under agent_id
+      tvolodi-orch.

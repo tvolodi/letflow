@@ -328,7 +328,10 @@ its five rules in Go). Per-question scoring's bucket-C confirmation therefore
 rests on a newly-found reason (no generic mechanism to route through), not on
 the starting position's original framing. This is a genuine gap between
 `0022`'s text and the platform, filed in `0030`, not corrected in `0022`
-itself (see this stage file's own hard constraint above).
+itself (per decision `0030`'s "Consequences" section — "`0022`'s bucket
+table is not edited by this record" — and `REVIEWER`'s 2026-09-13 sign-off
+on it: "a disagreement with standing text becomes a decision-record
+finding, not a quiet edit").
 
 ## Open questions, recorded rather than answered early
 
@@ -602,8 +605,9 @@ exam-specific; P5's exam-specific output is its ported spec corpus, measured by
 **Consequence for `0022`.** Rule 2 does not state its own scope, which is why
 this came up at all. An amendment stating it is to be filed as its own
 requirement rather than edited into `0022` in place, following the precedent of
-decision `0030`'s Finding 1 and this file's own hard constraint; until it
-lands, this entry is the governing precedent.
+decision `0030`'s "Consequences" section and `REVIEWER`'s 2026-09-13 sign-off
+on it ("a disagreement with standing text becomes a decision-record finding,
+not a quiet edit"); until it lands, this entry is the governing precedent.
 
 **2026-09-15 — `REVIEWER`, rule-2 adjudication for `REQ-351` (`ExamResultView.tsx`,
 `ExamSessionResultPage.tsx`).** `REQ-351` itself flagged that it needed a

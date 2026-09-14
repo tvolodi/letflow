@@ -124,7 +124,7 @@ export const queryKeys = {
   entities: {
     all: ['entities'] as const,
     definition: (entityType: string) => [...queryKeys.entities.all, 'definition', entityType] as const,
-    records: (entityType: string, filters?: { cursor?: string; page_size?: number }) =>
+    records: (entityType: string, filters?: { cursor?: string; page_size?: number; filters?: unknown }) =>
       [...queryKeys.entities.all, 'records', entityType, filters ?? {}] as const,
   },
 

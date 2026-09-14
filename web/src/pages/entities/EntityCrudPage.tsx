@@ -38,7 +38,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useIntl, type IntlShape } from 'react-intl'
 import { entitiesApi } from '@/api/entities'
 import { queryKeys } from '@/api/queryKeys'
-import type { ApiError, EntityFieldDef, EntityRecord } from '@/types/api'
+import type { ApiError, EntityFieldDef, EntityQueryFilterClause, EntityRecord } from '@/types/api'
 import { PageLayout } from '@/components/ui/PageLayout'
 import { Button } from '@/components/ui/Button'
 import { DataTable, type DataTableColumn } from '@/components/ui/DataTable'
@@ -51,6 +51,15 @@ import { EntitiesIntlProvider } from '@/i18n/EntitiesIntlProvider'
 import { entitiesMessages, resolveUiLocale } from '@/i18n/entitiesMessages'
 
 const PAGE_SIZE = 25
+
+/** ISS-0663: the default list view must exclude soft-deleted records --
+ *  `POST /entities/query` injects no implicit `deleted:false` predicate (by
+ *  design, per `lib/letflow/entities/query/compiler.ex`'s own moduledoc), so
+ *  every caller that wants "live records only" states it explicitly. This is
+ *  a compile-time constant, not caller-configurable, matching this codebase's
+ *  existing convention of each screen declaring the filters it needs (e.g.
+ *  `ExamListPage.tsx`'s explicit `status: 'active'` filter). */
+const EXCLUDE_DELETED_FILTERS: EntityQueryFilterClause[] = [{ field: 'deleted', op: 'eq', value: false }]
 
 type ModalState = { kind: 'create' } | { kind: 'edit'; record: EntityRecord } | null
 
@@ -102,8 +111,8 @@ function EntityCrudPageInner({ entityType }: EntityCrudPageProps) {
   })
 
   const recordsQuery = useQuery({
-    queryKey: queryKeys.entities.records(entityType, { cursor, page_size: PAGE_SIZE }),
-    queryFn: () => entitiesApi.queryRecords(entityType, { cursor, page_size: PAGE_SIZE }),
+    queryKey: queryKeys.entities.records(entityType, { cursor, page_size: PAGE_SIZE, filters: EXCLUDE_DELETED_FILTERS }),
+    queryFn: () => entitiesApi.queryRecords(entityType, { cursor, page_size: PAGE_SIZE, filters: EXCLUDE_DELETED_FILTERS }),
   })
 
   const rows = useMemo(() => recordsQuery.data?.items ?? [], [recordsQuery.data])

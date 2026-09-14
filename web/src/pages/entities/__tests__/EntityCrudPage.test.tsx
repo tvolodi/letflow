@@ -284,6 +284,46 @@ describe.each(CASES)('REQ-343 AC1 — EntityCrudPage generic CRUD for entity_typ
   })
 })
 
+describe('ISS-0663 — default records list excludes soft-deleted rows', () => {
+  it("sends an explicit deleted:false filter on the records query's queryFn call to entitiesApi.queryRecords, and the queryKey reflects that filter", async () => {
+    const tagCase = CASES.find((c) => c.entityType === 'tag')!
+    installMocksFor(tagCase)
+
+    render(<EntityCrudPage entityType="tag" />)
+
+    // useQuery is mocked directly (DIRECTIVE T-2's mocking pattern for this
+    // suite), so its queryFn is never invoked by the mock automatically --
+    // pull out the records query's own options and call queryFn ourselves to
+    // prove what request it actually issues.
+    const recordsCall = mockUseQuery.mock.calls.find(([opts]) => {
+      const { queryKey } = opts as { queryKey: readonly unknown[] }
+      return queryKey[1] === 'records'
+    })
+    expect(recordsCall).toBeDefined()
+    const [{ queryKey, queryFn }] = recordsCall as [{ queryKey: readonly unknown[]; queryFn: () => unknown }]
+
+    // The queryKey (distinct from the fk-reference widget's own internal
+    // queryRecords calls, which bypass useQuery entirely) must include the
+    // filter too, so the cache key matches the actual request shape.
+    expect(queryKey[3]).toMatchObject({
+      filters: [{ field: 'deleted', op: 'eq', value: false }],
+    })
+
+    await queryFn()
+
+    // POST /entities/query injects no implicit deleted:false default
+    // (lib/letflow/entities/query/compiler.ex) -- an empty filter list would
+    // return soft-deleted rows alongside live ones, so this screen must ask
+    // for exclusion explicitly.
+    expect(entitiesApi.queryRecords).toHaveBeenCalledWith(
+      'tag',
+      expect.objectContaining({
+        filters: [{ field: 'deleted', op: 'eq', value: false }],
+      }),
+    )
+  })
+})
+
 describe('REQ-343 AC2 — answer_option is_correct field-grant awareness', () => {
   it("renders answer_option's is_correct field in the admin create/edit form (this IS the authoring surface, not the candidate-facing exam UI)", () => {
     const answerOptionCase = CASES.find((c) => c.entityType === 'answer_option')!

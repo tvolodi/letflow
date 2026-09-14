@@ -71,12 +71,14 @@ import { useAntiCheatSignals } from '@/hooks/useAntiCheatSignals'
 import { PageLayout } from '@/components/ui/PageLayout'
 import { Button } from '@/components/ui/Button'
 import { ExamIntlProvider } from '@/i18n/ExamIntlProvider'
+import { resolveUiLocale } from '@/i18n/entitiesMessages'
 import type {
   AntiCheatSignalOutcome,
   ExamAnswerState,
   ExamQuestionState,
   ExamSessionStateResponse,
   ExamSubmissionOutcome,
+  LocalizedText,
 } from '@/types/exam'
 
 type Phase =
@@ -85,6 +87,23 @@ type Phase =
   | { kind: 'in_progress' }
   | { kind: 'expired' }
   | { kind: 'result'; outcome: ExamSubmissionOutcome }
+
+/** Resolves a `:localized_text` wire value to a single display string.
+ *  Fallback order: current UI locale -> 'en' -> first non-empty value -> ''.
+ *  Mirrors `EntityCrudPage.tsx`'s `formatCellValue`, with an explicit `en`
+ *  step named ahead of the "first non-empty value" step (see
+ *  docs/frontend/exam-session-localized-fields-fix.md). */
+function resolveLocalizedText(value: LocalizedText | null | undefined, uiLocale: string): string {
+  if (!value) return ''
+  const own = value[uiLocale]
+  if (own) return own
+  const en = value['en']
+  if (en) return en
+  for (const v of Object.values(value)) {
+    if (v) return v
+  }
+  return ''
+}
 
 function formatRemaining(totalSeconds: number): { minutes: string; seconds: string } {
   const clamped = Math.max(0, totalSeconds)
@@ -97,6 +116,7 @@ function ExamSessionPageInner() {
   const intl = useIntl()
   const navigate = useNavigate()
   const { examId } = useParams<{ examId: string }>()
+  const uiLocale = resolveUiLocale([intl.locale])
 
   const [phase, setPhase] = useState<Phase>({ kind: 'starting' })
   const [session, setSession] = useState<ExamSessionStateResponse | null>(null)
@@ -202,7 +222,7 @@ function ExamSessionPageInner() {
   )
 
   const handleOptionToggle = (question: ExamQuestionState, optionId: string) => {
-    const isMulti = question.type === 'multi_choice'
+    const isMulti = question.type === 'multiple'
     const current = answers[question.question_id]?.selected_option_ids ?? []
     const next = isMulti
       ? current.includes(optionId)
@@ -356,7 +376,7 @@ function ExamSessionPageInner() {
                 { current: questionIndex + 1, total: session.questions.length },
               )}
             </p>
-            <h3>{currentQuestion.stem}</h3>
+            <h3>{resolveLocalizedText(currentQuestion.stem, uiLocale)}</h3>
 
             {currentQuestion.type === 'short_text' ? (
               <div>
@@ -391,13 +411,13 @@ function ExamSessionPageInner() {
                   return (
                     <label key={option.id} style={{ display: 'block', marginBottom: 'var(--space-2)' }}>
                       <input
-                        type={currentQuestion.type === 'multi_choice' ? 'checkbox' : 'radio'}
+                        type={currentQuestion.type === 'multiple' ? 'checkbox' : 'radio'}
                         name={currentQuestion.question_id}
                         checked={selected}
                         data-testid={`exam-option-${option.id}`}
                         onChange={() => handleOptionToggle(currentQuestion, option.id)}
                       />{' '}
-                      {option.text}
+                      {resolveLocalizedText(option.text, uiLocale)}
                     </label>
                   )
                 })}

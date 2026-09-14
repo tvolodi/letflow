@@ -22,18 +22,23 @@ export interface ExamSessionView {
   expires_at: string
 }
 
+/** A `:localized_text` field's raw wire value -- a map of locale code to
+ *  string, e.g. `{ "en": "...", "ru": "...", "kk": "..." }`. Never a plain
+ *  string on the wire (see `lib/letflow/exam/session.ex`'s `fv/2`). */
+export type LocalizedText = Record<string, string>
+
 export interface ExamQuestionOption {
   id: string
-  text: string
+  text: LocalizedText
 }
 
-export type ExamQuestionType = 'single_choice' | 'multi_choice' | 'likert' | 'short_text' | string
+export type ExamQuestionType = 'single' | 'multiple' | 'true_false' | 'likert' | 'short_text'
 
 export interface ExamQuestionState {
   question_id: string
   sort_order: number
   type: ExamQuestionType
-  stem: string
+  stem: LocalizedText
   options: ExamQuestionOption[]
 }
 

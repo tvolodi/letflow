@@ -998,3 +998,19 @@ history:
       exam question can now actually be answered end to end, closing
       a real functional gap that made REQ-332's pending_manual grading
       path for that question type entirely unreachable.
+  - req: SCOPE-CHANGE
+    event: started
+    agent: ORCH
+    at: "2026-09-14T04:05:04Z"
+    note: >
+      Claimed letflow-queue task 654 (ISS-0654, GH#1373, S10) -- self-
+      filed by REVIEWER during ISS-0650's frontend review. Pure
+      frontend fix: ExamSessionPage.tsx's short_text question type
+      stores an in-progress edit in local textDraft state, only saved
+      to the backend on the textarea's onBlur. useAntiCheatSignals'
+      forced-submit outcome can flip phase straight to 'result' from a
+      signal callback with no blur ever firing, silently discarding an
+      uncommitted edit. Fix: flush the draft (save it) before or as
+      part of the forced submission, without introducing a network
+      race between the flush-save and the submit call. Dispatching to
+      FRONTEND-DEV.

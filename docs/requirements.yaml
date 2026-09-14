@@ -25529,7 +25529,7 @@ requirements:
     title: File the amendment that states bucket rule 2's own scope -- as a NEW decision record amending 0022 by reference, not an in-place edit -- so the P5 rule-2 adjudication stops being the governing precedent (S10, decision record)
     owner: CODE-DESIGNER
     impl_order: 669
-    status: pending
+    status: done
     stage: S10
     description: >
       ORCH PIN (registration, 2026-09-14): this record's number is PINNED

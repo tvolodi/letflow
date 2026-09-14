@@ -782,3 +782,28 @@ history:
       run -- that call was not made; if task 667 is still held, a
       subsequent run must release it per
       docs/agents/protocols/TASK_QUEUE.md.
+  - req: REQ-353
+    event: done
+    agent: DOC-UPDATER
+    at: "2026-09-14T23:43:26Z"
+    note: >
+      Closed out REQ-353 (letflow-queue task 669, GH#1405). Confirmed
+      docs/migration/decisions/0032-bucket-rule-2-scope-amendment.md
+      carries a filled-in REVIEWER sign-off (PASS, 2026-09-15) rather
+      than the CODE-DESIGNER-left PENDING placeholder: all 12 acceptance
+      criteria independently re-verified by REVIEWER (0022 confirmed
+      byte-identical via `git diff --name-only main --
+      docs/migration/decisions/0022-bilimbaga-vertical.md`; all five
+      clauses re-checked against source wording; class-wide sign-off
+      decline confirmed verbatim; the stage file's dangling "hard
+      constraint" back-references at lines 331/605 re-derived as
+      absent and reported as ISS-0675 rather than fixed in-scope;
+      SECURITY-REVIEWER skip justified). Flipped
+      docs/requirements.yaml's REQ-353 status pending -> done. Did not
+      re-review REVIEWER's verdict, per this run's own instruction that
+      it is final. Closed GH#1405 with an evidence comment summarizing
+      REVIEWER's verdict (decision 0032 filed amending 0022's bucket
+      rule 2 scope, all 12 ACs met, 0022 left byte-identical, dangling
+      stage-file references reported as ISS-0675 rather than fixed
+      in-scope). letflow-queue task 669 released status: done under
+      agent_id tvolodi-orch.

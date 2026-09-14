@@ -3726,8 +3726,14 @@ volumes:
     path: docs/status/requirement_status.v17.yaml
     status: current
     opened: 2026-09-14
-    entries: 14
+    entries: 15
     note: >
+      Incremented to 15 by DOC-UPDATER's own REQ-353 done-event append
+      (close-out of the 0032 bucket-rule-2-scope-amendment decision
+      record) -- `grep -c "^  - req:" docs/status/requirement_status.v17.yaml`
+      = 15 on-disk entries. `wc -l`/`wc -c` = 809 lines / 47128 bytes,
+      well under the roll ceiling, no roll triggered.
+
       Incremented to 14 by DOC-UPDATER's own SCOPE-CHANGE (ISS-0674
       resolution) and REQ-351 done-event appends -- `grep -c "^  - req:"
       docs/status/requirement_status.v17.yaml` = 14 on-disk entries.

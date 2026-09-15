@@ -391,7 +391,56 @@ defmodule Letflow.Exam.CertificateDocument do
   # produce a genuinely readable certificate.
   @text_opts [encoding_replacement_character: "?"]
 
-  defp safe_text_at(pdf, coords, text), do: Pdf.text_at(pdf, coords, text, @text_opts)
+  # ── SECURITY FIX (SECURITY-REVIEWER finding against REQ-356) ─────────────
+  #
+  # `deps/pdf`'s own `Pdf.Text.escape/1` (`deps/pdf/lib/pdf/text.ex:8-12`)
+  # escapes `(` and `)` but NEVER a literal backslash:
+  #
+  #     string |> String.replace("(", "\\(") |> String.replace(")", "\\)")
+  #
+  # A caller-controlled string containing a literal backslash immediately
+  # followed by `)` (e.g. `candidate_name` = `Letflow.Identity.User.display_name`,
+  # or a tenant-authored `exam_title`) therefore round-trips through this
+  # library's escaping UNCHANGED for that pair: `\)` stays `\)` in the emitted
+  # PDF text-literal operand. Per the PDF literal-string grammar, `\)` is
+  # itself a valid escape (an escaped literal `)`), so this looks safe in
+  # isolation -- the actual break is a backslash that is NOT already paired
+  # with a following paren, or more than one running together, e.g. input
+  # `\\)` (two backslashes, then a close-paren): the library's escape only
+  # touches the `)` producing `\\\)` (three backslashes then `)`), and a PDF
+  # parser consumes backslash-escapes pairwise left to right -- `\\` (one
+  # literal backslash) then `\)` (one literal `)`) -- reconstructing the
+  # original 3-byte input correctly ONLY because the count happens to be odd.
+  # Any input with an EVEN run of backslashes directly before a `)` (the
+  # simplest: a single `\` followed by `)`, i.e. literal bytes `\` `)`) hits
+  # the real bug: `Pdf.Text.escape/1` turns `)` into `\)`, yielding `\` `\`
+  # `)` (backslash, backslash, close-paren) -- a PDF parser reads THAT as one
+  # escaped-backslash pair (`\\`) followed by a BARE, unescaped `)`, which
+  # closes the PDF text-literal early. Everything after it in the content
+  # stream is then interpreted as raw PDF operators, not literal text --
+  # letting a candidate name or exam title inject arbitrary content-stream
+  # commands (e.g. drawing over/altering the displayed score).
+  #
+  # Fix: pre-escape every literal backslash to `\\` OURSELVES, BEFORE handing
+  # the string to `Pdf.text_at/4` (which internally calls the flawed
+  # `Text.escape/1` for the `(`/`)` pass only, via `Pdf.Page.kern_text/3`).
+  # Order is load-bearing per the PDF spec's own literal-string escaping
+  # rules: backslash MUST be escaped first, then `(`/`)`, or the parens pass
+  # would double-escape a backslash we already doubled and reintroduce this
+  # same bug. Concretely, for input bytes `\` `)`:
+  #   1. `escape_backslash/1` (this module): `\` -> `\\`, giving `\` `\` `)`.
+  #   2. `Pdf.Text.escape/1` (library, escapes `)` only, untouched by us):
+  #      `)` -> `\)`, giving `\` `\` `\` `)`.
+  #   3. A PDF parser reads that left to right as one `\\` pair (one literal
+  #      `\`) then one `\)` pair (one literal `)`) -- reconstructing the
+  #      original `\` `)` exactly, with NO early literal-close. Verified
+  #      against the real `pdf` library output, not just traced by hand --
+  #      see `certificate_document_test.exs`'s
+  #      "backslash-paren injection" test.
+  defp escape_backslash(text) when is_binary(text), do: String.replace(text, "\\", "\\\\")
+
+  defp safe_text_at(pdf, coords, text),
+    do: Pdf.text_at(pdf, coords, escape_backslash(text), @text_opts)
 
   # A fixed-width-per-character estimate (Helvetica is NOT monospace, so
   # this is deliberately approximate) -- good enough for this document's

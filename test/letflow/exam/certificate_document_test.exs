@@ -212,6 +212,128 @@ defmodule Letflow.Exam.CertificateDocumentTest do
     end
   end
 
+  # ---------------------------------------------------------------------
+  # SECURITY REGRESSION -- `deps/pdf`'s own `Pdf.Text.escape/1`
+  # (`deps/pdf/lib/pdf/text.ex:8-12`) escapes `(` and `)` but never a
+  # literal backslash. A candidate name (or exam title) containing a
+  # backslash directly before a `)` therefore made it into the emitted
+  # PDF content stream as `\` `\` `)` -- one escaped-backslash pair
+  # followed by a BARE, unescaped `)` that closed the PDF text-literal
+  # early, letting whatever followed be interpreted as raw content-stream
+  # operators instead of literal text (e.g. drawing over/altering the
+  # displayed score). `certificate_document.ex`'s `safe_text_at/3` now
+  # pre-escapes every backslash to `\\` BEFORE the library's own
+  # `(`/`)`-escaping pass runs, per the PDF literal-string spec's
+  # mandatory escaping order. These tests decode the ACTUAL PDF
+  # literal-string operands out of the rendered content stream (honoring
+  # backslash-escaping the way a real PDF parser would, not merely
+  # grepping for substrings) and assert every operand recovers exactly
+  # to its original input, with no injected content-stream operator ever
+  # appearing outside a literal.
+  # ---------------------------------------------------------------------
+
+  describe "render/2 -- PDF literal-string escaping (security)" do
+    test "a candidate name containing backslash-close-paren does not break out of its PDF text literal" do
+      # The exact defect class: a single `\` immediately followed by `)`,
+      # then content-stream operators that -- if the literal broke open --
+      # would inject a filled rectangle (visually overlaying the
+      # certificate) and open a second, unterminated literal.
+      injection = "Eve\\) 1 0 0 RG 0 0 800 800 re f (pwned"
+      cert = fixture_certificate(%{candidate_name: injection})
+
+      assert {:ok, bytes} = CertificateDocument.render(cert, fixture_verification())
+
+      {literals, residual} = decode_pdf_literal_operands(pdf_text_ops(bytes))
+
+      # The entire payload -- including the embedded operator-shaped text
+      # -- must recover as ONE literal, byte-for-byte identical to the
+      # original input. If the literal had broken open, this operand
+      # would instead show up truncated (e.g. just "Eve\") with the rest
+      # missing from `literals` entirely.
+      assert injection in literals
+
+      # And none of the injected tokens ever appear as REAL operators
+      # outside a decoded literal (i.e. leaked into the live content
+      # stream) -- only inside the literal operand asserted above.
+      refute residual =~ "RG"
+      refute residual =~ "800 800"
+      refute residual =~ "pwned"
+    end
+
+    test "standalone backslash, open-paren, and close-paren each round-trip as literal text" do
+      for {label, raw} <- [
+            {"lone backslash", "Back\\Slash"},
+            {"lone open-paren", "Open(Paren"},
+            {"lone close-paren", "Close)Paren"},
+            {"double backslash then close-paren", "Double\\\\)Close"}
+          ] do
+        cert = fixture_certificate(%{candidate_name: raw})
+
+        assert {:ok, bytes} = CertificateDocument.render(cert, fixture_verification()),
+               "render/2 failed for #{label}"
+
+        {literals, _residual} = decode_pdf_literal_operands(pdf_text_ops(bytes))
+
+        assert raw in literals,
+               "expected #{label} (#{inspect(raw)}) to round-trip exactly, got literals: #{inspect(literals)}"
+      end
+    end
+
+    test "an exam title containing backslash-close-paren round-trips exactly" do
+      injection = "Title\\) 1 0 0 rg (evil"
+      cert = fixture_certificate(%{exam_title: injection})
+
+      assert {:ok, bytes} = CertificateDocument.render(cert, fixture_verification())
+
+      {literals, _residual} = decode_pdf_literal_operands(pdf_text_ops(bytes))
+      assert injection in literals
+    end
+  end
+
+  # Decodes every well-formed PDF literal-string operand (`(...)`) out of a
+  # decompressed content-stream text, honoring backslash-escaping exactly as
+  # a real PDF parser would (ISO 32000-1 7.3.4.2: `\\` -> one literal
+  # backslash, `\(`/`\)` -> a literal paren, `\` + any other char -> that
+  # char literally, an UNESCAPED `)` closes the literal). Returns
+  # `{decoded_literals, residual_text}` where `residual_text` is everything
+  # OUTSIDE any literal (each literal replaced by a single space) -- used to
+  # confirm an injection payload never leaks out as real operators.
+  defp decode_pdf_literal_operands(text) do
+    {literals, residual} = scan_pdf_literals(text, false, [], [], [])
+    {Enum.reverse(literals), residual |> Enum.reverse() |> IO.iodata_to_binary()}
+  end
+
+  defp scan_pdf_literals(<<>>, _in_literal?, _acc, literals, residual), do: {literals, residual}
+
+  defp scan_pdf_literals(<<"\\", c, rest::binary>>, true, acc, literals, residual) do
+    decoded =
+      case c do
+        ?\\ -> ?\\
+        ?( -> ?(
+        ?) -> ?)
+        other -> other
+      end
+
+    scan_pdf_literals(rest, true, [decoded | acc], literals, residual)
+  end
+
+  defp scan_pdf_literals(<<")", rest::binary>>, true, acc, literals, residual) do
+    decoded = acc |> Enum.reverse() |> :binary.list_to_bin()
+    scan_pdf_literals(rest, false, [], [decoded | literals], [" " | residual])
+  end
+
+  defp scan_pdf_literals(<<c, rest::binary>>, true, acc, literals, residual) do
+    scan_pdf_literals(rest, true, [c | acc], literals, residual)
+  end
+
+  defp scan_pdf_literals(<<"(", rest::binary>>, false, _acc, literals, residual) do
+    scan_pdf_literals(rest, true, [], literals, residual)
+  end
+
+  defp scan_pdf_literals(<<c, rest::binary>>, false, acc, literals, residual) do
+    scan_pdf_literals(rest, false, acc, literals, [c | residual])
+  end
+
   # -----------------------------------------------------------------------
   # A PDF built by the `pdf` library is FlateDecode-compressed by default
   # (`compress: true`), so text operators are not literally grep-able in

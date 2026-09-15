@@ -3726,8 +3726,13 @@ volumes:
     path: docs/status/requirement_status.v17.yaml
     status: current
     opened: 2026-09-14
-    entries: 19
+    entries: 20
     note: >
+      Incremented to 20 by ORCH's own SCOPE-CHANGE (ISS-0676, blocked on
+      REQ-355 not yet merged) blocked-event append -- `grep -c "^  - req:"
+      docs/status/requirement_status.v17.yaml` = 20 on-disk entries; 953
+      lines / well under the roll ceiling, no roll triggered.
+
       Recounted to 19 during WF02-REQ352-20260914's Step Final rebase onto
       main, second conflict (Step 6's done-event replay): this branch's
       own REQ-352 done-event (originally appended against a stale

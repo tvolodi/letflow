@@ -921,3 +921,33 @@ history:
       Ships no projection module, no real kind string, and no frontend, per
       the requirement's own scope fence -- REQ-357 registers the first real
       kind on top of this platform machinery.
+
+  - req: SCOPE-CHANGE
+    event: blocked
+    agent: ORCH
+    at: 2026-09-15T02:38:47Z
+    note: >
+      Claimed letflow-queue task 676 (ISS-0676, GH#1415, agent_id
+      orch-session-issueloop) -- lowest-impl_order open task at the time.
+      Could not proceed: its affected files (lib/letflow/exam/certificate.ex,
+      lib/letflow/routers/exam_sessions.ex's render_issue_certificate/2)
+      belong to REQ-355, which does not exist on main yet -- confirmed via
+      `find . -iname "certificate*.ex"` returning nothing and
+      docs/requirements.yaml's REQ-355 entry still reading status: pending.
+      ISS-0676 was itself discovered by a concurrent session's REVIEWER
+      mid-run on WF02-REQ355-20260915 (per the issue's own
+      discovered_in_run field) -- REQ-355 is actively in progress on
+      another host/session's branch, not yet merged. The queue's
+      `depends_on: []` does not capture this real dependency (REQ-355
+      hasn't been assigned a queue task id yet, or the dependency was
+      never registered). Released the queue lock with status: blocked
+      (not done, not back to open) so a subsequent get_next_task call does
+      not keep handing this same unworkable task back -- confirmed via a
+      second get_next_task call returning the identical task 676 before
+      this blocked-release, and the queue's own response after release
+      showing status: blocked. No branch was created beyond a throwaway
+      Step 00 (fix/ISS-0676-20260915, deleted locally and on remote, no
+      commits). This entry should be revisited once REQ-355 merges to
+      main -- the fix direction is likely a simple documented-precedent
+      addition (Option 3 in the issue's own FIX DIRECTION), not a code
+      restructure, once the target file exists.

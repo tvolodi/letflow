@@ -1125,3 +1125,28 @@ history:
       Flipped docs/requirements.yaml's REQ-357 status in_progress -> done.
       Did not re-review REVIEWER's or SECURITY-REVIEWER's verdicts, per
       this pipeline's own convention that they are final.
+
+  - req: SCOPE-CHANGE
+    event: blocked
+    agent: ORCH
+    at: 2026-09-15T05:07:16Z
+    note: >
+      Claimed letflow-queue task 679 (ISS-0679, agent_id
+      orch-session-issueloop) -- lowest-impl_order open task. Could not
+      proceed: its target file (lib/letflow/exam/certificate_document.ex)
+      belongs to REQ-356 (PDF/QR certificate rendering), which is still
+      status: pending in docs/requirements.yaml and does not exist on
+      main -- confirmed via `ls lib/letflow/exam/certificate_document.ex`
+      returning nothing. ISS-0679 was itself discovered by REVIEWER
+      during REQ-356's own close-out, meaning REQ-356 is actively
+      in-progress on another concurrent session's branch, not yet
+      merged -- same class of premature-dependency gap as ISS-0676
+      (blocked earlier this run pending REQ-355, since resolved when
+      REQ-355 merged). Released the queue lock with status: blocked
+      rather than done/open, so a subsequent get_next_task call does not
+      keep handing this same unworkable task back. No branch was
+      created beyond a throwaway Step 00 (fix/ISS-0679-20260915,
+      deleted locally and on remote, no commits). Revisit once REQ-356
+      merges -- the fix direction (font embedding vs. library swap vs.
+      explicit deferral) is well-scoped in the issue's own FIX
+      DIRECTION section once the target file exists.

@@ -272,6 +272,7 @@ defmodule Letflow.Exam.CertificateTest do
       # byte-identical.
       assert first.first_issuance == true
       assert second.first_issuance == false
+
       assert Map.drop(first, [:first_issuance, :public_read_resource_id]) ==
                Map.drop(second, [:first_issuance, :public_read_resource_id])
 
@@ -344,6 +345,7 @@ defmodule Letflow.Exam.CertificateTest do
       # call and the idempotent-replay call; everything else must match.
       assert reread.first_issuance == false
       assert issued.first_issuance == true
+
       assert Map.drop(reread, [:first_issuance, :public_read_resource_id]) ==
                Map.drop(issued, [:first_issuance, :public_read_resource_id])
     end

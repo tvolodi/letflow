@@ -796,7 +796,9 @@ defmodule Letflow.Routers.ExamSessionsTest do
       # test/support/public_read_fixture_support.ex's revoke_handle!/1 already
       # establishes, since no admin/retraction write path exists yet
       # (Letflow.Exam.CertificatePublicProjection's own moduledoc).
-      Repo.get_by!(Letflow.Entities.Record.Latest, [record_id: issued["id"], entity_type: "certificate"],
+      Repo.get_by!(
+        Letflow.Entities.Record.Latest,
+        [record_id: issued["id"], entity_type: "certificate"],
         prefix: tenant.schema_name
       )
       |> Ecto.Changeset.change(deleted: true)

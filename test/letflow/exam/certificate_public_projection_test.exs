@@ -96,7 +96,10 @@ defmodule Letflow.Exam.CertificatePublicProjectionTest do
     end
 
     test "handle_meta is ignored entirely -- project/2 is a function of the resource alone" do
-      assert Projection.project(record(@field_values), %{issued_at: DateTime.utc_now(), kind: "certificate"}) ==
+      assert Projection.project(record(@field_values), %{
+               issued_at: DateTime.utc_now(),
+               kind: "certificate"
+             }) ==
                Projection.project(record(@field_values), %{})
     end
   end

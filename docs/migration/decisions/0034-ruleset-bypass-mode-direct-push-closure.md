@@ -194,3 +194,63 @@ Whoever applies this must re-verify the `required_status_checks` override intera
 authorization (`gh auth refresh -h github.com -s delete_repo`) this agent left
 uncompleted rather than push through unattended. This is surfaced to the user directly
 in this record and in the handoff report; it is not a silent gap.
+
+## REVIEWER sign-off
+
+**PASS (2026-09-15, `REVIEWER`, ISS-0678/GH#1418).**
+
+This record carried no `REVIEWER sign-off` section at all, not even a `PENDING`
+placeholder (unlike 0033, 0005, etc.) — noted as a documentation-convention gap, not
+grounds for FAIL on its own; this section supplies the missing sign-off rather than
+sending the PR back purely for that.
+
+Independently re-verified, not taken on the record's word:
+
+- **Premise-1 claim (`bypass_actors` is ruleset-scoped, not per-rule-type)** —
+  cross-checked against GitHub's REST API docs for repo rulesets directly (not the
+  record's paraphrase): confirmed. `bypass_actors` is a single array on the ruleset as a
+  whole; there is no per-rule-type bypass field. The issue's original premise is
+  correctly identified as false.
+- **`bypass_mode` values and semantics** — GitHub's docs list three values:
+  `always`, `pull_request`, and `exempt`. The record only discusses `always` and
+  `pull_request` (the two it tested); it does not mention `exempt`. This is an
+  incompleteness, not an error — the two modes it does describe match GitHub's
+  documented behavior exactly (`pull_request`: actor's bypass applies only to rule
+  evaluations occurring as part of a pull request; a bare push is not such an
+  evaluation, so the actor gets no bypass and is rejected like any non-bypassed actor).
+  Not a blocker; worth a one-line follow-up note if this record is revisited, but does
+  not change the finding for the mechanism actually being adopted.
+- **Test methodology** — the four-step live test (bare push blocked under
+  `bypass_mode: pull_request` → real `GH013` rejection quoted; PR-merge succeeds under
+  the same config; switching only `bypass_mode` to `always` reproduces 0018's exact
+  informational-bypass failure mode) isolates the one variable that matters
+  (`bypass_mode`, holding actor/rules/repo constant) and produces a genuine falsifiable
+  contrast rather than a single success case. This is sound methodology and the
+  conclusion follows from the evidence shown, not just asserted.
+- **Production repo untouched** — independently confirmed at review time, not
+  taken on the record's claim: `gh api repos/tvolodi/letflow/branches/main/protection`
+  returns the unchanged classic-protection configuration (contexts
+  `Backend gate (mix letflow.check)` / `Frontend gate (npm run check)`,
+  `enforce_admins: false`, `allow_force_pushes: false`, `allow_deletions: false` — same
+  shape as 0018 left it); `gh api repos/tvolodi/letflow/rulesets` returns `[]`. No
+  ruleset exists on the real repo.
+- **Non-application framing** — the record states explicitly, in its own
+  "Recommendation" and "What this record does not do" sections, that applying the
+  proposed ruleset config to `tvolodi/letflow` requires separate user authorization and
+  was not done by this record. This is stated plainly, not left implicit.
+- **Diff scope** — `git diff main...iss-0678-ruleset-research --name-only` shows exactly
+  one file: this decision record. No application code, migration, or live
+  configuration touched.
+- **Idiom / scope-creep read (REVIEWER's own remit beyond the AC checklist).** Pure
+  decision record — no `gen_statem`, no supervision tree, no code at all, so criteria
+  1–2 of REVIEWER's usual checklist don't apply. No scope creep: the record proposes a
+  configuration sketch but explicitly declines to apply it or to touch GIT_MERGE.md/0018
+  until a follow-on, separately authorized step — it does not reach ahead of what this
+  research task needed.
+
+**Outstanding items not blocking this PASS** (already flagged by the record itself, not
+new findings): the `required_status_checks` override path under rulesets
+(`gh pr merge --admin` equivalent) is explicitly named as unverified and left for
+whoever applies the config; the disposable test repo
+`tvolodi/letflow-ruleset-test-0655` cleanup is a separately tracked item per this task's
+own instructions.

@@ -202,6 +202,30 @@ defmodule Letflow.Exam.Certificate do
   alias Letflow.Routers.TenantConfig
   alias Letflow.TenantProvisioning
 
+  # ISS-0676 -- exhaustiveness over this union is NOT compiler-enforced.
+  # `Letflow.Routers.ExamSessions.render_issue_certificate/2` has one clause
+  # per atom below, plus a catch-all clause (that router's own comment
+  # above it explains why). Elixir's `@type` unions carry no case/function-
+  # clause exhaustiveness check the way a real sum type would, and Dialyzer
+  # does not fill that gap either -- confirmed by a real `mix dialyzer` run
+  # during this issue's investigation: temporarily adding a 7th atom here
+  # (with and without an explicit `@spec` on the router function naming
+  # this type) produced ZERO new warnings, because the router's catch-all
+  # clause widens the accepted type to `term()`, so Dialyzer's success
+  # typing sees no contract violation to report. `Letflow.Exam.Session`'s
+  # own `eligibility_error`/`autosave_error`/`submit_error` unions
+  # (session.ex:129-146) are the same shape for the same reason -- REVIEWER
+  # already accepted this as an established, non-blocking precedent for
+  # this vertical.
+  #
+  # When adding a new atom to this union: (1) add a matching
+  # `render_issue_certificate/2` clause in exam_sessions.ex, not just this
+  # type, and (2) add a case to
+  # `test/letflow/routers/exam_sessions_test.exs`'s "every issue_error atom
+  # ... renders its own distinct response" test (ISS-0676) asserting the
+  # new atom reaches its own clause rather than falling into the 500
+  # catch-all. Neither step is compiler-checked; both are how this gap is
+  # actually covered.
   @type issue_error ::
           :session_not_found
           | :not_owner

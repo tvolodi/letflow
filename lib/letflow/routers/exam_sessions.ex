@@ -513,6 +513,26 @@ defmodule Letflow.Routers.ExamSessions do
     Response.conflict(conn, "session was not passed")
   end
 
+  # ISS-0676 -- this catch-all is a deliberate, accepted idiom, not an
+  # oversight. `Letflow.Exam.Certificate.issue_error/0`
+  # (certificate.ex:205-...) is a `@type` union, and Elixir/Dialyzer give no
+  # compile-time exhaustiveness check of this clause set against it -- a
+  # real `mix dialyzer` run performed for this issue confirmed adding an
+  # atom to that union (with or without an explicit `@spec` on this
+  # function naming the type) produces zero warnings, because this very
+  # catch-all widens the accepted type to `term()`. `render_autosave/2` and
+  # `render_submit/2` above use the identical catch-all-plus-`Logger.warning`
+  # shape against `Letflow.Exam.Session`'s own error unions
+  # (session.ex:129-146) -- this is that established, REVIEWER-accepted
+  # precedent, not a one-off.
+  #
+  # When adding a new atom to `issue_error`: add a matching clause ABOVE
+  # this one, and add a case to
+  # `test/letflow/routers/exam_sessions_test.exs`'s "every issue_error atom
+  # ... renders its own distinct response" test (ISS-0676) proving the new
+  # atom reaches its own clause. Skipping either step means the new atom
+  # silently falls through to the generic 500 below, with no compiler or
+  # Dialyzer warning to catch the omission.
   defp render_issue_certificate(conn, {:error, reason}) do
     Logger.warning("exam certificate issuance failed: #{inspect(reason)}")
     Response.internal_error(conn)

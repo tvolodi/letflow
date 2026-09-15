@@ -30,6 +30,7 @@ defmodule Letflow.Routers.ExamSessions do
   | autosave_answer | `PUT /exam-sessions/:id/answers/:question_id` | `Letflow.Exam.Session.autosave_answer/4` | `ExamSessionSave` | 200 / 400 / 404 / 422 |
   | submit_session | `POST /exam-sessions/:id/submit` | `Letflow.Exam.Session.submit/3` | `ExamSessionSubmit` | 200 / 404 |
   | report_event | `POST /exam-sessions/:id/events` | `Letflow.Exam.AntiCheat.record_signal/4` | `ExamSessionReportEvent` | 200 / 400 / 404 / 422 |
+  | issue_certificate | `POST /exam-sessions/:id/certificate` | `Letflow.Exam.Certificate.issue_or_get_for_user/3` (REQ-355) | `ExamCertificateIssue` | 200 / 404 / 409 |
 
   ## Deliberately NOT routed here, and why (REQ-335's own scope fence)
 
@@ -120,6 +121,7 @@ defmodule Letflow.Routers.ExamSessions do
   alias Letflow.Api.Validation
   alias Letflow.Api.Validation.FieldConstraint
   alias Letflow.Exam.AntiCheat
+  alias Letflow.Exam.Certificate
   alias Letflow.Exam.Session
 
   # ── Start session ───────────────────────────────────────────────────────
@@ -159,6 +161,19 @@ defmodule Letflow.Routers.ExamSessions do
 
   authz_post "/:id/events", :ExamSessionReportEvent do
     handle_report_event(conn, conn.params["id"])
+  end
+
+  # ── Certificate issuance (REQ-355) ──────────────────────────────────────
+  #
+  # Idempotent issue-on-first-request: the first call for an eligible
+  # session creates the certificate, every later call for the SAME session
+  # returns the identical, already-issued record. See
+  # Letflow.Exam.Certificate's own moduledoc for the full guard order and
+  # idempotency guarantee -- this route is a thin composition layer over it,
+  # same shape as every other route in this module.
+
+  authz_post "/:id/certificate", :ExamCertificateIssue do
+    handle_issue_certificate(conn, conn.params["id"])
   end
 
   match _ do
@@ -390,6 +405,66 @@ defmodule Letflow.Routers.ExamSessions do
     Response.internal_error(conn)
   end
 
+  # ══ POST /exam-sessions/:id/certificate ═══════════════════════════════
+  #
+  # `candidate_id` is ALWAYS conn.assigns.auth_context.user_id, same as
+  # every other route in this module -- REQ-355's own scope fence is a
+  # candidate requesting issuance for THEIR OWN session, never a
+  # caller-supplied candidate identity.
+
+  defp handle_issue_certificate(conn, raw_session_id) do
+    candidate_id = conn.assigns.auth_context.user_id
+    prefix = prefix!(conn)
+
+    case cast_uuid(raw_session_id) do
+      {:ok, session_id} ->
+        render_issue_certificate(
+          conn,
+          Certificate.issue_or_get_for_user(candidate_id, session_id, prefix)
+        )
+
+      :error ->
+        Response.not_found(conn)
+    end
+  end
+
+  defp render_issue_certificate(conn, {:ok, certificate}),
+    do: Response.ok(conn, certificate_json(certificate))
+
+  # :session_not_found and :not_owner render through the SAME zero-detail
+  # 404 (INV-5) -- the identical pair every other route in this module
+  # already renders this way.
+  defp render_issue_certificate(conn, {:error, :session_not_found}), do: Response.not_found(conn)
+  defp render_issue_certificate(conn, {:error, :not_owner}), do: Response.not_found(conn)
+
+  # Three DISTINCT 409 messages -- see Letflow.Exam.Certificate's own
+  # moduledoc "grading_pending is not a passed: false refusal" for why
+  # :grading_pending gets its own honest message rather than reusing
+  # :session_not_passed's.
+  defp render_issue_certificate(conn, {:error, :grading_pending}) do
+    Response.conflict(
+      conn,
+      "this session contains a short-answer question awaiting grading and is not yet eligible for a certificate"
+    )
+  end
+
+  defp render_issue_certificate(conn, {:error, :session_not_submitted}) do
+    Response.conflict(conn, "session has not been submitted yet")
+  end
+
+  defp render_issue_certificate(conn, {:error, :exam_not_certifiable}) do
+    Response.conflict(conn, "this exam does not issue certificates")
+  end
+
+  defp render_issue_certificate(conn, {:error, :session_not_passed}) do
+    Response.conflict(conn, "session was not passed")
+  end
+
+  defp render_issue_certificate(conn, {:error, reason}) do
+    Logger.warning("exam certificate issuance failed: #{inspect(reason)}")
+    Response.internal_error(conn)
+  end
+
   # ══ POST /exam-sessions/:id/events ═════════════════════════════════════
   #
   # `action_taken` is NEVER accepted from the caller -- there is no such
@@ -462,6 +537,26 @@ defmodule Letflow.Routers.ExamSessions do
 
   # ══ JSON shaping (hand-selected fields only -- see this module's own
   # moduledoc redaction section) ══════════════════════════════════════════
+
+  defp certificate_json(%{
+         id: id,
+         session_id: session_id,
+         issued_at: issued_at,
+         candidate_name: candidate_name,
+         exam_title: exam_title,
+         score_pct: score_pct,
+         branding_snapshot: branding_snapshot
+       }) do
+    %{
+      "id" => id,
+      "session_id" => session_id,
+      "issued_at" => DateTime.to_iso8601(issued_at),
+      "candidate_name" => candidate_name,
+      "exam_title" => exam_title,
+      "score_pct" => score_pct,
+      "branding_snapshot" => branding_snapshot
+    }
+  end
 
   defp session_view_json(%{
          id: id,

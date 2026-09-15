@@ -271,7 +271,24 @@ defmodule Letflow.Routers.TenantConfig do
   defp branding_map(%Tenant{settings: settings}), do: branding_from_settings(settings)
   defp branding_map(nil), do: branding_from_settings(nil)
 
-  defp branding_from_settings(settings) when is_map(settings) do
+  @doc """
+  REQ-355 -- made `def` (was `defp`) so `Letflow.Exam.Certificate` can read
+  the exact same three-key branding map this router's own `config/2` route
+  exposes, rather than re-deriving branding from `Tenant.settings` a second
+  way. Still the same allowlist-by-construction read this module's own
+  moduledoc documents: exactly three named `Map.get/3` reads over
+  `settings`, never a merge or `Map.from_struct/1`, so an out-of-allowlist
+  key cannot surface here even if `TenantSettings`' write-time enforcement
+  were bypassed. `settings` is a tenant's raw `Tenant.settings` map (or
+  `nil`) -- callers outside this module still resolve their own `%Tenant{}`
+  first (this function does no `Repo` call itself, matching the rest of
+  this module's read-only, DB-call-free shape apart from `config/2`'s own
+  lookup).
+  """
+  @spec branding_from_settings(settings :: map() | nil) :: %{
+          String.t() => String.t() | nil | map()
+        }
+  def branding_from_settings(settings) when is_map(settings) do
     %{
       "app_name" => Map.get(settings, "app_name", @default_app_name),
       "logo_url" => Map.get(settings, "logo_url", @default_logo_url),
@@ -279,7 +296,7 @@ defmodule Letflow.Routers.TenantConfig do
     }
   end
 
-  defp branding_from_settings(_nil_or_other) do
+  def branding_from_settings(_nil_or_other) do
     %{
       "app_name" => @default_app_name,
       "logo_url" => @default_logo_url,

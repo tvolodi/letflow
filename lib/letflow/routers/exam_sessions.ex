@@ -31,6 +31,7 @@ defmodule Letflow.Routers.ExamSessions do
   | submit_session | `POST /exam-sessions/:id/submit` | `Letflow.Exam.Session.submit/3` | `ExamSessionSubmit` | 200 / 404 |
   | report_event | `POST /exam-sessions/:id/events` | `Letflow.Exam.AntiCheat.record_signal/4` | `ExamSessionReportEvent` | 200 / 400 / 404 / 422 |
   | issue_certificate | `POST /exam-sessions/:id/certificate` | `Letflow.Exam.Certificate.issue_or_get_for_user/3` (REQ-355) | `ExamCertificateIssue` | 200 / 404 / 409 |
+  | download_certificate | `GET /exam-sessions/:id/certificate/download` | `Letflow.Exam.Certificate.issue_or_get_for_user/3` + `Letflow.Exam.CertificateDocument.render/2` (REQ-356) | `ExamCertificateIssue` | 200 (`application/pdf`) / 404 / 409 |
 
   ## Deliberately NOT routed here, and why (REQ-335's own scope fence)
 
@@ -122,6 +123,7 @@ defmodule Letflow.Routers.ExamSessions do
   alias Letflow.Api.Validation.FieldConstraint
   alias Letflow.Exam.AntiCheat
   alias Letflow.Exam.Certificate
+  alias Letflow.Exam.CertificateDocument
   alias Letflow.Exam.Session
   alias Letflow.PublicRead
 
@@ -175,6 +177,21 @@ defmodule Letflow.Routers.ExamSessions do
 
   authz_post "/:id/certificate", :ExamCertificateIssue do
     handle_issue_certificate(conn, conn.params["id"])
+  end
+
+  # ── Certificate document download (REQ-356) ──────────────────────────────
+  #
+  # Reuses `:ExamCertificateIssue` rather than minting a new permission atom:
+  # this route's own eligibility/ownership check IS
+  # `Letflow.Exam.Certificate.issue_or_get_for_user/3` (the identical
+  # idempotent issue-or-fetch call the issuance route above makes -- a
+  # candidate who can download a certificate is, by definition, exactly a
+  # candidate who could issue/fetch one), so no new authorization semantics
+  # exist here that would justify growing `Letflow.Api.Authorization`'s
+  # permission matrix for a rendering-only requirement's own scope.
+
+  authz_get "/:id/certificate/download", :ExamCertificateIssue do
+    handle_download_certificate(conn, conn.params["id"])
   end
 
   match _ do
@@ -499,6 +516,99 @@ defmodule Letflow.Routers.ExamSessions do
   defp render_issue_certificate(conn, {:error, reason}) do
     Logger.warning("exam certificate issuance failed: #{inspect(reason)}")
     Response.internal_error(conn)
+  end
+
+  # ══ GET /exam-sessions/:id/certificate/download ════════════════════════
+  #
+  # REQ-356. Issues-or-fetches (idempotent, same as the POST route above),
+  # then renders PDF bytes FRESH on every request via
+  # `Letflow.Exam.CertificateDocument.render/2` -- nothing is read from or
+  # written to any attachment store; see that module's own moduledoc
+  # "Storage" section for the full regenerate-vs-persist statement.
+
+  defp handle_download_certificate(conn, raw_session_id) do
+    candidate_id = conn.assigns.auth_context.user_id
+    prefix = prefix!(conn)
+
+    case cast_uuid(raw_session_id) do
+      {:ok, session_id} ->
+        render_download_certificate(
+          conn,
+          Certificate.issue_or_get_for_user(candidate_id, session_id, prefix)
+        )
+
+      :error ->
+        Response.not_found(conn)
+    end
+  end
+
+  defp render_download_certificate(conn, {:ok, certificate}) do
+    # `verification.code` -- REQ-357 not landed yet (see
+    # `CertificateDocument`'s own moduledoc "Verification code" section):
+    # the certificate entity carries no `verification_code` field, so this
+    # route passes the certificate's OWN record id as an interim stand-in.
+    # This is flagged, not silently treated as final -- REQ-357's real,
+    # non-guessable capability handle (decision 0028) supersedes it without
+    # requiring any change to `CertificateDocument.render/2`'s own
+    # signature, by design.
+    verification = %{base_url: certificate_verify_base_url(), code: certificate.id}
+
+    case CertificateDocument.render(certificate, verification) do
+      {:ok, bytes} ->
+        conn
+        |> put_resp_content_type("application/pdf", nil)
+        |> put_resp_header(
+          "content-disposition",
+          "attachment; filename=\"certificate-#{certificate.id}.pdf\""
+        )
+        |> send_resp(200, bytes)
+
+      {:error, reason} ->
+        Logger.warning("exam certificate document render failed: #{inspect(reason)}")
+        Response.internal_error(conn)
+    end
+  end
+
+  defp render_download_certificate(conn, {:error, :session_not_found}),
+    do: Response.not_found(conn)
+
+  defp render_download_certificate(conn, {:error, :not_owner}), do: Response.not_found(conn)
+
+  defp render_download_certificate(conn, {:error, :grading_pending}) do
+    Response.conflict(
+      conn,
+      "this session contains a short-answer question awaiting grading and is not yet eligible for a certificate"
+    )
+  end
+
+  defp render_download_certificate(conn, {:error, :session_not_submitted}) do
+    Response.conflict(conn, "session has not been submitted yet")
+  end
+
+  defp render_download_certificate(conn, {:error, :exam_not_certifiable}) do
+    Response.conflict(conn, "this exam does not issue certificates")
+  end
+
+  defp render_download_certificate(conn, {:error, :session_not_passed}) do
+    Response.conflict(conn, "session was not passed")
+  end
+
+  defp render_download_certificate(conn, {:error, reason}) do
+    Logger.warning("exam certificate download failed: #{inspect(reason)}")
+    Response.internal_error(conn)
+  end
+
+  # Read at the point of use via `System.get_env/1`, matching
+  # `Letflow.Routers.TenantConfig.idp_base_url/0`'s own INV-4-compliant
+  # style (never threaded through a struct field, never logged) -- a
+  # verification base URL is not secret material, but the resolution style
+  # follows that precedent regardless. `@default_certificate_verify_base_url`
+  # matches this project's own dev HTTP port (`config/dev.exs`'s
+  # `http_port: 4000`).
+  @default_certificate_verify_base_url "http://localhost:4000"
+
+  defp certificate_verify_base_url do
+    System.get_env("CERTIFICATE_VERIFY_BASE_URL") || @default_certificate_verify_base_url
   end
 
   # ══ POST /exam-sessions/:id/events ═════════════════════════════════════

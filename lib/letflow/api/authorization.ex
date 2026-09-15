@@ -708,6 +708,16 @@ defmodule Letflow.Api.Authorization do
   def endpoint_policy_key("POST", "/exam-sessions/:id/certificate"),
     do: :ExamCertificateIssue
 
+  # REQ-356 -- the authenticated certificate PDF download route. Reuses
+  # :ExamCertificateIssue rather than a new atom: this route's own
+  # eligibility/ownership check is the identical
+  # Letflow.Exam.Certificate.issue_or_get_for_user/3 call the POST route
+  # above makes (see lib/letflow/routers/exam_sessions.ex's own route
+  # comment) -- no new authorization semantics exist to justify a new
+  # permission for a rendering-only requirement's own scope.
+  def endpoint_policy_key("GET", "/exam-sessions/:id/certificate/download"),
+    do: :ExamCertificateIssue
+
   # REQ-352 — the generic, kind-agnostic authenticated issue route
   # (Letflow.Routers.PublicReadHandles), mounted at /public-read-handles.
   # See design lib/letflow/design/req352-unauthenticated-read-platform.md §13.1.

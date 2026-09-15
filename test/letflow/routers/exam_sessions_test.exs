@@ -192,9 +192,9 @@ defmodule Letflow.Routers.ExamSessionsTest do
       end
     end
 
-    test "six routes are declared, matching the moduledoc's route table" do
+    test "seven routes are declared, matching the moduledoc's route table" do
       routes = Letflow.Routers.ExamSessions.__authz_routes__()
-      assert length(routes) == 6
+      assert length(routes) == 7
 
       assert {"POST", "/", :ExamSessionStart} in routes
       assert {"GET", "/:id", :ExamSessionRead} in routes
@@ -202,6 +202,7 @@ defmodule Letflow.Routers.ExamSessionsTest do
       assert {"POST", "/:id/submit", :ExamSessionSubmit} in routes
       assert {"POST", "/:id/events", :ExamSessionReportEvent} in routes
       assert {"POST", "/:id/certificate", :ExamCertificateIssue} in routes
+      assert {"GET", "/:id/certificate/download", :ExamCertificateIssue} in routes
     end
   end
 
@@ -647,6 +648,145 @@ defmodule Letflow.Routers.ExamSessionsTest do
         request(
           "POST",
           "/api/v1/exam-sessions/#{Ecto.UUID.generate()}/certificate",
+          other_ctx,
+          nil,
+          trace_id: trace_id
+        )
+
+      assert probe_conn.status == 404
+      assert missing_conn.status == 404
+      assert probe_conn.resp_body == missing_conn.resp_body
+    end
+  end
+
+  # ── REQ-356: certificate document download route, real HTTP end to end ──
+  #
+  # Full renderer coverage (magic-number check, field extraction, QR
+  # payload decode, branding-snapshot purity) lives in
+  # test/letflow/exam/certificate_document_test.exs against
+  # Letflow.Exam.CertificateDocument directly. This describe block proves
+  # only that the route is wired correctly: authenticated,
+  # CANDIDATE-reachable, returns a real PDF, and shares the issuance
+  # route's ownership/eligibility guards end to end.
+
+  describe "GET /exam-sessions/:id/certificate/download" do
+    test "start -> submit (passed) -> download returns a PDF with the right headers" do
+      tenant = tenant("req356-download-route")
+      ctx = candidate_ctx(tenant)
+
+      %{exam: exam, question_id: question_id, correct_id: correct_id} =
+        build_minimal_exam!(tenant.schema_name, %{"certificate_enabled" => true})
+
+      started = start_session!(ctx, exam.record_id)
+      session_id = started["session"]["id"]
+
+      request(
+        "PUT",
+        "/api/v1/exam-sessions/#{session_id}/answers/#{question_id}",
+        ctx,
+        %{"selected_option_ids" => [correct_id], "time_spent_seconds" => 5}
+      )
+
+      submit_conn = request("POST", "/api/v1/exam-sessions/#{session_id}/submit", ctx)
+      assert %{"status" => "submitted", "passed" => true} = json(submit_conn)
+
+      conn = request("GET", "/api/v1/exam-sessions/#{session_id}/certificate/download", ctx)
+
+      assert conn.status == 200
+      assert Plug.Conn.get_resp_header(conn, "content-type") == ["application/pdf"]
+
+      assert [disposition] = Plug.Conn.get_resp_header(conn, "content-disposition")
+      assert disposition =~ "attachment"
+      assert disposition =~ ".pdf"
+
+      assert byte_size(conn.resp_body) > 0
+      assert binary_part(conn.resp_body, 0, 5) == "%PDF-"
+    end
+
+    test "downloading is idempotent -- issues (or fetches) the SAME certificate both times" do
+      tenant = tenant("req356-download-idempotent")
+      ctx = candidate_ctx(tenant)
+
+      %{exam: exam, question_id: question_id, correct_id: correct_id} =
+        build_minimal_exam!(tenant.schema_name, %{"certificate_enabled" => true})
+
+      started = start_session!(ctx, exam.record_id)
+      session_id = started["session"]["id"]
+
+      request(
+        "PUT",
+        "/api/v1/exam-sessions/#{session_id}/answers/#{question_id}",
+        ctx,
+        %{"selected_option_ids" => [correct_id], "time_spent_seconds" => 5}
+      )
+
+      request("POST", "/api/v1/exam-sessions/#{session_id}/submit", ctx)
+
+      issue_conn = request("POST", "/api/v1/exam-sessions/#{session_id}/certificate", ctx)
+      issued = json(issue_conn)
+
+      first_download =
+        request("GET", "/api/v1/exam-sessions/#{session_id}/certificate/download", ctx)
+
+      second_download =
+        request("GET", "/api/v1/exam-sessions/#{session_id}/certificate/download", ctx)
+
+      assert first_download.status == 200
+      assert second_download.status == 200
+      # Byte-identical: both downloads render the SAME idempotent
+      # certificate record with no live-branding re-read in between.
+      assert first_download.resp_body == second_download.resp_body
+      assert byte_size(first_download.resp_body) > 0
+      assert is_binary(issued["candidate_name"])
+    end
+
+    test "certificate_enabled: false on the exam is refused with 409, not a PDF" do
+      tenant = tenant("req356-download-not-certifiable")
+      ctx = candidate_ctx(tenant)
+
+      %{exam: exam, question_id: question_id, correct_id: correct_id} =
+        build_minimal_exam!(tenant.schema_name, %{"certificate_enabled" => false})
+
+      started = start_session!(ctx, exam.record_id)
+      session_id = started["session"]["id"]
+
+      request(
+        "PUT",
+        "/api/v1/exam-sessions/#{session_id}/answers/#{question_id}",
+        ctx,
+        %{"selected_option_ids" => [correct_id], "time_spent_seconds" => 5}
+      )
+
+      request("POST", "/api/v1/exam-sessions/#{session_id}/submit", ctx)
+
+      conn = request("GET", "/api/v1/exam-sessions/#{session_id}/certificate/download", ctx)
+      assert conn.status == 409
+    end
+
+    test "another candidate's session_id renders the same 404 as a nonexistent one (INV-5)" do
+      tenant = tenant("req356-download-ownership")
+      owner_ctx = candidate_ctx(tenant)
+      other_ctx = candidate_ctx(tenant)
+
+      %{exam: exam} = build_minimal_exam!(tenant.schema_name, %{"certificate_enabled" => true})
+      started = start_session!(owner_ctx, exam.record_id)
+      session_id = started["session"]["id"]
+
+      trace_id = "req356-inv5-#{Ecto.UUID.generate()}"
+
+      probe_conn =
+        request(
+          "GET",
+          "/api/v1/exam-sessions/#{session_id}/certificate/download",
+          other_ctx,
+          nil,
+          trace_id: trace_id
+        )
+
+      missing_conn =
+        request(
+          "GET",
+          "/api/v1/exam-sessions/#{Ecto.UUID.generate()}/certificate/download",
           other_ctx,
           nil,
           trace_id: trace_id

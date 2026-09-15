@@ -143,7 +143,7 @@ at the normal one-agent-turn sizing when it becomes the active phase.
 | **P0** | This stage file, decision 0022, an `FR-BB` index reconstructed from its actual citation sites, and the `FR-BB` → `REQ-xxx` translation with a bucket declared on each | — | every S10 requirement is filed and `REQ-VALIDATOR`-passed |
 | **P1** | Close gaps 1–6 and 10–13; land 7–9 | B | `mix letflow.check` and `web/`'s `npm run check` green with all thirteen closed. As of 2026-09-12 gaps 1, 2, 3, 7, 8, 9, 10, 11, 12 and 13 are closed; gaps 4 and 5 have their mechanism settled by decision 0027 but remain open as capabilities (no mailer/SMTP, no PDF/QR dependency); **gap 6 is now closed** — `REQ-323`'s design (decision 0028), `REQ-352`'s platform machinery and `REQ-357`'s first real public-read kind (the certificate projection) are all `done`, see the "Gaps" section above and the bucket-C inventory below |
 | **P2** | The pack: entity definitions, process definitions, role-registry seed, Lua grading rules | A | a tenant with a working question bank and exam configuration, and **zero exam-specific Elixir**. Reachable as of 2026-09-11: gaps 10, 11 and 13 are closed — see below |
-| **P3** | `lib/letflow/exam/`: live session (deadline, autosave, per-question scoring, anti-cheat), certificate issuance | C | each module carries its `REVIEWER` bucket-C sign-off — met as of 2026-09-13 (see bucket-C inventory above). **This row's bucket (C) and deliverable list were a prediction, not the full outcome: P3 also produced bucket-A work (`REQ-329`, five session entity definitions) and bucket-B work (`REQ-331`, the deadline sweep on `Letflow.Scheduler.Poller`) — see "Bucket-C inventory" above. Certificate issuance was NOT delivered by P3: it needs PDF and QR rendering, `mix.exs` carries no such dependency, and gaps 4 and 5 (above) have their mechanism settled by decision `0027` but their capabilities remain open and unowned. A later reader should not read P3's completion as covering certificates. **Update, REQ-355:** the issuance HALF of certificates now exists (`Letflow.Exam.Certificate`, `priv/packs/bilimbaga/entity_definitions/certificate.json`) — eligibility guards, idempotent issue-or-fetch, and a branding snapshot captured at issuance. **Update, REQ-357 (`done`):** the QR/public-verification half is now built too — `Letflow.Exam.CertificatePublicProjection` registers the certificate as decision 0028's first real public-read kind, together with `REQ-352` (the platform half: the `/api/public` mount, sub-router, registry, rate limiter and refusal path, already merged). A handle is minted through `REQ-352`'s writer at `REQ-355`'s authenticated issue path; no second issue path or registry write surface was added. See the bucket-C inventory above (`Letflow.Exam.CertificatePublicProjection` row) for the full rule-2 adjudication. What still does NOT exist: PDF rendering (`REQ-356`, still `status: pending` in `docs/requirements.yaml` as of this entry) — `mix.exs` still carries no PDF-rendering dependency on `main`, so a later reader must not read this as full certificate delivery until `REQ-356` lands too.** |
+| **P3** | `lib/letflow/exam/`: live session (deadline, autosave, per-question scoring, anti-cheat), certificate issuance | C | each module carries its `REVIEWER` bucket-C sign-off — met as of 2026-09-13 (see bucket-C inventory above). **This row's bucket (C) and deliverable list were a prediction, not the full outcome: P3 also produced bucket-A work (`REQ-329`, five session entity definitions) and bucket-B work (`REQ-331`, the deadline sweep on `Letflow.Scheduler.Poller`) — see "Bucket-C inventory" above. Certificate issuance was NOT delivered by P3: it needs PDF and QR rendering, `mix.exs` carries no such dependency, and gaps 4 and 5 (above) have their mechanism settled by decision `0027` but their capabilities remain open and unowned. A later reader should not read P3's completion as covering certificates. **Update, REQ-355:** the issuance HALF of certificates now exists (`Letflow.Exam.Certificate`, `priv/packs/bilimbaga/entity_definitions/certificate.json`) — eligibility guards, idempotent issue-or-fetch, and a branding snapshot captured at issuance. **Update, REQ-356 (still `status: pending` in `docs/requirements.yaml`, PENDING REVIEWER rule-2 sign-off — see the bucket-C inventory above):** PDF rendering now exists in this branch's own tree (`Letflow.Exam.CertificateDocument`, `mix.exs` gains `pdf`/`eqrcode` per decision `0033`) and is wired to an authenticated download route (`GET /exam-sessions/:id/certificate/download`). **Update, REQ-357 (`done`):** the QR/public-verification half is built and merged to `main` — `Letflow.Exam.CertificatePublicProjection` registers the certificate as decision 0028's first real public-read kind, together with `REQ-352` (the platform half: the `/api/public` mount, sub-router, registry, rate limiter and refusal path, already merged). A handle is minted through `REQ-352`'s writer at `REQ-355`'s authenticated issue path; no second issue path or registry write surface was added. See the bucket-C inventory above (`Letflow.Exam.CertificatePublicProjection` row) for the full rule-2 adjudication. With `REQ-356`'s code now present alongside `REQ-357`'s merged public-verification half, certificate delivery has PDF rendering, an authenticated download route, and QR/public verification via the public-read projection — but a later reader should still treat `REQ-356` as not fully closed out until its own REVIEWER sign-off and `docs/requirements.yaml` status flip land.** |
 | **P4** | `web/`: admin CRUD generated from `x-ui`, plus the hand-written candidate exam-taking UI | C (client) | **Met, as of 2026-09-14.** `REQ-336`'s admin-CRUD engine composes `web/`'s own design-system components (`PageLayout`, `Button`, `DataTable`, `PaginationControls`, `ConfirmDialog`, `QueryStateBoundary`, per its own done-event close-out); `REQ-340`/`REQ-342` added widgets (enum, unique-composite error surfacing, localized_text, fk-reference) to that same registry with no BilimBaga file in their diffs (`git diff --name-only` scoped to `fieldRegistry.ts`/`widgets/` and their tests, per each requirement's own acceptance criterion); `REQ-343` wired all nine remaining entity types onto that engine and its own close-out states plainly "No file or component copied from `c:\Users\tvolo\dev\ai-dala\BilimBaga\frontend\` -- built entirely on `web/`'s own design-system components and REQ-336's/REQ-340's/REQ-342's engine and widgets"; `REQ-338`'s hand-written candidate UI (the two `web/src/pages/exam/` modules in the bucket-C inventory above) likewise names its own design-system components in its close-out and copies nothing from BilimBaga's frontend. Confirmed against all five close-outs (`REQ-336`/`REQ-340`/`REQ-342`/`REQ-343`/`REQ-338`), each independently stating which design-system components were used and that no BilimBaga file was copied — see their `done`-events in [`docs/status/requirement_status.v16.yaml`](../status/requirement_status.v16.yaml). `REQ-337`, the requirement originally filed for this scope, was retired by `REQ-VALIDATOR` for bundling four separable widget/wiring units and split into `REQ-340` (the two mechanically-driven widgets) and `REQ-341`; `REQ-VALIDATOR` then failed `REQ-341` too for the same class of bundling mistake (widget-type axis instead of widget-vs-wiring), and it was retired in turn and split into `REQ-342` (the two new widget shapes) and `REQ-343` (the actual screen/nav wiring for all nine remaining entity types) — see `REQ-342`'s and `REQ-343`'s own descriptions for the full history. |
 | **P5** | Parity: BilimBaga's 19 Playwright spec files (**168** `test()` blocks — corrected 2026-09-14 by `REQ-344`; the **286** previously recorded here on 2026-09-13 was wrong and is not reproducible from the corpus by any of three independent grep methods, see `docs/testing/REQ-344-bilimbaga-parity-triage.md` §1) ported to the Letflow build. Not "re-pointed": the two corpora are disjoint (zero filename overlap with `web/tests/e2e/`'s 38 specs) and BilimBaga's selectors are `getByRole`/`getByText`-dominated (314/137/66/16 `getByRole`/`locator`/`getByText`/`getByLabel` uses vs **one** `data-testid`, re-measured 2026-09-14), so they bind to its rendered DOM and accessible names rather than to portable hooks. **No longer blocked as of 2026-09-14** — P4 is done and its screens exist. Expanded into `REQ-344`–`REQ-348` on 2026-09-14: triage (`REQ-344`, **done** — see `docs/testing/REQ-344-bilimbaga-parity-triage.md`; 90 of 168 tests classified NO-COUNTERPART against today's `web/`, 30 PORTABLE-NOW or PORTABLE-AFTER-\<named REQ\> outright, the remainder split per-test), seeded exam fixture (`REQ-345`), candidate-side port (`REQ-346`), entity-CRUD admin port (`REQ-347`), close-out (`REQ-348`). **Met, as of 2026-09-14 — see "P5 close-out" below for the measured parity figure, the full per-file accounting against `REQ-344`'s 168-test corpus, and both required independent re-verifications.** | — | `RELEASE-VALIDATOR` re-derives the pass, `UAT-RUNNER` runs them against a live instance — **both done, see below** |
 | **P6** | *Conditional* — importer from BilimBaga's PostgreSQL into entity records | B | built only if a deployment holds real data; otherwise never built |
@@ -214,6 +214,7 @@ metric.
 | `Letflow.Exam.Scoring` | Grading arithmetic (single/true-false as 1-or-0, multiple-choice partial credit clamped to [0,1], Likert weighted-polarity normalization, short-text as `pending_manual`) is executable per-question-type logic with an explicit unanswered-question-as-wrong rule and a no-correct-option error case — none of this is expressible as static field structure. | The five grading rules are specific to this vertical's question-type taxonomy (single/multiple/likert/short-text) and are, per decision `0030` Finding 1, not currently reachable via the platform's one generic scripting mechanism (`Letflow.Engine.Lua.Executor`, unwired for node dispatch) — there is no generic capability to route through today. | PASS (REVIEWER, 2026-09-13, WF02-REQ332-20260913 @7a7216f1) |
 | `Letflow.Exam.AntiCheat` | Validates one of exactly three signal types, checks session ownership/in-progress/deadline state, derives `action_taken` from the exam's `on_tab_switch` config (never from caller input), applies a per-session write-rate debounce, and branches `log`/`warn`/`submit` — a live conditional with a side effect (in the `submit` branch, triggering `Letflow.Exam.Session.submit/3`), which an entity definition cannot express. | Stating this generically requires naming the signal vocabulary (`tab_switch`/`blur`/`fullscreen_exit`) and the terminal action (auto-submitting a session) — both vertical-specific per rule 1's own test; a generic "signal-triggered record transition" capability would be built for exactly one caller today, the speculative-generality failure mode `0022` exists to prevent. | PASS (REVIEWER, 2026-09-13, WF02-REQ333-20260913) |
 | `Letflow.Exam.Certificate` | `REQ-355`. Runs a fixed-order eligibility guard pipeline (ownership, a `grading_pending` special case kept distinct from a passed-false refusal, submitted-status, exam `certificate_enabled`, session `passed`) then an idempotent issue-or-fetch write with a branding snapshot captured only on first issuance — a multi-step `with`-chain comparing live session/exam state and reading `Letflow.Routers.TenantConfig.branding_from_settings/1` once, which an entity definition cannot express. | A generic "issue-on-first-request record gated by other-entities'-field checks" capability is a plausible platform abstraction in the abstract, but it would be built for exactly one caller today (no second gated-issuance use case exists in this vertical or elsewhere) — the same speculative-generality failure mode `0022` exists to prevent, already the basis for `QuestionSetResolver`/`AntiCheat`/`REQ-345`'s seed task above. | **PASS** (REVIEWER, 2026-09-15, WF02-REQ355-20260915 — see this file's "REVIEWER sign-off" section for the full rule-2 adjudication) |
+| `Letflow.Exam.CertificateDocument` | `REQ-356`. Renders a certificate's exam-specific content set (candidate name, exam title, score, issue date, a fixed signatory-block placeholder tied to the tenant's own branding) into a fixed-layout PDF page plus an embedded QR code encoding a verification URL — the exam-specific field set and layout are the substance of this module; the generic halves (turning positioned text/rectangles into PDF bytes, turning a string into a QR module matrix) are the `pdf`/`eqrcode` LIBRARIES decision `0033` chose, not code this module writes. | A generic "render a document from a field set plus a template" capability is a plausible platform abstraction (Letflow already has a form-schema/definition tradition) — this is the genuine bucket-A candidate REQ-356's own text flags for REVIEWER, not waved past here; see this file's "REVIEWER sign-off" section for the adjudication. | **PENDING** (REVIEWER rule-2 sign-off required before merge — see REQ-356's own requirements.yaml text for the exact A/B question to answer; REQ-356 is still `status: pending` in `docs/requirements.yaml` and carries no done-event in `docs/status/requirement_status.v17.yaml` as of this merge — DOC-UPDATER closes this out once the requirement is marked done) |
 | `Letflow.Exam.CertificatePublicProjection` | `REQ-357`. Decision 0028's first real public-read kind: a hand-built, PURE field allowlist over one `Letflow.Entities.Record.Latest` record, including `to_float/1`'s three-clause dispatch over `score_pct`'s non-uniform stored representation (float/integer/`Decimal`) and a deliberate `"issued_at"`→`"issued_on"` rename disambiguating against the envelope's own top-level `"issued_at"` key — both real judgment calls over the record's stored shape, not mechanical field copying, which an entity definition/declarative allowlist cannot express. | The A/B question REQ-357 itself posed (why not a declarative field allowlist in config, given REQ-352's registration mechanism is explicitly generic) was answered on the merits, not waved past: the decisive point is `issue_handle/4`'s `resource_id` needing `record.record_id` rather than `record.id` (`Letflow.Entities.Record.Latest`'s own primary key is distinct from its `record_id` field) — a silent-404 hazard that is reasoning about `Repo.get/3` primary-key semantics, not data a config format could express or protect against. A declarative alternative would reopen decision 0028's already-settled behaviour-based projection contract on the strength of one kind's simple field set — the same failure mode already declined for `QuestionSetResolver`/`AntiCheat`/the certificate-issuance guard pipeline. | **PASS** (REVIEWER, 2026-09-15, WF02-REQ357-20260915 @`e092e6b6` — full rule-2 adjudication recorded in that commit's message, quoted in this requirement's `docs/status/requirement_status.v17.yaml` done-event) |
 | `web/src/pages/exam/ExamListPage.tsx` | Renders the candidate's exam-discovery/eligibility-gated start screen, including the honest "which exams can I take" answer against `check_assigned/3`'s documented no-op (option (a): list every active exam with copy stating this is provisional pending an assignment decision record) — a live disclosure/copy decision tied to a specific runtime finding, not a declarative field structure a definition could express. | The eligibility-error vocabulary it surfaces (assignment/archived/active/availability-window/attempt-limit/one-open-session, REQ-332's six atoms) and the provisional-copy escape hatch are specific to this vertical's session lifecycle (rule 1); no generic platform capability treats "explain why a record isn't startable yet" as shared today. | PASS (REVIEWER, 2026-09-13/14, three passes across WF02-REQ338-20260914 — implementation, router.tsx/queryKeys.ts decoupling fix, post branch-collision recovery — plus RELEASE-VALIDATOR PASS; docs/status/requirement_status.v16.yaml, REQ-338 done-event) |
 | `web/src/pages/exam/ExamSessionPage.tsx` | Orchestrates the in-progress/submit/result flow: per-answer autosave, a live countdown that ticks locally but is re-anchored to the server's `remaining_seconds` on every save response, submit/grading-pending/result state transitions, and three anti-cheat browser-event listeners (`visibilitychange`/`blur`/`fullscreenchange`) wired to `Letflow.Exam.AntiCheat`'s `log`/`warn`/`submit` branches with teardown on unmount — executable UI behaviour and client/server clock reconciliation, not field structure. | The countdown-reanchoring contract, the six eligibility-error messages, and the three anti-cheat signal types/branches are all specific to this vertical's session runtime (rule 1, same vocabulary `Letflow.Exam.Session`/`Letflow.Exam.AntiCheat` already justify); no generic capability treats "live countdown reanchored to a server tick" or "browser-event-to-signal mapping" as shared today. | PASS (REVIEWER, 2026-09-13/14, three passes across WF02-REQ338-20260914 — implementation, router.tsx/queryKeys.ts decoupling fix, post branch-collision recovery — plus RELEASE-VALIDATOR PASS; docs/status/requirement_status.v16.yaml, REQ-338 done-event) |
@@ -252,28 +253,63 @@ phase close rather than trusting the last-recorded numbers.
 
 ```
 $ ls lib/letflow/exam/
-anti_cheat.ex  certificate.ex  certificate_public_projection.ex  question_set_resolver.ex  scoring.ex  session.ex
+anti_cheat.ex  certificate.ex  certificate_document.ex  certificate_public_projection.ex  question_set_resolver.ex  scoring.ex  session.ex
 $ wc -l lib/letflow/exam/*.ex
   309 lib/letflow/exam/anti_cheat.ex
   390 lib/letflow/exam/certificate.ex
+  451 lib/letflow/exam/certificate_document.ex
    77 lib/letflow/exam/certificate_public_projection.ex
   109 lib/letflow/exam/question_set_resolver.ex
   267 lib/letflow/exam/scoring.ex
  1223 lib/letflow/exam/session.ex
- 2375 total
+ 2826 total
 ```
 
+**7 modules, 2,826 total lines under `lib/letflow/exam/`, RE-measured
+2026-09-15 on the merged tree (REQ-356 merged with `origin/main`'s
+already-`done` REQ-357)** — this is the real combined figure after
+`git merge origin/main` brought REQ-357's `certificate_public_projection.ex`
+(77 lines) and `certificate.ex`'s 372→390 growth (+18 lines) onto this
+branch's own REQ-356 work (`certificate_document.ex`, 451 lines), rather
+than either side's stale partial total. It is NOT a concatenation of the
+two branches' last-recorded totals (2,731 + 2,375, which double-counts the
+five modules both branches shared) — it is `wc -l` re-run directly against
+this merge commit's actual `lib/letflow/exam/*.ex` listing, matching
+`anti_cheat.ex`/`question_set_resolver.ex`/`scoring.ex`/`session.ex`
+byte-for-byte unchanged on both sides. The two branches' own
+immediately-preceding measurements are kept below for history:
+
+**6 modules, 2,731 total lines under `lib/letflow/exam/`, RE-measured
+2026-09-15 (REQ-356, on this branch before the origin/main merge)** — this
+corrects a stale inventory that still carried `certificate_document.ex` at
+402 lines/2,682 total from REQ-356's initial commit; the security-fix
+commit (`075c4053`, "escape backslash before parens in PDF text literals")
+landed afterward and added the `escape_backslash/1` helper plus its
+justifying comment, growing `certificate_document.ex` from 402 to 451
+lines (+49), and this file's inventory was never re-run against that
+commit until now. `anti_cheat.ex`, `question_set_resolver.ex`,
+`scoring.ex`, `certificate.ex` and `session.ex` remain byte-for-byte
+unchanged. Two requirements in a row growing this directory (REQ-355 then
+REQ-356), per REQ-356's own requirements.yaml text, made visible here
+rather than batched into a single later edit. Prior figures: 402
+lines/2,682 total at REQ-356's initial (pre-security-fix) measurement; 5
+modules/2,280 lines at the 2026-09-15 REQ-355 measurement; 4 modules/1,878
+lines before that (`+certificate.ex` 372 new lines); 1,605 at the
+2026-09-13 measurement (`scoring.ex` 246→267, `session.ex` 941→1193,
+`anti_cheat.ex` and `question_set_resolver.ex` unchanged; see `ISS-0665`).
+
 **6 modules, 2,375 total lines under `lib/letflow/exam/`, measured 2026-09-15
-(REQ-357)** — the change against this file's own immediately-preceding "5
-modules, 2,280 lines" measurement above is `+certificate_public_projection.ex`
-(77 new lines, REQ-357's own module, decision 0028's first real public-read
-kind's projection) and `certificate.ex` growing 372→390 (+18 lines, the
-`issue_or_fetch/4` `is_duplicate`→`first_issuance` threading REVIEWER's
-sign-off on commit `e092e6b6` names) — confirmed via `git diff --stat` on
-this branch: exactly these two files under `lib/letflow/exam/` changed,
-`+107/-12` combined. `anti_cheat.ex`, `question_set_resolver.ex`,
-`scoring.ex` and `session.ex` are byte-for-byte unchanged. Re-measured from
-the real tree above, not carried forward from the prior figure.
+(REQ-357, on `main` before this branch's merge)** — the change against this
+file's own immediately-preceding "5 modules, 2,280 lines" measurement above
+is `+certificate_public_projection.ex` (77 new lines, REQ-357's own module,
+decision 0028's first real public-read kind's projection) and
+`certificate.ex` growing 372→390 (+18 lines, the `issue_or_fetch/4`
+`is_duplicate`→`first_issuance` threading REVIEWER's sign-off on commit
+`e092e6b6` names) — confirmed via `git diff --stat` on `main`: exactly
+these two files under `lib/letflow/exam/` changed, `+107/-12` combined.
+`anti_cheat.ex`, `question_set_resolver.ex`, `scoring.ex` and `session.ex`
+are byte-for-byte unchanged. Re-measured from the real tree above, not
+carried forward from the prior figure.
 
 **5 modules, 2,280 total lines under `lib/letflow/exam/`, measured 2026-09-15
 (REQ-355)** — the sole change against this file's own immediately-preceding
@@ -1023,3 +1059,30 @@ Candidate flow (`employee-portal`/`exam-taking`/`exam-result`) passed cleanly wi
 ### Verdict
 
 The ported parity suite passes on its own merits: every one of its 34 test() blocks has demonstrated a real pass under live conditions (Letflow + Keycloak + Postgres + the `REQ-345` fixture) across multiple independent runs by two independent roles. The only observed instability (`ISS-0663`) is proven, by direct API evidence, to be an artifact of this one persistent local development database having been exercised many times over the course of this same close-out's own verification work — not reproducible against the fresh database a real CI run always starts from, and not a defect in `REQ-346`/`REQ-347`/`REQ-349`'s ported work. No test was skipped, retried-until-green by narrowing scope, or deleted to force a pass.
+
+## REQ-356 — flagged, PENDING REVIEWER rule-2 sign-off (not self-adjudicated here)
+
+`Letflow.Exam.CertificateDocument` (this requirement) ships executable code
+under `lib/letflow/exam/`, so per REVIEWER's 2026-09-14 rule-2 adjudication
+above, it needs its own per-entry sign-off — deliberately not written by
+ELIXIR-DEV. REQ-356's own `requirements.yaml` text states the honest A/B
+question REVIEWER must answer: a certificate layout is close to a document
+template, and Letflow has a form-schema/definition tradition, so "why is the
+template not declarative pack content rendered by a generic renderer" is a
+genuine bucket-A candidate that must be answered rather than waved past. The
+bucket-C inventory row above records this module as **PENDING** until that
+sign-off is recorded here.
+
+**Also carried forward for REVIEWER's attention, not this file's own
+adjudication:** `lib/letflow/exam/certificate_document.ex`'s own moduledoc
+records a finding reopening decision `0033` — the chosen `pdf` library has
+no Unicode/non-Latin-1 glyph rendering path (WinAnsi/Latin-1 only, via
+bundled Type-1 AFM fonts), a gap that decision never evaluated because it
+never considered glyph coverage as a criterion. This is material for a
+Cyrillic-script vertical (`kk`/`ru` exam locales). The module degrades
+gracefully (`encoding_replacement_character: "?"`) rather than crashing, so
+REQ-356's own acceptance criteria are met for Latin/English content, but a
+follow-up requirement must decide how (or whether) to address non-Latin
+rendering before this vertical's Cyrillic-locale certificates are genuinely
+legible. No substitute library was adopted in response to this finding, per
+CLAUDE.md's prohibition on silently re-deciding a decision record.

@@ -951,3 +951,36 @@ history:
       main -- the fix direction is likely a simple documented-precedent
       addition (Option 3 in the issue's own FIX DIRECTION), not a code
       restructure, once the target file exists.
+  - req: REQ-355
+    event: done
+    agent: ORCH
+    at: "2026-09-15T02:45:02Z"
+    note: >
+      Certificate issuance entity definition + idempotent issue-on-first-
+      request context module (lib/letflow/exam/certificate.ex),
+      PR #1416 merged as 1fd89bb1. Idempotency via a deterministic
+      idempotency_key on Records.create_record/2 (deliberately avoiding
+      auto-triggered ISS-0648 column promotion), three-valued passed
+      handling distinguishing grading_pending from failed, branding
+      snapshot captured once at issuance and never re-read live
+      (proven by a mutate-after-issuance test). SECURITY-REVIEWER PASS
+      (INV-1/4/5/7/8 checked, INV-5 confirmed via Response.not_found/1's
+      parameterless body). REVIEWER PASS with a real rule-2 bucket-C
+      adjudication (cross-entity precondition logic and the three-valued
+      passed distinction are genuine executable control flow no
+      constraint_def can express -- bucket A rejected on the merits, not
+      by default). A MINOR type-safety finding (issue_error's bare atom
+      union) was separately filed as ISS-0676 (GH#1415, queue task 676)
+      rather than fixed in this requirement's own scope.
+
+      Along the way, PR #1416's CI surfaced a pre-existing, unrelated
+      failure in Letflow.Simulation.Req207VortexTest -- its own
+      self-diagnosing failure message explained that REQ-347's earlier
+      status flip to done made POST /entities/query real, requiring this
+      scenario's disposition to be re-derived. TEST-DESIGNER fixed it
+      (commit 07f929bc on main, verdict: still BLOCKED_ON_DEPENDENCY on
+      S8's :gui-dispatch harness gap, unchanged in substance) and also
+      caught that REQ-355's own title matched the same tripwire's
+      entity-vocabulary check, admitting it to pending_only_ids while
+      still pending. Merged into this branch and re-verified before the
+      final green CI run that unblocked the merge.

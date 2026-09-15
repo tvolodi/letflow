@@ -3726,8 +3726,12 @@ volumes:
     path: docs/status/requirement_status.v17.yaml
     status: current
     opened: 2026-09-14
-    entries: 20
+    entries: 21
     note: >
+      Incremented to 21 by ORCH's own REQ-355 done-event append (PR #1416
+      merged as 1fd89bb1) -- `grep -c "^  - req:"
+      docs/status/requirement_status.v17.yaml` = 21 on-disk entries; 986
+      lines / well under the roll ceiling, no roll triggered.
       Incremented to 20 by ORCH's own SCOPE-CHANGE (ISS-0676, blocked on
       REQ-355 not yet merged) blocked-event append -- `grep -c "^  - req:"
       docs/status/requirement_status.v17.yaml` = 20 on-disk entries; 953

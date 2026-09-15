@@ -25818,7 +25818,7 @@ requirements:
     title: "Certificate issuance: author the certificate entity definition and the idempotent issue-on-first-request context module gated on submitted+passed+certificate_enabled, capturing a branding snapshot at issuance time (S10 P3, certificate issuance)"
     owner: ELIXIR-DEV
     impl_order: 671
-    status: pending
+    status: done
     stage: S10
     description: >
       bucket: C for the context module, A for the entity definition. The

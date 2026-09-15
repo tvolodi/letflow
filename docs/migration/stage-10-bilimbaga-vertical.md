@@ -250,27 +250,31 @@ anti_cheat.ex  certificate.ex  certificate_document.ex  question_set_resolver.ex
 $ wc -l lib/letflow/exam/*.ex
   309 lib/letflow/exam/anti_cheat.ex
   372 lib/letflow/exam/certificate.ex
-  402 lib/letflow/exam/certificate_document.ex
+  451 lib/letflow/exam/certificate_document.ex
   109 lib/letflow/exam/question_set_resolver.ex
   267 lib/letflow/exam/scoring.ex
  1223 lib/letflow/exam/session.ex
- 2682 total
+ 2731 total
 ```
 
-**6 modules, 2,682 total lines under `lib/letflow/exam/`, measured 2026-09-15
-(REQ-356)** — the sole change against this file's own immediately-preceding
-"5 modules, 2,280 lines" measurement (REQ-355) is `+certificate_document.ex`
-(402 new lines, REQ-356's own module); `anti_cheat.ex`,
-`question_set_resolver.ex`, `scoring.ex`, `certificate.ex` and `session.ex`
-are byte-for-byte unchanged (`git diff --stat` against this branch's base
-touches only `certificate_document.ex` under this directory). Two
-requirements in a row growing this directory (REQ-355 then REQ-356), per
-REQ-356's own requirements.yaml text, made visible here rather than batched
-into a single later edit. Prior figures: 5 modules/2,280 lines at the
-2026-09-15 REQ-355 measurement; 4 modules/1,878 lines before that
-(`+certificate.ex` 372 new lines); 1,605 at the 2026-09-13 measurement
-(`scoring.ex` 246→267, `session.ex` 941→1193, `anti_cheat.ex` and
-`question_set_resolver.ex` unchanged; see `ISS-0665`).
+**6 modules, 2,731 total lines under `lib/letflow/exam/`, RE-measured
+2026-09-15 (REQ-356, REVIEWER rule-2 pass)** — this corrects a stale
+inventory that still carried `certificate_document.ex` at 402 lines/2,682
+total from REQ-356's initial commit; the security-fix commit
+(`075c4053`, "escape backslash before parens in PDF text literals") landed
+afterward and added the `escape_backslash/1` helper plus its justifying
+comment, growing `certificate_document.ex` from 402 to 451 lines (+49), and
+this file's inventory was never re-run against that commit until now.
+`anti_cheat.ex`, `question_set_resolver.ex`, `scoring.ex`, `certificate.ex`
+and `session.ex` remain byte-for-byte unchanged. Two requirements in a row
+growing this directory (REQ-355 then REQ-356), per REQ-356's own
+requirements.yaml text, made visible here rather than batched into a single
+later edit. Prior figures: 402 lines/2,682 total at REQ-356's initial
+(pre-security-fix) measurement; 5 modules/2,280 lines at the 2026-09-15
+REQ-355 measurement; 4 modules/1,878 lines before that (`+certificate.ex`
+372 new lines); 1,605 at the 2026-09-13 measurement (`scoring.ex` 246→267,
+`session.ex` 941→1193, `anti_cheat.ex` and `question_set_resolver.ex`
+unchanged; see `ISS-0665`).
 
 **`web/src/pages/exam/` and `web/src/api/exam.ts`, RE-measured 2026-09-15
 (REQ-351):**

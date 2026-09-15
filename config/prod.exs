@@ -7,17 +7,14 @@ import Config
 # lib/letflow/application.ex's http_child/0 — no override needed here;
 # only http_port, the runtime-dependent value, is set, in runtime.exs.)
 
-# Same placeholder as config/dev.exs — no real Keycloak instance exists
-# yet for any environment, deployed or local (see that file's comment and
-# README's "Migration status"). Replace with a real per-environment issuer
-# URL once realm provisioning (deferred past S1, see the S1 section note
-# in docs/requirements.yaml) exists. Kept identical to dev on purpose so a
-# Hetzner-deployed instance behaves the same as local until real OIDC
-# lands — do not diverge these without updating both.
+# :oidc issuer/client_id moved to config/runtime.exs (env-var driven,
+# OIDC_ISSUER/OIDC_CLIENT_ID) so a real per-environment Keycloak can be
+# pointed at without rebuilding the release image — see runtime.exs for
+# the current default (still the placeholder issuer until a deployment
+# sets the env vars). provider_name/signing_algs/token_verifier stay here
+# since they don't vary per environment.
 config :letflow, :oidc,
-  issuer: "https://placeholder-keycloak.invalid/realms/bpm-default",
   provider_name: Letflow.Oidc.DefaultProvider,
-  client_id: "letflow-placeholder-client",
   signing_algs: ["RS256"],
   token_verifier: Letflow.Oidc.TokenVerifier.Oidcc
 

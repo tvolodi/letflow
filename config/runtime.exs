@@ -127,4 +127,17 @@ if config_env() == :prod do
   config :letflow,
          :cors_allowed_origins,
          (System.get_env("CORS_ALLOWED_ORIGINS") || "") |> String.split(",", trim: true)
+
+  # :oidc issuer/client_id: runtime-configurable (not baked into the release
+  # image at compile time) so each deployed environment can point at its own
+  # Keycloak realm without a rebuild — provider_name/signing_algs/token_verifier
+  # stay in config/prod.exs since those don't vary per environment. `Config`
+  # merges keys within :oidc across files (config/prod.exs then this file),
+  # so this only adds/overrides :issuer and :client_id, it doesn't replace the
+  # whole keyword list. Defaults preserve the pre-existing placeholder so an
+  # environment that hasn't set these env vars yet behaves exactly as before.
+  config :letflow, :oidc,
+    issuer:
+      System.get_env("OIDC_ISSUER") || "https://placeholder-keycloak.invalid/realms/bpm-default",
+    client_id: System.get_env("OIDC_CLIENT_ID") || "letflow-placeholder-client"
 end

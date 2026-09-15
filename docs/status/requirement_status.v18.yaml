@@ -191,3 +191,22 @@ history:
       instead during this branch's Step Final rebase, per the
       established started/done-across-a-roll precedent (see volume 17's
       index entry).
+
+  - req: SCOPE-CHANGE
+    event: done
+    agent: ORCH
+    at: 2026-09-15T06:32:38Z
+    note: >
+      ISS-0676 (queue task 676, GH#1415) resolved via
+      fix/ISS-0676-20260915 (commit d719dfb1, full detail in
+      docs/issues/ISS-0676.yaml's resolution field). Real Dialyzer
+      experiment confirmed no compiler-enforced exhaustiveness is
+      achievable for issue_error's atom union in idiomatic Elixir;
+      resolved via documentation (permanent comments citing the
+      experiment and Session's identical precedent) plus a real
+      regression test covering all six atoms over HTTP, verified
+      discriminating by mutation (TEST-DESIGN-VALIDATOR removed a
+      clause, confirmed the test fails, reverted). REVIEWER PASS,
+      TEST-DESIGN-VALIDATOR PASS, TEST-RUNNER PASS (4299/4299, zero
+      failures). SECURITY-REVIEWER out of scope. GH#1415 closed with an
+      evidence comment; letflow-queue task 676 released status: done.

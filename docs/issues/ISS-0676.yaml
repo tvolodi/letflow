@@ -32,4 +32,39 @@ affected_files:
   - lib/letflow/routers/exam_sessions.ex
 queue_ref: Q-676
 github_ref: GH-1415
-status: open
+status: resolved
+resolution: >
+  RESOLVED 2026-09-15 via fix/ISS-0676-20260915 (commit d719dfb1). Real
+  investigation, not assumption: temporarily added dialyxir, built a
+  PLT, added a 7th atom to issue_error with no matching router clause
+  (with and without an explicit @spec on render_issue_certificate/2),
+  and confirmed Dialyzer reports zero new warnings either way -- the
+  catch-all clause widens the accepted type to term(), defeating
+  success typing. Elixir has no algebraic-type exhaustiveness checking;
+  no Dialyzer configuration or small restructuring buys real
+  compile-time exhaustiveness enforcement here without disproportionate
+  churn for a MINOR finding.
+
+  Resolution: documented the decision explicitly (permanent comments
+  above certificate.ex's @type issue_error and exam_sessions.ex's
+  catch-all clause, citing the real experiment, Letflow.Exam.Session's
+  identical established precedent -- eligibility_error/autosave_error/
+  submit_error use the same catch-all-plus-Logger.warning shape -- and
+  a maintenance checklist for future atoms), plus a real regression
+  test (test/letflow/routers/exam_sessions_test.exs:681-794) walking
+  all six issue_error atoms over real HTTP, each asserting its own
+  distinct documented response rather than the generic 500. The test's
+  discriminating power was verified by mutation: TEST-DESIGN-VALIDATOR
+  removed the :exam_not_certifiable clause, confirmed the test fails
+  (24 -> 22/24 passed, exactly the response the removed clause should
+  have produced), then reverted and confirmed clean again.
+
+  Pipeline: ISSUE-FIXER (real Dialyzer experiment, implementation) ->
+  REVIEWER PASS (judged the CODE-DESIGNER gate correctly skipped --
+  comment/test-only, zero executable-code changes; independently
+  verified the Session precedent and the new test's six distinct
+  scenarios; ran mix compile + both affected test files clean) ->
+  TEST-DESIGN-VALIDATOR PASS (real mutation check, two scenarios
+  independently traced to their trigger code paths) -> TEST-RUNNER PASS
+  (full suite, 4299/4299, zero failures). SECURITY-REVIEWER judged out
+  of scope by both ISSUE-FIXER and REVIEWER (no tenant-data path).

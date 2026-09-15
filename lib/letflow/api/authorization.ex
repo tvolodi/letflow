@@ -149,6 +149,22 @@ defmodule Letflow.Api.Authorization do
   continue to not hold them, for the same reason as before — sitting an exam
   is not part of either role's existing grant shape; `PLATFORM_ADMIN`'s
   catch-all still covers an operator who also needs to probe a session.
+
+  ## `PublicReadHandlesIssue` (REQ-352) — genuinely new, not pre-ported
+
+  One new atom for `Letflow.Routers.PublicReadHandles`'s single
+  `POST /public-read-handles` route (design
+  `lib/letflow/design/req352-unauthenticated-read-platform.md` §13.1). Names
+  the generic registry table (`public_read_handles`) and the one write
+  operation it exposes (`issue`) — no vertical named, per that design's own
+  vocabulary rule (§14/§15). Minted here, in the same diff as the route
+  consuming it, since decision 0028's standing prohibition already places
+  the writer this permission gates on this requirement's side of the
+  read/write split. **Deliberately no `role_allows?/2` clause added for it
+  against any non-`PLATFORM_ADMIN` role** — only `PLATFORM_ADMIN`'s existing
+  catch-all grants it today; which role(s) beyond that hold it is left to
+  the requirement that authors the first concrete issue path consuming this
+  permission (REQ-355, per the design's §13.1).
   """
 
   @type role ::
@@ -194,6 +210,7 @@ defmodule Letflow.Api.Authorization do
           | :ExamSessionSave
           | :ExamSessionSubmit
           | :ExamSessionReportEvent
+          | :PublicReadHandlesIssue
 
   @type access_decision_kind :: :Allow | :Deny403 | :AllowWithRowFilter
 
@@ -245,6 +262,7 @@ defmodule Letflow.Api.Authorization do
           | :ExamSessionSave
           | :ExamSessionSubmit
           | :ExamSessionReportEvent
+          | :PublicReadHandlesIssue
           | :Unknown
 
   @type task_row_scope :: :all | {:own_user_and_groups, String.t()}
@@ -292,7 +310,8 @@ defmodule Letflow.Api.Authorization do
     :ExamSessionRead,
     :ExamSessionSave,
     :ExamSessionSubmit,
-    :ExamSessionReportEvent
+    :ExamSessionReportEvent,
+    :PublicReadHandlesIssue
   ]
 
   @doc "All six `Role` values, R-Co's exact names plus ISS-0646's `CANDIDATE`. See `roles_from_strings/1` for untrusted-input conversion."
@@ -300,7 +319,7 @@ defmodule Letflow.Api.Authorization do
   def roles, do: @roles
 
   @doc """
-  All thirty-four `Permission` values — R-Co's fourteen, plus REQ-075's
+  All thirty-five `Permission` values — R-Co's fourteen, plus REQ-075's
   `:TenantsManage`, plus REQ-076's `:RolesManage`, plus REQ-212's
   `:AttachmentsManage`/`:AttachmentsRead`, plus ISS-0389's
   `:InstancesAdvanceTimer`, plus REQ-309's four entity-subsystem permissions
@@ -311,7 +330,8 @@ defmodule Letflow.Api.Authorization do
   `:EntitiesRecordsImport`), plus REQ-317's `:EntitiesAttachmentsManage`/
   `:EntitiesAttachmentsRead`, plus REQ-335's five exam-session-route
   permissions (`:ExamSessionStart`, `:ExamSessionRead`, `:ExamSessionSave`,
-  `:ExamSessionSubmit`, `:ExamSessionReportEvent`).
+  `:ExamSessionSubmit`, `:ExamSessionReportEvent`), plus REQ-352's
+  `:PublicReadHandlesIssue`.
 
   The stated count is asserted against `length(permissions())` by
   `test/letflow/api/authorization_test.exs` (REQ-309 AC1), computed rather than
@@ -680,6 +700,11 @@ defmodule Letflow.Api.Authorization do
   def endpoint_policy_key("POST", "/exam-sessions/:id/events"),
     do: :ExamSessionReportEvent
 
+  # REQ-352 — the generic, kind-agnostic authenticated issue route
+  # (Letflow.Routers.PublicReadHandles), mounted at /public-read-handles.
+  # See design lib/letflow/design/req352-unauthenticated-read-platform.md §13.1.
+  def endpoint_policy_key("POST", "/public-read-handles"), do: :PublicReadHandlesIssue
+
   def endpoint_policy_key(_method, _path), do: :Unknown
 
   @doc """
@@ -803,6 +828,10 @@ defmodule Letflow.Api.Authorization do
   def required_permission(:ExamSessionSave), do: :ExamSessionSave
   def required_permission(:ExamSessionSubmit), do: :ExamSessionSubmit
   def required_permission(:ExamSessionReportEvent), do: :ExamSessionReportEvent
+
+  # REQ-352 — identity clause (policy-key name == permission name), same
+  # shape as Entities*/ExamSession* above.
+  def required_permission(:PublicReadHandlesIssue), do: :PublicReadHandlesIssue
 
   def required_permission(:Unknown), do: :MetricsRead
 

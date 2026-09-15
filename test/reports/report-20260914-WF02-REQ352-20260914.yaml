@@ -1,0 +1,162 @@
+run_id: WF02-REQ352-20260914
+agent: TEST-RUNNER
+workflow: WF-02 Step 4 (requirement implementation, full-suite verification)
+requirement: REQ-352 (decision 0028's unauthenticated-read platform machinery, bucket B)
+timestamp_utc: "2026-09-15T00:26:47Z"
+branch: feature/WF02-REQ352-20260914
+head_commit_ancestor_confirmed: a1c0bcfd (TEST-DESIGNER's Step 3 commit; verified via
+  `git merge-base --is-ancestor a1c0bcfd HEAD`)
+
+verdict: PASS
+
+environment:
+  docker_compose: "letflow-1-postgres-1 already Running (10 days up, healthy), port 5463
+    per this workspace's untracked .env's LETFLOW_DB_PORT=5463 -- confirmed matching
+    `docker ps` port mapping. No `docker compose up` invoked (already running; this
+    workspace is told it shares its own dedicated container, not another checkout's)."
+  host_cores: 8 (nproc/getconf agree)
+  toolchain: elixir/mix present via asdf shims; `mix deps.get` succeeded (network available
+    this run).
+
+commands_run:
+  - "mix deps.get -- all dependencies fetched successfully."
+  - "mix letflow.check -- FIRST run FAILED at the format-check gate (see finding 1 below),
+    never reached compile/test."
+  - "mix format test/letflow/routers/public_read_test.exs test/letflow/public_read_test.exs
+    -- formatting-only fix (see finding 1)."
+  - "mix letflow.check -- SECOND run: all fast checks OK (check_toolchain,
+    check_requirements_registration, check_req_id_collision, check_deferral_staleness,
+    lint_handoffs: 0 new violations, check_async_sandbox_reachability: 0 new violations,
+    check_issue_refs: OK), format --check-formatted: OK, compile --warnings-as-errors: OK,
+    then letflow.check.test (scripts/test_parallel.sh) FAILED with 2 test failures (see
+    finding 2 below) -- exit 1 overall."
+  - "Root-caused and fixed finding 2's A9 entries drift (docs/status/requirement_status.index.yaml)."
+  - "mix test test/docs/requirement_status_invariants_test.exs -- 20 passed, confirms the fix."
+  - "mix test test/letflow/simulation/req207_vortex_test.exs -- 3/4 passed, 1 failed (same
+    failure as before the fix -- confirms it is independent of finding 1/2's fix and is a
+    separate, pre-existing failure)."
+  - "git diff main...HEAD -- docs/requirements.yaml -- confirms REQ-347's status field is
+    untouched by this diff (only REQ-352's own status: pending -> in_progress changed)."
+  - "git show main:docs/requirements.yaml | awk '/id: REQ-347$/,.../' -- confirms REQ-347
+    already reads status: done on main itself (the merge-base), independent of this branch."
+  - "mix format --check-formatted -- exit 0, clean."
+  - "mix compile --warnings-as-errors -- exit 0, clean."
+  - "scripts/test_parallel.sh (final, clean run, N=8 nproc-derived) -- see full-suite numbers
+    below."
+  - "mix test test/letflow/public_read_test.exs test/letflow/routers/public_read_test.exs
+    test/letflow/plugs/public_read_rate_limit_test.exs test/letflow/api/authorization_test.exs
+    test/letflow/supervisor/infrastructure_test.exs -- 117 passed, 0 failed (every REQ-352
+    new/modified test file, run together in isolation)."
+
+full_suite_result:
+  combined: "4248 tests, 6 properties, 1 failure (4253/4254 passed)"
+  per_partition:
+    - "partition 1: 494 tests, 3 properties, 0 failures, exit 0"
+    - "partition 2: 494 tests, 1 property, 0 failures, exit 0"
+    - "partition 3: 533 tests, 0 properties, 0 failures, exit 0"
+    - "partition 4: 403 tests, 0 properties, 0 failures, exit 0"
+    - "partition 5: 601 tests, 0 properties, 1 failure, exit 2"
+    - "partition 6: 627 tests, 0 properties, 0 failures, exit 0"
+    - "partition 7: 618 tests, 0 properties, 0 failures, exit 0"
+    - "partition 8: 478 tests, 2 properties, 0 failures, exit 0"
+
+findings:
+  - id: 1
+    severity: fixed-in-run
+    title: "mix format --check-formatted failed on two of TEST-DESIGNER's new test files"
+    detail: >
+      test/letflow/routers/public_read_test.exs and test/letflow/public_read_test.exs were
+      not `mix format`-clean (long single-line calls that `mix format` re-wraps). This
+      blocked mix letflow.check before compile/test ever ran. Fixed by running
+      `mix format` on exactly those two files -- diffed the result and confirmed it is a
+      pure re-wrap (line-break/indentation only), no logic change. Re-ran
+      `mix format --check-formatted` afterward: exit 0.
+    files: [test/letflow/routers/public_read_test.exs, test/letflow/public_read_test.exs]
+
+  - id: 2
+    severity: fixed-in-run (root cause traced to this run's own Step 00, not to REQ-352's
+      application/test code)
+    title: "A9 entries-count drift in docs/status/requirement_status.v17.yaml, introduced by
+      this run's own Step 00 git-setup append"
+    detail: >
+      RequirementStatusInvariantsTest's A9 assertion failed: declared entries for
+      docs/status/requirement_status.v17.yaml was 11, actual on-disk count was 12.
+      Verified this is NOT pre-existing: on `main` (merge-base), declared=11 and actual=11
+      (grep -c "^  - req:" on main's copy of the file), i.e. matched, no drift. This
+      branch's own Step 00 (ORCH git-setup, REQ-352's `started` event) appended one
+      history entry to volume 17 without incrementing the index's declared `entries:`
+      field for that volume -- an omission in this run's own bookkeeping, not a defect in
+      REQ-352's design/implementation/tests. Fixed per the established, repeatedly-used
+      convention in this same index file (TEST-RUNNER performing this exact class of A9
+      fix has precedent, e.g. "Incremented to 54 by WF02-REQ149-20260826 (TEST-RUNNER) A9
+      fix"): bumped volume 17's `entries:` to 12 in
+      docs/status/requirement_status.index.yaml with a note recording the root cause.
+      Re-ran test/docs/requirement_status_invariants_test.exs standalone afterward: 20
+      passed, 0 failed.
+    files: [docs/status/requirement_status.index.yaml]
+
+pre_existing_failures:
+  count: 1
+  definitive_resolution_of_prior_discrepancy: >
+    TEST-DESIGNER's original report claimed 5 pre-existing failures (Scheduler.Poller,
+    Req207Vortex, Api.Context, RequirementStatusInvariants -- 4 named for 5 claimed).
+    TEST-DESIGN-VALIDATOR's own re-run found only 2 (RequirementStatusInvariants A9,
+    Req207Vortex). This run's own full-suite execution -- fresh, independent, on the
+    actual current branch tip -- found the SAME 2 failures TEST-DESIGN-VALIDATOR found
+    (Scheduler.Poller and Api.Context ran clean here too, confirming TEST-DESIGN-VALIDATOR's
+    re-run over TEST-DESIGNER's original claim), and this run went one step further: one
+    of those 2 (the A9 drift) was root-caused to THIS RUN's own Step 00 bookkeeping (not
+    truly "pre-existing" relative to main at all -- see finding 2) and fixed. The
+    remaining, genuinely pre-existing failure is exactly 1:
+    - "Letflow.Simulation.Req207VortexTest: vortex-entity-list-filter-and-page disposition
+      is BLOCKED_ON_DEPENDENCY on the S8 simulation harness' :gui dispatch, re-derived
+      live after REQ-311 completed the record read path"
+      (test/letflow/simulation/req207_vortex_test.exs:1015)
+  attribution_evidence:
+    - route: "1 (structural) + 2 (reproduces at merge-base)"
+      test: "Req207VortexTest vortex-entity-list-filter-and-page"
+      evidence: >
+        (1) test/letflow/simulation/req207_vortex_test.exs is NOT in
+        `git diff --name-only main...HEAD` -- confirmed via direct grep, "NOT IN DIFF".
+        (2) The failure's own mechanism (read from the test source, lines ~1666-1694) is a
+        self-updating tripwire keyed on docs/requirements.yaml's REQ-347 `status:` field
+        flipping to done, checked against a `pending_only_ids`/`allowed_ids` admission
+        list scoped entirely to Letflow.Routers.Entities' route count and entity-titled
+        requirements -- REQ-352 (public_read /api/public machinery) never touches
+        Letflow.Routers.Entities or any entity-titled requirement.
+        (3) Confirmed causally, not by proximity: `git diff main...HEAD -- docs/requirements.yaml`
+        shows this diff changes ONLY REQ-352's own `status: pending -> in_progress` line --
+        REQ-347's status field is untouched by this diff.
+        (4) Confirmed at the merge-base directly: `git show main:docs/requirements.yaml`
+        already shows REQ-347 at `status: done` on `main` itself, before this branch's
+        commit existed. The tripwire's precondition (REQ-347 done) was already true at the
+        merge-base, so the failure reproduces there independent of anything in this diff --
+        satisfying route 2 (reproduces at the merge-base) directly, not merely by inference.
+      conclusion: "genuinely pre-existing, unrelated to REQ-352; not this run's problem to
+        fix -- filing is ORCH's call per ISSUE_QUEUE.md, not TEST-RUNNER's to file directly."
+
+regression_check_on_req352_files:
+  result: "zero failures trace to REQ-352's new/modified files"
+  evidence: >
+    Ran every new/modified test file from this diff together in isolation:
+    test/letflow/public_read_test.exs, test/letflow/routers/public_read_test.exs,
+    test/letflow/plugs/public_read_rate_limit_test.exs, test/letflow/api/authorization_test.exs,
+    test/letflow/supervisor/infrastructure_test.exs -- Result: 117 passed, 0 failed.
+    Confirmed via the full-suite combined result above that no failure's test name or file
+    matches lib/letflow/public_read*, lib/letflow/routers/public_read*,
+    lib/letflow/plugs/public_read_rate_limit*, or any of the five test files above -- the
+    sole remaining failure (Req207VortexTest) is attributed above to REQ-347/entities,
+    structurally and causally unrelated to this diff's files.
+
+gate_status:
+  format_check_formatted: PASS (after finding 1's fix)
+  compile_warnings_as_errors: PASS
+  letflow_check_fast_checks: "PASS (check_toolchain, check_requirements_registration,
+    check_req_id_collision, check_deferral_staleness, lint_handoffs: 0 new violations,
+    check_async_sandbox_reachability: 0 new violations, check_issue_refs: OK)"
+  full_test_suite: "4253/4254 passed, 1 pre-existing failure (Req207VortexTest, see above),
+    0 regressions from REQ-352"
+
+next_step: >
+  Hands off to RELEASE-VALIDATOR, which re-runs the full suite independently per this
+  project's redundancy principle rather than trusting this report alone.

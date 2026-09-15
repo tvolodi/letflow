@@ -54,14 +54,19 @@ defmodule Letflow.Routers.PublicReadTest do
       %{tenant_id: tenant_id, schema_name: schema} = PublicReadFixtureSupport.provision_tenant!()
 
       live_resource = PublicReadFixtureSupport.insert_resource!(schema, %{publishable: true})
-      unpublishable_resource = PublicReadFixtureSupport.insert_resource!(schema, %{publishable: false})
+
+      unpublishable_resource =
+        PublicReadFixtureSupport.insert_resource!(schema, %{publishable: false})
+
       deleted_resource = PublicReadFixtureSupport.insert_resource!(schema, %{publishable: true})
 
       revoked_handle = PublicReadFixtureSupport.issue_handle!(tenant_id, live_resource.id)
       PublicReadFixtureSupport.revoke_handle!(revoked_handle)
 
       expired_handle =
-        PublicReadFixtureSupport.issue_handle!(tenant_id, live_resource.id,
+        PublicReadFixtureSupport.issue_handle!(
+          tenant_id,
+          live_resource.id,
           PublicReadFixtureSupport.kind(),
           expires_at: DateTime.add(DateTime.utc_now(), -3600, :second)
         )
@@ -74,14 +79,21 @@ defmodule Letflow.Routers.PublicReadTest do
       deleted_handle = PublicReadFixtureSupport.issue_handle!(tenant_id, deleted_resource.id)
       Letflow.Repo.delete!(deleted_resource, prefix: schema)
 
-      valid_handle_for_method_case = PublicReadFixtureSupport.issue_handle!(tenant_id, live_resource.id)
+      valid_handle_for_method_case =
+        PublicReadFixtureSupport.issue_handle!(tenant_id, live_resource.id)
 
       deactivated_tenant = PublicReadFixtureSupport.provision_tenant!()
+
       deactivated_resource =
-        PublicReadFixtureSupport.insert_resource!(deactivated_tenant.schema_name, %{publishable: true})
+        PublicReadFixtureSupport.insert_resource!(deactivated_tenant.schema_name, %{
+          publishable: true
+        })
 
       deactivated_handle =
-        PublicReadFixtureSupport.issue_handle!(deactivated_tenant.tenant_id, deactivated_resource.id)
+        PublicReadFixtureSupport.issue_handle!(
+          deactivated_tenant.tenant_id,
+          deactivated_resource.id
+        )
 
       deactivated_tenant.tenant
       |> Letflow.Identity.Tenant.status_changeset(%{status: :inactive})
@@ -103,7 +115,8 @@ defmodule Letflow.Routers.PublicReadTest do
 
       cases = [
         {"malformed handle", get_public("/api/public/#{kind}/not-a-valid-handle!!")},
-        {"unknown handle", get_public("/api/public/#{kind}/#{PublicReadFixtureSupport.unknown_handle()}")},
+        {"unknown handle",
+         get_public("/api/public/#{kind}/#{PublicReadFixtureSupport.unknown_handle()}")},
         {"revoked", get_public("/api/public/#{kind}/#{ctx.revoked_handle}")},
         {"expired", get_public("/api/public/#{kind}/#{ctx.expired_handle}")},
         {"kind-mismatched",
@@ -112,7 +125,10 @@ defmodule Letflow.Routers.PublicReadTest do
          )},
         {"resource deleted", get_public("/api/public/#{kind}/#{ctx.deleted_handle}")},
         {"resource unpublishable", get_public("/api/public/#{kind}/#{ctx.unpublishable_handle}")},
-        {"unregistered kind", get_public("/api/public/not-a-registered-kind/#{PublicReadFixtureSupport.unknown_handle()}")},
+        {"unregistered kind",
+         get_public(
+           "/api/public/not-a-registered-kind/#{PublicReadFixtureSupport.unknown_handle()}"
+         )},
         {"wrong method",
          conn(:post, "/api/public/#{kind}/#{ctx.valid_handle_for_method_case}") |> call()},
         {"deactivated tenant", get_public("/api/public/#{kind}/#{ctx.deactivated_handle}")}
@@ -164,7 +180,10 @@ defmodule Letflow.Routers.PublicReadTest do
     end
 
     test "404s an unregistered kind" do
-      conn = get_public("/api/public/not-a-registered-kind/#{PublicReadFixtureSupport.unknown_handle()}")
+      conn =
+        get_public(
+          "/api/public/not-a-registered-kind/#{PublicReadFixtureSupport.unknown_handle()}"
+        )
 
       assert conn.status == 404
     end

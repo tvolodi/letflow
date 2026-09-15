@@ -84,6 +84,7 @@ defmodule Letflow.PublicReadTest do
         end)
 
       assert result == :not_found
+
       assert count == 1,
              "expected exactly one Repo query for a malformed handle (case 1), got #{count}"
     end
@@ -91,7 +92,10 @@ defmodule Letflow.PublicReadTest do
     test "an unknown, well-formed handle performs exactly one round-trip before refusal (AC-6)" do
       {result, count} =
         count_queries(fn ->
-          PublicRead.resolve(PublicReadFixtureSupport.kind(), PublicReadFixtureSupport.unknown_handle())
+          PublicRead.resolve(
+            PublicReadFixtureSupport.kind(),
+            PublicReadFixtureSupport.unknown_handle()
+          )
         end)
 
       assert result == :not_found

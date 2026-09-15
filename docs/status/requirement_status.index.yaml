@@ -3726,8 +3726,22 @@ volumes:
     path: docs/status/requirement_status.v17.yaml
     status: current
     opened: 2026-09-14
-    entries: 17
+    entries: 18
     note: >
+      Recounted to 18 during WF02-REQ352-20260914's Step Final rebase onto
+      main: this branch's own REQ-352 started-event (Step 00, originally
+      appended against a stale pre-REQ-350 base and computed as 12 there)
+      composed with main's six independently-landed entries (REQ-351
+      blocked, ISS-0674 done, REQ-351 done, REQ-353 done, ISS-0675 done,
+      REQ-354 done) in chronological `at:` order -- REQ-352's own
+      22:11:09Z timestamp sorts before all six (earliest is 23:30:49Z),
+      so it was composed first rather than appended after. Recounted
+      directly from `grep -c "^  - req:" docs/status/requirement_status.v17.yaml`
+      = 18 on-disk entries, rather than carrying forward either side's
+      independently-computed count (17 from main's side, 12 from this
+      branch's stale pre-rebase side), per this note's own
+      recount-every-time rule.
+
       Incremented to 17 by DOC-UPDATER's own REQ-354 done-event append
       (close-out of the 0033 pdf-qr-rendering-dependencies decision
       record) -- `grep -c "^  - req:" docs/status/requirement_status.v17.yaml`

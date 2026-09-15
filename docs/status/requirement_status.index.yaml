@@ -3726,21 +3726,36 @@ volumes:
     path: docs/status/requirement_status.v17.yaml
     status: current
     opened: 2026-09-14
-    entries: 18
+    entries: 19
     note: >
-      Recounted to 18 during WF02-REQ352-20260914's Step Final rebase onto
-      main: this branch's own REQ-352 started-event (Step 00, originally
-      appended against a stale pre-REQ-350 base and computed as 12 there)
-      composed with main's six independently-landed entries (REQ-351
-      blocked, ISS-0674 done, REQ-351 done, REQ-353 done, ISS-0675 done,
-      REQ-354 done) in chronological `at:` order -- REQ-352's own
-      22:11:09Z timestamp sorts before all six (earliest is 23:30:49Z),
-      so it was composed first rather than appended after. Recounted
-      directly from `grep -c "^  - req:" docs/status/requirement_status.v17.yaml`
-      = 18 on-disk entries, rather than carrying forward either side's
-      independently-computed count (17 from main's side, 12 from this
-      branch's stale pre-rebase side), per this note's own
+      Recounted to 19 during WF02-REQ352-20260914's Step Final rebase onto
+      main, second conflict (Step 6's done-event replay): this branch's
+      own REQ-352 done-event (originally appended against a stale
+      pre-REQ-354 base and computed as 13 there) composed with main's
+      six independently-landed entries (REQ-351 blocked, ISS-0674 done,
+      REQ-351 done, REQ-353 done, ISS-0675 done, REQ-354 done) -- all
+      six sort before REQ-352's own done-event (2026-09-15T00:36:22Z is
+      later than all of them, latest being REQ-351's 2026-09-15T00:00:00Z),
+      so REQ-352's done-event was appended after rather than interleaved.
+      Recounted directly from `grep -c "^  - req:"
+      docs/status/requirement_status.v17.yaml` = 19 on-disk entries,
+      rather than carrying forward either side's independently-computed
+      count (18 from this branch's first-conflict recount, 13 from this
+      branch's stale second pre-rebase side), per this note's own
       recount-every-time rule.
+
+      Recounted to 18 during WF02-REQ352-20260914's Step Final rebase onto
+      main, first conflict (Step 00's started-event replay): this branch's
+      own REQ-352 started-event (originally appended against a stale
+      pre-REQ-350 base and computed as 12 there) composed with the same
+      six main entries above in chronological `at:` order -- REQ-352's
+      own 22:11:09Z timestamp sorts before all six (earliest is
+      23:30:49Z), so it was composed first rather than appended after.
+      Recounted directly from `grep -c "^  - req:"
+      docs/status/requirement_status.v17.yaml` = 18 on-disk entries at
+      that point, rather than carrying forward either side's
+      independently-computed count (17 from main's side, 12 from this
+      branch's stale pre-rebase side).
 
       Incremented to 17 by DOC-UPDATER's own REQ-354 done-event append
       (close-out of the 0033 pdf-qr-rendering-dependencies decision

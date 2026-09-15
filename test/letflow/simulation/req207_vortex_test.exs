@@ -1586,7 +1586,43 @@ defmodule Letflow.Simulation.Req207VortexTest do
           # Disposition unchanged: still BLOCKED_ON_DEPENDENCY, still on S8's
           # :gui-dispatch stub (Signal 5), nothing under lib/ or
           # test/support/simulation/ left for this scenario to wait on.
-          "REQ-347"
+          "REQ-347",
+          # REQ-355, promoted from pending_only_ids on 2026-09-15 after its
+          # status flipped to done and this tripwire fired exactly as armed
+          # (the failure message quoted in this commit's own history: "the
+          # record-read route ALL SIX of this scenario's :gui steps need...
+          # HAS NOW BEEN BUILT", which is the generic pending_only_ids
+          # message, not a claim specific to this requirement -- REQ-355
+          # never touches that route). Same promotion shape as REQ-347: NOT
+          # waved through -- re-derived first. `git show --stat 1fd89bb1`
+          # (REQ-355's merge commit) touches
+          # docs/migration/stage-10-bilimbaga-vertical.md,
+          # lib/letflow/api/authorization.ex, lib/letflow/exam/certificate.ex,
+          # lib/letflow/routers/exam_sessions.ex,
+          # lib/letflow/routers/tenant_config.ex,
+          # priv/packs/bilimbaga/entity_definitions/certificate.json, and
+          # their tests -- no lib/letflow/routers/entities.ex, no
+          # lib/letflow/entities/, and -- the part that actually matters for
+          # THIS scenario's disposition -- no test/support/simulation/
+          # runner.ex. REQ-355 is a certificate-issuance context module and
+          # route wired onto Letflow.Routers.ExamSessions (its own commit
+          # message: "Wires an authenticated POST
+          # /exam-sessions/:id/certificate route"), a DIFFERENT router from
+          # Letflow.Routers.Entities that Signal 3''/3''' watch; it does not
+          # touch Signal 3''s route surface (re-verified live this session:
+          # Letflow.Routers.Entities.__authz_routes__/0 still returns exactly
+          # the same 17-route set asserted below, unchanged by REQ-355) and
+          # it does not touch Signal 5's harness (runner.ex's `:gui ->`
+          # clause is unmodified since REQ-208, commit 69f508c3 -- confirmed
+          # live, see Signal 5). So unlike REQ-310/311, REQ-355 landing
+          # changes NOTHING this scenario's disposition rests on: it is
+          # unconditionally admitted, not because filing builds nothing (it
+          # already shipped) but because what it shipped is orthogonal to
+          # both remaining signals. Disposition unchanged: still
+          # BLOCKED_ON_DEPENDENCY, still on S8's :gui-dispatch stub
+          # (Signal 5), nothing under lib/ or test/support/simulation/ left
+          # for this scenario to wait on.
+          "REQ-355"
         ])
 
       # SECOND-TIER ALLOWLIST -- admitted ONLY WHILE `status: pending`.
@@ -1700,29 +1736,25 @@ defmodule Letflow.Simulation.Req207VortexTest do
       # the re-derivation; it is no longer listed in this tier.
       #
       # REQ-355 (S10 P3, discovered here 2026-09-15 filed by a sibling
-      # session, owner ELIXIR-DEV, `status: pending`): "Certificate
-      # issuance: author the certificate entity definition and the
-      # idempotent issue-on-first-request context module...". Its title
+      # session, owner ELIXIR-DEV) was admitted HERE while `status: pending`:
+      # "Certificate issuance: author the certificate entity definition and
+      # the idempotent issue-on-first-request context module...". Its title
       # matches the word-bounded entity/entities check via "certificate
-      # entity definition". Per its own description it is bucket A (an
-      # entity_definitions pack document under priv/packs/bilimbaga/, the
-      # REQ-329 shape) plus bucket C (a NEW context module under
-      # lib/letflow/exam/, not lib/letflow/entities/ or
-      # lib/letflow/routers/) -- it mints no route on Letflow.Routers.Entities
-      # and does not touch test/support/simulation/runner.ex. `status:
-      # pending` at admission time (also explicitly flagged as needing a
-      # REVIEWER rule-2 sign-off it does not yet have, i.e. not even
-      # design-approved to implement yet) -- filing builds nothing, so
-      # admission here rather than allowed_ids is correct; re-derive when it
-      # flips to done.
+      # entity definition". It has SINCE flipped to `status: done`
+      # (2026-09-15, merge commit 1fd89bb1), this tripwire fired exactly as
+      # armed, and the re-derivation it demanded is complete: REQ-355 shipped
+      # a context module and route under Letflow.Routers.ExamSessions that
+      # touches neither the Letflow.Routers.Entities route surface (Signal
+      # 3''/3''') nor the harness (Signal 5), so it was promoted to
+      # allowed_ids above with the full account of why. See that entry for
+      # the re-derivation; it is no longer listed in this tier.
       pending_only_ids = [
         "REQ-315",
         "REQ-316",
         "REQ-317",
         "REQ-318",
         "REQ-319",
-        "REQ-320",
-        "REQ-355"
+        "REQ-320"
       ]
 
       refute Enum.empty?(entity_title_matches),

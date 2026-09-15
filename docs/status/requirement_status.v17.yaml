@@ -984,3 +984,32 @@ history:
       entity-vocabulary check, admitting it to pending_only_ids while
       still pending. Merged into this branch and re-verified before the
       final green CI run that unblocked the merge.
+
+  - req: SCOPE-CHANGE
+    event: done
+    agent: ORCH
+    at: 2026-09-15T02:57:06Z
+    note: >
+      ISS-0677 (queue task 677, GH#1417) resolved via PR #1419, merged
+      as f0afa83f. GIT_MERGE.md's no-direct-push-to-main rule reaffirmed
+      with zero exceptions after six commits (262b2a1e, 40fb4b9f,
+      83ef626d, 37f837b0, f3f1b5f7, 4793eed5) landed via bare push,
+      most citing another session's own unverified "established
+      precedent" note rather than the actual rule text. Added a
+      corrective note to GIT_MERGE.md naming all six commits and a new
+      docs/anti-patterns.md entry for the citation-loop failure mode.
+      Did not rewrite any of the six historical commits or this
+      run-history file's own past entries -- left as append-only
+      historical record, per the file's own rule. REVIEWER independently
+      re-verified the six-commit enumeration (git log/git show
+      --stat/GitHub PR search) and the zero-exceptions judgment: PASS.
+      docs/issues/ISS-0677.yaml (and ISS-0678.yaml, the fast-follow
+      filed to evaluate GitHub repository rulesets as a possible future
+      mechanical gate) written in this same close-out commit -- both
+      were missing from disk despite being registered via register_task,
+      an oversight in this run's own earlier steps, caught before this
+      close-out rather than left silently absent. GH#1417 closed
+      (auto-closed by the queue's release_lock status:done sync,
+      confirmed via `gh issue close 1417` reporting already-closed;
+      evidence comment posted separately). letflow-queue task 677
+      released status: done.

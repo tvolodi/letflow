@@ -265,3 +265,70 @@ Independently re-verified, not taken on CODE-DESIGNER's word:
 
 No corrections needed. Gate open for TEST-DESIGNER/whatever consumes this record next
 (REQ-355/356/357 may now cite a real library choice).
+
+## Addendum (2026-09-15, ISS-0679) — glyph-coverage gap investigated and accepted, not fixed
+
+ISS-0679 (queue task 679, GH#1423, MINOR; discovered by REVIEWER during REQ-356's
+close-out): this record's §2 chose `pdf` (option P1) evaluating only "renders
+positioned text/images sufficient for this document" — it never evaluated GLYPH
+COVERAGE as a criterion. `lib/letflow/exam/certificate_document.ex` (REQ-356) hit this
+directly: `pdf` 0.8.2 renders text through a single, hardcoded WinAnsi (Latin-1) path,
+so a Cyrillic candidate name or exam title (this vertical's own `kk`/`ru` locales)
+degrades every unsupported glyph to a literal `"?"` — confirmed graceful, not a crash,
+by SECURITY-REVIEWER, and documented in that module's own moduledoc/`safe_text_at/3`.
+
+**Investigated for this addendum, against the library's actual source, not assumed:**
+
+- `deps/pdf/lib/pdf/text.ex`'s `normalize_string/2` unconditionally pipes every string
+  through `Pdf.Encoding.WinAnsi.encode/2` before any text is drawn — this is not a
+  per-font-type branch; there is no code path in the library that skips it.
+- `deps/pdf/lib/pdf/external_font.ex` — the library's own "load a font other than the
+  bundled Helvetica/etc." mechanism — is NOT a Unicode/TrueType/OpenType embedding path.
+  `ExternalFont.load/1` parses an AFM metrics file plus a `.pfb` **Type-1** font-program
+  binary (treated as an opaque byte blob, not parsed for glyph tables), and
+  `font_dictionary/3` hardcodes `Dictionary.put("Encoding", n("WinAnsiEncoding"))` with
+  `first_char`/`last_char` spanning a single byte (0–255). There is no CIDFontType0/2
+  object construction anywhere in the library, no `Identity-H`/two-byte encoding, no
+  `ToUnicode` CMap, no TrueType `cmap`/`glyf`/`loca` table parsing. "External font"
+  means "a different Type-1 font, still WinAnsi, still single-byte" — not a Unicode
+  path.
+- Conclusion: `pdf` has genuinely **no** route to Unicode/CID text, full stop — not a
+  configuration gap, not a supported-but-undocumented feature. Making this vertical's
+  Cyrillic content render as real glyphs through `pdf` would mean bypassing the
+  library's entire font/text subsystem and hand-building, from this document's own
+  code: a TrueType parser (`cmap` for codepoint→glyph-ID, `hmtx`/`loca`/`glyf` for
+  widths and embedding), a `Type0`/`CIDFontType2` font dictionary with a `CIDToGIDMap`,
+  a `W` widths array, a `ToUnicode` CMap, and two-byte-encoded content-stream text
+  operators in place of `Pdf.Page.text_at/4`. That is exactly the class of complexity
+  §5(a) of this record already rejected building in-house for the *whole* PDF format;
+  building the CID-font subset of it by hand for one document is the same tradeoff on
+  a smaller but still real scale, not a small addition to
+  `certificate_document.ex`.
+- Alternative-library re-check: no viable pure-Elixir PDF library with real Unicode/CID
+  support was found. The one Unicode-capable alternative on the market at this
+  record's original writing, `chromic_pdf` (option P2), was rejected in §2 for
+  operational reasons (a Chrome/Chromium binary in every runtime environment) entirely
+  independent of glyph coverage — that tradeoff is unchanged by this finding, and
+  reversing §2 to fix a MINOR font-coverage gap when a working, honest fallback already
+  exists is disproportionate churn.
+
+**Decision: accept the Latin-1-only limitation as a deliberate, documented product
+constraint — no dependency change, no new font-embedding code.** `pdf`
+(option P1) remains chosen; §2's reasoning is otherwise unaffected. This is option (c)
+of ISS-0679's three candidate resolutions, chosen because (a) real font embedding is
+disproportionate effort for a MINOR issue with a working non-crashing fallback already
+shipped, and (b) no viable Unicode-capable pure-Elixir alternative exists without
+reopening and reversing §2's already-settled, unrelated operational tradeoff.
+
+**Trigger for revisiting:** if/when a tenant actually issues certificates to `kk`/`ru`
+candidates in production (not merely "the exam pack declares those locales") and the
+`"?"`-degraded rendering is reported as a real user-facing problem, re-open this
+addendum rather than ISS-0679 itself — at that point, re-evaluate both the hand-built
+CID-font-subset approach above (now costed against a real, not merely declared, need)
+and the state of the pure-Elixir PDF-library ecosystem at that later date (a
+Unicode-capable option may exist by then that does not today).
+
+No REVIEWER sign-off is required for this addendum on its own — it changes no
+`mix.exs`, `mix.lock`, route, migration, or code; it documents an investigation and
+accepts an existing, already-reviewed behavior. ISS-0679 itself is closed against this
+addendum (see `docs/issues/ISS-0679.yaml`'s `resolution_note`).

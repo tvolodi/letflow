@@ -47,6 +47,35 @@ attempt while either is red or pending is rejected by GitHub, not merely inadvis
 > (added by this same fix) for the canonical statement of that boundary. An
 > agent that finds itself about to run `git push origin main` for any reason has
 > misread this protocol; stop, create a branch, and proceed from step 1 instead.
+>
+> **Reaffirmed with zero exceptions (2026-09-15, ISS-0677) — "docs-only" is not
+> an exception, and there never was a project precedent making it one.** Six
+> commits landed via bare `git push origin main` on 2026-09-14/15 (`262b2a1e`,
+> `40fb4b9f`, `83ef626d`, `37f837b0`, `f3f1b5f7`, `4793eed5` — REQ-350/353/354
+> close-outs, ISS-0675 filing/resolution, and an ISS-0676 blocked-status
+> bookkeeping entry), each justified in its own run-history note as "matching
+> this session's/project's established precedent" for a docs-only change. **No
+> such precedent was ever decided.** The reasoning above is unconditional on
+> content: the gap this paragraph closes is that GitHub's push-allowlist
+> cannot distinguish a legitimate push from a bypass because both come from the
+> same admin identity — that argument does not weaken for a run-history append
+> or a decision-record sign-off any more than for application code. A "narrow
+> exception for append-only bookkeeping files" was considered and rejected for
+> this same reason: nothing mechanically stops a future direct push from
+> touching more than the claimed append-only file once the exception exists in
+> prose, and a self-asserted "this one only touched bookkeeping" claim is
+> exactly the unvalidated producer self-report `core-directives.md`'s
+> producer/validator principle exists to refuse — see
+> `docs/anti-patterns.md`'s "Citing a prior session's own bypass note as
+> 'established precedent' instead of re-reading the actual rule (ISS-0677)"
+> for the full incident and why each session inherited the excuse rather than
+> the rule. The six commits above are not reverted or rewritten — they already
+> merged and the run-history entries recording their (incorrect) justification
+> are append-only historical fact, not errors to silently correct — but no
+> further direct push to `main` is authorized for any reason, docs-only
+> included. This paragraph's own enforcement remains prose-only, not a
+> mechanical pre-push gate; see the anti-patterns entry for why that gap is
+> judged acceptable here rather than a defect requiring a new check.
 
 **What "reported green" means here.** This suite carries a standing set of pre-existing
 failures (13-15 at the time of writing) and has for days, so "green" read as "zero

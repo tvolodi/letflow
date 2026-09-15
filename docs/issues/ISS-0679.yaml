@@ -28,9 +28,67 @@ description: >
   real Unicode support, or explicitly decide non-Latin certificate
   rendering is out of scope for now and document that as a real product
   decision rather than a silent gap.
+
+  INVESTIGATION (2026-09-15, CODE-DESIGNER): read `deps/pdf/lib/pdf/text.ex`
+  and `deps/pdf/lib/pdf/external_font.ex` directly, not just the finding's
+  prose. `Pdf.Text.normalize_string/2` unconditionally routes every string
+  through `Pdf.Encoding.WinAnsi.encode/2` with no alternate path. The
+  library's ONE "load a different font" mechanism, `Pdf.ExternalFont.load/1`,
+  is NOT a Unicode/TrueType embedding path either: it parses an AFM metrics
+  file plus a `.pfb` Type-1 font-program binary (an opaque byte blob, no
+  glyph-table parsing) and `font_dictionary/3` hardcodes
+  `Encoding: WinAnsiEncoding` with single-byte `first_char`/`last_char` (0-255).
+  There is no `Type0`/`CIDFontType2` construction, no `Identity-H` two-byte
+  encoding, no `ToUnicode` CMap, no TrueType `cmap`/`glyf`/`loca` parsing
+  anywhere in `pdf` 0.8.2. Real Cyrillic rendering through this library would
+  require hand-building a CID-font subsystem from scratch (TrueType table
+  parsing, a `Type0` font dictionary, a `W` widths array, a `ToUnicode` CMap,
+  two-byte content-stream text operators bypassing `Pdf.Page.text_at/4`
+  entirely) -- exactly the class of PDF-internals complexity decision 0033's
+  own §5(a) already rejected building in-house, at a smaller but still real
+  scale. No viable pure-Elixir Unicode-capable PDF library alternative was
+  found either; the one Unicode-capable option on the market, `chromic_pdf`,
+  was already rejected in 0033 §2 for an unrelated operational reason (a
+  Chrome/Chromium binary in every runtime environment) that this finding does
+  not change, making a library switch disproportionate churn to reverse a
+  signed decision over a MINOR font-coverage gap.
 affected_files:
   - lib/letflow/exam/certificate_document.ex
   - docs/migration/decisions/0033-pdf-qr-rendering-dependencies.md
 queue_ref: Q-679
 github_ref: GH-1423
-status: open
+status: resolved
+resolved_by: CODE-DESIGNER
+resolved_in_run: ISS-0679-20260915
+resolved_at: "2026-09-15T00:00:00Z"
+resolution_note: >
+  Decision (c): accept the Latin-1/WinAnsi-only limitation as a deliberate,
+  documented product constraint. No dependency change, no font-embedding
+  code, no library switch. `lib/letflow/exam/certificate_document.ex`'s
+  existing `safe_text_at/3` fallback (`encoding_replacement_character: "?"`)
+  stays as the permanent, honest degrade path for non-Latin-1 content --
+  REQ-356 already ships this and it was already confirmed non-crashing by
+  SECURITY-REVIEWER.
+
+  Reasoning: option (a) (embed a Unicode TrueType font into `pdf`) is not a
+  small, well-scoped addition -- see the INVESTIGATION note above; `pdf` has
+  no Unicode/CID glyph path at any level, including its "external font"
+  loader, so closing this gap means hand-writing a CID-font PDF subsystem,
+  disproportionate effort for a MINOR issue with a working fallback already
+  in place. Option (b) (switch PDF libraries) has no viable pure-Elixir
+  Unicode-capable candidate; the one Unicode-capable option, `chromic_pdf`,
+  was already rejected by decision 0033 for an operational reason (a
+  required Chrome/Chromium binary) unrelated to and unaffected by this
+  finding, so reopening 0033 to reverse that choice over a MINOR gap is not
+  proportionate.
+
+  Recorded as a formal addendum to decision 0033 (not an in-place edit to
+  signed decision text, per this project's addendum convention) --
+  `docs/migration/decisions/0033-pdf-qr-rendering-dependencies.md`'s
+  "Addendum (2026-09-15, ISS-0679)" section carries the full investigation,
+  the decision, and the trigger for revisiting: if/when a tenant actually
+  issues certificates to real kk/ru candidates in production (not merely a
+  declared exam-pack locale) and the "?"-degraded rendering is reported as a
+  genuine user-facing problem, re-open that addendum and re-cost both the
+  hand-built CID-font approach and the pure-Elixir PDF-library ecosystem at
+  that later date.

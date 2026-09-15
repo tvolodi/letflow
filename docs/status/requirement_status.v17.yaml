@@ -1013,3 +1013,23 @@ history:
       confirmed via `gh issue close 1417` reporting already-closed;
       evidence comment posted separately). letflow-queue task 677
       released status: done.
+
+  - req: REQ-357
+    event: started
+    agent: ORCH
+    at: 2026-09-15T03:08:33Z
+    note: >
+      Claimed letflow-queue task 673 (GH#1409, agent_id
+      orch-session-issueloop, depends_on [668, 671] both done). Step 00
+      git setup: pulled main to 995dd1e8, branched
+      feature/WF02-REQ357-20260915, pushed. Registers the certificate
+      projection as decision 0028's first real public-read kind (bucket
+      C): the projection module, its kind string, and wiring a handle
+      mint through REQ-352's writer at REQ-355's issuance path. No
+      mount/router/limiter/registry-migration changes (those are
+      REQ-352's, already merged). Needs a per-entry rule-2 sign-off from
+      REVIEWER (real A/B adjudication: hand-built projection module vs.
+      a declarative field allowlist in config) and a hard
+      SECURITY-REVIEWER gate on the projection's field set (INV-2
+      substance -- what an anonymous handle-holder is entitled to see).
+      Routing to CODE-DESIGNER next.

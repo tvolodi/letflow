@@ -24,7 +24,11 @@ RUN mix compile
 RUN mix release
 
 # ── Stage 2: minimal runtime image ──────────────────────────────────────────
-FROM debian:bookworm-slim AS runtime
+# Must track the builder's Debian generation (glibc version) — the compiled
+# OTP release links dynamically against the builder's glibc, and an older
+# runtime base (e.g. bookworm's glibc 2.36 vs. trixie's 2.41) fails at
+# startup with "GLIBC_2.38 not found" for epmd/beam.smp.
+FROM debian:trixie-slim AS runtime
 
 # openssl/libncurses/locales are the standard runtime deps for a compiled
 # Erlang/OTP release; ca-certificates for outbound TLS (OIDC provider

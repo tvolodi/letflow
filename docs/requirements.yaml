@@ -26039,7 +26039,7 @@ requirements:
     title: "Register the certificate projection as decision 0028's first real public-read kind -- the projection module, its kind string, and the handle issued on the authenticated certificate path -- closing S10 gap 6's vertical half (S10 P3, certificate issuance)"
     owner: ELIXIR-DEV
     impl_order: 673
-    status: pending
+    status: done
     stage: S10
     description: >
       bucket: C. Only the projection module and its kind string are

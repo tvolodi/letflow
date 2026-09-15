@@ -5,11 +5,16 @@ config :letflow, ecto_repos: [Letflow.Repo]
 # REQ-352 (design lib/letflow/design/req352-unauthenticated-read-platform.md §8):
 # the unauthenticated-read kind registry -- a map of
 # %{kind_string => projection_module}, read at request time via
-# Application.fetch_env!/2 by Letflow.PublicRead.fetch_kind/1. Empty by default
-# (no kind registered in a given environment); config/test.exs adds the one
-# test-only fixture kind. Never add a real vertical kind here -- that is a
-# later requirement's scope.
-config :letflow, :public_read_kinds, %{}
+# Application.fetch_env!/2 by Letflow.PublicRead.fetch_kind/1. config/test.exs
+# adds the one test-only fixture kind on top of this.
+#
+# REQ-357 (design lib/letflow/design/req357-certificate-public-projection.md
+# §4) registers this stage's first real kind, "certificate" --
+# Letflow.Exam.CertificatePublicProjection. Do not add a further vertical
+# kind here without its own design/registration entry.
+config :letflow, :public_read_kinds, %{
+  "certificate" => Letflow.Exam.CertificatePublicProjection
+}
 
 # REQ-154: default instruction budget for tenant-supplied Lua scripts.
 # The 2-arity execute_with_manifest/2 reads this value; the 3-arity overload

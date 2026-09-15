@@ -1013,3 +1013,115 @@ history:
       confirmed via `gh issue close 1417` reporting already-closed;
       evidence comment posted separately). letflow-queue task 677
       released status: done.
+
+  - req: REQ-357
+    event: started
+    agent: ORCH
+    at: 2026-09-15T03:08:33Z
+    note: >
+      Claimed letflow-queue task 673 (GH#1409, agent_id
+      orch-session-issueloop, depends_on [668, 671] both done). Step 00
+      git setup: pulled main to 995dd1e8, branched
+      feature/WF02-REQ357-20260915, pushed. Registers the certificate
+      projection as decision 0028's first real public-read kind (bucket
+      C): the projection module, its kind string, and wiring a handle
+      mint through REQ-352's writer at REQ-355's issuance path. No
+      mount/router/limiter/registry-migration changes (those are
+      REQ-352's, already merged). Needs a per-entry rule-2 sign-off from
+      REVIEWER (real A/B adjudication: hand-built projection module vs.
+      a declarative field allowlist in config) and a hard
+      SECURITY-REVIEWER gate on the projection's field set (INV-2
+      substance -- what an anonymous handle-holder is entitled to see).
+      Routing to CODE-DESIGNER next.
+  - req: REQ-357
+    event: done
+    agent: DOC-UPDATER
+    at: "2026-09-15T04:48:34Z"
+    note: >
+      Closed out REQ-357 (letflow-queue task 673, GH#1409, decision 0028's
+      first real public-read kind, vertical half over REQ-352's platform
+      machinery). Pipeline: CODE-DESIGNER PASSed first try -> ELIXIR-DEV
+      implemented Letflow.Exam.CertificatePublicProjection plus the
+      certificate.ex issue_or_fetch/4 threading change, with a load-bearing
+      finding surfaced and fixed during implementation -- Letflow.Entities.
+      Record.Latest's primary key (id) is distinct from its own record_id
+      field, and issue_handle/4's resource_id must be supplied record_id,
+      not id, or the minted handle silently 404s forever -> SECURITY-REVIEWER
+      PASS (commit 284900ef) against INV-1/INV-2/INV-4/INV-5/INV-8, the
+      projection's field set verified field-by-field as the substance of the
+      review -> REVIEWER PASS (commit e092e6b6), scope-fence and contract-
+      change checks confirmed, plus the required per-entry rule-2 sign-off
+      -> TEST-DESIGNER/TEST-RUNNER PASS (commit f73f4c6f) -> RELEASE-VALIDATOR
+      independently re-verified in two passes: the first FAILed on a stale
+      checkout that had not yet picked up the SECURITY-REVIEWER/REVIEWER gate
+      commits (284900ef, e092e6b6), not a real defect; the second, against a
+      checkout confirmed to include both, PASSed all 11 acceptance criteria.
+
+      AC-9's "recorded and quoted" requirement -- REVIEWER's rule-2
+      adjudication is recorded in commit e092e6b6's own message
+      ("chore(WF02-REQ357-20260915): Step 2d REVIEWER -- PASS, rule-2
+      sign-off (AC-9)"), quoted here verbatim:
+
+      "Keep the hand-built module -- the design's own recommendation is
+      correct, verified rather than accepted on faith. The field-selection
+      half of project/2 is thin enough to tempt a declarative reading, but
+      two pieces are not mechanical data mapping: to_float/1's three-clause
+      dispatch (float/integer/Decimal) is a real judgment about score_pct's
+      non-uniform stored representation, already existing as executable code
+      one layer up in Letflow.Exam.Certificate itself -- a declarative
+      allowlist would have to invent a coercion-type vocabulary interpreted
+      by some generic engine, relocating the code rather than eliminating
+      it. The 'issued_at' -> 'issued_on' rename is a deliberate
+      disambiguation against the envelope's own top-level 'issued_at' key,
+      not a copy rule.
+
+      The decisive point is the primary-key substitution: Letflow.Entities.
+      Record.Latest has a distinct primary key (id) from its own record_id
+      field, and supplying record.record_id instead of record.id as
+      issue_handle/4's resource_id silently 404s forever. That is not a fact
+      a declarative field-allowlist format could express or protect against
+      -- it is reasoning about Repo.get/3's primary-key semantics that has
+      to be re-derived, consciously, by whoever authors the next kind's
+      projection. Forcing it into config would either invent a
+      which-column-is-your-join-key sub-language for a benefit visible only
+      once a second kind exists, or leave that reasoning undocumented in
+      data rather than in a moduledoc a reviewer actually reads.
+
+      Weighed against decision 0028's own precedent: 0028 already chose the
+      behaviour-based projection contract over a competing prose-based
+      alternative for this exact platform boundary. A declarative-config
+      alternative here would not be a small variation on that decision; it
+      would be a second, later, single-instance reopening of the same
+      boundary, on the strength of one kind's field set being simple -- the
+      same failure mode the stage-10 rule-2 precedent table already declined
+      for QuestionSetResolver, AntiCheat, and the certificate-issuance guard
+      pipeline itself.
+
+      ADJUDICATION: bucket C. The hand-built Letflow.Exam.
+      CertificatePublicProjection module is correctly scoped to what REQ-357
+      needs today; it does not preempt a future generalization, and a
+      declarative alternative is not justified by this instance alone. If a
+      second and third kind emerge needing nothing more expressive than
+      this, that later comparison is the right moment to generalize."
+
+      Updated docs/migration/stage-10-bilimbaga-vertical.md: re-ran the
+      bucket-C inventory ls/wc -l measurement fresh against this checkout
+      (6 modules, 2,375 total lines under lib/letflow/exam/, up from 5
+      modules/2,280 lines -- +certificate_public_projection.ex, 77 new
+      lines, and certificate.ex growing 372->390, +18 lines, matching
+      git diff --stat's +107/-12 exactly), added the module's own
+      inventory row citing REVIEWER's rule-2 PASS at e092e6b6, corrected
+      the P3 phase row's stale "QR/public verification (REQ-357) remain[s]
+      unbuilt" language now that it is built, and closed out gap 6 in the
+      "Gaps" section and the P1 phase row -- REQ-323's design (decision
+      0028), REQ-352's platform machinery and this requirement's vertical
+      instance are now all done. PDF rendering (REQ-356) is explicitly
+      still pending and unmerged to main; not claimed as done here.
+
+      This requirement, together with REQ-352, is decision 0028's first
+      real public-read kind now fully built end to end -- platform half
+      (REQ-352) and vertical half (REQ-357) both merged.
+
+      Flipped docs/requirements.yaml's REQ-357 status in_progress -> done.
+      Did not re-review REVIEWER's or SECURITY-REVIEWER's verdicts, per
+      this pipeline's own convention that they are final.

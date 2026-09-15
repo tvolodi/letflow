@@ -25937,7 +25937,7 @@ requirements:
     title: "Render the certificate document and its embedded verification QR code from an issued certificate record, adding the REQ-354-chosen dependencies to mix.exs, and serve it from the authenticated download route (S10 P3, certificate issuance)"
     owner: ELIXIR-DEV
     impl_order: 672
-    status: pending
+    status: done
     stage: S10
     description: >
       bucket: C. JUSTIFICATION on rule 1 -- the rendered artefact is a

@@ -1150,3 +1150,102 @@ history:
       merges -- the fix direction (font embedding vs. library swap vs.
       explicit deferral) is well-scoped in the issue's own FIX
       DIRECTION section once the target file exists.
+  - req: REQ-356
+    event: done
+    agent: ORCH
+    at: "2026-09-15T05:45:10Z"
+    note: >
+      Certificate PDF rendering + embedded QR verification code
+      (lib/letflow/exam/certificate_document.ex), PR #1422 merged as
+      fd885bc3. Added pdf and eqrcode deps to mix.exs per decision 0033,
+      each with the required inline comment naming this requirement, the
+      decision, and the REVIEWER sign-off requirement.
+
+      SECURITY-REVIEWER found a genuine, reproducible PDF content-stream
+      injection defect: the vendored pdf dependency's Text.escape/1 never
+      escapes a literal backslash before parens, so a candidate_name or
+      exam_title containing \) could break out of a PDF text literal and
+      inject content-stream commands into the rendered certificate.
+      Verified empirically against the real library (a standalone script
+      traced the actual decompressed content stream). ELIXIR-DEV fixed it
+      with escape_backslash/1 pre-escaping backslashes before the
+      library's own paren-escaping runs (correct order per the PDF
+      spec), added a regression test that decodes real PDF literal-string
+      operands rather than substring-matching. SECURITY-REVIEWER
+      independently re-verified by reverting the fix locally and
+      confirming the test then fails exactly as expected, then restoring
+      it -- PASS.
+
+      REVIEWER's mandatory rule-2 bucket adjudication: bucket C confirmed,
+      not bucket A. The QR-embedding math (raw EQRCode module-matrix
+      iteration, correcting a real upstream field-vs-tuple_size
+      discrepancy), the security escaping, and the WinAnsi/Latin-1 font
+      encoding degradation are genuine executable logic no declarative
+      pack-content template plus generic renderer could absorb for a
+      single caller -- the same premature-generalization test already
+      declined for QuestionSetResolver/AntiCheat/REQ-345/REQ-355.
+
+      A real, honestly-reported product gap: the pdf library has no
+      Unicode/CID glyph path, so Cyrillic (kk/ru locale) certificate
+      content degrades to "?" rather than crashing -- confirmed as
+      graceful degradation, not a crash risk, by SECURITY-REVIEWER. Filed
+      separately as ISS-0679 (GH#1423, queue task 679), non-blocking,
+      reopening decision 0033's evaluation criteria for this vertical's
+      actual locale needs.
+
+      CI on this PR hit the vortex-simulation tripwire test twice: once
+      transiently investigated as possibly caused by this PR's own new
+      download route, then correctly root-caused by TEST-DESIGNER to
+      REQ-355's own earlier status flip to done (REQ-355 was armed in
+      pending_only_ids while pending; promoted to allowed_ids per the
+      same precedent REQ-347 established, verified REQ-355's merged diff
+      touches neither the entities route surface nor the S8 harness this
+      scenario depends on).
+
+      Merging also hit a real, substantive conflict with main: a sibling
+      session's REQ-357 (certificate public-read projection) landed
+      concurrently, touching the same files (exam_sessions.ex/test, the
+      stage file). Resolved by composing both sides' genuinely additive
+      work (two independent routes/test-describe-blocks, two bucket-C
+      inventory rows) rather than discarding either -- re-measured the
+      combined lib/letflow/exam/ total fresh from the merged tree (7
+      modules, 2,826 lines) rather than concatenating stale partial
+      totals. One follow-up finding flagged but not fixed in this
+      close-out: the download route's verification-code stand-in
+      (certificate.id) was never upgraded to REQ-357's now-landed real
+      PublicRead.issue_handle mechanism -- worth its own follow-up issue.
+
+      Docs-only bookkeeping and code changes both went through a proper
+      branch+PR+CI cycle throughout, per ISS-0677's reaffirmed
+      no-direct-push rule (zero exceptions, not even for a one-line
+      docs fix) -- this session had briefly, incorrectly treated
+      "docs-only direct push" as established precedent earlier and
+      corrected that once ISS-0677 was found.
+# ─────────────────────────────────────────────────────────────────────────────
+# VOLUME 17 — CLOSED 2026-09-15. DO NOT APPEND TO THIS FILE.
+# This volume holds the complete requirement run history from 2026-09-14 through
+# 2026-09-15 (26 entries, 1223 frozen-prefix lines with this closure footer). It
+# is frozen: every line above this comment is preserved byte-for-byte. Closed by
+# ORCH's own REQ-356 done-event append (a straightforward append, no merge
+# conflict on this file this time), which brought this file to 1223 lines --
+# over its declared roll_rule ceiling (max_lines: 1200) -- confirmed via `wc -l`
+# on the working-tree file per this volume's own "WHEN THIS VOLUME IS FULL"
+# procedure.
+# Reads of this volume are TARGETED reads only -- a line range or a pattern
+# match, never a whole-file read. Use whichever your shell has:
+#   Read tool with offset/limit (works everywhere), or
+#   Bash:       grep -n PATTERN FILE   /   sed -n 'START,ENDp' FILE
+#   PowerShell: Select-String -Path FILE -Pattern PATTERN
+#               (Get-Content FILE)[START..END]
+#
+# NEW ENTRIES GO TO THE CURRENT VOLUME. Find it in:
+#   docs/status/requirement_status.index.yaml
+# which, as of this closure, names:
+#   docs/status/requirement_status.v18.yaml
+#
+# Why this file was closed: ORCH's own REQ-356 done-event append brought the
+# on-disk count to 26 entries across 1223 lines -- over the roll ceiling. No
+# entry above this footer was moved, edited or deleted.
+#
+# KNOWN ANOMALIES IN THIS VOLUME: none. This closure was a plain append-and-roll
+# with no concurrent merge conflict on this specific file at closure time.

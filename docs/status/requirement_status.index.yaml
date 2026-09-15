@@ -3724,10 +3724,29 @@ volumes:
 
   - volume: 17
     path: docs/status/requirement_status.v17.yaml
-    status: current
+    status: closed
     opened: 2026-09-14
-    entries: 25
+    closed: 2026-09-15
+    entries: 26
+    lines: 1251
+    bytes_working_tree: 73413
+    frozen_prefix_lines: 1223
+    frozen_prefix_sha256: "37753c1d390d4aedef409ee9ff32225c26d24f4ff7bdc08190e18e3cb34aab5e"
     note: >
+      Closed by ORCH's own REQ-356 done-event append -- `grep -c "^  - req:"
+      docs/status/requirement_status.v17.yaml` = 26 on-disk entries after
+      the append, 1223 lines -- over the 1,200-line roll ceiling, confirmed
+      via `wc -l` on the working-tree file. No concurrent merge conflict on
+      this specific file at closure time. Closure footer appended per the
+      roll rule; `frozen_prefix_sha256` computed over exactly the 1223
+      frozen-prefix lines using this file's documented
+      normalised-line-terminator digest (test/support/status_history.ex's
+      frozen_prefix_digest/2), not a raw sha256sum of the CRLF
+      working-tree bytes. Successor: docs/status/requirement_status.v18.yaml,
+      created with volume 17's header text verbatim (volume number, opening
+      date and predecessor path updated) and an empty `history:` list --
+      diffed against volume 17's original header to confirm only those
+      fields changed.
       Incremented to 25 by ORCH's own SCOPE-CHANGE (ISS-0679, blocked on
       REQ-356 not yet merged) blocked-event append -- `grep -c "^  - req:"
       docs/status/requirement_status.v17.yaml` = 25 on-disk entries; 1152
@@ -3847,6 +3866,20 @@ volumes:
       landed without their own index-note increments), per this note's own
       recount-every-time rule. `wc -l`/`wc -c` = 521 lines / 29754 bytes,
       well under the roll ceiling, no roll triggered.
+
+  - volume: 18
+    path: docs/status/requirement_status.v18.yaml
+    status: current
+    opened: 2026-09-15
+    entries: 0
+    note: >
+      Opened by ORCH's own REQ-356 close-out, successor to volume 17.
+      Created with volume 17's header text verbatim (volume number,
+      opening date and predecessor path updated) and an empty `history:`
+      list, per this index's `roll_rule.on_exceed` procedure -- diffed
+      against volume 17's original header to confirm only those fields
+      changed. `entries:` will be incremented per HOW-TO-APPEND step 6 as
+      real appends land.
 
 
 known_anomalies:

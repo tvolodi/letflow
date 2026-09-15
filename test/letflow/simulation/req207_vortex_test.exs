@@ -1560,7 +1560,33 @@ defmodule Letflow.Simulation.Req207VortexTest do
           "REQ-339",
           "REQ-340",
           "REQ-342",
-          "REQ-343"
+          "REQ-343",
+          # REQ-347, promoted from pending_only_ids on 2026-09-15 after its
+          # status flipped to done and this tripwire fired exactly as armed
+          # (the failure message quoted in this commit's own history). Same
+          # promotion shape as REQ-310/311: NOT waved through -- re-derived
+          # first. `git show --stat 822b3021` (REQ-347's own commit) touches
+          # only docs/issues/ISS-0662.yaml and four new
+          # web/tests/e2e/*.e2e.spec.ts files; no lib/letflow/routers/, no
+          # lib/letflow/entities/, no lib/letflow/api/, no
+          # lib/letflow/plugs/api_pipeline.ex, no lib/letflow/router.ex, and
+          # -- the part that actually matters for THIS scenario's disposition
+          # -- no test/support/simulation/runner.ex. REQ-347 is a Playwright
+          # spec PORT consuming the already-built EntityCrudPage/
+          # POST-/entities/query surface (its own description: "bucket: C,
+          # client test artefacts"); it does not touch Signal 3''/3'''s route
+          # surface (re-verified live this session: __authz_routes__/0 still
+          # returns exactly the same 17-route set asserted below, unchanged
+          # by REQ-347) and it does not touch Signal 5's harness (runner.ex's
+          # `:gui ->` clause is unmodified -- confirmed live, see Signal 5).
+          # So unlike REQ-310/311, REQ-347 landing changes NOTHING this
+          # scenario's disposition rests on: it is unconditionally admitted,
+          # not because filing builds nothing (it already shipped) but
+          # because what it shipped is orthogonal to both remaining signals.
+          # Disposition unchanged: still BLOCKED_ON_DEPENDENCY, still on S8's
+          # :gui-dispatch stub (Signal 5), nothing under lib/ or
+          # test/support/simulation/ left for this scenario to wait on.
+          "REQ-347"
         ])
 
       # SECOND-TIER ALLOWLIST -- admitted ONLY WHILE `status: pending`.
@@ -1663,16 +1689,32 @@ defmodule Letflow.Simulation.Req207VortexTest do
       # gets re-derived here rather than silently waved into allowed_ids.
       # All six are `status: pending` at admission time.
       #
-      # REQ-347 (S10 P5, filed 2026-09-14, owner FRONTEND-DEV, `status:
-      # pending`): "Port the entity-CRUD-backed admin parity specs ... onto
-      # /admin/bilimbaga/:entityType as *.e2e.spec.ts". Its title matches the
-      # word-bounded entity/entities check, but per its own description it is
-      # a Playwright test-spec port under web/ -- it does not touch
-      # Letflow.Routers.Entities, does not add a backend route, and does not
-      # touch the S8 :gui-dispatch stub this scenario's six steps depend on.
-      # Admitted here (not allowed_ids) per this tier's own contract: it is
-      # not yet triaged as landed/done, so it is armed rather than waved
-      # through. Re-derive when it flips to done.
+      # REQ-347 (S10 P5, filed 2026-09-14, owner FRONTEND-DEV) was admitted
+      # HERE while `status: pending` -- filing builds nothing, so it was
+      # armed rather than waved through. It has SINCE flipped to `status:
+      # done` (2026-09-15), this tripwire fired exactly as armed, and the
+      # re-derivation it demanded is complete: REQ-347 shipped a Playwright
+      # spec port under web/tests/e2e/ that touches neither the route surface
+      # (Signal 3''/3''') nor the harness (Signal 5), so it was promoted to
+      # allowed_ids above with the full account of why. See that entry for
+      # the re-derivation; it is no longer listed in this tier.
+      #
+      # REQ-355 (S10 P3, discovered here 2026-09-15 filed by a sibling
+      # session, owner ELIXIR-DEV, `status: pending`): "Certificate
+      # issuance: author the certificate entity definition and the
+      # idempotent issue-on-first-request context module...". Its title
+      # matches the word-bounded entity/entities check via "certificate
+      # entity definition". Per its own description it is bucket A (an
+      # entity_definitions pack document under priv/packs/bilimbaga/, the
+      # REQ-329 shape) plus bucket C (a NEW context module under
+      # lib/letflow/exam/, not lib/letflow/entities/ or
+      # lib/letflow/routers/) -- it mints no route on Letflow.Routers.Entities
+      # and does not touch test/support/simulation/runner.ex. `status:
+      # pending` at admission time (also explicitly flagged as needing a
+      # REVIEWER rule-2 sign-off it does not yet have, i.e. not even
+      # design-approved to implement yet) -- filing builds nothing, so
+      # admission here rather than allowed_ids is correct; re-derive when it
+      # flips to done.
       pending_only_ids = [
         "REQ-315",
         "REQ-316",
@@ -1680,7 +1722,7 @@ defmodule Letflow.Simulation.Req207VortexTest do
         "REQ-318",
         "REQ-319",
         "REQ-320",
-        "REQ-347"
+        "REQ-355"
       ]
 
       refute Enum.empty?(entity_title_matches),

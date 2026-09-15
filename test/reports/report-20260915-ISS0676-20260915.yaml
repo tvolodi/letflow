@@ -1,0 +1,81 @@
+run_id: ISS0676-20260915
+agent: TEST-RUNNER
+workflow: WF-03 Step (issue fix verification) / WF-04 Step 1 (full-suite verification)
+issue: ISS-0676 (Letflow.Exam.Certificate issue_error type-union hardening; GH#1415,
+  queue task 676)
+timestamp_utc: "2026-09-15T00:00:00Z"
+branch: fix/ISS-0676-20260915
+head_commit: d50aa89ab80b054998bdd9f7bac84e0ec039cf72
+head_commit_ancestor_confirmed: "d50aa89a confirmed as an ancestor of HEAD via
+  `git merge-base --is-ancestor d50aa89a HEAD` (exit 0); `git log -1` on the
+  checked-out branch shows d50aa89a as the tip commit itself."
+
+verdict: PASS
+
+environment:
+  docker_compose: "letflow-1-postgres-1 and letflow-1-keycloak-1 already Running
+    (both healthy per `docker compose ps`); port 5463 matches this workspace's
+    untracked .env's LETFLOW_DB_PORT=5463. Ordinary `docker` CLI got permission
+    denied (user not in the docker group in this environment); `sudo -n docker
+    compose up -d` succeeded non-interactively."
+  host_cores: 8 (nproc)
+  toolchain: elixir/mix present; no `mix deps.get` needed (deps already fetched).
+
+diff_scope:
+  files: "git diff --name-only main...HEAD: docs/status/requirement_status.index.yaml,
+    docs/status/requirement_status.v17.yaml, lib/letflow/exam/certificate.ex,
+    lib/letflow/routers/exam_sessions.ex, test/letflow/routers/exam_sessions_test.exs"
+  note: "Matches the task briefing's description of a comment-and-test-only diff:
+    two documentation-comment edits (certificate.ex, exam_sessions.ex) plus one
+    new end-to-end test (exam_sessions_test.exs). The two status/requirement_status
+    files are docs-only bookkeeping, not code."
+
+commands_run:
+  - "mix format --check-formatted -- exit 0, clean, no output."
+  - "mix compile --warnings-as-errors -- exit 0, clean, no output."
+  - "scripts/test_parallel.sh -- exit 0."
+
+full_suite_result:
+  final_combined: "4293 tests, 6 properties, 0 failures (4299/4299 passed)"
+  per_partition:
+    - "partition 1: 620 tests, 1 property, 0 failures, exit 0"
+    - "partition 2: 468 tests, 0 properties, 0 failures, exit 0"
+    - "partition 3: 621 tests, 2 properties, 0 failures, exit 0"
+    - "partition 4: 477 tests, 2 properties, 0 failures, exit 0"
+    - "partition 5: 605 tests, 1 property, 0 failures, exit 0"
+    - "partition 6: 538 tests, 0 properties, 0 failures, exit 0"
+    - "partition 7: 477 tests, 0 properties, 0 failures, exit 0"
+    - "partition 8: 487 tests, 0 properties, 0 failures, exit 0"
+  new_test_confirmed_executed: >
+    Grepped the partition logs for the new test's subject matter: partition 1's
+    log contains 12 matches for "issue_error"/"exhaustiveness", confirming
+    test/letflow/routers/exam_sessions_test.exs's new regression test actually
+    ran (not silently excluded/skipped) and passed as part of partition 1's
+    0-failure result.
+
+pre_existing_failures:
+  count: 0
+  note: "Full suite is entirely green -- 4299/4299 passed. No failures at all
+    this run, so there is nothing to attribute: neither the previously-seen
+    Req207VortexTest flake nor the Scheduler.PollerTest REQ-218 AC3 nondeterministic
+    race (both noted as pre-existing/unrelated in earlier reports this session)
+    occurred in this run. The suite's known-racy state has not changed; it simply
+    didn't manifest on this run."
+
+regression_check:
+  result: "zero regressions -- trivially true, since the full suite has zero
+    failures of any kind."
+  files_this_diff_touches: [lib/letflow/exam/certificate.ex,
+    lib/letflow/routers/exam_sessions.ex,
+    test/letflow/routers/exam_sessions_test.exs]
+  evidence: "No failing test exists in this run's output to attribute to or
+    clear from these three files."
+
+gate_status:
+  format_check_formatted: PASS
+  compile_warnings_as_errors: PASS
+  full_test_suite: "4299/4299 passed, 0 failures, 0 regressions from ISS-0676"
+
+next_step: >
+  Hands off to RELEASE-VALIDATOR, which re-runs the full suite independently per
+  this project's redundancy principle rather than trusting this report alone.

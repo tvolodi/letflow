@@ -1,0 +1,36 @@
+id: ISS-0679
+title: "pdf library (decision 0033) has no Unicode/non-Latin-1 glyph path -- Cyrillic (kk/ru) certificate content degrades to question-mark rather than rendering"
+discovered_by: REVIEWER
+discovered_in_run: WF02-REQ356-20260915
+discovered_at: "2026-09-15T04:40:57Z"
+severity: MINOR
+description: >
+  Discovered by REVIEWER during REQ-356's close-out review. The `pdf` hex
+  package chosen by decision 0033 only supports WinAnsi/Latin-1 text
+  (bundled Type-1 AFM fonts, no Unicode/CID path). A certificate rendered
+  for a candidate name, exam title, or branding text containing Cyrillic
+  characters (kk/ru locales) degrades each such glyph to a literal
+  question-mark character rather than crashing -- confirmed as a genuine
+  graceful-degradation code path (lib/letflow/exam/certificate_document.ex,
+  safe_text_at/3 and its moduledoc), not a crash risk, by SECURITY-REVIEWER
+  during REQ-356's review.
+
+  Non-blocking for REQ-356 itself (documented explicitly in the module's
+  moduledoc, not silently swallowed), but reopens decision 0033's
+  evaluation criteria -- glyph coverage was never assessed when `pdf` was
+  chosen -- for this vertical's actual kk/ru locale needs, which the
+  platform otherwise supports (see i18n catalogs elsewhere in the
+  codebase).
+
+  FIX DIRECTION: embed a Unicode/CID-capable TrueType font into the `pdf`
+  library's rendering path (if the library supports custom font
+  embedding), or choose a different PDF-rendering approach/library with
+  real Unicode support, or explicitly decide non-Latin certificate
+  rendering is out of scope for now and document that as a real product
+  decision rather than a silent gap.
+affected_files:
+  - lib/letflow/exam/certificate_document.ex
+  - docs/migration/decisions/0033-pdf-qr-rendering-dependencies.md
+queue_ref: Q-679
+github_ref: GH-1423
+status: open

@@ -657,4 +657,161 @@ defmodule Letflow.Routers.ExamSessionsTest do
       assert probe_conn.resp_body == missing_conn.resp_body
     end
   end
+
+  # ── REQ-357: issuance -> mint -> public resolve, end to end ──────────────
+  #
+  # Unit-level coverage of Letflow.Exam.CertificatePublicProjection's own
+  # exact-key-set/purity/skip behaviour lives in
+  # test/letflow/exam/certificate_public_projection_test.exs. This describe
+  # block is the one test that proves the WHOLE wiring together: a real
+  # authenticated POST mints a "public_handle", and that exact handle
+  # resolves through the real, separately-mounted, unauthenticated
+  # `Letflow.Router` -> `Letflow.Routers.PublicRead` -> `Letflow.PublicRead`
+  # path -- not each piece asserted in isolation.
+
+  describe "GET /api/public/certificate/:handle (REQ-357)" do
+    defp get_public(path), do: conn(:get, path) |> dispatch()
+
+    test "AC-6: a real issued certificate's public_handle resolves to the correct 3-key envelope with the exact 5-field data set" do
+      tenant = tenant("req357-public-e2e")
+      ctx = candidate_ctx(tenant)
+
+      %{exam: exam, question_id: question_id, correct_id: correct_id} =
+        build_minimal_exam!(tenant.schema_name, %{"certificate_enabled" => true})
+
+      started = start_session!(ctx, exam.record_id)
+      session_id = started["session"]["id"]
+
+      request(
+        "PUT",
+        "/api/v1/exam-sessions/#{session_id}/answers/#{question_id}",
+        ctx,
+        %{"selected_option_ids" => [correct_id], "time_spent_seconds" => 5}
+      )
+
+      request("POST", "/api/v1/exam-sessions/#{session_id}/submit", ctx)
+
+      issue_conn = request("POST", "/api/v1/exam-sessions/#{session_id}/certificate", ctx)
+      assert issue_conn.status == 200
+      issued = json(issue_conn)
+      assert is_binary(issued["public_handle"])
+
+      public_conn = get_public("/api/public/certificate/#{issued["public_handle"]}")
+      assert public_conn.status == 200
+
+      body = json(public_conn)
+
+      # Exactly the three top-level envelope keys Letflow.PublicRead.resolve/2
+      # builds -- "kind", "issued_at", "data" -- no more, no fewer.
+      assert Map.keys(body) |> Enum.sort() == ["data", "issued_at", "kind"]
+      assert body["kind"] == "certificate"
+      assert is_binary(body["issued_at"])
+
+      data = body["data"]
+
+      assert Map.keys(data) |> Enum.sort() ==
+               Enum.sort([
+                 "candidate_name",
+                 "exam_title",
+                 "score_pct",
+                 "issued_on",
+                 "branding_snapshot"
+               ])
+
+      # Every value matches the SOURCE certificate's own actual field values
+      # (the authenticated response), not merely "a" plausible-looking value.
+      assert data["candidate_name"] == issued["candidate_name"]
+      assert data["exam_title"] == issued["exam_title"]
+      assert data["score_pct"] == issued["score_pct"]
+      assert data["issued_on"] == issued["issued_at"]
+      assert data["branding_snapshot"] == issued["branding_snapshot"]
+
+      # No tenant id, no session id, no record identifier, no candidate
+      # account identifier leaks into the public envelope.
+      refute Map.has_key?(data, "session_id")
+      refute Map.has_key?(data, "id")
+      refute Map.has_key?(data, "tenant_id")
+    end
+
+    test "AC-4: never resolves to a valid:false/not-valid shape -- only the full success envelope or the identical 404 an unknown handle gets" do
+      tenant = tenant("req357-public-neverfalse")
+      ctx = candidate_ctx(tenant)
+
+      %{exam: exam, question_id: question_id, correct_id: correct_id} =
+        build_minimal_exam!(tenant.schema_name, %{"certificate_enabled" => true})
+
+      started = start_session!(ctx, exam.record_id)
+      session_id = started["session"]["id"]
+
+      request(
+        "PUT",
+        "/api/v1/exam-sessions/#{session_id}/answers/#{question_id}",
+        ctx,
+        %{"selected_option_ids" => [correct_id], "time_spent_seconds" => 5}
+      )
+
+      request("POST", "/api/v1/exam-sessions/#{session_id}/submit", ctx)
+      issued = json(request("POST", "/api/v1/exam-sessions/#{session_id}/certificate", ctx))
+
+      ok_conn = get_public("/api/public/certificate/#{issued["public_handle"]}")
+      assert ok_conn.status == 200
+      ok_body = json(ok_conn)
+      refute Map.has_key?(ok_body, "valid")
+      assert Map.has_key?(ok_body, "data")
+
+      unknown_conn =
+        get_public(
+          "/api/public/certificate/#{:crypto.strong_rand_bytes(32) |> Base.url_encode64(padding: false)}"
+        )
+
+      assert unknown_conn.status == 404
+      unknown_body = json(unknown_conn)
+      refute Map.has_key?(unknown_body, "valid")
+      refute Map.has_key?(unknown_body, "data")
+    end
+
+    test "AC-7: a soft-deleted (non-publishable) certificate 404s BYTE-IDENTICALLY to an unknown handle" do
+      tenant = tenant("req357-public-deleted")
+      ctx = candidate_ctx(tenant)
+
+      %{exam: exam, question_id: question_id, correct_id: correct_id} =
+        build_minimal_exam!(tenant.schema_name, %{"certificate_enabled" => true})
+
+      started = start_session!(ctx, exam.record_id)
+      session_id = started["session"]["id"]
+
+      request(
+        "PUT",
+        "/api/v1/exam-sessions/#{session_id}/answers/#{question_id}",
+        ctx,
+        %{"selected_option_ids" => [correct_id], "time_spent_seconds" => 5}
+      )
+
+      request("POST", "/api/v1/exam-sessions/#{session_id}/submit", ctx)
+      issued = json(request("POST", "/api/v1/exam-sessions/#{session_id}/certificate", ctx))
+
+      # Soft-delete the underlying entity_record_latest row directly -- the
+      # same "reach the schema directly, allowed for test support, never for
+      # application code" pattern
+      # test/support/public_read_fixture_support.ex's revoke_handle!/1 already
+      # establishes, since no admin/retraction write path exists yet
+      # (Letflow.Exam.CertificatePublicProjection's own moduledoc).
+      Repo.get_by!(Letflow.Entities.Record.Latest, [record_id: issued["id"], entity_type: "certificate"],
+        prefix: tenant.schema_name
+      )
+      |> Ecto.Changeset.change(deleted: true)
+      |> Repo.update!(prefix: tenant.schema_name)
+
+      deleted_conn = get_public("/api/public/certificate/#{issued["public_handle"]}")
+
+      unknown_conn =
+        get_public(
+          "/api/public/certificate/#{:crypto.strong_rand_bytes(32) |> Base.url_encode64(padding: false)}"
+        )
+
+      assert deleted_conn.status == 404
+      assert unknown_conn.status == 404
+      assert deleted_conn.resp_body == unknown_conn.resp_body
+    end
+  end
 end

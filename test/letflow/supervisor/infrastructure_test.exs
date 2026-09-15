@@ -4,7 +4,7 @@ defmodule Letflow.Supervisor.InfrastructureTest do
   `Letflow.Application`'s own top-level children list is exactly the 3 new
   supervisor modules (none of the original 20 leaf children remain direct
   children of `Letflow.Supervisor`), and that
-  `Letflow.Supervisor.Infrastructure` owns the 18 expected children, in
+  `Letflow.Supervisor.Infrastructure` owns the 19 expected children, in
   order, including the ISS-0224 SandboxPool.TaskSupervisor-before-SandboxPool
   ordering.
 
@@ -13,7 +13,13 @@ defmodule Letflow.Supervisor.InfrastructureTest do
   `Letflow.Supervisor.Pollers` and before `Letflow.Supervisor.Http` -- the
   top-level children-count assertion below is updated to match; nothing
   else in this module changes, since `PollersBreaker` does not touch
-  `Letflow.Supervisor.Infrastructure`'s own 18-child list or ordering.
+  `Letflow.Supervisor.Infrastructure`'s own child list or ordering.
+
+  REQ-352 (design `req352-unauthenticated-read-platform.md` §11.3) added a
+  further `Letflow.Supervisor.Infrastructure` child,
+  `Letflow.Plugs.PublicReadRateLimit.Bucket`, bringing that list from 18 to
+  19 -- placed directly after `Letflow.Metrics.Registry`, unaffected
+  ordering everywhere else.
 
   Read-only against the already-running, application-supervised singletons
   -- no restart, no config mutation, safe to run `async: true`.
@@ -50,7 +56,7 @@ defmodule Letflow.Supervisor.InfrastructureTest do
     refute Letflow.Scheduler.Poller in ids
   end
 
-  test "Letflow.Supervisor.Infrastructure owns the 18 expected children, in order" do
+  test "Letflow.Supervisor.Infrastructure owns the 19 expected children, in order" do
     children = Supervisor.which_children(Letflow.Supervisor.Infrastructure)
 
     ids =
@@ -64,6 +70,11 @@ defmodule Letflow.Supervisor.InfrastructureTest do
              Oidcc.ProviderConfiguration.Worker,
              Letflow.Registry,
              Letflow.Metrics.Registry,
+             # REQ-352: ETS-backed token bucket behind
+             # Letflow.Plugs.PublicReadRateLimit. No ordering dependency --
+             # mirrors Letflow.Metrics.Registry's own "leaf,
+             # independently-startable" placement immediately above it.
+             Letflow.Plugs.PublicReadRateLimit.Bucket,
              Letflow.Admission,
              Letflow.InstanceSupervisor,
              Letflow.SandboxPool.TaskSupervisor,
@@ -82,7 +93,7 @@ defmodule Letflow.Supervisor.InfrastructureTest do
              Letflow.Obs.Alerts.TaskSupervisor
            ]
 
-    assert length(ids) == 18
+    assert length(ids) == 19
   end
 
   test "ISS-0224: SandboxPool.TaskSupervisor precedes SandboxPool" do

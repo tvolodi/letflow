@@ -25417,7 +25417,7 @@ requirements:
     title: "Build decision 0028's unauthenticated-read platform machinery -- the /api/public mount, the Plug.Router sub-router, the public_read_handles registry and its authenticated writer, the ETS token-bucket rate limiter and the ten-case byte-identical refusal path -- with no projection and no vertical vocabulary (S10 gap 6, bucket B)"
     owner: ELIXIR-DEV
     impl_order: 668
-    status: pending
+    status: done
     stage: S10
     description: >
       bucket: B, wholly. Every deliverable here is domain-neutral platform

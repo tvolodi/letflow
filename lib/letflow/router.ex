@@ -11,6 +11,7 @@ defmodule Letflow.Router do
   | GET    | /api/tenant-config  | `Letflow.Routers.TenantConfig`     | **none**  | global `tenants` |
   | GET    | /api/mobile/tenant-config | `Letflow.Routers.MobileTenantConfig` | **none** | global `tenants` |
   | GET    | /metrics            | `Letflow.Routers.MetricsExposition`| **none**  | none (ETS only)  |
+  | GET    | /api/public/:kind/:handle | `Letflow.Routers.PublicRead` | **none**  | global `public_read_handles` + tenant-scoped resource |
   | *      | /api/v1/…           | `Letflow.Plugs.ApiPipeline`        | delegated | delegated |
   | *      | _                   | `Letflow.Api.Response.not_found/1` | none      | none      |
 
@@ -112,6 +113,15 @@ defmodule Letflow.Router do
   # above. See Letflow.Routers.MetricsExposition's moduledoc for the full auth/scope
   # reasoning and the tenant-safety invariant this relies on.
   forward("/metrics", to: Letflow.Routers.MetricsExposition)
+
+  # Public by design (REQ-352, decision 0028) -- the one unauthenticated
+  # read surface, addressed by opaque capability handle. Declared BEFORE
+  # the /api/v1 forward so it never enters Letflow.Plugs.AuthPipeline,
+  # same reasoning as the three public mounts above. See
+  # Letflow.Routers.PublicRead's own moduledoc for the mount/disclosure
+  # reasoning and docs/migration/decisions/0028-unauthenticated-read-boundary.md
+  # for the full decision record.
+  forward("/api/public", to: Letflow.Routers.PublicRead)
 
   forward("/api/v1", to: Letflow.Plugs.ApiPipeline)
 

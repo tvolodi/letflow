@@ -641,6 +641,22 @@ history:
       commit to follow this entry. letflow-queue task 666 released
       status: done.
 
+  - req: REQ-352
+    event: started
+    agent: ORCH
+    at: 2026-09-14T22:11:09Z
+    note: >
+      Claimed letflow-queue task 668 (GH#1404, agent_id orch-session-issueloop).
+      Step 00 git setup: pulled main to 262b2a1e (fast-forward, picked up
+      ISS-0664/ISS-0665 docs work landed by a concurrent session), branched
+      feature/WF02-REQ352-20260914, pushed. Builds decision 0028's
+      unauthenticated-read platform machinery (bucket B): /api/public mount,
+      Plug.Router sub-router, public_read_handles registry + writer, ETS
+      token-bucket rate limiter, ten-case byte-identical refusal path. Design
+      pattern already fixed by REQ-323 (lib/letflow/design/req323-unauthenticated-read-pattern.md,
+      decision 0028) -- CODE-DESIGNER builds from it rather than re-deriving.
+      Routing to CODE-DESIGNER next.
+
   - req: REQ-351
     event: blocked
     agent: REVIEWER
@@ -869,3 +885,39 @@ history:
       GH#1406 with an evidence comment summarizing the decision.
       letflow-queue task 670 released status: done under agent_id
       tvolodi-orch.
+
+  - req: REQ-352
+    event: done
+    agent: DOC-UPDATER
+    at: "2026-09-15T00:36:22Z"
+    note: >
+      Flipped status: in_progress -> done in docs/requirements.yaml (queue task
+      668, GH#1404, decision 0028's unauthenticated-read platform machinery,
+      bucket B). Pipeline: CODE-DESIGNER produced the implementation plan from
+      req323-unauthenticated-read-pattern.md/decision 0028 (2 rework rounds) ->
+      ELIXIR-DEV shipped the public_read_handles migration, the Ecto schema,
+      the authenticated writer, the /api/public mount + Plug.Router sub-router
+      with its kind-registration mechanism, the ETS token-bucket rate limiter,
+      and the ten-case byte-identical refusal path -> SECURITY-REVIEWER PASS
+      against INV-1/INV-2/INV-4/INV-5/INV-8 by name and all seven conditions
+      enumerated in req323-unauthenticated-read-pattern.md section 12, each
+      individually checked and recorded -- reached via commits 446937a4,
+      2562c1af and 7bfa2d0f after ORCH's own bookkeeping gap on this record was
+      caught by RELEASE-VALIDATOR and corrected in-run -> REVIEWER PASS (scope
+      clean, no vertical vocabulary in any added file, router stays generic) ->
+      TEST-DESIGNER/TEST-RUNNER: mix test 4253/4254 (one pre-existing,
+      unrelated failure, attributed not hidden) and
+      mix compile --warnings-as-errors clean -> RELEASE-VALIDATOR independently
+      re-verified and PASSed all 15 acceptance criteria.
+
+      Open questions resolved per the design doc, both load-bearing for what
+      "done" means here: OQ-1 (the authenticated issue path's permission atom)
+      minted as :PublicReadHandlesIssue, stated with reasoning rather than
+      inherited; OQ-2 (rate limiter reuse-vs-new) resolved as a new module,
+      since no Letflow.Plugs.RateLimit existed in the tree at the time this
+      requirement started (lib/letflow/plugs/api_pipeline.ex:59 was a
+      deferred-plugs table row, not a mount).
+
+      Ships no projection module, no real kind string, and no frontend, per
+      the requirement's own scope fence -- REQ-357 registers the first real
+      kind on top of this platform machinery.

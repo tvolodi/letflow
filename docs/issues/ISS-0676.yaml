@@ -1,0 +1,35 @@
+id: ISS-0676
+title: "Letflow.Exam.Certificate.issue_error is a bare atom union with no exhaustive-handling guarantee at the router call site"
+discovered_by: REVIEWER
+discovered_in_run: WF02-REQ355-20260915
+discovered_at: "2026-09-15T01:53:14Z"
+severity: MINOR
+description: >
+  Discovered by REVIEWER during REQ-355's close-out review of
+  lib/letflow/exam/certificate.ex. `@type issue_error :: :session_not_found |
+  :not_owner | :grading_pending | :session_not_submitted |
+  :exam_not_certifiable | :session_not_passed`. The router's own
+  `render_issue_certificate/2` has a catch-all clause
+  (`{:error, reason} -> Logger.warning(...)`, generic 500) that would
+  silently swallow a future typo or renamed atom rather than fail at
+  compile time -- Elixir's `@type` specs are not enforced for exhaustive
+  case-clause coverage at the call site.
+
+  This is not a novel gap: `Letflow.Exam.Session`'s own error unions are
+  shaped the same way, and REVIEWER accepted this as an already-established
+  precedent in this vertical rather than a new defect -- it does not block
+  REQ-355's PASS.
+
+  FIX DIRECTION: evaluate whether Dialyzer (already run in CI per this
+  project's tooling) can be configured to flag a non-exhaustive case/cond
+  over `issue_error`'s explicit type union, or whether restructuring as a
+  tagged result type would let the compiler verify exhaustiveness, or
+  explicitly document and accept the status quo (catch-all + Logger.warning)
+  as this vertical's established idiom for error-union handling, matching
+  Session's own precedent.
+affected_files:
+  - lib/letflow/exam/certificate.ex
+  - lib/letflow/routers/exam_sessions.ex
+queue_ref: Q-676
+github_ref: GH-1415
+status: open

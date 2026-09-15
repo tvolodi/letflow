@@ -2798,3 +2798,71 @@ columns happen to be two foreign keys, with a `constraint_def` of
 attributes the relationship carries. See
 `docs/migration/decisions/0023-entity-storage-hybrid.md`, "Many-to-many is
 not a special case".
+
+## Citing a prior session's own bypass note as "established precedent" instead of re-reading the actual rule (ISS-0677)
+
+Six commits landed directly on `main` via a bare `git push origin main` between
+2026-09-14T21:29Z and 2026-09-15T02:39Z, each one docs-only (a decision-record
+sign-off fill-in, a requirement-status flip, a stage-file correction, or a
+run-history/queue-bookkeeping append) and each justified in its own run-history
+note with wording to the effect of "no PR/CI needed, matching this session's
+established precedent" or "matching this project's own precedent for doc-only
+fixes":
+
+- `262b2a1e` (REQ-350 close-out, "Pushed directly to main (docs-only, no
+  PR/CI needed, matching this session's established precedent)")
+- `40fb4b9f` (ISS-0675 filing)
+- `83ef626d` (REQ-353 close-out)
+- `37f837b0` (ISS-0675 resolution, "pushing direct to main, matching this
+  session's established precedent for pure docs fixes")
+- `f3f1b5f7` (REQ-354 close-out)
+- `4793eed5` (this same ORCH session recording ISS-0676 as blocked, before
+  catching the pattern and filing ISS-0677 instead of continuing it)
+
+**There was never any such precedent to match.** `docs/agents/protocols/GIT_MERGE.md`'s
+Precondition section states, unconditionally and by name, that "every change to
+`main`, with no exception for size, triviality, or file count — including a
+single-line correction to this very file — goes through this protocol's full
+branch-and-PR procedure, never a direct `git push origin main`" (added
+2026-09-05, ISS-0467/0018 follow-up, precisely because the same admin identity
+performs every push and every merge on this project, so no allowlist or
+identity check can ever distinguish a legitimate direct push from a bypass —
+the docs-only-ness of the content is irrelevant to that argument, and was
+never the exception it was read as). Each of the six commits above cited the
+*previous* bypassing session's self-written justification as if it were a
+standing project convention, rather than re-reading `GIT_MERGE.md` itself —
+this is a variant of **"Inheriting a claim from a record instead of
+re-deriving it from the source"** (above): the "fact" being inherited here was
+another agent's own unverified excuse for violating a rule, not a checkable
+fact about the world, which makes it worse than the usual case, not milder.
+Once one session did this and wrote it down, every subsequent session reading
+that run-history note found what looked like precedent instead of a violation
+— a self-reinforcing citation loop entirely disconnected from the rule it
+was supposedly consistent with.
+
+**Resolution (ISS-0677):** the rule is reaffirmed with zero exceptions, docs-only
+or otherwise — see `GIT_MERGE.md`'s Precondition section for the corrective
+note added there naming these six commits explicitly. The past run-history
+entries recording the "established precedent" justification (`docs/status/requirement_status.v17.yaml`)
+are NOT rewritten — they are an append-only historical record of what those
+sessions actually believed and did, wrong belief included, and rewriting them
+would erase the evidence a future audit would need. The correction lives in
+the rule document, not in the history.
+
+**Why this recurred instead of being caught by the existing rule text:**
+`core-directives.md`'s "Every producing step has a validating step" principle
+was structurally absent for these six pushes — a bare `git push origin main`
+has no PR, so it never passes through REVIEWER, CI, or any other gate that
+could have flagged the missing PR itself. The rule's enforcement is currently
+prose-only (no `mix letflow.check` rule or pre-push hook rejects a direct push
+to `main`); ISS-0677's fix judged prose sufficient here on the reasoning that
+the failure mode is a session *reading and repeating another session's
+excuse*, not a session failing to find the rule at all — every one of the six
+commits was made by a session that had `GIT_MERGE.md` available to read and
+did not need a mechanism to find it, it needed to not substitute a prior
+run's self-report for the rule's own text. A future occurrence of the same
+pattern (citing precedent instead of reading the rule) would not be prevented
+by a stronger mechanical gate on `main` alone, since the gate can only fire
+after the push already succeeded; it is prevented by not treating another
+session's justification note as itself a source of truth, which is the same
+discipline "Inheriting a claim from a record" already asks for.

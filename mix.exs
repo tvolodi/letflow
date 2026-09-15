@@ -64,7 +64,30 @@ defmodule Letflow.MixProject do
       {:yaml_elixir, "~> 2.11", only: :test},
       {:ueberauth_oidcc, "~> 0.4"},
       {:lua, "~> 1.0"},
-      {:wasmex, "~> 0.15.1"}
+      {:wasmex, "~> 0.15.1"},
+      # REQ-356 (decision docs/migration/decisions/0033-pdf-qr-rendering-dependencies.md):
+      # pure-Elixir, MIT-licensed PDF byte generator -- chosen over chromic_pdf
+      # (rejected: requires a Chrome/Chromium binary in every runtime
+      # environment for a document that does not need an HTML/CSS layout
+      # engine) and over hand-rolling PDF bytes (rejected: the PDF object
+      # graph/xref table/stream machinery is exactly what this library exists
+      # to absorb, at no transitive-dependency cost). Renders the certificate
+      # document `lib/letflow/exam/certificate_document.ex` produces.
+      # Flagged for REVIEWER sign-off per this requirement's own AC1 --
+      # REVIEWER sign-off must be recorded before this merges.
+      {:pdf, "~> 0.8"},
+      # REQ-356 (decision docs/migration/decisions/0033-pdf-qr-rendering-dependencies.md):
+      # pure-Elixir, MIT-licensed QR-code module-matrix encoder -- chosen over
+      # qr_code (rejected: BSD-4-Clause's advertising-clause obligation is an
+      # avoidable licence-review burden an MIT alternative sidesteps for the
+      # same one-thing-done-well encoding this gap needs) and over shelling
+      # out to an external `qrencode` binary (rejected: an operational
+      # dependency added to remove a dependency that costs nothing to keep).
+      # Exposes the raw QR module matrix `certificate_document.ex` draws
+      # directly into the PDF, avoiding a round trip through a rasterised
+      # image format. Flagged for REVIEWER sign-off per this requirement's
+      # own AC1 -- REVIEWER sign-off must be recorded before this merges.
+      {:eqrcode, "~> 0.2"}
     ]
   end
 

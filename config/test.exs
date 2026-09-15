@@ -207,3 +207,25 @@ config :letflow, lua_wallclock_timeout_ms: 5000
 # Only set to `true` here, so the pause step can execute only under
 # MIX_ENV=test.
 config :letflow, activation_test_hooks_enabled?: true
+
+# REQ-352 (design lib/letflow/design/req352-unauthenticated-read-platform.md
+# §10): the one test-only fixture kind, registered ONLY here -- never in
+# config/config.exs or config/runtime.exs, so it does not exist in any
+# non-test environment. Proves Letflow.Routers.PublicRead's dispatch works
+# and that an unregistered kind 404s, without naming any vertical or adding
+# a real resource type. Letflow.PublicReadFixtureSupport.Projection lives
+# under test/support/ (TEST-DESIGNER's fixture, per the design's §10) --
+# this entry only registers the kind string against it; it is not invoked
+# until a test actually issues/resolves a handle for it.
+#
+# TEST-DESIGNER (REQ-352 Step 3) adds a SECOND kind string here,
+# "public-read-fixture-mismatch", registered against the same fixture
+# projection -- solely so AC-4's kind-mismatch refusal case (design §7 case
+# 5) can be exercised through a real HTTP request whose path `kind` is
+# registered but differs from the handle's own stored `kind` field, rather
+# than only through a direct Letflow.PublicRead.resolve/2 call. See
+# test/support/public_read_fixture_support.ex's `mismatched_kind/0`.
+config :letflow, :public_read_kinds, %{
+  "public-read-fixture" => Letflow.PublicReadFixtureSupport.Projection,
+  "public-read-fixture-mismatch" => Letflow.PublicReadFixtureSupport.Projection
+}

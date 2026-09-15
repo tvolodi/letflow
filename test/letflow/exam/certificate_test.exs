@@ -82,7 +82,12 @@ defmodule Letflow.Exam.CertificateTest do
     wrong = create_option!(schema, question.record_id, 1, false)
     create_rule!(schema, exam.record_id, category_id, 1)
 
-    %{exam: exam, question_id: question.record_id, correct_id: correct.record_id, wrong_id: wrong.record_id}
+    %{
+      exam: exam,
+      question_id: question.record_id,
+      correct_id: correct.record_id,
+      wrong_id: wrong.record_id
+    }
   end
 
   defp insert_candidate!(schema, display_name \\ "REQ-355 Candidate") do
@@ -109,7 +114,11 @@ defmodule Letflow.Exam.CertificateTest do
              Session.autosave_answer(
                session_view.id,
                candidate_id,
-               %{question_id: question_id, selected_option_ids: [correct_id], time_spent_seconds: 5},
+               %{
+                 question_id: question_id,
+                 selected_option_ids: [correct_id],
+                 time_spent_seconds: 5
+               },
                schema
              )
 
@@ -151,6 +160,7 @@ defmodule Letflow.Exam.CertificateTest do
 
     test "exam certificate_enabled: false -> :exam_not_certifiable, distinct from :session_not_passed" do
       %{schema_name: schema} = tenant("req355-guard-not-certifiable")
+
       %{exam: exam, question_id: question_id, correct_id: correct_id} =
         build_minimal_exam!(schema, %{"certificate_enabled" => false})
 
@@ -172,7 +182,11 @@ defmodule Letflow.Exam.CertificateTest do
                Session.autosave_answer(
                  session_view.id,
                  candidate_id,
-                 %{question_id: question_id, selected_option_ids: [wrong_id], time_spent_seconds: 5},
+                 %{
+                   question_id: question_id,
+                   selected_option_ids: [wrong_id],
+                   time_spent_seconds: 5
+                 },
                  schema
                )
 
@@ -207,13 +221,17 @@ defmodule Letflow.Exam.CertificateTest do
 
     test "a candidate cannot issue or fetch a certificate for another user's session (:not_owner)" do
       %{schema_name: schema} = tenant("req355-guard-ownership")
-      %{exam: exam, question_id: question_id, correct_id: correct_id} = build_minimal_exam!(schema)
+
+      %{exam: exam, question_id: question_id, correct_id: correct_id} =
+        build_minimal_exam!(schema)
+
       owner_id = insert_candidate!(schema).id
       other_id = insert_candidate!(schema).id
 
       session_id = submitted_passed_session!(schema, owner_id, exam, question_id, correct_id)
 
-      assert {:error, :not_owner} = Certificate.issue_or_get_for_user(other_id, session_id, schema)
+      assert {:error, :not_owner} =
+               Certificate.issue_or_get_for_user(other_id, session_id, schema)
     end
 
     test "a nonexistent session_id -> :session_not_found" do
@@ -235,7 +253,10 @@ defmodule Letflow.Exam.CertificateTest do
   describe "idempotency" do
     test "issuing twice for the same session yields exactly one certificate record, identical both times" do
       %{schema_name: schema} = tenant("req355-idempotent")
-      %{exam: exam, question_id: question_id, correct_id: correct_id} = build_minimal_exam!(schema)
+
+      %{exam: exam, question_id: question_id, correct_id: correct_id} =
+        build_minimal_exam!(schema)
+
       candidate_id = insert_candidate!(schema).id
       session_id = submitted_passed_session!(schema, candidate_id, exam, question_id, correct_id)
 
@@ -246,7 +267,10 @@ defmodule Letflow.Exam.CertificateTest do
 
       assert {:ok, records} =
                Letflow.Entities.Query.Compiler.compile(
-                 %{entity_type: "certificate", filters: [%{field: "session_id", op: :eq, value: session_id}]},
+                 %{
+                   entity_type: "certificate",
+                   filters: [%{field: "session_id", op: :eq, value: session_id}]
+                 },
                  schema
                )
                |> then(fn {:ok, query} -> {:ok, Repo.all(query, prefix: schema)} end)
@@ -265,7 +289,10 @@ defmodule Letflow.Exam.CertificateTest do
   describe "branding snapshot" do
     test "a branding change after issuance does not alter the already-issued certificate" do
       %{tenant_id: tenant_id, schema_name: schema} = tenant("req355-branding-snapshot")
-      %{exam: exam, question_id: question_id, correct_id: correct_id} = build_minimal_exam!(schema)
+
+      %{exam: exam, question_id: question_id, correct_id: correct_id} =
+        build_minimal_exam!(schema)
+
       candidate_id = insert_candidate!(schema).id
       session_id = submitted_passed_session!(schema, candidate_id, exam, question_id, correct_id)
 
@@ -274,7 +301,11 @@ defmodule Letflow.Exam.CertificateTest do
       assert {:ok, _changed} =
                original_tenant
                |> Tenant.settings_changeset(%{
-                 settings: %{"app_name" => "Original Co", "logo_url" => nil, "brand_colors" => %{"primary" => "#111111"}}
+                 settings: %{
+                   "app_name" => "Original Co",
+                   "logo_url" => nil,
+                   "brand_colors" => %{"primary" => "#111111"}
+                 }
                })
                |> Repo.update()
 
@@ -285,7 +316,11 @@ defmodule Letflow.Exam.CertificateTest do
       assert {:ok, _changed_again} =
                Repo.get(Tenant, tenant_id)
                |> Tenant.settings_changeset(%{
-                 settings: %{"app_name" => "Rebranded Co", "logo_url" => nil, "brand_colors" => %{"primary" => "#ffffff"}}
+                 settings: %{
+                   "app_name" => "Rebranded Co",
+                   "logo_url" => nil,
+                   "brand_colors" => %{"primary" => "#ffffff"}
+                 }
                })
                |> Repo.update()
 

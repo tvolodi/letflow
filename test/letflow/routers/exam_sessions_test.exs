@@ -591,10 +591,17 @@ defmodule Letflow.Routers.ExamSessionsTest do
       assert first["session_id"] == session_id
       assert first["score_pct"] == 100.0
       assert is_binary(first["id"])
+      # REQ-357: first issuance mints a one-time public-read handle,
+      # returned only on this call.
+      assert is_binary(first["public_handle"])
 
       second_conn = request("POST", "/api/v1/exam-sessions/#{session_id}/certificate", ctx)
       assert second_conn.status == 200
-      assert json(second_conn) == first
+      second = json(second_conn)
+      # A replay never re-mints a handle -- "public_handle" is absent, not
+      # re-derived; everything else about the certificate is unchanged.
+      refute Map.has_key?(second, "public_handle")
+      assert second == Map.delete(first, "public_handle")
     end
 
     test "certificate_enabled: false on the exam is refused with 409, not 200" do

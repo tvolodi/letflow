@@ -263,7 +263,17 @@ defmodule Letflow.Exam.CertificateTest do
       assert {:ok, first} = Certificate.issue_or_get_for_user(candidate_id, session_id, schema)
       assert {:ok, second} = Certificate.issue_or_get_for_user(candidate_id, session_id, schema)
 
-      assert first == second
+      # REQ-357: `first_issuance`/`public_read_resource_id` are internal
+      # wiring fields that legitimately DIFFER between the create call and
+      # the idempotent-replay call (the replay path decodes the original
+      # event's payload, which never carried the entity_record_latest row's
+      # own primary key -- see Letflow.Entities.Records.duplicate_result/1)
+      # -- everything else about the certificate itself must still be
+      # byte-identical.
+      assert first.first_issuance == true
+      assert second.first_issuance == false
+      assert Map.drop(first, [:first_issuance, :public_read_resource_id]) ==
+               Map.drop(second, [:first_issuance, :public_read_resource_id])
 
       assert {:ok, records} =
                Letflow.Entities.Query.Compiler.compile(
@@ -328,7 +338,14 @@ defmodule Letflow.Exam.CertificateTest do
       assert {:ok, reread} = Certificate.issue_or_get_for_user(candidate_id, session_id, schema)
 
       assert reread.branding_snapshot["app_name"] == "Original Co"
-      assert reread == issued
+
+      # REQ-357: see the idempotency test's own note -- `first_issuance`/
+      # `public_read_resource_id` legitimately differ between the create
+      # call and the idempotent-replay call; everything else must match.
+      assert reread.first_issuance == false
+      assert issued.first_issuance == true
+      assert Map.drop(reread, [:first_issuance, :public_read_resource_id]) ==
+               Map.drop(issued, [:first_issuance, :public_read_resource_id])
     end
   end
 end

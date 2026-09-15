@@ -1,0 +1,32 @@
+id: ISS-0678
+title: "Evaluate GitHub repository rulesets (per-rule bypass lists) as a mechanical alternative to prose-only enforcement of the no-direct-push-to-main rule"
+discovered_by: REVIEWER
+discovered_in_run: fix/ISS-0677-20260915
+discovered_at: "2026-09-15T02:44:49Z"
+severity: MINOR
+description: >
+  Filed as a fast-follow from ISS-0677 (GIT_MERGE.md's no-direct-push-ever
+  rule, reaffirmed with zero exceptions after six bare-push violations).
+  REVIEWER's sign-off on ISS-0677 noted that classic branch protection's
+  enforce_admins:false setting (decision 0018) means the same admin
+  identity can bypass required-status-checks uniformly, so a naive
+  "require PR before merge" classic rule would not actually block a bare
+  push either -- which is why ISS-0677's fix stayed prose-only (reaffirm
+  the rule, name violations, do not claim a mechanism that would not
+  work). GitHub's newer repository rulesets (distinct from classic branch
+  protection) support a bypass list scoped per-rule, which in principle
+  could let the same identity bypass required-status-checks for legitimate
+  merges while still being genuinely blocked from bare pushes to main -- an
+  avenue REVIEWER flagged as real but unexplored.
+
+  Scope: research whether repository rulesets' per-rule bypass-list
+  semantics actually close this gap for this repo's single-shared-admin-
+  identity situation (verify by testing bypass-list scoping in a
+  sandbox/test repo if possible, not just reading docs), and if so,
+  propose and implement the ruleset config as a decision record.
+affected_files:
+  - docs/agents/protocols/GIT_MERGE.md
+  - docs/migration/decisions/0018-branch-protection-posture.md
+queue_ref: Q-678
+github_ref: GH-1418
+status: open

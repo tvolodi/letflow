@@ -137,7 +137,7 @@ at the normal one-agent-turn sizing when it becomes the active phase.
 | **P0** | This stage file, decision 0022, an `FR-BB` index reconstructed from its actual citation sites, and the `FR-BB` → `REQ-xxx` translation with a bucket declared on each | — | every S10 requirement is filed and `REQ-VALIDATOR`-passed |
 | **P1** | Close gaps 1–6 and 10–13; land 7–9 | B | `mix letflow.check` and `web/`'s `npm run check` green with all thirteen closed. As of 2026-09-12 gaps 1, 2, 3, 7, 8, 9, 10, 11, 12 and 13 are closed; gaps 4 and 5 have their mechanism settled by decision 0027 but remain open as capabilities (no mailer/SMTP, no PDF/QR dependency); gap 6 remains open and unowned as a capability, with `REQ-323` now filed against it |
 | **P2** | The pack: entity definitions, process definitions, role-registry seed, Lua grading rules | A | a tenant with a working question bank and exam configuration, and **zero exam-specific Elixir**. Reachable as of 2026-09-11: gaps 10, 11 and 13 are closed — see below |
-| **P3** | `lib/letflow/exam/`: live session (deadline, autosave, per-question scoring, anti-cheat), certificate issuance | C | each module carries its `REVIEWER` bucket-C sign-off — met as of 2026-09-13 (see bucket-C inventory above). **This row's bucket (C) and deliverable list were a prediction, not the full outcome: P3 also produced bucket-A work (`REQ-329`, five session entity definitions) and bucket-B work (`REQ-331`, the deadline sweep on `Letflow.Scheduler.Poller`) — see "Bucket-C inventory" above. Certificate issuance was NOT delivered by P3: it needs PDF and QR rendering, `mix.exs` carries no such dependency, and gaps 4 and 5 (above) have their mechanism settled by decision `0027` but their capabilities remain open and unowned. A later reader should not read P3's completion as covering certificates.** |
+| **P3** | `lib/letflow/exam/`: live session (deadline, autosave, per-question scoring, anti-cheat), certificate issuance | C | each module carries its `REVIEWER` bucket-C sign-off — met as of 2026-09-13 (see bucket-C inventory above). **This row's bucket (C) and deliverable list were a prediction, not the full outcome: P3 also produced bucket-A work (`REQ-329`, five session entity definitions) and bucket-B work (`REQ-331`, the deadline sweep on `Letflow.Scheduler.Poller`) — see "Bucket-C inventory" above. Certificate issuance was NOT delivered by P3: it needs PDF and QR rendering, `mix.exs` carries no such dependency, and gaps 4 and 5 (above) have their mechanism settled by decision `0027` but their capabilities remain open and unowned. A later reader should not read P3's completion as covering certificates. **Update, REQ-355 (this entry, pending REVIEWER rule-2 sign-off):** the issuance HALF of certificates now exists (`Letflow.Exam.Certificate`, `priv/packs/bilimbaga/entity_definitions/certificate.json`) — eligibility guards, idempotent issue-or-fetch, and a branding snapshot captured at issuance. PDF rendering (`REQ-356`) and QR/public verification (`REQ-357`) remain unbuilt; `mix.exs` still carries no such dependency. A later reader should still not read this as full certificate delivery.** |
 | **P4** | `web/`: admin CRUD generated from `x-ui`, plus the hand-written candidate exam-taking UI | C (client) | **Met, as of 2026-09-14.** `REQ-336`'s admin-CRUD engine composes `web/`'s own design-system components (`PageLayout`, `Button`, `DataTable`, `PaginationControls`, `ConfirmDialog`, `QueryStateBoundary`, per its own done-event close-out); `REQ-340`/`REQ-342` added widgets (enum, unique-composite error surfacing, localized_text, fk-reference) to that same registry with no BilimBaga file in their diffs (`git diff --name-only` scoped to `fieldRegistry.ts`/`widgets/` and their tests, per each requirement's own acceptance criterion); `REQ-343` wired all nine remaining entity types onto that engine and its own close-out states plainly "No file or component copied from `c:\Users\tvolo\dev\ai-dala\BilimBaga\frontend\` -- built entirely on `web/`'s own design-system components and REQ-336's/REQ-340's/REQ-342's engine and widgets"; `REQ-338`'s hand-written candidate UI (the two `web/src/pages/exam/` modules in the bucket-C inventory above) likewise names its own design-system components in its close-out and copies nothing from BilimBaga's frontend. Confirmed against all five close-outs (`REQ-336`/`REQ-340`/`REQ-342`/`REQ-343`/`REQ-338`), each independently stating which design-system components were used and that no BilimBaga file was copied — see their `done`-events in [`docs/status/requirement_status.v16.yaml`](../status/requirement_status.v16.yaml). `REQ-337`, the requirement originally filed for this scope, was retired by `REQ-VALIDATOR` for bundling four separable widget/wiring units and split into `REQ-340` (the two mechanically-driven widgets) and `REQ-341`; `REQ-VALIDATOR` then failed `REQ-341` too for the same class of bundling mistake (widget-type axis instead of widget-vs-wiring), and it was retired in turn and split into `REQ-342` (the two new widget shapes) and `REQ-343` (the actual screen/nav wiring for all nine remaining entity types) — see `REQ-342`'s and `REQ-343`'s own descriptions for the full history. |
 | **P5** | Parity: BilimBaga's 19 Playwright spec files (**168** `test()` blocks — corrected 2026-09-14 by `REQ-344`; the **286** previously recorded here on 2026-09-13 was wrong and is not reproducible from the corpus by any of three independent grep methods, see `docs/testing/REQ-344-bilimbaga-parity-triage.md` §1) ported to the Letflow build. Not "re-pointed": the two corpora are disjoint (zero filename overlap with `web/tests/e2e/`'s 38 specs) and BilimBaga's selectors are `getByRole`/`getByText`-dominated (314/137/66/16 `getByRole`/`locator`/`getByText`/`getByLabel` uses vs **one** `data-testid`, re-measured 2026-09-14), so they bind to its rendered DOM and accessible names rather than to portable hooks. **No longer blocked as of 2026-09-14** — P4 is done and its screens exist. Expanded into `REQ-344`–`REQ-348` on 2026-09-14: triage (`REQ-344`, **done** — see `docs/testing/REQ-344-bilimbaga-parity-triage.md`; 90 of 168 tests classified NO-COUNTERPART against today's `web/`, 30 PORTABLE-NOW or PORTABLE-AFTER-\<named REQ\> outright, the remainder split per-test), seeded exam fixture (`REQ-345`), candidate-side port (`REQ-346`), entity-CRUD admin port (`REQ-347`), close-out (`REQ-348`). **Met, as of 2026-09-14 — see "P5 close-out" below for the measured parity figure, the full per-file accounting against `REQ-344`'s 168-test corpus, and both required independent re-verifications.** | — | `RELEASE-VALIDATOR` re-derives the pass, `UAT-RUNNER` runs them against a live instance — **both done, see below** |
 | **P6** | *Conditional* — importer from BilimBaga's PostgreSQL into entity records | B | built only if a deployment holds real data; otherwise never built |
@@ -207,6 +207,7 @@ metric.
 | `Letflow.Exam.QuestionSetResolver` | Deterministically resolves a seeded, shuffled, truncated question subset from a pool against rule configuration — this requires threading a seeded PRNG (`:rand`) through pool selection, truncation, and two independent shuffle steps, which is executable logic, not declarative field structure. | The pool/rule/count/shuffle model is shaped by this vertical's exam-rule schema (pools, rule counts, `options_order`); no existing platform abstraction treats "resolve a reproducible seeded item subset from a configured pool" as a generic capability, and building one now would be speculative ahead of a second caller. | PASS (REVIEWER, 2026-09-13, WF02-REQ332-20260913 @7a7216f1) |
 | `Letflow.Exam.Scoring` | Grading arithmetic (single/true-false as 1-or-0, multiple-choice partial credit clamped to [0,1], Likert weighted-polarity normalization, short-text as `pending_manual`) is executable per-question-type logic with an explicit unanswered-question-as-wrong rule and a no-correct-option error case — none of this is expressible as static field structure. | The five grading rules are specific to this vertical's question-type taxonomy (single/multiple/likert/short-text) and are, per decision `0030` Finding 1, not currently reachable via the platform's one generic scripting mechanism (`Letflow.Engine.Lua.Executor`, unwired for node dispatch) — there is no generic capability to route through today. | PASS (REVIEWER, 2026-09-13, WF02-REQ332-20260913 @7a7216f1) |
 | `Letflow.Exam.AntiCheat` | Validates one of exactly three signal types, checks session ownership/in-progress/deadline state, derives `action_taken` from the exam's `on_tab_switch` config (never from caller input), applies a per-session write-rate debounce, and branches `log`/`warn`/`submit` — a live conditional with a side effect (in the `submit` branch, triggering `Letflow.Exam.Session.submit/3`), which an entity definition cannot express. | Stating this generically requires naming the signal vocabulary (`tab_switch`/`blur`/`fullscreen_exit`) and the terminal action (auto-submitting a session) — both vertical-specific per rule 1's own test; a generic "signal-triggered record transition" capability would be built for exactly one caller today, the speculative-generality failure mode `0022` exists to prevent. | PASS (REVIEWER, 2026-09-13, WF02-REQ333-20260913) |
+| `Letflow.Exam.Certificate` | `REQ-355`. Runs a fixed-order eligibility guard pipeline (ownership, a `grading_pending` special case kept distinct from a passed-false refusal, submitted-status, exam `certificate_enabled`, session `passed`) then an idempotent issue-or-fetch write with a branding snapshot captured only on first issuance — a multi-step `with`-chain comparing live session/exam state and reading `Letflow.Routers.TenantConfig.branding_from_settings/1` once, which an entity definition cannot express. | A generic "issue-on-first-request record gated by other-entities'-field checks" capability is a plausible platform abstraction in the abstract, but it would be built for exactly one caller today (no second gated-issuance use case exists in this vertical or elsewhere) — the same speculative-generality failure mode `0022` exists to prevent, already the basis for `QuestionSetResolver`/`AntiCheat`/`REQ-345`'s seed task above. | **PASS** (REVIEWER, 2026-09-15, WF02-REQ355-20260915 — see this file's "REVIEWER sign-off" section for the full rule-2 adjudication) |
 | `web/src/pages/exam/ExamListPage.tsx` | Renders the candidate's exam-discovery/eligibility-gated start screen, including the honest "which exams can I take" answer against `check_assigned/3`'s documented no-op (option (a): list every active exam with copy stating this is provisional pending an assignment decision record) — a live disclosure/copy decision tied to a specific runtime finding, not a declarative field structure a definition could express. | The eligibility-error vocabulary it surfaces (assignment/archived/active/availability-window/attempt-limit/one-open-session, REQ-332's six atoms) and the provisional-copy escape hatch are specific to this vertical's session lifecycle (rule 1); no generic platform capability treats "explain why a record isn't startable yet" as shared today. | PASS (REVIEWER, 2026-09-13/14, three passes across WF02-REQ338-20260914 — implementation, router.tsx/queryKeys.ts decoupling fix, post branch-collision recovery — plus RELEASE-VALIDATOR PASS; docs/status/requirement_status.v16.yaml, REQ-338 done-event) |
 | `web/src/pages/exam/ExamSessionPage.tsx` | Orchestrates the in-progress/submit/result flow: per-answer autosave, a live countdown that ticks locally but is re-anchored to the server's `remaining_seconds` on every save response, submit/grading-pending/result state transitions, and three anti-cheat browser-event listeners (`visibilitychange`/`blur`/`fullscreenchange`) wired to `Letflow.Exam.AntiCheat`'s `log`/`warn`/`submit` branches with teardown on unmount — executable UI behaviour and client/server clock reconciliation, not field structure. | The countdown-reanchoring contract, the six eligibility-error messages, and the three anti-cheat signal types/branches are all specific to this vertical's session runtime (rule 1, same vocabulary `Letflow.Exam.Session`/`Letflow.Exam.AntiCheat` already justify); no generic capability treats "live countdown reanchored to a server tick" or "browser-event-to-signal mapping" as shared today. | PASS (REVIEWER, 2026-09-13/14, three passes across WF02-REQ338-20260914 — implementation, router.tsx/queryKeys.ts decoupling fix, post branch-collision recovery — plus RELEASE-VALIDATOR PASS; docs/status/requirement_status.v16.yaml, REQ-338 done-event) |
 | `web/src/pages/exam/ExamResultView.tsx` | `REQ-351`. The result-phase rendering extracted out of `ExamSessionPage.tsx` (same three testids/one render guard) so a session's result can be rendered identically whether it came from the LIVE start-answer-submit flow's in-memory `ExamSubmissionOutcome` or from a session LOADED by id via `GET /exam-sessions/:id` — a reuse/sharing decision over executable rendering logic, not a declarative field structure. | Its branching (`grading_pending` vs. scored, `passed` boolean, the pending-vs-score message ids) is this vertical's own `ExamSubmissionOutcome` shape and scoring vocabulary (rule 1, same basis `ExamSessionPage.tsx`'s own row already argues); no generic capability renders "an exam-shaped outcome." | **PASS** (REVIEWER, 2026-09-15, WF02-REQ351-20260915 — bucket C confirmed, extraction reuse, no speculative plumbing; see this file's "REVIEWER sign-off" section) |
@@ -244,19 +245,35 @@ phase close rather than trusting the last-recorded numbers.
 
 ```
 $ ls lib/letflow/exam/
-anti_cheat.ex  question_set_resolver.ex  scoring.ex  session.ex
+anti_cheat.ex  certificate.ex  question_set_resolver.ex  scoring.ex  session.ex
 $ wc -l lib/letflow/exam/*.ex
   309 lib/letflow/exam/anti_cheat.ex
+  372 lib/letflow/exam/certificate.ex
   109 lib/letflow/exam/question_set_resolver.ex
   267 lib/letflow/exam/scoring.ex
- 1193 lib/letflow/exam/session.ex
- 1878 total
+ 1223 lib/letflow/exam/session.ex
+ 2280 total
 ```
 
-**4 modules, 1,878 total lines under `lib/letflow/exam/`, measured 2026-09-15**
-(up from 1,605 at the 2026-09-13 measurement: `scoring.ex` 246→267,
-`session.ex` 941→1193, `anti_cheat.ex` and `question_set_resolver.ex`
-unchanged; see `ISS-0665`).
+**5 modules, 2,280 total lines under `lib/letflow/exam/`, measured 2026-09-15
+(REQ-355)** — the sole change against this file's own immediately-preceding
+"4 modules, 1,878 lines" measurement above is `+certificate.ex` (372 new
+lines, REQ-355's own module); `anti_cheat.ex`, `question_set_resolver.ex`
+and `scoring.ex` are byte-for-byte unchanged. `session.ex` was NOT touched
+by this requirement (`git diff --stat lib/letflow/exam/session.ex` against
+this branch's base is empty) — its line count reads 1223 here, not the
+1193 this file's own immediately-preceding block states, because that
+block was ALREADY stale before this requirement started (confirmed: a
+fresh `wc -l` at the very start of this requirement's own work, before any
+file was touched, already read 1223). REQ-355's own `requirements.yaml`
+entry explicitly warns of and pre-empts exactly this: its stated baseline
+("session 1193") is acknowledged there as stale by 30 further lines,
+filed as a separate, unrelated staleness issue, and an implementer is
+explicitly told not to treat the discrepancy as this requirement's own
+finding. Re-measured from the real tree above, not carried forward from
+either prior figure. Prior to the 1,878-line measurement: 1,605 at the
+2026-09-13 measurement (`scoring.ex` 246→267, `session.ex` 941→1193,
+`anti_cheat.ex` and `question_set_resolver.ex` unchanged; see `ISS-0665`).
 
 **`web/src/pages/exam/` and `web/src/api/exam.ts`, RE-measured 2026-09-15
 (REQ-351):**
@@ -722,6 +739,177 @@ for the close-out event. Merging `web/src/pages/exam/ExamResultView.tsx` and
 criterion: they are real, working, honestly-scoped improvements (they close 1
 of the 9 results-surface-blocked corpus blocks) that regress nothing and do
 not need to wait on `ISS-0674`'s resolution.
+
+**2026-09-15 — `REVIEWER`, rule-2 adjudication for `REQ-355` (`Letflow.Exam.Certificate`).**
+`REQ-355` itself flagged that it needed a per-entry rule-2 sign-off before
+registration and deliberately did not write one for itself, per this file's
+own established precedent for `REQ-338`/`REQ-345`/`REQ-351`. Adjudicated by
+reading `lib/letflow/exam/certificate.ex` and
+`test/letflow/exam/certificate_test.exs` directly (commit `9edf4ced`,
+branch `req-355-certificate-issuance`), not by trusting ELIXIR-DEV's own
+close-out narrative. `SECURITY-REVIEWER` has already PASSed this branch in
+full (INV-1..INV-9, ownership/INV-5 indistinguishability, idempotency
+atomicity, branding-snapshot isolation, no PII leakage, permission-scoping
+exhaustiveness) — this sign-off covers only rule 2/idiom/supervision/scope,
+not the security surface again.
+
+**Finding: bucket C stands — the honest A/B question `REQ-355` posed has a
+real answer, and it is not "this is just a record create."** The module's
+own moduledoc offers a candidate answer and explicitly declines to
+self-certify it; that candidate answer is correct, for reasons stronger
+than the moduledoc states in one place, laid out here:
+
+- *Why not A (a definition, plus the existing `Letflow.Entities.Records`
+  write surface, with no code in between):* `Letflow.Entities.Definition`
+  has no mechanism to express a cross-entity, ordered, multi-field
+  eligibility check — its `constraint_def` vocabulary (checked directly
+  against `lib/letflow/entities/definition.ex`) covers type/required/
+  unique/fk constraints on the record being written, never a precondition
+  computed by reading a *different* entity type's live field values first.
+  `issue_or_get_for_user/3`'s guard pipeline reads `Letflow.Exam.Session`
+  (status, passed) and a separately-fetched `exam` record
+  (`certificate_enabled`) *before* any write is attempted, in a fixed
+  order that matters for correctness (guard 2, `grading_pending`, must be
+  checked and returned before the generic not-submitted guard, precisely
+  so a session awaiting grading is never told "you failed" — see the
+  moduledoc's own "grading_pending is not a passed: false refusal"
+  section). A plain `Records.create_record/2` call, with no guard code in
+  front of it, would create a certificate for *any* session regardless of
+  status, exam configuration, or outcome — it validates field shape
+  against the definition, not cross-entity business state. There is no
+  slot in the definition format today to say "refuse this create unless a
+  different record's field equals X," and building one now, to authorize
+  exactly one caller, is the platform-generalization-ahead-of-need this
+  stage's own rule 2 exists to catch — not a reason to call the check
+  "declarative" by fiat.
+- *Why not B (a generic "gate a create on another entity's field values"
+  capability):* that capability doesn't exist today, and the honest
+  question is whether this is the second or third caller that would
+  justify building it, per `0022`'s own speculative-generality test. It
+  isn't — `Letflow.Exam.Session`'s own eligibility pipeline (assignment,
+  active/archived, availability window, attempt limits, one-open-session)
+  is the closest precedent in this vertical, already justified C by this
+  file's first inventory row on exactly this basis rather than
+  generalized into shared platform machinery, and no second vertical
+  exists yet to demand a shared abstraction. Building one now for a
+  single caller is the same failure mode already declined for
+  `QuestionSetResolver`, `AntiCheat`, and `REQ-345`'s seed task above.
+- *The three-valued `passed` handling is a genuine judgment call requiring
+  code, not a validation rule.* Treating `grading_pending` as its own
+  refusal (`:grading_pending`) rather than folding it into
+  `:session_not_passed` is not a data-shape decision a definition could
+  express even in principle — it is a decision about what message a
+  candidate is honestly owed, reached by reasoning about a queue that does
+  not exist in this codebase (`lib/letflow/exam/scoring.ex:255-257`'s
+  forcing rule, `lib/letflow/routers/exam_sessions.ex`'s own scope fence).
+  That is application logic, not record structure, by construction — no
+  amount of expressive constraint syntax turns "which of two honest
+  refusal messages does this candidate deserve" into a field-level rule.
+- *The idempotency-key derivation and the branding-snapshot's
+  first-issuance-only capture are both executable, not declarative.*
+  Computing `"certificate:issue:" <> session_id` and choosing to route it
+  through `Letflow.EventStore`'s real unique index rather than the
+  heavier automatic-column-promotion path (deliberately declined — see
+  the moduledoc's own "Idempotency" section for why `constraints` was
+  left off the entity definition on purpose) is a design decision with
+  runtime consequences, and reading `TenantConfig.branding_from_settings/1`
+  exactly once, only on the create branch, is control flow a definition
+  has no vocabulary for at all.
+
+**Verdict: this module correctly stays bucket C. It was not, and could not
+have been, expressed as bucket A pack content plus a plain
+`Letflow.Entities.Records.create_record/2` call** — not because the
+*record shape* is complex (it isn't; the entity definition half is
+correctly bucket A, per this file's inventory row and the same reasoning
+`REQ-329`'s five session types already established), but because the
+*issuance decision* requires reading two other live entities in a fixed
+order, producing one of six distinct outcomes, and performing a
+first-write-only side effect (the branding capture) — none of which the
+platform's declarative surface can express today. **PASS on rule 2.**
+
+**Rule 1 was already correctly self-assessed C by `REQ-355`'s own text**
+(the eligibility rule set cannot be stated without naming exams/sessions)
+and is not re-litigated here; rule 2 is the gate this sign-off exists for.
+
+**Idiom/supervision: no concern.** `issue_or_get_for_user/3` is a plain
+function in a context module, not a process — correctly so, since
+`Letflow.Engine`'s "process-vs-row" decision (REQ-045) already settled
+that this vertical's runtime unit is a row, not a supervised process, and
+nothing here reaches for a `GenServer`/`spawn`/singleton to do a
+one-shot guarded write. No `Letflow.InstanceSupervisor` interaction is
+implicated; `git diff --name-only` against `main` confirms no
+`lib/letflow/` file outside `lib/letflow/exam/certificate.ex`,
+`lib/letflow/api/authorization.ex`, and `lib/letflow/routers/` changed in
+a way that touches supervision.
+
+**Scope creep: none found.** The module writes exactly one entity type
+(`certificate`), reuses `Session.get_session_for_user/3` rather than
+re-implementing ownership/not-found semantics (moduledoc's own "reused
+here rather than re-implemented" note, verified against the actual
+delegation in `issue_or_get_for_user/3`'s first `with` clause), reuses the
+real `event_idempotency` unique index rather than inventing a new
+idempotency mechanism, and declines to wire an unreachable admin bypass
+parameter no caller today would ever set (moduledoc's own "admin bypass is
+NOT wired" section) rather than speculatively future-proofing. No
+behaviour, macro, or generic plumbing appears ahead of what this
+requirement needs.
+
+**Type-safety observation, filed rather than left only in this
+narrative (per this role's own standing instruction not to let an
+observation die in a summary nobody claims):** `issue_error` is a bare
+atom union (`@type issue_error :: :session_not_found | :not_owner |
+:grading_pending | :session_not_submitted | :exam_not_certifiable |
+:session_not_passed`), and the router's own `render_issue_certificate/2`
+has a catch-all clause (`{:error, reason} -> Logger.warning(...)`) that
+would silently 500 on any atom typo introduced by a future edit rather
+than fail at compile time. This does not block the PASS below — it is
+the same class already accepted elsewhere in this vertical (`Session`'s
+own error unions are shaped the same way) — but it is exactly the kind of
+"only a runtime error or the property test catches this" gap `@type`
+changes alone cannot close (Elixir's type system doesn't enforce
+exhaustive atom-union handling at the call site). Per
+`docs/agents/protocols/ISSUE_QUEUE.md` ("the discovering agent reports
+the finding to ORCH ... it does not call `gh` or `letflow-queue`
+itself"), this is reported here as a claimable finding, tagged
+`type-safety`, for ORCH to register via `register_task` (task_type:
+"issue") during this requirement's close-out — not written as a
+docs/issues/ISS-NNNN.yaml record directly by REVIEWER, since that id is
+only ever allocated by `register_task`'s response, never assigned
+locally.
+
+**Other acceptance criteria, independently re-verified against the diff
+and by running the suite, not by trusting ELIXIR-DEV's report:**
+idempotency is proven by a test that calls `issue_or_get_for_user/3`
+twice and counts rows via a real query
+(`test/letflow/exam/certificate_test.exs`'s "idempotency" describe block,
+asserting `length(records) == 1`), not by inspecting the implementation;
+ownership refusal (`:not_owner`) is asserted by a dedicated test and both
+`:not_owner` and `:session_not_found` render `Response.not_found/1`
+identically in `lib/letflow/routers/exam_sessions.ex`, satisfying INV-5;
+`grading_pending` vs. `:session_not_passed` are asserted as literally
+distinct error values by the same test
+(`grading_pending_result != {:error, :session_not_passed}`), not merely
+as two refusals; the branding-snapshot test mutates `Tenant.settings`
+*after* issuance and re-reads through the idempotent-replay path,
+asserting the stored snapshot is unchanged; `mix compile
+--warnings-as-errors --force` is clean (`Compiling 230 files (.ex)`,
+`Generated letflow app`, re-run directly by REVIEWER); `mix test` against
+`test/letflow/exam/certificate_test.exs`,
+`test/letflow/routers/exam_sessions_test.exs`, and
+`test/letflow/api/authorization_test.exs` together passes 128/128, re-run
+directly by REVIEWER rather than accepted from ELIXIR-DEV's report; `git
+diff --name-only main...HEAD` touches no `mix.exs` and no PDF/QR-rendering
+file, re-run directly by REVIEWER; the bucket-C inventory measurement was
+re-run from the tree directly by REVIEWER (`ls lib/letflow/exam/`, `wc -l
+lib/letflow/exam/*.ex`) and independently reproduces ELIXIR-DEV's own
+reported 5 modules / 2,280 lines exactly.
+
+**Overall: PASS.** Bucket C is correct for `Letflow.Exam.Certificate`; the
+entity definition correctly stays bucket A; no idiom, supervision, or
+scope-creep concern; all other acceptance criteria independently
+re-verified. This sign-off satisfies `REQ-355`'s own required per-entry
+rule-2 gate and its "sign-off obtained and recorded before merge"
+acceptance criterion.
 
 ## P5 close-out — `REQ-348`, 2026-09-14
 

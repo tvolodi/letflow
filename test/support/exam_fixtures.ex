@@ -32,7 +32,7 @@ defmodule Letflow.ExamFixtures do
 
   @entity_types ~w(exam question answer_option exam_question_rule
                     session session_question session_answer session_question_score
-                    session_event)
+                    session_event certificate)
 
   # `category` is deliberately NOT in `@entity_types` above: every EXISTING
   # caller of `provisioned_tenant_with_exam_definitions/1`

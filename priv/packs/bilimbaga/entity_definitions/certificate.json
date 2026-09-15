@@ -1,0 +1,58 @@
+{
+  "name": "certificate",
+  "display_name": "Certificate",
+  "description": "REQ-355 -- ports FR-BB43 (Certificate Generation), source table `certificates` from c:\\Users\\tvolo\\dev\\ai-dala\\BilimBaga\\backend\\migrations\\019_certificates.up.sql, service behaviour from backend/internal/certificates/service.go's GetOrCreate. Bucket A by the same reasoning REQ-329's five session entity types recorded: this is a declarative record shape with no execution semantics of its own -- the eligibility/idempotency/snapshot LOGIC that decides when and how a row here gets written lives in the bucket-C context module lib/letflow/exam/certificate.ex, exactly mirroring how session.json (data) is paired with Letflow.Exam.Session (behaviour). FIELD-LEVEL NOTES. session_id is :string, queried: true, required: true, with a real fk_def (fk_certificate_session_id) against the session entity type -- the source's session_id UUID NOT NULL UNIQUE REFERENCES exam_sessions(id). issued_at is :datetime, queried: false, required: true (source TIMESTAMPTZ NOT NULL DEFAULT NOW(), stamped by the context module at issuance, never left to a storage-layer default). candidate_name is :string, queried: false, required: true -- the direct port of the source's employee_name TEXT NOT NULL (Letflow's identity subsystem has no per-tenant employee concept, so this stores the issuing candidate's Letflow.Identity.User.display_name at issuance time, captured into this record for the same reason the branding snapshot is captured: so a later change to the candidate's own display_name does not alter an already-issued certificate). exam_title is :json, queried: false, required: true -- a DELIBERATE UPGRADE over the source's exam_title TEXT NOT NULL, storing the exam's full :localized_text map (all locales) rather than a single string, the same upgrade REQ-327's exam.json already made for exam.title itself; carrying the whole map here (not one flattened locale) is what lets a later renderer (REQ-356) pick the right locale without re-reading the live exam record. score_pct is :decimal with decimal_precision 5 and decimal_scale 2, ported verbatim from the source's DECIMAL(5,2), queried: false, required: true. branding_snapshot is :json, queried: false, required: true -- has NO source column (FR-BB43's TemplateSnapshot was a separate JSONB column, template_snapshot, holding the same idea under a different name); this is the field FR-BB43 AC-9 depends on: the context module reads lib/letflow/routers/tenant_config.ex's branding_from_settings/1 exactly once, at first issuance, and stores its full three-key map here verbatim -- a later branding change never touches an already-issued row because nothing here re-reads live branding. OMISSIONS, deliberate and matching every other document in this directory. No id, created_at or updated_at field is declared: the record subsystem (Letflow.Entities.Records) owns record identity and the event store owns the timeline. No created_by field: the issuing candidate is already named by session_id -> session.user_id, and by this record's own creation event's actor_id, so a third copy would be redundant. NOT PORTED, out of this requirement's scope (see lib/letflow/exam/certificate.ex's own moduledoc for the full accounting): verification_code (REQ-357's public-verification scope, not this requirement's) and template_snapshot's PDF-rendering consumer (REQ-356's scope) -- this document intentionally has no verification_code field, so a document expecting one is looking at the wrong requirement. IDEMPOTENCY, NOT EXPRESSED AS A `constraints` UNIQUE ENTRY HERE, EXPLAINED: the source's guarantee is `session_id UUID NOT NULL UNIQUE` plus `INSERT ... ON CONFLICT (session_id) DO NOTHING`. This document deliberately declares NO `constraints` entry for session_id, even though Letflow.Entities.Definition's constraint_def type could express a :unique constraint over [\"session_id\"] -- because doing so would trigger ISS-0648's automatic column-promotion-on-activation (a real per-entity-type SQL table plus a real Postgres UNIQUE constraint on a promoted column), which is materially heavier machinery than this record shape needs and would silently answer the very A/B question this requirement's own REVIEWER rule-2 sign-off is supposed to weigh (whether a certificate needs anything beyond ordinary entity-record semantics). Letflow.Exam.Certificate's own moduledoc records the idempotency mechanism actually used instead -- a deterministic Letflow.Entities.Records.create_record/2 idempotency_key derived from session_id, backed by the REAL, ALREADY-UNIQUE-INDEXED event_idempotency table every entity-record write already goes through -- and states its guarantee level precisely.",
+  "fields": [
+    {
+      "name": "session_id",
+      "type": "string",
+      "queried": true,
+      "required": true
+    },
+    {
+      "name": "issued_at",
+      "type": "datetime",
+      "queried": false,
+      "required": true
+    },
+    {
+      "name": "candidate_name",
+      "type": "string",
+      "queried": false,
+      "required": true
+    },
+    {
+      "name": "exam_title",
+      "type": "json",
+      "queried": false,
+      "required": true
+    },
+    {
+      "name": "score_pct",
+      "type": "decimal",
+      "decimal_precision": 5,
+      "decimal_scale": 2,
+      "queried": false,
+      "required": true
+    },
+    {
+      "name": "branding_snapshot",
+      "type": "json",
+      "queried": false,
+      "required": true
+    }
+  ],
+  "foreign_keys": [
+    {
+      "name": "fk_certificate_session_id",
+      "field": "session_id",
+      "references_entity": "session"
+    }
+  ],
+  "indexes": [
+    {
+      "name": "idx_certificate_session_id",
+      "fields": ["session_id"]
+    }
+  ]
+}

@@ -30,7 +30,7 @@ defmodule Letflow.Api.AuthorizationTest do
              ]
     end
 
-    test "permissions/0 returns exactly R-Co's fourteen Permission values plus REQ-075's :TenantsManage, REQ-076's :RolesManage, REQ-212's :AttachmentsManage/:AttachmentsRead, ISS-0389's :InstancesAdvanceTimer, REQ-309's four Entities* permissions, REQ-315's :EntitiesAggregate, REQ-318's three entity-record export/import permissions, REQ-317's :EntitiesAttachmentsManage/:EntitiesAttachmentsRead, REQ-335's five ExamSession* permissions, and REQ-352's :PublicReadHandlesIssue" do
+    test "permissions/0 returns exactly R-Co's fourteen Permission values plus REQ-075's :TenantsManage, REQ-076's :RolesManage, REQ-212's :AttachmentsManage/:AttachmentsRead, ISS-0389's :InstancesAdvanceTimer, REQ-309's four Entities* permissions, REQ-315's :EntitiesAggregate, REQ-318's three entity-record export/import permissions, REQ-317's :EntitiesAttachmentsManage/:EntitiesAttachmentsRead, REQ-335's five ExamSession* permissions, REQ-355's :ExamCertificateIssue, and REQ-352's :PublicReadHandlesIssue" do
       assert Authorization.permissions() == [
                :DefinitionsWrite,
                :DefinitionsRead,
@@ -66,6 +66,7 @@ defmodule Letflow.Api.AuthorizationTest do
                :ExamSessionSave,
                :ExamSessionSubmit,
                :ExamSessionReportEvent,
+               :ExamCertificateIssue,
                :PublicReadHandlesIssue
              ]
     end
@@ -393,7 +394,8 @@ defmodule Letflow.Api.AuthorizationTest do
           32 => "thirty-two",
           33 => "thirty-three",
           34 => "thirty-four",
-          35 => "thirty-five"
+          35 => "thirty-five",
+          36 => "thirty-six"
         }
         |> Map.get(actual_count)
 
@@ -919,7 +921,8 @@ defmodule Letflow.Api.AuthorizationTest do
           32 => "thirty-two",
           33 => "thirty-three",
           34 => "thirty-four",
-          35 => "thirty-five"
+          35 => "thirty-five",
+          36 => "thirty-six"
         }
         |> Map.get(actual_count)
 
@@ -1379,7 +1382,8 @@ defmodule Letflow.Api.AuthorizationTest do
           32 => "thirty-two",
           33 => "thirty-three",
           34 => "thirty-four",
-          35 => "thirty-five"
+          35 => "thirty-five",
+          36 => "thirty-six"
         }
         |> Map.get(actual_count)
 
@@ -1811,15 +1815,16 @@ defmodule Letflow.Api.AuthorizationTest do
       :ExamSessionRead,
       :ExamSessionSave,
       :ExamSessionSubmit,
-      :ExamSessionReportEvent
+      :ExamSessionReportEvent,
+      :ExamCertificateIssue
     ]
 
-    test "role_allows?/2 grants CANDIDATE exactly the five ExamSession* permissions, denying every other live permission" do
+    test "role_allows?/2 grants CANDIDATE exactly its six ExamSession*/ExamCertificateIssue permissions, denying every other live permission" do
       all_permissions = Authorization.permissions()
 
-      # Sanity: the five ExamSession* atoms are themselves real, live
-      # permissions -- if this ever failed, the denial loop below would be
-      # vacuously true for them.
+      # Sanity: the six atoms are themselves real, live permissions -- if
+      # this ever failed, the denial loop below would be vacuously true for
+      # them.
       for permission <- @candidate_permissions do
         assert permission in all_permissions,
                "expected #{inspect(permission)} to be a real permission"
@@ -1831,12 +1836,13 @@ defmodule Letflow.Api.AuthorizationTest do
 
         assert actual == expected,
                "role_allows?(:CANDIDATE, #{inspect(permission)}) returned #{inspect(actual)}, " <>
-                 "expected #{inspect(expected)} -- CANDIDATE must hold exactly the five " <>
-                 "ExamSession* permissions and nothing else (ISS-0646, decision 0013 addendum)"
+                 "expected #{inspect(expected)} -- CANDIDATE must hold exactly its six " <>
+                 "ExamSession*/ExamCertificateIssue permissions and nothing else (ISS-0646, " <>
+                 "decision 0013 addendum; REQ-355 added :ExamCertificateIssue to this set)"
       end
     end
 
-    test "evaluate_access/2 agrees: CANDIDATE gets Allow for all five ExamSession* policy keys" do
+    test "evaluate_access/2 agrees: CANDIDATE gets Allow for all six ExamSession*/ExamCertificateIssue policy keys" do
       # evaluate_access/2's second argument is an endpoint POLICY KEY (what
       # endpoint_policy_key/2 returns), not a raw Permission atom -- the two
       # only coincide where required_permission/1 has an identity clause, as

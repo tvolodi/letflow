@@ -192,15 +192,16 @@ defmodule Letflow.Routers.ExamSessionsTest do
       end
     end
 
-    test "five routes are declared, matching the moduledoc's route table" do
+    test "six routes are declared, matching the moduledoc's route table" do
       routes = Letflow.Routers.ExamSessions.__authz_routes__()
-      assert length(routes) == 5
+      assert length(routes) == 6
 
       assert {"POST", "/", :ExamSessionStart} in routes
       assert {"GET", "/:id", :ExamSessionRead} in routes
       assert {"PUT", "/:id/answers/:question_id", :ExamSessionSave} in routes
       assert {"POST", "/:id/submit", :ExamSessionSubmit} in routes
       assert {"POST", "/:id/events", :ExamSessionReportEvent} in routes
+      assert {"POST", "/:id/certificate", :ExamCertificateIssue} in routes
     end
   end
 
@@ -551,6 +552,102 @@ defmodule Letflow.Routers.ExamSessionsTest do
 
       conn = request("POST", "/api/v1/exam-sessions", ctx, %{"exam_id" => exam.record_id})
       assert conn.status == 403
+    end
+  end
+
+  # ── REQ-355: certificate issuance route, real HTTP end to end ────────────
+  #
+  # Full guard/idempotency/branding-snapshot unit coverage lives in
+  # test/letflow/exam/certificate_test.exs, against Letflow.Exam.Certificate
+  # directly. This describe block proves only that the route itself is wired
+  # correctly through the real Letflow.Plugs.ApiPipeline stack: authenticated,
+  # CANDIDATE-reachable, and idempotent over two real HTTP calls.
+
+  describe "POST /exam-sessions/:id/certificate" do
+    test "start -> submit (passed) -> issue certificate -> issue again returns the identical record" do
+      tenant = tenant("req355-certificate-route")
+      ctx = candidate_ctx(tenant)
+
+      %{exam: exam, question_id: question_id, correct_id: correct_id} =
+        build_minimal_exam!(tenant.schema_name, %{"certificate_enabled" => true})
+
+      started = start_session!(ctx, exam.record_id)
+      session_id = started["session"]["id"]
+
+      assert 200 ==
+               request(
+                 "PUT",
+                 "/api/v1/exam-sessions/#{session_id}/answers/#{question_id}",
+                 ctx,
+                 %{"selected_option_ids" => [correct_id], "time_spent_seconds" => 5}
+               ).status
+
+      submit_conn = request("POST", "/api/v1/exam-sessions/#{session_id}/submit", ctx)
+      assert %{"status" => "submitted", "passed" => true} = json(submit_conn)
+
+      first_conn = request("POST", "/api/v1/exam-sessions/#{session_id}/certificate", ctx)
+      assert first_conn.status == 200
+      first = json(first_conn)
+      assert first["session_id"] == session_id
+      assert first["score_pct"] == 100.0
+      assert is_binary(first["id"])
+
+      second_conn = request("POST", "/api/v1/exam-sessions/#{session_id}/certificate", ctx)
+      assert second_conn.status == 200
+      assert json(second_conn) == first
+    end
+
+    test "certificate_enabled: false on the exam is refused with 409, not 200" do
+      tenant = tenant("req355-certificate-not-certifiable")
+      ctx = candidate_ctx(tenant)
+
+      %{exam: exam, question_id: question_id, correct_id: correct_id} =
+        build_minimal_exam!(tenant.schema_name, %{"certificate_enabled" => false})
+
+      started = start_session!(ctx, exam.record_id)
+      session_id = started["session"]["id"]
+
+      request(
+        "PUT",
+        "/api/v1/exam-sessions/#{session_id}/answers/#{question_id}",
+        ctx,
+        %{"selected_option_ids" => [correct_id], "time_spent_seconds" => 5}
+      )
+
+      request("POST", "/api/v1/exam-sessions/#{session_id}/submit", ctx)
+
+      conn = request("POST", "/api/v1/exam-sessions/#{session_id}/certificate", ctx)
+      assert conn.status == 409
+    end
+
+    test "another candidate's session_id renders the same 404 as a nonexistent one (INV-5)" do
+      tenant = tenant("req355-certificate-ownership")
+      owner_ctx = candidate_ctx(tenant)
+      other_ctx = candidate_ctx(tenant)
+
+      %{exam: exam} = build_minimal_exam!(tenant.schema_name, %{"certificate_enabled" => true})
+      started = start_session!(owner_ctx, exam.record_id)
+      session_id = started["session"]["id"]
+
+      trace_id = "req355-inv5-#{Ecto.UUID.generate()}"
+
+      probe_conn =
+        request("POST", "/api/v1/exam-sessions/#{session_id}/certificate", other_ctx, nil,
+          trace_id: trace_id
+        )
+
+      missing_conn =
+        request(
+          "POST",
+          "/api/v1/exam-sessions/#{Ecto.UUID.generate()}/certificate",
+          other_ctx,
+          nil,
+          trace_id: trace_id
+        )
+
+      assert probe_conn.status == 404
+      assert missing_conn.status == 404
+      assert probe_conn.resp_body == missing_conn.resp_body
     end
   end
 end

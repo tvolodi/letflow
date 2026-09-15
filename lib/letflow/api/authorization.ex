@@ -210,6 +210,7 @@ defmodule Letflow.Api.Authorization do
           | :ExamSessionSave
           | :ExamSessionSubmit
           | :ExamSessionReportEvent
+          | :ExamCertificateIssue
           | :PublicReadHandlesIssue
 
   @type access_decision_kind :: :Allow | :Deny403 | :AllowWithRowFilter
@@ -262,6 +263,7 @@ defmodule Letflow.Api.Authorization do
           | :ExamSessionSave
           | :ExamSessionSubmit
           | :ExamSessionReportEvent
+          | :ExamCertificateIssue
           | :PublicReadHandlesIssue
           | :Unknown
 
@@ -311,6 +313,7 @@ defmodule Letflow.Api.Authorization do
     :ExamSessionSave,
     :ExamSessionSubmit,
     :ExamSessionReportEvent,
+    :ExamCertificateIssue,
     :PublicReadHandlesIssue
   ]
 
@@ -319,7 +322,7 @@ defmodule Letflow.Api.Authorization do
   def roles, do: @roles
 
   @doc """
-  All thirty-five `Permission` values — R-Co's fourteen, plus REQ-075's
+  All thirty-six `Permission` values — R-Co's fourteen, plus REQ-075's
   `:TenantsManage`, plus REQ-076's `:RolesManage`, plus REQ-212's
   `:AttachmentsManage`/`:AttachmentsRead`, plus ISS-0389's
   `:InstancesAdvanceTimer`, plus REQ-309's four entity-subsystem permissions
@@ -330,8 +333,8 @@ defmodule Letflow.Api.Authorization do
   `:EntitiesRecordsImport`), plus REQ-317's `:EntitiesAttachmentsManage`/
   `:EntitiesAttachmentsRead`, plus REQ-335's five exam-session-route
   permissions (`:ExamSessionStart`, `:ExamSessionRead`, `:ExamSessionSave`,
-  `:ExamSessionSubmit`, `:ExamSessionReportEvent`), plus REQ-352's
-  `:PublicReadHandlesIssue`.
+  `:ExamSessionSubmit`, `:ExamSessionReportEvent`), plus REQ-355's
+  `:ExamCertificateIssue`, plus REQ-352's `:PublicReadHandlesIssue`.
 
   The stated count is asserted against `length(permissions())` by
   `test/letflow/api/authorization_test.exs` (REQ-309 AC1), computed rather than
@@ -700,6 +703,11 @@ defmodule Letflow.Api.Authorization do
   def endpoint_policy_key("POST", "/exam-sessions/:id/events"),
     do: :ExamSessionReportEvent
 
+  # REQ-355 -- idempotent certificate issuance, same shape as the five
+  # REQ-335 clauses above.
+  def endpoint_policy_key("POST", "/exam-sessions/:id/certificate"),
+    do: :ExamCertificateIssue
+
   # REQ-352 — the generic, kind-agnostic authenticated issue route
   # (Letflow.Routers.PublicReadHandles), mounted at /public-read-handles.
   # See design lib/letflow/design/req352-unauthenticated-read-platform.md §13.1.
@@ -828,6 +836,7 @@ defmodule Letflow.Api.Authorization do
   def required_permission(:ExamSessionSave), do: :ExamSessionSave
   def required_permission(:ExamSessionSubmit), do: :ExamSessionSubmit
   def required_permission(:ExamSessionReportEvent), do: :ExamSessionReportEvent
+  def required_permission(:ExamCertificateIssue), do: :ExamCertificateIssue
 
   # REQ-352 — identity clause (policy-key name == permission name), same
   # shape as Entities*/ExamSession* above.
@@ -955,6 +964,7 @@ defmodule Letflow.Api.Authorization do
         :ExamSessionRead,
         :ExamSessionSave,
         :ExamSessionSubmit,
-        :ExamSessionReportEvent
+        :ExamSessionReportEvent,
+        :ExamCertificateIssue
       ]
 end

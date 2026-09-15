@@ -1,8 +1,7 @@
 # ── Stage 1: Build the Elixir release ──────────────────────────────────────
-# Pinned to match this project's `mix.exs` (elixir: "~> 1.14") and the
-# same builder image the sibling letflow-queue repo's deploy/Dockerfile
-# uses, for toolchain parity across the two deployed apps.
-FROM elixir:1.17-otp-27 AS builder
+# Pinned to match this project's `mix.exs` (elixir: "~> 1.18") and
+# `.tool-versions` (elixir 1.20.3-otp-29, erlang 29.0.5).
+FROM elixir:1.20.3-otp-29 AS builder
 
 ENV MIX_ENV=prod \
     LANG=C.UTF-8

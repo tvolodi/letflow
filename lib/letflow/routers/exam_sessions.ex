@@ -125,6 +125,7 @@ defmodule Letflow.Routers.ExamSessions do
   alias Letflow.Exam.Certificate
   alias Letflow.Exam.CertificateDocument
   alias Letflow.Exam.Session
+  alias Letflow.PublicRead
 
   # ── Start session ───────────────────────────────────────────────────────
 
@@ -443,6 +444,41 @@ defmodule Letflow.Routers.ExamSessions do
       :error ->
         Response.not_found(conn)
     end
+  end
+
+  # REQ-357 -- on the FIRST issuance only (never on an idempotent replay),
+  # mint a Letflow.PublicRead capability handle for this certificate and
+  # return the one-time plaintext to the candidate as "public_handle" on
+  # the AUTHENTICATED response. `resource_id` MUST be `record.id` (the
+  # Ecto primary key `Letflow.Exam.CertificatePublicProjection.schema/0`'s
+  # `Repo.get/3` matches against), never `record.record_id` -- see the
+  # design's §2.2/§5.2. `tenant_id` comes from `conn.assigns.auth_context`,
+  # same as every other tenant-scoped write in this router -- never
+  # request-supplied (INV-1). No second permission check is added here:
+  # `:ExamCertificateIssue` (this route's own policy-key gate) already
+  # authorizes this in-process call -- see the design's §5.5 for why no
+  # `:PublicReadHandlesIssue` consumer is introduced by this requirement.
+  #
+  # A mint failure is non-blocking relative to the certificate itself
+  # (already durably created, its own transaction already committed): the
+  # route still responds 200 with the certificate and simply omits
+  # "public_handle", logging a warning -- see the design's §5.3 for why no
+  # shared transaction wraps both writes.
+  defp render_issue_certificate(conn, {:ok, %{first_issuance: true} = certificate}) do
+    tenant_id = conn.assigns.auth_context.tenant_id
+    body = certificate_json(certificate)
+
+    body =
+      case PublicRead.issue_handle(tenant_id, "certificate", certificate.public_read_resource_id) do
+        {:ok, %{handle: plaintext}} ->
+          Map.put(body, "public_handle", plaintext)
+
+        {:error, reason} ->
+          Logger.warning("certificate public-read handle mint failed: #{inspect(reason)}")
+          body
+      end
+
+    Response.ok(conn, body)
   end
 
   defp render_issue_certificate(conn, {:ok, certificate}),

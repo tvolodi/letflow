@@ -175,11 +175,22 @@ defmodule Letflow.Exam.Certificate do
 
   ## Scope fence (REQ-355's own, restated here)
 
-  This module does NOT render a PDF, does NOT encode a QR code (REQ-356),
-  and does NOT expose a public verification lookup (REQ-357) -- no
-  `verification_code` field exists on this entity type at all. It issues
-  (or re-fetches) one declarative record; nothing here reads or writes
-  `mix.exs`.
+  This module does NOT render a PDF and does NOT encode a QR code
+  (REQ-356) -- no `verification_code` field exists on this entity type at
+  all. It issues (or re-fetches) one declarative record; nothing here
+  reads or writes `mix.exs`.
+
+  ## `first_issuance`/`public_read_resource_id` (REQ-357)
+
+  `issue_or_fetch/4` now threads `Letflow.Entities.Records.create_record/2`'s
+  own `is_duplicate` flag through as `first_issuance` (`not is_duplicate`)
+  instead of discarding it, and `certificate_view/2` carries it plus
+  `public_read_resource_id` (the record's own `id` -- the Ecto primary key,
+  NOT `record_id`) so `Letflow.Routers.ExamSessions` can mint a
+  `Letflow.PublicRead` handle exactly once per certificate, on first
+  issuance only. Both fields are internal wiring, never part of the
+  authenticated JSON response -- see
+  `lib/letflow/design/req357-certificate-public-projection.md` §5.
   """
 
   alias Letflow.Entities.Record.Latest
@@ -206,7 +217,9 @@ defmodule Letflow.Exam.Certificate do
           candidate_name: String.t(),
           exam_title: term(),
           score_pct: float(),
-          branding_snapshot: map()
+          branding_snapshot: map(),
+          first_issuance: boolean(),
+          public_read_resource_id: String.t()
         }
 
   @doc """
@@ -231,8 +244,8 @@ defmodule Letflow.Exam.Certificate do
          {:ok, exam} <- fetch_exam(session, prefix),
          :ok <- check_certificate_enabled(exam),
          :ok <- check_passed(session),
-         {:ok, record} <- issue_or_fetch(session, exam, candidate_id, prefix) do
-      {:ok, certificate_view(record)}
+         {:ok, record, first_issuance} <- issue_or_fetch(session, exam, candidate_id, prefix) do
+      {:ok, certificate_view(record, first_issuance)}
     end
   end
 
@@ -300,8 +313,11 @@ defmodule Letflow.Exam.Certificate do
              },
              prefix
            ) do
-        {:ok, %{record: record}} -> {:ok, record}
-        {:error, reason} -> {:error, reason}
+        {:ok, %{record: record, is_duplicate: is_duplicate}} ->
+          {:ok, record, not is_duplicate}
+
+        {:error, reason} ->
+          {:error, reason}
       end
     end
   end
@@ -338,7 +354,7 @@ defmodule Letflow.Exam.Certificate do
   # View projection
   # -----------------------------------------------------------------------
 
-  defp certificate_view(record) do
+  defp certificate_view(record, first_issuance) do
     %{
       id: record.record_id,
       session_id: fv(record, "session_id"),
@@ -346,7 +362,9 @@ defmodule Letflow.Exam.Certificate do
       candidate_name: fv(record, "candidate_name"),
       exam_title: fv(record, "exam_title"),
       score_pct: to_float(fv(record, "score_pct")),
-      branding_snapshot: fv(record, "branding_snapshot")
+      branding_snapshot: fv(record, "branding_snapshot"),
+      first_issuance: first_issuance,
+      public_read_resource_id: record.id
     }
   end
 

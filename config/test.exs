@@ -225,7 +225,16 @@ config :letflow, activation_test_hooks_enabled?: true
 # registered but differs from the handle's own stored `kind` field, rather
 # than only through a direct Letflow.PublicRead.resolve/2 call. See
 # test/support/public_read_fixture_support.ex's `mismatched_kind/0`.
+#
+# TEST-DESIGNER (REQ-357 Step 3) adds a THIRD entry, "certificate" =>
+# Letflow.Exam.CertificatePublicProjection, matching config/config.exs's own
+# registration. This whole map REPLACES config/config.exs's map rather than
+# merging with it (plain `import Config` + `config/2` semantics), so without
+# this entry "certificate" is unregistered in :test and no HTTP-level test
+# could ever exercise real resolution through this kind -- ELIXIR-DEV's own
+# flagged finding at REQ-357 close-out, acted on here.
 config :letflow, :public_read_kinds, %{
   "public-read-fixture" => Letflow.PublicReadFixtureSupport.Projection,
-  "public-read-fixture-mismatch" => Letflow.PublicReadFixtureSupport.Projection
+  "public-read-fixture-mismatch" => Letflow.PublicReadFixtureSupport.Projection,
+  "certificate" => Letflow.Exam.CertificatePublicProjection
 }

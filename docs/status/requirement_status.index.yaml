@@ -3726,8 +3726,29 @@ volumes:
     path: docs/status/requirement_status.v17.yaml
     status: current
     opened: 2026-09-14
-    entries: 22
+    entries: 25
     note: >
+      Incremented to 25 by ORCH's own SCOPE-CHANGE (ISS-0679, blocked on
+      REQ-356 not yet merged) blocked-event append -- `grep -c "^  - req:"
+      docs/status/requirement_status.v17.yaml` = 25 on-disk entries; 1152
+      lines / 66365 bytes, well under the roll ceiling, no roll triggered.
+
+      Incremented to 24 by DOC-UPDATER (WF02-REQ357-20260915, Step 6) after
+      appending REQ-357's own `done`-event -- `grep -c "^  - req:"
+      docs/status/requirement_status.v17.yaml` = 24 on-disk entries; 1127
+      lines / 64,982 bytes, well under the roll ceiling (1200 lines /
+      120000 bytes), no roll triggered.
+
+      Incremented to 23 by TEST-DESIGNER (WF02-REQ357-20260915, Step 3),
+      fixing a gap left by this same branch's own REQ-357 `started`-event
+      append (ELIXIR-DEV/ORCH, at 2026-09-15T03:08:33Z) which added the
+      entry but never bumped this declared count -- caught by
+      `test/docs/requirement_status_invariants_test.exs`'s A9 assertion
+      during this run's own `mix letflow.check.test` (declared 22, actual
+      23 on disk). `grep -c "^  - req:"
+      docs/status/requirement_status.v17.yaml` = 23 on-disk entries; 1035
+      lines, well under the roll ceiling, no roll triggered.
+
       Incremented to 22 by ORCH's own SCOPE-CHANGE (ISS-0677) done-event
       append (PR #1419 merged as f0afa83f) -- `grep -c "^  - req:"
       docs/status/requirement_status.v17.yaml` = 22 on-disk entries; 1015

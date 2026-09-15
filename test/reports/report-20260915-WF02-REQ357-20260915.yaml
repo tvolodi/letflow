@@ -1,0 +1,155 @@
+run_id: WF02-REQ357-20260915
+agent: TEST-RUNNER
+workflow: WF-02 Step 4 (requirement implementation, full-suite verification)
+requirement: REQ-357 (certificate public-read projection)
+timestamp_utc: "2026-09-15T04:25:55Z"
+branch: feature/WF02-REQ357-20260915
+head_commit_ancestor_confirmed: 38ba0bc9 (TEST-DESIGNER's Step 3 commit; verified via
+  `git merge-base --is-ancestor 38ba0bc9 HEAD`)
+
+verdict: PASS
+
+environment:
+  docker_compose: "letflow-1-postgres-1 already Running, port 5463 per this
+    workspace's untracked .env's LETFLOW_DB_PORT=5463 -- confirmed matching
+    `docker ps` port mapping (`sudo docker compose up -d` used; docker socket
+    requires sudo in this environment, ordinary `docker` CLI got permission
+    denied)."
+  host_cores: 8 (nproc)
+  toolchain: elixir/mix present; no `mix deps.get` needed (deps already fetched).
+
+diff_scope:
+  files: "git diff --name-only main...HEAD: config/config.exs, config/test.exs,
+    docs/requirements.yaml, docs/status/requirement_status.index.yaml,
+    docs/status/requirement_status.v17.yaml,
+    lib/letflow/design/req357-certificate-public-projection.md,
+    lib/letflow/exam/certificate.ex, lib/letflow/exam/certificate_public_projection.ex,
+    lib/letflow/routers/exam_sessions.ex,
+    test/letflow/exam/certificate_public_projection_test.exs,
+    test/letflow/exam/certificate_test.exs, test/letflow/routers/exam_sessions_test.exs,
+    test/specs/REQ-357.md"
+
+commands_run:
+  - "mix compile --warnings-as-errors -- exit 0, clean, no output."
+  - "mix format --check-formatted -- FIRST run FAILED: 3 files not formatted (see
+    finding 1)."
+  - "mix format <3 files> -- formatting-only fix; exam_sessions_test.exs required a
+    second `mix format` pass (its first re-wrap wasn't yet idempotent-stable in one
+    pass -- normal mix format behavior for a nested multi-line call)."
+  - "mix format --check-formatted -- SECOND run: exit 0, clean."
+  - "mix compile --warnings-as-errors -- re-run after the format fix: exit 0, clean."
+  - "scripts/test_parallel.sh -- FIRST run (before format fix): 4275 tests, 6
+    properties, 1 failure (4280/4281 passed) -- Req207VortexTest only."
+  - "scripts/test_parallel.sh -- SECOND run (after format fix, to confirm the
+    mechanical formatting change broke nothing): 4275 tests, 6 properties, 2
+    failures (4279/4281 passed) -- Req207VortexTest again, plus
+    Scheduler.PollerTest's REQ-218 AC3 partial-skip test (see attribution below)."
+  - "mix test test/letflow/exam/certificate_public_projection_test.exs
+    test/letflow/exam/certificate_test.exs test/letflow/routers/exam_sessions_test.exs
+    -- 36 passed, 0 failed (every REQ-357 new/modified test file, run together in
+    isolation)."
+
+full_suite_result:
+  final_combined: "4275 tests, 6 properties, 2 failures (4279/4281 passed)"
+  per_partition:
+    - "partition 1: 570 tests, 1 property, 0 failures, exit 0"
+    - "partition 2: 498 tests, 2 properties, 0 failures, exit 0"
+    - "partition 3: 515 tests, 2 properties, 0 failures, exit 0"
+    - "partition 4: 583 tests, 1 property, 0 failures, exit 0"
+    - "partition 5: 517 tests, 0 properties, 1 failure, exit 2"
+    - "partition 6: 446 tests, 0 properties, 0 failures, exit 0"
+    - "partition 7: 653 tests, 0 properties, 1 failure, exit 2"
+    - "partition 8: 493 tests, 0 properties, 0 failures, exit 0"
+
+findings:
+  - id: 1
+    severity: fixed-in-run
+    title: "mix format --check-formatted failed on all three of TEST-DESIGNER's
+      new/modified test files"
+    detail: >
+      test/letflow/exam/certificate_public_projection_test.exs,
+      test/letflow/exam/certificate_test.exs, and
+      test/letflow/routers/exam_sessions_test.exs were not `mix format`-clean
+      (a long single-line assert re-wrapped in the first file, two missing
+      blank lines before a multi-line assert in the second, and a
+      not-yet-standard-formatted `Repo.get_by!/3` call in the third). This
+      blocked the required format-check gate. Fixed by running `mix format`
+      on exactly these three files (the third file needed the command run
+      twice, since mix format's own re-wrap of the nested call wasn't fully
+      settled after one pass -- normal, not a sign of a bad edit). Diffed the
+      result: pure whitespace/line-break changes, no logic altered. Re-ran
+      `mix format --check-formatted` afterward: exit 0. Re-ran
+      `mix compile --warnings-as-errors` and the full suite afterward to
+      confirm the mechanical change broke nothing (see full_suite_result
+      above -- same file set, same test bodies, only whitespace differs).
+      These are files TEST-RUNNER owns per its role file ("any new test
+      files under test/"), so fixed directly rather than routed for rework.
+    files: [test/letflow/exam/certificate_public_projection_test.exs,
+      test/letflow/exam/certificate_test.exs,
+      test/letflow/routers/exam_sessions_test.exs]
+
+pre_existing_failures:
+  count: 2
+  attribution_evidence:
+    - route: "1 (structural)"
+      test: "Letflow.Simulation.Req207VortexTest: vortex-entity-list-filter-and-page
+        disposition is BLOCKED_ON_DEPENDENCY on the S8 simulation harness' :gui
+        dispatch, re-derived live after REQ-311 completed the record read path"
+      evidence: >
+        test/letflow/simulation/req207_vortex_test.exs is NOT in
+        `git diff --name-only main...HEAD` (confirmed above under diff_scope),
+        and neither is any module it exercises (Letflow.Routers.Entities /
+        simulation harness). This diff touches only the certificate/exam-session
+        domain. Same failure previously confirmed independent by
+        TEST-DESIGN-VALIDATOR's own re-run per this run's task briefing.
+      conclusion: "genuinely pre-existing, unrelated to REQ-357."
+    - route: "1 (structural) + 3 (demonstrated mechanism)"
+      test: "Letflow.Scheduler.PollerTest: REQ-218 AC3 'an antagonist contending
+        for the sole global unit produces a genuine partial skip'"
+      evidence: >
+        test/letflow/scheduler/poller_test.exs is NOT in
+        `git diff --name-only main...HEAD`; grepped this diff's own touched
+        files (certificate.ex, certificate_public_projection.ex,
+        exam_sessions.ex, config/config.exs, config/test.exs) for
+        "scheduler"/"poller" -- zero matches, so REQ-357 has no dependency
+        edge into the scheduler/admission subsystem. Beyond structural
+        clearing, the test's own source (test/letflow/scheduler/poller_test.exs:
+        617-645) documents its mechanism directly in a code comment: it retries
+        up to 5 times because "which specific attempts collide with the
+        antagonist is inherently nondeterministic," asserting only that a
+        partial skip is observed at least once in 5 tries under real
+        concurrent contention for a single global admission unit. It failed
+        under this run's 8-way parallel partition load (all 5 attempts landed
+        on total-success or total-skip that particular run) and passed cleanly
+        on this exact same commit in the immediately preceding suite run
+        (partition 5's first run, before the formatting fix, had 0 failures).
+        Same commit, same test, different outcome ten minutes apart -- a
+        timing/scheduling-contention race under load, not a code change,
+        consistent with the test's own documented nondeterministic design.
+      conclusion: "genuinely pre-existing and environmentally racy, unrelated
+        to REQ-357; not newly introduced by this diff (nothing in this diff
+        touches the scheduler/admission subsystem)."
+
+regression_check_on_req357_files:
+  result: "zero failures trace to REQ-357's new/modified files"
+  evidence: >
+    Ran every new/modified test file from this diff together in isolation:
+    test/letflow/exam/certificate_public_projection_test.exs,
+    test/letflow/exam/certificate_test.exs,
+    test/letflow/routers/exam_sessions_test.exs -- Result: 36 passed, 0 failed.
+    Neither full-suite run produced a failure whose test name or file matches
+    lib/letflow/exam/certificate.ex, lib/letflow/exam/certificate_public_projection.ex,
+    lib/letflow/routers/exam_sessions.ex, config/config.exs, config/test.exs, or
+    any of the three test files above. Both remaining failures are attributed
+    above to unrelated subsystems (S8 simulation harness / scheduler admission),
+    structurally and causally cleared of any connection to this diff.
+
+gate_status:
+  format_check_formatted: "PASS (after finding 1's fix)"
+  compile_warnings_as_errors: PASS
+  full_test_suite: "4279/4281 passed, 2 pre-existing/unrelated failures (see above),
+    0 regressions from REQ-357"
+
+next_step: >
+  Hands off to RELEASE-VALIDATOR, which re-runs the full suite independently per
+  this project's redundancy principle rather than trusting this report alone.

@@ -657,6 +657,141 @@ defmodule Letflow.Routers.ExamSessionsTest do
       assert missing_conn.status == 404
       assert probe_conn.resp_body == missing_conn.resp_body
     end
+
+    # ISS-0676 -- regression coverage for `render_issue_certificate/2`'s
+    # exhaustiveness over `Letflow.Exam.Certificate.issue_error/0`
+    # (certificate.ex:205-211). Elixir does not enforce case/function-clause
+    # exhaustiveness against a `@type` union at compile time (confirmed by a
+    # real `mix dialyzer` experiment during this issue's investigation --
+    # see the ISS-0676 handoff for the observed output: adding a 7th atom to
+    # the union, with and without an explicit `@spec` naming it, produced
+    # ZERO new Dialyzer warnings, because the catch-all clause below widens
+    # the accepted type to `term()`). This test is the compensating control:
+    # it asserts each of the SIX atoms currently in `issue_error` reaches
+    # its OWN documented clause (a distinct status/detail), never the
+    # generic-500 catch-all at exam_sessions.ex:516-519. It does NOT catch a
+    # rename that touches both places consistently, but it DOES catch (a) a
+    # new atom added to `issue_error` without an accompanying router clause
+    # (this test would need a new case added to keep passing, at which
+    # point the gap is visible in the diff) and (b) an existing router
+    # clause deleted by accident (the matching case here would start
+    # observing 500 and fail). See the comment above
+    # `render_issue_certificate/2`'s catch-all clause for the maintenance
+    # checklist this test is paired with.
+    test "every issue_error atom (certificate.ex:205-211) renders its own distinct response, never the 500 catch-all" do
+      tenant = tenant("iss0676-issue-error-exhaustiveness")
+      owner_ctx = candidate_ctx(tenant)
+
+      # :session_not_found -- a session id that was never created.
+      not_found_conn =
+        request(
+          "POST",
+          "/api/v1/exam-sessions/#{Ecto.UUID.generate()}/certificate",
+          owner_ctx
+        )
+
+      assert not_found_conn.status == 404
+      refute not_found_conn.status == 500
+
+      # :not_owner -- a real session, requested by a DIFFERENT candidate.
+      %{exam: owned_exam} =
+        build_minimal_exam!(tenant.schema_name, %{"certificate_enabled" => true})
+
+      owned_session_id = start_session!(owner_ctx, owned_exam.record_id)["session"]["id"]
+      other_ctx = candidate_ctx(tenant)
+
+      not_owner_conn =
+        request(
+          "POST",
+          "/api/v1/exam-sessions/#{owned_session_id}/certificate",
+          other_ctx
+        )
+
+      assert not_owner_conn.status == 404
+      refute not_owner_conn.status == 500
+
+      # :session_not_submitted -- session started, never submitted.
+      not_submitted_conn =
+        request("POST", "/api/v1/exam-sessions/#{owned_session_id}/certificate", owner_ctx)
+
+      assert not_submitted_conn.status == 409
+      assert json(not_submitted_conn)["detail"] == "session has not been submitted yet"
+
+      # :grading_pending -- a short-text question forces status
+      # :grading_pending on submit (see Letflow.Exam.Certificate's
+      # moduledoc "grading_pending is not a passed: false refusal").
+      grading_category_id = Ecto.UUID.generate()
+      grading_exam = create_exam!(tenant.schema_name, %{"certificate_enabled" => true})
+
+      create_question!(tenant.schema_name, grading_category_id, %{"type" => "shorttext"})
+      create_rule!(tenant.schema_name, grading_exam.record_id, grading_category_id, 1)
+
+      grading_session_id = start_session!(owner_ctx, grading_exam.record_id)["session"]["id"]
+
+      submit_conn =
+        request("POST", "/api/v1/exam-sessions/#{grading_session_id}/submit", owner_ctx)
+
+      assert %{"status" => "grading_pending"} = json(submit_conn)
+
+      grading_pending_conn =
+        request("POST", "/api/v1/exam-sessions/#{grading_session_id}/certificate", owner_ctx)
+
+      assert grading_pending_conn.status == 409
+
+      assert json(grading_pending_conn)["detail"] =~
+               "awaiting grading"
+
+      # :exam_not_certifiable -- exam has certificate_enabled: false.
+      %{exam: not_certifiable_exam, question_id: q1, correct_id: c1} =
+        build_minimal_exam!(tenant.schema_name, %{"certificate_enabled" => false})
+
+      not_certifiable_session_id =
+        start_session!(owner_ctx, not_certifiable_exam.record_id)["session"]["id"]
+
+      request(
+        "PUT",
+        "/api/v1/exam-sessions/#{not_certifiable_session_id}/answers/#{q1}",
+        owner_ctx,
+        %{"selected_option_ids" => [c1], "time_spent_seconds" => 5}
+      )
+
+      request("POST", "/api/v1/exam-sessions/#{not_certifiable_session_id}/submit", owner_ctx)
+
+      not_certifiable_conn =
+        request(
+          "POST",
+          "/api/v1/exam-sessions/#{not_certifiable_session_id}/certificate",
+          owner_ctx
+        )
+
+      assert not_certifiable_conn.status == 409
+      assert json(not_certifiable_conn)["detail"] == "this exam does not issue certificates"
+
+      # :session_not_passed -- answered wrong, submitted.
+      %{exam: not_passed_exam, question_id: q2, wrong_id: w2} =
+        build_minimal_exam!(tenant.schema_name, %{"certificate_enabled" => true})
+
+      not_passed_session_id =
+        start_session!(owner_ctx, not_passed_exam.record_id)["session"]["id"]
+
+      request(
+        "PUT",
+        "/api/v1/exam-sessions/#{not_passed_session_id}/answers/#{q2}",
+        owner_ctx,
+        %{"selected_option_ids" => [w2], "time_spent_seconds" => 5}
+      )
+
+      submit_failed_conn =
+        request("POST", "/api/v1/exam-sessions/#{not_passed_session_id}/submit", owner_ctx)
+
+      assert %{"status" => "submitted", "passed" => false} = json(submit_failed_conn)
+
+      not_passed_conn =
+        request("POST", "/api/v1/exam-sessions/#{not_passed_session_id}/certificate", owner_ctx)
+
+      assert not_passed_conn.status == 409
+      assert json(not_passed_conn)["detail"] == "session was not passed"
+    end
   end
 
   # ── REQ-356: certificate document download route, real HTTP end to end ──

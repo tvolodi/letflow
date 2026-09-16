@@ -1,0 +1,52 @@
+{
+  "handoff_id": "b6f3a1d2-000a-4a00-9c00-wf03iss0699009",
+  "run_id": "WF03-ISS0699-20260917",
+  "workflow_id": "WF-03",
+  "step": "04c",
+  "from_agent": "ORCH",
+  "to_agent": "TEST-RUNNER",
+  "file": "handoffs/WF03-ISS0699-20260917/step-04c-test-runner.json",
+  "created_at": "2026-09-16T21:26:34Z",
+  "started_at": "2026-09-16T21:26:34Z",
+  "completed_at": null,
+  "status": "PENDING",
+  "priority": "NORMAL",
+  "context": {
+    "stage": null,
+    "requirement_ids": [],
+    "requirement_text": {},
+    "source_text": {},
+    "related_handoff_ids": [],
+    "artifacts_in": [
+      "test/scripts/test_parallel_tmpdir_cleanup_test.sh",
+      "scripts/test_parallel.sh"
+    ],
+    "owned_modules": ["scripts/test_parallel.sh"]
+  },
+  "task": {
+    "description": "WF-03 Step 4c (TEST-RUNNER) for ISS-0699. On branch feature/WF03-ISS0699-20260917. No Elixir (.ex/.exs) file is touched by this fix -- only scripts/test_parallel.sh (bash). Run test/scripts/test_parallel_tmpdir_cleanup_test.sh yourself against this branch's scripts/test_parallel.sh and confirm it passes (4/4) with your own real output quoted. Also run `bash -n scripts/test_parallel.sh` to confirm no syntax error. Do NOT run the full `mix test` suite for this step -- it is unnecessary (no .ex file changed) and Step Final's git-merge will run it anyway after the rebase per this project's own GIT_MERGE.md; state this explicitly as your reason for skipping it, per this repo's No-Speculation rule (never silently skip a check without saying so). Write a test report to test/reports/report-20260916-WF03ISS0699-20260916.yaml following this repo's existing report convention (see any recent test/reports/report-*.yaml for shape). Claim by setting status to IN_PROGRESS.",
+    "acceptance_criteria": [
+      "test/scripts/test_parallel_tmpdir_cleanup_test.sh re-run with real quoted output, PASS",
+      "bash -n scripts/test_parallel.sh passes",
+      "A written report at test/reports/report-20260916-WF03ISS0699-20260916.yaml",
+      "Full mix test suite explicitly stated as out of scope for this step, with the stated reason, not silently omitted"
+    ]
+  },
+  "result": {
+    "status": "PENDING",
+    "summary": "",
+    "artifacts_out": [],
+    "issues": [],
+    "git_evidence": {
+      "branch_name": null,
+      "commit_sha_list": [],
+      "remote_branch": null,
+      "push_status": "skipped",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": ""
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

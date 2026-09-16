@@ -1092,8 +1092,19 @@ defmodule Mix.Tasks.Letflow.Check.TestTest do
     # fail this deterministically, without needing a real concurrency repro.
     test "install_executable_resolver/2 never mutates real PATH (hazard mechanism itself is gone)",
          %{fake_bin_dir: fake_bin_dir} do
-      install_fake_executable(fake_bin_dir, "bash", "Finished in 0.0 seconds\nResult: 0 passed\n", 0)
-      install_fake_executable(fake_bin_dir, "mix", "Finished in 0.0 seconds\nResult: 0 passed\n", 0)
+      install_fake_executable(
+        fake_bin_dir,
+        "bash",
+        "Finished in 0.0 seconds\nResult: 0 passed\n",
+        0
+      )
+
+      install_fake_executable(
+        fake_bin_dir,
+        "mix",
+        "Finished in 0.0 seconds\nResult: 0 passed\n",
+        0
+      )
 
       path_before = System.get_env("PATH")
 
@@ -1110,7 +1121,12 @@ defmodule Mix.Tasks.Letflow.Check.TestTest do
     # REAL executable found on this host's real PATH if this invariant ever regressed.
     test "an unmapped executable name resolves to nil, not a silent fallback to real PATH search",
          %{fake_bin_dir: fake_bin_dir} do
-      install_fake_executable(fake_bin_dir, "bash", "Finished in 0.0 seconds\nResult: 0 passed\n", 0)
+      install_fake_executable(
+        fake_bin_dir,
+        "bash",
+        "Finished in 0.0 seconds\nResult: 0 passed\n",
+        0
+      )
 
       install_executable_resolver(fake_bin_dir, ["bash"])
 

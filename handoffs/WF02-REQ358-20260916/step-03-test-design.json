@@ -8,8 +8,8 @@
   "file": "handoffs/WF02-REQ358-20260916/step-03-test-design.json",
   "created_at": "2026-09-16T09:06:21Z",
   "started_at": "2026-09-16T09:14:11Z",
-  "completed_at": "2026-09-16T09:45:00Z",
-  "status": "PENDING",
+  "completed_at": "2026-09-16T09:23:36Z",
+  "status": "COMPLETED",
   "priority": "NORMAL",
   "context": {
     "stage": "S7",
@@ -28,7 +28,7 @@
     ],
     "owned_modules": [
       "test/specs/REQ-358.md",
-      "test/letflow/mix_tasks/check_uat_scenario_schema_test.exs"
+      "test/mix/tasks/letflow_check_uat_scenario_schema_test.exs"
     ]
   },
   "task": {
@@ -44,13 +44,13 @@
   },
   "result": {
     "status": "PASS",
-    "summary": "Wrote test/specs/REQ-358.md and test/letflow/mix_tasks/check_uat_scenario_schema_test.exs (34 tests) exercising Mix.Tasks.Letflow.CheckUatScenarioSchema.check_scenario/2 and check_file/1 directly (no shell-out). AC1: 3 hermetic company_id-fallback fixtures + 2 live-file checks (meridian, platform) via check_file/1. AC2: one fixture per SCHEMA-2..6 rule (missing/empty/wrong-type scope, both/neither step-shapes, bad op, wrong-type eq/in value, empty branches list, missing/duplicate branch name, empty branch steps, else-not-last, else-multiple, YAML parse error, not-a-mapping) each asserting a specific rule tag and message substring. AC4: check_file/1 against the committed login-routing throwaway fixture plus a hermetic in-suite rebuild of the same 3-branch shape; module confirmed to expose no branch-evaluation function, so UAT-RUNNER's own live branch-matching is named as out of scope rather than faked. Verified two on-disk fixtures' exact YAML error shapes via a scratch mix run script before writing assertions against them. Did not run `mix letflow.check.test` per this dispatch's explicit instruction (TEST-RUNNER's job); instead ran `mix compile --warnings-as-errors` (clean) and a compile-only load of the test module via ExUnit app start + Code.compile_file (clean, no warnings) to confirm the suite is well-formed.",
+    "summary": "REWORK ITERATION 1: moved test file per required fix -- git mv test/letflow/mix_tasks/check_uat_scenario_schema_test.exs test/mix/tasks/letflow_check_uat_scenario_schema_test.exs (history preserved), removed the now-empty test/letflow/mix_tasks/ directory, and updated test/specs/REQ-358.md's 'Test file:' reference to the new path. No test logic changed -- all 34 test cases and assertions are byte-identical to the prior iteration. Ran `mix letflow.check.test` (TEST-RUNNER's usual check, run here per this handoff's explicit rework instruction to verify before completing): exit code 0, 11 passed/4335 excluded on the targeted run plus a clean isolated :lua_wallclock_race run; no 'default values for the optional arguments' warning substring present.",
     "artifacts_out": [
       "test/specs/REQ-358.md",
-      "test/letflow/mix_tasks/check_uat_scenario_schema_test.exs"
+      "test/mix/tasks/letflow_check_uat_scenario_schema_test.exs"
     ],
     "issues": [
-      "Test file placed at test/letflow/mix_tasks/ per this handoff's explicit owned_modules path, which diverges from this project's existing mix-task test convention (test/mix/tasks/, e.g. test/mix/tasks/letflow_check_requirements_registration_test.exs) -- flagged for TEST-DESIGN-VALIDATOR/ORCH awareness, not corrected unilaterally since owned_modules explicitly named the path."
+      "Resolved: test file is now at test/mix/tasks/letflow_check_uat_scenario_schema_test.exs, matching this project's existing mix-task test convention (12/12 files, e.g. test/mix/tasks/letflow_check_requirements_registration_test.exs)."
     ],
     "git_evidence": {
       "branch_name": "feature/WF02-REQ358-20260916",

@@ -369,3 +369,34 @@ history:
       chronological position rather than appended after both, per this
       file's own established composition precedent (see volume 3's index
       note, "recount-every-time"/chronological-interleave pattern).
+
+  - req: REQ-359
+    event: done
+    agent: DOC-UPDATER
+    at: 2026-09-16T10:49:45Z
+    note: >
+      Defined the BA-<VERTICAL> agent role (.claude/agents/ba-analyst.md),
+      parameterized by tenant-vertical/solution-pack via
+      docs/agents/ba-personas/<vertical>.yaml rather than a fixed persona
+      list -- dual authoring+sign-off responsibility, sign-off artefacts at
+      test/uat-reports/ba-signoff-<vertical>-<run_id>.yaml. Instantiated the
+      first real persona (docs/agents/ba-personas/bilimbaga.yaml) and
+      authored one real UAT scenario
+      (test/fixtures/uat/scenarios/bilimbaga/candidate-timed-exam-autograde.yaml).
+      docs/agents/AGENT_SYSTEM.md's roster table (3) and capability matrix
+      (3.1) gained the BA-<VERTICAL> row; docs/migration/decisions/
+      0004-humanless-pipeline.md gained its 2026-09-16 REQ-359 addendum,
+      append-only, original Decision/Reasoning sections untouched.
+      RELEASE-VALIDATOR PASSed all 5 acceptance criteria -- AC5's real
+      UAT-RUNNER dispatch against QA came back honestly BLOCKED (no
+      BilimBaga tenant/candidate/exam-definition seed data exists in QA;
+      GET /api/v1/tenants returns only Default Tenant, identity search for
+      bilimbaga/candidate returns count: 0, GET /api/v1/definitions returns
+      zero installed), verified independently twice with full quoted
+      evidence rather than fabricated as a pass -- REVIEWER and
+      RELEASE-VALIDATOR both confirmed AC5 only requires real execution
+      plus a quoted result, not a passing scenario, so this does not block
+      closure. Underlying QA seed-data gap filed as ISS-0690 (GH-1445,
+      queue Q-690). README.md checked -- no agent roster, ASCII state
+      diagram, or "Running it" content references agent roles or counts
+      anywhere in it, so no README change was needed.

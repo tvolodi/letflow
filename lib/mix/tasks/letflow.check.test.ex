@@ -166,7 +166,12 @@ defmodule Mix.Tasks.Letflow.Check.Test do
       )
     end
 
-    {output, exit_code} = stream_and_capture(bash, ["scripts/test_parallel.sh"])
+    # ISS-0699 (design doc iss0699-test-parallel-tmpdir-cleanup-fix.md §3a.2): pass
+    # TEST_PARALLEL_KEEP_LOGS=1 on this specific invocation so the script's own EXIT
+    # trap does not delete its partition-log tmp_dir out from under this caller --
+    # this task now owns removing that directory itself (see §3a.3 below).
+    {output, exit_code} =
+      stream_and_capture(bash, ["scripts/test_parallel.sh"], [{"TEST_PARALLEL_KEEP_LOGS", "1"}])
 
     # ORDERING RULE (design doc section 1.2 step 1): if the runner exited nonzero,
     # report that first -- even if the log-dir line also happens to be missing. The
@@ -193,7 +198,21 @@ defmodule Mix.Tasks.Letflow.Check.Test do
         )
 
       {:ok, log_dir} ->
-        check_main_suite_logs(resolve_native_path(log_dir), exit_code)
+        # ISS-0699 (design doc §3a.3): this task, not the script, now owns bounding
+        # this tmp_dir's lifetime end-to-end -- the script's own trap no longer
+        # deletes it (TEST_PARALLEL_KEEP_LOGS=1 above), so it must be removed here
+        # once check_main_suite_logs/2 is done reading it, on every outcome (zero
+        # logs, real failures, ISS-0069 substring match, or a clean pass). The
+        # `try` body runs check_main_suite_logs/2 to completion -- including the
+        # substring check inside it -- before this `after` block can possibly fire,
+        # so read-before-delete ordering holds by construction, not timing luck.
+        native_log_dir = resolve_native_path(log_dir)
+
+        try do
+          check_main_suite_logs(native_log_dir, exit_code)
+        after
+          File.rm_rf!(native_log_dir)
+        end
     end
   end
 
@@ -777,16 +796,33 @@ defmodule Mix.Tasks.Letflow.Check.Test do
     resolver.(name)
   end
 
-  defp stream_and_capture(cmd, args) do
+  # ISS-0699 (design doc §3a.2): `env` is an optional third argument, an :env-style
+  # list of {name, value} tuples forwarded to Port.open/2's own :env option, which
+  # only adds/overrides the named vars on top of this BEAM process's already-
+  # inherited environment -- it does not replace the environment wholesale, so the
+  # `[]` default changes nothing for the three call sites that don't pass it.
+  defp stream_and_capture(cmd, args, env \\ []) do
     executable = resolve_executable(cmd) || raise "executable not found: #{cmd}"
 
-    port =
-      Port.open({:spawn_executable, executable}, [
-        :binary,
-        :exit_status,
-        :stderr_to_stdout,
-        args: args
-      ])
+    port_opts = [
+      :binary,
+      :exit_status,
+      :stderr_to_stdout,
+      args: args
+    ]
+
+    # Erlang's `:env` port option requires each name/value to be a charlist (or
+    # atom), not a binary -- passing binaries raises `ArgumentError: invalid option
+    # in list` from `:erlang.open_port/2` (confirmed live against this OTP/host).
+    # Only add the :env key at all when non-empty, so the three call sites that
+    # don't pass env stay byte-for-byte identical to the pre-ISS-0699 opts list.
+    port_opts =
+      case env do
+        [] -> port_opts
+        _ -> port_opts ++ [env: Enum.map(env, fn {k, v} -> {to_charlist(k), to_charlist(v)} end)]
+      end
+
+    port = Port.open({:spawn_executable, executable}, port_opts)
 
     collect(port, [])
   end

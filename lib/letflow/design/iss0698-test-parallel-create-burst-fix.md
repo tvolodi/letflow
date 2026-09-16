@@ -1,7 +1,7 @@
 # ISS-0698 — `scripts/test_parallel.sh` parallel `ecto.create`/`ecto.migrate`
    burst fix design
 
-**Status:** design, awaiting CODE-DESIGN-VALIDATOR.
+**Status:** implemented (commit 664436fc), merged in WF03-ISS0698-20260917.
 **Run:** WF03-ISS0698-20260917, branch `feature/WF03-ISS0698-20260917`.
 **Scope:** `scripts/test_parallel.sh` Step 2 launch phase (new Step 1.7 inserted
 before it), plus a narrow, opt-in, backward-compatible `mix.exs` alias change

@@ -8,8 +8,8 @@
   "file": "handoffs/WF03-ISS0699-20260917/step-02-code-designer.json",
   "created_at": "2026-09-16T21:16:42Z",
   "started_at": "2026-09-16T22:20:55Z",
-  "completed_at": null,
-  "status": "PENDING",
+  "completed_at": "2026-09-16T22:23:24Z",
+  "status": "COMPLETED",
   "priority": "NORMAL",
   "context": {
     "stage": null,
@@ -39,8 +39,8 @@
     ]
   },
   "result": {
-    "status": "PENDING",
-    "summary": "ITERATION 0 RESULT (superseded, kept for reference): PASS. Design doc created at lib/letflow/design/iss0699-test-parallel-tmpdir-cleanup-fix.md specifying a single trap cleanup_tmp_dir EXIT registered right after tmp_dir's creation, success-only removal gated on TEST_PARALLEL_KEEP_LOGS, and a 4-path disposition table. This passed CODE-DESIGN-VALIDATOR and all downstream gates, but Step Final's CI run found it breaks lib/mix/tasks/letflow.check.test.ex, which reads partition-*.log from the same tmp_dir on every run (not just failures). See task.description's REWORK ITERATION 1 block for the full failure and the revision required.",
+    "status": "PASS",
+    "summary": "ITERATION 0 RESULT (superseded, kept for reference): PASS. Design doc created at lib/letflow/design/iss0699-test-parallel-tmpdir-cleanup-fix.md specifying a single trap cleanup_tmp_dir EXIT registered right after tmp_dir's creation, success-only removal gated on TEST_PARALLEL_KEEP_LOGS, and a 4-path disposition table. This passed CODE-DESIGN-VALIDATOR and all downstream gates, but Step Final's CI run found it breaks lib/mix/tasks/letflow.check.test.ex, which reads partition-*.log from the same tmp_dir on every run (not just failures). REWORK ITERATION 1 RESULT: PASS. Revised the design doc in place (same file, no new file) adding new section 3a, 'Caller coordination -- lib/mix/tasks/letflow.check.test.ex'. Adopted the REWORK dispatch's recommended shape as-is (evaluated and confirmed preferable over two alternatives, documented and rejected in 3a.5): (1) run_main_suite/0's single stream_and_capture(bash, [\"scripts/test_parallel.sh\"]) call (current line 169) now passes TEST_PARALLEL_KEEP_LOGS=1 as an env var, via a new optional third `env` argument threaded into stream_and_capture/2's Port.open/2 :env option (stream_and_capture/2 -> /3, default env \\\\ []); the module's other three stream_and_capture call sites (discovery dry-run, per-test wasm_hang subprocesses, lua_wallclock_race) are explicitly left untouched since they never invoke the script. (2) The existing check_main_suite_logs(resolve_native_path(log_dir), exit_code) call at current line 196 is now wrapped in a try/after that unconditionally File.rm_rf!'s the resolved log dir once that call returns or raises -- covering all four of its outcomes (zero logs found, real failures reported, ISS-0069 offending substring, clean :ok) with one cleanup site, relying on Elixir's try/after semantics (runs on both normal return and Mix.raise's exception) rather than per-branch edits. Section 3a.4 confirms the ISS-0069 substring-check logic itself (@target_substring, find_partition_log_dir/1, check_substring_across_logs/1, etc.) is untouched -- the read (inside the try body) provably completes before the after-block's delete can run. Also updated section 0 (sources read) and section 5/6 (acceptance-criteria mapping, open questions) to reflect the revision; sections 1-3 (script-side trap mechanism) are unchanged from iteration 0 and remain correct for direct/manual script invocations.",
     "artifacts_out": ["lib/letflow/design/iss0699-test-parallel-tmpdir-cleanup-fix.md"],
     "issues": [],
     "git_evidence": {
@@ -51,7 +51,7 @@
       "pr_url": null,
       "pr_create_error": null
     },
-    "next_action": ""
+    "next_action": "Route to CODE-DESIGN-VALIDATOR (regate)"
   },
   "rework_count": 1,
   "max_rework": 3

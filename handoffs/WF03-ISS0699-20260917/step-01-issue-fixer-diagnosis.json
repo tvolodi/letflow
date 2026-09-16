@@ -1,0 +1,55 @@
+{
+  "handoff_id": "b6f3a1d2-0002-4a00-9c00-wf03iss0699001",
+  "run_id": "WF03-ISS0699-20260917",
+  "workflow_id": "WF-03",
+  "step": "0.5-01",
+  "from_agent": "ORCH",
+  "to_agent": "ISSUE-FIXER",
+  "file": "handoffs/WF03-ISS0699-20260917/step-01-issue-fixer-diagnosis.json",
+  "created_at": "2026-09-16T21:15:05Z",
+  "started_at": "2026-09-16T21:15:05Z",
+  "completed_at": null,
+  "status": "PENDING",
+  "priority": "NORMAL",
+  "context": {
+    "stage": null,
+    "requirement_ids": [],
+    "requirement_text": {},
+    "source_text": {},
+    "related_handoff_ids": [],
+    "artifacts_in": [
+      "docs/issues/ISS-0699.yaml",
+      "scripts/test_parallel.sh",
+      "lib/letflow/design/iss0698-test-parallel-create-burst-fix.md",
+      "test/scripts/test_parallel_create_burst_test.sh",
+      "test/scripts/test_parallel_pool_sizing_test.sh"
+    ],
+    "owned_modules": ["scripts/test_parallel.sh"]
+  },
+  "task": {
+    "description": "WF-03 Step 0.5 (registry lookup) + Step 1 (diagnose) for ISS-0699, combined into one dispatch since both are your own role. On branch feature/WF03-ISS0699-20260917.\n\nStep 0.5: Search docs/issues/*.yaml for entries with status: resolved whose description mentions similar symptoms (test_parallel.sh, tmp dir accumulation, mktemp cleanup). Note any match in your result.summary.\n\nStep 1: Diagnose ISS-0699 directly. Read scripts/test_parallel.sh in full (already listed in artifacts_in) -- confirm for yourself, by reading the actual script, exactly where tmp_dir=$(mktemp -d ...) is created (Step 1.7, per the script's own comments) and confirm it is never rm -rf'd on any exit path (success, early `exit 1` error paths, or the final `exit \"$any_failed\"`). Do not diagnose from the issue report's prose alone -- read the script.\n\nWrite your diagnosis into result.summary: root cause, every exit point in the script that currently leaves tmp_dir behind, and what a fix needs to change. Per ISS-0699's own filed description, consider explicitly whether cleanup should be unconditional, success-only, or gated by an opt-out env var -- note that other workflows in this pipeline (TEST-RUNNER reports, etc.) sometimes cite a specific partition-N.log path after a failing run, so an unconditional delete-on-any-exit would break that inspection use case; state your recommendation on this tradeoff explicitly since CODE-DESIGNER will design from it. Do NOT implement the fix yourself.\n\nClaim by setting status to IN_PROGRESS.",
+    "acceptance_criteria": [
+      "Step 0.5 registry-lookup result stated (match found or not)",
+      "Root cause identified from actually reading scripts/test_parallel.sh, naming every exit path that currently leaves tmp_dir uncleaned",
+      "A stated recommendation on the cleanup-policy tradeoff (unconditional vs success-only vs opt-out), with reasoning, for CODE-DESIGNER to design from",
+      "No fix implemented in this step"
+    ]
+  },
+  "result": {
+    "status": "PENDING",
+    "summary": "",
+    "artifacts_out": [],
+    "issues": [],
+    "git_evidence": {
+      "branch_name": null,
+      "commit_sha_list": [],
+      "remote_branch": null,
+      "push_status": "skipped",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": ""
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

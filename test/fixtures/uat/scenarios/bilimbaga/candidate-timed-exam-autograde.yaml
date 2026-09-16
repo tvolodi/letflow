@@ -1,0 +1,102 @@
+# Authored by BA-BILIMBAGA (REQ-359), per docs/agents/ba-personas/bilimbaga.yaml
+# and .claude/agents/ba-analyst.md's AUTHORING responsibility. Not ported from
+# BilimBaga's own Go/Playwright corpus (that corpus is TEST-DESIGNER/UAT-RUNNER
+# territory, per REQ-344..349) -- this is a fresh, business-authored scenario
+# grounded in the real, currently-working bilimbaga vertical (P0-P5 done,
+# lib/letflow/exam/* + web/src/pages/exam/*, ISS-0674 resolved as of
+# 2026-09-14 so the score is genuinely returned on GET /exam-sessions/:id).
+---
+id: bilimbaga-candidate-timed-exam-autograde
+scope: bilimbaga
+title: A candidate sits a timed certification exam and sees their accurate score immediately after submitting
+version: "1.0"
+tags: [happy_path]
+
+description: >
+  A candidate signs in, starts one of their monthly compliance certification
+  exams, answers every question before the timer runs out, and submits. This
+  scenario checks that the candidate is shown an accurate, auto-graded score
+  right away -- not a delayed result, not a wrong number, and not a session
+  that quietly expired out from under them while they were still answering.
+
+actors:
+  candidate: actor-bilimbaga-candidate
+
+preconditions:
+  - description: A bilimbaga tenant exists with the exam solution pack installed
+    check: process_definition_active
+  - description: At least one certification exam is configured and active for this tenant, with no short-answer questions (so a score is produced immediately rather than left pending manual grading)
+    check: no_pending_instances
+
+steps:
+  - step: 1
+    actor: candidate
+    action: Signs in and opens the list of exams available to them
+    via: gui
+
+  - step: 2
+    actor: candidate
+    action: Starts a timed certification exam session
+    via: gui
+    produces:
+      instance_id: "the exam session's own identifier"
+
+  - step: 3
+    actor: candidate
+    action: >
+      Answers every question in the exam, well within the time allowed, and
+      submits the exam before the timer reaches zero
+    via: gui
+
+expected_outcomes:
+  - id: EO-001
+    description: >
+      After starting the exam, the candidate sees a visible countdown showing
+      how much time remains
+    verification:
+      method: page_state
+      detail: "The exam-taking screen shows a running countdown reflecting the session's remaining time"
+    on_fail:
+      severity: MAJOR
+      business_impact: >
+        Candidates cannot tell how much time they have left, which is unfair
+        for a timed certification and undermines trust in the process.
+      suggested_action: route_to_wf03
+
+  - id: EO-002
+    description: >
+      Immediately after submitting, the candidate sees their exam result --
+      a numeric score and a clear pass/fail statement -- without needing to
+      leave the page or wait
+    verification:
+      method: page_state
+      detail: "The result screen shows a score and a pass/fail statement matching the candidate's actual answers"
+    on_fail:
+      severity: BLOCKER
+      business_impact: >
+        Candidates cannot see whether they passed their certification exam
+        right after finishing it. This breaks the core promise of the exam
+        platform and would generate a flood of support questions.
+      suggested_action: route_to_wf03
+
+  - id: EO-003
+    description: >
+      The score shown matches a correct grading of the candidate's actual
+      answers -- a candidate who answered every question correctly sees a
+      passing score, not an understated or overstated one
+    verification:
+      method: instance_state
+      detail: "The session's recorded score and pass/fail state agree with what a correct grading of the submitted answers should produce"
+    on_fail:
+      severity: BLOCKER
+      business_impact: >
+        Candidates could be told they failed a certification exam they
+        actually passed (or the reverse), which is a compliance and trust
+        problem, not just a display bug.
+      suggested_action: route_to_backend_dev
+
+cleanup:
+  cancel_open_instances: true
+  description: >
+    Cancel the exam session opened in step 2 if the run did not complete it,
+    so a re-run of this scenario always starts from a clean state.

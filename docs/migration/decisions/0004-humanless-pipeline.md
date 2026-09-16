@@ -102,3 +102,19 @@ without a human catching drift.
 - `docs/requirements.yaml`'s existing schema (id/owner/status/description/
   acceptance_criteria/depends_on) is preserved — the new pipeline routes work through it,
   it does not replace it with R-Co's separate functional-requirements document.
+
+## Addendum (2026-09-16, REQ-359) — BO-*-equivalent deferral actioned
+
+The "What is explicitly NOT reproduced from R-Co" section above deferred the
+BO-SWIFTROUTE/BO-VORTEX/BO-MERIDIAN business-owner-persona layer until Letflow had a real
+tenant-business scenario corpus (S7) to validate against. REQ-358 confirmed both
+preconditions fired (S7 done; 29-scenario corpus exists) and REQ-359 actions the
+deferral: a generic `BA-<VERTICAL>` role (`.claude/agents/ba-analyst.md`, parameterized
+by `docs/agents/ba-personas/<vertical>.yaml`) replaces the closed three-persona pattern,
+keyed on Letflow's open tenant-vertical/solution-pack set instead of R-Co's three
+fictional companies — see `lib/letflow/design/req359-ba-role.md` for the full design and
+`docs/agents/AGENT_SYSTEM.md` §3/§3.1/§6 for the resulting roster/capability/artifact-
+location entries. This addendum does not revise the original "Decision"/"Reasoning"
+sections above, which remain correct as stated for the period before S7's precondition
+held. The `PRODUCT-OWNER`-equivalent half of the original deferral remains open,
+tracked as REQ-361.

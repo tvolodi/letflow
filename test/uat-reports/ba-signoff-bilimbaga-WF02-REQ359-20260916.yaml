@@ -1,0 +1,56 @@
+report_id: ba-signoff-bilimbaga-WF02-REQ359-20260916
+run_id: WF02-REQ359-20260916
+vertical: bilimbaga
+solution_pack: bilimbaga
+generated_at: "2026-09-16T10:55:00Z"
+persona: Ainur Zhaksybekova (Head of Learning & Assessment)
+source_uat_report: test/uat-reports/uat-2026-09-16-WF02-REQ359-20260916.yaml
+
+scenarios_reviewed: 1
+domain_verdict: FAIL
+
+scenario_verdicts:
+  - scenario_id: bilimbaga-candidate-timed-exam-autograde
+    title: "Candidate takes a timed certification exam and receives an auto-graded score"
+    persona_verdict: FAIL
+    business_note: >
+      I could not observe a single step of this scenario. There is no
+      exam environment set up for our candidates yet on the environment
+      this check ran against — no organization for our exams to live
+      under, no certification exam configured for candidates to take,
+      and no candidate account to sign in with. A candidate could not
+      even reach the exam list, let alone start a timed exam, answer
+      questions, or see a score. I want to be clear this is not the same
+      as the exam-taking experience being broken — it simply has not
+      been set up yet on this environment, so there was nothing to check
+      it against.
+    issues:
+      - BA-BILIMBAGA-001
+
+domain_issues:
+  - id: BA-BILIMBAGA-001
+    severity: BLOCKER
+    business_description: >
+      The environment used for this check has no BilimBaga presence at
+      all: no organization for the exam program, no certification exam
+      configured, and no candidate account available to sign in and take
+      an exam. Because of this, none of the candidate-facing exam
+      experience — starting a timed exam, answering questions, submitting,
+      and seeing an auto-graded result — could be exercised or observed.
+      This is a gap in how this particular environment was prepared for
+      testing, not a problem with the exam-taking feature itself or with
+      how the check was written; nothing about the actual candidate
+      experience has been shown to be working or broken, because it
+      could not be reached at all.
+    affected_scenario: bilimbaga-candidate-timed-exam-autograde
+    suggested_action: none
+
+overall_note: >
+  I cannot sign off on this vertical's release readiness from this run —
+  not because I found something wrong with how candidates take exams,
+  but because I was never able to see a candidate take one. Until this
+  environment has our exam program, at least one active certification
+  exam, and a candidate account set up on it, I have no way to confirm
+  that starting a timed exam, submitting answers, and receiving an
+  accurate score works the way our candidates need it to. This should be
+  treated as "not yet checked," not as "checked and failing."

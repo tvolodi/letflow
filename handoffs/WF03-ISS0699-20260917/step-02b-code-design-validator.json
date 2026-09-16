@@ -7,9 +7,9 @@
   "to_agent": "CODE-DESIGN-VALIDATOR",
   "file": "handoffs/WF03-ISS0699-20260917/step-02b-code-design-validator.json",
   "created_at": "2026-09-16T21:18:49Z",
-  "started_at": "2026-09-16T21:18:49Z",
-  "completed_at": "2026-09-17T00:20:00Z",
-  "status": "COMPLETED",
+  "started_at": "2026-09-16T22:24:05Z",
+  "completed_at": null,
+  "status": "PENDING",
   "priority": "NORMAL",
   "context": {
     "stage": null,
@@ -21,33 +21,38 @@
       "lib/letflow/design/iss0699-test-parallel-tmpdir-cleanup-fix.md",
       "handoffs/WF03-ISS0699-20260917/step-01-issue-fixer-diagnosis.json",
       "docs/issues/ISS-0699.yaml",
-      "scripts/test_parallel.sh"
+      "scripts/test_parallel.sh",
+      "lib/mix/tasks/letflow.check.test.ex",
+      "handoffs/WF03-ISS0699-20260917/step-final-git-merge.json",
+      "handoffs/WF03-ISS0699-20260917/step-02-code-designer.json"
     ],
-    "owned_modules": ["scripts/test_parallel.sh"]
+    "owned_modules": ["scripts/test_parallel.sh", "lib/mix/tasks/letflow.check.test.ex"]
   },
   "task": {
-    "description": "WF-03 Step 2b -- hard gate on CODE-DESIGNER's output. On branch feature/WF03-ISS0699-20260917. Independently read lib/letflow/design/iss0699-test-parallel-tmpdir-cleanup-fix.md directly (not the producing agent's own summary) against ISS-0699's acceptance criteria and ISSUE-FIXER's diagnosis. Verify: the trap mechanism is unambiguous enough for ELIXIR-DEV to implement without inventing anything (exact registration point, exact cleanup function behavior including correct $? capture-before-clobber ordering), the opt-out env var is fully specified (name/default/semantics), every exit path ISSUE-FIXER diagnosed is explicitly dispositioned (kept vs removed, with reasoning), and no finished ready-to-paste script edit is present (design artefacts state shape/pseudocode, not a drop-in diff). Claim by setting status to IN_PROGRESS.",
+    "description": "WF-03 Step 2b REGATE (not a rejection of your own prior PASS -- CODE-DESIGNER's design changed underneath it after Step Final's CI run found a real gap iteration 0 didn't cover). On branch feature/WF03-ISS0699-20260917. lib/letflow/design/iss0699-test-parallel-tmpdir-cleanup-fix.md was revised in place: new section 3a adds caller-side coordination with lib/mix/tasks/letflow.check.test.ex (passes TEST_PARALLEL_KEEP_LOGS=1 when invoking scripts/test_parallel.sh, and itself removes the log dir in a try/after around its existing check_main_suite_logs call). Independently read the FULL updated design doc yourself (not CODE-DESIGNER's own summary) and handoffs/WF03-ISS0699-20260917/step-final-git-merge.json's result.summary/issues for the exact CI failure this must fix, and lib/mix/tasks/letflow.check.test.ex's actual current code at the cited call sites. Verify: (a) the original 4 exit-path/trap/env-var design elements from iteration 0 are still intact and correct, (b) the new section names the exact call site(s) in letflow.check.test.ex being changed and the exact mechanism (env var passthrough + try/after cleanup), unambiguous enough for ELIXIR-DEV to implement without inventing anything, (c) it explicitly confirms the ISS-0069 substring-check logic itself is untouched, (d) no ready-to-paste diff is present for either file. Claim by flipping status to IN_PROGRESS on receipt, and set it to COMPLETED/FAILED as normal when you finish.",
     "acceptance_criteria": [
-      "PASS only if all 3 of ISS-0699's own acceptance_criteria (root cause confirmed / fix preserves inspectability / regression-provable) map to concrete design elements",
-      "PASS only if every exit path from the diagnosis is explicitly dispositioned",
-      "PASS only if the trap+cleanup-function shape is unambiguous (an ELIXIR-DEV implementing it needs no further judgment calls on WHEN cleanup runs)",
-      "FAIL if the doc contains a finished, ready-to-ship script diff instead of a design-level specification"
+      "PASS only if all 3 of ISS-0699's own acceptance_criteria still map to concrete design elements after the revision",
+      "PASS only if every exit path from the diagnosis is still explicitly dispositioned",
+      "PASS only if the trap+cleanup-function shape is unambiguous",
+      "PASS only if the new letflow.check.test.ex coordination (env var passthrough + which call site cleans up the log dir) is unambiguous and correctly fixes the CI failure recorded in step-final-git-merge.json",
+      "PASS only if the design confirms the ISS-0069 substring-check logic is untouched",
+      "FAIL if either file's edit is presented as a finished, ready-to-ship diff instead of a design-level specification"
     ]
   },
   "result": {
-    "status": "PASS",
-    "summary": "Independently verified lib/letflow/design/iss0699-test-parallel-tmpdir-cleanup-fix.md against docs/issues/ISS-0699.yaml and step-01's diagnosis by reading the design doc in full and re-checking scripts/test_parallel.sh directly (grep 'trap' = no matches; sed -n on lines 240-255/265-270/288-293/450-456 confirms tmp_dir=$(mktemp -d ...) at line 245, exit 1 at 251/268/291, exit \"$any_failed\" at 455 -- matches the design doc's cited line numbers exactly). Findings: (1) root cause / inspectability / regression-provability all map to concrete design elements -- root cause restated+cited in Sec 1, inspectability preserved via the success-only trap gate + explicit env-var override in Sec 2.3/2.4, and the mechanism's determinism (exit_code -eq 0 -> remove, else preserve, env var forces preserve) gives TEST-DESIGNER a provable regression contract. (2) All 4 exit paths ISSUE-FIXER named (251, 268, 291, 455) are explicitly dispositioned in Sec 3's table with reasoning tied back to the diagnosis (268/291's log-path citations, 455's any_failed split). (3) Trap+cleanup shape is unambiguous: exact registration point (line 245/246, before line 248's validation), exact statement (trap cleanup_tmp_dir EXIT), exact function pseudocode with the $?-must-be-first-statement ordering constraint called out explicitly, exact env-var name/default/semantics (TEST_PARALLEL_KEEP_LOGS, unset default, non-empty-checked per script's existing truthiness idiom) -- no judgment call left to ELIXIR-DEV on WHEN cleanup runs. (4) No ready-to-paste diff: the doc gives function/trap shape as pseudocode with explanatory annotations, not a line-anchored patch/hunk, and Sec 5 explicitly defers the actual splice location and surrounding file edits to ELIXIR-DEV -- consistent with this task's own dispatch note that bash's lack of an @spec-equivalent makes exact shape/pseudocode necessary here (same convention ISS-0698's design used, cited as precedent in the doc itself). No FAIL conditions found.",
+    "status": "PENDING",
+    "summary": "ITERATION 0 RESULT (superseded, kept for reference): PASS -- see git history of this file for the full iteration-0 verification. This regate covers the revised design only.",
     "artifacts_out": [],
     "issues": [],
     "git_evidence": {
-      "branch_name": "feature/WF03-ISS0699-20260917",
+      "branch_name": null,
       "commit_sha_list": [],
-      "remote_branch": "origin/feature/WF03-ISS0699-20260917",
-      "push_status": "pending",
+      "remote_branch": null,
+      "push_status": "skipped",
       "pr_url": null,
       "pr_create_error": null
     },
-    "next_action": "Route to ELIXIR-DEV (Step 3 implement)"
+    "next_action": ""
   },
   "rework_count": 0,
   "max_rework": 3

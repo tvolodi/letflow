@@ -1,0 +1,24 @@
+id: ISS-0696
+title: "web/ frontend vitest unit suite shows worker-distribution nondeterminism -- ExamSessionPage.test.tsx occasionally fails only under full-suite parallel execution"
+discovered_by: RELEASE-VALIDATOR
+discovered_in_run: WF02-REQ362-20260916
+discovered_at: "2026-09-16T12:40:00Z"
+severity: MINOR
+description: >
+  Discovered during REQ-362's Step 5 re-verification. Ran the full
+  frontend vitest unit suite 5 times: 4/5 runs showed only the known
+  pre-existing ISS-0694 failure (bilimbagaEntities.test.ts); 1/5 runs
+  additionally showed
+  web/src/pages/exam/__tests__/ExamSessionPage.test.tsx failing.
+  Isolated re-run of that file alone passed 22/22, and it passes on
+  main too. Root-caused to test-file worker-distribution
+  nondeterminism (vitest's parallel worker pool), not to REQ-362's new
+  visual-baseline.test.ts (verified to contain zero mocks/globals/fake
+  timers via grep and full read) or to any bug in
+  ExamSessionPage.test.tsx's own assertions. Not reliably reproducible
+  enough to root-cause further without dedicated investigation.
+affected_files:
+  - web/src/pages/exam/__tests__/ExamSessionPage.test.tsx
+queue_ref: Q-696
+github_ref: GH-1457
+status: open

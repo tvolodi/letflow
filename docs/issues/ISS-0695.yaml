@@ -1,0 +1,22 @@
+id: ISS-0695
+title: "Letflow.Scheduler.PollerTest (REQ-218 AC3) is order/load-sensitive and fails intermittently under parallel suite load"
+discovered_by: RELEASE-VALIDATOR
+discovered_in_run: WF02-REQ362-20260916
+discovered_at: "2026-09-16T12:40:00Z"
+severity: MINOR
+description: >
+  Discovered during REQ-362's Step 5 re-verification. Running the
+  full backend suite via mix letflow.check.test occasionally surfaces
+  a failure in Letflow.Scheduler.PollerTest (REQ-218 AC3,
+  retention-sweep-still-runs-after-its-own-poll_and_fire-was-rejected
+  assertion). Isolated re-runs of the file alone (3x) passed 19/19
+  every time, 0 failures -- this is a real, reproducible-under-load
+  flake, not a REQ-362 regression (zero lib/letflow/ files touched by
+  that diff). Root cause not yet investigated -- likely a timing/
+  global-admission-unit race exposed only under N-way parallel test
+  execution.
+affected_files:
+  - test/letflow/scheduler/poller_test.exs
+queue_ref: Q-695
+github_ref: GH-1456
+status: open

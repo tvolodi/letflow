@@ -8,8 +8,8 @@
   "file": "handoffs/WF03-ISS0699-20260917/step-04b-test-design-validator-rework1.json",
   "created_at": "2026-09-16T23:10:17Z",
   "started_at": "2026-09-16T23:10:17Z",
-  "completed_at": null,
-  "status": "PENDING",
+  "completed_at": "2026-09-17T04:20:00Z",
+  "status": "COMPLETED",
   "priority": "NORMAL",
   "context": {
     "stage": null,
@@ -34,19 +34,21 @@
     ]
   },
   "result": {
-    "status": "PENDING",
-    "summary": "",
-    "artifacts_out": [],
+    "status": "PASS",
+    "summary": "Independently reproduced, not trusted from the report. (1) `mix test test/mix/tasks/letflow_check_test_test.exs` on current branch: 'Finished in 3.5 seconds (0.00s async, 3.5s sync)\\nResult: 17 passed' -- 17/17, matches claim. (2) Built my own pre-rework-1 scratch copy via `git show 0b02f6d9:lib/mix/tasks/letflow.check.test.ex > lib/mix/tasks/letflow.check.test.ex` (0b02f6d9 = the commit immediately preceding ISS-0699's tmp_dir-cleanup fix ffc7bd1c), reran the same suite: 'Finished in 3.3 seconds (0.00s async, 3.3s sync)\\nResult: 15/17 passed'. The 2 failures were exactly the 2 new tests: '1) ... the partition-log directory is removed after a clean run's own successful read ... Expected false or nil, got true / code: refute File.exists?(log_dir)' and '2) ... TEST_PARALLEL_KEEP_LOGS=1 set on run_main_suite/0's own bash invocation reaches the subprocess's own environment ... (Mix.Error) mix letflow.check.test: FAILED -- scripts/test_parallel.sh exited 1 before ever printing its partition-log-directory line'. Both failures are for the right reason (no env passthrough, no cleanup) -- matches TEST-DESIGNER's fail-then-pass claim exactly. Restored via `git checkout -- lib/mix/tasks/letflow.check.test.ex`; confirmed `git status --porcelain` empty and `diff` against a pre-edit backup copy showed the restored file byte-identical. Mechanism check: install_env_var_aware_fake_bash/2 (test/mix/tasks/letflow_check_test_test.exs lines 747-807) branches its own behavior on `[ -n \"${TEST_PARALLEL_KEEP_LOGS:-}\" ]` (POSIX) / `if defined TEST_PARALLEL_KEEP_LOGS` (Windows .bat) evaluated INSIDE the fake subprocess's own environment -- it cannot pass unless Erlang's Port.open :env option genuinely delivered the var across the process boundary; my own pre-fix reproduction above independently confirms this, since removing the :env passthrough code made exactly this test fail with the fake bash's 'unset' branch (exit 1, no log-dir line) rather than a hand-simulated stand-in that would pass regardless. test/scripts/test_parallel_tmpdir_cleanup_test.sh (iteration 0): `git log` shows its only commit is ec312700 (unchanged since, `git diff HEAD` empty); ran it directly: 'PASS: clean exit, KEEP_LOGS unset -> tmp_dir removed' / 'PASS: clean exit, KEEP_LOGS set -> tmp_dir preserved' / 'PASS: failing exit, KEEP_LOGS unset -> tmp_dir preserved' / 'PASS: failing exit, KEEP_LOGS set -> tmp_dir preserved' / 'test_parallel_tmpdir_cleanup_test: 4 passed, 0 failed', exit code 0 -- untouched and still passing. Working tree confirmed clean throughout (git status --porcelain empty both before and after the scratch-copy swap).",
+    "artifacts_out": [
+      "handoffs/WF03-ISS0699-20260917/step-04b-test-design-validator-rework1.json"
+    ],
     "issues": [],
     "git_evidence": {
-      "branch_name": null,
+      "branch_name": "feature/WF03-ISS0699-20260917",
       "commit_sha_list": [],
-      "remote_branch": null,
-      "push_status": "skipped",
+      "remote_branch": "origin/feature/WF03-ISS0699-20260917",
+      "push_status": "pending",
       "pr_url": null,
       "pr_create_error": null
     },
-    "next_action": ""
+    "next_action": "Route to TEST-RUNNER (rework iteration 1)"
   },
   "rework_count": 0,
   "max_rework": 3

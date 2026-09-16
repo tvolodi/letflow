@@ -3880,8 +3880,18 @@ volumes:
     path: docs/status/requirement_status.v18.yaml
     status: current
     opened: 2026-09-15
-    entries: 3
+    entries: 4
     note: >
+      Incremented to 4 by WF02-REQ358-20260916 (DOC-UPDATER)'s own REQ-358
+      done-event append (Step 6) -- `grep -c "^  - req:"
+      docs/status/requirement_status.v18.yaml` = 4 on-disk entries, no
+      rebase conflict on this file. 251 lines / 14263 bytes, well under the
+      1200-line/120000-byte roll ceiling, so no roll triggered.
+
+      Incremented to 3 by ORCH's own REQ-358 started-event append (Step 00,
+      WF02-REQ358-20260916) -- `grep -c "^  - req:"
+      docs/status/requirement_status.v18.yaml` = 3 on-disk entries.
+
       Incremented to 2 by ORCH's own SCOPE-CHANGE (ISS-0676) done-event
       append, composed here during fix/ISS-0676-20260915's Step Final
       rebase after volume 17 rolled from under it -- `grep -c "^  - req:"

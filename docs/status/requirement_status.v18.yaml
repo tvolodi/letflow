@@ -226,3 +226,26 @@ history:
       explicit environment target. Branch feature/WF02-REQ358-20260916
       created from main at ab731b76 and pushed. run_id
       WF02-REQ358-20260916.
+
+  - req: REQ-358
+    event: done
+    agent: DOC-UPDATER
+    at: 2026-09-16T10:14:35Z
+    note: >
+      Extended the UAT scenario YAML schema with a `scope` field (platform vs.
+      open tenant-vertical identifier) and step-level `when:` branching
+      (eq/in/else conditions keyed on runtime-observable facts, e.g. role),
+      extended UAT-RUNNER/WF-05 with an explicit environment target
+      (base URL + named credential source), and added a schema-validation
+      mix task (lib/mix/tasks/letflow.check_uat_scenario_schema.ex).
+      RELEASE-VALIDATOR PASSed (handoffs/WF02-REQ358-20260916/
+      step-05-release-validation.json) -- all acceptance criteria satisfied.
+      Two fast-follow gaps logged, neither attributable to REQ-358 itself:
+      QA lacks Meridian/tenant fixture data, and no browser-automation tool
+      exists in the pipeline yet. Both already recorded in Step 5's own
+      handoff; no separate tracking mechanism invented for them here.
+      README.md checked -- no mention of UAT-RUNNER, the scenario schema, or
+      an ASCII state diagram touching this behavior anywhere in it, so no
+      README change made. No docs/migration/stage-N-*.md or
+      docs/migration/decisions/*.md file was named in REQ-358's acceptance
+      criteria, so that check is N/A for this requirement.

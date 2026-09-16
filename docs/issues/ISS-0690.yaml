@@ -1,0 +1,30 @@
+id: ISS-0690
+title: QA lacks BilimBaga tenant/solution-pack/candidate seed data needed for real bilimbaga-scope UAT scenarios
+discovered_by: ELIXIR-DEV
+discovered_in_run: WF02-REQ359-20260916
+discovered_at: "2026-09-16T10:45:57Z"
+severity: MINOR
+description: >
+  Discovered during WF02-REQ359-20260916 (REQ-359, BA agent role requirement)
+  executing its AC5 real-execution requirement: authored a real BilimBaga UAT
+  scenario (test/fixtures/uat/scenarios/bilimbaga/candidate-timed-exam-autograde.yaml)
+  and dispatched it for real via UAT-RUNNER against the live QA environment
+  (https://qa.bizdala.com), using a real PLATFORM_ADMIN Keycloak token.
+  GET /api/v1/tenants returns exactly one tenant (Default Tenant/bpm-default) --
+  no BilimBaga tenant exists. GET /api/v1/identity/users?search=bilimbaga and
+  ?search=candidate both return count: 0. GET /api/v1/definitions and
+  ?search=exam return zero process definitions installed.
+  ai-dala-infra/scripts/qa-login.sh only has 4 fixed seeded usernames
+  (admin/designer/operator/worker), none a candidate identity. This is the
+  same class of gap already recorded in REQ-358's own UAT report for the
+  Meridian tenant fixture. Verified independently twice (once by ELIXIR-DEV,
+  once again by a fresh UAT-RUNNER dispatch) with full quoted evidence --
+  both runs recorded the real BLOCKED/FAIL verdict honestly rather than
+  fabricating a pass.
+affected_files:
+  - test/fixtures/uat/scenarios/bilimbaga/candidate-timed-exam-autograde.yaml
+  - test/uat-reports/uat-2026-09-16-WF02-REQ359-20260916.yaml
+  - test/uat-reports/ba-signoff-bilimbaga-WF02-REQ359-20260916.yaml
+queue_ref: Q-690
+github_ref: GH-1445
+status: open

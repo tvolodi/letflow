@@ -436,3 +436,50 @@ history:
       unconditional auto-fail, dual-tracked issue filing on detected
       difference, explicit-justification re-baseline action. Routing to
       CODE-DESIGNER next.
+
+  - req: REQ-362
+    event: done
+    agent: DOC-UPDATER
+    at: 2026-09-16T12:50:55Z
+    note: >
+      Two-phase visual regression testing (phase 1 AI-agent-accepted
+      screenshot baselines, phase 2 mechanical Playwright pixel-diff,
+      unconditional auto-fail, dual-tracked issue filing, explicit-
+      justification re-baseline) shipped end to end. CODE-DESIGNER's
+      design PASSed CODE-DESIGN-VALIDATOR on first attempt. ELIXIR-DEV
+      implemented it and exercised all four "must happen for real"
+      acceptance criteria for real: a real baseline accepted from a real
+      UAT run, a real pixel-diff pass against an unchanged screen and a
+      real pixel-diff fail against a deliberately altered screen, a real
+      dual-tracked issue filed on the detected diff (ISS-0691, GH#1446)
+      and closed, and a real re-baseline exercised with its justification
+      recorded. SECURITY-REVIEWER PASSed (commit d7248b81) -- out of
+      scope, no tenant-data path touched -- filing one non-blocking
+      finding, ISS-0692 (future PII-in-git-history risk if this tooling
+      is later pointed at a real authenticated screen). REVIEWER PASSed
+      (commit e0a2690d), independently re-running the spec and confirming
+      GH#1446 live. TEST-DESIGNER found and fixed a real CI-fixture-
+      mutation defect in the original real-exercise spec (tagged
+      `@manual`, since it mutated shared fixtures unsafely for CI), adding
+      a disposable-fixture formal suite plus 18 unit tests in its place.
+      TEST-DESIGN-VALIDATOR PASSed, running the formal suite twice and
+      confirming zero fixture drift -- the load-bearing evidence for this
+      requirement's test coverage -- and flagged one unrelated gap,
+      ISS-0694 (pre-existing 'certificate' entity-type test gap).
+      TEST-RUNNER PASSed: backend 4324/4324, frontend statics clean,
+      REQ-362's own tests 6/6 e2e plus 18/18 unit. RELEASE-VALIDATOR
+      independently re-verified all six acceptance criteria from a cold
+      read and re-ran the full suite itself, PASSing, and flagged two
+      unrelated flakes as separate backlog items: ISS-0695
+      (Scheduler.PollerTest flake) and ISS-0696 (frontend vitest
+      worker-distribution flake). None of ISS-0692/ISS-0694/ISS-0695/
+      ISS-0696 block this requirement; all filed as separate issues.
+      docs/agents/AGENT_SYSTEM.md's artifact-locations table already
+      carries the visual-baselines row (test/fixtures/uat/visual-
+      baselines/, owner UAT-RUNNER) added during CODE-DESIGNER's Step 1,
+      confirmed present and accurate here, not re-added. README.md
+      checked -- REQ-362 does not alter any documented current behavior
+      surfaced there (no ASCII state diagram or "Running it" section
+      touches UAT visual regression), so no README change made. No
+      docs/migration/stage-N-*.md or docs/migration/decisions/*.md file
+      was named in REQ-362's acceptance criteria, so that check is N/A.

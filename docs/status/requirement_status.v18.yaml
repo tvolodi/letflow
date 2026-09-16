@@ -249,3 +249,98 @@ history:
       README change made. No docs/migration/stage-N-*.md or
       docs/migration/decisions/*.md file was named in REQ-358's acceptance
       criteria, so that check is N/A for this requirement.
+
+  - req: REQ-363
+    event: started
+    agent: ORCH
+    at: 2026-09-16T10:28:14Z
+    note: >
+      Claimed letflow-queue task 686 (GH#1438, agent_id
+      orch-session-issueloop, depends_on [REQ-041], already done). Step
+      00 git setup: pulled main (which now carries REQ-358's own merge
+      plus a proper WF-01 registration of REQ-363..366), branched
+      feature/WF02-REQ363-20260916, pushed. SELF-CORRECTION: an earlier
+      attempt this run backfilled a docs/requirements.yaml stub for
+      REQ-363 from get_next_task's own returned description/
+      acceptance_criteria (terse, incomplete), and CODE-DESIGNER
+      produced a design doc against that stub before the real WF-01
+      registration (commit 2027f295, REQ-363..366's full scoping) had
+      landed on main. That branch was deleted (never merged) once the
+      rebase conflict surfaced the real, richer requirement text --
+      depends_on [REQ-041] (not []), a screen_id/route-identifier field
+      the stub never had, process_definition_id as a real FK (the stub
+      used a bare UUID mirroring ProcessDefinition's own no-FK
+      convention), and sanitization stated as THIS requirement's own
+      scope (not deferred). A real discrepancy also surfaced worth
+      flagging to CODE-DESIGNER for this rework: the official
+      requirement text states confirmed_for_definition_version should
+      be an integer "matching Letflow.Definitions.ProcessDefinition.version",
+      but CODE-DESIGN-VALIDATOR's prior (now-superseded) review directly
+      verified process_definition.ex's real version column is :string,
+      not an integer -- this needs resolving explicitly (design must
+      state which is correct and why), not silently picked. Starting a
+      genuine CODE-DESIGNER pass against the real requirement text next.
+
+  - req: REQ-363
+    event: done
+    agent: ORCH
+    at: 2026-09-16T10:35:01Z
+    note: >
+      REQ-363 (queue task 686, GH#1438) design complete against the
+      real WF-01-registered requirement text: CODE-DESIGNER produced
+      lib/letflow/design/req363-help-content-data-model.md (commit
+      db552779) covering the tenant-scoped help_content table
+      (screen_id, nullable process_definition_id with an
+      application-level-not-DB-FK validation per process_definitions'
+      own established no-cross-schema-FK convention, title, body,
+      status draft|live only, confirmed_at, confirmed_for_definition_version,
+      media reserved jsonb, created_by, timestamps -- tenant-scoped via
+      prefix mirroring process_definitions' real migration/schema
+      convention), draft/live lifecycle reasoning quoting the
+      requirement's own Why section, the platform-vs-tenant split
+      (a separate platform_help_content global-schema table, reasoned
+      explicitly against REQ-358's own scope-field precedent since
+      help_content has real per-tenant schema isolation a shared-table-
+      plus-flag would violate), and write-path sanitization as this
+      requirement's own scope (raw HTML/script/event-handler-attributes
+      named explicitly as rejected shapes).
+
+      Resolved the confirmed_for_definition_version integer/string
+      discrepancy explicitly rather than silently: the requirement text
+      says integer "matching Letflow.Definitions.ProcessDefinition.version",
+      but process_definition.ex:88 and its migration both show version
+      is genuinely :string -- designed confirmed_for_definition_version
+      as :string to actually match the real column (an :integer column
+      cannot diff against a :string column with no numeric-format
+      constraint), flagged as OQ-3 for REVIEWER sign-off rather than
+      unilaterally deciding.
+
+      CODE-DESIGN-VALIDATOR PASSed on the first attempt against the
+      real requirement text: independently re-verified the version-type
+      claim at the cited file/line, confirmed screen_id and the
+      FK-semantics discussion are genuinely present (unlike the
+      discarded first attempt's stub), confirmed zero smuggled
+      implementation code (one fenced block, pure schema field
+      declarations, no function bodies), confirmed all real acceptance
+      criteria map to concrete design elements, confirmed the
+      platform-vs-tenant reasoning against REQ-358's actual design doc.
+
+      This requirement's own scope is design-only (its own acceptance
+      criteria: CODE-DESIGN-VALIDATOR PASS gates REQ-364, which
+      implements the actual migration/schema/sanitization) -- no
+      ELIXIR-DEV/SECURITY-REVIEWER/REVIEWER/TEST-* steps needed here,
+      though REVIEWER sign-off on OQ-3/OQ-4 is expected at REQ-364's own
+      Step 2d. Flipped docs/requirements.yaml's REQ-363 status
+      in_progress -> done. letflow-queue task 686 to be released
+      status: done.
+
+      SELF-CORRECTION RECORD: this run required a full restart after an
+      earlier attempt backfilled requirements.yaml from an incomplete
+      queue-API summary before the real WF-01 registration had landed
+      -- see this volume's REQ-363 started-event entry above for the
+      full account. Also: a concurrent CODE-DESIGN-VALIDATOR subagent
+      working this same requirement in this same shared (non-worktree)
+      checkout directory collided with unrelated REQ-362 Step-00 work
+      being done in parallel by ORCH, silently discarding REQ-362's
+      first uncommitted attempt -- redone cleanly afterward, see
+      REQ-362's own started-event entry.

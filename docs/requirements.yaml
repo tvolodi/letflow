@@ -26450,7 +26450,7 @@ requirements:
     title: In-app help content — data model (help_content table, draft/live lifecycle, confirmed_at staleness stamp, process-version linkage), tenant-schema-scoped
     owner: CODE-DESIGNER
     impl_order: 686  # letflow-queue task id, GH#1438
-    status: pending
+    status: done
     stage: S7
     description: >
       Origin: a separate design discussion (not UAT-related) about surfacing

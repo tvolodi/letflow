@@ -640,3 +640,56 @@ history:
       docs/issues/ISS-0698.yaml, status: open), was registered during
       this same run's verification but is unrelated to this closure --
       not resolved here, left for separate follow-up.
+
+  - req: SCOPE-CHANGE
+    event: done
+    agent: ORCH
+    at: 2026-09-16T21:09:32Z
+    note: >
+      ISS-0698 (queue task 698, GH#1465, docs/issues/ISS-0698.yaml)
+      resolved via full WF-03 (run WF03-ISS0698-20260917), merged as PR
+      #1467 (merge commit be52b40a). Root cause: recurrence of ISS-0219's
+      connection-burst class -- scripts/test_parallel.sh's Step 2 used to
+      launch all N partitions' ecto.create+ecto.migrate simultaneously
+      with no concurrency cap, transiently exceeding Postgres
+      max_connections (12/16 partitions crashed with Postgrex FATAL 53300
+      too_many_connections; ISS-0219's own doc-only fix never prevented
+      recurrence because `mix letflow.check.test` never sets
+      TEST_PARALLEL_N, so N auto-derives to nproc unconditionally). Fixed
+      by adding a new Step 1.7 (concurrency-capped ecto.create+ecto.migrate
+      per partition via a `wait -n -p` PID-to-partition semaphore, new env
+      var TEST_PARALLEL_MAX_CONCURRENT_CREATES default 4) and converting
+      mix.exs's `test:` alias to a function (test_alias/1, direct
+      Mix.Task.run/2 calls) that skips ecto.create/migrate when
+      LETFLOW_SKIP_ECTO_SETUP=1 is set by Step 2's partition launch --
+      decoupling the two pool lifecycles per partition that were
+      previously overlapping at launch instant. Fix design went through 2
+      CODE-DESIGN-VALIDATOR rework rounds (wait -n failure-attribution
+      gap; then ELIXIR-DEV found the design's original mix.exs mechanism
+      -- a function alias RETURNING a task-string list -- silently
+      discards its return value in this repo's Mix version, corrected to
+      direct Mix.Task.run/2 calls after live verification). Regression
+      test added: test/scripts/test_parallel_create_burst_test.sh, a real
+      Docker/Postgres integration test; fail-then-pass verified via a full
+      pre-fix worktree checkout (commit 8403e8e8: only 1/8 forced
+      partitions succeeded, real 53300 errors logged) vs. post-fix (all
+      8/8 succeeded, 1008/1008 tests passed, no 53300 anywhere).
+      TEST-RUNNER's own check additionally found ISS-0698's fix had broken
+      an unrelated pre-existing test (test/scripts/test_parallel_pool_sizing_test.sh,
+      the ISS-0287 precedent) via marker-extraction over-capture (the new
+      Step 1.7 relocated `tmp_dir=$(mktemp -d ...)` into the range that
+      test's awk extraction spans) -- fixed in-run by re-scoping the
+      extraction's end marker, independently re-validated (5/5 cases
+      passing). SECURITY-REVIEWER PASS (out of scope, no tenant-data
+      path). REVIEWER PASS (idiom/scope/decision-record-0009/ISS-0219-AC4
+      consistency all clean). docs/issues/ISS-0698.yaml set to status:
+      resolved/resolved_in_run/resolved_at by ISSUE-FIXER. GH#1465 closed
+      with an evidence comment. letflow-queue task 698 released status:
+      done. Note on process: this run hit repeated async-subagent stalls
+      during Step 4 (TEST-DESIGNER's background Docker verification
+      wasn't resuming reliably) -- ORCH took over Step 4's verification
+      directly (real Docker container, real pre-fix/post-fix comparison)
+      per an explicit course-correction from the launching session, with
+      the original TEST-DESIGNER subagent standing down cleanly after a
+      genuine sibling-collision check confirmed no duplicated/contradictory
+      work landed.

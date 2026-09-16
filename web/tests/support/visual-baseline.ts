@@ -29,7 +29,34 @@ import { fileURLToPath } from 'url'
 const THIS_DIR = path.dirname(fileURLToPath(import.meta.url))
 /** repo root, resolved from this file's location (web/tests/support/) */
 const REPO_ROOT = path.resolve(THIS_DIR, '..', '..', '..')
-const BASELINE_ROOT = path.join(REPO_ROOT, 'test', 'fixtures', 'uat', 'visual-baselines')
+const DEFAULT_BASELINE_ROOT = path.join(REPO_ROOT, 'test', 'fixtures', 'uat', 'visual-baselines')
+
+/**
+ * `test/fixtures/uat/visual-baselines/` is committed, durable fixture data
+ * (design §1.3) — a real accept/re-baseline there is meant to persist across
+ * runs. A formal regression-test suite that calls `acceptBaseline`/
+ * `rebaseline` on every CI invocation must NOT write through to that real
+ * tree, or every run would rewrite committed PNGs/sidecar timestamps and
+ * leave the working tree permanently dirty (found during REQ-362 TEST-DESIGNER
+ * review, WF02-REQ362-20260916 — the original real-exercise spec did exactly
+ * this against its own real evidence directory, which is fine for the
+ * one-time manual proof run it was, but not for an every-CI-run formal
+ * suite). `__setBaselineRootForTests` is a test-only escape hatch — mutable
+ * module state read lazily by every path/exists/accept/rebaseline call below,
+ * never called by production code (UAT-RUNNER at runtime always uses the
+ * default). Test code must call `__resetBaselineRootForTests()` (or
+ * re-invoke this with the default) once done, since the override is
+ * process/module-global for the life of the test worker.
+ */
+let BASELINE_ROOT = DEFAULT_BASELINE_ROOT
+
+export function __setBaselineRootForTests(root: string): void {
+  BASELINE_ROOT = root
+}
+
+export function __resetBaselineRootForTests(): void {
+  BASELINE_ROOT = DEFAULT_BASELINE_ROOT
+}
 
 export interface BaselineKey {
   companyId: string

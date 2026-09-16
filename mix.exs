@@ -61,7 +61,7 @@ defmodule Letflow.MixProject do
       # stream_data's own `only: :test` entry, not wasmex/lua's unconditional
       # runtime-engine entries. Flagged for REVIEWER sign-off per REQ-205's AC7,
       # same procedural precedent as REQ-148/REQ-165's own new top-level deps.
-      {:yaml_elixir, "~> 2.11", only: :test},
+      {:yaml_elixir, "~> 2.11", only: [:dev, :test]},
       {:ueberauth_oidcc, "~> 0.4"},
       {:lua, "~> 1.0"},
       {:wasmex, "~> 0.15.1"},

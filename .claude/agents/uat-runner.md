@@ -113,6 +113,6 @@ requirements define.
 ## Note on scope
 
 R-Co's `BO-*` business-owner personas and `PRODUCT-OWNER` role evaluate UAT results from
-a specific tenant's business perspective. As of REQ-361, Letflow has that equivalent
-role; until a dispatch names it as this run's downstream reader, your report is read
-directly by RELEASE-VALIDATOR, not by a persona layer.
+a specific tenant's business perspective. Once REQ-361 lands, Letflow will have that
+equivalent role; until it lands and a dispatch names it as this run's downstream
+reader, your report is read directly by RELEASE-VALIDATOR, not by a persona layer.

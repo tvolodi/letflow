@@ -83,7 +83,7 @@ to validate against. In practice this does not become live until S7
 R-Co's `BO-SWIFTROUTE`/`BO-VORTEX`/`BO-MERIDIAN`/`PRODUCT-OWNER` roles evaluate UAT
 results from a specific tenant's business perspective. Letflow has no tenant business
 scenario corpus yet — this workflow runs without persona-based sign-off until S7
-actually defines one, per `docs/migration/decisions/0004-humanless-pipeline.md`. As of
-REQ-361, this workflow runs with that persona-equivalent gate once a run's dispatch
-names it as this run's downstream reader; until named, RELEASE-VALIDATOR's own check
-(WF-04 Step 2) remains the closest equivalent gate.
+actually defines one, per `docs/migration/decisions/0004-humanless-pipeline.md`. Once
+REQ-361 lands, this workflow will run with that persona-equivalent gate once a run's
+dispatch names it as this run's downstream reader; until it lands and is named,
+RELEASE-VALIDATOR's own check (WF-04 Step 2) remains the closest equivalent gate.

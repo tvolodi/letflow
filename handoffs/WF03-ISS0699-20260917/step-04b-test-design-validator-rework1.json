@@ -1,0 +1,53 @@
+{
+  "handoff_id": "b6f3a1d2-000e-4a00-9c00-wf03iss0699013",
+  "run_id": "WF03-ISS0699-20260917",
+  "workflow_id": "WF-03",
+  "step": "04b-rework1",
+  "from_agent": "ORCH",
+  "to_agent": "TEST-DESIGN-VALIDATOR",
+  "file": "handoffs/WF03-ISS0699-20260917/step-04b-test-design-validator-rework1.json",
+  "created_at": "2026-09-16T23:10:17Z",
+  "started_at": "2026-09-16T23:10:17Z",
+  "completed_at": null,
+  "status": "PENDING",
+  "priority": "NORMAL",
+  "context": {
+    "stage": null,
+    "requirement_ids": [],
+    "requirement_text": {},
+    "source_text": {},
+    "related_handoff_ids": [],
+    "artifacts_in": [
+      "test/mix/tasks/letflow_check_test_test.exs",
+      "lib/mix/tasks/letflow.check.test.ex",
+      "handoffs/WF03-ISS0699-20260917/step-04-test-designer-rework1.json"
+    ],
+    "owned_modules": ["lib/mix/tasks/letflow.check.test.ex"]
+  },
+  "task": {
+    "description": "WF-03 Step 4b REWORK ITERATION 1 REGATE -- hard gate on TEST-DESIGNER's new regression tests for the check.test.ex fix. On branch feature/WF03-ISS0699-20260917. TEST-DESIGNER added two new tests to test/mix/tasks/letflow_check_test_test.exs (an env-var-passthrough test and a log-dir-cleanup-after-clean-run test) plus an install_env_var_aware_fake_bash/2 helper, and reported a fail-then-pass proof (15/17 passing with 2 new failures against a pre-rework-1 scratch copy of lib/mix/tasks/letflow.check.test.ex, 17/17 against current). Independently read the new tests yourself and INDEPENDENTLY REPRODUCE the fail-then-pass claim -- do not accept the report without reproducing it: (1) run `mix test test/mix/tasks/letflow_check_test_test.exs` against the current branch (should be 17/17 passing), (2) construct your own pre-rework-1 scratch copy (e.g. `git show 0b02f6d9:lib/mix/tasks/letflow.check.test.ex` swapped in temporarily, restored afterward -- verify with git status --porcelain that you left the tree clean) and confirm the same 2 tests FAIL there. Verify the fake-bash helper genuinely tests the Port.open :env passthrough mechanism (not a hand-simulated stand-in that could pass regardless of whether the real env var reaches the subprocess). Claim by flipping status to IN_PROGRESS on receipt, and set it to COMPLETED/FAILED as normal when you finish.",
+    "acceptance_criteria": [
+      "PASS only if you independently reproduced the fail-then-pass result yourself (quote your own run output)",
+      "PASS only if the fake-bash mechanism genuinely tests the real :env passthrough, not a mechanism that would pass even if the passthrough were broken",
+      "PASS only if you verified test/scripts/test_parallel_tmpdir_cleanup_test.sh (iteration 0) is untouched and still passes",
+      "PASS only if the working tree is confirmed clean (git status --porcelain empty) after your own scratch-copy verification"
+    ]
+  },
+  "result": {
+    "status": "PENDING",
+    "summary": "",
+    "artifacts_out": [],
+    "issues": [],
+    "git_evidence": {
+      "branch_name": null,
+      "commit_sha_list": [],
+      "remote_branch": null,
+      "push_status": "skipped",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": ""
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

@@ -284,7 +284,19 @@ defmodule Letflow.Scheduler.Poller do
   # `Enum.each`.
   @spec with_admission(String.t(), atom(), (-> any())) :: :ok
   defp with_admission(schema_name, op, fun) when is_function(fun, 0) do
-    case Admission.try_acquire(:global) do
+    admission_result = Admission.try_acquire(:global)
+
+    :telemetry.execute(
+      [:letflow, :scheduler, :admission_decision],
+      %{},
+      %{
+        schema: schema_name,
+        op: op,
+        result: if(match?({:ok, _}, admission_result), do: :granted, else: :rejected)
+      }
+    )
+
+    case admission_result do
       {:ok, ref} ->
         try do
           fun.()

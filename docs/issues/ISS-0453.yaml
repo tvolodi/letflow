@@ -111,3 +111,21 @@ data_point_20260907: >
   mechanism class as this issue's own filing, structurally cleared on
   that basis rather than blocking the merge. Recorded as a fresh data
   point rather than a new issue.
+
+resolved_occurrence_20260916: >
+  The specific occurrence this data_point_20260907 addendum describes --
+  the ac3b_attempt/ac3b_reduce ("retention sweep still runs after its own
+  poll_and_fire was rejected") mechanism -- was resolved by ISS-0695
+  (WF03-ISS0695-20260916): the Process.sleep(5)/filler-schema/10-attempt-
+  retry race in that specific test was replaced with a deterministic
+  telemetry-signaled release, eliminating that occurrence's race entirely.
+  This does NOT close ISS-0453 as a whole: this record's PRIMARY subject
+  (the antagonist-loop test at poller_test.exs:~575-648, "an antagonist
+  contending for the sole global unit produces a genuine partial skip") is
+  a genuinely different mechanism -- observing a many-way concurrent
+  interleaving, not a single release-vs-one-later-admission-attempt
+  ordering -- and is untouched by ISS-0695's fix. status stays `open`,
+  fix_direction (a)/(c)/(d) still apply to the antagonist-loop test.
+  Per lib/letflow/design/iss0695-poller-ac3b-telemetry-sync-fix.md's
+  "Disposition of ISS-0453.yaml" section, correcting ISSUE-FIXER's Step 1
+  recommendation to close this record entirely.

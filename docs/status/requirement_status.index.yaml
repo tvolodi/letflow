@@ -3880,8 +3880,19 @@ volumes:
     path: docs/status/requirement_status.v18.yaml
     status: current
     opened: 2026-09-15
-    entries: 10
+    entries: 11
     note: >
+      Recounted to 11 by WF03-ISS0695-20260916's Step 4 (TEST-RUNNER), which
+      found assertion A9 failing on a fresh `mix letflow.check.test` baseline:
+      commit e8ab8e0e (chore(WF03-ISS0694): append run-history done event)
+      appended its done-event to docs/status/requirement_status.v18.yaml but
+      never touched this index file, leaving `entries:` stale at 10 against
+      `grep -c "^  - req:" docs/status/requirement_status.v18.yaml` = 11
+      on-disk entries -- unrelated to ISS-0695 itself, fixed here only to
+      unblock a clean full-suite baseline before the 10-run non-flakiness
+      check. 530 lines / 31014 bytes, well under the roll ceiling, no roll
+      triggered.
+
       Recounted to 10 during WF02-REQ362-20260916's Step Final rebase,
       second conflict (Step 6's done-event replay): composed this run's
       own REQ-362 done-event (originally appended against a stale

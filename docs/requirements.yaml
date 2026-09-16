@@ -26150,3 +26150,298 @@ requirements:
     depends_on:
       - REQ-352
       - REQ-355
+
+  - id: REQ-358
+    title: Extend the UAT scenario schema and UAT-RUNNER with a scope field, conditional branching, and an environment target — precondition work for REQ-359..362
+    owner: TEST-DESIGNER
+    # impl_order: UNREGISTERED -- drafted directly in a working session, not yet run through letflow-queue registration; register before implementation begins
+    status: pending
+    stage: S7
+    description: >
+      DECISION BEING REVISITED, NAMED EXPLICITLY PER CORE-DIRECTIVES' "don't
+      silently re-decide a settled decision" rule. Decision 0004
+      ("What is explicitly NOT reproduced") deferred R-Co's BO-*/PRODUCT-OWNER
+      persona layer "to when S7 actually starts and there is a concrete
+      scenario corpus to validate against." .claude/agents/uat-runner.md's own
+      "Note on scope" restates the same condition. REQ-210 (S7's closing
+      requirement, done) confirmed both preconditions are now met: S7 is done,
+      and a real scenario corpus exists (11 tenant scenarios across 3
+      companies, 18 platform scenarios, test/fixtures/uat/scenarios/). This
+      requirement and REQ-359..362 are the deferred work whose trigger
+      condition has now fired — not a reopening of the decision's reasoning,
+      which remains correct as stated for the period before this precondition
+      held. REVIEWER should confirm this reading before this requirement's
+      dependents proceed rather than treat it as implicitly pre-approved.
+      .
+      WHY THIS REQUIREMENT IS SEPARATE FROM REQ-359/360. Both the new BA-role
+      requirement (REQ-359) and the PRODUCT-OWNER-port requirement (REQ-361)
+      need scenario files that can express conditional branching (e.g. "if
+      role=PLATFORM_ADMIN assert dashboard A, elif role=<tenant-role> assert
+      dashboard B, else assert login form") and need UAT-RUNNER able to target
+      a specific environment (base URL + credential source) rather than "a
+      real running instance" left generic. Neither of those two role/agent
+      requirements should each re-derive this schema/runner change
+      independently — it is shared, load-bearing infrastructure for both, so
+      it is its own requirement, sized and landed first.
+      .
+      SCOPE.
+      1. Extend the UAT scenario YAML schema (the format
+      test/fixtures/uat/scenarios/**/*.yaml already uses) with: (a) a `scope`
+      field distinguishing `platform` from a tenant-vertical identifier (adapt
+      R-Co's uat-scenario-schema-v1.1-addendum.md's `company_id` field and its
+      documented classification rule — "if a business user... would notice
+      the behaviour, the scenario keeps its [tenant] scope... use `platform`
+      only when the actor is the platform operator or the platform itself" —
+      to Letflow's own tenant model, which has no fixed set of named tenant
+      companies the way R-Co's SwiftRoute/Vortex/Meridian did; the field's
+      value should be an open tenant-vertical/solution-pack identifier, not a
+      closed enum of three); (b) a branching construct at the step level (a
+      `when:`/condition key gating which of several named sub-paths of
+      steps/expected_outcomes apply, keyed on a runtime-observable fact such
+      as the authenticated user's role) sufficient to express the
+      login-routing example above without inventing a general-purpose
+      scripting language — keep the construct as narrow as the actual need,
+      per this project's own anti-over-engineering directive.
+      2. Extend UAT-RUNNER (docs/agents/workflows/WF-05_uat_run.md and
+      .claude/agents/uat-runner.md) to accept an explicit environment target:
+      a base URL (e.g. https://qa.bizdala.com) and a named credential source
+      (e.g. ai-dala-infra/scripts/qa-login.sh's seeded users) rather than
+      assuming "whatever instance is reachable." Update
+      .claude/agents/uat-runner.md's "Note on scope" section to remove the
+      now-stale "your report is read directly by RELEASE-VALIDATOR, not by a
+      persona layer" sentence and replace it with a pointer to REQ-361's
+      PRODUCT-OWNER-equivalent role once that requirement lands (do not
+      forward-reference an agent that does not exist yet as though it already
+      does — word this as "as of REQ-361" per this project's own citation
+      discipline).
+      3. Update WF-05_uat_run.md's step sequence to reflect the branching
+      evaluation and environment-target steps this adds — do not leave the
+      workflow doc silently out of sync with the runner's actual new
+      behaviour.
+      NOT IN THIS REQUIREMENT: no new agent role (REQ-359/361), no actual
+      login-routing scenario authored (REQ-360 or wherever the first
+      platform-scope scenario using this schema lands — flag as a fast-follow
+      if not otherwise covered), no visual-regression mechanism (REQ-362).
+    acceptance_criteria:
+      - "the UAT scenario schema doc (or its equivalent home under docs/agents/) documents the new `scope` field and the branching construct, each with a worked example, and the schema change is backward compatible — every existing scenario file under test/fixtures/uat/scenarios/ still parses and its existing (non-branching) behaviour is unchanged, verified by re-running UAT-RUNNER against at least one existing scenario and quoting the unchanged pass/fail disposition"
+      - "a schema-validation check (matching the existing dry-run/schema-gate pattern this project already uses elsewhere for structured YAML, e.g. mix letflow.check's requirements-registration check) rejects a malformed scope/branching scenario file with a clear error, and a passing example is quoted"
+      - "UAT-RUNNER accepts an environment target (base URL + credential source) as an explicit input rather than an implicit assumption, and this is exercised for real against a non-local environment (the QA instance) as part of this requirement's own verification, with the actual command/invocation and its real output quoted — not merely a design claim"
+      - "the branching construct is proven sufficient for the login-routing example from the Why section (role=PLATFORM_ADMIN / role=<tenant> / unauthenticated, three distinct expected outcomes) by writing that exact scenario as a throwaway validation fixture (not committed as permanent scope — REQ-360 or its successor owns the real, permanent version) and running it for real against QA, quoting the result"
+      - "WF-05_uat_run.md and uat-runner.md are both updated consistently — no stale cross-reference to the old 'no persona layer' framing remains"
+    depends_on: []
+
+  - id: REQ-359
+    title: Define a BA (business-analyst) agent role — authors dev-facing specs and UAT scenarios in business language, one persona per tenant vertical, adapting R-Co's BO-* pattern
+    owner: REQ-ANALYST
+    # impl_order: UNREGISTERED -- drafted directly in a working session, not yet run through letflow-queue registration; register before implementation begins
+    status: pending
+    stage: S7
+    description: >
+      Adapts R-Co's BO-SWIFTROUTE/BO-VORTEX/BO-MERIDIAN pattern
+      (docs/agents/BO_SWIFTROUTE.md and siblings in R-Co,
+      https://github.com/tvolodi/R-Co) to Letflow's actual tenant model.
+      R-Co's BO-* personas represented three FICTIONAL tenant companies;
+      Letflow has no fixed set of named tenant companies — it has an open set
+      of real tenants, distinguished by which solution pack (REQ-041/078's
+      Letflow.Definitions.SolutionPack mechanism, e.g. the BilimBaga pack)
+      they run. This requirement's BA role is therefore keyed on
+      TENANT-VERTICAL/SOLUTION-PACK, not on a fixed roster of company
+      personas — a new tenant vertical gets a new BA persona (or an existing
+      one is reused if the vertical is a close match), rather than the
+      roster being closed at three the way R-Co's was.
+      .
+      For PLATFORM-scope functionality (no tenant business perspective
+      applies — R-Co's own uat-scenario-schema-v1.1-addendum.md states this
+      precisely: "use platform only when the actor is the platform operator
+      or the platform itself"), REQ-ANALYST remains the author, exactly as
+      R-Co's addendum specifies for its own `company_id: platform` case — do
+      NOT invent a platform-BA persona; that would contradict the addendum's
+      own stated rationale ("no business persona owns platform workflows")
+      which applies identically here.
+      .
+      DUAL ROLE, PER R-CO'S OWN DESIGN, NOT SPLIT INTO TWO AGENTS. Each BA
+      persona both AUTHORS UAT scenarios (in its tenant-vertical's own
+      domain vocabulary, never technical/implementation language — R-Co's
+      UAT_RUNNER.md's contains_technical_leak() linter concept is the
+      enforcement precedent to adapt) and SIGNS OFF on UAT-RUNNER's execution
+      results for scenarios in its scope, writing a structured sign-off
+      artefact. R-Co deliberately kept authoring and sign-off as one role
+      rather than two, reasoning that the same domain expertise is required
+      for both; nothing in this session's discussion argues for diverging
+      from that reasoning, so it is kept.
+      .
+      Depends on REQ-358's schema/branching/environment-target extension
+      (a BA persona needs the `scope` field and branching construct to author
+      scenarios expressing role-conditional behaviour within its vertical).
+    acceptance_criteria:
+      - "a canonical BA agent role file exists (matching this project's own .claude/agents/*.md structural convention — frontmatter name:/description:, Identity, Mandatory reading, What you do, Forbidden sections, per the existing uat-runner.md/issue-fixer.md precedent) generically parameterized by tenant-vertical/solution-pack rather than hardcoding a fixed persona list — the file states explicitly how a new vertical gets a BA persona assigned"
+      - "the role file states the dual authoring+sign-off responsibility explicitly, with the sign-off artefact's format/location specified (test/uat-reports/ba-signoff-<vertical>-<run_id>.yaml or this project's equivalent existing convention — do not invent a new top-level directory without checking docs/agents/AGENT_SYSTEM.md's artifact-locations table first and updating it if a new location is genuinely needed)"
+      - "the role file states a language rule for the sign-off artefact matching R-Co's rubric (business-readable prose, no stack traces/test IDs/line numbers) with a correct and a forbidden example quoted, adapted to Letflow's domain rather than copied verbatim from R-Co's banking/logistics examples"
+      - "docs/agents/AGENT_SYSTEM.md's roster table (section 3) and capability matrix (section 3.1) gain a row for this role, and docs/migration/decisions/0004-humanless-pipeline.md gains a dated addendum noting that the BO-*-equivalent deferral has now been actioned by this requirement (append-only, per that file's own convention — do not edit its original reasoning)"
+      - "at least one real BA persona is instantiated for an actual existing tenant vertical (the BilimBaga solution pack is the obvious first candidate, per REQ-041/078) and authors one real UAT scenario for it, exercised for real via UAT-RUNNER against QA, with the result quoted — a role definition with zero real usage is not sufficient to close this requirement"
+    depends_on: [REQ-358]
+
+  - id: REQ-360
+    title: Author the platform-admin login-routing UAT scenario as the first real REQ-ANALYST-authored platform-scope scenario using REQ-358's branching construct
+    owner: REQ-ANALYST
+    # impl_order: UNREGISTERED -- drafted directly in a working session, not yet run through letflow-queue registration; register before implementation begins
+    status: pending
+    stage: S7
+    description: >
+      The concrete scenario named throughout this session's design
+      discussion: a user opens the QA login URL; if already authenticated as
+      PLATFORM_ADMIN they land on the platform dashboard; if already
+      authenticated as a tenant-scoped role they land on their tenant
+      dashboard; if unauthenticated they see the login form with its actual
+      field set. This is the canonical first platform-scope scenario using
+      REQ-358's branching construct as real, permanent scope (not the
+      throwaway validation fixture REQ-358's own acceptance criteria used to
+      prove the construct works) — it belongs here, authored by REQ-ANALYST
+      per REQ-359's platform/tenant split, not folded into REQ-358 or
+      REQ-359 themselves.
+      .
+      Authored against the real QA environment's actual routing behaviour
+      (letflow-3/web/src/auth/ProtectedRoute.tsx and AuthProvider.tsx, both
+      already read and fixed once this session — see commit fa899836 — so
+      the actual current routing logic is known, not assumed) rather than
+      an idealized description — if the real app's behaviour differs from
+      the description in this requirement's own Why-section framing (e.g. if
+      there is in fact no distinct "tenant dashboard" route yet, only a
+      single workspace root), the scenario must describe what actually
+      exists and file a finding for the gap, not paper over it.
+    acceptance_criteria:
+      - "the scenario file exists under test/fixtures/uat/scenarios/platform/ (or the location REQ-358 establishes), using the scope: platform field and the branching construct, covering all three branches named in this requirement's description"
+      - "the scenario is run for real by UAT-RUNNER against the live QA environment (using REQ-358's environment-targeting extension and the qa-login.sh/qa-login.ps1 seeded credentials) and the actual result — including screenshots per UAT-RUNNER's existing screenshot-as-primary-evidence discipline — is recorded in a real uat-reports artefact, quoted in this requirement's close-out"
+      - "if the real observed routing behaviour differs from this requirement's own description (e.g. no distinct tenant-dashboard route exists yet), the scenario documents the real behaviour and a finding is filed per docs/agents/protocols/ISSUE_QUEUE.md rather than the scenario being silently rewritten to match what was expected"
+    depends_on: [REQ-358, REQ-359]
+
+  - id: REQ-361
+    title: Define a PRODUCT-OWNER-equivalent agent role — final release sign-off reading BA sign-offs and MUST-requirement coverage, writing a plain-language release recommendation
+    owner: REQ-ANALYST
+    # impl_order: UNREGISTERED -- drafted directly in a working session, not yet run through letflow-queue registration; register before implementation begins
+    status: pending
+    stage: S7
+    description: >
+      Adapts R-Co's PRODUCT-OWNER role (docs/agents/PRODUCT_OWNER.md,
+      https://github.com/tvolodi/R-Co) largely as-is — this session's own
+      research found its rubric well-specified and directly reusable, not
+      needing redesign. Ports:
+      (1) reads every BA sign-off artefact for the run (REQ-359's format),
+      never talks to BA personas directly;
+      (2) a single BLOCKER finding from any one BA blocks the release
+      regardless of other findings — no override without documented
+      rationale;
+      (3) cross-checks that every MUST-severity acceptance criterion for the
+      stage/requirement-batch under test was actually exercised by a passing
+      scenario (not merely "code exists") — Letflow's own
+      docs/requirements.yaml acceptance_criteria entries are the MUST-set to
+      check against, adapted from R-Co's own requirement-coverage check
+      which read an equivalent structure;
+      (4) arbitrates disagreements between two BA personas on the same
+      platform-level behaviour by reading the underlying requirement and
+      ruling which expectation is correct, routing to REQ-ANALYST (a
+      dependency loop back to a REQUIREMENT-authoring role, not an
+      implementation role — mirrors R-Co's own routing) if the requirement
+      itself is ambiguous;
+      (5) writes a plain-language release recommendation
+      (release_recommendation: APPROVED | BLOCKED, release_rationale in
+      stakeholder-readable prose, explicitly forbidding stack
+      traces/test-IDs/line numbers, matching R-Co's own quoted rubric) — this
+      is the artefact the user (the project's sole human reviewer) actually
+      reads, per this session's own stated intent ("my role is to look at the
+      ultimate result").
+      .
+      RELATIONSHIP TO RELEASE-VALIDATOR, NAMED EXPLICITLY SO IT IS NOT LEFT
+      AMBIGUOUS. RELEASE-VALIDATOR already exists and independently
+      re-verifies acceptance criteria before a requirement/stage is marked
+      done — it answers "is this safe to ship" from a technical-correctness
+      angle. This new role answers R-Co's own distinct question, "should we
+      ship" — a business/coverage judgment, not a re-verification of the
+      same technical facts. The two are complementary, not redundant; this
+      requirement's role file must state the distinction explicitly (R-Co's
+      own PRODUCT_OWNER.md quality-hierarchy framing — RELEASE-VALIDATOR
+      "safe to ship?", this role "should we ship?" — is the precedent to
+      cite) so a future reader does not collapse them into one role or treat
+      this new role as replacing RELEASE-VALIDATOR's existing gate.
+      .
+      Depends on REQ-359 (needs BA sign-off artefacts to read) and REQ-358
+      (needs the scenario/environment infrastructure both ultimately sit on).
+    acceptance_criteria:
+      - "a canonical agent role file exists matching this project's .claude/agents/*.md convention, stating the read-only relationship to BA sign-offs (never invoking a BA agent directly), the single-BLOCKER-blocks-release rule, the MUST-coverage cross-check against docs/requirements.yaml, the arbitration-and-route-to-REQ-ANALYST behaviour, and the plain-language output rule with a correct/forbidden example quoted"
+      - "the role file explicitly states its relationship to RELEASE-VALIDATOR ('should we ship' vs 'is it safe to ship') so the two gates are not collapsed or treated as redundant by a future reader"
+      - "docs/agents/AGENT_SYSTEM.md's roster table and capability matrix gain a row for this role; docs/migration/decisions/0004-humanless-pipeline.md's dated addendum (added by REQ-359) is extended to note this half of the deferred BO-*/PRODUCT-OWNER layer is also now actioned"
+      - "ORCH's routing logic (docs/agents/ORCHESTRATOR.md) is updated so a UAT run's completion routes to this new role before RELEASE-VALIDATOR, not in parallel with or instead of it — the ordering from R-Co's WF-05 ('it never runs in parallel with a BO agent'; runs after all BA-equivalent sign-offs) is the precedent to follow"
+      - "this role is exercised for real at least once against a real UAT run (e.g. the one REQ-360 produces) producing a real release_recommendation artefact, quoted in this requirement's close-out — not merely a role definition with no real invocation"
+    depends_on: [REQ-358, REQ-359]
+
+  - id: REQ-362
+    title: Two-phase visual regression testing — AI-agent-accepted screenshot baselines, then mechanical pixel-diff on every later run, auto-filing a dual-tracked issue on any detected difference
+    owner: TEST-DESIGNER
+    # impl_order: UNREGISTERED -- drafted directly in a working session, not yet run through letflow-queue registration; register before implementation begins
+    status: pending
+    stage: S7
+    description: >
+      Confirmed via this session's own research that NEITHER Letflow nor
+      R-Co has any visual-regression/pixel-diff tooling today — screenshots
+      exist as UAT evidence (UAT-RUNNER's existing screenshot-as-evidence
+      discipline, .claude/agents/uat-runner.md), but comparison is always by
+      LLM-agent judgment-in-prose, never mechanical pixel comparison. This is
+      a genuine gap in both systems, not something being ported from R-Co —
+      this requirement is new design, explicitly user-directed as two
+      phases, not a single mechanism:
+      .
+      PHASE 1 (judgment, already-existing capability, not re-implemented
+      here): the first time a UAT scenario's `gui_screen`-method outcome
+      runs (or is deliberately re-baselined — see below), the executing
+      agent (UAT-RUNNER, or a BA persona reviewing UAT-RUNNER's evidence per
+      REQ-359) judges the screenshot correct in context, exactly as it does
+      today. Once accepted, that screenshot becomes the PERSISTED BASELINE
+      for that scenario+step. This requirement's only new work for phase 1
+      is the baseline-persistence mechanism (storage location, naming keyed
+      to scenario id + step + environment, and an explicit accept action
+      that writes/overwrites the baseline) — not a new judgment mechanism.
+      .
+      PHASE 2 (new, mechanical, this requirement's main scope): every
+      subsequent run of a scenario that has an accepted baseline for a given
+      screenshot step performs a PIXEL-LEVEL comparison (Playwright's own
+      built-in toHaveScreenshot()-equivalent comparison, per this project's
+      existing Playwright dependency — do not introduce a new external
+      visual-testing service/dependency without a decision record, since
+      Playwright's built-in capability already covers the stated need) of
+      the new screenshot against the persisted baseline. ANY pixel
+      difference (starting threshold: the tool's own sane default, not a
+      loosened tolerance chosen to reduce noise — tune only if real
+      operational experience shows the default is unworkably noisy, and
+      record that as a finding if it happens rather than silently loosening
+      it up front) is treated as a potential regression: the scenario step
+      AUTO-FAILS. This is a deliberate default (per explicit user direction
+      in this session) — no LLM judgment call decides whether a diff
+      "counts" before failing; the fail is unconditional and mechanical.
+      .
+      ISSUE ROUTING ON AUTO-FAIL. A phase-2 auto-fail files an issue through
+      this project's EXISTING, already-working dual-track mechanism
+      (docs/agents/protocols/ISSUE_QUEUE.md's ISS-NNNN local +
+      letflow-queue Q-N + GitHub GH-N mirroring, register_task's existing
+      best-effort auto-mirroring) — do NOT design a new issue-filing path;
+      this project already has one and it already dual-writes to GitHub and
+      the queue. The filed issue carries both the new screenshot and the
+      baseline it diverged from as attached evidence, so whoever picks up
+      the issue (through the normal agentic issue-resolution pipeline, WF-03
+      or this project's current equivalent) can judge intentional-change vs.
+      real-regression themselves — this requirement does NOT itself decide
+      that; it only detects and reports the divergence.
+      .
+      RE-BASELINING. An intentional UI change needs an explicit,
+      auditable re-accept step (not an automatic "it must be fine, update
+      the baseline" fallback) — who/what agent role performs a re-baseline
+      accept, and what evidence it must record (why the change is
+      intentional, linking back to whatever requirement caused the visual
+      change) must be specified by this requirement, not left implicit.
+    acceptance_criteria:
+      - "a baseline-image storage location and naming convention is specified and documented (e.g. under test/fixtures/uat/baselines/ or this project's chosen equivalent — checked against docs/agents/AGENT_SYSTEM.md's artifact-locations table and that table updated if new), keyed to scenario id + step + environment, distinct from any transient per-run screenshot already produced by UAT-RUNNER today"
+      - "phase 1's baseline-accept action is implemented and exercised for real at least once — a real screenshot from a real UAT run is judged and persisted as a baseline, with the actual command/artefact quoted"
+      - "phase 2's pixel-diff comparison is implemented using Playwright's existing built-in screenshot-comparison capability (not a new external dependency) and is exercised for real at least twice: once against an unchanged screen (comparison passes, no issue filed) and once against a deliberately altered screen (comparison fails, an issue is filed) — both real outcomes quoted, not asserted"
+      - "the auto-filed issue on a detected diff is confirmed to actually land in BOTH the local issue registry (ISS-NNNN) and letflow-queue (and, per the existing best-effort mirroring, GitHub) via the existing ISSUE_QUEUE.md mechanism — not a new, parallel filing path — and carries both the new and baseline screenshots as attached evidence"
+      - "a re-baseline (accept-new-as-correct) action is specified and implemented, requiring an explicit reason/justification to be recorded (not merely 'accept' with no rationale), and is exercised for real at least once with the recorded rationale quoted"
+      - "this requirement's role file/design doc states explicitly that phase-2 auto-fail is unconditional (no LLM judgment gates whether a pixel diff 'counts' before failing) and why — citing this session's explicit user direction — so a future reader does not 'improve' this into a judgment-gated soft-fail without a fresh decision"
+    depends_on: [REQ-358]

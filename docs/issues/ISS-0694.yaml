@@ -1,0 +1,25 @@
+id: ISS-0694
+title: "'certificate' entity type is missing from BILIMBAGA_ENTITY_TYPES, causing a pre-existing test failure in bilimbagaEntities.test.ts"
+discovered_by: TEST-DESIGN-VALIDATOR
+discovered_in_run: WF02-REQ362-20260916
+discovered_at: "2026-09-16T11:56:00Z"
+severity: MINOR
+description: >
+  Discovered during REQ-362's Step 3b gate, while independently
+  confirming a full npm test run: 585 passed, 1 failed. The failing
+  test is in bilimbagaEntities.test.ts and asserts membership of the
+  "certificate" entity type in BILIMBAGA_ENTITY_TYPES -- a different
+  entity/assertion than ISS-0655's original tag-related bug in the
+  same file, so it is not a duplicate of ISS-0655 despite living in
+  the same test file. REQ-355/356/357 (certificate issuance/rendering/
+  public-read projection) landed this session and appear to have
+  introduced or exposed this gap without updating
+  BILIMBAGA_ENTITY_TYPES to include the new entity type. Structurally
+  confirmed unrelated to REQ-362's own diff (file absent from that
+  requirement's git diff).
+affected_files:
+  - bilimbagaEntities.test.ts
+  - BILIMBAGA_ENTITY_TYPES (exact source file TBD by whoever picks this up)
+queue_ref: Q-694
+github_ref: GH-1454
+status: open

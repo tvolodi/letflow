@@ -1,0 +1,54 @@
+{
+  "handoff_id": "b6f3a1d2-0009-4a00-9c00-wf03iss0699008",
+  "run_id": "WF03-ISS0699-20260917",
+  "workflow_id": "WF-03",
+  "step": "04b",
+  "from_agent": "ORCH",
+  "to_agent": "TEST-DESIGN-VALIDATOR",
+  "file": "handoffs/WF03-ISS0699-20260917/step-04b-test-design-validator.json",
+  "created_at": "2026-09-16T21:25:13Z",
+  "started_at": "2026-09-16T21:25:13Z",
+  "completed_at": null,
+  "status": "PENDING",
+  "priority": "NORMAL",
+  "context": {
+    "stage": null,
+    "requirement_ids": [],
+    "requirement_text": {},
+    "source_text": {},
+    "related_handoff_ids": [],
+    "artifacts_in": [
+      "test/scripts/test_parallel_tmpdir_cleanup_test.sh",
+      "scripts/test_parallel.sh",
+      "handoffs/WF03-ISS0699-20260917/step-04-test-designer.json",
+      "docs/issues/ISS-0699.yaml"
+    ],
+    "owned_modules": ["scripts/test_parallel.sh"]
+  },
+  "task": {
+    "description": "WF-03 Step 4b -- hard gate on TEST-DESIGNER's regression test for ISS-0699. On branch feature/WF03-ISS0699-20260917. Independently read test/scripts/test_parallel_tmpdir_cleanup_test.sh yourself and INDEPENDENTLY RE-RUN it -- do not accept TEST-DESIGNER's reported fail-then-pass claim without reproducing it yourself: (1) run it against this branch's post-fix scripts/test_parallel.sh (should PASS, 4/4), (2) run it against main's pre-fix copy (git show main:scripts/test_parallel.sh > a temp file, point TEST_PARALLEL_SCRIPT at it) and confirm it FAILS there. Also verify the extraction technique genuinely pulls the real shipped cleanup_tmp_dir()/trap logic out of the actual script (per this repo's established test/scripts/ convention) rather than a hand-duplicated copy that could drift. Check ISS-0699's own 3 acceptance_criteria in docs/issues/ISS-0699.yaml each map to something this test actually exercises. Claim by setting status to IN_PROGRESS.",
+    "acceptance_criteria": [
+      "PASS only if you independently re-ran the test against BOTH pre-fix and post-fix scripts yourself and reproduced the fail-then-pass result (quote your own run output, not TEST-DESIGNER's)",
+      "PASS only if the test extracts the real script's logic rather than duplicating it by hand",
+      "PASS only if all 3 of ISS-0699's acceptance_criteria are covered",
+      "FAIL if any of the 3 disposition cases (clean-removes, clean+KEEP_LOGS-preserves, failing-preserves) is missing or unverified"
+    ]
+  },
+  "result": {
+    "status": "PENDING",
+    "summary": "",
+    "artifacts_out": [],
+    "issues": [],
+    "git_evidence": {
+      "branch_name": null,
+      "commit_sha_list": [],
+      "remote_branch": null,
+      "push_status": "skipped",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": ""
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

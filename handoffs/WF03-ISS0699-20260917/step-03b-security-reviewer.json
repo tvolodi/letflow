@@ -7,9 +7,9 @@
   "to_agent": "SECURITY-REVIEWER",
   "file": "handoffs/WF03-ISS0699-20260917/step-03b-security-reviewer.json",
   "created_at": "2026-09-16T21:21:19Z",
-  "started_at": "2026-09-16T21:21:19Z",
-  "completed_at": "2026-09-16T21:21:56Z",
-  "status": "COMPLETED",
+  "started_at": "2026-09-16T22:54:46Z",
+  "completed_at": null,
+  "status": "PENDING",
   "priority": "NORMAL",
   "context": {
     "stage": null,
@@ -17,30 +17,31 @@
     "requirement_text": {},
     "source_text": {},
     "related_handoff_ids": [],
-    "artifacts_in": ["scripts/test_parallel.sh"],
-    "owned_modules": ["scripts/test_parallel.sh"]
+    "artifacts_in": ["scripts/test_parallel.sh", "lib/mix/tasks/letflow.check.test.ex"],
+    "owned_modules": ["scripts/test_parallel.sh", "lib/mix/tasks/letflow.check.test.ex"]
   },
   "task": {
-    "description": "WF-03 Step 3b -- security scope check on ISS-0699's fix. On branch feature/WF03-ISS0699-20260917. Run `git diff main...HEAD -- scripts/test_parallel.sh` and evaluate it against docs/agents/instructions/security-invariants.md's INV-1..INV-8. This is a dev/CI test-tooling script change (trap-based cleanup of a local /tmp scratch directory used for test partition logs), not an API route, migration, secrets handling, or tenant-data response path -- expected verdict is out-of-scope/NOT-APPLICABLE for every invariant, but verify by actually reading the diff rather than assuming. Claim by setting status to IN_PROGRESS.",
+    "description": "WF-03 Step 3b REGATE -- security scope check on ISS-0699's rework-iteration-1 addition. On branch feature/WF03-ISS0699-20260917. Your prior PASS on scripts/test_parallel.sh stands (that file is unchanged this iteration -- verify with `git diff main...HEAD -- scripts/test_parallel.sh` matching your earlier review). This regate is scoped to the NEW change: `git diff main...HEAD -- lib/mix/tasks/letflow.check.test.ex`, which now (a) threads an env-var arg through stream_and_capture/2->/3 to pass TEST_PARALLEL_KEEP_LOGS=1 to the script, and (b) wraps its existing check_main_suite_logs(...) call in try/after with File.rm_rf!(native_log_dir) to clean up the log directory itself. Evaluate this diff against docs/agents/instructions/security-invariants.md's INV-1..INV-9. Expected verdict is still out-of-scope/NOT-APPLICABLE (CI test-tooling, no tenant-data path), but verify by actually reading the diff -- in particular confirm File.rm_rf! is only ever applied to the resolved log_dir path (derived from the script's own controlled mktemp output), never to anything derived from untrusted/tenant input. Claim by flipping status to IN_PROGRESS on receipt, and set it to COMPLETED/FAILED as normal when you finish.",
     "acceptance_criteria": [
-      "Scope test stated explicitly (in scope or out of scope, with reasoning)",
-      "A verdict recorded for every invariant INV-1..INV-8 (APPLIES+PASS/FAIL or NOT-APPLICABLE), per this repo's SECURITY-REVIEWER convention"
+      "Scope test stated explicitly for the NEW diff (in scope or out of scope, with reasoning)",
+      "A verdict recorded for every invariant INV-1..INV-9",
+      "Explicit confirmation that File.rm_rf! is never applied to anything beyond the script's own controlled tmp_dir path"
     ]
   },
   "result": {
-    "status": "PASS",
-    "summary": "Scope test: ran `git diff main...HEAD -- scripts/test_parallel.sh`. The diff is entirely confined to scripts/test_parallel.sh, a dev/CI test-tooling shell script. It adds a `cleanup_tmp_dir` function registered via `trap ... EXIT` that removes the script's own per-run mktemp scratch directory (partition create/migrate + test logs) on a clean (exit 0) run, unless TEST_PARALLEL_KEEP_LOGS is set, and preserves it on any nonzero exit. It does not add/modify an API route reading or writing tenant-scoped data, does not add/modify a priv/repo/migrations/*.exs migration, does not resolve or handle any secret (no config/env/token access -- only $tmp_dir, $TMPDIR, TEST_PARALLEL_KEEP_LOGS, an ordinary boolean env-var check), does not add/modify response-shaping code for a tenant-scoped entity, and does not add/modify a lookup-by-ID handler. Verdict: OUT OF SCOPE -- no tenant-data path touched. Per-invariant verdicts: INV-1 (tenant data isolation) NOT-APPLICABLE -- no Ecto schema/migration/business-table query touched. INV-2 (server-side field authorisation) NOT-APPLICABLE -- no API response type touched; also pre-S4. INV-3 (untrusted runtime sandboxing) NOT-APPLICABLE -- pre-S5, no scripting/plugin code touched. INV-4 (secrets by reference only) NOT-APPLICABLE -- no secret material (API key, webhook signing key, OIDC secret, DB URL) is read, logged, or serialised anywhere in the diff; confirmed by inspection, the only env vars touched (TMPDIR, TEST_PARALLEL_KEEP_LOGS) are non-secret config knobs. INV-5 (not-found/forbidden indistinguishability) NOT-APPLICABLE -- pre-S4, no lookup-by-ID endpoint. INV-6 (new data-access paths prove scoping) NOT-APPLICABLE -- no new data-access path introduced. INV-7 (no SQL string interpolation) NOT-APPLICABLE -- no SQL, no Repo.query call, shell script only. INV-8 (no unhandled crashes on realistic failure paths) NOT-APPLICABLE -- this invariant targets lib/letflow/ Elixir code touching external I/O/tenant data; this diff touches only a bash test-runner script's own tmp-dir lifecycle, not Elixir process/supervision code. INV-9 (tenant-controlled outbound URL validation) NOT-APPLICABLE -- no outbound HTTP request or URL handling in the diff. No BLOCKER issues found.",
+    "status": "PENDING",
+    "summary": "ITERATION 0 RESULT (superseded, kept for reference): PASS, out of scope, all invariants NOT-APPLICABLE for scripts/test_parallel.sh. See git history of this file for the full iteration-0 review. This regate covers the new lib/mix/tasks/letflow.check.test.ex diff only.",
     "artifacts_out": [],
     "issues": [],
     "git_evidence": {
-      "branch_name": "feature/WF03-ISS0699-20260917",
+      "branch_name": null,
       "commit_sha_list": [],
       "remote_branch": null,
       "push_status": "skipped",
       "pr_url": null,
       "pr_create_error": null
     },
-    "next_action": "Route to REVIEWER (idiom/scope gate)"
+    "next_action": ""
   },
   "rework_count": 0,
   "max_rework": 3

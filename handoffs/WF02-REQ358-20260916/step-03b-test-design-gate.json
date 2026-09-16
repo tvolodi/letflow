@@ -1,0 +1,58 @@
+{
+  "handoff_id": "41441e78-173e-4356-a03c-cdcba9bfe5ea",
+  "run_id": "WF02-REQ358-20260916",
+  "workflow_id": "WF-02",
+  "step": "03b",
+  "from_agent": "ORCH",
+  "to_agent": "TEST-DESIGN-VALIDATOR",
+  "file": "handoffs/WF02-REQ358-20260916/step-03b-test-design-gate.json",
+  "created_at": "2026-09-16T09:11:59Z",
+  "started_at": "2026-09-16T09:11:59Z",
+  "completed_at": null,
+  "status": "PENDING",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S7",
+    "requirement_ids": ["REQ-358"],
+    "requirement_text": {
+      "REQ-358": "Extend the UAT scenario YAML schema with a scope field and step-level `when:` branching (eq/in/else only). Add a schema-validation mix task rejecting malformed scope/branching scenario files with a clear error. Backward compatible: every existing scenario file still parses unchanged. The branching construct must be proven sufficient for a login-routing example (role=PLATFORM_ADMIN / role=<tenant-role> / unauthenticated, three distinct outcomes)."
+    },
+    "source_text": {},
+    "related_handoff_ids": ["c37d440e-fec8-4623-83bd-410731dd008a"],
+    "artifacts_in": [
+      "test/specs/REQ-358.md",
+      "test/letflow/mix_tasks/check_uat_scenario_schema_test.exs",
+      "lib/mix/tasks/letflow.check_uat_scenario_schema.ex",
+      "test/mix/tasks/letflow_check_requirements_registration_test.exs"
+    ],
+    "owned_modules": [
+      "test/specs/REQ-358.md",
+      "test/letflow/mix_tasks/check_uat_scenario_schema_test.exs"
+    ]
+  },
+  "task": {
+    "description": "Hard gate per WF-02_requirement_implementation.md Step 3b. Read test/specs/REQ-358.md and test/letflow/mix_tasks/check_uat_scenario_schema_test.exs directly. Verify: every acceptance criterion has >=1 runnable test targeting it, no TODO-implement-test left, fixtures self-sufficient/no cross-test pollution, tests don't depend on each other running first, no hardcoded secrets.\n\nONE SPECIFIC ITEM TO RESOLVE, flagged by TEST-DESIGNER itself and independently confirmed by ORCH: every other mix-task test file in this project lives under test/mix/tasks/ (e.g. test/mix/tasks/letflow_check_requirements_registration_test.exs, in artifacts_in as the precedent — confirm this yourself: `find test -path '*mix*tasks*' -name '*.exs'` shows 11 files under test/mix/tasks/ and only this new one under test/letflow/mix_tasks/). TEST-DESIGNER's own handoff explains it followed the ORCH-supplied owned_modules path literally rather than deviating unilaterally — that is TEST-DESIGNER correctly not silently diverging from its dispatch, and the actual convention mismatch is ORCH's dispatch error, not a defect in TEST-DESIGNER's judgment. Judge whether this location mismatch is a BLOCKER requiring rework (move the file to test/mix/tasks/, rename to letflow_check_uat_scenario_schema_test.exs matching the sibling files' naming pattern, e.g. letflow_check_X_test.exs) or acceptable as-is. Given this project's own established, unbroken 11-file convention, moving it is very likely the correct call -- but make the determination yourself by reading the actual files, not on my say-so, and if you FAIL on this alone, say so explicitly as the sole reason rather than folding it into a vaguer summary.",
+    "acceptance_criteria": [
+      "Every REQ-358 acceptance criterion has a runnable test case",
+      "No hardcoded secrets/connection strings; fixtures self-sufficient; tests order-independent",
+      "The test file's location and naming convention is judged explicitly against this project's existing test/mix/tasks/ pattern, with a concrete PASS-as-is or FAIL-with-required-move verdict"
+    ]
+  },
+  "result": {
+    "status": "",
+    "summary": "",
+    "artifacts_out": [],
+    "issues": [],
+    "git_evidence": {
+      "branch_name": null,
+      "commit_sha_list": [],
+      "remote_branch": null,
+      "push_status": "skipped",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": ""
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

@@ -1,0 +1,201 @@
+run_id: WF02-REQ359-20260916
+date: "2026-09-16"
+completed_at: "2026-09-16T10:43:41Z"
+agent: UAT-RUNNER
+scope: >
+  REQ-359 (BA-<VERTICAL> agent role) real-QA UAT execution of the one
+  scenario provided: test/fixtures/uat/scenarios/bilimbaga/
+  candidate-timed-exam-autograde.yaml, authored by BA-BILIMBAGA. Real HTTP
+  calls, real Keycloak OIDC password-grant token, real API calls to the
+  live https://qa.bizdala.com backend -- no mocks. ELIXIR-DEV had already
+  performed an equivalent precondition check minutes before this dispatch;
+  per this project's "no speculation"/independent-verification directive,
+  every one of those checks was independently re-run here from scratch
+  (fresh qa-login.sh invocation, fresh token, fresh HTTP calls) rather than
+  trusted from ELIXIR-DEV's report.
+
+environment_target:
+  base_url: "https://qa.bizdala.com"
+  credential_source: "ai-dala-infra/scripts/qa-login.sh"
+
+independent_reverification:
+  credential_source_enumeration:
+    command: "bash ai-dala-infra/scripts/qa-login.sh"
+    output: |
+      QA login: https://qa.bizdala.com/
+
+      Available test users:
+        admin-user      PLATFORM_ADMIN
+        designer-user   PROCESS_DESIGNER
+        operator-user   PROCESS_OPERATOR
+        worker-user     TASK_WORKER
+
+      Usage: scripts/qa-login.sh <username>
+    finding: >
+      Independently confirmed: exactly four seeded usernames exist in this
+      credential source. No candidate/bilimbaga user of any kind is among
+      them, and the script has no mechanism to mint one -- it only reads a
+      fixed seeded-users.env on the QA Keycloak host.
+
+  admin_token_acquisition:
+    command: "bash ai-dala-infra/scripts/qa-login.sh admin-user"
+    output: "URL: https://qa.bizdala.com/ | Username: admin-user | Role: PLATFORM_ADMIN | Password: <redacted in this report, real value used live>"
+    token_request: >
+      POST https://auth.qa.bizdala.com/realms/bpm-default/protocol/openid-connect/token
+      grant_type=password, client_id=letflow-web, username=admin-user,
+      password=<the real password printed above>
+      -> HTTP 200, real signed JWT issued.
+    decoded_jwt_payload: >
+      {"iss":"https://auth.qa.bizdala.com/realms/bpm-default",
+      "aud":"letflow-web","realm_access":{"roles":["PLATFORM_ADMIN"]},
+      "roles":["PLATFORM_ADMIN"],"preferred_username":"admin-user",
+      "name":"Admin User","email":"admin@letflow.local"}
+    finding: "Real PLATFORM_ADMIN bearer token obtained; used for all four checks below."
+
+  tenants_check:
+    request: "GET https://qa.bizdala.com/api/v1/tenants (Bearer admin-user PLATFORM_ADMIN token)"
+    response: >
+      HTTP 200
+      {"items":[{"display_name":"Default Tenant",
+      "id":"fa2c7dbb-049b-4c44-8646-185deb22707c",
+      "inserted_at":"2026-09-16T05:49:27Z","slug":"bpm-default",
+      "status":"active","updated_at":"2026-09-16T05:49:27Z"}],
+      "next_cursor":null,"count":1}
+    finding: "Exactly one tenant exists on QA (Default Tenant / bpm-default). No BilimBaga tenant."
+
+  users_search_bilimbaga:
+    request: "GET https://qa.bizdala.com/api/v1/identity/users?search=bilimbaga"
+    response: 'HTTP 200 {"items":[],"next_cursor":null,"count":0}'
+    finding: "Zero users matching 'bilimbaga'."
+
+  users_search_candidate:
+    request: "GET https://qa.bizdala.com/api/v1/identity/users?search=candidate"
+    response: 'HTTP 200 {"items":[],"next_cursor":null,"count":0}'
+    finding: "Zero users matching 'candidate'. The scenario's actor actor-bilimbaga-candidate cannot be resolved against this credential_source or this instance's user directory."
+
+  definitions_check:
+    request: "GET https://qa.bizdala.com/api/v1/definitions"
+    response: 'HTTP 200 {"items":[],"next_cursor":null}'
+    finding: "Zero process definitions installed on QA."
+
+  definitions_search_exam:
+    request: "GET https://qa.bizdala.com/api/v1/definitions?search=exam"
+    response: 'HTTP 200 {"items":[],"next_cursor":null}'
+    finding: "Confirms specifically: no exam-related process definition (solution pack) exists either, ruling out a narrower search missing it."
+
+  conclusion: >
+    All four of ELIXIR-DEV's reported findings independently reproduce
+    exactly, from a freshly obtained token and freshly issued HTTP calls,
+    not copied from their report: (1) exactly one tenant (Default Tenant/
+    bpm-default), no BilimBaga tenant; (2) zero users matching "bilimbaga";
+    (3) zero users matching "candidate"; (4) zero process definitions
+    installed at all (so no exam solution pack, active or otherwise). The
+    credential_source has exactly four seeded usernames (admin-user,
+    designer-user, operator-user, worker-user), none of which is a
+    candidate/exam-taker identity the scenario's `actors.candidate:
+    actor-bilimbaga-candidate` could resolve to.
+
+scenario:
+  file: test/fixtures/uat/scenarios/bilimbaga/candidate-timed-exam-autograde.yaml
+  id: bilimbaga-candidate-timed-exam-autograde
+  scope: bilimbaga
+
+  preconditions_check:
+    - description: "A bilimbaga tenant exists with the exam solution pack installed"
+      check: process_definition_active
+      result: NOT_SATISFIED
+      evidence: >
+        tenants_check above shows exactly one tenant, Default Tenant/
+        bpm-default -- no tenant with a BilimBaga slug/display name exists.
+        definitions_check and definitions_search_exam above show zero
+        process definitions of any kind installed, so no exam solution
+        pack is present under any tenant, including Default Tenant.
+    - description: >
+        At least one certification exam is configured and active for this
+        tenant, with no short-answer questions
+      check: no_pending_instances
+      result: NOT_SATISFIED
+      evidence: >
+        Same definitions_check/definitions_search_exam evidence -- with
+        zero process definitions installed platform-wide, there is no
+        active certification exam configuration to check for short-answer
+        questions in the first place.
+
+  actor_resolution:
+    candidate: actor-bilimbaga-candidate
+    result: NOT_RESOLVABLE
+    evidence: >
+      users_search_bilimbaga and users_search_candidate above both return
+      zero results, and independent_reverification.credential_source_enumeration
+      confirms the credential_source (ai-dala-infra/scripts/qa-login.sh)
+      offers only admin-user/designer-user/operator-user/worker-user --
+      no candidate identity exists to sign in as for step 1.
+
+  steps_attempted:
+    - step: 1
+      action: "Signs in and opens the list of exams available to them"
+      attempted: false
+      reason: >
+        No credential resolves to actor-bilimbaga-candidate (see
+        actor_resolution above) -- there is no account to sign in with,
+        so this step cannot be honestly attempted, not even as a failed
+        attempt. Attempting to substitute a different seeded account
+        (e.g. worker-user) would not be testing this scenario's actor and
+        was not done, per uat-runner.md's "don't invent a substitute path"
+        prohibition.
+    - step: 2
+      action: "Starts a timed certification exam session"
+      attempted: false
+      reason: "Blocked transitively by step 1 not being attemptable, and independently: zero process definitions exist to start a session against (definitions_check)."
+    - step: 3
+      action: "Answers every question in the exam ... and submits"
+      attempted: false
+      reason: "Blocked transitively by steps 1-2."
+
+  expected_outcomes_check:
+    - id: EO-001
+      description: "Visible countdown showing remaining time after starting the exam"
+      verdict: BLOCKED
+      evidence: "Step 2 (start exam session) was never reached, so there is no exam-taking screen state to observe."
+    - id: EO-002
+      description: "Immediately after submitting, candidate sees score and pass/fail statement"
+      verdict: BLOCKED
+      evidence: "Step 3 (submit) was never reached, so there is no result screen state to observe."
+    - id: EO-003
+      description: "Score matches correct grading of the candidate's actual answers"
+      verdict: BLOCKED
+      evidence: "No session was ever started or submitted, so there is no recorded instance_state to query and compare against expected grading."
+
+  verdict: BLOCKED
+  gap: >
+    QA (https://qa.bizdala.com) has no BilimBaga tenant, no exam solution
+    pack / process definitions of any kind installed, and no candidate
+    (or any bilimbaga-named) user seeded in the credential_source this
+    run was told to use. This is a QA environment-seeding gap for the
+    bilimbaga vertical, not a defect in REQ-359's BA-<VERTICAL> agent role
+    itself, not a defect in the scenario file (which is well-formed and
+    schema-valid), and not evidence the underlying exam/scoring feature
+    (lib/letflow/exam/*, web/src/pages/exam/*, ISS-0674) is broken --
+    that feature was never reachable in this run because its
+    preconditions were never satisfiable on this instance today.
+
+overall_verdict: BLOCKED
+notes: >
+  No fabricated PASS. No step was skipped silently. Every precondition
+  and every step was checked against the real running QA instance with
+  real HTTP calls (quoted above) and found genuinely unsatisfiable, not
+  merely unchecked -- "no error was thrown" was never used as a passing
+  criterion, and no synthetic/substitute actor or data was invented to
+  force the scenario through. This result is the expected, correct
+  outcome for a QA seed that was never loaded with BilimBaga fixtures,
+  per this run's dispatch itself.
+
+  Recommendation to ORCH: file a QA-seeding gap issue (BilimBaga tenant +
+  exam solution pack + candidate user must be seeded on qa.bizdala.com,
+  analogous to the still-open Meridian seeding gap surfaced in
+  test/uat-reports/uat-2026-09-16-WF02-REQ358-20260916.yaml's
+  scenario_1_AC1) before this scenario -- or any other bilimbaga-scope
+  UAT scenario -- can produce a real PASS/FAIL disposition on QA.
+  BA-BILIMBAGA's own REQ-359 sign-off artefact should record this run's
+  BLOCKED verdict and evidence rather than a fabricated pass, per the
+  dispatch's own instruction.

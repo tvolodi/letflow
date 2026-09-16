@@ -46,13 +46,14 @@ producer/validator table — restated here as the roster's organizing shape.
 | `RELEASE-VALIDATOR` | Release Validator | Validates a stage/requirement-batch meets all MUST acceptance criteria before it's marked RELEASED; re-runs the full suite rather than trusting TEST-RUNNER's report alone | `handoffs/`, `docs/status/` |
 | `DOC-UPDATER` | Documentation Updater | Updates `docs/requirements.yaml` status, `docs/status/requirement_status*.yaml` (the index and all volumes), `README.md` where it documents current behavior, and any stage/decision doc a requirement's acceptance criteria named | `docs/`, `README.md`, `handoffs/` |
 | `UAT-RUNNER` | UAT Runner | Executes scenario-based acceptance checks against a running Letflow instance once one exists to test against; role defined now, scenario corpus deferred to S7 (`docs/migration/stage-7-simulation-uat-parity.md`) | `test/uat-reports/`, `handoffs/` |
+| `BA-<VERTICAL>` | Business Analyst (per tenant-vertical/solution-pack) | Authors UAT scenarios in tenant-vertical domain language and signs off on UAT-RUNNER's execution results for its scope, per `.claude/agents/ba-analyst.md` — one canonical role file, parameterized by vertical via `docs/agents/ba-personas/<vertical>.yaml`, not a closed per-company roster | `test/fixtures/uat/scenarios/<vertical>/`, `test/uat-reports/` (`ba-signoff-` prefix), `docs/agents/ba-personas/` (new-persona/reuse bookkeeping), `handoffs/` |
 
-**Deliberately not reproduced yet:** R-Co's `BO-SWIFTROUTE`/`BO-VORTEX`/`BO-MERIDIAN`
-business-owner personas and `PRODUCT-OWNER` — see
+**Deliberately not reproduced yet:** R-Co's `PRODUCT-OWNER` role — see
 `docs/migration/decisions/0004-humanless-pipeline.md`'s "What is explicitly NOT
-reproduced" section. These represent fictional tenant companies' business interests
-during UAT; Letflow has no tenant business scenario corpus yet (that's S7). Adding them
-before S7 starts would be scope creep against a stage that hasn't been reached.
+reproduced" section, and that file's 2026-09-16 addendum. R-Co's
+`BO-SWIFTROUTE`/`BO-VORTEX`/`BO-MERIDIAN` business-owner-persona equivalent is now
+actioned by REQ-359 as the `BA-<VERTICAL>` row above; only `PRODUCT-OWNER`'s
+equivalent (REQ-361, still pending) remains deferred.
 
 ### 3.1 Capability matrix
 
@@ -75,6 +76,7 @@ before S7 starts would be scope creep against a stage that hasn't been reached.
 | `RELEASE-VALIDATOR` | ✓ | status | ✓ (tests) | ✗ |
 | `DOC-UPDATER` | ✓ | ✓ | ✗ | ✗ |
 | `UAT-RUNNER` | ✓ | uat-reports | ✓ (HTTP calls against a running instance) | ✗ |
+| `BA-<VERTICAL>` | ✓ | ✓ (scenario files, ba-signoff files, persona-data files) | ✗ | ✗ |
 
 **`handoffs` in the Writes column means the agent's own handoff file only** (updated
 2026-08-17, ISS-0021/GH#78 — this table previously left `handoffs/registry.json`
@@ -137,6 +139,8 @@ requirement's file-level status stays exactly as terse as it's always been.
 | Test source | `test/` | `TEST-DESIGNER` | `.exs` |
 | Test reports | `test/reports/` | `TEST-RUNNER` | `.yaml` |
 | UAT reports | `test/uat-reports/` | `UAT-RUNNER` | `.yaml` |
+| BA sign-off reports | `test/uat-reports/` (`ba-signoff-` prefix) | `BA-<VERTICAL>` | `.yaml` |
+| BA persona data | `docs/agents/ba-personas/` | `ORCH`/`REQ-ANALYST` (creation), `BA-<VERTICAL>` (own reads) | `.yaml` |
 | Handoff files | `handoffs/` | all (via ORCH) | `.json` (exception) |
 | Requirement queue | `docs/requirements.yaml` | `ORCH`/`DOC-UPDATER` (status field) | `.yaml` (pre-existing schema, unchanged) |
 | Requirement event history | `docs/status/requirement_status*.yaml` (index + all volumes) | `DOC-UPDATER` | `.yaml` |

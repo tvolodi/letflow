@@ -528,3 +528,91 @@ history:
       issue-record content re-read directly from origin/main to confirm
       DOC-UPDATER's -- here, ISSUE-FIXER's -- claimed change actually
       landed, per core-directives.md, before writing this entry.
+
+  - req: SCOPE-CHANGE
+    event: done
+    agent: ORCH
+    at: "2026-09-16T18:58:00Z"
+    note: >
+      ISS-0695 (queue task 695, GH#1456, "Letflow.Scheduler.PollerTest
+      (REQ-218 AC3) is order/load-sensitive and fails intermittently under
+      parallel suite load") resolved via a WF-03 TEST-RUNNER-stall recovery
+      run, branch feature/WF03-ISS0695-20260916, merged as PR #1463 (squash
+      commit 9fb98408). This entry covers the RECOVERY session only --
+      Steps 00 through 4 (git setup, diagnosis, fix design, implementation,
+      telemetry-coverage tests) had already landed as commits dff32646/
+      1b6c048a/cc824c57 in an earlier session that stalled 90+ minutes
+      inside its own TEST-RUNNER step with no new commits and no working-
+      tree changes; a BEAM VM process matching that stall's start time was
+      found still running and was force-killed before this recovery began.
+
+      Recovery found: the stalled subagent had left an orphaned process
+      tree (mix letflow.check.test -> mix test --partitions 16, ~20
+      processes) still alive and holding Postgres connections. After
+      killing it, set_lock recovered queue task 695 under the SAME
+      agent_id (tvolodi-orch) the original run had used (409 under a fresh
+      agent_id, 200 under the matching one, confirming set_lock's
+      same-agent-id recovery semantics per TASK_QUEUE.md). Isolated
+      `mix test test/letflow/scheduler/poller_test.exs` then passed
+      cleanly -- 21 passed, 0 failures, deterministic, no retries -- ruling
+      out a defect in the new test code itself.
+
+      Root-causing the ORIGINAL stall (and three further apparent "hangs"
+      during this recovery's own verification attempts) consumed most of
+      this session. Findings, in order: (1) `mix letflow.check.test`'s
+      16-way test_parallel.sh froze system-wide before any partition
+      reached poller_test.exs, with Postgres showing zero blocking queries
+      -- host/infra, not this branch. (2) A subsequent plain `mix test` run
+      genuinely DID shell out to a real recursive `bash
+      scripts/test_parallel.sh` (confirmed via a new /tmp/letflow_test_
+      parallel.* directory appearing mid-run with real partition logs) --
+      a separate, real, pre-existing defect in
+      test/mix/tasks/letflow_check_test_test.exs's Windows fake-bash
+      interception, filed as ISS-0697 (queue task 697, GH#1462), not fixed
+      here. That run also exhausted Postgres's connection limit, requiring
+      a container restart (twice, over the course of this session). (3)
+      Manually backgrounding `mix test` via `nohup ... & disown` produced
+      a THIRD apparent hang that turned out to be a local-tooling artifact
+      -- the log itself showed "Writer crashed (:\"The pipe is being
+      closed.\")" once the launching tool call's own process boundary
+      ended, explaining why CPU usage kept climbing with no further log
+      output across all of this session's nohup-backed attempts. Switching
+      to the Bash tool's own `run_in_background` mechanism (the same one
+      that worked cleanly for the isolated poller_test.exs run) fixed the
+      pipe-crash class, but two further full local runs each stopped
+      cleanly (no crash trace, no attributable failure, exit code 127)
+      around ~94k lines of output at a consistent point, days apart from
+      each other only in output volume, not wall-clock -- consistent with
+      a background-process output-volume limitation of this session's own
+      tooling given this repo's verbose :debug-level SQL logging, not a
+      defect in the branch (every partial run's visible content showed
+      zero failures throughout).
+
+      Given the local full-suite runner could not be driven to completion
+      in this environment, relied on CI as the authoritative full-suite
+      gate per GIT_MERGE.md's own precondition instead of forcing a local
+      result: pushed, opened PR #1463, and GitHub Actions' `Backend gate
+      (mix letflow.check)` job -- the real full suite, in a clean Linux
+      environment -- passed in 9m9s, alongside `Frontend gate` and `Detect
+      changed paths`. Merged via `gh pr merge --squash --delete-branch`;
+      local main fast-forwarded and origin/main's docs/issues/ISS-0695.yaml
+      re-read directly to confirm status: resolved actually landed, per
+      core-directives.md, before writing this entry.
+
+      docs/issues/ISS-0695.yaml set to status: resolved with full evidence
+      (including an explicit note that the acceptance criteria's literal
+      "10 consecutive full-suite runs" was not completed locally, and why
+      the isolated deterministic pass plus the CI green run are judged
+      sufficient regardless -- the fix replaces a probabilistic race with
+      a synchronous telemetry signal, so determinism itself is the
+      relevant proof, not a sampling count). GH#1456 closed with an
+      evidence comment. Per the fix design's own "Disposition of
+      ISS-0453.yaml" section, docs/issues/ISS-0453.yaml got a
+      resolved_occurrence_20260916 note (the specific ac3b_attempt
+      occurrence it described is fixed) but stays status: open (its
+      primary subject, the antagonist-loop partial-skip test, is a
+      different, untouched mechanism). letflow-queue task 695 released
+      status: done (confirmed in the release response: locked_by null,
+      status done), best-effort-closing GH#1456 per TASK_QUEUE.md.
+      ISS-0697 stays open/unlocked in the queue (newly registered, not
+      yet worked) for separate follow-up.

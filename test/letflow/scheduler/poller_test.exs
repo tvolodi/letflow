@@ -801,6 +801,85 @@ defmodule Letflow.Scheduler.PollerTest do
     end
   end
 
+  # ISS-0695: `attach_ac3b_admission_probe/3` above only ever exercises ONE
+  # op (`:poll_and_fire`) and ONE result (`:rejected`) of the
+  # `[:letflow, :scheduler, :admission_decision]` telemetry event -- that is
+  # sufficient for AC3b's own synchronization need, but leaves the event's
+  # `:granted` branch, and its `op`/`schema`/`measurements` shape in
+  # general, with no coverage of its own. Now that this event is load-bearing
+  # for a test's correctness (not merely an OBS-02-style metric nobody reads
+  # the value of), a regression here -- wrong metadata key, event dropped on
+  # the granted branch, non-empty measurements -- deserves its own direct
+  # unit coverage, independent of AC3b's specific rejected/poll_and_fire use.
+  defp attach_admission_decision_collector(test_pid, schema_name) do
+    handler_id =
+      "poller-admission-decision-collector-#{System.unique_integer([:positive, :monotonic])}"
+
+    :telemetry.attach(
+      handler_id,
+      [:letflow, :scheduler, :admission_decision],
+      fn _event, measurements, metadata, _config ->
+        if metadata.schema == schema_name do
+          send(test_pid, {:admission_decision, measurements, metadata})
+        end
+      end,
+      nil
+    )
+
+    ExUnit.Callbacks.on_exit(fn -> :telemetry.detach(handler_id) end)
+  end
+
+  describe "ISS-0695: [:letflow, :scheduler, :admission_decision] telemetry emission" do
+    test "a granted admission emits the event with empty measurements and :granted metadata" do
+      AdmissionTestHelpers.restart_admission!(pool_size: 3, reserved_headroom: 2)
+
+      %{schema_name: schema_name} = provisioned_tenant("iss0695-telemetry-granted")
+      timer_id = due_timer_for!(schema_name, "iss0695-telemetry-granted")
+
+      attach_admission_decision_collector(self(), schema_name)
+
+      state = %{last_retention_run_at: nil, last_tick_started_at: nil}
+      assert {:noreply, _new_state} = Poller.handle_info(:tick, state)
+
+      assert_receive {:admission_decision, measurements, metadata}, 2_000
+
+      assert measurements == %{}
+      assert metadata.schema == schema_name
+      assert metadata.op == :poll_and_fire
+      assert metadata.result == :granted
+
+      # Real-world corroboration: an uncontended admission that was really
+      # granted let this schema's due timer actually fire.
+      assert timer_status!(schema_name, timer_id) == "fired"
+    end
+
+    test "a rejected admission emits the event with :rejected metadata, distinct from :granted" do
+      AdmissionTestHelpers.restart_admission!(pool_size: 3, reserved_headroom: 2)
+
+      %{schema_name: schema_name} = provisioned_tenant("iss0695-telemetry-rejected")
+      timer_id = due_timer_for!(schema_name, "iss0695-telemetry-rejected")
+
+      assert {:ok, probe_ref} = Admission.try_acquire(:global)
+      attach_admission_decision_collector(self(), schema_name)
+
+      state = %{last_retention_run_at: nil, last_tick_started_at: nil}
+      assert {:noreply, _new_state} = Poller.handle_info(:tick, state)
+
+      assert_receive {:admission_decision, measurements, metadata}, 2_000
+
+      assert measurements == %{}
+      assert metadata.schema == schema_name
+      assert metadata.op == :poll_and_fire
+      assert metadata.result == :rejected
+
+      # Real-world corroboration: the deterministically-held probe really
+      # did block this schema's poll_and_fire from running.
+      assert timer_status!(schema_name, timer_id) == "pending"
+
+      :ok = Admission.release(probe_ref)
+    end
+  end
+
   describe "REQ-218 AC4: Letflow.Admission.try_acquire({:tenant, _}) is never called from poller.ex" do
     test "the source text of lib/letflow/scheduler/poller.ex contains no {:tenant, admission call" do
       source = File.read!(Path.join(File.cwd!(), "lib/letflow/scheduler/poller.ex"))

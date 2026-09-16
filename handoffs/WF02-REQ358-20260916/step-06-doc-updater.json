@@ -8,8 +8,8 @@
   "file": "handoffs/WF02-REQ358-20260916/step-06-doc-updater.json",
   "created_at": "2026-09-16T10:13:53Z",
   "started_at": "2026-09-16T10:13:53Z",
-  "completed_at": null,
-  "status": "PENDING",
+  "completed_at": "2026-09-16T10:14:35Z",
+  "status": "COMPLETED",
   "priority": "NORMAL",
   "context": {
     "stage": "S7",
@@ -44,19 +44,23 @@
     ]
   },
   "result": {
-    "status": "",
-    "summary": "",
-    "artifacts_out": [],
+    "status": "PASS",
+    "summary": "REQ-358 flipped to done in docs/requirements.yaml. Appended a done event to docs/status/requirement_status.v18.yaml (append-only, git diff --numstat confirmed 23 insertions / 0 deletions on that file; volume now 251 lines / 14263 bytes, well under the 1200/120000 roll ceiling -- no roll needed). docs/status/requirement_status.index.yaml volume 18 entries incremented 3 -> 4 to match the on-disk grep -c count, in the same commit. README.md checked: no mention anywhere of UAT-RUNNER, the UAT scenario schema, or a state diagram touching this behavior, so no README edit was made. Migration stage/decision doc step: N/A, REQ-358's acceptance criteria named no docs/migration/stage-N-*.md or docs/migration/decisions/*.md file. Fast-follow gaps (QA Meridian/tenant fixture data, no browser-automation tool) already recorded in Step 5's handoff and restated in the run-history done-event note; no separate tracking mechanism was invented. mix test test/docs/requirement_status_invariants_test.exs: 20 passed, 0 failures.",
+    "artifacts_out": [
+      "docs/requirements.yaml",
+      "docs/status/requirement_status.v18.yaml",
+      "docs/status/requirement_status.index.yaml"
+    ],
     "issues": [],
     "git_evidence": {
-      "branch_name": null,
-      "commit_sha_list": [],
-      "remote_branch": null,
-      "push_status": "skipped",
+      "branch_name": "feature/WF02-REQ358-20260916",
+      "commit_sha_list": ["79a915a3"],
+      "remote_branch": "origin/feature/WF02-REQ358-20260916",
+      "push_status": "pushed",
       "pr_url": null,
       "pr_create_error": null
     },
-    "next_action": ""
+    "next_action": "ORCH: Step Final (merge feature/WF02-REQ358-20260916 to main once CI is green)."
   },
   "rework_count": 0,
   "max_rework": 3

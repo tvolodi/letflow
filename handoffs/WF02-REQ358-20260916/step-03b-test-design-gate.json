@@ -8,8 +8,8 @@
   "file": "handoffs/WF02-REQ358-20260916/step-03b-test-design-gate.json",
   "created_at": "2026-09-16T09:11:59Z",
   "started_at": "2026-09-16T09:11:59Z",
-  "completed_at": null,
-  "status": "PENDING",
+  "completed_at": "2026-09-16T14:20:00Z",
+  "status": "COMPLETED",
   "priority": "NORMAL",
   "context": {
     "stage": "S7",
@@ -39,19 +39,21 @@
     ]
   },
   "result": {
-    "status": "",
-    "summary": "",
+    "status": "FAIL",
+    "summary": "Standard coverage checks (a-e) all PASS: read test/specs/REQ-358.md and test/letflow/mix_tasks/check_uat_scenario_schema_test.exs in full against lib/mix/tasks/letflow.check_uat_scenario_schema.ex. Every AC1/AC2/AC4 sub-case named in the spec has a corresponding runnable test (25 test cases total, one describe block per AC); no @tag :skip; no 'TODO: implement test' anywhere in the spec or the test file; fixtures are per-test in-suite maps or use System.unique_integer/1-suffixed tmp dirs with on_exit cleanup (F-PARSE-ERROR, F-NOT-A-MAPPING) -- no shared/hardcoded IDs, no cross-test pollution; all tests use async: true with no shared mutable state or ordering dependency; no secrets/connection strings anywhere in the file. Ran `mix test test/letflow/mix_tasks/check_uat_scenario_schema_test.exs` myself (started docker compose up -d for Postgres/Keycloak first, since it wasn't running) -- Result: 25 passed, 0 failures, confirming every test is genuinely runnable and green, not merely present.\n\nLOCATION-CONVENTION ITEM (sole reason for FAIL): confirmed myself via `find test -path '*mix*tasks*' -name '*.exs'` -- 11 existing mix-task test files all live under test/mix/tasks/, all named letflow[.|_]<task_name>_test.exs (e.g. test/mix/tasks/letflow_check_requirements_registration_test.exs, defmodule Mix.Tasks.Letflow.CheckRequirementsRegistrationTest). The new file is the only one under test/letflow/mix_tasks/, breaking an otherwise-unbroken 11/11 convention. TEST-DESIGNER's own explanation (followed ORCH's literal owned_modules dispatch path rather than diverging unilaterally) is accepted as correct process discipline, not a defect in TEST-DESIGNER's judgment -- the dispatch itself was the error. Per this project's established convention this is a real, mechanical inconsistency (wrong directory breaks any tooling/glob that assumes test/mix/tasks/, and the module/file-path pairing convention every sibling follows), so it is a BLOCKER, not cosmetic. Required rework: git mv test/letflow/mix_tasks/check_uat_scenario_schema_test.exs test/mix/tasks/letflow_check_uat_scenario_schema_test.exs (removing the now-empty test/letflow/mix_tasks/ dir), and update any header path reference inside the file/spec to match. No test content or assertions need to change.",
     "artifacts_out": [],
-    "issues": [],
+    "issues": [
+      "test/letflow/mix_tasks/check_uat_scenario_schema_test.exs must move to test/mix/tasks/letflow_check_uat_scenario_schema_test.exs to match this project's unbroken 11/11 mix-task test file location+naming convention (test/mix/tasks/letflow_check_<task>_test.exs)"
+    ],
     "git_evidence": {
-      "branch_name": null,
+      "branch_name": "feature/WF02-REQ358-20260916",
       "commit_sha_list": [],
-      "remote_branch": null,
-      "push_status": "skipped",
+      "remote_branch": "origin/feature/WF02-REQ358-20260916",
+      "push_status": "pending",
       "pr_url": null,
       "pr_create_error": null
     },
-    "next_action": ""
+    "next_action": "Rework TEST-DESIGNER: move/rename the test file per the location-convention verdict above; no other changes required."
   },
   "rework_count": 0,
   "max_rework": 3

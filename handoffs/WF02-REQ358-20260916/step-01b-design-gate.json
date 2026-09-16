@@ -1,0 +1,82 @@
+{
+  "handoff_id": "2cf458a2-0964-44f9-b23d-11b09a43dd84",
+  "run_id": "WF02-REQ358-20260916",
+  "workflow_id": "WF-02",
+  "step": "01b",
+  "from_agent": "ORCH",
+  "to_agent": "CODE-DESIGN-VALIDATOR",
+  "file": "handoffs/WF02-REQ358-20260916/step-01b-design-gate.json",
+  "created_at": "2026-09-16T08:44:19Z",
+  "started_at": "2026-09-16T08:49:25Z",
+  "completed_at": "2026-09-16T09:40:00Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S7",
+    "requirement_ids": ["REQ-358"],
+    "requirement_text": {
+      "REQ-358": "DECISION BEING REVISITED, NAMED EXPLICITLY PER CORE-DIRECTIVES' \"don't silently re-decide a settled decision\" rule. Decision 0004 (\"What is explicitly NOT reproduced\") deferred R-Co's BO-*/PRODUCT-OWNER persona layer \"to when S7 actually starts and there is a concrete scenario corpus to validate against.\" .claude/agents/uat-runner.md's own \"Note on scope\" restates the same condition. REQ-210 (S7's closing requirement, done) confirmed both preconditions are now met: S7 is done, and a real scenario corpus exists (11 tenant scenarios across 3 companies, 18 platform scenarios, test/fixtures/uat/scenarios/). This requirement and REQ-359..362 are the deferred work whose trigger condition has now fired — not a reopening of the decision's reasoning, which remains correct as stated for the period before this precondition held. REVIEWER should confirm this reading before this requirement's dependents proceed rather than treat it as implicitly pre-approved. . SCOPE. 1. Extend the UAT scenario YAML schema with a `scope` field distinguishing `platform` from an open tenant-vertical identifier, and a step-level branching construct (`when:`) sufficient to express a login-routing example (role=PLATFORM_ADMIN / role=<tenant-role> / unauthenticated) without inventing a general-purpose scripting language. 2. Extend UAT-RUNNER (WF-05_uat_run.md and uat-runner.md) to accept an explicit environment target (base URL + credential source). Update uat-runner.md's 'Note on scope' to remove the stale 'no persona layer' sentence and replace it with a pointer worded 'as of REQ-361'. 3. Update WF-05_uat_run.md's step sequence to reflect the new branching-evaluation and environment-target steps. NOT IN THIS REQUIREMENT: no new agent role, no actual login-routing scenario authored as permanent scope, no visual-regression mechanism."
+    },
+    "source_text": {},
+    "related_handoff_ids": ["90bdb2cb-4967-43a5-85c5-6cef67dc1c6e"],
+    "artifacts_in": [
+      "lib/letflow/design/req358-uat-scope-branching-env.md",
+      ".claude/agents/uat-runner.md",
+      "docs/agents/workflows/WF-05_uat_run.md",
+      "test/fixtures/uat/scenarios/meridian/loan-origination-below-threshold.yaml"
+    ],
+    "owned_modules": [
+      "lib/letflow/design/req358-uat-scope-branching-env.md"
+    ]
+  },
+  "task": {
+    "description": "Hard gate per WF-02_requirement_implementation.md Step 1b (already read). Read lib/letflow/design/req358-uat-scope-branching-env.md directly — not CODE-DESIGNER's own summary of it. Verify against REQ-358's acceptance_criteria (below) and against the six full acceptance criteria in the Step 1 handoff (handoffs/WF02-REQ358-20260916/step-01-design.json, context.artifacts_in already includes the design doc; open that handoff too for the exact bar CODE-DESIGNER was held to). Pay particular attention to: (1) no implementation code present — the doc should carry the mix task's signatures/shapes only, never a full .ex function body; (2) the backward-compatibility mechanism is a concrete default-derivation rule an agent could mechanically apply, not an assertion of compatibility; (3) the branching construct's operator set is stated exactly (this gate should reject if it is vague enough that two implementers could reasonably build different things); (4) the login-routing worked example is fully written out, not summarized; (5) the uat-runner.md/WF-05 replacement prose is literal, ready-to-paste text, not a description of intent. CODE-DESIGNER's own report says it flagged 5 open questions (YAML-parsing dependency choice, branch-validation depth, whether facts beyond role need defining now, how credential_source is actually invoked since the script lives outside this repo, and branch-level vs top-level preconditions) — confirm each is genuinely left open in the doc (not silently resolved) and judge whether any is a BLOCKER-level gap (something ELIXIR-DEV cannot proceed without a decision on) versus a legitimate deferred/OQ per this project's anti-over-engineering norms. In particular: the YAML-parsing dependency choice is likely load-bearing for Step 2a (ELIXIR-DEV cannot write the mix task without knowing what parses YAML) — if the design doc does not name a concrete choice AND CODE-DESIGNER's own note says it \"needs REVIEWER sign-off\", check whether this project already has a YAML dependency in mix.exs (e.g. via a existing YAML-reading mix task) it could reuse without a new dependency decision at all — grep mix.exs's deps() for an existing yaml library before treating this as unresolved.",
+    "acceptance_criteria": [
+      "Every acceptance criterion in REQ-358 (quoted above) maps to a concrete design element — no TBD/deferral language on any of them",
+      "No implementation code (.ex/.exs bodies) present in the design doc — signatures and shapes only",
+      "The backward-compatibility default-derivation rule is stated precisely enough to be mechanically applied by ELIXIR-DEV without further judgment calls",
+      "The branching construct's exact operator set and evaluation procedure is unambiguous",
+      "Cross-module/cross-file dependencies (mix.exs wiring, which files the runner/WF-05 prose replaces) are listed explicitly",
+      "Each of CODE-DESIGNER's 5 stated open questions is judged BLOCKER or legitimately-deferred, with the YAML-dependency question specifically checked against mix.exs's actual deps() before accepting it as open",
+      "RE-GATE (iteration 1): CODE-DESIGNER applied a targeted addendum (commits d130770a, 8d8e900c on feature/WF02-REQ358-20260916) per handoffs/WF02-REQ358-20260916/step-01-design.json's REWORK ITERATION 1 note: (a) corrected the design doc's YAML-dependency premise to name yaml_elixir (already a project dependency, already used by letflow.audit_issue_closures.ex); (b) resolved the `only: :test` scoping question concretely by citing mix.exs's cli/0 preferred_envs: [\"letflow.check\": :test], which already runs the whole `letflow.check` alias under :test, so no widening is needed. Re-read the design doc in full again (not just the diff) and re-verify against all six original acceptance criteria above -- the fix must be checked in context, not taken on the rework agent's own say-so."
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "Re-gate iteration 1: re-read lib/letflow/design/req358-uat-scope-branching-env.md in full (not just the diff) and re-verified against all six original acceptance criteria. OQ-1 fix is concrete and verified against the actual tree: mix.exs:64 declares {:yaml_elixir, \"~> 2.11\", only: :test} (already in use by letflow.audit_issue_closures.ex); mix.exs:17 declares preferred_envs: [\"letflow.check\": :test]; letflow.check_issue_refs immediately precedes \"format --check-formatted\" in the letflow.check alias, matching §2.4's insertion point exactly. AC1 (backward-compat default-derivation, §1.2) is a precise mechanical rule with a concrete verification recipe (§5). AC2 (branching operator set) is exactly eq/in/else, unambiguous, with evaluation procedure in §4.3. AC3 (no implementation code) -- §2.2 is @spec/type-shape/prose only, no .ex bodies. AC4 (login-routing example) is fully written out in §3, not summarized. AC5 (uat-runner.md/WF-05 replacement prose) is literal, ready-to-paste markdown in §4.1-4.6. AC6 (5 OQs judged): OQ-1 resolved as required by this rework; OQ-2/3/4/5 remain genuinely open in the doc and are each legitimately-deferred, not BLOCKER-level (OQ-2 is a thoroughness-depth call correctly left to ELIXIR-DEV; OQ-3/OQ-5 have no concrete triggering need from this requirement's own scope; OQ-4 depends on an out-of-repo script CODE-DESIGNER correctly declined to guess at). No new gaps found.",
+    "artifacts_out": ["lib/letflow/design/req358-uat-scope-branching-env.md"],
+    "issues": [],
+    "git_evidence": {
+      "branch_name": "feature/WF02-REQ358-20260916",
+      "commit_sha_list": [],
+      "remote_branch": "origin/feature/WF02-REQ358-20260916",
+      "push_status": "pending",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": "Route to Step 2a (ELIXIR-DEV) to implement the design."
+  },
+  "rework_count": 0,
+  "max_rework": 3,
+  "gate_history": [
+    {
+      "iteration": 0,
+      "gated_at": "2026-09-16T09:15:00Z",
+      "status": "FAIL",
+      "summary": "Design doc's own premise in §0 ('Project has no YAML-parsing dependency in mix.exs today') is factually wrong. mix.exs deps() already lists {:yaml_elixir, \"~> 2.11\", only: :test}, actively used by an existing mix task (lib/mix/tasks/letflow.audit_issue_closures.ex) plus several test support/fixture modules. OQ-1 is therefore NOT a genuine open question requiring new REVIEWER dependency sign-off as the design claims -- it is a reuse decision the design should have made itself, including addressing the `only: :test` scoping, since the new letflow.check_uat_scenario_schema task is wired into the `letflow.check` alias (§2.4). All other checks looked sound but FAIL immediately per Step 1b's no-partial-credit rule.",
+      "issues": [
+        "BLOCKER: §0 premise 'no YAML-parsing dependency in mix.exs today' is false -- mix.exs already declares {:yaml_elixir, \"~> 2.11\", only: :test}, in active use by lib/mix/tasks/letflow.audit_issue_closures.ex and multiple test/ modules.",
+        "BLOCKER: OQ-1 must be resolved by CODE-DESIGNER, not left to ELIXIR-DEV/REVIEWER -- decide whether check_uat_scenario_schema reuses yaml_elixir, and if so, whether its `only: :test` restriction must change."
+      ],
+      "next_action": "Rework CODE-DESIGNER: correct §0's premise, resolve OQ-1 concretely (reuse yaml_elixir; decide and state the only:-scope fix), then re-route to CODE-DESIGN-VALIDATOR."
+    },
+    {
+      "iteration": 1,
+      "gated_at": "2026-09-16T09:40:00Z",
+      "status": "PASS",
+      "summary": "Re-read design doc in full; re-verified against all six original acceptance criteria, not only the YAML-dependency fix. §0's REWORK ITERATION 1 correction and §6's resolved OQ-1 both check out against the actual tree (mix.exs:64 yaml_elixir dep, mix.exs:17 preferred_envs, letflow.check alias insertion point at §2.4). No implementation code present; backward-compat default rule, branching operator set, login-routing example, and uat-runner.md/WF-05 replacement prose all meet the bar. OQ-2/3/4/5 remain genuinely open and are legitimately-deferred, not BLOCKER-level.",
+      "issues": [],
+      "next_action": "Route to Step 2a (ELIXIR-DEV) to implement the design."
+    }
+  ]
+}

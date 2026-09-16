@@ -58,6 +58,51 @@ scenarios; if that file does not exist or carries a `NOTE (ISS-0526)` comment ma
 it unresolved, record the scenario BLOCKED/UNBUILT_FEATURE on its frontend leg rather
 than skipping it silently or inventing a substitute API-only path.
 
+## Evaluating a `when:` branch
+
+A scenario file may carry `branches:` instead of a flat `steps:`/`expected_outcomes:`
+list (see `docs/agents/uat-scenario-schema.md`). For such a file:
+
+1. Read the branches top-to-bottom. For each branch (other than one with `when: else`),
+   evaluate its condition against the run's actual, currently-observed facts:
+   - `fact: role` means the role of the actor **currently authenticated in the browser
+     session or API client you are driving for this branch's steps** — observe it for
+     real (e.g. the role claim in the session/JWT you just authenticated with via
+     `credential_source`, or the role attribute on the account you signed in as), never
+     assume it from the actor name alone.
+   - `op: eq` matches iff the observed fact equals `value` exactly (string, case
+     sensitive).
+   - `op: in` matches iff the observed fact equals one entry of the `value` list.
+   - If no actor has been authenticated at all for this branch's steps (a step whose
+     `actor:` entry is deliberately not signed in), the observed `role` is the literal
+     value `unauthenticated`.
+2. Run the **first** branch whose condition matches. Run only that one branch's `steps:`
+   and check only that one branch's `expected_outcomes:` for this scenario execution —
+   do not run every branch.
+3. A branch with `when: else` matches iff no earlier branch matched. If no branch matches
+   at all (a file authored without an `else` branch, and no earlier condition matched),
+   record the scenario BLOCKED with the reason "no branch matched — fact values observed:
+   <list>," not a silent skip.
+4. Record the verdict against the branch actually run, naming the branch in your report
+   (e.g. `EO-001 (branch: tenant_user_dashboard): PASS`), so RELEASE-VALIDATOR can see
+   which path was exercised.
+
+## Environment target
+
+Every WF-05 dispatch to UAT-RUNNER carries an explicit environment target in the
+handoff's `context` — never assume "whatever instance is reachable":
+
+- `base_url`: the instance's base URL (e.g. `https://qa.bizdala.com`). All real HTTP
+  calls and GUI navigation in this run go against this base URL, not a default or
+  previously-used one.
+- `credential_source`: a named source of seeded login credentials (e.g.
+  `ai-dala-infra/scripts/qa-login.sh`) UAT-RUNNER uses to obtain actor credentials for
+  the run's scenarios, rather than inventing or hardcoding any. Resolve each scenario's
+  `actors:` map entries against this source's seeded users.
+
+If a dispatch is missing either field, do not guess a target — return the handoff
+FAILED, naming the missing field, per this project's "no speculation" core directive.
+
 ## Forbidden
 
 Don't mock the backend or intercept HTTP calls — the whole point is exercising the real
@@ -67,8 +112,7 @@ requirements define.
 
 ## Note on scope
 
-R-Co's `BO-*` business-owner personas and `PRODUCT-OWNER` role evaluate UAT results
-from a specific tenant's business perspective — Letflow doesn't have a tenant business
-scenario corpus yet, so those roles are deliberately not reproduced (see
-`docs/migration/decisions/0004-humanless-pipeline.md`). Until S7 defines one, your
-report is read directly by RELEASE-VALIDATOR, not by a persona layer.
+R-Co's `BO-*` business-owner personas and `PRODUCT-OWNER` role evaluate UAT results from
+a specific tenant's business perspective. Once REQ-361 lands, Letflow will have that
+equivalent role; until it lands and a dispatch names it as this run's downstream
+reader, your report is read directly by RELEASE-VALIDATOR, not by a persona layer.

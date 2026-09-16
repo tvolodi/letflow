@@ -1,0 +1,76 @@
+run_id: WF02-REQ358-20260916
+agent: TEST-RUNNER
+workflow: WF-02 Step 4 (requirement implementation, full-suite verification)
+requirement: REQ-358 (UAT scenario schema scope + branching, UAT-RUNNER env target,
+  schema-validation mix task)
+timestamp_utc: "2026-09-16T09:41:00Z"
+branch: feature/WF02-REQ358-20260916
+
+verdict: PASS
+
+environment:
+  docker_compose: "letflow-postgres-1 and letflow-keycloak-1 already Running before
+    this run (`docker compose up -d` confirmed both, no change needed). No untracked
+    .env LETFLOW_DB_PORT override present (only QUEUE_AUTH_TOKEN,
+    LETFLOW_KEYCLOAK_PORT, LETFLOW_SECRETS_MASTER_KEY set) -- default port 5462 used
+    by both compose and Ecto per README."
+  host_cores: 16 (nproc, via test_parallel.sh's own detection)
+  toolchain: elixir/mix present (/c/Program Files/Elixir/bin/{elixir,mix}); no
+    `mix deps.get` needed.
+
+diff_scope:
+  files: "git diff --name-only main...HEAD: .claude/agents/uat-runner.md,
+    docs/agents/uat-scenario-schema.md, docs/agents/workflows/WF-05_uat_run.md,
+    docs/requirements.yaml, docs/status/requirement_status.index.yaml,
+    docs/status/requirement_status.v18.yaml, handoffs/WF02-REQ358-20260916/*,
+    handoffs/orchestrator.log, handoffs/registry.json,
+    lib/letflow/design/req358-uat-scope-branching-env.md,
+    lib/mix/tasks/letflow.check_uat_scenario_schema.ex, mix.exs,
+    test/fixtures/uat/scenarios/_throwaway/login-routing-example.yaml,
+    test/mix/tasks/letflow_check_uat_scenario_schema_test.exs, test/specs/REQ-358.md"
+
+commands_run:
+  - "scripts/test_parallel.sh -- full suite, 16-way partitioned (N=16, nproc):
+    exit 0, 0 failures."
+
+full_suite_result:
+  final_combined: "4318 tests, 6 properties, 0 failures (4324/4324 passed)"
+  per_partition:
+    - "partition 1: 355 tests, 0 properties, 0 failures, exit 0"
+    - "partition 2: 235 tests, 0 properties, 0 failures, exit 0"
+    - "partition 3: 354 tests, 0 properties, 0 failures, exit 0"
+    - "partition 4: 280 tests, 2 properties, 0 failures, exit 0"
+    - "partition 5: 334 tests, 0 properties, 0 failures, exit 0"
+    - "partition 6: 178 tests, 0 properties, 0 failures, exit 0"
+    - "partition 7: 275 tests, 0 properties, 0 failures, exit 0"
+    - "partition 8: 173 tests, 0 properties, 0 failures, exit 0"
+    - "partition 9: 268 tests, 1 property, 0 failures, exit 0"
+    - "partition 10: 229 tests, 0 properties, 0 failures, exit 0"
+    - "partition 11: 269 tests, 0 properties, 0 failures, exit 0"
+    - "partition 12: 198 tests, 2 properties, 0 failures, exit 0"
+    - "partition 13: 267 tests, 1 property, 0 failures, exit 0"
+    - "partition 14: 367 tests, 0 properties, 0 failures, exit 0"
+    - "partition 15: 224 tests, 0 properties, 0 failures, exit 0"
+    - "partition 16: 312 tests, 0 properties, 0 failures, exit 0"
+
+findings: []
+
+pre_existing_failures:
+  count: 0
+  attribution_evidence: []
+  note: "Full suite is clean end to end -- no failures to attribute by any of the
+    three structural routes; nothing to file."
+
+regression_check_on_req358_files:
+  result: "included in the full-suite run above -- test/mix/tasks/
+    letflow_check_uat_scenario_schema_test.exs and test/specs/REQ-358.md ran as
+    part of the 4324-test combined total with 0 failures. No separate isolation
+    run was needed since the full suite already came back clean."
+
+gate_status:
+  full_test_suite: "4324/4324 passed, 0 pre-existing failures, 0 regressions from
+    REQ-358"
+
+next_step: >
+  Hands off to RELEASE-VALIDATOR, which re-runs the full suite independently per
+  this project's redundancy principle rather than trusting this report alone.

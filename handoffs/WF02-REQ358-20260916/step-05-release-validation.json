@@ -1,0 +1,70 @@
+{
+  "handoff_id": "9eb5a267-2f6c-4237-8609-98dbf1e38a0e",
+  "run_id": "WF02-REQ358-20260916",
+  "workflow_id": "WF-02",
+  "step": "05",
+  "from_agent": "ORCH",
+  "to_agent": "RELEASE-VALIDATOR",
+  "file": "handoffs/WF02-REQ358-20260916/step-05-release-validation.json",
+  "created_at": "2026-09-16T09:42:35Z",
+  "started_at": "2026-09-16T09:42:35Z",
+  "completed_at": null,
+  "status": "PENDING",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S7",
+    "requirement_ids": ["REQ-358"],
+    "requirement_text": {
+      "REQ-358": "Extend the UAT scenario YAML schema with a `scope` field and step-level `when:` branching (eq/in/else only, no general scripting language), sufficient to express a login-routing example (role=PLATFORM_ADMIN / role=<tenant-role> / unauthenticated, three distinct outcomes) as a throwaway validation fixture. Extend UAT-RUNNER (WF-05_uat_run.md, uat-runner.md) with an explicit environment target (base URL + credential source), exercised for real against the QA instance, with the actual command/invocation and its real output quoted. Add a schema-validation mix task that rejects a malformed scope/branching scenario file with a clear error, and passes on all 29 pre-existing scenario files unchanged. WF-05_uat_run.md's step sequence updated consistently with uat-runner.md, no stale cross-reference to the old 'no persona layer' framing. NOT IN SCOPE: no new agent role, no permanent scenario content, no visual-regression mechanism."
+    },
+    "source_text": {},
+    "related_handoff_ids": [
+      "90bdb2cb-4967-43a5-85c5-6cef67dc1c6e", "2cf458a2-0964-44f9-b23d-11b09a43dd84",
+      "843c27d8-1e77-4cf4-97e2-1044b9701c8c", "097d73f9-d591-423c-a0f0-3dd40ebf83ab",
+      "c37d440e-fec8-4623-83bd-410731dd008a", "41441e78-173e-4356-a03c-cdcba9bfe5ea",
+      "3e06c896-3ba1-4568-b321-fe68988d45e6", "1c726abc-8377-4fc7-89c6-200d4840b89e"
+    ],
+    "artifacts_in": [
+      "lib/mix/tasks/letflow.check_uat_scenario_schema.ex",
+      "test/mix/tasks/letflow_check_uat_scenario_schema_test.exs",
+      "test/specs/REQ-358.md",
+      "docs/agents/uat-scenario-schema.md",
+      ".claude/agents/uat-runner.md",
+      "docs/agents/workflows/WF-05_uat_run.md",
+      "test/fixtures/uat/scenarios/_throwaway/login-routing-example.yaml",
+      "test/reports/report-20260916-WF02-REQ358-20260916.yaml",
+      "test/uat-reports/uat-2026-09-16-WF02-REQ358-20260916.yaml",
+      "handoffs/WF02-REQ358-20260916/step-04b-uat-run.json"
+    ],
+    "owned_modules": []
+  },
+  "task": {
+    "description": "Independently re-verify every REQ-358 acceptance criterion per WF-02_requirement_implementation.md Step 5 (already read) — re-run scripts/test_parallel.sh yourself (do not trust Step 4's TEST-RUNNER report alone), then check each acceptance criterion against the actual code/artefacts, not against any prior step's summary.\n\nONE SPECIFIC JUDGMENT CALL THIS STEP MUST MAKE, not present in a typical Step 5: Step 4b (UAT-RUNNER, handoffs/WF02-REQ358-20260916/step-04b-uat-run.json, in artifacts_in) returned PARTIAL, not PASS. Read that handoff and test/uat-reports/uat-2026-09-16-WF02-REQ358-20260916.yaml in full. Summary of what happened: (1) AC1's 'unchanged pass/fail disposition' verification against an existing scenario (loan-origination-below-threshold.yaml) came back BLOCKED — the QA instance has no Meridian tenant/fixture data seeded (real evidence quoted: GET /api/v1/identity/users?search=meridian -> {\"count\":0}, GET /api/v1/tenants -> only Default Tenant exists). This is a QA environment data-seeding gap, not a defect in REQ-358's schema/code — the mix task's own unit-level backward-compatibility coverage (Step 3/4, 25 tests including a live check_file/1 run against the actual unmodified Meridian file, all passing at the parse/validation level) already demonstrates the schema change is byte-for-byte non-disruptive to that exact file; what's missing is only the END-TO-END live-HTTP half, which is blocked by absent QA data, not by REQ-358. (2) AC3 (environment-target exercised for real) came back genuinely PASS — real qa-login.sh invocations, real Keycloak tokens, real distinct HTTP outcomes per role, all quoted in the report. (3) AC4 (branching sufficiency) came back PARTIAL — the branch-SELECTION mechanism was proven for real (three distinct real backend responses keyed on role), but the scenario's own steps are `via: gui` and no browser-automation tool exists yet in this pipeline, so the full GUI walkthrough leg is BLOCKED/UNBUILT_FEATURE, reported honestly rather than faked.\n\nYOUR JOB: judge whether this constitutes 'all acceptance criteria satisfied' for REQ-358 given the above, or whether it is a genuine blocker requiring further work before DOC-UPDATER. Consider: (a) is the AC1 gap attributable to REQ-358's own implementation, or to a pre-existing QA environment limitation outside this requirement's control (check whether Meridian data was ever seeded on QA for ANY prior requirement's UAT verification, or whether QA has only ever supported platform-scope/default-tenant scenarios — this bears on whether treating the gap as 'environment, not REQ-358' is actually justified or is convenient rationalization); (b) is the AC4 GUI-leg gap similarly a pre-existing pipeline capability gap (no browser-automation tool wired in yet) rather than something REQ-358 itself needed to build (REQ-358's own SCOPE explicitly excludes 'no visual-regression mechanism' and does not promise GUI automation); (c) whether the combination of the mix task's exhaustive unit-level backward-compatibility proof (Step 3/4) plus the real API-level branch-selection proof (Step 4b) is sufficient live-system evidence for AC1/AC3/AC4's substance even though the specific literal scenario chosen (Meridian) could not complete end-to-end. State your verdict explicitly and reason through it — do not silently accept or silently reject Step 4b's PARTIAL.\n\nIf you conclude these gaps are pre-existing/out-of-REQ-358's-control and the evidence gathered is substantively sufficient: PASS, route to DOC-UPDATER, and name the two gaps (QA Meridian data absence; no browser-automation tool) as fast-follow items for RELEASE-VALIDATOR's own record, not silently dropped. If you conclude otherwise: FAIL with the specific blocking gap named and which agent it routes back to.",
+    "acceptance_criteria": [
+      "scripts/test_parallel.sh re-run independently, combined pass/fail totals quoted",
+      "Every REQ-358 acceptance criterion checked explicitly against the actual code/test/report artefacts",
+      "The Step 4b PARTIAL verdict is explicitly judged (not silently passed over) with reasoning per the three considerations (a)/(b)/(c) above",
+      "docs/status/requirement_status.yaml and docs/requirements.yaml checked for staleness relative to what actually shipped"
+    ]
+  },
+  "result": {
+    "status": "COMPLETED",
+    "summary": "PASS. Independent scripts/test_parallel.sh re-run (clean, single invocation after discarding a first run contaminated by two auto-backgrounded concurrent invocations colliding on the shared test-DB pool): combined 4318 tests, 6 properties, 0 failures (4324/4324 passed). mix letflow.check.test: OK, no 'default values for the optional arguments' match, isolated :lua_wallclock_race run also passed clean. letflow_check_uat_scenario_schema_test.exs: 25/25 passed independently. Each AC checked against actual artefacts: schema doc documents scope:/branches:/when: with worked examples and explicit backward-compat rule (docs/agents/uat-scenario-schema.md); mix task + 25 tests reject malformed files and pass all 29 pre-existing scenario files (find confirms 30 total under test/fixtures/uat/scenarios minus 1 _throwaway = 29); uat-runner.md's 'Note on scope' correctly references REQ-361 with no stale 'no persona layer' text; WF-05_uat_run.md Step 3 updated with branch-evaluation + environment-target steps consistent with uat-runner.md. docs/requirements.yaml has REQ-358 status: in_progress (not yet flipped) and docs/status/requirement_status.v18.yaml has only a 'started' entry, no 'done' -- correctly reflects that DOC-UPDATER has not run yet; no staleness found. JUDGMENT CALL on Step 4b's PARTIAL: PASS, not a blocker. (a) AC1's Meridian gap is a pre-existing QA environment limitation, not a REQ-358 defect -- grep across test/uat-reports/ shows the ONLY other real UAT report ever run against QA (uat-2026-09-08-WF03-ISS0296) never touched Meridian/tenant-vertical data either, and no prior report mentions Meridian at all, so QA has apparently never been seeded with tenant-vertical fixture data for ANY requirement -- this is not convenient rationalization, it's the first time anyone tried and hit a real, independently-confirmable environment gap. The schema's backward-compatibility claim is independently substantiated at the unit level (25 passing tests including a live check_file/1 run against the actual unmodified Meridian file, re-confirmed by me above), which is the correct level to prove 'schema change didn't break parsing' -- the live E2E half was always a stretch goal blocked by data the requirement never had scope to seed. (b) AC4's GUI-leg gap is a pipeline capability gap (no browser-automation tool wired in anywhere in this project yet, confirmed via UAT-RUNNER's own ToolSearch check), not something REQ-358 promised -- REQ-358's own NOT-IN-SCOPE line explicitly excludes 'no visual-regression mechanism' and the requirement's acceptance criteria never mention GUI automation, only that the branching construct be 'proven sufficient.' (c) The branch-selection mechanism -- the actual thing AC4 needs proven -- got real, live, multi-branch evidence (3 distinct real HTTP outcomes: 200/403/401, keyed on the same role fact used by the scenario's when: clauses, via real Keycloak tokens against real QA), which is substantively stronger proof of 'the construct works' than a GUI screenshot would have been. Combined with the mix task's exhaustive unit-level proof, this is sufficient live-system evidence for AC1/AC3/AC4's substance. Routing to DOC-UPDATER. Fast-follow items for RELEASE-VALIDATOR's own record (not silently dropped): (1) QA has no Meridian/tenant-vertical fixture data seeded -- blocks any tenant-scope scenario's live E2E UAT verification until seeded; (2) no browser-automation tool exists in this pipeline -- blocks any via: gui scenario step from being driven for real (relevant to REQ-360's future GUI-leg work).",
+    "artifacts_out": [],
+    "issues": [
+      "Fast-follow (not a REQ-358 blocker): QA instance has no Meridian/tenant-vertical fixture data seeded -- blocks live E2E UAT verification of any tenant-scope scenario until seeded.",
+      "Fast-follow (not a REQ-358 blocker): no browser-automation tool available anywhere in this pipeline -- blocks the GUI leg of any via: gui scenario step from being driven for real; relevant to REQ-360's successor work."
+    ],
+    "git_evidence": {
+      "branch_name": "feature/WF02-REQ358-20260916",
+      "commit_sha_list": ["e3b10f5f1f52874e962da307e13bbcd88724dc43"],
+      "remote_branch": "origin/feature/WF02-REQ358-20260916",
+      "push_status": "pending",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": "Route to DOC-UPDATER: flip REQ-358 status to done in docs/requirements.yaml and append a done event to docs/status/requirement_status.v18.yaml."
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

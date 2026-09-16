@@ -61,7 +61,7 @@ defmodule Letflow.MixProject do
       # stream_data's own `only: :test` entry, not wasmex/lua's unconditional
       # runtime-engine entries. Flagged for REVIEWER sign-off per REQ-205's AC7,
       # same procedural precedent as REQ-148/REQ-165's own new top-level deps.
-      {:yaml_elixir, "~> 2.11", only: :test},
+      {:yaml_elixir, "~> 2.11", only: [:dev, :test]},
       {:ueberauth_oidcc, "~> 0.4"},
       {:lua, "~> 1.0"},
       {:wasmex, "~> 0.15.1"},
@@ -149,6 +149,11 @@ defmodule Letflow.MixProject do
         # a gate because the rule it replaces ("ISS-0187 is queue task 187") was
         # documented too, and decayed to 172/305 with nothing re-checking it.
         "letflow.check_issue_refs",
+        # REQ-358: validates test/fixtures/uat/scenarios/**/*.yaml against the schema
+        # documented in docs/agents/uat-scenario-schema.md -- placed with the other
+        # fast, non-compiling structural scans (no shared parse target with any
+        # neighbor, so no ordering dependency either direction).
+        "letflow.check_uat_scenario_schema",
         "format --check-formatted",
         "compile --warnings-as-errors",
         "letflow.check.test"

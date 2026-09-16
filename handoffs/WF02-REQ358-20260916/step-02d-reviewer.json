@@ -1,0 +1,76 @@
+{
+  "handoff_id": "097d73f9-d591-423c-a0f0-3dd40ebf83ab",
+  "run_id": "WF02-REQ358-20260916",
+  "workflow_id": "WF-02",
+  "step": "02d",
+  "from_agent": "ORCH",
+  "to_agent": "REVIEWER",
+  "file": "handoffs/WF02-REQ358-20260916/step-02d-reviewer.json",
+  "created_at": "2026-09-16T08:59:04Z",
+  "started_at": "2026-09-16T09:05:16Z",
+  "completed_at": "2026-09-16T09:20:00Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S7",
+    "requirement_ids": ["REQ-358"],
+    "requirement_text": {
+      "REQ-358": "DECISION BEING REVISITED, NAMED EXPLICITLY PER CORE-DIRECTIVES' \"don't silently re-decide a settled decision\" rule. Decision 0004 (\"What is explicitly NOT reproduced\") deferred R-Co's BO-*/PRODUCT-OWNER persona layer \"to when S7 actually starts and there is a concrete scenario corpus to validate against.\" REQ-210 (S7's closing requirement, done) confirmed both preconditions are now met. REVIEWER should confirm this reading before this requirement's dependents (REQ-359..362) proceed rather than treat it as implicitly pre-approved -- this is an explicit ask of THIS gate, not incidental. SCOPE: extend the UAT scenario YAML schema with a scope field + step-level `when:` branching (eq/in/else only, no general expression language), extend UAT-RUNNER/WF-05 docs with an environment-target input, add a schema-validation mix task. NOT IN SCOPE: no new agent role, no permanent scenario content, no visual-regression mechanism."
+    },
+    "source_text": {},
+    "related_handoff_ids": ["843c27d8-1e77-4cf4-97e2-1044b9701c8c", "8f607929-80a5-486f-928e-65b5d726cea5"],
+    "artifacts_in": [
+      "lib/mix/tasks/letflow.check_uat_scenario_schema.ex",
+      "mix.exs",
+      "docs/agents/uat-scenario-schema.md",
+      ".claude/agents/uat-runner.md",
+      "docs/agents/workflows/WF-05_uat_run.md",
+      "lib/letflow/design/req358-uat-scope-branching-env.md",
+      "docs/migration/decisions/0004-humanless-pipeline.md",
+      "handoffs/WF02-REQ358-20260916/step-02a-elixir-dev.json"
+    ],
+    "owned_modules": [
+      "lib/mix/tasks/letflow.check_uat_scenario_schema.ex"
+    ]
+  },
+  "task": {
+    "description": "Hard gate per WF-02_requirement_implementation.md Step 2d and .claude/agents/reviewer.md's own procedure (idiomatic-vs-crutch, supervision integrity N/A here — no process/supervisor touched, type-safety gaps, scope creep) plus docs/anti-patterns.md. TWO THINGS THIS GATE MUST SPECIFICALLY DO, beyond the standard checklist:\n\n1. DECISION-RECORD CONSISTENCY CHECK (explicitly asked for by REQ-358's own requirement text, quoted above): read docs/migration/decisions/0004-humanless-pipeline.md's 'What is explicitly NOT reproduced' section and confirm the reading this run has proceeded on — that Decision 0004's deferral of R-Co's BO-*/PRODUCT-OWNER persona layer was conditioned on 'when S7 actually starts and there is a concrete scenario corpus to validate against', and that REQ-210 (done) already confirmed both preconditions are met — is correct, i.e. this run is not silently re-deciding a settled decision but is executing its already-stated trigger condition. State this confirmation (or disagreement) explicitly in your result; do not silently pass over it.\n\n2. THE MIX_ENV COMPILE-WARNING FINDING ELIXIR-DEV FLAGGED (see handoffs/WF02-REQ358-20260916/step-02a-elixir-dev.json's result.issues, in artifacts_in): lib/mix/tasks/ compiles under every Mix env, and a bare `mix compile --warnings-as-errors` with no MIX_ENV set warns because YamlElixir is scoped `only: :test` in mix.exs's deps(). Confirmed non-blocking for THIS project's actual CI (.github/workflows/ci.yml runs only `mix letflow.check`, which is forced to :test via mix.exs's preferred_envs — verify this yourself, don't take it on faith) and for GIT_MERGE.md Step Final's own gate sequence (also runs under whatever env the alias/task forces). Judge: is this an acceptable, documented tradeoff (leave yaml_elixir `only: :test`, since every actual gate this project runs already forces :test) or a genuine idiom/robustness gap that should be fixed now (e.g. widen yaml_elixir's dep scope to remove the env-dependency footgun entirely for any future bare `mix compile` invocation, interactive dev session, or editor tooling)? Either verdict is acceptable — PASS with a recorded non-blocking note, or FAIL with a specific required fix — but it must be a reasoned call, not silently dropped.\n\nStandard checks: read the diff (git diff main...HEAD), verify the new mix task follows the check_requirements_registration precedent idiomatically (pure core / thin Mix.Task wrapper), verify no scope creep beyond REQ-358's SCOPE section (no new agent role, no permanent scenario content beyond the throwaway fixture, no visual-regression code), verify the throwaway fixture is clearly marked as such and not silently promoted to permanent corpus.",
+    "acceptance_criteria": [
+      "Decision 0004 consistency explicitly confirmed or disputed, with reasoning, not silently assumed",
+      "The MIX_ENV/yaml_elixir compile-warning finding is explicitly judged PASS-with-note or FAIL-with-fix, not dropped",
+      "No genuine crutch, scope creep, or idiom violation found in the new mix task or doc changes; if one is found, FAIL names it specifically",
+      "docs/anti-patterns.md checked for relevant precedent before signing off",
+      "RE-GATE (iteration 1): ELIXIR-DEV widened yaml_elixir's dep scope in mix.exs from only: :test to only: [:dev, :test] per handoffs/WF02-REQ358-20260916/step-02a-elixir-dev.json's REWORK ITERATION 1 note, and re-verified a bare (no MIX_ENV set) `mix compile --warnings-as-errors` is now clean. Re-verify this yourself directly rather than trusting the rework report -- run the bare command again and quote it. Also confirm the MINOR wording fix (uat-runner.md/WF-05's REQ-361 present-tense sentence) was reworded to a conditional form."
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "RE-GATE (iteration 1) PASS. Judgment 1 (Decision 0004 consistency): re-confirmed correct, no change from iteration 0 -- REQ-358 executes Decision 0004's already-stated trigger condition (S7 started + REQ-210 done gave a concrete scenario corpus), not a silent re-decision. Judgment 2 (MIX_ENV/yaml_elixir): required fix verified directly, not trusted from ELIXIR-DEV's report -- mix.exs:64 now reads `only: [:dev, :test]`; ran `mix clean` then a bare `mix compile --warnings-as-errors` with MIX_ENV unset, output 'Compiling 240 files (.ex) / Generated letflow app', exit code 0, no warnings. MINOR wording fix also verified: uat-runner.md:115-117 and WF-05_uat_run.md:86-88 both now use conditional 'Once REQ-361 lands ... will have' phrasing instead of present-tense 'As of REQ-361, Letflow has'. Diff between iteration-0 and this HEAD touches only mix.exs + the two doc files -- no new scope, no new mix task changes, no crutch introduced. docs/anti-patterns.md checked, no entry covers this MIX_ENV/dep-scope class; none contradicted.",
+    "artifacts_out": ["handoffs/WF02-REQ358-20260916/step-02d-reviewer.json"],
+    "issues": [],
+    "git_evidence": {
+      "branch_name": "feature/WF02-REQ358-20260916",
+      "commit_sha_list": [],
+      "remote_branch": "origin/feature/WF02-REQ358-20260916",
+      "push_status": "pending",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": "Route to TEST-DESIGNER (Step 3) for WF-02."
+  },
+  "rework_count": 0,
+  "max_rework": 3,
+  "gate_history": [
+    {
+      "iteration": 0,
+      "gated_at": "2026-09-16T09:01:40Z",
+      "status": "FAIL",
+      "summary": "Judgment call 1 (Decision 0004 consistency) CONFIRMED, no re-decision. Judgment call 2 (MIX_ENV/yaml_elixir) FAIL: mix.exs's preferred_envs only forces :test for the letflow.check alias; GIT_MERGE.md step 5d's conflict-handling path runs a bare `mix compile --warnings-as-errors`, NOT forced to :test, and will hit a spurious undefined-function warning on any future rebase conflict. Required fix: widen yaml_elixir to only: [:dev, :test] in mix.exs. Standard checks (idiom, scope creep, supervision) all clean. One MINOR non-blocking note on REQ-361 present-tense wording.",
+      "issues": [
+        "MAJOR: yaml_elixir scoped only: :test while letflow.check_uat_scenario_schema.ex (compiles under every env) calls YamlElixir.read_from_file/1 -- bare mix compile --warnings-as-errors fails; GIT_MERGE.md step 5d hits this on any future rebase conflict. Fix: only: [:dev, :test].",
+        "MINOR: uat-runner.md/WF-05's REQ-361 sentence reads present-tense ('has that equivalent role') while REQ-361 is still pending; reword conditional."
+      ],
+      "next_action": "Route back to ELIXIR-DEV for the yaml_elixir dep-scope fix, then re-dispatch to REVIEWER for a fresh pass on the actual new diff."
+    }
+  ]
+}

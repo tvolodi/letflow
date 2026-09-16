@@ -400,3 +400,39 @@ history:
       queue Q-690). README.md checked -- no agent roster, ASCII state
       diagram, or "Running it" content references agent roles or counts
       anywhere in it, so no README change was needed.
+
+  - req: REQ-362
+    event: started
+    agent: ORCH
+    at: 2026-09-16T10:34:13Z
+    note: >
+      COMPOSITION NOTE (Step Final rebase onto a further-advanced
+      origin/main): this entry's own `at:` (10:34:13Z) chronologically
+      sits between REQ-359's started event (10:30:49Z) and REQ-363's
+      done event (10:35:01Z), both already landed earlier in this
+      volume -- appended here at the tail instead of reordered into
+      that exact position, since three other requirements' entries
+      (REQ-363, REQ-359, and this rebase's own REQ-362 done-event
+      below) all interleave within the same ~20-minute window and a
+      full reorder risks a transcription error; the real ordering is
+      preserved by each entry's own `at:` timestamp, which is what
+      matters for the record's accuracy.
+      Claimed letflow-queue task 682 (GH#1432, agent_id
+      orch-session-issueloop, depends_on [REQ-358], done -- merged as
+      09e1e367). Step 00 git setup: pulled main, branched
+      feature/WF02-REQ362-20260916, pushed. (Note: a first Step 00
+      attempt on this same branch was silently lost -- a
+      CODE-DESIGN-VALIDATOR subagent working WF02-REQ363-20260916
+      concurrently in this same shared checkout directory, not an
+      isolated worktree, checked out its own branch mid-way and
+      discarded this branch's uncommitted working-tree state before it
+      was committed. Redone cleanly here with no other agent running
+      concurrently. Lesson for future sessions: do not interleave ORCH's
+      own git operations with a dispatched agent's when both touch the
+      same shared checkout -- serialize, or use Agent's
+      isolation:"worktree" option.) Two-phase visual regression testing:
+      phase 1 AI-agent-accepted screenshot baselines, phase 2 mechanical
+      pixel-diff via Playwright's built-in screenshot comparison,
+      unconditional auto-fail, dual-tracked issue filing on detected
+      difference, explicit-justification re-baseline action. Routing to
+      CODE-DESIGNER next.

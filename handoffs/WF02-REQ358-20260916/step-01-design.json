@@ -9,7 +9,7 @@
   "created_at": "2026-09-16T08:39:49Z",
   "started_at": "2026-09-16T08:39:49Z",
   "completed_at": null,
-  "status": "PENDING",
+  "status": "IN_PROGRESS",
   "priority": "NORMAL",
   "context": {
     "stage": "S7",
@@ -50,19 +50,19 @@
     ]
   },
   "result": {
-    "status": "",
-    "summary": "",
-    "artifacts_out": [],
+    "status": "COMPLETED",
+    "summary": "Designed all three REQ-358 pieces in lib/letflow/design/req358-uat-scope-branching-env.md: (1) an optional `scope:` field coexisting with the existing `company_id:` field, with a documented default-derivation rule for backward compatibility (absent `scope` reads from `company_id`: 'platform' literal or the company name itself), plus a narrow step-level `branches:`/`when:` construct (fact/op/value with only `eq`/`in`/`else`, no expression language) proven sufficient on paper via a throwaway login-routing fixture (PLATFORM_ADMIN / tenant role / unauthenticated, three distinct outcomes); (2) `lib/mix/tasks/letflow.check_uat_scenario_schema.ex` designed structurally after letflow.check_requirements_registration.ex (run/1, check_file/1, check_scenario/2, render/1 signatures; SCHEMA-1..6 mechanical rules; exact [rule] file: message error shape; mix.exs aliases() wiring diff placed after letflow.check_issue_refs); (3) verbatim replacement/new-section markdown for .claude/agents/uat-runner.md (Environment target section, Evaluating a `when:` branch section, Note-on-scope replacement citing 'as of REQ-361') and docs/agents/workflows/WF-05_uat_run.md (Step 1/Step 2-3 additions, Deferred-personas sentence replacement). 5 open questions flagged explicitly (YAML-dependency choice needing REVIEWER sign-off per project precedent, per-step/per-outcome validation depth inside branches, fact vocabulary beyond `role`, ai-dala-infra credential_source invocation mechanism (outside this repo, not in artifacts_in), branch-level preconditions merge-vs-replace semantics) rather than silently resolved.",
+    "artifacts_out": ["lib/letflow/design/req358-uat-scope-branching-env.md"],
     "issues": [],
     "git_evidence": {
-      "branch_name": null,
+      "branch_name": "feature/WF02-REQ358-20260916",
       "commit_sha_list": [],
-      "remote_branch": null,
-      "push_status": "skipped",
+      "remote_branch": "origin/feature/WF02-REQ358-20260916",
+      "push_status": "pending",
       "pr_url": null,
       "pr_create_error": null
     },
-    "next_action": ""
+    "next_action": "CODE-DESIGN-VALIDATOR to review lib/letflow/design/req358-uat-scope-branching-env.md against REQ-358's four acceptance criteria, with particular attention to the 5 open questions (esp. OQ-1's YAML-dependency choice, which needs REVIEWER sign-off before ELIXIR-DEV implements) before dispatching Step 2."
   },
   "rework_count": 0,
   "max_rework": 3

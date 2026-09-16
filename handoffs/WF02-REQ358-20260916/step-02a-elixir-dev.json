@@ -1,0 +1,69 @@
+{
+  "handoff_id": "843c27d8-1e77-4cf4-97e2-1044b9701c8c",
+  "run_id": "WF02-REQ358-20260916",
+  "workflow_id": "WF-02",
+  "step": "02a",
+  "from_agent": "ORCH",
+  "to_agent": "ELIXIR-DEV",
+  "file": "handoffs/WF02-REQ358-20260916/step-02a-elixir-dev.json",
+  "created_at": "2026-09-16T08:50:34Z",
+  "started_at": "2026-09-16T08:50:34Z",
+  "completed_at": null,
+  "status": "PENDING",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S7",
+    "requirement_ids": ["REQ-358"],
+    "requirement_text": {
+      "REQ-358": "DECISION BEING REVISITED, NAMED EXPLICITLY PER CORE-DIRECTIVES' \"don't silently re-decide a settled decision\" rule. Decision 0004 (\"What is explicitly NOT reproduced\") deferred R-Co's BO-*/PRODUCT-OWNER persona layer \"to when S7 actually starts and there is a concrete scenario corpus to validate against.\" .claude/agents/uat-runner.md's own \"Note on scope\" restates the same condition. REQ-210 (S7's closing requirement, done) confirmed both preconditions are now met: S7 is done, and a real scenario corpus exists (11 tenant scenarios across 3 companies, 18 platform scenarios, test/fixtures/uat/scenarios/). This requirement and REQ-359..362 are the deferred work whose trigger condition has now fired. SCOPE. 1. Extend the UAT scenario YAML schema with a `scope` field distinguishing `platform` from an open tenant-vertical identifier, and a step-level branching construct (`when:`) sufficient to express a login-routing example (role=PLATFORM_ADMIN / role=<tenant-role> / unauthenticated) without inventing a general-purpose scripting language. 2. Extend UAT-RUNNER (WF-05_uat_run.md and uat-runner.md) to accept an explicit environment target (base URL + credential source). Update uat-runner.md's 'Note on scope' to remove the stale 'no persona layer' sentence and replace it with a pointer worded 'as of REQ-361'. 3. Update WF-05_uat_run.md's step sequence to reflect the new branching-evaluation and environment-target steps. NOT IN THIS REQUIREMENT: no new agent role, no actual login-routing scenario authored as permanent scope, no visual-regression mechanism."
+    },
+    "source_text": {},
+    "related_handoff_ids": ["90bdb2cb-4967-43a5-85c5-6cef67dc1c6e", "2cf458a2-0964-44f9-b23d-11b09a43dd84"],
+    "artifacts_in": [
+      "lib/letflow/design/req358-uat-scope-branching-env.md",
+      ".claude/agents/uat-runner.md",
+      "docs/agents/workflows/WF-05_uat_run.md",
+      "lib/mix/tasks/letflow.check_requirements_registration.ex",
+      "mix.exs",
+      "test/fixtures/uat/scenarios/meridian/loan-origination-below-threshold.yaml"
+    ],
+    "owned_modules": [
+      "lib/mix/tasks/letflow.check_uat_scenario_schema.ex",
+      "mix.exs",
+      "docs/agents/uat-scenario-schema.md",
+      ".claude/agents/uat-runner.md",
+      "docs/agents/workflows/WF-05_uat_run.md",
+      "test/fixtures/uat/scenarios/_throwaway/"
+    ]
+  },
+  "task": {
+    "description": "Implement REQ-358's design (lib/letflow/design/req358-uat-scope-branching-env.md, CODE-DESIGN-VALIDATOR PASSed — read it in full, it is the authority on exact shapes/signatures) end to end:\n\n1. NEW SCHEMA DOC: write docs/agents/uat-scenario-schema.md per the design's §1 content (the `scope:` field, its classification rule, its default-derivation relationship with `company_id:`, the `branches:`/`when:` construct with its exact `eq`/`in`/`else` operator set and evaluation procedure) — this is the schema's canonical documented home per the design.\n\n2. MIX TASK: implement lib/mix/tasks/letflow.check_uat_scenario_schema.ex per the design's §2 (module/function signatures, SCHEMA-1..6 mechanical rules, exact error-message shape) using YamlElixir.read_from_file/1 to parse (per the design's resolved OQ-1 — yaml_elixir is already a project dependency at mix.exs:64, only: :test, and that scoping is already sufficient since letflow.check runs under preferred_envs: [\"letflow.check\": :test]). Wire it into mix.exs's aliases()/letflow.check list at the design's specified insertion point (after letflow.check_issue_refs). Follow lib/mix/tasks/letflow.check_requirements_registration.ex's structural precedent (pure-core parse/validate functions, a thin Mix.Task wrapper that raises loudly with file+reason on failure).\n\n3. THROWAWAY VALIDATION FIXTURE (REQ-358 AC4): write the login-routing example scenario the design doc writes out in full (role=PLATFORM_ADMIN / role=<tenant-role> / unauthenticated -> three distinct expected outcomes) as a real YAML file using the new schema, under a clearly-throwaway path (e.g. test/fixtures/uat/scenarios/_throwaway/login-routing-example.yaml with a header comment stating it is throwaway validation scope for REQ-358, not permanent corpus — REQ-360 or its successor owns the real version). Confirm it validates cleanly against your new mix task.\n\n4. UAT-RUNNER + WF-05 DOC UPDATES: apply the design's verbatim replacement/new-section prose to .claude/agents/uat-runner.md (environment-target input, branch-evaluation procedure, Note-on-scope replacement citing 'as of REQ-361') and docs/agents/workflows/WF-05_uat_run.md (step-sequence additions for branching evaluation and environment-target steps) exactly as written in the design doc — these are markdown edits, apply them verbatim, do not paraphrase.\n\n5. BACKWARD-COMPATIBILITY VERIFICATION (AC1): run the new mix task against the full existing corpus (test/fixtures/uat/scenarios/**/*.yaml, 29 files, none of which you should need to edit) and confirm all pass unchanged under the new schema -- quote the real command and output. Additionally, dispatch/simulate re-running UAT-RUNNER's own procedure against at least one existing scenario file (e.g. test/fixtures/uat/scenarios/meridian/loan-origination-below-threshold.yaml) is NOT something you can do yourself (UAT-RUNNER is a separate agent role requiring a real running instance) -- instead, state explicitly in your handoff that this specific piece of AC1 verification (\"verified by re-running UAT-RUNNER against at least one existing scenario and quoting the unchanged pass/fail disposition\") is deferred to this run's dedicated UAT-RUNNER dispatch (ORCH will add one before Step 5 RELEASE-VALIDATION, since REQ-358's AC3 also requires a real non-local UAT-RUNNER run) -- do not fake or skip this, name it as an explicit follow-on gap in your result.issues so ORCH does not lose track of it.\n\n6. STANDARD GATES: mix compile --warnings-as-errors, mix format --check-formatted, and run your new mix task directly (mix letflow.check_uat_scenario_schema or via mix letflow.check) — quote all real output. No migration is involved (no DB schema change), so migration-related self-review items in WF-02 Step 2a's checklist are N/A -- state that explicitly rather than silently skipping the checklist.\n\nSelf-review checklist (WF-02_requirement_implementation.md Step 2a, already read): no tenant/user input interpolated into raw SQL (N/A here, no SQL), no unresolved {:ok,_} match on external I/O path relevant here (file I/O errors should be handled, not pattern-match-crashed, since this task runs in CI), new public functions have a one-line @doc, any changed function signature's call sites still compile (N/A, no existing function signatures changed).",
+    "acceptance_criteria": [
+      "mix compile --warnings-as-errors exits 0, output quoted",
+      "mix format --check-formatted exits 0 (or was fixed and re-run), output quoted",
+      "mix letflow.check_uat_scenario_schema (or equivalent invocation) runs for real against all 29 existing scenario files and passes, output quoted -- this is REQ-358 AC1's schema-validation half",
+      "A deliberately malformed scope/branching scenario file is constructed as a throwaway test input and shown to be rejected by the new mix task with a clear, specific error -- output quoted -- this is REQ-358 AC2",
+      "The throwaway login-routing validation fixture (item 3 above) is written, validates cleanly, and is committed under a path clearly marked throwaway -- this is REQ-358 AC4's implementation half (TEST-DESIGNER/RELEASE-VALIDATOR handle the 'run it against QA and quote the result' half in later steps)",
+      ".claude/agents/uat-runner.md and docs/agents/workflows/WF-05_uat_run.md both carry the design's verbatim replacement prose, no stale 'no persona layer' sentence remains -- this is REQ-358 AC5",
+      "docs/agents/uat-scenario-schema.md exists and documents scope + branching each with a worked example, per REQ-358 AC1's doc half",
+      "result.issues explicitly names the UAT-RUNNER-against-a-real-instance verification gap (AC1's re-run half, AC3's environment-target-exercised-for-real half, AC4's QA-run half) as deferred to this run's own later UAT-RUNNER dispatch, not silently dropped"
+    ]
+  },
+  "result": {
+    "status": "",
+    "summary": "",
+    "artifacts_out": [],
+    "issues": [],
+    "git_evidence": {
+      "branch_name": null,
+      "commit_sha_list": [],
+      "remote_branch": null,
+      "push_status": "skipped",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": ""
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

@@ -1,0 +1,94 @@
+# THROWAWAY -- REQ-358 schema-validation scope only, NOT permanent scenario corpus.
+# Proves the `scope:`/`branches:`/`when:` construct designed for REQ-358 is
+# sufficient to express the login-routing example named in the requirement text
+# (role=PLATFORM_ADMIN / role=<tenant-role> / unauthenticated -> three distinct
+# expected outcomes) using only the `eq`/`in`/`else` operator set -- no
+# general-purpose scripting language needed. REQ-360 (or its successor) owns
+# authoring the real, permanent version of a login-routing scenario, if any.
+# TEST-DESIGNER discards or relocates this file after using it to exercise
+# `mix letflow.check_uat_scenario_schema`'s pass path for REQ-358's own AC4.
+---
+id: throwaway-login-routing-req358-validation
+scope: platform
+process_id: n/a
+title: Post-login landing routes by authenticated role (REQ-358 schema validation fixture)
+version: "1.0"
+tags: [schema_validation, throwaway]
+
+description: >
+  Throwaway fixture proving the branching construct designed in REQ-358 can express:
+  a platform admin lands on the platform-admin dashboard, a tenant user lands on the
+  tenant dashboard, and an unauthenticated visitor sees the login form -- three distinct
+  outcomes from one login-routing action, gated on the authenticated session's role.
+
+actors:
+  viewer: actor-any
+
+preconditions:
+  - description: The instance is reachable at the configured environment target
+    check: instance_reachable
+
+branches:
+  - name: platform_admin_dashboard
+    when:
+      fact: role
+      op: eq
+      value: PLATFORM_ADMIN
+    steps:
+      - step: 1
+        actor: viewer
+        action: Signs in as a platform administrator
+        via: gui
+    expected_outcomes:
+      - id: EO-001
+        description: Platform admin dashboard is shown
+        verification:
+          method: page_state
+          detail: "post-login route is the platform-admin dashboard"
+        on_fail:
+          severity: BLOCKER
+          business_impact: Platform admins cannot reach their console after login.
+          suggested_action: route_to_wf03
+
+  - name: tenant_user_dashboard
+    when:
+      fact: role
+      op: in
+      value: [TENANT_ADMIN, TENANT_USER]
+    steps:
+      - step: 1
+        actor: viewer
+        action: Signs in as a tenant user
+        via: gui
+    expected_outcomes:
+      - id: EO-001
+        description: Tenant workspace dashboard is shown
+        verification:
+          method: page_state
+          detail: "post-login route is this tenant's dashboard"
+        on_fail:
+          severity: BLOCKER
+          business_impact: Tenant users cannot reach their workspace after login.
+          suggested_action: route_to_wf03
+
+  - name: unauthenticated_fallback
+    when: else
+    steps:
+      - step: 1
+        actor: viewer
+        action: Attempts the post-login route without signing in
+        via: gui
+    expected_outcomes:
+      - id: EO-001
+        description: The login form is shown
+        verification:
+          method: page_state
+          detail: "route is the login form, no dashboard content present"
+        on_fail:
+          severity: BLOCKER
+          business_impact: Unauthenticated visitors can reach a dashboard.
+          suggested_action: route_to_wf03
+
+cleanup:
+  cancel_open_instances: false
+  description: No process instance created; no cleanup required.

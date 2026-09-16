@@ -51,7 +51,10 @@ to validate against. In practice this does not become live until S7
    `test/fixtures/uat/scenarios/<company>/*.yaml` and
    `test/fixtures/uat/scenarios/platform/*.yaml` (see `.claude/agents/uat-runner.md`
    and ISS-0526/ISS-0527's design docs for the full shape).
-3. If either check fails: do not dispatch UAT-RUNNER. Log BLOCKED, name what's missing.
+3. Confirm this run's dispatch to UAT-RUNNER will carry an explicit environment target:
+   `base_url` and `credential_source` (see `.claude/agents/uat-runner.md`'s "Environment
+   target" section). Do not dispatch with an implicit/default target.
+4. If either check fails: do not dispatch UAT-RUNNER. Log BLOCKED, name what's missing.
 ```
 
 ## Step 2-3 — Run and report
@@ -63,11 +66,15 @@ to validate against. In practice this does not become live until S7
    via real HTTP calls (or, once web/ integration exists per S8, by driving the actual
    GUI — see REQ-107's manual-walkthrough precedent for what this looks like before a
    browser-automation tool is wired in).
-2. Observe actual resulting state (not just "no error thrown") — query the instance
+2. For a scenario using the `branches:` construct (`docs/agents/uat-scenario-schema.md`),
+   evaluate each branch's `when:` condition against this run's actual observed facts and
+   run only the first matching branch, per `.claude/agents/uat-runner.md`'s "Evaluating a
+   `when:` branch" procedure. Record which branch was run in the report.
+3. Observe actual resulting state (not just "no error thrown") — query the instance
    back to confirm the expected state was reached.
-3. Record PASS/FAIL per scenario with the observed evidence, not an inferred one.
-4. Write test/uat-reports/uat-<date>-<run-id>.yaml.
-5. Complete the handoff: PASS if all scenarios passed, FAIL otherwise with each
+4. Record PASS/FAIL per scenario with the observed evidence, not an inferred one.
+5. Write test/uat-reports/uat-<date>-<run-id>.yaml.
+6. Complete the handoff: PASS if all scenarios passed, FAIL otherwise with each
    failing scenario named.
 ```
 
@@ -76,5 +83,7 @@ to validate against. In practice this does not become live until S7
 R-Co's `BO-SWIFTROUTE`/`BO-VORTEX`/`BO-MERIDIAN`/`PRODUCT-OWNER` roles evaluate UAT
 results from a specific tenant's business perspective. Letflow has no tenant business
 scenario corpus yet — this workflow runs without persona-based sign-off until S7
-actually defines one, per `docs/migration/decisions/0004-humanless-pipeline.md`. Until
-then, RELEASE-VALIDATOR's own check (WF-04 Step 2) is the closest equivalent gate.
+actually defines one, per `docs/migration/decisions/0004-humanless-pipeline.md`. As of
+REQ-361, this workflow runs with that persona-equivalent gate once a run's dispatch
+names it as this run's downstream reader; until named, RELEASE-VALIDATOR's own check
+(WF-04 Step 2) remains the closest equivalent gate.

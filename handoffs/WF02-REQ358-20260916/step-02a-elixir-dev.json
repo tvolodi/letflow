@@ -9,7 +9,7 @@
   "created_at": "2026-09-16T08:50:34Z",
   "started_at": "2026-09-16T08:50:34Z",
   "completed_at": null,
-  "status": "PENDING",
+  "status": "COMPLETED",
   "priority": "NORMAL",
   "context": {
     "stage": "S7",
@@ -50,19 +50,29 @@
     ]
   },
   "result": {
-    "status": "",
-    "summary": "",
-    "artifacts_out": [],
-    "issues": [],
+    "status": "PASS",
+    "summary": "Implemented REQ-358 end to end per the CODE-DESIGN-VALIDATOR-approved design (lib/letflow/design/req358-uat-scope-branching-env.md): new mix task lib/mix/tasks/letflow.check_uat_scenario_schema.ex (SCHEMA-0..6 mechanical rules, pure check_scenario/2 core + thin run/1 wrapper, following check_requirements_registration's precedent, parsing with YamlElixir.read_from_file/1 per resolved OQ-1) wired into mix.exs's letflow.check alias after letflow.check_issue_refs; new schema doc docs/agents/uat-scenario-schema.md documenting scope/branches with worked examples; throwaway fixture test/fixtures/uat/scenarios/_throwaway/login-routing-example.yaml (all three eq/in/else branches) validates cleanly; verbatim design prose applied to .claude/agents/uat-runner.md (new 'Evaluating a when: branch' and 'Environment target' sections, replaced 'Note on scope') and docs/agents/workflows/WF-05_uat_run.md (Step 1 item 3, Step 2-3 item 2, Deferred-section trailing-sentence replacement). All 29 pre-existing scenario files pass unchanged (AC1 schema-validation half, including the untouched meridian fixture resolving scope via the company_id default). Two malformed fixtures (missing scope+branches/steps coexistence; else-branch-not-last) were constructed and rejected with specific SCHEMA-3/4/6 errors (AC2), then discarded (not committed). GATES: `MIX_ENV=test mix compile --warnings-as-errors --force` -> 'Compiling 263 files (.ex)\\nGenerated letflow app', exit 0. `mix format --check-formatted` -> exit 0, no output. `MIX_ENV=test mix letflow.check_uat_scenario_schema` -> '30 file(s) checked, 0 violation(s) across 0 file(s)', exit 0. No migration involved (N/A, stated per task instructions). DISCOVERED GAP (flagged, not silently fixed): the design's OQ-1 resolved yaml_elixir's `only: :test` scoping as sufficient for *running* the new task outside :test, but did not account for a *compile-time* hazard -- lib/mix/tasks/ compiles under every Mix env (mix.exs's elixirc_paths/1 has no per-env exclusion), so a bare `mix compile --warnings-as-errors` with no MIX_ENV set (plain :dev) now emits a warning-as-error on YamlElixir.read_from_file/1 being undefined, since this is the first lib/ (non-test-support) module to call YamlElixir. Under `MIX_ENV=test` (which `mix letflow.check`'s own preferred_envs: [\"letflow.check\": :test] already forces for every step in that alias, including its own compile step) it is clean, so the pipeline's actual gate command is unaffected -- but a bystander running bare `mix compile --warnings-as-errors` outside the alias will now see this warning. Recommend REVIEWER decide whether to widen yaml_elixir to `only: [:dev, :test]` (one-line dependency-scope change) or accept/document this as expected preferred_envs-dependent behavior.",
+    "artifacts_out": [
+      "lib/mix/tasks/letflow.check_uat_scenario_schema.ex",
+      "mix.exs",
+      "docs/agents/uat-scenario-schema.md",
+      "test/fixtures/uat/scenarios/_throwaway/login-routing-example.yaml",
+      ".claude/agents/uat-runner.md",
+      "docs/agents/workflows/WF-05_uat_run.md"
+    ],
+    "issues": [
+      "DEFERRED PER TASK INSTRUCTIONS, NOT A GAP IN THIS STEP'S OWN SCOPE: AC1's 're-run UAT-RUNNER against at least one existing scenario and quote the unchanged pass/fail disposition' half, AC3's 'environment-target exercised for real' half, and AC4's 'run the throwaway fixture against QA' half all require a real running instance and the separate UAT-RUNNER agent role -- none of which this ELIXIR-DEV step can perform itself. ORCH must add a dedicated UAT-RUNNER dispatch before Step 5 RELEASE-VALIDATION for this run, per the task description's own instruction.",
+      "NEW FINDING, flagged for REVIEWER: mix.exs's elixirc_paths/1 compiles lib/mix/tasks/ under every Mix env (no per-file/per-env exclusion), and the new task is the first lib/-resident module to call YamlElixir (only: :test dependency). A bare `mix compile --warnings-as-errors` with no MIX_ENV set now warns-as-errors on YamlElixir.read_from_file/1 being undefined; `MIX_ENV=test mix compile --warnings-as-errors` (which mix.exs's own preferred_envs already forces for every step of the letflow.check alias) is clean. This is a real gap in the design's OQ-1 resolution (which addressed only the runtime-invocation case, not this compile-time case) -- not silently worked around; recommend REVIEWER decide whether to widen yaml_elixir's scope to only: [:dev, :test]."
+    ],
     "git_evidence": {
-      "branch_name": null,
+      "branch_name": "feature/WF02-REQ358-20260916",
       "commit_sha_list": [],
-      "remote_branch": null,
-      "push_status": "skipped",
+      "remote_branch": "origin/feature/WF02-REQ358-20260916",
+      "push_status": "pending",
       "pr_url": null,
       "pr_create_error": null
     },
-    "next_action": ""
+    "next_action": "Route to SECURITY-REVIEWER (docs/agents/instructions/security-invariants.md gate check -- this change touches no tenant-data path, but per WF-02 the gate decision is not ELIXIR-DEV's own call) and REVIEWER (idiomatic-OTP/scope-creep/decision-record-consistency gate, plus explicit sign-off on the yaml_elixir dev-scope finding above) before TEST-DESIGNER. ORCH: add the dedicated UAT-RUNNER dispatch (see issues[]) before Step 5 RELEASE-VALIDATION."
   },
   "rework_count": 0,
   "max_rework": 3

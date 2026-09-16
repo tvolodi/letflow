@@ -149,6 +149,11 @@ defmodule Letflow.MixProject do
         # a gate because the rule it replaces ("ISS-0187 is queue task 187") was
         # documented too, and decayed to 172/305 with nothing re-checking it.
         "letflow.check_issue_refs",
+        # REQ-358: validates test/fixtures/uat/scenarios/**/*.yaml against the schema
+        # documented in docs/agents/uat-scenario-schema.md -- placed with the other
+        # fast, non-compiling structural scans (no shared parse target with any
+        # neighbor, so no ordering dependency either direction).
+        "letflow.check_uat_scenario_schema",
         "format --check-formatted",
         "compile --warnings-as-errors",
         "letflow.check.test"

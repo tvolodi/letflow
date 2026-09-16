@@ -1,0 +1,53 @@
+{
+  "handoff_id": "b3f1a2c4-6e1a-4f7a-9c2e-1a2b3c4d5e01",
+  "run_id": "WF03-ISS0692-20260916",
+  "workflow_id": "WF-03",
+  "step": "0.5-01",
+  "from_agent": "ORCH",
+  "to_agent": "ISSUE-FIXER",
+  "file": "handoffs/WF03-ISS0692-20260916/step-01-issue-fixer.json",
+  "created_at": "2026-09-16T11:15:44Z",
+  "started_at": "2026-09-16T11:15:44Z",
+  "completed_at": null,
+  "status": "PENDING",
+  "priority": "NORMAL",
+  "context": {
+    "stage": null,
+    "requirement_ids": [],
+    "requirement_text": {},
+    "source_text": {},
+    "related_handoff_ids": [],
+    "artifacts_in": [
+      "docs/issues/ISS-0692.yaml",
+      "lib/letflow/design/req362-visual-regression-testing.md",
+      "web/tests/support/visual-baseline.ts"
+    ],
+    "owned_modules": ["lib/letflow/design/req362-visual-regression-testing.md"]
+  },
+  "task": {
+    "description": "Queue task 692 (issue). Read docs/issues/ISS-0692.yaml in full for the complete finding -- do not rely on this summary. SECURITY-REVIEWER flagged, during REQ-362's Step 2c gate, that the visual-regression-testing design (lib/letflow/design/req362-visual-regression-testing.md) commits UAT screenshot baselines to git (test/fixtures/uat/visual-baselines/), with superseded baselines retained forever in git history, and the design states zero PII/redaction/synthetic-data policy. REQ-362 itself only exercises an unauthenticated static page, so nothing in REQ-362's own diff currently violates an invariant -- the gap is that a FUTURE requirement pointing this mechanism at a real authenticated gui_screen UAT scenario (explicitly deferred per the design's own OQ-4/2.4/3.6/4.4) would have no guardrail preventing real tenant PII (candidate names, emails, etc.) from becoming a permanently git-committed artifact.\n\nStep 0.5 (registry lookup): check docs/issues/*.yaml for a prior resolved entry about PII handling in committed test fixtures/artifacts. Note any match (or none) in your result.summary.\n\nStep 1 (diagnose): this is a design-gap issue, not a code defect -- there is no failing test to run. Your diagnosis must state: (a) exactly which design sections need to change and what they must say (synthetic/seeded-data requirement, a redaction step, or an explicit accepted-risk statement -- your call which is appropriate, with reasoning), (b) whether web/tests/support/visual-baseline.ts's acceptBaseline/rebaseline functions need an actual code change now, or whether stating the policy in the design is sufficient because no authenticated scenario currently adopts this tooling (AC2 in ISS-0692.yaml is explicitly conditional: 'If a redaction or synthetic-data mechanism is chosen, it is implemented...' -- read that condition carefully against current usage before concluding implementation is required now), (c) affected files and what a fix needs to change. Do NOT implement the fix yourself -- produce the diagnosis for CODE-DESIGNER.",
+    "acceptance_criteria": [
+      "Registry lookup performed and result stated (match or no match)",
+      "Diagnosis states which design sections must change and the specific policy content required (not just 'add a policy')",
+      "Diagnosis explicitly rules on whether code implementation is required now vs. design-only, with reasoning tied to current usage of the mechanism",
+      "next_action names CODE-DESIGNER as the next step"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "",
+    "artifacts_out": [],
+    "issues": [],
+    "git_evidence": {
+      "branch_name": null,
+      "commit_sha_list": [],
+      "remote_branch": null,
+      "push_status": "skipped",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": ""
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

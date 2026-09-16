@@ -26445,3 +26445,231 @@ requirements:
       - "a re-baseline (accept-new-as-correct) action is specified and implemented, requiring an explicit reason/justification to be recorded (not merely 'accept' with no rationale), and is exercised for real at least once with the recorded rationale quoted"
       - "this requirement's role file/design doc states explicitly that phase-2 auto-fail is unconditional (no LLM judgment gates whether a pixel diff 'counts' before failing) and why — citing this session's explicit user direction — so a future reader does not 'improve' this into a judgment-gated soft-fail without a fresh decision"
     depends_on: [REQ-358]
+
+  - id: REQ-363
+    title: In-app help content — data model (help_content table, draft/live lifecycle, confirmed_at staleness stamp, process-version linkage), tenant-schema-scoped
+    owner: CODE-DESIGNER
+    impl_order: 686  # letflow-queue task id, GH#1438
+    status: pending
+    stage: S7
+    description: >
+      Origin: a separate design discussion (not UAT-related) about surfacing
+      end-user product help "as project documentation, accessible from the
+      application," motivated by two confirmed facts: (1) no in-app
+      help/tooltip mechanism exists anywhere in web/src/ today (checked this
+      session — the only hits are native browser `title=` attributes and two
+      component-local hover overlays, no shared component); (2) `docs/frontend/`
+      is engineer-facing SHALL-statement spec prose, not end-user-readable
+      content, and cannot be reused as-is.
+      .
+      WHY DB-BACKED, NOT GIT-FILE-BACKED — THE DECIDING CONSTRAINT. The user
+      stated tenants are expected to develop their own process logic
+      themselves, the same self-service model REQ-041/078's
+      Letflow.Definitions.SolutionPack mechanism already gives tenants for
+      process definitions/entity types/variable schemas. A tenant cannot get
+      a PR merged into this repo, so help content a tenant is meant to own
+      and edit cannot live as a git-tracked file in `letflow-3` — it must
+      live in the same place a tenant's own process logic already does: that
+      tenant's own Postgres schema, mutable through a tenant-facing UI, not
+      through this repo's own pipeline. Platform-level help (shared screens
+      no tenant owns, e.g. the login-routing screen REQ-360 covers as a UAT
+      scenario) is the one category authored through the BA-agent/REQ-ANALYST
+      pipeline instead (REQ-365 covers that authoring path) — this
+      requirement's schema must support BOTH a tenant-owned row and a
+      platform-owned row without conflating them.
+      .
+      LIFECYCLE — DELIBERATELY SIMPLE, PER EXPLICIT USER DIRECTION. NOT
+      ProcessDefinition's draft/active/deprecated/archived shape, even though
+      that pattern exists and is proven in this codebase. Two states only:
+      `draft` and `live`. No version history, no deprecation, no archival.
+      This is a deliberate simplification the user chose after being shown
+      the fuller alternative — do not "improve" this into a heavier lifecycle
+      without a fresh user decision; if a future session judges the simple
+      model insufficient, that is a finding to report, not a unilateral
+      redesign.
+      .
+      STALENESS SIGNAL — THE ONE PIECE OF STATE TRACKING THIS REQUIREMENT
+      DOES ADD, negotiated specifically because a bare draft/live flag gives
+      no signal that a screen changed underneath its help text. Two fields,
+      not a version history:
+      1. `confirmed_at` (timestamp) on every help_content row — when someone
+         last reviewed this text against the current screen/process, set
+         explicitly by whoever publishes/re-confirms it, never inferred.
+      2. For help content scoped to a specific process (`process_definition_id`
+         non-null): `confirmed_for_definition_version` (integer, matching
+         `Letflow.Definitions.ProcessDefinition.version`). When that
+         process's currently-active version differs from this stored value,
+         the content is staleness-flaggable — this requirement defines the
+         field and the comparison is a pure read (no new job/worker), display
+         of the resulting "may be outdated" signal is REQ-366's job, not
+         this one's.
+      For non-process (generic screen) help, only `confirmed_at` applies —
+      there is no per-screen version concept anywhere in this codebase today
+      (confirmed this session), and inventing one solely to serve help
+      content is out of scope; `confirmed_at` alone is the accepted,
+      deliberately coarser signal for that category.
+      .
+      MEDIA — SCHEMA RESERVATION ONLY, NOT IMPLEMENTATION. Per explicit user
+      direction, visual/sound media support is deferred past phase 1, but the
+      schema must reserve a `media` field (e.g. jsonb array, empty `[]` by
+      default) now rather than requiring a later migration that has to
+      backfill every existing row — this requirement adds the column and
+      documents it as reserved/unused; REQ-368 or a later requirement is
+      where actual media storage/rendering is designed, not here.
+      .
+      SECURITY — SANITIZATION IS THIS REQUIREMENT'S OWN SCOPE, NOT DEFERRED
+      TO THE RENDERING REQUIREMENT. Help content is tenant-authored,
+      user-generated content rendered back to other users of that tenant —
+      the same XSS/injection surface as any UGC system. This requirement's
+      write path (the context module's create/update functions) must reject
+      raw HTML and constrain content to a markdown subset (no `<script>`, no
+      inline event handlers, no arbitrary embedded HTML) at write time, not
+      rely solely on REQ-366's render-time sanitization as the only
+      safeguard — defense in depth, matching this project's own
+      SECURITY-REVIEWER discipline for any tenant-data-path change.
+      .
+      DEPENDS ON REQ-041 (SolutionPack, for the tenant-scoping precedent and
+      schema_name_for_tenant/1 reuse) being done — already is.
+    acceptance_criteria:
+      - "a design artefact (lib/letflow/design/req363-*.md, per this project's own CODE-DESIGNER convention) specifies the help_content table schema: tenant-schema-scoped (via prefix, same convention as ProcessDefinition — 'this table lives in many Postgres schemas'), fields for screen_id/route identifier, process_definition_id (nullable, FK), title, body (markdown), status (draft|live enum, no other values), confirmed_at, confirmed_for_definition_version (nullable integer), media (jsonb, reserved/unused), created_by, timestamps"
+      - "the design explicitly states why draft/live (not ProcessDefinition's four-state lifecycle) was chosen, citing this requirement's own Why section, so a future reader does not silently 'fix' this into a heavier model"
+      - "the design states the platform-vs-tenant help distinction explicitly: platform-scope rows are NOT tenant-schema-scoped (they need their own home — the design must state where, e.g. a dedicated platform-level table or schema, consistent with how platform-scope UAT scenarios (REQ-358's scope field) are already distinguished from tenant scope) — this requirement does not build the platform-side authoring path (REQ-365), only ensures the schema doesn't conflate the two categories"
+      - "the design specifies the write-path sanitization/validation rule (rejected content shapes named explicitly: raw HTML, script tags, event handler attributes) as this requirement's own scope, not deferred wholesale to REQ-366"
+      - "CODE-DESIGN-VALIDATOR PASSes the design against every acceptance criterion above before REQ-364 (the backend context module) may begin"
+    depends_on: [REQ-041]
+
+  - id: REQ-364
+    title: In-app help content — backend context module (Letflow.Help), CRUD + publish/confirm actions, tenant-scoped, per REQ-363's design
+    owner: ELIXIR-DEV
+    impl_order: 687  # letflow-queue task id, GH#1439
+    status: pending
+    stage: S7
+    description: >
+      Implements REQ-363's design artefact exactly — no new schema decisions
+      here, this requirement is implementation of an already-validated
+      design, matching this project's own CODE-DESIGNER-then-ELIXIR-DEV
+      split for every other schema-bearing feature.
+      .
+      SCOPE: the `Letflow.Help` context module (naming follows this
+      project's existing per-domain-context convention, e.g.
+      `Letflow.Identity`, `Letflow.TenantProvisioning`) exposing: create a
+      draft, update a draft, publish (draft -> live, sets confirmed_at),
+      re-confirm (bumps confirmed_at on an already-live row without changing
+      body — the explicit "I checked this, it's still accurate" action), and
+      read (by screen_id + tenant prefix, or by process_definition_id).
+      Every write path enforces REQ-363's sanitization rule from that
+      design, not a weakened version of it.
+      .
+      NOT IN SCOPE: the tenant-facing authoring UI (REQ-365 for platform,
+      a separate future requirement for the tenant admin UI itself — this
+      requirement's acceptance criteria stop at a working, tested context
+      module, callable from IEx/tests, not yet wired to any HTTP route or
+      frontend component). Route/controller wiring, if this project's own
+      API-surface convention wants a separate requirement for it (matching
+      the pattern most REQ-027..030-style definition CRUD work already
+      used), is a natural fast-follow, not bundled here — state explicitly
+      in this requirement's close-out whether a route was added or
+      deliberately deferred, rather than leaving it ambiguous.
+    acceptance_criteria:
+      - "Letflow.Help context module exists implementing exactly the functions REQ-363's design specifies (create/update/publish/reconfirm/read), each tenant-scoped via prefix per the design's schema"
+      - "a write attempting raw HTML/script content is rejected with a clear error, tested explicitly — not merely assumed from the design"
+      - "publish sets confirmed_at from the real clock, never a caller-supplied value; reconfirm updates only confirmed_at, body is provably unchanged (tested)"
+      - "for process-scoped help (process_definition_id set), confirmed_for_definition_version is recorded at publish/reconfirm time from the process's actual current version, not caller-supplied"
+      - "mix test and mix compile --warnings-as-errors both pass, real output quoted"
+    depends_on: [REQ-363]
+
+  - id: REQ-365
+    title: Platform-level help content authoring — BA-agent/REQ-ANALYST pipeline path for screens no tenant owns
+    owner: REQ-ANALYST
+    impl_order: 688  # letflow-queue task id, GH#1440
+    status: pending
+    stage: S7
+    description: >
+      Per explicit user decision: platform-level help (shared screens like
+      login-routing that no tenant owns) is authored through the BA-agent/
+      REQ-ANALYST pipeline, matching the exact platform-vs-tenant split
+      already established for UAT scenarios (REQ-358's scope field,
+      REQ-359's BA-persona/REQ-ANALYST split, REQ-360's login-routing
+      scenario as the worked platform example). This requirement is the
+      authoring-path equivalent for help content: it does not re-derive that
+      split, it applies it.
+      .
+      SCOPE: wherever REQ-363's design placed platform-scope help content
+      (a dedicated table/schema, per that requirement's own acceptance
+      criterion), this requirement adds the write path/tooling REQ-ANALYST
+      (or, once REQ-359 lands, whichever role it specifies for platform
+      content) actually uses to author it — this could be as simple as a
+      direct context-module call analogous to REQ-364's tenant-scoped one,
+      scoped to the platform table instead, reusing REQ-364's
+      create/update/publish/reconfirm shape rather than inventing a parallel
+      one. Explicitly NOT a new UI — platform help authoring is
+      agent-pipeline-driven, matching how platform-scope UAT scenarios are
+      authored (a file/record written by an agent, not a form filled by a
+      human).
+      .
+      FIRST REAL CONTENT: author help for the login-routing screen
+      (the same screen REQ-360's UAT scenario covers) as this requirement's
+      own worked, real example — proves the authoring path end-to-end rather
+      than shipping an authoring mechanism with zero real content using it.
+    acceptance_criteria:
+      - "a platform-scope help-content write path exists, reusing REQ-364's context-module shape against wherever REQ-363's design placed platform rows, not a parallel schema/mechanism"
+      - "real help content for the login-routing screen is authored and published through this path, in plain end-user language (not engineer/SHALL-statement prose, per this requirement's own Why section) — the actual published text is quoted in this requirement's close-out"
+      - "the write path enforces the same sanitization rule REQ-363/364 established for tenant-scoped content — no separate, weaker validation for the platform path"
+    depends_on: [REQ-363, REQ-364]
+
+  - id: REQ-366
+    title: In-app help display panel — sanitized markdown rendering, staleness indicator, reachable per-screen from the frontend
+    owner: FRONTEND-DEV
+    impl_order: 689  # letflow-queue task id, GH#1441
+    status: pending
+    stage: S7
+    description: >
+      The user-facing half of this feature: a help panel/affordance
+      (e.g. a "?" trigger, consistent placement across screens — this
+      requirement's own design choice, not fixed here) that fetches and
+      renders the current screen's help_content (tenant-scoped or
+      platform-scope, whichever REQ-363's design and REQ-364's read function
+      resolve to for a given screen_id) and displays it.
+      .
+      RENDER-TIME SANITIZATION IS MANDATORY HERE TOO, INDEPENDENT OF REQ-363's
+      WRITE-TIME CHECK — defense in depth, not redundant. Markdown rendering
+      must use a sanitizing renderer (an allowlisted markdown-to-React
+      pipeline, no `dangerouslySetInnerHTML` on unsanitized content) so that
+      even if a malformed/legacy row somehow bypassed write-time validation,
+      render time is still safe. State explicitly in this requirement's
+      close-out which rendering library/approach was used and confirm it
+      does not permit raw HTML pass-through.
+      .
+      STALENESS INDICATOR: if the resolved help_content row is process-scoped
+      and its confirmed_for_definition_version differs from the process's
+      actual current active version (per REQ-363's fields), the panel shows
+      a visible, unmissable "this help may be outdated" indicator — not a
+      silent log line, since the entire point of tracking this field is a
+      user-visible signal. For non-process help, no equivalent signal exists
+      yet (confirmed_at alone, per REQ-363, is not compared against anything
+      today) — do not invent a comparison target that doesn't exist; a bare
+      "last reviewed <date>" display of confirmed_at is sufficient for that
+      category.
+      .
+      MEDIA: render whatever REQ-363's reserved `media` field contains IF
+      populated, but do not build any authoring path for populating it —
+      per explicit user direction this is phase-1-deferred; the schema
+      reservation exists so this requirement's renderer has something
+      forward-compatible to target later without a second frontend
+      requirement, but authoring/uploading media is out of scope here.
+      .
+      i18n: per this session's own research, no app-wide IntlProvider exists
+      in main.tsx — react-intl is used only in page-scoped providers
+      (EntitiesIntlProvider, ExamIntlProvider). Follow that same precedent:
+      if this requirement's own scope needs i18n at all (it may not, if
+      phase 1 is English-only per the same reasoning that applies to the
+      rest of the app), scope a local provider rather than assuming or
+      building a new app-wide one — do not silently expand scope into an
+      app-wide i18n rollout this requirement was never asked to do.
+    acceptance_criteria:
+      - "a help panel component exists, triggerable per-screen, fetching the resolved help_content for that screen_id (tenant-scoped or platform, resolved server-side per REQ-364's read function)"
+      - "markdown is rendered through a sanitizing pipeline; the close-out names the library/approach and confirms no dangerouslySetInnerHTML on unsanitized content, with a test asserting a malicious payload (e.g. embedded script tag) is neutralized in the rendered output"
+      - "the login-routing screen (REQ-365's first real platform content) actually displays its help content end-to-end in a real browser check against QA, screenshot quoted"
+      - "process-scoped help with a stale confirmed_for_definition_version shows the visible staleness indicator, exercised for real by publishing help against one process version then activating a new version and confirming the indicator appears"
+      - "npm run type-check, npm run lint, npm run test, npm run build all pass, real output quoted"
+    depends_on: [REQ-364]

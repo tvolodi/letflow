@@ -400,3 +400,86 @@ history:
       queue Q-690). README.md checked -- no agent roster, ASCII state
       diagram, or "Running it" content references agent roles or counts
       anywhere in it, so no README change was needed.
+
+  - req: REQ-362
+    event: started
+    agent: ORCH
+    at: 2026-09-16T10:34:13Z
+    note: >
+      COMPOSITION NOTE (Step Final rebase onto a further-advanced
+      origin/main): this entry's own `at:` (10:34:13Z) chronologically
+      sits between REQ-359's started event (10:30:49Z) and REQ-363's
+      done event (10:35:01Z), both already landed earlier in this
+      volume -- appended here at the tail instead of reordered into
+      that exact position, since three other requirements' entries
+      (REQ-363, REQ-359, and this rebase's own REQ-362 done-event
+      below) all interleave within the same ~20-minute window and a
+      full reorder risks a transcription error; the real ordering is
+      preserved by each entry's own `at:` timestamp, which is what
+      matters for the record's accuracy.
+      Claimed letflow-queue task 682 (GH#1432, agent_id
+      orch-session-issueloop, depends_on [REQ-358], done -- merged as
+      09e1e367). Step 00 git setup: pulled main, branched
+      feature/WF02-REQ362-20260916, pushed. (Note: a first Step 00
+      attempt on this same branch was silently lost -- a
+      CODE-DESIGN-VALIDATOR subagent working WF02-REQ363-20260916
+      concurrently in this same shared checkout directory, not an
+      isolated worktree, checked out its own branch mid-way and
+      discarded this branch's uncommitted working-tree state before it
+      was committed. Redone cleanly here with no other agent running
+      concurrently. Lesson for future sessions: do not interleave ORCH's
+      own git operations with a dispatched agent's when both touch the
+      same shared checkout -- serialize, or use Agent's
+      isolation:"worktree" option.) Two-phase visual regression testing:
+      phase 1 AI-agent-accepted screenshot baselines, phase 2 mechanical
+      pixel-diff via Playwright's built-in screenshot comparison,
+      unconditional auto-fail, dual-tracked issue filing on detected
+      difference, explicit-justification re-baseline action. Routing to
+      CODE-DESIGNER next.
+
+  - req: REQ-362
+    event: done
+    agent: DOC-UPDATER
+    at: 2026-09-16T12:50:55Z
+    note: >
+      Two-phase visual regression testing (phase 1 AI-agent-accepted
+      screenshot baselines, phase 2 mechanical Playwright pixel-diff,
+      unconditional auto-fail, dual-tracked issue filing, explicit-
+      justification re-baseline) shipped end to end. CODE-DESIGNER's
+      design PASSed CODE-DESIGN-VALIDATOR on first attempt. ELIXIR-DEV
+      implemented it and exercised all four "must happen for real"
+      acceptance criteria for real: a real baseline accepted from a real
+      UAT run, a real pixel-diff pass against an unchanged screen and a
+      real pixel-diff fail against a deliberately altered screen, a real
+      dual-tracked issue filed on the detected diff (ISS-0691, GH#1446)
+      and closed, and a real re-baseline exercised with its justification
+      recorded. SECURITY-REVIEWER PASSed (commit d7248b81) -- out of
+      scope, no tenant-data path touched -- filing one non-blocking
+      finding, ISS-0692 (future PII-in-git-history risk if this tooling
+      is later pointed at a real authenticated screen). REVIEWER PASSed
+      (commit e0a2690d), independently re-running the spec and confirming
+      GH#1446 live. TEST-DESIGNER found and fixed a real CI-fixture-
+      mutation defect in the original real-exercise spec (tagged
+      `@manual`, since it mutated shared fixtures unsafely for CI), adding
+      a disposable-fixture formal suite plus 18 unit tests in its place.
+      TEST-DESIGN-VALIDATOR PASSed, running the formal suite twice and
+      confirming zero fixture drift -- the load-bearing evidence for this
+      requirement's test coverage -- and flagged one unrelated gap,
+      ISS-0694 (pre-existing 'certificate' entity-type test gap).
+      TEST-RUNNER PASSed: backend 4324/4324, frontend statics clean,
+      REQ-362's own tests 6/6 e2e plus 18/18 unit. RELEASE-VALIDATOR
+      independently re-verified all six acceptance criteria from a cold
+      read and re-ran the full suite itself, PASSing, and flagged two
+      unrelated flakes as separate backlog items: ISS-0695
+      (Scheduler.PollerTest flake) and ISS-0696 (frontend vitest
+      worker-distribution flake). None of ISS-0692/ISS-0694/ISS-0695/
+      ISS-0696 block this requirement; all filed as separate issues.
+      docs/agents/AGENT_SYSTEM.md's artifact-locations table already
+      carries the visual-baselines row (test/fixtures/uat/visual-
+      baselines/, owner UAT-RUNNER) added during CODE-DESIGNER's Step 1,
+      confirmed present and accurate here, not re-added. README.md
+      checked -- REQ-362 does not alter any documented current behavior
+      surfaced there (no ASCII state diagram or "Running it" section
+      touches UAT visual regression), so no README change made. No
+      docs/migration/stage-N-*.md or docs/migration/decisions/*.md file
+      was named in REQ-362's acceptance criteria, so that check is N/A.

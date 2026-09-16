@@ -3880,8 +3880,27 @@ volumes:
     path: docs/status/requirement_status.v18.yaml
     status: current
     opened: 2026-09-15
-    entries: 8
+    entries: 10
     note: >
+      Recounted to 10 during WF02-REQ362-20260916's Step Final rebase,
+      second conflict (Step 6's done-event replay): composed this run's
+      own REQ-362 done-event (originally appended against a stale
+      pre-rebase base and computed as 6 there) with the 9 entries this
+      same rebase's first conflict had already composed -- `grep -c
+      "^  - req:" docs/status/requirement_status.v18.yaml` = 10 on-disk
+      entries; 485 lines / 27704 bytes, well under the roll ceiling, no
+      roll triggered.
+
+      Recounted to 9 during WF02-REQ362-20260916's Step Final rebase onto
+      a further-advanced origin/main: composed this run's own REQ-362
+      started-event (appended at the tail, not reordered into strict
+      chronological position, per that entry's own composition note) and
+      REQ-362 done-event with the 8 entries WF02-REQ359-20260916's own
+      Step Final rebase had already composed -- `grep -c "^  - req:"
+      docs/status/requirement_status.v18.yaml` = 9 on-disk entries,
+      rather than carrying forward either side's independently-computed
+      count, per this note's own recount-every-time rule.
+
       Recounted to 8 during WF02-REQ359-20260916's Step Final rebase onto
       origin/main (7bab6d2a), whose second conflict replayed this run's own
       REQ-359 done-event (DOC-UPDATER, Step 6) after the REQ-363
@@ -3923,6 +3942,20 @@ volumes:
       WF02-REQ359-20260916) -- `grep -c "^  - req:"
       docs/status/requirement_status.v18.yaml` = 5 on-disk entries (computed
       pre-rebase, superseded by the recount above).
+
+      Incremented to 6 by WF02-REQ362-20260916 (DOC-UPDATER)'s own
+      REQ-362 done-event append (Step 6) -- `grep -c "^  - req:"
+      docs/status/requirement_status.v18.yaml` = 6 on-disk entries at
+      that run's own pre-rebase base (superseded by the recount above),
+      323 lines / 18314 bytes, well under the 1200-line/120000-byte roll
+      ceiling, so no roll triggered.
+
+      Incremented to 5 by ORCH's own REQ-362 started-event append (redo,
+      after a first attempt was lost to a concurrent-checkout collision
+      in the same shared directory -- see that entry's own note) --
+      `grep -c "^  - req:" docs/status/requirement_status.v18.yaml` = 5
+      on-disk entries at that run's own pre-rebase base (superseded by
+      the recount above).
 
       Incremented to 4 by WF02-REQ358-20260916 (DOC-UPDATER)'s own REQ-358
       done-event append (Step 6) -- `grep -c "^  - req:"

@@ -1,0 +1,22 @@
+{
+  "scenario_id": "req362-visual-regression-selfcheck",
+  "company_id": "platform",
+  "step": 1,
+  "expected_outcome_id": "EO-001",
+  "environment": "local",
+  "accepted_by": "ELIXIR-DEV",
+  "accepted_in_run": "WF02-REQ362-20260916",
+  "accepted_at": "2026-09-16T11:02:46Z",
+  "judgment_detail": "Root route (GET /) settles on a real, fully-rendered page via the live vite dev server (app shell or, for an unauthenticated session, the real Keycloak login form it redirects to) — no error boundary, no blank page. Judged correct.",
+  "source_screenshot": "/home/tvolodi/workspace/letflow-1/scratch/req362-visual-regression/01-EO-001.local.captured.png",
+  "history": [
+    {
+      "rebaselined_by": "ELIXIR-DEV",
+      "rebaselined_in_run": "WF02-REQ362-20260916",
+      "rebaselined_at": "2026-09-16T11:02:52Z",
+      "justification": "REQ-362 (this requirement) itself intentionally injects a probe banner as part of its own real-exercise proof of the auto-fail path; re-baselining here documents that this specific altered screenshot is the deliberately-introduced fixture for that proof, not a product regression, closing ISS-0691 which the fail-case comparison above auto-filed.",
+      "superseded_baseline_hash": "50b21810f38a908153ba609c13b5943f2b23ff1568f549086d161c029df5ba39",
+      "related_issue_ref": "ISS-0691"
+    }
+  ]
+}

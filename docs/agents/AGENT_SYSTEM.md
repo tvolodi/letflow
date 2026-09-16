@@ -141,6 +141,7 @@ requirement's file-level status stays exactly as terse as it's always been.
 | UAT reports | `test/uat-reports/` | `UAT-RUNNER` | `.yaml` |
 | BA sign-off reports | `test/uat-reports/` (`ba-signoff-` prefix) | `BA-<VERTICAL>` | `.yaml` |
 | BA persona data | `docs/agents/ba-personas/` | `ORCH`/`REQ-ANALYST` (creation), `BA-<VERTICAL>` (own reads) | `.yaml` |
+| UAT visual-regression baselines | `test/fixtures/uat/visual-baselines/` | `UAT-RUNNER` (accept/re-baseline actions) | `.png` (+ one `.yaml` sidecar per baseline — see `lib/letflow/design/req362-visual-regression-testing.md` §2.3) |
 | Handoff files | `handoffs/` | all (via ORCH) | `.json` (exception) |
 | Requirement queue | `docs/requirements.yaml` | `ORCH`/`DOC-UPDATER` (status field) | `.yaml` (pre-existing schema, unchanged) |
 | Requirement event history | `docs/status/requirement_status*.yaml` (index + all volumes) | `DOC-UPDATER` | `.yaml` |

@@ -26378,7 +26378,7 @@ requirements:
     title: Two-phase visual regression testing — AI-agent-accepted screenshot baselines, then mechanical pixel-diff on every later run, auto-filing a dual-tracked issue on any detected difference
     owner: TEST-DESIGNER
     impl_order: 682  # letflow-queue task id, GH#1432
-    status: pending
+    status: done
     stage: S7
     description: >
       Confirmed via this session's own research that NEITHER Letflow nor

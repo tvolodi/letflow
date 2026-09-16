@@ -1,0 +1,189 @@
+run_id: WF03-ISS0698-20260917
+issue_id: ISS-0698
+agent: TEST-RUNNER
+step: "WF-03 Step 4 -- run of ISS-0698's regression test for the record"
+branch: feature/WF03-ISS0698-20260917
+commit_under_test: 7040993d
+date: 2026-09-17
+
+diff_scope:
+  files_changed:
+    - "scripts/test_parallel.sh (ELIXIR-DEV fix, commit 664436fc): new Step 1.7,
+       a capped-concurrency (TEST_PARALLEL_MAX_CONCURRENT_CREATES, default 4)
+       pre-create/pre-migrate phase run before Step 2's parallel mix test
+       launch, replacing the old all-at-once ecto.create/migrate burst"
+    - "mix.exs test alias (paired change per the fix commit)"
+    - "test/scripts/test_parallel_create_burst_test.sh (TEST-DESIGNER, commit
+       7040993d): new regression test for this fix"
+  note: >
+    Already validated PASS by CODE-DESIGN-VALIDATOR/REVIEWER/TEST-DESIGN-VALIDATOR
+    before this run, per dispatch brief. This step is TEST-RUNNER's own execution
+    of the new regression test plus the existing ISS-0287 pool-sizing precedent
+    test, for the record.
+
+test_1_create_burst_regression:
+  command: "bash test/scripts/test_parallel_create_burst_test.sh"
+  description: >
+    Real Docker/Postgres integration test. Spins up a disposable postgres:16
+    container with max_connections=30, forces N=8 partitions / TEST_POOL_SIZE=2
+    against it via scripts/test_parallel.sh, and asserts all 8 partitions
+    create+migrate and reach a Result: line with zero 53300 errors anywhere in
+    combined output.
+  result: PASS
+  actual_output: |
+    test_parallel_create_burst_test: starting disposable Postgres (max_connections=30) on port 5799
+    test_parallel_create_burst_test: running .../scripts/test_parallel.sh (N=8, TEST_POOL_SIZE=2 forced) against it
+    --- test_parallel.sh output ---
+    test_parallel: N=8 (source: env override)
+    test_parallel: pre-compiling MIX_ENV=test (single compile, before any partition launches)
+    test_parallel: TEST_POOL_SIZE=2 (caller override, not computed)
+    test_parallel: seeding 8 per-partition build paths from _build/test (sequential)
+    test_parallel: partition logs in /tmp/letflow_test_parallel.gOO57Y
+    test_parallel: seeding+migrating 8 partition databases (capped at 4 concurrent)
+    test_parallel: all 8 partition databases created+migrated
+    test_parallel: TEST_PARALLEL_GROUP=tp63874 (shared by all 8 partitions)
+    partition 1: 142 tests, 0 properties, 0 failures, exit 0
+    partition 2: 148 tests, 0 properties, 0 failures, exit 0
+    partition 3: 112 tests, 0 properties, 0 failures, exit 0
+    partition 4: 218 tests, 0 properties, 0 failures, exit 0
+    partition 5: 98 tests, 0 properties, 0 failures, exit 0
+    partition 6: 77 tests, 0 properties, 0 failures, exit 0
+    partition 7: 113 tests, 1 property, 0 failures, exit 0
+    partition 8: 99 tests, 0 properties, 0 failures, exit 0
+    ---
+    combined: 1007 tests, 1 properties, 0 failures (1008/1008 passed)
+    --- end output ---
+    PASS: script exited 0
+    PASS: all 8 partitions produced a successful Result: line
+    PASS: no 53300/too_many_connections in combined output
+    ---
+    test_parallel_create_burst_test: 3 passed, 0 failed
+  assertion_breakdown: "3 passed, 0 failed (script exit 0; all 8 partitions reached Result:; no 53300 anywhere)"
+
+test_2_pool_sizing_precedent_regression:
+  command: "bash test/scripts/test_parallel_pool_sizing_test.sh"
+  description: >
+    ISS-0287 precedent test -- extracts scripts/test_parallel.sh's own Step 1.5
+    connection-pool clamp arithmetic verbatim (via "# --- Step 1.5:" / "# --- Step 2:"
+    comment markers) and evals it in a controlled subshell to check the formula
+    hasn't regressed. Run to confirm ISS-0698's fix didn't disturb this.
+  result: FAIL
+  actual_output: |
+    FAIL: extracted Step 1.5 block from .../scripts/test_parallel.sh is 193 lines
+    (> 90) -- refusing to eval a suspiciously large capture; end marker may be
+    misplaced/renamed
+  root_cause_diagnosis: >
+    TWO independent, pre-existing findings, NEITHER of which is a regression in
+    the pool-sizing formula itself:
+
+    (1) NEW side effect of the ISS-0698 fix (this branch): the fix inserted two
+    new labelled sections, "# --- Step 1.6:" (seed per-partition build paths)
+    and "# --- Step 1.7:" (capped-concurrency pre-create/migrate), between the
+    pre-existing "# --- Step 1.5:" and "# --- Step 2:" markers that
+    test_parallel_pool_sizing_test.sh's awk extraction relies on as start/end
+    bounds. The extraction now captures Step 1.5 PLUS the new Step 1.6 and
+    Step 1.7 (106 lines -> 298 lines in scripts/test_parallel.sh, i.e. the
+    captured block grew from ~86 to ~193 lines), which trips the test's own
+    90-line over-capture guard (added deliberately in the ISS-0287 rework to
+    catch exactly this class of drift) before any arithmetic is even
+    evaluated. Manually re-extracting Step 1.5 alone (bounding at the new
+    "# --- Step 1.6:" marker instead of "# --- Step 2:") confirms Step 1.5's
+    actual formula body is textually unchanged by ISS-0698's fix -- this is a
+    stale end-marker assumption in the test, not a formula change.
+
+    (2) PRE-EXISTING, unrelated to this branch: even with a corrected end
+    marker, the test's own hardcoded expected values (e.g. "N=4 defaults ->
+    pool=21") were written against TEST_NONPOOL_CONNECTION_RESERVE's OLD
+    default of 2 (set by the ISS-0287 commit b7a5c052 that authored this test).
+    That default was bumped from 2 to 5 by commit aa956b9a (ISS-0515, "fix
+    reproducible CI tenant_template build-race", 2026-09-06 -- eleven days
+    before this branch existed) without updating this test's hardcoded
+    expectations. Manually evaluating the real, current Step 1.5 block gives
+    TEST_POOL_SIZE=20 for N=4 (not the test's expected 21); N=16 still
+    coincidentally gives 5 either way (82/16 and 85/16 both floor to 5), so
+    only the N=4 default-values case would actually mismatch once (1) above is
+    fixed. This drift predates ISS-0698 entirely and was not introduced or
+    caught by this branch's work.
+
+    Net effect on THIS run: the test fails at the extraction-guard stage
+    (finding 1), so finding 2's stale-expectation mismatch was never reached
+    in this execution -- documented here from manual verification, not from a
+    second assertion failure in the tool's own output.
+  not_fixed_here: >
+    Per TEST-RUNNER's mandate (diagnose, don't silently loosen a test to make
+    it pass, route to the owning role), this file was not edited. Both findings
+    are test-script-only issues (test/scripts/test_parallel_pool_sizing_test.sh's
+    marker bound and hardcoded expectations), not an application/formula bug --
+    no ELIXIR-DEV routing needed. Recommend a follow-up issue for TEST-DESIGNER
+    to (a) move the end marker to "# --- Step 1.6:" (or another marker
+    immediately after Step 1.5) and (b) refresh the N=4-defaults expected pool
+    value to match the current TEST_NONPOOL_CONNECTION_RESERVE default of 5.
+
+manual_verification_of_step_1_5_formula:
+  method: >
+    Re-extracted Step 1.5 in isolation (bounded at the new "# --- Step 1.6:"
+    marker) and eval'd it directly against the same three arithmetic cases the
+    broken test encodes, to confirm no real regression in the pool-sizing logic.
+  results:
+    - "N=4, all defaults: TEST_POOL_SIZE=20 (test file's stale expectation: 21 -- see finding 2 above)"
+    - "N=16, all defaults: TEST_POOL_SIZE=5 (matches test file's expectation)"
+    - "N=4, TEST_SUPERUSER_RESERVED=0 TEST_NONPOOL_CONNECTION_RESERVE=0: TEST_POOL_SIZE=22 (matches test file's expectation for the pre-ISS-0287 reproduction case)"
+  conclusion: >
+    The clamp formula itself computes consistently with its own documented
+    arithmetic at current defaults; the one mismatch (N=4 defaults) traces
+    entirely to the test's stale hardcoded constant from before the Sep 6
+    nonpool_reserve default bump, not to any change made on this branch.
+
+test_3_compile_and_smoke:
+  compile:
+    command: "mix compile"
+    result: PASS
+    actual_output: "(no output -- clean compile, no warnings, nothing to recompile)"
+  smoke_test:
+    command: "mix test test/letflow/application_test.exs"
+    result: PASS
+    actual_output: |
+      Running ExUnit with seed: 995366, max_cases: 32
+      Excluding tags: [:keycloak, :wasm_hang, :lua_wallclock_race]
+
+      ....
+      Finished in 0.03 seconds (0.03s async, 0.00s sync)
+
+      Result: 4 passed
+
+environment_check:
+  stray_docker_containers: "none -- `docker ps -a --filter name=letflow-iss0698-regression-pg` returned empty; the test's own trap cleaned up its disposable container"
+  stray_worktrees: "none -- `git worktree list` shows only the single primary checkout on feature/WF03-ISS0698-20260917"
+  git_status: "clean -- `git status --porcelain` empty before writing this report"
+
+overall_verdict: >
+  MIXED, but ISS-0698's own fix is VERIFIED WORKING. The new regression test
+  this fix ships with (test_parallel_create_burst_test.sh) PASSES cleanly: all
+  8 forced partitions create+migrate under the capped-concurrency Step 1.7 and
+  reach a Result: line with zero 53300/too_many_connections errors, against a
+  disposable max_connections=30 Postgres container -- the exact condition that
+  reproducibly broke pre-fix. mix compile is clean and a basic mix test smoke
+  check passes (4/4). However, the separate ISS-0287 pool-sizing precedent test
+  (test_parallel_pool_sizing_test.sh) FAILS, for two reasons neither of which is
+  a regression in the pool-sizing arithmetic itself: (1) this branch's Step 1.6/
+  Step 1.7 insertion shifted where the old "# --- Step 2:" end marker sits
+  relative to "# --- Step 1.5:", so the test's own over-capture guard now
+  (correctly) refuses to eval a 193-line block instead of the expected ~86; (2)
+  independently, and predating this branch by 11 days, the test's hardcoded
+  N=4-defaults expectation (pool=21) is stale against the TEST_NONPOOL_CONNECTION_RESERVE
+  default bump from 2 to 5 landed by ISS-0515 (commit aa956b9a, 2026-09-06).
+  Manual re-verification of the actual Step 1.5 arithmetic confirms no formula
+  regression. This finding should be triaged as its own small test-maintenance
+  issue before test_parallel_pool_sizing_test.sh can be claimed green again; it
+  does not block sign-off on ISS-0698's own acceptance criteria, which the
+  dedicated new regression test demonstrates are met.
+
+next_action: >
+  Route to RELEASE-VALIDATOR (Step 5) with this mixed result flagged explicitly:
+  ISS-0698's own fix and its dedicated regression test are PASS. Separately,
+  file a small follow-up issue (suggest ISS-0699 or next available number) for
+  TEST-DESIGNER to update test/scripts/test_parallel_pool_sizing_test.sh's end
+  marker (to stop at "# --- Step 1.6:" rather than "# --- Step 2:") and refresh
+  its stale N=4-defaults expected value (21 -> 20) to match the current
+  TEST_NONPOOL_CONNECTION_RESERVE default of 5. No ELIXIR-DEV routing needed --
+  both findings are test-script-only, not application bugs.

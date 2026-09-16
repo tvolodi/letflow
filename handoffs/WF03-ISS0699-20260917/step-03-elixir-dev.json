@@ -7,9 +7,9 @@
   "to_agent": "ELIXIR-DEV",
   "file": "handoffs/WF03-ISS0699-20260917/step-03-elixir-dev.json",
   "created_at": "2026-09-16T21:20:00Z",
-  "started_at": "2026-09-16T21:20:00Z",
-  "completed_at": "2026-09-16T21:21:02Z",
-  "status": "COMPLETED",
+  "started_at": "2026-09-16T22:25:27Z",
+  "completed_at": null,
+  "status": "PENDING",
   "priority": "NORMAL",
   "context": {
     "stage": null,
@@ -19,35 +19,38 @@
     "related_handoff_ids": [],
     "artifacts_in": [
       "lib/letflow/design/iss0699-test-parallel-tmpdir-cleanup-fix.md",
-      "scripts/test_parallel.sh"
+      "scripts/test_parallel.sh",
+      "lib/mix/tasks/letflow.check.test.ex",
+      "handoffs/WF03-ISS0699-20260917/step-final-git-merge.json"
     ],
-    "owned_modules": ["scripts/test_parallel.sh"]
+    "owned_modules": ["scripts/test_parallel.sh", "lib/mix/tasks/letflow.check.test.ex"]
   },
   "task": {
-    "description": "WF-03 Step 3 (implement) for ISS-0699. On branch feature/WF03-ISS0699-20260917. Implement the fix in scripts/test_parallel.sh exactly per lib/letflow/design/iss0699-test-parallel-tmpdir-cleanup-fix.md's specification (CODE-DESIGN-VALIDATOR-passed design): a trap cleanup_tmp_dir EXIT registered immediately after tmp_dir=$(mktemp -d ...) (current ~line 245), a cleanup_tmp_dir() function that captures $? as its first statement and removes tmp_dir only on a clean exit (exit code 0) with the TEST_PARALLEL_KEEP_LOGS opt-out unset, preserving it otherwise (any error exit, or a successful run with TEST_PARALLEL_KEEP_LOGS set). Verify manually after implementing: run `bash -n scripts/test_parallel.sh` (syntax check) and, if a local mix/postgres toolchain is reachable, run the script twice consecutively and confirm tmp_dir count behavior matches the design's disposition table -- state in result.summary whether you were able to run it for real or only syntax-checked it, and why. Claim by setting status to IN_PROGRESS.",
+    "description": "WF-03 Step 3 (implement) for ISS-0699 -- REWORK ITERATION 1. On branch feature/WF03-ISS0699-20260917. Your original scripts/test_parallel.sh implementation (trap+cleanup_tmp_dir, TEST_PARALLEL_KEEP_LOGS) is UNCHANGED and correct -- do not touch it again. Step Final's CI run found it breaks lib/mix/tasks/letflow.check.test.ex, which reads scripts/test_parallel.sh's partition-*.log files on every run (not just failures) and was hard-failing with 'contains zero partition-*.log files' once your trap started deleting them on success. CODE-DESIGNER's revised design (section 3a of lib/letflow/design/iss0699-test-parallel-tmpdir-cleanup-fix.md, CODE-DESIGN-VALIDATOR-passed) now specifies the fix on the letflow.check.test.ex side: (1) thread an env-var argument through stream_and_capture/2 (making it stream_and_capture/3 with a default) so the call site that invokes scripts/test_parallel.sh (run_main_suite/0, line ~169) passes TEST_PARALLEL_KEEP_LOGS=1, preventing the script's own trap from deleting the log dir out from under this caller; (2) wrap the existing check_main_suite_logs(...) call (line ~196) in a try/after that unconditionally File.rm_rf!s the resolved log dir once that call returns OR raises, so letflow.check.test.ex itself now owns bounding this tmp_dir's lifetime end-to-end. Read section 3a in full for the exact specification before implementing. Implement exactly per that design in lib/mix/tasks/letflow.check.test.ex. Do not touch the ISS-0069 substring-check logic itself. After implementing: run `mix compile --warnings-as-errors` to confirm it compiles, and if a local mix/postgres toolchain is reachable, actually run `mix letflow.check.test` twice consecutively and confirm the log dir is cleaned up both times with no 'zero partition-*.log files' failure; state in result.summary whether you were able to run it for real, and why if not. Claim by flipping status to IN_PROGRESS on receipt, and set it to COMPLETED/FAILED as normal when you finish.",
     "acceptance_criteria": [
-      "scripts/test_parallel.sh implements the exact trap+cleanup mechanism from the design doc, at the design's specified location",
-      "TEST_PARALLEL_KEEP_LOGS opt-out implemented exactly as specified",
-      "bash -n scripts/test_parallel.sh (syntax check) passes",
-      "Every exit path from the design's disposition table behaves as specified (verified by direct reasoning about the script if a real run isn't possible in this environment, or by an actual run if it is -- state which)",
-      "No unrelated change to the script"
+      "scripts/test_parallel.sh unchanged from iteration 0 (verify with git diff -- this rework touches lib/mix/tasks/letflow.check.test.ex only)",
+      "stream_and_capture's env-var passthrough implemented exactly per design section 3a, and threaded into the run_main_suite/0 call site that invokes scripts/test_parallel.sh with TEST_PARALLEL_KEEP_LOGS=1",
+      "check_main_suite_logs(...) call wrapped in a try/after that removes the log dir on every outcome (zero logs, real failures, ISS-0069 substring match, clean pass)",
+      "mix compile --warnings-as-errors passes",
+      "ISS-0069 substring-check logic itself is provably untouched (diff shows no changes to that logic)",
+      "If a real run of mix letflow.check.test is possible in this environment, it is run twice and both runs are clean of the CI failure; if not possible, state why and verify by direct reasoning instead"
     ]
   },
   "result": {
-    "status": "PASS",
-    "summary": "Implemented the design exactly: a cleanup_tmp_dir() function (captures $? as its first statement, removes tmp_dir only when exit_code -eq 0 and TEST_PARALLEL_KEEP_LOGS is unset, otherwise prints a stderr note preserving it) defined immediately above the existing `tmp_dir=$(mktemp -d ...)` line (former line 245), with `trap cleanup_tmp_dir EXIT` registered on the line immediately after tmp_dir is assigned -- covering all four exit paths (former lines 251, 268, 291, 455) with a single registration, per the design's disposition table. Also added a TEST_PARALLEL_KEEP_LOGS knob line to the top-of-file comment block (design's OQ-2, left to my discretion) documenting default/semantics. No other lines touched. Verification: `bash -n scripts/test_parallel.sh` passes (syntax check only). A real double-run was not possible in this environment -- this session has Elixir/mix (/c/Program Files/Elixir/bin/mix) but no local Postgres (`which psql` found none), and the script requires a live Postgres to reach ecto.create/migrate; also this is a Windows dev host while the script itself documents bash/Linux as its target runtime. Verified instead by direct reasoning against the design's disposition table: exit 251/268/291 are unconditional `exit 1` after tmp_dir creation -> exit_code=1 -> trap's else branch preserves tmp_dir (268/291 keep their $tmp_dir/create-$i.log citations valid, matching ISSUE-FIXER's load-bearing requirement); exit 455 with any_failed=0 -> exit_code=0, TEST_PARALLEL_KEEP_LOGS unset by default -> tmp_dir removed; exit 455 with any_failed=1 -> exit_code=1 -> preserved. Setting TEST_PARALLEL_KEEP_LOGS to any non-empty value forces preservation even on the exit-0 path, per the `[ -z ... ]` check. set -u is unaffected (both reads use ${VAR:-} or a local always-assigned before use).",
-    "artifacts_out": ["scripts/test_parallel.sh"],
+    "status": "PENDING",
+    "summary": "ITERATION 0 RESULT (superseded, kept for reference): PASS -- scripts/test_parallel.sh's trap+cleanup_tmp_dir+TEST_PARALLEL_KEEP_LOGS implementation, unchanged by this rework. See git history of this file for the full iteration-0 report. This rework adds the letflow.check.test.ex coordination fix only.",
+    "artifacts_out": [],
     "issues": [],
     "git_evidence": {
-      "branch_name": "feature/WF03-ISS0699-20260917",
+      "branch_name": null,
       "commit_sha_list": [],
       "remote_branch": null,
       "push_status": "skipped",
       "pr_url": null,
       "pr_create_error": null
     },
-    "next_action": "Route to SECURITY-REVIEWER (out of scope expected, no tenant-data path) then REVIEWER"
+    "next_action": ""
   },
-  "rework_count": 0,
+  "rework_count": 1,
   "max_rework": 3
 }

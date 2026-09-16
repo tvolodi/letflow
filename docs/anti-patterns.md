@@ -2866,3 +2866,71 @@ by a stronger mechanical gate on `main` alone, since the gate can only fire
 after the push already succeeded; it is prevented by not treating another
 session's justification note as itself a source of truth, which is the same
 discipline "Inheriting a claim from a record" already asks for.
+
+## Same-host concurrent ORCH sessions both drafted REQ-358, and `get_next_task`'s locking could not have caught it (2026-09-16)
+
+Two Claude Code sessions ran on this workstation (hostname `tvolodi`) at
+overlapping times, both acting as `ORCH`. Session A drafted REQ-358 through
+REQ-362 locally (with the sanctioned `# impl_order: UNREGISTERED` deferral
+marker per `TASK_QUEUE.md`), then called `register_task` for all five in
+dependency order and pushed the registration commit straight to `origin/main`
+(`9b2e7600`, then `cb02d057`) — REQ-358 became queue task 680/GH#1430.
+Roughly two minutes after Session A's `register_task` call, Session B ran
+`get_next_task` against a checkout whose local `docs/requirements.yaml` did
+not yet have Session A's pushed commits (Session B had not fetched/pulled in
+between). `get_next_task` correctly returned and locked task 680 — Session
+A's own `register_task` doesn't lock anything, so the task was genuinely
+`open` and claimable at that instant, and the queue's job is exactly to
+arbitrate who wins that race. But **winning the queue's lock told Session B
+nothing about whether the requirement text already existed somewhere it
+hadn't pulled yet.** Session B's own `docs/requirements.yaml` had no REQ-358
+entry at all (confirmed by grep, `git log --all`, and no handoff/PR trace),
+which read as "this queue task was registered before the requirement was ever
+drafted" — a plausible-looking anomaly with its own investigation path (see
+the entry this replaces, now superseded) — rather than "another session on
+this same host already drafted this and hasn't pushed it to `origin/main`
+yet, and my local `main` is now behind." Session B proceeded through a full
+WF-01 re-draft, a REQ-VALIDATOR FAIL/rework cycle that split the (redrafted,
+differently-scoped) REQ-358 into REQ-358+REQ-359, and registered its own
+REQ-359 as a *new* queue task (685/GH#1435) — colliding in content (not id;
+the queue assigns ids atomically) with the real REQ-359 Session A had already
+registered as task 681/GH#1431 ("define a BA persona role", nothing to do
+with UAT-RUNNER environment targets). The collision surfaced only when
+Session B's WF-02 Step 00 (`git pull --ff-only origin main`) hit a genuine
+fast-forward failure — GIT_SETUP.md's own STOP condition — at which point
+`git log main..origin/main` / `origin/main..main` made the whole sequence
+reconstructable.
+
+**Why the queue's own coordination didn't prevent this.** `get_next_task`
+correctly prevents two sessions from *implementing* the same locked task
+concurrently — that is what it is for, and it worked exactly as designed on
+that axis. It does nothing about the separate, earlier hazard: a
+requirement's *text* can exist, correctly and legitimately, in one session's
+local checkout before it exists in the shared queue or on `origin/main`, and
+`get_next_task`'s response carries only the queue's own summary
+(title/description/acceptance_criteria as posted to `register_task`), not a
+signal that a fuller, real draft is sitting one `git pull` away on the very
+same machine. A session that treats "the requirement isn't in my local
+`docs/requirements.yaml`" as proof "the requirement was never drafted"
+(rather than first ruling out "my checkout is behind") will reach exactly
+Session B's wrong conclusion whenever two sessions share a host and a git
+remote — which two ORCH sessions on one workstation always do.
+
+**Resolution.** `git fetch origin && git log main..origin/main` (or
+equivalently, noticing `git pull --ff-only` would fail) is the check that
+would have caught this *before* any drafting began, not just at WF-02 Step
+00 where GIT_SETUP.md already happens to catch it structurally. Session B's
+duplicate work was discarded (local commits were never pushed, so
+`git reset --hard origin/main` was sufficient and lost nothing shared);
+its erroneous queue task 685 was locked and released with `status: blocked`
+(excluding it from all future `get_next_task` claims without falsely
+asserting resolution) and its GitHub mirror (#1435) closed with a comment
+pointing at the real #1431; queue task 680 was released with no status,
+returning it to `open` for whichever session actually owns the in-progress
+REQ-358..362 family to reclaim through its own normal flow. **A session
+claiming unscoped work via `get_next_task` should `git fetch origin` and
+compare `main` against `origin/main` BEFORE concluding a claimed
+`task_type: "requirement"` task's text is missing/anomalous** — a clean
+`git pull --ff-only` succeeding is cheap evidence the local checkout is
+actually current; skipping it is what let a two-minute race turn into an
+hour of duplicated WF-01 effort.

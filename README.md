@@ -221,6 +221,36 @@ name takes precedence over `.env`; with neither set, the port is 5462 and
 behaviour is unchanged. `.env` is gitignored on purpose — the port is
 local state of a checkout, not of the project.
 
+## QA deployment
+
+A live QA instance runs at [https://qa.bizdala.com](https://qa.bizdala.com)
+(host `ubuntu-16gb-nbg1-1`, deploy infra tracked in the sibling
+`ai-dala-infra` repo — see that repo's `shared/app-registry.md` "Letflow"
+section for the full deploy detail). Sign in via the login screen, which
+redirects to a real Keycloak instance at
+[https://auth.qa.bizdala.com](https://auth.qa.bizdala.com), realm
+`bpm-default`.
+
+Four seeded test users are available, one per role (matching
+`priv/keycloak/realms/bpm-default.json`'s fixture — see
+[decision 0013](docs/migration/decisions/0013-authorization-role-set.md)
+for why `operator-user` holds `PROCESS_OPERATOR`, not `PLATFORM_ADMIN`):
+
+| Username | Role |
+|---|---|
+| `admin-user` | `PLATFORM_ADMIN` |
+| `designer-user` | `PROCESS_DESIGNER` |
+| `operator-user` | `PROCESS_OPERATOR` |
+| `worker-user` | `TASK_WORKER` |
+
+**Passwords are not in this file, or in any committed file** — per this
+project's secrets convention, they're host-only. Rotated values live at
+`/opt/apps/letflow-qa-keycloak/deploy/seeded-users.env` on
+`ubuntu-16gb-nbg1-1` (mode 600); the secret *names* (not values) are
+recorded in `ai-dala-infra/landscape/secrets-inventory.md`
+(`letflow-qa-keycloak-user-<username>-password`) for whoever has SSH
+access to that host and needs to retrieve one.
+
 ## Notes
 
 - Elixir 1.20.3 / OTP 29 is the pinned toolchain for this repo (see

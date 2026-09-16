@@ -1,0 +1,61 @@
+{
+  "handoff_id": "c37d440e-fec8-4623-83bd-410731dd008a",
+  "run_id": "WF02-REQ358-20260916",
+  "workflow_id": "WF-02",
+  "step": "03",
+  "from_agent": "ORCH",
+  "to_agent": "TEST-DESIGNER",
+  "file": "handoffs/WF02-REQ358-20260916/step-03-test-design.json",
+  "created_at": "2026-09-16T09:06:21Z",
+  "started_at": "2026-09-16T09:06:21Z",
+  "completed_at": null,
+  "status": "PENDING",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S7",
+    "requirement_ids": ["REQ-358"],
+    "requirement_text": {
+      "REQ-358": "Extend the UAT scenario YAML schema with a scope field and step-level `when:` branching (eq/in/else only). Extend UAT-RUNNER/WF-05 docs with an explicit environment target (base URL + credential source). Add a schema-validation mix task rejecting malformed scope/branching scenario files with a clear error. Backward compatible: every existing scenario file still parses and its non-branching behavior is unchanged. The branching construct must be proven sufficient for a login-routing example (role=PLATFORM_ADMIN / role=<tenant-role> / unauthenticated, three distinct outcomes)."
+    },
+    "source_text": {},
+    "related_handoff_ids": ["843c27d8-1e77-4cf4-97e2-1044b9701c8c", "097d73f9-d591-423c-a0f0-3dd40ebf83ab"],
+    "artifacts_in": [
+      "lib/mix/tasks/letflow.check_uat_scenario_schema.ex",
+      "lib/letflow/design/req358-uat-scope-branching-env.md",
+      "docs/agents/uat-scenario-schema.md",
+      "test/fixtures/uat/scenarios/_throwaway/login-routing-example.yaml",
+      "lib/mix/tasks/letflow.check_requirements_registration.ex"
+    ],
+    "owned_modules": [
+      "test/specs/REQ-358.md",
+      "test/letflow/mix_tasks/check_uat_scenario_schema_test.exs"
+    ]
+  },
+  "task": {
+    "description": "Scope test (run first, per WF-02_requirement_implementation.md Step 3, already read): Step 2a's artifacts_out includes lib/mix/tasks/letflow.check_uat_scenario_schema.ex, a real Elixir module with real parse/validate logic (not a bare .exs config declaration) — this HAS application-executable surface. Continue to the full procedure.\n\nWrite test/specs/REQ-358.md (requirement text, test cases, why each exists) and ExUnit test code under test/letflow/ (e.g. test/letflow/mix_tasks/check_uat_scenario_schema_test.exs) exercising lib/mix/tasks/letflow.check_uat_scenario_schema.ex's pure core functions directly (not by shelling out to `mix` — call the module's public functions, per this project's existing mix-task test convention, e.g. check lib/mix/tasks/letflow.check_requirements_registration.ex's own test file if one exists as a precedent for how this project tests mix tasks). Cover:\n1. AC1 (schema backward compatibility): a fixture derived from an existing real scenario file (or the actual file itself) with no `scope:`/`branches:` fields validates successfully, deriving `scope` from `company_id` per the design's default-derivation rule.\n2. AC2 (malformed rejection): at least one deliberately malformed scope/branching fixture (bad `scope:` type, unknown `when:` operator, missing `else` at the end of a `branches:` list, etc. — pick concrete cases from the design doc's SCHEMA-1..6 rules) is rejected with a specific, checkable error.\n3. AC4 (branching sufficiency): a test asserting the throwaway login-routing fixture (test/fixtures/uat/scenarios/_throwaway/login-routing-example.yaml, already in artifacts_in) validates successfully against the schema, and ideally a further unit-level test on the branch-evaluation logic itself covering all three named branches (PLATFORM_ADMIN / tenant role / unauthenticated/else) if the mix task's design exposes a testable branch-matching function separate from full-file validation — check the design doc/module for such a function; if none exists (branch evaluation is UAT-RUNNER's own runtime job, not something the mix task does), state that explicitly rather than inventing a fake test.\n\nDo NOT write a test asserting anything about UAT-RUNNER's own runtime branch evaluation against a live role/session — that is not unit-testable (UAT-RUNNER is a Claude subagent reading markdown procedurally against a real HTTP session, not an Elixir function), and REQ-358's AC3/AC4 require a REAL UAT-RUNNER run against QA for that half, which is a separate step this run will dispatch later (not TEST-DESIGNER's job). Do not fake this with an ExUnit test that doesn't exercise anything real — this project's own anti-over-engineering/no-manufactured-busywork norm applies.\n\nEvery acceptance criterion must have at least one test case that would fail if violated — verify this by reasoning through each test against a hypothetical broken implementation, not just asserting it.",
+    "acceptance_criteria": [
+      "test/specs/REQ-358.md exists with requirement text, test cases, and why each exists",
+      "test/letflow/... test code exists exercising check_uat_scenario_schema.ex's real logic (not shell-out, not a markdown grep)",
+      "AC1 backward-compatibility, AC2 malformed-rejection, and AC4 branching-sufficiency (schema-validation half) each have at least one concrete test case",
+      "No test depends on wall-clock time or unseeded randomness",
+      "No test fabricates coverage of something genuinely not unit-testable (UAT-RUNNER's live branch evaluation) — that gap is named explicitly instead"
+    ]
+  },
+  "result": {
+    "status": "",
+    "summary": "",
+    "artifacts_out": [],
+    "issues": [],
+    "git_evidence": {
+      "branch_name": null,
+      "commit_sha_list": [],
+      "remote_branch": null,
+      "push_status": "skipped",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": ""
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

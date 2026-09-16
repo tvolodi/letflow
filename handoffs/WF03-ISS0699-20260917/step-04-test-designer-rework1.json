@@ -1,0 +1,55 @@
+{
+  "handoff_id": "b6f3a1d2-000d-4a00-9c00-wf03iss0699012",
+  "run_id": "WF03-ISS0699-20260917",
+  "workflow_id": "WF-03",
+  "step": "04-rework1",
+  "from_agent": "ORCH",
+  "to_agent": "TEST-DESIGNER",
+  "file": "handoffs/WF03-ISS0699-20260917/step-04-test-designer-rework1.json",
+  "created_at": "2026-09-16T22:57:27Z",
+  "started_at": "2026-09-16T22:57:27Z",
+  "completed_at": null,
+  "status": "PENDING",
+  "priority": "NORMAL",
+  "context": {
+    "stage": null,
+    "requirement_ids": [],
+    "requirement_text": {},
+    "source_text": {},
+    "related_handoff_ids": [],
+    "artifacts_in": [
+      "lib/mix/tasks/letflow.check.test.ex",
+      "test/mix/tasks/letflow_check_test_test.exs",
+      "lib/letflow/design/iss0699-test-parallel-tmpdir-cleanup-fix.md",
+      "handoffs/WF03-ISS0699-20260917/step-03-elixir-dev.json",
+      "handoffs/WF03-ISS0699-20260917/step-final-git-merge.json"
+    ],
+    "owned_modules": ["lib/mix/tasks/letflow.check.test.ex"]
+  },
+  "task": {
+    "description": "WF-03 Step 4 REWORK ITERATION 1 -- additional regression coverage. On branch feature/WF03-ISS0699-20260917. The existing test/scripts/test_parallel_tmpdir_cleanup_test.sh (from iteration 0) already covers scripts/test_parallel.sh's own trap mechanism in isolation and still passes unchanged -- do not touch it. This dispatch covers the NEW rework-iteration-1 fix in lib/mix/tasks/letflow.check.test.ex only: the exact bug Step Final's CI run caught (the task's own log-reading call failing with 'contains zero partition-*.log files' once the script's trap started deleting logs on success) is a regression in THIS file's coordination with the script, not in the script itself -- and nothing in the existing test suite (test/mix/tasks/letflow_check_test_test.exs, 15/15 passing per ELIXIR-DEV's report) currently proves this specific bug is fixed, because that suite was written before this rework existed. Add a regression test to test/mix/tasks/letflow_check_test_test.exs (follow its own existing describe-block conventions -- see 'mix letflow.check.test's re-pointed ISS-0069 gate' etc. for the established pattern of exercising this module's behaviour, likely via the same stub/fake-script seam those existing tests already use) that: (a) proves the task's TEST_PARALLEL_KEEP_LOGS=1 env-var passthrough is actually reaching the invoked script (not just present in source), and (b) proves the log directory is removed after a clean run's own successful read (bounding accumulation, restoring what ISS-0699 originally wanted, now owned by this file instead of the script). Demonstrate fail-then-pass: temporarily revert lib/mix/tasks/letflow.check.test.ex to its pre-rework-1 state (git show for the commit just before ffc7bd1c, or use `git diff` to construct the reversal) in a scratch copy/worktree, confirm your new test FAILS there (reproducing the exact CI-caught bug locally), then confirm it PASSES against the current branch state. Quote both real run outputs in result.summary. Claim by flipping status to IN_PROGRESS on receipt, and set it to COMPLETED/FAILED as normal when you finish.",
+    "acceptance_criteria": [
+      "New test(s) added to test/mix/tasks/letflow_check_test_test.exs proving env-var passthrough reaches the invoked script and proving log-dir cleanup happens after a clean run",
+      "Demonstrated (and quoted in result.summary) to FAIL against the pre-rework-1 state of lib/mix/tasks/letflow.check.test.ex and PASS against the current state",
+      "test/scripts/test_parallel_tmpdir_cleanup_test.sh from iteration 0 left untouched and still passing",
+      "mix test test/mix/tasks/letflow_check_test_test.exs passes in full after your addition"
+    ]
+  },
+  "result": {
+    "status": "PENDING",
+    "summary": "",
+    "artifacts_out": [],
+    "issues": [],
+    "git_evidence": {
+      "branch_name": null,
+      "commit_sha_list": [],
+      "remote_branch": null,
+      "push_status": "skipped",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": ""
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

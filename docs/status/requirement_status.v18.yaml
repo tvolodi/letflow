@@ -616,3 +616,27 @@ history:
       status done), best-effort-closing GH#1456 per TASK_QUEUE.md.
       ISS-0697 stays open/unlocked in the queue (newly registered, not
       yet worked) for separate follow-up.
+
+  - req: SCOPE-CHANGE
+    event: done
+    agent: DOC-UPDATER
+    at: 2026-09-16T20:02:51Z
+    note: >
+      ISS-0697 (queue task 697, GH#1462, the real recursive-bash-spawn
+      defect in test/mix/tasks/letflow_check_test_test.exs's Windows
+      fake-bash interception filed during ISS-0695's recovery run)
+      resolved via full WF-03, merged as PR #1466 (squash commit
+      0b02f6d9). Root cause: a process-global PATH mutation used to
+      intercept `bash` created a TOCTOU race under parallel test
+      execution. Fixed by replacing the PATH-mutation seam with an
+      injectable Application-env executable-resolver, eliminating the
+      shared global-state race. Verified via a real `mix
+      letflow.check.test` full-suite run completing cleanly -- no hang,
+      no nested /tmp/letflow_test_parallel.* spawn. docs/issues/
+      ISS-0697.yaml set to status: resolved/resolved_in_run/resolved_at
+      by ISSUE-FIXER as part of the same merge. GH#1462 closed with an
+      evidence comment. letflow-queue task 697 released status: done.
+      A separate new finding, ISS-0698 (queue task 698, GH#1465,
+      docs/issues/ISS-0698.yaml, status: open), was registered during
+      this same run's verification but is unrelated to this closure --
+      not resolved here, left for separate follow-up.

@@ -8,8 +8,8 @@
   "file": "handoffs/WF03-ISS0699-20260917/step-04-test-designer-rework1.json",
   "created_at": "2026-09-16T22:57:27Z",
   "started_at": "2026-09-16T22:57:27Z",
-  "completed_at": null,
-  "status": "PENDING",
+  "completed_at": "2026-09-16T23:09:31Z",
+  "status": "COMPLETED",
   "priority": "NORMAL",
   "context": {
     "stage": null,
@@ -36,19 +36,19 @@
     ]
   },
   "result": {
-    "status": "PENDING",
-    "summary": "",
-    "artifacts_out": [],
+    "status": "PASS",
+    "summary": "Added a new describe block 'ISS-0699 REWORK ITERATION 1 regression: caller-side env-var passthrough and log-dir cleanup (design doc §3a)' to test/mix/tasks/letflow_check_test_test.exs with 2 tests: (a) 'TEST_PARALLEL_KEEP_LOGS=1 set on run_main_suite/0's own bash invocation reaches the subprocess's own environment' -- uses a new install_env_var_aware_fake_bash/2 helper whose fake `bash` branches its OWN behavior on whether TEST_PARALLEL_KEEP_LOGS is visible in ITS OWN process environment (prints the partition-log-dir line and exits 0 only if set; otherwise exits 1 without printing it), so the test can only pass if the env var genuinely crossed the Port.open/2 :env boundary, not merely appears in source. (b) 'the partition-log directory is removed after a clean run's own successful read' -- asserts `refute File.exists?(log_dir)` after a clean run.\n\nFAIL-THEN-PASS PROOF (both real runs quoted):\n\n1) PRE-REWORK-1 (scratch swap of lib/mix/tasks/letflow.check.test.ex to git show 0b02f6d9:<path>, the commit immediately before ffc7bd1c, verified via `git diff --stat` showing exactly the ISS-0699 rework-1 diff reverted -- 56 lines changed, no stray edits; working tree fully restored afterward, confirmed via `git status --porcelain` showing only the test file modified post-restore):\n`mix test test/mix/tasks/letflow_check_test_test.exs` output:\n```\n  1) test ISS-0699 REWORK ITERATION 1 regression: ... the partition-log directory is removed after a clean run's own successful read (Mix.Tasks.Letflow.Check.TestTest)\n     test/mix/tasks/letflow_check_test_test.exs:1255\n     Expected false or nil, got true\n     code: refute File.exists?(log_dir)\n\n  2) test ISS-0699 REWORK ITERATION 1 regression: ... TEST_PARALLEL_KEEP_LOGS=1 set on run_main_suite/0's own bash invocation reaches the subprocess's own environment (Mix.Tasks.Letflow.Check.TestTest)\n     test/mix/tasks/letflow_check_test_test.exs:1231\n     ** (Mix.Error) mix letflow.check.test: FAILED -- scripts/test_parallel.sh exited 1 before ever printing its partition-log-directory line ...\n\nResult: 15/17 passed\nFailed: 2 tests\n```\nBoth new tests fail against pre-rework-1 code, reproducing the exact CI-caught bug class (env var not forwarded / log dir not cleaned up).\n\n2) CURRENT branch state (post-restore, byte-identical to pre-edit lib file per `cp` back from backup):\n`mix test test/mix/tasks/letflow_check_test_test.exs` output:\n```\nResult: 17 passed\n```\nAll 17 tests, including both new ones, pass.\n\n3) Full gate: `mix letflow.check.test` (real run, not backgrounded-and-abandoned -- confirmed completed via both a blocking poll on its output file and an independent Monitor watch, both observing the same terminal line) exited 0:\n```\nmix letflow.check.test: OK -- isolated :lua_wallclock_race run also passed clean.\n[exited with code 0]\n```\nNo ISS-0069 substring-warning-gate failures, no test failures, all three stages (main parallel suite, wasm_hang isolation, lua_wallclock_race isolation) passed clean.\n\ntest/scripts/test_parallel_tmpdir_cleanup_test.sh (iteration 0) was not touched -- confirmed via `git status --porcelain` showing no changes to that file throughout this session.",
+    "artifacts_out": ["test/mix/tasks/letflow_check_test_test.exs"],
     "issues": [],
     "git_evidence": {
-      "branch_name": null,
+      "branch_name": "feature/WF03-ISS0699-20260917",
       "commit_sha_list": [],
-      "remote_branch": null,
-      "push_status": "skipped",
+      "remote_branch": "origin/feature/WF03-ISS0699-20260917",
+      "push_status": "pending",
       "pr_url": null,
       "pr_create_error": null
     },
-    "next_action": ""
+    "next_action": "Route to TEST-DESIGN-VALIDATOR (regate)"
   },
   "rework_count": 0,
   "max_rework": 3

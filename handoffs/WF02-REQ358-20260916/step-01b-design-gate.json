@@ -7,9 +7,9 @@
   "to_agent": "CODE-DESIGN-VALIDATOR",
   "file": "handoffs/WF02-REQ358-20260916/step-01b-design-gate.json",
   "created_at": "2026-09-16T08:44:19Z",
-  "started_at": "2026-09-16T08:44:19Z",
-  "completed_at": "2026-09-16T09:15:00Z",
-  "status": "COMPLETED",
+  "started_at": "2026-09-16T08:49:25Z",
+  "completed_at": null,
+  "status": "PENDING",
   "priority": "NORMAL",
   "context": {
     "stage": "S7",
@@ -37,17 +37,15 @@
       "The backward-compatibility default-derivation rule is stated precisely enough to be mechanically applied by ELIXIR-DEV without further judgment calls",
       "The branching construct's exact operator set and evaluation procedure is unambiguous",
       "Cross-module/cross-file dependencies (mix.exs wiring, which files the runner/WF-05 prose replaces) are listed explicitly",
-      "Each of CODE-DESIGNER's 5 stated open questions is judged BLOCKER or legitimately-deferred, with the YAML-dependency question specifically checked against mix.exs's actual deps() before accepting it as open"
+      "Each of CODE-DESIGNER's 5 stated open questions is judged BLOCKER or legitimately-deferred, with the YAML-dependency question specifically checked against mix.exs's actual deps() before accepting it as open",
+      "RE-GATE (iteration 1): CODE-DESIGNER applied a targeted addendum (commits d130770a, 8d8e900c on feature/WF02-REQ358-20260916) per handoffs/WF02-REQ358-20260916/step-01-design.json's REWORK ITERATION 1 note: (a) corrected the design doc's YAML-dependency premise to name yaml_elixir (already a project dependency, already used by letflow.audit_issue_closures.ex); (b) resolved the `only: :test` scoping question concretely by citing mix.exs's cli/0 preferred_envs: [\"letflow.check\": :test], which already runs the whole `letflow.check` alias under :test, so no widening is needed. Re-read the design doc in full again (not just the diff) and re-verify against all six original acceptance criteria above -- the fix must be checked in context, not taken on the rework agent's own say-so."
     ]
   },
   "result": {
-    "status": "FAIL",
-    "summary": "Design doc's own premise in §0 ('Project has no YAML-parsing dependency in mix.exs today') is factually wrong. mix.exs deps() already lists {:yaml_elixir, \"~> 2.11\", only: :test}, actively used by an existing mix task (lib/mix/tasks/letflow.audit_issue_closures.ex) plus several test support/fixture modules. OQ-1 is therefore NOT a genuine open question requiring new REVIEWER dependency sign-off as the design claims -- it is a reuse decision the design should have made itself (per the handoff's explicit instruction to check deps() before accepting OQ-1 as open), including addressing the `only: :test` scoping, since the new letftow.check_uat_scenario_schema task is wired into the `letflow.check` alias (§2.4) which is not test-scoped -- a real blocker the current design does not surface at all. This is a load-bearing error: §2's entire mix task design is predicated on the false 'no dependency exists' premise, so AC criteria 1 and 6 both fail (deferral language on a question that is not actually open; the specific mix.exs check the gate required was not performed, or was performed and its result was misreported). All other checks (no .ex bodies present, branching operator set eq/in/else fully specified, backward-compat default-derivation rule mechanical, cross-file dependencies listed, OQ-2..OQ-5 legitimately deferred) look sound but are moot -- FAIL immediately per Step 1b's no-partial-credit rule.",
+    "status": "",
+    "summary": "",
     "artifacts_out": [],
-    "issues": [
-      "BLOCKER: §0 premise 'no YAML-parsing dependency in mix.exs today' is false -- mix.exs already declares {:yaml_elixir, \"~> 2.11\", only: :test}, in active use by lib/mix/tasks/letflow.audit_issue_closures.ex and multiple test/ modules.",
-      "BLOCKER: OQ-1 must be resolved by CODE-DESIGNER, not left to ELIXIR-DEV/REVIEWER -- decide whether check_uat_scenario_schema reuses yaml_elixir, and if so, whether its `only: :test` restriction must change given the task runs via the non-test-scoped `letflow.check` alias (§2.4). This is a concrete design decision (widen dep scope vs. keep test-only and change task invocation), not a library-choice-requiring-REVIEWER-sign-off situation like check_requirements_registration's bug-fix case the design analogized to."
-    ],
+    "issues": [],
     "git_evidence": {
       "branch_name": null,
       "commit_sha_list": [],
@@ -56,8 +54,21 @@
       "pr_url": null,
       "pr_create_error": null
     },
-    "next_action": "Rework CODE-DESIGNER: correct §0's premise, resolve OQ-1 concretely (reuse yaml_elixir; decide and state the only:-scope fix), then re-route to CODE-DESIGN-VALIDATOR."
+    "next_action": ""
   },
   "rework_count": 0,
-  "max_rework": 3
+  "max_rework": 3,
+  "gate_history": [
+    {
+      "iteration": 0,
+      "gated_at": "2026-09-16T09:15:00Z",
+      "status": "FAIL",
+      "summary": "Design doc's own premise in §0 ('Project has no YAML-parsing dependency in mix.exs today') is factually wrong. mix.exs deps() already lists {:yaml_elixir, \"~> 2.11\", only: :test}, actively used by an existing mix task (lib/mix/tasks/letflow.audit_issue_closures.ex) plus several test support/fixture modules. OQ-1 is therefore NOT a genuine open question requiring new REVIEWER dependency sign-off as the design claims -- it is a reuse decision the design should have made itself, including addressing the `only: :test` scoping, since the new letflow.check_uat_scenario_schema task is wired into the `letflow.check` alias (§2.4). All other checks looked sound but FAIL immediately per Step 1b's no-partial-credit rule.",
+      "issues": [
+        "BLOCKER: §0 premise 'no YAML-parsing dependency in mix.exs today' is false -- mix.exs already declares {:yaml_elixir, \"~> 2.11\", only: :test}, in active use by lib/mix/tasks/letflow.audit_issue_closures.ex and multiple test/ modules.",
+        "BLOCKER: OQ-1 must be resolved by CODE-DESIGNER, not left to ELIXIR-DEV/REVIEWER -- decide whether check_uat_scenario_schema reuses yaml_elixir, and if so, whether its `only: :test` restriction must change."
+      ],
+      "next_action": "Rework CODE-DESIGNER: correct §0's premise, resolve OQ-1 concretely (reuse yaml_elixir; decide and state the only:-scope fix), then re-route to CODE-DESIGN-VALIDATOR."
+    }
+  ]
 }

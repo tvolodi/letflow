@@ -1,0 +1,53 @@
+{
+  "handoff_id": "b6f3a1d2-0005-4a00-9c00-wf03iss0699004",
+  "run_id": "WF03-ISS0699-20260917",
+  "workflow_id": "WF-03",
+  "step": "03",
+  "from_agent": "ORCH",
+  "to_agent": "ELIXIR-DEV",
+  "file": "handoffs/WF03-ISS0699-20260917/step-03-elixir-dev.json",
+  "created_at": "2026-09-16T21:20:00Z",
+  "started_at": "2026-09-16T21:20:00Z",
+  "completed_at": null,
+  "status": "PENDING",
+  "priority": "NORMAL",
+  "context": {
+    "stage": null,
+    "requirement_ids": [],
+    "requirement_text": {},
+    "source_text": {},
+    "related_handoff_ids": [],
+    "artifacts_in": [
+      "lib/letflow/design/iss0699-test-parallel-tmpdir-cleanup-fix.md",
+      "scripts/test_parallel.sh"
+    ],
+    "owned_modules": ["scripts/test_parallel.sh"]
+  },
+  "task": {
+    "description": "WF-03 Step 3 (implement) for ISS-0699. On branch feature/WF03-ISS0699-20260917. Implement the fix in scripts/test_parallel.sh exactly per lib/letflow/design/iss0699-test-parallel-tmpdir-cleanup-fix.md's specification (CODE-DESIGN-VALIDATOR-passed design): a trap cleanup_tmp_dir EXIT registered immediately after tmp_dir=$(mktemp -d ...) (current ~line 245), a cleanup_tmp_dir() function that captures $? as its first statement and removes tmp_dir only on a clean exit (exit code 0) with the TEST_PARALLEL_KEEP_LOGS opt-out unset, preserving it otherwise (any error exit, or a successful run with TEST_PARALLEL_KEEP_LOGS set). Verify manually after implementing: run `bash -n scripts/test_parallel.sh` (syntax check) and, if a local mix/postgres toolchain is reachable, run the script twice consecutively and confirm tmp_dir count behavior matches the design's disposition table -- state in result.summary whether you were able to run it for real or only syntax-checked it, and why. Claim by setting status to IN_PROGRESS.",
+    "acceptance_criteria": [
+      "scripts/test_parallel.sh implements the exact trap+cleanup mechanism from the design doc, at the design's specified location",
+      "TEST_PARALLEL_KEEP_LOGS opt-out implemented exactly as specified",
+      "bash -n scripts/test_parallel.sh (syntax check) passes",
+      "Every exit path from the design's disposition table behaves as specified (verified by direct reasoning about the script if a real run isn't possible in this environment, or by an actual run if it is -- state which)",
+      "No unrelated change to the script"
+    ]
+  },
+  "result": {
+    "status": "PENDING",
+    "summary": "",
+    "artifacts_out": [],
+    "issues": [],
+    "git_evidence": {
+      "branch_name": null,
+      "commit_sha_list": [],
+      "remote_branch": null,
+      "push_status": "skipped",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": ""
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

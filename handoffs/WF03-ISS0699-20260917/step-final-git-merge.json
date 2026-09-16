@@ -1,0 +1,54 @@
+{
+  "handoff_id": "b6f3a1d2-000c-4a00-9c00-wf03iss0699011",
+  "run_id": "WF03-ISS0699-20260917",
+  "workflow_id": "WF-03",
+  "step": "FINAL",
+  "from_agent": "ORCH",
+  "to_agent": "ELIXIR-DEV",
+  "file": "handoffs/WF03-ISS0699-20260917/step-final-git-merge.json",
+  "created_at": "2026-09-16T21:28:43Z",
+  "started_at": "2026-09-16T21:28:43Z",
+  "completed_at": null,
+  "status": "PENDING",
+  "priority": "NORMAL",
+  "context": {
+    "stage": null,
+    "requirement_ids": [],
+    "requirement_text": {},
+    "source_text": {},
+    "related_handoff_ids": [],
+    "artifacts_in": [
+      "docs/agents/protocols/GIT_MERGE.md",
+      "handoffs/WF03-ISS0699-20260917/step-04c-test-runner.json",
+      "handoffs/WF03-ISS0699-20260917/step-03b-security-reviewer.json"
+    ],
+    "owned_modules": ["scripts/test_parallel.sh"]
+  },
+  "task": {
+    "description": "WF-03 Step Final (git merge) for ISS-0699, queue task 699, GH#1468 (already closed). On branch feature/WF03-ISS0699-20260917. Follow docs/agents/protocols/GIT_MERGE.md exactly, steps 1-10 (single-worktree checkout, not the worktree variant): stage/commit any remaining files, fetch+rebase onto origin/main, run mix format --check-formatted / mix compile --warnings-as-errors / mix test after rebase (attribute any failure structurally per core-directives.md -- this branch changed only scripts/test_parallel.sh and test/scripts/test_parallel_tmpdir_cleanup_test.sh, so any Elixir compile/test failure is almost certainly pre-existing/unattributable to this branch, but verify and state the attribution route explicitly rather than assuming), push the rebased branch (force-with-lease only if a plain push is rejected as non-fast-forward), open a PR (title prefix 'fix:'), wait for CI (backend+frontend jobs) to go green via `gh pr checks <PR>` in a bounded poll loop (check every 1-2 minutes, do not rely on an internally-armed monitor since the parent session cannot see it), then merge with `gh pr merge --squash --delete-branch`, then do the mandatory local cleanup (checkout main, pull --ff-only, delete local branch) and verify a clean tree. Note for step 2's PR body: SECURITY-REVIEWER's verdict was PASS/out-of-scope per handoffs/WF03-ISS0699-20260917/step-03b-security-reviewer.json. Claim by setting status to IN_PROGRESS.",
+    "acceptance_criteria": [
+      "gh pr merge exited 0 (or PARTIAL correctly reported if gh unavailable, which it is not here)",
+      "git branch --show-current is main after cleanup",
+      "git pull --ff-only on main after merge exited 0",
+      "git status shows a clean working tree",
+      "PR body's mix test line states real pass/fail counts and attribution route, never a bare unsourced PASS"
+    ]
+  },
+  "result": {
+    "status": "PENDING",
+    "summary": "",
+    "artifacts_out": [],
+    "issues": [],
+    "git_evidence": {
+      "branch_name": null,
+      "commit_sha_list": [],
+      "remote_branch": null,
+      "push_status": "skipped",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": ""
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

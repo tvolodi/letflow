@@ -344,3 +344,28 @@ history:
       being done in parallel by ORCH, silently discarding REQ-362's
       first uncommitted attempt -- redone cleanly afterward, see
       REQ-362's own started-event entry.
+
+  - req: REQ-359
+    event: started
+    agent: ORCH
+    at: 2026-09-16T10:30:49Z
+    note: >
+      Claimed letflow-queue task 681 (GH#1431) via get_next_task, agent_id
+      tvolodi-orch. depends_on REQ-358 (done). Confirmed local main up to
+      date with origin/main before branching (git fetch + git log
+      main..origin/main empty aside from an unrelated in-flight
+      feature/WF02-REQ363-20260916 branch, not touching this requirement's
+      scope). Routing WF-02 in full: define a BA (business-analyst) agent
+      role file, update AGENT_SYSTEM.md's roster/capability matrix, append
+      a dated addendum to decision 0004, and instantiate a real BA persona
+      for the BilimBaga tenant vertical authoring and exercising one real
+      UAT scenario against QA. Branch feature/WF02-REQ359-20260916 created
+      from main and pushed. run_id WF02-REQ359-20260916.
+
+      COMPOSITION NOTE (Step Final rebase onto origin/main at 7bab6d2a):
+      this entry's own `at:` (10:30:49Z) sorts between REQ-363's started
+      event (10:28:14Z, landed on main first via commit 7bab6d2a) and
+      REQ-363's done event (10:35:01Z, same commit) -- reordered into that
+      chronological position rather than appended after both, per this
+      file's own established composition precedent (see volume 3's index
+      note, "recount-every-time"/chronological-interleave pattern).

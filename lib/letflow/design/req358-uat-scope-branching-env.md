@@ -50,10 +50,17 @@ visual-regression mechanism (REQ-362).
   before `format --check-formatted` / `compile --warnings-as-errors` / `letflow.check.test`,
   each with an inline comment explaining its placement relative to neighbors. §2.4 below
   follows this convention.
-- Project has no YAML-parsing dependency in `mix.exs` today (confirmed by
-  `check_requirements_registration`'s own moduledoc: "This project has no YAML dependency
-  and adding one for a bug fix would be a library choice requiring REVIEWER sign-off").
-  **This is load-bearing for §2's design** — see Open Question OQ-1.
+- **REWORK ITERATION 1 correction:** an earlier draft of this section claimed the
+  project has no YAML-parsing dependency at all. That is wrong — `mix.exs`'s `deps()`
+  already declares `{:yaml_elixir, "~> 2.11", only: :test}`, already used by
+  `lib/mix/tasks/letflow.audit_issue_closures.ex` and several test-support/fixture
+  modules (grep confirms both). `check_requirements_registration`'s own moduledoc
+  explaining why *it* avoids YAML ("adding one for a bug fix would be a library choice
+  requiring REVIEWER sign-off") describes that task's own deliberate choice not to
+  depend on `yaml_elixir` for a line-oriented text scan — it is not evidence the
+  dependency is absent from the project. §2's task **reuses `yaml_elixir`**, already on
+  record; see §2.2 and the resolved OQ-1 below (no new REVIEWER library sign-off
+  needed).
 
 ---
 
@@ -301,9 +308,12 @@ content. Raises only if the path cannot be read at all (I/O error, not a schema 
 @spec check_file(Path.t()) :: file_result()
 def check_file(path)
 
-@doc "Pure core: given already-parsed scenario data (a map, as produced by whatever YAML
-decoder this design adopts — see Open Question OQ-1) and the file's path (for error
-messages only), returns every mechanically-checkable violation. Empty list iff the file
+@doc "Pure core: given already-parsed scenario data (a map, as produced by
+`YamlElixir.read_from_file/1`, matching the codebase's existing convention in e.g.
+test/support/simulation/scenario_fixture.ex — see §0's REWORK ITERATION 1 correction and
+resolved OQ-1: this design reuses the project's existing `yaml_elixir` dependency, not a
+new one) and the file's path (for error messages only), returns every
+mechanically-checkable violation. Empty list iff the file
 satisfies every mechanical rule below. This is the unit hermetic fixture tests target,
 mirroring classify_entry/1's role in the precedent module."
 @spec check_scenario(Path.t(), map()) :: [violation()]
@@ -623,20 +633,34 @@ evidence, not an assertion that backward compatibility holds.
 
 ## 6. Open questions
 
-- **OQ-1 (YAML parsing for §2).** `check_requirements_registration` deliberately avoids a
-  YAML dependency by doing line-oriented text scanning instead of real parsing, because
-  "adding one for a bug fix would be a library choice requiring REVIEWER sign-off." §2's
-  task is materially different — validating YAML *structure* (nested `branches:`/`when:`
-  maps, lists of strings) line-oriented text scanning cannot do reliably — so this design
-  assumes ELIXIR-DEV either (a) adds a YAML-parsing dependency (e.g. `yaml_elixir` or
-  `:yamerl`), which per the project's own precedent requires REVIEWER sign-off before
-  landing, or (b) some existing dependency already in `mix.exs` already parses YAML
-  elsewhere in the codebase (unconfirmed — not checked as part of this design pass) and
-  should be reused instead of adding a new one. **CODE-DESIGN-VALIDATOR/ELIXIR-DEV must
-  resolve which, and get REVIEWER sign-off if (a), before implementation** — this design
-  deliberately does not pick one, since it is exactly the kind of dependency decision
-  `CLAUDE.md`'s "don't silently re-decide a settled decision" rule and REVIEWER's remit
-  cover.
+- **OQ-1 — RESOLVED in REWORK ITERATION 1 (was: which YAML-parsing dependency to add).**
+  Not a genuine open question: `mix.exs`'s `deps()` (line 64) already declares
+  `{:yaml_elixir, "~> 2.11", only: :test}`, already used elsewhere in the codebase
+  (`lib/mix/tasks/letflow.audit_issue_closures.ex` and several test-support/fixture
+  modules). `check_requirements_registration`'s "adding one for a bug fix would be a
+  library choice requiring REVIEWER sign-off" moduledoc comment describes why *that*
+  task avoids depending on `yaml_elixir` for its own narrow purpose (a line-oriented
+  text scan needs no real parser) — it does not mean the project has no YAML dependency.
+  **Decision: §2's `check_file/1` parses each scenario file with
+  `YamlElixir.read_from_file/1`, matching the codebase's existing convention (e.g.
+  `test/support/simulation/scenario_fixture.ex`) — no new dependency, no new REVIEWER
+  library sign-off needed.**
+  §2.2's `check_scenario/2` doc above and §0's premise are updated to state this.
+
+  **Scoping sub-question, also resolved:** `yaml_elixir` is currently `only: :test` in
+  `deps()`. §2.4 wires the new task into `mix.exs`'s `"letflow.check"` alias, and
+  `mix.exs` line 17 already declares `preferred_envs: ["letflow.check": :test]` —
+  meaning `mix letflow.check` (and therefore `mix letflow.check_uat_scenario_schema` run
+  standalone or via the alias) already executes in the `:test` Mix env. **Conclusion:
+  the existing `only: :test` scoping on `yaml_elixir` is already sufficient — it does
+  not need widening to `only: [:dev, :test]` or unscoping entirely.** The one case this
+  does not cover is a developer invoking `mix letflow.check_uat_scenario_schema` inside
+  an explicit `MIX_ENV=dev` (or `=prod`) shell rather than through the alias or its
+  `preferred_envs`-driven default — that invocation would `UndefinedFunctionError` on
+  `YamlElixir` the same way any other `only: :test` dependency would outside `:test`.
+  This is consistent with how the rest of `letflow.check`'s `:test`-scoped tooling
+  already behaves and is not a new risk this design introduces, so it is not carried
+  forward as a further open question.
 - **OQ-2 (per-step/per-outcome structural depth in §2.3).** SCHEMA-5 says branch
   `steps:`/`expected_outcomes:` reuse "the same shape as the pre-existing top-level
   ones" but this design does not fully re-specify field-by-field required-ness for

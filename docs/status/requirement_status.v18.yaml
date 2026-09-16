@@ -483,3 +483,48 @@ history:
       touches UAT visual regression), so no README change made. No
       docs/migration/stage-N-*.md or docs/migration/decisions/*.md file
       was named in REQ-362's acceptance criteria, so that check is N/A.
+
+  - req: SCOPE-CHANGE
+    event: done
+    agent: ORCH
+    at: 2026-09-16T13:13:13Z
+    note: >
+      ISS-0694 (queue task 694, GH#1454, "'certificate' entity type
+      missing from BILIMBAGA_ENTITY_TYPES") resolved via full WF-03,
+      branch feature/WF03-ISS0694-20260916, merged as PR #1459 (squash
+      commit f8095d0f). ISSUE-FIXER's Step 1 diagnosis found the bug
+      lived entirely in web/src/config/__tests__/bilimbagaEntities.test.ts's
+      own exclusion-set logic (RUNTIME_STATE_ENTITY_TYPES only covered
+      the 5 session_* types, not REQ-355's new certificate entity type)
+      -- not in production code, since lib/letflow/exam/certificate.ex
+      explicitly defers an admin-authoring route to a future
+      requirement. CODE-DESIGNER's fix design FAILed CODE-DESIGN-
+      VALIDATOR on the first attempt (missed two prose comments that
+      would become factually wrong once certificate joined the set for
+      a different reason than the session types), reworked and PASSed
+      on the second. FRONTEND-DEV implemented exactly per the approved
+      design: renamed RUNTIME_STATE_ENTITY_TYPES -> NO_ADMIN_AUTHORING_
+      ENTITY_TYPES, added 'certificate', rewrote both comment blocks --
+      no change to bilimbagaEntities.ts itself, preserving REQ-355's
+      scope. SECURITY-REVIEWER PASSed (out of scope, no tenant-data
+      path). REVIEWER PASSed (no scope creep, no decision-record
+      contradiction). TEST-DESIGNER determined no additional regression
+      test file was needed (the modified test file's own before/after
+      state IS the fail-then-pass proof -- independently reproduced:
+      pre-fix `AssertionError: expected [ 'certificate' ] to deeply
+      equal []`, post-fix 4/4 passed), and TEST-DESIGN-VALIDATOR PASSed
+      that reasoning after independently reproducing the same
+      fail-then-pass check itself. TEST-RUNNER confirmed full suites
+      clean: frontend 568/568, backend 4324/4324. Step Final's own
+      post-rebase mix test run surfaced one unrelated failure
+      (Letflow.Routers.TenantsTest, "lists tenants in the paginated
+      allowlisted shape") -- attributed structurally as not touched by
+      this branch's diff (test-file-only + design doc + issue
+      bookkeeping) and did not block the merge. ISSUE-FIXER's Step 5
+      set docs/issues/ISS-0694.yaml status: resolved and closed GH#1454
+      with an evidence comment. letflow-queue task 694 released
+      status: done, confirmed post-merge (locked_by null, status done).
+      Local main fast-forwarded to origin/main (242ae72c) and the
+      issue-record content re-read directly from origin/main to confirm
+      DOC-UPDATER's -- here, ISSUE-FIXER's -- claimed change actually
+      landed, per core-directives.md, before writing this entry.

@@ -248,7 +248,13 @@ project's secrets convention, they're host-only. If you have SSH access to
 `ubuntu-16gb-nbg1-1`, fetch one on demand (prints to your terminal, never
 written to a local file):
 
+```powershell
+# Windows / PowerShell
+ai-dala-infra\scripts\qa-login.ps1 operator-user
 ```
+
+```bash
+# macOS / Linux / Git Bash / WSL
 ai-dala-infra/scripts/qa-login.sh operator-user
 ```
 

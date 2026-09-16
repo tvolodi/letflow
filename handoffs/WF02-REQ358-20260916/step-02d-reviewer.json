@@ -8,8 +8,8 @@
   "file": "handoffs/WF02-REQ358-20260916/step-02d-reviewer.json",
   "created_at": "2026-09-16T08:59:04Z",
   "started_at": "2026-09-16T08:59:04Z",
-  "completed_at": null,
-  "status": "PENDING",
+  "completed_at": "2026-09-16T09:01:40Z",
+  "status": "COMPLETED",
   "priority": "NORMAL",
   "context": {
     "stage": "S7",
@@ -43,19 +43,32 @@
     ]
   },
   "result": {
-    "status": "",
-    "summary": "",
-    "artifacts_out": [],
-    "issues": [],
+    "status": "FAIL",
+    "summary": "JUDGMENT CALL 1 (Decision 0004 consistency) -- CONFIRMED, no re-decision. Read 0004's 'What is explicitly NOT reproduced' section directly: it defers the BO-*/PRODUCT-OWNER persona layer 'to when S7 actually starts and there is a concrete scenario corpus to validate against.' Read REQ-210 (done) directly in docs/requirements.yaml: it states S7 is done and the corpus exists (11 tenant scenarios/3 companies, 18 platform scenarios). Both trigger preconditions are genuinely met, not asserted on faith. Also confirmed REQ-358 itself stays inside 0004's still-standing boundary -- its own SCOPE excludes 'no new agent role'; the actual persona-role work (0004's specific deferred item) is REQ-359 (BA role, pending) and REQ-361 (PO-equivalent, pending), not this requirement. This is the deferred work's trigger firing, not 0004's reasoning being reopened.\n\nJUDGMENT CALL 2 (MIX_ENV/yaml_elixir) -- FAIL, required fix, not a documented tradeoff. Verified myself rather than trusting the handoff's framing: mix.exs's preferred_envs only forces :test for the `letflow.check` alias. Read docs/agents/protocols/GIT_MERGE.md step 5d directly (the conflict-handling 'verify the build still passes' block) -- it runs a bare `mix compile --warnings-as-errors`, NOT via the alias, so it is NOT forced to :test; ORCH's framing in this handoff's own task text ('GIT_MERGE.md Step Final's own gate sequence also runs under whatever env the alias/task forces') is incorrect for this step. This step is real and currently active (used repeatedly per docs/anti-patterns.md's own entries on this exact gate), triggered on any future rebase conflict, which will occur on some future branch regardless of what that branch touches, since lib/ always compiles. anti-patterns.md's 'elixirc --warnings-as-errors is not a proxy for mix compile --warnings-as-errors' entry underscores how precisely this project already treats this exact gate's exit-code behavior -- a spurious warning here would be read by a rebase-resolving agent as 'fix compile errors, git add, rebase --continue,' i.e. a false-positive bug hunt, exactly the kind of reliability gap the humanless-pipeline redundancy principle exists to close. REQUIRED FIX: widen yaml_elixir's dep scope in mix.exs from `only: :test` to `only: [:dev, :test]` -- a one-line, zero-risk change that removes the env-dependency footgun entirely rather than leaving it as documented debt. Route to ELIXIR-DEV.\n\nSTANDARD CHECKS: lib/mix/tasks/letflow.check_uat_scenario_schema.ex read in full -- correctly follows check_requirements_registration's precedent (pure check_scenario/2 core, never raises on malformed content; thin run/1 Mix.Task wrapper; @spec on every public/private boundary function). Supervision N/A, confirmed no process/supervisor file touched (git diff --stat). Branching construct is exactly eq/in/else, no general expression language -- matches REQ-358's own scope limit. Throwaway fixture (test/fixtures/uat/scenarios/_throwaway/login-routing-example.yaml) is clearly marked disposable in its own header comment and lives under a `_throwaway/` directory, not silently promoted to permanent corpus. No new agent role, no visual-regression code -- confirmed via diff --stat (18 files, all doc/handoff/fixture/mix-task, no new behaviour/role file). docs/anti-patterns.md checked: no direct-precedent entry for dep `only:` scoping, but the 'elixirc vs mix compile --warnings-as-errors' entry (line 1339) and the 'test-only production-code seam' entry (line 2199) both reinforce this project's low tolerance for MIX_ENV-dependent gate surprises, supporting the FAIL-with-fix call above rather than the PASS-with-note alternative.\n\nMINOR non-blocking note: .claude/agents/uat-runner.md's and WF-05_uat_run.md's updated 'Note on scope' sections read 'As of REQ-361, Letflow has that equivalent role' in present tense, but REQ-361 is status: pending (not done) -- the wording technically uses the requested 'as of REQ-361' citation form but its present-tense grammar ('has') reads as already-landed rather than conditional-on-landing, which is the exact confusion REQ-358's own task text warned against ('do not forward-reference an agent that does not exist yet as though it already does'). Not blocking this gate (no functional/code impact, and the literal citation is present), but flag for DOC-UPDATER/next touch to reword as conditional (e.g. 'once REQ-361 lands, Letflow will have...').",
+    "artifacts_out": [
+      "handoffs/WF02-REQ358-20260916/step-02d-reviewer.json"
+    ],
+    "issues": [
+      {
+        "severity": "MAJOR",
+        "description": "yaml_elixir is scoped `only: :test` in mix.exs's deps() while lib/mix/tasks/letflow.check_uat_scenario_schema.ex (compiled under every Mix env per elixirc_paths/1) calls YamlElixir.read_from_file/1 at module level. A bare `mix compile --warnings-as-errors` with no MIX_ENV set now fails on an undefined-function warning. This is not merely a hypothetical dev-workflow footgun: docs/agents/protocols/GIT_MERGE.md step 5d (conflict-handling 'verify the build still passes' block) runs exactly this bare command, not via the MIX_ENV=test-forced `letflow.check` alias, and will hit this spuriously on any future rebase-conflict resolution. REQUIRED FIX: widen yaml_elixir's dep entry to `only: [:dev, :test]` in mix.exs.",
+        "affected_requirement": "REQ-358"
+      },
+      {
+        "severity": "MINOR",
+        "description": ".claude/agents/uat-runner.md and docs/agents/workflows/WF-05_uat_run.md's updated 'Note on scope' sections say 'As of REQ-361, Letflow has that equivalent role' in present tense, while REQ-361 is status: pending. Reads as already-landed rather than conditional, which is the exact forward-reference confusion REQ-358's own task text asked this diff to avoid. Not blocking; reword to a conditional form on next touch.",
+        "affected_requirement": "REQ-358"
+      }
+    ],
     "git_evidence": {
-      "branch_name": null,
+      "branch_name": "feature/WF02-REQ358-20260916",
       "commit_sha_list": [],
-      "remote_branch": null,
-      "push_status": "skipped",
+      "remote_branch": "origin/feature/WF02-REQ358-20260916",
+      "push_status": "pending",
       "pr_url": null,
       "pr_create_error": null
     },
-    "next_action": ""
+    "next_action": "Route back to ELIXIR-DEV for the required yaml_elixir dep-scope fix (mix.exs: only: :test -> only: [:dev, :test]), then re-dispatch to REVIEWER for a fresh pass on that diff before TEST-DESIGNER (per docs/anti-patterns.md's 'test-only production-code seam' precedent -- a fresh REVIEWER pass on the actual new diff, not a rubber-stamp)."
   },
   "rework_count": 0,
   "max_rework": 3

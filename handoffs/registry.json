@@ -6631,6 +6631,26 @@
       "backfilled": false,
       "last_known_step": "Step Final PASS -- squash-merged to main as 8588c421 via PR #1447, both required CI checks green, queue task 681 released status: done.",
       "note": "REQ-359: defined the BA-<VERTICAL> agent role (.claude/agents/ba-analyst.md), parameterized by tenant-vertical/solution-pack via docs/agents/ba-personas/<vertical>.yaml rather than a fixed persona list -- dual authoring+sign-off responsibility, sign-off artefacts at test/uat-reports/ba-signoff-<vertical>-<run_id>.yaml. Instantiated the first real persona (docs/agents/ba-personas/bilimbaga.yaml) and authored one real UAT scenario (test/fixtures/uat/scenarios/bilimbaga/candidate-timed-exam-autograde.yaml). docs/agents/AGENT_SYSTEM.md's roster table (3) and capability matrix (3.1) gained the BA-<VERTICAL> row; docs/migration/decisions/0004-humanless-pipeline.md gained its 2026-09-16 REQ-359 addendum, append-only. Full WF-02 pipeline run: CODE-DESIGNER PASS -> CODE-DESIGN-VALIDATOR PASS -> ELIXIR-DEV PASS (real UAT-RUNNER dispatch against QA came back honestly BLOCKED -- no BilimBaga tenant/candidate/exam-definition seed data exists in QA, verified independently twice with full quoted evidence rather than fabricated as a pass; filed as ISS-0690/GH-1445/Q-690) -> SECURITY-REVIEWER PASS (out of scope for INV-1/2/3/5/6/7/8/9; INV-4 explicitly checked against the committed UAT report/sign-off artefacts, no real secret values present) -> REVIEWER PASS -> TEST-DESIGNER PASS (no application-executable surface, routed straight to RELEASE-VALIDATOR per WF-02's own documented skip path) -> RELEASE-VALIDATOR PASS (all 5 ACs independently confirmed; AC5 requires real execution plus a quoted result, not a passing scenario) -> DOC-UPDATER (REQ-359 flipped to done, run-history appended). Step Final rebase composed a concurrent sibling run's REQ-363 started+done pair into requirement_status.v18.yaml/index.yaml in chronological order. Full mix test suite re-run post-rebase: 4324 passed, 0 failed. Precondition-satisfied dependent: REQ-360 (queue task 683) can now proceed."
+    },
+    {
+      "run_id": "WF03-ISS0692-20260916",
+      "workflow_id": "WF-03",
+      "requirement_id": null,
+      "issue_id": "ISS-0692",
+      "queue_task_id": 692,
+      "queue_agent_id": "tvolodi-orch",
+      "github_issue_number": 1448,
+      "status": "HAND_BACK",
+      "owned_modules": [
+        "lib/letflow/design/req362-visual-regression-testing.md"
+      ],
+      "branch_name": "feature/WF03-ISS0692-20260916",
+      "started_at": "2026-09-16T11:15:44Z",
+      "lock_released_at": "2026-09-16T11:20:09Z",
+      "released_lock": true,
+      "backfilled": false,
+      "last_known_step": "Step 0.5-01 (ISSUE-FIXER) COMPLETED PASS -- diagnosis only, commit c6948f27, pushed. Steps 2+ (CODE-DESIGNER onward) not dispatched.",
+      "note": "ISS-0692 (queue task 692, GH#1448) -- SECURITY-REVIEWER flagged, during WF02-REQ362's own Step 2c gate, that the visual-regression-testing design has no PII/redaction/synthetic-data policy before use against a real authenticated UAT screen. Claimed via get_next_task and ran ISSUE-FIXER's Step 0.5 (registry lookup: no prior resolved match) + Step 1 (diagnose). Diagnosis found something that changes this run's shape: ISS-0692's own affected_files, lib/letflow/design/req362-visual-regression-testing.md and web/tests/support/visual-baseline.ts, do not exist on main at all -- they exist only on the unmerged sibling branch feature/WF02-REQ362-20260916 (commits bc053cfc/389fdbf8, last activity 2026-09-16T11:04:58Z, no PR yet, no evidence the run is dead). Recommendation on record for whoever picks this back up: add a new design section requiring synthetic/disclosed-fictional-only data for any authenticated UAT scenario using this mechanism (not redaction -- conflicts with the design's unconditional pixel-diff approach in Sec 3.4; not accepted-risk -- indefensible given permanent git retention of real PII); no code change to visual-baseline.ts is required now since no authenticated scenario has adopted the tooling yet and AC2's implementation clause isn't triggered. Rather than force this fix onto an in-flight sibling branch ORCH does not own (risk of clobbering concurrent work, or duplicating a fix that branch's own run may already be planning as part of its own SECURITY-REVIEWER rework), CODE-DESIGNER was NOT dispatched. Queue task 692 released_lock with NO status (stays open, immediately re-claimable) -- this is a genuine hand-back per TASK_QUEUE.md's release_lock rules, not a resolution: re-claim once feature/WF02-REQ362-20260916 has merged to main, at which point CODE-DESIGNER can be dispatched directly against ISSUE-FIXER's preserved diagnosis (handoffs/WF03-ISS0692-20260916/step-01-issue-fixer.json, branch feature/WF03-ISS0692-20260916, pushed) without re-diagnosing."
     }
   ]
 }

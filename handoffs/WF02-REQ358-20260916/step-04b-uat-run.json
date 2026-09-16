@@ -1,0 +1,62 @@
+{
+  "handoff_id": "1c726abc-8377-4fc7-89c6-200d4840b89e",
+  "run_id": "WF02-REQ358-20260916",
+  "workflow_id": "WF-02",
+  "step": "04b",
+  "from_agent": "ORCH",
+  "to_agent": "UAT-RUNNER",
+  "file": "handoffs/WF02-REQ358-20260916/step-04b-uat-run.json",
+  "created_at": "2026-09-16T09:38:25Z",
+  "started_at": "2026-09-16T09:38:25Z",
+  "completed_at": null,
+  "status": "PENDING",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S7",
+    "requirement_ids": ["REQ-358"],
+    "requirement_text": {
+      "REQ-358": "AC1 requires: 'verified by re-running UAT-RUNNER against at least one existing scenario and quoting the unchanged pass/fail disposition.' AC3 requires: 'UAT-RUNNER accepts an environment target (base URL + credential source) as an explicit input rather than an implicit assumption, and this is exercised for real against a non-local environment (the QA instance) as part of this requirement's own verification, with the actual command/invocation and its real output quoted — not merely a design claim.' AC4 requires: 'the branching construct is proven sufficient for the login-routing example... by writing that exact scenario as a throwaway validation fixture... and running it for real against QA, quoting the result.'"
+    },
+    "source_text": {},
+    "related_handoff_ids": ["843c27d8-1e77-4cf4-97e2-1044b9701c8c"],
+    "artifacts_in": [
+      "test/fixtures/uat/scenarios/meridian/loan-origination-below-threshold.yaml",
+      "test/fixtures/uat/scenarios/_throwaway/login-routing-example.yaml",
+      ".claude/agents/uat-runner.md",
+      "docs/agents/workflows/WF-05_uat_run.md",
+      "docs/agents/uat-scenario-schema.md"
+    ],
+    "owned_modules": [],
+    "environment_target": {
+      "base_url": "https://qa.bizdala.com",
+      "credential_source": "ai-dala-infra/scripts/qa-login.sh (and its qa-login.ps1 PowerShell equivalent) — seeded users admin-user (PLATFORM_ADMIN), designer-user (PROCESS_DESIGNER), operator-user (PROCESS_OPERATOR), worker-user (TASK_WORKER); ORCH has confirmed https://qa.bizdala.com/ responds 200 before this dispatch, per WF-05_uat_run.md Step 1's readiness check (already performed — you do not need to repeat it, but confirm it yourself if you want independent evidence)."
+    }
+  },
+  "task": {
+    "description": "Per WF-05_uat_run.md Step 2-3 (already read) and .claude/agents/uat-runner.md's 'Environment target' and 'Evaluating a `when:` branch' sections (already read), run TWO real UAT passes against the QA instance named in context.environment_target and write ONE combined report:\n\n1. AC1 VERIFICATION (unchanged-behavior half): run test/fixtures/uat/scenarios/meridian/loan-origination-below-threshold.yaml (an existing, unmodified scenario file — REQ-358 changed nothing about it) against QA using the environment target above. This file predates REQ-358's schema extension and has no `scope:`/`branches:` fields at all — the point of this run is to confirm the schema extension is genuinely backward compatible: this file must produce the SAME disposition it would have produced before REQ-358 (pass/fail per its own expected_outcomes, unaffected by the new optional fields' absence). If Meridian test data/actors do not exist on QA (this is a real possibility — QA may not be seeded with this specific scenario's fixtures), that is a legitimate BLOCKED/FAIL finding to report honestly, not something to route around by inventing data — report exactly what you observe.\n\n2. AC3+AC4 VERIFICATION (environment-target + branching sufficiency): run test/fixtures/uat/scenarios/_throwaway/login-routing-example.yaml (the throwaway fixture ELIXIR-DEV built for this exact purpose — read its header comment, it is explicitly disposable validation scope, not permanent corpus) against the same QA target. This scenario uses the new `branches:`/`when:` construct keyed on `role`, with three named branches (role=PLATFORM_ADMIN, role=<tenant-role>, else/unauthenticated). Actually authenticate as admin-user (PLATFORM_ADMIN, via credential_source above) for at least the PLATFORM_ADMIN branch, and exercise at least one more branch for real (either another seeded role, or the unauthenticated/else branch by genuinely not authenticating) — you do not need to exercise all three branches in every possible combination, but exercise enough branches for real that the branch-selection mechanism itself (picking the first matching `when:`, recording which branch ran) is demonstrated working, not merely parsed.\n\nWrite test/uat-reports/uat-<date>-WF02-REQ358-20260916.yaml with both scenarios' real observed results (not inferred, not 'no error thrown'). Complete the handoff citing the real commands/invocations and their real output for both scenarios, quoted — this is what AC3 explicitly requires ('not merely a design claim').\n\nIf either scenario cannot be run for a genuine infrastructure reason (QA down, fixture data absent, credential script inaccessible from this environment), report BLOCKED/PARTIAL honestly with the specific reason — do not fabricate a pass.",
+    "acceptance_criteria": [
+      "test/uat-reports/uat-<date>-WF02-REQ358-20260916.yaml written with real observed results for both scenarios",
+      "AC1: loan-origination-below-threshold.yaml's disposition quoted, with an explicit statement of whether it matches its pre-REQ-358 expected behavior",
+      "AC3: the actual environment-target invocation (base_url + credential_source actually used) quoted, not asserted",
+      "AC4: the login-routing throwaway fixture run for real against QA with at least two of its three branches genuinely exercised, the branch actually taken named per scenario per .claude/agents/uat-runner.md's branch-reporting convention",
+      "Any genuine blocker (missing fixture data, unreachable dependency) reported honestly rather than routed around"
+    ]
+  },
+  "result": {
+    "status": "",
+    "summary": "",
+    "artifacts_out": [],
+    "issues": [],
+    "git_evidence": {
+      "branch_name": null,
+      "commit_sha_list": [],
+      "remote_branch": null,
+      "push_status": "skipped",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": ""
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

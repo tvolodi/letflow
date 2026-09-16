@@ -1,0 +1,81 @@
+run_id: WF03-ISS0699-20260917
+issue_id: ISS-0699
+agent: TEST-RUNNER
+step: "WF-03 Step 4c -- TEST-RUNNER execution of ISS-0699's regression test"
+branch: feature/WF03-ISS0699-20260917
+commit_under_test: 7c9ce064
+date: 2026-09-16
+
+diff_scope:
+  files_changed:
+    - "scripts/test_parallel.sh -- fix for ISS-0699 (Step 1.7 tmp_dir, created
+       via mktemp -d, was never removed on any exit path; adds a
+       cleanup_tmp_dir function plus `trap cleanup_tmp_dir EXIT`)"
+    - "test/scripts/test_parallel_tmpdir_cleanup_test.sh -- new regression
+       test (TEST-DESIGNER), already validated PASS by
+       TEST-DESIGN-VALIDATOR before this step"
+  note: >
+    No Elixir (.ex/.exs) file is touched by this fix -- only
+    scripts/test_parallel.sh (bash). Per this handoff's explicit instruction,
+    the full mix test suite is NOT run at this step (see
+    full_mix_test_suite_scope below for the stated reason).
+
+test_1_tmpdir_cleanup_regression:
+  command: "bash test/scripts/test_parallel_tmpdir_cleanup_test.sh"
+  description: >
+    Extracts the real cleanup_tmp_dir function + tmp_dir=$(mktemp -d ...) +
+    trap cleanup_tmp_dir EXIT lines verbatim out of scripts/test_parallel.sh
+    (bounded between the `cleanup_tmp_dir() {` line and the following
+    `max_concurrent_creates=` line, with an over-capture guard and telltale
+    checks), then evals that extracted block in a controlled subshell that
+    fakes a fast exit (0 or 1) instead of running mix/postgres, covering all
+    3 named dispositions (4 cases total: clean exit + KEEP_LOGS unset ->
+    removed; clean exit + KEEP_LOGS set -> preserved; failing exit +
+    KEEP_LOGS unset -> preserved; failing exit + KEEP_LOGS set ->
+    preserved).
+  result: PASS
+  actual_output: |
+    PASS: clean exit, KEEP_LOGS unset -> tmp_dir removed (tmp_dir removed, as expected)
+    PASS: clean exit, KEEP_LOGS set -> tmp_dir preserved (tmp_dir preserved, as expected)
+    PASS: failing exit, KEEP_LOGS unset -> tmp_dir preserved (tmp_dir preserved, as expected)
+    PASS: failing exit, KEEP_LOGS set -> tmp_dir preserved (tmp_dir preserved, as expected)
+    ---
+    test_parallel_tmpdir_cleanup_test: 4 passed, 0 failed
+  assertion_breakdown: "4 passed, 0 failed (4/4, all named dispositions covered)"
+
+test_2_syntax_check:
+  command: "bash -n scripts/test_parallel.sh"
+  description: >
+    Bash syntax-only check (no execution) of the modified script, to confirm
+    the cleanup_tmp_dir/trap addition did not introduce a parse error.
+  result: PASS
+  actual_output: |
+    SYNTAX_OK rc=0
+  assertion_breakdown: "bash -n exited 0 -- no syntax error"
+
+full_mix_test_suite_scope:
+  status: OUT OF SCOPE for this step, explicitly (not silently omitted)
+  reason: >
+    No .ex/.exs file is touched by this fix -- only scripts/test_parallel.sh
+    (bash) and its own new bash-level regression test. Per this handoff's
+    explicit instruction and this repo's No-Speculation rule (never silently
+    skip a check without saying so), the full `mix test` suite is not run at
+    this step. Step Final's git-merge will run it anyway after the rebase,
+    per this project's own GIT_MERGE.md.
+
+environment_check:
+  git_status: "clean before writing this report (git status --porcelain empty)"
+  branch: feature/WF03-ISS0699-20260917
+  commit_under_test: 7c9ce064
+
+overall_verdict: >
+  PASS. ISS-0699's fix (cleanup_tmp_dir + trap cleanup_tmp_dir EXIT in
+  scripts/test_parallel.sh) is verified working: the dedicated regression
+  test passes 4/4, covering all three named dispositions (clean-exit
+  removal, KEEP_LOGS-preserved, failing-exit-preserved). The script's bash
+  syntax is clean. The full mix test suite was explicitly out of scope for
+  this step per the handoff's own instruction, since no Elixir file changed;
+  it will run at Step Final's git-merge per GIT_MERGE.md.
+
+next_action: >
+  Route to ISSUE-FIXER (Step 5 close issue).

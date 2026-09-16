@@ -1,0 +1,31 @@
+id: ISS-0699
+title: >
+  scripts/test_parallel.sh never cleans up its per-run /tmp partition-log
+  directories
+discovered_by: TEST-DESIGN-VALIDATOR
+discovered_in_run: WF03-ISS0698-20260917
+discovered_at: "2026-09-16T21:10:27Z"
+severity: MINOR
+description: >
+  Discovered during WF03-ISS0698-20260917's TEST-DESIGN-VALIDATOR gate --
+  unrelated to ISS-0698's own fix. scripts/test_parallel.sh creates a fresh
+  tmp_dir=$(mktemp -d) per run for partition logs (now created in Step 1.7 as
+  of ISS-0698's fix, previously Step 2) but never removes it afterward on any
+  exit path, success or failure. Observed ~280 accumulated
+  /tmp/letflow_test_parallel.* directories on this workstation from
+  historical runs. Not a correctness bug, but unbounded disk growth on any
+  host that runs this script repeatedly (dev workstations, CI runners).
+
+  Needs ISSUE-FIXER triage: likely fix is a trap-based cleanup on script exit
+  (success and failure paths), possibly with an opt-out env var for a run
+  whose logs a human/agent wants to inspect afterward -- many workflows in
+  this pipeline already cite specific partition-N.log paths in their reports
+  after a failing run, so unconditional deletion would break that; worth
+  checking before designing a fix.
+affected_files:
+  - scripts/test_parallel.sh
+related_issues:
+  - ISS-0698
+queue_ref: Q-699
+github_ref: GH-1468
+status: open

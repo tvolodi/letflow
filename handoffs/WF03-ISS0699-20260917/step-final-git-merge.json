@@ -7,9 +7,9 @@
   "to_agent": "ELIXIR-DEV",
   "file": "handoffs/WF03-ISS0699-20260917/step-final-git-merge.json",
   "created_at": "2026-09-16T21:28:43Z",
-  "started_at": "2026-09-16T21:28:43Z",
-  "completed_at": "2026-09-17T03:20:00Z",
-  "status": "COMPLETED",
+  "started_at": "2026-09-16T23:32:12Z",
+  "completed_at": null,
+  "status": "PENDING",
   "priority": "NORMAL",
   "context": {
     "stage": null,
@@ -19,15 +19,16 @@
     "related_handoff_ids": [],
     "artifacts_in": [
       "docs/agents/protocols/GIT_MERGE.md",
-      "handoffs/WF03-ISS0699-20260917/step-04c-test-runner.json",
+      "handoffs/WF03-ISS0699-20260917/step-04c-test-runner-rework1.json",
       "handoffs/WF03-ISS0699-20260917/step-03b-security-reviewer.json"
     ],
-    "owned_modules": ["scripts/test_parallel.sh"]
+    "owned_modules": ["scripts/test_parallel.sh", "lib/mix/tasks/letflow.check.test.ex"]
   },
   "task": {
-    "description": "WF-03 Step Final (git merge) for ISS-0699, queue task 699, GH#1468 (already closed). On branch feature/WF03-ISS0699-20260917. Follow docs/agents/protocols/GIT_MERGE.md exactly, steps 1-10 (single-worktree checkout, not the worktree variant): stage/commit any remaining files, fetch+rebase onto origin/main, run mix format --check-formatted / mix compile --warnings-as-errors / mix test after rebase (attribute any failure structurally per core-directives.md -- this branch changed only scripts/test_parallel.sh and test/scripts/test_parallel_tmpdir_cleanup_test.sh, so any Elixir compile/test failure is almost certainly pre-existing/unattributable to this branch, but verify and state the attribution route explicitly rather than assuming), push the rebased branch (force-with-lease only if a plain push is rejected as non-fast-forward), open a PR (title prefix 'fix:'), wait for CI (backend+frontend jobs) to go green via `gh pr checks <PR>` in a bounded poll loop (check every 1-2 minutes, do not rely on an internally-armed monitor since the parent session cannot see it), then merge with `gh pr merge --squash --delete-branch`, then do the mandatory local cleanup (checkout main, pull --ff-only, delete local branch) and verify a clean tree. Note for step 2's PR body: SECURITY-REVIEWER's verdict was PASS/out-of-scope per handoffs/WF03-ISS0699-20260917/step-03b-security-reviewer.json. Claim by setting status to IN_PROGRESS.",
+    "description": "WF-03 Step Final RETRY (rework iteration 1) for ISS-0699, queue task 699, GH#1468 (already closed -- resolution stands, now genuinely verified). PR #1469 (https://github.com/tvolodi/letflow/pull/1469) is already open from the first attempt, which FAILED at CI on a real bug (scripts/test_parallel.sh's cleanup trap deleted logs before lib/mix/tasks/letflow.check.test.ex could read them). That bug is now fixed (rework iteration 1, commits ffc7bd1c onward) and independently re-verified: TEST-RUNNER ran the real `mix letflow.check.test` gate twice on this branch and both times it completed clean (4331/4331 passed, 0 failures) -- see handoffs/WF03-ISS0699-20260917/step-04c-test-runner-rework1.json. On branch feature/WF03-ISS0699-20260917. Follow docs/agents/protocols/GIT_MERGE.md from step 2 onward (branch/PR already exist -- do not create a second PR): stage/commit any remaining files, fetch+rebase onto origin/main, run mix format --check-formatted / mix compile --warnings-as-errors / mix test after rebase (attribute any failure structurally), push the rebased branch to the SAME branch/PR #1469 (force-with-lease only if a plain push is rejected as non-fast-forward), update the existing PR #1469's body if needed to reflect the rework, wait for CI (backend+frontend jobs) to go green via `gh pr checks 1469` in a bounded poll loop (check every 1-2 minutes, do not rely on an internally-armed monitor -- poll synchronously, this failed last time specifically at the CI step so verify it for real this time), then merge with `gh pr merge --squash --delete-branch`, then do the mandatory local cleanup (checkout main, pull --ff-only, delete local branch) and verify a clean tree. Claim by flipping status to IN_PROGRESS on receipt, and set it to COMPLETED/FAILED as normal when you finish.",
     "acceptance_criteria": [
-      "gh pr merge exited 0 (or PARTIAL correctly reported if gh unavailable, which it is not here)",
+      "gh pr merge exited 0 against the EXISTING PR #1469 (not a newly created PR)",
+      "CI's backend job specifically confirmed green this time (this is the exact job that failed last attempt) -- quote the real gh pr checks output",
       "git branch --show-current is main after cleanup",
       "git pull --ff-only on main after merge exited 0",
       "git status shows a clean working tree",
@@ -35,25 +36,20 @@
     ]
   },
   "result": {
-    "status": "FAIL",
-    "summary": "Rebase (no-op, already ahead of origin/main), mix format --check-formatted (PASS), mix compile --warnings-as-errors (PASS), full mix test (4331 passed, 1 failed -- test/letflow/routers/tenants_test.exs:356 pagination test, confirmed unrelated pre-existing flake, file-disjoint from this branch's diff) all cleared. Pushed branch (plain fast-forward, no rewrite since rebase was no-op) and opened PR #1469 (https://github.com/tvolodi/letflow/pull/1469). CI then surfaced a REAL, branch-attributable failure distinct from the local mix test run: the 'Backend gate (mix letflow.check)' job failed with 'mix letflow.check.test: FAILED -- partition log directory /tmp/letflow_test_parallel.gg5711 contains zero partition-*.log files.' Root cause traced in lib/mix/tasks/letflow.check.test.ex: that task shells out to scripts/test_parallel.sh, waits for it to exit 0, and THEN reads scripts/test_parallel.sh's own tmp_dir for partition-*.log files (for its ISS-0069 substring gate) -- but this branch's ISS-0699 fix (scripts/test_parallel.sh's new cleanup_tmp_dir() EXIT trap) deletes that same tmp_dir on any clean (exit 0) run before letflow.check.test ever gets a chance to read it. This is a genuine design gap in ISS-0699's fix: it never accounted for a downstream consumer reading the partition logs AFTER test_parallel.sh's own successful exit. Locally, `mix test` alone never exercises this path (it doesn't go through letflow.check.test), which is why this was not caught before CI. This failure IS attributable to this branch -- not a pre-existing flake -- so per GIT_MERGE.md step 5d this blocks the merge; --admin override is not authorized. PR #1469 left open, branch left pushed, NOT merged.",
+    "status": "PENDING",
+    "summary": "ITERATION 0 RESULT (superseded -- root cause since fixed in rework iteration 1, re-verified twice by TEST-RUNNER via a real `mix letflow.check.test` run): FAIL. CI's 'Backend gate (mix letflow.check)' job failed with 'mix letflow.check.test: FAILED -- partition log directory ... contains zero partition-*.log files', caused by scripts/test_parallel.sh's new cleanup trap deleting logs before lib/mix/tasks/letflow.check.test.ex could read them. PR #1469 was left open, unmerged. See git history of this file for the full iteration-0 account. This retry re-runs Step Final now that the fix is in place and re-verified.",
     "artifacts_out": [],
-    "issues": [
-      {
-        "severity": "BLOCKER",
-        "description": "scripts/test_parallel.sh's ISS-0699 cleanup_tmp_dir() EXIT trap deletes tmp_dir (and its partition-*.log files) on every clean exit, including when invoked by lib/mix/tasks/letflow.check.test.ex (mix letflow.check -> mix letflow.check.test -> scripts/test_parallel.sh), which reads those same partition-*.log files AFTER the script exits 0 for its own ISS-0069 warning-substring gate. Result: 'mix letflow.check.test: FAILED -- partition log directory ... contains zero partition-*.log files' on every clean CI run since this fix landed on the branch. Needs a design fix (e.g. delay cleanup until letflow.check.test has read the logs, or have that task's own invocation set TEST_PARALLEL_KEEP_LOGS and clean up itself) -- not something to patch ad hoc at Step Final without going back through CODE-DESIGNER/CODE-DESIGN-VALIDATOR per this project's own gates. CI job: https://github.com/tvolodi/letflow/actions/runs/35155640353/job/104994345545"
-      }
-    ],
+    "issues": [],
     "git_evidence": {
-      "branch_name": "feature/WF03-ISS0699-20260917",
-      "commit_sha_list": ["e6f30b04b9ea29cc06ec555b7bf141bcc9573c5f"],
-      "remote_branch": "origin/feature/WF03-ISS0699-20260917",
-      "push_status": "success (plain fast-forward push, rebase was a no-op)",
+      "branch_name": null,
+      "commit_sha_list": [],
+      "remote_branch": null,
+      "push_status": "skipped",
       "pr_url": "https://github.com/tvolodi/letflow/pull/1469",
       "pr_create_error": null
     },
-    "next_action": "ORCH routes to ISSUE-FIXER for a fresh diagnosis/fix of the letflow.check.test vs. test_parallel.sh tmp_dir cleanup-ordering regression (new issue, follow-up to ISS-0699), on this same branch; PR #1469 stays open, unmerged, until that fix lands and Step Final is re-run from GIT_MERGE.md step 5."
+    "next_action": ""
   },
-  "rework_count": 0,
+  "rework_count": 1,
   "max_rework": 3
 }

@@ -1,5 +1,4 @@
 import { createBrowserRouter } from 'react-router-dom'
-import { AuthProvider } from '@/auth/AuthProvider'
 import { ProtectedRoute } from '@/auth/ProtectedRoute'
 import OidcCallbackPage from '@/pages/OidcCallbackPage'
 import { AppShell } from '@/components/layout/AppShell'
@@ -35,22 +34,16 @@ import BilimBagaEntityRoute from '@/pages/admin/bilimbaga/BilimBagaEntityRoute'
 export const router = createBrowserRouter([
   {
     path: '/auth/callback',
-    element: (
-      <AuthProvider>
-        <OidcCallbackPage />
-      </AuthProvider>
-    ),
+    element: <OidcCallbackPage />,
   },
   {
     path: '/',
     element: (
-      <AuthProvider>
-        <ProtectedRoute>
-          <ErrorBoundary>
-            <AppShell />
-          </ErrorBoundary>
-        </ProtectedRoute>
-      </AuthProvider>
+      <ProtectedRoute>
+        <ErrorBoundary>
+          <AppShell />
+        </ErrorBoundary>
+      </ProtectedRoute>
     ),
     children: [
       { index: true, element: <TenantDashboardPage /> },

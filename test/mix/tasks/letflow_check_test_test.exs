@@ -115,15 +115,6 @@ defmodule Mix.Tasks.Letflow.Check.TestTest do
   @target_substring "default values for the optional arguments"
 
   setup do
-    original_path = System.get_env("PATH")
-
-    on_exit(fn ->
-      case original_path do
-        nil -> System.delete_env("PATH")
-        path -> System.put_env("PATH", path)
-      end
-    end)
-
     fixture_root =
       Path.join(
         System.tmp_dir!(),
@@ -190,30 +181,68 @@ defmodule Mix.Tasks.Letflow.Check.TestTest do
     :ok
   end
 
-  # Prepends fake_bin_dir onto PATH (";"-joined on Windows, ":"-joined elsewhere) and
-  # asserts System.find_executable/1 actually resolves each of `names` into it --
-  # fail fast and legibly here rather than via a multi-minute real-subprocess timeout
-  # if PATH resolution ever again picks the real executable instead of the fake
-  # (exactly the ISS-0171 regression class both this file and its predecessor exist to
-  # prevent).
-  defp activate_fake_bin_dir(fake_bin_dir, names) do
-    separator = if match?({:win32, _}, :os.type()), do: ";", else: ":"
-    System.put_env("PATH", fake_bin_dir <> separator <> System.get_env("PATH", ""))
+  # ISS-0697: installs an Application-env resolver override
+  # ({:letflow, :check_test_executable_resolver}) instead of mutating the real,
+  # OS-process-global PATH -- see design doc iss0697-check-test-executable-resolver-fix.md
+  # §3. For each `name` in `names`, computes the expected fake-file path exactly as
+  # install_fake_executable/4 wrote it (mirrors, not duplicates divergently, that
+  # function's own naming convention) and builds a name => fake_path override map. The
+  # stored resolver looks up a given name in that map and returns nil for anything not
+  # explicitly faked -- deliberately NOT falling back to real System.find_executable/1
+  # for unmapped names, so an unfaked name fails loudly (via stream_and_capture/2's own
+  # "executable not found" raise) instead of silently resolving to a real executable,
+  # which is the whole point of this fix.
+  #
+  # Fail-fast guard (replaces the old PATH-search-based check): asserts
+  # File.exists?/1 against each expected fake path BEFORE installing the resolver,
+  # catching a wiring bug between this function's path construction and
+  # install_fake_executable/4's naming convention deterministically and locally, rather
+  # than via a multi-minute real-subprocess timeout.
+  #
+  # Cleanup: registers on_exit/1 to delete the Application env override after the test
+  # -- this key has no legitimate non-test setter, so unconditional delete (not
+  # "restore prior value") is correct.
+  defp install_executable_resolver(fake_bin_dir, names) do
+    overrides =
+      Map.new(names, fn name ->
+        fake_path =
+          case :os.type() do
+            {:win32, _} -> Path.join(fake_bin_dir, "#{name}.bat")
+            _ -> Path.join(fake_bin_dir, name)
+          end
 
-    Enum.each(names, fn name ->
-      resolved = System.find_executable(name)
-      expected_dir = fake_bin_dir |> Path.expand() |> String.downcase()
-      resolved_dir = resolved && resolved |> Path.dirname() |> Path.expand() |> String.downcase()
+        unless File.exists?(fake_path) do
+          flunk("""
+          install_executable_resolver/2 expected a fake executable file for #{inspect(name)} \
+          at #{inspect(fake_path)}, but it does not exist. This would either resolve to nil \
+          (unmapped-name failure) or indicate install_fake_executable/4's naming convention \
+          has diverged from this function's own path construction.
+          """)
+        end
 
-      unless resolved_dir == expected_dir do
-        flunk("""
-        activate_fake_bin_dir/2 did not take effect for #{inspect(name)}: \
-        System.find_executable(#{inspect(name)}) resolved to #{inspect(resolved)}, \
-        expected a file inside #{inspect(fake_bin_dir)}. This would recurse into the \
-        REAL executable (ISS-0171) instead of testing against the fake.
-        """)
+        {name, fake_path}
+      end)
+
+    # NOTE: the module under test resolves each executable TWICE per subprocess --
+    # once by bare name at the call site (e.g. `resolve_executable("bash")` in
+    # run_main_suite/0), then again by the already-resolved path inside
+    # stream_and_capture/2 (`resolve_executable(cmd)`, where `cmd` is the value the
+    # first call returned). Real System.find_executable/1 is idempotent on an
+    # already-resolved absolute path (it recognizes an existing file given by full
+    # path and returns it as-is), so this fake resolver must be too: fall back to
+    # returning `name` unchanged when it is itself one of this map's own fake-path
+    # values, still never falling through to a real PATH search for anything else.
+    fake_paths = MapSet.new(Map.values(overrides))
+
+    Application.put_env(:letflow, :check_test_executable_resolver, fn name ->
+      cond do
+        Map.has_key?(overrides, name) -> Map.get(overrides, name)
+        MapSet.member?(fake_paths, name) -> name
+        true -> nil
       end
     end)
+
+    on_exit(fn -> Application.delete_env(:letflow, :check_test_executable_resolver) end)
 
     :ok
   end
@@ -679,7 +708,7 @@ defmodule Mix.Tasks.Letflow.Check.TestTest do
   end
 
   defp run_and_capture_ok(fake_bin_dir) do
-    activate_fake_bin_dir(fake_bin_dir, ["bash", "mix"])
+    install_executable_resolver(fake_bin_dir, ["bash", "mix"])
 
     ExUnit.CaptureIO.capture_io(fn ->
       assert Mix.Tasks.Letflow.Check.Test.run([]) == :ok
@@ -720,7 +749,7 @@ defmodule Mix.Tasks.Letflow.Check.TestTest do
 
       exception =
         assert_raise Mix.Error, ~r/#{Regex.escape(@target_substring)}/, fn ->
-          activate_fake_bin_dir(fake_bin_dir, ["bash", "mix"])
+          install_executable_resolver(fake_bin_dir, ["bash", "mix"])
 
           ExUnit.CaptureIO.capture_io(fn ->
             Mix.Tasks.Letflow.Check.Test.run([])
@@ -772,7 +801,7 @@ defmodule Mix.Tasks.Letflow.Check.TestTest do
       install_fake_executable(fake_bin_dir, "bash", fake_runner_stdout(log_dir), 1)
       install_passing_fake_mix(fake_bin_dir)
 
-      activate_fake_bin_dir(fake_bin_dir, ["bash", "mix"])
+      install_executable_resolver(fake_bin_dir, ["bash", "mix"])
 
       {exception, io} =
         ExUnit.CaptureIO.with_io(fn ->
@@ -798,7 +827,7 @@ defmodule Mix.Tasks.Letflow.Check.TestTest do
       install_fake_executable(fake_bin_dir, "bash", fake_runner_stdout(nil), 0)
       install_passing_fake_mix(fake_bin_dir)
 
-      activate_fake_bin_dir(fake_bin_dir, ["bash", "mix"])
+      install_executable_resolver(fake_bin_dir, ["bash", "mix"])
 
       exception =
         assert_raise Mix.Error, fn ->
@@ -818,7 +847,7 @@ defmodule Mix.Tasks.Letflow.Check.TestTest do
       install_fake_executable(fake_bin_dir, "bash", fake_runner_stdout(normalized), 0)
       install_passing_fake_mix(fake_bin_dir)
 
-      activate_fake_bin_dir(fake_bin_dir, ["bash", "mix"])
+      install_executable_resolver(fake_bin_dir, ["bash", "mix"])
 
       exception =
         assert_raise Mix.Error, fn ->
@@ -846,7 +875,7 @@ defmodule Mix.Tasks.Letflow.Check.TestTest do
       install_passing_main_suite(fixture_root, fake_bin_dir)
       install_wasm_hang_retry_still_fails_fake_mix(fake_bin_dir)
 
-      activate_fake_bin_dir(fake_bin_dir, ["bash", "mix"])
+      install_executable_resolver(fake_bin_dir, ["bash", "mix"])
 
       exception =
         assert_raise Mix.Error, fn ->
@@ -877,7 +906,7 @@ defmodule Mix.Tasks.Letflow.Check.TestTest do
       install_passing_main_suite(fixture_root, fake_bin_dir)
       install_wasm_hang_retry_noisy_window_fake_mix(fake_bin_dir, 250, true)
 
-      activate_fake_bin_dir(fake_bin_dir, ["bash", "mix"])
+      install_executable_resolver(fake_bin_dir, ["bash", "mix"])
 
       exception =
         assert_raise Mix.Error, fn ->
@@ -894,7 +923,7 @@ defmodule Mix.Tasks.Letflow.Check.TestTest do
       install_passing_main_suite(fixture_root, fake_bin_dir)
       install_wasm_hang_retry_noisy_window_fake_mix(fake_bin_dir, 400, false)
 
-      activate_fake_bin_dir(fake_bin_dir, ["bash", "mix"])
+      install_executable_resolver(fake_bin_dir, ["bash", "mix"])
 
       exception =
         assert_raise Mix.Error, fn ->
@@ -911,7 +940,7 @@ defmodule Mix.Tasks.Letflow.Check.TestTest do
       install_passing_main_suite(fixture_root, fake_bin_dir)
       install_wasm_hang_no_header_fake_mix(fake_bin_dir)
 
-      activate_fake_bin_dir(fake_bin_dir, ["bash", "mix"])
+      install_executable_resolver(fake_bin_dir, ["bash", "mix"])
 
       exception =
         assert_raise Mix.Error, fn ->
@@ -950,7 +979,7 @@ defmodule Mix.Tasks.Letflow.Check.TestTest do
 
       install_passing_fake_mix(fake_bin_dir)
 
-      activate_fake_bin_dir(fake_bin_dir, ["bash", "mix"])
+      install_executable_resolver(fake_bin_dir, ["bash", "mix"])
 
       exception =
         assert_raise Mix.Error, fn ->
@@ -968,6 +997,144 @@ defmodule Mix.Tasks.Letflow.Check.TestTest do
       refute exception.message =~
                "never printed a \"test_parallel: partition logs in <dir>\" line. This " <>
                  "task cannot locate"
+    end
+  end
+
+  # A "trap" fake is installed onto a directory that then gets PREPENDED onto real
+  # PATH (not a replacement of PATH -- see the test below for why a full replacement
+  # is unsafe here). If anything in the module under test ever consults real PATH for
+  # `name`, it resolves to this trap instead of a real executable -- so the trap can
+  # never actually recurse into a real `bash`/`mix` invocation, but its distinctive
+  # exit code/output still makes "real PATH was consulted" observable and assertable.
+  defp install_path_trap(trap_dir, name) do
+    install_fake_executable(
+      trap_dir,
+      name,
+      "TRAP-CONSULTED-REAL-PATH: #{name} should never be resolved via real PATH",
+      97
+    )
+  end
+
+  describe "ISS-0697 regression: resolver seam immune to real PATH mutation" do
+    # This is the actual root-cause proof for ISS-0697: the old technique
+    # (activate_fake_bin_dir/2, pre-fix) worked by prepending fake_bin_dir onto the
+    # real, OS-process-global PATH, which is exactly the global mutable state a
+    # concurrently-scheduled async:true test elsewhere in the suite could race --
+    # winning the race meant letflow.check.test.ex's own System.find_executable("bash")
+    # resolved the REAL bash and genuinely exec'd scripts/test_parallel.sh recursively.
+    #
+    # This test simulates that race deterministically: AFTER the override is
+    # installed, real PATH is mutated (a trap directory is PREPENDED onto it) exactly
+    # the way a racing async test's own PATH-prepending technique would, then run/1 is
+    # driven to completion and asserted to succeed via the installed override.
+    #
+    # Deliberately PREPENDS the trap dir onto the real PATH rather than replacing PATH
+    # outright, for two independent safety reasons:
+    #   1. Windows' own tooling (findstr, used internally by the wasm_hang-aware fake
+    #      `mix.bat` fixture below to dispatch on argv shape) needs the real
+    #      System32 PATH entries to keep working -- wiping PATH would break the FIXTURE
+    #      itself, not the code under test, and produce a false failure signal.
+    #   2. If real PATH were instead consulted (the pre-fix hazard reoccurring) and
+    #      this test replaced PATH outright, whatever real `bash`/`mix` originally sat
+    #      on PATH would no longer be found either, silently masking the exact
+    #      recursion hazard this test exists to catch. Prepending a trap that shadows
+    #      the real executables (trap resolves first) instead makes "real PATH was
+    #      consulted" observably fail LOUD (the trap's distinctive exit
+    #      code/output) while never actually reaching a real `bash`/`scripts/test_parallel.sh`
+    #      invocation even if this regresses -- see the trap's own exit code 97 above.
+    test "run/1 succeeds via the override even when real PATH is mutated (prepended) afterward, never touching the PATH-prepended trap",
+         %{fixture_root: fixture_root, fake_bin_dir: fake_bin_dir} do
+      install_passing_main_suite(fixture_root, fake_bin_dir)
+      install_wasm_hang_aware_fake_mix(fake_bin_dir)
+
+      install_executable_resolver(fake_bin_dir, ["bash", "mix"])
+
+      trap_dir =
+        Path.join(
+          System.tmp_dir!(),
+          "letflow_check_test_pathtrap_#{System.unique_integer([:positive])}"
+        )
+
+      File.mkdir_p!(trap_dir)
+      on_exit(fn -> File.rm_rf!(trap_dir) end)
+
+      install_path_trap(trap_dir, "bash")
+      install_path_trap(trap_dir, "mix")
+
+      original_path = System.get_env("PATH")
+
+      on_exit(fn ->
+        case original_path do
+          nil -> System.delete_env("PATH")
+          path -> System.put_env("PATH", path)
+        end
+      end)
+
+      separator = if match?({:win32, _}, :os.type()), do: ";", else: ":"
+
+      # Simulate what a concurrently-scheduled async:true test could do to real PATH
+      # in the exact TOCTOU window ISS-0697 diagnosed -- between the override being
+      # installed and run/1 actually resolving/spawning its subprocesses.
+      System.put_env("PATH", trap_dir <> separator <> (original_path || ""))
+
+      io =
+        ExUnit.CaptureIO.capture_io(fn ->
+          assert Mix.Tasks.Letflow.Check.Test.run([]) == :ok
+        end)
+
+      assert io =~ "isolated wasm_hang tests passed"
+      refute io =~ "TRAP-CONSULTED-REAL-PATH"
+    end
+
+    # Proves the hazard's own mechanism (PATH mutation) is structurally gone from the
+    # installer, not merely avoided by convention -- a regression that reintroduced a
+    # `System.put_env("PATH", ...)` call inside install_executable_resolver/2 would
+    # fail this deterministically, without needing a real concurrency repro.
+    test "install_executable_resolver/2 never mutates real PATH (hazard mechanism itself is gone)",
+         %{fake_bin_dir: fake_bin_dir} do
+      install_fake_executable(
+        fake_bin_dir,
+        "bash",
+        "Finished in 0.0 seconds\nResult: 0 passed\n",
+        0
+      )
+
+      install_fake_executable(
+        fake_bin_dir,
+        "mix",
+        "Finished in 0.0 seconds\nResult: 0 passed\n",
+        0
+      )
+
+      path_before = System.get_env("PATH")
+
+      install_executable_resolver(fake_bin_dir, ["bash", "mix"])
+
+      assert System.get_env("PATH") == path_before
+    end
+
+    # Guards the "no fallback" invariant (design doc §3, point 2): an unfaked name
+    # must resolve to nil, never silently fall through to a real System.find_executable
+    # search. Reads the installed resolver back out of Application env and calls it
+    # directly -- deterministic, no subprocess spawn -- rather than driving this
+    # through run/1, which would (correctly, but riskily for a proof step) invoke a
+    # REAL executable found on this host's real PATH if this invariant ever regressed.
+    test "an unmapped executable name resolves to nil, not a silent fallback to real PATH search",
+         %{fake_bin_dir: fake_bin_dir} do
+      install_fake_executable(
+        fake_bin_dir,
+        "bash",
+        "Finished in 0.0 seconds\nResult: 0 passed\n",
+        0
+      )
+
+      install_executable_resolver(fake_bin_dir, ["bash"])
+
+      resolver = Application.get_env(:letflow, :check_test_executable_resolver)
+      assert is_function(resolver, 1)
+
+      unmapped_name = "totally_unmapped_executable_name_#{System.unique_integer([:positive])}"
+      assert resolver.(unmapped_name) == nil
     end
   end
 end

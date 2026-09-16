@@ -136,6 +136,15 @@ defmodule Mix.Tasks.Letflow.Check.Test do
   @target_substring "default values for the optional arguments"
   @log_dir_line_regex ~r/^test_parallel: partition logs in (.+)$/m
 
+  # ISS-0697 (design doc iss0697-check-test-executable-resolver-fix.md): the injectable
+  # override seam for this module's subprocess-executable resolution. Reads
+  # Application.get_env(:letflow, :check_test_executable_resolver, ...), falling back to
+  # real System.find_executable/1 whenever the key is unset -- i.e. every non-test
+  # invocation of `mix letflow.check.test` is byte-for-byte unaffected by this seam's
+  # existence. See resolve_executable/1 below, the sole caller of
+  # System.find_executable/1 in this module.
+  @type executable_resolver :: (String.t() -> Path.t() | nil)
+
   @impl Mix.Task
   def run(_args) do
     run_main_suite()
@@ -148,7 +157,7 @@ defmodule Mix.Tasks.Letflow.Check.Test do
   # substring check at the N per-partition log files the runner writes -- see
   # moduledoc and design doc section 1 for the full rationale.
   defp run_main_suite do
-    bash = System.find_executable("bash")
+    bash = resolve_executable("bash")
 
     if is_nil(bash) do
       Mix.raise(
@@ -201,7 +210,7 @@ defmodule Mix.Tasks.Letflow.Check.Test do
     if File.exists?(dir) do
       dir
     else
-      case System.find_executable("cygpath") do
+      case resolve_executable("cygpath") do
         nil ->
           dir
 
@@ -748,8 +757,28 @@ defmodule Mix.Tasks.Letflow.Check.Test do
   # or the other but not both at once (an `IO.stream` target prints live
   # but discards the text; a plain list/binary target captures but only
   # after the subprocess exits), so a raw port is used instead.
+  # ISS-0697: the single seam through which this module resolves an executable name to
+  # a path. Consults the {:letflow, :check_test_executable_resolver} Application env key
+  # -- unset in every real (non-test) invocation, so the default here (real
+  # System.find_executable/1) is what actually runs -- falling back to whatever
+  # resolver value a test has installed there (see
+  # test/mix/tasks/letflow_check_test_test.exs's install_executable_resolver/2). This is
+  # the ONLY place in this module that may call System.find_executable/1 directly; every
+  # other call site above goes through this function instead (design doc §2).
+  @spec resolve_executable(String.t()) :: Path.t() | nil
+  defp resolve_executable(name) do
+    resolver =
+      Application.get_env(
+        :letflow,
+        :check_test_executable_resolver,
+        &System.find_executable/1
+      )
+
+    resolver.(name)
+  end
+
   defp stream_and_capture(cmd, args) do
-    executable = System.find_executable(cmd) || raise "executable not found: #{cmd}"
+    executable = resolve_executable(cmd) || raise "executable not found: #{cmd}"
 
     port =
       Port.open({:spawn_executable, executable}, [

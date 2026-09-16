@@ -36,4 +36,23 @@ related_issues:
   - ISS-0697
 queue_ref: Q-698
 github_ref: GH-1465
-status: open
+status: resolved
+resolved_in_run: WF03-ISS0698-20260917
+resolved_at: "2026-09-17T20:58:43Z"
+resolution_summary: >
+  Root cause: recurrence of ISS-0219's connection-burst class, structural in
+  scripts/test_parallel.sh's unstaggered Step 2 launch -- all partitions
+  attempted ecto.create/ecto.migrate simultaneously with no concurrency cap,
+  exceeding Postgres max_connections=100. Fixed via new Step 1.7 in
+  scripts/test_parallel.sh: concurrency-capped ecto.create+ecto.migrate
+  using a wait -n -p semaphore (TEST_PARALLEL_MAX_CONCURRENT_CREATES env
+  var, default 4), plus mix.exs test: alias converted to test_alias/1
+  (direct Mix.Task.run/2 calls, skips create/migrate when
+  LETFLOW_SKIP_ECTO_SETUP=1). Implemented in commit 664436fc. Regression
+  test at test/scripts/test_parallel_create_burst_test.sh (real
+  Docker/Postgres integration test, fail-then-pass verified against a
+  pre-fix worktree checkout). Fix incidentally broke an unrelated
+  pre-existing test (test_parallel_pool_sizing_test.sh, ISS-0287
+  precedent) via marker-extraction over-capture; fixed in-run (commit
+  449471a1) and independently re-validated. All gates passed
+  (SECURITY-REVIEWER, REVIEWER, TEST-DESIGN-VALIDATOR, TEST-RUNNER).

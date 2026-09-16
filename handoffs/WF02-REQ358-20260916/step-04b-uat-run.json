@@ -8,8 +8,8 @@
   "file": "handoffs/WF02-REQ358-20260916/step-04b-uat-run.json",
   "created_at": "2026-09-16T09:38:25Z",
   "started_at": "2026-09-16T09:38:25Z",
-  "completed_at": null,
-  "status": "PENDING",
+  "completed_at": "2026-09-16T09:52:00Z",
+  "status": "COMPLETED",
   "priority": "NORMAL",
   "context": {
     "stage": "S7",
@@ -43,19 +43,22 @@
     ]
   },
   "result": {
-    "status": "",
-    "summary": "",
-    "artifacts_out": [],
-    "issues": [],
+    "status": "PARTIAL",
+    "summary": "Both scenarios run for real against https://qa.bizdala.com. Scenario 1 (AC1, loan-origination-below-threshold.yaml): BLOCKED -- real API queries (admin PLATFORM_ADMIN token) show QA has zero Meridian process definitions/users/tenant data seeded (GET /api/v1/definitions -> {\"items\":[]}, GET /api/v1/identity/users?search=meridian -> {\"items\":[],\"count\":0}, GET /api/v1/tenants -> only 'Default Tenant'/bpm-default). Scenario cannot execute; a QA data-seeding gap, not evidence against REQ-358's backward compatibility. Scenario 2 (AC3/AC4, login-routing-example.yaml): AC3 PASS -- real qa-login.sh invocations quoted, real Keycloak OIDC password-grant tokens obtained from https://auth.qa.bizdala.com/realms/bpm-default for admin-user (PLATFORM_ADMIN) and operator-user (PROCESS_OPERATOR), decoded JWTs quoted. AC4 PARTIAL -- branch-selection mechanism proven via 3 distinct real backend outcomes keyed on the same role fact (admin token -> GET /api/v1/tenants 200; operator token -> 403 forbidden; no token -> 401 unauthorized), but the GUI leg (page_state/post-login route, all steps declared via: gui) is BLOCKED/UNBUILT_FEATURE -- no browser-automation tool available in this session and the fixture carries no pipeline_test: spec. No pass fabricated for the GUI leg. Full evidence: test/uat-reports/uat-2026-09-16-WF02-REQ358-20260916.yaml.",
+    "artifacts_out": ["test/uat-reports/uat-2026-09-16-WF02-REQ358-20260916.yaml"],
+    "issues": [
+      "QA instance has no Meridian company/process-definition/user fixture data seeded -- blocks any Meridian scenario run on QA until seeded",
+      "No browser-automation tool available to this UAT-RUNNER session and no pipeline_test: Playwright spec named by the throwaway login-routing fixture -- GUI leg of branching scenarios cannot be driven for real until one exists (REQ-360 or successor)"
+    ],
     "git_evidence": {
-      "branch_name": null,
+      "branch_name": "feature/WF02-REQ358-20260916",
       "commit_sha_list": [],
-      "remote_branch": null,
-      "push_status": "skipped",
+      "remote_branch": "origin/feature/WF02-REQ358-20260916",
+      "push_status": "pending",
       "pr_url": null,
       "pr_create_error": null
     },
-    "next_action": ""
+    "next_action": "RELEASE-VALIDATOR/ORCH to review: AC3 PASS with real evidence; AC1 and the GUI half of AC4 are honestly BLOCKED, not FAILED -- seed Meridian QA fixtures and wire a pipeline_test spec before treating those halves as independently re-proven."
   },
   "rework_count": 0,
   "max_rework": 3

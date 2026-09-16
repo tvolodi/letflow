@@ -1,0 +1,38 @@
+id: ISS-0692
+title: "REQ-362's visual-baseline design has no redaction/synthetic-data requirement before use against a real authenticated UAT screen -- baselines are permanently git-committed"
+discovered_by: SECURITY-REVIEWER
+discovered_in_run: WF02-REQ362-20260916
+discovered_at: "2026-09-16T11:32:00Z"
+severity: MINOR
+description: >
+  Flagged by SECURITY-REVIEWER during REQ-362's Step 2c gate.
+  lib/letflow/design/req362-visual-regression-testing.md states
+  baselines under test/fixtures/uat/visual-baselines/ are committed to
+  git, and git history retains superseded baselines even after a
+  rebaseline overwrites the working-tree file (design lines ~106,
+  359-360). The design contains zero mention of PII/redaction/
+  sensitive-data handling.
+
+  REQ-362 itself never exercises this against a real authenticated
+  screen (its own self-check fixture drives only the static
+  unauthenticated root page), so nothing in that requirement's own
+  diff currently violates any invariant -- but the moment this
+  mechanism is pointed at a real authenticated gui_screen UAT scenario
+  (explicitly deferred to a future requirement per the design's own
+  OQ-4/section 2.4/3.6/4.4), any screenshot showing real candidate
+  names, emails, or other tenant-specific on-screen data becomes a
+  permanently git-committed artifact with no redaction or
+  synthetic-data requirement anywhere in the design to prevent it.
+
+  FIX DIRECTION: extend the design (or add a follow-up decision
+  record) requiring either synthetic/seeded fixture data for any
+  authenticated scenario used with this visual-regression mechanism,
+  or an explicit redaction step before acceptBaseline/rebaseline
+  persist the PNG, or an explicit accepted-risk statement with
+  reasoning if neither is judged necessary.
+affected_files:
+  - lib/letflow/design/req362-visual-regression-testing.md
+  - web/tests/support/visual-baseline.ts
+queue_ref: Q-692
+github_ref: GH-1448
+status: open

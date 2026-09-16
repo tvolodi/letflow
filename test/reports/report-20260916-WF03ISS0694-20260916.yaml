@@ -1,0 +1,49 @@
+run_id: WF03-ISS0694-20260916
+issue_id: ISS-0694
+agent: TEST-RUNNER
+step: "WF-03 Step 4 -- full-suite confirmation"
+branch: feature/WF03-ISS0694-20260916
+commit_under_test: dfc0644de943cc9fac8ef4d63b99a79b556da978
+date: 2026-09-16
+
+diff_scope:
+  files_changed:
+    - lib/letflow/design/iss-0694-bilimbagaEntities-test-fix.md
+    - web/src/config/__tests__/bilimbagaEntities.test.ts
+  note: >
+    No lib/letflow/ or priv/repo/migrations/ files touched. Fix is entirely
+    within a frontend test file plus a design doc.
+
+frontend:
+  command: "npm test -- --run (from web/)"
+  result: PASS
+  test_files: "82 passed (82)"
+  tests: "568 passed (568)"
+  duration: "12.70s (collect 44.17s, environment 88.65s, prepare 16.91s)"
+  target_file: "src/config/__tests__/bilimbagaEntities.test.ts -- 4 passed (4)"
+  failures: none
+  notes: >
+    Count (568) matches FRONTEND-DEV's earlier report on this branch. Differs
+    from ISS-0694's originating REQ-362/Step-3b-gate report of "585 passed, 1
+    failed" (586 total), but that report was against a different, unrelated
+    branch/session per the task brief -- expected divergence, not a regression
+    signal. No failures observed on this branch's full run.
+
+backend:
+  ran: true
+  rationale: >
+    Diff touches no lib/letflow/ or priv/repo/migrations/ files, so backend
+    impact was not expected. Ran scripts/test_parallel.sh anyway as an
+    independent sanity check per TEST-RUNNER's mandate to verify, not assume,
+    since docker compose services (postgres/keycloak) were already available.
+  docker_compose: "containers letflow-postgres-1 and letflow-keycloak-1 already Running"
+  command: "scripts/test_parallel.sh"
+  partitions:
+    n: 16
+    source: nproc
+  combined_result: "4318 tests, 6 properties, 0 failures (4324/4324 passed)"
+  per_partition_failures: "0 failures in all 16 partitions, all exit 0"
+  failures: none
+
+overall_verdict: PASS
+next_action: "Route to RELEASE-VALIDATOR (Step 5) -- gates into ISSUE-FIXER's Step 5 (close issue) and Step Final (merge)"

@@ -22,4 +22,6 @@ affected_files:
   - BILIMBAGA_ENTITY_TYPES (exact source file TBD by whoever picks this up)
 queue_ref: Q-694
 github_ref: GH-1454
-status: open
+status: resolved
+resolved_in_run: WF03-ISS0694-20260916
+resolved_at: "2026-09-16T12:17:23Z"

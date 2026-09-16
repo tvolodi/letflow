@@ -28,4 +28,6 @@ related_issues:
   - ISS-0698
 queue_ref: Q-699
 github_ref: GH-1468
-status: open
+status: resolved
+resolved_in_run: WF03-ISS0699-20260917
+resolved_at: "2026-09-16T21:28:20Z"

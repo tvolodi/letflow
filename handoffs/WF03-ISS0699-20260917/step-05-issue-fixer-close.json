@@ -8,8 +8,8 @@
   "file": "handoffs/WF03-ISS0699-20260917/step-05-issue-fixer-close.json",
   "created_at": "2026-09-16T21:27:53Z",
   "started_at": "2026-09-16T21:27:53Z",
-  "completed_at": null,
-  "status": "PENDING",
+  "completed_at": "2026-09-16T21:28:20Z",
+  "status": "COMPLETED",
   "priority": "NORMAL",
   "context": {
     "stage": null,
@@ -33,19 +33,19 @@
     ]
   },
   "result": {
-    "status": "PENDING",
-    "summary": "",
-    "artifacts_out": [],
+    "status": "PASS",
+    "summary": "docs/issues/ISS-0699.yaml updated: status changed from open to resolved, resolved_in_run: WF03-ISS0699-20260917, resolved_at: 2026-09-16T21:28:20Z. GitHub issue #1468 closed via `gh issue close 1468 --comment \"Fixed in WF03-ISS0699-20260917. See docs/issues/ISS-0699.yaml and the regression test at test/scripts/test_parallel_tmpdir_cleanup_test.sh.\"` -- gh output: '✓ Closed issue tvolodi/letflow#1468 (ISS-0699: scripts/test_parallel.sh never cleans up its per-run /tmp partition-log directories)'.",
+    "artifacts_out": ["docs/issues/ISS-0699.yaml"],
     "issues": [],
     "git_evidence": {
-      "branch_name": null,
+      "branch_name": "feature/WF03-ISS0699-20260917",
       "commit_sha_list": [],
       "remote_branch": null,
       "push_status": "skipped",
       "pr_url": null,
       "pr_create_error": null
     },
-    "next_action": ""
+    "next_action": "Route to Step Final (git merge)"
   },
   "rework_count": 0,
   "max_rework": 3

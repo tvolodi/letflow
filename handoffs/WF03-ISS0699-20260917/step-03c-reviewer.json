@@ -7,9 +7,9 @@
   "to_agent": "REVIEWER",
   "file": "handoffs/WF03-ISS0699-20260917/step-03c-reviewer.json",
   "created_at": "2026-09-16T21:22:08Z",
-  "started_at": "2026-09-16T21:22:08Z",
-  "completed_at": "2026-09-16T21:22:47Z",
-  "status": "COMPLETED",
+  "started_at": "2026-09-16T22:56:04Z",
+  "completed_at": null,
+  "status": "PENDING",
   "priority": "NORMAL",
   "context": {
     "stage": null,
@@ -19,34 +19,36 @@
     "related_handoff_ids": [],
     "artifacts_in": [
       "scripts/test_parallel.sh",
+      "lib/mix/tasks/letflow.check.test.ex",
       "lib/letflow/design/iss0699-test-parallel-tmpdir-cleanup-fix.md",
       "handoffs/WF03-ISS0699-20260917/step-03b-security-reviewer.json"
     ],
-    "owned_modules": ["scripts/test_parallel.sh"]
+    "owned_modules": ["scripts/test_parallel.sh", "lib/mix/tasks/letflow.check.test.ex"]
   },
   "task": {
-    "description": "WF-03 Step 3c -- REVIEWER gate for ISS-0699 (idiom/scope-creep/decision-record consistency). On branch feature/WF03-ISS0699-20260917, SECURITY-REVIEWER already PASSed (out of scope). Run `git diff main...HEAD -- scripts/test_parallel.sh` and verify: the implementation matches the CODE-DESIGN-VALIDATOR-passed design in lib/letflow/design/iss0699-test-parallel-tmpdir-cleanup-fix.md (no drift), the trap+cleanup logic is correctly ordered ($? captured before anything else can clobber it), no scope creep (only the cleanup mechanism changed, nothing else in the ~360-line script touched), and the change doesn't silently contradict any existing decision record (check docs/migration/decisions/0009-test-parallel-pool-sizing.md, the other decision record already governing this script, for anything this touches). Claim by setting status to IN_PROGRESS.",
+    "description": "WF-03 Step 3c REGATE -- REVIEWER gate for ISS-0699's rework iteration 1. On branch feature/WF03-ISS0699-20260917, SECURITY-REVIEWER already PASSed the regate (out of scope). Your prior PASS on scripts/test_parallel.sh stands (unchanged this iteration). This regate is scoped to the NEW change: run `git diff main...HEAD -- lib/mix/tasks/letflow.check.test.ex` and verify it matches design section 3a (no drift): stream_and_capture/2->/3 env-arg threading, run_main_suite/0's call site passing TEST_PARALLEL_KEEP_LOGS=1, and check_main_suite_logs(...) wrapped in try/after with File.rm_rf!(native_log_dir) on every outcome. Also verify: the ISS-0069 substring-check logic itself is provably untouched (diff the relevant functions against main), no scope creep beyond these two changes, and the change doesn't silently contradict any existing decision record touching this file (docs/migration/decisions/0009-test-parallel-pool-sizing.md, and ISS-0428's own design doc lib/letflow/design/iss0428-parallel-runner-in-check-test.md which originally justified this task's shell-out approach). Claim by flipping status to IN_PROGRESS on receipt, and set it to COMPLETED/FAILED as normal when you finish.",
     "acceptance_criteria": [
-      "Implementation matches the passed design with no unexplained drift",
-      "$? capture-before-clobber ordering verified correct in the actual diff",
-      "No scope creep beyond the cleanup mechanism",
-      "No contradiction with docs/migration/decisions/0009-test-parallel-pool-sizing.md or any other decision record touching this script"
+      "Implementation matches the passed design section 3a with no unexplained drift",
+      "ISS-0069 substring-check logic provably untouched",
+      "No scope creep beyond the two named changes",
+      "No contradiction with any decision record or prior design doc governing this file",
+      "try/after correctly covers every outcome branch (zero logs, real failures, substring match, clean pass) -- not just the happy path"
     ]
   },
   "result": {
-    "status": "PASS",
-    "summary": "Verified `git diff main...HEAD -- scripts/test_parallel.sh` directly. (1) No drift from the passed design: cleanup_tmp_dir/1 is defined above the tmp_dir=$(mktemp ...) line, `trap cleanup_tmp_dir EXIT` is registered on the line immediately after tmp_dir's creation and before the echo/validation lines that follow -- matching design section 2.2's required registration point (before the first exit path at the former line 251). The TEST_PARALLEL_KEEP_LOGS env var, its unset-safe `[ -z ... ]` check, the `-eq 0` exit-code test, and the stderr preservation message all match design section 2.3/2.4 verbatim in shape. (2) $? ordering: `local exit_code=$?` is the function's literal first statement, exactly as design section 2.3 mandates (\"MUST be the first statement\"), so no intervening command (the echo, the if) can clobber it before capture. (3) No scope creep: the diff is purely additive -- one new top-of-file comment block documenting TEST_PARALLEL_KEEP_LOGS, the cleanup_tmp_dir function, and the trap registration line. Nothing else in the ~360-line script (N-derivation, TEST_POOL_SIZE clamp, Step 1.7 concurrency logic, Step 4/5 log-parsing/exit contract) is touched. (4) Decision-record consistency: docs/migration/decisions/0009-test-parallel-pool-sizing.md governs TEST_POOL_SIZE/TEST_MAX_CONNECTIONS/N-budget arithmetic only; this diff does not read, write, or otherwise touch any of those knobs or the connection-budget formula, so there is no contradiction with 0009 or its addenda.",
+    "status": "PENDING",
+    "summary": "ITERATION 0 RESULT (superseded, kept for reference): PASS on scripts/test_parallel.sh, unchanged by this rework. See git history of this file for the full iteration-0 review. This regate covers the new lib/mix/tasks/letflow.check.test.ex diff only.",
     "artifacts_out": [],
     "issues": [],
     "git_evidence": {
-      "branch_name": "feature/WF03-ISS0699-20260917",
+      "branch_name": null,
       "commit_sha_list": [],
       "remote_branch": null,
       "push_status": "skipped",
       "pr_url": null,
       "pr_create_error": null
     },
-    "next_action": "Route to TEST-DESIGNER (Step 4 regression test)"
+    "next_action": ""
   },
   "rework_count": 0,
   "max_rework": 3

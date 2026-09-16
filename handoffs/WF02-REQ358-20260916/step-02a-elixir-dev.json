@@ -66,7 +66,7 @@
     ],
     "git_evidence": {
       "branch_name": "feature/WF02-REQ358-20260916",
-      "commit_sha_list": ["6b0579ca", "2c9cd401"],
+      "commit_sha_list": ["6b0579ca", "2c9cd401", "dca49a15"],
       "remote_branch": "origin/feature/WF02-REQ358-20260916",
       "push_status": "pushed",
       "pr_url": null,

@@ -1,0 +1,54 @@
+{
+  "handoff_id": "b6f3a1d2-0004-4a00-9c00-wf03iss0699003",
+  "run_id": "WF03-ISS0699-20260917",
+  "workflow_id": "WF-03",
+  "step": "02b",
+  "from_agent": "ORCH",
+  "to_agent": "CODE-DESIGN-VALIDATOR",
+  "file": "handoffs/WF03-ISS0699-20260917/step-02b-code-design-validator.json",
+  "created_at": "2026-09-16T21:18:49Z",
+  "started_at": "2026-09-16T21:18:49Z",
+  "completed_at": null,
+  "status": "PENDING",
+  "priority": "NORMAL",
+  "context": {
+    "stage": null,
+    "requirement_ids": [],
+    "requirement_text": {},
+    "source_text": {},
+    "related_handoff_ids": [],
+    "artifacts_in": [
+      "lib/letflow/design/iss0699-test-parallel-tmpdir-cleanup-fix.md",
+      "handoffs/WF03-ISS0699-20260917/step-01-issue-fixer-diagnosis.json",
+      "docs/issues/ISS-0699.yaml",
+      "scripts/test_parallel.sh"
+    ],
+    "owned_modules": ["scripts/test_parallel.sh"]
+  },
+  "task": {
+    "description": "WF-03 Step 2b -- hard gate on CODE-DESIGNER's output. On branch feature/WF03-ISS0699-20260917. Independently read lib/letflow/design/iss0699-test-parallel-tmpdir-cleanup-fix.md directly (not the producing agent's own summary) against ISS-0699's acceptance criteria and ISSUE-FIXER's diagnosis. Verify: the trap mechanism is unambiguous enough for ELIXIR-DEV to implement without inventing anything (exact registration point, exact cleanup function behavior including correct $? capture-before-clobber ordering), the opt-out env var is fully specified (name/default/semantics), every exit path ISSUE-FIXER diagnosed is explicitly dispositioned (kept vs removed, with reasoning), and no finished ready-to-paste script edit is present (design artefacts state shape/pseudocode, not a drop-in diff). Claim by setting status to IN_PROGRESS.",
+    "acceptance_criteria": [
+      "PASS only if all 3 of ISS-0699's own acceptance_criteria (root cause confirmed / fix preserves inspectability / regression-provable) map to concrete design elements",
+      "PASS only if every exit path from the diagnosis is explicitly dispositioned",
+      "PASS only if the trap+cleanup-function shape is unambiguous (an ELIXIR-DEV implementing it needs no further judgment calls on WHEN cleanup runs)",
+      "FAIL if the doc contains a finished, ready-to-ship script diff instead of a design-level specification"
+    ]
+  },
+  "result": {
+    "status": "PENDING",
+    "summary": "",
+    "artifacts_out": [],
+    "issues": [],
+    "git_evidence": {
+      "branch_name": null,
+      "commit_sha_list": [],
+      "remote_branch": null,
+      "push_status": "skipped",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": ""
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

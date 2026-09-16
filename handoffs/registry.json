@@ -6591,7 +6591,7 @@
       "queue_task_id": 680,
       "queue_agent_id": "tvolodi-orch",
       "github_issue_number": 1430,
-      "status": "IN_PROGRESS",
+      "status": "COMPLETED",
       "owned_modules": [
         "docs/agents/uat-scenario-schema.md",
         "test/fixtures/uat/scenarios/",
@@ -6602,11 +6602,11 @@
       ],
       "branch_name": "feature/WF02-REQ358-20260916",
       "started_at": "2026-09-16T08:38:02Z",
-      "lock_released_at": null,
-      "released_lock": false,
+      "lock_released_at": "2026-09-16T10:26:52Z",
+      "released_lock": true,
       "backfilled": false,
-      "last_known_step": "Step 00 COMPLETED PASS -- branch feature/WF02-REQ358-20260916 pushed.",
-      "note": "REQ-358: extend the UAT scenario YAML schema with a `scope` field and step-level conditional branching, and extend UAT-RUNNER with an explicit environment target (base URL + credential source). Precondition work for REQ-359..362 (not in this run's scope -- separate queue tasks 681-684)."
+      "last_known_step": "Step Final PASS -- squash-merged to main as 09e1e367 via PR #1437, both required CI checks green, queue task 680 released status: done.",
+      "note": "REQ-358: extended the UAT scenario YAML schema with a `scope` field and step-level conditional branching (eq/in/else), and extended UAT-RUNNER/WF-05_uat_run.md with an explicit environment target (base URL + credential source). Added lib/mix/tasks/letflow.check_uat_scenario_schema.ex. Full WF-02 pipeline run: CODE-DESIGNER (1 rework -- OQ-1 YAML-dep premise wrong) -> CODE-DESIGN-VALIDATOR PASS -> ELIXIR-DEV (1 rework -- yaml_elixir only: :test dep-scope footgun) -> SECURITY-REVIEWER PASS (out of scope) -> REVIEWER PASS -> TEST-DESIGNER (1 rework -- test file location convention) -> TEST-DESIGN-VALIDATOR PASS -> TEST-RUNNER PASS (4318/4318, 0 failures) -> UAT-RUNNER PARTIAL against real QA (Meridian scenario BLOCKED on absent QA tenant fixture data -- pre-existing QA seeding gap, not a REQ-358 defect; branch-selection mechanism proven via 3 distinct real HTTP outcomes keyed on role) -> RELEASE-VALIDATOR PASS (judged the PARTIAL non-blocking, logged 2 fast-follow gaps: QA lacks Meridian/tenant fixture data, no browser-automation tool in the pipeline yet) -> DOC-UPDATER (REQ-358 flipped to done, run-history appended). Precondition work for REQ-359..362 (not in this run's scope -- separate queue tasks 681-684)."
     }
   ]
 }

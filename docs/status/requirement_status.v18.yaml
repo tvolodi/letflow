@@ -249,3 +249,34 @@ history:
       README change made. No docs/migration/stage-N-*.md or
       docs/migration/decisions/*.md file was named in REQ-358's acceptance
       criteria, so that check is N/A for this requirement.
+
+  - req: REQ-363
+    event: started
+    agent: ORCH
+    at: 2026-09-16T10:28:14Z
+    note: >
+      Claimed letflow-queue task 686 (GH#1438, agent_id
+      orch-session-issueloop, depends_on [REQ-041], already done). Step
+      00 git setup: pulled main (which now carries REQ-358's own merge
+      plus a proper WF-01 registration of REQ-363..366), branched
+      feature/WF02-REQ363-20260916, pushed. SELF-CORRECTION: an earlier
+      attempt this run backfilled a docs/requirements.yaml stub for
+      REQ-363 from get_next_task's own returned description/
+      acceptance_criteria (terse, incomplete), and CODE-DESIGNER
+      produced a design doc against that stub before the real WF-01
+      registration (commit 2027f295, REQ-363..366's full scoping) had
+      landed on main. That branch was deleted (never merged) once the
+      rebase conflict surfaced the real, richer requirement text --
+      depends_on [REQ-041] (not []), a screen_id/route-identifier field
+      the stub never had, process_definition_id as a real FK (the stub
+      used a bare UUID mirroring ProcessDefinition's own no-FK
+      convention), and sanitization stated as THIS requirement's own
+      scope (not deferred). A real discrepancy also surfaced worth
+      flagging to CODE-DESIGNER for this rework: the official
+      requirement text states confirmed_for_definition_version should
+      be an integer "matching Letflow.Definitions.ProcessDefinition.version",
+      but CODE-DESIGN-VALIDATOR's prior (now-superseded) review directly
+      verified process_definition.ex's real version column is :string,
+      not an integer -- this needs resolving explicitly (design must
+      state which is correct and why), not silently picked. Starting a
+      genuine CODE-DESIGNER pass against the real requirement text next.

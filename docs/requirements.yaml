@@ -26673,3 +26673,110 @@ requirements:
       - "process-scoped help with a stale confirmed_for_definition_version shows the visible staleness indicator, exercised for real by publishing help against one process version then activating a new version and confirming the indicator appears"
       - "npm run type-check, npm run lint, npm run test, npm run build all pass, real output quoted"
     depends_on: [REQ-364]
+
+  - id: REQ-367
+    title: CD to QA on merge — .github/workflows/cd.yml + deploy/redeploy-qa.sh, triggered on push to main when backend or frontend paths changed, reusing letflow-queue's proven SSH-restricted-key pattern
+    owner: ELIXIR-DEV
+    impl_order: 693  # letflow-queue task id, GH#1450
+    status: pending
+    stage: S7
+    description: >
+      User request: automatically deploy to qa.bizdala.com whenever a merge
+      to main changes deployable application code. Confirmed scope, per
+      explicit user decision after being shown the alternative: deploy ON
+      MERGE TO MAIN, not a live preview environment per open PR — QA is one
+      shared, serially-updated instance (one Compose project, one nginx
+      vhost, confirmed this session), and per-PR ephemeral environments would
+      be substantially more infrastructure with no existing precedent
+      anywhere in this project.
+      .
+      DO NOT INVENT A NEW DEPLOY MECHANISM — THIS PATTERN ALREADY EXISTS AND
+      IS PROVEN. The sibling `tvolodi/letflow-queue` repo already runs
+      exactly this shape in production: `.github/workflows/cd.yml` triggers
+      after CI passes on `master`, SSHes into its target host over a
+      purpose-built, tightly restricted deploy key, and re-runs a
+      `deploy/redeploy-test.sh` script. This was built, live-fired for real
+      (a genuine push, real CI run, real CD run, real redeploy, independently
+      re-verified via a direct SSH check afterward — not just trusted from
+      the Actions log), and its restricted key was proven to reject an
+      actually-destructive command over the same channel (an `rm -rf` attempt
+      was forced into the redeploy script instead and the target directory
+      confirmed intact). Full detail:
+      ai-dala-infra's tasks/T-0111-provision-letflow-queue-cd-deploy-key.md.
+      This requirement adapts that exact shape for `letflow-3`/QA rather than
+      designing a new one — citing a different mechanism without a stated
+      reason to diverge is itself a finding to report, not something to do
+      quietly.
+      .
+      WHY THIS REPO'S OWN EXISTING `deploy/redeploy-test.sh` IS NOT REUSABLE
+      AS-IS. That script targets a DIFFERENT, unrelated environment
+      (`/opt/apps/letflow-test` on a host referred to as "hetzner-prod" in
+      its own header comment, Compose project `letflow-test`) — not
+      `/opt/apps/letflow-qa` on `ubuntu-16gb-nbg1-1`, which is where
+      `qa.bizdala.com` actually runs (confirmed via ai-dala-infra's
+      shared/app-registry.md this session). Its own header comment claims
+      "Automatically, by .github/workflows/cd.yml" invocation, but no such
+      workflow exists anywhere in this repo — that comment is stale/
+      aspirational, not a real wiring, and must not be treated as evidence
+      this capability already exists for QA. This requirement creates a NEW
+      script, `deploy/redeploy-qa.sh`, targeting the real QA path, rather
+      than repurposing or renaming the stale one (which may still be needed
+      for its own actual target later — do not delete it as part of this
+      requirement, it is out of scope).
+      .
+      QA'S DEPLOY SHAPE IS TWO ARTEFACTS, NOT ONE — DIFFERENT FROM
+      letflow-queue'S SINGLE-IMAGE CASE. Per this session's own prior manual
+      QA deploys (T-0125/T-0128/T-0129/T-0131, ai-dala-infra), a full QA
+      redeploy is: (1) `git pull` the checkout, (2) rebuild the backend
+      Docker image and `docker compose up -d --force-recreate app`, (3)
+      rebuild the frontend static bundle via a throwaway `node:22` container
+      (no Node installed on the host, per the minimal-footprint precedent)
+      with the real `VITE_OIDC_AUTHORITY`/`VITE_OIDC_CLIENT_ID` build args
+      and atomically swap it into `/opt/apps/letflow-qa/web-dist/`
+      (backing up the previous build first, matching the pattern already
+      used manually), (4) health-check both (`/health` for the backend,
+      `curl -sf https://qa.bizdala.com/` for the frontend shell). Do not
+      restart nginx or the Keycloak container — neither changes as part of
+      an application-code deploy, and restarting either unnecessarily is
+      itself a needless blast-radius increase (matches this session's own
+      "no regression" discipline used during T-0128's nginx work).
+      .
+      TRIGGER CONDITION — REUSE CI's EXISTING PATH FILTER, DO NOT REBUILD
+      DIFF LOGIC. `.github/workflows/ci.yml`'s `changes` job already computes
+      `backend`/`frontend` boolean outputs from a real `git diff` against the
+      base SHA (see that job's own regex patterns). This requirement's new
+      `cd.yml` must gate its deploy job on
+      `needs.changes.outputs.backend == 'true' || needs.changes.outputs.frontend == 'true'`
+      (reusing the SAME `changes` job — via `workflow_run` triggering off
+      `ci.yml`'s own completion, matching letflow-queue's own trigger
+      mechanism, or an equivalent that avoids a second independent diff
+      computation) so a docs-only merge (e.g. this same session's own
+      REQ-358..366 registration commits) does not trigger a redeploy at all.
+      Do not write a second, parallel path-filter regex — that is exactly
+      the duplication `docs/agents/design/iss0591-iss0592-ci-dedup-path-filter.md`
+      (cited in this project's own CI design history) already argues against
+      for the existing two jobs.
+      .
+      CREDENTIALS ARE OUT OF THIS REQUIREMENT'S OWN SCOPE — SEE THE
+      COMPANION ai-dala-infra TASK. This requirement's acceptance criteria
+      stop at "the workflow file and script exist, are correct, and are
+      provably ready to receive a working deploy key" — they do NOT include
+      actually provisioning the SSH key, setting GitHub Actions secrets, or
+      making any change to the ubuntu-16gb-nbg1-1 host. That is a
+      credential-provisioning action requiring host access this repo's own
+      pipeline does not have and per this project's own security discipline
+      should not casually acquire — it is a companion ai-dala-infra task,
+      following T-0111's own exact precedent (fresh purpose-built key,
+      `command=` restriction proven with a live destructive-command test,
+      secrets set by the user directly via `gh secret set` on
+      `tvolodi/letflow` since agents do not have write access to this repo's
+      own GitHub Actions secrets). This requirement's own close-out states
+      plainly that the deploy is NOT live until that companion task lands,
+      rather than implying completion it hasn't reached.
+    acceptance_criteria:
+      - "deploy/redeploy-qa.sh exists, targeting /opt/apps/letflow-qa/ on ubuntu-16gb-nbg1-1 (not the stale letflow-test path), performing all four steps named in this requirement's description (git pull, backend rebuild+recreate, frontend throwaway-container rebuild+atomic-swap with real build args, health checks for both), with the previous frontend build backed up before being replaced"
+      - ".github/workflows/cd.yml exists, triggered after ci.yml succeeds on main (or an equivalent mechanism that does not duplicate changes' diff computation), gated on the same backend/frontend outputs ci.yml's changes job already computes — a docs-only merge does not trigger a deploy, verified by a real (or realistically simulated, if a live SSH target isn't yet available) dry run showing the gate correctly skips"
+      - "the workflow uses the same SSH-action pattern letflow-queue's cd.yml already uses in production (or documents and justifies a deliberate deviation), referencing secret names (HETZNER_DEPLOY_HOST/HETZNER_DEPLOY_USER/HETZNER_DEPLOY_SSH_KEY-equivalent for QA, distinctly named so they cannot be confused with letflow-queue's own secrets of the same shape) that do not yet need to exist for this requirement to be considered code-complete"
+      - "the close-out states explicitly, in plain language, that this requirement does NOT make the deploy live — the companion ai-dala-infra task (SSH key provisioning + GitHub Actions secrets) is a separate, required step, named explicitly, not implied as already done"
+      - "the stale deploy/redeploy-test.sh is left untouched (not deleted, not repurposed) since its own actual target may still be needed later, and this requirement's own close-out states this explicitly rather than leaving the two scripts' relationship unexplained for a future reader"
+    depends_on: []

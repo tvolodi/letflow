@@ -244,12 +244,18 @@ for why `operator-user` holds `PROCESS_OPERATOR`, not `PLATFORM_ADMIN`):
 | `worker-user` | `TASK_WORKER` |
 
 **Passwords are not in this file, or in any committed file** — per this
-project's secrets convention, they're host-only. Rotated values live at
-`/opt/apps/letflow-qa-keycloak/deploy/seeded-users.env` on
-`ubuntu-16gb-nbg1-1` (mode 600); the secret *names* (not values) are
-recorded in `ai-dala-infra/landscape/secrets-inventory.md`
-(`letflow-qa-keycloak-user-<username>-password`) for whoever has SSH
-access to that host and needs to retrieve one.
+project's secrets convention, they're host-only. If you have SSH access to
+`ubuntu-16gb-nbg1-1`, fetch one on demand (prints to your terminal, never
+written to a local file):
+
+```
+ai-dala-infra/scripts/qa-login.sh operator-user
+```
+
+Values live at `/opt/apps/letflow-qa-keycloak/deploy/seeded-users.env` on
+that host (mode 600); the secret *names* (not values) are recorded in
+`ai-dala-infra/landscape/secrets-inventory.md`
+(`letflow-qa-keycloak-user-<username>-password`).
 
 ## Notes
 

@@ -1,0 +1,57 @@
+{
+  "handoff_id": "8f607929-80a5-486f-928e-65b5d726cea5",
+  "run_id": "WF02-REQ358-20260916",
+  "workflow_id": "WF-02",
+  "step": "02c",
+  "from_agent": "ORCH",
+  "to_agent": "SECURITY-REVIEWER",
+  "file": "handoffs/WF02-REQ358-20260916/step-02c-security-gate.json",
+  "created_at": "2026-09-16T08:58:06Z",
+  "started_at": "2026-09-16T08:58:06Z",
+  "completed_at": null,
+  "status": "PENDING",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S7",
+    "requirement_ids": ["REQ-358"],
+    "requirement_text": {
+      "REQ-358": "Extend the UAT scenario YAML schema with a scope field and step-level conditional branching, and extend UAT-RUNNER with an explicit environment target (base URL + credential source). No new agent role, no permanent scenario content, no visual-regression mechanism, no migration, no HTTP route, no API response shaping."
+    },
+    "source_text": {},
+    "related_handoff_ids": ["843c27d8-1e77-4cf4-97e2-1044b9701c8c"],
+    "artifacts_in": [
+      "lib/mix/tasks/letflow.check_uat_scenario_schema.ex",
+      "docs/agents/uat-scenario-schema.md",
+      ".claude/agents/uat-runner.md",
+      "docs/agents/workflows/WF-05_uat_run.md"
+    ],
+    "owned_modules": [
+      "lib/mix/tasks/letflow.check_uat_scenario_schema.ex"
+    ]
+  },
+  "task": {
+    "description": "Hard gate per WF-02_requirement_implementation.md Step 2c. Read context.artifacts_in and the branch diff: git diff main...HEAD. Run the scope test against docs/agents/instructions/security-invariants.md's applicability notes. Note for your convenience (verify, don't just trust): this change adds one mix task that reads local YAML fixture files under test/fixtures/uat/scenarios/ and updates docs/markdown only — no migration, no HTTP route, no API response shaping, no new permission atom, no tenant-scoped data path. Confirm this independently rather than accepting the characterization.",
+    "acceptance_criteria": [
+      "Scope test result stated explicitly (in scope / out of scope) with the specific evidence for the call",
+      "If out of scope: PASS with the one-clause reason named",
+      "If in scope: every applicable INV-1..INV-8 verdict stated explicitly, per invariant"
+    ]
+  },
+  "result": {
+    "status": "",
+    "summary": "",
+    "artifacts_out": [],
+    "issues": [],
+    "git_evidence": {
+      "branch_name": null,
+      "commit_sha_list": [],
+      "remote_branch": null,
+      "push_status": "skipped",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": ""
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

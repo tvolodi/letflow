@@ -8,8 +8,8 @@
   "file": "handoffs/WF03-ISS0699-20260917/step-02-code-designer.json",
   "created_at": "2026-09-16T21:16:42Z",
   "started_at": "2026-09-16T21:16:42Z",
-  "completed_at": null,
-  "status": "PENDING",
+  "completed_at": "2026-09-17T00:00:00Z",
+  "status": "COMPLETED",
   "priority": "NORMAL",
   "context": {
     "stage": null,
@@ -35,9 +35,9 @@
     ]
   },
   "result": {
-    "status": "PENDING",
-    "summary": "",
-    "artifacts_out": [],
+    "status": "PASS",
+    "summary": "Design doc created at lib/letflow/design/iss0699-test-parallel-tmpdir-cleanup-fix.md. Specifies a single `trap cleanup_tmp_dir EXIT` registered immediately after tmp_dir=$(mktemp -d ...) at current line 245, before any of the exit paths it needs to cover. The cleanup_tmp_dir() function's pseudocode captures `local exit_code=$?` as its first statement (must be first, to recover the script's real exit status before any other command clobbers $?), then removes tmp_dir only when exit_code -eq 0 AND the new opt-out env var TEST_PARALLEL_KEEP_LOGS is unset/empty; otherwise it preserves tmp_dir and logs why to stderr. New env var TEST_PARALLEL_KEEP_LOGS: default unset (cleanup-on-success is the new default behavior, no caller action needed), any non-empty value forces preservation even on a clean run, checked with the same non-emptiness idiom the script already uses for TEST_PARALLEL_N. Exit-path disposition table (per ISSUE-FIXER's four identified lines): line 251 (malformed TEST_PARALLEL_MAX_CONCURRENT_CREATES, exit 1) -> preserved; line 268 (partition create/migrate fail in capped-wait branch, exit 1) -> preserved, since its own error message cites $tmp_dir/create-$i.log; line 291 (same failure in drain loop, exit 1) -> preserved, same reasoning; line 455 exit \"$any_failed\" -> removed when any_failed=0 (the dominant leak path that produced the ~280 accumulated dirs), preserved when any_failed=1 (so TEST-RUNNER/other workflows can still inspect partition logs after a failing run, per ISSUE-FIXER's tradeoff recommendation). No finished script edit included -- only the trap registration line, the cleanup function's pseudocode/shape, and the disposition table, per this task's explicit instruction to leave the literal edit to ELIXIR-DEV. Also flags (OQ-1, not resolved) ISSUE-FIXER's noted limitation that success-only cleanup doesn't bound accumulation from repeated failing runs, and leaves a secondary prune-by-age mechanism as an undesigned follow-up.",
+    "artifacts_out": ["lib/letflow/design/iss0699-test-parallel-tmpdir-cleanup-fix.md"],
     "issues": [],
     "git_evidence": {
       "branch_name": null,
@@ -47,7 +47,7 @@
       "pr_url": null,
       "pr_create_error": null
     },
-    "next_action": ""
+    "next_action": "Route to CODE-DESIGN-VALIDATOR"
   },
   "rework_count": 0,
   "max_rework": 3

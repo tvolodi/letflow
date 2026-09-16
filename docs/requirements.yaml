@@ -26155,7 +26155,7 @@ requirements:
     title: Extend the UAT scenario schema and UAT-RUNNER with a scope field, conditional branching, and an environment target — precondition work for REQ-359..362
     owner: TEST-DESIGNER
     impl_order: 680  # letflow-queue task id, GH#1430
-    status: pending
+    status: in_progress
     stage: S7
     description: >
       DECISION BEING REVISITED, NAMED EXPLICITLY PER CORE-DIRECTIVES' "don't

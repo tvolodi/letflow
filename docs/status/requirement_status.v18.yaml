@@ -210,3 +210,19 @@ history:
       TEST-DESIGN-VALIDATOR PASS, TEST-RUNNER PASS (4299/4299, zero
       failures). SECURITY-REVIEWER out of scope. GH#1415 closed with an
       evidence comment; letflow-queue task 676 released status: done.
+
+  - req: REQ-358
+    event: started
+    agent: ORCH
+    at: 2026-09-16T08:38:02Z
+    note: >
+      Claimed letflow-queue task 680 (GH#1430) via get_next_task, agent_id
+      tvolodi-orch. Reclaimed cleanly per docs/anti-patterns.md's
+      2026-09-16 same-host-concurrent-ORCH entry -- confirmed local main
+      up to date with origin/main (git fetch + git log main..origin/main
+      empty) before branching, so no repeat of that incident's race.
+      Routing WF-02 in full: extend the UAT scenario YAML schema with a
+      scope field and step-level branching, and extend UAT-RUNNER with an
+      explicit environment target. Branch feature/WF02-REQ358-20260916
+      created from main at ab731b76 and pushed. run_id
+      WF02-REQ358-20260916.

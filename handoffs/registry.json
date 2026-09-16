@@ -6582,6 +6582,31 @@
       "backfilled": false,
       "last_known_step": "Step Final PASS -- merge pending.",
       "note": "REQ-333 (queue task 629, GH#1320) -- implemented Letflow.Exam.AntiCheat (309 lines), the fourth and final module REQ-330's rule-2 table authorised. Storage per decision 0030 Finding 2: session_event entity records via Letflow.Entities.Records. Ambiguity escape checked first, did not apply -- REQ-330 named the storage shape and debounce mitigation specifically enough to build without interpretation. action_taken derived solely from the exam's on_tab_switch config -- no action_taken parameter exists in the public function signature at all, the strongest form of service.go AC-10's guarantee. Debounce mitigation (reads the session's most recent session_event.occurred_at, rejects inside a configured window) proven by a repeated-signal test. No HTTP route, no new permission atom, no migration. Pipeline: ELIXIR-DEV (60 tests total across test/letflow/exam/) -> SECURITY-REVIEWER PASS (independently traced the AC-10 guarantee, verified INV-1, flagged the debounce check-then-insert as non-atomic under concurrent requests -- bounded amplification, non-blocking) -> REVIEWER PASS (confirmed idiomatic consistency, confirmed no cheap fix exists for the debounce race without inventing new entity-subsystem machinery, signed off design doc Section 7's fourth and final row) -> TEST-RUNNER confirmed a full mix letflow.check run clean except two pre-existing environment-only rust-toolchain failures. ELIXIR-DEV also surfaced a genuine pre-existing bug in REQ-332's already-merged session.ex (String.to_existing_atom load-order hazard) while writing tests; correctly left it untouched (out of REQ-333's authorised scope) and filed it as ISS-0631 (queue task 631, GH#1330) instead. With this requirement done, all four rows in REQ-330's rule-2 table carry a REVIEWER PASS sign-off -- P3's stage-file exit condition is met."
+    },
+    {
+      "run_id": "WF02-REQ358-20260916",
+      "workflow_id": "WF-02",
+      "requirement_id": "REQ-358",
+      "issue_id": null,
+      "queue_task_id": 680,
+      "queue_agent_id": "tvolodi-orch",
+      "github_issue_number": 1430,
+      "status": "IN_PROGRESS",
+      "owned_modules": [
+        "docs/agents/uat-scenario-schema.md",
+        "test/fixtures/uat/scenarios/",
+        "docs/agents/workflows/WF-05_uat_run.md",
+        ".claude/agents/uat-runner.md",
+        "lib/letflow/design/req358-uat-scope-branching-env.md",
+        "test/uat/"
+      ],
+      "branch_name": "feature/WF02-REQ358-20260916",
+      "started_at": "2026-09-16T08:38:02Z",
+      "lock_released_at": null,
+      "released_lock": false,
+      "backfilled": false,
+      "last_known_step": "Step 00 COMPLETED PASS -- branch feature/WF02-REQ358-20260916 pushed.",
+      "note": "REQ-358: extend the UAT scenario YAML schema with a `scope` field and step-level conditional branching, and extend UAT-RUNNER with an explicit environment target (base URL + credential source). Precondition work for REQ-359..362 (not in this run's scope -- separate queue tasks 681-684)."
     }
   ]
 }

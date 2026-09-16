@@ -1,0 +1,47 @@
+id: ISS-0691
+title: "Visual regression: platform/req362-visual-regression-selfcheck step 01 (EO-001) diverges from accepted baseline on local"
+discovered_by: ELIXIR-DEV
+discovered_in_run: WF02-REQ362-20260916
+discovered_at: "2026-09-16T10:59:46Z"
+severity: MINOR
+description: >
+  Phase-2 mechanical pixel-diff (REQ-362) auto-detected a divergence:
+  `expect(page).toHaveScreenshot()` reported "54953 pixels (ratio 0.06 of all
+  image pixels) are different" against the accepted baseline
+  test/fixtures/uat/visual-baselines/platform/req362-visual-regression-selfcheck/01-EO-001.local.png.
+  .
+  This was a deliberate, disclosed probe fixture from REQ-362's own
+  real-exercise proof (a banner injected into the live DOM via
+  page.evaluate() before capture, see
+  web/tests/e2e/req362-visual-regression.e2e.spec.ts's "fail case" test) —
+  not a product regression — filed via the real register_task/ISSUE_QUEUE.md
+  mechanism specifically to prove REQ-362 AC-4 (auto-filed issue lands in
+  local registry + queue + GitHub with both screenshots as evidence) for
+  real, per this requirement's own acceptance criteria.
+  .
+  Severity is MINOR because there is no `on_fail.severity` to inherit from a
+  real scenario file (design §6 step 1 names the scenario author's own
+  severity as the source in the general case) — this is a synthetic
+  self-check scenario, not a corpus scenario, so MINOR was chosen directly
+  as the lowest tier rather than inventing a severity this probe doesn't
+  actually carry.
+affected_files:
+  - test/fixtures/uat/visual-baselines/platform/req362-visual-regression-selfcheck/01-EO-001.local.png
+  - test/fixtures/uat/visual-baselines/platform/req362-visual-regression-selfcheck/_disputed/ISS-0691/01-EO-001.local.new.png
+  - test/fixtures/uat/visual-baselines/platform/req362-visual-regression-selfcheck/_disputed/ISS-0691/01-EO-001.local.baseline-at-time-of-failure.png
+  - web/tests/e2e/req362-visual-regression.e2e.spec.ts
+queue_ref: Q-691
+github_ref: GH-1446
+status: resolved
+resolved_in_run: WF02-REQ362-20260916
+resolved_at: "2026-09-16T11:02:52Z"
+resolution: >
+  Re-baselined (design §4) — the deliberately-altered screenshot was accepted
+  as the new baseline, with the justification recorded in the sidecar's
+  history at
+  test/fixtures/uat/visual-baselines/platform/req362-visual-regression-selfcheck/01-EO-001.local.yaml,
+  citing this issue as related_issue_ref. Not a code-level root-cause fix
+  (there was no defect — the divergence was this probe's own deliberate
+  fixture change) — recorded as `resolved` because the re-baseline is this
+  finding class's actual closing action, same as design §6 step 4/§4.2's
+  first bullet describes for an intentional-change verdict.

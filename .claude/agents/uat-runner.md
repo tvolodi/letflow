@@ -58,6 +58,38 @@ scenarios; if that file does not exist or carries a `NOTE (ISS-0526)` comment ma
 it unresolved, record the scenario BLOCKED/UNBUILT_FEATURE on its frontend leg rather
 than skipping it silently or inventing a substitute API-only path.
 
+### Two-phase visual regression for `gui_screen` expected outcomes (REQ-362)
+
+For an expected outcome whose `verification.method` is `gui_screen`, capturing the
+screenshot is no longer the end of the check — see
+`lib/letflow/design/req362-visual-regression-testing.md` for the full design (this
+section states only the decision point, per that design's §5):
+
+```
+On reaching a gui_screen expected outcome:
+  1. Capture the screenshot (unchanged from today).
+  2. Look up whether a baseline exists at
+     test/fixtures/uat/visual-baselines/<company_id>/<scenario_id>/<step>-<eo_id>.<environment>.png
+     for this scenario_id + step + expected_outcome_id + environment (helpers:
+     web/tests/support/visual-baseline.ts's baselineExists/baselinePngPath).
+  3. If NO baseline exists  -> PHASE 1: judge the screenshot correct exactly as
+     you do today, and if judged correct, call acceptBaseline() to persist it
+     as the new baseline (never overwrite an existing baseline this way).
+  4. If a baseline EXISTS   -> PHASE 2: run Playwright's own built-in
+     expect(page).toHaveScreenshot(snapshotName(key)) comparison against it,
+     at its own default threshold. PASS/FAIL is mechanical from here — you do
+     NOT judge whether a detected diff "counts" before it fails; any diff
+     fails the expected outcome. On FAIL, report the finding to ORCH per
+     ISSUE_QUEUE.md exactly as any other discovered defect (title/severity
+     per the design's §6), with the new and baseline screenshots as evidence.
+```
+
+A re-baseline (accepting an intentionally-changed screen as the new baseline) is a
+separate, later action per the design's §4 — never performed by the same run that
+observed the phase-2 failure, and never without a real, non-generic `justification`
+recorded in the baseline's sidecar (`rebaseline()` in
+`web/tests/support/visual-baseline.ts` enforces this mechanically).
+
 ## Evaluating a `when:` branch
 
 A scenario file may carry `branches:` instead of a flat `steps:`/`expected_outcomes:`
@@ -99,9 +131,18 @@ handoff's `context` — never assume "whatever instance is reachable":
   `ai-dala-infra/scripts/qa-login.sh`) UAT-RUNNER uses to obtain actor credentials for
   the run's scenarios, rather than inventing or hardcoding any. Resolve each scenario's
   `actors:` map entries against this source's seeded users.
+- `environment` (added by REQ-362, resolving that design's OQ-1): a short, stable slug
+  identifying the target instance for visual-baseline keying (e.g. `qa`, `local`,
+  `staging`) — **not** derived from `base_url` by parsing (a URL is not a stable
+  identity across ports/hosts pointing at logically "the same" environment; see
+  `lib/letflow/design/req362-visual-regression-testing.md` §1.1). Required whenever the
+  run includes any `gui_screen` expected outcome; if omitted on such a dispatch, do not
+  guess — return the handoff FAILED naming the missing field, same as `base_url`/
+  `credential_source` below.
 
-If a dispatch is missing either field, do not guess a target — return the handoff
-FAILED, naming the missing field, per this project's "no speculation" core directive.
+If a dispatch is missing any required field above, do not guess a target — return the
+handoff FAILED, naming the missing field, per this project's "no speculation" core
+directive.
 
 ## Forbidden
 

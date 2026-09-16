@@ -8,8 +8,8 @@
   "file": "handoffs/WF02-REQ358-20260916/step-01b-design-gate.json",
   "created_at": "2026-09-16T08:44:19Z",
   "started_at": "2026-09-16T08:49:25Z",
-  "completed_at": null,
-  "status": "PENDING",
+  "completed_at": "2026-09-16T09:40:00Z",
+  "status": "COMPLETED",
   "priority": "NORMAL",
   "context": {
     "stage": "S7",
@@ -42,19 +42,19 @@
     ]
   },
   "result": {
-    "status": "",
-    "summary": "",
-    "artifacts_out": [],
+    "status": "PASS",
+    "summary": "Re-gate iteration 1: re-read lib/letflow/design/req358-uat-scope-branching-env.md in full (not just the diff) and re-verified against all six original acceptance criteria. OQ-1 fix is concrete and verified against the actual tree: mix.exs:64 declares {:yaml_elixir, \"~> 2.11\", only: :test} (already in use by letflow.audit_issue_closures.ex); mix.exs:17 declares preferred_envs: [\"letflow.check\": :test]; letflow.check_issue_refs immediately precedes \"format --check-formatted\" in the letflow.check alias, matching §2.4's insertion point exactly. AC1 (backward-compat default-derivation, §1.2) is a precise mechanical rule with a concrete verification recipe (§5). AC2 (branching operator set) is exactly eq/in/else, unambiguous, with evaluation procedure in §4.3. AC3 (no implementation code) -- §2.2 is @spec/type-shape/prose only, no .ex bodies. AC4 (login-routing example) is fully written out in §3, not summarized. AC5 (uat-runner.md/WF-05 replacement prose) is literal, ready-to-paste markdown in §4.1-4.6. AC6 (5 OQs judged): OQ-1 resolved as required by this rework; OQ-2/3/4/5 remain genuinely open in the doc and are each legitimately-deferred, not BLOCKER-level (OQ-2 is a thoroughness-depth call correctly left to ELIXIR-DEV; OQ-3/OQ-5 have no concrete triggering need from this requirement's own scope; OQ-4 depends on an out-of-repo script CODE-DESIGNER correctly declined to guess at). No new gaps found.",
+    "artifacts_out": ["lib/letflow/design/req358-uat-scope-branching-env.md"],
     "issues": [],
     "git_evidence": {
-      "branch_name": null,
+      "branch_name": "feature/WF02-REQ358-20260916",
       "commit_sha_list": [],
-      "remote_branch": null,
-      "push_status": "skipped",
+      "remote_branch": "origin/feature/WF02-REQ358-20260916",
+      "push_status": "pending",
       "pr_url": null,
       "pr_create_error": null
     },
-    "next_action": ""
+    "next_action": "Route to Step 2a (ELIXIR-DEV) to implement the design."
   },
   "rework_count": 0,
   "max_rework": 3,
@@ -69,6 +69,14 @@
         "BLOCKER: OQ-1 must be resolved by CODE-DESIGNER, not left to ELIXIR-DEV/REVIEWER -- decide whether check_uat_scenario_schema reuses yaml_elixir, and if so, whether its `only: :test` restriction must change."
       ],
       "next_action": "Rework CODE-DESIGNER: correct §0's premise, resolve OQ-1 concretely (reuse yaml_elixir; decide and state the only:-scope fix), then re-route to CODE-DESIGN-VALIDATOR."
+    },
+    {
+      "iteration": 1,
+      "gated_at": "2026-09-16T09:40:00Z",
+      "status": "PASS",
+      "summary": "Re-read design doc in full; re-verified against all six original acceptance criteria, not only the YAML-dependency fix. §0's REWORK ITERATION 1 correction and §6's resolved OQ-1 both check out against the actual tree (mix.exs:64 yaml_elixir dep, mix.exs:17 preferred_envs, letflow.check alias insertion point at §2.4). No implementation code present; backward-compat default rule, branching operator set, login-routing example, and uat-runner.md/WF-05 replacement prose all meet the bar. OQ-2/3/4/5 remain genuinely open and are legitimately-deferred, not BLOCKER-level.",
+      "issues": [],
+      "next_action": "Route to Step 2a (ELIXIR-DEV) to implement the design."
     }
   ]
 }

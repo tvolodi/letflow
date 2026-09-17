@@ -869,3 +869,40 @@ history:
       was named in REQ-360's acceptance criteria (only
       docs/agents/protocols/ISSUE_QUEUE.md, for finding-filing), so that
       check is N/A for this requirement.
+
+  - req: SCOPE-CHANGE
+    event: done
+    agent: ORCH
+    at: "2026-09-17T04:15:00Z"
+    note: >
+      ISS-0704 (queue task 704, GH#1479, docs/issues/ISS-0704.yaml --
+      Letflow.Routers.TenantsTest pagination-shape test flake, discovered
+      during REQ-360's WF-02 Step Final full suite run) resolved via full
+      WF-03 (run WF03-ISS0704-20260917), merged as PR #1481 (squash commit
+      50cfbc93). ISSUE-FIXER reproduced the failure deterministically (not
+      a one-off flake as originally filed) and root-caused it to 129+
+      orphaned real tenant rows in the shared test DB, themselves leaked by
+      an unrestored global Ecto.Adapters.SQL.Sandbox.mode(Letflow.Repo,
+      :auto) flip elsewhere in the suite. Severity raised MINOR -> MAJOR
+      on that basis. CODE-DESIGNER scoped the fix narrowly and correctly:
+      only the failing test's request needed to change (scoped to the
+      fixture's own slug via ?search=, mirroring the neighboring test's
+      existing pattern) -- no production code touched. CODE-DESIGN-
+      VALIDATOR, SECURITY-REVIEWER (out of scope), and REVIEWER all PASSed.
+      TEST-DESIGNER and TEST-DESIGN-VALIDATOR each independently reproduced
+      the fail-then-pass proof (pre-fix: 20/21, post-fix: 21/21); a real
+      git-checkout-restore pitfall TEST-DESIGN-VALIDATOR hit during its own
+      verification (`git checkout -- <path>` restoring from the index, not
+      HEAD, after a prior cross-branch checkout) was written up in
+      docs/anti-patterns.md. TEST-RUNNER's pre-merge full suite: 4331/4331
+      passed. ISSUE-FIXER closed ISS-0704 (status: resolved) and closed
+      GH#1479 with an evidence-citing comment.
+
+      The underlying pollution mechanism (the unrestored Sandbox.mode
+      flip itself, plus the already-orphaned rows) was deliberately left
+      unfixed, per the design's own scope boundary -- REVIEWER flagged
+      that this needed to be its own claimable issue rather than a
+      design-doc recommendation. ORCH registered it as ISS-0705 (queue
+      task 705, GH#1480, severity MAJOR, docs/issues/ISS-0705.yaml,
+      status: open) and backfilled its queue_ref/github_ref. letflow-
+      queue task 704 released with status: done.

@@ -26,7 +26,7 @@ related_requirements:
   - REQ-360
 queue_ref: Q-701
 github_ref: GH-1475
-status: open
+status: resolved
 diagnosed_by: ISSUE-FIXER
 diagnosed_in_run: issue/ISS-0701-20260917
 diagnosed_at: "2026-09-17T00:00:00Z"
@@ -144,3 +144,27 @@ determination:
     superseded); (3) correct REQ-360's Why section in
     docs/requirements.yaml; (4) close ISS-0701 as resolved (path a) once
     the decision record and doc edits land.
+resolved_by: DOC-UPDATER
+resolved_in_run: docs/WF03-ISS0701-20260917
+resolved_at: "2026-09-17T13:45:00Z"
+resolution_note: >
+  Doc-correction path implemented per REVIEWER's determination above.
+  Produced docs/migration/decisions/0035-frontend-login-delegated-to-keycloak.md,
+  recording that the SPA delegates login entirely to Keycloak's hosted UI
+  (full-page redirect via ProtectedRoute.tsx's signinRedirect) as the
+  decided, working, intended production architecture -- SH-01 and
+  OIDC-F-01 were stale MUST-priority specs, not a missing feature.
+  Marked SH-01 (docs/frontend/requirements/SH-01.md front matter and
+  docs/frontend/frontend-requirements.md's table row) and OIDC-F-01
+  (frontend-requirements.md's table row; it has no separate per-req file)
+  status: superseded, each pointing at decision 0035. Also corrected the
+  Stage F1.5 goal prose in frontend-requirements.md, which described the
+  in-app login screen/token-paste field as still-live. Corrected REQ-360's
+  description in docs/requirements.yaml to state the Keycloak-hosted
+  redirect is the intended target architecture, matching
+  test/fixtures/uat/scenarios/platform/platform-login-routing-by-role.yaml's
+  own already-correct assertions, instead of the prior "login form with
+  its actual field set" framing. No application code was changed; the
+  dead AuthProvider.tsx login() scaffold was left in place per REVIEWER's
+  explicit scope note (optional future cleanup, not part of this fix).
+  GH#1475 closed with an evidence comment.

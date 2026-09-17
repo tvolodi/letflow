@@ -1127,3 +1127,37 @@ history:
       step. letflow-queue task 707 to be released status: done by ORCH
       after this step -- queue interaction explicitly out of scope for
       this DOC-UPDATER step per this run's own dispatch.
+
+  - req: SCOPE-CHANGE
+    event: done
+    agent: DOC-UPDATER
+    at: "2026-09-17T12:59:04Z"
+    note: >
+      ISS-0701 (queue task 701, GH#1475, docs/issues/ISS-0701.yaml -- no
+      in-app login form exists, only Keycloak-hosted redirect) resolved via
+      doc-correction on branch docs/WF03-ISS0701-20260917, per REVIEWER's
+      determination that Keycloak-hosted-only login is the correct, working
+      production architecture and SH-01/OIDC-F-01 are stale specs, not a
+      missing feature. Produced
+      docs/migration/decisions/0035-frontend-login-delegated-to-keycloak.md,
+      citing web/src/auth/ProtectedRoute.tsx's signinRedirect flow,
+      AuthProvider.tsx's dead login()/tryRestoreE2eSession(), and
+      REQ-133/REQ-360 as working, tested evidence. Marked SH-01 (front
+      matter + frontend-requirements.md row) and OIDC-F-01
+      (frontend-requirements.md row; no separate per-req file exists)
+      status: superseded, each pointing at decision 0035; also corrected
+      Stage F1.5's stale goal prose in the same file. Corrected REQ-360's
+      description in docs/requirements.yaml to state the Keycloak-hosted
+      redirect is the decided target architecture, matching
+      test/fixtures/uat/scenarios/platform/platform-login-routing-by-role.yaml's
+      own already-correct assertions, replacing the prior "login form with
+      its actual field set" framing. docs/issues/ISS-0701.yaml flipped
+      status: open -> resolved with a resolution_note citing decision 0035.
+      README.md checked -- its QA-deployment section already correctly
+      describes the login screen as redirecting to Keycloak, so no change
+      was needed there. No application code touched, per REVIEWER's
+      explicit scope note leaving AuthProvider.tsx's dead login() scaffold
+      as optional future cleanup, not part of this fix. GH#1475 to be
+      closed with an evidence comment by this same DOC-UPDATER step.
+      letflow-queue task 701 and PR merge are ORCH's follow-up, out of
+      scope for this DOC-UPDATER step per this run's own dispatch.

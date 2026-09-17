@@ -8,8 +8,8 @@
   "file": "handoffs/WF02-REQ367-20260917/step-01b-code-design-validator-regate.json",
   "created_at": "2026-09-17T17:05:00Z",
   "started_at": "2026-09-17T17:05:00Z",
-  "completed_at": null,
-  "status": "PENDING",
+  "completed_at": "2026-09-17T17:25:00Z",
+  "status": "COMPLETED",
   "priority": "NORMAL",
   "context": {
     "stage": "S7",
@@ -37,7 +37,17 @@
       "§0/§3-§7 (previously passed) were not damaged by the edit; AC mapping still holds"
     ]
   },
-  "result": null,
+  "result": {
+    "status": "PASS",
+    "next_action": "Route to ELIXIR-DEV (Step 2a)",
+    "regate_checks": {
+      "b_redeploy_qa_sh_no_standalone_bash_lines": "PASS -- re-read lib/letflow/design/req367-cd-qa-deploy.md §1 in full (all 8 numbered steps). Every step is now prose describing purpose/target-paths/ordering (e.g. 'Move into the app directory, pull the latest commit on the checked-out branch, then capture the resulting short commit ref into a variable and print it'; 'Build the backend image using the shared, existing deploy Dockerfile... tagging the result as the QA backend's latest image'). No standalone literal command lines (previously: `cd \"$APP_DIR\"`, `git pull`, `docker build -f deploy/Dockerfile -t letflow-qa:latest .`, `$COMPOSE up -d --force-recreate app`, `curl -sf https://qa.bizdala.com/`) remain anywhere in §1.",
+      "c_cd_yml_no_literal_yaml_blocks": "PASS -- re-read §2 in full (Triggers, Jobs, gate-reuse mechanism, Steps, Secret names subsections). Trigger/gate/step mechanics are described in prose (e.g. 'The workflow fires on completion of the CI workflow (named \"CI\"), restricted to the main branch'; 'Its connection details are drawn from three repository secrets... supplying the target host, the connecting username, and the private key'). No literal YAML key:value fragments (previously: `on: workflow_run: workflows: [\"CI\"], branches: [main], types: [completed]`, `if: github.event.workflow_run.conclusion == 'success'`, the SSH step's four populated input keys) remain. Secret names (QA_DEPLOY_HOST/QA_DEPLOY_USER/QA_DEPLOY_SSH_KEY) are listed as plain identifiers, not key:value syntax -- consistent with the prior gate's ruling that naming them is required by the acceptance criteria and is not itself implementation syntax.",
+      "f_no_implementation_code_in_new_sections": "PASS -- no fenced code blocks, no bare command/YAML syntax lines found anywhere in §1 or §2 on a full re-read.",
+      "no_regression_spot_check": "PASS -- §0 (sources consulted), §3 (why this avoids duplicating diff logic), §4 (redeploy-test.sh untouched), §5 (explicit scope), §6 (AC mapping table), §7 (six open questions) all read intact and consistent with the previously-passed version; CODE-DESIGNER's step-01 result.summary claim that only §1/§2 changed is corroborated by content inspection. §6's AC-mapping table's concrete-design-element column still accurately cites §1 steps 2-7 and §2's trigger/gate/steps content after the prose rewrite -- the mapping was already high-level (row descriptions, not literal syntax quotes) so the §1/§2 rewrite did not invalidate it."
+    },
+    "issues": []
+  },
   "rework_count": 1,
   "max_rework": 3
 }

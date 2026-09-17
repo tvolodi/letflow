@@ -1,0 +1,48 @@
+{
+  "handoff_id": "wf03-iss0703-step04b",
+  "run_id": "WF03-ISS0703-20260917",
+  "workflow_id": "WF-03",
+  "step": "04b",
+  "from_agent": "ORCH",
+  "to_agent": "TEST-DESIGN-VALIDATOR",
+  "file": "handoffs/WF03-ISS0703-20260917/step-04b-test-design-validator.json",
+  "created_at": "2026-09-17T08:37:38Z",
+  "started_at": "2026-09-17T08:37:38Z",
+  "completed_at": null,
+  "status": "PENDING",
+  "priority": "NORMAL",
+  "context": {
+    "stage": null,
+    "requirement_ids": [],
+    "requirement_text": {},
+    "source_text": {},
+    "related_handoff_ids": [],
+    "artifacts_in": [
+      "handoffs/WF03-ISS0703-20260917/step-04-test-designer.json",
+      "test/letflow/integration/keycloak_auth_pipeline_test.exs",
+      "test/specs/ISS-0703.md",
+      "lib/letflow/oidc/token_verifier/oidcc.ex"
+    ],
+    "owned_modules": []
+  },
+  "task": {
+    "description": "WF-03 Step 4b: hard gate on TEST-DESIGNER's regression test for ISS-0703 (`git checkout feature/WF03-ISS0703-20260917`). Read handoffs/WF03-ISS0703-20260917/step-04-test-designer.json's full result, then independently re-verify -- do not accept the producer's claim: (1) re-derive the fail-then-pass proof YOURSELF (temporarily swap lib/letflow/oidc/token_verifier/oidcc.ex back to main's pre-fix version -- `git show main:lib/letflow/oidc/token_verifier/oidcc.ex > /tmp/prefix.ex` and diff-swap it in -- run the 4 new ISS-0703 tests in test/letflow/integration/keycloak_auth_pipeline_test.exs, confirm they fail/crash as reported, then restore the real fix via git checkout and confirm they pass; verify git status --porcelain is clean of the swap afterward); (2) independently confirm the non-leakage assertion is real and actually checks what it claims (read the assertion code itself, not just the test's pass result); (3) confirm the tests exercise the REAL Oidcc adapter, not a stub/double; (4) note the reported pre-existing A9 test failure (docs/status/requirement_status.v18.yaml declared-vs-actual drift) is OUT OF SCOPE for this gate -- do not fail this gate over it, just note it exists. Claim this handoff by setting status to IN_PROGRESS only.",
+    "acceptance_criteria": [
+      "Fail-then-pass independently reproduced by YOU, with actual pre-fix-fail and post-fix-pass output quoted",
+      "Non-leakage assertion code read and confirmed to actually assert what it claims (not a tautology or trivially-true check)",
+      "Confirmed real Oidcc adapter is used, not TokenVerifierDouble",
+      "Confirmed the pre-fix-code swap used for reproduction was fully reverted (git status --porcelain clean)",
+      "PASS or FAIL with named gaps if FAIL",
+      "next_action routes to TEST-RUNNER on PASS"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "",
+    "artifacts_out": [],
+    "issues": [],
+    "next_action": ""
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

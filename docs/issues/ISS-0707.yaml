@@ -113,3 +113,16 @@ pipeline_log: []
       introduced at all beyond the already-reviewed shared helper. The
       only secret-adjacent change is deletion of an already-unused
       KEYCLOAK_DISCOVERY constant.
+  - step: REVIEWER
+    at: "2026-09-17T12:12:00Z"
+    result: >
+      PASS. Verified BPM_IDP_BASE_URL's removal is genuinely correct
+      (grep-confirmed zero remaining readers in all 9 files post-fix,
+      not an over-correction). Spot-checked all 9 (not just 4): 5
+      function-wrapped files' call sites correctly renamed, 4 inline
+      files correctly collapsed to a single call, matches design
+      exactly. Scope confirmed via git diff --name-only: exactly these
+      9 files, helpers.ts/pipeline.ts/platform-login-routing-by-role
+      genuinely untouched. No decision-record conflict. Idiom/pattern
+      consistency with ISS-0706 holds -- same mechanism, same
+      correctly-not-silently-absorbed behavioral nuance, no scope creep.

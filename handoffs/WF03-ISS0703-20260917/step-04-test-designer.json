@@ -8,8 +8,8 @@
   "file": "handoffs/WF03-ISS0703-20260917/step-04-test-designer.json",
   "created_at": "2026-09-17T07:53:56Z",
   "started_at": "2026-09-17T07:53:56Z",
-  "completed_at": null,
-  "status": "PENDING",
+  "completed_at": "2026-09-17T08:36:47Z",
+  "status": "COMPLETED",
   "priority": "NORMAL",
   "context": {
     "stage": null,
@@ -39,10 +39,15 @@
   },
   "result": {
     "status": "PASS",
-    "summary": "",
-    "artifacts_out": [],
-    "issues": [],
-    "next_action": ""
+    "summary": "Wrote a fail-then-pass regression test for ISS-0703 in the existing test/letflow/integration/keycloak_auth_pipeline_test.exs (new describe block 'ISS-0703 regression -- malformed raw_token never crashes the real adapter', 4 tests, real Keycloak/real Oidcc adapter, no new file per design doc section 7's own instruction), plus test/specs/ISS-0703.md. Two fixtures: (1) the confirmed live-trigger JSON-blob raw_token, (2) a dot-segmented non-base64url garbage string -- an initial plain undotted garbage candidate was tried and rejected because it does NOT reach the crash chain at all (oidcc's own shape check returns a normal {:error, :no_matching_key} pre-fix already), confirmed via a scratch `mix run` probe; the dotted fixture was verified to reach the same jose_base64url.decode!/2 CaseClauseError chain as the JSON blob. Each fixture is exercised unit-level (Letflow.Oidc.TokenVerifier.Oidcc.verify_bearer_token/2 called directly) and integration-level (through Letflow.Plugs.AuthPipeline.call/2), all with an explicit non-leakage assertion (ExUnit.CaptureLog + classification-string substring check) per SECURITY-REVIEWER's BLOCKER.\n\nFAIL-THEN-PASS PROOF (temporary swap: cp lib/letflow/oidc/token_verifier/oidcc.ex /tmp/post-fix-oidcc.ex; git show main:lib/letflow/oidc/token_verifier/oidcc.ex > /tmp/pre-fix-oidcc.ex; cp /tmp/pre-fix-oidcc.ex lib/letflow/oidc/token_verifier/oidcc.ex):\nPre-fix run (`MIX_ENV=test mix test --include keycloak test/letflow/integration/keycloak_auth_pipeline_test.exs`): `Result: 3/7 passed`, `Failed: 4 tests` -- all 4 new ISS-0703 tests failed with `** (CaseClauseError) no case clause matching:` propagating through jose_base64url.decode!/2 -> oidcc_token.int_validate_jwt/4 -> (integration cases) auth_pipeline.ex:250 -- i.e. the exact live defect reproduced. Pre-existing AC1/AC2/AC3 tests in the file still passed (3/7).\nRestored the fix (`cp /tmp/post-fix-oidcc.ex lib/letflow/oidc/token_verifier/oidcc.ex`; `git diff lib/letflow/oidc/token_verifier/oidcc.ex` empty, confirming full revert).\nPost-fix run (same command): `Result: 7 passed` -- all 4 new tests plus all 3 pre-existing tests pass.\n`git status --porcelain` after cleanup: only test/letflow/integration/keycloak_auth_pipeline_test.exs and test/specs/ISS-0703.md modified/added -- no stray lib/ changes.\n\nINTEGRATION-LEVEL HARNESS: the prior step's reported IPv6-localhost sandbox networking issue was NOT observed in this environment this run -- Keycloak (docker compose ps: letflow-keycloak-1, healthy) was reachable throughout, and the full integration-level suite (7/7, including both new integration-level ISS-0703 cases) ran for real, not just the unit-level portion. Both required coverage tiers were genuinely exercised, not merely designed.\n\n`mix format --check-formatted` on both new/changed files: clean, no output.\n\n`MIX_ENV=test mix letflow.check.test` (full run, ~742s): `Result: 268/269 passed (1/1 property, 267/268 tests), 3 excluded`, `Failed: 1 test` -- `mix letflow.check.test: FAILED -- scripts/test_parallel.sh exited 1`. The ONE failing test is `test A9: every indexed volume's declared entries: count equals what is actually on disk (Letflow.Docs.RequirementStatusInvariantsTest)` (test/docs/requirement_status_invariants_test.exs:464), reporting `docs/status/requirement_status.v18.yaml` declared 19 entries but 20 are actually on disk. This is a PRE-EXISTING, UNRELATED documentation-bookkeeping drift -- this run touched no file under docs/status/, docs/requirements.yaml, or anything status-index-related; it is almost certainly drift from concurrent sibling-session activity against the same repo (per this project's multi-host pipeline). Grepped the full ~589k-line captured output for the fixed substring `\"default values for the optional arguments\"` (the ISS-0069 dead-default-argument signature this task specifically checks for): zero matches -- the check that most directly bears on this task's own new test-helper code passes clean. The new test file itself produced zero compiler warnings anywhere in the full log (grepped `keycloak_auth_pipeline_test.exs` against every `warning:` line: no matches) and its 4 new tests are `@moduletag :keycloak`-excluded from this default run by design (test/test_helper.exs), same as this file's 3 pre-existing tests, so `mix letflow.check.test`'s only bearing on them is the fresh warnings-as-errors compile, which is clean.",
+    "artifacts_out": [
+      "test/letflow/integration/keycloak_auth_pipeline_test.exs",
+      "test/specs/ISS-0703.md"
+    ],
+    "issues": [
+      "mix letflow.check.test's one failure (test/docs/requirement_status_invariants_test.exs A9, docs/status/requirement_status.v18.yaml declared-count drift 19 vs 20 actual) is pre-existing and unrelated to ISS-0703 -- not touched by this run, not fixed here (out of TEST-DESIGNER's scope); flagged for ORCH/DOC-UPDATER to reconcile, likely caused by a concurrent sibling session appending to that volume without updating its declared header count."
+    ],
+    "next_action": "Route to TEST-DESIGN-VALIDATOR"
   },
   "rework_count": 0,
   "max_rework": 3

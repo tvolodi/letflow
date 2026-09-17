@@ -3914,8 +3914,14 @@ volumes:
     path: docs/status/requirement_status.v19.yaml
     status: current
     opened: 2026-09-17
-    entries: 2
+    entries: 3
     note: >
+      Incremented to 3 by WF02-REQ361-20260917 (DOC-UPDATER)'s own REQ-361
+      done-event append (Step 6) -- `grep -c "^  - req:"
+      docs/status/requirement_status.v19.yaml` = 3 on-disk entries; 253
+      lines / 14849 bytes, well under the 1200-line/120000-byte roll
+      ceiling, no roll triggered.
+
       Incremented to 1 by this ORCH session's own DOC-UPDATER SCOPE-CHANGE
       (ISS-0700 partial-action, REQ-360 stale-clause correction) done-event
       append, redirected here from volume 18 during this branch's rebase

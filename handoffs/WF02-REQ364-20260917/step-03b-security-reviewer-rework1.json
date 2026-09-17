@@ -1,0 +1,10 @@
+{
+  "req": "REQ-364",
+  "step": "03b-security-reviewer-rework1",
+  "result": "FAIL",
+  "at": "2026-09-17T14:55:00Z",
+  "prior_blocker_status": "closed -- reference-style link bypass confirmed fixed via adversarial reproduction",
+  "new_blocker": "angle-bracket-wrapped CommonMark reference-destination syntax ([label]: <url>) bypasses unsafe_scheme?/1: the capture group (\\S+) captures the leading '<', so the extracted scheme is '<javascript' not 'javascript', failing the disallowed-scheme membership check. Reproduced for [text][ref], shorthand [text], and ![alt][ref] reference-image forms -- all bypass identically. The inline form [text](<url>) shares the same unsafe_scheme?/1 helper and is exposed to the identical bug.",
+  "required_fix": "Strip a leading '<'/trailing '>' pair from the captured URL (both @markdown_link_pattern's and @markdown_reference_link_pattern's captures) before scheme extraction.",
+  "escalation": "Two rounds of the same bug class (regex denylist missing a valid CommonMark syntax variant) is evidence toward design OQ-4's option (b) -- a real parser/sanitizer -- rather than continuing to patch the regex surface. Routing to REVIEWER for that determination before a third rework round, per this session's established discipline for genuine unresolved design questions."
+}

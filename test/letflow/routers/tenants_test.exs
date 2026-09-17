@@ -28,6 +28,7 @@ defmodule Letflow.Routers.TenantsTest do
 
   alias Letflow.Admission
   alias Letflow.Identity.Tenant
+  alias Letflow.Test.SandboxAutoMode
   alias Letflow.TenantFixture
   alias Letflow.TenantProvisioning
 
@@ -388,47 +389,47 @@ defmodule Letflow.Routers.TenantsTest do
       # mode, same as Letflow.TenantFixture.provisioned_tenant!/1 -- DDL run under
       # the default per-test :manual/:shared sandbox transaction is not reliably
       # visible to Ecto.Migrator.run/4's own connection checkout.
-      Ecto.Adapters.SQL.Sandbox.mode(Letflow.Repo, :auto)
+      SandboxAutoMode.provision!(Letflow.Repo, fn ->
+        slug = "req075-create-e2e-#{Ecto.UUID.generate()}"
 
-      slug = "req075-create-e2e-#{Ecto.UUID.generate()}"
+        resp =
+          build_conn(:post, "/", nil,
+            roles: ["PLATFORM_ADMIN"],
+            body: %{"slug" => slug, "display_name" => "Create E2E"}
+          )
+          |> dispatch()
 
-      resp =
-        build_conn(:post, "/", nil,
-          roles: ["PLATFORM_ADMIN"],
-          body: %{"slug" => slug, "display_name" => "Create E2E"}
-        )
-        |> dispatch()
+        assert resp.status == 201
+        body = Jason.decode!(resp.resp_body)
+        assert body["slug"] == slug
+        tenant_id = body["id"]
 
-      assert resp.status == 201
-      body = Jason.decode!(resp.resp_body)
-      assert body["slug"] == slug
-      tenant_id = body["id"]
+        on_exit(fn ->
+          case TenantProvisioning.schema_name_for_tenant(tenant_id) do
+            {:ok, schema_name} -> Repo.query!(~s(DROP SCHEMA IF EXISTS "#{schema_name}" CASCADE))
+            {:error, :invalid_tenant_id} -> :ok
+          end
 
-      on_exit(fn ->
-        case TenantProvisioning.schema_name_for_tenant(tenant_id) do
-          {:ok, schema_name} -> Repo.query!(~s(DROP SCHEMA IF EXISTS "#{schema_name}" CASCADE))
-          {:error, :invalid_tenant_id} -> :ok
-        end
+          Repo.delete_all(
+            from(r in TenantProvisioning.Registration, where: r.tenant_id == ^tenant_id)
+          )
 
-        Repo.delete_all(
-          from(r in TenantProvisioning.Registration, where: r.tenant_id == ^tenant_id)
-        )
+          Repo.delete_all(from(t in Tenant, where: t.id == ^tenant_id))
+        end)
 
-        Repo.delete_all(from(t in Tenant, where: t.id == ^tenant_id))
+        {:ok, schema_name} = TenantProvisioning.schema_name_for_tenant(tenant_id)
+
+        # AC4's own wording: "querying information_schema for a table in the new
+        # schema -- not by trusting the 201." `events` is tenant_scoped_migrations/0's
+        # first manifest entry.
+        %{rows: rows} =
+          Repo.query!(
+            "SELECT table_name FROM information_schema.tables WHERE table_schema = $1 AND table_name = 'events'",
+            [schema_name]
+          )
+
+        assert rows != []
       end)
-
-      {:ok, schema_name} = TenantProvisioning.schema_name_for_tenant(tenant_id)
-
-      # AC4's own wording: "querying information_schema for a table in the new
-      # schema -- not by trusting the 201." `events` is tenant_scoped_migrations/0's
-      # first manifest entry.
-      %{rows: rows} =
-        Repo.query!(
-          "SELECT table_name FROM information_schema.tables WHERE table_schema = $1 AND table_name = 'events'",
-          [schema_name]
-        )
-
-      assert rows != []
     end
 
     test "a duplicate slug is rejected 409" do

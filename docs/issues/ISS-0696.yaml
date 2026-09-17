@@ -64,3 +64,16 @@ pipeline_log:
       Diff confined to two local useState hooks in ExamSessionPage.tsx;
       no tenant-data path, API shape, secret, SQL, or outbound-request
       code touched; no new failure path introduced.
+  - step: REVIEWER
+    at: "2026-09-17T07:33:00Z"
+    result: >
+      PASS. Confirmed the render-time setState guard cannot infinite-loop
+      (converges in one extra render per question change, matches React's
+      own documented adjust-state-during-render pattern); eslint
+      react-hooks plugin and tsc both clean. First use of this specific
+      pattern in web/src/ but genuinely idiomatic React, narrowly scoped,
+      well-commented -- accepted, flagged as a light watch-item (write up
+      as a documented convention if a third instance appears elsewhere,
+      not an anti-pattern for one justified instance). Diff scope matches
+      design exactly, nothing extra/missing. No conflict with any
+      docs/migration/decisions/ record.

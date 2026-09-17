@@ -1,0 +1,48 @@
+{
+  "handoff_id": "wf03-iss0705-step04",
+  "run_id": "WF03-ISS0705-20260917",
+  "workflow_id": "WF-03",
+  "step": "04",
+  "from_agent": "ORCH",
+  "to_agent": "TEST-DESIGNER",
+  "file": "handoffs/WF03-ISS0705-20260917/step-04-test-designer.json",
+  "created_at": "2026-09-17T12:15:00Z",
+  "started_at": "2026-09-17T12:15:00Z",
+  "completed_at": null,
+  "status": "PENDING",
+  "priority": "NORMAL",
+  "context": {
+    "stage": null,
+    "requirement_ids": [],
+    "requirement_text": {},
+    "source_text": {},
+    "related_handoff_ids": ["handoffs/WF03-ISS0705-20260917/step-03c-reviewer.json"],
+    "artifacts_in": [
+      "test/letflow/routers/tenants_test.exs",
+      "test/letflow/routers/identity_test.exs",
+      "test/letflow/role_registry_test.exs",
+      "test/support/sandbox_auto_mode.ex",
+      "docs/issues/ISS-0705.yaml",
+      "docs/agents/workflows/WF-03_issue_resolving.md"
+    ],
+    "owned_modules": ["test/letflow/routers/tenants_test.exs", "test/letflow/routers/identity_test.exs", "test/letflow/role_registry_test.exs"]
+  },
+  "task": {
+    "description": "WF-03 Step 4 (regression test) for ISS-0705, on branch feature/WF03-ISS0705-20260917. The fix itself already landed in test files (tenants_test.exs, identity_test.exs, role_registry_test.exs), verified by REVIEWER. Your job per WF-03_issue_resolving.md's Step 4: write a regression test that FAILS against the pre-fix code and PASSES against the post-fix code, proving the specific bug (Ecto.Adapters.SQL.Sandbox.mode(Letflow.Repo) left at :auto after tenants_test.exs's provisioning test runs, due to no restore) is actually caught.\n\nDesign approach: add a new test (e.g. in test/letflow/routers/tenants_test.exs itself, or a small dedicated test file such as test/letflow/sandbox_mode_regression_test.exs) that runs AFTER the fixed test in the same module/run and asserts `Ecto.Adapters.SQL.Sandbox.mode(Letflow.Repo)` is NOT `:auto`... note ExUnit doesn't expose a direct 'get current mode' call easily -- instead, the standard way to prove this class of leak is fixed is to demonstrate that a plain Ecto write in a SEPARATE async test, run in the same suite invocation immediately after the provisioning test, still gets rolled back (i.e., does not survive) -- if the leak were present, the write would commit for real and survive a fresh `mix test` process. Alternatively (and more directly testable in isolation, matching the project's existing pattern in test/support/sandbox_auto_mode.ex's own doctests or unit coverage if any exist): write a focused unit test against the SandboxAutoMode module usage itself.\n\nPER WF-03's OWN RULE for this case: since the pre-fix failure here is 'the mode is left wrong' (not 'the module doesn't exist yet'), the ordinary fail-then-pass proof applies directly -- checkout the pre-fix commit (before this run's Step 3 changes; find it via `git log` on this branch, or diff against origin/main before this branch's Step 3 commits) with ONLY the new regression test file/test added on top (isolate: new test file plus nothing else changed), run it, confirm it fails, then check out the fixed branch tip and confirm it passes. Document both runs' real output in your handoff.\n\nClaim this handoff by setting status to IN_PROGRESS only.",
+    "acceptance_criteria": [
+      "A new regression test exists that demonstrably fails against pre-fix tenants_test.exs (isolated: pre-fix code + only the new test added) and passes against post-fix code",
+      "Both the failing and passing run's real mix test output are quoted in result.summary",
+      "The test is deterministic (no reliance on timing/flakiness)",
+      "next_action routes to TEST-DESIGN-VALIDATOR"
+    ]
+  },
+  "result": {
+    "status": null,
+    "summary": null,
+    "artifacts_out": [],
+    "issues": [],
+    "next_action": null
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

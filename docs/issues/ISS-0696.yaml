@@ -22,3 +22,45 @@ affected_files:
 queue_ref: Q-696
 github_ref: GH-1457
 status: open
+pipeline_log:
+  - step: ISSUE-FIXER
+    at: "2026-09-17T06:45:00Z"
+    result: >
+      Root-caused live: a genuine React effect-ordering race, not shared
+      module state. ExamSessionPage.tsx's textDraft state synced via a
+      useEffect that commits one render cycle after the textarea first
+      appears; under full-suite vitest scheduler jitter, a forced-blur
+      anti-cheat signal can fire before that effect commits, so
+      maybeSaveDraft sees a stale empty draft and wrongly calls
+      saveAnswer. Reproduced live on run 10/12
+      ("expected \"spy\" to not be called at all, but actually been
+      called 1 times", called with text_answer: ""). Confirmed no
+      module-level singleton/global state involved.
+  - step: CODE-DESIGNER
+    at: "2026-09-17T07:05:00Z"
+    result: >
+      PASS. Design: lib/letflow/design/iss-0696-examsessionpage-race-fix.md.
+      Component-side fix chosen over test-side waitFor -- derive textDraft
+      during render (guarded by new textDraftQuestionId state) instead of
+      via effect, removing the race for real users too. No test-file
+      changes needed.
+  - step: CODE-DESIGN-VALIDATOR
+    at: "2026-09-17T07:12:00Z"
+    result: >
+      PASS. Verified design's line references and three-case navigation
+      walkthrough against the real ExamSessionPage.tsx source. Confirmed
+      the derive-during-render pattern is sound and unambiguous.
+  - step: FRONTEND-DEV
+    at: "2026-09-17T07:20:00Z"
+    result: >
+      PASS. Implemented at commit ade5fc0e (10 insertions, 3 deletions).
+      Isolated ExamSessionPage.test.tsx: 22/22 passed. Full web/ vitest
+      suite, 10 consecutive runs: 586/586 tests passed every run, 0
+      flakes. npm run type-check, lint, and guards all clean.
+  - step: SECURITY-REVIEWER
+    at: "2026-09-17T07:26:00Z"
+    result: >
+      PASS -- out of scope for every invariant, reasoned not assumed.
+      Diff confined to two local useState hooks in ExamSessionPage.tsx;
+      no tenant-data path, API shape, secret, SQL, or outbound-request
+      code touched; no new failure path introduced.

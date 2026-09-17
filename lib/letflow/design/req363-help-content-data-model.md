@@ -364,14 +364,148 @@ named with reasoning rather than picked silently, per this run's explicit instru
    but requires adding a new dependency, which per this project's own convention (cited
    above) needs REVIEWER sign-off before REQ-364 can take a dependency on it.
 
-**This design does not pick between the two for REQ-364** — that is a REVIEWER-sign-off-gated
-library decision, not a CODE-DESIGNER decision, per core-directives.md's dependency-choice
-guidance cited in item 1 above. What this design *does* commit to, and REQ-364 must
-implement regardless of which mechanism is chosen: the validator runs inside the changeset
-(rejecting at `create_changeset/2`/`update_changeset/2` time, `{:error, changeset}`, never a
-raised exception), and the exact rule set is §5.1/§5.2 above — not left to REQ-364 to
-reinvent. Flagged as **OQ-4** below for REVIEWER to confirm option 1 (no new dependency) is
-acceptable, or to sign off on adding a library for option 2.
+**Superseded — see §5.4.** Option 1 (regex/pattern-based validation, no new dependency) was
+built by ELIXIR-DEV against this section as originally written and reached
+`lib/letflow/help/help_content.ex`. SECURITY-REVIEWER found two real, confirmed bypasses
+across two review rounds (reference-style link definitions resolving a URL the inline-site
+regex never scanned; angle-bracket-wrapped autolink URLs `<javascript:...>` the tag-pattern
+regex misidentified as an HTML tag and the link-pattern regex never matched as a link). On
+the third round, REVIEWER (`handoffs/WF02-REQ364-20260917/step-03d-reviewer-determination.json`)
+constructed three further bypasses without changing the threat model at all — backslash-escaped
+scheme characters, HTML-entity-encoded scheme characters, and embedded whitespace/control
+characters inside a scheme name (the OWASP `javascript:` URI filter bypass cheat sheet's
+standard techniques) — and determined the regex approach is **structurally unsound, not
+incomplete**: every one of these five bypasses stems from the same root cause, that the regex
+scans raw source bytes for a `scheme:` substring while a real CommonMark parser's link-
+destination resolution applies escape processing, entity decoding, and whitespace
+normalization the regex never implements and cannot be patched to implement completely (each
+patch closes the specific case found and leaves the general class open). REVIEWER explicitly
+declined a third regex-patch round and routed this back through CODE-DESIGNER to resolve
+OQ-4 in the direction of option 2 — a real parser, AST-level. §5.4 is that resolution. Option
+1's specific bypasses, and the reasoning that no further regex patch is acceptable, are kept
+here rather than deleted, so a future reader does not "rediscover" option 1 as a live
+alternative.
+
+### 5.4 Resolved mechanism (amended 2026-09-17, per REVIEWER's determination) — `earmark_parser`
+
+**OQ-4 is resolved: a real CommonMark parser, AST-level destination checking.** No
+regex/pattern-based option remains live for this requirement.
+
+#### 5.4.1 Library choice: `earmark_parser`
+
+**Chosen: `earmark_parser`** (hex package `earmark_parser`, the parsing engine the `earmark`
+Markdown-to-HTML renderer itself depends on and exposes as a standalone package).
+
+- **Licence:** Apache-2.0.
+- **Maintenance status:** actively maintained (`RobertDober/earmark_parser`); it is the
+  parser `ex_doc` — the Elixir ecosystem's own documentation generator — depends on to parse
+  every `@doc`/`@moduledoc` string in every published Hex package, which is about as
+  broad and continuously-exercised a conformance workout as a Markdown parser gets in this
+  ecosystem.
+- **Pure-Elixir/Erlang vs. native/NIF:** pure Elixir. No NIF, no port, no external binary —
+  same shape this project already prefers per decision 0033 §2's P1-over-P2 reasoning (an
+  in-process, no-external-binary library beats one that requires provisioning something
+  outside the BEAM, when the in-process option is otherwise sufficient).
+- **Transitive-dependency impact:** none of note — `earmark_parser` has no runtime
+  dependencies of its own beyond Elixir/OTP.
+- **Why this over full `earmark` (the renderer, not just the parser):** this requirement never
+  needs rendered HTML — §5's write path only ever needs to *inspect* the parsed structure and
+  reject the changeset; it never displays the result (render-time display is REQ-366's job,
+  out of this requirement's scope per §5's own opening). Depending on `earmark_parser` alone
+  (not `earmark`) takes exactly the capability needed — `EarmarkParser.as_ast/2`, a function
+  that turns a markdown string into a CommonMark AST — with no HTML-rendering code path
+  pulled in unused. (Taking `earmark` instead would work too, since it re-exports the same
+  parser, but would name a dependency on rendering machinery this requirement never calls.)
+- **Why an AST parser over an HTML-sanitization library (e.g. `html_sanitize_ex`):** this
+  requirement's input is markdown source, not HTML. A sanitizer like `html_sanitize_ex`
+  parses and cleans *HTML* — to use one here, REQ-364 would first have to render the markdown
+  to HTML (via some renderer, i.e. `earmark` itself or similar) and then sanitize *that*,
+  meaning the same CommonMark-parsing step happens either way, plus a second full pass and a
+  second dependency. Checking link/image destination nodes directly on the parser's own AST
+  is the smaller, more direct mechanism — one dependency, one parse pass, no intermediate
+  HTML string ever constructed or discarded.
+- **Why this closes all five confirmed/constructed bypasses, not just the two SECURITY-REVIEWER
+  found:** `EarmarkParser.as_ast/2` is a real CommonMark-conformant parser. Reference-style
+  link definitions are resolved to their target destination by the parser itself as part of
+  producing the AST — there is no "inline site" vs. "definition site" distinction left for a
+  destination check to miss, because by the time the AST exists, every link/image node already
+  carries its *resolved* destination regardless of which markdown syntax produced it. The same
+  is true for autolinks (`<scheme:...>`), backslash-escaped characters, and HTML-entity-encoded
+  characters within a destination: CommonMark's spec mandates that a conformant parser resolve
+  backslash escapes and decode entities as part of producing inline content, including link
+  destinations, before that content is available to a caller at all — this is normal parser
+  behavior, not a security feature bolted on, which is exactly why "the parser already handles
+  it correctly" is the point of using one instead of hand-rolling the equivalent logic in a
+  regex (per REVIEWER's determination, cited above). Embedded whitespace/control characters
+  are likewise normalized by the parser as part of tokenizing a destination (CommonMark link
+  destinations are either angle-bracket-delimited, where whitespace/control characters are
+  spec-disallowed and the parser will not treat the construct as a valid destination at all,
+  or bare, where the destination token itself ends at the first ASCII whitespace/control byte
+  per spec) — there is no path through the parser's own destination-token production that
+  leaves raw whitespace/control bytes sitting inside a value the write path later scheme-checks.
+
+#### 5.4.2 Write-path mechanism (design-shape level, no implementation code)
+
+Replaces §5.3 option 1's regex-based validator function shape. The changeset validator
+(still invoked from `create_changeset/2`/`update_changeset/2`, still rejecting via
+`add_error/3`, `{:error, changeset}`, never a raised exception — that contract from the
+original §5.3 is unchanged) now does the following, for each of `:title` and `:body`:
+
+1. **Parse.** Call `EarmarkParser.as_ast/2` on the field's string value. `earmark_parser`
+   returns `{:ok, ast, deprecation_messages}` on a clean parse or `{:error, ast, error_messages}`
+   on a malformed-but-still-parseable input (CommonMark parsers are error-tolerant by design —
+   there is no markdown input that fails to produce *some* AST). Both tuple shapes carry an
+   `ast` (a list of node terms, CommonMark's own element-tree shape); the validator walks the
+   `ast` value from either branch — a non-empty `error_messages`/`deprecation_messages` list is
+   not itself a rejection reason (this requirement rejects specific *content* shapes named in
+   §5.1, not "syntactically unusual markdown").
+2. **Walk the AST for raw-HTML nodes.** `earmark_parser`'s AST distinguishes raw HTML
+   constructs (block-level HTML and inline HTML spans/tags) from parsed markdown constructs as
+   their own, separately-tagged node kind — the parser itself already does the "is this an
+   HTML tag or is this markdown-safe content" classification §5.1's raw-HTML-tag rule wants,
+   which is the same "let the library's own correct classification do the work" principle as
+   the destination check. If the walk finds any raw-HTML-classified node anywhere in the tree
+   (top level or nested inside any container node — list item, blockquote, emphasis, etc.),
+   the changeset is rejected under §5.1's raw-HTML-tag rule. This single check subsumes the
+   `<script>`/event-handler-attribute cases §5.1 names explicitly, exactly as the original
+   §5.3 reasoning already established (an event-handler attribute or a `<script>` tag can only
+   appear as a raw-HTML construct, which this check already catches in full).
+3. **Walk the AST for link/image destination nodes.** Separately, walk the same tree for every
+   node representing a resolved link or image (`earmark_parser`'s AST represents these as
+   element nodes carrying an `href` or `src` attribute in the node's attribute list — the
+   *already-resolved* destination string, per §5.4.1's "resolved" explanation above; not raw
+   source text). For every such node found, extract the scheme (the substring before the first
+   `:`, case-insensitive, with leading/trailing whitespace trimmed the same way §5.1's original
+   rule states) and reject the changeset under §5.1's scheme rule if it is one of `javascript`,
+   `data`, or `vbscript`.
+4. **Fenced/inline code content needs no separate stripping step.** §5.3's original mechanism
+   needed `strip_code_regions/1` as a standalone pre-pass because a regex has no concept of
+   "this span is a code span" — it can only be told to skip byte ranges that look like one.
+   `earmark_parser`'s AST represents fenced and inline code as their own distinct node kind
+   (code content, not re-parsed as markdown or HTML) by construction — steps 2 and 3 above
+   walk *only* raw-HTML nodes and link/image-destination nodes respectively, so code-span/
+   code-block node content is never visited by either check in the first place. No equivalent
+   of `strip_code_regions/1` is needed in the amended mechanism; the AST shape itself is what
+   makes §5.2's "fenced-block content is treated as literal text" guarantee hold, rather than a
+   separate blanking pass over source text.
+5. **Reject, don't strip.** Same as §5.3's original commitment: finding a disallowed node
+   anywhere in the tree adds a changeset error (`add_error/3`) and the changeset is invalid —
+   the write path never silently strips the offending construct and saves a modified `body`.
+
+No change to §5.1 (what is rejected) or §5.2 (the allowed markdown subset) — §5.4 only
+replaces *how* those rules are enforced, not what they say.
+
+#### 5.4.3 New dependency — flagged for REVIEWER sign-off, not self-approved
+
+Per this project's own convention (decision 0033, REQ-356's `pdf`/`eqrcode` precedent, cited
+in the original §5.3): **this design amendment names and justifies a library choice; it does
+not itself approve adding `earmark_parser` to `mix.exs`.** That approval is REVIEWER's to give,
+at the same procedural weight as REQ-356's PDF/QR library sign-off — ELIXIR-DEV's
+implementation of this amended §5.4 must not add the dependency and merge without a recorded
+REVIEWER sign-off, exactly as REQ-356's dependency entries in `mix.exs` each carry an explicit
+"Flagged for REVIEWER sign-off ... must be recorded before this merges" comment. Whether that
+sign-off is recorded as a new `docs/migration/decisions/` record (mirroring 0033's format) or
+inline in the implementation handoff is REVIEWER's call, not this design's.
 
 ---
 
@@ -405,7 +539,7 @@ that the column exists with the stated default so no later migration needs a dat
 | `timestamps` | §1.1 row 11 |
 | design explicitly states why draft/live (not `ProcessDefinition`'s four-state lifecycle) was chosen, citing requirement's own Why section | §2 (verbatim quote + citation) |
 | design states the platform-vs-tenant help distinction explicitly, platform rows NOT tenant-schema-scoped, states where they live, consistent with REQ-358's scope field | §3 (full section: `platform_help_content` in `public`, reasoning for divergence from REQ-358's field-based approach, explicit consistency argument) |
-| design specifies write-path sanitization/validation rule (rejected shapes named explicitly: raw HTML, script tags, event handler attributes) as this requirement's own scope, not deferred to REQ-366 | §5.1 (each named explicitly), §5.3 (mechanism, flagged as OQ-4 rather than silently deferred) |
+| design specifies write-path sanitization/validation rule (rejected shapes named explicitly: raw HTML, script tags, event handler attributes) as this requirement's own scope, not deferred to REQ-366 | §5.1 (each named explicitly), §5.3 (original mechanism, superseded), §5.4 (amended, resolved mechanism — `earmark_parser` AST walk, OQ-4 resolved) |
 
 ---
 
@@ -425,6 +559,51 @@ that the column exists with the stated default so no later migration needs a dat
   in case the literal "integer" instruction was meant to be controlling instead (which would
   imply a fresh decision to change `ProcessDefinition.version`'s own type, a decision-record-
   level question this design does not have authority to make).
-- **OQ-4** (§5.3) — sanitization mechanism: regex/pattern-based validator with no new
-  dependency (recommended) vs. a real HTML-sanitization library requiring REVIEWER sign-off
-  to add. Not picked here; flagged for REVIEWER at REQ-364's implementation gate.
+- **OQ-4** (§5.3/§5.4) — **RESOLVED 2026-09-17** by REVIEWER's determination
+  (`handoffs/WF02-REQ364-20260917/step-03d-reviewer-determination.json`): the regex/pattern-
+  based option built against this design's original §5.3 proved structurally unsound (five
+  confirmed/constructed bypasses across three review rounds — see §5.3's superseded note).
+  §5.4 now names and specifies `earmark_parser` (AST-level link/image destination and raw-HTML
+  node checking) as the mechanism ELIXIR-DEV must implement. The new dependency itself still
+  requires a separate REVIEWER sign-off before merge (§5.4.3) — resolving *which* library and
+  *how* it integrates is this amendment's job; approving the `mix.exs` addition is REVIEWER's,
+  same as REQ-356's precedent.
+
+### What changes for ELIXIR-DEV's existing implementation
+
+`lib/letflow/help/help_content.ex` (read in full for this amendment, current state) built
+§5.3 option 1 exactly: `@raw_html_tag_pattern`, `@markdown_link_pattern`,
+`@markdown_reference_link_pattern`, `@disallowed_url_schemes`, `validate_no_raw_html/2`,
+`validate_no_unsafe_link_scheme/2`, `contains_unsafe_link_scheme?/1`, `urls_unsafe?/2`,
+`unsafe_scheme?/1`, and the `strip_code_regions/1` code-span pre-pass. Per §5.4:
+
+- **All of the above module attributes and private functions are replaced**, not patched
+  again — they implement exactly the regex mechanism §5.3 documents as superseded. None of
+  the five bypasses is closeable by adding another pattern to this set (that is the substance
+  of REVIEWER's "structurally unsound" finding); ELIXIR-DEV should delete them rather than
+  layer a sixth pattern on top.
+- **`validate_common/1`'s call sequence changes shape**: instead of calling
+  `validate_no_raw_html/2` and `validate_no_unsafe_link_scheme/2` per field via
+  `validate_change/3` over the raw string, the replacement validator (§5.4.2 steps 1–3) parses
+  each field's value once via `EarmarkParser.as_ast/2` and walks the resulting AST for both
+  raw-HTML nodes and disallowed-scheme link/image-destination nodes in that same walk — the
+  two checks can share one parse per field rather than needing two independent passes, since
+  both `validate_no_raw_html/2`'s and `validate_no_unsafe_link_scheme/2`'s existing signatures
+  (`changeset, field -> changeset`) and call sites in `validate_common/1` stay the *shape* the
+  same; only their internals move from regex-over-string to AST-walk-over-parsed-tree.
+  `validate_length(:screen_id, ...)` and `validate_length(:title, ...)` are untouched — those
+  never depended on the sanitization mechanism.
+- **`strip_code_regions/1` is deleted, not ported** — §5.4.2 step 4 explains why: the AST
+  shape itself excludes code-span/code-block content from both checks, so there is no
+  equivalent pre-pass to write.
+- **The changeset error contract is unchanged**: `add_error/3` with the same two user-facing
+  messages (`"must not contain raw HTML tags"`, `"must not contain javascript:/data:/vbscript:
+  link or image URLs"`) is still the right shape — §5.4 changes detection, not the rejection
+  contract or the messages a caller sees.
+- **`mix.exs` gains one new dependency**, `{:earmark_parser, "~> ..."}` (ELIXIR-DEV verifies
+  the current hex.pm version at implementation time), flagged per §5.4.3 — implementation must
+  not proceed past adding this line without a recorded REVIEWER sign-off, mirroring the
+  `{:pdf, ...}`/`{:eqrcode, ...}` sign-off comments already in `mix.exs` for REQ-356.
+- **The module moduledoc's "Write-path sanitization" section** (currently citing "design §5.3's
+  option 1") needs updating to cite §5.4 and the amended mechanism once reimplemented — named
+  here so ELIXIR-DEV doesn't leave a stale citation pointing at the superseded section.

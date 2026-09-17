@@ -1,0 +1,13 @@
+{
+  "req": "REQ-364",
+  "step": "03-elixir-dev-rework2",
+  "result": "implemented",
+  "at": "2026-09-17T15:35:00Z",
+  "summary": "Replaced regex sanitization with EarmarkParser.as_ast/2 AST walk per design SS5.4.2. mix.exs gained earmark_parser ~> 1.4, citing decision 0036. help_content.ex: deleted all regex module attributes/helpers, added validate_markdown_safety/2 + walk/1 + raw_html_node?/2 + destination_violation/2 + scheme_letters/1 + decode_numeric_entities/1.",
+  "two_verified_gaps_found_in_design_and_fixed": [
+    "Raw HTML mixed inline with surrounding text is never tagged verbatim: true by earmark_parser 1.4.46 (only line-starting tags are) -- confirmed directly against the library's own moduledoc and live calls, not trusted from the design text. Added a bounded fallback scan of unparsed plain-text AST leaves for tag-shape patterns, excluding code-node content structurally so SS5.2's fenced-content-is-literal guarantee still holds.",
+    "Numeric HTML entity references and embedded whitespace/control characters in resolved href/src are NOT decoded/stripped by the library -- fixed by decoding decimal/hex numeric character references then keeping only ASCII a-z letters from the pre-colon portion before scheme comparison."
+  ],
+  "verification": "mix test test/letflow/help_test.exs: 47 passed (33 original + 14 new covering all 5 bypass classes plus legitimate-content cases). mix compile --warnings-as-errors clean. mix deps.get resolved earmark_parser 1.4.46 cleanly.",
+  "flagged_for_review": "the two verified-gap deviations from the design's stated mechanism need SECURITY-REVIEWER/REVIEWER sign-off before TEST-DESIGNER."
+}

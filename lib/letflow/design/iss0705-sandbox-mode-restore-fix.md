@@ -68,7 +68,17 @@ literal wording — everything else below follows it as given.
 
 ---
 
-## 1. `test/letflow/routers/tenants_test.exs` — wrap with `provision!/2`
+## 1. `test/letflow/routers/tenants_test.exs` — wrap with `provision!/2`, `on_exit/1` re-enters `:auto`
+
+**Rework iteration 1 (this revision).** WF-03 Step 3 applied the original §1.2 exactly as written and
+hit a real failure ELIXIR-DEV's report documents in full
+(`handoffs/WF03-ISS0705-20260917/step-03-elixir-dev.json` `result.summary`/`result.issues`):
+`DBConnection.OwnershipError: cannot find ownership process ... using mode :manual`, raised from
+inside the test's own `on_exit/1` cleanup (the `DROP SCHEMA`/`delete_all` block). §1.1/§1.4 below are
+unchanged from the original design; §1.2/§1.3 are rewritten to close this gap. §0.1's `provision!/2`
+selection itself is not in question — the gap is specifically that `provision!/2`'s `after`-block
+restore and the test's `on_exit/1` cleanup execute at different, non-overlapping times, and the
+original §1.2 didn't give `on_exit/1` a way to get `:auto` mode back for itself.
 
 ### 1.1 Current shape (lines 386-432, the `"creates a tenant row, provisions a real schema, and
 replays real migrations"` test)
@@ -79,15 +89,48 @@ The test body, in order: a comment block (387-390) → `Sandbox.mode(Letflow.Rep
 final `assert rows != []` (420-431). No restore of `:manual` mode anywhere in the test body or its
 `on_exit/1`.
 
-### 1.2 Change
+### 1.2 Root cause of the rework-1 failure (why the original §1.2 alone was not enough)
 
-Wrap the segment from immediately after the existing comment block through the test's final
-assertion — i.e. everything from `slug = "req075-create-e2e-#{Ecto.UUID.generate()}"` (393) through
-`assert rows != []` (431) — in the zero-arity function passed to
-`Letflow.Test.SandboxAutoMode.provision!/2`, replacing the standalone
-`Ecto.Adapters.SQL.Sandbox.mode(Letflow.Repo, :auto)` line (391) with the `provision!/2` call itself.
+`provision!/2`'s `after` block (`test/support/sandbox_auto_mode.ex` lines 66-71) runs **synchronously,
+inline in the test process, the instant the wrapped `fn` returns** — i.e. immediately after the
+test's final `assert rows != []`, still well before the enclosing `test ... do ... end` function
+itself returns. It restores `:manual` mode and issues a fresh `Sandbox.checkout(repo)` owned by that
+still-running test process.
 
-Before (shape):
+`on_exit/1` callbacks never run at that point, regardless of where in the test body they were
+*registered* — ExUnit always defers every registered `on_exit/1` to test teardown, executed later by
+a separate `ExUnit.OnExitHandler` process, after the test process itself has already exited. So by
+the time this test's `on_exit/1` (the `DROP SCHEMA`/`delete_all` cleanup) actually runs: mode is back
+to `:manual` (`provision!/2`'s restore already ran), and the checkout `provision!/2` issued belongs to
+a test process that no longer exists — `OnExitHandler` owns nothing. Its `Repo` calls raise
+`DBConnection.OwnershipError`.
+
+This means **narrowing the `provision!/2` wrap's boundary (rework option (a): wrap only the
+DDL/migration-replay segment, register `on_exit/1` outside it) does not fix this failure.** Moving
+`on_exit/1`'s *registration* earlier or later in the test body's source text has no effect on *when*
+it executes — that's always deferred past the wrapped `fn`'s return, hence always past
+`provision!/2`'s restore, no matter how wide or narrow the wrap is. The fix has to live inside
+`on_exit/1`'s own callback body, not in the wrap's boundary. **This design therefore adopts rework
+option (b).**
+
+### 1.3 Change
+
+Same wrap boundary as the original design (no change to §1.1's wrap width — narrowing it would not
+help, per §1.2 above, so there's no reason to also change it): everything from
+`slug = "req075-create-e2e-#{Ecto.UUID.generate()}"` (393) through `assert rows != []` (431) stays
+inside `Letflow.Test.SandboxAutoMode.provision!/2`'s wrapped `fn`, replacing the standalone
+`Ecto.Adapters.SQL.Sandbox.mode(Letflow.Repo, :auto)` line (391) with the `provision!/2` call itself,
+exactly as before.
+
+**The one substantive change from the original design:** the `on_exit/1` callback's body gains one
+new first line, `SandboxAutoMode.enter_auto_mode!(Letflow.Repo)`, run before its existing
+`DROP SCHEMA`/`delete_all` cleanup — so that by the time `OnExitHandler` actually invokes this
+callback, it puts the pool back into `:auto` mode itself first (no checkout needed for `:auto` mode,
+so it works from any process, matching `enter_auto_mode!/1`'s own moduledoc: "Thin, documented
+wrapper around `Sandbox.mode(repo, :auto)` ... no process-affinity requirement"), rather than
+depending on `provision!/2`'s already-elapsed, already-undone restore.
+
+Before (shape) — unchanged from the pre-rework-1 design:
 ```
 test "creates a tenant row, provisions a real schema, and replays real migrations" do
   # <existing comment, unchanged>
@@ -101,7 +144,7 @@ test "creates a tenant row, provisions a real schema, and replays real migration
 end
 ```
 
-After (shape):
+After (shape) — revised:
 ```
 test "creates a tenant row, provisions a real schema, and replays real migrations" do
   # <existing comment, unchanged>
@@ -109,27 +152,46 @@ test "creates a tenant row, provisions a real schema, and replays real migration
     slug = "req075-create-e2e-#{Ecto.UUID.generate()}"
     <dispatch + assertions>
     <tenant_id extraction>
-    on_exit(fn -> <schema drop + row cleanup> end)
+
+    on_exit(fn ->
+      SandboxAutoMode.enter_auto_mode!(Letflow.Repo)
+      <schema drop + row cleanup>
+    end)
+
     <information_schema query + assert>
   end)
 end
 ```
 
-Nothing inside the wrapped body changes — same `dispatch()` call, same assertions, same `on_exit/1`
-registration (still registered from inside the wrapped function, which still runs in the original
-test process, so `on_exit/1`'s own process-registration semantics are unaffected by being nested one
-level deeper in a `fn -> ... end`), same `information_schema` query, same final `assert`. Only the
-`Sandbox.mode(Letflow.Repo, :auto)` line is removed (subsumed into `provision!/2`'s own first step),
-and the file gains one `alias Letflow.Test.SandboxAutoMode` near its existing alias list (or a
-fully-qualified `Letflow.Test.SandboxAutoMode.provision!/2` call — ELIXIR-DEV's choice, matching
-ISS-0580 design §3.1's own latitude on this point).
+Nothing else changes — same `dispatch()` call, same assertions, same `on_exit/1` registration site
+(still registered from inside the wrapped function, which still runs in the original test process),
+same `information_schema` query, same final `assert`, same `<schema drop + row cleanup>` body
+verbatim (only prefixed by the one new `enter_auto_mode!/1` line). The file still gains one
+`alias Letflow.Test.SandboxAutoMode` near its existing alias list (or a fully-qualified
+`Letflow.Test.SandboxAutoMode.provision!/2`/`.enter_auto_mode!/1` call — ELIXIR-DEV's choice, matching
+ISS-0580 design §3.1's own latitude on this point; the file already has this alias per the rework-1
+`elixir-dev` handoff's committed change, so this is a no-op in practice).
 
-`provision!/2`'s own `after`-block restore (`Sandbox.mode(repo, :manual)` +
-`Sandbox.checkout(repo)`) now runs unconditionally once the wrapped function returns or raises —
-closing the leak whether the test's own assertions pass or fail partway through, matching ISS-0580's
-`INV-2`.
+**Why edit the same `on_exit/1` callback's body, rather than registering a second, separately-timed
+`on_exit/1` the way §2/§3 do (`identity_test.exs:1381`/`role_registry_test.exs:119`, which rely on
+LIFO ordering — an `enter_auto_mode!/1` `on_exit/1` registered *after* the real cleanup's `on_exit/1`
+so it runs *before* it):** those two sites *don't own* the cleanup `on_exit/1` they're pairing
+against — it's registered internally by `Letflow.TenantFixture.provisioned_tenant!/1`, a shared
+helper neither test file can edit inline, so the only way to run something before it is a second,
+separately-registered callback plus LIFO ordering. Here, by contrast, the `DROP SCHEMA`/`delete_all`
+`on_exit/1` is authored directly in this test, in this design's own control — there is nothing
+stopping the fix from being the one extra line at the top of that same callback, which is simpler
+than introducing a second callback and a LIFO-ordering dependency where none is otherwise needed.
+Simplicity being equal in correctness, the direct edit is preferred (per this task's "pick whichever
+... is simplest").
 
-### 1.3 Why `provision!/2`, not `enter_auto_mode!/1`/`exit_auto_mode!/1` or `Sandbox.allow/3`
+**End-state note:** as with §2/§3's own accepted end-state (§4 `INV-2`), the pool is left in `:auto`
+mode once this `on_exit/1` finishes — there is no further restore-to-`:manual` after the cleanup
+completes, because nothing in this already-exiting test process runs another `Repo` call afterward.
+This mirrors, not diverges from, the already-approved pattern in this same design for the other two
+files; see the revised `INV-1` in §4 below.
+
+### 1.4 Why `provision!/2`, not `enter_auto_mode!/1`/`exit_auto_mode!/1` or `Sandbox.allow/3`
 
 Confirmed by reading the test file's moduledoc (line 13) and the test body itself: the whole test
 runs in one process — `dispatch()` calls `Letflow.Routers.Tenants.call/2` directly, no `Task.async`,
@@ -255,13 +317,24 @@ Everything else in the block (the `case`/`Repo.delete_all` cleanup body, the REQ
 
 ## 4. Invariants
 
-- **INV-1 — `tenants_test.exs`'s `:auto`-mode window is closed on both the success and failure path
-  after this change**, and never widened relative to today (§1.2, mirroring ISS-0580's `INV-1`/`INV-2`).
+- **INV-1 — `tenants_test.exs` never raises `DBConnection.OwnershipError` from its own `on_exit/1`
+  cleanup, on both the success and failure path, after this change** (revised in rework-1, §1.2/§1.3):
+  `provision!/2`'s restore-to-`:manual` still runs unconditionally once the wrapped `fn` returns or
+  raises (closing the *test-body* `:auto`-mode window exactly as the original design intended), but
+  the `on_exit/1` cleanup registered inside that `fn` now re-enters `:auto` mode itself
+  (`enter_auto_mode!/1`) before doing its `DROP SCHEMA`/`delete_all` work, so it no longer depends on
+  `provision!/2`'s already-elapsed restore leaving it a usable connection. As with §2/§3 (`INV-2`
+  below), the pool's true final state once the whole test (body + deferred `on_exit/1`) has finished
+  is `:auto`, not `:manual` — not "closed" in the sense the pre-rework-1 wording implied, but matching
+  the same already-accepted end-state §2/§3 use for the identical reason (a later-running cleanup
+  callback needs a connection any process can obtain).
 - **INV-2 — `identity_test.exs`'s and `role_registry_test.exs`'s end-of-test mode (`:auto`) is
   unchanged by this design.** §0.1/§2.2/§3.2 are a pure named-helper substitution, not a behavior
   change — both sites still leave the pool in `:auto` mode when their `on_exit/1` callback returns,
   which is required for `TenantFixture.provisioned_tenant!/1`'s own later-running (LIFO) cleanup
-  `on_exit/1` to get a real connection.
+  `on_exit/1` to get a real connection. `tenants_test.exs` (§1, rework-1) now ends in the same state
+  for the same structural reason, though by a direct in-place edit rather than a second LIFO-ordered
+  callback (§1.3 explains why the two files differ in mechanism despite the shared end-state).
 - **INV-3 — no test's return value/contract changes.** `tenants_test.exs`'s test still runs the same
   assertions in the same order; `identity_test.exs`'s and `role_registry_test.exs`'s `setup` blocks
   still return `%{tenant: tenant}` / `%{tenant: tenant, schema_name: schema_name}` unchanged.
@@ -358,7 +431,7 @@ same `Sandbox.mode(repo, :auto)` call either way) — not proposed here to avoid
 
 | File | Change | Owner |
 |---|---|---|
-| `test/letflow/routers/tenants_test.exs` | Wrap the real-provisioning test body (lines 393-431) in `SandboxAutoMode.provision!/2`, removing the standalone `Sandbox.mode(..., :auto)` at line 391 (§1). | ELIXIR-DEV |
+| `test/letflow/routers/tenants_test.exs` | Wrap the real-provisioning test body (lines 393-431) in `SandboxAutoMode.provision!/2`, removing the standalone `Sandbox.mode(..., :auto)` at line 391; the test's own `on_exit/1` cleanup gains a leading `SandboxAutoMode.enter_auto_mode!(Letflow.Repo)` call (§1, rework-1). | ELIXIR-DEV |
 | `test/letflow/routers/identity_test.exs` | `on_exit/1` at line 1381: swap inline `Sandbox.mode(Letflow.Repo, :auto)` for `SandboxAutoMode.enter_auto_mode!(Letflow.Repo)` (§2). | ELIXIR-DEV |
 | `test/letflow/role_registry_test.exs` | `on_exit/1` at line 119: identical swap, paired fix (§3). | ELIXIR-DEV |
 | *(no file — operational only)* | Run §5.2's one-off `mix run -e` cleanup against the test DB once during Step 3; record before/after counts. | ELIXIR-DEV |

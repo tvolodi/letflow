@@ -8,8 +8,8 @@
   "file": "handoffs/WF03-ISS0705-20260917/step-02-code-designer-rework1.json",
   "created_at": "2026-09-17T09:45:00Z",
   "started_at": "2026-09-17T09:45:00Z",
-  "completed_at": null,
-  "status": "PENDING",
+  "completed_at": "2026-09-17T04:38:53Z",
+  "status": "COMPLETED",
   "priority": "NORMAL",
   "context": {
     "stage": null,
@@ -35,11 +35,11 @@
     ]
   },
   "result": {
-    "status": null,
-    "summary": null,
-    "artifacts_out": [],
+    "status": "PASS",
+    "summary": "Revised lib/letflow/design/iss0705-sandbox-mode-restore-fix.md Section 1 (tenants_test.exs) only. Root cause of ELIXIR-DEV's DBConnection.OwnershipError: provision!/2's `after`-block restore (Sandbox.mode(:manual) + checkout owned by the test process) runs synchronously, inline, the instant the wrapped fn returns -- well before the test's own on_exit/1 cleanup ever executes, since ExUnit always defers on_exit/1 to a separate OnExitHandler process running after test-process teardown, regardless of where in the source text on_exit/1 was registered. So narrowing the provision!/2 wrap's boundary (rework option (a): wrap only the DDL segment, register on_exit outside it) would NOT fix this -- moving the registration site doesn't change when the callback executes, which is always past provision!/2's restore. Chose option (b) instead: the on_exit/1 callback's body now calls SandboxAutoMode.enter_auto_mode!(Letflow.Repo) as its first line, before its existing DROP SCHEMA/delete_all cleanup, so the callback re-establishes :auto mode for itself at the moment it actually runs, independent of provision!/2's already-elapsed restore. Chose to edit the on_exit/1 callback's body in place rather than mirror identity_test.exs/role_registry_test.exs's second-callback-plus-LIFO-ordering pattern (their `enter_auto_mode!/1` on_exit registered after the real cleanup's on_exit, per that pattern's design in Sections 2/3): those two sites can't edit the cleanup on_exit directly because it's registered internally by the shared Letflow.TenantFixture.provisioned_tenant!/1 helper, whereas tenants_test.exs's on_exit is authored directly in the test and fully under this design's control, so a direct one-line edit is simpler and equally correct -- no new helper invented (enter_auto_mode!/1 already exists), and it matches sandbox_auto_mode.ex's own documented no-process-affinity guarantee for that function. End-state: pool is left in :auto mode after this on_exit/1 finishes, same accepted end-state as Sections 2/3's INV-2 (already-approved, unchanged) -- also updated INV-1's wording in Section 4 for accuracy, since the prior wording implied a restore-to-:manual end-state that no longer holds. Sections 2, 3, 5, 6 and the rest of the doc were not touched except this one INV-1 wording fix and one Section 7 table-row description update for consistency with the revised Section 1.",
+    "artifacts_out": ["lib/letflow/design/iss0705-sandbox-mode-restore-fix.md"],
     "issues": [],
-    "next_action": null
+    "next_action": "Route to CODE-DESIGN-VALIDATOR for a fresh pass on revised Section 1"
   },
   "rework_count": 1,
   "max_rework": 3

@@ -1,0 +1,8 @@
+{
+  "req": "REQ-364",
+  "step": "04-test-designer",
+  "result": "gap found and closed",
+  "at": "2026-09-17T19:10:00Z",
+  "summary": "3 of 4 ACs already sufficiently covered by the 54 existing tests. AC4 (confirmed_for_definition_version) had a real partial gap: original tests used a fixed process-definition version throughout, so reconfirm/2 merely replaying the stored value instead of re-reading fresh would have passed unnoticed. Added test:792-812 bumping the process definition's version between publish and reconfirm, asserting reconfirm reflects the NEW version. Verified via mutation testing: reverted resolve_confirmed_version to reuse the stale stored value, got 54/55 (only the new test failed), reverted mutant cleanly (git diff help.ex empty afterward).",
+  "verification": "mix letflow.check.test hit the documented stale-tenant_template-schema anti-pattern on first run (18 stale letflow_test* DBs predating help_content's migration) -- dropped them per docs/anti-patterns.md's documented fix, reran clean. help_test.exs: 55/55 consistently. Full suite runs 2-3: only pre-existing unrelated failures (a known ContextTest partition-race flake, REQ-369's already-known-unrelated impl_order gate failures)."
+}

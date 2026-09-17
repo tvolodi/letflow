@@ -144,3 +144,18 @@ pipeline_log: []
       real (rolled the 9 files back to 6f1b1d15^, TC-5 correctly failed
       reporting all 9, reverted, confirmed clean pass). npm test
       592/592, tsc clean.
+  - step: TEST-DESIGN-VALIDATOR
+    at: "2026-09-17T12:22:00Z"
+    result: >
+      PASS. Confirmed FIXED_FILES genuinely spreads all 19 files (10
+      ISS-0706 + 9 ISS-0707), each of the 9 verified to exist at its
+      stated path. Verified the regex-widening claim directly with node
+      (old pattern genuinely doesn't match '../helpers', new one does).
+      Independently reproduced fail-then-pass on own working tree: 24
+      regressions correctly reported across all 9 files when rolled
+      back, 6/6 pass restored. Hit the already-documented git-checkout-
+      restores-from-index footgun (docs/anti-patterns.md line ~2997)
+      during restoration, handled correctly via git restore
+      --source=HEAD. Confirmed TC-1..TC-4 genuinely unchanged. Own npm
+      test: 592/592, tsc clean. Spot-checked 3/9 files independently,
+      no copy-paste defects.

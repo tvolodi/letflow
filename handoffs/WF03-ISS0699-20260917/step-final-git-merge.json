@@ -8,8 +8,8 @@
   "file": "handoffs/WF03-ISS0699-20260917/step-final-git-merge.json",
   "created_at": "2026-09-16T21:28:43Z",
   "started_at": "2026-09-16T23:32:12Z",
-  "completed_at": null,
-  "status": "IN_PROGRESS",
+  "completed_at": "2026-09-17T00:17:04Z",
+  "status": "COMPLETED",
   "priority": "NORMAL",
   "context": {
     "stage": null,
@@ -36,19 +36,25 @@
     ]
   },
   "result": {
-    "status": "PENDING",
-    "summary": "ITERATION 0 RESULT (superseded -- root cause since fixed in rework iteration 1, re-verified twice by TEST-RUNNER via a real `mix letflow.check.test` run): FAIL. CI's 'Backend gate (mix letflow.check)' job failed with 'mix letflow.check.test: FAILED -- partition log directory ... contains zero partition-*.log files', caused by scripts/test_parallel.sh's new cleanup trap deleting logs before lib/mix/tasks/letflow.check.test.ex could read them. PR #1469 was left open, unmerged. See git history of this file for the full iteration-0 account. This retry re-runs Step Final now that the fix is in place and re-verified.",
-    "artifacts_out": [],
+    "status": "PASS",
+    "summary": "ITERATION 0 RESULT (superseded -- root cause since fixed in rework iteration 1, re-verified twice by TEST-RUNNER via a real `mix letflow.check.test` run): FAIL. CI's 'Backend gate (mix letflow.check)' job failed with 'mix letflow.check.test: FAILED -- partition log directory ... contains zero partition-*.log files', caused by scripts/test_parallel.sh's new cleanup trap deleting logs before lib/mix/tasks/letflow.check.test.ex could read them. PR #1469 was left open, unmerged. See git history of this file for the full iteration-0 account.\n\nRETRY (rework iteration 1) RESULT: PASS. Rebase onto origin/main was a no-op (branch already current). Post-rebase gates: mix format --check-formatted PASS, mix compile --warnings-as-errors PASS, mix test 4333/4334 passed (6/6 properties, 4327/4328 tests), 19 excluded, 1 failed -- 0 attributable to this branch (attribution route: file-disjoint; the sole failure, test/letflow/routers/tenants_test.exs:356 'GET /tenants as PLATFORM_ADMIN lists tenants in the paginated allowlisted shape', is a pre-existing pagination/shared-DB-fixture-accumulation flake -- this branch's full diff vs origin/main touches only scripts/test_parallel.sh, lib/mix/tasks/letflow.check.test.ex, their tests, and handoff/doc files, none of which touch tenant/router/pagination code). Pushed rebased branch (plain push, fast-forward, no force needed). Updated PR #1469's body with real post-rebase counts and attribution route. Polled `gh pr checks 1469` synchronously via bounded blocking loops (never an internally-armed background monitor) until both required checks reported a real conclusion: 'Backend gate (mix letflow.check)' -- the exact job that failed last attempt -- passed in 10m26s; 'Frontend gate (npm run check)' passed in 14s; 'Detect changed paths' passed in 7s. Ran `gh pr merge 1469 --squash --delete-branch`, which exited 0 and squash-merged PR #1469 into main at commit 163e2efd4449d4b0979f86467d2606899587efe5 (confirmed via `gh pr view 1469 --json state,mergedAt,mergeCommit` -> state MERGED, mergedAt 2026-09-17T00:16:45Z), remote branch auto-deleted. Local cleanup: `git checkout main`, `git pull --ff-only origin main` (fast-forward, exit 0), local feature branch already removed by the merge's local side effect; `git branch --show-current` -> main, `git log --oneline -1` -> 163e2efd matching the squash-merge commit, `git status` -> clean working tree. This handoff file's own COMPLETED/PASS result could not be included in the merged PR (it was written after the merge landed), so it is finalized via a small separate follow-up doc-only PR (branch chore/WF03-ISS0699-finalize-handoff-20260917) per GIT_MERGE.md's zero-exception no-direct-push-to-main rule.",
+    "artifacts_out": ["branch: feature/WF03-ISS0699-20260917 (squash-merged into main via PR #1469, branch deleted)"],
     "issues": [],
     "git_evidence": {
-      "branch_name": null,
-      "commit_sha_list": [],
-      "remote_branch": null,
-      "push_status": "skipped",
+      "branch_name": "feature/WF03-ISS0699-20260917",
+      "commit_sha_list": ["f6bac83f"],
+      "remote_branch": "origin/feature/WF03-ISS0699-20260917 (deleted post-merge)",
+      "push_status": "pushed (fast-forward)",
       "pr_url": "https://github.com/tvolodi/letflow/pull/1469",
-      "pr_create_error": null
+      "pr_create_error": null,
+      "merge_commit_sha": "163e2efd4449d4b0979f86467d2606899587efe5",
+      "ci_checks": {
+        "Backend gate (mix letflow.check)": "pass, 10m26s",
+        "Frontend gate (npm run check)": "pass, 14s",
+        "Detect changed paths": "pass, 7s"
+      }
     },
-    "next_action": ""
+    "next_action": "ORCH marks run COMPLETED, releases queue lock, writes RUN_DONE log line"
   },
   "rework_count": 1,
   "max_rework": 3

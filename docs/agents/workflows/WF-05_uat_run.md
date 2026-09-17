@@ -78,12 +78,34 @@ to validate against. In practice this does not become live until S7
    failing scenario named.
 ```
 
-## Deferred: business-owner personas
+## Step 4 — PRODUCT-OWNER release recommendation
 
-R-Co's `BO-SWIFTROUTE`/`BO-VORTEX`/`BO-MERIDIAN`/`PRODUCT-OWNER` roles evaluate UAT
-results from a specific tenant's business perspective. Letflow has no tenant business
-scenario corpus yet — this workflow runs without persona-based sign-off until S7
-actually defines one, per `docs/migration/decisions/0004-humanless-pipeline.md`. Once
-REQ-361 lands, this workflow will run with that persona-equivalent gate once a run's
-dispatch names it as this run's downstream reader; until it lands and is named,
-RELEASE-VALIDATOR's own check (WF-04 Step 2) remains the closest equivalent gate.
+**Agent:** `PRODUCT-OWNER`
+
+Runs once every `BA-<VERTICAL>` sign-off for this run_id has been written (see
+`.claude/agents/ba-analyst.md`'s SIGN-OFF responsibility — dispatched by ORCH
+per vertical, same as Step 2-3's UAT-RUNNER dispatch, for each vertical with
+scenarios in this run's UAT report). Never runs in parallel with a
+`BA-<VERTICAL>` sign-off step, and always runs strictly before
+`RELEASE-VALIDATOR` — see `.claude/agents/product-owner.md`'s Relationship
+section for why these are separate, non-substitutable gates.
+
+```
+1. Read every test/uat-reports/ba-signoff-*-<run_id>.yaml for this run_id, and
+   test/uat-reports/uat-<date>-<run_id>.yaml.
+2. Cross-check MUST-severity acceptance criteria for the requirement/stage batch
+   under test against passing-scenario coverage.
+3. Apply the single-BLOCKER-blocks-release rule.
+4. Arbitrate any cross-vertical disagreement found; route to REQ-ANALYST if the
+   underlying requirement is ambiguous.
+5. Write test/uat-reports/po-signoff-<run_id>.yaml.
+6. Complete the handoff: PASS if release_recommendation == APPROVED, FAIL
+   (BLOCKED) otherwise, naming every blocking issue and its suggested_action.
+```
+
+PASS → this stage's UAT parity is confirmed **and** business-approved for
+release; ORCH proceeds toward RELEASE-VALIDATOR / the stage-gate check in
+`ORCHESTRATOR.md` §8.
+FAIL (BLOCKED) → route per each issue's `suggested_action` (`route_to_wf03` /
+`route_to_req_analyst` / `route_to_uat_runner`), then re-run this step once
+resolved, per `.claude/agents/product-owner.md`'s rework policy (`max_rework: 1`).

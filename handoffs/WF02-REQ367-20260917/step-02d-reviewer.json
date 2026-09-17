@@ -9,7 +9,8 @@
   "created_at": "2026-09-17T19:35:00Z",
   "started_at": "2026-09-17T19:35:00Z",
   "completed_at": null,
-  "status": "PENDING",
+  "status": "COMPLETED",
+  "completed_at": "2026-09-17T14:53:32Z",
   "priority": "NORMAL",
   "context": {
     "stage": "S7",
@@ -39,7 +40,21 @@
       "Consistency with docs/anti-patterns.md and docs/migration/decisions/ checked explicitly"
     ]
   },
-  "result": null,
+  "result": {
+    "status": "PASS",
+    "next_action": "Route to TEST-DESIGNER (3)",
+    "findings": {
+      "1_idiom_vs_crutch": "PASS -- deploy/redeploy-qa.sh follows redeploy-test.sh's established conventions exactly: same shebang, same `set -euo pipefail`, same header-comment shape (purpose, run instructions, invocation modes), same numbered-step structure, same variable naming (APP_DIR, COMPOSE, DATE, CURRENT_REF), same rollback-tag-best-effort pattern (`docker tag ... 2>/dev/null || true`), same db-then-app compose sequencing with the same rationale comment, same 10-attempt/3s-sleep health-check retry shape. Every divergence is explicitly justified inline rather than silent: TIMESTAMP (sub-day granularity) is justified by the same-day web-dist-backup collision risk redeploy-test.sh doesn't have; the qa.env sourcing and frontend build/health-check steps are justified by QA having a second artefact (frontend bundle) that test's deploy doesn't; BACKEND_PORT overridability is justified by an explicitly-flagged open question (host port not confirmed at design time, cited to design doc §7 item 4) rather than silently guessing. No unexplained divergent style found.",
+      "2_supervision": "N/A -- no OTP supervision tree touched by this change. deploy/redeploy-qa.sh, cd.yml, and the ci.yml addition are CI/CD infrastructure only; Letflow.InstanceSupervisor and the gen_statem/Engine code are untouched.",
+      "3_failure_paths": "PASS -- every real failure path fails loudly. redeploy-qa.sh: `set -euo pipefail` makes any unguarded command failure fatal; the two `|| true` exceptions (docker tag rollback, python3 health-parse-or-empty) are both deliberate best-effort/retry-loop steps, not silent swallowing of a real failure -- the retry loop itself still `exit 1`s after 10 failed attempts, and qa.env's required vars use `: \"${VAR:?...}\"` guards that abort immediately if unset. cd.yml: the `actions/download-artifact@v4` step has no `continue-on-error`, so an artifact-download failure (missing/expired path-filter-outputs artifact) fails the job loudly rather than silently skipping to no-deploy -- confirmed no continue-on-error or `|| true` anywhere in cd.yml. The subsequent gate step only decides deploy-vs-skip based on the successfully-downloaded backend/frontend flags, which is the intended conditional (not a failure path).",
+      "4_scope_creep": "PASS -- the ci.yml addition (git diff main...HEAD -- .github/workflows/ci.yml) is exactly the two additive steps (\"Write path-filter outputs for cd.yml\", \"Upload path-filter outputs\") CODE-DESIGN-VALIDATOR's step-01b-regate ruling scoped as LEGITIMATE_MINIMAL_SCOPE: purely a downstream consumer of the existing `filter`/`fallback` steps' outputs, does not modify the existing diff/regex logic at all, adds no new job, no new trigger, no new permissions block. Nothing beyond what was designed/ruled.",
+      "anti_patterns_check": "docs/anti-patterns.md reviewed in full -- no entry applies to this change (existing entries are about mix toolchain assumptions, status-file volume handling, and clock/write ordering; none concern shell/CI-CD conventions). Nothing new to add.",
+      "decision_records_check": "docs/migration/decisions/ checked for CI/CD-relevant records: 0018-branch-protection-posture.md (ci.yml's changes job name is a required-status-check context; this change does not rename that job, confirmed) and 0033-pdf-qr-rendering-dependencies.md (unrelated). No decision record concerns a QA CD workflow or conflicts with this design. The design's §0 citation of letflow-queue's real cd.yml as reuse-precedent was checked against the actual implementation in cd.yml (workflow_run trigger, appleboy/ssh-action, restricted-SSH-key pattern) -- matches what was cited, nothing substituted."
+    },
+    "non_blocking_notes": [
+      "redeploy-qa.sh's BACKEND_PORT default (3113, matching redeploy-test.sh) and the exact qa.env file path/name remain open questions the design doc itself already flagged (§7 item 4) as needing host-access confirmation -- not a review blocker, just carried forward as a known follow-up before this script's first real QA run."
+    ]
+  },
   "rework_count": 0,
   "max_rework": 3
 }

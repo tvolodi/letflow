@@ -8,8 +8,8 @@
   "file": "handoffs/WF03-ISS0703-20260917/step-final-git-merge.json",
   "created_at": "2026-09-17T09:56:33Z",
   "started_at": "2026-09-17T09:56:33Z",
-  "completed_at": null,
-  "status": "IN_PROGRESS",
+  "completed_at": "2026-09-17T13:25:00Z",
+  "status": "COMPLETED",
   "priority": "HIGH",
   "context": {
     "stage": null,
@@ -33,18 +33,38 @@
   },
   "result": {
     "status": "PASS",
-    "summary": "",
-    "artifacts_out": [],
-    "issues": [],
+    "summary": "Rebased feature/WF03-ISS0703-20260917 onto origin/main (38 commits replayed, clean, no conflicts). Post-rebase verification: mix format --check-formatted PASS, mix compile --warnings-as-errors PASS. Ran mix test TWICE on the post-rebase tip (full suite, ~85 min each): run 1 (before I noticed and corrected a self-inflicted DB-pollution risk from an earlier accidental concurrent-mix-test mishap) reported 4334/4335 passed with Letflow.TenantProvisioning.ColumnPromotionTest AC1 failing on a stray tenant row; ran MIX_ENV=test mix ecto.reset to rule out contamination and reran clean: run 2 again reported 4334/4335 passed, this time with a DIFFERENT single failure, Letflow.Engine.Lua.ExecutorTest REQ-158 (a 5000ms wallclock_timeout). Neither failing test/module appears in this branch's diff (git diff --name-only origin/main...HEAD touches only lib/letflow/oidc/token_verifier/oidcc.ex, test/letflow/integration/keycloak_auth_pipeline_test.exs, and docs/handoffs) -- Route 1 attribution per core-directives.md's structural-attribution rule, consistent with this suite's documented dominant failure class of host-load-driven intermittent timing flakes. Neither run reproduced the specific A9 requirement_status_invariants_test.exs failure the dispatch flagged as a contingency. Pushed with --force-with-lease (rebase rewrote commits, first plain push was rejected non-fast-forward as expected). Opened PR #1494 with full Validation section including the attribution. gh pr checks showed all three checks PASS cleanly (Detect changed paths, Backend gate mix letflow.check 10m28s, Frontend gate npm run check) -- NO A9 failure occurred this run, so the anticipated --admin override contingency did NOT apply and was not used. Merged via plain `gh pr merge --squash --delete-branch` (no --admin needed). Local cleanup completed by the same gh command (checked out main, deleted local+remote branch). Verified: git branch --show-current = main, git log -1 shows squash-merge commit 6b47be61, git status clean. This result was written and committed via a small separate follow-up branch/PR (chore/WF03-ISS0703-20260917-handoff-finalize) because the result block was not filled in before step 6's push on the original branch, which was already squash-merged and deleted by the time this was noticed -- per GIT_MERGE.md's reaffirmed no-direct-push-to-main rule (docs-only is not an exception), this write-back could not go directly to main.",
+    "artifacts_out": [
+      "PR #1494: https://github.com/tvolodi/letflow/pull/1494 (merged)",
+      "main @ 6b47be61a4cf9a41e72643e6a3f6405d3f29372b"
+    ],
+    "issues": [
+      {
+        "severity": "MINOR",
+        "description": "Process error this run (not a code/product defect): the step-final-git-merge.json result block should have been filled in and committed on feature/WF03-ISS0703-20260917 BEFORE step 6's push, so it would ride along in the squash-merge like the rest of the run's artifacts. It was only set to IN_PROGRESS before push. By the time this was noticed, the branch was already merged and deleted, requiring a separate tiny follow-up branch/PR (chore/WF03-ISS0703-20260917-handoff-finalize) just to write the final result -- extra CI wait/PR overhead for a docs-only change. Future ELIXIR-DEV git-merge runs should fill in result fully and commit it as part of the SAME branch, before step 6, not after merge."
+      },
+      {
+        "severity": "MINOR",
+        "description": "Local mix test full-suite runs are intermittently flaky under this host's load: two consecutive clean full-suite runs on the identical post-rebase commit produced 4334/4335 both times but with two DIFFERENT single tests failing each time (Letflow.TenantProvisioning.ColumnPromotionTest AC1, then Letflow.Engine.Lua.ExecutorTest REQ-158/wallclock_timeout) -- neither is the A9 requirement_status_invariants_test.exs failure the dispatch anticipated as the known contingency. CI itself ran clean (no failures at all), so this did not block the merge, but it's worth flagging that local full-suite runs on this host are not currently a reliable oracle for exact failure identity run-to-run, likely due to host resource contention (this session itself briefly ran 3 concurrent mix test processes by mistake early in this run, which was corrected before the runs recorded here)."
+      },
+      {
+        "severity": "MAJOR",
+        "description": "Per the dispatch's explicit instruction: the A9 requirement_status_invariants_test.exs contingency did NOT recur this run -- CI's backend gate passed cleanly with no --admin override needed, breaking what would have been a third consecutive occurrence. No queue-registration action is needed from this run's own evidence. (Flagging per the dispatch's request to report the outcome either way; ORCH may stand down the anticipated queue-registration follow-up for this specific run, though the two PRIOR occurrences on ISS-0704/ISS-0705 are unaffected by this and still stand as their own history.)"
+      }
+    ],
     "git_evidence": {
-      "branch_name": null,
-      "commit_sha_list": [],
-      "remote_branch": null,
-      "push_status": "skipped",
-      "pr_url": null,
-      "pr_create_error": null
+      "branch_name": "feature/WF03-ISS0703-20260917",
+      "commit_sha_list": ["6b47be61a4cf9a41e72643e6a3f6405d3f29372b"],
+      "remote_branch": "origin/feature/WF03-ISS0703-20260917 (deleted post-merge)",
+      "push_status": "ok",
+      "pr_url": "https://github.com/tvolodi/letflow/pull/1494",
+      "pr_create_error": null,
+      "ci_checks": "Detect changed paths: pass (9s); Frontend gate (npm run check): pass (1m12s); Backend gate (mix letflow.check): pass (10m28s) -- all clean, no A9 or any other failure, no --admin override used",
+      "merge_method": "gh pr merge --squash --delete-branch (plain, no --admin)",
+      "merge_commit": "6b47be61a4cf9a41e72643e6a3f6405d3f29372b",
+      "merged_at": "2026-09-17T13:21:29Z"
     },
-    "next_action": ""
+    "next_action": "ORCH marks run WF03-ISS0703-20260917 COMPLETED and releases the owned_modules lock on lib/letflow/oidc/token_verifier/oidcc.ex. No A9 queue-registration follow-up needed from this run (see issues[2]); the two prior ISS-0704/ISS-0705 occurrences remain ORCH's own history to act on if not already done."
   },
   "rework_count": 0,
   "max_rework": 3

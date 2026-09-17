@@ -60,9 +60,6 @@ affected_files:
   - test/letflow/routers/identity_test.exs
 related_requirements:
   - ISS-0704
-queue_ref: null  # not yet registered -- per docs/agents/protocols/ISSUE_QUEUE.md,
-                  # only ORCH calls register_task; ORCH will allocate this and
-                  # backfill queue_ref/id after this run.
-github_ref: null  # same reason -- ORCH's register_task call best-effort-creates
-                   # the mirrored GitHub issue; not created by ISSUE-FIXER directly.
+queue_ref: Q-705
+github_ref: GH-1480
 status: open

@@ -472,3 +472,81 @@ defmodule Letflow.Routers.TenantsTest do
     end
   end
 end
+
+defmodule Letflow.Routers.TenantsIss0705SandboxModeRegressionTest do
+  @moduledoc """
+  ISS-0705 regression test. See `test/specs/ISS-0705.md` for the full design
+  rationale, including a documented empirical finding from designing this test
+  that changed its shape: a black-box probe comparing the true pre-ISS-0705
+  commit against the fixed tip (both wrapped in `Letflow.DataCase`'s own
+  `{:shared, self()}`-tracked setup) turned out to behave IDENTICALLY in both
+  cases, because `DBConnection.Ownership` has its own built-in safety net —
+  "a connection's mode reverts to :manual if its owner terminates" (the exact
+  wording `DBConnection.OwnershipError` itself reports) — that silently
+  papers over a leaked `:auto` flip once the owning (`{:shared, self()}`)
+  process exits, for ANY test using `Letflow.DataCase`'s standard setup.
+  That finding is *why* this test targets the actual, still-real hazard
+  underneath instead: the fix's own on_exit/1 callback — registered from
+  *inside* `SandboxAutoMode.provision!/2`'s wrapped function, so it runs in a
+  separate `ExUnit.OnExitHandler` process, after `provision!/2`'s own
+  synchronous restore (mode `:manual` + a fresh checkout for the now-finished
+  test process) has already run and is already stale — must re-enter `:auto`
+  mode ITSELF (`SandboxAutoMode.enter_auto_mode!/1`) before making its own
+  `Letflow.Repo` calls, or those calls raise `DBConnection.OwnershipError`.
+  This is not a theoretical trap: ELIXIR-DEV's own WF03-ISS0705-20260917 Step 3
+  attempt hit exactly this crash for real
+  (`handoffs/WF03-ISS0705-20260917/step-03-elixir-dev.json`), which is what
+  rework-1 (commit `5a8da536`) added the `enter_auto_mode!/1` line to fix.
+
+  This test reproduces that exact shape directly — `SandboxAutoMode.provision!/2`
+  wrapping a real `Letflow.Repo` write, with an `on_exit/1` registered from
+  inside the wrapped function that itself needs `Letflow.Repo` — rather than
+  depending on `Letflow.Routers.TenantsTest`'s own test or any cross-test
+  ordering, so it is self-contained and needs no special `mix test` invocation.
+  """
+
+  use ExUnit.Case, async: false
+
+  import Ecto.Query, only: [from: 2]
+
+  alias Letflow.Identity.Tenant
+  alias Letflow.Repo
+  alias Letflow.Test.SandboxAutoMode
+
+  test "ISS-0705 regression: an on_exit/1 callback registered inside " <>
+         "SandboxAutoMode.provision!/2 can still reach Letflow.Repo for its own cleanup" do
+    tenant_id =
+      SandboxAutoMode.provision!(Letflow.Repo, fn ->
+        tenant =
+          Tenant.create_changeset(
+            %Tenant{},
+            %{
+              slug: "iss0705-regress-#{Ecto.UUID.generate()}",
+              display_name: "ISS-0705 regression probe"
+            },
+            :disabled
+          )
+          |> Repo.insert!()
+
+        on_exit(fn ->
+          # This is the ISS-0705 fix itself: without re-entering :auto mode
+          # here, this callback's own Repo.delete_all/1 below raises
+          # DBConnection.OwnershipError -- provision!/2's own `after`-block
+          # restore (mode :manual + a fresh checkout) already ran, synchronously,
+          # for the ORIGINAL test process, the instant the wrapped fn above
+          # returned -- well before this on_exit/1 callback runs, in a
+          # SEPARATE OnExitHandler process, after that original process has
+          # already exited. Comment this line out to see the regression: it
+          # reproduces the exact DBConnection.OwnershipError ELIXIR-DEV's own
+          # Step 3 attempt hit (step-03-elixir-dev.json).
+          SandboxAutoMode.enter_auto_mode!(Letflow.Repo)
+
+          Repo.delete_all(from(t in Tenant, where: t.id == ^tenant.id))
+        end)
+
+        tenant.id
+      end)
+
+    assert is_binary(tenant_id)
+  end
+end

@@ -60,147 +60,163 @@ requirements):
   `redeploy-test.sh`, per `ai-dala-infra`'s T-0111 pattern), and may
   also be invoked manually the same way `redeploy-test.sh` is.
 
-Constants the script establishes up front (named, not hardcoded
-inline, mirroring `redeploy-test.sh`'s `APP_DIR`/`COMPOSE`/`DATE`
-pattern):
-- `APP_DIR` = `/opt/apps/letflow-qa`
-- `WEB_DIST_DIR` = `$APP_DIR/web-dist` (the live, nginx-served
-  frontend bundle directory)
-- `COMPOSE` = the `docker compose --project-directory $APP_DIR -f
-  $APP_DIR/deploy/docker-compose.qa.yml` invocation, analogous to
-  `redeploy-test.sh`'s `$COMPOSE` variable. **Open question**: whether
-  `deploy/docker-compose.qa.yml` already exists is not resolvable from
-  this checkout — see §7.
-- `DATE`/timestamp variable for backup/rollback-tag naming, mirroring
-  `redeploy-test.sh`'s `$(date +%Y%m%d)` — REQ-367's ordered-outline
-  below uses a finer-grained timestamp for the web-dist backup (see
-  step 5) since a same-day redeploy must not clobber an earlier
-  same-day backup.
+Constants the script establishes up front as named variables (not
+hardcoded inline at point of use), mirroring `redeploy-test.sh`'s
+`APP_DIR`/`COMPOSE`/`DATE` pattern:
+- An app-directory variable holding the absolute path
+  `/opt/apps/letflow-qa`.
+- A web-dist-directory variable holding that app directory's
+  `web-dist` subpath — the live, nginx-served frontend bundle
+  directory.
+- A compose-invocation variable analogous to `redeploy-test.sh`'s own
+  `$COMPOSE` variable: it should express the Compose call scoped to
+  the app directory as the project directory and to a QA-specific
+  compose file living under that directory's `deploy/` subpath.
+  **Open question**: whether that QA-specific compose file already
+  exists is not resolvable from this checkout — see §7.
+- A timestamp variable for backup/rollback-tag naming, mirroring
+  `redeploy-test.sh`'s own day-granularity date variable — REQ-367's
+  ordered outline below uses a finer-grained (sub-day) timestamp for
+  the web-dist backup specifically (see step 5) since a same-day
+  redeploy must not clobber an earlier same-day backup.
 
-Ordered procedure (`set -euo pipefail` throughout, matching
-`redeploy-test.sh`'s convention):
+Ordered procedure (strict-mode shell options throughout, matching
+`redeploy-test.sh`'s convention of failing fast on any error, unset
+variable, or pipeline failure):
 
-1. **Announce start.** Echo a UTC timestamp banner, same style as
-   `redeploy-test.sh`'s `echo "=== letflow test redeploy: ... ==="`.
+1. **Announce start.** Print a UTC timestamp banner, same style as
+   `redeploy-test.sh`'s own opening banner line.
 
-2. **Git pull.** `cd "$APP_DIR"`, `git pull`, capture
-   `CURRENT_REF=$(git rev-parse --short HEAD)` and echo it — identical
-   shape to `redeploy-test.sh` steps 1-2 (no credential injection
+2. **Git pull.** Move into the app directory, pull the latest commit
+   on the checked-out branch, then capture the resulting short commit
+   ref into a variable and print it — identical shape to
+   `redeploy-test.sh`'s first two steps (no credential injection
    needed; same public-repo assumption).
 
 3. **Backend: rebuild + recreate.**
-   - (Optional best-effort rollback tag, mirroring
-     `redeploy-test.sh` step 2 — `docker tag` the current
-     `letflow-qa:latest` image to `letflow-qa:rollback-$DATE`,
-     `2>/dev/null || true` so a first-run with no prior image doesn't
-     fail the script.)
-   - Build the backend image: `docker build -f deploy/Dockerfile -t
-     letflow-qa:latest .` (same `-f deploy/Dockerfile` as
-     `redeploy-test.sh`; the Dockerfile is shared/reused, not
-     duplicated — no new Dockerfile is in scope for this requirement).
-   - Ensure the db service is up first (`$COMPOSE up -d db`), same
-     ordering rationale as `redeploy-test.sh` step 4 (keep the db
-     container from being torn down/recreated on every redeploy; app's
-     own `depends_on` already enforces ordering, this just avoids an
-     unnecessary db restart).
-   - Recreate the app container: `$COMPOSE up -d --force-recreate
-     app`. Migrations run automatically on boot via the supervision
-     tree's `Ecto.Migrator`, same as `redeploy-test.sh` step 5 — no
-     separate migration step here.
+   - Optional best-effort rollback tag, mirroring `redeploy-test.sh`'s
+     own second step: re-tag the currently-running backend image under
+     a rollback-labelled tag that incorporates the timestamp variable,
+     tolerating (not failing the script on) the case where no prior
+     image exists yet — a first-ever run on a fresh host.
+   - Build the backend image using the shared, existing deploy
+     Dockerfile (the same one `redeploy-test.sh` already builds from —
+     no new Dockerfile is in scope for this requirement), tagging the
+     result as the QA backend's `latest` image.
+   - Bring the database service up first, on its own, before touching
+     the app service — same ordering rationale as `redeploy-test.sh`'s
+     corresponding step: avoid tearing down/recreating the db
+     container on every redeploy (the app service's own dependency
+     ordering already enforces db-before-app; this is purely about not
+     disturbing an already-healthy db container).
+   - Force-recreate only the app service against the freshly built
+     image. Migrations run automatically on boot via the supervision
+     tree's `Ecto.Migrator`, same as `redeploy-test.sh`'s corresponding
+     step — no separate migration invocation in this script.
 
 4. **Frontend: throwaway-container rebuild.**
-   - Run a throwaway `node:22` container (no Node installed on the
-     host — matches the requirement's stated minimal-footprint
-     precedent and `ci.yml`'s own frontend job pinning Node 22) that:
-     mounts/copies `web/` from the freshly-pulled checkout, runs the
-     equivalent of `npm ci` then the frontend production build (`npm
-     run build`, matching `web/package.json`'s existing build script —
-     the exact script name should be confirmed against
-     `web/package.json` by ELIXIR-DEV; not re-derived here since this
-     doc must not duplicate that file's contents) with two build-time
-     environment variables passed in as real values, not placeholders:
-     `VITE_OIDC_AUTHORITY` and `VITE_OIDC_CLIENT_ID`.
-   - The container writes its build output to a fresh directory
-     **outside** the live `$WEB_DIST_DIR` (e.g. a `$APP_DIR/web-dist.new`
-     staging path), never building directly into the path nginx is
-     currently serving from — this is what step 5's atomic swap
-     depends on.
-   - **Open question**: the exact source of the real
-     `VITE_OIDC_AUTHORITY`/`VITE_OIDC_CLIENT_ID` values (an `.env`-style
-     file already on the QA host, from the manual T-0125/T-0128/T-0129/
-     T-0131 precedent referenced in the requirement text) is not
-     visible from this checkout — see §7. The script should read them
-     from a named host-local file (not hardcode them in the script
-     body, and not accept them as new GitHub Actions secrets unless
-     ELIXIR-DEV finds evidence the manual precedent used that route),
-     with the exact file path/name confirmed by ELIXIR-DEV against the
-     actual host state or the T-01xx task records if reachable.
+   - Run a throwaway container from the official Node 22 image (no
+     Node installed on the host itself — matches the requirement's
+     stated minimal-footprint precedent and `ci.yml`'s own frontend job
+     pinning Node 22). Inside that container: make the freshly-pulled
+     `web/` checkout available, install dependencies via a clean,
+     lockfile-exact install, then run the frontend's existing
+     production build script from `web/package.json` (the exact script
+     name should be confirmed against that file by ELIXIR-DEV at
+     implementation time; not re-derived here so this doc doesn't go
+     stale if that file changes). Pass two build-time environment
+     variables into that build step as real values, not placeholders:
+     the OIDC authority URL and the OIDC client ID the QA frontend
+     bundle must be built against.
+   - The container must write its build output to a fresh staging
+     directory location outside the live web-dist directory — never
+     building directly into the path nginx is currently serving from.
+     This separation is what step 5's atomic swap depends on.
+   - **Open question**: the exact source of the real OIDC authority/
+     client-ID values (most plausibly an environment file already
+     present on the QA host, per the manual QA-deploy precedent the
+     requirement text cites) is not visible from this checkout — see
+     §7. The script should read those values from a named, existing
+     host-local file rather than hardcoding them into the script body,
+     and should not introduce new GitHub Actions secrets for them
+     unless ELIXIR-DEV finds evidence the manual precedent actually
+     used that route; the exact file path/name is for ELIXIR-DEV to
+     confirm against actual host state (or the task records the
+     requirement text cites, if reachable).
 
 5. **Frontend: atomic swap with backup.**
-   - Back up the current live bundle before replacing it: rename/move
-     `$WEB_DIST_DIR` to a timestamped backup path (e.g.
-     `$APP_DIR/web-dist.backup.<timestamp>`), matching "backing up the
-     previous build first" from the requirement text and the existing
-     manual-deploy pattern it cites.
-   - Atomically move the new staging build (`web-dist.new`, from step
-     4) into place as `$WEB_DIST_DIR` — a single `mv` (rename) on the
-     same filesystem, so nginx never observes a partially-populated
-     directory. No nginx reload/restart — nginx serves the directory
-     path directly and a rename is transparent to an already-open
-     directory handle / new requests resolve the new inode; matches
-     the requirement's explicit "do not restart nginx" instruction.
+   - Back up the current live bundle before replacing it: move the
+     live web-dist directory aside to a backup path that incorporates
+     the timestamp variable, matching "backing up the previous build
+     first" from the requirement text and the manual-deploy pattern it
+     cites.
+   - Move the new staging build (produced in step 4) into place as the
+     live web-dist directory, as a single rename on the same
+     filesystem so it completes atomically and nginx never observes a
+     partially-populated directory. No nginx reload or restart —
+     nginx serves that directory path directly, and a rename is
+     transparent to new requests, which resolve against the new
+     directory once the rename completes; this matches the
+     requirement's explicit instruction not to restart nginx.
    - No retention/pruning policy for old backups is specified by the
      requirement — flagged in §7 as an open question (unbounded growth
-     risk) rather than silently deciding a retention count.
+     risk) rather than this design silently deciding a retention
+     count.
 
 6. **Health check: backend.** Same retry-loop shape as
-   `redeploy-test.sh` step 6: poll `http://127.0.0.1:<backend-port>/health`
-   (port matches the app's existing published port — `redeploy-test.sh`
-   uses `3113`; the QA host's actual published port is not confirmed
-   from this checkout, see §7), parse `status` from the JSON body, retry
-   for up to 30s (10 attempts × 3s sleep), `exit 1` on exhaustion.
+   `redeploy-test.sh`'s own health-check step: repeatedly poll the
+   backend's local health endpoint on its published port (the port
+   number itself matches whatever the app's existing published port
+   is — `redeploy-test.sh` uses one specific port for its own
+   environment; the QA host's actual published port is not confirmed
+   from this checkout, see §7), inspecting a status field in the JSON
+   response body, retrying across a bounded total window (matching
+   `redeploy-test.sh`'s own retry count and sleep interval), and
+   failing the script loudly once that window is exhausted without a
+   healthy response.
 
-7. **Health check: frontend.** New check, not present in
+7. **Health check: frontend.** A new check, not present in
    `redeploy-test.sh` (that script has no separate frontend artefact).
-   `curl -sf https://qa.bizdala.com/` against the public HTTPS URL
-   (through nginx + TLS, not a local port — this is checking the
-   *served* shell, not the container, since there is no frontend
-   container/process to health-check directly). Non-2xx/curl failure
-   → `exit 1` with a clear error, matching the backend check's
-   fail-loud convention. A short bounded retry (mirroring step 6's
-   shape) is reasonable but not mandated by the requirement; ELIXIR-DEV
-   may choose a single-attempt check with a short curl timeout instead
-   if a full retry loop is judged unnecessary for a locally-served
-   static file — either is acceptable, not an open question requiring
-   sign-off.
+   Issue a single HTTPS request to the public QA site's root URL
+   (through nginx and TLS, not a local port — this checks the *served*
+   shell, not any container, since there is no frontend
+   container/process to health-check directly), treating a non-2xx
+   response or a request failure as a script failure, matching the
+   backend check's fail-loud convention. A short bounded retry
+   (mirroring step 6's shape) is reasonable but not mandated by the
+   requirement; ELIXIR-DEV may choose a single-attempt check with a
+   short request timeout instead, if a full retry loop is judged
+   unnecessary for a locally-served static file — either is
+   acceptable, not an open question requiring sign-off.
 
-8. **Done banner.** Echo the deployed ref (`$CURRENT_REF`), same as
-   `redeploy-test.sh`'s closing line.
+8. **Done banner.** Print the deployed ref captured in step 2, same as
+   `redeploy-test.sh`'s own closing line.
 
 ## 2. `.github/workflows/cd.yml` — structural outline
 
 ### Triggers
 
-- `on: workflow_run: workflows: ["CI"], branches: [main], types:
-  [completed]` — matches letflow-queue's exact mechanism, with
-  `branches: [main]` (this repo's default branch, confirmed by
-  `ci.yml`'s own `on.push.branches: [main]`) in place of letflow-queue's
-  `[master]`.
-- No `push`/`pull_request` triggers on this file — deploy only ever
-  follows a completed CI run on `main`, never runs directly on a PR.
+- The workflow fires on completion of the CI workflow (named `"CI"`),
+  restricted to the `main` branch — matching letflow-queue's exact
+  trigger mechanism, but with `main` in place of letflow-queue's
+  `master`, since `main` is this repo's default branch (confirmed by
+  `ci.yml`'s own push trigger targeting `main`).
+- No direct push or pull-request trigger on this file — deploy only
+  ever follows a completed CI run on `main`, never runs directly
+  against a PR.
 
 ### Jobs
 
-One job, `deploy`, same shape as letflow-queue's `cd.yml`:
+One job, named `deploy`, same shape as letflow-queue's `cd.yml`, running
+on a standard GitHub-hosted Ubuntu runner.
 
-- `runs-on: ubuntu-latest`
-- Job-level `if`, two conditions ANDed (both required; see below for
-  how the second is obtained):
-  1. `github.event.workflow_run.conclusion == 'success'` — identical
-     to letflow-queue's own gate (don't deploy over a failed/cancelled
-     CI run).
-  2. The reused `changes` job's gate signal (see next subsection) —
-     `backend == 'true' OR frontend == 'true'`.
+Job-level condition, two requirements both of which must hold (see the
+next subsection for how the second is obtained):
+  1. The triggering CI workflow run's conclusion was a success —
+     identical to letflow-queue's own gate (don't deploy over a
+     failed/cancelled CI run).
+  2. The reused `changes` job's gate signal indicates at least one of
+     the backend or frontend paths changed.
 
 ### How the gate reuses `ci.yml`'s `changes` job without duplicating diff logic
 
@@ -214,14 +230,14 @@ standard documented pattern for passing data across that boundary
 without a second diff computation:
 
 1. **`ci.yml`'s `changes` job gains one small addition** (a step, not a
-   new job, not a change to its diff logic): after computing
-   `backend`/`frontend`, it writes those two values to a small file
-   (e.g. `changes.json`, `backend=<bool>` / `frontend=<bool>`) and
-   uploads it as a build artifact (`actions/upload-artifact@v4`) named
-   e.g. `path-filter-outputs`. This does not touch `.github/workflows/ci.yml`'s
-   existing `filter`/`fallback` steps or their `git diff`/regex logic
-   at all — it is a pure downstream consumer of the outputs those
-   steps already produce.
+   new job, not a change to its diff logic): after computing its
+   backend/frontend booleans, that job writes those two values to a
+   small file and uploads that file as a build artifact, using the
+   standard artifact-upload action, under a name identifying it as the
+   path-filter outputs. This does not touch `.github/workflows/ci.yml`'s
+   existing filter/fallback steps or their diff/regex logic at all — it
+   is a pure downstream consumer of the outputs those steps already
+   produce.
    - **Note on scope**: `.github/workflows/ci.yml` is not listed in this
      requirement's `owned_modules` (only `deploy/redeploy-qa.sh` and
      `.github/workflows/cd.yml` are). This one-step addition to
@@ -235,43 +251,44 @@ without a second diff computation:
      §7 as something CODE-DESIGN-VALIDATOR and ELIXIR-DEV should
      confirm is acceptable scope, rather than silently touching a file
      outside `owned_modules` without comment.
-2. **`cd.yml`'s `deploy` job downloads that artifact** using
-   `actions/download-artifact@v4` with `run-id:
-   ${{ github.event.workflow_run.id }}` (cross-workflow download by run
-   ID, requiring `github-token: ${{ secrets.GITHUB_TOKEN }}` on that
-   step per that action's documented cross-run usage) as its first
-   step, before any SSH/deploy step.
+2. **`cd.yml`'s `deploy` job downloads that artifact** using the
+   standard artifact-download action, addressed to the triggering
+   workflow run's ID for a cross-workflow download, supplying the
+   built-in repo token that action's documented cross-run usage
+   requires, as its first step, before any SSH/deploy step.
 3. A subsequent step reads the two values out of the downloaded file
-   and exposes them as that step's own `$GITHUB_OUTPUT` (e.g.
-   `deploy=true`/`false`, OR'd from `backend`/`frontend`).
-4. All later steps in the job (the SSH deploy step) are gated with
-   `if: steps.<read-step-id>.outputs.deploy == 'true'` — a **step-level**
-   condition, matching `ci.yml`'s own documented preference (its header
-   comment: "step-level rather than job-level path-filter `if:`") so
-   the job itself still runs and reports a (skipped-steps) success
-   rather than the whole job vanishing — same rationale as `ci.yml`'s
-   own `backend`/`frontend` jobs.
-   - The job-level `if` (item 2 above, `conclusion == 'success'`) stays
+   and exposes a single combined boolean (true if either the backend
+   or frontend value is true) as that step's own output.
+4. All later steps in the job (the SSH deploy step) are gated by a
+   **step-level** condition on that combined output being true —
+   matching `ci.yml`'s own documented preference (its header comment
+   favors step-level over job-level path-filter conditions) so the job
+   itself still runs and reports a (skipped-steps) success rather than
+   the whole job vanishing — same rationale as `ci.yml`'s own
+   backend/frontend jobs.
+   - The job-level condition (item 2 above, CI-run-succeeded) stays
      job-level since that condition is about CI having run at all, not
-     about what changed — same split `ci.yml` itself already draws
-     between its job-level `!cancelled()` and step-level
-     `needs.changes.outputs.X != 'false'` conditions.
+     about what changed — the same split `ci.yml` itself already draws
+     between its job-level "not cancelled" condition and its
+     step-level "changes output is not false" conditions.
 
 ### Steps (in order)
 
-1. Download the `path-filter-outputs` artifact from the triggering
-   `workflow_run` (as above).
-2. Read/parse it, set the combined `deploy` step output.
-3. SSH deploy step (`appleboy/ssh-action@v1`, same action as
-   letflow-queue), gated by the step-level `if` from above, with:
-   - `host: ${{ secrets.QA_DEPLOY_HOST }}`
-   - `username: ${{ secrets.QA_DEPLOY_USER }}`
-   - `key: ${{ secrets.QA_DEPLOY_SSH_KEY }}`
-   - `script: bash /opt/apps/letflow-qa/deploy/redeploy-qa.sh`
-   - A comment, matching letflow-queue's own, noting the script value
-     is documentation-only since the restricted `command=` on the
-     deploy key's `authorized_keys` entry forces the real command
-     server-side.
+1. Download the path-filter-outputs artifact produced by the
+   triggering CI run (as described above).
+2. Read/parse that downloaded file and set the combined deploy-or-not
+   step output.
+3. Run the SSH deploy step, using the same third-party SSH-action
+   letflow-queue uses, gated by the step-level condition from above.
+   Its connection details are drawn from three repository secrets
+   (named below) supplying the target host, the connecting username,
+   and the private key; its remote command invokes
+   `redeploy-qa.sh` at its full path under the QA app directory. A
+   comment on this step should match letflow-queue's own, noting that
+   the remote-command value is documentation-only, since the
+   restricted `command=` entry on the deploy key's authorized-keys
+   line forces the real command to run server-side regardless of what
+   this step requests.
 
 ### Secret names (explicitly not required to exist yet)
 

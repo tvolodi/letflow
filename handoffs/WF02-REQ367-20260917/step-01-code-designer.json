@@ -8,8 +8,8 @@
   "file": "handoffs/WF02-REQ367-20260917/step-01-code-designer.json",
   "created_at": "2026-09-17T14:45:00Z",
   "started_at": "2026-09-17T14:45:00Z",
-  "completed_at": null,
-  "status": "PENDING",
+  "completed_at": "2026-09-17T14:46:17Z",
+  "status": "COMPLETED",
   "priority": "NORMAL",
   "context": {
     "stage": "S7",
@@ -42,7 +42,7 @@
   },
   "result": {
     "status": "PASS",
-    "summary": "Written by CODE-DESIGNER (agent aeb65416cb4bca36b). Process note: after 30+ minutes with no commits, ORCH sent a check-in message and, on continued silence, began writing its own fallback version of lib/letflow/design/req367-cd-qa-deploy.md directly. The dispatched agent was in fact still working the whole time (real read of ci.yml/redeploy-test.sh plus the sibling tvolodi/letflow-queue repo's actual production cd.yml/redeploy-test.sh, locally available at c:\\Users\\tvolo\\dev\\ai-dala\\letflow-queue) and wrote its own completed version to the same path shortly after replying to the check-in -- its write landed after ORCH's draft and is the version now on disk (ORCH's own draft was never committed; the agent's file overwrote it on the shared working tree before ORCH could commit). ORCH reviewed the agent's full 419-line output, found it thorough and higher quality than its own emergency draft (in particular its artifact-upload approach to crossing the workflow_run trigger boundary for reusing ci.yml's changes-job outputs, vs ORCH's own shared-script-extraction alternative -- both valid, the agent's is kept), and is keeping it as this step's real, attributed output rather than overriding it with ORCH's own draft. Covers: (1) cd.yml's workflow_run-off-ci.yml trigger, job/step-level gate conditions, and SSH-action step referencing new QA_DEPLOY_HOST/QA_DEPLOY_USER/QA_DEPLOY_SSH_KEY secret names (distinct from letflow-queue's HETZNER_* names); (2) redeploy-qa.sh's 8-step ordered procedure (announce, git pull, backend rebuild+recreate, frontend throwaway-node:22-container rebuild-to-staging-dir, atomic swap with timestamped backup, backend + frontend health checks, done banner); (3) the changes-job-reuse mechanism via a small artifact-upload addition to ci.yml's existing changes job (flagged as touching a file outside owned_modules, with reasoning for why that's necessary and a request for CODE-DESIGN-VALIDATOR to confirm the scope reading); (4) redeploy-test.sh's untouched status and the two scripts' explicit header-comment relationship; (5) an explicit in-scope/out-of-scope split with credentials excluded; (6) an acceptance-criteria mapping table; (7) six open questions (ci.yml scope confirmation, docker-compose.qa.yml existence, OIDC build-arg sourcing, backend health-check port, backup retention policy, frontend build script name) flagged rather than guessed.",
+    "summary": "REWORK ITERATION 1 complete. CODE-DESIGN-VALIDATOR's step-01b FAIL identified that lib/letflow/design/req367-cd-qa-deploy.md's Sec 1 (deploy/redeploy-qa.sh) and Sec 2 (cd.yml) contained literal, copy-pasteable bash command lines and YAML key:value fragments for the two NEW files, rather than staying in prose/structural description. Rewrote both sections in full: every step is now described in prose -- what it does, its exact target paths/values, its ordering -- with tool/command names mentioned only inline within sentences (e.g. 'builds the backend image using the shared, existing deploy Dockerfile', 'the workflow fires on completion of the CI workflow (named \"CI\"), restricted to the main branch') and no standalone real command lines or fenced/indented real YAML blocks for the two new files. Variables (APP_DIR, COMPOSE, DATE, CURRENT_REF, etc.) are now described as named variables the script establishes, not shown as literal shell syntax. The three new secret names (QA_DEPLOY_HOST/QA_DEPLOY_USER/QA_DEPLOY_SSH_KEY) remain listed as plain identifier names (not key:value YAML) since naming them is required by the acceptance criteria and is not itself implementation syntax. Sec 0 (citations of the real letflow-queue cd.yml and this repo's ci.yml, both existing files, clearly marked precedent) and Sec 3-7 (AC mapping, error handling, cross-file deps, scope, open questions) were left unchanged -- they already passed. Verified by re-reading the full rewritten file: no standalone bash command lines or literal YAML key:value blocks remain in Sec 1/Sec 2.",
     "artifacts_out": ["lib/letflow/design/req367-cd-qa-deploy.md"],
     "issues": [
       {
@@ -58,7 +58,7 @@
       "pr_url": null,
       "pr_create_error": null
     },
-    "next_action": "Route to CODE-DESIGN-VALIDATOR (Step 1b)"
+    "next_action": "Route to CODE-DESIGN-VALIDATOR (Step 1b) for regate"
   },
   "rework_count": 1,
   "max_rework": 3

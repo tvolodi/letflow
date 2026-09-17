@@ -1,0 +1,41 @@
+{
+  "handoff_id": "wf02-req369-step03",
+  "run_id": "WF02-REQ369-20260917",
+  "workflow_id": "WF-02",
+  "step": "03",
+  "from_agent": "TEST-DESIGNER",
+  "to_agent": "TEST-DESIGN-VALIDATOR",
+  "file": "handoffs/WF02-REQ369-20260917/step-03-test-design.json",
+  "created_at": "2026-09-17T22:30:00Z",
+  "started_at": "2026-09-17T22:15:00Z",
+  "completed_at": "2026-09-17T22:45:00Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S7",
+    "requirement_ids": ["REQ-369"],
+    "artifacts_in": [
+      "handoffs/WF02-REQ369-20260917/step-02d-reviewer.json",
+      "lib/letflow/design/req369-platform-dashboard-page.md",
+      "web/src/pages/dashboard/PlatformDashboardPage.tsx",
+      "web/src/router.tsx",
+      "web/src/pages/OidcCallbackPage.tsx"
+    ]
+  },
+  "task": {
+    "description": "WF-02 Step 3 -- test design for REQ-369's frontend-only diff (PlatformDashboardPage.tsx, router.tsx addition, OidcCallbackPage.tsx role-conditional navigate) per docs/agents/workflows/WF-02_requirement_implementation.md Step 3 and docs/guides/test_developer_guide.md. Scope test: web/src/pages/dashboard/PlatformDashboardPage.tsx is a new real React component (not config) -- real executable surface exists, proceeded with full test design."
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "Wrote test/specs/REQ-369.md and three new test files covering AC1-AC5 (AC6/AC7 are UAT-RUNNER's job later in this workflow, not duplicated here; AC8 is a close-out statement with no code-level test). Followed this codebase's established vitest/@testing-library conventions, matching HealthDashboardPage.test.tsx's mocked-Navigate idiom (AC3) and router.iss-0289.test.tsx's router.routes/matchRoutes idiom (AC4) exactly, per the design doc's own instruction to reuse established assertion idioms rather than invent new ones.\n\n1. web/src/pages/dashboard/__tests__/PlatformDashboardPage.test.tsx (4 tests) -- AC1 (fixed heading text + absence-scan for tenant-branded copy across the full rendered output, TC-REQ369-01; static source-text scan asserting the file never contains the literal string `useTenantContext`, TC-REQ369-02), AC2 (tenant-count tile renders the mocked useQuery/tenantsApi.list() `total` -- fixture deliberately uses an empty `items: []` array alongside `total: 37` so an implementation that wrongly derives the count from `items.length` instead of `total` would render `0` and fail, TC-REQ369-03), AC3 (PROCESS_OPERATOR session redirected to /instances, platform content absent, TC-REQ369-04).\n\n2. web/src/__tests__/router.req369.test.tsx (1 test) -- AC4: asserts against the REAL built `router` object that the pre-existing `index: true` and `path: 'dashboard'` children still resolve to TenantDashboardPage's actual component reference, and the new `path: 'platform-dashboard'` child resolves to PlatformDashboardPage (TC-REQ369-07). The mechanical 'diff shows only an addition' check was already done directly against git diff by REVIEWER (step-02d-reviewer.json's router_tsx_addition_only check); this test is the complementary route-table-correctness check.\n\n3. web/src/pages/__tests__/OidcCallbackPage.test.tsx (2 tests, NEW FILE -- confirmed via Glob that no prior test existed for this page, resolving the design doc's Open Q3) -- AC5: two tests, one per navigate() branch. TC-REQ369-05 builds a real JWT-shaped token (decoded by the REAL, unmocked decodeTokenPayload) with roles including PLATFORM_ADMIN and asserts navigate('/platform-dashboard', {replace:true}); TC-REQ369-06 uses PROCESS_OPERATOR and asserts navigate('/', {replace:true}) unchanged. Only the async OIDC/auth/API side-effect boundaries are mocked (getOidcManager, useAuth, setToken, resolveRealmFromUrl, tenantsApi.getBySlug, useNavigate) -- the actual role-membership branching logic under test runs unmocked. Discovered and documented in test/specs/REQ-369.md: OidcCallbackPage.tsx's module-scope `_callbackStarted` re-entrancy guard (added for React StrictMode) silently no-ops a second test's render within the same test file unless the module is freshly reloaded -- confirmed empirically (an earlier draft without vi.resetModules() hung on the second test). Fixed by calling vi.resetModules() and dynamically re-importing the component in each test; vi.mock(...) registrations survive resetModules() and still apply.\n\nAll three new files verified as a real, falsifiable claim against a stated plausible wrong implementation per test case (reasoned in test/specs/REQ-369.md's tables), since this is a WF-02 new-code requirement with no pre-fix version of PlatformDashboardPage.tsx to run these tests against (matches REQ-362's own precedent for a new-code requirement's spec -- the WF-03 mutant-testing obligation for the 'code did not exist' case is scoped to WF-03 regression runs, not WF-02).\n\nReal output (quoted in test/specs/REQ-369.md in full):\n$ cd web && npx vitest run src/pages/dashboard/__tests__/PlatformDashboardPage.test.tsx src/pages/__tests__/OidcCallbackPage.test.tsx src/__tests__/router.req369.test.tsx\n  Test Files  3 passed (3) / Tests  7 passed (7)\n$ cd web && npm test  (full suite)\n  Test Files  87 passed (87) / Tests  599 passed (599) -- zero regressions, 7 new tests over a 592-test baseline\n$ cd web && npx tsc --noEmit -p .  -- clean, exit 0\n$ cd web && npx eslint <the 3 new files>  -- clean, exit 0\n\nThis is a frontend-only (web/) change -- no lib/letflow/ or priv/repo/migrations/ files touched, so `mix letflow.check.test` (the Elixir warnings-as-errors/dead-default-argument check) is not applicable; the equivalent real-verification discipline for this stack is npm test + tsc --noEmit + eslint, all run and quoted above, matching REQ-362's precedent for a prior web/-only TEST-DESIGNER run.",
+    "artifacts_out": [
+      "test/specs/REQ-369.md",
+      "web/src/pages/dashboard/__tests__/PlatformDashboardPage.test.tsx",
+      "web/src/__tests__/router.req369.test.tsx",
+      "web/src/pages/__tests__/OidcCallbackPage.test.tsx"
+    ],
+    "next_action": "Route to TEST-DESIGN-VALIDATOR (Step 3b)"
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

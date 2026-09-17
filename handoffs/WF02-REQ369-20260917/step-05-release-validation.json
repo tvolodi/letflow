@@ -1,0 +1,56 @@
+{
+  "handoff_id": "wf02-req369-step05",
+  "run_id": "WF02-REQ369-20260917",
+  "workflow_id": "WF-02",
+  "step": "05",
+  "from_agent": "RELEASE-VALIDATOR",
+  "to_agent": "UAT-RUNNER",
+  "file": "handoffs/WF02-REQ369-20260917/step-05-release-validation.json",
+  "created_at": "2026-09-17T21:20:00Z",
+  "started_at": "2026-09-17T21:08:00Z",
+  "completed_at": "2026-09-17T21:20:00Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S7",
+    "requirement_ids": ["REQ-369"],
+    "artifacts_in": [
+      "handoffs/WF02-REQ369-20260917/step-04-test-run.json",
+      "docs/requirements.yaml (REQ-369 entry, acceptance_criteria)",
+      "web/src/pages/dashboard/PlatformDashboardPage.tsx",
+      "web/src/pages/OidcCallbackPage.tsx",
+      "web/src/router.tsx",
+      "web/src/pages/dashboard/__tests__/PlatformDashboardPage.test.tsx",
+      "web/src/pages/__tests__/OidcCallbackPage.test.tsx",
+      "test/fixtures/uat/scenarios/platform/platform-login-routing-by-role.yaml",
+      "docs/issues/ISS-0700.yaml"
+    ]
+  },
+  "task": {
+    "description": "WF-02 Step 5 -- independently re-verify REQ-369's 8 acceptance criteria against actual current code/tests, not against TEST-RUNNER's step-04 report or requirement_status history. Re-run the frontend gate myself; do not trust the prior report."
+  },
+  "result": {
+    "status": "PASS-WITH-PENDING",
+    "summary": "Confirmed on branch feature/WF02-REQ369-20260917, HEAD 2cf84a99, clean working tree -- no sibling-session collision this run.\n\nIndependently re-ran the full frontend gate myself (not trusting step-04's report):\n$ npm run type-check -> tsc -b, exit 0, no output\n$ npm run lint -> eslint --max-warnings 0, exit 0, no output\n$ npm test -> Test Files 87 passed (87), Tests 599 passed (599), Duration 43.17s (includes PlatformDashboardPage.test.tsx 4 tests, OidcCallbackPage.test.tsx 2 tests, router.req369.test.tsx 1 test, all green)\n$ npm run guards -> Test Files 4 passed (4), Tests 48 passed (48), including a real vite production build + bundle-scan\nAll numbers match TEST-RUNNER's step-04 report exactly -- independently reproduced, not copied.\n\nAC1 (PlatformDashboardPage.tsx exists, fixed 'Platform Overview' heading, never calls useTenantContext(), no tenant-branded copy): VERIFIED by direct file read. No import of useTenantContext anywhere in the file; heading is a hardcoded literal 'Platform Overview'; copy is generic ('Tenants', 'Platform Admin Links'). Matches TC-REQ369-01/02.\n\nAC2 (tenant-count tile sourced from tenantsApi.list().total): VERIFIED. Line 18-21: useQuery calls tenantsApi.list(); render at line 61 reads tenantsQuery.data?.total. No new endpoint introduced.\n\nAC3 (non-PLATFORM_ADMIN direct access sees self-gated not-authorized state): VERIFIED, with a note. The implementation redirects to <Navigate to=\"/instances\" replace />, which I initially flagged as a possible mismatch against 'not-authorized state' wording -- checked the codebase's own precedent this AC cites (TenantsPage.tsx line 69-70, HealthDashboardPage.tsx line 33-35) and both use the identical redirect-to-/instances idiom as their 'not authorized' gate. This is genuinely the project's established pattern for this AC's language, not a shortcut. Confirmed satisfied.\n\nAC4 (router.tsx new sibling route, existing two entries unchanged): VERIFIED by diff. `git diff origin/main...HEAD -- web/src/router.tsx` shows exactly a 2-line addition (one import, one route entry for 'platform-dashboard'); the existing `{ index: true }` and `{ path: 'dashboard' }` lines are byte-identical, untouched.\n\nAC5 (OidcCallbackPage.tsx role-conditional navigate): VERIFIED by direct read. Line 72: `navigate(payload.roles.includes('PLATFORM_ADMIN') ? '/platform-dashboard' : '/', { replace: true })`. Both branches covered by OidcCallbackPage.test.tsx TC-REQ369-05/06, both green.\n\nAC6 (real PLATFORM_ADMIN login against live QA, lands on /platform-dashboard, screenshot evidence): NOT SATISFIED YET. No UAT run has occurred in this workflow -- confirmed no UAT-RUNNER handoff exists in handoffs/WF02-REQ369-20260917/ (only steps 00 through 04 present), and a filesystem search turned up no screenshot artifact or UAT execution report referencing REQ-369 anywhere in the repo. This requires a real running QA instance and browser automation, which is UAT-RUNNER's job, not something re-derivable from static analysis or the unit suite.\n\nAC7 (platform-login-routing-by-role.yaml PLATFORM_ADMIN branch updated + re-run against QA): PARTIALLY SATISFIED -- the text-only half is done, the verification half is not. Confirmed via `git diff origin/main...HEAD -- test/fixtures/uat/scenarios/platform/platform-login-routing-by-role.yaml` that FRONTEND-DEV already updated the scenario's PLATFORM_ADMIN branch and its REAL-BEHAVIOR NOTE to describe the new /platform-dashboard destination (committed in 259fd95a, same commit as the code change). But this AC explicitly also requires the scenario be 're-run for real against QA... with the updated pass result quoted' -- that execution has not happened; no pass-result evidence exists anywhere in the repo or handoffs for this run.\n\nAC8 (close-out states ISS-0700 stays open, Unknown-workspace banner gap stays unresolved): NOT YET WRITTEN -- this is DOC-UPDATER's Step 6 job, not something to pre-empt here. Confirmed the precondition is still true and won't be contradicted: docs/issues/ISS-0700.yaml line 33 reads `status: open` right now, and no code in this diff touches TenantDashboardPage's isUnknown banner path (confirmed by the router.tsx diff above -- TenantDashboardPage's own route entries and file are untouched). So DOC-UPDATER can truthfully write AC8's required close-out language once AC6/AC7 evidence exists.\n\nVERDICT: PASS-WITH-PENDING, not FAIL. AC1-AC5 are the code-level acceptance criteria and are genuinely, independently verified against real code and a freshly re-run test suite -- no reason to block or rework any of that work; sending it back for rework would be wasted cycles since nothing is wrong with it. AC6/AC7 are evidence-gathering criteria that structurally require a live QA environment and cannot be satisfied by this role or by re-running the local suite again -- they were never expected to be done by Step 5. Per WF-02's own step ordering, UAT-RUNNER's live-QA run is a normal, expected step between here and DOC-UPDATER's close-out, not a defect in the implementation. Routing to UAT-RUNNER next rather than back to FRONTEND-DEV/TEST-RUNNER; routing to DOC-UPDATER would let Step 6 write a close-out AC6/AC7 explicitly require but that isn't truthful yet.",
+    "checks": {
+      "type_check": "PASS -- independently re-run, tsc -b, exit 0",
+      "lint": "PASS -- independently re-run, eslint --max-warnings 0, exit 0",
+      "full_suite": "PASS -- independently re-run, 87/87 test files, 599/599 tests",
+      "guards": "PASS -- independently re-run, 4/4 guard spec files, 48/48 tests, real production build",
+      "ac1_platform_dashboard_page": "VERIFIED -- direct file read, no useTenantContext import, fixed literal heading",
+      "ac2_tenant_count_tile": "VERIFIED -- direct file read, sourced from tenantsApi.list().total",
+      "ac3_non_admin_gate": "VERIFIED -- matches TenantsPage.tsx/HealthDashboardPage.tsx's own redirect-to-/instances precedent for 'not-authorized state'",
+      "ac4_router_diff": "VERIFIED -- git diff origin/main...HEAD shows a clean 2-line addition, old two route entries byte-identical",
+      "ac5_oidc_callback": "VERIFIED -- direct file read + both branches covered by green tests",
+      "ac6_live_qa_login": "NOT SATISFIED -- no UAT-RUNNER handoff or screenshot evidence exists yet; requires live QA run",
+      "ac7_uat_scenario_rerun": "PARTIALLY SATISFIED -- fixture text updated and committed (259fd95a), but not yet re-run against live QA; no pass-result evidence exists",
+      "ac8_closeout_language": "NOT YET WRITTEN -- DOC-UPDATER's job at Step 6; preconditions confirmed still true (ISS-0700 status: open, isUnknown banner path untouched) so it can be written truthfully once AC6/AC7 land"
+    },
+    "artifacts_out": [
+      "handoffs/WF02-REQ369-20260917/step-05-release-validation.json"
+    ],
+    "next_action": "Route to UAT-RUNNER: execute test/fixtures/uat/scenarios/platform/platform-login-routing-by-role.yaml's PLATFORM_ADMIN branch (pipeline_test: web/tests/e2e/pipelines/platform-login-routing-by-role.pipeline.e2e.spec.ts) for real against the live QA environment, confirm actual landing on /platform-dashboard with the real tenant count rendered, and capture screenshot evidence per UAT-RUNNER's existing screenshot-as-primary-evidence discipline. This satisfies AC6 and AC7 together (same scenario file, same run). Only once UAT-RUNNER's pass result (with screenshot) exists should this route to DOC-UPDATER (Step 6) to write the close-out required by AC8, quoting UAT-RUNNER's evidence for AC6/AC7 and stating ISS-0700 stays open / the Unknown-workspace banner gap stays unresolved."
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

@@ -69,7 +69,7 @@ export default function OidcCallbackPage() {
           tenant_type: tenantType,
           production_tenant_display_name: productionTenantDisplayName,
         })
-        navigate('/', { replace: true })
+        navigate(payload.roles.includes('PLATFORM_ADMIN') ? '/platform-dashboard' : '/', { replace: true })
       } catch {
         // OIDC callback failed — redirect to root which triggers Keycloak login
         window.location.replace('/')

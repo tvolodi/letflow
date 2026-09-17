@@ -62,3 +62,29 @@ queue_ref: Q-707
 github_ref: GH-1490
 status: open
 pipeline_log: []
+  - step: CODE-DESIGNER
+    at: "2026-09-17T11:35:00Z"
+    result: >
+      PASS (first attempt). Design:
+      lib/letflow/design/iss-0707-e2e-readiness-precondition-fix.md.
+      Confirmed all 9 files already import BPM_IDP_BASE_URL from
+      '../helpers', reuses ISS-0706's already-proven
+      assertBackendHealthy/assertServiceReadiness verbatim, no
+      helpers.ts change needed. Found two structural shapes (5 files
+      wrap in local assertServicesReady, 4 inline directly) and a real
+      behavioral nuance flagged as an open question: 5 of the 9 swallow
+      network failures via .catch(() => null), the shared helper doesn't
+      -- reasoned as an already-established ISS-0706 property, not a new
+      decision, correctly not silently absorbed either direction.
+  - step: CODE-DESIGN-VALIDATOR
+    at: "2026-09-17T11:45:00Z"
+    result: >
+      PASS (first attempt, no rework needed -- avoided the
+      leaked-implementation-code mistake that hit three prior designs
+      this session). Independently verified all 6 claims against real
+      source (imports, pipeline.ts untouched with no readiness helper of
+      its own, the two structural shapes, the .catch() split confirmed
+      via grep across all 9, KEYCLOAK_DISCOVERY sole-reader confirmed,
+      no ISS-0706 exception shapes present). Confirmed design contains
+      no implementation code. Judged Open Question 1's resolution sound,
+      not blocking.

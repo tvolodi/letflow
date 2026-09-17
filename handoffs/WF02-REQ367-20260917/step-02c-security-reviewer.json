@@ -8,8 +8,8 @@
   "file": "handoffs/WF02-REQ367-20260917/step-02c-security-reviewer.json",
   "created_at": "2026-09-17T18:30:00Z",
   "started_at": "2026-09-17T18:30:00Z",
-  "completed_at": null,
-  "status": "PENDING",
+  "completed_at": "2026-09-17T14:52:05Z",
+  "status": "COMPLETED",
   "priority": "NORMAL",
   "context": {
     "stage": "S7",
@@ -38,7 +38,23 @@
       "OIDC build-arg values sourced from a host-local file, not hardcoded"
     ]
   },
-  "result": null,
+  "result": {
+    "status": "PASS",
+    "summary": "out of scope for INV-1..INV-3/INV-5/INV-9 -- no tenant-data path touched, exact reasoning: this diff (deploy/redeploy-qa.sh, .github/workflows/cd.yml, additive .github/workflows/ci.yml change) is deploy-time CI/CD infrastructure -- a shell script that runs on a QA host over an SSH deploy key restricted by authorized_keys `command=` to itself, and two GitHub Actions workflow files. It creates no Ecto schema/migration, no API route, no response-shaping code, and no lookup-by-ID handler; it never executes inside a request path and never reads or writes tenant business data. INV-4 (secrets by reference only) does apply, since the change adds three new GitHub secret references and a script that handles OIDC client config -- verified below.",
+    "invariants_assessed": {
+      "INV-1": "NOT-APPLICABLE -- no Ecto schema, migration, or tenant-scoped table touched.",
+      "INV-2": "NOT-APPLICABLE -- no API response type; S4 not reached by this diff regardless.",
+      "INV-3": "NOT-APPLICABLE -- no tenant-authored script/plugin sandboxing involved.",
+      "INV-4": "APPLIES -- SATISFIED. (a) No secret value is echoed or logged: `grep -n echo deploy/redeploy-qa.sh | grep -iE 'secret|key|password|token|oidc'` returned no matches -- the script's echo statements are progress/status lines only (deploy start, git ref, health-check progress), and VITE_OIDC_AUTHORITY/VITE_OIDC_CLIENT_ID are passed to the throwaway `docker run` build container via `-e` flags, never echoed. (b) No secret is written to a file the repo tracks: qa.env is `source`d (read) from $APP_DIR/qa.env, a host-local file outside the git working tree the script operates in (`git pull` inside $APP_DIR only updates the tracked repo content, not qa.env) -- the script never writes to it. (c) SSH-action secret-reference pattern matches letflow-queue's own proven-safe production cd.yml (read directly at c:\\Users\\tvolo\\dev\\ai-dala\\letflow-queue\\.github\\workflows\\cd.yml): both use `appleboy/ssh-action@v1` with `host/username/key` sourced from `secrets.*_DEPLOY_HOST/USER/SSH_KEY`, both rely on a `command=`-restricted authorized_keys entry documented inline, both pass a `script:` line that is documentation only since the forced command wins. letflow's cd.yml is structurally identical for the secret-handling steps (it adds an earlier, secret-free artifact-download/gate step ahead of the SSH step, which does not touch secret material). (d) VITE_OIDC_AUTHORITY/VITE_OIDC_CLIENT_ID build args are sourced from `$APP_DIR/qa.env` (host-local, not tracked, not a GitHub Actions secret, not hardcoded in the script body) -- confirmed at redeploy-qa.sh lines 68-78, with `:?` guards that fail loudly rather than default to an empty/hardcoded value. Second grep for hardcoded secret-shaped literals (`grep -niE '(password|secret|client_secret|token)\\s*(=|:)\\s*\"[^\"]{8,}\"' deploy/ .github/workflows/`) also returned no matches across all three changed files.",
+      "INV-5": "NOT-APPLICABLE -- no lookup-by-ID endpoint; S4 not reached.",
+      "INV-6": "SATISFIED by this handoff's existence -- new data-access-path proof requirement does not apply since no new data-access path (API route/host function/business-table migration) is introduced; this handoff itself is the explicit statement required for the meta-invariant regardless.",
+      "INV-7": "NOT-APPLICABLE -- no SQL, no Repo.query call in this diff (`grep -n Repo.query deploy/ .github/workflows/` -- not Elixir files, no matches possible; confirmed no raw SQL anywhere in the three artifacts).",
+      "INV-8": "NOT-APPLICABLE -- no Elixir error-handling path in this diff; the shell script's own failure handling (`set -euo pipefail`, explicit health-check retry-then-exit-1 blocks) is outside INV-8's Elixir-specific `{:ok,_}|{:error,_}` scope and not itself a tenant-request path.",
+      "INV-9": "NOT-APPLICABLE -- no outbound HTTP request built from tenant-controlled input; the script's curl calls target fixed, hardcoded QA infra URLs (127.0.0.1:$BACKEND_PORT/health, https://qa.bizdala.com/), not tenant-supplied data."
+    },
+    "issues": [],
+    "next_action": "Route to REVIEWER (2d)"
+  },
   "rework_count": 0,
   "max_rework": 3
 }

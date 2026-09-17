@@ -1,0 +1,90 @@
+run_id: WF03-ISS0696-20260917
+issue_id: ISS-0696
+agent: TEST-RUNNER
+step: "WF-03 Step 4 -- full-suite confirmation"
+branch: fix/WF03-ISS0696-20260917
+commit_under_test: ade5fc0e5af0b86f55652d9172dd0386bd12abc8
+date: 2026-09-17
+
+diff_scope:
+  files_changed:
+    - web/src/pages/exam/ExamSessionPage.tsx
+  note: >
+    Fix derives `textDraft` during render instead of via `useEffect`, fixing
+    a full-suite-only scheduler race. Prior gates (ISSUE-FIXER,
+    CODE-DESIGNER, CODE-DESIGN-VALIDATOR, FRONTEND-DEV, SECURITY-REVIEWER,
+    REVIEWER, TEST-DESIGNER, TEST-DESIGN-VALIDATOR) all PASSed per
+    docs/issues/ISS-0696.yaml pipeline_log. This report is TEST-RUNNER's own
+    independent execution, not a re-statement of those.
+
+environment:
+  docker: >
+    Container access required sudo (user tvolodi not in docker group;
+    passwordless sudo available). Postgres (letflow-1-postgres-1) and
+    Keycloak (letflow-1-keycloak-1) were already up and healthy from a prior
+    session -- reused rather than restarted, per the instruction not to run
+    `docker compose up` in a checkout sharing another checkout's containers.
+    LETFLOW_DB_PORT=5463 from the untracked .env, consumed by both compose
+    and config/test.exs.
+
+backend:
+  command: "scripts/test_parallel.sh"
+  partitions:
+    n: 8
+    source: nproc
+  combined_result: "4318 tests, 6 properties, 0 failures (4324/4324 passed)"
+  per_partition:
+    - {partition: 1, tests: 623, properties: 1, failures: 0, exit: 0}
+    - {partition: 2, tests: 464, properties: 0, failures: 0, exit: 0}
+    - {partition: 3, tests: 623, properties: 0, failures: 0, exit: 0}
+    - {partition: 4, tests: 478, properties: 4, failures: 0, exit: 0}
+    - {partition: 5, tests: 601, properties: 1, failures: 0, exit: 0}
+    - {partition: 6, tests: 545, properties: 0, failures: 0, exit: 0}
+    - {partition: 7, tests: 499, properties: 0, failures: 0, exit: 0}
+    - {partition: 8, tests: 485, properties: 0, failures: 0, exit: 0}
+  failures: none
+
+static_checks:
+  mix_compile_warnings_as_errors: {result: PASS, exit: 0}
+  mix_format_check_formatted: {result: PASS, exit: 0}
+
+frontend_single_run:
+  command: "npm test (from web/)"
+  result: PASS
+  test_files: "83 passed (83)"
+  tests: "586 passed (586)"
+  duration: "21.48s"
+  target_file: "src/pages/exam not individually isolated in this run; covered within full suite"
+  failures: none
+
+frontend_10x_full_suite:
+  rationale: >
+    ISS-0696's acceptance criterion requires confirmation of non-flakiness
+    across at least 10 consecutive full-suite `npm test` runs. FRONTEND-DEV
+    already ran this once (586/586 x10) and TEST-DESIGN-VALIDATOR
+    independently spot-checked in isolation, but neither was TEST-RUNNER's
+    own independent execution of the full 10x criterion. This section is
+    that independent run, executed by this agent just now.
+  command: "npm test (from web/), 10 consecutive invocations"
+  runs:
+    - {run: 1,  test_files: "83 passed (83)", tests: "586 passed (586)", duration: "20.76s"}
+    - {run: 2,  test_files: "83 passed (83)", tests: "586 passed (586)", duration: "21.23s"}
+    - {run: 3,  test_files: "83 passed (83)", tests: "586 passed (586)", duration: "21.39s"}
+    - {run: 4,  test_files: "83 passed (83)", tests: "586 passed (586)", duration: "20.84s"}
+    - {run: 5,  test_files: "83 passed (83)", tests: "586 passed (586)", duration: "21.35s"}
+    - {run: 6,  test_files: "83 passed (83)", tests: "586 passed (586)", duration: "21.45s"}
+    - {run: 7,  test_files: "83 passed (83)", tests: "586 passed (586)", duration: "20.89s"}
+    - {run: 8,  test_files: "83 passed (83)", tests: "586 passed (586)", duration: "21.18s"}
+    - {run: 9,  test_files: "83 passed (83)", tests: "586 passed (586)", duration: "21.41s"}
+    - {run: 10, test_files: "83 passed (83)", tests: "586 passed (586)", duration: "21.46s"}
+  aggregate: "10/10 runs green, 586/586 tests passed in every run, 0 failures, 0 flakes observed"
+
+regression_check: >
+  No regressions vs. prior known-good baselines: backend combined count
+  (4324/4324) matches report-20260916-WF03ISS0694-20260916.yaml's backend
+  run exactly; frontend count (586/586) matches FRONTEND-DEV's and
+  TEST-DESIGN-VALIDATOR's earlier reports on this branch. No new failures,
+  no count drift.
+
+overall_verdict: PASS
+next_action: "Route to RELEASE-VALIDATOR (Step 5) -- independent re-verification before ISSUE-FIXER's Step Final (close issue / merge)"

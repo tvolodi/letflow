@@ -21,4 +21,151 @@ affected_files:
   - web/src/pages/exam/__tests__/ExamSessionPage.test.tsx
 queue_ref: Q-696
 github_ref: GH-1457
-status: open
+status: resolved
+resolved_in_run: WF03-ISS0696-20260917
+resolved_at: "2026-09-17T08:10:00Z"
+resolution_note: >
+  ROOT CAUSE (ISSUE-FIXER, live-reproduced): a genuine React effect-ordering
+  race in web/src/pages/exam/ExamSessionPage.tsx, not shared module state or
+  test-file worker-distribution flakiness as originally hypothesized.
+  textDraft state synced via a useEffect that only commits one render cycle
+  after the textarea first appears; under full-suite vitest scheduler
+  jitter, a forced-blur anti-cheat signal could fire before that effect
+  committed, so maybeSaveDraft saw a stale empty draft and wrongly called
+  saveAnswer. Reproduced live on run 10/12 ("expected \"spy\" to not be
+  called at all, but actually been called 1 times", called with
+  text_answer: "").
+
+  FIX (commit ade5fc0e, 10 insertions/3 deletions): derive textDraft during
+  render (guarded by a new textDraftQuestionId state) instead of via a
+  useEffect, removing the race for real users too -- no test-file changes
+  needed. Design: lib/letflow/design/iss-0696-examsessionpage-race-fix.md,
+  PASSed CODE-DESIGN-VALIDATOR. SECURITY-REVIEWER PASSed (out of scope, two
+  local useState hooks only). REVIEWER PASSed (render-time setState guard
+  cannot infinite-loop, converges in one extra render, matches React's own
+  documented adjust-state-during-render pattern; idiomatic, narrowly
+  scoped). TEST-DESIGNER/TEST-DESIGN-VALIDATOR both empirically confirmed
+  (10x runs against the pre-fix commit ade5fc0e^) that no single-file
+  deterministic regression test has discriminating power here -- the race
+  is a full-suite worker-scheduling artifact observable only at that level
+  -- so no new test was added; the regression guard is the repeated
+  full-suite run itself.
+
+  FINAL VERIFICATION: 30/30 independent full web/ vitest suite runs green
+  across three independent executions (FRONTEND-DEV 10x, TEST-RUNNER 10x,
+  RELEASE-VALIDATOR 10x), 586/586 tests passing every run, 0 flakes.
+  Backend: mix test 4324/4324 passed. RELEASE-VALIDATOR independently
+  re-derived all three acceptance criteria and audited every pipeline_log
+  step for a real committed artifact. Full step-by-step detail in this
+  record's own pipeline_log above (most recent entries).
+
+  Closed GH#1457 with an evidence comment. letflow-queue task 696 to be
+  released status: done by ORCH after this step, per this run's own
+  DOC-UPDATER instructions (queue release is explicitly out of scope for
+  this step).
+pipeline_log:
+  - step: ISSUE-FIXER
+    at: "2026-09-17T06:45:00Z"
+    result: >
+      Root-caused live: a genuine React effect-ordering race, not shared
+      module state. ExamSessionPage.tsx's textDraft state synced via a
+      useEffect that commits one render cycle after the textarea first
+      appears; under full-suite vitest scheduler jitter, a forced-blur
+      anti-cheat signal can fire before that effect commits, so
+      maybeSaveDraft sees a stale empty draft and wrongly calls
+      saveAnswer. Reproduced live on run 10/12
+      ("expected \"spy\" to not be called at all, but actually been
+      called 1 times", called with text_answer: ""). Confirmed no
+      module-level singleton/global state involved.
+  - step: CODE-DESIGNER
+    at: "2026-09-17T07:05:00Z"
+    result: >
+      PASS. Design: lib/letflow/design/iss-0696-examsessionpage-race-fix.md.
+      Component-side fix chosen over test-side waitFor -- derive textDraft
+      during render (guarded by new textDraftQuestionId state) instead of
+      via effect, removing the race for real users too. No test-file
+      changes needed.
+  - step: CODE-DESIGN-VALIDATOR
+    at: "2026-09-17T07:12:00Z"
+    result: >
+      PASS. Verified design's line references and three-case navigation
+      walkthrough against the real ExamSessionPage.tsx source. Confirmed
+      the derive-during-render pattern is sound and unambiguous.
+  - step: FRONTEND-DEV
+    at: "2026-09-17T07:20:00Z"
+    result: >
+      PASS. Implemented at commit ade5fc0e (10 insertions, 3 deletions).
+      Isolated ExamSessionPage.test.tsx: 22/22 passed. Full web/ vitest
+      suite, 10 consecutive runs: 586/586 tests passed every run, 0
+      flakes. npm run type-check, lint, and guards all clean.
+  - step: SECURITY-REVIEWER
+    at: "2026-09-17T07:26:00Z"
+    result: >
+      PASS -- out of scope for every invariant, reasoned not assumed.
+      Diff confined to two local useState hooks in ExamSessionPage.tsx;
+      no tenant-data path, API shape, secret, SQL, or outbound-request
+      code touched; no new failure path introduced.
+  - step: REVIEWER
+    at: "2026-09-17T07:33:00Z"
+    result: >
+      PASS. Confirmed the render-time setState guard cannot infinite-loop
+      (converges in one extra render per question change, matches React's
+      own documented adjust-state-during-render pattern); eslint
+      react-hooks plugin and tsc both clean. First use of this specific
+      pattern in web/src/ but genuinely idiomatic React, narrowly scoped,
+      well-commented -- accepted, flagged as a light watch-item (write up
+      as a documented convention if a third instance appears elsewhere,
+      not an anti-pattern for one justified instance). Diff scope matches
+      design exactly, nothing extra/missing. No conflict with any
+      docs/migration/decisions/ record.
+  - step: TEST-DESIGNER
+    at: "2026-09-17T07:41:00Z"
+    result: >
+      No new test warranted -- existing 22 tests in ExamSessionPage.test.tsx
+      are sufficient. Empirically verified rather than deferred to the
+      design doc: attempted a more targeted deterministic regression test,
+      ran it 10x against the pre-fix implementation (ade5fc0e^) in
+      isolation -- passed 10/10 against the buggy code too, proving zero
+      discriminating power (the race is a full-suite worker-scheduling
+      artifact external to any single spec file's control flow, matching
+      the original ISS-0696 finding). Reverted the scratch test; working
+      tree clean, nothing committed. True regression guard is FRONTEND-DEV's
+      10-consecutive-full-suite-run verification (586/586, 0 flakes),
+      which operates at the level where this race is actually observable.
+  - step: TEST-DESIGN-VALIDATOR
+    at: "2026-09-17T07:47:00Z"
+    result: >
+      PASS. Independently replicated TEST-DESIGNER's empirical claim in a
+      separate git worktree at ade5fc0e^ (confirmed via grep the buggy
+      useEffect was genuinely present, no fix applied): ran
+      ExamSessionPage.test.tsx in isolation 10x against the pre-fix code,
+      22/22 passed every run -- zero discriminating power confirmed
+      firsthand, not just trusted. Confirmed the AC mapping (10x
+      full-suite-run criterion legitimately deferred to
+      TEST-RUNNER/RELEASE-VALIDATOR) and working-tree cleanliness
+      (git diff ade5fc0e..HEAD -- web/src/pages/exam/ empty, only
+      pipeline-log YAML commits follow the fix).
+  - step: TEST-RUNNER
+    at: "2026-09-17T07:55:00Z"
+    result: >
+      PASS. Backend: mix test 4324/4324 passed (scripts/test_parallel.sh,
+      8 partitions), mix compile --warnings-as-errors PASS, mix format
+      --check-formatted PASS. Frontend: 586/586 passed single run, then
+      independently ran the full web/ vitest suite 10 consecutive times
+      (own execution, not reused from FRONTEND-DEV/TEST-DESIGN-VALIDATOR)
+      -- all 10 runs 586/586 passed, 0 flakes. No regressions vs. the
+      ISS-0694 baseline report. Report:
+      test/reports/report-20260917-WF03ISS0696-20260917.yaml (commit
+      6a0b7156).
+  - step: RELEASE-VALIDATOR
+    at: "2026-09-17T08:05:00Z"
+    result: >
+      PASS. Own independent 10x full web/ vitest suite runs: 10/10 green,
+      586/586 every run -- 30/30 total across FRONTEND-DEV/TEST-RUNNER/
+      RELEASE-VALIDATOR, 0 flakes. Own backend run: 4324/4324 passed.
+      mix letflow.check.test clean. Spot-checked diff vs. design, matches
+      exactly, fix still live in working tree. All three ACs independently
+      re-derived with distinct evidence. Audited every pipeline_log step
+      for a real committed artifact (not a bare conversational claim) --
+      all confirmed. No new issues found, nothing to file. Cleared for
+      DOC-UPDATER and merge.

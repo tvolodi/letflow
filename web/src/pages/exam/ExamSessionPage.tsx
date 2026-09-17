@@ -163,13 +163,20 @@ function ExamSessionPageInner() {
   // actually autosaves. Re-synced from the restored `answers` state whenever
   // the visible question changes, so navigating away and back shows the
   // last-saved text, not a stale draft from a previous question.
+  //
+  // ISS-0696: derived during render (React's "adjusting state during render"
+  // pattern) rather than in a useEffect, so there is no intermediate commit
+  // where the textarea is on-screen with a stale/empty textDraft one render
+  // behind the question it belongs to -- see
+  // lib/letflow/design/iss-0696-examsessionpage-race-fix.md.
   const [textDraft, setTextDraft] = useState<string>('')
-  useEffect(() => {
+  const [textDraftQuestionId, setTextDraftQuestionId] = useState<string | undefined>(undefined)
+  if (currentQuestion?.question_id !== textDraftQuestionId) {
+    setTextDraftQuestionId(currentQuestion?.question_id)
     if (currentQuestion?.type === 'short_text') {
       setTextDraft(answers[currentQuestion.question_id]?.text_answer ?? '')
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [currentQuestion?.question_id])
+  }
 
   const saveAnswer = useCallback(
     (question: ExamQuestionState, selectedOptionIds: string[], textAnswer?: string): Promise<void> => {

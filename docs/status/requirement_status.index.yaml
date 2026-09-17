@@ -3880,7 +3880,21 @@ volumes:
     path: docs/status/requirement_status.v18.yaml
     status: current
     opened: 2026-09-15
-    entries: 19
+    entries: 21
+    note: >
+      Recounted to 21 during this run's rebase onto origin/main (real
+      merge conflict on this file and requirement_status.v18.yaml,
+      resolved by composing origin/main's full 18-entry sequence with
+      this run's own ISS-0696 done-event appended at the tail, since its
+      2026-09-17T07:49:00Z timestamp postdates every entry origin/main
+      had landed) -- `grep -c "^  - req:"
+      docs/status/requirement_status.v18.yaml` = 21 on-disk entries; 1018
+      lines / 60854 bytes, well under the 1200-line/120000-byte roll
+      ceiling, no roll triggered.
+
+      Prior note (origin/main side, entries: 19, itself already off by
+      one against the pre-rebase on-disk count of 18) preserved below for
+      history:
     note: >
       Incremented to 18 by WF02-REQ360-20260917 (DOC-UPDATER)'s own REQ-360
       done-event append (Step 6) -- `grep -c "^  - req:"

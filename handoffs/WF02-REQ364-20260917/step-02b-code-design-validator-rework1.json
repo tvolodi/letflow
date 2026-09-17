@@ -1,0 +1,10 @@
+{
+  "req": "REQ-364",
+  "step": "02b-code-design-validator-rework1",
+  "result": "FAIL",
+  "at": "2026-09-17T15:10:00Z",
+  "blocking_finding": "SS5.4.2 step 2 misdescribes earmark_parser's actual AST shape for raw HTML as a 'separately-tagged node kind' -- verified against real hexdocs/README that raw/verbatim HTML is NOT a distinct tag/node kind. Every node is a uniform 4-tuple {tag, attrs, children, meta}; raw HTML is marked by meta[:verbatim] == true on a node that otherwise carries an ordinary-looking tag (e.g. {\"span\", [...], [...], %{verbatim: true}}). A reasonable implementer following the design as written would branch on node tag/shape, not meta[:verbatim], silently reopening a raw-HTML bypass -- the exact failure mode recurring at the design layer instead of the regex layer.",
+  "required_fix": "Correct SS5.4.2 step 2 to name the real discriminator (meta[:verbatim] == true on the walked node). Re-verify step 3's href/src attribute-list claim against the same primary source, since it was checked via the same secondary-fetch method as the now-disproven step 2 claim.",
+  "non_blocking_note": "SS5.4.1's 'earmark depends on earmark_parser' lineage claim is directionally true (earmark_parser's own README self-describes as extracted from earmark) but overstated against current hex.pm data -- earmark 1.4.49 lists zero deps and its GitHub repo is archived/retired. Should say 'originally extracted from' rather than 'depends on', and flag to REVIEWER that earmark itself (not earmark_parser) is retired, for due-diligence context even though this design correctly avoids taking earmark as a dependency.",
+  "confirmed_good": "earmark_parser confirmed real (hex.pm, Apache-2.0, zero runtime deps, actively maintained, 16 dependents including ex_doc). No implementation code found in SS5.4. New-dependency flag for REVIEWER sign-off present and correctly framed."
+}

@@ -170,3 +170,25 @@ pipeline_log:
       cross-tenant tile isolation with two real tenants -- explicitly
       not citing the still-BLOCKED attachment-cross-tenant-probe.yaml.
       Re-ran for real: 3/3 passed. eslint/tsc clean.
+
+  - step: TEST-DESIGN-VALIDATOR
+    at: "2026-09-17T09:52:00Z"
+    result: >
+      FAIL (again). Confirmed the new tile-visibility assertions are real
+      and pass (own 3/3 run). But the companion-spec citation
+      (tenant-dashboard.e2e.spec.ts TC-TD-UI-01-04) is false: ran it
+      directly, fails at its own precondition (GET /health/ready, which
+      router.ex explicitly documents as deliberately not ported -- only
+      GET /health/liveness exists by design). Not a sandbox artifact --
+      cannot pass against Letflow's real backend anywhere. Also its
+      leakage assertion is gated behind an if(swiftResp.ok()) that
+      silently no-ops if the second tenant isn't provisioned, so it
+      wouldn't reliably prove isolation even if reachable. EO-001's
+      "reflect this tenant's own data only" sub-claim for TASK_WORKER
+      still has no working coverage anywhere. Requires either (a) a real
+      fix to TC-TD-UI-01-04's readiness check + unconditional second-
+      tenant assertion, re-verified passing before re-citing, or (b)
+      dropping the citation and documenting this as a genuine,
+      currently-uncoverable gap -- same honest treatment already given to
+      attachment-cross-tenant-probe.yaml -- rather than citing an
+      unrunnable test as proof.

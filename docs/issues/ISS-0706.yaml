@@ -130,3 +130,14 @@ pipeline_log:
       default/swiftroute tenants), but the byte-identical
       TC-TD-UI-03-01 pattern verified working for real against a
       confirmed-404 endpoint. eslint/tsc clean. npm test 586/586.
+  - step: SECURITY-REVIEWER
+    at: "2026-09-17T10:55:00Z"
+    result: >
+      PASS. Zero lib/letflow/ or migration touches confirmed. INV-4:
+      apiBaseUrl/BPM_IDP_BASE_URL are parameters/env vars, not new
+      hardcoded secrets; TEST_ADMIN_USER/PASSWORD fallbacks are
+      pre-existing untouched fixture credentials. INV-9: outbound calls
+      made by the Playwright test process against operator/CI-configured
+      env vars, no tenant in the loop, same reasoning as ISS-0702.
+      TC-TD-UI-01-04's guard inversion judged a net correctness
+      improvement (silent false-pass -> hard failure), not a new risk.

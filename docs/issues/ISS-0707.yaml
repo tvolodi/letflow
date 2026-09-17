@@ -173,3 +173,18 @@ pipeline_log: []
       hit is the design doc itself, zero application code touched.
       Report: test/reports/report-20260917-WF03-ISS0707-20260917.yaml
       (commit cd4920d1).
+  - step: RELEASE-VALIDATOR
+    at: "2026-09-17T12:55:00Z"
+    result: >
+      PASS. Own 6-of-9-spec run against a real local backend: 0/19
+      readiness-throw failures. Independently confirmed all 9 files
+      genuinely import the shared helper (grep). Own unit test run: 6/6,
+      independently re-derived the regex-widening claim with node.
+      Confirmed PollerTest untouched by this branch's diff, reran the
+      full backend suite alone (4332/4332, PollerTest included and
+      passing) -- confirmed genuinely flaky/environment-sensitive
+      (earlier concurrent-invocation artifact from running two suites
+      against the shared DB pool simultaneously), not a regression. mix
+      letflow.check.test OK, compile/format/tsc clean. Full
+      gate-evidence audit: every pipeline_log step has a real commit.
+      No new issues found. Cleared for DOC-UPDATER and merge.

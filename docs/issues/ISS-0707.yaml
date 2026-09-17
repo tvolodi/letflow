@@ -104,3 +104,12 @@ pipeline_log: []
       (grep-confirmed), 10/23 downstream failures all pre-existing-gap
       class already characterized during ISS-0706. eslint/tsc clean.
       npm test 592/592, guards 48/48.
+  - step: SECURITY-REVIEWER
+    at: "2026-09-17T12:06:00Z"
+    result: >
+      PASS -- out of scope for every invariant, same reasoning as
+      ISS-0706. Confirmed zero lib/letflow/ or migration touches;
+      helpers.ts/pipeline.ts untouched, so no new outbound-call surface
+      introduced at all beyond the already-reviewed shared helper. The
+      only secret-adjacent change is deletion of an already-unused
+      KEYCLOAK_DISCOVERY constant.

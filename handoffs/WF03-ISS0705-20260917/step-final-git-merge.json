@@ -1,0 +1,43 @@
+{
+  "handoff_id": "wf03-iss0705-stepfinal",
+  "run_id": "WF03-ISS0705-20260917",
+  "workflow_id": "WF-03",
+  "step": "final",
+  "from_agent": "ORCH",
+  "to_agent": "ELIXIR-DEV",
+  "file": "handoffs/WF03-ISS0705-20260917/step-final-git-merge.json",
+  "created_at": "2026-09-17T15:30:00Z",
+  "started_at": "2026-09-17T15:30:00Z",
+  "completed_at": null,
+  "status": "PENDING",
+  "priority": "NORMAL",
+  "context": {
+    "stage": null,
+    "requirement_ids": [],
+    "requirement_text": {},
+    "source_text": {},
+    "related_handoff_ids": ["handoffs/WF03-ISS0705-20260917/step-05-issue-fixer-close.json"],
+    "artifacts_in": ["docs/agents/protocols/GIT_MERGE.md"],
+    "owned_modules": ["test/letflow/routers/tenants_test.exs", "test/letflow/routers/identity_test.exs", "test/letflow/role_registry_test.exs"]
+  },
+  "task": {
+    "description": "WF-03 Step Final (git merge) for ISS-0705, run WF03-ISS0705-20260917. All gates passed: Step 00 git-setup PASS, Step 1 diagnosis, Step 2/2b design+validation (1 rework, then PASS), Step 3/3b/3c implementation+security+review (1 rework, then PASS), Step 4/4b/4c regression test + independent mutant validation + full suite (PASS, 4331/4332, 1 confirmed-unrelated pre-existing failure in test/docs/requirement_status_invariants_test.exs), Step 5 issue closed (docs/issues/ISS-0705.yaml resolved, GH-1480 closed). Follow docs/agents/protocols/GIT_MERGE.md's full procedure exactly: verify branch, stage/commit any remaining uncommitted files by explicit filename, fetch+rebase onto origin/main (handle conflicts per the protocol's rules -- abort and escalate if >5 files or any excluded path), push the rebased branch, open a PR, wait for CI (backend + frontend jobs) to report success via `gh pr checks`, then merge via `gh pr merge` (never a bare push to main). Claim this handoff by setting status to IN_PROGRESS only.",
+    "acceptance_criteria": [
+      "git branch --show-current == feature/WF03-ISS0705-20260917 before starting",
+      "Rebase onto origin/main completes (or escalates per the protocol's conflict rules)",
+      "PR opened, CI backend+frontend jobs both green (or PARTIAL documented fallback if gh unavailable)",
+      "PR merged via gh pr merge, never a bare push to main",
+      "push_status: ok"
+    ]
+  },
+  "result": {
+    "status": null,
+    "summary": null,
+    "artifacts_out": [],
+    "issues": [],
+    "git_evidence": {},
+    "next_action": null
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

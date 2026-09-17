@@ -2,11 +2,10 @@ import { expect, test } from '@playwright/test'
 import * as fs from 'fs'
 import * as path from 'path'
 import { randomUUID } from 'crypto'
-import { loginWithToken, BPM_IDP_BASE_URL, BPM_IDP_CLIENT_ID } from './helpers'
+import { loginWithToken, assertServiceReadiness, BPM_IDP_BASE_URL, BPM_IDP_CLIENT_ID } from './helpers'
 
 const SCREENSHOTS_DIR = 'tests/screenshots'
 const API_BASE_URL = process.env.BPM_TEST_URL ?? 'http://127.0.0.1:8080'
-const KEYCLOAK_DISCOVERY_URL = `${BPM_IDP_BASE_URL}/realms/bpm-default/.well-known/openid-configuration`
 const KEYCLOAK_TOKEN_URL = `${BPM_IDP_BASE_URL}/realms/bpm-default/protocol/openid-connect/token`
 
 function getEnvOrDefault(name: string, fallback: string): string {
@@ -104,20 +103,6 @@ async function getKeycloakToken(
   return body.access_token
 }
 
-async function assertServiceReadiness(
-  request: import('@playwright/test').APIRequestContext,
-): Promise<void> {
-  const backendHealth = await request.fetch(`${API_BASE_URL}/health/ready`)
-  if (!backendHealth.ok()) {
-    throw new Error(`Backend readiness check failed (${backendHealth.status()}) at ${API_BASE_URL}/health/ready`)
-  }
-
-  const idpHealth = await request.fetch(KEYCLOAK_DISCOVERY_URL)
-  if (!idpHealth.ok()) {
-    throw new Error(`Keycloak readiness check failed (${idpHealth.status()}) at ${KEYCLOAK_DISCOVERY_URL}`)
-  }
-}
-
 async function navigateSpa(page: import('@playwright/test').Page, targetPath: string): Promise<void> {
   await page.evaluate((nextPath) => {
     window.history.pushState({}, '', nextPath)
@@ -131,7 +116,7 @@ test.describe('F5 admin users UI (ADM-UI-01..04)', () => {
   let adminToken = ''
 
   test.beforeEach(async ({ request }) => {
-    await assertServiceReadiness(request)
+    await assertServiceReadiness(request, API_BASE_URL)
     const creds = getAdminCredentials()
     adminUsername = creds.username
     adminToken = await getKeycloakToken(request, creds.username, creds.password)

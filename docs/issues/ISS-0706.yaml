@@ -80,4 +80,207 @@ related:
   - ISS-0702
 queue_ref: Q-706
 github_ref: GH-1488
-status: open
+status: resolved
+resolved_in_run: WF03-ISS0706-20260917
+resolved_at: "2026-09-17T11:25:00Z"
+resolution_note: >
+  ROOT CAUSE (CODE-DESIGNER, direct verification): this issue's own
+  "repo-wide grep" originally claimed 11 affected files, but direct
+  verification found sh05-06.shell.e2e.spec.ts already fixed under
+  ISS-0532 (no assertServiceReadiness call left) -- the real scope was 10
+  files, not 11: env04, f5-admin-observability, f6-webhooks, tenants,
+  f5-admin-groups-tokens, f5-admin-users, f6-dlq, iss-0063-oidc-redirect-
+  loop, tenant-dashboard, uat-tenant-url. All 10 duplicated the same
+  broken precondition: assertServiceReadiness() polling the never-mounted
+  `GET /health/ready` (lib/letflow/router.ex only mounts liveness `GET
+  /health`, a deliberate, permanent S6-observability-pending decision),
+  making every test in every one of these files fail before reaching its
+  real assertions whenever actually run.
+
+  FIX (commit a6b5e5ac, design lib/letflow/design/iss-0706-e2e-readiness-
+  precondition-fix.md): extracted shared assertBackendHealthy/
+  assertServiceReadiness helpers into web/tests/e2e/helpers.ts (this
+  codebase's established shared-helper location), pointed at the real
+  `GET /health`, mirroring ISS-0532's own resolution of the identical
+  misconception in application code. 8 plain files deleted their
+  duplicate and import the shared version; 2 variant files swapped only
+  their Letflow-backend check block, leaving Keycloak's own legitimate
+  `/health/ready` probe untouched. TC-TD-UI-01-04's independent second
+  defect -- its cross-tenant leakage assertion silently no-op'd behind
+  `if (swiftResp.ok())` -- was also fixed, inverted to a hard-fail
+  mirroring the same file's own TC-TD-UI-03-01 precedent.
+
+  TEST COVERAGE: TEST-DESIGNER added
+  web/tests/unit/iss-0706-e2e-health-precondition.test.ts (6 real cases,
+  mirroring the established iss-0295-e2e-idp-config.test.ts pattern),
+  including a scoped grep-regression confirming all 10 fixed files import
+  the shared helper with no local duplicate surviving. Fail-then-pass
+  verified for real in a throwaway worktree: 6/6 fail against the true
+  pre-fix commit, 6/6 pass at branch tip. TEST-DESIGN-VALIDATOR
+  independently reproduced the same fail-then-pass split in an isolated
+  worktree and confirmed the grep-regression correctly excludes both
+  legitimate `/health/ready` occurrences (the app's own response
+  listener, Keycloak's own probe) without flagging either.
+
+  FINAL VERIFICATION: RELEASE-VALIDATOR independently re-checked this
+  closure -- own 3-spec run against a real local backend (0/17
+  readiness-throw failures, matching TEST-RUNNER's own 0/63), read
+  TC-TD-UI-01-04's current code directly and confirmed the guard is
+  genuinely unconditional, confirmed the 10-not-11 scope correction via
+  sh05-06's own doc comment plus a grep count, independently ran the new
+  unit test (6/6, confirmed not a stub), and audited every pipeline_log
+  step for a real commit with zero lib/letflow/ touches (confirmed via
+  `git diff --stat`). Own fresh full-suite runs: mix
+  letflow.check.test 4332/4332, npm test 592/592, eslint/tsc clean.
+
+  FOLLOW-UP, NOT PART OF THIS CLOSURE: while scoping the regression
+  test's exclusion list, TEST-DESIGNER found this issue's own "repo-wide
+  grep" had itself missed 9 further e2e spec files under
+  onboarding/admin/pipelines/ subdirectories, sharing the identical bug
+  (the original grep was non-recursive). Filed and registered separately
+  as ISS-0707 (queue task 707, GH#1490, docs/issues/ISS-0707.yaml) --
+  stays status: open, deliberately not folded into this fix's scope.
+pipeline_log:
+  - step: CODE-DESIGNER
+    at: "2026-09-17T10:00:00Z"
+    result: >
+      FAIL then PASS (rework). Design:
+      lib/letflow/design/iss-0706-e2e-readiness-precondition-fix.md.
+      Real scope correction found by direct verification: sh05-06.shell.e2e.spec.ts
+      (one of the original 11) is stale -- already fixed under ISS-0532,
+      no assertServiceReadiness call left. Real scope is 10 files. Chose
+      to extract shared assertBackendHealthy/assertServiceReadiness
+      helpers into helpers.ts (already this codebase's established
+      shared-helper location for all 10 in-scope files), pointed at real
+      GET /health, mirroring ISS-0532's resolution pattern. 8 plain files
+      delete their duplicate and import the shared version; 2 variant
+      files only swap their backend-check block, preserving Keycloak's
+      own legitimate /health/ready probe untouched. TC-TD-UI-01-04's
+      if(swiftResp.ok()) silent-noop gate inverted to hard-fail,
+      mirroring the same file's own TC-TD-UI-03-01 precedent. First
+      attempt CODE-DESIGN-VALIDATOR FAILed: §5 contained real
+      implementation code verbatim-identical to the real file. Reworked
+      to prose/shape level only.
+  - step: CODE-DESIGN-VALIDATOR
+    at: "2026-09-17T10:20:00Z"
+    result: >
+      PASS on rework (FAIL on first attempt -- see CODE-DESIGNER entry).
+      Independently verified all scope claims against real source (sh05-06
+      staleness, byte-identical two-part shape across all 8 plain files,
+      both variant files' real shape, helpers.ts convention, the
+      TC-TD-UI-03-01 precedent). Confirmed §5 is now genuine prose with
+      no leaked code (grep-verified against the whole file). Confirmed
+      nothing else regressed during the rework.
+  - step: FRONTEND-DEV
+    at: "2026-09-17T10:47:00Z"
+    result: >
+      PASS. Implemented at commit a6b5e5ac: shared
+      assertBackendHealthy/assertServiceReadiness in helpers.ts pointed
+      at real GET /health; 8 plain files deduplicated to import it, 2
+      variant files' Letflow-backend check swapped (Keycloak's own
+      legitimate /health/ready untouched); TC-TD-UI-01-04's silent-noop
+      gate inverted to hard-fail. sh05-06.shell.e2e.spec.ts correctly
+      left untouched. Verified via curl (GET /health 200, /health/ready
+      404) and two real Playwright runs against local backend/Keycloak:
+      zero readiness-check failures across all 10 files, only unrelated
+      downstream failures (missing env vars, unseeded tenant fixtures,
+      the known ISS-0702 vite-proxy quirk). TC-TD-UI-01-04's exact hard-
+      fail branch not directly reachable in this DB (missing both
+      default/swiftroute tenants), but the byte-identical
+      TC-TD-UI-03-01 pattern verified working for real against a
+      confirmed-404 endpoint. eslint/tsc clean. npm test 586/586.
+  - step: SECURITY-REVIEWER
+    at: "2026-09-17T10:55:00Z"
+    result: >
+      PASS. Zero lib/letflow/ or migration touches confirmed. INV-4:
+      apiBaseUrl/BPM_IDP_BASE_URL are parameters/env vars, not new
+      hardcoded secrets; TEST_ADMIN_USER/PASSWORD fallbacks are
+      pre-existing untouched fixture credentials. INV-9: outbound calls
+      made by the Playwright test process against operator/CI-configured
+      env vars, no tenant in the loop, same reasoning as ISS-0702.
+      TC-TD-UI-01-04's guard inversion judged a net correctness
+      improvement (silent false-pass -> hard failure), not a new risk.
+  - step: REVIEWER
+    at: "2026-09-17T11:02:00Z"
+    result: >
+      PASS. Confirmed the naming decision matches the design's own §7.1
+      resolution (keep name, correct via doc-comment, ISS-0532
+      precedent) -- not a FRONTEND-DEV unilateral call. Resolved the
+      design's second open question (keep vs. drop a liveness-only
+      precondition) with a real verdict: keep it -- fails fast with a
+      clear diagnostic instead of an opaque downstream failure, doesn't
+      claim to verify DB/auth/subsystem readiness, name-vs-semantics gap
+      fully mitigated by centralizing the doc-comment. Spot-checked 3/8
+      plain files + both variants, split matches design exactly. Scope
+      creep confirmed clean (both incidental findings untouched).
+      TC-TD-UI-01-04 confirmed to genuinely mirror TC-TD-UI-03-01, not
+      superficially. No decision-record conflict.
+  - step: TEST-DESIGNER
+    at: "2026-09-17T10:18:00Z"
+    result: >
+      Real gap closed at commit 1f44644c: assertBackendHealthy/
+      assertServiceReadiness ARE the entire fix and tests/e2e/** is
+      excluded from CI, so nothing automated protected this regression
+      class. Added web/tests/unit/iss-0706-e2e-health-precondition.test.ts
+      (6 cases, mirroring the established iss-0295-e2e-idp-config.test.ts
+      pattern), including a scoped grep-regression confirming all 10
+      fixed files import the shared helper with no local dupe surviving.
+      Fail-then-pass verified for real in a throwaway worktree: 6/6 fail
+      against the true pre-fix commit, 6/6 pass at branch tip. npm test
+      592/592, eslint/tsc clean. TC-TD-UI-01-04's hard-fail branch:
+      sibling-pattern proof judged the practical ceiling (same
+      unseeded-tenant-fixture environment constraint as ISS-0702).
+      Spot-checked all 10 modified files' diffs for copy-paste errors --
+      clean, but surfaced a real separate finding while scoping the
+      regression test's exclusion list: 9 more files under
+      onboarding/admin/pipelines/ share the identical bug, missed by
+      ISS-0706's own non-recursive grep. Filed and registered as
+      ISS-0706 (queue task 707, GH#1490), correctly not folded into this
+      fix's scope.
+  - step: TEST-DESIGN-VALIDATOR
+    at: "2026-09-17T10:48:00Z"
+    result: >
+      PASS. Confirmed all 6 new unit test cases are real and meaningful
+      (backend-then-Keycloak short-circuit proven via toHaveBeenCalledWith,
+      not just return-value checks). Independently reproduced fail-then-
+      pass in an isolated worktree: 6/6 fail against a6b5e5ac^ (4 via
+      TypeError since helpers didn't exist, TC-5 via 22 concrete
+      pre-fix regressions), 6/6 pass at branch tip. Independently
+      confirmed TC-5's grep-regression correctly excludes both
+      legitimate /health/ready occurrences (app-response listener,
+      Keycloak's own probe) without flagging either. Own npm test run:
+      592/592. Accepted TC-TD-UI-01-04's practical-ceiling judgment.
+      Spot-checked ISS-0707's filing: verified 5/9 named files directly,
+      confirmed genuine hard-throws (not console warnings), confirmed
+      the explicitly-excluded 10th occurrence really is non-blocking.
+  - step: TEST-RUNNER
+    at: "2026-09-17T11:12:00Z"
+    result: >
+      PASS. Backend mix test 4332/4332 unaffected. Frontend npm test
+      592/592 (includes new 6/6 unit test). playwright --list: 290/50
+      clean. Ran the 10 modified specs against a real local backend --
+      0/63 executions hit "Backend not live" (the exact throw this fix
+      targets); 53 remaining failures categorized and all pre-existing/
+      out-of-scope (Keycloak's own /health/ready, missing env vars,
+      unseeded fixtures, the known ISS-0702 vite-proxy quirk). mix
+      compile/format clean. Confirmed zero lib/letflow/ application-code
+      touches. Noted (not fixed, out of scope): the 10 files' stale
+      BPM_TEST_URL default (127.0.0.1:8080) silently ECONNREFUSEs
+      without an explicit override. Report:
+      test/reports/report-20260917-WF03-ISS0706-20260917.yaml (commit
+      e26e96cd).
+  - step: RELEASE-VALIDATOR
+    at: "2026-09-17T11:25:00Z"
+    result: >
+      PASS. Own 3-spec run against a real local backend: 0/17 readiness-
+      throw failures (matches TEST-RUNNER's 0/63). Read TC-TD-UI-01-04's
+      current code directly, confirmed the guard is genuinely
+      unconditional. Confirmed scope correction (10 not 11) real via
+      sh05-06's own doc comment + grep count. Ran the new unit test
+      independently: 6/6, confirmed legitimate not a stub. Confirmed
+      ISS-0707 fully populated, not a placeholder, spot-checked 3/9 files
+      exist. Full gate-evidence audit: every pipeline_log step has a
+      real commit, zero lib/letflow/ touches confirmed via diff --stat.
+      Own fresh runs: mix letflow.check.test 4332/4332, npm test
+      592/592, eslint/tsc clean. No new defects beyond what's already
+      tracked. Cleared for DOC-UPDATER and merge.

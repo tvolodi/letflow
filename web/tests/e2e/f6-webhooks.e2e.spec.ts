@@ -2,11 +2,10 @@ import { expect, test, type APIRequestContext, type Page } from '@playwright/tes
 import { randomUUID } from 'crypto'
 import * as fs from 'fs'
 import * as path from 'path'
-import { loginWithToken, BPM_IDP_BASE_URL, BPM_IDP_CLIENT_ID } from './helpers'
+import { loginWithToken, assertServiceReadiness, BPM_IDP_BASE_URL, BPM_IDP_CLIENT_ID } from './helpers'
 
 const SCREENSHOTS_DIR = 'tests/screenshots'
 const API_BASE_URL = process.env.BPM_TEST_URL ?? 'http://127.0.0.1:8080'
-const KEYCLOAK_DISCOVERY_URL = `${BPM_IDP_BASE_URL}/realms/bpm-default/.well-known/openid-configuration`
 const KEYCLOAK_TOKEN_URL = `${BPM_IDP_BASE_URL}/realms/bpm-default/protocol/openid-connect/token`
 const API_PREFIX = '/api/v1'
 const DLQ_ALERT_THRESHOLD = Number(process.env.VITE_DLQ_ALERT_THRESHOLD ?? '10')
@@ -31,18 +30,6 @@ function shotPath(name: string): string {
 
 async function shot(page: Page, name: string): Promise<void> {
   await page.screenshot({ path: shotPath(name), fullPage: true })
-}
-
-async function assertServiceReadiness(request: APIRequestContext): Promise<void> {
-  const backendHealth = await request.fetch(`${API_BASE_URL}/health/ready`)
-  if (!backendHealth.ok()) {
-    throw new Error(`Backend readiness check failed (${backendHealth.status()}) at ${API_BASE_URL}/health/ready`)
-  }
-
-  const idpHealth = await request.fetch(KEYCLOAK_DISCOVERY_URL)
-  if (!idpHealth.ok()) {
-    throw new Error(`Keycloak readiness check failed (${idpHealth.status()}) at ${KEYCLOAK_DISCOVERY_URL}`)
-  }
 }
 
 async function getKeycloakToken(request: APIRequestContext, username: string, password: string): Promise<string> {
@@ -595,7 +582,7 @@ function expectColorClose(actual: string, expected: [number, number, number], to
 
 test.describe('F6 DLQ depth badge (DLQ-UI-05)', () => {
   test('TC-DLQ-UI-05-01: badge shows pending count and warning color when pending items exist', async ({ page, request }) => {
-    await assertServiceReadiness(request)
+    await assertServiceReadiness(request, API_BASE_URL)
     const creds = getAdminCredentials()
     const adminToken = await getKeycloakToken(request, creds.username, creds.password)
 
@@ -622,7 +609,7 @@ test.describe('F6 DLQ depth badge (DLQ-UI-05)', () => {
   })
 
   test('TC-DLQ-UI-05-02: badge switches to critical color when count exceeds configured threshold', async ({ page, request }) => {
-    await assertServiceReadiness(request)
+    await assertServiceReadiness(request, API_BASE_URL)
     const creds = getAdminCredentials()
     const adminToken = await getKeycloakToken(request, creds.username, creds.password)
 
@@ -652,7 +639,7 @@ test.describe('F6 webhooks UI (WH-UI-01..03)', () => {
   let deliveryFixtures: WebhookDeliveryFixtureContext[] = []
 
   test.beforeEach(async ({ request }) => {
-    await assertServiceReadiness(request)
+    await assertServiceReadiness(request, API_BASE_URL)
     createdWebhookIds = []
     deliveryFixtures = []
     const creds = getAdminCredentials()

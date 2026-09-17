@@ -25,7 +25,7 @@ import { test, expect } from '@playwright/test'
 import type { APIRequestContext, Page } from '@playwright/test'
 import * as fs from 'fs'
 import * as path from 'path'
-import { getKeycloakToken, BPM_IDP_BASE_URL } from './helpers'
+import { getKeycloakToken, assertServiceReadiness } from './helpers'
 import { navigateSpa } from './pipeline'
 
 // ── Config ────────────────────────────────────────────────────────────────────
@@ -34,7 +34,6 @@ const SCREENSHOTS_DIR = 'tests/screenshots'
 const TEST_ADMIN_USER = process.env.TEST_ADMIN_USER ?? 'admin-user'
 const TEST_ADMIN_PASSWORD = process.env.TEST_ADMIN_PASSWORD ?? 'admin-pass'
 const API_BASE_URL = (process.env.BPM_TEST_URL ?? 'http://127.0.0.1:8080').replace(/\/$/, '')
-const KEYCLOAK_DISCOVERY_URL = `${BPM_IDP_BASE_URL}/realms/bpm-default/.well-known/openid-configuration`
 
 // ── Screenshot helper ─────────────────────────────────────────────────────────
 
@@ -46,25 +45,6 @@ function shotPath(name: string): string {
 
 async function shot(page: Page, name: string): Promise<void> {
   await page.screenshot({ path: shotPath(name), fullPage: true })
-}
-
-// ── Pre-flight ────────────────────────────────────────────────────────────────
-
-async function assertServiceReadiness(request: APIRequestContext): Promise<void> {
-  const backendHealth = await request.fetch(`${API_BASE_URL}/health/ready`)
-  if (!backendHealth.ok()) {
-    throw new Error(
-      `Backend readiness check failed (${backendHealth.status()}) at ${API_BASE_URL}/health/ready. ` +
-      `Ensure the BPM backend is running.`,
-    )
-  }
-  const idpHealth = await request.fetch(KEYCLOAK_DISCOVERY_URL)
-  if (!idpHealth.ok()) {
-    throw new Error(
-      `Keycloak readiness check failed (${idpHealth.status()}) at ${KEYCLOAK_DISCOVERY_URL}. ` +
-      `Ensure Keycloak is running.`,
-    )
-  }
 }
 
 // ── Login helpers ─────────────────────────────────────────────────────────────
@@ -189,7 +169,7 @@ test.describe('TD-UI-01 — Tenant-scoped landing page', () => {
    * fetched from the real backend (not a hard-coded value).
    */
   test('TC-TD-UI-01-01: dashboard heading shows tenant display_name after login', async ({ page, request }) => {
-    await assertServiceReadiness(request)
+    await assertServiceReadiness(request, API_BASE_URL)
 
     const token = await getKeycloakToken(request, TEST_ADMIN_USER, TEST_ADMIN_PASSWORD)
     const { tenantDisplayName } = await loginWithTenantToken(page, request, token, 'default')
@@ -214,7 +194,7 @@ test.describe('TD-UI-01 — Tenant-scoped landing page', () => {
    * "Unknown workspace" and the amber warning banner (isUnknown === true path).
    */
   test('TC-TD-UI-01-02: unknown workspace shows fallback heading and banner when tenant_display_name is absent', async ({ page, request }) => {
-    await assertServiceReadiness(request)
+    await assertServiceReadiness(request, API_BASE_URL)
 
     const token = await getKeycloakToken(request, TEST_ADMIN_USER, TEST_ADMIN_PASSWORD)
     // Login without tenant context — tenant_display_name is null in session
@@ -246,7 +226,7 @@ test.describe('TD-UI-01 — Tenant-scoped landing page', () => {
    * the real OIDC callback succeeds.
    */
   test('TC-TD-UI-01-03: dashboard is the first route rendered after OIDC login', async ({ page, request }) => {
-    await assertServiceReadiness(request)
+    await assertServiceReadiness(request, API_BASE_URL)
 
     const token = await getKeycloakToken(request, TEST_ADMIN_USER, TEST_ADMIN_PASSWORD)
     await loginWithTenantToken(page, request, token, 'default')
@@ -267,12 +247,13 @@ test.describe('TD-UI-01 — Tenant-scoped landing page', () => {
    * Verify that the dashboard data tiles are scoped to the logged-in tenant.
    *
    * PREREQUISITE: The 'swiftroute' tenant must exist in the database for the
-   * cross-tenant isolation assertion. If swiftroute is not provisioned, the test
-   * still validates that the default tenant heading is shown and the tiles render
-   * without cross-tenant leakage in the heading region.
+   * cross-tenant isolation assertion. Fails with a clear message otherwise —
+   * if swiftroute is not provisioned, the leakage assertion cannot run and the
+   * test must not report a false pass. Run the swiftroute tenant onboarding
+   * pipeline (sim-company-onboarding.pipeline.e2e.spec.ts) before this test.
    */
   test('TC-TD-UI-01-04: dashboard data tiles show only tenant-scoped results', async ({ page, request }) => {
-    await assertServiceReadiness(request)
+    await assertServiceReadiness(request, API_BASE_URL)
 
     const token = await getKeycloakToken(request, TEST_ADMIN_USER, TEST_ADMIN_PASSWORD)
     const { tenantDisplayName } = await loginWithTenantToken(page, request, token, 'default')
@@ -285,20 +266,27 @@ test.describe('TD-UI-01 — Tenant-scoped landing page', () => {
     await expect(heading).toBeVisible()
     await expect(heading).toContainText(tenantDisplayName)
 
-    // Cross-tenant leakage check: if swiftroute is provisioned, resolve its display_name
-    // and assert it does NOT appear anywhere in the data tiles.
+    // Cross-tenant leakage check: resolve swiftroute's display_name and assert it does
+    // NOT appear anywhere in the data tiles. Hard-fails if swiftroute isn't provisioned —
+    // silently skipping this assertion would prove nothing about cross-tenant isolation.
     const swiftResp = await request.get(`${API_BASE_URL}/api/v1/tenants/swiftroute`, {
       headers: { Authorization: `Bearer ${token}` },
     })
-    if (swiftResp.ok()) {
-      const swiftData = await swiftResp.json() as { display_name: string }
-      const tiles = page.locator('[data-testid^="tile-"]')
-      const tilesText = await tiles.allTextContents()
-      const joined = tilesText.join(' ')
-      // No tile should contain the other tenant’s display name.
-      expect(joined).not.toContain(swiftData.display_name)
+    if (!swiftResp.ok()) {
+      throw new Error(
+        `TC-TD-UI-01-04 prerequisite not satisfied: GET /api/v1/tenants/swiftroute returned ` +
+        `${swiftResp.status()}. Run the swiftroute tenant onboarding pipeline ` +
+        `(sim-company-onboarding.pipeline.e2e.spec.ts) before this test.`,
+      )
     }
-    // Whether or not swiftroute exists: own tenant’s tiles must be present
+    const swiftData = await swiftResp.json() as { display_name: string }
+    const tiles = page.locator('[data-testid^="tile-"]')
+    const tilesText = await tiles.allTextContents()
+    const joined = tilesText.join(' ')
+    // No tile should contain the other tenant’s display name.
+    expect(joined).not.toContain(swiftData.display_name)
+
+    // Own tenant’s tiles must be present
     await expect(page.getByTestId('tile-definitions')).toBeVisible()
     await expect(page.getByTestId('tile-instances')).toBeVisible()
     await expect(page.getByTestId('tile-tasks')).toBeVisible()
@@ -315,7 +303,7 @@ test.describe('TD-UI-02 — Tenant identity indicator', () => {
    * authenticated route (tested on /instances and /definitions).
    */
   test('TC-TD-UI-02-01: tenant display_name visible in sidebar on multiple authenticated routes', async ({ page, request }) => {
-    await assertServiceReadiness(request)
+    await assertServiceReadiness(request, API_BASE_URL)
 
     const token = await getKeycloakToken(request, TEST_ADMIN_USER, TEST_ADMIN_PASSWORD)
     const { tenantDisplayName } = await loginWithTenantToken(page, request, token, 'default')
@@ -356,7 +344,7 @@ test.describe('TD-UI-02 — Tenant identity indicator', () => {
    * and the BPM app's tenant-display-name element is no longer present.
    */
   test('TC-TD-UI-02-03: tenant display_name cleared from sidebar after logout', async ({ page, request }) => {
-    await assertServiceReadiness(request)
+    await assertServiceReadiness(request, API_BASE_URL)
 
     const token = await getKeycloakToken(request, TEST_ADMIN_USER, TEST_ADMIN_PASSWORD)
     await loginWithTenantToken(page, request, token, 'default')
@@ -389,7 +377,7 @@ test.describe('TD-UI-02 — Tenant identity indicator', () => {
    * satisfying WCAG 2.1 AA accessible text requirement (FNFR-03).
    */
   test('TC-TD-UI-02-04: tenant name is rendered as accessible text', async ({ page, request }) => {
-    await assertServiceReadiness(request)
+    await assertServiceReadiness(request, API_BASE_URL)
 
     const token = await getKeycloakToken(request, TEST_ADMIN_USER, TEST_ADMIN_PASSWORD)
     const { tenantDisplayName } = await loginWithTenantToken(page, request, token, 'default')
@@ -424,7 +412,7 @@ test.describe('TD-UI-03 — Tenant realm routing', () => {
    *   If not: run the tenant onboarding pipeline first (sim-company-onboarding).
    */
   test('TC-TD-UI-03-01: no "choose organisation" prompt shown after login with resolved tenant context', async ({ page, request }) => {
-    await assertServiceReadiness(request)
+    await assertServiceReadiness(request, API_BASE_URL)
 
     const token = await getKeycloakToken(request, TEST_ADMIN_USER, TEST_ADMIN_PASSWORD)
 

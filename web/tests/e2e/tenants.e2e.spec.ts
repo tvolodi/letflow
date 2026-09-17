@@ -15,17 +15,16 @@
  * Every verdict is visual: screenshots are taken and asserted on visible content.
  */
 
-import { expect, test, type APIRequestContext, type Page } from '@playwright/test'
+import { expect, test, type Page } from '@playwright/test'
 import { randomUUID } from 'crypto'
 import * as fs from 'fs'
 import * as path from 'path'
-import { getKeycloakToken, loginWithToken, BPM_IDP_BASE_URL } from './helpers'
+import { getKeycloakToken, loginWithToken, assertServiceReadiness } from './helpers'
 
 // ── Config ────────────────────────────────────────────────────────────────────
 
 const SCREENSHOTS_DIR = 'tests/screenshots'
 const API_BASE_URL = process.env.BPM_TEST_URL ?? 'http://127.0.0.1:8080'
-const KEYCLOAK_DISCOVERY_URL = `${BPM_IDP_BASE_URL}/realms/bpm-default/.well-known/openid-configuration`
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -50,21 +49,6 @@ function getAdminCredentials(): { username: string; password: string } {
   return {
     username,
     password,
-  }
-}
-
-async function assertServiceReadiness(request: APIRequestContext): Promise<void> {
-  const backendHealth = await request.fetch(`${API_BASE_URL}/health/ready`)
-  if (!backendHealth.ok()) {
-    throw new Error(
-      `Backend readiness check failed (${backendHealth.status()}) at ${API_BASE_URL}/health/ready`,
-    )
-  }
-  const idpHealth = await request.fetch(KEYCLOAK_DISCOVERY_URL)
-  if (!idpHealth.ok()) {
-    throw new Error(
-      `Keycloak readiness check failed (${idpHealth.status()}) at ${KEYCLOAK_DISCOVERY_URL}`,
-    )
   }
 }
 
@@ -103,7 +87,7 @@ test.describe('TM tenants UI (TM-01, TM-02, TM-03, TM-04, TM-05)', () => {
   let adminToken = ''
 
   test.beforeEach(async ({ request }) => {
-    await assertServiceReadiness(request)
+    await assertServiceReadiness(request, API_BASE_URL)
     const creds = getAdminCredentials()
     adminToken = await getKeycloakToken(request, creds.username, creds.password)
   })

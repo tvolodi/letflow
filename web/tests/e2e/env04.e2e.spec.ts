@@ -30,13 +30,12 @@ import { expect, test, type APIRequestContext, type Page } from '@playwright/tes
 import * as fs from 'fs'
 import * as path from 'path'
 import { randomUUID } from 'crypto'
-import { getKeycloakToken, loginWithToken, BPM_IDP_BASE_URL, BPM_IDP_CLIENT_ID } from './helpers'
+import { getKeycloakToken, loginWithToken, assertServiceReadiness, BPM_IDP_BASE_URL, BPM_IDP_CLIENT_ID } from './helpers'
 
 // ── Config ────────────────────────────────────────────────────────────────────
 
 const SCREENSHOTS_DIR = 'tests/screenshots'
 const API_BASE_URL = (process.env.BPM_TEST_URL ?? 'http://127.0.0.1:8080').replace(/\/$/, '')
-const KEYCLOAK_DISCOVERY_URL = `${BPM_IDP_BASE_URL}/realms/bpm-default/.well-known/openid-configuration`
 
 // ── Screenshot helper ─────────────────────────────────────────────────────────
 
@@ -48,25 +47,6 @@ function shotPath(name: string): string {
 
 async function shot(page: Page, name: string): Promise<void> {
   await page.screenshot({ path: shotPath(name), fullPage: true })
-}
-
-// ── Readiness check ───────────────────────────────────────────────────────────
-
-async function assertServiceReadiness(request: APIRequestContext): Promise<void> {
-  const backendHealth = await request.fetch(`${API_BASE_URL}/health/ready`)
-  if (!backendHealth.ok()) {
-    throw new Error(
-      `Backend not ready (${backendHealth.status()}) at ${API_BASE_URL}/health/ready.\n` +
-      'Ensure the BPM backend is running before executing these tests.',
-    )
-  }
-  const idpHealth = await request.fetch(KEYCLOAK_DISCOVERY_URL)
-  if (!idpHealth.ok()) {
-    throw new Error(
-      `Keycloak not ready (${idpHealth.status()}) at ${KEYCLOAK_DISCOVERY_URL}.\n` +
-      'Ensure Keycloak is running before executing these tests.',
-    )
-  }
 }
 
 function getAdminCredentials(): { username: string; password: string } {
@@ -288,7 +268,7 @@ test.describe('ENV-04-A: Production tenant context (TC-ENV-04-03, TC-ENV-04-07)'
   let adminToken = ''
 
   test.beforeEach(async ({ request }) => {
-    await assertServiceReadiness(request)
+    await assertServiceReadiness(request, API_BASE_URL)
     const creds = getAdminCredentials()
     adminToken = await getKeycloakToken(request, creds.username, creds.password)
   })
@@ -370,7 +350,7 @@ test.describe('ENV-04-B: Tenant switcher [TEST] badge (TC-ENV-04-04)', () => {
   let fixture: TestTenantFixture | undefined
 
   test.beforeAll(async ({ request }) => {
-    await assertServiceReadiness(request)
+    await assertServiceReadiness(request, API_BASE_URL)
     const creds = getAdminCredentials()
     adminToken = await getKeycloakToken(request, creds.username, creds.password)
     fixture = await seedTestTenantFixture(request, adminToken)
@@ -687,7 +667,7 @@ test.describe('ENV-04-C: Banner and Promote button (TC-ENV-04-01/02/05/06/08/09/
 
   test.beforeAll(async ({ request }) => {
     test.setTimeout(120_000)
-    await assertServiceReadiness(request)
+    await assertServiceReadiness(request, API_BASE_URL)
     const creds = getAdminCredentials()
     adminToken = await getKeycloakToken(request, creds.username, creds.password)
     fixture = await onboardTestTenantFixture(request, adminToken)

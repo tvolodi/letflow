@@ -2,12 +2,11 @@ import { expect, test, type APIRequestContext, type Page } from '@playwright/tes
 import { randomUUID } from 'crypto'
 import * as fs from 'fs'
 import * as path from 'path'
-import { loginWithToken, BPM_IDP_BASE_URL, BPM_IDP_CLIENT_ID } from './helpers'
+import { loginWithToken, assertServiceReadiness, BPM_IDP_BASE_URL, BPM_IDP_CLIENT_ID } from './helpers'
 
 const SCREENSHOTS_DIR = 'tests/screenshots'
 const API_BASE_URL = process.env.BPM_TEST_URL ?? 'http://127.0.0.1:8080'
 const KEYCLOAK_TOKEN_URL = `${BPM_IDP_BASE_URL}/realms/bpm-default/protocol/openid-connect/token`
-const KEYCLOAK_DISCOVERY_URL = `${BPM_IDP_BASE_URL}/realms/bpm-default/.well-known/openid-configuration`
 
 function shotPath(name: string): string {
   const dir = path.resolve(SCREENSHOTS_DIR)
@@ -25,18 +24,6 @@ function getEnvOrDefault(name: string, fallback: string): string {
     return fallback
   }
   return value
-}
-
-async function assertServiceReadiness(request: APIRequestContext): Promise<void> {
-  const backendHealth = await request.fetch(`${API_BASE_URL}/health/ready`)
-  if (!backendHealth.ok()) {
-    throw new Error(`Backend readiness check failed (${backendHealth.status()}) at ${API_BASE_URL}/health/ready`)
-  }
-
-  const idpHealth = await request.fetch(KEYCLOAK_DISCOVERY_URL)
-  if (!idpHealth.ok()) {
-    throw new Error(`Keycloak readiness check failed (${idpHealth.status()}) at ${KEYCLOAK_DISCOVERY_URL}`)
-  }
 }
 
 async function getAdminToken(request: APIRequestContext): Promise<string> {
@@ -121,7 +108,7 @@ async function navigateSpa(page: Page, targetPath: string): Promise<void> {
 
 test.describe('F5 admin observability UI (ADM-UI-09..11)', () => {
   test.beforeEach(async ({ request }) => {
-    await assertServiceReadiness(request)
+    await assertServiceReadiness(request, API_BASE_URL)
   })
 
   test('TC-ADM-UI-09-01: health dashboard renders readiness cards and refresh behavior', async ({ page, request }) => {

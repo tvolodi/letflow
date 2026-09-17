@@ -1,0 +1,46 @@
+{
+  "handoff_id": "wf03-iss0705-step03-rework1",
+  "run_id": "WF03-ISS0705-20260917",
+  "workflow_id": "WF-03",
+  "step": "03-rework1",
+  "from_agent": "ORCH",
+  "to_agent": "ELIXIR-DEV",
+  "file": "handoffs/WF03-ISS0705-20260917/step-03-elixir-dev-rework1.json",
+  "created_at": "2026-09-17T10:55:00Z",
+  "started_at": "2026-09-17T10:55:00Z",
+  "completed_at": null,
+  "status": "PENDING",
+  "priority": "NORMAL",
+  "context": {
+    "stage": null,
+    "requirement_ids": [],
+    "requirement_text": {},
+    "source_text": {},
+    "related_handoff_ids": [
+      "handoffs/WF03-ISS0705-20260917/step-02-code-designer-rework1.json",
+      "handoffs/WF03-ISS0705-20260917/step-02b-code-design-validator-rework1.json"
+    ],
+    "artifacts_in": ["lib/letflow/design/iss0705-sandbox-mode-restore-fix.md"],
+    "owned_modules": ["test/letflow/routers/tenants_test.exs"]
+  },
+  "task": {
+    "description": "REWORK ITERATION 1: re-implement lib/letflow/design/iss0705-sandbox-mode-restore-fix.md's REVISED Section 1 only, for test/letflow/routers/tenants_test.exs. On branch feature/WF03-ISS0705-20260917 (`git checkout feature/WF03-ISS0705-20260917`; pull latest first). The prior attempt (commit 9fcd5fcb) wrapped the whole test body in SandboxAutoMode.provision!/2 and failed with a DBConnection.OwnershipError in the test's own on_exit/1 cleanup. Undo that wrap (keep the test body flat, as it was before this run's first attempt -- check `git log` / `git diff` to find the pre-fix baseline), and instead apply the revised, validated Section 1: add `Letflow.Test.SandboxAutoMode.enter_auto_mode!(Letflow.Repo)` as the FIRST line inside the test's own existing on_exit/1 cleanup callback (before its DROP SCHEMA/delete_all work), and restore the standalone `Ecto.Adapters.SQL.Sandbox.mode(Letflow.Repo, :auto)` call at the top of the test (this part of the original leak was never wrong on its own -- only the missing restore was the bug; the restore now lives inside on_exit/1 via enter_auto_mode!/1, consistent with sections 2/3's already-passing pattern). Sections 2 and 3 (identity_test.exs, role_registry_test.exs) are already correctly implemented and passing from the prior attempt -- do not touch them. Claim this handoff by setting status to IN_PROGRESS only.",
+    "acceptance_criteria": [
+      "test/letflow/routers/tenants_test.exs's on_exit/1 callback calls SandboxAutoMode.enter_auto_mode!(Letflow.Repo) as its first line, exactly per the revised design doc Section 1",
+      "test/letflow/routers/identity_test.exs and test/letflow/role_registry_test.exs left untouched (already correct)",
+      "mix compile succeeds with no new warnings",
+      "mix test test/letflow/routers/tenants_test.exs test/letflow/routers/identity_test.exs test/letflow/role_registry_test.exs passes fully",
+      "Changes committed to feature/WF03-ISS0705-20260917",
+      "next_action routes to SECURITY-REVIEWER"
+    ]
+  },
+  "result": {
+    "status": null,
+    "summary": null,
+    "artifacts_out": [],
+    "issues": [],
+    "next_action": null
+  },
+  "rework_count": 1,
+  "max_rework": 3
+}

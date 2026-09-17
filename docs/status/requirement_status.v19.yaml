@@ -169,3 +169,41 @@
 
 
 history:
+  - req: SCOPE-CHANGE
+    event: done
+    agent: DOC-UPDATER
+    at: "2026-09-17T13:20:40Z"
+    note: >
+      Immediate side-fix for ISS-0700's stale docs/requirements.yaml
+      clause (queue task 700, GH#1474, docs/issues/ISS-0700.yaml), per
+      REVIEWER's determination (path: missing-functionality) that a
+      distinct platform-admin dashboard is genuine missing functionality
+      to be routed to REQ-ANALYST as a new requirement -- ISS-0700 itself
+      stays status: open, NOT resolved by this step. Corrected REQ-360's
+      description clause that still read "if already authenticated as
+      PLATFORM_ADMIN they land on the platform dashboard" to state the
+      actual current behavior: PLATFORM_ADMIN lands on the same shared /
+      root (TenantDashboardPage) as every other authenticated role,
+      matching
+      test/fixtures/uat/scenarios/platform/platform-login-routing-by-role.yaml's
+      already-correct UAT scenario, and cross-referencing ISS-0700 as
+      tracking the pending future distinct-platform-dashboard work.
+      Recorded a partial_action field on docs/issues/ISS-0700.yaml noting
+      this side-fix, distinct from the still-open functional gap. No
+      decision record created (not a "document current behavior as
+      intentional" case -- REVIEWER's determination was "build it"). No
+      application code touched, no letflow-queue/GitHub issue state
+      changed -- ISS-0700 stays open and unlocked for the separate
+      REQ-ANALYST follow-up.
+
+      This entry was originally appended to volume 18 against a
+      pre-roll base; while this branch (docs/WF03-ISS0700-20260917) was
+      in flight, a concurrent session's ISS-0703 done-event closed
+      volume 18 (26 entries, 1211 frozen-prefix lines, over the roll
+      ceiling) and opened this volume 19. Rebased onto origin/main
+      (60f74d76) to resolve the real resulting merge conflict: volume 18
+      restored byte-for-byte from origin/main (frozen, not touched), this
+      entry redirected here to volume 19 instead of being inserted into
+      the now-closed predecessor, per this volume's own "never moves,
+      edits or deletes an existing entry" rule for the closed volume and
+      "append one entry per event" for the current one.

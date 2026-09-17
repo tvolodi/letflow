@@ -3895,21 +3895,39 @@ volumes:
       Closure footer appended per the roll procedure; successor volume 19
       created with the same header text.
 
-  - volume: 19
-    path: docs/status/requirement_status.v19.yaml
-    status: current
-    opened: 2026-09-17
-    entries: 0
-    note: >
-      Opened by ORCH as volume 18's roll successor, immediately after
-      volume 18 crossed the 1,200-line roll ceiling on the ISS-0703
-      done-event append. No entries yet at creation time.
+      This ORCH session's own DOC-UPDATER SCOPE-CHANGE (ISS-0700
+      partial-action, REQ-360 stale-clause correction) entry had
+      originally been appended to this volume against a pre-roll base
+      (would have been the 27th entry) -- redirected to volume 19 instead
+      during this branch's rebase onto origin/main, since this volume was
+      already closed and frozen by the time of that rebase. Volume 18
+      itself is unmodified here, byte-for-byte identical to origin/main's
+      closed state.
 
       Incremented to 24 by DOC-UPDATER's own SCOPE-CHANGE (ISS-0707)
       done-event append -- `grep -c "^  - req:"
       docs/status/requirement_status.v18.yaml` = 24 on-disk entries; 1129
       lines / 67530 bytes, well under the 1200-line/120000-byte roll
       ceiling, no roll triggered.
+
+  - volume: 19
+    path: docs/status/requirement_status.v19.yaml
+    status: current
+    opened: 2026-09-17
+    entries: 1
+    note: >
+      Incremented to 1 by this ORCH session's own DOC-UPDATER SCOPE-CHANGE
+      (ISS-0700 partial-action, REQ-360 stale-clause correction) done-event
+      append, redirected here from volume 18 during this branch's rebase
+      onto origin/main (volume 18 had already been closed by a concurrent
+      session's ISS-0703 append before this rebase) -- `grep -c "^  - req:"
+      docs/status/requirement_status.v19.yaml` = 1 on-disk entry; 209 lines
+      / 12120 bytes, well under the 1200-line/120000-byte roll ceiling, no
+      roll triggered.
+
+      Opened by ORCH as volume 18's roll successor, immediately after
+      volume 18 crossed the 1,200-line roll ceiling on the ISS-0703
+      done-event append. No entries yet at creation time.
 
       Incremented to 23 by DOC-UPDATER's own SCOPE-CHANGE (ISS-0706)
       done-event append -- `grep -c "^  - req:"

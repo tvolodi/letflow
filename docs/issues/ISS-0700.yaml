@@ -31,3 +31,163 @@ related_requirements:
 queue_ref: Q-700
 github_ref: GH-1474
 status: open
+diagnosed_by: ISSUE-FIXER
+diagnosed_in_run: issue/ISS-0700-20260917
+diagnosed_at: "2026-09-17T14:30:00Z"
+diagnosis:
+  determination: CANNOT_DETERMINE_INTENT_ESCALATE
+  summary: >
+    Direct reproduction confirms the report in full. web/src/router.tsx (read in full)
+    mounts the identical <TenantDashboardPage /> element at both { index: true } and
+    { path: 'dashboard' } under the single authenticated route tree rooted at '/' --
+    there is no role-conditional branch anywhere in the router, in
+    web/src/auth/ProtectedRoute.tsx, or in web/src/auth/AuthProvider.tsx.
+    web/src/pages/OidcCallbackPage.tsx (read in full) calls `navigate('/', { replace:
+    true })` unconditionally on successful callback -- it decodes `payload.roles` only
+    to validate the token is non-empty (line 39), never to branch the destination.
+    web/src/components/layout/AppShell.tsx's NAV_ITEMS table (read in full, lines
+    19-47) confirms PLATFORM_ADMIN's only differentiation is a longer `roles: [...]`
+    array on additional nav entries (Users, Groups, Tokens, Audit, Health, Metrics,
+    Register Tenant, Tenants, Services) -- there is no separate landing route any of
+    these substitute for; they are all reached by manual in-shell navigation after
+    landing on the same '/' dashboard every other role lands on.
+
+    web/src/pages/dashboard/TenantDashboardPage.tsx (read in full) is genuinely
+    tenant-scoped, not role-neutral: its <h1> renders `tenantDisplayName` from
+    useTenantContext() (web/src/auth/useTenantContext.ts), which derives from
+    `session.tenant_display_name` -- populated in OidcCallbackPage.tsx from
+    `resolveRealmFromUrl()` / the `bpm_realm_slug` sessionStorage key, i.e. whichever
+    OIDC realm the user authenticated through. Its three data tiles
+    (definitions/instances/tasks) are plain `.list()` calls with no explicit tenant
+    filter, relying on server-side token scoping. A PLATFORM_ADMIN is conceptually
+    platform-wide, not scoped to one tenant, so this page's tenant-branded heading and
+    tenant-implicit data queries are not obviously coherent as *that* role's landing
+    surface -- though I could not fully confirm from the frontend alone what a
+    PLATFORM_ADMIN's token/realm actually resolves to at login (e.g. whether they
+    always authenticate through a dedicated platform realm with its own
+    tenant_display_name, making the heading merely say "Platform" rather than a real
+    tenant's name).
+
+    docs/requirements.yaml's REQ-360 entry (current text, already corrected once by
+    ISS-0701's DOC-UPDATER pass for the login-form finding) still reads: "if already
+    authenticated as PLATFORM_ADMIN they land on the platform dashboard; if already
+    authenticated as a tenant-scoped role they land on their tenant dashboard" -- this
+    clause was NOT touched by ISS-0701's fix (which only corrected the login-form
+    Why-section clause and cited decision 0035) and is still factually wrong against
+    the real code: no distinct "platform dashboard" exists anywhere in web/src.
+
+    Critically, REQ-360's OWN shipped design doc
+    (lib/letflow/design/req360-platform-login-routing-uat-scenario.md, read in full)
+    already investigated this exact question at Section 0 finding #1 and Section 7
+    OQ-3, and explicitly declined to resolve it: "It is possible the product decision
+    is that PLATFORM_ADMIN deliberately lands on the same workspace shell as any other
+    role (simpler IA, admin capabilities surfaced via nav only) and no separate
+    platform dashboard was ever meant to exist. This design does not resolve that
+    product question." The permanent UAT scenario it produced,
+    test/fixtures/uat/scenarios/platform/platform-login-routing-by-role.yaml (read in
+    full), already documents the REAL behavior (shared '/' root for every role) as
+    what to test against, exactly per REQ-360's AC3 ("document the real behaviour...
+    rather than the scenario being silently rewritten") -- so the scenario itself is
+    correct and does not need to change regardless of how this finding resolves.
+
+    I searched docs/migration/decisions/ for anything settling dashboard/landing-page
+    routing per role: no decision record addresses this at all (grepped
+    "dashboard|Dashboard" across every decision file; only hits are unrelated
+    LiveDashboard/mix test-pool references in 0009-test-parallel-pool-sizing.md).
+    Unlike ISS-0701 (where REQ-133's own superseding text plus dead-code evidence gave
+    a clear, checkable answer), no comparable positive evidence exists here either
+    way: nothing confirms a distinct platform-admin dashboard was ever planned in a
+    later stage, AND nothing confirms "shared dashboard + nav-only capability
+    surfacing" was a deliberate, on-the-record IA decision. TenantDashboardPage's
+    tenant-branded heading is a real (if soft) signal toward "this page assumes a
+    single-tenant viewer," which cuts differently from ISS-0701's dead-code signal.
+  what_a_fix_needs_to_change: >
+    Two independent, non-exclusive resolution paths depending on product intent, which
+    this diagnosis cannot itself determine from available evidence:
+      (a) If a distinct platform-admin landing surface is genuinely wanted: build a
+          PlatformDashboardPage (or equivalent) reflecting platform-wide state rather
+          than one tenant's, add a role-conditional branch in OidcCallbackPage.tsx (and
+          a matching route in router.tsx) so PLATFORM_ADMIN lands there instead of '/',
+          and decide whether tenant-scoped roles keep landing on TenantDashboardPage
+          unchanged (they should).
+      (b) If shared-dashboard-plus-nav-only-capability-surfacing is in fact the
+          intended IA: this is a documentation-correction fix -- REQ-360's
+          docs/requirements.yaml description needs its still-stale "they land on the
+          platform dashboard" clause corrected to match the already-correct UAT
+          scenario text (shared '/' root, capabilities surfaced via nav only), and a
+          decision record should be added under docs/migration/decisions/ stating this
+          IA choice and its rationale explicitly (nothing currently supersedes the
+          absence of a decision here, unlike ISS-0701 where 0035 now exists).
+    Recommend REVIEWER make this determination explicitly, same precedent as ISS-0701
+    (docs/issues/ISS-0701.yaml's `determination` block, REVIEWER, 2026-09-17T13:15:00Z)
+    -- this is a genuine open product-IA question (REQ-360's own design doc flagged it
+    as OQ-3 and declined to resolve it), not a diagnosis this role can respond to by
+    guessing. If REVIEWER determines path (b), CLAUDE.md's "don't silently re-decide
+    what a decision record already settled" does not block that path since no decision
+    record exists yet to re-decide -- same as ISS-0701's own reasoning on this point.
+  next_action: >
+    Escalate to REVIEWER for a path (a)/(b) determination, per ISS-0701's precedent,
+    before routing to CODE-DESIGNER.
+determination:
+  determined_by: REVIEWER
+  determined_at: "2026-09-17T13:52:00Z"
+  path: missing-functionality
+  verdict: >
+    Genuine missing functionality, not a doc-correction. TenantDashboardPage
+    is actively tenant-possessive (renders tenantDisplayName, "Welcome to
+    your BPM workspace"), not role-neutral with graceful degradation.
+    PLATFORM_ADMIN has no natural tenant slug to bind to it (confirmed via
+    lib/letflow/design/req128-keycloak-dev-stack.md -- PLATFORM_ADMIN is a
+    realm role inside the shared realm, not a separate tenant). Two broken
+    paths confirmed by direct read: (1) if a PLATFORM_ADMIN logs in through
+    some tenant's branded URL, they land on a page implying they're scoped
+    to that tenant; (2) if they log in with no realm slug (the likely path
+    for landing on the bare app root), they hit the isUnknown branch --
+    "Unknown workspace" heading plus "Tenant name could not be loaded.
+    Contact your administrator." -- an actively broken message to show the
+    platform's own admin. A legitimate shared-landing design wouldn't
+    produce a self-contradicting error banner for the platform admin, so
+    this isn't "shared dashboard + nav-only capability surfacing was the
+    deliberate IA" (path b from the diagnosis) -- it's missing UI.
+  concrete_next_step: >
+    Route to REQ-ANALYST as a new requirement (WF-02-sized net-new UI, not
+    a WF-03 issue-fix). ISS-0700 stays open as the source finding, cited by
+    the new requirement alongside
+    lib/letflow/design/req360-platform-login-routing-uat-scenario.md
+    §0/§5/OQ-3 as prior art. Rough scope (not fully defined here, REQ-ANALYST's
+    job): a distinct PlatformDashboardPage route with platform-wide (not
+    tenant-branded) content, a role-conditional branch in
+    OidcCallbackPage.tsx sending PLATFORM_ADMIN there and every other role
+    to / unchanged, matching router.tsx route. Separately flagged but out
+    of this issue's frame: unauthenticated/no-realm-slug users of ANY role
+    hitting the existing isUnknown banpath may be its own pre-existing gap.
+
+    Independently of (a)/(b): docs/requirements.yaml's REQ-360 description
+    (~line 26290) still reads "if already authenticated as PLATFORM_ADMIN
+    they land on the platform dashboard" -- factually wrong today,
+    shouldn't wait on the new requirement being built. Route to
+    DOC-UPDATER now as a description bug-fix (not a decision record, since
+    the determination here is "build it," not "document current behavior
+    as intentional") -- rewrite to state the actual current behavior
+    (shared / root for every role, matching the now-correct UAT scenario)
+    and cross-reference the new platform-dashboard requirement as pending
+    future work.
+partial_action:
+  performed_by: DOC-UPDATER
+  performed_in_run: docs/WF03-ISS0700-20260917
+  performed_at: "2026-09-17T13:20:40Z"
+  summary: >
+    Immediate side-fix only, distinct from this issue's still-open
+    functional gap: corrected docs/requirements.yaml's REQ-360 description
+    clause that read "if already authenticated as PLATFORM_ADMIN they land
+    on the platform dashboard" to state the actual current behavior --
+    PLATFORM_ADMIN lands on the same shared / root (TenantDashboardPage) as
+    every other authenticated role, matching what
+    test/fixtures/uat/scenarios/platform/platform-login-routing-by-role.yaml's
+    UAT scenario already correctly tests -- and cross-referenced this issue
+    (ISS-0700) as tracking the pending future work of a distinct
+    platform-admin dashboard. This does NOT resolve ISS-0700 itself; status
+    stays open pending REQ-ANALYST drafting the new requirement per the
+    `determination` block's `concrete_next_step` above. No decision record
+    created, no application code touched, no letflow-queue/GitHub state
+    changed by this step.

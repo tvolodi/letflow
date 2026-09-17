@@ -26289,10 +26289,14 @@ requirements:
     stage: S7
     description: >
       The concrete scenario named throughout this session's design
-      discussion: a user opens the QA login URL; if already authenticated as
-      PLATFORM_ADMIN they land on the platform dashboard; if already
-      authenticated as a tenant-scoped role they land on their tenant
-      dashboard; if unauthenticated they are redirected to Keycloak's
+      discussion: a user opens the QA login URL; if already authenticated,
+      whether as PLATFORM_ADMIN or as a tenant-scoped role, they land on
+      the same shared / root (TenantDashboardPage) — there is no distinct
+      platform-admin dashboard today, matching what
+      test/fixtures/uat/scenarios/platform/platform-login-routing-by-role.yaml's
+      UAT scenario already correctly tests; a distinct platform-admin
+      dashboard is tracked as pending future work via ISS-0700; if
+      unauthenticated they are redirected to Keycloak's
       hosted login UI — the decided, intended target architecture per
       docs/migration/decisions/0035-frontend-login-delegated-to-keycloak.md,
       not an in-app login form (no such form exists or is planned; SH-01/

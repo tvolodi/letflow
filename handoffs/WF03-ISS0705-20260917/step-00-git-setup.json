@@ -8,8 +8,8 @@
   "file": "handoffs/WF03-ISS0705-20260917/step-00-git-setup.json",
   "created_at": "2026-09-17T04:12:39Z",
   "started_at": "2026-09-17T04:12:39Z",
-  "completed_at": null,
-  "status": "PENDING",
+  "completed_at": "2026-09-17T04:13:22Z",
+  "status": "COMPLETED",
   "priority": "NORMAL",
   "context": {
     "stage": null,
@@ -29,12 +29,17 @@
     ]
   },
   "result": {
-    "status": null,
-    "summary": null,
-    "artifacts_out": [],
+    "status": "PASS",
+    "summary": "Single worktree checkout. git checkout main + git pull --ff-only origin main succeeded (already up to date). Created and checked out feature/WF03-ISS0705-20260917 from main, verified via git branch --show-current, and pushed with upstream tracking to origin.",
+    "artifacts_out": ["branch: feature/WF03-ISS0705-20260917"],
     "issues": [],
-    "git_evidence": {},
-    "next_action": null
+    "git_evidence": {
+      "branch_name": "feature/WF03-ISS0705-20260917",
+      "commit_sha_list": ["95daf470b42e35f0ad4eef95b42bbe36ef41cdca"],
+      "remote_branch": "origin/feature/WF03-ISS0705-20260917",
+      "push_status": "new branch created and tracking set up successfully"
+    },
+    "next_action": "Route to Step 0.5/1 (ISSUE-FIXER diagnosis)"
   },
   "rework_count": 0,
   "max_rework": 3

@@ -1,0 +1,45 @@
+{
+  "handoff_id": "wf02-req367-step06",
+  "run_id": "WF02-REQ367-20260917",
+  "workflow_id": "WF-02",
+  "step": "06",
+  "from_agent": "ORCH",
+  "to_agent": "DOC-UPDATER",
+  "file": "handoffs/WF02-REQ367-20260917/step-06-doc-updater.json",
+  "created_at": "2026-09-17T22:20:00Z",
+  "started_at": "2026-09-17T22:20:00Z",
+  "completed_at": null,
+  "status": "PENDING",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S7",
+    "requirement_ids": ["REQ-367"],
+    "requirement_text": {
+      "REQ-367": "See handoffs/WF02-REQ367-20260917/step-00-git-setup.json's context.requirement_text for the full verbatim requirement description."
+    },
+    "artifacts_in": [
+      "deploy/redeploy-qa.sh",
+      ".github/workflows/cd.yml",
+      ".github/workflows/ci.yml",
+      "handoffs/WF02-REQ367-20260917/step-05-release-validator.json"
+    ],
+    "owned_modules": [
+      "docs/requirements.yaml",
+      "docs/status/requirement_status.v19.yaml"
+    ],
+    "branch_name": "feature/WF02-REQ367-20260917"
+  },
+  "task": {
+    "description": "WF-02 Step 6 -- Documentation update for REQ-367 (CD to QA deploy infra). Claim this handoff (status IN_PROGRESS). 1. Flip docs/requirements.yaml's REQ-367 entry status from 'in_progress' to 'done'. 2. Append a 'done' event to the current run-history volume -- check docs/status/requirement_status.index.yaml for which volume is current (should still be docs/status/requirement_status.v19.yaml, confirm by grepping 'status: current'), append (do not rewrite) a done event with a real UTC timestamp, referencing this run (WF02-REQ367-20260917), queue task 693, GH#1450, and RELEASE-VALIDATOR's PASS. The close-out note MUST include the two facts REQ-367's own acceptance criteria require to be stated explicitly in plain language: (a) this requirement does NOT make the QA deploy live -- the companion ai-dala-infra credential-provisioning task (SSH key + GitHub Actions secrets) is a separate, required, not-yet-done step; (b) deploy/redeploy-test.sh was left untouched and its relationship to the new deploy/redeploy-qa.sh (sibling script, different target environment) is stated. Update the index's entry count/note for the volume per its own append procedure. 3. README.md: check whether it documents CI/CD or deploy mechanisms currently -- if not, no change needed (confirm and state this explicitly rather than silently skipping). 4. This requirement's acceptance criteria did not name a specific docs/migration/stage-N-*.md or decision record to update, so none is required -- confirm this by rereading REQ-367's acceptance criteria list one more time before concluding. Complete the handoff: artifacts_out listing every file actually touched (docs/requirements.yaml, docs/status/requirement_status.v19.yaml, docs/status/requirement_status.index.yaml), next_action 'Route to ELIXIR-DEV for Step Final'. Commit and push on feature/WF02-REQ367-20260917.",
+    "acceptance_criteria": [
+      "docs/requirements.yaml's REQ-367 status flipped pending/in_progress -> done",
+      "A 'done' event appended (not rewritten) to the current run-history volume with a real UTC timestamp",
+      "Close-out note explicitly states the deploy is NOT live pending the companion ai-dala-infra task",
+      "Close-out note explicitly states deploy/redeploy-test.sh's untouched status and its relationship to the new script",
+      "README.md checked explicitly for whether it needs updating; result stated either way"
+    ]
+  },
+  "result": null,
+  "rework_count": 0,
+  "max_rework": 3
+}

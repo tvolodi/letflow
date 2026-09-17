@@ -3880,8 +3880,14 @@ volumes:
     path: docs/status/requirement_status.v18.yaml
     status: current
     opened: 2026-09-15
-    entries: 25
+    entries: 26
     note: >
+      Incremented to 26 by DOC-UPDATER's own SCOPE-CHANGE (ISS-0700
+      partial-action, REQ-360 stale-clause correction) done-event append
+      -- `grep -c "^  - req:" docs/status/requirement_status.v18.yaml` =
+      26 on-disk entries; 1196 lines / 71534 bytes, well under the
+      1200-line/120000-byte roll ceiling, no roll triggered.
+
       Incremented to 25 by DOC-UPDATER's own SCOPE-CHANGE (ISS-0701)
       done-event append -- `grep -c "^  - req:"
       docs/status/requirement_status.v18.yaml` = 25 on-disk entries; 1163

@@ -1161,3 +1161,36 @@ history:
       closed with an evidence comment by this same DOC-UPDATER step.
       letflow-queue task 701 and PR merge are ORCH's follow-up, out of
       scope for this DOC-UPDATER step per this run's own dispatch.
+
+  - req: SCOPE-CHANGE
+    event: done
+    agent: DOC-UPDATER
+    at: "2026-09-17T13:20:40Z"
+    note: >
+      Immediate side-fix for ISS-0700's stale docs/requirements.yaml
+      clause (queue task 700, GH#1474, docs/issues/ISS-0700.yaml), per
+      REVIEWER's determination (path: missing-functionality) that a
+      distinct platform-admin dashboard is genuine missing functionality
+      to be routed to REQ-ANALYST as a new requirement -- ISS-0700 itself
+      stays status: open, NOT resolved by this step. Corrected REQ-360's
+      description clause that still read "if already authenticated as
+      PLATFORM_ADMIN they land on the platform dashboard" to state the
+      actual current behavior: PLATFORM_ADMIN lands on the same shared /
+      root (TenantDashboardPage) as every other authenticated role,
+      matching
+      test/fixtures/uat/scenarios/platform/platform-login-routing-by-role.yaml's
+      already-correct UAT scenario, and cross-referencing ISS-0700 as
+      tracking the pending future distinct-platform-dashboard work.
+      Recorded a `partial_action` field on docs/issues/ISS-0700.yaml
+      noting this side-fix, distinct from the still-open functional gap.
+      No decision record created (not a "document current behavior as
+      intentional" case -- REVIEWER's determination was "build it").
+      README.md checked -- no documented current-behavior content (ASCII
+      state diagram, "Running it" section) references platform-admin
+      dashboard routing, so no README change was needed. No
+      docs/migration/stage-N-*.md or docs/migration/decisions/*.md file
+      named in this fix's scope. No application code touched, no
+      letflow-queue/GitHub issue state changed -- ISS-0700 stays open and
+      unlocked for the separate REQ-ANALYST follow-up; letflow-queue task
+      700 and PR merge are ORCH's follow-up, out of scope for this
+      DOC-UPDATER step per this run's own dispatch.

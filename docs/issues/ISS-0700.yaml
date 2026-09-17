@@ -172,3 +172,22 @@ determination:
     (shared / root for every role, matching the now-correct UAT scenario)
     and cross-reference the new platform-dashboard requirement as pending
     future work.
+partial_action:
+  performed_by: DOC-UPDATER
+  performed_in_run: docs/WF03-ISS0700-20260917
+  performed_at: "2026-09-17T13:20:40Z"
+  summary: >
+    Immediate side-fix only, distinct from this issue's still-open
+    functional gap: corrected docs/requirements.yaml's REQ-360 description
+    clause that read "if already authenticated as PLATFORM_ADMIN they land
+    on the platform dashboard" to state the actual current behavior --
+    PLATFORM_ADMIN lands on the same shared / root (TenantDashboardPage) as
+    every other authenticated role, matching what
+    test/fixtures/uat/scenarios/platform/platform-login-routing-by-role.yaml's
+    UAT scenario already correctly tests -- and cross-referenced this issue
+    (ISS-0700) as tracking the pending future work of a distinct
+    platform-admin dashboard. This does NOT resolve ISS-0700 itself; status
+    stays open pending REQ-ANALYST drafting the new requirement per the
+    `determination` block's `concrete_next_step` above. No decision record
+    created, no application code touched, no letflow-queue/GitHub state
+    changed by this step.

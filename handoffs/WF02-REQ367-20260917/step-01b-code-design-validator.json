@@ -1,0 +1,44 @@
+{
+  "handoff_id": "wf02-req367-step01b",
+  "run_id": "WF02-REQ367-20260917",
+  "workflow_id": "WF-02",
+  "step": "01b",
+  "from_agent": "ORCH",
+  "to_agent": "CODE-DESIGN-VALIDATOR",
+  "file": "handoffs/WF02-REQ367-20260917/step-01b-code-design-validator.json",
+  "created_at": "2026-09-17T15:35:00Z",
+  "started_at": "2026-09-17T15:35:00Z",
+  "completed_at": null,
+  "status": "PENDING",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S7",
+    "requirement_ids": ["REQ-367"],
+    "requirement_text": {
+      "REQ-367": "See handoffs/WF02-REQ367-20260917/step-00-git-setup.json's context.requirement_text for the full verbatim requirement description."
+    },
+    "artifacts_in": [
+      "lib/letflow/design/req367-cd-qa-deploy.md",
+      "handoffs/WF02-REQ367-20260917/step-01-code-designer.json"
+    ],
+    "owned_modules": [
+      "deploy/redeploy-qa.sh",
+      ".github/workflows/cd.yml"
+    ],
+    "branch_name": "feature/WF02-REQ367-20260917"
+  },
+  "task": {
+    "description": "WF-02 Step 1b -- Design gate for REQ-367's design (lib/letflow/design/req367-cd-qa-deploy.md). Claim this handoff (status IN_PROGRESS). Read the design file directly (not just CODE-DESIGNER's result.summary). This is infrastructure design (shell script + GitHub Actions workflow), not Elixir -- apply the same rigor as usual (per WF-02 Step 1b's standard checklist) adapted to this shape: (a) does every REQ-367 acceptance criterion map to a concrete design element -- no TBD/deferrals? (b) is deploy/redeploy-qa.sh's procedure fully specified (each step's purpose, target paths, ordering) without actual bash bodies? (c) is cd.yml's trigger/gate mechanism fully specified, including how it avoids duplicating ci.yml's diff logic, without actual YAML bodies? (d) are error-handling/failure-mode expectations stated (what happens if a step fails, health check fails, etc.) -- not left implicit? (e) are cross-file dependencies listed (what ci.yml change is implied, if any)? (f) is there any actual implementation code (real bash lines, real complete YAML blocks) present rather than structural/procedural description -- FAIL if so, even if a quoted precedent (the real letflow-queue cd.yml, clearly marked as a citation) is present, since that's documentation of an existing file, not new implementation, but check the NEW design sections (\\u00a71/\\u00a72 for redeploy-qa.sh/cd.yml) do not slip into full code?\n\nOne known unusual point to specifically evaluate: the design proposes adding a small artifact-upload step to .github/workflows/ci.yml's existing `changes` job (outside this requirement's own owned_modules of deploy/redeploy-qa.sh and .github/workflows/cd.yml), justified as necessary to satisfy REQ-367's 'reuse the changes job's outputs, no duplicated diff logic' acceptance criterion under a workflow_run cross-workflow trigger. Decide explicitly: is this in-scope scope creep or a legitimate, necessary, minimal touch this requirement's acceptance criteria actually require? State your reasoning either way -- this decision gates whether ELIXIR-DEV touches ci.yml at all in Step 2a.\n\nFAIL immediately on any check failure, no partial credit, per Step 1b's standard hard-gate procedure. Complete the handoff: PASS -> next_action 'Route to ELIXIR-DEV (Step 2a)' | FAIL -> next_action 'Rework CODE-DESIGNER', issues listing every failed check by requirement id. Commit the completed handoff JSON on branch feature/WF02-REQ367-20260917 and push.",
+    "acceptance_criteria": [
+      "Every REQ-367 acceptance criterion maps to a concrete design element, no TBD/deferrals",
+      "deploy/redeploy-qa.sh's full procedure specified without real bash implementation bodies",
+      "cd.yml's trigger/gate mechanism fully specified without real YAML implementation bodies",
+      "Error/failure-mode handling stated, not left implicit",
+      "Explicit ruling on whether the proposed ci.yml touch is legitimate minimal scope or creep",
+      "No implementation code present in the NEW design sections (quoted existing precedent is fine and expected)"
+    ]
+  },
+  "result": null,
+  "rework_count": 0,
+  "max_rework": 3
+}

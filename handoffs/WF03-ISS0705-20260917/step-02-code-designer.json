@@ -1,0 +1,50 @@
+{
+  "handoff_id": "wf03-iss0705-step02",
+  "run_id": "WF03-ISS0705-20260917",
+  "workflow_id": "WF-03",
+  "step": "02",
+  "from_agent": "ORCH",
+  "to_agent": "CODE-DESIGNER",
+  "file": "handoffs/WF03-ISS0705-20260917/step-02-code-designer.json",
+  "created_at": "2026-09-17T05:00:00Z",
+  "started_at": "2026-09-17T05:00:00Z",
+  "completed_at": null,
+  "status": "PENDING",
+  "priority": "NORMAL",
+  "context": {
+    "stage": null,
+    "requirement_ids": [],
+    "requirement_text": {},
+    "source_text": {},
+    "related_handoff_ids": ["handoffs/WF03-ISS0705-20260917/step-01-issue-fixer-diagnosis.json"],
+    "artifacts_in": [
+      "handoffs/WF03-ISS0705-20260917/step-01-issue-fixer-diagnosis.json",
+      "docs/issues/ISS-0705.yaml",
+      "test/support/sandbox_auto_mode.ex",
+      "test/letflow/routers/tenants_test.exs",
+      "test/letflow/routers/identity_test.exs",
+      "test/letflow/role_registry_test.exs",
+      "lib/letflow/design/iss0580-sandbox-auto-mode-restore-leak.md"
+    ],
+    "owned_modules": ["test/letflow/routers/tenants_test.exs", "test/letflow/routers/identity_test.exs", "test/letflow/role_registry_test.exs"]
+  },
+  "task": {
+    "description": "WF-03 Step 2 (fix design) for ISS-0705, on branch feature/WF03-ISS0705-20260917 (`git checkout feature/WF03-ISS0705-20260917` if needed; do not re-run git setup). Read ISSUE-FIXER's diagnosis in full at handoffs/WF03-ISS0705-20260917/step-01-issue-fixer-diagnosis.json's result.summary -- it already worked out the per-site fix approach; your job is to turn it into a precise, unambiguous design doc under lib/letflow/design/, NOT to re-diagnose from scratch. Key findings to design from: (1) test/letflow/routers/tenants_test.exs:391's real-provisioning segment (~lines 391-431) has a genuine unrestored Sandbox.mode(:auto) leak -- fix by wrapping that segment with the EXISTING helper `Letflow.Test.SandboxAutoMode.provision!/2` (test/support/sandbox_auto_mode.ex:62-72), which already does enter-:auto/run/restore-:manual-in-an-after-block in the same process. (2) test/letflow/routers/identity_test.exs:1371-1381's setup block already restores to :auto (the correct ambient convention per TenantFixture/ISS-0113/INV-F-6) but does so with a raw inline call instead of the existing helper `exit_auto_mode!/1` (test/support/sandbox_auto_mode.ex:107-110) -- swap it in, registered as the FIRST on_exit callback per that helper's own doc. (3) test/letflow/role_registry_test.exs:101-163 has a byte-for-byte identical pattern to identity_test.exs's setup block and should get the same exit_auto_mode!/1 swap as a paired fix, even though it's outside ISS-0705's own affected_files -- diagnosis flagged this explicitly, treat it as in-scope. (4) The 129 already-orphaned tenant rows are NOT attributable to either of the two named files and are a separate operational cleanup -- design a one-off cleanup approach (e.g. a documented `mix run -e` one-liner or a small maintenance script) that deletes tenant rows not matching any currently-active test fixture naming convention; this does not need to be application code, just a documented, runnable step ELIXIR-DEV can execute during Step 3.\n\nProduce a design doc (interfaces/call shapes only, no implementation code) covering: exact before/after code shape for each of the 3 test files' affected blocks, which helper function each calls and with what arguments, and the cleanup step's exact command. Claim this handoff by setting status to IN_PROGRESS only.",
+    "acceptance_criteria": [
+      "Design doc exists under lib/letflow/design/ covering all 3 test files (tenants_test.exs, identity_test.exs, role_registry_test.exs) and the orphaned-row cleanup",
+      "Each test file's fix cites the exact existing helper function and call shape from test/support/sandbox_auto_mode.ex -- no new helper module invented unless the existing ones genuinely don't fit (state why if so)",
+      "No implementation code in the design doc, only precise specification an ELIXIR-DEV can build from unambiguously",
+      "The orphaned-row cleanup step is specified precisely enough to run mechanically (exact query/command)",
+      "next_action routes to CODE-DESIGN-VALIDATOR"
+    ]
+  },
+  "result": {
+    "status": null,
+    "summary": null,
+    "artifacts_out": [],
+    "issues": [],
+    "next_action": null
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

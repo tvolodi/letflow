@@ -22,9 +22,48 @@ description: >
 
   Needs ISSUE-FIXER triage against the live QA instance and/or its recent
   deploys.
-affected_files: []
+
+  RESOLUTION NOTE (WF03-ISS0703-20260917): the filing's framing above --
+  a PLATFORM_ADMIN-specific regression tied to a merged commit between
+  2026-09-16 and 2026-09-17 -- was NOT supported by the evidence found
+  during diagnosis (see handoffs/WF03-ISS0703-20260917/step-01-issue-fixer-diagnosis.json
+  for the full trace). Live QA container logs showed the three crashing
+  requests each carried a malformed Authorization header -- the caller
+  sent the entire raw Keycloak token-endpoint JSON response as the bearer
+  value instead of extracting `.access_token` -- not a role-specific code
+  path. No commit in the 09-16..09-17 window touched the auth/oidc code
+  path, and the QA app container had not restarted or redeployed since
+  2026-09-15, so no merged-commit regression could explain it; the 500
+  was not reproducible with a well-formed PLATFORM_ADMIN token at
+  diagnosis time. That investigation did surface a real, independently
+  confirmed, now-fixed code defect: Letflow.Oidc.TokenVerifier.Oidcc.verify_bearer_token/2
+  let an exception escape uncaught when given ANY malformed/non-JWT-shaped
+  bearer token (reachable by any client, not just this specific mistake),
+  producing a raw HTTP 500 with an empty body instead of the documented
+  single-401-collapse behavior. This is the defect actually fixed and
+  recorded as resolved below.
+affected_files:
+  - lib/letflow/oidc/token_verifier/oidcc.ex
+  - lib/letflow/plugs/auth_pipeline.ex
 related_requirements:
   - REQ-360
 queue_ref: Q-703
 github_ref: GH-1477
-status: open
+status: resolved
+resolved_in_run: WF03-ISS0703-20260917
+resolved_at: "2026-09-17T09:55:47Z"
+resolution_summary: >
+  Root cause fixed: Letflow.Oidc.TokenVerifier.Oidcc.verify_bearer_token/2
+  (lib/letflow/oidc/token_verifier/oidcc.ex) now catches exceptions raised
+  by the underlying Oidcc/jose JWT-parsing chain on a malformed/non-JWT-shaped
+  bearer token and returns {:error, reason} instead of letting the exception
+  escape uncaught, so Letflow.Plugs.AuthPipeline.verify_token/1's existing
+  {:error,_} -> 401 Problem+JSON path handles it (matching the pipeline's
+  documented single-401-collapse design intent) instead of crashing to a
+  raw HTTP 500 with an empty body. Proven by a fail-then-pass regression
+  test at test/letflow/integration/keycloak_auth_pipeline_test.exs
+  exercising the real Oidcc.Token.validate_jwt/3 path (not the
+  TokenVerifierDouble) with a non-JWT-shaped Authorization value.
+  Independently re-verified by TEST-DESIGN-VALIDATOR and confirmed clean
+  by a full `mix test` run (4334/4335, only the pre-existing unrelated A9
+  drift failing).

@@ -112,3 +112,21 @@ pipeline_log:
       TC-TD-UI-03-01 precedent). Confirmed §5 is now genuine prose with
       no leaked code (grep-verified against the whole file). Confirmed
       nothing else regressed during the rework.
+  - step: FRONTEND-DEV
+    at: "2026-09-17T10:47:00Z"
+    result: >
+      PASS. Implemented at commit a6b5e5ac: shared
+      assertBackendHealthy/assertServiceReadiness in helpers.ts pointed
+      at real GET /health; 8 plain files deduplicated to import it, 2
+      variant files' Letflow-backend check swapped (Keycloak's own
+      legitimate /health/ready untouched); TC-TD-UI-01-04's silent-noop
+      gate inverted to hard-fail. sh05-06.shell.e2e.spec.ts correctly
+      left untouched. Verified via curl (GET /health 200, /health/ready
+      404) and two real Playwright runs against local backend/Keycloak:
+      zero readiness-check failures across all 10 files, only unrelated
+      downstream failures (missing env vars, unseeded tenant fixtures,
+      the known ISS-0702 vite-proxy quirk). TC-TD-UI-01-04's exact hard-
+      fail branch not directly reachable in this DB (missing both
+      default/swiftroute tenants), but the byte-identical
+      TC-TD-UI-03-01 pattern verified working for real against a
+      confirmed-404 endpoint. eslint/tsc clean. npm test 586/586.

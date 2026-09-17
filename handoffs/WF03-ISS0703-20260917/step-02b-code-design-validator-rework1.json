@@ -1,0 +1,64 @@
+{
+  "handoff_id": "wf03-iss0703-step02b-rework1",
+  "run_id": "WF03-ISS0703-20260917",
+  "workflow_id": "WF-03",
+  "step": "02b-rework1",
+  "from_agent": "ORCH",
+  "to_agent": "CODE-DESIGN-VALIDATOR",
+  "file": "handoffs/WF03-ISS0703-20260917/step-02b-code-design-validator-rework1.json",
+  "created_at": "2026-09-17T07:32:03Z",
+  "started_at": "2026-09-17T07:32:03Z",
+  "completed_at": "2026-09-17T07:32:47Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": null,
+    "requirement_ids": [],
+    "requirement_text": {},
+    "source_text": {},
+    "related_handoff_ids": ["handoffs/WF03-ISS0703-20260917/step-02-code-designer.json", "handoffs/WF03-ISS0703-20260917/step-02b-code-design-validator.json"],
+    "artifacts_in": [
+      "handoffs/WF03-ISS0703-20260917/step-02-code-designer.json",
+      "handoffs/WF03-ISS0703-20260917/step-02b-code-design-validator.json",
+      "lib/letflow/design/iss0703-oidc-verifier-exception-handling.md"
+    ],
+    "owned_modules": []
+  },
+  "task": {
+    "description": "WF-03 Step 2b regate (rework iteration 1) for ISS-0703, on branch feature/WF03-ISS0703-20260917 (`git checkout feature/WF03-ISS0703-20260917`). The prior gate (handoffs/WF03-ISS0703-20260917/step-02b-code-design-validator.json) FAILED on AC5 only (implementation code present in Section 4 and Section 5), with every other acceptance criterion passing. CODE-DESIGNER's rework (handoffs/WF03-ISS0703-20260917/step-02-code-designer.json, rework_count 1) claims to have fixed only those two named spots without touching anything else. Re-read the design doc directly and independently re-verify ALL SIX original acceptance criteria (do not just spot-check the two fixed sections) -- confirm the two fixes actually removed the implementation code, and confirm nothing else in the doc regressed or was altered beyond the two named gaps. Claim this handoff by setting status to IN_PROGRESS only.",
+    "acceptance_criteria": [
+      "Section 4 no longer contains a literal, pasteable Elixir statement (prose description only)",
+      "Section 5 no longer contains a fenced def/rescue/catch code skeleton (signature/spec + prose only)",
+      "All 6 of step-02's original acceptance_criteria independently re-confirmed against the current doc content",
+      "PASS or FAIL with specific named gaps if FAIL",
+      "next_action routes to ELIXIR-DEV on PASS"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "Independent re-gate of lib/letflow/design/iss0703-oidc-verifier-exception-handling.md, rework iteration 1. Read the current doc directly (not CODE-DESIGNER's summary) and re-verified all 6 of step-02's original acceptance_criteria from scratch, plus confirmed the two AC5 gaps named in the prior FAIL (handoffs/WF03-ISS0703-20260917/step-02b-code-design-validator.json) are actually fixed.\n\nGap 1 (Section 4): the literal, pasteable `Logger.warning(\"Letflow.Oidc.TokenVerifier.Oidcc crashed verifying a bearer token kind=#{kind} message=#{message}\")` statement is gone. Section 4 (current lines 115-130) is now prose-only describing the log message's content (module+function name, then kind/message fields) with no fenced code block. Confirmed via grep for fenced blocks (only 3 remain in the whole doc: lines 64-66, 101-106, 134-140) -- none in Section 4.\n\nGap 2 (Section 5): the full `def ... rescue ... catch ... end` skeleton in real Elixir syntax is gone. Section 5's only remaining fenced block (lines 134-140) is the legitimate `@impl`/`@spec`/def-head signature ending at `when is_binary(raw_token)` -- no rescue/catch/end clauses in code form. Clause-placement detail is now stated in prose only (current lines 147-155), redundant with Section 2 as intended, not in code syntax.\n\nVerified via `git show 3949b420` that the diff touched only these two spots -- no other section's substance changed.\n\nAll 6 original ACs re-confirmed independently against current doc content:\n1. Rescue/catch boundary + exact {:error, reason} shape: Section 2 (both oidcc calls, lines 21-60) + Section 3 (`{:verifier_crashed, %{kind: :error|:exit|:throw, message: String.t()}}`, lines 62-95) -- present and precise.\n2. Both Oidcc.Token.validate_jwt/3 and Oidcc.ClientContext.from_configuration_worker/4 covered in one boundary with justification: Section 2, lines 26-38 -- present.\n3. Corrected moduledoc text: Section 6, lines 157-183 -- present, accurate 'never raises' claim.\n4. TEST-DESIGNER guidance (real Oidcc adapter, not TokenVerifierDouble, unit+integration, fail-then-pass): Section 7, lines 185-230 -- present and precise.\n5. No implementation code: now satisfied -- only 3 fenced blocks remain, all legitimate (Section 3's @type shape, Section 3's unmodified auth_pipeline.ex quote offered as evidence, Section 5's @spec/def-head signature). No literal statements, no rescue/catch/end skeletons.\n6. No auth_pipeline.ex changes proposed absent a real gap: Section 3 (lines 97-113) and Section 8 (lines 237-239) both explicitly state no gap was found and no change is proposed -- confirmed consistent, nothing silently altered.\n\nPASS -- both previously-named gaps are fixed, no regression elsewhere, all 6 ACs hold.",
+    "artifacts_out": ["lib/letflow/design/iss0703-oidc-verifier-exception-handling.md"],
+    "issues": [],
+    "next_action": "Route to ELIXIR-DEV to implement per the design doc"
+  },
+  "rework_count": 0,
+  "max_rework": 3,
+  "gate_history": [
+    {
+      "iteration": 0,
+      "gated_at": "2026-09-17T07:29:20Z",
+      "status": "FAIL",
+      "summary": "5 of 6 ACs passed. AC5 (no implementation code) failed: Section 4 contained a literal Logger.warning/1 statement with real string interpolation; Section 5 rendered a full def/rescue/catch skeleton in real Elixir syntax beyond its legitimate @spec/def-head signature.",
+      "issues": ["Section 4: literal Logger.warning/1 statement, not a signature/shape", "Section 5: fenced def...rescue...catch...end skeleton crosses into implementation code, redundant with Section 2's prose"],
+      "next_action": "Route back to CODE-DESIGNER with the two named gaps"
+    },
+    {
+      "iteration": 1,
+      "gated_at": "2026-09-17T07:32:47Z",
+      "status": "PASS",
+      "summary": "Both AC5 gaps confirmed fixed (Section 4 literal Logger.warning statement removed, Section 5 rescue/catch skeleton removed); all 6 original ACs independently re-confirmed; no regression elsewhere per git show 3949b420.",
+      "issues": [],
+      "next_action": "Route to ELIXIR-DEV to implement per the design doc"
+    }
+  ]
+}

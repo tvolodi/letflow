@@ -1,0 +1,46 @@
+{
+  "handoff_id": "wf03-iss0703-step05",
+  "run_id": "WF03-ISS0703-20260917",
+  "workflow_id": "WF-03",
+  "step": "05",
+  "from_agent": "ORCH",
+  "to_agent": "ISSUE-FIXER",
+  "file": "handoffs/WF03-ISS0703-20260917/step-05-issue-fixer-close.json",
+  "created_at": "2026-09-17T09:55:14Z",
+  "started_at": "2026-09-17T09:55:14Z",
+  "completed_at": "2026-09-17T09:57:30Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": null,
+    "requirement_ids": [],
+    "requirement_text": {},
+    "source_text": {},
+    "related_handoff_ids": [],
+    "artifacts_in": [
+      "docs/issues/ISS-0703.yaml",
+      "docs/agents/protocols/WF-03_issue_resolving.md",
+      "handoffs/WF03-ISS0703-20260917/step-01-issue-fixer-diagnosis.json",
+      "handoffs/WF03-ISS0703-20260917/step-04c-test-runner.json"
+    ],
+    "owned_modules": ["docs/issues/ISS-0703.yaml"]
+  },
+  "task": {
+    "description": "WF-03 Step 5 (close issue) for ISS-0703, on branch feature/WF03-ISS0703-20260917 (`git checkout feature/WF03-ISS0703-20260917`). Follow docs/agents/workflows/WF-03_issue_resolving.md's Step 5 procedure exactly. This is a `resolved` outcome: the root cause (Letflow.Oidc.TokenVerifier.Oidcc.verify_bearer_token/2 letting an exception escape uncaught on malformed bearer tokens, producing a raw 500 instead of a clean 401) was fixed in lib/letflow/oidc/token_verifier/oidcc.ex, proven by a fail-then-pass regression test (test/letflow/integration/keycloak_auth_pipeline_test.exs), independently re-verified by TEST-DESIGN-VALIDATOR and confirmed clean by a full mix test run (4334/4335, only the pre-existing unrelated A9 drift failing). IMPORTANT: per ISSUE-FIXER's own diagnosis (step-01), the issue's ORIGINAL filed framing (a 'PLATFORM_ADMIN-specific regression tied to a merged commit between 2026-09-16 and 2026-09-17') was NOT supported by the evidence -- correct docs/issues/ISS-0703.yaml's record to reflect what was actually found: the 500 was triggered by a caller-side malformed-Authorization-header request (not a role-specific code path or a merged-commit regression), but that investigation surfaced a real, independently-confirmed, now-fixed code defect (the uncaught-exception-to-500 gap) that is the actual resolution being recorded. Write status: resolved, resolved_in_run: WF03-ISS0703-20260917, resolved_at: <real timestamp>. If github_issue_number is set (1477) and gh is reachable, close it with a --comment citing this run and the regression test path, per WF-03's evidence-on-close rule (a fix comment, not a bare close). Claim this handoff by setting status to IN_PROGRESS only.",
+    "acceptance_criteria": [
+      "docs/issues/ISS-0703.yaml status: resolved with resolved_in_run/resolved_at set to a real clock timestamp",
+      "The record's description/framing is corrected to reflect ISSUE-FIXER's actual diagnosis (not a PLATFORM_ADMIN-specific merged-commit regression, but a caller-side malformed-token trigger that surfaced a real, now-fixed uncaught-exception defect)",
+      "GitHub issue GH#1477 closed with a --comment citing the fix and regression test (or explicitly reports why not, if gh is unreachable)",
+      "next_action: Route to Step Final (git merge)"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "docs/issues/ISS-0703.yaml updated to status: resolved, resolved_in_run: WF03-ISS0703-20260917, resolved_at: 2026-09-17T09:55:47Z. Description appended with a RESOLUTION NOTE correcting the original filing's framing (a PLATFORM_ADMIN-specific regression tied to a merged commit between 2026-09-16 and 2026-09-17) to what step-01's diagnosis actually found: the live 500 was triggered by a caller-side malformed Authorization header (the full raw Keycloak token-endpoint JSON sent as the bearer value instead of the extracted access_token), not a role-specific code path or a merged-commit regression -- no commit in the 09-16..09-17 window touched the auth/oidc code path and the QA app container had not redeployed since 2026-09-15. That investigation nonetheless surfaced a real, independently-confirmed, now-fixed code defect (Letflow.Oidc.TokenVerifier.Oidcc.verify_bearer_token/2 letting an exception escape uncaught on a malformed/non-JWT-shaped bearer token, producing a raw 500 instead of a clean 401), which is the actual resolution recorded. Added affected_files and a resolution_summary citing the fix in lib/letflow/oidc/token_verifier/oidcc.ex and the fail-then-pass regression test at test/letflow/integration/keycloak_auth_pipeline_test.exs, independently re-verified by TEST-DESIGN-VALIDATOR and confirmed clean by the full mix test run (4334/4335, only the pre-existing unrelated A9 drift failing). GitHub issue GH#1477 closed via `gh issue close 1477 --comment \"...\"` (gh reachable, gh version 2.83.1) with an evidence comment citing this run, the regression test path, and the corrected framing -- confirmed closed (`gh issue close` returned '✓ Closed issue tvolodi/letflow#1477').",
+    "artifacts_out": ["docs/issues/ISS-0703.yaml"],
+    "issues": [],
+    "next_action": "Route to Step Final (git merge)"
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

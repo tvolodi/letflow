@@ -1,0 +1,51 @@
+{
+  "handoff_id": "wf03-iss0703-stepfinal",
+  "run_id": "WF03-ISS0703-20260917",
+  "workflow_id": "WF-03",
+  "step": "final",
+  "from_agent": "ORCH",
+  "to_agent": "ELIXIR-DEV",
+  "file": "handoffs/WF03-ISS0703-20260917/step-final-git-merge.json",
+  "created_at": "2026-09-17T09:56:33Z",
+  "started_at": "2026-09-17T09:56:33Z",
+  "completed_at": null,
+  "status": "IN_PROGRESS",
+  "priority": "HIGH",
+  "context": {
+    "stage": null,
+    "requirement_ids": [],
+    "requirement_text": {},
+    "source_text": {},
+    "related_handoff_ids": [],
+    "artifacts_in": ["docs/agents/protocols/GIT_MERGE.md"],
+    "owned_modules": ["lib/letflow/oidc/token_verifier/oidcc.ex"]
+  },
+  "task": {
+    "description": "WF-03 Step Final (git merge) for ISS-0703, on branch feature/WF03-ISS0703-20260917. Follow docs/agents/protocols/GIT_MERGE.md exactly (steps 1-10). All upstream gates already PASSED: ISSUE-FIXER diagnosis -> CODE-DESIGNER (2 rework iterations) -> CODE-DESIGN-VALIDATOR PASS -> ELIXIR-DEV (1 rework iteration) -> SECURITY-REVIEWER PASS (rework1) -> REVIEWER PASS -> TEST-DESIGNER (fail-then-pass proof) -> TEST-DESIGN-VALIDATOR independently reproduced PASS -> TEST-RUNNER full suite 4334/4335 (only the known pre-existing A9 drift failing) -> ISSUE-FIXER closed ISS-0703 (resolved) and GH#1477.\n\nIMPORTANT -- a known, PRE-EXISTING, unrelated CI gate issue: test/docs/requirement_status_invariants_test.exs's A9 check (docs/status/requirement_status.v18.yaml declared-vs-actual entry count drift) has now blocked TWO CONSECUTIVE prior WF-03 Step Final CI gates (ISS-0704 and ISS-0705), each requiring a --admin merge override. This run's branch touches nothing under docs/status/, so if CI's backend gate fails on the SAME A9 check again, do NOT just override silently a third time. Instead: (1) confirm via `gh pr checks` and the CI log that the ONLY failure is this exact A9 test (same assertion, same file); (2) if so, this is the correct GIT_MERGE.md step 5d/8b attribution path (a pre-existing failure structurally unrelated to this branch) -- proceed with `gh pr merge --squash --delete-branch --admin`, recording the override and attribution in result.git_evidence per step 8b's requirement, exactly as the two prior runs did; (3) ADDITIONALLY, since this is now a THIRD occurrence, report it back to me (ORCH) explicitly in your result.summary/issues as a MAJOR finding recommending it be registered as its own claimable letflow-queue issue (task_type: issue) so ELIXIR-DEV can actually fix the A9 drift rather than it being repeatedly bypassed -- I will handle the actual queue registration myself after your handoff completes, you only need to flag it clearly. If CI fails on anything OTHER than this specific A9 test, treat it as a genuine blocking failure per GIT_MERGE.md's normal rules -- do not override past an unattributed failure. Claim this handoff by setting status to IN_PROGRESS only.",
+    "acceptance_criteria": [
+      "Branch rebased onto origin/main, format/compile/test re-verified post-rebase",
+      "PR opened with the required Validation section (real mix test counts + structural attribution for any pre-existing failure, per GIT_MERGE.md step 7)",
+      "CI backend+frontend checks confirmed via gh pr checks before any merge attempt",
+      "If CI fails ONLY on the known A9 test: --admin override used with attribution recorded, AND this flagged explicitly as a MAJOR issue in result.issues recommending queue registration (third consecutive occurrence)",
+      "If CI fails on anything else: reported as a genuine FAIL, not overridden",
+      "Local cleanup back to main, clean tree, verified"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "",
+    "artifacts_out": [],
+    "issues": [],
+    "git_evidence": {
+      "branch_name": null,
+      "commit_sha_list": [],
+      "remote_branch": null,
+      "push_status": "skipped",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": ""
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

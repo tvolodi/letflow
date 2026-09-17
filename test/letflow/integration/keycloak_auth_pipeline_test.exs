@@ -58,11 +58,13 @@ defmodule Letflow.Integration.KeycloakAuthPipelineTest do
   @moduletag :keycloak
 
   import Ecto.Query, only: [where: 3]
+  import ExUnit.CaptureLog
   import Plug.Test
   import Plug.Conn
 
   alias Letflow.Identity.Tenant
   alias Letflow.Identity.User
+  alias Letflow.Oidc.TokenVerifier.Oidcc
   alias Letflow.Plugs.AuthPipeline
   alias Letflow.Repo
   alias Letflow.Support.KeycloakTestClient
@@ -299,6 +301,123 @@ defmodule Letflow.Integration.KeycloakAuthPipelineTest do
 
       assert user_id_1 == user_id_2
       assert user_count_for_subject(schema_name, subject) == 1
+    end
+  end
+
+  # ---------------------------------------------------------------------------------
+  # ISS-0703 regression -- lib/letflow/design/iss0703-oidc-verifier-exception-handling.md
+  # section 7. A non-JWT-shaped raw_token must never crash the REAL
+  # Letflow.Oidc.TokenVerifier.Oidcc adapter (confirmed live: CaseClauseError deep in
+  # jose_base64url.decode!/2, reached via Oidcc.Token.validate_jwt/3), and must never
+  # reach Bandit as a raw 500 through the full AuthPipeline. Deliberately NOT using
+  # Letflow.Oidc.TokenVerifierDouble (test/letflow/plugs/auth_pipeline_test.exs's
+  # string-equality stub never touches real oidcc/jose parsing and cannot exercise this
+  # defect at all -- see the design doc's section 7 preamble) -- this file's `setup`
+  # above already swaps in the real Oidcc adapter for every test in this module.
+  #
+  # Two raw_token fixtures, matching the design doc's required breadth:
+  #   1. the literal shape that triggered the live incident -- a whole Keycloak
+  #      token-endpoint JSON response pasted in as the bearer value instead of just its
+  #      "access_token" field (a caller bug, but one the verifier must survive, not
+  #      crash on)
+  #   2. plain non-base64url garbage, for breadth beyond the one confirmed live shape
+  # ---------------------------------------------------------------------------------
+
+  describe "ISS-0703 regression — malformed raw_token never crashes the real adapter" do
+    @json_blob_fixture ~s({"access_token":"eyJhbGciOiJSUzI1NiJ9.not-a-real-jwt.sig","expires_in":300,"token_type":"Bearer"})
+    # Deliberately dot-segmented (superficially JWT-shaped, three "." separated parts)
+    # but every segment is plain non-base64url garbage -- verified empirically
+    # (scratch probe against this branch's post-fix code) to reach the same
+    # jose_base64url.decode!/2 CaseClauseError crash chain as @json_blob_fixture.
+    # A plain undotted garbage string (e.g. "not-base64url-at-all") does NOT reach
+    # that call chain -- oidcc's own earlier shape check rejects it with a normal
+    # {:error, :no_matching_key}, without ever entering this module's rescue/catch
+    # boundary -- so it would not be a fail-first fixture for this regression at all.
+    @garbage_fixture "not-base64url.not-base64url.not-base64url"
+
+    # Fixed, hand-picked substrings (each >= 4 chars) drawn from each fixture above --
+    # the design doc's "representative substrings" non-leakage check. Chosen to include
+    # both the fixture's most distinctive alphanumeric run and adjacent punctuation, so
+    # a leak of either the token's raw bytes or an `inspect/1`-quoted rendering of them
+    # would still be caught.
+    @json_blob_substrings [
+      "access_token",
+      "eyJhbGciOiJSUzI1NiJ9",
+      "not-a-real-jwt",
+      "token_type"
+    ]
+    @garbage_substrings ["not-base64url"]
+
+    # AC1 (unit-level): calls Letflow.Oidc.TokenVerifier.Oidcc.verify_bearer_token/2
+    # DIRECTLY -- the real adapter, not through AuthPipeline -- against a real
+    # provider_name (config :letflow, :oidc's own Letflow.Oidc.DefaultProvider, which
+    # this module's setup_all above has already proven reachable via the discovery
+    # probe). This is the fail-first case: on pre-fix oidcc.ex, this call raises
+    # CaseClauseError and crashes the test process instead of returning a tuple.
+    test "verify_bearer_token/2 returns {:error, {:verifier_crashed, ...}} instead of raising, for a JSON-blob raw_token (the confirmed live trigger shape)" do
+      assert_verifier_crashed_cleanly(@json_blob_fixture, @json_blob_substrings)
+    end
+
+    test "verify_bearer_token/2 returns {:error, {:verifier_crashed, ...}} instead of raising, for plain non-base64url garbage" do
+      assert_verifier_crashed_cleanly(@garbage_fixture, @garbage_substrings)
+    end
+
+    # AC2 (integration-level): same two fixtures, but through the FULL pipeline
+    # (Letflow.Plugs.AuthPipeline.call/2, this file's own call_pipeline_with_token/1
+    # helper, matching this file's existing conn-building convention) -- proving the
+    # crash no longer escapes as a raw HTTP 500 with an empty body, but collapses to the
+    # pipeline's documented single-401 shape (auth_pipeline.ex:156-157), exactly like
+    # any other verification failure.
+    test "AuthPipeline.call/2 rejects a JSON-blob bearer token with a clean 401, not a 500 crash" do
+      assert_pipeline_rejects_cleanly(@json_blob_fixture)
+    end
+
+    test "AuthPipeline.call/2 rejects a plain-garbage bearer token with a clean 401, not a 500 crash" do
+      assert_pipeline_rejects_cleanly(@garbage_fixture)
+    end
+
+    # ---- shared assertion helpers for this describe block -----------------------
+
+    defp assert_verifier_crashed_cleanly(raw_token, leak_substrings) do
+      oidc_config = Application.fetch_env!(:letflow, :oidc)
+      provider_name = Keyword.fetch!(oidc_config, :provider_name)
+
+      log =
+        capture_log(fn ->
+          result = Oidcc.verify_bearer_token(raw_token, provider_name)
+          send(self(), {:verify_result, result})
+        end)
+
+      assert_received {:verify_result, result}
+
+      assert {:error, {:verifier_crashed, %{kind: :error, classification: classification}}} =
+               result
+
+      assert is_atom(classification)
+
+      classification_string = to_string(classification)
+
+      # Explicit non-leakage assertion (SECURITY-REVIEWER BLOCKER, design §3a): neither
+      # the returned classification nor the captured Logger.warning/1 output may contain
+      # any substring of the raw_token fixture that triggered the crash.
+      for substring <- leak_substrings do
+        refute String.contains?(classification_string, substring),
+               "classification #{inspect(classification_string)} leaked raw_token substring #{inspect(substring)}"
+
+        refute String.contains?(log, substring),
+               "captured log leaked raw_token substring #{inspect(substring)}: #{log}"
+      end
+    end
+
+    defp assert_pipeline_rejects_cleanly(raw_token) do
+      conn = call_pipeline_with_token(raw_token)
+
+      assert conn.halted
+      assert conn.status == 401
+      assert get_resp_header(conn, "content-type") |> Enum.at(0) =~ "application/json"
+
+      assert %{"error" => "unauthorized", "detail" => "invalid or expired bearer token"} =
+               Jason.decode!(conn.resp_body)
     end
   end
 end

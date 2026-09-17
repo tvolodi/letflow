@@ -1,0 +1,60 @@
+{
+  "handoff_id": "wf03-iss0703-step03-rework1",
+  "run_id": "WF03-ISS0703-20260917",
+  "workflow_id": "WF-03",
+  "step": "03-rework1",
+  "from_agent": "ORCH",
+  "to_agent": "ELIXIR-DEV",
+  "file": "handoffs/WF03-ISS0703-20260917/step-03-elixir-dev-rework1.json",
+  "created_at": "2026-09-17T07:47:43Z",
+  "started_at": "2026-09-17T07:47:43Z",
+  "completed_at": "2026-09-17T07:49:53Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": null,
+    "requirement_ids": [],
+    "requirement_text": {},
+    "source_text": {},
+    "related_handoff_ids": [
+      "handoffs/WF03-ISS0703-20260917/step-03-elixir-dev.json",
+      "handoffs/WF03-ISS0703-20260917/step-03b-security-reviewer.json",
+      "handoffs/WF03-ISS0703-20260917/step-02b-code-design-validator-rework2.json"
+    ],
+    "artifacts_in": [
+      "lib/letflow/design/iss0703-oidc-verifier-exception-handling.md",
+      "lib/letflow/oidc/token_verifier/oidcc.ex",
+      "handoffs/WF03-ISS0703-20260917/step-03b-security-reviewer.json"
+    ],
+    "owned_modules": ["lib/letflow/oidc/token_verifier/oidcc.ex"]
+  },
+  "task": {
+    "description": "WF-03 Step 3 rework iteration 1 for ISS-0703, on branch feature/WF03-ISS0703-20260917 (`git checkout feature/WF03-ISS0703-20260917`). Your prior implementation (handoffs/WF03-ISS0703-20260917/step-03-elixir-dev.json, commit 4ad5d4b0) FAILED SECURITY-REVIEWER (step-03b-security-reviewer.json) on a BLOCKER: the `message` field (built from Exception.message/1 / inspect/1) could leak a fragment of the raw bearer token. The design doc lib/letflow/design/iss0703-oidc-verifier-exception-handling.md has since been revised (PASSED CODE-DESIGN-VALIDATOR's regate, step-02b-code-design-validator-rework2.json) to replace that field with a `classification` field built ONLY from fixed atoms (the exception's __struct__ module name for the rescue branch; the caught reason directly if already an atom, else one of two fixed constants :non_atom_exit_reason/:non_atom_throw_reason, for the catch branch) -- no formatter (Exception.message/1, inspect/1, to_string/1, or similar) may ever be applied to the caught value's content. Re-read the current design doc in full (it has changed since your first implementation) and update lib/letflow/oidc/token_verifier/oidcc.ex to match EXACTLY -- replace the message-based construction with the classification-based construction, update the @type/@spec accordingly, update the moduledoc/@doc text if the design's wording changed. Re-run mix compile and the same test suites as before. Claim this handoff by setting status to IN_PROGRESS only.",
+    "acceptance_criteria": [
+      "The returned {:error, {:verifier_crashed, %{kind:, classification:}}} tuple's classification field is built exactly per the revised design -- no Exception.message/1, inspect/1, to_string/1, or string interpolation applied to the caught exception/exit/throw's own content anywhere in the new code",
+      "Logger.warning/1 call logs the same safe fields only",
+      "mix compile clean",
+      "Existing auth-pipeline/oidc test suites (test/letflow/plugs/auth_pipeline_test.exs, test/letflow/oidc/) still pass",
+      "No changes to auth_pipeline.ex"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "Replaced message-based error construction in lib/letflow/oidc/token_verifier/oidcc.ex with the classification-based construction per the revised design (lib/letflow/design/iss0703-oidc-verifier-exception-handling.md, rework iteration 2). @type crash_reason changed from %{kind: :error|:exit|:throw, message: String.t()} to %{kind: :error|:exit|:throw, classification: module() | atom()}. rescue branch: classification = exception.__struct__ (no Exception.message/1 call). catch branch: classification = reason when is_atom(reason), else :non_atom_exit_reason (kind :exit) or :non_atom_throw_reason (kind :throw) via a cond, replacing inspect/1. Logger.warning/1 in both branches now interpolates only kind and classification (both fixed atoms/module names), never the caught exception's fields or the caught reason's content. Moduledoc @doc text updated: 'message: ...' -> 'classification: ...' in the return-shape example; no other prose change needed (rest already matched the design's corrected wording from a prior iteration). No changes to auth_pipeline.ex. `mix compile` output: 'Compiling 1 file (.ex)' -- clean, no warnings/errors. `mix test test/letflow/plugs/auth_pipeline_test.exs test/letflow/oidc/` output: 'Finished in 21.2 seconds (0.5s async, 20.6s sync)' / 'Result: 43 passed (2 properties, 41 tests)' -- 0 failures (the only warnings shown are pre-existing ExUnit.Case.register_test/4 deprecation notices from the test framework itself, unrelated to this change).",
+    "artifacts_out": [
+      "lib/letflow/oidc/token_verifier/oidcc.ex"
+    ],
+    "issues": [],
+    "git_evidence": {
+      "branch_name": "feature/WF03-ISS0703-20260917",
+      "commit_sha_list": ["3e8481ccb519c8535b5d41e8c2983a85533b2dc9"],
+      "remote_branch": "origin/feature/WF03-ISS0703-20260917",
+      "push_status": "pushed",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": "Route to SECURITY-REVIEWER for re-gate"
+  },
+  "rework_count": 1,
+  "max_rework": 3
+}

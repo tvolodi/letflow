@@ -1,0 +1,51 @@
+{
+  "handoff_id": "wf03-iss0703-step03b-rework1",
+  "run_id": "WF03-ISS0703-20260917",
+  "workflow_id": "WF-03",
+  "step": "03b-rework1",
+  "from_agent": "ORCH",
+  "to_agent": "SECURITY-REVIEWER",
+  "file": "handoffs/WF03-ISS0703-20260917/step-03b-security-reviewer-rework1.json",
+  "created_at": "2026-09-17T07:50:29Z",
+  "started_at": "2026-09-17T07:50:29Z",
+  "completed_at": "2026-09-17T07:51:22Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": null,
+    "requirement_ids": [],
+    "requirement_text": {},
+    "source_text": {},
+    "related_handoff_ids": [
+      "handoffs/WF03-ISS0703-20260917/step-03b-security-reviewer.json",
+      "handoffs/WF03-ISS0703-20260917/step-03-elixir-dev-rework1.json"
+    ],
+    "artifacts_in": [
+      "lib/letflow/design/iss0703-oidc-verifier-exception-handling.md",
+      "lib/letflow/oidc/token_verifier/oidcc.ex",
+      "handoffs/WF03-ISS0703-20260917/step-03-elixir-dev-rework1.json"
+    ],
+    "owned_modules": []
+  },
+  "task": {
+    "description": "WF-03 Step 3b re-gate (rework iteration 1) for ISS-0703, on branch feature/WF03-ISS0703-20260917 (`git checkout feature/WF03-ISS0703-20260917`, then `git diff main -- lib/letflow/oidc/token_verifier/oidcc.ex` to see the full current diff). Your prior gate FAILED with a BLOCKER on INV-4: the `message` field (Exception.message/1/inspect/1) could leak a raw bearer-token fragment. ELIXIR-DEV has re-implemented per the revised design: the field is now `classification`, built only from the exception's `__struct__` (rescue branch) or the caught `reason` directly-if-already-an-atom else one of two fixed constants (catch branch) -- no formatter (Exception.message/1, inspect/1, to_string/1, string interpolation) is applied to the caught value's own content anywhere. Independently re-run the FULL gate (INV-1..INV-8, all three of your original specific concerns: token leakage, timing/oracle, false-authentication risk) against the actual current code -- do not just spot-check the one BLOCKER. Claim this handoff by setting status to IN_PROGRESS only.",
+    "acceptance_criteria": [
+      "Explicit APPLIES/NOT-APPLICABLE verdict for every invariant INV-1..INV-8, re-derived against the current diff",
+      "Explicit verdict that the classification field construction cannot embed any raw_token content -- verified by reading the actual code, not the design doc's claim alone",
+      "Explicit verdict on timing/oracle and false-authentication concerns (re-confirm, these were not blockers before)",
+      "PASS or FAIL with specific BLOCKER-severity issues if FAIL",
+      "next_action routes to REVIEWER on PASS"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "Full re-gate of rework1 (classification field replacing message field). INV-1 tenant data isolation: NOT-APPLICABLE -- no schema/migration/business-table touch, pure in-memory error classification. INV-2 server-side field authorisation: NOT-APPLICABLE -- S4 not started, no response shaping in this diff. INV-3 sandboxing: NOT-APPLICABLE -- S5 not started. INV-4 secrets by reference only: APPLIES and PASSES -- traced both rescue and catch branches line by line. Rescue branch: classification = exception.__struct__ (the exception's struct module atom only, e.g. CaseClauseError -- never a field, never Exception.message/1, never inspect/1 of the exception). Catch branch: classification = reason itself only when is_atom(reason) (atoms are drawn from the BEAM's fixed, compile-time atom table -- not implicitly constructed at runtime from arbitrary binary/token content, since nothing in this code path calls String.to_atom or similar), else one of two hardcoded constants :non_atom_exit_reason / :non_atom_throw_reason. Logger.warning interpolates only kind and classification via #{...}, i.e. to_string/1 on a module atom or a small fixed atom set -- never on exception fields, caught reason content, or anything derived from raw_token. No call to Exception.message/1, inspect/1, to_string/1-on-arbitrary-term, or string interpolation of exception/reason content exists anywhere in either clause. This is a structural guarantee (true for every exception/exit/throw shape this boundary could ever catch), not contingent on the one previously-confirmed crash shape -- the prior BLOCKER is resolved by construction, not by coincidence. INV-5 not-found/forbidden indistinguishability: NOT-APPLICABLE -- S4 not started, no lookup-by-ID endpoint. INV-6 new data-access paths prove scoping: APPLIES, satisfied by this review's explicit per-invariant verdicts. INV-7 no SQL interpolation: NOT-APPLICABLE -- no SQL in this diff. INV-8 no unhandled crashes on realistic failure paths: APPLIES and PASSES -- this is exactly the defect class being fixed; the rescue/catch clauses are themselves total (no formatting calls that could themselves raise) and always terminate in a well-formed {:error, {:verifier_crashed, %{kind:, classification:}}} tuple, matching AuthPipeline's existing {:error, {:verify, reason}} -> 401 collapse unchanged. INV-9 SSRF: NOT-APPLICABLE -- no outbound URL construction in this diff. Timing/oracle concern (re-confirmed, unchanged conclusion from the original PASS on this point): collapsing crash-to-500 into the same {:error,...}->401 path AuthPipeline already uses for every other verification failure reduces the pre-existing oracle (a 500-vs-401 status-code difference was a louder signal than anything introduced now); no new cross-tenant or valid/invalid-credential oracle is introduced. Not a blocker. False-authentication concern (re-confirmed): both rescue and catch clauses unconditionally build and return {:error, {:verifier_crashed, %{...}}} -- structurally no code path exists where a caught exception/exit/throw yields {:ok, _}. Not a blocker. Moduledoc/@doc correction (design section 6) and new @spec are present and accurate. Verdict: PASS, no BLOCKERs found.",
+    "artifacts_out": [
+      "handoffs/WF03-ISS0703-20260917/step-03b-security-reviewer-rework1.json"
+    ],
+    "issues": [],
+    "next_action": "Route to REVIEWER (WF-03 Step 3c / next gate) for idiomatic OTP usage, supervision integrity, scope creep, and decision-record consistency review of the same diff."
+  },
+  "rework_count": 1,
+  "max_rework": 3
+}

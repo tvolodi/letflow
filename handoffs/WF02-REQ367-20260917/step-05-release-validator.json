@@ -1,0 +1,48 @@
+{
+  "handoff_id": "wf02-req367-step05",
+  "run_id": "WF02-REQ367-20260917",
+  "workflow_id": "WF-02",
+  "step": "05",
+  "from_agent": "ORCH",
+  "to_agent": "RELEASE-VALIDATOR",
+  "file": "handoffs/WF02-REQ367-20260917/step-05-release-validator.json",
+  "created_at": "2026-09-17T21:15:00Z",
+  "started_at": "2026-09-17T21:15:00Z",
+  "completed_at": null,
+  "status": "PENDING",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S7",
+    "requirement_ids": ["REQ-367"],
+    "requirement_text": {
+      "REQ-367": "See handoffs/WF02-REQ367-20260917/step-00-git-setup.json's context.requirement_text for the full verbatim requirement description."
+    },
+    "artifacts_in": [
+      "deploy/redeploy-qa.sh",
+      ".github/workflows/cd.yml",
+      ".github/workflows/ci.yml",
+      "lib/letflow/design/req367-cd-qa-deploy.md",
+      "handoffs/WF02-REQ367-20260917/step-02a-elixir-dev.json",
+      "handoffs/WF02-REQ367-20260917/step-03-test-designer.json"
+    ],
+    "owned_modules": [
+      "deploy/redeploy-qa.sh",
+      ".github/workflows/cd.yml",
+      ".github/workflows/ci.yml"
+    ],
+    "branch_name": "feature/WF02-REQ367-20260917"
+  },
+  "task": {
+    "description": "WF-02 Step 5 -- Release validation for REQ-367 (CD to QA deploy infra). Claim this handoff (status IN_PROGRESS). This is a docs/infra requirement with TEST-DESIGNER's scope test having routed here directly (Steps 3b/4 skipped) -- per WF-02 Step 5's own procedure, verify acceptance criteria by independently reading the artefacts and re-running the same demonstration commands yourself, not by trusting Step 2a's or Step 3's quoted output. Re-run: bash -n deploy/redeploy-qa.sh; a YAML parse check on both .github/workflows/cd.yml and .github/workflows/ci.yml; git diff main...HEAD -- deploy/redeploy-test.sh (must show zero changes); git diff main...HEAD -- .github/workflows/ci.yml (must show only additive lines to the changes job, no modification to existing filter/fallback logic). Then independently confirm, by reading the files directly, each of REQ-367's 5 acceptance criteria (copied below) is genuinely satisfied -- do not accept a prior step's PASS summary as sufficient. Also check docs/status/requirement_status.yaml (current volume, docs/status/requirement_status.v19.yaml) and docs/requirements.yaml for staleness relative to what actually shipped (REQ-367 should currently show status: in_progress, to be flipped to done by DOC-UPDATER next). Complete the handoff: PASS -> next_action 'Route to DOC-UPDATER (Step 6)' | FAIL -> identify the blocking issue and which agent it routes back to. Commit and push on feature/WF02-REQ367-20260917.",
+    "acceptance_criteria": [
+      "deploy/redeploy-qa.sh exists, targeting /opt/apps/letflow-qa/ on ubuntu-16gb-nbg1-1, performing all 4 named steps (git pull, backend rebuild+recreate, frontend throwaway-container rebuild+atomic-swap with real build args and backup, health checks for both), with the previous frontend build backed up before being replaced",
+      ".github/workflows/cd.yml exists, triggered after ci.yml succeeds on main (or an equivalent mechanism that does not duplicate changes' diff computation), gated on the same backend/frontend outputs ci.yml's changes job already computes -- a docs-only merge does not trigger a deploy, verified by a real (or realistically simulated, since a live SSH target isn't yet available) dry run / structural confirmation showing the gate correctly skips",
+      "the workflow uses the same SSH-action pattern letflow-queue's cd.yml already uses in production (or documents and justifies a deliberate deviation), referencing secret names (QA_DEPLOY_HOST/QA_DEPLOY_USER/QA_DEPLOY_SSH_KEY) that do not yet need to exist for this requirement to be considered code-complete",
+      "the close-out states explicitly, in plain language, that this requirement does NOT make the deploy live -- the companion ai-dala-infra task (SSH key provisioning + GitHub Actions secrets) is a separate, required step, named explicitly, not implied as already done",
+      "the stale deploy/redeploy-test.sh is left untouched (not deleted, not repurposed) since its own actual target may still be needed later, and this requirement's own close-out states this explicitly rather than leaving the two scripts' relationship unexplained for a future reader"
+    ]
+  },
+  "result": null,
+  "rework_count": 0,
+  "max_rework": 3
+}

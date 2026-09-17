@@ -44,6 +44,12 @@
 # Overridable knob: TEST_PARALLEL_N=<positive integer> to force the
 # partition count instead of deriving it from nproc/getconf.
 #
+# Overridable knob: TEST_PARALLEL_KEEP_LOGS=<any non-empty value> to keep the
+# per-partition tmp_dir (create/migrate + test logs) even after a fully clean
+# (exit 0) run -- see ISS-0699 below. Unset by default, meaning a clean run's
+# tmp_dir is removed automatically; a run with any real failures always
+# preserves it regardless of this var.
+#
 # ISS-0222: running this script again immediately after a prior full-suite run
 # on the same host (no gap between two consecutive launches) can produce a
 # transient "too_many_connections"/DBConnection.ConnectionError in one
@@ -225,10 +231,101 @@ while [ "$i" -le "$N" ]; do
   i=$((i + 1))
 done
 
-# --- Step 2: launch N background partitions -------------------------------
+# --- Step 1.7: capped-concurrency pre-create/pre-migrate (ISS-0698) -------
+#
+# Root cause (see lib/letflow/design/iss0698-test-parallel-create-burst-fix.md
+# for the full design): Step 2 below backgrounds all N partitions' `mix test`
+# processes with no stagger. Each of those, via mix.exs's `test:` alias, used
+# to independently run `ecto.create --quiet` then `ecto.migrate --quiet`
+# before ever reaching the test phase -- and `ecto.migrate` calls
+# Mix.Ecto.ensure_started/2, which starts a full Letflow.Repo pool at that
+# partition's own TEST_POOL_SIZE. All N partitions hit this pool-open at the
+# same wall-clock instant, transiently exceeding Postgres's max_connections
+# even though Step 1.5's clamp already bounds steady-state N*TEST_POOL_SIZE
+# test-phase demand -- this is a distinct, launch-time-synchronized pool-open
+# the clamp was never sized to cover. Fix: run ecto.create+ecto.migrate here,
+# sequentially within each partition but capped in flight across partitions,
+# fully before Step 2 ever backgrounds a single test-phase process; Step 2's
+# `mix test` invocations then pass LETFLOW_SKIP_ECTO_SETUP=1 so mix.exs's
+# `test:` alias does not redundantly re-run (and re-burst) create/migrate.
+#
+# ISS-0699: tmp_dir below was never removed on any exit path, leaking one
+# directory (partition create/test logs) per invocation -- ~280 accumulated
+# on the host that filed this issue. Fix: a single `trap ... EXIT` registered
+# right after tmp_dir is created (see lib/letflow/design/iss0699-test-
+# parallel-tmpdir-cleanup-fix.md for the full design/rationale) removes it
+# only on a clean (exit 0) run, unless TEST_PARALLEL_KEEP_LOGS is set --
+# every nonzero-exit path (including the create/migrate failures at lines
+# below that cite "$tmp_dir/create-$i.log" in their own error message)
+# preserves it so that citation stays inspectable.
+cleanup_tmp_dir() {
+  local exit_code=$?          # MUST be the first statement -- capturing $?
+                               # here is what recovers this script's own real
+                               # exit status; any earlier statement would
+                               # clobber it before it can be read.
+
+  if [ "$exit_code" -eq 0 ] && [ -z "${TEST_PARALLEL_KEEP_LOGS:-}" ]; then
+    rm -rf "$tmp_dir"
+  else
+    echo "test_parallel: preserving $tmp_dir (exit_code=$exit_code, TEST_PARALLEL_KEEP_LOGS=${TEST_PARALLEL_KEEP_LOGS:-unset})" >&2
+  fi
+}
 
 tmp_dir=$(mktemp -d "${TMPDIR:-/tmp}/letflow_test_parallel.XXXXXX")
+trap cleanup_tmp_dir EXIT
 echo "test_parallel: partition logs in $tmp_dir"
+
+max_concurrent_creates="${TEST_PARALLEL_MAX_CONCURRENT_CREATES:-4}"
+if ! printf '%s' "$max_concurrent_creates" | grep -Eq '^[1-9][0-9]*$'; then
+  echo "test_parallel: ERROR TEST_PARALLEL_MAX_CONCURRENT_CREATES='$max_concurrent_creates' is not a positive integer" >&2
+  exit 1
+fi
+
+echo "test_parallel: seeding+migrating $N partition databases (capped at $max_concurrent_creates concurrent)"
+
+declare -A create_pid_to_partition
+in_flight=0
+
+i=1
+while [ "$i" -le "$N" ]; do
+  if [ "$in_flight" -ge "$max_concurrent_creates" ]; then
+    wait -n -p finished_pid
+    finished_exit=$?
+    finished_partition="${create_pid_to_partition[$finished_pid]}"
+    unset 'create_pid_to_partition[$finished_pid]'
+    in_flight=$((in_flight - 1))
+    if [ "$finished_exit" -ne 0 ]; then
+      echo "test_parallel: ERROR partition $finished_partition ecto.create/ecto.migrate failed with exit $finished_exit -- no partition launched (see $tmp_dir/create-$finished_partition.log)" >&2
+      exit 1
+    fi
+  fi
+
+  (
+    MIX_ENV=test MIX_TEST_PARTITION="$i" MIX_BUILD_PATH="_build/test-partition-$i" mix ecto.create --quiet &&
+      MIX_ENV=test MIX_TEST_PARTITION="$i" MIX_BUILD_PATH="_build/test-partition-$i" mix ecto.migrate --quiet
+  ) > "$tmp_dir/create-$i.log" 2>&1 &
+  create_pid_to_partition[$!]=$i
+  in_flight=$((in_flight + 1))
+
+  i=$((i + 1))
+done
+
+# Drain remaining in-flight create/migrate jobs.
+while [ "$in_flight" -gt 0 ]; do
+  wait -n -p finished_pid
+  finished_exit=$?
+  finished_partition="${create_pid_to_partition[$finished_pid]}"
+  unset 'create_pid_to_partition[$finished_pid]'
+  in_flight=$((in_flight - 1))
+  if [ "$finished_exit" -ne 0 ]; then
+    echo "test_parallel: ERROR partition $finished_partition ecto.create/ecto.migrate failed with exit $finished_exit -- no partition launched (see $tmp_dir/create-$finished_partition.log)" >&2
+    exit 1
+  fi
+done
+
+echo "test_parallel: all $N partition databases created+migrated"
+
+# --- Step 2: launch N background partitions -------------------------------
 
 # ISS-0217: a single tag shared by every partition THIS invocation launches, so
 # config/test.exs can fold it into each partition's application_name and
@@ -253,7 +350,7 @@ while [ "$i" -le "$N" ]; do
   # globally, because every partition must see a *different* value --
   # unlike TEST_PARALLEL_GROUP/TEST_POOL_SIZE above, which are deliberately
   # global-exported since every partition shares the same value there.
-  MIX_TEST_PARTITION="$i" MIX_BUILD_PATH="_build/test-partition-$i" \
+  MIX_TEST_PARTITION="$i" MIX_BUILD_PATH="_build/test-partition-$i" LETFLOW_SKIP_ECTO_SETUP=1 \
     mix test --partitions "$N" --no-color $high_pool_demand_exclude "$@" \
     > "$tmp_dir/partition-$i.log" 2>&1 &
   pids[$i]=$!

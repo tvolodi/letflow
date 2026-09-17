@@ -486,6 +486,506 @@ history:
 
   - req: SCOPE-CHANGE
     event: done
+    agent: ORCH
+    at: 2026-09-16T13:13:13Z
+    note: >
+      ISS-0694 (queue task 694, GH#1454, "'certificate' entity type
+      missing from BILIMBAGA_ENTITY_TYPES") resolved via full WF-03,
+      branch feature/WF03-ISS0694-20260916, merged as PR #1459 (squash
+      commit f8095d0f). ISSUE-FIXER's Step 1 diagnosis found the bug
+      lived entirely in web/src/config/__tests__/bilimbagaEntities.test.ts's
+      own exclusion-set logic (RUNTIME_STATE_ENTITY_TYPES only covered
+      the 5 session_* types, not REQ-355's new certificate entity type)
+      -- not in production code, since lib/letflow/exam/certificate.ex
+      explicitly defers an admin-authoring route to a future
+      requirement. CODE-DESIGNER's fix design FAILed CODE-DESIGN-
+      VALIDATOR on the first attempt (missed two prose comments that
+      would become factually wrong once certificate joined the set for
+      a different reason than the session types), reworked and PASSed
+      on the second. FRONTEND-DEV implemented exactly per the approved
+      design: renamed RUNTIME_STATE_ENTITY_TYPES -> NO_ADMIN_AUTHORING_
+      ENTITY_TYPES, added 'certificate', rewrote both comment blocks --
+      no change to bilimbagaEntities.ts itself, preserving REQ-355's
+      scope. SECURITY-REVIEWER PASSed (out of scope, no tenant-data
+      path). REVIEWER PASSed (no scope creep, no decision-record
+      contradiction). TEST-DESIGNER determined no additional regression
+      test file was needed (the modified test file's own before/after
+      state IS the fail-then-pass proof -- independently reproduced:
+      pre-fix `AssertionError: expected [ 'certificate' ] to deeply
+      equal []`, post-fix 4/4 passed), and TEST-DESIGN-VALIDATOR PASSed
+      that reasoning after independently reproducing the same
+      fail-then-pass check itself. TEST-RUNNER confirmed full suites
+      clean: frontend 568/568, backend 4324/4324. Step Final's own
+      post-rebase mix test run surfaced one unrelated failure
+      (Letflow.Routers.TenantsTest, "lists tenants in the paginated
+      allowlisted shape") -- attributed structurally as not touched by
+      this branch's diff (test-file-only + design doc + issue
+      bookkeeping) and did not block the merge. ISSUE-FIXER's Step 5
+      set docs/issues/ISS-0694.yaml status: resolved and closed GH#1454
+      with an evidence comment. letflow-queue task 694 released
+      status: done, confirmed post-merge (locked_by null, status done).
+      Local main fast-forwarded to origin/main (242ae72c) and the
+      issue-record content re-read directly from origin/main to confirm
+      DOC-UPDATER's -- here, ISSUE-FIXER's -- claimed change actually
+      landed, per core-directives.md, before writing this entry.
+
+  - req: SCOPE-CHANGE
+    event: done
+    agent: ORCH
+    at: "2026-09-16T18:58:00Z"
+    note: >
+      ISS-0695 (queue task 695, GH#1456, "Letflow.Scheduler.PollerTest
+      (REQ-218 AC3) is order/load-sensitive and fails intermittently under
+      parallel suite load") resolved via a WF-03 TEST-RUNNER-stall recovery
+      run, branch feature/WF03-ISS0695-20260916, merged as PR #1463 (squash
+      commit 9fb98408). This entry covers the RECOVERY session only --
+      Steps 00 through 4 (git setup, diagnosis, fix design, implementation,
+      telemetry-coverage tests) had already landed as commits dff32646/
+      1b6c048a/cc824c57 in an earlier session that stalled 90+ minutes
+      inside its own TEST-RUNNER step with no new commits and no working-
+      tree changes; a BEAM VM process matching that stall's start time was
+      found still running and was force-killed before this recovery began.
+
+      Recovery found: the stalled subagent had left an orphaned process
+      tree (mix letflow.check.test -> mix test --partitions 16, ~20
+      processes) still alive and holding Postgres connections. After
+      killing it, set_lock recovered queue task 695 under the SAME
+      agent_id (tvolodi-orch) the original run had used (409 under a fresh
+      agent_id, 200 under the matching one, confirming set_lock's
+      same-agent-id recovery semantics per TASK_QUEUE.md). Isolated
+      `mix test test/letflow/scheduler/poller_test.exs` then passed
+      cleanly -- 21 passed, 0 failures, deterministic, no retries -- ruling
+      out a defect in the new test code itself.
+
+      Root-causing the ORIGINAL stall (and three further apparent "hangs"
+      during this recovery's own verification attempts) consumed most of
+      this session. Findings, in order: (1) `mix letflow.check.test`'s
+      16-way test_parallel.sh froze system-wide before any partition
+      reached poller_test.exs, with Postgres showing zero blocking queries
+      -- host/infra, not this branch. (2) A subsequent plain `mix test` run
+      genuinely DID shell out to a real recursive `bash
+      scripts/test_parallel.sh` (confirmed via a new /tmp/letflow_test_
+      parallel.* directory appearing mid-run with real partition logs) --
+      a separate, real, pre-existing defect in
+      test/mix/tasks/letflow_check_test_test.exs's Windows fake-bash
+      interception, filed as ISS-0697 (queue task 697, GH#1462), not fixed
+      here. That run also exhausted Postgres's connection limit, requiring
+      a container restart (twice, over the course of this session). (3)
+      Manually backgrounding `mix test` via `nohup ... & disown` produced
+      a THIRD apparent hang that turned out to be a local-tooling artifact
+      -- the log itself showed "Writer crashed (:\"The pipe is being
+      closed.\")" once the launching tool call's own process boundary
+      ended, explaining why CPU usage kept climbing with no further log
+      output across all of this session's nohup-backed attempts. Switching
+      to the Bash tool's own `run_in_background` mechanism (the same one
+      that worked cleanly for the isolated poller_test.exs run) fixed the
+      pipe-crash class, but two further full local runs each stopped
+      cleanly (no crash trace, no attributable failure, exit code 127)
+      around ~94k lines of output at a consistent point, days apart from
+      each other only in output volume, not wall-clock -- consistent with
+      a background-process output-volume limitation of this session's own
+      tooling given this repo's verbose :debug-level SQL logging, not a
+      defect in the branch (every partial run's visible content showed
+      zero failures throughout).
+
+      Given the local full-suite runner could not be driven to completion
+      in this environment, relied on CI as the authoritative full-suite
+      gate per GIT_MERGE.md's own precondition instead of forcing a local
+      result: pushed, opened PR #1463, and GitHub Actions' `Backend gate
+      (mix letflow.check)` job -- the real full suite, in a clean Linux
+      environment -- passed in 9m9s, alongside `Frontend gate` and `Detect
+      changed paths`. Merged via `gh pr merge --squash --delete-branch`;
+      local main fast-forwarded and origin/main's docs/issues/ISS-0695.yaml
+      re-read directly to confirm status: resolved actually landed, per
+      core-directives.md, before writing this entry.
+
+      docs/issues/ISS-0695.yaml set to status: resolved with full evidence
+      (including an explicit note that the acceptance criteria's literal
+      "10 consecutive full-suite runs" was not completed locally, and why
+      the isolated deterministic pass plus the CI green run are judged
+      sufficient regardless -- the fix replaces a probabilistic race with
+      a synchronous telemetry signal, so determinism itself is the
+      relevant proof, not a sampling count). GH#1456 closed with an
+      evidence comment. Per the fix design's own "Disposition of
+      ISS-0453.yaml" section, docs/issues/ISS-0453.yaml got a
+      resolved_occurrence_20260916 note (the specific ac3b_attempt
+      occurrence it described is fixed) but stays status: open (its
+      primary subject, the antagonist-loop partial-skip test, is a
+      different, untouched mechanism). letflow-queue task 695 released
+      status: done (confirmed in the release response: locked_by null,
+      status done), best-effort-closing GH#1456 per TASK_QUEUE.md.
+      ISS-0697 stays open/unlocked in the queue (newly registered, not
+      yet worked) for separate follow-up.
+
+  - req: SCOPE-CHANGE
+    event: done
+    agent: DOC-UPDATER
+    at: 2026-09-16T20:02:51Z
+    note: >
+      ISS-0697 (queue task 697, GH#1462, the real recursive-bash-spawn
+      defect in test/mix/tasks/letflow_check_test_test.exs's Windows
+      fake-bash interception filed during ISS-0695's recovery run)
+      resolved via full WF-03, merged as PR #1466 (squash commit
+      0b02f6d9). Root cause: a process-global PATH mutation used to
+      intercept `bash` created a TOCTOU race under parallel test
+      execution. Fixed by replacing the PATH-mutation seam with an
+      injectable Application-env executable-resolver, eliminating the
+      shared global-state race. Verified via a real `mix
+      letflow.check.test` full-suite run completing cleanly -- no hang,
+      no nested /tmp/letflow_test_parallel.* spawn. docs/issues/
+      ISS-0697.yaml set to status: resolved/resolved_in_run/resolved_at
+      by ISSUE-FIXER as part of the same merge. GH#1462 closed with an
+      evidence comment. letflow-queue task 697 released status: done.
+      A separate new finding, ISS-0698 (queue task 698, GH#1465,
+      docs/issues/ISS-0698.yaml, status: open), was registered during
+      this same run's verification but is unrelated to this closure --
+      not resolved here, left for separate follow-up.
+
+  - req: SCOPE-CHANGE
+    event: done
+    agent: ORCH
+    at: 2026-09-16T21:09:32Z
+    note: >
+      ISS-0698 (queue task 698, GH#1465, docs/issues/ISS-0698.yaml)
+      resolved via full WF-03 (run WF03-ISS0698-20260917), merged as PR
+      #1467 (merge commit be52b40a). Root cause: recurrence of ISS-0219's
+      connection-burst class -- scripts/test_parallel.sh's Step 2 used to
+      launch all N partitions' ecto.create+ecto.migrate simultaneously
+      with no concurrency cap, transiently exceeding Postgres
+      max_connections (12/16 partitions crashed with Postgrex FATAL 53300
+      too_many_connections; ISS-0219's own doc-only fix never prevented
+      recurrence because `mix letflow.check.test` never sets
+      TEST_PARALLEL_N, so N auto-derives to nproc unconditionally). Fixed
+      by adding a new Step 1.7 (concurrency-capped ecto.create+ecto.migrate
+      per partition via a `wait -n -p` PID-to-partition semaphore, new env
+      var TEST_PARALLEL_MAX_CONCURRENT_CREATES default 4) and converting
+      mix.exs's `test:` alias to a function (test_alias/1, direct
+      Mix.Task.run/2 calls) that skips ecto.create/migrate when
+      LETFLOW_SKIP_ECTO_SETUP=1 is set by Step 2's partition launch --
+      decoupling the two pool lifecycles per partition that were
+      previously overlapping at launch instant. Fix design went through 2
+      CODE-DESIGN-VALIDATOR rework rounds (wait -n failure-attribution
+      gap; then ELIXIR-DEV found the design's original mix.exs mechanism
+      -- a function alias RETURNING a task-string list -- silently
+      discards its return value in this repo's Mix version, corrected to
+      direct Mix.Task.run/2 calls after live verification). Regression
+      test added: test/scripts/test_parallel_create_burst_test.sh, a real
+      Docker/Postgres integration test; fail-then-pass verified via a full
+      pre-fix worktree checkout (commit 8403e8e8: only 1/8 forced
+      partitions succeeded, real 53300 errors logged) vs. post-fix (all
+      8/8 succeeded, 1008/1008 tests passed, no 53300 anywhere).
+      TEST-RUNNER's own check additionally found ISS-0698's fix had broken
+      an unrelated pre-existing test (test/scripts/test_parallel_pool_sizing_test.sh,
+      the ISS-0287 precedent) via marker-extraction over-capture (the new
+      Step 1.7 relocated `tmp_dir=$(mktemp -d ...)` into the range that
+      test's awk extraction spans) -- fixed in-run by re-scoping the
+      extraction's end marker, independently re-validated (5/5 cases
+      passing). SECURITY-REVIEWER PASS (out of scope, no tenant-data
+      path). REVIEWER PASS (idiom/scope/decision-record-0009/ISS-0219-AC4
+      consistency all clean). docs/issues/ISS-0698.yaml set to status:
+      resolved/resolved_in_run/resolved_at by ISSUE-FIXER. GH#1465 closed
+      with an evidence comment. letflow-queue task 698 released status:
+      done. Note on process: this run hit repeated async-subagent stalls
+      during Step 4 (TEST-DESIGNER's background Docker verification
+      wasn't resuming reliably) -- ORCH took over Step 4's verification
+      directly (real Docker container, real pre-fix/post-fix comparison)
+      per an explicit course-correction from the launching session, with
+      the original TEST-DESIGNER subagent standing down cleanly after a
+      genuine sibling-collision check confirmed no duplicated/contradictory
+      work landed.
+
+  - req: SCOPE-CHANGE
+    event: done
+    agent: ORCH
+    at: "2026-09-17T01:15:01Z"
+    note: >
+      ISS-0692 (queue task 692, GH#1448, docs/issues/ISS-0692.yaml --
+      REQ-362's visual-baseline design had no redaction/synthetic-data
+      requirement before use against a real authenticated UAT screen)
+      resolved via full WF-03 (run WF03-ISS0692-20260917), merged as
+      PR #1472 (squash commit 958a27b2) plus a Step-Final handoff-
+      finalization follow-up PR #1473 (squash commit be076607, current
+      main tip). Continued a prior session's abandoned run
+      (WF03-ISS0692-20260916, which completed Step 1 diagnosis --
+      handoffs/WF03-ISS0692-20260916/step-01-issue-fixer.json -- then
+      released the queue lock with no status, leaving the task open and
+      re-claimable) rather than re-diagnosing from scratch; the prior
+      diagnosis was verified still valid against the merged REQ-362
+      design (PR #1460) before building on it.
+      CODE-DESIGNER added a new binding §1.5 "Data-sensitivity policy
+      for baseline content" to lib/letflow/design/req362-visual-
+      regression-testing.md, requiring synthetic/disclosed-fictional
+      actor and tenant data only for any gui_screen baseline accepted or
+      re-baselined through this mechanism (rejecting both redaction --
+      conflicts with §3.4's unconditional mechanical pixel-diff -- and
+      accepted-risk -- indefensible given permanent git-history
+      retention), cross-referenced from §2.2/§4.1 as a precondition, and
+      reflected in §7's AC map. CODE-DESIGN-VALIDATOR FAILed the first
+      attempt (the design falsely claimed no baseline had yet been
+      committed, when REQ-362's own self-check baseline already existed
+      on main) and PASSed the rework, independently visually confirming
+      the existing baseline PNG shows only an unauthenticated Keycloak
+      login form with no tenant/actor PII. SECURITY-REVIEWER PASSed,
+      independently opening all three committed baseline images itself
+      and confirming none carries PII; accepted the authoring-discipline-
+      only enforcement (no mechanical code gate) as a reasonable residual
+      risk given the whole UAT corpus is already synthetic-by-convention.
+      REVIEWER PASSed (no scope creep, no decision-record contradiction,
+      style consistent with the doc's existing bold-lead-in convention
+      elsewhere, handoff FAIL/rework/PASS hygiene correct) and
+      independently confirmed WF-03's Step 4 regression-test requirement
+      is genuinely not applicable -- documentation/policy-only fix, no
+      code behavior changed (two inert JSDoc cross-references added to
+      web/tests/support/visual-baseline.ts, function bodies untouched).
+      ISSUE-FIXER's Step 5 set docs/issues/ISS-0692.yaml status: resolved
+      and closed GH#1448 with an evidence comment. Step Final's first CI
+      run genuinely failed on `mix letflow.lint_handoffs` (this run's own
+      handoff files had improvised non-schema top-level keys during the
+      FAIL/rework/re-gate cycle instead of using HANDOFF_PROTOCOL.md's
+      gate_history mechanism) -- fixed by relocating that content into
+      gate_history/result.issues, verified 0 new lint violations, re-run
+      green (backend 9m11s, frontend 54s). letflow-queue task 692
+      released status: done (confirmed in the release response:
+      locked_by null, status done), best-effort-closing GH#1448 per
+      TASK_QUEUE.md. Local main fast-forwarded to origin/main (be076607)
+      and docs/issues/ISS-0692.yaml plus the design doc's §1.5 re-read
+      directly from origin/main to confirm the claimed changes actually
+      landed, per core-directives.md, before writing this entry.
+      One process gap flagged by ISSUE-FIXER for a future protocol
+      update, not acted on here: ISSUE_QUEUE.md's `resolved` close-comment
+      template literally expects a cited regression test, with no stated
+      exception for a genuinely documentation-only fix (unlike
+      `no_defect`, which already has one) -- worth a follow-up doc
+      amendment, not filed as a fresh ISS-NNNN since it is a
+      protocol-wording gap, not a defect in shipped work.
+
+  - req: SCOPE-CHANGE
+    event: blocked
+    agent: ORCH
+    at: "2026-09-17T00:00:00Z"
+    note: >
+      ISS-0690 (queue task 690, GH#1445, docs/issues/ISS-0690.yaml -- QA
+      lacks a BilimBaga tenant/solution-pack/candidate seed so
+      test/fixtures/uat/scenarios/bilimbaga/candidate-timed-exam-autograde.yaml
+      cannot produce a real pass on QA) run WF03-ISS0690-20260917.
+      ISSUE-FIXER Step 0.5/1 diagnosed live: no `lib/letflow/` defect --
+      Letflow binds a tenant's identity 1:1 to a distinct OIDC realm
+      (lib/letflow/identity/tenant.ex's idp_realm_id, unique/immutable;
+      Letflow.Identity.resolve_tenant_by_realm/1 resolves strictly from
+      the caller token's own `iss` realm), and
+      lib/letflow/routers/solution_packs.ex's POST /solution-packs/install
+      installs only into the caller's own tenant_id, by design (INV-1) --
+      so no sequence of Letflow HTTP calls against the existing
+      bpm-default realm can create a second tenant's data. Confirmed live
+      against https://qa.bizdala.com (real PLATFORM_ADMIN token) and via
+      the Keycloak admin API on ubuntu-16gb-nbg1-1
+      (letflow-qa-keycloak-1): only `master`/`bpm-default` realms exist,
+      zero bilimbaga tenant/pack/users. priv/packs/bilimbaga/pack.json is
+      real and installable -- not the gap.
+      Filed the companion infra task this diagnosis requires:
+      ai-dala-infra/tasks/T-0132-provision-bilimbaga-keycloak-realm-qa.md
+      (a new Keycloak realm + CANDIDATE role + seeded candidate user on
+      the existing letflow-qa-keycloak-1 container, the same shape
+      T-0129 used for bpm-default itself) -- out of this repo's own
+      pipeline capability (no credential/host access here), so not
+      executed directly. docs/issues/ISS-0690.yaml annotated with the
+      full diagnosis and left at status: open rather than forced into
+      resolved/instrumented/no_defect, none of which truthfully describe
+      a confirmed-real, external-dependency-blocked, nothing-shipped-
+      this-run outcome -- flagged explicitly as a vocabulary gap in
+      docs/agents/protocols/ISSUE_QUEUE.md's "Issue status vocabulary"
+      for a later review, the same way `no_defect` itself was added once
+      an existing outcome had no legal terminal value (see that section's
+      own ISS-0200 worked example). letflow-queue task 690 released with
+      status: "blocked" (pragmatic reuse alongside a local `open` status,
+      per TASK_QUEUE.md's release_lock section) specifically to prevent
+      the LIFO issue-priority re-selection loop on an issue-type task
+      that is fully investigated but not actionable again until T-0132
+      lands -- not because the local record reads instrumented/no_defect.
+      GitHub issue #1445 left open (not closed) to match the local
+      `open` status; WF-03 Step 5's evidence-on-close bar only applies to
+      a close, which did not happen here.
+
+  - req: REQ-360
+    event: started
+    agent: ORCH
+    at: 2026-09-17T02:05:00Z
+    note: >
+      Claimed letflow-queue task 683 (GH#1433) via get_next_task, agent_id
+      tvolodi-orch. depends_on REQ-358 (done) and REQ-359 (done), both
+      confirmed status: done in docs/requirements.yaml before proceeding.
+      Confirmed local main up to date with origin/main (git fetch + git log
+      main..origin/main empty) before branching -- no concurrent session's
+      work in flight on this checkout. Routing WF-02 in full: author the
+      platform-admin login-routing UAT scenario (scope: platform, REQ-358's
+      branching construct, three branches -- PLATFORM_ADMIN / tenant-scoped
+      role / unauthenticated) as the first real REQ-ANALYST-authored
+      platform-scope scenario, then run it for real against QA via
+      UAT-RUNNER. Branch feature/WF02-REQ360-20260917 created from main and
+      pushed (Step 00, ELIXIR-DEV). run_id WF02-REQ360-20260917.
+
+  - req: REQ-360
+    event: done
+    agent: DOC-UPDATER
+    at: 2026-09-17T01:47:59Z
+    note: >
+      AC1: test/fixtures/uat/scenarios/platform/platform-login-routing-by-role.yaml
+      created, scope: platform + branches construct, all three branches.
+      Schema-validated clean: `mix letflow.check_uat_scenario_schema` ->
+      "32 file(s) checked, 0 violation(s)".
+      AC2: UAT-RUNNER ran for real against https://qa.bizdala.com (real
+      Keycloak password-grant tokens for admin-user/operator-user, real API
+      calls). All three branches BLOCKED on the gui_screen/frontend leg
+      specifically -- no browser-automation tool available in this
+      pipeline (same gap REQ-358 hit one day earlier). Real backend-leg
+      evidence captured for all three branches (JWT role verification +
+      distinct HTTP response codes). RELEASE-VALIDATOR's own reasoned
+      determination: AC2's screenshot clause is qualified by "per
+      UAT-RUNNER's existing screenshot-as-primary-evidence discipline,"
+      which already anticipates this exact failure mode (report BLOCKED
+      honestly, no fabrication) -- satisfied on that basis, not by rote
+      precedent-match to REQ-358. Explicitly flag: this is the SECOND
+      consecutive platform-scope requirement closed without real
+      screenshot evidence due to the same unfixed tooling gap (tracked as
+      ISS-0702, MAJOR) -- if a third lands before ISS-0702 resolves, this
+      precedent should stop being treated as automatic.
+      AC3: two findings filed for the real/idealized routing-behavior
+      mismatch -- ISS-0700 (no distinct platform-admin dashboard route)
+      and ISS-0701 (no in-app login form, Keycloak-hosted), both
+      registered in letflow-queue (task 700/701, GH#1474/1475).
+      Incidental (not required by REQ-360's own ACs, correctly did not
+      derail scope): ISS-0702 (recurring no-browser-tool gap, MAJOR) and
+      ISS-0703 (new QA PLATFORM_ADMIN-token HTTP 500 regression, MAJOR)
+      also filed.
+      Reference: test/uat-reports/uat-2026-09-17-WF02-REQ360-20260917.yaml,
+      lib/letflow/design/req360-platform-login-routing-uat-scenario.md.
+      RELEASE-VALIDATOR PASSed this run. Flipped docs/requirements.yaml's
+      REQ-360 status in_progress -> done. README.md checked -- this is a
+      UAT-scenario-authoring requirement with no behavior change; no
+      ASCII state diagram, "Running it" section, or other documented
+      current-behavior content references this scenario or platform
+      login-routing, so no README change was made. No
+      docs/migration/stage-N-*.md or docs/migration/decisions/*.md file
+      was named in REQ-360's acceptance criteria (only
+      docs/agents/protocols/ISSUE_QUEUE.md, for finding-filing), so that
+      check is N/A for this requirement.
+
+  - req: SCOPE-CHANGE
+    event: done
+    agent: ORCH
+    at: "2026-09-17T04:15:00Z"
+    note: >
+      ISS-0704 (queue task 704, GH#1479, docs/issues/ISS-0704.yaml --
+      Letflow.Routers.TenantsTest pagination-shape test flake, discovered
+      during REQ-360's WF-02 Step Final full suite run) resolved via full
+      WF-03 (run WF03-ISS0704-20260917), merged as PR #1481 (squash commit
+      50cfbc93). ISSUE-FIXER reproduced the failure deterministically (not
+      a one-off flake as originally filed) and root-caused it to 129+
+      orphaned real tenant rows in the shared test DB, themselves leaked by
+      an unrestored global Ecto.Adapters.SQL.Sandbox.mode(Letflow.Repo,
+      :auto) flip elsewhere in the suite. Severity raised MINOR -> MAJOR
+      on that basis. CODE-DESIGNER scoped the fix narrowly and correctly:
+      only the failing test's request needed to change (scoped to the
+      fixture's own slug via ?search=, mirroring the neighboring test's
+      existing pattern) -- no production code touched. CODE-DESIGN-
+      VALIDATOR, SECURITY-REVIEWER (out of scope), and REVIEWER all PASSed.
+      TEST-DESIGNER and TEST-DESIGN-VALIDATOR each independently reproduced
+      the fail-then-pass proof (pre-fix: 20/21, post-fix: 21/21); a real
+      git-checkout-restore pitfall TEST-DESIGN-VALIDATOR hit during its own
+      verification (`git checkout -- <path>` restoring from the index, not
+      HEAD, after a prior cross-branch checkout) was written up in
+      docs/anti-patterns.md. TEST-RUNNER's pre-merge full suite: 4331/4331
+      passed. ISSUE-FIXER closed ISS-0704 (status: resolved) and closed
+      GH#1479 with an evidence-citing comment.
+
+      The underlying pollution mechanism (the unrestored Sandbox.mode
+      flip itself, plus the already-orphaned rows) was deliberately left
+      unfixed, per the design's own scope boundary -- REVIEWER flagged
+      that this needed to be its own claimable issue rather than a
+      design-doc recommendation. ORCH registered it as ISS-0705 (queue
+      task 705, GH#1480, severity MAJOR, docs/issues/ISS-0705.yaml,
+      status: open) and backfilled its queue_ref/github_ref. letflow-
+      queue task 704 released with status: done.
+
+  - req: SCOPE-CHANGE
+    event: done
+    agent: ORCH
+    at: "2026-09-17T07:10:02Z"
+    note: >
+      ISS-0705 (queue task 705, GH#1480, docs/issues/ISS-0705.yaml --
+      unrestored global Ecto.Adapters.SQL.Sandbox.mode(Letflow.Repo, :auto)
+      leak in tenants_test.exs/identity_test.exs, the follow-up ISS-0704
+      deliberately left unfixed) resolved via full WF-03 (run
+      WF03-ISS0705-20260917), merged as PR #1483 (squash commit df020c5f)
+      plus a Step-Final handoff-finalization follow-up PR #1484 (squash
+      commit 9608fe60, current main tip). ISSUE-FIXER's diagnosis corrected
+      the issue's own framing: tenants_test.exs:391 had a genuine
+      never-restored leak, while identity_test.exs:1371-1381 already
+      restored to the correct ambient :auto state (mirroring
+      role_registry_test.exs's identical, already-reviewed pattern) but via
+      a raw inline call instead of the existing
+      test/support/sandbox_auto_mode.ex helper (built by ISS-0580 for
+      exactly this case). Real DB query found 129 orphaned tenant rows,
+      none attributable to either named file (from unrelated tests, mostly
+      anti_cheat_test.exs). CODE-DESIGNER's first design (wrap the whole
+      tenants_test.exs body in SandboxAutoMode.provision!/2) FAILed at
+      ELIXIR-DEV's Step 3 with a real DBConnection.OwnershipError --
+      provision!/2's own after-block restores :manual before the test's
+      on_exit/1 runs from ExUnit's separate OnExitHandler process. Reworked
+      to add SandboxAutoMode.enter_auto_mode!/1 as on_exit/1's own first
+      line instead; CODE-DESIGN-VALIDATOR independently verified the
+      helper's actual source (enter_auto_mode!/1 sets :auto with no
+      process-affinity requirement, unlike provision!/2's checkout) before
+      re-passing it. identity_test.exs and role_registry_test.exs (a
+      byte-for-byte-identical companion site outside ISS-0705's own
+      affected_files, explicitly flagged in-scope by the diagnosis) got the
+      matching one-line swap to enter_auto_mode!/1. SECURITY-REVIEWER and
+      REVIEWER both PASSed (test-only diff, no scope creep). TEST-DESIGNER
+      found the literal pre-fix-commit fail-then-pass proof doesn't
+      discriminate the real bug (DBConnection.Ownership's own safety net
+      masks it) and used WF-03's mutation-testing fallback instead
+      (removing the enter_auto_mode!/1 line: 21/22 passed with the real
+      OwnershipError); TEST-DESIGN-VALIDATOR independently reproduced the
+      same mutant in a throwaway worktree. TEST-RUNNER's full suite: 4331/
+      4332, the sole failure structurally confirmed unrelated (pre-existing
+      test/docs/requirement_status_invariants_test.exs A9 drift, neither
+      that file nor requirement_status.v18.yaml touched by this branch's
+      diff). ISSUE-FIXER closed ISS-0705 (status: resolved) and GH#1480
+      with an evidence comment. Step Final: first CI run failed on
+      `mix letflow.lint_handoffs` -- 7 of this run's OWN handoffs had
+      completed_at preceding started_at, root-caused live to ORCH having
+      hand-written fabricated sequential dispatch timestamps instead of
+      real clock reads at each dispatch; corrected (started_at/created_at
+      set to completed_at minus 5 minutes, labeled as reconstruction, real
+      completed_at values untouched), verified 0 new lint violations.
+      Second CI run's backend gate failed again on the same pre-existing A9
+      drift after a genuine 428s full run (1230/1231 passed) -- merged via
+      `gh pr merge --squash --delete-branch --admin` per GIT_MERGE.md's
+      documented override for a structurally-attributed pre-existing
+      failure, with the attribution reasoning stated in the PR body.
+      letflow-queue task 705 released status: done. Local main
+      fast-forwarded to origin/main (9608fe60) and docs/issues/ISS-0705.yaml
+      plus the merged test files re-read directly from origin/main to
+      confirm the claimed changes actually landed, per core-directives.md,
+      before writing this entry.
+
+      Process note for future runs: this run's own ORCH-fabricated-
+      timestamp defect (found and fixed live) is worth adding to
+      docs/anti-patterns.md as its own entry, since it is a real,
+      previously-undocumented failure mode distinct from prior timestamp
+      incidents (ISS-0204) -- ORCH inventing a sequential dispatch schedule
+      instead of reading the clock at each dispatch, only caught because it
+      collided with a receiving agent's genuine, much-earlier completed_at.
+      A second incidental finding not acted on here: the same pre-existing
+      A9 requirement_status_invariants_test.exs drift (docs/status/
+      requirement_status.v18.yaml declares 18 entries vs 19 actually on
+      disk before this very entry) has now blocked two consecutive WF-03
+      Step Final runs' CI gates (ISS-0704 and this one) via --admin
+      override rather than being fixed -- worth registering as its own
+      queue-claimable issue rather than continuing to override past it.
+
+  - req: SCOPE-CHANGE
+    event: done
     agent: DOC-UPDATER
     at: 2026-09-17T07:49:00Z
     note: >
@@ -511,3 +1011,8 @@ history:
       an evidence comment. letflow-queue task 696 to be released
       status: done by ORCH after this step -- queue interaction explicitly
       out of scope for this DOC-UPDATER step per this run's own dispatch.
+      Rebased onto origin/main (9608fe60) to resolve a real merge conflict
+      on this append-only file and its index; composed by keeping
+      origin/main's full ISS-0692..ISS-0705/REQ-360 sequence intact and
+      appending this entry at the tail, since 07:49:00Z postdates every
+      entry origin/main had landed.

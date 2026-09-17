@@ -2934,3 +2934,82 @@ compare `main` against `origin/main` BEFORE concluding a claimed
 `git pull --ff-only` succeeding is cheap evidence the local checkout is
 actually current; skipping it is what let a two-minute race turn into an
 hour of duplicated WF-01 effort.
+
+## An issue whose confirmed root cause is a real, external-repo infra gap has
+## no legal `ISS-NNNN.yaml` terminal status (2026-09-17)
+
+**What happened.** ISS-0690 (queue task 690, GH#1445) alleged QA lacked a
+BilimBaga tenant/solution-pack/candidate seed needed for a real UAT scenario.
+ISSUE-FIXER (WF03-ISS0690-20260917) confirmed this live and traced the root
+cause: Letflow deliberately binds a tenant's identity 1:1 to a distinct OIDC
+realm (`lib/letflow/identity/tenant.ex`'s `idp_realm_id`,
+`Letflow.Identity.resolve_tenant_by_realm/1`), and
+`POST /solution-packs/install` installs only into the caller's own
+`tenant_id` by design (INV-1, `lib/letflow/routers/solution_packs.ex`
+moduledoc) — so no sequence of Letflow HTTP calls can create a second
+tenant's data; a new Keycloak realm has to be hand-provisioned first (the
+same shape `ai-dala-infra`'s T-0129 used for `bpm-default` itself). This is a
+**real, confirmed defect** with **no `lib/` code to fix** — the remaining
+work is entirely in `ai-dala-infra`'s domain (new Keycloak realm, role,
+client, seeded user), which this repo's own pipeline has no credential/host
+access to perform.
+
+None of `docs/agents/protocols/ISSUE_QUEUE.md`'s three terminal statuses fit:
+`resolved` is false (nothing was removed), `instrumented` is false (nothing
+was built/shipped this run, and its own bar requires the run's acceptance
+criteria to have been met — zero of ISS-0690's four were), `no_defect` is
+false (the alleged defect is real and confirmed, not absent). This is the
+same shape of gap that forced `no_defect` itself into existence (see that
+section's own ISS-0200 worked example) — a genuine outcome the vocabulary
+had no slot for.
+
+**Why this matters for this project specifically.** Forcing the record into
+the nearest-sounding status (most temptingly `instrumented`, since real
+diagnostic work was genuinely done) would plant a false claim in a registry
+later runs treat as ground truth — exactly the failure mode the whole
+resolved/instrumented/no_defect three-way split exists to prevent.
+
+**Correct alternative.** Left `docs/issues/ISS-0690.yaml` at `status: open`,
+appended a structured `diagnosis:` block (root cause, live evidence, pointer
+to the filed companion task `ai-dala-infra/tasks/T-0132-...md`) rather than
+forcing a false terminal claim. Did NOT close the GitHub mirror (evidence-on-
+close only applies when an issue is actually closed). Still released the
+`letflow-queue` lock with `status: "blocked"` — a deliberate, flagged
+mismatch with the local `open` status, needed only to stop the LIFO
+issue-priority re-selection loop `TASK_QUEUE.md` documents for a
+fully-investigated-but-not-actionable issue-type task, not because the
+local record reads `instrumented`/`no_defect`. Filed the mismatch and the
+missing-status-value gap explicitly in this run's own run-history entry
+(`docs/status/requirement_status.v18.yaml`, SCOPE-CHANGE/blocked, ORCH) for
+a later protocol review, rather than silently picking one of the three
+existing values and hoping the mismatch goes unnoticed. If this recurs, it's
+worth ISSUE_QUEUE.md gaining a fourth status (e.g. `blocked_external`) with
+its own evidence bar, the same way `no_defect` was added.
+
+## `git checkout -- <path>` does not undo a prior cross-branch `git checkout <branch> -- <path>` (2026-09-17, WF03-ISS0704)
+
+A WF-03 Step 4 fail-then-pass verification (ISS-0704) temporarily swapped in
+a pre-fix test file with `git checkout main -- test/letflow/routers/tenants_test.exs`
+to reproduce the pre-fix failure, then tried to restore the committed
+fix with plain `git checkout -- test/letflow/routers/tenants_test.exs`.
+`git status --porcelain` still showed the file modified afterward, because
+`git checkout main -- <path>` staged main's version into the index, and
+bare `git checkout -- <path>` restores from the **index**, not from `HEAD` —
+so it just reapplied the same pre-fix content it was meant to undo.
+
+**Fix:** to actually restore the committed version after a cross-branch/
+cross-ref `checkout -- <path>`, use `git checkout HEAD -- <path>` (or
+`git reset -- <path>` first, then `git checkout -- <path>`) — not bare
+`git checkout -- <path>`. Always verify the restore with **both**
+`git diff --stat` (worktree vs. index) **and** `git diff --cached --stat`
+(index vs. HEAD) — `git status --porcelain` alone can look clean or dirty
+for the wrong reason depending on which of the two mismatches exists;
+checking both diffs is what actually distinguishes "restored to HEAD" from
+"still holding the swapped-in content, just now unstaged-vs-staged
+differently."
+
+Caught by TEST-DESIGN-VALIDATOR independently re-running the same
+verification TEST-DESIGNER had performed, per this project's producer/
+validator redundancy principle — TEST-DESIGNER's own run had not hit this
+trap, but the validator's independent repetition of the same steps is
+exactly the kind of check that would catch it if it had gone unnoticed.

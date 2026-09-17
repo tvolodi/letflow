@@ -1,0 +1,35 @@
+id: ISS-0702
+title: >
+  UAT-RUNNER has no browser-automation tool available -- gui_screen
+  scenario legs recurringly BLOCKED
+discovered_by: ORCH
+discovered_in_run: WF02-REQ360-20260917
+discovered_at: "2026-09-17T01:42:40Z"
+severity: MAJOR
+description: >
+  Recurring across two consecutive real-QA WF-02 runs (REQ-358, 2026-09-16,
+  test/uat-reports/uat-2026-09-16-WF02-REQ358-20260916.yaml; REQ-360,
+  2026-09-17, test/uat-reports/uat-2026-09-17-WF02-REQ360-20260917.yaml).
+  Every scenario branch with verification.method: gui_screen and no
+  pipeline_test: Playwright spec cannot be executed for real -- no
+  Playwright/browser-control tool is available in the UAT-RUNNER agent
+  session (checked via ToolSearch both times, none found). UAT-RUNNER
+  correctly reports BLOCKED/UNBUILT_FEATURE rather than fabricating
+  screenshot evidence, but this means no REQ-360-class platform-scope
+  scenario with a real login-routing/GUI assertion can ever produce the
+  primary screenshot evidence its own acceptance criteria call for.
+
+  Needs a real fix: either wire a Playwright/browser-automation MCP tool
+  into the UAT-RUNNER agent definition, or write real pipeline_test:
+  Playwright specs for the scenarios that need gui_screen verification
+  (per .claude/agents/uat-runner.md's pipeline_test: key), so this class of
+  scenario stops recurring-BLOCKED indefinitely.
+affected_files:
+  - .claude/agents/uat-runner.md
+  - docs/agents/workflows/WF-05_uat_run.md
+related_requirements:
+  - REQ-358
+  - REQ-360
+queue_ref: Q-702
+github_ref: GH-1476
+status: open

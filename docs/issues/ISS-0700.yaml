@@ -1,0 +1,33 @@
+id: ISS-0700
+title: >
+  No distinct platform-admin dashboard route -- PLATFORM_ADMIN and
+  tenant-scoped roles land on the same / (TenantDashboardPage)
+discovered_by: ELIXIR-DEV
+discovered_in_run: WF02-REQ360-20260917
+discovered_at: "2026-09-17T01:38:00Z"
+severity: MINOR
+description: >
+  Discovered during REQ-360 (author the platform-admin login-routing UAT
+  scenario using REQ-358's branching construct). web/src/router.tsx mounts
+  the same TenantDashboardPage at both / and /dashboard for every
+  authenticated role; web/src/pages/OidcCallbackPage.tsx navigates to /
+  unconditionally regardless of role. PLATFORM_ADMIN's extra capability
+  surfaces only as additional nav-menu entries in web/src/components/AppShell.tsx,
+  never as a distinct post-login landing page/dashboard.
+
+  This is the inverse of the gap REQ-360's own Why-section framing
+  anticipated -- it expected a possibly-missing distinct tenant dashboard;
+  instead the tenant dashboard is real and shared, and the distinct
+  platform-admin dashboard is what does not exist. The real behaviour is
+  documented as such (not papered over) in
+  test/fixtures/uat/scenarios/platform/platform-login-routing-by-role.yaml,
+  which asserts both PLATFORM_ADMIN and tenant-scoped roles land at the
+  shared / root.
+affected_files:
+  - web/src/router.tsx
+  - web/src/pages/OidcCallbackPage.tsx
+related_requirements:
+  - REQ-360
+queue_ref: Q-700
+github_ref: GH-1474
+status: open

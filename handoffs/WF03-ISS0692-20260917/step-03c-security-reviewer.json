@@ -1,0 +1,59 @@
+{
+  "handoff_id": "e1f2a3b4-5c6d-4e7f-8a9b-0c1d2e3f4a03",
+  "run_id": "WF03-ISS0692-20260917",
+  "workflow_id": "WF-03",
+  "step": "3c",
+  "from_agent": "ORCH",
+  "to_agent": "SECURITY-REVIEWER",
+  "file": "handoffs/WF03-ISS0692-20260917/step-03c-security-reviewer.json",
+  "created_at": "2026-09-17T06:20:00Z",
+  "started_at": "2026-09-17T06:20:00Z",
+  "completed_at": "2026-09-17T06:45:00Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S7",
+    "requirement_ids": ["REQ-362"],
+    "related_handoff_ids": [
+      "handoffs/WF03-ISS0692-20260916/step-01-issue-fixer.json",
+      "handoffs/WF03-ISS0692-20260917/step-02-code-designer.json",
+      "handoffs/WF03-ISS0692-20260917/step-02b-code-design-validator.json"
+    ],
+    "artifacts_in": [
+      "docs/issues/ISS-0692.yaml",
+      "lib/letflow/design/req362-visual-regression-testing.md",
+      "web/tests/support/visual-baseline.ts",
+      "test/fixtures/uat/visual-baselines/platform/req362-visual-regression-selfcheck/01-EO-001.local.png",
+      "test/fixtures/uat/visual-baselines/platform/req362-visual-regression-selfcheck/01-EO-001.local.yaml",
+      "test/fixtures/uat/visual-baselines/platform/req362-visual-regression-selfcheck/_disputed/ISS-0691/01-EO-001.local.new.png",
+      "test/fixtures/uat/visual-baselines/platform/req362-visual-regression-selfcheck/_disputed/ISS-0691/01-EO-001.local.baseline-at-time-of-failure.png"
+    ],
+    "owned_modules": []
+  },
+  "task": {
+    "description": "Hard gate on ISS-0692's design amendment (SECURITY-REVIEWER originally raised this issue during REQ-362's own Step 2c gate on run WF02-REQ362-20260916). Verify the new §1.5 policy in lib/letflow/design/req362-visual-regression-testing.md actually closes the PII-exposure gap, assess residual risk of relying on authoring-discipline alone, and run the standard INV-1..INV-8 scope test against the full diff since 35d3489a.",
+    "acceptance_criteria": [
+      "Scope test run explicitly against the diff",
+      "Each of INV-1..INV-8 (and INV-9 if relevant) marked APPLIES/NOT-APPLICABLE with reasoning",
+      "Any APPLIES invariant independently verified, not taken on CODE-DESIGN-VALIDATOR's word",
+      "visual-baseline.ts diff independently confirmed comment-only",
+      "Existing committed baseline PNGs independently visually inspected for PII, not just the sidecar text trusted",
+      "Explicit PASS/FAIL verdict with next_action"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "Checked out feature/WF03-ISS0692-20260917 at HEAD aaf60c24 (git fetch/pull --ff-only, up to date). Read ISS-0692.yaml, the full current lib/letflow/design/req362-visual-regression-testing.md (not just §1.5 -- whole file for context), both step-02/step-02b handoffs (v1 FAIL and v2 PASS), and the full diff `git diff 35d3489a..HEAD -- lib/letflow/design/req362-visual-regression-testing.md web/tests/support/visual-baseline.ts`.\n\nSCOPE TEST: this is a design-doc amendment plus two comment-only annotations, not application code, a migration, a secret-resolving path, response-shaping code, or a lookup-by-ID handler in the literal sense. However it directly concerns a tenant-data-exposure-prevention policy for a permanently-git-committed artifact class (visual baselines) that this same role flagged during REQ-362's own gate -- treated as in-scope per the handoff's explicit framing and per this role's mandate to gate any change bearing on tenant-data exposure, not only literal code paths.\n\nINVARIANT-BY-INVARIANT (per security-invariants.md):\n- INV-1 (tenant data isolation / schema-per-tenant scoping): NOT-APPLICABLE in its literal mechanism sense -- no Ecto schema, migration, or query is touched by this diff. The *substance* INV-1 protects (tenant data must not leak outside its proper boundary) is what ISS-0692 raised in a different guise (permanent git artifact vs. cross-tenant DB read), and is addressed below under the general finding rather than forced into INV-1's checklist, which doesn't fit a documentation diff.\n- INV-2 (server-side field authorisation): NOT-APPLICABLE -- no API response shaping, S4 not started.\n- INV-3 (untrusted runtime sandboxing): NOT-APPLICABLE -- S5 not started, unrelated to this diff.\n- INV-4 (secrets by reference only): NOT-APPLICABLE -- no secret material, env var, or config resolution touched. Confirmed by reading the full diff; nothing resembling a credential appears in either changed file or in the three baseline PNGs/sidecar inspected.\n- INV-5 (not-found/forbidden indistinguishability): NOT-APPLICABLE -- no lookup-by-ID endpoint, S4 not started.\n- INV-6 (new data-access paths prove their scoping): NOT-APPLICABLE as a literal 'new data-access path' -- this diff adds no new path; it documents a content policy for an existing, already-gated mechanism (REQ-362, which itself already passed a SECURITY-REVIEWER gate that produced this very issue). This handoff itself is the artifact INV-6 asks for.\n- INV-7 (no SQL string interpolation): NOT-APPLICABLE -- no SQL anywhere in this diff.\n- INV-8 (no unhandled crashes on realistic failure paths): NOT-APPLICABLE -- `web/tests/support/visual-baseline.ts`'s diff is JSDoc-comment-only; verified independently below that no executable line changed, so there is no new error-handling surface to assess.\n- INV-9 (tenant-controlled outbound URL validation): NOT-APPLICABLE -- no outbound HTTP request logic touched.\n\nSince none of INV-1..9's literal checklists apply to a documentation diff, this gate's substantive work is the direct question the dispatch posed: does §1.5, if followed, actually close the gap this role originally raised, and is the residual risk acceptable.\n\nDOES §1.5 CLOSE THE GAP: Yes, on the terms the original issue asked for. ISS-0692's FIX DIRECTION offered three options -- synthetic/seeded data requirement, a redaction step, or an explicit accepted-risk statement with reasoning. §1.5 selects the first, states it as 'a precondition of calling the accept action (§2.2) and the re-baseline action (§4.1), not a suggestion,' cross-references correctly from both call sites (verified directly: §2.2 and §4.1 each carry a 'Precondition (§1.5)' paragraph ahead of their numbered steps), and updates §7's AC map row. This matches the issue's own fix direction option 1 and additionally documents (not merely asserts) why the other two options were rejected, with reasoning I independently re-checked: the redaction-vs-§3.4-unconditional-diff argument is sound (§3.4's text, re-read directly, does say 'any pixel difference ... fails ... immediately and mechanically. No agent ... is consulted' -- a redaction mask genuinely cannot coexist with a zero-tolerance mechanical diff without becoming a new noise source), and the accepted-risk-not-worth-it argument is a reasonable value judgment given synthetic data costs nothing new (independently spot-checked: `test/fixtures/uat/scenarios/swiftroute/tenant-onboarding-happy.yaml` header does say 'Ported verbatim from R-Co ... disclosed-synthetic fixtures' and its actor is indeed fictional -- Alice Bauer / alice.bauer@swiftroute.example).\n\nRESIDUAL GAP -- explicitly assessed: §1.5's own 'Enforcement note' is candid that this is authoring-discipline only, with zero mechanical enforcement -- 'is a judgment made by the scenario author and the accepting agent ... not a property derivable from image bytes. No code change is required.' This is a real residual gap (a future UAT-RUNNER or BA-persona run could still, in principle, accept a baseline against a real authenticated screen with real tenant data, and nothing in code stops it) but I assess it as an ACCEPTABLE residual risk for these independently-verified reasons, not merely because the design says so:\n(a) The entire UAT scenario corpus this mechanism draws its actor/tenant data from is already synthetic-by-convention project-wide (re-confirmed above, consistent with `Letflow.Simulation.Runner`'s established discipline per the design's own citation) -- this isn't a new trust boundary being asked to hold, it's the same discipline every other tenant-data-adjacent fixture in this codebase already relies on.\n(b) A mechanical PII-detection check (OCR/PII-scan on a screenshot before persist) does not exist anywhere in this codebase and would be a materially larger scope addition than ISS-0692 asked for or than this design-only WF-03 run is sized for -- appropriately deferred, not silently dropped, since §1.5 states the tradeoff reasoning in the design text itself rather than omitting it.\n(c) The one path this mechanism has actually exercised end-to-end (REQ-362's own self-check, plus the ISS-0691 fail-case proof) was independently re-verified by me, not taken on trust: I opened all three committed PNGs directly (`01-EO-001.local.png`, and both `_disputed/ISS-0691/` evidence images) -- all three show the same unauthenticated Keycloak 'LETFLOW DEFAULT REALM' login form with empty username/password fields and a red 'REQ-362 deliberate visual-regression fail-case probe' banner; no actor name, email, company name, or any tenant-identifying content appears in any of the three images. This matches and extends CODE-DESIGN-VALIDATOR's v2 re-gate finding (which inspected only the primary PNG) -- I additionally checked both `_disputed/` evidence images since they are also permanently git-committed artifacts under the same tree this policy governs, and found them equally clean.\n\nVISUAL-BASELINE.TS DIFF: independently re-confirmed comment-only. `git diff 35d3489a..HEAD -- web/tests/support/visual-baseline.ts` shows exactly two JSDoc block insertions (above `acceptBaseline` and `rebaseline`), each a `/** ... */` addition; no non-comment line is touched in either hunk. No functional change.\n\nCONCLUSION: §1.5 satisfies ISS-0692's fix direction, is correctly cross-referenced and AC-mapped, contains no implementation code, and the accompanying comment-only annotations in visual-baseline.ts correctly signpost the same precondition at the call sites without attempting (and incorrectly claiming) mechanical enforcement. The residual reliance on discipline-not-mechanism is real but consistent with, and no weaker than, the trust model already governing every other synthetic-by-convention fixture in this codebase, and the one real committed artifact under this mechanism today was independently verified clean. No BLOCKER found on any applicable ground.",
+    "artifacts_out": [],
+    "issues": [],
+    "git_evidence": {
+      "branch_name": "feature/WF03-ISS0692-20260917",
+      "commit_sha_list": ["aaf60c24af4361e6e197281c23224dfa1a132789"],
+      "remote_branch": "origin/feature/WF03-ISS0692-20260917",
+      "push_status": "already_pushed",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": "Route to REVIEWER (Step 3d)"
+  }
+}

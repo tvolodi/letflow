@@ -1,0 +1,170 @@
+run_id: WF03-ISS0699-20260917
+issue_id: ISS-0699
+agent: TEST-RUNNER
+step: "WF-03 Step 4c -- TEST-RUNNER execution of ISS-0699's regression test"
+branch: feature/WF03-ISS0699-20260917
+commit_under_test: 7c9ce064
+date: 2026-09-16
+
+diff_scope:
+  files_changed:
+    - "scripts/test_parallel.sh -- fix for ISS-0699 (Step 1.7 tmp_dir, created
+       via mktemp -d, was never removed on any exit path; adds a
+       cleanup_tmp_dir function plus `trap cleanup_tmp_dir EXIT`)"
+    - "test/scripts/test_parallel_tmpdir_cleanup_test.sh -- new regression
+       test (TEST-DESIGNER), already validated PASS by
+       TEST-DESIGN-VALIDATOR before this step"
+  note: >
+    No Elixir (.ex/.exs) file is touched by this fix -- only
+    scripts/test_parallel.sh (bash). Per this handoff's explicit instruction,
+    the full mix test suite is NOT run at this step (see
+    full_mix_test_suite_scope below for the stated reason).
+
+test_1_tmpdir_cleanup_regression:
+  command: "bash test/scripts/test_parallel_tmpdir_cleanup_test.sh"
+  description: >
+    Extracts the real cleanup_tmp_dir function + tmp_dir=$(mktemp -d ...) +
+    trap cleanup_tmp_dir EXIT lines verbatim out of scripts/test_parallel.sh
+    (bounded between the `cleanup_tmp_dir() {` line and the following
+    `max_concurrent_creates=` line, with an over-capture guard and telltale
+    checks), then evals that extracted block in a controlled subshell that
+    fakes a fast exit (0 or 1) instead of running mix/postgres, covering all
+    3 named dispositions (4 cases total: clean exit + KEEP_LOGS unset ->
+    removed; clean exit + KEEP_LOGS set -> preserved; failing exit +
+    KEEP_LOGS unset -> preserved; failing exit + KEEP_LOGS set ->
+    preserved).
+  result: PASS
+  actual_output: |
+    PASS: clean exit, KEEP_LOGS unset -> tmp_dir removed (tmp_dir removed, as expected)
+    PASS: clean exit, KEEP_LOGS set -> tmp_dir preserved (tmp_dir preserved, as expected)
+    PASS: failing exit, KEEP_LOGS unset -> tmp_dir preserved (tmp_dir preserved, as expected)
+    PASS: failing exit, KEEP_LOGS set -> tmp_dir preserved (tmp_dir preserved, as expected)
+    ---
+    test_parallel_tmpdir_cleanup_test: 4 passed, 0 failed
+  assertion_breakdown: "4 passed, 0 failed (4/4, all named dispositions covered)"
+
+test_2_syntax_check:
+  command: "bash -n scripts/test_parallel.sh"
+  description: >
+    Bash syntax-only check (no execution) of the modified script, to confirm
+    the cleanup_tmp_dir/trap addition did not introduce a parse error.
+  result: PASS
+  actual_output: |
+    SYNTAX_OK rc=0
+  assertion_breakdown: "bash -n exited 0 -- no syntax error"
+
+full_mix_test_suite_scope:
+  status: OUT OF SCOPE for this step, explicitly (not silently omitted)
+  reason: >
+    No .ex/.exs file is touched by this fix -- only scripts/test_parallel.sh
+    (bash) and its own new bash-level regression test. Per this handoff's
+    explicit instruction and this repo's No-Speculation rule (never silently
+    skip a check without saying so), the full `mix test` suite is not run at
+    this step. Step Final's git-merge will run it anyway after the rebase,
+    per this project's own GIT_MERGE.md.
+
+environment_check:
+  git_status: "clean before writing this report (git status --porcelain empty)"
+  branch: feature/WF03-ISS0699-20260917
+  commit_under_test: 7c9ce064
+
+overall_verdict: >
+  PASS. ISS-0699's fix (cleanup_tmp_dir + trap cleanup_tmp_dir EXIT in
+  scripts/test_parallel.sh) is verified working: the dedicated regression
+  test passes 4/4, covering all three named dispositions (clean-exit
+  removal, KEEP_LOGS-preserved, failing-exit-preserved). The script's bash
+  syntax is clean. The full mix test suite was explicitly out of scope for
+  this step per the handoff's own instruction, since no Elixir file changed;
+  it will run at Step Final's git-merge per GIT_MERGE.md.
+
+next_action: >
+  Route to ISSUE-FIXER (Step 5 close issue).
+
+rework_iteration_1:
+  agent: TEST-RUNNER
+  step: "WF-03 Step 4c REWORK ITERATION 1 -- lib/mix/tasks/letflow.check.test.ex now changed"
+  date: 2026-09-17
+  branch: feature/WF03-ISS0699-20260917
+  note: >
+    Unlike iteration 0 (bash-only, no .ex touched), this rework DOES change
+    lib/mix/tasks/letflow.check.test.ex. Per this handoff's explicit
+    instruction, the full `mix letflow.check.test` gate is run end to end
+    (real scripts/test_parallel.sh + check.test.ex integration), plus both
+    dedicated test files directly.
+
+  test_1_letflow_check_test_unit:
+    command: "mix test test/mix/tasks/letflow_check_test_test.exs"
+    result: PASS
+    actual_output: |
+      Running ExUnit with seed: 340515, max_cases: 32
+      Excluding tags: [:keycloak, :wasm_hang, :lua_wallclock_race]
+
+      .................
+      Finished in 3.5 seconds (0.00s async, 3.5s sync)
+
+      Result: 17 passed
+    assertion_breakdown: "17/17 passed, 0 failed"
+
+  test_2_tmpdir_cleanup_regression:
+    command: "bash test/scripts/test_parallel_tmpdir_cleanup_test.sh"
+    result: PASS
+    actual_output: |
+      PASS: clean exit, KEEP_LOGS unset -> tmp_dir removed (tmp_dir removed, as expected)
+      PASS: clean exit, KEEP_LOGS set -> tmp_dir preserved (tmp_dir preserved, as expected)
+      PASS: failing exit, KEEP_LOGS unset -> tmp_dir preserved (tmp_dir preserved, as expected)
+      PASS: failing exit, KEEP_LOGS set -> tmp_dir preserved (tmp_dir preserved, as expected)
+      ---
+      test_parallel_tmpdir_cleanup_test: 4 passed, 0 failed
+    assertion_breakdown: "4/4 passed, 0 failed (all named dispositions covered)"
+
+  test_3_full_check_test_gate:
+    command: "mix letflow.check.test"
+    description: >
+      Full parallel-runner gate this fix targets, run twice to confirm
+      determinism -- exercises scripts/test_parallel.sh + check.test.ex
+      end to end against real Postgres (16 partitions, isolated
+      wasm_hang and lua_wallclock_race subprocess reruns included).
+    result: PASS
+    actual_output_run1: |
+      test_parallel: N=16 (source: nproc)
+      test_parallel: TEST_POOL_SIZE=5 (computed: N=16, max_connections=100, superuser_reserved=3, headroom=10, nonpool_reserve=5)
+      test_parallel: seeding+migrating 16 partition databases (capped at 4 concurrent)
+      test_parallel: all 16 partition databases created+migrated
+      partition 1: 355 tests, 0 properties, 0 failures, exit 0
+      partition 2: 235 tests, 0 properties, 0 failures, exit 0
+      partition 3: 354 tests, 0 properties, 0 failures, exit 0
+      partition 4: 280 tests, 2 properties, 0 failures, exit 0
+      partition 5: 334 tests, 0 properties, 0 failures, exit 0
+      partition 6: 180 tests, 0 properties, 0 failures, exit 0
+      partition 7: 275 tests, 0 properties, 0 failures, exit 0
+      partition 8: 173 tests, 0 properties, 0 failures, exit 0
+      partition 9: 268 tests, 1 property, 0 failures, exit 0
+      partition 10: 229 tests, 0 properties, 0 failures, exit 0
+      partition 11: 269 tests, 0 properties, 0 failures, exit 0
+      partition 12: 198 tests, 2 properties, 0 failures, exit 0
+      partition 13: 272 tests, 1 property, 0 failures, exit 0
+      partition 14: 367 tests, 0 properties, 0 failures, exit 0
+      partition 15: 224 tests, 0 properties, 0 failures, exit 0
+      partition 16: 312 tests, 0 properties, 0 failures, exit 0
+      ---
+      combined: 4325 tests, 6 properties, 0 failures (4331/4331 passed)
+      test_parallel: preserving /tmp/letflow_test_parallel.IPuNms (exit_code=0, TEST_PARALLEL_KEEP_LOGS=1)
+      mix letflow.check.test: OK -- no test failures, no ISS-0069 warnings (16 partitions, logs: C:/Users/tvolo/AppData/Local/Temp/letflow_test_parallel.IPuNms).
+      mix letflow.check.test: OK -- 5/5 isolated wasm_hang tests passed, each in its own subprocess.
+      mix letflow.check.test: OK -- isolated :lua_wallclock_race run also passed clean.
+    actual_output_run2: |
+      (rerun to confirm deterministic exit code)
+      mix letflow.check.test: OK -- isolated :lua_wallclock_race run also passed clean.
+      EXIT=0
+    assertion_breakdown: "4331/4331 passed across 16 partitions, 0 failures, both isolated wasm_hang and lua_wallclock_race reruns clean; exit 0 confirmed on both runs"
+
+  overall_verdict: >
+    PASS. lib/mix/tasks/letflow.check.test.ex's rework-iteration-1 change is
+    verified: its own unit suite (17/17), the pre-existing bash regression
+    test (4/4), and the full end-to-end `mix letflow.check.test` gate
+    (4331/4331 tests across 16 partitions, 0 failures, both isolated
+    wasm_hang and lua_wallclock_race subprocess reruns clean) all pass, with
+    exit 0 confirmed across two independent runs.
+
+  next_action: >
+    Route to Step Final (git merge, rework iteration 1 retry).

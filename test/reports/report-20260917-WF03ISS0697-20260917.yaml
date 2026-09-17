@@ -1,0 +1,104 @@
+run_id: WF03-ISS0697-20260917
+issue_id: ISS-0697
+agent: TEST-RUNNER
+step: "WF-03 Step 4 -- first post-fix run of the exact command class that previously hung"
+branch: feature/WF03-ISS0697-20260917
+commit_under_test: 12f3f1839fa67be2c7e41583084e5a46e64b222a
+date: 2026-09-17
+
+diff_scope:
+  files_changed:
+    - "lib (ELIXIR-DEV fix): injectable executable resolver seam replacing PATH-mutation fake-bash interception"
+    - "test/mix/tasks/letflow_check_test_test.exs and related (TEST-DESIGNER regression coverage)"
+  note: >
+    Already validated PASS by SECURITY-REVIEWER/REVIEWER/TEST-DESIGN-VALIDATOR
+    before this run. This step is the first execution of `mix letflow.check.test`
+    (and therefore scripts/test_parallel.sh) against the fixed code -- the exact
+    operation class that stalled 90+ minutes with an orphaned BEAM VM in run
+    WF03-ISS0695-20260916.
+
+pre_run_baseline (established before invoking the command):
+  letflow_test_parallel_dirs_in_tmp: 295
+  letflow_check_test_fake_mix_dirs_in_tmp: 1950
+  note: >
+    The fake_mix_* dirs are historical debris from the OLD PATH-mutation
+    mechanism (all mtimes Sep 12, pre-fix) -- confirms the hazard this fix
+    targets was real and reproducible on this host. Not created by this run.
+  docker_compose: "letflow-postgres-1 and letflow-keycloak-1 already Up/healthy"
+  erl_exe_count: 18
+  bash_exe_count: 10
+
+full_suite_run:
+  command: "mix letflow.check.test"
+  execution_mode: >
+    Backgrounded and actively polled by TEST-RUNNER in bounded ~90-110s windows
+    (no blind long sleep, no reliance on a cross-turn notification), per the
+    dispatch brief's explicit override of the default background-wait rule.
+    Total wall time from launch to completion: approx. 3.5-4 minutes -- well
+    under the 15-minute kill ceiling. No kill was needed.
+  hang_observed: false
+  nested_spawn_symptom_observed: false
+  nested_spawn_check: >
+    letflow_test_parallel dirs in /tmp: exactly one new directory
+    (letflow_test_parallel.UQeQPy) appeared for this single top-level
+    invocation -- 295 -> 296, and it did not grow further after completion.
+    No second/nested letflow_test_parallel.* directory appeared. No new
+    letflow_check_test_fake_mix_* directories were created (still 1950) --
+    confirms the old PATH-mutation mechanism is gone, consistent with the fix.
+  process_check: >
+    erl.exe rose from 18 baseline to 23 during the run (16 partitions + base,
+    expected) and returned to 1 after completion. bash.exe returned to 9
+    (baseline 10). No orphaned BEAM VMs left running -- this is the opposite
+    of the WF03-ISS0695-20260916 symptom.
+  result: FAILED
+  combined_result_line: "combined: 888 tests, 2 properties, 0 failures (890/890 passed)"
+  per_partition: >
+    Only 4 of 16 partitions (2, 6, 7, 12) produced a Result: line and passed
+    cleanly (235+180+275+198 tests, 2 properties, 0 failures). The other 12
+    partitions (1,3,4,5,8,9,10,11,13,14,15,16) crashed during
+    `ecto.create`/`ecto.migrate` with:
+    "** (Postgrex.Error) FATAL 53300 (too_many_connections) sorry, too many
+    clients already" / "** (Mix) The database for Letflow.Repo couldn't be
+    created: killed". scripts/test_parallel.sh exited 1 overall.
+  root_cause_assessment: >
+    NOT the ISS-0697 hang/nested-spawn hazard -- no hang, no nested temp-dir
+    spawn, no orphaned processes; the run completed and cleaned up normally.
+    This is a separate, real finding: Postgres max_connections=100 (confirmed
+    via `SHOW max_connections`) was exceeded when 16 partitions simultaneously
+    attempted database creation at run start, before any pooling/headroom
+    accounting (TEST_POOL_SIZE=5/partition) would have applied. Post-run check
+    confirms no leaked connections (pg_stat_activity back to 6 total
+    afterward), so this is a startup burst/sequencing issue in
+    scripts/test_parallel.sh's parallel DB-creation phase, not a leak. Not
+    diagnosed further here -- TEST-RUNNER's mandate is to report, not fix;
+    routing this as a new finding rather than silently retrying or loosening
+    anything.
+
+fallback_isolated_run:
+  command: "mix test test/mix/tasks/letflow_check_test_test.exs --seed 0"
+  result: PASS
+  tests: "15 passed, 0 failures"
+  duration: "2.9 seconds"
+  failures: none
+
+overall_verdict: >
+  MIXED. The ISS-0697 fix itself is VERIFIED WORKING: no hang, no nested
+  /tmp/letflow_test_parallel.* spawn, no orphaned BEAM VMs -- the specific
+  hazard this issue targeted is absent on this run, and the isolated
+  regression test suite (15/15) passes cleanly. However, the full
+  `mix letflow.check.test` run as a whole is FAIL, because 12 of 16
+  partitions failed to even create their test database due to Postgres
+  too_many_connections (53300) -- an apparently pre-existing/unrelated
+  capacity or sequencing issue in the parallel-DB-creation phase, first
+  surfaced here because this is the first full run since the hang was
+  removed as a blocker. This new finding should be triaged as a separate
+  issue before this branch's full-suite gate can go green; it does not
+  block sign-off on the ISS-0697 fix itself, whose specific acceptance
+  criteria (no PATH-mutation hang) are met.
+next_action: >
+  Route to RELEASE-VALIDATOR (Step 5) with this mixed result flagged
+  explicitly: ISS-0697's own regression coverage and hang-absence are
+  PASS; the full-suite run surfaced a new, separate too_many_connections
+  issue in scripts/test_parallel.sh's DB-creation phase that needs its own
+  triage (likely ISSUE-FIXER) before a clean full-suite green run can be
+  claimed.

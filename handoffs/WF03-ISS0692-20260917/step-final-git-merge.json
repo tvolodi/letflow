@@ -1,0 +1,80 @@
+{
+  "handoff_id": "e1f2a3b4-5c6d-47e8-9a0b-1c2d3e4f5692",
+  "run_id": "WF03-ISS0692-20260917",
+  "workflow_id": "WF-03",
+  "step": "FINAL",
+  "from_agent": "ORCH",
+  "to_agent": "ELIXIR-DEV",
+  "file": "handoffs/WF03-ISS0692-20260917/step-final-git-merge.json",
+  "created_at": "2026-09-17T00:40:00Z",
+  "started_at": "2026-09-17T00:40:00Z",
+  "completed_at": "2026-09-17T01:11:33Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S7",
+    "requirement_ids": ["REQ-362"],
+    "requirement_text": {},
+    "source_text": {},
+    "related_handoff_ids": [
+      "handoffs/WF03-ISS0692-20260917/step-02-code-designer.json",
+      "handoffs/WF03-ISS0692-20260917/step-02b-code-design-validator.json",
+      "handoffs/WF03-ISS0692-20260917/step-03c-security-reviewer.json",
+      "handoffs/WF03-ISS0692-20260917/step-03d-reviewer.json",
+      "handoffs/WF03-ISS0692-20260917/step-05-issue-fixer-close.json"
+    ],
+    "artifacts_in": [
+      "docs/agents/protocols/GIT_MERGE.md",
+      "docs/issues/ISS-0692.yaml",
+      "lib/letflow/design/req362-visual-regression-testing.md",
+      "web/tests/support/visual-baseline.ts"
+    ],
+    "owned_modules": ["lib/letflow/design/req362-visual-regression-testing.md"]
+  },
+  "task": {
+    "description": "WF-03 Step Final (GIT MERGE) for ISS-0692, queue task 692, GH#1448 (already closed by ISSUE-FIXER, docs/issues/ISS-0692.yaml already status: resolved). All prior gates (design, design-validator, security-reviewer, reviewer, issue-fixer close) already PASSED on branch feature/WF03-ISS0692-20260917. Fetch/rebase-or-merge origin/main (it has moved ahead from concurrent work), push, open a PR summarizing the fix per the issue's resolution_note, poll CI synchronously and bounded (do not rely on a background monitor), diagnose any real failure rather than assuming the known wasm_hang flake applies, merge once green matching this repo's squash-merge convention, confirm the merge landed on main via git log, independently re-read the merged files (not the PR diff view) to confirm the §1.5 policy text and the closed issue's resolution actually landed, then write this handoff.",
+    "acceptance_criteria": [
+      "origin/main merged/rebased into the feature branch with no lost content",
+      "PR opened summarizing the ISS-0692 fix, attributed per repo convention",
+      "CI checks polled synchronously to a real conclusion, not assumed",
+      "Any CI failure diagnosed for real; the wasm_hang flake exception invoked only if the exact known pattern applies, with justification stated",
+      "PR merged using this repo's actual convention (squash, confirmed from recent merged-PR history)",
+      "Merge commit SHA on main confirmed via git log",
+      "Merged main independently re-read (not the PR diff) to confirm §1.5's policy text and ISS-0692's resolution actually landed",
+      "This handoff completed at COMPLETED/PASS"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "Fetched origin, checked out feature/WF03-ISS0692-20260917 (already up to date with its own remote). origin/main had moved 5 commits ahead (WF03-ISS0699 work, unrelated) since this branch was cut -- `git merge-base --is-ancestor origin/main HEAD` confirmed main was NOT an ancestor. Ran `git merge origin/main`, which produced a clean merge commit with zero conflicts (only handoffs/orchestrator.log and handoffs/registry.json changed, both additive) -- consistent with the dispatch's prediction that this branch's four affected files don't overlap concurrent work. Pushed.\n\nOpened PR #1472 (docs(ISS-0692): REQ-362 visual-baseline design gains binding synthetic-data-only policy), body summarizing the fix per ISS-0692's resolution_note and the gate chain, ending with the standard attribution footer.\n\nPolled `gh pr checks 1472` synchronously in a bounded loop (30s interval). First run: Frontend gate and 'Detect changed paths' passed; 'Backend gate (mix letflow.check)' FAILED in 51s. Diagnosed for real rather than assuming the known ISS-0418 wasm_hang flake (that flake's signature -- main suite green, only an isolated wasm_hang subprocess stage red -- did not match; this failure was a hard, non-test step). Pulled the job's full log (`gh run view --job --log`) and found the actual cause: `letflow.lint_handoffs: FAIL -- 2 new (un-grandfathered) violation(s)`, both inside this run's own handoff files -- step-02-code-designer.json carried a non-schema top-level key `rework_note`, and step-02b-code-design-validator.json carried three non-schema top-level keys (`result_v1_superseded`, `result_v2`, `status_history_note`) left over from its FAIL-then-PASS rework cycle. HANDOFF_PROTOCOL.md's schema has no such keys; a gate step's prior FAIL iteration belongs in `gate_history` (an array of `{iteration, gated_at, status, summary, issues, next_action}` entries), and a producer's own correction note belongs in `result.issues`.\n\nFixed both files, preserving every fact verbatim, only relocating it into schema-legal fields: step-02's `rework_note` content became a new `result.issues[]` MINOR entry; step-02b's `result_v1_superseded` became `gate_history[0]` (with `gated_at` derived from that FAIL's real commit timestamp, `6f9f689` at 2026-09-17T05:29:20+05:00 = 00:29:20Z, via `git log --follow` on the file), `result_v2` was promoted to the canonical top-level `result`, and `status_history_note` folded into a `result.issues[]` entry. Verified both files still parse as valid JSON and carry only schema-legal top-level keys (python json.load + key-diff against the schema fence). Ran `mix letflow.lint_handoffs` locally and confirmed `0 new violations` (was 2) across the full 2519-file corpus before pushing the fix. (A separate local `mix letflow.check` run in this environment hit Postgres 'too_many_connections' from two concurrent invocations contending for the same local DB pool -- an environment artefact, not evidence of a real code defect, since this fix touches only handoff JSON metadata and no lib/test code; the lint task itself, which was the actual CI failure, was verified directly and separately.)\n\nCommitted (`2a96d473`) and pushed the schema fix. Re-polled `gh pr checks 1472` synchronously; this time 'Detect changed paths' (7s), 'Frontend gate (npm run check)' (54s), and 'Backend gate (mix letflow.check)' (9m11s) all passed -- confirmed via the real `gh pr checks` output, no flake exception needed this round.\n\nConfirmed squash-merge is this repo's convention: `gh pr list --state merged --limit 5` plus `git log -1` on PR #1471's merge commit (6ad5ab2c) showed a single commit carrying the PR title with a `(#1471)` suffix -- the signature of a squash merge, not a merge commit or rebase-merge. Ran `gh pr merge 1472 --squash --delete-branch`, which fast-forwarded local main to `958a27b2` and reported the file-level diff landing (docs/issues/ISS-0692.yaml, the five handoffs/WF03-ISS0692-20260917/*.json files, the design doc, and visual-baseline.ts). `git fetch origin main && git log --oneline -3 origin/main` confirms `958a27b2 docs(ISS-0692): REQ-362 visual-baseline design gains binding synthetic-data-only policy (#1472)` is the tip of main.\n\nIndependently re-verified the merged content by reading it directly from `origin/main` (not the PR diff view): `git show origin/main:lib/letflow/design/req362-visual-regression-testing.md` confirms `### 1.5 Data-sensitivity policy for baseline content (binding, not an open question)` at line 129, the synthetic/disclosed-fictional-data-only invariant text, the redaction/accepted-risk rejection reasoning, both §2.2/§4.1 'Precondition (§1.5)' cross-references, and §7's new AC-map row. `git show origin/main:docs/issues/ISS-0692.yaml` confirms `status: resolved`, `resolved_in_run: WF03-ISS0692-20260917`. `git show origin/main:web/tests/support/visual-baseline.ts` confirms both JSDoc cross-references to design §1.5 above `acceptBaseline` and `rebaseline`.\n\nThis handoff file itself could not be included in PR #1472 (it documents work completed after that PR was already merged), so per the same GIT_MERGE.md constraint the WF03-ISS0699 Step Final precedent (handoffs/WF03-ISS0699-20260917/step-final-git-merge.json) followed, it is landed via a small separate follow-up doc-only PR rather than a direct push to main.",
+    "artifacts_out": [
+      "branch: feature/WF03-ISS0692-20260917 (squash-merged into main via PR #1472, branch deleted)",
+      "handoffs/WF03-ISS0692-20260917/step-02-code-designer.json",
+      "handoffs/WF03-ISS0692-20260917/step-02b-code-design-validator.json"
+    ],
+    "issues": [
+      {
+        "severity": "MINOR",
+        "description": "CI's backend gate genuinely failed once on this run's own handoff files (non-schema top-level keys: rework_note, result_v1_superseded, result_v2, status_history_note), not on a flake. Root cause: prior WF03-ISS0692-20260917 steps (CODE-DESIGNER's rework, CODE-DESIGN-VALIDATOR's re-gate) invented ad-hoc top-level fields to record a FAIL-and-rework cycle instead of using HANDOFF_PROTOCOL.md's existing gate_history mechanism. Fixed in commit 2a96d473 on this run's branch (now squashed into 958a27b2 on main). Flagging so future CODE-DESIGN-VALIDATOR/CODE-DESIGNER rework cycles use gate_history/result.issues from the start rather than inventing a field, avoiding this class of CI-time discovery.",
+        "affected_requirement": "REQ-362"
+      }
+    ],
+    "git_evidence": {
+      "branch_name": "feature/WF03-ISS0692-20260917",
+      "commit_sha_list": ["2a96d473"],
+      "remote_branch": "origin/feature/WF03-ISS0692-20260917 (deleted post-merge)",
+      "push_status": "pushed (fast-forward)",
+      "pr_url": "https://github.com/tvolodi/letflow/pull/1472",
+      "pr_create_error": null,
+      "merge_commit_sha": "958a27b2",
+      "ci_checks": {
+        "Detect changed paths": "pass, 7s",
+        "Frontend gate (npm run check)": "pass, 54s",
+        "Backend gate (mix letflow.check)": "pass, 9m11s (after schema fix; first attempt failed for real on lint_handoffs, diagnosed and fixed, not a flake)"
+      }
+    },
+    "next_action": "ORCH marks run COMPLETED, releases queue lock, writes RUN_DONE log line"
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

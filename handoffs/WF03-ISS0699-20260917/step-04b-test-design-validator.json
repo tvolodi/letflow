@@ -1,0 +1,54 @@
+{
+  "handoff_id": "b6f3a1d2-0009-4a00-9c00-wf03iss0699008",
+  "run_id": "WF03-ISS0699-20260917",
+  "workflow_id": "WF-03",
+  "step": "04b",
+  "from_agent": "ORCH",
+  "to_agent": "TEST-DESIGN-VALIDATOR",
+  "file": "handoffs/WF03-ISS0699-20260917/step-04b-test-design-validator.json",
+  "created_at": "2026-09-16T21:25:13Z",
+  "started_at": "2026-09-16T21:25:13Z",
+  "completed_at": "2026-09-16T21:26:03Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": null,
+    "requirement_ids": [],
+    "requirement_text": {},
+    "source_text": {},
+    "related_handoff_ids": [],
+    "artifacts_in": [
+      "test/scripts/test_parallel_tmpdir_cleanup_test.sh",
+      "scripts/test_parallel.sh",
+      "handoffs/WF03-ISS0699-20260917/step-04-test-designer.json",
+      "docs/issues/ISS-0699.yaml"
+    ],
+    "owned_modules": ["scripts/test_parallel.sh"]
+  },
+  "task": {
+    "description": "WF-03 Step 4b -- hard gate on TEST-DESIGNER's regression test for ISS-0699. On branch feature/WF03-ISS0699-20260917. Independently read test/scripts/test_parallel_tmpdir_cleanup_test.sh yourself and INDEPENDENTLY RE-RUN it -- do not accept TEST-DESIGNER's reported fail-then-pass claim without reproducing it yourself: (1) run it against this branch's post-fix scripts/test_parallel.sh (should PASS, 4/4), (2) run it against main's pre-fix copy (git show main:scripts/test_parallel.sh > a temp file, point TEST_PARALLEL_SCRIPT at it) and confirm it FAILS there. Also verify the extraction technique genuinely pulls the real shipped cleanup_tmp_dir()/trap logic out of the actual script (per this repo's established test/scripts/ convention) rather than a hand-duplicated copy that could drift. Check ISS-0699's own 3 acceptance_criteria in docs/issues/ISS-0699.yaml each map to something this test actually exercises. Claim by setting status to IN_PROGRESS.",
+    "acceptance_criteria": [
+      "PASS only if you independently re-ran the test against BOTH pre-fix and post-fix scripts yourself and reproduced the fail-then-pass result (quote your own run output, not TEST-DESIGNER's)",
+      "PASS only if the test extracts the real script's logic rather than duplicating it by hand",
+      "PASS only if all 3 of ISS-0699's acceptance_criteria are covered",
+      "FAIL if any of the 3 disposition cases (clean-removes, clean+KEEP_LOGS-preserves, failing-preserves) is missing or unverified"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "Independently re-ran test/scripts/test_parallel_tmpdir_cleanup_test.sh myself (not trusting TEST-DESIGNER's report) against both copies. POST-FIX (default target, this branch's scripts/test_parallel.sh): `PASS: clean exit, KEEP_LOGS unset -> tmp_dir removed` / `PASS: clean exit, KEEP_LOGS set -> tmp_dir preserved` / `PASS: failing exit, KEEP_LOGS unset -> tmp_dir preserved` / `PASS: failing exit, KEEP_LOGS set -> tmp_dir preserved` / `test_parallel_tmpdir_cleanup_test: 4 passed, 0 failed`, my own shell EXIT_CODE=0. PRE-FIX (`git show main:scripts/test_parallel.sh` saved to a temp file, pointed at via TEST_PARALLEL_SCRIPT): confirmed via `grep -c cleanup_tmp_dir`/`grep -c 'trap '` on that file both returned 0 (mechanism genuinely absent pre-fix, not a test artifact), then ran the test: `FAIL: could not extract cleanup_tmp_dir block from ... -- no 'cleanup_tmp_dir() {' start marker followed by a 'max_concurrent_creates=' end marker found (pre-fix script has no trap/cleanup mechanism at all)` / `test_parallel_tmpdir_cleanup_test: 0 passed, 1 failed`, my own shell EXIT_CODE=1. Fail-then-pass reproduced independently. Extraction technique verified genuine: ran the same awk extraction command myself directly against scripts/test_parallel.sh outside the test harness and confirmed the captured block (cleanup_tmp_dir() {...}, tmp_dir=$(mktemp -d ...), trap cleanup_tmp_dir EXIT, the following echo line) is byte-identical to the real script's lines 261-277 -- not a hand-duplicated copy. ISS-0699.yaml carries no literal acceptance_criteria field; the issue description's implied criteria (trap-based cleanup covering both success and failure exit paths, plus an opt-out env var for a run whose logs should be kept) map onto the handoff's own named 3 disposition cases -- clean-removes, clean+KEEP_LOGS-preserves, failing-preserves -- all 3 covered and passing in my own run (plus a 4th case, failing+KEEP_LOGS-set-preserves, proving failure-preservation is independent of the KEEP_LOGS check). No skip tags, no TODOs, no shared hardcoded state (each run_case uses its own fresh mktemp -d directory), no cross-test ordering dependency (each of the 4 run_case calls is self-contained), no secrets/connection strings in the test.",
+    "artifacts_out": [],
+    "issues": [],
+    "git_evidence": {
+      "branch_name": "feature/WF03-ISS0699-20260917",
+      "commit_sha_list": [],
+      "remote_branch": null,
+      "push_status": "pending",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": "Route to TEST-RUNNER"
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

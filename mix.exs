@@ -95,7 +95,25 @@ defmodule Letflow.MixProject do
     [
       "ecto.setup": ["ecto.create", "ecto.migrate"],
       "ecto.reset": ["ecto.drop", "ecto.setup"],
-      test: ["ecto.create --quiet", "ecto.migrate --quiet", "test"],
+      # ISS-0698 (design lib/letflow/design/iss0698-test-parallel-create-burst-fix.md
+      # §3): function-based alias, not a static list, so scripts/test_parallel.sh's
+      # new Step 1.7 can pre-run ecto.create/ecto.migrate itself (capped-concurrency,
+      # see that script) and tell Step 2's `mix test` invocations to skip redoing it
+      # (which would otherwise re-trigger the exact synchronized N-way pool-open
+      # burst this fix exists to eliminate) via LETFLOW_SKIP_ECTO_SETUP=1. Default
+      # (env var unset) is byte-for-byte the same three steps, same order, as the
+      # static list this replaced -- every existing caller (plain `mix test`, CI, an
+      # editor's test runner, `iex -S mix test`) is unaffected.
+      #
+      # Must call Mix.Task.run/2 directly for side effects -- must NOT return a list
+      # of task-strings. Verified live (design doc §3/§7 OQ-1): a function alias's
+      # return value is discarded by Mix's run_alias/6 (mix/lib/mix/task.ex
+      # ~568-609); only a list-based alias's return value is walked as task-strings.
+      # The trailing `Mix.Task.run("test", args)` call does not recurse back into
+      # this alias -- Mix.TasksServer's alias-already-running guard (task.ex
+      # ~424-425) runs the underlying `test` task directly once it sees `test`
+      # requested again from inside this alias's own resolution.
+      test: &test_alias/1,
       # `mix.exs` alias, not a `lib/mix/tasks/` custom task: REQ-003's
       # task-discovery-forces-compile problem (`docs/status/requirement_status.yaml`)
       # applied only to a module Mix must load from `lib/mix/tasks/` before running it,
@@ -159,5 +177,21 @@ defmodule Letflow.MixProject do
         "letflow.check.test"
       ]
     ]
+  end
+
+  # ISS-0698 (design lib/letflow/design/iss0698-test-parallel-create-burst-fix.md
+  # §3): resolution function for the `test:` alias above. LETFLOW_SKIP_ECTO_SETUP=1
+  # is set only by scripts/test_parallel.sh's Step 2, after its own new Step 1.7
+  # has already run ecto.create/ecto.migrate for every partition under a
+  # concurrency cap -- everyone else (env var unset) gets exactly today's
+  # three-step behavior.
+  defp test_alias(args) do
+    if System.get_env("LETFLOW_SKIP_ECTO_SETUP") == "1" do
+      Mix.Task.run("test", args)
+    else
+      Mix.Task.run("ecto.create", ["--quiet"])
+      Mix.Task.run("ecto.migrate", ["--quiet"])
+      Mix.Task.run("test", args)
+    end
   end
 end

@@ -1,0 +1,57 @@
+id: ISS-0697
+title: >
+  test/mix/tasks/letflow_check_test_test.exs's fake-bash interception fails
+  under a real full-suite Windows run, spawning a REAL recursive
+  mix letflow.check.test (hang/resource-exhaustion risk)
+discovered_by: ORCH
+discovered_in_run: WF03-ISS0695-20260916 (TEST-RUNNER stall recovery)
+discovered_at: "2026-09-16T17:31:43Z"
+severity: MAJOR
+description: >
+  Discovered during recovery of WF03-ISS0695-20260916's TEST-RUNNER step,
+  which had stalled for 90+ minutes with an orphaned BEAM VM (force-killed
+  before this recovery session began). This is the likely root cause of that
+  original stall, and was reproduced TWICE independently in this recovery
+  session, on a fresh host with no leftover processes:
+
+  (1) `mix letflow.check.test` (16-way test_parallel.sh) froze -- all 16
+  partition logs stopped writing simultaneously at the same timestamp,
+  mid-tenant-schema-setup, before any partition had reached poller_test.exs,
+  with Postgres pg_stat_activity showing zero blocking/active queries (i.e.
+  not a DB-side lock -- the OS processes themselves stopped making progress).
+
+  (2) A subsequent plain `mix test --no-color --exclude high_pool_demand`
+  run also froze mid-suite; investigation found a BRAND NEW
+  /tmp/letflow_test_parallel.<random> directory (containing 16 real
+  partition-N.log files with real DB query output) was created mid-run, at
+  the exact moment a burst of ~15 new erl.exe processes appeared -- proving
+  the outer `mix test` run genuinely shelled out to a REAL
+  `bash scripts/test_parallel.sh` (spawning a full real nested 16-way suite
+  run) instead of the fake bash that test/mix/tasks/letflow_check_test_test.exs's
+  ISS-0428/ISS-0171 fix is supposed to install on PATH via System.put_env.
+
+  This is the same failure class as the original ISS-0107 (POSIX-only fake
+  invisible on Windows PATHEXT/PATH-separator rules) resurfacing despite the
+  documented fix, and is dangerous because the nested real run itself
+  includes the SAME meta-test file in one of its own partitions, risking
+  exponential/recursive process spawn and Postgres connection-pool
+  exhaustion on Windows hosts.
+
+  Root cause not fully isolated in this session (did not pin down which
+  specific test case in the file fails to install/verify the fake, or why
+  the documented fail-fast guard did not catch it) -- that is the next
+  diagnostic step. Workaround used in this session: exclude/avoid running
+  the full suite via `mix letflow.check.test` or plain full-directory
+  `mix test` on this Windows host until fixed; verify individual changed
+  files in isolation instead.
+affected_files:
+  - test/mix/tasks/letflow_check_test_test.exs
+  - lib/mix/tasks/letflow.check.test.ex
+  - scripts/test_parallel.sh
+related_issues:
+  - ISS-0107
+queue_ref: Q-697
+github_ref: GH-1462
+status: resolved
+resolved_in_run: WF03-ISS0697-20260917
+resolved_at: "2026-09-16T19:47:37Z"

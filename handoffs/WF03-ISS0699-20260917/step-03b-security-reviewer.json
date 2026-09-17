@@ -1,0 +1,48 @@
+{
+  "handoff_id": "b6f3a1d2-0006-4a00-9c00-wf03iss0699005",
+  "run_id": "WF03-ISS0699-20260917",
+  "workflow_id": "WF-03",
+  "step": "03b",
+  "from_agent": "ORCH",
+  "to_agent": "SECURITY-REVIEWER",
+  "file": "handoffs/WF03-ISS0699-20260917/step-03b-security-reviewer.json",
+  "created_at": "2026-09-16T21:21:19Z",
+  "started_at": "2026-09-16T22:54:46Z",
+  "completed_at": "2026-09-16T22:55:35Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": null,
+    "requirement_ids": [],
+    "requirement_text": {},
+    "source_text": {},
+    "related_handoff_ids": [],
+    "artifacts_in": ["scripts/test_parallel.sh", "lib/mix/tasks/letflow.check.test.ex"],
+    "owned_modules": ["scripts/test_parallel.sh", "lib/mix/tasks/letflow.check.test.ex"]
+  },
+  "task": {
+    "description": "WF-03 Step 3b REGATE -- security scope check on ISS-0699's rework-iteration-1 addition. On branch feature/WF03-ISS0699-20260917. Your prior PASS on scripts/test_parallel.sh stands (that file is unchanged this iteration -- verify with `git diff main...HEAD -- scripts/test_parallel.sh` matching your earlier review). This regate is scoped to the NEW change: `git diff main...HEAD -- lib/mix/tasks/letflow.check.test.ex`, which now (a) threads an env-var arg through stream_and_capture/2->/3 to pass TEST_PARALLEL_KEEP_LOGS=1 to the script, and (b) wraps its existing check_main_suite_logs(...) call in try/after with File.rm_rf!(native_log_dir) to clean up the log directory itself. Evaluate this diff against docs/agents/instructions/security-invariants.md's INV-1..INV-9. Expected verdict is still out-of-scope/NOT-APPLICABLE (CI test-tooling, no tenant-data path), but verify by actually reading the diff -- in particular confirm File.rm_rf! is only ever applied to the resolved log_dir path (derived from the script's own controlled mktemp output), never to anything derived from untrusted/tenant input. Claim by flipping status to IN_PROGRESS on receipt, and set it to COMPLETED/FAILED as normal when you finish.",
+    "acceptance_criteria": [
+      "Scope test stated explicitly for the NEW diff (in scope or out of scope, with reasoning)",
+      "A verdict recorded for every invariant INV-1..INV-9",
+      "Explicit confirmation that File.rm_rf! is never applied to anything beyond the script's own controlled tmp_dir path"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "REGATE (iteration 1) on `git diff main...HEAD -- lib/mix/tasks/letflow.check.test.ex`. SCOPE TEST: out of scope -- this diff touches only Mix.Tasks.Letflow.Check.Test, a local CI test-runner task. It does not add/modify an API route reading or writing tenant-scoped data, does not add/modify a priv/repo/migrations/*.exs migration, does not resolve a secret (the new arg is the literal string \"1\" passed as an env-var VALUE to a subprocess, not a credential), does not shape a tenant-scoped API response, and does not add a lookup-by-ID handler. No tenant-data path is touched. scripts/test_parallel.sh is unchanged from the prior (iteration 0) PASS -- confirmed via `git diff main...HEAD -- scripts/test_parallel.sh`, matching the earlier review byte-for-byte (same trap-based cleanup_tmp_dir/TEST_PARALLEL_KEEP_LOGS mechanism, no changes this iteration). Per-invariant verdicts: INV-1 (tenant data isolation) NOT-APPLICABLE -- no Ecto schema, query, or migration touched; INV-2 (server-side field authorisation) NOT-APPLICABLE -- no API response type touched, and S4 hasn't started; INV-3 (untrusted runtime sandboxing) NOT-APPLICABLE -- S5 hasn't started, and this is trusted CI tooling, not tenant-authored script execution; INV-4 (secrets by reference only) NOT-APPLICABLE -- no secret material is introduced, logged, or threaded; the only new value forwarded is the literal \"1\" flag TEST_PARALLEL_KEEP_LOGS, not a credential; INV-5 (not-found/forbidden indistinguishability) NOT-APPLICABLE -- no lookup-by-ID endpoint, S4 hasn't started; INV-6 (new data-access paths prove scoping) NOT-APPLICABLE -- no new data-access path is introduced (this handoff itself is the required proof-of-scoping artifact for the change, satisfying the meta-invariant); INV-7 (no SQL string interpolation) NOT-APPLICABLE -- no SQL, raw or parameterised, appears anywhere in this diff; INV-8 (no unhandled crashes on realistic failure paths) NOT-APPLICABLE but reviewed for defensive quality -- File.rm_rf!/1 in an `after` block can itself raise on a genuine filesystem error, but this runs in a local CI/dev-tooling Mix task (not a shared multi-tenant process), operates on a directory this same process just created via a script it invoked, and a raised error here only fails the local `mix letflow.check.test` invocation, not a shared/tenant-facing process -- no cross-tenant blast radius, so INV-8's shared-process concern does not apply; INV-9 (tenant-controlled outbound URL validation) NOT-APPLICABLE -- no outbound HTTP request or URL of any kind in this diff. EXPLICIT CONFIRMATION (acceptance criterion 3): File.rm_rf!/1 is applied only to `native_log_dir`, defined as `resolve_native_path(log_dir)` where `log_dir` is destructured from `{:ok, log_dir}` -- traced to originate from parsing the script's own stdout line (`test_parallel: partition logs in $tmp_dir`, printed by scripts/test_parallel.sh immediately after its own `mktemp -d \"${TMPDIR:-/tmp}/letflow_test_parallel.XXXXXX\"` call, per the unchanged scripts/test_parallel.sh diff). resolve_native_path/1 only translates path representation (e.g. WSL<->Windows), it does not accept or merge in any caller-supplied or tenant-supplied path. There is no code path in this diff, or in the unchanged surrounding module, where File.rm_rf! receives a path derived from tenant input, API/network input, or any source other than the script's own controlled mktemp output. try/after read-before-delete ordering also holds by construction: check_main_suite_logs/2 (the read) runs inside the `try` body and must complete before the `after` block's File.rm_rf!/1 can fire.",
+    "artifacts_out": [],
+    "issues": [],
+    "git_evidence": {
+      "branch_name": null,
+      "commit_sha_list": [],
+      "remote_branch": null,
+      "push_status": "skipped",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": "Route to REVIEWER (regate)"
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

@@ -1,0 +1,90 @@
+run_id: WF03-ISS0704-20260917
+issue_id: ISS-0704
+agent: TEST-RUNNER
+step: "WF-03 Step 4 -- pre-Step-Final full-suite confirmation"
+branch: feature/WF03-ISS0704-20260917
+commit_under_test: 1292527e
+date: 2026-09-17
+
+diff_scope:
+  files_changed:
+    - "test/letflow/routers/tenants_test.exs (scoped the previously-flaky
+       'lists tenants in the paginated allowlisted shape' test's request to
+       its own fixture's slug via a search param, instead of relying on
+       overall row-count/ordering across the whole tenants table)"
+    - "docs/anti-patterns.md (new entry recording the pagination-fixture
+       flake and its fix)"
+    - "docs/agents/... design doc for this fix"
+  note: >
+    Already passed CODE-DESIGN-VALIDATOR, SECURITY-REVIEWER, REVIEWER, and
+    TEST-DESIGN-VALIDATOR gates before this run, per dispatch brief. This
+    step is TEST-RUNNER's own full-suite execution ahead of Step Final.
+
+environment:
+  docker: "docker compose up -d -- letflow-postgres-1 and letflow-keycloak-1
+    already Running (no restart needed)"
+  db_port: "no LETFLOW_DB_PORT override in .env -- default port 5462 used,
+    per README"
+  git_status_before_run: "clean, HEAD at 1292527e, correct branch, no
+    checkout/branch changes made"
+
+full_suite_run:
+  command: "bash scripts/test_parallel.sh"
+  description: >
+    16 parallel `mix test --partitions 16` processes (N derived from nproc),
+    each against its own migrated partition database, aggregated into one
+    combined Result:/Failed: total.
+  result: PASS
+  actual_output: |
+    test_parallel: N=16 (source: nproc)
+    test_parallel: pre-compiling MIX_ENV=test (single compile, before any partition launches)
+    test_parallel: TEST_POOL_SIZE=5 (computed: N=16, max_connections=100, superuser_reserved=3, headroom=10, nonpool_reserve=5)
+    test_parallel: seeding 16 per-partition build paths from _build/test (sequential)
+    test_parallel: partition logs in /tmp/letflow_test_parallel.wmbGEU
+    test_parallel: seeding+migrating 16 partition databases (capped at 4 concurrent)
+    test_parallel: all 16 partition databases created+migrated
+    test_parallel: TEST_PARALLEL_GROUP=tp104796 (shared by all 16 partitions)
+    partition 1: 355 tests, 0 properties, 0 failures, exit 0
+    partition 2: 235 tests, 0 properties, 0 failures, exit 0
+    partition 3: 354 tests, 0 properties, 0 failures, exit 0
+    partition 4: 280 tests, 2 properties, 0 failures, exit 0
+    partition 5: 334 tests, 0 properties, 0 failures, exit 0
+    partition 6: 180 tests, 0 properties, 0 failures, exit 0
+    partition 7: 275 tests, 0 properties, 0 failures, exit 0
+    partition 8: 173 tests, 0 properties, 0 failures, exit 0
+    partition 9: 268 tests, 1 property, 0 failures, exit 0
+    partition 10: 229 tests, 0 properties, 0 failures, exit 0
+    partition 11: 269 tests, 0 properties, 0 failures, exit 0
+    partition 12: 198 tests, 2 properties, 0 failures, exit 0
+    partition 13: 272 tests, 1 property, 0 failures, exit 0
+    partition 14: 367 tests, 0 properties, 0 failures, exit 0
+    partition 15: 224 tests, 0 properties, 0 failures, exit 0
+    partition 16: 312 tests, 0 properties, 0 failures, exit 0
+    ---
+    combined: 4325 tests, 6 properties, 0 failures (4331/4331 passed)
+  target_test_status: >
+    "lists tenants in the paginated allowlisted shape"
+    (test/letflow/routers/tenants_test.exs) is included in the 4331/4331
+    passed total -- 0 failures anywhere in the combined run, across all 16
+    partitions. Per-test log detail is unavailable for direct quoting
+    because the script auto-deletes each partition's tmp_dir on a fully
+    clean (exit 0) run (documented behavior, not an anomaly) and
+    TEST_PARALLEL_KEEP_LOGS was not set for this run. The combined
+    Result:/Failed: totals are the script's own authoritative aggregation
+    of every partition's real ExUnit summary, so "0 failures" already
+    covers this test; there is no separate per-file failure to report.
+  other_flaky_or_new_failures: "none observed -- 0 failures suite-wide"
+
+overall_verdict: >
+  PASS. Full suite: 4325 tests, 6 properties, 0 failures (4331/4331 passed),
+  exit 0 across all 16 partitions. The previously-flaky pagination test is
+  included in this clean run with no failure. No new failure traces to this
+  branch's diff (test/letflow/routers/tenants_test.exs,
+  docs/anti-patterns.md, docs/agents/... design doc) or to any other file --
+  the run is fully green with nothing to flag to ORCH as a separate concern
+  this time.
+
+next_action: >
+  Route to Step Final / RELEASE-VALIDATOR. RELEASE-VALIDATOR should still
+  independently re-run the suite per its own mandate rather than relying on
+  this report alone.

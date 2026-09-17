@@ -6,12 +6,15 @@
 #
 # This does NOT hand-duplicate the arithmetic. It extracts Step 1.5's own
 # arithmetic block verbatim out of the real scripts/test_parallel.sh (via the
-# script's own "# --- Step 1.5:" / "# --- Step 2:" comment markers, which
-# ISS-0287's fix design section 2.3 explicitly says stay in place) and `eval`s
-# that extracted block in a controlled subshell with N and the relevant env
-# vars set. This means the test exercises the actual shipped logic -- if
-# someone edits the formula without updating this test, the test still runs
-# against whatever the script currently says, not a copy that can drift.
+# script's own "# --- Step 1.5:" / "# --- Step 1.6:" comment markers, which
+# ISS-0287's fix design section 2.3 explicitly says stay in place; the end
+# marker was re-scoped from "# --- Step 2:" to "# --- Step 1.6:" during
+# WF03-ISS0698-20260917's fix -- see the extraction section below for why)
+# and `eval`s that extracted block in a controlled subshell with N and the
+# relevant env vars set. This means the test exercises the actual shipped
+# logic -- if someone edits the formula without updating this test, the test
+# still runs against whatever the script currently says, not a copy that can
+# drift.
 #
 # No existing shell-script-testing convention (bats, ExUnit System.cmd
 # harness, etc.) was found anywhere in this repo (grep across test/ and
@@ -43,16 +46,24 @@ fi
 # the original version only tracked "did the start marker flag ever get set"
 # and relied on a weak "output is non-empty and contains computed_pool"
 # sanity check. That check does NOT distinguish "extraction correctly closed
-# at the '# --- Step 2:' marker" from "the end marker was never found and awk
-# ran off EOF, capturing the rest of the script" -- if someone ever rewords
-# the Step 2 comment header, the old version would silently eval Step 2's
-# partition-launch logic, Step 3's wait, Step 4's aggregation, and Step 5's
-# exit (which still contains the substring "computed_pool" near the top,
-# so the weak check passed anyway). That eval would actually spawn
-# background `mix test` partitions as a side effect of running what is
-# supposed to be a lightweight, read-only arithmetic test.
+# at the end marker" from "the end marker was never found and awk ran off
+# EOF, capturing the rest of the script" -- if someone ever rewords the end
+# marker's comment header, the old version would silently eval far more than
+# Step 1.5's own arithmetic. That eval could then have side effects (e.g.
+# actually spawning background `mix test` partitions) as a side effect of
+# running what is supposed to be a lightweight, read-only arithmetic test.
 #
-# Two independent guards now close that gap:
+# End marker: "# --- Step 1.6:" (re-scoped here from the original
+# "# --- Step 2:" during WF03-ISS0698-20260917's fix -- ISS-0698 inserted a
+# new "# --- Step 1.7:" section between the pre-existing Step 1.6 and Step 2
+# markers, and relocated the `tmp_dir=$(mktemp -d ...)` line into that new
+# Step 1.7 section. Since this test only ever needs Step 1.5's own
+# TEST_POOL_SIZE arithmetic -- nothing from Step 1.6 or later -- stopping at
+# Step 1.6 instead of Step 2 both restores the test's original intent and
+# stops depending on how many intermediate steps get added between 1.5 and 2
+# in the future).
+#
+# Two independent guards close the over-capture gap:
 #
 #   1. The awk program itself tracks whether it was still "flag"-active when
 #      it hit the end marker (closed=1, explicit `exit 0`) vs. ran off EOF
@@ -62,24 +73,29 @@ fi
 #      captured text itself.
 #   2. Even if (1) were somehow bypassed, the captured block is positively
 #      bounded before eval: it must be <= 90 lines (the real Step 1.5 block,
-#      comments included, runs 64 lines as of this writing -- 90 gives
-#      headroom for reasonable comment growth while remaining far short of
-#      the ~218 lines an EOF over-capture would produce), and must NOT
-#      contain any of a small set of tokens that are unique to Step 2 and
-#      later ("mix test", "wait \"", "mktemp -d", "# --- Step 3",
-#      "# --- Step 4", "# --- Step 5"). Either check tripping is a hard,
-#      loud failure with no eval attempted.
+#      comments included, runs 87 lines as of this writing -- 90 gives a
+#      small margin for comment growth while remaining far short of the
+#      ~350 lines an EOF over-capture would produce), and must NOT contain
+#      any of a small set of tokens that are unique to Step 1.6 and later
+#      ("wait \"", "mktemp -d", "# --- Step 1.7", "# --- Step 2",
+#      "# --- Step 3", "# --- Step 4", "# --- Step 5"). Either check
+#      tripping is a hard, loud failure with no eval attempted.
+#      ("mix test" was dropped from this list during WF03-ISS0698-20260917's
+#      fix: Step 1.5's own comments now legitimately mention a nested
+#      `mix test` subprocess (ISS-0515/ISS-0426), so it is no longer unique
+#      to Step 1.6-or-later and would false-positive on Step 1.5's own text.
+#      The remaining tokens are all still absent from Step 1.5's own body.)
 
 step_1_5_block=$(awk '
   /^# --- Step 1\.5:/ { flag=1 }
   flag { print }
-  /^# --- Step 2:/ { if (flag) { closed=1; exit 0 } }
+  /^# --- Step 1\.6:/ { if (flag) { closed=1; exit 0 } }
   END { if (!closed) exit 1 }
 ' "$target")
 awk_rc=$?
 
 if [ "$awk_rc" -ne 0 ]; then
-  echo "FAIL: Step 1.5 extraction from $target never reached a '# --- Step 2:' end marker after starting at '# --- Step 1.5:' (marker missing/renamed?) -- refusing to eval an unbounded/unclosed capture" >&2
+  echo "FAIL: Step 1.5 extraction from $target never reached a '# --- Step 1.6:' end marker after starting at '# --- Step 1.5:' (marker missing/renamed?) -- refusing to eval an unbounded/unclosed capture" >&2
   exit 1
 fi
 
@@ -94,9 +110,9 @@ if [ "$block_line_count" -gt 90 ]; then
   exit 1
 fi
 
-for telltale in 'mix test' 'wait "' 'mktemp -d' '# --- Step 3' '# --- Step 4' '# --- Step 5'; do
+for telltale in 'wait "' 'mktemp -d' '# --- Step 1.7' '# --- Step 2' '# --- Step 3' '# --- Step 4' '# --- Step 5'; do
   if printf '%s' "$step_1_5_block" | grep -qF "$telltale"; then
-    echo "FAIL: extracted Step 1.5 block from $target contains '$telltale', a token unique to Step 2 or later -- extraction over-captured; refusing to eval" >&2
+    echo "FAIL: extracted Step 1.5 block from $target contains '$telltale', a token unique to Step 1.6 or later -- extraction over-captured; refusing to eval" >&2
     exit 1
   fi
 done
@@ -162,13 +178,17 @@ run_case() {
 
 # --- Cases -------------------------------------------------------------
 
-# 1. N=4, all defaults (documented ISS-0219 remedy value; ISS-0287's own
-#    worked verification in the design doc section 3): usable_ceiling =
-#    100 - 3 = 97; budget = 97 - 10 - 2 = 85; computed = 85 / 4 = 21.
-run_case "N=4 all defaults -> new formula" 4 -- "pool=21"
+# 1. N=4, all defaults: usable_ceiling = 100 - 3 = 97; budget =
+#    97 - 10 - 5 = 82; computed = 82 / 4 = 20. (Expected value corrected
+#    here from a stale pool=21/budget=85 during WF03-ISS0698-20260917's fix
+#    -- unrelated to ISS-0698 itself: TEST_NONPOOL_CONNECTION_RESERVE's
+#    documented default was bumped from 3 to 5 by ISS-0515 (2026-09-06),
+#    predating this branch, and this test's expected value was never
+#    updated to match.)
+run_case "N=4 all defaults -> new formula" 4 -- "pool=20"
 
 # 2. N=16, all defaults (decision 0009's original verification host):
-#    usable_ceiling = 97; budget = 85; computed = 85 / 16 = 5 -- unchanged
+#    usable_ceiling = 97; budget = 82; computed = 82 / 16 = 5 -- unchanged
 #    from the pre-fix formula's own N=16 result, confirming no regression
 #    at the value the original decision record was verified against.
 run_case "N=16 all defaults -> unchanged from pre-fix" 16 -- "pool=5"

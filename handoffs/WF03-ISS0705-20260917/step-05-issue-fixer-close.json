@@ -1,0 +1,40 @@
+{
+  "handoff_id": "wf03-iss0705-step05",
+  "run_id": "WF03-ISS0705-20260917",
+  "workflow_id": "WF-03",
+  "step": "05",
+  "from_agent": "ORCH",
+  "to_agent": "ISSUE-FIXER",
+  "file": "handoffs/WF03-ISS0705-20260917/step-05-issue-fixer-close.json",
+  "created_at": "2026-09-17T05:57:51Z",
+  "started_at": "2026-09-17T05:57:51Z",
+  "completed_at": "2026-09-17T06:02:51Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": null,
+    "requirement_ids": [],
+    "requirement_text": {},
+    "source_text": {},
+    "related_handoff_ids": ["handoffs/WF03-ISS0705-20260917/step-04c-test-runner.json"],
+    "artifacts_in": ["docs/issues/ISS-0705.yaml", "docs/agents/workflows/WF-03_issue_resolving.md", "docs/agents/protocols/ISSUE_QUEUE.md"],
+    "owned_modules": []
+  },
+  "task": {
+    "description": "WF-03 Step 5 (close issue) for ISS-0705, on branch feature/WF03-ISS0705-20260917. All gates passed: CODE-DESIGN-VALIDATOR (PASS, after 1 rework), SECURITY-REVIEWER (PASS), REVIEWER (PASS), TEST-DESIGN-VALIDATOR (PASS, independently reproduced mutant), TEST-RUNNER (PASS, full suite 4331/4332, 1 confirmed-unrelated pre-existing failure). Follow docs/agents/workflows/WF-03_issue_resolving.md's Step 5 exactly: set docs/issues/ISS-0705.yaml's status to 'resolved' with resolved_in_run: 'WF03-ISS0705-20260917' and resolved_at: a real UTC timestamp, and a resolution: summary covering: the tenants_test.exs/identity_test.exs/role_registry_test.exs fixes (reusing existing SandboxAutoMode helpers, no new helper invented), the 129 orphaned tenant rows (+985 dependent entity_column_promotions rows) cleaned from the test DB, the design doc path (lib/letflow/design/iss0705-sandbox-mode-restore-fix.md), the regression test (test/letflow/routers/tenants_test.exs's TenantsIss0705SandboxModeRegressionTest, test/specs/ISS-0705.md), and gates passed. If github_issue_number is known (check docs/issues/ISS-0705.yaml or the queue task response for GH#1480) and `gh` is reachable, close it: `gh issue close 1480 --comment '<summary citing resolved_in_run and the regression test path>'`. Claim this handoff by setting status to IN_PROGRESS only.",
+    "acceptance_criteria": [
+      "docs/issues/ISS-0705.yaml status: resolved, with resolved_in_run/resolved_at and a full resolution: summary",
+      "GitHub issue GH#1480 closed with an evidence-citing comment (not a bare close)",
+      "next_action routes to Step Final (git merge)"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "docs/issues/ISS-0705.yaml set to status: resolved, resolved_in_run: WF03-ISS0705-20260917, resolved_at: 2026-09-17T06:02:51Z, with a resolution.summary covering the tenants_test.exs/identity_test.exs/role_registry_test.exs fixes (reused existing SandboxAutoMode helpers, no new helper invented), the 129 orphaned tenant rows (+985 dependent entity_column_promotions rows) cleaned from the test DB, the design doc (lib/letflow/design/iss0705-sandbox-mode-restore-fix.md), the regression test (test/letflow/routers/tenants_test.exs's TenantsIss0705SandboxModeRegressionTest, test/specs/ISS-0705.md), and all passed gates. GitHub issue GH-1480 (tvolodi/letflow#1480) closed via `gh issue close 1480 --comment ...` citing resolved_in_run and the regression test path -- confirmed via gh CLI output 'Closed issue tvolodi/letflow#1480'.",
+    "artifacts_out": ["docs/issues/ISS-0705.yaml"],
+    "issues": [],
+    "next_action": "Route to Step Final (git merge)"
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

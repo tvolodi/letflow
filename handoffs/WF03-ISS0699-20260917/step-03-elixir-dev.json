@@ -1,0 +1,56 @@
+{
+  "handoff_id": "b6f3a1d2-0005-4a00-9c00-wf03iss0699004",
+  "run_id": "WF03-ISS0699-20260917",
+  "workflow_id": "WF-03",
+  "step": "03",
+  "from_agent": "ORCH",
+  "to_agent": "ELIXIR-DEV",
+  "file": "handoffs/WF03-ISS0699-20260917/step-03-elixir-dev.json",
+  "created_at": "2026-09-16T21:20:00Z",
+  "started_at": "2026-09-16T22:25:27Z",
+  "completed_at": "2026-09-17T03:40:00Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": null,
+    "requirement_ids": [],
+    "requirement_text": {},
+    "source_text": {},
+    "related_handoff_ids": [],
+    "artifacts_in": [
+      "lib/letflow/design/iss0699-test-parallel-tmpdir-cleanup-fix.md",
+      "scripts/test_parallel.sh",
+      "lib/mix/tasks/letflow.check.test.ex",
+      "handoffs/WF03-ISS0699-20260917/step-final-git-merge.json"
+    ],
+    "owned_modules": ["scripts/test_parallel.sh", "lib/mix/tasks/letflow.check.test.ex"]
+  },
+  "task": {
+    "description": "WF-03 Step 3 (implement) for ISS-0699 -- REWORK ITERATION 1. On branch feature/WF03-ISS0699-20260917. Your original scripts/test_parallel.sh implementation (trap+cleanup_tmp_dir, TEST_PARALLEL_KEEP_LOGS) is UNCHANGED and correct -- do not touch it again. Step Final's CI run found it breaks lib/mix/tasks/letflow.check.test.ex, which reads scripts/test_parallel.sh's partition-*.log files on every run (not just failures) and was hard-failing with 'contains zero partition-*.log files' once your trap started deleting them on success. CODE-DESIGNER's revised design (section 3a of lib/letflow/design/iss0699-test-parallel-tmpdir-cleanup-fix.md, CODE-DESIGN-VALIDATOR-passed) now specifies the fix on the letflow.check.test.ex side: (1) thread an env-var argument through stream_and_capture/2 (making it stream_and_capture/3 with a default) so the call site that invokes scripts/test_parallel.sh (run_main_suite/0, line ~169) passes TEST_PARALLEL_KEEP_LOGS=1, preventing the script's own trap from deleting the log dir out from under this caller; (2) wrap the existing check_main_suite_logs(...) call (line ~196) in a try/after that unconditionally File.rm_rf!s the resolved log dir once that call returns OR raises, so letflow.check.test.ex itself now owns bounding this tmp_dir's lifetime end-to-end. Read section 3a in full for the exact specification before implementing. Implement exactly per that design in lib/mix/tasks/letflow.check.test.ex. Do not touch the ISS-0069 substring-check logic itself. After implementing: run `mix compile --warnings-as-errors` to confirm it compiles, and if a local mix/postgres toolchain is reachable, actually run `mix letflow.check.test` twice consecutively and confirm the log dir is cleaned up both times with no 'zero partition-*.log files' failure; state in result.summary whether you were able to run it for real, and why if not. Claim by flipping status to IN_PROGRESS on receipt, and set it to COMPLETED/FAILED as normal when you finish.",
+    "acceptance_criteria": [
+      "scripts/test_parallel.sh unchanged from iteration 0 (verify with git diff -- this rework touches lib/mix/tasks/letflow.check.test.ex only)",
+      "stream_and_capture's env-var passthrough implemented exactly per design section 3a, and threaded into the run_main_suite/0 call site that invokes scripts/test_parallel.sh with TEST_PARALLEL_KEEP_LOGS=1",
+      "check_main_suite_logs(...) call wrapped in a try/after that removes the log dir on every outcome (zero logs, real failures, ISS-0069 substring match, clean pass)",
+      "mix compile --warnings-as-errors passes",
+      "ISS-0069 substring-check logic itself is provably untouched (diff shows no changes to that logic)",
+      "If a real run of mix letflow.check.test is possible in this environment, it is run twice and both runs are clean of the CI failure; if not possible, state why and verify by direct reasoning instead"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "ITERATION 1 (this rework): implemented design doc section 3a exactly. Change 1: stream_and_capture/2 -> stream_and_capture/3 with an optional `env \\\\ []` third argument threaded into Port.open/2's :env option (only added to port_opts when non-empty, so the three non-script call sites -- run_discovery_dry_run/0, run_single_wasm_hang_test/1, run_lua_wallclock_race_tests/0 -- are byte-for-byte unchanged); run_main_suite/0's line-169 call site now passes [{\"TEST_PARALLEL_KEEP_LOGS\", \"1\"}] so scripts/test_parallel.sh's own EXIT trap no longer deletes its tmp_dir out from under this caller. Change 2: the {:ok, log_dir} branch now resolves native_log_dir once and wraps check_main_suite_logs(...) in try/after, with File.rm_rf!(native_log_dir) unconditionally removing the directory on every outcome (zero logs, real failure, ISS-0069 substring match, clean pass). One implementation deviation from the design's illustrative pseudocode, noted inline: Erlang's :env port option requires charlist (not binary) name/value pairs -- passing binaries raised `ArgumentError: invalid option in list` live against this OTP 29/Windows host; fixed by converting each {k,v} via to_charlist/1 before adding the :env key. scripts/test_parallel.sh is unchanged (git diff confirms zero changes to that file). ISS-0069 substring-check logic (@target_substring, @log_dir_line_regex, find_partition_log_dir/1, partition_logs/1, index_partition_logs/1, check_substring_across_logs/1, report_partition_failures/1) is provably untouched -- full git diff of the changed file reviewed, only the two call sites in section 3a and stream_and_capture/2's signature changed. Verification: (1) `mix compile --warnings-as-errors` passes clean. (2) `mix test test/mix/tasks/letflow_check_test_test.exs` -- 15/15 passed (this project's toolchain, including a reachable local Postgres, is available in this environment). (3) Real double-run of `mix letflow.check.test` performed as instructed: both runs exited 0, both printed 'mix letflow.check.test: OK -- no test failures, no ISS-0069 warnings (16 partitions, logs: <dir>)' for the main suite (plus clean OK lines for the wasm_hang and lua_wallclock_race stages), with NO 'contains zero partition-*.log files' failure in either run -- the original CI-breaking symptom. Confirmed via `ls` that each run's own partition-log tmp_dir (letflow_test_parallel.dG0asy, then letflow_test_parallel.x2t2xm) no longer exists immediately after that run completes, proving this task's own File.rm_rf! is what performs the cleanup (not the script, which now defers to it).",
+    "artifacts_out": ["lib/mix/tasks/letflow.check.test.ex"],
+    "issues": [],
+    "git_evidence": {
+      "branch_name": null,
+      "commit_sha_list": [],
+      "remote_branch": null,
+      "push_status": "skipped",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": "Route to SECURITY-REVIEWER (regate) then REVIEWER (regate)"
+  },
+  "rework_count": 1,
+  "max_rework": 3
+}

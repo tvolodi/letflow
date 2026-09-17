@@ -694,28 +694,85 @@ defmodule Letflow.Scheduler.PollerTest do
   # runs only after the entire poll_and_fire loop plus the unwrapped
   # `maybe_refresh_active_instances/1` pass have completed -- a comfortably
   # wide, one-sided margin rather than a symmetric coin flip.
-  defp ac3b_attempt(schema_name, instance_id, attempt) do
+  # ISS-0695: attaches a test-only `:telemetry` handler to
+  # `[:letflow, :scheduler, :admission_decision]` (emitted once per
+  # `with_admission/3` call -- see `lib/letflow/scheduler/poller.ex`),
+  # filtered to `schema_name`'s own `:poll_and_fire` admission decision.
+  # Handler id/attach/detach shape follows
+  # `test/letflow/plugs/http_metrics_test.exs`'s `attach_test_handler/2`
+  # precedent (unique handler id, `on_exit/1` detach).
+  #
+  # Deviates from `lib/letflow/design/iss0695-poller-ac3b-telemetry-sync-fix.md`
+  # on ONE point, deliberately: the design's own text has the release happen
+  # in the *test process*, driven by the signal via `assert_receive`. That
+  # shape was tried first and reproduced the flake it was meant to fix
+  # (observed 1/8 local runs): `:telemetry.execute/3` invokes this handler
+  # SYNCHRONOUSLY in the *Poller process* itself, but a `send/2` to the test
+  # process only *schedules* a wakeup -- the Poller process is free to keep
+  # running (finish this schema's `Enum.each` iteration, call
+  # `maybe_refresh_active_instances/1`, reach retention's own
+  # `with_admission/3` call for this same schema) before the test process is
+  # even scheduled to run its `assert_receive` continuation, let alone
+  # complete the `Admission.release/1` GenServer round trip after it. That
+  # reintroduces exactly the kind of scheduler-timing race this fix exists to
+  # remove, just with a different two-sided shape than the original
+  # `Process.sleep/1` one. Calling `Admission.release/1` *inside the handler
+  # itself* (still running on the Poller process, synchronously, before
+  # `:telemetry.execute/3` returns to `with_admission/3`) makes the release
+  # happen-before any later admission attempt in the same tick with actual
+  # BEAM process-ordering guarantees, not a probabilistic race window --
+  # this is what step 4's "no wall-clock estimate is involved anywhere in
+  # this step" claim actually requires to hold. The `send/2` to `test_pid`
+  # is kept as the safety-net `assert_receive` signal the design also calls
+  # for, just no longer load-bearing for the release ordering itself.
+  defp attach_ac3b_admission_probe(test_pid, schema_name, probe_ref) do
+    handler_id = "poller-ac3b-admission-probe-#{System.unique_integer([:positive, :monotonic])}"
+
+    :telemetry.attach(
+      handler_id,
+      [:letflow, :scheduler, :admission_decision],
+      fn _event, _measurements, metadata, _config ->
+        if metadata.schema == schema_name and metadata.op == :poll_and_fire do
+          Admission.release(probe_ref)
+          send(test_pid, {:ac3b_admission_decision, metadata})
+        end
+      end,
+      nil
+    )
+
+    ExUnit.Callbacks.on_exit(fn -> :telemetry.detach(handler_id) end)
+  end
+
+  # ISS-0695: the release-vs-retention-sweep race that used to require a
+  # fixed `Process.sleep/1` plus 12 filler tenant schemas to widen the gap
+  # (see prior revision's comment, removed) is eliminated, not narrowed --
+  # the probe is released synchronously, on the Poller process itself,
+  # inside the `[:letflow, :scheduler, :admission_decision]` telemetry
+  # handler (see `attach_ac3b_admission_probe/3`'s own comment for why this
+  # differs from the design doc's test-process-release shape). This makes
+  # the target schema's retention sweep running after its own poll_and_fire
+  # rejection deterministic, so a single attempt (no retry loop) suffices.
+  defp ac3b_attempt(schema_name, instance_id) do
     clear_pending_events!(schema_name)
-    timer_id = due_timer_for!(schema_name, "req218-ac3b-#{attempt}")
+    timer_id = due_timer_for!(schema_name, "req218-ac3b")
 
     old_created_at =
       DateTime.utc_now() |> DateTime.add(-60, :day) |> DateTime.truncate(:microsecond)
 
-    seed_event!(schema_name, instance_id, old_created_at, attempt)
+    seed_event!(schema_name, instance_id, old_created_at, 1)
     archived_before = table_count(ArchivedEvent, schema_name)
 
     assert {:ok, probe_ref} = Admission.try_acquire(:global)
-
-    releaser =
-      Task.async(fn ->
-        Process.sleep(5)
-        Admission.release(probe_ref)
-      end)
+    attach_ac3b_admission_probe(self(), schema_name, probe_ref)
 
     state = %{last_retention_run_at: nil, last_tick_started_at: nil}
     assert {:noreply, _new_state} = Poller.handle_info(:tick, state)
 
-    Task.await(releaser)
+    # Safety-net confirmation only -- by the time this returns, the handler
+    # has already released the probe synchronously on the Poller process
+    # (see above). Not load-bearing for ordering, just a bounded wait
+    # against a genuine hang/regression (design doc's own framing).
+    assert_receive {:ac3b_admission_decision, %{result: :rejected}}, 2_000
 
     # Deterministic per the comment above: the probe was held before the
     # tick began, so this schema's poll_and_fire admission call -- the very
@@ -736,45 +793,91 @@ defmodule Letflow.Scheduler.PollerTest do
       instance_id = Ecto.UUID.generate()
       seed_instance_sequence!(schema_name, instance_id)
 
-      # Filler schemas (no due timers/events of their own), provisioned ONCE
-      # and reused across every attempt -- Poller's own tenant_schemas/0
-      # lists every currently-provisioned schema, so these add real,
-      # unavoidable DB round-trip time between the target schema's own
-      # poll_and_fire admission attempt (near the very start of the tick's
-      # timer loop, essentially instantaneous regardless of filler count)
-      # and its own, much LATER retention-sweep admission attempt (only
-      # after the ENTIRE poll_and_fire loop across every schema, plus the
-      # unwrapped maybe_refresh_active_instances pass over every schema
-      # again, have both completed). Without fillers this gap was measured
-      # (temporary IO.puts instrumentation, since removed) to be so narrow
-      # that no fixed release delay reliably landed inside it -- too short a
-      # delay let the release race ahead of even the target's own
-      # poll_and_fire attempt (breaking the "poll deterministically
-      # rejected" assumption this test's first assertion depends on), while
-      # a delay long enough to avoid that then usually landed AFTER
-      # retention's own attempt too (both admission calls on the same,
-      # wrong side). Fillers widen the real elapsed time between the two
-      # target-schema attempts, not the release delay itself, so a single
-      # fixed delay can reliably land after the first and before the second.
-      for i <- 1..12, do: provisioned_tenant("req218-ac3b-filler-#{i}")
-
-      # Only one side of ac3b_attempt/3 above is still a race (whether the
-      # 5ms-delayed release beats the retention-sweep admission call) --
-      # retried a handful of times purely as margin against scheduler jitter
-      # on a loaded host, not because the outcome is symmetric.
-      result = Enum.reduce_while(1..10, nil, &ac3b_reduce(schema_name, instance_id, &1, &2))
-
-      assert result == :ok,
-             "expected at least one of 10 attempts where this schema's retention sweep still " <>
-               "ran (old event archived) after its own poll_and_fire admission call was " <>
-               "deterministically rejected in the same tick -- proving a rejected operation " <>
-               "for a schema does not block that SAME schema's OTHER operations from being " <>
-               "attempted later in the same tick"
+      assert ac3b_attempt(schema_name, instance_id),
+             "expected this schema's retention sweep to still run (old event archived) after " <>
+               "its own poll_and_fire admission call was deterministically rejected in the " <>
+               "same tick -- proving a rejected operation for a schema does not block that " <>
+               "SAME schema's OTHER operations from being attempted later in the same tick"
     end
   end
 
-  defp ac3b_reduce(schema_name, instance_id, attempt, _acc) do
-    if ac3b_attempt(schema_name, instance_id, attempt), do: {:halt, :ok}, else: {:cont, nil}
+  # ISS-0695: `attach_ac3b_admission_probe/3` above only ever exercises ONE
+  # op (`:poll_and_fire`) and ONE result (`:rejected`) of the
+  # `[:letflow, :scheduler, :admission_decision]` telemetry event -- that is
+  # sufficient for AC3b's own synchronization need, but leaves the event's
+  # `:granted` branch, and its `op`/`schema`/`measurements` shape in
+  # general, with no coverage of its own. Now that this event is load-bearing
+  # for a test's correctness (not merely an OBS-02-style metric nobody reads
+  # the value of), a regression here -- wrong metadata key, event dropped on
+  # the granted branch, non-empty measurements -- deserves its own direct
+  # unit coverage, independent of AC3b's specific rejected/poll_and_fire use.
+  defp attach_admission_decision_collector(test_pid, schema_name) do
+    handler_id =
+      "poller-admission-decision-collector-#{System.unique_integer([:positive, :monotonic])}"
+
+    :telemetry.attach(
+      handler_id,
+      [:letflow, :scheduler, :admission_decision],
+      fn _event, measurements, metadata, _config ->
+        if metadata.schema == schema_name do
+          send(test_pid, {:admission_decision, measurements, metadata})
+        end
+      end,
+      nil
+    )
+
+    ExUnit.Callbacks.on_exit(fn -> :telemetry.detach(handler_id) end)
+  end
+
+  describe "ISS-0695: [:letflow, :scheduler, :admission_decision] telemetry emission" do
+    test "a granted admission emits the event with empty measurements and :granted metadata" do
+      AdmissionTestHelpers.restart_admission!(pool_size: 3, reserved_headroom: 2)
+
+      %{schema_name: schema_name} = provisioned_tenant("iss0695-telemetry-granted")
+      timer_id = due_timer_for!(schema_name, "iss0695-telemetry-granted")
+
+      attach_admission_decision_collector(self(), schema_name)
+
+      state = %{last_retention_run_at: nil, last_tick_started_at: nil}
+      assert {:noreply, _new_state} = Poller.handle_info(:tick, state)
+
+      assert_receive {:admission_decision, measurements, metadata}, 2_000
+
+      assert measurements == %{}
+      assert metadata.schema == schema_name
+      assert metadata.op == :poll_and_fire
+      assert metadata.result == :granted
+
+      # Real-world corroboration: an uncontended admission that was really
+      # granted let this schema's due timer actually fire.
+      assert timer_status!(schema_name, timer_id) == "fired"
+    end
+
+    test "a rejected admission emits the event with :rejected metadata, distinct from :granted" do
+      AdmissionTestHelpers.restart_admission!(pool_size: 3, reserved_headroom: 2)
+
+      %{schema_name: schema_name} = provisioned_tenant("iss0695-telemetry-rejected")
+      timer_id = due_timer_for!(schema_name, "iss0695-telemetry-rejected")
+
+      assert {:ok, probe_ref} = Admission.try_acquire(:global)
+      attach_admission_decision_collector(self(), schema_name)
+
+      state = %{last_retention_run_at: nil, last_tick_started_at: nil}
+      assert {:noreply, _new_state} = Poller.handle_info(:tick, state)
+
+      assert_receive {:admission_decision, measurements, metadata}, 2_000
+
+      assert measurements == %{}
+      assert metadata.schema == schema_name
+      assert metadata.op == :poll_and_fire
+      assert metadata.result == :rejected
+
+      # Real-world corroboration: the deterministically-held probe really
+      # did block this schema's poll_and_fire from running.
+      assert timer_status!(schema_name, timer_id) == "pending"
+
+      :ok = Admission.release(probe_ref)
+    end
   end
 
   describe "REQ-218 AC4: Letflow.Admission.try_acquire({:tenant, _}) is never called from poller.ex" do

@@ -1,0 +1,29 @@
+id: ISS-0701
+title: >
+  Login is fully delegated to Keycloak's hosted UI -- no in-app login
+  form/field-set exists
+discovered_by: ELIXIR-DEV
+discovered_in_run: WF02-REQ360-20260917
+discovered_at: "2026-09-17T01:38:01Z"
+severity: MINOR
+description: >
+  Discovered during REQ-360 (author the platform-admin login-routing UAT
+  scenario using REQ-358's branching construct). web/src/auth/ProtectedRoute.tsx
+  never renders an in-app login form -- on unauthenticated it redirects the
+  whole page to Keycloak's externally-hosted login UI, showing only a
+  "Redirecting to login..." placeholder first. Grepping for
+  LoginPage/LoginForm across web/src found zero matches.
+
+  This contradicts REQ-360's own Why-section framing, which assumed "the
+  login form with its actual field set" would be an in-app, testable
+  surface. The real behaviour is documented as such (not papered over) in
+  test/fixtures/uat/scenarios/platform/platform-login-routing-by-role.yaml's
+  unauthenticated branch, which asserts a redirect to the Keycloak-hosted
+  login UI rather than an in-app form.
+affected_files:
+  - web/src/auth/ProtectedRoute.tsx
+related_requirements:
+  - REQ-360
+queue_ref: Q-701
+github_ref: GH-1475
+status: open

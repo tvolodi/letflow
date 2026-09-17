@@ -1,0 +1,58 @@
+id: ISS-0698
+title: >
+  scripts/test_parallel.sh parallel ecto.create burst exceeds Postgres
+  max_connections (53300 too_many_connections), 12/16 partitions fail to
+  create their test DB
+discovered_by: TEST-RUNNER
+discovered_in_run: WF03-ISS0697-20260917
+discovered_at: "2026-09-17T19:46:54Z"
+severity: MAJOR
+description: >
+  Discovered during WF03-ISS0697-20260917's TEST-RUNNER Step 4 -- the FIRST
+  full `mix letflow.check.test` run after ISS-0697's fix (PATH-mutation
+  hazard) was verified removed. Not the ISS-0697 hazard: no hang, no nested
+  /tmp/letflow_test_parallel.* spawn, no orphaned processes -- the run
+  completed and cleaned up normally in ~3.5-4 minutes. Instead, 12 of 16
+  partitions crashed during ecto.create/ecto.migrate with
+  `Postgrex.Error FATAL 53300 (too_many_connections)` /
+  "The database for Letflow.Repo couldn't be created: killed"; only 4
+  partitions (2, 6, 7, 12) produced results (890/890 passed for those).
+
+  Confirmed Postgres `max_connections=100` via `SHOW max_connections`.
+  Confirmed no leaked connections post-run (pg_stat_activity back to 6
+  total) -- this is a startup burst/sequencing issue in
+  scripts/test_parallel.sh's parallel DB-creation phase (16 partitions
+  simultaneously attempting ecto.create at run start, before
+  TEST_POOL_SIZE=5/partition pooling/headroom accounting would apply), not
+  a leak.
+
+  Full report: test/reports/report-20260917-WF03ISS0697-20260917.yaml.
+  Root cause not yet diagnosed -- needs ISSUE-FIXER triage (likely:
+  serialize/stagger ecto.create across partitions, or raise
+  max_connections, or both).
+affected_files:
+  - scripts/test_parallel.sh
+related_issues:
+  - ISS-0697
+queue_ref: Q-698
+github_ref: GH-1465
+status: resolved
+resolved_in_run: WF03-ISS0698-20260917
+resolved_at: "2026-09-17T20:58:43Z"
+resolution_summary: >
+  Root cause: recurrence of ISS-0219's connection-burst class, structural in
+  scripts/test_parallel.sh's unstaggered Step 2 launch -- all partitions
+  attempted ecto.create/ecto.migrate simultaneously with no concurrency cap,
+  exceeding Postgres max_connections=100. Fixed via new Step 1.7 in
+  scripts/test_parallel.sh: concurrency-capped ecto.create+ecto.migrate
+  using a wait -n -p semaphore (TEST_PARALLEL_MAX_CONCURRENT_CREATES env
+  var, default 4), plus mix.exs test: alias converted to test_alias/1
+  (direct Mix.Task.run/2 calls, skips create/migrate when
+  LETFLOW_SKIP_ECTO_SETUP=1). Implemented in commit 664436fc. Regression
+  test at test/scripts/test_parallel_create_burst_test.sh (real
+  Docker/Postgres integration test, fail-then-pass verified against a
+  pre-fix worktree checkout). Fix incidentally broke an unrelated
+  pre-existing test (test_parallel_pool_sizing_test.sh, ISS-0287
+  precedent) via marker-extraction over-capture; fixed in-run (commit
+  449471a1) and independently re-validated. All gates passed
+  (SECURITY-REVIEWER, REVIEWER, TEST-DESIGN-VALIDATOR, TEST-RUNNER).

@@ -1,0 +1,95 @@
+id: ISS-0705
+title: >
+  Global Ecto.Adapters.SQL.Sandbox.mode(:auto) leak in tenants_test.exs/
+  identity_test.exs never restored to :manual, causing persistent test-DB
+  pollution
+discovered_by: ISSUE-FIXER
+discovered_in_run: WF03-ISS0704-20260917
+discovered_at: "2026-09-17T03:10:07Z"
+severity: MAJOR
+description: >
+  Follow-up from ISS-0704 (docs/issues/ISS-0704.yaml). ISS-0704's own root
+  cause was diagnosed and fixed on WF03-ISS0704-20260917 (test-side scoping
+  fix, no production code changed) -- but that fix deliberately treated the
+  underlying cause of the pollution itself as out of scope, per the
+  validated design doc
+  (lib/letflow/design/iss0704-tenants-pagination-test-scoping-fix.md), and
+  REVIEWER flagged during that run's Step 3 gate that the recommendation
+  can't stay a prose note in a design doc -- it needs to be its own
+  claimable issue. This is that issue.
+
+  Root cause: test/letflow/routers/tenants_test.exs (~line 391) and
+  test/letflow/routers/identity_test.exs (~lines 1361-1381) each flip
+  `Ecto.Adapters.SQL.Sandbox.mode(Letflow.Repo, :auto)` mid-test (to allow
+  the test's own process and spawned/async work to share a connection
+  outside the sandbox's normal per-test checkout), and never restore it to
+  `:manual` afterward -- no matching `on_exit` callback, no restoring flip
+  at the end of the test. Once flipped to `:auto` for the remainder of the
+  test run, every subsequent test in the same `mix test` invocation (and,
+  per ISS-0704's own reproduction, across separate invocations against the
+  same persistent dev/test database) inserts real, uncontained rows instead
+  of rows scoped to a per-test sandboxed transaction that gets rolled back.
+  ISS-0704's diagnosis confirmed 129+ such orphaned tenant rows had
+  accumulated in the shared test DB, which is what made the unscoped
+  pagination assertion in tenants_test.exs fail deterministically once page
+  1 filled with orphaned rows ahead of the test's own fixture.
+
+  This is a live, ongoing hazard independent of ISS-0704's own fix: any
+  other test in the suite that asserts on total row counts, exact pagination
+  contents, or an allowlisted/bounded result set against a table these
+  leaked rows land in is exposed to the same class of flake, and every
+  `mix test` run since whenever this leak was introduced has been quietly
+  adding to the pollution rather than resetting per test as the sandbox is
+  meant to guarantee.
+
+  Fix should either (a) wrap the `:auto` mode flip in each affected test
+  with a matching `on_exit` callback that restores `:manual`, or (b)
+  restructure the tests so they no longer need the global mode flip (e.g.
+  using `Ecto.Adapters.SQL.Sandbox.allow/3` to share the sandboxed
+  connection with a spawned process instead of disabling the sandbox
+  outright) -- CODE-DESIGNER should evaluate which fits each test's actual
+  concurrency need rather than assuming (a) is sufficient in both files.
+
+  Operational note, not itself a code-fix requirement: the 129+ tenant rows
+  already orphaned in the shared test DB by this leak should be identified
+  and cleaned up as part of or alongside whatever run fixes this, or they
+  will keep silently backing every row-count-sensitive test in the suite
+  even after the leak itself is closed.
+affected_files:
+  - test/letflow/routers/tenants_test.exs
+  - test/letflow/routers/identity_test.exs
+related_requirements:
+  - ISS-0704
+queue_ref: Q-705
+github_ref: GH-1480
+status: resolved
+resolved_in_run: "WF03-ISS0705-20260917"
+resolved_at: "2026-09-17T06:02:51Z"
+resolution:
+  summary: >
+    Fixed test/letflow/routers/tenants_test.exs (~line 391) and
+    test/letflow/routers/identity_test.exs (~lines 1361-1381), and also
+    test/letflow/role_registry_test.exs, which shared the same unrestored
+    `Ecto.Adapters.SQL.Sandbox.mode(Letflow.Repo, :auto)` pattern. The fix
+    reused the existing SandboxAutoMode helper machinery already present in
+    the test support tree rather than inventing a new helper, wrapping each
+    `:auto` flip with a matching restore so `:manual` mode is guaranteed back
+    on test exit regardless of pass/fail. Design doc:
+    lib/letflow/design/iss0705-sandbox-mode-restore-fix.md.
+
+    Operational cleanup: the 129 orphaned tenant rows (plus 985 dependent
+    entity_column_promotions rows) that had accumulated in the shared test DB
+    from the pre-fix leak (per ISS-0704's diagnosis) were identified and
+    deleted as part of this run, removing the residual pollution that was
+    still backing row-count-sensitive tests even independent of the leak
+    itself being closed.
+
+    Regression coverage: test/letflow/routers/tenants_test.exs's
+    TenantsIss0705SandboxModeRegressionTest (test/specs/ISS-0705.md is the
+    accompanying spec) demonstrates the mode is restored to :manual after the
+    affected tests run.
+
+    Gates: CODE-DESIGN-VALIDATOR PASS (after 1 rework), SECURITY-REVIEWER
+    PASS, REVIEWER PASS, TEST-DESIGN-VALIDATOR PASS (independently reproduced
+    the mutant), TEST-RUNNER PASS (full suite 4331/4332, 1 confirmed-unrelated
+    pre-existing failure).

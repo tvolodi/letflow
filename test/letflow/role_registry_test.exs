@@ -116,7 +116,7 @@ defmodule Letflow.Identity.RoleRegistryTest do
       # always gets a real, checked-in connection regardless of what mode the test
       # body left the pool in (mirrors identity_test.exs's own on_exit/1 handling
       # of this exact hazard, confirmed empirically there).
-      Ecto.Adapters.SQL.Sandbox.mode(Letflow.Repo, :auto)
+      Letflow.Test.SandboxAutoMode.enter_auto_mode!(Letflow.Repo)
 
       case TenantProvisioning.schema_name_for_tenant(tenant.id) do
         {:ok, schema_name} -> Repo.query!(~s(DROP SCHEMA IF EXISTS "#{schema_name}" CASCADE))

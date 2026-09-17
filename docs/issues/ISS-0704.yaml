@@ -1,0 +1,63 @@
+id: ISS-0704
+title: >
+  Letflow.Routers.TenantsTest pagination test flakes -- GET /tenants as
+  PLATFORM_ADMIN paginated-allowlisted-shape assertion fails intermittently
+discovered_by: ELIXIR-DEV
+discovered_in_run: WF02-REQ360-20260917
+discovered_at: "2026-09-17T02:39:03Z"
+severity: MAJOR  # raised from MINOR (ISSUE-FIXER, WF03-ISS0704-20260917): confirmed by
+                  # reproduction to be a DETERMINISTIC failure once 129+ orphaned rows
+                  # from the ISS-0705 sandbox-mode leak filled page 1 ahead of the
+                  # fixture -- not a one-off flake as the original MINOR filing assumed.
+description: >
+  Discovered during REQ-360's WF-02 Step Final full `mix test` run
+  (2026-09-17, feature/WF02-REQ360-20260917). test/letflow/routers/tenants_test.exs:356
+  ("GET /tenants as PLATFORM_ADMIN lists tenants in the paginated
+  allowlisted shape") failed -- 4327/4328 tests passed, this one failed.
+  Structurally cleared as pre-existing/unrelated to REQ-360's own diff:
+  `git diff --name-only origin/main...HEAD` for that branch touched only
+  docs/, lib/letflow/design/, test/fixtures/uat/, and test/uat-reports/ --
+  neither the failing test module nor lib/letflow/routers/tenants.ex appear
+  in that diff.
+
+  Likely cause per ELIXIR-DEV's own hypothesis (not yet confirmed): tenant-
+  fixture accumulation past the paginated LIMIT 51 in the shared test DB
+  across the full suite's accumulated state. Needs ISSUE-FIXER triage to
+  confirm rather than assume, and reproduction.
+affected_files:
+  - test/letflow/routers/tenants_test.exs
+  - lib/letflow/routers/tenants.ex
+related_requirements:
+  - REQ-360
+queue_ref: Q-704
+github_ref: GH-1479
+status: resolved
+resolved_in_run: WF03-ISS0704-20260917
+resolved_at: "2026-09-17T03:10:07Z"
+resolution: >
+  Root cause confirmed by ISSUE-FIXER: the "lists tenants in the paginated
+  allowlisted shape" test issued an unscoped `GET /` request that
+  deterministically fails once 129+ orphaned real tenant rows (leaked by a
+  separate, unrestored global `Ecto.Adapters.SQL.Sandbox.mode(Letflow.Repo,
+  :auto)` flip elsewhere in the suite -- see follow-up ISS-0705) fill page 1
+  ahead of the test's own fixture. Fixed by scoping the request to
+  `GET /?search=<fixture's own slug>`, mirroring the neighboring "search
+  filters by slug/display_name substring" test's existing pattern -- no
+  production code changed.
+
+  Design doc: lib/letflow/design/iss0704-tenants-pagination-test-scoping-fix.md
+  Implementation commit: 549c4bec (fix(ISS-0704): scope pagination test to
+  fixture's own slug via search)
+  Docs commit: 1292527e (docs(ISS-0704): record git-checkout-restore pitfall
+  found during Step 4 verification)
+
+  Gates passed: CODE-DESIGN-VALIDATOR (PASS), SECURITY-REVIEWER (PASS, out of
+  scope -- test-only change), REVIEWER (PASS), TEST-DESIGNER +
+  TEST-DESIGN-VALIDATOR both independently reproduced fail-then-pass,
+  TEST-RUNNER ran the full suite: 4331/4331 passed, 0 failures.
+
+  The underlying pollution mechanism (the unrestored Sandbox.mode(:auto)
+  flip itself, and the 129+ already-orphaned rows it left behind) is
+  DELIBERATELY NOT fixed by this run -- it is filed as its own issue,
+  ISS-0705 (docs/issues/ISS-0705.yaml), per REVIEWER's own flag that this
+  needs to be claimable work rather than a design-doc recommendation.

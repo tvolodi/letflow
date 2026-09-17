@@ -1,0 +1,55 @@
+{
+  "handoff_id": "b6f3a1d2-0002-4a00-9c00-wf03iss0699001",
+  "run_id": "WF03-ISS0699-20260917",
+  "workflow_id": "WF-03",
+  "step": "0.5-01",
+  "from_agent": "ORCH",
+  "to_agent": "ISSUE-FIXER",
+  "file": "handoffs/WF03-ISS0699-20260917/step-01-issue-fixer-diagnosis.json",
+  "created_at": "2026-09-16T21:15:05Z",
+  "started_at": "2026-09-16T21:15:05Z",
+  "completed_at": "2026-09-17T00:00:00Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": null,
+    "requirement_ids": [],
+    "requirement_text": {},
+    "source_text": {},
+    "related_handoff_ids": [],
+    "artifacts_in": [
+      "docs/issues/ISS-0699.yaml",
+      "scripts/test_parallel.sh",
+      "lib/letflow/design/iss0698-test-parallel-create-burst-fix.md",
+      "test/scripts/test_parallel_create_burst_test.sh",
+      "test/scripts/test_parallel_pool_sizing_test.sh"
+    ],
+    "owned_modules": ["scripts/test_parallel.sh"]
+  },
+  "task": {
+    "description": "WF-03 Step 0.5 (registry lookup) + Step 1 (diagnose) for ISS-0699, combined into one dispatch since both are your own role. On branch feature/WF03-ISS0699-20260917.\n\nStep 0.5: Search docs/issues/*.yaml for entries with status: resolved whose description mentions similar symptoms (test_parallel.sh, tmp dir accumulation, mktemp cleanup). Note any match in your result.summary.\n\nStep 1: Diagnose ISS-0699 directly. Read scripts/test_parallel.sh in full (already listed in artifacts_in) -- confirm for yourself, by reading the actual script, exactly where tmp_dir=$(mktemp -d ...) is created (Step 1.7, per the script's own comments) and confirm it is never rm -rf'd on any exit path (success, early `exit 1` error paths, or the final `exit \"$any_failed\"`). Do not diagnose from the issue report's prose alone -- read the script.\n\nWrite your diagnosis into result.summary: root cause, every exit point in the script that currently leaves tmp_dir behind, and what a fix needs to change. Per ISS-0699's own filed description, consider explicitly whether cleanup should be unconditional, success-only, or gated by an opt-out env var -- note that other workflows in this pipeline (TEST-RUNNER reports, etc.) sometimes cite a specific partition-N.log path after a failing run, so an unconditional delete-on-any-exit would break that inspection use case; state your recommendation on this tradeoff explicitly since CODE-DESIGNER will design from it. Do NOT implement the fix yourself.\n\nClaim by setting status to IN_PROGRESS.",
+    "acceptance_criteria": [
+      "Step 0.5 registry-lookup result stated (match found or not)",
+      "Root cause identified from actually reading scripts/test_parallel.sh, naming every exit path that currently leaves tmp_dir uncleaned",
+      "A stated recommendation on the cleanup-policy tradeoff (unconditional vs success-only vs opt-out), with reasoning, for CODE-DESIGNER to design from",
+      "No fix implemented in this step"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "STEP 0.5 (registry lookup): searched docs/issues/*.yaml for status: resolved entries matching test_parallel.sh / tmp-dir-accumulation / mktemp-cleanup symptoms. Grepped for mktemp|tmp_dir|/tmp accumulat|tmp dir across docs/issues/: 6 hits (ISS-0699 itself, ISS-0513, ISS-0428, ISS-0423, ISS-0171, ISS-0065). None matches this issue's actual symptom (a shell script's own mktemp -d work-dir never rm -rf'd on any exit path). ISS-0513/ISS-0171/ISS-0065 are all 'System.tmp_dir!/System.cmd on Windows' path-escaping/portability defects in ExUnit test helpers, not cleanup-on-exit defects, and two of them (ISS-0171, ISS-0065) already use try/after or an explicit fail-fast guard for their own temp artifacts -- opposite class of bug. ISS-0428/ISS-0423 are about wiring test_parallel.sh into mix letflow.check and suite parallelization/async, not its tmp_dir lifecycle -- ISS-0428's resolution_note even created the tmp_dir-consuming ISS-0069 log-scanning logic that Step 1.7's tmp_dir now serves, without addressing cleanup. No prior resolved entry covers this symptom -- not a recurrence, first time filed for this exact root cause.\n\nSTEP 1 (diagnosis, confirmed by reading scripts/test_parallel.sh in full, not from the issue report's prose): tmp_dir=$(mktemp -d \"${TMPDIR:-/tmp}/letflow_test_parallel.XXXXXX\") is created at line 245 (Step 1.7, per the script's own comment header -- moved here from the old Step 2 by ISS-0698's fix). Nothing in the script ever calls `rm -rf \"$tmp_dir\"` and no `trap ... EXIT` is set anywhere -- confirmed by reading the full 456-line file end to end; the string 'trap' does not appear.\n\nEvery exit point BEFORE line 245 (N-derivation failures at lines 86/91, pre-compile failure at line 103, pool-sizing validation errors at lines 154/158/163/170, per-partition build-path seed failure at line 222) is moot for this issue -- tmp_dir does not exist yet at those points, nothing to leak.\n\nEvery exit point AT OR AFTER line 245 leaks tmp_dir, with no exception:\n  1. Line 251 -- `exit 1` if TEST_PARALLEL_MAX_CONCURRENT_CREATES is malformed. tmp_dir already created one line earlier (245); leaked immediately, before any partition log is even written into it.\n  2. Line 268 -- `exit 1` inside the capped-concurrency wait loop when a partition's ecto.create/ecto.migrate fails. Leaked; the error message itself deliberately points at `$tmp_dir/create-$finished_partition.log` for inspection, so this leak is partly load-bearing today (see recommendation below).\n  3. Line 291 -- same `exit 1`, same message shape, in the drain loop that waits out remaining in-flight create/migrate jobs after the main seeding loop finishes. Leaked, same reasoning as #2.\n  4. Line 455 -- `exit \"$any_failed\"`, the script's one and only normal-completion exit, reached on BOTH a fully clean run (any_failed=0, every partition-N.log parsed with 0 failures) and a run with real test failures (any_failed=1). tmp_dir and all its partition-*.log/create-*.log files are left behind unconditionally in both cases -- this is the dominant leak path (every single successful run leaks one dir) and the one that produced the ~280 accumulated /tmp/letflow_test_parallel.* directories ISS-0699 observed.\n\nNo exit path in the file removes tmp_dir. A fix needs to add cleanup logic that runs on every one of the four paths above without removing it before something that still needs to read it has read it -- a `trap cleanup EXIT` (or equivalent) placed immediately after tmp_dir's creation at line 245 is the natural mechanism, since it fires uniformly for explicit `exit N` calls and for falling off the end of the script, and needs no changes at each of the four call sites individually.\n\nRECOMMENDATION on the cleanup-policy tradeoff (unconditional vs success-only vs opt-out), for CODE-DESIGNER: do NOT make cleanup unconditional on every exit. Lines 268/291's own error messages already cite `$tmp_dir/create-$finished_partition.log` by path for a human/agent to inspect after a failure, and this issue's own filed description independently confirms other workflows in this pipeline (TEST-RUNNER reports etc.) routinely cite a specific partition-N.log path after a failing run -- an unconditional delete-on-any-exit trap would silently break that inspection use case for every failing run, trading one real bug (disk growth) for another (losing failure evidence agents are known to rely on). Recommend: clean up unconditionally ONLY on the success path (any_failed=0 at line 455, and by extension any successful full completion); PRESERVE tmp_dir on every failure/error exit (lines 251, 268, 291, and 455 when any_failed=1) so a human/agent can still open the cited log. Layer an opt-out env var on top (e.g. TEST_PARALLEL_KEEP_LOGS=1) that forces preservation even on success, for a caller who wants to inspect a clean run's timing/logs too. Flag explicitly for CODE-DESIGNER: success-only cleanup does not, by itself, bound accumulation from repeated FAILING runs (a host with a flaky/red suite could still accumulate many preserved failure dirs over time) -- worth considering a secondary bound (e.g. prune failure-preserved dirs older than N days at script start) as part of the design, though that is a design decision, not dictated here.",
+    "artifacts_out": [],
+    "issues": [],
+    "git_evidence": {
+      "branch_name": "feature/WF03-ISS0699-20260917",
+      "commit_sha_list": ["7de52b83"],
+      "remote_branch": "origin/feature/WF03-ISS0699-20260917",
+      "push_status": "success",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": "Route to CODE-DESIGNER for fix design"
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

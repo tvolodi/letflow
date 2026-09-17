@@ -35,4 +35,34 @@ affected_files:
   - web/tests/support/visual-baseline.ts
 queue_ref: Q-692
 github_ref: GH-1448
-status: open
+status: resolved
+resolved_in_run: WF03-ISS0692-20260917
+resolved_at: "2026-09-17T00:38:26Z"
+resolution_note: >
+  Root cause removed: lib/letflow/design/req362-visual-regression-testing.md gained a
+  new §1.5 stating a binding policy that any authenticated-screen baseline used with
+  this visual-regression mechanism must use synthetic or explicitly-disclosed-fictional
+  data only -- never real tenant PII -- with cross-references added from §2.2 and §4.1,
+  and §7's acceptance-criteria map updated to point at it. The existing self-check
+  baseline (the only baseline that exists today, driving only the static unauthenticated
+  root page per this issue's own filing) was independently re-verified compliant by
+  three separate agents across the gate chain (CODE-DESIGN-VALIDATOR, SECURITY-REVIEWER,
+  REVIEWER), so nothing already committed needed remediation. web/tests/support/visual-baseline.ts
+  gained two comment-only JSDoc cross-references (above acceptBaseline and rebaseline)
+  pointing at the new §1.5, following the file's existing JSDoc convention of citing the
+  design section a function implements -- confirmed by SECURITY-REVIEWER and
+  independently re-confirmed by REVIEWER to touch no executable line; signatures and
+  bodies are byte-identical to the pre-fix code.
+
+  No code behavior changed (design-doc amendment + inert comments only), so REVIEWER's
+  Step 3d gate independently ruled Step 4's regression-test step not applicable to this
+  fix -- there is no behavior to regress-test. That verdict is recorded in
+  handoffs/WF03-ISS0692-20260917/step-03d-reviewer.json.
+
+  Gate chain: Step 1 diagnosis (handoffs/WF03-ISS0692-20260916/step-01-issue-fixer.json)
+  -> Step 2 CODE-DESIGNER design amendment, one rework cycle on a factual correction
+  (handoffs/WF03-ISS0692-20260917/step-02-code-designer.json) -> Step 2b
+  CODE-DESIGN-VALIDATOR PASS on v2 (handoffs/WF03-ISS0692-20260917/step-02b-code-design-validator.json)
+  -> Step 3c SECURITY-REVIEWER PASS (handoffs/WF03-ISS0692-20260917/step-03c-security-reviewer.json)
+  -> Step 3d REVIEWER PASS, including the regression-test-not-applicable ruling
+  (handoffs/WF03-ISS0692-20260917/step-03d-reviewer.json) -> Step 5 close (this record).

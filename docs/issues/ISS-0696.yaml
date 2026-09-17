@@ -104,3 +104,15 @@ pipeline_log:
       TEST-RUNNER/RELEASE-VALIDATOR) and working-tree cleanliness
       (git diff ade5fc0e..HEAD -- web/src/pages/exam/ empty, only
       pipeline-log YAML commits follow the fix).
+  - step: TEST-RUNNER
+    at: "2026-09-17T07:55:00Z"
+    result: >
+      PASS. Backend: mix test 4324/4324 passed (scripts/test_parallel.sh,
+      8 partitions), mix compile --warnings-as-errors PASS, mix format
+      --check-formatted PASS. Frontend: 586/586 passed single run, then
+      independently ran the full web/ vitest suite 10 consecutive times
+      (own execution, not reused from FRONTEND-DEV/TEST-DESIGN-VALIDATOR)
+      -- all 10 runs 586/586 passed, 0 flakes. No regressions vs. the
+      ISS-0694 baseline report. Report:
+      test/reports/report-20260917-WF03ISS0696-20260917.yaml (commit
+      6a0b7156).

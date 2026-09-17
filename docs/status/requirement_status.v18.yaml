@@ -693,3 +693,68 @@ history:
       the original TEST-DESIGNER subagent standing down cleanly after a
       genuine sibling-collision check confirmed no duplicated/contradictory
       work landed.
+
+  - req: SCOPE-CHANGE
+    event: done
+    agent: ORCH
+    at: "2026-09-17T01:15:01Z"
+    note: >
+      ISS-0692 (queue task 692, GH#1448, docs/issues/ISS-0692.yaml --
+      REQ-362's visual-baseline design had no redaction/synthetic-data
+      requirement before use against a real authenticated UAT screen)
+      resolved via full WF-03 (run WF03-ISS0692-20260917), merged as
+      PR #1472 (squash commit 958a27b2) plus a Step-Final handoff-
+      finalization follow-up PR #1473 (squash commit be076607, current
+      main tip). Continued a prior session's abandoned run
+      (WF03-ISS0692-20260916, which completed Step 1 diagnosis --
+      handoffs/WF03-ISS0692-20260916/step-01-issue-fixer.json -- then
+      released the queue lock with no status, leaving the task open and
+      re-claimable) rather than re-diagnosing from scratch; the prior
+      diagnosis was verified still valid against the merged REQ-362
+      design (PR #1460) before building on it.
+      CODE-DESIGNER added a new binding §1.5 "Data-sensitivity policy
+      for baseline content" to lib/letflow/design/req362-visual-
+      regression-testing.md, requiring synthetic/disclosed-fictional
+      actor and tenant data only for any gui_screen baseline accepted or
+      re-baselined through this mechanism (rejecting both redaction --
+      conflicts with §3.4's unconditional mechanical pixel-diff -- and
+      accepted-risk -- indefensible given permanent git-history
+      retention), cross-referenced from §2.2/§4.1 as a precondition, and
+      reflected in §7's AC map. CODE-DESIGN-VALIDATOR FAILed the first
+      attempt (the design falsely claimed no baseline had yet been
+      committed, when REQ-362's own self-check baseline already existed
+      on main) and PASSed the rework, independently visually confirming
+      the existing baseline PNG shows only an unauthenticated Keycloak
+      login form with no tenant/actor PII. SECURITY-REVIEWER PASSed,
+      independently opening all three committed baseline images itself
+      and confirming none carries PII; accepted the authoring-discipline-
+      only enforcement (no mechanical code gate) as a reasonable residual
+      risk given the whole UAT corpus is already synthetic-by-convention.
+      REVIEWER PASSed (no scope creep, no decision-record contradiction,
+      style consistent with the doc's existing bold-lead-in convention
+      elsewhere, handoff FAIL/rework/PASS hygiene correct) and
+      independently confirmed WF-03's Step 4 regression-test requirement
+      is genuinely not applicable -- documentation/policy-only fix, no
+      code behavior changed (two inert JSDoc cross-references added to
+      web/tests/support/visual-baseline.ts, function bodies untouched).
+      ISSUE-FIXER's Step 5 set docs/issues/ISS-0692.yaml status: resolved
+      and closed GH#1448 with an evidence comment. Step Final's first CI
+      run genuinely failed on `mix letflow.lint_handoffs` (this run's own
+      handoff files had improvised non-schema top-level keys during the
+      FAIL/rework/re-gate cycle instead of using HANDOFF_PROTOCOL.md's
+      gate_history mechanism) -- fixed by relocating that content into
+      gate_history/result.issues, verified 0 new lint violations, re-run
+      green (backend 9m11s, frontend 54s). letflow-queue task 692
+      released status: done (confirmed in the release response:
+      locked_by null, status done), best-effort-closing GH#1448 per
+      TASK_QUEUE.md. Local main fast-forwarded to origin/main (be076607)
+      and docs/issues/ISS-0692.yaml plus the design doc's §1.5 re-read
+      directly from origin/main to confirm the claimed changes actually
+      landed, per core-directives.md, before writing this entry.
+      One process gap flagged by ISSUE-FIXER for a future protocol
+      update, not acted on here: ISSUE_QUEUE.md's `resolved` close-comment
+      template literally expects a cited regression test, with no stated
+      exception for a genuinely documentation-only fix (unlike
+      `no_defect`, which already has one) -- worth a follow-up doc
+      amendment, not filed as a fresh ISS-NNNN since it is a
+      protocol-wording gap, not a defect in shipped work.

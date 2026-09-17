@@ -81,3 +81,34 @@ related:
 queue_ref: Q-706
 github_ref: GH-1488
 status: open
+pipeline_log:
+  - step: CODE-DESIGNER
+    at: "2026-09-17T10:00:00Z"
+    result: >
+      FAIL then PASS (rework). Design:
+      lib/letflow/design/iss-0706-e2e-readiness-precondition-fix.md.
+      Real scope correction found by direct verification: sh05-06.shell.e2e.spec.ts
+      (one of the original 11) is stale -- already fixed under ISS-0532,
+      no assertServiceReadiness call left. Real scope is 10 files. Chose
+      to extract shared assertBackendHealthy/assertServiceReadiness
+      helpers into helpers.ts (already this codebase's established
+      shared-helper location for all 10 in-scope files), pointed at real
+      GET /health, mirroring ISS-0532's resolution pattern. 8 plain files
+      delete their duplicate and import the shared version; 2 variant
+      files only swap their backend-check block, preserving Keycloak's
+      own legitimate /health/ready probe untouched. TC-TD-UI-01-04's
+      if(swiftResp.ok()) silent-noop gate inverted to hard-fail,
+      mirroring the same file's own TC-TD-UI-03-01 precedent. First
+      attempt CODE-DESIGN-VALIDATOR FAILed: §5 contained real
+      implementation code verbatim-identical to the real file. Reworked
+      to prose/shape level only.
+  - step: CODE-DESIGN-VALIDATOR
+    at: "2026-09-17T10:20:00Z"
+    result: >
+      PASS on rework (FAIL on first attempt -- see CODE-DESIGNER entry).
+      Independently verified all scope claims against real source (sh05-06
+      staleness, byte-identical two-part shape across all 8 plain files,
+      both variant files' real shape, helpers.ts convention, the
+      TC-TD-UI-03-01 precedent). Confirmed §5 is now genuine prose with
+      no leaked code (grep-verified against the whole file). Confirmed
+      nothing else regressed during the rework.

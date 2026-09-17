@@ -1,0 +1,46 @@
+{
+  "handoff_id": "wf03-iss0703-step01",
+  "run_id": "WF03-ISS0703-20260917",
+  "workflow_id": "WF-03",
+  "step": "01",
+  "from_agent": "ORCH",
+  "to_agent": "ISSUE-FIXER",
+  "file": "handoffs/WF03-ISS0703-20260917/step-01-issue-fixer-diagnosis.json",
+  "created_at": "2026-09-17T07:20:09Z",
+  "started_at": "2026-09-17T07:20:09Z",
+  "completed_at": null,
+  "status": "PENDING",
+  "priority": "HIGH",
+  "context": {
+    "stage": null,
+    "requirement_ids": [],
+    "requirement_text": {},
+    "source_text": {},
+    "related_handoff_ids": [],
+    "artifacts_in": [
+      "docs/issues/ISS-0703.yaml",
+      "test/uat-reports/uat-2026-09-17-WF02-REQ360-20260917.yaml",
+      "test/uat-reports/uat-2026-09-16-WF02-REQ358-20260916.yaml",
+      "docs/agents/workflows/WF-03_issue_resolving.md"
+    ],
+    "owned_modules": []
+  },
+  "task": {
+    "description": "WF-03 Step 0.5 + Step 1 for ISS-0703, on branch feature/WF03-ISS0703-20260917 (already checked out and pushed by Step 00 -- `git checkout feature/WF03-ISS0703-20260917` if your session starts elsewhere, do not re-run git setup). This issue was discovered live during REQ-360's WF-05 UAT run against the real QA instance https://qa.bizdala.com (2026-09-17): a real Keycloak password-grant token for admin-user (realm_access.roles=[\"PLATFORM_ADMIN\"]) got HTTP 500 with an empty body from GET /api/v1/tenants, GET /api/v1/identity/users, and GET /api/v1/health, reproducibly on retry. The identical call with the identical role one day earlier (2026-09-16) got HTTP 200 with well-formed bodies. A non-admin operator-user token against the same endpoints on the same day got well-formed 403/403/404 (not 500) -- isolated to the PLATFORM_ADMIN-authenticated path specifically. Full evidence is in test/uat-reports/uat-2026-09-17-WF02-REQ360-20260917.yaml's `new_finding_for_orch_triage` and `branch_platform_admin_lands_on_workspace_root` sections -- read it in full rather than only this description.\n\nStep 0.5 (registry lookup): check docs/issues/ for a prior *resolved* entry with matching symptoms (PLATFORM_ADMIN-specific 500s, tenant/identity/health routes, a QA-only regression). If a clear match exists, cite it and check whether this is a recurrence of a fix that didn't hold (escalate severity to at least MAJOR if so -- it is already filed MAJOR).\n\nStep 1 (diagnose): reproduce directly against the live QA instance, do not diagnose from the bug report's prose alone.\n1. Obtain a real admin-user token: `bash ../ai-dala-infra/scripts/qa-login.sh admin-user` (relative to this repo's parent directory, i.e. c:\\Users\\tvolo\\dev\\ai-dala\\ai-dala-infra\\scripts\\qa-login.sh) -- or curl the Keycloak token endpoint directly (https://auth.qa.bizdala.com/realms/bpm-default/protocol/openid-connect/token, grant_type=password, client_id=letflow-web) if that script's output shape doesn't hand you the bearer token directly. Decode the JWT to confirm realm_access.roles=[\"PLATFORM_ADMIN\"] before using it.\n2. Reproduce: curl -i (with -H \"Authorization: Bearer <token>\") against GET https://qa.bizdala.com/api/v1/tenants, GET https://qa.bizdala.com/api/v1/identity/users, GET https://qa.bizdala.com/api/v1/health. Confirm the 500/empty-body behavior is still live right now (it may have already been fixed by another deploy since discovery -- state plainly either way).\n3. Get an operator-user token the same way and confirm the well-formed 403/403/404 contrast still holds, to keep confirming this is PLATFORM_ADMIN-specific and not a blanket outage.\n4. Trace root cause. This is a live QA deploy, not a local dev environment -- you cannot attach a debugger or read QA's live logs directly unless this repo/ai-dala-infra exposes a documented way to (check ai-dala-infra for a log-access script or doc before assuming you cannot). Absent live log access, diagnose from the code: grep lib/letflow/ for the router/controller/plug code path handling /api/v1/tenants, /api/v1/identity/users, /api/v1/health, focusing on anything that treats a PLATFORM_ADMIN-scoped token differently from other roles (a role-check branch, a cross-tenant/global-scope query, an admin-only preload or serializer). Cross-reference recent commits to main (git log --oneline -20 -- lib/letflow/ around 2026-09-16..2026-09-17) for anything touching that PLATFORM_ADMIN-specific path that could explain a regression introduced between the 2026-09-16 (working) and 2026-09-17 (broken) QA snapshots -- QA deploys track main, so a merged commit in that window is the most likely suspect; state which commit(s) you found and why they are or are not implicated, or state plainly if nothing in that window looks implicated and what that means (e.g. a QA-environment-only config/data issue rather than an application-code regression -- in which case say so, this may turn into a no_defect or instrumented outcome rather than a code fix).\n5. Do NOT implement a fix yourself. Complete the handoff with your diagnosis in result.summary: root cause (or, if you cannot pin down a code-level root cause, the strongest evidence-backed hypothesis plus what would be needed to confirm it), affected files/commits, and what a fix needs to change -- or, if this turns out to not be a code defect at all (pure QA-environment issue), say that explicitly so ORCH can route this as `no_defect`/`instrumented` rather than forcing a code fix that doesn't apply. Claim this handoff by setting status to IN_PROGRESS only.",
+    "acceptance_criteria": [
+      "A real, freshly-issued PLATFORM_ADMIN token was obtained and used to re-probe all three endpoints against https://qa.bizdala.com just now -- current live status (still 500, or already recovered) is stated with the actual HTTP responses quoted, not assumed from the UAT report alone",
+      "A real operator-user token's contrasting response is re-confirmed the same way",
+      "Root cause is traced to specific code (file/line/commit) if it is a code defect, OR the diagnosis states plainly and with evidence that this is not a code-level defect (e.g. QA-environment/data/config issue) if that's what the evidence shows",
+      "next_action names the correct next step: CODE-DESIGNER (if a code fix is needed) or a recommendation to close as no_defect/instrumented (if not)"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "",
+    "artifacts_out": [],
+    "issues": [],
+    "next_action": ""
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

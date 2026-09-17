@@ -1,0 +1,60 @@
+{
+  "handoff_id": "wf02-req369-step-final",
+  "run_id": "WF02-REQ369-20260917",
+  "workflow_id": "WF-02",
+  "step": "final",
+  "from_agent": "FRONTEND-DEV",
+  "to_agent": "ORCH",
+  "file": "handoffs/WF02-REQ369-20260917/step-final-git-merge.json",
+  "created_at": "2026-09-17T16:36:00Z",
+  "started_at": "2026-09-17T16:10:00Z",
+  "completed_at": "2026-09-17T16:36:00Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S7",
+    "requirement_ids": ["REQ-369"],
+    "deviation_from_normal_order": "Step Final dispatched before Step 6 (DOC-UPDATER) per ORCH's explicit instruction: RELEASE-VALIDATOR's step-05 PASS-WITH-PENDING verified AC1-AC5, and UAT-RUNNER's step-05b confirmed AC6/AC7 cannot be satisfied pre-merge (QA's live bundle does not contain this feature's code; QA only reflects main post-merge via CD). Merging now unblocks CD to deploy REQ-369 to QA so UAT-RUNNER can be re-dispatched post-merge for real AC6/AC7 evidence, followed by DOC-UPDATER's real close-out.",
+    "artifacts_in": [
+      "handoffs/WF02-REQ369-20260917/step-05-release-validation.json",
+      "handoffs/WF02-REQ369-20260917/step-05b-uat.json",
+      "docs/agents/protocols/GIT_MERGE.md"
+    ]
+  },
+  "task": {
+    "description": "Run GIT_MERGE.md's full procedure for REQ-369: stage remaining handoff artifacts, rebase onto latest main, push, open PR, wait for CI, merge once green, clean up locally. Do not flip docs/requirements.yaml's REQ-369 status -- DOC-UPDATER does that in a later dispatch once post-merge UAT closes AC6/AC7."
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "Verified branch feature/WF02-REQ369-20260917 (re-checked with git branch --show-current; no sibling-session collision found -- single worktree, HEAD was 2cf84a99 at start). Staged and committed the two untracked handoff files (step-05-release-validation.json, step-05b-uat.json) left by RELEASE-VALIDATOR and UAT-RUNNER. Fetched origin/main (had moved to 73a3dcb2 since this branch was cut, via a concurrent WF02-REQ367 sibling session) and rebased cleanly -- no conflicts. Verified build post-rebase: mix format --check-formatted PASS, mix compile --warnings-as-errors PASS (exit 0). Confirmed via git diff origin/main...HEAD -- lib/ priv/ that this branch touches only lib/letflow/design/req369-platform-dashboard-page.md (a design doc, no application code) -- this is a frontend-only change. Ran the full frontend gate post-rebase: npm run type-check PASS, npm run lint PASS, npm test 87/87 test files, 599/599 tests PASS, npm run guards 4/4 files, 48/48 tests PASS (real production build + bundle-scan).\n\nPushed (fast-forward, no force needed since the rebase onto origin/main was a no-op -- main had not moved further between fetch and push). Opened PR #1507 (feat: PlatformDashboardPage + role-conditional login routing [WF02-REQ369-20260917]), base main, head feature/WF02-REQ369-20260917.\n\nPolled `gh pr checks 1507` actively in a bounded loop (no sleep/Monitor tool, per instruction -- used short bash sleeps inside the poll loop itself, which is the bounded-loop pattern, not an unbounded Monitor watch). First CI run (35246060606) came back with Frontend gate PASS but Backend gate FAIL: `mix letflow.check`'s `letflow.lint_handoffs` task reported 10 new (un-grandfathered) [H1] violations, all inside this run's own handoffs/WF02-REQ369-20260917/ directory -- every step file from step-01 through step-05b had written the top-level `status` field as the step's PASS/FAIL/BLOCKED verdict instead of the schema-required lifecycle enum (PENDING/IN_PROGRESS/COMPLETED/FAILED/ESCALATED/CANCELLED) documented in docs/agents/shared/HANDOFF_PROTOCOL.md line 321. step-00-git-setup.json (written correctly, status: COMPLETED / result.status: PASS) was the only file in this run that got the schema right, confirming the correct pattern and that this was a genuine defect in this run's own earlier steps' bookkeeping, not a pre-existing/grandfathered issue and not a false positive.\n\nThis is attributable to this branch (all 10 files are new, introduced by this run) and mechanically fixable without redesign, so fixed directly rather than attributing-and-forwarding: corrected the top-level `status` field in all 10 files (step-01-design.json, step-01b-design-gate.json, step-02b-frontend.json, step-02c-security.json, step-02d-reviewer.json, step-03-test-design.json, step-03b-test-gate.json, step-04-test-run.json, step-05-release-validation.json, step-05b-uat.json) to COMPLETED, leaving each file's nested result.status (PASS / PASS-WITH-PENDING / BLOCKED) untouched since that field correctly carries the step verdict per the schema. Verified locally: `mix letflow.lint_handoffs` now reports 'OK -- 0 new violations across 2573 handoff files (25 pre-existing grandfathered, traced to ISS-0190)', exit 0. Re-ran mix format --check-formatted (PASS) before committing.\n\nCommitted the fix (6f218f4e), re-fetched origin/main (still at 73a3dcb2, unmoved), rebase was a no-op, pushed as a plain fast-forward (no force needed). Opened no new PR -- pushed to the same PR #1507 branch, which picked up the new commit automatically. Re-polled `gh pr checks 1507`: all three required jobs (Detect changed paths, Backend gate (mix letflow.check), Frontend gate (npm run check)) reported pass -- confirmed both via `gh pr checks` and independently via `gh run view 35246520296 --json status,jobs` showing all three jobs conclusion:success, status:completed.\n\nMerged: `gh pr merge 1507 --squash --delete-branch` succeeded on the first attempt (no branch-protection override needed -- all required checks were genuinely green). Local side effect fast-forwarded this checkout's main to the merge commit and deleted the local feature branch automatically (single-worktree checkout, not the worktree-variant path). Verified all four Step 9 acceptance criteria: `git branch --show-current` -> main; `git log --oneline -1` -> 3c0cbd24 'feat: PlatformDashboardPage + role-conditional login routing [WF02-REQ369-20260917] (#1507)'; `git status` -> clean; `git fetch origin --prune` confirmed origin/feature/WF02-REQ369-20260917 was deleted remotely (no orphaned branch). `gh pr view 1507 --json state,mergedAt,mergeCommit` confirms state MERGED, mergeCommit 3c0cbd24290c062d1974b7eb91fa74adcc2c42f4.\n\nConfirmed docs/requirements.yaml's REQ-369 entry (line 26795) still reads `status: in_progress` -- untouched by this step, as instructed. DOC-UPDATER flips it in a later dispatch once post-merge UAT-RUNNER closes AC6/AC7.",
+    "checks": {
+      "rebase": "PASS -- clean, no conflicts, onto origin/main 73a3dcb2 then re-verified no-op on retry",
+      "post_rebase_build": "PASS -- mix format --check-formatted, mix compile --warnings-as-errors both exit 0",
+      "frontend_gate_post_rebase": "PASS -- type-check, lint, 599/599 tests, 48/48 guard tests, real production build",
+      "ci_first_attempt": "Backend gate FAIL -- letflow.lint_handoffs, 10 new un-grandfathered [H1] violations, all in this run's own handoffs/WF02-REQ369-20260917/ files (top-level status field used wrong enum). Attributed structurally: only files this run introduced, step-00 in the same run shows the correct pattern, so not pre-existing/grandfathered and not unrelated-branch noise. Fixed directly (mechanical correction to bookkeeping files this run owns), not overridden with --admin.",
+      "lint_fix_verified_locally": "PASS -- mix letflow.lint_handoffs: OK, 0 new violations, exit 0",
+      "ci_second_attempt": "PASS -- Detect changed paths, Backend gate (mix letflow.check), Frontend gate (npm run check) all pass; confirmed via gh pr checks and gh run view --json status,jobs",
+      "merge": "PASS -- gh pr merge --squash --delete-branch succeeded first attempt, no --admin override needed",
+      "post_merge_cleanup": "PASS -- on main, HEAD is the squash-merge commit, clean tree, remote and local feature branches deleted"
+    },
+    "git_evidence": {
+      "pr_number": 1507,
+      "pr_url": "https://github.com/tvolodi/letflow/pull/1507",
+      "merge_commit_sha": "3c0cbd24290c062d1974b7eb91fa74adcc2c42f4",
+      "merged_at": "2026-09-17T16:34:35Z",
+      "commit_sha_list_note": "Pre-rebase/pre-squash SHAs (2cf84a99, ddb83b2c, cb171d85, 6f218f4e) are superseded by the rebase and squash per GIT_MERGE.md's own note -- not re-recorded as if still meaningful.",
+      "ci_runs": [
+        {"run_id": "35246060606", "result": "FAIL -- Backend gate, letflow.lint_handoffs [H1], 10 new violations, fixed and re-pushed"},
+        {"run_id": "35246520296", "result": "PASS -- all 3 jobs green"}
+      ]
+    },
+    "artifacts_out": [
+      "handoffs/WF02-REQ369-20260917/step-final-git-merge.json",
+      "PR #1507 (merged, squash commit 3c0cbd24)",
+      "branch: feature/WF02-REQ369-20260917 (deleted, both remote and local)"
+    ],
+    "next_action": "ORCH re-dispatches UAT-RUNNER post-merge (once CD's merge-triggered redeploy of QA completes and health-checks pass) to actually execute platform-login-routing-by-role.yaml's PLATFORM_ADMIN branch against the now-updated https://qa.bizdala.com and close AC6/AC7 with real evidence. Only after that should DOC-UPDATER run Step 6's close-out (flip docs/requirements.yaml REQ-369 status, write AC8's close-out language quoting the post-merge UAT evidence). Do not release the letflow-queue lock on this task until that real close-out lands -- ORCH's job, not this step's."
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

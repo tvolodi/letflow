@@ -101,7 +101,12 @@ INPUT: trigger
 │     └─► Launch WF-04 (Step 00 once, Step Final once; incidental findings forwarded)
 │
 ├─ A running Letflow instance exists and a stage's UAT scenarios are ready?
-│     └─► Launch WF-05
+│     └─► Launch WF-05 (Steps 1-3 as before; Step 4 is now PRODUCT-OWNER's
+│           release-recommendation sign-off — see WF-05_uat_run.md. PRODUCT-OWNER
+│           runs after every BA-<VERTICAL> sign-off for the run has completed,
+│           strictly before RELEASE-VALIDATOR, never in parallel with either —
+│           R-Co's own WF-05 sequencing precedent ("it never runs in parallel
+│           with a BO agent"; runs after all BA-equivalent sign-offs))
 │
 └─ Does not match any standard workflow?
       └─► Build an ad-hoc workflow (§6). Never skip a standard workflow that DOES
@@ -295,7 +300,12 @@ Before routing WF-02 implementation handoffs for Stage N+1, ORCH verifies:
 1. All MUST requirements for Stage N have status `done` in `docs/requirements.yaml`.
 2. The most recent WF-04 full-suite run for Stage N produced zero BLOCKER issues.
 3. `RELEASE-VALIDATOR` produced a PASS for Stage N.
-4. `REVIEWER` has appended a dated sign-off section to `docs/migration/stage-N-*.md`
+4. If a WF-05 UAT run occurred for Stage N: `PRODUCT-OWNER` produced
+   `release_recommendation: APPROVED` for that run — a stage does not advance on
+   a `BLOCKED` recommendation, and this check does not apply when no WF-05 run
+   was in scope for the stage (pre-S7 stages, or a stage with no UAT scenario
+   corpus yet).
+5. `REVIEWER` has appended a dated sign-off section to `docs/migration/stage-N-*.md`
    (this predates the fuller pipeline — it's the existing per-stage convention, now
    also gated by RELEASE-VALIDATOR's own independent check rather than being the only
    check).

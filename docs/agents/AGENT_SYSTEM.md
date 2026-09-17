@@ -47,13 +47,15 @@ producer/validator table — restated here as the roster's organizing shape.
 | `DOC-UPDATER` | Documentation Updater | Updates `docs/requirements.yaml` status, `docs/status/requirement_status*.yaml` (the index and all volumes), `README.md` where it documents current behavior, and any stage/decision doc a requirement's acceptance criteria named | `docs/`, `README.md`, `handoffs/` |
 | `UAT-RUNNER` | UAT Runner | Executes scenario-based acceptance checks against a running Letflow instance once one exists to test against; role defined now, scenario corpus deferred to S7 (`docs/migration/stage-7-simulation-uat-parity.md`) | `test/uat-reports/`, `handoffs/` |
 | `BA-<VERTICAL>` | Business Analyst (per tenant-vertical/solution-pack) | Authors UAT scenarios in tenant-vertical domain language and signs off on UAT-RUNNER's execution results for its scope, per `.claude/agents/ba-analyst.md` — one canonical role file, parameterized by vertical via `docs/agents/ba-personas/<vertical>.yaml`, not a closed per-company roster | `test/fixtures/uat/scenarios/<vertical>/`, `test/uat-reports/` (`ba-signoff-` prefix), `docs/agents/ba-personas/` (new-persona/reuse bookkeeping), `handoffs/` |
+| `PRODUCT-OWNER` | Product Owner (platform-level business authority) | Reads every BA-<VERTICAL> sign-off for a UAT run, cross-checks MUST-severity acceptance-criteria coverage against `docs/requirements.yaml`, enforces the single-BLOCKER-blocks-release rule, arbitrates cross-vertical disagreements (routing to REQ-ANALYST if the underlying requirement is ambiguous), and writes the platform's plain-language release recommendation. Answers "should we ship?" — distinct from RELEASE-VALIDATOR's "is it safe to ship?" (`.claude/agents/product-owner.md`) | `test/uat-reports/` (`po-signoff-` prefix), `handoffs/` |
 
-**Deliberately not reproduced yet:** R-Co's `PRODUCT-OWNER` role — see
-`docs/migration/decisions/0004-humanless-pipeline.md`'s "What is explicitly NOT
-reproduced" section, and that file's 2026-09-16 addendum. R-Co's
-`BO-SWIFTROUTE`/`BO-VORTEX`/`BO-MERIDIAN` business-owner-persona equivalent is now
-actioned by REQ-359 as the `BA-<VERTICAL>` row above; only `PRODUCT-OWNER`'s
-equivalent (REQ-361, still pending) remains deferred.
+**Deliberately not reproduced from R-Co, historically — now fully actioned:**
+R-Co's `BO-SWIFTROUTE`/`BO-VORTEX`/`BO-MERIDIAN` business-owner-persona layer was
+actioned by REQ-359 as the `BA-<VERTICAL>` row above; R-Co's `PRODUCT-OWNER` role
+is actioned by REQ-361 as the `PRODUCT-OWNER` row above. See
+`docs/migration/decisions/0004-humanless-pipeline.md`'s original "What is
+explicitly NOT reproduced" section and its 2026-09-16 and 2026-09-17 addenda for
+the full history of this deferral and its closure.
 
 ### 3.1 Capability matrix
 
@@ -77,6 +79,7 @@ equivalent (REQ-361, still pending) remains deferred.
 | `DOC-UPDATER` | ✓ | ✓ | ✗ | ✗ |
 | `UAT-RUNNER` | ✓ | uat-reports | ✓ (HTTP calls against a running instance) | ✗ |
 | `BA-<VERTICAL>` | ✓ | ✓ (scenario files, ba-signoff files, persona-data files) | ✗ | ✗ |
+| `PRODUCT-OWNER` | ✓ | ✓ (`po-signoff-` files) | ✗ | ✗ |
 
 **`handoffs` in the Writes column means the agent's own handoff file only** (updated
 2026-08-17, ISS-0021/GH#78 — this table previously left `handoffs/registry.json`
@@ -141,6 +144,7 @@ requirement's file-level status stays exactly as terse as it's always been.
 | UAT reports | `test/uat-reports/` | `UAT-RUNNER` | `.yaml` |
 | BA sign-off reports | `test/uat-reports/` (`ba-signoff-` prefix) | `BA-<VERTICAL>` | `.yaml` |
 | BA persona data | `docs/agents/ba-personas/` | `ORCH`/`REQ-ANALYST` (creation), `BA-<VERTICAL>` (own reads) | `.yaml` |
+| PO sign-off reports | `test/uat-reports/` (`po-signoff-` prefix) | `PRODUCT-OWNER` | `.yaml` |
 | UAT visual-regression baselines | `test/fixtures/uat/visual-baselines/` | `UAT-RUNNER` (accept/re-baseline actions) | `.png` (+ one `.yaml` sidecar per baseline — see `lib/letflow/design/req362-visual-regression-testing.md` §2.3) |
 | Handoff files | `handoffs/` | all (via ORCH) | `.json` (exception) |
 | Requirement queue | `docs/requirements.yaml` | `ORCH`/`DOC-UPDATER` (status field) | `.yaml` (pre-existing schema, unchanged) |

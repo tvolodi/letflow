@@ -8,8 +8,8 @@
   "file": "handoffs/WF03-ISS0703-20260917/step-03-elixir-dev.json",
   "created_at": "2026-09-17T07:33:19Z",
   "started_at": "2026-09-17T07:33:19Z",
-  "completed_at": null,
-  "status": "PENDING",
+  "completed_at": "2026-09-17T07:36:54Z",
+  "status": "COMPLETED",
   "priority": "NORMAL",
   "context": {
     "stage": null,
@@ -36,18 +36,25 @@
   },
   "result": {
     "status": "PASS",
-    "summary": "",
-    "artifacts_out": [],
-    "issues": [],
+    "summary": "Implemented exactly the approved design (lib/letflow/design/iss0703-oidc-verifier-exception-handling.md) against lib/letflow/oidc/token_verifier/oidcc.ex: appended a `rescue`/`catch` clause pair to the existing `def verify_bearer_token/2` (function-clause sugar, `with` body unchanged), producing {:error, {:verifier_crashed, %{kind: :error | :exit | :throw, message: String.t()}}} on any non-local exit from Oidcc.ClientContext.from_configuration_worker/4 or Oidcc.Token.validate_jwt/3, logging via Logger.warning/1 (module+function name, kind=, message=, never raw_token) before returning. Added @type crash_reason and the explicit @spec from design §5. Corrected the @doc above verify_bearer_token/2 to the exact text in design §6 (moduledoc itself left unchanged, per design). No change to auth_pipeline.ex -- confirmed by re-reading auth_pipeline.ex:140-254: the existing {:error, {:verify, _reason}} -> 401 clause in handle_auth_error/2 already matches the new nested reason shape unchanged, matching the design's own §3/§8 finding; no gap found, none reported.\n\n`mix compile` output: 'Compiling 1 file (.ex)' -- clean, zero warnings.\n`mix format --check-formatted lib/letflow/oidc/token_verifier/oidcc.ex` -- exit 0 (already formatted).\n`mix test test/letflow/plugs/auth_pipeline_test.exs`: 'Result: 10 passed' -- all pass, unmodified.\n`mix test test/letflow/oidc/` (claim_mapping_test.exs, claim_mapping_property_test.exs, jit_provisioning_config_test.exs): 'Result: 33 passed (2 properties, 31 tests)'.\n`mix test test/letflow/integration/keycloak_auth_pipeline_test.exs --include keycloak`: setup_all raised 'Keycloak not ready at http://localhost:8093/...' despite `docker compose up -d keycloak` showing the container healthy and `curl http://localhost:8093/realms/bpm-default/.well-known/openid-configuration` returning HTTP 200 directly. Root-caused independently (not a regression from this change): a standalone `elixir -e` script calling `:httpc.request/4` against `http://localhost:8093/...` returned `{:error, :timeout}`, while the identical request against `http://127.0.0.1:8093/...` returned `{:ok, {{...},200,...}}` -- this sandbox's `:httpc`/`:inets` fails to connect over IPv6 (`::1`, which curl also tried first but then correctly fell back off) for 'localhost' and the test's 1000ms connect_timeout is too short to fall back, all before setup_all's probe even reaches AuthPipeline or the changed adapter code. This is a pre-existing environment/networking limitation of this sandbox, unrelated to the oidcc.ex change (the probe fails before any changed code path runs), and outside this handoff's scope to fix (test-infra changes are not authorized here). Flagging as a MINOR environmental note, not a code defect.",
+    "artifacts_out": [
+      "lib/letflow/oidc/token_verifier/oidcc.ex"
+    ],
+    "issues": [
+      {
+        "severity": "MINOR",
+        "description": "test/letflow/integration/keycloak_auth_pipeline_test.exs --include keycloak could not be exercised in this sandbox: :httpc/:inets fails to connect to 'localhost' (IPv6 ::1 hang) even though the same Keycloak endpoint is reachable via curl and via :httpc against 127.0.0.1 directly, and via plain curl to localhost. Container confirmed healthy (docker ps, docker logs). This is an environment/DNS-resolution quirk unrelated to the ISS-0703 code change and pre-dates it; not in scope to fix under this handoff (test-infra changes belong to TEST-DESIGNER/a separate fix)."
+      }
+    ],
     "git_evidence": {
-      "branch_name": null,
+      "branch_name": "feature/WF03-ISS0703-20260917",
       "commit_sha_list": [],
-      "remote_branch": null,
-      "push_status": "skipped",
+      "remote_branch": "origin/feature/WF03-ISS0703-20260917",
+      "push_status": "pending",
       "pr_url": null,
       "pr_create_error": null
     },
-    "next_action": ""
+    "next_action": "Route to SECURITY-REVIEWER"
   },
   "rework_count": 0,
   "max_rework": 3

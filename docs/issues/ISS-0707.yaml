@@ -60,8 +60,53 @@ related:
   - ISS-0532
 queue_ref: Q-707
 github_ref: GH-1490
-status: open
-pipeline_log: []
+status: resolved
+resolved_in_run: WF03-ISS0707-20260917
+resolved_at: "2026-09-17T12:55:00Z"
+resolution_note: >
+  Direct, mechanical follow-up to ISS-0706: ISS-0706's own "repo-wide"
+  grep for the broken `GET /health/ready` precondition was non-recursive
+  and missed 9 files one directory level deeper, under
+  web/tests/e2e/onboarding/, web/tests/e2e/admin/, and
+  web/tests/e2e/pipelines/ -- confirmed for real by directly running one
+  of them (admin/services.e2e.spec.ts) against a live local backend
+  (GET /health -> 200, GET /health/ready -> 404), which hard-failed
+  exactly as expected before reaching its own assertions.
+
+  FIX (commit 6f1b1d15, design
+  lib/letflow/design/iss-0707-e2e-readiness-precondition-fix.md): routed
+  all 9 files through the shared assertServiceReadiness/
+  assertBackendHealthy helpers ISS-0706 had already extracted into
+  web/tests/e2e/helpers.ts, deleting each file's own local
+  assertServicesReady wrapper or inline check plus the now-unused
+  KEYCLOAK_DISCOVERY constant. No change to helpers.ts, pipeline.ts, or
+  platform-login-routing-by-role.pipeline.e2e.spec.ts (that file's
+  `/health/ready` poll only console.warns, a separate, already-documented,
+  non-blocking case explicitly out of this issue's scope).
+
+  TEST COVERAGE: TEST-DESIGNER widened ISS-0706's own TC-5 grep-regression
+  from the original 10 files to all 19 (10 + 9), on the reasoning that
+  leaving it scoped to the original 10 would reproduce the exact scope
+  gap that let this issue go undetected in the first place. While
+  widening it, found and fixed a real latent bug in the check itself: the
+  old import-check regex only matched './helpers', which happened to work
+  for ISS-0706's top-level files but would have silently false-positived
+  forever on these one-directory-deeper files' correct '../helpers'
+  import. Fail-then-pass verified for real (rolled the 9 files back,
+  TC-5 correctly failed reporting all 9, reverted, confirmed clean pass).
+
+  FINAL VERIFICATION: RELEASE-VALIDATOR independently re-checked this
+  closure -- own 6-of-9-spec run against a real local backend (0/19
+  readiness-throw failures), independently confirmed via grep that all 9
+  files genuinely import the shared helper, independently re-derived the
+  regex-widening claim with node, and confirmed the sole backend test
+  failure encountered along the way (Scheduler.PollerTest) is genuinely
+  flaky/environment-sensitive and unrelated to this branch's diff --
+  reran the full backend suite alone and got 4332/4332 with PollerTest
+  included and passing. mix letflow.check.test, compile/format/tsc all
+  clean. Full gate-evidence audit: every pipeline_log step has a real
+  commit. No new issues found.
+pipeline_log:
   - step: CODE-DESIGNER
     at: "2026-09-17T11:35:00Z"
     result: >

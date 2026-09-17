@@ -356,7 +356,9 @@ defmodule Letflow.Routers.TenantsTest do
     test "lists tenants in the paginated allowlisted shape" do
       tenant = TenantFixture.provisioned_tenant!(slug_prefix: "req075-list-ok")
 
-      resp = build_conn(:get, "/", tenant, roles: ["PLATFORM_ADMIN"]) |> dispatch()
+      resp =
+        build_conn(:get, "/?search=#{tenant.tenant.slug}", tenant, roles: ["PLATFORM_ADMIN"])
+        |> dispatch()
 
       assert resp.status == 200
       body = Jason.decode!(resp.resp_body)

@@ -8,8 +8,8 @@
   "file": "handoffs/WF03-ISS0703-20260917/step-04b-test-design-validator.json",
   "created_at": "2026-09-17T08:37:38Z",
   "started_at": "2026-09-17T08:37:38Z",
-  "completed_at": null,
-  "status": "PENDING",
+  "completed_at": "2026-09-17T08:39:41Z",
+  "status": "COMPLETED",
   "priority": "NORMAL",
   "context": {
     "stage": null,
@@ -38,10 +38,12 @@
   },
   "result": {
     "status": "PASS",
-    "summary": "",
+    "summary": "Independently reproduced fail-then-pass myself (not trusting TEST-DESIGNER's report). Swap: `cp lib/letflow/oidc/token_verifier/oidcc.ex /tmp/post-fix-oidcc.ex`; `git show main:lib/letflow/oidc/token_verifier/oidcc.ex > /tmp/pre-fix-oidcc.ex`; diffed the two first to confirm the swap is exactly the reported fix (adds `require Logger`, a `@spec`, and the `rescue`/`catch` clauses -- no other behavioral delta). Copied pre-fix in place. PRE-FIX run (`MIX_ENV=test mix test --include keycloak test/letflow/integration/keycloak_auth_pipeline_test.exs`): `Result: 3/7 passed`, `Failed: 4 tests` -- all 4 new ISS-0703 tests crashed with `** (CaseClauseError) no case clause matching: 123` propagating through jose_base64url.decode!/2 -> jose_jwt.peek_protected/1 -> oidcc_jwt_util.verify_signature/3 -> oidcc_token.int_validate_jwt/4 -> (integration cases) auth_pipeline.ex:250 -- matches the reported crash chain and the live incident exactly; the 3 pre-existing AC1/AC2/AC3 tests still passed. Restored post-fix file (`cp /tmp/post-fix-oidcc.ex lib/letflow/oidc/token_verifier/oidcc.ex`), confirmed `git diff lib/letflow/oidc/token_verifier/oidcc.ex` empty. POST-FIX run (same command): `Result: 7 passed` -- all 7 tests green. `git status --porcelain` after cleanup: only this handoff file modified, no stray lib/ changes (deleted the /tmp swap files too).\n\nNon-leakage assertion independently verified as real, not a tautology: read the assertion code (keycloak_auth_pipeline_test.exs:381-410) -- it captures Logger output via ExUnit.CaptureLog and refutes substring containment of fixture-derived strings in both the classification-as-string and the captured log. Ran my own scratch probe (`mix run`, ExUnit.start(autorun: false) + Oidcc.verify_bearer_token/2 called directly against the JSON-blob fixture) to confirm the captured log is genuinely non-empty content, not an artifact of a suppressed log level: got `CAPTURED LOG: \"\\n13:39:35.519 [warning] Letflow.Oidc.TokenVerifier.Oidcc crashed verifying a bearer token kind=error classification=Elixir.CaseClauseError\\n\"` -- real warning text, and confirmed it contains none of the fixture's substrings (\"access_token\", \"eyJhbGciOiJSUzI1NiJ9\", \"not-a-real-jwt\", \"token_type\"). This rules out the refute-on-empty-string tautology risk. classification is built solely from `exception.__struct__`/a fixed atom (lib/letflow/oidc/token_verifier/oidcc.ex:61,70-74) -- structurally incapable of embedding raw_token content, and the test asserts this is actually true at runtime rather than just trusting the design's intent.\n\nConfirmed real adapter, not the double: config/test.exs:129 defaults `:token_verifier` to `Letflow.Oidc.TokenVerifierDouble`, but this test file's own `setup` (keycloak_auth_pipeline_test.exs:110-123) overrides `Application.put_env(:letflow, :oidc, ...)` to `Letflow.Oidc.TokenVerifier.Oidcc` for the whole module, restored via `on_exit`. More importantly, the unit-level tests call `Oidcc.verify_bearer_token/2` directly (`alias Letflow.Oidc.TokenVerifier.Oidcc` at line 67, called at line 387) -- bypassing the config-driven dispatch entirely, so which adapter runs is not even config-dependent for those two tests. The observed crash stacktrace (real jose_base64url/oidcc_jwt_util/oidcc_token internals) is conclusive: TokenVerifierDouble is a pure string-equality stub with no such call chain.\n\nA9 pre-existing docs/status drift (declared 19 vs 20 actual on docs/status/requirement_status.v18.yaml) noted as reported -- out of scope for this gate, not touched by this run, no bearing on the PASS verdict.",
     "artifacts_out": [],
-    "issues": [],
-    "next_action": ""
+    "issues": [
+      "Pre-existing, unrelated: docs/status/requirement_status.v18.yaml declared-vs-actual entry-count drift (A9 invariant test), reported by TEST-DESIGNER, out of scope for this gate."
+    ],
+    "next_action": "Route to TEST-RUNNER"
   },
   "rework_count": 0,
   "max_rework": 3

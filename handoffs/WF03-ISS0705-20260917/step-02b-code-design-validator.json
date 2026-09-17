@@ -8,8 +8,8 @@
   "file": "handoffs/WF03-ISS0705-20260917/step-02b-code-design-validator.json",
   "created_at": "2026-09-17T05:35:00Z",
   "started_at": "2026-09-17T05:35:00Z",
-  "completed_at": null,
-  "status": "PENDING",
+  "completed_at": "2026-09-17T06:10:00Z",
+  "status": "COMPLETED",
   "priority": "NORMAL",
   "context": {
     "stage": null,
@@ -35,11 +35,11 @@
     ]
   },
   "result": {
-    "status": null,
-    "summary": null,
-    "artifacts_out": [],
+    "status": "PASS",
+    "summary": "Independently verified test/support/sandbox_auto_mode.ex source directly (not trusting the design doc or ISSUE-FIXER). Quoted bodies: `def enter_auto_mode!(repo) do Sandbox.mode(repo, :auto) end` (line 86-88) sets :auto. `def exit_auto_mode!(repo) do Sandbox.mode(repo, :manual) end` (line 108-110) sets :manual -- confirmed by its own moduledoc ('Restores :manual mode on repo') and its docstring's LIFO/on_exit ordering guidance. CODE-DESIGNER's §0.1 correction is CORRECT: the task handoff's literal instruction to use exit_auto_mode!/1 at identity_test.exs:1381 and role_registry_test.exs:119 would have set the pool to :manual inside those on_exit/1 callbacks, but both call sites exist specifically to force the pool back to :auto before TenantFixture.provisioned_tenant!/1's own later-running (LIFO) on_exit/1 cleanup (DROP SCHEMA / delete_all) runs -- that cleanup needs a real checked-in connection, which only :auto mode provides from ExUnit's separate OnExitHandler process. Using exit_auto_mode!/1 there would have reproduced the exact leak/hazard class ISS-0705 exists to close. enter_auto_mode!/1 (:auto, no checkout, no process affinity) is the correct helper for both sites. Cross-checked design doc's cited line numbers/shapes against actual source: tenants_test.exs lines 386-432 match exactly (comment block, Sandbox.mode(:auto) at 391, on_exit at 407-418, information_schema query, assert rows != [] at 431); identity_test.exs lines 1355-1386 match exactly (setup block, :manual+checkout at 1374-1375, on_exit at 1381 with the flagged line); role_registry_test.exs lines 101-128 match exactly (setup-start :auto at line 102 -- correctly left untouched per OQ-2 -- and on_exit's forced :auto at line 119). Design covers all 3 required files (§1-§3) plus the orphaned-row cleanup (§5, exact mix run -e command, 129-row precondition/verification, explicitly scoped as an operational one-off script not committed to the codebase -- consistent with the handoff's own framing of it as 'not application code'). No implementation code: all three test-file changes are given as before/after shape with elided unchanged bodies (<dispatch + assertions> etc.), not full compiling modules; §5's fenced command is an explicitly-labeled one-off maintenance script, not a codebase file. Design is unambiguous enough to build from directly -- each of the 3 call sites names the exact line, the exact existing helper, and the exact replacement text with no invented helpers (INV-4 confirms only provision!/2 and enter_auto_mode!/1 are used, both pre-existing).",
+    "artifacts_out": ["lib/letflow/design/iss0705-sandbox-mode-restore-fix.md"],
     "issues": [],
-    "next_action": null
+    "next_action": "Route to ELIXIR-DEV for implementation"
   },
   "rework_count": 0,
   "max_rework": 3

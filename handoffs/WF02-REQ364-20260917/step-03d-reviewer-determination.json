@@ -1,0 +1,9 @@
+{
+  "req": "REQ-364",
+  "step": "03d-reviewer-determination",
+  "result": "option-b-real-parser-required",
+  "at": "2026-09-17T15:04:00Z",
+  "verdict": "Regex denylist approach is structurally unsound, not incomplete. Two confirmed bypasses (reference-style links, angle-bracket-wrapped URLs) plus three more constructible without changing the threat model (backslash-escaping, HTML entity encoding, embedded whitespace/control characters per the OWASP javascript: URI filter bypass cheat sheet) -- all stem from the same root cause: the regex scans raw source bytes for a scheme: substring, but CommonMark link-destination resolution (and any real renderer) applies escape processing, entity decoding, and whitespace normalization the regex never implements.",
+  "concrete_next_step": "Route back through CODE-DESIGNER to amend lib/letflow/design/req363-help-content-data-model.md section 5.3, resolving OQ-4: pick and name an actual library (e.g. html_sanitize_ex, or a CommonMark parser such as earmark/md feeding an AST-level link/image destination scheme check), specify the write-path mechanism precisely (parse -> walk link/image destination nodes -> reject on disallowed scheme, not strip-and-hope). New dependency requires REVIEWER sign-off on the specific choice, same procedural weight as REQ-356's PDF library precedent. Then back to ELIXIR-DEV to implement against the revised design. NOT a third ELIXIR-DEV regex patch round -- explicitly declined.",
+  "no_markdown_sanitization_dep_currently_in_tree": "confirmed via full mix.exs deps/0 read -- ecto_sql, postgrex, plug, bandit, jason, telemetry, stream_data, yaml_elixir, ueberauth_oidcc, lua, wasmex, a PDF renderer, nothing markdown/sanitization-related"
+}

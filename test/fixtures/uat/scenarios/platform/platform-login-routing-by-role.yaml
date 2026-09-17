@@ -4,13 +4,17 @@
 # platform-scope scenario using REQ-358's branching construct as permanent
 # scope.
 #
-# REAL-BEHAVIOR NOTE (finding to be filed by ORCH per
-# lib/letflow/design/req360-platform-login-routing-uat-scenario.md Section 5):
-# this scenario documents the ACTUAL observed routing behavior, which differs
-# from an idealized "platform dashboard vs. tenant dashboard vs. in-app login
-# form" description in two ways -- see branches 1-3 below and this
-# repository's lib/letflow/design/req360-platform-login-routing-uat-scenario.md
-# Section 0/5 for the full finding.
+# REAL-BEHAVIOR NOTE (finding filed by ORCH per
+# lib/letflow/design/req360-platform-login-routing-uat-scenario.md Section 5,
+# updated by REQ-369 which closed the platform-admin-landing-surface gap this
+# note originally documented):
+# this scenario documents the ACTUAL observed routing behavior. As of
+# REQ-369, PLATFORM_ADMIN now lands on a distinct platform-wide dashboard
+# (PlatformDashboardPage, route "/platform-dashboard") rather than the
+# tenant-dashboard root -- see branch 1 below and
+# lib/letflow/design/req369-platform-dashboard-page.md. Tenant-scoped roles
+# still land on the shared workspace root ("/", TenantDashboardPage) -- see
+# branch 2, unchanged by REQ-369.
 ---
 id: platform-login-routing-by-role
 scope: platform
@@ -22,15 +26,17 @@ tags: [auth, routing, platform]
 
 description: >
   A user opens the QA login URL. Real observed behavior as of 2026-09-17
-  (see design doc Section 0): authenticated users of every role -- both
-  PLATFORM_ADMIN and tenant-scoped roles -- land on the SAME workspace route
-  (the tenant-dashboard root, "/"); there is no distinct platform-admin
-  landing destination reached automatically at login (PLATFORM_ADMIN's extra
-  capabilities surface only as additional navigation entries within the same
-  shell, not as a different landing page). An unauthenticated visitor is
-  redirected to Keycloak's own externally-hosted login page -- Letflow's own
-  frontend renders no in-app login form and shows only a brief "Redirecting
-  to login..." placeholder first. This scenario verifies the REAL behavior in
+  (see design doc Section 0), updated by REQ-369: authenticated
+  PLATFORM_ADMIN users now land on a distinct platform-wide dashboard
+  ("/platform-dashboard", PlatformDashboardPage) that shows platform-scoped
+  content (tenant count, quick links to admin pages) and no tenant branding.
+  Tenant-scoped roles continue to land on the shared workspace route (the
+  tenant-dashboard root, "/", TenantDashboardPage); PLATFORM_ADMIN's extra
+  capabilities also still surface as additional navigation entries within
+  the authenticated shell. An unauthenticated visitor is redirected to
+  Keycloak's own externally-hosted login page -- Letflow's own frontend
+  renders no in-app login form and shows only a brief "Redirecting to
+  login..." placeholder first. This scenario verifies the REAL behavior in
   both respects, not the idealized distinct-dashboards/in-app-form
   description this requirement's own Why-section originally anticipated.
 
@@ -44,7 +50,7 @@ preconditions:
     check: instance_reachable
 
 branches:
-  - name: platform_admin_lands_on_workspace_root
+  - name: platform_admin_lands_on_platform_dashboard
     when:
       fact: role
       op: eq
@@ -60,16 +66,19 @@ branches:
     expected_outcomes:
       - id: EO-001
         description: >
-          Platform admin lands on the shared workspace root -- NOT a
-          distinct platform-admin dashboard, because none exists (see
-          scenario description)
+          Platform admin lands on the distinct platform-wide dashboard
+          introduced by REQ-369 -- NOT the tenant-dashboard workspace root
         verification:
           method: gui_screen
           detail: >
-            Route is "/" (the workspace root, rendering TenantDashboardPage);
-            the authenticated shell's navigation shows the PLATFORM_ADMIN-only
-            entries (e.g. Users, Tenants, Health, Metrics) alongside the same
-            dashboard tiles a tenant-scoped user sees
+            Route is "/platform-dashboard" (rendering PlatformDashboardPage,
+            not TenantDashboardPage); the page shows the
+            data-testid="platform-dashboard-heading" "Platform Overview"
+            heading, a data-testid="tile-tenant-count" tile populated from
+            the real GET /api/v1/tenants endpoint's "total" field, and a
+            data-testid="platform-quick-links" nav with links to Tenants,
+            Services, Health, Metrics, and Users; the authenticated shell's
+            navigation also shows the PLATFORM_ADMIN-only entries alongside
         on_fail:
           severity: BLOCKER
           business_impact: Platform admins cannot reach their workspace after login.

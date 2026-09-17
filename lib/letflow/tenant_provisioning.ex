@@ -552,7 +552,9 @@ defmodule Letflow.TenantProvisioning do
     {20_260_907_020_001, Letflow.Repo.Migrations.AddScanStatusToInstanceAttachments,
      "20260907020001_add_scan_status_to_instance_attachments.exs"},
     {20_260_911_000_001, Letflow.Repo.Migrations.CreateEntityRecordAttachments,
-     "20260911000001_create_entity_record_attachments.exs"}
+     "20260911000001_create_entity_record_attachments.exs"},
+    {20_260_917_000_001, Letflow.Repo.Migrations.CreateHelpContent,
+     "20260917000001_create_help_content.exs"}
   ]
 
   @doc """

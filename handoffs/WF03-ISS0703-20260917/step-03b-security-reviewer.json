@@ -1,0 +1,46 @@
+{
+  "handoff_id": "wf03-iss0703-step03b",
+  "run_id": "WF03-ISS0703-20260917",
+  "workflow_id": "WF-03",
+  "step": "03b",
+  "from_agent": "ORCH",
+  "to_agent": "SECURITY-REVIEWER",
+  "file": "handoffs/WF03-ISS0703-20260917/step-03b-security-reviewer.json",
+  "created_at": "2026-09-17T07:37:45Z",
+  "started_at": "2026-09-17T07:37:45Z",
+  "completed_at": null,
+  "status": "PENDING",
+  "priority": "NORMAL",
+  "context": {
+    "stage": null,
+    "requirement_ids": [],
+    "requirement_text": {},
+    "source_text": {},
+    "related_handoff_ids": [],
+    "artifacts_in": [
+      "lib/letflow/design/iss0703-oidc-verifier-exception-handling.md",
+      "lib/letflow/oidc/token_verifier/oidcc.ex",
+      "docs/agents/instructions/security-invariants.md"
+    ],
+    "owned_modules": []
+  },
+  "task": {
+    "description": "WF-03 Step 3b: gate the ISS-0703 fix (`git checkout feature/WF03-ISS0703-20260917`, diff against main is confined to lib/letflow/oidc/token_verifier/oidcc.ex). This is a change to the bearer-token verification path -- the authentication boundary for every tenant-scoped API request -- so it is squarely in scope for security review. The change adds a rescue/catch boundary around Oidcc.Token.validate_jwt/3 and Oidcc.ClientContext.from_configuration_worker/4 inside verify_bearer_token/2, returning {:error, {:verifier_crashed, %{kind:, message:}}} on any caught exception/exit/throw instead of letting it crash to a raw 500. Run against INV-1..INV-8 per docs/agents/instructions/security-invariants.md and state APPLIES/NOT-APPLICABLE for each with a verdict. Pay particular attention to: (1) whether the caught `message` field (from Exception.message/1 or inspect/1 of the caught reason) could ever leak the raw bearer token, a secret, or other sensitive data into logs or the error tuple -- the design explicitly says raw_token must never be included/logged, verify the implementation actually honors that; (2) whether converting a crash into a clean {:error,...} -> 401 response changes anything about timing/information available to an attacker probing for valid vs malformed tokens (a crash-to-500 vs collapse-to-401 timing/oracle concern); (3) whether the change could ever cause a malformed/invalid token to be treated as authenticated (it must not -- verify the rescue/catch path can only ever produce a REJECTION, never accidental authentication). Claim this handoff by setting status to IN_PROGRESS only.",
+    "acceptance_criteria": [
+      "Explicit APPLIES/NOT-APPLICABLE verdict stated for every invariant INV-1..INV-8",
+      "Explicit verdict on whether Exception.message/1 or inspect/1 output could leak the raw token or other secrets",
+      "Explicit verdict on the crash-vs-401 timing/oracle question",
+      "Explicit verdict confirming the rescue/catch path cannot result in false authentication",
+      "PASS or FAIL with specific BLOCKER-severity issues if FAIL"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "",
+    "artifacts_out": [],
+    "issues": [],
+    "next_action": ""
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

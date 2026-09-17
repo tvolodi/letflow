@@ -33,12 +33,13 @@
       "pr_url": "https://github.com/tvolodi/letflow/pull/1503",
       "merge_commit_sha": "17672a597ba825d40c80368f6a8a2ed8f5e76468",
       "push_status": "ok (--force-with-lease used once, documented, scoped to this run's own branch per GIT_MERGE.md step 6)",
-      "ci_result": "Backend gate PASS (10m21s), Frontend gate PASS (1m15s), Detect changed paths PASS (10s) -- second CI run, after fixing the timestamp-lint failure found on the first run"
+      "ci_result": "Backend gate PASS (10m21s), Frontend gate PASS (1m15s), Detect changed paths PASS (10s) -- second CI run, after fixing the timestamp-lint failure found on the first run",
+      "local_mix_test_result": "Confirmed clean after the fact (reported by ELIXIR-DEV agent aef05cb56954742fd after this run had already merged via CI): Finished in 3018.1 seconds (28.7s async, 2989.3s sync); Result: 4335 passed (6 properties, 4329 tests), 23 excluded; exited with code 0. Not actually stalled -- see corrected issues entry below."
     },
     "issues": [
       {
-        "severity": "MAJOR",
-        "description": "This run's own ELIXIR-DEV Step Final dispatch (agent aef05cb56954742fd) had its local mix test run stall/hang for an extended period with zero streamed output despite the underlying erl.exe process staying alive and consuming CPU -- the agent itself flagged this as abnormal (a healthy run streams output continuously) rather than claim a false result. Root cause not conclusively diagnosed (possibly a DB-sandbox/connection issue specific to this concurrent-session workstation environment); worth a follow-up finding for docs/anti-patterns.md on this class of local-suite stall separate from genuine slowness."
+        "severity": "MINOR",
+        "description": "CORRECTED (2026-09-17, after this handoff's initial write): this run's own ELIXIR-DEV Step Final dispatch (agent aef05cb56954742fd) had reported its local mix test run appeared stalled -- zero streamed output for an extended period despite the underlying erl.exe process staying alive -- and ORCH took over Step Final on that basis, relying on CI as the authoritative gate instead of waiting further. The local run was NOT actually stalled: it completed on its own after ~50 minutes (3018.1s) with a genuinely clean result -- `Finished in 3018.1 seconds (28.7s async, 2989.3s sync); Result: 4335 passed (6 properties, 4329 tests), 23 excluded; exited with code 0` -- reported back to ORCH after this run had already merged via CI. The earlier 'zero bytes of output' read that looked like a stall was itself a race against a buffered/not-yet-flushed output file, not a real hang. Downgraded from MAJOR to MINOR and corrected here rather than left standing as a false finding: this run's actual outcome (CI green, local suite also fully clean, 0 failures either way) was never in doubt, but the original stall diagnosis was wrong and should not be cited as evidence of a real local-suite hang class in any future docs/anti-patterns.md entry without re-verifying first."
       },
       {
         "severity": "MINOR",

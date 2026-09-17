@@ -26,4 +26,145 @@ related_requirements:
   - REQ-360
 queue_ref: Q-701
 github_ref: GH-1475
-status: open
+status: resolved
+diagnosed_by: ISSUE-FIXER
+diagnosed_in_run: issue/ISS-0701-20260917
+diagnosed_at: "2026-09-17T00:00:00Z"
+diagnosis:
+  determination: MISSING_FUNCTIONALITY
+  summary: >
+    Direct reproduction confirms the report: web/src/auth/ProtectedRoute.tsx (read in
+    full) never renders any login UI. On !isAuthenticated it fires a useEffect that
+    calls getOidcManager().then(m => m.signinRedirect(buildRedirectArgs())) -- a
+    full-page off-origin navigation to Keycloak's own hosted login page -- and renders
+    only a data-testid="auth-loading" "Redirecting to login..." placeholder while that
+    is pending. Confirmed exhaustively that NO in-app login surface exists anywhere in
+    web/src: `find web/src -iname "*login*"` returns zero files, `grep -rn
+    "LoginPage\|LoginForm" web/src` returns zero matches, and web/src/router.tsx (read
+    in full) has no /login route at all -- only /auth/callback plus the authenticated
+    route tree. web/src/auth/ only contains AuthProvider.tsx, AuthContext.tsx and
+    ProtectedRoute.tsx; AuthProvider's session-expired handler does the identical
+    signinRedirect-only thing.
+
+    This is NOT merely REQ-360's own Why-section prose being stale. REQ-360's
+    assumption ("they see the login form with its actual field set") matches the
+    still-current, MUST-priority frontend spec in docs/frontend/frontend-requirements.md:
+      - SH-01 (MUST): "The application SHALL present a login screen with a token
+        input field when no valid session exists."
+      - OIDC-F-01 (MUST, Stage F1.5 "OIDC SSO Login"): "The login screen SHALL display
+        a 'Sign in with Keycloak' button alongside the existing token input... The
+        developer token paste field is preserved unchanged."
+    Both are MUST-priority and neither is implemented. No decision record supersedes
+    them: docs/migration/decisions/ was searched for every Keycloak-related record
+    (0002-oidc-integration.md, 0013-authorization-role-set.md,
+    0022-bilimbaga-vertical.md) -- 0002 covers only the backend token-verification
+    library choice (ueberauth_oidcc vs. alternatives) and says nothing about frontend
+    login UI; none of the three decides "fully delegate to Keycloak's hosted UI, no
+    in-app form" as intended architecture. REQ-133 (S4, done, "End-to-end login --
+    SPA through Keycloak to an authorized API call") instead treated the
+    redirect-only ProtectedRoute as an inherited, pre-existing fact ("The SPA side
+    already exists and is migrated: ProtectedRoute redirects to OIDC...") without
+    revisiting whether that satisfies SH-01/OIDC-F-01 -- the gap was carried forward
+    silently across the S4/S8 migration, never explicitly decided.
+
+    REQ-360's own design doc (lib/letflow/design/req360-platform-login-routing-uat-scenario.md,
+    read in full) and the UAT scenario it produced
+    (test/fixtures/uat/scenarios/platform/platform-login-routing-by-role.yaml)
+    correctly document the REAL observed behavior (Keycloak-hosted redirect) as what
+    to test against -- that is proper "describe reality, don't paper over it"
+    practice per REQ-360's own acceptance criteria, but it establishes only that the
+    scenario is honest about current behavior, not that current behavior is the
+    intended target architecture. It does not resolve this ambiguity either way.
+
+    ROOT CAUSE: web/'s login flow was implemented as Keycloak-redirect-only from the
+    original R-Co migration/S4 login work (REQ-133) forward, and the pre-existing
+    MUST-level in-app-login-screen spec items (SH-01, OIDC-F-01) in
+    docs/frontend/frontend-requirements.md were never built and never formally
+    deprecated -- an unremarked spec/implementation gap, not a deliberate,
+    on-the-record architecture choice.
+  what_a_fix_needs_to_change: >
+    Two independent, non-exclusive resolution paths depending on product intent, which
+    this diagnosis cannot itself determine:
+      (a) If an in-app login screen is still wanted: build web/src/pages/LoginPage.tsx
+          (or equivalent) satisfying SH-01 (token input field, POSTs/validates against
+          GET /health/ready) and OIDC-F-01 (a "Sign in with Keycloak" button beside
+          it, invoking the existing OidcManager.signinRedirect flow ProtectedRoute.tsx
+          already wires up), wire a /login route into router.tsx, and change
+          ProtectedRoute.tsx to navigate there instead of redirecting straight to
+          Keycloak (or render LoginPage as the unauthenticated fallback in place, with
+          the button optionally still auto-triggering the Keycloak flow).
+      (b) If Keycloak-hosted-only login is in fact now the intended architecture (SPA
+          delegates entirely, no in-app form, no token-paste dev affordance): this is
+          a documentation-correction fix instead -- SH-01 and OIDC-F-01 in
+          docs/frontend/frontend-requirements.md need to be marked superseded/removed,
+          a decision record added under docs/migration/decisions/ stating this choice
+          and its rationale explicitly, and REQ-360's Why-section text updated to stop
+          citing an in-app field set as the expected outcome.
+    This diagnosis cannot determine which path reflects actual intent from the
+    evidence available -- no decision record picks either side, and REQ-133/REQ-360
+    both worked around the gap rather than resolving it. Recommend CODE-DESIGNER (or
+    REVIEWER, if a genuine architecture call is needed) make this determination
+    explicitly as the first step of the fix design, rather than ISSUE-FIXER guessing;
+    if design work reveals a real product-intent question rather than a build task,
+    it should be escalated for a decision record before path (a) is built, per
+    CLAUDE.md's "don't silently re-decide what a decision record already settled" --
+    except here nothing has been decided yet, so the escalation is to CREATE that
+    record, not to defer to an existing one.
+  next_action: Route to CODE-DESIGNER for fix design (path a or b per above)
+determination:
+  determined_by: REVIEWER
+  determined_at: "2026-09-17T13:15:00Z"
+  path: doc-correction
+  verdict: >
+    Keycloak-hosted-only login is the correct, working production
+    architecture. SH-01 and OIDC-F-01 are stale specs that should be
+    formally superseded, not built out. Evidence: REQ-133's own text
+    states it supersedes REQ-106 ("Point web/ at the running Letflow API
+    using the dev bootstrap token"), cancelled with the MVP-1 milestone --
+    exactly the decision point where the token-paste affordance should
+    have been struck from SH-01/OIDC-F-01, but the docs just went stale
+    instead. AuthContext.login(token)/AuthProvider's login callback still
+    exist but are provably dead: grep across web/src shows login( is
+    called from zero production components, only vi.fn() mocks in unit
+    tests, and no /login route exists. This is scaffolding that was never
+    wired up, not functionality that was silently dropped. The Keycloak-
+    redirect flow is real, tested, working production behavior (E2E-proven
+    by REQ-133, UAT-proven by REQ-360). No functional gap for end users --
+    SH-01's stated purpose is fully met by the redirect; the only thing
+    absent is a developer-convenience affordance for environments without
+    Keycloak reachable, already served by tryRestoreE2eSession() instead.
+  concrete_next_step: >
+    Route to REQ-ANALYST/DOC-UPDATER, NOT CODE-DESIGNER -- no application
+    code change required (the dead login() scaffold removal is optional
+    minor cleanup, not blocking). Produce: (1) a new decision record
+    docs/migration/decisions/00XX-frontend-login-delegated-to-keycloak.md;
+    (2) mark SH-01/OIDC-F-01 superseded in
+    docs/frontend/frontend-requirements.md and
+    docs/frontend/requirements/SH-01.md (front-matter status: RELEASED ->
+    superseded); (3) correct REQ-360's Why section in
+    docs/requirements.yaml; (4) close ISS-0701 as resolved (path a) once
+    the decision record and doc edits land.
+resolved_by: DOC-UPDATER
+resolved_in_run: docs/WF03-ISS0701-20260917
+resolved_at: "2026-09-17T13:45:00Z"
+resolution_note: >
+  Doc-correction path implemented per REVIEWER's determination above.
+  Produced docs/migration/decisions/0035-frontend-login-delegated-to-keycloak.md,
+  recording that the SPA delegates login entirely to Keycloak's hosted UI
+  (full-page redirect via ProtectedRoute.tsx's signinRedirect) as the
+  decided, working, intended production architecture -- SH-01 and
+  OIDC-F-01 were stale MUST-priority specs, not a missing feature.
+  Marked SH-01 (docs/frontend/requirements/SH-01.md front matter and
+  docs/frontend/frontend-requirements.md's table row) and OIDC-F-01
+  (frontend-requirements.md's table row; it has no separate per-req file)
+  status: superseded, each pointing at decision 0035. Also corrected the
+  Stage F1.5 goal prose in frontend-requirements.md, which described the
+  in-app login screen/token-paste field as still-live. Corrected REQ-360's
+  description in docs/requirements.yaml to state the Keycloak-hosted
+  redirect is the intended target architecture, matching
+  test/fixtures/uat/scenarios/platform/platform-login-routing-by-role.yaml's
+  own already-correct assertions, instead of the prior "login form with
+  its actual field set" framing. No application code was changed; the
+  dead AuthProvider.tsx login() scaffold was left in place per REVIEWER's
+  explicit scope note (optional future cleanup, not part of this fix).
+  GH#1475 closed with an evidence comment.

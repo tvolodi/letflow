@@ -26292,8 +26292,12 @@ requirements:
       discussion: a user opens the QA login URL; if already authenticated as
       PLATFORM_ADMIN they land on the platform dashboard; if already
       authenticated as a tenant-scoped role they land on their tenant
-      dashboard; if unauthenticated they see the login form with its actual
-      field set. This is the canonical first platform-scope scenario using
+      dashboard; if unauthenticated they are redirected to Keycloak's
+      hosted login UI — the decided, intended target architecture per
+      docs/migration/decisions/0035-frontend-login-delegated-to-keycloak.md,
+      not an in-app login form (no such form exists or is planned; SH-01/
+      OIDC-F-01 are superseded by that record). This is the canonical first
+      platform-scope scenario using
       REQ-358's branching construct as real, permanent scope (not the
       throwaway validation fixture REQ-358's own acceptance criteria used to
       prove the construct works) — it belongs here, authored by REQ-ANALYST

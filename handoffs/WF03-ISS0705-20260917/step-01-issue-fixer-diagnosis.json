@@ -1,0 +1,43 @@
+{
+  "handoff_id": "wf03-iss0705-step01",
+  "run_id": "WF03-ISS0705-20260917",
+  "workflow_id": "WF-03",
+  "step": "01",
+  "from_agent": "ORCH",
+  "to_agent": "ISSUE-FIXER",
+  "file": "handoffs/WF03-ISS0705-20260917/step-01-issue-fixer-diagnosis.json",
+  "created_at": "2026-09-17T04:20:00Z",
+  "started_at": "2026-09-17T04:20:00Z",
+  "completed_at": null,
+  "status": "PENDING",
+  "priority": "NORMAL",
+  "context": {
+    "stage": null,
+    "requirement_ids": [],
+    "requirement_text": {
+      "ISS-0705": "Global Ecto.Adapters.SQL.Sandbox.mode(:auto) leak in tenants_test.exs/identity_test.exs never restored to :manual, causing persistent test-DB pollution. Root cause: test/letflow/routers/tenants_test.exs (~line 391) and test/letflow/routers/identity_test.exs (~lines 1361-1381) each flip Ecto.Adapters.SQL.Sandbox.mode(Letflow.Repo, :auto) mid-test (to allow the test's own process and spawned/async work to share a connection outside the sandbox's normal per-test checkout), and never restore it to :manual afterward -- no matching on_exit callback, no restoring flip at the end of the test. Once flipped to :auto for the remainder of the test run, every subsequent test in the same mix test invocation (and, per ISS-0704's own reproduction, across separate invocations against the same persistent dev/test database) inserts real, uncontained rows instead of rows scoped to a per-test sandboxed transaction that gets rolled back. ISS-0704's diagnosis confirmed 129+ such orphaned tenant rows had accumulated in the shared test DB. Fix should either (a) wrap the :auto mode flip in each affected test with a matching on_exit callback that restores :manual, or (b) restructure the tests so they no longer need the global mode flip (e.g. using Ecto.Adapters.SQL.Sandbox.allow/3 to share the sandboxed connection with a spawned process instead of disabling the sandbox outright) -- evaluate which fits each test's actual concurrency need. Operational note: the 129+ tenant rows already orphaned in the shared test DB by this leak should be identified and cleaned up as part of or alongside whatever run fixes this."
+    },
+    "source_text": {},
+    "related_handoff_ids": [],
+    "artifacts_in": ["docs/issues/ISS-0705.yaml", "docs/issues/ISS-0704.yaml", "test/letflow/routers/tenants_test.exs", "test/letflow/routers/identity_test.exs", "docs/agents/workflows/WF-03_issue_resolving.md"],
+    "owned_modules": ["test/letflow/routers/tenants_test.exs", "test/letflow/routers/identity_test.exs"]
+  },
+  "task": {
+    "description": "WF-03 Step 0.5 + Step 1 for ISS-0705, on branch feature/WF03-ISS0705-20260917 (already checked out by Step 00 -- do not re-run git setup, just `git checkout feature/WF03-ISS0705-20260917` if your session starts elsewhere). Step 0.5: check docs/issues/ for a prior resolved entry with matching symptoms (this is itself a documented follow-up from ISS-0704 -- read that file, it's already the match, so just confirm and cite it). Step 1: reproduce and confirm the root cause directly rather than trusting the issue file's prose: (a) read both call sites in tenants_test.exs (~line 391) and identity_test.exs (~lines 1361-1381) that flip Ecto.Adapters.SQL.Sandbox.mode(Letflow.Repo, :auto), confirm neither has a matching on_exit restoring :manual; (b) query the test database directly to confirm/quantify the orphaned tenant row count (use whatever DB access mix/psql tooling this repo has -- e.g. a small mix run or ecto query against the test repo config) so the design step has real numbers, not the 129+ estimate from ISS-0704; (c) determine for EACH call site whether the actual fix should be (a) wrap with on_exit restoring :manual, or (b) restructure via Sandbox.allow/3 to avoid the global flip entirely -- state which fits each site's actual concurrency need and why, so CODE-DESIGNER doesn't have to re-derive it. Do NOT implement the fix yourself. Claim this handoff by setting status to IN_PROGRESS only.",
+    "acceptance_criteria": [
+      "Both call sites' current code (with line numbers) and confirmation neither restores :manual is quoted in result.summary",
+      "A real, freshly-measured count of orphaned tenant rows in the test DB is reported (not just cited from ISS-0704)",
+      "A concrete per-file fix approach (on_exit restore vs Sandbox.allow/3 restructure) is recommended with reasoning",
+      "next_action routes to CODE-DESIGNER for fix design"
+    ]
+  },
+  "result": {
+    "status": null,
+    "summary": null,
+    "artifacts_out": [],
+    "issues": [],
+    "next_action": null
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

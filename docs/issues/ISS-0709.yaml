@@ -1,0 +1,46 @@
+id: ISS-0709
+title: >
+  flatten_plain_text/1 in help_content.ex over-rejects legitimate content
+  spanning paragraph/block boundaries
+discovered_by: SECURITY-REVIEWER
+discovered_in_run: WF02-REQ364-20260917
+discovered_at: "2026-09-17T18:15:00Z"
+severity: MINOR
+description: >
+  Found during REQ-364's round-4 security review, while actively probing
+  the new AST-based markdown sanitizer for a new bypass class -- found
+  none (this is the opposite class: false positive / over-rejection, not
+  a security bypass).
+
+  flatten_plain_text/1 in lib/letflow/help/help_content.ex concatenates an
+  entire block's (or effectively the whole document's) prose together with
+  no separator when building its fallback text scan for raw-tag detection
+  split across inline-formatting nodes (the fix for REQ-364's round-3
+  tag-split bypass). This means two unrelated < / > characters in separate
+  paragraphs (e.g. used as comparison operators, or generic-type notation)
+  can combine into something that looks like a raw HTML tag and get
+  falsely rejected.
+
+  Two reproduced examples:
+    - Two adjacent paragraphs "Configure with a<" / "b>c or make it safe"
+      -> falsely rejected.
+    - "if a<b and *count* >d then continue" (bare < / > as comparison
+      operators, split by emphasis) -> falsely rejected.
+
+  Confirmed one-directional (never under-restrictive -- walk_node/1's
+  structural checks run independently and can't be suppressed). Not a
+  security defect, not gating REQ-364's merge (REVIEWER's own
+  determination), but real and worth fixing: technical docs legitimately
+  using bare < / > as comparison/generic-type notation isn't rare in
+  in-app help content.
+
+  FIX DIRECTION (per SECURITY-REVIEWER's own routing note): bound
+  flatten_plain_text/1's projection to one paragraph/block's own children
+  rather than concatenating across the whole document.
+affected_files:
+  - lib/letflow/help/help_content.ex
+related_requirements:
+  - REQ-364
+queue_ref: Q-709
+github_ref: GH-1508
+status: open

@@ -210,3 +210,18 @@ pipeline_log:
       without an explicit override. Report:
       test/reports/report-20260917-WF03-ISS0706-20260917.yaml (commit
       e26e96cd).
+  - step: RELEASE-VALIDATOR
+    at: "2026-09-17T11:25:00Z"
+    result: >
+      PASS. Own 3-spec run against a real local backend: 0/17 readiness-
+      throw failures (matches TEST-RUNNER's 0/63). Read TC-TD-UI-01-04's
+      current code directly, confirmed the guard is genuinely
+      unconditional. Confirmed scope correction (10 not 11) real via
+      sh05-06's own doc comment + grep count. Ran the new unit test
+      independently: 6/6, confirmed legitimate not a stub. Confirmed
+      ISS-0707 fully populated, not a placeholder, spot-checked 3/9 files
+      exist. Full gate-evidence audit: every pipeline_log step has a
+      real commit, zero lib/letflow/ touches confirmed via diff --stat.
+      Own fresh runs: mix letflow.check.test 4332/4332, npm test
+      592/592, eslint/tsc clean. No new defects beyond what's already
+      tracked. Cleared for DOC-UPDATER and merge.

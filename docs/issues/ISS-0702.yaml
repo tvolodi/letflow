@@ -274,3 +274,20 @@ pipeline_log:
       identical against the pre-edit commit -- genuinely pre-existing and
       unrelated to this diff. Judged dropping the citation (vs. fixing
       the companion spec here) the correct scope call.
+
+  - step: TEST-RUNNER
+    at: "2026-09-17T10:20:00Z"
+    result: >
+      PASS. Confirmed zero lib/letflow/ diff. Backend mix test:
+      4332/4332 passed. Frontend npm test: 586/586 passed. Schema
+      validation: 32/32 clean. playwright --list: 290 tests/50 files, no
+      syntax errors. mix compile --warnings-as-errors and mix format
+      clean. New spec itself: 1/3 passed locally -- traced root cause
+      directly (not just accepted the attribution): vite's proxy target
+      localhost:4000 resolves to ::1 in this sandbox while the backend
+      binds only 0.0.0.0/IPv4, confirmed via curl. Cross-checked against
+      two unrelated pre-existing specs, both also failed on the same/a
+      related sandbox-wide gap (ISS-0706's /health/ready symptom) --
+      confirms this is environmental, not a regression from this diff.
+      Report: test/reports/report-20260917-WF03-ISS0702-20260917.yaml
+      (commit 2c5dee0b).

@@ -1,0 +1,65 @@
+{
+  "handoff_id": "wf02-req367-step01",
+  "run_id": "WF02-REQ367-20260917",
+  "workflow_id": "WF-02",
+  "step": "01",
+  "from_agent": "ORCH",
+  "to_agent": "CODE-DESIGNER",
+  "file": "handoffs/WF02-REQ367-20260917/step-01-code-designer.json",
+  "created_at": "2026-09-17T14:45:00Z",
+  "started_at": "2026-09-17T14:45:00Z",
+  "completed_at": "2026-09-17T14:46:17Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S7",
+    "requirement_ids": ["REQ-367"],
+    "requirement_text": {
+      "REQ-367": "See handoffs/WF02-REQ367-20260917/step-00-git-setup.json's context.requirement_text for the full verbatim requirement description -- not repeated here to keep this handoff shorter; read that file's context block in full before designing. Summary: new .github/workflows/cd.yml + new deploy/redeploy-qa.sh, adapting tvolodi/letflow-queue's proven SSH-restricted-key CD pattern for qa.bizdala.com. Two artefacts, not one (unlike letflow-queue's single-image case): the script must (1) git pull, (2) rebuild+recreate the backend Docker image via docker compose, (3) rebuild the frontend static bundle via a throwaway node:22 container with real VITE_OIDC_AUTHORITY/VITE_OIDC_CLIENT_ID build args and atomically swap it into /opt/apps/letflow-qa/web-dist/ (backing up the previous build first), (4) health-check both. cd.yml must gate its deploy job on ci.yml's existing `changes` job's backend/frontend outputs -- do not duplicate diff logic. Credentials (SSH key, GH secrets) are explicitly OUT of scope -- this requirement only needs the workflow/script to exist, be correct, and reference not-yet-existing secret names. Do not touch deploy/redeploy-test.sh."
+    },
+    "artifacts_in": [
+      ".github/workflows/ci.yml",
+      "deploy/redeploy-test.sh",
+      "handoffs/WF02-REQ367-20260917/step-00-git-setup.json"
+    ],
+    "owned_modules": [
+      "deploy/redeploy-qa.sh",
+      ".github/workflows/cd.yml"
+    ],
+    "branch_name": "feature/WF02-REQ367-20260917"
+  },
+  "task": {
+    "description": "REWORK ITERATION 1: CODE-DESIGN-VALIDATOR failed this design (see handoffs/WF02-REQ367-20260917/step-01b-code-design-validator.json's result for the full verdict) on checks (b)/(c)/(f): lib/letflow/design/req367-cd-qa-deploy.md's §1 (deploy/redeploy-qa.sh) and §2 (cd.yml) contain literal, copy-pasteable bash lines and YAML key/value fragments for the two NEW files rather than structural/procedural description only -- e.g. `docker build -f deploy/Dockerfile -t letflow-qa:latest .`, `$COMPOSE up -d --force-recreate app`, `curl -sf https://qa.bizdala.com/`, `on: workflow_run: workflows: [\"CI\"], branches: [main], types: [completed]`, and the SSH step's four real input keys fully populated. Fix: rewrite §1 and §2 so every step is described in PROSE ONLY (what the step does, in what order, against which exact paths/values) with NO literal shell command lines and NO literal YAML key:value syntax for the two NEW files -- name commands/tools by role (e.g. \"builds the backend Docker image via `docker build`, tagged `letflow-qa:latest`\" is borderline-acceptable if it stays prose; a full command line standing alone on its own, or a real YAML block, is not). §0's citations of the existing letflow-queue cd.yml and this repo's ci.yml (both existing files, clearly marked as precedent) are NOT the problem and may stay as-is. Everything else in the design (AC mapping §6, error-handling, cross-file dependencies, the ci.yml-touch scope ruling -- CODE-DESIGN-VALIDATOR separately ruled that one-step ci.yml addition IS legitimate minimal scope, not creep, and ELIXIR-DEV may implement it in Step 2a once this design re-passes) already passed and does not need to change. On finishing, flip this handoff's status to COMPLETED and result.status to PASS/FAIL as normal (do not re-claim via IN_PROGRESS-only; this handoff is already past that point) -- route to CODE-DESIGN-VALIDATOR (Step 1b) again for a regate. Commit and push on feature/WF02-REQ367-20260917.\n\n---ORIGINAL DISPATCH BELOW---\nWF-02 Step 1 -- Code design for REQ-367 (CD to QA on merge). Claim this handoff (status IN_PROGRESS). Read .github/workflows/ci.yml IN FULL (especially the `changes` job's path-filter outputs and job names) and deploy/redeploy-test.sh IN FULL (as the closest existing precedent for shape/conventions, even though it targets a different environment and must not be copied verbatim -- note its differences: different host/path/compose-project). Also read the sibling repo's pattern if reachable: tvolodi/letflow-queue's own .github/workflows/cd.yml and deploy/redeploy-test.sh, if this checkout has access to that repo locally (check c:\\Users\\tvolo\\dev\\ai-dala\\letflow-queue or similar sibling path) -- if not locally available, design from this repo's own ci.yml/redeploy-test.sh precedent plus the requirement text's own detailed description of that pattern (SSH over a restricted deploy key, workflow_run trigger off ci.yml's completion, gated on the changes job's outputs).\n\nThis is infrastructure work (a bash script + a GitHub Actions YAML workflow), not Elixir application code -- adapt the design artefact's shape accordingly: instead of Ecto schemas/gen_statem specs, describe (1) deploy/redeploy-qa.sh's exact procedure as an ordered, numbered shell-script outline (each step's commands, in plain description, not full bash yet -- ELIXIR-DEV writes the actual script), including exact target paths (/opt/apps/letflow-qa/, web-dist/, backup naming), the docker compose invocation, the throwaway node:22 container invocation with build args, and both health-check commands; (2) .github/workflows/cd.yml's exact trigger mechanism (workflow_run on ci.yml completion, or documented equivalent), the job's conditional gate expression referencing ci.yml's changes job outputs, the SSH-action step referencing new, distinctly-named secret names (e.g. QA_DEPLOY_HOST/QA_DEPLOY_USER/QA_DEPLOY_SSH_KEY -- must NOT collide with letflow-queue's own secret names of the same shape), and the exact remote command it runs (invoking redeploy-qa.sh). State explicitly which secrets are referenced but not required to exist yet.\n\nWrite the design to lib/letflow/design/req367-cd-qa-deploy.md covering: (a) the numbered script procedure, (b) the workflow YAML structure/keys (not full YAML, a structural outline: triggers, jobs, gate condition, steps in order, secret names referenced), (c) exactly how the trigger avoids duplicating ci.yml's diff logic, (d) an explicit statement that deploy/redeploy-test.sh is left untouched and how the two scripts' relationship should be stated in cd.yml/redeploy-qa.sh's own header comments, (e) an explicit statement of what is and is NOT in scope (credentials excluded), (f) a section mapping each of REQ-367's 5 acceptance criteria (copied from step-00's handoff context) to a concrete design element, (g) an Open Questions section for anything not resolvable from available context (e.g., if the sibling letflow-queue repo's exact cd.yml is not locally readable, note that ELIXIR-DEV should still be able to implement from this design's own detail plus the pattern description in the requirement text -- do not silently invent unstated specifics; flag them).\n\nNo actual .sh or .yml code in the design doc -- structural outlines and command descriptions only, per the design-vs-implementation split CODE-DESIGN-VALIDATOR will check.\n\nComplete the handoff: status COMPLETED, result.status PASS, artifacts_out: [\"lib/letflow/design/req367-cd-qa-deploy.md\"], next_action \"Route to CODE-DESIGN-VALIDATOR (Step 1b)\". Commit the design file and completed handoff JSON on branch feature/WF02-REQ367-20260917, then push.",
+    "acceptance_criteria": [
+      "Every REQ-367 acceptance criterion maps to a concrete design element",
+      "deploy/redeploy-qa.sh's procedure is fully specified as an ordered outline: git pull, backend rebuild+recreate, frontend throwaway-container rebuild+atomic-swap with backup, both health checks",
+      "cd.yml's trigger/gate mechanism is fully specified and explicitly avoids duplicating ci.yml's changes job diff logic",
+      "Secret names are named explicitly, distinctly from letflow-queue's own secret names, and stated as not-yet-required-to-exist",
+      "deploy/redeploy-test.sh's untouched status and its relationship to the new script is stated explicitly",
+      "No implementation code (.sh/.yml bodies) present -- structural/procedural description only",
+      "Open questions are listed explicitly, not silently resolved by guessing"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "REWORK ITERATION 1 complete. CODE-DESIGN-VALIDATOR's step-01b FAIL identified that lib/letflow/design/req367-cd-qa-deploy.md's Sec 1 (deploy/redeploy-qa.sh) and Sec 2 (cd.yml) contained literal, copy-pasteable bash command lines and YAML key:value fragments for the two NEW files, rather than staying in prose/structural description. Rewrote both sections in full: every step is now described in prose -- what it does, its exact target paths/values, its ordering -- with tool/command names mentioned only inline within sentences (e.g. 'builds the backend image using the shared, existing deploy Dockerfile', 'the workflow fires on completion of the CI workflow (named \"CI\"), restricted to the main branch') and no standalone real command lines or fenced/indented real YAML blocks for the two new files. Variables (APP_DIR, COMPOSE, DATE, CURRENT_REF, etc.) are now described as named variables the script establishes, not shown as literal shell syntax. The three new secret names (QA_DEPLOY_HOST/QA_DEPLOY_USER/QA_DEPLOY_SSH_KEY) remain listed as plain identifier names (not key:value YAML) since naming them is required by the acceptance criteria and is not itself implementation syntax. Sec 0 (citations of the real letflow-queue cd.yml and this repo's ci.yml, both existing files, clearly marked precedent) and Sec 3-7 (AC mapping, error handling, cross-file deps, scope, open questions) were left unchanged -- they already passed. Verified by re-reading the full rewritten file: no standalone bash command lines or literal YAML key:value blocks remain in Sec 1/Sec 2.",
+    "artifacts_out": ["lib/letflow/design/req367-cd-qa-deploy.md"],
+    "issues": [
+      {
+        "severity": "MINOR",
+        "description": "Dispatched CODE-DESIGNER agent (aeb65416cb4bca36b) went 30+ minutes with no commits and did not reply to a check-in until after ORCH had already begun an emergency fallback write to the same file path, in the same shared working directory (not an isolated worktree) -- a real race on disk, resolved only because the agent's write happened to land after ORCH's and ORCH reviewed before committing. Two process gaps worth fixing for future runs: (a) dispatch latency/responsiveness expectations for this agent type may need recalibrating rather than assuming 15-20 minutes of silence means stuck, and (b) ORCH should not begin writing a fallback artifact into the same shared working tree a still-possibly-live agent is using without first isolating the work (e.g. a scratch path) or receiving explicit confirmation the agent has stopped -- this time it was caught by review before any conflicting commit landed, but that was not guaranteed."
+      }
+    ],
+    "git_evidence": {
+      "branch_name": "feature/WF02-REQ367-20260917",
+      "commit_sha_list": [],
+      "remote_branch": "origin/feature/WF02-REQ367-20260917",
+      "push_status": null,
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": "Route to CODE-DESIGN-VALIDATOR (Step 1b) for regate"
+  },
+  "rework_count": 1,
+  "max_rework": 3
+}

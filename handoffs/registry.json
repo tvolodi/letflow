@@ -5921,8 +5921,7 @@
       "recovery_note": "handoffs/WF02-REQ277-20260909/step-00-git-setup.json -- (a-1) redispatch shape but broader: a genuinely prior, real WF-02 run for REQ-277 (same run-id, PR #1137) reached DOC-UPDATER but died before Step Final with zero handoffs/ files ever committed. ORCH investigated (git log/gh pr view on origin/feature/WF02-REQ277-20260909), confirmed the implementation was real and in-scope, and resumed on the existing branch rather than restarting from scratch -- rebased onto main, then re-ran every gate (SECURITY-REVIEWER, REVIEWER, TEST-DESIGNER, TEST-DESIGN-VALIDATOR, TEST-RUNNER, RELEASE-VALIDATOR, DOC-UPDATER) fresh since none of the prior run's own verdicts had a committed handoff to trust. A SECOND recovery followed: Step Final's own first dispatch (to FRONTEND-DEV) was itself never actioned (died/abandoned with zero work started) and was redispatched by ORCH at 2026-09-09T14:14:09Z -- not rework per HANDOFF_PROTOCOL.md 4.1(a-1), since no verdict had been reached.",
       "last_known_step": "Step Final COMPLETED PASS -- merged to main as 27b51cfc (PR #1137, squash). ESCALATED state (see handoffs/escalations.yaml) resolved in the same ORCH session: (1) $QUEUE_AUTH_TOKEN was in fact available in this checkout's .env all along (prior sessions' repeated checks were wrong -- root cause not further diagnosed), so ORCH called register_task for REQ-279 (queue task 562, GH#1151, depends_on resolved to [550,551,552]) and wrote its impl_order into docs/requirements.yaml, clearing the deferral-staleness violation at its root rather than needing the enforce_admins-blocked --admin override at all; (2) discovered and fixed 4 further mix letflow.lint_handoffs violations (H2 x2 timestamp-ordering, H3 x2 stray fields_written key) in this run's own handoff files that were also failing the Backend CI gate, unrelated to the REQ-279 finding; (3) both CI checks (Backend, Frontend) passed clean on the final commit (2caaba4e), gh pr merge --squash --delete-branch succeeded with no override; (4) local cleanup done (main pulled, feature branch deleted locally and on remote); (5) queue task 551 force-released status:done (original locking agent_id unrecoverable via the API, task confirmed genuinely complete via the merged commit before forcing).",
       "note": "REQ-277 (queue task 551, GH#1124) migrates web/src/pages/definitions/ and web/src/pages/dlq/ onto design-system primitives per decision 0020 D2b (2 of 3), eliminating all 201 measured colour-literal occurrences. This run is a HANDOFF_PROTOCOL.md 4.1 recovery of a genuinely prior, real WF-02 run whose own handoffs/ files were never committed (see recovery_note). Every gate in THIS run's own pipeline independently PASSED with real re-derivation, not trust: CODE-DESIGN-VALIDATOR (pre-existing, verified), SECURITY-REVIEWER (out of scope, pure frontend), REVIEWER (spot-checked 4/4 page files including the rebase-composed conflict resolution against ISS-0559's Button props and REQ-285's react-intl formatting), TEST-DESIGNER (independently re-verified pre-existing DlqPage pagination coverage, correctly avoided inventing busywork tests for pure primitive swaps), TEST-DESIGN-VALIDATOR (independently re-ran the spec's own mutation test), TEST-RUNNER and RELEASE-VALIDATOR (both ran the full backend suite to completion synchronously, RELEASE-VALIDATOR from a genuinely cold environment after finding letflow-postgres-1 wasn't even running), DOC-UPDATER (confirmed prior bookkeeping already correct, no duplicate writes). Frontend gates fully green throughout: 323/323 unit tests, 48/48 guard tests. Merged 2026-09-09T15:12:13Z as commit 27b51cfc. Full diagnosis, evidence, and resolution path in handoffs/escalations.yaml (entry amended, not superseded, per HANDOFF_PROTOCOL.md 7.2's same-session-recovery rule)."
-    }
-,
+    },
     {
       "run_id": "WF02-REQ279-20260909",
       "workflow_id": "WF-02",
@@ -5942,8 +5941,7 @@
       "backfilled": false,
       "last_known_step": "Step Final PASS -- merge pending.",
       "note": "REQ-279 (queue task 562, GH#1151) deletes the literal-colour guard's web/src/pages/ exemption -- the completion test for decision 0020 D2, now that REQ-276/277/278 have all migrated their pages off literal colours. Exactly one allowedPaths entry and its two-line comment removed from web/tests/guards/forbidlist.ts. REVIEWER independently re-ran npm run guards/type-check/lint/test in the foreground (not trusting FRONTEND-DEV's self-report or any background/async report) -- all clean, no literal-colour violation was masked by the migrations. Pipeline: FRONTEND-DEV -> REVIEWER (PASS). TEST-DESIGNER/TEST-DESIGN-VALIDATOR and SECURITY-REVIEWER skipped (existing guard tests already exercise this; no tenant-data path). Merge-time bookkeeping: flipping REQ-279 to done expired REQ-283's blocked-by: REQ-279 deferral; REQ-283's other dependency (REQ-281) was already done, so registered REQ-283 properly (queue task 563, GH#1154) rather than a fake re-scope. Updated T-LIVE-DEFERRED-COUNT (7 -> 6)."
-    }
-,
+    },
     {
       "run_id": "WF02-REQ283-20260909",
       "workflow_id": "WF-02",
@@ -5964,8 +5962,7 @@
       "backfilled": false,
       "last_known_step": "Step Final PASS -- merge pending.",
       "note": "REQ-283 (queue task 563, GH#1154) applies tenant branding as CSS custom-property overrides on tokens.css (0020 D1c, theming half). New BrandingProvider mounted at app root, closed one-key allowlist (brand_colors.primary -> --color-brand-600) matching the server-side @brand_colors_allowed_keys ~w(primary) closure, plain <img src> logo rendering with alt sourced only from appName. Pipeline: CODE-DESIGNER -> CODE-DESIGN-VALIDATOR (PASS) -> FRONTEND-DEV -> SECURITY-REVIEWER (PASS -- allowlist iteration direction and alt-attribute sourcing both independently confirmed safe, zero eval/dangerouslySetInnerHTML/innerHTML, CSS values set via safe setProperty API) -> REVIEWER (1 rework cycle: AC1's computed-CSS-value test initially only exercised applyBrandingColors() directly, not the real BrandingProvider wiring; FRONTEND-DEV added a render-level test with a genuine fail-first proof, REVIEWER independently reproduced the fail-first break itself, re-check PASS). TEST-DESIGNER/TEST-DESIGN-VALIDATOR skipped (337 tests across 53 files already map every AC, independently re-run by both SECURITY-REVIEWER and REVIEWER). No dependents deferred against REQ-283 -- no cascade this time."
-    }
-,
+    },
     {
       "run_id": "WF02-REQ289-20260909",
       "workflow_id": "WF-02",
@@ -5990,7 +5987,6 @@
       "recovery_note": "handoffs/WF02-REQ289-20260909/step-00-git-setup.json -- broader than (a-1): a genuinely prior, real WF-02 run for REQ-289 left one real commit (dc031e61, design doc + decision addendum + 39-entry corpus + test file) on origin/feature/WF02-REQ289-20260909 but died with zero handoffs/ files ever committed and no PR ever opened -- queue task 544 was left locked by an unrecoverable agent_id (~16h stale, force-released per TASK_QUEUE.md's dead-host path). ORCH investigated, confirmed the implementation substantially real and in-scope, rebased it onto current main (one composed conflict in decision 0020), and resumed rather than restarted -- but found and is now addressing one genuine acceptance-criteria gap (AC3 null-literal coverage) via the full remaining pipeline rather than trusting the prior run's own uncommitted/self-contradicting REVIEWER claim.",
       "last_known_step": "Step Final COMPLETED PASS -- merged to main as 81f005d8 (PR #1157, squash, no override needed). Full chain run fresh after Step 00's recovery: CODE-DESIGNER addendum (closed the null-literal gap: new tag lit:null, new entry expr-040, retagged expr-039) -> CODE-DESIGN-VALIDATOR PASS -> ELIXIR-DEV -> SECURITY-REVIEWER PASS (out of scope) -> REVIEWER PASS (independently re-derived the null-asymmetry semantic against expr_test.exs, real sign-off replacing the open placeholder in decision 0020) -> TEST-DESIGNER/TEST-DESIGN-VALIDATOR skipped (existing test iterates the corpus generically, no new hardcoded logic needed) -> TEST-RUNNER PASS (3591/3591) -> RELEASE-VALIDATOR PASS (independently re-verified all 10 ACs from a cold read) -> DOC-UPDATER (status pending -> done).",
       "note": "REQ-289 (queue task 544, GH#1100) exports a language-neutral conformance corpus (40 entries) from Letflow.Engine.Expr's own tests per decision 0020 D1a step 9 (1 of 2) -- required to land before REQ-293 (TypeScript) or REQ-294 (Dart) can begin their own evaluators. Recovered a genuinely prior, real implementation (see recovery_note) rather than restarting from scratch, and closed one real acceptance-criteria gap found during recovery (AC3's null literal kind -- the coverage-enumeration test never tracked lit:null, and the corpus only covered the arithmetic-error half of Expr's documented null-asymmetry semantic). Merged 2026-09-09T17:45:54Z as commit 81f005d8. Merge-time bookkeeping: flipping REQ-289 to done expired REQ-290's blocked-by: REQ-289 deferral (its sole dependency) -- registered it properly in the queue (task 572, GH#1168) rather than inventing a re-scope target. Full diagnosis in handoffs/WF02-REQ289-20260909/step-00-git-setup.json."
-
     },
     {
       "run_id": "WF02-REQ295-20260909",
@@ -6012,8 +6008,7 @@
       "backfilled": false,
       "last_known_step": "Step Final PASS -- merge pending.",
       "note": "REQ-295 (queue task 564, GH#1158) answers decision 0023's DDL-execution open question -- new decision record docs/migration/decisions/0024-entity-promotion-ddl-execution.md plus a companion design doc for REQ-296 onward. Design-only, no lib/ code. Extends Letflow.TenantProvisioning (new ColumnPromotion functions) rather than a manifest reuse, dedicated migrator, or inline promotion-path execution. Per-tenant partial-failure state machine via a new entity_column_promotions table. Backfill via rebuild_projection/2 replay with dual-write + query_eligible gating typed_column dispatch. Rollback via allowlist-exclusion + corrective re-promotion, never a drop/narrow (0023's additive-only rule respected). entity_record_latest recommended for retirement. Pipeline: CODE-DESIGNER -> CODE-DESIGN-VALIDATOR (1 rework: missing file:line citation, fixed) -> SECURITY-REVIEWER (1 rework: cross-tenant DDL risk from independently-sourced tenant_id/promotion_id parameters, fixed by deriving tenant_id from the loaded promotion row; re-check PASS) -> REVIEWER (PASS -- confirmed extending TenantProvisioning inherits REQ-045's already-settled process-vs-row precedent, no new supervision review needed). Both gates named by 0023's own closing sentence recorded in 0024's own sign-off sections. No dependents deferred against REQ-295."
-    }
-,
+    },
     {
       "run_id": "WF02-REQ302-20260909",
       "workflow_id": "WF-02",
@@ -6033,8 +6028,7 @@
       "backfilled": false,
       "last_known_step": "Step Final PASS -- merge pending.",
       "note": "REQ-302 (queue task 565, GH#1159) answers two independent column-semantics questions for entity storage (split from REQ-295 after REQ-VALIDATOR's second sizing gate) -- new decision record docs/migration/decisions/0025-promoted-fk-ondelete-and-localized-text-search-strategy.md, deliberately its own file (parallel session to REQ-295's 0024, no ordering dependency). Sub-question 1: ON DELETE RESTRICT for promoted FK columns, reconciled against Records.delete_record/2's soft-delete-only application path (records.ex:199-219, :289-298) -- RESTRICT fails loudly against an out-of-band hard DELETE rather than silently losing data; CASCADE/SET NULL/NO ACTION each explicitly rejected. Sub-question 2: per-field search_strategy (:plain default, :fulltext opt-in) for localized text, matching the only existing full-text precedent (Definitions.search/2, ILIKE-only). Pipeline: CODE-DESIGNER -> CODE-DESIGN-VALIDATOR (1 rework: a records.ex citation overshot by 5 lines into an unrelated function, fixed) -> SECURITY-REVIEWER (PASS -- confirmed RESTRICT's actual Postgres failure mode is a loud auditable error, no cross-tenant FK risk) -> REVIEWER (PASS -- confirmed the on_delete: :restrict precedent real though not perfectly uniform, flagged as a non-blocking nit already tracked under ISS-0225; confirmed no accidental coupling between the two sub-questions; confirmed 0023/0024 both untouched). Both gates recorded in 0025's own distinct sign-off sections. No dependents' deferral hatches reference REQ-302."
-    }
-,
+    },
     {
       "run_id": "WF02-REQ296-20260909",
       "workflow_id": "WF-02",
@@ -6054,8 +6048,7 @@
       "backfilled": false,
       "last_known_step": "Step Final PASS -- merge pending.",
       "note": "REQ-296 (queue task 566, GH#1160) implements the DDL-generation half of decision 0023 -- Letflow.Entities.Definition.DDL.generate_table_ddl/2, a pure function returning raw SQL CREATE TABLE text matching REQ-295's execution mechanism. Two independent promotion triggers (FK membership, queried: true); :json never promoted (defence-in-depth). All identifiers validated via an anchored allowlist regex, enum values quote-doubled, decimal precision/scale integer-guarded -- SECURITY-REVIEWER independently traced every value reaching the generated SQL and found no injection vector. Pipeline: CODE-DESIGNER -> CODE-DESIGN-VALIDATOR (PASS) -> ELIXIR-DEV -> SECURITY-REVIEWER (PASS, flagged 2 non-blocking test gaps) -> REVIEWER (PASS, closed those 2 gaps directly, 24 tests total, full suite re-run solo confirming only pre-existing rustc-absent failures). TEST-DESIGNER/TEST-DESIGN-VALIDATOR skipped (comprehensive coverage independently confirmed twice). Extension point for REQ-301 stated in moduledoc, not implemented."
-    }
-,
+    },
     {
       "run_id": "WF02-REQ297-20260909",
       "workflow_id": "WF-02",
@@ -6078,8 +6071,7 @@
       "backfilled": false,
       "last_known_step": "Step Final PASS -- merge pending.",
       "note": "REQ-297 (queue task 567, GH#1161) is the promotion executor -- the first code to actually run entity-storage DDL against live tenant schemas, implementing REQ-295's designed ColumnPromotion mechanism via REQ-296's DDL generator. Nine functions on TenantProvisioning, new global entity_column_promotions table (per-tenant atomicity), backfill via real rebuild_projection/2 replay with dual-write, table-creation-on-first-use (a correctly-flagged gap-fill, not a scope overreach). Additive-only enforced by a real information_schema.columns check; dual-write is a new separate Multi step leaving upsert_record_latest/3 untouched. Pipeline: CODE-DESIGNER -> CODE-DESIGN-VALIDATOR (PASS) -> ELIXIR-DEV -> SECURITY-REVIEWER (PASS -- exhaustive cross-tenant/injection trace, the highest-stakes review in this batch) -> REVIEWER (PASS -- found and confirmed a 3rd, unrelated pre-existing test flake via isolated re-run). TEST-DESIGNER/TEST-DESIGN-VALIDATOR skipped (17 tests, comprehensive, independently confirmed twice)."
-    }
-,
+    },
     {
       "run_id": "WF02-REQ298-20260910",
       "workflow_id": "WF-02",
@@ -6103,8 +6095,7 @@
       "backfilled": false,
       "last_known_step": "Step Final PASS -- merge pending.",
       "note": "REQ-298 (queue task 569, GH#1163) activates constraint_def unique indexes and fk_def referential integrity (REFERENCES ... ON DELETE RESTRICT per REQ-302), extending REQ-296's generator and REQ-297's executor. FK REFERENCES rides the same ADD COLUMN statement; multi-column unique constraints use a new ConstraintActivation retrofit mechanism under the same advisory-lock serialization. Many-to-many worked example verified with no join-table special case. A genuine necessity (FK-promoted columns forced to uuid pg_type) surfaced a real production-crashing bug SECURITY-REVIEWER caught: cast_promoted_value/2 and both write-path placeholder builders lacked a uuid case, masked by the original test helper's own manual cast. Fixed with fail-first-proven tests exercising the real production paths. Pipeline: CODE-DESIGNER -> CODE-DESIGN-VALIDATOR (PASS) -> ELIXIR-DEV -> SECURITY-REVIEWER (1 rework: real bug caught and fixed, re-check PASS with independently-reproduced fail-first proof) -> REVIEWER (PASS). TEST-DESIGNER/TEST-DESIGN-VALIDATOR skipped (44 tests, comprehensive, independently confirmed twice)."
-    }
-,
+    },
     {
       "run_id": "WF02-REQ300-20260910",
       "workflow_id": "WF-02",
@@ -6127,8 +6118,7 @@
       "backfilled": false,
       "last_known_step": "Step Final PASS -- merge pending.",
       "note": "REQ-300 (queue task 571, GH#1165) adds joins to Query.Compiler over promoted FK columns. Design went through 2 rework cycles catching real regressions (unconditional compile/2 repointing would break plain queries against unpromoted entity types; table-vs-column existence-check granularity gap for join columns). A THIRD instance of the same bug class surfaced at implementation in the ordinary filter/sort path, caught by SECURITY-REVIEWER via a real written-and-run reproduction, fixed by centralizing a per-column existence check in Allowlist.load/2 (shared with the join path via TenantProvisioning.entity_column_exists?/3). REVIEWER's final pass deliberately swept for a fourth instance and found none. Pipeline: CODE-DESIGNER (2 design rework cycles) -> CODE-DESIGN-VALIDATOR (PASS) -> ELIXIR-DEV -> SECURITY-REVIEWER (1 rework: third bug instance, re-check PASS) -> REVIEWER (PASS). TEST-DESIGNER/TEST-DESIGN-VALIDATOR skipped (12 tests, comprehensive, independently confirmed twice)."
-    }
-,
+    },
     {
       "run_id": "WF02-REQ303-20260910",
       "workflow_id": "WF-02",
@@ -6148,8 +6138,7 @@
       "backfilled": false,
       "last_known_step": "Step Final PASS -- merge pending.",
       "note": "REQ-303 (queue task 574, GH#1172) answers S10 gap 13 (SolutionPack entity_definitions section) -- new decision record docs/migration/decisions/0026-solution-pack-entity-definitions-section.md, explicitly independent of the 0023 entity-storage batch. Schema version stays unchanged (envelope identifier, not section presence); old/new pack compatibility follows existing default-to-[] and service_catalog_entries's reject-unsupported precedent respectively. Install is :inactive-only, name collision aborts the whole transaction. Key finding: the form-schema gap is ALREADY CLOSED -- form_schema is a HUMAN_TASK node attribute inside a definition's graph, and packed definitions already embed their graph verbatim, so no new pack section is needed for it. INV-1: no new caller-supplied tenant identifier anywhere. Pipeline: CODE-DESIGNER -> CODE-DESIGN-VALIDATOR (1 rework: citation pointed at wrong section for a quoted rationale, load-bearing form-schema claim itself was accurate on first pass; re-check PASS) -> SECURITY-REVIEWER (PASS, named INV-1 sign-off per this requirement's own AC) -> REVIEWER (PASS). Design-only, no lib/ code -- REQ-304/305 build the export/install sides."
-    }
-,
+    },
     {
       "run_id": "WF03-ISS0578-20260910",
       "workflow_id": "WF-03",
@@ -6169,8 +6158,7 @@
       "backfilled": false,
       "last_known_step": "Step Final PASS -- merge pending.",
       "note": "ISS-0578 (queue task 578, GH#1185) -- shifting Postgrex.DBConnection.ConnectionError failures inside clone_tenant_schema!/1 under N-way parallel test execution. ISSUE-FIXER diagnosed root cause via code reading + live reproduction: a single unretried ~150-250-round-trip transaction is disproportionately likely to catch a transient TCP hiccup under load, explaining the shifting set of unrelated failing files each run -- not a code regression, pool sizing not implicated. Fix: bounded retry (3 attempts, 200ms backoff) wrapping the existing clone, struct-only match on Postgrex.Error/DBConnection.ConnectionError (no message-substring matching), cleanup-before-retry via DROP SCHEMA IF EXISTS on a fresh connection. Pipeline: ISSUE-FIXER -> CODE-DESIGNER (1 rework: citation-range error) -> CODE-DESIGN-VALIDATOR (PASS) -> ELIXIR-DEV (3 new tests using real Postgres error triggers, no mocks in this codebase) -> REVIEWER (PASS, independently re-ran full suite three times, zero new failures; one redirect needed for an illegal cross-turn background-wait). Test-support-only change, not a tenant-data-path change -- SECURITY-REVIEWER correctly skipped per design's own scope confirmation, independently confirmed by REVIEWER. TEST-DESIGNER/TEST-DESIGN-VALIDATOR skipped per this session's established precedent (implementing agent's own tests comprehensive, REVIEWER independently verified quality)."
-    }
-,
+    },
     {
       "run_id": "WF03-ISS0580-20260910",
       "workflow_id": "WF-03",
@@ -6190,8 +6178,7 @@
       "backfilled": false,
       "last_known_step": "Step Final PASS -- merge pending.",
       "note": "ISS-0580 (queue task 580, GH#1189) -- ColumnPromotionTest AC1 flaked with a unique-constraint violation under parallel suite load, independently observed 3 times this session (twice during ISS-0578's own verification). Root cause: Ecto.Adapters.SQL.Sandbox.mode(Repo, :auto) set in provisioned_tenant/0-style helpers and never restored to :manual -- a global, pool-wide setting, so this leaked real writes from concurrently-running async tests into the shared test DB. Same defect found in 7 files. Pipeline: ISSUE-FIXER -> CODE-DESIGNER (first attempt went off-script running live test-debugging spikes for 1.5h with no design-doc output, killed by ORCH, one stray uncommitted test edit reverted; relaunched with explicit read-only-investigation scope, completed cleanly) -> CODE-DESIGN-VALIDATOR (PASS first try) -> ELIXIR-DEV (new Letflow.Test.SandboxAutoMode helper, 7 call sites updated) -> REVIEWER (1 rework: caught that a necessary on_exit force-:auto reset was never paired with a restore, reopening the leak once per test instead of once per bug; fixed by calling exit_auto_mode!/1 as the last on_exit statement; re-check PASS, full suite confirmed ColumnPromotionTest flake no longer reproduces). REVIEWER flagged orphaned tenant/tenant_schemas row accumulation in the shared test DB (not caught by TenantSchemaReaper) as a follow-up candidate, not a blocker. Test-support-only change -- SECURITY-REVIEWER correctly skipped."
-    }
-,
+    },
     {
       "run_id": "WF03-ISS0582-20260910",
       "workflow_id": "WF-03",
@@ -6211,8 +6198,7 @@
       "backfilled": false,
       "last_known_step": "Step Final PASS -- merge pending.",
       "note": "ISS-0582 (queue task 582, GH#1196) -- pack_entity_definition/1 embedded a raw, non-UTF-8-safe SHA-256 digest (logical_shape_version) verbatim into the SolutionPack pack document, breaking Jason.encode!/1 for real. Discovered by TEST-DESIGNER writing REQ-306's round-trip coverage. Fix: hex-encode at pack time (encode_logical_shape_version/1, matching Records.hex_version/1's convention), hex-decode at parse time (decode_logical_shape_version/1, non-raising, reusing :invalid_pack_document). create_definition/2 recomputes logical_shape_version fresh and never reads the packed value, so this is round-trip-fidelity only, not load-bearing for install correctness. Pipeline: CODE-DESIGNER (PASS first try, explicitly called this in-scope for SECURITY-REVIEWER) -> CODE-DESIGN-VALIDATOR PASS first try -> ELIXIR-DEV (real AC1/AC2 evidence via throwaway test) -> SECURITY-REVIEWER PASS -> REVIEWER PASS -> TEST-DESIGNER added one permanent regression test (real export/4 -> Jason encode/decode -> install/3 pipeline, fail-first-proven against the pre-fix code). TEST-DESIGN-VALIDATOR skipped per established precedent."
-    }
-,
+    },
     {
       "run_id": "WF03-ISS0583-20260911",
       "workflow_id": "WF-03",
@@ -6232,8 +6218,7 @@
       "backfilled": false,
       "last_known_step": "Step Final PASS -- merge pending.",
       "note": "ISS-0583 (queue task 583, GH#1200) -- reattempted after REQ-292 merged (PR #1204), resolving an earlier blocked outcome (2026-09-10T21:54Z) whose precondition (a real TASK_COMPLETED v2 schema) did not yet exist. Extends mix letflow.backfill_event_type_versions (ISS-0332's already-generic mechanism) with a byte-verbatim TASK_COMPLETED v2 seed, backfilling pre-existing tenants stuck at schema_version 1. Pipeline: CODE-DESIGNER (re-verified premise for real; 1 rework for a phantom 'DIRECTIVE T-4' citation) -> CODE-DESIGN-VALIDATOR PASS -> ELIXIR-DEV (fail-first-proven regression test, real AC1 evidence) -> SECURITY-REVIEWER FAIL then PASS (1 rework: caught the new test file reintroducing the exact global Sandbox.mode(:auto) leak ISS-0580 had just closed hours earlier, causing a real ColumnPromotionTest regression in the same run -- fixed via SandboxAutoMode.provision!/2, independently re-verified) -> REVIEWER PASS. TEST-DESIGNER/TEST-DESIGN-VALIDATOR skipped per established precedent."
-    }
-,
+    },
     {
       "run_id": "WF02-REQ312-20260911",
       "workflow_id": "WF-02",
@@ -6253,8 +6238,7 @@
       "backfilled": false,
       "last_known_step": "Step Final PASS -- merge pending.",
       "note": "REQ-312 (queue task 602, GH#1253) -- S10 gap 2, design-only requirement for an aggregation/reporting query capability (count/sum/avg/min/max/group_by) over Letflow.Entities.Query.Compiler, extending Letflow.Routers.Entities' POST /entities/query surface with a new sibling route POST /entities/query/aggregate and a new compile_aggregate/2. Design artefact: lib/letflow/design/req312-query-aggregation.md. Pipeline: CODE-DESIGNER (2 rework cycles: a self-contradictory typed_columns/1 arity citation + a misquote, then a genuine security gap) -> CODE-DESIGN-VALIDATOR PASS -> SECURITY-REVIEWER FAIL then PASS (found the design's INV-2 mechanism exempted filters fields, which combined with count/group_by turns a weak single-bit filter oracle into an exact per-group count reconstructing a restricted field's tenant-wide distribution; fixed by extending the restriction check to filters fields, scoped only to the new aggregate route; verdict recorded in the design artefact per this requirement's own AC) -> CODE-DESIGN-VALIDATOR final narrow re-check PASS. No lib/ implementation, no route mounted, no migration, no test."
-    }
-,
+    },
     {
       "run_id": "WF02-REQ314-20260911",
       "workflow_id": "WF-02",
@@ -6274,8 +6258,7 @@
       "backfilled": false,
       "last_known_step": "Step Final PASS -- merge pending.",
       "note": "REQ-314 (queue task 604, GH#1255) -- S10 gap 12, design-only requirement for bulk import/export of entity records, a records-level sibling to Letflow.Definitions.ExportImport. Own schema-versioned document format, export reuses the POST /entities/query selection pipeline, import goes through create_record/2 exclusively with no independent validation. Pipeline: CODE-DESIGNER (3 rework cycles: two self-referential grep-quine citation issues, then a genuine INV-2 permission-model gap) -> CODE-DESIGN-VALIDATOR PASS -> SECURITY-REVIEWER FAIL then PASS (found the original single-tier unredacted-export argument was a category error -- no existing capability lets one identity bypass FieldGrants at scale; fixed with a two-tier atom scheme, default respects FieldGrants, a new explicitly-exceptional atom gates the unredacted variant with fail-closed 403) -> CODE-DESIGN-VALIDATOR final re-check PASS. No lib/ implementation, no route mounted, no migration, no test."
-    }
-,
+    },
     {
       "run_id": "WF03-ISS0613-20260911",
       "workflow_id": "WF-03",
@@ -6694,6 +6677,27 @@
       "backfilled": false,
       "last_known_step": "Step Final PASS -- PR #1494 (the ISS-0703 fix) squash-merged to main as 6b47be61, CI (backend+frontend) confirmed green on the FIRST attempt, no --admin override needed. Follow-up PR #1496 (handoff finalization) squash-merged ff07f6eb; PR #1497 (this run-history append, rolling requirement_status volume 18 -> 19) squash-merged dc72c035. Queue task 703 released status: done. GitHub issue #1477 already closed at Step 5 (docs/issues/ISS-0703.yaml status: resolved).",
       "note": "ISS-0703 (queue task 703, GH#1477) -- live QA UAT run (REQ-360's WF-05) found a real PLATFORM_ADMIN Keycloak token getting HTTP 500 (empty body) from GET /api/v1/tenants, /api/v1/identity/users, /api/v1/health against https://qa.bizdala.com, filed as a suspected PLATFORM_ADMIN-specific merged-commit regression. ISSUE-FIXER's Step 0.5+1 diagnosis re-probed the live instance for real (fresh admin + operator tokens) and found the 500 was NOT currently reproducible and NOT tied to any merged commit in the 09-16->09-17 window or a QA redeploy (container up continuously since 2026-09-15) -- traced instead via live QA container logs (ssh + docker logs) to a caller-side request whose Authorization header carried the full raw Keycloak token-endpoint JSON blob instead of the extracted access_token. That malformed input triggered a real, independently-confirmed, still-live code defect: Letflow.Oidc.TokenVerifier.Oidcc.verify_bearer_token/2 (lib/letflow/oidc/token_verifier/oidcc.ex) let a CaseClauseError from jose_base64url.decode!/2, deep in the oidcc/jose dependency chain, propagate uncaught through Letflow.Plugs.AuthPipeline.verify_token/1 to a raw Bandit 500, instead of the pipeline's documented single-401-collapse for every verifier {:error,_} outcome. Full WF-03 chain, two real rework cycles: CODE-DESIGNER designed a rescue/catch boundary fix -> CODE-DESIGN-VALIDATOR FAIL (AC5: Section 4 had a literal Logger.warning/1 statement, Section 5 a fenced def/rescue/catch skeleton -- both implementation code, not signatures) -> rework iteration 1 fixed both -> CODE-DESIGN-VALIDATOR regate PASS -> ELIXIR-DEV implemented (rescue/catch on verify_bearer_token/2, {:error,{:verifier_crashed,%{kind:,message:}}}) -> SECURITY-REVIEWER FAIL (real BLOCKER on INV-4: the message field, built from Exception.message/1/inspect/1, could embed a literal fragment of the raw bearer token in logs/response -- the design's own worked example already showed this, just coincidentally harmless for the one confirmed crash shape) -> CODE-DESIGNER rework iteration 2 (replaced message with a classification field built ONLY from fixed atoms -- the exception's __struct__, or the caught reason itself if already an atom else one of two fixed constants -- no formatter ever applied to caught-value content, structurally leak-proof) -> CODE-DESIGN-VALIDATOR regate PASS -> ELIXIR-DEV re-implemented (rework 1) -> SECURITY-REVIEWER regate PASS (independently traced both branches, confirmed no path from raw_token to the log/tuple) -> REVIEWER PASS (idiom matches existing safe_to_existing_atom/1 precedent; flagged one MINOR doc-citation error, non-blocking) -> TEST-DESIGNER wrote a fail-then-pass regression test in test/letflow/integration/keycloak_auth_pipeline_test.exs (4 new tests: unit + integration tiers, the REAL Oidcc adapter not TokenVerifierDouble, plus an explicit non-token-leakage assertion via ExUnit.CaptureLog) with a real pre-fix-swap/post-fix-restore proof (3/7 passed pre-fix with the exact live crash chain reproduced, 7/7 post-fix) -> TEST-DESIGN-VALIDATOR independently reproduced the same fail-then-pass proof AND the non-leakage assertion itself from scratch, confirmed real adapter usage via config override inspection -> TEST-RUNNER ran the full suite for real (4334/4335 passed, 3805.9s; the one failure confirmed to be the known pre-existing unrelated A9 requirement_status_invariants_test.exs drift, re-verified by a targeted rerun) -> ISSUE-FIXER Step 5 closed docs/issues/ISS-0703.yaml (status: resolved, description corrected from the original PLATFORM_ADMIN-specific/merged-commit framing to what step-01's diagnosis actually found) and GH#1477 with an evidence comment. Step Final (ELIXIR-DEV): rebased cleanly, PR #1494 opened, CI green on the FIRST attempt (both backend+frontend checks) with no --admin override needed -- notably breaking the two-consecutive-override streak ISS-0704 and ISS-0705 had each hit on this exact same A9 drift, so per this run's own dispatched contingency instruction, no new queue-issue registration for the A9 drift was warranted from this run's evidence. Plain gh pr merge --squash --delete-branch succeeded, merged 6b47be61. Two MINOR process notes recorded in the run's own handoff: (1) ELIXIR-DEV briefly forgot to fill in Step Final's result before pushing, caught after PR #1494 was already merged, corrected via a small follow-up PR #1496 (merged ff07f6eb) rather than a direct push to main, per GIT_MERGE.md's zero-exception no-direct-push rule; (2) two clean local full-suite mix test runs on the identical post-rebase commit reported different single failing tests each time (neither the anticipated A9 test, neither intersecting this branch's diff) -- local full-suite runs on this host are not currently a reliable failure-identity oracle run-to-run, though CI itself (the authoritative gate) ran fully clean both times it mattered. ORCH independently re-read the merged lib/letflow/oidc/token_verifier/oidcc.ex, docs/issues/ISS-0703.yaml, and the regression test from origin/main to confirm the claimed changes actually landed before releasing the queue lock and writing run-history. Queue task 703 released_lock status: done. Run-history append (this entry) required rolling docs/status/requirement_status.yaml's current volume from 18 to 19 (volume 18 crossed the 1,200-line roll ceiling on this exact append) -- closed volume 18 (26 entries, 1211 frozen-prefix lines, sha256 25436a24542cf85b56f6bb36749c6fab68cb3f034aa1ef0477c95be620d074ea recorded in the index), opened volume 19 with the same header text, both landed via a small separate PR #1497 (merged dc72c035) since this bookkeeping also goes through the full branch+PR+CI cycle per GIT_MERGE.md's zero-exception rule."
+    },
+    {
+      "run_id": "WF02-REQ367-20260917",
+      "workflow_id": "WF-02",
+      "requirement_id": "REQ-367",
+      "issue_id": null,
+      "queue_task_id": 693,
+      "queue_agent_id": "TVOLODI-orch",
+      "github_issue_number": 1450,
+      "status": "IN_PROGRESS",
+      "owned_modules": [
+        "deploy/redeploy-qa.sh",
+        ".github/workflows/cd.yml"
+      ],
+      "branch_name": "feature/WF02-REQ367-20260917",
+      "started_at": "2026-09-17T14:35:03Z",
+      "lock_released_at": null,
+      "released_lock": false,
+      "backfilled": false,
+      "last_known_step": "Step 00 (git setup) COMPLETED PASS -- branch feature/WF02-REQ367-20260917 created and pushed by ELIXIR-DEV (commit 3a5daaae).",
+      "note": "CD to QA on merge -- new .github/workflows/cd.yml + deploy/redeploy-qa.sh, adapting letflow-queue own proven SSH-restricted-key CD pattern for qa.bizdala.com. Credentials out of scope (companion ai-dala-infra task)."
     }
   ]
 }

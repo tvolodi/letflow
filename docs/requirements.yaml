@@ -26686,7 +26686,7 @@ requirements:
     title: CD to QA on merge — .github/workflows/cd.yml + deploy/redeploy-qa.sh, triggered on push to main when backend or frontend paths changed, reusing letflow-queue's proven SSH-restricted-key pattern
     owner: ELIXIR-DEV
     impl_order: 693  # letflow-queue task id, GH#1450
-    status: pending
+    status: done
     stage: S7
     description: >
       User request: automatically deploy to qa.bizdala.com whenever a merge

@@ -1,0 +1,64 @@
+{
+  "handoff_id": "wf02-req367-step01b",
+  "run_id": "WF02-REQ367-20260917",
+  "workflow_id": "WF-02",
+  "step": "01b",
+  "from_agent": "ORCH",
+  "to_agent": "CODE-DESIGN-VALIDATOR",
+  "file": "handoffs/WF02-REQ367-20260917/step-01b-code-design-validator.json",
+  "created_at": "2026-09-17T15:35:00Z",
+  "started_at": "2026-09-17T15:35:00Z",
+  "completed_at": "2026-09-17T16:05:00Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S7",
+    "requirement_ids": ["REQ-367"],
+    "requirement_text": {
+      "REQ-367": "See handoffs/WF02-REQ367-20260917/step-00-git-setup.json's context.requirement_text for the full verbatim requirement description."
+    },
+    "artifacts_in": [
+      "lib/letflow/design/req367-cd-qa-deploy.md",
+      "handoffs/WF02-REQ367-20260917/step-01-code-designer.json"
+    ],
+    "owned_modules": [
+      "deploy/redeploy-qa.sh",
+      ".github/workflows/cd.yml"
+    ],
+    "branch_name": "feature/WF02-REQ367-20260917"
+  },
+  "task": {
+    "description": "WF-02 Step 1b -- Design gate for REQ-367's design (lib/letflow/design/req367-cd-qa-deploy.md). Claim this handoff (status IN_PROGRESS). Read the design file directly (not just CODE-DESIGNER's result.summary). This is infrastructure design (shell script + GitHub Actions workflow), not Elixir -- apply the same rigor as usual (per WF-02 Step 1b's standard checklist) adapted to this shape: (a) does every REQ-367 acceptance criterion map to a concrete design element -- no TBD/deferrals? (b) is deploy/redeploy-qa.sh's procedure fully specified (each step's purpose, target paths, ordering) without actual bash bodies? (c) is cd.yml's trigger/gate mechanism fully specified, including how it avoids duplicating ci.yml's diff logic, without actual YAML bodies? (d) are error-handling/failure-mode expectations stated (what happens if a step fails, health check fails, etc.) -- not left implicit? (e) are cross-file dependencies listed (what ci.yml change is implied, if any)? (f) is there any actual implementation code (real bash lines, real complete YAML blocks) present rather than structural/procedural description -- FAIL if so, even if a quoted precedent (the real letflow-queue cd.yml, clearly marked as a citation) is present, since that's documentation of an existing file, not new implementation, but check the NEW design sections (\\u00a71/\\u00a72 for redeploy-qa.sh/cd.yml) do not slip into full code?\n\nOne known unusual point to specifically evaluate: the design proposes adding a small artifact-upload step to .github/workflows/ci.yml's existing `changes` job (outside this requirement's own owned_modules of deploy/redeploy-qa.sh and .github/workflows/cd.yml), justified as necessary to satisfy REQ-367's 'reuse the changes job's outputs, no duplicated diff logic' acceptance criterion under a workflow_run cross-workflow trigger. Decide explicitly: is this in-scope scope creep or a legitimate, necessary, minimal touch this requirement's acceptance criteria actually require? State your reasoning either way -- this decision gates whether ELIXIR-DEV touches ci.yml at all in Step 2a.\n\nFAIL immediately on any check failure, no partial credit, per Step 1b's standard hard-gate procedure. Complete the handoff: PASS -> next_action 'Route to ELIXIR-DEV (Step 2a)' | FAIL -> next_action 'Rework CODE-DESIGNER', issues listing every failed check by requirement id. Commit the completed handoff JSON on branch feature/WF02-REQ367-20260917 and push.",
+    "acceptance_criteria": [
+      "Every REQ-367 acceptance criterion maps to a concrete design element, no TBD/deferrals",
+      "deploy/redeploy-qa.sh's full procedure specified without real bash implementation bodies",
+      "cd.yml's trigger/gate mechanism fully specified without real YAML implementation bodies",
+      "Error/failure-mode handling stated, not left implicit",
+      "Explicit ruling on whether the proposed ci.yml touch is legitimate minimal scope or creep",
+      "No implementation code present in the NEW design sections (quoted existing precedent is fine and expected)"
+    ]
+  },
+  "result": {
+    "status": "FAIL",
+    "next_action": "Rework CODE-DESIGNER",
+    "ci_yml_scope_ruling": {
+      "verdict": "LEGITIMATE_MINIMAL_SCOPE, not creep",
+      "reasoning": "REQ-367's own text mandates gating cd.yml on ci.yml's changes job outputs 'via workflow_run ... or an equivalent that avoids a second independent diff computation,' and explicitly forbids writing a second path-filter regex. A workflow_run-triggered workflow runs as a genuinely separate workflow run and cannot consume another workflow's job outputs via `needs:` (needs only resolves within one workflow run) -- this is a real GitHub Actions platform constraint, not a design choice. That leaves exactly three options: (1) duplicate the diff logic in cd.yml (explicitly forbidden by the requirement text), (2) some other cross-workflow signal-passing mechanism, or (3) the proposed artifact-upload addition. The proposed step is additive only (one new step in the existing `changes` job), does not touch the existing `filter`/`fallback` steps' git diff/regex logic at all, and is the standard documented pattern for passing data across a workflow_run boundary. Given the requirement's own explicit instruction leaves no alternative that avoids duplicated diff logic, this is necessary minimal scope this requirement's acceptance criteria actually require, not scope creep -- ELIXIR-DEV should touch this one step of ci.yml in Step 2a."
+    },
+    "checks": {
+      "a_every_ac_maps_to_design_element": "PASS -- §6 table maps all five requirement themes to concrete design elements; §7's open questions are genuinely environment-dependent unknowns (host file paths, an unconfirmed compose file, a port number) not resolvable from this checkout without host access, not deferrals of a design decision.",
+      "b_redeploy_qa_sh_procedure_specified_without_real_bash_bodies": "FAIL",
+      "c_cd_yml_mechanism_specified_without_real_yaml_bodies": "FAIL",
+      "d_error_failure_mode_handling_stated": "PASS -- explicit for every step (docker tag fallback `2>/dev/null || true` reasoning stated in prose, backend health-check retry/exit-1 shape, frontend health-check fail-loud on non-2xx, `set -euo pipefail` convention stated).",
+      "e_cross_file_dependencies_listed": "PASS -- ci.yml touch (§2), web/package.json build-script-name confirmation (§1 step 4 and §7.6), deploy/docker-compose.qa.yml existence check (§7.2) all named explicitly.",
+      "f_no_implementation_code_in_new_sections": "FAIL"
+    },
+    "issues": [
+      "REQ-367 check (b)/(f): lib/letflow/design/req367-cd-qa-deploy.md §1 (deploy/redeploy-qa.sh, a NEW file -- not existing-file citation) contains literal, directly copy-pasteable bash statements rather than structural/procedural description only. Evidence: step 2 gives `cd \"$APP_DIR\"`, `git pull`, `CURRENT_REF=$(git rev-parse --short HEAD)` verbatim; step 3 gives `docker tag ... letflow-qa:rollback-$DATE ... 2>/dev/null || true`, `docker build -f deploy/Dockerfile -t letflow-qa:latest .`, `$COMPOSE up -d db`, `$COMPOSE up -d --force-recreate app` verbatim; step 7 gives `curl -sf https://qa.bizdala.com/` verbatim. These are not paraphrased steps ('build the backend image, tag a rollback copy first') -- they are the actual command lines that would appear in the shipped script, distributed through prose instead of a fenced code block, but functionally identical to writing the script body. This is implementation code, not a procedural outline, and is exactly the risk the handoff task told this validator to check for.",
+      "REQ-367 check (c)/(f): lib/letflow/design/req367-cd-qa-deploy.md §2 (.github/workflows/cd.yml, a NEW file) contains literal YAML key/value fragments that are directly usable as-is, not structural description. Evidence: the Triggers subsection gives `on: workflow_run: workflows: [\"CI\"], branches: [main], types: [completed]` verbatim; the job-level gate gives `if: github.event.workflow_run.conclusion == 'success'`; the Steps subsection gives the SSH step's four real input keys verbatim -- `host: ${{ secrets.QA_DEPLOY_HOST }}`, `username: ${{ secrets.QA_DEPLOY_USER }}`, `key: ${{ secrets.QA_DEPLOY_SSH_KEY }}`, `script: bash /opt/apps/letflow-qa/deploy/redeploy-qa.sh` -- and the step-level gate gives `if: steps.<read-step-id>.outputs.deploy == 'true'`. Concatenated, these fragments amount to nearly the full real cd.yml body, not a structural outline ELIXIR-DEV still has to design from scratch.",
+      "Distinguish from what is NOT a violation: §0's citations of letflow-queue's real cd.yml and this repo's real ci.yml (both existing files, clearly marked as precedent/citation) are correctly out of scope for this finding -- the FAIL is specific to §1/§2's NEW-file sections slipping literal syntax in alongside the procedural description."
+    ]
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

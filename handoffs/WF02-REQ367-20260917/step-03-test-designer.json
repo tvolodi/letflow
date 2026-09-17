@@ -1,0 +1,47 @@
+{
+  "handoff_id": "wf02-req367-step03",
+  "run_id": "WF02-REQ367-20260917",
+  "workflow_id": "WF-02",
+  "step": "03",
+  "from_agent": "ORCH",
+  "to_agent": "TEST-DESIGNER",
+  "file": "handoffs/WF02-REQ367-20260917/step-03-test-designer.json",
+  "created_at": "2026-09-17T20:15:00Z",
+  "started_at": "2026-09-17T20:15:00Z",
+  "completed_at": "2026-09-17T21:05:00Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S7",
+    "requirement_ids": ["REQ-367"],
+    "requirement_text": {
+      "REQ-367": "See handoffs/WF02-REQ367-20260917/step-00-git-setup.json's context.requirement_text for the full verbatim requirement description."
+    },
+    "artifacts_in": [
+      "deploy/redeploy-qa.sh",
+      ".github/workflows/cd.yml",
+      ".github/workflows/ci.yml"
+    ],
+    "owned_modules": [
+      "deploy/redeploy-qa.sh",
+      ".github/workflows/cd.yml",
+      ".github/workflows/ci.yml"
+    ],
+    "branch_name": "feature/WF02-REQ367-20260917"
+  },
+  "task": {
+    "description": "WF-02 Step 3 -- Test design scope test for REQ-367 (CD to QA deploy infra). Claim this handoff (status IN_PROGRESS). Apply WF-02 Step 3's scope test per docs/agents/workflows/WF-02_requirement_implementation.md: does Step 2a's artifacts_out contain application-executable surface an ExUnit/StreamData test could plausibly exercise? deploy/redeploy-qa.sh and .github/workflows/cd.yml are new shell/YAML infrastructure with no Elixir application logic; the additive change to .github/workflows/ci.yml is also pure YAML. None of these are 'nothing to unit-test' by file-extension coincidence (like mix.exs) -- they are genuinely deploy-time infra with no runtime Elixir behavior for ExUnit to exercise, and this project's test suite does not (and per this run's own scope should not) spin up a real SSH target / GitHub Actions runner to exercise a workflow_run trigger end-to-end. This matches the scope test's 'no application-executable surface' branch. HOWEVER: before concluding this, verify explicitly (don't just assert) that the acceptance-criteria demonstrations already exist as quoted real command output from Step 2a (bash -n syntax check, YAML parse checks, git diff confirmations) -- read handoffs/WF02-REQ367-20260917/step-02a-elixir-dev.json's result to confirm these were actually run and quoted, since RELEASE-VALIDATOR will rely on that evidence instead of a test run. If any acceptance criterion has no such quoted demonstration, note it as a gap for RELEASE-VALIDATOR to close, rather than silently assuming it's fine. Complete the handoff: status PASS, summary stating the scope-test conclusion and listing exactly which quoted command-output demonstrations exist for which acceptance criteria, next_action 'Route directly to RELEASE-VALIDATOR (Step 5) -- Steps 3b/4 skipped, RELEASE-VALIDATOR verifies acceptance criteria by reading the artefacts directly (including the quoted command-output demonstrations from Step 2a) rather than by test result.' Commit and push on feature/WF02-REQ367-20260917.",
+    "acceptance_criteria": [
+      "Scope-test conclusion stated explicitly with reasoning, not asserted without checking",
+      "Every REQ-367 acceptance criterion's evidence source (which quoted Step 2a command output, or a gap) is listed explicitly for RELEASE-VALIDATOR to consume"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "Scope-test conclusion: NO application-executable surface. artifacts_out from Step 2a is deploy/redeploy-qa.sh (bash), .github/workflows/cd.yml (new YAML), and an additive change to .github/workflows/ci.yml (YAML) -- pure deploy-time shell/CI infrastructure, no Elixir application logic for ExUnit/StreamData to exercise, and per this run's own stated scope the suite must not spin up a real SSH target or GitHub Actions runner to exercise a workflow_run trigger end-to-end. This is the scope test's 'no application-executable surface' branch, not a file-extension coincidence like mix.exs -- there is genuinely no runtime Elixir behavior here.\n\nPer-acceptance-criterion evidence audit (REQ-367, from Step 2a's task.acceptance_criteria): before accepting the 'no surface' conclusion, I checked whether Step 2a's own result.validation_evidence had a quoted demonstration for each criterion, and where it only covered syntax/parse-level checks (not content), I independently re-verified content myself this turn and quote that evidence below so RELEASE-VALIDATOR has it either way.\n\n1. 'deploy/redeploy-qa.sh exists, targeting /opt/apps/letflow-qa/ ..., performing all 4 named steps' -- Step 2a quoted only `bash -n deploy/redeploy-qa.sh -> exit 0` (syntax, not content). GAP in Step 2a's own evidence, CLOSED by me this turn: read the full file (deploy/redeploy-qa.sh, 146 lines) directly. Confirms APP_DIR=/opt/apps/letflow-qa (line 28), git pull (lines 40-44), backend docker build + `$COMPOSE up -d --force-recreate app` (lines 49-62), throwaway node:22 frontend build with VITE_OIDC_AUTHORITY/VITE_OIDC_CLIENT_ID sourced from qa.env plus atomic mv-based swap with a timestamped backup (lines 64-116), and both health checks -- backend /health JSON parse retry loop (lines 118-132) and frontend https://qa.bizdala.com/ curl (lines 134-144). Re-ran `bash -n deploy/redeploy-qa.sh` myself -> exit 0, output 'BASH_SYNTAX_OK'.\n\n2. 'cd.yml exists, triggered after ci.yml succeeds on main, gated on the same backend/frontend signal ci.yml's changes job computes without a duplicated diff computation' -- Step 2a quoted only the YAML parse check (syntax, not content). GAP CLOSED by me: read .github/workflows/cd.yml directly. Confirms `on: workflow_run: workflows: [\"CI\"], branches: [main], types: [completed]` (lines 25-28), job condition `github.event.workflow_run.conclusion == 'success'` (line 39), and the gate step downloads the `path-filter-outputs` artifact via actions/download-artifact@v4 with run-id (lines 41-46) and sources backend/frontend from it (lines 48-56) rather than recomputing a diff. Re-ran the YAML parse myself -> 'CD_YML_OK'.\n\n3. 'uses the same SSH-action pattern letflow-queue's cd.yml uses ... referencing QA_DEPLOY_HOST/QA_DEPLOY_USER/QA_DEPLOY_SSH_KEY' -- GAP CLOSED by me: confirmed in cd.yml lines 58-70, `uses: appleboy/ssh-action@v1` with `host: secrets.QA_DEPLOY_HOST`, `username: secrets.QA_DEPLOY_USER`, `key: secrets.QA_DEPLOY_SSH_KEY`, invoking `bash /opt/apps/letflow-qa/deploy/redeploy-qa.sh`.\n\n4. 'deploy/redeploy-test.sh is left untouched' -- Step 2a quoted `git diff --stat -- deploy/redeploy-test.sh -> empty`. FULLY COVERED by Step 2a's own quoted evidence. Re-ran myself -> empty diff, 'REDEPLOY_TEST_DIFF_EMPTY_CONFIRMED'.\n\n5. 'ci.yml's existing diff/regex logic in the changes job is unchanged -- only a new additive step' -- Step 2a quoted a description of the diff (two new appended steps, zero lines changed in existing filter/fallback steps). FULLY COVERED. I independently read .github/workflows/ci.yml lines 124-213 and confirm: the existing `filter`/`fallback` steps' diff/regex logic (lines 136-195) is byte-identical to the pre-existing pattern, and the only additions are the 'Write path-filter outputs for cd.yml' and 'Upload path-filter outputs' steps (lines 197-213), which are pure downstream consumers of steps.filter/steps.fallback outputs already computed. Re-ran YAML parse myself -> 'CI_YML_OK'.\n\n6. 'Both new files' header comments explicitly state the redeploy-test.sh/redeploy-qa.sh relationship and QA-only deploy scope' -- GAP CLOSED by me: deploy/redeploy-qa.sh lines 6-13 state it is a 'SIBLING script, not a replacement' to redeploy-test.sh with explicit host/path/Compose-project contrast. cd.yml lines 7-10 state 'QA-ONLY: this workflow deploys exclusively to qa.bizdala.com ... letflow-test's own eventual CD wiring ... is a separate, not-yet-filed concern -- this file does not cover it.'\n\nConclusion: all 6 REQ-367 acceptance criteria now have quoted, content-level command-output or direct-file-read verification (2 from Step 2a's own quoted evidence, 4 closed by my own re-verification this turn) -- no outstanding gap for RELEASE-VALIDATOR to close. Per docs/agents/workflows/WF-02_requirement_implementation.md's scope test, this requirement is routed directly to RELEASE-VALIDATOR (Step 5); Steps 3b (TEST-DESIGN-VALIDATOR) and 4 (TEST-RUNNER) are skipped as there is no executable test artifact to validate or run.",
+    "artifacts_out": [],
+    "next_action": "Route directly to RELEASE-VALIDATOR (Step 5) -- Steps 3b/4 skipped, RELEASE-VALIDATOR verifies acceptance criteria by reading the artefacts directly (including the quoted command-output demonstrations from Step 2a and this handoff's own supplemental content-level verification) rather than by test result."
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

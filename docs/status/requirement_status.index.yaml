@@ -3914,8 +3914,31 @@ volumes:
     path: docs/status/requirement_status.v19.yaml
     status: current
     opened: 2026-09-17
-    entries: 1
+    entries: 7
     note: >
+      Incremented to 7 by DOC-UPDATER's own REQ-369 blocked-event append (Step
+      6, WF02-REQ369-20260917) -- `grep -c "^  - req:"
+      docs/status/requirement_status.v19.yaml` = 7 on-disk entries; 364
+      lines / 21211 bytes, well under the 1200-line/120000-byte roll
+      ceiling, no roll triggered.
+
+      Incremented to 5 by DOC-UPDATER's own REQ-367 done-event append (Step
+      6, WF02-REQ367-20260917) -- `grep -c "^  - req:"
+      docs/status/requirement_status.v19.yaml` = 5 on-disk entries; 321
+      lines / 18581 bytes, well under the 1200-line/120000-byte roll
+      ceiling, no roll triggered.
+
+      Incremented to 4 by ORCH's own REQ-367 started-event append (Step 00,
+      WF02-REQ367-20260917) -- `grep -c "^  - req:"
+      docs/status/requirement_status.v19.yaml` = 4 on-disk entries; well
+      under the 1200-line/120000-byte roll ceiling, no roll triggered.
+
+      Incremented to 3 by WF02-REQ361-20260917 (DOC-UPDATER)'s own REQ-361
+      done-event append (Step 6) -- `grep -c "^  - req:"
+      docs/status/requirement_status.v19.yaml` = 3 on-disk entries; 253
+      lines / 14849 bytes, well under the 1200-line/120000-byte roll
+      ceiling, no roll triggered.
+
       Incremented to 1 by this ORCH session's own DOC-UPDATER SCOPE-CHANGE
       (ISS-0700 partial-action, REQ-360 stale-clause correction) done-event
       append, redirected here from volume 18 during this branch's rebase

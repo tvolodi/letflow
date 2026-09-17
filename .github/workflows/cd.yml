@@ -1,0 +1,70 @@
+name: CD (QA)
+
+# Runs only after CI succeeds on main -- never deploys code that hasn't
+# passed mix letflow.check / npm run check. See workflows/ci.yml for the
+# tested jobs.
+#
+# QA-ONLY: this workflow deploys exclusively to qa.bizdala.com via
+# deploy/redeploy-qa.sh. letflow-test's own eventual CD wiring (if
+# deploy/redeploy-test.sh is ever activated for its own target) is a
+# separate, not-yet-filed concern -- this file does not cover it.
+#
+# REQ-367: adapts the sibling letflow-queue repo's proven cd.yml shape
+# (workflow_run off CI success, restricted-SSH-key deploy) rather than
+# inventing a new deploy mechanism. One deliberate divergence: this repo's
+# ci.yml already computes backend/frontend path-filter outputs (letflow-queue's
+# does not), and REQ-367 requires gating the QA deploy on that same signal
+# without duplicating the diff computation. A workflow_run-triggered
+# workflow is a separate workflow run and cannot read another workflow's
+# job outputs via `needs:` -- so the gate is threaded across that boundary
+# via the path-filter-outputs artifact ci.yml's `changes` job now uploads
+# (see ci.yml) rather than either a second diff/regex or an unconditional
+# deploy. See lib/letflow/design/req367-cd-qa-deploy.md §2-3 for the full
+# reasoning.
+on:
+  workflow_run:
+    workflows: ["CI"]
+    branches: [main]
+    types: [completed]
+
+jobs:
+  deploy:
+    name: Deploy to QA
+    runs-on: ubuntu-latest
+    # Job-level condition: only that CI itself succeeded (not cancelled/
+    # failed). Whether backend/frontend actually changed is a *step*-level
+    # condition below, matching ci.yml's own documented preference for
+    # step-level over job-level path-filter conditions (so the job still
+    # runs and reports success with skipped steps, rather than vanishing).
+    if: github.event.workflow_run.conclusion == 'success'
+    steps:
+      - name: Download path-filter outputs from the triggering CI run
+        uses: actions/download-artifact@v4
+        with:
+          name: path-filter-outputs
+          run-id: ${{ github.event.workflow_run.id }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Determine whether to deploy
+        id: gate
+        run: |
+          source path-filter-outputs.txt
+          if [[ "$backend" == "true" || "$frontend" == "true" ]]; then
+            echo "should_deploy=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "should_deploy=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Deploy to QA (ubuntu-16gb-nbg1-1)
+        if: steps.gate.outputs.should_deploy == 'true'
+        uses: appleboy/ssh-action@v1
+        with:
+          host: ${{ secrets.QA_DEPLOY_HOST }}
+          username: ${{ secrets.QA_DEPLOY_USER }}
+          key: ${{ secrets.QA_DEPLOY_SSH_KEY }}
+          # The deploy key's authorized_keys entry is restricted (command=)
+          # to invoke deploy/redeploy-qa.sh only -- see ai-dala-infra's
+          # T-0111 pattern (companion provisioning task, not part of
+          # REQ-367). Any script passed here is ignored by sshd in favor of
+          # the forced command; it's included anyway for clarity/documentation.
+          script: bash /opt/apps/letflow-qa/deploy/redeploy-qa.sh

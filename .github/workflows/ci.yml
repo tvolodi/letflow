@@ -194,6 +194,27 @@ jobs:
           echo "backend=true" >> "$GITHUB_OUTPUT"
           echo "frontend=true" >> "$GITHUB_OUTPUT"
 
+      # REQ-367: publish this job's already-computed backend/frontend outputs
+      # as a build artifact so .github/workflows/cd.yml (a separate,
+      # workflow_run-triggered workflow) can gate its QA deploy on the same
+      # signal without a second git diff/regex computation -- a workflow_run
+      # trigger runs as a distinct workflow run and cannot read this job's
+      # `outputs:` via `needs:` (that only works within one workflow run).
+      # Pure downstream consumer of the values the filter/fallback steps
+      # above already produced -- does not touch their diff/regex logic.
+      - name: Write path-filter outputs for cd.yml
+        run: |
+          echo "backend=${{ steps.filter.outputs.backend || steps.fallback.outputs.backend }}" >> path-filter-outputs.txt
+          echo "frontend=${{ steps.filter.outputs.frontend || steps.fallback.outputs.frontend }}" >> path-filter-outputs.txt
+          cat path-filter-outputs.txt
+
+      - name: Upload path-filter outputs
+        uses: actions/upload-artifact@v4
+        with:
+          name: path-filter-outputs
+          path: path-filter-outputs.txt
+          retention-days: 1
+
   # This job's `name:` string is a required-status-check `context` on main's branch
   # protection (docs/migration/decisions/0018-branch-protection-posture.md). Do not
   # rename it without updating that record's `contexts` list and re-running its

@@ -71,6 +71,7 @@ Routing logic, gates, rework/escalation rules, stage-gate enforcement:
 | `RELEASE-VALIDATOR` | Independently re-verifies acceptance criteria before a requirement/stage is marked done | [`.claude/agents/release-validator.md`](.claude/agents/release-validator.md) |
 | `DOC-UPDATER` | Flips requirement status, appends status history, updates docs | [`.claude/agents/doc-updater.md`](.claude/agents/doc-updater.md) |
 | `UAT-RUNNER` | Scenario-based acceptance checks against a real running instance (load-bearing from S7 on) | [`.claude/agents/uat-runner.md`](.claude/agents/uat-runner.md) |
+| `PRODUCT-OWNER` | Reads every BA-<VERTICAL> sign-off for a UAT run and writes the platform's plain-language release recommendation ("should we ship?") — distinct from RELEASE-VALIDATOR's technical "is it safe to ship?" | [`.claude/agents/product-owner.md`](.claude/agents/product-owner.md) |
 
 **Default `AGENT_ID`:** if none is stated, default to `ORCH`. `ORCH`
 may act directly instead of routing through the full chain only when a

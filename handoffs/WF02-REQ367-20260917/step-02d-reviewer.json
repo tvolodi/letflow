@@ -1,0 +1,60 @@
+{
+  "handoff_id": "wf02-req367-step02d",
+  "run_id": "WF02-REQ367-20260917",
+  "workflow_id": "WF-02",
+  "step": "02d",
+  "from_agent": "ORCH",
+  "to_agent": "REVIEWER",
+  "file": "handoffs/WF02-REQ367-20260917/step-02d-reviewer.json",
+  "created_at": "2026-09-17T14:53:01Z",
+  "started_at": "2026-09-17T14:53:01Z",
+  "completed_at": "2026-09-17T14:53:32Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S7",
+    "requirement_ids": ["REQ-367"],
+    "requirement_text": {
+      "REQ-367": "See handoffs/WF02-REQ367-20260917/step-00-git-setup.json's context.requirement_text for the full verbatim requirement description."
+    },
+    "artifacts_in": [
+      "deploy/redeploy-qa.sh",
+      ".github/workflows/cd.yml",
+      ".github/workflows/ci.yml",
+      "lib/letflow/design/req367-cd-qa-deploy.md"
+    ],
+    "owned_modules": [
+      "deploy/redeploy-qa.sh",
+      ".github/workflows/cd.yml",
+      ".github/workflows/ci.yml"
+    ],
+    "branch_name": "feature/WF02-REQ367-20260917"
+  },
+  "task": {
+    "description": "WF-02 Step 2d -- Idiom review for REQ-367 (CD to QA deploy infra). Claim this handoff (status IN_PROGRESS). Read the diff (git diff main...HEAD) and follow .claude/agents/reviewer.md's four questions, adapted for this non-Elixir infra change: (1) idiomatic vs. crutch -- does deploy/redeploy-qa.sh follow the SAME conventions as the existing deploy/redeploy-test.sh (set -euo pipefail, retry-loop health-check shape, variable naming), or does it invent a divergent style with no stated reason? (2) supervision integrity -- N/A for this change (no OTP supervision tree touched), state that explicitly. (3) type-safety / correctness gaps -- for shell+YAML, the equivalent is: does the script fail loudly (exit non-zero) on every real failure path rather than silently continuing? Does cd.yml's gate correctly fail-safe (does an artifact-download failure cause a silent no-deploy or a loud error)? (4) scope creep -- is the one additive step to ci.yml's changes job (already ruled legitimate minimal scope by CODE-DESIGN-VALIDATOR, see step-01b's ci_yml_scope_ruling) still genuinely minimal in the actual implementation, or did ELIXIR-DEV's implementation add anything beyond what was designed/ruled? Also check docs/anti-patterns.md for any relevant prior finding this change might repeat. Check consistency with docs/migration/decisions/ -- particularly whether this diverges from any documented CI/CD decision without a stated reason (the design's §0 already addresses the letflow-queue-pattern-reuse question; confirm the implementation matches what was cited, not something else). FAIL if a genuine crutch, unexplained divergence, silent-failure path, or unjustified scope creep is found; otherwise PASS with any non-blocking notes recorded. Complete the handoff: PASS -> next_action 'Route to TEST-DESIGNER (3)' | FAIL -> next_action 'Rework ELIXIR-DEV'. Commit and push on feature/WF02-REQ367-20260917.",
+    "acceptance_criteria": [
+      "Idiom check: redeploy-qa.sh follows redeploy-test.sh's own established conventions, divergences justified",
+      "Correctness: every real failure path in both new artifacts fails loudly, none silently swallowed",
+      "Scope: the ci.yml addition matches exactly what was designed/ruled, nothing beyond it",
+      "Consistency with docs/anti-patterns.md and docs/migration/decisions/ checked explicitly"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "orch_timestamp_correction": "ORCH's original dispatch fabricated created_at/started_at as a sequential-narrative timestamp (2026-09-17T19:35:00Z) rather than a real clock read, and also left a duplicate null completed_at key from a template artifact -- both caught by CI's letflow.lint_handoffs H2/H3 checks. created_at/started_at corrected to 14:53:01Z (derived from this handoff's own real dispatch-commit timestamp, 6a2fdc9, 2026-09-17T19:53:01+05:00, not re-guessed) and the duplicate null completed_at key removed.",
+    "next_action": "Route to TEST-DESIGNER (3)",
+    "findings": {
+      "1_idiom_vs_crutch": "PASS -- deploy/redeploy-qa.sh follows redeploy-test.sh's established conventions exactly: same shebang, same `set -euo pipefail`, same header-comment shape (purpose, run instructions, invocation modes), same numbered-step structure, same variable naming (APP_DIR, COMPOSE, DATE, CURRENT_REF), same rollback-tag-best-effort pattern (`docker tag ... 2>/dev/null || true`), same db-then-app compose sequencing with the same rationale comment, same 10-attempt/3s-sleep health-check retry shape. Every divergence is explicitly justified inline rather than silent: TIMESTAMP (sub-day granularity) is justified by the same-day web-dist-backup collision risk redeploy-test.sh doesn't have; the qa.env sourcing and frontend build/health-check steps are justified by QA having a second artefact (frontend bundle) that test's deploy doesn't; BACKEND_PORT overridability is justified by an explicitly-flagged open question (host port not confirmed at design time, cited to design doc §7 item 4) rather than silently guessing. No unexplained divergent style found.",
+      "2_supervision": "N/A -- no OTP supervision tree touched by this change. deploy/redeploy-qa.sh, cd.yml, and the ci.yml addition are CI/CD infrastructure only; Letflow.InstanceSupervisor and the gen_statem/Engine code are untouched.",
+      "3_failure_paths": "PASS -- every real failure path fails loudly. redeploy-qa.sh: `set -euo pipefail` makes any unguarded command failure fatal; the two `|| true` exceptions (docker tag rollback, python3 health-parse-or-empty) are both deliberate best-effort/retry-loop steps, not silent swallowing of a real failure -- the retry loop itself still `exit 1`s after 10 failed attempts, and qa.env's required vars use `: \"${VAR:?...}\"` guards that abort immediately if unset. cd.yml: the `actions/download-artifact@v4` step has no `continue-on-error`, so an artifact-download failure (missing/expired path-filter-outputs artifact) fails the job loudly rather than silently skipping to no-deploy -- confirmed no continue-on-error or `|| true` anywhere in cd.yml. The subsequent gate step only decides deploy-vs-skip based on the successfully-downloaded backend/frontend flags, which is the intended conditional (not a failure path).",
+      "4_scope_creep": "PASS -- the ci.yml addition (git diff main...HEAD -- .github/workflows/ci.yml) is exactly the two additive steps (\"Write path-filter outputs for cd.yml\", \"Upload path-filter outputs\") CODE-DESIGN-VALIDATOR's step-01b-regate ruling scoped as LEGITIMATE_MINIMAL_SCOPE: purely a downstream consumer of the existing `filter`/`fallback` steps' outputs, does not modify the existing diff/regex logic at all, adds no new job, no new trigger, no new permissions block. Nothing beyond what was designed/ruled.",
+      "anti_patterns_check": "docs/anti-patterns.md reviewed in full -- no entry applies to this change (existing entries are about mix toolchain assumptions, status-file volume handling, and clock/write ordering; none concern shell/CI-CD conventions). Nothing new to add.",
+      "decision_records_check": "docs/migration/decisions/ checked for CI/CD-relevant records: 0018-branch-protection-posture.md (ci.yml's changes job name is a required-status-check context; this change does not rename that job, confirmed) and 0033-pdf-qr-rendering-dependencies.md (unrelated). No decision record concerns a QA CD workflow or conflicts with this design. The design's §0 citation of letflow-queue's real cd.yml as reuse-precedent was checked against the actual implementation in cd.yml (workflow_run trigger, appleboy/ssh-action, restricted-SSH-key pattern) -- matches what was cited, nothing substituted."
+    },
+    "non_blocking_notes": [
+      "redeploy-qa.sh's BACKEND_PORT default (3113, matching redeploy-test.sh) and the exact qa.env file path/name remain open questions the design doc itself already flagged (§7 item 4) as needing host-access confirmation -- not a review blocker, just carried forward as a known follow-up before this script's first real QA run."
+    ]
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

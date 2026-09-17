@@ -1,0 +1,49 @@
+{
+  "handoff_id": "wf02-req369-step02c",
+  "run_id": "WF02-REQ369-20260917",
+  "workflow_id": "WF-02",
+  "step": "02c",
+  "from_agent": "SECURITY-REVIEWER",
+  "to_agent": "REVIEWER",
+  "file": "handoffs/WF02-REQ369-20260917/step-02c-security.json",
+  "created_at": "2026-09-17T15:45:10Z",
+  "started_at": "2026-09-17T15:30:00Z",
+  "completed_at": "2026-09-17T15:45:10Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S7",
+    "requirement_ids": ["REQ-369"],
+    "artifacts_in": [
+      "handoffs/WF02-REQ369-20260917/step-02b-frontend.json",
+      "web/src/pages/dashboard/PlatformDashboardPage.tsx",
+      "web/src/router.tsx",
+      "web/src/pages/OidcCallbackPage.tsx",
+      "test/fixtures/uat/scenarios/platform/platform-login-routing-by-role.yaml"
+    ]
+  },
+  "task": {
+    "description": "WF-02 Step 2c -- security gate on REQ-369's frontend diff (git diff main...HEAD) against docs/agents/instructions/security-invariants.md INV-1..INV-9."
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "Scope test: diff is frontend-only (web/src/pages/dashboard/PlatformDashboardPage.tsx new, web/src/router.tsx +2 lines, web/src/pages/OidcCallbackPage.tsx one-line role-conditional navigate(), plus a UAT fixture YAML). No migration, no Ecto schema, no new/changed API route, no secret-resolving code. It does touch role-based routing/gating (PLATFORM_ADMIN) and displays a tenant-count aggregate, so per the dispatch instruction it was treated as plausibly in-scope and checked for real against every invariant rather than reflexively marked NOT-APPLICABLE.\n\nINV-1 (tenant data isolation) -- NOT-APPLICABLE. No Ecto schema module or migration touched by this diff; nothing to check against 0003's :prefix mechanism.\n\nINV-2 (server-side field authorisation) -- APPLIES (this diff introduces a UI surface that is client-side-gated on PLATFORM_ADMIN and fetches a tenant aggregate; verified the actual authorization boundary rather than assuming NOT-APPLICABLE from the invariant doc's stale 'S4 not started' note -- S4's API surface demonstrably exists, e.g. lib/letflow/routers/tenants.ex). Verified: PlatformDashboardPage.tsx's isPlatformAdmin check (Boolean(session?.roles.includes('PLATFORM_ADMIN'))) is UX-only -- it is NOT the security boundary for the tenant data it displays. The underlying call, tenantsApi.list() -> GET /api/v1/tenants, is unchanged by this diff and is enforced server-side by lib/letflow/routers/tenants.ex's `authz_get \"/\", :TenantsManage` (Letflow.Api.Authorization.evaluate_access/2, PLATFORM_ADMIN-only via the :TenantsManage policy key), checked before any Repo call. Field selection for the response is server-built via the hand-written tenant_map/1 allowlist (6 keys), never a client-side redaction of a fuller struct. So even a non-admin who navigates directly to /platform-dashboard (bypassing the client-side Navigate-away) gets a 403 from the server on the underlying fetch, not a client-side-only block. PASS.\n\nINV-3 (untrusted runtime sandboxing) -- NOT-APPLICABLE. S5 not started; no scripting/plugin code in this diff.\n\nINV-4 (secrets by reference only) -- NOT-APPLICABLE to this diff's content (no config/env/secret-resolving code touched), verified anyway: `grep -rniE \"(password|secret|client_secret|token)\\s*(=|:)\\s*\\\"[^\\\"]{8,}\\\"\" web/src/pages/dashboard/PlatformDashboardPage.tsx web/src/router.tsx web/src/pages/OidcCallbackPage.tsx` -- zero hits.\n\nINV-5 (not-found/forbidden indistinguishability) -- NOT-APPLICABLE. This diff adds a dashboard page and a role-conditional redirect, not a new lookup-by-ID endpoint.\n\nINV-6 (new data-access paths prove their scoping) -- APPLIES (meta-invariant, always applies). Satisfied by this handoff itself: PASS status, every invariant explicitly assessed with applies/not-applicable and reasoning.\n\nINV-7 (no SQL string interpolation) -- NOT-APPLICABLE. No SQL/Ecto code in this diff (TypeScript/frontend only).\n\nINV-8 (no unhandled crashes on realistic failure paths) -- NOT-APPLICABLE. Invariant is scoped to lib/letflow/ (Elixir); this diff touches no Elixir code. (Noting for completeness, not as a substitute check: PlatformDashboardPage.tsx's own loading/error/success states are handled via QueryStateBoundary/classifyError, consistent with the project's existing frontend error-handling pattern, but this is outside INV-8's literal scope.)\n\nINV-9 (tenant-controlled outbound URL validation) -- NOT-APPLICABLE. No outbound HTTP request construction from tenant-controlled input in this diff.\n\nNo FAIL on any applicable invariant (INV-2, INV-6 both PASS). Routing to REVIEWER per WF-02 Step 2d.",
+    "invariants_assessed": {
+      "INV-1": "NOT-APPLICABLE",
+      "INV-2": "APPLIES - PASS",
+      "INV-3": "NOT-APPLICABLE",
+      "INV-4": "NOT-APPLICABLE",
+      "INV-5": "NOT-APPLICABLE",
+      "INV-6": "APPLIES - PASS",
+      "INV-7": "NOT-APPLICABLE",
+      "INV-8": "NOT-APPLICABLE",
+      "INV-9": "NOT-APPLICABLE"
+    },
+    "artifacts_out": [
+      "handoffs/WF02-REQ369-20260917/step-02c-security.json"
+    ],
+    "next_action": "Route to REVIEWER (2d)"
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

@@ -1,0 +1,65 @@
+{
+  "handoff_id": "wf02-req367-step02c",
+  "run_id": "WF02-REQ367-20260917",
+  "workflow_id": "WF-02",
+  "step": "02c",
+  "from_agent": "ORCH",
+  "to_agent": "SECURITY-REVIEWER",
+  "file": "handoffs/WF02-REQ367-20260917/step-02c-security-reviewer.json",
+  "created_at": "2026-09-17T14:51:26Z",
+  "started_at": "2026-09-17T14:51:26Z",
+  "completed_at": "2026-09-17T14:52:05Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S7",
+    "requirement_ids": ["REQ-367"],
+    "requirement_text": {
+      "REQ-367": "See handoffs/WF02-REQ367-20260917/step-00-git-setup.json's context.requirement_text for the full verbatim requirement description."
+    },
+    "artifacts_in": [
+      "deploy/redeploy-qa.sh",
+      ".github/workflows/cd.yml",
+      ".github/workflows/ci.yml"
+    ],
+    "owned_modules": [
+      "deploy/redeploy-qa.sh",
+      ".github/workflows/cd.yml",
+      ".github/workflows/ci.yml"
+    ],
+    "branch_name": "feature/WF02-REQ367-20260917"
+  },
+  "task": {
+    "description": "WF-02 Step 2c -- Security gate for REQ-367 (CD to QA deploy infra: new deploy/redeploy-qa.sh, new .github/workflows/cd.yml, additive change to .github/workflows/ci.yml's changes job). Claim this handoff (status IN_PROGRESS). Read git diff main...HEAD for this branch and the three artifacts_in files directly. Run the scope test per WF-02 Step 2c's standard procedure: does this diff touch a tenant-data path per docs/agents/instructions/security-invariants.md's applicability notes? This is CI/CD infrastructure (a deploy script + GitHub Actions workflows), not an API route/migration/tenant-data-shaping code path in the usual sense -- but it DOES touch secrets handling (new QA_DEPLOY_HOST/QA_DEPLOY_USER/QA_DEPLOY_SSH_KEY secret references) and a script that will run with real host/deploy privileges once credentials are provisioned, so do not dismiss it as automatically out of scope without checking: specifically verify (a) no secret value is ever echoed/logged in the script or workflow, (b) no secret is written to a file the git repo would track, (c) the SSH-action step's secret references follow the same pattern already proven safe in production by letflow-queue's own cd.yml (cite it if reachable at c:\\Users\\tvolo\\dev\\ai-dala\\letflow-queue), (d) the frontend build's VITE_OIDC_AUTHORITY/VITE_OIDC_CLIENT_ID values are sourced from a host-local file rather than hardcoded in the script body, (e) no tenant/user data path is touched at all (this is deploy-time infra, not a runtime request path) -- state this explicitly as the basis for ruling INV-1..INV-8 NOT-APPLICABLE if that's the finding, rather than silently skipping. If genuinely out of scope after this check, PASS with summary 'out of scope -- no tenant-data path touched, exact reasoning: <state it>', next_action 'Route to REVIEWER (2d)'. If any applicable finding: FAIL with issues listing severity per invariant. Complete the handoff and commit+push on feature/WF02-REQ367-20260917.",
+    "acceptance_criteria": [
+      "Scope determination made explicitly with reasoning, not a silent skip",
+      "No secret value ever echoed/logged/written to a tracked file in either new artifact",
+      "SSH-action secret-reference pattern matches letflow-queue's own proven-safe production pattern",
+      "OIDC build-arg values sourced from a host-local file, not hardcoded"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "out of scope for INV-1..INV-3/INV-5/INV-9 -- no tenant-data path touched, exact reasoning: this diff (deploy/redeploy-qa.sh, .github/workflows/cd.yml, additive .github/workflows/ci.yml change) is deploy-time CI/CD infrastructure -- a shell script that runs on a QA host over an SSH deploy key restricted by authorized_keys `command=` to itself, and two GitHub Actions workflow files. It creates no Ecto schema/migration, no API route, no response-shaping code, and no lookup-by-ID handler; it never executes inside a request path and never reads or writes tenant business data. INV-4 (secrets by reference only) does apply, since the change adds three new GitHub secret references and a script that handles OIDC client config -- verified below.",
+    "invariants_assessed": {
+      "INV-1": "NOT-APPLICABLE -- no Ecto schema, migration, or tenant-scoped table touched.",
+      "INV-2": "NOT-APPLICABLE -- no API response type; S4 not reached by this diff regardless.",
+      "INV-3": "NOT-APPLICABLE -- no tenant-authored script/plugin sandboxing involved.",
+      "INV-4": "APPLIES -- SATISFIED. (a) No secret value is echoed or logged: `grep -n echo deploy/redeploy-qa.sh | grep -iE 'secret|key|password|token|oidc'` returned no matches -- the script's echo statements are progress/status lines only (deploy start, git ref, health-check progress), and VITE_OIDC_AUTHORITY/VITE_OIDC_CLIENT_ID are passed to the throwaway `docker run` build container via `-e` flags, never echoed. (b) No secret is written to a file the repo tracks: qa.env is `source`d (read) from $APP_DIR/qa.env, a host-local file outside the git working tree the script operates in (`git pull` inside $APP_DIR only updates the tracked repo content, not qa.env) -- the script never writes to it. (c) SSH-action secret-reference pattern matches letflow-queue's own proven-safe production cd.yml (read directly at c:\\Users\\tvolo\\dev\\ai-dala\\letflow-queue\\.github\\workflows\\cd.yml): both use `appleboy/ssh-action@v1` with `host/username/key` sourced from `secrets.*_DEPLOY_HOST/USER/SSH_KEY`, both rely on a `command=`-restricted authorized_keys entry documented inline, both pass a `script:` line that is documentation only since the forced command wins. letflow's cd.yml is structurally identical for the secret-handling steps (it adds an earlier, secret-free artifact-download/gate step ahead of the SSH step, which does not touch secret material). (d) VITE_OIDC_AUTHORITY/VITE_OIDC_CLIENT_ID build args are sourced from `$APP_DIR/qa.env` (host-local, not tracked, not a GitHub Actions secret, not hardcoded in the script body) -- confirmed at redeploy-qa.sh lines 68-78, with `:?` guards that fail loudly rather than default to an empty/hardcoded value. Second grep for hardcoded secret-shaped literals (`grep -niE '(password|secret|client_secret|token)\\s*(=|:)\\s*\"[^\"]{8,}\"' deploy/ .github/workflows/`) also returned no matches across all three changed files.",
+      "INV-5": "NOT-APPLICABLE -- no lookup-by-ID endpoint; S4 not reached.",
+      "INV-6": "SATISFIED by this handoff's existence -- new data-access-path proof requirement does not apply since no new data-access path (API route/host function/business-table migration) is introduced; this handoff itself is the explicit statement required for the meta-invariant regardless.",
+      "INV-7": "NOT-APPLICABLE -- no SQL, no Repo.query call in this diff (`grep -n Repo.query deploy/ .github/workflows/` -- not Elixir files, no matches possible; confirmed no raw SQL anywhere in the three artifacts).",
+      "INV-8": "NOT-APPLICABLE -- no Elixir error-handling path in this diff; the shell script's own failure handling (`set -euo pipefail`, explicit health-check retry-then-exit-1 blocks) is outside INV-8's Elixir-specific `{:ok,_}|{:error,_}` scope and not itself a tenant-request path.",
+      "INV-9": "NOT-APPLICABLE -- no outbound HTTP request built from tenant-controlled input; the script's curl calls target fixed, hardcoded QA infra URLs (127.0.0.1:$BACKEND_PORT/health, https://qa.bizdala.com/), not tenant-supplied data."
+    },
+    "issues": [
+      {
+        "severity": "MINOR",
+        "description": "ORCH's original dispatch fabricated created_at/started_at as a sequential-narrative timestamp (2026-09-17T18:30:00Z) rather than a real clock read, causing it to postdate the agent's own real completed_at (14:52:05Z) -- caught by CI's letflow.lint_handoffs H2 check. Corrected to 14:51:26Z, derived from this handoff's own real dispatch-commit timestamp (3bf6290, 2026-09-17T19:51:26+05:00), not re-guessed."
+      }
+    ],
+    "next_action": "Route to REVIEWER (2d)"
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

@@ -207,3 +207,158 @@ history:
       the now-closed predecessor, per this volume's own "never moves,
       edits or deletes an existing entry" rule for the closed volume and
       "append one entry per event" for the current one.
+
+  - req: REQ-361
+    event: started
+    agent: ORCH
+    at: "2026-09-17T14:07:16Z"
+    note: >
+      WF-02 run WF02-REQ361-20260917 (queue task 684, GH#1434) begins.
+      Defines a PRODUCT-OWNER-equivalent agent role for final release
+      sign-off, adapting R-Co's PRODUCT_OWNER.md. Depends on REQ-358 and
+      REQ-359, both status: done. Step 00 (git setup) PASS: branch
+      feature/WF02-REQ361-20260917 created and pushed by ELIXIR-DEV.
+
+  - req: REQ-361
+    event: done
+    agent: DOC-UPDATER
+    at: "2026-09-17T14:20:01Z"
+    note: >
+      WF-02 run WF02-REQ361-20260917 (queue task 684, GH#1434) complete,
+      RELEASE-VALIDATOR PASS. Shipped: new .claude/agents/product-owner.md
+      role file defining PRODUCT-OWNER (final release sign-off, "should we
+      ship?" vs. RELEASE-VALIDATOR's "is it safe to ship?"); reads every
+      BA-<VERTICAL> sign-off for a UAT run, enforces the single-BLOCKER-
+      blocks-release rule, cross-checks MUST-severity acceptance-criteria
+      coverage against docs/requirements.yaml, arbitrates cross-vertical
+      disagreements (routing to REQ-ANALYST if the underlying requirement
+      is ambiguous), writes a plain-language release recommendation.
+      docs/agents/AGENT_SYSTEM.md's roster table and capability matrix
+      gained a PRODUCT-OWNER row; docs/agents/ORCHESTRATOR.md's routing
+      updated so a UAT run's completion routes to PRODUCT-OWNER before
+      RELEASE-VALIDATOR, never in parallel with either; WF-05_uat_run.md
+      gained a new Step 4 ("PRODUCT-OWNER release recommendation");
+      docs/migration/decisions/0004-humanless-pipeline.md's dated addendum
+      (opened by REQ-359) extended to note this PRODUCT-OWNER half of the
+      deferred BO-*/PRODUCT-OWNER layer is now also actioned; CLAUDE.md's
+      roster table gained the PRODUCT-OWNER row. AC5 (real exercise of the
+      role, not just a definition) satisfied by
+      test/uat-reports/po-signoff-WF02-REQ359-20260916.yaml,
+      release_recommendation: BLOCKED, derived from the bilimbaga BA
+      sign-off's one BLOCKER finding — the role's first real invocation.
+      README.md checked: it does not itself enumerate the agent roster, so
+      no change needed there. Known pre-existing gap, correctly out of this
+      requirement's scope and NOT fixed here: REVIEWER's Step 2d review
+      flagged CLAUDE.md's roster table is still missing a BA-<VERTICAL> row
+      from the earlier REQ-359 — left for a separate follow-up.
+
+  - req: REQ-367
+    event: started
+    agent: ORCH
+    at: "2026-09-17T14:35:03Z"
+    note: >
+      WF-02 run WF02-REQ367-20260917 (queue task 693, GH#1450) begins.
+      CD to QA on merge -- new .github/workflows/cd.yml + new
+      deploy/redeploy-qa.sh, adapting tvolodi/letflow-queue's own proven
+      SSH-restricted-key CD pattern for qa.bizdala.com
+      (/opt/apps/letflow-qa/ on ubuntu-16gb-nbg1-1). Credentials
+      (SSH key provisioning, GitHub Actions secrets) explicitly out of
+      scope -- companion ai-dala-infra task, per T-0111's precedent. Step
+      00 (git setup) PASS: branch feature/WF02-REQ367-20260917 created and
+      pushed by ELIXIR-DEV.
+
+  - req: REQ-367
+    event: done
+    agent: DOC-UPDATER
+    at: "2026-09-17T14:59:02Z"
+    note: >
+      WF-02 run WF02-REQ367-20260917 (queue task 693, GH#1450) complete,
+      RELEASE-VALIDATOR PASS. Shipped: new .github/workflows/cd.yml
+      (triggers via workflow_run after CI succeeds on main, gated on the
+      same backend/frontend booleans ci.yml's existing changes job already
+      computes -- no second diff/path-filter logic, so a docs-only merge
+      correctly skips deploy) and new deploy/redeploy-qa.sh (targets
+      /opt/apps/letflow-qa/ on ubuntu-16gb-nbg1-1: git pull, backend Docker
+      rebuild + compose force-recreate, frontend rebuilt in a throwaway
+      node:22 container with real VITE_OIDC_AUTHORITY/VITE_OIDC_CLIENT_ID
+      build args and atomically swapped into web-dist/ with the previous
+      build backed up first, then health checks for both backend and
+      frontend). Reuses letflow-queue's own proven SSH-restricted-key CD
+      pattern (appleboy/ssh-action, QA_DEPLOY_HOST/QA_DEPLOY_USER/
+      QA_DEPLOY_SSH_KEY secret names).
+
+      Two facts stated explicitly per REQ-367's own acceptance criteria:
+      (a) THIS REQUIREMENT DOES NOT MAKE THE QA DEPLOY LIVE. The
+      QA_DEPLOY_* secrets referenced by cd.yml are not yet provisioned --
+      the companion ai-dala-infra task (SSH key provisioning on
+      ubuntu-16gb-nbg1-1 + `gh secret set` on tvolodi/letflow, following
+      T-0111's precedent) is a separate, required, not-yet-done step.
+      Until it lands, cd.yml will fail at the SSH step by design. (b) The
+      pre-existing deploy/redeploy-test.sh was left completely untouched
+      (git diff main...HEAD -- deploy/redeploy-test.sh is empty) -- it
+      targets a different, unrelated environment
+      (/opt/apps/letflow-test on host "hetzner-prod", Compose project
+      letflow-test), and its own stale header comment claiming automatic
+      invocation via .github/workflows/cd.yml was and remains wrong (no
+      such wiring exists for it). deploy/redeploy-qa.sh is a new sibling
+      script for the real QA target, not a repurposing or replacement of
+      it; redeploy-test.sh may still be needed for its own actual target
+      later and was not deleted.
+
+      README.md checked explicitly: it has a "QA deployment" section
+      (lines 224-264) describing how to reach the live QA instance and
+      fetch seeded-user credentials, but it does not itself document the
+      CI/CD triggering mechanism (manual vs. automatic) -- it points to
+      the sibling ai-dala-infra repo's app-registry for deploy detail, a
+      statement this change does not contradict. Since the new cd.yml/
+      redeploy-qa.sh are not yet live (per (a) above), no README update
+      is needed at this time; this will be revisited when the companion
+      credential-provisioning task lands and the deploy actually goes
+      live.
+
+      No docs/migration/stage-N-*.md or decisions/*.md file was named by
+      REQ-367's acceptance criteria (reread just now to confirm) -- none
+      required.
+  - req: REQ-369
+    event: started
+    agent: ORCH
+    at: "2026-09-17T15:32:55Z"
+    note: >
+      WF-02 Step 00 (git setup) PASS via FRONTEND-DEV -- branch
+      feature/WF02-REQ369-20260917 created off origin/main, pushed. Claimed from
+      letflow-queue task 708 (GH#1501). status flipped pending -> in_progress in
+      docs/requirements.yaml. Routing to CODE-DESIGNER (Step 1) next.
+
+  - req: REQ-369
+    event: blocked
+    agent: DOC-UPDATER
+    at: "2026-09-17T16:56:24Z"
+    note: >
+      WF-02 Step 6 (WF02-REQ369-20260917). AC1-5 done and merged (squash commit
+      3c0cbd24290c062d1974b7eb91fa74adcc2c42f4, PR #1507); RELEASE-VALIDATOR
+      independently re-verified them PASS-WITH-PENDING per
+      step-05-release-validation.json. AC6/AC7 (real PLATFORM_ADMIN login against
+      live QA with screenshot evidence, and the UAT scenario re-run against QA)
+      are blocked: UAT-RUNNER's step-05b-uat.json confirmed pre-merge that QA's
+      served bundle did not yet contain this branch's code (grepped for
+      "platform-dashboard" and "Platform Overview": 0 matches), so it deferred to
+      after the merge-triggered CD deploy. Post-merge, that CD deploy itself
+      failed at the SSH step ("error: missing server host") because the
+      QA_DEPLOY_HOST/QA_DEPLOY_USER/QA_DEPLOY_SSH_KEY GitHub secrets are not
+      provisioned in this repo -- a pre-existing, external gap, not a REQ-369
+      defect: the same gap REQ-367's own done-event above documented, tracked as
+      a companion ai-dala-infra task following the T-0111
+      (T-0111-provision-letflow-queue-cd-deploy-key.md) pattern. Nothing in this
+      repo can resolve it; it requires SSH key provisioning plus `gh secret set`
+      on the infra side. AC8 is satisfied by this note itself: ISS-0700
+      (docs/issues/ISS-0700.yaml) stays status: open, NOT closed by this
+      requirement, and the separate "Unknown workspace" banner gap for
+      non-PLATFORM_ADMIN unauthenticated/no-realm-slug users remains unresolved
+      and explicitly out of this requirement's scope. docs/requirements.yaml's
+      REQ-369 entry flipped in_progress -> blocked (not done) and gained a
+      close_out_note field recording all of the above plus the remaining-work
+      pointer (re-dispatch UAT-RUNNER once QA_DEPLOY_* secrets land and a
+      merge-triggered CD deploy succeeds, then flip to done). README.md checked
+      (grepped for platform-dashboard/PlatformDashboard/role-conditional --
+      no hits): it does not document per-role dashboard routing at all, so no
+      update needed.

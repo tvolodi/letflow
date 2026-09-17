@@ -5,6 +5,7 @@ import { AppShell } from '@/components/layout/AppShell'
 import { ErrorBoundary } from '@/components/layout/ErrorBoundary'
 import ProcessModulesPage from '@/pages/admin/modules/ProcessModulesPage'
 import TenantDashboardPage from '@/pages/dashboard/TenantDashboardPage'
+import PlatformDashboardPage from '@/pages/dashboard/PlatformDashboardPage'
 import DefinitionListPage from '@/pages/definitions/DefinitionListPage'
 import DefinitionEditorPage from '@/pages/definitions/DefinitionEditorPage'
 import InstanceBoardPage from '@/pages/instances/InstanceBoardPage'
@@ -48,6 +49,7 @@ export const router = createBrowserRouter([
     children: [
       { index: true, element: <TenantDashboardPage /> },
       { path: 'dashboard', element: <TenantDashboardPage /> },
+      { path: 'platform-dashboard', element: <PlatformDashboardPage /> },
       { path: 'definitions', element: <DefinitionListPage /> },
       { path: 'definitions/new', element: <DefinitionEditorPage /> },
       { path: 'definitions/:id', element: <DefinitionEditorPage /> },

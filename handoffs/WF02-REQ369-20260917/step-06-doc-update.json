@@ -1,0 +1,48 @@
+{
+  "handoff_id": "wf02-req369-step06",
+  "run_id": "WF02-REQ369-20260917",
+  "workflow_id": "WF-02",
+  "step": "06",
+  "from_agent": "DOC-UPDATER",
+  "to_agent": "ORCH",
+  "file": "handoffs/WF02-REQ369-20260917/step-06-doc-update.json",
+  "created_at": "2026-09-17T16:56:24Z",
+  "started_at": "2026-09-17T16:56:24Z",
+  "completed_at": "2026-09-17T16:56:24Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S7",
+    "requirement_ids": ["REQ-369"],
+    "artifacts_in": [
+      "handoffs/WF02-REQ369-20260917/step-05-release-validation.json",
+      "handoffs/WF02-REQ369-20260917/step-05b-uat.json",
+      "handoffs/WF02-REQ369-20260917/step-final-git-merge.json",
+      "docs/status/requirement_status.index.yaml",
+      "docs/status/requirement_status.v19.yaml"
+    ]
+  },
+  "task": {
+    "description": "Run WF-02 Step 6 for REQ-369 with a genuine external terminal blocker on AC6/AC7: flip status to blocked (NOT done), append a blocked event to the current run-history volume, do not close ISS-0700, and write an explicit close-out note into docs/requirements.yaml's REQ-369 entry recording the remaining-work pointer for whoever resumes this once the QA_DEPLOY_* secrets are provisioned."
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "docs/requirements.yaml's REQ-369 entry: status flipped in_progress -> blocked (line ~26795). A new close_out_note field was appended after depends_on: [REQ-360] stating -- AC1-AC5 done and merged (PR #1507, squash commit 3c0cbd24290c062d1974b7eb91fa74adcc2c42f4), independently re-verified by RELEASE-VALIDATOR (PASS-WITH-PENDING, step-05-release-validation.json); AC6/AC7 blocked because the post-merge CD-to-QA deploy failed at the SSH step (\"error: missing server host\") since QA_DEPLOY_HOST/QA_DEPLOY_USER/QA_DEPLOY_SSH_KEY are not provisioned as GitHub secrets in this repo -- a pre-existing, external, non-REQ-369 gap, the same one REQ-367's own done-event documented, tracked under ai-dala-infra's T-0111-provision-letflow-queue-cd-deploy-key.md pattern; AC8 satisfied by the note itself (ISS-0700 stays open, Unknown-workspace banner gap stated as unresolved and out of scope); and the remaining-work pointer (re-dispatch UAT-RUNNER once the secrets are provisioned and a merge-triggered CD deploy succeeds, execute the live-QA login + screenshot + scenario re-run for AC6/AC7, then flip status to done).\n\ndocs/status/requirement_status.index.yaml confirmed volume 19 (docs/status/requirement_status.v19.yaml) still status: current before appending. Read it in full (331 lines pre-append). Appended one `req: REQ-369, event: blocked` entry (timestamp from the clock, 2026-09-17T16:56:24Z) restating the same facts. `git diff --numstat` on the volume showed 34 additions / 0 deletions, confirming append-only. Post-append measurement: 364 lines / 21211 bytes, well under the 1200-line/120000-byte roll ceiling -- no roll triggered. Updated the index's volume-19 `entries:` count from 6 to 7 in the same commit, with a note recording the grep-verified on-disk count and size.\n\ndocs/issues/ISS-0700.yaml verified untouched: `status: open` (line 33), confirmed not edited by this step, per REQ-369's own explicit scope (\"do not close ISS-0700 from this requirement's own close-out\").\n\nREADME.md checked: grepped for `platform.*dashboard|dashboard.*platform|PlatformDashboard|role-conditional` -- zero matches. README.md does not document per-role dashboard routing or login-redirect behaviour at any level of detail this change would make stale, so no README update was made.\n\nNo docs/migration/stage-N-*.md or docs/migration/decisions/*.md file was named by REQ-369's acceptance criteria -- none required and none checked for a gap.",
+    "artifacts_out": [
+      "docs/requirements.yaml",
+      "docs/status/requirement_status.v19.yaml",
+      "docs/status/requirement_status.index.yaml",
+      "handoffs/WF02-REQ369-20260917/step-06-doc-update.json"
+    ],
+    "checks": {
+      "status_flip": "PASS -- docs/requirements.yaml REQ-369 status: blocked (not done), verified by Edit tool's applied diff",
+      "run_history_append": "PASS -- git diff --numstat showed 34\\t0 (additions only) on docs/status/requirement_status.v19.yaml",
+      "roll_rule": "not triggered -- 364 lines / 21211 bytes, under the 1200-line/120000-byte ceiling",
+      "iss_0700_untouched": "PASS -- status: open confirmed at line 33, no edit made",
+      "readme_check": "PASS -- grep found no per-role-dashboard documentation to update"
+    },
+    "next_action": "ORCH: do not release the letflow-queue lock on task 708 as fully done -- REQ-369 is status: blocked, not done. Track the companion ai-dala-infra QA_DEPLOY_* secret-provisioning task (T-0111 pattern); once it lands and a merge-triggered CD deploy to QA succeeds, re-dispatch UAT-RUNNER against https://qa.bizdala.com to close AC6/AC7 with real evidence, then re-dispatch DOC-UPDATER for the real done close-out."
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

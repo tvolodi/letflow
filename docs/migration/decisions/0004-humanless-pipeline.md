@@ -118,3 +118,27 @@ location entries. This addendum does not revise the original "Decision"/"Reasoni
 sections above, which remain correct as stated for the period before S7's precondition
 held. The `PRODUCT-OWNER`-equivalent half of the original deferral remains open,
 tracked as REQ-361.
+
+## Addendum (2026-09-17, REQ-361) — PRODUCT-OWNER-equivalent deferral actioned
+
+The 2026-09-16 addendum above actioned the BO-*-equivalent half of the original
+"What is explicitly NOT reproduced from R-Co" deferral (the BA-<VERTICAL> role)
+and left "The `PRODUCT-OWNER`-equivalent half of the original deferral remains
+open, tracked as REQ-361." REQ-361 actions that remaining half: a
+`PRODUCT-OWNER` role (`.claude/agents/product-owner.md`) ports R-Co's rubric —
+reads every BA-<VERTICAL> sign-off for a UAT run (never invoking a BA persona
+directly), enforces a single-BLOCKER-blocks-release rule, cross-checks
+MUST-severity acceptance-criteria coverage against `docs/requirements.yaml`,
+arbitrates cross-vertical disagreements (routing to REQ-ANALYST when the
+underlying requirement is ambiguous), and writes a plain-language release
+recommendation (`test/uat-reports/po-signoff-<run_id>.yaml`) — see
+`lib/letflow/design/product-owner-role.md` for the full design and
+`docs/agents/AGENT_SYSTEM.md` §3/§3.1/§6 for the resulting roster/capability/
+artifact-location entries. `docs/agents/workflows/WF-05_uat_run.md` gained a
+Step 4 for this role, sequenced after every BA-<VERTICAL> sign-off and strictly
+before `RELEASE-VALIDATOR`, matching R-Co's own WF-05 sequencing precedent ("it
+never runs in parallel with a BO agent"). This addendum does not revise the
+original "Decision"/"Reasoning" sections, nor the 2026-09-16 addendum, which
+remain correct as stated for their own periods. With both halves of the
+original R-Co-parity deferral now actioned, "What is explicitly NOT reproduced
+from R-Co" no longer has an open item tracked against this decision record.

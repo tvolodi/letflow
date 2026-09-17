@@ -1,0 +1,70 @@
+{
+  "handoff_id": "wf02-req367-step02a",
+  "run_id": "WF02-REQ367-20260917",
+  "workflow_id": "WF-02",
+  "step": "02a",
+  "from_agent": "ORCH",
+  "to_agent": "ELIXIR-DEV",
+  "file": "handoffs/WF02-REQ367-20260917/step-02a-elixir-dev.json",
+  "created_at": "2026-09-17T17:40:00Z",
+  "started_at": "2026-09-17T17:40:00Z",
+  "completed_at": "2026-09-17T18:15:00Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S7",
+    "requirement_ids": ["REQ-367"],
+    "requirement_text": {
+      "REQ-367": "See handoffs/WF02-REQ367-20260917/step-00-git-setup.json's context.requirement_text for the full verbatim requirement description."
+    },
+    "artifacts_in": [
+      "lib/letflow/design/req367-cd-qa-deploy.md",
+      ".github/workflows/ci.yml",
+      "deploy/redeploy-test.sh"
+    ],
+    "owned_modules": [
+      "deploy/redeploy-qa.sh",
+      ".github/workflows/cd.yml",
+      ".github/workflows/ci.yml"
+    ],
+    "branch_name": "feature/WF02-REQ367-20260917"
+  },
+  "task": {
+    "description": "WF-02 Step 2a -- Implementation for REQ-367 (CD to QA on merge). Claim this handoff (status IN_PROGRESS). Verify branch: git branch --show-current must equal feature/WF02-REQ367-20260917. Read lib/letflow/design/req367-cd-qa-deploy.md IN FULL (the approved, PASSED design -- CODE-DESIGN-VALIDATOR passed it after one rework; §1/§2 are prose-only by design, YOU write the actual code).\n\nImplement exactly what the design specifies:\n1. NEW FILE deploy/redeploy-qa.sh -- per design §1's ordered procedure. Make it executable-shaped (proper shebang, set -euo pipefail, matching deploy/redeploy-test.sh's own conventions -- read that file again for exact style/idioms to match). Follow every specific detail in §1: APP_DIR=/opt/apps/letflow-qa, git pull, backend docker build+compose recreate, throwaway node:22 frontend build with real VITE_OIDC_AUTHORITY/VITE_OIDC_CLIENT_ID args (source them from a host-local env file per §1's open-question resolution -- use a sensible convention and comment it clearly, e.g. sourcing $APP_DIR/qa.env), atomic swap with timestamped backup of the previous web-dist, both health checks (backend /health JSON parse, frontend https://qa.bizdala.com/ curl), matching redeploy-test.sh's retry-loop shape. Header comment must state this script's relationship to redeploy-test.sh explicitly (different host/path/target, sibling not replacement) per design §4.\n2. NEW FILE .github/workflows/cd.yml -- per design §2's structural outline. workflow_run trigger off ci.yml completion on main, job-level gate on conclusion=='success', the changes-job-reuse mechanism (see item 3 below for the one small ci.yml addition this requires), SSH deploy step via appleboy/ssh-action@v1 with QA_DEPLOY_HOST/QA_DEPLOY_USER/QA_DEPLOY_SSH_KEY secrets (not yet provisioned -- that's fine, expected), invoking redeploy-qa.sh. Match letflow-queue's real cd.yml's header-comment style (quoted in design §0) adapted for QA.\n3. ONE SMALL ADDITION to .github/workflows/ci.yml's existing `changes` job -- CODE-DESIGN-VALIDATOR explicitly ruled this in-scope, not creep (see handoffs/WF02-REQ367-20260917/step-01b-code-design-validator.json's ci_yml_scope_ruling). Add the artifact-upload step per design §2's 'How the gate reuses...' subsection: after computing backend/frontend, write those two values to a small file and upload as a build artifact so cd.yml's deploy job can consume it via actions/download-artifact@v4 with run-id. Do NOT touch ci.yml's existing filter/fallback steps' git diff/regex logic at all -- purely additive.\n4. Do NOT touch deploy/redeploy-test.sh at all.\n\nAfter implementing: mix compile --warnings-as-errors (only if this touches any .ex/.exs file -- it does not, this is pure shell+YAML, so note that this check is N/A and say so explicitly rather than silently skipping it). Validate the new YAML is syntactically valid (e.g. a YAML parse check -- python -c \"import yaml,sys; yaml.safe_load(open('.github/workflows/cd.yml'))\" or equivalent; also re-validate ci.yml still parses after your addition). Validate the shell script's syntax with `bash -n deploy/redeploy-qa.sh`. Run `mix format --check-formatted` only if it applies (it won't touch these files, but confirm nothing else broke).\n\nSelf-review checklist: no secrets/credentials hardcoded anywhere; deploy/redeploy-test.sh unchanged (confirm via git diff); ci.yml's existing changes-job diff/regex logic unchanged (confirm via git diff, only an addition); both new files' header comments state the required cross-references (cd.yml states it deploys only QA; redeploy-qa.sh states its relationship to redeploy-test.sh).\n\nComplete the handoff: artifacts_out listing every file created/modified, next_action 'Route to SECURITY-REVIEWER (2c)'. Commit and push on feature/WF02-REQ367-20260917.",
+    "acceptance_criteria": [
+      "deploy/redeploy-qa.sh exists, targeting /opt/apps/letflow-qa/ on ubuntu-16gb-nbg1-1, performing all 4 named steps (git pull, backend rebuild+recreate, frontend throwaway-container rebuild+atomic-swap with real build args and backup, health checks for both)",
+      ".github/workflows/cd.yml exists, triggered after ci.yml succeeds on main, gated on the same backend/frontend signal ci.yml's changes job computes without a duplicated diff computation",
+      "The workflow uses the same SSH-action pattern letflow-queue's cd.yml uses in production, referencing QA_DEPLOY_HOST/QA_DEPLOY_USER/QA_DEPLOY_SSH_KEY (distinct names, not required to exist yet)",
+      "deploy/redeploy-test.sh is left untouched (verify via git diff showing zero changes to that file)",
+      "ci.yml's existing diff/regex logic in the changes job is unchanged -- only a new additive step",
+      "Both new files' header comments explicitly state the redeploy-test.sh/redeploy-qa.sh relationship and QA-only deploy scope"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "artifacts_out": [
+      "deploy/redeploy-qa.sh (new)",
+      ".github/workflows/cd.yml (new)",
+      ".github/workflows/ci.yml (modified -- additive only, two new steps in the `changes` job)"
+    ],
+    "next_action": "Route to SECURITY-REVIEWER (2c)",
+    "validation_evidence": {
+      "mix_compile_warnings_as_errors": "N/A -- no .ex/.exs file touched; this is pure shell+YAML infrastructure work",
+      "mix_format_check_formatted": "N/A -- no Elixir file touched; skipped for the same reason as the compile check",
+      "bash_syntax_check": "bash -n deploy/redeploy-qa.sh -> exit 0, no output",
+      "yaml_parse_cd_yml": "python -c \"import yaml; yaml.safe_load(open('.github/workflows/cd.yml'))\" -> OK_CD_YML",
+      "yaml_parse_ci_yml": "python -c \"import yaml; yaml.safe_load(open('.github/workflows/ci.yml'))\" -> OK_CI_YML (re-validated after the addition)",
+      "redeploy_test_sh_untouched": "git diff --stat -- deploy/redeploy-test.sh -> empty (zero changes)",
+      "ci_yml_diff_review": "git diff -- .github/workflows/ci.yml shows only two new appended steps ('Write path-filter outputs for cd.yml', 'Upload path-filter outputs') after the existing fallback step -- zero lines changed in the existing filter/fallback steps' diff/regex logic",
+      "no_hardcoded_secrets": "grep -i 'password|secret|token|key' over deploy/redeploy-qa.sh -> only comment references to the SSH deploy-key mechanism and the qa.env sourcing convention; VITE_OIDC_* and QA_BACKEND_PORT are sourced from a host-local $APP_DIR/qa.env file, never hardcoded; cd.yml's three new secret names (QA_DEPLOY_HOST/QA_DEPLOY_USER/QA_DEPLOY_SSH_KEY) are referenced, not provisioned, per design/requirement"
+    },
+    "open_items_for_downstream_review": [
+      "deploy/docker-compose.qa.yml does not exist in this checkout (confirmed via `ls deploy/`) and was NOT authored by this handoff -- it is outside owned_modules and design §7 item 2 leaves its authorship as an open question rather than silently assuming it exists or creating it. redeploy-qa.sh's $COMPOSE variable references it by the same convention as redeploy-test.sh/docker-compose.test.yml; the compose file must exist on the QA host (or be authored as a follow-up) before this script can actually run.",
+      "Backend health-check port (design §7 item 4) is resolved by sourcing QA_BACKEND_PORT from qa.env with a 3113 fallback default (matching redeploy-test.sh's value) rather than a confirmed QA-specific port -- flagged in the script's own comment for host-state confirmation.",
+      "qa.env's exact path/existence on ubuntu-16gb-nbg1-1 (design §7 item 3) is assumed by convention, not confirmed against actual host state or the T-0125/T-0128/T-0129/T-0131 task records (not reachable from this checkout).",
+      "Web-dist backup retention/pruning (design §7 item 5) is intentionally left unbounded, per the design's explicit decision not to invent an unrequested retention policy."
+    ]
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

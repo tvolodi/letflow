@@ -61,24 +61,79 @@ the remaining `:throw`/`:exit` kinds, per Elixir's standard
 
 ## 3. Exact `{:error, reason}` shape on a caught exception
 
+**REVISED (rework iteration 2)** — see §3a below for why. Field renamed
+from `message` to `classification` because its type and meaning changed,
+not just its construction (permitted by this rework's own scope note).
+
 ```
-@type crash_reason :: {:verifier_crashed, %{kind: :error | :exit | :throw, message: String.t()}}
+@type crash_reason :: {:verifier_crashed, %{kind: :error | :exit | :throw, classification: module() | atom()}}
 ```
 
 Returned as `{:error, crash_reason}`.
 
 - `:kind` — which non-local exit was caught: `:error` (from `rescue`),
   `:exit`, or `:throw` (both from `catch`).
-- `:message` — a short, human-readable diagnostic string, safe to log:
-  - for the `rescue` branch (kind `:error`), `Exception.message/1` applied
-    to the rescued exception struct (e.g. `"no case clause matching: 123"`
-    for the confirmed `CaseClauseError`);
-  - for the `catch` branch (`:exit`/`:throw`), `inspect/1` applied to the
-    caught `reason` term, since a thrown/exited value is not guaranteed to
-    be an `Exception` struct and has no `Exception.message/1`.
-- The map deliberately does **not** include `raw_token` or any token
-  fragment — the crash reason is logged (see below) and must never place
-  bearer-token material in logs.
+- `:classification` — identifies *what kind* of exception/exit/throw was
+  caught, and nothing else:
+  - for the `rescue` branch (kind `:error`), the rescued exception's own
+    struct module, i.e. `exception.__struct__` (e.g. `CaseClauseError`,
+    `ArgumentError`, `FunctionClauseError`). This is always one of the
+    fixed, statically-defined exception-struct modules Elixir/Erlang/the
+    `oidcc`/`jose` dependencies define — it names *which exception type*
+    was raised and is never built from, or dependent on the content of,
+    the exception's message/fields/arguments;
+  - for the `catch` branch (kind `:exit` or `:throw`), a *coarse, total*
+    classifier applied to the caught `reason` term:
+    - if `is_atom(reason)`, `classification = reason` (an already-existing,
+      statically-interned atom such as `:normal`, `:timeout`, `:noproc` —
+      atoms are drawn from the BEAM's fixed atom table, not built at
+      runtime from arbitrary binary content, so this can never itself be a
+      fragment of `raw_token`);
+    - otherwise (any non-atom `reason` — tuple, binary, list, struct,
+      etc.), `classification = :non_atom_exit_reason` (kind `:exit`) or
+      `:non_atom_throw_reason` (kind `:throw`) — one fixed, constant atom,
+      literally the same value every time, never derived from the term.
+
+### 3a. Why this changed and what it guarantees (SECURITY-REVIEWER BLOCKER fix)
+
+SECURITY-REVIEWER's BLOCKER (`handoffs/WF03-ISS0703-20260917/step-03b-security-reviewer.json`)
+found that the previous design's `message` field — `Exception.message/1` in
+the `rescue` branch, `inspect/1` of `reason` in the `catch` branch — is not
+structurally safe: both are total, generic formatting functions over
+*whatever value the exception/exit/throw happens to carry*, and that value
+can be (and, per the confirmed `jose_base64url.decode!/2` trace, already is,
+for at least one crash shape) a literal slice of `raw_token`. The bug was
+never in "logging a message" per se — it was in deriving that message from
+the *content* of the caught value at all.
+
+The revised `classification` field above is constructed **only** from
+either (a) an exception's `__struct__` — a fixed atom naming the exception
+*type*, never the exception's field values — or (b) a fixed, small,
+hardcoded set of atoms (`:non_atom_exit_reason`, `:non_atom_throw_reason`,
+or an already-atom `reason` drawn from the BEAM's atom table). **No branch
+of this classification ever calls `Exception.message/1`, `inspect/1`,
+`to_string/1`, string interpolation, or any other formatting function on
+the caught exception struct's fields, the caught `reason` term's content,
+or any value derived from `raw_token`.** This makes the "never contains
+`raw_token` or a substring of it" property structural — true for every
+exception/exit/throw shape this boundary could ever catch, present or
+future, in the `oidcc`/`jose` dependency chain — not contingent on the one
+currently-confirmed crash shape happening to be harmless.
+
+**What `classification` will never contain:** any character, byte, or
+substring of `raw_token`; any exception field value (message text,
+arguments, offending binary/term); any `inspect/1` or `Exception.message/1`
+output of any kind.
+
+**What `classification` will always be:** either a `module()` atom naming
+an exception struct type (rescue branch), or one of a small fixed set of
+constant/pre-existing atoms (catch branch) — safe to log and safe to return
+in the `{:error, ...}` tuple without redaction, by construction.
+
+The map still deliberately does **not** include `raw_token` or any token
+fragment, and must never place bearer-token material in logs — this intent
+is unchanged from the prior version; only the mechanism that now actually
+enforces it structurally, instead of coincidentally, has changed.
 
 **Why a new tag (`:verifier_crashed`) rather than reusing an existing oidcc
 reason atom:** the module's existing `{:error, reason}` return (the
@@ -120,10 +175,14 @@ into, distinct from routine 401s which are not logged), the rescue/catch
 boundary logs a single `Logger.warning/1` call before returning the
 `{:error, ...}` tuple. The logged message is a string that names the module
 and function (`Letflow.Oidc.TokenVerifier.Oidcc crashed verifying a bearer
-token`), followed by the same `kind` and `message` values placed in the
-returned tuple (as `kind=...` and `message=...` fields), so an operator can
-see the same diagnostic that was returned without needing to correlate
-against the response. This mirrors the existing precedent of
+token`), followed by the same `kind` and `classification` values placed in
+the returned tuple (as `kind=...` and `classification=...` fields — e.g.
+`kind=error classification=Elixir.CaseClauseError`), so an operator can see
+the same diagnostic that was returned without needing to correlate against
+the response. Per §3a, `classification` is always a bare atom/module name,
+never formatted exception content, so this log line can never embed
+`raw_token` material regardless of which exception/exit/throw shape
+triggered it. This mirrors the existing precedent of
 `AuthPipeline.handle_auth_error/2`'s own
 `{:error, {:provision, reason}}` branch, which logs at `Logger.error/1`
 before rejecting (`auth_pipeline.ex:177-179`) — the same "log the unexpected
@@ -150,9 +209,12 @@ body of the `def`, with a `rescue` clause and a `catch` clause appended to
 the same `def` (function-clause sugar, not a nested `try do` block), each
 producing the logged, tagged `{:error, {:verifier_crashed, %{...}}}` tuple
 described in §3 and §4 — `rescue exception ->` builds `kind: :error` and
-`message: Exception.message(exception)`; `catch kind, reason ->` builds
-`kind: kind` and `message: inspect(reason)`. No further code-level detail is
-specified here beyond what §2–§4 already state in prose.
+`classification: exception.__struct__`; `catch kind, reason ->` builds
+`kind: kind` and `classification:` the coarse, total classification of
+`reason` described in §3 (an already-atom `reason` used as-is; any other
+term maps to the fixed `:non_atom_exit_reason` / `:non_atom_throw_reason`
+constant per `kind`). No further code-level detail is specified here beyond
+what §2–§4 already state in prose.
 
 ## 6. Moduledoc correction
 
@@ -174,7 +236,7 @@ unchanged):
 > Authorization header value that is not a JWT, such as a caller
 > accidentally sending a whole token-endpoint JSON response instead of its
 > `access_token` field) — is caught at this function's own boundary and
-> returned as `{:error, {:verifier_crashed, %{kind: ..., message: ...}}}`,
+> returned as `{:error, {:verifier_crashed, %{kind: ..., classification: ...}}}`,
 > the same as any other verification failure (unresolvable provider config,
 > expired token, bad signature, wrong algorithm).
 
@@ -205,11 +267,22 @@ Required coverage:
    `~s({"access_token":"eyJ...","token_type":"Bearer"})`; additionally a
    plain non-base64url garbage string is recommended for breadth) against a
    real configured `provider_name`. Assert the return is
-   `{:error, {:verifier_crashed, %{kind: :error, message: message}}}` with
-   `message` a non-empty string — **fail-first**: on pre-fix code this call
-   must be shown to raise/crash the test process (the test, run before the
-   fix lands, demonstrates the crash; run after, demonstrates the clean
-   `{:error, ...}` return).
+   `{:error, {:verifier_crashed, %{kind: :error, classification: classification}}}`
+   with `classification` a `module()` atom (e.g. `CaseClauseError`) —
+   **fail-first**: on pre-fix code this call must be shown to raise/crash
+   the test process (the test, run before the fix lands, demonstrates the
+   crash; run after, demonstrates the clean `{:error, ...}` return).
+   **Non-leakage assertion (required per SECURITY-REVIEWER's BLOCKER
+   recommendation):** for every fixture `raw_token` used in this test,
+   assert the returned `classification` value, once converted to a string
+   (`to_string/1` on the atom), does not equal and does not contain any
+   substring of length >= 4 of `raw_token` — `refute String.contains?(to_string(classification), <substring>)`
+   for representative substrings, or equivalently assert `classification`
+   is a member of the small fixed set of expected atoms/module names this
+   design enumerates in §3, which by construction excludes anything
+   token-derived. The same non-leakage assertion must be made against the
+   captured `Logger.warning/1` output (via `ExUnit.CaptureLog`) for this
+   test case.
 2. **Integration-level, through the full pipeline:** an HTTP request (or
    `Plug.Conn` built and passed through `Letflow.Plugs.AuthPipeline.call/2`
    directly, matching this test file's existing style) carrying

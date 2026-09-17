@@ -74,3 +74,21 @@ pipeline_log:
       nothing else regressed (helper choice, EO mapping, nav-locator
       pattern, pipeline_test: YAML key format, §1.7 framing, scope
       discipline all intact).
+  - step: FRONTEND-DEV
+    at: "2026-09-17T09:10:00Z"
+    result: >
+      PASS. Implemented at commit 08652b81: new spec
+      web/tests/e2e/pipelines/platform-login-routing-by-role.pipeline.e2e.spec.ts,
+      pipeline_test: key added to the scenario yaml, uat-runner.md
+      de-ambiguated per design §3. Real 3/3 branch run against local
+      stack; unauthenticated branch additionally confirmed against real
+      QA (qa.bizdala.com) since it needs no credentials -- QA credentials
+      for the other two branches unavailable in this sandbox (no
+      qa-login.sh access), noted explicitly rather than faked. Found and
+      fixed a real test-instrumentation race (external Playwright polling
+      loses the auth-loading placeholder to the redirect's speed on both
+      local and QA) via an in-page MutationObserver recording through
+      window.name across the cross-origin navigation -- observation only,
+      no app-behavior mock. Schema validation: 32/32 clean. type-check/
+      lint clean. playwright --list: 290 tests/50 files, no syntax
+      errors. npm run guards 48/48. npm test 586/586.

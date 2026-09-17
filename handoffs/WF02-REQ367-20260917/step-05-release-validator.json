@@ -8,8 +8,8 @@
   "file": "handoffs/WF02-REQ367-20260917/step-05-release-validator.json",
   "created_at": "2026-09-17T21:15:00Z",
   "started_at": "2026-09-17T21:15:00Z",
-  "completed_at": null,
-  "status": "PENDING",
+  "completed_at": "2026-09-17T21:45:00Z",
+  "status": "COMPLETED",
   "priority": "NORMAL",
   "context": {
     "stage": "S7",
@@ -42,7 +42,54 @@
       "the stale deploy/redeploy-test.sh is left untouched (not deleted, not repurposed) since its own actual target may still be needed later, and this requirement's own close-out states this explicitly rather than leaving the two scripts' relationship unexplained for a future reader"
     ]
   },
-  "result": null,
+  "result": {
+    "status": "PASS",
+    "artifacts_out": [
+      "deploy/redeploy-qa.sh",
+      ".github/workflows/cd.yml",
+      ".github/workflows/ci.yml"
+    ],
+    "next_action": "Route to DOC-UPDATER (Step 6)",
+    "independent_verification": {
+      "bash_n_redeploy_qa_sh": "bash -n deploy/redeploy-qa.sh -> exit 0, no output (re-run independently, not copied from step-02a)",
+      "yaml_parse_cd_yml": "python -c \"import yaml; yaml.safe_load(open('.github/workflows/cd.yml'))\" -> 'cd.yml OK' (python3/python binary discovered fresh, not assumed present)",
+      "yaml_parse_ci_yml": "python -c \"import yaml; yaml.safe_load(open('.github/workflows/ci.yml'))\" -> 'ci.yml OK'",
+      "git_diff_redeploy_test_sh": "git diff main...HEAD -- deploy/redeploy-test.sh -> empty output, confirmed zero changes",
+      "git_diff_ci_yml": "git diff main...HEAD -- .github/workflows/ci.yml -> exactly two new appended steps ('Write path-filter outputs for cd.yml', 'Upload path-filter outputs') inserted after the existing fallback step at line 194; read the full changes job (lines 117-225) directly and confirmed zero lines touched in the existing filter/fallback grep/diff logic (lines 136-195 unchanged in the diff)"
+    },
+    "acceptance_criteria_verification": [
+      {
+        "criterion": 1,
+        "status": "PASS",
+        "evidence": "Read deploy/redeploy-qa.sh in full. APP_DIR=/opt/apps/letflow-qa, header names ubuntu-16gb-nbg1-1. Steps present: (1) git pull + rev-parse ref, (2) docker build backend image + docker compose up -d --force-recreate app, (3) frontend built in a throwaway node:22 container with real VITE_OIDC_AUTHORITY/VITE_OIDC_CLIENT_ID sourced from qa.env, written to a staging dir then atomically mv'd into web-dist (previous web-dist first mv'd to a timestamped -backup- dir before the swap -- confirmed backup-before-replace ordering at the 'Swapping frontend bundle into place' step), (4) backend /health curl-retry loop and frontend https://qa.bizdala.com/ curl -sf check, both failing the script (exit 1) on failure."
+      },
+      {
+        "criterion": 2,
+        "status": "PASS",
+        "evidence": "cd.yml's `on: workflow_run: workflows: [\"CI\"], branches: [main], types: [completed]` triggers only after CI completes on main; job-level `if: github.event.workflow_run.conclusion == 'success'` gates on CI success. Deploy step gated on step-level `steps.gate.outputs.should_deploy == 'true'`, computed from ci.yml's own already-computed backend/frontend outputs (downloaded via actions/download-artifact from the triggering run's `path-filter-outputs` artifact) -- no second diff/regex. Read ci.yml's changes job directly: it appends exactly two steps (write path-filter-outputs.txt, upload-artifact) as pure downstream consumers of steps.filter/steps.fallback outputs already computed by the pre-existing, untouched logic. Structural confirmation: a docs-only merge produces backend=false/frontend=false from the untouched filter step, propagates unchanged through the new write/upload steps, and cd.yml's gate step correctly sets should_deploy=false, skipping the deploy step -- traced end to end by reading both files, no live GitHub Actions run available to trigger in this environment (consistent with step-02a's own validation_evidence, independently re-derived here rather than trusted)."
+      },
+      {
+        "criterion": 3,
+        "status": "PASS",
+        "evidence": "cd.yml's deploy step uses `uses: appleboy/ssh-action@v1` with `host: secrets.QA_DEPLOY_HOST`, `username: secrets.QA_DEPLOY_USER`, `key: secrets.QA_DEPLOY_SSH_KEY`, `script: bash /opt/apps/letflow-qa/deploy/redeploy-qa.sh` -- matches the requirement text's description of letflow-queue's own production cd.yml pattern (purpose-built restricted SSH key, appleboy/ssh-action). Secret names are QA-prefixed and distinct from letflow-queue's own (HETZNER_DEPLOY_*), per design doc section 2 (lib/letflow/design/req367-cd-qa-deploy.md lines 295-302) -- deliberately not yet provisioned; workflow references them without requiring they exist for code-completeness."
+      },
+      {
+        "criterion": 4,
+        "status": "PASS",
+        "evidence": "lib/letflow/design/req367-cd-qa-deploy.md lines 304-311 state in plain language: 'None of these are provisioned by this requirement... provisioning...is a companion ai-dala-infra task, out of scope here. cd.yml referencing these names before they exist is expected and correct -- the workflow will simply fail at the SSH step...until that companion task lands.' This is an explicit, unambiguous non-live statement naming the companion task, not an implication of completeness."
+      },
+      {
+        "criterion": 5,
+        "status": "PASS",
+        "evidence": "git diff main...HEAD -- deploy/redeploy-test.sh is empty (confirmed above) -- file genuinely untouched. deploy/redeploy-qa.sh's own header (lines 6-17) explicitly states the sibling (not replacement) relationship, names the concrete differences (host, APP_DIR, Compose project, two-artefact vs one-artefact shape), and design doc section 4 (lines 324-343) documents the same relationship for a future reader, plus states redeploy-test.sh's own stale cd.yml claim is knowingly left uncorrected as out of scope."
+      }
+    ],
+    "staleness_check": {
+      "docs_requirements_yaml": "REQ-367 entry (line 26685) shows status: in_progress -- correct, matches handoff task's expectation; not yet flipped to done (DOC-UPDATER's job next).",
+      "docs_status_requirement_status_v19_yaml": "Only one event present for REQ-367 (line 255, event: started, agent: ORCH, at 2026-09-17T14:35:03Z) -- consistent with in_progress status, no premature or contradictory 'done'/'verified' event found."
+    },
+    "notes": "No mismatch found between any prior step's quoted output and this independent re-run -- step-02a's validation_evidence and this validator's own commands produced the same results (bash -n exit 0, YAML OK, empty redeploy-test.sh diff, additive-only ci.yml diff), each command executed fresh in this session rather than trusted from the handoff JSON. No contradiction found against docs/migration/decisions/ records."
+  },
   "rework_count": 0,
   "max_rework": 3
 }

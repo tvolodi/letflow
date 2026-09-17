@@ -106,3 +106,18 @@ pipeline_log:
       window.name instrumentation carries only a static non-secret marker
       string, ships only in web/tests/, no real concern. No BLOCKER
       findings.
+  - step: REVIEWER
+    at: "2026-09-17T09:24:00Z"
+    result: >
+      PASS. Confirmed spec follows established Playwright e2e convention
+      (reachability precheck, helper imports, nav-visibility assertions
+      all match precedent files exactly, three independent test() blocks
+      correctly chosen over createPipeline() since branches are mutually
+      exclusive not sequential). The window.name/MutationObserver
+      instrumentation FRONTEND-DEV added mid-implementation judged
+      legitimate, not scope creep: test-file-only, fulfills a mechanism
+      the design already flagged as open/hard (§1.6) without prescribing
+      how, observation-only (changes nothing about app behavior), did not
+      need a CODE-DESIGNER round-trip. Diff scope matches the reworked
+      design exactly. No decision-record conflict. uat-runner.md doc fix
+      confirmed accurate and genuinely clearer.

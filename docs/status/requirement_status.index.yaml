@@ -3914,7 +3914,7 @@ volumes:
     path: docs/status/requirement_status.v19.yaml
     status: current
     opened: 2026-09-17
-    entries: 1
+    entries: 2
     note: >
       Incremented to 1 by this ORCH session's own DOC-UPDATER SCOPE-CHANGE
       (ISS-0700 partial-action, REQ-360 stale-clause correction) done-event

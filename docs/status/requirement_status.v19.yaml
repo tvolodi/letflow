@@ -207,3 +207,14 @@ history:
       the now-closed predecessor, per this volume's own "never moves,
       edits or deletes an existing entry" rule for the closed volume and
       "append one entry per event" for the current one.
+
+  - req: REQ-361
+    event: started
+    agent: ORCH
+    at: "2026-09-17T14:07:16Z"
+    note: >
+      WF-02 run WF02-REQ361-20260917 (queue task 684, GH#1434) begins.
+      Defines a PRODUCT-OWNER-equivalent agent role for final release
+      sign-off, adapting R-Co's PRODUCT_OWNER.md. Depends on REQ-358 and
+      REQ-359, both status: done. Step 00 (git setup) PASS: branch
+      feature/WF02-REQ361-20260917 created and pushed by ELIXIR-DEV.

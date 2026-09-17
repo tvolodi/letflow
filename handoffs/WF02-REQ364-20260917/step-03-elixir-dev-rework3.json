@@ -1,0 +1,13 @@
+{
+  "req": "REQ-364",
+  "step": "03-elixir-dev-rework3",
+  "result": "implemented",
+  "at": "2026-09-17T17:47:00Z",
+  "fixes": [
+    "Blocker 1: @numeric_entity_pattern now matches [xX] not just lowercase x",
+    "Blocker 2: flatten_plain_text/1 builds one contiguous text projection per sibling list (excluding code/pre content), so raw tags split across **strong**/`code`/*em* nodes are detected",
+    "Blocker 3: validate_markdown_safety/2 handles both {:ok, ast, _} and {:error, ast, _} from EarmarkParser.as_ast/2, no more bare-match crash",
+    "tenant_fixture.ex @expected_tenant_tables gained help_content"
+  ],
+  "verification": "mix test test/letflow/help_test.exs: 54/54 passed (47 + 7 new). All 5 original bypass classes reverified closed. mix compile --warnings-as-errors clean. Full suite (mix test, ~4400 tests) run 3 times: first surfaced 964 failures traced to a stale tenant_template Postgres schema artifact (dropped), second found+fixed one legitimately-affected hardcoded table-count assertion (44->45), third/final: 4386/4389 passed, 3 remaining pre-existing/unrelated (REQ-369 impl_order -- already fixed on main via merged PR #1502, this branch just predates that pull)."
+}

@@ -141,3 +141,18 @@ pipeline_log:
       env vars, no tenant in the loop, same reasoning as ISS-0702.
       TC-TD-UI-01-04's guard inversion judged a net correctness
       improvement (silent false-pass -> hard failure), not a new risk.
+  - step: REVIEWER
+    at: "2026-09-17T11:02:00Z"
+    result: >
+      PASS. Confirmed the naming decision matches the design's own §7.1
+      resolution (keep name, correct via doc-comment, ISS-0532
+      precedent) -- not a FRONTEND-DEV unilateral call. Resolved the
+      design's second open question (keep vs. drop a liveness-only
+      precondition) with a real verdict: keep it -- fails fast with a
+      clear diagnostic instead of an opaque downstream failure, doesn't
+      claim to verify DB/auth/subsystem readiness, name-vs-semantics gap
+      fully mitigated by centralizing the doc-comment. Spot-checked 3/8
+      plain files + both variants, split matches design exactly. Scope
+      creep confirmed clean (both incidental findings untouched).
+      TC-TD-UI-01-04 confirmed to genuinely mirror TC-TD-UI-03-01, not
+      superficially. No decision-record conflict.

@@ -1,0 +1,134 @@
+# Permanent corpus (REQ-360). Not the REQ-358 throwaway validation fixture --
+# see test/fixtures/uat/scenarios/_throwaway/login-routing-example.yaml for
+# that file's own scope note. This is the first real REQ-ANALYST-authored
+# platform-scope scenario using REQ-358's branching construct as permanent
+# scope.
+#
+# REAL-BEHAVIOR NOTE (finding to be filed by ORCH per
+# lib/letflow/design/req360-platform-login-routing-uat-scenario.md Section 5):
+# this scenario documents the ACTUAL observed routing behavior, which differs
+# from an idealized "platform dashboard vs. tenant dashboard vs. in-app login
+# form" description in two ways -- see branches 1-3 below and this
+# repository's lib/letflow/design/req360-platform-login-routing-uat-scenario.md
+# Section 0/5 for the full finding.
+---
+id: platform-login-routing-by-role
+scope: platform
+company_id: platform
+process_id: n/a
+title: Post-login landing surface by authenticated role (real QA routing behavior)
+version: "1.0"
+tags: [auth, routing, platform]
+
+description: >
+  A user opens the QA login URL. Real observed behavior as of 2026-09-17
+  (see design doc Section 0): authenticated users of every role -- both
+  PLATFORM_ADMIN and tenant-scoped roles -- land on the SAME workspace route
+  (the tenant-dashboard root, "/"); there is no distinct platform-admin
+  landing destination reached automatically at login (PLATFORM_ADMIN's extra
+  capabilities surface only as additional navigation entries within the same
+  shell, not as a different landing page). An unauthenticated visitor is
+  redirected to Keycloak's own externally-hosted login page -- Letflow's own
+  frontend renders no in-app login form and shows only a brief "Redirecting
+  to login..." placeholder first. This scenario verifies the REAL behavior in
+  both respects, not the idealized distinct-dashboards/in-app-form
+  description this requirement's own Why-section originally anticipated.
+
+actors:
+  viewer: actor-any
+
+preconditions:
+  - description: The instance is reachable at the configured environment target
+    check: instance_reachable
+
+branches:
+  - name: platform_admin_lands_on_workspace_root
+    when:
+      fact: role
+      op: eq
+      value: PLATFORM_ADMIN
+    steps:
+      - step: 1
+        actor: viewer
+        action: >
+          Signs in as a platform administrator (PLATFORM_ADMIN role) via the
+          QA environment's seeded admin credentials and reaches the post-login
+          screen
+        via: gui
+    expected_outcomes:
+      - id: EO-001
+        description: >
+          Platform admin lands on the shared workspace root -- NOT a
+          distinct platform-admin dashboard, because none exists (see
+          scenario description)
+        verification:
+          method: gui_screen
+          detail: >
+            Route is "/" (the workspace root, rendering TenantDashboardPage);
+            the authenticated shell's navigation shows the PLATFORM_ADMIN-only
+            entries (e.g. Users, Tenants, Health, Metrics) alongside the same
+            dashboard tiles a tenant-scoped user sees
+        on_fail:
+          severity: BLOCKER
+          business_impact: Platform admins cannot reach their workspace after login.
+          suggested_action: route_to_wf03
+
+  - name: tenant_scoped_role_lands_on_workspace_root
+    when:
+      fact: role
+      op: in
+      value: [PROCESS_DESIGNER, PROCESS_OPERATOR, TASK_WORKER]
+    steps:
+      - step: 1
+        actor: viewer
+        action: >
+          Signs in as a tenant-scoped user via the QA environment's seeded
+          operator credentials and reaches the post-login screen
+        via: gui
+    expected_outcomes:
+      - id: EO-001
+        description: Tenant-scoped user lands on the same workspace root
+        verification:
+          method: gui_screen
+          detail: >
+            Route is "/" (the workspace root, rendering TenantDashboardPage);
+            the authenticated shell's navigation shows only this role's
+            permitted entries (no PLATFORM_ADMIN-only items); dashboard tiles
+            reflect this tenant's own data only
+        on_fail:
+          severity: BLOCKER
+          business_impact: Tenant users cannot reach their workspace after login.
+          suggested_action: route_to_wf03
+
+  - name: unauthenticated_redirects_to_external_login
+    when: else
+    steps:
+      - step: 1
+        actor: viewer
+        action: >
+          Opens the QA login URL without any prior session (no token, no
+          cookie)
+        via: gui
+    expected_outcomes:
+      - id: EO-001
+        description: >
+          Visitor is redirected toward Keycloak's hosted login page --
+          Letflow renders no in-app login form of its own
+        verification:
+          method: gui_screen
+          detail: >
+            Immediately after navigation, the app briefly shows the
+            data-testid="auth-loading" "Redirecting to login..." placeholder,
+            then the browser is redirected off-origin to the configured OIDC
+            authority's own hosted login page (outside Letflow's own
+            frontend -- there is no Letflow-rendered field set to describe;
+            the fields shown, if any, are Keycloak's, not this
+            application's)
+        on_fail:
+          severity: BLOCKER
+          business_impact: Unauthenticated visitors cannot reach a way to sign in.
+          suggested_action: route_to_wf03
+
+cleanup:
+  cancel_open_instances: false
+  description: No process instance created; no cleanup required.

@@ -121,3 +121,17 @@ pipeline_log:
       need a CODE-DESIGNER round-trip. Diff scope matches the reworked
       design exactly. No decision-record conflict. uat-runner.md doc fix
       confirmed accurate and genuinely clearer.
+  - step: TEST-DESIGNER
+    at: "2026-09-17T09:31:00Z"
+    result: >
+      No new test warranted -- the deliverable is itself an already-run,
+      already-passing test. Verified all three branches' assertions
+      against AppShell.tsx's real NAV_ITEMS source of truth, no stale
+      link names, no untested branch. Branch 2's single-role sampling
+      (TASK_WORKER of three disjunctive roles) is a reasoned,
+      already-REVIEWER-passed design decision (§1.5), not re-litigated.
+      Confirmed no doc-lint/schema mechanism exists for .claude/agents/*.md
+      prose to register with. window.name workaround already proven by
+      the spec's own hard assertion on every run, including against real
+      QA -- no separate regression test would prove anything beyond
+      restating browser API behavior.

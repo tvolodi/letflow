@@ -192,3 +192,46 @@ pipeline_log:
       currently-uncoverable gap -- same honest treatment already given to
       attachment-cross-tenant-probe.yaml -- rather than citing an
       unrunnable test as proof.
+
+  - step: TEST-DESIGNER
+    at: "2026-09-17T10:12:00Z"
+    result: >
+      Chose option (b): dropped the false TC-TD-UI-01-04 citation and
+      documented the cross-tenant-isolation sub-claim as a genuine,
+      currently-uncoverable gap in a code comment (same treatment already
+      given to attachment-cross-tenant-probe.yaml), rather than fixing
+      TC-TD-UI-01-04 itself. Justification: a repo-wide grep found the
+      broken `GET /health/ready` precondition is not unique to
+      TC-TD-UI-01-04 -- it is duplicated across 11 e2e spec files
+      (web/tests/e2e/{env04,f5-admin-observability,f6-webhooks,sh05-06.shell,
+      tenants,f5-admin-groups-tokens,f5-admin-users,f6-dlq,
+      iss-0063-oidc-redirect-loop,tenant-dashboard,uat-tenant-url}.e2e.spec.ts),
+      making a single-file fix here both narrower than the real problem and
+      squarely outside ISS-0702's stated scope (a UAT-RUNNER tooling/doc
+      gap, not a general e2e-suite health sweep) -- exactly the kind of
+      silent scope expansion this session's established discipline flags.
+      Filed the widespread breakage as its own issue, docs/issues/ISS-0706.yaml
+      (not a duplicate -- checked first; ISS-0532 covered the app-code
+      instance of this same /health/ready misconception, not the test
+      suite), including TC-TD-UI-01-04's second defect (the
+      `if (swiftResp.ok())` silent-noop gate) as part of that issue's scope.
+      Updated the code comment in
+      web/tests/e2e/pipelines/platform-login-routing-by-role.pipeline.e2e.spec.ts
+      (~lines 146-160) to state plainly that this sub-claim has no working
+      coverage anywhere in the repo right now, cite the real router.ex
+      finding, and reference ISS-0706. Re-ran the pipeline spec for real
+      afterward (`VITE_API_BASE_URL=http://127.0.0.1:4000 npx playwright
+      test tests/e2e/pipelines/platform-login-routing-by-role.pipeline.e2e.spec.ts`):
+      1 passed / 2 failed (tile assertions time out --
+      "Tenant name could not be loaded" / "Platform is currently
+      unavailable"), but confirmed by stashing this change and re-running
+      against the pre-edit commit that the identical 2 failures occur
+      unchanged -- this sandbox's currently-running backend has no tenant
+      seeded for the 127.0.0.1 Host header this local Playwright run
+      resolves against (`mix letflow.seed` itself fails here on a missing
+      LETFLOW_SECRETS_MASTER_KEY, a deeper pre-existing sandbox-provisioning
+      gap, not something this change touches or should try to fix). The
+      edit is a comment-only change to an already-passing assertion block
+      (the tile-visibility assertions themselves, and the full 3/3 pass,
+      were independently confirmed by TEST-DESIGN-VALIDATOR's own prior
+      run) and is confirmed behaviorally inert. eslint/tsc clean.

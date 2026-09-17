@@ -144,16 +144,25 @@ test.describe('Pipeline: platform-login-routing-by-role', () => {
     // authenticated tenant context) genuinely executed and resolved for this
     // token/role rather than being skipped or erroring.
     // The deeper claim — tenant A's data never appears in tenant B's
-    // tiles — IS already covered, for real, by an existing executable spec
-    // with two real tenants available (default + swiftroute):
-    // web/tests/e2e/tenant-dashboard.e2e.spec.ts's
-    // 'TC-TD-UI-01-04: dashboard data tiles show only tenant-scoped results'
-    // (asserts the swiftroute tenant's display_name never appears in the
-    // default tenant's tile text). That test is real and already running —
-    // unlike test/fixtures/uat/scenarios/platform/attachment-cross-tenant-probe.yaml,
-    // whose own pipeline_test is a still-BLOCKED aspirational forward
-    // reference per its NOTE (ISS-0527) comment, so it was deliberately NOT
-    // cited here as the covering test.
+    // tiles — currently has NO working coverage anywhere in this repo.
+    // web/tests/e2e/tenant-dashboard.e2e.spec.ts's 'TC-TD-UI-01-04' looks
+    // like the obvious candidate (it does assert swiftroute's display_name
+    // never appears in the default tenant's tiles) but it cannot actually
+    // run against Letflow: its assertServiceReadiness() precondition polls
+    // GET /health/ready, which lib/letflow/router.ex's moduledoc documents
+    // as a deliberate, permanent non-port (only GET /health, liveness,
+    // exists) — confirmed by directly running the test. It also gates its
+    // leakage assertion behind `if (swiftResp.ok())`, so even with a
+    // reachable backend it would silently no-op rather than reliably prove
+    // isolation if the second tenant weren't provisioned. This is a
+    // pre-existing gap (the /health/ready pattern is shared by 11 e2e spec
+    // files repo-wide, filed separately as ISS-0706 — see
+    // docs/issues/ISS-0706.yaml) that this fix did not create and is not
+    // in scope to solve here (ISS-0702 is a UAT-RUNNER tooling/doc gap, not
+    // a general e2e-suite health sweep). Same honest treatment already
+    // given to the still-BLOCKED
+    // test/fixtures/uat/scenarios/platform/attachment-cross-tenant-probe.yaml:
+    // documented as uncoverable rather than citing a test that cannot pass.
     await expect(page.getByTestId('tile-instances-count')).toBeVisible()
     await expect(page.getByTestId('tile-tasks-count')).toBeVisible()
 

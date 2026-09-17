@@ -1,0 +1,83 @@
+id: ISS-0706
+title: >
+  11 web/tests/e2e/*.ts specs poll the never-mounted GET /health/ready as a
+  precondition and cannot pass against Letflow's real backend anywhere
+discovered_by: TEST-DESIGNER
+discovered_in_run: WF03-ISS0702-20260917
+discovered_at: "2026-09-17T10:05:00Z"
+severity: MAJOR
+description: >
+  Found while resolving a second TEST-DESIGN-VALIDATOR FAIL on ISS-0702
+  (docs/issues/ISS-0702.yaml): a citation of
+  web/tests/e2e/tenant-dashboard.e2e.spec.ts's TC-TD-UI-01-04 as proof of
+  cross-tenant dashboard-tile isolation was found to be false, because that
+  test's own assertServiceReadiness() precondition polls
+  `GET ${API_BASE_URL}/health/ready` and throws if it is not `.ok()`.
+
+  `lib/letflow/router.ex`'s own moduledoc (lines 51-55) documents this as a
+  deliberate, permanent decision: the R-Co readiness endpoint was never
+  ported ("requires S6 observability subsystem probes that do not yet
+  exist"). Only `GET /health` (liveness) is mounted. This is not a sandbox
+  artifact — `assertServiceReadiness()`'s readiness check cannot pass against
+  Letflow's real backend in any environment, local or QA, now or before S6
+  observability probes exist.
+
+  A repo-wide grep shows this is not isolated to TC-TD-UI-01-04 — the
+  identical `assertServiceReadiness()`/`GET /health/ready` pattern is
+  duplicated (copy-pasted, not shared via a helper) across 11 e2e spec files:
+    - web/tests/e2e/env04.e2e.spec.ts
+    - web/tests/e2e/f5-admin-observability.e2e.spec.ts
+    - web/tests/e2e/f6-webhooks.e2e.spec.ts
+    - web/tests/e2e/sh05-06.shell.e2e.spec.ts
+    - web/tests/e2e/tenants.e2e.spec.ts
+    - web/tests/e2e/f5-admin-groups-tokens.e2e.spec.ts
+    - web/tests/e2e/f5-admin-users.e2e.spec.ts
+    - web/tests/e2e/f6-dlq.e2e.spec.ts
+    - web/tests/e2e/iss-0063-oidc-redirect-loop.e2e.spec.ts
+    - web/tests/e2e/tenant-dashboard.e2e.spec.ts
+    - web/tests/e2e/uat-tenant-url.e2e.spec.ts
+
+  Every test in every one of these files fails at its own precondition
+  before reaching its real assertions, whenever actually run. CI excludes
+  `tests/e2e/**` entirely (per ISS-0702's own finding), so nothing catches
+  this in the normal pipeline — it only surfaces when a test is run for real,
+  which is exactly what happened here.
+
+  This is a close cousin of ISS-0532 (docs/issues/ISS-0532.yaml, resolved),
+  which fixed the SAME `/health/ready` misconception in application code
+  (web/src/api/health.ts) but did not touch the test suite — these 11 spec
+  files were not in scope there and the pattern survived independently in
+  web/tests/e2e/.
+
+  TC-TD-UI-01-04 additionally has a second, independent defect: its
+  cross-tenant leakage assertion is gated behind `if (swiftResp.ok())`, so
+  even with a reachable backend it would silently no-op (pass with nothing
+  checked) rather than reliably prove isolation if the second tenant weren't
+  provisioned. Worth fixing alongside the readiness check, not a separate
+  issue.
+
+  Fix should either (a) point all 11 files' assertServiceReadiness() at the
+  real `GET /health` (mirroring ISS-0532's resolution exactly), or (b)
+  extract a single shared helper so this doesn't recur an 12th time --
+  CODE-DESIGNER should evaluate which given how much of the duplication is
+  otherwise identical. TC-TD-UI-01-04's `if (swiftResp.ok())` gate should be
+  made unconditional (hard-fail if the second tenant can't be provisioned)
+  as part of the same fix.
+affected_files:
+  - web/tests/e2e/env04.e2e.spec.ts
+  - web/tests/e2e/f5-admin-observability.e2e.spec.ts
+  - web/tests/e2e/f6-webhooks.e2e.spec.ts
+  - web/tests/e2e/sh05-06.shell.e2e.spec.ts
+  - web/tests/e2e/tenants.e2e.spec.ts
+  - web/tests/e2e/f5-admin-groups-tokens.e2e.spec.ts
+  - web/tests/e2e/f5-admin-users.e2e.spec.ts
+  - web/tests/e2e/f6-dlq.e2e.spec.ts
+  - web/tests/e2e/iss-0063-oidc-redirect-loop.e2e.spec.ts
+  - web/tests/e2e/tenant-dashboard.e2e.spec.ts
+  - web/tests/e2e/uat-tenant-url.e2e.spec.ts
+related:
+  - ISS-0532
+  - ISS-0702
+queue_ref: Q-706
+github_ref: null
+status: open

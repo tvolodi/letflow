@@ -3880,7 +3880,7 @@ volumes:
     path: docs/status/requirement_status.v18.yaml
     status: current
     opened: 2026-09-15
-    entries: 18
+    entries: 19
     note: >
       Incremented to 18 by WF02-REQ360-20260917 (DOC-UPDATER)'s own REQ-360
       done-event append (Step 6) -- `grep -c "^  - req:"

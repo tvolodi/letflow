@@ -1,0 +1,47 @@
+{
+  "handoff_id": "wf02-req369-step02b",
+  "run_id": "WF02-REQ369-20260917",
+  "workflow_id": "WF-02",
+  "step": "02b",
+  "from_agent": "FRONTEND-DEV",
+  "to_agent": "SECURITY-REVIEWER",
+  "file": "handoffs/WF02-REQ369-20260917/step-02b-frontend.json",
+  "created_at": "2026-09-17T21:05:00Z",
+  "started_at": "2026-09-17T20:40:00Z",
+  "completed_at": "2026-09-17T21:05:00Z",
+  "status": "PASS",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S7",
+    "requirement_ids": ["REQ-369"],
+    "artifacts_in": [
+      "lib/letflow/design/req369-platform-dashboard-page.md",
+      "handoffs/WF02-REQ369-20260917/step-01b-design-gate.json"
+    ]
+  },
+  "task": {
+    "description": "WF-02 Step 2b -- implement REQ-369 in web/ exactly per the approved design (lib/letflow/design/req369-platform-dashboard-page.md): new PlatformDashboardPage.tsx, one new sibling router.tsx route, role-conditional navigate() in OidcCallbackPage.tsx, and the corresponding UAT scenario YAML assertion update.",
+    "acceptance_criteria": [
+      "New web/src/pages/dashboard/PlatformDashboardPage.tsx per design Sec 1 (heading, tenant-count tile via tenantsApi.list().total, quick-links, self-gating, no useTenantContext import)",
+      "web/src/router.tsx gets exactly one new sibling route; the pre-existing { index: true } and { path: 'dashboard' } TenantDashboardPage entries remain byte-identical",
+      "web/src/pages/OidcCallbackPage.tsx's navigate() call becomes role-conditional (PLATFORM_ADMIN -> /platform-dashboard, else -> / unchanged), reusing the already-decoded payload.roles",
+      "test/fixtures/uat/scenarios/platform/platform-login-routing-by-role.yaml's PLATFORM_ADMIN branch updated to assert /platform-dashboard as destination (live E2E run left to UAT-RUNNER)",
+      "npm run type-check, lint, test, and guards all pass from web/, with real output quoted",
+      "No hardcoded API base URL, no new token storage, no new state-management/routing/build tool, no shim normalising a backend contract mismatch"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "Implemented REQ-369 exactly per the approved design doc (lib/letflow/design/req369-platform-dashboard-page.md), all 8 sections cross-checked against its Sec 6 AC map.\n\n1. NEW web/src/pages/dashboard/PlatformDashboardPage.tsx -- default-exported, no-props function component. Hooks called unconditionally in the design's stated order: useAuth() then useQuery<TenantListResponse, ApiError>({ queryKey: queryKeys.admin.tenants({}), queryFn: () => tenantsApi.list() }). isPlatformAdmin derived as Boolean(session?.roles.includes('PLATFORM_ADMIN')); when false, renders <Navigate to=\"/instances\" replace /> per Sec 1.4/Sec 4 precedent (matches TenantsPage.tsx/HealthDashboardPage.tsx exactly). rendererState three-way derivation (loading/classifyError/success) per Sec 1.7. Heading is the fixed literal <h1 data-testid=\"platform-dashboard-heading\">Platform Overview</h1> -- no tenantDisplayName/isUnknown/'your workspace'/'Tenant name could not be loaded' text anywhere in the file (grepped to confirm). Tenant-count tile: data-testid=\"tile-tenant-count\", text content String(tenantsQuery.data?.total ?? 0), wrapped in QueryStateBoundary with onRetry wired to tenantsQuery.refetch. Quick-links: data-testid=\"platform-quick-links\" <nav> with exactly the five <Link> entries and to= values from Sec 1.6 (admin/tenants, admin/services, admin/health, admin/metrics, admin/users), under a 'Platform Admin Links' label. Does NOT import useTenantContext (grepped to confirm) -- the only auth hook used is useAuth().\n\n2. web/src/router.tsx -- added one import (PlatformDashboardPage) and one new sibling route { path: 'platform-dashboard', element: <PlatformDashboardPage /> } directly after the two TenantDashboardPage entries, inside the same authenticated children array (inherits ProtectedRoute/AppShell/ErrorBoundary, no new top-level route tree, matching Sec 2). Verified via `git diff web/src/router.tsx`: the diff contains only two added (+) lines (one import, one route) and zero removed (-) lines -- the pre-existing { index: true, element: <TenantDashboardPage /> } and { path: 'dashboard', element: <TenantDashboardPage /> } lines are byte-identical before/after, satisfying AC4's mechanical diff-inspection requirement stated in the design.\n\n3. web/src/pages/OidcCallbackPage.tsx -- line 72's navigate('/', { replace: true }) became navigate(payload.roles.includes('PLATFORM_ADMIN') ? '/platform-dashboard' : '/', { replace: true }), placed at the exact same call site (after setSession(...), same as before), reusing the already-decoded/validated payload from lines 38-39 (no session.roles use -- session doesn't exist yet at this point, matching the design's stated reasoning). No other line in the file touched -- both window.location.replace('/') fallback paths (invalid-token line 41, callback-exception line 75) are untouched, confirmed by diff.\n\n4. test/fixtures/uat/scenarios/platform/platform-login-routing-by-role.yaml -- rewrote the top-level description block and the PLATFORM_ADMIN branch (renamed platform_admin_lands_on_workspace_root -> platform_admin_lands_on_platform_dashboard per the design's suggested rename) so its expected_outcomes assert route /platform-dashboard rendering PlatformDashboardPage, with the tenant-count tile and quick-links testids named explicitly, tenant-count sourced from the real GET /api/v1/tenants total. The tenant_scoped_role_lands_on_workspace_root and unauthenticated_redirects_to_external_login branches were left completely untouched, per the design's explicit scope note. Did NOT attempt a live QA E2E run -- that is UAT-RUNNER's job later in this workflow (AC6/AC7's execution half).\n\nGates run from web/, real output quoted:\n- `npm run type-check` -- clean, no errors (tsc -b tsconfig.json, no output).\n- `npm run lint` -- clean, no output (eslint --max-warnings 0).\n- `npm test` -- 84 test files, 592 tests passed (vitest run, excluding e2e/guards).\n- `npm run guards` -- 4 files, 48 tests passed, including a full production `vite build` (2146 modules transformed, dist/ emitted) with zero guard violations in source or the built bundle.\n\nSelf-review per Step 2b's checklist: no hardcoded API base URL (VITE_API_BASE_URL env-var pattern untouched, tenantsApi.list() goes through the existing client.ts); no new token storage mechanism (only useAuth()'s existing session.roles is read, no localStorage/sessionStorage touched); no new state-management/routing/build tool (reused existing react-router-dom, @tanstack/react-query); no shim normalising a backend contract mismatch -- Open Q1 in the design (whether a no-params tenantsApi.list() call returns an accurate platform-wide total) was implemented as specified (empty-object queryKeys.admin.tenants({}) / no-arg tenantsApi.list()) without adding any client-side normalisation; if the live total proves inaccurate against the real endpoint, that is a backend-contract question for UAT-RUNNER/ORCH to surface, not something worked around here.\n\nGit convention: this run's own git log (WF02-REQ367, the most recent completed WF-02 run in this repo) shows FRONTEND-DEV/ELIXIR-DEV committing their implementation directly to the feature branch per step (e.g. `26dbe389 feat(WF02-REQ367): implement CD-to-QA deploy script and workflow (Step 2a)`), followed by separate dispatch/complete handoff-bookkeeping commits, rather than holding all changes uncommitted until Step Final. Followed that convention here: committed the four changed files with a `feat(WF02-REQ369)` message and pushed to the existing remote feature branch (already set up at Step 00), so SECURITY-REVIEWER/REVIEWER can diff against origin.",
+    "artifacts_out": [
+      "web/src/pages/dashboard/PlatformDashboardPage.tsx",
+      "web/src/router.tsx",
+      "web/src/pages/OidcCallbackPage.tsx",
+      "test/fixtures/uat/scenarios/platform/platform-login-routing-by-role.yaml",
+      "handoffs/WF02-REQ369-20260917/step-02b-frontend.json"
+    ],
+    "next_action": "Route to SECURITY-REVIEWER (2c)"
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

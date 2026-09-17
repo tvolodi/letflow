@@ -8,8 +8,8 @@
   "file": "handoffs/WF03-ISS0705-20260917/step-02-code-designer.json",
   "created_at": "2026-09-17T05:00:00Z",
   "started_at": "2026-09-17T05:00:00Z",
-  "completed_at": null,
-  "status": "PENDING",
+  "completed_at": "2026-09-17T05:40:00Z",
+  "status": "COMPLETED",
   "priority": "NORMAL",
   "context": {
     "stage": null,
@@ -39,11 +39,14 @@
     ]
   },
   "result": {
-    "status": null,
-    "summary": null,
-    "artifacts_out": [],
-    "issues": [],
-    "next_action": null
+    "status": "PASS",
+    "summary": "Design doc written: lib/letflow/design/iss0705-sandbox-mode-restore-fix.md. (1) tenants_test.exs:391 -- wrap the real-provisioning test body (lines 393-431) in Letflow.Test.SandboxAutoMode.provision!/2, removing the standalone Sandbox.mode(Letflow.Repo, :auto) call; provision!/2's own after-block restores :manual + checkout on both success and failure path. (2) identity_test.exs:1371-1381's setup -- single-line swap inside its on_exit/1 callback (line 1381): replace inline Ecto.Adapters.SQL.Sandbox.mode(Letflow.Repo, :auto) with SandboxAutoMode.enter_auto_mode!(Letflow.Repo). (3) role_registry_test.exs:101-163 -- identical paired swap inside its on_exit/1 (line 119) only; its unrelated setup-start mode-entry at line 102 is left untouched and named as OQ-2. (4) Orphaned-row cleanup -- exact mix run -e command (design section 5.2) that lists every Letflow.TenantProvisioning.Registration row, DROP SCHEMA CASCADEs each one, then Repo.delete_all/1's both Registration and Tenant, with a precondition (no concurrent mix test) and a post-run verification count.\n\nIMPORTANT DEVIATION FROM THE TASK HANDOFF, flagged explicitly (design section 0.1/OQ-1): the handoff (via ISSUE-FIXER's diagnosis) named SandboxAutoMode.exit_auto_mode!/1 as the helper to swap into identity_test.exs's on_exit. Verified directly against test/support/sandbox_auto_mode.ex's actual implementation: exit_auto_mode!/1's body is Sandbox.mode(repo, :manual) -- it restores :manual, not :auto. Using it at this call site would leave the pool in :manual when TenantFixture.provisioned_tenant!/1's own later-running (LIFO) on_exit cleanup needs :auto to get a real connection, reproducing the exact hazard class this issue exists to close. enter_auto_mode!/1 (body: Sandbox.mode(repo, :auto)) is the correct existing helper for both identity_test.exs and role_registry_test.exs's on_exit swap -- still an existing helper, no new one invented, but not the one literally named in the handoff. CODE-DESIGN-VALIDATOR should re-verify this reasoning independently rather than treating it as pre-approved.",
+    "artifacts_out": ["lib/letflow/design/iss0705-sandbox-mode-restore-fix.md"],
+    "issues": [
+      "Design deviates from the task handoff's literal helper choice for identity_test.exs/role_registry_test.exs (exit_auto_mode!/1 -> enter_auto_mode!/1); see design doc section 0.1/OQ-1 for full reasoning and re-verify independently.",
+      "role_registry_test.exs:102's own setup-start Sandbox.mode(..., :auto) call is left unchanged (OQ-2) -- different call shape, outside this issue's named scope."
+    ],
+    "next_action": "Route to CODE-DESIGN-VALIDATOR"
   },
   "rework_count": 0,
   "max_rework": 3

@@ -266,3 +266,56 @@ history:
       scope -- companion ai-dala-infra task, per T-0111's precedent. Step
       00 (git setup) PASS: branch feature/WF02-REQ367-20260917 created and
       pushed by ELIXIR-DEV.
+
+  - req: REQ-367
+    event: done
+    agent: DOC-UPDATER
+    at: "2026-09-17T14:59:02Z"
+    note: >
+      WF-02 run WF02-REQ367-20260917 (queue task 693, GH#1450) complete,
+      RELEASE-VALIDATOR PASS. Shipped: new .github/workflows/cd.yml
+      (triggers via workflow_run after CI succeeds on main, gated on the
+      same backend/frontend booleans ci.yml's existing changes job already
+      computes -- no second diff/path-filter logic, so a docs-only merge
+      correctly skips deploy) and new deploy/redeploy-qa.sh (targets
+      /opt/apps/letflow-qa/ on ubuntu-16gb-nbg1-1: git pull, backend Docker
+      rebuild + compose force-recreate, frontend rebuilt in a throwaway
+      node:22 container with real VITE_OIDC_AUTHORITY/VITE_OIDC_CLIENT_ID
+      build args and atomically swapped into web-dist/ with the previous
+      build backed up first, then health checks for both backend and
+      frontend). Reuses letflow-queue's own proven SSH-restricted-key CD
+      pattern (appleboy/ssh-action, QA_DEPLOY_HOST/QA_DEPLOY_USER/
+      QA_DEPLOY_SSH_KEY secret names).
+
+      Two facts stated explicitly per REQ-367's own acceptance criteria:
+      (a) THIS REQUIREMENT DOES NOT MAKE THE QA DEPLOY LIVE. The
+      QA_DEPLOY_* secrets referenced by cd.yml are not yet provisioned --
+      the companion ai-dala-infra task (SSH key provisioning on
+      ubuntu-16gb-nbg1-1 + `gh secret set` on tvolodi/letflow, following
+      T-0111's precedent) is a separate, required, not-yet-done step.
+      Until it lands, cd.yml will fail at the SSH step by design. (b) The
+      pre-existing deploy/redeploy-test.sh was left completely untouched
+      (git diff main...HEAD -- deploy/redeploy-test.sh is empty) -- it
+      targets a different, unrelated environment
+      (/opt/apps/letflow-test on host "hetzner-prod", Compose project
+      letflow-test), and its own stale header comment claiming automatic
+      invocation via .github/workflows/cd.yml was and remains wrong (no
+      such wiring exists for it). deploy/redeploy-qa.sh is a new sibling
+      script for the real QA target, not a repurposing or replacement of
+      it; redeploy-test.sh may still be needed for its own actual target
+      later and was not deleted.
+
+      README.md checked explicitly: it has a "QA deployment" section
+      (lines 224-264) describing how to reach the live QA instance and
+      fetch seeded-user credentials, but it does not itself document the
+      CI/CD triggering mechanism (manual vs. automatic) -- it points to
+      the sibling ai-dala-infra repo's app-registry for deploy detail, a
+      statement this change does not contradict. Since the new cd.yml/
+      redeploy-qa.sh are not yet live (per (a) above), no README update
+      is needed at this time; this will be revisited when the companion
+      credential-provisioning task lands and the deploy actually goes
+      live.
+
+      No docs/migration/stage-N-*.md or decisions/*.md file was named by
+      REQ-367's acceptance criteria (reread just now to confirm) -- none
+      required.

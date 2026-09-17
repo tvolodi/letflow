@@ -91,3 +91,16 @@ pipeline_log:
       tree clean, nothing committed. True regression guard is FRONTEND-DEV's
       10-consecutive-full-suite-run verification (586/586, 0 flakes),
       which operates at the level where this race is actually observable.
+  - step: TEST-DESIGN-VALIDATOR
+    at: "2026-09-17T07:47:00Z"
+    result: >
+      PASS. Independently replicated TEST-DESIGNER's empirical claim in a
+      separate git worktree at ade5fc0e^ (confirmed via grep the buggy
+      useEffect was genuinely present, no fix applied): ran
+      ExamSessionPage.test.tsx in isolation 10x against the pre-fix code,
+      22/22 passed every run -- zero discriminating power confirmed
+      firsthand, not just trusted. Confirmed the AC mapping (10x
+      full-suite-run criterion legitimately deferred to
+      TEST-RUNNER/RELEASE-VALIDATOR) and working-tree cleanliness
+      (git diff ade5fc0e..HEAD -- web/src/pages/exam/ empty, only
+      pipeline-log YAML commits follow the fix).

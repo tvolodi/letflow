@@ -26792,7 +26792,7 @@ requirements:
   - id: REQ-369
     title: Distinct PlatformDashboardPage for PLATFORM_ADMIN — replaces the shared tenant-branded landing page for that role, with role-conditional login routing
     owner: FRONTEND-DEV
-    status: pending
+    status: in_progress
     stage: S7
     impl_order: 708  # letflow-queue task id, GH#1501
     description: >

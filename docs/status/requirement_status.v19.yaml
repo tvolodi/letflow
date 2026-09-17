@@ -319,3 +319,12 @@ history:
       No docs/migration/stage-N-*.md or decisions/*.md file was named by
       REQ-367's acceptance criteria (reread just now to confirm) -- none
       required.
+  - req: REQ-369
+    event: started
+    agent: ORCH
+    at: "2026-09-17T15:32:55Z"
+    note: >
+      WF-02 Step 00 (git setup) PASS via FRONTEND-DEV -- branch
+      feature/WF02-REQ369-20260917 created off origin/main, pushed. Claimed from
+      letflow-queue task 708 (GH#1501). status flipped pending -> in_progress in
+      docs/requirements.yaml. Routing to CODE-DESIGNER (Step 1) next.

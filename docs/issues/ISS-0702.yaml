@@ -291,3 +291,21 @@ pipeline_log:
       confirms this is environmental, not a regression from this diff.
       Report: test/reports/report-20260917-WF03-ISS0702-20260917.yaml
       (commit 2c5dee0b).
+
+  - step: RELEASE-VALIDATOR
+    at: "2026-09-17T10:35:00Z"
+    result: >
+      PASS. Independently reproduced the 1/3 local pass and traced the
+      identical IPv6/IPv4 loopback root cause firsthand (ss/curl -6
+      checks, WebServer log grep) -- distinguished fix-mechanism-works
+      from sandbox-networking-quirk; the third (unauthenticated) branch
+      passed for real including the window.name instrumentation, proving
+      the fix mechanism itself works. Read the current uat-runner.md
+      wording directly and judged it would have prevented the original
+      misdiagnosis. Confirmed the coverage-gap saga genuinely resolved
+      (no false citation remains) and ISS-0706 is really registered (gh
+      issue view 1488/1476 both real and open). Own full independent
+      suite run: backend 4332/4332, mix letflow.check.test OK, frontend
+      586/586, schema 32/32, playwright --list clean, guards 48/48.
+      Audited all 16 commits on this branch, one per pipeline_log step,
+      no bare conversational claims. No new findings.

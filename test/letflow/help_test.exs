@@ -790,6 +790,29 @@ defmodule Letflow.HelpTest do
       assert reconfirmed.confirmed_for_definition_version == "3.0.0"
     end
 
+    test "re-reads the process definition's version at reconfirm time -- a version bump between publish and reconfirm is reflected, not the previously-stored value replayed" do
+      %{schema_name: schema_name} = provisioned_tenant()
+      definition = create_process_definition!(schema_name, "1.0.0")
+      help = create_draft!(schema_name, %{process_definition_id: definition.id})
+
+      assert {:ok, published} = Help.publish(help.id, prefix: schema_name)
+      assert published.confirmed_for_definition_version == "1.0.0"
+
+      # The process definition is still :draft (Definitions.create/2's own default),
+      # so its own `version` field can still be bumped in place via Definitions.update/3
+      # -- same row id, no new process_definition_id. If reconfirm/2 merely copied the
+      # previously-stored confirmed_for_definition_version forward instead of resolving
+      # it fresh off the referenced ProcessDefinition row (per this module's moduledoc,
+      # "read directly ... at that same moment"), this test would catch it: it would
+      # wrongly see "1.0.0" again instead of the bumped "1.5.0".
+      assert {:ok, _updated_definition} =
+               Letflow.Definitions.update(definition.id, %{version: "1.5.0"}, prefix: schema_name)
+
+      assert {:ok, reconfirmed} = Help.reconfirm(published.id, prefix: schema_name)
+
+      assert reconfirmed.confirmed_for_definition_version == "1.5.0"
+    end
+
     test "returns {:error, :not_live} for a :draft row" do
       %{schema_name: schema_name} = provisioned_tenant()
       help = create_draft!(schema_name)

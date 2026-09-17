@@ -1,0 +1,54 @@
+{
+  "handoff_id": "wf03-iss0703-step03",
+  "run_id": "WF03-ISS0703-20260917",
+  "workflow_id": "WF-03",
+  "step": "03",
+  "from_agent": "ORCH",
+  "to_agent": "ELIXIR-DEV",
+  "file": "handoffs/WF03-ISS0703-20260917/step-03-elixir-dev.json",
+  "created_at": "2026-09-17T07:33:19Z",
+  "started_at": "2026-09-17T07:33:19Z",
+  "completed_at": null,
+  "status": "PENDING",
+  "priority": "NORMAL",
+  "context": {
+    "stage": null,
+    "requirement_ids": [],
+    "requirement_text": {},
+    "source_text": {},
+    "related_handoff_ids": [],
+    "artifacts_in": [
+      "lib/letflow/design/iss0703-oidc-verifier-exception-handling.md",
+      "lib/letflow/oidc/token_verifier/oidcc.ex",
+      "lib/letflow/plugs/auth_pipeline.ex"
+    ],
+    "owned_modules": ["lib/letflow/oidc/token_verifier/oidcc.ex"]
+  },
+  "task": {
+    "description": "WF-03 Step 3 (implement) for ISS-0703, on branch feature/WF03-ISS0703-20260917 (`git checkout feature/WF03-ISS0703-20260917`). Implement EXACTLY the approved design at lib/letflow/design/iss0703-oidc-verifier-exception-handling.md (PASSED CODE-DESIGN-VALIDATOR gate, handoffs/WF03-ISS0703-20260917/step-02b-code-design-validator-rework1.json) against lib/letflow/oidc/token_verifier/oidcc.ex. Do not invent behavior the design doesn't specify, and do not add scope beyond what the design covers (auth_pipeline.ex should need NO changes per the design's own finding -- if you find during implementation that it actually does need a change, stop and report that as a MAJOR issue rather than silently expanding scope). Run `mix compile` and confirm it's clean, and run the existing auth-pipeline/oidc test suites (test/letflow/plugs/auth_pipeline_test.exs, test/letflow/integration/keycloak_auth_pipeline_test.exs, and any test/letflow/oidc/ tests) to confirm no existing behavior broke. Claim this handoff by setting status to IN_PROGRESS only.",
+    "acceptance_criteria": [
+      "verify_bearer_token/2 no longer lets an exception from Oidcc.Token.validate_jwt/3 or Oidcc.ClientContext.from_configuration_worker/4 escape uncaught -- matches the design's exact rescue/catch boundary and {:error, {:verifier_crashed, %{kind:, message:}}} shape",
+      "Moduledoc corrected per the design's specified text",
+      "mix compile is clean (no warnings introduced)",
+      "Existing auth-pipeline/oidc test suites still pass unmodified (no test edits in this step -- that's TEST-DESIGNER's job next)",
+      "No changes to auth_pipeline.ex unless a real gap is found and reported, not silently patched"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "",
+    "artifacts_out": [],
+    "issues": [],
+    "git_evidence": {
+      "branch_name": null,
+      "commit_sha_list": [],
+      "remote_branch": null,
+      "push_status": "skipped",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": ""
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

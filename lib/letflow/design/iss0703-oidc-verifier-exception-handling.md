@@ -117,15 +117,14 @@ logic; no change to that file is proposed.**
 Per this module's own defensive intent and to preserve operability (this is
 exactly the kind of unexpected-crash case an operator needs visibility
 into, distinct from routine 401s which are not logged), the rescue/catch
-boundary logs at `Logger.warning/1` before returning the `{:error, ...}`
-tuple:
-
-```
-Logger.warning("Letflow.Oidc.TokenVerifier.Oidcc crashed verifying a bearer token kind=#{kind} message=#{message}")
-```
-
-using the same `kind`/`message` values placed in the returned tuple. This
-mirrors the existing precedent of `AuthPipeline.handle_auth_error/2`'s own
+boundary logs a single `Logger.warning/1` call before returning the
+`{:error, ...}` tuple. The logged message is a string that names the module
+and function (`Letflow.Oidc.TokenVerifier.Oidcc crashed verifying a bearer
+token`), followed by the same `kind` and `message` values placed in the
+returned tuple (as `kind=...` and `message=...` fields), so an operator can
+see the same diagnostic that was returned without needing to correlate
+against the response. This mirrors the existing precedent of
+`AuthPipeline.handle_auth_error/2`'s own
 `{:error, {:provision, reason}}` branch, which logs at `Logger.error/1`
 before rejecting (`auth_pipeline.ex:177-179`) — the same "log the unexpected
 case, stay silent on routine rejection" split. **Never log `raw_token`.**
@@ -145,25 +144,15 @@ contract (`lib/letflow/oidc/token_verifier.ex:28-29` already types the error
 case as the unconstrained `term()`, so `{:verifier_crashed, %{...}}` needs no
 behaviour-level type widening). The `@spec` above documents the two return
 shapes explicitly for readers of this module going forward, formalizing what
-was previously only in prose (the moduledoc). Body structure, at the level
-this design constrains it:
-
-```
-def verify_bearer_token(raw_token, provider_name) when is_binary(raw_token) do
-  # ...unchanged existing `with` expression (fetch oidc_config, client_id,
-  # signing_algs; from_configuration_worker/4; validate_jwt/3)...
-rescue
-  exception ->
-    # log (§4), then {:error, {:verifier_crashed, %{kind: :error, message: Exception.message(exception)}}}
-catch
-  kind, reason ->
-    # log (§4), then {:error, {:verifier_crashed, %{kind: kind, message: inspect(reason)}}}
-end
-```
-
-(Shown here only to pin down clause placement/shape for ELIXIR-DEV — not
-implementation code; the existing `with` body itself is untouched and not
-reproduced.)
+was previously only in prose (the moduledoc). Clause placement is exactly as
+described in §2: the existing `with` expression remains the unmodified `do`
+body of the `def`, with a `rescue` clause and a `catch` clause appended to
+the same `def` (function-clause sugar, not a nested `try do` block), each
+producing the logged, tagged `{:error, {:verifier_crashed, %{...}}}` tuple
+described in §3 and §4 — `rescue exception ->` builds `kind: :error` and
+`message: Exception.message(exception)`; `catch kind, reason ->` builds
+`kind: kind` and `message: inspect(reason)`. No further code-level detail is
+specified here beyond what §2–§4 already state in prose.
 
 ## 6. Moduledoc correction
 

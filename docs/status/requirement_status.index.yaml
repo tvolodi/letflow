@@ -3880,8 +3880,14 @@ volumes:
     path: docs/status/requirement_status.v18.yaml
     status: current
     opened: 2026-09-15
-    entries: 17
+    entries: 18
     note: >
+      Incremented to 18 by WF02-REQ360-20260917 (DOC-UPDATER)'s own REQ-360
+      done-event append (Step 6) -- `grep -c "^  - req:"
+      docs/status/requirement_status.v18.yaml` = 18 on-disk entries, no
+      rebase conflict on this file. 871 lines / 52488 bytes, well under the
+      1200-line/120000-byte roll ceiling, so no roll triggered.
+
       Incremented to 17 by ORCH's own REQ-360 started-event append (Step 00,
       WF02-REQ360-20260917) -- `grep -c "^  - req:"
       docs/status/requirement_status.v18.yaml` = 17 on-disk entries, no

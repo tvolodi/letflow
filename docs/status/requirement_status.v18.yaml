@@ -823,3 +823,49 @@ history:
       platform-scope scenario, then run it for real against QA via
       UAT-RUNNER. Branch feature/WF02-REQ360-20260917 created from main and
       pushed (Step 00, ELIXIR-DEV). run_id WF02-REQ360-20260917.
+
+  - req: REQ-360
+    event: done
+    agent: DOC-UPDATER
+    at: 2026-09-17T01:47:59Z
+    note: >
+      AC1: test/fixtures/uat/scenarios/platform/platform-login-routing-by-role.yaml
+      created, scope: platform + branches construct, all three branches.
+      Schema-validated clean: `mix letflow.check_uat_scenario_schema` ->
+      "32 file(s) checked, 0 violation(s)".
+      AC2: UAT-RUNNER ran for real against https://qa.bizdala.com (real
+      Keycloak password-grant tokens for admin-user/operator-user, real API
+      calls). All three branches BLOCKED on the gui_screen/frontend leg
+      specifically -- no browser-automation tool available in this
+      pipeline (same gap REQ-358 hit one day earlier). Real backend-leg
+      evidence captured for all three branches (JWT role verification +
+      distinct HTTP response codes). RELEASE-VALIDATOR's own reasoned
+      determination: AC2's screenshot clause is qualified by "per
+      UAT-RUNNER's existing screenshot-as-primary-evidence discipline,"
+      which already anticipates this exact failure mode (report BLOCKED
+      honestly, no fabrication) -- satisfied on that basis, not by rote
+      precedent-match to REQ-358. Explicitly flag: this is the SECOND
+      consecutive platform-scope requirement closed without real
+      screenshot evidence due to the same unfixed tooling gap (tracked as
+      ISS-0702, MAJOR) -- if a third lands before ISS-0702 resolves, this
+      precedent should stop being treated as automatic.
+      AC3: two findings filed for the real/idealized routing-behavior
+      mismatch -- ISS-0700 (no distinct platform-admin dashboard route)
+      and ISS-0701 (no in-app login form, Keycloak-hosted), both
+      registered in letflow-queue (task 700/701, GH#1474/1475).
+      Incidental (not required by REQ-360's own ACs, correctly did not
+      derail scope): ISS-0702 (recurring no-browser-tool gap, MAJOR) and
+      ISS-0703 (new QA PLATFORM_ADMIN-token HTTP 500 regression, MAJOR)
+      also filed.
+      Reference: test/uat-reports/uat-2026-09-17-WF02-REQ360-20260917.yaml,
+      lib/letflow/design/req360-platform-login-routing-uat-scenario.md.
+      RELEASE-VALIDATOR PASSed this run. Flipped docs/requirements.yaml's
+      REQ-360 status in_progress -> done. README.md checked -- this is a
+      UAT-scenario-authoring requirement with no behavior change; no
+      ASCII state diagram, "Running it" section, or other documented
+      current-behavior content references this scenario or platform
+      login-routing, so no README change was made. No
+      docs/migration/stage-N-*.md or docs/migration/decisions/*.md file
+      was named in REQ-360's acceptance criteria (only
+      docs/agents/protocols/ISSUE_QUEUE.md, for finding-filing), so that
+      check is N/A for this requirement.

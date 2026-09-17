@@ -194,3 +194,19 @@ pipeline_log:
       Spot-checked ISS-0707's filing: verified 5/9 named files directly,
       confirmed genuine hard-throws (not console warnings), confirmed
       the explicitly-excluded 10th occurrence really is non-blocking.
+  - step: TEST-RUNNER
+    at: "2026-09-17T11:12:00Z"
+    result: >
+      PASS. Backend mix test 4332/4332 unaffected. Frontend npm test
+      592/592 (includes new 6/6 unit test). playwright --list: 290/50
+      clean. Ran the 10 modified specs against a real local backend --
+      0/63 executions hit "Backend not live" (the exact throw this fix
+      targets); 53 remaining failures categorized and all pre-existing/
+      out-of-scope (Keycloak's own /health/ready, missing env vars,
+      unseeded fixtures, the known ISS-0702 vite-proxy quirk). mix
+      compile/format clean. Confirmed zero lib/letflow/ application-code
+      touches. Noted (not fixed, out of scope): the 10 files' stale
+      BPM_TEST_URL default (127.0.0.1:8080) silently ECONNREFUSEs
+      without an explicit override. Report:
+      test/reports/report-20260917-WF03-ISS0706-20260917.yaml (commit
+      e26e96cd).

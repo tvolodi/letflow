@@ -151,3 +151,22 @@ pipeline_log:
       reasoned out-of-scope decision. Requires either a minimal tile
       assertion or an explicit documented out-of-scope citation before
       this can PASS.
+
+  - step: TEST-DESIGNER
+    at: "2026-09-17T09:44:00Z"
+    result: >
+      Gap closed at commit df7ff6d2. Chose option (a): added real tile
+      assertions rather than an out-of-scope citation, since a real
+      dashboard UI with real data-testids already exists
+      (TenantDashboardPage.tsx). Branches 1/2 now both assert
+      tile-definitions/tile-instances/tile-tasks visible, proving "same
+      tiles" directly. For branch 2's cross-tenant-isolation half:
+      discovered mid-implementation that this sandbox's tenant-by-Host-
+      header resolution makes a same-tenant absence-of-banner check
+      measure the wrong thing (only one tenant seeded here) -- dropped
+      that approach, asserted count tiles render live data instead, and
+      documented in a code comment + cited a real already-passing spec
+      (tenant-dashboard.e2e.spec.ts TC-TD-UI-01-04) that genuinely proves
+      cross-tenant tile isolation with two real tenants -- explicitly
+      not citing the still-BLOCKED attachment-cross-tenant-probe.yaml.
+      Re-ran for real: 3/3 passed. eslint/tsc clean.

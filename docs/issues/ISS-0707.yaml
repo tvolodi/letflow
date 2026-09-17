@@ -159,3 +159,17 @@ pipeline_log: []
       --source=HEAD. Confirmed TC-1..TC-4 genuinely unchanged. Own npm
       test: 592/592, tsc clean. Spot-checked 3/9 files independently,
       no copy-paste defects.
+  - step: TEST-RUNNER
+    at: "2026-09-17T12:35:00Z"
+    result: >
+      PASS. Backend 4331/4332 (sole failure: PollerTest, a probabilistic
+      contention test in an untouched file -- re-ran alone 21/21,
+      confirmed flaky under 8-way partition contention not a
+      regression). Frontend npm test 592/592. playwright --list 290/50
+      clean. Ran all 9 modified specs against a real local backend: 0/23
+      readiness-precondition throws (grep-confirmed), 10 remaining
+      failures all pre-existing app/data-state timeouts unrelated to
+      this fix. mix compile/format clean. Confirmed only lib/letflow/
+      hit is the design doc itself, zero application code touched.
+      Report: test/reports/report-20260917-WF03-ISS0707-20260917.yaml
+      (commit cd4920d1).

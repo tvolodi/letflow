@@ -6686,17 +6686,17 @@
       "queue_task_id": 693,
       "queue_agent_id": "TVOLODI-orch",
       "github_issue_number": 1450,
-      "status": "IN_PROGRESS",
+      "status": "COMPLETED",
       "owned_modules": [
         "deploy/redeploy-qa.sh",
         ".github/workflows/cd.yml"
       ],
       "branch_name": "feature/WF02-REQ367-20260917",
       "started_at": "2026-09-17T14:35:03Z",
-      "lock_released_at": null,
-      "released_lock": false,
+      "lock_released_at": "2026-09-17T15:28:11Z",
+      "released_lock": true,
       "backfilled": false,
-      "last_known_step": "Step 00 (git setup) COMPLETED PASS -- branch feature/WF02-REQ367-20260917 created and pushed by ELIXIR-DEV (commit 3a5daaae).",
+      "last_known_step": "Step Final PASS -- PR #1503 (main requirement) squash-merged 17672a59, CI green on second attempt (first attempt failed on letflow.lint_handoffs -- 3 of this run own dispatch handoffs had fabricated timestamps, fixed). Follow-up PR #1504 (Step Final handoff finalization) squash-merged 0beb3023. Queue task 693 released status: done.",
       "note": "CD to QA on merge -- new .github/workflows/cd.yml + deploy/redeploy-qa.sh, adapting letflow-queue own proven SSH-restricted-key CD pattern for qa.bizdala.com. Credentials out of scope (companion ai-dala-infra task)."
     }
   ]

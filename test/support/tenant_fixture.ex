@@ -145,6 +145,7 @@ defmodule Letflow.TenantFixture do
     "events_archive",
     "group_members",
     "groups",
+    "help_content",
     "instance_attachments",
     "instance_definition_snapshots",
     "instance_projections",

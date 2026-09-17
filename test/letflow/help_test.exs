@@ -471,6 +471,94 @@ defmodule Letflow.HelpTest do
       assert "must not contain raw HTML tags" in errors_on(changeset).body
     end
 
+    # ------------------------------------------------------------------------------
+    # Round 3 (SECURITY-REVIEWER `step-03b-security-reviewer-rework2.json`) -- three
+    # new real defects found against the round-2 implementation, not new bypass
+    # classes against the mechanism itself.
+    # ------------------------------------------------------------------------------
+
+    test "round 3 blocker 1 -- uppercase-hex numeric character reference (&#X..;) is rejected" do
+      %{schema_name: schema_name} = provisioned_tenant()
+
+      assert {:error, changeset} =
+               Help.create_draft(
+                 draft_attrs(%{body: "[x](java&#X73;cript:alert(1))"}),
+                 prefix: schema_name
+               )
+
+      assert "must not contain javascript:/data:/vbscript: link or image URLs" in errors_on(
+               changeset
+             ).body
+    end
+
+    test "round 3 blocker 2 -- raw tag split across a **strong**-interrupted text run is rejected" do
+      %{schema_name: schema_name} = provisioned_tenant()
+
+      assert {:error, changeset} =
+               Help.create_draft(
+                 draft_attrs(%{body: "x<img on**err**=\"x()\">y"}),
+                 prefix: schema_name
+               )
+
+      assert "must not contain raw HTML tags" in errors_on(changeset).body
+    end
+
+    test "round 3 blocker 2 -- raw tag split across a `code`-interrupted text run is rejected" do
+      %{schema_name: schema_name} = provisioned_tenant()
+
+      assert {:error, changeset} =
+               Help.create_draft(
+                 draft_attrs(%{body: "x<img on`err`=\"x()\">y"}),
+                 prefix: schema_name
+               )
+
+      assert "must not contain raw HTML tags" in errors_on(changeset).body
+    end
+
+    test "round 3 blocker 2 -- raw tag split across an *emphasis*-interrupted text run is rejected" do
+      %{schema_name: schema_name} = provisioned_tenant()
+
+      assert {:error, changeset} =
+               Help.create_draft(
+                 draft_attrs(%{body: "x<img on*err*=\"x()\">y"}),
+                 prefix: schema_name
+               )
+
+      assert "must not contain raw HTML tags" in errors_on(changeset).body
+    end
+
+    test "round 3 blocker 2 -- a raw tag split by inline formatting still excludes real code-span content from the merged scan" do
+      %{schema_name: schema_name} = provisioned_tenant()
+
+      # The code span's own content ("<not-a-tag>") must not be merged into the
+      # surrounding prose by the flattened-text projection -- it should stay excluded
+      # (§5.2), so this body (no real raw tag anywhere, split or otherwise) is safe.
+      body = "before `<not-a-tag>` and **bold** after"
+
+      assert {:ok, help} = Help.create_draft(draft_attrs(%{body: body}), prefix: schema_name)
+      assert help.body == body
+    end
+
+    test "round 3 blocker 3 -- malformed markdown (unclosed fenced code block) does not crash and is handled safely" do
+      %{schema_name: schema_name} = provisioned_tenant()
+
+      body = "some text\n\n```elixir\nIO.puts 1\n"
+
+      result = Help.create_draft(draft_attrs(%{body: body}), prefix: schema_name)
+
+      assert match?({:ok, _help}, result) or match?({:error, %Ecto.Changeset{}}, result)
+    end
+
+    test "round 3 blocker 3 -- malformed markdown (unclosed inline backtick) does not crash and is handled safely" do
+      %{schema_name: schema_name} = provisioned_tenant()
+
+      body = "some text with `unclosed code"
+
+      result = Help.create_draft(draft_attrs(%{body: body}), prefix: schema_name)
+
+      assert match?({:ok, _help}, result) or match?({:error, %Ecto.Changeset{}}, result)
+    end
+
     test "allows a safe https:// link" do
       %{schema_name: schema_name} = provisioned_tenant()
 

@@ -84,6 +84,29 @@ defmodule Letflow.Help.HelpContent do
   Both gaps, and the primary-source verification behind them, are flagged in this
   requirement's implementation handoff for REVIEWER to confirm alongside the rest of
   this change.
+
+  ### Round 3 fixes (SECURITY-REVIEWER `step-03b-security-reviewer-rework2.json`)
+
+  1. `@numeric_entity_pattern`'s hex branch now matches `[xX]`, not a bare lowercase
+     `x` -- an uppercase hex marker (`&#X73;`, valid per HTML5) previously survived
+     undecoded into `scheme_letters/1`, whose downcase-then-filter-a-z step folded the
+     entity's own literal `x` syntax character into the extracted scheme
+     (`"javaxcript"` instead of `"javascript"`), missing the disallowed-scheme match.
+  2. The plain-text fallback scan (gap 1 above) now scans a *flattened text projection*
+     of each list of sibling AST nodes (built by `flatten_plain_text/1`) instead of each
+     text leaf independently -- a raw tag's `<`/`>` split across two text leaves by an
+     intervening inline-formatting node (`**strong**`, `` `code` ``, emphasis, a link,
+     ...) is otherwise invisible to a per-leaf scan. `"code"`/`"pre"` nodes still
+     contribute nothing to the projection, so §5.2's "fenced content stays literal" is
+     unaffected.
+  3. `validate_markdown_safety/2` no longer bare-matches `{:ok, ast, _messages} = ...`
+     against `EarmarkParser.as_ast/2`'s result -- that call's own documented contract
+     returns `{:error, ast, messages}` for any `:warning`-or-worse parse message
+     (including ordinary tenant text like an unclosed backtick or an unclosed fenced
+     block, not only malicious input), which the bare match let raise `MatchError`
+     straight out of `Letflow.Help.create_draft/2`/`update_draft/3` (INV-8). Both
+     branches are now handled explicitly; either way the returned `ast` (still real,
+     usable structure per the library's own contract) is walked exactly as before.
   """
 
   use Ecto.Schema
@@ -123,8 +146,14 @@ defmodule Letflow.Help.HelpContent do
 
   # Decimal (`&#106;`) and hex (`&#x6a;`/`&#X6A;`) numeric character references --
   # closes the verified gap where `EarmarkParser.as_ast/2` does not decode these inside
-  # a resolved link/image destination (see moduledoc).
-  @numeric_entity_pattern ~r/&#(x[0-9a-fA-F]+|[0-9]+);/
+  # a resolved link/image destination (see moduledoc). The hex marker (`x`/`X`) is
+  # case-insensitive per HTML5's numeric-character-reference grammar (`&#x73;` and
+  # `&#X73;` are the same reference) -- `[xX]` here matches `decode_entity_code/1`'s own
+  # already-case-insensitive `x in [?x, ?X]` guard below; a bare lowercase `x` in this
+  # pattern (SECURITY-REVIEWER round 3, blocker 1) let an uppercase-marker entity survive
+  # undecoded into `scheme_letters/1`, where the leftover literal `x` character got
+  # folded into the extracted scheme, producing `"javaxcript"` instead of `"javascript"`.
+  @numeric_entity_pattern ~r/&#([xX][0-9a-fA-F]+|[0-9]+);/
 
   @doc """
   Structural changeset for creating a new help content draft. Does no I/O.
@@ -175,7 +204,22 @@ defmodule Letflow.Help.HelpContent do
   defp validate_markdown_safety(changeset, field) do
     validate_change(changeset, field, fn ^field, value ->
       if is_binary(value) do
-        {:ok, ast, _messages} = EarmarkParser.as_ast(value)
+        # `EarmarkParser.as_ast/2`'s documented contract is `{:ok, ast, []} | {:error,
+        # ast, errors()}` -- the `:error` branch fires for ANY :warning-or-worse parse
+        # message (SECURITY-REVIEWER round 3, blocker 3), which includes ordinary,
+        # non-adversarial tenant-authored content such as a stray unclosed backtick or
+        # an unclosed fenced code block, not only malicious input. A bare `{:ok, ast,
+        # _messages} = ...` match crashed (`MatchError`) on that branch. Per the
+        # library's own contract, the `:error` branch's `ast` is still real, usable
+        # parsed structure (just with parse warnings) -- both branches are handled the
+        # same way here: walk whatever AST was produced. This never loses detection of
+        # unsafe content (the walk still runs), it only stops a parse-quality warning
+        # from crashing the write path outright (INV-8).
+        ast =
+          case EarmarkParser.as_ast(value) do
+            {:ok, ast, _messages} -> ast
+            {:error, ast, _messages} -> ast
+          end
 
         ast
         |> walk()
@@ -195,9 +239,30 @@ defmodule Letflow.Help.HelpContent do
   # design §5.4.2 steps 2-3, plus the two verified-gap supplements documented in this
   # module's moduledoc. Every `earmark_parser` AST node is a uniform 4-tuple
   # `{tag, attrs, children, meta}`; plain text leaves are bare binaries.
-  defp walk(nodes) when is_list(nodes), do: Enum.flat_map(nodes, &walk/1)
+  #
+  # SECURITY-REVIEWER round 3, blocker 2: a raw tag's own `<`/`>` can land in two
+  # different plain-text AST leaves when an inline-formatting node (`**strong**`,
+  # `` `code` ``, emphasis, a link, ...) interrupts the tag's own attribute area --
+  # e.g. `x<img on**err**="x()">y` parses to three siblings, `"x<img on"`,
+  # `{"strong", [], ["err"], %{}}`, `"=\"x()\">y"`, and neither text sibling alone
+  # contains a complete `<...>` span. Scanning each leaf independently (as the previous
+  # round did) misses this. The fix: at each list-of-children level, build one flattened
+  # text projection of that level (in AST order) -- plain-text leaves contribute their
+  # own text, and any non-code/pre element contributes its own inner text recursively
+  # (so `**err**`'s "err" is treated as contiguous with its neighbours, closing the
+  # split) -- then scan that single projection once for the raw-tag pattern, alongside
+  # (not instead of) the existing per-node structural checks. `"code"`/`"pre"` nodes
+  # contribute nothing to the projection (empty string, not their literal content), so
+  # fenced/inline code text is never concatenated into surrounding prose -- §5.2's
+  # "fenced content stays literal/excluded" guarantee holds exactly as before; this is
+  # the same exclusion `nested` below already applies for the structural recursion.
+  defp walk(nodes) when is_list(nodes) do
+    structural = Enum.flat_map(nodes, &walk_node/1)
+    text_scan = nodes |> flatten_plain_text() |> walk_text()
+    structural ++ text_scan
+  end
 
-  defp walk({tag, attrs, children, meta}) do
+  defp walk_node({tag, attrs, children, meta}) do
     raw_html_violation = if raw_html_node?(tag, meta), do: [:raw_html], else: []
     scheme_violation = destination_violation(tag, attrs)
 
@@ -211,16 +276,31 @@ defmodule Letflow.Help.HelpContent do
     raw_html_violation ++ scheme_violation ++ nested
   end
 
-  # Plain, unparsed text leaf -- design §5.4.2 assumed all raw HTML becomes a
-  # `verbatim: true` node; verified against real `earmark_parser` output that inline raw
-  # HTML mixed with surrounding text on the same line does not (see moduledoc's "verified
-  # gaps" section). This is the fallback that still satisfies design §5.1's "reject any
-  # raw angle-bracket tag construct" requirement for that shape.
-  defp walk(text) when is_binary(text) do
+  # Plain-text leaves are handled entirely by the flattened-projection scan in
+  # `walk/1` above now (so a split-by-formatting tag is still caught) -- nothing
+  # additional to do for a bare binary at the structural-node level.
+  defp walk_node(text) when is_binary(text), do: []
+  defp walk_node(_other), do: []
+
+  defp walk_text(text) when is_binary(text) do
     if Regex.match?(@raw_html_tag_pattern, text), do: [:raw_html], else: []
   end
 
-  defp walk(_other), do: []
+  # Builds one contiguous text projection of a list of sibling AST nodes, in order:
+  # binaries contribute their own text; `"code"`/`"pre"` nodes contribute nothing
+  # (excluded, not merged into prose -- §5.2); any other element contributes its own
+  # children's projection recursively (so inline formatting like `**strong**`/`*em*`/
+  # links don't break an otherwise-contiguous raw tag apart). This is a projection for
+  # the raw-tag-shape scan only -- it never replaces the per-node structural checks in
+  # `walk_node/1`, which still run independently against the real AST.
+  defp flatten_plain_text(nodes) when is_list(nodes) do
+    nodes |> Enum.map(&flatten_plain_text/1) |> Enum.join()
+  end
+
+  defp flatten_plain_text(text) when is_binary(text), do: text
+  defp flatten_plain_text({tag, _attrs, _children, _meta}) when tag in ["code", "pre"], do: ""
+  defp flatten_plain_text({_tag, _attrs, children, _meta}), do: flatten_plain_text(children)
+  defp flatten_plain_text(_other), do: ""
 
   # `meta[:verbatim] == true` per design §5.4.2 step 2. HTML comment nodes
   # (`{:comment, [], [...], %{comment: true}}`) are also raw, non-markdown-subset content

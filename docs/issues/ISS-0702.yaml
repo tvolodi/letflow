@@ -135,3 +135,19 @@ pipeline_log:
       the spec's own hard assertion on every run, including against real
       QA -- no separate regression test would prove anything beyond
       restating browser API behavior.
+  - step: TEST-DESIGN-VALIDATOR
+    at: "2026-09-17T09:37:00Z"
+    result: >
+      FAIL. Independently ran the spec (3/3 passed, own output quoted)
+      and confirmed nav-role assertions accurate against AppShell.tsx --
+      but found a real coverage gap neither the design nor TEST-DESIGNER
+      caught: the scenario yaml's EO-001 detail text carries a
+      dashboard-tile sub-claim for branches 1 and 2 ("alongside the same
+      dashboard tiles a tenant-scoped user sees" / "dashboard tiles
+      reflect this tenant's own data only", both on_fail.severity:
+      BLOCKER) that the spec asserts nothing about -- neither route/nav
+      checks cover it. This sub-claim was silently dropped somewhere in
+      CODE-DESIGNER's design (never mentioned in §1.4/§1.5), not a cited,
+      reasoned out-of-scope decision. Requires either a minimal tile
+      assertion or an explicit documented out-of-scope citation before
+      this can PASS.

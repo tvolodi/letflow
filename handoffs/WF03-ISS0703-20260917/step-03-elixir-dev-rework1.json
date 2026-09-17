@@ -1,0 +1,58 @@
+{
+  "handoff_id": "wf03-iss0703-step03-rework1",
+  "run_id": "WF03-ISS0703-20260917",
+  "workflow_id": "WF-03",
+  "step": "03-rework1",
+  "from_agent": "ORCH",
+  "to_agent": "ELIXIR-DEV",
+  "file": "handoffs/WF03-ISS0703-20260917/step-03-elixir-dev-rework1.json",
+  "created_at": "2026-09-17T07:47:43Z",
+  "started_at": "2026-09-17T07:47:43Z",
+  "completed_at": null,
+  "status": "PENDING",
+  "priority": "NORMAL",
+  "context": {
+    "stage": null,
+    "requirement_ids": [],
+    "requirement_text": {},
+    "source_text": {},
+    "related_handoff_ids": [
+      "handoffs/WF03-ISS0703-20260917/step-03-elixir-dev.json",
+      "handoffs/WF03-ISS0703-20260917/step-03b-security-reviewer.json",
+      "handoffs/WF03-ISS0703-20260917/step-02b-code-design-validator-rework2.json"
+    ],
+    "artifacts_in": [
+      "lib/letflow/design/iss0703-oidc-verifier-exception-handling.md",
+      "lib/letflow/oidc/token_verifier/oidcc.ex",
+      "handoffs/WF03-ISS0703-20260917/step-03b-security-reviewer.json"
+    ],
+    "owned_modules": ["lib/letflow/oidc/token_verifier/oidcc.ex"]
+  },
+  "task": {
+    "description": "WF-03 Step 3 rework iteration 1 for ISS-0703, on branch feature/WF03-ISS0703-20260917 (`git checkout feature/WF03-ISS0703-20260917`). Your prior implementation (handoffs/WF03-ISS0703-20260917/step-03-elixir-dev.json, commit 4ad5d4b0) FAILED SECURITY-REVIEWER (step-03b-security-reviewer.json) on a BLOCKER: the `message` field (built from Exception.message/1 / inspect/1) could leak a fragment of the raw bearer token. The design doc lib/letflow/design/iss0703-oidc-verifier-exception-handling.md has since been revised (PASSED CODE-DESIGN-VALIDATOR's regate, step-02b-code-design-validator-rework2.json) to replace that field with a `classification` field built ONLY from fixed atoms (the exception's __struct__ module name for the rescue branch; the caught reason directly if already an atom, else one of two fixed constants :non_atom_exit_reason/:non_atom_throw_reason, for the catch branch) -- no formatter (Exception.message/1, inspect/1, to_string/1, or similar) may ever be applied to the caught value's content. Re-read the current design doc in full (it has changed since your first implementation) and update lib/letflow/oidc/token_verifier/oidcc.ex to match EXACTLY -- replace the message-based construction with the classification-based construction, update the @type/@spec accordingly, update the moduledoc/@doc text if the design's wording changed. Re-run mix compile and the same test suites as before. Claim this handoff by setting status to IN_PROGRESS only.",
+    "acceptance_criteria": [
+      "The returned {:error, {:verifier_crashed, %{kind:, classification:}}} tuple's classification field is built exactly per the revised design -- no Exception.message/1, inspect/1, to_string/1, or string interpolation applied to the caught exception/exit/throw's own content anywhere in the new code",
+      "Logger.warning/1 call logs the same safe fields only",
+      "mix compile clean",
+      "Existing auth-pipeline/oidc test suites (test/letflow/plugs/auth_pipeline_test.exs, test/letflow/oidc/) still pass",
+      "No changes to auth_pipeline.ex"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "",
+    "artifacts_out": [],
+    "issues": [],
+    "git_evidence": {
+      "branch_name": null,
+      "commit_sha_list": [],
+      "remote_branch": null,
+      "push_status": "skipped",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": ""
+  },
+  "rework_count": 1,
+  "max_rework": 3
+}

@@ -1,0 +1,44 @@
+{
+  "handoff_id": "wf02-req367-step02c",
+  "run_id": "WF02-REQ367-20260917",
+  "workflow_id": "WF-02",
+  "step": "02c",
+  "from_agent": "ORCH",
+  "to_agent": "SECURITY-REVIEWER",
+  "file": "handoffs/WF02-REQ367-20260917/step-02c-security-reviewer.json",
+  "created_at": "2026-09-17T18:30:00Z",
+  "started_at": "2026-09-17T18:30:00Z",
+  "completed_at": null,
+  "status": "PENDING",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S7",
+    "requirement_ids": ["REQ-367"],
+    "requirement_text": {
+      "REQ-367": "See handoffs/WF02-REQ367-20260917/step-00-git-setup.json's context.requirement_text for the full verbatim requirement description."
+    },
+    "artifacts_in": [
+      "deploy/redeploy-qa.sh",
+      ".github/workflows/cd.yml",
+      ".github/workflows/ci.yml"
+    ],
+    "owned_modules": [
+      "deploy/redeploy-qa.sh",
+      ".github/workflows/cd.yml",
+      ".github/workflows/ci.yml"
+    ],
+    "branch_name": "feature/WF02-REQ367-20260917"
+  },
+  "task": {
+    "description": "WF-02 Step 2c -- Security gate for REQ-367 (CD to QA deploy infra: new deploy/redeploy-qa.sh, new .github/workflows/cd.yml, additive change to .github/workflows/ci.yml's changes job). Claim this handoff (status IN_PROGRESS). Read git diff main...HEAD for this branch and the three artifacts_in files directly. Run the scope test per WF-02 Step 2c's standard procedure: does this diff touch a tenant-data path per docs/agents/instructions/security-invariants.md's applicability notes? This is CI/CD infrastructure (a deploy script + GitHub Actions workflows), not an API route/migration/tenant-data-shaping code path in the usual sense -- but it DOES touch secrets handling (new QA_DEPLOY_HOST/QA_DEPLOY_USER/QA_DEPLOY_SSH_KEY secret references) and a script that will run with real host/deploy privileges once credentials are provisioned, so do not dismiss it as automatically out of scope without checking: specifically verify (a) no secret value is ever echoed/logged in the script or workflow, (b) no secret is written to a file the git repo would track, (c) the SSH-action step's secret references follow the same pattern already proven safe in production by letflow-queue's own cd.yml (cite it if reachable at c:\\Users\\tvolo\\dev\\ai-dala\\letflow-queue), (d) the frontend build's VITE_OIDC_AUTHORITY/VITE_OIDC_CLIENT_ID values are sourced from a host-local file rather than hardcoded in the script body, (e) no tenant/user data path is touched at all (this is deploy-time infra, not a runtime request path) -- state this explicitly as the basis for ruling INV-1..INV-8 NOT-APPLICABLE if that's the finding, rather than silently skipping. If genuinely out of scope after this check, PASS with summary 'out of scope -- no tenant-data path touched, exact reasoning: <state it>', next_action 'Route to REVIEWER (2d)'. If any applicable finding: FAIL with issues listing severity per invariant. Complete the handoff and commit+push on feature/WF02-REQ367-20260917.",
+    "acceptance_criteria": [
+      "Scope determination made explicitly with reasoning, not a silent skip",
+      "No secret value ever echoed/logged/written to a tracked file in either new artifact",
+      "SSH-action secret-reference pattern matches letflow-queue's own proven-safe production pattern",
+      "OIDC build-arg values sourced from a host-local file, not hardcoded"
+    ]
+  },
+  "result": null,
+  "rework_count": 0,
+  "max_rework": 3
+}

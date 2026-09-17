@@ -1,0 +1,189 @@
+run_id: WF02-REQ360-20260917
+date: "2026-09-17"
+agent: UAT-RUNNER
+scope: >
+  WF-05 Step 2-3 for REQ-360: execute the newly-authored permanent scenario
+  test/fixtures/uat/scenarios/platform/platform-login-routing-by-role.yaml
+  (three branches via REQ-358's branches:/when: construct) against the real
+  QA instance named in this dispatch's context. No mocks, real HTTP, real
+  Keycloak OIDC password-grant tokens, real API calls to the live
+  https://qa.bizdala.com backend. Checked for a browser-automation tool via
+  ToolSearch before starting (queries: "playwright browser automation
+  screenshot", "browser screenshot navigate click page") -- none found in
+  this session (Penpot design tools, WebFetch, and various OAuth-completion
+  tools only). This matches the precedent recorded in
+  test/uat-reports/uat-2026-09-16-WF02-REQ358-20260916.yaml for the same gap.
+  All three of this scenario's expected outcomes carry
+  verification.method: gui_screen and via: gui steps, and the file names no
+  pipeline_test: spec, so per .claude/agents/uat-runner.md's instruction this
+  is disclosed honestly as BLOCKED/UNBUILT_FEATURE on the frontend leg for
+  all three branches, not routed around with a substitute API-only pass.
+
+environment_target:
+  base_url: "https://qa.bizdala.com"
+  credential_source: "ai-dala-infra/scripts/qa-login.sh"
+  environment: qa
+  readiness_check: "curl -s -o /dev/null -w '%{http_code}' https://qa.bizdala.com/ -> HTTP_STATUS:200 (independently re-confirmed by UAT-RUNNER, not only trusted from ORCH's earlier check)"
+  oidc_issuer_discovered: "https://auth.qa.bizdala.com/realms/bpm-default (GET .../.well-known/openid-configuration -> HTTP 200, token_endpoint present, confirmed live)"
+  credential_invocations:
+    - command: "bash ai-dala-infra/scripts/qa-login.sh admin-user"
+      output: "URL: https://qa.bizdala.com/ | Username: admin-user | Role: PLATFORM_ADMIN | Password: <redacted in this report, real value used live>"
+    - command: "bash ai-dala-infra/scripts/qa-login.sh operator-user"
+      output: "URL: https://qa.bizdala.com/ | Username: operator-user | Role: PROCESS_OPERATOR | Password: <redacted in this report, real value used live>"
+
+tooling_available: >
+  No Playwright/browser-control tool, no screenshot capability, of any kind
+  was available to this UAT-RUNNER session. Confirmed by ToolSearch before
+  any scenario work began (not assumed). All GUI-driving and all gui_screen
+  evidence capture for this run's three branches was therefore impossible to
+  perform for real; no screenshot evidence is fabricated or substituted
+  below.
+
+scenario:
+  file: test/fixtures/uat/scenarios/platform/platform-login-routing-by-role.yaml
+  purpose: >
+    Verify real observed post-login routing behavior by authenticated role,
+    per the three branches the scenario's own header comment already
+    documents as differing from an idealized distinct-dashboards/in-app-form
+    description (ISS-0700/ISS-0701, already filed per the design doc's
+    Section 5 and this branch's own commit history).
+
+  branch_platform_admin_lands_on_workspace_root:
+    when: "fact: role, op: eq, value: PLATFORM_ADMIN"
+    gui_leg:
+      verdict: "BLOCKED / UNBUILT_FEATURE (frontend leg -- no browser-automation tool available)"
+      reason: >
+        EO-001's verification.method is gui_screen (route is "/", nav shows
+        PLATFORM_ADMIN-only entries). This requires actually driving a
+        browser to observe the rendered route and navigation. No such tool
+        exists in this session; not skipped silently, not faked with a
+        backend-only substitute.
+    backend_role_evidence_real:
+      token_exchange: >
+        POST https://auth.qa.bizdala.com/realms/bpm-default/protocol/openid-connect/token
+        grant_type=password, client_id=letflow-web, username=admin-user
+        -> HTTP 200, access_token issued. Decoded JWT payload:
+        preferred_username="admin-user", realm_access.roles=["PLATFORM_ADMIN"],
+        iss="https://auth.qa.bizdala.com/realms/bpm-default".
+      role_confirmed: "PLATFORM_ADMIN, matching this branch's `when:` condition exactly."
+      api_probe_anomaly_found: >
+        Using the real admin-user bearer token against three distinct real
+        API endpoints (GET /api/v1/tenants, GET /api/v1/identity/users,
+        GET /api/v1/health) all returned HTTP 500 with an empty response
+        body, reproducibly (retried GET /api/v1/tenants twice more, same
+        500 both times). This differs from the REQ-358 QA run one day
+        earlier (uat-2026-09-16-WF02-REQ358-20260916.yaml), which recorded
+        HTTP 200 with a real tenant list for the same admin-user token
+        against GET /api/v1/tenants. By contrast, the same three endpoints
+        with the real operator-user bearer token returned well-formed
+        403/403/404 Problem+JSON responses in this same run (see next
+        branch), so this is not a blanket outage -- it is specific to
+        requests carrying a PLATFORM_ADMIN-scoped token, observed for real,
+        not inferred. This is a new finding outside this scenario's own
+        expected outcomes (which concern frontend routing, not this API);
+        flagging to ORCH for triage/issue-filing rather than silently
+        omitting it, per "no absence of error as pass" and "report the
+        actual observed evidence" discipline.
+    verdict: "BLOCKED (frontend leg unverifiable this run); backend role-selection fact confirmed real; unrelated real API anomaly found and reported separately below"
+
+  branch_tenant_scoped_role_lands_on_workspace_root:
+    when: "fact: role, op: in, value: [PROCESS_DESIGNER, PROCESS_OPERATOR, TASK_WORKER]"
+    gui_leg:
+      verdict: "BLOCKED / UNBUILT_FEATURE (frontend leg -- no browser-automation tool available)"
+      reason: >
+        Same gap as above: EO-001 requires observing the rendered route and
+        a role-scoped nav via a real browser; not possible in this session.
+    backend_role_evidence_real:
+      token_exchange: >
+        POST .../token grant_type=password, username=operator-user
+        -> HTTP 200. Decoded JWT: preferred_username="operator-user",
+        realm_access.roles=["PROCESS_OPERATOR"].
+      role_confirmed: >
+        PROCESS_OPERATOR, a literal member of this branch's `when: {op: in,
+        value: [PROCESS_DESIGNER, PROCESS_OPERATOR, TASK_WORKER]}` list --
+        an exact match this time (REQ-358's own run only had a
+        near-analogue available; this scenario's actual value list includes
+        PROCESS_OPERATOR directly, so the match is exact, not approximate).
+      api_probe_real: >
+        GET https://qa.bizdala.com/api/v1/tenants (Bearer operator token)
+        -> HTTP 403 {"status":403,"type":"https://bpm.example.com/problems/forbidden","title":"Forbidden","detail":"insufficient permissions",...}
+        GET https://qa.bizdala.com/api/v1/identity/users (Bearer operator token)
+        -> HTTP 403, same Problem+JSON shape.
+        GET https://qa.bizdala.com/api/v1/health (Bearer operator token)
+        -> HTTP 404 {"status":404,"type":"https://bpm.example.com/problems/not-found",...}
+        Confirms a distinct, well-formed, non-500 outcome for this role,
+        distinct from the PLATFORM_ADMIN token's 500s above on the same
+        endpoints -- the role-based discriminator is real and produces
+        real, different backend behavior.
+    verdict: "BLOCKED (frontend leg unverifiable this run); backend role-selection fact confirmed real and exact"
+
+  branch_unauthenticated_redirects_to_external_login:
+    when: "else (no earlier branch matched)"
+    gui_leg:
+      verdict: "BLOCKED / UNBUILT_FEATURE (frontend leg -- no browser-automation tool available)"
+      reason: >
+        EO-001 requires observing a real browser navigation sequence: the
+        transient in-app "Redirecting to login..." placeholder
+        (data-testid="auth-loading"), then an actual off-origin redirect to
+        Keycloak's hosted login page. Neither the transient placeholder nor
+        the off-origin navigation can be observed without a real browser;
+        curl cannot follow client-side (JS-driven) redirects or render a
+        placeholder.
+    backend_evidence_real:
+      root_fetch: >
+        GET https://qa.bizdala.com/ with no Authorization header and no
+        cookie -> HTTP 200, HTML shell returned (server does not itself
+        redirect -- consistent with the scenario's own description that the
+        redirect to Keycloak is client-side JS, not a server 30x).
+      api_probe_real: >
+        GET https://qa.bizdala.com/api/v1/tenants, no Authorization header
+        -> HTTP 401 {"error":"unauthorized","detail":"missing or malformed Authorization header"}
+        Confirms the backend independently enforces "unauthenticated" as a
+        real, distinct state (role fact = "unauthenticated" per
+        uat-scenario-schema.md's convention), matching this branch's
+        `when: else` selection.
+    verdict: "BLOCKED (frontend leg unverifiable this run -- cannot observe the placeholder or the off-origin redirect without a browser); backend unauthenticated-state fact confirmed real"
+
+overall_verdict: BLOCKED
+new_finding_for_orch_triage:
+  title: "PLATFORM_ADMIN-scoped bearer tokens receive HTTP 500 (empty body) from qa.bizdala.com on multiple API endpoints where a non-admin token gets a well-formed 403/404"
+  observed: >
+    GET /api/v1/tenants, GET /api/v1/identity/users, GET /api/v1/health each
+    returned HTTP 500 with an empty response body when called with a real,
+    valid, freshly-issued admin-user (PLATFORM_ADMIN) bearer token, on
+    2026-09-17 against https://qa.bizdala.com. Retried GET /api/v1/tenants
+    two additional times with the same token; same 500 both times
+    (reproducible, not a one-off blip). The identical GET /api/v1/tenants
+    call one day earlier (REQ-358's QA run, 2026-09-16) with the same
+    admin-user account returned HTTP 200 with a real tenant list -- so this
+    is a regression on QA between 2026-09-16 and 2026-09-17, not
+    long-standing behavior this run merely noticed for the first time.
+    The same three endpoints called with a real operator-user
+    (PROCESS_OPERATOR) token in this same run returned well-formed
+    Problem+JSON 403/403/404 responses, so the 500 is specific to
+    PLATFORM_ADMIN-scoped tokens, not a blanket outage.
+  severity_suggestion: "Should be triaged before this scenario's branch 1 can be meaningfully re-attempted even once a browser tool exists -- if the backend errors for admin tokens, the GUI's platform-admin nav items (Users, Tenants, Health, Metrics) this scenario's EO-001 expects to see populated may themselves fail to load, independent of the routing question this scenario is actually testing."
+  evidence_location: "This report, branch_platform_admin_lands_on_workspace_root.backend_role_evidence_real.api_probe_anomaly_found, above."
+notes: >
+  No fabricated passes, no fabricated screenshots. All three branches'
+  gui_screen expected outcomes are BLOCKED on the frontend leg because no
+  browser-automation tool is available in this UAT-RUNNER session -- checked
+  via ToolSearch before starting, not assumed. This matches the precedent
+  disclosed in test/uat-reports/uat-2026-09-16-WF02-REQ358-20260916.yaml. The
+  scenario's own header comment already documents ISS-0700 (no distinct
+  platform-admin dashboard exists) and ISS-0701 (no in-app login form,
+  Keycloak-hosted only) as real, already-filed findings from static code
+  reading; this run could not independently re-confirm either finding
+  visually for the same tooling-gap reason, but nothing observed in this
+  run's real backend evidence (JWT roles, API responses) contradicts either
+  filed finding.
+  A new, distinct, unrelated real finding was made during this run: real
+  QA API endpoints return HTTP 500 for a PLATFORM_ADMIN-scoped token where
+  they returned HTTP 200 one day earlier -- see new_finding_for_orch_triage
+  above. Recommended next steps: (1) provision a Playwright/browser-
+  automation tool for UAT-RUNNER's execution environment (recurring blocker
+  across REQ-358 and REQ-360 QA runs now) so gui_screen expected outcomes
+  can be verified for real rather than reported BLOCKED every time; (2)
+  triage the admin-token 500 regression separately, ideally before
+  re-attempting this scenario's branch 1 leg even once a browser tool
+  exists.

@@ -8,8 +8,8 @@
   "file": "handoffs/WF02-REQ367-20260917/step-01-code-designer.json",
   "created_at": "2026-09-17T14:45:00Z",
   "started_at": "2026-09-17T14:45:00Z",
-  "completed_at": null,
-  "status": "PENDING",
+  "completed_at": "2026-09-17T15:20:00Z",
+  "status": "COMPLETED",
   "priority": "NORMAL",
   "context": {
     "stage": "S7",
@@ -40,7 +40,26 @@
       "Open questions are listed explicitly, not silently resolved by guessing"
     ]
   },
-  "result": null,
+  "result": {
+    "status": "PASS",
+    "summary": "Written by CODE-DESIGNER (agent aeb65416cb4bca36b). Process note: after 30+ minutes with no commits, ORCH sent a check-in message and, on continued silence, began writing its own fallback version of lib/letflow/design/req367-cd-qa-deploy.md directly. The dispatched agent was in fact still working the whole time (real read of ci.yml/redeploy-test.sh plus the sibling tvolodi/letflow-queue repo's actual production cd.yml/redeploy-test.sh, locally available at c:\\Users\\tvolo\\dev\\ai-dala\\letflow-queue) and wrote its own completed version to the same path shortly after replying to the check-in -- its write landed after ORCH's draft and is the version now on disk (ORCH's own draft was never committed; the agent's file overwrote it on the shared working tree before ORCH could commit). ORCH reviewed the agent's full 419-line output, found it thorough and higher quality than its own emergency draft (in particular its artifact-upload approach to crossing the workflow_run trigger boundary for reusing ci.yml's changes-job outputs, vs ORCH's own shared-script-extraction alternative -- both valid, the agent's is kept), and is keeping it as this step's real, attributed output rather than overriding it with ORCH's own draft. Covers: (1) cd.yml's workflow_run-off-ci.yml trigger, job/step-level gate conditions, and SSH-action step referencing new QA_DEPLOY_HOST/QA_DEPLOY_USER/QA_DEPLOY_SSH_KEY secret names (distinct from letflow-queue's HETZNER_* names); (2) redeploy-qa.sh's 8-step ordered procedure (announce, git pull, backend rebuild+recreate, frontend throwaway-node:22-container rebuild-to-staging-dir, atomic swap with timestamped backup, backend + frontend health checks, done banner); (3) the changes-job-reuse mechanism via a small artifact-upload addition to ci.yml's existing changes job (flagged as touching a file outside owned_modules, with reasoning for why that's necessary and a request for CODE-DESIGN-VALIDATOR to confirm the scope reading); (4) redeploy-test.sh's untouched status and the two scripts' explicit header-comment relationship; (5) an explicit in-scope/out-of-scope split with credentials excluded; (6) an acceptance-criteria mapping table; (7) six open questions (ci.yml scope confirmation, docker-compose.qa.yml existence, OIDC build-arg sourcing, backend health-check port, backup retention policy, frontend build script name) flagged rather than guessed.",
+    "artifacts_out": ["lib/letflow/design/req367-cd-qa-deploy.md"],
+    "issues": [
+      {
+        "severity": "MINOR",
+        "description": "Dispatched CODE-DESIGNER agent (aeb65416cb4bca36b) went 30+ minutes with no commits and did not reply to a check-in until after ORCH had already begun an emergency fallback write to the same file path, in the same shared working directory (not an isolated worktree) -- a real race on disk, resolved only because the agent's write happened to land after ORCH's and ORCH reviewed before committing. Two process gaps worth fixing for future runs: (a) dispatch latency/responsiveness expectations for this agent type may need recalibrating rather than assuming 15-20 minutes of silence means stuck, and (b) ORCH should not begin writing a fallback artifact into the same shared working tree a still-possibly-live agent is using without first isolating the work (e.g. a scratch path) or receiving explicit confirmation the agent has stopped -- this time it was caught by review before any conflicting commit landed, but that was not guaranteed."
+      }
+    ],
+    "git_evidence": {
+      "branch_name": "feature/WF02-REQ367-20260917",
+      "commit_sha_list": [],
+      "remote_branch": "origin/feature/WF02-REQ367-20260917",
+      "push_status": null,
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": "Route to CODE-DESIGN-VALIDATOR (Step 1b)"
+  },
   "rework_count": 0,
   "max_rework": 3
 }

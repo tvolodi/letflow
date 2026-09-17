@@ -17,16 +17,29 @@ defmodule Letflow.Oidc.TokenVerifier.Oidcc do
 
   @behaviour Letflow.Oidc.TokenVerifier
 
+  require Logger
+
+  @type crash_reason :: {:verifier_crashed, %{kind: :error | :exit | :throw, message: String.t()}}
+
   @doc """
   Builds an unauthenticated `Oidcc.ClientContext` from the supervised
   `Oidcc.ProviderConfiguration.Worker` registered under `provider_name`, then
   calls `Oidcc.Token.validate_jwt/3` with the configured `signing_algs`
   allowlist. Every `Oidcc.ClientContext.from_configuration_worker/4` and
-  `Oidcc.Token.validate_jwt/3` error collapses to `{:error, reason}` — never
-  raises on a realistic failure path (unresolvable provider config, expired
-  token, bad signature, wrong algorithm).
+  `Oidcc.Token.validate_jwt/3` error collapses to `{:error, reason}`.
+  Never raises or exits: a malformed/invalid `raw_token` — including one
+  that is not base64url/JWT-shaped at all (e.g. garbage input, or an
+  Authorization header value that is not a JWT, such as a caller
+  accidentally sending a whole token-endpoint JSON response instead of its
+  `access_token` field) — is caught at this function's own boundary and
+  returned as `{:error, {:verifier_crashed, %{kind: ..., message: ...}}}`,
+  the same as any other verification failure (unresolvable provider config,
+  expired token, bad signature, wrong algorithm).
   """
   @impl Letflow.Oidc.TokenVerifier
+  @spec verify_bearer_token(raw_token :: String.t(), provider_name :: atom()) ::
+          {:ok, claims :: %{optional(String.t()) => term()}}
+          | {:error, term()}
   def verify_bearer_token(raw_token, provider_name) when is_binary(raw_token) do
     oidc_config = Application.fetch_env!(:letflow, :oidc)
     client_id = Keyword.fetch!(oidc_config, :client_id)
@@ -42,5 +55,23 @@ defmodule Letflow.Oidc.TokenVerifier.Oidcc do
            Oidcc.Token.validate_jwt(raw_token, client_context, %{signing_algs: signing_algs}) do
       {:ok, claims}
     end
+  rescue
+    exception ->
+      message = Exception.message(exception)
+
+      Logger.warning(
+        "Letflow.Oidc.TokenVerifier.Oidcc crashed verifying a bearer token kind=error message=#{message}"
+      )
+
+      {:error, {:verifier_crashed, %{kind: :error, message: message}}}
+  catch
+    kind, reason ->
+      message = inspect(reason)
+
+      Logger.warning(
+        "Letflow.Oidc.TokenVerifier.Oidcc crashed verifying a bearer token kind=#{kind} message=#{message}"
+      )
+
+      {:error, {:verifier_crashed, %{kind: kind, message: message}}}
   end
 end

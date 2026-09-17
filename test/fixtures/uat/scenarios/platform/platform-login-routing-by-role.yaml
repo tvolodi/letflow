@@ -34,6 +34,8 @@ description: >
   both respects, not the idealized distinct-dashboards/in-app-form
   description this requirement's own Why-section originally anticipated.
 
+pipeline_test: web/tests/e2e/pipelines/platform-login-routing-by-role.pipeline.e2e.spec.ts
+
 actors:
   viewer: actor-any
 

@@ -49,14 +49,29 @@ two corpora or assume either supersedes the other (`docs/issues/ISS-0526.yaml`'s
 scope note (5) is explicit that they remain separate artifacts serving separate test
 layers).
 
-Read each narrative field as an instruction to *you*: perform the `action` for real
-(real HTTP call, or real GUI interaction via `pipeline_test:` once wired in), then
-check the state described in each `expected_outcomes[].detail`/`.evidence` against the
-real running instance, same discipline as your "no mocks, no absence-of-error as pass"
-rule above. A `pipeline_test:` key names a Playwright spec to drive for GUI-only
-scenarios; if that file does not exist or carries a `NOTE (ISS-0526)` comment marking
-it unresolved, record the scenario BLOCKED/UNBUILT_FEATURE on its frontend leg rather
-than skipping it silently or inventing a substitute API-only path.
+Read each narrative field as an instruction to *you*: perform the `action` for real.
+For a `gui:` step, that means real GUI interaction — driven by running the scenario's
+own `pipeline_test:` Playwright spec, if it has one, via Bash: `npx playwright test
+<pipeline_test path>` (run from `web/`, or `--config=web/playwright.config.ts` from the
+repo root). **This is a Bash invocation of an existing, already-installed Playwright
+spec file — not an interactive browser-control tool.** Do not search ToolSearch for a
+browser/MCP tool to drive `gui_screen` verification; none exists in this pipeline and
+none is needed — `npx playwright test` runs a real Chromium browser headlessly and
+reports pass/fail plus screenshots on disk, which is the entire mechanism. Then check
+the state described in each `expected_outcomes[].detail`/`.evidence` against the real
+running instance — read the spec's console output and the screenshots it wrote under
+`web/tests/screenshots/pipelines/` (or wherever the spec documents saving them) — same
+discipline as your "no mocks, no absence-of-error as pass" rule above.
+
+A `pipeline_test:` key at the scenario's top level names the Playwright spec (relative
+to the repo root, e.g. `web/tests/e2e/pipelines/<name>.pipeline.e2e.spec.ts`) to drive
+for GUI-only scenarios this way. If the scenario has no `pipeline_test:` key at all, or
+the named file does not exist, or it carries a `NOTE (ISS-0526)` / `NOTE (ISS-0527)`
+comment marking it an unresolved aspirational forward-reference, record the scenario
+BLOCKED/UNBUILT_FEATURE on its frontend leg rather than skipping it silently or
+inventing a substitute API-only path — that is a real, correctly-reported gap (see
+`docs/issues/ISS-0527.yaml`'s backlog of 27 such files), not something to route around
+by searching for a different tool.
 
 ### Two-phase visual regression for `gui_screen` expected outcomes (REQ-362)
 

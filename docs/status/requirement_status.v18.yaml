@@ -758,3 +758,50 @@ history:
       `no_defect`, which already has one) -- worth a follow-up doc
       amendment, not filed as a fresh ISS-NNNN since it is a
       protocol-wording gap, not a defect in shipped work.
+
+  - req: SCOPE-CHANGE
+    event: blocked
+    agent: ORCH
+    at: "2026-09-17T00:00:00Z"
+    note: >
+      ISS-0690 (queue task 690, GH#1445, docs/issues/ISS-0690.yaml -- QA
+      lacks a BilimBaga tenant/solution-pack/candidate seed so
+      test/fixtures/uat/scenarios/bilimbaga/candidate-timed-exam-autograde.yaml
+      cannot produce a real pass on QA) run WF03-ISS0690-20260917.
+      ISSUE-FIXER Step 0.5/1 diagnosed live: no `lib/letflow/` defect --
+      Letflow binds a tenant's identity 1:1 to a distinct OIDC realm
+      (lib/letflow/identity/tenant.ex's idp_realm_id, unique/immutable;
+      Letflow.Identity.resolve_tenant_by_realm/1 resolves strictly from
+      the caller token's own `iss` realm), and
+      lib/letflow/routers/solution_packs.ex's POST /solution-packs/install
+      installs only into the caller's own tenant_id, by design (INV-1) --
+      so no sequence of Letflow HTTP calls against the existing
+      bpm-default realm can create a second tenant's data. Confirmed live
+      against https://qa.bizdala.com (real PLATFORM_ADMIN token) and via
+      the Keycloak admin API on ubuntu-16gb-nbg1-1
+      (letflow-qa-keycloak-1): only `master`/`bpm-default` realms exist,
+      zero bilimbaga tenant/pack/users. priv/packs/bilimbaga/pack.json is
+      real and installable -- not the gap.
+      Filed the companion infra task this diagnosis requires:
+      ai-dala-infra/tasks/T-0132-provision-bilimbaga-keycloak-realm-qa.md
+      (a new Keycloak realm + CANDIDATE role + seeded candidate user on
+      the existing letflow-qa-keycloak-1 container, the same shape
+      T-0129 used for bpm-default itself) -- out of this repo's own
+      pipeline capability (no credential/host access here), so not
+      executed directly. docs/issues/ISS-0690.yaml annotated with the
+      full diagnosis and left at status: open rather than forced into
+      resolved/instrumented/no_defect, none of which truthfully describe
+      a confirmed-real, external-dependency-blocked, nothing-shipped-
+      this-run outcome -- flagged explicitly as a vocabulary gap in
+      docs/agents/protocols/ISSUE_QUEUE.md's "Issue status vocabulary"
+      for a later review, the same way `no_defect` itself was added once
+      an existing outcome had no legal terminal value (see that section's
+      own ISS-0200 worked example). letflow-queue task 690 released with
+      status: "blocked" (pragmatic reuse alongside a local `open` status,
+      per TASK_QUEUE.md's release_lock section) specifically to prevent
+      the LIFO issue-priority re-selection loop on an issue-type task
+      that is fully investigated but not actionable again until T-0132
+      lands -- not because the local record reads instrumented/no_defect.
+      GitHub issue #1445 left open (not closed) to match the local
+      `open` status; WF-03 Step 5's evidence-on-close bar only applies to
+      a close, which did not happen here.

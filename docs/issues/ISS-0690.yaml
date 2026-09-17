@@ -28,3 +28,53 @@ affected_files:
 queue_ref: Q-690
 github_ref: GH-1445
 status: open
+diagnosis:
+  diagnosed_by: ISSUE-FIXER
+  diagnosed_in_run: WF03-ISS0690-20260917
+  diagnosed_at: "2026-09-17T00:00:00Z"
+  note: >
+    Root cause confirmed live, not a lib/ code defect. Letflow binds a tenant's
+    identity 1:1 to a distinct OIDC realm (lib/letflow/identity/tenant.ex's
+    idp_realm_id, unique/immutable; Letflow.Identity.resolve_tenant_by_realm/1
+    resolves strictly from the caller's own token `iss` realm claim).
+    POST /solution-packs/install installs only into
+    conn.assigns.auth_context.tenant_id -- no caller-suppliable tenant id
+    exists, by design (lib/letflow/routers/solution_packs.ex moduledoc, INV-1).
+    So no sequence of Letflow HTTP calls against the existing bpm-default
+    realm can create a second tenant's data; a second Keycloak realm must
+    exist first, the same way bpm-default itself did before
+    ai-dala-infra's T-0129. priv/packs/bilimbaga/pack.json is a real,
+    installable pack -- the application side is ready and not the gap.
+    Confirmed live against https://qa.bizdala.com with a real PLATFORM_ADMIN
+    token: GET /api/v1/tenants still returns exactly one tenant; Keycloak
+    admin API on ubuntu-16gb-nbg1-1 (letflow-qa-keycloak-1) confirms only
+    `master` and `bpm-default` realms exist.
+
+    None of ISS-NNNN.yaml's terminal status values (resolved/instrumented/
+    no_defect) truthfully describe this outcome: the alleged defect (missing
+    QA seed data) is real and confirmed (rules out no_defect), nothing was
+    shipped or built this run (rules out instrumented, which also requires
+    this run's own acceptance criteria to have been met -- none of the four
+    were), and no root cause was removed (rules out resolved). Left as
+    `status: open`, annotated, rather than forcing a false claim into the
+    registry -- flagged explicitly for a later vocabulary review
+    (docs/agents/protocols/ISSUE_QUEUE.md's "Issue status vocabulary" has no
+    slot for "confirmed real gap, external-repo companion task required,
+    nothing to ship on this side").
+  blocked_by_external_task: ai-dala-infra/tasks/T-0132-provision-bilimbaga-keycloak-realm-qa.md
+  next_action: >
+    Once T-0132 lands (a bilimbaga Keycloak realm on letflow-qa-keycloak-1
+    with a seeded candidate user), a follow-up letflow-side pass:
+    POST /tenants (idp_realm_id = the new realm), POST /solution-packs/install
+    using a token minted from that realm, configure >=1 active exam, then
+    dispatch UAT-RUNNER to re-run
+    test/fixtures/uat/scenarios/bilimbaga/candidate-timed-exam-autograde.yaml
+    against QA for the real result this issue's AC4 requires.
+queue_release: >
+  Queue task 690 released with status "blocked" (not "done", not no-status)
+  to prevent a re-selection loop on an issue-type task that is fully
+  investigated but not actionable again until the external T-0132 infra task
+  lands -- see docs/agents/protocols/TASK_QUEUE.md's release_lock section.
+  This is a pragmatic reuse of "blocked" alongside a local status of `open`
+  rather than the doc's literal instrumented/no_defect pairing, for the
+  reason stated in `diagnosis.note` above.

@@ -1,0 +1,56 @@
+{
+  "handoff_id": "wf03-iss0703-step03c",
+  "run_id": "WF03-ISS0703-20260917",
+  "workflow_id": "WF-03",
+  "step": "03c",
+  "from_agent": "ORCH",
+  "to_agent": "REVIEWER",
+  "file": "handoffs/WF03-ISS0703-20260917/step-03c-reviewer.json",
+  "created_at": "2026-09-17T07:51:51Z",
+  "started_at": "2026-09-17T07:51:51Z",
+  "completed_at": "2026-09-17T07:53:22Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": null,
+    "requirement_ids": [],
+    "requirement_text": {},
+    "source_text": {},
+    "related_handoff_ids": [],
+    "artifacts_in": [
+      "lib/letflow/design/iss0703-oidc-verifier-exception-handling.md",
+      "lib/letflow/oidc/token_verifier/oidcc.ex",
+      "handoffs/WF03-ISS0703-20260917/step-01-issue-fixer-diagnosis.json",
+      "handoffs/WF03-ISS0703-20260917/step-03b-security-reviewer-rework1.json"
+    ],
+    "owned_modules": []
+  },
+  "task": {
+    "description": "WF-03 Step 3c: REVIEWER gate for ISS-0703, on branch feature/WF03-ISS0703-20260917 (`git checkout feature/WF03-ISS0703-20260917`; `git diff main -- lib/letflow/oidc/token_verifier/oidcc.ex` for the full current diff -- note this file went through two implementation iterations, so read the CURRENT state of the file directly, not just the diff narrative in earlier handoffs). SECURITY-REVIEWER has already PASSED this change (handoffs/WF03-ISS0703-20260917/step-03b-security-reviewer-rework1.json). Your gate: idiomatic OTP/Elixir usage, no scope creep beyond the approved design (lib/letflow/design/iss0703-oidc-verifier-exception-handling.md), consistency with this codebase's existing rescue/catch/error-tuple conventions (the design cites Letflow.Api.Authorization.safe_to_existing_atom/1 as precedent for the try/rescue/catch sugar shape -- confirm the implementation actually follows that precedent's style), and whether ISSUE-FIXER's diagnosis is fully addressed by what was actually implemented (not just what was designed). Claim this handoff by setting status to IN_PROGRESS only.",
+    "acceptance_criteria": [
+      "Implementation matches the approved design with no undesigned scope creep",
+      "Idiomatic rescue/catch usage, consistent with existing codebase precedent",
+      "No dead code, no unused variables/aliases introduced",
+      "Moduledoc/@doc corrections read accurately against the new behavior",
+      "PASS or FAIL with specific issues if FAIL",
+      "next_action routes to TEST-DESIGNER on PASS"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "Reviewed the current state of lib/letflow/oidc/token_verifier/oidcc.ex (git diff main, both oidcc calls unchanged, rescue/catch appended to the def) against the approved design, ISSUE-FIXER's diagnosis, and codebase precedent. IDIOM: the rescue/catch is attached directly to the `def ... do ... end` as function-clause sugar (no nested `try do` block, no extracted helper) -- this is the correct shape. NOTE: the design doc cites the precedent as `lib/letflow/api/authorization.ex:250-254` (safe_to_existing_atom/1), but that function does not exist anywhere in authorization.ex -- I verified by grep across lib/. The actual precedent (same `def ... rescue ArgumentError -> nil end` shape, same line numbers 250-254) lives in lib/letflow/engine/service_task.ex:250-254 and is duplicated in lib/letflow/routers/definitions.ex:448-452. This is a design-doc citation error (wrong file name), not an implementation defect -- the implementation independently matches the REAL precedent's shape correctly, so it does not block this gate, but the citation should be corrected for future readers. SUPERVISION: not applicable -- no process/supervision-tree changes in this diff, pure function-level exception handling. SCOPE: @type crash_reason and @spec exactly match design section 3/5, no undesigned abstractions, no helper functions extracted beyond what the design specifies, AuthPipeline is correctly left untouched (confirmed by diff -- only oidcc.ex changed) matching design section 3a's explicit no-change finding. TYPE-SAFETY (non-blocking observation, not filed as an issue): `crash_reason`'s `classification: module() | atom()` is the loosest possible atom typing and is never referenced by the function's own @spec (which uses bare `term()` for the error case, per design section 5's explicit text) -- the real safety guarantee here is structural/by-construction in the code (classification can only ever be an exception's __struct__ or one of two fixed constants or an already-atom reason), not enforced by the type system, but tightening it further isn't practical (rescue branch's `exception.__struct__` is an open set by nature) so I did not file this as a type-safety issue -- it's marginal enough not to be worth queuing as claimable work. DEAD CODE: none -- `require Logger` is used, no unused variables/aliases, `crash_reason` type is unused by any @spec but this produces no compiler warning (confirmed: `mix compile --warnings-as-errors` exits 0) and is standard practice for a documentation-only public @type. MODULEDOC/@doc: corrected text matches design section 6 verbatim. ISSUE-FIXER's diagnosis (unhandled CaseClauseError from jose_base64url.decode!/2 on non-base64url raw_token, propagating through AuthPipeline to a raw 500) is fully addressed: both oidcc calls are now covered by one rescue/catch boundary that always terminates in a well-formed {:error, {:verifier_crashed, %{...}}} tuple matching AuthPipeline's existing {:error, {:verify, reason}} -> 401 collapse, unchanged. Verdict: PASS, no BLOCKERs, one non-blocking documentation-accuracy note (design doc's precedent citation should be corrected to service_task.ex or definitions.ex, not authorization.ex).",
+    "artifacts_out": [
+      "handoffs/WF03-ISS0703-20260917/step-03c-reviewer.json"
+    ],
+    "issues": [
+      {
+        "title": "Design doc lib/letflow/design/iss0703-oidc-verifier-exception-handling.md section 2 cites the rescue/catch sugar precedent as `lib/letflow/api/authorization.ex:250-254` (safe_to_existing_atom/1) -- that function does not exist in authorization.ex. The real precedent with matching shape and line numbers is lib/letflow/engine/service_task.ex:250-254 (duplicated in lib/letflow/routers/definitions.ex:448-452).",
+        "severity": "MINOR",
+        "blocking": false
+      }
+    ],
+    "next_action": "Route to TEST-DESIGNER (WF-03 next step) to write the regression test per design section 7 (unit-level on the adapter directly with a non-base64url-shaped raw_token, fail-first against pre-fix code, plus integration-level through AuthPipeline asserting the clean 401; both with the required non-leakage assertions against classification and captured Logger output). Optionally, a low-priority doc fix to correct the design doc's precedent citation (authorization.ex -> service_task.ex/definitions.ex) can be picked up whenever convenient -- non-blocking."
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

@@ -8,8 +8,8 @@
   "file": "handoffs/WF03-ISS0703-20260917/step-00-git-setup.json",
   "created_at": "2026-09-17T07:16:21Z",
   "started_at": "2026-09-17T07:16:21Z",
-  "completed_at": null,
-  "status": "PENDING",
+  "completed_at": "2026-09-17T07:17:34Z",
+  "status": "COMPLETED",
   "priority": "NORMAL",
   "context": {
     "stage": null,
@@ -30,18 +30,18 @@
   },
   "result": {
     "status": "PASS",
-    "summary": "",
-    "artifacts_out": [],
+    "summary": "Followed docs/agents/protocols/GIT_SETUP.md standard (non-worktree) procedure for run-id WF03-ISS0703-20260917: `git worktree list` showed a single entry so the worktree variant did not apply. `git checkout main` succeeded (already on main); `git pull --ff-only origin main` exited 0 (already up to date with origin/main at 5301aa76). No prior branch existed, so the -D cleanup step was a no-op. Created and checked out `feature/WF03-ISS0703-20260917` via `git checkout -b`; `git branch --show-current` confirmed it. Pushed with `git push -u origin feature/WF03-ISS0703-20260917`, which exited 0 and set up tracking against the new remote branch.",
+    "artifacts_out": ["branch: feature/WF03-ISS0703-20260917"],
     "issues": [],
     "git_evidence": {
-      "branch_name": null,
-      "commit_sha_list": [],
-      "remote_branch": null,
-      "push_status": "skipped",
+      "branch_name": "feature/WF03-ISS0703-20260917",
+      "commit_sha_list": ["5301aa763ecd6652b55cedad8b066e6a876f69b5"],
+      "remote_branch": "origin/feature/WF03-ISS0703-20260917",
+      "push_status": "success",
       "pr_url": null,
       "pr_create_error": null
     },
-    "next_action": ""
+    "next_action": "Route to Step 0.5/1 (ISSUE-FIXER diagnosis)"
   },
   "rework_count": 0,
   "max_rework": 3

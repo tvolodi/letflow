@@ -3878,27 +3878,56 @@ volumes:
 
   - volume: 18
     path: docs/status/requirement_status.v18.yaml
-    status: current
+    status: closed
     opened: 2026-09-15
+    closed: 2026-09-17
     entries: 26
+    lines: 1238
+    bytes_working_tree: 75914
+    frozen_prefix_lines: 1211
+    frozen_prefix_sha256: "25436a24542cf85b56f6bb36749c6fab68cb3f034aa1ef0477c95be620d074ea"
     note: >
-      Incremented to 26 by DOC-UPDATER's own SCOPE-CHANGE (ISS-0700
-      partial-action, REQ-360 stale-clause correction) done-event append
-      -- `grep -c "^  - req:" docs/status/requirement_status.v18.yaml` =
-      26 on-disk entries; 1196 lines / 71534 bytes, well under the
-      1200-line/120000-byte roll ceiling, no roll triggered.
+      Closed by ORCH's own ISS-0703 done-event (SCOPE-CHANGE) append --
+      `grep -c "^  - req:" docs/status/requirement_status.v18.yaml` = 26
+      on-disk entries after the append, 1211 lines -- over the 1,200-line
+      roll ceiling, confirmed via `wc -l` on the working-tree file. No
+      concurrent merge conflict on this specific file at closure time.
+      Closure footer appended per the roll procedure; successor volume 19
+      created with the same header text.
 
-      Incremented to 25 by DOC-UPDATER's own SCOPE-CHANGE (ISS-0701)
-      done-event append -- `grep -c "^  - req:"
-      docs/status/requirement_status.v18.yaml` = 25 on-disk entries; 1163
-      lines / 69598 bytes, well under the 1200-line/120000-byte roll
-      ceiling, no roll triggered.
+      This ORCH session's own DOC-UPDATER SCOPE-CHANGE (ISS-0700
+      partial-action, REQ-360 stale-clause correction) entry had
+      originally been appended to this volume against a pre-roll base
+      (would have been the 27th entry) -- redirected to volume 19 instead
+      during this branch's rebase onto origin/main, since this volume was
+      already closed and frozen by the time of that rebase. Volume 18
+      itself is unmodified here, byte-for-byte identical to origin/main's
+      closed state.
 
       Incremented to 24 by DOC-UPDATER's own SCOPE-CHANGE (ISS-0707)
       done-event append -- `grep -c "^  - req:"
       docs/status/requirement_status.v18.yaml` = 24 on-disk entries; 1129
       lines / 67530 bytes, well under the 1200-line/120000-byte roll
       ceiling, no roll triggered.
+
+  - volume: 19
+    path: docs/status/requirement_status.v19.yaml
+    status: current
+    opened: 2026-09-17
+    entries: 1
+    note: >
+      Incremented to 1 by this ORCH session's own DOC-UPDATER SCOPE-CHANGE
+      (ISS-0700 partial-action, REQ-360 stale-clause correction) done-event
+      append, redirected here from volume 18 during this branch's rebase
+      onto origin/main (volume 18 had already been closed by a concurrent
+      session's ISS-0703 append before this rebase) -- `grep -c "^  - req:"
+      docs/status/requirement_status.v19.yaml` = 1 on-disk entry; 209 lines
+      / 12120 bytes, well under the 1200-line/120000-byte roll ceiling, no
+      roll triggered.
+
+      Opened by ORCH as volume 18's roll successor, immediately after
+      volume 18 crossed the 1,200-line roll ceiling on the ISS-0703
+      done-event append. No entries yet at creation time.
 
       Incremented to 23 by DOC-UPDATER's own SCOPE-CHANGE (ISS-0706)
       done-event append -- `grep -c "^  - req:"

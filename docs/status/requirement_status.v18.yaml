@@ -1161,36 +1161,78 @@ history:
       closed with an evidence comment by this same DOC-UPDATER step.
       letflow-queue task 701 and PR merge are ORCH's follow-up, out of
       scope for this DOC-UPDATER step per this run's own dispatch.
-
   - req: SCOPE-CHANGE
     event: done
-    agent: DOC-UPDATER
-    at: "2026-09-17T13:20:40Z"
+    agent: ORCH
+    at: "2026-09-17T13:25:26Z"
     note: >
-      Immediate side-fix for ISS-0700's stale docs/requirements.yaml
-      clause (queue task 700, GH#1474, docs/issues/ISS-0700.yaml), per
-      REVIEWER's determination (path: missing-functionality) that a
-      distinct platform-admin dashboard is genuine missing functionality
-      to be routed to REQ-ANALYST as a new requirement -- ISS-0700 itself
-      stays status: open, NOT resolved by this step. Corrected REQ-360's
-      description clause that still read "if already authenticated as
-      PLATFORM_ADMIN they land on the platform dashboard" to state the
-      actual current behavior: PLATFORM_ADMIN lands on the same shared /
-      root (TenantDashboardPage) as every other authenticated role,
-      matching
-      test/fixtures/uat/scenarios/platform/platform-login-routing-by-role.yaml's
-      already-correct UAT scenario, and cross-referencing ISS-0700 as
-      tracking the pending future distinct-platform-dashboard work.
-      Recorded a `partial_action` field on docs/issues/ISS-0700.yaml
-      noting this side-fix, distinct from the still-open functional gap.
-      No decision record created (not a "document current behavior as
-      intentional" case -- REVIEWER's determination was "build it").
-      README.md checked -- no documented current-behavior content (ASCII
-      state diagram, "Running it" section) references platform-admin
-      dashboard routing, so no README change was needed. No
-      docs/migration/stage-N-*.md or docs/migration/decisions/*.md file
-      named in this fix's scope. No application code touched, no
-      letflow-queue/GitHub issue state changed -- ISS-0700 stays open and
-      unlocked for the separate REQ-ANALYST follow-up; letflow-queue task
-      700 and PR merge are ORCH's follow-up, out of scope for this
-      DOC-UPDATER step per this run's own dispatch.
+      ISS-0703 (queue task 703, GH#1477) resolved via WF-03. Discovered live
+      during REQ-360's WF-05 UAT run against https://qa.bizdala.com: a real
+      PLATFORM_ADMIN Keycloak token got HTTP 500 (empty body) from
+      GET /api/v1/tenants, /api/v1/identity/users, /api/v1/health.
+      ISSUE-FIXER's diagnosis (Step 0.5+1) re-probed the live QA instance for
+      real and found the 500 was NOT currently reproducible and NOT tied to
+      any merged commit in the 09-16->09-17 window or a QA redeploy -- tracing
+      it instead via live QA container logs to a caller-side request whose
+      Authorization header carried the full raw Keycloak token-endpoint JSON
+      blob instead of the extracted access_token. That malformed input hit a
+      real, independently-confirmed, still-live code defect:
+      Letflow.Oidc.TokenVerifier.Oidcc.verify_bearer_token/2
+      (lib/letflow/oidc/token_verifier/oidcc.ex) let an exception from
+      Oidcc.Token.validate_jwt/3 (a CaseClauseError deep in the oidcc/jose
+      dependency chain on non-base64url input) propagate uncaught to a raw
+      Bandit 500, instead of the auth pipeline's documented single-401-collapse
+      behavior. CODE-DESIGNER designed a rescue/catch boundary fix (2 rework
+      iterations: iteration 1 fixed CODE-DESIGN-VALIDATOR's AC5 implementation-code
+      finding; iteration 2 fixed a real SECURITY-REVIEWER BLOCKER -- the first
+      implementation's message field, built from Exception.message/1/inspect/1,
+      could leak a raw bearer-token fragment into logs/response; replaced with a
+      classification field built only from fixed atoms, structurally leak-proof) ->
+      CODE-DESIGN-VALIDATOR PASS (regate) -> ELIXIR-DEV implemented twice (rework
+      1 after the security BLOCKER) -> SECURITY-REVIEWER PASS (regate, confirmed
+      the classification field cannot embed token content) -> REVIEWER PASS ->
+      TEST-DESIGNER wrote a fail-then-pass regression test in
+      test/letflow/integration/keycloak_auth_pipeline_test.exs (unit + integration
+      tiers, real Oidcc adapter not the test double, plus an explicit
+      non-token-leakage assertion) -> TEST-DESIGN-VALIDATOR independently
+      reproduced the fail-then-pass proof and the non-leakage check itself ->
+      TEST-RUNNER ran the full suite (4334/4335 passed, only the known
+      pre-existing unrelated A9 drift failing) -> ISSUE-FIXER closed
+      docs/issues/ISS-0703.yaml (status: resolved, corrected the original
+      "PLATFORM_ADMIN-specific merged-commit regression" framing to what was
+      actually found) and closed GH#1477 with an evidence comment. Step Final:
+      PR #1494 (fix) squash-merged as 6b47be61, CI (backend+frontend) green on
+      the FIRST attempt with no --admin override needed -- breaking the
+      two-consecutive-override streak ISS-0704/ISS-0705 had hit on this same
+      A9 drift; follow-up PR #1496 (handoff finalization) squash-merged as
+      ff07f6eb. Independently re-read the merged lib/letflow/oidc/token_verifier/oidcc.ex,
+      docs/issues/ISS-0703.yaml, and the regression test from origin/main to
+      confirm the claimed changes actually landed, per core-directives.md,
+      before writing this entry. Queue task 703 released status: done.
+# ─────────────────────────────────────────────────────────────────────────────
+# VOLUME 18 — CLOSED 2026-09-17. DO NOT APPEND TO THIS FILE.
+# This volume holds the complete requirement run history from 2026-09-15 through
+# 2026-09-17 (26 entries, 1211 frozen-prefix lines before this closure footer).
+# It is frozen: every line above this comment is preserved byte-for-byte. Closed
+# by ORCH's own ISS-0703 done-event (SCOPE-CHANGE) append, which brought this
+# file to 1211 lines -- over the declared roll_rule ceiling (max_lines: 1200) --
+# confirmed via `wc -l` on the working-tree file per this volume's own
+# "WHEN THIS VOLUME IS FULL" procedure.
+# Reads of this volume are TARGETED reads only -- a line range or a pattern
+# match, never a whole-file read. Use whichever your shell has:
+#   Read tool with offset/limit (works everywhere), or
+#   Bash:       grep -n PATTERN FILE   /   sed -n 'START,ENDp' FILE
+#   PowerShell: Select-String -Path FILE -Pattern PATTERN
+#               (Get-Content FILE)[START..END]
+#
+# NEW ENTRIES GO TO THE CURRENT VOLUME. Find it in:
+#   docs/status/requirement_status.index.yaml
+# which, as of this closure, names:
+#   docs/status/requirement_status.v19.yaml
+#
+# Why this file was closed: ORCH's own ISS-0703 done-event append brought the
+# on-disk count to 26 entries across 1211 lines -- over the roll ceiling. No
+# entry above this footer was moved, edited or deleted.
+#
+# KNOWN ANOMALIES IN THIS VOLUME: none. This closure was a plain append-and-roll
+# with no concurrent merge conflict on this specific file at closure time.

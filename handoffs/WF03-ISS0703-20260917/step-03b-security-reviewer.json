@@ -1,0 +1,54 @@
+{
+  "handoff_id": "wf03-iss0703-step03b",
+  "run_id": "WF03-ISS0703-20260917",
+  "workflow_id": "WF-03",
+  "step": "03b",
+  "from_agent": "ORCH",
+  "to_agent": "SECURITY-REVIEWER",
+  "file": "handoffs/WF03-ISS0703-20260917/step-03b-security-reviewer.json",
+  "created_at": "2026-09-17T07:37:45Z",
+  "started_at": "2026-09-17T07:37:45Z",
+  "completed_at": "2026-09-17T07:41:46Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": null,
+    "requirement_ids": [],
+    "requirement_text": {},
+    "source_text": {},
+    "related_handoff_ids": [],
+    "artifacts_in": [
+      "lib/letflow/design/iss0703-oidc-verifier-exception-handling.md",
+      "lib/letflow/oidc/token_verifier/oidcc.ex",
+      "docs/agents/instructions/security-invariants.md"
+    ],
+    "owned_modules": []
+  },
+  "task": {
+    "description": "WF-03 Step 3b: gate the ISS-0703 fix (`git checkout feature/WF03-ISS0703-20260917`, diff against main is confined to lib/letflow/oidc/token_verifier/oidcc.ex). This is a change to the bearer-token verification path -- the authentication boundary for every tenant-scoped API request -- so it is squarely in scope for security review. The change adds a rescue/catch boundary around Oidcc.Token.validate_jwt/3 and Oidcc.ClientContext.from_configuration_worker/4 inside verify_bearer_token/2, returning {:error, {:verifier_crashed, %{kind:, message:}}} on any caught exception/exit/throw instead of letting it crash to a raw 500. Run against INV-1..INV-8 per docs/agents/instructions/security-invariants.md and state APPLIES/NOT-APPLICABLE for each with a verdict. Pay particular attention to: (1) whether the caught `message` field (from Exception.message/1 or inspect/1 of the caught reason) could ever leak the raw bearer token, a secret, or other sensitive data into logs or the error tuple -- the design explicitly says raw_token must never be included/logged, verify the implementation actually honors that; (2) whether converting a crash into a clean {:error,...} -> 401 response changes anything about timing/information available to an attacker probing for valid vs malformed tokens (a crash-to-500 vs collapse-to-401 timing/oracle concern); (3) whether the change could ever cause a malformed/invalid token to be treated as authenticated (it must not -- verify the rescue/catch path can only ever produce a REJECTION, never accidental authentication). Claim this handoff by setting status to IN_PROGRESS only.",
+    "acceptance_criteria": [
+      "Explicit APPLIES/NOT-APPLICABLE verdict stated for every invariant INV-1..INV-8",
+      "Explicit verdict on whether Exception.message/1 or inspect/1 output could leak the raw token or other secrets",
+      "Explicit verdict on the crash-vs-401 timing/oracle question",
+      "Explicit verdict confirming the rescue/catch path cannot result in false authentication",
+      "PASS or FAIL with specific BLOCKER-severity issues if FAIL"
+    ]
+  },
+  "result": {
+    "status": "FAIL",
+    "summary": "INV-1..INV-8 verdicts: INV-1 (tenant data isolation) NOT-APPLICABLE -- diff touches no schema/migration/business table, only in-memory error handling in the auth-verification function. INV-2 (server-side field authorisation) NOT-APPLICABLE -- no tenant-scoped API response shaping in this diff; the rescue/catch output is an internal {:error, reason} tuple, and AuthPipeline's existing collapse to a fixed 401 body is unchanged. INV-3 (untrusted runtime sandboxing) NOT-APPLICABLE -- S5 not started. INV-4 (secrets by reference only) APPLIES -- and FAILS, see below. INV-5 (not-found/forbidden indistinguishability) NOT-APPLICABLE -- no lookup-by-ID endpoint here. INV-6 (new data-access paths prove scoping) APPLIES via this review itself -- satisfied by this handoff's explicit verdicts. INV-7 (no SQL string interpolation) NOT-APPLICABLE -- no SQL in this diff. INV-8 (no unhandled crashes on realistic failure paths) APPLIES and is SATISFIED -- this is exactly the defect class the change fixes: Oidcc.ClientContext.from_configuration_worker/4 and Oidcc.Token.validate_jwt/3 both touch network input (JWKS fetch, tenant-supplied bearer token) and previously could crash the process on malformed input; the new rescue/catch converts every non-local exit into a typed {:error, {:verifier_crashed, _}} tuple, and the rescue/catch clauses themselves cannot raise (Logger.warning interpolation only ever receives binaries from Exception.message/1 or inspect/1, both total functions). BLOCKER FOUND on INV-4 / concern (1) -- see issues. Concern (2) timing/oracle: NOT a blocker. Collapsing a raw 500 into the same {:error, {:verify, {:verifier_crashed, _}}} -> 401 path AuthPipeline already uses for every other verification failure *reduces* the existing oracle (previously a 500 vs 401 status-code difference was itself a much louder signal than anything introduced now); the extra Exception.message/inspect + Logger.warning work on the crash path does create a small CPU-time asymmetry versus a well-formed-but-invalid token, but that only distinguishes 'structurally malformed input' from 'well-formed but rejected input' -- a distinction the attacker already knows from the bytes they sent, not a cross-tenant or valid/invalid-credential oracle in the sense INV-5 is written for. Verdict: acceptable, not a BLOCKER. Concern (3) false authentication: NOT a blocker -- confirmed the rescue/catch clauses are structurally incapable of returning {:ok, _}; both branches unconditionally build and return {:error, {:verifier_crashed, %{...}}}, and the `with` chain's only path to {:ok, claims} requires both oidcc calls to already have returned {:ok, _} without raising, in which case rescue/catch never runs. No code path exists where a caught exception yields authentication.",
+    "artifacts_out": [],
+    "issues": [
+      {
+        "severity": "BLOCKER",
+        "invariant": "INV-4",
+        "title": "Exception.message/1 and inspect/1 are unbounded, generic channels that can and do echo raw-token-derived bytes into the returned reason tuple and Logger.warning -- the design's 'never include raw_token or any token fragment' promise is not actually enforced by the implementation",
+        "detail": "Traced the confirmed crash site, deps/jose/src/base/jose_base64url.erl 'decode!'/2. In the Padding=nil branch (lines ~152-166) the inner `case Tail0 of ... end` has NO catch-all clause -- only Tail0 lengths of 0, 2, 3, or 4 bytes are matched. A raw_token whose trailing (non-4-aligned) remainder is exactly 1 byte falls through with no matching clause and raises `CaseClauseError` whose exception value IS that literal byte of the token (Tail0 itself, a binary sliced directly out of raw_token). `Exception.message/1` on that struct embeds an `inspect`-style rendering of the offending value, i.e. a literal fragment of the caller-supplied bearer token, inside the string this code then (a) passes to `Logger.warning/1` and (b) places verbatim into the returned `{:error, {:verifier_crashed, %{message: ...}}}` tuple. The design doc's own worked example ('no case clause matching: 123' for a `{`-first JSON-body token) already shows the pattern -- a codepoint/byte pulled straight from the attacker's input -- but frames it as obviously harmless; the general mechanism is not bounded to single harmless codepoints. Other, not-yet-triggered exception types further inside oidcc/jose (ArgumentError from :binary/:crypto primitives, badarg from base64 or JOSE-JWE/JWS internals, etc.) routinely embed the FULL offending binary in their message/reason, not a single byte -- and this rescue/catch is a blanket boundary around the entire function body (per the design's own scope choice in section 2), so any future or already-reachable exception type from either oidcc call is caught the same way with no allowlist, no truncation, and no redaction of the message content before it is logged and returned. This means: for a REAL (not attacker-garbage) bearer token that happens to trip an unexpected oidcc/jose bug, live token material could be written to the application log via Logger.warning. This directly contradicts the design doc section 3's explicit statement ('the map deliberately does not include raw_token or any token fragment... must never place bearer-token material in logs') and section 4's 'Never log raw_token' -- the design's intent is right, but the chosen mechanism (verbatim Exception.message/1 / inspect/1 passthrough) does not implement that intent as a structural guarantee, only as a coincidence of the one currently-confirmed crash shape.",
+        "recommendation": "Do not log or return Exception.message/1 / inspect/1 output verbatim. Either (a) log/return only the exception's module name (e.g. `exception.__struct__` / a fixed classification) plus a static description, never the interpolated message text, or (b) if a human-readable message is wanted for operability, redact it: cap its length and drop it entirely (replace with a fixed placeholder) whenever it is not provably free of raw_token-derived content -- e.g. by never constructing the message from a rescued/caught value that could itself be a binary slice of raw_token, or (c) at minimum, add a regression test (TEST-DESIGNER, per design section 7) that asserts, for every crash-inducing fixture used in the fail-first tests, `refute message =~ raw_token` and `refute` any substring of raw_token of length >= 4 appears in the logged message and the returned tuple, so this property is enforced going forward rather than assumed from a single confirmed trace. Route back to CODE-DESIGNER/ELIXIR-DEV to revise the message-construction approach before re-submitting to SECURITY-REVIEWER."
+      }
+    ],
+    "next_action": "Route back to CODE-DESIGNER (or ELIXIR-DEV if the fix is judged implementation-only) to redesign how `message` is derived in the rescue/catch clauses so raw_token-derived content cannot reach Logger.warning or the returned {:error, {:verifier_crashed, _}} tuple, then re-submit to SECURITY-REVIEWER (WF-03 Step 3b) for re-gating. Concerns (2) and (3) from the handoff task are resolved and do not need rework."
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

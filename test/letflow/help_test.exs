@@ -265,6 +265,70 @@ defmodule Letflow.HelpTest do
              ).body
     end
 
+    test "rejects a reference-style link whose definition has a javascript: URL scheme" do
+      %{schema_name: schema_name} = provisioned_tenant()
+
+      body = """
+      [click here][1]
+
+      [1]: javascript:alert(document.cookie)
+      """
+
+      assert {:error, changeset} =
+               Help.create_draft(draft_attrs(%{body: body}), prefix: schema_name)
+
+      assert "must not contain javascript:/data:/vbscript: link or image URLs" in errors_on(
+               changeset
+             ).body
+    end
+
+    test "rejects a shorthand reference-style link ([text] / [text]: url) with an unsafe scheme" do
+      %{schema_name: schema_name} = provisioned_tenant()
+
+      body = """
+      [click here]
+
+      [click here]: javascript:alert(document.cookie)
+      """
+
+      assert {:error, changeset} =
+               Help.create_draft(draft_attrs(%{body: body}), prefix: schema_name)
+
+      assert "must not contain javascript:/data:/vbscript: link or image URLs" in errors_on(
+               changeset
+             ).body
+    end
+
+    test "rejects a reference-style image whose definition has a data: URL scheme" do
+      %{schema_name: schema_name} = provisioned_tenant()
+
+      body = """
+      ![alt][img]
+
+      [img]: data:text/html;base64,abcd
+      """
+
+      assert {:error, changeset} =
+               Help.create_draft(draft_attrs(%{body: body}), prefix: schema_name)
+
+      assert "must not contain javascript:/data:/vbscript: link or image URLs" in errors_on(
+               changeset
+             ).body
+    end
+
+    test "allows a reference-style link whose definition uses a safe https scheme" do
+      %{schema_name: schema_name} = provisioned_tenant()
+
+      body = """
+      [click here][1]
+
+      [1]: https://example.test/path
+      """
+
+      assert {:ok, help} = Help.create_draft(draft_attrs(%{body: body}), prefix: schema_name)
+      assert help.body == body
+    end
+
     test "allows the design's own markdown subset -- headings, emphasis, lists, a plain https link, and a fenced code block" do
       %{schema_name: schema_name} = provisioned_tenant()
 

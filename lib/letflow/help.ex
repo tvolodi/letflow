@@ -103,6 +103,7 @@ defmodule Letflow.Help do
           | {:error, :not_found}
           | {:error, :not_a_draft}
           | {:error, :process_definition_not_found}
+          | {:error, :invalid_prefix}
           | {:error, Ecto.Changeset.t()}
   def update_draft(id, attrs, opts) when is_map(attrs) and is_list(opts) do
     prefix = Keyword.fetch!(opts, :prefix)
@@ -114,6 +115,9 @@ defmodule Letflow.Help do
       row
       |> HelpContent.update_changeset(attrs)
       |> Repo.update(prefix: prefix)
+    else
+      {:error, :invalid_schema_name} -> {:error, :invalid_prefix}
+      other -> other
     end
   end
 
@@ -128,6 +132,7 @@ defmodule Letflow.Help do
           | {:error, :not_found}
           | {:error, :not_a_draft}
           | {:error, :process_definition_not_found}
+          | {:error, :invalid_prefix}
           | {:error, Ecto.Changeset.t()}
   def publish(id, opts) when is_list(opts) do
     prefix = Keyword.fetch!(opts, :prefix)
@@ -143,6 +148,9 @@ defmodule Letflow.Help do
         confirmed_for_definition_version: confirmed_version
       })
       |> Repo.update(prefix: prefix)
+    else
+      {:error, :invalid_schema_name} -> {:error, :invalid_prefix}
+      other -> other
     end
   end
 
@@ -157,6 +165,7 @@ defmodule Letflow.Help do
           | {:error, :not_found}
           | {:error, :not_live}
           | {:error, :process_definition_not_found}
+          | {:error, :invalid_prefix}
           | {:error, Ecto.Changeset.t()}
   def reconfirm(id, opts) when is_list(opts) do
     prefix = Keyword.fetch!(opts, :prefix)
@@ -171,6 +180,9 @@ defmodule Letflow.Help do
         confirmed_for_definition_version: confirmed_version
       })
       |> Repo.update(prefix: prefix)
+    else
+      {:error, :invalid_schema_name} -> {:error, :invalid_prefix}
+      other -> other
     end
   end
 
@@ -184,6 +196,7 @@ defmodule Letflow.Help do
           {:ok, HelpContent.t()}
           | {:error, :not_found}
           | {:error, :not_live}
+          | {:error, :invalid_prefix}
           | {:error, Ecto.Changeset.t()}
   def withdraw(id, opts) when is_list(opts) do
     prefix = Keyword.fetch!(opts, :prefix)
@@ -194,6 +207,9 @@ defmodule Letflow.Help do
       row
       |> Ecto.Changeset.change(%{status: :draft})
       |> Repo.update(prefix: prefix)
+    else
+      {:error, :invalid_schema_name} -> {:error, :invalid_prefix}
+      other -> other
     end
   end
 

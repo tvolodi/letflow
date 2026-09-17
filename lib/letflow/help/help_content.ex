@@ -70,8 +70,21 @@ defmodule Letflow.Help.HelpContent do
   @raw_html_tag_pattern ~r/<\/?[a-zA-Z][^<>]*>/
 
   # design §5.1 -- markdown link/image URL component, checked for a disallowed scheme.
-  # Matches both `[text](url)` and `![alt](url)`.
+  # Matches both `[text](url)` and `![alt](url)` -- CommonMark *inline* link/image syntax.
   @markdown_link_pattern ~r/!?\[[^\]]*\]\(([^)]+)\)/
+
+  # design §5.1, extended per SECURITY-REVIEWER FAIL on REQ-364 (handoffs/
+  # WF02-REQ364-20260917/step-03b-security-reviewer.json): CommonMark *reference-style*
+  # links/images -- `[text][ref]` / `![alt][ref]` / the shorthand `[ref]` -- resolve their
+  # real URL from a separate link-definition line (`[ref]: url`), not from the inline usage
+  # site. The inline-only @markdown_link_pattern above never sees that URL at all, so a
+  # payload like `[click here][1]` / `[1]: javascript:alert(1)` scanned clean. Any
+  # conformant downstream markdown renderer resolves definition lines regardless of how
+  # many places reference them, so it is the definition line -- not the usage site -- that
+  # must be scanned for a disallowed scheme. Matches a line (after leading whitespace)
+  # shaped `[label]: url`, same shape CommonMark itself requires for a link reference
+  # definition.
+  @markdown_reference_link_pattern ~r/^[ \t]*\[[^\]]+\]:[ \t]*(\S+)/m
 
   @disallowed_url_schemes ~w(javascript data vbscript)
 
@@ -137,8 +150,15 @@ defmodule Letflow.Help.HelpContent do
   end
 
   defp contains_unsafe_link_scheme?(value) do
-    @markdown_link_pattern
-    |> Regex.scan(strip_code_regions(value), capture: :all_but_first)
+    stripped = strip_code_regions(value)
+
+    urls_unsafe?(@markdown_link_pattern, stripped) or
+      urls_unsafe?(@markdown_reference_link_pattern, stripped)
+  end
+
+  defp urls_unsafe?(pattern, stripped) do
+    pattern
+    |> Regex.scan(stripped, capture: :all_but_first)
     |> Enum.any?(fn [url] -> unsafe_scheme?(url) end)
   end
 

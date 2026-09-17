@@ -1,0 +1,46 @@
+{
+  "handoff_id": "wf03-iss0705-step04c",
+  "run_id": "WF03-ISS0705-20260917",
+  "workflow_id": "WF-03",
+  "step": "04c",
+  "from_agent": "ORCH",
+  "to_agent": "TEST-RUNNER",
+  "file": "handoffs/WF03-ISS0705-20260917/step-04c-test-runner.json",
+  "created_at": "2026-09-17T05:56:25Z",
+  "started_at": "2026-09-17T05:56:25Z",
+  "completed_at": "2026-09-17T06:01:25Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": null,
+    "requirement_ids": [],
+    "requirement_text": {},
+    "source_text": {},
+    "related_handoff_ids": ["handoffs/WF03-ISS0705-20260917/step-04b-test-design-validator.json"],
+    "artifacts_in": [],
+    "owned_modules": ["test/letflow/routers/tenants_test.exs", "test/letflow/routers/identity_test.exs", "test/letflow/role_registry_test.exs"]
+  },
+  "task": {
+    "description": "WF-03 Step 4c (TEST-RUNNER) for ISS-0705, on branch feature/WF03-ISS0705-20260917. Run the FULL mix test suite (`mix test`, not a scoped subset) and report real pass/fail counts. This is the Step Final precondition -- ISS-0705's own acceptance criteria require 'Full mix test suite passes with 0 failures after the fix'. Note: a prior TEST-DESIGNER run this session found ONE unrelated, pre-existing failure in test/docs/requirement_status_invariants_test.exs (A9, requirement_status.v18.yaml declared-vs-actual count drift) via `mix letflow.check.test` -- confirm whether this still reproduces on a full `mix test` run and, if so, confirm it is genuinely pre-existing/unrelated to this branch's diff (check whether that test file or requirement_status.v18.yaml appear in `git diff --name-only origin/main...HEAD`) rather than assuming. If it's confirmed pre-existing and unrelated, do not treat it as a blocker for this issue's own gate, but report it clearly so ORCH can file it as its own incidental issue. Claim this handoff by setting status to IN_PROGRESS only.",
+    "acceptance_criteria": [
+      "Full mix test suite run to completion, real output quoted",
+      "Pass/fail counts stated exactly",
+      "Any failure confirmed either related to this branch's diff (blocking) or genuinely pre-existing/unrelated (non-blocking, reported for separate filing)",
+      "next_action routes to ISSUE-FIXER for Step 5 (close issue) if the suite is clean of ISS-0705-related failures"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "Ran full mix test suite via scripts/test_parallel.sh (N=16 partitions, aggregated real Result:/Failed: counts). Combined: 4326 tests, 6 properties, 1 failure (4331/4332 passed). The single failure is in partition 1: 'test A9: every indexed volume's declared entries: count equals what is actually on disk (Letflow.Docs.RequirementStatusInvariantsTest)' at test/docs/requirement_status_invariants_test.exs:464, with mismatch [{\"docs/status/requirement_status.v18.yaml\", 18, 19}] (declared vs actual entry count drift). This is the same failure a prior TEST-DESIGNER run this session found via `mix letflow.check.test`. Confirmed via `git diff --name-only origin/main...HEAD` that neither test/docs/requirement_status_invariants_test.exs nor docs/status/requirement_status.v18.yaml appear in this branch's diff (diff touches only handoffs/WF03-ISS0705-20260917/*, lib/letflow/design/iss0705-sandbox-mode-restore-fix.md, test/letflow/role_registry_test.exs, test/letflow/routers/identity_test.exs, test/letflow/routers/tenants_test.exs, and test/specs/ISS-0705.md). This confirms A9 is genuinely pre-existing and unrelated to ISS-0705's diff -- not a blocker for this issue's gate. All ISS-0705-owned tests (test/letflow/routers/tenants_test.exs, test/letflow/routers/identity_test.exs, test/letflow/role_registry_test.exs) passed with 0 failures across their partitions.",
+    "artifacts_out": ["test/reports/report-2026-09-17-WF03-ISS0705-20260917.yaml"],
+    "issues": [
+      {
+        "id": "A9-drift-req-status-v18",
+        "description": "Pre-existing, unrelated failure: test/docs/requirement_status_invariants_test.exs A9 fails because docs/status/requirement_status.v18.yaml declares 18 entries but 19 are actually on disk. Reproduces on a full mix test run independent of this branch. Should be filed as its own incidental issue and routed to ISSUE-FIXER separately -- not part of ISS-0705's scope."
+      }
+    ],
+    "next_action": "Route to ISSUE-FIXER for Step 5 (close ISS-0705) -- suite is clean of ISS-0705-related failures. Separately, file A9-drift-req-status-v18 as its own incidental issue."
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

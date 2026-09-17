@@ -1378,7 +1378,7 @@ defmodule Letflow.Routers.IdentityTest do
       # LIFO ordering runs this FIRST -- forcing :auto mode back on before that
       # teardown's DROP SCHEMA / DELETE cleanup needs a real, checked-in
       # connection, exactly like role_registry_test.exs's own on_exit/1 does.
-      on_exit(fn -> Ecto.Adapters.SQL.Sandbox.mode(Letflow.Repo, :auto) end)
+      on_exit(fn -> Letflow.Test.SandboxAutoMode.enter_auto_mode!(Letflow.Repo) end)
 
       Repo.query!(~s(SET search_path TO "#{tenant.schema_name}", public))
 

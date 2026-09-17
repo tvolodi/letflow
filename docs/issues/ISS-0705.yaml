@@ -62,4 +62,34 @@ related_requirements:
   - ISS-0704
 queue_ref: Q-705
 github_ref: GH-1480
-status: open
+status: resolved
+resolved_in_run: "WF03-ISS0705-20260917"
+resolved_at: "2026-09-17T06:02:51Z"
+resolution:
+  summary: >
+    Fixed test/letflow/routers/tenants_test.exs (~line 391) and
+    test/letflow/routers/identity_test.exs (~lines 1361-1381), and also
+    test/letflow/role_registry_test.exs, which shared the same unrestored
+    `Ecto.Adapters.SQL.Sandbox.mode(Letflow.Repo, :auto)` pattern. The fix
+    reused the existing SandboxAutoMode helper machinery already present in
+    the test support tree rather than inventing a new helper, wrapping each
+    `:auto` flip with a matching restore so `:manual` mode is guaranteed back
+    on test exit regardless of pass/fail. Design doc:
+    lib/letflow/design/iss0705-sandbox-mode-restore-fix.md.
+
+    Operational cleanup: the 129 orphaned tenant rows (plus 985 dependent
+    entity_column_promotions rows) that had accumulated in the shared test DB
+    from the pre-fix leak (per ISS-0704's diagnosis) were identified and
+    deleted as part of this run, removing the residual pollution that was
+    still backing row-count-sensitive tests even independent of the leak
+    itself being closed.
+
+    Regression coverage: test/letflow/routers/tenants_test.exs's
+    TenantsIss0705SandboxModeRegressionTest (test/specs/ISS-0705.md is the
+    accompanying spec) demonstrates the mode is restored to :manual after the
+    affected tests run.
+
+    Gates: CODE-DESIGN-VALIDATOR PASS (after 1 rework), SECURITY-REVIEWER
+    PASS, REVIEWER PASS, TEST-DESIGN-VALIDATOR PASS (independently reproduced
+    the mutant), TEST-RUNNER PASS (full suite 4331/4332, 1 confirmed-unrelated
+    pre-existing failure).

@@ -82,6 +82,17 @@ test.describe('Pipeline: platform-login-routing-by-role', () => {
       await expect(page.getByRole('link', { name })).toBeVisible()
     }
 
+    // EO-001's dashboard-tile sub-claim ("alongside the same dashboard tiles a
+    // tenant-scoped user sees", on_fail.severity: BLOCKER — ISS-0702 gap found
+    // by TEST-DESIGN-VALIDATOR, missed by the original design). The workspace
+    // root renders TenantDashboardPage.tsx's three tiles regardless of role;
+    // asserting all three are present here, and identically in the
+    // tenant-scoped branch below, is what actually proves "the SAME tiles" —
+    // a bare "a tile section exists" check on one branch alone would not.
+    for (const testid of ['tile-definitions', 'tile-instances', 'tile-tasks']) {
+      await expect(page.getByTestId(testid)).toBeVisible()
+    }
+
     await shot(page, 'admin')
   })
 
@@ -101,6 +112,50 @@ test.describe('Pipeline: platform-login-routing-by-role', () => {
     for (const name of ['Users', 'Tenants', 'Register Tenant', 'Audit', 'Health', 'Metrics']) {
       await expect(page.getByRole('link', { name })).not.toBeVisible()
     }
+
+    // EO-001's dashboard-tile sub-claim, tenant-scoped side (ISS-0702 gap —
+    // see the identical assertion + comment in the PLATFORM_ADMIN branch
+    // above). Same three tiles visible here as for PLATFORM_ADMIN is what
+    // proves "the same dashboard tiles a tenant-scoped user sees" from this
+    // branch's own wording ("dashboard tiles reflect this tenant's own data
+    // only").
+    for (const testid of ['tile-definitions', 'tile-instances', 'tile-tasks']) {
+      await expect(page.getByTestId(testid)).toBeVisible()
+    }
+
+    // The "reflect this tenant's own data only" half of EO-001's detail text
+    // is a cross-tenant-isolation claim. This environment has only one
+    // seeded tenant reachable via `worker-user`, so there is no second
+    // tenant's data available here to prove non-leakage against (a bare
+    // "no PLATFORM_ADMIN nav" check above doesn't touch tile *content*
+    // scoping at all). Verified by hand while writing this assertion (real
+    // run against a local stack) that `tenant-unknown-banner` is NOT a
+    // usable proxy here: tenant resolution in this environment is by HTTP
+    // Host header (`/api/tenant-config?host=...`, see TenantDashboardPage's
+    // `useTenantContext`), and the local stack is reached over a bare
+    // loopback IP with no tenant subdomain, so the banner renders identically
+    // for PLATFORM_ADMIN and TASK_WORKER alike — it is a host-routing signal,
+    // not a role/data-scoping one, so asserting on it here would be
+    // measuring the wrong thing. The minimal thing this branch CAN prove
+    // without a second tenant: the count tiles actually render live data (not
+    // stuck on their loading skeleton, not replaced by the QueryStateBoundary
+    // error state), confirming the scoped list queries
+    // (queryKeys.instances.list/tasks.list, both filtered by the
+    // authenticated tenant context) genuinely executed and resolved for this
+    // token/role rather than being skipped or erroring.
+    // The deeper claim — tenant A's data never appears in tenant B's
+    // tiles — IS already covered, for real, by an existing executable spec
+    // with two real tenants available (default + swiftroute):
+    // web/tests/e2e/tenant-dashboard.e2e.spec.ts's
+    // 'TC-TD-UI-01-04: dashboard data tiles show only tenant-scoped results'
+    // (asserts the swiftroute tenant's display_name never appears in the
+    // default tenant's tile text). That test is real and already running —
+    // unlike test/fixtures/uat/scenarios/platform/attachment-cross-tenant-probe.yaml,
+    // whose own pipeline_test is a still-BLOCKED aspirational forward
+    // reference per its NOTE (ISS-0527) comment, so it was deliberately NOT
+    // cited here as the covering test.
+    await expect(page.getByTestId('tile-instances-count')).toBeVisible()
+    await expect(page.getByTestId('tile-tasks-count')).toBeVisible()
 
     await shot(page, 'tenant-scoped')
   })

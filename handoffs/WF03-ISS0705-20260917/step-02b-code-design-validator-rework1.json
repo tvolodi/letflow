@@ -8,8 +8,8 @@
   "file": "handoffs/WF03-ISS0705-20260917/step-02b-code-design-validator-rework1.json",
   "created_at": "2026-09-17T10:20:00Z",
   "started_at": "2026-09-17T10:20:00Z",
-  "completed_at": null,
-  "status": "PENDING",
+  "completed_at": "2026-09-17T11:05:00Z",
+  "status": "COMPLETED",
   "priority": "NORMAL",
   "context": {
     "stage": null,
@@ -35,11 +35,13 @@
     ]
   },
   "result": {
-    "status": null,
-    "summary": null,
-    "artifacts_out": [],
+    "status": "PASS",
+    "summary": "Verified against the actual source of test/support/sandbox_auto_mode.ex (lines 85-88): `def enter_auto_mode!(repo), do: Sandbox.mode(repo, :auto)` -- a one-line call to `Sandbox.mode/2`, with no `Sandbox.checkout/1` call anywhere in its body. `Sandbox.mode/2` sets a pool-wide global (per the module's own moduledoc, 'not scoped to the calling process'); it carries no process-affinity/ownership requirement. This contrasts with `provision!/2`'s restore step (lines 63-72), which DOES call `Sandbox.checkout(repo)` (line 70) -- that is the call that requires the invoking process to be the one that will use the connection, and is exactly what broke in the original (pre-rework-1) design: `provision!/2`'s `after` block ran its checkout in the test process, but the test's `on_exit/1` cleanup then ran later from ExUnit's separate `OnExitHandler` process, which owned nothing, producing `DBConnection.OwnershipError`. The revised §1.3 adds `SandboxAutoMode.enter_auto_mode!(Letflow.Repo)` as the first line inside that same on_exit/1 body (test/letflow/routers/tenants_test.exs, current on-disk shape at lines 391-431 read and confirmed to match §1.1's described 'current shape' exactly). Because enter_auto_mode!/1 only flips the pool-wide mode flag and issues no checkout, calling it from OnExitHandler's process is unaffected by which process happens to call it -- it needs no ownership entry to succeed, so it puts the pool back into :auto mode regardless of who calls it, and the subsequent DROP SCHEMA/delete_all calls in that same callback then execute against a real :auto-mode connection (auto mode services any caller without a checkout) rather than a stale :manual-mode checkout owned by an exited process. This closes the exact failure ELIXIR-DEV's Step 3 report describes, and the mechanism is not merely theoretical: sections 2/3 (identity_test.exs:1381, role_registry_test.exs:119) already call this identical enter_auto_mode!/1-from-on_exit/1 pattern today and ELIXIR-DEV's Step 3 report confirms both are fully green ('all identity_test.exs and role_registry_test.exs tests green, including the exact describe blocks/on_exit callbacks touched'), which is direct empirical confirmation the pattern does not raise DBConnection.OwnershipError in practice. Consistency check: §4's revised INV-1 explicitly states the pool's true final state is :auto, matching INV-2's already-accepted end-state for §2/§3, and gives correct reasoning for why (a later-running LIFO cleanup on_exit/1 needs a connection any process can obtain); §7's file-touched table matches §1.3's described edit (single new line inside the existing on_exit/1, no wrap-boundary change). No 'TBD'/deferral language found. No implementation code present -- §1.3's before/after blocks are prose call-shape sketches (elided bodies via `<...>` placeholders), not compiling standalone modules, consistent with §§2/3's existing style. OQ-1/OQ-2 are explicit, correctly scoped open questions, not silent gaps. Design is unambiguous enough to implement directly: exact line to add, exact call, exact position (first line of the existing on_exit/1 body) all specified with no ELIXIR-DEV judgment call required beyond the already-flagged alias-vs-fully-qualified-call latitude carried over from the original design.",
+    "artifacts_out": [
+      "lib/letflow/design/iss0705-sandbox-mode-restore-fix.md"
+    ],
     "issues": [],
-    "next_action": null
+    "next_action": "Route to ELIXIR-DEV to re-implement Section 1 only (add `SandboxAutoMode.enter_auto_mode!(Letflow.Repo)` as the first line of the test's on_exit/1 callback body in test/letflow/routers/tenants_test.exs) -- Sections 2/3 remain implemented and passing, no re-work needed there. After re-implementing, ELIXIR-DEV should re-run `mix test test/letflow/routers/tenants_test.exs test/letflow/routers/identity_test.exs test/letflow/role_registry_test.exs` to confirm the previously-failing test now passes, then route to SECURITY-REVIEWER per the original Step 3 handoff's acceptance criteria."
   },
   "rework_count": 0,
   "max_rework": 3

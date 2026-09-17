@@ -1016,3 +1016,41 @@ history:
       origin/main's full ISS-0692..ISS-0705/REQ-360 sequence intact and
       appending this entry at the tail, since 07:49:00Z postdates every
       entry origin/main had landed.
+
+  - req: SCOPE-CHANGE
+    event: done
+    agent: DOC-UPDATER
+    at: "2026-09-17T10:40:00Z"
+    note: >
+      ISS-0702 (queue task 702, GH#1476) resolved via
+      fix/WF03-ISS0702-20260917 (commit 08652b81, full detail in
+      docs/issues/ISS-0702.yaml's resolution_note field). Root cause: a
+      category error, not a genuine tooling gap -- the pipeline_test:
+      Playwright-via-Bash mechanism uat-runner.md already intended was
+      already real and working; the actual gap was one scenario
+      (platform-login-routing-by-role.yaml) missing its pipeline_test: key
+      plus imprecise doc wording about the driving mechanism, which caused
+      two sessions (REQ-358, REQ-360) to misdiagnose it as "no browser tool
+      exists." Fixed by authoring the missing spec (three per-branch
+      test() blocks), adding the pipeline_test: key, and de-ambiguating
+      uat-runner.md. CODE-DESIGN-VALIDATOR, SECURITY-REVIEWER, REVIEWER all
+      PASSed. TEST-DESIGN-VALIDATOR FAILed twice on a real coverage gap
+      (EO-001's cross-tenant tile-isolation sub-claim) before it was
+      honestly resolved: no fabricated coverage, no false citation --
+      documented in-code as a genuine, currently-uncoverable gap and the
+      wider root defect (a broken GET /health/ready precondition
+      duplicated across 11 e2e spec files) filed separately as
+      docs/issues/ISS-0706.yaml, which stays open and is not part of this
+      closure. RELEASE-VALIDATOR independently PASSed: full suite green
+      (backend 4332/4332, frontend 586/586, schema 32/32, playwright
+      --list clean, guards 48/48), independently traced the local 1/3
+      pipeline-spec failure to a sandbox IPv4/IPv6 loopback mismatch
+      (vite proxy resolving localhost to ::1, backend bound 0.0.0.0 only),
+      confirmed identical against the pre-fix commit and therefore
+      unrelated to this diff; the unauthenticated branch passed for real
+      including the window.name cross-origin instrumentation, proving the
+      fix mechanism itself works. GH#1476 to be closed with an evidence
+      comment by this same DOC-UPDATER step. letflow-queue task 702 to be
+      released status: done by ORCH after this step -- queue interaction
+      explicitly out of scope for this DOC-UPDATER step per this run's own
+      dispatch.

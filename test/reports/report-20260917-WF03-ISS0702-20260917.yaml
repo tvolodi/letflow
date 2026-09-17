@@ -1,0 +1,159 @@
+run_id: WF03-ISS0702-20260917
+issue_id: ISS-0702
+agent: TEST-RUNNER
+step: "WF-03 Step 4 -- full verification of ISS-0702's fix"
+branch: fix/WF03-ISS0702-20260917
+commit_under_test: 3de8ff6f
+date: 2026-09-17
+
+diff_scope:
+  files_changed:
+    - "web/tests/e2e/pipelines/platform-login-routing-by-role.pipeline.e2e.spec.ts (new)"
+    - "test/fixtures/uat/scenarios/platform/platform-login-routing-by-role.yaml (new pipeline_test: key)"
+    - ".claude/agents/uat-runner.md (doc clarification)"
+    - "docs/issues/ISS-0702.yaml"
+    - "docs/issues/ISS-0706.yaml (new, out-of-scope defect registered, not fixed here)"
+    - "lib/letflow/design/iss-0702-uat-runner-pipeline-test-gap-fix.md"
+  note: >
+    web/-only + agent-doc change. Zero lib/letflow/ files touched -- confirmed
+    via `git diff --name-only main...HEAD` before running anything. Already
+    passed ISSUE-FIXER, CODE-DESIGNER (FAIL then PASS), CODE-DESIGN-VALIDATOR
+    (FAIL then PASS), FRONTEND-DEV, SECURITY-REVIEWER, REVIEWER, TEST-DESIGNER
+    (two genuine FAILs resolved), TEST-DESIGN-VALIDATOR -- per
+    docs/issues/ISS-0702.yaml pipeline_log. This is TEST-RUNNER's own
+    independent execution of every check named in the dispatch brief.
+
+environment:
+  docker: "docker compose up -d -- letflow-1-postgres-1 and letflow-1-keycloak-1
+    already Running (healthy), no restart needed"
+  db_port: ".env sets LETFLOW_DB_PORT=5463, used by compose and Ecto per README"
+  backend_for_e2e: "a Letflow Plug/Bandit server (MIX_ENV=dev) was already running
+    on 0.0.0.0:4000 from a prior session (pid 1276114) -- verified reachable via
+    curl on both localhost and 127.0.0.1 before running Playwright"
+
+checks_run:
+
+  - name: "backend full suite (mix test via scripts/test_parallel.sh)"
+    command: "./scripts/test_parallel.sh"
+    result: PASS
+    actual_output: |
+      test_parallel: N=8 (source: nproc)
+      test_parallel: pre-compiling MIX_ENV=test (single compile, before any partition launches)
+      test_parallel: TEST_POOL_SIZE=10 (computed: N=8, max_connections=100, superuser_reserved=3, headroom=10, nonpool_reserve=5)
+      partition 1: 623 tests, 1 property, 0 failures, exit 0
+      partition 2: 464 tests, 0 properties, 0 failures, exit 0
+      partition 3: 623 tests, 0 properties, 0 failures, exit 0
+      partition 4: 478 tests, 4 properties, 0 failures, exit 0
+      partition 5: 606 tests, 1 property, 0 failures, exit 0
+      partition 6: 547 tests, 0 properties, 0 failures, exit 0
+      partition 7: 499 tests, 0 properties, 0 failures, exit 0
+      partition 8: 486 tests, 0 properties, 0 failures, exit 0
+      ---
+      combined: 4326 tests, 6 properties, 0 failures (4332/4332 passed)
+    note: "as expected for a web/-only diff, this suite is unaffected -- 100% green."
+
+  - name: "frontend unit suite (npm test)"
+    command: "cd web && npm test -- --run"
+    result: PASS
+    actual_output: |
+      Test Files  83 passed (83)
+           Tests  586 passed (586)
+      Duration  21.58s
+
+  - name: "UAT scenario schema check"
+    command: "mix letflow.check_uat_scenario_schema"
+    result: PASS
+    actual_output: |
+      32 file(s) checked, 0 violation(s) across 0 file(s)
+    note: >
+      test/fixtures/uat/scenarios/platform/platform-login-routing-by-role.yaml
+      (with the new pipeline_test: key) passes cleanly alongside all 31 other
+      scenario files -- confirms the new key does not break scenario schema
+      validation.
+
+  - name: "playwright suite collection (npx playwright test --list)"
+    command: "cd web && npx playwright test --list"
+    result: PASS
+    actual_output: "Total: 290 tests in 50 files"
+    note: >
+      Suite collects cleanly, no syntax errors across any spec file, including
+      the new tests/e2e/pipelines/platform-login-routing-by-role.pipeline.e2e.spec.ts
+      (3 tests collected there).
+
+  - name: "compile check"
+    command: "mix compile --warnings-as-errors"
+    result: PASS
+    actual_output: "(no output -- clean compile, zero warnings)"
+
+  - name: "format check"
+    command: "mix format --check-formatted"
+    result: PASS
+    actual_output: "(exit 0, no unformatted files)"
+
+  - name: "new pipeline spec execution"
+    command: >
+      cd web && npx playwright test
+      tests/e2e/pipelines/platform-login-routing-by-role.pipeline.e2e.spec.ts
+      --reporter=list
+    result: "1 passed / 2 failed"
+    actual_output: |
+      ✘ EO-001: PLATFORM_ADMIN lands on workspace root with admin nav (7.1s)
+      ✘ EO-001: tenant-scoped role (TASK_WORKER) lands on workspace root with narrower nav (6.2s)
+      ✓ EO-001: unauthenticated visitor sees auth-loading then redirects off-origin to Keycloak (1.0s)
+      1 passed (20.8s)
+
+      Both failures: expect(locator).toBeVisible() failed on
+      page.getByTestId('tile-definitions'), timeout 5000ms, element(s) not found.
+    sanity_check_performed: >
+      This matches the exact 1-passed/2-failed pattern TEST-DESIGN-VALIDATOR
+      already reported and attributed to a pre-existing sandbox gap, not a
+      regression -- but per the dispatch brief, that attribution was verified
+      independently rather than assumed. Root cause traced concretely in this
+      run: the web/ dev server's Vite proxy (web/vite.config.ts) targets
+      `http://localhost:4000` literally; in this sandbox, Node resolves
+      "localhost" to ::1 (IPv6) first, while the Letflow backend binds only
+      0.0.0.0 (IPv4) -- confirmed directly:
+        curl http://localhost:4000/health   -> {"status":"ok"}
+        curl http://127.0.0.1:4000/health   -> {"status":"ok"}
+        curl -6 http://[::1]:4000/health    -> connection refused (curl RC=7)
+      The Playwright run's own [WebServer] log lines showed repeated
+      "vite http proxy error: ... ECONNREFUSED ::1:4000" for every
+      /api/v1/definitions, /api/v1/instances, /api/v1/tasks call the
+      dashboard makes -- so the browser-rendered dashboard never receives
+      tile data and the tile-definitions/instances/tasks testids never
+      render, independent of anything this diff's spec asserts.
+      Cross-checked for "is this specific to the new spec / this diff": ran
+      two pre-existing specs unrelated to this branch's content --
+      tests/e2e/pipelines/admin-user-lifecycle.pipeline.e2e.spec.ts and
+      tests/e2e/tenant-dashboard.e2e.spec.ts (TC-TD-UI-01-04, an existing
+      tile-assertion test) -- both failed too, on a related but distinct
+      symptom of the same environmental gap (their own /health/ready
+      precondition against 127.0.0.1:8080, the already-registered
+      ISS-0706 defect). Conclusion: the 2 failures in the new spec are
+      real, but they are an environmental/infra gap in this sandbox
+      (backend only bound to IPv4, dashboard API calls silently failing
+      through the Vite proxy) -- not a defect in the new spec's code, the
+      scenario fixture, or the diff under test. Not a regression from this
+      branch.
+
+overall_verdict: >
+  PASS with one already-known, independently-corroborated environmental
+  exception. Backend: 4332/4332 passed, 0 failures. Frontend unit: 586/586
+  passed. UAT scenario schema: 32/32 files valid, 0 violations (the new
+  pipeline_test: key does not break schema validation). Playwright
+  collection: 290 tests/50 files, clean. mix compile --warnings-as-errors:
+  clean. mix format --check-formatted: clean. New pipeline spec: 1/3 passed
+  -- the 2 failures reproduce the exact pattern TEST-DESIGN-VALIDATOR already
+  flagged, and this run traced their concrete root cause (Vite proxy IPv6/
+  IPv4 mismatch against this sandbox's backend) and confirmed via two
+  unrelated pre-existing specs that the same class of environmental failure
+  is not specific to this diff. No genuine new regression found anywhere.
+
+next_action: >
+  Route to RELEASE-VALIDATOR. RELEASE-VALIDATOR should still independently
+  re-run the suite per its own mandate rather than relying on this report
+  alone, and should be aware going in that the new pipeline spec's 2/3
+  failures are an environmental sandbox gap (Vite dev-proxy IPv6 resolution
+  vs an IPv4-only backend), not a code defect in this branch -- consistent
+  with, and now further corroborated beyond, TEST-DESIGN-VALIDATOR's prior
+  finding.

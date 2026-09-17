@@ -32,4 +32,335 @@ related_requirements:
   - REQ-360
 queue_ref: Q-702
 github_ref: GH-1476
-status: open
+status: resolved
+resolved_in_run: WF03-ISS0702-20260917
+resolved_at: "2026-09-17T10:35:00Z"
+resolution_note: >
+  ROOT CAUSE (ISSUE-FIXER): a category error, not a genuine tooling gap. Only
+  option (a) -- an interactive MCP browser-control tool -- was ever actually
+  unavailable, and it is not buildable in this pipeline. The pipeline_test:
+  mechanism .claude/agents/uat-runner.md already intends (Playwright driven
+  via Bash `npx playwright test`) was already real and working, proven
+  against real Keycloak login in web/tests/e2e/uat-alice-login.e2e.spec.ts.
+  The actual gap was narrower and self-inflicted: the platform-login-
+  routing-by-role.yaml scenario had no pipeline_test: key (28 other
+  scenarios already had one), and uat-runner.md's wording was imprecise
+  enough about the driving mechanism to cause two independent sessions
+  (REQ-358, REQ-360) to misdiagnose this as "no browser tool exists" rather
+  than "this one scenario's spec was never written."
+
+  FIX (commit 08652b81, design lib/letflow/design/iss-0702-uat-runner-
+  pipeline-test-gap-fix.md): authored the missing spec
+  web/tests/e2e/pipelines/platform-login-routing-by-role.pipeline.e2e.spec.ts
+  (three independent test() blocks, one per role-routing branch), added the
+  pipeline_test: key to the scenario yaml, and de-ambiguated uat-runner.md's
+  description of the driving mechanism. CODE-DESIGN-VALIDATOR, SECURITY-
+  REVIEWER, and REVIEWER all PASSed. A real test-instrumentation race
+  (external Playwright polling losing the auth-loading placeholder to the
+  redirect's speed) was fixed via an in-page MutationObserver recording
+  through window.name across the cross-origin navigation -- observation
+  only, no app-behavior mock.
+
+  COVERAGE GAP, HANDLED HONESTLY: TEST-DESIGN-VALIDATOR twice FAILed the
+  first two attempts at covering EO-001's cross-tenant "dashboard tiles
+  reflect this tenant's own data only" sub-claim -- first for silently
+  dropping it, then for citing a companion spec (tenant-dashboard.e2e.spec.ts
+  TC-TD-UI-01-04) that was independently proven unrunnable (broken
+  GET /health/ready precondition, plus a silently-no-op leakage assertion).
+  Rather than fabricate coverage or force a narrow patch to one file when a
+  repo-wide grep showed the same broken precondition duplicated across 11
+  e2e spec files, TEST-DESIGNER documented the sub-claim in a code comment
+  as a genuine, currently-uncoverable gap (same honest treatment already
+  given to attachment-cross-tenant-probe.yaml) and filed the real,
+  wider-scoped defect separately as docs/issues/ISS-0706.yaml -- which stays
+  open and is explicitly not folded into this closure.
+
+  FINAL VERIFICATION: RELEASE-VALIDATOR independently ran the full suite
+  (backend mix test 4332/4332, frontend npm test 586/586, schema validation
+  32/32, playwright --list 290 tests/50 files clean, guards 48/48) and
+  independently traced the local 1/3 pipeline-spec failure to a sandbox-
+  networking root cause (vite's proxy target localhost:4000 resolving to
+  ::1 while the backend binds only 0.0.0.0/IPv4) -- reproduced firsthand via
+  ss/curl -6 checks and WebServer log grep, confirmed present identically
+  against the pre-fix commit, and therefore confirmed unrelated to this
+  diff. The third (unauthenticated) branch passed for real, including the
+  window.name instrumentation, proving the fix mechanism itself works.
+  Audited all 16 commits on this branch, one per pipeline_log step, no bare
+  conversational claims. No new findings. Full step-by-step detail in this
+  record's own pipeline_log below.
+pipeline_log:
+  - step: ISSUE-FIXER
+    at: "2026-09-17T08:32:00Z"
+    result: >
+      Root-caused: a category error, not a genuine environment gap. Option
+      (a) -- an interactive MCP browser-control tool -- confirmed
+      genuinely unavailable and not buildable in this pipeline (ToolSearch
+      checked, none found). But .claude/agents/uat-runner.md already
+      intends pipeline_test: specs to be driven via Bash (npx playwright
+      test), which is real, working, and already proven against real
+      Keycloak login in web/tests/e2e/uat-alice-login.e2e.spec.ts. Actual
+      gap: test/fixtures/uat/scenarios/platform/platform-login-routing-by-role.yaml
+      has no pipeline_test: key (28 other scenarios already have one), and
+      the agent doc's wording is imprecise enough to cause this exact
+      misdiagnosis twice. Recommended: author the missing spec (option b)
+      + fix the doc's imprecise description of the driving mechanism.
+      Separate PLATFORM_ADMIN HTTP 500 QA regression is already filed as
+      ISS-0703, not folded in here.
+  - step: CODE-DESIGNER
+    at: "2026-09-17T08:44:00Z"
+    result: >
+      FAIL then PASS (rework). Design:
+      lib/letflow/design/iss-0702-uat-runner-pipeline-test-gap-fix.md.
+      First attempt CODE-DESIGN-VALIDATOR FAILed: real implementation code
+      leaked into the three per-branch sections (complete compilable
+      test() bodies, not shapes) and a fabricated citation (invented
+      header-comment quote in req133-ac2-ac5.e2e.spec.ts that doesn't
+      exist). Reworked to shape-level assertion lists + rationale, and
+      replaced the fabricated citation with real verified line numbers
+      (:64, :98, :122; also self-caught and fixed an adjacent wrong
+      citation, :66 -> :67).
+  - step: CODE-DESIGN-VALIDATOR
+    at: "2026-09-17T08:50:00Z"
+    result: >
+      PASS on rework (FAIL on first attempt -- see CODE-DESIGNER entry).
+      Independently verified every line citation against the real source
+      file byte-accurate; confirmed §1.4-1.6 are now genuine prose
+      shapes/rationale with no executable Playwright syntax; confirmed
+      nothing else regressed (helper choice, EO mapping, nav-locator
+      pattern, pipeline_test: YAML key format, §1.7 framing, scope
+      discipline all intact).
+  - step: FRONTEND-DEV
+    at: "2026-09-17T09:10:00Z"
+    result: >
+      PASS. Implemented at commit 08652b81: new spec
+      web/tests/e2e/pipelines/platform-login-routing-by-role.pipeline.e2e.spec.ts,
+      pipeline_test: key added to the scenario yaml, uat-runner.md
+      de-ambiguated per design §3. Real 3/3 branch run against local
+      stack; unauthenticated branch additionally confirmed against real
+      QA (qa.bizdala.com) since it needs no credentials -- QA credentials
+      for the other two branches unavailable in this sandbox (no
+      qa-login.sh access), noted explicitly rather than faked. Found and
+      fixed a real test-instrumentation race (external Playwright polling
+      loses the auth-loading placeholder to the redirect's speed on both
+      local and QA) via an in-page MutationObserver recording through
+      window.name across the cross-origin navigation -- observation only,
+      no app-behavior mock. Schema validation: 32/32 clean. type-check/
+      lint clean. playwright --list: 290 tests/50 files, no syntax
+      errors. npm run guards 48/48. npm test 586/586.
+  - step: SECURITY-REVIEWER
+    at: "2026-09-17T09:18:00Z"
+    result: >
+      PASS -- ran full INV-1..INV-9 pass despite zero lib/letflow/ or
+      migration touches. INV-4: admin-user/admin-pass/worker-user/
+      worker-pass confirmed to be pre-existing established test fixture
+      credentials already the default params in helpers.ts and used
+      identically across dozens of pre-existing specs, not new/leaked
+      secrets. INV-9 confirmed not-applicable: outbound calls are made by
+      a Playwright test process against operator/CI-configured env vars,
+      no tenant in the loop, not the class of request INV-9 governs. The
+      window.name instrumentation carries only a static non-secret marker
+      string, ships only in web/tests/, no real concern. No BLOCKER
+      findings.
+  - step: REVIEWER
+    at: "2026-09-17T09:24:00Z"
+    result: >
+      PASS. Confirmed spec follows established Playwright e2e convention
+      (reachability precheck, helper imports, nav-visibility assertions
+      all match precedent files exactly, three independent test() blocks
+      correctly chosen over createPipeline() since branches are mutually
+      exclusive not sequential). The window.name/MutationObserver
+      instrumentation FRONTEND-DEV added mid-implementation judged
+      legitimate, not scope creep: test-file-only, fulfills a mechanism
+      the design already flagged as open/hard (§1.6) without prescribing
+      how, observation-only (changes nothing about app behavior), did not
+      need a CODE-DESIGNER round-trip. Diff scope matches the reworked
+      design exactly. No decision-record conflict. uat-runner.md doc fix
+      confirmed accurate and genuinely clearer.
+  - step: TEST-DESIGNER
+    at: "2026-09-17T09:31:00Z"
+    result: >
+      No new test warranted -- the deliverable is itself an already-run,
+      already-passing test. Verified all three branches' assertions
+      against AppShell.tsx's real NAV_ITEMS source of truth, no stale
+      link names, no untested branch. Branch 2's single-role sampling
+      (TASK_WORKER of three disjunctive roles) is a reasoned,
+      already-REVIEWER-passed design decision (§1.5), not re-litigated.
+      Confirmed no doc-lint/schema mechanism exists for .claude/agents/*.md
+      prose to register with. window.name workaround already proven by
+      the spec's own hard assertion on every run, including against real
+      QA -- no separate regression test would prove anything beyond
+      restating browser API behavior.
+  - step: TEST-DESIGN-VALIDATOR
+    at: "2026-09-17T09:37:00Z"
+    result: >
+      FAIL. Independently ran the spec (3/3 passed, own output quoted)
+      and confirmed nav-role assertions accurate against AppShell.tsx --
+      but found a real coverage gap neither the design nor TEST-DESIGNER
+      caught: the scenario yaml's EO-001 detail text carries a
+      dashboard-tile sub-claim for branches 1 and 2 ("alongside the same
+      dashboard tiles a tenant-scoped user sees" / "dashboard tiles
+      reflect this tenant's own data only", both on_fail.severity:
+      BLOCKER) that the spec asserts nothing about -- neither route/nav
+      checks cover it. This sub-claim was silently dropped somewhere in
+      CODE-DESIGNER's design (never mentioned in §1.4/§1.5), not a cited,
+      reasoned out-of-scope decision. Requires either a minimal tile
+      assertion or an explicit documented out-of-scope citation before
+      this can PASS.
+
+  - step: TEST-DESIGNER
+    at: "2026-09-17T09:44:00Z"
+    result: >
+      Gap closed at commit df7ff6d2. Chose option (a): added real tile
+      assertions rather than an out-of-scope citation, since a real
+      dashboard UI with real data-testids already exists
+      (TenantDashboardPage.tsx). Branches 1/2 now both assert
+      tile-definitions/tile-instances/tile-tasks visible, proving "same
+      tiles" directly. For branch 2's cross-tenant-isolation half:
+      discovered mid-implementation that this sandbox's tenant-by-Host-
+      header resolution makes a same-tenant absence-of-banner check
+      measure the wrong thing (only one tenant seeded here) -- dropped
+      that approach, asserted count tiles render live data instead, and
+      documented in a code comment + cited a real already-passing spec
+      (tenant-dashboard.e2e.spec.ts TC-TD-UI-01-04) that genuinely proves
+      cross-tenant tile isolation with two real tenants -- explicitly
+      not citing the still-BLOCKED attachment-cross-tenant-probe.yaml.
+      Re-ran for real: 3/3 passed. eslint/tsc clean.
+
+  - step: TEST-DESIGN-VALIDATOR
+    at: "2026-09-17T09:52:00Z"
+    result: >
+      FAIL (again). Confirmed the new tile-visibility assertions are real
+      and pass (own 3/3 run). But the companion-spec citation
+      (tenant-dashboard.e2e.spec.ts TC-TD-UI-01-04) is false: ran it
+      directly, fails at its own precondition (GET /health/ready, which
+      router.ex explicitly documents as deliberately not ported -- only
+      GET /health/liveness exists by design). Not a sandbox artifact --
+      cannot pass against Letflow's real backend anywhere. Also its
+      leakage assertion is gated behind an if(swiftResp.ok()) that
+      silently no-ops if the second tenant isn't provisioned, so it
+      wouldn't reliably prove isolation even if reachable. EO-001's
+      "reflect this tenant's own data only" sub-claim for TASK_WORKER
+      still has no working coverage anywhere. Requires either (a) a real
+      fix to TC-TD-UI-01-04's readiness check + unconditional second-
+      tenant assertion, re-verified passing before re-citing, or (b)
+      dropping the citation and documenting this as a genuine,
+      currently-uncoverable gap -- same honest treatment already given to
+      attachment-cross-tenant-probe.yaml -- rather than citing an
+      unrunnable test as proof.
+
+  - step: TEST-DESIGNER
+    at: "2026-09-17T10:12:00Z"
+    result: >
+      Chose option (b): dropped the false TC-TD-UI-01-04 citation and
+      documented the cross-tenant-isolation sub-claim as a genuine,
+      currently-uncoverable gap in a code comment (same treatment already
+      given to attachment-cross-tenant-probe.yaml), rather than fixing
+      TC-TD-UI-01-04 itself. Justification: a repo-wide grep found the
+      broken `GET /health/ready` precondition is not unique to
+      TC-TD-UI-01-04 -- it is duplicated across 11 e2e spec files
+      (web/tests/e2e/{env04,f5-admin-observability,f6-webhooks,sh05-06.shell,
+      tenants,f5-admin-groups-tokens,f5-admin-users,f6-dlq,
+      iss-0063-oidc-redirect-loop,tenant-dashboard,uat-tenant-url}.e2e.spec.ts),
+      making a single-file fix here both narrower than the real problem and
+      squarely outside ISS-0702's stated scope (a UAT-RUNNER tooling/doc
+      gap, not a general e2e-suite health sweep) -- exactly the kind of
+      silent scope expansion this session's established discipline flags.
+      Filed the widespread breakage as its own issue, docs/issues/ISS-0706.yaml
+      (not a duplicate -- checked first; ISS-0532 covered the app-code
+      instance of this same /health/ready misconception, not the test
+      suite), including TC-TD-UI-01-04's second defect (the
+      `if (swiftResp.ok())` silent-noop gate) as part of that issue's scope.
+      Updated the code comment in
+      web/tests/e2e/pipelines/platform-login-routing-by-role.pipeline.e2e.spec.ts
+      (~lines 146-160) to state plainly that this sub-claim has no working
+      coverage anywhere in the repo right now, cite the real router.ex
+      finding, and reference ISS-0706. Re-ran the pipeline spec for real
+      afterward (`VITE_API_BASE_URL=http://127.0.0.1:4000 npx playwright
+      test tests/e2e/pipelines/platform-login-routing-by-role.pipeline.e2e.spec.ts`):
+      1 passed / 2 failed (tile assertions time out --
+      "Tenant name could not be loaded" / "Platform is currently
+      unavailable"), but confirmed by stashing this change and re-running
+      against the pre-edit commit that the identical 2 failures occur
+      unchanged -- this sandbox's currently-running backend has no tenant
+      seeded for the 127.0.0.1 Host header this local Playwright run
+      resolves against (`mix letflow.seed` itself fails here on a missing
+      LETFLOW_SECRETS_MASTER_KEY, a deeper pre-existing sandbox-provisioning
+      gap, not something this change touches or should try to fix). The
+      edit is a comment-only change to an already-passing assertion block
+      (the tile-visibility assertions themselves, and the full 3/3 pass,
+      were independently confirmed by TEST-DESIGN-VALIDATOR's own prior
+      run) and is confirmed behaviorally inert. eslint/tsc clean.
+
+  - step: TEST-DESIGNER
+    at: "2026-09-17T10:00:00Z"
+    result: >
+      Chose option (b) at commit c48b6f94, with real justification for
+      rejecting (a): TC-TD-UI-01-04's broken /health/ready precondition
+      is copy-pasted across 11 e2e spec files, not unique to this one --
+      fixing just one would be a misleadingly narrow patch to a
+      widespread problem, and outside ISS-0702's own scope (a UAT-RUNNER
+      tooling/doc gap, not an e2e-suite health sweep). Checked ISS-0532
+      first (resolved, fixed the same misconception in app code only,
+      never the test suite) to confirm this isn't a duplicate filing.
+      Filed the real gap as ISS-0706 (new). Replaced the false citation
+      in the spec with an honest comment: this EO-001 sub-claim has no
+      working coverage anywhere right now, citing the real router.ex
+      finding and ISS-0706 -- same honest treatment already given to
+      attachment-cross-tenant-probe.yaml. Re-ran the spec: 1 passed/2
+      failed, but confirmed via stash-and-rerun against the pre-edit
+      commit that the identical 2 failures occur there too (a separate
+      pre-existing sandbox tenant-seeding gap, LETFLOW_SECRETS_MASTER_KEY
+      missing for mix letflow.seed, unrelated to this change) -- the
+      comment-only edit is behaviorally inert. eslint/tsc clean.
+
+  - step: TEST-DESIGN-VALIDATOR
+    at: "2026-09-17T10:08:00Z"
+    result: >
+      PASS (third pass, after two genuine FAILs -- see prior entries).
+      Confirmed the false citation is genuinely gone, replaced with an
+      honest comment (independently re-ran TC-TD-UI-01-04, confirmed it
+      dies at assertServiceReadiness()). Confirmed ISS-0706 is real and
+      substantive, spot-checked 6/11 named files for the identical
+      pattern. Confirmed ISS-0532 is app-code-only, not a duplicate.
+      Independently reproduced the 1/3-failing run (not trusting the
+      stash-and-rerun narrative), traced the real failure mechanism
+      (AuthProvider tenant-slug resolution failing against an
+      under-provisioned single-tenant sandbox DB) and confirmed it's
+      identical against the pre-edit commit -- genuinely pre-existing and
+      unrelated to this diff. Judged dropping the citation (vs. fixing
+      the companion spec here) the correct scope call.
+
+  - step: TEST-RUNNER
+    at: "2026-09-17T10:20:00Z"
+    result: >
+      PASS. Confirmed zero lib/letflow/ diff. Backend mix test:
+      4332/4332 passed. Frontend npm test: 586/586 passed. Schema
+      validation: 32/32 clean. playwright --list: 290 tests/50 files, no
+      syntax errors. mix compile --warnings-as-errors and mix format
+      clean. New spec itself: 1/3 passed locally -- traced root cause
+      directly (not just accepted the attribution): vite's proxy target
+      localhost:4000 resolves to ::1 in this sandbox while the backend
+      binds only 0.0.0.0/IPv4, confirmed via curl. Cross-checked against
+      two unrelated pre-existing specs, both also failed on the same/a
+      related sandbox-wide gap (ISS-0706's /health/ready symptom) --
+      confirms this is environmental, not a regression from this diff.
+      Report: test/reports/report-20260917-WF03-ISS0702-20260917.yaml
+      (commit 2c5dee0b).
+
+  - step: RELEASE-VALIDATOR
+    at: "2026-09-17T10:35:00Z"
+    result: >
+      PASS. Independently reproduced the 1/3 local pass and traced the
+      identical IPv6/IPv4 loopback root cause firsthand (ss/curl -6
+      checks, WebServer log grep) -- distinguished fix-mechanism-works
+      from sandbox-networking-quirk; the third (unauthenticated) branch
+      passed for real including the window.name instrumentation, proving
+      the fix mechanism itself works. Read the current uat-runner.md
+      wording directly and judged it would have prevented the original
+      misdiagnosis. Confirmed the coverage-gap saga genuinely resolved
+      (no false citation remains) and ISS-0706 is really registered (gh
+      issue view 1488/1476 both real and open). Own full independent
+      suite run: backend 4332/4332, mix letflow.check.test OK, frontend
+      586/586, schema 32/32, playwright --list clean, guards 48/48.
+      Audited all 16 commits on this branch, one per pipeline_log step,
+      no bare conversational claims. No new findings.

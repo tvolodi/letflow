@@ -1,0 +1,41 @@
+{
+  "handoff_id": "wf03-iss0705-step04c",
+  "run_id": "WF03-ISS0705-20260917",
+  "workflow_id": "WF-03",
+  "step": "04c",
+  "from_agent": "ORCH",
+  "to_agent": "TEST-RUNNER",
+  "file": "handoffs/WF03-ISS0705-20260917/step-04c-test-runner.json",
+  "created_at": "2026-09-17T14:00:00Z",
+  "started_at": "2026-09-17T14:00:00Z",
+  "completed_at": null,
+  "status": "PENDING",
+  "priority": "NORMAL",
+  "context": {
+    "stage": null,
+    "requirement_ids": [],
+    "requirement_text": {},
+    "source_text": {},
+    "related_handoff_ids": ["handoffs/WF03-ISS0705-20260917/step-04b-test-design-validator.json"],
+    "artifacts_in": [],
+    "owned_modules": ["test/letflow/routers/tenants_test.exs", "test/letflow/routers/identity_test.exs", "test/letflow/role_registry_test.exs"]
+  },
+  "task": {
+    "description": "WF-03 Step 4c (TEST-RUNNER) for ISS-0705, on branch feature/WF03-ISS0705-20260917. Run the FULL mix test suite (`mix test`, not a scoped subset) and report real pass/fail counts. This is the Step Final precondition -- ISS-0705's own acceptance criteria require 'Full mix test suite passes with 0 failures after the fix'. Note: a prior TEST-DESIGNER run this session found ONE unrelated, pre-existing failure in test/docs/requirement_status_invariants_test.exs (A9, requirement_status.v18.yaml declared-vs-actual count drift) via `mix letflow.check.test` -- confirm whether this still reproduces on a full `mix test` run and, if so, confirm it is genuinely pre-existing/unrelated to this branch's diff (check whether that test file or requirement_status.v18.yaml appear in `git diff --name-only origin/main...HEAD`) rather than assuming. If it's confirmed pre-existing and unrelated, do not treat it as a blocker for this issue's own gate, but report it clearly so ORCH can file it as its own incidental issue. Claim this handoff by setting status to IN_PROGRESS only.",
+    "acceptance_criteria": [
+      "Full mix test suite run to completion, real output quoted",
+      "Pass/fail counts stated exactly",
+      "Any failure confirmed either related to this branch's diff (blocking) or genuinely pre-existing/unrelated (non-blocking, reported for separate filing)",
+      "next_action routes to ISSUE-FIXER for Step 5 (close issue) if the suite is clean of ISS-0705-related failures"
+    ]
+  },
+  "result": {
+    "status": null,
+    "summary": null,
+    "artifacts_out": [],
+    "issues": [],
+    "next_action": null
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

@@ -393,8 +393,8 @@ regex/pattern-based option remains live for this requirement.
 
 #### 5.4.1 Library choice: `earmark_parser`
 
-**Chosen: `earmark_parser`** (hex package `earmark_parser`, the parsing engine the `earmark`
-Markdown-to-HTML renderer itself depends on and exposes as a standalone package).
+**Chosen: `earmark_parser`** (hex package `earmark_parser`, originally extracted from the
+`earmark` Markdown-to-HTML renderer and now maintained as its own standalone package).
 
 - **Licence:** Apache-2.0.
 - **Maintenance status:** actively maintained (`RobertDober/earmark_parser`); it is the
@@ -402,6 +402,17 @@ Markdown-to-HTML renderer itself depends on and exposes as a standalone package)
   every `@doc`/`@moduledoc` string in every published Hex package, which is about as
   broad and continuously-exercised a conformance workout as a Markdown parser gets in this
   ecosystem.
+- **Due-diligence note on `earmark` itself (not `earmark_parser`):** hex.pm currently lists
+  `earmark` (the full Markdown-to-HTML renderer, version 1.4.49) as a **retired package**
+  ("Deprecated - Earmark is no longer maintained. Migrate to a replacement, for example
+  MDEx") carrying a recorded security advisory, and its GitHub repository has been archived.
+  `earmark` 1.4.49 itself declares zero runtime dependencies on hex.pm — it does not currently
+  depend on `earmark_parser` in a way that would pull this design's chosen dependency in
+  transitively, and this design does not propose taking `earmark` as a dependency at all (see
+  "Why this over full `earmark`" below). Flagged here for REVIEWER's due-diligence review
+  alongside the §5.4.3 sign-off, since `earmark_parser`'s own README traces its lineage back
+  to `earmark` and a reviewer scanning for that name should see this noted rather than
+  discover it independently.
 - **Pure-Elixir/Erlang vs. native/NIF:** pure Elixir. No NIF, no port, no external binary —
   same shape this project already prefers per decision 0033 §2's P1-over-P2 reasoning (an
   in-process, no-external-binary library beats one that requires provisioning something
@@ -459,25 +470,37 @@ original §5.3 is unchanged) now does the following, for each of `:title` and `:
    `ast` value from either branch — a non-empty `error_messages`/`deprecation_messages` list is
    not itself a rejection reason (this requirement rejects specific *content* shapes named in
    §5.1, not "syntactically unusual markdown").
-2. **Walk the AST for raw-HTML nodes.** `earmark_parser`'s AST distinguishes raw HTML
-   constructs (block-level HTML and inline HTML spans/tags) from parsed markdown constructs as
-   their own, separately-tagged node kind — the parser itself already does the "is this an
-   HTML tag or is this markdown-safe content" classification §5.1's raw-HTML-tag rule wants,
-   which is the same "let the library's own correct classification do the work" principle as
-   the destination check. If the walk finds any raw-HTML-classified node anywhere in the tree
-   (top level or nested inside any container node — list item, blockquote, emphasis, etc.),
-   the changeset is rejected under §5.1's raw-HTML-tag rule. This single check subsumes the
-   `<script>`/event-handler-attribute cases §5.1 names explicitly, exactly as the original
-   §5.3 reasoning already established (an event-handler attribute or a `<script>` tag can only
-   appear as a raw-HTML construct, which this check already catches in full).
+2. **Walk the AST for raw-HTML nodes.** Every `earmark_parser` AST node is a uniform 4-tuple
+   `{tag, attrs, children, meta}` (confirmed against `earmark_parser`'s own hexdocs and
+   README) — raw/verbatim HTML is **not** a separately-tagged node kind. A node produced from
+   literal HTML in the source carries an otherwise-ordinary-looking `tag` (e.g. `{"span", [...],
+   [...], %{verbatim: true}}`, or `{"a", [{"href", "href"}], ["link"], %{verbatim: true}}` for
+   an inline HTML anchor) and is distinguished from the equivalent markdown-produced node
+   *only* by `meta[:verbatim] == true` — a markdown-syntax link parses to the same `"a"` tag
+   shape but with `meta == %{}` (no `verbatim` key set to `true`). The walk must therefore check
+   `meta[:verbatim] == true` on every visited node, not branch on `tag`/node shape — checking
+   tag/shape alone cannot distinguish raw HTML from parser-synthesized markdown output, since
+   both produce the same tag vocabulary. If the walk finds any node anywhere in the tree (top
+   level or nested inside any container node — list item, blockquote, emphasis, etc.) with
+   `meta[:verbatim] == true`, the changeset is rejected under §5.1's raw-HTML-tag rule. This
+   single check subsumes the `<script>`/event-handler-attribute cases §5.1 names explicitly,
+   exactly as the original §5.3 reasoning already established (an event-handler attribute or a
+   `<script>` tag can only appear as a raw-HTML construct, i.e. a `meta[:verbatim] == true`
+   node, which this check already catches in full).
 3. **Walk the AST for link/image destination nodes.** Separately, walk the same tree for every
-   node representing a resolved link or image (`earmark_parser`'s AST represents these as
-   element nodes carrying an `href` or `src` attribute in the node's attribute list — the
-   *already-resolved* destination string, per §5.4.1's "resolved" explanation above; not raw
-   source text). For every such node found, extract the scheme (the substring before the first
-   `:`, case-insensitive, with leading/trailing whitespace trimmed the same way §5.1's original
-   rule states) and reject the changeset under §5.1's scheme rule if it is one of `javascript`,
-   `data`, or `vbscript`.
+   node whose `tag` is `"a"` (links) or `"img"` (images) — confirmed against `earmark_parser`'s
+   own hexdocs/README examples (`{"a", [{"href", "destination"}], ["title"], %{}}` for a
+   markdown link; images follow the same shape with an `"img"` tag and `src` attribute). The
+   destination is the value of the `"href"` (for `"a"`) or `"src"` (for `"img"`) key in the
+   node's `attrs` list — the *already-resolved* destination string, per §5.4.1's "resolved"
+   explanation above; not raw source text. This walk is unconditional on `meta[:verbatim]`: a
+   link/image node can appear with or without `verbatim: true` (an `<a href="...">` written as
+   raw HTML is already caught by step 2's raw-HTML check regardless of its destination, but a
+   markdown-syntax `[text](url)` link — `meta == %{}` — is *only* caught by this step, since
+   step 2 never visits it). For every `"a"`/`"img"` node found, extract the scheme (the
+   substring before the first `:`, case-insensitive, with leading/trailing whitespace trimmed
+   the same way §5.1's original rule states) from its `href`/`src` value and reject the
+   changeset under §5.1's scheme rule if it is one of `javascript`, `data`, or `vbscript`.
 4. **Fenced/inline code content needs no separate stripping step.** §5.3's original mechanism
    needed `strip_code_regions/1` as a standalone pre-pass because a regex has no concept of
    "this span is a code span" — it can only be told to skip byte ranges that look like one.

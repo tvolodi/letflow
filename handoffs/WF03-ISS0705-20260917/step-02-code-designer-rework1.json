@@ -1,0 +1,46 @@
+{
+  "handoff_id": "wf03-iss0705-step02-rework1",
+  "run_id": "WF03-ISS0705-20260917",
+  "workflow_id": "WF-03",
+  "step": "02-rework1",
+  "from_agent": "ORCH",
+  "to_agent": "CODE-DESIGNER",
+  "file": "handoffs/WF03-ISS0705-20260917/step-02-code-designer-rework1.json",
+  "created_at": "2026-09-17T09:45:00Z",
+  "started_at": "2026-09-17T09:45:00Z",
+  "completed_at": null,
+  "status": "PENDING",
+  "priority": "NORMAL",
+  "context": {
+    "stage": null,
+    "requirement_ids": [],
+    "requirement_text": {},
+    "source_text": {},
+    "related_handoff_ids": ["handoffs/WF03-ISS0705-20260917/step-03-elixir-dev.json"],
+    "artifacts_in": [
+      "lib/letflow/design/iss0705-sandbox-mode-restore-fix.md",
+      "handoffs/WF03-ISS0705-20260917/step-03-elixir-dev.json",
+      "test/support/sandbox_auto_mode.ex",
+      "test/letflow/routers/tenants_test.exs"
+    ],
+    "owned_modules": ["test/letflow/routers/tenants_test.exs"]
+  },
+  "task": {
+    "description": "REWORK ITERATION 1: WF-03 Step 2 rework for ISS-0705, scoped ONLY to design doc lib/letflow/design/iss0705-sandbox-mode-restore-fix.md's Section 1 (tenants_test.exs fix). Sections 2 and 3 (identity_test.exs, role_registry_test.exs) are verified correct and already implemented/passing -- do NOT touch them or ask ELIXIR-DEV to redo them.\n\nOn branch feature/WF03-ISS0705-20260917 (`git checkout feature/WF03-ISS0705-20260917`; the branch already has the correct §2/§3 changes committed at 9fcd5fcb -- do not revert them).\n\nRead handoffs/WF03-ISS0705-20260917/step-03-elixir-dev.json's result.summary and result.issues in full: ELIXIR-DEV applied §1's design exactly (wrap the real-provisioning test body in `Letflow.Test.SandboxAutoMode.provision!/2`) and it fails with `DBConnection.OwnershipError: cannot find ownership process ... using mode :manual`. Root cause: `provision!/2`'s own `after` block restores :manual mode + a fresh checkout owned by the TEST process as soon as the wrapped fn returns -- but this test's own `on_exit/1` (registered INSIDE the wrapped fn, doing DROP SCHEMA/delete_all cleanup) only runs LATER, from ExUnit's separate OnExitHandler process, by which point the :manual-mode connection is checked out to a process (the original test process) that no longer owns anything from OnExitHandler's perspective.\n\nDesign a fix for this specific gap. Two directions worth considering (pick whichever is more correct and simpler -- your call, state your reasoning): (a) restructure so the test's on_exit/1 callback is registered OUTSIDE the provision!/2-wrapped closure (i.e. call provision!/2 only around the narrower DDL/migration-replay segment that actually needs :auto mode, register on_exit separately at the top level of the test as before); (b) have the on_exit/1 callback itself re-enter :auto mode (e.g. via SandboxAutoMode.enter_auto_mode!/1) before doing its DROP SCHEMA/delete_all cleanup, so it doesn't depend on the pool still being in the state provision!/2 left as a side effect of timing. Check test/support/sandbox_auto_mode.ex's own moduledoc/other usage sites for precedent before choosing. Update lib/letflow/design/iss0705-sandbox-mode-restore-fix.md's Section 1 only. Claim this handoff by setting status to COMPLETED/FAILED as normal on finishing (the handoff is already claimed conceptually via this rework note; just do the work and complete it).",
+    "acceptance_criteria": [
+      "Section 1 of the design doc revised with an exact before/after shape that keeps on_exit/1's DDL cleanup working regardless of provision!/2's after-block timing",
+      "Reasoning for the chosen approach (a) vs (b) stated, referencing test/support/sandbox_auto_mode.ex's existing usage patterns",
+      "Sections 2/3 and the cleanup section left untouched",
+      "next_action routes to CODE-DESIGN-VALIDATOR for a fresh pass on the revised Section 1"
+    ]
+  },
+  "result": {
+    "status": null,
+    "summary": null,
+    "artifacts_out": [],
+    "issues": [],
+    "next_action": null
+  },
+  "rework_count": 1,
+  "max_rework": 3
+}

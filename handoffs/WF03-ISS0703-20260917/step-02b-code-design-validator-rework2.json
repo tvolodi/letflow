@@ -1,0 +1,65 @@
+{
+  "handoff_id": "wf03-iss0703-step02b-rework2",
+  "run_id": "WF03-ISS0703-20260917",
+  "workflow_id": "WF-03",
+  "step": "02b-rework2",
+  "from_agent": "ORCH",
+  "to_agent": "CODE-DESIGN-VALIDATOR",
+  "file": "handoffs/WF03-ISS0703-20260917/step-02b-code-design-validator-rework2.json",
+  "created_at": "2026-09-17T07:45:07Z",
+  "started_at": "2026-09-17T07:45:07Z",
+  "completed_at": null,
+  "status": "PENDING",
+  "priority": "NORMAL",
+  "context": {
+    "stage": null,
+    "requirement_ids": [],
+    "requirement_text": {},
+    "source_text": {},
+    "related_handoff_ids": ["handoffs/WF03-ISS0703-20260917/step-02-code-designer.json", "handoffs/WF03-ISS0703-20260917/step-03b-security-reviewer.json"],
+    "artifacts_in": [
+      "handoffs/WF03-ISS0703-20260917/step-02-code-designer.json",
+      "handoffs/WF03-ISS0703-20260917/step-03b-security-reviewer.json",
+      "lib/letflow/design/iss0703-oidc-verifier-exception-handling.md"
+    ],
+    "owned_modules": []
+  },
+  "task": {
+    "description": "WF-03 Step 2b regate (rework iteration 2) for ISS-0703, on branch feature/WF03-ISS0703-20260917 (`git checkout feature/WF03-ISS0703-20260917`). This revision replaces the design's `message` field (Exception.message/1 / inspect/1, flagged by SECURITY-REVIEWER as a token-leak risk -- see handoffs/WF03-ISS0703-20260917/step-03b-security-reviewer.json's full FAIL result) with a `classification` field built only from fixed atoms (exception __struct__ module name, or a small fixed set of constant atoms for exit/throw). Re-read the design doc directly and independently verify: (1) the new classification-field construction is STRUCTURALLY guaranteed to never embed any byte of raw_token -- read the exact construction rules stated (not just trust the summary), confirm no formatter (Exception.message/1, inspect/1, to_string/1, or similar) is ever applied to the caught value's content; (2) TEST-DESIGNER guidance now requires an explicit non-leakage assertion; (3) re-confirm all 6 of step-02's ORIGINAL acceptance criteria still hold against the current doc (rescue/catch boundary, both oidcc calls covered, moduledoc correction, no implementation code, no auth_pipeline.ex change); (4) confirm no new implementation-code-shaped fenced blocks were introduced by this revision. Claim this handoff by setting status to IN_PROGRESS only.",
+    "acceptance_criteria": [
+      "Classification-field construction is verified structurally leak-proof -- no formatter applied to the caught exception/exit/throw's own content/value, ever",
+      "TEST-DESIGNER guidance includes an explicit token-non-leakage assertion against both the returned tuple and logged output",
+      "All 6 original step-02 acceptance criteria re-confirmed",
+      "No new implementation code introduced by this revision",
+      "PASS or FAIL with specific named gaps if FAIL",
+      "next_action routes to ELIXIR-DEV (for re-implementation) on PASS"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "",
+    "artifacts_out": [],
+    "issues": [],
+    "next_action": ""
+  },
+  "rework_count": 0,
+  "max_rework": 3,
+  "gate_history": [
+    {
+      "iteration": 0,
+      "gated_at": "2026-09-17T07:29:20Z",
+      "status": "FAIL",
+      "summary": "5 of 6 ACs passed. AC5 (no implementation code) failed on Section 4/5 fenced code.",
+      "issues": ["Section 4 literal Logger.warning/1 statement", "Section 5 fenced def/rescue/catch skeleton"],
+      "next_action": "Route back to CODE-DESIGNER"
+    },
+    {
+      "iteration": 1,
+      "gated_at": "2026-09-17T07:34:10Z",
+      "status": "PASS",
+      "summary": "Both AC5 gaps confirmed fixed; all 6 ACs independently re-confirmed. Routed to ELIXIR-DEV.",
+      "issues": [],
+      "next_action": "Route to ELIXIR-DEV"
+    }
+  ]
+}

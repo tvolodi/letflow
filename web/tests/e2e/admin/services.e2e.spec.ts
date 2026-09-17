@@ -11,12 +11,11 @@
 
 import * as fs from 'fs'
 import * as path from 'path'
-import { expect, test, type APIRequestContext, type Page } from '@playwright/test'
-import { getKeycloakToken, loginWithToken, BPM_IDP_BASE_URL } from '../helpers'
+import { expect, test, type Page } from '@playwright/test'
+import { getKeycloakToken, loginWithToken, assertServiceReadiness } from '../helpers'
 
 const SCREENSHOTS_DIR = 'tests/screenshots'
 const API_BASE_URL = process.env.BPM_TEST_URL ?? 'http://127.0.0.1:8080'
-const KEYCLOAK_DISCOVERY_URL = `${BPM_IDP_BASE_URL}/realms/bpm-default/.well-known/openid-configuration`
 
 function shotPath(name: string): string {
   const dir = path.resolve(SCREENSHOTS_DIR)
@@ -26,17 +25,6 @@ function shotPath(name: string): string {
 
 async function shot(page: Page, name: string): Promise<void> {
   await page.screenshot({ path: shotPath(name), fullPage: true })
-}
-
-async function assertServicesReady(request: APIRequestContext): Promise<void> {
-  const backend = await request.fetch(`${API_BASE_URL}/health/ready`)
-  if (!backend.ok()) {
-    throw new Error(`Backend not ready (${backend.status()}) at ${API_BASE_URL}/health/ready`)
-  }
-  const idp = await request.fetch(KEYCLOAK_DISCOVERY_URL)
-  if (!idp.ok()) {
-    throw new Error(`Keycloak not ready (${idp.status()}) at ${KEYCLOAK_DISCOVERY_URL}`)
-  }
 }
 
 async function navigateSpa(page: Page, targetPath: string): Promise<void> {
@@ -49,7 +37,7 @@ async function navigateSpa(page: Page, targetPath: string): Promise<void> {
 
 test.describe('SVC-04: admin Services page role-gate', () => {
   test.beforeEach(async ({ request }) => {
-    await assertServicesReady(request)
+    await assertServiceReadiness(request, API_BASE_URL)
   })
 
   // ── TC-SVC-04-UI-01 ─────────────────────────────────────────────────────────

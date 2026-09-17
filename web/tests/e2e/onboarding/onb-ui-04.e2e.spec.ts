@@ -17,30 +17,12 @@ import {
   loginWithToken,
   navigateSpa,
 } from '../pipeline'
-import { BPM_IDP_BASE_URL } from '../helpers'
+import { assertServiceReadiness } from '../helpers'
 
 // Saga completion may take up to 90 s
 test.setTimeout(120_000)
 
 const API_BASE_URL       = process.env.BPM_TEST_URL     ?? 'http://127.0.0.1:8080'
-const KEYCLOAK_DISCOVERY = `${BPM_IDP_BASE_URL}/realms/bpm-default/.well-known/openid-configuration`
-
-async function assertServicesReady(request: Parameters<typeof getKeycloakToken>[0]) {
-  const backend = await request.fetch(`${API_BASE_URL}/health/ready`).catch(() => null)
-  if (!backend?.ok()) {
-    throw new Error(
-      `Backend not ready at ${API_BASE_URL}/health/ready. ` +
-      'Ensure docker-compose services are running before executing these tests.'
-    )
-  }
-  const idp = await request.fetch(KEYCLOAK_DISCOVERY).catch(() => null)
-  if (!idp?.ok()) {
-    throw new Error(
-      `Keycloak not ready at ${KEYCLOAK_DISCOVERY}. ` +
-      'Ensure docker-compose keycloak service is running before executing these tests.'
-    )
-  }
-}
 
 /**
  * Run the full form → progress → result flow and return the final URL parts.
@@ -88,7 +70,7 @@ async function runFullWizard(
 test.describe('ONB-UI-04 — Onboarding result screen', () => {
 
   test('completed result screen shows slug and oidc_authority', async ({ page, request }) => {
-    await assertServicesReady(request)
+    await assertServiceReadiness(request, API_BASE_URL)
 
     const { slug } = await runFullWizard(page, request)
 
@@ -120,7 +102,7 @@ test.describe('ONB-UI-04 — Onboarding result screen', () => {
   })
 
   test('"Try Again" navigates back to form with prefilled slug', async ({ page, request }) => {
-    await assertServicesReady(request)
+    await assertServiceReadiness(request, API_BASE_URL)
 
     const uid  = randomUUID().slice(0, 8)
     const slug = `test-${uid}`
@@ -189,7 +171,7 @@ test.describe('ONB-UI-04 — Onboarding result screen', () => {
   })
 
   test('page-reload restore via ?hostname= shows completed result', async ({ page, request }) => {
-    await assertServicesReady(request)
+    await assertServiceReadiness(request, API_BASE_URL)
 
     const { slug, hostname, onboardingId, resultUrl } = await runFullWizard(page, request)
 

@@ -20,27 +20,9 @@ import {
   loginWithToken,
   navigateSpa,
 } from '../pipeline'
-import { BPM_IDP_BASE_URL } from '../helpers'
+import { assertServiceReadiness } from '../helpers'
 
 const API_BASE_URL       = process.env.BPM_TEST_URL     ?? 'http://127.0.0.1:8080'
-const KEYCLOAK_DISCOVERY = `${BPM_IDP_BASE_URL}/realms/bpm-default/.well-known/openid-configuration`
-
-async function assertServicesReady(request: Parameters<typeof getKeycloakToken>[0]) {
-  const backend = await request.fetch(`${API_BASE_URL}/health/ready`).catch(() => null)
-  if (!backend?.ok()) {
-    throw new Error(
-      `Backend not ready at ${API_BASE_URL}/health/ready. ` +
-      'Ensure docker-compose services are running.'
-    )
-  }
-  const idp = await request.fetch(KEYCLOAK_DISCOVERY).catch(() => null)
-  if (!idp?.ok()) {
-    throw new Error(
-      `Keycloak not ready at ${KEYCLOAK_DISCOVERY}. ` +
-      'Ensure docker-compose keycloak service is running.'
-    )
-  }
-}
 
 async function loginAsAdmin(page: Parameters<typeof loginWithToken>[0], request: Parameters<typeof getKeycloakToken>[0]) {
   const token = await getKeycloakToken(request)
@@ -54,7 +36,7 @@ async function loginAsAdmin(page: Parameters<typeof loginWithToken>[0], request:
 test.describe('ONB-UI-02 — Tenant registration form', () => {
 
   test('submitting empty form shows validation errors on required fields', async ({ page, request }) => {
-    await assertServicesReady(request)
+    await assertServiceReadiness(request, API_BASE_URL)
     await loginAsAdmin(page, request)
 
     await page.screenshot({ path: 'scratch/onb-ui-02-empty-form.png', fullPage: true })
@@ -79,7 +61,7 @@ test.describe('ONB-UI-02 — Tenant registration form', () => {
   })
 
   test('invalid slug format shows slug validation error', async ({ page, request }) => {
-    await assertServicesReady(request)
+    await assertServiceReadiness(request, API_BASE_URL)
     await loginAsAdmin(page, request)
 
     // Fill slug with invalid value (uppercase + special char)
@@ -99,7 +81,7 @@ test.describe('ONB-UI-02 — Tenant registration form', () => {
   })
 
   test('invalid email shows email validation error', async ({ page, request }) => {
-    await assertServicesReady(request)
+    await assertServiceReadiness(request, API_BASE_URL)
     await loginAsAdmin(page, request)
 
     const uid = randomUUID().slice(0, 8)
@@ -124,7 +106,7 @@ test.describe('ONB-UI-02 — Tenant registration form', () => {
   })
 
   test('hostname with protocol prefix shows hostname validation error', async ({ page, request }) => {
-    await assertServicesReady(request)
+    await assertServiceReadiness(request, API_BASE_URL)
     await loginAsAdmin(page, request)
 
     const uid = randomUUID().slice(0, 8)
@@ -149,7 +131,7 @@ test.describe('ONB-UI-02 — Tenant registration form', () => {
   })
 
   test('valid form submission navigates to progress screen', async ({ page, request }) => {
-    await assertServicesReady(request)
+    await assertServiceReadiness(request, API_BASE_URL)
     await loginAsAdmin(page, request)
 
     const uid = randomUUID().slice(0, 8)

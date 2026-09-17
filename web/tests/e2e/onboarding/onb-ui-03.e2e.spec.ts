@@ -19,30 +19,12 @@ import {
   loginWithToken,
   navigateSpa,
 } from '../pipeline'
-import { BPM_IDP_BASE_URL } from '../helpers'
+import { assertServiceReadiness } from '../helpers'
 
 // Onboarding saga involves Keycloak realm creation — allow generous timeout
 test.setTimeout(120_000)
 
 const API_BASE_URL       = process.env.BPM_TEST_URL     ?? 'http://127.0.0.1:8080'
-const KEYCLOAK_DISCOVERY = `${BPM_IDP_BASE_URL}/realms/bpm-default/.well-known/openid-configuration`
-
-async function assertServicesReady(request: Parameters<typeof getKeycloakToken>[0]) {
-  const backend = await request.fetch(`${API_BASE_URL}/health/ready`).catch(() => null)
-  if (!backend?.ok()) {
-    throw new Error(
-      `Backend not ready at ${API_BASE_URL}/health/ready. ` +
-      'Ensure docker-compose services are running before executing these tests.'
-    )
-  }
-  const idp = await request.fetch(KEYCLOAK_DISCOVERY).catch(() => null)
-  if (!idp?.ok()) {
-    throw new Error(
-      `Keycloak not ready at ${KEYCLOAK_DISCOVERY}. ` +
-      'Ensure docker-compose keycloak service is running before executing these tests.'
-    )
-  }
-}
 
 async function submitValidForm(
   page: Parameters<typeof loginWithToken>[0],
@@ -76,7 +58,7 @@ async function submitValidForm(
 test.describe('ONB-UI-03 — Onboarding progress display', () => {
 
   test('progress screen shows spinner after form submit', async ({ page, request }) => {
-    await assertServicesReady(request)
+    await assertServiceReadiness(request, API_BASE_URL)
     await submitValidForm(page, request)
 
     await page.screenshot({ path: 'scratch/onb-ui-03-progress-screen.png', fullPage: true })
@@ -92,7 +74,7 @@ test.describe('ONB-UI-03 — Onboarding progress display', () => {
   })
 
   test('saga terminal state navigates to result screen', async ({ page, request }) => {
-    await assertServicesReady(request)
+    await assertServiceReadiness(request, API_BASE_URL)
     await submitValidForm(page, request)
 
     await page.screenshot({ path: 'scratch/onb-ui-03-waiting-for-saga.png', fullPage: true })

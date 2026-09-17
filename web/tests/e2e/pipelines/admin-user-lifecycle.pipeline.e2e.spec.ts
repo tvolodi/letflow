@@ -26,10 +26,9 @@ import {
   extractIdFromUrl,
   authHeaders,
 } from '../pipeline'
-import { BPM_IDP_BASE_URL } from '../helpers'
+import { assertServiceReadiness } from '../helpers'
 
 const API_BASE_URL = process.env.BPM_TEST_URL ?? 'http://127.0.0.1:8080'
-const KEYCLOAK_DISCOVERY_URL = `${BPM_IDP_BASE_URL}/realms/bpm-default/.well-known/openid-configuration`
 
 interface UserLifecycleState {
   adminToken: string
@@ -41,10 +40,7 @@ interface UserLifecycleState {
 test.describe('Pipeline: admin user lifecycle (ADM-UI-01..04)', () => {
   test('full lifecycle: list → create → update → assign role → deactivate', async ({ page, request }) => {
     // Pre-check: services must be reachable before we start the chain
-    const backendOk = await request.fetch(`${API_BASE_URL}/health/ready`)
-    if (!backendOk.ok()) throw new Error(`Backend not ready: ${backendOk.status()}`)
-    const idpOk = await request.fetch(KEYCLOAK_DISCOVERY_URL)
-    if (!idpOk.ok()) throw new Error(`Keycloak not ready: ${idpOk.status()}`)
+    await assertServiceReadiness(request, API_BASE_URL)
 
     const adminToken = await getKeycloakToken(request)
     await loginWithToken(page, adminToken)

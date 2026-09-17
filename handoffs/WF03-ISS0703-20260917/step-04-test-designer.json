@@ -1,0 +1,49 @@
+{
+  "handoff_id": "wf03-iss0703-step04",
+  "run_id": "WF03-ISS0703-20260917",
+  "workflow_id": "WF-03",
+  "step": "04",
+  "from_agent": "ORCH",
+  "to_agent": "TEST-DESIGNER",
+  "file": "handoffs/WF03-ISS0703-20260917/step-04-test-designer.json",
+  "created_at": "2026-09-17T07:53:56Z",
+  "started_at": "2026-09-17T07:53:56Z",
+  "completed_at": null,
+  "status": "PENDING",
+  "priority": "NORMAL",
+  "context": {
+    "stage": null,
+    "requirement_ids": [],
+    "requirement_text": {},
+    "source_text": {},
+    "related_handoff_ids": [],
+    "artifacts_in": [
+      "lib/letflow/design/iss0703-oidc-verifier-exception-handling.md",
+      "lib/letflow/oidc/token_verifier/oidcc.ex",
+      "test/letflow/plugs/auth_pipeline_test.exs",
+      "test/letflow/integration/keycloak_auth_pipeline_test.exs",
+      "docs/agents/workflows/WF-03_issue_resolving.md"
+    ],
+    "owned_modules": ["test/letflow/oidc/token_verifier/oidcc_test.exs", "test/letflow/integration/keycloak_auth_pipeline_test.exs"]
+  },
+  "task": {
+    "description": "WF-03 Step 4 (regression test) for ISS-0703, on branch feature/WF03-ISS0703-20260917 (`git checkout feature/WF03-ISS0703-20260917`). Write a fail-then-pass regression test proving the fix (per WF-03_issue_resolving.md's Steps 2-4 rules: the test must be shown to FAIL against the pre-fix code and PASS against the post-fix code). The design doc lib/letflow/design/iss0703-oidc-verifier-exception-handling.md, section 7 (TEST-DESIGNER guidance), specifies exactly what to cover -- read it in full and follow it precisely: (1) a unit-level test calling Letflow.Oidc.TokenVerifier.Oidcc.verify_bearer_token/2 directly (the REAL adapter, not TokenVerifierDouble) with a non-JWT-shaped raw_token (e.g. garbage/non-base64url content, or the literal raw Keycloak token-endpoint JSON blob that triggered the live incident), asserting it returns {:error, {:verifier_crashed, %{kind:, classification:}}} instead of raising; (2) an integration-level test through Letflow.Plugs.AuthPipeline.call/2 (or the existing test/letflow/integration/keycloak_auth_pipeline_test.exs harness if it already exercises the real Oidcc adapter) asserting a clean 401 Problem+JSON response instead of a raw 500 crash; (3) an EXPLICIT non-leakage assertion per SECURITY-REVIEWER's requirement -- assert the returned tuple's classification field, AND any captured Logger.warning output, contains no substring of the raw_token fixture used to trigger the crash. Prove the fail-then-pass property explicitly in your handoff (checked out pre-fix code -- e.g. `git stash` your test-only changes, temporarily revert lib/letflow/oidc/token_verifier/oidcc.ex to main's version via `git show main:lib/letflow/oidc/token_verifier/oidcc.ex > /tmp/pre-fix-oidcc.ex` and diff-swap it in, run the new tests, confirm they fail/crash, then restore the real fix and confirm they pass -- revert any temporary swap fully afterward and verify `git status --porcelain` is clean of that swap before finishing). Do NOT run the full suite yourself for the final gate -- that's TEST-RUNNER's job next; you only need to prove fail-then-pass for your own new tests. Claim this handoff by setting status to IN_PROGRESS only.",
+    "acceptance_criteria": [
+      "Unit test exercises the REAL Letflow.Oidc.TokenVerifier.Oidcc adapter (not TokenVerifierDouble) with a non-JWT-shaped bearer token, asserting the {:error, {:verifier_crashed, ...}} tuple",
+      "Integration test asserts a clean 401 (not a 500 crash) through the real pipeline for the same kind of malformed input",
+      "An explicit assertion exists that neither the returned classification field nor logged output contains any substring of the raw_token fixture",
+      "Fail-then-pass is demonstrated and stated explicitly in result.summary with the actual pre-fix failure output and post-fix pass output quoted",
+      "Any temporary pre-fix code swap used for the fail-first proof is fully reverted, verified via git status --porcelain before completing",
+      "next_action routes to TEST-DESIGN-VALIDATOR"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "",
+    "artifacts_out": [],
+    "issues": [],
+    "next_action": ""
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

@@ -1,0 +1,31 @@
+id: ISS-0704
+title: >
+  Letflow.Routers.TenantsTest pagination test flakes -- GET /tenants as
+  PLATFORM_ADMIN paginated-allowlisted-shape assertion fails intermittently
+discovered_by: ELIXIR-DEV
+discovered_in_run: WF02-REQ360-20260917
+discovered_at: "2026-09-17T02:39:03Z"
+severity: MINOR
+description: >
+  Discovered during REQ-360's WF-02 Step Final full `mix test` run
+  (2026-09-17, feature/WF02-REQ360-20260917). test/letflow/routers/tenants_test.exs:356
+  ("GET /tenants as PLATFORM_ADMIN lists tenants in the paginated
+  allowlisted shape") failed -- 4327/4328 tests passed, this one failed.
+  Structurally cleared as pre-existing/unrelated to REQ-360's own diff:
+  `git diff --name-only origin/main...HEAD` for that branch touched only
+  docs/, lib/letflow/design/, test/fixtures/uat/, and test/uat-reports/ --
+  neither the failing test module nor lib/letflow/routers/tenants.ex appear
+  in that diff.
+
+  Likely cause per ELIXIR-DEV's own hypothesis (not yet confirmed): tenant-
+  fixture accumulation past the paginated LIMIT 51 in the shared test DB
+  across the full suite's accumulated state. Needs ISSUE-FIXER triage to
+  confirm rather than assume, and reproduction.
+affected_files:
+  - test/letflow/routers/tenants_test.exs
+  - lib/letflow/routers/tenants.ex
+related_requirements:
+  - REQ-360
+queue_ref: Q-704
+github_ref: GH-1479
+status: open

@@ -26794,6 +26794,7 @@ requirements:
     owner: FRONTEND-DEV
     status: pending
     stage: S7
+    impl_order: 708  # letflow-queue task id, GH#1501
     description: >
       Fixes the gap ISS-0700 found and REVIEWER's determination on it
       (docs/issues/ISS-0700.yaml, determined_by: REVIEWER,

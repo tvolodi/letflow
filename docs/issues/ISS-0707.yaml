@@ -88,3 +88,19 @@ pipeline_log: []
       no ISS-0706 exception shapes present). Confirmed design contains
       no implementation code. Judged Open Question 1's resolution sound,
       not blocking.
+  - step: FRONTEND-DEV
+    at: "2026-09-17T12:00:00Z"
+    result: >
+      PASS. Implemented at commit 6f1b1d15: all 9 files now import
+      assertServiceReadiness from '../helpers', local
+      assertServicesReady/inline checks deleted along with
+      KEYCLOAK_DISCOVERY constants. One sensible deviation from the
+      design's literal wording (kept BPM_IDP_BASE_URL in the import
+      line) -- lint/tsc required dropping it since it became unused,
+      flagged transparently, not silently changed. helpers.ts/pipeline.ts
+      untouched, platform-login-routing-by-role.pipeline.e2e.spec.ts
+      untouched. Real verification: playwright --list clean (290/50);
+      ran all 9 against a real local backend, zero precondition throws
+      (grep-confirmed), 10/23 downstream failures all pre-existing-gap
+      class already characterized during ISS-0706. eslint/tsc clean.
+      npm test 592/592, guards 48/48.

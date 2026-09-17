@@ -178,3 +178,19 @@ pipeline_log:
       ISS-0706's own non-recursive grep. Filed and registered as
       ISS-0706 (queue task 707, GH#1490), correctly not folded into this
       fix's scope.
+  - step: TEST-DESIGN-VALIDATOR
+    at: "2026-09-17T10:48:00Z"
+    result: >
+      PASS. Confirmed all 6 new unit test cases are real and meaningful
+      (backend-then-Keycloak short-circuit proven via toHaveBeenCalledWith,
+      not just return-value checks). Independently reproduced fail-then-
+      pass in an isolated worktree: 6/6 fail against a6b5e5ac^ (4 via
+      TypeError since helpers didn't exist, TC-5 via 22 concrete
+      pre-fix regressions), 6/6 pass at branch tip. Independently
+      confirmed TC-5's grep-regression correctly excludes both
+      legitimate /health/ready occurrences (app-response listener,
+      Keycloak's own probe) without flagging either. Own npm test run:
+      592/592. Accepted TC-TD-UI-01-04's practical-ceiling judgment.
+      Spot-checked ISS-0707's filing: verified 5/9 named files directly,
+      confirmed genuine hard-throws (not console warnings), confirmed
+      the explicitly-excluded 10th occurrence really is non-blocking.

@@ -257,3 +257,20 @@ pipeline_log:
       pre-existing sandbox tenant-seeding gap, LETFLOW_SECRETS_MASTER_KEY
       missing for mix letflow.seed, unrelated to this change) -- the
       comment-only edit is behaviorally inert. eslint/tsc clean.
+
+  - step: TEST-DESIGN-VALIDATOR
+    at: "2026-09-17T10:08:00Z"
+    result: >
+      PASS (third pass, after two genuine FAILs -- see prior entries).
+      Confirmed the false citation is genuinely gone, replaced with an
+      honest comment (independently re-ran TC-TD-UI-01-04, confirmed it
+      dies at assertServiceReadiness()). Confirmed ISS-0706 is real and
+      substantive, spot-checked 6/11 named files for the identical
+      pattern. Confirmed ISS-0532 is app-code-only, not a duplicate.
+      Independently reproduced the 1/3-failing run (not trusting the
+      stash-and-rerun narrative), traced the real failure mechanism
+      (AuthProvider tenant-slug resolution failing against an
+      under-provisioned single-tenant sandbox DB) and confirmed it's
+      identical against the pre-edit commit -- genuinely pre-existing and
+      unrelated to this diff. Judged dropping the citation (vs. fixing
+      the companion spec here) the correct scope call.

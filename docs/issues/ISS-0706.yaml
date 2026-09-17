@@ -156,3 +156,25 @@ pipeline_log:
       creep confirmed clean (both incidental findings untouched).
       TC-TD-UI-01-04 confirmed to genuinely mirror TC-TD-UI-03-01, not
       superficially. No decision-record conflict.
+  - step: TEST-DESIGNER
+    at: "2026-09-17T10:18:00Z"
+    result: >
+      Real gap closed at commit 1f44644c: assertBackendHealthy/
+      assertServiceReadiness ARE the entire fix and tests/e2e/** is
+      excluded from CI, so nothing automated protected this regression
+      class. Added web/tests/unit/iss-0706-e2e-health-precondition.test.ts
+      (6 cases, mirroring the established iss-0295-e2e-idp-config.test.ts
+      pattern), including a scoped grep-regression confirming all 10
+      fixed files import the shared helper with no local dupe surviving.
+      Fail-then-pass verified for real in a throwaway worktree: 6/6 fail
+      against the true pre-fix commit, 6/6 pass at branch tip. npm test
+      592/592, eslint/tsc clean. TC-TD-UI-01-04's hard-fail branch:
+      sibling-pattern proof judged the practical ceiling (same
+      unseeded-tenant-fixture environment constraint as ISS-0702).
+      Spot-checked all 10 modified files' diffs for copy-paste errors --
+      clean, but surfaced a real separate finding while scoping the
+      regression test's exclusion list: 9 more files under
+      onboarding/admin/pipelines/ share the identical bug, missed by
+      ISS-0706's own non-recursive grep. Filed and registered as
+      ISS-0706 (queue task 707, GH#1490), correctly not folded into this
+      fix's scope.

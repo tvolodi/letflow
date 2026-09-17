@@ -58,7 +58,7 @@ affected_files:
 related:
   - ISS-0706
   - ISS-0532
-queue_ref: null
-github_ref: null
+queue_ref: Q-707
+github_ref: GH-1490
 status: open
 pipeline_log: []

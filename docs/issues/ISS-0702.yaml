@@ -92,3 +92,17 @@ pipeline_log:
       no app-behavior mock. Schema validation: 32/32 clean. type-check/
       lint clean. playwright --list: 290 tests/50 files, no syntax
       errors. npm run guards 48/48. npm test 586/586.
+  - step: SECURITY-REVIEWER
+    at: "2026-09-17T09:18:00Z"
+    result: >
+      PASS -- ran full INV-1..INV-9 pass despite zero lib/letflow/ or
+      migration touches. INV-4: admin-user/admin-pass/worker-user/
+      worker-pass confirmed to be pre-existing established test fixture
+      credentials already the default params in helpers.ts and used
+      identically across dozens of pre-existing specs, not new/leaked
+      secrets. INV-9 confirmed not-applicable: outbound calls are made by
+      a Playwright test process against operator/CI-configured env vars,
+      no tenant in the loop, not the class of request INV-9 governs. The
+      window.name instrumentation carries only a static non-secret marker
+      string, ships only in web/tests/, no real concern. No BLOCKER
+      findings.

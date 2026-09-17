@@ -1,0 +1,47 @@
+{
+  "handoff_id": "wf03-iss0703-step02",
+  "run_id": "WF03-ISS0703-20260917",
+  "workflow_id": "WF-03",
+  "step": "02",
+  "from_agent": "ORCH",
+  "to_agent": "CODE-DESIGNER",
+  "file": "handoffs/WF03-ISS0703-20260917/step-02-code-designer.json",
+  "created_at": "2026-09-17T07:25:20Z",
+  "started_at": "2026-09-17T07:25:20Z",
+  "completed_at": null,
+  "status": "PENDING",
+  "priority": "NORMAL",
+  "context": {
+    "stage": null,
+    "requirement_ids": [],
+    "requirement_text": {},
+    "source_text": {},
+    "related_handoff_ids": [],
+    "artifacts_in": [
+      "handoffs/WF03-ISS0703-20260917/step-01-issue-fixer-diagnosis.json",
+      "lib/letflow/oidc/token_verifier/oidcc.ex",
+      "lib/letflow/plugs/auth_pipeline.ex"
+    ],
+    "owned_modules": ["lib/letflow/oidc/token_verifier/oidcc.ex"]
+  },
+  "task": {
+    "description": "WF-03 Step 2 (fix design) for ISS-0703, on branch feature/WF03-ISS0703-20260917 (already checked out and pushed -- `git checkout feature/WF03-ISS0703-20260917` if your session starts elsewhere). Read ISSUE-FIXER's full diagnosis at handoffs/WF03-ISS0703-20260917/step-01-issue-fixer-diagnosis.json's result.summary in full -- do not re-derive the diagnosis, it is already done. Root cause: Letflow.Oidc.TokenVerifier.Oidcc.verify_bearer_token/2 (lib/letflow/oidc/token_verifier/oidcc.ex:30-45) lets an exception raised deep inside the oidcc/jose dependency chain (a CaseClauseError from jose_base64url.decode!/2, triggered when the raw bearer token is not valid base64url/JWT-shaped -- e.g. garbage or non-token input) propagate uncaught, through Letflow.Plugs.AuthPipeline.verify_token/1 (auth_pipeline.ex:245-254, which only pattern-matches {:ok,_}/{:error,_} tuples, not exceptions), all the way to a raw Bandit HTTP 500 with an empty body -- instead of the auth pipeline's documented design intent that every verifier {:error,_reason} collapses to a single well-formed 401 Problem+JSON response (see auth_pipeline.ex's own comments around lines 241-254). The module's own moduledoc (oidcc.ex lines 20-27) falsely claims it 'never raises' -- that claim does not hold for malformed/non-JWT-shaped input.\n\nDesign a fix: verify_bearer_token/2 must catch any exception raised by Oidcc.Token.validate_jwt/3 (and defensively Oidcc.ClientContext.from_configuration_worker/4, the other oidcc call in this function) and convert it into an {:error, reason} tuple that Letflow.Plugs.AuthPipeline.verify_token/1's existing error-collapse path already knows how to turn into a 401 -- so no change should be needed to auth_pipeline.ex itself unless your design finds a real gap there. Choose an appropriate rescue/catch shape (a `try`/`rescue`, or `Kernel.catch`-and-classify style already used elsewhere in this codebase if a convention exists -- check lib/letflow/oidc/ and lib/letflow/plugs/ for precedent before inventing a new shape) and a specific {:error, reason} tag that fits the existing error-tuple vocabulary this module/pipeline already uses (read verify_bearer_token/2's existing {:error, ...} return shapes and match the convention, do not invent an inconsistent new atom). Also design the moduledoc correction: the 'never raises' claim must be fixed to state accurately what is now guaranteed (never raises; malformed/invalid input, including non-base64url/non-JWT-shaped tokens, now returns {:error, ...}).\n\nThis is a design document only -- no implementation code, per this project's design/implementation split (see CODE-DESIGN-VALIDATOR's own gate criteria). State exact function signatures/specs, the exact {:error, reason} shape, and where the rescue boundary sits, precisely enough that ELIXIR-DEV and TEST-DESIGNER need no further judgement calls. Write the design artefact to lib/letflow/design/iss0703-oidc-verifier-exception-handling.md (standard location, see docs/agents/AGENT_SYSTEM.md for the convention). Claim this handoff by setting status to IN_PROGRESS only.",
+    "acceptance_criteria": [
+      "Design states the exact rescue/catch boundary (which call(s) it wraps) and the exact {:error, reason} tuple shape returned on a caught exception, consistent with verify_bearer_token/2's existing error vocabulary",
+      "Design covers both Oidcc.Token.validate_jwt/3 and Oidcc.ClientContext.from_configuration_worker/4 (or explicitly justifies excluding the latter if it cannot raise on malformed input)",
+      "Design states the corrected moduledoc text (accurate 'never raises' claim)",
+      "Design states what TEST-DESIGNER's regression test must exercise: the REAL Letflow.Oidc.TokenVerifier.Oidcc adapter (not TokenVerifierDouble) with a non-JWT-shaped Authorization/bearer-token value, proving fail-then-pass",
+      "No .ex implementation code bodies in the design doc -- signatures/specs/shapes only",
+      "No changes proposed to auth_pipeline.ex's error-collapse logic unless the design identifies a real, specific gap there (state explicitly if none found)"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "",
+    "artifacts_out": [],
+    "issues": [],
+    "next_action": ""
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

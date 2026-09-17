@@ -26788,3 +26788,112 @@ requirements:
       - "the close-out states explicitly, in plain language, that this requirement does NOT make the deploy live — the companion ai-dala-infra task (SSH key provisioning + GitHub Actions secrets) is a separate, required step, named explicitly, not implied as already done"
       - "the stale deploy/redeploy-test.sh is left untouched (not deleted, not repurposed) since its own actual target may still be needed later, and this requirement's own close-out states this explicitly rather than leaving the two scripts' relationship unexplained for a future reader"
     depends_on: []
+
+  - id: REQ-369
+    title: Distinct PlatformDashboardPage for PLATFORM_ADMIN — replaces the shared tenant-branded landing page for that role, with role-conditional login routing
+    owner: FRONTEND-DEV
+    status: pending
+    stage: S7
+    description: >
+      Fixes the gap ISS-0700 found and REVIEWER's determination on it
+      (docs/issues/ISS-0700.yaml, determined_by: REVIEWER,
+      determined_at: 2026-09-17T13:52:00Z, path: missing-functionality) scoped
+      for REQ-ANALYST to fill in. ISS-0700 stays status: open as the source
+      finding — this requirement is the fix, tracked separately; do not close
+      ISS-0700 from this requirement's own close-out. Prior art:
+      lib/letflow/design/req360-platform-login-routing-uat-scenario.md's
+      Section 0 finding #1 and Section 7 OQ-3, which first surfaced this exact
+      open question and explicitly declined to resolve it, and REQ-360's own
+      entry in this file (its description was corrected by ISS-0700's
+      DOC-UPDATER partial_action to state the current, factual shared-'/'-root
+      behaviour — this requirement is what makes that description stale again,
+      in the intended direction).
+      .
+      THE PROBLEM, CONFIRMED BY DIRECT READ (not re-derived here, see
+      ISS-0700's diagnosis/determination blocks for the full trace).
+      web/src/router.tsx mounts the identical `<TenantDashboardPage />` at
+      both `{ index: true }` and `{ path: 'dashboard' }` for every
+      authenticated role, PLATFORM_ADMIN included. web/src/pages/dashboard/TenantDashboardPage.tsx
+      is actively tenant-possessive — its `<h1>` renders `tenantDisplayName`
+      from `useTenantContext()`, and its copy reads "Welcome to your BPM
+      workspace." PLATFORM_ADMIN has no natural tenant to bind that to
+      (confirmed via lib/letflow/design/req128-keycloak-dev-stack.md —
+      PLATFORM_ADMIN is a realm role inside the shared realm, not a tenant).
+      Two broken outcomes result depending on how they land: a misleading
+      "your workspace" framing if they land through a tenant-branded realm
+      slug, or the actively broken `isUnknown` banner ("Unknown workspace" /
+      "Tenant name could not be loaded. Contact your administrator.") if they
+      land with no realm slug — the more likely path for a platform admin,
+      per REVIEWER's determination.
+      .
+      SCOPE — THREE CHANGES, ALL IN web/. (1) A new
+      `web/src/pages/dashboard/PlatformDashboardPage.tsx`, sibling to
+      `TenantDashboardPage.tsx` in the same directory, rendering
+      platform-wide, non-tenant-branded content only — it must not import or
+      call `useTenantContext()` at all, and must not render `tenantDisplayName`
+      or the "your workspace"/`isUnknown` copy anywhere. Concretely: an `<h1>`
+      (`data-testid="platform-dashboard-heading"`) reading "Platform Overview"
+      (a fixed string, not derived from any tenant); a tenant-count tile
+      (`data-testid="tile-tenant-count"`) sourced from the EXISTING
+      `tenantsApi.list()` (web/src/api/tenants.ts, `/api/v1/tenants`, already
+      used by web/src/pages/admin/tenants/TenantsPage.tsx) reading its
+      response's `total` field — do not invent a new backend endpoint for
+      this; and a "Platform Admin Links" quick-links section
+      (`data-testid="platform-quick-links"`) with router `<Link>`s into the
+      existing `/admin/tenants`, `/admin/services`, `/admin/health`,
+      `/admin/metrics`, `/admin/users` routes (all already built and already
+      gated to PLATFORM_ADMIN in AppShell.tsx's NAV_ITEMS — this requirement
+      only links to them, it does not change or duplicate their content).
+      Follow this codebase's existing self-gating precedent for
+      PLATFORM_ADMIN-only pages (e.g. web/src/pages/admin/tenants/TenantsPage.tsx's
+      `if (!session?.roles.includes('PLATFORM_ADMIN'))` guard,
+      web/src/pages/admin/HealthDashboardPage.tsx's `isPlatformAdmin` check) —
+      PlatformDashboardPage must render an equivalent "not authorized" state
+      for a non-PLATFORM_ADMIN who reaches the route directly by URL, since
+      (per the existing pattern this project already uses everywhere else)
+      routes are not role-gated at the router level, only self-gated per
+      page. (2) `web/src/router.tsx` gains a new sibling route under the
+      existing authenticated route tree (e.g. `{ path: 'platform-dashboard',
+      element: <PlatformDashboardPage /> }`), alongside the existing
+      unchanged `{ index: true }` and `{ path: 'dashboard' }` entries — those
+      two stay exactly as they are today (`TenantDashboardPage`, for every
+      non-PLATFORM_ADMIN role, and reachable by PLATFORM_ADMIN too if they
+      navigate there directly, since this requirement does not remove that
+      page's general reachability). (3) `web/src/pages/OidcCallbackPage.tsx`'s
+      unconditional `navigate('/', { replace: true })` (line 72) becomes
+      role-conditional: PLATFORM_ADMIN (checked via the already-decoded
+      `payload.roles`, which this file already reads at line 39 but does not
+      yet use for routing) navigates to `/platform-dashboard` instead; every
+      other role's navigation target is unchanged (`/`).
+      .
+      OUT OF SCOPE, EXPLICITLY — DO NOT FOLD IN. The separate "Unknown
+      workspace" banner gap REVIEWER flagged but did not fold into this
+      requirement's frame: unauthenticated/no-realm-slug users of ANY
+      non-PLATFORM_ADMIN role still hitting TenantDashboardPage's `isUnknown`
+      banner path is a related-but-separate pre-existing concern, not
+      resolved by this requirement and not this requirement's job to fix —
+      leave TenantDashboardPage's own isUnknown handling untouched.
+      Cross-tenant health/metrics AGGREGATION beyond what
+      HealthDashboardPage/MetricsPage already compute is also out of scope —
+      this requirement links to those existing pages, it does not build new
+      cross-tenant aggregation logic or a new summary endpoint.
+      .
+      Depends on REQ-360, whose permanent UAT scenario
+      (test/fixtures/uat/scenarios/platform/platform-login-routing-by-role.yaml)
+      currently documents the real (pre-fix) shared-'/'-root behaviour this
+      requirement changes for PLATFORM_ADMIN specifically — that scenario's
+      PLATFORM_ADMIN branch needs updating to assert the new
+      `/platform-dashboard` destination as part of this requirement's own
+      close-out (same file, same branching construct, no new UAT
+      infrastructure needed), matching REQ-360's AC3 discipline (document the
+      real, current behaviour, don't let a scenario go stale against it).
+    acceptance_criteria:
+      - "web/src/pages/dashboard/PlatformDashboardPage.tsx exists, renders `data-testid=\"platform-dashboard-heading\"` with the fixed text \"Platform Overview\" (never a tenant name), never calls `useTenantContext()`, and never renders `tenantDisplayName` or the `isUnknown` \"Tenant name could not be loaded\" copy anywhere in its output — verified by a component test asserting both the presence of the fixed heading and the absence of any tenant-branded string"
+      - "the tenant-count tile (`data-testid=\"tile-tenant-count\"`) renders a real count sourced from `tenantsApi.list()`'s `total` field (no new backend endpoint introduced), covered by a test that mocks the existing `/api/v1/tenants` response and asserts the rendered count matches the mocked `total`"
+      - "a non-PLATFORM_ADMIN session reaching `/platform-dashboard` directly by URL sees a self-gated not-authorized state (matching this codebase's existing per-page role-guard precedent, e.g. TenantsPage.tsx/HealthDashboardPage.tsx), covered by a test asserting a PROCESS_OPERATOR (or any non-PLATFORM_ADMIN) session does not see the platform content"
+      - "web/src/router.tsx has a new route for PlatformDashboardPage alongside the unchanged existing `{ index: true }` and `{ path: 'dashboard' }` TenantDashboardPage entries — both old entries are provably unchanged (diff shows only an addition, no modification to the existing two lines)"
+      - "web/src/pages/OidcCallbackPage.tsx navigates a PLATFORM_ADMIN session to `/platform-dashboard` and every other role's session to `/` unchanged, covered by two component/integration tests (one per branch) asserting the actual `navigate()` target based on `payload.roles`"
+      - "a real PLATFORM_ADMIN login against the live QA environment is exercised end-to-end (reusing REQ-358's environment-targeting UAT infrastructure) and actually lands on `/platform-dashboard` with the real tenant count rendered — not merely unit-tested — with the result (including a screenshot, per UAT-RUNNER's existing screenshot-as-primary-evidence discipline) quoted in this requirement's close-out"
+      - "test/fixtures/uat/scenarios/platform/platform-login-routing-by-role.yaml's PLATFORM_ADMIN branch is updated to assert `/platform-dashboard` as the destination (not the old shared `/` root), re-run for real against QA per REQ-360's own verification discipline, with the updated pass result quoted; the scenario's other branches (tenant-scoped role, unauthenticated) are left unchanged since this requirement does not alter their behaviour"
+      - "this requirement's own close-out states explicitly that ISS-0700 remains status: open (not closed by this requirement) and that the separate 'Unknown workspace' banner gap for non-PLATFORM_ADMIN unauthenticated/no-realm-slug users is unresolved and out of this requirement's scope"
+    depends_on: [REQ-360]

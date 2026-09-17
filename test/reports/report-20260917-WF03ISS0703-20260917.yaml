@@ -1,0 +1,104 @@
+run_id: WF03-ISS0703-20260917
+issue_id: ISS-0703
+agent: TEST-RUNNER
+step: "WF-03 Step 4c -- full-suite confirmation"
+branch: feature/WF03-ISS0703-20260917
+commit_under_test: f7757148
+date: 2026-09-17
+
+diff_scope:
+  note: >
+    Already passed TEST-DESIGNER and TEST-DESIGN-VALIDATOR gates before this
+    run, per dispatch brief (handoffs/WF03-ISS0703-20260917/step-04-test-designer.json,
+    step-04b-test-design-validator.json). This step is TEST-RUNNER's own
+    full-suite execution: test/letflow/integration/keycloak_auth_pipeline_test.exs
+    gained an "ISS-0703 regression -- malformed raw_token never crashes the
+    real adapter" describe block (4 tests, @moduletag :keycloak, excluded
+    from the default full-suite run and verified separately below).
+
+environment:
+  docker: "docker compose up -d -- letflow-postgres-1 and letflow-keycloak-1
+    already Running (no restart needed)"
+  db_port: "no LETFLOW_DB_PORT override observed; default port used per README"
+  git_status_before_run: "clean, correct branch (feature/WF03-ISS0703-20260917),
+    no checkout/branch changes made beyond claiming this handoff"
+
+full_suite_run:
+  command: "MIX_ENV=test mix test"
+  description: >
+    Single-process full suite (not scripts/test_parallel.sh this time --
+    run directly per this handoff's explicit instruction). Excludes tags
+    [:keycloak, :wasm_hang, :lua_wallclock_race] by default (test/test_helper.exs:52).
+    Took 3805.9 seconds (32.0s async, 3773.9s sync) -- confirmed via CPU
+    accounting (erl.exe process CPU time climbing throughout, e.g. 1319s ->
+    1330s over a 20s sample midway through) that this was a genuinely long
+    run, not a hang.
+  result: PASS (one known pre-existing failure, see below)
+  actual_output: |
+    Finished in 3805.9 seconds (32.0s async, 3773.9s sync)
+
+    Result: 4334/4335 passed (6/6 properties, 4328/4329 tests), 23 excluded
+    Failed: 1 test
+  known_preexisting_failure:
+    test: "test A9: every indexed volume's declared entries: count equals what is actually on disk (Letflow.Docs.RequirementStatusInvariantsTest)"
+    file: "test/docs/requirement_status_invariants_test.exs:464"
+    confirmed_via: "targeted rerun: MIX_ENV=test mix test test/docs/requirement_status_invariants_test.exs -> Result: 19/20 passed, Failed: 1 test"
+    detail: >
+      A9 -- docs/status/requirement_status.v18.yaml declared 19 entries,
+      actual on-disk count 20. Matches exactly the drift already flagged in
+      this handoff's dispatch brief as pre-existing and unrelated to
+      ISS-0703 (this branch touches no docs/status/ files). Confirmed
+      independently: it is the SAME failure, and it is the ONLY failure in
+      the full 4335-test run (4335 - 4334 = 1, and that 1 is this test).
+
+keycloak_tagged_tests:
+  command: "MIX_ENV=test mix test --include keycloak test/letflow/integration/keycloak_auth_pipeline_test.exs"
+  first_run:
+    result: "4/7 passed, 3 failed"
+    cause: >
+      Transient Keycloak cold-start latency. AC1/AC2/AC3 (pre-existing tests,
+      not part of ISS-0703's own regression scope) each failed with
+      {:error, {:transport_error, :timeout}} calling
+      KeycloakTestClient.direct_access_token/4, whose @http_options uses a
+      deliberately short timeout: 2_000/connect_timeout: 1_000
+      (test/support/keycloak_test_client.ex:29, by design -- fast fail
+      instead of ExUnit's own longer default timeout). Manually curling the
+      same token endpoint confirmed a 9.06s response time on the first call
+      after ~24h container idle, well over the test client's 2s budget.
+    diagnosis: "environment warm-up, not a code regression"
+  verification:
+    action: "curled the token endpoint 3 more times immediately after"
+    result: "0.54s, 0.35s, 0.48s -- back to normal, confirming transient cold start"
+  second_run:
+    result: "7 passed, 0 failed"
+    detail: >
+      All 7 tests in the file passed, including the 4 ISS-0703 regression
+      tests (malformed raw_token / JSON-blob and plain-garbage bearer token
+      handling, both at the TokenVerifier.Oidcc level and through
+      AuthPipeline.call/2) and the 3 previously-timed-out AC1/AC2/AC3 tests.
+  iss0703_scope_verdict: >
+    PASS. The 4 tests actually introduced by ISS-0703 (the "malformed
+    raw_token never crashes the real adapter" describe block,
+    test/letflow/integration/keycloak_auth_pipeline_test.exs:326-378) passed
+    on both runs -- they never depend on direct_access_token and were
+    unaffected by the transient Keycloak slowness that hit AC1-3.
+
+other_flaky_or_new_failures: "none beyond the known pre-existing A9 drift and the transient Keycloak cold-start timeout (both diagnosed and explained above, neither blocks this gate)"
+
+overall_verdict: >
+  PASS. Full suite: 4334/4335 passed, 23 excluded, Failed: 1 test -- the
+  same pre-existing A9 requirement_status.v18.yaml declared-vs-actual drift
+  flagged in the dispatch brief, confirmed via targeted rerun to be the
+  SAME and ONLY failure. All ISS-0703-related tests
+  (test/letflow/integration/keycloak_auth_pipeline_test.exs, run with
+  --include keycloak since the whole file is @moduletag :keycloak and
+  excluded by default) pass -- 7/7 on the settled run, with the one
+  transient run's 3 failures root-caused to Keycloak cold-start latency
+  against KeycloakTestClient's deliberately short 2s test timeout, not to
+  any code regression.
+
+next_action: >
+  Route to Step 5 / ISSUE-FIXER to close docs/issues/ISS-0703.yaml (status:
+  resolved) per WF-03_issue_resolving.md Step 5. RELEASE-VALIDATOR should
+  still independently re-run the suite per its own mandate rather than
+  trusting this report alone.

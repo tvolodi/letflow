@@ -8,8 +8,8 @@
   "file": "handoffs/WF03-ISS0703-20260917/step-02b-code-design-validator.json",
   "created_at": "2026-09-17T07:28:09Z",
   "started_at": "2026-09-17T07:28:09Z",
-  "completed_at": null,
-  "status": "PENDING",
+  "completed_at": "2026-09-17T07:29:46Z",
+  "status": "COMPLETED",
   "priority": "NORMAL",
   "context": {
     "stage": null,
@@ -36,11 +36,14 @@
     ]
   },
   "result": {
-    "status": "PASS",
-    "summary": "",
+    "status": "FAIL",
+    "summary": "Independently read lib/letflow/design/iss0703-oidc-verifier-exception-handling.md in full (not CODE-DESIGNER's own summary) against step-02's six acceptance_criteria and ISSUE-FIXER's diagnosis. Five of six criteria are satisfied: AC1 (Section 2 states the boundary wraps the entire verify_bearer_token/2 body, i.e. both oidcc calls, using this codebase's def/rescue/catch function-clause-sugar precedent from Letflow.Api.Authorization.safe_to_existing_atom/1; Section 3 gives the exact {:error, {:verifier_crashed, %{kind: :error|:exit|:throw, message: String.t()}}} shape with a precise rationale for both rescue and catch), AC2 (Section 2 explicitly covers both Oidcc.Token.validate_jwt/3 and Oidcc.ClientContext.from_configuration_worker/4 in one boundary with justification for not isolating just validate_jwt/3), AC3 (Section 6 gives exact corrected moduledoc text), AC4 (Section 7 precisely specifies unit + integration regression coverage against the REAL Letflow.Oidc.TokenVerifier.Oidcc adapter, not TokenVerifierDouble, fail-first discipline, and correctly identifies test/letflow/integration/keycloak_auth_pipeline_test.exs as the home), and the auth_pipeline.ex criterion (Section 3 traces the exact existing verify_token/1 and handle_auth_error/2 clauses that already match the new reason shape unchanged, explicitly states no gap found -- confirmed independently against the real auth_pipeline.ex:245-254/156-157, no silent change proposed).\n\nAC5 (no implementation code) FAILS on two independent points, both verified by reading the actual code blocks in the .md file directly:\n1. Section 4 contains a complete, literal, copy-pasteable Elixir statement presented as the proposed implementation line: `Logger.warning(\"Letflow.Oidc.TokenVerifier.Oidcc crashed verifying a bearer token kind=#{kind} message=#{message}\")`. This is not a signature or type shape -- it is an actual executable .ex statement ELIXIR-DEV could paste verbatim into the rescue/catch clauses. WF-02 Step 1b check 2e forbids 'actual .ex/.exs code blocks -- signatures and type shapes only, not bodies', not just full function bodies -- a single real statement still qualifies.\n2. Section 5 goes beyond the @spec/def head shown at its top (which alone would be a legitimate signature per check 2b). It additionally renders a full `def ... rescue ... catch ... end` skeleton in real Elixir syntax with real clause patterns (`exception ->`, `kind, reason ->`), i.e. it dictates the function's control-flow/clause structure using actual code syntax rather than prose. CODE-DESIGNER's own footnote ('Shown here only to pin down clause placement/shape for ELIXIR-DEV -- not implementation code') concedes exactly the ambiguity this gate exists to catch; substituting comments for expressions inside real def/rescue/catch/end syntax produces a body skeleton, not a signature -- Section 2's prose already conveys the identical clause-placement information without any code block, making Section 5's fenced skeleton redundant as well as out of bounds. (Section 3's fenced code block, by contrast, is an unmodified quote of auth_pipeline.ex's existing code offered as evidence that no change is needed there -- that is not proposed new implementation and does not itself violate check 2e.)\n\nPer WF-02 Step 1b's explicit 'FAIL immediately on any single failed check -- no partial credit,' this design gate FAILs on AC5 alone despite the other five criteria being met.",
     "artifacts_out": [],
-    "issues": [],
-    "next_action": ""
+    "issues": [
+      "Section 4: remove the literal `Logger.warning(\"...\")` code block; replace with prose specifying the exact log message format/fields (kind, message) without presenting it as a pasteable statement.",
+      "Section 5: remove the `def ... rescue ... catch ... end` code-fenced skeleton entirely; keep only the @spec/def-head signature (already sufficient per AC1/AC2), and if clause-placement detail beyond Section 2's existing prose is still felt necessary, state it in prose, not in a fenced block using real rescue/catch/end syntax."
+    ],
+    "next_action": "Rework CODE-DESIGNER: fix the two named AC5 gaps (Section 4 log-statement code block, Section 5 rescue/catch code-fenced skeleton) without altering the substance already correctly specified elsewhere (rescue/catch boundary scope, error-tuple shape, moduledoc correction, test guidance), then resubmit to CODE-DESIGN-VALIDATOR."
   },
   "rework_count": 0,
   "max_rework": 3

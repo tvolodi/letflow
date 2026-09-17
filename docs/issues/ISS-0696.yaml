@@ -77,3 +77,17 @@ pipeline_log:
       not an anti-pattern for one justified instance). Diff scope matches
       design exactly, nothing extra/missing. No conflict with any
       docs/migration/decisions/ record.
+  - step: TEST-DESIGNER
+    at: "2026-09-17T07:41:00Z"
+    result: >
+      No new test warranted -- existing 22 tests in ExamSessionPage.test.tsx
+      are sufficient. Empirically verified rather than deferred to the
+      design doc: attempted a more targeted deterministic regression test,
+      ran it 10x against the pre-fix implementation (ade5fc0e^) in
+      isolation -- passed 10/10 against the buggy code too, proving zero
+      discriminating power (the race is a full-suite worker-scheduling
+      artifact external to any single spec file's control flow, matching
+      the original ISS-0696 finding). Reverted the scratch test; working
+      tree clean, nothing committed. True regression guard is FRONTEND-DEV's
+      10-consecutive-full-suite-run verification (586/586, 0 flakes),
+      which operates at the level where this race is actually observable.

@@ -1,0 +1,43 @@
+{
+  "handoff_id": "wf02-req367-step01b-regate",
+  "run_id": "WF02-REQ367-20260917",
+  "workflow_id": "WF-02",
+  "step": "01b-regate",
+  "from_agent": "ORCH",
+  "to_agent": "CODE-DESIGN-VALIDATOR",
+  "file": "handoffs/WF02-REQ367-20260917/step-01b-code-design-validator-regate.json",
+  "created_at": "2026-09-17T17:05:00Z",
+  "started_at": "2026-09-17T17:05:00Z",
+  "completed_at": null,
+  "status": "PENDING",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S7",
+    "requirement_ids": ["REQ-367"],
+    "requirement_text": {
+      "REQ-367": "See handoffs/WF02-REQ367-20260917/step-00-git-setup.json's context.requirement_text for the full verbatim requirement description."
+    },
+    "artifacts_in": [
+      "lib/letflow/design/req367-cd-qa-deploy.md",
+      "handoffs/WF02-REQ367-20260917/step-01-code-designer.json",
+      "handoffs/WF02-REQ367-20260917/step-01b-code-design-validator.json"
+    ],
+    "owned_modules": [
+      "deploy/redeploy-qa.sh",
+      ".github/workflows/cd.yml"
+    ],
+    "branch_name": "feature/WF02-REQ367-20260917"
+  },
+  "task": {
+    "description": "WF-02 Step 1b REGATE (rework iteration 1) -- re-review lib/letflow/design/req367-cd-qa-deploy.md after CODE-DESIGNER's rework, per handoffs/WF02-REQ367-20260917/step-01b-code-design-validator.json's prior FAIL verdict (checks b/c/f: literal bash/YAML in §1/§2). CODE-DESIGNER claims §1/§2 were rewritten to prose-only, §0/§3-§7 left unchanged (commit c8918c8c). Claim this handoff (status IN_PROGRESS). Read the CURRENT lib/letflow/design/req367-cd-qa-deploy.md directly and specifically re-check the three previously-failed items: (b) deploy/redeploy-qa.sh procedure -- confirm no standalone real bash command lines remain in §1; (c) cd.yml mechanism -- confirm no literal YAML key:value blocks remain in §2; (f) no implementation code overall in the NEW sections. Also spot-check that §0/§3-§7 (already-passed) were not damaged by the edit and that §6's acceptance-criteria mapping still holds against the reworded §1/§2. Do NOT re-run the full checklist from scratch as fresh work -- this is a targeted regate on the specific FAIL reasons plus a no-regression spot-check, per WF-02's rework rules. FAIL again only if the SAME issue recurs or a new one is introduced by the edit. Complete the handoff: PASS -> next_action 'Route to ELIXIR-DEV (Step 2a)' | FAIL -> next_action 'Rework CODE-DESIGNER (iteration 2)', issues listing every failed check. Commit and push on feature/WF02-REQ367-20260917.",
+    "acceptance_criteria": [
+      "§1 (redeploy-qa.sh) contains no standalone literal bash command lines",
+      "§2 (cd.yml) contains no literal YAML key:value blocks for the two new files",
+      "No implementation code present anywhere in the NEW design sections",
+      "§0/§3-§7 (previously passed) were not damaged by the edit; AC mapping still holds"
+    ]
+  },
+  "result": null,
+  "rework_count": 1,
+  "max_rework": 3
+}

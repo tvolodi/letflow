@@ -126,3 +126,21 @@ pipeline_log: []
       genuinely untouched. No decision-record conflict. Idiom/pattern
       consistency with ISS-0706 holds -- same mechanism, same
       correctly-not-silently-absorbed behavioral nuance, no scope creep.
+  - step: TEST-DESIGNER
+    at: "2026-09-17T12:15:00Z"
+    result: >
+      Coverage extended at commit 5f04ad2e. Judged ISS-0706's existing
+      TC-1..TC-4 (helper function behavior) still fully valid since
+      helpers.ts is untouched by this fix. Extended TC-5's scoped
+      grep-regression to all 19 files (10+9) rather than deferring --
+      leaving it scoped only to the original 10 would reproduce the
+      exact scope-gap that let ISS-0707's bug go undetected in the first
+      place. While extending, found and fixed a real latent bug: the old
+      import-check regex only matched './helpers', which happened to
+      work for ISS-0706's top-level files but would have silently
+      false-positived forever on ISS-0707's one-directory-deeper files
+      (correctly '../helpers'). Spot-checked all 9 modified files'
+      diffs, no copy-paste defects found. Fail-then-pass verified for
+      real (rolled the 9 files back to 6f1b1d15^, TC-5 correctly failed
+      reporting all 9, reverted, confirmed clean pass). npm test
+      592/592, tsc clean.

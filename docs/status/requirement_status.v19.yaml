@@ -251,3 +251,18 @@ history:
       requirement's scope and NOT fixed here: REVIEWER's Step 2d review
       flagged CLAUDE.md's roster table is still missing a BA-<VERTICAL> row
       from the earlier REQ-359 — left for a separate follow-up.
+
+  - req: REQ-367
+    event: started
+    agent: ORCH
+    at: "2026-09-17T14:35:03Z"
+    note: >
+      WF-02 run WF02-REQ367-20260917 (queue task 693, GH#1450) begins.
+      CD to QA on merge -- new .github/workflows/cd.yml + new
+      deploy/redeploy-qa.sh, adapting tvolodi/letflow-queue's own proven
+      SSH-restricted-key CD pattern for qa.bizdala.com
+      (/opt/apps/letflow-qa/ on ubuntu-16gb-nbg1-1). Credentials
+      (SSH key provisioning, GitHub Actions secrets) explicitly out of
+      scope -- companion ai-dala-infra task, per T-0111's precedent. Step
+      00 (git setup) PASS: branch feature/WF02-REQ367-20260917 created and
+      pushed by ELIXIR-DEV.

@@ -207,3 +207,47 @@ history:
       the now-closed predecessor, per this volume's own "never moves,
       edits or deletes an existing entry" rule for the closed volume and
       "append one entry per event" for the current one.
+
+  - req: REQ-361
+    event: started
+    agent: ORCH
+    at: "2026-09-17T14:07:16Z"
+    note: >
+      WF-02 run WF02-REQ361-20260917 (queue task 684, GH#1434) begins.
+      Defines a PRODUCT-OWNER-equivalent agent role for final release
+      sign-off, adapting R-Co's PRODUCT_OWNER.md. Depends on REQ-358 and
+      REQ-359, both status: done. Step 00 (git setup) PASS: branch
+      feature/WF02-REQ361-20260917 created and pushed by ELIXIR-DEV.
+
+  - req: REQ-361
+    event: done
+    agent: DOC-UPDATER
+    at: "2026-09-17T14:20:01Z"
+    note: >
+      WF-02 run WF02-REQ361-20260917 (queue task 684, GH#1434) complete,
+      RELEASE-VALIDATOR PASS. Shipped: new .claude/agents/product-owner.md
+      role file defining PRODUCT-OWNER (final release sign-off, "should we
+      ship?" vs. RELEASE-VALIDATOR's "is it safe to ship?"); reads every
+      BA-<VERTICAL> sign-off for a UAT run, enforces the single-BLOCKER-
+      blocks-release rule, cross-checks MUST-severity acceptance-criteria
+      coverage against docs/requirements.yaml, arbitrates cross-vertical
+      disagreements (routing to REQ-ANALYST if the underlying requirement
+      is ambiguous), writes a plain-language release recommendation.
+      docs/agents/AGENT_SYSTEM.md's roster table and capability matrix
+      gained a PRODUCT-OWNER row; docs/agents/ORCHESTRATOR.md's routing
+      updated so a UAT run's completion routes to PRODUCT-OWNER before
+      RELEASE-VALIDATOR, never in parallel with either; WF-05_uat_run.md
+      gained a new Step 4 ("PRODUCT-OWNER release recommendation");
+      docs/migration/decisions/0004-humanless-pipeline.md's dated addendum
+      (opened by REQ-359) extended to note this PRODUCT-OWNER half of the
+      deferred BO-*/PRODUCT-OWNER layer is now also actioned; CLAUDE.md's
+      roster table gained the PRODUCT-OWNER row. AC5 (real exercise of the
+      role, not just a definition) satisfied by
+      test/uat-reports/po-signoff-WF02-REQ359-20260916.yaml,
+      release_recommendation: BLOCKED, derived from the bilimbaga BA
+      sign-off's one BLOCKER finding — the role's first real invocation.
+      README.md checked: it does not itself enumerate the agent roster, so
+      no change needed there. Known pre-existing gap, correctly out of this
+      requirement's scope and NOT fixed here: REVIEWER's Step 2d review
+      flagged CLAUDE.md's roster table is still missing a BA-<VERTICAL> row
+      from the earlier REQ-359 — left for a separate follow-up.

@@ -1,0 +1,68 @@
+report_id: po-signoff-WF02-REQ359-20260916
+run_id: WF02-REQ359-20260916
+generated_at: "2026-09-17T00:00:00Z"
+scope: >
+  REQ-359 (define the BA-<VERTICAL> agent role) UAT run, first real
+  exercise of the PRODUCT-OWNER role per REQ-361 acceptance criterion 5.
+  Inputs read: test/uat-reports/uat-2026-09-16-WF02-REQ359-20260916.yaml
+  and test/uat-reports/ba-signoff-bilimbaga-WF02-REQ359-20260916.yaml.
+
+ba_verdicts:
+  bilimbaga: FAIL
+
+criteria_coverage:
+  must_criteria_this_batch: 5
+  covered_by_passing_scenario: 0
+  uncovered:
+    - requirement_id: REQ-359
+      criterion: >
+        at least one real BA persona is instantiated for an actual
+        existing tenant vertical (the BilimBaga solution pack is the
+        obvious first candidate, per REQ-041/078) and authors one real
+        UAT scenario for it, exercised for real via UAT-RUNNER against
+        QA, with the result quoted -- a role definition with zero real
+        usage is not sufficient to close this requirement
+
+cross_vertical_findings: []
+# Only one BA persona (bilimbaga) has produced a sign-off for this
+# run_id -- there is no second vertical to disagree with, so no
+# cross-vertical arbitration applies here. This is stated plainly per
+# instruction rather than fabricating a disagreement.
+
+blocker_overrides: []
+# No override is recorded. The BLOCKER below is a genuine environment
+# gap, not a judgment call to wave through.
+
+release_recommendation: BLOCKED
+release_rationale: >
+  This vertical's candidate exam experience could not be shown to work
+  this run, because the environment it was checked against was never
+  set up for it -- there was no exam program, no active exam, and no
+  candidate account to sign in with, so nobody could actually watch a
+  candidate take an exam from start to finish. That is a gap in how the
+  environment was prepared, not a sign that anything is broken. Until a
+  properly seeded environment lets someone walk through the exam
+  experience end to end and it is confirmed to work, this cannot be
+  recommended for release.
+
+issues:
+  - id: PO-001
+    severity: BLOCKER
+    description: >
+      The one business reviewer for this vertical could not observe any
+      part of the candidate exam experience -- no exam program, no
+      active exam, and no candidate account existed on the environment
+      used for this check. Until that environment is properly prepared,
+      nobody can confirm the exam-taking experience behaves the way
+      candidates need it to.
+    suggested_action: route_to_uat_runner
+  - id: PO-002
+    severity: MINOR
+    description: >
+      Four of this requirement's five acceptance points describe
+      documents and role definitions rather than something a business
+      scenario can exercise, so they fall outside what this review of
+      scenario results can confirm one way or the other; only the point
+      about actually trying the exam experience end to end falls within
+      what this review checks, and it is the one blocking release above.
+    suggested_action: none

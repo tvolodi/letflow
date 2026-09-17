@@ -1,0 +1,42 @@
+{
+  "handoff_id": "wf02-req367-step03",
+  "run_id": "WF02-REQ367-20260917",
+  "workflow_id": "WF-02",
+  "step": "03",
+  "from_agent": "ORCH",
+  "to_agent": "TEST-DESIGNER",
+  "file": "handoffs/WF02-REQ367-20260917/step-03-test-designer.json",
+  "created_at": "2026-09-17T20:15:00Z",
+  "started_at": "2026-09-17T20:15:00Z",
+  "completed_at": null,
+  "status": "PENDING",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S7",
+    "requirement_ids": ["REQ-367"],
+    "requirement_text": {
+      "REQ-367": "See handoffs/WF02-REQ367-20260917/step-00-git-setup.json's context.requirement_text for the full verbatim requirement description."
+    },
+    "artifacts_in": [
+      "deploy/redeploy-qa.sh",
+      ".github/workflows/cd.yml",
+      ".github/workflows/ci.yml"
+    ],
+    "owned_modules": [
+      "deploy/redeploy-qa.sh",
+      ".github/workflows/cd.yml",
+      ".github/workflows/ci.yml"
+    ],
+    "branch_name": "feature/WF02-REQ367-20260917"
+  },
+  "task": {
+    "description": "WF-02 Step 3 -- Test design scope test for REQ-367 (CD to QA deploy infra). Claim this handoff (status IN_PROGRESS). Apply WF-02 Step 3's scope test per docs/agents/workflows/WF-02_requirement_implementation.md: does Step 2a's artifacts_out contain application-executable surface an ExUnit/StreamData test could plausibly exercise? deploy/redeploy-qa.sh and .github/workflows/cd.yml are new shell/YAML infrastructure with no Elixir application logic; the additive change to .github/workflows/ci.yml is also pure YAML. None of these are 'nothing to unit-test' by file-extension coincidence (like mix.exs) -- they are genuinely deploy-time infra with no runtime Elixir behavior for ExUnit to exercise, and this project's test suite does not (and per this run's own scope should not) spin up a real SSH target / GitHub Actions runner to exercise a workflow_run trigger end-to-end. This matches the scope test's 'no application-executable surface' branch. HOWEVER: before concluding this, verify explicitly (don't just assert) that the acceptance-criteria demonstrations already exist as quoted real command output from Step 2a (bash -n syntax check, YAML parse checks, git diff confirmations) -- read handoffs/WF02-REQ367-20260917/step-02a-elixir-dev.json's result to confirm these were actually run and quoted, since RELEASE-VALIDATOR will rely on that evidence instead of a test run. If any acceptance criterion has no such quoted demonstration, note it as a gap for RELEASE-VALIDATOR to close, rather than silently assuming it's fine. Complete the handoff: status PASS, summary stating the scope-test conclusion and listing exactly which quoted command-output demonstrations exist for which acceptance criteria, next_action 'Route directly to RELEASE-VALIDATOR (Step 5) -- Steps 3b/4 skipped, RELEASE-VALIDATOR verifies acceptance criteria by reading the artefacts directly (including the quoted command-output demonstrations from Step 2a) rather than by test result.' Commit and push on feature/WF02-REQ367-20260917.",
+    "acceptance_criteria": [
+      "Scope-test conclusion stated explicitly with reasoning, not asserted without checking",
+      "Every REQ-367 acceptance criterion's evidence source (which quoted Step 2a command output, or a gap) is listed explicitly for RELEASE-VALIDATOR to consume"
+    ]
+  },
+  "result": null,
+  "rework_count": 0,
+  "max_rework": 3
+}

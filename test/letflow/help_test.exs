@@ -329,6 +329,209 @@ defmodule Letflow.HelpTest do
       assert help.body == body
     end
 
+    # ------------------------------------------------------------------------------
+    # AC / decision 0036: the earmark_parser AST-based mechanism must close all five
+    # bypass classes SECURITY-REVIEWER/REVIEWER found against the superseded regex
+    # mechanism (`handoffs/WF02-REQ364-20260917/step-03b-security-reviewer.json`,
+    # `step-03b-security-reviewer-rework1.json`,
+    # `step-03d-reviewer-determination.json`), not just the two SECURITY-REVIEWER
+    # originally reported.
+    # ------------------------------------------------------------------------------
+
+    test "bypass 1/5 -- reference-style link definitions with a javascript: scheme are rejected" do
+      %{schema_name: schema_name} = provisioned_tenant()
+
+      body = """
+      [click here][1]
+
+      [1]: javascript:alert(document.cookie)
+      """
+
+      assert {:error, changeset} =
+               Help.create_draft(draft_attrs(%{body: body}), prefix: schema_name)
+
+      assert "must not contain javascript:/data:/vbscript: link or image URLs" in errors_on(
+               changeset
+             ).body
+    end
+
+    test "bypass 2/5 -- angle-bracket-wrapped reference-definition URLs are rejected" do
+      %{schema_name: schema_name} = provisioned_tenant()
+
+      body = """
+      [click][1]
+
+      [1]: <javascript:alert(1)>
+      """
+
+      assert {:error, changeset} =
+               Help.create_draft(draft_attrs(%{body: body}), prefix: schema_name)
+
+      assert "must not contain javascript:/data:/vbscript: link or image URLs" in errors_on(
+               changeset
+             ).body
+    end
+
+    test "bypass 3/5 -- backslash-escaped scheme characters are rejected" do
+      %{schema_name: schema_name} = provisioned_tenant()
+
+      assert {:error, changeset} =
+               Help.create_draft(
+                 draft_attrs(%{body: "[x](java\\script:alert(1))"}),
+                 prefix: schema_name
+               )
+
+      assert "must not contain javascript:/data:/vbscript: link or image URLs" in errors_on(
+               changeset
+             ).body
+    end
+
+    test "bypass 4/5 -- HTML numeric (decimal) character-reference-encoded scheme characters are rejected" do
+      %{schema_name: schema_name} = provisioned_tenant()
+
+      assert {:error, changeset} =
+               Help.create_draft(
+                 draft_attrs(%{body: "[x](java&#115;cript:alert(1))"}),
+                 prefix: schema_name
+               )
+
+      assert "must not contain javascript:/data:/vbscript: link or image URLs" in errors_on(
+               changeset
+             ).body
+    end
+
+    test "bypass 4/5 -- HTML numeric (hex) character-reference-encoded scheme characters are rejected" do
+      %{schema_name: schema_name} = provisioned_tenant()
+
+      assert {:error, changeset} =
+               Help.create_draft(
+                 draft_attrs(%{body: "[x](java&#x73;cript:alert(1))"}),
+                 prefix: schema_name
+               )
+
+      assert "must not contain javascript:/data:/vbscript: link or image URLs" in errors_on(
+               changeset
+             ).body
+    end
+
+    test "bypass 5/5 -- embedded whitespace inside the scheme is rejected" do
+      %{schema_name: schema_name} = provisioned_tenant()
+
+      assert {:error, changeset} =
+               Help.create_draft(
+                 draft_attrs(%{body: "[x](java script:alert(1))"}),
+                 prefix: schema_name
+               )
+
+      assert "must not contain javascript:/data:/vbscript: link or image URLs" in errors_on(
+               changeset
+             ).body
+    end
+
+    test "bypass 5/5 -- embedded control characters (tab) inside the scheme are rejected" do
+      %{schema_name: schema_name} = provisioned_tenant()
+
+      assert {:error, changeset} =
+               Help.create_draft(
+                 draft_attrs(%{body: "[x](java\tscript:alert(1))"}),
+                 prefix: schema_name
+               )
+
+      assert "must not contain javascript:/data:/vbscript: link or image URLs" in errors_on(
+               changeset
+             ).body
+    end
+
+    test "bypass 5/5 -- embedded control characters (newline) inside the scheme are rejected" do
+      %{schema_name: schema_name} = provisioned_tenant()
+
+      assert {:error, changeset} =
+               Help.create_draft(
+                 draft_attrs(%{body: "[x](java\nscript:alert(1))"}),
+                 prefix: schema_name
+               )
+
+      assert "must not contain javascript:/data:/vbscript: link or image URLs" in errors_on(
+               changeset
+             ).body
+    end
+
+    test "verified-gap fallback -- raw HTML mixed inline with surrounding text on the same line is still rejected" do
+      %{schema_name: schema_name} = provisioned_tenant()
+
+      # earmark_parser does not tag this `verbatim: true` at all (confirmed against real
+      # parser output -- it only recognizes an HTML tag construct that starts its own
+      # line); the plain-text AST-leaf fallback scan is what catches it.
+      assert {:error, changeset} =
+               Help.create_draft(
+                 draft_attrs(%{body: "before <script>alert(1)</script> after"}),
+                 prefix: schema_name
+               )
+
+      assert "must not contain raw HTML tags" in errors_on(changeset).body
+    end
+
+    test "allows a safe https:// link" do
+      %{schema_name: schema_name} = provisioned_tenant()
+
+      assert {:ok, help} =
+               Help.create_draft(
+                 draft_attrs(%{body: "[safe](https://example.test/path)"}),
+                 prefix: schema_name
+               )
+
+      assert help.body == "[safe](https://example.test/path)"
+    end
+
+    test "allows a safe image" do
+      %{schema_name: schema_name} = provisioned_tenant()
+
+      assert {:ok, help} =
+               Help.create_draft(
+                 draft_attrs(%{body: "![alt text](https://example.test/image.png)"}),
+                 prefix: schema_name
+               )
+
+      assert help.body == "![alt text](https://example.test/image.png)"
+    end
+
+    test "allows raw text that merely contains the word 'javascript' without being a URL scheme" do
+      %{schema_name: schema_name} = provisioned_tenant()
+
+      assert {:ok, help} =
+               Help.create_draft(
+                 draft_attrs(%{body: "I love javascript programming and data structures."}),
+                 prefix: schema_name
+               )
+
+      assert help.body == "I love javascript programming and data structures."
+    end
+
+    test "allows a fenced code block containing text that would otherwise look unsafe (raw tags and a javascript: scheme)" do
+      %{schema_name: schema_name} = provisioned_tenant()
+
+      body = """
+      Example:
+
+      ```
+      <script>alert(1)</script>
+      [x](javascript:alert(1))
+      ```
+      """
+
+      assert {:ok, help} = Help.create_draft(draft_attrs(%{body: body}), prefix: schema_name)
+      assert help.body == body
+    end
+
+    test "allows inline code content that would otherwise look unsafe" do
+      %{schema_name: schema_name} = provisioned_tenant()
+
+      body = "See `<div onclick=\"x()\">` and `javascript:alert(1)` as literal examples."
+
+      assert {:ok, help} = Help.create_draft(draft_attrs(%{body: body}), prefix: schema_name)
+      assert help.body == body
+    end
+
     test "allows the design's own markdown subset -- headings, emphasis, lists, a plain https link, and a fenced code block" do
       %{schema_name: schema_name} = provisioned_tenant()
 

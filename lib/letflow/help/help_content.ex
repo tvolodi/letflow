@@ -29,15 +29,61 @@ defmodule Letflow.Help.HelpContent do
   caller-supplied attrs (design §4.1/§4.2's own "never caller-supplied" instruction, and
   this requirement's own acceptance criteria).
 
-  ## Write-path sanitization (design §5, this requirement's own scope — not deferred)
+  ## Write-path sanitization (design §5.4, this requirement's own scope — not deferred)
 
-  `create_changeset/2` and `update_changeset/2` both run `validate_no_raw_html/2` and
-  `validate_no_unsafe_link_scheme/2` against `:title` and `:body`, rejecting the changeset
-  (`add_error/3` — never a raised exception) rather than silently stripping content. This
-  is design §5.3's option 1 (regex/pattern-based validation, no new dependency) — the
-  design's own recommended mechanism, since `mix.exs` carries no markdown/HTML-sanitization
-  library today and adding one would need REVIEWER sign-off design §5.3 does not grant
-  itself. Flagged (design OQ-4) for REVIEWER to confirm at this requirement's gate.
+  `create_changeset/2` and `update_changeset/2` both run `validate_markdown_safety/2`
+  against `:title` and `:body`, rejecting the changeset (`add_error/3` — never a raised
+  exception) rather than silently stripping content. This is design §5.4's amended,
+  AST-based mechanism: `EarmarkParser.as_ast/2` parses each field once into a CommonMark
+  AST (decision `docs/migration/decisions/0036-earmark-parser-markdown-sanitization-
+  dependency.md`), and the resulting tree is walked for raw-HTML nodes
+  (`meta[:verbatim] == true`) and for `"a"`/`"img"` destination nodes with a disallowed
+  URL scheme. This replaces the original §5.3 option 1 (regex/pattern-based validation),
+  which SECURITY-REVIEWER and REVIEWER found structurally bypassable across three rounds
+  (5 confirmed/constructed bypasses — reference-style link definitions, angle-bracket-
+  wrapped autolinks, backslash-escaped/entity-encoded/whitespace-embedded scheme
+  characters) and explicitly declined to patch further.
+
+  ### Two verified gaps in `earmark_parser`'s real behavior vs. the design's stated claims
+
+  Confirmed directly against `earmark_parser` 1.4.46 (the version this project actually
+  resolves, matching decision 0036), not assumed from the design or its own hexdocs
+  citations:
+
+  1. **Raw HTML mixed inline with surrounding text on the same line is never tagged
+     `verbatim: true` at all** — it is left as plain, unparsed text content (confirmed via
+     `earmark_parser`'s own moduledoc: "HTML is not parsed recursively or detected in all
+     conditions right now" — only a tag that starts its own line, alone or across
+     matching multi-line blocks, becomes a `%{verbatim: true}` node; e.g.
+     `"click <div onclick=\\"x()\\">here</div>"` parses to a single literal-text `"p"` child,
+     no `"div"` node at all). The design's §5.4.2 step 2 assumed *every* raw-HTML
+     construct becomes a `verbatim: true` node; that does not hold for this shape. To
+     still satisfy §5.1's actual requirement (reject *any* raw angle-bracket tag
+     construct, not only ones the parser recognizes as an HTML block) and to keep the
+     pre-existing, still-valid test `"rejects a body containing any other raw HTML tag"`
+     passing, the walk also scans each *unparsed plain-text* AST leaf for the same
+     tag-shape pattern the superseded §5.3 mechanism used — scoped only to text the
+     parser left unstructured (code-span/code-block node content is still structurally
+     excluded from this scan, so §5.2's "fenced content is literal" guarantee is
+     unaffected).
+  2. **HTML numeric character references inside link/image destinations are not decoded**
+     by `as_ast/2` (`[x](java&#115;cript:alert(1))` resolves its `href` attribute to the
+     literal, still-encoded string `"java&#115;cript:alert(1)"`), and embedded
+     whitespace/control characters inside a destination are not always stripped either
+     (`[x](java\\tscript:alert(1))` resolves to `href: "java\\tscript:alert(1)"`, tab
+     intact) — both contradict §5.4.1's "the parser already handles it correctly"
+     reasoning for those two bypass classes specifically. The scheme check below
+     decodes decimal/hex numeric character references and keeps only ASCII `a`-`z`
+     letters from the pre-colon portion of the (decoded) destination before comparing
+     against `@disallowed_url_schemes`, closing both classes without reintroducing a
+     scheme-detection regex over raw source bytes (REVIEWER's actual objection to the
+     superseded mechanism) — this operates only on the AST's own already-resolved
+     destination value, same as §5.4.2 specifies, with one extra normalization step the
+     design did not anticipate.
+
+  Both gaps, and the primary-source verification behind them, are flagged in this
+  requirement's implementation handoff for REVIEWER to confirm alongside the rest of
+  this change.
   """
 
   use Ecto.Schema
@@ -61,32 +107,24 @@ defmodule Letflow.Help.HelpContent do
   @type t :: %__MODULE__{}
   @type status :: :draft | :live
 
-  # design §5.1 -- any raw angle-bracket tag construct, opening or closing, for any
-  # tagname. Not a denylist of "known-dangerous" tags (design's own stated reasoning: a
-  # denylist is incomplete by construction and markdown's own syntax needs no raw HTML
-  # tag). Matches `<script>`, `</script>`, `<img onerror=...>`, etc. — every construct
-  # design §5.1 names explicitly is a raw-HTML-tag construct and is covered by this one
-  # pattern.
+  # design §5.4.2 step 2's fallback for the verified gap in earmark_parser's real
+  # behavior (see moduledoc): raw HTML mixed inline with surrounding text on the same
+  # line is left as unparsed plain text (no `meta[:verbatim] == true` node at all), so
+  # this pattern is used only to scan *already-unparsed plain-text AST leaves* -- never
+  # the raw source string, and never text the parser structured into a code/pre node
+  # (excluded structurally, see `walk/1`'s `"code"` clause). This is not a reintroduction
+  # of the superseded §5.3 mechanism: §5.3 scanned the *entire raw source string* for
+  # scheme/tag patterns as its *only* detection mechanism; here it is a narrow, bounded
+  # supplement to the AST walk, applied only where the parser itself declined to produce
+  # structure at all.
   @raw_html_tag_pattern ~r/<\/?[a-zA-Z][^<>]*>/
 
-  # design §5.1 -- markdown link/image URL component, checked for a disallowed scheme.
-  # Matches both `[text](url)` and `![alt](url)` -- CommonMark *inline* link/image syntax.
-  @markdown_link_pattern ~r/!?\[[^\]]*\]\(([^)]+)\)/
-
-  # design §5.1, extended per SECURITY-REVIEWER FAIL on REQ-364 (handoffs/
-  # WF02-REQ364-20260917/step-03b-security-reviewer.json): CommonMark *reference-style*
-  # links/images -- `[text][ref]` / `![alt][ref]` / the shorthand `[ref]` -- resolve their
-  # real URL from a separate link-definition line (`[ref]: url`), not from the inline usage
-  # site. The inline-only @markdown_link_pattern above never sees that URL at all, so a
-  # payload like `[click here][1]` / `[1]: javascript:alert(1)` scanned clean. Any
-  # conformant downstream markdown renderer resolves definition lines regardless of how
-  # many places reference them, so it is the definition line -- not the usage site -- that
-  # must be scanned for a disallowed scheme. Matches a line (after leading whitespace)
-  # shaped `[label]: url`, same shape CommonMark itself requires for a link reference
-  # definition.
-  @markdown_reference_link_pattern ~r/^[ \t]*\[[^\]]+\]:[ \t]*(\S+)/m
-
   @disallowed_url_schemes ~w(javascript data vbscript)
+
+  # Decimal (`&#106;`) and hex (`&#x6a;`/`&#X6A;`) numeric character references --
+  # closes the verified gap where `EarmarkParser.as_ast/2` does not decode these inside
+  # a resolved link/image destination (see moduledoc).
+  @numeric_entity_pattern ~r/&#(x[0-9a-fA-F]+|[0-9]+);/
 
   @doc """
   Structural changeset for creating a new help content draft. Does no I/O.
@@ -123,62 +161,138 @@ defmodule Letflow.Help.HelpContent do
     changeset
     |> validate_length(:screen_id, min: 1, max: 255)
     |> validate_length(:title, min: 1, max: 255)
-    |> validate_no_raw_html(:title)
-    |> validate_no_raw_html(:body)
-    |> validate_no_unsafe_link_scheme(:title)
-    |> validate_no_unsafe_link_scheme(:body)
+    |> validate_markdown_safety(:title)
+    |> validate_markdown_safety(:body)
   end
 
-  defp validate_no_raw_html(changeset, field) do
+  # design §5.4.2 -- parses the field's value once via `EarmarkParser.as_ast/2` and walks
+  # the resulting AST for both raw-HTML nodes and disallowed-scheme link/image
+  # destination nodes in the same pass ("the two checks can share one parse per field
+  # rather than needing two independent passes" -- design's own words), rather than the
+  # superseded §5.3 mechanism's two independent `validate_change/3` calls each re-scanning
+  # the raw string. Rejects (`add_error/3`), never silently strips -- same contract as
+  # §5.3, same two user-facing messages.
+  defp validate_markdown_safety(changeset, field) do
     validate_change(changeset, field, fn ^field, value ->
-      if is_binary(value) and Regex.match?(@raw_html_tag_pattern, strip_code_regions(value)) do
-        [{field, "must not contain raw HTML tags"}]
+      if is_binary(value) do
+        {:ok, ast, _messages} = EarmarkParser.as_ast(value)
+
+        ast
+        |> walk()
+        |> Enum.uniq()
+        |> Enum.map(&{field, violation_message(&1)})
       else
         []
       end
     end)
   end
 
-  defp validate_no_unsafe_link_scheme(changeset, field) do
-    validate_change(changeset, field, fn ^field, value ->
-      if is_binary(value) and contains_unsafe_link_scheme?(value) do
-        [{field, "must not contain javascript:/data:/vbscript: link or image URLs"}]
-      else
+  defp violation_message(:raw_html), do: "must not contain raw HTML tags"
+
+  defp violation_message(:unsafe_scheme),
+    do: "must not contain javascript:/data:/vbscript: link or image URLs"
+
+  # design §5.4.2 steps 2-3, plus the two verified-gap supplements documented in this
+  # module's moduledoc. Every `earmark_parser` AST node is a uniform 4-tuple
+  # `{tag, attrs, children, meta}`; plain text leaves are bare binaries.
+  defp walk(nodes) when is_list(nodes), do: Enum.flat_map(nodes, &walk/1)
+
+  defp walk({tag, attrs, children, meta}) do
+    raw_html_violation = if raw_html_node?(tag, meta), do: [:raw_html], else: []
+    scheme_violation = destination_violation(tag, attrs)
+
+    # design §5.4.2 step 4: fenced/inline code node content is never visited by either
+    # check -- `"code"` nodes (both standalone inline and nested inside `"pre"` for
+    # fenced blocks) are excluded from recursion entirely, which is what makes §5.2's
+    # "fenced-block content is literal" guarantee hold for both the AST-structural check
+    # and this module's plain-text fallback scan alike.
+    nested = if tag == "code", do: [], else: walk(children)
+
+    raw_html_violation ++ scheme_violation ++ nested
+  end
+
+  # Plain, unparsed text leaf -- design §5.4.2 assumed all raw HTML becomes a
+  # `verbatim: true` node; verified against real `earmark_parser` output that inline raw
+  # HTML mixed with surrounding text on the same line does not (see moduledoc's "verified
+  # gaps" section). This is the fallback that still satisfies design §5.1's "reject any
+  # raw angle-bracket tag construct" requirement for that shape.
+  defp walk(text) when is_binary(text) do
+    if Regex.match?(@raw_html_tag_pattern, text), do: [:raw_html], else: []
+  end
+
+  defp walk(_other), do: []
+
+  # `meta[:verbatim] == true` per design §5.4.2 step 2. HTML comment nodes
+  # (`{:comment, [], [...], %{comment: true}}`) are also raw, non-markdown-subset content
+  # per design §5.2 ("no raw HTML of any kind"), so `meta[:comment] == true` is treated
+  # the same way.
+  defp raw_html_node?(_tag, meta), do: meta[:verbatim] == true or meta[:comment] == true
+
+  # design §5.4.2 step 3 -- unconditional on `meta[:verbatim]`, since a markdown-syntax
+  # `[text](url)` link (`meta == %{}`) is only ever visited here, never by the raw-HTML
+  # check above.
+  defp destination_violation("a", attrs), do: scheme_violation_for(attrs, "href")
+  defp destination_violation("img", attrs), do: scheme_violation_for(attrs, "src")
+  defp destination_violation(_tag, _attrs), do: []
+
+  defp scheme_violation_for(attrs, attr_name) do
+    case List.keyfind(attrs, attr_name, 0) do
+      {^attr_name, destination} when is_binary(destination) ->
+        if unsafe_scheme?(destination), do: [:unsafe_scheme], else: []
+
+      _ ->
         []
-      end
-    end)
-  end
-
-  defp contains_unsafe_link_scheme?(value) do
-    stripped = strip_code_regions(value)
-
-    urls_unsafe?(@markdown_link_pattern, stripped) or
-      urls_unsafe?(@markdown_reference_link_pattern, stripped)
-  end
-
-  defp urls_unsafe?(pattern, stripped) do
-    pattern
-    |> Regex.scan(stripped, capture: :all_but_first)
-    |> Enum.any?(fn [url] -> unsafe_scheme?(url) end)
-  end
-
-  defp unsafe_scheme?(url) do
-    case String.split(url, ":", parts: 2) do
-      [scheme, _rest] -> String.downcase(String.trim(scheme)) in @disallowed_url_schemes
-      _ -> false
     end
   end
 
-  # design §5.2 -- "fenced-block content is treated as literal text, never re-parsed for
-  # further markdown or HTML." Blanks out fenced (``` ... ```) and inline (`...`) code
-  # spans before either raw-HTML-tag or link-scheme scanning runs, so a legitimate code
-  # example containing literal angle brackets (e.g. documenting HTML syntax, or a
-  # generic-type example like `Vector<Int>`) is not rejected as if it were live markup.
-  # Blanking (not deleting) preserves the surrounding text's byte offsets, though no
-  # caller here depends on that -- it is simply the simplest correct transform.
-  defp strip_code_regions(value) do
-    value
-    |> String.replace(~r/```.*?```/s, "")
-    |> String.replace(~r/`[^`\n]*`/, "")
+  defp unsafe_scheme?(destination) do
+    destination
+    |> decode_numeric_entities()
+    |> scheme_letters()
+    |> then(&(&1 in @disallowed_url_schemes))
   end
+
+  # Keeps only ASCII a-z letters (after decoding numeric entities and lower-casing) from
+  # the portion of the destination before its first `:` -- closes the embedded-
+  # whitespace/control-character bypass class (verified: `as_ast/2` does not always strip
+  # these from a resolved destination, see moduledoc) without needing a separate
+  # allowlist of characters to strip; any non-letter byte in that span (whitespace,
+  # control characters, a stray `<`/`>` left over from an angle-bracket destination,
+  # etc.) is simply not a letter and is dropped.
+  defp scheme_letters(destination) do
+    case String.split(destination, ":", parts: 2) do
+      [maybe_scheme, _rest] ->
+        maybe_scheme
+        |> String.downcase()
+        |> String.to_charlist()
+        |> Enum.filter(&(&1 in ?a..?z))
+        |> List.to_string()
+
+      _ ->
+        ""
+    end
+  end
+
+  defp decode_numeric_entities(string) do
+    Regex.replace(@numeric_entity_pattern, string, fn _whole, code -> decode_entity_code(code) end)
+  end
+
+  defp decode_entity_code(<<x, rest::binary>>) when x in [?x, ?X],
+    do: codepoint_to_binary(rest, 16)
+
+  defp decode_entity_code(decimal), do: codepoint_to_binary(decimal, 10)
+
+  defp codepoint_to_binary(digits, base) do
+    case Integer.parse(digits, base) do
+      {codepoint, ""} -> safe_codepoint(codepoint)
+      _ -> ""
+    end
+  end
+
+  # Valid Unicode scalar values only (excludes the surrogate range) -- an out-of-range or
+  # surrogate reference decodes to nothing rather than raising, since a malformed entity
+  # is not this validator's concern beyond not crashing on it.
+  defp safe_codepoint(cp) when cp in 0..0xD7FF, do: <<cp::utf8>>
+  defp safe_codepoint(cp) when cp in 0xE000..0x10FFFF, do: <<cp::utf8>>
+  defp safe_codepoint(_cp), do: ""
 end

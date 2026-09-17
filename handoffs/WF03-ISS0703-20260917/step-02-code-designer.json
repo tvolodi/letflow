@@ -8,8 +8,8 @@
   "file": "handoffs/WF03-ISS0703-20260917/step-02-code-designer.json",
   "created_at": "2026-09-17T07:25:20Z",
   "started_at": "2026-09-17T07:25:20Z",
-  "completed_at": null,
-  "status": "PENDING",
+  "completed_at": "2026-09-17T07:26:42Z",
+  "status": "COMPLETED",
   "priority": "NORMAL",
   "context": {
     "stage": null,
@@ -37,10 +37,10 @@
   },
   "result": {
     "status": "PASS",
-    "summary": "",
-    "artifacts_out": [],
+    "summary": "Designed the fix for ISS-0703 at lib/letflow/design/iss0703-oidc-verifier-exception-handling.md. Rescue/catch boundary wraps the entire body of Letflow.Oidc.TokenVerifier.Oidcc.verify_bearer_token/2 (both Oidcc.ClientContext.from_configuration_worker/4 and Oidcc.Token.validate_jwt/3, since both cross into the oidcc dependency and neither has a documented raise-free guarantee -- one boundary covers both rather than isolating just validate_jwt/3), using this codebase's existing function-clause try/rescue sugar precedent (Letflow.Api.Authorization.safe_to_existing_atom/1, authorization.ex:250-254) rather than a nested try-do block. Both `rescue exception` (kind :error, covers the confirmed live CaseClauseError) and `catch kind, reason` (kind :exit/:throw) are specified, since rescue alone only covers raised exceptions, not throw/exit, and the moduledoc's 'never raises' contract is read broadly (no abnormal exit escapes). Exact error shape: {:error, {:verifier_crashed, %{kind: :error | :exit | :throw, message: String.t()}}} -- message is Exception.message/1 for the rescue branch, inspect/1 of the caught reason for catch; raw_token is never included (never logged, never returned). Logging: Logger.warning/1 inside the boundary before returning, mirroring AuthPipeline.handle_auth_error/2's existing Logger.error/1 precedent on its :provision branch. Verified no change is needed to auth_pipeline.ex: verify_token/1's existing `{:error, reason} -> {:error, {:verify, reason}}` and handle_auth_error/2's existing `{:error, {:verify, _reason}} -> reject(conn, 401, ...)` clauses already match the new {:verifier_crashed, %{...}} reason unchanged -- explicitly stated in the design as no gap found (AC6). Moduledoc correction specified verbatim, replacing the false 'never raises on a realistic failure path' sentence with accurate text naming the new guarantee and the malformed-input case. TEST-DESIGNER guidance (AC4) specifies exercising the REAL Letflow.Oidc.TokenVerifier.Oidcc adapter (not TokenVerifierDouble) at both unit level (direct call to verify_bearer_token/2 with a non-JWT-shaped raw_token, asserting the {:error, {:verifier_crashed, ...}} tuple, fail-first against pre-fix code) and integration level (through Letflow.Plugs.AuthPipeline.call/2 / test/letflow/integration/keycloak_auth_pipeline_test.exs, asserting a clean 401 Problem+JSON instead of a raw 500), both required to be shown fail-then-pass. Design contains signatures/specs/shapes and a labeled non-code clause-placement sketch only -- no .ex implementation code bodies.",
+    "artifacts_out": ["lib/letflow/design/iss0703-oidc-verifier-exception-handling.md"],
     "issues": [],
-    "next_action": ""
+    "next_action": "Route to CODE-DESIGN-VALIDATOR"
   },
   "rework_count": 0,
   "max_rework": 3

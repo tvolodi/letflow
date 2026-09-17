@@ -26792,7 +26792,7 @@ requirements:
   - id: REQ-369
     title: Distinct PlatformDashboardPage for PLATFORM_ADMIN — replaces the shared tenant-branded landing page for that role, with role-conditional login routing
     owner: FRONTEND-DEV
-    status: in_progress
+    status: blocked
     stage: S7
     impl_order: 708  # letflow-queue task id, GH#1501
     description: >
@@ -26898,3 +26898,32 @@ requirements:
       - "test/fixtures/uat/scenarios/platform/platform-login-routing-by-role.yaml's PLATFORM_ADMIN branch is updated to assert `/platform-dashboard` as the destination (not the old shared `/` root), re-run for real against QA per REQ-360's own verification discipline, with the updated pass result quoted; the scenario's other branches (tenant-scoped role, unauthenticated) are left unchanged since this requirement does not alter their behaviour"
       - "this requirement's own close-out states explicitly that ISS-0700 remains status: open (not closed by this requirement) and that the separate 'Unknown workspace' banner gap for non-PLATFORM_ADMIN unauthenticated/no-realm-slug users is unresolved and out of this requirement's scope"
     depends_on: [REQ-360]
+    close_out_note: >
+      status: blocked, NOT done — set by DOC-UPDATER (Step 6, WF02-REQ369-20260917,
+      2026-09-17). AC1-AC5 are genuinely complete and independently re-verified:
+      RELEASE-VALIDATOR's PASS-WITH-PENDING (step-05-release-validation.json) and
+      merged as PR #1507, squash commit 3c0cbd24290c062d1974b7eb91fa74adcc2c42f4.
+      AC6 (real PLATFORM_ADMIN login against live QA, screenshot evidence) and AC7
+      (UAT scenario re-run against QA) are BLOCKED — UAT-RUNNER's step-05b-uat.json
+      confirmed pre-merge that QA's live bundle does not contain this code yet
+      (grepped the served bundle for "platform-dashboard" and "Platform Overview":
+      0 matches), and QA only receives code via a merge-triggered CD deploy. After
+      merge, that CD deploy itself failed at the SSH step with "error: missing
+      server host" — the QA_DEPLOY_HOST/QA_DEPLOY_USER/QA_DEPLOY_SSH_KEY GitHub
+      secrets are not provisioned in this repo. This is a pre-existing, external gap,
+      not introduced by REQ-369: it is the same gap REQ-367's own close-out
+      documented (docs/status/requirement_status.v19.yaml, REQ-367 done-event —
+      "the companion ai-dala-infra task ... is a separate, required, not-yet-done
+      step"), tracked under ai-dala-infra's T-0111-provision-letflow-queue-cd-deploy-key.md
+      pattern. Nothing in this repo can fix it; it requires SSH key provisioning
+      plus `gh secret set` on the infra side. AC8 is satisfied by this note itself:
+      ISS-0700 (docs/issues/ISS-0700.yaml) stays status: open, NOT closed by this
+      requirement, and the separate "Unknown workspace" banner gap for
+      non-PLATFORM_ADMIN unauthenticated/no-realm-slug users remains unresolved and
+      out of this requirement's scope. REMAINING WORK for whoever picks this back
+      up: once the QA_DEPLOY_* secrets are provisioned and a merge-triggered CD
+      deploy to QA succeeds, re-dispatch UAT-RUNNER to actually execute
+      test/fixtures/uat/scenarios/platform/platform-login-routing-by-role.yaml's
+      PLATFORM_ADMIN branch against the live https://qa.bizdala.com, capture the
+      login + tenant-count + screenshot evidence for AC6, quote the updated scenario
+      pass result for AC7, then flip this requirement's status to done.

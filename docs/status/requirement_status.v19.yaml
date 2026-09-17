@@ -328,3 +328,37 @@ history:
       feature/WF02-REQ369-20260917 created off origin/main, pushed. Claimed from
       letflow-queue task 708 (GH#1501). status flipped pending -> in_progress in
       docs/requirements.yaml. Routing to CODE-DESIGNER (Step 1) next.
+
+  - req: REQ-369
+    event: blocked
+    agent: DOC-UPDATER
+    at: "2026-09-17T16:56:24Z"
+    note: >
+      WF-02 Step 6 (WF02-REQ369-20260917). AC1-5 done and merged (squash commit
+      3c0cbd24290c062d1974b7eb91fa74adcc2c42f4, PR #1507); RELEASE-VALIDATOR
+      independently re-verified them PASS-WITH-PENDING per
+      step-05-release-validation.json. AC6/AC7 (real PLATFORM_ADMIN login against
+      live QA with screenshot evidence, and the UAT scenario re-run against QA)
+      are blocked: UAT-RUNNER's step-05b-uat.json confirmed pre-merge that QA's
+      served bundle did not yet contain this branch's code (grepped for
+      "platform-dashboard" and "Platform Overview": 0 matches), so it deferred to
+      after the merge-triggered CD deploy. Post-merge, that CD deploy itself
+      failed at the SSH step ("error: missing server host") because the
+      QA_DEPLOY_HOST/QA_DEPLOY_USER/QA_DEPLOY_SSH_KEY GitHub secrets are not
+      provisioned in this repo -- a pre-existing, external gap, not a REQ-369
+      defect: the same gap REQ-367's own done-event above documented, tracked as
+      a companion ai-dala-infra task following the T-0111
+      (T-0111-provision-letflow-queue-cd-deploy-key.md) pattern. Nothing in this
+      repo can resolve it; it requires SSH key provisioning plus `gh secret set`
+      on the infra side. AC8 is satisfied by this note itself: ISS-0700
+      (docs/issues/ISS-0700.yaml) stays status: open, NOT closed by this
+      requirement, and the separate "Unknown workspace" banner gap for
+      non-PLATFORM_ADMIN unauthenticated/no-realm-slug users remains unresolved
+      and explicitly out of this requirement's scope. docs/requirements.yaml's
+      REQ-369 entry flipped in_progress -> blocked (not done) and gained a
+      close_out_note field recording all of the above plus the remaining-work
+      pointer (re-dispatch UAT-RUNNER once QA_DEPLOY_* secrets land and a
+      merge-triggered CD deploy succeeds, then flip to done). README.md checked
+      (grepped for platform-dashboard/PlatformDashboard/role-conditional --
+      no hits): it does not document per-role dashboard routing at all, so no
+      update needed.

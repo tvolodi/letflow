@@ -25,7 +25,7 @@ import {
   loginWithToken,
   navigateSpa,
 } from '../pipeline'
-import { BPM_IDP_BASE_URL } from '../helpers'
+import { assertServiceReadiness } from '../helpers'
 
 // Env-var injection — allows UAT-RUNNER to drive the test with a canonical slug.
 // When absent: falls back to random generation (existing behaviour).
@@ -38,7 +38,6 @@ const INJECTED_ADMIN_DISPLAY: string | undefined  = process.env.ONBOARDING_PIPEL
 test.setTimeout(300_000)
 
 const API_BASE_URL       = process.env.BPM_TEST_URL     ?? 'http://127.0.0.1:8080'
-const KEYCLOAK_DISCOVERY = `${BPM_IDP_BASE_URL}/realms/bpm-default/.well-known/openid-configuration`
 
 interface OnboardingWizardState {
   adminToken:   string
@@ -51,20 +50,7 @@ test.describe('Pipeline: onboarding-wizard', () => {
   test('ONB-UI-01..04: PLATFORM_ADMIN registers a tenant end-to-end', async ({ page, request }) => {
 
     // ── Pre-checks ────────────────────────────────────────────────────────────
-    const backendResp = await request.fetch(`${API_BASE_URL}/health/ready`).catch(() => null)
-    if (!backendResp?.ok()) {
-      throw new Error(
-        `Backend not ready at ${API_BASE_URL}/health/ready. ` +
-        'Ensure docker-compose services are running before executing pipeline tests.'
-      )
-    }
-    const idpResp = await request.fetch(KEYCLOAK_DISCOVERY).catch(() => null)
-    if (!idpResp?.ok()) {
-      throw new Error(
-        `Keycloak not ready at ${KEYCLOAK_DISCOVERY}. ` +
-        'Ensure docker-compose keycloak service is running before executing pipeline tests.'
-      )
-    }
+    await assertServiceReadiness(request, API_BASE_URL)
 
     const adminToken = await getKeycloakToken(request)
     await loginWithToken(page, adminToken)

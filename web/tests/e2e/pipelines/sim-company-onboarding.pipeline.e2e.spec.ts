@@ -35,10 +35,9 @@ import {
   authHeaders,
   shot,
 } from '../pipeline'
-import { BPM_IDP_BASE_URL } from '../helpers'
+import { assertServiceReadiness } from '../helpers'
 
 const API_BASE_URL        = process.env.BPM_TEST_URL      ?? 'http://127.0.0.1:8080'
-const KEYCLOAK_DISCOVERY  = `${BPM_IDP_BASE_URL}/realms/bpm-default/.well-known/openid-configuration`
 
 // ── Fixture data (mirrors swiftroute org_structure.yaml) ──────────────────────
 const COMPANY_NAME = 'SwiftRoute Ltd'
@@ -57,10 +56,7 @@ test.describe('Pipeline: sim-company-onboarding (SwiftRoute)', () => {
   test('company setup: users → groups → roles → verify', async ({ page, request }) => {
 
     // ── Pre-checks ────────────────────────────────────────────────────────────
-    const backendOk = await request.fetch(`${API_BASE_URL}/health/ready`)
-    if (!backendOk.ok()) throw new Error(`Backend not ready: ${backendOk.status()}`)
-    const idpOk = await request.fetch(KEYCLOAK_DISCOVERY)
-    if (!idpOk.ok()) throw new Error(`Keycloak not ready: ${idpOk.status()}`)
+    await assertServiceReadiness(request, API_BASE_URL)
 
     const adminToken = await getKeycloakToken(request)
     await loginWithToken(page, adminToken)

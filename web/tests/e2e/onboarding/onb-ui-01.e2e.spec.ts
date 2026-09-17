@@ -16,36 +16,16 @@ import {
   loginWithToken,
   navigateSpa,
 } from '../pipeline'
-import { BPM_IDP_BASE_URL } from '../helpers'
+import { assertServiceReadiness } from '../helpers'
 
 const API_BASE_URL       = process.env.BPM_TEST_URL     ?? 'http://127.0.0.1:8080'
-const KEYCLOAK_DISCOVERY = `${BPM_IDP_BASE_URL}/realms/bpm-default/.well-known/openid-configuration`
-
-// ── Pre-flight ────────────────────────────────────────────────────────────────
-
-async function assertServicesReady(request: Parameters<typeof getKeycloakToken>[0]) {
-  const backend = await request.fetch(`${API_BASE_URL}/health/ready`).catch(() => null)
-  if (!backend?.ok()) {
-    throw new Error(
-      `Backend not ready at ${API_BASE_URL}/health/ready. ` +
-      'Ensure docker-compose services are running before executing these tests.'
-    )
-  }
-  const idp = await request.fetch(KEYCLOAK_DISCOVERY).catch(() => null)
-  if (!idp?.ok()) {
-    throw new Error(
-      `Keycloak not ready at ${KEYCLOAK_DISCOVERY}. ` +
-      'Ensure docker-compose keycloak service is running before executing these tests.'
-    )
-  }
-}
 
 // ── Tests ─────────────────────────────────────────────────────────────────────
 
 test.describe('ONB-UI-01 — Register Tenant entry point', () => {
 
   test('PLATFORM_ADMIN sees "Register Tenant" nav entry in the sidebar', async ({ page, request }) => {
-    await assertServicesReady(request)
+    await assertServiceReadiness(request, API_BASE_URL)
 
     const token = await getKeycloakToken(request)
     await loginWithToken(page, token)
@@ -74,7 +54,7 @@ test.describe('ONB-UI-01 — Register Tenant entry point', () => {
   })
 
   test('TASK_WORKER user does NOT see "Register Tenant" in the sidebar (absent from DOM)', async ({ page, request }) => {
-    await assertServicesReady(request)
+    await assertServiceReadiness(request, API_BASE_URL)
 
     // Use TASK_WORKER credentials — must not have PLATFORM_ADMIN role
     const token = await getKeycloakToken(request, 'worker-user', 'worker-pass')

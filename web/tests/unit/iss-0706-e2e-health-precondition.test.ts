@@ -16,23 +16,28 @@
  *   short-circuits (propagating the backend's own error, never reaching the
  *   Keycloak check) if that throws; checks Keycloak discovery second and
  *   throws with its own message if that's unreachable.
- * TC-5: none of the 10 files this fix touched contain a local, hardcoded
- *   `/health/ready` precondition against the Letflow backend any more — all
- *   import the shared helper instead. Scoped to exactly the 10 files ISS-0706
- *   claims to have fixed (not repo-wide): a broader recurrence of this exact
- *   bug class in other e2e files, outside ISS-0706's own stated scope, was
- *   found during this coverage assessment and is tracked separately as
- *   ISS-0707 (docs/issues/ISS-0707.yaml) — conflating that into this file's
- *   assertion would make an unrelated, already-filed gap look like a failure
- *   of this fix.
+ * TC-5: none of the 19 files fixed by ISS-0706 (10 files, commit a6b5e5ac)
+ *   or ISS-0707 (9 more files ISS-0706's own grep missed — flat
+ *   `web/tests/e2e/*.ts` only, not recursive into subdirectories — commit
+ *   6f1b1d15) contain a local, hardcoded `/health/ready` precondition
+ *   against the Letflow backend any more — all import the shared helper
+ *   instead. Originally scoped to exactly ISS-0706's 10 files; extended
+ *   during ISS-0707's own coverage assessment to also cover its 9 files
+ *   (onboarding/, admin/, pipelines/ subdirectories) so a future regression
+ *   reintroducing a local duplicate in any of these 19 is caught here too,
+ *   not just in the 10 ISS-0706 originally fixed.
  *
- * Pre-fix / post-fix proof (see test/specs/ISS-0706.md for the full record):
- *   - Against a6b5e5ac^ (pre-fix): helpers.ts exports neither
+ * Pre-fix / post-fix proof (see test/specs/ISS-0706.md and
+ * test/specs/ISS-0707.md for the full record):
+ *   - Against a6b5e5ac^ (pre-fix, ISS-0706): helpers.ts exports neither
  *     assertBackendHealthy nor assertServiceReadiness at all (TC-1..TC-4 fail
  *     to even import them) and TC-5 fails — none of the 10 files import a
  *     shared helper; each still has its own local /health/ready-based
  *     function.
- *   - Against a6b5e5ac (post-fix, this branch's tip): all pass.
+ *   - Against a6b5e5ac (post-fix ISS-0706 / pre-fix ISS-0707): TC-1..TC-4
+ *     pass; TC-5 fails on the 9 ISS-0707 files (still importing
+ *     BPM_IDP_BASE_URL and hardcoding their own /health/ready check).
+ *   - Against 6f1b1d15 (post-fix ISS-0707, this branch's tip): all pass.
  */
 
 import { describe, it, expect, vi } from 'vitest'
@@ -45,7 +50,7 @@ const E2E_DIR = join(__dirname, '..', 'e2e')
 // The exact 10 files ISS-0706's own commit (a6b5e5ac) claims to have fixed —
 // see that commit's message. sh05-06.shell.e2e.spec.ts is deliberately
 // excluded: it was already fixed under ISS-0532 and untouched here.
-const FIXED_FILES = [
+const ISS_0706_FIXED_FILES = [
   'env04.e2e.spec.ts',
   'f5-admin-observability.e2e.spec.ts',
   'f6-webhooks.e2e.spec.ts',
@@ -57,6 +62,27 @@ const FIXED_FILES = [
   'iss-0063-oidc-redirect-loop.e2e.spec.ts',
   'uat-tenant-url.e2e.spec.ts',
 ]
+
+// The exact 9 additional files ISS-0707's own commit (6f1b1d15) claims to
+// have fixed — see that commit's message. Paths are relative to E2E_DIR (they
+// live in subdirectories — this is precisely the recursion gap ISS-0706's
+// own flat `web/tests/e2e/*.ts` grep missed and ISS-0707 exists to close).
+// platform-login-routing-by-role.pipeline.e2e.spec.ts is deliberately
+// excluded: its own /health/ready poll only console.warns (non-blocking),
+// not the same bug — see docs/issues/ISS-0707.yaml.
+const ISS_0707_FIXED_FILES = [
+  'onboarding/onb-ui-01.e2e.spec.ts',
+  'onboarding/onb-ui-02.e2e.spec.ts',
+  'onboarding/onb-ui-03.e2e.spec.ts',
+  'onboarding/onb-ui-04.e2e.spec.ts',
+  'admin/services.e2e.spec.ts',
+  'pipelines/onboarding-wizard.pipeline.e2e.spec.ts',
+  'pipelines/sim-admin-processes.pipeline.e2e.spec.ts',
+  'pipelines/admin-user-lifecycle.pipeline.e2e.spec.ts',
+  'pipelines/sim-company-onboarding.pipeline.e2e.spec.ts',
+]
+
+const FIXED_FILES = [...ISS_0706_FIXED_FILES, ...ISS_0707_FIXED_FILES]
 
 /** Minimal fake APIRequestContext — only the `.fetch(url)` method these two
  * helpers actually call. Casts through `unknown` since a real
@@ -135,18 +161,22 @@ describe('ISS-0706 — e2e health-precondition fix', () => {
     })
   })
 
-  describe('TC-5: none of the 10 ISS-0706-fixed files reintroduce a local /health/ready precondition', () => {
-    it('every fixed file imports assertBackendHealthy or assertServiceReadiness from ./helpers, and hardcodes no Letflow-backend /health/ready call', () => {
+  describe('TC-5: none of the 19 ISS-0706/ISS-0707-fixed files reintroduce a local /health/ready precondition', () => {
+    it('every fixed file imports assertBackendHealthy or assertServiceReadiness from helpers.ts, and hardcodes no Letflow-backend /health/ready call', () => {
       const offenders: { file: string; reason: string }[] = []
 
       for (const file of FIXED_FILES) {
         const content = readFileSync(join(E2E_DIR, file), 'utf8')
 
+        // ISS-0706's 10 files sit directly under tests/e2e/ and import
+        // from './helpers'; ISS-0707's 9 files sit one level deeper, under
+        // tests/e2e/{onboarding,admin,pipelines}/, and import from
+        // '../helpers' — both are the shared helpers.ts, so both are valid.
         const importsHelper =
-          /from '\.\/helpers'/.test(content) &&
+          /from '\.\.?\/helpers'/.test(content) &&
           (content.includes('assertBackendHealthy') || content.includes('assertServiceReadiness'))
         if (!importsHelper) {
-          offenders.push({ file, reason: 'does not import assertBackendHealthy/assertServiceReadiness from ./helpers' })
+          offenders.push({ file, reason: 'does not import assertBackendHealthy/assertServiceReadiness from helpers.ts' })
         }
 
         // A Letflow-backend health/ready call is built from the file's own

@@ -1098,3 +1098,32 @@ history:
       this closure. letflow-queue task 706 to be released status: done
       by ORCH after this step -- queue interaction explicitly out of
       scope for this DOC-UPDATER step per this run's own dispatch.
+
+  - req: SCOPE-CHANGE
+    event: done
+    agent: DOC-UPDATER
+    at: "2026-09-17T12:24:52Z"
+    note: >
+      ISS-0707 (queue task 707, GH#1490) resolved via
+      fix/WF03-ISS0707-20260917, full detail in docs/issues/ISS-0707.yaml's
+      resolution_note field. Direct, mechanical follow-up to ISS-0706: 9
+      more web/tests/e2e/**/*.ts specs under onboarding/, admin/, and
+      pipelines/ that ISS-0706's own non-recursive grep missed, sharing
+      the identical broken `GET /health/ready` precondition. Fixed by
+      routing all 9 through the already-existing shared
+      assertServiceReadiness/assertBackendHealthy helpers (commit
+      6f1b1d15), no helpers.ts change needed. CODE-DESIGN-VALIDATOR,
+      SECURITY-REVIEWER, REVIEWER all PASSed. TEST-DESIGNER extended
+      ISS-0706's own TC-5 grep-regression from 10 to all 19 files, fixing
+      a real latent regex bug found along the way (the old check only
+      matched './helpers', not these files' correct '../helpers').
+      RELEASE-VALIDATOR independently PASSed: own 6-of-9-spec run against
+      a real local backend (0/19 readiness-throw failures), independently
+      confirmed the regex-widening claim and the shared-helper import
+      across all 9 files, and confirmed Scheduler.PollerTest (the sole
+      backend failure hit along the way) is genuinely flaky/unrelated --
+      full backend suite reran alone at 4332/4332 with PollerTest passing.
+      GH#1490 closed with an evidence comment by this same DOC-UPDATER
+      step. letflow-queue task 707 to be released status: done by ORCH
+      after this step -- queue interaction explicitly out of scope for
+      this DOC-UPDATER step per this run's own dispatch.

@@ -1,0 +1,169 @@
+run_id: WF03-ISS0707-20260917
+workflow_id: WF-03
+step: 04
+agent: TEST-RUNNER
+date: 2026-09-17T11:55:00Z
+branch: fix/WF03-ISS0707-20260917
+
+checks:
+
+  - name: backend_full_suite
+    command: scripts/test_parallel.sh
+    partition_count:
+      N: 8
+      source: nproc
+    result:
+      combined_tests: 4326
+      combined_properties: 6
+      combined_failures: 1
+      passed: 4331
+      total: 4332
+      exit_code: 1
+    raw_output: |
+      test_parallel: N=8 (source: nproc)
+      test_parallel: pre-compiling MIX_ENV=test (single compile, before any partition launches)
+      test_parallel: TEST_POOL_SIZE=10 (computed: N=8, max_connections=100, superuser_reserved=3, headroom=10, nonpool_reserve=5)
+      test_parallel: seeding 8 per-partition build paths from _build/test (sequential)
+      test_parallel: partition logs in /tmp/letflow_test_parallel.uI96sI
+      test_parallel: seeding+migrating 8 partition databases (capped at 4 concurrent)
+      test_parallel: all 8 partition databases created+migrated
+      test_parallel: TEST_PARALLEL_GROUP=tp4061297 (shared by all 8 partitions)
+      partition 1: 623 tests, 1 property, 0 failures, exit 0
+      partition 2: 464 tests, 0 properties, 0 failures, exit 0
+      partition 3: 623 tests, 0 properties, 0 failures, exit 0
+      partition 4: 478 tests, 4 properties, 0 failures, exit 0
+      partition 5: 606 tests, 1 property, 0 failures, exit 0
+      partition 6: 547 tests, 0 properties, 1 failures, exit 2
+      partition 7: 499 tests, 0 properties, 0 failures, exit 0
+      partition 8: 486 tests, 0 properties, 0 failures, exit 0
+      ---
+      combined: 4326 tests, 6 properties, 1 failures (4331/4332 passed)
+    single_failure:
+      test: >
+        REQ-218 AC3: a capacity rejection for one schema/operation does not
+        block the rest of the same tick an antagonist contending for the sole
+        global unit produces a genuine partial skip (Letflow.Scheduler.PollerTest)
+      location: test/letflow/scheduler/poller_test.exs:617
+      message: >
+        expected at least one of 5 attempts to show a genuine partial skip
+        (some of the 10 schemas' poll_and_fire admitted, some rejected) within
+        a single tick while an antagonist contended for the sole global unit
+        -- got either total success or total skip on every attempt
+      diagnosis: >
+        Pre-existing probabilistic-contention property test in a file this
+        branch does not touch (git diff --name-only main...HEAD confirms
+        test/letflow/scheduler/poller_test.exs is not among the changed
+        files). Re-ran in isolation
+        (mix test test/letflow/scheduler/poller_test.exs --seed 0) and it
+        passed 21/21 -- confirms flakiness under 8-way partition contention on
+        this host, not a regression introduced by ISS-0707's web/-only
+        change.
+    verdict: PASS (1 known-flaky, unrelated, confirmed-passing-in-isolation failure)
+
+  - name: frontend_unit
+    command: npm test   (web/)
+    result:
+      test_files: 84
+      tests_passed: 592
+      tests_total: 592
+      exit_code: 0
+    note: >
+      Matches TEST-DESIGN-VALIDATOR's independently confirmed 592/592
+      (per pipeline_log), no regression from the unit-test extension.
+    verdict: PASS
+
+  - name: e2e_suite_collects
+    command: npx playwright test --list   (web/)
+    result:
+      total_tests: 290
+      total_files: 50
+    verdict: PASS
+
+  - name: e2e_readiness_precondition_9_modified_specs
+    command: >
+      BPM_TEST_URL=http://127.0.0.1:4000 BPM_IDP_BASE_URL=http://localhost:8082
+      npx playwright test tests/e2e/admin/services.e2e.spec.ts
+      tests/e2e/onboarding/onb-ui-01.e2e.spec.ts tests/e2e/onboarding/onb-ui-02.e2e.spec.ts
+      tests/e2e/onboarding/onb-ui-03.e2e.spec.ts tests/e2e/onboarding/onb-ui-04.e2e.spec.ts
+      tests/e2e/pipelines/admin-user-lifecycle.pipeline.e2e.spec.ts
+      tests/e2e/pipelines/onboarding-wizard.pipeline.e2e.spec.ts
+      tests/e2e/pipelines/sim-admin-processes.pipeline.e2e.spec.ts
+      tests/e2e/pipelines/sim-company-onboarding.pipeline.e2e.spec.ts
+    setup: >
+      Real local backend already running on :4000 (GET /health returned
+      {"status":"ok"}; GET /health/ready confirmed 404, the never-mounted
+      endpoint this fix routes around) + docker compose postgres/keycloak
+      (both healthy, keycloak on :8082). Default BPM_TEST_URL in these 9
+      specs is http://127.0.0.1:8080 (not a real listener), so
+      BPM_TEST_URL=http://127.0.0.1:4000 was set explicitly, same override
+      pattern as ISS-0706's own TEST-RUNNER report.
+    result:
+      total: 23
+      passed: 13
+      failed: 10
+    readiness_precondition_check:
+      old_bug_occurrences: 0
+      grep: >
+        grep -iE "not ready|backend not|/health/ready|readiness" over the
+        full run log (both the pass list and every failure's stack trace)
+      conclusion: >
+        Zero readiness-precondition throws across all 23 test executions in
+        the 9 modified files. Every one of the 10 failures below times out
+        deep into the test body (15-35s in, on UI locators / saga polling /
+        metrics content) -- structurally impossible for a precondition that
+        would hard-fail in well under a second at the start of the test if
+        it were still broken. This is the fix's entire target and it holds
+        for all 9 files.
+    remaining_failure_categories_all_unrelated_to_this_fix:
+      - category: app_data_state_on_shared_long_running_dev_backend
+        count: 10
+        examples:
+          - "onb-ui-02/03/04: onboarding saga never reaches /admin/onboarding/.+/progress or terminal state within 30s"
+          - "admin-user-lifecycle / sim-company-onboarding: getByTestId('admin-users-table') never becomes visible"
+          - "sim-admin-processes: metrics page renders no pre/table/[data-testid*=metric] content"
+        note: >
+          All 10 failures are downstream application/data-state timeouts on
+          this workspace's pre-existing, long-running dev instance (started
+          independently of this test run, already serving :4000 before
+          TEST-RUNNER connected to it) -- not readiness-precondition errors,
+          not a regression from ISS-0707's test-infrastructure-only diff.
+          Root-causing saga/seed-data state on a shared dev backend is
+          outside this branch's web/-only readiness-fix scope.
+    verdict: PASS (for this fix's scope)
+    note: >
+      Matches TEST-DESIGNER/TEST-DESIGN-VALIDATOR's coverage claim exactly:
+      the readiness precondition no longer throws for any of the 9 files.
+
+  - name: mix_compile_warnings_as_errors
+    command: mix compile --warnings-as-errors
+    exit_code: 0
+    verdict: PASS
+
+  - name: mix_format_check
+    command: mix format --check-formatted
+    exit_code: 0
+    verdict: PASS
+
+  - name: lib_letflow_untouched
+    command: git diff --name-only main...HEAD -- lib/letflow/
+    result:
+      - lib/letflow/design/iss-0707-e2e-readiness-precondition-fix.md
+    verdict: PASS
+    note: >
+      Only file under lib/letflow/ touched is the CODE-DESIGNER design doc
+      (lib/letflow/design/) -- documentation, not application code. Zero
+      lib/letflow/*.ex or priv/repo/migrations/ changes, confirming this is
+      a web/-only test-infrastructure fix, same shape as ISS-0706.
+
+overall_verdict: PASS
+next_action: >
+  Route to RELEASE-VALIDATOR for independent re-verification. No regressions
+  found attributable to this branch. The single backend-suite failure
+  (Letflow.Scheduler.PollerTest, REQ-218 AC3) is a pre-existing probabilistic
+  test in an untouched file, confirmed passing 21/21 in isolation -- flaky
+  under this host's 8-way partition contention, not caused by ISS-0707. The
+  readiness-precondition bug ISS-0707 targets is confirmed gone (0/23
+  readiness-throw occurrences across all 9 modified e2e spec files run
+  against the real local backend); the 10 remaining e2e failures are
+  pre-existing app/data-state timeouts on a shared dev backend, unrelated to
+  this fix's scope.

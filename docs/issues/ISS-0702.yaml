@@ -33,3 +33,44 @@ related_requirements:
 queue_ref: Q-702
 github_ref: GH-1476
 status: open
+pipeline_log:
+  - step: ISSUE-FIXER
+    at: "2026-09-17T08:32:00Z"
+    result: >
+      Root-caused: a category error, not a genuine environment gap. Option
+      (a) -- an interactive MCP browser-control tool -- confirmed
+      genuinely unavailable and not buildable in this pipeline (ToolSearch
+      checked, none found). But .claude/agents/uat-runner.md already
+      intends pipeline_test: specs to be driven via Bash (npx playwright
+      test), which is real, working, and already proven against real
+      Keycloak login in web/tests/e2e/uat-alice-login.e2e.spec.ts. Actual
+      gap: test/fixtures/uat/scenarios/platform/platform-login-routing-by-role.yaml
+      has no pipeline_test: key (28 other scenarios already have one), and
+      the agent doc's wording is imprecise enough to cause this exact
+      misdiagnosis twice. Recommended: author the missing spec (option b)
+      + fix the doc's imprecise description of the driving mechanism.
+      Separate PLATFORM_ADMIN HTTP 500 QA regression is already filed as
+      ISS-0703, not folded in here.
+  - step: CODE-DESIGNER
+    at: "2026-09-17T08:44:00Z"
+    result: >
+      FAIL then PASS (rework). Design:
+      lib/letflow/design/iss-0702-uat-runner-pipeline-test-gap-fix.md.
+      First attempt CODE-DESIGN-VALIDATOR FAILed: real implementation code
+      leaked into the three per-branch sections (complete compilable
+      test() bodies, not shapes) and a fabricated citation (invented
+      header-comment quote in req133-ac2-ac5.e2e.spec.ts that doesn't
+      exist). Reworked to shape-level assertion lists + rationale, and
+      replaced the fabricated citation with real verified line numbers
+      (:64, :98, :122; also self-caught and fixed an adjacent wrong
+      citation, :66 -> :67).
+  - step: CODE-DESIGN-VALIDATOR
+    at: "2026-09-17T08:50:00Z"
+    result: >
+      PASS on rework (FAIL on first attempt -- see CODE-DESIGNER entry).
+      Independently verified every line citation against the real source
+      file byte-accurate; confirmed §1.4-1.6 are now genuine prose
+      shapes/rationale with no executable Playwright syntax; confirmed
+      nothing else regressed (helper choice, EO mapping, nav-locator
+      pattern, pipeline_test: YAML key format, §1.7 framing, scope
+      discipline all intact).

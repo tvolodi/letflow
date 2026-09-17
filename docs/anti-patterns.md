@@ -2985,3 +2985,31 @@ a later protocol review, rather than silently picking one of the three
 existing values and hoping the mismatch goes unnoticed. If this recurs, it's
 worth ISSUE_QUEUE.md gaining a fourth status (e.g. `blocked_external`) with
 its own evidence bar, the same way `no_defect` was added.
+
+## `git checkout -- <path>` does not undo a prior cross-branch `git checkout <branch> -- <path>` (2026-09-17, WF03-ISS0704)
+
+A WF-03 Step 4 fail-then-pass verification (ISS-0704) temporarily swapped in
+a pre-fix test file with `git checkout main -- test/letflow/routers/tenants_test.exs`
+to reproduce the pre-fix failure, then tried to restore the committed
+fix with plain `git checkout -- test/letflow/routers/tenants_test.exs`.
+`git status --porcelain` still showed the file modified afterward, because
+`git checkout main -- <path>` staged main's version into the index, and
+bare `git checkout -- <path>` restores from the **index**, not from `HEAD` —
+so it just reapplied the same pre-fix content it was meant to undo.
+
+**Fix:** to actually restore the committed version after a cross-branch/
+cross-ref `checkout -- <path>`, use `git checkout HEAD -- <path>` (or
+`git reset -- <path>` first, then `git checkout -- <path>`) — not bare
+`git checkout -- <path>`. Always verify the restore with **both**
+`git diff --stat` (worktree vs. index) **and** `git diff --cached --stat`
+(index vs. HEAD) — `git status --porcelain` alone can look clean or dirty
+for the wrong reason depending on which of the two mismatches exists;
+checking both diffs is what actually distinguishes "restored to HEAD" from
+"still holding the swapped-in content, just now unstaged-vs-staged
+differently."
+
+Caught by TEST-DESIGN-VALIDATOR independently re-running the same
+verification TEST-DESIGNER had performed, per this project's producer/
+validator redundancy principle — TEST-DESIGNER's own run had not hit this
+trap, but the validator's independent repetition of the same steps is
+exactly the kind of check that would catch it if it had gone unnoticed.

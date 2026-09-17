@@ -26285,7 +26285,7 @@ requirements:
     title: Author the platform-admin login-routing UAT scenario as the first real REQ-ANALYST-authored platform-scope scenario using REQ-358's branching construct
     owner: REQ-ANALYST
     impl_order: 683  # letflow-queue task id, GH#1433
-    status: pending
+    status: in_progress
     stage: S7
     description: >
       The concrete scenario named throughout this session's design

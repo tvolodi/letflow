@@ -1,0 +1,64 @@
+id: ISS-0707
+title: >
+  9 more web/tests/e2e/**/*.ts specs (under onboarding/, admin/, pipelines/)
+  poll the never-mounted GET /health/ready as a precondition -- ISS-0706's
+  "repo-wide grep" missed these subdirectories
+discovered_by: TEST-DESIGNER
+discovered_in_run: WF03-ISS0706-20260917
+discovered_at: "2026-09-17T10:18:00Z"
+severity: MAJOR
+description: >
+  Found while assessing test coverage for ISS-0706's fix (commit a6b5e5ac):
+  spot-checking the 10 files ISS-0706 fixed for copy-paste defects (per that
+  step's own dispatch brief, item 3) required a repo-wide search for other
+  `/health/ready` occurrences, to correctly scope a regression test's
+  exclusion list. That search turned up 9 additional e2e spec files, all
+  under subdirectories of web/tests/e2e/ (onboarding/, admin/, pipelines/),
+  none of which were in ISS-0706's own stated 11-file scope
+  (docs/issues/ISS-0706.yaml's own "repo-wide grep" claim), with the
+  identical bug: a hard-failing precondition against
+  `${API_BASE_URL}/health/ready`, a route lib/letflow/router.ex deliberately
+  never mounts (see that router's own moduledoc, lines 51-55 -- requires S6
+  observability probes that do not exist yet).
+
+  ISS-0706's own grep evidently only searched flat files directly under
+  web/tests/e2e/ (e.g. `grep -l ... web/tests/e2e/*.ts`), not recursively
+  into its subdirectories (`web/tests/e2e/**/*.ts`) -- every file below was
+  missed by that scope, not newly introduced by ISS-0706's fix.
+
+  Confirmed for real by directly running one of the 9
+  (web/tests/e2e/admin/services.e2e.spec.ts) against a live local backend
+  (the same instance used to verify ISS-0706's own fix, localhost:4000,
+  GET /health -> 200, GET /health/ready -> 404):
+
+    Error: Backend not ready (404) at http://localhost:4000/health/ready
+        at assertServicesReady (tests/e2e/admin/services.e2e.spec.ts:34:11)
+    2 failed
+
+  All 9 confirmed files hard-fail (throw, not warn) on this precondition,
+  before reaching their own assertions -- unrunnable against Letflow's real
+  backend anywhere, exactly like ISS-0706's original 11.
+
+  One further occurrence was found and is explicitly NOT included below:
+  web/tests/e2e/pipelines/platform-login-routing-by-role.pipeline.e2e.spec.ts
+  (line 60) also polls `${API_BASE_URL}/health/ready`, but only
+  `console.warn`s on failure (non-blocking) -- not the same bug, no action
+  needed there. That file's own comment (lines 140-160) already documents
+  ISS-0706 by name as a known, not-yet-fully-fixed gap.
+affected_files:
+  - web/tests/e2e/onboarding/onb-ui-01.e2e.spec.ts
+  - web/tests/e2e/onboarding/onb-ui-02.e2e.spec.ts
+  - web/tests/e2e/onboarding/onb-ui-03.e2e.spec.ts
+  - web/tests/e2e/onboarding/onb-ui-04.e2e.spec.ts
+  - web/tests/e2e/admin/services.e2e.spec.ts
+  - web/tests/e2e/pipelines/onboarding-wizard.pipeline.e2e.spec.ts
+  - web/tests/e2e/pipelines/sim-admin-processes.pipeline.e2e.spec.ts
+  - web/tests/e2e/pipelines/admin-user-lifecycle.pipeline.e2e.spec.ts
+  - web/tests/e2e/pipelines/sim-company-onboarding.pipeline.e2e.spec.ts
+related:
+  - ISS-0706
+  - ISS-0532
+queue_ref: null
+github_ref: null
+status: open
+pipeline_log: []

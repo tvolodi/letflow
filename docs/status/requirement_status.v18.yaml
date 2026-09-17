@@ -483,3 +483,31 @@ history:
       touches UAT visual regression), so no README change made. No
       docs/migration/stage-N-*.md or docs/migration/decisions/*.md file
       was named in REQ-362's acceptance criteria, so that check is N/A.
+
+  - req: SCOPE-CHANGE
+    event: done
+    agent: DOC-UPDATER
+    at: 2026-09-17T07:49:00Z
+    note: >
+      ISS-0696 (queue task 696, GH#1457) resolved via
+      fix/WF03-ISS0696-20260917 (commit ade5fc0e, full detail in
+      docs/issues/ISS-0696.yaml's resolution_note field). Root cause: a
+      genuine React effect-ordering race in ExamSessionPage.tsx --
+      textDraft synced via a useEffect committing one render cycle late,
+      so under full-suite vitest scheduler jitter a forced-blur anti-cheat
+      signal could fire before that effect committed and maybeSaveDraft
+      wrongly saved a stale empty draft. Fixed by deriving textDraft
+      during render instead of via effect (10 insertions/3 deletions).
+      CODE-DESIGN-VALIDATOR PASS, SECURITY-REVIEWER PASS (out of scope),
+      REVIEWER PASS (idiomatic render-time setState guard, converges in
+      one extra render, no infinite-loop risk). TEST-DESIGNER/
+      TEST-DESIGN-VALIDATOR both empirically confirmed no single-file
+      deterministic test has discriminating power for this full-suite-only
+      race, so no new test file was added -- the regression guard is
+      repeated full-suite execution itself. RELEASE-VALIDATOR PASSed
+      independently: 30/30 total full web/ vitest suite runs green across
+      FRONTEND-DEV/TEST-RUNNER/RELEASE-VALIDATOR (10 each), 586/586 tests
+      every run, 0 flakes; backend mix test 4324/4324. GH#1457 closed with
+      an evidence comment. letflow-queue task 696 to be released
+      status: done by ORCH after this step -- queue interaction explicitly
+      out of scope for this DOC-UPDATER step per this run's own dispatch.

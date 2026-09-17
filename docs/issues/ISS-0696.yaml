@@ -21,7 +21,48 @@ affected_files:
   - web/src/pages/exam/__tests__/ExamSessionPage.test.tsx
 queue_ref: Q-696
 github_ref: GH-1457
-status: open
+status: resolved
+resolved_in_run: WF03-ISS0696-20260917
+resolved_at: "2026-09-17T08:10:00Z"
+resolution_note: >
+  ROOT CAUSE (ISSUE-FIXER, live-reproduced): a genuine React effect-ordering
+  race in web/src/pages/exam/ExamSessionPage.tsx, not shared module state or
+  test-file worker-distribution flakiness as originally hypothesized.
+  textDraft state synced via a useEffect that only commits one render cycle
+  after the textarea first appears; under full-suite vitest scheduler
+  jitter, a forced-blur anti-cheat signal could fire before that effect
+  committed, so maybeSaveDraft saw a stale empty draft and wrongly called
+  saveAnswer. Reproduced live on run 10/12 ("expected \"spy\" to not be
+  called at all, but actually been called 1 times", called with
+  text_answer: "").
+
+  FIX (commit ade5fc0e, 10 insertions/3 deletions): derive textDraft during
+  render (guarded by a new textDraftQuestionId state) instead of via a
+  useEffect, removing the race for real users too -- no test-file changes
+  needed. Design: lib/letflow/design/iss-0696-examsessionpage-race-fix.md,
+  PASSed CODE-DESIGN-VALIDATOR. SECURITY-REVIEWER PASSed (out of scope, two
+  local useState hooks only). REVIEWER PASSed (render-time setState guard
+  cannot infinite-loop, converges in one extra render, matches React's own
+  documented adjust-state-during-render pattern; idiomatic, narrowly
+  scoped). TEST-DESIGNER/TEST-DESIGN-VALIDATOR both empirically confirmed
+  (10x runs against the pre-fix commit ade5fc0e^) that no single-file
+  deterministic regression test has discriminating power here -- the race
+  is a full-suite worker-scheduling artifact observable only at that level
+  -- so no new test was added; the regression guard is the repeated
+  full-suite run itself.
+
+  FINAL VERIFICATION: 30/30 independent full web/ vitest suite runs green
+  across three independent executions (FRONTEND-DEV 10x, TEST-RUNNER 10x,
+  RELEASE-VALIDATOR 10x), 586/586 tests passing every run, 0 flakes.
+  Backend: mix test 4324/4324 passed. RELEASE-VALIDATOR independently
+  re-derived all three acceptance criteria and audited every pipeline_log
+  step for a real committed artifact. Full step-by-step detail in this
+  record's own pipeline_log above (most recent entries).
+
+  Closed GH#1457 with an evidence comment. letflow-queue task 696 to be
+  released status: done by ORCH after this step, per this run's own
+  DOC-UPDATER instructions (queue release is explicitly out of scope for
+  this step).
 pipeline_log:
   - step: ISSUE-FIXER
     at: "2026-09-17T06:45:00Z"

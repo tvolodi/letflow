@@ -405,6 +405,8 @@ defmodule Letflow.Routers.TenantsTest do
         tenant_id = body["id"]
 
         on_exit(fn ->
+          SandboxAutoMode.enter_auto_mode!(Letflow.Repo)
+
           case TenantProvisioning.schema_name_for_tenant(tenant_id) do
             {:ok, schema_name} -> Repo.query!(~s(DROP SCHEMA IF EXISTS "#{schema_name}" CASCADE))
             {:error, :invalid_tenant_id} -> :ok

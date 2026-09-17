@@ -1,0 +1,63 @@
+{
+  "handoff_id": "wf02-req369-step01",
+  "run_id": "WF02-REQ369-20260917",
+  "workflow_id": "WF-02",
+  "step": "01",
+  "from_agent": "CODE-DESIGNER",
+  "to_agent": "CODE-DESIGN-VALIDATOR",
+  "file": "handoffs/WF02-REQ369-20260917/step-01-design.json",
+  "created_at": "2026-09-17T00:10:00Z",
+  "started_at": "2026-09-17T00:10:00Z",
+  "completed_at": "2026-09-17T01:15:00Z",
+  "status": "PASS",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S7",
+    "requirement_ids": ["REQ-369"],
+    "requirement_text": {
+      "REQ-369": "See handoffs/WF02-REQ369-20260917/step-00-git-setup.json context.requirement_text.REQ-369 verbatim -- unchanged, not re-copied here to avoid drift between copies."
+    },
+    "artifacts_in": [
+      "docs/agents/workflows/WF-02_requirement_implementation.md (Step 1 procedure)",
+      "docs/guides/frontend_developer_guide.md",
+      "handoffs/WF02-REQ369-20260917/step-00-git-setup.json",
+      "web/src/router.tsx",
+      "web/src/pages/OidcCallbackPage.tsx",
+      "web/src/pages/dashboard/TenantDashboardPage.tsx",
+      "web/src/pages/admin/tenants/TenantsPage.tsx",
+      "web/src/pages/admin/HealthDashboardPage.tsx",
+      "web/src/api/tenants.ts",
+      "web/src/api/queryKeys.ts",
+      "web/src/auth/AuthContext.tsx",
+      "web/src/types/api.ts (UserSession)",
+      "test/fixtures/uat/scenarios/platform/platform-login-routing-by-role.yaml"
+    ],
+    "owned_modules": [
+      "web/src/pages/dashboard/PlatformDashboardPage.tsx",
+      "web/src/router.tsx",
+      "web/src/pages/OidcCallbackPage.tsx"
+    ],
+    "branch_name": "feature/WF02-REQ369-20260917"
+  },
+  "task": {
+    "description": "WF-02 Step 1 -- code design for REQ-369 (distinct PlatformDashboardPage for PLATFORM_ADMIN, role-conditional login routing). Frontend-only requirement, no backend/DB changes.",
+    "acceptance_criteria": [
+      "web/src/pages/dashboard/PlatformDashboardPage.tsx exists, renders data-testid=\"platform-dashboard-heading\" with the fixed text \"Platform Overview\" (never a tenant name), never calls useTenantContext(), and never renders tenantDisplayName or the isUnknown \"Tenant name could not be loaded\" copy anywhere in its output -- verified by a component test asserting both the presence of the fixed heading and the absence of any tenant-branded string",
+      "the tenant-count tile (data-testid=\"tile-tenant-count\") renders a real count sourced from tenantsApi.list()'s total field (no new backend endpoint introduced), covered by a test that mocks the existing /api/v1/tenants response and asserts the rendered count matches the mocked total",
+      "a non-PLATFORM_ADMIN session reaching /platform-dashboard directly by URL sees a self-gated not-authorized state (matching this codebase's existing per-page role-guard precedent, e.g. TenantsPage.tsx/HealthDashboardPage.tsx), covered by a test asserting a PROCESS_OPERATOR (or any non-PLATFORM_ADMIN) session does not see the platform content",
+      "web/src/router.tsx has a new route for PlatformDashboardPage alongside the unchanged existing { index: true } and { path: 'dashboard' } TenantDashboardPage entries -- both old entries are provably unchanged (diff shows only an addition, no modification to the existing two lines)",
+      "web/src/pages/OidcCallbackPage.tsx navigates a PLATFORM_ADMIN session to /platform-dashboard and every other role's session to / unchanged, covered by two component/integration tests (one per branch) asserting the actual navigate() target based on payload.roles",
+      "a real PLATFORM_ADMIN login against the live QA environment is exercised end-to-end (reusing REQ-358's environment-targeting UAT infrastructure) and actually lands on /platform-dashboard with the real tenant count rendered -- not merely unit-tested -- with the result (including a screenshot, per UAT-RUNNER's existing screenshot-as-primary-evidence discipline) quoted in this requirement's close-out",
+      "test/fixtures/uat/scenarios/platform/platform-login-routing-by-role.yaml's PLATFORM_ADMIN branch is updated to assert /platform-dashboard as the destination (not the old shared / root), re-run for real against QA per REQ-360's own verification discipline, with the updated pass result quoted; the scenario's other branches (tenant-scoped role, unauthenticated) are left unchanged since this requirement does not alter their behaviour",
+      "this requirement's own close-out states explicitly that ISS-0700 remains status: open (not closed by this requirement) and that the separate 'Unknown workspace' banner gap for non-PLATFORM_ADMIN unauthenticated/no-realm-slug users is unresolved and out of this requirement's scope"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "REWORK (attempt 1): Sec 1.3, 1.4, 1.7, and 3 of lib/letflow/design/req369-platform-dashboard-page.md rewritten per step-01b-design-gate.json's FAIL to remove all executable statement sequences -- Sec 1.3 (tenant-count query) restated as a signature/config table (hook, queryKey, queryFn source, return/error types) instead of a live useQuery({...}) call; Sec 1.4 (self-gating, AC3) restated as a declarative predicate/consequence table instead of an if/return wired to JSX; Sec 1.7 (component structure) restated as an ordered hooks table + derived-values table + prose containment outline instead of a full function body with a live render tree and inline onRetry handler; Sec 3 (OidcCallbackPage, AC5) restated as a decision table (condition -> navigate target/replace) mirroring Sec 4's existing precedent-table style, instead of a ternary-driven navigate() call. A duplicate leftover explanatory paragraph in Sec 3 (artifact of the rewrite) was also removed. All other sections (1.1, 1.2, 1.5, 1.6, 2, 4-9), which passed checks (a)-(d), are unchanged except where the fix required no cross-reference edits -- none did. Design still covers all 8 ACs per Section 6's map; no implementation code (.tsx/.ts function bodies) remains anywhere in the file -- remaining code fences are the validator-approved literal structural fragments (Sec 1.1 default-export signature, Sec 1.5 heading literal, Sec 1.6 nav-links literal, Sec 2 router.tsx diff) under direct test assertion, not business logic.",
+    "artifacts_out": ["lib/letflow/design/req369-platform-dashboard-page.md"],
+    "next_action": "re-gate"
+  },
+  "rework_count": 1,
+  "max_rework": 3
+}

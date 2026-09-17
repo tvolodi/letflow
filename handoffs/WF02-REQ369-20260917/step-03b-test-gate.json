@@ -1,0 +1,50 @@
+{
+  "handoff_id": "wf02-req369-step03b",
+  "run_id": "WF02-REQ369-20260917",
+  "workflow_id": "WF-02",
+  "step": "03b",
+  "from_agent": "TEST-DESIGN-VALIDATOR",
+  "to_agent": "TEST-RUNNER",
+  "file": "handoffs/WF02-REQ369-20260917/step-03b-test-gate.json",
+  "created_at": "2026-09-17T23:10:00Z",
+  "started_at": "2026-09-17T22:50:00Z",
+  "completed_at": "2026-09-17T23:10:00Z",
+  "status": "PASS",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S7",
+    "requirement_ids": ["REQ-369"],
+    "artifacts_in": [
+      "handoffs/WF02-REQ369-20260917/step-03-test-design.json",
+      "test/specs/REQ-369.md",
+      "web/src/pages/dashboard/__tests__/PlatformDashboardPage.test.tsx",
+      "web/src/__tests__/router.req369.test.tsx",
+      "web/src/pages/__tests__/OidcCallbackPage.test.tsx",
+      "web/src/pages/dashboard/PlatformDashboardPage.tsx",
+      "web/src/pages/OidcCallbackPage.tsx",
+      "lib/letflow/design/req369-platform-dashboard-page.md"
+    ]
+  },
+  "task": {
+    "description": "WF-02 Step 3b -- hard test-design gate for REQ-369 per docs/agents/workflows/WF-02_requirement_implementation.md Step 3b. Independently read the test spec and all three test files (not just TEST-DESIGNER's narrative), cross-checked each against REQ-369's AC1-AC5 (AC6/AC7 legitimately deferred to UAT-RUNNER, AC8 is a close-out statement) and against the shipped source files (PlatformDashboardPage.tsx, OidcCallbackPage.tsx), and re-ran the tests myself."
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "Independently verified all five code-level ACs have real, correctly-targeted coverage; re-ran the tests myself rather than trusting TEST-DESIGNER's quoted output.\n\nAC1 (fixed heading, never tenant-branded copy, never useTenantContext) -- TC-REQ369-01 asserts the literal 'Platform Overview' heading text and does an absence-scan of document.body.textContent for the three exact tenant-branded phrases named in REQ-369's text ('your workspace', 'Tenant name could not be loaded', 'Unknown workspace'). TC-REQ369-02 does a static source-text regex scan of PlatformDashboardPage.tsx for the literal string 'useTenantContext' -- correctly catches an unused-but-imported case a render-only test would miss. Cross-checked against the actual shipped file: no useTenantContext import present, heading is the fixed literal, no tenant-branded strings anywhere. Matches.\n\nAC2 (tenant-count tile from tenantsApi.list().total) -- TC-REQ369-03 mocks useQuery with total:37 AND items:[] (deliberately empty) specifically to falsify an items.length-based wrong implementation, which would render '0' instead of '37'. Shipped source (PlatformDashboardPage.tsx line 61) renders String(tenantsQuery.data?.total ?? 0) -- matches, and the fixture design genuinely discriminates the two plausible implementations.\n\nAC3 (self-gated not-authorized state) -- TC-REQ369-04 uses a PROCESS_OPERATOR session, asserts the mocked Navigate marker carries data-to=\"/instances\", and additionally asserts platform-dashboard-heading/tile-tenant-count/platform-quick-links are all absent (catching a gate that redirects but doesn't short-circuit the render). Verified against design doc Sec 1.4/Sec 4 and against the actual precedents (TenantsPage.tsx:69, HealthDashboardPage.tsx) via grep -- both use the identical Boolean(session?.roles.includes('PLATFORM_ADMIN')) / <Navigate to=\"/instances\" replace /> pattern; PlatformDashboardPage.tsx (shipped) matches exactly. Test target /instances is correct, not a weaker proxy.\n\nAC4 (router.tsx new route, two existing entries unchanged) -- TC-REQ369-07 asserts against the real built router object (router.routes, not a re-declared copy) that index/dashboard children still resolve to TenantDashboardPage's actual component reference and platform-dashboard resolves to PlatformDashboardPage, explicitly asserting it is NOT TenantDashboardPage. This is a stronger check than a diff-only inspection (already separately done by REVIEWER per step-02d-reviewer.json's router_tsx_addition_only check) -- the two checks are complementary, not duplicative, and together cover AC4 in full.\n\nAC5 (OidcCallbackPage role-conditional navigate, two branches) -- TC-REQ369-05/06 build real JWT-shaped tokens decoded by the REAL, unmocked decodeTokenPayload, only mocking the async/IO boundaries (OidcManager, setToken, resolveRealmFromUrl, tenantsApi.getBySlug, useAuth, useNavigate). Each asserts both the correct navigate() call AND the explicit absence of the other branch's call. Verified against shipped OidcCallbackPage.tsx line 72: navigate(payload.roles.includes('PLATFORM_ADMIN') ? '/platform-dashboard' : '/', { replace: true }) -- matches exactly.\n\nFixture isolation / self-sufficiency -- OidcCallbackPage.tsx has a module-scope _callbackStarted re-entrancy guard (StrictMode double-invoke protection); the test file correctly calls vi.resetModules() + dynamic re-import per test to avoid the second test silently no-oping, and the spec documents having empirically hit and fixed this failure mode. I ran TC-REQ369-06 in isolation (npx vitest run ... -t \"TC-REQ369-06\") and it passed standalone, confirming no order dependency. All three files use afterEach(cleanup + vi.clearAllMocks()) -- no shared mutable state leaks across tests. No @tag :skip, no it.skip/it.todo, no 'TODO: implement test' anywhere in the spec or test files. No hardcoded secrets or connection strings (the fakeToken() helper builds a plain btoa-encoded JSON JWT-shape with alg:'none' and a placeholder 'sig' segment -- not a real credential).\n\nAC6/AC7 deferral -- test/specs/REQ-369.md explicitly states AC6 (live QA E2E, screenshot evidence) and AC7 (UAT scenario YAML update + real re-run) are out of scope for this file and are UAT-RUNNER's job later in this workflow. This is a legitimate deferral per the dispatch's own framing, not a coverage gap -- both require a real running QA environment, which is outside a component-test's remit. AC8 is a close-out/DOC-UPDATER statement with no code-level test, consistent with REQ-362's precedent cited in the spec.\n\nIndependent re-run (this validator, not copied from TEST-DESIGNER's quoted output):\n$ cd web && npx vitest run src/pages/dashboard/__tests__/PlatformDashboardPage.test.tsx src/pages/__tests__/OidcCallbackPage.test.tsx src/__tests__/router.req369.test.tsx\n  Test Files 3 passed (3) / Tests 7 passed (7)\n$ cd web && npx vitest run src/pages/__tests__/OidcCallbackPage.test.tsx -t \"TC-REQ369-06\"\n  Test Files 1 passed (1) / Tests 1 passed | 1 skipped (2) -- confirms TC-REQ369-06 is self-sufficient in isolation, not dependent on TC-REQ369-05 having run first.\n\nNo gaps found. No rework needed.",
+    "checks": {
+      "ac1_coverage": "PASS -- TC-REQ369-01/02, verified against shipped source (no useTenantContext import, fixed heading, no tenant-branded copy)",
+      "ac2_coverage": "PASS -- TC-REQ369-03, total vs items.length discrimination confirmed genuine",
+      "ac3_coverage": "PASS -- TC-REQ369-04, redirect target and content-absence both asserted, matches shipped precedent",
+      "ac4_coverage": "PASS -- TC-REQ369-07, real router object, component-reference-level assertion, complementary to REVIEWER's diff check",
+      "ac5_coverage": "PASS -- TC-REQ369-05/06, real unmocked decodeTokenPayload, both branches, matches shipped navigate() line",
+      "ac6_ac7_deferral_legitimate": "PASS -- explicitly deferred to UAT-RUNNER in test/specs/REQ-369.md, requires live QA environment, not a component-test gap",
+      "no_skip_or_todo": "PASS -- no @tag :skip, it.skip, it.todo, or TODO markers found",
+      "fixture_isolation": "PASS -- afterEach cleanup+clearAllMocks in all 3 files; vi.resetModules() per test in OidcCallbackPage.test.tsx for the module-scope guard; TC-REQ369-06 verified to pass standalone",
+      "no_hardcoded_secrets": "PASS -- fakeToken() builds a placeholder JWT shape, no real credentials or connection strings"
+    },
+    "artifacts_out": [],
+    "next_action": "Route to TEST-RUNNER (Step 4)"
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

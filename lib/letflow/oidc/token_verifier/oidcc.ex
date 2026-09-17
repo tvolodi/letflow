@@ -19,7 +19,8 @@ defmodule Letflow.Oidc.TokenVerifier.Oidcc do
 
   require Logger
 
-  @type crash_reason :: {:verifier_crashed, %{kind: :error | :exit | :throw, message: String.t()}}
+  @type crash_reason ::
+          {:verifier_crashed, %{kind: :error | :exit | :throw, classification: module() | atom()}}
 
   @doc """
   Builds an unauthenticated `Oidcc.ClientContext` from the supervised
@@ -32,7 +33,7 @@ defmodule Letflow.Oidc.TokenVerifier.Oidcc do
   Authorization header value that is not a JWT, such as a caller
   accidentally sending a whole token-endpoint JSON response instead of its
   `access_token` field) — is caught at this function's own boundary and
-  returned as `{:error, {:verifier_crashed, %{kind: ..., message: ...}}}`,
+  returned as `{:error, {:verifier_crashed, %{kind: ..., classification: ...}}}`,
   the same as any other verification failure (unresolvable provider config,
   expired token, bad signature, wrong algorithm).
   """
@@ -57,21 +58,26 @@ defmodule Letflow.Oidc.TokenVerifier.Oidcc do
     end
   rescue
     exception ->
-      message = Exception.message(exception)
+      classification = exception.__struct__
 
       Logger.warning(
-        "Letflow.Oidc.TokenVerifier.Oidcc crashed verifying a bearer token kind=error message=#{message}"
+        "Letflow.Oidc.TokenVerifier.Oidcc crashed verifying a bearer token kind=error classification=#{classification}"
       )
 
-      {:error, {:verifier_crashed, %{kind: :error, message: message}}}
+      {:error, {:verifier_crashed, %{kind: :error, classification: classification}}}
   catch
     kind, reason ->
-      message = inspect(reason)
+      classification =
+        cond do
+          is_atom(reason) -> reason
+          kind == :exit -> :non_atom_exit_reason
+          kind == :throw -> :non_atom_throw_reason
+        end
 
       Logger.warning(
-        "Letflow.Oidc.TokenVerifier.Oidcc crashed verifying a bearer token kind=#{kind} message=#{message}"
+        "Letflow.Oidc.TokenVerifier.Oidcc crashed verifying a bearer token kind=#{kind} classification=#{classification}"
       )
 
-      {:error, {:verifier_crashed, %{kind: kind, message: message}}}
+      {:error, {:verifier_crashed, %{kind: kind, classification: classification}}}
   end
 end

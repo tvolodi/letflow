@@ -8,8 +8,8 @@
   "file": "handoffs/WF03-ISS0703-20260917/step-03-elixir-dev-rework1.json",
   "created_at": "2026-09-17T07:47:43Z",
   "started_at": "2026-09-17T07:47:43Z",
-  "completed_at": null,
-  "status": "PENDING",
+  "completed_at": "2026-09-17T07:49:53Z",
+  "status": "COMPLETED",
   "priority": "NORMAL",
   "context": {
     "stage": null,
@@ -40,18 +40,20 @@
   },
   "result": {
     "status": "PASS",
-    "summary": "",
-    "artifacts_out": [],
+    "summary": "Replaced message-based error construction in lib/letflow/oidc/token_verifier/oidcc.ex with the classification-based construction per the revised design (lib/letflow/design/iss0703-oidc-verifier-exception-handling.md, rework iteration 2). @type crash_reason changed from %{kind: :error|:exit|:throw, message: String.t()} to %{kind: :error|:exit|:throw, classification: module() | atom()}. rescue branch: classification = exception.__struct__ (no Exception.message/1 call). catch branch: classification = reason when is_atom(reason), else :non_atom_exit_reason (kind :exit) or :non_atom_throw_reason (kind :throw) via a cond, replacing inspect/1. Logger.warning/1 in both branches now interpolates only kind and classification (both fixed atoms/module names), never the caught exception's fields or the caught reason's content. Moduledoc @doc text updated: 'message: ...' -> 'classification: ...' in the return-shape example; no other prose change needed (rest already matched the design's corrected wording from a prior iteration). No changes to auth_pipeline.ex. `mix compile` output: 'Compiling 1 file (.ex)' -- clean, no warnings/errors. `mix test test/letflow/plugs/auth_pipeline_test.exs test/letflow/oidc/` output: 'Finished in 21.2 seconds (0.5s async, 20.6s sync)' / 'Result: 43 passed (2 properties, 41 tests)' -- 0 failures (the only warnings shown are pre-existing ExUnit.Case.register_test/4 deprecation notices from the test framework itself, unrelated to this change).",
+    "artifacts_out": [
+      "lib/letflow/oidc/token_verifier/oidcc.ex"
+    ],
     "issues": [],
     "git_evidence": {
-      "branch_name": null,
+      "branch_name": "feature/WF03-ISS0703-20260917",
       "commit_sha_list": [],
-      "remote_branch": null,
-      "push_status": "skipped",
+      "remote_branch": "origin/feature/WF03-ISS0703-20260917",
+      "push_status": "pending",
       "pr_url": null,
       "pr_create_error": null
     },
-    "next_action": ""
+    "next_action": "Route to SECURITY-REVIEWER for re-gate"
   },
   "rework_count": 1,
   "max_rework": 3

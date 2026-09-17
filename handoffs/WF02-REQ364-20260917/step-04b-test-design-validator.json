@@ -1,0 +1,7 @@
+{
+  "req": "REQ-364",
+  "step": "04b-test-design-validator",
+  "result": "PASS",
+  "at": "2026-09-17T19:30:00Z",
+  "notes": "Independently reproduced the mutation test on reconfirm/2's resolve_confirmed_version call: 54/55 with the exact same test failing, reverted cleanly, 55/55 restored. Spot-checked AC2 (real error-message-string assertions) and AC3 (real confirmed_at bracketing + body-unchanged assertions) directly in test code. Confirmed the docs/anti-patterns.md stale-tenant_template entry is real and matches the cited symptom/fix, so the full-suite methodology is credible."
+}

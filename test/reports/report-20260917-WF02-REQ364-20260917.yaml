@@ -1,0 +1,131 @@
+run_id: WF02-REQ364-20260917
+agent: TEST-RUNNER
+workflow: WF-02 Step 4 (requirement implementation, full-suite verification)
+requirement: REQ-364 (in-app help content: tenant-scoped Letflow.Help context
+  module, earmark_parser-based AST markdown sanitization, replacing an earlier
+  regex-based approach after a 4-round SECURITY-REVIEWER saga). Full detail in
+  handoffs/WF02-REQ364-20260917/.
+timestamp_utc: "2026-09-17T23:28:13Z"
+branch: feature/WF02-REQ364-20260917
+commit: 6c826a7657aeecb19f718861304faa7303961372
+commit_note: "Merge remote-tracking branch 'origin/main' into
+  feature/WF02-REQ364-20260917 -- branch was freshly rebased/merged onto
+  current main (picks up REQ-369's platform dashboard and other concurrent
+  work) immediately before this run, per task instructions. No conflicts
+  occurred per the merge commit."
+
+verdict: PASS
+
+environment:
+  docker_compose: "letflow-1-postgres-1 and letflow-1-keycloak-1 already
+    Running before this run (13 days / 3 weeks uptime respectively);
+    `docker compose up -d` (via passwordless sudo in this sandbox -- the
+    invoking user is not in the host's docker group) confirmed both, no
+    change needed. Untracked .env sets LETFLOW_DB_PORT=5463 (own-workspace
+    override per README) plus QUEUE_AUTH_TOKEN and
+    LETFLOW_SECRETS_MASTER_KEY."
+  host_cores: "8 (nproc)"
+  toolchain: "mix 1.20.3 / Erlang-OTP 29 (asdf-managed) present; mix
+    deps.get run cleanly (earmark_parser 1.4.46 fetched among others), no
+    network gap hit."
+  stale_tenant_template_precaution: "Per docs/anti-patterns.md's
+    'Stale tenant_template schema surviving a migration-adding commit' entry
+    and this branch adding a new migration
+    (20260917000001_create_help_content.exs), proactively dropped all 9
+    pre-existing letflow_test* databases (letflow_test, letflow_test1..8)
+    before running the suite, so ecto.create/migrate rebuilt
+    tenant_template fresh against this branch's actual migration set.
+    Avoided the near-uniform-failure-spike class of false regression this
+    anti-pattern documents."
+
+commands_run:
+  - "for db in letflow_test letflow_test1..8: DROP DATABASE IF EXISTS
+     <db>; -- cleared stale tenant_template cache before running the suite."
+  - "TEST_PARALLEL_N=4 scripts/test_parallel.sh -- used the README's
+     known-good override rather than the nproc-derived default, to avoid
+     ISS-0219-class Postgres too_many_connections spikes seen on this host
+     in prior runs. Clean run, all 4 partitions produced real Result:
+     lines, 0 failures."
+  - "mix test test/letflow/help_test.exs -- run standalone per task
+     instructions to confirm the REQ-364 module's own count explicitly."
+  - "mix compile --warnings-as-errors -- clean, no output."
+  - "mix format --check-formatted -- clean, no output."
+  - "cd web && npm test (vitest) -- clean, all files passed."
+
+full_suite_result:
+  final_combined: "4381 tests, 6 properties, 0 failures (4387/4387 passed)"
+  per_partition:
+    - "partition 1: 1125 tests, 5 properties, 0 failures, exit 0"
+    - "partition 2: 1165 tests, 1 property, 0 failures, exit 0"
+    - "partition 3: 1162 tests, 0 properties, 0 failures, exit 0"
+    - "partition 4: 929 tests, 0 properties, 0 failures, exit 0"
+  note: "The task's flagged 'REQ-369 impl_order gate failure some earlier
+    full-suite runs hit' did NOT occur -- confirms it's resolved by this
+    branch merging current main (REQ-369 is now fully in this branch's
+    history via the 6c826a76 merge commit)."
+
+help_test_result:
+  standalone_run: "mix test test/letflow/help_test.exs -- Result: 55 passed"
+  matches_expected: "yes -- 55/55, matches the task's stated expectation and
+    TEST-DESIGN-VALIDATOR's own mutation-tested coverage count."
+
+backend_static_gates:
+  compile_warnings_as_errors: "clean, no output"
+  format_check: "clean, no output"
+
+frontend_test_result:
+  vitest: "Test Files 87 passed (87); Tests 599 passed (599)"
+  duration: "24.48s"
+  note: "This branch's merge with main pulls in REQ-369's frontend work
+    (PlatformDashboardPage etc.) -- its tests (e.g.
+    src/pages/dashboard/__tests__/PlatformDashboardPage.test.tsx, 4 tests)
+    are included in this run and pass."
+
+req364_new_work_present:
+  - path: lib/letflow/help.ex
+    note: "Letflow.Help context module, present, 12641 bytes."
+  - path: lib/letflow/help/help_content.ex
+    note: "HelpContent schema + earmark_parser-based AST sanitizer,
+      present, 20547 bytes."
+  - path: priv/repo/migrations/20260917000001_create_help_content.exs
+    note: "the tenant-scoped help_content migration, present, registered
+      in Letflow.TenantProvisioning.tenant_scoped_migrations/0 per its own
+      commit message (c5518eff)."
+  - path: mix.exs
+    note: "earmark_parser ~> 1.4 dependency present (line 103), with
+      REQ-364 decision-record comment (docs/migration/decisions/0036) and
+      rationale for not using the retired/advisory-carrying full `earmark`
+      renderer."
+  - path: test/letflow/help_test.exs
+    note: "present, 33044 bytes, 55/55 passing standalone (see
+      help_test_result above)."
+  verification_method: "git log --oneline main..HEAD and file
+    presence/size checks, since branch just merged main so a plain
+    git diff main...HEAD comparison isn't meaningful for isolating this
+    branch's own work (per task instructions). Commit history on this
+    branch (6c826a76's first-parent ancestry) shows the full REQ-364
+    saga: c5518eff (initial Help context module) through 4ede2cc9/bb7653ab
+    (round-3 security fixes + reconfirm-freshness coverage gap closed by
+    TEST-DESIGNER via mutation testing) to 6d98011d (Step 4b
+    TEST-DESIGN-VALIDATOR PASS)."
+
+regressions: "None found. Full backend suite (4387/4387), standalone
+  help_test.exs (55/55), and full frontend suite (599/599) all pass
+  cleanly. mix compile --warnings-as-errors and mix format
+  --check-formatted are both clean."
+
+gate_status:
+  full_backend_suite: "4387/4387 passed, 0 failures"
+  help_test_standalone: "55/55 passed"
+  backend_compile_and_format: "mix compile --warnings-as-errors clean; mix
+    format --check-formatted clean"
+  frontend_unit_tests: "599/599 passed (87/87 files)"
+  req364_files_present: "confirmed -- see req364_new_work_present above"
+
+next_step: >
+  Hands off to RELEASE-VALIDATOR, which re-runs the full suite
+  independently per this project's redundancy principle rather than
+  trusting this report alone. Nothing in this run flags a concern for
+  RELEASE-VALIDATOR to chase -- the previously-known REQ-369 impl_order
+  gate issue is resolved by the merge, and no stale-tenant_template
+  symptoms were seen after the precautionary DB drop.

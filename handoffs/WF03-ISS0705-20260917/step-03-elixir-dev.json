@@ -1,0 +1,47 @@
+{
+  "handoff_id": "wf03-iss0705-step03",
+  "run_id": "WF03-ISS0705-20260917",
+  "workflow_id": "WF-03",
+  "step": "03",
+  "from_agent": "ORCH",
+  "to_agent": "ELIXIR-DEV",
+  "file": "handoffs/WF03-ISS0705-20260917/step-03-elixir-dev.json",
+  "created_at": "2026-09-17T06:10:00Z",
+  "started_at": "2026-09-17T06:10:00Z",
+  "completed_at": null,
+  "status": "PENDING",
+  "priority": "NORMAL",
+  "context": {
+    "stage": null,
+    "requirement_ids": [],
+    "requirement_text": {},
+    "source_text": {},
+    "related_handoff_ids": [
+      "handoffs/WF03-ISS0705-20260917/step-02-code-designer.json",
+      "handoffs/WF03-ISS0705-20260917/step-02b-code-design-validator.json"
+    ],
+    "artifacts_in": ["lib/letflow/design/iss0705-sandbox-mode-restore-fix.md"],
+    "owned_modules": ["test/letflow/routers/tenants_test.exs", "test/letflow/routers/identity_test.exs", "test/letflow/role_registry_test.exs"]
+  },
+  "task": {
+    "description": "WF-03 Step 3 (implement) for ISS-0705, on branch feature/WF03-ISS0705-20260917 (`git checkout feature/WF03-ISS0705-20260917`; do not re-run git setup). Implement the fix EXACTLY per the validated design doc lib/letflow/design/iss0705-sandbox-mode-restore-fix.md (PASSED CODE-DESIGN-VALIDATOR, confirmed helper choice: `Letflow.Test.SandboxAutoMode.provision!/2` for tenants_test.exs:391's segment, `enter_auto_mode!/1` for identity_test.exs:1381 and role_registry_test.exs:119's on_exit callbacks -- NOT exit_auto_mode!/1, which was verified to set :manual, the wrong mode for those two sites). Also execute the orphaned-row cleanup command specified in the design doc's cleanup section (one-off, against the test DB) and report the before/after row count. Claim this handoff by setting status to IN_PROGRESS only.",
+    "acceptance_criteria": [
+      "test/letflow/routers/tenants_test.exs's real-provisioning segment wrapped in SandboxAutoMode.provision!/2 exactly per the design doc",
+      "test/letflow/routers/identity_test.exs:1381 and test/letflow/role_registry_test.exs:119 swapped to enter_auto_mode!/1",
+      "Orphaned tenant rows cleanup executed per the design doc's command, with before/after count reported",
+      "mix compile succeeds with no new warnings introduced",
+      "mix test test/letflow/routers/tenants_test.exs test/letflow/routers/identity_test.exs test/letflow/role_registry_test.exs passes",
+      "Changes committed to feature/WF03-ISS0705-20260917",
+      "next_action routes to SECURITY-REVIEWER"
+    ]
+  },
+  "result": {
+    "status": null,
+    "summary": null,
+    "artifacts_out": [],
+    "issues": [],
+    "next_action": null
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

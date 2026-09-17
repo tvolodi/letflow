@@ -14,7 +14,7 @@
  */
 
 import { test, expect, type APIRequestContext, type Page } from '@playwright/test'
-import { BPM_IDP_BASE_URL, BPM_IDP_CLIENT_ID } from './helpers'
+import { assertBackendHealthy, BPM_IDP_BASE_URL, BPM_IDP_CLIENT_ID } from './helpers'
 
 const API_BASE_URL = (process.env.BPM_TEST_URL ?? '').replace(/\/$/, '')
 const REQUIRED_DB_URL = process.env.BPM_TEST_DB_URL ?? ''
@@ -38,10 +38,7 @@ async function ensurePrerequisites(request: APIRequestContext): Promise<void> {
   const apiBaseUrl = requireEnv('BPM_TEST_URL', API_BASE_URL)
   const keycloakBaseUrl = requireEnv('BPM_IDP_BASE_URL', BPM_IDP_BASE_URL)
 
-  const backendHealth = await request.get(`${apiBaseUrl}/health/ready`)
-  if (!backendHealth.ok()) {
-    throw new Error(`ISS-0063 prerequisite not satisfied: backend readiness check failed (${backendHealth.status()}) at ${apiBaseUrl}/health/ready`)
-  }
+  await assertBackendHealthy(request, apiBaseUrl)
 
   const keycloakDiscovery = await request.get(`${keycloakBaseUrl}/realms/bpm-default/.well-known/openid-configuration`)
   if (!keycloakDiscovery.ok()) {

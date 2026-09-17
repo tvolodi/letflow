@@ -97,3 +97,57 @@ export async function loginWithToken(page: Page, token: string): Promise<void> {
     // Fallback: just wait for any main content to appear
   })
 }
+
+/**
+ * Backend liveness precondition — real `GET /health` check.
+ *
+ * NOTE (ISS-0532 / ISS-0706): a true per-subsystem readiness endpoint
+ * (`GET /health/ready`) does not exist on the backend — `lib/letflow/router.ex`
+ * deliberately does not port R-Co's readiness route; it requires S6
+ * observability probes that do not exist yet (see that router's moduledoc).
+ * Every e2e spec that polled `/health/ready` as a precondition was throwing
+ * on every run, before reaching its own assertions. `web/src/api/health.ts`
+ * had the identical bug in application code and was fixed under ISS-0532 by
+ * pointing at the real `GET /health` liveness endpoint instead; this function
+ * mirrors that resolution for the test suite (ISS-0706). This checks liveness
+ * only — it is not a full subsystem-readiness probe.
+ *
+ * Never returns a boolean; resolves on 2xx, throws otherwise.
+ */
+export async function assertBackendHealthy(
+  request: APIRequestContext,
+  apiBaseUrl: string,
+): Promise<void> {
+  const backendHealth = await request.fetch(`${apiBaseUrl}/health`)
+  if (!backendHealth.ok()) {
+    throw new Error(
+      `Backend not live (${backendHealth.status()}) at ${apiBaseUrl}/health.\n` +
+      'Ensure the BPM backend is running before executing these tests.\n' +
+      '(This checks liveness, not full readiness — see the ISS-0532/ISS-0706 note ' +
+      'on assertBackendHealthy in helpers.ts.)',
+    )
+  }
+}
+
+/**
+ * Combined backend + Keycloak readiness precondition used by most e2e specs.
+ *
+ * Checks backend liveness first (see `assertBackendHealthy`); if that throws,
+ * the Keycloak check never runs and the error propagates unchanged. Then
+ * checks Keycloak's OIDC discovery document is reachable.
+ */
+export async function assertServiceReadiness(
+  request: APIRequestContext,
+  apiBaseUrl: string,
+): Promise<void> {
+  await assertBackendHealthy(request, apiBaseUrl)
+
+  const keycloakDiscoveryUrl = `${BPM_IDP_BASE_URL}/realms/bpm-default/.well-known/openid-configuration`
+  const idpHealth = await request.fetch(keycloakDiscoveryUrl)
+  if (!idpHealth.ok()) {
+    throw new Error(
+      `Keycloak not ready (${idpHealth.status()}) at ${keycloakDiscoveryUrl}.\n` +
+      'Ensure Keycloak is running before executing these tests.',
+    )
+  }
+}

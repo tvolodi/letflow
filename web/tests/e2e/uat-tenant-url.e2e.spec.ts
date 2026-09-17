@@ -4,7 +4,7 @@ import {
   keycloakTokenUrl,
   resolveTenantContext,
 } from './pipeline'
-import { BPM_IDP_BASE_URL } from './helpers'
+import { assertBackendHealthy, BPM_IDP_BASE_URL } from './helpers'
 
 function decodeJwtPayload(token: string): { iss?: string } {
   const payload = token.split('.')[1]
@@ -13,10 +13,7 @@ function decodeJwtPayload(token: string): { iss?: string } {
 
 async function requireBackendReady(request: APIRequestContext): Promise<void> {
   const apiBaseUrl = (process.env.BPM_TEST_URL ?? 'http://127.0.0.1:8080').replace(/\/$/, '')
-  const response = await request.get(`${apiBaseUrl}/health/ready`)
-  if (!response.ok()) {
-    throw new Error(`Backend readiness check failed (${response.status()}) at ${apiBaseUrl}/health/ready`)
-  }
+  await assertBackendHealthy(request, apiBaseUrl)
 }
 
 async function requireIdpReady(request: APIRequestContext): Promise<void> {

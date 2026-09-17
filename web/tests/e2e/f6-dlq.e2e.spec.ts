@@ -2,11 +2,10 @@ import { expect, test } from '@playwright/test'
 import { randomUUID } from 'crypto'
 import * as fs from 'fs'
 import * as path from 'path'
-import { getKeycloakToken, loginWithToken, BPM_IDP_BASE_URL } from './helpers'
+import { getKeycloakToken, loginWithToken, assertServiceReadiness } from './helpers'
 
 const SCREENSHOTS_DIR = 'tests/screenshots'
 const API_BASE_URL = process.env.BPM_TEST_URL ?? 'http://127.0.0.1:8080'
-const KEYCLOAK_DISCOVERY_URL = `${BPM_IDP_BASE_URL}/realms/bpm-default/.well-known/openid-configuration`
 const API_PREFIX = '/api/v1'
 
 function getEnvOrDefault(name: string, fallback: string): string {
@@ -35,20 +34,6 @@ function decodeJwtPayload(token: string): { sub?: string; preferred_username?: s
   const parts = token.split('.')
   if (parts.length !== 3) throw new Error('Invalid JWT token')
   return JSON.parse(Buffer.from(parts[1], 'base64').toString('utf-8')) as { sub?: string; preferred_username?: string; [key: string]: unknown }
-}
-
-async function assertServiceReadiness(
-  request: import('@playwright/test').APIRequestContext,
-): Promise<void> {
-  const backendHealth = await request.fetch(`${API_BASE_URL}/health/ready`)
-  if (!backendHealth.ok()) {
-    throw new Error(`Backend readiness check failed (${backendHealth.status()}) at ${API_BASE_URL}/health/ready`)
-  }
-
-  const idpHealth = await request.fetch(KEYCLOAK_DISCOVERY_URL)
-  if (!idpHealth.ok()) {
-    throw new Error(`Keycloak readiness check failed (${idpHealth.status()}) at ${KEYCLOAK_DISCOVERY_URL}`)
-  }
 }
 
 async function createDlqFixtureDefinition(
@@ -384,7 +369,7 @@ test.describe('F6 DLQ UI (DLQ-UI-01..04)', () => {
     fixtureInstanceId = ''
     fixtureDlqId = ''
 
-    await assertServiceReadiness(request)
+    await assertServiceReadiness(request, API_BASE_URL)
     const creds = getAdminCredentials()
     adminToken = await getKeycloakToken(request, creds.username, creds.password)
     const fixture = await ensureActionableDlqFixture(request, adminToken)

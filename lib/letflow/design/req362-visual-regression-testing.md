@@ -135,6 +135,22 @@ tenant PII** (real candidate names, emails, phone numbers, or any other genuinel
 tenant-identifying on-screen data). This is a precondition of calling the accept
 action (§2.2) and the re-baseline action (§4.1), not a suggestion.
 
+**Existing baseline checked against this policy (fact, verified — not an open
+question).** `test/fixtures/uat/visual-baselines/` is not empty: it already contains a
+baseline committed by REQ-362's own self-check —
+`platform/req362-visual-regression-selfcheck/01-EO-001.local.png` and its sidecar
+`01-EO-001.local.yaml`, landed in commit `242ae72c` (PR #1460, merged to `main`, an
+ancestor of every branch built on this design). That baseline has been checked against
+this policy and found compliant: the sidecar's own `judgment_detail` records that it
+captures "the root route (GET /) ... for an unauthenticated session, the real Keycloak
+login form" — a static, unauthenticated screen carrying no actor data, no tenant data,
+and no PII of any kind. This is not a case of the policy applying retroactively to
+content that predates it; the baseline was independently inspected against §1.5's
+invariant while writing this section and confirmed to contain nothing the invariant
+forbids. No accept (§2) or re-baseline (§4) call has yet produced a baseline that
+required this check to actually reject anything — the one baseline in the tree today
+simply never carried tenant data to begin with.
+
 **Why this needs to be said here, explicitly, even though it is not a new practice.**
 Every scenario file under `test/fixtures/uat/scenarios/` already follows exactly this
 discipline today — spot-checked directly against

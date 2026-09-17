@@ -1,0 +1,10 @@
+{
+  "req": "REQ-364",
+  "step": "03b-security-reviewer",
+  "result": "FAIL",
+  "at": "2026-09-17T14:35:00Z",
+  "blocker": "lib/letflow/help/help_content.ex's @markdown_link_pattern regex only matches CommonMark inline link/image syntax [text](url)/![alt](url). It does not match reference-style link/image definitions ([text][ref] ... [ref]: javascript:alert(1)), which any conformant downstream markdown renderer resolves into a real href/src. contains_unsafe_link_scheme?/1 returns false for such payloads (no [...](...) substring exists), so validate_no_unsafe_link_scheme/2 adds no error and the row is written with a javascript: payload live in body -- a complete bypass of REQ-364's own AC2 write-path sanitization requirement.",
+  "non_blocking_finding": "create_draft/2's `with` has an else clause mapping {:error, :invalid_schema_name} -> {:error, :invalid_prefix}, but update_draft/3, publish/2, reconfirm/2, withdraw/2 have no else clause, so an invalid prefix on those falls through as the raw {:error, :invalid_schema_name} instead of the documented {:error, :invalid_prefix} in their @specs. Not a crash, but a real spec/implementation inconsistency for REVIEWER.",
+  "required_fix": "Extend the URL-scheme scan to also match reference-style link-definition lines (e.g. ^\\s*\\[[^\\]]+\\]:\\s*(\\S+)), applied post-code-stripping the same way as the existing inline check, OR reconsider design section 5.3 option 2 (a real sanitizer/parser) given a regex denylist over markdown's full link-syntax surface has now demonstrated a concrete gap.",
+  "scope_creep_flag_resolved": "withdraw/2 (live->draft, added because design section 2's lifecycle diagram shows this transition though REQ-364's acceptance criteria don't name it separately) reviewed for independent security concern -- none found, follows the identical with-chain/prefix-scoping pattern as every other function. Scope-creep question itself deferred to REVIEWER, not a security finding."
+}

@@ -126,6 +126,63 @@ This row is this design's own deliverable per AC-1 ("that table updated if new")
 `ELIXIR-DEV`/`TEST-DESIGNER` applies this literal row addition as part of implementing
 this requirement; it is not implemented by CODE-DESIGNER itself (design-only role).
 
+### 1.5 Data-sensitivity policy for baseline content (binding, not an open question)
+
+**Decision, stated as an invariant of this mechanism:** any `gui_screen` expected
+outcome accepted (§2) or re-baselined (§4) through this mechanism must be captured
+against **synthetic/disclosed-fictional actor and tenant data only — never real
+tenant PII** (real candidate names, emails, phone numbers, or any other genuinely
+tenant-identifying on-screen data). This is a precondition of calling the accept
+action (§2.2) and the re-baseline action (§4.1), not a suggestion.
+
+**Why this needs to be said here, explicitly, even though it is not a new practice.**
+Every scenario file under `test/fixtures/uat/scenarios/` already follows exactly this
+discipline today — spot-checked directly against
+`test/fixtures/uat/scenarios/swiftroute/tenant-onboarding-happy.yaml`, whose actor
+`Alice Bauer` (`alice.bauer@swiftroute.example` at hostname `swiftroute.bpm.example`)
+is disclosed-fictional per that file's own header-comment provenance discipline
+("Ported verbatim from R-Co... disclosed-synthetic fixtures"), the same discipline
+already established for `Letflow.Simulation.Runner` fixtures. So this section asks
+nothing new of scenario authors. What is new is that, unlike a transient screenshot
+(§1.3 — git-ignored, one per run, discarded), a baseline accepted here is **permanently
+retained** — committed to git, with every superseded version still recoverable from git
+history even after a re-baseline overwrites the working-tree file (§1.3, §4.3). That
+permanence is exactly what turns an already-synthetic-by-convention screen into a
+standing risk the moment a future scenario happens to be seeded with real data instead:
+nothing before this section stopped that. Section 1.5 exists to make the corpus's
+existing, already-followed practice a binding, checked invariant specifically for this
+one mechanism, so no future authenticated `gui_screen` scenario can slip real PII into
+a permanent artifact by omission.
+
+**Why synthetic/disclosed-fictional data, and not redaction or accepted-risk (the two
+alternatives this design considered and rejected):**
+
+- **Not redaction** (masking or blurring regions of the PNG before persist). Phase 2
+  (§3.4) is deliberately an *unconditional, mechanical* pixel-diff with no loosened
+  tolerance — that is the requirement's own explicit point. A redaction mask would have
+  to render bit-for-bit identically on every future run forever, or it becomes a second,
+  self-inflicted source of spurious diffs, directly undermining §3.4's "auto-fail is
+  unconditional" intent. Synthetic data has no such failure mode: the screen simply
+  never contains real data in the first place, so pixel stability is unaffected by this
+  policy at all.
+- **Not accepted-risk.** A screenshot containing real tenant PII would be a permanent,
+  git-history-retained artifact (§1.3) — exactly the class of tenant-data exposure this
+  project's security invariants exist to prevent (this is the finding SECURITY-REVIEWER
+  raised, not a marginal concern to wave through). There is no operational benefit to
+  accepting that risk that offsets it.
+- **Synthetic/disclosed-fictional data costs nothing new to adopt**, because the
+  existing UAT scenario corpus is already entirely synthetic by convention (verified
+  above) — this section only makes an existing, already-universal practice explicit and
+  binding for this specific mechanism, rather than introducing a new authoring burden.
+
+**Enforcement note (see §7):** this is a content/authoring-discipline invariant, not
+something `acceptBaseline`/`rebaseline` in `web/tests/support/visual-baseline.ts` can
+mechanically verify from a PNG buffer or a `BaselineKey` — "is the on-screen data
+synthetic" is a judgment made by the scenario author and the accepting agent
+(UAT-RUNNER today), not a property derivable from image bytes. No code change is
+required to state this policy; it is deliberately not deferred as an open question in
+§8 — the decision is made here, now, as a binding invariant.
+
 ---
 
 ## 2. Phase 1: baseline-accept action
@@ -145,6 +202,11 @@ path (no baseline can exist yet) — this is expected and is how a baseline popu
 run establishes the whole corpus.
 
 ### 2.2 What the accept action does
+
+**Precondition (§1.5):** the screen being captured must be seeded with
+synthetic/disclosed-fictional actor and tenant data only — never real tenant PII. This
+is checked by the scenario author and the accepting agent before step 1 below, not by
+the accept action's own code (§1.5's enforcement note).
 
 1. UAT-RUNNER captures the `gui_screen` screenshot exactly as it already does today
    (`page.screenshot({ path: ..., fullPage: true })` or equivalent, into the
@@ -316,6 +378,11 @@ runs and quotes the actual output in their own handoffs.
 
 ### 4.1 Who performs it
 
+**Precondition (§1.5):** exactly as for the accept action (§2.2), the replacement
+screenshot being re-baselined must be seeded with synthetic/disclosed-fictional actor
+and tenant data only — never real tenant PII. A re-baseline does not get a pass on this
+invariant merely because the baseline it replaces was already accepted.
+
 The **same role tier that performs phase-1 accept** — UAT-RUNNER today, or (once
 REQ-359/REQ-361 land) the BA-persona/PRODUCT-OWNER-equivalent role reviewing UAT
 evidence — **never** an automated/unattended step, and never the same run that
@@ -461,6 +528,7 @@ call and a real `docs/issues/<issue_ref>.yaml` file landing on disk, with the ac
 | AC-4 (auto-filed issue lands in local+queue+GitHub via existing mechanism, carries both screenshots) | §6 (reuse of ISSUE_QUEUE.md verbatim), §6.1 (real-exercise requirement) |
 | AC-5 (re-baseline action with mandatory recorded justification, exercised for real) | §4 (action shape, mandatory `justification` field), §4.4 (real-exercise requirement) |
 | AC-6 (design states auto-fail is unconditional, and why) | §3.4 (explicit statement + reasoning) |
+| (data-handling scope implicit in AC-1/AC-2 — what may be captured into a permanent baseline) | §1.5 (binding synthetic/disclosed-fictional-data-only policy, cross-referenced from §2.2 and §4.1) |
 
 ---
 

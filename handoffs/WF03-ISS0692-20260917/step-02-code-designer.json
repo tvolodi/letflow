@@ -1,0 +1,67 @@
+{
+  "handoff_id": "c4e2b8a1-7f3d-4a9e-8b1c-2d3e4f5a6b02",
+  "run_id": "WF03-ISS0692-20260917",
+  "workflow_id": "WF-03",
+  "step": "1-02",
+  "from_agent": "ORCH",
+  "to_agent": "CODE-DESIGN-VALIDATOR",
+  "file": "handoffs/WF03-ISS0692-20260917/step-02-code-designer.json",
+  "created_at": "2026-09-17T00:23:53Z",
+  "started_at": "2026-09-17T00:23:53Z",
+  "completed_at": "2026-09-17T00:23:53Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S7",
+    "requirement_ids": ["REQ-362"],
+    "requirement_text": {},
+    "source_text": {},
+    "related_handoff_ids": ["handoffs/WF03-ISS0692-20260916/step-01-issue-fixer.json"],
+    "artifacts_in": [
+      "docs/issues/ISS-0692.yaml",
+      "handoffs/WF03-ISS0692-20260916/step-01-issue-fixer.json",
+      "lib/letflow/design/req362-visual-regression-testing.md",
+      "web/tests/support/visual-baseline.ts",
+      "test/fixtures/uat/scenarios/swiftroute/tenant-onboarding-happy.yaml"
+    ],
+    "owned_modules": ["lib/letflow/design/req362-visual-regression-testing.md"]
+  },
+  "task": {
+    "description": "Queue task 692 (issue). Verify the prior ISSUE-FIXER diagnosis (WF03-ISS0692-20260916, step-01) still holds against the current, post-merge state of lib/letflow/design/req362-visual-regression-testing.md (now on main via PR #1460) and the UAT scenario corpus, then write the design amendment directly into that file per the diagnosis's part (a)/(b): a new binding data-sensitivity policy section requiring synthetic/disclosed-fictional actor and tenant data only for any gui_screen baseline accepted or re-baselined through this mechanism -- never real tenant PII -- cross-referenced from the accept (§2.2) and re-baseline (§4.1) actions, resolved as a stated decision (not left in §8's open questions), with §7's AC map updated to cover the implicit data-handling scope of AC-1/AC-2.",
+    "acceptance_criteria": [
+      "Prior diagnosis re-verified against current file state (design doc content and scenario corpus) before editing",
+      "New §1.5 'Data-sensitivity policy for baseline content' added to lib/letflow/design/req362-visual-regression-testing.md stating the synthetic/disclosed-fictional-data-only invariant as binding, with reasoning for why redaction and accepted-risk were rejected",
+      "§2.2 (accept action) and §4.1 (re-baseline action) each cross-reference §1.5 as a precondition",
+      "§7's AC map gains a row/line noting §1.5 addresses the implicit data-handling scope of AC-1/AC-2",
+      "§8 is NOT given a new open question for this -- the policy is resolved as a stated decision",
+      "No implementation code (redaction/synthetic-data-enforcement mechanism) added anywhere",
+      "Change committed on feature/WF03-ISS0692-20260917",
+      "next_action names CODE-DESIGN-VALIDATOR as the next step"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "Re-verified the prior diagnosis (WF03-ISS0692-20260916 step-01-issue-fixer) against the current tree: lib/letflow/design/req362-visual-regression-testing.md is confirmed present on main (this branch's base) with exactly the content the diagnosis quoted -- §1.3 ('Distinctness from transient screenshots', durable git-committed baselines, zero data-sensitivity caveat), §2.2/§4.1 with no content precondition, §7's AC map, and §8's four open questions (OQ-1..OQ-4), none of which already covered this gap. Spot-checked test/fixtures/uat/scenarios/swiftroute/tenant-onboarding-happy.yaml directly: actor 'Alice Bauer' / 'alice.bauer@swiftroute.example' / hostname 'swiftroute.bpm.example' confirmed disclosed-fictional per the file's own header-comment provenance ('Ported verbatim from R-Co... disclosed-synthetic fixtures'). Confirmed test/fixtures/uat/visual-baselines/ still does not exist anywhere in the tree -- no authenticated gui_screen scenario has yet produced a real baseline through this mechanism, so the diagnosis's premise (design-only fix, no retroactive baseline to fix) still holds.\n\nDESIGN CHANGE APPLIED to lib/letflow/design/req362-visual-regression-testing.md:\n\n1. New §1.5 'Data-sensitivity policy for baseline content (binding, not an open question)', inserted after §1.4 and before §2. States as a binding invariant: any gui_screen expected outcome accepted (§2) or re-baselined (§4) must be captured against synthetic/disclosed-fictional actor and tenant data only, never real tenant PII. Grounds this in the swiftroute scenario spot-check (not a new practice) and in §1.3's own permanence point (git-committed, superseded versions retained forever in history -- the property that turns an already-synthetic-by-convention screen into a standing risk the moment a future scenario deviates). States the rejection reasoning for the two alternatives ISS-0692's fix direction offered: redaction rejected because a pixel mask must be bit-for-bit stable forever against §3.4's unconditional mechanical diff or it becomes a second source of spurious failures; accepted-risk rejected because real PII in a permanently git-history-retained artifact is exactly the exposure class this project's security invariants exist to prevent. Notes explicitly this is an authoring-discipline invariant, not something acceptBaseline/rebaseline can mechanically verify from PNG bytes -- and states plainly it is deliberately NOT deferred to §8 as an open question.\n\n2. §2.2 (accept action): added a 'Precondition (§1.5)' paragraph before its numbered steps, cross-referencing the new section.\n\n3. §4.1 (re-baseline action): added a 'Precondition (§1.5)' paragraph, explicit that a re-baseline does not get a pass on this invariant merely because the baseline it replaces was already accepted.\n\n4. §7's AC map: added a new row '(data-handling scope implicit in AC-1/AC-2 -- what may be captured into a permanent baseline) | §1.5 (binding synthetic/disclosed-fictional-data-only policy, cross-referenced from §2.2 and §4.1)'.\n\n5. §8 left untouched -- no new open question added; the policy is a stated decision per the task's explicit instruction.\n\nOPTIONAL DOCSTRING (my discretion, per the diagnosis's part (c) and the dispatch's explicit 'your call'): added a one-line-plus cross-reference to §1.5 in the JSDoc comments above both acceptBaseline and rebaseline in web/tests/support/visual-baseline.ts, stating the caller-side precondition and that it is not enforceable from PNG bytes. Judged worth adding: near-zero cost, makes the invariant visible at the call site for whoever implements the first real authenticated gui_screen scenario, and is explicitly comment-only -- does not add, or gesture at adding, any redaction/synthetic-data-enforcement code, so it does not trigger ISS-0692's AC2 implementation clause. No other change made to that file; acceptBaseline/rebaseline's logic, signatures, and error-throwing behavior are byte-for-byte unchanged.\n\nNo implementation/enforcement code was written anywhere (no redaction transform, no synthetic-data validator) -- consistent with (b)/(c) of the diagnosis and this dispatch's explicit instruction. AC2's implementation clause ('if a redaction or synthetic-data mechanism is chosen, it is implemented') is not triggered: the chosen policy is a content/authoring discipline, not a mechanism acceptBaseline/rebaseline's code enforces, and no baseline has yet been committed for the policy to apply retroactively to.",
+    "artifacts_out": [
+      "lib/letflow/design/req362-visual-regression-testing.md",
+      "web/tests/support/visual-baseline.ts"
+    ],
+    "issues": [
+      {
+        "id": "ISS-0692",
+        "note": "MINOR, self-caught, no external impact: the first commit attempt landed on 'main' instead of 'feature/WF03-ISS0692-20260917' -- a prior `git branch --show-current` check earlier in this session had confirmed the feature branch, but by the time `git commit` ran the working directory had reverted to `main` (root cause not conclusively identified; possibly a stale cached cwd/branch state between tool calls in this environment). Caught immediately via a post-commit `git branch --show-current` check (commit 6dfafd49 on main, main only 1 ahead of origin/main, never pushed). Recovered before any push: tagged the commit on a temp branch, checked out the correct feature branch, cherry-picked the commit onto it (now 5e9a7af6), reset main's local branch pointer back to its original commit (6ad5ab2c, matching origin/main), and deleted the temp branch. Final state verified: main untouched, feature/WF03-ISS0692-20260917 carries the change, nothing pushed until this handoff is finalized. Flagging so ORCH/REVIEWER can decide whether this environment's branch-state reporting needs a fix recorded in docs/anti-patterns.md."
+      }
+    ],
+    "git_evidence": {
+      "branch_name": "feature/WF03-ISS0692-20260917",
+      "commit_sha_list": ["73175416"],
+      "remote_branch": "origin/feature/WF03-ISS0692-20260917",
+      "push_status": "pushed",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": "Route to CODE-DESIGN-VALIDATOR: re-check lib/letflow/design/req362-visual-regression-testing.md's new §1.5 (and its §2.2/§4.1/§7 cross-references) for completeness, unambiguity, and absence of implementation code, per ISS-0692's acceptance criteria. No implementation step follows for the design content itself -- this fix is design-only. The optional web/tests/support/visual-baseline.ts docstring addition (comment-only, no logic change) should also be confirmed as non-functional during that gate."
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

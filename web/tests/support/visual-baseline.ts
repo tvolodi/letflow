@@ -170,6 +170,12 @@ function sha256File(filePath: string): string {
  * exists for this key — callers must check `baselineExists` first (design
  * §2.2 step 4: an existing baseline routes to phase 2, never a silent
  * overwrite here).
+ *
+ * Data-sensitivity precondition (design §1.5): callers must only invoke this
+ * against a screenshot captured from a screen seeded with synthetic/
+ * disclosed-fictional actor and tenant data — never real tenant PII. This is
+ * not something this function can check from the PNG bytes; it is the
+ * caller's (scenario author's / accepting agent's) responsibility.
  */
 export function acceptBaseline(key: BaselineKey, sourcePngPath: string, prov: AcceptProvenance, runId: string): void {
   if (baselineExists(key)) {
@@ -201,6 +207,10 @@ export function acceptBaseline(key: BaselineKey, sourcePngPath: string, prov: Ac
  * Re-baseline action (design §4.3). Requires an existing baseline and a
  * non-blank, non-generic `justification`. Appends to the sidecar's
  * append-only `history` list and overwrites the baseline PNG.
+ *
+ * Data-sensitivity precondition (design §1.5): same as `acceptBaseline` —
+ * the replacement screenshot must be synthetic/disclosed-fictional data
+ * only, never real tenant PII. Not enforceable from the PNG bytes here.
  */
 export function rebaseline(key: BaselineKey, newPngPath: string, entry: RebaselineEntry): void {
   if (!baselineExists(key)) {

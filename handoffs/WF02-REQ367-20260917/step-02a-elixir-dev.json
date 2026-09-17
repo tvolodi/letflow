@@ -8,8 +8,8 @@
   "file": "handoffs/WF02-REQ367-20260917/step-02a-elixir-dev.json",
   "created_at": "2026-09-17T17:40:00Z",
   "started_at": "2026-09-17T17:40:00Z",
-  "completed_at": null,
-  "status": "PENDING",
+  "completed_at": "2026-09-17T18:15:00Z",
+  "status": "COMPLETED",
   "priority": "NORMAL",
   "context": {
     "stage": "S7",
@@ -40,7 +40,31 @@
       "Both new files' header comments explicitly state the redeploy-test.sh/redeploy-qa.sh relationship and QA-only deploy scope"
     ]
   },
-  "result": null,
+  "result": {
+    "status": "PASS",
+    "artifacts_out": [
+      "deploy/redeploy-qa.sh (new)",
+      ".github/workflows/cd.yml (new)",
+      ".github/workflows/ci.yml (modified -- additive only, two new steps in the `changes` job)"
+    ],
+    "next_action": "Route to SECURITY-REVIEWER (2c)",
+    "validation_evidence": {
+      "mix_compile_warnings_as_errors": "N/A -- no .ex/.exs file touched; this is pure shell+YAML infrastructure work",
+      "mix_format_check_formatted": "N/A -- no Elixir file touched; skipped for the same reason as the compile check",
+      "bash_syntax_check": "bash -n deploy/redeploy-qa.sh -> exit 0, no output",
+      "yaml_parse_cd_yml": "python -c \"import yaml; yaml.safe_load(open('.github/workflows/cd.yml'))\" -> OK_CD_YML",
+      "yaml_parse_ci_yml": "python -c \"import yaml; yaml.safe_load(open('.github/workflows/ci.yml'))\" -> OK_CI_YML (re-validated after the addition)",
+      "redeploy_test_sh_untouched": "git diff --stat -- deploy/redeploy-test.sh -> empty (zero changes)",
+      "ci_yml_diff_review": "git diff -- .github/workflows/ci.yml shows only two new appended steps ('Write path-filter outputs for cd.yml', 'Upload path-filter outputs') after the existing fallback step -- zero lines changed in the existing filter/fallback steps' diff/regex logic",
+      "no_hardcoded_secrets": "grep -i 'password|secret|token|key' over deploy/redeploy-qa.sh -> only comment references to the SSH deploy-key mechanism and the qa.env sourcing convention; VITE_OIDC_* and QA_BACKEND_PORT are sourced from a host-local $APP_DIR/qa.env file, never hardcoded; cd.yml's three new secret names (QA_DEPLOY_HOST/QA_DEPLOY_USER/QA_DEPLOY_SSH_KEY) are referenced, not provisioned, per design/requirement"
+    },
+    "open_items_for_downstream_review": [
+      "deploy/docker-compose.qa.yml does not exist in this checkout (confirmed via `ls deploy/`) and was NOT authored by this handoff -- it is outside owned_modules and design §7 item 2 leaves its authorship as an open question rather than silently assuming it exists or creating it. redeploy-qa.sh's $COMPOSE variable references it by the same convention as redeploy-test.sh/docker-compose.test.yml; the compose file must exist on the QA host (or be authored as a follow-up) before this script can actually run.",
+      "Backend health-check port (design §7 item 4) is resolved by sourcing QA_BACKEND_PORT from qa.env with a 3113 fallback default (matching redeploy-test.sh's value) rather than a confirmed QA-specific port -- flagged in the script's own comment for host-state confirmation.",
+      "qa.env's exact path/existence on ubuntu-16gb-nbg1-1 (design §7 item 3) is assumed by convention, not confirmed against actual host state or the T-0125/T-0128/T-0129/T-0131 task records (not reachable from this checkout).",
+      "Web-dist backup retention/pruning (design §7 item 5) is intentionally left unbounded, per the design's explicit decision not to invent an unrequested retention policy."
+    ]
+  },
   "rework_count": 0,
   "max_rework": 3
 }

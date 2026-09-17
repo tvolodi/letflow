@@ -1,0 +1,59 @@
+{
+  "handoff_id": "b6f3a1d2-0004-4a00-9c00-wf03iss0699003",
+  "run_id": "WF03-ISS0699-20260917",
+  "workflow_id": "WF-03",
+  "step": "02b",
+  "from_agent": "ORCH",
+  "to_agent": "CODE-DESIGN-VALIDATOR",
+  "file": "handoffs/WF03-ISS0699-20260917/step-02b-code-design-validator.json",
+  "created_at": "2026-09-16T21:18:49Z",
+  "started_at": "2026-09-16T22:24:05Z",
+  "completed_at": "2026-09-16T22:24:59Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": null,
+    "requirement_ids": [],
+    "requirement_text": {},
+    "source_text": {},
+    "related_handoff_ids": [],
+    "artifacts_in": [
+      "lib/letflow/design/iss0699-test-parallel-tmpdir-cleanup-fix.md",
+      "handoffs/WF03-ISS0699-20260917/step-01-issue-fixer-diagnosis.json",
+      "docs/issues/ISS-0699.yaml",
+      "scripts/test_parallel.sh",
+      "lib/mix/tasks/letflow.check.test.ex",
+      "handoffs/WF03-ISS0699-20260917/step-final-git-merge.json",
+      "handoffs/WF03-ISS0699-20260917/step-02-code-designer.json"
+    ],
+    "owned_modules": ["scripts/test_parallel.sh", "lib/mix/tasks/letflow.check.test.ex"]
+  },
+  "task": {
+    "description": "WF-03 Step 2b REGATE (not a rejection of your own prior PASS -- CODE-DESIGNER's design changed underneath it after Step Final's CI run found a real gap iteration 0 didn't cover). On branch feature/WF03-ISS0699-20260917. lib/letflow/design/iss0699-test-parallel-tmpdir-cleanup-fix.md was revised in place: new section 3a adds caller-side coordination with lib/mix/tasks/letflow.check.test.ex (passes TEST_PARALLEL_KEEP_LOGS=1 when invoking scripts/test_parallel.sh, and itself removes the log dir in a try/after around its existing check_main_suite_logs call). Independently read the FULL updated design doc yourself (not CODE-DESIGNER's own summary) and handoffs/WF03-ISS0699-20260917/step-final-git-merge.json's result.summary/issues for the exact CI failure this must fix, and lib/mix/tasks/letflow.check.test.ex's actual current code at the cited call sites. Verify: (a) the original 4 exit-path/trap/env-var design elements from iteration 0 are still intact and correct, (b) the new section names the exact call site(s) in letflow.check.test.ex being changed and the exact mechanism (env var passthrough + try/after cleanup), unambiguous enough for ELIXIR-DEV to implement without inventing anything, (c) it explicitly confirms the ISS-0069 substring-check logic itself is untouched, (d) no ready-to-paste diff is present for either file. Claim by flipping status to IN_PROGRESS on receipt, and set it to COMPLETED/FAILED as normal when you finish.",
+    "acceptance_criteria": [
+      "PASS only if all 3 of ISS-0699's own acceptance_criteria still map to concrete design elements after the revision",
+      "PASS only if every exit path from the diagnosis is still explicitly dispositioned",
+      "PASS only if the trap+cleanup-function shape is unambiguous",
+      "PASS only if the new letflow.check.test.ex coordination (env var passthrough + which call site cleans up the log dir) is unambiguous and correctly fixes the CI failure recorded in step-final-git-merge.json",
+      "PASS only if the design confirms the ISS-0069 substring-check logic is untouched",
+      "FAIL if either file's edit is presented as a finished, ready-to-ship diff instead of a design-level specification"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "ITERATION 0 RESULT (superseded, kept for reference): PASS -- see git history of this file for the full iteration-0 verification. REGATE (iteration 1) independently verified: read the full revised lib/letflow/design/iss0699-test-parallel-tmpdir-cleanup-fix.md, handoffs/WF03-ISS0699-20260917/step-final-git-merge.json's CI failure evidence (PR #1469, 'partition log directory ... contains zero partition-*.log files' on every clean run because the new EXIT trap deleted tmp_dir before letflow.check.test.ex could read it), and lib/mix/tasks/letflow.check.test.ex's actual current code. Confirmed directly against the live file: run_main_suite/0 (lines 159-198) is the sole caller of scripts/test_parallel.sh via stream_and_capture/2 at line 169 (grepped all 4 stream_and_capture call sites -- 169, 493, 688, 726 -- only 169 invokes the script; the other three call plain `mix test`, matching the design's claim that they must not receive the new env arg); stream_and_capture/2 (lines 780-792) is currently 2-arity with a fixed Port.open opts list and no :env passthrough, matching §3a.2's stated baseline; check_main_suite_logs/2 (lines 226-266) has exactly the four outcomes (empty logs raise, exit_code!=0 raise via report_partition_failures, {:offending,_} raise, :ok info) the design's §3a.3 try/after claims to cover; the {:ok, log_dir} branch calling resolve_native_path/check_main_suite_logs is at line 196 as cited. (a) Iteration-0's trap registration point, cleanup-function pseudocode, TEST_PARALLEL_KEEP_LOGS contract, and 4-row exit-path disposition table (§2-§3) are unchanged and remain internally consistent with the new §3a caveat (caller-scoped opt-out for this one subprocess only). (b) §3a.2/§3a.3 name the exact call sites (line 169 for the env passthrough, line 196's {:ok, log_dir} branch wrapped in try/after for cleanup) and the exact mechanism (new optional `env \\\\ []` arg threaded into Port.open's :env opt; try/after around check_main_suite_logs with File.rm_rf!/1 in after) -- unambiguous enough to implement without invention; only a genuine FFI-typing detail (binary vs charlist for the env tuple, OQ-3) is correctly left open since it doesn't affect the design's reasoning. (c) §3a.4 explicitly confirms @target_substring/find_partition_log_dir/1/check_substring_across_logs/1/report_partition_failures/1 etc. are untouched, with a correct ordering argument (try body, including check_main_suite_logs's full internal execution, completes before after fires). (d) No ready-to-paste diff for either file -- both scripts/test_parallel.sh and letflow.check.test.ex edits remain pseudocode/shape-level with explicit open questions (OQ-2, OQ-3) left to ELIXIR-DEV. All 6 acceptance criteria of this handoff met.",
+    "artifacts_out": ["lib/letflow/design/iss0699-test-parallel-tmpdir-cleanup-fix.md"],
+    "issues": [],
+    "git_evidence": {
+      "branch_name": "feature/WF03-ISS0699-20260917",
+      "commit_sha_list": [],
+      "remote_branch": null,
+      "push_status": "pending",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": "Route to ELIXIR-DEV (Step 3 re-implement)"
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

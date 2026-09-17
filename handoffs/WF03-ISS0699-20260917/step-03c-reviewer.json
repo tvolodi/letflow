@@ -1,0 +1,55 @@
+{
+  "handoff_id": "b6f3a1d2-0007-4a00-9c00-wf03iss0699006",
+  "run_id": "WF03-ISS0699-20260917",
+  "workflow_id": "WF-03",
+  "step": "03c",
+  "from_agent": "ORCH",
+  "to_agent": "REVIEWER",
+  "file": "handoffs/WF03-ISS0699-20260917/step-03c-reviewer.json",
+  "created_at": "2026-09-16T21:22:08Z",
+  "started_at": "2026-09-16T22:56:04Z",
+  "completed_at": "2026-09-17T00:00:00Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": null,
+    "requirement_ids": [],
+    "requirement_text": {},
+    "source_text": {},
+    "related_handoff_ids": [],
+    "artifacts_in": [
+      "scripts/test_parallel.sh",
+      "lib/mix/tasks/letflow.check.test.ex",
+      "lib/letflow/design/iss0699-test-parallel-tmpdir-cleanup-fix.md",
+      "handoffs/WF03-ISS0699-20260917/step-03b-security-reviewer.json"
+    ],
+    "owned_modules": ["scripts/test_parallel.sh", "lib/mix/tasks/letflow.check.test.ex"]
+  },
+  "task": {
+    "description": "WF-03 Step 3c REGATE -- REVIEWER gate for ISS-0699's rework iteration 1. On branch feature/WF03-ISS0699-20260917, SECURITY-REVIEWER already PASSed the regate (out of scope). Your prior PASS on scripts/test_parallel.sh stands (unchanged this iteration). This regate is scoped to the NEW change: run `git diff main...HEAD -- lib/mix/tasks/letflow.check.test.ex` and verify it matches design section 3a (no drift): stream_and_capture/2->/3 env-arg threading, run_main_suite/0's call site passing TEST_PARALLEL_KEEP_LOGS=1, and check_main_suite_logs(...) wrapped in try/after with File.rm_rf!(native_log_dir) on every outcome. Also verify: the ISS-0069 substring-check logic itself is provably untouched (diff the relevant functions against main), no scope creep beyond these two changes, and the change doesn't silently contradict any existing decision record touching this file (docs/migration/decisions/0009-test-parallel-pool-sizing.md, and ISS-0428's own design doc lib/letflow/design/iss0428-parallel-runner-in-check-test.md which originally justified this task's shell-out approach). Claim by flipping status to IN_PROGRESS on receipt, and set it to COMPLETED/FAILED as normal when you finish.",
+    "acceptance_criteria": [
+      "Implementation matches the passed design section 3a with no unexplained drift",
+      "ISS-0069 substring-check logic provably untouched",
+      "No scope creep beyond the two named changes",
+      "No contradiction with any decision record or prior design doc governing this file",
+      "try/after correctly covers every outcome branch (zero logs, real failures, substring match, clean pass) -- not just the happy path"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "REGATE PASS. Verified `git diff main...HEAD -- lib/mix/tasks/letflow.check.test.ex` matches design doc iss0699-test-parallel-tmpdir-cleanup-fix.md §3a exactly: (1) stream_and_capture/2 -> /3 with `env \\\\ []` default, threaded into Port.open's :env opts list, converted name/value to charlists only when non-empty -- correct per OTP's :env port option requiring charlists/atoms not binaries, and the three other call sites (run_discovery_dry_run/0, run_single_wasm_hang_test/1, run_lua_wallclock_race_tests/0) stay 2-arity/unaffected (confirmed not in the diff). (2) run_main_suite/0's one call site (line ~173) now passes [{\"TEST_PARALLEL_KEEP_LOGS\", \"1\"}], scoped to only that invocation, matching §3a.2. (3) the {:ok, log_dir} branch binds native_log_dir and wraps check_main_suite_logs/2 in try/after with File.rm_rf!(native_log_dir) in the after clause -- covers all four of that function's outcomes (zero logs, real failures/report_partition_failures, ISS-0069 substring match, clean :ok pass) since Elixir's after fires on both normal return and Mix.raise's raised exception; read-before-delete ordering holds by try/after evaluation order, not timing. ISS-0069 substring-check logic (@target_substring, find_partition_log_dir/1, check_substring_across_logs/1, report_partition_failures/1) does not appear anywhere in the diff -- provably untouched. No scope creep: diff is confined to stream_and_capture/2->3 and the one run_main_suite/0 call site/branch; scripts/test_parallel.sh's diff (trap/cleanup function) matches design §2, unchanged from the already-PASSed iteration-0 review (prior PASS on that file stands). No contradiction with docs/migration/decisions/0009-test-parallel-pool-sizing.md (pool-sizing arithmetic untouched) or lib/letflow/design/iss0428-parallel-runner-in-check-test.md (log-dir discovery/shell-out contract unchanged; this change only moves temp-dir lifetime ownership from the script's trap to the caller, which composes with, not contradicts, ISS-0428's design). No OTP idiom/supervision concerns -- this is Mix-task/tooling code, no process/supervision surface involved.",
+    "artifacts_out": [],
+    "issues": [],
+    "git_evidence": {
+      "branch_name": "feature/WF03-ISS0699-20260917",
+      "commit_sha_list": [],
+      "remote_branch": null,
+      "push_status": "pending",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": "Route to TEST-DESIGNER (Step 4 regression test, rework iteration 1)"
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

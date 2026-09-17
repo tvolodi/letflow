@@ -1,0 +1,55 @@
+{
+  "handoff_id": "b6f3a1d2-000c-4a00-9c00-wf03iss0699011",
+  "run_id": "WF03-ISS0699-20260917",
+  "workflow_id": "WF-03",
+  "step": "FINAL",
+  "from_agent": "ORCH",
+  "to_agent": "ELIXIR-DEV",
+  "file": "handoffs/WF03-ISS0699-20260917/step-final-git-merge.json",
+  "created_at": "2026-09-16T21:28:43Z",
+  "started_at": "2026-09-16T23:32:12Z",
+  "completed_at": null,
+  "status": "IN_PROGRESS",
+  "priority": "NORMAL",
+  "context": {
+    "stage": null,
+    "requirement_ids": [],
+    "requirement_text": {},
+    "source_text": {},
+    "related_handoff_ids": [],
+    "artifacts_in": [
+      "docs/agents/protocols/GIT_MERGE.md",
+      "handoffs/WF03-ISS0699-20260917/step-04c-test-runner-rework1.json",
+      "handoffs/WF03-ISS0699-20260917/step-03b-security-reviewer.json"
+    ],
+    "owned_modules": ["scripts/test_parallel.sh", "lib/mix/tasks/letflow.check.test.ex"]
+  },
+  "task": {
+    "description": "WF-03 Step Final RETRY (rework iteration 1) for ISS-0699, queue task 699, GH#1468 (already closed -- resolution stands, now genuinely verified). PR #1469 (https://github.com/tvolodi/letflow/pull/1469) is already open from the first attempt, which FAILED at CI on a real bug (scripts/test_parallel.sh's cleanup trap deleted logs before lib/mix/tasks/letflow.check.test.ex could read them). That bug is now fixed (rework iteration 1, commits ffc7bd1c onward) and independently re-verified: TEST-RUNNER ran the real `mix letflow.check.test` gate twice on this branch and both times it completed clean (4331/4331 passed, 0 failures) -- see handoffs/WF03-ISS0699-20260917/step-04c-test-runner-rework1.json. On branch feature/WF03-ISS0699-20260917. Follow docs/agents/protocols/GIT_MERGE.md from step 2 onward (branch/PR already exist -- do not create a second PR): stage/commit any remaining files, fetch+rebase onto origin/main, run mix format --check-formatted / mix compile --warnings-as-errors / mix test after rebase (attribute any failure structurally), push the rebased branch to the SAME branch/PR #1469 (force-with-lease only if a plain push is rejected as non-fast-forward), update the existing PR #1469's body if needed to reflect the rework, wait for CI (backend+frontend jobs) to go green via `gh pr checks 1469` in a bounded poll loop (check every 1-2 minutes, do not rely on an internally-armed monitor -- poll synchronously, this failed last time specifically at the CI step so verify it for real this time), then merge with `gh pr merge --squash --delete-branch`, then do the mandatory local cleanup (checkout main, pull --ff-only, delete local branch) and verify a clean tree. Claim by flipping status to IN_PROGRESS on receipt, and set it to COMPLETED/FAILED as normal when you finish.",
+    "acceptance_criteria": [
+      "gh pr merge exited 0 against the EXISTING PR #1469 (not a newly created PR)",
+      "CI's backend job specifically confirmed green this time (this is the exact job that failed last attempt) -- quote the real gh pr checks output",
+      "git branch --show-current is main after cleanup",
+      "git pull --ff-only on main after merge exited 0",
+      "git status shows a clean working tree",
+      "PR body's mix test line states real pass/fail counts and attribution route, never a bare unsourced PASS"
+    ]
+  },
+  "result": {
+    "status": "PENDING",
+    "summary": "ITERATION 0 RESULT (superseded -- root cause since fixed in rework iteration 1, re-verified twice by TEST-RUNNER via a real `mix letflow.check.test` run): FAIL. CI's 'Backend gate (mix letflow.check)' job failed with 'mix letflow.check.test: FAILED -- partition log directory ... contains zero partition-*.log files', caused by scripts/test_parallel.sh's new cleanup trap deleting logs before lib/mix/tasks/letflow.check.test.ex could read them. PR #1469 was left open, unmerged. See git history of this file for the full iteration-0 account. This retry re-runs Step Final now that the fix is in place and re-verified.",
+    "artifacts_out": [],
+    "issues": [],
+    "git_evidence": {
+      "branch_name": null,
+      "commit_sha_list": [],
+      "remote_branch": null,
+      "push_status": "skipped",
+      "pr_url": "https://github.com/tvolodi/letflow/pull/1469",
+      "pr_create_error": null
+    },
+    "next_action": ""
+  },
+  "rework_count": 1,
+  "max_rework": 3
+}

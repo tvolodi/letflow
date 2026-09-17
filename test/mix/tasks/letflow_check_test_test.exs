@@ -729,6 +729,83 @@ defmodule Mix.Tasks.Letflow.Check.TestTest do
     :ok
   end
 
+  # REWORK ITERATION 1 (ISS-0699 design doc §3a): a fake `bash` whose behavior
+  # actually depends on whether TEST_PARALLEL_KEEP_LOGS reached its own process
+  # environment -- not a static canned response. When the var is present (any
+  # non-empty value, mirroring the real script's `[ -z "${TEST_PARALLEL_KEEP_LOGS:-}" ]`
+  # truthiness check per design doc §2.4), it behaves like a normal clean run and
+  # prints the partition-log-directory line; when absent, it deliberately does NOT
+  # print that line and exits nonzero instead -- reproducing exactly what the real
+  # script would do if this caller never set the var (its own trap would already
+  # have deleted `tmp_dir` by the time this task tried to read it, per the design
+  # doc's REWORK ITERATION 1 root-cause section). This is the only way to prove the
+  # env var actually crosses the Port.open/2 boundary into the subprocess's own
+  # environment -- asserting on `letflow.check.test.ex`'s source text would only
+  # prove the call site was edited, not that Erlang's `:env` port option, the
+  # charlist/binary typing, and stream_and_capture/3's threading of the value all
+  # actually work end-to-end.
+  defp install_env_var_aware_fake_bash(fake_bin_dir, log_dir) do
+    case :os.type() do
+      {:win32, _} ->
+        # Companion-file + `type` technique (matches install_fake_executable/4 and the
+        # ISS-0524 wasm_hang fixtures above), NOT inline `echo` -- batch's `echo`
+        # unconditionally appends CRLF, which would leave a trailing "\r" glued onto
+        # the captured directory path (find_partition_log_dir/1's regex is a plain
+        # multiline match with no per-line "\r" stripping, unlike
+        # split_output_lines/1's wasm_hang-discovery path), silently breaking
+        # File.exists?/1 and Path.wildcard/1 downstream. Verified live: the inline-echo
+        # version of this fixture reproducibly made check_main_suite_logs/2 report
+        # "zero partition-*.log files" even though the directory and its files exist.
+        set_output_path = Path.join(fake_bin_dir, "env_aware_bash_set.txt")
+        unset_output_path = Path.join(fake_bin_dir, "env_aware_bash_unset.txt")
+
+        File.write!(
+          set_output_path,
+          "test_parallel: N=2 (source: fake)\ntest_parallel: partition logs in #{log_dir}\n"
+        )
+
+        File.write!(
+          unset_output_path,
+          "test_parallel: TEST_PARALLEL_KEEP_LOGS was not set on this invocation\n"
+        )
+
+        set_output_win = String.replace(set_output_path, "/", "\\")
+        unset_output_win = String.replace(unset_output_path, "/", "\\")
+
+        fake_path = Path.join(fake_bin_dir, "bash.bat")
+
+        File.write!(fake_path, """
+        @echo off
+        if defined TEST_PARALLEL_KEEP_LOGS (
+          type "#{set_output_win}"
+          exit /b 0
+        ) else (
+          type "#{unset_output_win}"
+          exit /b 1
+        )
+        """)
+
+      _ ->
+        fake_path = Path.join(fake_bin_dir, "bash")
+
+        File.write!(fake_path, """
+        #!/bin/sh
+        if [ -n "${TEST_PARALLEL_KEEP_LOGS:-}" ]; then
+          echo "test_parallel: N=2 (source: fake)"
+          echo "test_parallel: partition logs in #{log_dir}"
+          exit 0
+        else
+          echo "test_parallel: TEST_PARALLEL_KEEP_LOGS was not set on this invocation"
+          exit 1
+        fi
+        """)
+
+        File.chmod!(fake_path, 0o755)
+    end
+
+    :ok
+  end
+
   describe "mix letflow.check.test's re-pointed ISS-0069 gate (design doc section 1)" do
     test "raises and reports the offending line, with partition attribution, when the target substring is present in a per-partition log even though the wrapper exited 0",
          %{fixture_root: fixture_root, fake_bin_dir: fake_bin_dir} do
@@ -1135,6 +1212,61 @@ defmodule Mix.Tasks.Letflow.Check.TestTest do
 
       unmapped_name = "totally_unmapped_executable_name_#{System.unique_integer([:positive])}"
       assert resolver.(unmapped_name) == nil
+    end
+  end
+
+  describe "ISS-0699 REWORK ITERATION 1 regression: caller-side env-var passthrough and log-dir cleanup (design doc §3a)" do
+    # Proves (a): TEST_PARALLEL_KEEP_LOGS=1 set by run_main_suite/0's own
+    # stream_and_capture/3 call actually reaches the invoked `bash` subprocess's own
+    # environment, not merely present somewhere in this module's source. Uses
+    # install_env_var_aware_fake_bash/2, whose behavior branches on whether the var is
+    # visible inside ITS OWN process -- so this can only pass if Port.open/2 truly
+    # received an :env entry carrying it.
+    #
+    # This is exactly the bug Step Final's CI run caught (design doc REWORK ITERATION 1
+    # section): against the pre-rework-1 shape (stream_and_capture/2, no env
+    # passthrough at all), this fake bash never observes TEST_PARALLEL_KEEP_LOGS, never
+    # prints the partition-log-directory line, and exits 1 -- so run/1 raises instead of
+    # returning :ok.
+    test "TEST_PARALLEL_KEEP_LOGS=1 set on run_main_suite/0's own bash invocation reaches the subprocess's own environment",
+         %{fixture_root: fixture_root, fake_bin_dir: fake_bin_dir} do
+      log_dir =
+        write_partition_log(fixture_root, "logs", "partition-1.log", "Result: 5/5 passed\n")
+
+      write_partition_log(fixture_root, "logs", "partition-2.log", "Result: 3/3 passed\n")
+
+      install_env_var_aware_fake_bash(fake_bin_dir, log_dir)
+      install_wasm_hang_aware_fake_mix(fake_bin_dir)
+
+      io = run_and_capture_ok(fake_bin_dir)
+
+      assert io =~ "OK -- no test failures, no ISS-0069 warnings"
+      refute io =~ "TEST_PARALLEL_KEEP_LOGS was not set"
+    end
+
+    # Proves (b): the partition-log directory is actually removed (not merely read)
+    # once check_main_suite_logs/2 finishes with a clean run -- restoring, from this
+    # caller's side, the bounded-accumulation property ISS-0699 originally wanted for
+    # scripts/test_parallel.sh itself (design doc §3a, "now owned by this file instead
+    # of the script"). Against the pre-rework-1 shape (no try/after, no
+    # File.rm_rf!/1 call anywhere in run_main_suite/0), this directory survives the run
+    # untouched, so the `refute File.exists?/1` below fails there and passes on the
+    # current branch.
+    test "the partition-log directory is removed after a clean run's own successful read",
+         %{fixture_root: fixture_root, fake_bin_dir: fake_bin_dir} do
+      log_dir =
+        write_partition_log(fixture_root, "logs", "partition-1.log", "Result: 5/5 passed\n")
+
+      write_partition_log(fixture_root, "logs", "partition-2.log", "Result: 3/3 passed\n")
+
+      assert File.exists?(log_dir)
+
+      install_fake_executable(fake_bin_dir, "bash", fake_runner_stdout(log_dir), 0)
+      install_wasm_hang_aware_fake_mix(fake_bin_dir)
+
+      _io = run_and_capture_ok(fake_bin_dir)
+
+      refute File.exists?(log_dir)
     end
   end
 end

@@ -1,0 +1,55 @@
+{
+  "handoff_id": "b6f3a1d2-000d-4a00-9c00-wf03iss0699012",
+  "run_id": "WF03-ISS0699-20260917",
+  "workflow_id": "WF-03",
+  "step": "04-rework1",
+  "from_agent": "ORCH",
+  "to_agent": "TEST-DESIGNER",
+  "file": "handoffs/WF03-ISS0699-20260917/step-04-test-designer-rework1.json",
+  "created_at": "2026-09-16T22:57:27Z",
+  "started_at": "2026-09-16T22:57:27Z",
+  "completed_at": "2026-09-16T23:09:31Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": null,
+    "requirement_ids": [],
+    "requirement_text": {},
+    "source_text": {},
+    "related_handoff_ids": [],
+    "artifacts_in": [
+      "lib/mix/tasks/letflow.check.test.ex",
+      "test/mix/tasks/letflow_check_test_test.exs",
+      "lib/letflow/design/iss0699-test-parallel-tmpdir-cleanup-fix.md",
+      "handoffs/WF03-ISS0699-20260917/step-03-elixir-dev.json",
+      "handoffs/WF03-ISS0699-20260917/step-final-git-merge.json"
+    ],
+    "owned_modules": ["lib/mix/tasks/letflow.check.test.ex"]
+  },
+  "task": {
+    "description": "WF-03 Step 4 REWORK ITERATION 1 -- additional regression coverage. On branch feature/WF03-ISS0699-20260917. The existing test/scripts/test_parallel_tmpdir_cleanup_test.sh (from iteration 0) already covers scripts/test_parallel.sh's own trap mechanism in isolation and still passes unchanged -- do not touch it. This dispatch covers the NEW rework-iteration-1 fix in lib/mix/tasks/letflow.check.test.ex only: the exact bug Step Final's CI run caught (the task's own log-reading call failing with 'contains zero partition-*.log files' once the script's trap started deleting logs on success) is a regression in THIS file's coordination with the script, not in the script itself -- and nothing in the existing test suite (test/mix/tasks/letflow_check_test_test.exs, 15/15 passing per ELIXIR-DEV's report) currently proves this specific bug is fixed, because that suite was written before this rework existed. Add a regression test to test/mix/tasks/letflow_check_test_test.exs (follow its own existing describe-block conventions -- see 'mix letflow.check.test's re-pointed ISS-0069 gate' etc. for the established pattern of exercising this module's behaviour, likely via the same stub/fake-script seam those existing tests already use) that: (a) proves the task's TEST_PARALLEL_KEEP_LOGS=1 env-var passthrough is actually reaching the invoked script (not just present in source), and (b) proves the log directory is removed after a clean run's own successful read (bounding accumulation, restoring what ISS-0699 originally wanted, now owned by this file instead of the script). Demonstrate fail-then-pass: temporarily revert lib/mix/tasks/letflow.check.test.ex to its pre-rework-1 state (git show for the commit just before ffc7bd1c, or use `git diff` to construct the reversal) in a scratch copy/worktree, confirm your new test FAILS there (reproducing the exact CI-caught bug locally), then confirm it PASSES against the current branch state. Quote both real run outputs in result.summary. Claim by flipping status to IN_PROGRESS on receipt, and set it to COMPLETED/FAILED as normal when you finish.",
+    "acceptance_criteria": [
+      "New test(s) added to test/mix/tasks/letflow_check_test_test.exs proving env-var passthrough reaches the invoked script and proving log-dir cleanup happens after a clean run",
+      "Demonstrated (and quoted in result.summary) to FAIL against the pre-rework-1 state of lib/mix/tasks/letflow.check.test.ex and PASS against the current state",
+      "test/scripts/test_parallel_tmpdir_cleanup_test.sh from iteration 0 left untouched and still passing",
+      "mix test test/mix/tasks/letflow_check_test_test.exs passes in full after your addition"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "Added a new describe block 'ISS-0699 REWORK ITERATION 1 regression: caller-side env-var passthrough and log-dir cleanup (design doc §3a)' to test/mix/tasks/letflow_check_test_test.exs with 2 tests: (a) 'TEST_PARALLEL_KEEP_LOGS=1 set on run_main_suite/0's own bash invocation reaches the subprocess's own environment' -- uses a new install_env_var_aware_fake_bash/2 helper whose fake `bash` branches its OWN behavior on whether TEST_PARALLEL_KEEP_LOGS is visible in ITS OWN process environment (prints the partition-log-dir line and exits 0 only if set; otherwise exits 1 without printing it), so the test can only pass if the env var genuinely crossed the Port.open/2 :env boundary, not merely appears in source. (b) 'the partition-log directory is removed after a clean run's own successful read' -- asserts `refute File.exists?(log_dir)` after a clean run.\n\nFAIL-THEN-PASS PROOF (both real runs quoted):\n\n1) PRE-REWORK-1 (scratch swap of lib/mix/tasks/letflow.check.test.ex to git show 0b02f6d9:<path>, the commit immediately before ffc7bd1c, verified via `git diff --stat` showing exactly the ISS-0699 rework-1 diff reverted -- 56 lines changed, no stray edits; working tree fully restored afterward, confirmed via `git status --porcelain` showing only the test file modified post-restore):\n`mix test test/mix/tasks/letflow_check_test_test.exs` output:\n```\n  1) test ISS-0699 REWORK ITERATION 1 regression: ... the partition-log directory is removed after a clean run's own successful read (Mix.Tasks.Letflow.Check.TestTest)\n     test/mix/tasks/letflow_check_test_test.exs:1255\n     Expected false or nil, got true\n     code: refute File.exists?(log_dir)\n\n  2) test ISS-0699 REWORK ITERATION 1 regression: ... TEST_PARALLEL_KEEP_LOGS=1 set on run_main_suite/0's own bash invocation reaches the subprocess's own environment (Mix.Tasks.Letflow.Check.TestTest)\n     test/mix/tasks/letflow_check_test_test.exs:1231\n     ** (Mix.Error) mix letflow.check.test: FAILED -- scripts/test_parallel.sh exited 1 before ever printing its partition-log-directory line ...\n\nResult: 15/17 passed\nFailed: 2 tests\n```\nBoth new tests fail against pre-rework-1 code, reproducing the exact CI-caught bug class (env var not forwarded / log dir not cleaned up).\n\n2) CURRENT branch state (post-restore, byte-identical to pre-edit lib file per `cp` back from backup):\n`mix test test/mix/tasks/letflow_check_test_test.exs` output:\n```\nResult: 17 passed\n```\nAll 17 tests, including both new ones, pass.\n\n3) Full gate: `mix letflow.check.test` (real run, not backgrounded-and-abandoned -- confirmed completed via both a blocking poll on its output file and an independent Monitor watch, both observing the same terminal line) exited 0:\n```\nmix letflow.check.test: OK -- isolated :lua_wallclock_race run also passed clean.\n[exited with code 0]\n```\nNo ISS-0069 substring-warning-gate failures, no test failures, all three stages (main parallel suite, wasm_hang isolation, lua_wallclock_race isolation) passed clean.\n\ntest/scripts/test_parallel_tmpdir_cleanup_test.sh (iteration 0) was not touched -- confirmed via `git status --porcelain` showing no changes to that file throughout this session.",
+    "artifacts_out": ["test/mix/tasks/letflow_check_test_test.exs"],
+    "issues": [],
+    "git_evidence": {
+      "branch_name": "feature/WF03-ISS0699-20260917",
+      "commit_sha_list": [],
+      "remote_branch": "origin/feature/WF03-ISS0699-20260917",
+      "push_status": "pending",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": "Route to TEST-DESIGN-VALIDATOR (regate)"
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

@@ -1,0 +1,55 @@
+{
+  "handoff_id": "b6f3a1d2-0008-4a00-9c00-wf03iss0699007",
+  "run_id": "WF03-ISS0699-20260917",
+  "workflow_id": "WF-03",
+  "step": "04",
+  "from_agent": "ORCH",
+  "to_agent": "TEST-DESIGNER",
+  "file": "handoffs/WF03-ISS0699-20260917/step-04-test-designer.json",
+  "created_at": "2026-09-16T21:23:02Z",
+  "started_at": "2026-09-16T21:23:02Z",
+  "completed_at": "2026-09-16T21:24:48Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": null,
+    "requirement_ids": [],
+    "requirement_text": {},
+    "source_text": {},
+    "related_handoff_ids": [],
+    "artifacts_in": [
+      "scripts/test_parallel.sh",
+      "lib/letflow/design/iss0699-test-parallel-tmpdir-cleanup-fix.md",
+      "test/scripts/test_parallel_pool_sizing_test.sh",
+      "test/scripts/test_parallel_create_burst_test.sh",
+      "docs/issues/ISS-0699.yaml"
+    ],
+    "owned_modules": ["scripts/test_parallel.sh"]
+  },
+  "task": {
+    "description": "WF-03 Step 4 (regression test) for ISS-0699. On branch feature/WF03-ISS0699-20260917. This repo has NO Elixir/mix-test surface here -- the fix is entirely in scripts/test_parallel.sh (bash). Follow the established shell-test convention: test/scripts/test_parallel_pool_sizing_test.sh and test/scripts/test_parallel_create_burst_test.sh are the precedent (standalone bash test scripts under test/scripts/, POSIX-friendly assertions, explicit PASS/FAIL summary, process exit code 0/1). Write test/scripts/test_parallel_tmpdir_cleanup_test.sh that proves the fix -- it must FAIL against the PRE-FIX script and PASS against the POST-FIX script (fail-then-pass proof, per WF-03's own test-design requirement). Since a full real invocation of test_parallel.sh needs mix/postgres (not available in this environment per ELIXIR-DEV's own note), do NOT require a real mix test run: instead, directly test the trap/cleanup MECHANISM by extracting and exercising it in isolation (same technique as test_parallel_pool_sizing_test.sh's own extraction approach -- source or eval the relevant block from the real script in a controlled subshell/fixture that fakes a fast exit without running mix), covering at minimum: (a) a simulated clean exit (exit 0) with TEST_PARALLEL_KEEP_LOGS unset -- tmp_dir removed; (b) a simulated clean exit with TEST_PARALLEL_KEEP_LOGS set -- tmp_dir preserved; (c) a simulated failing exit (non-zero) -- tmp_dir preserved regardless of TEST_PARALLEL_KEEP_LOGS. Run it yourself against BOTH the pre-fix commit (git show main:scripts/test_parallel.sh, or checkout main's copy via TEST_PARALLEL_SCRIPT=<path to a pre-fix copy>) and the current post-fix branch, and record both results in result.summary as the fail-then-pass proof. Do not run the tests yet in the sense of TEST-RUNNER's own independent step -- but you must demonstrate the fail-then-pass property yourself as design evidence, per WF-03 Step 4's own rule. Claim by setting status to IN_PROGRESS.",
+    "acceptance_criteria": [
+      "test/scripts/test_parallel_tmpdir_cleanup_test.sh created, following the established test/scripts/ convention",
+      "Covers all 3 disposition cases: clean exit removes tmp_dir, clean exit + KEEP_LOGS preserves it, failing exit preserves it regardless of KEEP_LOGS",
+      "Demonstrated (and quoted in result.summary) to FAIL against the pre-fix script and PASS against the post-fix script",
+      "Tests the real mechanism (extracted/sourced from the actual script, not a hand-duplicated copy of the logic) per this repo's own established precedent"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "Created test/scripts/test_parallel_tmpdir_cleanup_test.sh, following test_parallel_pool_sizing_test.sh's extraction technique: awk extracts the real cleanup_tmp_dir() function + tmp_dir=$(mktemp -d ...) + trap cleanup_tmp_dir EXIT + following echo line verbatim from the target script (start marker 'cleanup_tmp_dir() {', end marker 'max_concurrent_creates=', with a closed-flag exit-code guard, a 40-line size bound, and telltale-token over-capture guards), then evals that block in controlled subshells that simulate exit 0/1 and TEST_PARALLEL_KEEP_LOGS set/unset instead of running a real mix/postgres invocation. Covers all 3 dispositions from ISS-0699's design doc table (plus a 4th case proving failure-preservation independent of KEEP_LOGS): clean exit + KEEP_LOGS unset -> removed; clean exit + KEEP_LOGS set -> preserved; failing exit + KEEP_LOGS unset -> preserved; failing exit + KEEP_LOGS set -> preserved.\n\nPRE-FIX run (TEST_PARALLEL_SCRIPT pointed at `git show main:scripts/test_parallel.sh`, which has no cleanup_tmp_dir function and no trap anywhere): `FAIL: could not extract cleanup_tmp_dir block from /tmp/iss0699/test_parallel_prefix.sh -- no 'cleanup_tmp_dir() {' start marker followed by a 'max_concurrent_creates=' end marker found (pre-fix script has no trap/cleanup mechanism at all)` / `test_parallel_tmpdir_cleanup_test: 0 passed, 1 failed` / exit code 1.\n\nPOST-FIX run (against this branch's scripts/test_parallel.sh, default target, no override): `PASS: clean exit, KEEP_LOGS unset -> tmp_dir removed (tmp_dir removed, as expected)` / `PASS: clean exit, KEEP_LOGS set -> tmp_dir preserved (tmp_dir preserved, as expected)` / `PASS: failing exit, KEEP_LOGS unset -> tmp_dir preserved (tmp_dir preserved, as expected)` / `PASS: failing exit, KEEP_LOGS set -> tmp_dir preserved (tmp_dir preserved, as expected)` / `test_parallel_tmpdir_cleanup_test: 4 passed, 0 failed` / exit code 0.\n\nFail-then-pass demonstrated against the real shipped mechanism, not a hand-duplicated copy of the trap/cleanup logic.",
+    "artifacts_out": ["test/scripts/test_parallel_tmpdir_cleanup_test.sh"],
+    "issues": [],
+    "git_evidence": {
+      "branch_name": "feature/WF03-ISS0699-20260917",
+      "commit_sha_list": [],
+      "remote_branch": null,
+      "push_status": "pending",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": "Route to TEST-DESIGN-VALIDATOR"
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

@@ -44,6 +44,12 @@
 # Overridable knob: TEST_PARALLEL_N=<positive integer> to force the
 # partition count instead of deriving it from nproc/getconf.
 #
+# Overridable knob: TEST_PARALLEL_KEEP_LOGS=<any non-empty value> to keep the
+# per-partition tmp_dir (create/migrate + test logs) even after a fully clean
+# (exit 0) run -- see ISS-0699 below. Unset by default, meaning a clean run's
+# tmp_dir is removed automatically; a run with any real failures always
+# preserves it regardless of this var.
+#
 # ISS-0222: running this script again immediately after a prior full-suite run
 # on the same host (no gap between two consecutive launches) can produce a
 # transient "too_many_connections"/DBConnection.ConnectionError in one
@@ -242,7 +248,31 @@ done
 # fully before Step 2 ever backgrounds a single test-phase process; Step 2's
 # `mix test` invocations then pass LETFLOW_SKIP_ECTO_SETUP=1 so mix.exs's
 # `test:` alias does not redundantly re-run (and re-burst) create/migrate.
+#
+# ISS-0699: tmp_dir below was never removed on any exit path, leaking one
+# directory (partition create/test logs) per invocation -- ~280 accumulated
+# on the host that filed this issue. Fix: a single `trap ... EXIT` registered
+# right after tmp_dir is created (see lib/letflow/design/iss0699-test-
+# parallel-tmpdir-cleanup-fix.md for the full design/rationale) removes it
+# only on a clean (exit 0) run, unless TEST_PARALLEL_KEEP_LOGS is set --
+# every nonzero-exit path (including the create/migrate failures at lines
+# below that cite "$tmp_dir/create-$i.log" in their own error message)
+# preserves it so that citation stays inspectable.
+cleanup_tmp_dir() {
+  local exit_code=$?          # MUST be the first statement -- capturing $?
+                               # here is what recovers this script's own real
+                               # exit status; any earlier statement would
+                               # clobber it before it can be read.
+
+  if [ "$exit_code" -eq 0 ] && [ -z "${TEST_PARALLEL_KEEP_LOGS:-}" ]; then
+    rm -rf "$tmp_dir"
+  else
+    echo "test_parallel: preserving $tmp_dir (exit_code=$exit_code, TEST_PARALLEL_KEEP_LOGS=${TEST_PARALLEL_KEEP_LOGS:-unset})" >&2
+  fi
+}
+
 tmp_dir=$(mktemp -d "${TMPDIR:-/tmp}/letflow_test_parallel.XXXXXX")
+trap cleanup_tmp_dir EXIT
 echo "test_parallel: partition logs in $tmp_dir"
 
 max_concurrent_creates="${TEST_PARALLEL_MAX_CONCURRENT_CREATES:-4}"

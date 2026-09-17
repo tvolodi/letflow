@@ -1,0 +1,58 @@
+{
+  "handoff_id": "b6f3a1d2-0003-4a00-9c00-wf03iss0699002",
+  "run_id": "WF03-ISS0699-20260917",
+  "workflow_id": "WF-03",
+  "step": "02",
+  "from_agent": "ORCH",
+  "to_agent": "CODE-DESIGNER",
+  "file": "handoffs/WF03-ISS0699-20260917/step-02-code-designer.json",
+  "created_at": "2026-09-16T21:16:42Z",
+  "started_at": "2026-09-16T22:20:55Z",
+  "completed_at": "2026-09-16T22:23:24Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": null,
+    "requirement_ids": [],
+    "requirement_text": {},
+    "source_text": {},
+    "related_handoff_ids": [],
+    "artifacts_in": [
+      "handoffs/WF03-ISS0699-20260917/step-01-issue-fixer-diagnosis.json",
+      "scripts/test_parallel.sh",
+      "lib/letflow/design/iss0698-test-parallel-create-burst-fix.md",
+      "lib/mix/tasks/letflow.check.test.ex",
+      "handoffs/WF03-ISS0699-20260917/step-final-git-merge.json"
+    ],
+    "owned_modules": ["scripts/test_parallel.sh", "lib/mix/tasks/letflow.check.test.ex"]
+  },
+  "task": {
+    "description": "WF-03 Step 2 (fix design) for ISS-0699. On branch feature/WF03-ISS0699-20260917. Read ISSUE-FIXER's diagnosis in result.summary of handoffs/WF03-ISS0699-20260917/step-01-issue-fixer-diagnosis.json in full -- it names the exact root cause (no trap/cleanup for tmp_dir=$(mktemp -d ...) at line ~245 of scripts/test_parallel.sh, four leaking exit paths) and a recommended policy (success-only cleanup via a trap set right after tmp_dir's creation, preserve on any failure/error exit, opt-out env var to force preservation even on success).\n\nProduce a design artefact at lib/letflow/design/iss0699-test-parallel-tmpdir-cleanup-fix.md (follow this repo's existing design-doc convention -- see lib/letflow/design/iss0698-test-parallel-create-burst-fix.md, a design doc for the same script, as your template for shape/sections). Since scripts/test_parallel.sh is bash, not Elixir, the design should specify: the exact trap mechanism (trap-on-EXIT calling a cleanup function; must correctly distinguish success exit from the script's own error/failure exit paths -- note the script's own exit code contract in Step 5, 'exit \"$any_failed\"', and that some early error paths use bare `exit 1`), the new opt-out env var's name and default, and exactly which of the diagnosed exit points keep tmp_dir vs remove it. State the trap's exact shape and the cleanup function's exact shape/pseudocode (signatures/pseudocode are fine for a bash design artefact -- this project's 'no implementation code' rule for CODE-DESIGNER is about not writing the finished, ready-to-ship function body; stating the trap registration line and the cleanup logic's shape is necessary here since there is no @spec-equivalent for bash to design against). Do not write the finished, drop-in script edit itself -- leave the literal edit to ELIXIR-DEV.\n\nREWORK ITERATION 1: Step Final's git-merge run discovered a real, CI-attributable regression from the original (iteration 0) design, recorded in full in handoffs/WF03-ISS0699-20260917/step-final-git-merge.json's result.summary/issues. Root cause: lib/mix/tasks/letflow.check.test.ex (the mix letflow.check.test task CI's backend gate runs) shells out to scripts/test_parallel.sh via System.cmd/stream_and_capture, and AFTER that process exits, reads the same tmp_dir's partition-*.log files (via the runner's own printed 'test_parallel: partition logs in <dir>' line) to apply an ISS-0069 warning-substring gate -- on EVERY run, not just a failing one. The iteration-0 design's success-only cleanup trap deletes tmp_dir before this downstream consumer ever reads it, so CI's backend job now hard-fails on every clean test run with 'partition log directory ... contains zero partition-*.log files'. This consumer was not accounted for in iteration 0's design (which only reasoned about scripts/test_parallel.sh's own internal exit paths, not an external caller reading the directory after the script returns).\n\nRevise the design to fix this without reopening ISS-0699 (unbounded accumulation must still be fixed for direct/manual invocations of the script). Recommended shape to evaluate: (a) lib/mix/tasks/letflow.check.test.ex sets TEST_PARALLEL_KEEP_LOGS=1 (the already-designed opt-out) as an env var when it invokes scripts/test_parallel.sh, so the script's own trap never deletes tmp_dir out from under this caller; (b) lib/mix/tasks/letflow.check.test.ex itself becomes responsible for removing log_dir (File.rm_rf!/1 or equivalent) once it is done reading the partition logs, on both its own success and failure paths, so the task's own tmp_dir accumulation is still bounded end-to-end. State exactly where in letflow.check.test.ex's existing flow (see its @spec'd private functions, e.g. find_partition_log_dir/1, and stream_and_capture's call site) each of these two changes belongs, and confirm this doesn't touch the ISS-0069 substring-check logic itself. If you evaluate and reject this shape in favor of something else, state why. Claim by flipping status to IN_PROGRESS on receipt, and set it to COMPLETED/FAILED as normal when you finish, exactly as any first dispatch would.",
+    "acceptance_criteria": [
+      "Design doc created at lib/letflow/design/iss0699-test-parallel-tmpdir-cleanup-fix.md",
+      "Specifies the exact trap mechanism and where in the script it is registered",
+      "Specifies the opt-out env var name, default, and semantics",
+      "States explicitly, for every exit path ISSUE-FIXER identified (lines ~251, ~268, ~291, ~455 per the diagnosis), whether tmp_dir is kept or removed under the new design, and why",
+      "No finished, ready-to-paste script implementation in the design doc",
+      "REWORK ITERATION 1: design doc updated (not a new file) to also specify exactly how lib/mix/tasks/letflow.check.test.ex coordinates with the trap so it never observes a deleted tmp_dir -- naming the env var it sets on invocation and the exact point in its existing flow where it now removes log_dir itself",
+      "REWORK ITERATION 1: confirms the ISS-0069 substring-check logic itself is untouched"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "ITERATION 0 RESULT (superseded, kept for reference): PASS. Design doc created at lib/letflow/design/iss0699-test-parallel-tmpdir-cleanup-fix.md specifying a single trap cleanup_tmp_dir EXIT registered right after tmp_dir's creation, success-only removal gated on TEST_PARALLEL_KEEP_LOGS, and a 4-path disposition table. This passed CODE-DESIGN-VALIDATOR and all downstream gates, but Step Final's CI run found it breaks lib/mix/tasks/letflow.check.test.ex, which reads partition-*.log from the same tmp_dir on every run (not just failures). REWORK ITERATION 1 RESULT: PASS. Revised the design doc in place (same file, no new file) adding new section 3a, 'Caller coordination -- lib/mix/tasks/letflow.check.test.ex'. Adopted the REWORK dispatch's recommended shape as-is (evaluated and confirmed preferable over two alternatives, documented and rejected in 3a.5): (1) run_main_suite/0's single stream_and_capture(bash, [\"scripts/test_parallel.sh\"]) call (current line 169) now passes TEST_PARALLEL_KEEP_LOGS=1 as an env var, via a new optional third `env` argument threaded into stream_and_capture/2's Port.open/2 :env option (stream_and_capture/2 -> /3, default env \\\\ []); the module's other three stream_and_capture call sites (discovery dry-run, per-test wasm_hang subprocesses, lua_wallclock_race) are explicitly left untouched since they never invoke the script. (2) The existing check_main_suite_logs(resolve_native_path(log_dir), exit_code) call at current line 196 is now wrapped in a try/after that unconditionally File.rm_rf!'s the resolved log dir once that call returns or raises -- covering all four of its outcomes (zero logs found, real failures reported, ISS-0069 offending substring, clean :ok) with one cleanup site, relying on Elixir's try/after semantics (runs on both normal return and Mix.raise's exception) rather than per-branch edits. Section 3a.4 confirms the ISS-0069 substring-check logic itself (@target_substring, find_partition_log_dir/1, check_substring_across_logs/1, etc.) is untouched -- the read (inside the try body) provably completes before the after-block's delete can run. Also updated section 0 (sources read) and section 5/6 (acceptance-criteria mapping, open questions) to reflect the revision; sections 1-3 (script-side trap mechanism) are unchanged from iteration 0 and remain correct for direct/manual script invocations.",
+    "artifacts_out": ["lib/letflow/design/iss0699-test-parallel-tmpdir-cleanup-fix.md"],
+    "issues": [],
+    "git_evidence": {
+      "branch_name": null,
+      "commit_sha_list": [],
+      "remote_branch": null,
+      "push_status": "skipped",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": "Route to CODE-DESIGN-VALIDATOR (regate)"
+  },
+  "rework_count": 1,
+  "max_rework": 3
+}

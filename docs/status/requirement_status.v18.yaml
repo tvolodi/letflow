@@ -1054,3 +1054,47 @@ history:
       released status: done by ORCH after this step -- queue interaction
       explicitly out of scope for this DOC-UPDATER step per this run's own
       dispatch.
+
+  - req: SCOPE-CHANGE
+    event: done
+    agent: DOC-UPDATER
+    at: "2026-09-17T11:33:00Z"
+    note: >
+      ISS-0706 (queue task 706, GH#1488) resolved via
+      fix/WF03-ISS0706-20260917 (commit a6b5e5ac, full detail in
+      docs/issues/ISS-0706.yaml's resolution_note field). Root cause:
+      direct verification corrected this issue's own claimed 11-file
+      scope to 10 -- sh05-06.shell.e2e.spec.ts was already fixed under
+      ISS-0532 -- for the remaining 10 files' duplicated
+      assertServiceReadiness() precondition polling the never-mounted
+      `GET /health/ready` (lib/letflow/router.ex only mounts liveness
+      `GET /health`, a deliberate S6-observability-pending decision).
+      Fixed by extracting shared assertBackendHealthy/
+      assertServiceReadiness helpers into web/tests/e2e/helpers.ts
+      pointed at the real GET /health, mirroring ISS-0532's own
+      resolution pattern; 8 plain files deduplicated to import it, 2
+      variant files' Letflow-backend check swapped (Keycloak's own
+      legitimate /health/ready untouched); TC-TD-UI-01-04's independent
+      second defect (a silently-no-op cross-tenant leakage assertion)
+      was also inverted to a hard-fail. CODE-DESIGN-VALIDATOR,
+      SECURITY-REVIEWER, REVIEWER all PASSed. TEST-DESIGNER added
+      web/tests/unit/iss-0706-e2e-health-precondition.test.ts (6 real
+      cases plus a scoped grep-regression confirming no local duplicate
+      survives), fail-then-pass verified for real (6/6 fail pre-fix, 6/6
+      pass post-fix); TEST-DESIGN-VALIDATOR independently reproduced the
+      same split. RELEASE-VALIDATOR independently PASSed: own 3-spec run
+      against a real local backend (0/17 readiness-throw failures),
+      direct code read confirming TC-TD-UI-01-04's guard is genuinely
+      unconditional, independent 6/6 unit-test run, full gate-evidence
+      audit (real commit per pipeline_log step, zero lib/letflow/
+      touches), and fresh full-suite runs (mix letflow.check.test
+      4332/4332, npm test 592/592, eslint/tsc clean). GH#1488 closed
+      with an evidence comment by this same DOC-UPDATER step. A
+      follow-up defect -- 9 more e2e spec files under
+      onboarding/admin/pipelines/ sharing the identical bug, missed by
+      this issue's own non-recursive grep -- was found by TEST-DESIGNER
+      and filed separately as ISS-0707 (queue task 707, GH#1490,
+      docs/issues/ISS-0707.yaml, status: open); explicitly NOT part of
+      this closure. letflow-queue task 706 to be released status: done
+      by ORCH after this step -- queue interaction explicitly out of
+      scope for this DOC-UPDATER step per this run's own dispatch.

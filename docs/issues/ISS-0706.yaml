@@ -80,7 +80,66 @@ related:
   - ISS-0702
 queue_ref: Q-706
 github_ref: GH-1488
-status: open
+status: resolved
+resolved_in_run: WF03-ISS0706-20260917
+resolved_at: "2026-09-17T11:25:00Z"
+resolution_note: >
+  ROOT CAUSE (CODE-DESIGNER, direct verification): this issue's own
+  "repo-wide grep" originally claimed 11 affected files, but direct
+  verification found sh05-06.shell.e2e.spec.ts already fixed under
+  ISS-0532 (no assertServiceReadiness call left) -- the real scope was 10
+  files, not 11: env04, f5-admin-observability, f6-webhooks, tenants,
+  f5-admin-groups-tokens, f5-admin-users, f6-dlq, iss-0063-oidc-redirect-
+  loop, tenant-dashboard, uat-tenant-url. All 10 duplicated the same
+  broken precondition: assertServiceReadiness() polling the never-mounted
+  `GET /health/ready` (lib/letflow/router.ex only mounts liveness `GET
+  /health`, a deliberate, permanent S6-observability-pending decision),
+  making every test in every one of these files fail before reaching its
+  real assertions whenever actually run.
+
+  FIX (commit a6b5e5ac, design lib/letflow/design/iss-0706-e2e-readiness-
+  precondition-fix.md): extracted shared assertBackendHealthy/
+  assertServiceReadiness helpers into web/tests/e2e/helpers.ts (this
+  codebase's established shared-helper location), pointed at the real
+  `GET /health`, mirroring ISS-0532's own resolution of the identical
+  misconception in application code. 8 plain files deleted their
+  duplicate and import the shared version; 2 variant files swapped only
+  their Letflow-backend check block, leaving Keycloak's own legitimate
+  `/health/ready` probe untouched. TC-TD-UI-01-04's independent second
+  defect -- its cross-tenant leakage assertion silently no-op'd behind
+  `if (swiftResp.ok())` -- was also fixed, inverted to a hard-fail
+  mirroring the same file's own TC-TD-UI-03-01 precedent.
+
+  TEST COVERAGE: TEST-DESIGNER added
+  web/tests/unit/iss-0706-e2e-health-precondition.test.ts (6 real cases,
+  mirroring the established iss-0295-e2e-idp-config.test.ts pattern),
+  including a scoped grep-regression confirming all 10 fixed files import
+  the shared helper with no local duplicate surviving. Fail-then-pass
+  verified for real in a throwaway worktree: 6/6 fail against the true
+  pre-fix commit, 6/6 pass at branch tip. TEST-DESIGN-VALIDATOR
+  independently reproduced the same fail-then-pass split in an isolated
+  worktree and confirmed the grep-regression correctly excludes both
+  legitimate `/health/ready` occurrences (the app's own response
+  listener, Keycloak's own probe) without flagging either.
+
+  FINAL VERIFICATION: RELEASE-VALIDATOR independently re-checked this
+  closure -- own 3-spec run against a real local backend (0/17
+  readiness-throw failures, matching TEST-RUNNER's own 0/63), read
+  TC-TD-UI-01-04's current code directly and confirmed the guard is
+  genuinely unconditional, confirmed the 10-not-11 scope correction via
+  sh05-06's own doc comment plus a grep count, independently ran the new
+  unit test (6/6, confirmed not a stub), and audited every pipeline_log
+  step for a real commit with zero lib/letflow/ touches (confirmed via
+  `git diff --stat`). Own fresh full-suite runs: mix
+  letflow.check.test 4332/4332, npm test 592/592, eslint/tsc clean.
+
+  FOLLOW-UP, NOT PART OF THIS CLOSURE: while scoping the regression
+  test's exclusion list, TEST-DESIGNER found this issue's own "repo-wide
+  grep" had itself missed 9 further e2e spec files under
+  onboarding/admin/pipelines/ subdirectories, sharing the identical bug
+  (the original grep was non-recursive). Filed and registered separately
+  as ISS-0707 (queue task 707, GH#1490, docs/issues/ISS-0707.yaml) --
+  stays status: open, deliberately not folded into this fix's scope.
 pipeline_log:
   - step: CODE-DESIGNER
     at: "2026-09-17T10:00:00Z"

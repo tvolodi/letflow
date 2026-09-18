@@ -169,6 +169,14 @@ defmodule Letflow.Plugs.ApiPipeline do
   # a handle). See Letflow.Routers.PublicReadHandles' own moduledoc.
   forward("/public-read-handles", to: Letflow.Routers.PublicReadHandles)
 
+  # REQ-366 §1 -- the HTTP read route REQ-364 itself deferred
+  # (Letflow.Help's own moduledoc). Mounted the same way as every other
+  # authenticated tenant-scoped sub-router above. See
+  # Letflow.Routers.Help's own moduledoc for the route table and the
+  # design (lib/letflow/design/req366-help-display-panel.md) this
+  # implements.
+  forward("/help", to: Letflow.Routers.Help)
+
   match _ do
     Letflow.Api.Response.not_found(conn)
   end

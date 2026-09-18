@@ -762,6 +762,56 @@ history:
       AC7 is not yet satisfied (scenario fixture already correct; its own named
       pipeline_test fails per ISS-0712, independent of credentials).
 
+  - req: ISS-0712
+    event: done
+    agent: ORCH
+    at: "2026-09-18T15:26:41Z"
+    note: >
+      WF03-ISS0712-20260918. Full WF-03 run, queue task Q-712 claimed via
+      get_next_task (LIFO issue priority, newest open issue). Root cause
+      (web/tests/e2e/helpers.ts's loginWithToken session-injection login
+      structurally could never exercise OidcCallbackPage.tsx's real
+      OIDC-callback role-redirect) diagnosed by ISSUE-FIXER, design PASSed by
+      CODE-DESIGN-VALIDATOR, implemented by FRONTEND-DEV (new
+      loginViaRealOidcRedirect + resolveCredential helpers, wired into the
+      PLATFORM_ADMIN case of platform-login-routing-by-role.pipeline.e2e.spec.ts),
+      SECURITY-REVIEWER PASS (INV-4, no credential leakage), REVIEWER PASS
+      (matches design, no scope creep), TEST-DESIGNER wrote mutation-tested
+      unit tests for the new resolveCredential function
+      (web/tests/unit/resolveCredential.test.ts, 3 mutants), TEST-DESIGN-VALIDATOR
+      independently applied and reproduced one mutant's exact failure count,
+      TEST-RUNNER confirmed full suite green with no attributable regressions.
+      UAT-RUNNER then re-ran the actual fixed pipeline_test live against real
+      QA (test/uat-reports/uat-2026-09-18-WF03-ISS0712-20260918.yaml) --
+      loginViaRealOidcRedirect genuinely drove Keycloak's hosted login form
+      (#username/#password/#kc-login all worked live) through the real
+      /auth/callback exchange, landing on /platform-dashboard with all
+      expected content -- confirming the root cause is actually removed, not
+      merely code-reviewed. A separate, unrelated MINOR issue was found
+      further into that same live run (unscoped "Tenants" link locator,
+      Playwright strict-mode violation) and filed separately as ISS-0713
+      (queue task Q-713, GH#1523) rather than folded into this close.
+      docs/issues/ISS-0712.yaml: status: resolved, resolved_in_run:
+      WF03-ISS0712-20260918, resolved_at: "2026-09-18T15:14:52Z", citing both
+      the regression test and the live UAT confirmation as evidence. GitHub
+      issue #1520 closed with an evidence-citing comment. Merged to main via
+      PR #1524 (squash), both required CI checks (Backend gate, Frontend
+      gate) polled directly via `gh pr checks` and confirmed green before
+      merge -- not left to an internally-armed Monitor the parent session
+      couldn't see complete (an earlier merge attempt by ORCH itself
+      collided harmlessly with FRONTEND-DEV's own already-in-flight merge;
+      both independently verified the same PASS state afterward). Queue task
+      712 released with status: done (best-effort-closes GH#1520, already
+      closed by hand above -- no-op). Files landed on main, independently
+      re-verified by ORCH by reading them post-merge rather than trusting
+      any agent's result.summary alone: docs/issues/ISS-0712.yaml,
+      docs/issues/ISS-0713.yaml, web/tests/e2e/helpers.ts,
+      web/tests/e2e/pipelines/platform-login-routing-by-role.pipeline.e2e.spec.ts,
+      web/tests/unit/resolveCredential.test.ts,
+      lib/letflow/design/iss-0712-real-oidc-redirect-login-helper.md,
+      test/specs/ISS-0712.md, test/reports/report-20260918-WF03-ISS0712-20260918.yaml,
+      test/uat-reports/uat-2026-09-18-WF03-ISS0712-20260918.yaml.
+
       UAT-RUNNER's evidence PR (#1518, test/uat-reports/uat-2026-09-18-WF02-REQ369-AC6AC7-20260918T143000Z.yaml,
       single report file, no web/ or lib/ diff) merged by ORCH after CI passed (Detect
       changed paths: success; Frontend gate: success; Backend gate: success, polled

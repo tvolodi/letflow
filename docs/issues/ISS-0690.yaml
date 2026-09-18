@@ -124,3 +124,153 @@ followup:
     active exam, then dispatch UAT-RUNNER to re-run
     test/fixtures/uat/scenarios/bilimbaga/candidate-timed-exam-autograde.yaml
     against QA for the real AC4 result this issue requires.
+followup_2:
+  checked_by: ISSUE-FIXER
+  checked_at: "2026-09-18T14:35:00Z"
+  note: >
+    Credential access confirmed working this run (SSH/qa-login.sh path
+    unnecessary -- ORCH had already fetched real Keycloak passwords for
+    admin-user/bpm-default and candidate-user/bilimbaga this session).
+    Executed the previous followup's next_action live end to end, with
+    real HTTP responses at every step -- and refined ORCH's own
+    hypothesis with a live result that turned out to be a DIFFERENT
+    mechanism than predicted, not the one predicted.
+
+    Step 1 (role/permission mapping, static read):
+    lib/letflow/api/authorization.ex confirms POST /solution-packs/install
+    is declared `authz_post "/install", :DefinitionsCreate` (line 167),
+    `required_permission(:DefinitionsCreate)` maps to `:DefinitionsWrite`
+    (lines 812-822), and `role_allows?/2`'s CANDIDATE clause (lines
+    1023-1032) grants CANDIDATE exactly six ExamSession*/ExamCertificateIssue
+    permissions and NOT :DefinitionsWrite. So the permission-mapping half
+    of ORCH's hypothesis is correct as a static fact.
+
+    Step 2 (POST /tenants, real HTTP): minted a real PLATFORM_ADMIN token
+    for admin-user against bpm-default
+    (POST https://auth.qa.bizdala.com/realms/bpm-default/protocol/openid-connect/token,
+    200, real JWT with iss=.../realms/bpm-default). Then
+    POST https://qa.bizdala.com/api/v1/tenants
+    body {"slug":"bilimbaga","display_name":"BilimBaga","idp_realm_id":"bilimbaga"}
+    -> real HTTP 201:
+    {"display_name":"BilimBaga","id":"6ab093a1-d190-4063-9543-d66b80d261a1",
+    "inserted_at":"2026-09-18T14:29:28Z","slug":"bilimbaga","status":"active",
+    "updated_at":"2026-09-18T14:29:28Z"}. Tenant creation succeeded exactly
+    as ORCH predicted (PLATFORM_ADMIN, no realm-match requirement on this
+    route).
+
+    Step 3 (POST /solution-packs/install, real HTTP): minted a real
+    CANDIDATE token for candidate-user against the bilimbaga realm
+    (POST https://auth.qa.bizdala.com/realms/bilimbaga/protocol/openid-connect/token,
+    200, real JWT with iss=.../realms/bilimbaga, realm_access.roles
+    containing "CANDIDATE"). Then
+    POST https://qa.bizdala.com/api/v1/solution-packs/install
+    with priv/packs/bilimbaga/pack.json as the body and that token as
+    Bearer -> real HTTP **401**, body
+    {"error":"unauthorized","detail":"invalid or expired bearer token"}.
+    NOT the 403 ORCH's hypothesis predicted. Root-caused by reading
+    lib/letflow/plugs/auth_pipeline.ex: the OIDC auth branch's step 1
+    (`verify_token/1`, i.e. `Letflow.Oidc.TokenVerifier.verify_bearer_token/2`)
+    runs BEFORE realm extraction/tenant resolution/permission evaluation,
+    and validates every incoming JWT against exactly ONE registered
+    `Oidcc.ProviderConfiguration.Worker` (lib/letflow/supervisor/infrastructure.ex
+    lines 159-177), configured from a SINGLE `:oidc, :issuer` value
+    (config/runtime.exs lines 140-141, `OIDC_ISSUER` env var -- QA's
+    deployed value resolves to .../realms/bpm-default, confirmed by the
+    admin token's own iss claim above and by the prior UAT report
+    test/uat-reports/uat-2026-09-16-WF02-REQ359-20260916.yaml). A JWT
+    issued by any OTHER realm (bilimbaga) fails this single-issuer
+    verification outright -- wrong issuer, wrong signing JWKS -- and is
+    rejected 401 by handle_auth_error/2's `{:error, {:verify, _}}` clause
+    (auth_pipeline.ex line 156-157) before permission evaluation is ever
+    reached. **This is a strictly earlier, deeper, role-independent
+    failure than the :DefinitionsWrite 403 predicted**: no token from any
+    non-bpm-default realm, of ANY role including PLATFORM_ADMIN, can
+    authenticate against this QA deployment at all, right now.
+
+    This single-issuer-per-deployment behavior is DOCUMENTED, deliberate
+    design, not an undiscovered code defect: config/runtime.exs's own
+    comment (lines 131-136) states "each deployed environment can point
+    at its own Keycloak realm" (singular), and
+    lib/letflow/design/req019-tenant-realm-binding.md line 244 states
+    outright "REQ-016 configures a single realm/issuer". REQ-016 (OIDC
+    foundation) and REQ-019 (tenant/realm binding, Tenant.idp_realm_id,
+    resolve_tenant_by_realm/1, verify_realm_ownership/2) both shipped
+    knowingly leaving this gap: the tenants table's data model supports N
+    tenants each bound to a distinct realm, but the actual OIDC
+    token-verification layer (Oidcc.ProviderConfiguration.Worker) trusts
+    exactly one issuer per running deployment. Nothing in req019's or
+    req021's (lib/letflow/design/req021-auth-plug-pipeline.md) acceptance
+    criteria commits to multi-issuer verification within one deployment
+    -- so this is NOT reported as a new Letflow code defect to route to
+    CODE-DESIGNER; it is a real, confirmed, structural boundary of the
+    shipped OIDC design that this UAT scenario's premise (BilimBaga as a
+    second tenant coexisting with bpm-default on the SAME QA deployment,
+    reachable via its own realm's OIDC login) runs directly into.
+
+    Checked whether Letflow's OTHER auth path (the opaque `lf_tok_`
+    API-token branch, REQ-076, lib/letflow/plugs/auth_pipeline.ex lines
+    24-71/140-149) offers a legitimate route around this for the CURRENT
+    admin-user token, since it resolves tenant from an `X-Tenant-Slug`
+    header rather than a JWT `iss` claim. It does not: `POST /tokens`
+    (lib/letflow/routers/identity.ex line 191) is `authz_post "/tokens",
+    :TokensManage`, and its handler is called with
+    `conn.assigns.scoped_opts` (line 192) -- the same caller's-own-tenant
+    :prefix scoping INV-1 enforces everywhere else in this codebase. An
+    admin-user token authenticated against bpm-default resolves
+    scoped_opts to bpm-default's own schema, so any token it mints (and
+    any user_id that token could reference) is confined to bpm-default,
+    not bilimbaga. No sequence of calls against the current admin-user
+    token reaches bilimbaga's schema by any path -- confirmed by reading
+    the code, not assumed; not attempted live, since doing so would only
+    reconfirm the same INV-1 boundary already traced twice
+    (solution-packs/install above and here), and the run's own
+    instructions rule out probing for an unscoped/superuser workaround.
+
+    Left `status: open`, queue release stays `blocked` (unchanged from
+    the prior followup) -- this narrows the blocker further (from "no
+    credential access" to "Keycloak realm: done + credential access:
+    done" to now "structurally cannot authenticate a second-realm caller
+    against this single-issuer QA deployment at all") without closing it,
+    same class of confirmed-real-external/architectural gap as before.
+  next_action: >
+    Do NOT re-attempt POST /solution-packs/install with a bilimbaga-realm
+    token against the current QA deployment -- it is confirmed blocked at
+    the OIDC issuer-verification layer (401, "invalid or expired bearer
+    token"), before role/permission evaluation, for every role including
+    PLATFORM_ADMIN, not just CANDIDATE. This is a decision point for
+    ORCH/a human-equivalent architecture call, not a simple infra seed
+    task: whichever of the following is chosen, it is NOT something
+    ISSUE-FIXER should decide or implement --
+      (a) accept the current one-realm-per-deployment design (REQ-016)
+          as final, and give BilimBaga its own separate Letflow
+          deployment/environment with OIDC_ISSUER pointed at the
+          bilimbaga realm -- but this contradicts the existing UAT
+          scenario's and this issue's own premise (BilimBaga as a
+          second TENANT alongside bpm-default's Default Tenant on ONE
+          shared qa.bizdala.com deployment, per GET /api/v1/tenants
+          already listing both after this run's POST /tenants); or
+      (b) scope a genuinely new requirement/capability: dynamic/
+          multi-issuer OIDC token verification within a single Letflow
+          deployment (a real code change to
+          Letflow.Oidc.TokenVerifier/Oidcc.ProviderConfiguration.Worker's
+          one-provider-per-application-instance shape), which is
+          substantial enough that it should go through REQ-ANALYST/
+          REQ-VALIDATOR/CODE-DESIGNER like any other requirement, not be
+          folded into this issue's fix; or
+      (c) bypass OIDC entirely for BilimBaga's exam-candidate flow via
+          the already-built API-token branch (REQ-076, `lf_tok_`
+          opaque bearer + X-Tenant-Slug header) -- requires a Letflow
+          user row to exist inside the bilimbaga tenant's own schema
+          (none exist yet -- 0 users, since no OIDC login into that
+          tenant has ever succeeded to JIT-provision one) and a token
+          minted by a caller whose OWN auth_context.tenant_id is already
+          bilimbaga (which nothing today satisfies) -- this also needs a
+          person/agent with direct DB/ops seeding access to that
+          tenant's schema, mirroring how bpm-default's own seed users
+          (admin-user etc.) were provisioned by ai-dala-infra rather than
+          through the Letflow API, i.e. still an ai-dala-infra-side task,
+          not a letflow-side one.
+    Whoever picks this up next needs BOTH a decision among (a)/(b)/(c)
+    above AND, if (a) or (c), a follow-on ai-dala-infra task -- do not
+    default to (b) without ORCH/REQ-ANALYST sign-off, since it is the
+    only option requiring new Letflow application code.

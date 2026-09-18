@@ -30,7 +30,7 @@ related_requirements:
   - REQ-360
 queue_ref: Q-700
 github_ref: GH-1474
-status: open
+status: resolved
 diagnosed_by: ISSUE-FIXER
 diagnosed_in_run: issue/ISS-0700-20260917
 diagnosed_at: "2026-09-17T14:30:00Z"
@@ -191,3 +191,55 @@ partial_action:
     `determination` block's `concrete_next_step` above. No decision record
     created, no application code touched, no letflow-queue/GitHub state
     changed by this step.
+resolution:
+  resolved_by: ISSUE-FIXER
+  resolved_in_run: issue/ISS-0700-20260918-closeout
+  resolved_at: "2026-09-18T13:35:00Z"
+  summary: >
+    Closing out per WF-03 Step 5. The functional gap this issue tracked (no
+    distinct platform-admin landing route; PLATFORM_ADMIN and every
+    tenant-scoped role shared TenantDashboardPage at '/') was fixed as a
+    side effect of REQ-ANALYST's REQ-369 (drafted per this issue's own
+    `determination.concrete_next_step`), not via a dedicated WF-03 fix cycle
+    for this issue specifically. The fix shipped in PR #1507
+    (3c0cbd24 "feat: PlatformDashboardPage + role-conditional login routing
+    [WF02-REQ369-20260917] (#1507)"), merged to main 2026-09-17T16:34:35Z.
+
+    Re-verified directly against main (commit ecd0cf91, working tree clean)
+    at closeout time, not copied from any prior claim:
+      - web/src/router.tsx line 52 mounts a distinct
+        `{ path: 'platform-dashboard', element: <PlatformDashboardPage /> }`
+        route, separate from the `/` and `/dashboard` routes which still
+        render `<TenantDashboardPage />` unchanged (lines 50-51).
+      - web/src/pages/OidcCallbackPage.tsx line 72:
+        `navigate(payload.roles.includes('PLATFORM_ADMIN') ?
+        '/platform-dashboard' : '/', { replace: true })` -- role-conditional,
+        every non-PLATFORM_ADMIN role's destination is unchanged.
+      - web/src/pages/dashboard/PlatformDashboardPage.tsx (read in full) is
+        genuinely platform-wide: no `tenantDisplayName`/`useTenantContext`
+        dependency (grepped, zero hits), queries `tenantsApi.list()` across
+        all tenants, and guards itself with an `isPlatformAdmin` check
+        (`session.roles.includes('PLATFORM_ADMIN')`) that redirects non-admins
+        away -- the opposite of TenantDashboardPage's tenant-possessive
+        heading/copy this issue originally flagged.
+      - Test coverage confirmed present and on-point:
+        web/src/pages/dashboard/__tests__/PlatformDashboardPage.test.tsx and
+        web/src/pages/__tests__/OidcCallbackPage.test.tsx TC-REQ369-05
+        (PLATFORM_ADMIN -> navigate('/platform-dashboard', ...)) and
+        TC-REQ369-06 (non-PLATFORM_ADMIN role -> navigate not called with
+        '/platform-dashboard') -- these exercise the exact role-conditional
+        branch this issue was about, not just unrelated OIDC callback
+        behavior.
+      - `gh pr view 1507` confirms state MERGED, baseRefName main,
+        mergedAt 2026-09-17T16:34:35Z; the three files' current HEAD content
+        traces to commit 3c0cbd24 (that same PR), not a since-reverted state.
+
+    Note: REQ-369 itself remains `status: blocked` in docs/requirements.yaml
+    at closeout time -- but that block is for two unrelated acceptance
+    criteria (AC6/AC7, live-QA login-screenshot verification) that cannot
+    run because QA_DEPLOY_HOST/QA_DEPLOY_USER/QA_DEPLOY_SSH_KEY GitHub
+    secrets are not yet provisioned in ai-dala-infra. That gap has nothing
+    to do with whether ISS-0700's own defect is fixed in the shipped code on
+    main -- it is, per the direct re-verification above -- so it does not
+    reopen or diminish this issue's resolution. REQ-369's own entry in
+    docs/requirements.yaml is intentionally left untouched by this closeout.

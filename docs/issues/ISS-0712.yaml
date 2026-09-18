@@ -80,4 +80,26 @@ fix_direction: >
   before REQ-369's AC7 can be marked done.
 queue_ref: Q-712
 github_ref: GH-1520
-status: open
+status: resolved
+resolved_in_run: WF03-ISS0712-20260918
+resolved_at: "2026-09-18T15:14:52Z"
+resolution_evidence: >
+  Root cause (session-injection login structurally could never exercise
+  OidcCallbackPage.tsx's real OIDC-callback role-redirect) removed by
+  FRONTEND-DEV's `loginViaRealOidcRedirect` + `resolveCredential` additions
+  to web/tests/e2e/helpers.ts, wired into the PLATFORM_ADMIN case of
+  web/tests/e2e/pipelines/platform-login-routing-by-role.pipeline.e2e.spec.ts.
+  Regression test: web/tests/unit/resolveCredential.test.ts (TEST-DESIGNER,
+  mutation-tested -- 3 mutants applied and independently reproduced by
+  TEST-DESIGN-VALIDATOR; full suite green per TEST-RUNNER). Live confirmation:
+  UAT-RUNNER re-ran the fixed pipeline_test against real QA
+  (test/uat-reports/uat-2026-09-18-WF03-ISS0712-20260918.yaml) --
+  loginViaRealOidcRedirect genuinely drove Keycloak's hosted login form,
+  completed the real /auth/callback exchange, and
+  toHaveURL('/platform-dashboard') passed with platform-dashboard-heading/
+  tile-tenant-count/platform-quick-links all visible. SECURITY-REVIEWER
+  (INV-4, no leakage) and REVIEWER (matches design, no scope creep) both
+  PASS. A separate, unrelated MINOR issue found further into that same live
+  run (Playwright strict-mode violation on an unscoped "Tenants" link
+  locator, downstream of this issue's own scope) was filed separately as
+  ISS-0713 and does not affect this resolution.

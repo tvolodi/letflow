@@ -1,0 +1,173 @@
+run_id: WF03-ISS0712-20260918
+date: "2026-09-18"
+agent: UAT-RUNNER
+scope: >
+  Re-run of test/fixtures/uat/scenarios/platform/platform-login-routing-by-role.yaml's
+  PLATFORM_ADMIN branch, for real against live QA, via its own named
+  pipeline_test (web/tests/e2e/pipelines/platform-login-routing-by-role.pipeline.e2e.spec.ts),
+  after ISS-0712's fix (commit 542b23e7: `loginViaRealOidcRedirect` helper in
+  web/tests/e2e/helpers.ts, wired into this spec's PLATFORM_ADMIN case;
+  env-var credential path via `resolveCredential`). This is the live proof
+  ISS-0712's fix_direction called for -- REVIEWER flagged the Keycloak
+  selectors (#kc-login/#username/#password) as unconfirmed against live
+  infra, since no live Keycloak instance was available during
+  implementation/test-design.
+
+environment_target:
+  base_url: "https://qa.bizdala.com"
+  credential_source: "ai-dala-infra/scripts/qa-login.sh"
+  environment: qa
+  readiness_check: "curl -s -o /dev/null -w '%{http_code}' https://qa.bizdala.com/ -> 200 (confirmed this run)."
+
+credential_acquisition: >
+  Real ai-dala-infra checkout present at c:\Users\tvolo\dev\ai-dala\ai-dala-infra;
+  `ssh ubuntu-16gb-nbg1-1 whoami` -> tvolodi (working SSH). Ran
+  `bash scripts/qa-login.sh admin-user` from that checkout and obtained a real
+  seeded PLATFORM_ADMIN credential (username admin-user; role PLATFORM_ADMIN)
+  for https://qa.bizdala.com. Password used only in-memory, as the
+  `UAT_QA_ADMIN_PASSWORD` env var on the actual `npx playwright test`
+  invocation below -- exactly the new supported credential path
+  helpers.ts's `resolveCredential` (landed with ISS-0712's fix) now provides.
+  Never written to any file, this report included.
+
+command: >
+  cd web && E2E_BASE_URL=https://qa.bizdala.com
+  BPM_IDP_BASE_URL=https://auth.qa.bizdala.com
+  UAT_QA_ADMIN_PASSWORD=<not recorded> npx playwright test
+  tests/e2e/pipelines/platform-login-routing-by-role.pipeline.e2e.spec.ts
+  --project=chromium -g "PLATFORM_ADMIN lands on the distinct platform dashboard"
+
+note_on_BPM_IDP_BASE_URL: >
+  The spec's `beforeAll` IdP-reachability precheck reads `BPM_IDP_BASE_URL`,
+  which defaults to `http://localhost:8082` in helpers.ts -- not itself part
+  of ISS-0712's fix (that env var already existed). Had to be set explicitly
+  to https://auth.qa.bizdala.com (confirmed reachable, 200, at
+  /realms/bpm-default/.well-known/openid-configuration) for this run; without
+  it the very first attempt failed at the precheck with ECONNREFUSED
+  ::1:8082, before ever reaching the login helper under test. Not a defect in
+  ISS-0712's fix -- this is how every other pipeline_test in this suite is
+  invoked against QA (same convention as the prior AC6/AC7 run), just noting
+  it plainly since the dispatch prompt did not mention it.
+
+result_login_mechanism: PASS
+login_mechanism_disposition: >
+  ISS-0712's core fix is CONFIRMED working live, real evidence, no mocks.
+  `loginViaRealOidcRedirect` drove a real, unseeded page.goto('/'), the app's
+  own auth guard genuinely redirected off-origin to Keycloak
+  (auth.qa.bizdala.com), the real Keycloak-hosted login form was filled via
+  its own `#username`/`#password` fields and submitted via `#kc-login` (the
+  selector REVIEWER flagged as unconfirmed -- it worked, first try, against
+  live Keycloak), the browser genuinely came back through the app's own
+  `/auth/callback` OIDC exchange, and `OidcCallbackPage.tsx`'s
+  role-conditional `navigate()` genuinely chose `/platform-dashboard` for
+  this PLATFORM_ADMIN token. The following assertions, in file order, all
+  PASSED for real before the run hit an unrelated failure (see
+  result_overall below):
+    - `expect(page).toHaveURL('/platform-dashboard')` -- PASS
+    - `platform-dashboard-heading` visible, text "Platform Overview" -- PASS
+    - `tile-tenant-count` visible -- PASS
+    - `platform-quick-links` visible -- PASS
+  This is exactly the code path ISS-0712 documented as structurally
+  unreachable by the old `loginWithToken` session-injection helper
+  (previously observed to fail here with the URL stuck at "https://qa.bizdala.com/").
+  It is no longer stuck there.
+
+result_overall: FAIL
+overall_failure_detail: >
+  The test still ends FAIL, but for a different, NEW reason unrelated to
+  ISS-0712's login-mechanism fix -- surfaced only now because the fix let the
+  test run far enough to reach it. Line 97's loop assertion
+  `expect(page.getByRole('link', { name })).toBeVisible()` over
+  ['Tenants','Services','Health','Metrics','Users'] is unscoped: it matches
+  ANY link with that accessible name anywhere on the page, not just the
+  `platform-quick-links` nav the comment above it says it's checking. The
+  real PlatformDashboardPage renders the SAME link text twice -- once in the
+  `platform-quick-links` nav (as intended) and once in the authenticated
+  shell's own left sidebar (which EO-001's own scenario text says should
+  render "alongside" -- "Tenants", "Services", "Health", "Metrics", "Users"
+  are all real sidebar entries too, confirmed in the failure screenshot).
+  Playwright's strict-mode locator resolution correctly refuses to pick one
+  of two matches and throws:
+    `strict mode violation: getByRole('link', { name: 'Tenants' }) resolved
+    to 2 elements: 1) <a ... href="/admin/tenants"> aka
+    getByRole('complementary').getByRole('link', {name:'Tenants'})  2) <a
+    href="/admin/tenants">Tenants</a> aka
+    getByTestId('platform-quick-links').getByRole('link', {name:'Tenants'})`
+  Real command output (2 attempts, both failed identically):
+    "1 failed
+     [chromium] > ... EO-001: PLATFORM_ADMIN lands on the distinct platform dashboard"
+  Screenshot evidence (test-results\pipelines-platform-login-r-759b6-distinct-platform-dashboard-chromium\test-failed-1.png,
+  captured this run): shows the real, live state at failure --
+  "Platform Overview" heading, TENANTS tile (showing "0" -- the pre-existing,
+  already-filed tenant-count defect, see below, not new), "PLATFORM ADMIN
+  LINKS" nav with Tenants/Services/Health/Metrics/Users all rendered, full
+  PLATFORM_ADMIN sidebar nav alongside (Instances, My Tasks, Definitions,
+  DLQ, Webhooks, Users, Groups, Tokens, Audit, Health, Metrics, Register
+  Tenant, Tenants, Services, Question Bank), footer reading "Admin User" /
+  "PLATFORM_ADMIN" -- all genuine, matching what EO-001's own detail text
+  describes ("the authenticated shell's navigation also shows the
+  PLATFORM_ADMIN-only entries alongside").
+
+pre_existing_finding_tenant_count_still_zero: >
+  Same screenshot also shows the TENANTS tile still rendering "0". This is
+  the already-filed, already-known defect from
+  test/uat-reports/uat-2026-09-18-WF02-REQ369-AC6AC7-20260918T143000Z.yaml's
+  new_finding_tenant_count_bug (PlatformDashboardPage.tsx reads `.total`,
+  the real backend response has no `total` field, only `count`). Not new,
+  not re-filed here, noted only because it is visible in this run's own
+  evidence.
+
+new_finding_for_orch: >
+  Reporting per ISSUE_QUEUE.md protocol (discovered incidentally, outside
+  this run's own scope, not blocking THIS run's login-mechanism verdict
+  since that verdict is a clean PASS on its own terms):
+    title: "platform-login-routing-by-role.pipeline.e2e.spec.ts's PLATFORM_ADMIN
+      quick-links assertion (line 97) uses an unscoped getByRole('link', {name})
+      locator that ambiguously matches both platform-quick-links nav AND the
+      sidebar's identically-labelled entries -- strict-mode violation"
+    severity: MINOR
+    rationale: >
+      Blocks this one pipeline_test case from ever reaching a clean PASS
+      once ISS-0712's login fix is in place (the assertion is unconditionally
+      wrong given the real DOM shape, not flaky/environment-dependent) but is
+      cosmetic to the test itself -- the real product behavior these lines
+      are trying to prove (quick-links nav renders all five links) is
+      already independently confirmed true by this same screenshot. Not a
+      product defect.
+    affected_files:
+      - web/tests/e2e/pipelines/platform-login-routing-by-role.pipeline.e2e.spec.ts
+    suggested_fix: >
+      Scope the loop to the quick-links container specifically, e.g.
+      `page.getByTestId('platform-quick-links').getByRole('link', { name })`,
+      matching the pattern the file's own comment above the loop already
+      claims to be doing.
+    routing: TEST-DESIGNER (test-code-only fix, no product code implicated)
+  Not fixed in this run -- UAT-RUNNER does not edit pipeline_test source
+  beyond what its role permits; flagging for ORCH to route.
+
+iss0712_disposition: >
+  ISS-0712's fix_direction is CONFIRMED delivered and working, live, against
+  real QA infrastructure: the PLATFORM_ADMIN case now genuinely drives
+  Keycloak's real hosted login form (previously-unconfirmed selectors
+  #username/#password/#kc-login all worked against live Keycloak) and
+  genuinely exercises OidcCallbackPage.tsx's role-conditional redirect,
+  landing on /platform-dashboard with all of REQ-369's own testids rendering
+  real, live content. This is exactly the gap ISS-0712 was filed to close,
+  and it is closed. The remaining pipeline_test FAIL is a separate,
+  narrower, MINOR test-code defect (see new_finding_for_orch above), not a
+  regression and not evidence against ISS-0712's fix. Recommend: ISS-0712
+  status -> resolved (root cause removed, live-verified); file the new
+  finding above as its own issue via ORCH/letflow-queue per ISSUE_QUEUE.md,
+  then a follow-up UAT-RUNNER re-run once that lands to get this scenario's
+  pipeline_test to a clean PASS end-to-end.
+
+verdict: >
+  PASS on the specific question this dispatch asked (does ISS-0712's fix
+  genuinely land PLATFORM_ADMIN on /platform-dashboard via the real OIDC
+  callback flow) -- yes, confirmed live, real command output and real
+  screenshot evidence above, not predicted. FAIL on the pipeline_test's own
+  overall exit code, for a distinct, newly-surfaced, MINOR test-design bug
+  unrelated to the login mechanism (see new_finding_for_orch). No mocks, no
+  absence-of-error-as-pass, no fabricated screenshot, no plaintext QA
+  password committed to any file (only username/role named, per this
+  project's established convention).

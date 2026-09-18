@@ -44,3 +44,30 @@ related_requirements:
 queue_ref: Q-709
 github_ref: GH-1508
 status: open
+pipeline_log:
+  - step: CODE-DESIGNER
+    at: "2026-09-18T01:25:00Z"
+    result: >
+      PASS (first attempt). Design:
+      lib/letflow/design/iss-0709-flatten-plain-text-scope-fix.md.
+      Traced root cause through the real call graph: walk/1's outermost
+      call over the document's top-level block siblings is where
+      flatten_plain_text/1's unbounded recursion first over-concatenates.
+      Fix: no change to call sites, add a new @block_boundary_tags
+      exclusion set (p, h1-h6, li, blockquote, td, th) alongside the
+      existing code/pre exclusion. Flagged two real open questions
+      (cross-adjacent-block detection gap -> REVIEWER; tag-list
+      verification against earmark_parser's real source -> ELIXIR-DEV)
+      rather than deciding them.
+  - step: CODE-DESIGN-VALIDATOR
+    at: "2026-09-18T01:39:00Z"
+    result: >
+      PASS (first attempt). Independently verified the call-graph root
+      cause against real code line-by-line. Verified the
+      @block_boundary_tags list against earmark_parser 1.4.46's actual
+      source (grepped the real dependency's ast_renderer.ex/
+      table_renderer.ex), closing that open question before
+      implementation starts. Verified all three AST traces (round-3
+      non-regression, both issue reproduction cases) against real
+      EarmarkParser.as_ast/2 output, not narrative. Confirmed no
+      implementation code leaked. Cleared for ELIXIR-DEV.

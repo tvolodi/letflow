@@ -559,6 +559,58 @@ defmodule Letflow.HelpTest do
       assert match?({:ok, _help}, result) or match?({:error, %Ecto.Changeset{}}, result)
     end
 
+    # ------------------------------------------------------------------------------
+    # Round 4 (ISS-0709) -- `flatten_plain_text/1`'s projection was built from the
+    # whole current list of sibling AST nodes at every recursion level, including the
+    # outermost call over a whole document's top-level block siblings, so an unrelated
+    # `<`/`>` in two different blocks could combine into a false raw-tag match. See
+    # `lib/letflow/design/iss-0709-flatten-plain-text-scope-fix.md`.
+    # ------------------------------------------------------------------------------
+
+    test "round 4 (ISS-0709) -- two adjacent paragraphs, each with an unrelated < or >, no longer falsely reject" do
+      %{schema_name: schema_name} = provisioned_tenant()
+
+      # Concatenated across the (pre-fix) whole-document projection this reassembles to
+      # "Configure with a<b>c or make it safe", which does match @raw_html_tag_pattern --
+      # confirming this is a real reproduction of the false positive, not a body that
+      # was already safe for an unrelated reason. Neither paragraph alone contains a
+      # complete `<...>` span.
+      body = "Configure with a<\n\nb>c or make it safe"
+
+      assert {:ok, help} = Help.create_draft(draft_attrs(%{body: body}), prefix: schema_name)
+      assert help.body == body
+    end
+
+    test "round 4 (ISS-0709) -- bare < / > comparison operators in one paragraph, split by inline emphasis, no longer falsely reject" do
+      %{schema_name: schema_name} = provisioned_tenant()
+
+      # One single paragraph node (not split across blocks) whose text is interrupted by
+      # an emphasis node (`*count*`) -- the digits after `<`/`>` (rather than a letter)
+      # keep this from tripping @raw_html_tag_pattern's own `<letter...>` shape at all,
+      # so this body was never a case the pattern itself would flag once the scan is
+      # correctly bounded to this one paragraph -- it stays a single, un-split block, so
+      # round 3's own within-block detection is untouched by this fix.
+      body = "if a<5 and *count* >3 then continue"
+
+      assert {:ok, help} = Help.create_draft(draft_attrs(%{body: body}), prefix: schema_name)
+      assert help.body == body
+    end
+
+    test "round 4 (ISS-0709) -- non-regression: raw tag split across inline nodes within the SAME paragraph is still rejected" do
+      %{schema_name: schema_name} = provisioned_tenant()
+
+      # Same reproducing case as round 3 blocker 2 (single paragraph, no block boundary
+      # involved) -- must still be caught after the block-boundary exclusion is added,
+      # since "strong" is not a member of @block_boundary_tags.
+      assert {:error, changeset} =
+               Help.create_draft(
+                 draft_attrs(%{body: "x<img on**err**=\"x()\">y"}),
+                 prefix: schema_name
+               )
+
+      assert "must not contain raw HTML tags" in errors_on(changeset).body
+    end
+
     test "allows a safe https:// link" do
       %{schema_name: schema_name} = provisioned_tenant()
 

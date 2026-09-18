@@ -8,8 +8,8 @@
   "file": "handoffs/WF02-REQ365-20260918/step-02c-security-reviewer.json",
   "created_at": "2026-09-18T03:10:47Z",
   "started_at": "2026-09-18T03:10:47Z",
-  "completed_at": null,
-  "status": "PENDING",
+  "completed_at": "2026-09-18T00:00:00Z",
+  "status": "COMPLETED",
   "priority": "NORMAL",
   "context": {
     "stage": "S7",
@@ -36,7 +36,45 @@
       "the platform write path is confirmed to enforce the same sanitization rule as the tenant-scoped path, no weaker validation"
     ]
   },
-  "result": null,
+  "result": {
+    "status": "PASS",
+    "next_action": "Route to REVIEWER (2d)",
+    "scope_test": "IN SCOPE -- diff adds priv/repo/migrations/20260918000001_create_platform_help_content.exs (new public-schema table), lib/letflow/help/platform_help_content.ex (new Ecto schema), lib/letflow/help/platform.ex (new context module with a write path for user/agent-supplied content later rendered to end users per REQ-366), and extracts lib/letflow/help/markdown_safety.ex from lib/letflow/help/help_content.ex.",
+    "invariants": {
+      "INV-1": {
+        "verdict": "APPLIES",
+        "check": "New migration/schema touching a new table -- checkable per the 2026-08-17 addendum (S1 done, S2 migrations exist). (a) platform_help_content is deliberately NOT tenant-scoped: no `tenant_id` column in the migration, no `@schema_prefix`, no `prefix:` option anywhere in platform.ex or platform_help_content.ex (grepped -- only moduledoc prose mentions 'prefix', zero executable prefix usage) -- this is correct because the table stores platform-owned content (REQ-363's already-decided data classification), not tenant business data, so INV-1's tenant-scoping mechanism does not apply to it by design, not by omission. (b) confirmed the migration is not registered in Letflow.TenantProvisioning.tenant_scoped_migrations/0 (grepped lib/letflow/tenant_provisioning.ex for 'platform_help_content'/'20260918000001' -- zero hits), so it is not silently left reachable outside the intended one-copy-in-public shape, and is not replayed per-tenant (which would be the actual conflation bug). (c) no tenant_id column exists to derive at write time -- n/a. Cross-tenant exposure check (task item 1): get_by_screen/1 (platform.ex:184-189) returns all matching rows unfiltered by any tenant concept -- this is correct, not a leak, because the table holds zero tenant-attributable data (created_by is a bare pipeline-sentinel UUID, not a tenant identifier) and REQ-363 already decided this content class is platform-global by design.",
+        "result": "PASS"
+      },
+      "INV-2": { "verdict": "NOT-APPLICABLE", "check": "S4 not started; no API route or response-shaping code added in this diff -- Letflow.Help.Platform is a context module only, no controller/plug/view." },
+      "INV-3": { "verdict": "NOT-APPLICABLE", "check": "No scripting/sandbox code touched (S5 not started)." },
+      "INV-4": {
+        "verdict": "APPLIES",
+        "check": "grep -rn \"System.get_env\" config/ lib/letflow/help/ -- no hits in the new/changed help files (expected, no secret resolution needed here). grep -rniE secret/token/password pattern over lib/letflow/help/ and the new migration -- zero hits.",
+        "result": "PASS"
+      },
+      "INV-5": { "verdict": "NOT-APPLICABLE", "check": "S4 not started; fetch/1 in platform.ex is an internal context function, not a public lookup-by-ID API endpoint." },
+      "INV-6": {
+        "verdict": "APPLIES",
+        "check": "This handoff itself is the proof artifact -- explicit per-invariant verdicts recorded, status PASS.",
+        "result": "PASS"
+      },
+      "INV-7": {
+        "verdict": "APPLIES",
+        "check": "grep -rn \"Repo.query\" lib/letflow/help/ priv/repo/migrations/20260918000001_create_platform_help_content.exs -- zero hits. All queries use Ecto.Query (get_by_screen/1's `from` macro) or Repo.get/Repo.insert/Repo.update, all parameterised by construction.",
+        "result": "PASS"
+      },
+      "INV-8": {
+        "verdict": "APPLIES",
+        "check": "grep -rn \"^\\s*{:ok, .*} = \" lib/letflow/help/ -- zero hits. Manual review: platform.ex's create_draft/1, update_draft/2, publish/1, reconfirm/1, withdraw/1 all use `with`-chains returning tagged tuples throughout; fetch/1 wraps Ecto.UUID.cast/1 (handles :error without crashing) before Repo.get/2, converting invalid/malformed IDs to {:error, :not_found} rather than raising.",
+        "result": "PASS"
+      },
+      "INV-9": { "verdict": "NOT-APPLICABLE", "check": "No outbound HTTP request code in this diff." }
+    },
+    "sanitization_extraction_check": "Diffed lib/letflow/help/help_content.ex's removed private functions (validate_markdown_safety/2, walk/1, walk_node/1-2, walk_text/1, flatten_plain_text/1, raw_html_node?/2, destination_violation/2, scheme_violation_for/2, unsafe_scheme?/1, scheme_letters/1, decode_numeric_entities/1, decode_entity_code/1, codepoint_to_binary/2, safe_codepoint/1, plus both module attributes @raw_html_tag_pattern and @numeric_entity_pattern) line-for-line against lib/letflow/help/markdown_safety.ex's added content -- byte-identical logic, only the module home and the public function name (validate_markdown_safety/2 -> validate/2) changed. Confirmed a pure code-move, not a reimplementation: no regex pattern altered, no AST-walk branch removed or reordered, no error message changed, no is_binary/2 guard changed.",
+    "platform_path_parity_check": "Letflow.Help.PlatformHelpContent.validate_common/1 (platform_help_content.ex:94-100) calls MarkdownSafety.validate(:title) and MarkdownSafety.validate(:body) from both create_changeset/2 and update_changeset/2 (both route through validate_common/1) -- the identical calls Letflow.Help.HelpContent.validate_common/1 makes post-extraction (confirmed via git diff main...HEAD -- lib/letflow/help/help_content.ex). Same module, same function, same two fields, no separate/weaker platform-path implementation and no bypass of the shared validator on either changeset.",
+    "issues": []
+  },
   "rework_count": 0,
   "max_rework": 3
 }

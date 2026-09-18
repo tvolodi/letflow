@@ -1,0 +1,40 @@
+{
+  "handoff_id": "e468284c-4c95-43d4-bbb3-f9c3f6d6328e",
+  "run_id": "WF02-REQ365-20260918",
+  "workflow_id": "WF-02",
+  "step": "01b",
+  "from_agent": "ORCH",
+  "to_agent": "CODE-DESIGN-VALIDATOR",
+  "file": "handoffs/WF02-REQ365-20260918/step-01b-design-gate.json",
+  "created_at": "2026-09-18T02:44:07Z",
+  "started_at": "2026-09-18T02:44:07Z",
+  "completed_at": null,
+  "status": "PENDING",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S7",
+    "requirement_ids": ["REQ-365"],
+    "requirement_text": {
+      "REQ-365": "Per explicit user decision: platform-level help (shared screens like login-routing that no tenant owns) is authored through the BA-agent/REQ-ANALYST pipeline, matching the exact platform-vs-tenant split already established for UAT scenarios (REQ-358's scope field, REQ-359's BA-persona/REQ-ANALYST split, REQ-360's login-routing scenario as the worked platform example). This requirement is the authoring-path equivalent for help content: it does not re-derive that split, it applies it. . SCOPE: wherever REQ-363's design placed platform-scope help content (a dedicated table/schema, per that requirement's own acceptance criterion), this requirement adds the write path/tooling REQ-ANALYST (or, once REQ-359 lands, whichever role it specifies for platform content) actually uses to author it — this could be as simple as a direct context-module call analogous to REQ-364's tenant-scoped one, scoped to the platform table instead, reusing REQ-364's create/update/publish/reconfirm shape rather than inventing a parallel one. Explicitly NOT a new UI — platform help authoring is agent-pipeline-driven, matching how platform-scope UAT scenarios are authored (a file/record written by an agent, not a form filled by a human). . FIRST REAL CONTENT: author help for the login-routing screen (the same screen REQ-360's UAT scenario covers) as this requirement's own worked, real example — proves the authoring path end-to-end rather than shipping an authoring mechanism with zero real content using it."
+    },
+    "related_handoff_ids": [],
+    "artifacts_in": [
+      "lib/letflow/design/req365-platform-help-authoring.md",
+      "lib/letflow/design/req363-help-content-data-model.md",
+      "lib/letflow/help.ex",
+      "lib/letflow/help/help_content.ex"
+    ],
+    "owned_modules": []
+  },
+  "task": {
+    "description": "On branch feature/WF02-REQ365-20260918. Read lib/letflow/design/req365-platform-help-authoring.md independently (not CODE-DESIGNER's result.summary). Hard-gate it per WF-02 Step 1b (docs/agents/workflows/WF-02_requirement_implementation.md): every REQ-365 acceptance criterion maps to a concrete design element, no TBD/deferral language on anything in scope, function signatures fully specified (name/inputs/outputs/error cases), error-handling shape stated, cross-module dependencies listed, no implementation code (.ex bodies) present — signatures/type-shapes/literal content text only. Specifically verify: (a) the platform_help_content migration shape is fully specified and consistent with req363 design §3 (public schema, no prefix, no tenant_scoped_migrations registration); (b) the write-path module/function shapes are complete and consistent with lib/letflow/help.ex's actual shipped signatures (read that file, don't take the design doc's word for it); (c) the sanitization-reuse mechanism is concretely specified, not hand-waved; (d) the literal login-routing help content text is genuinely present, in plain end-user language, and the screen_id is stated explicitly. FAIL immediately on any check failure, no partial credit — list every failed check by requirement id. On PASS, complete the handoff (status COMPLETED, result.status PASS, next_action \"Route to ELIXIR-DEV (Step 2a)\"), commit and push to feature/WF02-REQ365-20260918. On FAIL, complete the handoff with result.status FAIL and next_action \"Rework CODE-DESIGNER\", listing every failed check.",
+    "acceptance_criteria": [
+      "a platform-scope help-content write path exists, reusing REQ-364's context-module shape against wherever REQ-363's design placed platform rows, not a parallel schema/mechanism",
+      "real help content for the login-routing screen is authored and published through this path, in plain end-user language (not engineer/SHALL-statement prose, per this requirement's own Why section) — the actual published text is quoted in this requirement's close-out",
+      "the write path enforces the same sanitization rule REQ-363/364 established for tenant-scoped content — no separate, weaker validation for the platform path"
+    ]
+  },
+  "result": null,
+  "rework_count": 0,
+  "max_rework": 3
+}

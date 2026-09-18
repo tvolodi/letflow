@@ -1,4 +1,7 @@
 defmodule Letflow.Help do
+  # Docs-only comment: T-0133 CD pipeline test-fire commit (ai-dala-infra),
+  # confirming the QA deploy key's forced command and GitHub Actions wiring
+  # end-to-end. No functional change.
   @moduledoc """
   Context module for in-app help content, tenant-scoped via `opts[:prefix]`. Implements
   REQ-363's already-validated design (`lib/letflow/design/req363-help-content-data-model.md`)

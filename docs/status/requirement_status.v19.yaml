@@ -983,3 +983,39 @@ history:
       live diagnosis. depends_on [32, 34], both satisfied. Step 00 (git
       setup) PASS: branch feature/WF02-REQ370-20260918 created off
       origin/main and pushed.
+
+  - req: SCOPE-CHANGE
+    event: revised
+    agent: DOC-UPDATER
+    at: "2026-09-18T19:50:13Z"
+    note: >
+      WF02-REQ369-closeout-final-20260918. Updated REQ-369's close_out_note in
+      docs/requirements.yaml (append-only, prior 2026-09-18T14:53:51Z ORCH note
+      retained verbatim below the new content, marked superseded) per the newest
+      evidence, test/uat-reports/uat-2026-09-18-WF02-REQ369-AC6AC7-final-20260918.yaml.
+      status field left as blocked (unchanged) -- AC6/AC7 remain genuinely unmet.
+
+      All three known blocking issues are now resolved: ISS-0711 (tenant-count field
+      mismatch) is resolved and merged (commit 124bcc5a, PR #1528), and that fix's
+      deployment to QA was independently confirmed LIVE this session via direct
+      before/after bundle inspection (old `.total` read confirmed gone, new `.count`
+      read confirmed present in the redeployed bundle) -- not merely trusted from the
+      fix's own report. ISS-0712 (pipeline_test login-mechanism gap) and ISS-0713
+      (quick-links strict-mode locator) were already both resolved per the prior
+      ORCH note.
+
+      AC6 and AC7 remain NOT re-verified -- solely because THIS execution environment
+      has no path to a real PLATFORM_ADMIN credential (no ai-dala-infra checkout, no
+      SSH to the QA host, no seeded credential env vars, no vault CLI -- all checked
+      directly and reported honestly, not assumed). A DIFFERENT execution environment
+      obtained credentials earlier today for the ISS-0712/ISS-0713 verification runs,
+      but that access is not available here. This is a credential-access gap in this
+      specific environment, not a code or deploy defect. ORCH has asked the user
+      directly (in the live conversation, not yet answered as of this dispatch)
+      whether they can provide QA PLATFORM_ADMIN credentials or point to a
+      credential-fetch path, to finish AC6/AC7.
+
+      README.md checked: no per-role dashboard routing documented there (matches
+      prior sessions' own findings), so no update needed. No docs/migration/stage-N-*.md
+      or decisions/*.md file was named by REQ-369's acceptance criteria beyond what
+      prior close-out notes already addressed -- none required updating here.

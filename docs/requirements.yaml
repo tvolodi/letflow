@@ -26946,6 +26946,62 @@ requirements:
       - "this requirement's own close-out states explicitly that ISS-0700 remains status: open (not closed by this requirement) and that the separate 'Unknown workspace' banner gap for non-PLATFORM_ADMIN unauthenticated/no-realm-slug users is unresolved and out of this requirement's scope"
     depends_on: [REQ-360]
     close_out_note: >
+      status: blocked, NOT done — updated by DOC-UPDATER
+      (WF02-REQ369-closeout-final-20260918, 2026-09-18), superseding the
+      2026-09-18T14:53:51Z ORCH note below in substance (kept append-only per this
+      file's own history discipline: nothing here is deleted, this note states the
+      current, factual position). AC1-AC5 remain genuinely complete and independently
+      re-verified: RELEASE-VALIDATOR's PASS-WITH-PENDING (step-05-release-validation.json),
+      merged as PR #1507, squash commit 3c0cbd24290c062d1974b7eb91fa74adcc2c42f4.
+      .
+      ALL THREE KNOWN BLOCKING ISSUES ARE NOW RESOLVED. ISS-0711 (tenant-count field
+      mismatch, `.total` vs. the real `.count` envelope) is resolved and merged
+      (fix/WF03-ISS0711-20260918, commit 124bcc5a, PR #1528) — and that deploy is
+      independently CONFIRMED LIVE on QA via direct bundle inspection this session, not
+      merely trusted from the fix's own report: before the coordinator's trigger-redeploy
+      commit, the live bundle still contained the old broken read
+      (`...i.total)??0`); after it, a new bundle hash
+      (assets/index-DAWxibro.js, replacing the stale index-DjB53d10.js) was fetched and
+      grepped directly, confirming the tenant-count tile now reads `...i.count)??0` and
+      that no `.total` read remains near the tenant-count render. ISS-0712 (pipeline_test
+      login-mechanism gap) and ISS-0713 (quick-links strict-mode locator) are also both
+      resolved, per the prior ORCH note below and its own cited evidence
+      (test/uat-reports/uat-2026-09-18-WF03-ISS0712-20260918.yaml,
+      test/uat-reports/uat-2026-09-18-WF03-ISS0713-20260918.yaml). Full evidence for this
+      session's own independent deploy confirmation:
+      test/uat-reports/uat-2026-09-18-WF02-REQ369-AC6AC7-final-20260918.yaml.
+      .
+      AC6 AND AC7 STILL NOT RE-VERIFIED — SOLELY A CREDENTIAL-ACCESS GAP IN THIS SPECIFIC
+      EXECUTION ENVIRONMENT, NOT A CODE OR DEPLOY DEFECT. This is a DIFFERENT execution
+      environment from the one that resolved the credential gap earlier today for the
+      ISS-0712/ISS-0713 verification runs — that access is not available here. Checked
+      directly, not assumed: no `ai-dala-infra` checkout anywhere on this filesystem, no
+      SSH access to the QA host (`ssh ubuntu-16gb-nbg1-1` fails on DNS resolution, no
+      matching `~/.ssh/config` entry), no pre-seeded credential environment variables, no
+      vault/secret-manager CLI (`vault`/`op`/`bw`/`pass` all absent), and no usable QA
+      credential in this repo's own `.env`. Real network reachability to
+      https://qa.bizdala.com itself is NOT the blocker (200 on `/`, real 401 on
+      unauthenticated `/api/v1/tenants` — both confirmed live this session) — only the
+      credential-fetch path is missing from this environment. AC6's own "real tenant
+      count rendered" clause and AC7's named pipeline_test re-run both require an actual
+      PLATFORM_ADMIN login this environment cannot perform. ORCH has asked the user
+      directly (in the live conversation, not yet answered as of this note) whether they
+      can provide QA PLATFORM_ADMIN credentials or point to a credential-fetch path, to
+      finish AC6/AC7; this note is written so a future session — with or without
+      credentials, and whether or not it is this same environment — knows exactly where
+      to pick this up: read
+      test/uat-reports/uat-2026-09-18-WF02-REQ369-AC6AC7-final-20260918.yaml in full
+      first, then either (a) dispatch UAT-RUNNER from a credential-capable environment to
+      perform the real login and re-run the named pipeline_test now that all three fixes
+      are confirmed live, or (b) make the sufficiency judgment call the report's own
+      `ac7_disposition` field lays out (accepting the existing
+      test/uat-reports/uat-2026-09-18-WF03-ISS0713-20260918.yaml PASS plus this session's
+      independent deploy confirmation as combined evidence) — left to ORCH/
+      RELEASE-VALIDATOR, not decided unilaterally here. AC8 remains satisfied: ISS-0700
+      (docs/issues/ISS-0700.yaml) stays status: open, untouched by this note, and the
+      separate "Unknown workspace" banner gap remains out of scope.
+      .
+      --- Prior note (2026-09-18T14:53:51Z), retained for history, superseded by the above ---
       status: blocked, NOT done — updated by ORCH (WF02-REQ369-AC6AC7-20260918T143000Z,
       2026-09-18), superseding the 2026-09-18T13:35:49Z note below in substance (kept
       append-only per this file's own history discipline: nothing here is deleted, this

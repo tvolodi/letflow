@@ -1,0 +1,43 @@
+{
+  "handoff_id": "13f1759a-2a8e-4b72-bcc7-fef52c4a8bdd",
+  "run_id": "WF02-REQ365-20260918",
+  "workflow_id": "WF-02",
+  "step": "03",
+  "from_agent": "ORCH",
+  "to_agent": "TEST-DESIGNER",
+  "file": "handoffs/WF02-REQ365-20260918/step-03-test-designer.json",
+  "created_at": "2026-09-18T03:15:30Z",
+  "started_at": "2026-09-18T03:15:30Z",
+  "completed_at": null,
+  "status": "PENDING",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S7",
+    "requirement_ids": ["REQ-365"],
+    "requirement_text": {
+      "REQ-365": "Per explicit user decision: platform-level help (shared screens like login-routing that no tenant owns) is authored through the BA-agent/REQ-ANALYST pipeline, matching the exact platform-vs-tenant split already established for UAT scenarios (REQ-358's scope field, REQ-359's BA-persona/REQ-ANALYST split, REQ-360's login-routing scenario as the worked platform example). This requirement is the authoring-path equivalent for help content: it does not re-derive that split, it applies it. . SCOPE: wherever REQ-363's design placed platform-scope help content (a dedicated table/schema, per that requirement's own acceptance criterion), this requirement adds the write path/tooling REQ-ANALYST (or, once REQ-359 lands, whichever role it specifies for platform content) actually uses to author it — this could be as simple as a direct context-module call analogous to REQ-364's tenant-scoped one, scoped to the platform table instead, reusing REQ-364's create/update/publish/reconfirm shape rather than inventing a parallel one. Explicitly NOT a new UI — platform help authoring is agent-pipeline-driven, matching how platform-scope UAT scenarios are authored (a file/record written by an agent, not a form filled by a human). . FIRST REAL CONTENT: author help for the login-routing screen (the same screen REQ-360's UAT scenario covers) as this requirement's own worked, real example — proves the authoring path end-to-end rather than shipping an authoring mechanism with zero real content using it."
+    },
+    "related_handoff_ids": [],
+    "artifacts_in": [
+      "lib/letflow/design/req365-platform-help-authoring.md",
+      "lib/letflow/help/platform.ex",
+      "lib/letflow/help/platform_help_content.ex",
+      "lib/letflow/help/markdown_safety.ex",
+      "lib/letflow/help/help_content.ex",
+      "test/letflow/help_test.exs"
+    ],
+    "owned_modules": []
+  },
+  "task": {
+    "description": "On branch feature/WF02-REQ365-20260918. Full application-executable surface produced by Step 2a (new context module, new schema, new migration, extracted shared validator) -- this is NOT a docs-only requirement, the scope test does not apply, proceed to the full procedure. Read test/letflow/help_test.exs (the existing REQ-364 test suite for Letflow.Help/HelpContent) as your pattern precedent -- match its structure/conventions for the new test file, ExUnit + real Postgres via the tenant-provisioning test setup this codebase already uses. Write test/specs/REQ-365.md (requirement text, test cases, why each exists) and test/letflow/help/platform_test.exs (or wherever help_test.exs's own sibling convention puts it) covering: create_draft/1 (rejects :status/:confirmed_at/:confirmed_for_definition_version in attrs, same as Letflow.Help), update_draft/2 (rejects update on a :live row), publish/1 (draft->live, confirmed_at from real clock not caller-supplied), reconfirm/1 (bumps confirmed_at only, body unchanged -- provably, via a direct comparison), withdraw/1 (live->draft), get_by_screen/1, and a write attempting raw HTML/script/javascript: URI content is rejected with a clear error (exercising the shared MarkdownSafety path from the platform side specifically, not just re-testing HelpContent's own coverage -- REQ-365's acceptance criterion #3 requires this be demonstrated for the platform path too, not merely inherited by assertion). Also add/extend a test confirming help_content.ex's behavior is unchanged after the MarkdownSafety extraction (may already be covered by the existing help_test.exs -- if so, state that explicitly rather than duplicating). Every acceptance criterion below must have >=1 test case that would fail if violated. No test depends on wall-clock time or unseeded randomness. Complete the handoff (status COMPLETED, result.status PASS/FAIL, artifacts_out listing every file written, next_action \"Route to TEST-DESIGN-VALIDATOR\"), commit and push to feature/WF02-REQ365-20260918.",
+    "acceptance_criteria": [
+      "a platform-scope help-content write path exists, reusing REQ-364's context-module shape against wherever REQ-363's design placed platform rows, not a parallel schema/mechanism",
+      "the write path enforces the same sanitization rule REQ-363/364 established for tenant-scoped content — no separate, weaker validation for the platform path",
+      "every Letflow.Help.Platform function has test coverage (create_draft/1, update_draft/2, publish/1, reconfirm/1, withdraw/1, get_by_screen/1)",
+      "help_content.ex's own existing tests still pass unchanged after the markdown-safety extraction (same behavior, moved location)"
+    ]
+  },
+  "result": null,
+  "rework_count": 0,
+  "max_rework": 3
+}

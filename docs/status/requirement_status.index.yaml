@@ -3914,9 +3914,22 @@ volumes:
     path: docs/status/requirement_status.v19.yaml
     status: current
     opened: 2026-09-17
-    entries: 15
+    entries: 16
     note: >
-      Incremented to 15 by ORCH's own ISS-0712 done-event append
+      Incremented to 16 by ORCH's own ISS-0713 done-event append
+      (WF03-ISS0713-20260918, queue task Q-713 -- full WF-03 run resolving
+      the platform-login-routing-by-role pipeline_test's unscoped
+      Tenants-link locator strict-mode violation, live-verified against QA,
+      merged via PR #1526; ORCH took over Step Final directly after the
+      dispatched FRONTEND-DEV subagent stalled mid-protocol) -- `grep -c
+      "^  - req:" docs/status/requirement_status.v19.yaml` = 16 on-disk
+      entries; 910 lines / 55822 bytes, well under the 1200-line/120000-byte
+      roll ceiling, no roll triggered. This entry deliberately uses `req:
+      SCOPE-CHANGE` (not `req: ISS-0713`) per this volume's own header
+      vocabulary rule -- see the entry's own closing note for why that
+      matters (the immediately-prior ISS-0712 entry got this wrong).
+
+      Prior note (15 entries), retained for history: Incremented to 15 by ORCH's own ISS-0712 done-event append
       (WF03-ISS0712-20260918, queue task Q-712 -- full WF-03 run resolving
       the pipeline_test's real-OIDC-redirect login gap, live-verified against
       QA, merged via PR #1524) -- `grep -c "^  - req:"

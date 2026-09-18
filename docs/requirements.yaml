@@ -27100,3 +27100,157 @@ requirements:
       PLATFORM_ADMIN branch against the live https://qa.bizdala.com, capture the
       login + tenant-count + screenshot evidence for AC6, quote the updated scenario
       pass result for AC7, then flip this requirement's status to done.
+
+  - id: REQ-370
+    title: "Multi-issuer OIDC token verification -- trust the tenant table's own realm bindings, not one hardcoded :oidc, :issuer value"
+    owner: ELIXIR-DEV
+    status: pending
+    stage: S1
+    description: >
+      SECURITY-CRITICAL. This requirement changes the authentication
+      boundary itself -- SECURITY-REVIEWER's gate on it is not routine, it
+      is the substance of what this requirement is for. INV-1 (tenant data
+      isolation, docs/agents/instructions/security-invariants.md) is
+      directly implicated: getting multi-issuer verification wrong could
+      let a token minted for one tenant's realm be accepted for another
+      tenant's context, or weaken the "we verify against exactly the
+      issuers we actually trust" guarantee in a way that admits a
+      forged/untrusted token. This is not a routine feature add; treat it
+      with the same weight as a new auth plug.
+      .
+      ROOT CAUSE, LIVE-CONFIRMED, DO NOT RE-DERIVE. This requirement is
+      based directly on docs/issues/ISS-0690.yaml's followup_2 block
+      (checked_by ISSUE-FIXER, 2026-09-18T14:35:00Z), which executed this
+      diagnosis end to end against real QA infrastructure with real HTTP
+      responses -- not a hypothesis, a confirmed live result. Cite it, do
+      not repeat its investigation. Summary of what it found: a real
+      CANDIDATE-role JWT minted by Keycloak's bilimbaga realm
+      (iss=.../realms/bilimbaga), presented against
+      https://qa.bizdala.com/api/v1/solution-packs/install, gets a real
+      HTTP 401 {"error":"unauthorized","detail":"invalid or expired bearer
+      token"} -- for EVERY role, including PLATFORM_ADMIN, not just
+      CANDIDATE. This is not a permission-mapping issue (ISS-0690's own
+      followup confirmed the CANDIDATE-role/:DefinitionsWrite mapping is a
+      separate, correct, unrelated fact) -- it fails strictly earlier, at
+      lib/letflow/plugs/auth_pipeline.ex's verify_token/1 step (calling
+      Letflow.Oidc.TokenVerifier's configured implementation), which
+      validates every incoming JWT against exactly ONE registered
+      Oidcc.ProviderConfiguration.Worker
+      (lib/letflow/supervisor/infrastructure.ex, the {Oidcc.ProviderConfiguration.Worker,
+      %{issuer: ..., name: ...}} child spec), configured from a single
+      `:oidc, :issuer` value (config/runtime.exs, OIDC_ISSUER env var). A
+      JWT issued by any realm other than that one configured issuer fails
+      verification outright -- wrong issuer, wrong signing JWKS -- and is
+      rejected 401 by handle_auth_error/2's {:error, {:verify, _}} clause,
+      before tenant resolution, realm-ownership guard, or permission
+      evaluation are ever reached.
+      .
+      THIS IS DOCUMENTED, DELIBERATE, KNOWN-AT-SHIP-TIME DESIGN, NOT AN
+      UNDISCOVERED DEFECT. REQ-016 (OIDC foundation, done) and REQ-019
+      (tenant/realm binding, done) both shipped knowingly leaving this gap:
+      lib/letflow/design/req019-tenant-realm-binding.md line 244 states
+      outright "REQ-016 configures a single realm/issuer," and
+      config/runtime.exs's own comment says each deployed environment
+      points at its own single Keycloak realm (singular). The tenants
+      table's data model already supports N tenants each bound to their
+      own distinct realm (idp_realm_id, unique/immutable per REQ-019's
+      tenants_idp_realm_id_partial_index and Letflow.Identity.resolve_tenant_by_realm/1),
+      but the token-VERIFICATION layer never consults that mapping -- it
+      only ever checks a token's issuer against the one statically
+      configured value. This requirement closes that specific gap.
+      .
+      ONE OF THREE OPTIONS ISS-0690's followup_2 IDENTIFIED -- THIS
+      REQUIREMENT COMMITS TO OPTION (b) ONLY. followup_2's next_action
+      named three ways to resolve the underlying blocker: (a) keep
+      one-realm-per-deployment as final and give each tenant a fully
+      separate Letflow deployment -- explicitly NOT this requirement's
+      approach, and it contradicts the existing multi-tenant premise the
+      tenants table itself already encodes; (b) dynamic/multi-issuer OIDC
+      token verification within one Letflow deployment -- THIS is what
+      this requirement scopes and commits to; (c) bypass OIDC entirely for
+      a given tenant via the existing opaque lf_tok_ API-token branch
+      (REQ-076) -- out of scope here, a different mechanism with its own
+      separate seeding/provisioning story that does not touch
+      Letflow.Oidc.TokenVerifier at all. Do not fold (a) or (c) into this
+      requirement's implementation; if either later becomes the actual
+      chosen path for a specific tenant that is a separate decision, not
+      a silent substitute for shipping (b).
+      .
+      SCOPE, STATED PRECISELY SO IT DOES NOT DRIFT INTO "TRUST ALL
+      ISSUERS": teach the token-verification layer to look up which
+      realm(s) it should trust from the tenants table's already-existing,
+      already-unique, already-immutable idp_realm_id column -- not from a
+      single static config value -- so that a token from ANY registered
+      tenant's own realm is correctly verified against that specific
+      tenant's own Keycloak issuer/JWKS, and a token from an issuer with NO
+      corresponding tenant row is still correctly rejected. The trusted set
+      is "exactly the issuers with a real, existing tenant row bound to
+      them, resolved dynamically against the current state of the tenants
+      table" -- never a wildcard, never "accept any issuer and sort out
+      tenant scoping afterward." Concretely, this requires (at minimum;
+      CODE-DESIGNER resolves the exact mechanism):
+        1. Letflow.Oidc.TokenVerifier's callback contract and its two
+           implementations (lib/letflow/oidc/token_verifier.ex,
+           lib/letflow/oidc/token_verifier/oidcc.ex) change from "verify
+           against the one supervised Oidcc.ProviderConfiguration.Worker" to
+           "resolve which provider/issuer to verify against, given the
+           token's own claimed issuer, against the tenants table" --
+           before trusting the claimed issuer's signature, since the claim
+           itself is exactly what verification must not blindly trust.
+        2. lib/letflow/supervisor/infrastructure.ex's single {Oidcc.ProviderConfiguration.Worker,
+           %{issuer: ..., name: ...}} child spec becomes a per-realm set of
+           supervised provider-configuration workers (one JWKS-fetching,
+           auto-refreshing worker per registered tenant realm) rather than
+           one hardcoded worker -- CODE-DESIGNER decides the concrete
+           supervision shape (e.g. a DynamicSupervisor keyed by realm,
+           workers started/stopped as tenants are created, vs. some other
+           mechanism) and states explicitly how a NEWLY created tenant's
+           realm becomes verifiable without a full application restart, or
+           states explicitly and justifies why a restart is acceptable for
+           this batch if the dynamic-worker-lifecycle path is judged out of
+           this requirement's size.
+        3. config/runtime.exs's single `:oidc, :issuer` env var either
+           becomes a seed/bootstrap-only value (e.g. still used to verify
+           the bpm-default realm specifically, or to configure the
+           Keycloak host common to every realm) or is superseded entirely
+           by the tenants table as the sole source of truth for which
+           issuers exist -- CODE-DESIGNER states explicitly which, and why,
+           since this is exactly the kind of "does this contradict an
+           existing decision record" question core-directives.md requires
+           flagging rather than silently resolving: no
+           docs/migration/decisions/ record currently states a multi-issuer
+           policy, so if CODE-DESIGNER's chosen mechanism implies one, that
+           should be raised for REVIEWER sign-off as this requirement's own
+           design artifact, not adopted silently.
+      .
+      OUT OF SCOPE, EXPLICITLY. This requirement does NOT itself resolve
+      ISS-0690 -- ISS-0690 stays status: open, untouched by this
+      requirement's own close-out, exactly the same discipline
+      REQ-369's close-out already applied to ISS-0700 (docs/requirements.yaml's
+      REQ-369 entry: "ISS-0700 ... stays status: open, NOT closed by this
+      requirement"). ISS-0690 can only be closed once the BilimBaga UAT
+      scenario (test/fixtures/uat/scenarios/bilimbaga/candidate-timed-exam-autograde.yaml)
+      is actually re-run successfully against live QA after this
+      requirement lands -- a live re-run with real QA credential access,
+      which is a separate follow-up step, not this requirement's own
+      acceptance criteria. This requirement also does not implement option
+      (a) (separate deployment per tenant) or option (c) (the lf_tok_
+      API-token bypass) -- see above. This requirement does not change
+      lib/letflow/plugs/auth_pipeline.ex's steps 2-6 (tenant resolution
+      from realm claim, realm-ownership guard, JIT provisioning, auth
+      context attachment) -- those already correctly consume whichever
+      realm/tenant the (now-multi-issuer) verification step hands them;
+      only the verification step itself (step 1) is in scope.
+    acceptance_criteria:
+      - "a design artifact from CODE-DESIGNER exists (lib/letflow/design/req370-*.md) resolving the three concrete points named in this description's SCOPE section -- the TokenVerifier callback/implementation shape, the per-realm provider-worker supervision shape (including how a newly created tenant's realm becomes verifiable), and the fate of config/runtime.exs's single :oidc, :issuer value -- and is SECURITY-REVIEWER-PASSed and REVIEWER-PASSed before implementation, given this requirement's security-critical status"
+      - "a real automated test proves a token whose iss claims tenant A's own bound realm, presented against a request resolving to tenant B's context, is rejected -- not silently accepted under the wrong tenant, and not merely re-testing REQ-019's already-existing verify_realm_ownership/2 guard (that guard runs AFTER verification and already has its own REQ-019 tests; this test targets the NEW multi-issuer verification step itself, proving it does not cross-accept)"
+      - "a real automated test proves that for each of at least two distinct, independently-registered tenant realms (each with its own idp_realm_id row in the tenants table), a token genuinely issued by (or a test double standing in for) that realm's own issuer verifies successfully -- not only the single previously-hardcoded issuer"
+      - "a real automated test proves a token whose iss claims an issuer with NO corresponding tenant row (no idp_realm_id match at all) is rejected with 401 by the verification step itself -- not silently trusted, and not accidentally falling through to a wildcard/catch-all acceptance path"
+      - "a real automated test proves that revoking/removing a tenant's idp_realm_id binding (or the tenant row itself) causes subsequent tokens from that realm to be rejected -- the trusted set is derived from current tenants-table state, not cached/latched permanently from a token's first successful verification"
+      - "SECURITY-REVIEWER's sign-off explicitly states whether INV-1 is satisfied by the new per-realm verification mechanism, and explicitly addresses the specific risk this requirement's description names: a token minted for one tenant's realm being accepted for a different tenant's context"
+      - "the close-out states explicitly, in the same words as this description's OUT OF SCOPE section requires, that ISS-0690 remains status: open and is not closed by this requirement, and names the concrete follow-up (a live re-run of test/fixtures/uat/scenarios/bilimbaga/candidate-timed-exam-autograde.yaml against QA with real credential access) that would close it"
+      - "if any part of the chosen mechanism implies a multi-issuer OIDC policy not currently stated in any docs/migration/decisions/ record, the close-out states this explicitly and names whether a new decision record was filed or REVIEWER sign-off was otherwise obtained for it, rather than silently shipping an undocumented policy change"
+      - "`mix test` and `mix compile --warnings-as-errors` both pass with real output quoted"
+    depends_on:
+      - REQ-019
+      - REQ-021

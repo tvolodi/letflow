@@ -118,13 +118,17 @@ defmodule Letflow.Exam.Session do
 
   import Ecto.Query, only: [from: 2]
 
+  alias Letflow.Entities.Query.Allowlist
   alias Letflow.Entities.Query.Compiler
+  alias Letflow.Entities.Query.Cursor
   alias Letflow.Entities.Record.Latest
   alias Letflow.Entities.Records
   alias Letflow.Exam.QuestionSetResolver
   alias Letflow.Exam.Scoring
   alias Letflow.Repo
   alias Letflow.TenantProvisioning
+
+  @default_available_exams_page_size 100
 
   @type eligibility_error ::
           :not_assigned
@@ -171,6 +175,52 @@ defmodule Letflow.Exam.Session do
           required(:time_spent_seconds) => non_neg_integer(),
           optional(:text_answer) => String.t() | nil
         }
+
+  @type exam_row :: Latest.t() | Compiler.entity_row()
+
+  # -----------------------------------------------------------------------
+  # list_available_exams/2 (ISS-0718)
+  # -----------------------------------------------------------------------
+
+  @doc """
+  Lists the `exam` entity records a CANDIDATE may currently start a session
+  against (`lib/letflow/design/iss0718-candidate-exam-list-route.md` §1.2).
+
+  `entity_type: "exam"` and `filters: [status eq "active"]` are hardcoded
+  in this function's own body, never derived from `opts` or any caller
+  input -- `opts` carries pagination only (`:cursor`, `:page_size`, default
+  #{@default_available_exams_page_size} when `:page_size` is omitted or
+  `nil`). Reuses the same three-step read pipeline
+  `Letflow.Routers.Entities`' generic `POST /entities/query` route calls
+  (`Compiler.compile/2`, `Allowlist.load/2`, `Cursor.paginate/5`) -- library
+  modules, not HTTP-route-specific -- without that route's `FieldGrants`
+  redaction step: `entity_field_restrictions` carries no row for
+  entity_type "exam" today (design doc §6 OQ-1), so there is nothing for
+  redaction to enforce that plain `field_values` exposure does not already
+  cover for this fixed, hardcoded, `status = "active"` query.
+  """
+  @spec list_available_exams(prefix :: String.t(), opts :: keyword()) ::
+          {:ok, %{items: [exam_row()], next_cursor: String.t() | nil}}
+          | {:error, term()}
+  def list_available_exams(prefix, opts \\ []) when is_binary(prefix) and is_list(opts) do
+    request = %{
+      entity_type: "exam",
+      filters: [%{field: "status", op: :eq, value: "active"}],
+      sort: [],
+      join: []
+    }
+
+    paginate_opts = %{
+      cursor: Keyword.get(opts, :cursor),
+      page_size: Keyword.get(opts, :page_size) || @default_available_exams_page_size
+    }
+
+    with {:ok, compiled} <- Compiler.compile(request, prefix),
+         {:ok, allowlist} <- Allowlist.load(request.entity_type, prefix),
+         {:ok, page} <- Cursor.paginate(request, compiled, allowlist, paginate_opts, prefix) do
+      {:ok, %{items: page.items, next_cursor: page.next_cursor}}
+    end
+  end
 
   # -----------------------------------------------------------------------
   # create/3

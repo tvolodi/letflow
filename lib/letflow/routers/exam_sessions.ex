@@ -118,9 +118,11 @@ defmodule Letflow.Routers.ExamSessions do
 
   require Logger
 
+  alias Letflow.Api.Pagination
   alias Letflow.Api.Response
   alias Letflow.Api.Validation
   alias Letflow.Api.Validation.FieldConstraint
+  alias Letflow.Entities.Record.Latest
   alias Letflow.Exam.AntiCheat
   alias Letflow.Exam.Certificate
   alias Letflow.Exam.CertificateDocument
@@ -131,6 +133,20 @@ defmodule Letflow.Routers.ExamSessions do
 
   authz_post "/", :ExamSessionStart do
     handle_start_session(conn)
+  end
+
+  # ── Available-exams list (ISS-0718) ─────────────────────────────────────
+  #
+  # Reuses the EXISTING `:ExamSessionStart` permission -- no new atom minted,
+  # CANDIDATE's role_allows?/2 six-member list is unchanged (see
+  # lib/letflow/design/iss0718-candidate-exam-list-route.md §0). Declared
+  # ABOVE "/:id" below for readability only, matching the ordering-note
+  # convention this file already uses at "/:id" vs the deeper write routes:
+  # a literal "/available" segment always wins over the "/:id" wildcard in
+  # Plug.Router's compiled matcher regardless of declaration order.
+
+  authz_get "/available", :ExamSessionStart do
+    handle_list_available_exams(conn)
   end
 
   # ── Session-state read ──────────────────────────────────────────────────
@@ -312,6 +328,67 @@ defmodule Letflow.Routers.ExamSessions do
 
   defp render_get_session_state(conn, {:error, reason}) do
     Logger.warning("exam session state read failed: #{inspect(reason)}")
+    Response.internal_error(conn)
+  end
+
+  # ══ GET /exam-sessions/available (ISS-0718) ═══════════════════════════
+  #
+  # `entity_type: "exam"` + `status: "active"` filtering is hardcoded
+  # server-side in Session.list_available_exams/2 -- this route accepts no
+  # caller-supplied entity-type or filter selection, only pagination
+  # (`cursor`/`page_size`, same flat-query-string shape
+  # Letflow.Routers.Entities' own `GET /entities/definitions` route uses).
+  #
+  # No FieldGrants redaction step: entity_field_restrictions carries no row
+  # for entity_type "exam" today (confirmed against the live migrations/
+  # seed data at implementation time -- design doc §6 OQ-1), so there is
+  # nothing for a redaction step to enforce here that plain field_values
+  # exposure does not already cover.
+
+  defp handle_list_available_exams(conn) do
+    prefix = prefix!(conn)
+    conn = fetch_query_params(conn)
+    query = conn.query_params
+
+    case Pagination.parse_page_size_param(Map.get(query, "page_size")) do
+      {:ok, page_size} ->
+        opts = [cursor: Map.get(query, "cursor"), page_size: page_size]
+        render_list_available_exams(conn, Session.list_available_exams(prefix, opts))
+
+      {:error, :invalid_page_size} ->
+        Response.bad_request(conn, "invalid page_size")
+    end
+  end
+
+  defp render_list_available_exams(conn, {:ok, %{items: items, next_cursor: next_cursor}}) do
+    Response.ok(conn, %{
+      "items" => Enum.map(items, &exam_row_json/1),
+      "next_cursor" => next_cursor
+    })
+  end
+
+  # Duplicated locally rather than reusing Letflow.Routers.Entities' private
+  # render_query_error/2 (design §6 OQ-2 -- that function is defp, not
+  # importable across routers; this file's own established convention is
+  # each router owns its own JSON/error shaping, matching exam_row_json/1
+  # below). Only the error shapes this route's hardcoded, well-formed
+  # request can actually surface are handled explicitly; anything else logs
+  # and falls through to a detail-free 500, same as every other unexpected
+  # branch in this router.
+  defp render_list_available_exams(conn, {:error, :page_size_too_large}),
+    do: Response.bad_request(conn, "page_size out of range")
+
+  defp render_list_available_exams(conn, {:error, :invalid_cursor}),
+    do: Response.bad_request(conn, "invalid cursor")
+
+  defp render_list_available_exams(conn, {:error, :wrong_endpoint}),
+    do: Response.bad_request(conn, "cursor is not valid for this endpoint")
+
+  defp render_list_available_exams(conn, {:error, :resume_key_arity_mismatch}),
+    do: Response.bad_request(conn, "cursor does not match this request's sort clause")
+
+  defp render_list_available_exams(conn, {:error, reason}) do
+    Logger.warning("available-exams list failed: #{inspect(reason)}")
     Response.internal_error(conn)
   end
 
@@ -825,6 +902,40 @@ defmodule Letflow.Routers.ExamSessions do
       "submission" => if(submission, do: submission_outcome_json(submission), else: nil)
     }
   end
+
+  # Structurally identical to Letflow.Routers.Entities' own
+  # query_item_map/1's two non-join clauses (entities.ex:2327-2330) --
+  # duplicated rather than imported cross-router (design §1.3 OQ-2,
+  # matching this file's own established convention that each router owns
+  # its JSON shaping). `Letflow.Entities.Query.Compiler.compile_plain/5`
+  # returns either an unpromoted `%Letflow.Entities.Record.Latest{}` struct
+  # or a promoted plain-map `entity_row()`, depending on whether "exam" has
+  # a per-type table today -- both clauses are needed for that reason, not
+  # for defensiveness.
+  defp exam_row_json(%Latest{} = record) do
+    %{
+      "record_id" => record.record_id,
+      "field_values" => record.field_values,
+      "deleted" => record.deleted,
+      "entity_def_version" => encode_entity_def_version(record.entity_def_version),
+      "last_event_global_seq" => record.last_event_global_seq
+    }
+  end
+
+  defp exam_row_json(%{field_values: _field_values} = entity_row) do
+    %{
+      "record_id" => entity_row.record_id,
+      "field_values" => entity_row.field_values,
+      "deleted" => entity_row.deleted,
+      "entity_def_version" => encode_entity_def_version(entity_row.entity_def_version),
+      "last_event_global_seq" => entity_row.last_event_global_seq
+    }
+  end
+
+  defp encode_entity_def_version(nil), do: nil
+
+  defp encode_entity_def_version(version) when is_binary(version),
+    do: Base.encode16(version, case: :lower)
 
   # ══ Shared plumbing ═══════════════════════════════════════════════════
 

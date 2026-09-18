@@ -722,6 +722,16 @@ defmodule Letflow.Api.Authorization do
   # answers "may this role reach this route," never "is this the caller's own
   # session."
   def endpoint_policy_key("POST", "/exam-sessions"), do: :ExamSessionStart
+
+  # ISS-0718 -- the candidate-facing available-exams list route. Reuses the
+  # EXISTING :ExamSessionStart atom (no new permission minted): "which exams
+  # are currently startable" is the same capability as "may start a session
+  # against a given exam," applied to a list instead of one exam_id (design
+  # doc iss0718-candidate-exam-list-route.md §0.1). CANDIDATE's
+  # role_allows?/2 six-member list and the ISS-0646 closed-set invariant
+  # test are both unchanged by this clause.
+  def endpoint_policy_key("GET", "/exam-sessions/available"), do: :ExamSessionStart
+
   def endpoint_policy_key("GET", "/exam-sessions/:id"), do: :ExamSessionRead
 
   def endpoint_policy_key("PUT", "/exam-sessions/:id/answers/:question_id"),

@@ -169,3 +169,64 @@
 
 
 history:
+  - req: SCOPE-CHANGE
+    event: done
+    agent: DOC-UPDATER
+    at: "2026-09-18T21:26:59Z"
+    note: >
+      WF-03 run WF03-ISS0716-20260918 (queue task Q-716, GH-1534) complete,
+      RELEASE-VALIDATOR PASS ("Clearing ISS-0716 for DOC-UPDATER and
+      merge."). ISS-0716 (flaky Letflow.TenantProvisioning.
+      ColumnPromotionTest AC1) is now resolved: root cause was a known
+      ISS-0580-family residual hazard -- SandboxAutoMode
+      (test/support/sandbox_auto_mode.ex) sets the DB sandbox to pool-wide
+      :auto mode for the duration of tenant provisioning, so a
+      concurrently-scheduled sibling test's writes commit for real during
+      that window, legitimately widening :all-scoped
+      register_column_promotion/4's resolved tenant-id set beyond this
+      test's own tenant_a/tenant_b -- production-correct behavior on
+      list_registrations/0's unscoped Repo.all, not a defect. Fix is
+      test-only, per design
+      lib/letflow/design/iss0716-column-promotion-ac1-all-scope-flake.md:
+      commit 6a849e17 (ELIXIR-DEV) replaced AC1's exact-set-equality
+      assertion with a containment check (tenant_a/tenant_b present,
+      extras tolerated) and scoped the downstream DDL-execution loop to
+      only tenant_a/tenant_b's own rows with a length==2 sanity check.
+      No lib/letflow/ file touched. REVIEWER confirmed the SECURITY-
+      REVIEWER skip legitimate, matching real ISS-0580 precedent.
+      TEST-DESIGNER mutation-tested both new assertions, no coverage gap
+      found. TEST-RUNNER (commit 0d520324) ran 5/5 solo repeats plus 3
+      independent full concurrent-suite runs (2x scripts/test_parallel.sh,
+      1x internal to mix letflow.check.test), 4436/4436 each;
+      RELEASE-VALIDATOR's own independent recheck added a 4th full
+      concurrent-suite run, also 4436/4436 -- 4 independent
+      full-concurrent-suite runs at 4436/4436 total, no recurrence. Stated
+      with RELEASE-VALIDATOR's own calibration: this closes the known
+      mechanism, verified empirically, not a permanent-elimination
+      guarantee -- SandboxAutoMode's pool-wide :auto-mode window remains a
+      standing, documented hazard for any other test relying on exact-set
+      assertions over unscoped queries.
+
+      This entry was appended to volume 20 rather than volume 19 because
+      this branch's first merge attempt against origin/main (bb2d1b9f)
+      independently rolled volume 19 to volume 20 itself, but a sibling
+      session (commit 0925093c, PR #1544) rolled it AGAIN with different
+      content (ISS-0690 re-verification entries) before this branch's PR
+      could merge -- a genuine race between two independent, concurrent
+      rolls. Rather than hand-reconciling two divergent "closed volume 19"
+      states, this branch was rebuilt from a fresh origin/main checkout
+      (cherry-picking only its real content commits: issue-record filing,
+      design, fix, test report) and this status append was redone fresh
+      against the volume the index actually names as current at rebuild
+      time (volume 20, opened by the sibling session's own roll).
+
+      docs/issues/ISS-0716.yaml status flipped open -> resolved with a
+      resolution_note recording all of the above and citing the three real
+      commits (design doc, 6a849e17, 0d520324). No docs/requirements.yaml
+      entry to flip (this is an ISS, not a REQ). No docs/migration/
+      stage-N-*.md or decisions/*.md file was named by ISS-0716's
+      affected_files -- none required updating. README.md checked
+      (grepped ColumnPromotionTest/SandboxAutoMode/tenant-count -- no
+      hits): this is internal test-suite behavior, not documented current
+      behavior, so no README update needed. No merge and no
+      letflow-queue/GitHub state change performed here -- ORCH's job next.

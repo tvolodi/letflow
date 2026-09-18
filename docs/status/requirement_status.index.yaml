@@ -4293,15 +4293,25 @@ volumes:
     path: docs/status/requirement_status.v20.yaml
     status: current
     opened: 2026-09-18
-    entries: 0
+    entries: 1
     note: >
-      Opened by ORCH's own ISS-0690 blocked-event close-out, successor to
-      volume 19 (closed at 23 entries / 1212 frozen-prefix lines, over the
-      1200-line roll ceiling). Created with volume 19's header text
-      verbatim (volume number, opening date and predecessor path updated)
-      and an empty `history:` list, per this index's `roll_rule.on_exceed`
-      procedure. `entries:` will be incremented per HOW-TO-APPEND step 6
-      as real appends land.
+      Incremented to 1 by DOC-UPDATER's own ISS-0716 SCOPE-CHANGE done-event
+      append (WF03-ISS0716-20260918 -- fixed ColumnPromotionTest AC1's
+      concurrent-tenant-commit flake) -- `grep -c "^  - req:"
+      docs/status/requirement_status.v20.yaml` = 1 on-disk entry; 232 lines
+      / 13672 bytes, well under the 1200-line/120000-byte roll ceiling, no
+      roll triggered. This branch's own PR hit a real race with a sibling
+      session's independent roll of this same volume (see this entry's own
+      note in v20.yaml for the full account) -- rebuilt from a fresh
+      origin/main checkout rather than hand-reconciling two divergent
+      "closed volume 19" states.
+
+      Prior note (0 entries): Opened by ORCH's own ISS-0690 blocked-event
+      close-out, successor to volume 19 (closed at 23 entries / 1212
+      frozen-prefix lines, over the 1200-line roll ceiling). Created with
+      volume 19's header text verbatim (volume number, opening date and
+      predecessor path updated) and an empty `history:` list, per this
+      index's `roll_rule.on_exceed` procedure.
 
 
 known_anomalies:

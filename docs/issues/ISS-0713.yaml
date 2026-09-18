@@ -43,4 +43,19 @@ fix_direction: >
   clean end-to-end PASS.
 queue_ref: Q-713
 github_ref: GH-1523
-status: open
+status: resolved
+resolved_in_run: WF03-ISS0713-20260918
+resolved_at: "2026-09-18T15:38:34Z"
+resolution_evidence: >
+  Root cause (unscoped `page.getByRole('link', { name: 'Tenants' })` matching
+  both the platform-quick-links "Tenants" link and the sidebar "Tenants" link)
+  removed by scoping the locator to
+  `page.getByTestId('platform-quick-links').getByRole('link', { name })` at
+  web/tests/e2e/pipelines/platform-login-routing-by-role.pipeline.e2e.spec.ts
+  line 97, fix commit 374ae4ea. SECURITY-REVIEWER (PASS, out of scope for
+  tenant-data), REVIEWER (PASS, no scope creep), and TEST-DESIGN-VALIDATOR
+  (PASS) all signed off. Live confirmation: UAT-RUNNER re-ran the fixed
+  pipeline_test against real QA (https://qa.bizdala.com) --
+  test/uat-reports/uat-2026-09-18-WF03-ISS0713-20260918.yaml -- clean
+  `1 passed (11.9s)` for "EO-001: PLATFORM_ADMIN lands on the distinct
+  platform dashboard", no strict-mode violation.

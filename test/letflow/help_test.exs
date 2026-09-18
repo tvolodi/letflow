@@ -559,6 +559,79 @@ defmodule Letflow.HelpTest do
       assert match?({:ok, _help}, result) or match?({:error, %Ecto.Changeset{}}, result)
     end
 
+    # ------------------------------------------------------------------------------
+    # Round 4 (ISS-0709) -- `flatten_plain_text/1`'s projection was built from the
+    # whole current list of sibling AST nodes at every recursion level, including the
+    # outermost call over a whole document's top-level block siblings, so an unrelated
+    # `<`/`>` in two different blocks could combine into a false raw-tag match. See
+    # `lib/letflow/design/iss-0709-flatten-plain-text-scope-fix.md`.
+    # ------------------------------------------------------------------------------
+
+    test "round 4 (ISS-0709) -- two adjacent paragraphs, each with an unrelated < or >, no longer falsely reject" do
+      %{schema_name: schema_name} = provisioned_tenant()
+
+      # Concatenated across the (pre-fix) whole-document projection this reassembles to
+      # "Configure with a<b>c or make it safe", which does match @raw_html_tag_pattern --
+      # confirming this is a real reproduction of the false positive, not a body that
+      # was already safe for an unrelated reason. Neither paragraph alone contains a
+      # complete `<...>` span.
+      body = "Configure with a<\n\nb>c or make it safe"
+
+      assert {:ok, help} = Help.create_draft(draft_attrs(%{body: body}), prefix: schema_name)
+      assert help.body == body
+    end
+
+    test "round 4 (ISS-0709) -- bare < / > comparison operators in one paragraph, split by inline emphasis, no longer falsely reject" do
+      %{schema_name: schema_name} = provisioned_tenant()
+
+      # One single paragraph node (not split across blocks) whose text is interrupted by
+      # an emphasis node (`*count*`) -- the digits after `<`/`>` (rather than a letter)
+      # keep this from tripping @raw_html_tag_pattern's own `<letter...>` shape at all,
+      # so this body was never a case the pattern itself would flag once the scan is
+      # correctly bounded to this one paragraph -- it stays a single, un-split block, so
+      # round 3's own within-block detection is untouched by this fix.
+      body = "if a<5 and *count* >3 then continue"
+
+      assert {:ok, help} = Help.create_draft(draft_attrs(%{body: body}), prefix: schema_name)
+      assert help.body == body
+    end
+
+    test "round 4 (ISS-0709) -- non-regression: raw tag split across inline nodes within the SAME paragraph is still rejected" do
+      %{schema_name: schema_name} = provisioned_tenant()
+
+      # Same reproducing case as round 3 blocker 2 (single paragraph, no block boundary
+      # involved) -- must still be caught after the block-boundary exclusion is added,
+      # since "strong" is not a member of @block_boundary_tags.
+      assert {:error, changeset} =
+               Help.create_draft(
+                 draft_attrs(%{body: "x<img on**err**=\"x()\">y"}),
+                 prefix: schema_name
+               )
+
+      assert "must not contain raw HTML tags" in errors_on(changeset).body
+    end
+
+    test "round 4 (ISS-0709) -- negative confirmation: a raw tag split across two adjacent list items is NOT detected (documented deferred gap)" do
+      %{schema_name: schema_name} = provisioned_tenant()
+
+      # Design §5 open question 1 (accepted by REVIEWER as a documented limitation, not
+      # a follow-up issue): after this fix, "li" is a @block_boundary_tags member, so
+      # flatten_plain_text/1 no longer tunnels through one list item into a sibling list
+      # item's content. Concatenated across the (pre-fix, whole-list) projection this
+      # would reassemble to "item a<b>c", which DOES match @raw_html_tag_pattern -- so
+      # this is a genuine reproduction of the deferred gap, not a body that was already
+      # safe for an unrelated reason. This test exists to make the design's own
+      # documented tradeoff verifiable rather than only asserted in prose: if a future
+      # change accidentally started detecting across list-item boundaries (or, worse,
+      # accidentally stopped detecting the SAME-block cases the other round-4 tests
+      # cover), one of these two tests would fail and point at exactly which behavior
+      # moved.
+      body = "- item a<\n- b>c"
+
+      assert {:ok, help} = Help.create_draft(draft_attrs(%{body: body}), prefix: schema_name)
+      assert help.body == body
+    end
+
     test "allows a safe https:// link" do
       %{schema_name: schema_name} = provisioned_tenant()
 

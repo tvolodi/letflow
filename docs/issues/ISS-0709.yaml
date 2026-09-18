@@ -43,4 +43,170 @@ related_requirements:
   - REQ-364
 queue_ref: Q-709
 github_ref: GH-1508
-status: open
+status: resolved
+resolution_note: >
+  Root cause: found during REQ-364's own round-4 security-review saga (the
+  same "regex denylist is structurally unsound" thread that produced the
+  AST-based markdown sanitizer) -- flatten_plain_text/1 in
+  lib/letflow/help/help_content.ex, added as the fix for REQ-364's round-3
+  tag-split bypass, concatenated an entire block's (effectively the whole
+  document's) prose together with no separator when building its
+  fallback plain-text scan for a raw tag split across inline-formatting
+  sibling nodes. Two unrelated < / > characters in separate paragraphs or
+  list items (bare comparison operators, generic-type notation) could
+  combine across that unbounded projection into something matching
+  @raw_html_tag_pattern and get falsely rejected. Confirmed
+  one-directional throughout (never under-restrictive -- walk_node/1's
+  structural raw-HTML/URL-scheme checks run independently and are
+  unaffected).
+
+  Fix: commit d9fba212 (ELIXIR-DEV, per CODE-DESIGNER's design in
+  lib/letflow/design/iss-0709-flatten-plain-text-scope-fix.md, PASSed by
+  CODE-DESIGN-VALIDATOR). Added a new @block_boundary_tags exclusion set
+  (p, h1-h6, li, blockquote, td, th), verified against earmark_parser
+  1.4.46's real AST output, alongside the existing code/pre exclusion --
+  bounds flatten_plain_text/1's projection to one paragraph/block's own
+  children instead of the whole document. No change to
+  walk/1/walk_node/1/walk_text/1 call sites or arity. SECURITY-REVIEWER
+  and REVIEWER both independently confirmed the fix narrows (never
+  widens) exposure.
+
+  Coverage gap closed: TEST-DESIGNER found that ELIXIR-DEV's 3 new tests
+  covered acceptance-criteria rows 1-4 but left AC row 5 -- the
+  deferred cross-block-boundary scope decision REVIEWER explicitly
+  signed off on as an accepted documented limitation -- pinned down only
+  as prose, never empirically confirmed. Added a negative-confirmation
+  test proving a raw tag split across two adjacent list items is NOT
+  detected, first verifying the real AST via EarmarkParser.as_ast/2 to
+  confirm the test genuinely reproduces the documented gap rather than
+  an already-safe body. This is a real, closed coverage gap, not a
+  no-op ratification.
+
+  Final verification: RELEASE-VALIDATOR independently re-verified all 3
+  acceptance criteria plus TEST-DESIGNER's bonus negative-confirmation
+  test against the real commits and named tests (with line numbers) in
+  help_test.exs, confirmed zero handoffs/*.json files were created on
+  this branch, and re-ran mix test (59/59 on help_test.exs),
+  mix letflow.lint_handoffs (clean), and mix compile (clean) itself.
+  Full pipeline_log gate-evidence audit: all 10 commits map 1:1 to
+  logged pipeline steps. PASS, no new findings.
+pipeline_log:
+  - step: CODE-DESIGNER
+    at: "2026-09-18T01:25:00Z"
+    result: >
+      PASS (first attempt). Design:
+      lib/letflow/design/iss-0709-flatten-plain-text-scope-fix.md.
+      Traced root cause through the real call graph: walk/1's outermost
+      call over the document's top-level block siblings is where
+      flatten_plain_text/1's unbounded recursion first over-concatenates.
+      Fix: no change to call sites, add a new @block_boundary_tags
+      exclusion set (p, h1-h6, li, blockquote, td, th) alongside the
+      existing code/pre exclusion. Flagged two real open questions
+      (cross-adjacent-block detection gap -> REVIEWER; tag-list
+      verification against earmark_parser's real source -> ELIXIR-DEV)
+      rather than deciding them.
+  - step: CODE-DESIGN-VALIDATOR
+    at: "2026-09-18T01:39:00Z"
+    result: >
+      PASS (first attempt). Independently verified the call-graph root
+      cause against real code line-by-line. Verified the
+      @block_boundary_tags list against earmark_parser 1.4.46's actual
+      source (grepped the real dependency's ast_renderer.ex/
+      table_renderer.ex), closing that open question before
+      implementation starts. Verified all three AST traces (round-3
+      non-regression, both issue reproduction cases) against real
+      EarmarkParser.as_ast/2 output, not narrative. Confirmed no
+      implementation code leaked. Cleared for ELIXIR-DEV.
+  - step: ELIXIR-DEV
+    at: "2026-09-18T01:43:00Z"
+    result: >
+      PASS. Implemented at commit d9fba212: new @block_boundary_tags
+      list (p, h1-h6, li, blockquote, td, th), new flatten_plain_text/1
+      clause excluding those tags, kept separate from the existing
+      code/pre clause per design. No change to walk/1/walk_node/1/
+      walk_text/1 call sites or arity. Empirically pre-verified against
+      the real create_changeset/2 before writing ExUnit tests (avoided
+      hand-tracing). 3 new tests added covering both issue-reproduction
+      cases plus the round-3 non-regression case. Full suite: 58/58 (55
+      existing + 3 new). mix compile --warnings-as-errors clean.
+  - step: SECURITY-REVIEWER
+    at: "2026-09-18T01:50:00Z"
+    result: >
+      PASS. Re-verified against the exact sanitizer module hardened over
+      4 rounds during REQ-364. Confirmed the fix narrows (not widens)
+      exposure -- walk_node/1's structural raw-HTML/URL-scheme checks
+      run unconditionally, unaffected by this change; only the plain-text
+      fallback-scan projection is bounded. Re-ran the round-3 non-
+      regression test against the real code: 58/58 pass. Independently
+      re-verified @block_boundary_tags against EarmarkParser.as_ast/2's
+      real 1.4.46 output for heading/list/blockquote/table markdown.
+      Confirmed the deferred cross-block gap is genuinely cosmetic/
+      availability-only, not exploitable (no live renderer exists yet
+      for help_content.body). INV-1 applies and is satisfied (no query/
+      migration/prefix logic touched). Tests confirmed real, not vacuous.
+  - step: REVIEWER
+    at: "2026-09-18T01:55:00Z"
+    result: >
+      PASS. Explicit determination on the deferred cross-block-boundary
+      gap: accept as documented limitation, no follow-up issue --
+      structural checks (raw_html_node?/2, destination_violation/2)
+      remain unaffected, splitting a tag across two adjacent block
+      siblings is a materially less plausible authoring pattern than the
+      already-fixed within-block case, no live renderer exists yet, and
+      filing a follow-up for a MINOR narrowing-only gap would itself be
+      scope creep. Confirmed idiom: new clause kept separate from the
+      existing code/pre exclusion per design, no change to arity/call
+      sites. Scope discipline confirmed (2 files only). Moduledoc updates
+      traced against actual behavior, accurate. Independently re-ran
+      tests: 58/58.
+  - step: TEST-DESIGNER
+    at: "2026-09-18T02:00:00Z"
+    result: >
+      Real gap found and closed (not a no-op ratification): ELIXIR-DEV's
+      3 tests covered AC rows 1-4, but AC row 5 (the deferred
+      cross-block scope decision REVIEWER signed off on) existed only as
+      prose, never empirically pinned down. Added a negative-confirmation
+      test proving a raw tag split across two adjacent list items is NOT
+      detected -- verified the real AST via EarmarkParser.as_ast/2 first
+      (not hand-traced) to confirm this genuinely reproduces the
+      documented deferred gap, not an already-safe body. mix test:
+      59/59. mix letflow.check.test: exit 0, clean.
+  - step: TEST-DESIGN-VALIDATOR
+    at: "2026-09-18T02:35:00Z"
+    result: >
+      PASS (second dispatch attempt after a first instance died silently
+      mid-run without reporting, unrelated environment issue -- no
+      finding from that attempt). Independently verified the AST claim
+      by running EarmarkParser.as_ast/2 against the real test input:
+      confirmed two sibling li nodes each with one text child.
+      Independently confirmed the pre-fix concatenation would have
+      matched @raw_html_tag_pattern (genuine discriminating test, not
+      vacuous). Own mix test run: 59/59. Own mix letflow.check.test run
+      (properly backgrounded/polled): exit 0, combined 4391/4391, no
+      ISS-0069 warning anywhere in the full log. Scope confirmed: 1 file
+      changed.
+  - step: TEST-RUNNER
+    at: "2026-09-18T03:15:00Z"
+    result: >
+      PASS. mix test full suite: 4394/4394 (4388 tests + 6 properties),
+      0 failures. test/letflow/help_test.exs: 59/59. mix compile
+      --warnings-as-errors and mix format --check-formatted clean.
+      mix letflow.check.test run properly backgrounded and polled to
+      genuine completion: 4391/4391 combined across 8 partitions, plus
+      isolated wasm_hang (5/5) and lua_wallclock_race clean -- matches
+      TEST-DESIGN-VALIDATOR's independently reported count exactly.
+      Report: test/reports/report-20260918-WF03-ISS0709-20260918.yaml
+      (commit 9b1d6c41).
+  - step: RELEASE-VALIDATOR
+    at: "2026-09-18T03:30:00Z"
+    result: >
+      PASS. Verified fix/test diffs against real commits. All 3
+      acceptance criteria (plus TEST-DESIGNER's bonus negative-
+      confirmation test) traced to specific named tests with line
+      numbers in help_test.exs. Confirmed zero handoffs/*.json files
+      created on this branch (the REQ-364 lesson applied correctly --
+      pipeline log used docs/issues/ISS-0709.yaml throughout). Own spot
+      runs: mix test help_test.exs 59/59, mix letflow.lint_handoffs exit
+      0 clean, mix compile clean. Full gate-evidence audit: all 10
+      commits map 1:1 to pipeline_log entries. No new findings. Cleared
+      for DOC-UPDATER and merge.

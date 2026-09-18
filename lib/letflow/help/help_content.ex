@@ -107,6 +107,34 @@ defmodule Letflow.Help.HelpContent do
      straight out of `Letflow.Help.create_draft/2`/`update_draft/3` (INV-8). Both
      branches are now handled explicitly; either way the returned `ast` (still real,
      usable structure per the library's own contract) is walked exactly as before.
+
+  ### Round 4 fix (ISS-0709 -- `lib/letflow/design/iss-0709-flatten-plain-text-scope-fix.md`)
+
+  Round 3's `flatten_plain_text/1` projection (see round 3 item 2 above) was built from
+  **the entire current list of sibling AST nodes at every level of recursion**,
+  including the outermost call over a whole document's top-level block siblings (e.g.
+  `[{"p",...}, {"h2",...}, {"p",...}]`). Nothing stopped that projection from tunnelling
+  through a block element's own boundary into its children and concatenating it with a
+  *different* block's content -- so an unrelated `<` at the end of one paragraph and a
+  `>` at the start of the next combined into a false raw-tag match (and likewise for two
+  adjacent list items, a heading followed by a paragraph, or two adjacent table cells).
+
+  Fix: `flatten_plain_text/1` now also excludes (contributes `""`, does not recurse into)
+  any node whose tag is a member of `@block_boundary_tags` (`"p"`, `"h1"`-`"h6"`, `"li"`,
+  `"blockquote"`, `"td"`, `"th"`), as its own clause alongside -- not merged with -- the
+  existing `"code"`/`"pre"` exclusion. This bounds the projection to one block's own
+  children at a time, matching what `walk_node/1`'s own recursive call into that block's
+  children already does structurally. No change to where `walk/1`/`walk_node/1`/
+  `flatten_plain_text/1` are invoked -- the existing recursive call graph already
+  produces one call bounded to each block's own children; only the guard inside
+  `flatten_plain_text/1` changed. Inline-level tags (`"strong"`, `"em"`, links, ...) are
+  deliberately not in `@block_boundary_tags`, so a raw tag split across inline-formatting
+  nodes *within the same block* (round 3's own fix target) is still detected.
+
+  This intentionally narrows detection: a raw tag's `<`/`>` split across two different
+  block-level siblings is no longer flagged by this fallback scan (deferred per the
+  design's open question 1 -- SECURITY-REVIEWER's routing note already characterizes this
+  class as MINOR / non-gating).
   """
 
   use Ecto.Schema
@@ -154,6 +182,19 @@ defmodule Letflow.Help.HelpContent do
   # undecoded into `scheme_letters/1`, where the leftover literal `x` character got
   # folded into the extracted scheme, producing `"javaxcript"` instead of `"javascript"`.
   @numeric_entity_pattern ~r/&#([xX][0-9a-fA-F]+|[0-9]+);/
+
+  # ISS-0709 fix (round 4): block-level tags whose own children must never be
+  # concatenated with a sibling block's children by `flatten_plain_text/1`'s
+  # projection. Verified against `earmark_parser` 1.4.46's real CommonMark/GFM AST
+  # output (design `lib/letflow/design/iss-0709-flatten-plain-text-scope-fix.md` §1.1),
+  # not merely assumed from the spec. Only the tags that can *directly* hold inline/text
+  # content need listing -- container tags like `"ul"`/`"ol"`/`"table"`/`"tr"` never need
+  # their own entry because the cascade already stops one level lower, at their `"li"`/
+  # `"td"`/`"th"` children (design §1.2's cascade argument). Deliberately excludes
+  # `"code"`/`"pre"`, which keep their own separate clause below for a different
+  # invariant (§5.2's "fenced content is literal", not this block-boundary invariant --
+  # design §1.3).
+  @block_boundary_tags ~w(p h1 h2 h3 h4 h5 h6 li blockquote td th)
 
   @doc """
   Structural changeset for creating a new help content draft. Does no I/O.
@@ -248,14 +289,21 @@ defmodule Letflow.Help.HelpContent do
   # contains a complete `<...>` span. Scanning each leaf independently (as the previous
   # round did) misses this. The fix: at each list-of-children level, build one flattened
   # text projection of that level (in AST order) -- plain-text leaves contribute their
-  # own text, and any non-code/pre element contributes its own inner text recursively
-  # (so `**err**`'s "err" is treated as contiguous with its neighbours, closing the
-  # split) -- then scan that single projection once for the raw-tag pattern, alongside
-  # (not instead of) the existing per-node structural checks. `"code"`/`"pre"` nodes
-  # contribute nothing to the projection (empty string, not their literal content), so
-  # fenced/inline code text is never concatenated into surrounding prose -- §5.2's
+  # own text, and any non-code/pre, non-block-boundary element contributes its own inner
+  # text recursively (so `**err**`'s "err" is treated as contiguous with its neighbours,
+  # closing the split) -- then scan that single projection once for the raw-tag pattern,
+  # alongside (not instead of) the existing per-node structural checks. `"code"`/`"pre"`
+  # nodes contribute nothing to the projection (empty string, not their literal content),
+  # so fenced/inline code text is never concatenated into surrounding prose -- §5.2's
   # "fenced content stays literal/excluded" guarantee holds exactly as before; this is
   # the same exclusion `nested` below already applies for the structural recursion.
+  # ISS-0709 (round 4): a `@block_boundary_tags` node (`"p"`, headings, `"li"`,
+  # `"blockquote"`, `"td"`/`"th"`) likewise contributes nothing at THIS level, so the
+  # projection at any given list-of-children level never tunnels through one of its own
+  # block-element children into a *sibling* block's content -- it stays bounded to one
+  # block's own children, since the recursive call into that block's own children (fired
+  # from `walk_node/1` below) is where that block's own projection is built instead. See
+  # the moduledoc's round-4 entry for the false-positive this closes.
   defp walk(nodes) when is_list(nodes) do
     structural = Enum.flat_map(nodes, &walk_node/1)
     text_scan = nodes |> flatten_plain_text() |> walk_text()
@@ -288,17 +336,32 @@ defmodule Letflow.Help.HelpContent do
 
   # Builds one contiguous text projection of a list of sibling AST nodes, in order:
   # binaries contribute their own text; `"code"`/`"pre"` nodes contribute nothing
-  # (excluded, not merged into prose -- §5.2); any other element contributes its own
-  # children's projection recursively (so inline formatting like `**strong**`/`*em*`/
-  # links don't break an otherwise-contiguous raw tag apart). This is a projection for
-  # the raw-tag-shape scan only -- it never replaces the per-node structural checks in
-  # `walk_node/1`, which still run independently against the real AST.
+  # (excluded, not merged into prose -- §5.2); any node tagged with a
+  # `@block_boundary_tags` member (`"p"`, `"h1"`-`"h6"`, `"li"`, `"blockquote"`, `"td"`,
+  # `"th"`) also contributes nothing -- ISS-0709 (round 4): the projection must not
+  # tunnel through a block element's own boundary and concatenate its content with a
+  # *sibling* block's content, or an unrelated `<`/`>` at the edge of two adjacent blocks
+  # (two paragraphs, two list items, a heading followed by a paragraph, ...) can combine
+  # into a false raw-tag match. Any other element (genuinely inline-level: emphasis,
+  # `"strong"`, links, ...) contributes its own children's projection recursively, so
+  # inline formatting within the SAME block still doesn't break an otherwise-contiguous
+  # raw tag apart (design `lib/letflow/design/iss-0709-flatten-plain-text-scope-fix.md`
+  # §2's round-3 non-regression trace). This is a projection for the raw-tag-shape scan
+  # only -- it never replaces the per-node structural checks in `walk_node/1`, which
+  # still run independently against the real AST. Note this projection is now bounded to
+  # one block's own children at a time (not "the whole list of sibling AST nodes at every
+  # level" as originally described) -- see the moduledoc's ISS-0709 entry and `walk/1`'s
+  # own comment above.
   defp flatten_plain_text(nodes) when is_list(nodes) do
     nodes |> Enum.map(&flatten_plain_text/1) |> Enum.join()
   end
 
   defp flatten_plain_text(text) when is_binary(text), do: text
   defp flatten_plain_text({tag, _attrs, _children, _meta}) when tag in ["code", "pre"], do: ""
+
+  defp flatten_plain_text({tag, _attrs, _children, _meta}) when tag in @block_boundary_tags,
+    do: ""
+
   defp flatten_plain_text({_tag, _attrs, children, _meta}), do: flatten_plain_text(children)
   defp flatten_plain_text(_other), do: ""
 

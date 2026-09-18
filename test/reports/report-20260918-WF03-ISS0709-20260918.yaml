@@ -1,0 +1,112 @@
+run_id: WF03-ISS0709-20260918
+workflow_id: WF-03
+step: 04
+agent: TEST-RUNNER
+date: 2026-09-18T02:57:16Z
+branch: fix/WF03-ISS0709-20260918
+
+context: >
+  Narrow sanitization false-positive fix in lib/letflow/help/help_content.ex
+  (the module hardened over REQ-364's 4-round security saga). All prior
+  gates PASSed (CODE-DESIGNER, CODE-DESIGN-VALIDATOR, ELIXIR-DEV,
+  SECURITY-REVIEWER, REVIEWER, TEST-DESIGNER, TEST-DESIGN-VALIDATOR --
+  the latter independently ran mix letflow.check.test at 4391/4391).
+  This report is TEST-RUNNER's own fresh, independent run, not a rubber
+  stamp of the prior gate's numbers.
+
+checks:
+
+  - name: backend_full_suite
+    command: mix test
+    result:
+      combined_tests: 4388
+      combined_properties: 6
+      combined_failures: 0
+      passed: 4394
+      excluded: 23
+      exit_code: 0
+    raw_output: |
+      Finished in 2135.4 seconds (20.6s async, 2114.8s sync)
+      Result: 4394 passed (6 properties, 4388 tests), 23 excluded
+    verdict: PASS
+
+  - name: help_test_specific
+    command: mix test test/letflow/help_test.exs
+    result:
+      passed: 59
+      total: 59
+      exit_code: 0
+    raw_output: |
+      Finished in 66.3 seconds (0.00s async, 66.3s sync)
+      Result: 59 passed
+    verdict: PASS
+    note: >
+      Confirms the exact 59/59 count claimed by TEST-DESIGNER/
+      TEST-DESIGN-VALIDATOR for the sanitization fix's own test file.
+
+  - name: mix_compile_warnings_as_errors
+    command: mix compile --warnings-as-errors
+    exit_code: 0
+    verdict: PASS
+
+  - name: mix_format_check
+    command: mix format --check-formatted
+    exit_code: 0
+    verdict: PASS
+
+  - name: letflow_check_test
+    command: mix letflow.check.test
+    description: >
+      Runs scripts/test_parallel.sh (8-way partitioned mix test) plus two
+      isolated-subprocess checks (wasm_hang x5, lua_wallclock_race).
+      Executed via nohup + background PID, polled to genuine completion
+      (until ! kill -0 <pid>) before this report was written -- not ended
+      mid-run.
+    result:
+      partitioned_run:
+        partition_count:
+          N: 8
+          source: nproc
+        combined_tests: 4385
+        combined_properties: 6
+        combined_failures: 0
+        passed: 4391
+        total: 4391
+        exit_code: 0
+      raw_output: |
+        partition 1: 603 tests, 1 property, 0 failures, exit 0
+        partition 2: 522 tests, 0 properties, 0 failures, exit 0
+        partition 3: 584 tests, 0 properties, 0 failures, exit 0
+        partition 4: 596 tests, 0 properties, 0 failures, exit 0
+        partition 5: 522 tests, 4 properties, 0 failures, exit 0
+        partition 6: 647 tests, 1 property, 0 failures, exit 0
+        partition 7: 578 tests, 0 properties, 0 failures, exit 0
+        partition 8: 333 tests, 0 properties, 0 failures, exit 0
+        ---
+        combined: 4385 tests, 6 properties, 0 failures (4391/4391 passed)
+        mix letflow.check.test: OK -- no test failures, no ISS-0069 warnings (8 partitions, logs: /tmp/letflow_test_parallel.bBxndH).
+      isolated_wasm_hang:
+        result: "5/5 isolated wasm_hang tests passed, each in its own subprocess"
+        verdict: PASS
+      isolated_lua_wallclock_race:
+        result: "isolated :lua_wallclock_race run also passed clean"
+        verdict: PASS
+    verdict: PASS
+    note: >
+      Matches TEST-DESIGN-VALIDATOR's independently reported 4391/4391
+      exactly -- two independent runs (theirs and this one) agree.
+      Note this combined count (4391, partitioned run) is naturally lower
+      than the plain `mix test` combined count above (4394) because the
+      partitioned run excludes tests tagged for isolated-subprocess
+      execution (wasm_hang, lua_wallclock_race), which are separately
+      verified above at 5/5 and clean respectively -- not a discrepancy.
+
+overall_verdict: PASS
+regressions_found: none
+next_action: >
+  Route to RELEASE-VALIDATOR for independent re-verification. All checks
+  green: full mix test suite 4394 passed / 0 failed, help_test.exs 59/59,
+  compile clean under --warnings-as-errors, mix format clean,
+  mix letflow.check.test 4391/4391 combined across 8 partitions plus both
+  isolated-subprocess checks passing. No regressions attributable to this
+  branch.

@@ -71,3 +71,15 @@ pipeline_log:
       non-regression, both issue reproduction cases) against real
       EarmarkParser.as_ast/2 output, not narrative. Confirmed no
       implementation code leaked. Cleared for ELIXIR-DEV.
+  - step: ELIXIR-DEV
+    at: "2026-09-18T01:43:00Z"
+    result: >
+      PASS. Implemented at commit d9fba212: new @block_boundary_tags
+      list (p, h1-h6, li, blockquote, td, th), new flatten_plain_text/1
+      clause excluding those tags, kept separate from the existing
+      code/pre clause per design. No change to walk/1/walk_node/1/
+      walk_text/1 call sites or arity. Empirically pre-verified against
+      the real create_changeset/2 before writing ExUnit tests (avoided
+      hand-tracing). 3 new tests added covering both issue-reproduction
+      cases plus the round-3 non-regression case. Full suite: 58/58 (55
+      existing + 3 new). mix compile --warnings-as-errors clean.

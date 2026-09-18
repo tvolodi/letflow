@@ -3914,7 +3914,7 @@ volumes:
     path: docs/status/requirement_status.v19.yaml
     status: current
     opened: 2026-09-17
-    entries: 21
+    entries: 22
     note: >
       Incremented to 21 by ORCH's own REQ-370 Step-Final done-event append
       (recovery/completion run, branch feature/WF02-REQ370-20260918, PR

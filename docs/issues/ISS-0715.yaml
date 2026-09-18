@@ -31,4 +31,46 @@ affected_files:
   - test/docs/requirement_status_invariants_test.exs
 queue_ref: Q-715
 github_ref: GH-1533
-status: open
+status: resolved
+resolved_in_run: "PR#1531 (fix(status): correct illegal req: ISS-0712 vocabulary value)"
+resolved_at: "2026-09-18T18:27:08Z"
+resolution_evidence: >
+  Already resolved before this issue was even filed. This issue was
+  discovered_at 2026-09-18T18:47:00Z, but PR #1531
+  (docs/fix-iss0712-vocab-defect-20260918, merge commit d812033a, branch
+  commit 1757c6f8) had already merged to main at 2026-09-18T18:27:08Z --
+  about 20 minutes earlier -- correcting
+  docs/status/requirement_status.v19.yaml line 765's `req: ISS-0712` to
+  `req: SCOPE-CHANGE` in place, with an explanatory note appended
+  documenting the correction (v19.yaml lines ~769-790). The session that
+  filed this issue was working from a branch whose merge-base with main
+  predated PR #1531 landing, so it never saw the fix and diagnosed the
+  defect as still-open.
+
+  This issue's own proposed remedy (fix_direction below, "declare as a
+  known anomaly") would have been INCORRECT even if the defect had still
+  been open: docs/status/requirement_status.v19.yaml is the CURRENT
+  (open, not yet closed/digest-pinned) volume per
+  docs/status/requirement_status.index.yaml, and
+  test/docs/requirement_status_invariants_test.exs's own A5 assertion
+  text is explicit that "a vocabulary defect in the CURRENT volume is
+  FIXED in the working tree before it is committed -- it can never be
+  declared away here." known_anomalies:/known_shape_anomalies: are
+  reserved exclusively for defects in CLOSED, digest-pinned volumes (the
+  three pre-existing entries in volume 1). PR #1531 applied the actually
+  correct, sanctioned remedy: fixing the line in place, not declaring it
+  away.
+
+  Verified directly on this closeout branch (fix/ISS-0715-close-20260919,
+  based on main HEAD 21177271, which already contains PR #1531's fix):
+  `git show main:docs/status/requirement_status.v19.yaml` lines 765-766
+  read `req: SCOPE-CHANGE`; `mix test
+  test/docs/requirement_status_invariants_test.exs` passes 20/20,
+  including A4a and A5.
+
+  This closeout run (WF03-ISS0715-close-20260919, GH#1533) made NO
+  code/test changes -- PR #1531 already did the actual fix, before this
+  issue existed. This run only closes the paperwork: docs/issues/ISS-0715.yaml
+  status flip, one run-history append to
+  docs/status/requirement_status.v19.yaml, and closing GH#1533 with a
+  comment pointing at PR #1531.

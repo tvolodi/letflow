@@ -11,11 +11,12 @@
  *   POST   /api/v1/exam-sessions/:id/submit
  *   POST   /api/v1/exam-sessions/:id/events
  *
- * Plus `queryExamRecords`, this requirement's own self-contained wrapper
- * around the generic `POST /entities/query` route (used by the exam list
- * screen) -- added so REQ-338 does not import REQ-336's `entitiesApi`
- * (a separate, currently-blocked requirement); see web/src/api/exam.ts's
- * own moduledoc comment.
+ * Plus `listAvailableExams` (ISS-0718), which replaced this file's original
+ * `queryExamRecords` wrapper around the generic `POST /entities/query` route:
+ * CANDIDATE cannot reach that route (`:EntitiesQuery` is outside CANDIDATE's
+ * ISS-0646 closed permission set), so the exam list screen now calls the
+ * dedicated `GET /exam-sessions/available` route instead; see
+ * web/src/api/exam.ts's own moduledoc comment.
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { examApi } from '../exam'
@@ -43,7 +44,7 @@ afterEach(() => {
 })
 
 describe('REQ-338 AC1 — examApi shape', () => {
-  it('exposes exactly the five named session operations plus queryExamRecords', () => {
+  it('exposes exactly the five named session operations plus listAvailableExams', () => {
     const keys = Object.keys(examApi).sort()
     expect(keys).toEqual(
       [
@@ -52,7 +53,7 @@ describe('REQ-338 AC1 — examApi shape', () => {
         'saveAnswer',
         'submitSession',
         'reportEvent',
-        'queryExamRecords',
+        'listAvailableExams',
       ].sort(),
     )
   })

@@ -83,4 +83,34 @@ affected_files:
   - test/uat-reports/uat-2026-09-19-WF03-ISS0690-BILIMBAGA-20260919.yaml
 queue_ref: Q-718
 github_ref: GH-1541
-status: open
+status: resolved
+resolved_in_run: WF03-ISS0718-20260919
+resolved_at: "2026-09-18T22:05:00Z"
+resolution: >
+  Root cause removed via option (b) from this entry's own text: ExamListPage.tsx
+  (web/src/pages/exam/ExamListPage.tsx) now calls a new dedicated backend route,
+  GET /exam-sessions/available (lib/letflow/routers/exam_sessions.ex),
+  instead of the generic POST /api/v1/entities/query. The new route is scoped
+  under the existing :ExamSessionStart permission -- already one of CANDIDATE's
+  six ISS-0646 permissions -- so CANDIDATE's closed permission set from ISS-0646
+  is untouched; no new permission atom was introduced and the closed-set
+  invariant test was not modified.
+  Design: lib/letflow/design/iss0718-candidate-exam-list-route.md.
+  Implementation commits: 2263cc98 (feat: add GET /exam-sessions/available
+  backend route), 8a2f3faa (fix: update route-table test/moduledoc for the 8th
+  route), fae234c3 (fix: frontend switches exam list to GET
+  /exam-sessions/available).
+  Regression tests: 354a980a (test: regression tests for GET
+  /exam-sessions/available) -- 5 new ISS-0718 tests in
+  test/letflow/routers/exam_sessions_test.exs, verified fail-first against
+  pre-fix code (UndefinedFunctionError, route did not exist) and passing
+  post-fix.
+  Gates cleared this run: CODE-DESIGN-VALIDATOR (PASS, after one rework),
+  SECURITY-REVIEWER (PASS), REVIEWER (PASS), TEST-DESIGN-VALIDATOR (PASS, with
+  an independently-applied mutant), TEST-RUNNER (PASS: full mix test suite
+  4452/4452, frontend npm run guards 48/48; report at
+  test/reports/report-20260919-WF03-ISS0718-20260919.yaml).
+  PR: https://github.com/tvolodi/letflow/pull/1546 (backend CI gate still
+  pending at time of this close; frontend gate and changed-paths detection
+  both passed; equivalent full local suite already verified green via
+  TEST-RUNNER).

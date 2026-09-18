@@ -26,19 +26,18 @@
  *  once its real routes were read (only the description's OWN speculative
  *  path guesses were wrong; the operation list held).
  *
- *  `queryExamRecords` below is this requirement's OWN, self-contained call
- *  onto the generic `POST /entities/query` route (the only record-read route
- *  in `lib/letflow/routers/entities.ex` — no dedicated "list exams" route
- *  exists, same finding REQ-336's own web/src/api/entities.ts documents).
- *  REQ-338 does not depend on REQ-336 (both requirements' own texts say so
- *  explicitly, and REQ-336 is currently blocked on ISS-0648), so this file
- *  does not import REQ-336's `entitiesApi`, nor REQ-336's
- *  `EntityQueryRequest`/`EntityRecordsPage` additions to
- *  web/src/types/api.ts (those are REQ-336's own uncommitted addition, not a
- *  pre-existing shared type — see this branch's fix-up commit for the corrected
- *  finding). `ExamQueryRequest`/`ExamRecordsPage` below are this requirement's
- *  own minimal, self-contained mirror of the generic query route's shape,
- *  scoped to exactly what this file's own call site needs.
+ *  ISS-0718: `listAvailableExams` below replaces this requirement's original
+ *  `queryExamRecords` call onto the generic `POST /entities/query` route.
+ *  CANDIDATE cannot reach that route — `:EntitiesQuery` is outside
+ *  CANDIDATE's ISS-0646 closed permission set, so every CANDIDATE call was a
+ *  guaranteed 403. `listAvailableExams` instead calls the new, dedicated
+ *  `GET /exam-sessions/available` route (added by ISS-0718's fix, gated on
+ *  CANDIDATE's existing `:ExamSessionStart` permission — no new grant), which
+ *  hardcodes `entity_type: "exam"` and `status: active` server-side rather
+ *  than accepting caller-supplied filters. See
+ *  `lib/letflow/design/iss0718-candidate-exam-list-route.md` for the full
+ *  design. `ExamRecord`/`ExamRecordsPage` below are unchanged — the new
+ *  route returns the identical response shape the old one did.
  */
 
 import { client } from './client'
@@ -53,25 +52,9 @@ import type {
 
 const BASE = '/api/v1/exam-sessions'
 
-/** One filter clause of `POST /entities/query`'s request body
- *  (`lib/letflow/routers/entities.ex`'s own request schema) — REQ-338's own
- *  minimal mirror, not imported from REQ-336's types/api.ts addition. */
-export interface ExamQueryFilterClause {
-  field: string
-  op: 'eq' | 'ne' | 'lt' | 'lte' | 'gt' | 'gte' | 'in' | 'not_in' | 'contains' | 'is_null' | 'is_not_null'
-  value?: unknown
-}
-
-/** `POST /entities/query`'s request body, minus `entity_type` (this file
- *  always supplies `entity_type: 'exam'` itself — see `queryExamRecords`). */
-export interface ExamQueryRequest {
-  filters?: ExamQueryFilterClause[]
-  cursor?: string
-  page_size?: number
-}
-
-/** One `exam` record as returned by `POST /entities/query`
- *  (`entity_row_map/1`'s shape). */
+/** One `exam` record as returned by `GET /exam-sessions/available`
+ *  (identical shape to the old `POST /entities/query` route's
+ *  `entity_row_map/1`-style rendering — ISS-0718 §1.4). */
 export interface ExamRecord {
   record_id: string
   field_values: Record<string, unknown>
@@ -80,7 +63,7 @@ export interface ExamRecord {
   last_event_global_seq: number
 }
 
-/** `POST /entities/query`'s response body for the `exam` entity type. */
+/** `GET /exam-sessions/available`'s response body. */
 export interface ExamRecordsPage {
   items: ExamRecord[]
   next_cursor: string | null
@@ -115,10 +98,13 @@ export const examApi = {
   reportEvent: (sessionId: string, type: AntiCheatSignalType) =>
     client.post<AntiCheatSignalOutcome>(`${BASE}/${encodeURIComponent(sessionId)}/events`, { type }),
 
-  /** `POST /entities/query`, scoped to this requirement's own `exam` list
-   *  screen. See this file's moduledoc comment above: the only record-read
-   *  route in the entities router, called directly rather than through
-   *  REQ-336's `entitiesApi.queryRecords`. */
-  queryExamRecords: (query: ExamQueryRequest = {}) =>
-    client.post<ExamRecordsPage>('/api/v1/entities/query', { entity_type: 'exam', ...query }),
+  /** `GET /exam-sessions/available` — lists exams a CANDIDATE may currently
+   *  start a session against (status=active, exam_id filtering is
+   *  server-side and NOT caller-controlled — see
+   *  lib/letflow/design/iss0718-candidate-exam-list-route.md §1). Replaces
+   *  this file's prior `queryExamRecords`/`POST /entities/query` call, which
+   *  CANDIDATE cannot reach (ISS-0718 — `:EntitiesQuery` is outside
+   *  CANDIDATE's ISS-0646 closed set). */
+  listAvailableExams: (opts: { cursor?: string; page_size?: number } = {}) =>
+    client.get<ExamRecordsPage>(`${BASE}/available`, opts),
 }

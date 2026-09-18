@@ -192,11 +192,12 @@ defmodule Letflow.Routers.ExamSessionsTest do
       end
     end
 
-    test "seven routes are declared, matching the moduledoc's route table" do
+    test "eight routes are declared, matching the moduledoc's route table" do
       routes = Letflow.Routers.ExamSessions.__authz_routes__()
-      assert length(routes) == 7
+      assert length(routes) == 8
 
       assert {"POST", "/", :ExamSessionStart} in routes
+      assert {"GET", "/available", :ExamSessionStart} in routes
       assert {"GET", "/:id", :ExamSessionRead} in routes
       assert {"PUT", "/:id/answers/:question_id", :ExamSessionSave} in routes
       assert {"POST", "/:id/submit", :ExamSessionSubmit} in routes
@@ -1089,6 +1090,90 @@ defmodule Letflow.Routers.ExamSessionsTest do
       assert deleted_conn.status == 404
       assert unknown_conn.status == 404
       assert deleted_conn.resp_body == unknown_conn.resp_body
+    end
+  end
+
+  # ── ISS-0718: GET /exam-sessions/available ───────────────────────────────
+  #
+  # TEST-DESIGNER, WF-03 run WF03-ISS0718-20260919. Proves the acceptance
+  # criteria from docs/issues/ISS-0718.yaml that are testable at this layer:
+  # a CANDIDATE token can list active exams through the new dedicated route
+  # (not the generic /entities/query route CANDIDATE is structurally denied),
+  # inactive exams and non-exam entities never leak into the response, and
+  # ISS-0646's closed permission set is genuinely untouched -- the old
+  # generic-query call CANDIDATE used to make still 403s exactly as before.
+
+  describe "GET /exam-sessions/available (ISS-0718)" do
+    test "a CANDIDATE token lists active exams with 200, not 403" do
+      tenant = tenant("iss0718-candidate-lists")
+      ctx = candidate_ctx(tenant)
+      %{exam: exam} = build_minimal_exam!(tenant.schema_name, %{"status" => "active"})
+
+      conn = request("GET", "/api/v1/exam-sessions/available", ctx)
+
+      assert conn.status == 200
+      body = json(conn)
+      assert %{"items" => items, "next_cursor" => _} = body
+      assert Enum.any?(items, fn item -> item["record_id"] == exam.record_id end)
+    end
+
+    test "an archived exam is excluded from the response" do
+      tenant = tenant("iss0718-excludes-archived")
+      ctx = candidate_ctx(tenant)
+
+      %{exam: active_exam} = build_minimal_exam!(tenant.schema_name, %{"status" => "active"})
+      %{exam: archived_exam} = build_minimal_exam!(tenant.schema_name, %{"status" => "archived"})
+
+      conn = request("GET", "/api/v1/exam-sessions/available", ctx)
+      assert conn.status == 200
+
+      ids = Enum.map(json(conn)["items"], & &1["record_id"])
+      assert active_exam.record_id in ids
+      refute archived_exam.record_id in ids
+    end
+
+    test "non-exam entities (e.g. question) never appear in the response" do
+      tenant = tenant("iss0718-excludes-non-exam")
+      ctx = candidate_ctx(tenant)
+
+      %{exam: exam, question_id: question_id} = build_minimal_exam!(tenant.schema_name)
+
+      conn = request("GET", "/api/v1/exam-sessions/available", ctx)
+      assert conn.status == 200
+
+      ids = Enum.map(json(conn)["items"], & &1["record_id"])
+      assert exam.record_id in ids
+      refute question_id in ids
+    end
+
+    test "a role without :ExamSessionStart (e.g. PROCESS_DESIGNER) is forbidden" do
+      tenant = tenant("iss0718-role-gating")
+      ctx = user_ctx(tenant, ["PROCESS_DESIGNER"])
+      build_minimal_exam!(tenant.schema_name)
+
+      conn = request("GET", "/api/v1/exam-sessions/available", ctx)
+      assert conn.status == 403
+    end
+
+    # ISS-0646 regression guard: proves the fix genuinely did not widen
+    # CANDIDATE's closed permission set. The old ExamListPage.tsx call
+    # (POST /entities/query with entity_type "exam") is the exact call
+    # ISS-0718's live UAT run confirmed 403s for a real CANDIDATE token --
+    # this must still 403 after the fix, since the fix's whole point (design
+    # doc §0) is a dedicated route under the existing :ExamSessionStart
+    # permission, not any change to what :EntitiesQuery grants.
+    test "a CANDIDATE token still gets 403 on the old generic /entities/query call" do
+      tenant = tenant("iss0718-old-route-still-403")
+      ctx = candidate_ctx(tenant)
+      build_minimal_exam!(tenant.schema_name)
+
+      conn =
+        request("POST", "/api/v1/entities/query", ctx, %{
+          "entity_type" => "exam",
+          "filters" => [%{"field" => "status", "op" => "eq", "value" => "active"}]
+        })
+
+      assert conn.status == 403
     end
   end
 end

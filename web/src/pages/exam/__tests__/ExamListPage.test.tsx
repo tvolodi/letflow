@@ -30,7 +30,7 @@ vi.mock('@tanstack/react-query', () => ({
 
 vi.mock('@/api/exam', () => ({
   examApi: {
-    queryExamRecords: vi.fn(),
+    listAvailableExams: vi.fn(),
   },
 }))
 

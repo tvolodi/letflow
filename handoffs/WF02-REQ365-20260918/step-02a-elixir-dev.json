@@ -1,0 +1,48 @@
+{
+  "handoff_id": "57248ddb-5ea4-42a1-9870-9c27a5c348e5",
+  "run_id": "WF02-REQ365-20260918",
+  "workflow_id": "WF-02",
+  "step": "02a",
+  "from_agent": "ORCH",
+  "to_agent": "ELIXIR-DEV",
+  "file": "handoffs/WF02-REQ365-20260918/step-02a-elixir-dev.json",
+  "created_at": "2026-09-18T02:50:10Z",
+  "started_at": "2026-09-18T02:50:10Z",
+  "completed_at": null,
+  "status": "PENDING",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S7",
+    "requirement_ids": ["REQ-365"],
+    "requirement_text": {
+      "REQ-365": "Per explicit user decision: platform-level help (shared screens like login-routing that no tenant owns) is authored through the BA-agent/REQ-ANALYST pipeline, matching the exact platform-vs-tenant split already established for UAT scenarios (REQ-358's scope field, REQ-359's BA-persona/REQ-ANALYST split, REQ-360's login-routing scenario as the worked platform example). This requirement is the authoring-path equivalent for help content: it does not re-derive that split, it applies it. . SCOPE: wherever REQ-363's design placed platform-scope help content (a dedicated table/schema, per that requirement's own acceptance criterion), this requirement adds the write path/tooling REQ-ANALYST (or, once REQ-359 lands, whichever role it specifies for platform content) actually uses to author it — this could be as simple as a direct context-module call analogous to REQ-364's tenant-scoped one, scoped to the platform table instead, reusing REQ-364's create/update/publish/reconfirm shape rather than inventing a parallel one. Explicitly NOT a new UI — platform help authoring is agent-pipeline-driven, matching how platform-scope UAT scenarios are authored (a file/record written by an agent, not a form filled by a human). . FIRST REAL CONTENT: author help for the login-routing screen (the same screen REQ-360's UAT scenario covers) as this requirement's own worked, real example — proves the authoring path end-to-end rather than shipping an authoring mechanism with zero real content using it."
+    },
+    "related_handoff_ids": [],
+    "artifacts_in": [
+      "lib/letflow/design/req365-platform-help-authoring.md",
+      "lib/letflow/design/req363-help-content-data-model.md",
+      "lib/letflow/help.ex",
+      "lib/letflow/help/help_content.ex",
+      "priv/repo/migrations/20260917000001_create_help_content.exs",
+      "docs/anti-patterns.md"
+    ],
+    "owned_modules": [
+      "lib/letflow/help.ex",
+      "lib/letflow/help/",
+      "priv/repo/migrations/"
+    ]
+  },
+  "task": {
+    "description": "On branch feature/WF02-REQ365-20260918. Verify `git branch --show-current` equals it before touching any file. Implement lib/letflow/design/req365-platform-help-authoring.md EXACTLY -- no new schema/API decisions, this is implementation of an already-validated design (PASSed CODE-DESIGN-VALIDATOR, iteration 1). Concretely: (1) priv/repo/migrations/*.exs creating `platform_help_content` in the public schema per the design's §1.3 shape -- unguarded, unregistered in Letflow.TenantProvisioning.tenant_scoped_migrations/0. (2) lib/letflow/help/platform_help_content.ex Ecto schema per §2. (3) Extract the shared markdown-safety validator per §5: pull HelpContent's existing private validate_markdown_safety/2 and its full call graph out of lib/letflow/help/help_content.ex into a new lib/letflow/help/markdown_safety.ex (Letflow.Help.MarkdownSafety) exposing validate(changeset, field), then call it from BOTH help_content.ex's changeset AND the new platform_help_content.ex's changeset -- one implementation, two call sites, confirm help_content.ex's own existing tests still pass unchanged after this refactor (same behavior, moved location). (4) lib/letflow/help/platform.ex (Letflow.Help.Platform context module) per §3 -- create_draft/1, update_draft/2, publish/1, reconfirm/1, withdraw/1, get_by_screen/1, mirroring lib/letflow/help.ex's Letflow.Help exactly minus the opts/prefix parameter (read that file in full, match its @spec shapes/error tuples/moduledoc conventions). (5) FIRST REAL CONTENT: actually publish the login-routing help content the design drafted in §4.2 (screen_id \"login-routing\", the literal title/body text there) through this new write path against a real or Docker-provisioned Postgres -- via a one-off IEx/mix run (Mix.Task or `mix run -e`, your choice, whichever this codebase's existing precedent favors for a one-time seed action; check for an existing seed-task convention first) that calls Letflow.Help.Platform.create_draft/1 then .publish/1. Quote the exact call output (the created row's id, confirmed status: :live, confirmed_at) in your result.summary -- this is the run's own evidence for REQ-365's second acceptance criterion, and DOC-UPDATER will need the exact published text quoted at Step 6, so state the full title+body text verbatim in result.summary too. mix compile --warnings-as-errors, mix ecto.migrate (see docs/anti-patterns.md's Docker fallback if no local toolchain -- report explicitly if neither is available, do not report PASS without having run it), mix format --check-formatted. Self-review per WF-02 Step 2a's checklist (docs/agents/workflows/WF-02_requirement_implementation.md): no SQL string interpolation of tenant/user input, every new public function has a @doc, all call sites of any changed function signature still compile. Complete the handoff (status COMPLETED, result.status PASS/FAIL/PARTIAL, artifacts_out listing every file touched, next_action \"Route to SECURITY-REVIEWER (2c)\"), commit and push to feature/WF02-REQ365-20260918.",
+    "acceptance_criteria": [
+      "a platform-scope help-content write path exists, reusing REQ-364's context-module shape against wherever REQ-363's design placed platform rows, not a parallel schema/mechanism",
+      "real help content for the login-routing screen is authored and published through this path, in plain end-user language (not engineer/SHALL-statement prose, per this requirement's own Why section) — the actual published text is quoted in this requirement's close-out",
+      "the write path enforces the same sanitization rule REQ-363/364 established for tenant-scoped content — no separate, weaker validation for the platform path",
+      "mix compile --warnings-as-errors and mix ecto.migrate both pass, real output quoted",
+      "help_content.ex's own existing tests still pass unchanged after the markdown-safety extraction (same behavior, moved location)"
+    ]
+  },
+  "result": null,
+  "rework_count": 0,
+  "max_rework": 3
+}

@@ -26946,6 +26946,66 @@ requirements:
       - "this requirement's own close-out states explicitly that ISS-0700 remains status: open (not closed by this requirement) and that the separate 'Unknown workspace' banner gap for non-PLATFORM_ADMIN unauthenticated/no-realm-slug users is unresolved and out of this requirement's scope"
     depends_on: [REQ-360]
     close_out_note: >
+      status: blocked, NOT done — updated by DOC-UPDATER (WF02-REQ369-closeout-update-20260918,
+      2026-09-18), superseding the 2026-09-17 note below in substance (kept append-only
+      per this file's own history discipline: nothing here is deleted, this note states
+      the current, factual position). AC1-AC5 remain genuinely complete and independently
+      re-verified: RELEASE-VALIDATOR's PASS-WITH-PENDING (step-05-release-validation.json),
+      merged as PR #1507, squash commit 3c0cbd24290c062d1974b7eb91fa74adcc2c42f4.
+      .
+      RESOLVED SINCE THE 2026-09-17 NOTE (do not re-derive, cite these directly):
+      (1) The QA_DEPLOY_HOST/QA_DEPLOY_USER/QA_DEPLOY_SSH_KEY GitHub secrets are now
+      provisioned — a successful "CD (QA)" GitHub Actions run completed at
+      2026-09-18T12:49:01Z, and the live bundle at https://qa.bizdala.com was
+      independently re-fetched and grepped this session, confirming REQ-369's frontend
+      code is actually live: "platform-dashboard" (2 hits), "Platform Overview" (1),
+      platform-dashboard-heading (1), tile-tenant-count (1), platform-quick-links (1).
+      Full evidence: test/uat-reports/uat-2026-09-18-WF02-REQ369-20260918.yaml
+      (UAT-RUNNER, already committed to main; note that commit landed via a direct
+      push to main, a separate process mistake already recorded in
+      docs/anti-patterns.md — not a defect in the evidence itself). (2)
+      test/fixtures/uat/scenarios/platform/platform-login-routing-by-role.yaml's
+      PLATFORM_ADMIN branch was ALREADY correct as of the original PR #1507 (asserts
+      `/platform-dashboard`, the heading, tile-tenant-count, and platform-quick-links
+      testids) — no fixture change was needed for AC7's scenario text itself. (3) A
+      second, independent staleness bug was found and fixed: this repo's own E2E
+      pipeline spec, web/tests/e2e/pipelines/platform-login-routing-by-role.pipeline.e2e.spec.ts,
+      still asserted the OLD `/` TenantDashboardPage landing for the PLATFORM_ADMIN
+      case. Fixed and merged as PR #1515, commit 0114d657 ("test(e2e): fix stale
+      PLATFORM_ADMIN branch in platform-login-routing pipeline spec (REQ-369)").
+      .
+      STILL BLOCKING — THE ONLY REMAINING GAP, NAMED PRECISELY: AC6 (real PLATFORM_ADMIN
+      login against live QA, screenshot evidence) and AC7's real scenario re-run cannot
+      be executed from THIS kind of execution environment because there is no
+      QA credential-fetch path available here: no `ai-dala-infra` checkout, and no SSH
+      access to the QA host (`ubuntu-16gb-nbg1-1`) to run
+      `ai-dala-infra/scripts/qa-login.sh` (or equivalent) and obtain a real PLATFORM_ADMIN
+      Keycloak token. This was confirmed empirically, not assumed: UAT-RUNNER's live
+      Playwright run this session (test/uat-reports/uat-2026-09-18-WF02-REQ369-20260918.yaml)
+      shows 2 of 3 scenario branches (PLATFORM_ADMIN, tenant-scoped role) failing on a
+      real `401 invalid_grant` from Keycloak at the token-fetch step, while the third
+      branch (unauthenticated, which needs no credentials) genuinely passed against
+      live QA — proving the bundle/route/scenario mechanics are correct and isolating
+      the sole remaining blocker to credential access, not to any application defect.
+      AC8 remains satisfied by this note: ISS-0700 (docs/issues/ISS-0700.yaml) stays
+      status: open, NOT closed by this requirement, and the separate "Unknown workspace"
+      banner gap for non-PLATFORM_ADMIN unauthenticated/no-realm-slug users remains
+      unresolved and out of this requirement's scope.
+      .
+      REMAINING WORK for whoever picks this back up — precise enough to act on directly,
+      no re-investigation needed: from a session WITH real `ai-dala-infra` checkout
+      access and SSH access to `ubuntu-16gb-nbg1-1`, run (or equivalent to)
+      `ai-dala-infra/scripts/qa-login.sh` to obtain a real PLATFORM_ADMIN Keycloak
+      token/session against https://auth.qa.bizdala.com, then re-dispatch UAT-RUNNER to
+      (a) actually log in as PLATFORM_ADMIN against https://qa.bizdala.com, land on
+      `/platform-dashboard`, capture the login + real tenant-count + screenshot evidence
+      for AC6, and (b) re-run
+      test/fixtures/uat/scenarios/platform/platform-login-routing-by-role.yaml's
+      PLATFORM_ADMIN branch (now that both it and the E2E pipeline spec assert the
+      correct destination) for real against QA and quote the pass result for AC7. Once
+      both are captured, flip this requirement's status to done.
+      .
+      --- Prior note (2026-09-17), retained for history, superseded by the above ---
       status: blocked, NOT done — set by DOC-UPDATER (Step 6, WF02-REQ369-20260917,
       2026-09-17). AC1-AC5 are genuinely complete and independently re-verified:
       RELEASE-VALIDATOR's PASS-WITH-PENDING (step-05-release-validation.json) and

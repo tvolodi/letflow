@@ -139,3 +139,15 @@ pipeline_log:
       (properly backgrounded/polled): exit 0, combined 4391/4391, no
       ISS-0069 warning anywhere in the full log. Scope confirmed: 1 file
       changed.
+  - step: TEST-RUNNER
+    at: "2026-09-18T03:15:00Z"
+    result: >
+      PASS. mix test full suite: 4394/4394 (4388 tests + 6 properties),
+      0 failures. test/letflow/help_test.exs: 59/59. mix compile
+      --warnings-as-errors and mix format --check-formatted clean.
+      mix letflow.check.test run properly backgrounded and polled to
+      genuine completion: 4391/4391 combined across 8 partitions, plus
+      isolated wasm_hang (5/5) and lua_wallclock_race clean -- matches
+      TEST-DESIGN-VALIDATOR's independently reported count exactly.
+      Report: test/reports/report-20260918-WF03-ISS0709-20260918.yaml
+      (commit 9b1d6c41).

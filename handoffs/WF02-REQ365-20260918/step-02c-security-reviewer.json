@@ -1,0 +1,42 @@
+{
+  "handoff_id": "25ce41fb-23fd-4f72-a520-c7a2c91e0a87",
+  "run_id": "WF02-REQ365-20260918",
+  "workflow_id": "WF-02",
+  "step": "02c",
+  "from_agent": "ORCH",
+  "to_agent": "SECURITY-REVIEWER",
+  "file": "handoffs/WF02-REQ365-20260918/step-02c-security-reviewer.json",
+  "created_at": "2026-09-18T03:10:47Z",
+  "started_at": "2026-09-18T03:10:47Z",
+  "completed_at": null,
+  "status": "PENDING",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S7",
+    "requirement_ids": ["REQ-365"],
+    "requirement_text": {
+      "REQ-365": "Per explicit user decision: platform-level help (shared screens like login-routing that no tenant owns) is authored through the BA-agent/REQ-ANALYST pipeline, matching the exact platform-vs-tenant split already established for UAT scenarios (REQ-358's scope field, REQ-359's BA-persona/REQ-ANALYST split, REQ-360's login-routing scenario as the worked platform example). This requirement is the authoring-path equivalent for help content: it does not re-derive that split, it applies it. . SCOPE: wherever REQ-363's design placed platform-scope help content (a dedicated table/schema, per that requirement's own acceptance criterion), this requirement adds the write path/tooling REQ-ANALYST (or, once REQ-359 lands, whichever role it specifies for platform content) actually uses to author it — this could be as simple as a direct context-module call analogous to REQ-364's tenant-scoped one, scoped to the platform table instead, reusing REQ-364's create/update/publish/reconfirm shape rather than inventing a parallel one. Explicitly NOT a new UI — platform help authoring is agent-pipeline-driven, matching how platform-scope UAT scenarios are authored (a file/record written by an agent, not a form filled by a human). . FIRST REAL CONTENT: author help for the login-routing screen (the same screen REQ-360's UAT scenario covers) as this requirement's own worked, real example — proves the authoring path end-to-end rather than shipping an authoring mechanism with zero real content using it."
+    },
+    "related_handoff_ids": [],
+    "artifacts_in": [
+      "docs/agents/instructions/security-invariants.md",
+      "priv/repo/migrations/20260918000001_create_platform_help_content.exs",
+      "lib/letflow/help/platform_help_content.ex",
+      "lib/letflow/help/platform.ex",
+      "lib/letflow/help/markdown_safety.ex",
+      "lib/letflow/help/help_content.ex"
+    ],
+    "owned_modules": []
+  },
+  "task": {
+    "description": "On branch feature/WF02-REQ365-20260918. Read `git diff main...HEAD` and docs/agents/instructions/security-invariants.md. Scope test: this diff adds a new public-schema table (platform_help_content), a migration, an Ecto schema, a new Letflow.Help.Platform context module (create/update/publish/reconfirm/withdraw/read, no tenant-scoping since the table is platform-global), and extracts a shared markdown-sanitization validator (Letflow.Help.MarkdownSafety) used by both the tenant-scoped and platform-scoped write paths. This is a real write path for user/agent-supplied content rendered back to end users later (REQ-366) -- in scope for review, not trivially out of scope. For each of INV-1..INV-8, determine APPLIES or NOT-APPLICABLE against this diff and run its 'How to verify' check for each APPLIES invariant. Pay particular attention to: (1) whether the platform table's global (non-tenant-scoped) nature creates any cross-tenant data-exposure risk despite being platform-owned content (should be none, since no tenant secrets flow through it, but verify explicitly rather than assume); (2) whether the extracted MarkdownSafety module preserves the exact same sanitization guarantees the prior inline version had (no weakening during the refactor -- diff the actual validation logic, not just that a function got renamed); (3) whether the platform write path enforces the identical sanitization rule as the tenant path (REQ-365's own acceptance criterion #3) -- confirm both changesets call the same shared validator with no bypass. FAIL immediately on any applicable invariant failing -- all BLOCKER, no partial credit. Complete the handoff (status COMPLETED, result.status PASS/FAIL, next_action \"Route to REVIEWER (2d)\" on PASS or \"Rework ELIXIR-DEV\" on FAIL naming failed invariants), commit and push to feature/WF02-REQ365-20260918.",
+    "acceptance_criteria": [
+      "every applicable INV-1..INV-8 invariant verdict recorded explicitly (APPLIES/NOT-APPLICABLE), with a real check run for each APPLIES",
+      "the sanitization-extraction refactor is confirmed to preserve identical behavior, not just renamed code",
+      "the platform write path is confirmed to enforce the same sanitization rule as the tenant-scoped path, no weaker validation"
+    ]
+  },
+  "result": null,
+  "rework_count": 0,
+  "max_rework": 3
+}

@@ -908,3 +908,16 @@ history:
       correctly. The line-765 entry is a pre-existing defect this run did
       not introduce and, per this file's own append-only rule, did not
       correct.
+
+  - req: REQ-370
+    event: started
+    agent: ORCH
+    at: "2026-09-18T17:11:13Z"
+    note: >
+      WF-02 run WF02-REQ370-20260918 (queue task 714, GH#1529) begins.
+      SECURITY-CRITICAL: multi-issuer OIDC token verification -- trust the
+      tenants table's own idp_realm_id bindings instead of the single
+      hardcoded :oidc, :issuer value, per ISS-0690 followup_2's confirmed
+      live diagnosis. depends_on [32, 34], both satisfied. Step 00 (git
+      setup) PASS: branch feature/WF02-REQ370-20260918 created off
+      origin/main and pushed.

@@ -3914,9 +3914,9 @@ volumes:
     path: docs/status/requirement_status.v19.yaml
     status: current
     opened: 2026-09-17
-    entries: 16
+    entries: 17
     note: >
-      Incremented to 16 by ORCH's own ISS-0713 done-event append
+      Incremented to 17 by ORCH's own REQ-370 started-event append
       (WF03-ISS0713-20260918, queue task Q-713 -- full WF-03 run resolving
       the platform-login-routing-by-role pipeline_test's unscoped
       Tenants-link locator strict-mode violation, live-verified against QA,

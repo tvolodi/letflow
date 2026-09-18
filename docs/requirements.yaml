@@ -27104,8 +27104,9 @@ requirements:
   - id: REQ-370
     title: "Multi-issuer OIDC token verification -- trust the tenant table's own realm bindings, not one hardcoded :oidc, :issuer value"
     owner: ELIXIR-DEV
-    status: pending
+    status: in_progress
     stage: S1
+    # impl_order: 714
     description: >
       SECURITY-CRITICAL. This requirement changes the authentication
       boundary itself -- SECURITY-REVIEWER's gate on it is not routine, it

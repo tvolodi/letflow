@@ -42,8 +42,14 @@ defmodule Letflow.Oidc.TokenVerifierDouble do
   empty strings — this double is only ever reached after
   `Letflow.Plugs.AuthPipeline`'s own empty/malformed-header short-circuit, so
   it does not need to special-case those itself).
+
+  REQ-370: arity 1 (no `provider_name`) — this double does not implement
+  the new multi-issuer routing/trust-gate logic itself (that is
+  `Letflow.Oidc.TokenVerifier.Oidcc`'s and `Letflow.Oidc.ProviderRegistry`'s
+  own responsibility); it only matches the new callback contract's arity so
+  callers compile.
   """
   @impl Letflow.Oidc.TokenVerifier
-  def verify_bearer_token(@valid_token, _provider_name), do: {:ok, @valid_claims}
-  def verify_bearer_token(_other_token, _provider_name), do: {:error, :invalid_test_token}
+  def verify_bearer_token(@valid_token), do: {:ok, @valid_claims}
+  def verify_bearer_token(_other_token), do: {:error, :invalid_test_token}
 end

@@ -67,7 +67,12 @@ defmodule Letflow.Supervisor.InfrastructureTest do
     assert ids == [
              Letflow.Repo,
              Ecto.Migrator,
-             Oidcc.ProviderConfiguration.Worker,
+             # REQ-370: the single static Oidcc.ProviderConfiguration.Worker child was
+             # replaced by Letflow.Oidc.ProviderRegistry -- a DynamicSupervisor owning
+             # one per-realm Oidcc.ProviderConfiguration.Worker, started lazily, per
+             # design doc req370-multi-issuer-oidc-verification.md §4.2. Same list
+             # position (child #3), everything else unaffected.
+             Letflow.Oidc.ProviderRegistry,
              Letflow.Registry,
              Letflow.Metrics.Registry,
              # REQ-352: ETS-backed token bucket behind

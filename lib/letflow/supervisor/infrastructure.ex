@@ -24,7 +24,10 @@ defmodule Letflow.Supervisor.Infrastructure do
 
   1. `Letflow.Repo`
   2. `Ecto.Migrator`
-  3. `Oidcc.ProviderConfiguration.Worker`
+  3. `Letflow.Oidc.ProviderRegistry` (REQ-370: a `DynamicSupervisor` of
+     per-realm `Oidcc.ProviderConfiguration.Worker`s, replacing the former
+     single static worker child — see that module's own moduledoc and
+     `lib/letflow/design/req370-multi-issuer-oidc-verification.md` §4)
   4. `Letflow.Registry` (generic `Registry`)
   5. `Letflow.Metrics.Registry`
   6. `Letflow.Plugs.PublicReadRateLimit.Bucket`
@@ -150,31 +153,20 @@ defmodule Letflow.Supervisor.Infrastructure do
 
   @impl true
   def init(_init_arg) do
-    oidc_config = Application.fetch_env!(:letflow, :oidc)
-
     children = [
       Letflow.Repo,
       {Ecto.Migrator,
        repos: Application.fetch_env!(:letflow, :ecto_repos), skip: skip_migrations?()},
-      {Oidcc.ProviderConfiguration.Worker,
-       %{
-         issuer: Keyword.fetch!(oidc_config, :issuer),
-         name: Keyword.fetch!(oidc_config, :provider_name),
-         backoff_type: :random,
-         # REQ-128: dev/test's local Keycloak serves discovery over plain
-         # HTTP (docker-compose.yml's keycloak service, no TLS termination
-         # in front of it). oidcc's discovery parser otherwise rejects a
-         # non-https userinfo_endpoint outright
-         # (oidcc_provider_configuration.erl's AllowUnsafeHttp quirk,
-         # default false) and the worker never reaches a ready state.
-         # Opt-in only, off by default: config/dev.exs and config/test.exs
-         # set :allow_unsafe_http true; config/prod.exs does not set it at
-         # all, so a real deployed issuer is still held to the safe
-         # default.
-         provider_configuration_opts: %{
-           quirks: %{allow_unsafe_http: Keyword.get(oidc_config, :allow_unsafe_http, false)}
-         }
-       }},
+      # REQ-370 (design req370-multi-issuer-oidc-verification.md §4): a
+      # DynamicSupervisor owning one Oidcc.ProviderConfiguration.Worker per
+      # trusted realm, started lazily on first verification attempt rather
+      # than enumerated eagerly here -- its own init/1 reads no config and
+      # makes no Repo call, matching Letflow.Admission's/
+      # Letflow.Engine.Wasm.InvocationLease's own "no DB read inside init/1"
+      # precedent. Replaces the former single static
+      # {Oidcc.ProviderConfiguration.Worker, ...} child that this exact list
+      # position held before this requirement (REQ-016).
+      Letflow.Oidc.ProviderRegistry,
       {Registry, keys: :unique, name: Letflow.Registry},
       # REQ-194 (design req194-prometheus-metrics.md §5): the ETS-backed metrics
       # collector behind GET /metrics. A leaf, independently-startable component

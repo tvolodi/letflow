@@ -3912,20 +3912,74 @@ volumes:
 
   - volume: 19
     path: docs/status/requirement_status.v19.yaml
-    status: current
+    status: closed
     opened: 2026-09-17
-    entries: 19
+    closed: 2026-09-18
+    entries: 23
+    lines: 1266
+    bytes_working_tree: 77214
+    frozen_prefix_lines: 1232
+    frozen_prefix_sha256: "4d5e47a653e0009fcdda8f143644438e24ac86d95a8277bc5373a353ffd903a6"
     note: >
-      Incremented to 19 by DOC-UPDATER's own ISS-0716 SCOPE-CHANGE
-      done-event append (WF03-ISS0716-20260918). Previously incremented to
-      18 by DOC-UPDATER's own REQ-369 revised-event append
-      (WF02-REQ369-closeout-final-20260918 -- updated REQ-369's
-      close_out_note in docs/requirements.yaml with the newest evidence,
-      test/uat-reports/uat-2026-09-18-WF02-REQ369-AC6AC7-final-20260918.yaml;
-      status left as blocked) -- `grep -c "^  - req:"
-      docs/status/requirement_status.v19.yaml` = 18 on-disk entries; 1008
-      lines / 61296 bytes, well under the 1200-line/120000-byte roll
+      Closed at 23 entries by ORCH's own ISS-0716 SCOPE-CHANGE done-event
+      append (WF03-ISS0716-20260918), which required resolving a real merge
+      conflict against a sibling session's already-landed REQ-370/ISS-0715
+      entries (origin/main's own 22-entries state, itself the product of an
+      earlier concurrent-merge resolution -- see "Prior note (22 entries)"
+      below). Resolution took origin/main's already-correctly-ordered 1180
+      lines as the base and appended this branch's own ISS-0716 entry after
+      it (`at: "2026-09-18T21:04:03Z"`, the latest timestamp of all entries
+      in this volume) -- `grep -c "^  - req:"
+      docs/status/requirement_status.v19.yaml` = 23 on-disk entries; 1232
+      frozen-prefix lines / 77214 bytes -- over the 1200-line/120000-byte
+      roll ceiling, so this volume was closed and
+      docs/status/requirement_status.v20.yaml opened as its successor in
+      the same commit.
+
+      Prior note (22 entries): Incremented to 21 by ORCH's own REQ-370
+      Step-Final done-event append
+      (recovery/completion run, branch feature/WF02-REQ370-20260918, PR
+      #1535 squash-merged to main as 21177271, queue task 714, GH#1529 --
+      multi-issuer OIDC token verification) -- `grep -c "^  - req:"
+      docs/status/requirement_status.v19.yaml` = 21 on-disk entries; 1152
+      lines, well under the 1200-line/120000-byte roll ceiling, no roll
+      triggered.
+
+      Prior note (20 entries): Incremented to 20 by DOC-UPDATER's own
+      REQ-370 done-event append (recovery/completion run, branch
+      feature/WF02-REQ370-20260918, PR #1535, queue task 714, GH#1529 --
+      multi-issuer OIDC token verification) -- 20 on-disk entries; 1084
+      lines / 66752 bytes, well under the 1200-line/120000-byte roll
       ceiling, no roll triggered.
+
+      Prior note (19 entries): Incremented to 19 by ORCH's own REQ-370
+      started-event append (WF02-REQ370-20260918, queue task 714, GH#1529 --
+      multi-issuer OIDC token verification), merged on top of origin/main's
+      own DOC-UPDATER REQ-369 revised-event append
+      (WF02-REQ369-closeout-final-20260918) that landed independently at
+      nearly the same time (both entries preserved on rebase, append-only,
+      ordered by their own `at:` timestamps: REQ-370 started at 17:11:13Z,
+      then REQ-369 revised at 19:50:13Z) -- 19 on-disk entries; 1021 lines,
+      well under the 1200-line/120000-byte roll ceiling, no roll triggered.
+
+      Prior note (18 entries): Incremented to 18 by ORCH's own REQ-370
+      started-event append (WF02-REQ370-20260918, queue task 714, GH#1529),
+      merged on top of origin/main's own ISS-0711 done-event append that
+      landed independently at nearly the same time (both entries preserved
+      on rebase, append-only, ordered by their own `at:` timestamps:
+      ISS-0711 done at 16:22:39Z, then REQ-370 started at 17:11:13Z) -- 18
+      on-disk entries; 985 lines, well under the 1200-line/120000-byte roll
+      ceiling, no roll triggered.
+
+      Prior note (17 entries): Incremented to 17 by DOC-UPDATER's own
+      ISS-0711 done-event append (WF03-ISS0711-20260918 -- full pipeline run
+      resolving the TenantListResponse `total`/`count` field mismatch that
+      blocked REQ-369's AC6), merged on top of a concurrent ORCH ISS-0713
+      append that landed independently at nearly the same time (both entries
+      preserved on rebase, append-only, ordered by their own `at:`
+      timestamps: ORCH's ISS-0713 entry at 16:01:06Z, then this ISS-0711
+      entry at 16:22:39Z) -- 17 on-disk entries; 951 lines / 57452 bytes,
+      well under the 1200-line/120000-byte roll ceiling, no roll triggered.
 
       Prior note (17 entries, ISS-0711): Incremented to 17 by DOC-UPDATER's
       own ISS-0711 done-event append (WF03-ISS0711-20260918 -- full
@@ -4242,6 +4296,18 @@ volumes:
       against volume 17's original header to confirm only those fields
       changed. `entries:` will be incremented per HOW-TO-APPEND step 6 as
       real appends land.
+
+  - volume: 20
+    path: docs/status/requirement_status.v20.yaml
+    status: current
+    opened: 2026-09-18
+    entries: 0
+    note: >
+      Opened by ORCH's own ISS-0716 close-out, successor to volume 19.
+      Created with volume 19's header text verbatim (volume number, opening
+      date and predecessor path updated) and an empty `history:` list, per
+      this index's `roll_rule.on_exceed` procedure. `entries:` will be
+      incremented per HOW-TO-APPEND step 6 as real appends land.
 
 
 known_anomalies:

@@ -122,8 +122,9 @@ config :letflow, Letflow.Repo,
 {keycloak_port, _bindings} = Code.eval_file(Path.expand("keycloak_port.exs", __DIR__))
 
 config :letflow, :oidc,
-  issuer: "http://localhost:#{keycloak_port}/realms/bpm-default",
-  provider_name: Letflow.Oidc.DefaultProvider,
+  # REQ-370: keycloak_base_url replaces :issuer as the trust-resolution
+  # source -- see config/dev.exs's comment for the same key.
+  keycloak_base_url: "http://localhost:#{keycloak_port}",
   client_id: "letflow-web",
   signing_algs: ["RS256"],
   token_verifier: Letflow.Oidc.TokenVerifierDouble,

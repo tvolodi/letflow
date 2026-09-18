@@ -1,0 +1,76 @@
+id: ISS-0715
+title: "requirement_status.v19.yaml line 765 has req: ISS-0712, an illegal vocabulary value (REQ-NNN | SCOPE-CHANGE only)"
+discovered_by: TEST-RUNNER
+discovered_in_run: WF02-REQ370-20260918
+discovered_at: "2026-09-18T18:47:00Z"
+severity: MINOR
+description: >
+  Pre-existing, unrelated to REQ-370's own diff -- diff-absence confirmed:
+  this branch's only commit touching docs/status/requirement_status.v19.yaml
+  (7639a6cf) appended a single "started" event; the offending line was
+  written by commit bf989a89 ("WF03-ISS0712-20260918", agent ORCH), an
+  ancestor of this branch's merge-base with main (c219c7cd) -- it predates
+  this branch entirely and belongs to a sibling WF-03 issue-fix run.
+  test/docs/requirement_status_invariants_test.exs's A4a ("every entry in
+  every volume uses the documented req/event vocabulary") and A5 ("the
+  on-disk vocabulary-anomaly set equals the index's declared set exactly")
+  both fail on it: `req: ISS-0712` is not a legal value per the volume's own
+  header (`req:` is REQ-NNN | SCOPE-CHANGE only -- an issue fix must use
+  SCOPE-CHANGE with the ISS id named in `note:`). This is the same class of
+  vocabulary defect volume 1's own `known_shape_anomalies` section already
+  documents for three other entries, but this specific occurrence was never
+  declared there, so the invariant tests correctly flag it live. Per the
+  volume's own append-only rule, the offending line itself cannot be
+  corrected -- WF03-ISS0713-20260918's own close-out note (recorded in
+  requirement_status.v19.yaml) already anticipated this and deliberately did
+  not copy the mistake, flagging it for "a future session correcting
+  docs/status/ vocabulary."
+affected_files:
+  - docs/status/requirement_status.v19.yaml
+  - docs/status/requirement_status.index.yaml
+  - test/docs/requirement_status_invariants_test.exs
+queue_ref: Q-715
+github_ref: GH-1533
+status: resolved
+resolved_in_run: "PR#1531 (fix(status): correct illegal req: ISS-0712 vocabulary value)"
+resolved_at: "2026-09-18T18:27:08Z"
+resolution_evidence: >
+  Already resolved before this issue was even filed. This issue was
+  discovered_at 2026-09-18T18:47:00Z, but PR #1531
+  (docs/fix-iss0712-vocab-defect-20260918, merge commit d812033a, branch
+  commit 1757c6f8) had already merged to main at 2026-09-18T18:27:08Z --
+  about 20 minutes earlier -- correcting
+  docs/status/requirement_status.v19.yaml line 765's `req: ISS-0712` to
+  `req: SCOPE-CHANGE` in place, with an explanatory note appended
+  documenting the correction (v19.yaml lines ~769-790). The session that
+  filed this issue was working from a branch whose merge-base with main
+  predated PR #1531 landing, so it never saw the fix and diagnosed the
+  defect as still-open.
+
+  This issue's own proposed remedy (fix_direction below, "declare as a
+  known anomaly") would have been INCORRECT even if the defect had still
+  been open: docs/status/requirement_status.v19.yaml is the CURRENT
+  (open, not yet closed/digest-pinned) volume per
+  docs/status/requirement_status.index.yaml, and
+  test/docs/requirement_status_invariants_test.exs's own A5 assertion
+  text is explicit that "a vocabulary defect in the CURRENT volume is
+  FIXED in the working tree before it is committed -- it can never be
+  declared away here." known_anomalies:/known_shape_anomalies: are
+  reserved exclusively for defects in CLOSED, digest-pinned volumes (the
+  three pre-existing entries in volume 1). PR #1531 applied the actually
+  correct, sanctioned remedy: fixing the line in place, not declaring it
+  away.
+
+  Verified directly on this closeout branch (fix/ISS-0715-close-20260919,
+  based on main HEAD 21177271, which already contains PR #1531's fix):
+  `git show main:docs/status/requirement_status.v19.yaml` lines 765-766
+  read `req: SCOPE-CHANGE`; `mix test
+  test/docs/requirement_status_invariants_test.exs` passes 20/20,
+  including A4a and A5.
+
+  This closeout run (WF03-ISS0715-close-20260919, GH#1533) made NO
+  code/test changes -- PR #1531 already did the actual fix, before this
+  issue existed. This run only closes the paperwork: docs/issues/ISS-0715.yaml
+  status flip, one run-history append to
+  docs/status/requirement_status.v19.yaml, and closing GH#1533 with a
+  comment pointing at PR #1531.

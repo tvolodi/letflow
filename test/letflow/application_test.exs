@@ -10,24 +10,35 @@ defmodule Letflow.ApplicationTest do
   # list includes a supervised Oidcc.ProviderConfiguration.Worker child
   # spec, sourced from config rather than a literal hardcoded issuer URL."
   #
+  # REQ-370 (design req370-multi-issuer-oidc-verification.md §4) replaced the single,
+  # always-running, config-registered-name static worker with
+  # Letflow.Oidc.ProviderRegistry -- a DynamicSupervisor that starts per-realm workers
+  # LAZILY (on first verification attempt against that realm, design §4.1's own "why
+  # lazy-on-demand" reasoning), never eagerly at boot. There is therefore no longer any
+  # single Oidcc.ProviderConfiguration.Worker process "alive at boot, registered under
+  # a configured name" for this test to find -- :provider_name itself was removed from
+  # every config file (design §6). These three tests are rewritten to assert the new
+  # shape: ProviderRegistry itself (not a per-realm worker) is the supervised,
+  # always-running, config-independent child; the actual per-realm worker lifecycle is
+  # covered by test/letflow/oidc/provider_registry_multi_realm_test.exs's
+  # `ProviderRegistry.ensure_started/1` unit tests instead (which need real tenant
+  # fixtures this DB-free file deliberately does not use).
+  #
   # This proves the child spec is actually wired into the real, running
   # supervision tree Letflow.Application starts for every test run (not
   # just present as dead code in application.ex that nothing exercises).
   # Every mix test invocation already boots Letflow.Application once via
-  # ExUnit's normal app-start path, against config/test.exs's unreachable
-  # placeholder issuer (config :letflow, :oidc) — this test just inspects
-  # that already-running tree rather than starting anything itself, so it
-  # adds no wall-clock cost beyond a couple of in-VM lookups.
-  test "the OIDC provider-configuration worker is alive and registered under its configured name" do
-    %{provider_name: provider_name} = Application.fetch_env!(:letflow, :oidc) |> Map.new()
+  # ExUnit's normal app-start path — this test just inspects that
+  # already-running tree rather than starting anything itself, so it adds
+  # no wall-clock cost beyond a couple of in-VM lookups.
+  test "the OIDC ProviderRegistry is alive and registered under its own module name" do
+    pid = Process.whereis(Letflow.Oidc.ProviderRegistry)
 
-    pid = Process.whereis(provider_name)
-
-    assert is_pid(pid), "expected #{inspect(provider_name)} to be a registered, live process"
+    assert is_pid(pid), "expected Letflow.Oidc.ProviderRegistry to be a registered, live process"
     assert Process.alive?(pid)
   end
 
-  test "Letflow.Supervisor.Infrastructure supervises the OIDC worker as a real child, not just config-referenced" do
+  test "Letflow.Supervisor.Infrastructure supervises the OIDC ProviderRegistry as a real child, not just config-referenced" do
     # REQ-219 (design req219-supervision-layering.md §1.1) moved the OIDC
     # worker, along with the rest of the original flat 20-child list, one
     # level down from Letflow.Supervisor's own direct children into
@@ -37,31 +48,30 @@ defmodule Letflow.ApplicationTest do
 
     oidc_child =
       Enum.find(children, fn
-        {_id, _pid, _type, [Oidcc.ProviderConfiguration.Worker]} -> true
+        {_id, _pid, _type, [Letflow.Oidc.ProviderRegistry]} -> true
         _ -> false
       end)
 
-    assert {_id, pid, :worker, [Oidcc.ProviderConfiguration.Worker]} = oidc_child
+    # A DynamicSupervisor is its own child :supervisor type, not :worker.
+    assert {_id, pid, :supervisor, [Letflow.Oidc.ProviderRegistry]} = oidc_child
     assert is_pid(pid)
     assert Process.alive?(pid)
   end
 
-  test "the worker's issuer/name are sourced from config, not hardcoded, and match what booted" do
+  test "the deployment-wide oidc config (keycloak_base_url/client_id) is present and non-empty, not hardcoded" do
     oidc_config = Application.fetch_env!(:letflow, :oidc) |> Map.new()
 
-    # config/test.exs's documented placeholder (.invalid TLD, RFC 2606) —
-    # asserting the shape (config-sourced, present, non-empty) rather than
-    # pinning the exact placeholder string, so this test doesn't need to
-    # change if the placeholder value itself is ever swapped for another
-    # non-resolving placeholder.
-    assert %{issuer: issuer, provider_name: provider_name} = oidc_config
-    assert is_binary(issuer) and issuer != ""
-    assert is_atom(provider_name)
-
-    # The live worker process is registered exactly under the name config
-    # supplied — proves application.ex actually read this config into the
-    # child spec rather than a coincidentally-matching literal.
-    assert Process.whereis(provider_name)
+    # REQ-370 §6: :issuer/:provider_name are retired -- keycloak_base_url is the new
+    # per-realm-issuer-derivation source (Letflow.Oidc.ProviderRegistry.start_worker/2
+    # builds "#{keycloak_base_url}/realms/#{realm}" from it, lazily, per realm --
+    # covered directly by provider_registry_multi_realm_test.exs). client_id/
+    # signing_algs remain genuinely deployment-wide (not per-realm), unchanged by
+    # REQ-370. Asserting shape (config-sourced, present, non-empty) rather than
+    # pinning the exact placeholder string, so this test doesn't need to change if
+    # the placeholder value itself is ever swapped for another non-resolving one.
+    assert %{keycloak_base_url: keycloak_base_url, client_id: client_id} = oidc_config
+    assert is_binary(keycloak_base_url) and keycloak_base_url != ""
+    assert is_binary(client_id) and client_id != ""
   end
 
   # REQ-128: lib/letflow/application.ex's start/2 reads

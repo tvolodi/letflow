@@ -121,10 +121,14 @@ defmodule Letflow.Plugs.AuthPipelineTest do
 
   defp insert_bpm_default_tenant! do
     # "bpm-default" is the one realm Letflow.Oidc.TokenVerifierDouble's fixed sentinel
-    # token always claims — reused here safely: every test seeds its own tenant row
-    # (and now its own tenant schema) with a unique slug, so concurrently-run tests
-    # would not collide even under async — this file no longer runs async purely
-    # because of the :auto-mode requirement above, not because of this realm reuse.
+    # token always claims. REQ-370's seed migration
+    # (priv/repo/migrations/20260918173137_seed_default_tenant.exs) now permanently
+    # binds exactly one tenant to idp_realm_id "bpm-default" (partial unique index) —
+    # this test needs a FRESH, exclusively-owned tenant + empty schema under that same
+    # realm, so the migration-seeded binding is temporarily displaced first (restored
+    # via on_exit/1) — see Letflow.Support.BpmDefaultRealmDisplacement's moduledoc.
+    Letflow.Support.BpmDefaultRealmDisplacement.displace!()
+
     insert_tenant!(%{
       slug: unique_slug("bpm-default-tenant"),
       display_name: "BPM Default Realm Tenant",
@@ -269,6 +273,12 @@ defmodule Letflow.Plugs.AuthPipelineTest do
       # A bpm-default-claiming token, but deliberately no tenant bound to bpm-default at
       # all -- resolve_tenant_by_realm/1 returns {:error, :not_found}, so the pipeline
       # never reaches the realm-ownership guard or JIT provisioning in the first place.
+      # REQ-370's seed migration otherwise guarantees a tenant IS always bound to
+      # "bpm-default" -- temporarily displaced here (restored via on_exit/1) so this
+      # test can still construct the "genuinely unbound" case it needs. See
+      # Letflow.Support.BpmDefaultRealmDisplacement's moduledoc.
+      Letflow.Support.BpmDefaultRealmDisplacement.displace!()
+
       other_tenant = insert_tenant_for_realm!(unique_realm("unrelated"))
       {:ok, other_schema} = TenantProvisioning.schema_name_for_tenant(other_tenant.id)
 

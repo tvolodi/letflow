@@ -148,3 +148,54 @@ wired in, `Oidcc.ProviderConfiguration.Worker` needs a supervised child spec in
 per-realm JIT config invariant in `src/oidc/jit_provisioning.zig`). No `mix.exs`
 dependency and no `application.ex` change are made as part of this decision record —
 see `docs/migration/stage-1-identity.md` for where that work belongs.
+
+## Addendum — 2026-09-18 (REQ-370, REVIEWER sign-off)
+
+REQ-370 (`lib/letflow/design/req370-multi-issuer-oidc-verification.md`) is the
+requirement that actually executes the per-realm supervision shape this decision
+record's own S1-deferral paragraph above predicted ("likely one per configured
+realm/issuer"). Filed as an addendum here, not as a new decision record, because
+REQ-370 does not introduce a policy in tension with anything decided above — it
+resolves the one thing this record deliberately left open at the time
+(`Oidcc.ProviderConfiguration.Worker` was, until REQ-370, still wired as a single
+statically-configured worker for one issuer; multi-issuer was foreshadowed but never
+built). Recorded here per REQ-370's own design §7 recommendation and REVIEWER's
+independent agreement with it (WF02-REQ370-20260918).
+
+**What REQ-370 actually built, as the concrete policy this record only sketched
+before:**
+
+- **Trust source:** the `tenants` table (`idp_realm_id`, REQ-015/REQ-019) is the sole
+  source of truth for which OIDC issuers are trusted — never a static config list,
+  never "accept any issuer." A token's claimed (unverified) realm is resolved against
+  a live tenant row **before** its signature is ever checked against that realm's
+  JWKS, and this resolution is re-run fresh on every single verification call, never
+  cached as a standing trust fact. This is what makes revocation (a tenant's
+  `idp_realm_id` binding being removed) take effect immediately on the next request,
+  independent of whatever provider-worker processes happen to still be alive.
+- **Supervision shape:** `Letflow.Oidc.ProviderRegistry`, a `DynamicSupervisor`
+  (`strategy: :one_for_one`), owns one `Oidcc.ProviderConfiguration.Worker` per
+  *trusted* realm, named via `{:via, Registry, {Letflow.Registry, {:oidc_provider,
+  realm}}}` — reusing the generic `Letflow.Registry` already supervised as
+  infrastructure child #4, rather than a second `Registry` process. Workers start
+  lazily, on first verification attempt against a realm (never enumerated eagerly at
+  boot), so a newly created tenant's realm becomes verifiable without an application
+  restart. No worker-teardown mechanism exists yet — an idle worker for a realm whose
+  tenant row is later deleted persists for the node's lifetime; REVIEWER's assessment
+  (same sign-off) is that this is an acceptable bounded trade-off for now (worker
+  count is bounded by legitimate tenant count, not attacker-reachable, since
+  `ensure_started/1` never starts a worker for an unresolved realm) and not a defect
+  blocking this addendum — flagged as a candidate follow-up requirement once tenant
+  deletion becomes a real operation.
+- **One shared Keycloak host, N realms:** `config/runtime.exs`'s `:oidc, :issuer` is
+  retired as a trust source and replaced by `:oidc, :keycloak_base_url`, one Keycloak
+  deployment shared across every tenant realm (`tenants.idp_realm_id` stores a bare
+  realm slug, not a full issuer URL — there is no per-tenant host column). A future
+  tenant needing a genuinely separate IdP host is out of this scope and would need a
+  schema change; not assumed impossible, just not built.
+
+This addendum does not change 0002's original decision (`ueberauth_oidcc`/`oidcc`
+remains the token-verification/JWKS-caching library) — it records that the
+multi-issuer supervision policy that decision explicitly deferred is now built, and
+states what it turned out to be, for future readers who would otherwise only find the
+prediction above and not its resolution.

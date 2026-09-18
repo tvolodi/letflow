@@ -1,0 +1,234 @@
+run_id: WF02-REQ370-20260918
+requirement_ids: [REQ-370]
+agent: TEST-RUNNER
+step: "WF-02 Step 4 -- full suite run for REQ-370 (multi-issuer OIDC token verification, SECURITY-CRITICAL)"
+branch: feature/WF02-REQ370-20260918
+commit_under_test: 869576cb
+date: 2026-09-18
+
+environment_constraint_note: >
+  This workstation had hit too_many_connections twice earlier today from the
+  default 16-way partition count leaving orphaned erl.exe processes holding
+  Postgres connections after OOM kills. Before running, docker ps showed both
+  containers healthy and `SELECT count(*) FROM pg_stat_activity` returned 6
+  (well under 100) -- no orphaned-process cleanup was needed. Ran with
+  TEST_PARALLEL_N=4 (env override, well under the 16-CPU default) per the
+  dispatch's explicit mitigation instruction.
+
+diff_scope:
+  files_changed_main_to_head:
+    - "lib/letflow/oidc/provider_registry.ex (new, 111 lines)"
+    - "lib/letflow/oidc/token_verifier.ex (modified, +40/-)"
+    - "lib/letflow/oidc/token_verifier/oidcc.ex (modified, +124/-, incl. TEST-DESIGNER's verify_signature/2 bugfix, re-reviewed)"
+    - "lib/letflow/plugs/auth_pipeline.ex (modified, +8/-)"
+    - "lib/letflow/supervisor/infrastructure.ex (modified: static Oidcc.ProviderConfiguration.Worker child replaced by Letflow.Oidc.ProviderRegistry DynamicSupervisor)"
+    - "priv/repo/migrations/20260918173137_seed_default_tenant.exs (new: seeds a permanent tenants row, slug/idp_realm_id = 'bpm-default')"
+    - "test/letflow/oidc/provider_registry_multi_realm_test.exs (new, 11 tests, AC2-AC5)"
+    - "test/support/configurable_token_verifier_double.ex (restored) + 3 dependents"
+    - "test/letflow/integration/keycloak_auth_pipeline_test.exs (new, 7 tests, live-Keycloak-gated)"
+    - "docs/requirements.yaml (REQ-370 entry added, includes a malformed '# impl_order: 714' comment line)"
+  note: >
+    git diff --stat main..HEAD -- lib/ priv/ shows 7 files, 979
+    insertions/52 deletions. No test files under test/letflow/plugs/,
+    test/letflow/identity_test.exs, test/letflow/application_test.exs,
+    test/letflow/router_test.exs, test/letflow/supervisor/infrastructure_test.exs,
+    test/letflow/routers/req077_promotion_pipeline_test.exs, or
+    test/letflow/tenant_provisioning/column_promotion_test.exs were touched by
+    any commit on this branch (git log main..HEAD -- <those paths> is empty).
+
+full_suite_run:
+  command: "TEST_PARALLEL_N=4 scripts/test_parallel.sh"
+  partitions: 4
+  partition_source: "env override (TEST_PARALLEL_N=4), not nproc (host has 16 CPUs)"
+  result: FAIL
+  actual_output: |
+    test_parallel: N=4 (source: env override)
+    test_parallel: pre-compiling MIX_ENV=test (single compile, before any partition launches)
+    test_parallel: TEST_POOL_SIZE=20 (computed: N=4, max_connections=100, superuser_reserved=3, headroom=10, nonpool_reserve=5)
+    test_parallel: seeding 4 per-partition build paths from _build/test (sequential)
+    test_parallel: partition logs in /tmp/letflow_test_parallel.TRdShu
+    test_parallel: seeding+migrating 4 partition databases (capped at 4 concurrent)
+    test_parallel: all 4 partition databases created+migrated
+    test_parallel: TEST_PARALLEL_GROUP=tp127652 (shared by all 4 partitions)
+    partition 1: 1241 tests, 2 properties, 6 failures, exit 2
+    partition 2: 1044 tests, 2 properties, 6 failures, exit 2
+    partition 3: 1243 tests, 0 properties, 4 failures, exit 2
+    partition 4: 913 tests, 2 properties, 7 failures, exit 2
+    ---
+    combined: 4441 tests, 6 properties, 23 failures (4424/4447 passed)
+    test_parallel: preserving /tmp/letflow_test_parallel.TRdShu (exit_code=1)
+    real 25m33.792s
+  combined_totals: "4447 total (4441 tests + 6 properties), 4424 passed, 23 failed, script exit 1"
+
+acceptance_surface_targeted_run:
+  command: >
+    mix test test/letflow/oidc/provider_registry_multi_realm_test.exs
+    test/letflow/integration/keycloak_auth_pipeline_test.exs ; mix test
+    test/letflow/api/authorization_ac9_test.exs
+    test/letflow/api/authorization_test.exs
+    test/letflow/plugs/auth_pipeline_configurable_verifier_test.exs
+  purpose: >
+    REQ-370's own acceptance surface, run standalone to isolate it from the
+    23 full-suite failures below (none of which are in these files).
+  result: PASS
+  actual_output: |
+    Result: 11 passed, 7 excluded   # provider_registry_multi_realm_test.exs (AC2-AC5) + keycloak_auth_pipeline_test.exs (live-Keycloak-gated, correctly excluded, matches TEST-DESIGN-VALIDATOR's own "0 tests, 7 excluded" finding)
+    Result: 108 passed              # authorization_ac9_test.exs + authorization_test.exs + auth_pipeline_configurable_verifier_test.exs (the 3 ConfigurableTokenVerifierDouble dependents)
+  combined_totals: "119 passed, 0 failed, 7 excluded (as expected) across REQ-370's entire own test surface"
+
+failure_attribution:
+  failures_observed: 23
+  method: >
+    Per core-directives.md's "Failure Attribution Is Structural, Never By
+    Count-Matching" -- each failure below is attributed by either
+    diff-presence (a file this branch's commits changed directly explains
+    the failure) or diff-absence + merge-base reproduction (the failing
+    test file was never touched by this branch and the offending data
+    predates this branch on main), never by guessing from the count alone.
+
+  groups:
+    - id: A
+      count: 12
+      cause: >
+        REQUIREMENT-CAUSED, needs rework. New migration
+        priv/repo/migrations/20260918173137_seed_default_tenant.exs (diff-
+        present, this branch only) permanently inserts a tenants row with
+        idp_realm_id = 'bpm-default' into the shared, non-sandboxed test
+        Postgres DB (Ecto.Migrator runs once per partition DB, outside any
+        per-test sandbox transaction). Five pre-existing test files --
+        unmodified by this branch (git log main..HEAD confirms no commits
+        touch them) -- each independently insert their OWN tenant row with
+        idp_realm_id: "bpm-default", a value they assumed (correctly, until
+        now) no other row could hold; identity_test.exs's own comment
+        documents this assumption explicitly: "per test/specs/REQ-019.md,
+        'seeded' means TEST-DESIGNER-constructed, not a real
+        priv/repo/seeds.exs row." All 12 fail identically with
+        Ecto.InvalidChangesetError, idp_realm_id "has already been taken",
+        constraint tenants_idp_realm_id_partial_index.
+      affected_tests:
+        - "Letflow.IdentityTest: resolve_tenant_by_realm/1 resolves the seeded default tenant (bpm-default) (test/letflow/identity_test.exs:520)"
+        - "Letflow.IdentityTest: resolve_realm_by_tenant/1 resolves the seeded default tenant's (bpm-default) idp_realm_id (test/letflow/identity_test.exs:527)"
+        - "Letflow.Plugs.AuthPipelineTest: AC2 a well-formed but invalid/unverifiable bearer token is rejected 401 (test/letflow/plugs/auth_pipeline_test.exs:220)"
+        - "Letflow.Plugs.AuthPipelineTest: AC2 none of the above rejected requests write any user row anywhere (test/letflow/plugs/auth_pipeline_test.exs:233)"
+        - "Letflow.Plugs.AuthPipelineTest: AC1 a valid bearer token flows through the full pipeline (test/letflow/plugs/auth_pipeline_test.exs)"
+        - "Letflow.Plugs.AuthPipelineTest: AC1 a second request with the same valid token resolves to the same user_id (test/letflow/plugs/auth_pipeline_test.exs)"
+        - "Letflow.Plugs.AuthPipelineTest: AC4 AuthPipeline's call/2 never reaches JIT provisioning when tenant resolution fails (test/letflow/plugs/auth_pipeline_test.exs)"
+        - "Letflow.Plugs.ApiPipelineIntegrationTest: REQ-071 AC5 concurrent tenant-status isolation (test/letflow/plugs/api_pipeline_integration_test.exs:204)"
+        - "Letflow.Plugs.ApiPipelineIntegrationTest: REQ-071 AC4 migrating tenant rejects writes (test/letflow/plugs/api_pipeline_integration_test.exs:127)"
+        - "Letflow.Plugs.ApiPipelineIntegrationTest: REQ-071 AC2 valid token reaches the stubbed handler (test/letflow/plugs/api_pipeline_integration_test.exs:96)"
+        - "Letflow.Plugs.ApiPipelineIntegrationTest: REQ-071 AC4 migrating tenant does not block reads (test/letflow/plugs/api_pipeline_integration_test.exs:152)"
+        - "Letflow.Routers.Req077PromotionPipelineTest: design §12.9 the :Unknown gate denies a real non-admin caller (test/letflow/routers/req077_promotion_pipeline_test.exs:1027)"
+      responsible_agent: TEST-DESIGNER
+      recommended_fix: >
+        Update the 5 affected pre-existing test files' fixture helpers
+        (insert_bpm_default_tenant!/insert_default_tenant!/
+        insert_tenant_for_realm!("bpm-default")) to reuse the now-real
+        seeded tenant row instead of inserting a second one under the same
+        idp_realm_id, or to use a distinct realm string where the seeded
+        row's specific identity isn't the point of the test. This is an
+        intended, designed behavior change (the migration's own moduledoc
+        justifies it against REQ-019's OQ-3), not an application bug --
+        ELIXIR-DEV's code is not at fault.
+
+    - id: B
+      count: 5
+      cause: >
+        REQUIREMENT-CAUSED, needs rework. lib/letflow/supervisor/infrastructure.ex
+        (diff-present, this branch only) replaced the single static
+        {Oidcc.ProviderConfiguration.Worker, ...} supervision-tree child
+        with Letflow.Oidc.ProviderRegistry (a DynamicSupervisor starting
+        per-realm workers lazily). Four pre-existing test files --
+        unmodified by this branch -- hardcode the old single-static-worker
+        shape.
+      affected_tests:
+        - "Letflow.Supervisor.InfrastructureTest: owns the 19 expected children, in order"
+        - "Letflow.ApplicationTest: the worker's issuer/name are sourced from config, not hardcoded, and match what booted"
+        - "Letflow.ApplicationTest: the OIDC provider-configuration worker is alive and registered under its configured name"
+        - "Letflow.ApplicationTest: Letflow.Supervisor.Infrastructure supervises the OIDC worker as a real child, not just config-referenced"
+        - "Letflow.RouterTest: REQ-071 AC3 GET /health returns 200 while Letflow.Oidc.DefaultProvider is dead"
+      responsible_agent: TEST-DESIGNER
+      recommended_fix: >
+        Update these 4 files' expectations to match the new
+        ProviderRegistry DynamicSupervisor shape (child count/position,
+        how to assert a worker is alive per-realm rather than by one fixed
+        registered name). TEST-DESIGN-VALIDATOR's PASS gate covered AC2-AC5
+        of the new tests but did not check this supervision-tree shape
+        change against the pre-existing suite; a broader regression check
+        would have caught this before Step 4.
+
+    - id: C
+      count: 3
+      cause: >
+        REQUIREMENT-CAUSED, needs rework. docs/requirements.yaml's own
+        REQ-370 entry (added on this branch) contains a malformed
+        registration line: "# impl_order: 714" (commented out, not a real
+        `impl_order: N  # comment` key as every other entry in the file
+        uses, e.g. line 218 `impl_order: 4  # letflow-queue task id`). The
+        live registration-check tooling (mix letflow.check) reads the real
+        docs/requirements.yaml and flags this as an unrecognised
+        registration form.
+      affected_tests:
+        - "Mix.Tasks.Letflow.CheckDeferralStalenessTest: T-LIVE-* T-REG-STILL-GREEN"
+        - "Mix.Tasks.Letflow.CheckRequirementsRegistrationTest: T-LIVE-INVARIANTS neither and unclassified are both empty"
+        - "Mix.Tasks.Letflow.CheckRequirementsRegistrationTest: T-LIVE-GREEN the real file produces zero violations"
+      responsible_agent: DOC-UPDATER
+      recommended_fix: >
+        Fix docs/requirements.yaml line 27104: either give REQ-370 a real
+        `impl_order: N  # letflow-queue task id` key or remove the stray
+        comment line entirely if no queue task id applies yet.
+
+    - id: D
+      count: 2
+      cause: >
+        PRE-EXISTING, unrelated to REQ-370. test/docs/requirement_status_invariants_test.exs
+        A4a/A5 fail on docs/status/requirement_status.v19.yaml line 765:
+        `req: ISS-0712` is not in the legal req/event vocabulary
+        (REQ-NNN | SCOPE-CHANGE). Diff-absence: this branch's only commit
+        touching that file (7639a6cf) appended a single "started" event;
+        the offending ISS-0712 line was written by commit bf989a89
+        ("WF03-ISS0712-20260918", agent ORCH), which is an ancestor of this
+        branch's merge-base with main (c219c7cd) -- i.e. it predates this
+        branch entirely and belongs to a sibling WF-03 issue-fix run, not
+        REQ-370.
+      affected_tests:
+        - "Letflow.Docs.RequirementStatusInvariantsTest: A5 the on-disk vocabulary-anomaly set equals the index's declared set exactly"
+        - "Letflow.Docs.RequirementStatusInvariantsTest: A4a every entry in every volume uses the documented req/event vocabulary"
+      responsible_agent: "forward per ISSUE_QUEUE.md (pre-existing, unrelated -- not this run's to fix; TEST-RUNNER does not allocate an issue id itself)"
+
+    - id: E
+      count: 1
+      cause: >
+        LIKELY PRE-EXISTING / test-isolation flakiness, unrelated to
+        REQ-370's diff. Letflow.TenantProvisioning.ColumnPromotionTest AC1
+        asserts register_column_promotion/4 with :all registered exactly
+        [tenant_a, tenant_b] (2 ids) but found 4 ids on disk -- 2 extra
+        tenant rows (89a1a5a6-..., ed5ae99c-...) not accounted for by this
+        test's own setup. test/letflow/tenant_provisioning/column_promotion_test.exs
+        was not touched by any commit on this branch. This file uses
+        Letflow.DataCase async: false with real commits (not per-test
+        sandbox isolation, same pattern as group A's files), so an :all
+        query is inherently exposed to any tenant row left by a
+        concurrently-scheduled test in the same partition process -- a
+        pre-existing test-isolation gap in how :all-scoped queries are
+        tested, not something this branch's diff introduces. Could not
+        pin an exact external mechanism (unlike group D) so flagging with
+        lower confidence than D.
+      affected_tests:
+        - "Letflow.TenantProvisioning.ColumnPromotionTest: AC1 DDL applied to every tenant, verified directly against Postgres (test/letflow/tenant_provisioning/column_promotion_test.exs:172)"
+      responsible_agent: "forward per ISSUE_QUEUE.md for investigation (pre-existing/flaky, unrelated to this run's own acceptance criteria)"
+
+overall_verdict: >
+  FAIL. Full suite: 4424/4447 passed, 23 failures, script exit 1 across 4
+  partitions (TEST_PARALLEL_N=4, env override per this workstation's
+  documented memory/connection constraint). REQ-370's OWN acceptance
+  surface is clean: provider_registry_multi_realm_test.exs (11/11, AC2-AC5)
+  + keycloak_auth_pipeline_test.exs (0 tests, 7 excluded, matches
+  TEST-DESIGN-VALIDATOR's own finding) + the 3 ConfigurableTokenVerifierDouble
+  dependents (108/108) all pass standalone with zero failures. All 23
+  full-suite failures are regressions in PRE-EXISTING test files this
+  branch never touched, caused by this branch's own application/migration/
+  docs changes interacting with those files' fixed assumptions (groups A/B/C,
+  20 failures, REQUIREMENT-CAUSED, rework required) or are unrelated
+  pre-existing issues (groups D/E, 3 failures, forward per ISSUE_QUEUE.md).
+
+next_action: "Route to TEST-DESIGNER (groups A, B -- 17 failures) and DOC-UPDATER (group C -- 3 failures) for rework; groups D (2) and E (1) forward per ISSUE_QUEUE.md as pre-existing/unrelated. Do NOT route to RELEASE-VALIDATOR until groups A/B/C are fixed and a clean full-suite run is produced."

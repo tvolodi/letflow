@@ -11,7 +11,13 @@
  *   component never calls useTenantContext() (static import-scan, since the
  *   module itself is never imported by this file — see below).
  * TC-REQ369-03: AC2 — tenant-count tile renders the mocked
- *   tenantsApi.list()/useQuery `total`.
+ *   tenantsApi.list()/useQuery `count`.
+ * TC-ISS0711-05: regression for ISS-0711 — mocks the exact real backend
+ *   response shape ({items, next_cursor, count}, no `total` key at all) and
+ *   asserts the tile renders that real count. This is the coverage gap
+ *   ISS-0711 names: REQ-369's original AC2 test mocked a fictional `total`
+ *   field the real API never sends and so could not catch the component
+ *   reading it. See lib/letflow/design/iss0711-tenant-count-field-mismatch.md.
  * TC-REQ369-04: AC3 — a non-PLATFORM_ADMIN session is redirected to
  *   /instances instead of seeing platform content (mirrors
  *   HealthDashboardPage.test.tsx's TC-ISS0532-11 idiom exactly).
@@ -74,9 +80,8 @@ const NON_ADMIN_SESSION = { ...PLATFORM_ADMIN_SESSION, roles: ['PROCESS_OPERATOR
 
 const TENANT_LIST: TenantListResponse = {
   items: [],
-  total: 37,
-  limit: 20,
-  offset: 0,
+  next_cursor: null,
+  count: 37,
 }
 
 function queryResult(overrides: Record<string, unknown>) {
@@ -128,13 +133,27 @@ describe('REQ-369 — PlatformDashboardPage', () => {
     expect(src).not.toMatch(/useTenantContext/)
   })
 
-  it('TC-REQ369-03: tenant-count tile renders the count sourced from tenantsApi.list()\'s mocked total', () => {
+  it('TC-REQ369-03: tenant-count tile renders the count sourced from tenantsApi.list()\'s mocked count', () => {
     mockUseAuth.mockReturnValue({ session: PLATFORM_ADMIN_SESSION } as unknown as ReturnType<typeof useAuth>)
     mockUseQuery.mockReturnValue(queryResult({ data: TENANT_LIST }) as unknown as ReturnType<typeof useQuery>)
 
     render(<PlatformDashboardPage />)
 
     expect(screen.getByTestId('tile-tenant-count')).toHaveTextContent('37')
+  })
+
+  it('TC-ISS0711-05: renders the real count from the actual backend envelope shape (no `total` key present)', () => {
+    mockUseAuth.mockReturnValue({ session: PLATFORM_ADMIN_SESSION } as unknown as ReturnType<typeof useAuth>)
+    const realShapeResponse: TenantListResponse = {
+      items: [],
+      next_cursor: null,
+      count: 2,
+    }
+    mockUseQuery.mockReturnValue(queryResult({ data: realShapeResponse }) as unknown as ReturnType<typeof useQuery>)
+
+    render(<PlatformDashboardPage />)
+
+    expect(screen.getByTestId('tile-tenant-count')).toHaveTextContent('2')
   })
 
   it('TC-REQ369-04: a non-PLATFORM_ADMIN session is redirected to /instances instead of seeing platform content', () => {

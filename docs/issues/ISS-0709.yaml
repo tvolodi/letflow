@@ -125,3 +125,17 @@ pipeline_log:
       (not hand-traced) to confirm this genuinely reproduces the
       documented deferred gap, not an already-safe body. mix test:
       59/59. mix letflow.check.test: exit 0, clean.
+  - step: TEST-DESIGN-VALIDATOR
+    at: "2026-09-18T02:35:00Z"
+    result: >
+      PASS (second dispatch attempt after a first instance died silently
+      mid-run without reporting, unrelated environment issue -- no
+      finding from that attempt). Independently verified the AST claim
+      by running EarmarkParser.as_ast/2 against the real test input:
+      confirmed two sibling li nodes each with one text child.
+      Independently confirmed the pre-fix concatenation would have
+      matched @raw_html_tag_pattern (genuine discriminating test, not
+      vacuous). Own mix test run: 59/59. Own mix letflow.check.test run
+      (properly backgrounded/polled): exit 0, combined 4391/4391, no
+      ISS-0069 warning anywhere in the full log. Scope confirmed: 1 file
+      changed.

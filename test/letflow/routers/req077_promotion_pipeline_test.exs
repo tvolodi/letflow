@@ -993,6 +993,13 @@ defmodule Letflow.Routers.Req077PromotionPipelineTest do
     defp insert_tenant_for_realm!(realm) do
       Ecto.Adapters.SQL.Sandbox.mode(Letflow.Repo, :auto)
 
+      # REQ-370's seed migration permanently binds exactly one tenant to
+      # idp_realm_id "bpm-default" (partial unique index) -- this test needs a
+      # FRESH, exclusively-owned tenant under that same realm, so the
+      # migration-seeded binding is temporarily displaced first (restored via
+      # on_exit/1). See Letflow.Support.BpmDefaultRealmDisplacement's moduledoc.
+      if realm == "bpm-default", do: Letflow.Support.BpmDefaultRealmDisplacement.displace!()
+
       tenant =
         %Letflow.Identity.Tenant{}
         |> Letflow.Identity.Tenant.create_changeset(

@@ -75,6 +75,15 @@ defmodule Letflow.Plugs.ApiPipelineIntegrationTest do
   end
 
   defp insert_tenant_for_realm!(realm) do
+    # REQ-370's seed migration permanently binds exactly one tenant to
+    # idp_realm_id "bpm-default" (partial unique index) -- every test in this file
+    # that requests that specific realm needs a FRESH, exclusively-owned tenant +
+    # empty schema under it (it mutates status, asserts exact Repo-query counts,
+    # etc.), so the migration-seeded binding is temporarily displaced first
+    # (restored via on_exit/1) when `realm` is literally "bpm-default". See
+    # Letflow.Support.BpmDefaultRealmDisplacement's moduledoc.
+    if realm == "bpm-default", do: Letflow.Support.BpmDefaultRealmDisplacement.displace!()
+
     insert_tenant!(%{
       slug: unique_slug(),
       display_name: "API Pipeline Integration Test Tenant",

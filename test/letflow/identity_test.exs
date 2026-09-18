@@ -93,16 +93,30 @@ defmodule Letflow.IdentityTest do
     |> Repo.insert!()
   end
 
-  # The one fixture deliberately using the literal "bpm-default" reserved slug/realm —
-  # per test/specs/REQ-019.md, "seeded" means TEST-DESIGNER-constructed, not a real
-  # priv/repo/seeds.exs row. oidc_mode is irrelevant to the pinning rule itself (it's
-  # unconditional), so :enabled is used here without loss of generality.
+  # REQ-370 (priv/repo/migrations/20260918173137_seed_default_tenant.exs) closed
+  # REQ-019's own previously-flagged OQ-3 ("no priv/repo/seeds.exs and no real
+  # default-tenant row exists anywhere") by adding a real, idempotent, permanent seed
+  # migration that binds exactly one tenant to idp_realm_id "bpm-default" (partial
+  # unique index enforces at most one). This helper's own doc comment used to say
+  # "'seeded' means TEST-DESIGNER-constructed, not a real priv/repo/seeds.exs row" --
+  # that is no longer true, and inserting a SECOND row under the same idp_realm_id
+  # now violates tenants_idp_realm_id_partial_index unconditionally (the row from the
+  # migration is real, committed Postgres state, visible even inside this test's own
+  # sandboxed transaction under normal READ COMMITTED semantics). So this helper now
+  # reuses the real migration-seeded row instead of inserting a duplicate -- both
+  # call sites below (resolve_tenant_by_realm/1, resolve_realm_by_tenant/1) only need
+  # SOME tenant genuinely bound to "bpm-default", not one this test exclusively owns.
   defp insert_default_tenant! do
-    insert_tenant!(%{
-      slug: "bpm-default",
-      display_name: "Default Tenant",
-      idp_realm_id: "bpm-default"
-    })
+    # Reads under the same mutex Letflow.Support.BpmDefaultRealmDisplacement's other
+    # callers (auth_pipeline_test.exs/api_pipeline_integration_test.exs/
+    # req077_promotion_pipeline_test.exs) hold while they temporarily displace this
+    # binding for their own exclusive use -- without it, this read can land in the
+    # window between one of those tests' Repo.delete!/1 and its on_exit-deferred
+    # restore and raise Ecto.NoResultsError (reproduced live while fixing this; see
+    # that module's own moduledoc "Mutual exclusion" section for the full story).
+    Letflow.Support.BpmDefaultRealmDisplacement.with_lock(fn ->
+      Repo.get_by!(Tenant, idp_realm_id: "bpm-default")
+    end)
   end
 
   defp identity_context(overrides \\ %{}) do

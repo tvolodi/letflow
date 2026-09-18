@@ -3914,9 +3914,11 @@ volumes:
     path: docs/status/requirement_status.v19.yaml
     status: current
     opened: 2026-09-17
-    entries: 18
+    entries: 19
     note: >
-      Incremented to 18 by DOC-UPDATER's own REQ-369 revised-event append
+      Incremented to 19 by DOC-UPDATER's own ISS-0716 SCOPE-CHANGE
+      done-event append (WF03-ISS0716-20260918). Previously incremented to
+      18 by DOC-UPDATER's own REQ-369 revised-event append
       (WF02-REQ369-closeout-final-20260918 -- updated REQ-369's
       close_out_note in docs/requirements.yaml with the newest evidence,
       test/uat-reports/uat-2026-09-18-WF02-REQ369-AC6AC7-final-20260918.yaml;

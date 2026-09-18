@@ -66,7 +66,52 @@ related:
   - ISS-0580
 queue_ref: Q-716
 github_ref: GH-1534
-status: open
+status: resolved
+resolution_note: >
+  WF03-ISS0716-20260918 complete. Full pipeline PASSed: CODE-DESIGNER/
+  CODE-DESIGN-VALIDATOR (design:
+  lib/letflow/design/iss0716-column-promotion-ac1-all-scope-flake.md),
+  ELIXIR-DEV, REVIEWER (confirmed the SECURITY-REVIEWER skip legitimate,
+  matching real ISS-0580 precedent -- no lib/letflow/ change, no
+  tenant-data path touched), TEST-DESIGNER (mutation-tested both new
+  assertions, no coverage gap found), TEST-RUNNER, RELEASE-VALIDATOR
+  ("Clearing ISS-0716 for DOC-UPDATER and merge."). Real commits: design
+  doc above, 6a849e17 (ELIXIR-DEV implementation), 0d520324 (TEST-RUNNER
+  verification report).
+
+  Fix is test-only, per diagnosis.recommended_fix above: AC1's exact-set-
+  equality assertion in
+  test/letflow/tenant_provisioning/column_promotion_test.exs replaced
+  with a containment check (tenant_a and tenant_b present among the
+  resolved ids, extras from concurrently-committed tenants tolerated),
+  and the downstream DDL-execution loop scoped to only tenant_a/
+  tenant_b's own rows with a length==2 sanity check, so an unrelated
+  leaked tenant row is never run through run_column_promotion/1. No
+  lib/letflow/ file touched -- register_column_promotion/4's :all scope
+  remains the unscoped, production-correct Repo.all it always was.
+
+  Root cause was a known ISS-0580-family residual hazard: SandboxAutoMode
+  (test/support/sandbox_auto_mode.ex) sets the DB sandbox to pool-wide
+  :auto mode for the duration of tenant provisioning, so any other
+  concurrently-scheduled test's writes committed during that window
+  commit for real -- ISS-0580's own design doc already flagged this
+  bounded window as still open, and this issue is that residual, not a
+  recurrence of ISS-0580's original unbounded leak.
+
+  Verification, stated with the same calibration RELEASE-VALIDATOR itself
+  used: TEST-RUNNER's report
+  (test/reports/report-20260918-WF03-ISS0716-20260918.yaml) ran 5/5 solo
+  repeats of the file plus 3 independent full concurrent-suite runs (2x
+  scripts/test_parallel.sh, 1x internal to mix letflow.check.test),
+  4436/4436 each; RELEASE-VALIDATOR's own independent recheck added a 4th
+  full concurrent-suite run, also 4436/4436, before clearing this issue --
+  4 independent full-concurrent-suite runs at 4436/4436 total, no
+  recurrence. This closes the known mechanism, verified empirically
+  across those 4 runs; it is not a permanent-elimination guarantee, since
+  the fix relaxes an assertion to tolerate concurrent commits rather than
+  removing SandboxAutoMode's pool-wide :auto-mode window itself -- that
+  window remains a standing, documented hazard for any other test relying
+  on exact-set assertions over unscoped queries.
 diagnosis:
   diagnosed_by: ISSUE-FIXER
   diagnosed_in_run: WF03-ISS0716-20260918

@@ -78,3 +78,49 @@ queue_release: >
   This is a pragmatic reuse of "blocked" alongside a local status of `open`
   rather than the doc's literal instrumented/no_defect pairing, for the
   reason stated in `diagnosis.note` above.
+followup:
+  checked_by: ORCH
+  checked_at: "2026-09-18T13:53:00Z"
+  note: >
+    Re-checked T-0132's landing status directly (real HTTP probe, not
+    assumed): GET https://auth.qa.bizdala.com/realms/bilimbaga/.well-known/openid-configuration
+    returns 200 with a real OIDC discovery document (issuer, token/auth/
+    userinfo/jwks endpoints all present); a control probe against a
+    deliberately nonexistent realm on the same host returns 404, ruling
+    out a wildcard/always-200 response. T-0132's Keycloak-realm half is
+    confirmed landed -- this is a genuinely new fact, not a re-derivation
+    of `diagnosis.note` above.
+
+    However, the letflow-side follow-up `diagnosis.next_action` describes
+    (POST /tenants with idp_realm_id = the new realm, POST
+    /solution-packs/install using a token minted from that realm, seed a
+    candidate account, re-run the UAT scenario) is STILL not actionable
+    from this execution environment, for a reason distinct from the
+    original T-0132 gap: no QA admin credential-fetch path exists here
+    (no ai-dala-infra checkout, no SSH access to the QA host to run
+    qa-login.sh or an equivalent) to obtain the real PLATFORM_ADMIN token
+    those POST calls require, and no path to seed or discover a candidate
+    identity inside the new bilimbaga realm either. This is the identical
+    credential-access gap independently found the same day for REQ-369's
+    AC6/AC7 (docs/requirements.yaml's REQ-369 entry, close_out_note) --
+    not a coincidence, but the same underlying environment limitation
+    surfacing on a second, unrelated item.
+
+    Left `status: open` and the queue release at `blocked` unchanged --
+    this finding narrows the blocker (Keycloak realm: done; credential
+    access: still the wall) without closing it. next_action below
+    supersedes the original T-0132-pending framing for whoever picks this
+    up next with real QA/ai-dala-infra access.
+  next_action: >
+    T-0132 (Keycloak realm) is done -- do not re-verify that again. What's
+    left, from a session with a real QA admin credential-fetch path: mint a
+    PLATFORM_ADMIN token via qa-login.sh (or equivalent) against QA's
+    bpm-default realm, POST /tenants with idp_realm_id set to the new
+    bilimbaga realm, POST /solution-packs/install (priv/packs/bilimbaga/
+    pack.json) using a token minted from that new realm, seed or locate at
+    least one candidate account inside the bilimbaga realm (check whether
+    T-0132 seeded one as part of realm provisioning -- if not, that's a
+    fresh companion infra task, not a letflow-side one), configure >=1
+    active exam, then dispatch UAT-RUNNER to re-run
+    test/fixtures/uat/scenarios/bilimbaga/candidate-timed-exam-autograde.yaml
+    against QA for the real AC4 result this issue requires.

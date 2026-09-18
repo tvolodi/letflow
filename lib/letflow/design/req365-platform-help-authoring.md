@@ -284,19 +284,28 @@ def update_draft(id, attrs)
       process_definition_id is ever set on a platform row today, so there is nothing to
       resolve a version against)."
 @spec publish(id :: Ecto.UUID.t()) ::
-        {:ok, PlatformHelpContent.t()} | {:error, :not_found} | {:error, :not_a_draft}
+        {:ok, PlatformHelpContent.t()}
+        | {:error, :not_found}
+        | {:error, :not_a_draft}
+        | {:error, Ecto.Changeset.t()}
 def publish(id)
 
 @doc "Re-confirms an already-:live row: bumps confirmed_at (real clock). :title/:body
       untouched, same contract as Letflow.Help.reconfirm/2."
 @spec reconfirm(id :: Ecto.UUID.t()) ::
-        {:ok, PlatformHelpContent.t()} | {:error, :not_found} | {:error, :not_live}
+        {:ok, PlatformHelpContent.t()}
+        | {:error, :not_found}
+        | {:error, :not_live}
+        | {:error, Ecto.Changeset.t()}
 def reconfirm(id)
 
 @doc "Withdraws an already-:live row back to :draft. Same live->draft legality as design
       req363 §2 / Letflow.Help.withdraw/2."
 @spec withdraw(id :: Ecto.UUID.t()) ::
-        {:ok, PlatformHelpContent.t()} | {:error, :not_found} | {:error, :not_live}
+        {:ok, PlatformHelpContent.t()}
+        | {:error, :not_found}
+        | {:error, :not_live}
+        | {:error, Ecto.Changeset.t()}
 def withdraw(id)
 
 @doc "Lists platform help content attached to screen_id. No opts/prefix parameter — this
@@ -304,6 +313,16 @@ def withdraw(id)
 @spec get_by_screen(screen_id :: String.t()) :: {:ok, [PlatformHelpContent.t()]}
 def get_by_screen(screen_id)
 ```
+
+`publish/1`, `reconfirm/1`, and `withdraw/1` each end in a `Repo.update/2` call against
+the row's changeset (status/`confirmed_at` transition), exactly like
+`Letflow.Help.publish/2`/`reconfirm/2`/`withdraw/2` do — so `{:error, Ecto.Changeset.t()}`
+belongs in all three `@spec`s for the same reason it already appears on `create_draft/1`
+and `update_draft/2`: a concurrent write, a stale row, or a constraint violation
+(e.g. a unique index) can turn that `Repo.update/2` into an error tuple even after the
+state-transition guard (`:not_a_draft`/`:not_live`) has already passed. This was omitted
+from the first pass of this design with no stated rationale; there is no genuine reason
+the platform path is immune to it, so it is restored rather than narrowed.
 
 No `get_by_process_definition_id/1` is specified for the platform module: since §3.3
 never lets a platform row carry a non-nil `process_definition_id`, such a query would

@@ -108,7 +108,7 @@ defmodule Letflow.HelpTest do
     definition
   end
 
-  defp draft_attrs(overrides \\ %{}) do
+  defp draft_attrs(overrides) do
     Map.merge(
       %{
         screen_id: unique_screen_id(),

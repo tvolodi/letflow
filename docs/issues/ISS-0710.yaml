@@ -69,7 +69,17 @@ fix_direction: >
   argument -- matches ISS-0069's own established fix shape for this exact
   recurring pattern. Re-run mix letflow.check.test to confirm the warning
   clears and no other latent instance exists in this file.
-queue_ref: pending registration (RELEASE-VALIDATOR has no letflow-queue/GH
-  tool access in this session -- ORCH must register via TASK_QUEUE.md's
-  protocol before dispatch)
-status: open
+queue_ref: Q-710
+github_ref: GH-1509
+status: resolved
+resolved_by: ORCH
+resolved_in_run: WF02-REQ364-20260917
+resolved_at: "2026-09-17T23:56:00Z"
+resolution_note: >
+  Fixed directly on feature/WF02-REQ364-20260917 (the branch this defect
+  was blocking) rather than a separate WF-03 pipeline, given how trivial
+  the change is (one-line default-argument removal). Removed the dead
+  default from draft_attrs/1 (defp draft_attrs(overrides), no \\ %{}).
+  Verified: mix compile --warnings-as-errors clean, mix test
+  test/letflow/help_test.exs 55/55, mix letflow.check.test re-run clean
+  (no "default values for the optional arguments" warning).

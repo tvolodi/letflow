@@ -27380,7 +27380,7 @@ requirements:
       subagent burned excessive resources and was force-stopped without
       committing; ORCH picked up its real, complete uncommitted fix-up work
       (7 test files + new test/support/bpm_default_realm_displacement.ex)
-      and committed it; a duplicate concurrent impl_order registration from
+      and committed it; a duplicate concurrent queue-registration field from
       main required a merge conflict resolution; ORCH found
       SECURITY-REVIEWER's gate missing from the branch history and
       dispatched it for real (see AC1 above); and ORCH found and fixed a

@@ -1150,3 +1150,31 @@ history:
       explicit dispatch instruction, given this workstation's known
       low-memory/local-test-reliability constraint -- no full local mix
       test run was performed in this recovery session.
+
+  - req: SCOPE-CHANGE
+    event: done
+    agent: ISSUE-FIXER
+    at: "2026-09-18T20:37:01Z"
+    note: >
+      WF03-ISS0715-close-20260919. Queue task 715, GH#1533. ORCH
+      independently confirmed ISS-0715 was already resolved by PR #1531
+      (fix(status): correct illegal req: ISS-0712 vocabulary value,
+      merge commit d812033a, branch commit 1757c6f8, merged
+      2026-09-18T18:27:08Z) roughly 20 minutes BEFORE this issue was even
+      filed (discovered_at 2026-09-18T18:47:00Z) -- PR #1531 already
+      corrected this volume's line 765 `req: ISS-0712` to
+      `req: SCOPE-CHANGE`. This issue's own proposed remedy (declare the
+      defect as a known_shape_anomalies entry) would have been incorrect
+      regardless: this volume is the CURRENT (open, not closed/pinned)
+      volume, and test/docs/requirement_status_invariants_test.exs's own
+      A5 assertion text mandates that a vocabulary defect in the CURRENT
+      volume is fixed in place, never declared away -- that mechanism is
+      reserved for CLOSED, digest-pinned volumes only. No code or test
+      change was made this run. Verification: `git show
+      main:docs/status/requirement_status.v19.yaml` lines 765-766 already
+      read `req: SCOPE-CHANGE` on main HEAD 21177271; `mix test
+      test/docs/requirement_status_invariants_test.exs` passes 20/20
+      (including A4a and A5) on this closeout branch
+      (fix/ISS-0715-close-20260919). This run closed out
+      docs/issues/ISS-0715.yaml (status: resolved) and GitHub issue #1533
+      only.

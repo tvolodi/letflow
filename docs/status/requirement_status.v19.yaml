@@ -362,3 +362,133 @@ history:
       (grepped for platform-dashboard/PlatformDashboard/role-conditional --
       no hits): it does not document per-role dashboard routing at all, so no
       update needed.
+
+  - req: REQ-364
+    event: done
+    agent: DOC-UPDATER
+    at: "2026-09-18T00:20:29Z"
+    note: >
+      WF-02 run WF02-REQ364-20260917 (queue task 687, GH#1439) complete,
+      RELEASE-VALIDATOR PASS on the Step 5 recheck (branch
+      feature/WF02-REQ364-20260917, commit 1d9ca6e4). Shipped:
+      Letflow.Help (lib/letflow/help.ex + lib/letflow/help/help_content.ex),
+      a tenant-scoped context module implementing REQ-363's already-
+      validated design exactly (create_draft/update_draft/publish/
+      reconfirm/withdraw/read), every write/read path passing `prefix:
+      prefix` explicitly, no HTTP route wired (deliberately deferred, per
+      this requirement's own NOT-IN-SCOPE clause -- stated explicitly, not
+      left ambiguous). CODE-DESIGNER was not re-invoked at the start
+      (implementing REQ-363's validated design directly); ISSUE-FIXER was
+      not involved (this is a REQ, not an ISS).
+
+      This was a genuinely long saga, almost entirely about the write-path
+      sanitization mechanism, and is recorded here in full because the
+      length reflects the pipeline's redundancy working as designed, not
+      churn. Sequence: (1) SECURITY-REVIEWER FAILed the first regex-based
+      implementation (step-03b-security-reviewer.json) -- reference-style
+      markdown link definitions bypassed the inline-link-only regex,
+      writing a live javascript: payload. ELIXIR-DEV fixed it
+      (c71ceb9e). (2) SECURITY-REVIEWER FAILed again
+      (step-03b-security-reviewer-rework1.json) -- a second, distinct
+      bypass via angle-bracket-wrapped CommonMark autolink syntax
+      ([label]: <url>), and explicitly escalated rather than requesting a
+      third regex patch, citing two rounds of the same bug class (a
+      regex denylist missing a valid CommonMark syntax variant) as
+      evidence toward design OQ-4's real-parser option. (3) REVIEWER's
+      own determination (step-03d-reviewer-determination.json)
+      constructed three further bypasses without changing the threat
+      model (backslash-escaping, HTML-entity encoding, embedded
+      whitespace/control characters -- the OWASP javascript: URI filter
+      bypass cheat sheet's standard techniques) and ruled the regex
+      denylist approach structurally unsound, not incomplete, routing
+      back to CODE-DESIGNER for a real AST-level parser rather than a
+      third regex round. (4) CODE-DESIGNER reworked design section 5.4 to
+      resolve OQ-4 to earmark_parser AST-level checking
+      (32c7ed99); CODE-DESIGN-VALIDATOR FAILed the first pass
+      (step-02b-code-design-validator-rework1.json) -- the design
+      misdescribed earmark_parser's actual AST shape for raw HTML as a
+      separately-tagged node kind, when the real discriminator is
+      meta[:verbatim] == true on an otherwise-ordinary-looking node; a
+      design-layer recurrence of the same "wrong discriminator" failure
+      mode. CODE-DESIGNER fixed it (23e7d766) and PASSed on the second
+      attempt, independently re-verified against earmark_parser's real
+      README/hexdocs/test suite. (5) REVIEWER signed off on the new
+      dependency (decision record
+      docs/migration/decisions/0036-earmark-parser-markdown-sanitization-dependency.md,
+      commit 77a1577b) -- Apache-2.0, pure Elixir, no NIF, actively
+      maintained, the parser ex_doc itself depends on. (6) ELIXIR-DEV
+      reimplemented against the AST-walk design (80d22e7a), finding and
+      closing two more real gaps beyond the design's own text (inline-
+      mixed raw HTML never tagged verbatim by the library; numeric HTML
+      entities and embedded whitespace/control characters in resolved
+      href/src not auto-decoded) -- flagged explicitly for review rather
+      than silently patched. (7) SECURITY-REVIEWER FAILed a third time
+      (step-03b-security-reviewer-rework2.json) with three more findings
+      on the new implementation: a case-sensitive numeric-entity-decode
+      bypass (uppercase &#X73; vs. the pattern's hardcoded lowercase x),
+      a raw HTML tag split across separate inline AST sibling nodes
+      (e.g. by **bold** or `code` interrupting the tag's own attribute
+      area) evading the per-leaf fallback scan, and an INV-8 bare-match
+      crash on realistic non-adversarial input (an unclosed backtick or
+      unclosed fenced code block, which EarmarkParser.as_ast/2's own
+      documented contract returns as {:error, ...} for, not a raised
+      exception) -- plus a non-blocking finding that the shared tenant
+      fixture's @expected_tenant_tables hadn't been updated for the new
+      help_content table, blocking even the round's own test-result
+      verification. ELIXIR-DEV fixed all four (32671e27); SECURITY-
+      REVIEWER PASSed on round four (96a6aa46, commit 4ede2cc9),
+      independently re-reproducing all three fixes plus a seventh-class
+      probe of the new flatten_plain_text/1 helper that found no new
+      bypass in either direction but did surface a real, one-directional
+      (over-restrictive only) false-positive: bare < / > used as
+      comparison/generic-type notation, split across paragraphs or inline
+      formatting, gets wrongly rejected as raw HTML because the
+      projection concatenates across the whole document with no
+      separator. That finding was filed as ISS-0709 (MINOR, open,
+      correctly left open -- not gating this requirement, per REVIEWER's
+      own determination) rather than fixed silently. REVIEWER then PASSed
+      (624a093a), confirming the AST-based mechanism sound and
+      registering ISS-0709 as the queued follow-up (queue task 709,
+      GH#1508).
+
+      TEST-DESIGNER (717ceb5d) found and closed a real partial gap in
+      existing coverage for AC4 (confirmed_for_definition_version): the
+      original tests exercised a fixed process-definition version
+      throughout, so reconfirm/2 merely replaying the stored value
+      instead of re-reading the process's actual current version would
+      have passed unnoticed. Added a test bumping the process
+      definition's version between publish and reconfirm and asserting
+      the new version is reflected; verified via mutation testing
+      (revert-and-confirm-only-the-new-test-fails, then revert the
+      mutant cleanly). TEST-DESIGN-VALIDATOR PASSed
+      (6d98011d), independently reproducing that exact mutation result.
+      TEST-RUNNER PASSed (2ec14151) on the full suite.
+
+      RELEASE-VALIDATOR's first independent recheck FAILed
+      (a3103ba0), filing ISS-0710 (MINOR): running this project's own
+      mix letflow.check.test convention (not merely mix test /
+      scripts/test_parallel.sh) surfaced a dead default argument on
+      test/letflow/help_test.exs's draft_attrs/1 helper -- an ISS-0069-
+      class recurrence (8th occurrence), a real warnings-as-errors
+      failure blocking AC5's own gate even though it changed nothing any
+      test actually exercised. Fixed directly on this branch rather than
+      a separate WF-03 pipeline given the triviality of the change
+      (5894bf71); ISS-0710 marked resolved. RELEASE-VALIDATOR's Step 5
+      recheck then PASSed (1d9ca6e4, this commit), independently
+      re-running mix letflow.check.test clean (8/8 partitions, combined
+      4387/4387) and mix compile --warnings-as-errors clean, and
+      verifying the fix directly in source.
+
+      docs/issues/ISS-0709.yaml (status: open, MINOR, a genuine follow-up
+      -- flatten_plain_text/1's cross-paragraph over-rejection) and
+      docs/issues/ISS-0710.yaml (status: resolved, fixed on this branch)
+      both confirmed left in their correct current states by this step,
+      neither touched here. README.md checked (grepped "Help"/"context
+      module"/the "What's here today" and "Running it" sections): it
+      does not enumerate individual context modules and no HTTP route
+      was added (deliberately deferred per this requirement's own scope
+      clause), so no README update is needed. No docs/migration/
+      stage-N-*.md or decisions/*.md file was named by REQ-364's
+      acceptance criteria (reread just now to confirm) beyond the new
+      decision record 0036 itself, which already exists and is accurate
+      -- no further stage-file update required.

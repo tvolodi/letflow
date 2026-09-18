@@ -8,8 +8,8 @@
   "file": "handoffs/WF02-REQ365-20260918/step-01-code-designer.json",
   "created_at": "2026-09-18T02:38:24Z",
   "started_at": "2026-09-18T02:38:24Z",
-  "completed_at": null,
-  "status": "PENDING",
+  "completed_at": "2026-09-18T02:43:32Z",
+  "status": "COMPLETED",
   "priority": "NORMAL",
   "context": {
     "stage": "S7",
@@ -37,7 +37,14 @@
       "the write path enforces the same sanitization rule REQ-363/364 established for tenant-scoped content — no separate, weaker validation for the platform path"
     ]
   },
-  "result": null,
+  "result": {
+    "status": "PASS",
+    "summary": "Designed lib/letflow/design/req365-platform-help-authoring.md: (1) priv/repo/migrations/<ts>_create_platform_help_content.exs shape -- plain, unguarded, unregistered migration creating `platform_help_content` in the public schema (mirrors users/tenants' migration shape, NOT help_content's tenant-scoped/prefix-guarded one), same column list as help_content (req363 §1.1) with process_definition_id retained for shape-parity but write-path-rejected (see below). (2) lib/letflow/help/platform_help_content.ex Ecto schema shape -- identical field list to HelpContent, no @schema_prefix (this table has exactly one physical copy, so no call ever needs a prefix: option at all -- a different rationale from HelpContent's own no-@schema_prefix reasoning, stated explicitly). (3) A second context module, Letflow.Help.Platform (lib/letflow/help/platform.ex), not a platform-scoped branch inside Letflow.Help -- reasoned explicitly in §3.1: opts/prefix has no meaning for an unscoped table, and this mirrors req363 §3's own HelpContent-vs-PlatformHelpContent schema split one level up. Same six actions/names/error-tuple shape as Letflow.Help (create_draft/1, update_draft/2, publish/1, reconfirm/1, withdraw/1, get_by_screen/1), opts dropped throughout. req363's own OQ-2 (platform-scope process_definition_id) is not resolved, but narrowed concretely: create_draft/1 and update_draft/2 reject any non-nil process_definition_id with {:error, :process_definition_id_not_supported} until a future requirement resolves OQ-2 -- flagged as OQ-2 (carried) in §8, not silently guessed. created_by for agent-authored rows uses a documented sentinel UUID (00000000-0000-0000-0000-000000000000), flagged as new-convention OQ-5 for REVIEWER sign-off. (4) Sanitization reuse, not reinvention: §5 specifies extracting HelpContent's existing validate_markdown_safety/2 (and its full AST-walk/entity-decode helper set) into a new shared module Letflow.Help.MarkdownSafety.validate/2, called from both HelpContent's and PlatformHelpContent's changesets -- one implementation, two call sites, no new earmark_parser dependency (already REVIEWER-approved per decision 0036-earmark-parser-markdown-sanitization-dependency.md, whose real filename corrects this handoff's own artifacts_in citation -- noted in §0). (5) FIRST REAL CONTENT: screen_id chosen as \"login-routing\" (reasoned in §4.1 from the requirement text's own repeated naming and REQ-360's shipped UAT scenario id platform-login-routing-by-role, stripped of scenario-specific decoration -- no existing screen_id registry exists in the tree to defer to). Literal title \"Signing in and where you land\" and a 3-section plain-end-user-language markdown body (signing in via Keycloak redirect, role-based landing, what happens if sign-in fails) are drafted verbatim in §4.2 for a later implementation step to publish via Letflow.Help.Platform.create_draft/1 + publish/1. All three acceptance criteria mapped in §7. Six open questions listed in §8 (two carried from req363 unresolved, four new), none silently resolved.",
+    "artifacts_out": [
+      "lib/letflow/design/req365-platform-help-authoring.md"
+    ],
+    "next_action": "Route to CODE-DESIGN-VALIDATOR"
+  },
   "rework_count": 0,
   "max_rework": 3
 }

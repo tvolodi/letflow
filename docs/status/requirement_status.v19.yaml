@@ -686,3 +686,50 @@ history:
       other reference to REQ-365 as not-yet-built (grep across docs/): only
       this status volume, the index, and docs/requirements.yaml itself
       reference REQ-365 -- nothing else needed updating.
+
+  - req: REQ-369
+    event: revised
+    agent: DOC-UPDATER
+    at: "2026-09-18T13:35:49Z"
+    note: >
+      WF02-REQ369-closeout-update-20260918. status stays blocked (NOT flipped to
+      done — AC6/AC7 remain genuinely unmet), but the close_out_note is updated
+      with new facts confirmed this session. RESOLVED: (1) QA_DEPLOY_* GitHub
+      secrets are now provisioned -- successful "CD (QA)" run at
+      2026-09-18T12:49:01Z, and the live https://qa.bizdala.com bundle was
+      independently re-fetched and grepped, confirming REQ-369's frontend code
+      is actually live (platform-dashboard, "Platform Overview",
+      platform-dashboard-heading, tile-tenant-count, platform-quick-links all
+      present). Evidence: test/uat-reports/uat-2026-09-18-WF02-REQ369-20260918.yaml
+      (UAT-RUNNER; committed to main via a direct push, a separate mistake
+      already recorded in docs/anti-patterns.md, not touched here). (2)
+      test/fixtures/uat/scenarios/platform/platform-login-routing-by-role.yaml's
+      PLATFORM_ADMIN branch was already correct from the original PR #1507 --
+      no fixture change needed. (3) A second, independent staleness bug was
+      found and fixed: web/tests/e2e/pipelines/platform-login-routing-by-role.pipeline.e2e.spec.ts's
+      PLATFORM_ADMIN case still asserted the old `/` TenantDashboardPage
+      landing -- fixed and merged as PR #1515, commit 0114d657.
+
+      STILL BLOCKING, precisely named: this execution environment has no QA
+      credential-fetch path -- no ai-dala-infra checkout, no SSH access to the
+      QA host (ubuntu-16gb-nbg1-1) to run ai-dala-infra/scripts/qa-login.sh (or
+      equivalent) and obtain a real PLATFORM_ADMIN Keycloak token. Confirmed
+      empirically, not assumed: a live Playwright run this session
+      (test/uat-reports/uat-2026-09-18-WF02-REQ369-20260918.yaml) shows 2 of 3
+      scenario branches (PLATFORM_ADMIN, tenant-scoped) failing on a real
+      `401 invalid_grant` from Keycloak at the token-fetch step, while the
+      unauthenticated branch (needing no credentials) genuinely passed against
+      live QA -- isolating the sole remaining blocker to credential access, not
+      to any application defect. AC8 remains satisfied: ISS-0700
+      (docs/issues/ISS-0700.yaml) stays status: open, untouched by this run,
+      and the separate "Unknown workspace" banner gap remains out of scope.
+
+      docs/requirements.yaml's REQ-369 close_out_note field updated in place
+      (append-only prose: the prior 2026-09-17 note is retained verbatim below
+      the new content, marked superseded, not deleted) with all of the above
+      plus a precise remaining-work pointer for a future session with real
+      ai-dala-infra/SSH access to QA. status field itself left as blocked
+      (unchanged). README.md checked: no per-role dashboard routing documented
+      there (matches the 2026-09-17 done-event's own finding), so no update
+      needed. docs/issues/ISS-0700.yaml intentionally not touched (already
+      correctly resolved by a prior session, out of this run's scope).

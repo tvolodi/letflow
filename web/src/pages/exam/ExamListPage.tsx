@@ -19,13 +19,16 @@
  *  screen's data source, when a truthful provisional list is buildable,
  *  would leave nine other acceptance criteria undone unnecessarily.
  *
- *  Read exclusively via the existing generic entity-read route
- *  (`POST /entities/query`, this requirement's OWN `examApi.queryExamRecords`
- *  in web/src/api/exam.ts) -- no new backend route is needed to list `exam`
- *  records, and none is invented here. Deliberately not REQ-336's
- *  `entitiesApi.queryRecords`: REQ-338 does not depend on REQ-336 (both
- *  requirements' own texts say so explicitly), so this page calls the same
- *  generic route through its own requirement's file instead.
+ *  ISS-0718: this screen now reads via the dedicated
+ *  `GET /exam-sessions/available` route (`examApi.listAvailableExams` in
+ *  web/src/api/exam.ts), gated by CANDIDATE's existing `:ExamSessionStart`
+ *  permission. Added specifically because the generic `POST /entities/query`
+ *  route this screen previously called (via `examApi.queryExamRecords`) is
+ *  outside CANDIDATE's ISS-0646 closed permission set — every CANDIDATE call
+ *  onto it was a guaranteed 403. See
+ *  `lib/letflow/design/iss0718-candidate-exam-list-route.md` for the full
+ *  design; status=active filtering is now hardcoded server-side rather than
+ *  a caller-supplied filter clause.
  *
  *  REQ-366 addendum: this screen's `PageLayout` `actions` slot now also
  *  carries `<HelpTrigger screenId="exam-list" />` — this run's real,
@@ -56,11 +59,7 @@ function ExamListPageInner() {
 
   const examsQuery = useQuery({
     queryKey: queryKeys.exam.list({ page_size: 100 }),
-    queryFn: () =>
-      examApi.queryExamRecords({
-        filters: [{ field: 'status', op: 'eq', value: 'active' }],
-        page_size: 100,
-      }),
+    queryFn: () => examApi.listAvailableExams({ page_size: 100 }),
   })
 
   const exams = useMemo(() => examsQuery.data?.items ?? [], [examsQuery.data])

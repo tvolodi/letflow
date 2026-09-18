@@ -1,0 +1,46 @@
+id: ISS-0713
+title: >
+  platform-login-routing-by-role pipeline_test PLATFORM_ADMIN case has
+  unscoped Tenants link locator -- strict-mode violation
+discovered_by: UAT-RUNNER
+discovered_in_run: WF03-ISS0712-20260918
+discovered_at: "2026-09-18T15:10:00Z"
+severity: MINOR
+description: >
+  Discovered live 2026-09-18 during UAT-RUNNER's re-verification of ISS-0712's
+  fix (run WF03-ISS0712-20260918, see
+  test/uat-reports/uat-2026-09-18-WF03-ISS0712-20260918.yaml). Once ISS-0712
+  fixed the PLATFORM_ADMIN login mechanism (loginViaRealOidcRedirect now
+  genuinely drives the real Keycloak/OIDC flow and reaches
+  /platform-dashboard), the pipeline_test proceeded further than it ever had
+  before and then failed at
+  web/tests/e2e/pipelines/platform-login-routing-by-role.pipeline.e2e.spec.ts
+  line ~97: `page.getByRole('link', { name: 'Tenants' })` is unscoped and
+  matches both the platform-quick-links "Tenants" link and the sidebar
+  "Tenants" link, producing a genuine Playwright strict-mode violation.
+  Confirmed via real Playwright output and a captured screenshot
+  (web/test-results/pipelines-platform-login-r-759b6-distinct-platform-dashboard-chromium/test-failed-1.png).
+  Not a product defect -- purely a test-locator scoping bug, and entirely
+  unrelated to ISS-0712's root cause, which is fully fixed and live-verified
+  (all assertions up through the tile checks passed for real against QA
+  before this locator ambiguity was hit).
+affected_files:
+  - web/tests/e2e/pipelines/platform-login-routing-by-role.pipeline.e2e.spec.ts
+related_requirements:
+  - REQ-369
+related:
+  - ISS-0712
+severity_rationale: >
+  MINOR -- a test-only locator scoping bug that blocks a fully clean pass of
+  this one pipeline_test, but does not indicate any product defect and does
+  not block REQ-369's AC7 conclusion (the redirect behavior itself is already
+  live-verified correct). Does not block release.
+fix_direction: >
+  Scope the "Tenants" link assertion to the platform-quick-links region, e.g.
+  `page.getByTestId('platform-quick-links').getByRole('link', { name: 'Tenants' })`
+  instead of an unscoped page-wide getByRole lookup. After the fix lands,
+  dispatch UAT-RUNNER to re-run this pipeline_test against live QA for a
+  clean end-to-end PASS.
+queue_ref: Q-713
+github_ref: GH-1523
+status: open

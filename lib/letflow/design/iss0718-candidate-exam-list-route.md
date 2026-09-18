@@ -114,11 +114,12 @@ regardless of declaration order in `Plug.Router`'s compiled matcher — so order
 for readability only, mirroring this file's own existing comment convention at line
 136-141 about `/:id` vs. the deeper write routes).
 
-```
-authz_get "/available", :ExamSessionStart do
-  handle_list_available_exams(conn)
-end
-```
+The route is declared through this router's existing `authz_get/3` macro (same declaration
+form every other route in this file already uses, §0): path `"/available"`, required
+policy key `:ExamSessionStart` (§0 — the existing atom, no new one minted), body
+delegating straight to the new handler, `handle_list_available_exams(conn)` (§1.3). No
+inline logic lives in the route declaration itself — same one-line-delegate shape as this
+file's other `authz_get` clauses.
 
 **Permission: `:ExamSessionStart`** (§0 — the existing atom, no new one minted). No change
 to `lib/letflow/api/authorization.ex`'s `@type permission`, `@permissions` list, or any
@@ -185,19 +186,18 @@ shaping the generic query route already has (`Letflow.Routers.Entities`'s
 
 ### 1.3 Router rendering (`handle_list_available_exams/1`)
 
-```
-defp handle_list_available_exams(conn) do
-  prefix = prefix!(conn)
+`handle_list_available_exams/1`, a private handler local to `exam_sessions.ex` (same
+placement convention as this file's other `handle_*` delegates), behaves as follows, in
+order:
 
-  case parse_available_exams_opts(conn.params) do
-    {:ok, opts} ->
-      render_list_available_exams(conn, Session.list_available_exams(prefix, opts))
-
-    {:errors, field_errors} ->
-      Response.send_problem(conn, Validation.problem(field_errors))
-  end
-end
-```
+1. Resolves `prefix = prefix!(conn)` (§0's established helper — same call every other
+   route in this router makes).
+2. Validates `conn.params` via `parse_available_exams_opts/1` (§1.3's next paragraph).
+   - On success (`{:ok, opts}`): calls `Session.list_available_exams(prefix, opts)`
+     (§1.2) and passes its result to `render_list_available_exams/2` for rendering.
+   - On validation failure (`{:errors, field_errors}`): renders the problem response
+     directly — `Response.send_problem/2` with the validation problem built from
+     `field_errors` — and never calls `Session.list_available_exams/2` at all.
 
 - `parse_available_exams_opts/1` validates `cursor` (optional string) and `page_size`
   (optional, positive integer, same `FieldConstraint`-based validation shape

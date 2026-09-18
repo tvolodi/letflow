@@ -1082,3 +1082,71 @@ history:
       requirement's acceptance criteria; the one decisions/ file it did
       name (0002-oidc-integration.md) is confirmed already updated per AC8.
       Not merged here -- ORCH's job next (Step Final).
+
+  - req: REQ-370
+    event: done
+    agent: ORCH
+    at: "2026-09-18T20:31:31Z"
+    note: >
+      Step Final. After DOC-UPDATER's close-out commit (f162720a) pushed,
+      the re-triggered CI backend gate (run 35390545235) FAILED fast
+      (55s, before any test ran) on mix letflow.check_requirements_registration's
+      [R2] check: DOC-UPDATER's own close-out prose in docs/requirements.yaml
+      literally contained the bare word "impl_order" (describing the
+      earlier duplicate-registration merge conflict), which the checker's
+      \bimpl_order\b regex (lib/mix/tasks/letflow.check_requirements_registration.ex:149)
+      matched as a second, ambiguous impl_order line for REQ-370 -- a real
+      false-positive trigger, not a real duplicate field (confirmed by
+      reading the file directly: only one actual `impl_order: 714` field
+      line exists in the block). ORCH fixed directly (commit 23353f27,
+      one-line reword to "queue-registration field", no meaning lost) per
+      the sizing rule (single doc file, no app-logic change) rather than
+      re-dispatching DOC-UPDATER. Pushed; CI re-ran clean (run 35390909877,
+      backend gate 10m7s, frontend gate pass) on tip 23353f27, confirmed via
+      `gh pr checks 1535` synchronous polling this session ran directly
+      (not a background monitor, per explicit instruction after an earlier
+      background-monitor approach in this same run proved unobservable to
+      the dispatching context). PR #1535 mergeable: MERGEABLE, head matched
+      23353f27, `gh pr merge --squash --delete-branch` succeeded with no
+      --admin override needed -- squash-merged to main as 21177271. Local
+      main fast-forwarded to 21177271; feature branch already gone (deleted
+      by the merge). Independently re-verified post-merge, reading
+      origin/main directly rather than trusting any agent's result.summary:
+      docs/requirements.yaml's REQ-370 status: done confirmed on disk;
+      test/support/bpm_default_realm_displacement.ex's Process.unlink fix
+      confirmed present; lib/letflow/design/req370-multi-issuer-oidc-verification.md's
+      §13 SECURITY-REVIEWER sign-off confirmed present. Queue task 714
+      released via letflow-queue's /tasks/714/release, agent_id
+      tvolodi-orch (the id actually holding the lock -- recovered via
+      set_lock trial per TASK_QUEUE.md's recovery procedure, since this
+      session's own agent_id convention differed from the stalled prior
+      session's), status: done; response confirmed locked_by: null,
+      status: done. GH#1529 best-effort-closed by release_lock's own sync
+      (not independently re-checked here).
+
+      Full run summary (WF02-REQ370-20260918, spanning a prior stalled
+      session and this recovery session): a TEST-DESIGNER subagent in the
+      prior session burned 400k+ tokens repeatedly retrying local mix test
+      verification without committing and was force-stopped, leaving real,
+      complete, uncommitted fix-up work (7 test files fixing 23 test
+      failures TEST-RUNNER's earlier full-suite run had found, plus a new
+      test/support/bpm_default_realm_displacement.ex mutex module) sitting
+      in the working tree. This recovery session: reviewed that diff for
+      real (not blindly trusted), confirmed it coherent and complete;
+      recovered the queue lock via set_lock under a fresh agent_id;
+      committed and pushed it; opened PR #1535 (none existed yet); resolved
+      two rounds of real merge conflicts against concurrently-landing main
+      commits (a duplicate impl_order registration, then REQ-369's
+      close-out); found SECURITY-REVIEWER's gate entirely missing from this
+      branch's history despite an implementation commit claiming it had
+      PASSed, and dispatched a real, independently-derived SECURITY-REVIEWER
+      review (commit 6bdd35a1, PASS, no BLOCKER); diagnosed and fixed a
+      genuine Postgrex-connection-linking bug in the new test support file
+      that was causing 10 CI failures (commit 6ce44823); dispatched
+      RELEASE-VALIDATOR (independent PASS on all 9 ACs) and DOC-UPDATER
+      (close-out, commit f162720a); fixed one more CI false-positive from
+      DOC-UPDATER's own prose (commit 23353f27); then merged. CI was
+      treated as the authoritative test gate throughout per this session's
+      explicit dispatch instruction, given this workstation's known
+      low-memory/local-test-reliability constraint -- no full local mix
+      test run was performed in this recovery session.

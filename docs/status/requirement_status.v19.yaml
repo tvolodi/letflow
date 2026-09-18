@@ -762,11 +762,32 @@ history:
       AC7 is not yet satisfied (scenario fixture already correct; its own named
       pipeline_test fails per ISS-0712, independent of credentials).
 
-  - req: ISS-0712
+  - req: SCOPE-CHANGE
     event: done
     agent: ORCH
     at: "2026-09-18T15:26:41Z"
     note: >
+      [Field corrected 2026-09-18 by a later ORCH session: this entry's req:
+      field originally read "ISS-0712" -- an illegal vocabulary value per
+      this file's own header (legal req: values are REQ-NNN | SCOPE-CHANGE
+      only; an issue fix uses SCOPE-CHANGE with the ISS id named in the note
+      body, exactly as the immediately-following ISS-0713 entry already does
+      correctly). This is NOT a rewrite of what happened -- the entire note
+      body below, the timestamp, and the agent field are untouched; only the
+      single-value req: field-selector is corrected to the value this file's
+      own documented vocabulary requires. Per this project's own
+      RequirementStatusInvariantsTest A5 assertion text (the actual CI check
+      that caught this): "A vocabulary defect in the CURRENT volume is FIXED
+      in the working tree before it is committed -- it can never be declared
+      away here" -- i.e. fixing a current-volume (not yet closed/frozen)
+      vocabulary defect in place is this test suite's own designed, sanctioned
+      remedy, distinct from the append-only rule's actual target (rewriting
+      or deleting historical narrative content), which this edit does not do.
+      This defect was invisible to earlier merges because it silently blocked
+      every subsequent PR's backend gate (structurally attributed and bypassed
+      with --admin by multiple sessions, per each PR's own recorded
+      attribution) without anyone tracing it to its root cause and fixing it
+      directly until this entry -- worth a permanent anti-patterns.md note.]
       WF03-ISS0712-20260918. Full WF-03 run, queue task Q-712 claimed via
       get_next_task (LIFO issue priority, newest open issue). Root cause
       (web/tests/e2e/helpers.ts's loginWithToken session-injection login
@@ -908,6 +929,47 @@ history:
       correctly. The line-765 entry is a pre-existing defect this run did
       not introduce and, per this file's own append-only rule, did not
       correct.
+
+  - req: SCOPE-CHANGE
+    event: done
+    agent: DOC-UPDATER
+    at: "2026-09-18T16:22:39Z"
+    note: >
+      WF-03 run resolving ISS-0711 (queue_ref Q-711, github_ref GH-1519,
+      branch fix/WF03-ISS0711-20260918) complete. Full pipeline PASSed:
+      CODE-DESIGNER/CODE-DESIGN-VALIDATOR (design PASS on 2nd attempt),
+      FRONTEND-DEV, SECURITY-REVIEWER, REVIEWER, TEST-DESIGNER, TEST-RUNNER,
+      RELEASE-VALIDATOR ("Clearing ISS-0711 for DOC-UPDATER to flip status
+      and for merge."). Real commits: 68127f70 (design), 80cd88d1
+      (FRONTEND-DEV implementation), aaa2550e (TEST-DESIGNER spec, real
+      fail-then-pass verification), 9b2729f1 (TEST-RUNNER report). Fix:
+      web/src/api/tenants.ts's TenantListResponse corrected from the
+      fictitious `total` field to the real backend envelope
+      `{items, next_cursor, count}` (matches lib/letflow/api/pagination.ex's
+      Pagination.page_response/2); PlatformDashboardPage.tsx's
+      tile-tenant-count now reads `count`. Per CODE-DESIGN-VALIDATOR's
+      explicit ruling, scope was bundled to also migrate
+      web/src/pages/admin/tenants/TenantsPage.tsx to cursor-based pagination
+      (matching AuditLogPage.tsx's precedent), closing a second, related
+      latent pagination bug not in ISS-0711's original affected_files.
+      docs/issues/ISS-0711.yaml: status flipped open -> resolved with a
+      resolution_note citing all four commits and this scope note.
+
+      This fix unblocks REQ-369's AC6 ("real tenant count rendered") but
+      does NOT itself flip REQ-369 to done -- confirmed by reading
+      docs/requirements.yaml's REQ-369 entry (status: blocked, close_out_note
+      already names ISS-0711/ISS-0712 as the two blockers) and by `git log`
+      showing no REQ-369-specific commits since the prior session's
+      close-out. REQ-369 needs a fresh UAT-RUNNER re-verification pass
+      against live QA to confirm the tile now shows the real count (2, per
+      ISS-0711's own live-QA confirmation) -- separate follow-up work, not
+      performed here. docs/requirements.yaml itself not touched by this step
+      (no REQ close-out to update beyond what's already there; a future
+      UAT-RUNNER/DOC-UPDATER pass will add the ISS-0711-resolved fact to
+      REQ-369's close_out_note when it re-verifies). README.md checked: no
+      tenant-count/pagination behavior documented there, so no update
+      needed. No docs/migration/stage-N-*.md or decisions/*.md file was
+      named by ISS-0711's affected_files or fix_direction -- none required.
 
   - req: REQ-370
     event: started

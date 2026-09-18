@@ -80,9 +80,8 @@ const TENANT_LIST: TenantListResponse = {
       production_tenant_display_name: null,
     },
   ],
-  total: 2,
-  limit: 20,
-  offset: 0,
+  next_cursor: null,
+  count: 2,
 }
 
 // ── Tests ─────────────────────────────────────────────────────────────────────

@@ -12,6 +12,12 @@ import type { ApiError } from '@/types/api'
  * PLATFORM_ADMIN, reached from OidcCallbackPage's role-conditional redirect.
  * Deliberately platform-scoped: no tenant context, no tenant-branded copy.
  * See lib/letflow/design/req369-platform-dashboard-page.md.
+ *
+ * Tenant-count tile reads `count` from tenantsApi.list()'s real response
+ * envelope (ISS-0711 fix). This comment trips CD's per-commit path filter
+ * so QA's next deploy actually picks up that fix's own commit -- CI never
+ * succeeded on that commit's own diff (it hit the ISS-0712 vocabulary bug
+ * fixed separately), so no deploy was ever triggered for it directly.
  */
 export default function PlatformDashboardPage(): JSX.Element {
   const { session } = useAuth()
@@ -58,7 +64,7 @@ export default function PlatformDashboardPage(): JSX.Element {
             Tenants
           </div>
           <div style={{ fontSize: '2.25rem', fontWeight: 700, color: 'var(--color-info)' }}>
-            {String(tenantsQuery.data?.total ?? 0)}
+            {String(tenantsQuery.data?.count ?? 0)}
           </div>
         </div>
       </QueryStateBoundary>

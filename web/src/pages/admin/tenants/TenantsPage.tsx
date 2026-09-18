@@ -39,11 +39,12 @@ export default function TenantsPage() {
   const qc = useQueryClient()
 
   const [search, setSearch] = useState<string>('')
-  const [offset, setOffset] = useState<number>(0)
+  const [cursorStack, setCursorStack] = useState<string[]>([])
   const [actionError, setActionError] = useState<string | null>(null)
   const [confirmState, setConfirmState] = useState<{ slug: string; action: 'deactivate' | 'reactivate' } | null>(null)
 
-  const listParams = { search: search || undefined, limit: PAGE_SIZE, offset }
+  const cursor = cursorStack[cursorStack.length - 1]
+  const listParams = { search: search || undefined, page_size: PAGE_SIZE, cursor }
 
   const listQuery = useQuery({
     queryKey: queryKeys.admin.tenants(listParams),
@@ -71,13 +72,13 @@ export default function TenantsPage() {
   }
 
   const data = listQuery.data
-  const total = data?.total ?? 0
-  const currentPage = Math.floor(offset / PAGE_SIZE) + 1
+  const nextCursor = data?.next_cursor
+  const currentPage = cursorStack.length + 1
   const rendererState: RendererState = listQuery.isLoading ? 'loading' : listQuery.isError ? classifyError(listQuery.error) : 'success'
 
   function handleSearchChange(value: string) {
     setSearch(value)
-    setOffset(0)
+    setCursorStack([])
   }
 
   function handleLifecycleAction(slug: string, action: 'deactivate' | 'reactivate') {
@@ -260,13 +261,20 @@ export default function TenantsPage() {
             />
           </div>
 
-          {total > PAGE_SIZE && (
+          {(cursorStack.length > 0 || Boolean(nextCursor)) && (
             <div data-testid="tenants-pagination" style={{ marginTop: '1rem' }}>
               <PaginationControls
                 page={currentPage}
                 pageSize={PAGE_SIZE}
-                totalItems={total}
-                onPageChange={(newPage) => setOffset((newPage - 1) * PAGE_SIZE)}
+                totalItems={null}
+                hasNextPage={Boolean(nextCursor)}
+                onPageChange={(newPage) => {
+                  if (newPage < currentPage) {
+                    setCursorStack((prev) => prev.slice(0, -1))
+                  } else if (nextCursor) {
+                    setCursorStack((prev) => [...prev, nextCursor])
+                  }
+                }}
               />
             </div>
           )}

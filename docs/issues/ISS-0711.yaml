@@ -62,4 +62,36 @@ fix_direction: >
   AC6 can be marked done.
 queue_ref: Q-711
 github_ref: GH-1519
-status: open
+status: resolved
+resolution_note: >
+  Full pipeline PASSed: CODE-DESIGNER/CODE-DESIGN-VALIDATOR (design fixed on
+  its 2nd attempt), FRONTEND-DEV, SECURITY-REVIEWER, REVIEWER, TEST-DESIGNER,
+  TEST-RUNNER, RELEASE-VALIDATOR ("Clearing ISS-0711 for DOC-UPDATER to flip
+  status and for merge."). Real commits: 68127f70 (CODE-DESIGNER's design,
+  addressing CODE-DESIGN-VALIDATOR's first-round findings), 80cd88d1
+  (FRONTEND-DEV implementation), aaa2550e (TEST-DESIGNER's test spec, with a
+  real fail-then-pass verification -- confirmed failing against the old code
+  before the fix, passing after), 9b2729f1 (TEST-RUNNER's report, all
+  frontend gates PASS).
+
+  Fix: web/src/api/tenants.ts's TenantListResponse type corrected from the
+  fictitious `{total}` field to the real backend envelope shape
+  `{items, next_cursor, count}` (matching lib/letflow/api/pagination.ex's
+  Pagination.page_response/2 exactly). web/src/pages/dashboard/
+  PlatformDashboardPage.tsx's tile-tenant-count now reads `count` instead of
+  the always-undefined `total`. Per CODE-DESIGN-VALIDATOR's explicit ruling,
+  the fix's scope was bundled to also migrate web/src/pages/admin/tenants/
+  TenantsPage.tsx to cursor-based pagination (matching AuditLogPage.tsx's
+  existing precedent) -- TenantsPage.tsx shared the same stale
+  TenantListResponse type and had its own latent, related pagination bug not
+  named in this issue's original affected_files, closed here as part of the
+  same type-contract fix rather than left for a separate issue.
+
+  This fix unblocks REQ-369's AC6 ("real tenant count rendered") but does
+  NOT itself flip REQ-369 to done -- REQ-369 needs a fresh UAT-RUNNER
+  re-verification pass against live QA to confirm the tile now actually
+  renders the real count (2, per ISS-0711's own live-QA confirmation), which
+  is separate follow-up work. As of this resolution, REQ-369's
+  docs/requirements.yaml status is still `blocked` (unchanged by this step)
+  -- see its close_out_note for AC6/AC7's precise remaining-work pointer,
+  which now additionally needs ISS-0711 cited as resolved.

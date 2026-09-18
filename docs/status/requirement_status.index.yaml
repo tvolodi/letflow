@@ -3914,20 +3914,40 @@ volumes:
     path: docs/status/requirement_status.v19.yaml
     status: current
     opened: 2026-09-17
-    entries: 17
+    entries: 18
     note: >
-      Incremented to 17 by ORCH's own REQ-370 started-event append
-      (WF03-ISS0713-20260918, queue task Q-713 -- full WF-03 run resolving
-      the platform-login-routing-by-role pipeline_test's unscoped
-      Tenants-link locator strict-mode violation, live-verified against QA,
-      merged via PR #1526; ORCH took over Step Final directly after the
-      dispatched FRONTEND-DEV subagent stalled mid-protocol) -- `grep -c
-      "^  - req:" docs/status/requirement_status.v19.yaml` = 16 on-disk
-      entries; 910 lines / 55822 bytes, well under the 1200-line/120000-byte
-      roll ceiling, no roll triggered. This entry deliberately uses `req:
-      SCOPE-CHANGE` (not `req: ISS-0713`) per this volume's own header
-      vocabulary rule -- see the entry's own closing note for why that
-      matters (the immediately-prior ISS-0712 entry got this wrong).
+      Incremented to 18 by ORCH's own REQ-370 started-event append
+      (WF02-REQ370-20260918, queue task 714, GH#1529 -- multi-issuer OIDC
+      token verification), merged on top of origin/main's own ISS-0711
+      done-event append that landed independently at nearly the same time
+      (both entries preserved on rebase, append-only, ordered by their own
+      `at:` timestamps: ISS-0711 done at 16:22:39Z, then REQ-370 started at
+      17:11:13Z) -- `grep -c "^  - req:"
+      docs/status/requirement_status.v19.yaml` = 18 on-disk entries; 985
+      lines / well under the 1200-line/120000-byte roll ceiling, no roll
+      triggered.
+
+      Prior note (17 entries): Incremented to 17 by DOC-UPDATER's own
+      ISS-0711 done-event append (WF03-ISS0711-20260918 -- full pipeline run
+      resolving the TenantListResponse `total`/`count` field mismatch that
+      blocked REQ-369's AC6), merged on top of a concurrent ORCH ISS-0713
+      append that landed independently at nearly the same time (both entries
+      preserved on rebase, append-only, ordered by their own `at:`
+      timestamps: ORCH's ISS-0713 entry at 16:01:06Z, then this ISS-0711
+      entry at 16:22:39Z) -- 17 on-disk entries; 951 lines / 57452 bytes,
+      well under the 1200-line/120000-byte roll ceiling, no roll triggered.
+
+      Prior note (16 entries, ISS-0713): Incremented to 16 by ORCH's own
+      ISS-0713 done-event append (WF03-ISS0713-20260918, queue task Q-713
+      -- full WF-03 run resolving the platform-login-routing-by-role
+      pipeline_test's unscoped Tenants-link locator strict-mode violation,
+      live-verified against QA, merged via PR #1526; ORCH took over Step
+      Final directly after the dispatched FRONTEND-DEV subagent stalled
+      mid-protocol) -- 16 on-disk entries; 910 lines / 55822 bytes. This
+      entry deliberately uses `req: SCOPE-CHANGE` (not `req: ISS-0713`) per
+      this volume's own header vocabulary rule -- see the entry's own
+      closing note for why that matters (the immediately-prior ISS-0712
+      entry got this wrong).
 
       Prior note (15 entries), retained for history: Incremented to 15 by ORCH's own ISS-0712 done-event append
       (WF03-ISS0712-20260918, queue task Q-712 -- full WF-03 run resolving

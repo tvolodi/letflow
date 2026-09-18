@@ -1178,3 +1178,62 @@ history:
       (fix/ISS-0715-close-20260919). This run closed out
       docs/issues/ISS-0715.yaml (status: resolved) and GitHub issue #1533
       only.
+
+  - req: SCOPE-CHANGE
+    event: blocked
+    agent: ORCH
+    at: "2026-09-18T21:01:34Z"
+    note: >
+      WF03-ISS0690-BILIMBAGA-20260919, queue task 690. Re-verified
+      ISS-0690's followup_2 next_action live against QA instead of
+      trusting the prior session's "CD (QA) succeeded" claim. First
+      re-test still got a real 401 -- traced to a genuinely new,
+      separate defect: ai-dala-infra's redeploy-qa.sh builds an image
+      under one tag but docker-compose.qa.yml's app service has no
+      `image:` field, so `docker compose up --force-recreate` never
+      picks it up, silently no-op'ing QA backend deploys. QA was running
+      pre-REQ-370 commit b04a2bb4 despite two "successful" CD (QA) runs
+      since REQ-370 merged. Filed as ISS-0717 (Q-717/GH-1540) and ad hoc
+      unblocked for this session (rebuilt/recreated under the tag
+      compose actually uses) -- not a durable fix. With QA genuinely
+      running a6e899fc, confirmed live: a bilimbaga-realm CANDIDATE
+      token against GET /api/v1/definitions now returns 403
+      (permission-correct) instead of 401 -- REQ-370 holds up live.
+      Dispatched a fresh UAT-RUNNER; real result BLOCKED (not PASS), full
+      report at
+      test/uat-reports/uat-2026-09-19-WF03-ISS0690-BILIMBAGA-20260919.yaml.
+      Two distinct remaining blockers: ISS-0690's own solution-pack
+      install gap (narrowed to a missing bilimbaga-realm admin
+      credential, ai-dala-infra-side) and a newly discovered
+      CANDIDATE/:EntitiesQuery permission gap on the exam-list screen,
+      filed as ISS-0718 (Q-718/GH-1541, BLOCKER). ISS-0690 stays
+      status: open; queue task 690 released with status: blocked
+      (unchanged convention) -- narrowed, not resolved. Committed as
+      part of PR #1542, merged to main as 9e1bc3e0.
+# ─────────────────────────────────────────────────────────────────────────────
+# VOLUME 19 — CLOSED 2026-09-18. DO NOT APPEND TO THIS FILE.
+# This volume holds the complete requirement run history from 2026-09-17 through
+# 2026-09-18 (23 entries, 1212 frozen-prefix lines before this closure footer).
+# It is frozen: every line above this comment is preserved byte-for-byte. Closed
+# by ORCH's own ISS-0690 blocked-event (SCOPE-CHANGE) append, which brought this
+# file to 1212 lines -- over the declared roll_rule ceiling (max_lines: 1200) --
+# confirmed via `wc -l` on the working-tree file per this volume's own
+# "WHEN THIS VOLUME IS FULL" procedure.
+# Reads of this volume are TARGETED reads only -- a line range or a pattern
+# match, never a whole-file read. Use whichever your shell has:
+#   Read tool with offset/limit (works everywhere), or
+#   Bash:       grep -n PATTERN FILE   /   sed -n 'START,ENDp' FILE
+#   PowerShell: Select-String -Path FILE -Pattern PATTERN
+#               (Get-Content FILE)[START..END]
+#
+# NEW ENTRIES GO TO THE CURRENT VOLUME. Find it in:
+#   docs/status/requirement_status.index.yaml
+# which, as of this closure, names:
+#   docs/status/requirement_status.v20.yaml
+#
+# Why this file was closed: ORCH's own ISS-0690 blocked-event append brought the
+# on-disk count to 23 entries across 1212 lines -- over the roll ceiling. No
+# entry above this footer was moved, edited or deleted.
+#
+# KNOWN ANOMALIES IN THIS VOLUME: none. This closure was a plain append-and-roll
+# with no concurrent merge conflict on this specific file at closure time.

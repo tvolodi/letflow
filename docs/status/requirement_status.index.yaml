@@ -3912,10 +3912,23 @@ volumes:
 
   - volume: 19
     path: docs/status/requirement_status.v19.yaml
-    status: current
+    status: closed
     opened: 2026-09-17
-    entries: 22
+    closed: 2026-09-18
+    entries: 23
+    lines: 1239
+    bytes_working_tree: 76560
+    frozen_prefix_lines: 1212
+    frozen_prefix_sha256: "a7a73830bd63e4358a8b71aa00da4c4911b1d000cefb3a2dbaaa66e84a1b66e1"
     note: >
+      Closed by ORCH's own ISS-0690 blocked-event (SCOPE-CHANGE) append --
+      `grep -c "^  - req:" docs/status/requirement_status.v19.yaml` = 23
+      on-disk entries after the append, 1212 lines -- over the 1,200-line
+      roll ceiling, confirmed via `wc -l` on the working-tree file. No
+      concurrent merge conflict on this specific file at closure time.
+      Closure footer appended per the roll procedure; successor volume 20
+      created with the same header text.
+
       Incremented to 21 by ORCH's own REQ-370 Step-Final done-event append
       (recovery/completion run, branch feature/WF02-REQ370-20260918, PR
       #1535 squash-merged to main as 21177271, queue task 714, GH#1529 --
@@ -4275,6 +4288,20 @@ volumes:
       against volume 17's original header to confirm only those fields
       changed. `entries:` will be incremented per HOW-TO-APPEND step 6 as
       real appends land.
+
+  - volume: 20
+    path: docs/status/requirement_status.v20.yaml
+    status: current
+    opened: 2026-09-18
+    entries: 0
+    note: >
+      Opened by ORCH's own ISS-0690 blocked-event close-out, successor to
+      volume 19 (closed at 23 entries / 1212 frozen-prefix lines, over the
+      1200-line roll ceiling). Created with volume 19's header text
+      verbatim (volume number, opening date and predecessor path updated)
+      and an empty `history:` list, per this index's `roll_rule.on_exceed`
+      procedure. `entries:` will be incremented per HOW-TO-APPEND step 6
+      as real appends land.
 
 
 known_anomalies:

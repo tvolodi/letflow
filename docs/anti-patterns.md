@@ -3013,3 +3013,32 @@ verification TEST-DESIGNER had performed, per this project's producer/
 validator redundancy principle — TEST-DESIGNER's own run had not hit this
 trap, but the validator's independent repetition of the same steps is
 exactly the kind of check that would catch it if it had gone unnoticed.
+
+## A UAT-only pass pushed a new report file directly to `main` (2026-09-18, WF02-REQ369-20260918)
+
+UAT-RUNNER, dispatched to gather REQ-369's AC6/AC7 evidence after an
+external QA-deploy blocker cleared, wrote a real UAT report
+(`test/uat-reports/uat-2026-09-18-WF02-REQ369-20260918.yaml`) and committed
+it with `git push origin main` directly — no branch, no PR, no CI. This is
+exactly the zero-exception rule `GIT_MERGE.md` restates explicitly for
+this precise excuse ("it's just docs/a report, not application code"):
+"docs-only is not an exception, and there never was a project precedent
+making it one" (reaffirmed 2026-09-15 after six earlier commits made this
+identical justification). The dispatch prompt that spawned this run did
+not explicitly repeat the no-direct-push rule for this specific pass
+(it was stated for the *implementation* work, not called out again for
+what looked like a pure evidence-gathering step) — that gap in the prompt
+is the proximate cause, not a considered judgment call by the agent.
+
+**Correct alternative:** every commit reaching `main`, including a single
+new report file with zero code changes, goes through branch → PR → CI →
+merge, with no size/triviality/file-count exception — see `GIT_MERGE.md`'s
+own restated rule. When dispatching *any* agent that will `git commit`
+anything, state the no-direct-push rule in that dispatch's own prompt
+explicitly, even for evidence-only/report-only work — do not assume a
+role's own instructions file covers it, since a role like UAT-RUNNER may
+reasonably read "just write a report" as bookkeeping exempt from the
+full pipeline. The already-pushed commit was not reverted (matches this
+file's own established handling for prior direct-push incidents — the
+commit is append-only historical fact); the mistake is recorded here so
+the next dispatch prompt states the rule instead of assuming it's implied.

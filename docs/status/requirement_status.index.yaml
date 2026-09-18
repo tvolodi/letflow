@@ -3914,19 +3914,26 @@ volumes:
     path: docs/status/requirement_status.v19.yaml
     status: current
     opened: 2026-09-17
-    entries: 17
+    entries: 18
     note: >
-      Incremented to 17 by DOC-UPDATER's own ISS-0711 done-event append
-      (WF03-ISS0711-20260918 -- full pipeline run resolving the
-      TenantListResponse `total`/`count` field mismatch that blocked
-      REQ-369's AC6), merged on top of a concurrent ORCH ISS-0713 append
-      that landed independently at nearly the same time (both entries
-      preserved on rebase, append-only, ordered by their own `at:`
-      timestamps: ORCH's ISS-0713 entry at 16:01:06Z, then this ISS-0711
-      entry at 16:22:39Z) -- `grep -c "^  - req:"
-      docs/status/requirement_status.v19.yaml` = 17 on-disk entries; 951
-      lines / 57452 bytes, well under the 1200-line/120000-byte roll
+      Incremented to 18 by DOC-UPDATER's own REQ-369 revised-event append
+      (WF02-REQ369-closeout-final-20260918 -- updated REQ-369's
+      close_out_note in docs/requirements.yaml with the newest evidence,
+      test/uat-reports/uat-2026-09-18-WF02-REQ369-AC6AC7-final-20260918.yaml;
+      status left as blocked) -- `grep -c "^  - req:"
+      docs/status/requirement_status.v19.yaml` = 18 on-disk entries; 1008
+      lines / 61296 bytes, well under the 1200-line/120000-byte roll
       ceiling, no roll triggered.
+
+      Prior note (17 entries, ISS-0711): Incremented to 17 by DOC-UPDATER's
+      own ISS-0711 done-event append (WF03-ISS0711-20260918 -- full
+      pipeline run resolving the TenantListResponse `total`/`count` field
+      mismatch that blocked REQ-369's AC6), merged on top of a concurrent
+      ORCH ISS-0713 append that landed independently at nearly the same
+      time (both entries preserved on rebase, append-only, ordered by
+      their own `at:` timestamps: ORCH's ISS-0713 entry at 16:01:06Z, then
+      this ISS-0711 entry at 16:22:39Z) -- 951 lines / 57452 bytes, well
+      under the roll ceiling, no roll triggered.
 
       Prior note (16 entries, ISS-0713): Incremented to 16 by ORCH's own
       ISS-0713 done-event append (WF03-ISS0713-20260918, queue task Q-713

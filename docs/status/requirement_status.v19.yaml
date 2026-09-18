@@ -613,3 +613,76 @@ history:
       content for the login-routing screen as the worked example. Step 00
       (git setup) PASS: branch feature/WF02-REQ365-20260918 created and
       pushed by ELIXIR-DEV.
+
+  - req: REQ-365
+    event: done
+    agent: DOC-UPDATER
+    at: "2026-09-18T06:40:34Z"
+    note: >
+      WF-02 run WF02-REQ365-20260918 (queue task 688, GH#1440) complete,
+      RELEASE-VALIDATOR PASS (step-05-release-validator.json). Shipped:
+      new public.platform_help_content table
+      (priv/repo/migrations/20260918000001_create_platform_help_content.exs,
+      unguarded/unprefixed and confirmed absent from
+      Letflow.TenantProvisioning's @tenant_scoped_migration_manifest -- one
+      physical table, not a parallel mechanism) plus
+      lib/letflow/help/platform.ex (mirrors Letflow.Help's create_draft/
+      update_draft/publish/reconfirm/withdraw shape against
+      Letflow.Help.PlatformHelpContent) and
+      lib/letflow/help/platform_help_content.ex. Sanitization reuses the
+      single shared lib/letflow/help/markdown_safety.ex
+      (MarkdownSafety.validate/2), called by both PlatformHelpContent and
+      tenant-scoped HelpContent -- no second/weaker validator for the
+      platform path (AC3).
+
+      AC2 (real login-routing help content, authored and published, actual
+      text quoted here): RELEASE-VALIDATOR queried public.platform_help_content
+      directly in the real dev Postgres container (letflow-postgres-1,
+      letflow_dev) -- exactly one row, screen_id='login-routing',
+      status='live', confirmed_at populated. Published body:
+
+        # Signing in
+
+        When you open Letflow, you're taken to a secure sign-in page to enter
+        your username and password. This page is provided by Letflow's
+        identity provider, not by Letflow itself — you may notice the page
+        looks a little different from the rest of the app.
+
+        After you sign in successfully, you're brought straight back into
+        Letflow automatically. There's nothing else you need to do — no
+        separate "continue" step, no extra click.
+
+        ## Where you land after signing in
+
+        Once you're signed in, you'll see your workspace dashboard, showing
+        your processes and instances.
+
+        - If you're a **regular user or tenant administrator**, this
+          dashboard is scoped to your own organization.
+        - If you're a **platform administrator**, you land on the same kind
+          of starting page, but you'll also see extra menu items — like
+          **Tenants** — that only platform administrators can see and use.
+
+        ## If something goes wrong
+
+        If your sign-in doesn't succeed, or your session has expired, you're
+        sent back to the sign-in page automatically so you can try again. You
+        never need to manually type in a web address or hunt for a login
+        link — Letflow always routes you to the right place on its own.
+
+      Independent re-verification (RELEASE-VALIDATOR, not trusting
+      TEST-RUNNER's/ELIXIR-DEV's report): mix test
+      test/letflow/help/platform_test.exs test/letflow/help_test.exs (86/86);
+      scripts/test_parallel.sh full suite, 16 partitions, 4412 tests + 6
+      properties, 4418/4418 passed; mix letflow.check.test clean.
+
+      docs/requirements.yaml's REQ-365 entry flipped in_progress -> done.
+      README.md checked (grepped login-routing/help content/platform_help/
+      Letflow.Help -- no hits): it does not enumerate individual context
+      modules or per-screen help content, so no README update needed,
+      consistent with REQ-364's own precedent. No docs/migration/stage-N-*.md
+      or decisions/*.md file was named by REQ-365's acceptance criteria
+      (reread just now to confirm) -- none required. Checked docs/ for any
+      other reference to REQ-365 as not-yet-built (grep across docs/): only
+      this status volume, the index, and docs/requirements.yaml itself
+      reference REQ-365 -- nothing else needed updating.

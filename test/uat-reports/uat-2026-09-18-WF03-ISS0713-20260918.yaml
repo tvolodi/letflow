@@ -1,0 +1,97 @@
+run_id: WF03-ISS0713-20260918
+date: "2026-09-18"
+agent: UAT-RUNNER
+scope: >
+  Re-run of test/fixtures/uat/scenarios/platform/platform-login-routing-by-role.yaml's
+  PLATFORM_ADMIN branch, for real against live QA, via its own named
+  pipeline_test (web/tests/e2e/pipelines/platform-login-routing-by-role.pipeline.e2e.spec.ts),
+  after ISS-0713's fix (commit 374ae4ea: scopes the quick-links loop assertion
+  at line ~97 to `page.getByTestId('platform-quick-links').getByRole('link', { name })`
+  instead of the unscoped `page.getByRole('link', { name })` that collided
+  with the identically-labelled sidebar entries). Test-only change, no
+  product code. This is the live confirmation that the fix produces a clean
+  end-to-end PASS, closing out the MINOR finding surfaced incidentally during
+  the WF03-ISS0712-20260918 run.
+
+environment_target:
+  base_url: "https://qa.bizdala.com"
+  credential_source: "ai-dala-infra/scripts/qa-login.sh"
+  environment: qa
+  readiness_check: >
+    curl -s -o /dev/null -w '%{http_code}' https://qa.bizdala.com/ -> 200;
+    curl -s -o /dev/null -w '%{http_code}'
+    https://auth.qa.bizdala.com/realms/bpm-default/.well-known/openid-configuration
+    -> 200 (both confirmed this run).
+
+credential_acquisition: >
+  Real ai-dala-infra checkout present at c:\Users\tvolo\dev\ai-dala\ai-dala-infra;
+  `ssh ubuntu-16gb-nbg1-1 whoami` -> tvolodi (working SSH). Ran
+  `bash scripts/qa-login.sh admin-user` from that checkout and obtained a real
+  seeded PLATFORM_ADMIN credential (username admin-user; role PLATFORM_ADMIN)
+  for https://qa.bizdala.com. Password used only in-memory, as the
+  `UAT_QA_ADMIN_PASSWORD` env var on the actual `npx playwright test`
+  invocation below. Never written to any file, this report included.
+
+command: >
+  cd web && E2E_BASE_URL=https://qa.bizdala.com
+  BPM_IDP_BASE_URL=https://auth.qa.bizdala.com
+  UAT_QA_ADMIN_PASSWORD=<not recorded> npx playwright test
+  tests/e2e/pipelines/platform-login-routing-by-role.pipeline.e2e.spec.ts
+  --project=chromium -g "PLATFORM_ADMIN lands on the distinct platform dashboard"
+
+real_command_output: >
+  "Running 1 test using 1 worker
+
+    ok 1 [chromium] ›
+  tests\e2e\pipelines\platform-login-routing-by-role.pipeline.e2e.spec.ts:70:3
+  › Pipeline: platform-login-routing-by-role › EO-001: PLATFORM_ADMIN lands on
+  the distinct platform dashboard (9.9s)
+
+    1 passed (11.9s)"
+
+result_overall: PASS
+disposition: >
+  Clean end-to-end PASS, real evidence, single attempt, no retries needed.
+  The full chain exercised live: real, unseeded page.goto('/'), genuine
+  off-origin redirect to Keycloak (auth.qa.bizdala.com), real Keycloak-hosted
+  login form filled and submitted (#username/#password/#kc-login), genuine
+  return through the app's own /auth/callback OIDC exchange,
+  OidcCallbackPage.tsx's role-conditional navigate() landing on
+  /platform-dashboard, and every REQ-369 AC1/AC2 testid assertion passing:
+    - expect(page).toHaveURL('/platform-dashboard') -- PASS
+    - platform-dashboard-heading visible, text "Platform Overview" -- PASS
+    - tile-tenant-count visible -- PASS
+    - platform-quick-links visible -- PASS
+    - the fixed, scoped loop assertion over
+      page.getByTestId('platform-quick-links').getByRole('link', { name })
+      for ['Tenants','Services','Health','Metrics','Users'] -- PASS, no
+      strict-mode violation (the exact defect ISS-0713 fixed)
+  Screenshot evidence captured this run:
+  web/tests/screenshots/pipelines/platform-login-routing-by-role-admin.png
+  (fresh, timestamped within this run's window).
+
+note_pre_existing_tenant_count_defect: >
+  Not re-checked in detail this run since the assertion under test
+  (tile-tenant-count visible) does not assert its numeric value -- the
+  already-filed tenant-count-reads-.total-not-.count defect from
+  test/uat-reports/uat-2026-09-18-WF02-REQ369-AC6AC7-20260918T143000Z.yaml
+  is unaffected by and unrelated to this fix, not re-filed here.
+
+new_findings: none. No new, unrelated failures surfaced this run.
+
+iss0713_disposition: >
+  ISS-0713's fix is CONFIRMED delivered and working, live, against real QA
+  infrastructure. The strict-mode locator collision (platform-quick-links nav
+  vs. identically-labelled sidebar entries) that caused the WF03-ISS0712-20260918
+  run's pipeline_test to FAIL is resolved by the scoped locator, and the
+  scenario now runs clean end-to-end with zero failures on a single attempt.
+  Recommend: ISS-0713 status -> resolved.
+
+verdict: >
+  Clean end-to-end PASS. This closes out ISS-0713's acceptance criteria --
+  both the PLATFORM_ADMIN OIDC login mechanism (confirmed live in the prior
+  WF03-ISS0712-20260918 run) and this run's own quick-links locator fix are
+  now verified together in one passing pipeline_test execution, real command
+  output and real screenshot evidence above, not predicted. No mocks, no
+  absence-of-error-as-pass, no plaintext QA password committed to any file
+  (only username/role named, per this project's established convention).

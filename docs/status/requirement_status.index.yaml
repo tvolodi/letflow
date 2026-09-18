@@ -4293,18 +4293,25 @@ volumes:
     path: docs/status/requirement_status.v20.yaml
     status: current
     opened: 2026-09-18
-    entries: 1
+    entries: 2
     note: >
-      Incremented to 1 by DOC-UPDATER's own ISS-0716 SCOPE-CHANGE done-event
-      append (WF03-ISS0716-20260918 -- fixed ColumnPromotionTest AC1's
-      concurrent-tenant-commit flake) -- `grep -c "^  - req:"
-      docs/status/requirement_status.v20.yaml` = 1 on-disk entry; 232 lines
-      / 13672 bytes, well under the 1200-line/120000-byte roll ceiling, no
-      roll triggered. This branch's own PR hit a real race with a sibling
-      session's independent roll of this same volume (see this entry's own
-      note in v20.yaml for the full account) -- rebuilt from a fresh
-      origin/main checkout rather than hand-reconciling two divergent
-      "closed volume 19" states.
+      Incremented to 2 by ORCH's own ISS-0718 done-event append
+      (WF03-ISS0718-20260919 -- CANDIDATE role dedicated exam-list route,
+      PR #1546) -- `grep -c "^  - req:"
+      docs/status/requirement_status.v20.yaml` = 2 on-disk entries; 305
+      lines / 18591 bytes, well under the 1200-line/120000-byte roll
+      ceiling, no roll triggered.
+
+      Prior note (1 entry): Incremented to 1 by DOC-UPDATER's own ISS-0716
+      SCOPE-CHANGE done-event append (WF03-ISS0716-20260918 -- fixed
+      ColumnPromotionTest AC1's concurrent-tenant-commit flake) --
+      `grep -c "^  - req:" docs/status/requirement_status.v20.yaml` = 1
+      on-disk entry; 232 lines / 13672 bytes, well under the
+      1200-line/120000-byte roll ceiling, no roll triggered. This branch's
+      own PR hit a real race with a sibling session's independent roll of
+      this same volume (see this entry's own note in v20.yaml for the full
+      account) -- rebuilt from a fresh origin/main checkout rather than
+      hand-reconciling two divergent "closed volume 19" states.
 
       Prior note (0 entries): Opened by ORCH's own ISS-0690 blocked-event
       close-out, successor to volume 19 (closed at 23 entries / 1212

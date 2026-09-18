@@ -230,3 +230,76 @@ history:
       hits): this is internal test-suite behavior, not documented current
       behavior, so no README update needed. No merge and no
       letflow-queue/GitHub state change performed here -- ORCH's job next.
+  - req: ISS-0718
+    event: done
+    agent: ORCH
+    at: "2026-09-18T22:41:55Z"
+    note: >
+      WF-03 run WF03-ISS0718-20260919 (queue task Q-718, GH-1541) complete
+      and merged to main as commit 3b548591 (PR #1546, squash-merged, both
+      CI gates green: backend mix letflow.check 10m49s pass, frontend
+      npm run check pass). ISS-0718 (CANDIDATE role gets a real 403 on the
+      exam list screen -- ExamListPage.tsx's POST /entities/query call
+      requires :EntitiesQuery, outside CANDIDATE's ISS-0646 closed
+      six-permission set) is now resolved. CODE-DESIGNER chose option (b)
+      from the issue's own text: a new dedicated route
+      GET /exam-sessions/available (lib/letflow/routers/exam_sessions.ex),
+      gated by the EXISTING :ExamSessionStart permission CANDIDATE already
+      holds -- zero changes to role_allows?(:CANDIDATE, ...) or the
+      ISS-0646 closed-set invariant test in
+      test/letflow/api/authorization_test.exs. CODE-DESIGN-VALIDATOR FAILed
+      once (design doc contained literal compilable Elixir code instead of
+      prose/pseudocode per this project's convention) then PASSed after
+      rework. Letflow.Exam.Session.list_available_exams/2
+      (lib/letflow/exam/session.ex) hardcodes entity_type "exam" + status
+      "active" server-side, reusing Compiler/Allowlist/Cursor internally
+      without the generic route's FieldGrants redaction step (confirmed no
+      entity_field_restrictions row exists for "exam" today). Frontend
+      (web/src/api/exam.ts, web/src/pages/exam/ExamListPage.tsx) switched
+      to the new route, dropped the dead queryExamRecords call.
+      SECURITY-REVIEWER PASS (tenant isolation via prefix threaded through
+      Compiler/Allowlist/Cursor, INV-1/4/7/8 satisfied, permission-reuse
+      equivalence-of-effect verified -- CANDIDATE could already probe
+      individual exam status one at a time via the pre-existing
+      POST /exam-sessions route under the same permission). REVIEWER PASS
+      (idiom matches existing router conventions, no scope creep, decision
+      0013's addendum untouched, REQ-366's :HelpRead precedent not
+      reopened). TEST-DESIGNER wrote 5 new tests in
+      test/letflow/routers/exam_sessions_test.exs (commit 354a980a) and
+      applied 3 mutants (drop status filter, swap policy key to
+      :EntitiesQuery, swap entity_type to "question"), all caught, all
+      reverted and verified clean. TEST-DESIGN-VALIDATOR independently
+      applied its own mutant (status filter drop, 2/5 tests failed as
+      expected) per WF-03's "code did not exist" rule, confirmed revert
+      clean, PASS. TEST-RUNNER: full mix test suite 4452/4452 passed (16
+      partitions), frontend npm run guards 48/48 passed including a real
+      production build -- no regressions. ISSUE-FIXER closed
+      docs/issues/ISS-0718.yaml (status: resolved,
+      resolved_in_run: WF03-ISS0718-20260919) and GitHub issue #1541 with
+      a comment citing the design doc, implementation commits, and
+      regression tests -- confirmed closed via gh issue view.
+
+      This run's own ELIXIR-DEV, SECURITY-REVIEWER and TEST-DESIGNER
+      dispatches each went quiet for an extended period without
+      committing progress mid-step; ORCH verified their in-progress
+      working-tree state directly (uncommitted diffs matching their later
+      self-reports), independently re-ran the relevant tests itself where
+      warranted, and in ELIXIR-DEV's and TEST-DESIGNER's cases pushed
+      already-completed local commits the agent had made but not yet
+      pushed, rather than blocking further on an unresponsive dispatch --
+      each agent's own later report, once it did land, confirmed the
+      independently-verified state matched exactly. ORCH also
+      independently performed a SECURITY-REVIEWER PASS itself, later
+      corroborated in full by the original SECURITY-REVIEWER dispatch's
+      own delayed report reaching the same conclusion by an independent
+      path (entity_field_restrictions grep, INV-1 trace, equivalence
+      argument). One cosmetic typo (exam_sessions_router.ex ->
+      exam_sessions.ex) in the ISSUE-FIXER close-out's resolution text was
+      corrected directly by ORCH as a trivial one-line doc fix.
+      Letflow-queue task 718 released with status: done (GitHub issue
+      close-sync verified via gh issue view, already closed by
+      ISSUE-FIXER's own step). No docs/requirements.yaml entry to flip
+      (this is an ISS, not a REQ). No docs/migration/stage-N-*.md or
+      decisions/*.md file required updating -- ISS-0718's fix deliberately
+      avoided touching decision 0013's addendum, consistent with the
+      design's own stated goal.

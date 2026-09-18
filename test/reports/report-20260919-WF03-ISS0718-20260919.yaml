@@ -1,0 +1,64 @@
+run_id: WF03-ISS0718-20260919
+agent: TEST-RUNNER
+date_utc: 2026-09-18T22:03:53Z
+branch: feature/WF03-ISS0718-20260919
+scope: |
+  WF-03 Step 4 final test-run gate for ISS-0718 (GET /exam-sessions/available
+  backend route + frontend switch to it). Design, backend implementation,
+  frontend implementation, SECURITY-REVIEWER, REVIEWER, and TEST-DESIGN-VALIDATOR
+  (with independent mutation testing) already passed on this branch. Ran the full
+  suite exactly once per instructions (documented workstation low-memory issue
+  makes repeated local retries stall without progress).
+
+commands_run:
+  - cwd: .
+    cmd: docker compose up -d
+    note: >
+      letflow-postgres-1 and letflow-keycloak-1 already running; no .env
+      LETFLOW_DB_PORT override present, so default port 5462 used.
+  - cwd: .
+    cmd: bash scripts/test_parallel.sh
+  - cwd: web
+    cmd: npm run guards
+    resolves_to: >
+      vitest run tests/guards/meta-control.spec.ts tests/guards/source-scan.spec.ts
+      tests/guards/bundle-scan.spec.ts tests/guards/role-set.spec.ts --reporter=verbose
+      (bundle-scan.spec.ts drives a real `tsc -b && vite build` production build
+      as part of its own test)
+
+backend_test_result:
+  partitions: 16
+  combined: "4452/4452 passed"
+  tests: 4446
+  properties: 6
+  failures: 0
+  exit_codes: "all 16 partitions exit 0"
+  raw_summary: "combined: 4446 tests, 6 properties, 0 failures (4452/4452 passed)"
+  regression_check: >
+    Zero failures across the entire suite -- nothing to attribute. No
+    pre-existing-flake or connection-pool-contention failures observed on this
+    run.
+
+frontend_guard_result:
+  test_files: "4 passed (4)"
+  tests: "48 passed (48)"
+  duration_ms: 14330
+  includes: >
+    meta-control.spec.ts (fixture coverage + single-source regex invariant),
+    source-scan.spec.ts (web/src/**/*.{ts,tsx,css} guard scan), bundle-scan.spec.ts
+    (real production build via tsc -b && vite build, then built-bundle guard scan --
+    build succeeded, 2422 modules transformed, no build errors; only a routine
+    chunk-size-over-500kB advisory warning, not a failure), role-set.spec.ts
+    (AppShell Role union vs. authorization matrix).
+  note: >
+    Matches FRONTEND-DEV's own report on this run (48/48 including a full
+    production build).
+
+verdict: PASS
+verdict_basis: >
+  Full backend suite: 4452/4452 passed, 0 failures, 0 pending, across all 16
+  partitions -- no regression, no flake to attribute. Frontend guard suite
+  (including a real production build): 48/48 passed. No real regression found
+  anywhere in this run.
+
+next_action: "Route to ISSUE-FIXER for Step 5 issue close-out"

@@ -58,7 +58,7 @@ export default function PlatformDashboardPage(): JSX.Element {
             Tenants
           </div>
           <div style={{ fontSize: '2.25rem', fontWeight: 700, color: 'var(--color-info)' }}>
-            {String(tenantsQuery.data?.total ?? 0)}
+            {String(tenantsQuery.data?.count ?? 0)}
           </div>
         </div>
       </QueryStateBoundary>

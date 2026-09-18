@@ -1,0 +1,151 @@
+run_id: WF03-ISS0711-20260918
+agent: TEST-RUNNER
+date_utc: 2026-09-18T16:18:05Z
+branch: fix/WF03-ISS0711-20260918
+head_commit: aaa2550e73804359db9d47bcf08752c7918980ed
+scope: |
+  WF-03 Step 4 final test-run confirmation for ISS-0711 (tenant-count/pagination
+  field-mismatch fix). Design (68127f70), FRONTEND-DEV implementation (80cd88d1),
+  and TEST-DESIGNER spec + fail-then-pass verification (aaa2550e) already landed
+  on this branch. SECURITY-REVIEWER and REVIEWER both PASSed. Frontend-only change.
+
+diff_scope_check:
+  cmd: "git diff --name-only main...HEAD"
+  result: |
+    lib/letflow/design/iss0711-tenant-count-field-mismatch.md
+    test/specs/ISS-0711.md
+    web/src/api/queryKeys.ts
+    web/src/api/tenants.ts
+    web/src/pages/admin/tenants/TenantsPage.tsx
+    web/src/pages/admin/tenants/__tests__/TenantsPage.pagination.test.tsx
+    web/src/pages/admin/tenants/__tests__/TenantsPage.test.tsx
+    web/src/pages/dashboard/PlatformDashboardPage.tsx
+    web/src/pages/dashboard/__tests__/PlatformDashboardPage.test.tsx
+  conclusion: >
+    No files under lib/letflow/ or priv/repo/migrations/ are touched by this branch
+    (lib/letflow/design/ is a design-doc markdown file, not application code).
+    Confirms this is frontend-only, so a full backend mix letflow.check.test run
+    is not required per task instructions; mix compile --warnings-as-errors run
+    instead as a cheap sanity check.
+
+commands_run:
+  - cwd: web
+    cmd: npm run type-check
+    resolves_to: tsc -b tsconfig.json
+    status: PASS
+    output: |
+      > letflow-web@0.1.0 type-check
+      > tsc -b tsconfig.json
+      (no errors, exit 0)
+
+  - cwd: web
+    cmd: npm run lint
+    resolves_to: eslint . --ext ts,tsx --report-unused-disable-directives --max-warnings 0
+    status: PASS
+    output: |
+      > letflow-web@0.1.0 lint
+      > eslint . --ext ts,tsx --report-unused-disable-directives --max-warnings 0
+      (no errors, exit 0)
+
+  - cwd: web
+    cmd: npm run test
+    resolves_to: vitest run --passWithNoTests --exclude "tests/e2e/**" --exclude "tests/guards/**"
+    status: PASS
+    output: |
+      Test Files  95 passed (95)
+           Tests  633 passed (633)
+        Start at  16:16:37
+        Duration  25.02s (transform 7.78s, setup 0ms, collect 37.82s, tests 17.46s,
+                   environment 63.22s, prepare 15.07s)
+      All suites passed, including this branch's:
+        - src/pages/admin/tenants/__tests__/TenantsPage.pagination.test.tsx (4 tests)
+        - src/pages/admin/tenants/__tests__/TenantsPage.test.tsx (1 test)
+        - src/pages/dashboard/__tests__/PlatformDashboardPage.test.tsx (5 tests)
+      No failures, no skips, no unrelated pre-existing breakage observed this run
+      (unlike prior ISS-0712 report, no rehype-sanitize/HelpMarkdown collection
+      failures occurred here -- full 95/95 file pass).
+
+  - cwd: web
+    cmd: npm run build
+    resolves_to: tsc -b && vite build
+    status: PASS
+    output: |
+      > letflow-web@0.1.0 build
+      > tsc -b && vite build
+
+      vite v5.4.21 building for production...
+      transforming...
+      ✓ 2406 modules transformed.
+      rendering chunks...
+      computing gzip size...
+      dist/index.html                         0.61 kB │ gzip:   0.34 kB
+      dist/assets/index-BQ8nkMe7.css          3.10 kB │ gzip:   1.03 kB
+      dist/assets/vendor-BZV40eAE.css        15.85 kB │ gzip:   2.65 kB
+      dist/assets/autoLayout-BcA-PA3s.js      0.93 kB │ gzip:   0.52 kB
+      dist/assets/index-CSmDDN3S.js         357.83 kB │ gzip:  88.29 kB
+      dist/assets/vendor-DtaDAWqj.js      1,263.56 kB │ gzip: 396.46 kB
+
+      (!) Some chunks are larger than 500 kB after minification. Consider:
+      - Using dynamic import() to code-split the application
+      - Use build.rollupOptions.output.manualChunks to improve chunking
+      - Adjust chunk size limit for this warning via build.chunkSizeWarningLimit.
+      ✓ built in 9.87s
+    note: >
+      Chunk-size warning is advisory only (pre-existing, not introduced by this
+      branch), build exits 0.
+
+  - cwd: web
+    cmd: npm run guards
+    resolves_to: >
+      vitest run tests/guards/meta-control.spec.ts tests/guards/source-scan.spec.ts
+      tests/guards/bundle-scan.spec.ts tests/guards/role-set.spec.ts --reporter=verbose
+    status: PASS
+    output: |
+      Test Files  4 passed (4)
+           Tests  48 passed (48)
+        Start at  16:17:33
+        Duration  26.66s
+      Includes a nested production build (tsc -b && vite build) which also
+      succeeded (2422 modules transformed, built in 11.46s), plus:
+        - role-set: AppShell Role union vs Letflow.Api.Authorization.roles/0 -- pass
+        - meta-control: all fixture-coverage checks (offender/bystander regex pairs
+          for msw-import, http-mock-adapter, raw-fetch-outside-client,
+          literal-colour, native-confirm, tenant-slug-in-source, inline-query-key,
+          inline-stale-time, missing-query-state-boundary, test-only-or-skip) -- pass
+        - source-scan: web/src/**/*.{ts,tsx,css} has no guard violations -- pass
+        - bundle-scan: built bundle contains no guard violations -- pass
+        - bundle-scan: GRD-UI-03 AC4 literal-colour synthetic fixture detection -- pass
+
+  - cwd: /home/tvolodi/workspace/letflow-1
+    cmd: mix compile --warnings-as-errors
+    status: PASS
+    output: |
+      Compiling 7 files (.ex)
+      Generated letflow app
+    note: >
+      Cheap backend sanity check only, per task scope -- no lib/letflow/ or
+      priv/repo/migrations/ files are touched by this branch, so a full
+      mix letflow.check.test / scripts/test_parallel.sh run was not required
+      and was not performed.
+
+backend_full_suite: >
+  NOT RUN. Justification: git diff --name-only main...HEAD (quoted above) shows
+  zero files under lib/letflow/ or priv/repo/migrations/ touched by this branch;
+  the only non-web change is a markdown design doc under lib/letflow/design/ and
+  a markdown test spec under test/specs/. Per this task's explicit instructions,
+  scripts/test_parallel.sh / mix letflow.check.test was not required for a
+  frontend-only change; mix compile --warnings-as-errors was run instead and
+  passed cleanly.
+
+verdict: PASS
+verdict_basis: >
+  All five frontend verification commands (type-check, lint, test, build, guards)
+  passed with zero failures, zero warnings-as-errors violations, and zero skipped
+  tests. The three new/modified test files for this fix
+  (TenantsPage.pagination.test.tsx, TenantsPage.test.tsx,
+  PlatformDashboardPage.test.tsx) all pass within the full 633/633 suite run --
+  no isolated re-run was needed since the whole suite was green. mix compile
+  --warnings-as-errors confirms the backend is unaffected and unbroken. No new
+  failures, no pre-existing unrelated failures observed in this run (a cleaner
+  result than the most recent prior report in this directory, which had
+  unrelated missing-npm-package collection failures on a different branch).

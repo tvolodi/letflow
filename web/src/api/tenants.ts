@@ -14,15 +14,19 @@ export interface Tenant {
   production_tenant_display_name: string | null
 }
 
+// Real backend envelope: lib/letflow/api/pagination.ex's Page struct
+// (`@derive {Jason.Encoder, only: [:items, :next_cursor, :count]}`) via
+// lib/letflow/routers/tenants.ex's handle_list/1. There has never been a
+// `total`/`limit`/`offset` field on this endpoint's response body — see
+// lib/letflow/design/iss0711-tenant-count-field-mismatch.md.
 export interface TenantListResponse {
   items: Tenant[]
-  total: number
-  limit: number
-  offset: number
+  next_cursor: string | null
+  count: number // length(items) for the CURRENT PAGE ONLY — never a cross-page total.
 }
 
 export const tenantsApi = {
-  list: (params?: { search?: string; limit?: number; offset?: number }) =>
+  list: (params?: { search?: string; cursor?: string; page_size?: number }) =>
     client.get<TenantListResponse>('/api/v1/tenants', params as Record<string, unknown>),
 
   getBySlug: (slug: string) =>

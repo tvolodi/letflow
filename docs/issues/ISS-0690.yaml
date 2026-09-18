@@ -274,3 +274,108 @@ followup_2:
     above AND, if (a) or (c), a follow-on ai-dala-infra task -- do not
     default to (b) without ORCH/REQ-ANALYST sign-off, since it is the
     only option requiring new Letflow application code.
+followup_3:
+  checked_by: ORCH
+  checked_at: "2026-09-19T00:00:00Z"
+  note: >
+    Option (b) landed: REQ-370 (multi-issuer OIDC token verification,
+    merged as 21177271, PR #1535) is done. This run re-verified it live
+    against QA rather than trusting the prior session's "CD (QA)
+    succeeded" claim at face value, per this run's own explicit
+    instruction not to assume the fix is deployed -- and that caution was
+    justified: the first live re-test still got a 401, identical to
+    followup_2's pre-fix result.
+
+    Root-caused to a genuinely new, separate, higher-impact defect, now
+    filed as ISS-0717 (Q-717/GH-1540): ai-dala-infra's
+    deploy/redeploy-qa.sh builds and tags an image as `letflow-qa:latest`,
+    but docker-compose.qa.yml's `app` service has no `image:` field, so
+    `docker compose up --force-recreate` never actually picks up that
+    freshly-built image -- it silently keeps running whatever
+    `letflow-qa-app:latest` (compose's own auto-named image) last
+    happened to be. Confirmed live: QA was running git ref b04a2bb4
+    (pre-REQ-370) despite two "successful" CD (QA) runs after REQ-370
+    merged (both were docs-only commits whose deploy step correctly
+    no-op'd; the one CI run that would have deployed REQ-370's own commit,
+    211772716c, was cancelled and no CD run ever reached it). This means
+    QA backend deploys may have been silently no-op'ing for an unknown
+    prior window -- see ISS-0717 for the full account and remediation
+    options. Ad hoc fixed for THIS session only (rebuilt and
+    force-recreated the container under the tag compose actually uses);
+    NOT a durable fix, will not survive the next automated CD (QA) run.
+
+    With QA genuinely running a6e899fc (current main, REQ-370 included),
+    re-tested: a real bilimbaga-realm CANDIDATE token against
+    GET /api/v1/definitions now returns a real 403 Forbidden
+    (permission-correct) instead of the prior 401 unauthorized
+    (auth-layer rejection). REQ-370's multi-issuer verification is
+    confirmed genuinely working live, not just merged.
+
+    AC2 (solution pack installed) is STILL not done, for a narrower reason
+    than any previously recorded: the bilimbaga Keycloak realm has exactly
+    one seeded user (candidate-user, CANDIDATE role) -- no admin/designer
+    equivalent exists in that realm with :DefinitionsWrite, and
+    POST /solution-packs/install is strictly scoped to the caller's own
+    token's tenant_id (confirmed by reading
+    lib/letflow/routers/solution_packs.ex -- no cross-tenant admin
+    override exists, by INV-1 design). Attempted to seed a bilimbaga-realm
+    admin user directly via Keycloak's admin API to unblock this myself;
+    no master/realm-admin Keycloak credential was available from this
+    environment (only the five seeded APPLICATION user passwords in
+    seeded-users.env) -- this remains a genuine ai-dala-infra-side gap,
+    same class as followup_2's option (c) discussion.
+
+    Dispatched a FRESH UAT-RUNNER (not reusing any prior report) to
+    actually re-run
+    test/fixtures/uat/scenarios/bilimbaga/candidate-timed-exam-autograde.yaml
+    against QA with the real bilimbaga CANDIDATE token, per this run's own
+    instruction to confirm live rather than assume. Real result: BLOCKED,
+    not PASS -- full report at
+    test/uat-reports/uat-2026-09-19-WF03-ISS0690-BILIMBAGA-20260919.yaml.
+    No 401 anywhere in that run (REQ-370 confirmed holding up under a
+    fresh token). Two distinct blockers recorded honestly:
+      1. AC2's still-open gap above (no pack installed, so no active exam
+         exists) -- POST /api/v1/exam-sessions with a synthetic exam_id
+         correctly returned 422 "this exam is not currently active", not
+         an auth error.
+      2. A genuinely NEW defect, surfaced only now that the auth layer no
+         longer blocks the request first: ExamListPage.tsx's exam-listing
+         call (POST /entities/query, needs :EntitiesQuery) is outside
+         CANDIDATE's ISS-0646 closed permission set (exactly six
+         ExamSession*/ExamCertificateIssue permissions, nothing else) --
+         real 403 Forbidden, confirmed live. Filed separately as ISS-0718
+         (Q-718/GH-1541, BLOCKER) since it is a real, actionable,
+         letflow-side authorization/design gap, independent of both
+         ISS-0690 and ISS-0717.
+
+    Net position: this issue narrows further with each pass (auth-layer
+    blocker: closed by REQ-370, confirmed live. Deploy-pipeline blocker:
+    discovered and ad hoc unblocked, durable fix filed as ISS-0717.
+    Solution-pack install: narrowed to a specific missing
+    bilimbaga-realm credential, ai-dala-infra-side. Exam-list
+    authorization: newly discovered, filed as ISS-0718, letflow-side) but
+    is NOT closed -- AC2 and AC4 (this issue's own acceptance criteria)
+    are still not met. Left status: open, queue release stays blocked
+    (unchanged convention from followup/followup_2), consistent with this
+    file's own "None of ISS-NNNN.yaml's terminal status values truthfully
+    describe this outcome" reasoning in diagnosis.note above -- still true
+    here, now for a different, narrower set of remaining blockers.
+  next_action: >
+    Two independent follow-ups now exist, neither of which is
+    ISSUE-FIXER's to resolve directly for this issue:
+      1. ISS-0717 (ai-dala-infra-side): fix the redeploy-qa.sh/
+         docker-compose.qa.yml image-tag mismatch durably, so future
+         CD (QA) runs actually deploy. Also needs a bilimbaga-realm
+         admin/designer-role Keycloak user seeded (no ticket filed for
+         that specific piece yet -- whoever picks up ISS-0717 or a
+         follow-on should file it, scoped narrowly: one user, one role,
+         one realm) so AC2 (solution pack install) becomes reachable.
+      2. ISS-0718 (letflow-side): resolve the CANDIDATE/:EntitiesQuery
+         permission gap via CODE-DESIGNER, so the exam-list screen
+         actually works for any candidate once seed data exists.
+    Once BOTH land: install priv/packs/bilimbaga/pack.json into the
+    bilimbaga tenant (PLATFORM_ADMIN- or DefinitionsWrite-capable token
+    scoped to bilimbaga), configure >=1 active exam, then re-run
+    test/fixtures/uat/scenarios/bilimbaga/candidate-timed-exam-autograde.yaml
+    via UAT-RUNNER one more time for the real AC4 result this issue
+    requires before it can move to resolved.

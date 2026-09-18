@@ -1,0 +1,86 @@
+id: ISS-0718
+title: "CANDIDATE role gets 403 on the exam list screen -- ExamListPage.tsx's entities/query call is outside CANDIDATE's ISS-0646 closed permission set"
+discovered_by: UAT-RUNNER
+discovered_in_run: WF03-ISS0690-BILIMBAGA-20260919
+discovered_at: "2026-09-19T00:00:00Z"
+severity: BLOCKER
+description: >
+  Live-confirmed 2026-09-19 by a fresh UAT-RUNNER dispatch (run
+  WF03-ISS0690-BILIMBAGA-20260919, see
+  test/uat-reports/uat-2026-09-19-WF03-ISS0690-BILIMBAGA-20260919.yaml)
+  re-running test/fixtures/uat/scenarios/bilimbaga/candidate-timed-exam-autograde.yaml
+  against live QA with a real CANDIDATE-role JWT (candidate-user, bilimbaga
+  Keycloak realm) -- this is a genuinely new, distinct defect from ISS-0690
+  itself, surfaced only because REQ-370 (multi-issuer OIDC verification)
+  fixed the earlier auth-layer 401 and let the actual request reach
+  authorization.
+
+  web/src/pages/exam/ExamListPage.tsx (REQ-338) lists active exams by
+  calling POST /api/v1/entities/query (examApi.queryExamRecords in
+  web/src/api/exam.ts) -- its own file header says this deliberately,
+  explaining it reuses "the existing generic entity-read route... no new
+  backend route is needed." That route requires the :EntitiesQuery
+  permission (lib/letflow/api/authorization.ex).
+
+  Separately, ISS-0646 (see decision 0013's addendum) established CANDIDATE
+  as a deliberately CLOSED permission set: "CANDIDATE must hold exactly its
+  six ExamSession*/ExamCertificateIssue permissions and nothing else" --
+  enforced by test/letflow/api/authorization_test.exs's own closed-set
+  invariant test, and reaffirmed explicitly when REQ-366 considered (and
+  rejected) widening that set for :HelpRead
+  (lib/letflow/api/authorization.ex's own moduledoc, "HelpRead... CANDIDATE
+  deliberately excluded" section).
+
+  :EntitiesQuery is not one of CANDIDATE's six permissions. The two
+  decisions were never reconciled: REQ-338 built the ONLY exam-listing
+  screen a candidate is meant to use around a route CANDIDATE is
+  structurally forbidden from calling. Confirmed live: POST
+  https://qa.bizdala.com/api/v1/entities/query with a real bilimbaga-realm
+  CANDIDATE token and the exact filter ExamListPage.tsx sends
+  ({"entity_type":"exam","filters":[{"field":"status","op":"eq","value":"active"}]})
+  returns a real 403 Forbidden, {"detail":"insufficient permissions"}
+  (trace_id 0fc5c3ee-08a9-4647-89f2-0d09ae586c83). A probe against
+  POST /api/v1/exam-sessions with a synthetic exam_id got a real 422
+  "this exam is not currently active" (trace_id
+  018cdc48-50c6-4f07-80c8-00c80a4fcda0), confirming the ExamSession* routes
+  themselves DO accept CANDIDATE's token fine -- the 403 is specific to the
+  entities/query call the list screen depends on, not a general auth
+  problem.
+
+  IMPACT: every real CANDIDATE-role user hits a 403 the moment they load
+  the exam list screen, on every tenant, not just BilimBaga -- this is
+  upstream of and independent from ISS-0690's own BilimBaga-specific
+  seed-data gap. Candidates cannot discover which exams are available to
+  sit at all through the built UI, in any tenant, today.
+
+  NOT reported as: a solution-pack/seed-data gap (that's ISS-0690, unaffected
+  by this), or an auth/token-verification bug (that's the REQ-370 class of
+  problem, and is confirmed NOT the cause here -- the 403 is a real,
+  correct authorization decision given CANDIDATE's closed permission set,
+  not a bypassed check).
+
+  Two ways to resolve, CODE-DESIGNER's call, not ISSUE-FIXER's:
+    (a) grant CANDIDATE a narrow, read-only, exam-scoped list permission
+        (a new permission atom, e.g. :ExamListRead, or widen ISS-0646's
+        closed set specifically for a read-only entities/query filtered to
+        entity_type=exam) -- requires touching the closed-set invariant
+        test deliberately, with REVIEWER/SECURITY-REVIEWER sign-off, same
+        as REQ-366's :HelpRead precedent explicitly flagged but did not
+        resolve; or
+    (b) give ExamListPage.tsx its own dedicated backend route scoped
+        under the existing ExamSession* permission family instead of the
+        generic entities/query route, avoiding any change to CANDIDATE's
+        closed set at all.
+  Do not silently pick one -- REQ-338's own design already flagged the
+  "escape option" ambiguity once (see ExamListPage.tsx's own header
+  comment); this is the same class of open question, now with a live
+  confirmed failure attached, not a hypothetical.
+affected_files:
+  - web/src/pages/exam/ExamListPage.tsx
+  - web/src/api/exam.ts
+  - lib/letflow/api/authorization.ex
+  - test/letflow/api/authorization_test.exs
+  - test/uat-reports/uat-2026-09-19-WF03-ISS0690-BILIMBAGA-20260919.yaml
+queue_ref: Q-718
+github_ref: GH-1541
+status: open

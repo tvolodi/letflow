@@ -1,0 +1,177 @@
+run_id: WF03-ISS0690-BILIMBAGA-20260919
+date: "2026-09-19"
+agent: UAT-RUNNER
+scope: >
+  test/fixtures/uat/scenarios/bilimbaga/candidate-timed-exam-autograde.yaml
+  (id: bilimbaga-candidate-timed-exam-autograde), run for real against live
+  QA, following up on ISS-0690 (missing BilimBaga tenant/solution-pack/
+  candidate seed data) and this session's earlier REQ-370 multi-issuer-OIDC
+  deploy fix. This scenario is `via: gui` throughout (steps 1-3) with no
+  `pipeline_test:` key present anywhere in the file -- per WF-05's own
+  instruction, an absent `pipeline_test:` means the frontend/GUI leg of each
+  step is recorded BLOCKED rather than silently skipped or routed around with
+  an invented substitute. This run therefore exercises the real backend HTTP
+  surface each GUI step and precondition actually depends on (confirmed by
+  reading web/src/pages/exam/ExamListPage.tsx and web/src/api/exam.ts for the
+  real request shapes the frontend issues), and reports the GUI leg itself as
+  BLOCKED/UNBUILT_FEATURE (no spec to drive).
+
+environment_target:
+  base_url: "https://qa.bizdala.com"
+  credential_source: "ai-dala-infra/scripts/qa-login.sh (candidate-user, bilimbaga realm)"
+  environment: qa
+  tenant: "bilimbaga (id 6ab093a1-d190-4063-9543-d66b80d261a1, idp_realm_id bilimbaga)"
+
+credential_acquisition: >
+  Token minted directly via
+  POST https://auth.qa.bizdala.com/realms/bilimbaga/protocol/openid-connect/token
+  (grant_type=password, client_id=letflow-web, username=candidate-user) ->
+  HTTP 200, real access_token returned (RS256 JWT, issuer
+  https://auth.qa.bizdala.com/realms/bilimbaga). Password used only
+  in-memory for this run's curl calls; not written to this report or any
+  committed file. Confirms REQ-370's multi-issuer verification path is live:
+  this bilimbaga-realm-issued token is the same one later accepted (401->403,
+  i.e. authenticated but scope-checked) by the API in the calls below.
+
+steps_executed:
+  - step: precondition_check
+    description: >
+      Preconditions: "A bilimbaga tenant exists with the exam solution pack
+      installed" (check: process_definition_active) and "At least one
+      certification exam is configured and active" (check: no_pending_instances).
+    method: >
+      POST https://qa.bizdala.com/api/v1/entities/query
+      body: {"entity_type":"exam","filters":[{"field":"status","op":"eq","value":"active"}],"page_size":100}
+      Authorization: Bearer <candidate-user bilimbaga token>
+      -- this is the EXACT call web/src/pages/exam/ExamListPage.tsx issues
+      (via examApi.queryExamRecords) to populate step 1's "list of exams
+      available to them" screen, so it doubles as both the precondition
+      check and step 1's real backend equivalent.
+    real_response: >
+      HTTP 403
+      {"status":403,"type":"https://bpm.example.com/problems/forbidden","title":"Forbidden","detail":"insufficient permissions","trace_id":"0fc5c3ee-08a9-4647-89f2-0d09ae586c83"}
+    finding: >
+      NEW DEFECT, independent of the pack-install gap: lib/letflow/api/authorization.ex
+      role_allows?(:CANDIDATE, permission) (line ~1023) grants CANDIDATE
+      exactly six permissions -- ExamSessionStart, ExamSessionRead,
+      ExamSessionSave, ExamSessionSubmit, ExamSessionReportEvent,
+      ExamCertificateIssue -- and does NOT include :EntitiesQuery, which
+      endpoint_policy_key/2 (same file, line 659) maps POST /entities/query
+      to. ExamListPage.tsx's only exam-listing mechanism is this exact route
+      (per that file's own moduledoc: "no dedicated 'list exams' route
+      exists"). Consequence: a real CANDIDATE-role user can NEVER see the
+      list of exams available to them, by design of the current permission
+      matrix -- this is not a QA seed-data gap, it reproduces the same way
+      once the solution pack is installed and an exam is made active. This
+      is a genuine, newly-observed, real defect on the real system, not
+      inferred.
+
+  - step: 1
+    actor: candidate
+    action: "Signs in and opens the list of exams available to them"
+    via: gui (no pipeline_test spec exists for this scenario)
+    gui_leg_verdict: BLOCKED/UNBUILT_FEATURE -- no Playwright spec to drive.
+    backend_leg_verdict: FAIL (see precondition_check finding above -- 403
+      Forbidden on the exact call this screen depends on).
+
+  - step: 2
+    actor: candidate
+    action: "Starts a timed certification exam session"
+    via: gui (no pipeline_test spec exists)
+    method: >
+      Could not obtain a real exam_id from step 1 (blocked above, and
+      independently -- per this session's established context -- the
+      BilimBaga solution pack is not installed in this tenant, so no real
+      exam_id exists yet regardless). Probed the real backend endpoint
+      directly with a syntactically-valid but non-existent exam_id to
+      confirm the session-start route itself is reachable and CANDIDATE-
+      authorized (sanity check, not a scenario pass):
+      POST https://qa.bizdala.com/api/v1/exam-sessions
+      body: {"exam_id":"00000000-0000-0000-0000-000000000000"}
+    real_response: >
+      HTTP 422
+      {"status":422,"type":"https://bpm.example.com/problems/unprocessable-entity","title":"Unprocessable Entity","detail":"this exam is not currently active","trace_id":"018cdc48-50c6-4f07-80c8-00c80a4fcda0"}
+    finding: >
+      Confirms two things honestly: (a) CANDIDATE's ExamSessionStart
+      permission itself IS correctly granted and reachable (no 401/403 here
+      -- the request was accepted past auth/authz and rejected on business
+      grounds instead, per lib/letflow/routers/exam_sessions.ex's
+      render_start_session(:exam_not_active) clause), and (b) there is no
+      active exam configured for this candidate to start, consistent with
+      the solution pack not being installed. Not a scenario PASS -- no real
+      exam_id was exercised, since none exists.
+    gui_leg_verdict: BLOCKED/UNBUILT_FEATURE.
+    backend_leg_verdict: BLOCKED -- no active exam exists to start a real
+      session against.
+
+  - step: 3
+    actor: candidate
+    action: "Answers every question and submits before the timer expires"
+    via: gui (no pipeline_test spec exists)
+    verdict: NOT EXECUTED -- unreachable without a real session id from step 2.
+
+expected_outcomes:
+  - id: EO-001
+    description: "Visible countdown after starting the exam"
+    verdict: NOT EXECUTED -- no session exists to observe a countdown on.
+  - id: EO-002
+    description: "Immediate score + pass/fail after submit"
+    verdict: NOT EXECUTED -- no session exists to submit.
+  - id: EO-003
+    description: "Score matches correct grading of actual answers"
+    verdict: NOT EXECUTED -- no session exists to grade.
+
+result_overall: BLOCKED
+
+disposition: >
+  This run makes genuine, incremental progress over ISS-0690's prior state,
+  and it is a DIFFERENT, NARROWER failure point than the previous 401-at-
+  auth-layer blocker this session already fixed (REQ-370's multi-issuer
+  deploy fix): the candidate token is now correctly authenticated
+  (no 401 anywhere in this run) and correctly authorized for the exam-session
+  routes themselves (422 business-rule rejection, not 401/403, on the
+  session-start probe). The scenario is still BLOCKED end-to-end, for two
+  independent, honestly-distinguished reasons:
+    1. (Previously known, per ISS-0690/this session's context) No BilimBaga
+       exam solution pack is installed in this tenant, so no active exam
+       exists for a candidate to start. UAT-RUNNER did not attempt to
+       install it (out of scope for this role; also, per this session's own
+       prior finding, no admin/designer-role user exists in the bilimbaga
+       realm to do so, and PLATFORM_ADMIN's bpm-default token cannot
+       cross-tenant-install per lib/letflow/routers/solution_packs.ex's
+       strict same-tenant scoping).
+    2. (NEWLY DISCOVERED this run, NOT previously known) Even once an exam is
+       installed and made active, CANDIDATE role as currently defined in
+       lib/letflow/api/authorization.ex cannot list exams at all -- the
+       ExamListPage.tsx screen's only data source (POST /entities/query,
+       gated on :EntitiesQuery) is not among CANDIDATE's six granted
+       permissions. This would block step 1 of this scenario even after
+       ISS-0690's seed-data gap is fully closed. This is a real, reproducible
+       403 on the real system, evidenced above, not inferred or predicted.
+
+new_findings: >
+  One new defect, recommended for the issue queue (ORCH/ISSUE-FIXER):
+  "CANDIDATE role cannot list exams -- POST /entities/query (exam listing)
+  requires :EntitiesQuery, which lib/letflow/api/authorization.ex's
+  role_allows?(:CANDIDATE, _) closed-set (ISS-0646) does not include, so
+  ExamListPage.tsx's only exam-listing data source 403s for every real
+  candidate." Severity: BLOCKER per this scenario's own EO-002 on_fail
+  framing ("breaks the core promise of the exam platform") -- this defect
+  sits upstream of EO-002/EO-003 and independently blocks the entire
+  candidate exam flow at its very first screen. Evidence: real HTTP 403
+  response quoted above (trace_id 0fc5c3ee-08a9-4647-89f2-0d09ae586c83).
+  Note: ISS-0646's own closed-set invariant test
+  (test/letflow/api/authorization_test.exs) may need its expected permission
+  list revisited as part of any fix, not just the exam-list call site.
+
+verdict: >
+  BLOCKED, not FAIL and not PASS -- this scenario cannot be driven to
+  completion on real QA today. Real progress confirmed relative to the prior
+  auth-layer 401 blocker (this session's REQ-370 fix holds up under a fresh,
+  independent bilimbaga-realm candidate token). Two distinct, correctly
+  distinguished real blockers remain, one already tracked (ISS-0690 pack
+  install) and one newly surfaced by this run (CANDIDATE :EntitiesQuery gap)
+  and recommended for filing. No mocks used; every response above is a real,
+  quoted HTTP exchange against https://qa.bizdala.com and
+  https://auth.qa.bizdala.com; no step was marked PASS on the absence of an
+  error.

@@ -1,0 +1,86 @@
+id: ISS-0717
+title: "QA redeploy silently no-ops backend code changes -- docker-compose.qa.yml/redeploy-qa.sh image-tag mismatch"
+discovered_by: ORCH
+discovered_in_run: ORCH-QUEUE-ISS0690-20260918
+discovered_at: "2026-09-18T20:58:10Z"
+severity: MAJOR
+description: >
+  Live-confirmed 2026-09-19 during ISS-0690 re-verification (ORCH session):
+  ai-dala-infra's deploy/redeploy-qa.sh (invoked both manually and by
+  letflow's .github/workflows/cd.yml over SSH) builds and tags a Docker
+  image as `letflow-qa:latest` via a plain `docker build -t letflow-qa:latest .`
+  call, then runs `docker compose ... up -d --force-recreate app` expecting
+  compose to pick up that freshly built image. It never does: the app
+  service in ai-dala-infra's deploy/docker-compose.qa.yml has NO `image:`
+  field, so compose falls back to its own auto-generated image name
+  (`letflow-qa-app:latest`) for that service -- a completely separate,
+  disconnected image from the one the script just built and tagged. Since
+  `up` (without `--build`) never rebuilds an already-existing image, the
+  running container silently keeps running whatever `letflow-qa-app:latest`
+  last happened to be, however stale, while every redeploy run reports
+  success.
+
+  CONFIRMED LIVE, not a hypothesis: before this session's manual
+  intervention, the QA container (letflow-qa-app-1) was running git ref
+  b04a2bb4 -- a commit from *before* REQ-370 (multi-issuer OIDC
+  verification, merged as 21177271, PR #1535) -- despite at least two
+  "successful" CD (QA) GitHub Actions runs since that merge (headSha
+  b6358ba8b1 at 2026-09-18T20:36:27Z and a6e899fcc4 at 20:40:11Z, both
+  reporting job conclusion "success"). Both of those runs' "Deploy to QA"
+  step was in fact SKIPPED by the path-filter gate (docs-only commits,
+  correctly), and the last run that WOULD have deployed REQ-370's actual
+  backend change -- the CI run for merge commit 211772716c itself -- was
+  CANCELLED (superseded by the next push before it could finish), so no CD
+  (QA) run ever actually reached the deploy step for REQ-370's own commit
+  at all. Manually running redeploy-qa.sh reproduced the same silent no-op:
+  it built and tagged `letflow-qa:latest` successfully, `up
+  --force-recreate` reported success, but the running container's image
+  digest never changed and `Letflow.Oidc.ProviderRegistry` (a REQ-370
+  module) remained absent from the running release's compiled module list
+  (`grep ProviderRegistry /app/lib/letflow-0.1.0/ebin/letflow.app` -> no
+  match) even though it was present in both the newly-built (but wrongly
+  tagged) `letflow-qa:latest` image and in `_build/prod` inside the builder
+  stage. Root cause confirmed by comparing `docker inspect
+  letflow-qa-app-1 --format '{{.Config.Image}}'` (-> `letflow-qa-app`, NOT
+  `letflow-qa`) against the image the script actually built and tagged.
+
+  Fixed AD HOC for this session only (not a durable fix): rebuilt the image
+  directly under the tag compose actually uses
+  (`docker build -f deploy/Dockerfile -t letflow-qa-app:latest .`) and
+  force-recreated the container from that. QA is now genuinely running
+  a6e899fc and REQ-370's multi-issuer verification is confirmed working
+  live (a bilimbaga-realm CANDIDATE token against GET /api/v1/definitions
+  now returns a real 403 Forbidden -- permission-correct -- instead of the
+  prior 401 unauthorized -- auth-layer rejection). This ad hoc fix will NOT
+  survive the next automated CD (QA) run, which still runs the same broken
+  redeploy-qa.sh unchanged.
+
+  IMPACT: every QA deploy since whenever this drift was introduced may have
+  silently been a no-op for backend code changes -- the actual window is
+  unknown from this repo alone and needs ai-dala-infra's own git history
+  to bound. This is a live-infrastructure defect in a DIFFERENT repo
+  (ai-dala-infra), not a letflow lib/ code defect -- ISSUE-FIXER should not
+  attempt to fix it from this repo; it needs either
+  (a) adding `image: letflow-qa-app:latest` to
+      ai-dala-infra's deploy/docker-compose.qa.yml so compose and the
+      manual build step agree on one tag, or
+  (b) changing redeploy-qa.sh to build via `docker compose build app`
+      instead of a separate `docker build -t letflow-qa:latest`
+      (note: naive `$COMPOSE build` from redeploy-qa.sh's own
+      `--project-directory` invocation currently fails differently --
+      `resolve : lstat /opt/apps/deploy: no such file or directory` --
+      because docker-compose.qa.yml's `build.context: ..` is written
+      assuming resolution relative to the compose FILE's own directory,
+      but an explicit `--project-directory` overrides that base to the
+      project directory itself instead, breaking the relative path; this
+      needs fixing too, e.g. an absolute/project-directory-relative
+      context path).
+  Whoever picks this up needs ai-dala-infra repo write access -- out of
+  scope for a letflow-repo-only session to fix directly.
+affected_files:
+  - ../ai-dala-infra/deploy/docker-compose.qa.yml (external repo, not tracked here)
+  - ../ai-dala-infra/deploy/redeploy-qa.sh (external repo, not tracked here)
+  - .github/workflows/cd.yml (this repo -- the caller, unaffected itself)
+queue_ref: Q-717
+github_ref: GH-1540
+status: open

@@ -1,0 +1,153 @@
+run_id: WF02-REQ369-AC6AC7-final-20260918
+date: "2026-09-18"
+agent: UAT-RUNNER
+queue_task: "708 (GH#1501)"
+scope: >
+  Re-verification of REQ-369's remaining AC6 (real PLATFORM_ADMIN login
+  against live QA, real tenant count rendered, screenshot evidence) and AC7
+  (platform-login-routing-by-role.yaml's PLATFORM_ADMIN branch re-run via its
+  own named pipeline_test), dispatched after ISS-0711 (tenant-count field
+  mismatch), ISS-0712 (pipeline_test login-mechanism gap), and ISS-0713
+  (quick-links strict-mode locator) were all reported resolved. This run's
+  own execution environment is DIFFERENT from the one that produced the
+  three prior evidence reports referenced below (this one is a Linux host
+  with no `ai-dala-infra` checkout and no SSH access configured to
+  `ubuntu-16gb-nbg1-1` -- confirmed empirically, see credential_access_gap
+  below) -- that distinction matters for how this report's findings should
+  be read.
+
+environment_target:
+  base_url: "https://qa.bizdala.com"
+  credential_source: "ai-dala-infra/scripts/qa-login.sh"
+  environment: qa
+  readiness_check: >
+    curl -s -o /dev/null -w '%{http_code}' https://qa.bizdala.com/ -> 200
+    (confirmed this run). curl against /api/v1/tenants with no auth header
+    -> real 401 "missing or malformed Authorization header" (confirmed real
+    backend is live and enforcing auth, not a stub).
+
+deploy_verification_INDEPENDENT: >
+  Before touching credentials, independently re-verified (not merely trusted
+  the coordinator's claim) that ISS-0711's fix is genuinely live on QA.
+  First check (before the coordinator's trigger-redeploy commit landed):
+  fetched the live bundle at https://qa.bizdala.com/assets/index-DjB53d10.js
+  and found the OLD, broken pattern still present:
+  `String(((i=r.data)==null?void 0:i.total)??0)` -- confirming the fix was
+  NOT yet deployed at that point (this matches the coordinator's own
+  root-cause account: ISS-0711's commit, 124bcc5a, never had a successful
+  CI run on its own diff, so CD's path-filter gate never fired for it).
+  Second check, after the coordinator's trigger-redeploy commit: refetched
+  https://qa.bizdala.com/ and found a NEW bundle hash,
+  /assets/index-DAWxibro.js (different from the stale index-DjB53d10.js).
+  Fetched that bundle directly and grepped it: the tenant-count tile's
+  render now reads
+  `String(((i=r.data)==null?void 0:i.count)??0)` -- `.count`, not `.total`.
+  Also confirmed only 3 occurrences of the literal substring ".total" remain
+  anywhere in the whole bundle (none of them near the tenant-count render),
+  versus the tenant-count-specific `.total` read that was there before.
+  CONCLUSION: ISS-0711's fix is genuinely live on QA as of this run,
+  independently confirmed via direct bundle inspection, not by trusting any
+  report or CD status alone.
+
+credential_access_gap: >
+  BLOCKED at the credential-acquisition step. This run's execution
+  environment has none of the following, all checked directly:
+  (1) no `ai-dala-infra` checkout anywhere on the filesystem (`find / -iname
+  "*ai-dala-infra*"` and `find / -iname "qa-login.sh"` both empty);
+  (2) no SSH access to the QA host -- `ssh ubuntu-16gb-nbg1-1 whoami` fails
+  with `Could not resolve hostname ubuntu-16gb-nbg1-1: Temporary failure in
+  name resolution`, and `~/.ssh/config` has no entry for that host (only a
+  `github.com-letflow` entry exists);
+  (3) no pre-seeded credential environment variables (`UAT_QA_ADMIN_PASSWORD`
+  etc. -- checked via `env | grep -iE "qa_|admin|keycloak|idp|bpm_|UAT_"`,
+  empty); (4) no vault/secret-manager CLI available (`vault`, `op`, `bw`,
+  `pass` all absent) and no usable QA credential in this repo's own `.env`
+  (checked directly, no `QA`/`ADMIN`/`KEYCLOAK` entries).
+  This is the SAME category of gap the original AC6/AC7 attempt hit
+  (test/uat-reports/uat-2026-09-18-WF02-REQ369-20260918.yaml) before a
+  DIFFERENT execution environment (one with a real
+  `c:\Users\tvolo\dev\ai-dala\ai-dala-infra` checkout and working SSH,
+  referenced in
+  test/uat-reports/uat-2026-09-18-WF02-REQ369-AC6AC7-20260918T143000Z.yaml
+  and the two ISS-07xx follow-up reports) resolved it -- but that resolution
+  was specific to that other environment's filesystem/network access, not to
+  this one. This run's own environment genuinely lacks it; not guessed, not
+  assumed -- checked directly and reported honestly per this project's
+  no-speculation directive, rather than fabricating a login or reusing a
+  stale credential from a prior report.
+  Real network reachability to https://qa.bizdala.com itself is NOT the
+  blocker (confirmed 200/401 responses above) -- only the credential-fetch
+  path is missing from this specific environment.
+
+what_this_run_DID_accomplish: >
+  Independent, live, real-HTTP confirmation that ISS-0711's fix is deployed
+  and correct on QA (see deploy_verification_INDEPENDENT above) -- this is
+  new, genuine evidence this run produced, distinct from and additional to
+  the coordinator's own claim, obtained by directly fetching and grepping
+  the live bundle both before and after the redeploy. This closes the
+  specific factual question of "is the fix live" with real evidence. It does
+  NOT constitute AC6/AC7 satisfaction on its own -- AC6 explicitly requires
+  a real PLATFORM_ADMIN login exercising the rendered value end-to-end, and
+  AC7 requires the named pipeline_test to actually run, neither of which
+  this run could perform without a credential.
+
+ac6_disposition: >
+  NOT RE-VERIFIED by this run. The specific defect that previously blocked
+  AC6 (tenant-count tile always rendering 0 due to the `.total`/`.count`
+  field mismatch, ISS-0711) is independently confirmed FIXED and LIVE on QA
+  via direct bundle inspection (see deploy_verification_INDEPENDENT) -- this
+  is strong circumstantial evidence the fix works, but AC6's own wording
+  requires the count to be observed via a real PLATFORM_ADMIN login, which
+  this run could not perform (see credential_access_gap). AC6 should remain
+  open pending a run from an environment that can obtain a real PLATFORM_ADMIN
+  credential.
+
+ac7_disposition: >
+  NOT RE-VERIFIED by this run, same reason. The named pipeline_test
+  (web/tests/e2e/pipelines/platform-login-routing-by-role.pipeline.e2e.spec.ts)
+  was read and confirmed to already contain ISS-0712's and ISS-0713's fixes
+  (loginViaRealOidcRedirect + resolveCredential wired into the PLATFORM_ADMIN
+  case; the quick-links loop scoped to
+  page.getByTestId('platform-quick-links').getByRole('link', {name})) --
+  matching the two prior resolved-issue reports
+  (test/uat-reports/uat-2026-09-18-WF03-ISS0712-20260918.yaml,
+  test/uat-reports/uat-2026-09-18-WF03-ISS0713-20260918.yaml) which already
+  ran this spec to a clean PASS against QA. This run did not re-execute it
+  (no credential available to set as UAT_QA_ADMIN_PASSWORD for the
+  `npx playwright test` invocation), so it adds no new pass/fail evidence
+  for AC7 beyond what those two prior reports already established. AC7
+  should remain open pending either (a) a fresh run from a
+  credential-capable environment specifically confirming the pipeline_test
+  still passes now that ISS-0711's fix is also live (the prior PASS in
+  WF03-ISS0713-20260918 predates ISS-0711's deploy and explicitly did not
+  check the tenant-count's numeric value), or (b) accepting the existing
+  WF03-ISS0713-20260918 PASS plus this run's independent bundle confirmation
+  as sufficient combined evidence -- a judgment call left to ORCH/
+  RELEASE-VALIDATOR, not decided unilaterally here.
+
+overall_verdict: >
+  Genuine, independently-obtained evidence that ISS-0711's fix is correctly
+  deployed to live QA (new bundle hash, `.count` read confirmed present,
+  `.total` read confirmed absent from the tenant-count render) -- this run's
+  real contribution. Neither AC6 nor AC7 can be marked done from THIS run's
+  evidence alone: this execution environment lacks any path to a real
+  PLATFORM_ADMIN credential (no ai-dala-infra checkout, no SSH to the QA
+  host, no env-seeded credential, no vault) and therefore could not perform
+  the actual login step AC6 requires or re-execute the pipeline_test AC7
+  requires. Recommend ORCH either (a) dispatch this same re-verification
+  from an environment with genuine QA credential access (as the
+  WF02-REQ369-AC6AC7-20260918T143000Z / WF03-ISS0712-20260918 /
+  WF03-ISS0713-20260918 runs had), now that ISS-0711's deploy is confirmed
+  live, to get one clean end-to-end run covering all three fixes together,
+  or (b) make the sufficiency judgment call described in ac7_disposition
+  using the existing WF03-ISS0713-20260918 PASS plus this run's independent
+  deploy confirmation as combined evidence.
+
+notes: >
+  No credentials fabricated, no login simulated, no screenshot invented, no
+  stale evidence relabeled as fresh. This report's only new, genuine claim is
+  the live-bundle deploy confirmation (before/after, both fetched and grepped
+  for real this run) -- everything about AC6/AC7's login-dependent claims is
+  reported as NOT re-verified, honestly, rather than assumed passing because
+  a prior report or the coordinator's message said the underlying defect was
+  fixed.

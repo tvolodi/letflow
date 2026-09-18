@@ -135,6 +135,14 @@ export const queryKeys = {
     shares: (moduleId: string) => [...queryKeys.modules.all, 'shares', moduleId] as const,
   },
 
+  help: {
+    all: ['help'] as const,
+    /** REQ-366 §2.2 — one key per (screenId, processDefinitionId) pair
+     *  `useHelpContent` resolves. */
+    resolved: (screenId: string, processDefinitionId: string | null) =>
+      [...queryKeys.help.all, 'resolved', screenId, processDefinitionId] as const,
+  },
+
   exam: {
     all: ['exam'] as const,
     session: (sessionId: string) => [...queryKeys.exam.all, 'session', sessionId] as const,

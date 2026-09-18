@@ -1,10 +1,97 @@
 {
-  "req": "REQ-364",
-  "step": "03b-security-reviewer",
-  "result": "FAIL",
-  "at": "2026-09-17T14:35:00Z",
-  "blocker": "lib/letflow/help/help_content.ex's @markdown_link_pattern regex only matches CommonMark inline link/image syntax [text](url)/![alt](url). It does not match reference-style link/image definitions ([text][ref] ... [ref]: javascript:alert(1)), which any conformant downstream markdown renderer resolves into a real href/src. contains_unsafe_link_scheme?/1 returns false for such payloads (no [...](...) substring exists), so validate_no_unsafe_link_scheme/2 adds no error and the row is written with a javascript: payload live in body -- a complete bypass of REQ-364's own AC2 write-path sanitization requirement.",
-  "non_blocking_finding": "create_draft/2's `with` has an else clause mapping {:error, :invalid_schema_name} -> {:error, :invalid_prefix}, but update_draft/3, publish/2, reconfirm/2, withdraw/2 have no else clause, so an invalid prefix on those falls through as the raw {:error, :invalid_schema_name} instead of the documented {:error, :invalid_prefix} in their @specs. Not a crash, but a real spec/implementation inconsistency for REVIEWER.",
-  "required_fix": "Extend the URL-scheme scan to also match reference-style link-definition lines (e.g. ^\\s*\\[[^\\]]+\\]:\\s*(\\S+)), applied post-code-stripping the same way as the existing inline check, OR reconsider design section 5.3 option 2 (a real sanitizer/parser) given a regex denylist over markdown's full link-syntax surface has now demonstrated a concrete gap.",
-  "scope_creep_flag_resolved": "withdraw/2 (live->draft, added because design section 2's lifecycle diagram shows this transition though REQ-364's acceptance criteria don't name it separately) reviewed for independent security concern -- none found, follows the identical with-chain/prefix-scoping pattern as every other function. Scope-creep question itself deferred to REVIEWER, not a security finding."
+  "run_id": "WF02-REQ364-20260917",
+  "workflow_id": "WF-02",
+  "step": "03b",
+  "from_agent": "SECURITY-REVIEWER",
+  "to_agent": "ORCH",
+  "created_at": "2026-09-17T14:38:03Z",
+  "started_at": "2026-09-17T14:38:03Z",
+  "completed_at": "2026-09-17T14:38:03Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S7",
+    "requirement_ids": [
+      "REQ-364"
+    ],
+    "requirement_text": {
+      "REQ-364": "Implements REQ-363's design artefact exactly — no new schema decisions here, this requirement is implementation of an already-validated design, matching this project's own CODE-DESIGNER-then-ELIXIR-DEV split for every other schema-bearing feature.\n\nSCOPE: the `Letflow.Help` context module (naming follows this project's existing per-domain-context convention, e.g. `Letflow.Identity`, `Letflow.TenantProvisioning`) exposing: create a draft, update a draft, publish (draft -> live, sets confirmed_at), re-confirm (bumps confirmed_at on an already-live row without changing body — the explicit \"I checked this, it's still accurate\" action), and read (by screen_id + tenant prefix, or by process_definition_id). Every write path enforces REQ-363's sanitization rule from that design, not a weakened version of it.\n\nNOT IN SCOPE: the tenant-facing authoring UI (REQ-365 for platform, a separate future requirement for the tenant admin UI itself — this requirement's acceptance criteria stop at a working, tested context module, callable from IEx/tests, not yet wired to any HTTP route or frontend component). Route/controller wiring, if this project's own API-surface convention wants a separate requirement for it (matching the pattern most REQ-027..030-style definition CRUD work already used), is a natural fast-follow, not bundled here — state explicitly in this requirement's close-out whether a route was added or deliberately deferred, rather than leaving it ambiguous."
+    },
+    "related_handoff_ids": [],
+    "artifacts_in": [],
+    "owned_modules": [
+      "lib/letflow/help.ex",
+      "lib/letflow/help/help_content.ex"
+    ]
+  },
+  "rework_count": 0,
+  "max_rework": 3,
+  "handoff_id": "b2d1b4ac-8ea8-4b65-9c0f-845ea6b2569e",
+  "file": "handoffs/WF02-REQ364-20260917/step-03b-security-reviewer.json",
+  "task": {
+    "description": "Run SECURITY-REVIEWER's gate against ELIXIR-DEV's initial implementation of the Letflow.Help context module (REQ-364), scoped against security-invariants.md's INV-1..INV-9, with particular weight on REQ-364's AC2 (a write attempting raw HTML/script content is rejected). Verify the write-path sanitizer's real behavior directly -- do not trust ELIXIR-DEV's own summary of what it blocks.",
+    "acceptance_criteria": [
+      "Every applicable invariant (INV-1..INV-9) is verdicted APPLIES/NOT-APPLICABLE, none silently skipped",
+      "The write-path markdown sanitizer is probed with at least one adversarial payload per plausible bypass class, reproduced directly against create_changeset/2, not assumed from the design or implementation summary",
+      "PASS only if no bypass survives reproduction; otherwise FAIL naming the exact bypass, the code path responsible, and the required fix"
+    ]
+  },
+  "result": {
+    "status": "FAIL",
+    "summary": "RECONSTRUCTION NOTE: this handoff was originally written live during WF02-REQ364-20260917's security-review saga as ad-hoc, non-schema JSON (informal top-level keys such as req/at/result-as-bare-string instead of HANDOFF_PROTOCOL.md §2's real schema), the exact anti-pattern this session's own ISS-0692 precedent names. It has been rewritten into full schema conformance by a later ORCH session under §4.1's not_agent_attested mechanism. created_at/started_at/completed_at are all set to the file's own git-introducing-commit timestamp (`git log --follow --diff-filter=A --format=%aI --reverse -- <path>`), the best-available real timestamp, NOT the original live dispatch/claim/completion times, which were never recorded in schema-legal fields on disk. All findings, quoted test counts, and verification detail below are migrated verbatim in substance from the original ad-hoc file; nothing was invented or paraphrased away.\n\nBLOCKER: lib/letflow/help/help_content.ex's @markdown_link_pattern regex only matches CommonMark inline link/image syntax [text](url)/![alt](url). It does not match reference-style link/image definitions ([text][ref] ... [ref]: javascript:alert(1)), which any conformant downstream markdown renderer resolves into a real href/src. contains_unsafe_link_scheme?/1 returns false for such payloads (no [...](...) substring exists), so validate_no_unsafe_link_scheme/2 adds no error and the row is written with a javascript: payload live in body -- a complete bypass of REQ-364's own AC2 write-path sanitization requirement.\n\nNON-BLOCKING FINDING: create_draft/2's `with` has an else clause mapping {:error, :invalid_schema_name} -> {:error, :invalid_prefix}, but update_draft/3, publish/2, reconfirm/2, withdraw/2 have no else clause, so an invalid prefix on those falls through as the raw {:error, :invalid_schema_name} instead of the documented {:error, :invalid_prefix} in their @specs. Not a crash, but a real spec/implementation inconsistency for REVIEWER.\n\nSCOPE-CREEP FLAG RESOLVED: withdraw/2 (live->draft, added because design section 2's lifecycle diagram shows this transition though REQ-364's acceptance criteria don't name it separately) reviewed for independent security concern -- none found, follows the identical with-chain/prefix-scoping pattern as every other function. Scope-creep question itself deferred to REVIEWER, not a security finding.",
+    "artifacts_out": [],
+    "issues": [
+      {
+        "severity": "BLOCKER",
+        "description": "@markdown_link_pattern only matches inline [text](url)/![alt](url) syntax, not reference-style link/image definitions ([text][ref] ... [ref]: javascript:alert(1)) -- contains_unsafe_link_scheme?/1 returns false, so a javascript: payload is written live to body. Complete bypass of REQ-364 AC2.",
+        "affected_requirement": "REQ-364"
+      },
+      {
+        "severity": "MINOR",
+        "description": "update_draft/3, publish/2, reconfirm/2, withdraw/2 lack the else clause create_draft/2 has, so an invalid prefix surfaces as raw {:error, :invalid_schema_name} instead of the documented {:error, :invalid_prefix} @spec.",
+        "affected_requirement": "REQ-364"
+      }
+    ],
+    "git_evidence": {
+      "branch_name": "feature/WF02-REQ364-20260917",
+      "commit_sha_list": [],
+      "remote_branch": "origin/feature/WF02-REQ364-20260917",
+      "push_status": "ok",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": "Route back to ELIXIR-DEV for rework round 1 -- extend the URL-scheme scan to reference-style link-definition lines (e.g. ^\\s*\\[[^\\]]+\\]:\\s*(\\S+)), applied post-code-stripping the same way as the existing inline check, OR reconsider design section 5.3 option 2 (a real sanitizer/parser) given a regex denylist over markdown's full link-syntax surface has now demonstrated a concrete gap."
+  },
+  "not_agent_attested": {
+    "reconstructed_by": "ORCH",
+    "reconstructed_at": "2026-09-18T00:40:13Z",
+    "reason": "The original acting SECURITY-REVIEWER agent completed this gate live and reported a real FAIL, but wrote it as ad-hoc JSON (top-level keys req/step/result/at/blocker/non_blocking_finding/required_fix/scope_creep_flag_resolved) instead of HANDOFF_PROTOCOL.md §2's schema -- an ISS-0692-class protocol violation, not an agent death. A later ORCH session (this one) is reconstructing the file into schema conformance from the original content plus git history, per §4.1's mechanism for handoffs an acting agent cannot itself re-attest to in schema-legal form.",
+    "fields_written": [
+      "handoff_id",
+      "file",
+      "status",
+      "result",
+      "task",
+      "context",
+      "created_at",
+      "started_at",
+      "completed_at",
+      "priority",
+      "rework_count",
+      "max_rework",
+      "not_agent_attested"
+    ],
+    "evidence": [
+      "git log --follow --diff-filter=A --format=%aI --reverse -- handoffs/WF02-REQ364-20260917/step-03b-security-reviewer.json -> established 2026-09-17T14:38:03+00:00 as this file's introducing-commit timestamp, used for created_at/started_at/completed_at",
+      "Read the original ad-hoc file's content directly (req/step/result/at/blocker/non_blocking_finding/required_fix/scope_creep_flag_resolved keys) -> source for every finding migrated into result.summary/result.issues above",
+      "grep -n REQ-364 docs/requirements.yaml; sed -n range read of the REQ-364 entry -> source for context.requirement_text"
+    ],
+    "not_verifiable_after_the_fact": [
+      "The original live dispatch time ORCH actually stamped started_at with (no schema-legal started_at existed on the original file)",
+      "The original live IN_PROGRESS-claim timestamp",
+      "Whether the original agent's real completed_at differed from the commit timestamp used here",
+      "A handoff_id, since none existed on the original file",
+      "The exact commit_sha_list this step's own commits would have listed at the time (git_evidence.commit_sha_list is left empty rather than guessed)"
+    ]
+  }
 }

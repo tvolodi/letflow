@@ -1,37 +1,95 @@
 {
-  "req": "REQ-364",
-  "step": "03b-security-reviewer-rework3",
-  "result": "PASS",
-  "at": "2026-09-17T18:35:00Z",
-  "commit": "4ede2cc9",
-  "scope_test": "APPLIES (unchanged from round 3) -- this round's diff (2388d294..4ede2cc9) touches only lib/letflow/help/help_content.ex's sanitizer logic plus tests/fixtures; no migration, no new Repo call, no new secret. INV-1/INV-4/INV-7's round-3 PASS carries forward unchanged; INV-8 is the invariant actually under test this round (blocker 3).",
-  "invariant_assessment": {
-    "INV-1": "APPLIES, PASS (carried forward from round 3 -- no migration or schema/prefix change in this round's diff)",
-    "INV-2": "NOT-APPLICABLE -- S4 not started",
-    "INV-3": "NOT-APPLICABLE -- S5 not started",
-    "INV-4": "APPLIES, PASS (carried forward -- no secret material touched)",
-    "INV-5": "NOT-APPLICABLE -- S4 not started",
-    "INV-6": "Meta-invariant -- this handoff is the proof artifact",
-    "INV-7": "APPLIES, PASS (carried forward -- no Repo.query use)",
-    "INV-8": "APPLIES, PASS -- see verification below",
-    "INV-9": "NOT-APPLICABLE -- no outbound HTTP in scope"
+  "run_id": "WF02-REQ364-20260917",
+  "workflow_id": "WF-02",
+  "step": "03b-rework3",
+  "from_agent": "SECURITY-REVIEWER",
+  "to_agent": "ORCH",
+  "created_at": "2026-09-17T18:33:03Z",
+  "started_at": "2026-09-17T18:33:03Z",
+  "completed_at": "2026-09-17T18:33:03Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S7",
+    "requirement_ids": [
+      "REQ-364"
+    ],
+    "requirement_text": {
+      "REQ-364": "Implements REQ-363's design artefact exactly — no new schema decisions here, this requirement is implementation of an already-validated design, matching this project's own CODE-DESIGNER-then-ELIXIR-DEV split for every other schema-bearing feature.\n\nSCOPE: the `Letflow.Help` context module (naming follows this project's existing per-domain-context convention, e.g. `Letflow.Identity`, `Letflow.TenantProvisioning`) exposing: create a draft, update a draft, publish (draft -> live, sets confirmed_at), re-confirm (bumps confirmed_at on an already-live row without changing body — the explicit \"I checked this, it's still accurate\" action), and read (by screen_id + tenant prefix, or by process_definition_id). Every write path enforces REQ-363's sanitization rule from that design, not a weakened version of it.\n\nNOT IN SCOPE: the tenant-facing authoring UI (REQ-365 for platform, a separate future requirement for the tenant admin UI itself — this requirement's acceptance criteria stop at a working, tested context module, callable from IEx/tests, not yet wired to any HTTP route or frontend component). Route/controller wiring, if this project's own API-surface convention wants a separate requirement for it (matching the pattern most REQ-027..030-style definition CRUD work already used), is a natural fast-follow, not bundled here — state explicitly in this requirement's close-out whether a route was added or deliberately deferred, rather than leaving it ambiguous."
+    },
+    "related_handoff_ids": [],
+    "artifacts_in": [],
+    "owned_modules": [
+      "lib/letflow/help.ex",
+      "lib/letflow/help/help_content.ex"
+    ]
   },
-  "verification_performed": {
-    "blocker_1_reverified": "Ran EarmarkParser.as_ast/2 and Letflow.Help.HelpContent.create_changeset/2 directly (MIX_ENV=test MIX_TEST_PARTITION=901) on '[x](java&#X73;cript:alert(1))' and an all-caps variant '[x](&#X6A;avascript:alert(1))' -- both now valid?=false, rejected with the unsafe-scheme error. @numeric_entity_pattern confirmed changed to `~r/&#([xX][0-9a-fA-F]+|[0-9]+);/`. Genuinely closed.",
-    "blocker_2_reverified": "Ran EarmarkParser.as_ast/2 on 'x<img on**err**=\"x()\">y' and 'x<img on`err`=\"x()\">y' -- confirmed AST still splits the raw tag across sibling text/strong/code nodes exactly as round 3 found. Ran create_changeset/2 on both: valid?=false, raw-HTML error, in both cases (including the code-span split, where flatten_plain_text/1's code-node exclusion still leaves '<img on' + '' + '=\"x()\">y' concatenated -- still matches the tag pattern since the tag's own angle brackets are outside the excluded code content). Genuinely closed.",
-    "blocker_3_reverified": "Ran create_changeset/2 on 'some text with `unclosed code' and a fenced block opened but never closed -- both now valid?=true, errors=[], no crash. Confirmed validate_markdown_safety/2 now case-matches both {:ok, ast, _} and {:error, ast, _}. Genuinely closed.",
-    "all_prior_round_payloads_retraced": "Reference-style link, angle-bracket autolink, backslash-before-colon, decimal entity, embedded-tab destination, plain javascript: baseline -- all still valid?=false (rejected) against the current create_changeset/2. No regression.",
-    "seventh_bypass_probe_flatten_plain_text": "Actively probed both directions per the task brief. (a) Bypass direction: none found -- flatten_plain_text/1 only ADDS a text_scan detection alongside the unchanged per-node structural checks (walk_node/1 still runs independently); it can never suppress an existing detection, and its own recursion is unconditional/whole-subtree so it cannot itself be evaded by nesting depth or additional sibling structure. (b) Over-rejection direction: CONFIRMED, but not a security-invariant violation. flatten_plain_text/1 recurses into every non-code/pre element's children and walk/1's list clause joins ALL siblings at a given level with NO separator -- and critically, this includes the ROOT block list itself (paragraphs, list items, etc. are ordinary elements, not excluded like code/pre), so the projection effectively concatenates the ENTIRE document's prose (minus code/pre) into one string for the raw-tag-shape scan, not just one inline formatting run. Reproduced two concrete false positives that did NOT trigger before this round's fix: (1) two adjacent paragraphs 'Configure with a<' / 'b>c or make it safe' (a stray '<' ending one paragraph, an unrelated 'b>c' starting the next) now cross-concatenates to '...a<b>c...' and is wrongly rejected as raw HTML; (2) ordinary prose using '<'/'>' as comparison operators split by emphasis, 'if a<b and *count* >d then continue', is wrongly rejected the same way. (The single-le, no-formatting case 'if a<b and c>d then continue' was ALREADY rejected before this round -- that part is pre-existing over-rejection, not new; only the cross-sibling/cross-paragraph concatenation is new this round.) This is a genuine availability/UX regression -- legitimate help-content authors using bare angle brackets as comparison operators or generic-type notation, split across any inline formatting or across paragraphs, will have valid drafts rejected -- but it is strictly one-directional (over-restrictive, never under-restrictive) and touches no tenant-isolation, secret, SQL-injection, or crash invariant. Not gating on it; flagged below for routing.",
-    "code_pre_exclusion_at_all_nesting_positions": "Confirmed flatten_plain_text/1's code/pre exclusion clause matches on tag alone regardless of nesting depth (pattern-matches {tag, _, _, _} when tag in [\"code\",\"pre\"] before the generic recursive clause), so a code/pre node nested arbitrarily deep is excluded correctly at every position -- verified this structurally in the source (line 301 always wins over line 302 for those two tags via clause ordering) and confirmed behaviorally via the code-span-split payload above.",
-    "help_test_reproduced": "MIX_ENV=test MIX_TEST_PARTITION=901 mix test test/letflow/help_test.exs -- real run, 'Result: 54 passed', 0 failures.",
-    "full_suite_reproduced": "MIX_ENV=test MIX_TEST_PARTITION=901 mix test (real run, 2063s) -- 'Result: 4386/4389 passed (6/6 properties, 4380/4383 tests), 23 excluded', 3 failed. Ran `mix test --failed` to inspect: all 3 are Mix.Tasks.Letflow.CheckRequirementsRegistrationTest / CheckDeferralStalenessTest failures on REQ-369's docs/requirements.yaml entry missing an `impl_order` line -- entirely unrelated to REQ-364/help_content, matches ELIXIR-DEV's claim (already fixed on main via a merged PR this branch predates). Confirmed genuine and non-masking -- no help_content/sanitizer test among the 3.",
-    "tenant_fixture_fix_spot_checked": "git diff main...HEAD -- test/support/tenant_fixture.ex shows exactly one added line, \"help_content\", in @expected_tenant_tables. Real, matches the claim.",
-    "table_count_assertion_fix_spot_checked": "git diff main...HEAD -- test/letflow/support/tenant_fixture_test.exs shows the hardcoded count assertion bumped from 44 to 45 with an updated comment crediting REQ-364. Real, matches the claim.",
-    "stale_tenant_template_schema_claim": "Not independently reproducible after the fact (a prior-state DB artifact, not a code diff) -- but consistent with observed behavior: this round's own test runs (both the fresh ecto.create/migrate and the two full test-run reproductions) completed cleanly with no tenant_template self-check failure, which is what a stale-schema-artifact fix would produce. Not a security finding either way."
+  "rework_count": 3,
+  "max_rework": 3,
+  "handoff_id": "f8532c66-51c4-49ae-9dea-32bc3a2d369f",
+  "file": "handoffs/WF02-REQ364-20260917/step-03b-security-reviewer-rework3.json",
+  "task": {
+    "description": "Run SECURITY-REVIEWER's gate (rework round 3, final) against ELIXIR-DEV's fixes for all three rework-2 blockers (step-03-elixir-dev-rework3.json). Re-verify each blocker's fix by direct reproduction, retrace all five original bypass payloads plus round 3's own two new payloads for regression, actively probe the new flatten_plain_text/1 mechanism itself for new bypass or over-rejection behavior, and reproduce the full test suite.",
+    "acceptance_criteria": [
+      "All three rework-2 blockers independently reproduced as closed against the real dependency and create_changeset/2",
+      "No regression on any of the 7 previously-identified bypass payloads",
+      "flatten_plain_text/1 itself actively probed for a new bypass class its own introduction might create",
+      "help_test.exs and the full mix test suite reproduced directly, real counts quoted",
+      "tenant_fixture.ex and table-count-assertion fixes spot-checked in the diff"
+    ]
   },
-  "non_security_finding_flagged_for_visibility_not_a_security_invariant": {
-    "what": "flatten_plain_text/1's whole-subtree, no-separator concatenation (see seventh_bypass_probe_flatten_plain_text above) creates false-positive raw-HTML rejections for legitimate content containing bare '<'/'>' characters split across inline formatting or paragraph boundaries -- an availability/UX defect, not a security bypass (it only over-rejects, never under-rejects).",
-    "routing": "Flagging for REVIEWER/ELIXIR-DEV per core-directives.md 'never resolve a conflict/finding silently' -- recommend either (a) accepting this as a known false-positive-prone tradeoff given the security fix it closes is more important, with a moderate design note, or (b) scoping the flattened projection to a bounded window (e.g. only within one paragraph/block's own children, not across the top-level document list) if reducing false positives matters for this content type. Not a blocker for this security gate."
+  "result": {
+    "status": "PASS",
+    "summary": "RECONSTRUCTION NOTE: this handoff was originally written live during WF02-REQ364-20260917's security-review saga as ad-hoc, non-schema JSON (informal top-level keys such as req/at/result-as-bare-string instead of HANDOFF_PROTOCOL.md §2's real schema), the exact anti-pattern this session's own ISS-0692 precedent names. It has been rewritten into full schema conformance by a later ORCH session under §4.1's not_agent_attested mechanism. created_at/started_at/completed_at are all set to the file's own git-introducing-commit timestamp (`git log --follow --diff-filter=A --format=%aI --reverse -- <path>`), the best-available real timestamp, NOT the original live dispatch/claim/completion times, which were never recorded in schema-legal fields on disk. All findings, quoted test counts, and verification detail below are migrated verbatim in substance from the original ad-hoc file; nothing was invented or paraphrased away.\n\nCommit 4ede2cc9. SCOPE TEST: APPLIES (unchanged from round 3) -- this round's diff (2388d294..4ede2cc9) touches only lib/letflow/help/help_content.ex's sanitizer logic plus tests/fixtures; no migration, no new Repo call, no new secret. INV-1/INV-4/INV-7's round-3 PASS carries forward unchanged; INV-8 is the invariant actually under test this round (blocker 3).\n\nINVARIANT ASSESSMENT: INV-1 APPLIES PASS (carried forward -- no migration/schema/prefix change in this round's diff). INV-2/INV-3/INV-5/INV-9 NOT-APPLICABLE (unchanged). INV-4 APPLIES PASS (carried forward -- no secret material touched). INV-6 meta-invariant, this handoff is the proof artifact. INV-7 APPLIES PASS (carried forward -- no Repo.query use). INV-8 APPLIES PASS -- see verification below.\n\nVERIFICATION PERFORMED:\nBlocker 1 reverified: Ran EarmarkParser.as_ast/2 and Letflow.Help.HelpContent.create_changeset/2 directly on '[x](java&#X73;cript:alert(1))' and an all-caps variant '[x](&#X6A;avascript:alert(1))' -- both now valid?=false, rejected with the unsafe-scheme error. @numeric_entity_pattern confirmed changed to `~r/&#([xX][0-9a-fA-F]+|[0-9]+);/`. Genuinely closed.\nBlocker 2 reverified: Ran EarmarkParser.as_ast/2 on 'x<img on**err**=\"x()\">y' and 'x<img on`err`=\"x()\">y' -- confirmed AST still splits the raw tag across sibling text/strong/code nodes exactly as round 3 found. Ran create_changeset/2 on both: valid?=false, raw-HTML error, in both cases (including the code-span split, where flatten_plain_text/1's code-node exclusion still leaves '<img on' + '' + '=\"x()\">y' concatenated -- still matches the tag pattern since the tag's own angle brackets are outside the excluded code content). Genuinely closed.\nBlocker 3 reverified: Ran create_changeset/2 on 'some text with `unclosed code' and a fenced block opened but never closed -- both now valid?=true, errors=[], no crash. Confirmed validate_markdown_safety/2 now case-matches both {:ok, ast, _} and {:error, ast, _}. Genuinely closed.\nAll prior-round payloads retraced: reference-style link, angle-bracket autolink, backslash-before-colon, decimal entity, embedded-tab destination, plain javascript: baseline -- all still valid?=false (rejected). No regression.\n\nSEVENTH BYPASS PROBE (flatten_plain_text/1, actively probed both directions per the task brief): (a) bypass direction -- none found; flatten_plain_text/1 only ADDS a text_scan detection alongside the unchanged per-node structural checks (walk_node/1 still runs independently); it can never suppress an existing detection, and its own recursion is unconditional/whole-subtree so it cannot itself be evaded by nesting depth or additional sibling structure. (b) over-rejection direction -- CONFIRMED, but not a security-invariant violation: flatten_plain_text/1 recurses into every non-code/pre element's children and walk/1's list clause joins ALL siblings at a given level with NO separator, including the ROOT block list itself, so the projection effectively concatenates the ENTIRE document's prose (minus code/pre) into one string for the raw-tag-shape scan. Reproduced two concrete false positives new this round: (1) two adjacent paragraphs 'Configure with a<' / 'b>c or make it safe' now cross-concatenates to '...a<b>c...' and is wrongly rejected as raw HTML; (2) ordinary prose using '<'/'>' as comparison operators split by emphasis, 'if a<b and *count* >d then continue', is wrongly rejected the same way. (The single-leaf, no-formatting case 'if a<b and c>d then continue' was ALREADY rejected before this round -- pre-existing, not new; only the cross-sibling/cross-paragraph concatenation is new.) This is a genuine availability/UX regression -- legitimate help-content authors using bare angle brackets as comparison operators or generic-type notation, split across formatting or paragraphs, will have valid drafts rejected -- but it is strictly one-directional (over-restrictive, never under-restrictive) and touches no tenant-isolation, secret, SQL-injection, or crash invariant. Not gating on it; flagged for routing.\nCode/pre exclusion confirmed correct at all nesting positions (structural clause-ordering check plus behavioral code-span-split payload).\nhelp_test.exs reproduced: MIX_ENV=test MIX_TEST_PARTITION=901 mix test test/letflow/help_test.exs -- real run, 'Result: 54 passed', 0 failures.\nFull suite reproduced: MIX_ENV=test MIX_TEST_PARTITION=901 mix test (real run, 2063s) -- 'Result: 4386/4389 passed (6/6 properties, 4380/4383 tests), 23 excluded', 3 failed. `mix test --failed` confirmed all 3 are Mix.Tasks.Letflow.CheckRequirementsRegistrationTest/CheckDeferralStalenessTest failures on REQ-369's docs/requirements.yaml entry missing an impl_order line -- entirely unrelated to REQ-364/help_content, matches ELIXIR-DEV's claim (already fixed on main via a merged PR this branch predates). Confirmed genuine and non-masking -- no help_content/sanitizer test among the 3.\ntenant_fixture.ex and table-count-assertion fixes spot-checked directly in git diff main...HEAD -- both real, matching the claims.\nStale-tenant_template-schema claim not independently reproducible after the fact (a prior-state DB artifact, not a code diff) but consistent with observed clean behavior this round.",
+    "artifacts_out": [],
+    "issues": [
+      {
+        "severity": "MINOR",
+        "description": "flatten_plain_text/1's whole-subtree, no-separator concatenation creates false-positive raw-HTML rejections for legitimate content containing bare '<'/'>' characters split across inline formatting or paragraph boundaries -- an availability/UX defect, not a security bypass (only over-rejects, never under-rejects).",
+        "affected_requirement": "REQ-364"
+      }
+    ],
+    "git_evidence": {
+      "branch_name": "feature/WF02-REQ364-20260917",
+      "commit_sha_list": [
+        "4ede2cc9"
+      ],
+      "remote_branch": "origin/feature/WF02-REQ364-20260917",
+      "push_status": "ok",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": "PASS. All three round-3 blockers genuinely closed, independently reproduced against the real EarmarkParser 1.4.46 dependency and the real create_changeset/2. Route to REVIEWER next per WF-02. Separately flag the seventh-probe over-rejection finding for REVIEWER/ELIXIR-DEV -- not a blocker for this security gate."
   },
-  "final_determination": "PASS. All three round-3 blockers (case-sensitive hex-entity bypass, tag-split-across-inline-siblings bypass, INV-8 bare-match crash) are genuinely closed, independently reproduced against the real EarmarkParser 1.4.46 dependency and the real create_changeset/2, not merely trusted from the handoff summary. All five original bypass payloads plus round-3's two remain closed with no regression. The seventh-class probe into flatten_plain_text/1 found no new bypass in either direction -- only a real but non-security over-rejection side effect, flagged separately. mix test test/letflow/help_test.exs reproduced at 54/54. Full suite reproduced at 4386/4389, with all 3 failures independently confirmed unrelated to this change (REQ-369 impl_order registration hygiene). tenant_fixture.ex and the table-count assertion fixes are real, verified in the diff. Four rounds, three real closed findings (round 1's mechanism-level findings resolved via the AST-based redesign per REVIEWER's step-03d determination, plus this round's three implementation-level fixes) -- this is exactly what the pipeline's producer/validator redundancy is for. Routing to REVIEWER next per WF-02."
+  "not_agent_attested": {
+    "reconstructed_by": "ORCH",
+    "reconstructed_at": "2026-09-18T00:40:13Z",
+    "reason": "Original acting SECURITY-REVIEWER agent ran this final rework-3 gate live with extensive real reproduction (including a fresh adversarial probe of the newly-introduced flatten_plain_text/1 mechanism itself) and reached a real PASS with one flagged MINOR non-security finding, but recorded it as ad-hoc JSON (req/step/result/at/commit/scope_test/invariant_assessment/verification_performed/non_security_finding.../final_determination keys) instead of HANDOFF_PROTOCOL.md's schema. Reconstructed by a later ORCH session under §4.1's mechanism; the seventh-probe finding and every quoted test count are preserved verbatim in substance.",
+    "fields_written": [
+      "handoff_id",
+      "file",
+      "status",
+      "result",
+      "task",
+      "context",
+      "created_at",
+      "started_at",
+      "completed_at",
+      "priority",
+      "rework_count",
+      "max_rework",
+      "not_agent_attested"
+    ],
+    "evidence": [
+      "git log --follow --diff-filter=A --format=%aI --reverse -- handoffs/WF02-REQ364-20260917/step-03b-security-reviewer-rework3.json -> 2026-09-17T18:33:03+00:00, used for created_at/started_at/completed_at",
+      "Read the original ad-hoc file's content directly -> source for the invariant assessment, verification detail, and seventh-probe finding migrated above",
+      "Original file's own 'commit' key (4ede2cc9) -> used to populate git_evidence.commit_sha_list"
+    ],
+    "not_verifiable_after_the_fact": [
+      "The original live dispatch/claim timestamps",
+      "Whether the original agent's real completed_at differed from the commit timestamp used here",
+      "A handoff_id, since none existed on the original file",
+      "Whether 4ede2cc9 still resolves in this clone after any later rebase/squash (per HANDOFF_PROTOCOL.md's commit_sha_list scope note)"
+    ]
+  }
 }

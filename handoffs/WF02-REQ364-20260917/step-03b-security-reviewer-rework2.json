@@ -1,54 +1,107 @@
 {
-  "req": "REQ-364",
-  "step": "03b-security-reviewer-rework2",
-  "result": "FAIL",
-  "at": "2026-09-17T15:40:00Z",
-  "scope_test": "APPLIES -- tenant-scoped migration (priv/repo/migrations/20260917000001_create_help_content.exs, guarded `if prefix() do`, registered in Letflow.TenantProvisioning.tenant_scoped_migrations/0), a new Ecto schema (lib/letflow/help/help_content.ex) whose every read/write in lib/letflow/help.ex passes `prefix: prefix` explicitly, and a write-path sanitizer guarding against stored content later rendered to users.",
-  "invariant_assessment": {
-    "INV-1": "APPLIES, PASS -- verified all three sub-checks: (a) every Repo call in lib/letflow/help.ex (insert/update/get/all, 8 call sites) passes `prefix: prefix` explicitly; (b) migration's `create table(..., prefix: prefix())` is inside `if prefix() do`, and is registered in tenant_scoped_migrations/0 (git diff confirms both halves present in the same commit); (c) no tenant_id column exists on help_content at all (mirrors process_definitions' no-intra-schema-tenant_id-column convention per its own moduledoc) -- not a caller-supplied-tenant_id defect since there is no such column to misuse.",
-    "INV-2": "NOT-APPLICABLE -- S4 not started, no HTTP route/controller in this requirement's scope (help.ex moduledoc states this explicitly).",
-    "INV-3": "NOT-APPLICABLE -- S5 not started.",
-    "INV-4": "APPLIES, PASS -- grepped lib/letflow/help.ex and lib/letflow/help/help_content.ex for System.get_env and hardcoded-secret-shaped literals: zero hits, no secret material touched by this change.",
-    "INV-5": "NOT-APPLICABLE -- S4 not started, no lookup-by-ID HTTP endpoint in this requirement's scope.",
-    "INV-6": "Meta-invariant -- this handoff is the proof artifact; see result below.",
-    "INV-7": "APPLIES, PASS -- grepped for Repo.query across the changed files: zero hits, all access via Ecto.Query/Repo.insert|update|get|all.",
-    "INV-8": "APPLIES, FAIL -- see blocker 3 below.",
-    "INV-9": "NOT-APPLICABLE -- no outbound HTTP request in this requirement's scope."
-  },
-  "verification_performed": {
-    "earmark_parser_behavior_independently_reproduced": "Ran `EarmarkParser.as_ast/2` directly (mix run --no-start against the real 1.4.46 dep, matching decision 0036 and mix.lock) rather than trusting the handoff's prose. Confirmed both claimed gaps are real: (1) `\"click <div onclick=\\\"x()\\\">here</div>\"` parses to a single literal-text \"p\" child with no verbatim node -- inline-mixed raw HTML is genuinely never tagged verbatim; a line-starting `\"<div onclick=\\\"x()\\\">here</div>\"` by contrast IS tagged `%{verbatim: true}}`, confirming the claimed asymmetry. (2) `\"[x](java&#115;cript:alert(1))\"` resolves href to the literal, undecoded `\"java&#115;cript:alert(1)\"`, and `\"[x](java\\tscript:alert(1))\"` resolves href with the tab intact -- both confirmed not auto-handled by the library.",
-    "five_original_bypass_payloads_reverified_against_real_create_changeset": "All five now genuinely rejected: (1) reference-style link definition -- rejected; (2) angle-bracket-wrapped autolink `[x](<javascript:alert(1)>)` -- rejected; (3) backslash-before-colon `[x](javascript\\\\:alert(1))` -- rejected; (4) decimal HTML entity `[x](java&#115;cript:alert(1))` -- rejected; (5) embedded tab `[x](java\\tscript:alert(1))` and embedded control char via `&#10;` -- both rejected. Baseline plain `[x](javascript:alert(1))` also still rejected."
-  },
-  "blocker_1_new_bypass_case_sensitive_numeric_entity_decode": {
-    "payload": "[x](java&#X73;cript:alert(1))  -- note uppercase X in the hex marker, valid per HTML5's numeric-character-reference grammar (the x/X marker is explicitly case-insensitive; &#x73; and &#X73; are the same reference)",
-    "reproduced": "Letflow.Help.HelpContent.create_changeset/2 on this body: valid? == true, errors == [] -- the javascript: payload is accepted and would be written live to help_content.body untouched.",
-    "code_path_reason": "lib/letflow/help/help_content.ex:127's @numeric_entity_pattern is `~r/&#(x[0-9a-fA-F]+|[0-9]+);/` -- the hex-form alternative hardcodes a literal lowercase `x`, with no `/i` flag and no `[xX]` alternative, even though decode_entity_code/1 (line 280) is itself written to accept both (`x in [?x, ?X]`) -- the capturing regex never gets the chance to hand it an uppercase form. Because decode_numeric_entities/1 fails to match `&#X73;` at all, the entity survives un-decoded into scheme_letters/1 (line 262), which downcases the whole pre-colon span (`\"java&#X73;cript\"` -> `\"java&#x73;cript\"`) BEFORE filtering to ASCII a-z -- the now-lowercased literal `x` marker character from the un-decoded entity syntax itself survives the a-z filter as a real letter, producing the extracted scheme `\"javaxcript\"` (extra `x` injected) instead of `\"javascript\"`. `\"javaxcript\"` is not in @disallowed_url_schemes, so unsafe_scheme?/1 returns false.",
-    "why_this_is_the_same_bug_class_the_last_two_rounds_exist_to_close": "Same root cause REVIEWER's determination (step-03d) already named: a check written against an assumed-normalized string, defeated by an encoding variant the check's own author didn't enumerate -- previously CommonMark-syntax variants (reference-style, angle-bracket), now an HTML5-entity-syntax variant (hex marker case)."
-  },
-  "blocker_2_new_bypass_raw_tag_split_across_inline_ast_leaves": {
-    "payloads": [
-      "x<img on**err**=\"x()\">y   -- tag's '<' lands in one plain-text leaf, '>' lands in the leaf after the **strong** node",
-      "x<img on`err`=\"x()\">y    -- identical split via an inline code span instead of strong"
+  "run_id": "WF02-REQ364-20260917",
+  "workflow_id": "WF-02",
+  "step": "03b-rework2",
+  "from_agent": "SECURITY-REVIEWER",
+  "to_agent": "ORCH",
+  "created_at": "2026-09-17T15:11:51Z",
+  "started_at": "2026-09-17T15:11:51Z",
+  "completed_at": "2026-09-17T15:11:51Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S7",
+    "requirement_ids": [
+      "REQ-364"
     ],
-    "reproduced": "Both: Letflow.Help.HelpContent.create_changeset/2 -- valid? == true, errors == []. Confirmed via EarmarkParser.as_ast/2 directly first: `[{\"p\", [], [\"x<img on\", {\"strong\", [], [\"err\"], %{}}, \"=\\\"x()\\\">y\"], %{}}]` -- three children, and the raw tag's own '<' and '>' each live in a DIFFERENT string sibling.",
-    "code_path_reason": "lib/letflow/help/help_content.ex:219's fallback `walk(text) when is_binary(text)` scans each plain-text AST leaf independently against @raw_html_tag_pattern (`~r/<\\/?[a-zA-Z][^<>]*>/`, requires both a literal '<' and a literal '>' within the SAME leaf). walk/1's list clause (line 198) calls this per-child, never reassembling sibling text nodes before scanning. Any inline construct that interrupts the raw tag's own attribute area -- `**bold**`, `` `code` ``, and by the same mechanism emphasis/links/anything earmark treats as its own inline node -- splits the leading `<tag attrs` fragment and the trailing `...>` fragment into separate list elements, and neither fragment alone contains a complete `<...>` span, so neither leaf matches. Contrast with the one payload that appeared similar but is NOT a bypass (`x<div on*click*=\"x()\">y</div>` -- caught): that one happens to still carry a separate, complete `</div>` closing tag intact in its own trailing leaf, which independently matches the pattern. The bypass is real whenever the payload has no such redundant complete tag elsewhere.",
-    "severity_note": "This defeats the exact mechanism blocker_1 of ELIXIR-DEV's own rework2 summary calls out as the fix for gap 1 (inline-mixed raw HTML) -- the fallback scan closes the case where earmark declines to produce a verbatim node, but only when the raw tag's angle brackets survive in one unbroken text run; it was never checked against the case where earmark's own inline-node splitting breaks that assumption, which is the ordinary case for any raw tag that happens to contain markdown-significant characters in its attribute value."
+    "requirement_text": {
+      "REQ-364": "Implements REQ-363's design artefact exactly — no new schema decisions here, this requirement is implementation of an already-validated design, matching this project's own CODE-DESIGNER-then-ELIXIR-DEV split for every other schema-bearing feature.\n\nSCOPE: the `Letflow.Help` context module (naming follows this project's existing per-domain-context convention, e.g. `Letflow.Identity`, `Letflow.TenantProvisioning`) exposing: create a draft, update a draft, publish (draft -> live, sets confirmed_at), re-confirm (bumps confirmed_at on an already-live row without changing body — the explicit \"I checked this, it's still accurate\" action), and read (by screen_id + tenant prefix, or by process_definition_id). Every write path enforces REQ-363's sanitization rule from that design, not a weakened version of it.\n\nNOT IN SCOPE: the tenant-facing authoring UI (REQ-365 for platform, a separate future requirement for the tenant admin UI itself — this requirement's acceptance criteria stop at a working, tested context module, callable from IEx/tests, not yet wired to any HTTP route or frontend component). Route/controller wiring, if this project's own API-surface convention wants a separate requirement for it (matching the pattern most REQ-027..030-style definition CRUD work already used), is a natural fast-follow, not bundled here — state explicitly in this requirement's close-out whether a route was added or deliberately deferred, rather than leaving it ambiguous."
+    },
+    "related_handoff_ids": [],
+    "artifacts_in": [],
+    "owned_modules": [
+      "lib/letflow/help.ex",
+      "lib/letflow/help/help_content.ex"
+    ]
   },
-  "blocker_3_inv8_bare_match_crashes_on_realistic_non_adversarial_input": {
-    "payloads_no_attack_intent_required": [
-      "some text with `unclosed code   (a single stray unmatched backtick)",
-      "```elixir\\nIO.puts 1            (an unclosed fenced code block)"
+  "rework_count": 2,
+  "max_rework": 3,
+  "handoff_id": "2b28f185-a896-4a7a-a2c6-8b74f2577f60",
+  "file": "handoffs/WF02-REQ364-20260917/step-03b-security-reviewer-rework2.json",
+  "task": {
+    "description": "Run SECURITY-REVIEWER's gate (rework round 2) against ELIXIR-DEV's AST-based sanitizer rework (step-03-elixir-dev-rework2.json), including its two self-flagged design deviations. Scope-test the diff against security-invariants.md INV-1..INV-9, independently reproduce earmark_parser's real behavior for the two flagged gaps, re-verify all five original bypass payloads still reject, and actively probe for new bypass classes the AST-based mechanism itself might introduce.",
+    "acceptance_criteria": [
+      "Every applicable invariant (INV-1..INV-9) verdicted with the specific evidence checked",
+      "The two ELIXIR-DEV-flagged design deviations are independently reproduced against the real earmark_parser dependency, not trusted from the handoff",
+      "All five original bypass payloads re-verified rejected, no regression",
+      "Any new bypass found is reproduced directly against create_changeset/2 with the exact payload and code-path root cause named",
+      "A blocking test-infrastructure issue discovered along the way is reported, not silently worked around"
+    ]
+  },
+  "result": {
+    "status": "FAIL",
+    "summary": "RECONSTRUCTION NOTE: this handoff was originally written live during WF02-REQ364-20260917's security-review saga as ad-hoc, non-schema JSON (informal top-level keys such as req/at/result-as-bare-string instead of HANDOFF_PROTOCOL.md §2's real schema), the exact anti-pattern this session's own ISS-0692 precedent names. It has been rewritten into full schema conformance by a later ORCH session under §4.1's not_agent_attested mechanism. created_at/started_at/completed_at are all set to the file's own git-introducing-commit timestamp (`git log --follow --diff-filter=A --format=%aI --reverse -- <path>`), the best-available real timestamp, NOT the original live dispatch/claim/completion times, which were never recorded in schema-legal fields on disk. All findings, quoted test counts, and verification detail below are migrated verbatim in substance from the original ad-hoc file; nothing was invented or paraphrased away.\n\nSCOPE TEST: APPLIES -- tenant-scoped migration (priv/repo/migrations/20260917000001_create_help_content.exs, guarded `if prefix() do`, registered in Letflow.TenantProvisioning.tenant_scoped_migrations/0), a new Ecto schema (lib/letflow/help/help_content.ex) whose every read/write in lib/letflow/help.ex passes `prefix: prefix` explicitly, and a write-path sanitizer guarding against stored content later rendered to users.\n\nINVARIANT ASSESSMENT:\nINV-1: APPLIES, PASS -- verified all three sub-checks: (a) every Repo call in lib/letflow/help.ex (insert/update/get/all, 8 call sites) passes `prefix: prefix` explicitly; (b) migration's `create table(..., prefix: prefix())` is inside `if prefix() do`, and is registered in tenant_scoped_migrations/0 (git diff confirms both halves present in the same commit); (c) no tenant_id column exists on help_content at all (mirrors process_definitions' no-intra-schema-tenant_id-column convention per its own moduledoc) -- not a caller-supplied-tenant_id defect since there is no such column to misuse.\nINV-2: NOT-APPLICABLE -- S4 not started, no HTTP route/controller in this requirement's scope (help.ex moduledoc states this explicitly).\nINV-3: NOT-APPLICABLE -- S5 not started.\nINV-4: APPLIES, PASS -- grepped lib/letflow/help.ex and lib/letflow/help/help_content.ex for System.get_env and hardcoded-secret-shaped literals: zero hits, no secret material touched by this change.\nINV-5: NOT-APPLICABLE -- S4 not started, no lookup-by-ID HTTP endpoint in this requirement's scope.\nINV-6: Meta-invariant -- this handoff is the proof artifact.\nINV-7: APPLIES, PASS -- grepped for Repo.query across the changed files: zero hits, all access via Ecto.Query/Repo.insert|update|get|all.\nINV-8: APPLIES, FAIL -- see blocker 3 below.\nINV-9: NOT-APPLICABLE -- no outbound HTTP request in this requirement's scope.\n\nVERIFICATION PERFORMED:\nearmark_parser behavior independently reproduced: Ran `EarmarkParser.as_ast/2` directly (mix run --no-start against the real 1.4.46 dep, matching decision 0036 and mix.lock) rather than trusting the handoff's prose. Confirmed both claimed gaps are real: (1) `\"click <div onclick=\\\"x()\\\">here</div>\"` parses to a single literal-text \"p\" child with no verbatim node -- inline-mixed raw HTML is genuinely never tagged verbatim; a line-starting `\"<div onclick=\\\"x()\\\">here</div>\"` by contrast IS tagged `%{verbatim: true}}`, confirming the claimed asymmetry. (2) `\"[x](java&#115;cript:alert(1))\"` resolves href to the literal, undecoded `\"java&#115;cript:alert(1)\"`, and `\"[x](java\\tscript:alert(1))\"` resolves href with the tab intact -- both confirmed not auto-handled by the library.\nFive original bypass payloads reverified against the real create_changeset/2: all five now genuinely rejected: (1) reference-style link definition -- rejected; (2) angle-bracket-wrapped autolink `[x](<javascript:alert(1)>)` -- rejected; (3) backslash-before-colon `[x](javascript\\\\:alert(1))` -- rejected; (4) decimal HTML entity `[x](java&#115;cript:alert(1))` -- rejected; (5) embedded tab `[x](java\\tscript:alert(1))` and embedded control char via `&#10;` -- both rejected. Baseline plain `[x](javascript:alert(1))` also still rejected.\n\nBLOCKER 1 -- new bypass, case-sensitive numeric-entity decode: payload `[x](java&#X73;cript:alert(1))` (uppercase X in the hex marker, valid per HTML5's numeric-character-reference grammar). Reproduced: Letflow.Help.HelpContent.create_changeset/2 on this body: valid? == true, errors == [] -- the javascript: payload is accepted and would be written live to help_content.body untouched. Root cause: help_content.ex:127's @numeric_entity_pattern is `~r/&#(x[0-9a-fA-F]+|[0-9]+);/` -- the hex-form alternative hardcodes a literal lowercase `x`, with no `/i` flag and no `[xX]` alternative, even though decode_entity_code/1 (line 280) is itself written to accept both (`x in [?x, ?X]`) -- the capturing regex never gets the chance to hand it an uppercase form. Because decode_numeric_entities/1 fails to match `&#X73;` at all, the entity survives un-decoded into scheme_letters/1 (line 262), which downcases the whole pre-colon span (`\"java&#X73;cript\"` -> `\"java&#x73;cript\"`) BEFORE filtering to ASCII a-z -- the now-lowercased literal `x` marker character from the un-decoded entity syntax itself survives the a-z filter as a real letter, producing the extracted scheme `\"javaxcript\"` (extra `x` injected) instead of `\"javascript\"`. `\"javaxcript\"` is not in @disallowed_url_schemes, so unsafe_scheme?/1 returns false. Same bug class REVIEWER's step-03d determination already named: a check written against an assumed-normalized string, defeated by an encoding variant the check's own author didn't enumerate -- previously CommonMark-syntax variants (reference-style, angle-bracket), now an HTML5-entity-syntax variant (hex marker case).\n\nBLOCKER 2 -- new bypass, raw tag split across inline AST leaves: payloads `x<img on**err**=\"x()\">y` and `` x<img on`err`=\"x()\">y `` (tag's '<' lands in one plain-text leaf, '>' lands in the leaf after the **strong**/`code` node). Reproduced: both -- create_changeset/2 valid? == true, errors == []. Confirmed via EarmarkParser.as_ast/2 directly first: `[{\"p\", [], [\"x<img on\", {\"strong\", [], [\"err\"], %{}}, \"=\\\"x()\\\">y\"], %{}}]` -- three children, and the raw tag's own '<' and '>' each live in a DIFFERENT string sibling. Root cause: help_content.ex:219's fallback `walk(text) when is_binary(text)` scans each plain-text AST leaf independently against @raw_html_tag_pattern (requires both a literal '<' and a literal '>' within the SAME leaf). walk/1's list clause (line 198) calls this per-child, never reassembling sibling text nodes before scanning. This defeats the exact mechanism blocker_1 of ELIXIR-DEV's own rework2 summary calls out as the fix for gap 1 (inline-mixed raw HTML) -- the fallback scan closes the case where earmark declines to produce a verbatim node, but only when the raw tag's angle brackets survive in one unbroken text run.\n\nBLOCKER 3 -- INV-8, bare-match crashes on realistic non-adversarial input: payloads 'some text with `unclosed code' (a single stray unmatched backtick) and an unclosed fenced code block. Reproduced: both raise `** (MatchError) no match of right hand side value: {:error, ast, [...]}` at help_content.ex:178, inside the anonymous fn passed to Ecto.Changeset.validate_change/3 -- propagates straight out of create_changeset/2 (and equally update_changeset/2), uncaught. Root cause: help_content.ex:178 is `{:ok, ast, _messages} = EarmarkParser.as_ast(value)`, a bare 3-tuple match assuming the :ok branch always fires; EarmarkParser.as_ast/2's own documented contract sets status to :error whenever ANY emitted message has severity :warning OR :error, not only for a genuinely-unparseable document. `value` here is directly the tenant-authored `:title`/`:body` field content -- exactly the input class INV-8 names. A tenant author who simply forgets a closing backtick while writing ordinary help text crashes the write path.\n\nNON-SECURITY FINDING (flagged for visibility, not a security invariant): test/support/tenant_fixture.ex's @expected_tenant_tables (42 entries, comment says '22 tables' -- stale even before this change) was never updated to add \"help_content\", so test/support/tenant_template.ex's template_self_check!/1 raises `TENANT_TEMPLATE_SELF_CHECK_FAILED table set mismatch: missing=[] extra=[\"help_content\"]` before ANY test using the shared tenant template can run. Reproduced directly: it does not reach a single test in help_test.exs. Consequence: the rework2 handoff's claim 'mix test test/letflow/help_test.exs: 47 passed' is not currently reproducible -- this is a real defect independent of the three security blockers above and must also be fixed before this round can re-verify test results at all.",
+    "artifacts_out": [],
+    "issues": [
+      {
+        "severity": "BLOCKER",
+        "description": "@numeric_entity_pattern's hex branch hardcodes a lowercase 'x' with no /i flag, so an uppercase HTML5 numeric entity hex marker (&#X73;) survives un-decoded, downcases into a literal 'x' during scheme extraction, and produces 'javaxcript' -- not in @disallowed_url_schemes, so javascript: payloads using an uppercase hex entity marker are accepted and written live.",
+        "affected_requirement": "REQ-364"
+      },
+      {
+        "severity": "BLOCKER",
+        "description": "The plain-text fallback raw-HTML scan (walk/1's list clause) checks each AST sibling leaf independently against @raw_html_tag_pattern; a raw tag whose '<' and '>' land in different siblings (split by any inline construct such as **bold** or `code`) is never detected in either leaf alone.",
+        "affected_requirement": "REQ-364"
+      },
+      {
+        "severity": "BLOCKER",
+        "description": "help_content.ex:178's bare `{:ok, ast, _messages} = EarmarkParser.as_ast(value)` match crashes with a MatchError on realistic, non-adversarial tenant input (e.g. an unclosed inline backtick or fenced code block), violating INV-8's typed-result requirement for tenant-controlled input.",
+        "affected_requirement": "REQ-364"
+      },
+      {
+        "severity": "MINOR",
+        "description": "test/support/tenant_fixture.ex's @expected_tenant_tables was never updated to add \"help_content\", so the shared tenant-template self-check fails before any test in help_test.exs runs, making ELIXIR-DEV's claimed 47/47 result currently unreproducible.",
+        "affected_requirement": "REQ-364"
+      }
     ],
-    "reproduced": "Both raise `** (MatchError) no match of right hand side value: {:error, ast, [...]}` at lib/letflow/help/help_content.ex:178, inside the anonymous fn passed to Ecto.Changeset.validate_change/3 -- propagates straight out of create_changeset/2 (and equally update_changeset/2), i.e. out of Letflow.Help.create_draft/2 and update_draft/3, uncaught.",
-    "code_path_reason": "help_content.ex:178 is `{:ok, ast, _messages} = EarmarkParser.as_ast(value)`, a bare 3-tuple match assuming the :ok branch always fires. EarmarkParser.as_ast/2's own documented contract (deps/earmark_parser/lib/earmark_parser.ex:15, `@type t :: {:ok, ast(), []} | {:error, ast(), errors()}`) and its own implementation (lines 623-631) set status to :error whenever ANY emitted message has severity :warning OR :error -- not only for a genuinely-unparseable document. Real trigger conditions confirmed live in this earmark_parser version: an unclosed inline backtick run (parser.ex:237 emits `:warning, \"Closing unclosed backquotes\"`), an unclosed fenced code block (parser.ex:505 emits `:error, \"Fenced Code Block opened ... not closed\"`), an undefined footnote reference (ast/inline.ex:444), and illegal inline attribute syntax (attr_parser.ex:67) all hit this path. None of these require adversarial intent -- a tenant author who simply forgets a closing backtick while writing ordinary help text crashes the write path.",
-    "invariant": "INV-8 -- 'Error handling uses typed results ... for any path that touches external I/O, tenant-controlled data, or network input. A bare pattern match that can raise on realistic input ... is a defect.' `value` here is directly the tenant-authored `:title`/`:body` field content -- exactly the input class INV-8 names. This is not a supervised-process-restart case (no per-instance isolation here, per the invariant's own carve-out) -- it is a changeset validator called synchronously inside Letflow.Help's write path, so the crash surfaces directly to that call's caller."
+    "git_evidence": {
+      "branch_name": "feature/WF02-REQ364-20260917",
+      "commit_sha_list": [],
+      "remote_branch": "origin/feature/WF02-REQ364-20260917",
+      "push_status": "ok",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": "Route back to ELIXIR-DEV (third rework round on the implementation, not a fourth design round -- the AST-based mechanism itself remains sound; these are implementation-level gaps): (1) make @numeric_entity_pattern's hex branch case-insensitive; (2) reassemble/concatenate adjacent unstructured AST leaves (bounded to the same parent's children, excluding code/pre content) before applying @raw_html_tag_pattern; (3) replace the bare EarmarkParser match with a case/with that treats the :error branch as a validation failure, not a crash; (4) add \"help_content\" to test/support/tenant_fixture.ex's @expected_tenant_tables."
   },
-  "non_security_finding_flagged_for_visibility_not_a_security_invariant": {
-    "what": "test/support/tenant_fixture.ex's @expected_tenant_tables (42 entries, comment says '22 tables' -- stale even before this change) was never updated to add \"help_content\", so test/support/tenant_template.ex's template_self_check!/1 raises `TENANT_TEMPLATE_SELF_CHECK_FAILED table set mismatch: missing=[] extra=[\"help_content\"]` before ANY test using the shared tenant template can run.",
-    "reproduced": "Ran `MIX_ENV=test MIX_TEST_PARTITION=97 mix test test/letflow/help_test.exs` myself (LETFLOW_SECRETS_MASTER_KEY set, db created/migrated on the isolated test partition per README) -- it does not reach a single test in help_test.exs; it raises the above ExUnit.AssertionError during global test-suite setup (test/test_helper.exs:94 -> TenantTemplate.ensure_template!/0 -> build_template!/0 -> template_self_check!/1).",
-    "consequence": "The rework2 handoff's claim 'mix test test/letflow/help_test.exs: 47 passed' is not currently reproducible -- this is a real defect independent of the three security blockers above and must also be fixed (add \"help_content\" to @expected_tenant_tables) before this round can re-verify test results at all.",
-    "routing": "Flagging for REVIEWER/ELIXIR-DEV rather than gating on it directly -- not a security invariant, but recorded here since it blocks the very test-run verification this round was also asked to perform, and per core-directives.md 'Never resolve a conflict/finding silently.'"
-  },
-  "required_fix": "Route back to ELIXIR-DEV (third rework round on the implementation, not a fourth design round -- the AST-based mechanism itself remains sound; these are implementation-level gaps in how the mechanism's own edge cases and the library's documented status contract are handled): (1) make @numeric_entity_pattern's hex branch case-insensitive (`/i` flag or `[xX]`) so it matches decode_entity_code/1's own already-case-insensitive intent; (2) fix the plain-text fallback scan to detect a raw tag whose '<' and '>' land in different AST siblings -- e.g. reassemble/concatenate adjacent unstructured leaves (bounded to the same parent's children, still excluding code/pre content) before applying @raw_html_tag_pattern, rather than scanning each leaf in isolation; (3) replace the bare `{:ok, ast, _messages} = EarmarkParser.as_ast(value)` match with a `case`/`with` that treats EarmarkParser's own `{:error, ast, messages}` branch as a validation failure (add_error, same contract as every other rejection here) rather than letting it crash -- note the AST is still usable/present in the :error tuple, so this is not a loss of the walk's own results, just correct handling of the library's documented return contract; (4) separately, someone must add \"help_content\" to test/support/tenant_fixture.ex's @expected_tenant_tables so the test suite's claimed 47-pass result can actually be reproduced.",
-  "not_reopening": "The AST-based mechanism itself (decision 0036, REVIEWER's option-b determination) is not in question -- these are implementation gaps within that mechanism, the same category of finding as rounds 1-2, not evidence the mechanism choice was wrong."
+  "not_agent_attested": {
+    "reconstructed_by": "ORCH",
+    "reconstructed_at": "2026-09-18T00:40:13Z",
+    "reason": "Original acting SECURITY-REVIEWER agent ran this rework-2 gate live with extensive real reproduction against the live earmark_parser dependency and reached a real FAIL with three named blockers plus a non-security finding, but recorded it as ad-hoc JSON (req/step/result/at/scope_test/invariant_assessment/verification_performed/blocker_1.../blocker_2.../blocker_3.../non_security_finding.../required_fix/not_reopening keys) instead of HANDOFF_PROTOCOL.md's schema. Reconstructed by a later ORCH session under §4.1's mechanism; every blocker, payload, and root-cause line number is preserved verbatim in substance.",
+    "fields_written": [
+      "handoff_id",
+      "file",
+      "status",
+      "result",
+      "task",
+      "context",
+      "created_at",
+      "started_at",
+      "completed_at",
+      "priority",
+      "rework_count",
+      "max_rework",
+      "not_agent_attested"
+    ],
+    "evidence": [
+      "git log --follow --diff-filter=A --format=%aI --reverse -- handoffs/WF02-REQ364-20260917/step-03b-security-reviewer-rework2.json -> 2026-09-17T15:11:51+00:00, used for created_at/started_at/completed_at",
+      "Read the original ad-hoc file's content directly -> source for the invariant assessment, verification detail, and all three blockers plus the non-security finding migrated above"
+    ],
+    "not_verifiable_after_the_fact": [
+      "The original live dispatch/claim timestamps",
+      "Whether the original agent's real completed_at differed from the commit timestamp used here",
+      "A handoff_id, since none existed on the original file",
+      "The exact commit_sha_list this step's own commits would have listed at the time"
+    ]
+  }
 }

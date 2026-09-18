@@ -1,9 +1,90 @@
 {
-  "req": "REQ-364",
-  "step": "03d-reviewer-determination",
-  "result": "option-b-real-parser-required",
-  "at": "2026-09-17T15:04:00Z",
-  "verdict": "Regex denylist approach is structurally unsound, not incomplete. Two confirmed bypasses (reference-style links, angle-bracket-wrapped URLs) plus three more constructible without changing the threat model (backslash-escaping, HTML entity encoding, embedded whitespace/control characters per the OWASP javascript: URI filter bypass cheat sheet) -- all stem from the same root cause: the regex scans raw source bytes for a scheme: substring, but CommonMark link-destination resolution (and any real renderer) applies escape processing, entity decoding, and whitespace normalization the regex never implements.",
-  "concrete_next_step": "Route back through CODE-DESIGNER to amend lib/letflow/design/req363-help-content-data-model.md section 5.3, resolving OQ-4: pick and name an actual library (e.g. html_sanitize_ex, or a CommonMark parser such as earmark/md feeding an AST-level link/image destination scheme check), specify the write-path mechanism precisely (parse -> walk link/image destination nodes -> reject on disallowed scheme, not strip-and-hope). New dependency requires REVIEWER sign-off on the specific choice, same procedural weight as REQ-356's PDF library precedent. Then back to ELIXIR-DEV to implement against the revised design. NOT a third ELIXIR-DEV regex patch round -- explicitly declined.",
-  "no_markdown_sanitization_dep_currently_in_tree": "confirmed via full mix.exs deps/0 read -- ecto_sql, postgrex, plug, bandit, jason, telemetry, stream_data, yaml_elixir, ueberauth_oidcc, lua, wasmex, a PDF renderer, nothing markdown/sanitization-related"
+  "run_id": "WF02-REQ364-20260917",
+  "workflow_id": "WF-02",
+  "step": "03d",
+  "from_agent": "REVIEWER",
+  "to_agent": "ORCH",
+  "created_at": "2026-09-17T14:44:29Z",
+  "started_at": "2026-09-17T14:44:29Z",
+  "completed_at": "2026-09-17T14:44:29Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S7",
+    "requirement_ids": [
+      "REQ-364"
+    ],
+    "requirement_text": {
+      "REQ-364": "Implements REQ-363's design artefact exactly — no new schema decisions here, this requirement is implementation of an already-validated design, matching this project's own CODE-DESIGNER-then-ELIXIR-DEV split for every other schema-bearing feature.\n\nSCOPE: the `Letflow.Help` context module (naming follows this project's existing per-domain-context convention, e.g. `Letflow.Identity`, `Letflow.TenantProvisioning`) exposing: create a draft, update a draft, publish (draft -> live, sets confirmed_at), re-confirm (bumps confirmed_at on an already-live row without changing body — the explicit \"I checked this, it's still accurate\" action), and read (by screen_id + tenant prefix, or by process_definition_id). Every write path enforces REQ-363's sanitization rule from that design, not a weakened version of it.\n\nNOT IN SCOPE: the tenant-facing authoring UI (REQ-365 for platform, a separate future requirement for the tenant admin UI itself — this requirement's acceptance criteria stop at a working, tested context module, callable from IEx/tests, not yet wired to any HTTP route or frontend component). Route/controller wiring, if this project's own API-surface convention wants a separate requirement for it (matching the pattern most REQ-027..030-style definition CRUD work already used), is a natural fast-follow, not bundled here — state explicitly in this requirement's close-out whether a route was added or deliberately deferred, rather than leaving it ambiguous."
+    },
+    "related_handoff_ids": [],
+    "artifacts_in": [],
+    "owned_modules": [
+      "lib/letflow/help.ex",
+      "lib/letflow/help/help_content.ex"
+    ]
+  },
+  "rework_count": 0,
+  "max_rework": 3,
+  "handoff_id": "c841bb2a-4df6-4443-bf48-ce3435613e53",
+  "file": "handoffs/WF02-REQ364-20260917/step-03d-reviewer-determination.json",
+  "task": {
+    "description": "SECURITY-REVIEWER's rework-1 gate escalated a design-approach question (step-03b-security-reviewer-rework1.json): two rounds of the same bug class -- a regex denylist missing a valid CommonMark link-destination syntax variant -- were found against help_content.ex's write-path sanitizer. Determine whether the regex-denylist approach (design section 5.3 option 1) is sound but incomplete, or structurally unsound, and if the latter, name the concrete alternative (option 2: a real parser/AST-based sanitizer) and the concrete next routing step.",
+    "acceptance_criteria": [
+      "A definitive verdict: is the regex-denylist approach sound-but-incomplete or structurally unsound",
+      "If structurally unsound, name a specific real library/mechanism to route CODE-DESIGNER toward, not just 'reconsider'",
+      "State the concrete next routing step (which agent, which artefact to amend) rather than leaving it open-ended"
+    ]
+  },
+  "result": {
+    "status": "FAIL",
+    "summary": "RECONSTRUCTION NOTE: this handoff was originally written live during WF02-REQ364-20260917's security-review saga as ad-hoc, non-schema JSON (informal top-level keys such as req/at/result-as-bare-string instead of HANDOFF_PROTOCOL.md §2's real schema), the exact anti-pattern this session's own ISS-0692 precedent names. It has been rewritten into full schema conformance by a later ORCH session under §4.1's not_agent_attested mechanism. created_at/started_at/completed_at are all set to the file's own git-introducing-commit timestamp (`git log --follow --diff-filter=A --format=%aI --reverse -- <path>`), the best-available real timestamp, NOT the original live dispatch/claim/completion times, which were never recorded in schema-legal fields on disk. All findings, quoted test counts, and verification detail below are migrated verbatim in substance from the original ad-hoc file; nothing was invented or paraphrased away.\n\nVERDICT: Regex denylist approach is structurally unsound, not incomplete. Two confirmed bypasses (reference-style links, angle-bracket-wrapped URLs) plus three more constructible without changing the threat model (backslash-escaping, HTML entity encoding, embedded whitespace/control characters per the OWASP javascript: URI filter bypass cheat sheet) -- all stem from the same root cause: the regex scans raw source bytes for a scheme: substring, but CommonMark link-destination resolution (and any real renderer) applies escape processing, entity decoding, and whitespace normalization the regex never implements.\n\nCONCRETE NEXT STEP: Route back through CODE-DESIGNER to amend lib/letflow/design/req363-help-content-data-model.md section 5.3, resolving OQ-4: pick and name an actual library (e.g. html_sanitize_ex, or a CommonMark parser such as earmark/md feeding an AST-level link/image destination scheme check), specify the write-path mechanism precisely (parse -> walk link/image destination nodes -> reject on disallowed scheme, not strip-and-hope). New dependency requires REVIEWER sign-off on the specific choice, same procedural weight as REQ-356's PDF library precedent. Then back to ELIXIR-DEV to implement against the revised design. NOT a third ELIXIR-DEV regex patch round -- explicitly declined.\n\nno_markdown_sanitization_dep_currently_in_tree: confirmed via full mix.exs deps/0 read -- ecto_sql, postgrex, plug, bandit, jason, telemetry, stream_data, yaml_elixir, ueberauth_oidcc, lua, wasmex, a PDF renderer, nothing markdown/sanitization-related.",
+    "artifacts_out": [],
+    "issues": [
+      {
+        "severity": "BLOCKER",
+        "description": "The regex-denylist write-path sanitizer (design section 5.3 option 1) is structurally unsound: it scans raw source bytes for a scheme: substring while CommonMark link-destination resolution applies escape processing, entity decoding, and whitespace normalization the regex never implements -- at least 5 distinct bypass classes are constructible against the same root cause.",
+        "affected_requirement": "REQ-364"
+      }
+    ],
+    "git_evidence": {
+      "branch_name": "feature/WF02-REQ364-20260917",
+      "commit_sha_list": [],
+      "remote_branch": "origin/feature/WF02-REQ364-20260917",
+      "push_status": "ok",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": "Route to CODE-DESIGNER to amend req363-help-content-data-model.md section 5.3 resolving OQ-4 toward option (b) -- a real parser/AST-based sanitizer -- then to CODE-DESIGN-VALIDATOR, then back to ELIXIR-DEV. Do not dispatch a third regex-patch rework round."
+  },
+  "not_agent_attested": {
+    "reconstructed_by": "ORCH",
+    "reconstructed_at": "2026-09-18T00:40:13Z",
+    "reason": "Original acting REVIEWER agent reached this determination live and its FAIL-equivalent verdict (regex approach rejected, routed back to CODE-DESIGNER) is real, but it was recorded as ad-hoc JSON (req/step/result/at/verdict/concrete_next_step/no_markdown_sanitization_dep_currently_in_tree keys) instead of HANDOFF_PROTOCOL.md's schema. This step's result.status is mapped to FAIL because its substance is a rejection of the current implementation approach that routes back for rework, the same mapping this reconstruction applies consistently across all 12 files' original free-text result values.",
+    "fields_written": [
+      "handoff_id",
+      "file",
+      "status",
+      "result",
+      "task",
+      "context",
+      "created_at",
+      "started_at",
+      "completed_at",
+      "priority",
+      "rework_count",
+      "max_rework",
+      "not_agent_attested"
+    ],
+    "evidence": [
+      "git log --follow --diff-filter=A --format=%aI --reverse -- handoffs/WF02-REQ364-20260917/step-03d-reviewer-determination.json -> 2026-09-17T14:44:29+00:00, used for created_at/started_at/completed_at",
+      "Read the original ad-hoc file's content directly -> source for the verdict and next-step content migrated above"
+    ],
+    "not_verifiable_after_the_fact": [
+      "The original live dispatch/claim timestamps",
+      "Whether the original agent's real completed_at differed from the commit timestamp used here",
+      "A handoff_id, since none existed on the original file",
+      "The exact commit_sha_list this step's own commits would have listed at the time"
+    ]
+  }
 }

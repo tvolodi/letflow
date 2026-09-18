@@ -26946,6 +26946,72 @@ requirements:
       - "this requirement's own close-out states explicitly that ISS-0700 remains status: open (not closed by this requirement) and that the separate 'Unknown workspace' banner gap for non-PLATFORM_ADMIN unauthenticated/no-realm-slug users is unresolved and out of this requirement's scope"
     depends_on: [REQ-360]
     close_out_note: >
+      status: blocked, NOT done — updated by ORCH (WF02-REQ369-AC6AC7-20260918T143000Z,
+      2026-09-18), superseding the 2026-09-18T13:35:49Z note below in substance (kept
+      append-only per this file's own history discipline: nothing here is deleted, this
+      note states the current, factual position). AC1-AC5 remain genuinely complete and
+      independently re-verified: RELEASE-VALIDATOR's PASS-WITH-PENDING
+      (step-05-release-validation.json), merged as PR #1507, squash commit
+      3c0cbd24290c062d1974b7eb91fa74adcc2c42f4.
+      .
+      THE CREDENTIAL-ACCESS BLOCKER NAMED BELOW IS NOW RESOLVED. This session's execution
+      environment has a real c:\Users\tvolo\dev\ai-dala\ai-dala-infra checkout and working
+      SSH access to ubuntu-16gb-nbg1-1 (confirmed live: `ssh ubuntu-16gb-nbg1-1 whoami` ->
+      tvolodi). UAT-RUNNER fetched a real seeded PLATFORM_ADMIN credential via
+      `ai-dala-infra/scripts/qa-login.sh admin-user` and used it for real HTTP/browser
+      calls against live QA — no mocks, password never recorded in any file or commit.
+      Full evidence: test/uat-reports/uat-2026-09-18-WF02-REQ369-AC6AC7-20260918T143000Z.yaml
+      (PR #1518, merged).
+      .
+      AC6 IS NOW PARTIALLY SATISFIED. A real, full end-to-end PLATFORM_ADMIN login,
+      driven through Keycloak's real hosted login page (not the pipeline_test's
+      session-injection shortcut — see AC7 finding below), genuinely lands on
+      `/platform-dashboard` with the `platform-dashboard-heading` ("Platform Overview"),
+      `platform-quick-links` nav, and full PLATFORM_ADMIN nav entry set all rendering —
+      proven with a fresh screenshot
+      (web/tests/screenshots/pipelines/platform-login-routing-by-role-admin-real-oidc-20260918.png,
+      gitignored, referenced by path). BUT AC6's own explicit "real tenant count
+      rendered" clause is NOT satisfied: a genuine, newly-discovered product defect,
+      ISS-0711 (docs/issues/ISS-0711.yaml, queue_ref Q-711, github_ref GH-1519,
+      severity BLOCKER, status open) — PlatformDashboardPage.tsx reads a `.total` field
+      the real `GET /api/v1/tenants` response does not have (real shape is
+      `{items, next_cursor, count}`, confirmed via direct authenticated curl against
+      live QA returning `count: 2`), so the tile always renders "0" regardless of the
+      real count. AC6 cannot be marked done until ISS-0711 is fixed and re-verified.
+      .
+      AC7 IS STILL NOT SATISFIED, for a reason distinct from anything previously
+      recorded. The scenario file's PLATFORM_ADMIN branch assertion (route + three
+      testids) is confirmed correct and unchanged. But re-running it for real against
+      QA via its OWN NAMED pipeline_test
+      (web/tests/e2e/pipelines/platform-login-routing-by-role.pipeline.e2e.spec.ts),
+      with fully correct credentials this time, produced a genuine FAIL — a second new
+      finding, ISS-0712 (docs/issues/ISS-0712.yaml, queue_ref Q-712, github_ref GH-1520,
+      severity MAJOR, status open): the pipeline_test's shared login helper
+      (helpers.ts's `loginWithToken`) authenticates via sessionStorage injection,
+      deliberately bypassing Keycloak's real redirect and the app's own
+      `/auth/callback` route — but REQ-369's role-conditional redirect lives only
+      inside OidcCallbackPage.tsx's one-time useEffect, which runs solely during that
+      real OIDC exchange. This is a test-design gap, not a product defect — the real
+      product behavior was independently proven correct via a genuine (throwaway,
+      uncommitted) real-OIDC-redirect login in the same UAT-RUNNER run. AC7 cannot be
+      marked done until ISS-0712 is fixed (the pipeline_test's PLATFORM_ADMIN case
+      needs its own real-redirect-based login) and the scenario is re-run for real
+      through the fixed spec.
+      .
+      REMAINING WORK for whoever picks this back up: (1) route ISS-0711 to
+      CODE-DESIGNER/ELIXIR-DEV or FRONTEND-DEV to fix the total/count contract
+      mismatch; (2) route ISS-0712 to TEST-DESIGNER to give the pipeline_test's
+      PLATFORM_ADMIN case a real-redirect login path (also add an env-var credential
+      path to helpers.ts so a real-environment run never needs an ad-hoc source edit
+      to supply a live credential); (3) once both land, dispatch UAT-RUNNER once more
+      — from an environment with ai-dala-infra/SSH access to QA, same as this run — to
+      re-run the fixed pipeline_test for real against QA and confirm both AC6 (real
+      tenant count) and AC7 (scenario PASS via its own named pipeline_test) before
+      flipping this requirement's status to done. AC8 remains satisfied: ISS-0700
+      (docs/issues/ISS-0700.yaml) stays status: open, untouched by this run, and the
+      separate "Unknown workspace" banner gap remains out of scope.
+      .
+      --- Prior note (2026-09-18T13:35:49Z), retained for history, superseded by the above ---
       status: blocked, NOT done — updated by DOC-UPDATER (WF02-REQ369-closeout-update-20260918,
       2026-09-18), superseding the 2026-09-17 note below in substance (kept append-only
       per this file's own history discipline: nothing here is deleted, this note states

@@ -89,7 +89,7 @@ resolved_at: "2026-09-18T22:05:00Z"
 resolution: >
   Root cause removed via option (b) from this entry's own text: ExamListPage.tsx
   (web/src/pages/exam/ExamListPage.tsx) now calls a new dedicated backend route,
-  GET /exam-sessions/available (lib/letflow/routers/exam_sessions_router.ex),
+  GET /exam-sessions/available (lib/letflow/routers/exam_sessions.ex),
   instead of the generic POST /api/v1/entities/query. The new route is scoped
   under the existing :ExamSessionStart permission -- already one of CANDIDATE's
   six ISS-0646 permissions -- so CANDIDATE's closed permission set from ISS-0646

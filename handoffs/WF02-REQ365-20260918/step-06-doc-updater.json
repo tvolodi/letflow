@@ -29,15 +29,14 @@
   },
   "result": {
     "status": "PASS",
-    "summary": "docs/requirements.yaml: REQ-365 entry `status:` flipped from `in_progress` to `done` (line 26593). Appended one `done` event for REQ-365 to docs/status/requirement_status.v19.yaml (the current volume per docs/status/requirement_status.index.yaml) -- git diff --numstat confirmed 73 insertions, 0 deletions on that file. Close-out note quotes the full published login-routing help body verbatim as read from RELEASE-VALIDATOR's step-05 handoff (result.published_login_routing_help_body), which itself was queried directly from the real dev Postgres row (public.platform_help_content, screen_id='login-routing', status='live'), satisfying AC2's requirement that the close-out quote the actual published text. docs/status/requirement_status.index.yaml's volume-19 `entries:` count incremented 9 -> 10 in the same commit, with a new note entry recording the on-disk recount (582 lines / 34122 bytes, well under the 1200-line/120000-byte roll ceiling -- no roll triggered). Verified `grep -c \"^  - req:\" docs/status/requirement_status.v19.yaml` = 10, matching the declared count. Checked docs/ for any other reference to REQ-365 as not-yet-built: grep across docs/ found REQ-365 named only in docs/requirements.yaml, docs/status/requirement_status.index.yaml, and docs/status/requirement_status.v19.yaml itself -- no docs/migration/ file or sibling requirement's NOT-IN-SCOPE clause references it, so no further doc updates were needed. README.md checked (grepped login-routing/help content/platform_help/Letflow.Help -- no hits): it does not enumerate individual context modules or per-screen help content, consistent with REQ-364's own precedent, so no README update is needed. No docs/migration/stage-N-*.md or decisions/*.md file was named by REQ-365's acceptance criteria (reread to confirm) -- none required."
+    "summary": "docs/requirements.yaml: REQ-365 entry `status:` flipped from `in_progress` to `done` (line 26593). Appended one `done` event for REQ-365 to docs/status/requirement_status.v19.yaml (the current volume per docs/status/requirement_status.index.yaml) -- git diff --numstat confirmed 73 insertions, 0 deletions on that file. Close-out note quotes the full published login-routing help body verbatim as read from RELEASE-VALIDATOR's step-05 handoff (result.published_login_routing_help_body), which itself was queried directly from the real dev Postgres row (public.platform_help_content, screen_id='login-routing', status='live'), satisfying AC2's requirement that the close-out quote the actual published text. docs/status/requirement_status.index.yaml's volume-19 `entries:` count incremented 9 -> 10 in the same commit, with a new note entry recording the on-disk recount (582 lines / 34122 bytes, well under the 1200-line/120000-byte roll ceiling -- no roll triggered). Verified `grep -c \"^  - req:\" docs/status/requirement_status.v19.yaml` = 10, matching the declared count. Checked docs/ for any other reference to REQ-365 as not-yet-built: grep across docs/ found REQ-365 named only in docs/requirements.yaml, docs/status/requirement_status.index.yaml, and docs/status/requirement_status.v19.yaml itself -- no docs/migration/ file or sibling requirement's NOT-IN-SCOPE clause references it, so no further doc updates were needed. README.md checked (grepped login-routing/help content/platform_help/Letflow.Help -- no hits): it does not enumerate individual context modules or per-screen help content, consistent with REQ-364's own precedent, so no README update is needed. No docs/migration/stage-N-*.md or decisions/*.md file was named by REQ-365's acceptance criteria (reread to confirm) -- none required.",
+    "artifacts_out": [
+      "docs/requirements.yaml",
+      "docs/status/requirement_status.v19.yaml",
+      "docs/status/requirement_status.index.yaml"
+    ],
+    "next_action": "Route to ORCH for Step Final merge"
   },
-  "artifacts_out": [
-    "docs/requirements.yaml",
-    "docs/status/requirement_status.v19.yaml",
-    "docs/status/requirement_status.index.yaml",
-    "handoffs/WF02-REQ365-20260918/step-06-doc-updater.json"
-  ],
-  "next_action": "Route to ORCH for Step Final merge",
   "rework_count": 0,
   "max_rework": 3
 }

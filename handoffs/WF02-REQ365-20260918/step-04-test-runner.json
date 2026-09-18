@@ -40,12 +40,12 @@
       "scripts/test_parallel.sh run to completion, real combined pass/fail totals quoted -- 4418/4418 passed, 0 failures",
       "zero failures in test/letflow/help/platform_test.exs and test/letflow/help_test.exs -- 86/86 passed",
       "any pre-existing/unrelated failure attributed structurally -- N/A this run, zero failures occurred; absence confirmed by reading actual per-partition output, not by count-matching"
-    ]
+    ],
+    "artifacts_out": [
+      "test/reports/report-20260918-WF02REQ365-20260918.yaml"
+    ],
+    "next_action": "Route to RELEASE-VALIDATOR"
   },
-  "artifacts_out": [
-    "test/reports/report-20260918-WF02REQ365-20260918.yaml"
-  ],
-  "next_action": "Route to RELEASE-VALIDATOR",
   "rework_count": 0,
   "max_rework": 3
 }

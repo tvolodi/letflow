@@ -53,12 +53,10 @@
       "a platform-scope help-content write path exists, reusing REQ-364's context-module shape against wherever REQ-363's design placed platform rows, not a parallel schema/mechanism -- CONFIRMED: platform_help_content table unguarded/unregistered, Letflow.Help.Platform mirrors Letflow.Help's shape",
       "real help content for the login-routing screen is authored and published through this path, in plain end-user language -- CONFIRMED: queried real Postgres row directly, status=live, text quoted above",
       "the write path enforces the same sanitization rule REQ-363/364 established for tenant-scoped content -- CONFIRMED: single shared Letflow.Help.MarkdownSafety.validate/2, called by both PlatformHelpContent and HelpContent, no second implementation found"
-    ]
+    ],
+    "artifacts_out": [],
+    "next_action": "Route to DOC-UPDATER"
   },
-  "artifacts_out": [
-    "handoffs/WF02-REQ365-20260918/step-05-release-validator.json"
-  ],
-  "next_action": "Route to DOC-UPDATER",
   "rework_count": 0,
   "max_rework": 3
 }

@@ -611,6 +611,27 @@ defmodule Letflow.HelpTest do
       assert "must not contain raw HTML tags" in errors_on(changeset).body
     end
 
+    test "round 4 (ISS-0709) -- negative confirmation: a raw tag split across two adjacent list items is NOT detected (documented deferred gap)" do
+      %{schema_name: schema_name} = provisioned_tenant()
+
+      # Design §5 open question 1 (accepted by REVIEWER as a documented limitation, not
+      # a follow-up issue): after this fix, "li" is a @block_boundary_tags member, so
+      # flatten_plain_text/1 no longer tunnels through one list item into a sibling list
+      # item's content. Concatenated across the (pre-fix, whole-list) projection this
+      # would reassemble to "item a<b>c", which DOES match @raw_html_tag_pattern -- so
+      # this is a genuine reproduction of the deferred gap, not a body that was already
+      # safe for an unrelated reason. This test exists to make the design's own
+      # documented tradeoff verifiable rather than only asserted in prose: if a future
+      # change accidentally started detecting across list-item boundaries (or, worse,
+      # accidentally stopped detecting the SAME-block cases the other round-4 tests
+      # cover), one of these two tests would fail and point at exactly which behavior
+      # moved.
+      body = "- item a<\n- b>c"
+
+      assert {:ok, help} = Help.create_draft(draft_attrs(%{body: body}), prefix: schema_name)
+      assert help.body == body
+    end
+
     test "allows a safe https:// link" do
       %{schema_name: schema_name} = provisioned_tenant()
 

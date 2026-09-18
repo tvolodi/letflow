@@ -330,8 +330,16 @@ defmodule Letflow.RouterTest do
   end
 
   describe "REQ-071 AC3: /health survives the OIDC provider worker being down" do
-    test "GET /health returns 200 while Letflow.Oidc.DefaultProvider is dead" do
-      pid = Process.whereis(Letflow.Oidc.DefaultProvider)
+    # REQ-370 (design req370-multi-issuer-oidc-verification.md §4) replaced the
+    # single, always-running, config-registered Letflow.Oidc.DefaultProvider static
+    # worker with Letflow.Oidc.ProviderRegistry -- a DynamicSupervisor that starts
+    # per-realm workers lazily. Letflow.Oidc.DefaultProvider no longer exists at all
+    # (Process.whereis/1 for it now always returns nil), so this test's equivalent
+    # "the OIDC provider layer being down" target is ProviderRegistry itself -- the
+    # one process REQ-071 AC3's own point (an unrelated dependency being dead must
+    # not take /health down with it) still has a real, always-running analog for.
+    test "GET /health returns 200 while Letflow.Oidc.ProviderRegistry is dead" do
+      pid = Process.whereis(Letflow.Oidc.ProviderRegistry)
       assert is_pid(pid)
       ref = Process.monitor(pid)
       Process.exit(pid, :kill)
@@ -343,11 +351,15 @@ defmodule Letflow.RouterTest do
       assert conn.status == 200
       assert Jason.decode!(conn.resp_body) == %{"status" => "ok"}
 
-      # Letflow.Supervisor's :one_for_one strategy (lib/letflow/application.ex:32)
-      # restarts the killed Oidcc.ProviderConfiguration.Worker automatically — a new
-      # process gets registered under the same Letflow.Oidc.DefaultProvider name, so a
-      # later test resolving this name again does not observe a permanently-dead
-      # provider. Confirmed by reading application.ex directly rather than asserted
+      # Letflow.Supervisor.Infrastructure's :one_for_one strategy restarts the killed
+      # ProviderRegistry automatically — a new DynamicSupervisor process gets
+      # registered under the same Letflow.Oidc.ProviderRegistry name (start_link/1
+      # hardcodes name: __MODULE__, not config-dependent), so a later test resolving
+      # this name again does not observe a permanently-dead provider. Any per-realm
+      # worker ProviderRegistry had started dies with it and is simply re-started
+      # lazily again on the next verification attempt against that realm
+      # (ensure_started/1's own idempotent behavior, design §4.1) — confirmed by
+      # reading provider_registry.ex/infrastructure.ex directly rather than asserted
       # here (asserting on the exact restart timing would itself be flaky).
     end
   end

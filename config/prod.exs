@@ -7,14 +7,15 @@ import Config
 # lib/letflow/application.ex's http_child/0 — no override needed here;
 # only http_port, the runtime-dependent value, is set, in runtime.exs.)
 
-# :oidc issuer/client_id moved to config/runtime.exs (env-var driven,
-# OIDC_ISSUER/OIDC_CLIENT_ID) so a real per-environment Keycloak can be
-# pointed at without rebuilding the release image — see runtime.exs for
-# the current default (still the placeholder issuer until a deployment
-# sets the env vars). provider_name/signing_algs/token_verifier stay here
-# since they don't vary per environment.
+# :oidc keycloak_base_url/client_id moved to config/runtime.exs (env-var
+# driven, OIDC_KEYCLOAK_BASE_URL/OIDC_CLIENT_ID, REQ-370) so a real
+# per-environment Keycloak can be pointed at without rebuilding the release
+# image — see runtime.exs for the current default (still the placeholder
+# host until a deployment sets the env vars). signing_algs/token_verifier
+# stay here since they don't vary per environment. :provider_name is
+# retired entirely (REQ-370) -- per-realm names are computed by
+# Letflow.Oidc.ProviderRegistry.via_name/1, not configured.
 config :letflow, :oidc,
-  provider_name: Letflow.Oidc.DefaultProvider,
   signing_algs: ["RS256"],
   token_verifier: Letflow.Oidc.TokenVerifier.Oidcc
 

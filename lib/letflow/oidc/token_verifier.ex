@@ -17,14 +17,42 @@ defmodule Letflow.Oidc.TokenVerifier do
 
   See `lib/letflow/design/req021-auth-plug-pipeline.md` §3.2 for the full
   reasoning behind this seam.
+
+  ## REQ-370 — multi-issuer verification (arity 2 → 1)
+
+  `provider_name` is no longer a caller-supplied argument. Under multi-issuer
+  verification (`lib/letflow/design/req370-multi-issuer-oidc-verification.md`
+  §3), *which* provider to verify a token against is something only the
+  verifier itself can determine — by peeking the token's own claimed issuer
+  and resolving it against the `tenants` table (the sole source of issuer
+  trust, see `Letflow.Oidc.ProviderRegistry`) — so it can no longer be passed
+  in by `Letflow.Plugs.AuthPipeline`.
   """
 
-  @doc """
-  Verifies `raw_token` against the OIDC provider registered under
-  `provider_name` (the same atom `Letflow.Application` passed to
-  `Oidcc.ProviderConfiguration.Worker` at startup). Returns the verified
-  claims map on success.
+  @typedoc "Verified claims map returned on successful verification."
+  @type claims :: %{optional(String.t()) => term()}
+
+  @typedoc """
+  Error union returned by `verify_bearer_token/1`. `:untrusted_issuer` is new
+  under REQ-370 — the claimed realm resolved to no tenant row (or no longer
+  resolves to one). It is deliberately collapsed by
+  `Letflow.Plugs.AuthPipeline.handle_auth_error/2`'s existing generic-401
+  catch-all, identically to every other verify failure — no new
+  HTTP-distinguishable oracle is introduced.
   """
-  @callback verify_bearer_token(raw_token :: String.t(), provider_name :: atom()) ::
-              {:ok, claims :: %{optional(String.t()) => term()}} | {:error, term()}
+  @type verify_error ::
+          :malformed_token
+          | :untrusted_issuer
+          | {:verifier_crashed,
+             %{kind: :error | :exit | :throw, classification: module() | atom()}}
+          | term()
+
+  @doc """
+  Verifies `raw_token`, resolving which OIDC provider to trust from the
+  token's own (unverified) claimed issuer against the `tenants` table —
+  never a caller-supplied provider. Returns the verified claims map on
+  success.
+  """
+  @callback verify_bearer_token(raw_token :: String.t()) ::
+              {:ok, claims()} | {:error, verify_error()}
 end

@@ -128,16 +128,44 @@ if config_env() == :prod do
          :cors_allowed_origins,
          (System.get_env("CORS_ALLOWED_ORIGINS") || "") |> String.split(",", trim: true)
 
-  # :oidc issuer/client_id: runtime-configurable (not baked into the release
-  # image at compile time) so each deployed environment can point at its own
-  # Keycloak realm without a rebuild — provider_name/signing_algs/token_verifier
-  # stay in config/prod.exs since those don't vary per environment. `Config`
-  # merges keys within :oidc across files (config/prod.exs then this file),
-  # so this only adds/overrides :issuer and :client_id, it doesn't replace the
-  # whole keyword list. Defaults preserve the pre-existing placeholder so an
-  # environment that hasn't set these env vars yet behaves exactly as before.
+  # :oidc keycloak_base_url/client_id: runtime-configurable (not baked into
+  # the release image at compile time) so each deployed environment can
+  # point at its own Keycloak host without a rebuild —
+  # signing_algs/token_verifier stay in config/prod.exs since those don't
+  # vary per environment. `Config` merges keys within :oidc across files
+  # (config/prod.exs then this file), so this only adds/overrides
+  # :keycloak_base_url and :client_id, it doesn't replace the whole keyword
+  # list.
+  #
+  # REQ-370 (design req370-multi-issuer-oidc-verification.md §6):
+  # :oidc, :issuer is retired as the trust source -- the tenants table is
+  # now the sole source of issuer trust (Letflow.Oidc.ProviderRegistry
+  # resolves each realm's own issuer as "#{keycloak_base_url}/realms/#{realm}").
+  # OIDC_ISSUER is kept ONLY as a one-deprecation-cycle legacy-derivation
+  # fallback for keycloak_base_url, so an already-deployed environment that
+  # has only ever set OIDC_ISSUER continues to resolve its bpm-default realm
+  # correctly without an immediate operator action. It is never consulted to
+  # decide whether a non-default realm is trusted.
+  #
+  # derive_base_url_from_legacy_issuer/1 below is a small pure helper (a
+  # local anonymous function, not a module function -- this file is a plain
+  # script, not a module) that strips a trailing "/realms/<anything>" suffix
+  # off a full legacy OIDC_ISSUER URL, yielding the shared Keycloak host.
+  derive_base_url_from_legacy_issuer = fn
+    nil ->
+      nil
+
+    issuer when is_binary(issuer) ->
+      case Regex.run(~r{\A(.*?)/realms/[^/]+\z}, issuer) do
+        [_full, base_url] -> base_url
+        nil -> nil
+      end
+  end
+
   config :letflow, :oidc,
-    issuer:
-      System.get_env("OIDC_ISSUER") || "https://placeholder-keycloak.invalid/realms/bpm-default",
+    keycloak_base_url:
+      System.get_env("OIDC_KEYCLOAK_BASE_URL") ||
+        derive_base_url_from_legacy_issuer.(System.get_env("OIDC_ISSUER")) ||
+        "https://placeholder-keycloak.invalid",
     client_id: System.get_env("OIDC_CLIENT_ID") || "letflow-placeholder-client"
 end

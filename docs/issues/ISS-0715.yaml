@@ -1,0 +1,34 @@
+id: ISS-0715
+title: "requirement_status.v19.yaml line 765 has req: ISS-0712, an illegal vocabulary value (REQ-NNN | SCOPE-CHANGE only)"
+discovered_by: TEST-RUNNER
+discovered_in_run: WF02-REQ370-20260918
+discovered_at: "2026-09-18T18:47:00Z"
+severity: MINOR
+description: >
+  Pre-existing, unrelated to REQ-370's own diff -- diff-absence confirmed:
+  this branch's only commit touching docs/status/requirement_status.v19.yaml
+  (7639a6cf) appended a single "started" event; the offending line was
+  written by commit bf989a89 ("WF03-ISS0712-20260918", agent ORCH), an
+  ancestor of this branch's merge-base with main (c219c7cd) -- it predates
+  this branch entirely and belongs to a sibling WF-03 issue-fix run.
+  test/docs/requirement_status_invariants_test.exs's A4a ("every entry in
+  every volume uses the documented req/event vocabulary") and A5 ("the
+  on-disk vocabulary-anomaly set equals the index's declared set exactly")
+  both fail on it: `req: ISS-0712` is not a legal value per the volume's own
+  header (`req:` is REQ-NNN | SCOPE-CHANGE only -- an issue fix must use
+  SCOPE-CHANGE with the ISS id named in `note:`). This is the same class of
+  vocabulary defect volume 1's own `known_shape_anomalies` section already
+  documents for three other entries, but this specific occurrence was never
+  declared there, so the invariant tests correctly flag it live. Per the
+  volume's own append-only rule, the offending line itself cannot be
+  corrected -- WF03-ISS0713-20260918's own close-out note (recorded in
+  requirement_status.v19.yaml) already anticipated this and deliberately did
+  not copy the mistake, flagging it for "a future session correcting
+  docs/status/ vocabulary."
+affected_files:
+  - docs/status/requirement_status.v19.yaml
+  - docs/status/requirement_status.index.yaml
+  - test/docs/requirement_status_invariants_test.exs
+queue_ref: Q-715
+github_ref: GH-1533
+status: open

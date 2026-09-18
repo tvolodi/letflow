@@ -8,8 +8,8 @@
   "file": "handoffs/WF02-REQ365-20260918/step-01b-design-gate.json",
   "created_at": "2026-09-18T02:44:07Z",
   "started_at": "2026-09-18T02:48:32Z",
-  "completed_at": null,
-  "status": "PENDING",
+  "completed_at": "2026-09-18T02:55:00Z",
+  "status": "COMPLETED",
   "priority": "NORMAL",
   "context": {
     "stage": "S7",
@@ -34,7 +34,17 @@
       "the write path enforces the same sanitization rule REQ-363/364 established for tenant-scoped content — no separate, weaker validation for the platform path"
     ]
   },
-  "result": null,
+  "result": {
+    "status": "PASS",
+    "summary": "REGATE iteration 1. Re-ran the full WF-02 Step 1b gate (checks a-d) against the current state of lib/letflow/design/req365-platform-help-authoring.md, independently, alongside req363's design and the actual shipped lib/letflow/help.ex. (a) §1/§1.3: platform_help_content migration is public-schema, no prefix() concept, no if prefix() do guard, explicitly not registered in Letflow.TenantProvisioning.tenant_scoped_migrations/0 -- consistent with req363 §3's placement decision and the users/tenants migration precedent. (b) §3.2: all six Letflow.Help.Platform signatures (create_draft/1, update_draft/2, publish/1, reconfirm/1, withdraw/1, get_by_screen/1) checked against the real lib/letflow/help.ex -- the prior gap is fixed: publish/1, reconfirm/1, and withdraw/1 now each include {:error, Ecto.Changeset.t()} (lines 286-309), with an explicit stated rationale (lines 317-325: each ends in a Repo.update/2 against a changeset, same as the shipped Letflow.Help equivalents, so a concurrent write/stale row/constraint violation can surface after the state-transition guard passes). Divergences from Letflow.Help's error vocabulary (no :invalid_prefix, :process_definition_id_not_supported instead of :process_definition_not_found) are each reasoned in §3.1/§3.3, not silent drift. No regression on the other five signatures. (c) §5: sanitization reuse is concrete, not hand-waved -- extraction of the existing lib/letflow/help/help_content.ex private validator chain into a new shared Letflow.Help.MarkdownSafety.validate/2, called from both HelpContent and PlatformHelpContent changesets; no second implementation, no new dependency. (d) §4.1-§4.2: screen_id is explicitly stated (\"login-routing\", reasoned from the requirement text and REQ-360's scenario id) and real, plain end-user-language help content is present in full (title + markdown body describing Keycloak-hosted sign-in and role-based landing, no SHALL-statement/engineer prose). No TBD/deferral language found (grepped). No implementation code bodies present -- §2's schema block and §3.2's function block are signatures/field declarations/type shapes only, matching the same pseudo-code convention already used and passed in the precedent req363 design. Cross-module dependencies listed in §6.",
+    "checks": {
+      "a_migration_shape": "PASS",
+      "b_write_path_signatures_vs_shipped_help_ex": "PASS",
+      "c_sanitization_reuse_mechanism": "PASS",
+      "d_login_routing_content_and_screen_id": "PASS"
+    },
+    "next_action": "Route to ELIXIR-DEV (Step 2a)"
+  },
   "rework_count": 0,
   "max_rework": 3,
   "gate_history": [

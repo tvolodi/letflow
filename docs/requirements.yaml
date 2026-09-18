@@ -27104,6 +27104,7 @@ requirements:
   - id: REQ-370
     title: "Multi-issuer OIDC token verification -- trust the tenant table's own realm bindings, not one hardcoded :oidc, :issuer value"
     owner: ELIXIR-DEV
+    impl_order: 714  # letflow-queue task id, GH#1529
     status: pending
     stage: S1
     description: >

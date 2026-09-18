@@ -186,10 +186,23 @@ defmodule Letflow.TenantProvisioning.ColumnPromotionTest do
                  :all
                )
 
-      tenant_ids_registered = Enum.map(rows, & &1.tenant_id) |> Enum.sort()
-      assert tenant_ids_registered == Enum.sort([tenant_a, tenant_b])
+      # :all resolves via an unscoped `list_registrations/0` (production-correct
+      # behavior -- see tenant_provisioning.ex's own @doc), so under a real-commit,
+      # concurrently-scheduled test suite it may legitimately also resolve tenants
+      # this test did not provision (ISS-0580's documented residual :auto-mode
+      # window). Assert containment, not exact-set-equality (ISS-0716).
+      tenant_ids_registered = Enum.map(rows, & &1.tenant_id)
+      assert tenant_a in tenant_ids_registered
+      assert tenant_b in tenant_ids_registered
 
-      for row <- rows do
+      # Scope the DDL-execution loop to this test's own two rows -- iterating an
+      # unrelated, concurrently-leaked tenant's row could fail for a reason having
+      # nothing to do with AC1 (e.g. no active "invoice" definition there), and
+      # would mutate a row this test has no business advancing (ISS-0716).
+      rows_for_this_test = Enum.filter(rows, &(&1.tenant_id in [tenant_a, tenant_b]))
+      assert length(rows_for_this_test) == 2
+
+      for row <- rows_for_this_test do
         assert {:ok, %ColumnPromotion{status: "ddl_applied"}} =
                  TenantProvisioning.run_column_promotion(row.id)
       end

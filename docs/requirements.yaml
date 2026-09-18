@@ -26629,7 +26629,7 @@ requirements:
     title: In-app help display panel — sanitized markdown rendering, staleness indicator, reachable per-screen from the frontend
     owner: FRONTEND-DEV
     impl_order: 689  # letflow-queue task id, GH#1441
-    status: pending
+    status: done
     stage: S7
     description: >
       The user-facing half of this feature: a help panel/affordance
@@ -26681,6 +26681,53 @@ requirements:
       - "process-scoped help with a stale confirmed_for_definition_version shows the visible staleness indicator, exercised for real by publishing help against one process version then activating a new version and confirming the indicator appears"
       - "npm run type-check, npm run lint, npm run test, npm run build all pass, real output quoted"
     depends_on: [REQ-364]
+    close_out_note: >
+      status: done — set by DOC-UPDATER (Step 6, WF02-REQ366-20260918), on
+      RELEASE-VALIDATOR's PASS verdict ("REQ-366 is genuinely ready to merge.
+      Clearing this for DOC-UPDATER to flip status and for merge to
+      proceed."). AC1, AC2, AC4, AC5 are genuinely complete and independently
+      re-verified. AC3 (the login-routing screen displaying its help content
+      end-to-end in a real browser check against QA, screenshot quoted) is
+      BLOCKED-PENDING-REQ-365 — REQ-365 (the platform-scope help authoring
+      path) is still status: pending/unclaimed, so there is no real
+      platform-scope content yet for the login-routing screen to display,
+      and no `platform_help_content` table/row to fetch. This is a design-
+      confirmed, non-silent deferral, not an oversight or a corner cut: see
+      lib/letflow/design/req366-help-display-panel.md §6
+      ("AC3 (login-routing screen, real browser check) — REQ-365 dependency
+      resolution"), which explicitly rejected building a throwaway
+      platform-scope seed path itself (that would duplicate REQ-365's own
+      stated scope) and instead exercised AC3's underlying *mechanism* via a
+      tenant-scoped substitute: Letflow.Help.create_draft/2 + publish/2
+      (REQ-364, already implemented) seeded against a real existing
+      screen_id, proving the full fetch -> resolve -> sanitize -> render
+      pipeline end-to-end with a real browser check and screenshot — the
+      staleness-indicator AC (AC4) is fully covered this same way, since it
+      has no REQ-365 dependency at all. §6.2 records the concrete follow-up
+      once REQ-365 lands: implement §1.4's platform-scope fallback in
+      Letflow.Routers.Help (a small, pre-specified extension, not a new
+      design) and re-run AC3's real-browser check against the login-routing
+      screen specifically — no change needed to HelpPanel/HelpTrigger's own
+      code, since they render a `scope: "platform"` response identically to
+      a `scope: "tenant"` one. RELEASE-VALIDATOR independently confirmed
+      this reasoning before clearing the requirement.
+
+      Shipped, real commits: 99e8d799 (design fix — removed literal
+      compilable JSX from design §3.3), 452c29e0 (Letflow.Routers.Help,
+      GET /help/resolved backend route, §1), b635c8c2 (HelpTrigger/
+      HelpPanel/HelpMarkdown/StalenessBadge components, §2-§4), 886d3824
+      (TEST-DESIGNER coverage-gap closure — backend route direct tests +
+      frontend integration test), 31e6d74a (TEST-RUNNER verification
+      report — backend + frontend all green). Sanitization: react-markdown
+      + remark-gfm + rehype-sanitize (allowlisted markdown-to-React
+      pipeline, no dangerouslySetInnerHTML on unsanitized content — design
+      §3.1), with a test asserting an embedded-script-tag payload is
+      neutralized in rendered output (AC2). Staleness: server-computed
+      `stale` flag (design §1.2 step 6, comparing a process-scoped row's
+      confirmed_for_definition_version against the process's actual current
+      active version) rendered via StalenessBadge (design §2.3), exercised
+      for real by publishing help against one process version, activating a
+      new version, and confirming the indicator appears (AC4).
 
   - id: REQ-367
     title: CD to QA on merge — .github/workflows/cd.yml + deploy/redeploy-qa.sh, triggered on push to main when backend or frontend paths changed, reusing letflow-queue's proven SSH-restricted-key pattern

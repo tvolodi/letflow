@@ -3914,8 +3914,14 @@ volumes:
     path: docs/status/requirement_status.v19.yaml
     status: current
     opened: 2026-09-17
-    entries: 9
+    entries: 10
     note: >
+      Incremented to 10 by DOC-UPDATER's own REQ-366 done-event append
+      (Step 6, WF02-REQ366-20260918) -- `grep -c "^  - req:"
+      docs/status/requirement_status.v19.yaml` = 10 on-disk entries; 600
+      lines / 35676 bytes, well under the 1200-line/120000-byte roll
+      ceiling, no roll triggered.
+
       Incremented to 9 by DOC-UPDATER's own SCOPE-CHANGE (ISS-0709)
       done-event append (WF03-ISS0709-20260918) -- `grep -c "^  - req:"
       docs/status/requirement_status.v19.yaml` = 9 on-disk entries; 534

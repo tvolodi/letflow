@@ -569,27 +569,49 @@ uncertainty in exactly how that boundary is drawn, not whether one exists).
 
 ## 11. Testing notes for TEST-DESIGNER (all 5 REQ-370 acceptance-criteria tests)
 
-- **AC2 — cross-tenant rejection** (token whose `iss` claims tenant A's own bound realm,
-  presented against a request resolving to tenant B's context, is rejected). Construct two
-  real tenant fixtures (`idp_realm_id: "realm-a"`, `idp_realm_id: "realm-b"`), each with
-  its own running/reachable test double or real-Keycloak-realm token source (§0 —
-  `Letflow.Oidc.TokenVerifierDouble`'s existing single-fixed-claims shape needs extending
-  to support **multiple** realm/claims pairs selectable by input, since AC2/AC3/AC4 all
-  need more than one distinguishable fake issuer; this is a `test/support/` change
-  TEST-DESIGNER owns, not this design's own file list). Present a token whose `iss`
-  genuinely resolves to tenant A's realm at `verify_bearer_token/1` — this design's own
-  scope (§1's "does not change steps 2-6") means step 1 verification **succeeds** for such
-  a token (it IS a validly-issued, correctly-routed token for realm A) — the actual
-  cross-tenant rejection this test needs to prove happens at `AuthPipeline`'s existing,
-  unchanged `guard_realm_ownership/2` step (REQ-019/REQ-021, already shipped) when the
-  resolved tenant (from the realm claim) doesn't match whatever "tenant B's context" means
-  for the request. **State this explicitly to TEST-DESIGNER: AC2 is a REGRESSION test
-  proving REQ-019's existing guard still works correctly once multi-issuer verification
-  is layered underneath it, not a new behavior this design itself introduces** — this
-  design's own job for AC2 is only to ensure verification no longer rejects tenant A's
-  valid token *before* the existing guard gets a chance to run (i.e., replacing the
-  current single-issuer 401 with a successful step-1 verification is the precondition
-  for the guard to be exercisable at all).
+- **AC2 — the NEW multi-issuer verification step itself does not cross-accept.**
+  REQ-370's AC2 is explicit that this must target `verify_bearer_token/1`'s own new
+  routing/verification logic, not merely re-exercise REQ-019's already-tested
+  `verify_realm_ownership/2` guard (that guard runs strictly *after* verification and is
+  out of this design's own change surface, §1). Construct two real, concurrently-bound
+  tenant fixtures (`idp_realm_id: "realm-a"`, `idp_realm_id: "realm-b"`), each with its own
+  distinguishable signing-key material (§0 — `Letflow.Oidc.TokenVerifierDouble`'s existing
+  single-fixed-claims shape needs extending to support **multiple** realm/claims/key
+  pairs selectable by input; this is a `test/support/` change TEST-DESIGNER owns, not this
+  design's own file list). With BOTH realms' providers concurrently registered/started
+  (`ProviderRegistry.ensure_started/1` called for both before this test's own assertions,
+  so a routing bug has an actual second provider present to mis-route into — a test with
+  only one realm registered could not detect a mix-up at all), two assertions, both
+  exercising `verify_bearer_token/1` directly (not through the full `AuthPipeline`, so
+  the guard genuinely cannot be what's producing the result):
+  1. **Positive routing-isolation check:** a token genuinely signed by realm A's own key,
+     `iss` claiming realm A, verifies successfully (`{:ok, claims}`) with
+     `claims["iss"]` confirmed to be realm A's — proving realm B's concurrently-registered
+     provider was not the one consulted (if it had been, verification would fail: A's
+     token is not signed by B's key).
+  2. **Negative cross-accept/forgery check — the actual "does not cross-accept" property.**
+     Fabricate a token whose `iss` claims realm A but whose signature was produced with
+     realm B's own signing key (constructing this directly via the test double's/fixture's
+     own key material — not obtainable from a real Keycloak, since that would require
+     possessing another realm's private key, which is exactly the point: this simulates an
+     attacker who controls realm B's tenant but is attempting to have a token accepted
+     *as* realm A). Assert `verify_bearer_token/1` **rejects** this token. This is the
+     test that actually proves the new verification step cannot be tricked into accepting
+     a token for the wrong realm's identity, independent of and prior to anything
+     `verify_realm_ownership/2` would ever see (a forged token like this never reaches the
+     guard at all under this design, since step 1 rejects it first) — this is the concrete
+     test named in §5 step 4/§9 INV-1's "the one new failure mode this design must not
+     introduce" discussion, moved here under AC2 rather than left folded into AC3's
+     "each realm independently verifies" framing (AC3's own test, below, is a positive-only
+     per-realm-success check and does not by itself prove non-cross-acceptance between two
+     *concurrently* registered realms — that isolation property is AC2's, not AC3's).
+  Downstream of these two `verify_bearer_token/1`-level assertions, TEST-DESIGNER may
+  additionally exercise the same scenario through the full `AuthPipeline` to confirm
+  `verify_realm_ownership/2` still independently rejects whatever cross-tenant-context
+  cases it already covers (REQ-019's own tests already pin that behavior; repeating it here
+  is optional regression coverage, not this design's own AC2 obligation) — but that
+  full-pipeline check must not be presented as AC2's primary evidence; the two
+  `verify_bearer_token/1`-level assertions above are.
 - **AC3 — ≥2 distinct, independently-registered realms each verify successfully.**
   Extend the test double (or, preferably, exercise this against the real
   `Letflow.Oidc.TokenVerifier.Oidcc` adapter with a local Keycloak that can be configured
@@ -638,7 +660,7 @@ uncertainty in exactly how that boundary is drawn, not whether one exists).
 | REQ-370 acceptance criterion | Concrete design element |
 |---|---|
 | AC1 — this design artifact exists, resolves the 3 SCOPE points, SECURITY-REVIEWER + REVIEWER PASS before implementation | This file; §3 (callback shape), §4 (supervision shape + new-tenant-without-restart), §6 (`:oidc, :issuer` fate) |
-| AC2 — cross-tenant rejection test | §11 "AC2" — clarifies this exercises REQ-019's existing unchanged guard, with this design's own contribution being "verification no longer blocks the guard from running" |
+| AC2 — cross-tenant rejection test | §11 "AC2" — targets the NEW `verify_bearer_token/1` routing/verification step itself (positive routing-isolation + negative cross-realm-forgery checks with two realms concurrently registered), distinct from and prior to REQ-019's existing `verify_realm_ownership/2` guard |
 | AC3 — ≥2 realms verify successfully | §4 (per-realm worker resolution), §5 (adapter routing), §11 "AC3" |
 | AC4 — unknown-issuer rejection | §2 (trust gate), §3 (`:untrusted_issuer`), §4.2 step 1, §11 "AC4" |
 | AC5 — revocation causes rejection | §4.3 (why no teardown mechanism is needed for this to hold), §11 "AC5" |

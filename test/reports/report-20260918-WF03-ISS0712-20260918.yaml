@@ -1,0 +1,74 @@
+run_id: WF03-ISS0712-20260918
+agent: TEST-RUNNER
+date_utc: 2026-09-18T15:10:44Z
+branch: feature/WF03-ISS0712-20260918
+scope: |
+  WF-03 Step 4 final test-run confirmation for ISS-0712 (real-OIDC-redirect login
+  helper for PLATFORM_ADMIN e2e case). Design, implementation, security review,
+  code review, test design, and test-design validation already passed on this branch.
+
+commands_run:
+  - cwd: web
+    cmd: npm test
+    resolves_to: vitest run --passWithNoTests --exclude "tests/e2e/**" --exclude "tests/guards/**"
+  - cwd: web
+    cmd: npx tsc -b tsconfig.json
+
+unit_test_result:
+  test_files: "7 failed | 87 passed (94)"
+  tests: "606 passed (606)"
+  new_tests:
+    file: tests/unit/resolveCredential.test.ts
+    status: PASS
+    count: 5
+    duration_ms: 5
+    note: "TC-RC-01..05 all passed, none skipped"
+  failed_suites_pre_existing_unrelated:
+    - src/__tests__/router.iss-0289.test.tsx
+    - src/__tests__/router.req369.test.tsx
+    - src/components/help/__tests__/HelpMarkdown.test.tsx
+    - src/components/help/__tests__/HelpPanel.test.tsx
+    - src/components/help/__tests__/HelpTrigger.test.tsx
+    - src/components/help/__tests__/HelpIntegration.test.tsx
+    - src/pages/exam/__tests__/ExamListPage.test.tsx
+  failed_suites_cause: >
+    Vite import-analysis failure resolving 'rehype-sanitize' from
+    src/components/help/HelpMarkdown.tsx (transitively pulled in by the router and
+    exam suites above). These packages (react-markdown, rehype-sanitize,
+    hast-util-sanitize, remark-gfm) are absent from web/node_modules in this
+    environment. All are file-level collection failures (0 tests each) -- zero
+    test-assertion failures in the run (606/606 passed).
+  regression_check: >
+    git diff main...HEAD --stat shows this branch's only committed changes are
+    docs/issues/iss-0712-real-oidc-redirect-login-helper.md,
+    web/tests/e2e/helpers.ts, and
+    web/tests/e2e/pipelines/platform-login-routing-by-role.pipeline.e2e.spec.ts --
+    none touch HelpMarkdown.tsx, package.json, or node_modules. Confirms the
+    7 failing suites are pre-existing on main, not a regression from this branch
+    (consistent with prior step's git-stash comparison finding).
+
+typecheck_result:
+  status: FAIL (pre-existing, unrelated)
+  errors: 5
+  detail: |
+    src/components/help/HelpMarkdown.tsx(20,31): error TS2307: Cannot find module 'rehype-sanitize'
+    src/components/help/HelpMarkdown.tsx(21,29): error TS2307: Cannot find module 'hast-util-sanitize'
+    src/components/help/HelpMarkdown.tsx(22,27): error TS2307: Cannot find module 'react-markdown'
+    src/components/help/HelpMarkdown.tsx(23,28): error TS2307: Cannot find module 'rehype-sanitize'
+    src/components/help/HelpMarkdown.tsx(24,23): error TS2307: Cannot find module 'remark-gfm'
+  note: >
+    Same missing-package root cause as the unit test failures, same file, outside
+    this branch's diff. No type errors in any file this branch touches or in
+    resolveCredential.test.ts.
+
+e2e_scope: >
+  platform-login-routing-by-role.pipeline.e2e.spec.ts was NOT run -- no live
+  Keycloak/QA instance available in this environment. Out of scope for
+  TEST-RUNNER per task instructions; deferred to UAT-RUNNER against real QA.
+
+verdict: PASS
+verdict_basis: >
+  No new failures introduced by this branch's changes. The new resolveCredential
+  tests (TC-RC-01..05) genuinely pass, not skipped. All pre-existing failures
+  (7 suites, 5 typecheck errors) are isolated to src/components/help/HelpMarkdown.tsx
+  and its missing npm dependencies, confirmed outside this branch's diff.

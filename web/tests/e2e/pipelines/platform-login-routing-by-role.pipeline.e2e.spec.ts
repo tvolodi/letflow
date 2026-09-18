@@ -35,7 +35,7 @@
 import * as fs from 'fs'
 import * as path from 'path'
 import { test, expect } from '@playwright/test'
-import { getKeycloakToken, loginWithToken, BPM_IDP_BASE_URL } from '../helpers'
+import { getKeycloakToken, loginWithToken, loginViaRealOidcRedirect, resolveCredential, BPM_IDP_BASE_URL } from '../helpers'
 
 const APP_BASE_URL = process.env.E2E_BASE_URL ?? 'http://127.0.0.1:4173'
 const API_BASE_URL = process.env.BPM_TEST_URL ?? 'http://127.0.0.1:8080'
@@ -67,9 +67,13 @@ test.describe('Pipeline: platform-login-routing-by-role', () => {
     }
   })
 
-  test('EO-001: PLATFORM_ADMIN lands on the distinct platform dashboard', async ({ page, request }) => {
-    const token = await getKeycloakToken(request, 'admin-user', 'admin-pass')
-    await loginWithToken(page, token)
+  test('EO-001: PLATFORM_ADMIN lands on the distinct platform dashboard', async ({ page }) => {
+    await loginViaRealOidcRedirect(
+      page,
+      'admin-user',
+      resolveCredential('UAT_QA_ADMIN_PASSWORD', 'admin-pass'),
+      '/platform-dashboard',
+    )
 
     // Core routing claim (REQ-369): PLATFORM_ADMIN no longer lands on the
     // shared tenant-branded workspace root — OidcCallbackPage.tsx's
@@ -97,7 +101,7 @@ test.describe('Pipeline: platform-login-routing-by-role', () => {
   })
 
   test('EO-001: tenant-scoped role (TASK_WORKER) lands on workspace root with narrower nav', async ({ page, request }) => {
-    const token = await getKeycloakToken(request, 'worker-user', 'worker-pass')
+    const token = await getKeycloakToken(request, 'worker-user', resolveCredential('UAT_QA_WORKER_PASSWORD', 'worker-pass'))
     await loginWithToken(page, token)
 
     // Core routing claim: tenant-scoped roles land on the SAME root, not a

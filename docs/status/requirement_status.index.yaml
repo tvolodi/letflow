@@ -3914,19 +3914,25 @@ volumes:
     path: docs/status/requirement_status.v19.yaml
     status: current
     opened: 2026-09-17
-    entries: 19
+    entries: 20
     note: >
-      Incremented to 19 by ORCH's own REQ-370 started-event append
-      (WF02-REQ370-20260918, queue task 714, GH#1529 -- multi-issuer OIDC
-      token verification), merged on top of origin/main's own DOC-UPDATER
-      REQ-369 revised-event append (WF02-REQ369-closeout-final-20260918)
-      that landed independently at nearly the same time (both entries
-      preserved on rebase, append-only, ordered by their own `at:`
-      timestamps: REQ-370 started at 17:11:13Z, then REQ-369 revised at
-      19:50:13Z) -- `grep -c "^  - req:"
-      docs/status/requirement_status.v19.yaml` = 19 on-disk entries; 1021
-      lines, well under the 1200-line/120000-byte roll ceiling, no roll
-      triggered.
+      Incremented to 20 by DOC-UPDATER's own REQ-370 done-event append
+      (recovery/completion run, branch feature/WF02-REQ370-20260918, PR
+      #1535, queue task 714, GH#1529 -- multi-issuer OIDC token
+      verification) -- `grep -c "^  - req:"
+      docs/status/requirement_status.v19.yaml` = 20 on-disk entries; 1084
+      lines / 66752 bytes, well under the 1200-line/120000-byte roll
+      ceiling, no roll triggered.
+
+      Prior note (19 entries): Incremented to 19 by ORCH's own REQ-370
+      started-event append (WF02-REQ370-20260918, queue task 714, GH#1529 --
+      multi-issuer OIDC token verification), merged on top of origin/main's
+      own DOC-UPDATER REQ-369 revised-event append
+      (WF02-REQ369-closeout-final-20260918) that landed independently at
+      nearly the same time (both entries preserved on rebase, append-only,
+      ordered by their own `at:` timestamps: REQ-370 started at 17:11:13Z,
+      then REQ-369 revised at 19:50:13Z) -- 19 on-disk entries; 1021 lines,
+      well under the 1200-line/120000-byte roll ceiling, no roll triggered.
 
       Prior note (18 entries): Incremented to 18 by ORCH's own REQ-370
       started-event append (WF02-REQ370-20260918, queue task 714, GH#1529),

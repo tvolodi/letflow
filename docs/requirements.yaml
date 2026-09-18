@@ -27160,7 +27160,7 @@ requirements:
   - id: REQ-370
     title: "Multi-issuer OIDC token verification -- trust the tenant table's own realm bindings, not one hardcoded :oidc, :issuer value"
     owner: ELIXIR-DEV
-    status: in_progress
+    status: done
     stage: S1
     impl_order: 714  # letflow-queue task id, GH#1529
     description: >
@@ -27311,3 +27311,85 @@ requirements:
     depends_on:
       - REQ-019
       - REQ-021
+    close_out_note: >
+      status: done -- set by DOC-UPDATER on a recovery/completion run
+      (branch feature/WF02-REQ370-20260918, PR #1535), on RELEASE-VALIDATOR's
+      independent PASS verdict on every acceptance criterion (AC1-AC9).
+
+      AC1: lib/letflow/design/req370-multi-issuer-oidc-verification.md
+      exists and resolves all three named SCOPE points (TokenVerifier
+      callback/implementation shape, per-realm DynamicSupervisor shape,
+      fate of config/runtime.exs's single :oidc, :issuer value).
+      SECURITY-REVIEWER-PASSed (design §13 addendum, commit 6bdd35a1) and
+      REVIEWER-PASSed (docs/migration/decisions/0002-oidc-integration.md
+      addendum, commit d7a23b0b). Stated honestly, as real process history
+      and not a defect being hidden: chronologically, SECURITY-REVIEWER's
+      gate was found MISSING from this branch's history mid-recovery-run --
+      ELIXIR-DEV's implementation commit had claimed one that did not
+      actually exist anywhere in the branch -- and was dispatched for real
+      by ORCH only after implementation had already landed, producing §13
+      as a post-implementation, independently-re-derived gate rather than
+      the pre-implementation one the pipeline normally requires. This is
+      recorded here rather than papered over.
+
+      AC2-AC5: real automated tests in
+      test/letflow/oidc/provider_registry_multi_realm_test.exs (11 tests)
+      map to each: cross-tenant rejection (forged-signature / wrong-realm
+      cross-accept check), multi-realm success (two distinct genuinely-
+      registered realms both verify), unknown-issuer rejection (no tenant
+      row -> 401, both at the verification-step level and end-to-end via
+      AuthPipeline), and revocation (a realm that verified once is rejected
+      immediately after its tenant binding is removed -- trust is
+      re-resolved fresh every call, never cached). RELEASE-VALIDATOR cited
+      exact line numbers and independently confirmed these are real,
+      non-trivial tests, not restatements of REQ-019's existing
+      verify_realm_ownership/2 coverage.
+
+      AC6: SECURITY-REVIEWER's §13 sign-off explicitly states INV-1 PASS
+      and traces the central risk this requirement's description names --
+      a token minted for one tenant's realm being accepted for a different
+      tenant's context -- end to end through both the unverified-iss-peek
+      resolution step and the per-realm worker/JWKS verification step.
+
+      AC7: ISS-0690 (docs/issues/ISS-0690.yaml) remains status: open and is
+      NOT closed by this requirement. The concrete follow-up that would
+      close it: a live re-run of
+      test/fixtures/uat/scenarios/bilimbaga/candidate-timed-exam-autograde.yaml
+      against QA with real credential access.
+
+      AC8: REVIEWER's addendum to
+      docs/migration/decisions/0002-oidc-integration.md (commit d7a23b0b)
+      is the decision-record disposition for the multi-issuer policy this
+      requirement's mechanism implies. REVIEWER chose to amend the existing
+      record rather than file a new one, per the design's own §7
+      recommendation -- the addendum states the policy was foreshadowed but
+      not built by 0002's original text, so extending it in place (trust
+      source = tenants.idp_realm_id, DynamicSupervisor-per-realm shape,
+      :oidc, :issuer retired in favor of :oidc, :keycloak_base_url) rather
+      than opening a new record was the correct disposition, not a silent
+      policy change.
+
+      AC9: CI green on this branch -- backend (mix letflow.check) and
+      frontend (npm run check) gates both passed on commit 6ce44823, and
+      again on the follow-up merge commit 77565fe0 (merging in concurrent
+      main changes, docs-only) via PR #1535 (gh pr checks 1535 / gh run
+      view 35389845633).
+
+      Recorded for the historical record, not as defects but as real
+      process history from this recovery run: an earlier TEST-DESIGNER
+      subagent burned excessive resources and was force-stopped without
+      committing; ORCH picked up its real, complete uncommitted fix-up work
+      (7 test files + new test/support/bpm_default_realm_displacement.ex)
+      and committed it; a duplicate concurrent impl_order registration from
+      main required a merge conflict resolution; ORCH found
+      SECURITY-REVIEWER's gate missing from the branch history and
+      dispatched it for real (see AC1 above); and ORCH found and fixed a
+      genuine Postgrex-connection-linking bug in the new test support file
+      (commit 6ce44823) that was causing 10 CI failures.
+
+      README.md checked (grepped oidc/issuer/realm): does not document the
+      token-verification mechanism itself (only tenant-resolution and the
+      bpm-default seed tenant, both still accurate), so no update needed.
+      No other docs/migration/stage-N-*.md file was named by this
+      requirement's acceptance criteria; the one decisions/ file it did
+      name (0002-oidc-integration.md) is confirmed updated per AC8 above.

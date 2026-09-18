@@ -19,6 +19,18 @@ description: >
   4 tenant ids on disk, 2 extra rows not accounted for by this test's own
   setup.
 
+  TEST-RUNNER's OWN original finding (verbatim from its queue-task filing,
+  preserved here rather than silently upgraded to a later, more confident
+  diagnosis) explicitly flagged this as: "Lower confidence than a typical
+  pre-existing finding: could not pin an exact external mechanism (e.g. a
+  specific sibling test that leaves rows), only the structural exposure (no
+  sandboxing + :all-scoped query). Needs investigation to confirm root cause
+  and either add proper isolation/cleanup or scope the query more precisely."
+  That investigation is exactly what ISSUE-FIXER's dispatch (below) performed
+  -- the structural-exposure hypothesis is now confirmed as the actual
+  mechanism, not merely a suspicion, but no single deterministic culprit test
+  was pinned (see below), consistent with TEST-RUNNER's own original framing.
+
   Root cause diagnosed by ISSUE-FIXER (WF03-ISS0716-20260918): the test file's
   `provisioned_tenant()` fixture calls
   `Letflow.Test.SandboxAutoMode.provision!/2` (test/support/sandbox_auto_mode.ex)

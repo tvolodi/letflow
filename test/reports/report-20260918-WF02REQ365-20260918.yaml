@@ -1,0 +1,104 @@
+run_id: WF02-REQ365-20260918
+requirement_ids: [REQ-365]
+agent: TEST-RUNNER
+step: "WF-02 Step 4 -- full suite run for REQ-365 (platform-scope help authoring)"
+branch: feature/WF02-REQ365-20260918
+commit_under_test: 17d018f7
+date: 2026-09-18
+
+diff_scope:
+  files_changed_main_to_head:
+    - "lib/letflow/help/help_content.ex (modified)"
+    - "lib/letflow/help/markdown_safety.ex (new)"
+    - "lib/letflow/help/platform.ex (new)"
+    - "lib/letflow/help/platform_help_content.ex (new)"
+    - "priv/repo/migrations/20260918000001_create_platform_help_content.exs (new)"
+    - "test/letflow/help/platform_test.exs (new, 339 lines)"
+    - "lib/letflow/design/req365-platform-help-authoring.md (new, design doc)"
+    - "test/specs/REQ-365.md (new)"
+  note: >
+    Full `git diff main...HEAD --stat` shows 21 files changed, 2176
+    insertions, 226 deletions. All application/test code changes are scoped
+    to lib/letflow/help/ and its migration/test files.
+
+full_suite_run:
+  command: "bash scripts/test_parallel.sh"
+  environment: "Docker Postgres (letflow-postgres-1, healthy) and Keycloak
+    (letflow-keycloak-1, healthy) already running before this run; no
+    concurrent sibling-session Postgres-contention messages (TenantSchemaReaper
+    deferrals, ISS-0110/ISS-0414-shaped) observed in this run's output."
+  partitions: 16
+  result: PASS
+  actual_output: |
+    test_parallel: N=16 (source: nproc)
+    test_parallel: pre-compiling MIX_ENV=test (single compile, before any partition launches)
+    test_parallel: TEST_POOL_SIZE=5 (computed: N=16, max_connections=100, superuser_reserved=3, headroom=10, nonpool_reserve=5)
+    test_parallel: seeding 16 per-partition build paths from _build/test (sequential)
+    test_parallel: partition logs in /tmp/letflow_test_parallel.Vcd3jp
+    test_parallel: seeding+migrating 16 partition databases (capped at 4 concurrent)
+    test_parallel: all 16 partition databases created+migrated
+    test_parallel: TEST_PARALLEL_GROUP=tp6011 (shared by all 16 partitions)
+    partition 1: 302 tests, 0 properties, 0 failures, exit 0
+    partition 2: 318 tests, 0 properties, 0 failures, exit 0
+    partition 3: 329 tests, 0 properties, 0 failures, exit 0
+    partition 4: 336 tests, 0 properties, 0 failures, exit 0
+    partition 5: 363 tests, 0 properties, 0 failures, exit 0
+    partition 6: 204 tests, 2 properties, 0 failures, exit 0
+    partition 7: 372 tests, 0 properties, 0 failures, exit 0
+    partition 8: 159 tests, 0 properties, 0 failures, exit 0
+    partition 9: 148 tests, 1 property, 0 failures, exit 0
+    partition 10: 184 tests, 0 properties, 0 failures, exit 0
+    partition 11: 313 tests, 0 properties, 0 failures, exit 0
+    partition 12: 221 tests, 0 properties, 0 failures, exit 0
+    partition 13: 277 tests, 0 properties, 0 failures, exit 0
+    partition 14: 331 tests, 2 properties, 0 failures, exit 0
+    partition 15: 302 tests, 1 property, 0 failures, exit 0
+    partition 16: 253 tests, 0 properties, 0 failures, exit 0
+    ---
+    combined: 4412 tests, 6 properties, 0 failures (4418/4418 passed)
+  combined_totals: "4412 tests + 6 properties = 4418 total, 0 failures, script exit 0"
+
+acceptance_surface_targeted_run:
+  command: "bash scripts/test_parallel.sh test/letflow/help/platform_test.exs test/letflow/help_test.exs"
+  purpose: >
+    Confirms zero failures specifically in this requirement's own acceptance
+    surface (test/letflow/help/platform_test.exs and test/letflow/help_test.exs),
+    per the WF-02 Step 4 dispatch's explicit acceptance criterion. Only
+    partitions whose --partitions hash landed matching tests produced a
+    Result: line; the other 14 partitions logged "no Result: line" warnings
+    because zero of their assigned test IDs matched the two-file filter --
+    this is an artifact of applying file filters under fixed 16-way
+    partitioning, not a test or infra failure (the unfiltered full run above
+    already covers every partition with a real Result: line and 0 failures
+    suite-wide, which is the authoritative signal).
+  result: PASS
+  actual_output: |
+    combined: 86 tests, 0 properties, 0 failures (86/86 passed)
+  combined_totals: "86 tests, 0 failures -- test/letflow/help/platform_test.exs and test/letflow/help_test.exs both green"
+
+failure_attribution:
+  failures_observed: 0
+  note: >
+    Zero failures occurred in either the full 4418-test suite run or the
+    targeted 86-test acceptance-surface run. No pre-existing/unrelated
+    failure class exists to attribute this time (the prior TEST-DESIGNER
+    Step 3 run's ~90 concurrent-sibling-session failures did not recur on
+    this run -- consistent with no other session holding Postgres
+    contention at the time this run executed). Per core-directives.md's
+    "Failure Attribution Is Structural, Never By Count-Matching", this
+    absence of failures was verified by reading this run's own actual
+    output (all 16 partitions' Result: lines checked individually above),
+    not inferred by comparing totals against the prior run's ~90 figure.
+
+environment_check:
+  docker_containers: "letflow-postgres-1 (healthy), letflow-keycloak-1 (healthy) -- both already running, used as-is per dispatch instructions"
+  git_status_before_report: "clean, branch feature/WF02-REQ365-20260918, HEAD 17d018f7"
+
+overall_verdict: >
+  PASS. Full suite: 4418/4418 passed (4412 tests + 6 properties), 0
+  failures, script exit 0, across all 16 partitions. Targeted acceptance
+  surface (test/letflow/help/platform_test.exs, test/letflow/help_test.exs):
+  86/86 passed, 0 failures. No pre-existing or unrelated failures occurred
+  in this run to attribute.
+
+next_action: "Route to RELEASE-VALIDATOR"

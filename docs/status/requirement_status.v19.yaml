@@ -733,3 +733,42 @@ history:
       there (matches the 2026-09-17 done-event's own finding), so no update
       needed. docs/issues/ISS-0700.yaml intentionally not touched (already
       correctly resolved by a prior session, out of this run's scope).
+
+  - req: REQ-369
+    event: revised
+    agent: ORCH
+    at: "2026-09-18T14:53:51Z"
+    note: >
+      WF02-REQ369-AC6AC7-20260918T143000Z. Processed letflow-queue task 708 from the
+      queue (agent_id tvolodi-orch). Dispatched UAT-RUNNER to re-attempt REQ-369's
+      remaining AC6/AC7, now that this execution environment has a real ai-dala-infra
+      checkout and working SSH access to ubuntu-16gb-nbg1-1 (confirmed: `ssh
+      ubuntu-16gb-nbg1-1 whoami` -> tvolodi) -- the credential-access blocker recorded
+      in the prior 2026-09-18T13:35:49Z revised-event is resolved. UAT-RUNNER fetched a
+      real PLATFORM_ADMIN credential via ai-dala-infra/scripts/qa-login.sh admin-user
+      and ran real HTTP/browser traffic against live QA, no mocks.
+
+      Result independently verified by ORCH before acting on it (read the full report,
+      spot-checked the two cited code claims directly in source: web/src/api/tenants.ts's
+      TenantListResponse.total field vs. lib/letflow/api/pagination.ex's actual
+      {items, next_cursor, count} envelope -- confirmed genuine mismatch). Two new,
+      genuine findings surfaced: ISS-0711 (tenant-count tile always renders 0, BLOCKER
+      for AC6, queue_ref Q-711, github_ref GH-1519) and ISS-0712 (pipeline_test's shared
+      login helper structurally cannot exercise REQ-369's redirect code path, MAJOR,
+      blocks AC7, queue_ref Q-712, github_ref GH-1520). Both registered via
+      register_task and written to docs/issues/ISS-0711.yaml and docs/issues/ISS-0712.yaml.
+      AC6 is now partially satisfied (real login + routing + heading + nav all proven
+      correct via a real OIDC-redirect login; tenant count still wrong per ISS-0711).
+      AC7 is not yet satisfied (scenario fixture already correct; its own named
+      pipeline_test fails per ISS-0712, independent of credentials).
+
+      UAT-RUNNER's evidence PR (#1518, test/uat-reports/uat-2026-09-18-WF02-REQ369-AC6AC7-20260918T143000Z.yaml,
+      single report file, no web/ or lib/ diff) merged by ORCH after CI passed (Detect
+      changed paths: success; Frontend gate: success; Backend gate: success, polled
+      directly via `gh pr checks`/`gh run view`, not left to an armed Monitor).
+      docs/requirements.yaml's REQ-369 close_out_note updated (append-only, prior note
+      retained and marked superseded) with the full current position and precise
+      remaining-work pointer. status field left as blocked (unchanged) -- AC6/AC7 are
+      still not both fully satisfied. Queue task 708 released with status: blocked
+      (terminal-but-not-resolved outcome, not a resolution -- per TASK_QUEUE.md this
+      excludes it from further get_next_task claims without falsely closing GH#1501).

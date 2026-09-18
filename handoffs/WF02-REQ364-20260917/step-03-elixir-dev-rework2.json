@@ -1,0 +1,95 @@
+{
+  "run_id": "WF02-REQ364-20260917",
+  "workflow_id": "WF-02",
+  "step": "03-rework2",
+  "from_agent": "ELIXIR-DEV",
+  "to_agent": "ORCH",
+  "created_at": "2026-09-17T15:05:51Z",
+  "started_at": "2026-09-17T15:05:51Z",
+  "completed_at": "2026-09-17T15:05:51Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S7",
+    "requirement_ids": [
+      "REQ-364"
+    ],
+    "requirement_text": {
+      "REQ-364": "Implements REQ-363's design artefact exactly — no new schema decisions here, this requirement is implementation of an already-validated design, matching this project's own CODE-DESIGNER-then-ELIXIR-DEV split for every other schema-bearing feature.\n\nSCOPE: the `Letflow.Help` context module (naming follows this project's existing per-domain-context convention, e.g. `Letflow.Identity`, `Letflow.TenantProvisioning`) exposing: create a draft, update a draft, publish (draft -> live, sets confirmed_at), re-confirm (bumps confirmed_at on an already-live row without changing body — the explicit \"I checked this, it's still accurate\" action), and read (by screen_id + tenant prefix, or by process_definition_id). Every write path enforces REQ-363's sanitization rule from that design, not a weakened version of it.\n\nNOT IN SCOPE: the tenant-facing authoring UI (REQ-365 for platform, a separate future requirement for the tenant admin UI itself — this requirement's acceptance criteria stop at a working, tested context module, callable from IEx/tests, not yet wired to any HTTP route or frontend component). Route/controller wiring, if this project's own API-surface convention wants a separate requirement for it (matching the pattern most REQ-027..030-style definition CRUD work already used), is a natural fast-follow, not bundled here — state explicitly in this requirement's close-out whether a route was added or deliberately deferred, rather than leaving it ambiguous."
+    },
+    "related_handoff_ids": [],
+    "artifacts_in": [],
+    "owned_modules": [
+      "lib/letflow/help.ex",
+      "lib/letflow/help/help_content.ex"
+    ]
+  },
+  "rework_count": 2,
+  "max_rework": 3,
+  "handoff_id": "54818f0e-541f-43e6-b315-4df22926e598",
+  "file": "handoffs/WF02-REQ364-20260917/step-03-elixir-dev-rework2.json",
+  "task": {
+    "description": "Implement the AST-based markdown sanitizer per CODE-DESIGNER's now-validated req363-help-content-data-model.md section 5.4 (rework 2), replacing the rejected regex-denylist approach in lib/letflow/help/help_content.ex. Verify any edge case the design does not explicitly cover directly against the real earmark_parser dependency rather than trusting the design text, and flag any verified deviation for SECURITY-REVIEWER/REVIEWER.",
+    "acceptance_criteria": [
+      "help_content.ex's write-path sanitizer uses EarmarkParser.as_ast/2 and an AST walk per design SS5.4.2, all regex-only sanitization code removed",
+      "mix.exs gains earmark_parser as a dependency, citing the governing decision record",
+      "mix test test/letflow/help_test.exs and mix compile --warnings-as-errors both pass, real output quoted",
+      "Any verified gap between the design's stated mechanism and the library's real behavior is fixed and explicitly flagged for review, not silently patched"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "RECONSTRUCTION NOTE: this handoff was originally written live during WF02-REQ364-20260917's security-review saga as ad-hoc, non-schema JSON (informal top-level keys such as req/at/result-as-bare-string instead of HANDOFF_PROTOCOL.md §2's real schema), the exact anti-pattern this session's own ISS-0692 precedent names. It has been rewritten into full schema conformance by a later ORCH session under §4.1's not_agent_attested mechanism. created_at/started_at/completed_at are all set to the file's own git-introducing-commit timestamp (`git log --follow --diff-filter=A --format=%aI --reverse -- <path>`), the best-available real timestamp, NOT the original live dispatch/claim/completion times, which were never recorded in schema-legal fields on disk. All findings, quoted test counts, and verification detail below are migrated verbatim in substance from the original ad-hoc file; nothing was invented or paraphrased away.\n\nReplaced regex sanitization with EarmarkParser.as_ast/2 AST walk per design SS5.4.2. mix.exs gained earmark_parser ~> 1.4, citing decision 0036. help_content.ex: deleted all regex module attributes/helpers, added validate_markdown_safety/2 + walk/1 + raw_html_node?/2 + destination_violation/2 + scheme_letters/1 + decode_numeric_entities/1.\n\nTWO VERIFIED GAPS FOUND IN DESIGN AND FIXED:\n1. Raw HTML mixed inline with surrounding text is never tagged verbatim: true by earmark_parser 1.4.46 (only line-starting tags are) -- confirmed directly against the library's own moduledoc and live calls, not trusted from the design text. Added a bounded fallback scan of unparsed plain-text AST leaves for tag-shape patterns, excluding code-node content structurally so SS5.2's fenced-content-is-literal guarantee still holds.\n2. Numeric HTML entity references and embedded whitespace/control characters in resolved href/src are NOT decoded/stripped by the library -- fixed by decoding decimal/hex numeric character references then keeping only ASCII a-z letters from the pre-colon portion before scheme comparison.\n\nVERIFICATION: mix test test/letflow/help_test.exs: 47 passed (33 original + 14 new covering all 5 bypass classes plus legitimate-content cases). mix compile --warnings-as-errors clean. mix deps.get resolved earmark_parser 1.4.46 cleanly.\n\nFLAGGED FOR REVIEW: the two verified-gap deviations from the design's stated mechanism need SECURITY-REVIEWER/REVIEWER sign-off before TEST-DESIGNER.",
+    "artifacts_out": [
+      "lib/letflow/help/help_content.ex",
+      "mix.exs"
+    ],
+    "issues": [
+      {
+        "severity": "MINOR",
+        "description": "Two deviations from design SS5.4.2's stated mechanism (inline-mixed raw HTML not tagged verbatim by the real library; numeric entities/whitespace not decoded by the real library) were found and fixed during implementation, not anticipated by the design -- flagged for SECURITY-REVIEWER/REVIEWER sign-off rather than silently patched.",
+        "affected_requirement": "REQ-364"
+      }
+    ],
+    "git_evidence": {
+      "branch_name": "feature/WF02-REQ364-20260917",
+      "commit_sha_list": [],
+      "remote_branch": "origin/feature/WF02-REQ364-20260917",
+      "push_status": "ok",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": "Route to SECURITY-REVIEWER for rework-round gate on the two flagged deviations and the AST-based mechanism generally."
+  },
+  "not_agent_attested": {
+    "reconstructed_by": "ORCH",
+    "reconstructed_at": "2026-09-18T00:40:13Z",
+    "reason": "Original acting ELIXIR-DEV agent implemented this rework round live and reported real, quoted test output, but recorded it as ad-hoc JSON (req/step/result/at/summary/two_verified_gaps_found_in_design_and_fixed/verification/flagged_for_review keys) instead of HANDOFF_PROTOCOL.md's schema. Reconstructed by a later ORCH session under §4.1's mechanism. result.status PASS reflects the original 'implemented' value, since the reported acceptance criteria (test pass, compile clean, gaps fixed and flagged) were met.",
+    "fields_written": [
+      "handoff_id",
+      "file",
+      "status",
+      "result",
+      "task",
+      "context",
+      "created_at",
+      "started_at",
+      "completed_at",
+      "priority",
+      "rework_count",
+      "max_rework",
+      "not_agent_attested"
+    ],
+    "evidence": [
+      "git log --follow --diff-filter=A --format=%aI --reverse -- handoffs/WF02-REQ364-20260917/step-03-elixir-dev-rework2.json -> 2026-09-17T15:05:51+00:00, used for created_at/started_at/completed_at",
+      "Read the original ad-hoc file's content directly -> source for the summary, verified gaps, and verification text migrated above"
+    ],
+    "not_verifiable_after_the_fact": [
+      "The original live dispatch/claim timestamps",
+      "Whether the original agent's real completed_at differed from the commit timestamp used here",
+      "A handoff_id, since none existed on the original file",
+      "The exact commit_sha_list this step's own commits would have listed at the time",
+      "The exact file list this step touched beyond help_content.ex and mix.exs named in its own summary"
+    ]
+  }
+}

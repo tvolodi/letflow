@@ -87,7 +87,20 @@ defmodule Letflow.MixProject do
       # directly into the PDF, avoiding a round trip through a rasterised
       # image format. Flagged for REVIEWER sign-off per this requirement's
       # own AC1 -- REVIEWER sign-off must be recorded before this merges.
-      {:eqrcode, "~> 0.2"}
+      {:eqrcode, "~> 0.2"},
+      # REQ-364 (decision docs/migration/decisions/0036-earmark-parser-markdown-
+      # sanitization-dependency.md): pure-Elixir, Apache-2.0, zero-runtime-deps
+      # CommonMark parser, used only for `EarmarkParser.as_ast/2` -- the
+      # `help_content`/`platform_help_content` write-path changeset validator
+      # (lib/letflow/help/help_content.ex) walks the resulting AST to reject raw
+      # HTML (meta[:verbatim] == true) and disallowed-scheme link/image
+      # destinations. Replaces a regex-based validator REVIEWER found
+      # structurally bypassable (5 confirmed/constructed bypasses across 3
+      # rounds) -- see the design's §5.4 for the full mechanism. Chosen over the
+      # full `earmark` renderer (retired on hex.pm, carries a security advisory,
+      # and this requirement never needs rendered HTML) per the design's own
+      # §5.4.1. REVIEWER sign-off recorded in decision 0036 before this merges.
+      {:earmark_parser, "~> 1.4"}
     ]
   end
 

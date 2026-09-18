@@ -1,0 +1,85 @@
+id: ISS-0710
+title: >
+  test/letflow/help_test.exs's draft_attrs/1 default argument is dead --
+  recurrence of ISS-0069's class, caught by mix letflow.check.test
+discovered_by: RELEASE-VALIDATOR
+discovered_in_run: WF02-REQ364-20260917
+discovered_at: "2026-09-17T23:50:00Z"
+severity: MINOR
+description: >
+  Found during REQ-364's RELEASE-VALIDATOR re-verification pass, running
+  this project's own `mix letflow.check.test` convention independently
+  (not merely `scripts/test_parallel.sh`/`mix test`, per this role's own
+  mandatory-reading brief and ISS-0069's own recurrence history).
+
+  `test/letflow/help_test.exs`'s private helper `draft_attrs/1`
+  (line 111) declares `overrides \\ %{}`, but every call site in the file
+  -- including `create_draft!/2`'s own forwarding call at line 124 -- always
+  passes an explicit argument; grepping the file for a bare `draft_attrs()`
+  call returns zero matches. The default value is genuinely, permanently
+  unreachable, exactly ISS-0069's documented anti-pattern
+  ("A test helper's default argument goes dead...", `docs/anti-patterns.md`),
+  which has now recurred 8 times (7 prior + this one), most recently
+  REQ-203 where it slipped past two TEST-DESIGN-VALIDATOR passes, two
+  REVIEWER passes, and a RELEASE-VALIDATOR pass that ran `mix test
+  <specific files>` and `scripts/test_parallel.sh` but not
+  `mix letflow.check.test`.
+
+  Real, quoted output from an independent `mix letflow.check.test` run on
+  branch `feature/WF02-REQ364-20260917` at commit `2ec14151` (this run's
+  full suite itself passed clean, 4387/4387, 0 failures -- this is purely
+  the stricter warnings-as-errors-on-a-forced-fresh-compile gate firing):
+
+    combined: 4381 tests, 6 properties, 0 failures (4387/4387 passed)
+    ** (Mix) mix letflow.check.test: FAILED -- "default values for the
+    optional arguments" warning found (ISS-0069's own class recurring):
+      [partition 6] .......     warning: default values for the optional
+      arguments in the private function draft_attrs/1 are never used
+
+  Confirmed independently (not merely echoing the tool's own message):
+  grepped test/letflow/help_test.exs for `draft_attrs()` (bare, no
+  argument) -- zero matches across every call site in the file.
+
+  This does not affect REQ-364's functional acceptance criteria (AC1-AC4
+  all independently re-verified as genuinely met by RELEASE-VALIDATOR
+  against current code and a fresh mutation-test-covered assertion for
+  AC4) -- it is specifically AC5's own "mix test and mix compile
+  --warnings-as-errors both pass" gate, via this project's established
+  mix letflow.check.test convention for catching exactly this warning
+  class reliably (plain `mix test`/`scripts/test_parallel.sh` alone do
+  not reliably catch it, per ISS-0069's own documented root cause: Mix's
+  incremental compiler does not always force a fresh warnings-as-errors
+  recompile of an already-compiled test module across separate `mix test`
+  invocations sharing a `_build` cache).
+affected_files:
+  - test/letflow/help_test.exs
+related_requirements:
+  - REQ-364
+related:
+  - ISS-0069
+severity_rationale: >
+  MINOR, not a merge blocker on its own diagnostic value (the default
+  argument being dead does not change what any test actually exercises --
+  every call site already supplies an explicit map), but it must be fixed
+  before REQ-364 merges because it is a real `mix letflow.check.test`
+  failure and AC5 requires that gate to pass, not merely `mix test`.
+fix_direction: >
+  Remove the dead default from draft_attrs/1's signature (`defp
+  draft_attrs(overrides)`, no `\\ %{}`) since no call site ever omits the
+  argument -- matches ISS-0069's own established fix shape for this exact
+  recurring pattern. Re-run mix letflow.check.test to confirm the warning
+  clears and no other latent instance exists in this file.
+queue_ref: Q-710
+github_ref: GH-1509
+status: resolved
+resolved_by: ORCH
+resolved_in_run: WF02-REQ364-20260917
+resolved_at: "2026-09-17T23:56:00Z"
+resolution_note: >
+  Fixed directly on feature/WF02-REQ364-20260917 (the branch this defect
+  was blocking) rather than a separate WF-03 pipeline, given how trivial
+  the change is (one-line default-argument removal). Removed the dead
+  default from draft_attrs/1 (defp draft_attrs(overrides), no \\ %{}).
+  Verified: mix compile --warnings-as-errors clean, mix test
+  test/letflow/help_test.exs 55/55, mix letflow.check.test re-run clean
+  (no "default values for the optional arguments" warning).

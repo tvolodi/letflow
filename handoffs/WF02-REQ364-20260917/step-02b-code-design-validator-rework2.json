@@ -1,0 +1,85 @@
+{
+  "run_id": "WF02-REQ364-20260917",
+  "workflow_id": "WF-02",
+  "step": "02b-rework2",
+  "from_agent": "CODE-DESIGN-VALIDATOR",
+  "to_agent": "ORCH",
+  "created_at": "2026-09-17T14:52:54Z",
+  "started_at": "2026-09-17T14:52:54Z",
+  "completed_at": "2026-09-17T14:52:54Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S7",
+    "requirement_ids": [
+      "REQ-364"
+    ],
+    "requirement_text": {
+      "REQ-364": "Implements REQ-363's design artefact exactly — no new schema decisions here, this requirement is implementation of an already-validated design, matching this project's own CODE-DESIGNER-then-ELIXIR-DEV split for every other schema-bearing feature.\n\nSCOPE: the `Letflow.Help` context module (naming follows this project's existing per-domain-context convention, e.g. `Letflow.Identity`, `Letflow.TenantProvisioning`) exposing: create a draft, update a draft, publish (draft -> live, sets confirmed_at), re-confirm (bumps confirmed_at on an already-live row without changing body — the explicit \"I checked this, it's still accurate\" action), and read (by screen_id + tenant prefix, or by process_definition_id). Every write path enforces REQ-363's sanitization rule from that design, not a weakened version of it.\n\nNOT IN SCOPE: the tenant-facing authoring UI (REQ-365 for platform, a separate future requirement for the tenant admin UI itself — this requirement's acceptance criteria stop at a working, tested context module, callable from IEx/tests, not yet wired to any HTTP route or frontend component). Route/controller wiring, if this project's own API-surface convention wants a separate requirement for it (matching the pattern most REQ-027..030-style definition CRUD work already used), is a natural fast-follow, not bundled here — state explicitly in this requirement's close-out whether a route was added or deliberately deferred, rather than leaving it ambiguous."
+    },
+    "related_handoff_ids": [],
+    "artifacts_in": [],
+    "owned_modules": [
+      "lib/letflow/help.ex",
+      "lib/letflow/help/help_content.ex"
+    ]
+  },
+  "rework_count": 2,
+  "max_rework": 3,
+  "handoff_id": "dc247059-42e5-49aa-9c90-f4bb9a471ee4",
+  "file": "handoffs/WF02-REQ364-20260917/step-02b-code-design-validator-rework2.json",
+  "task": {
+    "description": "Re-validate CODE-DESIGNER's corrected req363-help-content-data-model.md section 5.4 (rework 2), after rework 1's FAIL on SS5.4.2's AST-shape misdescription. Independently re-verify the corrected discriminator and the step-3 href/src claims against primary sources, including earmark_parser's own real test suite this time, not merely its docs.",
+    "acceptance_criteria": [
+      "SS5.4.2's corrected meta[:verbatim] discriminator is independently re-verified against real earmark_parser sources",
+      "Step 3's a/href and img/src claims are re-verified against the library's real test suite, not paraphrased",
+      "SS5.4.1's due-diligence correction (earmark retired, earmark_parser maintained) is confirmed against hex.pm",
+      "Diff stays scoped to design text only, no implementation code"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "RECONSTRUCTION NOTE: this handoff was originally written live during WF02-REQ364-20260917's security-review saga as ad-hoc, non-schema JSON (informal top-level keys such as req/at/result-as-bare-string instead of HANDOFF_PROTOCOL.md §2's real schema), the exact anti-pattern this session's own ISS-0692 precedent names. It has been rewritten into full schema conformance by a later ORCH session under §4.1's not_agent_attested mechanism. created_at/started_at/completed_at are all set to the file's own git-introducing-commit timestamp (`git log --follow --diff-filter=A --format=%aI --reverse -- <path>`), the best-available real timestamp, NOT the original live dispatch/claim/completion times, which were never recorded in schema-legal fields on disk. All findings, quoted test counts, and verification detail below are migrated verbatim in substance from the original ad-hoc file; nothing was invented or paraphrased away.\n\nIndependently re-verified SS5.4.2's corrected AST shape/meta[:verbatim] discriminator and step 3's a/href, img/src claims against real earmark_parser README, hexdocs, and (for the image case, going further than the prior round) the library's own real test suite (test/acceptance/ast/links_images/img_test.exs). All accurate, verbatim-matched to real examples, not paraphrased/invented. Confirmed hex.pm shows earmark itself retired with a listed security advisory, earmark_parser actively maintained -- SS5.4.1's due-diligence correction accurate. Diff scoped exactly as claimed, no implementation code.",
+    "artifacts_out": [],
+    "issues": [],
+    "git_evidence": {
+      "branch_name": "feature/WF02-REQ364-20260917",
+      "commit_sha_list": [],
+      "remote_branch": "origin/feature/WF02-REQ364-20260917",
+      "push_status": "ok",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": "Route to ELIXIR-DEV (Step 2a) -- implement against req363-help-content-data-model.md section 5.4 as now validated."
+  },
+  "not_agent_attested": {
+    "reconstructed_by": "ORCH",
+    "reconstructed_at": "2026-09-18T00:40:13Z",
+    "reason": "Original acting CODE-DESIGN-VALIDATOR agent ran this re-gate live and reached a real PASS verdict after independent re-verification (including reading the library's real test suite), but recorded it as ad-hoc JSON (req/step/result/at/notes keys) instead of HANDOFF_PROTOCOL.md's schema. Reconstructed by a later ORCH session under §4.1's mechanism.",
+    "fields_written": [
+      "handoff_id",
+      "file",
+      "status",
+      "result",
+      "task",
+      "context",
+      "created_at",
+      "started_at",
+      "completed_at",
+      "priority",
+      "rework_count",
+      "max_rework",
+      "not_agent_attested"
+    ],
+    "evidence": [
+      "git log --follow --diff-filter=A --format=%aI --reverse -- handoffs/WF02-REQ364-20260917/step-02b-code-design-validator-rework2.json -> 2026-09-17T14:52:54+00:00, used for created_at/started_at/completed_at",
+      "Read the original ad-hoc file's content directly -> source for result.summary above"
+    ],
+    "not_verifiable_after_the_fact": [
+      "The original live dispatch/claim timestamps",
+      "Whether the original agent's real completed_at differed from the commit timestamp used here",
+      "A handoff_id, since none existed on the original file",
+      "The exact commit_sha_list this step's own commits would have listed at the time"
+    ]
+  }
+}

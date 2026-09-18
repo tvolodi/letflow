@@ -26550,7 +26550,7 @@ requirements:
     title: In-app help content — backend context module (Letflow.Help), CRUD + publish/confirm actions, tenant-scoped, per REQ-363's design
     owner: ELIXIR-DEV
     impl_order: 687  # letflow-queue task id, GH#1439
-    status: pending
+    status: done
     stage: S7
     description: >
       Implements REQ-363's design artefact exactly — no new schema decisions

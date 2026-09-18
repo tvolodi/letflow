@@ -130,6 +130,19 @@ defmodule Letflow.Support.BpmDefaultRealmDisplacement do
     # unpooled Postgrex connection outside Ecto's own pool machinery entirely.
     opts = Repo.config() |> Keyword.drop([:pool, :pool_size])
     {:ok, lock_conn} = Postgrex.start_link(opts)
+    # Postgrex.start_link/1 is a plain GenServer.start_link/3, linked to the calling
+    # process by default. displace!/0's release runs inside an ExUnit.Callbacks.on_exit/1
+    # callback, which executes in a SEPARATE process AFTER the original test process has
+    # already exited -- so a still-linked lock_conn dies along with that test process
+    # (default link propagation) before release_dedicated_lock!/1 ever gets to use it,
+    # producing a live "no process"/DBConnection.Holder.checkout crash in the on_exit
+    # callback (reproduced for real in CI, 10 failures across every caller of
+    # displace!/0 -- auth_pipeline_test.exs/api_pipeline_integration_test.exs/
+    # req077_promotion_pipeline_test.exs). Unlinking here decouples lock_conn's lifecycle
+    # from whichever process happens to be calling acquire_dedicated_lock! at the time,
+    # which is required for a connection meant to outlive the current process until an
+    # on_exit callback releases it.
+    Process.unlink(lock_conn)
     Postgrex.query!(lock_conn, "SELECT pg_advisory_lock($1)", [@lock_key])
     lock_conn
   end

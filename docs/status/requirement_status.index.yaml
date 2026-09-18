@@ -3914,8 +3914,42 @@ volumes:
     path: docs/status/requirement_status.v19.yaml
     status: current
     opened: 2026-09-17
-    entries: 10
+    entries: 12
     note: >
+      Recounted to 12 while resolving this run's (WF02-REQ365-20260918)
+      Step Final rebase onto origin/main: composing DOC-UPDATER's own
+      REQ-365 done-event append (Step 6) with the already-landed REQ-366
+      done-event append (Step 6, WF02-REQ366-20260918) and this run's own
+      REQ-365 started-event append (Step 00), each side having computed a
+      lower count independently, unaware of the others -- `grep -c
+      "^  - req:" docs/status/requirement_status.v19.yaml` = 12 on-disk
+      entries; 688 lines / 40860 bytes, well under the 1200-line/120000-byte
+      roll ceiling, no roll triggered.
+
+      Recounted to 11 while resolving this run's (WF02-REQ365-20260918)
+      rebase onto origin/main: a real concurrent-append collision on this
+      volume's note, composing DOC-UPDATER's REQ-366 done-event append
+      (Step 6, WF02-REQ366-20260918, already landed on main) with this
+      run's own REQ-365 started-event append (Step 00) -- `grep -c
+      "^  - req:" docs/status/requirement_status.v19.yaml` = 11 on-disk
+      entries; 615 lines / 36991 bytes, well under the 1200-line/120000-byte
+      roll ceiling, no roll triggered.
+
+      Separately, and concurrently, incremented to 10 by DOC-UPDATER's own
+      REQ-365 done-event append (Step 6, WF02-REQ365-20260918) -- `grep -c
+      "^  - req:" docs/status/requirement_status.v19.yaml` = 10 on-disk
+      entries; 582 lines / 34122 bytes, well under the 1200-line/120000-byte
+      roll ceiling, no roll triggered.
+
+      Recounted to 10 during this run's rebase onto origin/main: a real
+      concurrent-append collision on this volume's note, composing
+      DOC-UPDATER's ISS-0709 done-event append (already landed on main) with
+      this run's own REQ-365 started-event append (this branch's own commit,
+      each side computing 9 independently, unaware of the other) --
+      `grep -c "^  - req:" docs/status/requirement_status.v19.yaml` = 10
+      on-disk entries; 549 lines / 32796 bytes, well under the
+      1200-line/120000-byte roll ceiling, no roll triggered.
+
       Incremented to 10 by DOC-UPDATER's own REQ-366 done-event append
       (Step 6, WF02-REQ366-20260918) -- `grep -c "^  - req:"
       docs/status/requirement_status.v19.yaml` = 10 on-disk entries; 600
@@ -3927,6 +3961,12 @@ volumes:
       docs/status/requirement_status.v19.yaml` = 9 on-disk entries; 534
       lines / 31547 bytes, well under the 1200-line/120000-byte roll
       ceiling, no roll triggered.
+
+      Separately, and concurrently, incremented to 9 by ORCH's own REQ-365
+      started-event append (Step 00, WF02-REQ365-20260918) -- `grep -c
+      "^  - req:" docs/status/requirement_status.v19.yaml` = 9 on-disk
+      entries; 509 lines, well under the 1200-line/120000-byte roll ceiling,
+      no roll triggered.
 
       Incremented to 8 by DOC-UPDATER's own REQ-364 done-event append (Step
       6, WF02-REQ364-20260917) -- `grep -c "^  - req:"

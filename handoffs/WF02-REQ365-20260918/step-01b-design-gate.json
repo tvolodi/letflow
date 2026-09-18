@@ -1,0 +1,64 @@
+{
+  "handoff_id": "e468284c-4c95-43d4-bbb3-f9c3f6d6328e",
+  "run_id": "WF02-REQ365-20260918",
+  "workflow_id": "WF-02",
+  "step": "01b",
+  "from_agent": "ORCH",
+  "to_agent": "CODE-DESIGN-VALIDATOR",
+  "file": "handoffs/WF02-REQ365-20260918/step-01b-design-gate.json",
+  "created_at": "2026-09-18T02:44:07Z",
+  "started_at": "2026-09-18T02:48:32Z",
+  "completed_at": "2026-09-18T02:55:00Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S7",
+    "requirement_ids": ["REQ-365"],
+    "requirement_text": {
+      "REQ-365": "Per explicit user decision: platform-level help (shared screens like login-routing that no tenant owns) is authored through the BA-agent/REQ-ANALYST pipeline, matching the exact platform-vs-tenant split already established for UAT scenarios (REQ-358's scope field, REQ-359's BA-persona/REQ-ANALYST split, REQ-360's login-routing scenario as the worked platform example). This requirement is the authoring-path equivalent for help content: it does not re-derive that split, it applies it. . SCOPE: wherever REQ-363's design placed platform-scope help content (a dedicated table/schema, per that requirement's own acceptance criterion), this requirement adds the write path/tooling REQ-ANALYST (or, once REQ-359 lands, whichever role it specifies for platform content) actually uses to author it — this could be as simple as a direct context-module call analogous to REQ-364's tenant-scoped one, scoped to the platform table instead, reusing REQ-364's create/update/publish/reconfirm shape rather than inventing a parallel one. Explicitly NOT a new UI — platform help authoring is agent-pipeline-driven, matching how platform-scope UAT scenarios are authored (a file/record written by an agent, not a form filled by a human). . FIRST REAL CONTENT: author help for the login-routing screen (the same screen REQ-360's UAT scenario covers) as this requirement's own worked, real example — proves the authoring path end-to-end rather than shipping an authoring mechanism with zero real content using it."
+    },
+    "related_handoff_ids": [],
+    "artifacts_in": [
+      "lib/letflow/design/req365-platform-help-authoring.md",
+      "lib/letflow/design/req363-help-content-data-model.md",
+      "lib/letflow/help.ex",
+      "lib/letflow/help/help_content.ex"
+    ],
+    "owned_modules": []
+  },
+  "task": {
+    "description": "On branch feature/WF02-REQ365-20260918. Read lib/letflow/design/req365-platform-help-authoring.md independently (not CODE-DESIGNER's result.summary). Hard-gate it per WF-02 Step 1b (docs/agents/workflows/WF-02_requirement_implementation.md): every REQ-365 acceptance criterion maps to a concrete design element, no TBD/deferral language on anything in scope, function signatures fully specified (name/inputs/outputs/error cases), error-handling shape stated, cross-module dependencies listed, no implementation code (.ex bodies) present — signatures/type-shapes/literal content text only. Specifically verify: (a) the platform_help_content migration shape is fully specified and consistent with req363 design §3 (public schema, no prefix, no tenant_scoped_migrations registration); (b) the write-path module/function shapes are complete and consistent with lib/letflow/help.ex's actual shipped signatures (read that file, don't take the design doc's word for it); (c) the sanitization-reuse mechanism is concretely specified, not hand-waved; (d) the literal login-routing help content text is genuinely present, in plain end-user language, and the screen_id is stated explicitly. FAIL immediately on any check failure, no partial credit — list every failed check by requirement id. On PASS, complete the handoff (status COMPLETED, result.status PASS, next_action \"Route to ELIXIR-DEV (Step 2a)\"), commit and push to feature/WF02-REQ365-20260918. On FAIL, complete the handoff with result.status FAIL and next_action \"Rework CODE-DESIGNER\", listing every failed check.\n\nREGATE (iteration 1): CODE-DESIGNER fixed the single check-(b) gap this gate found (see gate_history[0]) -- lib/letflow/design/req365-platform-help-authoring.md §3.2's publish/1, reconfirm/1, withdraw/1 now include {:error, Ecto.Changeset.t()} with a stated rationale. Re-run the FULL gate procedure again (all four checks a-d), not just check (b) -- confirm nothing else regressed.",
+    "acceptance_criteria": [
+      "a platform-scope help-content write path exists, reusing REQ-364's context-module shape against wherever REQ-363's design placed platform rows, not a parallel schema/mechanism",
+      "real help content for the login-routing screen is authored and published through this path, in plain end-user language (not engineer/SHALL-statement prose, per this requirement's own Why section) — the actual published text is quoted in this requirement's close-out",
+      "the write path enforces the same sanitization rule REQ-363/364 established for tenant-scoped content — no separate, weaker validation for the platform path"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "REGATE iteration 1. Re-ran the full WF-02 Step 1b gate (checks a-d) against the current state of lib/letflow/design/req365-platform-help-authoring.md, independently, alongside req363's design and the actual shipped lib/letflow/help.ex. (a) §1/§1.3: platform_help_content migration is public-schema, no prefix() concept, no if prefix() do guard, explicitly not registered in Letflow.TenantProvisioning.tenant_scoped_migrations/0 -- consistent with req363 §3's placement decision and the users/tenants migration precedent. (b) §3.2: all six Letflow.Help.Platform signatures (create_draft/1, update_draft/2, publish/1, reconfirm/1, withdraw/1, get_by_screen/1) checked against the real lib/letflow/help.ex -- the prior gap is fixed: publish/1, reconfirm/1, and withdraw/1 now each include {:error, Ecto.Changeset.t()} (lines 286-309), with an explicit stated rationale (lines 317-325: each ends in a Repo.update/2 against a changeset, same as the shipped Letflow.Help equivalents, so a concurrent write/stale row/constraint violation can surface after the state-transition guard passes). Divergences from Letflow.Help's error vocabulary (no :invalid_prefix, :process_definition_id_not_supported instead of :process_definition_not_found) are each reasoned in §3.1/§3.3, not silent drift. No regression on the other five signatures. (c) §5: sanitization reuse is concrete, not hand-waved -- extraction of the existing lib/letflow/help/help_content.ex private validator chain into a new shared Letflow.Help.MarkdownSafety.validate/2, called from both HelpContent and PlatformHelpContent changesets; no second implementation, no new dependency. (d) §4.1-§4.2: screen_id is explicitly stated (\"login-routing\", reasoned from the requirement text and REQ-360's scenario id) and real, plain end-user-language help content is present in full (title + markdown body describing Keycloak-hosted sign-in and role-based landing, no SHALL-statement/engineer prose). No TBD/deferral language found (grepped). No implementation code bodies present -- §2's schema block and §3.2's function block are signatures/field declarations/type shapes only, matching the same pseudo-code convention already used and passed in the precedent req363 design. Cross-module dependencies listed in §6.",
+    "checks": {
+      "a_migration_shape": "PASS",
+      "b_write_path_signatures_vs_shipped_help_ex": "PASS",
+      "c_sanitization_reuse_mechanism": "PASS",
+      "d_login_routing_content_and_screen_id": "PASS"
+    },
+    "next_action": "Route to ELIXIR-DEV (Step 2a)"
+  },
+  "rework_count": 0,
+  "max_rework": 3,
+  "gate_history": [
+    {
+      "iteration": 0,
+      "gated_at": "2026-09-18T02:48:00Z",
+      "status": "FAIL",
+      "summary": "REQ-365 design (lib/letflow/design/req365-platform-help-authoring.md) read in full, independently, alongside req363's design, lib/letflow/help.ex, and lib/letflow/help/help_content.ex. Checks (a), (c), (d) pass. Check (b) fails: three of six Letflow.Help.Platform signatures in §3.2 (publish/1, reconfirm/1, withdraw/1) omit {:error, Ecto.Changeset.t()}, present in the shipped lib/letflow/help.ex equivalents (publish/2, reconfirm/2, withdraw/2), with no stated rationale — unlike §3.1's reasoned omission of :invalid_prefix. FAILed immediately per WF-02 Step 1b's no-partial-credit rule.",
+      "issues": [
+        "REQ-365 §3.2: Letflow.Help.Platform.publish/1's @spec omits {:error, Ecto.Changeset.t()}, present in the shipped Letflow.Help.publish/2 (lib/letflow/help.ex lines 130-136), no rationale given.",
+        "REQ-365 §3.2: Letflow.Help.Platform.reconfirm/1's @spec omits {:error, Ecto.Changeset.t()}, present in the shipped Letflow.Help.reconfirm/2 (lib/letflow/help.ex lines 163-169), no rationale given.",
+        "REQ-365 §3.2: Letflow.Help.Platform.withdraw/1's @spec omits {:error, Ecto.Changeset.t()}, present in the shipped Letflow.Help.withdraw/2 (lib/letflow/help.ex lines 195-200), no rationale given."
+      ],
+      "next_action": "Rework CODE-DESIGNER"
+    }
+  ]
+}

@@ -113,3 +113,15 @@ pipeline_log:
       sites. Scope discipline confirmed (2 files only). Moduledoc updates
       traced against actual behavior, accurate. Independently re-ran
       tests: 58/58.
+  - step: TEST-DESIGNER
+    at: "2026-09-18T02:00:00Z"
+    result: >
+      Real gap found and closed (not a no-op ratification): ELIXIR-DEV's
+      3 tests covered AC rows 1-4, but AC row 5 (the deferred
+      cross-block scope decision REVIEWER signed off on) existed only as
+      prose, never empirically pinned down. Added a negative-confirmation
+      test proving a raw tag split across two adjacent list items is NOT
+      detected -- verified the real AST via EarmarkParser.as_ast/2 first
+      (not hand-traced) to confirm this genuinely reproduces the
+      documented deferred gap, not an already-safe body. mix test:
+      59/59. mix letflow.check.test: exit 0, clean.

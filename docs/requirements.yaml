@@ -26590,7 +26590,7 @@ requirements:
     title: Platform-level help content authoring — BA-agent/REQ-ANALYST pipeline path for screens no tenant owns
     owner: REQ-ANALYST
     impl_order: 688  # letflow-queue task id, GH#1440
-    status: pending
+    status: in_progress
     stage: S7
     description: >
       Per explicit user decision: platform-level help (shared screens like

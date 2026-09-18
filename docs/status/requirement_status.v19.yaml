@@ -598,3 +598,18 @@ history:
       references REQ-366 as pending. No docs/migration/stage-N-*.md or
       docs/migration/decisions/*.md file was named by REQ-366's acceptance
       criteria (reread just now to confirm) -- none required updating.
+
+  - req: REQ-365
+    event: started
+    agent: ORCH
+    at: "2026-09-18T02:36:36Z"
+    note: >
+      WF-02 run WF02-REQ365-20260918 (queue task 688, GH#1440) begins.
+      Platform-level help content authoring path -- REQ-363's design
+      placed platform-scope rows in a separate public.platform_help_content
+      table (not yet migrated); this run adds that migration plus the
+      write path (reusing REQ-364's Letflow.Help create/update/publish/
+      reconfirm shape against the platform table) and authors real help
+      content for the login-routing screen as the worked example. Step 00
+      (git setup) PASS: branch feature/WF02-REQ365-20260918 created and
+      pushed by ELIXIR-DEV.

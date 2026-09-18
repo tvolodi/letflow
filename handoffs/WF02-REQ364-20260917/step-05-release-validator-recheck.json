@@ -1,0 +1,7 @@
+{
+  "req": "REQ-364",
+  "step": "05-release-validator-recheck",
+  "result": "PASS",
+  "at": "2026-09-18T00:35:00Z",
+  "notes": "Independently re-ran mix letflow.check.test properly (backgrounded, polled, full log preserved) -- clean, no ISS-0069 warning, 8/8 partitions 0 failures, combined 4387/4387. mix compile --warnings-as-errors clean. Verified the fix directly in source (draft_attrs/1 no default, ~30 call sites all pass explicit args). ISS-0710's resolution_note claims all independently reproduced accurate. Diff scope sanity check clean. Clear for DOC-UPDATER and merge."
+}

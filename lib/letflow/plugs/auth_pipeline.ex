@@ -242,12 +242,16 @@ defmodule Letflow.Plugs.AuthPipeline do
   # Every {:error, _reason} the verifier returns collapses to a single 401 —
   # this design does not distinguish malformed/expired/bad-signature at the
   # HTTP-response level (§3.1's OQ-4).
+  #
+  # REQ-370: verify_bearer_token/1 (arity 1, no provider_name) — the verifier
+  # itself resolves which provider to trust from the token's own claimed
+  # issuer against the tenants table
+  # (lib/letflow/design/req370-multi-issuer-oidc-verification.md §3).
   defp verify_token(raw_token) do
     oidc_config = Application.fetch_env!(:letflow, :oidc)
     verifier = Keyword.fetch!(oidc_config, :token_verifier)
-    provider_name = Keyword.fetch!(oidc_config, :provider_name)
 
-    case verifier.verify_bearer_token(raw_token, provider_name) do
+    case verifier.verify_bearer_token(raw_token) do
       {:ok, claims} -> {:ok, claims}
       {:error, reason} -> {:error, {:verify, reason}}
     end

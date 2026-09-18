@@ -24,11 +24,25 @@ export const BPM_IDP_BASE_URL =
 const KEYCLOAK_TOKEN_URL = `${BPM_IDP_BASE_URL}/realms/bpm-default/protocol/openid-connect/token`
 export const BPM_IDP_CLIENT_ID = process.env.BPM_IDP_CLIENT_ID ?? 'letflow-web'
 
+/**
+ * Resolve a credential from an env var, falling back to a local-dev literal.
+ *
+ * Returns `process.env[envVarName]` when set and non-empty (trimmed);
+ * otherwise returns `localDevFallback` unchanged. An unset env var is the
+ * expected local-dev case, not an error — this never throws.
+ */
+export function resolveCredential(envVarName: string, localDevFallback: string): string {
+  const raw = process.env[envVarName]
+  const value = (raw ?? '').trim()
+  if (value.length == 0) return localDevFallback
+  return value
+}
+
 /** Obtain a JWT access token from Keycloak via password grant. */
 export async function getKeycloakToken(
   request: APIRequestContext,
   username = 'admin-user',
-  password = 'admin-pass',
+  password = resolveCredential('UAT_QA_ADMIN_PASSWORD', 'admin-pass'),
 ): Promise<string> {
   const response = await request.post(KEYCLOAK_TOKEN_URL, {
     headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
@@ -96,6 +110,56 @@ export async function loginWithToken(page: Page, token: string): Promise<void> {
   await page.waitForSelector('[data-testid="user-display-name"]', { timeout: 15_000 }).catch(() => {
     // Fallback: just wait for any main content to appear
   })
+}
+
+/**
+ * Log in to the app by driving Keycloak's real hosted-login-page redirect.
+ *
+ * Unlike `loginWithToken`, this does NOT inject a session via
+ * `addInitScript`/`sessionStorage` — it navigates with no pre-existing
+ * session, waits for the app's own auth guard to redirect off-origin to
+ * Keycloak, fills Keycloak's own login form, submits, and waits for the
+ * browser to land back on `expectedUrl` after the app's `/auth/callback`
+ * exchange completes. This is what actually exercises
+ * `OidcCallbackPage.tsx`'s role-conditional `navigate()` — session injection
+ * structurally cannot reach that code path (see ISS-0712).
+ *
+ * NOTE: the exact Keycloak submit-control selector (`#kc-login` /
+ * `input[type=submit]`) is Keycloak's own markup, not app markup, and is
+ * assumed here as Keycloak's standard default theme selector. It was not
+ * confirmed against a live Keycloak instance in this environment — see
+ * ISS-0712's design doc §4.1 for the flagged open question.
+ */
+export async function loginViaRealOidcRedirect(
+  page: Page,
+  username: string,
+  password: string,
+  expectedUrl: string,
+): Promise<void> {
+  // 1. Navigate with no pre-seeded session — the app's own guard must run.
+  await page.goto('/', { waitUntil: 'domcontentloaded' })
+
+  // 2. Wait for the app's ProtectedRoute/AuthProvider guard to redirect
+  // off-origin to Keycloak's hosted login page (same technique as this
+  // spec file's unauthenticated-redirect case).
+  const appOrigin = new URL(page.url()).origin
+  await page.waitForURL((url) => url.origin !== appOrigin, { timeout: 20_000 })
+
+  // 3. Fill Keycloak's own login form fields and submit.
+  await page.fill('#username', username)
+  await page.fill('#password', password)
+  await Promise.all([
+    page.waitForURL((url) => url.origin === appOrigin, { timeout: 20_000 }),
+    page.locator('#kc-login, input[type="submit"]').first().click(),
+  ])
+
+  // 4. (Optional intermediate checkpoint) The browser passes back through
+  // the app's own /auth/callback route here; not asserted on directly since
+  // OidcCallbackPage.tsx renders only a transient status before navigating.
+
+  // 5. Wait for the final post-callback destination — proves
+  // OidcCallbackPage.tsx's role-conditional navigate() chose expectedUrl.
+  await page.waitForURL(expectedUrl, { timeout: 15_000 })
 }
 
 /**

@@ -26,6 +26,7 @@ defmodule Letflow.Routers.ExamSessions do
   | Handler | Method/path | Delegate | Permission | Response |
   |---|---|---|---|---|
   | start_session | `POST /exam-sessions` | `Letflow.Exam.Session.create/3`, then `Letflow.Exam.Session.get_session_state_for_user/3` for the 201 body | `ExamSessionStart` | 201 / 400 / 403 / 409 / 422 |
+  | list_available_exams | `GET /exam-sessions/available` (ISS-0718) | `Letflow.Exam.Session.list_available_exams/2` | `ExamSessionStart` | 200 / 400 / 403 |
   | get_session_state | `GET /exam-sessions/:id` | `Letflow.Exam.Session.get_session_state_for_user/3` | `ExamSessionRead` | 200 / 404 |
   | autosave_answer | `PUT /exam-sessions/:id/answers/:question_id` | `Letflow.Exam.Session.autosave_answer/4` | `ExamSessionSave` | 200 / 400 / 404 / 422 |
   | submit_session | `POST /exam-sessions/:id/submit` | `Letflow.Exam.Session.submit/3` | `ExamSessionSubmit` | 200 / 404 |

@@ -192,11 +192,12 @@ defmodule Letflow.Routers.ExamSessionsTest do
       end
     end
 
-    test "seven routes are declared, matching the moduledoc's route table" do
+    test "eight routes are declared, matching the moduledoc's route table" do
       routes = Letflow.Routers.ExamSessions.__authz_routes__()
-      assert length(routes) == 7
+      assert length(routes) == 8
 
       assert {"POST", "/", :ExamSessionStart} in routes
+      assert {"GET", "/available", :ExamSessionStart} in routes
       assert {"GET", "/:id", :ExamSessionRead} in routes
       assert {"PUT", "/:id/answers/:question_id", :ExamSessionSave} in routes
       assert {"POST", "/:id/submit", :ExamSessionSubmit} in routes

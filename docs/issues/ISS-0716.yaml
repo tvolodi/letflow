@@ -1,0 +1,30 @@
+id: ISS-0716
+title: "ColumnPromotionTest AC1 flaky: :all-scoped tenant query picks up rows left by a concurrently-scheduled test"
+discovered_by: TEST-RUNNER
+discovered_in_run: WF02-REQ370-20260918
+discovered_at: "2026-09-18T18:47:00Z"
+severity: MINOR
+description: >
+  Likely pre-existing test-isolation flakiness, unrelated to REQ-370's own
+  diff -- test/letflow/tenant_provisioning/column_promotion_test.exs was not
+  touched by any commit on that branch (git log main..HEAD for that path is
+  empty). Letflow.TenantProvisioning.ColumnPromotionTest's AC1 asserts
+  register_column_promotion/4 with :all registered exactly [tenant_a,
+  tenant_b] (2 ids), but one full-suite run found 4 ids on disk -- 2 extra
+  tenant rows not accounted for by this test's own setup. This file uses
+  Letflow.DataCase async: false with real commits (not per-test sandbox
+  isolation, the same pattern as REQ-370's Group A finding), so an
+  :all-scoped query is inherently exposed to any tenant row left by a
+  concurrently-scheduled test in the same partition process.
+  Lower-confidence than a typical pre-existing finding: TEST-RUNNER could
+  not pin an exact external mechanism (e.g. a specific sibling test that
+  leaves rows behind), only the structural exposure (no sandboxing +
+  :all-scoped query, an inherently fragile combination). Needs investigation
+  to confirm the actual root cause before deciding the right fix (test-level
+  isolation vs. a structural change to how async: false + real-commit tests
+  avoid polluting an :all query).
+affected_files:
+  - test/letflow/tenant_provisioning/column_promotion_test.exs
+queue_ref: Q-716
+github_ref: GH-1534
+status: open

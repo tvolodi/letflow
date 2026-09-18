@@ -82,16 +82,12 @@ defmodule Letflow.Help.PlatformTest do
 
     test "rejects a caller-supplied :confirmed_for_definition_version" do
       assert {:error, :confirmed_for_definition_version_not_accepted} =
-               Platform.create_draft(
-                 draft_attrs(%{confirmed_for_definition_version: "9.9.9"})
-               )
+               Platform.create_draft(draft_attrs(%{confirmed_for_definition_version: "9.9.9"}))
     end
 
     test "rejects a non-nil :process_definition_id (design §3.3 -- OQ-2 unresolved)" do
       assert {:error, :process_definition_id_not_supported} =
-               Platform.create_draft(
-                 draft_attrs(%{process_definition_id: Ecto.UUID.generate()})
-               )
+               Platform.create_draft(draft_attrs(%{process_definition_id: Ecto.UUID.generate()}))
     end
 
     test "omitting :process_definition_id entirely succeeds, leaving it nil" do
@@ -124,9 +120,7 @@ defmodule Letflow.Help.PlatformTest do
 
     test "rejects a markdown link with a javascript: URL scheme" do
       assert {:error, changeset} =
-               Platform.create_draft(
-                 draft_attrs(%{body: "click [here](javascript:alert(1))"})
-               )
+               Platform.create_draft(draft_attrs(%{body: "click [here](javascript:alert(1))"}))
 
       assert "must not contain javascript:/data:/vbscript: link or image URLs" in errors_on(
                changeset
@@ -135,9 +129,7 @@ defmodule Letflow.Help.PlatformTest do
 
     test "rejects a markdown image with a data: URL scheme" do
       assert {:error, changeset} =
-               Platform.create_draft(
-                 draft_attrs(%{body: "![alt](data:text/html;base64,abcd)"})
-               )
+               Platform.create_draft(draft_attrs(%{body: "![alt](data:text/html;base64,abcd)"}))
 
       assert "must not contain javascript:/data:/vbscript: link or image URLs" in errors_on(
                changeset

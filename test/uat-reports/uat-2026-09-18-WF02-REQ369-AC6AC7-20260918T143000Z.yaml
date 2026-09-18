@@ -1,0 +1,231 @@
+run_id: WF02-REQ369-AC6AC7-20260918T143000Z
+date: "2026-09-18"
+agent: UAT-RUNNER
+queue_task: "708 (GH#1501), locked to agent_id tvolodi-orch"
+scope: >
+  Re-attempt of REQ-369's remaining AC6/AC7 evidence-gathering, dispatched
+  after the credential-access blocker that stopped the prior run
+  (test/uat-reports/uat-2026-09-18-WF02-REQ369-20260918.yaml) was resolved:
+  this session has a real ai-dala-infra checkout and working SSH access to
+  ubuntu-16gb-nbg1-1. The stale pipeline_test finding from that prior run was
+  also independently fixed and merged as PR #1515 (commit 0114d657) before
+  this run started. No lib/ code was touched. Two small, deliberately
+  temporary web/ edits were made and reverted during this run (see
+  temporary_edits_during_run below) -- no net change to web/ from this run.
+
+environment_target:
+  base_url: "https://qa.bizdala.com"
+  credential_source: "ai-dala-infra/scripts/qa-login.sh"
+  environment: qa
+  readiness_check: "curl -s -o /dev/null -w '%{http_code}' https://qa.bizdala.com/ -> 200 (re-confirmed this run)."
+
+credential_access_RESOLVED:
+  finding: >
+    Unlike the prior run, this session has a real c:\Users\tvolo\dev\ai-dala\ai-dala-infra
+    checkout and working SSH (`ssh ubuntu-16gb-nbg1-1 whoami` -> tvolodi).
+    Ran `bash scripts/qa-login.sh admin-user` from that checkout and obtained
+    a real seeded PLATFORM_ADMIN credential for https://qa.bizdala.com
+    (username admin-user; role PLATFORM_ADMIN; password NOT recorded here or
+    anywhere in the repo, per this dispatch's explicit instruction -- used
+    only in-memory for this run's real HTTP/browser calls).
+
+pipeline_test_spec_status: >
+  Read web/tests/e2e/pipelines/platform-login-routing-by-role.pipeline.e2e.spec.ts
+  in full before running anything. Confirmed (not just trusted) that PR #1515
+  / commit 0114d657 already fixed the PLATFORM_ADMIN case to assert
+  `/platform-dashboard` + platform-dashboard-heading/tile-tenant-count/
+  platform-quick-links -- the stale-spec finding from the prior run's report
+  is resolved, no further edit needed to that assertion.
+
+temporary_edits_during_run:
+  - file: web/tests/e2e/pipelines/platform-login-routing-by-role.pipeline.e2e.spec.ts
+    change: >
+      Line 71's getKeycloakToken call for the PLATFORM_ADMIN case was
+      temporarily edited to read the password from
+      `process.env.UAT_QA_ADMIN_PASSWORD` instead of the hardcoded
+      'admin-pass' literal, so the real fetched QA credential could be used
+      without ever being written to a file. Reverted via `git checkout --`
+      immediately after the run (git status confirms clean, no diff left).
+      This was necessary because the spec hardcodes 'admin-pass' as a
+      literal default argument, not something UAT-RUNNER is in scope to fix
+      permanently -- flagged below as a new finding for TEST-DESIGNER.
+  - file: web/tests/e2e/_uat-runner-temp-real-login.e2e.spec.ts
+    change: >
+      A new, throwaway, UNCOMMITTED spec file was added to drive a real,
+      full OIDC-redirect login (through Keycloak's own hosted login page and
+      back through /auth/callback) as a genuinely independent verification,
+      after discovering that the existing pipeline_test's login mechanism
+      cannot exercise the code path AC6/AC7 need to prove (see
+      new_finding_login_mechanism_gap below). Deleted after use; never
+      committed; `git status` confirms it left no trace.
+
+new_finding_login_mechanism_gap:
+  title: "platform-login-routing-by-role pipeline_test's PLATFORM_ADMIN case cannot pass even with correct credentials -- its login helper bypasses the exact code path REQ-369's redirect logic lives in"
+  severity_suggestion: "Should block AC7 from being marked satisfiable via the NAMED pipeline_test until fixed -- distinct from, and found only after, the two previously-resolved blockers (CD-deploy secrets, stale route assertion)."
+  detail: >
+    Running the pipeline_test with real, correct PLATFORM_ADMIN credentials
+    (via the temporary env-var substitution above) produced a NEW, genuine
+    failure, not a pass: `expect(page).toHaveURL('/platform-dashboard')`
+    received "https://qa.bizdala.com/" instead. Root-caused by reading the
+    actual source, not guessed: web/tests/e2e/helpers.ts's `loginWithToken`
+    (used by every case in this pipeline_test) authenticates by writing a
+    session object directly into sessionStorage via `addInitScript` and then
+    navigating straight to `/` -- it deliberately bypasses Keycloak's real
+    hosted-login-page redirect and the app's own `/auth/callback` route
+    entirely (see helpers.ts's own module comment: "the token-based login
+    page has been removed... tests authenticate by... injecting the
+    session"). But REQ-369's role-conditional redirect
+    (`navigate(payload.roles.includes('PLATFORM_ADMIN') ? '/platform-dashboard' : '/', ...)`)
+    lives ONLY inside web/src/pages/OidcCallbackPage.tsx's one-time
+    useEffect, which runs solely during the real `/auth/callback` OIDC
+    exchange (confirmed by reading OidcCallbackPage.tsx directly, line 72;
+    also confirmed no equivalent guard exists elsewhere by grepping
+    router.tsx for PLATFORM_ADMIN, which only found the route registration,
+    not a redirect guard). Session-injection login therefore structurally
+    can never reach the code path this scenario's EO-001 needs to prove --
+    it isn't a flaky test, it is testing the wrong mechanism by construction.
+  disposition: >
+    This is a TEST-DESIGN gap in the pipeline_test's shared login helper for
+    this specific scenario, not a product defect -- see
+    real_oidc_verification below, which proves the actual product behavior
+    is correct when driven through the real login flow. Flagging to ORCH for
+    routing to TEST-DESIGNER: the PLATFORM_ADMIN case of this pipeline_test
+    needs its own real-redirect-based login (drive Keycloak's hosted login
+    form directly, as this run's throwaway verification script did) rather
+    than sharing helpers.ts's session-injection `loginWithToken`, or the
+    scenario's EO-001 will never be provable by its own named pipeline_test
+    regardless of credential correctness.
+  secondary_finding: >
+    helpers.ts's getKeycloakToken/loginWithToken hardcode 'admin-pass' /
+    'worker-pass' as literal default arguments (not sourced from any secret
+    store), which is what forced this run's temporary env-var edit above.
+    Real QA passwords are never those literals (confirmed 401 against them
+    in the prior run). Worth a TEST-DESIGNER pass to let these tests read
+    real QA credentials from an env var when E2E_BASE_URL points at a
+    non-local environment, without hardcoding any password in source.
+
+real_oidc_verification:
+  purpose: >
+    Independent, genuine end-to-end proof of AC6's actual claim (real
+    PLATFORM_ADMIN login lands on /platform-dashboard with real data),
+    obtained via a real Keycloak-redirect login flow instead of the
+    session-injection shortcut the named pipeline_test uses (see finding
+    above) -- this is what AC6 asks for ("real system, not simulated";
+    "exercised end-to-end", not merely a hardcoded-fixture bypass).
+  method: >
+    Threw away spec (web/tests/e2e/_uat-runner-temp-real-login.e2e.spec.ts,
+    deleted after use, never committed) that: navigated to
+    https://qa.bizdala.com/ with no session, waited for the real off-origin
+    redirect to Keycloak's hosted login page, filled Keycloak's own #username
+    /#password form fields with the real fetched admin-user credential,
+    submitted, waited for the real redirect back to the app origin (through
+    /auth/callback), and captured the resulting URL + a full-page screenshot.
+  command: >
+    cd web && E2E_BASE_URL=https://qa.bizdala.com
+    UAT_QA_ADMIN_PASSWORD=<not recorded> npx playwright test
+    tests/e2e/_uat-runner-temp-real-login.e2e.spec.ts --project=chromium
+  result: "1 passed (8.5s), real run against live QA, no mocks"
+  observed_idp_redirect: >
+    https://auth.qa.bizdala.com/realms/bpm-default/protocol/openid-connect/auth?client_id=letflow-web&redirect_uri=https%3A%2F%2Fqa.bizdala.com%2Fauth%2Fcallback&response_type=code&scope=openid+profile&...
+    (real Keycloak-hosted login page, confirmed reached)
+  observed_final_url: "https://qa.bizdala.com/platform-dashboard"
+  screenshot: >
+    web/tests/screenshots/pipelines/platform-login-routing-by-role-admin-real-oidc-20260918.png
+    (copied from web/test-results/_uat-runner-temp-real-login-final.png,
+    captured this run; mtime 2026-09-18 19:37 local, confirmed after this
+    run's start; web/tests/screenshots/ is gitignored, referenced by path
+    only, same convention as the prior report's screenshot citations).
+  visual_evidence_observed_in_screenshot:
+    - "Heading reads 'Platform Overview' (platform-dashboard-heading), not any tenant name."
+    - "'TENANTS' tile (tile-tenant-count) IS rendered and visible."
+    - "'PLATFORM ADMIN LINKS' nav (platform-quick-links) shows Tenants, Services, Health, Metrics, Users -- all present."
+    - "Authenticated shell footer reads 'Admin User' / 'PLATFORM_ADMIN', confirming the real token's role claim."
+    - "Sidebar nav shows the full PLATFORM_ADMIN-only entry set (Users, Groups, Tokens, Audit, Health, Metrics, Register Tenant, Tenants, Services, Question Bank) alongside the shared entries."
+
+new_finding_tenant_count_bug:
+  title: "PlatformDashboardPage's tile-tenant-count always renders 0, never the real tenant count -- GET /api/v1/tenants has no 'total' field"
+  severity_suggestion: "BLOCKER for AC6's specific 'real tenant count rendered' clause -- a real, reproducible product defect, not a test artifact."
+  detail: >
+    The screenshot captured above (real OIDC login, live QA) shows the
+    TENANTS tile rendering "0". Independently queried the live backend for
+    ground truth: obtained a real admin-user token via direct Keycloak
+    password-grant, then `curl -H "Authorization: Bearer <token>"
+    https://qa.bizdala.com/api/v1/tenants` ->
+    `{"items":[{"display_name":"Default Tenant",...},{"display_name":"BilimBaga",...}],"next_cursor":null,"count":2}`
+    -- the real, live tenant count is 2, not 0. Root-caused by reading
+    source: web/src/pages/dashboard/PlatformDashboardPage.tsx line 61 renders
+    `String(tenantsQuery.data?.total ?? 0)` -- it reads a `.total` field.
+    web/src/api/tenants.ts line 19 declares `TenantListResponse.total:
+    number` in its TypeScript type, but the REAL backend response (confirmed
+    directly above, not inferred from the type) has no `total` key at all --
+    only `items`, `next_cursor`, and `count`. `.total` is therefore always
+    `undefined` and the `?? 0` fallback fires unconditionally, regardless of
+    how many tenants actually exist. This directly contradicts the
+    scenario's own EO-001 detail text ("tile...populated from the real GET
+    /api/v1/tenants endpoint's 'total' field") and AC6's explicit "real
+    tenant count rendered" wording -- the count shown is never real.
+  disposition: >
+    New, genuine defect discovered by this UAT run, distinct from the login-
+    mechanism finding above (that one is a test-design gap; this one is a
+    real frontend/backend contract mismatch). Flagging to ORCH: needs a
+    CODE-DESIGNER/ELIXIR-DEV or FRONTEND-DEV pass to decide which side is
+    wrong (either the backend should return a `total` field, or the frontend
+    should read `count` instead) and fix the mismatch, then a re-run of this
+    scenario to confirm the tile shows "2" (or whatever the live count is at
+    that time) before AC6 can be marked fully satisfied.
+
+ac6_disposition: >
+  PARTIALLY SATISFIED. The core routing claim -- a real, full end-to-end
+  PLATFORM_ADMIN login (through Keycloak's real hosted login page, not a
+  fixture shortcut) genuinely lands on /platform-dashboard with the
+  platform-dashboard-heading, platform-quick-links nav, and PLATFORM_ADMIN
+  nav entries all rendering -- IS now proven true with real, fresh screenshot
+  evidence (see real_oidc_verification above). But AC6's own explicit wording
+  ("the real tenant count rendered") is NOT satisfied: the tenant-count tile
+  shows 0 against a real live count of 2, a genuine, reproducible defect
+  (see new_finding_tenant_count_bug). AC6 cannot be marked fully done from
+  this run's evidence until that defect is fixed and re-verified.
+
+ac7_disposition: >
+  NOT SATISFIED via the named pipeline_test as things stand, for a reason
+  distinct from anything previously reported. The scenario file's own
+  PLATFORM_ADMIN branch assertion (route + three testids) is correct and
+  already in place (confirmed, not re-edited). Re-running the scenario for
+  real against QA via its OWN NAMED pipeline_test, with correct credentials
+  this time, produced a genuine FAIL because that spec's shared login helper
+  structurally cannot exercise the code path under test (see
+  new_finding_login_mechanism_gap). The scenario's real-world claim was
+  independently proven true via a real OIDC-redirect login (not the named
+  pipeline_test), but AC7 asks specifically for "test/fixtures/.../
+  platform-login-routing-by-role.yaml's ... branch ... re-run for real
+  against QA" via its own pipeline machinery -- that machinery itself needs
+  a TEST-DESIGNER fix before it can produce a genuine PASS. AC7 should stay
+  open until that fix lands and this scenario is re-run through the fixed
+  spec.
+
+overall_verdict: >
+  Both previously-known blockers (CD-deploy secrets gap; credential-access
+  gap) are confirmed resolved this run -- real credentials were fetched and
+  used for real HTTP/browser calls against live QA, no mocks, no fabricated
+  evidence. Two NEW, genuine, distinct findings surfaced by actually running
+  real traffic against QA with correct credentials for the first time:
+  (1) the pipeline_test's shared login helper cannot exercise REQ-369's
+  redirect code path at all (test-design gap), and (2) the tenant-count tile
+  has a real frontend/backend contract mismatch and always shows 0 (product
+  defect). Neither AC6 nor AC7 can be marked fully done from this run's
+  evidence -- REQ-369 should remain status: blocked, routed to ORCH for
+  triage of both new findings (test-design fix to TEST-DESIGNER; tenant-count
+  defect to CODE-DESIGNER/ELIXIR-DEV or FRONTEND-DEV as appropriate) before
+  a further UAT-RUNNER re-verification pass.
+
+notes: >
+  No mocks, no absence-of-error-as-pass, no fabricated screenshots, no
+  plaintext QA password committed to any file or written into this report
+  (only the username and role are named, per this dispatch's explicit
+  instruction). The one genuinely new positive result this run produced --
+  real end-to-end PLATFORM_ADMIN login via Keycloak's hosted page landing on
+  /platform-dashboard with the expected headings/nav -- is real, fresh,
+  independently-obtained evidence, not a rerun of stale artifacts. The two
+  new findings are reported with the same full disclosure discipline as the
+  prior run's stale-spec and credential-access findings; neither is papered
+  over as a pass.

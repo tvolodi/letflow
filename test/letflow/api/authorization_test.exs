@@ -30,7 +30,7 @@ defmodule Letflow.Api.AuthorizationTest do
              ]
     end
 
-    test "permissions/0 returns exactly R-Co's fourteen Permission values plus REQ-075's :TenantsManage, REQ-076's :RolesManage, REQ-212's :AttachmentsManage/:AttachmentsRead, ISS-0389's :InstancesAdvanceTimer, REQ-309's four Entities* permissions, REQ-315's :EntitiesAggregate, REQ-318's three entity-record export/import permissions, REQ-317's :EntitiesAttachmentsManage/:EntitiesAttachmentsRead, REQ-335's five ExamSession* permissions, REQ-355's :ExamCertificateIssue, and REQ-352's :PublicReadHandlesIssue" do
+    test "permissions/0 returns exactly R-Co's fourteen Permission values plus REQ-075's :TenantsManage, REQ-076's :RolesManage, REQ-212's :AttachmentsManage/:AttachmentsRead, ISS-0389's :InstancesAdvanceTimer, REQ-309's four Entities* permissions, REQ-315's :EntitiesAggregate, REQ-318's three entity-record export/import permissions, REQ-317's :EntitiesAttachmentsManage/:EntitiesAttachmentsRead, REQ-335's five ExamSession* permissions, REQ-355's :ExamCertificateIssue, REQ-352's :PublicReadHandlesIssue, and REQ-366's :HelpRead" do
       assert Authorization.permissions() == [
                :DefinitionsWrite,
                :DefinitionsRead,
@@ -67,7 +67,8 @@ defmodule Letflow.Api.AuthorizationTest do
                :ExamSessionSubmit,
                :ExamSessionReportEvent,
                :ExamCertificateIssue,
-               :PublicReadHandlesIssue
+               :PublicReadHandlesIssue,
+               :HelpRead
              ]
     end
   end
@@ -395,7 +396,8 @@ defmodule Letflow.Api.AuthorizationTest do
           33 => "thirty-three",
           34 => "thirty-four",
           35 => "thirty-five",
-          36 => "thirty-six"
+          36 => "thirty-six",
+          37 => "thirty-seven"
         }
         |> Map.get(actual_count)
 
@@ -922,7 +924,8 @@ defmodule Letflow.Api.AuthorizationTest do
           33 => "thirty-three",
           34 => "thirty-four",
           35 => "thirty-five",
-          36 => "thirty-six"
+          36 => "thirty-six",
+          37 => "thirty-seven"
         }
         |> Map.get(actual_count)
 
@@ -1383,7 +1386,8 @@ defmodule Letflow.Api.AuthorizationTest do
           33 => "thirty-three",
           34 => "thirty-four",
           35 => "thirty-five",
-          36 => "thirty-six"
+          36 => "thirty-six",
+          37 => "thirty-seven"
         }
         |> Map.get(actual_count)
 

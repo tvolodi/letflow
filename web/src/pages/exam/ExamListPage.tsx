@@ -26,6 +26,15 @@
  *  `entitiesApi.queryRecords`: REQ-338 does not depend on REQ-336 (both
  *  requirements' own texts say so explicitly), so this page calls the same
  *  generic route through its own requirement's file instead.
+ *
+ *  REQ-366 addendum: this screen's `PageLayout` `actions` slot now also
+ *  carries `<HelpTrigger screenId="exam-list" />` — this run's real,
+ *  tenant-scoped `screen_id` used to exercise the full help
+ *  fetch -> resolve -> sanitize -> render mechanism end-to-end (design
+ *  §6.1's substitute for AC3's still-blocked login-routing screen; see
+ *  `lib/letflow/design/req366-help-display-panel.md` §6). Chosen because
+ *  this page already used `PageLayout`'s `actions` slot cleanly and needed
+ *  no structural change beyond adding the trigger.
  */
 
 import { useMemo } from 'react'
@@ -39,6 +48,7 @@ import { Button } from '@/components/ui/Button'
 import { QueryStateBoundary } from '@/components/ui/QueryStateBoundary'
 import { classifyError, type RendererState } from '@/utils/classifyError'
 import { ExamIntlProvider } from '@/i18n/ExamIntlProvider'
+import { HelpTrigger } from '@/components/help/HelpTrigger'
 
 function ExamListPageInner() {
   const intl = useIntl()
@@ -57,7 +67,10 @@ function ExamListPageInner() {
 
   return (
     <div data-testid="exam-list-page">
-      <PageLayout title={intl.formatMessage({ id: 'exam.list.title' })}>
+      <PageLayout
+        title={intl.formatMessage({ id: 'exam.list.title' })}
+        actions={<HelpTrigger screenId="exam-list" />}
+      >
         <div
           data-testid="exam-list-provisional-notice"
           role="note"

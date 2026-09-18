@@ -165,6 +165,31 @@ defmodule Letflow.Api.Authorization do
   catch-all grants it today; which role(s) beyond that hold it is left to
   the requirement that authors the first concrete issue path consuming this
   permission (REQ-355, per the design's §13.1).
+
+  ## `HelpRead` (REQ-366 §1) — genuinely new, CANDIDATE deliberately excluded
+
+  One new atom for `Letflow.Routers.Help`'s single `GET /help/resolved`
+  route (design `lib/letflow/design/req366-help-display-panel.md` §1.3).
+  Real `endpoint_policy_key/2` clause and identity `required_permission/1`
+  clause, same shape as `Entities*`/`ExamSession*` above.
+
+  Design §1.3 states this permission is "granted to all six roles...
+  unconditionally on any recognized role" and flags that as its own **OQ-2**,
+  explicitly inviting REVIEWER to judge a narrower grant instead. This
+  module implements a **deliberate, flagged deviation** from that literal
+  instruction: `role_allows?/2` grants `:HelpRead` to `PLATFORM_ADMIN`,
+  `PROCESS_DESIGNER`, `PROCESS_OPERATOR`, `TASK_WORKER`, and `AGENT_RUNNER`,
+  but **not** `CANDIDATE`. Reason: `test/letflow/api/authorization_test.exs`'s
+  ISS-0646 closed-set invariant test ("CANDIDATE must hold exactly its six
+  ExamSession*/ExamCertificateIssue permissions and nothing else",
+  decision 0013's addendum) already settled that `CANDIDATE`'s permission
+  set is closed — silently widening it here would be exactly the "don't
+  silently re-decide what a decision record already settled" case this
+  project's core directives forbid. Flagged for SECURITY-REVIEWER/REVIEWER
+  (this run's own next two gates) to make the actual call between keeping
+  `CANDIDATE` excluded (this implementation) and widening ISS-0646's closed
+  set for `:HelpRead` specifically (design §1.3's literal instruction). See
+  `Letflow.Routers.Help`'s own moduledoc for the same note.
   """
 
   @type role ::
@@ -212,6 +237,7 @@ defmodule Letflow.Api.Authorization do
           | :ExamSessionReportEvent
           | :ExamCertificateIssue
           | :PublicReadHandlesIssue
+          | :HelpRead
 
   @type access_decision_kind :: :Allow | :Deny403 | :AllowWithRowFilter
 
@@ -265,6 +291,7 @@ defmodule Letflow.Api.Authorization do
           | :ExamSessionReportEvent
           | :ExamCertificateIssue
           | :PublicReadHandlesIssue
+          | :HelpRead
           | :Unknown
 
   @type task_row_scope :: :all | {:own_user_and_groups, String.t()}
@@ -314,7 +341,8 @@ defmodule Letflow.Api.Authorization do
     :ExamSessionSubmit,
     :ExamSessionReportEvent,
     :ExamCertificateIssue,
-    :PublicReadHandlesIssue
+    :PublicReadHandlesIssue,
+    :HelpRead
   ]
 
   @doc "All six `Role` values, R-Co's exact names plus ISS-0646's `CANDIDATE`. See `roles_from_strings/1` for untrusted-input conversion."
@@ -322,7 +350,7 @@ defmodule Letflow.Api.Authorization do
   def roles, do: @roles
 
   @doc """
-  All thirty-six `Permission` values — R-Co's fourteen, plus REQ-075's
+  All thirty-seven `Permission` values — R-Co's fourteen, plus REQ-075's
   `:TenantsManage`, plus REQ-076's `:RolesManage`, plus REQ-212's
   `:AttachmentsManage`/`:AttachmentsRead`, plus ISS-0389's
   `:InstancesAdvanceTimer`, plus REQ-309's four entity-subsystem permissions
@@ -334,7 +362,8 @@ defmodule Letflow.Api.Authorization do
   `:EntitiesAttachmentsRead`, plus REQ-335's five exam-session-route
   permissions (`:ExamSessionStart`, `:ExamSessionRead`, `:ExamSessionSave`,
   `:ExamSessionSubmit`, `:ExamSessionReportEvent`), plus REQ-355's
-  `:ExamCertificateIssue`, plus REQ-352's `:PublicReadHandlesIssue`.
+  `:ExamCertificateIssue`, plus REQ-352's `:PublicReadHandlesIssue`, plus
+  REQ-366's `:HelpRead`.
 
   The stated count is asserted against `length(permissions())` by
   `test/letflow/api/authorization_test.exs` (REQ-309 AC1), computed rather than
@@ -723,6 +752,11 @@ defmodule Letflow.Api.Authorization do
   # See design lib/letflow/design/req352-unauthenticated-read-platform.md §13.1.
   def endpoint_policy_key("POST", "/public-read-handles"), do: :PublicReadHandlesIssue
 
+  # REQ-366 §1 — Letflow.Routers.Help's single route, mounted at /help. See
+  # this module's moduledoc "HelpRead" section and
+  # lib/letflow/design/req366-help-display-panel.md §1.1/§1.3.
+  def endpoint_policy_key("GET", "/help/resolved"), do: :HelpRead
+
   def endpoint_policy_key(_method, _path), do: :Unknown
 
   @doc """
@@ -852,6 +886,10 @@ defmodule Letflow.Api.Authorization do
   # shape as Entities*/ExamSession* above.
   def required_permission(:PublicReadHandlesIssue), do: :PublicReadHandlesIssue
 
+  # REQ-366 — identity clause (policy-key name == permission name), same
+  # shape as Entities*/ExamSession*/PublicReadHandlesIssue above.
+  def required_permission(:HelpRead), do: :HelpRead
+
   def required_permission(:Unknown), do: :MetricsRead
 
   @doc "Ports `hasPermission/2` (L171-176) exactly."
@@ -898,7 +936,11 @@ defmodule Letflow.Api.Authorization do
         # :EntitiesQuery/:EntitiesDefinitionsRead/:EntitiesDefinitionsWrite
         # but not :EntitiesRecordsWrite (a schema-authoring role, not the
         # "operate on live tenant data" class Manage is reserved for).
-        :EntitiesAttachmentsRead
+        :EntitiesAttachmentsRead,
+        # REQ-366 (design §1.3, this module's moduledoc "HelpRead" section):
+        # help content is a read-only UI affordance meant to assist every
+        # authenticated user regardless of role.
+        :HelpRead
       ]
 
   def role_allows?(:PROCESS_OPERATOR, permission),
@@ -934,7 +976,9 @@ defmodule Letflow.Api.Authorization do
         # "operate on live tenant data" class :EntitiesRecordsWrite itself
         # was assigned to for this role.
         :EntitiesAttachmentsManage,
-        :EntitiesAttachmentsRead
+        :EntitiesAttachmentsRead,
+        # REQ-366 (design §1.3): see PROCESS_DESIGNER clause's comment above.
+        :HelpRead
       ]
 
   def role_allows?(:TASK_WORKER, permission),
@@ -956,9 +1000,18 @@ defmodule Letflow.Api.Authorization do
         # REQ-317 (design §7 OQ-2 role matrix): read only -- no write-class
         # entity permission at all is granted to this role, mirroring its
         # existing instance-scoped :AttachmentsRead-only grant.
-        :EntitiesAttachmentsRead
+        :EntitiesAttachmentsRead,
+        # REQ-366 (design §1.3): see PROCESS_DESIGNER clause's comment above.
+        :HelpRead
       ]
 
+  # REQ-366 -- the one exception to this role's otherwise total, unconditional
+  # `false` (see the clause below): help content is a read-only UI affordance
+  # meant to assist every authenticated user regardless of role, and
+  # AGENT_RUNNER has no ISS-0646-style closed-set invariant blocking it the
+  # way CANDIDATE does (see this module's moduledoc "HelpRead" section for
+  # why CANDIDATE is deliberately excluded instead).
+  def role_allows?(:AGENT_RUNNER, :HelpRead), do: true
   def role_allows?(:AGENT_RUNNER, _permission), do: false
 
   # ISS-0646 (decision 0013 addendum): CANDIDATE is a dedicated role for

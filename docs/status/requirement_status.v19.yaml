@@ -532,3 +532,69 @@ history:
       "Help"): not documented there (matches REQ-364's own done-event
       finding), so no README update needed. No merge and no
       letflow-queue update performed here -- ORCH's job next.
+
+  - req: REQ-366
+    event: done
+    agent: DOC-UPDATER
+    at: "2026-09-18T06:49:29Z"
+    note: >
+      WF-02 run WF02-REQ366-20260918 complete, RELEASE-VALIDATOR PASS
+      ("REQ-366 is genuinely ready to merge. Clearing this for DOC-UPDATER
+      to flip status and for merge to proceed."). Full pipeline ran:
+      CODE-DESIGNER/CODE-DESIGN-VALIDATOR, ELIXIR-DEV (backend route)/
+      SECURITY-REVIEWER/REVIEWER, FRONTEND-DEV (panel)/SECURITY-REVIEWER/
+      REVIEWER, TEST-DESIGNER/TEST-DESIGN-VALIDATOR, TEST-RUNNER, all PASS.
+      Shipped, real commits: 99e8d799 (design fix, removed literal
+      compilable JSX from lib/letflow/design/req366-help-display-panel.md
+      §3.3), 452c29e0 (Letflow.Routers.Help — new GET /help/resolved
+      backend route, design §1, resolving tenant-scoped or platform-scope
+      help_content server-side per REQ-364's read function, with a
+      server-computed staleness flag), b635c8c2 (frontend panel — new
+      HelpTrigger/HelpPanel/HelpMarkdown/StalenessBadge components, design
+      §2-§4), 886d3824 (TEST-DESIGNER coverage-gap closure — backend route
+      direct tests + a frontend integration test), 31e6d74a (TEST-RUNNER
+      verification report, backend + frontend both green).
+
+      Sanitization (AC2): react-markdown + remark-gfm + rehype-sanitize, an
+      allowlisted markdown-to-React pipeline with no dangerouslySetInnerHTML
+      on unsanitized content (design §3.1), verified by a test asserting an
+      embedded-script-tag payload is neutralized in the rendered output.
+
+      Staleness (AC4): design §1.2 step 6 computes `stale` server-side by
+      comparing a process-scoped help row's confirmed_for_definition_version
+      against the process's actual current active version; StalenessBadge
+      (design §2.3) renders the visible indicator. Exercised for real:
+      published help against one process-definition version, activated a
+      new version, confirmed the indicator appeared. No REQ-365 dependency,
+      fully covered.
+
+      AC3 is explicitly BLOCKED-PENDING-REQ-365, not silently marked done.
+      REQ-365 (platform-scope help authoring path) is still status: pending
+      /unclaimed, so there is no real platform-scope content yet for the
+      login-routing screen and no platform_help_content table/row to fetch
+      — AC3 as literally written (the login-routing screen, REQ-365's real
+      content, screenshot against QA) cannot be exercised until REQ-365
+      lands. This is a design-confirmed, non-silent deferral: design §6
+      explicitly rejected building a throwaway platform-scope seed path
+      (duplicating REQ-365's own stated scope) and instead proved AC3's
+      underlying fetch -> resolve -> sanitize -> render mechanism via a
+      real, screenshot-evidenced tenant-scoped substitute (Letflow.Help.
+      create_draft/2 + publish/2 against a real existing screen_id) — §6.1.
+      §6.2 records the concrete follow-up once REQ-365 lands: implement
+      design §1.4's platform-scope fallback in Letflow.Routers.Help (a
+      small, pre-specified extension) and re-run AC3's real-browser check
+      against the login-routing screen itself; no HelpPanel/HelpTrigger
+      code changes needed, since they render a scope:"platform" response
+      identically to a scope:"tenant" one. RELEASE-VALIDATOR independently
+      confirmed this reasoning (not merely the producer's claim) before
+      clearing the requirement. docs/requirements.yaml's REQ-366 entry
+      flipped pending -> done, with a close_out_note recording this AC3
+      caveat in full (not left to disappear behind a bare "done").
+
+      README.md checked: grepped for REQ-366/REQ-365/"help panel"/
+      HelpPanel/help_content -- no hits; README does not enumerate
+      individual frontend components or in-app help, so no update needed.
+      docs/frontend/ checked for REQ-366-relevant conventions: no file
+      references REQ-366 as pending. No docs/migration/stage-N-*.md or
+      docs/migration/decisions/*.md file was named by REQ-366's acceptance
+      criteria (reread just now to confirm) -- none required updating.

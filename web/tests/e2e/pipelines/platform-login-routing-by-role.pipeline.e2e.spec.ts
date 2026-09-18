@@ -94,7 +94,7 @@ test.describe('Pipeline: platform-login-routing-by-role', () => {
 
     // Quick-links nav entries into the existing admin routes.
     for (const name of ['Tenants', 'Services', 'Health', 'Metrics', 'Users']) {
-      await expect(page.getByRole('link', { name })).toBeVisible()
+      await expect(page.getByTestId('platform-quick-links').getByRole('link', { name })).toBeVisible()
     }
 
     await shot(page, 'admin')

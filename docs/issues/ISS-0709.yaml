@@ -98,3 +98,18 @@ pipeline_log:
       availability-only, not exploitable (no live renderer exists yet
       for help_content.body). INV-1 applies and is satisfied (no query/
       migration/prefix logic touched). Tests confirmed real, not vacuous.
+  - step: REVIEWER
+    at: "2026-09-18T01:55:00Z"
+    result: >
+      PASS. Explicit determination on the deferred cross-block-boundary
+      gap: accept as documented limitation, no follow-up issue --
+      structural checks (raw_html_node?/2, destination_violation/2)
+      remain unaffected, splitting a tag across two adjacent block
+      siblings is a materially less plausible authoring pattern than the
+      already-fixed within-block case, no live renderer exists yet, and
+      filing a follow-up for a MINOR narrowing-only gap would itself be
+      scope creep. Confirmed idiom: new clause kept separate from the
+      existing code/pre exclusion per design, no change to arity/call
+      sites. Scope discipline confirmed (2 files only). Moduledoc updates
+      traced against actual behavior, accurate. Independently re-ran
+      tests: 58/58.

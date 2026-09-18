@@ -673,3 +673,97 @@ Every element REQ-370's SCOPE section names is addressed: (1) `TokenVerifier` ca
 both implementations — §3, §5; (2) per-realm provider-worker supervision shape, including
 new-tenant-without-restart — §4; (3) fate of `:oidc, :issuer` — §6, with the decision-record
 question resolved via explicit REVIEWER-flag rather than silent adoption — §7.
+
+## 13. SECURITY-REVIEWER sign-off (post-implementation, independently re-derived)
+
+**Run:** recovery run for feature/WF02-REQ370-20260918 / PR #1535, dispatched directly by
+ORCH because no `SECURITY-REVIEWER PASS` gate commit exists anywhere in this branch's
+history despite ELIXIR-DEV's implementation commit (cbe0d085) claiming one. This section
+is that missing gate, produced by reviewing the actual merged diff
+(`git diff main...feature/WF02-REQ370-20260918 -- lib/ priv/`) against
+`docs/agents/instructions/security-invariants.md` directly — §9 above (written
+pre-implementation) was read as a starting point only, not taken on trust; the verdict
+below was re-derived from the code as it stands.
+
+**Scope test:** applies. The diff adds a migration (`priv/repo/migrations/20260918173137_seed_default_tenant.exs`)
+and changes a lookup-by-identity trust path (`lib/letflow/oidc/provider_registry.ex`,
+`lib/letflow/oidc/token_verifier/oidcc.ex`) that resolves which tenant/realm a bearer
+token is trusted against.
+
+**INV-1 (tenant data isolation) — APPLIES — PASS.** The table touched (`tenants`,
+`priv/repo/migrations/20260816000001_create_tenants.exs`) is the tenant *registry*
+itself — the root mechanism `docs/migration/decisions/0003-ecto-schema-strategy.md`
+names as living in `public` by design (it is what maps a tenant to its own
+`:prefix`-scoped schema; there is no more-fundamental schema to scope it *by*). It is not
+tenant-business-data, so (a)/(b)/(c)'s `:prefix`-scoping requirement does not apply to it
+the way it would to an event-store or process-definition table. The new migration inserts
+one literal, hardcoded row (`slug = 'bpm-default'`) via `ON CONFLICT (slug) DO NOTHING` —
+no caller-supplied or tenant-controlled value is written. Verified `idp_realm_id` carries
+a **unique partial index** (`tenants_idp_realm_id_partial_index`,
+`20260816000001_create_tenants.exs:38-40`, `WHERE idp_realm_id IS NOT NULL`) — this is
+what makes `Identity.resolve_tenant_by_realm/1`'s `Repo.get_by` unambiguous: a realm can
+resolve to at most one tenant, ever, which is the DB-level precondition the whole
+trust-gate design depends on. Confirmed directly, not assumed from the design doc's prose.
+
+**Central risk (REQ-370's own description, AC6): "a token minted for one tenant's realm
+being accepted for another tenant's context."** Traced the full path, both layers:
+
+1. `TokenVerifier.Oidcc.verify_bearer_token/1` peeks the token's **unverified** `iss`
+   claim (`peek_realm/1`, `token_verifier/oidcc.ex:99-112`), parses the realm, and calls
+   `ProviderRegistry.ensure_started/1` — which re-resolves the realm against the live
+   `tenants` table **before** checking whether a worker is already running
+   (`do_ensure_worker/1`, `provider_registry.ex:65-75` — trust check precedes liveness
+   check, exactly as the moduledoc claims; confirmed by reading the function body, not
+   the comment). An unbound/revoked realm returns `{:error, :unknown_realm}` →
+   `:untrusted_issuer`, rejected before any signature check runs.
+2. Crucially, the *unverified* peek is only used to pick which realm's JWKS to fetch.
+   `Oidcc.Token.validate_jwt/3` (`verify_signature/2`, `oidcc.ex:146-162`) then
+   independently re-checks `iss` against that specific worker's own configured issuer and
+   verifies the signature against that realm's own JWKS. A token forged/relabeled to
+   claim a different tenant's realm cannot pass this step unless it is actually signed by
+   that realm's real key — routing off an untrusted claim fails closed into a signature
+   mismatch, not open. This is the property that actually prevents cross-tenant
+   acceptance, and it is enforced by `oidcc`'s own library code, not merely asserted by
+   this codebase's routing logic.
+3. Downstream in `auth_pipeline.ex`, `authenticate_oidc/2` (`:124-131`) re-derives
+   `realm` from the now-**verified** `claims` (not the earlier unverified peek),
+   re-resolves `tenant` from it again, and `guard_realm_ownership/2` checks it — a second,
+   independent tenant resolution after verification, and `attach_auth_context/4` uses
+   `tenant.id` from that schema-authoritative resolution, never a token-claimed value
+   (comment at `:56-58`, confirmed against the actual code path, not just the comment).
+
+**Revocation (AC5) — not latched.** `resolve_tenant_by_realm/1`
+(`lib/letflow/identity.ex:146-153`) is a plain `Repo.get_by`, called fresh on every
+`ensure_started/1` invocation — no ETS/process-state cache sits in front of it. Worker
+liveness (`Registry.lookup`) is consulted only *after* the trust check already passed,
+so a running JWKS-fetch worker for a since-revoked realm is never reached — the request
+is rejected at the trust-check step before worker lookup happens at all. Revocation
+takes effect on the next request with no teardown mechanism required, matching §4.3's
+claim; verified against the actual ordering in `do_ensure_worker/1`, not assumed.
+
+**INV-4 (secrets by reference) — APPLIES — PASS.** `client_secret: :unauthenticated` (no
+secret held by this resource-server path); `oidc_config` read via
+`Application.fetch_env!` at point of use in both `provider_registry.ex` and
+`oidcc.ex`, never threaded through a return value or log call. `grep -rn
+"System.get_env" config/ lib/` and the hardcoded-secret heuristic grep were run against
+this diff's files; no hit.
+
+**INV-7 (no SQL string interpolation) — APPLIES — PASS.** The new migration's two
+`execute/1` calls contain only literal constants (`'bpm-default'` twice) — no
+tenant-controlled or caller-supplied value is interpolated into either string.
+
+**INV-8 (no unhandled crashes) — APPLIES — PASS.** `verify_bearer_token/1` wraps its
+entire `with` chain in `rescue`/`catch`, converting any crash (including
+`JOSE.JWT.peek_payload/1` on non-JWT-shaped input) into a typed
+`{:error, {:verifier_crashed, _}}` tuple — this is the exact defect class INV-8 exists
+to catch, and it is handled, not left to crash the calling process.
+
+**INV-2, INV-3, INV-5, INV-9** — NOT-APPLICABLE (S4/S5 not started; no outbound-URL code
+touched by this diff).
+
+**Verdict: PASS.** No BLOCKER found. AC1 and AC6 are satisfied by this section:
+INV-1 is explicitly stated as satisfied (registry-table exception, confirmed via the
+unique partial index) and the cross-tenant risk is explicitly traced through both the
+routing layer and `oidcc`'s independent signature re-check, not merely asserted.
+
+— SECURITY-REVIEWER, 2026-09-18T19:36:40Z

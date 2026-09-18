@@ -43,7 +43,53 @@ related_requirements:
   - REQ-364
 queue_ref: Q-709
 github_ref: GH-1508
-status: open
+status: resolved
+resolution_note: >
+  Root cause: found during REQ-364's own round-4 security-review saga (the
+  same "regex denylist is structurally unsound" thread that produced the
+  AST-based markdown sanitizer) -- flatten_plain_text/1 in
+  lib/letflow/help/help_content.ex, added as the fix for REQ-364's round-3
+  tag-split bypass, concatenated an entire block's (effectively the whole
+  document's) prose together with no separator when building its
+  fallback plain-text scan for a raw tag split across inline-formatting
+  sibling nodes. Two unrelated < / > characters in separate paragraphs or
+  list items (bare comparison operators, generic-type notation) could
+  combine across that unbounded projection into something matching
+  @raw_html_tag_pattern and get falsely rejected. Confirmed
+  one-directional throughout (never under-restrictive -- walk_node/1's
+  structural raw-HTML/URL-scheme checks run independently and are
+  unaffected).
+
+  Fix: commit d9fba212 (ELIXIR-DEV, per CODE-DESIGNER's design in
+  lib/letflow/design/iss-0709-flatten-plain-text-scope-fix.md, PASSed by
+  CODE-DESIGN-VALIDATOR). Added a new @block_boundary_tags exclusion set
+  (p, h1-h6, li, blockquote, td, th), verified against earmark_parser
+  1.4.46's real AST output, alongside the existing code/pre exclusion --
+  bounds flatten_plain_text/1's projection to one paragraph/block's own
+  children instead of the whole document. No change to
+  walk/1/walk_node/1/walk_text/1 call sites or arity. SECURITY-REVIEWER
+  and REVIEWER both independently confirmed the fix narrows (never
+  widens) exposure.
+
+  Coverage gap closed: TEST-DESIGNER found that ELIXIR-DEV's 3 new tests
+  covered acceptance-criteria rows 1-4 but left AC row 5 -- the
+  deferred cross-block-boundary scope decision REVIEWER explicitly
+  signed off on as an accepted documented limitation -- pinned down only
+  as prose, never empirically confirmed. Added a negative-confirmation
+  test proving a raw tag split across two adjacent list items is NOT
+  detected, first verifying the real AST via EarmarkParser.as_ast/2 to
+  confirm the test genuinely reproduces the documented gap rather than
+  an already-safe body. This is a real, closed coverage gap, not a
+  no-op ratification.
+
+  Final verification: RELEASE-VALIDATOR independently re-verified all 3
+  acceptance criteria plus TEST-DESIGNER's bonus negative-confirmation
+  test against the real commits and named tests (with line numbers) in
+  help_test.exs, confirmed zero handoffs/*.json files were created on
+  this branch, and re-ran mix test (59/59 on help_test.exs),
+  mix letflow.lint_handoffs (clean), and mix compile (clean) itself.
+  Full pipeline_log gate-evidence audit: all 10 commits map 1:1 to
+  logged pipeline steps. PASS, no new findings.
 pipeline_log:
   - step: CODE-DESIGNER
     at: "2026-09-18T01:25:00Z"

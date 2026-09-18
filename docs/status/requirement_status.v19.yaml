@@ -492,3 +492,43 @@ history:
       acceptance criteria (reread just now to confirm) beyond the new
       decision record 0036 itself, which already exists and is accurate
       -- no further stage-file update required.
+
+  - req: SCOPE-CHANGE
+    event: done
+    agent: DOC-UPDATER
+    at: "2026-09-18T03:11:52Z"
+    note: >
+      WF-03 run WF03-ISS0709-20260918 (queue task 709, GH#1508) complete,
+      RELEASE-VALIDATOR independent PASS. ISS-0709 (MINOR, filed during
+      REQ-364's own round-4 security review) is now resolved: root cause
+      was flatten_plain_text/1 in lib/letflow/help/help_content.ex
+      concatenating an entire block's/document's prose with no separator
+      when scanning for a raw HTML tag split across inline-formatting
+      sibling nodes, causing unrelated < / > characters in separate
+      paragraphs/list items (bare comparison operators, generic-type
+      notation) to falsely combine into an apparent raw tag and get
+      over-rejected -- confirmed one-directional throughout, never a
+      security bypass. Fixed at commit d9fba212 (ELIXIR-DEV): new
+      @block_boundary_tags exclusion set (p, h1-h6, li, blockquote, td,
+      th) alongside the existing code/pre exclusion, bounding the
+      projection to one block's own children. TEST-DESIGNER found and
+      closed a real coverage gap: AC row 5, the deferred
+      cross-block-boundary scope decision REVIEWER explicitly accepted
+      as a documented limitation, existed only as prose until a new
+      negative-confirmation test pinned it down (verified against the
+      real EarmarkParser.as_ast/2 AST first). RELEASE-VALIDATOR
+      independently re-verified all acceptance criteria against real
+      commits/tests, confirmed zero handoffs/*.json files created on
+      this branch (the REQ-364 lesson applied correctly -- pipeline_log
+      used docs/issues/ISS-0709.yaml throughout), and re-ran mix test
+      (59/59 help_test.exs), mix letflow.lint_handoffs, and mix compile
+      itself, all clean. docs/issues/ISS-0709.yaml status flipped
+      open -> resolved with a resolution_note recording root cause, fix,
+      the closed coverage gap, and final verification. GitHub issue
+      #1508 closed with a matching summary. No docs/migration/
+      stage-N-*.md or decisions/*.md file was named by ISS-0709's
+      affected_files (lib/letflow/help/help_content.ex only), so none
+      required updating. README.md checked (grepped "help_content"/
+      "Help"): not documented there (matches REQ-364's own done-event
+      finding), so no README update needed. No merge and no
+      letflow-queue update performed here -- ORCH's job next.

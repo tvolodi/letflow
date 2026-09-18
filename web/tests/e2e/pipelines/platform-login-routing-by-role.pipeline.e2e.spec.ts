@@ -11,7 +11,11 @@
  * forward-state-accumulation shape (see
  * lib/letflow/design/iss-0702-uat-runner-pipeline-test-gap-fix.md §1.3):
  *
- *   1. PLATFORM_ADMIN lands on workspace root with admin nav (§1.4)
+ *   1. PLATFORM_ADMIN lands on the distinct /platform-dashboard route (§1.4)
+ *      -- updated for REQ-369 (PlatformDashboardPage); see that requirement's
+ *      AC7 and its close-out note for the re-verification discipline this
+ *      update follows. Was originally "lands on workspace root with admin
+ *      nav" against the pre-REQ-369 shared-'/'-root behaviour.
  *   2. Tenant-scoped role (TASK_WORKER) lands on workspace root, narrower nav (§1.5)
  *   3. Unauthenticated visitor sees auth-loading, then redirects off-origin (§1.6)
  *
@@ -63,34 +67,30 @@ test.describe('Pipeline: platform-login-routing-by-role', () => {
     }
   })
 
-  test('EO-001: PLATFORM_ADMIN lands on workspace root with admin nav', async ({ page, request }) => {
+  test('EO-001: PLATFORM_ADMIN lands on the distinct platform dashboard', async ({ page, request }) => {
     const token = await getKeycloakToken(request, 'admin-user', 'admin-pass')
     await loginWithToken(page, token)
 
-    // Core routing claim: PLATFORM_ADMIN lands on the shared workspace root,
-    // not a distinct platform-admin dashboard.
-    await expect(page).toHaveURL('/')
+    // Core routing claim (REQ-369): PLATFORM_ADMIN no longer lands on the
+    // shared tenant-branded workspace root — OidcCallbackPage.tsx's
+    // role-conditional navigate() (line 72) sends it to the new, distinct
+    // PlatformDashboardPage route instead.
+    await expect(page).toHaveURL('/platform-dashboard')
 
-    // PLATFORM_ADMIN-only nav entries are visible — proves the admin nav is present.
-    for (const name of ['Users', 'Tenants', 'Health', 'Metrics']) {
+    // PlatformDashboardPage.tsx's own content — fixed, non-tenant-branded
+    // heading (never a tenant name; see PlatformDashboardPage.tsx's
+    // `data-testid="platform-dashboard-heading"` <h1> reading "Platform
+    // Overview"), the tenant-count tile sourced from tenantsApi.list(), and
+    // the platform admin quick-links nav. These are REQ-369 AC1/AC2's own
+    // testids (docs/requirements.yaml REQ-369), not TenantDashboardPage's.
+    await expect(page.getByTestId('platform-dashboard-heading')).toBeVisible()
+    await expect(page.getByTestId('platform-dashboard-heading')).toHaveText('Platform Overview')
+    await expect(page.getByTestId('tile-tenant-count')).toBeVisible()
+    await expect(page.getByTestId('platform-quick-links')).toBeVisible()
+
+    // Quick-links nav entries into the existing admin routes.
+    for (const name of ['Tenants', 'Services', 'Health', 'Metrics', 'Users']) {
       await expect(page.getByRole('link', { name })).toBeVisible()
-    }
-
-    // Entries shared with tenant-scoped roles are ALSO visible — proves this
-    // is the same workspace root, not a distinct admin-only screen.
-    for (const name of ['Instances', 'My Tasks']) {
-      await expect(page.getByRole('link', { name })).toBeVisible()
-    }
-
-    // EO-001's dashboard-tile sub-claim ("alongside the same dashboard tiles a
-    // tenant-scoped user sees", on_fail.severity: BLOCKER — ISS-0702 gap found
-    // by TEST-DESIGN-VALIDATOR, missed by the original design). The workspace
-    // root renders TenantDashboardPage.tsx's three tiles regardless of role;
-    // asserting all three are present here, and identically in the
-    // tenant-scoped branch below, is what actually proves "the SAME tiles" —
-    // a bare "a tile section exists" check on one branch alone would not.
-    for (const testid of ['tile-definitions', 'tile-instances', 'tile-tasks']) {
-      await expect(page.getByTestId(testid)).toBeVisible()
     }
 
     await shot(page, 'admin')
@@ -113,12 +113,17 @@ test.describe('Pipeline: platform-login-routing-by-role', () => {
       await expect(page.getByRole('link', { name })).not.toBeVisible()
     }
 
-    // EO-001's dashboard-tile sub-claim, tenant-scoped side (ISS-0702 gap —
-    // see the identical assertion + comment in the PLATFORM_ADMIN branch
-    // above). Same three tiles visible here as for PLATFORM_ADMIN is what
-    // proves "the same dashboard tiles a tenant-scoped user sees" from this
-    // branch's own wording ("dashboard tiles reflect this tenant's own data
-    // only").
+    // EO-001's dashboard-tile sub-claim, tenant-scoped side (ISS-0702 gap).
+    // NOTE (REQ-369): this branch's own comparison target used to be an
+    // identical assertion in the PLATFORM_ADMIN branch above, back when both
+    // roles landed on the same TenantDashboardPage workspace root. REQ-369
+    // moved PLATFORM_ADMIN to its own distinct /platform-dashboard route
+    // with its own tile set (tile-tenant-count, not these three), so that
+    // comparison no longer holds — these three tiles are now specific to
+    // TenantDashboardPage / tenant-scoped roles only. Left asserting here
+    // regardless: it still proves TenantDashboardPage's own tile set renders
+    // for a tenant-scoped role, which is this branch's own claim regardless
+    // of what PLATFORM_ADMIN's separate page does.
     for (const testid of ['tile-definitions', 'tile-instances', 'tile-tasks']) {
       await expect(page.getByTestId(testid)).toBeVisible()
     }

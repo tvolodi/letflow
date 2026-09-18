@@ -30,6 +30,14 @@ defmodule Letflow.Oidc.ConfigurableTokenVerifierDouble do
   never interfere with each other the way mutating shared application config
   would.
 
+  **REQ-370 (arity 2 -> 1):** `Letflow.Oidc.TokenVerifier.verify_bearer_token/1`
+  dropped `provider_name` as a caller-supplied argument -- multi-issuer routing
+  is now the verifier's own internal responsibility (see
+  `lib/letflow/design/req370-multi-issuer-oidc-verification.md` §3). This double
+  mirrors `Letflow.Oidc.TokenVerifierDouble`'s own REQ-370 fix (arity 1, no
+  `provider_name` clause parameter) while preserving every multi-realm/
+  multi-subject token-grammar case documented below unchanged.
+
   Recognized raw-token formats (`raw_token` is never a real JWT — this is a
   test double, free to define its own fixture-token grammar):
 
@@ -58,7 +66,7 @@ defmodule Letflow.Oidc.ConfigurableTokenVerifierDouble do
   @issuer_prefix "https://placeholder-keycloak.invalid/realms/"
 
   @impl Letflow.Oidc.TokenVerifier
-  def verify_bearer_token(@valid_token, _provider_name) do
+  def verify_bearer_token(@valid_token) do
     {:ok,
      %{
        "iss" => @issuer_prefix <> "bpm-default",
@@ -70,7 +78,7 @@ defmodule Letflow.Oidc.ConfigurableTokenVerifierDouble do
      }}
   end
 
-  def verify_bearer_token("no-sub-token:" <> realm, _provider_name) when byte_size(realm) > 0 do
+  def verify_bearer_token("no-sub-token:" <> realm) when byte_size(realm) > 0 do
     {:ok,
      %{
        "iss" => @issuer_prefix <> realm,
@@ -81,7 +89,7 @@ defmodule Letflow.Oidc.ConfigurableTokenVerifierDouble do
      }}
   end
 
-  def verify_bearer_token("realm-token:" <> rest, _provider_name) do
+  def verify_bearer_token("realm-token:" <> rest) do
     case String.split(rest, ":sub=", parts: 2) do
       [realm, subject] when byte_size(realm) > 0 and byte_size(subject) > 0 ->
         {:ok, claims_for(realm, subject)}
@@ -94,7 +102,7 @@ defmodule Letflow.Oidc.ConfigurableTokenVerifierDouble do
     end
   end
 
-  def verify_bearer_token(_other_token, _provider_name), do: {:error, :invalid_test_token}
+  def verify_bearer_token(_other_token), do: {:error, :invalid_test_token}
 
   defp claims_for(realm, subject) do
     %{

@@ -145,8 +145,20 @@ defmodule Letflow.Integration.KeycloakAuthPipelineTest do
             :enabled
           )
           |> Repo.insert!()
-          |> provision_and_replay!()
       end
+
+    # REQ-370: `priv/repo/migrations/20260918173137_seed_default_tenant.exs` now
+    # idempotently inserts a bare `tenants` row for `bpm-default` (design doc §10 --
+    # closing REQ-019's own previously-flagged "no default-tenant row exists" OQ-3),
+    # so the `Repo.get_by/2` branch above can now find a REAL, already-migrated `tenants`
+    # row that has never had its own physical schema provisioned. `provision_and_replay!/1`
+    # is idempotent either way (`TenantProvisioning.provision_tenant_schema/1`'s own
+    # moduledoc: "second call returns {:ok, %Registration{}} with the same row the
+    # first"), so it is always run here rather than only in the `nil` branch above --
+    # this is what actually restores this file's pre-REQ-370 test intent (a real,
+    # complete bpm-default schema) against a DB where the migration already seeded the
+    # row without provisioning the schema.
+    tenant = provision_and_replay!(tenant)
 
     TenantFixture.assert_schema_complete!(tenant.id)
 
@@ -348,17 +360,20 @@ defmodule Letflow.Integration.KeycloakAuthPipelineTest do
     ]
     @garbage_substrings ["not-base64url"]
 
-    # AC1 (unit-level): calls Letflow.Oidc.TokenVerifier.Oidcc.verify_bearer_token/2
-    # DIRECTLY -- the real adapter, not through AuthPipeline -- against a real
-    # provider_name (config :letflow, :oidc's own Letflow.Oidc.DefaultProvider, which
-    # this module's setup_all above has already proven reachable via the discovery
-    # probe). This is the fail-first case: on pre-fix oidcc.ex, this call raises
-    # CaseClauseError and crashes the test process instead of returning a tuple.
-    test "verify_bearer_token/2 returns {:error, {:verifier_crashed, ...}} instead of raising, for a JSON-blob raw_token (the confirmed live trigger shape)" do
+    # AC1 (unit-level): calls Letflow.Oidc.TokenVerifier.Oidcc.verify_bearer_token/1
+    # DIRECTLY -- the real adapter, not through AuthPipeline. REQ-370 dropped the
+    # arity 2 -> 1 (no caller-supplied provider_name -- the adapter now peeks the
+    # token's own unverified "iss" to route to a provider via ProviderRegistry). For
+    # both fixtures below, peek_realm/1's JOSE.JWT.peek_payload/1 call itself is what
+    # raises on this non-JWT-shaped input, before ProviderRegistry is ever consulted --
+    # so this remains a direct, provider-independent unit call. This is the fail-first
+    # case: on pre-fix oidcc.ex, this call raises CaseClauseError and crashes the test
+    # process instead of returning a tuple.
+    test "verify_bearer_token/1 returns {:error, {:verifier_crashed, ...}} instead of raising, for a JSON-blob raw_token (the confirmed live trigger shape)" do
       assert_verifier_crashed_cleanly(@json_blob_fixture, @json_blob_substrings)
     end
 
-    test "verify_bearer_token/2 returns {:error, {:verifier_crashed, ...}} instead of raising, for plain non-base64url garbage" do
+    test "verify_bearer_token/1 returns {:error, {:verifier_crashed, ...}} instead of raising, for plain non-base64url garbage" do
       assert_verifier_crashed_cleanly(@garbage_fixture, @garbage_substrings)
     end
 
@@ -379,12 +394,9 @@ defmodule Letflow.Integration.KeycloakAuthPipelineTest do
     # ---- shared assertion helpers for this describe block -----------------------
 
     defp assert_verifier_crashed_cleanly(raw_token, leak_substrings) do
-      oidc_config = Application.fetch_env!(:letflow, :oidc)
-      provider_name = Keyword.fetch!(oidc_config, :provider_name)
-
       log =
         capture_log(fn ->
-          result = Oidcc.verify_bearer_token(raw_token, provider_name)
+          result = Oidcc.verify_bearer_token(raw_token)
           send(self(), {:verify_result, result})
         end)
 

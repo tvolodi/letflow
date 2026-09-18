@@ -125,14 +125,33 @@ defmodule Letflow.Oidc.TokenVerifier.Oidcc do
 
   # Step 4: exactly as before this design, except provider_ref is the
   # routed-to via-tuple rather than a static config-read atom.
+  #
+  # BUGFIX (discovered by TEST-DESIGNER writing REQ-370's AC2/AC3/AC5 tests against a
+  # real oidcc-backed provider, not a double -- see test/specs/REQ-370.md "Production
+  # defect found and fixed during test design"): `Oidcc.ClientContext.from_configuration_worker/3,4`'s
+  # own non-pid clause (`deps/oidcc/src/oidcc_client_context.erl`) resolves ProviderName
+  # via plain Erlang `erlang:whereis/1`, which only accepts a registered ATOM name and
+  # raises `ArgumentError` for anything else -- including the `{:via, Registry, _}` tuple
+  # `Letflow.Oidc.ProviderRegistry.via_name/1` returns. The design doc's §4.2 confirmed
+  # only that `{:via, Registry, _}` is accepted by `start_link/1` (true), not that
+  # `from_configuration_worker/3,4` can subsequently look such a name back up (false) --
+  # every existing test exercised only the test-double `TokenVerifier` implementations,
+  # never this real adapter's post-REQ-370 path, so this was never caught until now.
+  # `GenServer.whereis/1` (Elixir's own wrapper, NOT the raw Erlang BIF) DOES resolve a
+  # `{:via, Registry, _}` name to a pid directly -- resolving to a pid here, once, before
+  # calling into `oidcc`'s own API, sidesteps the gap without changing
+  # `ProviderRegistry`'s naming/supervision shape (§4.2) at all: `from_configuration_worker/3`'s
+  # `is_pid(ProviderName)` clause handles a genuine pid identically regardless of how it
+  # was registered.
   defp verify_signature(raw_token, provider_ref) do
     oidc_config = Application.fetch_env!(:letflow, :oidc)
     client_id = Keyword.fetch!(oidc_config, :client_id)
     signing_algs = Keyword.fetch!(oidc_config, :signing_algs)
 
-    with {:ok, client_context} <-
+    with pid when is_pid(pid) <- GenServer.whereis(provider_ref) || {:error, :provider_not_ready},
+         {:ok, client_context} <-
            Oidcc.ClientContext.from_configuration_worker(
-             provider_ref,
+             pid,
              client_id,
              :unauthenticated
            ),

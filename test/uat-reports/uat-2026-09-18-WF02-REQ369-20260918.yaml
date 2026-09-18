@@ -1,0 +1,190 @@
+run_id: WF02-REQ369-20260918
+date: "2026-09-18"
+agent: UAT-RUNNER
+scope: >
+  Follow-up evidence-gathering pass for REQ-369's two blocked acceptance
+  criteria (AC6: real PLATFORM_ADMIN login against live QA with screenshot
+  evidence; AC7: re-run test/fixtures/uat/scenarios/platform/platform-login-routing-by-role.yaml's
+  PLATFORM_ADMIN branch for real against QA after its destination assertion
+  was updated to /platform-dashboard). Dispatched because the CD-deploy
+  infra gap that blocked the prior WF02-REQ369-20260917 UAT-RUNNER run
+  (QA_DEPLOY_HOST/QA_DEPLOY_USER/QA_DEPLOY_SSH_KEY GitHub secrets not
+  provisioned) has since been resolved -- gh run list confirms a successful
+  CD (QA) run at 2026-09-18T12:49:01Z. No lib/ or web/ application code was
+  touched in this pass; REQ-369's implementation is already merged
+  (PR #1507, squash commit 3c0cbd24290c062d1974b7eb91fa74adcc2c42f4).
+
+environment_target:
+  base_url: "https://qa.bizdala.com"
+  credential_source: "ai-dala-infra/scripts/qa-login.sh"
+  environment: qa
+  readiness_check: >
+    curl -s -o /dev/null -w '%{http_code}' https://qa.bizdala.com/ ->
+    HTTP_STATUS:200 (independently re-confirmed by UAT-RUNNER this run).
+  oidc_issuer_discovered: >
+    https://auth.qa.bizdala.com/realms/bpm-default
+    (GET .../.well-known/openid-configuration -> HTTP 200, confirmed live).
+
+preflight_findings:
+  deployed_bundle_check:
+    method: >
+      Fetched https://qa.bizdala.com/ (HTTP 200), extracted the served
+      bundle path from the returned HTML, and downloaded it directly.
+    served_bundle: "/assets/index-DjB53d10.js (363676 bytes)"
+    note: >
+      Bundle filename differs from the prior blocked run's observed
+      /assets/index-Bm3IRknt.js -- confirms a new deploy actually happened
+      between 2026-09-17 and this run, consistent with the CD (QA) success
+      cited above.
+    grep_results:
+      platform-dashboard: 2
+      "Platform Overview": 1
+      platform-dashboard-heading: 1
+      tile-tenant-count: 1
+      platform-quick-links: 1
+    conclusion: >
+      REQ-369's frontend code (PlatformDashboardPage, its route, and its
+      three data-testids) is confirmed live on QA's served bundle -- this is
+      real, independently re-derived evidence (not merely trusting the
+      dispatch's own claim), obtained the same way the prior blocked run's
+      negative check was obtained (same method, opposite result).
+
+  scenario_file_already_updated: >
+    Read test/fixtures/uat/scenarios/platform/platform-login-routing-by-role.yaml
+    in full before doing anything else, per this requirement's AC7 wording.
+    Its PLATFORM_ADMIN branch (name:
+    platform_admin_lands_on_platform_dashboard) already asserts route
+    "/platform-dashboard", the platform-dashboard-heading, tile-tenant-count,
+    and platform-quick-links testids -- it was NOT left at the old shared
+    '/' assertion. `git log` on the file shows its last change was commit
+    3c0cbd24, the REQ-369 PR itself (#1507) -- the update this task's item 2
+    asked UAT-RUNNER to make had already been made as part of that PR, not
+    left outstanding. No edit to this file was needed or made this run.
+
+  pipeline_test_spec_STALE_finding: >
+    NEW FINDING, not previously reported: the scenario's own pipeline_test
+    (web/tests/e2e/pipelines/platform-login-routing-by-role.pipeline.e2e.spec.ts,
+    last touched by commit 29e66f12, BEFORE REQ-369's 3c0cbd24) was not
+    updated alongside the scenario file or the implementation. Its
+    PLATFORM_ADMIN case (line 66) still asserts `await expect(page).toHaveURL('/')`
+    and checks TenantDashboardPage's nav/tile testids
+    (tile-definitions/tile-instances/tile-tasks), not PlatformDashboardPage's
+    platform-dashboard-heading/tile-tenant-count/platform-quick-links. Its
+    tenant-scoped case (line 99) also still targets '/'  with the old tile
+    ids -- that one is still factually correct post-REQ-369 (tenant-scoped
+    roles are unchanged), so only the PLATFORM_ADMIN case is actually wrong,
+    but neither case reflects the new PlatformDashboardPage testids at all.
+    This means the pipeline_test this scenario names is now testing the
+    WRONG destination for its own PLATFORM_ADMIN branch and cannot pass even
+    with correct credentials, independent of the credential gap documented
+    below. Flagging to ORCH for routing to TEST-DESIGNER -- fixing a
+    Playwright spec is outside UAT-RUNNER's role and outside this
+    dispatch's explicit "do not touch web/" scope.
+
+credential_access_BLOCKED:
+  finding: >
+    This UAT-RUNNER session has no working path to real QA credentials.
+    README.md's "QA deployment" section states passwords are host-only,
+    fetched on demand via `ai-dala-infra/scripts/qa-login.sh <username>`,
+    which requires SSH access to host `ubuntu-16gb-nbg1-1`. Checked both
+    preconditions directly, not assumed:
+      1. The sibling `ai-dala-infra` repo/script does not exist anywhere in
+         this session's filesystem (`find / -iname "qa-login.sh"` and
+         `find / -iname "*ai-dala-infra*"` both returned no matches).
+      2. `ssh ubuntu-16gb-nbg1-1` fails at DNS resolution
+         ("Could not resolve hostname ubuntu-16gb-nbg1-1: Temporary failure
+         in name resolution") -- no SSH access to the credential host either.
+      3. No QA credential env vars are present in this session's environment
+         (checked `env | grep -iE "pass|secret|token|key"` -- only an
+         unrelated messaging token was present).
+    This is a DIFFERENT, genuine blocker from the now-resolved CD-deploy
+    secrets gap the 2026-09-17 close-out note described -- that gap was
+    about QA's own deploy pipeline and is confirmed fixed (see
+    preflight_findings.deployed_bundle_check above). This gap is about
+    UAT-RUNNER's own execution environment lacking credential-fetch access
+    for THIS run. Not fabricating login success to route around it.
+  attempted_direct_token_request: >
+    As a check (not a substitute for the real qa-login.sh flow), attempted
+    POST https://auth.qa.bizdala.com/realms/bpm-default/protocol/openid-connect/token
+    with client_id=letflow-web, username=admin-user, password=admin-pass
+    (the local-dev-seed default password, NOT a real QA credential) ->
+    HTTP 401 {"error":"invalid_grant","error_description":"Invalid user
+    credentials"}, as expected -- QA's real seeded password is different
+    and unknown to this session. This confirms the QA Keycloak realm is
+    live and reachable, and that credential access (not reachability) is
+    the actual blocker.
+
+pipeline_test_real_execution:
+  command: >
+    cd web && E2E_BASE_URL=https://qa.bizdala.com
+    BPM_IDP_BASE_URL=https://auth.qa.bizdala.com npx playwright test
+    tests/e2e/pipelines/platform-login-routing-by-role.pipeline.e2e.spec.ts
+    --project=chromium
+  result: "2 failed, 1 passed (real run against live QA, no mocks)"
+  branch_platform_admin_lands_on_platform_dashboard:
+    verdict: "FAIL (real, not fabricated)"
+    evidence: >
+      Error: Keycloak token request failed (401): {"error":"invalid_grant",
+      "error_description":"Invalid user credentials"} at helpers.ts:45,
+      getKeycloakToken('admin-user', 'admin-pass'). Playwright screenshot
+      (of the pre-navigation blank state, not a successful login) attached
+      at web/test-results/pipelines-platform-login-r-b06ae-rkspace-root-with-admin-nav-chromium/test-failed-1.png.
+      This is the credential_access_BLOCKED gap manifesting as a real test
+      failure, plus (independently) the pipeline_test_spec_STALE_finding
+      above -- even with a correct password this case would still fail
+      since it asserts the old '/' route, not '/platform-dashboard'.
+    ac6_disposition: "NOT SATISFIED -- no real login, no real screenshot of a successful PLATFORM_ADMIN landing. Reporting honestly rather than substituting the stale 2026-09-17 local-run screenshots at web/tests/screenshots/pipelines/platform-login-routing-by-role-admin.png (confirmed stale by file mtime: 2026-09-17 08:54:19 UTC, a full day before this run and predating the QA redeploy) as if they were this run's evidence."
+  branch_tenant_scoped_role_lands_on_workspace_root:
+    verdict: "FAIL (real, not fabricated) -- same credential_access_BLOCKED cause (worker-user/worker-pass 401 invalid_grant)."
+    note: "Out of REQ-369's own scope (tenant-scoped routing is unchanged by REQ-369), but this pipeline_test's other case, run for real in the same invocation; reported for completeness."
+  branch_unauthenticated_redirects_to_external_login:
+    verdict: "PASS (real, against live QA)"
+    evidence: >
+      Test passed in 967ms with no credentials involved (deliberately, per
+      the scenario's `else` branch). Real navigation to https://qa.bizdala.com
+      with no token/cookie, in-page MutationObserver confirmed the
+      data-testid="auth-loading" placeholder rendered
+      (window.name === 'auth-loading-seen'), then
+      page.waitForURL(url => url.origin !== appOrigin) resolved for real
+      against Keycloak's live hosted login page at
+      https://auth.qa.bizdala.com. Screenshot captured and fresh for this
+      run: web/tests/screenshots/pipelines/platform-login-routing-by-role-unauthenticated.png
+      (mtime 2026-09-18 12:58:20 UTC, confirmed newer than this run's start).
+    scope_note: "Not part of REQ-369's AC6/AC7 (those concern only the PLATFORM_ADMIN branch); reported because it ran in the same real invocation and is genuine positive QA evidence."
+
+overall_verdict: >
+  AC6: NOT SATISFIED this run. AC7: PARTIALLY ADVANCED -- the scenario
+  file's own PLATFORM_ADMIN branch assertion was confirmed already correct
+  (done as part of PR #1507, not by this run), and the scenario was
+  genuinely re-run for real against QA per AC7's instruction, but the
+  PLATFORM_ADMIN branch's result is FAIL, for two distinct, real, disclosed
+  reasons: (1) this UAT-RUNNER session has no working credential-fetch path
+  to QA (SSH/ai-dala-infra access gap, not a code defect), and (2)
+  independently, the pipeline_test spec itself was never updated to match
+  REQ-369's new destination and would fail even with correct credentials.
+  Neither AC6 nor AC7 can be marked done from this run's evidence. REQ-369
+  should remain status: blocked; do not route to DOC-UPDATER to close it
+  out from this report.
+
+new_findings_for_orch_triage:
+  - title: "pipeline_test spec for platform-login-routing-by-role is stale relative to REQ-369 -- still asserts PLATFORM_ADMIN lands on '/' with TenantDashboardPage testids"
+    file: web/tests/e2e/pipelines/platform-login-routing-by-role.pipeline.e2e.spec.ts
+    detail: "See preflight_findings.pipeline_test_spec_STALE_finding above. Needs a TEST-DESIGNER pass to update the PLATFORM_ADMIN case's assertions to /platform-dashboard + platform-dashboard-heading/tile-tenant-count/platform-quick-links, matching the scenario file's already-updated EO-001 detail."
+    severity_suggestion: "Should block AC7 from being marked satisfiable at all until fixed -- even a session with valid QA credentials would see this case FAIL today."
+  - title: "UAT-RUNNER execution environment has no credential-fetch path to QA (no ai-dala-infra checkout, no SSH access to ubuntu-16gb-nbg1-1)"
+    detail: "See credential_access_BLOCKED above. This blocks AC6 and the PLATFORM_ADMIN/tenant-scoped legs of AC7 regardless of the pipeline_test staleness issue. Needs either the ai-dala-infra repo made available to this execution environment, SSH access provisioned for it, or QA credentials surfaced to it by some other secret-delivery mechanism this project already trusts."
+    severity_suggestion: "Blocks re-attempting this requirement's remaining ACs at all until resolved -- distinct from, and now that the CD-deploy secrets gap is fixed, the NEW long pole for REQ-369's close-out."
+
+iss_0700_check: >
+  Confirmed docs/issues/ISS-0700.yaml status: resolved, closed out by a
+  concurrent ISSUE-FIXER run (issue/ISS-0700-20260917) as a determined
+  side effect of PR #1507. Read in full, not modified by this run, per
+  this dispatch's explicit instruction not to touch it further.
+
+notes: >
+  No mocks, no absence-of-error-as-pass, no fabricated screenshots. Two of
+  three pipeline_test cases genuinely failed against live QA for real,
+  disclosed reasons; the third genuinely passed. The two stale local
+  screenshots under web/tests/screenshots/pipelines/ (admin.png,
+  tenant-scoped.png, both mtime 2026-09-17) were identified as stale by
+  file mtime and explicitly NOT used as this run's evidence for AC6.

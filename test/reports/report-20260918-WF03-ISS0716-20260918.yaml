@@ -1,0 +1,169 @@
+run_id: WF03-ISS0716-20260918
+agent: TEST-RUNNER
+date_utc: 2026-09-18T20:35:00Z
+branch: fix/WF03-ISS0716-20260918
+head_commit: 6a849e178708e95c53fe304124ae921643db4dd7
+scope: |
+  WF-03 Step 4 final test-run confirmation for ISS-0716 (flaky
+  Letflow.TenantProvisioning.ColumnPromotionTest AC1 fix). Root cause diagnosed by
+  ISSUE-FIXER: SandboxAutoMode's pool-wide :auto sandbox mode window lets
+  concurrently-scheduled tenant-provisioning tests commit for real, so :all-scoped
+  register_column_promotion/4 legitimately (production-correct) sees extra tenant
+  ids beyond this test's own tenant_a/tenant_b. Fix (commit 6a849e17) is test-only:
+  AC1's assertion relaxed to containment (tenant_a and tenant_b present among
+  resolved ids, tolerating extras) plus scoping the downstream DDL-execution loop
+  to only tenant_a/tenant_b's own rows. No lib/letflow/ change. Already passed
+  REVIEWER (SECURITY-REVIEWER skip confirmed legitimate, matching ISS-0580
+  precedent) and TEST-DESIGNER (mutation-tested both new assertions, no gap
+  found, no new test needed).
+
+environment:
+  docker: |
+    sudo docker compose ps (already running, not restarted by this run):
+      letflow-1-postgres-1   postgres:16   Up 2 weeks (healthy)   0.0.0.0:5463->5432/tcp
+      letflow-1-keycloak-1   quay.io/keycloak/keycloak:26.2   Up 3 weeks (healthy)
+  note: >
+    .env sets LETFLOW_DB_PORT=5463 (non-default, per README) -- both docker
+    compose and Ecto pick this up automatically. Docker socket required sudo
+    in this sandbox (tvolodi is in the docker group but the socket check
+    failed unprivileged; `sudo docker compose ps` confirmed containers already
+    healthy, so `docker compose up -d` was not re-run).
+
+commands_run:
+  - cmd: mix compile --warnings-as-errors
+    status: PASS
+    exit: 0
+    output: "(no warnings, no output -- clean compile)"
+
+  - cmd: mix format --check-formatted
+    status: PASS
+    exit: 0
+    output: "(no output -- all files already formatted)"
+
+  - cmd: >
+      for i in 1..5: mix test test/letflow/tenant_provisioning/column_promotion_test.exs
+    purpose: >
+      Repeated solo runs of the fixed file to build confidence the flake is gone.
+      Note: the original flake's mechanism required a concurrently-scheduled
+      SIBLING test's SandboxAutoMode window to overlap this file's own -- a solo
+      run of this file alone cannot reproduce the collision (no concurrent tenant
+      writes to race against). This is why the full-suite parallel runs below are
+      the load-bearing verification; the solo repeats confirm the file has no
+      *other* internal flakiness.
+    status: PASS (5/5)
+    output: |
+      RUN 1: Result: 22 passed  (exit 0)
+      RUN 2: Result: 22 passed  (exit 0)
+      RUN 3: Result: 22 passed  (exit 0)
+      RUN 4: Result: 22 passed  (exit 0)
+      RUN 5: Result: 22 passed  (exit 0)
+
+  - cmd: scripts/test_parallel.sh (run 1)
+    purpose: >
+      Real reproducer of the original flake mechanism -- 8 concurrent partitions,
+      each running a slice of the suite, so tenant-provisioning tests using
+      SandboxAutoMode genuinely race against each other the way they did when
+      TEST-RUNNER originally discovered ISS-0716.
+    status: PASS
+    output: |
+      test_parallel: N=8 (source: nproc)
+      test_parallel: TEST_POOL_SIZE=10 (computed: N=8, max_connections=100, superuser_reserved=3, headroom=10, nonpool_reserve=5)
+      test_parallel: all 8 partition databases created+migrated
+      partition 1: 554 tests, 1 property, 0 failures, exit 0
+      partition 2: 483 tests, 0 properties, 0 failures, exit 0
+      partition 3: 535 tests, 0 properties, 0 failures, exit 0
+      partition 4: 621 tests, 0 properties, 0 failures, exit 0
+      partition 5: 623 tests, 0 properties, 0 failures, exit 0
+      partition 6: 577 tests, 2 properties, 0 failures, exit 0
+      partition 7: 626 tests, 2 properties, 0 failures, exit 0
+      partition 8: 411 tests, 1 property, 0 failures, exit 0
+      ---
+      combined: 4430 tests, 6 properties, 0 failures (4436/4436 passed)
+
+  - cmd: scripts/test_parallel.sh (run 2)
+    purpose: Second independent full-suite parallel run for extra confidence.
+    status: PASS
+    output: |
+      partition 1: 554 tests, 1 property, 0 failures, exit 0
+      partition 2: 483 tests, 0 properties, 0 failures, exit 0
+      partition 3: 535 tests, 0 properties, 0 failures, exit 0
+      partition 4: 621 tests, 0 properties, 0 failures, exit 0
+      partition 5: 623 tests, 0 properties, 0 failures, exit 0
+      partition 6: 577 tests, 2 properties, 0 failures, exit 0
+      partition 7: 626 tests, 2 properties, 0 failures, exit 0
+      partition 8: 411 tests, 1 property, 0 failures, exit 0
+      ---
+      combined: 4430 tests, 6 properties, 0 failures (4436/4436 passed)
+
+  - cmd: mix letflow.check.test
+    purpose: >
+      Project's stricter gate: runs its own internal full 8-partition parallel
+      suite (a third full-suite run, effectively), then isolated single-process
+      re-runs of the known-hazardous wasm_hang and lua_wallclock_race test
+      groups, each in its own subprocess.
+    run_mode: blocking foreground call, not backgrounded; took approximately 40 minutes wall-clock.
+    status: PASS
+    exit: 0
+    output: |
+      test_parallel: N=8 (source: nproc)
+      test_parallel: all 8 partition databases created+migrated
+      partition 1: 554 tests, 1 property, 0 failures, exit 0
+      partition 2: 483 tests, 0 properties, 0 failures, exit 0
+      partition 3: 535 tests, 0 properties, 0 failures, exit 0
+      partition 4: 621 tests, 0 properties, 0 failures, exit 0
+      partition 5: 623 tests, 0 properties, 0 failures, exit 0
+      partition 6: 577 tests, 2 properties, 0 failures, exit 0
+      partition 7: 626 tests, 2 properties, 0 failures, exit 0
+      partition 8: 411 tests, 1 property, 0 failures, exit 0
+      ---
+      combined: 4430 tests, 6 properties, 0 failures (4436/4436 passed)
+      mix letflow.check.test: OK -- no test failures, no ISS-0069 warnings
+        (8 partitions, logs: /tmp/letflow_test_parallel.75XUpb).
+
+      Result: 0 tests, 4457 excluded
+      Result: 1 passed, 15 excluded
+      Result: 1 passed, 32 excluded
+      Result: 1 passed, 11 excluded
+      Result: 1 passed, 11 excluded
+      Result: 1 passed, 11 excluded
+      mix letflow.check.test: OK -- 5/5 isolated wasm_hang tests passed, each in
+        its own subprocess.
+
+      Result: 11 passed, 4451 excluded
+      mix letflow.check.test: OK -- isolated :lua_wallclock_race run also passed
+        clean.
+    note: >
+      Non-load-bearing compiler type-warning noise appeared in this run's
+      output (Elixir's set-theoretic type checker flagging pre-existing
+      always-true/false comparisons in signature_heuristic_test.exs,
+      repository_test.exs, solution_pack_test.exs, snapshot_store_test.exs,
+      module_registry_test.exs, and a redundant-clause warning) -- none are in
+      column_promotion_test.exs, none affect pass/fail counts, and
+      mix letflow.check.test's own gate (which explicitly checks for
+      "ISS-0069 warnings") reported OK, so these are pre-existing and out of
+      this issue's scope.
+
+column_promotion_flake_verdict: >
+  Across 3 independent full-suite concurrent runs (2 standalone
+  scripts/test_parallel.sh invocations plus mix letflow.check.test's own
+  internal run) -- 8 concurrent partitions each, the exact condition needed to
+  reproduce the original AC1 flake (concurrently-scheduled SandboxAutoMode
+  writes from sibling tenant-provisioning tests) -- plus 5 solo repeats of the
+  file in isolation, zero failures were observed anywhere in
+  column_promotion_test.exs or the suite at large. This is consistent with,
+  though does not mathematically prove, the flake being resolved: the fix
+  replaces an exact-equality assertion that was structurally guaranteed to
+  break under any concurrent commit with a containment check that tolerates
+  it by construction, so the fix is correct by inspection of the mechanism,
+  not merely by absence of an observed failure in this run.
+
+verdict: PASS
+verdict_basis: >
+  mix compile --warnings-as-errors and mix format --check-formatted both pass
+  clean. column_promotion_test.exs passes 5/5 solo repeats (22 tests each).
+  Three independent full concurrent-suite runs (2x scripts/test_parallel.sh,
+  1x internal to mix letflow.check.test) each report 4436/4436 passed, 0
+  failures. mix letflow.check.test's own stricter gate -- full suite plus
+  isolated wasm_hang and lua_wallclock_race hazard re-runs -- exits 0 with an
+  explicit "OK" on every phase. No new failures, no regressions, no skipped
+  tests observed anywhere in this run.

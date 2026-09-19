@@ -1,0 +1,61 @@
+id: ISS-0727
+title: >
+  qa.bizdala.com tenant-config-by-host resolves to bpm-default realm for
+  bilimbaga scenarios, not bilimbaga
+discovered_by: UAT-RUNNER
+discovered_in_run: gui-review-2026-09-19-bilimbaga-candidate-exam-rerun
+discovered_at: "2026-09-19T19:00:24Z"
+severity: MAJOR
+tags:
+  - infra
+  - qa-host-config
+  - oidc
+  - bilimbaga
+description: >
+  Discovered by UAT-RUNNER during the bilimbaga-candidate-timed-exam-autograde
+  GUI review re-run (2026-09-19), as a correction to ISS-0725 (the QA
+  candidate-user credential issue), which was resolved on the strength of a
+  direct token-endpoint check alone. Driving a real browser against the
+  literal dispatched base_url https://qa.bizdala.com (no query string)
+  reproduces the ORIGINAL pilot failure end to end: GET
+  /api/tenant-config?host=qa.bizdala.com resolves oidc_authority to
+  realms/bpm-default (the wrong realm), so candidate-user is rejected by
+  Keycloak hosted login form (Invalid username or password) even though the
+  credential itself is fine. Every per-tenant subdomain guess tried
+  (bilimbaga.qa.bizdala.com, bilimbaga.bizdala.com, qa-bilimbaga.bizdala.com)
+  returns the same bpm-default fallback -- this QA host has no per-tenant
+  subdomain wired for bilimbaga. Only the realm=bilimbaga query-param
+  override (web/src/auth/tenantConfig.ts, function resolveRealmFromUrl, built
+  for exactly this local/QA multi-tenant-on-one-host case) reaches the
+  correct realm and lets candidate-user authenticate through the real
+  browser. This is ai-dala-infra QA-host-config territory (tenant-config-by-
+  host wiring), not a web/ code defect.
+affected_files:
+  - web/src/auth/tenantConfig.ts
+  - test/uat-reports/gui-review-2026-09-19-bilimbaga-candidate-exam-rerun.md
+suggested_fix: >
+  Two possible resolutions: (1) wire qa.bizdala.com tenant-config lookup to
+  route bilimbaga scenarios correctly (e.g. a real subdomain, or a
+  host-to-realm mapping), or (2) standardize that all future WF-05 dispatch
+  base_url values for bilimbaga scenarios explicitly include the
+  realm=bilimbaga query param so this is never assumed away again.
+severity_rationale: >
+  MAJOR -- blocks real browser login for the bilimbaga tenant on QA when
+  reached via the realistic bare-host URL (no ?realm= override), which is
+  exactly how a production candidate would arrive. Workaround exists
+  (explicit ?realm=bilimbaga), so not a full outage, but the default/
+  realistic path is broken.
+related:
+  - ISS-0725  # QA candidate-user credential issue, corrected by this finding
+  - ISS-0726  # hard-nav OIDC redirect-target loss -- a related but separate frontend bug, whose own e2e test coverage explicitly names this issue as the source of its scoped-out realm-resolution gap
+queue_ref: Q-727
+github_ref: GH-1578
+status: open
+# NOTE: filed by ORCH after briefly, accidentally claiming this queue task
+# via a duplicate get_next_task call and releasing it back to open
+# (ai-dala-infra/QA-host-config territory, out of scope for a web/-only
+# session). Per docs/agents/protocols/ISSUE_QUEUE.md, the local record
+# should exist regardless of who eventually fixes it -- filed here to close
+# that gap, discovered when ISS-0726's own test-spec coverage-table citation
+# of this file was found broken (the file didn't exist yet) during
+# TEST-DESIGN-VALIDATOR's review of PR #1581.

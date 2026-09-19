@@ -93,6 +93,7 @@ defmodule Letflow.Router do
   plug(:dispatch)
 
   # No auth, no DB — liveness signal for deploy/redeploy-test.sh.
+  # verification-marker: T-0134 redeploy-qa.sh image-tag fix, 2026-09-19
   get "/health" do
     Letflow.Api.Response.send_json(conn, 200, %{status: "ok"})
   end

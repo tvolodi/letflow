@@ -67,4 +67,4 @@ status: open
 # atomically-allocated id for this issue is 721, not 722. Corrected here
 # by ORCH after registering it for real via letflow-queue.
 queue_ref: Q-721
-github_issue_number: 1555
+github_ref: GH-1555

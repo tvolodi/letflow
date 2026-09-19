@@ -1,0 +1,91 @@
+# WF-03 ISS-0721 (REQ-228) -- Step 4c full-suite RE-RUN (rerun1), after
+# ELIXIR-DEV's rework1 fix for the 4 real failures found by the prior run
+# (test/reports/report-20260919-WF03-ISS0721-20260919.yaml).
+#
+# `bash scripts/test_parallel.sh` (16 partitions, N from nproc) on branch
+# feature/WF03-ISS0721-20260919, real Postgres (docker-compose, letflow-postgres-1,
+# port 5462, no LETFLOW_DB_PORT override in .env). Actual combined output:
+#
+#   partition 1: 322 tests, 1 property, 0 failures, exit 0
+#   partition 2: 275 tests, 0 properties, 0 failures, exit 0
+#   partition 3: 387 tests, 0 properties, 0 failures, exit 0
+#   partition 4: 360 tests, 0 properties, 0 failures, exit 0
+#   partition 5: 343 tests, 0 properties, 0 failures, exit 0
+#   partition 6: 256 tests, 0 properties, 0 failures, exit 0
+#   partition 7: 343 tests, 0 properties, 0 failures, exit 0
+#   partition 8: 190 tests, 0 properties, 0 failures, exit 0
+#   partition 9: 189 tests, 3 properties, 0 failures, exit 0
+#   partition 10: 234 tests, 0 properties, 0 failures, exit 0
+#   partition 11: 204 tests, 0 properties, 0 failures, exit 0
+#   partition 12: 176 tests, 0 properties, 0 failures, exit 0
+#   partition 13: 315 tests, 0 properties, 0 failures, exit 0
+#   partition 14: 366 tests, 2 properties, 0 failures, exit 0
+#   partition 15: 292 tests, 0 properties, 1 failures, exit 2
+#   partition 16: 197 tests, 0 properties, 0 failures, exit 0
+#   combined: 4449 tests, 6 properties, 1 failures (4454/4455 passed)
+#
+# None of the 4 previously-diff-caused failures recurred:
+#   - test/letflow/tenant_provisioning_event_seed_test.exs's "OQ-1 ... idempotent"
+#     and "REQ-140 AC12 ..." fixture-count failures (partition 4 last run): GONE.
+#   - test/support/tenant_template_test.exs's 2 :invalid_schema_name
+#     TENANT_TEMPLATE_SELF_CHECK_FAILED failures (partition 11 last run): GONE.
+#
+# The only failure this run is the same pre-existing, change-unrelated
+# ISS-0724 filename/id drift (T-LIVE-CLEAN) already named as MINOR/non-blocker
+# in the prior run's report -- confirmed still present, unfixed by anything
+# meanwhile, and per this handoff's own acceptance criteria explicitly not a
+# blocker for this run. The known Lua/PlatformTest (REQ-161) flake did not
+# recur either.
+#
+# Verdict: PASS.
+
+requirement: REQ-228
+run_id: WF03-ISS0721-20260919
+rerun: 1
+branch: feature/WF03-ISS0721-20260919
+command: bash scripts/test_parallel.sh
+partitions: 16
+
+totals:
+  tests: 4449
+  properties: 6
+  failures: 1
+  passed: 4454
+  attempted: 4455
+
+known_flake_recurred: false   # Letflow.Engine.Lua.PlatformTest (REQ-161) did not appear.
+
+previously_fixed_failures_recurred: false
+previously_fixed_failures_checked:
+  - test: "OQ-1: replay_migrations/2 re-run against an already-seeded tenant stays idempotent"
+    file: test/letflow/tenant_provisioning_event_seed_test.exs:290
+    status: FIXED (did not recur)
+  - test: "REQ-140 AC12: a pre-existing (6-row) tenant gains the 3 new registry rows on replay, idempotently"
+    file: test/letflow/tenant_provisioning_event_seed_test.exs:337
+    status: FIXED (did not recur)
+  - test: "the template itself is faithful to a genuine migration build -- template matches an independently migration-built reference schema"
+    file: test/support/tenant_template_test.exs:93
+    status: FIXED (did not recur)
+  - test: "the template itself is faithful to a genuine migration build -- two concurrent reference-schema builds do not collide"
+    file: test/support/tenant_template_test.exs:108
+    status: FIXED (did not recur)
+
+failures:
+  - test: "T-LIVE-* -- the real docs/issues/ corpus T-LIVE-CLEAN -- the tree itself satisfies every rule"
+    module: Mix.Tasks.Letflow.CheckIssueRefsTest
+    file: test/mix/tasks/letflow_check_issue_refs_test.exs:151
+    error: "docs/issues/ has drifted from the numbering schema: [R5] docs/issues/ISS-0724.yaml: `id: ISS-0722` does not match filename `ISS-0724`"
+    attributable_to_this_diff: false
+    reason: >
+      Same pre-existing docs/issues/ corpus drift already named as unrelated in
+      the prior run's report (ISS-0724.yaml's internal id field still says
+      ISS-0722). Not caused by this diff, not the known Lua/PlatformTest flake,
+      and explicitly excluded from this handoff's blocking criteria.
+    partition: 15
+
+verdict: PASS
+verdict_reason: >
+  All 4 previously-diff-caused failures are fixed and did not recur. The only
+  remaining failure is the known, pre-existing, change-unrelated ISS-0724
+  filename/id drift, which this handoff's acceptance criteria explicitly
+  permit without blocking. The known Lua/PlatformTest flake did not recur.

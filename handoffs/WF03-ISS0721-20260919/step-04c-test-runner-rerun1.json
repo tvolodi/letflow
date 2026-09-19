@@ -8,8 +8,8 @@
   "file": "handoffs/WF03-ISS0721-20260919/step-04c-test-runner-rerun1.json",
   "created_at": "2026-09-19T08:06:49Z",
   "started_at": "2026-09-19T08:06:49Z",
-  "completed_at": null,
-  "status": "PENDING",
+  "completed_at": "2026-09-19T08:20:00Z",
+  "status": "COMPLETED",
   "priority": "NORMAL",
   "context": {
     "stage": null,
@@ -34,18 +34,33 @@
   },
   "result": {
     "status": "PASS",
-    "summary": "",
-    "artifacts_out": [],
-    "issues": [],
+    "summary": "bash scripts/test_parallel.sh (16 partitions) on real Postgres: combined 4449 tests, 6 properties, 1 failure (4454/4455 passed). None of the 4 previously-diff-caused failures recurred: (1) tenant_provisioning_event_seed_test.exs 'OQ-1 ... idempotent' (was count==13 expected, got 16) -- FIXED; (2) same file 'REQ-140 AC12 ...' (was count_before==10 expected, got 13) -- FIXED; (3) tenant_template_test.exs 'template matches an independently migration-built reference schema' (was TENANT_TEMPLATE_SELF_CHECK_FAILED :invalid_schema_name) -- FIXED; (4) same file's concurrent-build variant, same error -- FIXED. The only remaining failure is the same pre-existing, change-unrelated ISS-0724 filename/id drift already named in the prior run: test/mix/tasks/letflow_check_issue_refs_test.exs's T-LIVE-CLEAN finds docs/issues/ISS-0724.yaml's internal id field (ISS-0722) still doesn't match its filename (partition 15) -- confirmed unfixed by anything meanwhile, and per this handoff's own acceptance criteria not a blocker for this run. The known Lua/PlatformTest (REQ-161) flake did not recur. Full details in test/reports/report-20260919-WF03-ISS0721-20260919-rerun1.yaml.",
+    "artifacts_out": [
+      "test/reports/report-20260919-WF03-ISS0721-20260919-rerun1.yaml"
+    ],
+    "issues": [
+      {
+        "severity": "INFO",
+        "description": "All 4 real regressions from the prior run (lib/letflow/tenant_provisioning.ex's maybe_seed_entity_event_types/2 diff) are confirmed fixed by ELIXIR-DEV's rework1 and did not recur."
+      },
+      {
+        "severity": "MINOR",
+        "description": "Unrelated pre-existing failure persists: test/mix/tasks/letflow_check_issue_refs_test.exs's T-LIVE-CLEAN finds docs/issues/ISS-0724.yaml's internal id field (ISS-0722) does not match its filename. Not attributable to this diff; not this run's blocker; still worth a separate fix (tracked as ISS-0724 drift)."
+      },
+      {
+        "severity": "INFO",
+        "description": "Known Lua/PlatformTest flake (REQ-161) did not recur in this run."
+      }
+    ],
     "git_evidence": {
       "branch_name": "feature/WF03-ISS0721-20260919",
       "commit_sha_list": [],
       "remote_branch": "origin/feature/WF03-ISS0721-20260919",
-      "push_status": "skipped",
+      "push_status": "pending",
       "pr_url": null,
       "pr_create_error": null
     },
-    "next_action": ""
+    "next_action": "Route to Step 5 (ISSUE-FIXER close-out)"
   },
   "rework_count": 1,
   "max_rework": 3

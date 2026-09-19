@@ -112,3 +112,26 @@ resolution:
     exam_question_rule mode "manual" configuration, to prove the fix against
     the actual live scenario that discovered ISS-0722, not only against
     unit/integration coverage.
+  live_reverify_attempt: >
+    UAT-RUNNER attempted this follow-up post-merge (report
+    test/uat-reports/uat-2026-09-19-ISS0722-LIVE-REVERIFY-20260919.yaml).
+    Confirmed real and unfabricated: commit 55f93b6b (containing this fix)
+    is merged to main and the code at lib/letflow/exam/session.ex:772/835
+    genuinely has the mode "manual" clause; CD run 35432542727's own "Deploy
+    to QA" step shows conclusion: success (a real, non-skipped deploy);
+    https://qa.bizdala.com/health returns 200 and /api/v1/health correctly
+    401s without a bearer token, confirming the live instance is up and
+    enforcing auth. NOT confirmed: no live end-to-end manual-mode exam
+    session was run. This environment has no ai-dala-infra checkout, `ssh
+    ubuntu-16gb-nbg1-1` fails with "Could not resolve hostname", and no QA
+    credentials are available here -- unlike the original discovery run
+    (WF03-ISS0690-BILIMBAGA-RERUN-20260919), which had real SSH/credential
+    access via a different environment. UAT-RUNNER deliberately did not
+    guess at credentials or fabricate a result. The unit/integration
+    coverage plus confirmed live deployment is reasonable interim evidence,
+    so ISS-0722 stays resolved, but the live end-to-end exercise remains a
+    genuinely open follow-up, not closed by this attempt: a future session
+    with real ai-dala-infra SSH/credential access should create a real
+    manual-mode exam_question_rule + exam_manual_question pins on live QA,
+    start a session, and confirm the returned questions list matches the
+    pinned set exactly.

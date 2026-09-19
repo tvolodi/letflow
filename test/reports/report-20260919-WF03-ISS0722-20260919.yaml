@@ -1,0 +1,103 @@
+run_id: WF03-ISS0722-20260919
+agent: TEST-RUNNER
+date_utc: 2026-09-19T07:06:10Z
+branch: feature/WF03-ISS0722-20260919
+pr: "#1564"
+commit: 41018e39
+scope: |
+  WF-02 Step 4 / WF-04 Step 1 test-run gate for ISS-0722 (exam_question_rule
+  mode "manual" support in lib/letflow/exam/session.ex). Design,
+  SECURITY-REVIEWER, REVIEWER, and TEST-DESIGN-VALIDATOR already passed on
+  this branch. This step runs the full backend gate (mix letflow.check.test)
+  plus a standalone `mix compile --warnings-as-errors`, and classifies any
+  failure as caused-by-this-diff vs pre-existing-unrelated.
+
+commands_run:
+  - cwd: .
+    cmd: sudo docker compose up -d
+    note: >
+      letflow-1-postgres-1 and letflow-1-keycloak-1 already running/healthy.
+      Untracked .env sets LETFLOW_DB_PORT=5463, used by both compose and
+      config/test.exs.
+  - cwd: .
+    cmd: mix deps.get
+    note: "All dependencies fetched successfully (network access available this run)."
+  - cwd: .
+    cmd: WASMEX_BUILD=true mix compile --warnings-as-errors
+    result: "exit 0, zero warnings, zero output (project already clean-compiled)."
+  - cwd: .
+    cmd: WASMEX_BUILD=true mix letflow.check.test
+    note: "Run 3 times in a row to check the one failure seen in run 2 against known flake ISS-0340."
+
+runs:
+  - run: 1
+    exit_code: 0
+    main_suite: "combined: 4453 tests, 6 properties, 0 failures (4459/4459 passed), 8 partitions"
+    wasm_hang: "5/5 isolated wasm_hang tests passed"
+    lua_wallclock_race: "isolated :lua_wallclock_race run passed clean"
+    verdict: PASS
+  - run: 2
+    exit_code: 1
+    main_suite: >
+      partition 8: 383 tests, 2 properties, 1 failures, exit 2;
+      combined: 4453 tests, 6 properties, 1 failures (4458/4459 passed)
+    failing_test: >
+      test/letflow/api/context_test.exs:103 "scoped_repo_opts/1 is 1-arity —
+      no tenant/schema/prefix parameter exists to pass"
+      (Letflow.Api.ContextTest) -- "Expected truthy, got false" on
+      `assert function_exported?(Context, :scoped_repo_opts, 1)`.
+    classification: PRE-EXISTING, UNRELATED TO THIS DIFF -- known flake ISS-0340
+    root_cause: >
+      docs/issues/ISS-0340.yaml (status: reopened) already documents the exact
+      mechanism, confirmed live by REVIEWER on WF02-REQ309-20260911:
+      `function_exported?/3` returns false for a module not yet LOADED in the
+      VM (it does not trigger loading). This pure-introspection test was moved
+      out of a provisioning describe block by an earlier fix, which
+      incidentally removed the setup that had been forcing
+      Letflow.Api.Context to load first, so the assertion's outcome now
+      depends on scheduling luck under parallel test ordering. Nothing in
+      this branch's diff (lib/letflow/exam/session.ex,
+      test/letflow/exam/session_test.exs) touches lib/letflow/api/context.ex
+      or its test file. Suggested fix already on record in ISS-0340
+      (Code.ensure_loaded!(Context) as the test's first line) -- out of this
+      branch's scope fence; not applied here.
+    stacktrace: |
+        1) test scoped_repo_opts/1 API shape scoped_repo_opts/1 is 1-arity — no tenant/schema/prefix parameter exists to pass (Letflow.Api.ContextTest)
+           test/letflow/api/context_test.exs:103
+           Expected truthy, got false
+           code: assert function_exported?(Context, :scoped_repo_opts, 1)
+           stacktrace:
+             test/letflow/api/context_test.exs:104: (test)
+    wasm_hang: "not reached (run_main_suite/0 Mix.raise'd before this step)"
+    lua_wallclock_race: "not reached"
+  - run: 3
+    exit_code: 0
+    main_suite: "combined: 4453 tests, 6 properties, 0 failures (4459/4459 passed), 8 partitions"
+    wasm_hang: "5/5 isolated wasm_hang tests passed"
+    lua_wallclock_race: "isolated :lua_wallclock_race run passed clean"
+    verdict: PASS
+
+compile_check:
+  cmd: "WASMEX_BUILD=true mix compile --warnings-as-errors"
+  exit_code: 0
+  warnings: 0
+
+ISS-0722_specific_coverage: >
+  test/letflow/exam/session_test.exs (manual-mode session materialization
+  coverage, commit 4462185b) and the sort_order-reversed discriminator test
+  (commit 41018e39) ran as part of every partitioned run above (main suite,
+  not isolated) and passed with 0 failures in all 3 runs, including the one
+  run (run 2) where an unrelated partition-8 test flaked.
+
+verdict: PASS
+verdict_basis: >
+  2 of 3 full-suite runs: 4459/4459 passed, 0 failures, 0 compile warnings.
+  The 1 failure seen in run 2 (test/letflow/api/context_test.exs:103) is a
+  pre-existing, already-tracked, already-root-caused flake (ISS-0340,
+  status: reopened) with a mechanism unrelated to anything this branch
+  touches -- it does not implicate lib/letflow/exam/session.ex or its test
+  coverage. No new failure, no ISS-0069 warning-class recurrence, and both
+  isolated subprocess suites (wasm_hang, lua_wallclock_race) passed clean on
+  every run that reached them.
+
+next_action: "Route to RELEASE-VALIDATOR for independent re-verification."

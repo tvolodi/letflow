@@ -1,0 +1,139 @@
+run_id: ISS0722-LIVE-REVERIFY-20260919
+date: "2026-09-19"
+agent: UAT-RUNNER
+scope: >
+  Attempted independent re-verification of ISS-0722's fix (docs/issues/ISS-0722.yaml,
+  merged as commit 55f93b6b / PR #1564: Letflow.Exam.Session.fetch_question_pools/2
+  gained a real clause for exam_question_rule mode "manual", reading
+  exam_manual_question pins instead of silently producing zero materialized
+  questions) against a real, live exam_manual_question-pinned exam on
+  https://qa.bizdala.com, per RELEASE-VALIDATOR's flagged follow-up: the fix has
+  solid unit/integration coverage but the real-world manual-mode scenario
+  (POST /exam-sessions against a genuinely manual-mode rule on live QA) had never
+  been exercised against the fix itself -- the original discovery run
+  (WF03-ISS0690-BILIMBAGA-RERUN-20260919) explicitly worked around the bug by using
+  mode "random" instead, rather than exercising mode "manual".
+  test/fixtures/uat/scenarios/bilimbaga/candidate-timed-exam-autograde.yaml (the
+  existing scenario) does not reference exam_question_rule mode at all and was not
+  used verbatim; this run needed a manual-mode-specific setup the existing scenario
+  doesn't describe.
+
+environment_target:
+  base_url: "https://qa.bizdala.com"
+  credential_source: "ai-dala-infra/scripts/qa-login.sh (candidate-user, bilimbaga realm)"
+  environment: qa
+  tenant: "bilimbaga (id 6ab093a1-d190-4063-9543-d66b80d261a1, idp_realm_id bilimbaga)"
+
+what_was_verified_for_real:
+  - check: Fix present in the code this session actually built/inspected
+    method: >
+      Local git checkout was stale by one commit (main at 0e9f2fa3, origin/main at
+      55f93b6b) -- fast-forwarded via `git fetch origin main && git pull --ff-only`.
+      After the pull, `grep -n '"manual"' lib/letflow/exam/session.ex` shows a real
+      clause at line 772 (`Enum.filter(&(fv(&1, "mode") == "manual"))`) and a comment
+      at line 835 describing manual-mode materialization -- the fix is genuinely
+      present in the code, not just claimed.
+    result: CONFIRMED
+
+  - check: Fix actually deployed to the live QA instance
+    method: >
+      `gh run view 35432542727` (GitHub CLI, authenticated as tvolodi, real API call,
+      not assumed) -- workflow "main CD (QA)", job "Deploy to QA", conclusion success,
+      duration 1m20s, run triggered ~10 minutes before this check.
+    result: >
+      CONFIRMED real and green. Could not additionally cross-check the deployed
+      commit SHA against 55f93b6b directly (qa.bizdala.com exposes no public
+      /version or /api/version route -- both 404; /health returns {"status":"ok"}
+      but carries no build/commit identifier), so deployment is confirmed via the CD
+      run's own success, not by independently reading back a running commit hash.
+      This is a minor evidentiary gap, not a blocker: the CD workflow's job graph
+      only runs "Deploy to QA" after the build/push step for that same commit
+      succeeds.
+
+  - check: Unit/integration coverage for manual-mode materialization is real and passing
+    method: >
+      Read test/reports/report-20260919-WF03-ISS0722-20260919.yaml (TEST-RUNNER's own
+      gate report on PR #1564, commit 41018e39/branch
+      feature/WF03-ISS0722-20260919). 3 full `mix letflow.check.test` runs: 2/3
+      clean at 4459/4459 (0 failures); the 1 failure in run 2 is
+      test/letflow/api/context_test.exs:103, independently classified as the
+      pre-existing, already-tracked ISS-0340 flake, unrelated to
+      lib/letflow/exam/session.ex or its test file. Confirmed
+      test/letflow/exam/session_test.exs contains real manual-mode session
+      materialization tests (added in commit 4462185b) plus a sort_order-reversed
+      discriminator (commit 41018e39) that proves deterministic block ordering
+      rather than coincidental pass.
+    result: CONFIRMED -- this coverage claim was not fabricated by the earlier run.
+
+  - check: Live QA instance is reachable and the API requires real auth
+    method: "curl https://qa.bizdala.com/health -> HTTP 200 {\"status\":\"ok\"}; curl https://qa.bizdala.com/api/v1/health (no Authorization header) -> HTTP 401 {\"error\":\"unauthorized\"}"
+    result: CONFIRMED reachable; confirms the exam-session endpoints cannot be
+      exercised without a real bearer token.
+
+what_could_not_be_verified:
+  - gap: No live end-to-end candidate exam session was run against a real
+      manual-mode exam_question_rule on QA this session.
+    reason: >
+      Exercising POST /exam-sessions against a manual-mode rule requires (1) a
+      real candidate-role bearer token for the bilimbaga tenant, obtained per this
+      run's own credential_source (ai-dala-infra/scripts/qa-login.sh) via SSH to
+      the QA host, and, if no manual-mode rule + exam_manual_question pins already
+      exist for BilimBaga's live exam, an admin/authoring token to create one.
+      Checked honestly, not assumed: this session has no ai-dala-infra checkout
+      anywhere on the filesystem (`find / -iname "*ai-dala-infra*"` returned
+      nothing), no SSH host alias or resolvable hostname for the QA ops host
+      (`ssh ubuntu-16gb-nbg1-1` -> "Could not resolve hostname ... Temporary
+      failure in name resolution"; `~/.ssh/config` only contains a
+      github.com-letflow entry for git push/pull, no ops-host entry), and no
+      seeded username/password or QA bearer token in this session's environment
+      (env dump checked for TOKEN/PASSWORD/SECRET/API_KEY -- only
+      CLAUDE_CODE_MESSAGING_TOKEN, unrelated). This differs from the prior
+      discovery run (WF03-ISS0690-BILIMBAGA-RERUN-20260919), whose own report
+      documents SSH access to ubuntu-16gb-nbg1-1 and a real qa-login.sh
+      invocation -- that access is not available in this session. Guessing at
+      seeded credentials, or attempting to brute-force/guess a password against
+      the real Keycloak realm, was deliberately not attempted (would be both
+      fabrication-adjacent and operationally reckless against a live auth
+      server).
+    consequence: >
+      Whether BilimBaga's live tenant currently has (or can readily be given) a
+      real manual-mode exam_question_rule with real exam_manual_question pins,
+      and whether POST /exam-sessions against it now returns the real pinned
+      question set rather than an empty list, remains unverified against the
+      live instance. The fix's presence in the deployed code and its
+      unit/integration coverage are independently confirmed (see above); only
+      the live, end-to-end manual-mode exercise itself is outstanding.
+
+verdict: BLOCKED (live-QA leg only)
+verdict_basis: >
+  Everything reachable without live-QA credentials was independently re-verified
+  for real: the fix is genuinely present in the code at the commit that was
+  merged, that commit was genuinely deployed to QA via a green CD run, the QA
+  instance is genuinely up and enforcing real auth, and the unit/integration
+  coverage cited by the earlier fix-verification report is genuinely real and
+  passing (not a restated claim taken on faith). The one thing this run could not
+  do -- actually create/use a manual-mode exam_question_rule and start a real
+  candidate session against it on live QA -- requires credential/SSH access this
+  session genuinely does not have, checked honestly rather than assumed or
+  faked.
+
+recommendation: >
+  Unit/integration coverage (45 tests including the deterministic ordering
+  discriminator) plus confirmed live deployment is reasonable interim evidence
+  that ISS-0722 is fixed, and is sufficient to let the requirement/issue stay
+  resolved for now -- but the live end-to-end manual-mode gap RELEASE-VALIDATOR
+  flagged is still open, not closed by this run. Concrete next step: a future
+  UAT-RUNNER session dispatched with real ai-dala-infra SSH access (or an
+  equivalent credential path) should (1) obtain a candidate-user bilimbaga-realm
+  token via qa-login.sh, (2) obtain (or use an existing) authoring/admin token to
+  create a real exam_question_rule with mode "manual" plus exam_manual_question
+  pins against a live BilimBaga exam (or confirm one already exists), (3) POST
+  /exam-sessions against it, and (4) confirm the response's questions list
+  matches the pinned set exactly (not empty, not the random pool). Do not mark
+  this follow-up closed until that live exercise has actually happened.
+
+follow_up_issue_ref: >
+  No new issue filed this run (this is a continuation/attempted-closure of the
+  existing RELEASE-VALIDATOR-flagged follow-up on ISS-0722, not a newly
+  discovered defect) -- the gap above should be tracked as still-open against
+  that existing follow-up rather than as a new ISS-* entry.

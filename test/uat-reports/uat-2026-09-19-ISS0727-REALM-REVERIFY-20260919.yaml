@@ -1,0 +1,119 @@
+run_id: ISS0727-REALM-REVERIFY-20260919
+date: "2026-09-19"
+agent: UAT-RUNNER
+scope: >
+  Independent live re-verification of ISS-0727's acceptance criteria
+  (docs/issues/ISS-0727.yaml, queue task 727): qa.bizdala.com's tenant-config-by-host
+  lookup previously resolved to the bpm-default realm for bilimbaga scenarios instead
+  of bilimbaga, breaking real candidate login. A docs-only fix (PR #1583,
+  .claude/agents/uat-runner.md) documented that every future WF-05 dispatch of a
+  bilimbaga scenario against qa.bizdala.com must include `?realm=bilimbaga` in
+  base_url. This run checks, against the real running qa.bizdala.com instance, whether
+  that `?realm=bilimbaga` query-param convention actually reaches the bilimbaga realm
+  (not bpm-default) -- per web/src/auth/tenantConfig.ts's resolveRealmFromUrl, which
+  reads a `realm` URL query param and forwards it as `{realm: realmSlug}` to
+  `GET /api/tenant-config`.
+
+environment_target:
+  base_url: "https://qa.bizdala.com"
+  credential_source: "not required for this check -- /api/tenant-config is a public,
+    unauthenticated endpoint per web/src/auth/tenantConfig.ts's own usage (called
+    before login, to determine which OIDC authority to send the user to)"
+  environment: qa
+  tenant: "bilimbaga"
+
+what_was_verified_for_real:
+  - check: Network reachability to qa.bizdala.com from this session
+    method: "curl -v https://qa.bizdala.com/ -- real TLS handshake completed, real
+      Let's Encrypt cert for CN=qa.bizdala.com (valid 2026-09-15 to 2026-12-14),
+      resolved to 46.225.239.60, nginx/1.28.3 served the response."
+    result: CONFIRMED reachable. This session is NOT blocked on network access, unlike
+      some prior UAT-RUNNER sessions that lacked SSH/credential access -- this check
+      needed neither.
+
+  - check: "GET /api/tenant-config?realm=bilimbaga resolves to the bilimbaga realm's
+      OIDC authority, matching tenantConfig.ts's precedence-1 `realm` query-param
+      branch"
+    method: >
+      curl -s -i "https://qa.bizdala.com/api/tenant-config?realm=bilimbaga"
+    result: >
+      CONFIRMED FIXED. HTTP 200, body:
+      {"branding":{"app_name":"Letflow","brand_colors":{"primary":"#228be6"},
+      "logo_url":null},"client_id":"letflow-web",
+      "oidc_authority":"https://auth.qa.bizdala.com/realms/bilimbaga"}
+      -- oidc_authority correctly names the bilimbaga realm, not bpm-default.
+
+  - check: Control comparison -- realm=bpm-default and no-realm-param (host-based
+      default) both still resolve to bpm-default, proving the bilimbaga result above
+      is a real realm-specific branch and not a hardcoded/always-bilimbaga response
+    method: >
+      curl -s -i "https://qa.bizdala.com/api/tenant-config?realm=bpm-default" and
+      curl -s -i "https://qa.bizdala.com/api/tenant-config" (no params)
+    result: >
+      CONFIRMED. Both returned oidc_authority
+      "https://auth.qa.bizdala.com/realms/bpm-default" -- distinct from the
+      realm=bilimbaga response above. The endpoint genuinely discriminates on the
+      `realm` query param rather than always answering bilimbaga or always answering
+      bpm-default.
+
+  - check: The bilimbaga realm named in oidc_authority actually exists as a live
+      Keycloak realm at that authority (not merely echoed back by tenant-config
+      without a real backing realm)
+    method: >
+      curl -s -i
+      "https://auth.qa.bizdala.com/realms/bilimbaga/.well-known/openid-configuration"
+    result: >
+      CONFIRMED real and live. HTTP 200, a genuine Keycloak OIDC discovery document
+      with issuer "https://auth.qa.bizdala.com/realms/bilimbaga" and real
+      authorization_endpoint / token_endpoint / userinfo_endpoint / jwks_uri all
+      under .../realms/bilimbaga/... . Control: the bpm-default realm's equivalent
+      well-known endpoint also returns HTTP 200 (both realms are live), confirming
+      bilimbaga is not a broken or placeholder realm.
+
+what_could_not_be_verified:
+  - gap: This check did not drive a real browser (Playwright) through
+      https://qa.bizdala.com/?realm=bilimbaga end to end, nor complete a real
+      candidate login against the bilimbaga realm with seeded credentials.
+    reason: >
+      ISS-0727's acceptance criteria offer two satisfying conditions joined by OR:
+      (a) a real browser reaching the bilimbaga login (not bpm-default), OR (b) the
+      dispatch convention being documented to always include realm=bilimbaga, with
+      that update made -- the docs-only fix (PR #1583) already satisfies (b). This
+      run's task was scoped to re-verify, via direct HTTP, that (b)'s documented
+      convention actually produces correct realm resolution against the live
+      instance -- which it does (see above). A full Playwright browser walkthrough
+      of the login page rendering and a real credential-backed login were out of
+      scope for this specific re-verification task and were not attempted; no
+      credential_source was supplied for this dispatch.
+    consequence: >
+      The tenant-config API leg of the fix is independently confirmed live. The
+      remaining browser-rendering leg (does the SPA's login page, once tenantConfig.ts
+      receives this oidc_authority, actually redirect the browser to
+      auth.qa.bizdala.com/realms/bilimbaga's real login form and render it correctly)
+      is inferred from the API response being correct plus tenantConfig.ts's read
+      code path, not independently observed via a real browser in this run.
+
+verdict: PASS (API-resolution leg of ISS-0727's acceptance criteria)
+verdict_basis: >
+  The specific, checkable claim in scope for this run -- "does
+  https://qa.bizdala.com/?realm=bilimbaga (matching tenantConfig.ts's query-param
+  handling) actually reach the bilimbaga realm, not bpm-default" -- was verified live
+  against the real running qa.bizdala.com instance, with real evidence (actual HTTP
+  responses, actual oidc_authority values, actual Keycloak discovery documents),
+  not assumed or inferred from the docs-only fix alone. The realm query param is
+  genuinely honored by the backend, genuinely distinguishes bilimbaga from
+  bpm-default, and the bilimbaga realm it names is a real, live Keycloak realm.
+
+recommendation: >
+  ISS-0727's documented dispatch convention (`?realm=bilimbaga` in base_url for
+  bilimbaga UAT dispatches) is confirmed effective at the API level as of this run
+  and safe to rely on for future WF-05 dispatches. The acceptance criteria's OR
+  clause is satisfied via option (b) (documented convention + this live
+  re-verification), so no further live-browser walkthrough is strictly required to
+  close ISS-0727. If a fully end-to-end browser-rendered login confirmation is still
+  wanted for extra assurance, a future dispatch should supply a credential_source
+  and explicitly ask for the Playwright leg; this run did not fabricate one.
+
+follow_up_issue_ref: >
+  No new issue filed. This run re-verifies and closes out the "OR" acceptance-path
+  of ISS-0727 via live re-verification; no new defect was discovered.

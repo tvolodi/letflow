@@ -50,7 +50,40 @@ related:
   - ISS-0726  # hard-nav OIDC redirect-target loss -- a related but separate frontend bug, whose own e2e test coverage explicitly names this issue as the source of its scoped-out realm-resolution gap
 queue_ref: Q-727
 github_ref: GH-1578
-status: open
+resolution: >
+  Resolved via the second, repo-actionable option: PR #1583 documented in
+  .claude/agents/uat-runner.md's "Environment target" section that every
+  future WF-05 dispatch of a bilimbaga scenario against qa.bizdala.com MUST
+  set base_url to include ?realm=bilimbaga, so this gap is never silently
+  assumed away by a future dispatch again.
+
+  Independently re-verified LIVE against qa.bizdala.com per this issue's own
+  AC2 (not assumed) -- UAT-RUNNER's report
+  (test/uat-reports/uat-2026-09-19-ISS0727-REALM-REVERIFY-20260919.yaml)
+  confirms real network access and:
+
+    GET https://qa.bizdala.com/api/tenant-config?realm=bilimbaga
+    -> oidc_authority: "https://auth.qa.bizdala.com/realms/bilimbaga"
+
+  with controls proving this is a real discriminating branch, not a fluke:
+  both ?realm=bpm-default and the no-param host-default path return
+  oidc_authority pointing at realms/bpm-default, distinct from the bilimbaga
+  result above. The bilimbaga realm itself is confirmed live and real:
+  GET https://auth.qa.bizdala.com/realms/bilimbaga/.well-known/openid-configuration
+  returns a genuine Keycloak OIDC discovery document (HTTP 200, real
+  authorization_endpoint/token_endpoint/jwks_uri under realms/bilimbaga).
+
+  This satisfies AC1's OR clause (dispatch-convention update made) combined
+  with AC2 (live re-verification, not assumed).
+
+  NOT verified by this close-out: a full Playwright candidate-login
+  walkthrough completing an actual Keycloak sign-in (no credential_source
+  was supplied to this HTTP-level re-check) -- named honestly as still
+  outstanding, not silently covered. The underlying qa.bizdala.com host-to-
+  realm mapping (resolution option 1) also remains unfixed; the
+  ?realm=bilimbaga query-param path is the sanctioned workaround going
+  forward, not a claim that host-based resolution itself now works.
+status: resolved
 # NOTE: filed by ORCH after briefly, accidentally claiming this queue task
 # via a duplicate get_next_task call and releasing it back to open
 # (ai-dala-infra/QA-host-config territory, out of scope for a web/-only

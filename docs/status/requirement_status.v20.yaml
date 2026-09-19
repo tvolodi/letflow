@@ -537,3 +537,36 @@ history:
       was named by ISS-0726's affected_files -- none required updating. No
       merge performed here -- ORCH's job next, after confirming this push's
       own CI is green and no other agent is currently active.
+  - req: SCOPE-CHANGE
+    event: done
+    agent: ORCH
+    at: "2026-09-19T22:05:00Z"
+    note: >
+      ISS-0727 (qa.bizdala.com tenant-config-by-host resolves bilimbaga
+      scenarios to bpm-default realm, not bilimbaga -- ai-dala-infra
+      QA-host-config territory, docs/issues/ISS-0727.yaml, queue_ref Q-727,
+      github_ref GH-1578) resolved. Briefly, accidentally claimed this queue
+      task via a duplicate get_next_task call earlier this session, released
+      it back to open (correctly judged out of scope for a web/-only
+      session), but discovered the local docs/issues/ISS-0727.yaml record
+      was never filed -- fixed via a direct commit (PR #1582) once TEST-
+      DESIGN-VALIDATOR found ISS-0726's own PR citing it as a broken
+      reference. Resolved for real via PR #1583: documented in
+      .claude/agents/uat-runner.md's "Environment target" section that every
+      WF-05 dispatch of a bilimbaga scenario against qa.bizdala.com must set
+      base_url to include ?realm=bilimbaga (the issue's own second,
+      repo-actionable resolution option). Independently re-verified LIVE
+      against qa.bizdala.com per the issue's own AC2 (not assumed) --
+      dispatched UAT-RUNNER, which confirmed real network access and GET
+      /api/tenant-config?realm=bilimbaga genuinely resolves oidc_authority
+      to realms/bilimbaga (distinct from both ?realm=bpm-default and the
+      no-param host-default path, both of which still return bpm-default --
+      real discriminating controls, not a coincidence), and confirmed the
+      bilimbaga realm's own OIDC discovery document is live. Full evidence:
+      test/uat-reports/uat-2026-09-19-ISS0727-REALM-REVERIFY-20260919.yaml.
+      Honestly named as NOT covered: a full Playwright candidate-login
+      walkthrough (no credential_source supplied to this HTTP-level check),
+      and the underlying host-to-realm mapping itself (resolution option 1)
+      remains unfixed -- the query-param path is the sanctioned workaround,
+      not a claim host-based resolution now works on its own. Queue task 727
+      released with status: done.

@@ -8,8 +8,8 @@
   "file": "handoffs/WF03-ISS0721-20260919/step-04-test-designer.json",
   "created_at": "2026-09-19T06:52:18Z",
   "started_at": "2026-09-19T06:52:18Z",
-  "completed_at": null,
-  "status": "PENDING",
+  "completed_at": "2026-09-19T07:32:59Z",
+  "status": "COMPLETED",
   "priority": "NORMAL",
   "context": {
     "stage": null,
@@ -37,18 +37,26 @@
   },
   "result": {
     "status": "PASS",
-    "summary": "",
-    "artifacts_out": [],
-    "issues": [],
+    "summary": "New test file test/letflow/tenant_provisioning/entity_event_type_seeding_test.exs written (2 tests) plus test/specs/ISS-0721.md. No lib/ changes -- confirmed via `git status --short` showing only the two new test-tree files plus this handoff.\n\n=== FAIL-FIRST PROOF (pre-fix, origin/main @ ffc433d2, throwaway worktree ../letflow-iss0721-prefix) ===\n`git worktree add ../letflow-iss0721-prefix origin/main`, only the new test file copied in, `mix deps.get`, then:\n$ mix test test/letflow/tenant_provisioning/entity_event_type_seeding_test.exs\n  1) test ISS-0721 -- entity event types are auto-seeded by replay_migrations/2 the three ENTITY_RECORD_* event types are registered as a side effect of provisioning alone (Letflow.TenantProvisioning.EntityEventTypeSeedingTest)\n     match (=) failed\n     code:  assert {:ok, _type} = Registry.get_type(event_type, tenant_id)\n     left:  {:ok, _type}\n     right: {:error, :unknown_event_type}\n  2) test ISS-0721 -- entity event types are auto-seeded by replay_migrations/2 a second replay_migrations/2 call against the same tenant does not error, and writes still succeed (Letflow.TenantProvisioning.EntityEventTypeSeedingTest)\n     match (=) failed\n     code:  assert {:ok, %{record: record}} = Records.create_record(create_attrs(), schema)\n     left:  {:ok, %{record: record}}\n     right: {:error, :unknown_event_type}\nResult: 0/2 passed\nFailed: 2 tests\nBoth failures reproduce ISS-0721's exact named failure mode ({:error, :unknown_event_type}) -- not vacuous. Worktree then removed: `git worktree remove ../letflow-iss0721-prefix --force`, confirmed via `git worktree list` showing only the main working tree.\n\n=== PASS PROOF (post-fix, this branch feature/WF03-ISS0721-20260919) ===\n$ mix test test/letflow/tenant_provisioning/entity_event_type_seeding_test.exs\n..\nFinished in 4.2 seconds (0.00s async, 4.2s sync)\nResult: 2 passed\nBoth tests pass post-fix.\n\n=== mix letflow.check.test (full suite, run for real, output quoted) ===\nRan mix letflow.check.test to completion twice, cleanly (single invocation each time, ~432-436s main-suite runtime, no concurrent contention -- a stray extra concurrent invocation on my part caused a THIRD, unrelated, self-inflicted Postgres 'too_many_connections' run in between, which I discarded and is not reported as evidence). Both clean runs FAIL, but on the SAME pre-existing, change-unrelated flake both times -- Letflow.Engine.Lua.PlatformTest (REQ-161, lib/letflow/engine/lua/platform.ex's platform.fail/exit semantics), never on anything in tenant_provisioning.ex or the new test file:\nRun A: 'Result: 358/360 passed / Failed: 2 tests' -- both failures in PlatformTest's 'REQ-161: platform.fail terminates by exit/1...' describe block (AC1 and AC2 sub-tests), each showing a Task crash log for {:script_failed, ...} (the test's own intentional/expected crash-log noise, per that test's own moduledoc) immediately preceding a genuine assertion mismatch.\nRun B (fully independent invocation, no shared state): 'Result: 358/360 passed / Failed: 2 tests' again -- same describe block, same 358/360 total, but a DIFFERENT specific sub-assertion failed than Run A ('AC2: a missing reason/details pair defaults to the documented fallback string and nil' this time vs 'AC2: the structured failure carries the reason/details...' in Run A) -- consistent with a timing-sensitive flake under full-parallel-suite load, not a deterministic break.\nBoth runs: `** (Mix) mix letflow.check.test: FAILED -- scripts/test_parallel.sh exited 1 (real test failure/error).` -- because run_main_suite raises on any real test failure BEFORE reaching the ISS-0069 substring check (lib/mix/tasks/letflow.check.test.ex:248-258), so the ISS-0069 gate itself was never reached by either run; it is not that it failed, it was not exercised.\nEvidence this flake is pre-existing and unrelated to this diff (not investigated further -- out of this handoff's scope, ISS-0721 touches only tenant_provisioning.ex and its own test tree):\n(a) `mix test test/letflow/engine/lua/platform_test.exs` run in isolation: 'Result: 100 passed' -- zero failures when not competing for resources under the full 16-partition parallel suite.\n(b) This diff's only lib/ change (already-committed, pre-existing on this branch before my step) is tenant_provisioning.ex; this handoff's own new files are test-tree only. Neither touches lib/letflow/engine/lua/ in any way.\n(c) `git status --short` confirms no lib/ files touched by this step.\nSubstitute ISS-0069 verification (since the real task's own substring check was never reached by either full run): `MIX_ENV=test mix compile --force --warnings-as-errors` (fresh full recompile, lib+test) -- clean, zero warnings. `MIX_ENV=test mix test --warnings-as-errors test/letflow/tenant_provisioning/entity_event_type_seeding_test.exs` (forced fresh recompile of just this file) -- 'Result: 2 passed', zero warnings, confirming this new test file's own helpers carry no ISS-0069-class dead-default-argument warning.\nFlagged in result.issues below for ORCH/RELEASE-VALIDATOR: the pre-existing PlatformTest flake blocks a clean mix letflow.check.test run on this branch and should be triaged separately from ISS-0721.",
+    "artifacts_out": [
+      "test/letflow/tenant_provisioning/entity_event_type_seeding_test.exs",
+      "test/specs/ISS-0721.md"
+    ],
+    "issues": [
+      {
+        "severity": "MINOR",
+        "description": "mix letflow.check.test does not exit clean on this branch, but not due to ISS-0721 or this step's new test: Letflow.Engine.Lua.PlatformTest (REQ-161, lib/letflow/engine/lua/platform.ex) fails 2/360 tests under the full 16-partition parallel suite, non-deterministically (a different specific sub-assertion failed across two independent clean runs), while passing 100/100 in isolation (`mix test test/letflow/engine/lua/platform_test.exs`). This diff touches only tenant_provisioning.ex and test/letflow/tenant_provisioning/, never lib/letflow/engine/lua/. Because run_main_suite raises on real test failures before reaching the ISS-0069 substring check, that check was never exercised by either full run (substitute evidence in result.summary confirms no ISS-0069-class warning in the new test file). Recommend a separate ISSUE-FIXER pass to root-cause the PlatformTest timing sensitivity under parallel load; not investigated further here as out of this handoff's scope."
+      }
+    ],
     "git_evidence": {
       "branch_name": "feature/WF03-ISS0721-20260919",
       "commit_sha_list": [],
       "remote_branch": "origin/feature/WF03-ISS0721-20260919",
-      "push_status": "skipped",
+      "push_status": "pending",
       "pr_url": null,
       "pr_create_error": null
     },
-    "next_action": ""
+    "next_action": "Route to Step 4b (TEST-DESIGN-VALIDATOR)"
   },
   "rework_count": 0,
   "max_rework": 3

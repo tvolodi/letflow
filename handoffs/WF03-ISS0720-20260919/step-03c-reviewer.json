@@ -8,8 +8,8 @@
   "file": "handoffs/WF03-ISS0720-20260919/step-03c-reviewer.json",
   "created_at": "2026-09-19T03:42:39Z",
   "started_at": "2026-09-19T03:42:39Z",
-  "completed_at": null,
-  "status": "PENDING",
+  "completed_at": "2026-09-19T03:43:16Z",
+  "status": "COMPLETED",
   "priority": "HIGH",
   "context": {
     "stage": "S7",
@@ -35,19 +35,19 @@
     ]
   },
   "result": {
-    "status": "BLOCKED",
-    "summary": "",
+    "status": "PASS",
+    "summary": "Reviewed git diff main...HEAD -- lib/letflow/routers/tenant_config.ex config/dev.exs config/test.exs against the PASSed design doc (lib/letflow/design/iss0720-tenant-config-stale-issuer-key.md), the activation.ex compile_env precedent (directly re-read), and REQ-370's own decision-record text. 1) Design-match, no drift: oidc_issuer_base/0 now reads :keycloak_base_url instead of :issuer and the String.split(\"/realms/\")|>List.first() stripping is removed entirely, exactly per design §1 -- diff shows the old case/nil branch replaced by a single `Application.get_env(:letflow, :oidc, [])[:keycloak_base_url]` line, no residual stripping logic left dead in the module. idp_base_url/0's final `|| @default_idp_base_url` clause is replaced by a call to the new default_idp_base_url!/0, which raises unless @allow_localhost_idp_fallback? is true, per design §2.2/§2.3 -- the raise message names only the two env var names, the config key, and the compile-time default literal (no request/tenant data, confirmed by re-reading -- default_idp_base_url!/0 takes no arguments at all so there is nothing request-scoped to leak). config/dev.exs and config/test.exs each add exactly `config :letflow, :allow_localhost_idp_fallback, true` with no other changes; config/prod.exs and config/runtime.exs are untouched (confirmed empty diff for both, matching SECURITY-REVIEWER's own independent check in step-03b). No `def`, `@spec`, module, or function-arity/visibility change anywhere in the diff -- matches design §3's explicit 'no new structure' constraint. 2) Idiomatic OTP/Elixir usage, pattern precedent directly re-read: opened lib/letflow/repository/activation.ex:228-247 myself rather than trusting the design doc's citation. activation.ex's own pattern is `@activation_test_hooks_enabled? Application.compile_env(:letflow, :activation_test_hooks_enabled?, false)`, resolved once at compile time, defaulting false, with only config/test.exs opting in and dev/prod left at the default -- its own comment explicitly rejects a runtime Mix.env() check because Mix is unavailable in a compiled release. tenant_config.ex's new @allow_localhost_idp_fallback? attribute mirrors this shape exactly: same Application.compile_env/3 call shape, same false default, same 'only non-prod config files opt in, prod/runtime.exs add nothing' structure (here dev+test opt in rather than test alone, which the design doc states explicitly and correctly as the one deliberate difference from activation.ex's narrower test-only case -- justified by idp_base_url/0 needing a working default in dev too, not just test). This is idiomatic use of the codebase's own established compile-time-flag convention, not an ad hoc reinvention. No gen_statem/GenServer/supervision surface is touched by this diff at all -- Letflow.Routers.TenantConfig is a Plug.Router with no process state, so questions 1-2 of the REVIEWER brief (gen_statem idiom, InstanceSupervisor isolation) are not applicable to this change; nothing here collapses or touches any per-instance process isolation. Type-safety (question 3): no new transition/state logic is introduced -- this is a config-resolution helper returning a String.t() | no return (raise), not a new state representable by a struct/enum; no type-safety gap worth filing under docs/issues/ for this specific diff. 3) No scope creep: the diff touches exactly what the design specifies -- oidc_issuer_base/0's body, idp_base_url/0's body, one new private module attribute, one new private function (default_idp_base_url!/0, needed only to express the conditional the design explicitly says requires no new named function beyond what's necessary -- this one is minimal and matches §2.2's 'no new named function required... it is a conditional inside idp_base_url/0's existing body' in spirit, implemented as a small extracted private helper rather than an inline if, which is a normal Elixir readability choice and not new public structure). No new module, no new public API, no migration, no unrelated file touched beyond the two companion config files the design explicitly named as in-scope companions. Design doc's own open question (§5 item 1) flags that config/runtime.exs's structurally-identical 'placeholder-keycloak.invalid' fallback is out of scope for this fix and asks REVIEWER to confirm that scoping call -- CONFIRMED ACCEPTABLE: runtime.exs is not in this handoff's owned_modules, ISS-0720/ISS-0719 are both specifically about tenant_config.ex, and the design doc correctly flags it as a follow-up rather than silently expanding scope to fix it here; no action needed from REVIEWER beyond this confirmation, which is recorded so it isn't silently dropped. 4) Consistency with REQ-370's decision record: re-read docs/migration/decisions/0002-oidc-integration.md's REQ-370 addendum (lines ~160-190) directly rather than trusting the design doc's paraphrase -- it states verbatim '`config/runtime.exs`'s `:oidc, :issuer` is retired as a trust source and replaced by `:oidc, :keycloak_base_url`, one Keycloak deployment shared across every tenant realm... there is no per-tenant host column,' i.e. :keycloak_base_url is explicitly documented as a bare shared host, not a full issuer URL with a /realms/ suffix. This is exactly the shape assumption this fix's key-rename and stripping-removal rely on -- the fix completes REQ-370's own migration by finally repointing the one remaining reader (tenant_config.ex) that REQ-370 itself missed, rather than diverging from or silently re-deciding REQ-370's intent. No contradiction found with any other docs/migration/decisions/ record.",
     "artifacts_out": [],
     "issues": [],
     "git_evidence": {
-      "branch_name": null,
+      "branch_name": "feature/WF03-ISS0720-20260919",
       "commit_sha_list": [],
-      "remote_branch": null,
+      "remote_branch": "origin/feature/WF03-ISS0720-20260919",
       "push_status": "skipped",
       "pr_url": null,
       "pr_create_error": null
     },
-    "next_action": ""
+    "next_action": "Route to TEST-DESIGNER. Note design doc §5 item 3 for TEST-DESIGNER's attention: the raise branch in default_idp_base_url!/0 depends on a compile-time Application.compile_env/3-resolved attribute, which does not respond to Application.put_env/3 at runtime -- TEST-DESIGNER will need to determine whether this branch is unit-testable in the conventional way within this same test.exs-compiled suite, or whether it can only be verified by code reading plus a separate compile-time-flag-off build/CI check."
   },
   "rework_count": 0,
   "max_rework": 3

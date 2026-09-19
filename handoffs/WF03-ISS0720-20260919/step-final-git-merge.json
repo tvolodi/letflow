@@ -9,7 +9,7 @@
   "created_at": "2026-09-19T04:11:55Z",
   "started_at": "2026-09-19T04:11:55Z",
   "completed_at": null,
-  "status": "PENDING",
+  "status": "IN_PROGRESS",
   "priority": "HIGH",
   "context": {
     "stage": "S7",

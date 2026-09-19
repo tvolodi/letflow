@@ -57,14 +57,12 @@ then merges+reindexes into one `resolved` list (lines 736-739) passed to
    no `sort_order` key yet.
 3. **Changed**: replace the concatenate-then-reindex block (current lines 736-739) with
    assigning `sort_order` to the manual block alone, continuing the numbering where the
-   random block's own indices leave off:
-
-   ```
-   resolved_manual =
-     resolved_manual_unindexed
-     |> Enum.with_index(length(resolved_random))
-     |> Enum.map(fn {row, index} -> Map.put(row, :sort_order, index) end)
-   ```
+   random block's own indices leave off. In words: index `resolved_manual_unindexed`
+   using `Enum.with_index/2`, called with a starting-offset argument of
+   `length(resolved_random)` rather than the default `0`, then set each row's
+   `sort_order` field to the index produced by that pass (one field-set per row, same
+   mechanism `Map.put/3` already uses elsewhere in this module — no new idiom). The
+   result is bound to `resolved_manual`, replacing the unindexed binding.
 
    `Enum.with_index/2`'s second argument is the starting offset — this is standard
    library behavior, not new logic. **Behavioral identity with today's output**: today,
@@ -80,22 +78,15 @@ then merges+reindexes into one `resolved` list (lines 736-739) passed to
    for every row, in both blocks, versus current behavior.
 4. `resolved_random` and `resolved_manual` are never concatenated anywhere in
    `materialize_session/5`. Both are passed, as two separate arguments, to
-   `persist_session_questions/5` (§3):
-
-   ```
-   with {:ok, %{record: session_record}} <-
-          write_record("session", session_attrs, candidate_id, prefix),
-        :ok <-
-          persist_session_questions(
-            session_record.record_id,
-            resolved_random,
-            resolved_manual,
-            candidate_id,
-            prefix
-          ) do
-     {:ok, session_view(session_record)}
-   end
-   ```
+   `persist_session_questions/5` (§3). The existing `with` chain's shape is unchanged
+   (still `write_record("session", ...)` producing `session_record`, then a second
+   step gating on `:ok`, then `session_view(session_record)` on success) — the only
+   edit to this `with` block is its second step's call target and argument list: where
+   today it calls the 4-arity `persist_session_questions` with one merged list, it now
+   calls the 5-arity `persist_session_questions` (§3) with `session_record.record_id`,
+   `resolved_random`, `resolved_manual`, `candidate_id`, and `prefix`, in that order —
+   the same five values already in scope, just passed as two list arguments instead of
+   one.
 
 No other line in `materialize_session/5` changes (session_attrs construction,
 `write_record` call, `session_view` return — all untouched).
@@ -132,14 +123,14 @@ verbatim, called twice — random block first, then manual block, via `with`:
       ) :: :ok | {:error, term()}
 ```
 
-```
-defp persist_session_questions(session_id, resolved_random, resolved_manual, actor_id, prefix) do
-  with :ok <- write_question_rows(session_id, resolved_random, actor_id, prefix),
-       :ok <- write_question_rows(session_id, resolved_manual, actor_id, prefix) do
-    :ok
-  end
-end
-```
+Body, in words: a `with` chain of exactly two steps, each calling
+`write_question_rows/4` — first on `resolved_random`, then (gated on the first
+returning `:ok`) on `resolved_manual` — both calls passing through the same
+`session_id`, `actor_id`, `prefix` already bound in the enclosing function's
+arguments; the chain's overall result is `:ok` when both steps succeed, or the
+first `{:error, _}` either step returns. This is the same two-step
+`with`-gated-on-`:ok` shape already used elsewhere in this module (e.g.
+`materialize_session/5`'s own `with` block, §2 step 4) — no new control-flow idiom.
 
 `write_question_rows/4`'s own body is origin-blind by design — that's correct and safe
 at this stage, because by the time either list reaches it, `sort_order` is already
@@ -179,19 +170,37 @@ undefined-function diagnostic from a warning to a hard compile failure — i.e. 
 literal "fail to compile" AC1 asks for, not a best-effort lint. There is no other
 `persist_session_questions` clause of any other arity for such a call to silently
 resolve to instead (Elixir does not do partial-application/currying dispatch across
-different `defp` arities the way default-argument overloads might suggest) — so there is
-no fallback merge path anywhere in the module for a future edit to accidentally take.
+different `defp` arities the way default-argument overloads might suggest) — so the
+literal 4-arity revert scenario described above is closed at compile time.
 
-A future edit that keeps `resolved_random`/`resolved_manual` as two arguments but
-reorders/reshuffles *within* one of them before the call (e.g. `Enum.shuffle(resolved_manual)`
-inserted in `materialize_session/5`) would **not** be caught by the compiler — no design
-in this shape category can catch a mutation to a single list's own contents at compile
-time, only a wrong-shape/wrong-arity *merge*. This is the specific finding the issue
-describes (concatenation-erases-origin), not the broader "no future logic bug is
-possible" claim; TEST-DESIGNER already has an existing property/example test
-(`iss0722-...md` §7) asserting manual-block order is preserved regardless of
-`shuffle_questions?`, which remains the assertion-level backstop for that narrower
-in-block case, per AC1's own "or fail an obvious assertion" alternative clause.
+**Residual gap, named explicitly (not closed by the arity change alone):** the arity
+change only catches a revert that keeps the *call shape* at 4 arguments. A future edit
+could reintroduce the concatenate-and-reindex merge internally (e.g. compute
+`merged = resolved_random ++ resolved_manual |> Enum.shuffle()` or any other
+reshuffled/reordered blob) and still satisfy the new 5-arity
+`persist_session_questions/5` signature by passing that merged list as one of the two
+arguments and `[]` as the other — for example
+`persist_session_questions(session_record.record_id, merged, [], candidate_id, prefix)`.
+This compiles cleanly: `persist_session_questions/5` has no way to distinguish "a
+correctly-separated `resolved_manual` list" from "an empty list standing in for a
+merge that already happened upstream," since both are just `[QuestionSetResolver.resolved_question()]`
+values with no marker of provenance. The arity change closes the specific regression
+shape ISS-0724 was filed against (a silent revert to the *old 4-argument call site*,
+unchanged); it does not, and cannot by itself, close every shape a future edit could
+take to reintroduce merging while nominally keeping two list arguments.
+
+This residual gap is why AC1 offers a second, independent bar — "fail to compile
+**or** fail an obvious assertion" — rather than relying on the compiler alone. The
+assertion-level backstop for this gap is TEST-DESIGNER's existing property/example
+test (`iss0722-...md` §7) asserting manual-block order is preserved regardless of
+`shuffle_questions?`: a merge-then-split-into-`(merged, [])` edit as described above
+would shuffle/reorder the manual-origin questions together with the random ones,
+which that test is built to catch (it targets exactly the "manual order must stay
+authored-order-and-deterministic, independent of shuffle" property, not just "manual
+list is non-empty"). This design does not claim the arity change alone closes the
+door on every regression shape in this category — it closes the literal-revert shape
+at compile time and relies on the named test as the AC1-sanctioned assertion-level
+backstop for the residual shuffle-then-repack shape.
 
 ## 5. Unchanged (explicitly, for RELEASE-VALIDATOR/REVIEWER scan-ability)
 

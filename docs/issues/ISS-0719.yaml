@@ -81,4 +81,41 @@ fix_direction: >
   re-verification (queue task 708).
 queue_ref: Q-719
 github_ref: GH-1550
-status: open
+status: resolved
+resolved_in_run: WF02-REQ369-AC6AC7-final3-20260919
+resolved_at: "2026-09-19T05:39:57Z"
+resolution: >
+  RESOLVED by two independent, both-confirmed-live fixes, not one. (a)
+  ai-dala-infra's T-0137 infra-side mitigation: BPM_IDP_BASE_URL set
+  directly in QA's .env (https://auth.qa.bizdala.com) -- checked before
+  the broken fallback chain in idp_base_url/0 ever runs, so it alone is
+  sufficient to fix the symptom, and it remains in place as
+  belt-and-suspenders even now that the code fix below is confirmed
+  deployed. (b) The actual code fix, ISS-0720 (commit fc55e700,
+  lib/letflow/routers/tenant_config.ex's oidc_issuer_base/0 corrected to
+  read the current :keycloak_base_url key instead of the retired
+  :issuer key), merged as PR #1553. As of this close-out, fc55e700 IS
+  confirmed actually deployed and live on QA: the CD run for commit
+  507bdb77 (which includes fc55e700 in its history) succeeded, and
+  GET /api/tenant-config was independently re-curled by ORCH just before
+  this close-out, confirming a correct, non-cached oidc_authority
+  (https://auth.qa.bizdala.com/realms/bpm-default, cache-control:
+  max-age=0, private, must-revalidate -- ruling out stale cache). This
+  supersedes the prior final3 UAT report's own step1_cd_deploy_verification
+  finding that fc55e700 had NOT yet reached QA as of that run (its own
+  push-triggered CD job was skipped by an unrelated
+  mix letflow.check_issue_refs lint failure on ISS-0721/ISS-0722); that
+  gap was closed by later commits (507bdb77, PR #1560; ad22d2ca,
+  PR #1559) fixing those two records' github_issue_number: -> github_ref:
+  fields and re-triggering a real CD deploy.
+  .
+  Closing evidence for the originally-reported symptom (real login broken
+  for all QA users): test/uat-reports/uat-2026-09-19-WF02-REQ369-AC6AC7-final3-20260919.yaml
+  (UAT-RUNNER) -- AC6 PASS: a real, full end-to-end PLATFORM_ADMIN login
+  through Keycloak's real hosted login page against live QA lands on
+  /platform-dashboard with the real tenant count (2) rendered, screenshot
+  at web/tests/screenshots/pipelines/platform-login-routing-by-role-admin.png.
+  AC7 PASS: the named pipeline_test
+  (web/tests/e2e/pipelines/platform-login-routing-by-role.pipeline.e2e.spec.ts)
+  PLATFORM_ADMIN case, real run against live QA, "1 passed" (9.9s), every
+  assertion in the test body executed and passed.

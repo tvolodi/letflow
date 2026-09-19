@@ -4293,14 +4293,13 @@ volumes:
     path: docs/status/requirement_status.v20.yaml
     status: current
     opened: 2026-09-18
-    entries: 3
+    entries: 4
     note: >
-      Incremented to 2 by ORCH's own ISS-0718 done-event append
-      (WF03-ISS0718-20260919 -- CANDIDATE role dedicated exam-list route,
-      PR #1546) -- `grep -c "^  - req:"
-      docs/status/requirement_status.v20.yaml` = 2 on-disk entries; 305
-      lines / 18591 bytes, well under the 1200-line/120000-byte roll
-      ceiling, no roll triggered.
+      Incremented to 4 by ORCH's own REQ-369 blocked-event append
+      (2026-09-19T02:49:52Z -- AC6/AC7 re-verification surfaced a new live
+      BLOCKER, ISS-0719, filed and routed) -- `grep -c "^  - req:"
+      docs/status/requirement_status.v20.yaml` = 4 on-disk entries; well
+      under the 1200-line/120000-byte roll ceiling, no roll triggered.
 
       Prior note (1 entry): Incremented to 1 by DOC-UPDATER's own ISS-0716
       SCOPE-CHANGE done-event append (WF03-ISS0716-20260918 -- fixed

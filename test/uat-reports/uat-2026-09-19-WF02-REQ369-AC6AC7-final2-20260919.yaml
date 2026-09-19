@@ -1,0 +1,230 @@
+run_id: WF02-REQ369-AC6AC7-final2-20260919
+date: "2026-09-19"
+agent: UAT-RUNNER
+queue_task: "708 (REQ-369, GH#1501), locked to agent_id orch-req369-20260919"
+scope: >
+  Close-out re-verification of REQ-369's last remaining gap: AC6 (real
+  PLATFORM_ADMIN login against live QA, real tenant count rendered,
+  screenshot evidence) and AC7 (platform-login-routing-by-role.yaml's
+  PLATFORM_ADMIN branch re-run via its own named pipeline_test). Dispatched
+  after confirming ISS-0711 (tenant-count field mismatch), ISS-0712
+  (pipeline_test login-mechanism gap), and ISS-0713 (quick-links strict-mode
+  locator) are all resolved and merged. This run's environment
+  (c:\Users\tvolo\dev\ai-dala\ai-dala-infra, Windows) genuinely has QA
+  credential access via SSH to ubuntu-16gb-nbg1-1 and
+  scripts/qa-login.sh -- confirmed working this run, not assumed. This run
+  DID obtain and use real credentials, and DID discover a new, genuine,
+  live QA defect that blocks both AC6 and AC7 -- see below. This is NOT a
+  repeat of the prior credential-access gap.
+
+environment_target:
+  base_url: "https://qa.bizdala.com"
+  credential_source: "ai-dala-infra/scripts/qa-login.sh"
+  environment: qa
+  readiness_check: >
+    curl -s -o /dev/null -w '%{http_code}' https://qa.bizdala.com/ -> 200
+    (confirmed this run). curl against /api/v1/tenants with no auth header
+    -> real 401 (confirmed real backend live and enforcing auth).
+
+credential_access_CONFIRMED:
+  finding: >
+    `ssh ubuntu-16gb-nbg1-1 whoami` -> `tvolodi` (succeeded). Ran
+    `bash scripts/qa-login.sh admin-user` from
+    c:\Users\tvolo\dev\ai-dala\ai-dala-infra and obtained a real seeded
+    PLATFORM_ADMIN credential for https://qa.bizdala.com (username
+    admin-user, role PLATFORM_ADMIN). Password held only in-memory/shell-env
+    for this run's real HTTP/browser calls -- never written to any file,
+    never committed, not recorded in this report. Independently confirmed
+    the credential is genuinely valid by a direct Keycloak password-grant
+    call against https://auth.qa.bizdala.com/realms/bpm-default/protocol/openid-connect/token
+    -> HTTP 200, decoded access_token has preferred_username=admin-user,
+    realm_access.roles=["PLATFORM_ADMIN"]. Credential access is not the
+    blocker this run -- see new_finding_broken_oidc_authority below for what
+    actually blocked AC6/AC7.
+
+scenario_file_check: >
+  Read test/fixtures/uat/scenarios/platform/platform-login-routing-by-role.yaml
+  in full (not trusted from prior reports). Confirmed directly: the
+  platform_admin_lands_on_platform_dashboard branch's EO-001.verification.detail
+  (lines 73-81) already asserts route "/platform-dashboard",
+  data-testid="platform-dashboard-heading" "Platform Overview",
+  data-testid="tile-tenant-count" sourced from GET /api/v1/tenants, and
+  data-testid="platform-quick-links" with links to Tenants/Services/Health/
+  Metrics/Users. No edit needed to this scenario file.
+
+pipeline_test_execution:
+  command: >
+    cd web && E2E_BASE_URL=https://qa.bizdala.com
+    BPM_IDP_BASE_URL=https://auth.qa.bizdala.com
+    UAT_QA_ADMIN_PASSWORD=<fetched, not recorded> npx playwright test
+    tests/e2e/pipelines/platform-login-routing-by-role.pipeline.e2e.spec.ts
+    --project=chromium -g "PLATFORM_ADMIN"
+  result: "1 failed (ran twice, --retries=0 on the second run to rule out flake -- same failure both times, not transient)"
+  real_output: >
+    Error: page.waitForURL: net::ERR_CONNECTION_REFUSED
+    at helpers.ts:146 (inside loginViaRealOidcRedirect, waiting for the
+    browser to navigate off-origin to the IdP after page.goto('/')).
+  root_cause_INDEPENDENTLY_TRACED: >
+    Extracted the Playwright trace.zip's network log (0-trace.network /
+    1-trace.network) and found the actual URL the live QA app's browser
+    redirect attempted was
+    `http://localhost:8082/realms/bpm-default/protocol/openid-connect/auth?client_id=letflow-web&redirect_uri=https%3A%2F%2Fqa.bizdala.com%2Fauth%2Fcallback&...`
+    -- NOT https://auth.qa.bizdala.com as the prior 2026-09-18 successful
+    run observed. Confirmed this is not a test artifact by querying the
+    live backend directly: `curl -s
+    "https://qa.bizdala.com/api/tenant-config?host=qa.bizdala.com"` (run
+    twice) both times returned
+    `{"branding":{...},"client_id":"letflow-web","oidc_authority":"http://localhost:8082/realms/bpm-default"}`
+    -- response headers show `cache-control: max-age=0, private,
+    must-revalidate`, so this is not a stale cached value, it is the live
+    backend's real current answer. Root-caused in source (not guessed):
+    lib/letflow/routers/tenant_config.ex line 312-316's `idp_base_url/0`
+    resolves `System.get_env("BPM_IDP_BASE_URL") ||
+    System.get_env("KEYCLOAK_BASE_URL") || oidc_issuer_base() ||
+    @default_idp_base_url` where `@default_idp_base_url` (line 167) is the
+    literal `"http://localhost:8082"`. The live QA backend process is
+    currently falling all the way through to that local-dev default --
+    meaning none of BPM_IDP_BASE_URL, KEYCLOAK_BASE_URL, or the compiled
+    :oidc issuer config resolve correctly in the QA deployment right now.
+    Independently isolated that Keycloak itself is NOT the problem: a
+    direct password-grant call against the REAL QA IdP
+    (https://auth.qa.bizdala.com/realms/bpm-default/protocol/openid-connect/token)
+    with the fetched admin-user credential succeeded (HTTP 200, valid
+    PLATFORM_ADMIN token decoded) -- only the backend's *advertised*
+    oidc_authority value returned to browsers via GET /api/tenant-config is
+    wrong. This is very likely a side effect of the recent QA
+    docker-compose/image-tag redeploy work referenced in this repo's recent
+    commit history (69c430ad "add missing image: field to
+    docker-compose.qa.yml app service", a3b8244f, 55ce601e closing
+    ISS-0717) -- flagged as a hypothesis from the git log, not confirmed by
+    inspecting the QA compose file/env directly, which is out of scope for
+    UAT-RUNNER to fix.
+
+new_finding_broken_oidc_authority:
+  title: "Live QA backend's GET /api/tenant-config advertises oidc_authority=http://localhost:8082/realms/bpm-default instead of the real QA Keycloak -- breaks login for every real user on QA right now, not just PLATFORM_ADMIN"
+  severity: BLOCKER
+  scope_note: >
+    Not a REQ-369-specific defect and not confined to PLATFORM_ADMIN --
+    OidcCallbackPage/AuthProvider redirects EVERY unauthenticated visitor
+    to whatever /api/tenant-config's oidc_authority says, so this currently
+    breaks the entire real login flow on https://qa.bizdala.com for any
+    real browser (any real user's machine has nothing listening on
+    localhost:8082). Flagging with BLOCKER severity given that blast
+    radius, distinct from and broader than REQ-369's own AC6/AC7 scope.
+  evidence: >
+    - Playwright trace network log: redirect target observed was
+      http://localhost:8082/realms/bpm-default/protocol/openid-connect/auth?...
+    - Direct curl (x2, cache-control: max-age=0 must-revalidate) of
+      https://qa.bizdala.com/api/tenant-config?host=qa.bizdala.com:
+      oidc_authority="http://localhost:8082/realms/bpm-default"
+    - Direct password-grant against the REAL QA IdP
+      (https://auth.qa.bizdala.com/realms/.../token) with the same
+      credential succeeded (HTTP 200), proving Keycloak itself is healthy
+      and the credential is valid -- isolating the defect to the backend's
+      advertised authority value only.
+    - lib/letflow/routers/tenant_config.ex:167,312-316 read directly:
+      idp_base_url/0 falls through to the localhost:8082 default when none
+      of BPM_IDP_BASE_URL/KEYCLOAK_BASE_URL/compiled :oidc issuer resolve.
+  disposition: >
+    New, genuine, live QA defect discovered by this run -- not the
+    credential-access gap the prior two runs hit, not a stale-report replay.
+    Blocks BOTH AC6 (no real end-to-end PLATFORM_ADMIN login is currently
+    possible via a real browser against QA) and AC7 (the named
+    pipeline_test's real-OIDC-redirect login step fails for the same
+    reason, confirmed reproducible on two separate runs of the same
+    command). Routing to ORCH for triage -- almost certainly an
+    infra/deployment env-var gap on the QA app service (BPM_IDP_BASE_URL
+    not set, or set incorrectly, after the recent QA redeploy), not an
+    application code defect and not something UAT-RUNNER should attempt to
+    fix by editing lib/ or infra config itself.
+
+what_this_run_independently_confirmed_as_GOOD: >
+  Not everything is broken -- isolating what is and is not affected matters
+  for triage. (1) Real backend tenant data is correct: authenticated
+  `GET /api/v1/tenants` (via a token obtained directly from the real
+  Keycloak, bypassing the broken app redirect) returns
+  `{"items":[{"display_name":"Default Tenant",...},{"display_name":"BilimBaga",...}],"count":2}`
+  -- ISS-0711's `.count` fix (confirmed live in the prior
+  final-20260918 report's bundle grep) has correct real data to read once a
+  user can actually reach the dashboard. (2) The real QA Keycloak
+  (auth.qa.bizdala.com) itself is healthy and the seeded admin-user
+  PLATFORM_ADMIN credential is genuinely valid. (3) The scenario file and
+  the pipeline_test spec's PLATFORM_ADMIN case (loginViaRealOidcRedirect +
+  resolveCredential wiring from ISS-0712/ISS-0713) are both correctly
+  written -- the failure is not a test-design defect, it reproduces because
+  the live system it is correctly driving is itself currently broken.
+
+ac6_disposition: >
+  NOT SATISFIED. A real, full end-to-end PLATFORM_ADMIN login through
+  Keycloak's real hosted login page against live QA could NOT be completed
+  this run: the browser never reached Keycloak's login page at all because
+  the live backend's own advertised oidc_authority points it at
+  http://localhost:8082 instead of the real QA IdP (see
+  new_finding_broken_oidc_authority). No /platform-dashboard screenshot
+  showing a real rendered tenant count could be captured because the login
+  itself fails before reaching that page -- this is a genuine product/infra
+  defect blocking AC6, not a credential-access gap (credential access is
+  confirmed working this run) and not a re-run of any previously-resolved
+  issue. The tenant-count DATA itself is independently confirmed correct
+  (count=2, obtained via a token fetched directly from Keycloak) but that
+  does not satisfy AC6's own wording, which requires the value to be
+  observed via a real login.
+
+ac7_disposition: >
+  NOT SATISFIED. The named pipeline_test
+  (web/tests/e2e/pipelines/platform-login-routing-by-role.pipeline.e2e.spec.ts)
+  was run twice against live QA with real, valid PLATFORM_ADMIN credentials
+  -g "PLATFORM_ADMIN" (second run with --retries=0 to rule out flake) --
+  both runs produced a real FAIL:
+  `Error: page.waitForURL: net::ERR_CONNECTION_REFUSED` at helpers.ts:146,
+  because the app's real off-origin redirect target
+  (http://localhost:8082/...) is unreachable from any real browser, exactly
+  as it would be for a real end user. The scenario file's own
+  PLATFORM_ADMIN branch assertion is correct and unchanged (verified by
+  reading, see scenario_file_check). This is a new, previously-unreported
+  blocker distinct from ISS-0711/0712/0713, all three of which remain
+  correctly resolved -- the pipeline_test itself is fine; the live system
+  under test currently is not.
+
+overall_verdict: >
+  REQ-369's application code (PlatformDashboardPage, the role-conditional
+  OidcCallbackPage redirect, the ISS-0711 tenant-count fix) is not in
+  question here -- nothing in this run contradicts any of that. What
+  blocks AC6 and AC7 is a NEW, live, genuine QA-deployment defect
+  (oidc_authority misconfigured to localhost:8082) that breaks the entire
+  real login flow for QA, discovered only because this run had, for the
+  first time, both real credential access AND ran the actual real-redirect
+  login path all the way through instead of stopping at the credential
+  step. REQ-369 should remain status: blocked. Recommend ORCH route
+  new_finding_broken_oidc_authority to infra/deployment triage (likely
+  BPM_IDP_BASE_URL missing or wrong on the QA app service after the recent
+  docker-compose.qa.yml / image-tag redeploy work) as its own issue, with
+  BLOCKER severity given it breaks all real QA logins, not just
+  PLATFORM_ADMIN -- and only after that is fixed and confirmed live should
+  UAT-RUNNER re-attempt this same AC6/AC7 re-verification.
+
+screenshot_evidence: >
+  web/test-results/pipelines-platform-login-r-759b6-distinct-platform-dashboard-chromium/test-failed-1.png
+  -- blank white page (ERR_CONNECTION_REFUSED before any content loads);
+  this IS the accurate evidence of the failure, not a placeholder. No
+  /platform-dashboard success screenshot exists from this run because the
+  login never reached that page. (web/test-results/ is gitignored, same
+  convention as web/tests/screenshots/pipelines/ for evidence referenced by
+  path only.)
+
+cleanup: >
+  No throwaway spec files were added this run (unlike the 2026-09-18
+  20260918T143000Z run, which needed a temporary real-OIDC-redirect spec
+  before helpers.ts gained loginViaRealOidcRedirect -- that helper now
+  exists permanently, so no temporary file was needed here). No edits made
+  to any file under web/ or lib/. `git status` confirmed clean in both the
+  repo root and web/ before and after this run.
+
+notes: >
+  No mocks, no absence-of-error-as-pass, no fabricated screenshot, no
+  plaintext QA password committed or written into this report (only
+  username and role are named). The FAIL reported for AC6/AC7 is a real,
+  reproduced-twice FAIL with root cause independently traced through the
+  Playwright trace network log, direct curl confirmation of the live
+  backend response, and direct source inspection of
+  lib/letflow/routers/tenant_config.ex -- not inferred, not guessed.

@@ -1975,3 +1975,4 @@
 2026-09-19T08:19:55Z | DISPATCH | WF-03 | WF03-ISS0721-20260919/step-final-git-merge | ORCH -> ELIXIR-DEV | PENDING
 2026-09-19T08:56:19Z | GATE_PASS | WF-03 | WF03-ISS0721-20260919/step-final-git-merge | ELIXIR-DEV(ORCH-completed) -> ORCH | PASS (found IN_PROGRESS/stale from dead prior session mid-merge; PR #1568 all gates already PASS; ORCH updated branch onto main, waited for CI green, squash-merged as 400032ef)
 2026-09-19T08:56:19Z | RUN_DONE | WF-03 | WF03-ISS0721-20260919 | ORCH | REQ-228 / ISS-0721 resolved and merged to main (400032ef)
+2026-09-19T09:01:47Z | RELEASE_LOCK | WF-03 | WF03-ISS0721-20260919 | ORCH -> letflow-queue | task 720 released status: done

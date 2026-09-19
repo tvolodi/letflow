@@ -8,8 +8,8 @@
   "file": "handoffs/WF03-ISS0721-20260919/step-00-git-setup-retry1.json",
   "created_at": "2026-09-19T06:36:27Z",
   "started_at": "2026-09-19T06:36:27Z",
-  "completed_at": null,
-  "status": "PENDING",
+  "completed_at": "2026-09-19T06:44:00Z",
+  "status": "COMPLETED",
   "priority": "NORMAL",
   "context": {
     "stage": null,
@@ -30,18 +30,18 @@
   },
   "result": {
     "status": "PASS",
-    "summary": "",
-    "artifacts_out": [],
+    "summary": "Re-ran GIT_SETUP.md from the reconciled main (ORCH's rebase+push left both local and origin main at 05802cea, this checkout's HEAD then advanced by ORCH's own retry-dispatch commit to ffc433d2, still a clean ff state). git checkout main was a no-op (already on main); git pull --ff-only origin main returned 'Already up to date' (exit 0). No secondary worktree present (git worktree list showed a single entry), so the standard procedure applied, not the worktree variant. No stale feature/WF03-ISS0721-20260919 branch existed from the prior aborted attempt, so no git branch -D was needed. Created and checked out feature/WF03-ISS0721-20260919 from ffc433d2, verified with git branch --show-current, and pushed with -u to origin; GitHub returned 'new branch' confirmation and set up tracking.",
+    "artifacts_out": ["branch: feature/WF03-ISS0721-20260919"],
     "issues": [],
     "git_evidence": {
-      "branch_name": null,
-      "commit_sha_list": [],
-      "remote_branch": null,
-      "push_status": "skipped",
+      "branch_name": "feature/WF03-ISS0721-20260919",
+      "commit_sha_list": ["ffc433d251503f1af95c1f221c3dc06d971795b1"],
+      "remote_branch": "origin/feature/WF03-ISS0721-20260919",
+      "push_status": "success",
       "pr_url": null,
       "pr_create_error": null
     },
-    "next_action": ""
+    "next_action": "Route to Step 0.5/1 (ISSUE-FIXER diagnosis)"
   },
   "rework_count": 0,
   "max_rework": 3

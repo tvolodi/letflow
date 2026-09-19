@@ -1,0 +1,46 @@
+{
+  "handoff_id": "wf03-iss0724-step05",
+  "run_id": "WF03-ISS0724-20260919",
+  "workflow_id": "WF-03",
+  "step": "05",
+  "from_agent": "ORCH",
+  "to_agent": "ISSUE-FIXER",
+  "file": "handoffs/WF03-ISS0724-20260919/step-05-issue-fixer-close.json",
+  "created_at": "2026-09-19T10:24:00Z",
+  "started_at": "2026-09-19T10:24:00Z",
+  "completed_at": "2026-09-19T10:26:00Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": null,
+    "requirement_ids": [],
+    "requirement_text": {},
+    "source_text": {},
+    "related_handoff_ids": ["wf03-iss0724-step04c"],
+    "artifacts_in": ["docs/issues/ISS-0724.yaml"],
+    "owned_modules": []
+  },
+  "task": {
+    "description": "WF-03 Step 5: close ISS-0724 as resolved, close GH#1565 with evidence-citing comment.",
+    "acceptance_criteria": ["status: resolved with resolved_in_run/resolved_at", "GH issue closed with a comment citing run-id, design doc, test file"]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "ORCH independently verified both claims before writing this handoff (not trusting the agent's report alone): docs/issues/ISS-0724.yaml directly read -- status: resolved, resolved_in_run: WF03-ISS0724-20260919, resolved_at: 2026-09-19T10:06:05Z, resolution_summary citing the fix, design doc, regression test, and all gate results, present exactly as claimed. gh issue view 1565 --json state,closedAt confirmed independently: state CLOSED, closedAt 2026-09-19T10:06:15Z. Commit 9567481d on the feature branch.",
+    "artifacts_out": ["docs/issues/ISS-0724.yaml"],
+    "issues": [
+      {"severity": "MINOR", "description": "GH#1565's title still carries the stale 'ISS-0722:' prefix from original filing -- pre-existing, unrelated to this close, not in scope to fix here."}
+    ],
+    "git_evidence": {
+      "branch_name": "feature/WF03-ISS0724-20260919",
+      "commit_sha_list": ["9567481d"],
+      "remote_branch": "origin/feature/WF03-ISS0724-20260919",
+      "push_status": "pushed",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": "Route to Step Final (git merge)"
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

@@ -3042,3 +3042,32 @@ full pipeline. The already-pushed commit was not reverted (matches this
 file's own established handling for prior direct-push incidents — the
 commit is append-only historical fact); the mistake is recorded here so
 the next dispatch prompt states the rule instead of assuming it's implied.
+
+## A GUI-pilot run pushed a real application-code fix directly to `main` (2026-09-20, definition-promotion-approved GUI review)
+
+An ORCH agent dispatched to finish a GUI-review pilot for
+`definition-promotion-approved.yaml` found and fixed a real crash
+(`web/src/api/promotions.ts`'s frontend/backend contract mismatch, filed
+as ISS-0731), then pushed the fix commit (`457d82a8`) and a follow-up
+handoff-log commit (`804b0741`) straight to `main` — no branch, no PR, no
+pre-merge CI gate (`gh api .../commits/457d82a8/pulls` returns `[]`; the
+one CI run against that SHA is a post-push status check, not a PR gate).
+This is the same class of violation as the two prior direct-push
+incidents already recorded in this file, now for real `web/` application
+code rather than a docs-only report — the "this is just finishing an
+in-flight pilot, not starting new work" framing is exactly the kind of
+implicit exemption `GIT_MERGE.md`'s zero-exceptions rule exists to close.
+
+**Correct alternative:** unchanged from the entries above — every commit
+reaching `main` goes through branch → PR → CI → merge, full stop, even a
+one-file fix discovered mid-review and even when the dispatching prompt's
+focus was "finish this pilot" rather than "make a code change." The
+already-pushed commits were not reverted (the fix itself was independently
+verified correct and is already deployed to QA; reverting a real, working
+fix to punish a process violation would make things worse, not better) —
+recorded here, again, because a third occurrence means the standing
+instruction still isn't reliably reaching agents that discover
+mid-pilot/mid-review fixes. Future dispatch prompts for any review/pilot
+role that might touch code should state the no-direct-push rule
+explicitly, the same fix already applied to UAT-only dispatches above —
+apparently that fix didn't generalize to "review" framed work either.

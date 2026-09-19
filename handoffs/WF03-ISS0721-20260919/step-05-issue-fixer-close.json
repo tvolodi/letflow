@@ -8,8 +8,8 @@
   "file": "handoffs/WF03-ISS0721-20260919/step-05-issue-fixer-close.json",
   "created_at": "2026-09-19T08:18:27Z",
   "started_at": "2026-09-19T08:18:27Z",
-  "completed_at": null,
-  "status": "PENDING",
+  "completed_at": "2026-09-19T08:19:17Z",
+  "status": "COMPLETED",
   "priority": "NORMAL",
   "context": {
     "stage": null,
@@ -34,18 +34,18 @@
   },
   "result": {
     "status": "PASS",
-    "summary": "",
-    "artifacts_out": [],
+    "summary": "Closed ISS-0721 as `resolved` per WF-03 Step 5. docs/issues/ISS-0721.yaml status flipped from open to resolved with resolved_in_run: WF03-ISS0721-20260919 and resolved_at: 2026-09-19T08:19:02Z (real UTC clock timestamp). GH-1554 closed via `gh issue close 1554 --comment \"...\"` citing the run-id, docs/issues/ISS-0721.yaml, and the regression test path test/letflow/tenant_provisioning/entity_event_type_seeding_test.exs, per the `resolved`-branch comment shape in WF-03 Step 5 (never claiming more than the fail-then-pass regression test plus full-suite PASS already evidenced in step-04c-test-runner-rerun1). This is a genuine root-cause close: Letflow.Entities.EventTypes.seed!/1 (REQ-228) is now invoked automatically from Letflow.TenantProvisioning.replay_migrations/2 for every real tenant, not a workaround.",
+    "artifacts_out": ["docs/issues/ISS-0721.yaml"],
     "issues": [],
     "git_evidence": {
       "branch_name": "feature/WF03-ISS0721-20260919",
       "commit_sha_list": [],
       "remote_branch": "origin/feature/WF03-ISS0721-20260919",
-      "push_status": "skipped",
+      "push_status": "pending",
       "pr_url": null,
       "pr_create_error": null
     },
-    "next_action": ""
+    "next_action": "Route to Step Final (git merge)"
   },
   "rework_count": 0,
   "max_rework": 3

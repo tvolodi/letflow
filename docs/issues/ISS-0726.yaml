@@ -1,0 +1,47 @@
+id: ISS-0726
+title: >
+  Hard navigation to /exam bounces back to / instead of showing the exam
+  list
+discovered_by: UAT-RUNNER
+discovered_in_run: gui-review-2026-09-19-bilimbaga-candidate-exam-rerun
+discovered_at: "2026-09-19T18:59:49Z"
+severity: MAJOR
+tags:
+  - frontend
+  - routing
+  - oidc
+  - bilimbaga
+description: >
+  Discovered during the bilimbaga-candidate-timed-exam-autograde GUI review
+  re-run (2026-09-19). A full page load / direct navigation to
+  https://qa.bizdala.com/exam (what a bookmark, refresh, or shared deep link
+  would do -- the realistic way a CANDIDATE would have to reach this screen
+  given the companion issue about missing nav) triggers a re-auth Keycloak
+  OIDC redirect round trip and lands back on / (the no-access dashboard),
+  never rendering ExamListPage. Reproduced twice independently: nav trace
+  goes /exam -> auth.qa.bizdala.com/realms/bilimbaga/.../auth ->
+  /auth/callback?realm=bilimbaga... -> / (not /exam). By contrast, an
+  in-SPA client-side navigation (history.pushState, no reload) to the exact
+  same /exam path DOES render ExamListPage correctly -- so this is
+  specifically a hard-navigation/reload-path bug (likely ProtectedRoute or
+  the OIDC manager not preserving/restoring the originally-requested
+  redirect target), not a permissions problem on the /exam route itself.
+  Needs ISSUE-FIXER root-cause diagnosis before a fix.
+affected_files:
+  - web/src/auth/ProtectedRoute.tsx
+  - web/src/router.tsx
+  - test/uat-reports/gui-review-2026-09-19-bilimbaga-candidate-exam-rerun.md
+suggested_fix: >
+  Not decided here -- needs ISSUE-FIXER root-cause diagnosis. Likely
+  candidates: ProtectedRoute or the OIDC manager not preserving/restoring
+  the originally-requested redirect target across a full-page OIDC
+  redirect round trip.
+severity_rationale: >
+  MAJOR -- breaks the realistic candidate path to the exam list (bookmark,
+  refresh, shared deep link) for every candidate on every tenant, not just
+  bilimbaga. In-SPA navigation still works, so this is not a total outage,
+  but it is a real, reproducible defect blocking a normal, expected user
+  flow.
+queue_ref: Q-726
+github_ref: GH-1577
+status: open

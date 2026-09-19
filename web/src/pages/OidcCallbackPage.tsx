@@ -8,6 +8,7 @@ import { setToken } from '@/api/client'
 import { decodeTokenPayload, resolveDisplayName } from '@/auth/tokenUtils'
 import { resolveRealmFromUrl } from '@/auth/tenantConfig'
 import { tenantsApi } from '@/api/tenants'
+import { isSafeRestorePath } from '@/auth/safeRestorePath'
 
 /**
  * Module-level guard: prevent double-invocation of signinRedirectCallback().
@@ -69,7 +70,10 @@ export default function OidcCallbackPage() {
           tenant_type: tenantType,
           production_tenant_display_name: productionTenantDisplayName,
         })
-        navigate(payload.roles.includes('PLATFORM_ADMIN') ? '/platform-dashboard' : '/', { replace: true })
+        const restoredPath = isSafeRestorePath(user.state) ? user.state : null
+        const destination =
+          restoredPath ?? (payload.roles.includes('PLATFORM_ADMIN') ? '/platform-dashboard' : '/')
+        navigate(destination, { replace: true })
       } catch {
         // OIDC callback failed — redirect to root which triggers Keycloak login
         window.location.replace('/')

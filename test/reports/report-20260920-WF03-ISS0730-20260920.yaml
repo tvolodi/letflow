@@ -1,0 +1,104 @@
+# WF-03 ISS-0730 -- Step 4 TEST-RUNNER gate before merge.
+#
+# Scope: frontend-only fix (mount promotion-review GUI route behind
+# PLATFORM_ADMIN gate). Commit ec4d5e0b on main, plus TEST-DESIGNER's
+# strengthened, still-uncommitted test/router.iss-0730.test.tsx (4 cases,
+# mutation-tested). No .ex/.exs/migration files touched by this change --
+# confirmed via `git status --porcelain -- lib/ priv/repo/migrations/`, which
+# shows only lib/letflow/design/iss0730-promotion-review-page-routing.md (a
+# design doc, not application code). A full `mix test` / scripts/test_parallel.sh
+# backend run is therefore not required for this fix's verification per the
+# WF-03 Step 4 dispatch instructions; not run here.
+#
+# node_modules was absent in this workspace at run start; ran `npm install`
+# in web/ first (607 packages, network available, no error) before any of the
+# four commands below.
+#
+# 1) npm run test (vitest run --passWithNoTests --exclude tests/e2e/**
+#    --exclude tests/guards/**):
+#      Test Files  96 passed (96)
+#      Tests        638 passed (638)
+#      Duration     65.51s
+#    Includes src/__tests__/router.iss-0730.test.tsx -- 4 tests, all passed,
+#    353ms.
+#
+# 2) npm run type-check (tsc -b tsconfig.json): clean, no output, exit 0.
+#
+# 3) npm run lint (eslint . --ext ts,tsx --max-warnings 0): clean, no output,
+#    exit 0.
+#
+# 4) npm run guards (meta-control, source-scan, bundle-scan, role-set specs):
+#      Test Files  4 passed (4)
+#      Tests       48 passed (48)
+#      Duration    16.02s
+#    bundle-scan runs a real production build (vite build, 2428 modules,
+#    "built in 8.52s") and scans the built bundle; that build succeeded
+#    clean.
+
+requirement: ISS-0730
+run_id: WF03-ISS0730-20260920
+branch: main
+commands:
+  - npm install (web/)
+  - npm run test (web/)
+  - npm run type-check (web/)
+  - npm run lint (web/)
+  - npm run guards (web/)
+
+frontend_totals:
+  test_files: 96
+  tests: 638
+  failures: 0
+  type_check: PASS
+  lint: PASS
+  guards_test_files: 4
+  guards_tests: 48
+  guards_failures: 0
+  production_build: PASS
+
+backend_suite_run: false
+backend_suite_reason: >
+  Frontend-only change (router/gating), confirmed via
+  `git status --porcelain -- lib/ priv/repo/migrations/` showing no
+  application-code or migration files touched -- the sole lib/ entry is the
+  design doc lib/letflow/design/iss0730-promotion-review-page-routing.md.
+  SECURITY-REVIEWER and REVIEWER already confirmed no backend files touched
+  in this pipeline; scripts/test_parallel.sh was not run as part of this
+  gate per WF-03 Step 4 dispatch instructions for this specific fix.
+
+working_tree_check:
+  expected: "commit ec4d5e0b on main, plus one uncommitted modified test file (web/src/__tests__/router.iss-0730.test.tsx)"
+  actual_git_status_porcelain: |
+     M docs/issues/ISS-0725.yaml
+     M handoffs/orchestrator.log
+     M web/src/__tests__/router.iss-0730.test.tsx
+    ?? docs/issues/ISS-0726.yaml
+    ?? docs/issues/ISS-0727.yaml
+    ?? docs/issues/ISS-0728.yaml
+    ?? docs/issues/ISS-0729.yaml
+    ?? docs/issues/ISS-0730.yaml
+    ?? lib/letflow/design/iss0730-promotion-review-page-routing.md
+    ?? test/specs/ISS-0730.md
+    ?? test/uat-reports/gui-review-2026-09-20-definition-promotion-approved.md
+    ?? test/uat-reports/uat-2026-09-19-WF05-HEALTHCHECK-BILIMBAGA-20260919.yaml
+    ?? test/uat-reports/uat-2026-09-19-WF05-HEALTHCHECK-PLATFORM-20260919.yaml
+  note: >
+    The tree carries more than just the expected uncommitted test file --
+    several modified/untracked files beyond ISS-0730's own scope (ISS-0725,
+    ISS-0726..0729 issue docs, UAT reports, orchestrator.log) are present
+    from other in-flight pipeline work in this same checkout. None of them
+    are lib/ application code, migrations, or web/src files other than the
+    one expected test file, so they do not affect this fix's own
+    verification, but the tree is not as narrowly scoped as "commit
+    ec4d5e0b plus one file" -- flagging for ORCH/whoever commits next rather
+    than silently treating it as clean.
+
+verdict: PASS
+verdict_reason: >
+  Real npm run test/type-check/lint/guards runs (not trusted from an earlier
+  report) all passed cleanly: 638/638 frontend tests across 96 files
+  including the 4 strengthened ISS-0730 router tests, 0 type errors, 0 lint
+  violations, and 48/48 guard tests including a real production build. No
+  backend files touched by this change, confirmed directly. Working tree has
+  extra uncommitted artifacts from unrelated in-flight work beyond the
+  single expected test file -- noted above, not a blocker for this fix.

@@ -26946,6 +26946,68 @@ requirements:
       - "this requirement's own close-out states explicitly that ISS-0700 remains status: open (not closed by this requirement) and that the separate 'Unknown workspace' banner gap for non-PLATFORM_ADMIN unauthenticated/no-realm-slug users is unresolved and out of this requirement's scope"
     depends_on: [REQ-360]
     close_out_note: >
+      status: blocked, NOT done — updated by ORCH (WF02-REQ369-AC6AC7-20260919,
+      2026-09-19T02:49:52Z), superseding the 2026-09-18 note below in substance
+      (kept append-only per this file's own history discipline: nothing here is
+      deleted, this note states the current, factual position). AC1-AC5 remain
+      genuinely complete and independently re-verified: RELEASE-VALIDATOR's
+      PASS-WITH-PENDING (step-05-release-validation.json), merged as PR #1507,
+      squash commit 3c0cbd24290c062d1974b7eb91fa74adcc2c42f4.
+      .
+      THE CREDENTIAL-ACCESS GAP NAMED IN THE 2026-09-18 NOTE BELOW IS RESOLVED FOR THIS
+      ENVIRONMENT — genuinely re-checked, not assumed. This session's execution
+      environment (Windows) has a real c:\Users\tvolo\dev\ai-dala\ai-dala-infra checkout
+      and working SSH access to ubuntu-16gb-nbg1-1 (confirmed live:
+      `ssh ubuntu-16gb-nbg1-1 whoami` -> tvolodi). Dispatched UAT-RUNNER, which fetched a
+      real seeded PLATFORM_ADMIN credential via `ai-dala-infra/scripts/qa-login.sh
+      admin-user` and independently confirmed it valid via a direct Keycloak
+      password-grant against https://auth.qa.bizdala.com (HTTP 200, decoded token has
+      preferred_username=admin-user, realm_access.roles=["PLATFORM_ADMIN"]). Password
+      never recorded in any file or commit.
+      .
+      AC6 AND AC7 ARE STILL NOT SATISFIED — BUT FOR A NEW, GENUINE, LIVE QA-DEPLOYMENT
+      DEFECT, NOT A CREDENTIAL GAP. This is the first run for this requirement with both
+      real credential access AND a full real-OIDC-redirect login attempt carried all the
+      way through instead of stopping at the credential-fetch step, and it surfaced a
+      new BLOCKER: the live QA backend's `GET /api/tenant-config` advertises
+      `oidc_authority="http://localhost:8082/realms/bpm-default"` instead of the real QA
+      Keycloak (confirmed twice via direct curl, `cache-control: max-age=0
+      must-revalidate` — not stale cache), so every real browser's OIDC redirect goes to
+      `localhost:8082`, which is unreachable from any real client. This breaks real login
+      for ALL QA users, not only PLATFORM_ADMIN — filed as its own issue, ISS-0719
+      (docs/issues/ISS-0719.yaml, queue_ref Q-719, github_ref GH-1550, severity BLOCKER),
+      root-caused to lib/letflow/routers/tenant_config.ex's `idp_base_url/0` falling
+      through to its `"http://localhost:8082"` default because none of
+      BPM_IDP_BASE_URL/KEYCLOAK_BASE_URL/the compiled `:oidc` issuer resolve on the live
+      QA app service — very likely a side effect of the recent QA docker-compose/
+      image-tag redeploy work (ISS-0717/T-0134), not confirmed by inspecting the QA
+      compose/env directly. Keycloak itself is independently confirmed healthy (the
+      direct password-grant above succeeded); only the backend's advertised authority
+      value is wrong. The named pipeline_test
+      (web/tests/e2e/pipelines/platform-login-routing-by-role.pipeline.e2e.spec.ts)
+      PLATFORM_ADMIN case was run twice against live QA with valid credentials, both
+      times failing identically (`net::ERR_CONNECTION_REFUSED` at the redirect step) —
+      not a flake. Full evidence:
+      test/uat-reports/uat-2026-09-19-WF02-REQ369-AC6AC7-final2-20260919.yaml.
+      REQ-369's own application code is NOT in question — PlatformDashboardPage, the
+      role-conditional OidcCallbackPage redirect, and ISS-0711's tenant-count fix are all
+      independently confirmed correct and unaffected by this finding (the real backend
+      tenant data was confirmed count=2 via a token fetched directly from Keycloak,
+      bypassing the broken app redirect).
+      .
+      REMAINING WORK for whoever picks this back up: (1) route ISS-0719 to infra/
+      deployment triage to inspect the real QA docker-compose.qa.yml/env on
+      ubuntu-16gb-nbg1-1, confirm/fix BPM_IDP_BASE_URL (expected
+      https://auth.qa.bizdala.com), redeploy, and confirm `GET /api/tenant-config`'s
+      oidc_authority is correct via direct curl; (2) once fixed and confirmed live,
+      re-dispatch UAT-RUNNER (same credential-access path as this run) to re-attempt AC6
+      (real login, real tenant count rendered, screenshot) and AC7 (named pipeline_test
+      re-run against QA, real PASS) before flipping this requirement's status to done.
+      AC8 remains satisfied: ISS-0700 (docs/issues/ISS-0700.yaml) stays status: open,
+      untouched by this note, and the separate "Unknown workspace" banner gap remains
+      out of scope.
+      .
+      --- Prior note (2026-09-18), retained for history, superseded by the above ---
       status: blocked, NOT done — updated by DOC-UPDATER
       (WF02-REQ369-closeout-final-20260918, 2026-09-18), superseding the
       2026-09-18T14:53:51Z ORCH note below in substance (kept append-only per this

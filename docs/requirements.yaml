@@ -27512,6 +27512,8 @@ requirements:
     owner: FRONTEND-DEV
     status: pending
     stage: S8
+    # impl_order: UNREGISTERED -- freshly filed 2026-09-20 by ORCH during a UAT
+    # scenario GUI review, not yet triaged into letflow-queue's task ordering.
     description: >
       GAP FOUND DURING UAT SCENARIO REVIEW, NOT A HYPOTHESIS. Filed by ORCH
       2026-09-20 while applying the "review real screens before writing a

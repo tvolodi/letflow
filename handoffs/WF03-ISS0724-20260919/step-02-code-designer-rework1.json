@@ -1,0 +1,47 @@
+{
+  "handoff_id": "wf03-iss0724-step02-rework1",
+  "run_id": "WF03-ISS0724-20260919",
+  "workflow_id": "WF-03",
+  "step": "02",
+  "from_agent": "ORCH",
+  "to_agent": "CODE-DESIGNER",
+  "file": "handoffs/WF03-ISS0724-20260919/step-02-code-designer-rework1.json",
+  "created_at": "2026-09-19T09:08:00Z",
+  "started_at": "2026-09-19T09:08:00Z",
+  "completed_at": "2026-09-19T09:12:00Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": null,
+    "requirement_ids": [],
+    "requirement_text": {},
+    "source_text": {},
+    "related_handoff_ids": ["wf03-iss0724-step02b"],
+    "artifacts_in": ["lib/letflow/design/iss0724-exam-question-origin-separation.md", "handoffs/WF03-ISS0724-20260919/step-02b-code-design-validator.json"],
+    "owned_modules": ["lib/letflow/exam/session.ex"]
+  },
+  "task": {
+    "description": "Rework 1/3: fix CODE-DESIGN-VALIDATOR's two Step 2b findings -- remove pasteable implementation code from sections 2/3, correct section 4's overstated compile-failure claim.",
+    "acceptance_criteria": [
+      "Sections 2/3 are prose-only, no pasteable Elixir bodies, @specs retained",
+      "Section 4 names the merged-list-plus-empty-arg residual gap and cites the assertion-level backstop"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "Both findings fixed. Sections 2 (step 3's Enum.with_index/Map.put pipeline, step 4's with block) and 3 (persist_session_questions/5 body) rewritten prose-only, mechanism named (Enum.with_index/2 with starting-offset length(resolved_random)) rather than pasted as code; only @spec blocks remain fenced. Section 4 now explicitly names the residual gap (persist_session_questions(id, merged, [], candidate_id, prefix) compiles cleanly under the new 5-arity signature since neither argument carries provenance) and states the arity change only closes the literal 4-argument revert shape, pointing to TEST-DESIGNER's manual-order property test (iss0722 design doc section 7) as the AC1-sanctioned assertion-level backstop. Sections 0/1/5/6 untouched per instructions.",
+    "artifacts_out": ["lib/letflow/design/iss0724-exam-question-origin-separation.md"],
+    "issues": [],
+    "git_evidence": {
+      "branch_name": "feature/WF03-ISS0724-20260919",
+      "commit_sha_list": ["250a3a9a"],
+      "remote_branch": "origin/feature/WF03-ISS0724-20260919",
+      "push_status": "pushed",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": "Route to Step 2b re-gate"
+  },
+  "rework_count": 1,
+  "max_rework": 3
+}

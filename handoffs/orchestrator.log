@@ -1967,3 +1967,5 @@
 2026-09-19T08:01:52Z | DISPATCH | WF-03 | WF03-ISS0721-20260919/step-03b-security-reviewer-rework1 | ORCH -> SECURITY-REVIEWER | PENDING (re-gate on updated diff)
 2026-09-19T08:15:00Z | GATE_PASS | WF-03 | WF03-ISS0721-20260919/step-03b-security-reviewer-rework1 | SECURITY-REVIEWER -> ORCH | PASS (carve-out structurally unreachable for a real tenant schema_name)
 2026-09-19T08:04:13Z | DISPATCH | WF-03 | WF03-ISS0721-20260919/step-03c-reviewer-rework1 | ORCH -> REVIEWER | PENDING (re-gate on updated diff, incl. scope-creep judgement on 3rd fixture fix)
+2026-09-19T08:30:00Z | GATE_PASS | WF-03 | WF03-ISS0721-20260919/step-03c-reviewer-rework1 | REVIEWER -> ORCH | PASS (3rd fixture fix ruled in-scope mechanical correction, not scope creep)
+2026-09-19T08:06:49Z | DISPATCH | WF-03 | WF03-ISS0721-20260919/step-04c-test-runner-rerun1 | ORCH -> TEST-RUNNER | PENDING (re-run after Step 3 rework1)

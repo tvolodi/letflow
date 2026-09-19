@@ -61,10 +61,54 @@ suggested_fix: >
   mode is not actually meant to be supported yet -- the rule-creation path
   should reject mode "manual" with a clear validation error instead of
   silently accepting it and producing a broken exam later.
-status: open
+status: resolved
 # NOTE: filename/queue-id mismatch -- see docs/issues/ISS-0721.yaml's own
 # identical note for the full explanation. register_task's real,
 # atomically-allocated id for this issue is 721, not 722. Corrected here
 # by ORCH after registering it for real via letflow-queue.
 queue_ref: Q-721
 github_ref: GH-1555
+resolution:
+  resolved_in_run: WF03-ISS0722-20260919
+  commit: 41018e39
+  pr: 1564
+  branch: feature/WF03-ISS0722-20260919
+  design_doc: lib/letflow/design/iss0722-exam-manual-question-mode.md
+  fix: >
+    Letflow.Exam.Session gained fetch_manual_questions/2, a real clause for
+    exam_question_rule.mode "manual" that reads the rule's pinned
+    exam_manual_question rows and materializes exactly those questions,
+    instead of silently falling through to an empty result as before. For
+    mixed-mode exams (an exam with both "random" and "manual" rules
+    contributing blocks), block ordering is random-blocks-first then
+    manual-blocks-second, and manual-origin questions are carved out of the
+    randomization/shuffle step applied to random-origin questions (so a
+    pinned manual question set stays in its authored order rather than being
+    reshuffled). A rule of mode "manual" whose exam_manual_question set is
+    empty now returns {:error, :manual_rule_empty} instead of silently
+    producing a zero-question session, closing the original silent-failure
+    complaint directly (HTTP 201 with an empty questions list, no error
+    anywhere).
+  gate_history: >
+    CODE-DESIGN-VALIDATOR PASS. SECURITY-REVIEWER PASS. REVIEWER PASS.
+    TEST-DESIGN-VALIDATOR PASS after two rework cycles. TEST-RUNNER:
+    4459/4459 passed. RELEASE-VALIDATOR PASS.
+  verification_scope_and_gap: >
+    Honest accounting, per RELEASE-VALIDATOR's own statement: this fix has
+    unit/integration test coverage only -- 45 passing tests, including a
+    genuine deterministic ordering-discrimination proof (commit 41018e39's
+    sort_order-reversed discriminator) that the mixed-mode block-ordering
+    behavior is real and not coincidentally matching test fixture order. The
+    actual real-world BilimBaga scenario that discovered this bug in the
+    first place -- a live exam_manual_question-pinned exam run against
+    qa.bizdala.com -- was worked around at discovery time (the UAT run
+    swapped the exam's rule to mode "random" to get an installable exam, per
+    this issue's own "WORKAROUND USED THIS RUN" note) rather than exercised
+    against the real fix. It has NOT been re-run end-to-end against this fix.
+    A pending follow-up is recommended, not silently implied as already
+    covered: once this merges and deploys, UAT-RUNNER should re-run
+    test/fixtures/uat/scenarios/bilimbaga/candidate-timed-exam-autograde.yaml
+    (or a manual-mode variant of it) against live QA with a real
+    exam_question_rule mode "manual" configuration, to prove the fix against
+    the actual live scenario that discovered ISS-0722, not only against
+    unit/integration coverage.

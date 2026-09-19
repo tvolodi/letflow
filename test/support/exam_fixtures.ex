@@ -2,8 +2,8 @@ defmodule Letflow.ExamFixtures do
   @moduledoc """
   Shared REQ-332/REQ-333 test fixture: provisions a real tenant schema and
   installs just enough of the bilimbaga entity definitions (`exam`,
-  `question`, `answer_option`, `exam_question_rule`, `session`,
-  `session_question`, `session_answer`, `session_question_score`,
+  `question`, `answer_option`, `exam_question_rule`, `exam_manual_question`,
+  `session`, `session_question`, `session_answer`, `session_question_score`,
   `session_event`) for
   `Letflow.Exam.Session`/`Letflow.Exam.QuestionSetResolver`/
   `Letflow.Exam.Scoring`/`Letflow.Exam.AntiCheat` integration tests, without a full
@@ -30,7 +30,7 @@ defmodule Letflow.ExamFixtures do
 
   @definitions_dir Path.join([File.cwd!(), "priv", "packs", "bilimbaga", "entity_definitions"])
 
-  @entity_types ~w(exam question answer_option exam_question_rule
+  @entity_types ~w(exam question answer_option exam_question_rule exam_manual_question
                     session session_question session_answer session_question_score
                     session_event certificate)
 

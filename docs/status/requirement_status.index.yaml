@@ -4293,8 +4293,15 @@ volumes:
     path: docs/status/requirement_status.v20.yaml
     status: current
     opened: 2026-09-18
-    entries: 5
+    entries: 6
     note: >
+      Incremented to 6 by DOC-UPDATER's own ISS-0722 SCOPE-CHANGE done-event
+      append (WF03-ISS0722-20260919, 2026-09-19T07:21:51Z -- ISS-0722
+      resolved, manual-mode exam question materialization fix) --
+      `grep -c "^  - req:" docs/status/requirement_status.v20.yaml` = 6
+      on-disk entries. 470 lines / 29103 bytes, well under the
+      1200-line/120000-byte roll ceiling, so no roll triggered.
+
       Incremented to 5 by DOC-UPDATER's own REQ-369 done-event append
       (WF02-REQ369-AC6AC7-final3-20260919, 2026-09-19T05:39:57Z -- REQ-369
       close-out, AC6/AC7 finally satisfied) -- `grep -c "^  - req:"

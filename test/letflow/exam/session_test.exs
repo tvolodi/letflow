@@ -63,12 +63,26 @@ defmodule Letflow.Exam.SessionTest do
     ExamFixtures.create_record!(schema, "answer_option", Map.merge(defaults, attrs))
   end
 
-  defp create_rule!(schema, exam_id, category_id, count, sort_order \\ 0) do
+  # ISS-0722: `mode` defaults to "random" (every pre-existing call site keeps
+  # this default, so it stays live -- see docs/anti-patterns.md ISS-0069);
+  # manual-mode tests pass `"manual"` explicitly.
+  defp create_rule!(schema, exam_id, category_id, count, sort_order \\ 0, mode \\ "random") do
     ExamFixtures.create_record!(schema, "exam_question_rule", %{
       "exam_id" => exam_id,
-      "mode" => "random",
+      "mode" => mode,
       "category_id" => category_id,
       "count" => count,
+      "sort_order" => sort_order
+    })
+  end
+
+  # ISS-0722: pins `question_id` to a `mode: "manual"` `exam_question_rule`,
+  # at the given intra-rule `sort_order` (distinct from the rule's own
+  # `sort_order` among the exam's rules -- design doc §3/§4).
+  defp create_manual_question!(schema, rule_id, question_id, sort_order) do
+    ExamFixtures.create_record!(schema, "exam_manual_question", %{
+      "rule_id" => rule_id,
+      "question_id" => question_id,
       "sort_order" => sort_order
     })
   end
@@ -84,10 +98,21 @@ defmodule Letflow.Exam.SessionTest do
 
   # Builds a minimal exam with one rule/one pool of `pool_size` single-choice
   # questions, taking `count` of them, and returns everything a test needs.
+  #
+  # ISS-0722: `opts[:mode]` defaults to `:random` (unchanged behavior for
+  # every existing caller). `mode: :manual` builds a single `mode: "manual"`
+  # `exam_question_rule` instead, and pins all `pool_size` questions to it
+  # via `exam_manual_question` rows in creation order (`sort_order` 0..n-1)
+  # -- `count`/`category_id` still exist on the rule (schema requires
+  # `count`, design doc §1) but are semantically unused by the manual path.
+  # The returned map additionally carries `pinned_question_ids` (the manual
+  # pin order) so tests can assert materialized order without recomputing
+  # it from `questions`.
   defp build_minimal_exam!(schema, opts \\ []) do
     pool_size = Keyword.get(opts, :pool_size, 1)
     count = Keyword.get(opts, :count, 1)
     exam_attrs = Keyword.get(opts, :exam_attrs, %{})
+    mode = Keyword.get(opts, :mode, :random)
     category_id = Ecto.UUID.generate()
 
     exam = create_exam!(schema, exam_attrs)
@@ -97,9 +122,30 @@ defmodule Letflow.Exam.SessionTest do
         build_single_choice_question!(schema, category_id)
       end
 
-    create_rule!(schema, exam.record_id, category_id, count)
+    case mode do
+      :random ->
+        create_rule!(schema, exam.record_id, category_id, count)
+        %{exam: exam, category_id: category_id, questions: questions}
 
-    %{exam: exam, category_id: category_id, questions: questions}
+      :manual ->
+        rule = create_rule!(schema, exam.record_id, category_id, count, 0, "manual")
+
+        pinned_question_ids =
+          questions
+          |> Enum.with_index()
+          |> Enum.map(fn {{question_id, _correct, _wrong}, index} ->
+            create_manual_question!(schema, rule.record_id, question_id, index)
+            question_id
+          end)
+
+        %{
+          exam: exam,
+          category_id: category_id,
+          questions: questions,
+          rule: rule,
+          pinned_question_ids: pinned_question_ids
+        }
+    end
   end
 
   # ---------------------------------------------------------------------
@@ -328,6 +374,227 @@ defmodule Letflow.Exam.SessionTest do
       prefix: schema
     )
     |> Enum.map(& &1.field_values)
+  end
+
+  # ---------------------------------------------------------------------
+  # ISS-0722 -- exam_question_rule mode "manual" materialization
+  # ---------------------------------------------------------------------
+
+  describe "ISS-0722 -- manual-mode question materialization" do
+    test "pure manual-mode exam materializes exactly the pinned questions, in exam_manual_question.sort_order" do
+      %{schema_name: schema} = tenant("iss0722-manual-only")
+
+      %{exam: exam, pinned_question_ids: pinned_question_ids} =
+        build_minimal_exam!(schema, mode: :manual, pool_size: 4)
+
+      assert {:ok, session_view} =
+               Session.create(Ecto.UUID.generate(), exam.record_id, schema)
+
+      rows = session_question_rows(schema, session_view.id)
+
+      # Same questions, same count, same order as authored -- not just "some
+      # permutation of the right set."
+      assert Enum.map(rows, & &1["question_id"]) == pinned_question_ids
+    end
+
+    test "mixed-mode exam (random rule + manual rule) materializes both blocks, random-block-first then manual-block (design §4.2)" do
+      %{schema_name: schema} = tenant("iss0722-mixed-mode")
+
+      %{exam: exam, category_id: random_category_id, questions: random_questions} =
+        build_minimal_exam!(schema, mode: :random, pool_size: 3, count: 3)
+
+      random_question_ids =
+        Enum.map(random_questions, fn {question_id, _c, _w} -> question_id end)
+
+      manual_rule =
+        create_rule!(schema, exam.record_id, random_category_id, 1, 1, "manual")
+
+      manual_questions =
+        for _ <- 1..2, do: build_single_choice_question!(schema, Ecto.UUID.generate())
+
+      pinned_question_ids =
+        manual_questions
+        |> Enum.with_index()
+        |> Enum.map(fn {{question_id, _c, _w}, index} ->
+          create_manual_question!(schema, manual_rule.record_id, question_id, index)
+          question_id
+        end)
+
+      assert {:ok, session_view} =
+               Session.create(Ecto.UUID.generate(), exam.record_id, schema)
+
+      rows = session_question_rows(schema, session_view.id)
+      materialized_ids = Enum.map(rows, & &1["question_id"])
+
+      assert length(materialized_ids) == 5
+
+      {random_block, manual_block} = Enum.split(materialized_ids, 3)
+
+      # Random block: same set as the random pool (order is resolver-owned,
+      # unshuffled here since shuffle_questions defaults to false), but
+      # crucially it comes FIRST.
+      assert Enum.sort(random_block) == Enum.sort(random_question_ids)
+      # Manual block: exact pin order, LAST.
+      assert manual_block == pinned_question_ids
+    end
+
+    test "manual rule with a LOWER sort_order than the random rule still materializes AFTER it -- block order is mode-based, not exam_question_rule.sort_order-based (design §4.2)" do
+      %{schema_name: schema} = tenant("iss0722-sort-order-discriminator")
+
+      exam = create_exam!(schema, %{})
+      random_category_id = Ecto.UUID.generate()
+
+      random_questions =
+        for _ <- 1..3, do: build_single_choice_question!(schema, random_category_id)
+
+      random_question_ids =
+        Enum.map(random_questions, fn {question_id, _c, _w} -> question_id end)
+
+      # Deliberately reversed relative to the "mixed-mode" test above: here
+      # the random rule's sort_order (1) is HIGHER than the manual rule's
+      # sort_order (0). If block order were actually driven by
+      # exam_question_rule.sort_order (the tempting-but-wrong implementation
+      # design §4.2 explicitly warns against), the manual block would
+      # materialize first in this setup. The shipped implementation
+      # (session.ex:734's unconditional `resolved_random ++ resolved_manual`)
+      # ignores rule sort_order for block placement and always emits the
+      # random block first -- this is the only fixture arrangement that can
+      # distinguish the two implementations from each other.
+      create_rule!(schema, exam.record_id, random_category_id, 3, 1, "random")
+      manual_rule = create_rule!(schema, exam.record_id, random_category_id, 1, 0, "manual")
+
+      manual_questions =
+        for _ <- 1..2, do: build_single_choice_question!(schema, Ecto.UUID.generate())
+
+      pinned_question_ids =
+        manual_questions
+        |> Enum.with_index()
+        |> Enum.map(fn {{question_id, _c, _w}, index} ->
+          create_manual_question!(schema, manual_rule.record_id, question_id, index)
+          question_id
+        end)
+
+      assert {:ok, session_view} =
+               Session.create(Ecto.UUID.generate(), exam.record_id, schema)
+
+      rows = session_question_rows(schema, session_view.id)
+      materialized_ids = Enum.map(rows, & &1["question_id"])
+
+      assert length(materialized_ids) == 5
+
+      {random_block, manual_block} = Enum.split(materialized_ids, 3)
+
+      # Random block first (by set, order is resolver-owned/unshuffled here),
+      # manual block last in exact pin order -- despite the manual rule
+      # having the numerically lower sort_order.
+      assert Enum.sort(random_block) == Enum.sort(random_question_ids)
+      assert manual_block == pinned_question_ids
+    end
+
+    test "shuffle_questions? true does NOT reorder manual-origin questions, even while shuffling the random-origin block (design §4.1)" do
+      %{schema_name: schema} = tenant("iss0722-shuffle-carveout")
+
+      %{exam: exam, category_id: random_category_id} =
+        build_minimal_exam!(schema,
+          mode: :random,
+          pool_size: 8,
+          count: 8,
+          exam_attrs: %{"shuffle_questions" => true}
+        )
+
+      manual_rule =
+        create_rule!(schema, exam.record_id, random_category_id, 1, 1, "manual")
+
+      manual_questions =
+        for _ <- 1..6, do: build_single_choice_question!(schema, Ecto.UUID.generate())
+
+      pinned_question_ids =
+        manual_questions
+        |> Enum.with_index()
+        |> Enum.map(fn {{question_id, _c, _w}, index} ->
+          create_manual_question!(schema, manual_rule.record_id, question_id, index)
+          question_id
+        end)
+
+      assert {:ok, session_view} =
+               Session.create(Ecto.UUID.generate(), exam.record_id, schema)
+
+      rows = session_question_rows(schema, session_view.id)
+      materialized_ids = Enum.map(rows, & &1["question_id"])
+
+      assert length(materialized_ids) == 14
+
+      # The LAST 6 materialized rows are the manual block (§4.2: random block
+      # first). Its order must be EXACTLY the authored pin order -- not a
+      # permutation, not "the right set in some order" -- regardless of
+      # `shuffle_questions?: true` on the exam. This is the invariant
+      # REVIEWER flagged as fragile: assert the precise list equality, not a
+      # weaker set-membership check, so a mutant that accidentally folds the
+      # manual block into the shuffle would fail this deterministically
+      # (8-of-14 odds of an accidental exact-order match by chance is
+      # negligible, and the code path is deterministic either way -- this
+      # is not a statistical/seeded-randomness assertion, it's a structural
+      # one: manual rows are never passed through `Enum.shuffle/1` at all).
+      manual_block = Enum.take(materialized_ids, -6)
+      assert manual_block == pinned_question_ids
+
+      random_block = Enum.take(materialized_ids, 8)
+      assert Enum.sort(random_block) != Enum.sort(manual_block)
+    end
+
+    test "a manual rule with zero exam_manual_question rows returns {:error, :manual_rule_empty} and creates no session" do
+      %{schema_name: schema} = tenant("iss0722-manual-empty")
+
+      exam = create_exam!(schema, %{})
+      category_id = Ecto.UUID.generate()
+      # Manual rule created directly (bypassing build_minimal_exam!/2's
+      # :manual path, which always pins pool_size questions) so this rule
+      # genuinely has zero exam_manual_question rows.
+      create_rule!(schema, exam.record_id, category_id, 1, 0, "manual")
+
+      candidate_id = Ecto.UUID.generate()
+
+      assert {:error, :manual_rule_empty} =
+               Session.create(candidate_id, exam.record_id, schema)
+
+      # Mirrors how a rejected create/3 call must leave no trace: no
+      # "session" entity record was written for this candidate/exam pair.
+      # Raw query against entity_record_latest, same pattern as the
+      # "session snapshot isolation" describe block above -- Session
+      # exposes no listing function of its own.
+      import Ecto.Query
+
+      session_rows =
+        Repo.all(
+          from(r in Letflow.Entities.Record.Latest,
+            where:
+              r.entity_type == "session" and
+                fragment("?->>?", r.field_values, "exam_id") == ^exam.record_id and
+                fragment("?->>?", r.field_values, "user_id") == ^candidate_id
+          ),
+          prefix: schema
+        )
+
+      assert session_rows == []
+    end
+
+    test "regression proof: a random-only exam's materialization is unchanged by the manual-mode fix" do
+      %{schema_name: schema} = tenant("iss0722-random-only-regression")
+
+      %{exam: exam, questions: questions} =
+        build_minimal_exam!(schema, pool_size: 3, count: 3)
+
+      question_ids = Enum.map(questions, fn {question_id, _c, _w} -> question_id end)
+
+      assert {:ok, session_view} =
+               Session.create(Ecto.UUID.generate(), exam.record_id, schema)
+
+      rows = session_question_rows(schema, session_view.id)
+      materialized_ids = Enum.map(rows, & &1["question_id"])
+
+      assert length(materialized_ids) == 3
+      assert Enum.sort(materialized_ids) == Enum.sort(question_ids)
+    end
   end
 
   # ---------------------------------------------------------------------

@@ -430,3 +430,41 @@ history:
       blocked -> done and close_out_note appended (append-only) with the full
       account above. GitHub issue GH-1550 (ISS-0719) closed with a comment
       citing both fixes and the UAT report path.
+  - req: SCOPE-CHANGE
+    event: done
+    agent: DOC-UPDATER
+    at: "2026-09-19T07:21:51Z"
+    note: >
+      WF-03 run WF03-ISS0722-20260919 (queue task Q-721, GH-1555) complete,
+      commit 41018e39, PR #1564. ISS-0722 (Letflow.Exam.Session.
+      fetch_question_pools/2 only handled exam_question_rule mode "random";
+      mode "manual" silently fell through to zero materialized questions
+      with no error -- discovered live against qa.bizdala.com while seeding
+      BilimBaga's exam_manual_question-pinned exam) is now resolved per
+      design doc lib/letflow/design/iss0722-exam-manual-question-mode.md:
+      fetch_manual_questions/2 added, a real clause reading the rule's
+      pinned exam_manual_question rows; mixed-mode block ordering is
+      random-first-then-manual; manual-origin questions are carved out of
+      the shuffle step applied to random-origin ones; an empty manual rule
+      now returns {:error, :manual_rule_empty} instead of a silent empty
+      session. Full gate history, all PASS: CODE-DESIGN-VALIDATOR,
+      SECURITY-REVIEWER, REVIEWER, TEST-DESIGN-VALIDATOR (after two rework
+      cycles), TEST-RUNNER (4459/4459), RELEASE-VALIDATOR.
+      docs/issues/ISS-0722.yaml flipped open -> resolved with a full
+      resolution block citing all of the above. Honest gap stated there and
+      here: coverage is unit/integration only (45 tests, including a real
+      deterministic ordering-discrimination proof) -- the live BilimBaga
+      scenario that discovered this bug was worked around at discovery time
+      (swapped to mode "random") rather than exercised against this fix, and
+      has not been re-run end-to-end against it. Recommending a UAT-RUNNER
+      follow-up re-run of
+      test/fixtures/uat/scenarios/bilimbaga/candidate-timed-exam-autograde.yaml
+      (or a manual-mode variant) against live QA once this merges and
+      deploys, named here as a pending item rather than implied as already
+      proven. No docs/requirements.yaml entry to flip (this is an ISS, not a
+      REQ). README.md checked (grepped exam_question_rule/manual
+      question/exam mode -- no hits): not documented current behavior there,
+      so no README update needed. No docs/migration/stage-N-*.md or
+      decisions/*.md file was named by ISS-0722's affected_files -- none
+      required updating. No merge performed here -- ORCH's job next, after
+      confirming this push's own CI is green.

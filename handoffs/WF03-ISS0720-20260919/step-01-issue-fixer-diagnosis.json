@@ -8,8 +8,8 @@
   "file": "handoffs/WF03-ISS0720-20260919/step-01-issue-fixer-diagnosis.json",
   "created_at": "2026-09-19T03:30:14Z",
   "started_at": "2026-09-19T03:30:14Z",
-  "completed_at": null,
-  "status": "PENDING",
+  "completed_at": "2026-09-19T03:31:32Z",
+  "status": "COMPLETED",
   "priority": "HIGH",
   "context": {
     "stage": "S7",
@@ -38,19 +38,19 @@
     ]
   },
   "result": {
-    "status": "BLOCKED",
-    "summary": "",
-    "artifacts_out": [],
+    "status": "PASS",
+    "summary": "Root cause confirmed by direct source/config read, not from T-0138/ISS-0719 prose alone. lib/letflow/routers/tenant_config.ex:320-325 defp oidc_issuer_base/0 reads Application.get_env(:letflow, :oidc, [])[:issuer] -- but grep across config/runtime.exs (line 165-170), config/dev.exs (line 87-98, with an explicit 'REQ-370: keycloak_base_url replaces :issuer' comment at 88-90), config/test.exs (line 124-135, same REQ-370 rename comment), and config/prod.exs (line 18-21, 'moved to config/runtime.exs' per its own line-10 comment) shows all four set only :keycloak_base_url and :client_id under :letflow, :oidc -- :issuer is set nowhere. So oidc_issuer_base/0 always evaluates to nil in every environment. idp_base_url/0 (tenant_config.ex:312-316) is System.get_env(\"BPM_IDP_BASE_URL\") || System.get_env(\"KEYCLOAK_BASE_URL\") || oidc_issuer_base() || @default_idp_base_url; with the third clause permanently dead, any deployment where both env vars are unset falls straight through to @default_idp_base_url (line 167) = the literal dev value \"http://localhost:8082\" -- exactly ISS-0719's live QA BLOCKER (GET /api/tenant-config advertised localhost:8082 as oidc_authority, sending every real browser's OIDC redirect to ERR_CONNECTION_REFUSED). Currently mitigated operationally, not fixed in code, by T-0137's BPM_IDP_BASE_URL=https://auth.qa.bizdala.com set directly in QA's .env, which is checked before the broken fallback chain. CODE-DESIGNER's fix needs to: (1) change oidc_issuer_base/0 to read :keycloak_base_url instead of the retired :issuer key; (2) reconsider the String.split(\"/realms/\")|>List.first() post-processing in that function, since config/dev.exs's own comment (line 90) confirms keycloak_base_url is already a bare host with no /realms/... suffix to strip -- that logic was shaped for the old full-issuer-URL value and is likely dead weight against the new key's shape; (3) resolve the open design question T-0138 deliberately left unresolved. Recommendation: @default_idp_base_url should NOT remain a silent last-resort fallback outside dev/test -- this bug is itself proof of what a silent fallback costs (three resolution layers quietly failed and the code served a 200 with a plausible-looking but broken localhost authority instead of surfacing the failure; nothing caught it until a real user's browser hit ERR_CONNECTION_REFUSED). The endpoint's documented 'never error to the caller' rule (moduledoc lines 35-51, INV-5/anti-oracle) governs the tenant/DB lookup's response shape, not silent substitution of a known-wrong IDP host -- those are different concerns. Suggested shape: keep a bare fallback literal only under Mix.env() in [:dev, :test]; in any other environment, fail loudly (raise/halt at boot, or at minimum :error-level log plus failing health check) when no real keycloak_base_url/BPM_IDP_BASE_URL/KEYCLOAK_BASE_URL resolves, rather than serving localhost:8082 as if legitimate. This is a recommendation for CODE-DESIGNER to weigh, not a foregone conclusion. Step 0.5 registry check: grepped docs/issues/ for matching symptoms (tenant_config/oidc_issuer_base/:issuer/localhost:8082) -- only ISS-0719 (open, describes the QA symptom, not this root cause) plus three unrelated older hits (ISS-0690, ISS-0546, ISS-0418, ISS-0296) matched loosely on 'issuer'; none is a prior resolved entry for this root cause, so this is not a recurrence of a previously-fixed issue.",
+    "artifacts_out": ["docs/issues/ISS-0720.yaml"],
     "issues": [],
     "git_evidence": {
-      "branch_name": null,
+      "branch_name": "feature/WF03-ISS0720-20260919",
       "commit_sha_list": [],
-      "remote_branch": null,
+      "remote_branch": "origin/feature/WF03-ISS0720-20260919",
       "push_status": "skipped",
       "pr_url": null,
       "pr_create_error": null
     },
-    "next_action": ""
+    "next_action": "Route to Step 2 (CODE-DESIGNER fix design)"
   },
   "rework_count": 0,
   "max_rework": 3

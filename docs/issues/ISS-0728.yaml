@@ -1,0 +1,56 @@
+id: ISS-0728
+title: >
+  CANDIDATE role has no in-app navigation path to the exam list
+discovered_by: UAT-RUNNER
+discovered_in_run: gui-review-2026-09-19-bilimbaga-candidate-exam-rerun
+discovered_at: "2026-09-19T18:59:48Z"
+severity: MAJOR
+tags:
+  - frontend
+  - navigation
+  - candidate
+  - bilimbaga
+description: >
+  Discovered by UAT-RUNNER during the bilimbaga-candidate-timed-exam-autograde
+  GUI review re-run (2026-09-19). web/src/components/layout/AppShell.tsx
+  defines Role as PLATFORM_ADMIN | PROCESS_DESIGNER | PROCESS_OPERATOR |
+  TASK_WORKER -- CANDIDATE is not a member of this type at all, and no
+  NAV_ITEMS entry is gated for it. After a real successful sign-in as
+  candidate-user, the candidate lands on / (TenantDashboardPage) with a
+  sidebar containing only "Sign out", plus a "Tenant name could not be
+  loaded" banner (403 on GET /api/v1/tenants/bilimbaga -- CANDIDATE lacks
+  read permission, cosmetic noise) and body text "You do not have access to
+  this area. Contact your tenant administrator." with a single My Tasks link
+  -- never mentioning exams. There is no discoverable path anywhere in the
+  real GUI for a candidate to reach /exam. This needs a design decision
+  (CODE-DESIGNER territory): add CANDIDATE to Role, add a NAV_ITEMS entry
+  gated on it, and/or a candidate-specific TenantDashboardPage view, rather
+  than the current generic no-access message.
+affected_files:
+  - web/src/components/layout/AppShell.tsx
+  - test/uat-reports/gui-review-2026-09-19-bilimbaga-candidate-exam-rerun.md
+suggested_fix: >
+  Not decided here -- needs CODE-DESIGNER's own design. Add CANDIDATE to the
+  Role type, add a NAV_ITEMS entry gated on it (likely pointing at /exam),
+  and/or a candidate-specific TenantDashboardPage view, rather than the
+  current generic no-access message.
+severity_rationale: >
+  MAJOR -- a real candidate who successfully authenticates has no
+  discoverable way to reach the exam list in the live GUI. Not a full outage
+  (a hand-typed /exam URL still works per ISS-0726's own e2e evidence), but
+  the realistic in-app navigation path is entirely missing.
+related:
+  - ISS-0726  # hard-nav OIDC redirect-target loss -- separate frontend bug also discovered in this GUI review run, also fixed a /exam-adjacent flow
+queue_ref: Q-725
+github_ref: GH-1576
+status: open
+# NOTE: filename/queue-id mismatch, same class already documented for other
+# records this session (see ISS-0721.yaml/ISS-0724.yaml's own identical
+# notes). register_task's real, atomically-allocated id for this issue is
+# 725, which per letflow-queue's own id->issue_ref rule maps to issue_ref
+# "ISS-0725" -- but that filename is ALREADY OWNED by a different, earlier
+# issue (docs/issues/ISS-0725.yaml, queue_ref Q-723, the QA candidate-user
+# Keycloak credential defect) which itself carries the identical class of
+# mismatch. Renaming either file would destroy or collide with an existing
+# record -- both worse than a documented mismatch. Filed here as
+# ISS-0728.yaml (next unused slot) instead.

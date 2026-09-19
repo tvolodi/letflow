@@ -1,0 +1,49 @@
+id: ISS-0722
+title: >
+  Letflow.Exam.Session resolved_question maps from random vs manual origin
+  are structurally indistinguishable after concatenation
+discovered_by: REVIEWER
+discovered_in_run: WF03-ISS0722-20260919
+discovered_at: "2026-09-19T06:10:00Z"
+severity: MINOR
+tags:
+  - exam
+  - type-safety
+description: >
+  Found during REVIEWER's idiom/scope gate on PR #1564 (ISS-0722's own fix
+  for exam_question_rule mode "manual" being silently dropped).
+  materialize_session/5 (lib/letflow/exam/session.ex ~lines 711-736)
+  concatenates resolved_random (from QuestionSetResolver.resolve/5) and
+  resolved_manual (from the new fetch_manual_questions/2 path) into one
+  untagged list of identically-shaped maps (question_id, options_order,
+  sort_order) before a single Enum.with_index/1 re-indexing pass. Verified
+  correct as implemented for ISS-0722's own fix -- but once concatenated,
+  nothing in the type system distinguishes manual-origin rows (which must
+  never be reordered/reshuffled per design
+  lib/letflow/design/iss0722-exam-manual-question-mode.md section 4.1) from
+  random-origin rows (which legitimately get shuffled upstream). A future
+  refactor of this function could silently violate that invariant with no
+  compiler/dialyzer signal, relying solely on a property test's continued
+  existence and execution to catch it.
+affected_files:
+  - lib/letflow/exam/session.ex
+suggested_fix: >
+  Not designed further by REVIEWER, routed to CODE-DESIGNER/ELIXIR-DEV.
+  Either tag each resolved_question() with its origin at construction
+  (origin: :random | :manual), or keep the two lists separate one call
+  further (into persist_session_questions/4) rather than merging as early
+  as materialize_session/5 does today.
+queue_ref: Q-722
+github_ref: GH-1565
+status: open
+# NOTE: filename/queue-id mismatch, same class TASK_QUEUE.md/ISSUE_QUEUE.md
+# already document for other records (queue task's real, atomically
+# allocated id is 722, which per letflow-queue's own id->issue_ref rule
+# would normally map to filename ISS-0722.yaml -- but that filename is
+# ALREADY OWNED by a different, unrelated, earlier-filed issue (this
+# session's own ISS-0722.yaml, queue_ref Q-721, the exam manual-mode
+# defect this very PR fixes). Renaming either file to "fix" the mismatch
+# would either destroy the existing issue's record or collide with it --
+# both worse than a documented mismatch. This file is named ISS-0724.yaml
+# (next unused slot) instead, following ISS-0721.yaml's own precedent for
+# the identical class of collision.

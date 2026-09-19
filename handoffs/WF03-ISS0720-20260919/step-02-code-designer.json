@@ -8,8 +8,8 @@
   "file": "handoffs/WF03-ISS0720-20260919/step-02-code-designer.json",
   "created_at": "2026-09-19T03:32:24Z",
   "started_at": "2026-09-19T03:32:24Z",
-  "completed_at": null,
-  "status": "PENDING",
+  "completed_at": "2026-09-19T03:35:58Z",
+  "status": "COMPLETED",
   "priority": "HIGH",
   "context": {
     "stage": "S7",
@@ -36,19 +36,19 @@
     ]
   },
   "result": {
-    "status": "BLOCKED",
-    "summary": "",
-    "artifacts_out": [],
+    "status": "PASS",
+    "summary": "Design written to lib/letflow/design/iss0720-tenant-config-stale-issuer-key.md. (1) oidc_issuer_base/0: repoint Application.get_env(:letflow, :oidc, [])[:issuer] to [:keycloak_base_url], AND explicitly remove the String.split(\"/realms/\")|>List.first() stripping -- keycloak_base_url is already a bare base URL (confirmed via config/dev.exs:88-90's REQ-370 comment and config/runtime.exs:141-146's derivation, which shows keycloak_base_url is upstream of any /realms/ suffix, not downstream); config_map/2 already appends \"/realms/\" <> realm_id itself, so the old stripping is dead-at-best, silently-truncating-at-worst against the new key's shape. (2) Traced (not assumed) what actually reaches @default_idp_base_url after the key fix: config/dev.exs and config/test.exs always set a real keycloak_base_url, and config/runtime.exs's own :prod block always sets one too (env var, legacy-derivation, or its own \"https://placeholder-keycloak.invalid\" literal) -- so tenant_config.ex's own localhost fallback becomes reachable only when the :letflow, :oidc app env is entirely unpopulated (a release/boot defect, not a missing env var). Despite that narrower exposure, agree with ISSUE-FIXER's recommendation: scope @default_idp_base_url to dev/test only, via a new compile-time module attribute @allow_localhost_idp_fallback? = Application.compile_env(:letflow, :allow_localhost_idp_fallback, false) -- mirrors this codebase's own established pattern (activation.ex's @activation_test_hooks_enabled?, explicitly rejecting a runtime Mix.env() check since Mix is unavailable in a compiled release) rather than inventing a new convention; config/dev.exs and config/test.exs each need one companion line (config :letflow, :allow_localhost_idp_fallback, true), prod/runtime.exs add nothing. Outside dev/test, idp_base_url/0 raises at call time instead of returning the literal, once no real value resolves from either env var or keycloak_base_url. Reckoned directly with the moduledoc's never-error/INV-5 rule (not sidestepped): that rule is scoped to the realm/tenant-resolution branch (resolve_realm/2 + DB lookup), whose failure varies per-request/per-tenant, where masking preserves availability for unaffected tenants and avoids a tenant-existence oracle; idp_base_url/0's failure is uniform across every request/tenant on a given boot -- no availability to preserve across, no tenant signal to leak -- so a loud, immediate, whole-node failure caught by a smoke test/health check before real traffic is judged better than the plausible-looking 200 that caused ISS-0719, at the accepted cost of a temporary 500 on this endpoint until redeploy. (3) No new public function/module/@spec: both changes are body-level edits to the two existing private functions plus one new private compile-time module attribute (same kind as activation.ex's precedent) -- explicitly justified in the doc's own S3. Open questions flagged rather than silently resolved: config/runtime.exs's own placeholder-keycloak.invalid fallback is a structurally identical problem one layer up but out of this fix's owned_modules scope (routed to REVIEWER to confirm the scoping call); and whether the raise branch is unit-testable given compile-time attributes don't respond to Application.put_env/3 at runtime is flagged for TEST-DESIGNER.",
+    "artifacts_out": ["lib/letflow/design/iss0720-tenant-config-stale-issuer-key.md"],
     "issues": [],
     "git_evidence": {
-      "branch_name": null,
+      "branch_name": "feature/WF03-ISS0720-20260919",
       "commit_sha_list": [],
-      "remote_branch": null,
+      "remote_branch": "origin/feature/WF03-ISS0720-20260919",
       "push_status": "skipped",
       "pr_url": null,
       "pr_create_error": null
     },
-    "next_action": ""
+    "next_action": "Route to Step 2b (CODE-DESIGN-VALIDATOR gate)"
   },
   "rework_count": 0,
   "max_rework": 3

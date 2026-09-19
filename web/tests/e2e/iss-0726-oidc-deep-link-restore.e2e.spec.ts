@@ -81,6 +81,24 @@ test.describe('ISS-0726 — OIDC deep-link path restore regression', () => {
   test('TC-ISS-0726-01: hard navigation to /exam restores /exam (not / or /platform-dashboard) after the real Keycloak round trip', async ({ request, page }) => {
     await ensurePrerequisites(request)
 
+    // Seed the realm slug into sessionStorage BEFORE the hard navigation.
+    //
+    // resolveRealmFromUrl() (web/src/auth/tenantConfig.ts) only resolves a
+    // realm from a pre-existing sessionStorage['bpm_realm_slug'] entry or a
+    // `?realm=` query param on the CURRENT url. A fresh browser context
+    // navigating straight to /exam with neither present makes
+    // buildRedirectArgs() (web/src/auth/oidcRedirectArgs.ts) short-circuit to
+    // `undefined` before the fix's own capture-path logic ever runs — this
+    // is a real, pre-existing property of resolveRealmFromUrl, not something
+    // the fix under test introduced. addInitScript runs before any page JS,
+    // so the session storage entry exists by the time tenantConfig.ts reads
+    // it. Proven against a live backend + Keycloak by ISSUE-FIXER (ISS-0726
+    // follow-up): 1 passed, full capture -> Keycloak round trip -> restore
+    // to /exam.
+    await page.addInitScript(() => {
+      sessionStorage.setItem('bpm_realm_slug', 'bpm-default')
+    })
+
     // The one load-bearing difference from ISS-0063's TC-ISS-0063-02: start
     // the hard navigation at /exam, the originally-requested protected deep
     // link, instead of /.

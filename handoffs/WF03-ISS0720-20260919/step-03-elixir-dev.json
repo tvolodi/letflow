@@ -1,0 +1,57 @@
+{
+  "handoff_id": "a1b2c3d4-0001-4000-8000-000000000005",
+  "run_id": "WF03-ISS0720-20260919",
+  "workflow_id": "WF-03",
+  "step": "03",
+  "from_agent": "ORCH",
+  "to_agent": "ELIXIR-DEV",
+  "file": "handoffs/WF03-ISS0720-20260919/step-03-elixir-dev.json",
+  "created_at": "2026-09-19T03:38:04Z",
+  "started_at": "2026-09-19T03:38:04Z",
+  "completed_at": null,
+  "status": "PENDING",
+  "priority": "HIGH",
+  "context": {
+    "stage": "S7",
+    "requirement_ids": [],
+    "requirement_text": {},
+    "source_text": {},
+    "related_handoff_ids": [],
+    "artifacts_in": [
+      "lib/letflow/design/iss0720-tenant-config-stale-issuer-key.md",
+      "lib/letflow/routers/tenant_config.ex",
+      "config/dev.exs",
+      "config/test.exs",
+      "lib/letflow/activation.ex"
+    ],
+    "owned_modules": ["lib/letflow/routers/tenant_config.ex", "config/dev.exs", "config/test.exs"]
+  },
+  "task": {
+    "description": "git checkout feature/WF03-ISS0720-20260919 first. Implement the PASSed design at lib/letflow/design/iss0720-tenant-config-stale-issuer-key.md exactly -- read it in full before writing any code. This changes lib/letflow/routers/tenant_config.ex's oidc_issuer_base/0 to read :keycloak_base_url instead of the retired :issuer key (removing the now-unnecessary /realms/ stripping), and scopes @default_idp_base_url's localhost fallback to dev/test only via a new Application.compile_env(:letflow, :oidc)[:allow_localhost_idp_fallback] (or however the design doc names it exactly -- follow the design doc's naming, not this paraphrase) with config/dev.exs and config/test.exs both setting it true, and every other environment failing loudly (per the design doc's exact specified failure mechanism) when no real base URL resolves. Run `mix compile --warnings-as-errors` and `mix format` on the touched files. Run the existing targeted test file(s) covering tenant_config.ex (find them: `grep -rl tenant_config test/`) to confirm nothing existing regresses -- note any pre-existing unrelated failures explicitly rather than silently absorbing them into this step's result.",
+    "acceptance_criteria": [
+      "lib/letflow/routers/tenant_config.ex's oidc_issuer_base/0 reads :keycloak_base_url, never :issuer, and no longer does /realms/ string-splitting",
+      "config/dev.exs and config/test.exs both set the new flag so local dev/test behavior (falling back to the compiled localhost default) is unchanged from before this fix",
+      "Every other environment (no flag, or flag false/absent) fails loudly per the design doc's specified mechanism instead of silently serving localhost:8082",
+      "mix compile --warnings-as-errors clean on the touched files",
+      "mix format clean (git diff shows no formatting-only changes needed)",
+      "Existing tenant_config.ex-covering tests re-run and pass (or pre-existing unrelated failures explicitly named, not silently absorbed)"
+    ]
+  },
+  "result": {
+    "status": "BLOCKED",
+    "summary": "",
+    "artifacts_out": [],
+    "issues": [],
+    "git_evidence": {
+      "branch_name": null,
+      "commit_sha_list": [],
+      "remote_branch": null,
+      "push_status": "skipped",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": ""
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

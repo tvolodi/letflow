@@ -720,7 +720,7 @@ defmodule Letflow.Exam.Session do
              shuffle_options?,
              seed
            ) do
-      resolved_manual =
+      resolved_manual_unindexed =
         Enum.map(manual_questions, fn %{question_id: question_id, option_ids: option_ids} ->
           %{
             question_id: question_id,
@@ -733,9 +733,9 @@ defmodule Letflow.Exam.Session do
           }
         end)
 
-      resolved =
-        (resolved_random ++ resolved_manual)
-        |> Enum.with_index()
+      resolved_manual =
+        resolved_manual_unindexed
+        |> Enum.with_index(length(resolved_random))
         |> Enum.map(fn {row, index} -> Map.put(row, :sort_order, index) end)
 
       now = utc_now()
@@ -754,7 +754,13 @@ defmodule Letflow.Exam.Session do
       with {:ok, %{record: session_record}} <-
              write_record("session", session_attrs, candidate_id, prefix),
            :ok <-
-             persist_session_questions(session_record.record_id, resolved, candidate_id, prefix) do
+             persist_session_questions(
+               session_record.record_id,
+               resolved_random,
+               resolved_manual,
+               candidate_id,
+               prefix
+             ) do
         {:ok, session_view(session_record)}
       end
     end
@@ -865,8 +871,28 @@ defmodule Letflow.Exam.Session do
     end
   end
 
-  defp persist_session_questions(session_id, resolved, actor_id, prefix) do
-    Enum.reduce_while(resolved, :ok, fn resolved_question, :ok ->
+  @spec persist_session_questions(
+          session_id :: String.t(),
+          resolved_random :: [QuestionSetResolver.resolved_question()],
+          resolved_manual :: [QuestionSetResolver.resolved_question()],
+          actor_id :: String.t(),
+          prefix :: String.t()
+        ) :: :ok | {:error, term()}
+  defp persist_session_questions(session_id, resolved_random, resolved_manual, actor_id, prefix) do
+    with :ok <- write_question_rows(session_id, resolved_random, actor_id, prefix),
+         :ok <- write_question_rows(session_id, resolved_manual, actor_id, prefix) do
+      :ok
+    end
+  end
+
+  @spec write_question_rows(
+          session_id :: String.t(),
+          rows :: [QuestionSetResolver.resolved_question()],
+          actor_id :: String.t(),
+          prefix :: String.t()
+        ) :: :ok | {:error, term()}
+  defp write_question_rows(session_id, rows, actor_id, prefix) do
+    Enum.reduce_while(rows, :ok, fn resolved_question, :ok ->
       attrs = %{
         "session_id" => session_id,
         "question_id" => resolved_question.question_id,

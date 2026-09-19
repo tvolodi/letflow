@@ -1,0 +1,48 @@
+{
+  "handoff_id": "wf03-iss0724-step00",
+  "run_id": "WF03-ISS0724-20260919",
+  "workflow_id": "WF-03",
+  "step": "00",
+  "from_agent": "ORCH",
+  "to_agent": "ELIXIR-DEV",
+  "file": "handoffs/WF03-ISS0724-20260919/step-00-git-setup.json",
+  "created_at": "2026-09-19T08:58:00Z",
+  "started_at": "2026-09-19T08:58:00Z",
+  "completed_at": "2026-09-19T08:58:20Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": null,
+    "requirement_ids": [],
+    "requirement_text": {},
+    "source_text": {},
+    "related_handoff_ids": [],
+    "artifacts_in": ["docs/issues/ISS-0724.yaml", "docs/agents/protocols/GIT_SETUP.md"],
+    "owned_modules": ["lib/letflow/exam/session.ex"]
+  },
+  "task": {
+    "description": "WF-03 Step 00 (git setup) for ISS-0724 (queue task Q-722, GH#1565). Follow docs/agents/protocols/GIT_SETUP.md exactly: checkout+pull main, create+push feature/WF03-ISS0724-20260919.",
+    "acceptance_criteria": [
+      "git pull --ff-only exited 0",
+      "git branch --show-current outputs feature/WF03-ISS0724-20260919",
+      "git push -u origin feature/WF03-ISS0724-20260919 exited 0"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "main was already clean/up to date at 3be69b39 (ORCH had just resolved a stale sibling merge). git checkout main -> no-op. git pull --ff-only origin main -> already up to date. No pre-existing feature/WF03-ISS0724-20260919 branch found. git checkout -b feature/WF03-ISS0724-20260919 succeeded; git branch --show-current confirmed. git push -u origin feature/WF03-ISS0724-20260919 succeeded, tracking set up.",
+    "artifacts_out": ["branch: feature/WF03-ISS0724-20260919"],
+    "issues": [],
+    "git_evidence": {
+      "branch_name": "feature/WF03-ISS0724-20260919",
+      "commit_sha_list": [],
+      "remote_branch": "origin/feature/WF03-ISS0724-20260919",
+      "push_status": "pushed",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": "Route to Step 0.5/1 (ISSUE-FIXER registry lookup + diagnose)"
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

@@ -1,0 +1,55 @@
+{
+  "handoff_id": "wf03-iss0724-step01",
+  "run_id": "WF03-ISS0724-20260919",
+  "workflow_id": "WF-03",
+  "step": "01",
+  "from_agent": "ORCH",
+  "to_agent": "ISSUE-FIXER",
+  "file": "handoffs/WF03-ISS0724-20260919/step-01-issue-fixer-diagnosis.json",
+  "created_at": "2026-09-19T08:59:00Z",
+  "started_at": "2026-09-19T08:59:00Z",
+  "completed_at": "2026-09-19T09:00:00Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": null,
+    "requirement_ids": [],
+    "requirement_text": {},
+    "source_text": {},
+    "related_handoff_ids": [],
+    "artifacts_in": [
+      "docs/issues/ISS-0724.yaml",
+      "docs/issues/ISS-0722.yaml",
+      "lib/letflow/exam/session.ex",
+      "lib/letflow/exam/question_set_resolver.ex",
+      "lib/letflow/design/iss0722-exam-manual-question-mode.md"
+    ],
+    "owned_modules": ["lib/letflow/exam/session.ex"]
+  },
+  "task": {
+    "description": "WF-03 Steps 0.5 + 1 combined (registry lookup + diagnose) for docs/issues/ISS-0724.yaml on branch feature/WF03-ISS0724-20260919.",
+    "acceptance_criteria": [
+      "Confirms AC1/AC2 premises by direct reading of session.ex/question_set_resolver.ex/design doc, not issue prose alone",
+      "States whether this is a recurrence of a prior resolved issue or distinct",
+      "Names exact functions/lines a fix needs to touch and gives a reasoned recommendation between origin-tagging and list-separation",
+      "Does not implement the fix -- routes to CODE-DESIGNER"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "STEP 0.5: docs/issues/ISS-0722.yaml (resolved) is the only prior issue on this code path but its root cause (manual mode silently dropped) is distinct and already fixed -- that fix (PR #1564) is what introduced this concatenation. A broader grep for related terms across docs/issues/*.yaml found no other genuine match (13 filename hits, 0 actually contain 'resolved_question'). VERDICT: distinct, new finding, not a recurrence.\n\nSTEP 1: Confirmed by direct reading (lib/letflow/exam/session.ex:707-882, lib/letflow/exam/question_set_resolver.ex:1-94, lib/letflow/design/iss0722-exam-manual-question-mode.md section 4.1). materialize_session/5 concatenates resolved_random ++ resolved_manual at session.ex:736-739 via Enum.with_index/1; both lists are shaped identically to QuestionSetResolver's @type resolved_question() (question_set_resolver.ex:46-51, no origin field). fetch_manual_questions/2 (session.ex:840-841) reuses the resolver's question_row() type by convention only. Design doc section 4.1 (lines 208-215) states manual-origin questions must NEVER be reordered by shuffle_questions?, currently enforced only by materialize_session/5's manual path never calling Enum.shuffle on resolved_manual -- a behavioral fact with no structural/type backing once concatenated.\n\nWhat a fix touches: (1) materialize_session/5 concatenation at session.ex:736-739; (2) persist_session_questions/4 (session.ex:868-882), currently takes one flat list; (3) QuestionSetResolver's resolved_question() type/spec (question_set_resolver.ex:46-51,68) only if origin-tagging is chosen; (4) manual map construction at session.ex:724-734; (5) any existing test asserting on resolved's shape.\n\nRECOMMENDATION: keep the two lists separate one call further into persist_session_questions/4, rather than tag-at-construction. Reasoning: tagging widens QuestionSetResolver's public type for a caller-side (session.ex) concern, blurring the module boundary the design doc explicitly protects (section 2, 'bypass don't generalize the resolver', line 361), and a tag alone doesn't structurally prevent a future Enum.shuffle(resolved) on the merged list -- it only makes the violation detectable after the fact, not a compile failure, which AC1 explicitly asks for. Separating the lists through persist_session_questions/4 (signature persist_session_questions(session_id, resolved_random, resolved_manual, actor_id, prefix)) makes the never-reorder invariant a structural fact of the call graph -- a future edit merging/reshuffling them would show up as a wrong-arity/wrong-variable compile error, not a silent semantic change. AC2 is also easier to keep provably true this way since resolved_random/resolved_manual's own construction logic (session.ex:715-734) doesn't change at all. CODE-DESIGNER still needs to specify sort_order computation for the separated-list design: preserve 'random block first, then manual block, sort_order continuous across both' (design doc section 4.2) -- e.g. Enum.with_index(resolved_random) then Enum.with_index(resolved_manual, length(resolved_random)).\n\nBoth AC1 and AC2's factual premises independently verified by direct reading, not trusted from issue prose.",
+    "artifacts_out": [],
+    "issues": [],
+    "git_evidence": {
+      "branch_name": "feature/WF03-ISS0724-20260919",
+      "commit_sha_list": [],
+      "remote_branch": "origin/feature/WF03-ISS0724-20260919",
+      "push_status": "skipped",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": "Route to Step 2 (CODE-DESIGNER fix design) -- recommend list-separation direction into persist_session_questions/4"
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

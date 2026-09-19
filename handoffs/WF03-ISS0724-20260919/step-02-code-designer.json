@@ -1,0 +1,56 @@
+{
+  "handoff_id": "wf03-iss0724-step02",
+  "run_id": "WF03-ISS0724-20260919",
+  "workflow_id": "WF-03",
+  "step": "02",
+  "from_agent": "ORCH",
+  "to_agent": "CODE-DESIGNER",
+  "file": "handoffs/WF03-ISS0724-20260919/step-02-code-designer.json",
+  "created_at": "2026-09-19T09:01:00Z",
+  "started_at": "2026-09-19T09:01:00Z",
+  "completed_at": "2026-09-19T09:03:00Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": null,
+    "requirement_ids": [],
+    "requirement_text": {},
+    "source_text": {},
+    "related_handoff_ids": ["wf03-iss0724-step01"],
+    "artifacts_in": [
+      "docs/issues/ISS-0724.yaml",
+      "handoffs/WF03-ISS0724-20260919/step-01-issue-fixer-diagnosis.json",
+      "lib/letflow/exam/session.ex",
+      "lib/letflow/exam/question_set_resolver.ex",
+      "lib/letflow/design/iss0722-exam-manual-question-mode.md"
+    ],
+    "owned_modules": ["lib/letflow/exam/session.ex"]
+  },
+  "task": {
+    "description": "WF-03 Step 2 (fix design) for ISS-0724 on branch feature/WF03-ISS0724-20260919, per ISSUE-FIXER's diagnosis. Design artefact into lib/letflow/design/.",
+    "acceptance_criteria": [
+      "Exact new/changed function signatures and @specs for materialize_session/5 and persist_session_questions/4",
+      "Exact sort_order computation preserving current behavior",
+      "States concretely how AC1's 'fail to compile or fail an obvious assertion' bar is met",
+      "States independent judgment on tagging vs. list-separation, not a rubber stamp of ISSUE-FIXER's recommendation",
+      "Design doc only, no implementation code"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "Design artefact: lib/letflow/design/iss0724-exam-question-origin-separation.md. Followed ISSUE-FIXER's list-separation recommendation with independent reasoning (section 1): tagging resolved_question() would widen QuestionSetResolver's public type for a caller-side concern, violating iss0722 design doc section 2's module boundary, and is only runtime-checkable, not a compile-time guarantee.\n\nmaterialize_session/5 (section 2): resolved_random computation and resolved_manual_unindexed construction unchanged; replaces the concatenate-then-Enum.with_index/1 block with Enum.with_index(resolved_manual_unindexed, length(resolved_random)) to assign only the manual block's sort_order, continuing numbering from where the random block leaves off -- proven bit-for-bit identical to current output (random block's sort_order was already 0..n-1 matching its list position). Calls persist_session_questions/5 with resolved_random and resolved_manual as two separate arguments, never concatenated.\n\npersist_session_questions/4 -> persist_session_questions/5 (section 3): arity change, old 4-arity clause deleted entirely, no overload/fallback. New signature takes resolved_random and resolved_manual as separate typed params ([QuestionSetResolver.resolved_question()] each), delegating row-writing to a new private write_question_rows/4 helper (today's Enum.reduce_while/write_record loop, unchanged, called twice -- random block first, then manual).\n\nAC1 mechanism (section 4): a future edit reintroducing a merged list and calling the old 4-arg shape hits 'undefined function persist_session_questions/4' -- a hard compile failure under mix letflow.check -> compile --warnings-as-errors, satisfying AC1's literal 'fail to compile' bar. Scoped honestly: catches wrong-arity/merge edits, not an in-place Enum.shuffle on resolved_manual alone -- that residual case is covered by TEST-DESIGNER's property test per iss0722 design doc section 7, matching AC1's 'or fail an obvious assertion' alternative.\n\nAC2 (section 5): lists every untouched function/value explicitly (resolver, fetch helpers, attrs shape, block ordering, shuffle semantics) confirming no behavior change. No open questions remain.",
+    "artifacts_out": ["lib/letflow/design/iss0724-exam-question-origin-separation.md"],
+    "issues": [],
+    "git_evidence": {
+      "branch_name": "feature/WF03-ISS0724-20260919",
+      "commit_sha_list": [],
+      "remote_branch": "origin/feature/WF03-ISS0724-20260919",
+      "push_status": "skipped",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": "Route to Step 2b (CODE-DESIGN-VALIDATOR gate)"
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

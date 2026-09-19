@@ -1,0 +1,49 @@
+{
+  "handoff_id": "wf03-iss0724-step04",
+  "run_id": "WF03-ISS0724-20260919",
+  "workflow_id": "WF-03",
+  "step": "04",
+  "from_agent": "ORCH",
+  "to_agent": "TEST-DESIGNER",
+  "file": "handoffs/WF03-ISS0724-20260919/step-04-test-designer.json",
+  "created_at": "2026-09-19T09:26:00Z",
+  "started_at": "2026-09-19T09:26:00Z",
+  "completed_at": "2026-09-19T09:56:00Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": null,
+    "requirement_ids": [],
+    "requirement_text": {},
+    "source_text": {},
+    "related_handoff_ids": ["wf03-iss0724-step03c"],
+    "artifacts_in": ["lib/letflow/exam/session.ex", "lib/letflow/design/iss0724-exam-question-origin-separation.md", "lib/letflow/design/iss0722-exam-manual-question-mode.md", "test/letflow/exam/session_test.exs"],
+    "owned_modules": ["lib/letflow/exam/session.ex", "test/letflow/exam/session_test.exs"]
+  },
+  "task": {
+    "description": "WF-03 Step 4: write a fail-then-pass regression test for ISS-0724, using WF-03's mutation-testing procedure since the never-reorder invariant was already behaviorally correct pre-fix (no real pre-fix functional bug to reproduce) -- the compile-time guarantee's own named residual gap needed an assertion-level backstop per the design doc's own section 4.",
+    "acceptance_criteria": [
+      "Property test asserting manual-block order/sort_order invariant to shuffle_questions? across many seeds",
+      "Sensitivity proven via mutant applied in a throwaway git worktree (not the real tree), targeting the design's named residual gap",
+      "Mutant FAILs, real code PASSes",
+      "Real working tree verified clean of the mutant afterward"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "New describe block 'ISS-0724 -- never-reorder invariant holds across many seeds' in test/letflow/exam/session_test.exs: builds a mixed random(8)+manual(6) exam with shuffle_questions?: true, loops 20 distinct seeds via Session.create_with_seed/4, asserts manual block's question-id order equals authored pin order and sort_order values equal fixed expected sequence 8..13 for every seed.\n\nMutant verification (preferred technique, throwaway git worktree ../letflow-mutant-iss0724, deps/build pointed at main repo via MIX_DEPS_PATH/MIX_BUILD_PATH, real tree never touched): mutant reintroduced the design's own named residual gap -- merged+reshuffled list passed as persist_session_questions's first arg, [] as second, still satisfying the new 5-arity signature. Result against mutant: 42/46 passed -- new ISS-0724 test failed at seed 1 (manual-block order diverged from authored pin order), plus 3 ISS-0722 precedent tests also failed, confirming genuine sensitivity to this exact regression shape. Worktree fully removed (git worktree remove --force, rm -rf), git worktree list confirms only real checkout remains.\n\nReal code: mix test test/letflow/exam/session_test.exs --seed 0 -> 46 passed, 0 failed.\n\ngit status --porcelain lib/ test/ on real working tree: only test/letflow/exam/session_test.exs modified, lib/ clean -- mutant never leaked into the real tree.",
+    "artifacts_out": ["test/letflow/exam/session_test.exs"],
+    "issues": [],
+    "git_evidence": {
+      "branch_name": "feature/WF03-ISS0724-20260919",
+      "commit_sha_list": ["4162795e"],
+      "remote_branch": "origin/feature/WF03-ISS0724-20260919",
+      "push_status": "pushed (retried once after a transient network failure)",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": "Route to Step 4b (TEST-DESIGN-VALIDATOR)"
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

@@ -35,7 +35,24 @@ suggested_fix: >
   as materialize_session/5 does today.
 queue_ref: Q-722
 github_ref: GH-1565
-status: open
+status: resolved
+resolved_in_run: WF03-ISS0724-20260919
+resolved_at: "2026-09-19T10:06:05Z"
+resolution_summary: >
+  materialize_session/5 (lib/letflow/exam/session.ex) no longer concatenates
+  resolved_random and resolved_manual into one untagged list before
+  persisting. persist_session_questions/4 was replaced by an arity-5 version
+  that keeps the two origins distinguishable end-to-end; the old arity-4
+  clause was deleted outright (no fallback), so a future accidental re-merge
+  fails to compile rather than silently reintroducing the gap. Design:
+  lib/letflow/design/iss0724-exam-question-origin-separation.md. A
+  property test (test/letflow/exam/session_test.exs, "ISS-0724 -- never
+  -reorder invariant holds across many seeds") backstops the residual gap
+  the compile-time mechanism doesn't catch by itself, and was independently
+  verified sensitive to that exact regression by TEST-DESIGN-VALIDATOR via
+  its own mutant. Gates passed: CODE-DESIGN-VALIDATOR (after 1 rework),
+  SECURITY-REVIEWER, REVIEWER, TEST-DESIGN-VALIDATOR, TEST-RUNNER
+  full-suite (4462/4462, 0 failures).
 # NOTE: filename/queue-id mismatch, same class TASK_QUEUE.md/ISSUE_QUEUE.md
 # already document for other records (queue task's real, atomically
 # allocated id is 722, which per letflow-queue's own id->issue_ref rule

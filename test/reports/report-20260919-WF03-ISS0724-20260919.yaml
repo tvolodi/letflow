@@ -1,0 +1,37 @@
+# WF-03 ISS-0724 (GH#1565) -- Step 4c full-suite gate before merge.
+# `scripts/test_parallel.sh` (16 partitions, N from nproc) on branch
+# feature/WF03-ISS0724-20260919, real Postgres (docker-compose, letflow-postgres-1,
+# port 5462). Actual combined output:
+#
+#   combined: 4456 tests, 6 properties, 0 failures (4462/4462 passed)
+#
+# Clean run. All 16 partitions passed with 0 failures each. Diff scope for this
+# branch is lib/letflow/exam/session.ex (materialize_session/5,
+# persist_session_questions/4->5) and test/letflow/exam/session_test.exs (new
+# property test). No failures to attribute -- nothing to diagnose.
+
+requirement: ISS-0724
+run_id: WF03-ISS0724-20260919
+branch: feature/WF03-ISS0724-20260919
+command: scripts/test_parallel.sh
+partitions: 16
+
+totals:
+  tests: 4456
+  properties: 6
+  failures: 0
+  passed: 4462
+  attempted: 4462
+
+known_flake_recurred: false   # Letflow.Engine.Lua.PlatformTest (REQ-161) did not
+                               # appear anywhere -- no failures at all in this run.
+
+failures: []
+
+verdict: PASS
+verdict_reason: >
+  Full suite passed cleanly across all 16 partitions (4456 tests, 6 properties,
+  0 failures, 4462/4462 passed). No failures to attribute to this branch's diff
+  (lib/letflow/exam/session.ex, test/letflow/exam/session_test.exs) or to any
+  pre-existing/unrelated cause. Ready for RELEASE-VALIDATOR's independent
+  re-verification.

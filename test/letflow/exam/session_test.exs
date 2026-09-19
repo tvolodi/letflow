@@ -598,6 +598,98 @@ defmodule Letflow.Exam.SessionTest do
   end
 
   # ---------------------------------------------------------------------
+  # ISS-0724 -- never-reorder invariant, property backstop across many seeds
+  # (design doc lib/letflow/design/iss0724-exam-question-origin-separation.md
+  # §4's named residual gap: the arity change from persist_session_questions/4
+  # to /5 only catches a literal 4-arg revert at compile time. It cannot catch
+  # a future edit that merges resolved_random/resolved_manual into one
+  # reshuffled list and passes it as persist_session_questions(id, merged, [],
+  # candidate_id, prefix) -- that compiles cleanly under the new 5-arity
+  # signature, since neither argument carries provenance. This test is the
+  # assertion-level backstop §4 explicitly defers to: it asserts the
+  # never-reorder invariant (iss0722-...md §4.1 -- shuffle_questions? never
+  # reorders manual-origin questions) end-to-end, across many distinct seeds,
+  # so it is not merely "passed once" but demonstrably insensitive to seed
+  # choice -- exactly the property a merge-then-reshuffle regression would
+  # violate for ALMOST every seed (a reshuffled 14-element list matching the
+  # authored 6-element manual order by chance is negligible).
+  # ---------------------------------------------------------------------
+
+  describe "ISS-0724 -- never-reorder invariant holds across many seeds" do
+    test "manual-block question order and sort_order values are invariant to shuffle_questions?, across many distinct seeds" do
+      %{schema_name: schema} = tenant("iss0724-never-reorder-property")
+
+      %{exam: exam, category_id: random_category_id} =
+        build_minimal_exam!(schema,
+          mode: :random,
+          pool_size: 8,
+          count: 8,
+          exam_attrs: %{"shuffle_questions" => true, "max_attempts" => 1000}
+        )
+
+      manual_rule =
+        create_rule!(schema, exam.record_id, random_category_id, 1, 1, "manual")
+
+      manual_questions =
+        for _ <- 1..6, do: build_single_choice_question!(schema, Ecto.UUID.generate())
+
+      pinned_question_ids =
+        manual_questions
+        |> Enum.with_index()
+        |> Enum.map(fn {{question_id, _c, _w}, index} ->
+          create_manual_question!(schema, manual_rule.record_id, question_id, index)
+          question_id
+        end)
+
+      # sort_order for the manual block is always assigned starting right
+      # after the random block's own 0..7 indices (materialize_session/5,
+      # design §2 step 3) -- 8..13 here, regardless of seed.
+      expected_manual_sort_orders = Enum.to_list(8..13)
+
+      seeds = [
+        1,
+        2,
+        3,
+        5,
+        8,
+        13,
+        21,
+        34,
+        55,
+        89,
+        144,
+        233,
+        1_000,
+        7,
+        42,
+        1_337,
+        999_983,
+        2_024,
+        17,
+        64
+      ]
+
+      for seed <- seeds do
+        candidate_id = Ecto.UUID.generate()
+
+        assert {:ok, session_view} =
+                 Session.create_with_seed(candidate_id, exam.record_id, schema, seed)
+
+        rows = session_question_rows(schema, session_view.id)
+        assert length(rows) == 14
+
+        manual_rows = Enum.take(rows, -6)
+
+        assert Enum.map(manual_rows, & &1["question_id"]) == pinned_question_ids,
+               "seed #{seed}: manual-block question order diverged from the authored pin order"
+
+        assert Enum.map(manual_rows, & &1["sort_order"]) == expected_manual_sort_orders,
+               "seed #{seed}: manual-block sort_order values diverged from the assigned authored sequence"
+      end
+    end
+  end
+
+  # ---------------------------------------------------------------------
   # autosave_answer/4
   # ---------------------------------------------------------------------
 

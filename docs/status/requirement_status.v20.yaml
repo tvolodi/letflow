@@ -570,3 +570,51 @@ history:
       remains unfixed -- the query-param path is the sanctioned workaround,
       not a claim host-based resolution now works on its own. Queue task 727
       released with status: done.
+  - req: SCOPE-CHANGE
+    event: done
+    agent: DOC-UPDATER
+    at: "2026-09-19T22:39:24Z"
+    note: >
+      WF-03 run WF03-ISS0728-20260919 (queue task Q-725, GH-1576) complete,
+      commit e0285886, PR #1587. ISS-0728 (CANDIDATE role has no in-app
+      navigation path to the exam list -- discovered by UAT-RUNNER during
+      the bilimbaga-candidate-timed-exam-autograde GUI review re-run:
+      AppShell.tsx's Role type excluded CANDIDATE entirely, no NAV_ITEMS
+      entry gated for it, and after real sign-in a candidate landed on a
+      generic "You do not have access to this area" PermissionDenied screen
+      with only a /tasks link, never mentioning exams) is now resolved per
+      design doc lib/letflow/design/iss0728-candidate-exam-nav.md. Fix:
+      AppShell.tsx's Role type widened to include CANDIDATE; a new
+      NAV_ITEMS entry ({ to: '/exam', label: 'Exams', roles: ['CANDIDATE'] })
+      added right after "My Tasks"; PermissionDenied.tsx made role-aware via
+      useAuth(), rendering "Go to Exams" -> /exam for a CANDIDATE session
+      while every other role (and a null session) keeps the existing
+      "My Tasks" -> /tasks fallback unchanged.
+
+      Full gate history, all PASS: CODE-DESIGN-VALIDATOR, with independent
+      confirmation this is out of SECURITY-REVIEWER's scope (client-side
+      nav visibility only; CANDIDATE's real server-side authorization in
+      lib/letflow/api/authorization.ex untouched and already correctly
+      scoped); REVIEWER; TEST-DESIGN-VALIDATOR, with independently
+      reproduced mutation testing over the new coverage; TEST-RUNNER
+      (691/691 Vitest across 99 files, including
+      AppShell.candidate-nav.test.tsx's 6 cases and PermissionDenied's
+      CANDIDATE-specific 3 cases, plus 48/48 guard tests including a real
+      production build); RELEASE-VALIDATOR, with full independent
+      re-verification of the acceptance criteria.
+
+      docs/issues/ISS-0728.yaml flipped open -> resolved with a full
+      resolution block citing all of the above. Named, not silently
+      covered, remaining gap: a live check that a real candidate-user on
+      qa.bizdala.com actually sees and can click the new nav entry
+      end-to-end remains unconfirmed -- inherent to jsdom/vitest coverage,
+      explicitly named by the design doc itself as a recommended
+      UAT-RUNNER follow-up, same shape as ISS-0726's own precedent. No
+      docs/requirements.yaml entry to flip (this is an ISS, not a REQ;
+      grepped ISS-0728, no hits). README.md checked (grepped ISS-0728 and
+      CANDIDATE, no hits) -- not documented current behavior there, so no
+      README update needed. No docs/migration/stage-N-*.md or
+      decisions/*.md file was named by ISS-0728's affected_files -- none
+      required updating. No merge performed here -- ORCH's job next, after
+      confirming this push's own CI is green and no other agent is
+      currently active.

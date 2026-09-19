@@ -43,7 +43,7 @@ related:
   - ISS-0726  # hard-nav OIDC redirect-target loss -- separate frontend bug also discovered in this GUI review run, also fixed a /exam-adjacent flow
 queue_ref: Q-725
 github_ref: GH-1576
-status: open
+status: resolved
 # NOTE: filename/queue-id mismatch, same class already documented for other
 # records this session (see ISS-0721.yaml/ISS-0724.yaml's own identical
 # notes). register_task's real, atomically-allocated id for this issue is
@@ -54,3 +54,38 @@ status: open
 # mismatch. Renaming either file would destroy or collide with an existing
 # record -- both worse than a documented mismatch. Filed here as
 # ISS-0728.yaml (next unused slot) instead.
+resolution:
+  resolved_at: "2026-09-19T22:41:00Z"
+  resolved_in_run: WF03-ISS0728-20260919
+  commit: e0285886
+  pr: 1587
+  branch: feature/WF03-ISS0728-20260919
+  design_doc: lib/letflow/design/iss0728-candidate-exam-nav.md
+  fix: >
+    web/src/components/layout/AppShell.tsx: Role type widened to include
+    CANDIDATE; new NAV_ITEMS entry ({ to: '/exam', label: 'Exams', roles:
+    ['CANDIDATE'] }) added right after "My Tasks", so a CANDIDATE session's
+    sidebar now shows a discoverable path to the exam list.
+    web/src/components/ui/PermissionDenied.tsx made role-aware: reads the
+    session via useAuth() and renders "Go to Exams" -> /exam for a
+    CANDIDATE session, while every other role (and a null session) keeps
+    the existing "My Tasks" -> /tasks fallback unchanged.
+  gate_history: >
+    CODE-DESIGN-VALIDATOR PASS, with independent confirmation that this
+    change is out of SECURITY-REVIEWER's scope (client-side nav visibility
+    only; CANDIDATE's real server-side authorization in
+    lib/letflow/api/authorization.ex is untouched and already correctly
+    scoped). REVIEWER PASS. TEST-DESIGN-VALIDATOR PASS, with independently
+    reproduced mutation testing over the new coverage. TEST-RUNNER PASS:
+    691/691 Vitest tests (99 files) plus 48/48 guard tests, including a
+    real production build. RELEASE-VALIDATOR PASS, with full independent
+    re-verification of the acceptance criteria.
+  remaining_gap: >
+    Named, not silently covered: a live check that a real candidate-user
+    on qa.bizdala.com actually sees and can click the new nav entry
+    end-to-end remains unconfirmed. This is inherent to jsdom/vitest
+    coverage (no real browser, no real deployed build), and is explicitly
+    named by the design doc itself as a recommended UAT-RUNNER follow-up --
+    same shape as ISS-0726's own precedent (see that issue's resolution
+    entry in docs/status/requirement_status.v20.yaml for the identical
+    pattern).

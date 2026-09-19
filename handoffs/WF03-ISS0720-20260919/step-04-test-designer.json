@@ -8,8 +8,8 @@
   "file": "handoffs/WF03-ISS0720-20260919/step-04-test-designer.json",
   "created_at": "2026-09-19T03:44:03Z",
   "started_at": "2026-09-19T03:44:03Z",
-  "completed_at": null,
-  "status": "PENDING",
+  "completed_at": "2026-09-19T03:57:00Z",
+  "status": "COMPLETED",
   "priority": "HIGH",
   "context": {
     "stage": "S7",
@@ -35,19 +35,22 @@
     ]
   },
   "result": {
-    "status": "BLOCKED",
-    "summary": "",
-    "artifacts_out": [],
+    "status": "PASS",
+    "summary": "Added a regression test to test/letflow/routers/tenant_config_test.exs (describe 'ISS-0720: oidc_authority reflects configured :keycloak_base_url, not the retired :issuer key') plus test/specs/ISS-0720.md. The test sets Application.put_env(:letflow, :oidc, ...) with a distinctive keycloak_base_url (https://iss0720-regression-test-authority.example), restored via on_exit/1, confirms BPM_IDP_BASE_URL/KEYCLOAK_BASE_URL are unset in this test env (refute System.get_env/1 -- confirmed both nil), calls GET /api/tenant-config through Letflow.Router, and asserts oidc_authority starts with the configured host + '/realms/' and never contains 'localhost'. FAIL-THEN-PASS PROOF (real, executed, not asserted): (1) Post-fix baseline: `mix test test/letflow/routers/tenant_config_test.exs` -> 'Result: 11 passed'. (2) Pre-fix repro: replaced lib/letflow/routers/tenant_config.ex in the working tree with `git show 1fd89bb1:lib/letflow/routers/tenant_config.ex` (1fd89bb1 is the immediate parent of fix commit dbcc89e2), test file and config/dev.exs+test.exs left untouched, reran the same test file -> 'Result: 10/11 passed', the ISS-0720 test the sole failure: 'Expected truthy, got false ... # 1 \"http://localhost:8082/realms/bpm-default\" # 2 \"https://iss0720-regression-test-authority.example/realms/\"' -- exactly the ISS-0720/ISS-0719 symptom (configured keycloak_base_url ignored, compiled localhost default leaks through). (3) Restored lib/letflow/routers/tenant_config.ex to the post-fix version; `git diff` on it came back empty (exact restore confirmed); reran -> 'Result: 11 passed' again. (4) Ran `mix letflow.check.test` (forces fresh warnings-as-errors recompile of the full suite, not just this file) -> 'mix letflow.check.test: OK -- isolated :lua_wallclock_race run also passed clean.', exit code 0, no 'default values for the optional arguments' substring present. COMPILE-TIME RAISE-PATH STATEMENT: the @allow_localhost_idp_fallback? flag on default_idp_base_url!/0's raise branch is resolved once at compile time via Application.compile_env/3 (mirrors Letflow.Repository.Activation's @activation_test_hooks_enabled? pattern) -- Application.put_env/3 cannot change an already-compiled module attribute at runtime, and config/test.exs compiles this suite with the flag permanently true, so the raise branch is NOT reachable/unit-testable from within this same test.exs-compiled suite; exercising it would require a separate build/MIX_ENV with allow_localhost_idp_fallback unset. This is an explicitly accepted gap per the design doc's own §5 item 3 and REVIEWER's step-03c next_action, not a step failure -- the flag's own correctness (false in prod/runtime.exs, true in dev/test.exs) was already independently verified by SECURITY-REVIEWER and REVIEWER via direct config-file inspection. Leakage check: grepped the full test/ tree for any other test asserting on the literal keycloak_base_url host inside oidc_authority (localhost + oidc_authority/keycloak_base_url patterns) -- none found, so this test's temporary global Application env mutation (kept in this async: true file per the task's instruction to follow the file's existing convention) cannot collide with another test's literal-value assertion; on_exit/1 restores the original :oidc keyword list unconditionally.",
+    "artifacts_out": [
+      "test/letflow/routers/tenant_config_test.exs",
+      "test/specs/ISS-0720.md"
+    ],
     "issues": [],
     "git_evidence": {
-      "branch_name": null,
+      "branch_name": "feature/WF03-ISS0720-20260919",
       "commit_sha_list": [],
-      "remote_branch": null,
+      "remote_branch": "origin/feature/WF03-ISS0720-20260919",
       "push_status": "skipped",
       "pr_url": null,
       "pr_create_error": null
     },
-    "next_action": ""
+    "next_action": "Route to Step 4b (TEST-DESIGN-VALIDATOR)"
   },
   "rework_count": 0,
   "max_rework": 3

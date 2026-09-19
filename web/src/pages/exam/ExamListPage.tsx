@@ -52,10 +52,39 @@ import { QueryStateBoundary } from '@/components/ui/QueryStateBoundary'
 import { classifyError, type RendererState } from '@/utils/classifyError'
 import { ExamIntlProvider } from '@/i18n/ExamIntlProvider'
 import { HelpTrigger } from '@/components/help/HelpTrigger'
+import { resolveUiLocale } from '@/i18n/entitiesMessages'
+import type { LocalizedText } from '@/types/exam'
+
+/** ISS-0728: `field_values.title`/`.name` come back from
+ *  `GET /exam-sessions/available` as the raw entity field value -- a
+ *  `:localized_text` field renders as a `LocalizedText` object (e.g.
+ *  `{en, kk, ru}`), NOT a plain string, so `String(value)` on it produced
+ *  the literal text "[object Object]" for every real exam. Mirrors
+ *  `ExamSessionPage.tsx`'s own `resolveLocalizedText` (used there for
+ *  question stems/option text): a plain string field value passes through
+ *  unchanged; a `LocalizedText` object resolves via current UI locale ->
+ *  'en' -> first non-empty value -> ''. */
+function resolveExamFieldText(value: unknown, uiLocale: string): string {
+  if (value == null) return ''
+  if (typeof value === 'string') return value
+  if (typeof value === 'object') {
+    const localized = value as LocalizedText
+    const own = localized[uiLocale]
+    if (own) return own
+    const en = localized['en']
+    if (en) return en
+    for (const v of Object.values(localized)) {
+      if (v) return v
+    }
+    return ''
+  }
+  return String(value)
+}
 
 function ExamListPageInner() {
   const intl = useIntl()
   const navigate = useNavigate()
+  const uiLocale = resolveUiLocale([intl.locale])
 
   const examsQuery = useQuery({
     queryKey: queryKeys.exam.list({ page_size: 100 }),
@@ -124,7 +153,11 @@ function ExamListPageInner() {
                   marginBottom: 'var(--space-2)',
                 }}
               >
-                <span>{String(exam.field_values.title ?? exam.field_values.name ?? exam.record_id)}</span>
+                <span>
+                  {resolveExamFieldText(exam.field_values.title, uiLocale) ||
+                    resolveExamFieldText(exam.field_values.name, uiLocale) ||
+                    exam.record_id}
+                </span>
                 <Button
                   variant="primary"
                   size="sm"

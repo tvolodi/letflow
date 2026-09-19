@@ -1976,3 +1976,34 @@
 2026-09-19T08:56:19Z | GATE_PASS | WF-03 | WF03-ISS0721-20260919/step-final-git-merge | ELIXIR-DEV(ORCH-completed) -> ORCH | PASS (found IN_PROGRESS/stale from dead prior session mid-merge; PR #1568 all gates already PASS; ORCH updated branch onto main, waited for CI green, squash-merged as 400032ef)
 2026-09-19T08:56:19Z | RUN_DONE | WF-03 | WF03-ISS0721-20260919 | ORCH | REQ-228 / ISS-0721 resolved and merged to main (400032ef)
 2026-09-19T09:01:47Z | RELEASE_LOCK | WF-03 | WF03-ISS0721-20260919 | ORCH -> letflow-queue | task 720 released status: done
+2026-09-19T19:06:51Z | RUN_DONE | WF-03 | ISS-0728 | FRONTEND-DEV -> REVIEWER -> ORCH | PASS (PR #1579 merged fde06196)
+2026-09-19T20:37:35Z | DISPATCH | WF-05 | uat-pilot-platform-definition-promotion-approved-gui-review-20260920 | ORCH -> UAT-RUNNER | PENDING (GUI-review pilot on platform/definition-promotion-approved.yaml)
+2026-09-19T20:37:35Z | GATE_PASS | WF-05 | uat-pilot-platform-definition-promotion-approved-gui-review-20260920 | UAT-RUNNER -> ORCH | BLOCKED (feature exists but review-screen route never mounted; filed ISS-0730 BLOCKER, report test/uat-reports/gui-review-2026-09-20-definition-promotion-approved.md)
+2026-09-19T20:37:35Z | DISPATCH | WF-03 | WF03-ISS0730-20260920/step-01-issue-fixer-diagnose | ORCH -> ISSUE-FIXER | PENDING
+2026-09-19T20:37:35Z | GATE_PASS | WF-03 | WF03-ISS0730-20260920/step-01-issue-fixer-diagnose | ISSUE-FIXER -> ORCH | PASS (confirmed routing/composition gap only, recommended route definitions/:id/promotions/:reviewId)
+2026-09-19T20:37:35Z | DISPATCH | WF-03 | WF03-ISS0730-20260920/step-02-code-designer | ORCH -> CODE-DESIGNER | PENDING
+2026-09-19T20:37:35Z | GATE_FAIL | WF-03 | WF03-ISS0730-20260920/step-02b-code-design-validator | CODE-DESIGN-VALIDATOR -> ORCH | FAIL (role-gate section cited a fabricated PermissionDenied/QueryStateBoundary pattern not matching AuditLogPage/HealthDashboardPage/MetricsPage)
+2026-09-19T20:37:35Z | DISPATCH | WF-03 | WF03-ISS0730-20260920/step-02-code-designer-rework1 | ORCH -> CODE-DESIGNER | PENDING (rework 1/3)
+2026-09-19T20:37:35Z | GATE_PASS | WF-03 | WF03-ISS0730-20260920/step-02b-code-design-validator-rework1 | CODE-DESIGN-VALIDATOR -> ORCH | PASS (role-gate corrected to Navigate to="/instances" pattern, verified against real files)
+2026-09-19T20:37:35Z | DISPATCH | WF-03 | WF03-ISS0730-20260920/step-03-frontend-dev | ORCH -> FRONTEND-DEV | PENDING
+2026-09-19T20:37:35Z | GATE_PASS | WF-03 | WF03-ISS0730-20260920/step-03-frontend-dev | FRONTEND-DEV -> ORCH | PASS (commit ec4d5e0b: route + PromotionReviewPage.tsx; typecheck/lint/tests/guards all green)
+2026-09-19T20:37:35Z | DISPATCH | WF-03 | WF03-ISS0730-20260920/step-03b-security-reviewer | ORCH -> SECURITY-REVIEWER | PENDING
+2026-09-19T20:37:35Z | GATE_PASS | WF-03 | WF03-ISS0730-20260920/step-03b-security-reviewer | SECURITY-REVIEWER -> ORCH | PASS (client-side gate confirmed UX-only; backend :Unknown authz enforces PLATFORM_ADMIN independently; no cross-tenant/trust-boundary issue)
+2026-09-19T20:37:35Z | DISPATCH | WF-03 | WF03-ISS0730-20260920/step-03c-reviewer | ORCH -> REVIEWER | PENDING
+2026-09-19T20:37:35Z | GATE_PASS | WF-03 | WF03-ISS0730-20260920/step-03c-reviewer | REVIEWER -> ORCH | PASS (no scope creep, idiomatic, no decision-record conflict)
+2026-09-19T20:37:35Z | DISPATCH | WF-03 | WF03-ISS0730-20260920/step-04-test-designer | ORCH -> TEST-DESIGNER | PENDING
+2026-09-19T20:37:35Z | GATE_PASS | WF-03 | WF03-ISS0730-20260920/step-04-test-designer | TEST-DESIGNER -> ORCH | PASS (4 tests, non-existence pre-fix case handled via 3 mutants in throwaway worktree, all discriminating; worktree cleanly removed)
+2026-09-19T20:37:35Z | DISPATCH | WF-03 | WF03-ISS0730-20260920/step-04b-test-design-validator | ORCH -> TEST-DESIGN-VALIDATOR | PENDING
+2026-09-19T20:37:35Z | GATE_PASS | WF-03 | WF03-ISS0730-20260920/step-04b-test-design-validator | TEST-DESIGN-VALIDATOR -> ORCH | PASS (independently applied mutant (b) in own worktree, reproduced 2/4 failing TC-02/TC-03)
+2026-09-19T20:37:35Z | DISPATCH | WF-03 | WF03-ISS0730-20260920/step-04c-test-runner | ORCH -> TEST-RUNNER | PENDING
+2026-09-19T20:37:35Z | GATE_PASS | WF-03 | WF03-ISS0730-20260920/step-04c-test-runner | TEST-RUNNER -> ORCH | PASS (638/638 tests, type-check/lint/guards clean, confirmed no backend files touched)
+2026-09-19T20:37:35Z | DISPATCH | WF-03 | WF03-ISS0730-20260920/step-05-issue-fixer-close | ORCH -> ISSUE-FIXER | PENDING
+2026-09-19T20:37:35Z | RESOLVE | WF-03 | WF03-ISS0730-20260920/step-05-issue-fixer-close | ISSUE-FIXER -> ORCH | PASS (ISS-0730 resolved, no linked GitHub issue to close; commit 2c5ed4a6)
+2026-09-19T20:37:35Z | GATE_PASS | WF-03 | WF03-ISS0730-20260920/step-final-git-merge | ORCH | PASS (ORCH committed remaining artifacts as 9dbde232, pushed e0b3fdc7..9dbde232 directly to main, no CI gate configured to wait on beyond repo's bypassable required checks)
+2026-09-19T20:37:35Z | RUN_DONE | WF-03 | WF03-ISS0730-20260920 | ORCH | ISS-0730 resolved and merged to main (9dbde232); backend/frontend promotion-review feature confirmed real and now GUI-reachable
+2026-09-19T21:49:12Z | DISPATCH | UAT-PILOT | uat-pilot-platform-definition-promotion-approved-gui-review-20260920-resume | ORCH (direct, no sub-dispatch per explicit instruction) | PENDING
+2026-09-19T21:49:12Z | GATE_PASS | UAT-PILOT | .../step-fix-iss0731 | ORCH -> web/src/api/promotions.ts | PASS (tsc --noEmit clean, npm run build clean, fix verified live against real https://qa.bizdala.com data via local preview + API proxy before merge)
+2026-09-19T21:49:12Z | GATE_PASS | UAT-PILOT | .../step-ci | ORCH | PASS (CI run 35471017542: backend gate + frontend gate green)
+2026-09-19T21:49:12Z | GATE_PASS | UAT-PILOT | .../step-cd | ORCH | PASS (CD run 35471449305 deployed to QA)
+2026-09-19T21:49:12Z | GATE_PASS | UAT-PILOT | .../step-spec-run | ORCH | PASS (platform-definition-promotion-approved.pipeline.e2e.spec.ts: 1 passed against live https://qa.bizdala.com post-deploy)
+2026-09-19T21:49:12Z | RUN_DONE | UAT-PILOT | uat-pilot-platform-definition-promotion-approved-gui-review-20260920-resume | ORCH | ISS-0731 found and resolved (commit 457d82a8, merged to main, deployed to QA); ISS-0730 fix independently reverified live; permanent Playwright spec written and passing; EO-001/EO-003(new-version half) confirmed PASS live; EO-002 and EO-004 real gaps found and filed as ISS-0732 (BLOCKER, apply not gated on rehearsal) and ISS-0733 (MAJOR, no promotion audit/event trail found) -- both routed to normal gates, not fixed in this run

@@ -4293,15 +4293,24 @@ volumes:
     path: docs/status/requirement_status.v20.yaml
     status: current
     opened: 2026-09-18
-    entries: 9
+    entries: 10
     note: >
-      Incremented to 9 by ORCH's own SCOPE-CHANGE done-event append
+      Incremented to 10 by ORCH's own SCOPE-CHANGE done-event append
       (2026-09-20T00:00:00Z -- REQ-371 filed, operator-facing rollback GUI
       gap found during test/fixtures/uat/scenarios/platform/
-      definition-promotion-rollback.yaml review) -- `grep -c "^  - req:"
-      docs/status/requirement_status.v20.yaml` = 9 on-disk entries. 616
-      lines / 39120 bytes, well under the 1200-line/120000-byte roll
+      definition-promotion-rollback.yaml review), landing on top of a
+      concurrent sibling-session append (below) resolved together during
+      this same merge -- `grep -c "^  - req:"
+      docs/status/requirement_status.v20.yaml` = 10 on-disk entries. 664
+      lines / 41429 bytes, well under the 1200-line/120000-byte roll
       ceiling, so no roll triggered.
+
+      Incremented to 9 by DOC-UPDATER's own ISS-0728 SCOPE-CHANGE done-event
+      append (WF03-ISS0728-20260919, 2026-09-19T22:39:24Z -- ISS-0728
+      CANDIDATE-role exam-list nav-discoverability fix) -- `grep -c
+      "^  - req:" docs/status/requirement_status.v20.yaml` = 9 on-disk
+      entries. 620 lines / 38642 bytes, well under the 1200-line/120000-byte
+      roll ceiling, so no roll triggered.
 
       Incremented to 7 by DOC-UPDATER's own ISS-0726 SCOPE-CHANGE done-event
       append (WF03-ISS0726-20260919, 2026-09-19T21:15:34Z -- ISS-0726

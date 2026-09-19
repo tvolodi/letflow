@@ -8,7 +8,7 @@ import { dlqApi } from '@/api/dlq'
 import { queryKeys } from '@/api/queryKeys'
 import { useBranding } from '@/theming/BrandingContext'
 
-type Role = 'PLATFORM_ADMIN' | 'PROCESS_DESIGNER' | 'PROCESS_OPERATOR' | 'TASK_WORKER'
+type Role = 'PLATFORM_ADMIN' | 'PROCESS_DESIGNER' | 'PROCESS_OPERATOR' | 'TASK_WORKER' | 'CANDIDATE'
 
 interface NavItem {
   to: string
@@ -19,6 +19,7 @@ interface NavItem {
 const NAV_ITEMS: NavItem[] = [
   { to: '/instances',     label: 'Instances',   roles: ['PLATFORM_ADMIN', 'PROCESS_DESIGNER', 'PROCESS_OPERATOR'] },
   { to: '/tasks',         label: 'My Tasks',    roles: ['PLATFORM_ADMIN', 'PROCESS_OPERATOR', 'TASK_WORKER'] },
+  { to: '/exam',          label: 'Exams',       roles: ['CANDIDATE'] },
   { to: '/definitions',  label: 'Definitions', roles: ['PLATFORM_ADMIN', 'PROCESS_DESIGNER'] },
   { to: '/dlq',           label: 'DLQ',         roles: ['PLATFORM_ADMIN', 'PROCESS_OPERATOR'] },
   { to: '/webhooks',      label: 'Webhooks',    roles: ['PLATFORM_ADMIN', 'PROCESS_OPERATOR'] },

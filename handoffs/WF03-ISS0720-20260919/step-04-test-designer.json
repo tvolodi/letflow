@@ -1,0 +1,54 @@
+{
+  "handoff_id": "a1b2c3d4-0001-4000-8000-000000000008",
+  "run_id": "WF03-ISS0720-20260919",
+  "workflow_id": "WF-03",
+  "step": "04",
+  "from_agent": "ORCH",
+  "to_agent": "TEST-DESIGNER",
+  "file": "handoffs/WF03-ISS0720-20260919/step-04-test-designer.json",
+  "created_at": "2026-09-19T03:44:03Z",
+  "started_at": "2026-09-19T03:44:03Z",
+  "completed_at": null,
+  "status": "PENDING",
+  "priority": "HIGH",
+  "context": {
+    "stage": "S7",
+    "requirement_ids": [],
+    "requirement_text": {},
+    "source_text": {},
+    "related_handoff_ids": [],
+    "artifacts_in": [
+      "lib/letflow/design/iss0720-tenant-config-stale-issuer-key.md",
+      "lib/letflow/routers/tenant_config.ex",
+      "test/letflow/routers/tenant_config_test.exs",
+      "handoffs/WF03-ISS0720-20260919/step-03c-reviewer.json"
+    ],
+    "owned_modules": ["test/letflow/routers/tenant_config_test.exs"]
+  },
+  "task": {
+    "description": "git checkout feature/WF03-ISS0720-20260919 first. Write a fail-then-pass regression test proving ISS-0720's fix, per docs/agents/workflows/WF-03_issue_resolving.md Step 4's requirement: the test must be shown to FAIL against the pre-fix code and PASS against the post-fix code (checked out via a separate commit/worktree comparison, or reasoned via a mutation if the pre-fix state is awkward to check out -- your call, but the fail-first proof must be real and stated in your summary, not asserted).\n\nCore regression test: set Application.put_env(:letflow, :oidc, keycloak_base_url: \"https://iss0720-regression-test-authority.example\") (restoring the original value in on_exit/1), ensure BPM_IDP_BASE_URL and KEYCLOAK_BASE_URL system env vars are NOT set during this test (use System.delete_env/put_env with on_exit restore, or confirm test env never sets them -- check first), then GET /api/tenant-config and assert the response's oidc_authority starts with \"https://iss0720-regression-test-authority.example/realms/\". Against PRE-FIX code (which reads the retired :issuer key, always nil, so falls through to the compiled localhost default since env vars are unset), this assertion fails -- the response would show localhost:8082, not the configured keycloak_base_url. Against POST-FIX code, it passes. This directly discriminates the exact bug ISS-0720/T-0138/ISS-0719 describes.\n\nAlso cover: the REVIEWER-flagged constraint that the new @allow_localhost_idp_fallback? compile-time flag cannot be runtime-toggled via Application.put_env/3 -- do not attempt to test the raise branch by flipping that flag at runtime; if you want coverage of the raise path, state explicitly in your summary why it either can or cannot be practically unit-tested given the compile-time mechanism, and if it cannot, that is an acceptable, explicitly-stated gap (not a step failure) since the flag's own correctness (false in prod/runtime.exs, true in dev/test.exs) was independently verified by SECURITY-REVIEWER and REVIEWER already via direct config-file inspection.\n\nAdd the test to test/letflow/routers/tenant_config_test.exs (existing file, artifacts_in) as new test case(s), following that file's existing conventions.",
+    "acceptance_criteria": [
+      "New test in test/letflow/routers/tenant_config_test.exs asserts oidc_authority reflects a custom configured keycloak_base_url when BPM_IDP_BASE_URL/KEYCLOAK_BASE_URL are unset",
+      "Fail-then-pass proof is real and stated: confirmed FAIL against pre-fix tenant_config.ex, confirmed PASS against post-fix",
+      "Test cleans up any Application.put_env/System.put_env changes in on_exit/1, verified not to leak into other tests",
+      "Explicit statement on whether/why the compile-time-gated raise path is or isn't separately unit-testable"
+    ]
+  },
+  "result": {
+    "status": "BLOCKED",
+    "summary": "",
+    "artifacts_out": [],
+    "issues": [],
+    "git_evidence": {
+      "branch_name": null,
+      "commit_sha_list": [],
+      "remote_branch": null,
+      "push_status": "skipped",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": ""
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

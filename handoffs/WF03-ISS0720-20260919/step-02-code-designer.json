@@ -1,0 +1,55 @@
+{
+  "handoff_id": "a1b2c3d4-0001-4000-8000-000000000003",
+  "run_id": "WF03-ISS0720-20260919",
+  "workflow_id": "WF-03",
+  "step": "02",
+  "from_agent": "ORCH",
+  "to_agent": "CODE-DESIGNER",
+  "file": "handoffs/WF03-ISS0720-20260919/step-02-code-designer.json",
+  "created_at": "2026-09-19T03:32:24Z",
+  "started_at": "2026-09-19T03:32:24Z",
+  "completed_at": null,
+  "status": "PENDING",
+  "priority": "HIGH",
+  "context": {
+    "stage": "S7",
+    "requirement_ids": [],
+    "requirement_text": {},
+    "source_text": {},
+    "related_handoff_ids": [],
+    "artifacts_in": [
+      "docs/issues/ISS-0720.yaml",
+      "handoffs/WF03-ISS0720-20260919/step-01-issue-fixer-diagnosis.json",
+      "lib/letflow/routers/tenant_config.ex",
+      "config/runtime.exs"
+    ],
+    "owned_modules": ["lib/letflow/routers/tenant_config.ex"]
+  },
+  "task": {
+    "description": "git checkout feature/WF03-ISS0720-20260919 first. Design the fix for ISS-0720's root cause: read result.summary of step-01-issue-fixer-diagnosis.json (artifacts_in) in full for the diagnosis and ISSUE-FIXER's recommendation. Design must specify, as interface/signature-level changes only (no implementation bodies, per this project's design-artefact rules): (1) oidc_issuer_base/0's replacement logic reading Application.get_env(:letflow, :oidc, [])[:keycloak_base_url] instead of the retired :issuer key -- note keycloak_base_url is already a bare base URL (no /realms/<slug> suffix, confirmed by config/runtime.exs's own derive_base_url_from_legacy_issuer comment and value shape), so the existing String.split(\"/realms/\") stripping logic in the current oidc_issuer_base/0 must be removed, not merely re-pointed at a new key -- state this explicitly as a design element, do not leave it implicit. (2) A decision, with stated rationale, on whether @default_idp_base_url (\"http://localhost:8082\") stays as a fallback for every environment or is scoped to fail loudly (raise, or an explicit warning/error condition) outside Mix.env() in [:dev, :test] -- ISSUE-FIXER's diagnosis recommends the latter; you are the design authority and may agree or diverge, but must state your reasoning either way, and if you scope it, specify exactly what happens instead in a non-dev/test environment with no real base URL resolvable (raise at call time vs. at boot vs. a logged error with the literal default retained as belt-and-suspenders -- pick one and justify it against this endpoint's own moduledoc's 'never error to the caller' rule, which governs the TENANT/DB-lookup response shape, not this config-resolution path -- do not silently let that rule block your decision without addressing it explicitly). (3) No new public function, module, or @spec beyond what's needed to express this -- if the fix is a small function body change, a design doc's job here is to state the target logic in words/pseudocode-free interface terms, not to prescribe unnecessary structure for a 1-2 function fix. Write the design artefact to lib/letflow/design/iss0720-tenant-config-stale-issuer-key.md, following this project's existing design-doc conventions (see other files in lib/letflow/design/ for shape/precedent).",
+    "acceptance_criteria": [
+      "Design doc exists at lib/letflow/design/iss0720-tenant-config-stale-issuer-key.md",
+      "Explicitly states the :keycloak_base_url key rename and the removal of the /realms/ stripping logic",
+      "Explicitly decides and justifies the localhost-default fallback question (keep-always vs. dev/test-scoped-with-fail-loud-elsewhere), addressing the moduledoc's never-error rule directly rather than ignoring it",
+      "Contains no .ex implementation code bodies (interface/signature/pseudocode-free description only, per this project's CODE-DESIGN-VALIDATOR check (e))",
+      "Design is a fix to an existing private function -- no new public function/module/@spec is introduced unless genuinely required, and the doc states explicitly why or why not"
+    ]
+  },
+  "result": {
+    "status": "BLOCKED",
+    "summary": "",
+    "artifacts_out": [],
+    "issues": [],
+    "git_evidence": {
+      "branch_name": null,
+      "commit_sha_list": [],
+      "remote_branch": null,
+      "push_status": "skipped",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": ""
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

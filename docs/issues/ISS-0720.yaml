@@ -134,4 +134,6 @@ fix_direction: >
   should treat this as a recommendation, not a foregone conclusion --
   final call is theirs -- but the design should explicitly address it
   rather than silently preserving the current always-succeeds behavior.
-status: open
+status: resolved
+resolved_in_run: WF03-ISS0720-20260919
+resolved_at: "2026-09-19T04:11:28Z"

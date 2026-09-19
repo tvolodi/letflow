@@ -83,4 +83,52 @@ affected_files:
   - .github/workflows/cd.yml (this repo -- the caller, unaffected itself)
 queue_ref: Q-717
 github_ref: GH-1540
-status: open
+status: resolved
+resolved_in_run: ai-dala-infra T-0134 (run 2026-09-19-fix-letflow-qa-image-tag-mismatch-001)
+resolved_at: "2026-09-19T00:00:00Z"
+resolution: >
+  Durable fix landed in ai-dala-infra's T-0134
+  (tasks/T-0134-fix-letflow-qa-redeploy-image-tag-mismatch.md, status: done,
+  outcome: succeeded), the companion task this entry's own ad hoc fix
+  explicitly deferred to. T-0134 added an explicit `image: letflow-qa:latest`
+  field to ai-dala-infra's deploy/docker-compose.qa.yml `app` service --
+  the exact tag deploy/redeploy-qa.sh already builds -- so Compose's `up
+  --force-recreate` now actually deploys the freshly built image instead of
+  silently falling back to its own auto-generated, disconnected
+  `letflow-qa-app:latest` tag.
+
+  As part of landing this fix, the compose file (previously host-local and
+  never git-tracked since T-0125's 2026-09-15 provisioning) was committed
+  into this repo (tvolodi/letflow) for the first time: commit 69c430ad
+  ("fix(deploy): add missing image: field to docker-compose.qa.yml app
+  service"), independently confirmed present on `main` and inspected
+  directly -- deploy/docker-compose.qa.yml's `app` service now reads
+  `image: letflow-qa:latest`, matching redeploy-qa.sh's build tag exactly.
+
+  T-0134 verified the fix end to end, not just by inspection: a trivial,
+  real, observable change (a comment in lib/letflow/router.ex, commit
+  a3b8244f, "chore(router): add verification marker comment for T-0134 QA
+  redeploy fix") was deployed through the actual redeploy-qa.sh script (not
+  a manual ad hoc rebuild), and the running container's image SHA was
+  confirmed to exactly match the freshly built image -- the same
+  "prove it, don't trust the script's own success message" standard this
+  entry's own ad hoc fix used. Post-deploy health checks
+  (https://qa.bizdala.com/ and /health) returned 200.
+
+  T-0134 also checked (AC4) for the same missing-`image:` defect across
+  sibling compose files on the host -- deploy/docker-compose.test.yml's
+  `app` service already carried `image: letflow-test:latest` correctly; no
+  copy-paste defect found elsewhere. AC5 (root-causing the staleness
+  window via git history) returned a false-premise finding:
+  docker-compose.qa.yml was never tracked in any repo's git history before
+  commit 69c430ad, so the drift window is bounded as "since T-0125 first
+  stood up this compose file on 2026-09-15 through T-0134's fix on
+  2026-09-19" -- every QA redeploy reporting success in that ~4-day window
+  was silently a no-op for backend code changes.
+
+  This is a docs-only close-out on the letflow side: no letflow lib/ code
+  change was needed, since the actual fix lives entirely in
+  ai-dala-infra's deploy/docker-compose.qa.yml (now also tracked here as of
+  69c430ad) and its deploy procedure. Evidence: T-0134's own record
+  (ai-dala-infra/tasks/T-0134-fix-letflow-qa-redeploy-image-tag-mismatch.md),
+  this repo's commits 69c430ad and a3b8244f on `main`, and GH#1540.

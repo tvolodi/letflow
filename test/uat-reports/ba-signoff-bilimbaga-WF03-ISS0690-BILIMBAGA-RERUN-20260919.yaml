@@ -1,0 +1,89 @@
+report_id: ba-signoff-bilimbaga-WF03-ISS0690-BILIMBAGA-RERUN-20260919
+run_id: WF03-ISS0690-BILIMBAGA-RERUN-20260919
+vertical: bilimbaga
+solution_pack: bilimbaga
+generated_at: "2026-09-19T05:10:00Z"
+persona: Ainur Zhaksybekova (Head of Learning & Assessment)
+source_uat_report: test/uat-reports/uat-2026-09-19-WF03-ISS0690-BILIMBAGA-RERUN-20260919.yaml
+
+scenarios_reviewed: 1
+domain_verdict: CONDITIONAL_PASS
+
+scenario_verdicts:
+  - scenario_id: bilimbaga-candidate-timed-exam-autograde
+    title: "Candidate takes a timed certification exam and receives an auto-graded score"
+    persona_verdict: CONDITIONAL_PASS
+    business_note: >
+      This time I could actually see the flow work. A real candidate
+      account signed in, saw our Safety Certification Exam in their list,
+      started a timed session, answered both questions, and submitted --
+      and the system told them, immediately, that they scored 100% and
+      passed. I independently checked which answers were actually correct
+      before trusting that number, and it matched. That is exactly what I
+      need this feature to do for our candidates.
+
+      I am marking this CONDITIONAL rather than a full PASS for one honest
+      reason that has nothing to do with the grading itself: this check
+      was run entirely through direct API calls, not by watching a real
+      browser screen render the countdown timer or the result page. I'm
+      told the underlying data (a live countdown value, an immediate score
+      in the submit response) was there and behaved correctly -- but I
+      have not personally seen the exam screen with my own eyes, and I
+      want that seen before I call this fully done. This is a testing-
+      coverage gap, not a sign that anything is broken.
+    issues:
+      - BA-BILIMBAGA-002
+      - BA-BILIMBAGA-003
+
+domain_issues:
+  - id: BA-BILIMBAGA-002
+    severity: MINOR
+    business_description: >
+      Nobody has actually watched the exam-taking screens render in a real
+      browser for this scenario yet -- only the underlying data was
+      checked via direct API calls. I want to see the countdown timer and
+      the result screen with my own eyes (or a recorded screenshot walk-
+      through) before I consider this fully signed off, even though the
+      data behind those screens checked out correctly.
+    affected_scenario: bilimbaga-candidate-timed-exam-autograde
+    suggested_action: >
+      Add a `pipeline_test:` entry to this scenario naming a real
+      Playwright spec that drives the actual candidate exam flow in a
+      browser (the engineering team already has similar specs for other
+      exam screens -- web/tests/e2e/exam-taking.e2e.spec.ts and
+      neighboring files -- that could likely be adapted), then re-run this
+      scenario through that spec.
+  - id: BA-BILIMBAGA-003
+    severity: MINOR
+    business_description: >
+      While setting up this check's exam data, the testing team found that
+      a brand-new organization on our platform cannot save any exam
+      content at all until an engineer manually runs a setup step by hand
+      -- and separately, that an exam configured to use a hand-picked list
+      of questions (rather than randomly drawn ones) silently produces an
+      exam with no questions in it at all, with no warning to whoever set
+      it up. Neither of these affected today's check (the team worked
+      around both to get a working exam in place), but both are real gaps
+      I'd want closed before we onboard a new customer organization or
+      before any of our exam authors try to build a hand-picked-question
+      exam.
+    affected_scenario: bilimbaga-candidate-timed-exam-autograde
+    suggested_action: >
+      Tracked as ISS-0721 (missing setup step for new organizations) and
+      ISS-0722 (hand-picked-question exams silently produce zero
+      questions) in the engineering issue queue -- no action needed from
+      me, just wanted this visible in my sign-off.
+
+overall_note: >
+  This is real, meaningful progress -- the last time I looked at this, I
+  could not even reach the exam list. Now I have watched (via the raw data
+  the system exchanged, not yet a rendered screen) a candidate sign in,
+  find their exam, take it under a real timer, submit it, and get an
+  accurate pass with the right score, checked independently against the
+  actual correct answers rather than just trusting what the system
+  reported about itself. I'm comfortable calling the core exam-taking
+  promise verified at the data level. What's left before I'd call this
+  fully done: someone needs to actually watch this happen in a browser,
+  not just in API responses, and the two setup-time gaps my team hit while
+  preparing this exam (BA-BILIMBAGA-003) should get closed before we trust
+  this for a new customer.

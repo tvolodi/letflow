@@ -1,0 +1,70 @@
+id: ISS-0722
+title: "Letflow.Exam.Session.fetch_question_pools/2 only handles exam_question_rule mode \"random\" -- mode \"manual\" is silently ignored, producing zero materialized questions with no error"
+discovered_by: UAT-RUNNER
+discovered_in_run: WF03-ISS0690-BILIMBAGA-RERUN-20260919
+discovered_at: "2026-09-19T00:00:00Z"
+severity: MAJOR
+tags:
+  - exam
+  - silent-failure
+  - bilimbaga
+description: >
+  Discovered while seeding the BilimBaga tenant on live QA
+  (https://qa.bizdala.com) for a re-run of
+  test/fixtures/uat/scenarios/bilimbaga/candidate-timed-exam-autograde.yaml
+  (ISS-0690's own required next step). The BilimBaga solution pack
+  (priv/packs/bilimbaga/pack.json) authors and activates a real,
+  installable exam_manual_question join entity type (binding an exam
+  directly to a specific, pinned set of questions -- the "manual" question-
+  selection mode named by exam_question_rule.mode, an :enum whose other
+  value is "random"). An exam_question_rule record with mode "manual" was
+  created against a real exam and a real set of exam_manual_question rows
+  pinning specific questions to it, then a session was started
+  (POST /exam-sessions) against that exam: the session was created
+  successfully (HTTP 201, no error of any kind) but its questions list was
+  empty ([]) -- zero materialized questions, silently, with no rejection
+  and no error surfaced anywhere in the response or logs.
+
+  Root cause, confirmed by reading lib/letflow/exam/session.ex (~line 744,
+  fetch_question_pools/2): the function pattern-matches on
+  exam_question_rule.mode and has a real, working clause only for "random"
+  (draws N questions from a category/tag pool). No clause reads
+  exam_manual_question at all for mode "manual" -- the function simply
+  falls through to an empty result for any rule whose mode is not
+  "random", rather than raising, returning an error tuple, or logging.
+  exam_manual_question is a real, authored, pack-installable entity type
+  (see priv/packs/bilimbaga/exam_manual_question.json's own description) --
+  nothing reads it anywhere in lib/letflow/exam/*.
+
+  WORKAROUND USED THIS RUN (not a fix): configured this run's own
+  exam_question_rule with mode "random" (pulling 2 questions from a
+  category pool) instead of "manual", to get a working exam installed for
+  the UAT re-run. This sidesteps the gap rather than exercising or fixing
+  it.
+
+  IMPACT: any exam authored with a manual (pinned-question) rule --
+  a legitimate, pack-supported configuration a real BilimBaga exam author
+  could reasonably choose (e.g. "this exact set of 10 questions, no
+  randomization") -- silently produces a zero-question exam for every
+  candidate who starts a session against it. No error anywhere makes this
+  discoverable short of noticing the empty questions array; a real exam
+  author could ship a broken exam without any signal.
+affected_files:
+  - lib/letflow/exam/session.ex
+  - priv/packs/bilimbaga/exam_manual_question.json
+  - test/uat-reports/uat-2026-09-19-WF03-ISS0690-BILIMBAGA-RERUN-20260919.yaml
+suggested_fix: >
+  CODE-DESIGNER's call, not decided here. At minimum,
+  fetch_question_pools/2 needs a real clause for mode "manual" that reads
+  exam_manual_question rows for the rule and materializes those specific
+  questions (mirroring how "random" draws from its pool), or -- if manual
+  mode is not actually meant to be supported yet -- the rule-creation path
+  should reject mode "manual" with a clear validation error instead of
+  silently accepting it and producing a broken exam later.
+status: open
+# NOTE: filename/queue-id mismatch -- see docs/issues/ISS-0721.yaml's own
+# identical note for the full explanation. register_task's real,
+# atomically-allocated id for this issue is 721, not 722. Corrected here
+# by ORCH after registering it for real via letflow-queue.
+queue_ref: Q-721
+github_issue_number: 1555

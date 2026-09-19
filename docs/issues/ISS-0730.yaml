@@ -1,0 +1,84 @@
+id: ISS-0730
+title: >
+  No reachable GUI route anywhere in web/ renders the promotion-review
+  screens (pending review, approve, release) -- components exist but are
+  never wired into router.tsx or AppShell's nav
+discovered_by: UAT-RUNNER
+discovered_in_run: uat-pilot-platform-definition-promotion-approved-gui-review-20260920
+discovered_at: "2026-09-20T00:00:00Z"
+severity: BLOCKER
+description: >
+  Discovered while following the "review real screens before writing a
+  blind Playwright spec" pilot process on
+  test/fixtures/uat/scenarios/platform/definition-promotion-approved.yaml
+  (PW-01, sys-definition-promotion). This scenario's steps 2/3/5 are all
+  `via: gui` and require a PLATFORM_ADMIN-role reviewer to open a pending
+  change review screen, read the diff, approve it, and later release it.
+
+  The backend machinery is real and substantially complete: promotion
+  review state machine (lib/letflow/definitions/promotion_review.ex,
+  promotion_review_store.ex), diff computation
+  (Letflow.Definitions.PromotionPlan.compute_promotion_plan/5), rehearsal
+  (Letflow.Definitions.apply_promotion_assertion_rerun/6 +
+  Letflow.SandboxPool), and HTTP routes (lib/letflow/routers/promotions.ex)
+  all exist and are wired. Frontend *components* for this flow also exist:
+  web/src/components/promotions/PromotionReviewStateMachine.tsx,
+  PlanDigestView.tsx, NonSkippableApprovalGate.tsx,
+  ConflictRejectionAlert.tsx, and web/src/hooks/usePromotions.ts +
+  web/src/api/promotions.ts.
+
+  However, none of these components is imported or rendered by any page,
+  and no route in web/src/router.tsx points at any of them (confirmed by
+  grep across web/src for PlanDigestView/NonSkippableApprovalGate/
+  ConflictRejectionAlert/usePromotions outside their own definition/test
+  files: zero real callers). web/src/components/layout/AppShell.tsx's
+  NAV_ITEMS has no "Promotions"/"Change Reviews" entry for any role,
+  confirmed live against a real PLATFORM_ADMIN sign-in on
+  https://qa.bizdala.com (admin-user, realm bpm-default): the real
+  sidebar returned by the app lists Instances, My Tasks, Definitions,
+  DLQ, Webhooks, Users, Groups, Tokens, Audit, Health, Metrics, Register
+  Tenant, Tenants, Services, Question Bank, Sign out -- nothing
+  promotion-related. Direct navigation to plausible guessed routes
+  (/admin/promotions, /promotions, /definitions/promotions,
+  /admin/definitions/promotions) all render React Router's raw
+  "Unexpected Application Error! 404 Not Found" dev error page, confirming
+  no route exists at all, live.
+
+  A reviewer therefore has no real way to reach this screen through the
+  actual application today -- only DefinitionEditorPage.tsx's own
+  "Promote" button (which starts a promotion, i.e. this scenario's step 1)
+  is wired; nothing renders the review/approve/release side.
+affected_files:
+  - web/src/router.tsx
+  - web/src/components/layout/AppShell.tsx
+  - web/src/components/promotions/PromotionReviewStateMachine.tsx (exists, orphaned)
+  - web/src/components/promotions/PlanDigestView.tsx (exists, orphaned)
+  - web/src/components/promotions/NonSkippableApprovalGate.tsx (exists, orphaned)
+  - web/src/components/promotions/ConflictRejectionAlert.tsx (exists, orphaned)
+severity_rationale: >
+  BLOCKER: this is not a cosmetic gap -- it blocks the entire GUI leg of
+  the scenario's happy path (steps 2, 3, 5) for any real user, with no
+  workaround short of hand-mounting the component in a browser devtools
+  console. EO-001 (reviewer sees the change list before approving) and
+  EO-003's release-visible-on-screen half cannot be exercised by any real
+  PLATFORM_ADMIN today. Per this scenario's own on_fail.suggested_action
+  for EO-001/EO-002/EO-003 (route_to_wf03), and per the dispatch's
+  instruction to stop and not write the pipeline_test spec when a real
+  defect blocks the GUI leg.
+fix_direction: >
+  Needs a routing/nav decision (CODE-DESIGNER territory, small): add a
+  route (e.g. definitions/:id/promotions/:reviewId, or a standalone
+  admin/promotions list + detail pair) that renders
+  PromotionReviewStateMachine (which already composes PlanDigestView,
+  NonSkippableApprovalGate, ConflictRejectionAlert per its own moduledoc),
+  and a NAV_ITEMS entry gated on PLATFORM_ADMIN (and/or PROCESS_DESIGNER,
+  TBD by design) pointing at it. usePromotions.ts/api/promotions.ts
+  already provide the data layer -- this looks like a page/route was
+  never actually created to host the already-built components, not a
+  missing-component problem.
+process_note: >
+  Full evidence, live screenshots, and EO-001..EO-004 results:
+  test/uat-reports/gui-review-2026-09-20-definition-promotion-approved.md
+status: resolved
+resolved_in_run: wf03-iss0730-20260920
+resolved_at: "2026-09-19T20:36:46Z"

@@ -8,6 +8,7 @@ import TenantDashboardPage from '@/pages/dashboard/TenantDashboardPage'
 import PlatformDashboardPage from '@/pages/dashboard/PlatformDashboardPage'
 import DefinitionListPage from '@/pages/definitions/DefinitionListPage'
 import DefinitionEditorPage from '@/pages/definitions/DefinitionEditorPage'
+import PromotionReviewPage from '@/pages/definitions/PromotionReviewPage'
 import InstanceBoardPage from '@/pages/instances/InstanceBoardPage'
 import InstanceDetailPage from '@/pages/instances/InstanceDetailPage'
 import TaskInboxPage from '@/pages/tasks/TaskInboxPage'
@@ -53,6 +54,7 @@ export const router = createBrowserRouter([
       { path: 'definitions', element: <DefinitionListPage /> },
       { path: 'definitions/new', element: <DefinitionEditorPage /> },
       { path: 'definitions/:id', element: <DefinitionEditorPage /> },
+      { path: 'definitions/:id/promotions/:reviewId', element: <PromotionReviewPage /> },
       { path: 'instances', element: <InstanceBoardPage /> },
       { path: 'instances/:id', element: <InstanceDetailPage /> },
       { path: 'tasks', element: <TaskInboxPage /> },

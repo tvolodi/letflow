@@ -90,4 +90,4 @@ status: open
 # exactly the filename collision docs/agents/protocols/TASK_QUEUE.md warns
 # against.
 queue_ref: Q-720
-github_issue_number: 1554
+github_ref: GH-1554

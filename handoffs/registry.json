@@ -6707,18 +6707,18 @@
       "queue_task_id": 720,
       "queue_agent_id": "letflow-c5-orch",
       "github_issue_number": 1554,
-      "status": "IN_PROGRESS",
+      "status": "COMPLETED",
       "owned_modules": [
         "lib/letflow/tenant_provisioning.ex",
         "lib/letflow/entities/event_types.ex"
       ],
       "branch_name": "feature/WF03-ISS0721-20260919",
       "started_at": "2026-09-19T06:34:25Z",
-      "lock_released_at": null,
-      "released_lock": false,
+      "lock_released_at": "2026-09-19T08:59:16Z",
+      "released_lock": true,
       "backfilled": false,
-      "last_known_step": "Step 00 DISPATCH -> ELIXIR-DEV",
-      "note": "Letflow.Entities.EventTypes.seed!/1 (REQ-228) never wired into tenant provisioning -- fresh tenants 500 on first POST /entities/:type. Mirrors ISS-0072's maybe_seed_platform_event_types/2 fix shape. SECURITY-REVIEWER mandatory gate (tenant-data path)."
+      "last_known_step": "Step Final PASS -- PR #1568 squash-merged 400032ef, ISS-0721 resolved (docs/issues/ISS-0721.yaml), GH-1554 closed. Queue task 720 released status: done.",
+      "note": "Letflow.Entities.EventTypes.seed!/1 (REQ-228) never wired into tenant provisioning -- fresh tenants 500 on first POST /entities/:type. Mirrored ISS-0072's maybe_seed_platform_event_types/2 fix shape: added maybe_seed_entity_event_types/2 to tenant_provisioning.ex's replay_migrations/2 with-chain, with a narrow :invalid_schema_name carve-out (added after a full-suite re-run surfaced it breaks test/support/tenant_template.ex's synthetic reference-schema self-check) added via a design-amendment rework cycle, SECURITY-REVIEWER-cleared on the amended diff. Full-suite PASS confirmed before merge (4454/4455, one pre-existing unrelated failure that was itself fixed on main by a concurrent PR before this branch's own Step Final rebase, landing at 4455/4455). This registry entry corrected 2026-09-19T08:59:16Z after Step Final's own handoff-finalization commit (3be69b39, on main) updated orchestrator.log's RUN_DONE line but left this run's registry.json entry stale at IN_PROGRESS/released_lock:false -- fixed here as its own small bookkeeping PR per GIT_MERGE.md's zero-exception rule (no direct push to main, even for a one-field correction)."
     }
   ]
 }

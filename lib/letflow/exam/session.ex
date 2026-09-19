@@ -709,15 +709,35 @@ defmodule Letflow.Exam.Session do
   # =======================================================================
 
   defp materialize_session(candidate_id, exam_id, exam, prefix, seed) do
-    with {:ok, rules, pool} <- fetch_question_pools(exam_id, prefix),
-         {:ok, resolved} <-
+    shuffle_options? = fv(exam, "shuffle_options") == true
+
+    with {:ok, rules, pool, manual_questions} <- fetch_question_pools(exam_id, prefix),
+         {:ok, resolved_random} <-
            QuestionSetResolver.resolve(
              rules,
              pool,
              fv(exam, "shuffle_questions") == true,
-             fv(exam, "shuffle_options") == true,
+             shuffle_options?,
              seed
            ) do
+      resolved_manual =
+        Enum.map(manual_questions, fn %{question_id: question_id, option_ids: option_ids} ->
+          %{
+            question_id: question_id,
+            options_order:
+              if shuffle_options? do
+                Enum.shuffle(option_ids)
+              else
+                option_ids
+              end
+          }
+        end)
+
+      resolved =
+        (resolved_random ++ resolved_manual)
+        |> Enum.with_index()
+        |> Enum.map(fn {row, index} -> Map.put(row, :sort_order, index) end)
+
       now = utc_now()
       expires_at = DateTime.add(now, fv(exam, "time_limit_minutes") * 60, :second)
 
@@ -747,23 +767,41 @@ defmodule Letflow.Exam.Session do
         |> Enum.filter(&(fv(&1, "mode") == "random"))
         |> Enum.sort_by(&fv(&1, "sort_order"))
 
+      manual_rules =
+        rule_records
+        |> Enum.filter(&(fv(&1, "mode") == "manual"))
+        |> Enum.sort_by(&fv(&1, "sort_order"))
+
       rules =
         Enum.map(random_rules, fn r -> %{pool_id: fv(r, "category_id"), count: fv(r, "count")} end)
 
       pool_ids = rules |> Enum.map(& &1.pool_id) |> Enum.uniq()
 
-      pool_ids
-      |> Enum.reduce_while({:ok, %{}}, fn pool_id, {:ok, acc} ->
-        case fetch_pool_questions(pool_id, prefix) do
-          {:ok, rows} -> {:cont, {:ok, Map.put(acc, pool_id, rows)}}
-          {:error, _reason} = error -> {:halt, error}
-        end
-      end)
-      |> case do
-        {:ok, pool} -> {:ok, rules, pool}
-        {:error, _reason} = error -> error
+      with {:ok, pool} <- fetch_pools(pool_ids, prefix),
+           {:ok, manual_questions} <- fetch_manual_rules(manual_rules, prefix) do
+        {:ok, rules, pool, manual_questions}
       end
     end
+  end
+
+  defp fetch_pools(pool_ids, prefix) do
+    pool_ids
+    |> Enum.reduce_while({:ok, %{}}, fn pool_id, {:ok, acc} ->
+      case fetch_pool_questions(pool_id, prefix) do
+        {:ok, rows} -> {:cont, {:ok, Map.put(acc, pool_id, rows)}}
+        {:error, _reason} = error -> {:halt, error}
+      end
+    end)
+  end
+
+  defp fetch_manual_rules(manual_rules, prefix) do
+    manual_rules
+    |> Enum.reduce_while({:ok, []}, fn rule, {:ok, acc} ->
+      case fetch_manual_questions(rule.record_id, prefix) do
+        {:ok, rows} -> {:cont, {:ok, acc ++ rows}}
+        {:error, _reason} = error -> {:halt, error}
+      end
+    end)
   end
 
   defp fetch_pool_questions(category_id, prefix) do
@@ -790,6 +828,40 @@ defmodule Letflow.Exam.Session do
     with {:ok, options} <- query_all("answer_option", [eq("question_id", question_id)], prefix) do
       sorted = Enum.sort_by(options, &fv(&1, "sort_order"))
       {:ok, Enum.map(sorted, & &1.record_id)}
+    end
+  end
+
+  # ISS-0722 -- manual-mode question pinning: reads exam_manual_question rows
+  # for a single mode: "manual" exam_question_rule, ordered by the pin's own
+  # sort_order, and mirrors fetch_pool_questions/2's fetch_option_ids/2 reuse
+  # verbatim. A rule with zero pinned rows errors rather than silently
+  # contributing zero questions (design doc §3/§6) -- this is the fix's own
+  # answer to the class of bug ISS-0722 reports, applied to the new path too.
+  @spec fetch_manual_questions(rule_id :: String.t(), prefix :: String.t()) ::
+          {:ok, [QuestionSetResolver.question_row()]} | {:error, :manual_rule_empty | term()}
+  defp fetch_manual_questions(rule_id, prefix) do
+    with {:ok, pins} <-
+           query_all("exam_manual_question", [eq("rule_id", rule_id)], prefix) do
+      if pins == [] do
+        {:error, :manual_rule_empty}
+      else
+        pins
+        |> Enum.sort_by(&fv(&1, "sort_order"))
+        |> Enum.reduce_while({:ok, []}, fn pin, {:ok, acc} ->
+          case fetch_option_ids(fv(pin, "question_id"), prefix) do
+            {:ok, option_ids} ->
+              {:cont,
+               {:ok, [%{question_id: fv(pin, "question_id"), option_ids: option_ids} | acc]}}
+
+            {:error, _reason} = error ->
+              {:halt, error}
+          end
+        end)
+        |> case do
+          {:ok, rows} -> {:ok, Enum.reverse(rows)}
+          {:error, _reason} = error -> error
+        end
+      end
     end
   end
 

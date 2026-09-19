@@ -92,6 +92,77 @@ export interface PromotionContext {
   }>
 }
 
+/**
+ * ISS-0731: the raw wire shape `GET /api/v1/promotions/{id}/context` actually
+ * returns — `Letflow.Routers.Promotions.review_context_map/1`'s documented
+ * "exactly 9 keys" (that moduledoc comment, §"GET /promotions/:id/context"),
+ * confirmed live against a real review on 2026-09-20. It is FLAT (no nested
+ * `review`/`plan` objects), has no `tenant_id`/`approved_by`/`approved_at`/
+ * `superseded_by`/`updated_at` (`promotion_reviews` never grew those columns
+ * on this port — REQ-064/Decision-0006-D2 dropped `tenant_id`; the others
+ * were never added), and `serialised_plan` is already a decoded JSON object
+ * (`Jason.decode!/1`'d by the handler), not the raw string the frontend
+ * `PromotionReview.serialised_plan: string` field name implies. This is the
+ * actual, unadapted backend response — `getContext` below maps it onto the
+ * `PromotionContext` shape the already-built review components expect,
+ * rather than changing those components (see ISS-0731 for the full
+ * incident: the previous, never-exercised assumption crashed every real
+ * promotion-review page load with "Cannot read properties of undefined").
+ */
+interface RawPromotionContext {
+  review_id: string
+  plan_digest: string
+  serialised_plan: { entries: PlanEntry[] } & Record<string, unknown>
+  status: ReviewStatus
+  requested_by: string
+  def_type: string
+  def_id: string
+  created_at: string
+  row_version: number
+}
+
+/**
+ * Adapts the real, flat backend response (`RawPromotionContext`) onto the
+ * `PromotionContext` shape `PromotionReviewStateMachine`/`PlanDigestView`/
+ * `NonSkippableApprovalGate` already consume (ISS-0731).
+ *
+ * Two fields have no backend source and are filled with a documented,
+ * honest default rather than guessed:
+ *   - `digest_verified: true` — this endpoint has nothing to compare the
+ *     stored digest against; it simply returns the one digest of record.
+ *     "Mismatch" is only a meaningful concept at write time (approve/apply's
+ *     own 409 `PLAN_DIGEST_MISMATCH`), never at this read.
+ *   - `assertions: []` — per-artifact assertion items are not part of this
+ *     endpoint's response at all; the closest backend data is
+ *     `GET /api/v1/promotions/{id}` (R3)'s aggregate `assertion_run` (pass/
+ *     fail counts, not a per-artifact list) — a structurally different
+ *     shape, out of scope for this crash fix (tracked separately).
+ */
+function adaptPromotionContext(raw: RawPromotionContext): PromotionContext {
+  const review: PromotionReview = {
+    id: raw.review_id,
+    tenant_id: '',
+    plan_digest: raw.plan_digest,
+    def_type: raw.def_type,
+    def_id: raw.def_id,
+    serialised_plan: JSON.stringify(raw.serialised_plan),
+    status: raw.status,
+    requested_by: raw.requested_by,
+    approved_by: null,
+    approved_at: null,
+    superseded_by: null,
+    row_version: raw.row_version,
+    created_at: raw.created_at,
+    updated_at: raw.created_at,
+  }
+  return {
+    review,
+    plan: { entries: raw.serialised_plan.entries },
+    digest_verified: true,
+    assertions: [],
+  }
+}
+
 /** POST /api/v1/promotions/{id}/approve body */
 export interface ApprovePromotionRequest {
   plan_digest: string
@@ -111,7 +182,9 @@ export const promotionsApi = {
    * Returns the stored plan, digest, and review context for a given review.
    */
   getContext: (reviewId: string) =>
-    client.get<PromotionContext>(`/api/v1/promotions/${reviewId}/context`),
+    client
+      .get<RawPromotionContext>(`/api/v1/promotions/${reviewId}/context`)
+      .then(adaptPromotionContext),
 
   /**
    * POST /api/v1/promotions/{reviewId}/approve

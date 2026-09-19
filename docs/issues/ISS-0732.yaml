@@ -1,0 +1,53 @@
+id: ISS-0732
+title: >
+  Promotion release is not actually gated on a passed rehearsal --
+  Letflow.Definitions.Promotion.apply_review/4 only checks plan_digest and
+  status == :approved, never the latest PromotionAssertionRun
+discovered_by: ORCH (acting as UAT-RUNNER for a resumed GUI-review pilot)
+discovered_in_run: uat-pilot-platform-definition-promotion-approved-gui-review-20260920-resume
+discovered_at: "2026-09-20T21:30:00Z"
+severity: BLOCKER
+description: >
+  test/fixtures/uat/scenarios/platform/definition-promotion-approved.yaml's
+  EO-002 requires: "The change is not released until its own checks have
+  been re-run and passed on a disposable copy" (on_fail.severity: BLOCKER).
+
+  Confirmed live against https://qa.bizdala.com: after a real review was
+  approved (review_id 3564cee6-1120-462c-af10-863def46f888), the
+  PromotionReviewPage's "Apply" button was already enabled -- with zero
+  rehearsal ever having run (no PromotionAssertionRun existed yet for this
+  review at that point). Reading
+  lib/letflow/definitions/promotion.ex:498's apply_review/4 confirms this
+  is not a frontend gap: its only preconditions are
+  verify_apply_digest/2 (plan_digest match) and verify_approved/1
+  (status == :approved) -- grepping promotion.ex and
+  promotion_review_store.ex for "assertion"/"rehears" finds nothing. There
+  is no code path anywhere that reads
+  Letflow.Definitions.get_latest_assertion_run/2 before allowing apply.
+
+  This pilot's own walkthrough ran the rehearsal (POST
+  /api/v1/promotions/:id/run-assertions) before clicking Apply, matching
+  the scenario's step order and getting a real "passed", 0-failed result
+  -- but that ordering is a courtesy of how this run happened to drive it,
+  not something the system enforces. A reviewer (or a scripted/automated
+  caller) can click Apply immediately after Approve and release goes
+  through with no rehearsal at all.
+affected_files:
+  - lib/letflow/definitions/promotion.ex
+fix_direction: >
+  Needs a new precondition in apply_review/4 (or verify_approved/1)
+  requiring Letflow.Definitions.get_latest_assertion_run/2 to return a run
+  for this review's current plan_digest with assertions_failed == 0
+  (matching the gate condition already established for R8's own 200/422
+  split, per lib/letflow/routers/promotions.ex's moduledoc "The
+  assertion-run gate condition" section) before allowing the transition to
+  :applied. This is backend business-logic scope (CODE-DESIGNER + ELIXIR-DEV
+  + SECURITY-REVIEWER + REVIEWER + TEST-DESIGNER), not a small fix --
+  deliberately not implemented in this run per this pilot's own
+  small-fix-only mandate. The frontend NonSkippableApprovalGate.tsx would
+  also need a corresponding "release blocked -- rehearsal required" surfaced
+  state once the backend actually returns one (it does not today; apply
+  currently just succeeds).
+process_note: >
+  Full evidence: test/uat-reports/gui-review-2026-09-20-definition-promotion-approved.md
+status: open

@@ -129,16 +129,27 @@ export async function resolveTenantContext(
     throw new Error(`Tenant lookup failed (${response.status()}): ${body}`)
   }
 
+  // ISS-0731 follow-up fix: `GET /api/v1/tenants/:slug`
+  // (`Letflow.Routers.Tenants.tenant_map/1`) actually returns the tenant's
+  // primary key as `id`, not `tenant_id` -- confirmed live against
+  // https://qa.bizdala.com/api/v1/tenants/bilimbaga on 2026-09-20
+  // ({"display_name":...,"id":"<uuid>","slug":"bilimbaga",...}, no
+  // `tenant_id` or `idp_realm_id` key at all). This function's own type
+  // previously assumed a `tenant_id`/`idp_realm_id` shape that was never
+  // exercised by any caller reading `.tenantId` before this fix (only
+  // `uat-tenant-url.e2e.spec.ts` used this helper, and only for `.realm`,
+  // which happened to still resolve correctly via the `?? data.slug`
+  // fallback) -- `tenantId` was silently `undefined` for every prior caller.
   const data = await response.json() as {
-    tenant_id: string
+    id: string
     slug: string
-    idp_realm_id: string | null
+    idp_realm_id?: string | null
     [key: string]: unknown
   }
 
   const realm = data.idp_realm_id ?? data.slug
   const ctx: TenantContext = {
-    tenantId: data.tenant_id,
+    tenantId: data.id,
     realm,
     slug: data.slug,
     tokenUrl: keycloakTokenUrl(realm),

@@ -1,0 +1,58 @@
+id: ISS-0731
+title: >
+  PromotionReviewPage crashed on every real review once reachable -- GET
+  /api/v1/promotions/:id/context returns a flat shape, but
+  web/src/api/promotions.ts's PromotionContext/PromotionReview types and
+  the getContext() client assumed a nested {review, plan, digest_verified,
+  assertions} shape that the backend never returns
+discovered_by: ORCH (acting as UAT-RUNNER for a resumed GUI-review pilot)
+discovered_in_run: uat-pilot-platform-definition-promotion-approved-gui-review-20260920-resume
+discovered_at: "2026-09-20T21:20:00Z"
+severity: BLOCKER
+description: >
+  Follow-on from ISS-0730 (routing fix, resolved). Once
+  /definitions/:id/promotions/:reviewId actually rendered, it crashed
+  immediately with "Something went wrong" / "An unexpected error occurred
+  in this view" for every real promotion review, confirmed live against
+  https://qa.bizdala.com with a real review created via the API
+  (review_id 3564cee6-1120-462c-af10-863def46f888). Console showed two
+  TypeErrors: "Cannot read properties of undefined (reading 'status')"
+  and "Cannot read properties of undefined (reading 'requested_by')".
+
+  Root cause: GET /api/v1/promotions/:id/context
+  (Letflow.Routers.Promotions.review_context_map/1, that router's own
+  moduledoc: "Exactly 9 keys") returns a FLAT object --
+  {review_id, plan_digest, serialised_plan (already Jason-decoded, an
+  object not a string), status, requested_by, def_type, def_id,
+  created_at, row_version} -- with no tenant_id, approved_by, approved_at,
+  superseded_by, or updated_at fields at all, and no nested review/plan
+  wrapper. web/src/api/promotions.ts's PromotionContext type (and every
+  component built against it -- PromotionReviewStateMachine.tsx,
+  PlanDigestView.tsx, NonSkippableApprovalGate.tsx, all read `context.review.*`)
+  assumed {review: PromotionReview, plan: PromotionPlan, digest_verified:
+  boolean, assertions: [...]}, a shape that was apparently never checked
+  against a real backend response before ISS-0730 wired the route.
+affected_files:
+  - web/src/api/promotions.ts
+fix_direction: >
+  Fixed directly in this run (small, one-file, no component changes):
+  web/src/api/promotions.ts now types the real flat backend response
+  (RawPromotionContext) and getContext() adapts it onto the PromotionContext
+  shape the already-built, already-approved components consume, via a new
+  adaptPromotionContext() function. digest_verified is set true (this
+  read-only endpoint has nothing to compare the digest against -- mismatch
+  is only a meaningful concept at write time); assertions is set [] (this
+  endpoint carries no per-artifact assertion items -- the closest backend
+  data, GET /api/v1/promotions/:id's aggregate assertion_run, is a
+  structurally different shape, out of scope here). Verified live: served
+  the fixed build locally (vite preview) with API calls proxied through to
+  the real https://qa.bizdala.com backend, drove a real review end to end
+  (open -> approve -> rehearse -> apply) via real GUI clicks with zero
+  console errors; see the review report for screenshots. tsc --noEmit and
+  npm run build both pass clean.
+process_note: >
+  Full evidence, live screenshots, and EO-001..EO-004 results:
+  test/uat-reports/gui-review-2026-09-20-definition-promotion-approved.md
+status: resolved
+resolved_in_run: uat-pilot-platform-definition-promotion-approved-gui-review-20260920-resume
+resolved_at: "2026-09-20T21:45:00Z"

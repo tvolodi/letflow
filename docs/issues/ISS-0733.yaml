@@ -1,0 +1,60 @@
+id: ISS-0733
+title: >
+  No DEFINITION_PROMOTED audit/event entry found via any queried surface
+  after a real promotion release
+discovered_by: ORCH (acting as UAT-RUNNER for a resumed GUI-review pilot)
+discovered_in_run: uat-pilot-platform-definition-promotion-approved-gui-review-20260920-resume
+discovered_at: "2026-09-20T21:35:00Z"
+severity: MAJOR
+description: >
+  test/fixtures/uat/scenarios/platform/definition-promotion-approved.yaml's
+  EO-004 requires: "The change history for this process shows the
+  proposal, the approval with the approver's name, and the release, in
+  that order with timestamps" (on_fail.severity: MAJOR).
+
+  A real review (3564cee6-1120-462c-af10-863def46f888) was submitted,
+  approved, rehearsed, and applied live against https://qa.bizdala.com
+  during this pilot (release confirmed: the target tenant's
+  GET /api/v1/definitions/active/uat-promo-review-flow, 404 before
+  release, returned a real ACTIVE definition after -- and a new instance
+  started after release pinned to that new definition_id). After that
+  real release:
+    - GET /api/v1/audit (as the review's own home-tenant caller,
+      bpm-default) showed only definition.create/definition.activate for
+      the SOURCE definition -- no promotion/apply-related entry.
+    - GET /api/v1/audit as a bilimbaga-tenant caller showed
+      instance.create/task.create/artifact.activate entries around the
+      release time, but nothing naming the promotion or review.
+    - GET /api/v1/instances/00000000-0000-0000-0000-000000000001/timeline
+      (the platform_instance_id sentinel
+      Letflow.EventStore.platform_instance_id/0 documents as the intended
+      home for platform-level events like this one) returned 404.
+
+  lib/letflow/definitions/promotion.ex's moduledoc already flags the
+  mechanism as fragile by design: "This function does not assume anything
+  about how an arbitrary injected event_appender manages its own
+  transactionality, and it does not roll back the already-committed
+  version-pointer move if the event-append fails. That is a real gap,
+  stated here rather than hidden." apply_review/4 returned success (the
+  GUI showed "applied") regardless of whether
+  PlatformEvents.append_definition_promoted/2 actually persisted anything
+  queryable -- this pilot could not distinguish "the event was appended
+  somewhere not yet checked" from "the append silently failed" within its
+  own time budget.
+affected_files:
+  - lib/letflow/event_store/platform_events.ex
+  - lib/letflow/definitions/promotion.ex
+fix_direction: >
+  Needs investigation (ISSUE-FIXER) before a fix is scoped: (1) confirm
+  whether append_definition_promoted/2's EventStore.append/2 call actually
+  succeeds for a real apply_review/4 call today (a passing/failing return
+  value was never observed directly in this pilot -- apply_review/4
+  ignores the event-append's own result by design, per its moduledoc), and
+  if it does succeed, (2) find the real read path for it (a
+  GET /api/v1/instances/:platform_instance_id/timeline variant, or a
+  dedicated platform-events endpoint that does not exist yet) so EO-004
+  has something concrete to point UAT at. If the append is in fact
+  silently failing, that is the real bug to fix, not the read path.
+process_note: >
+  Full evidence: test/uat-reports/gui-review-2026-09-20-definition-promotion-approved.md
+status: open

@@ -25,15 +25,16 @@ description: >
   checks that work already underway is not disturbed by the switch.
 
 pipeline_test: web/tests/e2e/pipelines/platform-definition-promotion-approved.pipeline.e2e.spec.ts
-# NOTE (ISS-0527): this spec file does not exist in R-Co's own web/ tree at the
-# pinned commit either -- it is an aspirational forward-reference to a Playwright
-# test that was never authored anywhere, gated on the same missing feature this
-# scenario's own steps exercise. UAT-RUNNER cannot drive this pipeline_test yet;
-# treat any run of this scenario as BLOCKED/UNBUILT_FEATURE on the frontend leg
-# until FRONTEND-DEV authors it against a real shipped feature.
-# UAT-RUNNER drives this Playwright pipeline test for the reviewer's steps.
-# If this file does not exist or the test cannot run, that is a BLOCKER
-# (missing UI) and must be routed to FRONTEND-DEV before UAT can proceed.
+# ISS-0527 resolved 2026-09-20: the spec above now exists and drives the real
+# review/approve/rehearsal/apply flow end to end (steps 2/3/5 via the real GUI,
+# steps 1/4 via the API per the scenario's own `via: system` actor model). See
+# test/uat-reports/gui-review-2026-09-20-definition-promotion-approved.md for
+# the full pilot history: ISS-0730 (no route wired the review screen) and
+# ISS-0731 (the review screen crashed once reachable — a frontend/backend
+# contract mismatch in web/src/api/promotions.ts) are both resolved. EO-002's
+# backend enforcement gap (release is not actually blocked without a passed
+# rehearsal) and EO-004's audit-trail gap (no DEFINITION_PROMOTED entry found
+# after a real release) remain open — ISS-0732 and ISS-0733.
 
 actors:
   authoring_agent: actor-system-authoring-agent

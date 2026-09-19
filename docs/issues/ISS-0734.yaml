@@ -1,0 +1,90 @@
+id: ISS-0734
+title: >
+  No GUI surface exists to view a promotion-review conflict refusal -- no
+  review-queue/list screen at all, and a submit-time conflict leaves no
+  review row to show even if one existed
+discovered_by: ORCH (acting as UAT-RUNNER, "review real screens before writing
+  a blind Playwright spec" process)
+discovered_in_run: gui-review-platform-definition-promotion-conflict-rejected-20260920
+discovered_at: "2026-09-20T22:40:00Z"
+severity: MAJOR
+description: >
+  test/fixtures/uat/scenarios/platform/definition-promotion-conflict-rejected.yaml's
+  step 2 (`via: gui`, `expected_screen: "refused change review detail"`) and
+  EO-001 (`verification.method: gui_screen`) require a reviewer-facing screen
+  that shows a refused promotion proposal and names what clashed. No such
+  screen is reachable today, for two independent, both-confirmed-live reasons:
+
+  1. A submit-time conflict is rejected BEFORE
+     `Letflow.Definitions.PromotionReviewStore.insert_review/2` ever runs --
+     `lib/letflow/routers/promotions.ex`'s `do_submit/3` `with` chain
+     short-circuits on `PromotionConflict.reject_if_conflicts/4`'s error and
+     returns the 409 directly. No `promotion_reviews` row is ever created for
+     a refused submission, so there is nothing for any screen to display even
+     if one existed. Confirmed live against https://qa.bizdala.com: a stale
+     submission gets a real, correctly-detailed 409
+     (`.../problems/promotion-conflict`, naming process_key/base_version/
+     target_active_version/target_definition_id) but leaves no queryable
+     record behind at all.
+
+  2. Independently, no review-queue/list screen exists in `web/` regardless --
+     `web/src/router.tsx` has only the single direct-URL
+     `definitions/:id/promotions/:reviewId` detail route (ISS-0730), with no
+     `GET /promotions` list endpoint, no nav entry, by design (see
+     `lib/letflow/design/iss0730-promotion-review-page-routing.md`). A
+     reviewer with no reviewId in hand has no way to discover that a
+     submission was refused, or to open a refused (or even a legitimately
+     pending) review, through the app's own navigation.
+
+  `web/src/components/promotions/ConflictRejectionAlert.tsx` is a fully-built
+  component clearly intended for exactly this (its own header comment says
+  "Conflict pre-flight rejection UI... Displays ConflictRejection details when
+  a promotion returns HTTP 409 PROMOTION_CONFLICT") but has zero callers
+  anywhere in `web/src` (confirmed by
+  `grep -rln ConflictRejectionAlert web/src`) -- built, never wired. Its own
+  prop shape (`process_key`/`target_version`/`target_definition_id`/
+  `source_change`/`target_change`) also does not match the real backend 409
+  body's shape (`process_key`/`base_version`/`target_active_version`/
+  `target_definition_id`, no `source_change`/`target_change` fields at all) --
+  wiring it in as-is would need a reshape, not just a route.
+
+  The apply-time conflict re-check (EO-004's own protection -- an approval
+  cannot be reused once the target has moved) is real and does have a partial
+  fix already (ISS-0735, this same review, small and already fixed): the
+  PromotionReviewPage/NonSkippableApprovalGate screen a reviewer is already on
+  when they click Apply now shows an accurate inline message naming the
+  conflict. This issue is about the OTHER half: there is still no way to
+  discover a refused proposal in the first place, or any dedicated screen
+  that lists/shows refused reviews across a workspace.
+affected_files:
+  - web/src/router.tsx
+  - web/src/components/layout/AppShell.tsx
+  - web/src/components/promotions/ConflictRejectionAlert.tsx
+  - lib/letflow/routers/promotions.ex
+fix_direction: >
+  Two separable pieces of real product scope, not a same-session fix:
+    1. A review-queue/list screen (`GET /api/v1/promotions` list endpoint +
+       a `web/` list page + nav entry), so a reviewer can discover pending/
+       refused/failed reviews without an out-of-band reviewId. This is the
+       larger piece -- new backend route, new frontend page, needs
+       CODE-DESIGNER/CODE-DESIGN-VALIDATOR sign-off on the list's shape
+       (pagination, filtering by status/tenant) before ELIXIR-DEV/FRONTEND-DEV
+       build it.
+    2. Deciding whether a submit-time conflict refusal should be durably
+       recorded at all (a lightweight `promotion_conflict_refusals` audit
+       trail, or widening `promotion_reviews` to accept a `:refused` status
+       row even though no plan was ever "reviewable") -- currently by design
+       it leaves zero trace (also EO-005's own gap, see ISS-0733's audit-path
+       finding). If refusals stay ephemeral by design, EO-001/step 2's own
+       `gui_screen` verification method should be revisited against that
+       decision rather than left permanently unsatisfiable.
+  Once (1) exists, `ConflictRejectionAlert.tsx` should be reshaped to the real
+  backend conflict body and wired into both the list screen and the
+  submit-flow's own error path (there is currently no GUI submit flow at all
+  -- `web/src/api/promotions.ts` has no `submit`/`propose` function; step 1 is
+  `via: system` in the scenario's own actor model, so this may be
+  intentionally API-only, worth confirming with CODE-DESIGNER before building
+  a GUI submit form nobody asked for).
+process_note: >
+  Full evidence: test/uat-reports/gui-review-2026-09-20-definition-promotion-conflict-rejected.md
+status: open

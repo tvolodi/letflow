@@ -80,6 +80,31 @@ function DigestMismatchError(props: { message?: string }) {
   )
 }
 
+// ── Promotion conflict error (HTTP 409, apply-time re-check — ISS-0735) ───────
+//
+// Distinct from a digest mismatch: this fires when `POST /apply`'s own
+// conflict re-check (`Letflow.Definitions.PromotionConflict.reject_if_conflicts/4`,
+// called from inside `Promotion.do_promote_definition/7`) finds the target
+// tenant has moved past this review's `base_version` since it was approved
+// — e.g. a different promotion landed in between. Both this and a digest
+// mismatch are HTTP 409, but they are different RFC 9457 problem `type`s
+// (`.../problems/promotion-conflict` vs `.../problems/conflict`) and need a
+// different message: a digest mismatch means "re-review", a promotion
+// conflict means "rebuild against the tenant's current version" (the same
+// message the submit-time conflict already uses).
+function PromotionConflictError(props: { targetActiveVersion?: string }) {
+  return (
+    <InlineError
+      testId="promotion-conflict-error"
+      message={
+        props.targetActiveVersion
+          ? `The target tenant has advanced to version ${props.targetActiveVersion} since this change was approved. This approval no longer applies — rebuild the proposal on the current live version and resubmit for review.`
+          : 'The target tenant has advanced since this change was approved. This approval no longer applies — rebuild the proposal on the current live version and resubmit for review.'
+      }
+    />
+  )
+}
+
 // ── Invalid transition error (HTTP 400) ───────────────────────────────────────
 
 function TransitionError(props: { message?: string }) {
@@ -153,6 +178,7 @@ export function NonSkippableApprovalGate(props: NonSkippableApprovalGateProps): 
   const [transitionError, setTransitionError] = useState(false)
   const [extraFieldsError, setExtraFieldsError] = useState(false)
   const [generalError, setGeneralError] = useState<string | null>(null)
+  const [promotionConflict, setPromotionConflict] = useState<{ targetActiveVersion?: string } | null>(null)
 
   const isSelfApproval = review.requested_by === currentUserId
   const canApprove = !isSelfApproval && review.status === 'pending_review'
@@ -212,6 +238,7 @@ export function NonSkippableApprovalGate(props: NonSkippableApprovalGateProps): 
 
   async function handleApply() {
     setDigestError(false)
+    setPromotionConflict(null)
     setTransitionError(false)
     setExtraFieldsError(false)
     setGeneralError(null)
@@ -219,8 +246,18 @@ export function NonSkippableApprovalGate(props: NonSkippableApprovalGateProps): 
     try {
       await onApply(review.id, review.plan_digest)
     } catch (err: unknown) {
-      const err2 = err as { status?: number; code?: string; message?: string }
-      if (err2.status === 409 || err2.code === 'PLAN_DIGEST_MISMATCH') {
+      const err2 = err as { status?: number; code?: string; message?: string; details?: { conflicts?: Array<{ target_active_version?: string }> } }
+      // ISS-0735: HTTP 409 from /apply is not always a digest mismatch --
+      // `POST /apply`'s own conflict re-check (the target tenant having
+      // moved past this review's base_version since approval, EO-004's own
+      // protection) ALSO returns 409, as a distinct RFC 9457 problem `type`
+      // (`.../problems/promotion-conflict`, not `.../problems/conflict`).
+      // Checking `code` (the response's `type`) before falling back to a
+      // bare status check keeps these two 409s from collapsing into the
+      // same, sometimes-wrong message.
+      if (err2.status === 409 && err2.code?.endsWith('/promotion-conflict')) {
+        setPromotionConflict({ targetActiveVersion: err2.details?.conflicts?.[0]?.target_active_version })
+      } else if (err2.status === 409 || err2.code === 'PLAN_DIGEST_MISMATCH') {
         setDigestError(true)
       } else if (err2.status === 400 || err2.code === 'INVALID_REVIEW_TRANSITION') {
         setTransitionError(true)
@@ -359,6 +396,7 @@ export function NonSkippableApprovalGate(props: NonSkippableApprovalGateProps): 
       {/* Inline errors */}
       {selfApprovalError && <SelfApprovalError />}
       {digestError && <DigestMismatchError />}
+      {promotionConflict && <PromotionConflictError targetActiveVersion={promotionConflict.targetActiveVersion} />}
       {transitionError && <TransitionError />}
       {extraFieldsError && <ExtraFieldsError />}
       {generalError && <InlineError testId="general-error" message={generalError} />}

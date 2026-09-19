@@ -25,15 +25,21 @@ description: >
   already given cannot be carried over onto a changed proposal.
 
 pipeline_test: web/tests/e2e/pipelines/platform-definition-promotion-conflict-rejected.pipeline.e2e.spec.ts
-# NOTE (ISS-0527): this spec file does not exist in R-Co's own web/ tree at the
-# pinned commit either -- it is an aspirational forward-reference to a Playwright
-# test that was never authored anywhere, gated on the same missing feature this
-# scenario's own steps exercise. UAT-RUNNER cannot drive this pipeline_test yet;
-# treat any run of this scenario as BLOCKED/UNBUILT_FEATURE on the frontend leg
-# until FRONTEND-DEV authors it against a real shipped feature.
-# UAT-RUNNER drives this Playwright pipeline test for the reviewer's steps.
-# If this file does not exist or the test cannot run, that is a BLOCKER
-# (missing UI) and must be routed to FRONTEND-DEV before UAT can proceed.
+# UPDATE (2026-09-20, GUI review): the stale ISS-0527 note this comment used to
+# carry is gone -- the spec now exists, runs, and passes for real against
+# https://qa.bizdala.com. The underlying conflict-detection machinery
+# (Letflow.Definitions.PromotionConflict.reject_if_conflicts/4, re-checked at
+# both submit time and apply time) is real, confirmed live, and covers this
+# scenario's EO-001/EO-002/EO-003/EO-004. This scenario's own step 2 (opening
+# a "refused change review detail" screen) has no reachable GUI today -- a
+# submit-time conflict is rejected before any review row is ever inserted, and
+# no review-queue/list screen exists in web/ at all (filed as ISS-0734) -- so
+# the spec drives the conflict checks at the system/API level instead (steps
+# 1/3/5 are all `authoring_agent`, matching a `via: system` actor model) and
+# exercises the one real reviewer-facing GUI screen this flow has: opening and
+# approving the rebuilt (non-conflicting) review (step 4). See
+# test/uat-reports/gui-review-2026-09-20-definition-promotion-conflict-rejected.md
+# for the full review.
 
 actors:
   authoring_agent: actor-system-authoring-agent

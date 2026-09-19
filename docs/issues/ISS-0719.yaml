@@ -81,4 +81,56 @@ fix_direction: >
   re-verification (queue task 708).
 queue_ref: Q-719
 github_ref: GH-1550
-status: open
+status: resolved
+resolved_in_run: WF03-ISS0719-20260919
+resolved_at: "2026-09-19T04:01:39Z"
+resolution: >
+  CODE FIX merged and independently re-verified -- LIVE QA CONFIRMATION IS
+  STILL OUTSTANDING. Do not read this entry as "real QA login is confirmed
+  fixed"; only the source-code defect is confirmed fixed.
+
+  Root cause: lib/letflow/routers/tenant_config.ex's `oidc_issuer_base/0`
+  (line 331) was reading a retired `:issuer` config key instead of the live
+  `:keycloak_base_url` key, so on any host where only `:keycloak_base_url`
+  is actually configured (as QA's deploy does), resolution fell all the way
+  through `idp_base_url/0`'s `||` chain to the literal
+  `@default_idp_base_url` ("http://localhost:8082") -- exactly the symptom
+  UAT-RUNNER traced live against qa.bizdala.com.
+
+  Fix commit 7cd2a420 (fix(tenant_config): resolve oidc_issuer_base from
+  :keycloak_base_url (ISS-0719)) changes `oidc_issuer_base/0` to read
+  `:keycloak_base_url`.
+
+  Regression proof, fail-then-pass, commit 90ce307d (test(ISS-0719):
+  regression coverage for oidc_issuer_base/keycloak_base_url):
+  test/letflow/routers/tenant_config_oidc_issuer_test.exs -- a distinctive
+  non-default `keycloak_base_url` is asserted to be reflected in
+  `oidc_authority`; independently confirmed by RELEASE-VALIDATOR to FAIL
+  against the pre-fix parent commit (10ca7a48) and PASS against the fix.
+  Also covers the nil-`keycloak_base_url` fallback and confirms the retired
+  `:issuer` key no longer influences the resolved authority. Test spec:
+  test/specs/ISS-0719.md.
+
+  Gates cleared this run: CODE-DESIGN-VALIDATOR, SECURITY-REVIEWER,
+  REVIEWER, TEST-DESIGN-VALIDATOR, TEST-RUNNER (4455/4455), and
+  RELEASE-VALIDATOR all PASSed -- see PR #1552
+  (https://github.com/tvolodi/letflow/pull/1552), commit 90ce307d.
+
+  PENDING -- NOT YET DONE, tracked so this does not silently drop:
+    1. QA redeploy: the live QA app service must actually be redeployed
+       with this fix (commit 90ce307d or later on main) before its running
+       process reflects the corrected `oidc_issuer_base/0` logic -- the
+       current live QA container still runs the pre-fix code as of this
+       entry.
+    2. Live confirmation: once redeployed, confirm
+       `GET https://qa.bizdala.com/api/tenant-config?host=qa.bizdala.com`
+       actually returns the real QA Keycloak authority (not
+       `localhost:8082`), then re-run REQ-369's AC6 (real PLATFORM_ADMIN
+       login, real tenant count rendered) and AC7 (named pipeline_test
+       platform-login-routing-by-role.pipeline.e2e.spec.ts re-run against
+       live QA) via UAT-RUNNER under letflow-queue task 708, the same task
+       that originally surfaced this issue.
+    3. Owner for the two pending items above: UAT-RUNNER (task 708),
+       gated on infra actually redeploying QA with this fix first (the
+       ISS-0717/T-0134 image-tag class of gap is the reason this project
+       no longer assumes "merged to main" implies "live on QA").

@@ -395,3 +395,48 @@ history:
       UAT-RUNNER re-verification pass. Queue task 708 released with status:
       blocked (not done, not a credential-gap hand-back this time -- a real
       external blocker with its own tracked issue).
+  - req: SCOPE-CHANGE
+    event: done
+    agent: DOC-UPDATER
+    at: "2026-09-19T05:22:11Z"
+    note: >
+      WF-03 run feature/WF03-ISS0719-20260919 (PR #1552, commit 90ce307d)
+      complete: CODE-DESIGN-VALIDATOR, SECURITY-REVIEWER, REVIEWER,
+      TEST-DESIGN-VALIDATOR, TEST-RUNNER (4455/4455), and RELEASE-VALIDATOR
+      all PASSed. ISS-0719 (live QA backend advertised
+      oidc_authority=http://localhost:8082/realms/bpm-default instead of the
+      real QA Keycloak, breaking real login for every QA user) is now
+      resolved on the CODE side only -- docs/issues/ISS-0719.yaml flipped
+      open -> resolved with an explicit PENDING block, not silently closed
+      as fully done. Root cause: lib/letflow/routers/tenant_config.ex's
+      oidc_issuer_base/0 (line 331) read a retired :issuer config key
+      instead of the live :keycloak_base_url key, falling through
+      idp_base_url/0's || chain to the literal @default_idp_base_url
+      ("http://localhost:8082") on any host (QA included) where only
+      :keycloak_base_url is actually configured. Fix commit 7cd2a420 reads
+      :keycloak_base_url instead. Regression proof, fail-then-pass, commit
+      90ce307d: test/letflow/routers/tenant_config_oidc_issuer_test.exs --
+      independently confirmed by RELEASE-VALIDATOR to FAIL against the
+      pre-fix parent commit (10ca7a48) and PASS against the fix; also
+      covers the nil-keycloak_base_url fallback and confirms the retired
+      :issuer key no longer influences the resolved authority. Test spec:
+      test/specs/ISS-0719.md.
+      NOT yet confirmed from this environment, and explicitly tracked as
+      pending in ISS-0719.yaml's own resolution block: (1) QA has not yet
+      been redeployed with this fix -- the live container still runs
+      pre-fix code; (2) REQ-369's AC6 (real PLATFORM_ADMIN login, real
+      tenant count rendered) and AC7 (named pipeline_test re-run against
+      live QA) still need a fresh UAT-RUNNER pass under letflow-queue task
+      708 once QA is redeployed, confirming GET /api/tenant-config no
+      longer returns localhost:8082 before re-attempting the OIDC-redirect
+      flow. This entry itself does not claim REQ-369 unblocked -- that
+      flip belongs to the task-708 UAT-RUNNER re-verification, not to this
+      docs-only close-out. No docs/requirements.yaml entry was flipped by
+      this session (REQ-369 stays blocked pending the live re-verification
+      above; ISS-0719 is an ISS record, not a REQ). No docs/migration/
+      stage-N-*.md or decisions/*.md file was named by ISS-0719's
+      affected_files, so none required updating. README.md checked (no
+      documented-behavior claims about oidc_issuer_base/tenant-config
+      resolution needed updating). Letflow-queue task 719 release and
+      final merge are ORCH's next steps, not performed by this docs-only
+      step.

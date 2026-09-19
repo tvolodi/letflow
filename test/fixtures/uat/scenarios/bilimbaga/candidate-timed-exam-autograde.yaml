@@ -100,3 +100,12 @@ cleanup:
   description: >
     Cancel the exam session opened in step 2 if the run did not complete it,
     so a re-run of this scenario always starts from a clean state.
+
+# Added 2026-09-20 by UAT-RUNNER after a real, screen-by-screen GUI review
+# against live QA reached and confirmed EO-001/EO-002/EO-003 -- see
+# test/uat-reports/gui-review-2026-09-19-bilimbaga-candidate-exam-rerun.md's
+# "2026-09-20 re-run" section for the full review, and the spec's own
+# top-of-file doc comment for the three already-filed navigation gaps
+# (ISS-0726/ISS-0727/ISS-0729) it deliberately works around rather than
+# re-litigates.
+pipeline_test: web/tests/e2e/pipelines/bilimbaga-candidate-timed-exam.pipeline.e2e.spec.ts

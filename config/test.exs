@@ -132,6 +132,13 @@ config :letflow, :oidc,
   # provider_configuration_opts comment. Not set in config/prod.exs.
   allow_unsafe_http: true
 
+# ISS-0720 (design lib/letflow/design/iss0720-tenant-config-stale-issuer-key.md
+# §2.2): same as config/dev.exs -- opts test into
+# Letflow.Routers.TenantConfig's compiled-in localhost:8082 fallback so
+# existing tests keep passing unchanged. Not set in config/prod.exs or
+# config/runtime.exs.
+config :letflow, :allow_localhost_idp_fallback, true
+
 # Duplicated from config/dev.exs (this repo's config files don't cascade —
 # see the :oidc key's comment above for the same note). Per-realm
 # claim-path configuration for Letflow.Oidc.ClaimMapping, distinct from the

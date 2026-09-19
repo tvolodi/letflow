@@ -94,6 +94,9 @@ defmodule Letflow.Router do
 
   # No auth, no DB — liveness signal for deploy/redeploy-test.sh.
   # verification-marker: T-0134 redeploy-qa.sh image-tag fix, 2026-09-19
+  # (re-triggered: the prior marker commit's own CI failed on the unrelated
+  # ISS-0718 vocabulary bug, now fixed, so it never reached a real deploy
+  # attempt -- this commit gives CI/CD a fresh backend-path diff to react to)
   get "/health" do
     Letflow.Api.Response.send_json(conn, 200, %{status: "ok"})
   end

@@ -1,0 +1,64 @@
+{
+  "handoff_id": "wf03-iss0724-step02b",
+  "run_id": "WF03-ISS0724-20260919",
+  "workflow_id": "WF-03",
+  "step": "02b",
+  "from_agent": "ORCH",
+  "to_agent": "CODE-DESIGN-VALIDATOR",
+  "file": "handoffs/WF03-ISS0724-20260919/step-02b-code-design-validator.json",
+  "created_at": "2026-09-19T09:05:00Z",
+  "started_at": "2026-09-19T09:05:00Z",
+  "completed_at": "2026-09-19T09:07:00Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": null,
+    "requirement_ids": [],
+    "requirement_text": {},
+    "source_text": {},
+    "related_handoff_ids": ["wf03-iss0724-step02"],
+    "artifacts_in": [
+      "lib/letflow/design/iss0724-exam-question-origin-separation.md",
+      "docs/issues/ISS-0724.yaml",
+      "lib/letflow/exam/session.ex",
+      "lib/letflow/exam/question_set_resolver.ex",
+      "lib/letflow/design/iss0722-exam-manual-question-mode.md"
+    ],
+    "owned_modules": ["lib/letflow/exam/session.ex"]
+  },
+  "task": {
+    "description": "WF-03 Step 2b hard gate on CODE-DESIGNER's design for ISS-0724.",
+    "acceptance_criteria": [
+      "AC1/AC2 coverage verified independently",
+      "Design contains no implementation code",
+      "sort_order computation verified behavior-preserving by hand trace",
+      "AC1's compile-failure claim checked for overclaiming"
+    ]
+  },
+  "result": {
+    "status": "FAIL",
+    "summary": "AC1/AC2 coverage confirmed sound, sort_order hand-traced (3 random + 2 manual) and confirmed bit-for-bit identical to current behavior -- both PASS. HARD FAIL on implementation-code-in-design: section 2 step 3 (lines 62-67) is a literal pasteable Elixir pipeline (Enum.with_index/Map.put), section 2 step 4 (lines 86-97) reproduces the full with/do block verbatim, section 3 (lines 136-141) gives a complete pasteable persist_session_questions/5 body -- contrast with the iss0722 design doc's own discipline of describing bodies in prose ('Body, in words: ...'), reserving code fences only for quoting already-shipped code. Also: section 4's claim that no fallback merge path exists is overstated -- a future edit could pass a merged/reshuffled list as one arg and [] as the other, satisfying the new 5-arity signature while still compiling and silently violating the invariant; the design needs to name this residual gap explicitly and point to the assertion-level backstop (AC1's 'or fail an obvious assertion' clause) rather than implying the arity change alone closes the door.",
+    "artifacts_out": [],
+    "issues": [
+      {
+        "severity": "MAJOR",
+        "description": "Design doc contains full implementation code in sections 2 and 3 instead of @specs + prose. Must be rewritten to prose-only per this project's design-doc convention (iss0722 doc as the model)."
+      },
+      {
+        "severity": "MINOR",
+        "description": "Section 4 overclaims the compile-failure guarantee -- does not address the merged-list-plus-empty-second-arg regression path, which still compiles under the new 5-arity signature. Must name this gap and cite the assertion-level backstop explicitly."
+      }
+    ],
+    "git_evidence": {
+      "branch_name": "feature/WF03-ISS0724-20260919",
+      "commit_sha_list": [],
+      "remote_branch": "origin/feature/WF03-ISS0724-20260919",
+      "push_status": "skipped",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": "Rework 1: CODE-DESIGNER rewrites sections 2/3 to prose-only (no pasteable Elixir), and corrects section 4's compile-failure claim to name the residual merged-list-plus-empty-arg gap and its assertion-level backstop."
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

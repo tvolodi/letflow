@@ -1,0 +1,65 @@
+id: ISS-0735
+title: >
+  NonSkippableApprovalGate misclassified every HTTP 409 from POST /apply as a
+  digest mismatch, hiding real promotion-conflict refusals behind the wrong
+  message
+discovered_by: ORCH (acting as UAT-RUNNER, "review real screens before writing
+  a blind Playwright spec" process)
+discovered_in_run: gui-review-platform-definition-promotion-conflict-rejected-20260920
+discovered_at: "2026-09-20T22:20:00Z"
+severity: MINOR
+description: >
+  While driving test/fixtures/uat/scenarios/platform/definition-promotion-conflict-rejected.yaml's
+  EO-004 (an approval recorded against one set of changes cannot be reused to
+  release a different set), confirmed live against https://qa.bizdala.com
+  that `POST /api/v1/promotions/:id/apply`'s own conflict re-check
+  (`Letflow.Definitions.Promotion.do_promote_definition/7`, called from
+  `apply_review/4`) is real and correctly refuses a stale approval with a 409
+  RFC 9457 problem naming the conflict
+  (`type: ".../problems/promotion-conflict"`, a `conflicts` array with
+  `process_key`/`base_version`/`target_active_version`/`target_definition_id`).
+
+  `web/src/components/promotions/NonSkippableApprovalGate.tsx`'s
+  `handleApply()` catch block, before this fix, classified this as:
+
+    if (err2.status === 409 || err2.code === 'PLAN_DIGEST_MISMATCH') {
+      setDigestError(true)
+    }
+
+  `err2.code` is `web/src/api/client.ts`'s 409 handler's
+  `body['type'] ?? body['code'] ?? 'STALE_VERSION'` -- i.e. the RFC 9457
+  problem `type` URL, never the literal string `'PLAN_DIGEST_MISMATCH'`, so
+  that half of the check was dead. The `err2.status === 409` half matched
+  BOTH a genuine digest mismatch (`type: ".../problems/conflict"`) and a real
+  promotion conflict (`type: ".../problems/promotion-conflict"`) -- any 409
+  from `/apply`, including EO-004's own core protection firing correctly,
+  displayed "Plan digest mismatch. The plan may have changed since
+  submission. Please review again." This is factually wrong for a promotion
+  conflict (nothing about the reviewed plan or its digest changed -- the
+  TARGET tenant moved) and discarded the `conflicts` detail the backend
+  already provides, so a reviewer seeing this message would not learn that a
+  competing change landed first, or which one.
+affected_files:
+  - web/src/components/promotions/NonSkippableApprovalGate.tsx
+fix_direction: >
+  Fixed in this same commit: `handleApply()`'s catch block now checks
+  `err2.code?.endsWith('/promotion-conflict')` before the generic
+  digest-mismatch/409 branch, and renders a new `PromotionConflictError`
+  inline message naming the real `target_active_version` from
+  `err.details.conflicts[0]` when present. Verified via `tsc --noEmit` and
+  `npm run build` (both clean); NOT re-verified against a live redeployed QA
+  frontend in this same run (that would need this fix's PR to merge and QA to
+  redeploy first, same as ISS-0730/0731's own next-step note) -- the OLD,
+  buggy classification was confirmed live via direct API inspection (the real
+  409 body's `type` field), and the fix's own logic was read against that
+  confirmed real payload shape, not guessed.
+  Left deliberately unfixed here (belongs with ISS-0734, the larger gap):
+  wiring the already-built but differently-shaped
+  `ConflictRejectionAlert.tsx` component in for a fuller display -- its prop
+  shape does not match the real backend 409 body and reshaping it is more
+  than this one-file fix.
+process_note: >
+  Full evidence: test/uat-reports/gui-review-2026-09-20-definition-promotion-conflict-rejected.md
+status: resolved
+resolved_in_run: gui-review-platform-definition-promotion-conflict-rejected-20260920
+resolved_at: "2026-09-20T22:35:00Z"

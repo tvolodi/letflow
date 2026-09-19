@@ -14,7 +14,9 @@ export function ProtectedRoute({ children }: { children: ReactNode }) {
     if (!isLoading && !isAuthenticated && !redirecting) {
       setRedirecting(true)
       void getOidcManager().then(m => {
-        void m.signinRedirect(buildRedirectArgs())
+        void m.signinRedirect(
+          buildRedirectArgs(window.location.pathname + window.location.search),
+        )
       })
     }
   }, [isLoading, isAuthenticated, redirecting])

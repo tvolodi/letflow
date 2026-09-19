@@ -8,13 +8,7 @@ import type { UserSession } from '@/types/api'
 import { AuthContext, type AuthContextValue } from './AuthContext'
 import { getOidcManager } from './OidcManager'
 import { tenantsApi } from '@/api/tenants'
-import { resolveRealmFromUrl } from './tenantConfig'
-
-function buildRedirectArgs(): { redirect_uri: string } | undefined {
-  const slug = resolveRealmFromUrl()
-  if (!slug) return undefined
-  return { redirect_uri: window.location.origin + '/auth/callback?realm=' + encodeURIComponent(slug) }
-}
+import { buildRedirectArgs } from './oidcRedirectArgs'
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [session, setSessionState] = useState<UserSession | null>(() => {

@@ -77,4 +77,51 @@ describe('buildRedirectArgs', () => {
       'https://app.example.com/auth/callback?realm=my%20realm%2Ftest',
     )
   })
+
+  // ISS-0726 — capture-side `state` handling. See
+  // lib/letflow/design/iss-0726-oidc-redirect-path-restore.md §2.3/§6.1.
+
+  it('TC-ISS0726-01: a safe capturePath is carried as state alongside redirect_uri', () => {
+    // Arrange
+    mockResolveRealmFromUrl.mockReturnValue('swiftroute')
+
+    // Act
+    const result = buildRedirectArgs('/exam')
+
+    // Assert
+    expect(result).toBeDefined()
+    expect(result!.state).toBe('/exam')
+    expect(result!.redirect_uri).toBe(
+      'https://app.example.com/auth/callback?realm=swiftroute',
+    )
+  })
+
+  it('TC-ISS0726-02: an unsafe capturePath (open-redirect-shaped) is rejected — state key is absent', () => {
+    // Arrange
+    mockResolveRealmFromUrl.mockReturnValue('swiftroute')
+
+    // Act
+    const result = buildRedirectArgs('//evil.com')
+
+    // Assert: redirect_uri is still produced, but the unsafe value never
+    // reaches the returned object's state field.
+    expect(result).toBeDefined()
+    expect(result!.state).toBeUndefined()
+    expect('state' in result!).toBe(false)
+    expect(result!.redirect_uri).toBe(
+      'https://app.example.com/auth/callback?realm=swiftroute',
+    )
+  })
+
+  it('TC-ISS0726-03: omitting capturePath entirely omits the state key (backward compatible with TC-OIDC-F02-01)', () => {
+    // Arrange
+    mockResolveRealmFromUrl.mockReturnValue('swiftroute')
+
+    // Act
+    const result = buildRedirectArgs()
+
+    // Assert
+    expect(result).toBeDefined()
+    expect('state' in result!).toBe(false)
+  })
 })

@@ -159,6 +159,20 @@ If a dispatch is missing any required field above, do not guess a target — ret
 handoff FAILED, naming the missing field, per this project's "no speculation" core
 directive.
 
+**Bilimbaga scenarios on `qa.bizdala.com` — `?realm=bilimbaga` is required in
+`base_url`.** ISS-0727 (`docs/issues/ISS-0727.yaml`) found that `qa.bizdala.com`'s
+tenant-config-by-host lookup resolves to the `bpm-default` realm for every bilimbaga
+scenario, not `bilimbaga` — a QA-host-config gap in `ai-dala-infra`, not a `web/` code
+defect, and not yet fixed. Until it is, any WF-05 dispatch of a
+`test/fixtures/uat/scenarios/bilimbaga/*.yaml` scenario against `qa.bizdala.com` MUST
+set `base_url` to include the `?realm=bilimbaga` query param (e.g.
+`https://qa.bizdala.com/?realm=bilimbaga`), matching
+`web/src/auth/tenantConfig.ts`'s `resolveRealmFromUrl` override built for exactly this
+case — otherwise the real-browser Keycloak login will silently authenticate against the
+wrong realm and reject a valid bilimbaga candidate credential. A dispatch missing this
+param for a bilimbaga scenario against `qa.bizdala.com` should be treated the same as a
+missing required field above.
+
 ## Forbidden
 
 Don't mock the backend or intercept HTTP calls — the whole point is exercising the real

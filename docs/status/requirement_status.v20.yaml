@@ -314,3 +314,52 @@ history:
       decisions/*.md file required updating -- ISS-0718's fix deliberately
       avoided touching decision 0013's addendum, consistent with the
       design's own stated goal.
+  - req: SCOPE-CHANGE
+    event: done
+    agent: ORCH
+    at: "2026-09-19T00:00:00Z"
+    note: >
+      ISS-0717 (QA redeploy silently no-ops backend code changes --
+      docker-compose.qa.yml/redeploy-qa.sh image-tag mismatch, queue task
+      Q-717, GH-1540) closed for real. This entry's own record explicitly
+      documented its 2026-09-18 session's own fix as an ad hoc, non-durable
+      workaround (a manual `docker build -f deploy/Dockerfile -t
+      letflow-qa-app:latest .` rebuild) and deferred the durable fix to a
+      companion ai-dala-infra task, T-0134. Confirmed T-0134
+      (ai-dala-infra/tasks/T-0134-fix-letflow-qa-redeploy-image-tag-mismatch.md)
+      is now status: done, outcome: succeeded, read in full before closing
+      this issue rather than trusting the status label alone. T-0134 added
+      an explicit `image: letflow-qa:latest` field to
+      deploy/docker-compose.qa.yml's `app` service -- the exact tag
+      redeploy-qa.sh already builds -- and, as part of that fix, committed
+      the compose file into this repo (tvolodi/letflow) for the first time
+      (it had existed only as a host-local, never-git-tracked file since
+      T-0125's 2026-09-15 provisioning): commit 69c430ad. Independently
+      spot-checked rather than trusting T-0134's own account alone: read
+      69c430ad's diff directly (31 lines added, first-ever commit of this
+      file) and confirmed deploy/docker-compose.qa.yml's `app` service on
+      this repo's `main` reads `image: letflow-qa:latest` exactly as
+      claimed. T-0134 verified the fix through a real script-driven
+      redeploy (not another manual rebuild): a trivial, real, observable
+      change (a comment in lib/letflow/router.ex, this repo's commit
+      a3b8244f) was deployed via the actual redeploy-qa.sh, and the running
+      container's image SHA was confirmed to match the freshly built image
+      -- both commits independently visible in this repo's own git log.
+      T-0134 also checked sibling compose files for the same defect
+      (docker-compose.test.yml already had a correct `image:` field, no
+      copy-paste pattern found) and root-caused the staleness window as
+      "since T-0125 (2026-09-15) through T-0134's fix (2026-09-19)" --
+      docker-compose.qa.yml was never tracked in any repo's git history
+      before 69c430ad, so no earlier drift window exists to bound.
+      docs/issues/ISS-0717.yaml updated to status: resolved with a full
+      resolution block citing T-0134 and this evidence, via branch
+      fix/ISS-0717-20260919. GH#1540 closed with an evidence comment
+      citing the same.
+      This was a docs-only close-out on the letflow side -- no lib/ code
+      change was needed or made, since the actual fix lives entirely in
+      ai-dala-infra's deploy/docker-compose.qa.yml (now also tracked here)
+      and its deploy procedure -- still routed through a full
+      branch+PR+CI+merge per GIT_MERGE.md's no-direct-push rule rather than
+      a direct push to main. No docs/requirements.yaml entry to flip (this
+      is an ISS, not a REQ). Letflow-queue task 717 released with status:
+      done -- genuinely resolved, not merely a run that finished cleanly.

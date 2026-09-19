@@ -403,7 +403,8 @@ defmodule Letflow.Exam.SessionTest do
       %{exam: exam, category_id: random_category_id, questions: random_questions} =
         build_minimal_exam!(schema, mode: :random, pool_size: 3, count: 3)
 
-      random_question_ids = Enum.map(random_questions, fn {question_id, _c, _w} -> question_id end)
+      random_question_ids =
+        Enum.map(random_questions, fn {question_id, _c, _w} -> question_id end)
 
       manual_rule =
         create_rule!(schema, exam.record_id, random_category_id, 1, 1, "manual")
@@ -446,7 +447,8 @@ defmodule Letflow.Exam.SessionTest do
       random_questions =
         for _ <- 1..3, do: build_single_choice_question!(schema, random_category_id)
 
-      random_question_ids = Enum.map(random_questions, fn {question_id, _c, _w} -> question_id end)
+      random_question_ids =
+        Enum.map(random_questions, fn {question_id, _c, _w} -> question_id end)
 
       # Deliberately reversed relative to the "mixed-mode" test above: here
       # the random rule's sort_order (1) is HIGHER than the manual rule's

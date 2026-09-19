@@ -1,0 +1,49 @@
+id: ISS-0723
+title: >
+  Letflow.SandboxPoolTest "RT-6 death path c" flaked again during
+  WF03-ISS0720-20260919's Step Final full-suite run -- recurrence of the
+  known sandbox-pool release-timeout flake class (ISS-0601/ISS-0590/
+  ISS-0536/ISS-0533/ISS-0224)
+discovered_by: ELIXIR-DEV
+discovered_in_run: WF03-ISS0720-20260919
+discovered_at: "2026-09-19T04:20:00Z"
+severity: MINOR
+description: >
+  During WF03-ISS0720-20260919's Step Final (git merge) full-suite run
+  (scripts/test_parallel.sh, 16 partitions), test/letflow/sandbox_pool_test.exs's
+  "RT-6 death path c" case failed: 4452/4453 passed. The change in that run
+  (lib/letflow/routers/tenant_config.ex, config/dev.exs, config/test.exs,
+  test/letflow/routers/tenant_config_test.exs) shares no dependency with
+  test/letflow/sandbox_pool_test.exs or lib/letflow/sandbox_pool.ex, so this
+  is structurally attributed as pre-existing/unrelated flakiness, not a
+  regression this run introduced -- consistent with the prior resolved
+  entries in this same flake class (ISS-0601, ISS-0590, ISS-0536, ISS-0533,
+  ISS-0224), which each independently found and resolved the same
+  bounded-poll-deadline-under-contention pattern in this test file, only
+  for it to recur later under different full-suite timing conditions.
+  Not re-diagnosed here (out of scope for this run); filed per ORCH's
+  standard "incidental finding alongside what the step was checking" rule
+  (do not extend the current run, file and forward) for the next WF-03 pickup
+  to actually re-diagnose, since prior fixes have not permanently closed
+  this flake class.
+affected_files:
+  - test/letflow/sandbox_pool_test.exs
+  - lib/letflow/sandbox_pool.ex
+related:
+  - ISS-0601
+  - ISS-0590
+  - ISS-0536
+  - ISS-0533
+  - ISS-0224
+severity_rationale: >
+  MINOR: test-infrastructure flakiness under full-suite contention, loud
+  failure mode (a test failure, not a silent defect), no production
+  behaviour affected, and a well-established recurring pattern rather than
+  a new class of failure.
+fix_direction: >
+  Not designed here. Whoever picks this up should first check whether this
+  is genuinely the same root cause as the prior resolved entries recurring
+  (in which case the earlier fixes did not durably close it and a more
+  robust mechanism than a bounded wall-clock poll deadline is warranted),
+  or a distinct new timing issue that happens to hit the same test case.
+status: open

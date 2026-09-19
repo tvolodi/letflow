@@ -1,49 +1,93 @@
 id: ISS-0721
-title: >
-  Letflow.SandboxPoolTest "RT-6 death path c" flaked again during
-  WF03-ISS0720-20260919's Step Final full-suite run -- recurrence of the
-  known sandbox-pool release-timeout flake class (ISS-0601/ISS-0590/
-  ISS-0536/ISS-0533/ISS-0224)
-discovered_by: ELIXIR-DEV
-discovered_in_run: WF03-ISS0720-20260919
-discovered_at: "2026-09-19T04:20:00Z"
-severity: MINOR
+title: "A newly-provisioned tenant has no entity-record event types registered -- Letflow.Entities.EventTypes.seed!/1 (REQ-228) is never called by tenant provisioning or any HTTP route, so every entity record write 500s with :unknown_event_type until seeded manually"
+discovered_by: UAT-RUNNER
+discovered_in_run: WF03-ISS0690-BILIMBAGA-RERUN-20260919
+discovered_at: "2026-09-19T00:00:00Z"
+severity: MAJOR
+tags:
+  - operational-gap
+  - event-store
+  - tenant-provisioning
+  - entities
 description: >
-  During WF03-ISS0720-20260919's Step Final (git merge) full-suite run
-  (scripts/test_parallel.sh, 16 partitions), test/letflow/sandbox_pool_test.exs's
-  "RT-6 death path c" case failed: 4452/4453 passed. The change in that run
-  (lib/letflow/routers/tenant_config.ex, config/dev.exs, config/test.exs,
-  test/letflow/routers/tenant_config_test.exs) shares no dependency with
-  test/letflow/sandbox_pool_test.exs or lib/letflow/sandbox_pool.ex, so this
-  is structurally attributed as pre-existing/unrelated flakiness, not a
-  regression this run introduced -- consistent with the prior resolved
-  entries in this same flake class (ISS-0601, ISS-0590, ISS-0536, ISS-0533,
-  ISS-0224), which each independently found and resolved the same
-  bounded-poll-deadline-under-contention pattern in this test file, only
-  for it to recur later under different full-suite timing conditions.
-  Not re-diagnosed here (out of scope for this run); filed per ORCH's
-  standard "incidental finding alongside what the step was checking" rule
-  (do not extend the current run, file and forward) for the next WF-03 pickup
-  to actually re-diagnose, since prior fixes have not permanently closed
-  this flake class.
+  Discovered while seeding the BilimBaga tenant on live QA
+  (https://qa.bizdala.com) for a re-run of
+  test/fixtures/uat/scenarios/bilimbaga/candidate-timed-exam-autograde.yaml
+  (ISS-0690's own required next step). After POST /tenants created the
+  bilimbaga tenant (id 6ab093a1-d190-4063-9543-d66b80d261a1) and its
+  solution pack (priv/packs/bilimbaga/pack.json) was installed, every
+  attempt to create an entity record (category, exam, question,
+  answer_option, etc.) via the normal POST /entities/:type route failed
+  with a 500 whose real cause traced to Letflow.EventStore.Registry not
+  having ENTITY_RECORD_CREATED / ENTITY_RECORD_UPDATED / ENTITY_RECORD_DELETED
+  rows registered for the tenant's own schema -- the same class of gap
+  ISS-0072 fixed for the ENGINE's own write paths
+  (TASK_COMPLETED/INSTANCE_CANCELLED/etc., seeded by
+  Letflow.TenantProvisioning.maybe_seed_platform_event_types/2 at
+  provisioning time), but for a DIFFERENT, separately-maintained seed list:
+  REQ-228's own Letflow.Entities.EventTypes.seed!/1
+  (lib/letflow/entities/event_types.ex), which owns the entity-record event
+  types specifically and is a distinct function from
+  maybe_seed_platform_event_types/2. Confirmed live: exactly the same
+  unregistered-event-type rejection Letflow.EventStore.Registry.validate_payload/3
+  raises, per ISS-0072's own description of that failure mode, but for the
+  entity-record write path this time, not the engine write path ISS-0072
+  already closed.
+
+  Root cause: Letflow.Entities.EventTypes.seed!/1 exists, is real, and
+  correctly registers the three entity-record event types when called --
+  but nothing in production code ever calls it automatically. It is not
+  wired into Letflow.TenantProvisioning.provision/1 (or any of its
+  maybe_seed_* steps) and no HTTP route triggers it either. The only
+  callers found are test fixtures that invoke it directly for their own
+  setup, exactly the same pattern ISS-0072 described for the engine event
+  types before that issue's fix. A brand-new tenant today can complete
+  POST /tenants successfully, install a solution pack successfully (schema
+  DDL for the pack's entity types IS created), and still be structurally
+  unable to write a single entity record through the normal API -- the
+  first real POST /entities/:type call for that tenant 500s.
+
+  WORKAROUND USED THIS RUN (not a fix): called
+  Letflow.Entities.EventTypes.seed!/1 manually against the bilimbaga tenant
+  schema via the production node's own remote console (ssh
+  ubuntu-16gb-nbg1-1, sudo docker exec letflow-qa-app-1 /app/bin/letflow
+  rpc "..."), an ops action outside the normal application surface. This
+  unblocked seeding the exam content needed for this UAT re-run but does
+  not fix the underlying gap -- any OTHER newly-provisioned tenant hits
+  the identical wall today.
+
+  IMPACT: every tenant provisioned today (not just BilimBaga) is unable to
+  write entity records at all until an operator manually runs this seed
+  function via a remote console -- this is a genuine tenant-provisioning
+  completeness gap, not a BilimBaga-specific or QA-environment-specific
+  issue.
 affected_files:
-  - test/letflow/sandbox_pool_test.exs
-  - lib/letflow/sandbox_pool.ex
-related:
-  - ISS-0601
-  - ISS-0590
-  - ISS-0536
-  - ISS-0533
-  - ISS-0224
-severity_rationale: >
-  MINOR: test-infrastructure flakiness under full-suite contention, loud
-  failure mode (a test failure, not a silent defect), no production
-  behaviour affected, and a well-established recurring pattern rather than
-  a new class of failure.
-fix_direction: >
-  Not designed here. Whoever picks this up should first check whether this
-  is genuinely the same root cause as the prior resolved entries recurring
-  (in which case the earlier fixes did not durably close it and a more
-  robust mechanism than a bounded wall-clock poll deadline is warranted),
-  or a distinct new timing issue that happens to hit the same test case.
+  - lib/letflow/tenant_provisioning.ex
+  - lib/letflow/entities/event_types.ex
+  - lib/letflow/event_store/registry.ex
+  - test/uat-reports/uat-2026-09-19-WF03-ISS0690-BILIMBAGA-RERUN-20260919.yaml
+suggested_fix: >
+  Same shape as ISS-0072's own fix: wire
+  Letflow.Entities.EventTypes.seed!/1 into
+  Letflow.TenantProvisioning.provision/1 (or an equivalent
+  maybe_seed_entity_event_types/2 step run alongside
+  maybe_seed_platform_event_types/2) so every newly-provisioned tenant gets
+  its entity-record event types registered automatically, with no manual
+  remote-console step required. CODE-DESIGNER's call on exact placement/
+  idempotency semantics, not decided here.
 status: open
+# NOTE: filename/queue-id mismatch, same class the TASK_QUEUE.md protocol
+# doc already documents for 27 other records (Q-<id> is authoritative,
+# filename is not) -- register_task's real, atomically-allocated id for
+# this issue is 720, not 721. UAT-RUNNER filed this record with a locally
+# -invented placeholder queue_ref before ORCH had a chance to register it
+# through letflow-queue; ORCH (this session) registered it for real
+# immediately after and corrected this field to the true id. The filename
+# was left as ISS-0721.yaml (not renamed to ISS-0720.yaml) because a
+# DIFFERENT, unrelated, already in-flight issue on a sibling branch
+# (feature/WF03-ISS0720-20260919) already owns the ISS-0720.yaml filename
+# for its own separate defect -- renaming this file to match would create
+# exactly the filename collision docs/agents/protocols/TASK_QUEUE.md warns
+# against.
+queue_ref: Q-720
+github_issue_number: 1554

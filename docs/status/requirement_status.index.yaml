@@ -4293,7 +4293,7 @@ volumes:
     path: docs/status/requirement_status.v20.yaml
     status: current
     opened: 2026-09-18
-    entries: 7
+    entries: 8
     note: >
       Incremented to 7 by DOC-UPDATER's own ISS-0726 SCOPE-CHANGE done-event
       append (WF03-ISS0726-20260919, 2026-09-19T21:15:34Z -- ISS-0726

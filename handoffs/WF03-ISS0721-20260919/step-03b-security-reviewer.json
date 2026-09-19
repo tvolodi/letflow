@@ -1,0 +1,52 @@
+{
+  "handoff_id": "wf03-iss0721-step03b",
+  "run_id": "WF03-ISS0721-20260919",
+  "workflow_id": "WF-03",
+  "step": "03b",
+  "from_agent": "ORCH",
+  "to_agent": "SECURITY-REVIEWER",
+  "file": "handoffs/WF03-ISS0721-20260919/step-03b-security-reviewer.json",
+  "created_at": "2026-09-19T06:49:45Z",
+  "started_at": "2026-09-19T06:49:45Z",
+  "completed_at": null,
+  "status": "PENDING",
+  "priority": "NORMAL",
+  "context": {
+    "stage": null,
+    "requirement_ids": ["REQ-228"],
+    "requirement_text": {},
+    "source_text": {},
+    "related_handoff_ids": ["wf03-iss0721-step03"],
+    "artifacts_in": [
+      "handoffs/WF03-ISS0721-20260919/step-03-elixir-dev.json",
+      "lib/letflow/tenant_provisioning.ex",
+      "docs/agents/instructions/security-invariants.md"
+    ],
+    "owned_modules": []
+  },
+  "task": {
+    "description": "Mandatory gate on ELIXIR-DEV's implementation (Step 3, commit c1d72550) for ISS-0721 -- this touches lib/letflow/tenant_provisioning.ex, a tenant-data path (tenant provisioning), so this gate is required per WF-03 Step 3 and cannot be skipped. Run `git diff origin/main...HEAD -- lib/letflow/tenant_provisioning.ex` yourself and verify against INV-1..INV-8 in docs/agents/instructions/security-invariants.md, stating APPLIES/NOT-APPLICABLE for each per the required format (an unlisted invariant reads as an unrun check). Pay particular attention to: the new schema_name value passed into Letflow.Entities.EventTypes.seed!/1 is the same already-validated schema_name already used elsewhere in this function for prefix: schema_name in Ecto.Migrator.run/4 -- confirm no new untrusted input path was introduced; the change adds no new API route, no new config/secret handling, and no response-shaping change.",
+    "acceptance_criteria": [
+      "Every invariant INV-1..INV-8 given an explicit APPLIES/NOT-APPLICABLE verdict",
+      "Verdicts reference the actual diff (git diff origin/main...HEAD), not the design doc or ELIXIR-DEV's summary alone",
+      "PASS or FAIL with specific findings"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "",
+    "artifacts_out": [],
+    "issues": [],
+    "git_evidence": {
+      "branch_name": "feature/WF03-ISS0721-20260919",
+      "commit_sha_list": [],
+      "remote_branch": "origin/feature/WF03-ISS0721-20260919",
+      "push_status": "skipped",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": ""
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

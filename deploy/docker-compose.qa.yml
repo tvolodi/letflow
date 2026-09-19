@@ -1,0 +1,31 @@
+services:
+  app:
+    image: letflow-qa:latest
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile
+    env_file: .env
+    depends_on:
+      db:
+        condition: service_healthy
+    ports:
+      - "127.0.0.1:3201:4000"
+    restart: unless-stopped
+  db:
+    image: postgres:16-alpine
+    env_file: .env
+    environment:
+      POSTGRES_DB: letflow_qa
+      POSTGRES_USER: letflow
+    volumes:
+      - letflow_qa_pg:/var/lib/postgresql/data
+    ports:
+      - "127.0.0.1:3202:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U letflow -d letflow_qa"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    restart: unless-stopped
+volumes:
+  letflow_qa_pg:

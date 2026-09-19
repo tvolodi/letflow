@@ -468,3 +468,72 @@ history:
       decisions/*.md file was named by ISS-0722's affected_files -- none
       required updating. No merge performed here -- ORCH's job next, after
       confirming this push's own CI is green.
+  - req: SCOPE-CHANGE
+    event: done
+    agent: DOC-UPDATER
+    at: "2026-09-19T21:15:34Z"
+    note: >
+      WF-03 run WF03-ISS0726-20260919 (queue task Q-726, GH-1577) complete,
+      commit 073a17c9, PR #1581. ISS-0726 (hard navigation to /exam bounces
+      back to / instead of showing the exam list -- the realistic candidate
+      deep-link/bookmark/refresh path, discovered during the
+      bilimbaga-candidate-timed-exam-autograde GUI review re-run) is now
+      resolved per design doc
+      lib/letflow/design/iss-0726-oidc-redirect-path-restore.md. Root cause
+      (pre-confirmed by ISSUE-FIXER, independently re-verified against main
+      at e0b3fdc7 while designing): ProtectedRoute's OIDC redirect never
+      captured the originally-requested path anywhere that survives the
+      full-page round trip to Keycloak and back, so OidcCallbackPage always
+      fell through to its role-based fallback. Fix: a new
+      web/src/auth/safeRestorePath.ts validator (isSafeRestorePath, a 9-check
+      open-redirect guard -- type/length, leading-slash-required, rejects
+      protocol-relative "//", rejects backslash, rejects an embedded URL
+      scheme anywhere in the string, restricts path/query/fragment to safe
+      RFC 3986-derived character classes), adversarially tested by
+      SECURITY-REVIEWER with real bypass payloads, all correctly rejected;
+      path capture via oidc-client-ts's own `state` signin option (not a
+      separate sessionStorage key) in oidcRedirectArgs.ts's
+      buildRedirectArgs(), validated again at capture time as defense in
+      depth, with the two near-duplicate buildRedirectArgs() implementations
+      (oidcRedirectArgs.ts, AuthProvider.tsx) deduped to one shared
+      implementation; and restore-priority logic in OidcCallbackPage.tsx
+      where a validated captured path now wins over the role-based fallback
+      whenever present, including for PLATFORM_ADMIN.
+
+      Full gate history, all PASS: CODE-DESIGN-VALIDATOR; SECURITY-REVIEWER
+      (adversarial, real open-redirect bypass payloads against
+      safeRestorePath.ts, all rejected); REVIEWER; TEST-DESIGN-VALIDATOR
+      after 3 rounds -- round 1 found a live e2e realm-seeding gap and it
+      was fixed (commit 38c65475, "seed realm slug before ISS-0726 e2e
+      deep-link navigation"), round 2 found a coverage-honesty gap about the
+      untested hostname-fallback path and it was fixed with an explicit gap
+      note rather than left silently implied as covered (commit 0d041ac8,
+      "name ISS-0726 hostname-fallback e2e gap explicitly"), round 3 found a
+      broken doc citation to ISS-0727 and it was fixed by filing that
+      missing record (commit 4d7464b4, "file local record for ISS-0727");
+      TEST-RUNNER (682/682 vitest, 48/48 guards, e2e 2/3 clean with 1 timing
+      flake); RELEASE-VALIDATOR (independently reproduced the e2e flake 3x,
+      visually confirmed via screenshot/DOM that even the "failing" run had
+      already correctly landed on /exam -- a test-timing race in the e2e
+      harness, not a redirect defect).
+
+      docs/issues/ISS-0726.yaml flipped open -> resolved with a full
+      resolution block citing all of the above. Named, not silently
+      covered, remaining gaps: (a) the live qa.bizdala.com-specific
+      deployment has not been re-checked against this fix (the design's own
+      follow-up), (b) the true zero-prior-context/hostname-resolved
+      candidate path from the original bug report is not exercised by any
+      automated test here -- it depends on realm resolution succeeding
+      first, which is ISS-0727's separate, infra-blocked territory, not this
+      PR's job. Recommending a UAT-RUNNER follow-up once this deploys:
+      verify the hard-navigation-to-/exam fix against live qa.bizdala.com,
+      keeping in mind ISS-0727 may still block the underlying realm
+      resolution for bilimbaga specifically until that is separately fixed.
+      No docs/requirements.yaml entry to flip (this is an ISS, not a REQ;
+      grepped ISS-0726, no hits). README.md checked (grepped
+      redirect/oidc/exam -- only pre-existing, unrelated hits at lines 128
+      and 230) -- not documented current behavior there, so no README
+      update needed. No docs/migration/stage-N-*.md or decisions/*.md file
+      was named by ISS-0726's affected_files -- none required updating. No
+      merge performed here -- ORCH's job next, after confirming this push's
+      own CI is green and no other agent is currently active.

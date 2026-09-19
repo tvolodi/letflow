@@ -44,4 +44,81 @@ severity_rationale: >
   flow.
 queue_ref: Q-726
 github_ref: GH-1577
-status: open
+status: resolved
+resolution:
+  resolved_in_run: WF03-ISS0726-20260919
+  commit: 073a17c9
+  pr: 1581
+  branch: feature/WF03-ISS0726-20260919
+  design_doc: lib/letflow/design/iss-0726-oidc-redirect-path-restore.md
+  summary: >
+    Root cause (pre-confirmed by ISSUE-FIXER, independently re-verified against
+    current main at fetch e0b3fdc7 while writing the design): ProtectedRoute's
+    OIDC redirect never captured the originally-requested path anywhere that
+    survives the full-page navigation round trip to Keycloak and back, so
+    OidcCallbackPage always fell through to its role-based fallback
+    (/platform-dashboard for PLATFORM_ADMIN, / for everyone else) instead of
+    the path the user actually asked for. Fix ships in three parts, all in
+    web/: (1) a new validator web/src/auth/safeRestorePath.ts
+    (isSafeRestorePath, a type guard) enforcing a 9-check open-redirect guard
+    -- string type and length bound, leading-slash-required, rejects
+    protocol-relative "//", rejects any backslash, rejects an embedded URL
+    scheme anywhere in the string, and restricts the path/query/fragment
+    portions to safe RFC 3986-derived character classes -- adversarially
+    tested by SECURITY-REVIEWER with real bypass payloads
+    (//evil.com, /\evil.com, javascript:/data: schemes, embedded <script>,
+    etc.), all correctly rejected; (2) capture via oidc-client-ts's own
+    `state` signin option, not a separate sessionStorage key --
+    web/src/auth/oidcRedirectArgs.ts's buildRedirectArgs() gained an optional
+    capturePath parameter, validated again at capture time (defense in
+    depth, not only at restore time) before being included as `state`;
+    ProtectedRoute.tsx's call site now passes
+    `window.location.pathname + window.location.search` at the exact moment
+    it decides to redirect. The two near-duplicate buildRedirectArgs()
+    implementations (oidcRedirectArgs.ts and AuthProvider.tsx) were also
+    deduped -- AuthProvider.tsx now imports the shared one; (3) restore
+    priority in web/src/pages/OidcCallbackPage.tsx: a validated restored
+    `user.state` path now wins over the role-based fallback whenever
+    present, including for PLATFORM_ADMIN (falls back to the old
+    role-conditional branch only when `state` is absent or fails
+    isSafeRestorePath).
+  gate_history: >
+    CODE-DESIGN-VALIDATOR PASS. SECURITY-REVIEWER PASS, adversarial --
+    exercised safeRestorePath.ts with real open-redirect bypass payloads,
+    all correctly rejected; confirmed state round-trips through Keycloak and
+    this app's own localStorage-backed oidc-client-ts stateStore with no new
+    persistent storage introduced. REVIEWER PASS. TEST-DESIGN-VALIDATOR PASS
+    after 3 rounds: round 1 found a live e2e realm-seeding gap (the new
+    iss-0726-oidc-deep-link-restore.e2e.spec.ts needed the realm slug seeded
+    before the deep-link navigation it exercises) and it was fixed (commit
+    38c65475, "seed realm slug before ISS-0726 e2e deep-link navigation");
+    round 2 found a coverage-honesty gap -- the true zero-prior-context
+    hostname-resolved candidate path wasn't exercised by any automated test
+    here -- and it was fixed by adding an explicit gap note rather than
+    silently leaving it implied as covered (commit 0d041ac8, "name ISS-0726
+    hostname-fallback e2e gap explicitly"); round 3 found a broken doc
+    citation to ISS-0727 (a record that didn't exist yet) and it was fixed
+    by filing that missing record (commit 4d7464b4, "file local record for
+    ISS-0727"). TEST-RUNNER PASS: 682/682 vitest, 48/48 guards, e2e 2/3
+    clean with 1 timing flake. RELEASE-VALIDATOR PASS: independently
+    reproduced the e2e flake 3 times and visually confirmed via
+    screenshot/DOM that even the "failing" run had already correctly landed
+    on /exam -- a test-timing race in the e2e harness itself, not a redirect
+    defect, so the flake does not indicate an unfixed regression.
+  remaining_gaps: >
+    Named explicitly here, not silently covered: (a) the live
+    qa.bizdala.com-specific deployment has not been re-checked against this
+    fix -- the design doc's own §6.3 already flagged this, since neither the
+    Vitest unit suite nor the CI-local-Keycloak e2e suite can exercise the
+    real qa.bizdala.com proxy/TLS/CDN layer ISS-0726 was originally
+    discovered on; (b) the true zero-prior-context/hostname-resolved
+    candidate path from the original bug report is not exercised by any
+    automated test in this PR -- it depends on realm resolution succeeding
+    first, which is ISS-0727's separate, currently infra-blocked territory,
+    not this PR's job to fix.
+  recommended_follow_up: >
+    A UAT-RUNNER follow-up once this deploys: verify the hard-navigation-to-
+    /exam fix against live qa.bizdala.com (confirm it lands on /exam and
+    renders ExamListPage, per the design's §6.3 follow-up framing), keeping
+    in mind ISS-0727 may still block the underlying realm resolution for
+    bilimbaga specifically until that is separately fixed.

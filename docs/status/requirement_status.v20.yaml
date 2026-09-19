@@ -230,11 +230,22 @@ history:
       hits): this is internal test-suite behavior, not documented current
       behavior, so no README update needed. No merge and no
       letflow-queue/GitHub state change performed here -- ORCH's job next.
-  - req: ISS-0718
+  - req: SCOPE-CHANGE
     event: done
     agent: ORCH
     at: "2026-09-18T22:41:55Z"
     note: >
+      [Field corrected 2026-09-19 by a later ORCH session: this entry's req:
+      field originally read "ISS-0718" -- an illegal vocabulary value per
+      this file's own header (legal req: values are REQ-NNN | SCOPE-CHANGE
+      only; an issue fix uses SCOPE-CHANGE with the ISS id named in the note
+      body). Same recurring mistake as ISS-0712's earlier instance (see that
+      correction's own note in the prior volume for the full reasoning).
+      Corrected in place per RequirementStatusInvariantsTest's own A5
+      assertion text: a vocabulary defect in the CURRENT (not yet closed)
+      volume is fixed in the working tree, never declared away. Only the
+      single-value req: field-selector is corrected; the rest of this entry
+      (timestamp, agent, full note body below) is untouched.]
       WF-03 run WF03-ISS0718-20260919 (queue task Q-718, GH-1541) complete
       and merged to main as commit 3b548591 (PR #1546, squash-merged, both
       CI gates green: backend mix letflow.check 10m49s pass, frontend

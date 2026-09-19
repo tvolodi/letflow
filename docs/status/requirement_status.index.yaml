@@ -4293,7 +4293,7 @@ volumes:
     path: docs/status/requirement_status.v20.yaml
     status: current
     opened: 2026-09-18
-    entries: 4
+    entries: 5
     note: >
       Incremented to 4 by ORCH's own REQ-369 blocked-event append
       (2026-09-19T02:49:52Z -- AC6/AC7 re-verification surfaced a new live

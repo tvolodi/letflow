@@ -81,4 +81,37 @@ fix_direction: >
   re-verification (queue task 708).
 queue_ref: Q-719
 github_ref: GH-1550
-status: open
+resolution: >
+  Root cause was NOT the infra/env-var gap hypothesized above -- it was an
+  application code defect. ISS-0720 (docs/issues/ISS-0720.yaml), filed and
+  fully resolved by a concurrent ORCH session's own WF-03 run
+  (WF03-ISS0720-20260919) while this issue's own duplicate pipeline was
+  in flight, root-caused it precisely: lib/letflow/routers/tenant_config.ex's
+  `oidc_issuer_base/0` read the retired `:oidc, :issuer` config key
+  (REQ-370 renamed it to `:keycloak_base_url` everywhere else), so it always
+  returned nil and `idp_base_url/0` fell through to the hardcoded
+  `http://localhost:8082` dev default on any environment lacking a
+  literally-named BPM_IDP_BASE_URL/KEYCLOAK_BASE_URL override.
+
+  Fixed on main via commit dbcc89e2 (PR #1553) -- `oidc_issuer_base/0` now
+  reads `:keycloak_base_url`, and `default_idp_base_url!/0` scopes the
+  localhost fallback to dev/test only, raising in every other environment
+  rather than silently serving a known-wrong authority. Verified by
+  ISS-0720's own full pipeline (design/security/idiom/test-design/test-run
+  gates all PASS, full suite 4453/4453).
+
+  This session (ORCH, same host) independently diagnosed and fixed the
+  identical defect in parallel as part of this issue's own WF-03 run
+  (PR #1552, branch feature/WF03-ISS0719-20260919) -- closed without
+  merging once the duplication was discovered during a routine rebase onto
+  main, to avoid a conflicting/redundant change. No functional difference
+  in outcome: same root cause, equivalent fix, both independently gated
+  through security/idiom/test review before either was known to overlap.
+
+  Pending (unconfirmed from this environment either run): whether QA's live
+  deployment has actually been redeployed with this fix, and whether
+  REQ-369 AC6/AC7 (queue task 708) now passes against live QA. Next step:
+  confirm a real (non-skipped) CD deploy of the commit containing this fix,
+  then curl QA's `/api/tenant-config` to confirm `oidc_authority` no longer
+  shows `localhost:8082`, then have UAT-RUNNER re-attempt REQ-369 AC6/AC7.
+status: resolved

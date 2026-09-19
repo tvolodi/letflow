@@ -1,0 +1,106 @@
+run_id: WF03-ISS0719-20260919
+agent: TEST-RUNNER
+date_utc: 2026-09-19T04:40:27Z
+branch: feature/WF03-ISS0719-20260919
+commit: 90ce307d
+pr: 1552
+scope: |
+  WF-03 test-run gate for ISS-0719 (stale :oidc :issuer config key ->
+  :keycloak_base_url in lib/letflow/routers/tenant_config.ex). Branch already
+  passed CODE-DESIGN-VALIDATOR, SECURITY-REVIEWER, REVIEWER, and
+  TEST-DESIGN-VALIDATOR. This report is the TEST-RUNNER execution gate before
+  RELEASE-VALIDATOR's independent re-run.
+
+commands_run:
+  - cwd: .
+    cmd: sudo docker compose up -d
+    note: >
+      letflow-1-postgres-1 and letflow-1-keycloak-1 were already running
+      (started earlier via sudo since the sandbox user is not in the `docker`
+      group). Postgres on port 5463 per this checkout's untracked .env
+      (LETFLOW_DB_PORT=5463).
+  - cwd: .
+    cmd: mix compile --warnings-as-errors
+    result: clean, no output, exit 0
+  - cwd: .
+    cmd: mix letflow.check
+    result: >
+      FIRST run: FAILED at the test step (scripts/test_parallel.sh exited 1,
+      9 real test failures across 3 of 8 partitions -- see
+      first_run_failures below). Re-ran scripts/test_parallel.sh standalone a
+      second time immediately after with no code changes: 0 failures,
+      4455/4455 passed. Then re-ran the full `mix letflow.check` a third time
+      end-to-end: clean pass, no failures anywhere (toolchain/requirements/
+      req-id-collision/deferral-staleness/async-sandbox/issue-refs/
+      uat-scenario-schema checks, format --check-formatted,
+      compile --warnings-as-errors, full test suite, plus the two isolated
+      subprocess re-runs the alias does for wasm_hang and lua_wallclock_race
+      tags).
+
+first_run_failures:
+  partition_totals: "1 test failed in one partition (Result: 623/624 passed, 3 excluded), 4 failed in another (674/678), 4 failed in a third (371/375) -- 9 failed tests total out of 8 partitions, ~4450 tests"
+  failures:
+    - test: "Letflow.Routers.Req077PromotionPipelineTest design §12.9: the :Unknown gate denies a real non-admin caller end-to-end POST /api/v1/promotions/plan with a real VIEWER token, full pipeline, is 403"
+      error: "** (DBConnection.ConnectionError) connection not available and request was dropped from queue after 4000ms"
+      location: "test/letflow/routers/req077_promotion_pipeline_test.exs:1034, via test/support/bpm_default_realm_displacement.ex:146"
+    - test: "Letflow.ServiceCatalogReaperTest sweep_service_catalog_orphans/1 with leftover rows present deletes both global and tenant-scoped rows unconditionally"
+      error: "match (=) failed -- left: {:ok, %{deleted: deleted}}, right: {:deferred, :concurrent_invocation}"
+      location: "test/support/service_catalog_reaper_test.exs:139"
+    - test: "Letflow.ServiceCatalogReaperTest sweep_service_catalog_orphans/1 sibling test_parallel.sh guard proceeds (not deferred) when the other connection shares this invocation's group tag"
+      error: "** (DBConnection.ConnectionError) connection not available and request was dropped from queue after 4000ms"
+      location: "test/support/service_catalog_reaper_test.exs:222"
+    - test: "Letflow.ServiceCatalogReaperTest sweep_service_catalog_orphans/1 with an empty table returns {:ok, %{deleted: 0}} and leaves the table empty"
+      error: "match (=) failed -- left: {:ok, %{deleted: 0}}, right: {:deferred, :concurrent_invocation}"
+      location: "test/support/service_catalog_reaper_test.exs:118"
+    - test: "Letflow.ServiceCatalogReaperTest sweep_service_catalog_orphans/1 concurrent-invocation guard defers entirely while another invocation's connection is open, leaving rows untouched"
+      error: "** (DBConnection.ConnectionError) connection not available and request was dropped from queue after 4000ms"
+      location: "test/support/service_catalog_reaper_test.exs:164"
+    - test: "Letflow.Plugs.ApiPipelineIntegrationTest REQ-071 AC5: concurrent tenant-status isolation a malformed tenant_id crashes only its own request process; a concurrent valid request for a different tenant still succeeds"
+      error: "** (DBConnection.ConnectionError) connection not available and request was dropped from queue after 4000ms"
+      location: "test/letflow/plugs/api_pipeline_integration_test.exs:213, via test/support/bpm_default_realm_displacement.ex:146"
+    - test: "Letflow.TenantSchemaReaperTest sweep_orphans/2 concurrent-invocation liveness guard (ISS-0110) spares an old row while another invocation's connection is open, reclaims it once that connection closes"
+      error: "Assertion with >= failed -- assert reclaimed >= 1, left: 0, right: 1"
+      location: "test/support/tenant_schema_reaper_test.exs:273"
+    - test: "Letflow.TenantSchemaReaperTest sweep_orphans/2 reclaims an old, well-formed orphaned row drops the real schema and deletes both rows"
+      error: "Assertion with >= failed -- assert reclaimed >= 1, left: 0, right: 1"
+      location: "test/support/tenant_schema_reaper_test.exs:124"
+    - test: "Letflow.TenantSchemaReaperTest sweep_orphans/2 schema_name format guard skips an old row with a malformed schema_name instead of attempting a drop"
+      error: "Assertion with >= failed -- assert skipped >= 1, left: 0, right: 1"
+      location: "test/support/tenant_schema_reaper_test.exs:212"
+  attribution: >
+    None of these 9 failures touch lib/letflow/routers/tenant_config.ex or any
+    OIDC/keycloak_base_url code path -- they are DBConnection.ConnectionError
+    pool-exhaustion timeouts and TenantSchemaReaper/ServiceCatalogReaper
+    concurrent-invocation-guard races between sibling partitions sharing one
+    TEST_PARALLEL_GROUP under N=8 parallelism (a known category, see
+    docs/migration/decisions/0009-test-parallel-pool-sizing.md). Confirmed
+    non-reproducing: a same-branch, same-commit, no-code-change re-run of
+    scripts/test_parallel.sh immediately after (N=8 again) came back
+    4455/4455 passed, 0 failures. A third full `mix letflow.check` also
+    passed clean end-to-end.
+
+final_backend_test_result:
+  partitions: 8
+  combined: "4455/4455 passed"
+  tests: 4449
+  properties: 6
+  failures: 0
+  exit_codes: "all 8 partitions exit 0"
+  raw_summary: "combined: 4449 tests, 6 properties, 0 failures (4455/4455 passed)"
+
+compile_warnings_as_errors: clean (no warnings, exit 0)
+
+verdict: PASS
+verdict_basis: >
+  mix compile --warnings-as-errors is clean. The first `mix letflow.check`
+  run hit 9 flaky infra-related test failures (connection-pool exhaustion /
+  cross-partition liveness-guard races), none touching the ISS-0719 change
+  under review. A same-commit re-run and a full third `mix letflow.check`
+  run both came back completely green (4455/4455, 0 failures), plus all of
+  letflow.check's other gates (toolchain, requirements-registration,
+  req-id-collision, deferral-staleness, async-sandbox-reachability,
+  issue-refs, uat-scenario-schema, format --check-formatted, and the two
+  isolated wasm_hang/lua_wallclock_race subprocess re-runs) passed clean.
+  No real regression found from this change.
+
+next_action: "Route to RELEASE-VALIDATOR for independent re-verification"

@@ -395,3 +395,32 @@ history:
       UAT-RUNNER re-verification pass. Queue task 708 released with status:
       blocked (not done, not a credential-gap hand-back this time -- a real
       external blocker with its own tracked issue).
+  - req: SCOPE-CHANGE
+    event: done
+    agent: ORCH
+    at: "2026-09-19T05:40:00Z"
+    note: >
+      ISS-0719 reconciled with ISS-0720 -- duplicate concurrent fix
+      discovered and resolved. This session ran ISS-0719's own full WF-03
+      pipeline in parallel (design/security/idiom/test-design/test-run/
+      release-validation, all PASS, PR #1552) while a concurrent ORCH
+      session independently root-caused and fixed the identical defect
+      under a different issue number, ISS-0720, via its own full WF-03 run
+      (WF03-ISS0720-20260919) and merged it first (commit dbcc89e2, PR
+      #1553): lib/letflow/routers/tenant_config.ex's oidc_issuer_base/0 read
+      the retired :oidc :issuer config key instead of REQ-370's
+      :keycloak_base_url, plus a further hardening (default_idp_base_url!/0
+      now raises outside dev/test instead of silently serving
+      localhost:8082). Discovered the overlap when rebasing PR #1552 onto
+      origin/main produced a genuine merge conflict on the same function.
+      Closed PR #1552 without merging (commit history preserved on GitHub,
+      branch deleted) rather than force a redundant/conflicting change onto
+      an already-fixed function. docs/issues/ISS-0719.yaml flipped to
+      resolved, cross-referencing ISS-0720's actual fix commit and this
+      duplication's own account, honest about what's still unconfirmed:
+      whether QA has actually been redeployed with the fix and whether
+      REQ-369 AC6/AC7 (queue task 708) now passes live. Letflow-queue task
+      719 was already released as done in this session's prior (now-moot)
+      DOC-UPDATER step -- left as-is, since the underlying work genuinely is
+      done, just via a different commit than originally tracked. No
+      docs/requirements.yaml entry to flip (ISS, not REQ).

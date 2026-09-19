@@ -12,6 +12,18 @@
  *   redirects to /instances (client-side role gate), matching the pattern
  *   used by AuditLogPage/HealthDashboardPage/MetricsPage -- per
  *   lib/letflow/design/iss0730-promotion-review-page-routing.md §3.1.
+ * TC-ISS0730-03: navigating to the review URL as a PLATFORM_ADMIN user is
+ *   NOT redirected -- the role gate lets the actual reviewer through. Without
+ *   this, an inverted role check (`if (isPlatformAdmin) return <Navigate .../>`)
+ *   would still pass TC-ISS0730-02 (a non-admin who is also never let in
+ *   trivially "isn't redirected to the wrong place" in some readings) while
+ *   locking every real PLATFORM_ADMIN out -- this test targets that failure
+ *   mode directly, from the opposite session.
+ * TC-ISS0730-04: none of the plausible wrong/guessed paths the original
+ *   issue's live investigation tried (/admin/promotions, /promotions,
+ *   /definitions/promotions, /admin/definitions/promotions -- ISS-0730.yaml
+ *   lines 41-45) resolve to any route at all. Guards against the review page
+ *   becoming reachable at a second, undocumented URL alongside the real one.
  */
 
 import type { ReactElement } from 'react'
@@ -50,6 +62,12 @@ const NON_ADMIN_SESSION = {
   tenant_id: 'tid-demo-co',
   tenant_type: 'production' as const,
   production_tenant_display_name: null,
+}
+
+const ADMIN_SESSION = {
+  ...NON_ADMIN_SESSION,
+  display_name: 'Platform Admin',
+  roles: ['PLATFORM_ADMIN'],
 }
 
 afterEach(() => {
@@ -106,5 +124,55 @@ describe('ISS-0730 regression — promotion review route wiring', () => {
 
     expect(screen.getByTestId('instances-redirect-target')).toBeInTheDocument()
     expect(screen.queryByTestId('non-skippable-approval-gate')).not.toBeInTheDocument()
+  })
+
+  it('TC-ISS0730-03: navigating to a review URL as a PLATFORM_ADMIN user is NOT redirected to /instances', () => {
+    mockUseAuth.mockReturnValue({
+      session: ADMIN_SESSION,
+      isAuthenticated: true,
+      isLoading: false,
+      loginSource: null,
+      login: vi.fn(),
+      logout: vi.fn(),
+      setSession: vi.fn(),
+    })
+
+    const targetUrl = '/definitions/def-1/promotions/review-42'
+    const matches = matchRoutes(router.routes, targetUrl)
+    expect(matches).not.toBeNull()
+    const leaf = matches![matches!.length - 1]
+
+    render(
+      <MemoryRouter initialEntries={[targetUrl]}>
+        <Routes>
+          <Route path={leaf.route.path} element={leaf.route.element as ReactElement} />
+          <Route path="/instances" element={<div data-testid="instances-redirect-target" />} />
+        </Routes>
+      </MemoryRouter>,
+    )
+
+    expect(screen.queryByTestId('instances-redirect-target')).not.toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: 'Promotion Review' })).toBeInTheDocument()
+  })
+
+  it('TC-ISS0730-04: none of the plausible pre-fix guessed URLs route to PromotionReviewPage', () => {
+    // ISS-0730.yaml lines 41-45: these exact URLs were tried live pre-fix and
+    // all 404'd. '/definitions/promotions' is a partial exception -- it
+    // structurally matches the dynamic `definitions/:id` leaf with
+    // `id: "promotions"` (ordinary param-matching, not a route this fix
+    // creates), so for that one path the assertion is narrowed to "does not
+    // resolve to PromotionReviewPage" rather than "matches nothing at all".
+    const guessedPaths = [
+      '/admin/promotions',
+      '/promotions',
+      '/definitions/promotions',
+      '/admin/definitions/promotions',
+    ]
+
+    for (const path of guessedPaths) {
+      const matches = matchRoutes(router.routes, path)
+      const leaf = matches?.[matches.length - 1]
+      expect((leaf?.route.element as ReactElement | undefined)?.type).not.toBe(PromotionReviewPage)
+    }
   })
 })

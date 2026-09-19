@@ -368,6 +368,7 @@ defmodule Letflow.TenantProvisioning do
           {:ok, applied_versions :: [pos_integer()]}
           | {:error, :tenant_not_provisioned}
           | {:error, {:migration_failed, Exception.t()}}
+          | {:error, {:event_type_seed_failed, term()}}
   def replay_migrations(tenant_id, migration_source \\ nil) do
     case Repo.get_by(Registration, tenant_id: tenant_id) do
       nil ->
@@ -387,7 +388,8 @@ defmodule Letflow.TenantProvisioning do
 
           mark_migrations_applied(tenant_id)
 
-          with :ok <- maybe_seed_platform_event_types(using_default_manifest?, tenant_id) do
+          with :ok <- maybe_seed_platform_event_types(using_default_manifest?, tenant_id),
+               :ok <- maybe_seed_entity_event_types(using_default_manifest?, schema_name) do
             {:ok, applied_versions}
           end
         rescue
@@ -1081,6 +1083,20 @@ defmodule Letflow.TenantProvisioning do
         {:error, reason} -> {:halt, {:error, {:event_type_seed_failed, reason}}}
       end
     end)
+  end
+
+  @spec maybe_seed_entity_event_types(
+          using_default_manifest? :: boolean(),
+          schema_name :: String.t()
+        ) ::
+          :ok | {:error, {:event_type_seed_failed, term()}}
+  defp maybe_seed_entity_event_types(false, _schema_name), do: :ok
+
+  defp maybe_seed_entity_event_types(true, schema_name) do
+    case Letflow.Entities.EventTypes.seed!(schema_name) do
+      {:ok, _seed_result} -> :ok
+      {:error, reason} -> {:error, {:event_type_seed_failed, reason}}
+    end
   end
 
   # =========================================================================

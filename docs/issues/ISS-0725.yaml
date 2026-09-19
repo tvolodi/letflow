@@ -1,0 +1,65 @@
+id: ISS-0725
+title: >
+  QA candidate-user seeded Keycloak credential does not authenticate
+discovered_by: UAT-RUNNER
+discovered_in_run: uat-pilot-bilimbaga-candidate-exam-gui-review-20260919
+discovered_at: "2026-09-19T15:40:00Z"
+severity: BLOCKER
+description: >
+  During a pilot GUI review of bilimbaga-candidate-timed-exam-autograde.yaml
+  (ISS-0690, closed 2026-09-19) -- a trial of a new "genuinely review each
+  real screen before writing a Playwright regression spec" process -- the
+  dispatched UAT-RUNNER run could not get past sign-in against
+  https://qa.bizdala.com. The candidate-user credential returned by
+  ai-dala-infra/scripts/qa-login.sh candidate-user (role CANDIDATE,
+  bilimbaga tenant) was rejected by Keycloak both via the real browser
+  hosted-login form ("Invalid username or password") and via a direct
+  OAuth token-endpoint grant (invalid_grant) -- reproduced on two
+  independent fetches of the credential from ubuntu-16gb-nbg1-1's
+  seeded-users.env. admin-user, fetched and tested the same way at the same
+  moment, authenticated cleanly, ruling out a realm-wide Keycloak outage or
+  a qa.bizdala.com-wide problem. This isolates the defect to the seeded
+  candidate-user account specifically being out of sync with (or
+  disabled/locked behind) what seeded-users.env reports.
+  This blocks bilimbaga-candidate-timed-exam-autograde.yaml -- still
+  BLOCKED, no pipeline_test key added, since writing one from an
+  unverified walkthrough would be exactly the blind-spec problem this
+  pilot process exists to prevent -- and blocks any other pending UAT
+  scenario needing a non-admin CANDIDATE actor against qa.bizdala.com.
+affected_files:
+  - ai-dala-infra/scripts/qa-login.sh
+  - test/fixtures/uat/scenarios/bilimbaga/candidate-timed-exam-autograde.yaml
+severity_rationale: >
+  BLOCKER: no candidate-role GUI verification is possible at all against
+  the QA environment until this is fixed -- it silently blocks this
+  scenario and every other pending scenario needing a CANDIDATE actor, not
+  just a cosmetic or minor defect.
+fix_direction: >
+  Not diagnosed further here (ai-dala-infra territory, outside this repo's
+  agent pipeline). Whoever picks this up should check on
+  ubuntu-16gb-nbg1-1 whether the Keycloak seed for candidate-user was
+  re-run/rotated without updating seeded-users.env, whether the account is
+  disabled/locked (e.g. required-actions, temporarily-disabled after failed
+  attempts), or whether seeded-users.env itself holds a stale value versus
+  what Keycloak actually has stored.
+process_note: >
+  Process-friction finding from the pilot this issue was discovered under:
+  a credential handed to a UAT-RUNNER dispatch should be pre-verified with
+  one cheap token-endpoint check before dispatch, since a browser-level
+  login failure alone is ambiguous (typo vs. shell-escaping vs. a genuinely
+  broken account) -- see
+  test/uat-reports/gui-review-2026-09-19-bilimbaga-candidate-exam.md for
+  the full pilot report.
+queue_ref: Q-723
+github_ref: GH-1574
+# NOTE: filename/queue-id mismatch, same class TASK_QUEUE.md/ISSUE_QUEUE.md
+# already document for other records. register_task's response returned
+# issue_ref "ISS-0723" (queue task id 723) -- but filename ISS-0723.yaml is
+# ALREADY OWNED by a different, unrelated, earlier-filed issue (a
+# sandbox-pool test-flake finding from WF03-ISS0720-20260919, filed without
+# a queue_ref, i.e. before or outside this call). Renaming either file to
+# "fix" the mismatch would either destroy the existing issue's record or
+# collide with it -- both worse than a documented mismatch. This file is
+# named ISS-0725.yaml (next unused slot) instead, following ISS-0724.yaml's
+# own precedent for the identical class of collision.
+status: open

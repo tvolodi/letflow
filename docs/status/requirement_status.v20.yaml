@@ -363,3 +363,35 @@ history:
       a direct push to main. No docs/requirements.yaml entry to flip (this
       is an ISS, not a REQ). Letflow-queue task 717 released with status:
       done -- genuinely resolved, not merely a run that finished cleanly.
+  - req: REQ-369
+    event: blocked
+    agent: ORCH
+    at: "2026-09-19T02:49:52Z"
+    note: >
+      Queue task 708 (GH#1501) re-verification of the last remaining gap,
+      AC6/AC7. This session's environment (Windows,
+      c:\Users\tvolo\dev\ai-dala\ai-dala-infra) genuinely has QA credential
+      access (SSH to ubuntu-16gb-nbg1-1 confirmed, scripts/qa-login.sh
+      returned a real PLATFORM_ADMIN credential, independently confirmed
+      valid via a direct Keycloak password-grant) -- resolving the
+      credential-access gap the prior close_out_note left open for this kind
+      of environment. UAT-RUNNER used it for a real end-to-end OIDC-redirect
+      login attempt against live QA and a real re-run of the named
+      pipeline_test (platform-login-routing-by-role.pipeline.e2e.spec.ts),
+      both of which surfaced a new, genuine, live BLOCKER defect instead of
+      passing: the QA backend's GET /api/tenant-config advertises
+      oidc_authority=http://localhost:8082/realms/bpm-default instead of the
+      real QA Keycloak, breaking real login for every QA user (not only
+      PLATFORM_ADMIN). Filed as ISS-0719 (docs/issues/ISS-0719.yaml,
+      queue_ref Q-719, github_ref GH-1550, severity BLOCKER), root-caused to
+      lib/letflow/routers/tenant_config.ex's idp_base_url/0 default fallback,
+      likely a side effect of the recent ISS-0717/T-0134 QA redeploy work.
+      Full evidence: test/uat-reports/uat-2026-09-19-WF02-REQ369-AC6AC7-final2-20260919.yaml.
+      REQ-369's own application code (PlatformDashboardPage, OidcCallbackPage
+      redirect, ISS-0711's tenant-count fix) is independently confirmed
+      unaffected and correct. docs/requirements.yaml's REQ-369 close_out_note
+      updated (append-only) with the full account and remaining-work pointer.
+      status remains blocked -- pending ISS-0719's resolution, then one more
+      UAT-RUNNER re-verification pass. Queue task 708 released with status:
+      blocked (not done, not a credential-gap hand-back this time -- a real
+      external blocker with its own tracked issue).

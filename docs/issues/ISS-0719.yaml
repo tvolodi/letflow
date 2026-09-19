@@ -1,0 +1,84 @@
+id: ISS-0719
+title: >
+  Live QA backend advertises oidc_authority=http://localhost:8082/realms/bpm-default
+  instead of the real QA Keycloak -- breaks real login for every QA user
+discovered_by: UAT-RUNNER
+discovered_in_run: WF02-REQ369-AC6AC7-final2-20260919
+discovered_at: "2026-09-19T02:45:00Z"
+severity: BLOCKER
+description: >
+  Discovered during letflow-queue task 708 (REQ-369) AC6/AC7 re-verification
+  (test/uat-reports/uat-2026-09-19-WF02-REQ369-AC6AC7-final2-20260919.yaml),
+  the first run for this requirement with genuine QA credential access AND a
+  full real-OIDC-redirect login attempt carried all the way through instead
+  of stopping at the credential-fetch step.
+
+  `GET https://qa.bizdala.com/api/tenant-config?host=qa.bizdala.com` returns
+  `oidc_authority="http://localhost:8082/realms/bpm-default"` -- confirmed
+  live, twice, response headers `cache-control: max-age=0, private,
+  must-revalidate` (not a stale cache). This sends every real browser's OIDC
+  redirect to `localhost:8082`, which nothing is listening on from any real
+  client machine, so real login is broken for ALL users on QA right now, not
+  only PLATFORM_ADMIN.
+
+  Root-caused in source, not guessed: lib/letflow/routers/tenant_config.ex
+  lines 167,312-316 -- `idp_base_url/0` resolves
+  `System.get_env("BPM_IDP_BASE_URL") || System.get_env("KEYCLOAK_BASE_URL")
+  || oidc_issuer_base() || @default_idp_base_url`, where
+  `@default_idp_base_url` (line 167) is the literal `"http://localhost:8082"`.
+  The live QA backend process is currently falling all the way through to
+  that local-dev default, meaning none of BPM_IDP_BASE_URL, KEYCLOAK_BASE_URL,
+  or the compiled `:oidc` issuer config resolve correctly on the deployed QA
+  app service.
+
+  Independently isolated that Keycloak itself is healthy: a direct
+  password-grant call against the real QA IdP
+  (https://auth.qa.bizdala.com/realms/bpm-default/protocol/openid-connect/token)
+  with a real seeded admin-user credential (fetched via
+  ai-dala-infra/scripts/qa-login.sh) succeeded -- HTTP 200, decoded
+  access_token has preferred_username=admin-user,
+  realm_access.roles=["PLATFORM_ADMIN"]. Only the backend's *advertised*
+  authority value returned via GET /api/tenant-config is wrong.
+
+  Very likely a side effect of the recent QA docker-compose/image-tag
+  redeploy work visible in this repo's recent commit history (69c430ad "add
+  missing image: field to docker-compose.qa.yml app service", a3b8244f,
+  55ce601e closing ISS-0717/T-0134) -- flagged as a hypothesis from git-log
+  timing, not confirmed by inspecting the QA compose file/env directly (out
+  of scope for UAT-RUNNER; this is an infra/deployment config question, not
+  an application code defect as far as this diagnosis goes).
+
+  Reproduced twice, not a flake: the named pipeline_test
+  (web/tests/e2e/pipelines/platform-login-routing-by-role.pipeline.e2e.spec.ts)
+  PLATFORM_ADMIN case was run twice against live QA with valid credentials
+  (second run with --retries=0), both times failing identically with
+  `Error: page.waitForURL: net::ERR_CONNECTION_REFUSED` at helpers.ts:146
+  (inside loginViaRealOidcRedirect). Playwright's trace network log confirmed
+  the actual off-origin redirect target attempted was
+  `http://localhost:8082/realms/bpm-default/protocol/openid-connect/auth?...`.
+affected_files:
+  - lib/letflow/routers/tenant_config.ex
+related_requirements:
+  - REQ-369
+related:
+  - ISS-0717  # recent QA redeploy work this issue is hypothesized to be a side effect of
+severity_rationale: >
+  BLOCKER -- breaks real end-user login for the entire QA environment, not
+  only PLATFORM_ADMIN or REQ-369's own scope. Directly blocks REQ-369's AC6
+  (real PLATFORM_ADMIN login, real tenant count rendered) and AC7 (named
+  pipeline_test re-run against QA), both reproduced FAIL twice with a
+  precisely traced root cause.
+fix_direction: >
+  Almost certainly an infra/deployment env-var gap on the QA app service:
+  BPM_IDP_BASE_URL (or KEYCLOAK_BASE_URL) is not set, or set incorrectly, on
+  the live QA container/process -- most likely introduced or exposed by the
+  recent docker-compose.qa.yml / image-tag redeploy work (ISS-0717/T-0134).
+  Route to infra/deployment triage to inspect the actual QA
+  docker-compose.qa.yml / env file on ubuntu-16gb-nbg1-1 and confirm/fix
+  BPM_IDP_BASE_URL (expected: https://auth.qa.bizdala.com), then redeploy and
+  re-verify GET /api/tenant-config's oidc_authority directly. Only once fixed
+  and confirmed live should UAT-RUNNER re-attempt REQ-369's AC6/AC7
+  re-verification (queue task 708).
+queue_ref: Q-719
+github_ref: GH-1550
+status: open

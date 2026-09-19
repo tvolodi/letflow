@@ -1,0 +1,57 @@
+{
+  "handoff_id": "wf03-iss0721-step02-rework2",
+  "run_id": "WF03-ISS0721-20260919",
+  "workflow_id": "WF-03",
+  "step": "02",
+  "from_agent": "ORCH",
+  "to_agent": "CODE-DESIGNER",
+  "file": "handoffs/WF03-ISS0721-20260919/step-02-code-designer-rework2.json",
+  "created_at": "2026-09-19T07:50:41Z",
+  "started_at": "2026-09-19T07:50:41Z",
+  "completed_at": null,
+  "status": "PENDING",
+  "priority": "NORMAL",
+  "context": {
+    "stage": null,
+    "requirement_ids": ["REQ-228"],
+    "requirement_text": {},
+    "source_text": {},
+    "related_handoff_ids": ["wf03-iss0721-step04c"],
+    "artifacts_in": [
+      "lib/letflow/design/iss0721-entity-event-type-seeding.md",
+      "handoffs/WF03-ISS0721-20260919/step-04c-test-runner.json",
+      "test/reports/report-20260919-WF03-ISS0721-20260919.yaml",
+      "lib/letflow/tenant_provisioning.ex",
+      "lib/letflow/entities/event_types.ex",
+      "test/support/tenant_template.ex",
+      "test/letflow/tenant_provisioning_event_seed_test.exs"
+    ],
+    "owned_modules": ["lib/letflow/tenant_provisioning.ex"]
+  },
+  "task": {
+    "description": "REWORK ITERATION 2 (of the design, following TEST-RUNNER's Step 4c FAIL -- this is a design amendment, not a repeat of rework1's already-resolved BLOCKER/MINOR). Full-suite run on this branch surfaced a real bug in the shipped design: 4/5 failures traced to this run's diff.\n\n**Root cause (ORCH read the actual code directly to confirm this, not guessing):** test/support/tenant_template.ex builds a reference/self-check schema via the REAL, unmodified Letflow.TenantProvisioning.replay_migrations/2 (call sites at lines 336 and 536), against a Registration whose schema_name is a deliberate non-standard literal (e.g. \"tenant_template_refcheck\") rather than the canonical \"tenant_\" <> 32-hex-chars format tenant_id_for_schema_name/1 (tenant_provisioning.ex:236-256) requires to reverse a schema_name back to a tenant_id. Letflow.Entities.EventTypes.seed!/1 (event_types.ex:117-118) opens with `with {:ok, tenant_id} <- TenantProvisioning.tenant_id_for_schema_name(prefix) do` -- so calling it against this synthetic schema_name returns {:error, :invalid_schema_name}, which the new maybe_seed_entity_event_types/2 currently normalizes to {:error, {:event_type_seed_failed, :invalid_schema_name}}, failing replay_migrations/2's whole with-chain. This is why test/support/tenant_template_test.exs's two template-self-check tests now fail with TENANT_TEMPLATE_SELF_CHECK_FAILED ... {:event_type_seed_failed, :invalid_schema_name} -- a genuine regression this run's diff introduced, not a stale fixture.\n\n(Contrast with maybe_seed_platform_event_types/2, which was never affected by this because it takes tenant_id directly, already bound in replay_migrations/2's own function parameter -- it never needs to reverse a schema_name at all, so this class of schema doesn't trip it.)\n\n**Required design amendment:** maybe_seed_entity_event_types/2 must NOT hard-fail replay_migrations/2's with-chain when EventTypes.seed!/1 fails specifically with {:error, :invalid_schema_name} -- normalize that one specific reason to :ok (skip silently) instead of {:error, {:event_type_seed_failed, :invalid_schema_name}}, because it means the schema_name in play does not represent a genuinely provisioned tenant (per tenant_id_for_schema_name/1's own moduledoc: schema_name_for_tenant/1 has no special-cased default-tenant UUID, so every REAL Registration's schema_name always matches the canonical pattern -- only test-support synthetic/reference schemas can produce :invalid_schema_name here, and those have no tenant-facing entity-record write path to protect). ALL OTHER error reasons from seed!/1 must continue to propagate as {:error, {:event_type_seed_failed, reason}} exactly as currently designed -- this carve-out is narrowly scoped to :invalid_schema_name only, not a blanket swallow-all-errors change.\n\nAlso note for ELIXIR-DEV (state this in your amended design, section for ELIXIR-DEV to action, not yours to fix): TEST-RUNNER also found 2 stale row-count assertions in test/letflow/tenant_provisioning_event_seed_test.exs (expected event_type_registry counts of 13/10, now correctly 16/13 -- a 3-row overshoot exactly matching the 3 new ENTITY_RECORD_* types this fix now correctly seeds for real tenants). State plainly that these two literal counts need updating to reflect the new, correct behavior -- not a design change, a mechanical fixture update.\n\nAmend lib/letflow/design/iss0721-entity-event-type-seeding.md in place (add a new section or extend section 5) to state this carve-out precisely, prose only, no implementation code.",
+    "acceptance_criteria": [
+      "Design explicitly states the :invalid_schema_name carve-out and its scope (this reason only, all others still propagate)",
+      "Design explains WHY this carve-out is safe (schema_name_for_tenant/1 guarantees every real tenant registration matches the canonical pattern)",
+      "Design notes the two stale test fixture counts for ELIXIR-DEV to update mechanically",
+      "No implementation code bodies"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "",
+    "artifacts_out": [],
+    "issues": [],
+    "git_evidence": {
+      "branch_name": "feature/WF03-ISS0721-20260919",
+      "commit_sha_list": [],
+      "remote_branch": "origin/feature/WF03-ISS0721-20260919",
+      "push_status": "skipped",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": ""
+  },
+  "rework_count": 2,
+  "max_rework": 3
+}

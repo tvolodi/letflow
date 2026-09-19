@@ -1957,3 +1957,5 @@
 2026-09-19T07:34:09Z | DISPATCH | WF-03 | WF03-ISS0721-20260919/step-04b-test-design-validator | ORCH -> TEST-DESIGN-VALIDATOR | PENDING
 2026-09-19T07:52:00Z | GATE_PASS | WF-03 | WF03-ISS0721-20260919/step-04b-test-design-validator | TEST-DESIGN-VALIDATOR -> ORCH | PASS (fail-side independently reproduced; incidental Lua/PlatformTest flake flagged for filing)
 2026-09-19T07:38:27Z | DISPATCH | WF-03 | WF03-ISS0721-20260919/step-04c-test-runner | ORCH -> TEST-RUNNER | PENDING
+2026-09-19T07:52:00Z | GATE_FAIL | WF-03 | WF03-ISS0721-20260919/step-04c-test-runner | TEST-RUNNER -> ORCH | FAIL (4/5 failures caused by this diff: 2 stale row-count fixtures in tenant_provisioning_event_seed_test.exs, 2 real :invalid_schema_name failures in tenant_template_test.exs; 1 unrelated pre-existing ISS-0724 filename/id drift failure)
+2026-09-19T07:50:41Z | DISPATCH | WF-03 | WF03-ISS0721-20260919/step-02-code-designer-rework2 | ORCH -> CODE-DESIGNER | PENDING (design amendment after Step 4c FAIL)

@@ -159,7 +159,10 @@ defmodule Letflow.TenantProvisioning.EntityEventTypeSeedingTest do
 
       assert {:ok, %{record: updated}} =
                Records.update_record(
-                 create_attrs(%{record_id: record.record_id, field_values: %{"label" => "second"}}),
+                 create_attrs(%{
+                   record_id: record.record_id,
+                   field_values: %{"label" => "second"}
+                 }),
                  schema
                )
 

@@ -1,0 +1,52 @@
+{
+  "handoff_id": "wf03-iss0721-step02-rework1",
+  "run_id": "WF03-ISS0721-20260919",
+  "workflow_id": "WF-03",
+  "step": "02",
+  "from_agent": "ORCH",
+  "to_agent": "CODE-DESIGNER",
+  "file": "handoffs/WF03-ISS0721-20260919/step-02-code-designer-rework1.json",
+  "created_at": "2026-09-19T06:45:03Z",
+  "started_at": "2026-09-19T06:45:03Z",
+  "completed_at": null,
+  "status": "PENDING",
+  "priority": "NORMAL",
+  "context": {
+    "stage": null,
+    "requirement_ids": ["REQ-228"],
+    "requirement_text": {},
+    "source_text": {},
+    "related_handoff_ids": ["wf03-iss0721-step02", "wf03-iss0721-step02b"],
+    "artifacts_in": [
+      "lib/letflow/design/iss0721-entity-event-type-seeding.md",
+      "handoffs/WF03-ISS0721-20260919/step-02b-code-design-validator.json",
+      "lib/letflow/design/iss072-event-type-registration.md"
+    ],
+    "owned_modules": ["lib/letflow/tenant_provisioning.ex"]
+  },
+  "task": {
+    "description": "REWORK ITERATION 1: CODE-DESIGN-VALIDATOR FAILED lib/letflow/design/iss0721-entity-event-type-seeding.md with 1 BLOCKER (see handoffs/WF03-ISS0721-20260919/step-02b-code-design-validator.json's result.issues for the exact citation): section 5's 'New' code fence is directly-pasteable Elixir -- real implementation code, not a signature/shape, violating the design-doc convention. Your own design doc's section 0 cites lib/letflow/design/iss072-event-type-registration.md section 2.1 as precedent for this exact class of change, and that precedent describes the control-flow change in PROSE, explicitly labeled 'described here as the required control-flow shape, not as code; ELIXIR-DEV chooses the exact construct' -- mirror that convention. Fix: rewrite section 5's 'New' block as prose describing the required control-flow shape (what gets added to the with-chain, in what order, what it returns on each branch) instead of a code fence. The 'Current' quote of already-shipped code may stay as-is (quoting existing code is not the same as writing new implementation code). Also address the MINOR: section 7's wording about replay_migrations/2's @spec is a speculative conditional -- CODE-DESIGN-VALIDATOR independently confirmed by reading tenant_provisioning.ex:364-371 that the @spec does NOT currently list {:error, {:event_type_seed_failed, term()}}, so tighten section 7 to state that as a confirmed fact requiring a one-line @spec addition, not a maybe. On finishing, flip status to COMPLETED/result.status as normal (do not re-claim via IN_PROGRESS-only boilerplate -- this handoff is already claimed by virtue of being dispatched to you; just do the work and complete it).",
+    "acceptance_criteria": [
+      "Section 5 contains no directly-pasteable Elixir code -- prose control-flow description only, matching the iss072 precedent's convention",
+      "Section 7 states the @spec gap as a confirmed fact, not a speculative conditional",
+      "All previously-PASSED checks (fix-requirement traceability, idempotency claim, no-TBD-language, regression-test spec concreteness) remain intact -- do not regress anything CODE-DESIGN-VALIDATOR already verified"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "",
+    "artifacts_out": [],
+    "issues": [],
+    "git_evidence": {
+      "branch_name": "feature/WF03-ISS0721-20260919",
+      "commit_sha_list": [],
+      "remote_branch": "origin/feature/WF03-ISS0721-20260919",
+      "push_status": "skipped",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": ""
+  },
+  "rework_count": 1,
+  "max_rework": 3
+}

@@ -8,8 +8,8 @@
   "file": "handoffs/WF03-ISS0721-20260919/step-02-code-designer-rework2.json",
   "created_at": "2026-09-19T07:50:41Z",
   "started_at": "2026-09-19T07:50:41Z",
-  "completed_at": null,
-  "status": "PENDING",
+  "completed_at": "2026-09-19T08:15:00Z",
+  "status": "COMPLETED",
   "priority": "NORMAL",
   "context": {
     "stage": null,
@@ -39,18 +39,18 @@
   },
   "result": {
     "status": "PASS",
-    "summary": "",
-    "artifacts_out": [],
+    "summary": "Amended lib/letflow/design/iss0721-entity-event-type-seeding.md with new section 6 ('Amendment (rework iteration 2): the :invalid_schema_name carve-out', prose only, no implementation code) addressing TEST-RUNNER's Step 4c FAIL: (1) states precisely that maybe_seed_entity_event_types/2 must normalize {:error, :invalid_schema_name} from EventTypes.seed!/1 to :ok (silent skip) instead of {:error, {:event_type_seed_failed, :invalid_schema_name}}, with an amended §3-style return-shape table showing this is the sole carve-out and every other error reason still propagates as {:error, {:event_type_seed_failed, reason}} exactly as originally designed; (2) explains why this is safe -- schema_name_for_tenant/1's moduledoc guarantees uniform 'tenant_' <> hex derivation with no special-cased branch, so tenant_id_for_schema_name/1 can only return :invalid_schema_name for a schema_name that was never produced by schema_name_for_tenant/1, i.e. does not correspond to any genuinely provisioned tenant and has no tenant-facing entity-record write path to protect (only test/support/tenant_template.ex's synthetic self-check schema constructs such a schema_name today, at replay_migrations/2 call sites lines 336/536); (3) added §6.3 flagging the two stale test/letflow/tenant_provisioning_event_seed_test.exs row-count literals (lines 304 and 419, 13 -> 16, matching the 3 new ENTITY_RECORD_* rows now correctly seeded for real tenants) as a mechanical fixture update for ELIXIR-DEV, explicitly not a design change. Old §6/§7 renumbered to §7/§8 to keep the document contiguous; §0's source list extended with the artifacts read for this amendment. No function bodies or code blocks were added -- only the pre-existing §2 @spec block (unchanged) and prose.",
+    "artifacts_out": ["lib/letflow/design/iss0721-entity-event-type-seeding.md"],
     "issues": [],
     "git_evidence": {
       "branch_name": "feature/WF03-ISS0721-20260919",
-      "commit_sha_list": [],
+      "commit_sha_list": ["PENDING_FILL_AFTER_COMMIT"],
       "remote_branch": "origin/feature/WF03-ISS0721-20260919",
-      "push_status": "skipped",
+      "push_status": "pending",
       "pr_url": null,
       "pr_create_error": null
     },
-    "next_action": ""
+    "next_action": "Route to Step 2b re-gate (CODE-DESIGN-VALIDATOR)"
   },
   "rework_count": 2,
   "max_rework": 3

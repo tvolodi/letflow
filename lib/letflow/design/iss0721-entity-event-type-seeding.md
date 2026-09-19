@@ -17,6 +17,16 @@
   `lib/letflow/design/iss072-event-type-registration.md` — prior design
   precedent for this exact seed-list-plus-wiring shape.
 
+**Added for the rework-iteration-2 amendment (§6):**
+`handoffs/WF03-ISS0721-20260919/step-04c-test-runner.json` and
+`test/reports/report-20260919-WF03-ISS0721-20260919.yaml` (TEST-RUNNER's
+Step 4c FAIL and root-cause trace), `test/support/tenant_template.ex` (the
+synthetic-schema self-check call sites at lines 336/536),
+`lib/letflow/tenant_provisioning.ex`'s `schema_name_for_tenant/1` and
+`tenant_id_for_schema_name/1` moduledocs (lines 204–256), and
+`test/letflow/tenant_provisioning_event_seed_test.exs` (the two stale
+row-count assertions, lines 304/419).
+
 ## 1. Root cause (as established by ISSUE-FIXER — not re-derived here)
 
 `Letflow.Entities.EventTypes.seed!/1` (REQ-228) registers the three
@@ -172,7 +182,106 @@ Notes on this change:
   match a return value the function can already produce), not a design
   decision, so it is not further specified here.
 
-## 6. Regression test TEST-DESIGNER must write
+## 6. Amendment (rework iteration 2): the `:invalid_schema_name` carve-out
+
+**Trigger for this amendment:** TEST-RUNNER's Step 4c full-suite run
+(`test/reports/report-20260919-WF03-ISS0721-20260919.yaml`) found a real
+regression this design's §2–§5 shape introduced, traced by ORCH to a direct
+read of the code (not guessed): `test/support/tenant_template.ex` builds a
+reference/self-check schema by calling the real, unmodified
+`Letflow.TenantProvisioning.replay_migrations/2` (call sites at lines 336
+and 536) against a `Registration` whose `schema_name` is a deliberate
+non-standard literal (e.g. `"tenant_template_refcheck"`) rather than the
+canonical `"tenant_" <> <32-hex-chars>` shape `tenant_id_for_schema_name/1`
+(tenant_provisioning.ex:241-256) requires to reverse a `schema_name` back to
+a `tenant_id`. `Letflow.Entities.EventTypes.seed!/1` (event_types.ex:117-118)
+opens with `with {:ok, tenant_id} <- TenantProvisioning.tenant_id_for_schema_name(prefix) do`,
+so calling it against this synthetic schema name returns
+`{:error, :invalid_schema_name}`, which `maybe_seed_entity_event_types/2` as
+specified in §3 above normalizes to
+`{:error, {:event_type_seed_failed, :invalid_schema_name}}` — failing
+`replay_migrations/2`'s whole `with`-chain and breaking
+`test/support/tenant_template_test.exs`'s two template-self-check tests
+(`TENANT_TEMPLATE_SELF_CHECK_FAILED ... {:event_type_seed_failed, :invalid_schema_name}`).
+
+Contrast with `maybe_seed_platform_event_types/2` (§2's sibling function),
+which was never affected by this because it takes `tenant_id` directly,
+already bound in `replay_migrations/2`'s own `%Registration{tenant_id:
+tenant_id}` match — it never needs to reverse a `schema_name` at all, so
+this class of synthetic schema doesn't trip it. This carve-out is therefore
+needed for the entity clause only, not the platform clause.
+
+### 6.1 The carve-out, precisely
+
+`maybe_seed_entity_event_types/2` (§2) must **not** hard-fail
+`replay_migrations/2`'s `with`-chain when `EventTypes.seed!/1` fails
+specifically with `{:error, :invalid_schema_name}`. That one specific
+reason must be normalized to `:ok` (skip silently) instead of
+`{:error, {:event_type_seed_failed, :invalid_schema_name}}`. This amends
+§3's return-shape table as follows — §3's table's `{:error, reason} ->
+{:error, {:event_type_seed_failed, reason}}` row now has an exception
+carved out ahead of it:
+
+| `seed!/1` returns | `maybe_seed_entity_event_types/2` returns |
+|---|---|
+| `{:ok, _seed_result}` | `:ok` (unchanged from §3) |
+| `{:error, :invalid_schema_name}` | `:ok` (**new in this amendment** — skip silently) |
+| `{:error, reason}` for any other `reason` | `{:error, {:event_type_seed_failed, reason}}` (unchanged from §3) |
+
+This carve-out is narrowly scoped to the single atom `:invalid_schema_name`
+— **not** a blanket swallow-all-errors change. Every other error reason
+`seed!/1` can return (including, notably, any reason other than
+`:duplicate_event_type_version`, which §4 already establishes never
+surfaces to this function at all since `seed!/1` absorbs it internally)
+must continue to propagate as
+`{:error, {:event_type_seed_failed, reason}}` exactly as §3 originally
+specified, short-circuiting `replay_migrations/2`'s `with`-chain exactly as
+before.
+
+### 6.2 Why this carve-out is safe
+
+`schema_name_for_tenant/1`'s own moduledoc (tenant_provisioning.ex:204–210)
+states it applies the `"tenant_" <> hex` derivation uniformly, with no
+special-cased default-tenant UUID and no other lossy or divergent branch.
+Consequently **every real, production-provisioned tenant's `schema_name`
+always matches the canonical `"tenant_" <> <32-hex-chars>` pattern** —
+`tenant_id_for_schema_name/1` (the exact inverse) is total and deterministic
+over that entire domain (its own `@doc`, tenant_provisioning.ex:236–239) and
+can only return `{:error, :invalid_schema_name}` for a `schema_name` that
+was never produced by `schema_name_for_tenant/1` in the first place, i.e.
+one that does not correspond to any genuinely provisioned tenant.
+
+In this codebase, the only place a `Registration`/schema-name pair with a
+non-canonical `schema_name` is constructed at all is test support
+(`test/support/tenant_template.ex`'s synthetic reference schema) —
+deliberately, to self-check the migration-replay path against a schema that
+is not a real tenant. Such a schema has no tenant-facing entity-record write
+path to protect: nothing will ever call `Letflow.Entities.Records`'
+production write path against it, because no real tenant is ever routed to
+it (there is no `tenant_id` that reverses to it). Silently skipping the
+entity-event-type seed for a schema that can never receive a real
+entity-record write therefore loses no protection this design otherwise
+provides — the seed's entire purpose (§1) is to make real entity-record
+writes succeed on real tenants, and `:invalid_schema_name` is proof, by
+construction, that the schema in play is not one.
+
+### 6.3 Note for ELIXIR-DEV: two stale test fixture counts (mechanical, not a design change)
+
+TEST-RUNNER's Step 4c run also found `test/letflow/tenant_provisioning_event_seed_test.exs`
+carries two literal `event_type_registry` row-count assertions that predate
+this fix actually seeding entity event types on real tenants: `assert count
+== 13` (line 304) and `assert count_after_second_call == 13` (line 419) must
+become `16`, matching the 3 new `ENTITY_RECORD_*` rows (`CREATED`,
+`UPDATED`, `DELETED`) this fix now correctly seeds for every real tenant on
+top of the pre-existing 13 platform event types. This is **not** a design
+change — it is a mechanical fixture update to reflect the new, correct
+behavior this amendment (together with §2–§5) produces, and ELIXIR-DEV
+should make it as part of implementing this design. (The separate
+`count_before == 10` assertion at line 359, covering a deliberately
+pre-REQ-140 fixture state before entity seeding would even run, is
+unaffected and needs no change.)
+
+## 7. Regression test TEST-DESIGNER must write
 
 A test that:
 
@@ -213,7 +322,7 @@ A test that:
    in that assumption (e.g. if `seed!/1`'s internal duplicate-tolerance ever
    breaks) is caught here too.
 
-## 7. Open questions
+## 8. Open questions
 
 - None remaining on the `@spec` question: §5 confirms (by direct read of
   `tenant_provisioning.ex:364-371`) that `replay_migrations/2`'s existing

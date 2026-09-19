@@ -646,7 +646,28 @@ defmodule Letflow.Exam.SessionTest do
       # design §2 step 3) -- 8..13 here, regardless of seed.
       expected_manual_sort_orders = Enum.to_list(8..13)
 
-      seeds = [1, 2, 3, 5, 8, 13, 21, 34, 55, 89, 144, 233, 1_000, 7, 42, 1_337, 999_983, 2_024, 17, 64]
+      seeds = [
+        1,
+        2,
+        3,
+        5,
+        8,
+        13,
+        21,
+        34,
+        55,
+        89,
+        144,
+        233,
+        1_000,
+        7,
+        42,
+        1_337,
+        999_983,
+        2_024,
+        17,
+        64
+      ]
 
       for seed <- seeds do
         candidate_id = Ecto.UUID.generate()

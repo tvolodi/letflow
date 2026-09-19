@@ -109,3 +109,57 @@ describe('REQ-369 AC5 — OidcCallbackPage role-conditional navigation', () => {
     expect(mockNavigate).not.toHaveBeenCalledWith('/platform-dashboard', { replace: true })
   })
 })
+
+/**
+ * ISS-0726 — restore-side priority logic in OidcCallbackPage.tsx: a
+ * validated `user.state` (round-tripped through oidc-client-ts's `state`
+ * option) wins over the role-based fallback, including for PLATFORM_ADMIN.
+ * See lib/letflow/design/iss-0726-oidc-redirect-path-restore.md §3.1, §6.1
+ * and test/specs/ISS-0726.md.
+ */
+describe('ISS-0726 — OidcCallbackPage restore-priority navigation', () => {
+  it('TC-ISS0726-04: a validated user.state wins over the PROCESS_OPERATOR fallback', async () => {
+    vi.resetModules()
+    const token = fakeToken(['PROCESS_OPERATOR'])
+
+    mockSigninRedirectCallback.mockResolvedValue({ access_token: token, state: '/exam' })
+
+    const { default: OidcCallbackPage } = await import('@/pages/OidcCallbackPage')
+    render(<OidcCallbackPage />)
+
+    await waitFor(() => {
+      expect(mockNavigate).toHaveBeenCalledWith('/exam', { replace: true })
+    })
+    expect(mockNavigate).not.toHaveBeenCalledWith('/', { replace: true })
+  })
+
+  it('TC-ISS0726-05: a validated user.state wins over PLATFORM_ADMIN\'s dashboard fallback', async () => {
+    vi.resetModules()
+    const token = fakeToken(['PLATFORM_ADMIN'])
+
+    mockSigninRedirectCallback.mockResolvedValue({ access_token: token, state: '/exam' })
+
+    const { default: OidcCallbackPage } = await import('@/pages/OidcCallbackPage')
+    render(<OidcCallbackPage />)
+
+    await waitFor(() => {
+      expect(mockNavigate).toHaveBeenCalledWith('/exam', { replace: true })
+    })
+    expect(mockNavigate).not.toHaveBeenCalledWith('/platform-dashboard', { replace: true })
+  })
+
+  it('TC-ISS0726-06: an unsafe user.state (open-redirect-shaped) is rejected — falls back to role-based destination', async () => {
+    vi.resetModules()
+    const token = fakeToken(['PROCESS_OPERATOR'])
+
+    mockSigninRedirectCallback.mockResolvedValue({ access_token: token, state: '//evil.com' })
+
+    const { default: OidcCallbackPage } = await import('@/pages/OidcCallbackPage')
+    render(<OidcCallbackPage />)
+
+    await waitFor(() => {
+      expect(mockNavigate).toHaveBeenCalledWith('/', { replace: true })
+    })
+    expect(mockNavigate).not.toHaveBeenCalledWith('//evil.com', { replace: true })
+  })
+})

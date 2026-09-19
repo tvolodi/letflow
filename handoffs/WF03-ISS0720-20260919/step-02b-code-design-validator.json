@@ -1,0 +1,53 @@
+{
+  "handoff_id": "a1b2c3d4-0001-4000-8000-000000000004",
+  "run_id": "WF03-ISS0720-20260919",
+  "workflow_id": "WF-03",
+  "step": "02b",
+  "from_agent": "ORCH",
+  "to_agent": "CODE-DESIGN-VALIDATOR",
+  "file": "handoffs/WF03-ISS0720-20260919/step-02b-code-design-validator.json",
+  "created_at": "2026-09-19T03:36:31Z",
+  "started_at": "2026-09-19T03:36:31Z",
+  "completed_at": null,
+  "status": "PENDING",
+  "priority": "HIGH",
+  "context": {
+    "stage": "S7",
+    "requirement_ids": [],
+    "requirement_text": {},
+    "source_text": {},
+    "related_handoff_ids": [],
+    "artifacts_in": [
+      "lib/letflow/design/iss0720-tenant-config-stale-issuer-key.md",
+      "docs/issues/ISS-0720.yaml",
+      "lib/letflow/routers/tenant_config.ex"
+    ],
+    "owned_modules": ["lib/letflow/routers/tenant_config.ex"]
+  },
+  "task": {
+    "description": "git checkout feature/WF03-ISS0720-20260919 first. Independently gate lib/letflow/design/iss0720-tenant-config-stale-issuer-key.md against this project's standard design-validator checklist (per your own role file). In particular verify: (a) every acceptance criterion in the originating diagnosis is covered; (b) no implementation code bodies are present; (c) the :keycloak_base_url rename and removal of the /realms/ stripping logic are both stated explicitly and correctly against the real config/runtime.exs, config/dev.exs, config/test.exs shapes -- verify these yourself by reading the config files directly, do not trust the design doc's claim; (d) the localhost-default fallback decision is genuinely justified (not asserted) and internally consistent with the endpoint's own moduledoc 'never-error' rule -- confirm the design doc's own reasoning about WHY that rule doesn't govern this config-resolution path actually holds up against a direct re-read of the moduledoc; (e) the chosen mechanism (Application.compile_env with a new :allow_localhost_idp_fallback flag) is actually a correct, buildable mechanism for scoping dev/test-only behavior in an Elixir release -- verify against how this project's existing config/dev.exs, config/test.exs, config/prod.exs, config/runtime.exs actually set config today, since a compile-time attribute defaulting to false must actually be overridden to true in dev.exs/test.exs for the fallback to still work there, and the design doc must specify that config addition too, not just the tenant_config.ex-side logic.",
+    "acceptance_criteria": [
+      "PASS or FAIL verdict stated with specific reasoning per check (a)-(e) above, not a general impression",
+      "If FAIL: every gap named with the specific missing/wrong design element",
+      "Independently confirmed (not trusted) that keycloak_base_url is the correct, currently-set key across config/runtime.exs, config/dev.exs, config/test.exs, config/prod.exs",
+      "Independently confirmed the compile_env-based dev/test scoping mechanism is complete (covers both the tenant_config.ex read side AND the config/dev.exs+test.exs write side needed to preserve today's local-dev behavior)"
+    ]
+  },
+  "result": {
+    "status": "BLOCKED",
+    "summary": "",
+    "artifacts_out": [],
+    "issues": [],
+    "git_evidence": {
+      "branch_name": null,
+      "commit_sha_list": [],
+      "remote_branch": null,
+      "push_status": "skipped",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": ""
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

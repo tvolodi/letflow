@@ -8,8 +8,8 @@
   "file": "handoffs/WF03-ISS0721-20260919/step-02b-code-design-validator.json",
   "created_at": "2026-09-19T06:42:31Z",
   "started_at": "2026-09-19T06:42:31Z",
-  "completed_at": null,
-  "status": "PENDING",
+  "completed_at": "2026-09-19T06:44:15Z",
+  "status": "COMPLETED",
   "priority": "NORMAL",
   "context": {
     "stage": null,
@@ -36,10 +36,13 @@
     ]
   },
   "result": {
-    "status": "PASS",
-    "summary": "",
+    "status": "FAIL",
+    "summary": "Read lib/letflow/design/iss0721-entity-event-type-seeding.md directly (not CODE-DESIGNER's handoff summary), plus event_types.ex's and tenant_provisioning.ex's actual bodies. 5 of 6 gate checks pass; 1 BLOCKER: section 5 embeds a real, copy-pasteable Elixir `with`-chain as the fix's 'New' code, which is an implementation-code body, not a signature/shape -- and this project's own cited precedent (iss072-event-type-registration.md section 2.1, which THIS design lists in its own section 0 'Sources read') deliberately avoided exactly this by describing the control-flow change in prose ('described here as the required control-flow shape, not as code; ELIXIR-DEV chooses the exact construct'). Section 2's `@spec` block is fine (spec, not a body) and its two clauses are described in prose, matching the precedent's style -- section 5 is the sole violation, but it is decisive under check (4)'s 'no .ex implementation code bodies -- signatures and type shapes only' with no partial credit. Independently verified findings on the other checks: (1) PASS -- every element of ISSUE-FIXER's step-01 'WHAT A FIX NEEDS TO CHANGE' (new function, call-site line ~390, exact schema_name argument, ok/error normalization) traces to a concrete design section (2, 3, 4, 5 respectively), cited by section number in the design's own section 0. (2) PASS -- idempotency claim independently re-verified against event_types.ex:117-140's actual body (not copied from the design's own assertion): the `Enum.reduce_while/3` in `seed!/1` does catch `{:error, :duplicate_event_type_version}` per event-type and folds it into `skipped` while still returning `{:ok, seed_result()}` -- matches section 4's claim exactly. (3) FAIL, see above -- section 5's 'New' with-chain block. (5) PASS, and independently resolved rather than just checked for presence: I read replay_migrations/2's actual `@spec` (tenant_provisioning.ex:364-371) myself -- it lists only `{:error, :tenant_not_provisioned}` and `{:error, {:migration_failed, Exception.t()}}`, NOT `{:error, {:event_type_seed_failed, term()}}`, even though the sibling `maybe_seed_platform_event_types/2` call already wired into the with-chain today already produces that exact error shape. So the design's speculative framing in section 7 ('it should, if ISS-0072's own fix updated it identically') is answered, and answered in the direction the design did not assume: the @spec does NOT already cover it, so ELIXIR-DEV needs a concrete one-line @spec addition, not just a 'check and see.' The design's own text already tells ELIXIR-DEV to add it if missing (mechanical, not a design decision), which is enough to satisfy this run's acceptance criterion 5 on its own terms ('resolved or explicitly left as a mechanical note ... not silently dropped') -- flagging this only so CODE-DESIGNER can tighten section 7's wording to state the confirmed fact instead of the open conditional, while reworking the section 5 BLOCKER. (4/no-TBD) PASS -- no deferral/TBD language found via read-through; the one open item (spec coverage) is explicitly named, not silently dropped. (6) PASS -- section 6's regression-test spec is concrete and actionable: real provisioning path with no manual seed!/1 call, a real entity-record write asserted to succeed (not just Registry.get_type/2), an explicit fail-on-pre-fix-code requirement naming the exact {:error, :unknown_event_type} reproduction, and a second-call idempotency assertion -- satisfies WF-03's fail-then-pass rule.",
     "artifacts_out": [],
-    "issues": [],
+    "issues": [
+      {"severity": "BLOCKER", "description": "lib/letflow/design/iss0721-entity-event-type-seeding.md section 5's 'New' code fence (lines ~123-128) is a real, directly-pasteable Elixir with-chain -- implementation code, not a signature/shape, in violation of this gate's check 4. Rework: replace the fenced 'New' code block with a prose description of the required control-flow shape (a second `:ok <-` clause added to the existing with-chain, calling maybe_seed_entity_event_types/2 with the same using_default_manifest? gate and schema_name), mirroring this design's own cited precedent lib/letflow/design/iss072-event-type-registration.md section 2.1, which states the equivalent change as prose explicitly labelled 'described here as the required control-flow shape, not as code; ELIXIR-DEV chooses the exact construct.' The 'Current' code fence quoting the existing, already-shipped with-chain for context is not itself a problem and may stay.", "affected_requirement": "REQ-228"},
+      {"severity": "MINOR", "description": "Section 7's open question is phrased as an unresolved conditional ('it should, if ISS-0072's own fix updated it identically') when the actual answer is directly checkable and, checked here, is 'no': replay_migrations/2's @spec (tenant_provisioning.ex:364-371) does not list {:error, {:event_type_seed_failed, term()}} today. Not a BLOCKER on its own (this run's acceptance criterion 5 permits leaving this as an explicit mechanical note), but tighten the wording while reworking the section 5 BLOCKER so ELIXIR-DEV is told the fact, not sent to go check it.", "affected_requirement": "REQ-228"}
+    ],
     "git_evidence": {
       "branch_name": "feature/WF03-ISS0721-20260919",
       "commit_sha_list": [],
@@ -48,7 +51,7 @@
       "pr_url": null,
       "pr_create_error": null
     },
-    "next_action": ""
+    "next_action": "Rework CODE-DESIGNER -- 1 BLOCKER above (section 5's with-chain must be prose, matching iss072 precedent's convention), plus 1 MINOR (tighten section 7 wording with the now-confirmed @spec-gap fact) -- rework iteration 1 of 3"
   },
   "rework_count": 0,
   "max_rework": 3

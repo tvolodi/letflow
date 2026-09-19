@@ -8,8 +8,8 @@
   "file": "handoffs/WF03-ISS0721-20260919/step-03-elixir-dev-rework1.json",
   "created_at": "2026-09-19T07:55:42Z",
   "started_at": "2026-09-19T07:55:42Z",
-  "completed_at": null,
-  "status": "PENDING",
+  "completed_at": "2026-09-19T08:00:24Z",
+  "status": "COMPLETED",
   "priority": "NORMAL",
   "context": {
     "stage": null,
@@ -37,9 +37,14 @@
   },
   "result": {
     "status": "PASS",
-    "summary": "",
-    "artifacts_out": [],
-    "issues": [],
+    "summary": "Both rework changes implemented per design §6. (1) lib/letflow/tenant_provisioning.ex: maybe_seed_entity_event_types/2 now matches {:error, :invalid_schema_name} -> :ok ahead of the general {:error, reason} -> {:error, {:event_type_seed_failed, reason}} clause, which is otherwise unchanged -- every other error reason still propagates exactly as before. (2) test/letflow/tenant_provisioning_event_seed_test.exs: the two named stale counts (line ~304 `count == 13`, line ~419 `count_after_second_call == 13`) updated to 16 (13 platform + 3 ISS-0721 ENTITY_RECORD_* types), confirmed correct by reading surrounding context. DEVIATION beyond the two named changes, disclosed for gate review: running the full two-file suite after the above surfaced that a THIRD assertion in the same test file, in the 'REQ-140 AC12' test, was also stale and NOT covered by the design's §6.3 claim that `count_before == 10` (line ~359) is 'unaffected and needs no change' -- that claim assumed entity-type seeding wouldn't apply there, but the test's own provisioned_tenant() helper uses the default manifest, so all 3 ENTITY_RECORD_* rows ARE seeded for that tenant too; after that test deletes the 3 REQ-140 platform rows the true pre-backfill count is 16-3=13, not 10. Left unfixed, this assertion fails with `left: 13, right: 10`. I corrected it to `count_before == 13` and, for the same reason, added the 3 ENTITY_RECORD_* names to the `names_after_backfill` expected-list assertion further down in the same test (Repo.all(EventType) returns all registry rows, entity types included, so the pre-existing 13-name expected list was incomplete once entity types are always seeded). Both are mechanical fixture corrections in the same owned test file, not a design change, and not touching any file outside owned_modules -- flagging explicitly since they go beyond the two locations the task named. mix compile: clean, no warnings/errors. mix test test/support/tenant_template_test.exs test/letflow/tenant_provisioning_event_seed_test.exs: `Finished in 24.5 seconds (0.00s async, 24.5s sync)` / `Result: 16 passed` -- 0 failures, real DB-backed run (no --exclude), all previously-failing tests (TENANT_TEMPLATE_SELF_CHECK_FAILED x2, the two stale-count tests, and the newly-surfaced count_before/names_after_backfill assertions) now green.",
+    "artifacts_out": [
+      "lib/letflow/tenant_provisioning.ex",
+      "test/letflow/tenant_provisioning_event_seed_test.exs"
+    ],
+    "issues": [
+      "design §6.3's claim that test/letflow/tenant_provisioning_event_seed_test.exs's count_before == 10 assertion (REQ-140 AC12 test) is unaffected was incorrect -- that tenant is also provisioned via the default manifest, so entity-type seeding applies to it too; corrected to 13, and the related names_after_backfill list extended with the 3 ENTITY_RECORD_* names. Flagging for CODE-DESIGNER/CODE-DESIGN-VALIDATOR awareness even though no further design action is needed -- the fix is mechanical and self-contained in the already-owned test file."
+    ],
     "git_evidence": {
       "branch_name": "feature/WF03-ISS0721-20260919",
       "commit_sha_list": [],
@@ -48,7 +53,7 @@
       "pr_url": null,
       "pr_create_error": null
     },
-    "next_action": ""
+    "next_action": "Route to Step 3b re-gate (SECURITY-REVIEWER)"
   },
   "rework_count": 1,
   "max_rework": 3

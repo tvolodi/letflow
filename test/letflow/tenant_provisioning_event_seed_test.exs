@@ -300,8 +300,10 @@ defmodule Letflow.TenantProvisioningEventSeedTest do
 
       # REQ-215 (lib/letflow/design/req215-service-task-engine-wiring.md §3.2)
       # added SERVICE_TASK_COMPLETED to @platform_event_type_seed_attrs,
-      # raising the seeded total from 12 to 13.
-      assert count == 13
+      # raising the seeded total from 12 to 13. ISS-0721
+      # (lib/letflow/design/iss0721-entity-event-type-seeding.md) adds the 3
+      # ENTITY_RECORD_* types on top of that, raising the total to 16.
+      assert count == 16
 
       # And the seeded types are still all usable after the re-seed no-op.
       attrs = append_attrs("TASK_COMPLETED", minimal_payload_for("TASK_COMPLETED"))
@@ -356,7 +358,12 @@ defmodule Letflow.TenantProvisioningEventSeedTest do
       count_before =
         Repo.aggregate(EventType, :count, prefix: schema_name)
 
-      assert count_before == 10
+      # ISS-0721 (lib/letflow/design/iss0721-entity-event-type-seeding.md)
+      # now seeds the 3 ENTITY_RECORD_* types unconditionally for every real
+      # tenant at provisioning time, so the pre-REQ-140 (6-row) state
+      # reproduced above by deleting the 3 REQ-140 rows leaves 13 rows here
+      # (16 total - 3 deleted), not 10.
+      assert count_before == 13
 
       # First replay_migrations/2 call after the simulated pre-existing state --
       # backfills the 3 missing rows.
@@ -382,7 +389,14 @@ defmodule Letflow.TenantProvisioningEventSeedTest do
                  "TIMER_FIRED",
                  "SERVICE_TASK_COMPLETED",
                  "effect_applied",
-                 "ordering_lag_threshold_exceeded"
+                 "ordering_lag_threshold_exceeded",
+                 # ISS-0721: the 3 ENTITY_RECORD_* types are seeded
+                 # unconditionally alongside the platform types and were
+                 # never deleted by this test's req140_types delete, so they
+                 # are present both before and after the backfill.
+                 "ENTITY_RECORD_CREATED",
+                 "ENTITY_RECORD_UPDATED",
+                 "ENTITY_RECORD_DELETED"
                ])
 
       # The 3 backfilled types are usable via append_platform_event/2 --
@@ -410,13 +424,14 @@ defmodule Letflow.TenantProvisioningEventSeedTest do
       assert event.event_type == "DEFINITION_PROMOTED"
 
       # Second replay_migrations/2 call: a no-op, still returns success, and
-      # does NOT duplicate any of the 13 rows.
+      # does NOT duplicate any of the 16 rows (13 platform + 3 ISS-0721
+      # ENTITY_RECORD_* entity types).
       assert {:ok, _applied_versions} = TenantProvisioning.replay_migrations(tenant_id)
 
       count_after_second_call =
         Repo.aggregate(EventType, :count, prefix: schema_name)
 
-      assert count_after_second_call == 13
+      assert count_after_second_call == 16
     end
   end
 end

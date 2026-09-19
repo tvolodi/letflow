@@ -1095,6 +1095,12 @@ defmodule Letflow.TenantProvisioning do
   defp maybe_seed_entity_event_types(true, schema_name) do
     case Letflow.Entities.EventTypes.seed!(schema_name) do
       {:ok, _seed_result} -> :ok
+      # Carve-out (design §6): a schema_name that doesn't reverse to a real
+      # tenant_id (e.g. test/support/tenant_template.ex's synthetic
+      # self-check schema) has no tenant-facing entity-record write path to
+      # protect -- skip silently rather than failing replay_migrations/2's
+      # with-chain for a schema no real tenant is ever routed to.
+      {:error, :invalid_schema_name} -> :ok
       {:error, reason} -> {:error, {:event_type_seed_failed, reason}}
     end
   end

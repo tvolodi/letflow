@@ -1,0 +1,48 @@
+{
+  "handoff_id": "wf03-iss0721-step00-retry1",
+  "run_id": "WF03-ISS0721-20260919",
+  "workflow_id": "WF-03",
+  "step": "00",
+  "from_agent": "ORCH",
+  "to_agent": "ELIXIR-DEV",
+  "file": "handoffs/WF03-ISS0721-20260919/step-00-git-setup-retry1.json",
+  "created_at": "2026-09-19T06:36:27Z",
+  "started_at": "2026-09-19T06:36:27Z",
+  "completed_at": null,
+  "status": "PENDING",
+  "priority": "NORMAL",
+  "context": {
+    "stage": null,
+    "requirement_ids": ["REQ-228"],
+    "requirement_text": {},
+    "source_text": {},
+    "related_handoff_ids": ["wf03-iss0721-step00"],
+    "artifacts_in": ["docs/issues/ISS-0721.yaml", "docs/agents/protocols/GIT_SETUP.md", "handoffs/WF03-ISS0721-20260919/step-00-git-setup.json"],
+    "owned_modules": ["lib/letflow/tenant_provisioning.ex", "lib/letflow/entities/event_types.ex"]
+  },
+  "task": {
+    "description": "Retry of Step 00 (git setup) for ISS-0721/run WF03-ISS0721-20260919. Not rework of your prior attempt -- you correctly stopped per GIT_SETUP.md step 2 when git pull --ff-only failed with local/origin main diverged (your own step-00-git-setup.json FAIL is the correct record of that; rework_count on this run stays 0, per ORCHESTRATOR.md's rule that only a REJECTED-work verdict counts as rework, not an infra block). ORCH has since resolved the divergence directly: fetched origin/main, confirmed the 3 local-only commits were all in handoffs/ (no overlap with origin's new commit which only touched docs/issues/ISS-0724.yaml), rebased cleanly (git rebase origin/main, no conflicts), and pushed -- local and origin main are now both at 05802cea. Re-run GIT_SETUP.md's full procedure now from a clean, reconciled main: git checkout main, git pull --ff-only origin main (should now be a no-op/success), create+checkout branch feature/WF03-ISS0721-20260919, push -u origin feature/WF03-ISS0721-20260919. Claim this handoff by setting status to IN_PROGRESS only.",
+    "acceptance_criteria": [
+      "git pull --ff-only exited 0",
+      "git branch --show-current outputs feature/WF03-ISS0721-20260919",
+      "git push -u origin feature/WF03-ISS0721-20260919 exited 0"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "",
+    "artifacts_out": [],
+    "issues": [],
+    "git_evidence": {
+      "branch_name": null,
+      "commit_sha_list": [],
+      "remote_branch": null,
+      "push_status": "skipped",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": ""
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

@@ -1,0 +1,53 @@
+{
+  "handoff_id": "wf03-iss0721-step00",
+  "run_id": "WF03-ISS0721-20260919",
+  "workflow_id": "WF-03",
+  "step": "00",
+  "from_agent": "ORCH",
+  "to_agent": "ELIXIR-DEV",
+  "file": "handoffs/WF03-ISS0721-20260919/step-00-git-setup.json",
+  "created_at": "2026-09-19T06:34:25Z",
+  "started_at": "2026-09-19T06:34:25Z",
+  "completed_at": "2026-09-19T06:41:00Z",
+  "status": "FAILED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": null,
+    "requirement_ids": ["REQ-228"],
+    "requirement_text": {},
+    "source_text": {},
+    "related_handoff_ids": [],
+    "artifacts_in": ["docs/issues/ISS-0721.yaml", "docs/agents/protocols/GIT_SETUP.md"],
+    "owned_modules": ["lib/letflow/tenant_provisioning.ex", "lib/letflow/entities/event_types.ex"]
+  },
+  "task": {
+    "description": "WF-03 Step 00 (git setup) for ISS-0721 (queue task Q-720, GH#1554). Follow docs/agents/protocols/GIT_SETUP.md exactly: git checkout main, git pull --ff-only origin main, create+checkout branch feature/WF03-ISS0721-20260919, push -u origin feature/WF03-ISS0721-20260919. Claim this handoff by setting status to IN_PROGRESS only.",
+    "acceptance_criteria": [
+      "git pull --ff-only exited 0",
+      "git branch --show-current outputs feature/WF03-ISS0721-20260919",
+      "git push -u origin feature/WF03-ISS0721-20260919 exited 0"
+    ]
+  },
+  "result": {
+    "status": "FAIL",
+    "summary": "Followed GIT_SETUP.md exactly. git worktree list showed a single entry (no secondary worktree) so the standard (non-worktree) procedure applied. Step 1 `git checkout main` succeeded (already on main). Step 2 `git pull --ff-only origin main` FAILED: 'fatal: Not possible to fast-forward, aborting.' `git status` confirms local main and origin/main have diverged, 1 commit each: local main carries unpushed commit 11353e57 (\"handoff(WF03-ISS0721): dispatch Step 00 git-setup to ELIXIR-DEV\", the ORCH dispatch commit that created this very handoff file locally without pushing it), while origin/main carries commit c47f316a (\"docs(issues): register ISS-0724, REVIEWER's incidental finding on PR #1564 (#1566)\") that local does not have. Per GIT_SETUP.md step 2 this is a hard STOP -- did not attempt merge/rebase myself. No branch was created and nothing was pushed; local main was left as-is (still on main, diverged, with only this handoff file's IN_PROGRESS-then-FAILED edit as a working-tree change).",
+    "artifacts_out": [],
+    "issues": [
+      {
+        "severity": "BLOCKER",
+        "description": "local main has diverged from origin -- needs resolution before any run can branch from it. Local main is ahead by unpushed commit 11353e57 (the ORCH dispatch commit for this very run, created locally but never pushed) while origin/main is ahead by commit c47f316a (docs(issues): register ISS-0724, PR #1566, unrelated docs/issues change) that local never fetched/merged. This blocks every future run branching from main, not just WF03-ISS0721-20260919 -- ORCH must resolve (e.g. push 11353e57 first if it is meant to land, or merge/rebase local main onto origin/main) before Step 00 can be retried for this or any other run."
+      }
+    ],
+    "git_evidence": {
+      "branch_name": null,
+      "commit_sha_list": [],
+      "remote_branch": null,
+      "push_status": "skipped",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": "ORCH must resolve the main-branch divergence (local unpushed commit 11353e57 vs origin commit c47f316a) before this or any run can proceed past Step 00. Do not route to Step 0.5/1 until main is reconciled and this step is retried successfully."
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

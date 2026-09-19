@@ -168,6 +168,21 @@ defmodule Letflow.Routers.TenantConfig do
   @default_client_id "letflow-web"
   @default_realm "bpm-default"
 
+  # ISS-0720 (design lib/letflow/design/iss0720-tenant-config-stale-issuer-key.md
+  # §2.2): mirrors Letflow.Repository.Activation's
+  # @activation_test_hooks_enabled? shape exactly -- resolved once at compile
+  # time via Application.compile_env/3, defaulting false, never a runtime
+  # Mix.env() check (unavailable in a compiled release). Only
+  # config/dev.exs and config/test.exs set this true; config/prod.exs and
+  # config/runtime.exs add nothing, so the false default holds everywhere
+  # else and idp_base_url/0's final fallback clause raises instead of
+  # silently serving @default_idp_base_url.
+  @allow_localhost_idp_fallback? Application.compile_env(
+                                   :letflow,
+                                   :allow_localhost_idp_fallback,
+                                   false
+                                 )
+
   # ── Branding platform defaults (REQ-281) ──────────────────────────────────
   #
   # Endpoint-local, independent from Letflow.Routers.MobileTenantConfig's own
@@ -312,16 +327,35 @@ defmodule Letflow.Routers.TenantConfig do
   defp idp_base_url do
     System.get_env("BPM_IDP_BASE_URL") || System.get_env("KEYCLOAK_BASE_URL") ||
       oidc_issuer_base() ||
-      @default_idp_base_url
+      default_idp_base_url!()
   end
 
-  # Derive the IDP base URL from the compiled :oidc issuer, which is already
-  # set correctly via config/keycloak_port.exs for every workspace.
-  defp oidc_issuer_base do
-    case Application.get_env(:letflow, :oidc, [])[:issuer] do
-      nil -> nil
-      issuer -> issuer |> String.split("/realms/") |> List.first()
+  # ISS-0720 §2.2/§2.3: the compiled-in localhost default is only ever
+  # returned in dev/test (@allow_localhost_idp_fallback? true there). Every
+  # other environment raises at call time rather than silently serving
+  # localhost:8082 as a plausible-looking 200 -- see the design doc's
+  # reckoning with this module's moduledoc "never error to the caller" rule,
+  # which is scoped to the realm/tenant-resolution branch, not this one.
+  defp default_idp_base_url! do
+    if @allow_localhost_idp_fallback? do
+      @default_idp_base_url
+    else
+      raise "Letflow.Routers.TenantConfig: no IDP base URL resolved -- " <>
+              "BPM_IDP_BASE_URL and KEYCLOAK_BASE_URL are both unset and " <>
+              ":letflow, :oidc, :keycloak_base_url is not configured. Refusing " <>
+              "to fall back to the dev-only default (#{@default_idp_base_url}); " <>
+              "set one of the above."
     end
+  end
+
+  # Derive the IDP base URL from the compiled :oidc config's
+  # :keycloak_base_url, which is already a bare base URL (no /realms/...
+  # suffix -- REQ-370 retired the old :issuer key, which was a full issuer
+  # URL and needed the now-removed String.split/List.first stripping to
+  # recover the bare host). See design lib/letflow/design/
+  # iss0720-tenant-config-stale-issuer-key.md §1.
+  defp oidc_issuer_base do
+    Application.get_env(:letflow, :oidc, [])[:keycloak_base_url]
   end
 
   defp client_id, do: System.get_env("OIDC_CLIENT_ID") || @default_client_id

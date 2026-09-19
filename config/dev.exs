@@ -97,6 +97,14 @@ config :letflow, :oidc,
   # https-only validation must be relaxed here. Not set in config/prod.exs.
   allow_unsafe_http: true
 
+# ISS-0720 (design lib/letflow/design/iss0720-tenant-config-stale-issuer-key.md
+# §2.2): opts dev into Letflow.Routers.TenantConfig's compiled-in
+# localhost:8082 fallback, mirroring activation_test_hooks_enabled?'s
+# dev/test-only-opt-in shape. Not set in config/prod.exs or
+# config/runtime.exs, so the false default holds there and the router raises
+# instead of silently serving a localhost URL.
+config :letflow, :allow_localhost_idp_fallback, true
+
 # Per-realm claim-path configuration for Letflow.Oidc.ClaimMapping — distinct
 # from the :oidc key above (that one is REQ-016's provider-worker-startup
 # config, consumed by Letflow.Application; this one is REQ-017's claim-mapping

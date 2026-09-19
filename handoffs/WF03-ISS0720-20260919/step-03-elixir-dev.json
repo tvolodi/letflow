@@ -1,0 +1,61 @@
+{
+  "handoff_id": "a1b2c3d4-0001-4000-8000-000000000005",
+  "run_id": "WF03-ISS0720-20260919",
+  "workflow_id": "WF-03",
+  "step": "03",
+  "from_agent": "ORCH",
+  "to_agent": "ELIXIR-DEV",
+  "file": "handoffs/WF03-ISS0720-20260919/step-03-elixir-dev.json",
+  "created_at": "2026-09-19T03:38:04Z",
+  "started_at": "2026-09-19T03:38:04Z",
+  "completed_at": "2026-09-19T03:40:46Z",
+  "status": "COMPLETED",
+  "priority": "HIGH",
+  "context": {
+    "stage": "S7",
+    "requirement_ids": [],
+    "requirement_text": {},
+    "source_text": {},
+    "related_handoff_ids": [],
+    "artifacts_in": [
+      "lib/letflow/design/iss0720-tenant-config-stale-issuer-key.md",
+      "lib/letflow/routers/tenant_config.ex",
+      "config/dev.exs",
+      "config/test.exs",
+      "lib/letflow/activation.ex"
+    ],
+    "owned_modules": ["lib/letflow/routers/tenant_config.ex", "config/dev.exs", "config/test.exs"]
+  },
+  "task": {
+    "description": "git checkout feature/WF03-ISS0720-20260919 first. Implement the PASSed design at lib/letflow/design/iss0720-tenant-config-stale-issuer-key.md exactly -- read it in full before writing any code. This changes lib/letflow/routers/tenant_config.ex's oidc_issuer_base/0 to read :keycloak_base_url instead of the retired :issuer key (removing the now-unnecessary /realms/ stripping), and scopes @default_idp_base_url's localhost fallback to dev/test only via a new Application.compile_env(:letflow, :oidc)[:allow_localhost_idp_fallback] (or however the design doc names it exactly -- follow the design doc's naming, not this paraphrase) with config/dev.exs and config/test.exs both setting it true, and every other environment failing loudly (per the design doc's exact specified failure mechanism) when no real base URL resolves. Run `mix compile --warnings-as-errors` and `mix format` on the touched files. Run the existing targeted test file(s) covering tenant_config.ex (find them: `grep -rl tenant_config test/`) to confirm nothing existing regresses -- note any pre-existing unrelated failures explicitly rather than silently absorbing them into this step's result.",
+    "acceptance_criteria": [
+      "lib/letflow/routers/tenant_config.ex's oidc_issuer_base/0 reads :keycloak_base_url, never :issuer, and no longer does /realms/ string-splitting",
+      "config/dev.exs and config/test.exs both set the new flag so local dev/test behavior (falling back to the compiled localhost default) is unchanged from before this fix",
+      "Every other environment (no flag, or flag false/absent) fails loudly per the design doc's specified mechanism instead of silently serving localhost:8082",
+      "mix compile --warnings-as-errors clean on the touched files",
+      "mix format clean (git diff shows no formatting-only changes needed)",
+      "Existing tenant_config.ex-covering tests re-run and pass (or pre-existing unrelated failures explicitly named, not silently absorbed)"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "Implemented per lib/letflow/design/iss0720-tenant-config-stale-issuer-key.md exactly. (1) tenant_config.ex: oidc_issuer_base/0 now reads Application.get_env(:letflow, :oidc, [])[:keycloak_base_url] directly (no /realms/ String.split/List.first stripping -- keycloak_base_url is already a bare base URL, design §1). (2) Added @allow_localhost_idp_fallback? = Application.compile_env(:letflow, :allow_localhost_idp_fallback, false), mirroring Letflow.Repository.Activation's @activation_test_hooks_enabled? compile-time-attribute shape exactly (design §2.2). idp_base_url/0's final clause now calls default_idp_base_url!/0: returns @default_idp_base_url when the flag is true (dev/test), else raises a RuntimeError naming the missing BPM_IDP_BASE_URL/KEYCLOAK_BASE_URL/:keycloak_base_url resolution chain (design §2.3's call-time-raise decision, explicitly scoped away from the moduledoc's never-error rule which covers only the realm/tenant-resolution branch). (3) config/dev.exs and config/test.exs each add `config :letflow, :allow_localhost_idp_fallback, true` right after their :oidc block; config/prod.exs and config/runtime.exs untouched (false default holds, per design §2.2 and §5 OQ-1's explicit out-of-scope call on runtime.exs's own placeholder fallback). Verification, actual command output: `mix compile --warnings-as-errors` -> 'Compiling 247 files (.ex)\\nGenerated letflow app' (clean, zero warnings). `mix format --check-formatted lib/letflow/routers/tenant_config.ex config/dev.exs config/test.exs` -> no output, exit clean (git diff on tenant_config.ex shows only the intended attribute-alignment reformatting from mix format itself, no other formatting-only changes). Targeted tests (found via `grep -rl tenant_config test/`): `mix test test/letflow/routers/tenant_config_test.exs test/letflow/routers/mobile_tenant_config_test.exs test/letflow/routers/req078_supporting_routes_test.exs` -> 'Finished in 19.5 seconds ... Result: 51 passed' (zero failures). Also ran the other two tenant_config-referencing suites for extra coverage: `mix test test/letflow/api/authorization_enforcement_test.exs test/letflow/simulation/req207_vortex_test.exs` -> 'Finished in 7.0 seconds ... Result: 20 passed' (zero failures). No pre-existing unrelated failures encountered in any run. Design's §5 open question 3 (raise-branch testability under compile-time Application.compile_env/3) is left for TEST-DESIGNER per the design doc, not resolved here.",
+    "artifacts_out": [
+      "lib/letflow/routers/tenant_config.ex",
+      "config/dev.exs",
+      "config/test.exs"
+    ],
+    "issues": [],
+    "git_evidence": {
+      "branch_name": "feature/WF03-ISS0720-20260919",
+      "commit_sha_list": [],
+      "remote_branch": null,
+      "push_status": "skipped",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": "Route to Step 3b (SECURITY-REVIEWER)"
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

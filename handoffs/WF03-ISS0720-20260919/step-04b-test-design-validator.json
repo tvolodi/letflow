@@ -1,0 +1,54 @@
+{
+  "handoff_id": "a1b2c3d4-0001-4000-8000-000000000009",
+  "run_id": "WF03-ISS0720-20260919",
+  "workflow_id": "WF-03",
+  "step": "04b",
+  "from_agent": "ORCH",
+  "to_agent": "TEST-DESIGN-VALIDATOR",
+  "file": "handoffs/WF03-ISS0720-20260919/step-04b-test-design-validator.json",
+  "created_at": "2026-09-19T03:57:49Z",
+  "started_at": "2026-09-19T03:57:49Z",
+  "completed_at": "2026-09-19T03:59:58Z",
+  "status": "COMPLETED",
+  "priority": "HIGH",
+  "context": {
+    "stage": "S7",
+    "requirement_ids": [],
+    "requirement_text": {},
+    "source_text": {},
+    "related_handoff_ids": [],
+    "artifacts_in": [
+      "test/letflow/routers/tenant_config_test.exs",
+      "test/specs/ISS-0720.md",
+      "handoffs/WF03-ISS0720-20260919/step-04-test-designer.json",
+      "lib/letflow/routers/tenant_config.ex"
+    ],
+    "owned_modules": ["test/letflow/routers/tenant_config_test.exs"]
+  },
+  "task": {
+    "description": "git checkout feature/WF03-ISS0720-20260919 first. Hard gate on TEST-DESIGNER's new ISS-0720 test. TEST-DESIGNER reports a fail-then-pass proof obtained by swapping tenant_config.ex for its pre-fix content (git show 1fd89bb1:lib/letflow/routers/tenant_config.ex), rerunning, then restoring. INDEPENDENTLY REPRODUCE this yourself -- do not accept the reported 10/11 -> 11/11 counts as given. Also verify: the test correctly cleans up Application.put_env/System.get_env state (no leakage into other tests -- run the full test/letflow/routers/tenant_config_test.exs file at least twice in a row to confirm no ordering-dependent leakage), the new test's assertion is specific enough that it could not spuriously pass (i.e. it would also fail if the fix were subtly wrong, e.g. if the fix forgot to strip a stray character), and the compile-time-raise-path-not-testable claim is a genuine structural limitation, not a shortcut (confirm Application.compile_env/3's behavior yourself if you are not certain).",
+    "acceptance_criteria": [
+      "Independently reproduced the fail-then-pass proof (swap to pre-fix tenant_config.ex, rerun, confirm FAIL; restore, rerun, confirm PASS) and reports what you found, not what TEST-DESIGNER reported",
+      "Confirms working tree is byte-identical to pre-swap state after your own revert, verified via git diff",
+      "Confirms no test-state leakage across repeated runs",
+      "Confirms the compile-time raise-path testability gap is genuine, not a shortcut"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "Independently reproduced all four required checks, not just accepted TEST-DESIGNER's reported counts. (1) FAIL-THEN-PASS PROOF, self-executed: post-fix baseline `mix test test/letflow/routers/tenant_config_test.exs` -> 'Result: 11 passed'. Confirmed via `git log --oneline` that 1fd89bb1 is the direct parent of fix commit dbcc89e2 (git log shows dbcc89e2 -> 1fd89bb1 -> a0136662). Swapped lib/letflow/routers/tenant_config.ex to `git show 1fd89bb1:lib/letflow/routers/tenant_config.ex` myself, reran -> 'Result: 10/11 passed', sole failure was the ISS-0720 test at test/letflow/routers/tenant_config_test.exs:362, with output byte-identical to what the spec quotes: 'Expected truthy, got false ... # 1 \"http://localhost:8082/realms/bpm-default\" # 2 \"https://iss0720-regression-test-authority.example/realms/\"'. Restored the post-fix file from my own pre-swap backup copy; `git diff lib/letflow/routers/tenant_config.ex` came back empty (byte-identical restore, confirmed by me, not assumed); reran -> 'Result: 11 passed' twice more (with a different --seed on one run) to rule out ordering flukes. (2) WORKING TREE STATE: after my own revert, `git diff lib/letflow/routers/tenant_config.ex` is empty and `git status --porcelain` shows only the handoff JSON I am editing as modified -- lib/ and test/ are clean. (3) NO TEST-STATE LEAKAGE: ran the full tenant_config_test.exs file three times in a row post-restore (default seed, then a second default-seed run, then --seed 12345) -- 'Result: 11 passed' every time, no flakiness, confirming the Application.put_env/on_exit cleanup in the ISS-0720 test does not leak into the file's other 10 tests or across repeated runs. (4) ASSERTION SPECIFICITY (mutation check, self-performed, not copied from TEST-DESIGNER): temporarily mutated the POST-FIX oidc_issuer_base/0 in lib/letflow/routers/tenant_config.ex to append a stray '/stray' suffix to the configured keycloak_base_url (simulating exactly the 'fix forgot to strip a stray character' scenario the task named) -- reran the suite -> 'Result: 10/11 passed', the ISS-0720 test failed (its assert String.starts_with?(..., \"https://iss0720-regression-test-authority.example/realms/\") caught the mutated host), proving the assertion is specific enough to discriminate a subtly-wrong fix, not just presence/absence. Reverted the mutant immediately after; `git diff lib/letflow/routers/tenant_config.ex` empty again, reran -> 'Result: 11 passed'. This mutant was applied and reverted directly in the working tree (not a worktree) since it was a single-line, single-file probe reverted within the same tool call sequence, verified via git diff before proceeding to the next step each time. (5) COMPILE-TIME RAISE-PATH CLAIM, verified myself, not just read: confirmed via grep that config/prod.exs and config/runtime.exs set no allow_localhost_idp_fallback key (so the compiled default false holds there) while config/dev.exs and config/test.exs both set it true. Independently verified Application.compile_env/3's actual runtime behavior (rather than trusting the spec's characterization) with a standalone elixir script (/tmp/compile_env_check.exs, run via `elixir` directly, not `mix run`, to avoid app-boot secrets requirements): a module attribute set via Application.compile_env/3 printed 'false' before AND after a subsequent Application.put_env/3 call flipped the same key to true at runtime -- empirically confirms the compiled attribute is fixed at compile time and immune to runtime Application.put_env/3, so the raise branch genuinely cannot be exercised from within the single already-compiled test.exs suite. This is a genuine structural limitation, not a shortcut. All four of the task's acceptance criteria are independently satisfied by my own reproduction, not by trusting TEST-DESIGNER's or REVIEWER's prior reports.",
+    "artifacts_out": [],
+    "issues": [],
+    "git_evidence": {
+      "branch_name": "feature/WF03-ISS0720-20260919",
+      "commit_sha_list": [],
+      "remote_branch": "origin/feature/WF03-ISS0720-20260919",
+      "push_status": "skipped",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": "Route to Step 05 (next WF-03 step per docs/agents/workflows/WF-03_issue_resolving.md); lib/ and test/ working tree is clean, no rework needed."
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

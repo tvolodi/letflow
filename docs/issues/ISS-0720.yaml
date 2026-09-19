@@ -1,0 +1,139 @@
+id: ISS-0720
+title: >
+  tenant_config.ex's oidc_issuer_base/0 reads the retired :issuer config key
+  (REQ-370 renamed it to :keycloak_base_url) -- always returns nil, so
+  idp_base_url/0 falls through to env vars or the compiled localhost:8082
+  dev default; root cause of ISS-0719's live QA BLOCKER
+discovered_by: ISSUE-FIXER
+discovered_in_run: WF03-ISS0720-20260919
+discovered_at: "2026-09-19T03:30:14Z"
+severity: MAJOR
+description: >
+  Root-caused by reading source directly, not from T-0138/ISS-0719's prose
+  alone.
+
+  lib/letflow/routers/tenant_config.ex:320-325 defines:
+
+    defp oidc_issuer_base do
+      case Application.get_env(:letflow, :oidc, [])[:issuer] do
+        nil -> nil
+        issuer -> issuer |> String.split("/realms/") |> List.first()
+      end
+    end
+
+  This reads the `:issuer` key out of the `:letflow, :oidc` keyword list.
+  REQ-370 (design req370-multi-issuer-oidc-verification.md §6) retired that
+  key and renamed the config surface to `:keycloak_base_url` everywhere:
+
+  - config/runtime.exs:141 (comment): "REQ-370 ... :oidc, :issuer is retired
+    as the trust source -- the tenants table is now the sole source of issuer
+    trust". runtime.exs:165-170 sets `config :letflow, :oidc, keycloak_base_url:
+    ..., client_id: ...` -- no `:issuer` key anywhere in the file.
+  - config/dev.exs:87-98 sets `config :letflow, :oidc, keycloak_base_url:
+    "http://localhost:#{keycloak_port}", client_id: "letflow-web",
+    signing_algs: [...], token_verifier: ..., allow_unsafe_http: true` --
+    comment at dev.exs:88-90 explicitly says "REQ-370: keycloak_base_url
+    replaces :issuer as the trust-resolution source". No `:issuer` key.
+  - config/test.exs:124-135 (grepped, same pattern): sets `:oidc` with
+    `keycloak_base_url`, comment again notes the REQ-370 rename. No `:issuer`
+    key.
+  - config/prod.exs:18-21: `:oidc keycloak_base_url/client_id moved to
+    config/runtime.exs` per its own comment at line 10. No `:issuer` key.
+
+  A repo-wide grep (`grep -rn ":oidc\|:issuer\|:keycloak_base_url"
+  config/`) confirms `:issuer` is set nowhere under the `:letflow, :oidc`
+  key in any of the four config files; only `:keycloak_base_url` is ever
+  set. Confirmed via `git log` (per T-0138) that tenant_config.ex has been
+  untouched since before REQ-370 landed -- it is a stale call site orphaned
+  by REQ-370's own rename, not an infra/env gap.
+
+  Effect: `Application.get_env(:letflow, :oidc, [])[:issuer]` evaluates to
+  `nil` in every environment (dev/test/prod/runtime all compile
+  `keycloak_base_url`, never `issuer`), so `oidc_issuer_base/0` always
+  returns `nil`. `idp_base_url/0` (tenant_config.ex:312-316) is:
+
+    defp idp_base_url do
+      System.get_env("BPM_IDP_BASE_URL") || System.get_env("KEYCLOAK_BASE_URL") ||
+        oidc_issuer_base() ||
+        @default_idp_base_url
+    end
+
+  With `oidc_issuer_base/0` permanently dead, this collapses to
+  `System.get_env("BPM_IDP_BASE_URL") || System.get_env("KEYCLOAK_BASE_URL")
+  || @default_idp_base_url`, where `@default_idp_base_url` (line 167) is
+  the literal dev value `"http://localhost:8082"`. On any deployment where
+  neither `BPM_IDP_BASE_URL` nor `KEYCLOAK_BASE_URL` is set in the process
+  environment, `GET /api/tenant-config`'s `oidc_authority` silently
+  advertises `localhost:8082` instead of a real Keycloak host -- exactly
+  ISS-0719's live QA BLOCKER (every real browser's OIDC redirect sent to
+  localhost, breaking login for all users). This is currently mitigated
+  operationally (not fixed in code) by T-0137, which set
+  `BPM_IDP_BASE_URL=https://auth.qa.bizdala.com` directly in QA's `.env`
+  -- that env var is checked before the broken fallback chain, so it masks
+  the defect without touching tenant_config.ex. Any future environment or
+  redeploy path that omits both env vars will silently reproduce the same
+  failure.
+affected_files:
+  - lib/letflow/routers/tenant_config.ex
+related_requirements:
+  - REQ-370
+related:
+  - ISS-0719
+severity_rationale: >
+  MAJOR, not BLOCKER: this is the confirmed root cause of ISS-0719's live
+  BLOCKER, but ISS-0719's live-breaking symptom is itself currently
+  operationally mitigated by T-0137's env-var override (BPM_IDP_BASE_URL
+  set directly on QA), which is checked before the broken fallback chain
+  ever runs. So this defect is not, by itself, currently live-breaking --
+  but it is a real, reproducible code defect (confirmed via direct
+  source/config read, not just T-0138/ISS-0719's prose) that will recur on
+  any future deployment/redeploy path that omits both BPM_IDP_BASE_URL and
+  KEYCLOAK_BASE_URL, since the dead `oidc_issuer_base/0` fallback no longer
+  provides a real safety net between the env vars and the localhost dev
+  default.
+fix_direction: >
+  Route to CODE-DESIGNER (Step 2 of this WF-03 run). The fix needs to
+  change tenant_config.ex's oidc_issuer_base/0 (lines 320-325) to read the
+  current `:keycloak_base_url` key instead of the retired `:issuer` key --
+  `Application.get_env(:letflow, :oidc, [])[:keycloak_base_url]` already
+  yields a bare host (no `/realms/...` suffix to strip, per dev.exs:90's
+  comment and runtime.exs's setup), so the `String.split("/realms/") |>
+  List.first()` post-processing this function currently does for a
+  full-issuer-URL value is very likely dead weight against the new key's
+  shape and should be reconsidered/removed rather than kept out of
+  caution, since the key here never carries a realm suffix as recorded in
+  config/dev.exs and config/runtime.exs. CODE-DESIGNER should also cover
+  the explicit design question T-0138 raised and deliberately left open:
+
+  Recommendation on the localhost-default question: `@default_idp_base_url
+  = "http://localhost:8082"` should NOT remain as a silent last-resort
+  fallback in any environment where a real IDP base URL is expected. This
+  bug is a direct demonstration of the failure mode a silent fallback
+  produces -- three layers of resolution (two env vars, one compiled
+  config read) all quietly failed and the code never surfaced that failure
+  anywhere; it just served a plausible-looking wrong URL with a 200 and
+  `cache-control: max-age=0, private, must-revalidate`, and nothing
+  detected it until a real browser hit ERR_CONNECTION_REFUSED against
+  localhost. The endpoint's own moduledoc (lines 35-51) establishes a
+  deliberate "never returns an error to the caller" rule for the tenant/DB
+  resolution path (INV-5, anti-oracle, login-page availability) -- but
+  that rule concerns the *response shape/status code* the browser receives
+  for a given realm/tenant lookup, not silent substitution of a
+  known-wrong IDP host. A caller that receives a 200 with a broken
+  localhost authority is worse off than a fast, loud failure at boot/deploy
+  time: the former surfaces only when a real user's browser attempts a
+  redirect and gets ERR_CONNECTION_REFUSED, well after the login page
+  looked fine; the latter surfaces immediately, in CI/deploy logs, before
+  any real user is affected. Concretely: keep a bare, obviously-fake
+  literal (or none at all) only for `Mix.env() in [:dev, :test]`, and in
+  any other environment (i.e. effectively `:prod`/deployed runtime) either
+  raise/halt at application boot when no real `keycloak_base_url` /
+  `BPM_IDP_BASE_URL` / `KEYCLOAK_BASE_URL` resolves, or at minimum log at
+  `:error` level and fail the health check, rather than serving
+  `localhost:8082` as if it were a legitimate authority. CODE-DESIGNER
+  should treat this as a recommendation, not a foregone conclusion --
+  final call is theirs -- but the design should explicitly address it
+  rather than silently preserving the current always-succeeds behavior.
+status: resolved
+resolved_in_run: WF03-ISS0720-20260919
+resolved_at: "2026-09-19T04:11:28Z"

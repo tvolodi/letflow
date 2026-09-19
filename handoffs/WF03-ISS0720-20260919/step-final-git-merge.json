@@ -1,0 +1,53 @@
+{
+  "handoff_id": "a1b2c3d4-0001-4000-8000-00000000000c",
+  "run_id": "WF03-ISS0720-20260919",
+  "workflow_id": "WF-03",
+  "step": "final",
+  "from_agent": "ORCH",
+  "to_agent": "ELIXIR-DEV",
+  "file": "handoffs/WF03-ISS0720-20260919/step-final-git-merge.json",
+  "created_at": "2026-09-19T04:11:55Z",
+  "started_at": "2026-09-19T04:11:55Z",
+  "completed_at": null,
+  "status": "IN_PROGRESS",
+  "priority": "HIGH",
+  "context": {
+    "stage": "S7",
+    "requirement_ids": [],
+    "requirement_text": {},
+    "source_text": {},
+    "related_handoff_ids": [],
+    "artifacts_in": [
+      "docs/agents/protocols/GIT_MERGE.md",
+      "docs/issues/ISS-0720.yaml",
+      "handoffs/WF03-ISS0720-20260919/step-04c-test-runner.json"
+    ],
+    "owned_modules": ["lib/letflow/routers/tenant_config.ex", "config/dev.exs", "config/test.exs", "test/letflow/routers/tenant_config_test.exs"]
+  },
+  "task": {
+    "description": "Execute docs/agents/protocols/GIT_MERGE.md's full procedure exactly, steps 1-9, for branch feature/WF03-ISS0720-20260919. All upstream gates PASSed: CODE-DESIGN-VALIDATOR, SECURITY-REVIEWER, REVIEWER, TEST-DESIGN-VALIDATOR, TEST-RUNNER (full suite 4453/4453). Rebase onto current origin/main, push, open a PR, wait for CI's backend and frontend required checks to go green, then merge via gh pr merge --squash --delete-branch (no --admin unless a check is provably unrelated pre-existing drift -- state your reasoning if you use it). PR title/body should summarize the ISS-0720/T-0138 fix. After merge, this is NOT the end of this task -- ORCH will separately update T-0138's own ai-dala-infra file and run a follow-up handoff-finalization commit; do not attempt either of those yourself.",
+    "acceptance_criteria": [
+      "Branch rebased cleanly onto current origin/main",
+      "PR opened, CI backend+frontend checks green (or --admin override justified explicitly)",
+      "PR merged via gh pr merge --squash --delete-branch",
+      "git_evidence in result fully populated: PR url, merge commit sha"
+    ]
+  },
+  "result": {
+    "status": "BLOCKED",
+    "summary": "",
+    "artifacts_out": [],
+    "issues": [],
+    "git_evidence": {
+      "branch_name": null,
+      "commit_sha_list": [],
+      "remote_branch": null,
+      "push_status": "skipped",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": ""
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

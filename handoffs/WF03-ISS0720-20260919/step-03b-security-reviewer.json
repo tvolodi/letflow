@@ -1,0 +1,53 @@
+{
+  "handoff_id": "a1b2c3d4-0001-4000-8000-000000000006",
+  "run_id": "WF03-ISS0720-20260919",
+  "workflow_id": "WF-03",
+  "step": "03b",
+  "from_agent": "ORCH",
+  "to_agent": "SECURITY-REVIEWER",
+  "file": "handoffs/WF03-ISS0720-20260919/step-03b-security-reviewer.json",
+  "created_at": "2026-09-19T03:41:18Z",
+  "started_at": "2026-09-19T03:41:18Z",
+  "completed_at": "2026-09-19T03:42:07Z",
+  "status": "COMPLETED",
+  "priority": "HIGH",
+  "context": {
+    "stage": "S7",
+    "requirement_ids": [],
+    "requirement_text": {},
+    "source_text": {},
+    "related_handoff_ids": [],
+    "artifacts_in": [
+      "lib/letflow/design/iss0720-tenant-config-stale-issuer-key.md",
+      "lib/letflow/routers/tenant_config.ex",
+      "docs/agents/instructions/security-invariants.md"
+    ],
+    "owned_modules": ["lib/letflow/routers/tenant_config.ex"]
+  },
+  "task": {
+    "description": "git checkout feature/WF03-ISS0720-20260919 first, then git diff main...HEAD -- lib/letflow/routers/tenant_config.ex config/dev.exs config/test.exs to see the actual change. This is a required gate: the diff touches lib/letflow/routers/tenant_config.ex, the pre-authentication /api/tenant-config route whose moduledoc names an explicit anti-oracle/never-error security rule (INV-5-adjacent) -- confirm the change does not weaken that rule for the resolve_realm/2 per-tenant lookup path (it should not touch that path at all; verify). Independently verify the new default_idp_base_url!/0 raise path cannot leak any tenant-identifying or credential information in its error message/log (it should only ever name the resolution-chain failure itself, never any request-specific data). Verify the new @allow_localhost_idp_fallback? compile-time flag cannot be set true in a real deployment by an attacker or by accident (confirm config/prod.exs and config/runtime.exs are untouched and do not set it, so it defaults false in any prod/runtime-configured environment) per security-invariants.md's relevant invariants.",
+    "acceptance_criteria": [
+      "Verdict stated per-invariant (APPLIES/NOT-APPLICABLE with PASS/FAIL) against security-invariants.md's INV-1..INV-8, not a general impression",
+      "Confirms resolve_realm/2's per-tenant lookup branch and its never-error/anti-oracle behavior are untouched by this diff",
+      "Confirms the raise path in default_idp_base_url!/0 leaks no tenant/credential data",
+      "Confirms config/prod.exs and config/runtime.exs are untouched and the new flag defaults false there"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "Reviewed git diff main...HEAD -- lib/letflow/routers/tenant_config.ex config/dev.exs config/test.exs config/prod.exs config/runtime.exs against security-invariants.md INV-1..INV-8 (plus INV-9, checked for completeness). Verdicts: INV-1 (tenant data isolation) NOT-APPLICABLE -- diff touches no tenant-scoped table/schema/migration; tenant_config.ex's moduledoc confirms this endpoint deliberately reads only the global `tenants` table with no :prefix scoping, and neither resolve_realm/2 nor config_map/2 nor branding_map/1 is touched by this diff. INV-2 (server-side field authorisation) NOT-APPLICABLE per file's own applicability note (S4 not started) -- also independently confirmed the response-shaping functions (config_map/2, branding_map/1, branding_from_settings/1) are untouched, so the existing 3-key/3-subkey allowlist is preserved unchanged. INV-3 NOT-APPLICABLE (S5 not started). INV-4 (secrets by reference only) APPLIES -- PASS: `grep -rn \"System.get_env\" config/ lib/routers/tenant_config.ex` shows env-sourced reads only (BPM_IDP_BASE_URL, KEYCLOAK_BASE_URL, OIDC_CLIENT_ID); no hardcoded secret literals added; the new `@allow_localhost_idp_fallback?` is a boolean flag, not secret material. INV-5 NOT-APPLICABLE (S4 not started) -- also independently confirmed resolve_realm/2 (the anti-oracle lookup branch) has zero diff lines touching it. INV-6 (new data-access paths prove scoping) APPLIES -- satisfied by this handoff itself; no new data-access path introduced (idp_base_url!/oidc_issuer_base are config-resolution helpers, not a data-access path to tenant data). INV-7 (no SQL string interpolation) APPLIES -- no SQL in this diff, PASS by inspection. INV-8 (no unhandled crashes on realistic failure paths) APPLIES -- PASS: the new raise in default_idp_base_url!/0 is a deliberate, explicitly-justified fail-loud decision (design doc §2.3), not a bare pattern-match crash on tenant-controlled input -- it fires identically for every tenant/request when deployment config is missing entirely (a node-wide misconfiguration state, not per-request tenant input), and the design doc explicitly reckons with the moduledoc's never-error rule, scoping the carve-out narrowly to IDP-base-URL resolution only. INV-9 NOT-APPLICABLE -- no outbound HTTP request logic touched. Task-specific verifications: (1) resolve_realm/2 and its never-error/anti-oracle behavior -- CONFIRMED UNTOUCHED, zero diff lines in resolve_realm/2, non_empty/1, config_map/2, or branding_map/1; the only functions changed are idp_base_url/0, the new default_idp_base_url!/0, and oidc_issuer_base/0, none of which are in the realm/tenant-resolution path. (2) default_idp_base_url!/0's raise message -- read verbatim: names only env var names (BPM_IDP_BASE_URL, KEYCLOAK_BASE_URL), the config key (:letflow, :oidc, :keycloak_base_url), and the compile-time literal default (http://localhost:8082); the function takes no request/tenant/realm parameter at all, so there is no tenant-identifying or credential data available to leak into the message in the first place. (3) @allow_localhost_idp_fallback? cannot be true in a real deployment -- confirmed via `git diff main...HEAD -- config/prod.exs config/runtime.exs` (empty, zero changes) and `grep -n allow_localhost_idp_fallback config/prod.exs config/runtime.exs` (zero hits, only config/dev.exs:106 and config/test.exs:140 set it true); Application.compile_env/3's false default therefore holds in prod and any runtime-configured environment.",
+    "artifacts_out": [],
+    "issues": [],
+    "git_evidence": {
+      "branch_name": "feature/WF03-ISS0720-20260919",
+      "commit_sha_list": [],
+      "remote_branch": "origin/feature/WF03-ISS0720-20260919",
+      "push_status": "skipped",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": "Route to REVIEWER (idiom/OTP/supervision/decision-record gate) per WF-02 Step 2c ordering, then TEST-DESIGNER."
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

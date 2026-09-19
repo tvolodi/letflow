@@ -1,0 +1,52 @@
+run_id: WF03-ISS0720-20260919
+agent: TEST-RUNNER
+date_utc: 2026-09-19T04:10:19Z
+branch: feature/WF03-ISS0720-20260919
+scope: |
+  WF-03 Step 4c (04c) final full-suite test-run gate for ISS-0720
+  (Letflow.Routers.TenantConfig's oidc_issuer_base/0 reading the retired
+  :issuer config key instead of :keycloak_base_url -- the ISS-0719 live-QA
+  symptom). Design, backend implementation (lib/letflow/routers/tenant_config.ex),
+  the ISS-0720 regression test (test/letflow/routers/tenant_config_test.exs), and
+  TEST-DESIGN-VALIDATOR already passed on this branch. This step runs the FULL
+  suite (not just the targeted tenant_config file every prior step in this run
+  scoped to) and classifies any failure as caused-by-this-diff vs
+  pre-existing-unrelated.
+
+commands_run:
+  - cwd: .
+    cmd: git checkout feature/WF03-ISS0720-20260919
+  - cwd: .
+    cmd: docker compose up -d
+    note: >
+      letflow-postgres-1 and letflow-keycloak-1 already running; no .env
+      LETFLOW_DB_PORT override present, so default port 5462 used.
+  - cwd: .
+    cmd: bash scripts/test_parallel.sh
+
+backend_test_result:
+  partitions: 16
+  n_source: nproc
+  combined: "4453/4453 passed"
+  tests: 4447
+  properties: 6
+  failures: 0
+  exit_codes: "all 16 partitions exit 0"
+  raw_summary: "combined: 4447 tests, 6 properties, 0 failures (4453/4453 passed)"
+  regression_check: >
+    Zero failures across the entire suite -- nothing to attribute as
+    caused-by-this-diff, nothing to name as pre-existing-unrelated. No
+    pre-existing-flake or connection-pool-contention failures observed on this
+    run. The ISS-0720 regression test itself (describe "ISS-0720: oidc_authority
+    reflects configured :keycloak_base_url, not the retired :issuer key" in
+    test/letflow/routers/tenant_config_test.exs) is included in this full run
+    and passed.
+
+verdict: PASS
+verdict_basis: >
+  Full backend suite: 4453/4453 passed, 0 failures, across all 16 partitions --
+  no regression attributable to this run's diff, nothing pre-existing to name.
+  Acceptance criteria met: full run executed (not the targeted file only), real
+  output quoted above, zero failures so nothing required classification.
+
+next_action: "Route to Step 5 (ISSUE-FIXER close)"

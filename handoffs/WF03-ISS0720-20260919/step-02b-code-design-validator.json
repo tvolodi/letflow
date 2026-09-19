@@ -1,0 +1,55 @@
+{
+  "handoff_id": "a1b2c3d4-0001-4000-8000-000000000004",
+  "run_id": "WF03-ISS0720-20260919",
+  "workflow_id": "WF-03",
+  "step": "02b",
+  "from_agent": "ORCH",
+  "to_agent": "CODE-DESIGN-VALIDATOR",
+  "file": "handoffs/WF03-ISS0720-20260919/step-02b-code-design-validator.json",
+  "created_at": "2026-09-19T03:36:31Z",
+  "started_at": "2026-09-19T03:36:31Z",
+  "completed_at": "2026-09-19T03:37:47Z",
+  "status": "COMPLETED",
+  "priority": "HIGH",
+  "context": {
+    "stage": "S7",
+    "requirement_ids": [],
+    "requirement_text": {},
+    "source_text": {},
+    "related_handoff_ids": [],
+    "artifacts_in": [
+      "lib/letflow/design/iss0720-tenant-config-stale-issuer-key.md",
+      "docs/issues/ISS-0720.yaml",
+      "lib/letflow/routers/tenant_config.ex"
+    ],
+    "owned_modules": ["lib/letflow/routers/tenant_config.ex"]
+  },
+  "task": {
+    "description": "git checkout feature/WF03-ISS0720-20260919 first. Independently gate lib/letflow/design/iss0720-tenant-config-stale-issuer-key.md against this project's standard design-validator checklist (per your own role file). In particular verify: (a) every acceptance criterion in the originating diagnosis is covered; (b) no implementation code bodies are present; (c) the :keycloak_base_url rename and removal of the /realms/ stripping logic are both stated explicitly and correctly against the real config/runtime.exs, config/dev.exs, config/test.exs shapes -- verify these yourself by reading the config files directly, do not trust the design doc's claim; (d) the localhost-default fallback decision is genuinely justified (not asserted) and internally consistent with the endpoint's own moduledoc 'never-error' rule -- confirm the design doc's own reasoning about WHY that rule doesn't govern this config-resolution path actually holds up against a direct re-read of the moduledoc; (e) the chosen mechanism (Application.compile_env with a new :allow_localhost_idp_fallback flag) is actually a correct, buildable mechanism for scoping dev/test-only behavior in an Elixir release -- verify against how this project's existing config/dev.exs, config/test.exs, config/prod.exs, config/runtime.exs actually set config today, since a compile-time attribute defaulting to false must actually be overridden to true in dev.exs/test.exs for the fallback to still work there, and the design doc must specify that config addition too, not just the tenant_config.ex-side logic.",
+    "acceptance_criteria": [
+      "PASS or FAIL verdict stated with specific reasoning per check (a)-(e) above, not a general impression",
+      "If FAIL: every gap named with the specific missing/wrong design element",
+      "Independently confirmed (not trusted) that keycloak_base_url is the correct, currently-set key across config/runtime.exs, config/dev.exs, config/test.exs, config/prod.exs",
+      "Independently confirmed the compile_env-based dev/test scoping mechanism is complete (covers both the tenant_config.ex read side AND the config/dev.exs+test.exs write side needed to preserve today's local-dev behavior)"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "Independently gated lib/letflow/design/iss0720-tenant-config-stale-issuer-key.md against all five checks. (a) Coverage: design §4's acceptance-criteria table maps every element of the diagnosis (docs/issues/ISS-0720.yaml) -- key rename, /realms/ stripping removal, and the localhost-fallback decision -- to a specific design section; no diagnosis point is left uncovered. (b) No implementation code: the one code-shaped block (design §0) is explicitly cited as *existing* code for root-cause citation only; §1's target logic and §2.2's raise-branch logic are both given in prose/words with no proposed .ex bodies, no new def, no new @spec (design §3 states this explicitly and correctly). (c) Verified directly (not trusted) by reading config/runtime.exs:131-169, config/dev.exs:85-94, config/test.exs:122-130, config/prod.exs:1-13: all four files set only :keycloak_base_url (never :issuer) under :letflow, :oidc; dev.exs/test.exs comments literally say 'REQ-370: keycloak_base_url replaces :issuer as the trust-resolution source' with values of shape http://localhost:<port> (no /realms/ suffix); runtime.exs's :prod block sets keycloak_base_url via OIDC_KEYCLOAK_BASE_URL || legacy-issuer-derivation || the placeholder-keycloak.invalid literal, confirming keycloak_base_url is the live key everywhere and is never a full issuer URL needing /realms/ stripping. Design's §1 claims match exactly. (d) Re-read tenant_config.ex's moduledoc lines 35-56 directly: the never-error rule's own two stated justifications (availability; INV-5/anti-oracle) are both framed around resolve_realm/2's per-request, per-tenant DB lookup variability (a slug/host miss, a DB outage) -- not around a single node-wide config-resolution value that is either present or absent identically for every request until redeploy. Design §2.3's reckoning is a faithful, non-strained reading of the actual moduledoc text, not an assertion -- it correctly identifies that idp_base_url/0's failure mode has no per-tenant variability to preserve availability across and no tenant-existence signal to leak, so the carve-out is properly scoped and leaves resolve_realm/2's own never-error behavior untouched. (e) Verified activation.ex:228-247 directly: the exact same pattern (Application.compile_env(:letflow, :activation_test_hooks_enabled?, false), compile-time-resolved module attribute, only config/test.exs overriding to true) is already established precedent in this codebase, confirming compile_env is a correct, buildable mechanism (not a runtime Mix.env() call). Design §2.2 explicitly specifies BOTH sides: the tenant_config.ex-side @allow_localhost_idp_fallback? attribute AND the companion config/dev.exs + config/test.exs additions of `config :letflow, :allow_localhost_idp_fallback, true` (config/prod.exs and runtime.exs correctly get no addition, since the false default already holds there per current grep). No gap found on the read-side/write-side split the task specifically warned about. Verdict: PASS on all five checks (a)-(e).",
+    "artifacts_out": [
+      "handoffs/WF03-ISS0720-20260919/step-02b-code-design-validator.json"
+    ],
+    "issues": [],
+    "git_evidence": {
+      "branch_name": "feature/WF03-ISS0720-20260919",
+      "commit_sha_list": [],
+      "remote_branch": null,
+      "push_status": "skipped",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": "Route to ELIXIR-DEV to implement the fix per lib/letflow/design/iss0720-tenant-config-stale-issuer-key.md: repoint oidc_issuer_base/0 to :keycloak_base_url with /realms/ stripping removed, add @allow_localhost_idp_fallback? compile_env attribute with call-time raise in idp_base_url/0 when false and no real value resolves, and add the companion config :letflow, :allow_localhost_idp_fallback, true to config/dev.exs and config/test.exs."
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

@@ -8,8 +8,8 @@
   "file": "handoffs/WF03-ISS0721-20260919/step-02-code-designer-rework1.json",
   "created_at": "2026-09-19T06:45:03Z",
   "started_at": "2026-09-19T06:45:03Z",
-  "completed_at": null,
-  "status": "PENDING",
+  "completed_at": "2026-09-19T07:05:00Z",
+  "status": "COMPLETED",
   "priority": "NORMAL",
   "context": {
     "stage": null,
@@ -34,18 +34,18 @@
   },
   "result": {
     "status": "PASS",
-    "summary": "",
-    "artifacts_out": [],
+    "summary": "Reworked lib/letflow/design/iss0721-entity-event-type-seeding.md to fix both points CODE-DESIGN-VALIDATOR raised in step-02b. BLOCKER: section 5's 'New' code fence (a directly-pasteable Elixir with-chain) is replaced with a prose description of the control-flow change -- a second `:ok <-` clause inserted after the existing platform-seed clause, calling maybe_seed_entity_event_types/2 with the same using_default_manifest? and the already-bound schema_name, with the do-block and short-circuit behavior spelled out in prose -- mirroring iss072-event-type-registration.md section 2.1's own convention ('described here as the required control-flow shape, not as code; ELIXIR-DEV chooses the exact construct'), which this design's own section 0 already cited as precedent. The 'Current' code fence quoting the existing shipped with-chain was left as-is per the task's explicit allowance (quoting existing code is not new implementation code). MINOR: section 7 (and the section 5 note it's paired with, plus section 7's open-questions list) no longer frames the @spec gap as a speculative 'it should, if...' conditional -- it now states as a confirmed fact, sourced from a direct read of tenant_provisioning.ex:364-371, that replay_migrations/2's current @spec lists only {:error, :tenant_not_provisioned} and {:error, {:migration_failed, Exception.t()}} and does NOT list {:error, {:event_type_seed_failed, term()}}, and tells ELIXIR-DEV directly to add the one-line union addition rather than 'check and see.' Verified no regression on the four previously-PASSED checks: section 0/1 fix-requirement traceability, section 4's idempotency claim, and section 6's regression-test spec are all unchanged; no TBD/deferral language was introduced by either edit.",
+    "artifacts_out": ["lib/letflow/design/iss0721-entity-event-type-seeding.md"],
     "issues": [],
     "git_evidence": {
       "branch_name": "feature/WF03-ISS0721-20260919",
-      "commit_sha_list": [],
+      "commit_sha_list": ["PENDING_COMMIT"],
       "remote_branch": "origin/feature/WF03-ISS0721-20260919",
-      "push_status": "skipped",
+      "push_status": "pending",
       "pr_url": null,
       "pr_create_error": null
     },
-    "next_action": ""
+    "next_action": "Route to Step 2b re-gate (CODE-DESIGN-VALIDATOR)"
   },
   "rework_count": 1,
   "max_rework": 3

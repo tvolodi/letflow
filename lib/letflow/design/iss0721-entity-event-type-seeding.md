@@ -118,14 +118,25 @@ with :ok <- maybe_seed_platform_event_types(using_default_manifest?, tenant_id) 
 end
 ```
 
-New:
-
-```
-with :ok <- maybe_seed_platform_event_types(using_default_manifest?, tenant_id),
-     :ok <- maybe_seed_entity_event_types(using_default_manifest?, schema_name) do
-  {:ok, applied_versions}
-end
-```
+New (described here as the required control-flow shape, not as code;
+ELIXIR-DEV chooses the exact construct — mirrors
+`lib/letflow/design/iss072-event-type-registration.md` section 2.1's
+convention for this same class of change): the `with`-chain gains a second
+`:ok <-` clause, inserted immediately after the existing
+`:ok <- maybe_seed_platform_event_types(using_default_manifest?, tenant_id)`
+clause and before the chain's `do` block. This new clause calls
+`maybe_seed_entity_event_types(using_default_manifest?, schema_name)` — the
+same `using_default_manifest?` value already bound for the first clause, and
+the `schema_name` value already bound in the `%Registration{schema_name:
+schema_name}` clause (line 376), not a new or re-derived value. The chain's
+`do` block is unchanged (`{:ok, applied_versions}`). On success both clauses
+evaluate to `:ok` and the chain proceeds to the `do` block exactly as today;
+if either clause instead returns `{:error, {:event_type_seed_failed, reason}}`
+(the platform clause's existing shape, or the new entity clause's shape per
+§3), the `with` short-circuits on that `{:error, ...}` value and
+`replay_migrations/2` returns it directly, without evaluating the `do` block —
+identical short-circuit behavior to the platform clause today, just now with
+a second clause capable of triggering it.
 
 Notes on this change:
 
@@ -146,20 +157,20 @@ Notes on this change:
   passing a custom `migration_source` skips both seed attempts identically,
   preserving ISS-0072's original gating rationale for the new call too.
 - `{:error, {:event_type_seed_failed, reason}}` from either clause short-
-  circuits the `with`, and `replay_migrations/2`'s existing `@spec` already
-  promises `{:error, {:event_type_seed_failed, reason}}`'s parent type space
-  is compatible — but note: **the `@spec` at lines 364-371 is not itself
-  updated by this design's file list** (it is outside the diagnosis's named
-  call-site scope) — ELIXIR-DEV/CODE-DESIGN-VALIDATOR should confirm whether
-  `replay_migrations/2`'s public `@spec` already covers
-  `{:error, {:event_type_seed_failed, term()}}` as a return value (it does,
-  implicitly, if it already types the `maybe_seed_platform_event_types/2`
-  failure the same way — check the existing `@spec`'s error union) or needs
-  a one-line addition. **This is an explicit open question**, not silently
-  resolved: if the current `@spec` does not already list this error shape
-  in its union, ELIXIR-DEV must add it (mechanical, not a design decision),
-  since `maybe_seed_platform_event_types/2`'s identical failure shape
-  presumably already required the same treatment when ISS-0072 shipped.
+  circuits the `with`. **Confirmed by direct read of
+  `tenant_provisioning.ex:364-371` (not assumed):** `replay_migrations/2`'s
+  current `@spec` lists only `{:error, :tenant_not_provisioned}` and
+  `{:error, {:migration_failed, Exception.t()}}` — it does **not** already
+  list `{:error, {:event_type_seed_failed, term()}}`, even though the
+  existing `maybe_seed_platform_event_types/2` clause already wired into the
+  `with`-chain today can already produce that exact shape. This is a
+  pre-existing gap this design's file list does not otherwise touch, and it
+  becomes newly load-bearing once the entity clause added here can also
+  produce that shape. **ELIXIR-DEV must add
+  `{:error, {:event_type_seed_failed, term()}}` as a one-line addition to
+  the `@spec`'s error union** — mechanical (widening an existing union to
+  match a return value the function can already produce), not a design
+  decision, so it is not further specified here.
 
 ## 6. Regression test TEST-DESIGNER must write
 
@@ -204,12 +215,11 @@ A test that:
 
 ## 7. Open questions
 
-- Whether `replay_migrations/2`'s existing `@spec` (lines 364-371) already
-  types the `{:error, {:event_type_seed_failed, term()}}` union member (it
-  should, if ISS-0072's own fix updated it identically for
-  `maybe_seed_platform_event_types/2`'s failure) — flagged in §5, not
-  silently resolved. ELIXIR-DEV must check and add it if missing; this is
-  mechanical and does not change this design's shape.
+- None remaining on the `@spec` question: §5 confirms (by direct read of
+  `tenant_provisioning.ex:364-371`) that `replay_migrations/2`'s existing
+  `@spec` does **not** list the `{:error, {:event_type_seed_failed, term()}}`
+  union member today. ELIXIR-DEV must add it — a mechanical one-line
+  addition, not a design decision, so it is not further specified here.
 - No other open questions. `seed!/1`'s idempotency (§4), the exact argument
   value and its scope binding (§2), and the ok/error normalization (§3) are
   all fully specified above.

@@ -34,6 +34,16 @@ pipeline_test: web/tests/e2e/pipelines/platform-definition-promotion-rollback.pi
 # UAT-RUNNER drives this Playwright pipeline test for the operator's steps.
 # If this file does not exist or the test cannot run, that is a BLOCKER
 # (missing UI) and must be routed to FRONTEND-DEV before UAT can proceed.
+# NOTE (2026-09-20, ORCH gui-review pass, confirmed live against current source,
+# not re-citing ISS-0527 unread): the backend leg is NOT missing --
+# Letflow.Definitions.rollback_definition_version/4 (REQ-038) and
+# POST /api/v1/definitions/:process_key/rollback (REQ-077 R9) both exist and are
+# fully wired, including a real DEFINITION_VERSION_ROLLED_BACK audit-event append.
+# The gap is entirely in web/src: no rollback/withdraw UI, no call to the rollback
+# endpoint anywhere in web/src, and no change-history/audit screen that could show
+# EO-005. Filed as docs/requirements.yaml REQ-371 (owner FRONTEND-DEV) to build the
+# missing screen(s) and, once shipped, author and pass this pipeline_test for real.
+# Full evidence: test/uat-reports/gui-review-2026-09-20-definition-promotion-rollback.md.
 
 actors:
   operator: actor-platform-admin

@@ -1,0 +1,60 @@
+{
+  "handoff_id": "wf03-iss0721-step03-rework1",
+  "run_id": "WF03-ISS0721-20260919",
+  "workflow_id": "WF-03",
+  "step": "03",
+  "from_agent": "ORCH",
+  "to_agent": "ELIXIR-DEV",
+  "file": "handoffs/WF03-ISS0721-20260919/step-03-elixir-dev-rework1.json",
+  "created_at": "2026-09-19T07:55:42Z",
+  "started_at": "2026-09-19T07:55:42Z",
+  "completed_at": "2026-09-19T08:00:24Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": null,
+    "requirement_ids": ["REQ-228"],
+    "requirement_text": {},
+    "source_text": {},
+    "related_handoff_ids": ["wf03-iss0721-step02b-rework2", "wf03-iss0721-step04c"],
+    "artifacts_in": [
+      "lib/letflow/design/iss0721-entity-event-type-seeding.md",
+      "lib/letflow/tenant_provisioning.ex",
+      "test/letflow/tenant_provisioning_event_seed_test.exs",
+      "test/reports/report-20260919-WF03-ISS0721-20260919.yaml"
+    ],
+    "owned_modules": ["lib/letflow/tenant_provisioning.ex", "test/letflow/tenant_provisioning_event_seed_test.exs"]
+  },
+  "task": {
+    "description": "REWORK ITERATION 1 of your Step 3 implementation, following TEST-RUNNER's Step 4c FAIL (real regressions, not the known Lua flake -- see test/reports/report-20260919-WF03-ISS0721-20260919.yaml). CODE-DESIGNER's approved amendment (lib/letflow/design/iss0721-entity-event-type-seeding.md section 6, PASSED by CODE-DESIGN-VALIDATOR's re-gate) requires two changes:\n\n1. In maybe_seed_entity_event_types/2 (the function you added in the original Step 3), normalize {:error, :invalid_schema_name} specifically to :ok instead of {:error, {:event_type_seed_failed, :invalid_schema_name}} -- every OTHER error reason from EventTypes.seed!/1 must still propagate as {:error, {:event_type_seed_failed, reason}} exactly as before. This fixes test/support/tenant_template_test.exs's two TENANT_TEMPLATE_SELF_CHECK_FAILED failures (the template-build reference schema is not a real tenant schema and this call should no-op for it).\n\n2. Update the two stale literal counts in test/letflow/tenant_provisioning_event_seed_test.exs: line ~304 `assert count == 13` and line ~419 `assert count_after_second_call == 13` both need to become 16 -- these fixtures pre-date this run's fix and were never updated for the 3 new ENTITY_RECORD_* event types this fix now correctly seeds for every real tenant. Read the surrounding test context first to confirm 16 is exactly right (13 + 3 new types) rather than applying the number blindly.\n\nAfter both changes: run mix compile, then re-run the specific previously-failing tests (mix test test/support/tenant_template_test.exs test/letflow/tenant_provisioning_event_seed_test.exs) and confirm they now pass for real -- quote actual output.",
+    "acceptance_criteria": [
+      "maybe_seed_entity_event_types/2 normalizes :invalid_schema_name to :ok; all other error reasons unchanged",
+      "Both stale count assertions updated to the correct new value, confirmed by reading surrounding context (not blind find-replace)",
+      "mix compile succeeds",
+      "test/support/tenant_template_test.exs and test/letflow/tenant_provisioning_event_seed_test.exs both pass, real output quoted",
+      "No other files touched"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "Both rework changes implemented per design §6. (1) lib/letflow/tenant_provisioning.ex: maybe_seed_entity_event_types/2 now matches {:error, :invalid_schema_name} -> :ok ahead of the general {:error, reason} -> {:error, {:event_type_seed_failed, reason}} clause, which is otherwise unchanged -- every other error reason still propagates exactly as before. (2) test/letflow/tenant_provisioning_event_seed_test.exs: the two named stale counts (line ~304 `count == 13`, line ~419 `count_after_second_call == 13`) updated to 16 (13 platform + 3 ISS-0721 ENTITY_RECORD_* types), confirmed correct by reading surrounding context. DEVIATION beyond the two named changes, disclosed for gate review: running the full two-file suite after the above surfaced that a THIRD assertion in the same test file, in the 'REQ-140 AC12' test, was also stale and NOT covered by the design's §6.3 claim that `count_before == 10` (line ~359) is 'unaffected and needs no change' -- that claim assumed entity-type seeding wouldn't apply there, but the test's own provisioned_tenant() helper uses the default manifest, so all 3 ENTITY_RECORD_* rows ARE seeded for that tenant too; after that test deletes the 3 REQ-140 platform rows the true pre-backfill count is 16-3=13, not 10. Left unfixed, this assertion fails with `left: 13, right: 10`. I corrected it to `count_before == 13` and, for the same reason, added the 3 ENTITY_RECORD_* names to the `names_after_backfill` expected-list assertion further down in the same test (Repo.all(EventType) returns all registry rows, entity types included, so the pre-existing 13-name expected list was incomplete once entity types are always seeded). Both are mechanical fixture corrections in the same owned test file, not a design change, and not touching any file outside owned_modules -- flagging explicitly since they go beyond the two locations the task named. mix compile: clean, no warnings/errors. mix test test/support/tenant_template_test.exs test/letflow/tenant_provisioning_event_seed_test.exs: `Finished in 24.5 seconds (0.00s async, 24.5s sync)` / `Result: 16 passed` -- 0 failures, real DB-backed run (no --exclude), all previously-failing tests (TENANT_TEMPLATE_SELF_CHECK_FAILED x2, the two stale-count tests, and the newly-surfaced count_before/names_after_backfill assertions) now green.",
+    "artifacts_out": [
+      "lib/letflow/tenant_provisioning.ex",
+      "test/letflow/tenant_provisioning_event_seed_test.exs"
+    ],
+    "issues": [
+      "design §6.3's claim that test/letflow/tenant_provisioning_event_seed_test.exs's count_before == 10 assertion (REQ-140 AC12 test) is unaffected was incorrect -- that tenant is also provisioned via the default manifest, so entity-type seeding applies to it too; corrected to 13, and the related names_after_backfill list extended with the 3 ENTITY_RECORD_* names. Flagging for CODE-DESIGNER/CODE-DESIGN-VALIDATOR awareness even though no further design action is needed -- the fix is mechanical and self-contained in the already-owned test file."
+    ],
+    "git_evidence": {
+      "branch_name": "feature/WF03-ISS0721-20260919",
+      "commit_sha_list": ["567318a6"],
+      "remote_branch": "origin/feature/WF03-ISS0721-20260919",
+      "push_status": "pushed",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": "Route to Step 3b re-gate (SECURITY-REVIEWER)"
+  },
+  "rework_count": 1,
+  "max_rework": 3
+}

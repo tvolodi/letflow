@@ -1,0 +1,54 @@
+{
+  "handoff_id": "wf03-iss0721-stepfinal",
+  "run_id": "WF03-ISS0721-20260919",
+  "workflow_id": "WF-03",
+  "step": "final",
+  "from_agent": "ORCH",
+  "to_agent": "ELIXIR-DEV",
+  "file": "handoffs/WF03-ISS0721-20260919/step-final-git-merge.json",
+  "created_at": "2026-09-19T08:19:55Z",
+  "started_at": "2026-09-19T08:19:55Z",
+  "completed_at": null,
+  "status": "IN_PROGRESS",
+  "priority": "NORMAL",
+  "context": {
+    "stage": null,
+    "requirement_ids": ["REQ-228"],
+    "requirement_text": {},
+    "source_text": {},
+    "related_handoff_ids": ["wf03-iss0721-step05"],
+    "artifacts_in": [
+      "docs/agents/protocols/GIT_MERGE.md",
+      "handoffs/WF03-ISS0721-20260919/step-04c-test-runner-rerun1.json",
+      "handoffs/WF03-ISS0721-20260919/step-05-issue-fixer-close.json"
+    ],
+    "owned_modules": ["lib/letflow/tenant_provisioning.ex"]
+  },
+  "task": {
+    "description": "Follow docs/agents/protocols/GIT_MERGE.md exactly for run WF03-ISS0721-20260919, branch feature/WF03-ISS0721-20260919 (all gates PASSED: CODE-DESIGN-VALIDATOR, SECURITY-REVIEWER, REVIEWER, TEST-DESIGN-VALIDATOR, TEST-RUNNER full-suite PASS at 4454/4455 with the one remaining failure being the known, pre-existing, unrelated ISS-0724 doc-lint issue -- structurally attributable, not this branch's). Use PR title prefix \"fix:\" per WF-03 convention. In the PR body's Validation section, state the mix test attribution explicitly: 4454 passed, 1 failed, 0 attributable to this branch (the 1 failure is test/mix/tasks/letflow_check_issue_refs_test.exs's T-LIVE-CLEAN check on docs/issues/ISS-0724.yaml's pre-existing filename/id mismatch, unrelated to lib/letflow/tenant_provisioning.ex or any file this branch touches -- evidence in handoffs/WF03-ISS0721-20260919/step-04c-test-runner-rerun1.json). SECURITY-REVIEWER: PASS (tenant-data path, in scope -- handoffs/WF03-ISS0721-20260919/step-03b-security-reviewer-rework1.json). RELEASE-VALIDATOR: not run for this WF-03 issue-fix run (WF-03 does not name it as a step; TEST-RUNNER's full-suite PASS is this run's own independent re-verification).",
+    "acceptance_criteria": [
+      "gh pr merge exited 0 (or PARTIAL correctly reported if gh unavailable)",
+      "git branch --show-current is main after cleanup",
+      "git log --oneline -1 shows the squash-merge commit",
+      "git status shows a clean working tree",
+      "PR body's mix test line carries the real counts and attribution, not a bare PASS"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "",
+    "artifacts_out": [],
+    "issues": [],
+    "git_evidence": {
+      "branch_name": "feature/WF03-ISS0721-20260919",
+      "commit_sha_list": [],
+      "remote_branch": "origin/feature/WF03-ISS0721-20260919",
+      "push_status": "skipped",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": ""
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

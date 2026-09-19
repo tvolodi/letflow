@@ -1,0 +1,67 @@
+{
+  "handoff_id": "wf03-iss0721-step04c",
+  "run_id": "WF03-ISS0721-20260919",
+  "workflow_id": "WF-03",
+  "step": "04c",
+  "from_agent": "ORCH",
+  "to_agent": "TEST-RUNNER",
+  "file": "handoffs/WF03-ISS0721-20260919/step-04c-test-runner.json",
+  "created_at": "2026-09-19T07:38:27Z",
+  "started_at": "2026-09-19T07:38:27Z",
+  "completed_at": "2026-09-19T13:05:00Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": null,
+    "requirement_ids": ["REQ-228"],
+    "requirement_text": {},
+    "source_text": {},
+    "related_handoff_ids": ["wf03-iss0721-step04b"],
+    "artifacts_in": [
+      "test/letflow/tenant_provisioning/entity_event_type_seeding_test.exs",
+      "handoffs/WF03-ISS0721-20260919/step-04b-test-design-validator.json"
+    ],
+    "owned_modules": []
+  },
+  "task": {
+    "description": "Run the full test suite (mix test, or the project's standard full-suite task) on branch feature/WF03-ISS0721-20260919 and report real pass/fail counts. Note: TEST-DESIGNER and TEST-DESIGN-VALIDATOR both already observed a pre-existing, change-unrelated flake in Letflow.Engine.Lua.PlatformTest (REQ-161) under full-suite parallel load (2/360 failing, different sub-assertion each run, passes 100/100 in isolation, in a file this diff never touches). If you see the same flake, do not treat it as a blocker for THIS run -- report it as such (still name it explicitly in issues[] at the appropriate severity) rather than silently ignoring it or failing the whole gate on it. Any OTHER failure (in tenant_provisioning.ex, entity_event_type_seeding_test.exs, or anything not matching that known flake's shape) is a real blocker for this run.",
+    "acceptance_criteria": [
+      "Full suite run for real, actual output quoted (no speculation)",
+      "New test file's 2 tests pass",
+      "No failure attributable to this run's diff (tenant_provisioning.ex change) anywhere in the suite",
+      "The known unrelated Lua/PlatformTest flake, if it recurs, is named but does not block this gate"
+    ]
+  },
+  "result": {
+    "status": "FAIL",
+    "summary": "sh scripts/test_parallel.sh (16 partitions) on real Postgres: combined 4449 tests, 6 properties, 5 failures (4450/4455 passed). The known Lua/PlatformTest flake (REQ-161) did NOT recur -- none of the 5 failures match its shape. 4 of the 5 failures are real regressions from this run's diff (commit c1d72550, lib/letflow/tenant_provisioning.ex's new maybe_seed_entity_event_types/2): (1) test/letflow/tenant_provisioning_event_seed_test.exs 'OQ-1... idempotent' expected count==13, got 16 (partition 4); (2) same file 'REQ-140 AC12...' expected count_before==10, got 13 (partition 4) -- both a 3-row overshoot matching the 3 new ENTITY_RECORD_* event types now seeded, against pre-existing hardcoded fixture counts not updated for this change; (3) test/support/tenant_template_test.exs 'template matches an independently migration-built reference schema' fails with TENANT_TEMPLATE_SELF_CHECK_FAILED ... {:event_type_seed_failed, :invalid_schema_name} (partition 11); (4) same file's concurrent-build variant, same error (partition 11). The 5th failure is unrelated pre-existing docs corpus drift: test/mix/tasks/letflow_check_issue_refs_test.exs's T-LIVE-CLEAN test finds docs/issues/ISS-0724.yaml's internal id field (ISS-0722) mismatched with its filename (partition 15) -- not caused by this diff, not the known flake. New test file test/letflow/tenant_provisioning/entity_event_type_seeding_test.exs's 2 tests did not appear among the 5 failures (no evidence they failed), but full per-test pass confirmation isn't printed by mix test for passing tests. Full details in test/reports/report-20260919-WF03-ISS0721-20260919.yaml.",
+    "artifacts_out": [
+      "test/reports/report-20260919-WF03-ISS0721-20260919.yaml"
+    ],
+    "issues": [
+      {
+        "severity": "BLOCKER",
+        "description": "This run's diff (commit c1d72550, lib/letflow/tenant_provisioning.ex's maybe_seed_entity_event_types/2) causes 4 real test failures: 2 in test/letflow/tenant_provisioning_event_seed_test.exs (hardcoded event-type-registry row counts now off by 3, the count of newly auto-seeded ENTITY_RECORD_* types) and 2 in test/support/tenant_template_test.exs (TENANT_TEMPLATE_SELF_CHECK_FAILED with {:event_type_seed_failed, :invalid_schema_name} from Letflow.Entities.EventTypes.seed!/1 during the independent reference-schema build). Route to ISSUE-FIXER / ELIXIR-DEV for root cause and fix before this can re-run green."
+      },
+      {
+        "severity": "INFO",
+        "description": "Known Lua/PlatformTest flake (REQ-161) did not recur in this run."
+      },
+      {
+        "severity": "MINOR",
+        "description": "Unrelated pre-existing failure: test/mix/tasks/letflow_check_issue_refs_test.exs's T-LIVE-CLEAN finds docs/issues/ISS-0724.yaml's internal id field (ISS-0722) does not match its filename. Not attributable to this diff; worth a separate fix but not this run's blocker."
+      }
+    ],
+    "git_evidence": {
+      "branch_name": "feature/WF03-ISS0721-20260919",
+      "commit_sha_list": ["f66028bf"],
+      "remote_branch": "origin/feature/WF03-ISS0721-20260919",
+      "push_status": "pushed",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": "Route to ISSUE-FIXER: diagnose and fix the 4 regressions in lib/letflow/tenant_provisioning.ex's maybe_seed_entity_event_types/2 (test/letflow/tenant_provisioning_event_seed_test.exs row-count fixtures and test/support/tenant_template_test.exs's :invalid_schema_name error from Letflow.Entities.EventTypes.seed!/1), then re-run TEST-RUNNER before proceeding to Step 5 close-out."
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

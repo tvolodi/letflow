@@ -1,0 +1,97 @@
+# WF-03 ISS-0721 (REQ-228) -- Step 4c full-suite run.
+# `sh scripts/test_parallel.sh` (16 partitions, N from nproc) on branch
+# feature/WF03-ISS0721-20260919, real Postgres (docker-compose, letflow-postgres-1,
+# port 5462). Actual combined output:
+#
+#   combined: 4449 tests, 6 properties, 5 failures (4450/4455 passed)
+#
+# 4 of the 5 failures are directly attributable to THIS run's diff
+# (lib/letflow/tenant_provisioning.ex's new maybe_seed_entity_event_types/2 clause,
+# commit c1d72550 "feat(ISS-0721): seed entity record event types during tenant
+# provisioning"); the 5th is pre-existing and unrelated. NONE of the 5 match the
+# known Lua/PlatformTest flake's shape (that flake did not recur in this run).
+#
+# Verdict: FAIL. Real blocker per this handoff's own acceptance criteria
+# ("No failure attributable to this run's diff ... anywhere in the suite").
+
+requirement: REQ-228
+run_id: WF03-ISS0721-20260919
+branch: feature/WF03-ISS0721-20260919
+command: sh scripts/test_parallel.sh
+partitions: 16
+
+totals:
+  tests: 4449
+  properties: 6
+  failures: 5
+  passed: 4450
+  attempted: 4455
+
+known_flake_recurred: false   # Letflow.Engine.Lua.PlatformTest (REQ-161) did not
+                               # appear anywhere in the 5 failures below.
+
+failures:
+  - test: "OQ-1: replay_migrations/2 re-run against an already-seeded tenant stays idempotent a second replay_migrations/2 call for the same tenant still returns :ok overall, and the 13 rows are not duplicated"
+    module: Letflow.TenantProvisioningEventSeedTest
+    file: test/letflow/tenant_provisioning_event_seed_test.exs:290
+    assertion: "assert count == 13"
+    got: 16
+    attributable_to_this_diff: true
+    reason: >
+      3-row overshoot matches exactly the 3 new ENTITY_RECORD_CREATED/UPDATED/DELETED
+      event types this diff's maybe_seed_entity_event_types/2 now seeds during
+      replay_migrations/2 -- this pre-existing fixture's hardcoded row-count
+      expectation (13) predates that change and was not updated for it.
+    partition: 4
+
+  - test: "REQ-140 AC12: a pre-existing (6-row) tenant gains the 3 new registry rows on replay, idempotently replay_migrations/2 backfills the 3 REQ-140 types, and a second call is a no-op"
+    module: Letflow.TenantProvisioningEventSeedTest
+    file: test/letflow/tenant_provisioning_event_seed_test.exs:337
+    assertion: "assert count_before == 10"
+    got: 13
+    attributable_to_this_diff: true
+    reason: "Same 3-row overshoot as above, same root cause."
+    partition: 4
+
+  - test: "the template itself is faithful to a genuine migration build template matches an independently migration-built reference schema"
+    module: Letflow.Test.TenantTemplateTest
+    file: test/support/tenant_template_test.exs:93
+    error: "TENANT_TEMPLATE_SELF_CHECK_FAILED reference build via replay_migrations/2 returned {:event_type_seed_failed, :invalid_schema_name}"
+    stacktrace_entry: "test/support/tenant_template.ex:541: Letflow.Test.TenantTemplate.assert_template_parity_against_independent_reference!/1"
+    attributable_to_this_diff: true
+    reason: >
+      Error atom is literally this diff's own {:error, {:event_type_seed_failed,
+      reason}} wrapping (lib/letflow/tenant_provisioning.ex's new
+      maybe_seed_entity_event_types/2) -- the reference-schema build path used by
+      the template-parity self-check hits :invalid_schema_name inside
+      Letflow.Entities.EventTypes.seed!/1.
+    partition: 11
+
+  - test: "the template itself is faithful to a genuine migration build two concurrent reference-schema builds do not collide"
+    module: Letflow.Test.TenantTemplateTest
+    file: test/support/tenant_template_test.exs:108
+    error: "TENANT_TEMPLATE_SELF_CHECK_FAILED reference build via replay_migrations/2 returned {:event_type_seed_failed, :invalid_schema_name}"
+    attributable_to_this_diff: true
+    reason: "Same root cause as the previous failure, hit on the concurrent-build variant."
+    partition: 11
+
+  - test: "T-LIVE-* -- the real docs/issues/ corpus T-LIVE-CLEAN -- the tree itself satisfies every rule"
+    module: Mix.Tasks.Letflow.CheckIssueRefsTest
+    file: test/mix/tasks/letflow_check_issue_refs_test.exs:151
+    error: "docs/issues/ has drifted from the numbering schema: [R5] docs/issues/ISS-0724.yaml: `id: ISS-0722` does not match filename `ISS-0724`"
+    attributable_to_this_diff: false
+    reason: >
+      Pre-existing docs/issues/ corpus drift (ISS-0724.yaml's internal id field
+      says ISS-0722), unrelated to tenant_provisioning.ex/entity event type
+      seeding and not touched by this run's diff. Not the known Lua/PlatformTest
+      flake either -- a distinct, real, but out-of-scope finding.
+    partition: 15
+
+verdict: FAIL
+verdict_reason: >
+  4 of 5 failures are real regressions introduced by this run's diff (commit
+  c1d72550), violating this handoff's own acceptance criterion "No failure
+  attributable to this run's diff (tenant_provisioning.ex change) anywhere in
+  the suite". The known Lua/PlatformTest flake did not recur. The 5th failure
+  (docs/issues/ corpus drift, ISS-0724.yaml) is unrelated pre-existing drift,
+  named here for completeness but not this run's blocker.

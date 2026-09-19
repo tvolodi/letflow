@@ -1935,3 +1935,41 @@
 2026-09-19T06:34:25Z | DISPATCH | WF-03 | WF03-ISS0721-20260919/step-00-git-setup | ORCH -> ELIXIR-DEV | PENDING
 2026-09-19T06:36:27Z | RECONCILE | WF-03 | WF03-ISS0721-20260919 | ORCH -> - | local main had diverged from origin (unpushed handoff commits vs origin ISS-0724 commit c47f316a); rebased clean (no conflicts, disjoint files), pushed, main now at 05802cea
 2026-09-19T06:36:27Z | DISPATCH | WF-03 | WF03-ISS0721-20260919/step-00-git-setup-retry1 | ORCH -> ELIXIR-DEV | PENDING
+2026-09-19T06:37:28Z | GATE_PASS | WF-03 | WF03-ISS0721-20260919/step-00-git-setup-retry1 | ELIXIR-DEV -> ORCH | PASS
+2026-09-19T06:37:28Z | DISPATCH | WF-03 | WF03-ISS0721-20260919/step-01-issue-fixer-diagnosis | ORCH -> ISSUE-FIXER | PENDING
+2026-09-19T06:39:00Z | GATE_PASS | WF-03 | WF03-ISS0721-20260919/step-01-issue-fixer-diagnosis | ISSUE-FIXER -> ORCH | PASS
+2026-09-19T06:40:27Z | DISPATCH | WF-03 | WF03-ISS0721-20260919/step-02-code-designer | ORCH -> CODE-DESIGNER | PENDING
+2026-09-19T06:44:00Z | GATE_PASS | WF-03 | WF03-ISS0721-20260919/step-02-code-designer | CODE-DESIGNER -> ORCH | PASS
+2026-09-19T06:42:31Z | DISPATCH | WF-03 | WF03-ISS0721-20260919/step-02b-code-design-validator | ORCH -> CODE-DESIGN-VALIDATOR | PENDING
+2026-09-19T06:47:00Z | GATE_FAIL | WF-03 | WF03-ISS0721-20260919/step-02b-code-design-validator | CODE-DESIGN-VALIDATOR -> ORCH | FAIL (1 BLOCKER: literal code in design doc section 5)
+2026-09-19T06:45:03Z | DISPATCH | WF-03 | WF03-ISS0721-20260919/step-02-code-designer-rework1 | ORCH -> CODE-DESIGNER | PENDING (rework 1/3)
+2026-09-19T06:49:00Z | GATE_PASS | WF-03 | WF03-ISS0721-20260919/step-02-code-designer-rework1 | CODE-DESIGNER -> ORCH | PASS
+2026-09-19T06:46:26Z | DISPATCH | WF-03 | WF03-ISS0721-20260919/step-02b-code-design-validator-rework1 | ORCH -> CODE-DESIGN-VALIDATOR | PENDING (re-gate)
+2026-09-19T06:51:00Z | GATE_PASS | WF-03 | WF03-ISS0721-20260919/step-02b-code-design-validator-rework1 | CODE-DESIGN-VALIDATOR -> ORCH | PASS
+2026-09-19T06:47:45Z | DISPATCH | WF-03 | WF03-ISS0721-20260919/step-03-elixir-dev | ORCH -> ELIXIR-DEV | PENDING
+2026-09-19T06:52:00Z | GATE_PASS | WF-03 | WF03-ISS0721-20260919/step-03-elixir-dev | ELIXIR-DEV -> ORCH | PASS
+2026-09-19T06:49:45Z | DISPATCH | WF-03 | WF03-ISS0721-20260919/step-03b-security-reviewer | ORCH -> SECURITY-REVIEWER | PENDING
+2026-09-19T06:53:00Z | GATE_PASS | WF-03 | WF03-ISS0721-20260919/step-03b-security-reviewer | SECURITY-REVIEWER -> ORCH | PASS
+2026-09-19T06:51:18Z | DISPATCH | WF-03 | WF03-ISS0721-20260919/step-03c-reviewer | ORCH -> REVIEWER | PENDING
+2026-09-19T06:55:00Z | GATE_PASS | WF-03 | WF03-ISS0721-20260919/step-03c-reviewer | REVIEWER -> ORCH | PASS
+2026-09-19T06:52:18Z | DISPATCH | WF-03 | WF03-ISS0721-20260919/step-04-test-designer | ORCH -> TEST-DESIGNER | PENDING
+2026-09-19T07:35:00Z | GATE_PASS | WF-03 | WF03-ISS0721-20260919/step-04-test-designer | TEST-DESIGNER -> ORCH | PASS (fail-then-pass proven: 0/2 pre-fix, 2/2 post-fix; MINOR incidental flake flagged, Lua PlatformTest REQ-161, unrelated to this diff)
+2026-09-19T07:34:09Z | DISPATCH | WF-03 | WF03-ISS0721-20260919/step-04b-test-design-validator | ORCH -> TEST-DESIGN-VALIDATOR | PENDING
+2026-09-19T07:52:00Z | GATE_PASS | WF-03 | WF03-ISS0721-20260919/step-04b-test-design-validator | TEST-DESIGN-VALIDATOR -> ORCH | PASS (fail-side independently reproduced; incidental Lua/PlatformTest flake flagged for filing)
+2026-09-19T07:38:27Z | DISPATCH | WF-03 | WF03-ISS0721-20260919/step-04c-test-runner | ORCH -> TEST-RUNNER | PENDING
+2026-09-19T07:52:00Z | GATE_FAIL | WF-03 | WF03-ISS0721-20260919/step-04c-test-runner | TEST-RUNNER -> ORCH | FAIL (4/5 failures caused by this diff: 2 stale row-count fixtures in tenant_provisioning_event_seed_test.exs, 2 real :invalid_schema_name failures in tenant_template_test.exs; 1 unrelated pre-existing ISS-0724 filename/id drift failure)
+2026-09-19T07:50:41Z | DISPATCH | WF-03 | WF03-ISS0721-20260919/step-02-code-designer-rework2 | ORCH -> CODE-DESIGNER | PENDING (design amendment after Step 4c FAIL)
+2026-09-19T08:05:00Z | GATE_PASS | WF-03 | WF03-ISS0721-20260919/step-02-code-designer-rework2 | CODE-DESIGNER -> ORCH | PASS (design amended with invalid_schema_name carve-out)
+2026-09-19T07:54:24Z | DISPATCH | WF-03 | WF03-ISS0721-20260919/step-02b-code-design-validator-rework2 | ORCH -> CODE-DESIGN-VALIDATOR | PENDING
+2026-09-19T08:10:00Z | GATE_PASS | WF-03 | WF03-ISS0721-20260919/step-02b-code-design-validator-rework2 | CODE-DESIGN-VALIDATOR -> ORCH | PASS
+2026-09-19T07:55:42Z | DISPATCH | WF-03 | WF03-ISS0721-20260919/step-03-elixir-dev-rework1 | ORCH -> ELIXIR-DEV | PENDING (rework 1/3)
+2026-09-19T08:20:00Z | GATE_PASS | WF-03 | WF03-ISS0721-20260919/step-03-elixir-dev-rework1 | ELIXIR-DEV -> ORCH | PASS (invalid_schema_name carve-out implemented; 3 stale fixture assertions fixed, one beyond design's explicit note but mechanical/flagged)
+2026-09-19T08:01:52Z | DISPATCH | WF-03 | WF03-ISS0721-20260919/step-03b-security-reviewer-rework1 | ORCH -> SECURITY-REVIEWER | PENDING (re-gate on updated diff)
+2026-09-19T08:15:00Z | GATE_PASS | WF-03 | WF03-ISS0721-20260919/step-03b-security-reviewer-rework1 | SECURITY-REVIEWER -> ORCH | PASS (carve-out structurally unreachable for a real tenant schema_name)
+2026-09-19T08:04:13Z | DISPATCH | WF-03 | WF03-ISS0721-20260919/step-03c-reviewer-rework1 | ORCH -> REVIEWER | PENDING (re-gate on updated diff, incl. scope-creep judgement on 3rd fixture fix)
+2026-09-19T08:30:00Z | GATE_PASS | WF-03 | WF03-ISS0721-20260919/step-03c-reviewer-rework1 | REVIEWER -> ORCH | PASS (3rd fixture fix ruled in-scope mechanical correction, not scope creep)
+2026-09-19T08:06:49Z | DISPATCH | WF-03 | WF03-ISS0721-20260919/step-04c-test-runner-rerun1 | ORCH -> TEST-RUNNER | PENDING (re-run after Step 3 rework1)
+2026-09-19T08:45:00Z | GATE_PASS | WF-03 | WF03-ISS0721-20260919/step-04c-test-runner-rerun1 | TEST-RUNNER -> ORCH | PASS (4454/4455, only known unrelated ISS-0724 failure remains)
+2026-09-19T08:18:27Z | DISPATCH | WF-03 | WF03-ISS0721-20260919/step-05-issue-fixer-close | ORCH -> ISSUE-FIXER | PENDING
+2026-09-19T08:30:00Z | RESOLVE | WF-03 | WF03-ISS0721-20260919/step-05-issue-fixer-close | ISSUE-FIXER -> ORCH | PASS (ISS-0721 resolved, GH-1554 closed)
+2026-09-19T08:19:55Z | DISPATCH | WF-03 | WF03-ISS0721-20260919/step-final-git-merge | ORCH -> ELIXIR-DEV | PENDING

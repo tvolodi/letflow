@@ -1,0 +1,72 @@
+{
+  "handoff_id": "wf03-iss0721-step02b-rework1",
+  "run_id": "WF03-ISS0721-20260919",
+  "workflow_id": "WF-03",
+  "step": "02b",
+  "from_agent": "ORCH",
+  "to_agent": "CODE-DESIGN-VALIDATOR",
+  "file": "handoffs/WF03-ISS0721-20260919/step-02b-code-design-validator-rework1.json",
+  "created_at": "2026-09-19T06:46:26Z",
+  "started_at": "2026-09-19T06:46:26Z",
+  "completed_at": "2026-09-19T06:47:02Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": null,
+    "requirement_ids": ["REQ-228"],
+    "requirement_text": {},
+    "source_text": {},
+    "related_handoff_ids": ["wf03-iss0721-step02b", "wf03-iss0721-step02-rework1"],
+    "artifacts_in": [
+      "lib/letflow/design/iss0721-entity-event-type-seeding.md",
+      "handoffs/WF03-ISS0721-20260919/step-02b-code-design-validator.json",
+      "handoffs/WF03-ISS0721-20260919/step-02-code-designer-rework1.json",
+      "lib/letflow/tenant_provisioning.ex"
+    ],
+    "owned_modules": []
+  },
+  "task": {
+    "description": "Re-gate of lib/letflow/design/iss0721-entity-event-type-seeding.md after CODE-DESIGNER's rework1. Your prior FAIL (handoffs/WF03-ISS0721-20260919/step-02b-code-design-validator.json) named 1 BLOCKER (section 5 contained directly-pasteable Elixir code, not prose) and 1 MINOR (section 7's @spec claim was a speculative conditional). Re-read section 5 and section 7 yourself and verify both are actually fixed -- section 5 must now be prose describing control flow (no runnable code fence for the NEW logic), and section 7 must state the @spec gap as a confirmed fact matching tenant_provisioning.ex:364-371's real current @spec (verify this yourself, don't trust the rework's claim). Also spot-check that the four previously-PASSED checks were not regressed (traceability, idempotency claim, no-TBD language, regression-test spec) -- a quick re-scan is sufficient since those sections were reported unchanged, but confirm they are in fact unchanged.",
+    "acceptance_criteria": [
+      "Section 5 contains no directly-pasteable Elixir code for the NEW logic -- prose only",
+      "Section 7's @spec claim verified against tenant_provisioning.ex's actual current @spec, stated as fact not speculation",
+      "Previously-passed checks confirmed still intact",
+      "PASS or FAIL with specific findings per HANDOFF_PROTOCOL.md's worked examples"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "Re-gate PASS. Both prior findings independently re-verified against source, not against the rework's own claims. (1) BLOCKER resolved: design doc section 5 (lib/letflow/design/iss0721-entity-event-type-seeding.md:111-174) now contains prose only for the NEW with-chain clause -- the only remaining code fence in section 5 (lines 113-119) is the existing/current with-chain shown verbatim for context ('Current (tenant_provisioning.ex:390-392)'), not new logic; the 'New' subsection (lines 121-139) is pure prose describing control flow, deferring the exact construct to ELIXIR-DEV ('ELIXIR-DEV chooses the exact construct'). No directly-pasteable Elixir for the new clause. (2) MINOR resolved: section 7 (lines 218-222) and section 5's closing note (lines 159-173) state the @spec gap as a confirmed fact ('Confirmed by direct read of tenant_provisioning.ex:364-371 (not assumed)'), not a speculative conditional. Verified myself by reading tenant_provisioning.ex:364-371 directly: the live @spec for replay_migrations/2 is exactly {:ok, [pos_integer()]} | {:error, :tenant_not_provisioned} | {:error, {:migration_failed, Exception.t()}} -- it does NOT list {:error, {:event_type_seed_failed, term()}}, matching the design doc's claim verbatim. Regression check on the four previously-passed items, re-scanned against current file content: traceability (section 0, four sources cited with line ranges) intact; idempotency claim (section 4) intact and unchanged, correctly attributes duplicate-tolerance to seed!/1 itself; no TBD/deferral language found anywhere in the document; regression-test spec (section 6, 5 numbered requirements incl. fail-then-pass and idempotency assertions) intact. Also confirmed section 2's lone code fence (lines 42-44) is a bare @spec signature only, no function body -- consistent with the no-implementation-code rule and not part of either finding under re-gate. No new issues found.",
+    "artifacts_out": ["handoffs/WF03-ISS0721-20260919/step-02b-code-design-validator-rework1.json"],
+    "issues": [],
+    "git_evidence": {
+      "branch_name": "feature/WF03-ISS0721-20260919",
+      "commit_sha_list": ["078926ba"],
+      "remote_branch": "origin/feature/WF03-ISS0721-20260919",
+      "push_status": "pushed",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": "Route to Step 3 (ELIXIR-DEV implementation)"
+  },
+  "rework_count": 1,
+  "max_rework": 3,
+  "gate_history": [
+    {
+      "iteration": 0,
+      "gated_at": "2026-09-19T06:44:00Z",
+      "status": "FAIL",
+      "summary": "Section 5's 'New' code fence was directly-pasteable Elixir, not prose/shape -- violates no-implementation-code rule. Section 7's @spec claim was a speculative conditional rather than a verified fact.",
+      "issues": ["BLOCKER: section 5 contains implementation code", "MINOR: section 7 speculative @spec wording"],
+      "next_action": "Rework CODE-DESIGNER"
+    },
+    {
+      "iteration": 1,
+      "gated_at": "2026-09-19T06:47:02Z",
+      "status": "PASS",
+      "summary": "Both findings independently re-verified against actual file contents (not the rework's claims): section 5 is now prose-only for the new with-chain clause, and section 7's @spec claim matches tenant_provisioning.ex:364-371's real current @spec verbatim. Previously-passed checks confirmed still intact.",
+      "issues": [],
+      "next_action": "Route to Step 3 (ELIXIR-DEV implementation)"
+    }
+  ]
+}

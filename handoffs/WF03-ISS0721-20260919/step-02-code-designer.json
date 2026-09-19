@@ -1,0 +1,55 @@
+{
+  "handoff_id": "wf03-iss0721-step02",
+  "run_id": "WF03-ISS0721-20260919",
+  "workflow_id": "WF-03",
+  "step": "02",
+  "from_agent": "ORCH",
+  "to_agent": "CODE-DESIGNER",
+  "file": "handoffs/WF03-ISS0721-20260919/step-02-code-designer.json",
+  "created_at": "2026-09-19T06:40:27Z",
+  "started_at": "2026-09-19T06:40:27Z",
+  "completed_at": "2026-09-19T06:52:00Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": null,
+    "requirement_ids": ["REQ-228"],
+    "requirement_text": {},
+    "source_text": {},
+    "related_handoff_ids": ["wf03-iss0721-step01"],
+    "artifacts_in": [
+      "handoffs/WF03-ISS0721-20260919/step-01-issue-fixer-diagnosis.json",
+      "lib/letflow/entities/event_types.ex",
+      "lib/letflow/tenant_provisioning.ex",
+      "lib/letflow/design/req228-entity-event-registration-commands.md",
+      "lib/letflow/design/iss072-event-type-registration.md"
+    ],
+    "owned_modules": ["lib/letflow/tenant_provisioning.ex"]
+  },
+  "task": {
+    "description": "Design a fix for ISS-0721 using ISSUE-FIXER's diagnosis in step-01's result.summary in full (do not re-derive the root cause -- it's already established there). The diagnosis names the exact call site (Letflow.TenantProvisioning.replay_migrations/2, tenant_provisioning.ex:390's with-chain) and the exact argument (schema_name, already bound in that function's own %Registration{schema_name: schema_name} clause) for a new sibling call mirroring maybe_seed_platform_event_types/2's shape. Produce a design artefact under lib/letflow/design/ (design only -- signatures/@specs/shapes, no .ex implementation bodies) covering: (1) the new private function's name, signature, and placement (e.g. maybe_seed_entity_event_types/2, alongside maybe_seed_platform_event_types/2 near tenant_provisioning.ex:1074-1084) -- decide and state exact placement/idempotency semantics yourself, this is explicitly your call per ISS-0721.yaml's suggested_fix; (2) how the with-chain in replay_migrations/2 (line ~390) is extended to call it, and the ok/error shape it returns/normalizes to (EventTypes.seed!/1 returns {:ok, seed_result()} | {:error, term()} per its @spec at event_types.ex:116 -- state exactly how that's mapped to :ok | {:error, {:event_type_seed_failed, reason}} to match maybe_seed_platform_event_types/2's own return contract so the with-chain composes); (3) idempotency on a second call (tenant re-migration) -- check EventTypes.seed!/1's own moduledoc/body for its duplicate-registration behavior (it registers via Registry.register_type/2 per the design doc at req228-entity-event-registration-commands.md -- confirm whether that already tolerates a duplicate the same way maybe_seed_platform_event_types/2 tolerates {:error, :duplicate_event_type_version}, and state explicitly what this fix must do if not); (4) exactly what regression test TEST-DESIGNER needs to write to satisfy WF-03's fail-then-pass rule (a test that provisions a tenant, then asserts the entity-record event types are registered without a manual seed!/1 call, and that this test FAILS on the pre-fix code). No implementation code.",
+    "acceptance_criteria": [
+      "Every element of ISS-0721's suggested_fix is covered by a concrete design element (new function signature, exact with-chain change, ok/error shape)",
+      "Idempotency on repeat provisioning/migration is explicitly addressed, not left implicit",
+      "No .ex implementation bodies -- signatures and shapes only",
+      "States exactly what TEST-DESIGNER's regression test must assert, including the fail-first requirement"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "Design artefact written at lib/letflow/design/iss0721-entity-event-type-seeding.md, built directly on step-01's diagnosis (no re-derivation). Covers: (1) new private function maybe_seed_entity_event_types/2 in tenant_provisioning.ex, placed immediately after maybe_seed_platform_event_types/2 (after line 1084) -- two clauses (false -> :ok no-op; true -> calls Letflow.Entities.EventTypes.seed!(schema_name)) -- argument is schema_name (not tenant_id), already bound in replay_migrations/2's own %Registration{schema_name: schema_name} clause, matching every one of the 22 test call sites' argument shape. (2) with-chain in replay_migrations/2 (~line 390) extended with a second clause: `:ok <- maybe_seed_entity_event_types(using_default_manifest?, schema_name)`, same using_default_manifest? gate, inside the existing try/rescue so no new rescue path is introduced. (3) Return normalization: seed!/1's {:ok, seed_result()} -> :ok (map discarded); {:error, reason} -> {:error, {:event_type_seed_failed, reason}}, matching maybe_seed_platform_event_types/2's own tagging convention so the with-chain composes. (4) Idempotency: confirmed by reading seed!/1's body/moduledoc that it ALREADY tolerates {:error, :duplicate_event_type_version} internally per-event-type (folds into seed_result().skipped, still returns {:ok, _}) -- so maybe_seed_entity_event_types/2 needs NO extra duplicate-handling clause, unlike its sibling which matches that atom inline. Stated explicitly as a design decision, not left implicit. (5) Regression test spec for TEST-DESIGNER: provision a tenant via the real path with no manual seed!/1 call, perform a real entity-record write, assert it succeeds (not just that get_type/2 returns ok), must FAIL on pre-fix code reproducing ISS-0721's {:error, :unknown_event_type}, plus a second-call idempotency assertion (re-run replay_migrations/2, confirm no error and the write still succeeds). One open question flagged (not silently resolved): whether replay_migrations/2's existing @spec already types the {:error, {:event_type_seed_failed, term()}} union member or needs a one-line addition -- mechanical, for ELIXIR-DEV to check. No .ex implementation bodies included anywhere in the design doc.",
+    "artifacts_out": ["lib/letflow/design/iss0721-entity-event-type-seeding.md"],
+    "issues": [],
+    "git_evidence": {
+      "branch_name": "feature/WF03-ISS0721-20260919",
+      "commit_sha_list": ["216f4f25"],
+      "remote_branch": "origin/feature/WF03-ISS0721-20260919",
+      "push_status": "pushed",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": "Route to Step 2b (CODE-DESIGN-VALIDATOR)"
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

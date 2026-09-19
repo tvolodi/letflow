@@ -1,0 +1,334 @@
+# Design: ISS-0721 — wire `Entities.EventTypes.seed!/1` into tenant provisioning
+
+## 0. Sources read for this design
+
+- `handoffs/WF03-ISS0721-20260919/step-01-issue-fixer-diagnosis.json` —
+  `result.summary` in full. This design does not re-derive the root cause;
+  it takes ISSUE-FIXER's diagnosis as given and covers only the fix shape.
+- `lib/letflow/entities/event_types.ex` — `seed!/1` (`@spec` at line 116,
+  body at 117-140), its moduledoc's idempotency statement (lines 101-115),
+  `seed_result()` type (line 99).
+- `lib/letflow/tenant_provisioning.ex` — `replay_migrations/2` (lines
+  365-394, the `with`-chain at line 390), `maybe_seed_platform_event_types/2`
+  (lines 1074-1084, the ISS-0072 precedent this design mirrors), and
+  `tenant_id_for_schema_name/1`'s `@doc` (confirms `schema_name` round-trips
+  to `tenant_id`, per ISSUE-FIXER's diagnosis).
+- `lib/letflow/design/req228-entity-event-registration-commands.md` and
+  `lib/letflow/design/iss072-event-type-registration.md` — prior design
+  precedent for this exact seed-list-plus-wiring shape.
+
+**Added for the rework-iteration-2 amendment (§6):**
+`handoffs/WF03-ISS0721-20260919/step-04c-test-runner.json` and
+`test/reports/report-20260919-WF03-ISS0721-20260919.yaml` (TEST-RUNNER's
+Step 4c FAIL and root-cause trace), `test/support/tenant_template.ex` (the
+synthetic-schema self-check call sites at lines 336/536),
+`lib/letflow/tenant_provisioning.ex`'s `schema_name_for_tenant/1` and
+`tenant_id_for_schema_name/1` moduledocs (lines 204–256), and
+`test/letflow/tenant_provisioning_event_seed_test.exs` (the two stale
+row-count assertions, lines 304/419).
+
+## 1. Root cause (as established by ISSUE-FIXER — not re-derived here)
+
+`Letflow.Entities.EventTypes.seed!/1` (REQ-228) registers the three
+`ENTITY_RECORD_*` event types but has **zero production call sites** —
+every call site outside `event_types.ex` itself is a test fixture. A
+freshly-provisioned tenant's `event_type_registry` table therefore has no
+rows for `ENTITY_RECORD_CREATED/UPDATED/DELETED`, so the first entity-record
+write 500s via `EventStore.Registry.validate_payload/3` →
+`{:error, :unknown_event_type}`. This is a distinct instance of the same
+*class* of gap ISS-0072 fixed for the engine's own event types (via
+`maybe_seed_platform_event_types/2`), not a recurrence of ISS-0072's own
+root cause — the two seed lists are separate and this one was simply never
+wired at all.
+
+## 2. New function: name, signature, placement
+
+Add a new private function to `lib/letflow/tenant_provisioning.ex`,
+immediately after `maybe_seed_platform_event_types/2` (i.e. directly below
+line 1084, inside the same private-helpers region, so the two ISS-0072/
+ISS-0721 seed wrappers stay visually paired for future readers):
+
+```
+@spec maybe_seed_entity_event_types(using_default_manifest? :: boolean(), schema_name :: String.t()) ::
+        :ok | {:error, {:event_type_seed_failed, term()}}
+```
+
+Two clauses, mirroring `maybe_seed_platform_event_types/2`'s own
+false/true split exactly:
+
+- `maybe_seed_entity_event_types(false, _schema_name)` → `:ok` (no-op when
+  the caller supplied a custom `migration_source`, same gating rationale as
+  the platform seed: a partial/custom migration list may not even have
+  applied the `event_type_registry` table's DDL yet).
+- `maybe_seed_entity_event_types(true, schema_name)` → calls
+  `Letflow.Entities.EventTypes.seed!(schema_name)` and normalizes its
+  return per §3 below.
+
+**Argument is `schema_name`, not `tenant_id`** — this is the one place this
+new function's shape *differs* from its sibling `maybe_seed_platform_event_types/2`
+(which takes `tenant_id`, because it calls `Registry.register_type/2`
+directly). `EventTypes.seed!/1`'s own `@spec` takes `prefix :: String.t()`
+and internally round-trips it back to a `tenant_id` via
+`tenant_id_for_schema_name/1`. `replay_migrations/2` already has
+`schema_name` bound in its own `%Registration{schema_name: schema_name}`
+clause (line 376) and already passes that same `schema_name` value as
+`Ecto.Migrator.run/4`'s `prefix:` option (line 384) — no new value needs to
+be threaded in or derived; the call site (§4) passes that existing binding
+straight through.
+
+## 3. Return-shape normalization
+
+`EventTypes.seed!/1` returns `{:ok, seed_result()} | {:error, term()}`
+(`seed_result() :: %{registered: [Registry.EventType.t()], skipped: [String.t()]}`).
+`maybe_seed_entity_event_types/2` must normalize this to match
+`maybe_seed_platform_event_types/2`'s own `:ok | {:error, {:event_type_seed_failed, reason}}`
+contract, so the two calls compose identically inside the same `with`-chain:
+
+| `seed!/1` returns | `maybe_seed_entity_event_types/2` returns |
+|---|---|
+| `{:ok, _seed_result}` | `:ok` (the `seed_result()` map — `registered`/`skipped` lists — is discarded, same as `maybe_seed_platform_event_types/2` discards `register_type/2`'s `{:ok, event_type}`) |
+| `{:error, reason}` | `{:error, {:event_type_seed_failed, reason}}` |
+
+No `case`/`with` branch needs to special-case
+`{:error, :duplicate_event_type_version}` here — see §4.
+
+## 4. Idempotency on repeat provisioning/migration
+
+`EventTypes.seed!/1` **already tolerates duplicates internally** (confirmed
+by reading its body, event_types.ex:117-140, and its moduledoc,
+lines 106-114): each of the three `Registry.register_type/2` calls that
+returns `{:error, :duplicate_event_type_version}` is caught inside its own
+`Enum.reduce_while/3` and folded into the `skipped` list rather than halting
+or erroring — the overall call still returns `{:ok, seed_result()}` with
+that event type's name in `skipped`. This is the exact same idempotency
+guarantee `maybe_seed_platform_event_types/2` gets by explicitly matching
+`{:error, :duplicate_event_type_version} -> {:cont, :ok}` itself — the
+difference is *where* the tolerance lives (inside `seed!/1` for this call,
+inline in the caller for the platform seed), not whether it exists.
+
+**Conclusion: no extra idempotency handling is needed in
+`maybe_seed_entity_event_types/2`.** A second `replay_migrations/2` call
+against an already-seeded tenant schema re-invokes `seed!/1`, which re-hits
+`{:error, :duplicate_event_type_version}` for all three event types
+internally, still returns `{:ok, %{registered: [], skipped: [...]}}`, which
+§3's mapping turns into `:ok` — the with-chain proceeds exactly as on first
+call. This must be stated as a design decision (not left implicit) because
+it is the one place this fix's behavior legitimately differs from copying
+`maybe_seed_platform_event_types/2`'s pattern verbatim: no duplicate-atom
+match arm is needed or written here, since `seed!/1` already absorbs it one
+layer down.
+
+## 5. `with`-chain change in `replay_migrations/2`
+
+Current (tenant_provisioning.ex:390-392):
+
+```
+with :ok <- maybe_seed_platform_event_types(using_default_manifest?, tenant_id) do
+  {:ok, applied_versions}
+end
+```
+
+New (described here as the required control-flow shape, not as code;
+ELIXIR-DEV chooses the exact construct — mirrors
+`lib/letflow/design/iss072-event-type-registration.md` section 2.1's
+convention for this same class of change): the `with`-chain gains a second
+`:ok <-` clause, inserted immediately after the existing
+`:ok <- maybe_seed_platform_event_types(using_default_manifest?, tenant_id)`
+clause and before the chain's `do` block. This new clause calls
+`maybe_seed_entity_event_types(using_default_manifest?, schema_name)` — the
+same `using_default_manifest?` value already bound for the first clause, and
+the `schema_name` value already bound in the `%Registration{schema_name:
+schema_name}` clause (line 376), not a new or re-derived value. The chain's
+`do` block is unchanged (`{:ok, applied_versions}`). On success both clauses
+evaluate to `:ok` and the chain proceeds to the `do` block exactly as today;
+if either clause instead returns `{:error, {:event_type_seed_failed, reason}}`
+(the platform clause's existing shape, or the new entity clause's shape per
+§3), the `with` short-circuits on that `{:error, ...}` value and
+`replay_migrations/2` returns it directly, without evaluating the `do` block —
+identical short-circuit behavior to the platform clause today, just now with
+a second clause capable of triggering it.
+
+Notes on this change:
+
+- Both clauses run inside the same `try` that already wraps
+  `Ecto.Migrator.run/4` (lines 380-393), so an unexpected exception from
+  either seed call is still caught by the existing `rescue exception ->
+  {:error, {:migration_failed, exception}}` clause — no new rescue path is
+  introduced.
+- Order: `maybe_seed_platform_event_types/2` first (existing behavior,
+  unchanged position), `maybe_seed_entity_event_types/2` second. The two
+  seed lists are independent (different event type names, no shared state
+  or ordering dependency between them), so this order is arbitrary but is
+  specified explicitly to remove ambiguity for ELIXIR-DEV: platform first,
+  entity second, matching the order the two `maybe_seed_*` function
+  definitions will appear in the file (§2).
+- Both clauses are gated by the *same* `using_default_manifest?` value
+  (computed once at line 379) — not re-evaluated per clause — so a caller
+  passing a custom `migration_source` skips both seed attempts identically,
+  preserving ISS-0072's original gating rationale for the new call too.
+- `{:error, {:event_type_seed_failed, reason}}` from either clause short-
+  circuits the `with`. **Confirmed by direct read of
+  `tenant_provisioning.ex:364-371` (not assumed):** `replay_migrations/2`'s
+  current `@spec` lists only `{:error, :tenant_not_provisioned}` and
+  `{:error, {:migration_failed, Exception.t()}}` — it does **not** already
+  list `{:error, {:event_type_seed_failed, term()}}`, even though the
+  existing `maybe_seed_platform_event_types/2` clause already wired into the
+  `with`-chain today can already produce that exact shape. This is a
+  pre-existing gap this design's file list does not otherwise touch, and it
+  becomes newly load-bearing once the entity clause added here can also
+  produce that shape. **ELIXIR-DEV must add
+  `{:error, {:event_type_seed_failed, term()}}` as a one-line addition to
+  the `@spec`'s error union** — mechanical (widening an existing union to
+  match a return value the function can already produce), not a design
+  decision, so it is not further specified here.
+
+## 6. Amendment (rework iteration 2): the `:invalid_schema_name` carve-out
+
+**Trigger for this amendment:** TEST-RUNNER's Step 4c full-suite run
+(`test/reports/report-20260919-WF03-ISS0721-20260919.yaml`) found a real
+regression this design's §2–§5 shape introduced, traced by ORCH to a direct
+read of the code (not guessed): `test/support/tenant_template.ex` builds a
+reference/self-check schema by calling the real, unmodified
+`Letflow.TenantProvisioning.replay_migrations/2` (call sites at lines 336
+and 536) against a `Registration` whose `schema_name` is a deliberate
+non-standard literal (e.g. `"tenant_template_refcheck"`) rather than the
+canonical `"tenant_" <> <32-hex-chars>` shape `tenant_id_for_schema_name/1`
+(tenant_provisioning.ex:241-256) requires to reverse a `schema_name` back to
+a `tenant_id`. `Letflow.Entities.EventTypes.seed!/1` (event_types.ex:117-118)
+opens with `with {:ok, tenant_id} <- TenantProvisioning.tenant_id_for_schema_name(prefix) do`,
+so calling it against this synthetic schema name returns
+`{:error, :invalid_schema_name}`, which `maybe_seed_entity_event_types/2` as
+specified in §3 above normalizes to
+`{:error, {:event_type_seed_failed, :invalid_schema_name}}` — failing
+`replay_migrations/2`'s whole `with`-chain and breaking
+`test/support/tenant_template_test.exs`'s two template-self-check tests
+(`TENANT_TEMPLATE_SELF_CHECK_FAILED ... {:event_type_seed_failed, :invalid_schema_name}`).
+
+Contrast with `maybe_seed_platform_event_types/2` (§2's sibling function),
+which was never affected by this because it takes `tenant_id` directly,
+already bound in `replay_migrations/2`'s own `%Registration{tenant_id:
+tenant_id}` match — it never needs to reverse a `schema_name` at all, so
+this class of synthetic schema doesn't trip it. This carve-out is therefore
+needed for the entity clause only, not the platform clause.
+
+### 6.1 The carve-out, precisely
+
+`maybe_seed_entity_event_types/2` (§2) must **not** hard-fail
+`replay_migrations/2`'s `with`-chain when `EventTypes.seed!/1` fails
+specifically with `{:error, :invalid_schema_name}`. That one specific
+reason must be normalized to `:ok` (skip silently) instead of
+`{:error, {:event_type_seed_failed, :invalid_schema_name}}`. This amends
+§3's return-shape table as follows — §3's table's `{:error, reason} ->
+{:error, {:event_type_seed_failed, reason}}` row now has an exception
+carved out ahead of it:
+
+| `seed!/1` returns | `maybe_seed_entity_event_types/2` returns |
+|---|---|
+| `{:ok, _seed_result}` | `:ok` (unchanged from §3) |
+| `{:error, :invalid_schema_name}` | `:ok` (**new in this amendment** — skip silently) |
+| `{:error, reason}` for any other `reason` | `{:error, {:event_type_seed_failed, reason}}` (unchanged from §3) |
+
+This carve-out is narrowly scoped to the single atom `:invalid_schema_name`
+— **not** a blanket swallow-all-errors change. Every other error reason
+`seed!/1` can return (including, notably, any reason other than
+`:duplicate_event_type_version`, which §4 already establishes never
+surfaces to this function at all since `seed!/1` absorbs it internally)
+must continue to propagate as
+`{:error, {:event_type_seed_failed, reason}}` exactly as §3 originally
+specified, short-circuiting `replay_migrations/2`'s `with`-chain exactly as
+before.
+
+### 6.2 Why this carve-out is safe
+
+`schema_name_for_tenant/1`'s own moduledoc (tenant_provisioning.ex:204–210)
+states it applies the `"tenant_" <> hex` derivation uniformly, with no
+special-cased default-tenant UUID and no other lossy or divergent branch.
+Consequently **every real, production-provisioned tenant's `schema_name`
+always matches the canonical `"tenant_" <> <32-hex-chars>` pattern** —
+`tenant_id_for_schema_name/1` (the exact inverse) is total and deterministic
+over that entire domain (its own `@doc`, tenant_provisioning.ex:236–239) and
+can only return `{:error, :invalid_schema_name}` for a `schema_name` that
+was never produced by `schema_name_for_tenant/1` in the first place, i.e.
+one that does not correspond to any genuinely provisioned tenant.
+
+In this codebase, the only place a `Registration`/schema-name pair with a
+non-canonical `schema_name` is constructed at all is test support
+(`test/support/tenant_template.ex`'s synthetic reference schema) —
+deliberately, to self-check the migration-replay path against a schema that
+is not a real tenant. Such a schema has no tenant-facing entity-record write
+path to protect: nothing will ever call `Letflow.Entities.Records`'
+production write path against it, because no real tenant is ever routed to
+it (there is no `tenant_id` that reverses to it). Silently skipping the
+entity-event-type seed for a schema that can never receive a real
+entity-record write therefore loses no protection this design otherwise
+provides — the seed's entire purpose (§1) is to make real entity-record
+writes succeed on real tenants, and `:invalid_schema_name` is proof, by
+construction, that the schema in play is not one.
+
+### 6.3 Note for ELIXIR-DEV: two stale test fixture counts (mechanical, not a design change)
+
+TEST-RUNNER's Step 4c run also found `test/letflow/tenant_provisioning_event_seed_test.exs`
+carries two literal `event_type_registry` row-count assertions that predate
+this fix actually seeding entity event types on real tenants: `assert count
+== 13` (line 304) and `assert count_after_second_call == 13` (line 419) must
+become `16`, matching the 3 new `ENTITY_RECORD_*` rows (`CREATED`,
+`UPDATED`, `DELETED`) this fix now correctly seeds for every real tenant on
+top of the pre-existing 13 platform event types. This is **not** a design
+change — it is a mechanical fixture update to reflect the new, correct
+behavior this amendment (together with §2–§5) produces, and ELIXIR-DEV
+should make it as part of implementing this design. (The separate
+`count_before == 10` assertion at line 359, covering a deliberately
+pre-REQ-140 fixture state before entity seeding would even run, is
+unaffected and needs no change.)
+
+## 7. Regression test TEST-DESIGNER must write
+
+A test that:
+
+1. Provisions a tenant end-to-end through the real path (whatever fixture/
+   helper the existing entity-record write-path tests already use to get a
+   provisioned tenant with `replay_migrations/2` run against it — e.g. the
+   same setup `test/support/tenant_fixture.ex`-based tests use elsewhere in
+   this suite), **without** any explicit/manual call to
+   `Letflow.Entities.EventTypes.seed!/1` anywhere in the test's own setup.
+2. Performs a real entity-record write for one of the three event types
+   (e.g. drives whatever creates an `ENTITY_RECORD_CREATED` event through
+   the actual production path — `Letflow.Entities.Records`' create path per
+   `records.ex:18-21`'s moduledoc, or equivalently calls
+   `EventStore.append_multi/3` → `Registry.validate_payload/3` for
+   `"ENTITY_RECORD_CREATED"` against the freshly-provisioned tenant schema).
+3. Asserts the write **succeeds** (no `{:error, :unknown_event_type}`) —
+   this is the concrete, positive assertion; a passing test must show the
+   event type is registered as a side effect of provisioning alone, not by
+   asserting `Registry.get_type/2` returns `{:ok, _}` alone (that would be
+   weaker — assert the actual write path succeeds end-to-end, since that is
+   the reproduction path ISSUE-FIXER confirmed the bug through).
+4. **Must fail on pre-fix code** (WF-03's fail-then-pass rule): on the
+   current `main`/pre-fix `tenant_provisioning.ex` (no
+   `maybe_seed_entity_event_types/2` call in `replay_migrations/2`), this
+   test must reproduce ISS-0721's exact failure —
+   `{:error, :unknown_event_type}` (or the enclosing 500/error tuple the
+   production call path surfaces it as) — proving the test actually
+   exercises the gap and is not vacuously true. TEST-DESIGNER should run it
+   against the pre-fix tree (or temporarily comment out the new
+   `with`-chain clause) to confirm the red state before ELIXIR-DEV's fix
+   turns it green, per WF-03's protocol.
+5. Should also assert idempotency per §4: calling `replay_migrations/2` a
+   second time against the same already-provisioned tenant (simulating a
+   tenant re-migration) does not raise, does not return
+   `{:error, {:event_type_seed_failed, _}}`, and the entity-record write
+   still succeeds afterward — this is the concrete assertion that exercises
+   §4's "no extra idempotency handling needed" conclusion, so a regression
+   in that assumption (e.g. if `seed!/1`'s internal duplicate-tolerance ever
+   breaks) is caught here too.
+
+## 8. Open questions
+
+- None remaining on the `@spec` question: §5 confirms (by direct read of
+  `tenant_provisioning.ex:364-371`) that `replay_migrations/2`'s existing
+  `@spec` does **not** list the `{:error, {:event_type_seed_failed, term()}}`
+  union member today. ELIXIR-DEV must add it — a mechanical one-line
+  addition, not a design decision, so it is not further specified here.
+- No other open questions. `seed!/1`'s idempotency (§4), the exact argument
+  value and its scope binding (§2), and the ok/error normalization (§3) are
+  all fully specified above.

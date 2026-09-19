@@ -1,0 +1,62 @@
+{
+  "handoff_id": "wf03-iss0721-step04b",
+  "run_id": "WF03-ISS0721-20260919",
+  "workflow_id": "WF-03",
+  "step": "04b",
+  "from_agent": "ORCH",
+  "to_agent": "TEST-DESIGN-VALIDATOR",
+  "file": "handoffs/WF03-ISS0721-20260919/step-04b-test-design-validator.json",
+  "created_at": "2026-09-19T07:34:09Z",
+  "started_at": "2026-09-19T07:34:09Z",
+  "completed_at": "2026-09-19T07:36:32Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": null,
+    "requirement_ids": ["REQ-228"],
+    "requirement_text": {},
+    "source_text": {},
+    "related_handoff_ids": ["wf03-iss0721-step04"],
+    "artifacts_in": [
+      "test/letflow/tenant_provisioning/entity_event_type_seeding_test.exs",
+      "test/specs/ISS-0721.md",
+      "handoffs/WF03-ISS0721-20260919/step-04-test-designer.json",
+      "lib/letflow/design/iss0721-entity-event-type-seeding.md",
+      "docs/agents/workflows/WF-03_issue_resolving.md"
+    ],
+    "owned_modules": []
+  },
+  "task": {
+    "description": "Hard gate on TEST-DESIGNER's regression test (test/letflow/tenant_provisioning/entity_event_type_seeding_test.exs) for ISS-0721. Verify: (1) both acceptance criteria from lib/letflow/design/iss0721-entity-event-type-seeding.md section 6 are actually covered (fresh-tenant entity-record write succeeds without manual seed!/1; second-call idempotency); (2) the fail-first proof is real -- independently reproduce at least the fail side yourself (a throwaway git worktree of origin/main with only the new test file copied in, run it, confirm the same {:error, :unknown_event_type} failure TEST-DESIGNER reported) rather than accepting the reported counts as given, per HANDOFF_PROTOCOL.md's 'every producing step has a validating step' principle and this run's own worked-example precedent; (3) the test is isolated and self-sufficient (no cross-test state dependency); (4) triage the MINOR issue TEST-DESIGNER flagged (Letflow.Engine.Lua.PlatformTest/REQ-161 flaking under full-suite parallel load, 2/360, unrelated files) -- confirm it really is pre-existing/unrelated to this diff (e.g. check whether it's a known flake already on file, such as ISS-0723's SandboxPoolTest-class recurring flake pattern) and state in your result whether it should be filed as a fresh issue or is already tracked, per ORCHESTRATOR.md's decision-tree rule for incidental findings (file it, do not extend this run).",
+    "acceptance_criteria": [
+      "Both design-doc AC's (fresh-tenant write succeeds, second-call idempotency) independently confirmed covered by the test file's actual assertions",
+      "Fail-first proof independently reproduced (at minimum the fail side, via your own throwaway worktree run), not merely accepted from the report",
+      "Test isolation confirmed",
+      "Incidental Lua/PlatformTest flake triaged and a disposition stated (already-tracked vs needs filing)",
+      "PASS or FAIL with specific findings"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "AC coverage (read test/letflow/tenant_provisioning/entity_event_type_seeding_test.exs directly, cross-checked against design doc section 6, not TEST-DESIGNER's summary): AC1 (fresh-tenant write succeeds without manual seed!/1) is covered by test 1 (lines 143-180) -- provisioned_tenant_no_manual_seed/0 (lines 66-99) provisions via provision_tenant_schema/1 + replay_migrations/1 with no migration_source and deliberately omits any EventTypes.seed!/1 call (confirmed by reading the fixture body); the test then asserts Registry.get_type/2 == {:ok,_} for all 3 ENTITY_RECORD_* names AND drives real writes through Records.create_record/2, update_record/2, delete_record/2 (the stronger, production-path assertion the design's section 6 item 3 explicitly required over a get_type-only check). AC2 (second-call idempotency) is covered by test 2 (lines 182-193) -- calls replay_migrations/2 a second time against the same tenant_id, asserts {:ok,_}, then a real create_record/2 write still succeeds, exercising design section 4's 'seed!/1 already tolerates duplicates internally' claim. Both criteria map to real, non-vacuous assertions.\n\nFail-first proof, independently reproduced myself (not accepted from the report): `git worktree add ../letflow-iss0721-validate origin/main` (origin/main verified at ffc433d2, matching the spec's cited pre-fix tip, via `git rev-parse origin/main`), copied only test/letflow/tenant_provisioning/entity_event_type_seeding_test.exs into the worktree (test/support/sandbox_auto_mode.ex already exists on main, no other file needed), `mix deps.get`, then `MIX_ENV=test mix test test/letflow/tenant_provisioning/entity_event_type_seeding_test.exs`. My own run:\n```\n  2) test ... the three ENTITY_RECORD_* event types are registered ...\n     match (=) failed\n     code:  assert {:ok, _type} = Registry.get_type(event_type, tenant_id)\n     left:  {:ok, _type}\n     right: {:error, :unknown_event_type}\nFinished in 3.6 seconds (0.00s async, 3.6s sync)\nResult: 0/2 passed\nFailed: 2 tests\n```\nMatches TEST-DESIGNER's reported failure exactly (same error, same 0/2, same shape on both tests). Worktree removed afterward: `git worktree remove ../letflow-iss0721-validate --force`, confirmed via `git worktree list` showing only the main working tree. Also re-ran on this branch post-fix as a sanity check: `MIX_ENV=test mix test test/letflow/tenant_provisioning/entity_event_type_seeding_test.exs` -> `Result: 2 passed`, confirming the same file genuinely flips from fail to pass across the fix commit.\n\nTest isolation: each test calls provisioned_tenant_no_manual_seed/0 independently, which creates its own tenant via a unique slug (Letflow.TenantSlugFixture.unique_slug/1) and its own schema, with an on_exit callback that drops the schema and deletes both the Registration and Tenant rows -- no shared fixture state, no ordering dependency between the two tests, async: false is scoped to real-Postgres provisioning (not a cross-test hazard). No @tag :skip, no 'TODO: implement test' language, no hardcoded secrets or connection strings (DB access goes through Letflow.Repo/DataCase as everywhere else in this suite).\n\nIncidental Lua/PlatformTest flake triage: grepped docs/issues/*.yaml for 'platform_test.exs', 'PlatformTest', 'REQ-161', 'Lua.Platform' -- only ISS-0418 matches (wasm_hang concurrency-cap issue, a wasmex/native-thread-pool mechanism in test/letflow/engine/wasm/, unrelated file class, already resolved). Read ISS-0723.yaml in full: that is a DIFFERENT recurring flake class (Letflow.SandboxPoolTest 'RT-6 death path c', release-timeout pattern in test/letflow/sandbox_pool_test.exs/lib/letflow/sandbox_pool.ex) -- not the same test module, not the same mechanism (bounded-poll-deadline vs. Lua script-failure assertion timing under parallel load), so it does not cover this finding either. No existing docs/issues/ record tracks Letflow.Engine.Lua.PlatformTest (REQ-161) flaking under the full 16-partition parallel suite. Disposition: NOT already tracked -- needs filing as a fresh issue. Per docs/agents/protocols/ISSUE_QUEUE.md's procedure, the id must come from letflow-queue's register_task (never scanned/incremented locally), which only ORCH calls -- so this validator reports the finding in result.issues below (title, description, severity, affected_files) for ORCH to register and file, rather than fabricating an ISS-NNNN filename itself. Do not extend this run to investigate or fix the flake, per ORCHESTRATOR.md's decision-tree rule for incidental findings.\n\nOverall verdict: PASS. Both design-doc acceptance criteria are genuinely covered by real, non-vacuous assertions; the fail-first proof is independently reproduced (not merely trusted); the test is isolated and self-sufficient; the incidental flake is triaged with a clear disposition (needs filing, not a duplicate of any tracked issue).",
+    "artifacts_out": [],
+    "issues": [
+      {
+        "severity": "MINOR",
+        "description": "Letflow.Engine.Lua.PlatformTest (REQ-161, lib/letflow/engine/lua/platform.ex, test/letflow/engine/lua/platform_test.exs) fails 2/360 non-deterministically under the full 16-partition parallel suite (mix letflow.check.test), landing on a different specific sub-assertion across independent runs, while passing 100/100 in isolation. Confirmed via docs/issues/ grep this is NOT the same class as ISS-0723 (SandboxPoolTest release-timeout pattern) or ISS-0418 (wasm_hang native-thread-pool exhaustion) -- no existing local issue record covers it. Unrelated to this diff (tenant_provisioning.ex and its own test tree only; zero touch of lib/letflow/engine/lua/). Needs filing as a fresh ISS-NNNN per docs/agents/protocols/ISSUE_QUEUE.md (ORCH to call register_task -- this validator does not allocate the id itself). Suggested title: 'Letflow.Engine.Lua.PlatformTest (REQ-161) flakes under full-suite parallel load, 2/360, timing-sensitive sub-assertion, passes 100/100 in isolation.'",
+        "affected_requirement": null
+      }
+    ],
+    "git_evidence": {
+      "branch_name": "feature/WF03-ISS0721-20260919",
+      "commit_sha_list": [],
+      "remote_branch": "origin/feature/WF03-ISS0721-20260919",
+      "push_status": "ok",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": "Route to Step 4c (TEST-RUNNER full suite); ORCH to also file the Lua/PlatformTest incidental flake per docs/agents/protocols/ISSUE_QUEUE.md (register_task -> docs/issues/<issue_ref>.yaml) before or alongside forwarding"
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

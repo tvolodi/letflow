@@ -1,0 +1,54 @@
+{
+  "handoff_id": "wf03-iss0721-step03c-rework1",
+  "run_id": "WF03-ISS0721-20260919",
+  "workflow_id": "WF-03",
+  "step": "03c",
+  "from_agent": "ORCH",
+  "to_agent": "REVIEWER",
+  "file": "handoffs/WF03-ISS0721-20260919/step-03c-reviewer-rework1.json",
+  "created_at": "2026-09-19T08:04:13Z",
+  "started_at": "2026-09-19T08:04:13Z",
+  "completed_at": "2026-09-19T08:05:09Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": null,
+    "requirement_ids": ["REQ-228"],
+    "requirement_text": {},
+    "source_text": {},
+    "related_handoff_ids": ["wf03-iss0721-step03-rework1", "wf03-iss0721-step03b-rework1", "wf03-iss0721-step03c"],
+    "artifacts_in": [
+      "handoffs/WF03-ISS0721-20260919/step-03-elixir-dev-rework1.json",
+      "handoffs/WF03-ISS0721-20260919/step-03b-security-reviewer-rework1.json",
+      "lib/letflow/tenant_provisioning.ex",
+      "lib/letflow/design/iss0721-entity-event-type-seeding.md",
+      "test/letflow/tenant_provisioning_event_seed_test.exs"
+    ],
+    "owned_modules": []
+  },
+  "task": {
+    "description": "Re-gate on the updated diff (commit 567318a6) since your original Step 3c PASS. Review the new invalid_schema_name carve-out in maybe_seed_entity_event_types/2 for idiom and design-doc match (design section 6 approved it). ALSO review a deviation ELIXIR-DEV disclosed: while fixing the two design-noted stale fixture counts in test/letflow/tenant_provisioning_event_seed_test.exs, ELIXIR-DEV found and fixed a THIRD stale assertion (the REQ-140 AC12 test's count_before == 10, corrected to 13, plus an extended expected-name list) that the design doc's section 6.3 did not call out and had actually claimed was unaffected. Judge whether this third fix is in-scope, mechanical fixture correction (licensed implicitly by 'fix the stale counts this diff's real behavior change causes', even though the design doc missed this specific instance) or whether it is scope creep requiring a design update first. State your judgement explicitly -- this is exactly the kind of decision-record/scope-creep check this gate exists for.",
+    "acceptance_criteria": [
+      "New carve-out reviewed for idiom and design match",
+      "Explicit ruling on the third disclosed fixture fix: in-scope mechanical correction, or scope creep requiring rework",
+      "PASS or FAIL with specific findings"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "Re-gate on commit 567318a6, scoped to two changes: (1) the new invalid_schema_name carve-out in maybe_seed_entity_event_types/2, and (2) a disclosed third fixture fix beyond what design section 6.3 called out. Both PASS.\n\n1. CARVE-OUT (idiom + design match): the diff adds exactly one case clause -- `{:error, :invalid_schema_name} -> :ok` -- inserted ahead of the generic `{:error, reason} -> {:error, {:event_type_seed_failed, reason}}` fallthrough, with an inline comment restating the design's rationale (a schema_name that never reverses to a real tenant_id has no tenant-facing write path to protect). This is a literal, minimal implementation of design section 6.1's table: only the :invalid_schema_name atom is carved out, every other error reason still propagates unchanged. No new abstraction, no new control-flow shape -- a plain `case` clause matching this module's own established idiom (maybe_seed_platform_event_types/2 uses the identical case-over-tagged-tuples style two functions above it). Section 6.2's safety argument (schema_name_for_tenant/1 is total and uniform with no lossy branch, so :invalid_schema_name can only arise for a schema no real tenant is ever routed to) was independently verified by reading schema_name_for_tenant/1 and tenant_id_for_schema_name/1 directly (tenant_provisioning.ex lines 212-256) rather than taken on the design doc's word alone -- holds. No supervision-integrity concern (no process/spawn involved) and no gen_statem-vs-GenServer question applies to this helper. PASS.\n\n2. THIRD DISCLOSED FIXTURE FIX -- RULING: IN-SCOPE MECHANICAL CORRECTION, NOT SCOPE CREEP. The REQ-140 AC12 test's count_before assertion (test/letflow/tenant_provisioning_event_seed_test.exs, 'a pre-existing (6-row) tenant gains the 3 new registry rows on replay, idempotently') deletes exactly the 3 REQ-140-added rows from a tenant provisioned through the real default-manifest path, then asserts the remaining count. Design section 6.3 predicted this assertion was 'unaffected' by ISS-0721 and needed no change -- that prediction was simply arithmetically wrong, not a signal that a new design decision is needed: once section 5's with-chain change seeds the 3 ENTITY_RECORD_* types unconditionally for every real tenant (which section 6.3 itself already licensed touching this file to reflect), deleting only the 3 REQ-140 rows necessarily leaves 13 rows (16 - 3), not 10. ELIXIR-DEV's fix -- count_before 10 -> 13, and extending names_after_backfill's expected list with the 3 ENTITY_RECORD_* names -- changes no production code and introduces no new behavior, abstraction, or design surface; it is pure test arithmetic brought in line with behavior the approved design sections 2-6 already specify. The design doc's own general license ('fix the stale counts this diff's real behavior change causes') covers this instance in substance even though section 6.3's enumeration missed it by miscalculating one case. Distinguish this from real scope creep (e.g. adding a new seed-list abstraction, a config toggle, or touching a call site the design didn't name) -- none of that occurred here. Ruling: no rework and no design-doc update is required to merge; recommend (non-blocking) a follow-up note in the design doc or its own amendment log correcting section 6.3's 'unaffected' claim for the historical record, since a future reader relying on that doc alone would be misled about this test's behavior -- but this is documentation hygiene, not a gate condition.\n\nNo new type-safety gap introduced by this diff (the tagged-tuple/atom error idiom here is consistent with the rest of this module, not a regression). No anti-patterns.md entries apply.\n\nOverall: PASS. TEST-DESIGNER does not need to touch anything -- the existing regression test (test/letflow/tenant_provisioning_event_seed_test.exs, already updated by ELIXIR-DEV as part of this same commit) already covers both the carve-out's correctness (tenant_template_test.exs's two self-check tests, which this carve-out exists to fix) and the entity-seeding row-count behavior (the three now-corrected count assertions). No new test scenario is introduced by this rework beyond fixture-count corrections to already-existing tests.",
+    "artifacts_out": [],
+    "issues": [],
+    "git_evidence": {
+      "branch_name": "feature/WF03-ISS0721-20260919",
+      "commit_sha_list": ["567318a6b2b6b87e30fc0b03ba66491f65c0016f"],
+      "remote_branch": "origin/feature/WF03-ISS0721-20260919",
+      "push_status": "pushed",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": "Route to Step 4 rework (TEST-DESIGNER not needed -- existing regression test already covers this; route to Step 4c re-run, TEST-RUNNER full suite)"
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

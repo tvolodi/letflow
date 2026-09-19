@@ -75,7 +75,9 @@ suggested_fix: >
   its entity-record event types registered automatically, with no manual
   remote-console step required. CODE-DESIGNER's call on exact placement/
   idempotency semantics, not decided here.
-status: open
+status: resolved
+resolved_in_run: WF03-ISS0721-20260919
+resolved_at: "2026-09-19T08:19:02Z"
 # NOTE: filename/queue-id mismatch, same class the TASK_QUEUE.md protocol
 # doc already documents for 27 other records (Q-<id> is authoritative,
 # filename is not) -- register_task's real, atomically-allocated id for

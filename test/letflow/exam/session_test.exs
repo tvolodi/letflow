@@ -437,6 +437,58 @@ defmodule Letflow.Exam.SessionTest do
       assert manual_block == pinned_question_ids
     end
 
+    test "manual rule with a LOWER sort_order than the random rule still materializes AFTER it -- block order is mode-based, not exam_question_rule.sort_order-based (design §4.2)" do
+      %{schema_name: schema} = tenant("iss0722-sort-order-discriminator")
+
+      exam = create_exam!(schema, %{})
+      random_category_id = Ecto.UUID.generate()
+
+      random_questions =
+        for _ <- 1..3, do: build_single_choice_question!(schema, random_category_id)
+
+      random_question_ids = Enum.map(random_questions, fn {question_id, _c, _w} -> question_id end)
+
+      # Deliberately reversed relative to the "mixed-mode" test above: here
+      # the random rule's sort_order (1) is HIGHER than the manual rule's
+      # sort_order (0). If block order were actually driven by
+      # exam_question_rule.sort_order (the tempting-but-wrong implementation
+      # design §4.2 explicitly warns against), the manual block would
+      # materialize first in this setup. The shipped implementation
+      # (session.ex:734's unconditional `resolved_random ++ resolved_manual`)
+      # ignores rule sort_order for block placement and always emits the
+      # random block first -- this is the only fixture arrangement that can
+      # distinguish the two implementations from each other.
+      create_rule!(schema, exam.record_id, random_category_id, 3, 1, "random")
+      manual_rule = create_rule!(schema, exam.record_id, random_category_id, 1, 0, "manual")
+
+      manual_questions =
+        for _ <- 1..2, do: build_single_choice_question!(schema, Ecto.UUID.generate())
+
+      pinned_question_ids =
+        manual_questions
+        |> Enum.with_index()
+        |> Enum.map(fn {{question_id, _c, _w}, index} ->
+          create_manual_question!(schema, manual_rule.record_id, question_id, index)
+          question_id
+        end)
+
+      assert {:ok, session_view} =
+               Session.create(Ecto.UUID.generate(), exam.record_id, schema)
+
+      rows = session_question_rows(schema, session_view.id)
+      materialized_ids = Enum.map(rows, & &1["question_id"])
+
+      assert length(materialized_ids) == 5
+
+      {random_block, manual_block} = Enum.split(materialized_ids, 3)
+
+      # Random block first (by set, order is resolver-owned/unshuffled here),
+      # manual block last in exact pin order -- despite the manual rule
+      # having the numerically lower sort_order.
+      assert Enum.sort(random_block) == Enum.sort(random_question_ids)
+      assert manual_block == pinned_question_ids
+    end
+
     test "shuffle_questions? true does NOT reorder manual-origin questions, even while shuffling the random-origin block (design §4.1)" do
       %{schema_name: schema} = tenant("iss0722-shuffle-carveout")
 

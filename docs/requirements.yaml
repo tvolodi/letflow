@@ -26839,7 +26839,7 @@ requirements:
   - id: REQ-369
     title: Distinct PlatformDashboardPage for PLATFORM_ADMIN — replaces the shared tenant-branded landing page for that role, with role-conditional login routing
     owner: FRONTEND-DEV
-    status: blocked
+    status: done
     stage: S7
     impl_order: 708  # letflow-queue task id, GH#1501
     description: >
@@ -26946,6 +26946,57 @@ requirements:
       - "this requirement's own close-out states explicitly that ISS-0700 remains status: open (not closed by this requirement) and that the separate 'Unknown workspace' banner gap for non-PLATFORM_ADMIN unauthenticated/no-realm-slug users is unresolved and out of this requirement's scope"
     depends_on: [REQ-360]
     close_out_note: >
+      status: done — set by DOC-UPDATER (WF02-REQ369-AC6AC7-final3-20260919,
+      2026-09-19T05:39:57Z), superseding the 2026-09-19T02:49:52Z ORCH note below
+      in substance (kept append-only per this file's own history discipline:
+      nothing here is deleted, this note states the current, factual position).
+      AC1-AC5 remain genuinely complete and independently re-verified:
+      RELEASE-VALIDATOR's PASS-WITH-PENDING (step-05-release-validation.json),
+      merged as PR #1507, squash commit 3c0cbd24290c062d1974b7eb91fa74adcc2c42f4.
+      .
+      AC6 AND AC7 ARE NOW GENUINELY SATISFIED, per UAT-RUNNER's third and final
+      re-verification: test/uat-reports/uat-2026-09-19-WF02-REQ369-AC6AC7-final3-20260919.yaml.
+      AC6 PASS: a real, full end-to-end PLATFORM_ADMIN login through Keycloak's
+      real hosted login page against live QA lands on /platform-dashboard with
+      the real tenant count (2) rendered on tile-tenant-count, screenshot at
+      web/tests/screenshots/pipelines/platform-login-routing-by-role-admin.png
+      (independently cross-checked against a direct GET /api/v1/tenants call,
+      count=2). AC7 PASS: the named pipeline_test
+      (web/tests/e2e/pipelines/platform-login-routing-by-role.pipeline.e2e.spec.ts)
+      PLATFORM_ADMIN case, real run against live QA, "1 passed" (9.9s) — every
+      assertion in the test body (URL, heading text, tile visibility,
+      quick-links visibility, all 5 named nav links) executed and passed.
+      .
+      ISS-0719 (the BLOCKER that stalled the second AC6/AC7 attempt — live QA
+      backend advertising oidc_authority=http://localhost:8082/realms/bpm-default)
+      is now resolved (docs/issues/ISS-0719.yaml, resolved_in_run:
+      WF02-REQ369-AC6AC7-final3-20260919), by two independent, both-confirmed-live
+      fixes: ai-dala-infra's T-0137 infra-side mitigation (BPM_IDP_BASE_URL set
+      directly in QA's .env, still in place as belt-and-suspenders) and the
+      actual code fix (ISS-0720, commit fc55e700), which as of this close-out is
+      confirmed actually deployed and live on QA (CD run for commit 507bdb77 --
+      which includes fc55e700 -- succeeded; GET /api/tenant-config independently
+      re-curled and confirmed correct, cache-control ruling out stale cache).
+      .
+      AC8 CORRECTION, CHECKED DIRECTLY RATHER THAN ASSUMED FROM PRIOR NOTES:
+      docs/issues/ISS-0700.yaml is actually status: resolved (not open) as of
+      2026-09-18T13:35:00Z (resolved_by: ISSUE-FIXER,
+      resolved_in_run: issue/ISS-0700-20260918-closeout) -- every prior note
+      in this history, including this run's own dispatch instructions, was
+      working from a stale premise. Critically, this does NOT violate AC8's
+      actual constraint: AC8 requires that REQ-369's OWN close-out not be
+      what closes ISS-0700, and it was not -- ISS-0700 was closed by a
+      separate, independent WF-03 issue-fix closeout that merely cited
+      REQ-369's already-merged PR #1507 as the shipped fix for ISS-0700's
+      functional gap (distinct platform-admin dashboard), not by any action
+      taken as part of REQ-369's own close-out (this one, or any prior one in
+      this file's history). The separate "Unknown workspace" banner gap for
+      non-PLATFORM_ADMIN unauthenticated/no-realm-slug users remains
+      unresolved and out of this requirement's scope, per ISS-0700's own
+      `concrete_next_step` block ("Separately flagged but out of this issue's
+      frame").
+      .
+      --- Prior note (2026-09-19T02:49:52Z), retained for history, superseded by the above ---
       status: blocked, NOT done — updated by ORCH (WF02-REQ369-AC6AC7-20260919,
       2026-09-19T02:49:52Z), superseding the 2026-09-18 note below in substance
       (kept append-only per this file's own history discipline: nothing here is

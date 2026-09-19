@@ -1,0 +1,256 @@
+run_id: WF02-REQ369-AC6AC7-final3-20260919
+date: "2026-09-19"
+agent: UAT-RUNNER
+queue_task: "708 (REQ-369, GH#1501)"
+scope: >
+  Third re-attempt of REQ-369's last remaining gap: AC6 (real PLATFORM_ADMIN
+  login against live QA, real tenant count rendered, screenshot evidence)
+  and AC7 (platform-login-routing-by-role.yaml's PLATFORM_ADMIN branch
+  re-run via its own named pipeline_test). Dispatched after ISS-0719 (live
+  QA backend advertising oidc_authority=http://localhost:8082/...) was
+  reported resolved on two fronts: an infra-side mitigation (T-0137,
+  BPM_IDP_BASE_URL set directly in QA's .env) and a letflow-side code fix
+  (commit fc55e700, ISS-0720/T-0138, fixing tenant_config.ex's retired
+  :issuer key read). Both claims are independently re-verified below, not
+  assumed -- and this run found the second claim to be FALSE as stated: the
+  code fix has NOT actually reached QA via CD, only the infra mitigation
+  has. AC6 and AC7 themselves genuinely PASS regardless (the infra
+  mitigation alone is sufficient), but this is reported as its own finding
+  because REQ-369's/ISS-0720's close-out claims are materially inaccurate
+  about deployment provenance.
+
+environment_target:
+  base_url: "https://qa.bizdala.com"
+  credential_source: "ai-dala-infra/scripts/qa-login.sh"
+  environment: qa
+  readiness_check: >
+    curl -s -o /dev/null -w '%{http_code}' https://qa.bizdala.com/ -> 200
+    (confirmed this run).
+
+step1_cd_deploy_verification:
+  claim_under_test: >
+    REQ-370's close-out and ISS-0720/T-0138 both claim commit fc55e700
+    "landed on QA's live deployment via the normal CD pipeline." This run
+    independently checked that claim via `gh run list`/`gh api` rather than
+    trusting it.
+  finding_DEPLOY_DID_NOT_HAPPEN: >
+    FALSE AS CLAIMED. fc55e700's own push-triggered CI run
+    (35423462664) FAILED -- not on anything related to the tenant_config.ex
+    fix, but on an unrelated `mix letflow.check_issue_refs` lint violation:
+    `[R2] docs/issues/ISS-0721.yaml:93` and `docs/issues/ISS-0722.yaml:70`
+    still use the superseded `github_issue_number:` field name instead of
+    `github_ref:`. Because .github/workflows/cd.yml's "Deploy to QA" job
+    is gated `if: github.event.workflow_run.conclusion == 'success'`, the
+    CD run triggered for fc55e700 (databaseId 35423516755) was entirely
+    SKIPPED -- confirmed via `gh api .../35423516755/jobs`: `"steps":[]`,
+    the job never executed any step, including the actual SSH deploy.
+    Independently confirmed fc55e700's own "Detect changed paths" step DID
+    correctly compute backend=true (verified via
+    `gh run view --job=105845218007 --log`, showing
+    `echo "backend=true" >> path-filter-outputs.txt`), i.e. this commit
+    WOULD have deployed had CI passed -- the skip is not a false negative
+    on path detection, it is the CI failure gate doing exactly what it is
+    designed to do.
+    .
+    The two commits merged after fc55e700 (36376897, docs/handoffs-only;
+    705f70fe, docs/ISS-0723-only) both had their own CI pass and their own
+    CD run execute the job -- but in both cases the "Deploy to QA
+    (ubuntu-16gb-nbg1-1)" STEP itself shows `"conclusion":"skipped"` (per
+    `gh api .../35423677501/jobs` and `.../35423835272/jobs`), because
+    change-detection is computed per-push against that push's own diff
+    only, and neither of those two docs-only commits touched
+    backend/frontend paths. Neither commit "picked up" fc55e700's earlier,
+    un-deployed backend change -- there is no catch-up mechanism in this
+    CD design for a deploy that was skipped by an earlier CI failure.
+    .
+    The last CD run whose "Deploy to QA (ubuntu-16gb-nbg1-1)" step actually
+    EXECUTED (not skipped) is run 35419958545 (commit 10ca7a48, "chore
+    (router): re-trigger T-0134 QA redeploy verification"), which ran at
+    2026-09-19T03:56:44Z, real duration 56s -- this PREDATES fc55e700's own
+    push-triggered CI run (createdAt 2026-09-19T05:15:19Z, matching
+    fc55e700's commit timestamp 2026-09-19T10:15:17+05:00 =
+    2026-09-19T05:15:17Z). No CD run after 10ca7a48 has executed a real
+    (non-skipped) "Deploy to QA" step as of this run's own check (`gh run
+    list` covering every CD run through 705f70fe, the current main HEAD at
+    dispatch time).
+  conclusion: >
+    QA's currently-running backend process almost certainly does NOT
+    contain fc55e700's tenant_config.ex code fix. The correct
+    oidc_authority observed in step 2 below is attributable to the
+    infra-side mitigation (T-0137, BPM_IDP_BASE_URL set directly in QA's
+    .env) alone -- the old, pre-fix code path already checks
+    `System.get_env("BPM_IDP_BASE_URL")` first (per the prior
+    final2-20260919 report's own source citation of
+    lib/letflow/routers/tenant_config.ex:312-316), so setting that env var
+    directly is independently sufficient to produce a correct
+    oidc_authority even without fc55e700 deployed. This is a genuine,
+    new, separately-actionable finding: ISS-0720/T-0138's own close-out
+    text overstates what actually reached QA, and the CI gate is currently
+    silently dropping deploys behind an unrelated docs-lint failure with
+    no automatic re-drive. NOT filed as a new issue by this run per this
+    agent's mandate ("does not fix, files back to ORCH") -- reported here
+    for ORCH to route (recommend: either fix docs/issues/ISS-0721.yaml and
+    ISS-0722.yaml's `github_issue_number:` -> `github_ref:` fields and
+    push a trivial commit to re-trigger a real backend deploy, or manually
+    re-run CD for a commit at/after fc55e700 once CI is green).
+
+step2_tenant_config_reverification:
+  command: >
+    curl -sS -D - -o body.json
+    "https://qa.bizdala.com/api/tenant-config?host=qa.bizdala.com"
+  real_response_headers: >
+    HTTP/1.1 200 OK
+    cache-control: max-age=0, private, must-revalidate
+    (not a stale/cached value -- must-revalidate on every request)
+  real_response_body: >
+    {"branding":{"app_name":"Letflow","brand_colors":{"primary":"#228be6"},"logo_url":null},"client_id":"letflow-web","oidc_authority":"https://auth.qa.bizdala.com/realms/bpm-default"}
+  finding: >
+    CORRECT. oidc_authority now points at the real QA Keycloak
+    (https://auth.qa.bizdala.com/realms/bpm-default), not localhost:8082.
+    ISS-0719's originally-reported symptom is genuinely gone on this
+    endpoint. Per step1 above, attribute this fix to the infra-side
+    mitigation (T-0137), not confirmed attributable to the code fix
+    (fc55e700) since that commit is not confirmed deployed.
+
+step3_credential_fetch:
+  method: >
+    `ssh ubuntu-16gb-nbg1-1 whoami` -> `tvolodi` (confirmed live). Ran
+    `bash scripts/qa-login.sh admin-user` from
+    c:\Users\tvolo\dev\ai-dala\ai-dala-infra, obtaining a real seeded
+    PLATFORM_ADMIN credential (username admin-user). Independently
+    confirmed valid via a direct Keycloak password-grant against
+    https://auth.qa.bizdala.com/realms/bpm-default/protocol/openid-connect/token
+    -> HTTP 200, decoded access_token has preferred_username=admin-user,
+    realm_access.roles=["PLATFORM_ADMIN"]. Password held only in
+    shell-env for this run's real HTTP/browser calls -- never written to
+    any file, never committed, not recorded in this report or in any git
+    history.
+
+step4_real_login_evidence:
+  method: >
+    Ran the named pipeline_test's own real-OIDC-redirect helper
+    (loginViaRealOidcRedirect, via the pipeline_test itself -- see step5)
+    rather than a hand-rolled login, so the browser genuinely drove
+    Keycloak's real hosted login page end-to-end.
+  result: >
+    Real browser session lands on https://qa.bizdala.com/platform-dashboard.
+    Rendered content (screenshot evidence below): h1
+    data-testid="platform-dashboard-heading" reading "Platform Overview"
+    (no tenant name); tile data-testid="tile-tenant-count" reading "2";
+    platform-quick-links section with Tenants/Services/Health/Metrics/Users
+    links; user menu shows "Admin User" / "PLATFORM_ADMIN"; full
+    PLATFORM_ADMIN nav (Users, Tenants, Register Tenant, Audit, Health,
+    Metrics, Services, Question Bank, DLQ, Webhooks, Groups, Tokens all
+    visible).
+  tenant_count_cross_check: >
+    Independently fetched GET /api/v1/tenants with a bearer token obtained
+    directly from Keycloak (bypassing the app UI):
+    `{"items":[{"display_name":"Default Tenant",...},{"display_name":"BilimBaga",...}],"next_cursor":null,"count":2}`
+    -- count=2 matches the rendered tile exactly.
+  screenshot_path: >
+    web/tests/screenshots/pipelines/platform-login-routing-by-role-admin.png
+    (captured 2026-09-19T05:27:27Z by this run's pipeline_test execution;
+    gitignored per this repo's existing web/tests/screenshots/pipelines/
+    convention -- referenced by path, not committed as a binary).
+
+step5_pipeline_test_execution:
+  command: >
+    cd web && E2E_BASE_URL=https://qa.bizdala.com
+    BPM_IDP_BASE_URL=https://auth.qa.bizdala.com
+    UAT_QA_ADMIN_PASSWORD=<fetched, not recorded> npx playwright test
+    tests/e2e/pipelines/platform-login-routing-by-role.pipeline.e2e.spec.ts
+    -g "PLATFORM_ADMIN lands on the distinct platform dashboard"
+    --reporter=list
+  real_output: >
+    Running 1 test using 1 worker
+    ok 1 [chromium] ... EO-001: PLATFORM_ADMIN lands on the distinct
+    platform dashboard (7.6s)
+    1 passed (9.9s)
+  finding: "REAL PASS -- not inferred from absence of error; every assertion in the test body (URL, heading text, tile visibility, quick-links visibility, all 5 named nav links) executed and passed against the live QA instance."
+
+scenario_file_check: >
+  test/fixtures/uat/scenarios/platform/platform-login-routing-by-role.yaml's
+  PLATFORM_ADMIN branch was already confirmed correct (asserts
+  /platform-dashboard, platform-dashboard-heading, tile-tenant-count,
+  platform-quick-links) by the prior final-20260918 and final2-20260919
+  runs -- re-confirmed unchanged this run (git diff against those runs'
+  citations shows no edits to this file). No fixture change needed.
+
+ac6_disposition: >
+  SATISFIED. A real, full end-to-end PLATFORM_ADMIN login through
+  Keycloak's real hosted login page against live QA genuinely lands on
+  /platform-dashboard with the real tenant count (2) rendered, evidenced by
+  a fresh screenshot from this run
+  (web/tests/screenshots/pipelines/platform-login-routing-by-role-admin.png)
+  and independently cross-checked against a direct
+  GET /api/v1/tenants call. Caveat carried into overall_verdict below:
+  this PASS is currently sustained by the infra-side mitigation (T-0137)
+  alone, not by the code fix (fc55e700) which is not confirmed deployed
+  (see step1_cd_deploy_verification) -- AC6's own wording ("real
+  PLATFORM_ADMIN login ... lands on /platform-dashboard with the correct
+  tenant count rendered") is satisfied on its literal text regardless of
+  which fix is responsible, so this is recorded as SATISFIED, with the
+  deploy-provenance caveat flagged separately for ORCH's attention.
+
+ac7_disposition: >
+  SATISFIED. The named pipeline_test
+  (web/tests/e2e/pipelines/platform-login-routing-by-role.pipeline.e2e.spec.ts)
+  PLATFORM_ADMIN case was re-run for real against live QA with valid
+  PLATFORM_ADMIN credentials and produced a genuine PASS (1 passed, 9.9s;
+  full assertion list in step5 above). The scenario file's own
+  PLATFORM_ADMIN branch (already asserting /platform-dashboard) required
+  no further edit.
+
+overall_verdict: >
+  AC6 and AC7 both PASS on their literal text, with real evidence: a real
+  browser-driven OIDC login lands on /platform-dashboard with the correct
+  tenant count (2) rendered, and the named pipeline_test's PLATFORM_ADMIN
+  case genuinely passes against live QA. ISS-0719's originally-reported
+  symptom (oidc_authority=localhost:8082) is confirmed gone via direct curl
+  with cache-control ruling out stale cache.
+  .
+  HOWEVER, this run surfaces a genuine, separate, and material finding
+  that ORCH should not let pass unnoticed: the letflow-side code fix
+  (commit fc55e700, ISS-0720/T-0138) that REQ-370's close-out and
+  ISS-0720 both describe as having "landed on QA's live deployment via the
+  normal CD pipeline" in fact never reached QA -- its own CI run failed on
+  an unrelated docs/issues lint violation
+  (docs/issues/ISS-0721.yaml/ISS-0722.yaml's superseded
+  `github_issue_number:` field), which gated its CD deploy job out
+  entirely (job ran zero steps), and no commit since has re-triggered a
+  real backend deploy (the two subsequent commits are both docs-only and
+  their own per-push path-filter correctly computed backend=false). AC6/
+  AC7's PASS is currently resting entirely on the infra-side mitigation
+  (BPM_IDP_BASE_URL set directly in QA's .env, T-0137) -- which is a real
+  and independently sufficient fix for the symptom, but means the
+  underlying code defect ISS-0720 targeted is still live in QA's running
+  process, and ISS-0720's own close-out claim of deployment is factually
+  wrong. Recommend ORCH: (1) close ISS-0719 as resolved -- the originally
+  reported symptom (broken login for all QA users) is genuinely gone and
+  independently re-verified; (2) do NOT let ISS-0720 close on the basis of
+  its current "landed via CD" claim -- either correct that claim to note
+  the fix is merged-but-undeployed, or push a trivial follow-up commit
+  (e.g. fixing the two `github_issue_number:` -> `github_ref:` fields that
+  are themselves blocking CI) to get a green CI run and a real CD deploy of
+  fc55e700, then re-verify via a fresh QA bundle grep or the app's own
+  version/health signal that the fix is actually running; (3) separately
+  consider whether the CD design's lack of a catch-up/retry path for a
+  deploy skipped by an unrelated CI failure is worth hardening (out of
+  scope for this run to fix or file).
+
+cleanup: >
+  No edits made to any file under web/ or lib/. New screenshot file
+  written under web/tests/screenshots/pipelines/ (gitignored path,
+  consistent with prior runs' convention) and this report file. `git
+  status` shows only this report (and the gitignored screenshot, not
+  tracked) as new.
+
+notes: >
+  No mocks, no absence-of-error-as-pass, no fabricated screenshot, no
+  plaintext QA password committed or written into this report (only
+  username and role are named). The step1 CD-deploy finding was reached by
+  directly inspecting `gh run list`/`gh api` job step data, not inferred
+  from the passing AC6/AC7 result -- a passing login does not, by itself,
+  prove which of the two claimed fixes is responsible, which is exactly
+  why this run checked deploy provenance independently rather than
+  crediting both fixes as instructed to verify, not assume.

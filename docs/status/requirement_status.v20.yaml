@@ -395,3 +395,38 @@ history:
       UAT-RUNNER re-verification pass. Queue task 708 released with status:
       blocked (not done, not a credential-gap hand-back this time -- a real
       external blocker with its own tracked issue).
+  - req: REQ-369
+    event: done
+    agent: DOC-UPDATER
+    at: "2026-09-19T05:39:57Z"
+    note: >
+      Queue task 708 (GH#1501) close-out, third and final AC6/AC7
+      re-verification. UAT-RUNNER's final3 report
+      (test/uat-reports/uat-2026-09-19-WF02-REQ369-AC6AC7-final3-20260919.yaml)
+      confirms AC6 PASS (real PLATFORM_ADMIN login through Keycloak's real
+      hosted login page against live QA, lands on /platform-dashboard, real
+      tenant count 2 rendered, screenshot at
+      web/tests/screenshots/pipelines/platform-login-routing-by-role-admin.png)
+      and AC7 PASS (named pipeline_test
+      web/tests/e2e/pipelines/platform-login-routing-by-role.pipeline.e2e.spec.ts
+      PLATFORM_ADMIN case, real run against QA, "1 passed"). ISS-0719 (the
+      BLOCKER that stalled the prior attempt -- live QA backend advertising
+      oidc_authority=http://localhost:8082/realms/bpm-default) is now resolved
+      (docs/issues/ISS-0719.yaml, resolved_in_run:
+      WF02-REQ369-AC6AC7-final3-20260919) via two independent, both-confirmed-live
+      fixes: ai-dala-infra's T-0137 infra-side mitigation (BPM_IDP_BASE_URL set
+      directly in QA's .env, still in place) and the code fix (ISS-0720, commit
+      fc55e700), now confirmed actually deployed and live on QA (CD run for
+      commit 507bdb77, which includes fc55e700, succeeded; GET /api/tenant-config
+      independently re-curled by ORCH and confirmed correct, cache-control
+      ruling out stale cache). AC1-AC5 already complete (merged PR #1507).
+      AC8 re-checked directly: docs/issues/ISS-0700.yaml is actually
+      status: resolved (not open, correcting the stale premise carried in
+      prior notes) -- resolved separately by ISSUE-FIXER
+      (issue/ISS-0700-20260918-closeout), citing REQ-369's own merged PR #1507
+      as the shipped fix; REQ-369's own close-out did not itself close
+      ISS-0700, so AC8's actual constraint (REQ-369's close-out is not what
+      closes it) is satisfied. docs/requirements.yaml's REQ-369 status flipped
+      blocked -> done and close_out_note appended (append-only) with the full
+      account above. GitHub issue GH-1550 (ISS-0719) closed with a comment
+      citing both fixes and the UAT report path.

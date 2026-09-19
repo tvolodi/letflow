@@ -8,8 +8,8 @@
   "file": "handoffs/WF03-ISS0720-20260919/step-final-git-merge.json",
   "created_at": "2026-09-19T04:11:55Z",
   "started_at": "2026-09-19T04:11:55Z",
-  "completed_at": null,
-  "status": "IN_PROGRESS",
+  "completed_at": "2026-09-19T05:25:00Z",
+  "status": "COMPLETED",
   "priority": "HIGH",
   "context": {
     "stage": "S7",
@@ -34,19 +34,33 @@
     ]
   },
   "result": {
-    "status": "BLOCKED",
-    "summary": "",
-    "artifacts_out": [],
-    "issues": [],
+    "status": "PASS",
+    "summary": "GIT_MERGE.md steps 1-9 executed exactly for feature/WF03-ISS0720-20260919. Step 2: staged/committed the IN_PROGRESS claim edit to this handoff (no other uncommitted artifacts). Step 4-5: fetched origin/main, rebase was a clean replay of all 23 commits onto origin/main (10ca7a48), no conflicts. Step 5d: mix format --check-formatted clean, mix compile --warnings-as-errors clean (1 file), full mix test suite run via scripts/test_parallel.sh (16 partitions): combined 4447 tests, 6 properties, 1 failure (4452/4453 passed). The 1 failure (Letflow.SandboxPoolTest 'provisioning does not block the pool's mailbox (ISS-0224 regression) RT-6 (death path c)', test/letflow/sandbox_pool_test.exs:1087) is structurally attributed pre-existing/unrelated per core-directives.md route 1: neither test/letflow/sandbox_pool_test.exs nor Letflow.SandboxPool nor any of its dependencies appear in `git diff --name-only origin/main...HEAD` for this branch (only config/dev.exs, config/test.exs, lib/letflow/routers/tenant_config.ex, test/letflow/routers/tenant_config_test.exs, plus docs/handoffs were touched). No currently-open issue record tracks this specific recurrence (ISS-0224/ISS-0533/ISS-0536/ISS-0590/ISS-0601 are all status: resolved) -- flagged in issues[] below for ORCH to file per ISSUE_QUEUE.md rather than filed directly here (discovering agent reports, does not call the queue itself). Step 6: plain push rejected non-fast-forward (expected, rebase replayed commits); republished with --force-with-lease on this run's own feature branch, succeeded. Step 7: opened PR #1553 with mix test line carrying the real counts and attribution route inline (not a bare PASS). Step 8: both required checks (Backend gate, Frontend gate) reported pending immediately after push, both resolved to pass within ~11 minutes (backend 10m54s, frontend 12s) -- no --admin override needed, plain `gh pr merge --squash --delete-branch` succeeded on the first attempt. Step 9: checked out main, pulled --ff-only (fast-forward, main had also advanced with unrelated commits -- ISS-0721/ISS-0722 filings and a UAT rerun -- from a concurrent session between this run's rebase and its merge; no conflict since the merge itself was a clean squash onto whatever main's tip was at merge time), branch deleted automatically by gh as part of the merge, working tree clean.",
+    "artifacts_out": [
+      "PR https://github.com/tvolodi/letflow/pull/1553 (merged)"
+    ],
+    "issues": [
+      {
+        "severity": "MEDIUM",
+        "description": "test/letflow/sandbox_pool_test.exs: 'provisioning does not block the pool's mailbox (ISS-0224 regression) RT-6 (death path c)' (Letflow.SandboxPoolTest) failed once during this run's post-rebase full-suite check (test/letflow/sandbox_pool_test.exs:1087, 'Expected false or nil, got true' on refute MapSet.member?(final, o_schema) -- a released sandbox schema still present in the pool's final live set). Structurally unrelated to this branch's diff (route 1, see result.summary). All prior issue records referencing this test/scenario (ISS-0224, ISS-0533, ISS-0536, ISS-0590, ISS-0601) are status: resolved, so this is a new recurrence with no open tracking record. Not filed as a new ISS-NNNN here per ISSUE_QUEUE.md step 2 (discovering agent reports to ORCH; only ORCH calls register_task/letflow-queue to allocate the id) -- ORCH should register_task this finding."
+      }
+    ],
     "git_evidence": {
-      "branch_name": null,
-      "commit_sha_list": [],
-      "remote_branch": null,
-      "push_status": "skipped",
-      "pr_url": null,
-      "pr_create_error": null
+      "branch_name": "feature/WF03-ISS0720-20260919",
+      "commit_sha_list": [
+        "a6c95a21", "783428ea", "3dd5bbd3", "9e5d56d8", "58872e3f", "b6f74eb9",
+        "38cdb325", "ba5dabff", "a3e83b43", "c600582d", "89877f6e", "1673f790",
+        "2cdd0937", "79a9d022", "48736c55", "9fb2e8f8", "7b9dcf0c", "9e0b03c9",
+        "e840a93a", "da1fc15e", "8f0ae481", "c1d516be", "bc6eb3df"
+      ],
+      "remote_branch": "origin/feature/WF03-ISS0720-20260919 (deleted post-merge by gh pr merge --delete-branch)",
+      "push_status": "force-with-lease (non-fast-forward after rebase, per GIT_MERGE.md step 6 -- expected, not an error)",
+      "pr_url": "https://github.com/tvolodi/letflow/pull/1553",
+      "pr_create_error": null,
+      "merge_commit_sha": "fc55e700f5725a0291a98de89088d4b9f30c58eb",
+      "ci_checks": "Backend gate (mix letflow.check): pass (10m54s); Frontend gate (npm run check): pass (12s); Detect changed paths: pass (8s) -- no --admin override used"
     },
-    "next_action": ""
+    "next_action": "ORCH marks run COMPLETED, releases owned_modules lock, files the SandboxPoolTest recurrence (issues[0] above) per ISSUE_QUEUE.md, and separately updates T-0138's own ai-dala-infra file per this handoff's own task note (not done by ELIXIR-DEV, per that note's explicit instruction)."
   },
   "rework_count": 0,
   "max_rework": 3

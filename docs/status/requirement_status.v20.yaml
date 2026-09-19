@@ -570,3 +570,47 @@ history:
       remains unfixed -- the query-param path is the sanctioned workaround,
       not a claim host-based resolution now works on its own. Queue task 727
       released with status: done.
+  - req: SCOPE-CHANGE
+    event: done
+    agent: ORCH
+    at: "2026-09-20T00:00:00Z"
+    note: >
+      Applied the "review real screens before writing a blind Playwright
+      spec" process to
+      test/fixtures/uat/scenarios/platform/definition-promotion-rollback.yaml
+      (sibling of definition-promotion-approved.yaml and
+      definition-promotion-conflict-rejected.yaml, reviewed the same day --
+      see test/uat-reports/gui-review-2026-09-20-*.md). Checked whether
+      rollback/withdrawal functionality exists by reading current source
+      directly, not assuming from the scenario's own NOTE (ISS-0527).
+      Confirmed the backend is fully built and wired:
+      Letflow.Definitions.rollback_definition_version/4 (REQ-038) and
+      POST /api/v1/definitions/:process_key/rollback
+      (lib/letflow/routers/definitions.ex handle_rollback/2, REQ-077 R9) both
+      exist, and the event-append leg is real --
+      Letflow.EventStore.PlatformEvents.append_definition_version_rolled_back/2
+      is genuinely called, so a real DEFINITION_VERSION_ROLLED_BACK audit
+      event is written today. But web/src has ZERO rollback support: grepped
+      "rollback" case-insensitively across web/src (no hits), and read
+      web/src/pages/definitions/DefinitionListPage.tsx's version-history row
+      in full -- its only row actions are Activate/Archive, no
+      rollback/withdraw button, no reason input, no call to the rollback
+      endpoint, and no audit-trail/change-history screen anywhere in web/src
+      that could satisfy EO-005. This is a genuine, verified frontend gap,
+      not a stale scenario note -- the scenario's own NOTE (ISS-0527) is
+      correct that this is BLOCKED/UNBUILT_FEATURE on the frontend leg (it
+      was actually confirmed independently here, not merely re-cited).
+      Filed docs/requirements.yaml REQ-371 (owner FRONTEND-DEV, stage S8,
+      status: pending) sized to build the operator-facing rollback/withdraw
+      screen, error-state rendering for the four already-wired backend error
+      shapes, restored-version confirmation on a new case, and a
+      change-history/audit view, plus authoring and passing the named
+      pipeline_test spec once the screen exists. No implementation attempted
+      here per this run's own explicit instruction (file the gap, do not
+      build the frontend feature in this dispatch). UAT scenario run recorded
+      BLOCKED in
+      test/uat-reports/gui-review-2026-09-20-definition-promotion-rollback.md.
+      No docs/requirements.yaml entry needed flipping (REQ-371 is newly
+      filed, not an existing one being closed). No docs/migration/
+      stage-N-*.md or decisions/*.md file needed updating -- this is a net-
+      new frontend gap finding, not a change to already-documented behavior.

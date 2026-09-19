@@ -27506,3 +27506,102 @@ requirements:
       No other docs/migration/stage-N-*.md file was named by this
       requirement's acceptance criteria; the one decisions/ file it did
       name (0002-oidc-integration.md) is confirmed updated per AC8 above.
+
+  - id: REQ-371
+    title: Operator-facing rollback/withdrawal screen for a released process definition
+    owner: FRONTEND-DEV
+    status: pending
+    stage: S8
+    description: >
+      GAP FOUND DURING UAT SCENARIO REVIEW, NOT A HYPOTHESIS. Filed by ORCH
+      2026-09-20 while applying the "review real screens before writing a
+      Playwright spec" process to
+      test/fixtures/uat/scenarios/platform/definition-promotion-rollback.yaml
+      (sibling of definition-promotion-approved.yaml and
+      definition-promotion-conflict-rejected.yaml, same underlying
+      promotion-review machinery, both reviewed the same day — see
+      test/uat-reports/gui-review-2026-09-20-*.md).
+      .
+      BACKEND IS FULLY BUILT AND WIRED — this requirement is frontend-only,
+      confirmed by direct source read, not assumed from the scenario's own
+      stale-looking NOTE. `Letflow.Definitions.rollback_definition_version/4`
+      exists in lib/letflow/definitions.ex (REQ-038, PRM-08), the HTTP route
+      `POST /api/v1/definitions/:process_key/rollback` exists and is fully
+      wired in lib/letflow/routers/definitions.ex (`handle_rollback/2`, REQ-077
+      R9), and the event-append leg is real (not a stub) — it calls
+      `Letflow.EventStore.PlatformEvents.append_definition_version_rolled_back/2`,
+      so a real DEFINITION_VERSION_ROLLED_BACK audit event is written on
+      every successful rollback today.
+      .
+      THE GAP IS ENTIRELY IN web/src. `web/src/pages/definitions/DefinitionListPage.tsx`
+      has a "Version history" expandable row (data-testid="version-history-row")
+      that lists a definition's versions with status badges, but its only
+      row-level actions are Activate (DRAFT only) and Archive
+      (ACTIVE/DEPRECATED only) — there is no rollback/withdraw button, no
+      confirmation dialog, no reason-for-rollback input, and no call anywhere
+      in web/src to the rollback endpoint (grepped "rollback" across web/src
+      case-insensitively — zero matches outside this requirement's own
+      filing). There is also no operator-facing audit-trail/change-history
+      screen anywhere in web/src that would show a past rollback's actor,
+      timestamp, restored version and reason (EO-005 of the scenario above).
+      .
+      SCOPE — what this requirement builds:
+      1. A rollback/withdraw action on the process detail / version-history
+         view, visible to PLATFORM_ADMIN (and whichever other role the
+         existing DESIGNER_ROLES-style gating in DefinitionListPage.tsx
+         already uses for destructive actions — follow that precedent, do
+         not invent a new role check), available on any version currently
+         eligible per the backend's own accepted-status set
+         (ACTIVE/DEPRECATED, i.e. any version that was live before — mirror
+         the backend's own eligibility rather than re-deriving it
+         client-side from a guess).
+      2. A confirmation step that requires a free-text reason (the backend
+         does not take a reason parameter today — confirm this directly
+         against handle_rollback/2's @rollback_schema before building; if a
+         reason truly has nowhere to go server-side, that is itself a
+         finding this requirement's own design step must surface, not
+         silently drop — do not invent a reason field that is collected and
+         discarded).
+      3. Real error-state rendering for all four backend error shapes
+         already wired in render_rollback/2: :forbidden (403), 404
+         (process_key not found), :version_never_active (422, "target_version
+         was never active" — must be shown as a clear refusal naming the
+         requested version, per EO-004's own wording, not a generic error
+         toast), :already_active (422).
+      4. A live case started after a successful rollback must visibly reflect
+         the restored version somewhere the operator can confirm on screen
+         (EO-001) — confirm what "starts a case" and "confirms the version it
+         runs on" already look like elsewhere in web/src (case list/detail
+         pages) and reuse that pattern rather than building a new one.
+      5. A change-history/audit-trail display showing at minimum the
+         DEFINITION_VERSION_ROLLED_BACK event's actor, timestamp, restored
+         version, and (if item 2 above lands a reason field) the reason
+         (EO-005) — check whether any existing audit/change-history screen in
+         web/src already renders platform events generically before building
+         a new one from scratch.
+      .
+      OUT OF SCOPE, NOT SILENTLY DROPPED: building the reason parameter on
+      the BACKEND if item 2's check finds it is genuinely missing there — if
+      so, file that as its own small ELIXIR-DEV follow-up rather than
+      widening this frontend requirement's own file-scope into
+      lib/letflow/. Do not touch
+      Letflow.Definitions.rollback_definition_version/4's signature or
+      lib/letflow/routers/definitions.ex from this requirement.
+      .
+      Once this ships, UAT-RUNNER can drive
+      test/fixtures/uat/scenarios/platform/definition-promotion-rollback.yaml
+      for real against a running instance and the Playwright regression spec
+      already named at that scenario's own `pipeline_test` field
+      (web/tests/e2e/pipelines/platform-definition-promotion-rollback.pipeline.e2e.spec.ts)
+      can finally be authored against a real shipped screen instead of
+      remaining the aspirational forward-reference ISS-0527 already found it
+      to be.
+    acceptance_criteria:
+      - "a rollback/withdraw action is reachable from the process detail / version-history view in web/src for any version the backend accepts (ACTIVE or DEPRECATED status per Letflow.Definitions.rollback_definition_version/4's own eligible-target set), gated to the same role(s) DefinitionListPage.tsx already uses for destructive definition actions"
+      - "confirming the action calls POST /api/v1/definitions/:process_key/rollback with the selected target_version and a real HTTP response is handled — the close-out states explicitly whether a reason field was added and, if the backend has nowhere to receive it, names the follow-up filed for that rather than silently dropping the reason on the floor"
+      - "each of the four backend error responses (403 forbidden, 404 process_key not found, 422 version_never_active, 422 already_active) renders a distinct, clear message on screen — exercised for real against a running instance, not asserted from reading the router code alone, screenshot or real HTTP trace quoted"
+      - "after a successful rollback, starting a new case shows on screen that it is running on the restored version, exercised for real end to end (EO-001 of test/fixtures/uat/scenarios/platform/definition-promotion-rollback.yaml)"
+      - "a change-history/audit view shows a completed rollback's actor, timestamp, and restored version, exercised for real against a running instance (EO-005 of the same scenario), reusing an existing generic platform-event display if one already exists rather than building a redundant one"
+      - "test/fixtures/uat/scenarios/platform/definition-promotion-rollback.yaml's NOTE (ISS-0527) is removed or updated once this requirement's own close-out confirms the feature is real and driveable, and web/tests/e2e/pipelines/platform-definition-promotion-rollback.pipeline.e2e.spec.ts is authored and passes for real (`npx playwright test` output quoted) — both as part of this requirement's own close-out, not deferred to a further requirement"
+      - "npm run type-check, npm run lint, npm run test, npm run build all pass, real output quoted"
+    depends_on: []

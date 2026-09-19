@@ -1969,3 +1969,5 @@
 2026-09-19T08:04:13Z | DISPATCH | WF-03 | WF03-ISS0721-20260919/step-03c-reviewer-rework1 | ORCH -> REVIEWER | PENDING (re-gate on updated diff, incl. scope-creep judgement on 3rd fixture fix)
 2026-09-19T08:30:00Z | GATE_PASS | WF-03 | WF03-ISS0721-20260919/step-03c-reviewer-rework1 | REVIEWER -> ORCH | PASS (3rd fixture fix ruled in-scope mechanical correction, not scope creep)
 2026-09-19T08:06:49Z | DISPATCH | WF-03 | WF03-ISS0721-20260919/step-04c-test-runner-rerun1 | ORCH -> TEST-RUNNER | PENDING (re-run after Step 3 rework1)
+2026-09-19T08:45:00Z | GATE_PASS | WF-03 | WF03-ISS0721-20260919/step-04c-test-runner-rerun1 | TEST-RUNNER -> ORCH | PASS (4454/4455, only known unrelated ISS-0724 failure remains)
+2026-09-19T08:18:27Z | DISPATCH | WF-03 | WF03-ISS0721-20260919/step-05-issue-fixer-close | ORCH -> ISSUE-FIXER | PENDING

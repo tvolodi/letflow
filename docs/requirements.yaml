@@ -27506,3 +27506,35 @@ requirements:
       No other docs/migration/stage-N-*.md file was named by this
       requirement's acceptance criteria; the one decisions/ file it did
       name (0002-oidc-integration.md) is confirmed updated per AC8 above.
+
+  - id: REQ-371
+    title: "Operator-facing rollback/withdrawal screen for a released process definition"
+    owner: FRONTEND-DEV
+    status: pending
+    stage: S8
+    impl_order: 728  # letflow-queue task id, GH#1589
+    description: >
+      Backend rollback path (Letflow.Definitions.rollback_definition_version/4,
+      POST /api/v1/definitions/:process_key/rollback) is fully built and
+      wired, including a real DEFINITION_VERSION_ROLLED_BACK audit-event
+      append. web/src has zero rollback/withdraw UI. Build the
+      operator-facing rollback/withdraw screen, error-state rendering for
+      the four wired backend error shapes, restored-version confirmation on
+      a new case, and a change-history/audit view; then author and pass
+      web/tests/e2e/pipelines/platform-definition-promotion-rollback.pipeline.e2e.spec.ts.
+      # NOTE: this entry was backfilled by ORCH -- the queue task (728) was
+      # registered without a matching docs/requirements.yaml entry ever
+      # being committed. Content copied verbatim from the queue task's own
+      # title/description/acceptance_criteria/depends_on fields, not
+      # re-derived. Per this project's "queue is authoritative for
+      # claiming, yaml is authoritative for content" split, this backfill
+      # closes that gap before implementation proceeds.
+    acceptance_criteria:
+      - "a rollback/withdraw action is reachable from the process detail / version-history view in web/src for any version the backend accepts, gated to the same role(s) DefinitionListPage.tsx already uses for destructive definition actions"
+      - "confirming the action calls POST /api/v1/definitions/:process_key/rollback with the selected target_version and a real HTTP response is handled"
+      - "each of the four backend error responses (403, 404, 422 version_never_active, 422 already_active) renders a distinct, clear message on screen, exercised for real"
+      - "after a successful rollback, starting a new case shows on screen that it is running on the restored version, exercised for real end to end"
+      - "a change-history/audit view shows a completed rollback actor, timestamp, and restored version, exercised for real"
+      - "test/fixtures/uat/scenarios/platform/definition-promotion-rollback.yaml NOTE removed/updated and its named pipeline_test spec authored and passing"
+      - "npm run type-check, npm run lint, npm run test, npm run build all pass"
+    depends_on: []

@@ -164,6 +164,12 @@ defmodule Letflow.Routers.TenantConfig do
   # web/src/auth/{OidcManager,tenantConfig}.ts defaults are a same-value
   # fallback for when this call fails, not the effective source of truth),
   # so a stale default here silently overrides a correct SPA-side default.
+  # This constant is a last-resort fallback only: it is also the value QA
+  # silently fell all the way through to (ISS-0719) when the *only* other
+  # resolution path (oidc_issuer_base/0) was silently broken for months after
+  # REQ-370. Reaching this default in any non-dev environment is itself a
+  # signal something upstream is misconfigured, not a value that should ever
+  # be reached outside local dev.
   @default_idp_base_url "http://localhost:8082"
   @default_client_id "letflow-web"
   @default_realm "bpm-default"
@@ -315,12 +321,17 @@ defmodule Letflow.Routers.TenantConfig do
       @default_idp_base_url
   end
 
-  # Derive the IDP base URL from the compiled :oidc issuer, which is already
-  # set correctly via config/keycloak_port.exs for every workspace.
+  # Derive the IDP base URL from the compiled :oidc, :keycloak_base_url
+  # (REQ-370's trust-resolution source -- see config/dev.exs/config/runtime.exs's
+  # own comments for the same key), which is already a bare host with no
+  # /realms/... suffix, so no further parsing is needed or performed here. The
+  # old :issuer-keyed lookup (retired by REQ-370) silently always returned nil,
+  # which is what let a real deployment fall all the way through to
+  # @default_idp_base_url -- see ISS-0719 for the full incident.
   defp oidc_issuer_base do
-    case Application.get_env(:letflow, :oidc, [])[:issuer] do
-      nil -> nil
-      issuer -> issuer |> String.split("/realms/") |> List.first()
+    case Application.get_env(:letflow, :oidc, [])[:keycloak_base_url] do
+      base_url when is_binary(base_url) and base_url != "" -> base_url
+      _nil_or_empty -> nil
     end
   end
 

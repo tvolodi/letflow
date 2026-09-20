@@ -1,0 +1,64 @@
+{
+  "handoff_id": "c1a1e001-0000-4000-8000-000000000009",
+  "run_id": "WF03-ISS0736-20260921",
+  "workflow_id": "WF-03",
+  "step": "03c",
+  "from_agent": "ORCH",
+  "to_agent": "REVIEWER",
+  "file": "handoffs/WF03-ISS0736-20260921/step-03c-reviewer.json",
+  "created_at": "2026-09-20T19:31:19Z",
+  "started_at": "2026-09-20T19:31:19Z",
+  "completed_at": null,
+  "status": "PENDING",
+  "priority": "HIGH",
+  "context": {
+    "stage": "S4",
+    "requirement_ids": ["REQ-378"],
+    "requirement_text": {
+      "REQ-378": "See handoffs/WF03-ISS0736-20260921/step-00-git-setup.json context.requirement_text.REQ-378 for the full verbatim text."
+    },
+    "related_handoff_ids": ["c1a1e001-0000-4000-8000-000000000008"],
+    "artifacts_in": [
+      "lib/letflow/design/req378-oidc-live-revocation-check.md",
+      "handoffs/WF03-ISS0736-20260921/step-03-elixir-dev.json",
+      "handoffs/WF03-ISS0736-20260921/step-03b-security-reviewer.json",
+      "lib/letflow/plugs/auth_pipeline.ex",
+      "lib/letflow/identity.ex"
+    ],
+    "owned_modules": [
+      "lib/letflow/plugs/auth_pipeline.ex",
+      "lib/letflow/api/authorization.ex",
+      "lib/letflow/identity.ex",
+      "lib/letflow/identity/user.ex",
+      "web/src/api/identity.ts",
+      "web/src/pages/admin/GroupsPage.tsx"
+    ]
+  },
+  "task": {
+    "description": "SECURITY-REVIEWER has already PASSED this change (handoffs/WF03-ISS0736-20260921/step-03b-security-reviewer.json). Your gate: OTP idiom, supervision integrity (n/a here -- no process/supervisor touched, confirm that), scope creep, and decision-record consistency. Review `git diff main...feature/WF03-ISS0736-20260921`. Specifically check: (1) Letflow.Identity.list_effective_role_names/2 and the new AuthPipeline private function follow this codebase's existing conventions (naming, with-chain style, error tuple shapes) -- compare against neighboring functions like verify_api_token/2; (2) no scope creep beyond REQ-378's 4 acceptance criteria (e.g. did ELIXIR-DEV touch anything not authorized by the design or the GUI fix); (3) does this conflict with any existing decision record in docs/migration/decisions/ (e.g. does adding a per-request DB query to the OIDC path contradict any stated performance/architecture decision) -- check, don't assume; (4) is the flagged pre-existing sibling bug (groupsApi.addMembers/.list/.get/.update/.delete/.members sharing the same broken /api/v1/admin/groups prefix, noted in the design doc and by CODE-DESIGN-VALIDATOR) something that should be filed as a new issue -- if so, note it in your summary so ORCH can file it post-merge (do not fix it in this run, out of scope).",
+    "acceptance_criteria": [
+      "Idiom/style check against neighboring code, not abstract preference",
+      "Explicit confirmation no supervision-tree file was touched",
+      "Explicit scope-creep check against REQ-378's 4 ACs",
+      "Explicit check against docs/migration/decisions/ for conflicts",
+      "Recommend filing the sibling groupsApi bug as a follow-up issue if not already filed"
+    ]
+  },
+  "result": {
+    "status": "PENDING",
+    "summary": "",
+    "artifacts_out": [],
+    "issues": [],
+    "git_evidence": {
+      "branch_name": null,
+      "commit_sha_list": [],
+      "remote_branch": null,
+      "push_status": "skipped",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": ""
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

@@ -1,0 +1,76 @@
+{
+  "handoff_id": "c1a1e001-0000-4000-8000-000000000006",
+  "run_id": "WF03-ISS0736-20260921",
+  "workflow_id": "WF-03",
+  "step": "02b-rework1",
+  "from_agent": "ORCH",
+  "to_agent": "CODE-DESIGN-VALIDATOR",
+  "file": "handoffs/WF03-ISS0736-20260921/step-02b-code-design-validator-rework1.json",
+  "created_at": "2026-09-20T19:24:19Z",
+  "started_at": "2026-09-20T19:24:19Z",
+  "completed_at": null,
+  "status": "PENDING",
+  "priority": "HIGH",
+  "context": {
+    "stage": "S4",
+    "requirement_ids": ["REQ-378"],
+    "requirement_text": {
+      "REQ-378": "See handoffs/WF03-ISS0736-20260921/step-00-git-setup.json context.requirement_text.REQ-378 for the full verbatim text. Acceptance criteria: (1) live revoke-takes-effect-next-request; (2) revoking action reachable through Letflow's own web/ GUI, not only Keycloak; (3) 403 renders through existing QueryStateBoundary/PermissionDenied contract unchanged; (4) SECURITY-REVIEWER signs off on the chosen mechanism before merge."
+    },
+    "related_handoff_ids": ["c1a1e001-0000-4000-8000-000000000005"],
+    "artifacts_in": [
+      "lib/letflow/design/req378-oidc-live-revocation-check.md",
+      "handoffs/WF03-ISS0736-20260921/step-02-code-designer-rework1.json",
+      "handoffs/WF03-ISS0736-20260921/step-02b-code-design-validator.json",
+      "web/src/api/identity.ts",
+      "web/src/pages/admin/GroupsPage.tsx",
+      "lib/letflow/routers/identity.ex"
+    ],
+    "owned_modules": [
+      "lib/letflow/plugs/auth_pipeline.ex",
+      "lib/letflow/api/authorization.ex",
+      "lib/letflow/identity/role_registry.ex",
+      "lib/letflow/identity.ex",
+      "lib/letflow/identity/user.ex",
+      "web/src/pages/admin/UsersPage.tsx",
+      "web/src/pages/admin/GroupsPage.tsx",
+      "web/src/api/identity.ts"
+    ]
+  },
+  "task": {
+    "description": "RE-GATE after rework 1/3. CODE-DESIGNER amended lib/letflow/design/req378-oidc-live-revocation-check.md's AC2 section only (per handoffs/WF03-ISS0736-20260921/step-02-code-designer-rework1.json's result.summary) to fix the previously-FAILED GUI-reachability claim: corrected web/src/api/identity.ts removeMembers signature to (id, userId) hitting DELETE /api/v1/identity/groups/:id/members/:user_id (the real route per lib/letflow/routers/identity.ex:182), plus the GroupsPage.tsx mutationFn fix. Independently re-verify THIS fix against actual source yourself -- confirm the route really exists at that path/method in lib/letflow/routers/identity.ex, confirm the corrected function signature/call-site design is unambiguous enough to implement with no invented details, and confirm the rest of the design (sections left unchanged from before) is still intact/untouched. Also note: CODE-DESIGNER flagged that groupsApi.addMembers/.list/.get/.update/.delete/.members share the same broken /api/v1/admin/groups prefix as a separate pre-existing bug, explicitly out of scope for this fix -- confirm that note is accurate and that scoping it out does not undermine AC2 (i.e. confirm removeMembers specifically, which AC2 depends on, is the one being fixed, and nothing about leaving the siblings broken affects this requirement's acceptance).",
+    "acceptance_criteria": [
+      "PASS only if the corrected AC2 GUI path is independently re-verified against real route-table source",
+      "Confirm no other design section regressed/changed unexpectedly",
+      "If PASS: route to ELIXIR-DEV for implementation",
+      "If FAIL again: name the exact remaining gap by acceptance criterion, rework_count becomes 2/3"
+    ]
+  },
+  "result": {
+    "status": "PENDING",
+    "summary": "",
+    "artifacts_out": [],
+    "issues": [],
+    "git_evidence": {
+      "branch_name": null,
+      "commit_sha_list": [],
+      "remote_branch": null,
+      "push_status": "skipped",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": ""
+  },
+  "rework_count": 1,
+  "max_rework": 3,
+  "gate_history": [
+    {
+      "iteration": 0,
+      "gated_at": "2026-09-20T19:21:42Z",
+      "status": "FAIL",
+      "summary": "AC2 role-revocation GUI path did not exist as claimed -- GroupsPage.tsx/api/identity.ts wiring was broken.",
+      "issues": ["AC2 GUI path broken -- fixed in rework1, needs re-verification"],
+      "next_action": "Rework CODE-DESIGNER"
+    }
+  ]
+}

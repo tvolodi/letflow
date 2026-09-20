@@ -8,8 +8,8 @@
   "file": "handoffs/WF03-ISS0736-20260921/step-02-code-designer-rework2.json",
   "created_at": "2026-09-20T21:32:36Z",
   "started_at": "2026-09-20T21:32:36Z",
-  "completed_at": null,
-  "status": "PENDING",
+  "completed_at": "2026-09-20T21:37:39Z",
+  "status": "COMPLETED",
   "priority": "HIGH",
   "context": {
     "stage": "S4",
@@ -49,19 +49,19 @@
     ]
   },
   "result": {
-    "status": "PENDING",
-    "summary": "",
-    "artifacts_out": [],
+    "status": "PASS",
+    "summary": "Amended lib/letflow/design/req378-oidc-live-revocation-check.md to close the JIT-provisioning gap TEST-RUNNER found: §1-§2 as shipped had no path writing group_members from a JWT's claimed roles, so every OIDC user (fresh or pre-existing) reads roles: [] once AuthPipeline trusts group_members exclusively. New §2.2 adds a one-time, marker-gated sync: a new nullable users.role_claims_synced_at column (tenant-scoped migration, §2.2.1/§7), a new Letflow.Identity.sync_role_claims_from_token/3 (§2.2.2, never an error tuple, self-healing on internal failure since the marker stays nil and the next request retries), called from insert_or_fetch/4's created:true branch unconditionally and from upsert_by_external_identity/4's and re_select_on_conflict/3's existing-user (created:false) branches only when role_claims_synced_at is nil (§2.2.3). §2.2.4 argues explicitly why gating on a persisted one-time marker (never reset, including across revocation) rather than on current group_members row-count is what keeps this safe against REQ-378's own threat model: a revoked-to-zero user's marker is already non-nil from their original sync, so the gate never re-fires for them and group_members correctly stays empty; only a genuinely never-synced user (new or pre-existing) gets the one-time write. Pre-existing OIDC users are explicitly NOT left as accepted collateral and get no separate backfill migration either -- because the new column's every existing row lands NULL with no default/backfill statement, their first post-deploy request is indistinguishable from a new user's first request to the same gate, so §7 names this as the deliberate backfill answer, not an open gap. §8 (signature summary), §9 (AC mapping) and §10 (open questions, two new judgment calls flagged for REVIEWER/SECURITY-REVIEWER) updated to match. §§0-1, §2's pre-existing text, §3-§6 and §4/§4.1 (deactivation check, GroupsPage.tsx GUI fix) left untouched per the task's instruction -- diff is additive only (new §2.2, amended §7/§8/§9/§10, and the REWORK 2 header note).",
+    "artifacts_out": ["lib/letflow/design/req378-oidc-live-revocation-check.md"],
     "issues": [],
     "git_evidence": {
-      "branch_name": null,
+      "branch_name": "feature/WF03-ISS0736-20260921",
       "commit_sha_list": [],
-      "remote_branch": null,
-      "push_status": "skipped",
+      "remote_branch": "origin/feature/WF03-ISS0736-20260921",
+      "push_status": "pending",
       "pr_url": null,
       "pr_create_error": null
     },
-    "next_action": ""
+    "next_action": "Route to CODE-DESIGN-VALIDATOR for re-gate of the amended design (§2.2 specifically, plus the §7/§8/§9/§10 amendments), per this rework's routing."
   },
   "rework_count": 2,
   "max_rework": 3,

@@ -13,6 +13,21 @@ match actual `web/` source (`handoffs/WF03-ISS0736-20260921/step-02b-code-design
 Only §4 is amended below (now split into §4 + new §4.1); §§0-3, §5-§10 are unchanged from
 the version CODE-DESIGN-VALIDATOR already independently re-verified as correct.
 
+**REWORK 2 note (2026-09-21):** TEST-RUNNER (step-04c, full suite) FAILed this design at
+implementation time — not a validator gate — because §1-§2 as shipped have no seeding
+path for `group_members`: a JIT-provisioned user's role exists only as a JWT claim until
+*something* writes a `group_members` row for them, and nothing ever did. Every OIDC user
+today (freshly provisioned or provisioned before this fix) hits this gap. Full citation:
+`handoffs/WF03-ISS0736-20260921/step-04c-test-runner.json` `result.summary`, and
+`test/reports/report-20260921-WF03-ISS0736-20260921.yaml`. **New §2.2 below closes this
+gap** (a one-time, marker-gated sync of claimed roles into `group_members`, covering both
+brand-new and pre-existing OIDC users, without ever re-syncing after the first time —
+see §2.2's own reasoning for why that boundary is safe against REQ-378's own threat
+model). §7 (migration), §8 (signature summary), §9 (AC mapping) and §10 (open questions)
+are amended to match. §§0-1, §2 (its existing text, unchanged below §2.1), §3-§6, §4-§4.1
+are otherwise untouched — this rework does not revisit anything CODE-DESIGN-VALIDATOR or
+TEST-RUNNER already found correct.
+
 ## 0. Problem recap (from the diagnosis, not re-argued)
 
 `Letflow.Plugs.AuthPipeline.authenticate_oidc/2` attaches
@@ -170,6 +185,164 @@ modules in the same `Letflow.Identity.*` namespace as their would-be caller. Thi
 - **No caching, no memoization, no ETS.** One `Repo.all/2` per call — this is the whole
   point (mirrors `verify_api_token/2`'s uncached single round trip exactly).
 
+## 2.2 Closing the JIT-provisioning gap — one-time claims-to-`group_members` sync (REWORK 2)
+
+**Root cause (re-derived from TEST-RUNNER's citation, not re-argued):** §2.1's
+`list_effective_role_names/2` is correct on its own terms — it faithfully reads whatever
+`group_members` currently holds. The gap is that **nothing ever writes to
+`group_members` from a JWT's claimed roles**, for any OIDC user, ever. Before this
+requirement's fix, that didn't matter (roles came straight from the claim every
+request); now that §1 makes `group_members` the sole source of truth, a user with zero
+rows there — which is every OIDC user today, freshly provisioned or provisioned months
+ago — reads `roles: []` regardless of what their token claims.
+
+**The naive fix is unsafe.** Re-syncing `group_members` from the token's claimed roles
+on *every* request/login (or whenever the live query currently returns `[]`) would
+defeat REQ-378 outright: a `tenant_admin` revokes a user down to zero role-bearing
+groups, the user's IdP-side token/session still carries the old claim (IdP-side
+revocation is a separate, slower system this requirement does not touch — diagnosis
+§0), the user's next login re-syncs from that stale claim, and the revocation is
+silently undone the moment `group_members` is empty again. A row-count-based trigger
+("sync whenever currently empty") is indistinguishable between "never yet synced" and
+"synced once, then fully revoked" — both read as zero rows — so it cannot be the gate.
+
+**The gate is therefore an explicit, persisted, one-time marker — not a row count.**
+
+### 2.2.1 New column — `users.role_claims_synced_at`
+
+Tenant-scoped migration (same shape/placement as
+`20260907020001_add_scan_status_to_instance_attachments.exs`'s `if prefix() do` /
+`tenant_scoped_migrations/0` registration pattern — `users` is itself tenant-scoped
+per Decision 0006 D1, so this column follows the table it's added to):
+
+```
+alter table(:users, prefix: schema) do
+  add :role_claims_synced_at, :utc_datetime_usec, null: true
+end
+```
+
+`null: true`, **no default expression, no backfill statement** — every existing row
+(every OIDC user provisioned before this fix ships, and every internal/non-OIDC user)
+gets `NULL` for free, at zero migration cost, and `NULL` is exactly the correct meaning
+for "not yet synced" for all of them, including internal users (who never reach the OIDC
+sync path at all — see 2.2.3, so their permanently-`NULL` marker is inert, never read).
+`Letflow.Identity.User` (schema module) gains one matching field:
+`field(:role_claims_synced_at, :utc_datetime_usec)`. **Not added to any existing
+changeset** (`jit_changeset/2`, `create_changeset/2`, `profile_changeset/2`,
+`status_changeset/2`) — it is written exactly once, only by 2.2.2's new function, via a
+direct `Ecto.Changeset.change/2` + `Repo.update/2` (same "not a caller-assignable field"
+posture `jit_changeset/2`'s own moduledoc already documents for `password_hash`/
+`auth_source`). This is a deliberate security note for SECURITY-REVIEWER: no router or
+public changeset ever accepts `role_claims_synced_at` from request input — a caller
+setting it early (e.g. to a client-supplied non-nil value) could otherwise suppress its
+own seeding or, worse, nothing downstream re-checks it once non-null, so it must stay
+fully unassignable outside 2.2.2.
+
+### 2.2.2 New function — `Letflow.Identity.sync_role_claims_from_token/3`
+
+```
+@spec sync_role_claims_from_token(
+        user :: User.t(),
+        identity_context :: IdentityContext.t(),
+        opts :: opts()
+      ) :: User.t()
+```
+
+Always returns a `User.t()` — **never an error tuple, never raises past a genuine
+connection failure**, matching this module's existing "seeding/lookup helpers don't fail
+the caller's flow" convention (`RoleRegistry.resolve_role_in_tx/1`'s own doc states the
+identical principle for the same reason: a role-lookup/seed problem must never abort
+JIT provisioning itself). Behavior:
+
+1. Resolve claimed role names to group ids: new private
+   `resolve_group_ids_for_role_names(identity_context.roles, opts) :: [Ecto.UUID.t()]` —
+   `Repo.all(from t in TenantRole, where: t.name in ^role_names, select: t.group_id,
+   distinct: true)`, `prefix: Keyword.fetch!(opts, :prefix)`. Lives in `Letflow.Identity`
+   itself, **not** `RoleRegistry`, for the identical reason §2 already gives for
+   `list_effective_role_names/2`: it keeps `RoleRegistry`'s moduledoc invariant ("no
+   coupling to the OIDC/claim-mapping pipeline") literally true — this is the second
+   function that reasoning now covers, not a new exception to it. A claimed role name
+   with no matching `tenant_role` row resolves to nothing for that name — not an error;
+   the IdP is free to claim role names this tenant hasn't bound to a group yet.
+2. For each resolved `group_id`, insert a `group_members` row for `user.id` via the
+   **existing private helper** `insert_or_fetch_group_member/3` (`identity.ex`, backs
+   `add_group_member/3` — reused directly at its lean private arity, not through
+   `add_group_member/3`'s own public wrapper, which would add two redundant
+   `Repo.get/3` existence checks for a `Group`/`User` this function already knows exist:
+   the group id just came from a live `tenant_role` row, and `user` is the struct this
+   function was called with). Already `on_conflict: :nothing` /
+   `conflict_target: [:group_id, :user_id]` — idempotent, safe even if called twice.
+3. Stamp `user.role_claims_synced_at = DateTime.utc_now()` via
+   `Ecto.Changeset.change/2` + `Repo.update/2`, `prefix: Keyword.fetch!(opts, :prefix)`.
+4. Steps 2-3 run inside one `Repo.transaction/1` (group-membership inserts and the
+   marker stamp commit or roll back together — never a state where the marker is set
+   but a resolved group's membership row wasn't written, or vice versa).
+
+**On any failure inside the transaction** (logged via `Logger.error/1`, reason
+included): return the **original, unmodified `user`** (marker still `nil`,
+`group_members` unchanged) rather than propagating an error. This is deliberately
+self-healing, not merely fail-open: because the marker is still `nil`, the **very next**
+request for this same user re-enters this exact function (via 2.2.3's call sites) and
+retries the sync — a transient DB error costs one request's worth of `roles: []` (a
+false-negative 403, safe direction to fail in) and self-corrects, rather than requiring
+an operator to intervene or a caller to specially retry.
+
+### 2.2.3 Call sites — where the one-time sync is invoked
+
+Both call sites gate on `role_claims_synced_at == nil` (2.2.4 below on why that gate is
+what makes this safe), and both already have `identity_context` and `opts` in scope
+today — no new parameter threading into `provision_oidc_user/4` or its callers:
+
+- **`insert_or_fetch/4`**, inside the `if Repo.get(User, id, prefix: prefix) do` branch
+  (the branch that confirms a genuine new-row insert, `auth_pipeline.ex:1550` region —
+  this is the `created: true` path): unconditionally calls
+  `sync_role_claims_from_token(inserted, identity_context, opts)` (a brand-new row's
+  marker is always `nil`, so no gate check is needed here — the row cannot pre-exist)
+  and uses its return value as the `user:` in `{:ok, %{user: synced_user, created:
+  true}}` in place of the un-synced `inserted` struct.
+- **`upsert_by_external_identity/4`**'s `%User{} = existing ->` branch, **and**
+  `re_select_on_conflict/3`'s identical `%User{} = existing ->` branch (both currently
+  return `{:ok, %{user: existing, created: false}}` unconditionally — both must change
+  identically, since both are "found an existing row" outcomes, one from the fast path,
+  one from the on-conflict race-loser path): becomes
+  `user = if is_nil(existing.role_claims_synced_at), do:
+  sync_role_claims_from_token(existing, identity_context, opts), else: existing` before
+  returning `{:ok, %{user: user, created: false}}`. For the overwhelming majority of
+  returning-user requests (marker already non-nil from a prior sync), this is a single
+  extra struct-field read, zero extra queries — the `if` short-circuits before any new
+  `Repo` call.
+
+### 2.2.4 Why the marker-gate does not reintroduce REQ-378's vulnerability
+
+This is the judgment call CODE-DESIGN-VALIDATOR and SECURITY-REVIEWER must both sign off
+on explicitly (also restated in §10): **the sync runs at most once per user, ever**, on
+whichever request first observes `role_claims_synced_at == nil` for that user — the
+user's actual first-ever provisioning if they're new, or their first request after this
+fix deploys if they predate it. From that point on, `role_claims_synced_at` is permanently
+non-`nil` for that user (nothing in this design, or anywhere else in the codebase, ever
+resets it back to `nil`), so:
+
+- A user revoked down to zero `group_members` rows **after** their one-time sync already
+  ran keeps a non-`nil` marker — the gate never re-fires for them, `group_members` stays
+  at zero rows, `list_effective_role_names/2` correctly returns `[]`, and AC1's
+  revoke-takes-effect-next-request property holds exactly as §1-§2 already established.
+  The marker is what makes "zero rows because never synced" and "zero rows because
+  revoked" distinguishable — the row count alone (what the naive fix would have gated
+  on) cannot tell these apart; the marker can, because it is written once and never
+  touched by revocation (`Identity.remove_group_member/3`, §4's table, does not touch
+  `users` at all).
+- A pre-existing OIDC user (provisioned before this fix, `role_claims_synced_at: nil`
+  today) syncs exactly once, on their first post-deploy request — this **is** this
+  design's answer to task item (d)/AC2 of this rework's own acceptance criteria (see
+  §7): no separate backfill migration is needed, because the sync mechanism itself,
+  gated by the marker rather than by "was this row inserted just now", already covers
+  both populations with one code path. This is a deliberate, named decision, not the
+  "accept the collateral" fallback the rework's task text offered as the alternative —
+  chosen because it costs nothing extra (no migration to write, no window where a
+  legitimate pre-existing user is denied) and does not weaken the security property
+  (per the bullet above, a marker set on *this* first-post-deploy sync is exactly as
+  permanent as a marker set at original provisioning time).
+
 ## 3. AC3 — 403 renders through the existing contract unchanged (task item d)
 
 **Confirmed: no `web/` renderer change is needed**, and none is proposed. Both new
@@ -320,13 +493,33 @@ UX polish gap, not a security gap, and is not this requirement's concern per its
 
 ## 7. Migration / schema shape (task item f)
 
-**No migration needed.** No new table, no new column. `users.status` (REQ-073),
-`group_members` (REQ-074), `tenant_role`/`groups` (REQ-015/REQ-020) all already exist
-with the shape §1-§2 depend on. `Letflow.Identity.User`'s schema is unchanged — the
-diagnosis's finding that "there is nowhere on the `users` row itself to even store an
-OIDC user's role" is correct and this design does not change that: roles stay
-exclusively in `tenant_role`/`groups`/`group_members`, read live via a join, never
-denormalized onto `users`.
+**REWORK 2 — amended.** §1-§2's live-read side still needs no migration: `users.status`
+(REQ-073), `group_members` (REQ-074), `tenant_role`/`groups` (REQ-015/REQ-020) all
+already exist with the shape §1-§2 depend on. **§2.2's seeding fix does need one new
+column**, added by REWORK 2: `users.role_claims_synced_at :: utc_datetime_usec | nil`
+(2.2.1) — a tenant-scoped migration (`if prefix() do` / registered in
+`Letflow.TenantProvisioning.tenant_scoped_migrations/0`, matching
+`20260907020001_add_scan_status_to_instance_attachments.exs`'s pattern exactly), nullable
+with no default and no backfill statement. This is still not a place where "roles" are
+denormalized onto `users` — the column stores only *when this user's claims were last
+synced into `group_members`*, never a role name or list itself; roles remain exclusively
+derived from `tenant_role`/`groups`/`group_members`, read live via §2.1's join, exactly
+as the un-amended text above already established.
+
+**Pre-existing-user backfill (task item d of this rework): explicitly NOT a separate
+migration or an accepted-collateral tradeoff — it's the same one-time-sync mechanism.**
+Because the new column's every existing row lands `NULL` (no default, no backfill
+statement — 2.2.1), and 2.2.3's gate is "`role_claims_synced_at == nil`", every
+pre-existing OIDC user is, from this migration's own perspective, indistinguishable from
+a brand-new user the first time they're seen post-deploy: their first request after this
+ships syncs their then-current token claims into `group_members` and stamps the marker,
+exactly once, via the same code path 2.2.2-2.2.3 describe for new users. No separate
+backfill script, no data migration touching `group_members` directly, and no window
+where such a user is denied *indefinitely* — only their single first post-deploy request
+sees `roles` sourced from a `group_members` row that didn't exist a moment before request
+processing began (transparent to them: they still get `roles: [<claimed>]` on that same
+request, per 2.2.2 running before §1's `verify_local_account_state/2` step reads live
+roles in the same request's pipeline).
 
 ## 8. Full signature summary
 
@@ -360,6 +553,32 @@ removeMembers: (id: string, userId: string) => Promise<void>
 # web/src/pages/admin/GroupsPage.tsx — removeMember mutation's mutationFn threads userId
 # through instead of wrapping it in a discarded array (§4.1, REWORK 1); no signature
 # change to the mutation's own call site (line 234) or to addMember (unchanged).
+
+# lib/letflow/identity.ex (new, REWORK 2, §2.2.2)
+@spec sync_role_claims_from_token(
+        user :: User.t(),
+        identity_context :: IdentityContext.t(),
+        opts :: opts()
+      ) :: User.t()
+# Never an error tuple; on internal failure returns the original (still-unsynced) user
+# unchanged so the next request retries (§2.2.2's self-healing note).
+
+# lib/letflow/identity.ex (new private, REWORK 2, §2.2.2 step 1)
+@spec resolve_group_ids_for_role_names(role_names :: [String.t()], opts :: opts()) ::
+        [Ecto.UUID.t()]
+
+# lib/letflow/identity.ex — insert_or_fetch/4 (REWORK 2, §2.2.3): the created:true
+# branch's returned user is now sync_role_claims_from_token/3's return value in place of
+# the raw inserted struct. upsert_by_external_identity/4's and re_select_on_conflict/3's
+# %User{} = existing -> branches (both created:false) now conditionally call the same
+# function when existing.role_claims_synced_at is nil. No @spec on either function
+# changes — both still return {:ok, %{user: User.t(), created: boolean()}}.
+
+# lib/letflow/identity/user.ex (new field, REWORK 2, §2.2.1)
+field(:role_claims_synced_at, :utc_datetime_usec)
+# Not added to jit_changeset/2, create_changeset/2, profile_changeset/2, or
+# status_changeset/2 — written only via sync_role_claims_from_token/3's own
+# Ecto.Changeset.change/2 + Repo.update/2, never from caller-supplied attrs.
 ```
 
 No `.ex`/`.tsx` implementation bodies above — every code-shaped block is either an
@@ -371,16 +590,38 @@ not introduce new ones).
 
 | REQ-378 AC | Design element |
 |---|---|
-| AC1 — revoke-then-immediately-retry, no sleep/refresh wait | §1 (new pipeline step, uncached per-request query), §2.1 (no cache/ETS/memoization), §5 (cost accepted as one live round trip, same as the API-token precedent) |
+| AC1 — revoke-then-immediately-retry, no sleep/refresh wait | §1 (new pipeline step, uncached per-request query), §2.1 (no cache/ETS/memoization), §2.2 (REWORK 2 — the one-time seed never re-fires post-revocation, §2.2.4), §5 (cost accepted as one live round trip, same as the API-token precedent) |
 | AC2 — reachable through `web/`'s own GUI, not only Keycloak | §4 (deactivate path: existing, already-shipped, re-confirmed correct); §4.1 (role-revoke path: `web/` fix to `groupsApi.removeMembers`'s signature and its `GroupsPage.tsx` call site, correcting the endpoint to the real `DELETE /api/v1/identity/groups/:id/members/:user_id` route — REWORK 1) |
 | AC3 — 403 renders through existing `QueryStateBoundary`/`PermissionDenied` contract unchanged | §1.2 (403 via existing `reject/4`), §3 (no new renderer state, no new response shape, role-narrowing path reuses `evaluate_access/2`'s existing `Deny403`) |
 | AC4 — SECURITY-REVIEWER signs off on the chosen mechanism before merge | Not this design's own step to satisfy — routed as this handoff's `next_action` to `CODE-DESIGN-VALIDATOR`, and the pipeline's next stage after implementation routes to `SECURITY-REVIEWER` per WF-03/AC4's own wording; §5 pre-flags the one-query-per-request cost for that review explicitly rather than leaving it implicit |
 
 ## 10. Open questions
 
-None outstanding for ELIXIR-DEV to guess at. Two judgment calls this design made
-explicitly, restated here so REVIEWER/SECURITY-REVIEWER can challenge them directly
-rather than discover them mid-review:
+None outstanding for ELIXIR-DEV to guess at. Four judgment calls this design made
+explicitly (two from before this rework, two added by REWORK 2), restated here so
+REVIEWER/SECURITY-REVIEWER can challenge them directly rather than discover them
+mid-review:
+
+- **(REWORK 2) The one-time sync is gated by a persisted marker
+  (`role_claims_synced_at`), not by "current `group_members` row count is zero"** —
+  reasoned in full in §2.2.4. This is the crux of REWORK 2's fix and is exactly the
+  distinction TEST-RUNNER's finding turned on: a row-count gate cannot tell "never
+  synced" from "revoked to zero" apart, and a marker gate can, because nothing ever
+  resets the marker. If SECURITY-REVIEWER wants an even stronger guarantee (e.g. an
+  audit-logged record of what was synced and when, beyond the bare timestamp), that is
+  additive to this design (the `role_claims_synced_at` value itself, or a companion
+  `Letflow.Identity.Audit` entry per REQ-195's existing pattern), not a structural
+  change to the gate itself.
+- **(REWORK 2) Pre-existing OIDC users are backfilled by the same one-time-sync
+  mechanism, not by a separate data migration** — reasoned in §7 and §2.2.4's second
+  bullet. Flagging explicitly because it means a pre-existing user's very first
+  post-deploy request is the moment their `group_members` row first gets written — if
+  SECURITY-REVIEWER considers even that one-request-delayed, self-service backfill an
+  unacceptable window (versus a proactive migration seeding all pre-existing users'
+  `group_members` from... nothing, since no historical claims are persisted anywhere in
+  this codebase to backfill from — the diagnosis's own finding), that would need to be
+  argued as a functional requirement change, not a design gap: there is no source of
+  truth for a pre-existing user's claimed roles other than their own next token.
 
 - **403 (not 401) for `:inactive`** — reasoned in §1.2. If SECURITY-REVIEWER disagrees
   (e.g. wants inactive accounts to look identical to "invalid token" to avoid confirming

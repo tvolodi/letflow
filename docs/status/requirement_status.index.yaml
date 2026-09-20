@@ -4289,12 +4289,69 @@ volumes:
       changed. `entries:` will be incremented per HOW-TO-APPEND step 6 as
       real appends land.
 
+  - volume: 21
+    path: docs/status/requirement_status.v21.yaml
+    status: current
+    opened: 2026-09-20
+    entries: 0
+    note: >
+      Opened by DOC-UPDATER's own ISS-0743 close-out, successor to volume 20
+      (closed at 19 entries / 1227 frozen-prefix lines, over the 1200-line
+      roll ceiling -- the rebase reconciliation of ISS-0741's and ISS-0743's
+      concurrently-written entries crossed it). Created with volume 20's
+      header text verbatim (volume number, opening date and predecessor path
+      updated) and an empty `history:` list, per this index's
+      `roll_rule.on_exceed` procedure.
+
   - volume: 20
     path: docs/status/requirement_status.v20.yaml
-    status: current
+    status: closed
     opened: 2026-09-18
-    entries: 18
+    closed: 2026-09-20
+    entries: 19
+    lines: 1262
+    bytes_working_tree: 79810
+    frozen_prefix_lines: 1227
+    frozen_prefix_sha256: "3bab1026ad2739e54fd6ff58104a75d6260642e24017e192eb15b599506d318f"
     note: >
+      Closed by DOC-UPDATER's own ISS-0743 SCOPE-CHANGE done-event append,
+      composed during feature/WF03-ISS0739-20260920's rebase onto fresh
+      origin/main (which had independently gained ISS-0741's own append) --
+      `grep -c "^  - req:" docs/status/requirement_status.v20.yaml` = 19
+      on-disk entries after the rebase, 1227 lines -- over the 1,200-line
+      roll ceiling (bytes, 77521, stayed under the 120000-byte ceiling; only
+      the line ceiling was crossed), confirmed via `wc -l` on the
+      working-tree file. Real rebase conflict on this file, resolved by
+      keeping BOTH entries (origin's ISS-0741 entry first, this branch's
+      ISS-0743 entry second) -- append-only means preserving both.
+
+      Incremented to 19 by DOC-UPDATER's own rebase of
+      feature/WF03-ISS0739-20260920 (PR #1618, ISS-0743 close-out) onto
+      fresh origin/main: origin/main had independently gained ISS-0741's own
+      DOC-UPDATER append (2026-09-20T07:14:07Z -- InstanceBoardPage
+      start-dialog click-freeze fix, bumping this volume's on-disk count to
+      18 without its own index note paragraph) since this branch's own
+      ISS-0743 append (below) was first written against volume 20 at 18
+      entries. The rebase produced a real conflict in
+      docs/status/requirement_status.v20.yaml (both sides appended after the
+      same tail entry); resolved by keeping BOTH entries, in file order by
+      when each was written (origin's 07:14:07Z entry first, this branch's
+      own 08:10:54Z entry second) -- append-only means preserving both,
+      never dropping one to make the counts match a smaller number.
+      `grep -c "^  - req:" docs/status/requirement_status.v20.yaml` = 19
+      on-disk entries, recounted after the rebase, not assumed from either
+      side's own pre-rebase note. 1227 lines / 77521 bytes, well under the
+      1200-line/120000-byte roll ceiling, so no roll triggered.
+
+      Incremented to 18 by DOC-UPDATER's own ISS-0743 SCOPE-CHANGE done-event
+      append (WF03-ISS0743-20260920, 2026-09-20T08:10:54Z --
+      Letflow.Definitions.search_paginated/3 exception-hardening fix), before
+      the rebase above composed it with origin's own concurrent append -- at
+      that point in this branch's own history, `grep -c "^  - req:"
+      docs/status/requirement_status.v20.yaml` = 18 on-disk entries. 1169
+      lines / 73899 bytes, well under the 1200-line/120000-byte roll ceiling,
+      so no roll triggered.
+
       Incremented to 17 by DOC-UPDATER's own rebase of
       feature/WF03-ISS0737-20260920 onto fresh origin/main: origin/main had
       independently gained ORCH's own SCOPE-CHANGE done-event append

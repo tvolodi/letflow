@@ -1165,3 +1165,98 @@ history:
       is no letflow-queue task to release. No merge performed here --
       ORCH's job next, after confirming this push's own CI is green and no
       other agent is currently active.
+  - req: SCOPE-CHANGE
+    event: done
+    agent: DOC-UPDATER
+    at: "2026-09-20T08:10:54Z"
+    note: >
+      WF-03 run WF03-ISS0743-20260920 (PR #1618, branch
+      feature/WF03-ISS0739-20260920) complete. ISS-0743 (GET
+      /api/v1/definitions/search -- Letflow.Definitions.search_paginated/3
+      had zero exception handling, so any raised exception surfaced as
+      Bandit's raw empty-body HTTP 500 instead of a shaped JSON problem
+      response; discovered by ISSUE-FIXER blocking REQ-371's required e2e
+      spec) is now resolved per design doc
+      lib/letflow/design/iss-0739-search-paginated-exception-hardening.md
+      (filename retains its originally-authored "iss-0739" name; see the
+      issue record's own NOTE for why the id diverged). Fix: wrapped
+      search_paginated/3's with chain in a try/rescue mirroring
+      Definitions.activate/2's exact established idiom, adding
+      {:error, {:query_failed, exception}} to search_error() only (not the
+      shared common_error() union). No router change needed --
+      render_search_result/2's existing catch-all clause already
+      structurally matches the new tuple. get_by_id/2, get_active_by_name/2,
+      list_paginated/2, and delta/2 share the identical gap but are
+      explicitly out of scope for this fix (flagged, not fixed). Honestly
+      stated per the issue's own root_cause_honesty_note: ~440+ direct
+      reproduction attempts never reproduced the original crash, so this is
+      idiom-matching defensive hardening plus new test coverage, not a
+      confirmed-root-cause patch -- the new rescue path is exercised by a
+      real deterministic test forcing a genuine Postgrex.Error (dropping the
+      tenant schema's process_definitions table inside a sandboxed test
+      transaction).
+
+      Traceability note: this issue's filename/id was renumbered TWICE due
+      to concurrent-session docs/issues/ slot collisions (originally filed
+      as ISS-0739, refiled as ISS-0743 once ORCH found two other sessions
+      had independently claimed ISS-0739.yaml for unrelated defects) --
+      same collision class already documented under ISS-0729/ISS-0738/
+      ISS-0741's own NOTE comments this session. The design doc's filename
+      and internal prose still say "ISS-0739" throughout; only the
+      issue-record filename/id changed.
+
+      Full gate history, all PASS: SECURITY-REVIEWER (mandatory,
+      tenant-data-read-path per INV-8); REVIEWER; TEST-DESIGNER/
+      TEST-DESIGN-VALIDATOR; TEST-RUNNER (full suite 4469/4469);
+      RELEASE-VALIDATOR (independent re-verification: diff-vs-design match,
+      1060/1060 targeted test pass, mix letflow.check.test clean, scope
+      confirmed to 5 files, no invariant violations).
+
+      docs/issues/ISS-0743.yaml flipped open -> resolved, with confirmation
+      of all four gate PASSes appended to its own resolution.gates field
+      (append-only edit to that prose field; the pre-existing
+      resolution: block written by prior agents was left otherwise
+      untouched). No docs/requirements.yaml entry to flip -- this is an ISS,
+      not a REQ (REQ-371, the related requirement, remains status: pending
+      independently of this fix). README.md and docs/migration/ grepped for
+      ISS-0743/ISS-0739 -- no hits; not documented current behavior there,
+      so no update needed. queue_ref is null on this issue (filed directly,
+      not via register_task) -- nothing to release via letflow-queue; per
+      docs/agents/protocols/TASK_QUEUE.md, that release is ORCH-only in any
+      case and out of scope for DOC-UPDATER. No merge performed here --
+      ORCH's/this same session's next step, after confirming CI is green.
+# ─────────────────────────────────────────────────────────────────────────────
+# VOLUME 20 — CLOSED 2026-09-20. DO NOT APPEND TO THIS FILE.
+# This volume holds the complete requirement run history from 2026-09-18 through
+# 2026-09-20 (19 entries, 1227 frozen-prefix lines before this closure footer).
+# It is frozen: every line above this comment is preserved byte-for-byte. Closed
+# by DOC-UPDATER's own ISS-0743 SCOPE-CHANGE done-event append (rebase
+# reconciliation with ISS-0741's own concurrent append), which brought this
+# file to 1227 lines -- over the declared roll_rule ceiling (max_lines: 1200) --
+# confirmed via `wc -l` on the working-tree file per this volume's own
+# "WHEN THIS VOLUME IS FULL" procedure. Byte count (77521) stayed under the
+# 120000-byte ceiling; only the line ceiling was crossed.
+# Reads of this volume are TARGETED reads only -- a line range or a pattern
+# match, never a whole-file read. Use whichever your shell has:
+#   Read tool with offset/limit (works everywhere), or
+#   Bash:       grep -n PATTERN FILE   /   sed -n 'START,ENDp' FILE
+#   PowerShell: Select-String -Path FILE -Pattern PATTERN
+#               (Get-Content FILE)[START..END]
+#
+# NEW ENTRIES GO TO THE CURRENT VOLUME. Find it in:
+#   docs/status/requirement_status.index.yaml
+# which, as of this closure, names:
+#   docs/status/requirement_status.v21.yaml
+#
+# Why this file was closed: DOC-UPDATER's own ISS-0743 SCOPE-CHANGE done-event
+# append, composed during feature/WF03-ISS0739-20260920's rebase onto fresh
+# origin/main (which had independently gained ISS-0741's own append), brought
+# the on-disk count to 19 entries across 1227 lines -- over the roll ceiling.
+# No entry above this footer was moved, edited or deleted.
+#
+# KNOWN ANOMALIES IN THIS VOLUME: none new. This closure followed a real
+# rebase conflict on this file (both branches had appended after the same
+# tail entry) resolved by keeping BOTH entries, in file order by when each was
+# written (origin's ISS-0741 entry first, this branch's ISS-0743 entry
+# second) -- see this volume's own entries and the index's volume-20 note for
+# the full account.

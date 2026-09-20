@@ -564,6 +564,11 @@ defmodule Letflow.Routers.Definitions do
   defp render_search_result(conn, {:error, :expired}),
     do: Response.send_problem(conn, Error.cursor_expired())
 
+  # search_paginated exception hardening -- also covers
+  # Definitions.search_paginated/3's own {:error, {:query_failed, exception}}
+  # tuple (its try/rescue catch-all): `_common_error` is a variable name, not
+  # a type constraint, so it already structurally matches any {:error, _}
+  # two-tuple; no code change was needed here for that fix, only this note.
   defp render_search_result(conn, {:error, _common_error}), do: Response.internal_error(conn)
 
   defp search_result_map(%{definition: definition, rank: rank}) do

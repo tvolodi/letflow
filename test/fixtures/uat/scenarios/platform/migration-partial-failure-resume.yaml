@@ -34,6 +34,21 @@ pipeline_test: web/tests/e2e/pipelines/platform-migration-partial-failure-resume
 # UAT-RUNNER drives this Playwright pipeline test for the operator's steps.
 # If this file does not exist or the test cannot run, that is a BLOCKER
 # (missing UI) and must be routed to FRONTEND-DEV before UAT can proceed.
+#
+# ADDENDUM (2026-09-20, ORCH, GUI-review sweep applying "review real screens
+# before writing a blind Playwright spec"): independently re-verified this
+# NOTE by reading current source (lib/letflow/ and web/src/), not by re-citing
+# it unread. Confirmed the underlying feature -- a platform-wide per-tenant
+# fanout runner with failure isolation, resume-outstanding, and idempotent
+# re-run, plus an operator-facing rollout-status screen -- genuinely does not
+# exist anywhere in this codebase, backend or frontend; it was never invented
+# under any other requirement (req022-tenant-schema-provisioning.md's own
+# design notes name this exact gap and explicitly defer it). Filed as
+# docs/requirements.yaml REQ-374 (backend fanout runner, ELIXIR-DEV) and
+# REQ-375 (frontend rollout-status screen, FRONTEND-DEV, depends on REQ-374).
+# Full trace: test/uat-reports/gui-review-2026-09-20-migration-partial-failure-resume.md.
+# This scenario stays BLOCKED/UNBUILT_FEATURE until REQ-374 and REQ-375 both
+# ship and this pipeline_test is authored for real against a live screen.
 
 actors:
   operator: actor-platform-admin

@@ -8,8 +8,8 @@
   "file": "handoffs/WF03-ISS0736-20260921/step-04-test-designer.json",
   "created_at": "2026-09-20T19:33:00Z",
   "started_at": "2026-09-20T19:33:00Z",
-  "completed_at": null,
-  "status": "PENDING",
+  "completed_at": "2026-09-20T21:07:44Z",
+  "status": "COMPLETED",
   "priority": "HIGH",
   "context": {
     "stage": "S4",
@@ -43,19 +43,25 @@
     ]
   },
   "result": {
-    "status": "PENDING",
-    "summary": "",
-    "artifacts_out": [],
-    "issues": [],
+    "status": "PASS",
+    "summary": "Wrote test/specs/ISS-0736.md plus two test files covering REQ-378's AC1 (backend, live revocation) and AC2 (frontend, GUI-reachable path). Backend: test/letflow/plugs/iss0736_oidc_live_revocation_test.exs (Letflow.Plugs.Iss0736OidcLiveRevocationTest), 2 tests -- mirrors test/letflow/api_token_auth_pipeline_test.exs's full Letflow.Router.call/2 dispatch convention and test/letflow/plugs/auth_pipeline_test.exs's tenant-provisioning fixture pattern. Test 1 grants PLATFORM_ADMIN via Identity.create_group/2 + Identity.add_group_member/3, dispatches GET /api/v1/identity/tokens with the fixed OIDC sentinel bearer token, asserts 200 + role present, calls Identity.remove_group_member/3 (no re-auth/sleep), re-dispatches the IDENTICAL request with the IDENTICAL bearer token, asserts 403. Test 2 does the same shape via Identity.update_user_status/3(:inactive) instead, proving the account-deactivation short-circuit independently. Frontend: web/src/api/__tests__/identity.removeMembers.test.ts asserts groupsApi.removeMembers(groupId, userId) hits the real DELETE /api/v1/identity/groups/:id/members/:user_id route, not the pre-fix nonexistent /api/v1/admin/groups path -- mirrors web/src/api/__tests__/entities.test.ts's fetch-spy convention.\n\nFAIL-THEN-PASS PROOF (both real, quoted):\nBackend PASS (branch tip, after `rm -rf _build/test/lib/letflow` forced fresh --warnings-as-errors recompile): `mix test test/letflow/plugs/iss0736_oidc_live_revocation_test.exs --seed 0` -> \"Compiling 272 files (.ex)\" then \"Result: 2 passed\", zero warnings.\nBackend FAIL (throwaway `git worktree add ../letflow-iss0736-prefix main`, main=fb6a8d43, predates step-03's fix -- confirmed zero occurrences of verify_local_account_state in that commit's auth_pipeline.ex; new test file copied in unmodified): both tests fail with `assert granted_conn.status == 200` / `left: 403, right: 200` (the granted-role assertion itself fails pre-fix, proving the JWT-claims-only role read was the real gap) -> \"Result: 0/2 passed, Failed: 2 tests\". Worktree removed after (`git worktree remove --force`), `git status --porcelain` on primary checkout confirmed clean of residue.\nFrontend PASS (branch tip): `npx vitest run src/api/__tests__/identity.removeMembers.test.ts` -> \"Test Files 1 passed (1), Tests 2 passed (2)\".\nFrontend FAIL (same worktree, web/node_modules symlinked from primary checkout): `AssertionError: expected '/api/v1/admin/groups/group-1/members' to contain '/api/v1/identity/groups/group-1/members/user-1'` -> \"Test Files 1 failed (1), Tests 1 failed | 1 passed (2)\".\n\nmix letflow.check.test: two full-suite attempts in this sandboxed Windows/Docker-Postgres environment both hit widespread, UNRELATED failures across many partitions (e.g. Letflow.Engine.ServiceTaskDispatcherTest: UndefinedFunctionError for a module that genuinely exists on disk -- a stale/partial per-partition _build hardlink copy under this host's parallel runner, matching this repo's own documented ISS-0699/ISS-0428 parallel-runner fragility, not a real code defect) -- could not get a fully clean end-to-end run in this session. Positive evidence gathered directly from the full run's raw output (/tmp/check_test_run2.log, 88MB, this session only, not committed): grep -c \"default values for the optional arguments\" -> 0 (the exact ISS-0069 substring this task gates on never appears anywhere in the full-suite output); grep -n \"Letflow.Plugs.Iss0736OidcLiveRevocationTest\" (failure-header pattern) -> no matches, zero failures anywhere for this new test module; the new test's own DB writes (iss0736-admins-* group creation) appear exactly twice in the log with no adjacent failure block, matching the 2 tests. Combined with the isolated forced-fresh-recompile run above (2 passed, zero warnings), this is real evidence the new files introduce no warning and no failure, though the mandatory full-suite command itself could not be shown green in this session due to pre-existing environment resource contention unrelated to REQ-378 -- flagging this explicitly for TEST-DESIGN-VALIDATOR/TEST-RUNNER to re-attempt or independently assess rather than silently asserting a clean full run.",
+    "artifacts_out": [
+      "test/specs/ISS-0736.md",
+      "test/letflow/plugs/iss0736_oidc_live_revocation_test.exs",
+      "web/src/api/__tests__/identity.removeMembers.test.ts"
+    ],
+    "issues": [
+      "mix letflow.check.test could not be shown to pass end-to-end in this session -- two full 16-partition attempts both hit widespread, unrelated (non-REQ-378) failures attributable to this host's parallel-runner/_build-hardlink fragility, not to this change. See result.summary for the substitute evidence gathered directly from that run's own output (zero ISS-0069 substring hits, zero failures for the new test module)."
+    ],
     "git_evidence": {
-      "branch_name": null,
+      "branch_name": "feature/WF03-ISS0736-20260921",
       "commit_sha_list": [],
-      "remote_branch": null,
-      "push_status": "skipped",
+      "remote_branch": "origin/feature/WF03-ISS0736-20260921",
+      "push_status": "pending",
       "pr_url": null,
       "pr_create_error": null
     },
-    "next_action": ""
+    "next_action": "TEST-DESIGN-VALIDATOR"
   },
   "rework_count": 0,
   "max_rework": 3

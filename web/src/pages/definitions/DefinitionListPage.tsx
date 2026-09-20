@@ -43,6 +43,11 @@ export default function DefinitionListPage() {
   const pendingSearchTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   const hasDesignerRole = session?.roles?.some((r) => DESIGNER_ROLES.includes(r)) ?? false
+  // REQ-371 §6: rollback is gated on PLATFORM_ADMIN alone, not DESIGNER_ROLES
+  // above — POST .../rollback is `:Unknown`-gated (PLATFORM_ADMIN-only), a
+  // narrower permission than DefinitionsWrite. See
+  // lib/letflow/design/req371-rollback-withdrawal-screen.md §6.
+  const isPlatformAdmin = Boolean(session?.roles.includes('PLATFORM_ADMIN'))
 
   // Debounce search query (300ms)
   const debouncedSearch = useDebounce(search, 300)
@@ -219,6 +224,16 @@ export default function DefinitionListPage() {
           {(def.status === 'ACTIVE' || def.status === 'DEPRECATED') && (
             <Button variant="secondary" size="sm" onClick={() => archive.mutate(def.id)} loading={archive.isPending}>
               Archive
+            </Button>
+          )}
+          {def.status === 'ACTIVE' && isPlatformAdmin && (
+            <Button
+              variant="danger"
+              size="sm"
+              data-testid={`btn-rollback-${def.id}`}
+              onClick={() => navigate(`/definitions/${def.id}/rollback`)}
+            >
+              Rollback…
             </Button>
           )}
         </div>

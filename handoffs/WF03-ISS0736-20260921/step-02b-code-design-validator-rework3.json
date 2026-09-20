@@ -1,0 +1,58 @@
+{
+  "handoff_id": "c1a1e001-0000-4000-8000-000000000010",
+  "run_id": "WF03-ISS0736-20260921",
+  "workflow_id": "WF-03",
+  "step": "02b-rework3",
+  "from_agent": "ORCH",
+  "to_agent": "CODE-DESIGN-VALIDATOR",
+  "file": "handoffs/WF03-ISS0736-20260921/step-02b-code-design-validator-rework3.json",
+  "created_at": "2026-09-20T21:46:24Z",
+  "started_at": "2026-09-20T21:46:24Z",
+  "completed_at": null,
+  "status": "PENDING",
+  "priority": "HIGH",
+  "context": {
+    "stage": "S4",
+    "requirement_ids": ["REQ-378"],
+    "requirement_text": {
+      "REQ-378": "See handoffs/WF03-ISS0736-20260921/step-00-git-setup.json context.requirement_text.REQ-378 for the full verbatim text."
+    },
+    "related_handoff_ids": ["c1a1e001-0000-4000-8000-00000000000f"],
+    "artifacts_in": [
+      "lib/letflow/design/req378-oidc-live-revocation-check.md",
+      "handoffs/WF03-ISS0736-20260921/step-02-code-designer-rework3.json",
+      "lib/letflow/api/authorization.ex",
+      "lib/letflow/plugs/authorize.ex"
+    ],
+    "owned_modules": [
+      "lib/letflow/plugs/auth_pipeline.ex",
+      "lib/letflow/identity.ex"
+    ]
+  },
+  "task": {
+    "description": "FINAL RE-GATE (rework 3/3, no further rework possible -- FAIL here means ORCH escalates per docs/agents/ORCHESTRATOR.md Section 5). CODE-DESIGNER added §2.3 'Test-assertion impact' to lib/letflow/design/req378-oidc-live-revocation-check.md, claiming: Authorization.roles_from_strings/1 already drops any claimed role string outside the closed role() type before any access decision, so the 3 previously-failing tests' `roles == [\"VIEWER\"]` assertions test an inert implementation artifact, not a security property, and should be updated to `roles == []` (all other assertions in each test unchanged). Independently re-verify: (1) read roles_from_strings/1's actual implementation yourself and confirm it really does drop unrecognized strings with no side effect; (2) confirm every real access-decision call site (authorize.ex and any router-level checks) routes through roles_from_strings/1 and never reads conn.assigns.auth_context.roles directly for a grant decision; (3) confirm the named 3 test files/line numbers and the exact proposed assertion changes are correct and would make each test pass again without weakening what each test actually proves (403 still asserted, tenant/user id checks unchanged); (4) confirm this really is a complete design now -- check nothing else in §§0-2.2 needs to change as a result of this addendum.",
+    "acceptance_criteria": [
+      "roles_from_strings/1 and its call sites independently re-verified against real source",
+      "Confirmed the proposed test-assertion changes are correct and complete for all 3 files",
+      "If PASS: next_action routes to ELIXIR-DEV to implement the §2.2 sync mechanism AND make the §2.3 test-assertion corrections in the same pass",
+      "If FAIL: this is terminal for this run's design phase -- name the exact remaining problem precisely so ORCH can decide between escalation and a scope reduction, per ORCHESTRATOR.md Section 5"
+    ]
+  },
+  "result": {
+    "status": "PENDING",
+    "summary": "",
+    "artifacts_out": [],
+    "issues": [],
+    "git_evidence": {
+      "branch_name": null,
+      "commit_sha_list": [],
+      "remote_branch": null,
+      "push_status": "skipped",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": ""
+  },
+  "rework_count": 3,
+  "max_rework": 3
+}

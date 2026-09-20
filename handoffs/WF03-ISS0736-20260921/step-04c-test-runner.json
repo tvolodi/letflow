@@ -1,0 +1,60 @@
+{
+  "handoff_id": "c1a1e001-0000-4000-8000-00000000000c",
+  "run_id": "WF03-ISS0736-20260921",
+  "workflow_id": "WF-03",
+  "step": "04c",
+  "from_agent": "ORCH",
+  "to_agent": "TEST-RUNNER",
+  "file": "handoffs/WF03-ISS0736-20260921/step-04c-test-runner.json",
+  "created_at": "2026-09-20T21:15:29Z",
+  "started_at": "2026-09-20T21:15:29Z",
+  "completed_at": null,
+  "status": "PENDING",
+  "priority": "HIGH",
+  "context": {
+    "stage": "S4",
+    "requirement_ids": ["REQ-378"],
+    "requirement_text": {
+      "REQ-378": "See handoffs/WF03-ISS0736-20260921/step-00-git-setup.json context.requirement_text.REQ-378 for the full verbatim text."
+    },
+    "related_handoff_ids": ["c1a1e001-0000-4000-8000-00000000000b"],
+    "artifacts_in": [
+      "handoffs/WF03-ISS0736-20260921/step-04b-test-design-validator.json",
+      "test/letflow/plugs/iss0736_oidc_live_revocation_test.exs",
+      "web/src/api/__tests__/identity.removeMembers.test.ts"
+    ],
+    "owned_modules": [
+      "lib/letflow/plugs/auth_pipeline.ex",
+      "lib/letflow/identity.ex",
+      "web/src/api/identity.ts",
+      "web/src/pages/admin/GroupsPage.tsx"
+    ]
+  },
+  "task": {
+    "description": "Run the FULL test suite (backend `mix test` in full, and frontend `npm test`/vitest full run in web/) on feature/WF03-ISS0736-20260921 and report real pass/fail counts. Note: TEST-DESIGN-VALIDATOR's own full-suite attempt (step-04b) hit widespread unrelated failures it attributed to stale per-partition _build hardlink copies under this host's parallel runner (mirroring documented ISS-0264-class fragility) -- if you hit the same symptom, try a non-partitioned/serial `mix test` run or a fresh `_build` (`rm -rf _build/test` then recompile) before concluding it's environmental; if it recurs and is clearly unrelated to this change (different modules, pre-existing on main too), document that clearly rather than blocking indefinitely, but do not simply assume it's environmental without at least one concrete attempt to rule out this change as the cause (e.g. confirm the same class of failure exists by running the identical suite against origin/main in a throwaway worktree, or by checking the failing modules have zero relation to auth_pipeline.ex/identity.ex/groups). This run's new tests (test/letflow/plugs/iss0736_oidc_live_revocation_test.exs, web/src/api/__tests__/identity.removeMembers.test.ts) must show 0 failures specifically. Run everything in the foreground with direct output -- do not arm a background Monitor and wait passively on it.",
+    "acceptance_criteria": [
+      "Full backend suite run, real pass/fail/total counts quoted",
+      "Full frontend suite run, real pass/fail/total counts quoted",
+      "New REQ-378 tests specifically confirmed 0 failures",
+      "Any failures present are triaged: pre-existing-on-main (cite evidence) vs. caused-by-this-branch (must FAIL/PARTIAL and block if caused-by-this-branch)",
+      "If genuinely environmental and pre-existing, document the evidence for that conclusion, don't just assert it"
+    ]
+  },
+  "result": {
+    "status": "PENDING",
+    "summary": "",
+    "artifacts_out": [],
+    "issues": [],
+    "git_evidence": {
+      "branch_name": null,
+      "commit_sha_list": [],
+      "remote_branch": null,
+      "push_status": "skipped",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": ""
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

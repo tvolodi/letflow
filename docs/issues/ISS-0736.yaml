@@ -84,6 +84,8 @@ process_note: >
   itself (QueryStateBoundary/PermissionDenied/classifyError, REQ-362) was
   independently verified correct and NOT part of this gap — see
   test/uat-reports/gui-review-2026-09-20-renderer-permission-denied-surface.md.
-queue_ref: null   # filed directly by ORCH during a GUI-review sweep, no letflow-queue register_task call in this session
-github_ref: null   # gh available and authenticated, but not opened as a GitHub issue -- tracked as a local record plus REQ-378, per this project's doc-only-finding convention; open to filing on request
+queue_ref: Q-760  # letflow-queue task id 760, issue_ref ISS-0760 (queue's own
+  # numbering doesn't match this file's local ISS-0736 id -- see TASK_QUEUE.md's
+  # "Never derive a set_lock target from a filename"). Registered 2026-09-20 by ORCH.
+github_ref: GH-1648
 status: open

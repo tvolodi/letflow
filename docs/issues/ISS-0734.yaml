@@ -87,4 +87,8 @@ fix_direction: >
   a GUI submit form nobody asked for).
 process_note: >
   Full evidence: test/uat-reports/gui-review-2026-09-20-definition-promotion-conflict-rejected.md
+queue_ref: Q-759  # letflow-queue task id 759, issue_ref ISS-0759 (queue's own
+  # numbering doesn't match this file's local ISS-0734 id -- see TASK_QUEUE.md's
+  # "Never derive a set_lock target from a filename"). Registered 2026-09-20 by ORCH.
+github_ref: GH-1647
 status: open

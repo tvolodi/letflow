@@ -35,6 +35,28 @@ pipeline_test: web/tests/e2e/pipelines/tenant-branding.pipeline.e2e.spec.ts
 # UAT-RUNNER drives this Playwright pipeline test for all steps. If this file does
 # not exist or the test cannot run, that is a BLOCKER (missing UI) and must be
 # routed to FRONTEND-DEV before UAT can proceed.
+#
+# ADDENDUM (2026-09-20, GUI-review sweep, ORCH): re-verified against current
+# source, not assumed from the NOTE above. REQ-280/281/282/283 (all done) built
+# the STORE and READ side of tenant branding -- Letflow.Identity.Tenant's
+# settings changeset, GET /api/tenant-config, and web/src/theming/'s apply-on-
+# load wiring are all real. What is still missing, confirmed by reading
+# lib/letflow/design/req281-tenant-config-branding-key.md section 6 (which
+# states outright that Letflow.Identity.update_tenant_settings/2 having "no
+# HTTP-reachable write path" is fine BY DESIGN) and by grepping every router
+# under lib/letflow/routers/ (zero PATCH/PUT/POST route writes tenants.settings):
+# there is no HTTP-reachable write path for a tenant admin to change their own
+# branding at all, no colour-contrast/readability validation (only hex-format
+# validation exists), and no activity-log recording of a rejected out-of-scope
+# change. Filed as REQ-382 (ELIXIR-DEV, the write endpoint + contrast check +
+# audit-log recording) and REQ-383 (FRONTEND-DEV, the screen itself, blocked on
+# REQ-382), depends_on REQ-280/REQ-281. See
+# test/uat-reports/gui-review-2026-09-20-tenant-branding-applied.md for the
+# full trace, including confirmation that EO-002 (status-colour immutability)
+# and EO-004 (irreversible-action confirmation, via
+# web/src/components/instances/CancelInstanceDialog.tsx) already hold today,
+# and a documented (not fixed -- severity MINOR, suggested_action: none in this
+# scenario's own EO-005) first-paint colour flash in BrandingProvider.tsx.
 
 actors:
   tenant_admin:  actor-swiftroute-alice

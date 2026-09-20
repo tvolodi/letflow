@@ -28278,3 +28278,169 @@ requirements:
       - "a further update offered afterwards does not re-present the already-resolved process as a fresh conflict, matching EO-005"
       - "the stale NOTE (ISS-0527) is removed from template-update-conflict-resolution.yaml and web/tests/e2e/pipelines/template-update-conflict.pipeline.e2e.spec.ts exists and passes against the real screen"
     depends_on: [REQ-380]
+
+  - id: REQ-382
+    title: "HTTP-reachable tenant-branding write path: PATCH endpoint, colour-contrast refusal, and rejected-out-of-scope-key activity-log recording"
+    owner: ELIXIR-DEV
+    status: pending
+    stage: S8
+    impl_order: 739  # Registered 2026-09-20 by ORCH from this GUI-review UAT finding.
+    description: >
+      Filed from the GUI-review UAT run of
+      test/fixtures/uat/scenarios/platform/tenant-branding-applied.yaml (PW-14)
+      -- see test/uat-reports/gui-review-2026-09-20-tenant-branding-applied.md
+      for the full trace. First of two requirements from that finding
+      (REQ-383 is the frontend screen, blocked on this one).
+
+      WHAT EXISTS TODAY, confirmed by reading current source, not assumed from
+      the scenario's own stale NOTE (ISS-0527): REQ-280/281/282/283 (all
+      `status: done`) built the STORE and the READ side of tenant branding --
+      `Letflow.Identity.Tenant.settings_changeset/2` validates a closed
+      `brand_colors` vocabulary (today exactly one key, `"primary"`, a
+      6-digit-hex format check only) and `Letflow.Identity.update_tenant_settings/2`
+      persists it; `GET /api/tenant-config` and
+      `GET /api/mobile/tenant-config` serve it back out; `web/src/theming/`
+      applies it to `--color-brand-600` on load. But
+      `lib/letflow/design/req281-tenant-config-branding-key.md` section 6
+      states outright that `update_tenant_settings/2` having "no
+      HTTP-reachable write path" is fine BY DESIGN for that requirement's own
+      test purposes -- and grepping every router under `lib/letflow/routers/`
+      confirms it: there is no `PATCH`/`PUT`/`POST` route anywhere that calls
+      `update_tenant_settings/2` or writes `tenants.settings` at all. A
+      tenant admin cannot change their own branding through any HTTP-reachable
+      path today, GUI or otherwise -- REQ-383's screen has nothing to call.
+
+      THIS REQUIREMENT adds three things, all backend, none of them a GUI:
+
+      1. An authenticated, tenant-scoped write endpoint (e.g.
+      `PATCH /api/v1/tenant/settings`, mounted behind the normal
+      `Letflow.Plugs.ApiPipeline`/`AuthPipeline`, restricted to a
+      tenant-admin-class role -- follow this router family's existing
+      role-check convention, do not invent a new one) that accepts a partial
+      settings map and delegates to `Letflow.Identity.update_tenant_settings/2`
+      exactly as it exists today (do not change that function's own casting
+      discipline). A request that supplies ONLY recognized keys with valid
+      values succeeds and the change is visible on the next
+      `GET /api/tenant-config` call (EO-001's "positive" half).
+
+      2. Colour-contrast refusal (EO-003), which does not exist at any layer
+      today -- `Tenant.settings_changeset/2`'s `validate_brand_colors/2`
+      checks hex-format ONLY (`#RRGGBB` shape), never contrast/readability
+      against the page background. Add a WCAG-2.1-style contrast-ratio check
+      (contrast of the submitted `brand_colors.primary` against
+      `tokens.css`'s `--surface-page`/`--surface-card` background, using the
+      standard relative-luminance formula) to `settings_changeset/2`'s
+      `validate_brand_colors/2`, rejecting a value below the AA threshold
+      (4.5:1 for normal text -- state the exact threshold and formula used in
+      the design doc, this is new scope, not a re-derivation of an existing
+      constant) with a plain-language error message the caller can surface
+      verbatim, not just a validation atom. The previously-stored colour must
+      remain in effect -- a rejected changeset must not partially apply.
+
+      3. Recording a rejected out-of-scope write for the platform operator
+      (EO-001's "negative" half): when a settings PATCH request's *raw input*
+      contains a key this closed vocabulary does not recognize (per
+      `Letflow.Identity.TenantSettings`'s allowlist) or a `brand_colors`
+      sub-key beyond `"primary"`, the endpoint must both (a) apply only the
+      recognized/valid part of the request (never fail the whole request for
+      one out-of-scope key -- REQ-280's per-field changeset discipline
+      already supports a partial map) and (b) write one `Letflow.Audit` entry
+      (`lib/letflow/audit.ex`/`lib/letflow/audit/entry.ex` -- reuse the
+      existing audit-log mechanism already used elsewhere, do not invent a
+      second one) naming the tenant, the actor, the rejected key(s), and the
+      attempted value(s), so `web/src/pages/admin/AuditLogPage.tsx` (already
+      built, REQ unspecified -- confirm which requirement owns it and cite it
+      in the design doc) surfaces it without any frontend change. This is new
+      scope: no existing code path rejects and records an out-of-scope
+      settings key today, because no write path exists to reject anything
+      from.
+
+      OUT OF SCOPE, explicitly: extending the `brand_colors` allowlist beyond
+      `"primary"` (REQ-383's screen only ever offers what this requirement's
+      endpoint accepts, and the allowlist itself is REQ-283's frontend
+      `BRAND_COLOR_CSS_PROPERTY` fence plus this backend's own -- widening
+      either is a separate, explicitly-flagged future requirement, per
+      REQ-283's own moduledoc). Do not build a general "any tenant setting
+      can be PATCHed" endpoint beyond what `brand_colors`/`app_name`/
+      `logo_url` already validate.
+    acceptance_criteria:
+      - "a new authenticated, tenant-admin-scoped route accepts a settings PATCH and a valid brand_colors.primary round-trips through GET /api/tenant-config on the next call -- a test exercises this over real HTTP, not by calling Letflow.Identity.update_tenant_settings/2 directly"
+      - "submitting a brand_colors.primary value that passes the existing hex-format check but fails a WCAG AA (4.5:1) contrast check against tokens.css's page background is refused with a plain-language message naming why, and the previously-stored colour is unchanged after the attempt -- a test asserts both the refusal and the unchanged stored value"
+      - "a request whose raw input includes an out-of-allowlist top-level key (e.g. a warning-colour or text-size key) or an out-of-allowlist brand_colors sub-key applies only the request's recognized, valid part and never 500s or rejects the whole request for that reason alone"
+      - "the same rejected-key request writes exactly one Letflow.Audit entry naming the tenant, actor, rejected key(s) and attempted value(s) -- a test asserts the entry's presence and content, and that AuditLogPage's existing query surfaces it with no frontend change"
+      - "Letflow.Identity.Tenant.settings_changeset/2's existing structural-impossibility discipline (cast list scoped to :settings only) and TenantSettings' closed top-level key vocabulary are both unchanged by this requirement -- a test asserts this endpoint cannot touch :status, :slug, :idp_realm_id or :display_name, exactly as update_tenant_settings/2 already could not"
+      - "mix compile --warnings-as-errors and mix test both pass, with real output quoted; SECURITY-REVIEWER sign-off is required before merge (this adds the first HTTP-reachable write path onto tenant.settings, a tenant-data path per docs/agents/instructions/security-invariants.md)"
+    depends_on: [REQ-280, REQ-281]
+
+  - id: REQ-383
+    title: "Company appearance settings screen: apply/adjust branding colours, surface contrast refusal, surface rejected-out-of-scope-change confirmation"
+    owner: FRONTEND-DEV
+    status: pending
+    stage: S8
+    impl_order: 740  # Registered 2026-09-20 by ORCH from this GUI-review UAT finding.
+    description: >
+      Second of two requirements from the same GUI-review finding as
+      REQ-382 -- see REQ-382's description for the full "what exists today"
+      trace and
+      test/uat-reports/gui-review-2026-09-20-tenant-branding-applied.md.
+      Blocked on REQ-382 landing (there is no real endpoint to wire to yet).
+      Grepping `web/src/pages/admin/` confirms there is no appearance/
+      branding settings screen today -- `EditTenantPage.tsx` (the only
+      per-tenant admin edit screen) has no colour/branding field at all, only
+      `display_name`.
+
+      THIS REQUIREMENT: a tenant-admin-reachable screen (e.g. under
+      `web/src/pages/admin/tenants/` alongside `EditTenantPage.tsx`, or a
+      dedicated `web/src/pages/admin/AppearanceSettingsPage.tsx` -- CODE-DESIGNER's
+      call) that (1) lets the tenant admin submit a new `brand_colors.primary`
+      value and calls REQ-382's endpoint (EO-001's positive half); (2) on a
+      successful save, shows a plain confirmation and the applied colour
+      takes effect immediately without a full page reload being required to
+      see it reflected somewhere on the same screen; (3) on a request that
+      also attempts an out-of-scope change (any field this screen does not
+      itself expose -- since this screen's own form cannot construct an
+      out-of-scope key by construction, this criterion is satisfied by
+      confirming the screen has no way to submit one, not by testing a
+      server-side reject path a same-origin form can never trigger); (4) on
+      a contrast-refused submission (REQ-382's new validation), shows the
+      endpoint's plain-language refusal message and leaves the previous
+      colour visibly in effect, never a raw validation-error blob (EO-003);
+      (5) confirms platform status colours (approved/waiting/failed, e.g. on
+      `web/src/components/ui/StatusBadge.tsx`-rendered screens) are
+      unaffected by any tenant colour change, which already holds
+      structurally today (`BRAND_COLOR_CSS_PROPERTY`'s allowlist has exactly
+      one key, `"primary"`, mapped only to `--color-brand-600` --
+      `--color-success`/`--color-warning`/`--color-error`/`--color-failure`
+      are separate custom properties `web/src/theming/applyBranding.ts` never
+      touches; this criterion needs a regression test, not new code) --
+      EO-002. Once this screen is confirmed correct against a real running
+      instance, remove this scenario's stale NOTE (ISS-0527) from
+      test/fixtures/uat/scenarios/platform/tenant-branding-applied.yaml and
+      author
+      web/tests/e2e/pipelines/tenant-branding.pipeline.e2e.spec.ts (the path
+      the scenario's own `pipeline_test` already names) against the real
+      screen, including a first-paint screenshot for EO-005 (see note below).
+
+      EO-005 NOTE (documented, not this requirement's job to fix): this
+      review's report also found that `web/src/theming/BrandingProvider.tsx`
+      applies branding in a `useEffect`, which runs strictly after first
+      paint, and `main.tsx` renders the app tree synchronously without
+      awaiting the pre-warmed `fetchTenantConfig` promise -- so the very
+      first drawn frame always shows `tokens.css`'s platform-default
+      `--color-brand-600`, then swaps to the tenant's colour once the network
+      round-trip resolves. This is a real, confirmed flash, but the
+      scenario's own EO-005 carries `severity: MINOR` and
+      `suggested_action: none` -- so this requirement's own EO-005 acceptance
+      criterion below only asks the new pipeline_test to DOCUMENT the flash
+      (screenshot the first frame vs. the settled frame, note whether it
+      still shows the swap), not to eliminate it. Fixing it (e.g. blocking
+      first render on the pre-warmed config promise, or a synchronous
+      inline `<script>` pre-paint colour set) is out of scope here and would
+      need its own requirement if EO-005's severity is ever revised upward.
+    acceptance_criteria:
+      - "a tenant admin can submit a new brand_colors.primary value through the screen, it round-trips through REQ-382's endpoint, and a confirmation is shown, matching EO-001's positive half"
+      - "submitting a contrast-refused colour (per REQ-382) shows that endpoint's plain-language message on screen and the previously-applied colour remains visibly in effect -- no raw validation-error blob, matching EO-003"
+      - "a regression test confirms StatusBadge's approved/waiting/failed colours are unchanged after a tenant colour change -- matching EO-002, structural today, verified rather than assumed"
+      - "the screen's own form has no field, control or code path capable of submitting a key this requirement did not itself add (i.e. cannot construct EO-001's negative half from this screen) -- stated and verified explicitly rather than left silent, since the negative half is exercised at REQ-382's API layer, not here"
+      - "the stale NOTE (ISS-0527) is removed from tenant-branding-applied.yaml and web/tests/e2e/pipelines/tenant-branding.pipeline.e2e.spec.ts exists, passes against the real screen, and includes a first-paint-vs-settled-frame screenshot pair documenting EO-005's known flash (not fixing it)"
+    depends_on: [REQ-382]

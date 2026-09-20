@@ -1,0 +1,58 @@
+{
+  "handoff_id": "c1a1e001-0000-4000-8000-000000000017",
+  "run_id": "WF03-ISS0736-20260921",
+  "workflow_id": "WF-03",
+  "step": "03-rework2",
+  "from_agent": "ORCH",
+  "to_agent": "ELIXIR-DEV",
+  "file": "handoffs/WF03-ISS0736-20260921/step-03-elixir-dev-rework2.json",
+  "created_at": "2026-09-20T22:34:20Z",
+  "started_at": "2026-09-20T22:34:20Z",
+  "completed_at": null,
+  "status": "PENDING",
+  "priority": "HIGH",
+  "context": {
+    "stage": "S4",
+    "requirement_ids": ["REQ-378"],
+    "requirement_text": {
+      "REQ-378": "See handoffs/WF03-ISS0736-20260921/step-00-git-setup.json context.requirement_text.REQ-378 for the full verbatim text."
+    },
+    "related_handoff_ids": ["c1a1e001-0000-4000-8000-000000000016"],
+    "artifacts_in": [
+      "handoffs/WF03-ISS0736-20260921/step-04c-test-runner-rework1.json",
+      "test/reports/report-20260921-WF03-ISS0736-20260921-rework1.yaml",
+      "lib/letflow/identity_migration.ex",
+      "lib/letflow/identity/user.ex"
+    ],
+    "owned_modules": [
+      "lib/letflow/identity_migration.ex"
+    ]
+  },
+  "task": {
+    "description": "TEST-RUNNER's rework1 full-suite gate found a genuine regression this branch caused: this run added `role_claims_synced_at` to `Letflow.Identity.User` (§2.2's new field), and `lib/letflow/identity_migration.ex`'s `copy_users/2` (~line 155) has no `select:` restriction, so it now pulls that new field into a query against the LEGACY, frozen `public.users` table (which was never migrated to carry that column), causing `Postgrex.Error ... undefined_column` -- 7 test failures in test/letflow/identity_migration_test.exs. Fix: add the same kind of explicit `select:` restriction `copy_groups/2` (same module) already carries from an earlier REQ-074 column-addition hazard of this identical class -- read copy_groups/2's existing guard first and mirror its exact shape/pattern for copy_users/2, restricting the query to only the legacy columns that actually exist in public.users. Run `mix compile --warnings-as-errors` and `mix test test/letflow/identity_migration_test.exs` and quote real output confirming all pass. Also re-run the previously-regressed/REQ-378 test files (test/letflow/plugs/auth_pipeline_test.exs test/letflow/plugs/api_pipeline_integration_test.exs test/letflow/routers/req077_promotion_pipeline_test.exs test/letflow/plugs/iss0736_oidc_live_revocation_test.exs) to confirm no new regression. Run everything in the foreground -- no background Monitor waiting.",
+    "acceptance_criteria": [
+      "copy_users/2 fixed to mirror copy_groups/2's existing select-restriction pattern for this exact hazard class",
+      "mix compile --warnings-as-errors passes",
+      "test/letflow/identity_migration_test.exs passes in full, real output quoted",
+      "The 4 REQ-378-related test files still pass, real output quoted",
+      "No unrelated changes to identity_migration.ex"
+    ]
+  },
+  "result": {
+    "status": "PENDING",
+    "summary": "",
+    "artifacts_out": [],
+    "issues": [],
+    "git_evidence": {
+      "branch_name": null,
+      "commit_sha_list": [],
+      "remote_branch": null,
+      "push_status": "skipped",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": ""
+  },
+  "rework_count": 2,
+  "max_rework": 3
+}

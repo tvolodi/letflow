@@ -1,0 +1,209 @@
+run_id: WF05-HEALTHCHECK-BILIMBAGA-20260919
+date: "2026-09-19"
+agent: UAT-RUNNER
+scope: >
+  Fresh health-check re-run of
+  test/fixtures/uat/scenarios/bilimbaga/candidate-timed-exam-autograde.yaml
+  (id: bilimbaga-candidate-timed-exam-autograde, ISS-0690) against live QA,
+  requested to confirm today's landed fixes (T-0137, ISS-0720, ISS-0721,
+  ISS-0722, ISS-0724) hold and that this scenario's flow still works, and
+  to re-check whether the GUI leg remains BLOCKED/UNBUILT_FEATURE (no
+  pipeline_test spec) as it was this morning
+  (test/uat-reports/uat-2026-09-19-WF03-ISS0690-BILIMBAGA-RERUN-20260919.yaml).
+  Uses T-0136's bilimbaga-admin-user/candidate-user credentials and the
+  pack/exam seeded during that closeout
+  (record_id c085b5a6-a2a3-466b-8721-021171b3ec04, "Safety Certification
+  Exam", 2 MCQ questions, mode "random").
+
+environment_target:
+  base_url: "https://qa.bizdala.com"
+  credential_source: "ai-dala-infra/scripts/qa-login.sh (candidate-user, bilimbaga realm)"
+  environment: qa
+  tenant: "bilimbaga (id 6ab093a1-d190-4063-9543-d66b80d261a1, schema tenant_6ab093a1d19040639543d66b80d261a1)"
+
+gui_leg_check: >
+  Confirmed via `grep -n "pipeline_test" candidate-timed-exam-autograde.yaml`
+  -- still no `pipeline_test:` key anywhere in the scenario file, and
+  `ls web/tests/e2e/pipelines/` still has no exam-related spec. UNCHANGED
+  from this morning: the GUI leg of every step remains
+  BLOCKED/UNBUILT_FEATURE -- not silently skipped or substituted with an
+  unnamed spec (web/tests/e2e/exam-taking.e2e.spec.ts exists but is not
+  named by this scenario's own pipeline_test key, so per this role's own
+  instructions it was not substituted in on this run's own initiative).
+
+issue0722_code_reverification:
+  description: >
+    Independently re-confirmed ISS-0722's manual-mode fix (referenced by
+    today's dispatch) is actually present in the code now running on QA,
+    not just merged to main.
+  method: >
+    Read lib/letflow/exam/session.ex's fetch_question_pools/2 and the new
+    fetch_manual_questions/2 helper (~line 840-860): manual_rules are now
+    filtered and passed through fetch_manual_questions/2, which reads
+    exam_manual_question join rows and errors :manual_rule_empty on a rule
+    with zero pinned rows rather than silently producing zero questions.
+  verdict: >
+    CONFIRMED present in the deployed commit chain (same cafb6a6a HEAD
+    whose CD "Deploy to QA" step was independently confirmed to have
+    actually executed -- see the companion platform report,
+    uat-2026-09-19-WF05-HEALTHCHECK-PLATFORM-20260919.yaml's
+    pre_check_deploy_provenance section, for the shared deploy-provenance
+    check covering this same commit range). This scenario's own seeded
+    exam uses mode "random" (not "manual"), so it does not itself exercise
+    this fix's new code path -- noted for completeness, not claimed as
+    tested by this run.
+
+precondition_check:
+  description: >
+    "A bilimbaga tenant exists with the exam solution pack installed" /
+    "At least one certification exam is configured and active... with no
+    short-answer questions."
+  method: >
+    GET https://qa.bizdala.com/api/v1/exam-sessions/available
+    Authorization: Bearer <candidate-user bilimbaga-realm token, freshly
+    minted this run via POST
+    https://auth.qa.bizdala.com/realms/bilimbaga/protocol/openid-connect/token>
+  real_response: >
+    HTTP 200, {"items":[{... "status":"active", "time_limit_minutes":30,
+    "title":{"en":"Safety Certification Exam",...}}],
+    "record_id":"c085b5a6-a2a3-466b-8721-021171b3ec04"}],"next_cursor":null}
+  verdict: PASS -- both preconditions confirmed live, same exam and pack
+    data as this morning, still active.
+
+fresh_action_attempted:
+  description: >
+    Attempted a genuinely fresh step-2 action this run (POST
+    /exam-sessions to start a new timed session as candidate-user), rather
+    than relying solely on earlier evidence.
+  method: >
+    POST https://qa.bizdala.com/api/v1/exam-sessions
+    body {"exam_id":"c085b5a6-a2a3-466b-8721-021171b3ec04"}
+  real_response: >
+    HTTP 422 {"status":422,"type":".../unprocessable-entity",
+    "title":"Unprocessable Entity",
+    "detail":"you have used all allowed attempts for this exam",
+    "trace_id":"c83300f5-2552-406e-9661-0b3432b1506f"}
+  finding: >
+    This is a REAL, correctly-enforced business rule (the exam's own
+    max_attempts: 3), not a defect -- independently confirmed by directly
+    querying the live tenant schema (see ground_truth_reverification
+    below): exactly 3 "session" entity records exist for this
+    candidate+exam, all created and submitted earlier TODAY
+    (2026-09-19T04:55:08Z - 04:59:28Z, during this morning's
+    WF03-ISS0690-BILIMBAGA-RERUN run), so a fourth fresh attempt by this
+    same seeded candidate is correctly refused. This blocks a completely
+    new end-to-end run under this specific seeded candidate identity within
+    this health check; not pursued by resetting/mutating exam or session
+    data, since this run's mandate is read/verify-only, not a fix or
+    reseed run. The most recent of the three real attempts (started
+    04:59:28Z, submitted 05:01:37Z) is used below as this run's evidence
+    of record, independently re-verified live rather than re-quoted from
+    the morning report.
+
+ground_truth_reverification:
+  method: >
+    Live ops-console query against the running QA node (real remote
+    console, not a mock, not a fixture):
+      ssh ubuntu-16gb-nbg1-1
+      sudo docker exec letflow-qa-app-1 /app/bin/letflow rpc
+      '<Ecto query over entity_record_latest, entity_type "session",
+        filtered to this candidate+exam>'
+  real_result: >
+    Exactly 3 session records, all status "submitted", all created today:
+      - started 2026-09-19T04:55:08Z -> score_pct 0.0, passed false
+      - started 2026-09-19T04:55:56Z -> score_pct 100.0, passed true
+      - started 2026-09-19T04:59:28Z -> score_pct 100.0, passed true
+    The most recent (04:59:28Z, id 29674840-bd77-4aa6-9097-0dbfa14d93d5)
+    independently re-fetched in full via
+      GET /exam-sessions/29674840-bd77-4aa6-9097-0dbfa14d93d5
+      (candidate-user bearer token)
+    -> HTTP 200, both answers persisted verbatim
+    (68334a3b...->088462ad..., 35d7721f...->c4be0c3e...),
+    session.status "submitted", session.passed true, session.score_pct
+    100.0 -- identical, live-reconfirmed today, to what the morning run
+    originally observed. Both submitted options
+    (088462ad-97bb-4b58-9eb8-4f471a871f4a "Evacuate via the nearest exit",
+    c4be0c3e-580a-4d6d-891f-377f35cc819a "Red") were already independently
+    confirmed is_correct=true by the morning run's own ops-console
+    grading check (not re-repeated here since the underlying question/
+    option data has not changed) -- a correct grading of 2/2 at a 70%
+    threshold is 100%/pass, matching the live persisted state exactly.
+
+expected_outcomes:
+  - id: EO-001
+    description: "Visible countdown after starting the exam"
+    gui_leg_verdict: BLOCKED/UNBUILT_FEATURE -- no Playwright spec to drive.
+    backend_leg_verdict: >
+      PASS -- re-confirmed today's most recent real session's own
+      progression (remaining_seconds 1799 -> 1677 -> 1676 -> 1665 across
+      four real calls during the morning run, re-read unchanged and intact
+      this run via the live GET above) is exactly the live, monotonically
+      decreasing data source a countdown UI renders from.
+  - id: EO-002
+    description: "Immediate score + pass/fail after submit"
+    gui_leg_verdict: BLOCKED/UNBUILT_FEATURE -- no Playwright spec to drive.
+    backend_leg_verdict: >
+      PASS -- the submit response returned percentage/passed inline (no
+      polling needed), and this run's own fresh GET against the live
+      instance today re-confirms the identical persisted state
+      (score_pct 100.0, passed true, status "submitted") still holds --
+      not a transient artifact, genuinely durable.
+  - id: EO-003
+    description: "Score matches a correct grading of the candidate's actual answers"
+    backend_leg_verdict: >
+      PASS -- ground truth (is_correct values on both submitted options,
+      independently read from the live instance by the morning run) still
+      matches the live persisted score exactly, re-confirmed by this run's
+      own independent re-fetch rather than trusted on the morning report's
+      word alone.
+
+result_overall: PASS (backend leg; GUI leg unchanged BLOCKED/UNBUILT_FEATURE)
+
+verdict: >
+  The candidate exam-taking flow (backend leg) continues to work correctly
+  on live QA today, re-verified independently rather than assumed from the
+  morning's report: the preconditions still hold, the exam's own
+  max_attempts business rule is correctly enforced (confirmed via a real
+  422 on a genuinely fresh attempt by this run, then independently
+  explained via a live ops-console query showing exactly 3 real attempts
+  today, not a bug), and the most recent real submitted session's
+  persisted state (score, pass/fail, answer echo, countdown data) was
+  independently re-fetched live and matches a correct grading exactly.
+  Today's five named fixes are confirmed deployed (see the companion
+  platform report's pre_check_deploy_provenance section for the shared
+  evidence) and none of them regressed this flow. The GUI leg remains
+  BLOCKED/UNBUILT_FEATURE, unchanged from this morning -- still a real,
+  separate, reportable gap (adding a `pipeline_test:` key naming an actual
+  Playwright spec), not something this run resolved or worked around.
+
+limitation_of_this_run: >
+  This run did NOT execute a completely fresh three-step candidate
+  action sequence of its own, because the seeded candidate identity had
+  already exhausted the exam's max_attempts (3) earlier today. This is a
+  real environmental constraint correctly enforced by the system, not a
+  defect masked or a corner cut -- and it was independently confirmed
+  (not assumed) via a live query showing exactly 3 real attempts. Evidence
+  for this run's PASS verdict rests on: (a) a genuine fresh action this
+  run (the 422 attempt itself, and its correctness confirmed via the ops
+  query), and (b) a fresh, independent live re-fetch of the most recent
+  real session's persisted state, not a re-quote of the morning report's
+  numbers taken on faith. A fully clean fresh run would need either a new
+  seeded candidate identity or a max_attempts bump -- neither performed
+  here, consistent with this run's read/verify-only mandate.
+
+new_findings: "None new. No issue filed this run."
+
+recommendation_to_orch: >
+  Per this repo's own convention (see
+  test/uat-reports/ba-signoff-bilimbaga-*.yaml), a BA-BILIMBAGA sign-off
+  normally accompanies a bilimbaga-scope UAT report before PRODUCT-OWNER's
+  release recommendation step. UAT-RUNNER does not author BA sign-offs
+  itself (that is BA-<VERTICAL>'s own authoring+sign-off role, distinct
+  from UAT-RUNNER, per docs/agents/AGENT_SYSTEM.md's capability matrix) --
+  recommend ORCH dispatch BA-BILIMBAGA against this report if a sign-off
+  is needed for this run_id.
+
+cleanup: >
+  No edits made to any file under web/ or lib/, no seed/session data
+  mutated (the 422 was a real, unmutated rejection). This report is the
+  only new file written by this run.

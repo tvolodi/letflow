@@ -28757,3 +28757,273 @@ requirements:
       - "web/src/pages/admin/AuditLogPage.tsx surfaces the new entry with no frontend change, matching REQ-382's own precedent for reusing the existing audit-log mechanism"
       - "mix compile --warnings-as-errors and mix test both pass, with real output quoted; SECURITY-REVIEWER sign-off is required before merge (this is a tenant-data access-control/audit path per docs/agents/instructions/security-invariants.md)"
     depends_on: [REQ-211, REQ-212]
+
+  - id: REQ-389
+    title: "Content-type allowlist enforcement for instance-attachment uploads, refusing disallowed kinds with a plain limit explanation"
+    owner: ELIXIR-DEV
+    status: pending
+    stage: S6
+    impl_order: 746  # Registered 2026-09-20 by ORCH from this GUI-review UAT finding.
+    description: >
+      Filed from the GUI-review UAT run of
+      test/fixtures/uat/scenarios/swiftroute/shipment-attach-delivery-note.yaml
+      (PW-09) -- see
+      test/uat-reports/gui-review-2026-09-20-shipment-attach-delivery-note.md
+      for the full trace. First of four requirements from that finding
+      (REQ-390 is per-tenant storage-quota tracking; REQ-391 is attachment-
+      lifecycle history/audit linkage and approval-record attachment
+      attribution; REQ-392 is the frontend attach/remove/quota/history UI,
+      depending on all three plus the already-filed REQ-386/387/388).
+
+      WHAT EXISTS TODAY, confirmed by reading current source, not assumed
+      from the scenario's own stale NOTE (ISS-0526): REQ-211/212 (both
+      `status: done`) built `Letflow.Repository.Attachments.upload/2` and the
+      `POST /instances/:id/attachments` route (`lib/letflow/routers/
+      instances.ex`). `upload/2` rejects on `:file_too_large` (a single,
+      content-type-independent byte-size ceiling, `@max_upload_bytes`) and,
+      per a later requirement than REQ-211/212, on `:infected`/
+      `:scan_unavailable` via `Letflow.Repository.AttachmentScanner`. Nothing
+      in `upload/2`, the scanner, or the route layer inspects or restricts
+      the caller-declared `content_type` against any allowed/disallowed set
+      -- `Letflow.Repository.Attachments`' own moduledoc states this
+      explicitly as INV-a ("content_type is caller-supplied metadata, never
+      a validated fact... no magic-byte/MIME-sniffing check is performed
+      anywhere here"), and that statement is accurate: a video file is
+      accepted today exactly like a PDF, provided it clears the size
+      ceiling and the malware scan.
+
+      This scenario's step 3 requires a video file to be refused with "a
+      plain explanation of the limit" (EO-002) -- that refusal path does not
+      exist. Note this is a genuinely new restriction, not a relaxation of
+      INV-a: INV-a's "never validated against actual byte content" statement
+      (no MIME-sniffing) is preserved; this requirement adds a check against
+      the *declared* `content_type` string against an explicit allowlist,
+      which is a different, coarser check than sniffing and does not
+      contradict INV-a's own scope statement (state this distinction
+      explicitly in the design doc so a future reader does not think this
+      requirement silently reopens INV-a).
+
+      THIS REQUIREMENT builds:
+
+      1. A module-level allowlist of accepted `content_type` values for
+         instance attachments (e.g. `application/pdf`, common image types,
+         common office-document types -- name the concrete list and its
+         rationale in the design doc; this is a judgement call with no
+         existing requirement-stated value, flag it for REVIEWER same as
+         `@max_upload_bytes`'s own precedent). Video/audio MIME types are
+         excluded.
+      2. `upload/2` checks the caller-declared `content_type` against this
+         allowlist *before* the size check, the malware scan, or any
+         `repository_artifacts`/`instance_attachments` write, returning a
+         new tagged error (e.g. `{:error, :content_type_not_allowed}`) that
+         the route layer renders as a 4xx response naming the rejected kind
+         and the allowed set in plain language (not just a bare error code)
+         -- matching EO-002's "readable explanation naming the limit"
+         wording.
+      3. Confirm (with a test) that a rejected upload leaves neither a
+         `repository_artifacts` row nor an `instance_attachments` row behind
+         -- the same "nothing half-attached" guarantee `:file_too_large`
+         already provides, extended to this new rejection path.
+
+      OUT OF SCOPE: any MIME-sniffing/content inspection (INV-a is
+      unchanged); the frontend rejection-message screen (REQ-392); storage-
+      quota tracking (REQ-390).
+    acceptance_criteria:
+      - "upload/2 rejects a caller-declared content_type outside a stated allowlist with a new, distinct error tag, checked before the size ceiling, the malware scan, and any DB write -- a test asserts no repository_artifacts or instance_attachments row is created for a rejected upload"
+      - "the route layer renders the rejection as a 4xx response naming the rejected content_type and the allowed set in plain language, distinct from the existing :file_too_large and :infected response bodies -- a test asserts the response body text"
+      - "an allowed content_type (e.g. application/pdf) already accepted before this change continues to be accepted after it -- a regression test using the same fixture REQ-211/212's own tests use"
+      - "the design doc states explicitly why this new declared-content_type allowlist check does not contradict INV-a's existing no-MIME-sniffing statement"
+      - "mix compile --warnings-as-errors and mix test both pass, with real output quoted"
+    depends_on: [REQ-211, REQ-212]
+
+  - id: REQ-390
+    title: "Per-tenant storage-quota tracking for instance attachments, with a queryable usage figure"
+    owner: ELIXIR-DEV
+    status: pending
+    stage: S6
+    impl_order: 747  # Registered 2026-09-20 by ORCH from this GUI-review UAT finding.
+    description: >
+      Filed from the GUI-review UAT run of
+      test/fixtures/uat/scenarios/swiftroute/shipment-attach-delivery-note.yaml
+      (PW-09) -- see
+      test/uat-reports/gui-review-2026-09-20-shipment-attach-delivery-note.md.
+      Second of four requirements from that finding.
+
+      WHAT EXISTS TODAY: grepped `lib/letflow/` exhaustively for
+      `storage_quota`/`storage_usage`/`storage_allowance`/any per-tenant
+      storage-accounting concept -- zero hits beyond unrelated design-doc
+      prose. `Letflow.Repository.Attachments.upload/2` and `delete/2`
+      (REQ-211) never read or write any quota/usage figure; nothing in this
+      codebase tracks how many bytes a tenant's accepted attachments
+      currently occupy, and nothing would refuse an upload for being over an
+      allowance (today the only upload refusal is `@max_upload_bytes`, a
+      *per-file* ceiling, not a *per-tenant cumulative* one). This
+      scenario's precondition ("SwiftRoute has storage allowance remaining")
+      and EO-003 (a usage figure that rises on accepted upload and falls on
+      removal) have no backing mechanism at all.
+
+      THIS REQUIREMENT builds:
+
+      1. A per-tenant storage-usage figure, derived from
+         `instance_attachments`/`repository_artifacts` (e.g. a `SUM
+         (byte_size)` query over the tenant's own `instance_attachments`
+         rows, or a maintained running counter updated inside `upload/2`/
+         `delete/2` -- state and justify the choice between "compute on
+         read" and "maintain a counter" explicitly in the design doc; a
+         computed-on-read sum is simpler and cannot drift, a maintained
+         counter is cheaper to query repeatedly -- this is a genuine design
+         decision with no requirement-stated answer).
+      2. A per-tenant storage *allowance* (a configured ceiling -- reuse
+         `Letflow.TenantProvisioning`'s or an existing tenant-settings
+         mechanism if one already holds a comparable per-tenant numeric
+         limit; if none does, name a concrete default and where it is
+         configured, flagged for REVIEWER as a judgement call).
+      3. `upload/2` refuses an upload that would push the tenant's usage
+         over its allowance, distinctly from `:file_too_large` (a new
+         tagged error, e.g. `{:error, :storage_quota_exceeded}`), before any
+         DB write -- "nothing half-attached" applies here too.
+      4. A queryable usage figure (a context-module function at minimum;
+         REQ-392's frontend requirement adds the route/UI that surfaces it)
+         reflecting the current total, correct immediately after both an
+         accepted upload and a removal.
+
+      OUT OF SCOPE: the frontend display of the usage figure (REQ-392); the
+      route exposing it (left to REQ-392's own scoping, or a small follow-up
+      if REQ-392 finds it needs one first).
+    acceptance_criteria:
+      - "a context-module function returns a tenant's current total attached-attachment byte usage, correct immediately after an upload/2 call and after a delete/2 call, in that order, within one test"
+      - "a configured per-tenant storage allowance exists and is named/documented; upload/2 refuses an upload that would exceed it with a distinct error tag, checked before any DB write -- a test asserts no repository_artifacts or instance_attachments row is created for a refused-for-quota upload"
+      - "the quota check and the existing @max_upload_bytes per-file check are independently testable and independently triggerable (a test exercises each without the other firing)"
+      - "removing an attachment (delete/2) is reflected in the usage figure on the very next read -- a test asserts the before/after values across upload then delete"
+      - "mix compile --warnings-as-errors and mix test both pass, with real output quoted"
+    depends_on: [REQ-211, REQ-212]
+
+  - id: REQ-391
+    title: "Instance-attachment attach/remove events recorded on instance history with attribution, and approval records naming the attachment reviewed"
+    owner: ELIXIR-DEV
+    status: pending
+    stage: S6
+    impl_order: 748  # Registered 2026-09-20 by ORCH from this GUI-review UAT finding.
+    description: >
+      Filed from the GUI-review UAT run of
+      test/fixtures/uat/scenarios/swiftroute/shipment-attach-delivery-note.yaml
+      (PW-09) -- see
+      test/uat-reports/gui-review-2026-09-20-shipment-attach-delivery-note.md.
+      Third of four requirements from that finding.
+
+      WHAT EXISTS TODAY: `Letflow.Repository.Attachments.upload/2` and
+      `delete/2` (REQ-211, `lib/letflow/repository/attachments.ex`) never
+      call into whatever mechanism populates an instance's own history/
+      timeline (the `GET /instances/:id/history`/`/timeline` routes on
+      `lib/letflow/routers/instances.ex`, grepped for any call from the
+      attachments module -- zero hits). An attachment's `uploaded_by`
+      column (REQ-211 schema) is stored but never surfaced anywhere as a
+      history entry; `delete/2` records no "who removed what" fact anywhere
+      outside the row's own disappearance. Separately, whatever mechanism
+      records a task-approval decision (the ops-manager "approve" action
+      this scenario's step 5 exercises) has no field or linkage naming which
+      attachment(s) were attached to the instance at decision time -- grepped
+      for any approval/decision-recording schema referencing
+      `instance_attachments`/`content_hash`/`attachment_id` -- zero hits.
+      This scenario's EO-004 (history shows attach + removal, by whom) and
+      EO-005 (the approval record names the exact document reviewed) have no
+      backing mechanism at all.
+
+      THIS REQUIREMENT builds:
+
+      1. `upload/2` and `delete/2` each record one history/timeline-visible
+         entry on the owning instance (whatever this codebase's existing
+         instance-history mechanism is -- read it in full before designing
+         this addition, and reuse it rather than inventing a second history
+         store) naming: the action (attached/removed), the attachment's
+         `file_name`, and the actor (`uploaded_by` for attach; the caller of
+         `delete/2` for remove -- `delete/2`'s own signature may need a new
+         `deleted_by` parameter, named explicitly as a signature change to
+         an already-`done` REQ-211 function, flagged for REVIEWER the same
+         way REQ-211's own design flagged its cross-module changes).
+      2. Whatever mechanism records the ops-manager's approve/reject
+         decision on a review task gains a way to name the attachment(s)
+         attached to the instance at the moment the decision was recorded
+         (e.g. a snapshot of current attachment ids/file_names on the
+         decision record, or a reference resolvable later even if the
+         attachment is subsequently removed -- state and justify the choice
+         in the design doc, since "removed later" vs. "still present" changes
+         what a snapshot vs. a live reference would show a future reader).
+
+      OUT OF SCOPE: the frontend rendering of either the history entries or
+      the approval record's attachment reference (REQ-392); which existing
+      approve/decision mechanism this hooks into is this requirement's own
+      design-stage discovery, not resolved here (read the actual current
+      task-decision code before designing).
+    acceptance_criteria:
+      - "uploading an attachment produces a history/timeline entry on the owning instance naming the file and the uploading actor -- a test asserts this over the existing history/timeline read path, not by inspecting internal state directly"
+      - "removing an attachment produces a distinct history/timeline entry naming the file and the removing actor, retained even after the attachment row itself is gone"
+      - "an approve (or equivalent) decision recorded while an attachment is present on the instance results in a decision record that names that attachment (file_name at minimum) -- a test asserts the recorded decision references it"
+      - "the design doc states and justifies the snapshot-vs-live-reference choice for the approval record's attachment reference, and a test demonstrates the chosen behavior across a subsequent removal of that same attachment"
+      - "mix compile --warnings-as-errors and mix test both pass, with real output quoted"
+    depends_on: [REQ-211, REQ-212]
+
+  - id: REQ-392
+    title: "Frontend attach/remove/rejection/quota/history UI for instance attachments on the task/instance detail and approval screens"
+    owner: FRONTEND-DEV
+    status: pending
+    stage: S8
+    impl_order: 749  # Registered 2026-09-20 by ORCH from this GUI-review UAT finding.
+    description: >
+      Filed from the GUI-review UAT run of
+      test/fixtures/uat/scenarios/swiftroute/shipment-attach-delivery-note.yaml
+      (PW-09) -- see
+      test/uat-reports/gui-review-2026-09-20-shipment-attach-delivery-note.md.
+      Fourth of four requirements from that finding; depends on REQ-387
+      (already-filed frontend upload/list widget + document-viewer screen,
+      from the sibling attachment-cross-tenant-probe finding) plus REQ-389/
+      REQ-390/REQ-391 (the backend type-rejection, quota, and history/
+      approval-attribution mechanisms this screen surfaces).
+
+      WHAT EXISTS TODAY: grepped `web/src/` exhaustively for any
+      attachment-related component, page, route, or API client
+      (`attachment`, case-insensitive) -- zero hits, confirming this
+      scenario's own stale NOTE (ISS-0526) is still accurate: there is
+      nothing on any task/instance detail screen a dispatcher could use to
+      attach, list, or remove a document, no rejection message for a
+      disallowed/oversized file, no storage-usage figure shown anywhere, and
+      no history/timeline rendering of an attach/remove event or an
+      approval decision's reviewed-document reference. REQ-387 (filed
+      earlier today from a different scenario) already scopes an upload/
+      list widget and a document-viewer screen -- this requirement does not
+      duplicate that scope; it adds what REQ-387 does not cover:
+
+      1. A "remove" action on each listed attachment (calling REQ-212's
+         existing `DELETE /instances/:id/attachments/:attachment_id` route),
+         on the same widget REQ-387 builds.
+      2. Distinct, readable rejection messages for a REQ-389
+         content-type-not-allowed refusal and a REQ-390 storage-quota-
+         exceeded refusal, each naming the specific limit that was hit
+         (mirroring REQ-387's own existing plan for the size-ceiling
+         rejection message, extended to these two new backend error tags).
+      3. A storage-usage figure (from REQ-390's queryable usage function/
+         route) shown near the upload widget, updating after an accepted
+         upload and after a removal.
+      4. The instance's history/timeline view (wherever this codebase
+         already renders it -- follow that page's existing conventions)
+         rendering the REQ-391 attach/remove entries with actor attribution.
+      5. The approval/decision screen rendering the REQ-391
+         attachment-reference on a recorded decision, so a reviewer (or a
+         later auditor) can see which document backed an approval.
+      6. Extends the permanent Playwright regression spec at this
+         scenario's own `pipeline_test` path
+         (`web/tests/e2e/pipelines/shipment-attach-delivery-note.pipeline.e2e.spec.ts`)
+         to cover all of the above, once REQ-387/389/390/391 have shipped.
+
+      OUT OF SCOPE: anything REQ-387 already builds (upload/list widget
+      skeleton, document-viewer screen, signed-link handling); the backend
+      mechanisms themselves (REQ-389/390/391).
+    acceptance_criteria:
+      - "the attachment widget REQ-387 builds gains a remove action that calls DELETE /instances/:id/attachments/:attachment_id and updates the list without a full page reload"
+      - "attempting to attach a disallowed content type and an over-quota upload each render a distinct, readable message naming the specific limit hit, verified by a test for each"
+      - "a storage-usage figure is shown near the widget and its rendered value changes correctly across an accepted upload and a removal within one test"
+      - "the instance history/timeline view renders an attach entry and a remove entry with actor names, verified by a test"
+      - "the approval/decision screen renders the reviewed attachment's file_name on a recorded decision, verified by a test"
+      - "web/tests/e2e/pipelines/shipment-attach-delivery-note.pipeline.e2e.spec.ts exists as a real Playwright spec (not a stub) covering the full scenario steps 1-5 and passes against a running instance -- quote the real run output"
+      - "the stale NOTE (ISS-0526) in test/fixtures/uat/scenarios/swiftroute/shipment-attach-delivery-note.yaml is removed once this requirement and REQ-387/389/390/391 have all shipped, since the feature it warns about will then be real"
+    depends_on: [REQ-387, REQ-389, REQ-390, REQ-391]

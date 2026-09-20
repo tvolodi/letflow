@@ -1,0 +1,64 @@
+{
+  "handoff_id": "c1a1e001-0000-4000-8000-000000000008",
+  "run_id": "WF03-ISS0736-20260921",
+  "workflow_id": "WF-03",
+  "step": "03b",
+  "from_agent": "ORCH",
+  "to_agent": "SECURITY-REVIEWER",
+  "file": "handoffs/WF03-ISS0736-20260921/step-03b-security-reviewer.json",
+  "created_at": "2026-09-20T19:28:52Z",
+  "started_at": "2026-09-20T19:28:52Z",
+  "completed_at": null,
+  "status": "PENDING",
+  "priority": "HIGH",
+  "context": {
+    "stage": "S4",
+    "requirement_ids": ["REQ-378"],
+    "requirement_text": {
+      "REQ-378": "See handoffs/WF03-ISS0736-20260921/step-00-git-setup.json context.requirement_text.REQ-378 for the full verbatim text. This requirement's acceptance criterion 4 is: SECURITY-REVIEWER signs off explicitly on the chosen enforcement mechanism before merge, given this closes a real authorization-enforcement gap, not just a UI gap. This is a MANDATORY gate for this run -- it must run before REVIEWER (WF-03's Step 3 says SECURITY-REVIEWER then REVIEWER for security-relevant changes), not skipped."
+    },
+    "related_handoff_ids": ["c1a1e001-0000-4000-8000-000000000007"],
+    "artifacts_in": [
+      "lib/letflow/design/req378-oidc-live-revocation-check.md",
+      "handoffs/WF03-ISS0736-20260921/step-03-elixir-dev.json",
+      "docs/agents/instructions/security-invariants.md",
+      "lib/letflow/plugs/auth_pipeline.ex",
+      "lib/letflow/identity.ex",
+      "lib/letflow/api/authorization.ex"
+    ],
+    "owned_modules": [
+      "lib/letflow/plugs/auth_pipeline.ex",
+      "lib/letflow/api/authorization.ex",
+      "lib/letflow/identity.ex",
+      "lib/letflow/identity/user.ex",
+      "web/src/api/identity.ts",
+      "web/src/pages/admin/GroupsPage.tsx"
+    ]
+  },
+  "task": {
+    "description": "This is REQ-378/ISS-0736's authorization-enforcement-gap fix: for OIDC-authenticated sessions, AuthPipeline.authenticate_oidc/2 previously trusted the bearer JWT's own role claims exclusively, never cross-checked against Letflow-local state, so a tenant-admin revocation via the GUI had zero live effect. The fix adds a live, uncached, per-request check (Letflow.Identity.list_effective_role_names/2 + a user-status check) between provision_user and attach_auth_context, short-circuiting inactive accounts to 403 and substituting the JWT-claimed role list with a live DB-derived one. Review the actual diff (git diff main...feature/WF03-ISS0736-20260921 -- lib/letflow/plugs/auth_pipeline.ex lib/letflow/identity.ex lib/letflow/api/authorization.ex web/src/api/identity.ts web/src/pages/admin/GroupsPage.tsx) against docs/agents/instructions/security-invariants.md's INV-1..INV-8, stating APPLIES/NOT-APPLICABLE and a verdict for each, per the security-reviewer-scoped worked example in docs/agents/shared/HANDOFF_PROTOCOL.md. Additionally, sign off explicitly on: (a) whether the new query is correctly tenant-scoped (no cross-tenant role leakage); (b) whether the fail-open/fail-closed behavior on a DB error in the new check is correct (must fail closed -- verify it does not silently default to allow); (c) whether the 403-vs-500 status-code choices are appropriate and do not leak information about account existence/status beyond what the API already leaks elsewhere; (d) the added per-request query's performance/DoS surface is acceptable (mirrors the existing api-token precedent, but confirm no unbounded query or N+1); (e) the corrected GroupsPage.tsx/identity.ts GUI fix does not introduce any new tenant-scoping or authz gap of its own (confirm the DELETE endpoint it now correctly calls is itself properly tenant/authz-scoped).",
+    "acceptance_criteria": [
+      "Every applicable invariant (INV-1..INV-8) gets an explicit verdict, not a blanket pass",
+      "Explicit sign-off statement on the chosen enforcement mechanism itself (fail-closed behavior, tenant scoping, status-code choice) -- this IS REQ-378 AC4, required for merge",
+      "If any BLOCKER found: FAIL with exact issue, route to rework (ELIXIR-DEV or CODE-DESIGNER depending on whether it's implementation or design-level)",
+      "If PASS: next_action routes to REVIEWER"
+    ]
+  },
+  "result": {
+    "status": "PENDING",
+    "summary": "",
+    "artifacts_out": [],
+    "issues": [],
+    "git_evidence": {
+      "branch_name": null,
+      "commit_sha_list": [],
+      "remote_branch": null,
+      "push_status": "skipped",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": ""
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

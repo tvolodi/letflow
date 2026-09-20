@@ -1,0 +1,52 @@
+id: ISS-0766
+title: >
+  test/letflow/identity_test.exs's REQ-019 AC1 tests (resolve_tenant_by_realm/1,
+  resolve_realm_by_tenant/1) intermittently fail under shared, non-partitioned
+  test DB state when the bpm-default tenant row is displaced
+discovered_by: ELIXIR-DEV
+discovered_in_run: WF03-ISS0736-20260921
+discovered_at: "2026-09-20T22:51:57Z"
+severity: MINOR
+tags:
+  - backend
+  - test-flake
+  - shared-db-isolation
+description: >
+  Flagged during REQ-378/ISS-0736's Step Final (git merge) full-suite
+  re-check. A single non-partitioned `mix test` run over the full suite
+  intermittently shows 2 failures in test/letflow/identity_test.exs
+  (resolve_tenant_by_realm/1, resolve_realm_by_tenant/1 -- REQ-019 AC1)
+  when some other test displaces the bpm-default tenant row (via
+  test/support/bpm_default_realm_displacement.ex) and its `on_exit`
+  restoration does not complete before these two tests run, under shared,
+  non-isolated DB state.
+
+  Does NOT reproduce under this project's own validated isolated-partition
+  method (`scripts/test_parallel.sh`, 16 partitions): 4472/4472 clean, 0
+  failures, confirmed twice in the same run (once by TEST-RUNNER's own
+  step-04c-test-runner-rework2 gate, once independently by ELIXIR-DEV's
+  Step Final re-check). Not attributable to REQ-378 or any file it
+  touched (lib/letflow/identity.ex, identity_migration.ex,
+  plugs/auth_pipeline.ex, api/authorization.ex).
+affected_files:
+  - test/letflow/identity_test.exs
+  - test/support/bpm_default_realm_displacement.ex
+related_requirements:
+  - REQ-019
+related:
+  - ISS-0736  # discovered as an out-of-scope finding during ISS-0736's Step Final
+severity_rationale: >
+  MINOR -- does not reproduce under the project's own validated isolated
+  test methodology; only manifests under a non-partitioned shared-DB run,
+  and the module's own moduledoc already documents adjacent test-isolation
+  hazards of this same class (a link failure and a mutual-exclusion race),
+  suggesting this may be foldable into the same existing fix class rather
+  than a wholly new investigation.
+fix_direction: >
+  Investigate whether bpm_default_realm_displacement.ex's on_exit
+  restoration can race against another test's setup under shared
+  (non-partitioned) DB state, and whether it should be folded into the
+  same fix class as the module's already-documented link-failure/
+  mutual-exclusion-race hazards. Lower priority since the project's
+  standard isolated-partition test runner does not exhibit the flake.
+status: open

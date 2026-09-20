@@ -29027,3 +29027,217 @@ requirements:
       - "web/tests/e2e/pipelines/shipment-attach-delivery-note.pipeline.e2e.spec.ts exists as a real Playwright spec (not a stub) covering the full scenario steps 1-5 and passes against a running instance -- quote the real run output"
       - "the stale NOTE (ISS-0526) in test/fixtures/uat/scenarios/swiftroute/shipment-attach-delivery-note.yaml is removed once this requirement and REQ-387/389/390/391 have all shipped, since the feature it warns about will then be real"
     depends_on: [REQ-387, REQ-389, REQ-390, REQ-391]
+
+  - id: REQ-393
+    title: "Generic, tenant-agnostic entity-list browse screen with user-facing filter builder, sort control, and page-size control, wired to the already-built POST /entities/query engine"
+    owner: FRONTEND-DEV
+    status: pending
+    stage: S8
+    impl_order: 750  # Registered 2026-09-20 by ORCH from this GUI-review UAT finding.
+    description: >
+      Filed from the GUI-review UAT run of
+      test/fixtures/uat/scenarios/vortex/entity-list-filter-and-page.yaml
+      (PW-10) -- see
+      test/uat-reports/gui-review-2026-09-20-entity-list-filter-and-page.md.
+      First of two requirements from that finding.
+
+      WHAT EXISTS TODAY: the backend query engine this scenario exercises is
+      real, thorough, and already unit-tested -- `Letflow.Entities.Query.Allowlist`
+      (REQ-230, field-name allowlisting with a named `{:field_not_allowed, _}`
+      rejection), `Letflow.Entities.Query.Compiler` (REQ-230/300, parameterised
+      filter/sort/join compilation), `Letflow.Entities.Query.Cursor` (REQ-231,
+      keyset pagination generalised to an arbitrary sort clause list), and
+      `Letflow.Entities.Query.FieldGrants` (REQ-231, per-user field redaction
+      via a `:__field_redacted__` sentinel that replaces -- never merely hides
+      -- a restricted field's value before the response is ever serialised,
+      confirmed by `test/letflow/entities/query_cursor_field_grants_test.exs`).
+      `POST /entities/query` (REQ-311, `lib/letflow/routers/entities.ex`)
+      composes all four and already returns a named 422 for a non-searchable
+      filter field (`{:field_not_allowed, field}`) and a named 400 for an
+      over-limit page size (`Pagination.validate_page_size/1`'s
+      `:page_size_too_large`, mapped at `render_query_error/2`). None of this
+      is a gap -- EO-001/EO-002/EO-003/EO-005's *mechanisms* already exist at
+      the API layer.
+
+      THE GAP: grepped `web/src/` exhaustively. The only entity-list screen
+      anywhere in this codebase is `web/src/pages/entities/EntityCrudPage.tsx`
+      (REQ-343), and it is wired ONLY to BilimBaga's ten admin entity types
+      (`web/src/config/bilimbagaEntities.ts`, mounted only at
+      `/admin/bilimbaga/:entityType`). It does not give an end user any of the
+      three controls this scenario's steps need:
+
+        1. No filter UI at all -- the only filter it ever sends is a
+           compile-time-constant `[{field: "deleted", op: "eq", value: false}]`
+           (`EXCLUDE_DELETED_FILTERS`). A caller cannot express "status =
+           quarantined AND supplier = Nordmetall" through any control on this
+           screen, and there is no affordance anywhere for attempting a filter
+           on a non-searchable field either (step 3/EO-003 unreachable).
+        2. No server-side sort control -- `DataTable`'s `sortable`/`sortValue`
+           props (`web/src/components/ui/DataTable.tsx`) drive
+           `@tanstack/react-table`'s `getSortedRowModel()`, a purely
+           CLIENT-SIDE sort of whatever rows are already in memory for the
+           CURRENT page. No `sort` clause is ever sent to `POST /entities/query`
+           (`recordsQuery`'s query key/fn in `EntityCrudPage.tsx` carries no
+           `sort` field at all). "Sort oldest-first, then page through every
+           page in that order" (step 2/EO-001) cannot be done correctly
+           through this screen -- each page's rows are independently
+           re-sorted in the browser with no guaranteed relationship to the
+           adjacent page's order.
+        3. No page-size control -- `PAGE_SIZE = 25` is a source-code constant;
+           there is no input anywhere a caller could use to request a larger
+           page and trigger EO-005's refusal message.
+        4. This screen is BilimBaga-only by construction (`isBilimBagaEntityType`
+           gates the route); there is no Vortex-facing (or generic,
+           tenant-agnostic) route this scenario's Karl/Anna could open at all,
+           independent of whether Vortex has any entity type provisioned (see
+           this finding's own review report for the separate observation that
+           Vortex currently has no entity-definition solution pack -- out of
+           this requirement's scope; this requirement is about the missing
+           GENERIC screen, reusable once any tenant, Vortex included, has a
+           queryable entity type).
+
+      THIS REQUIREMENT builds a generic, tenant-agnostic entity-list/browse
+      screen (either a new component or a materially extended
+      `EntityCrudPage.tsx` -- FRONTEND-DEV's own design call, stated and
+      justified) that:
+
+        1. Renders a filter builder: at minimum, one or more
+           field/operator/value rows a user can add, matching
+           `Letflow.Entities.Query.Types.filter_clause()`'s shape, submitted
+           as `POST /entities/query`'s `filters` array. Field choices are
+           driven by the fetched `EntityDefinition`'s own `queried: true`
+           fields (the same set `Allowlist.load/2` allowlists) -- the screen
+           does not let a user attempt a field the backend would reject
+           anyway UNLESS the point is to demonstrate the rejection path
+           (state and justify which of these two UX choices was made; either
+           is acceptable as long as the rejection message is reachable and
+           readable one way or another, e.g. a raw-field debug affordance,
+           since EO-003 must remain demonstrably testable).
+        2. Renders a sort control (field + direction) that is sent as
+           `POST /entities/query`'s `sort` array and drives the SERVER's own
+           order -- `DataTable`'s client-side `sortable` prop is turned off
+           (or removed) for this screen's columns once server-driven sort is
+           wired, so the two mechanisms cannot silently disagree.
+        3. Renders a page-size control (or otherwise exposes a way to request
+           a specific page size), surfacing `POST /entities/query`'s own
+           `{:error, :page_size_too_large}` -> 400 as a clear, readable
+           message naming the limit, not a silent truncation.
+        4. Surfaces the existing `{:field_not_allowed, field}` -> 422 as a
+           clear, readable message naming the specific field, per EO-003.
+        5. Writes the permanent Playwright regression spec at this scenario's
+           own `pipeline_test` path
+           (`web/tests/e2e/pipelines/entity-list-query.pipeline.e2e.spec.ts`),
+           covering filter, sort-then-page-to-completion, the non-searchable-
+           filter rejection, and the over-limit-page-size rejection -- run for
+           real against a running instance, quoting the actual pass output.
+        6. Removes this scenario's stale NOTE (ISS-0526-class forward
+           reference) once this requirement and REQ-394 (the entity-type
+           authorization requirement filed alongside this one) have both
+           shipped -- EO-004 needs REQ-394's backend mechanism, not just this
+           screen, so the NOTE stays until both land.
+
+      OUT OF SCOPE: any Vortex-specific entity-definition/solution-pack
+      provisioning (whether "production batch" records for Vortex ever exist
+      is a separate product decision, not this requirement's to make); the
+      entity-type-level authorization mechanism EO-004 needs (REQ-394, filed
+      alongside this one); anything about BilimBaga's own existing ten-type
+      wiring, which this requirement must not regress.
+    acceptance_criteria:
+      - "a filter builder UI exists on the generic entity-list screen, lets a user add one or more field/operator/value clauses, and a test drives it end to end confirming the resulting list matches the filter (e.g. against a BilimBaga entity type already provisioned in this codebase)"
+      - "a sort control exists, sends a `sort` clause to POST /entities/query, and a test confirms server-driven order is preserved across at least two consecutive pages (not merely within one page)"
+      - "a page-size control (or equivalent) exists; requesting a page size above the platform's configured limit renders a clear, readable message naming the limit, verified by a test, with no partial/truncated list rendered as though it were complete"
+      - "attempting a filter on a field absent from the entity type's allowlist renders a clear, readable message naming that specific field, verified by a test"
+      - "web/tests/e2e/pipelines/entity-list-query.pipeline.e2e.spec.ts exists as a real Playwright spec (not a stub) covering filter, sort-then-page, non-searchable-filter rejection, and over-limit-page-size rejection, and passes against a running instance -- quote the real run output"
+      - "the existing BilimBaga admin-CRUD screens (REQ-343) are not regressed -- their own test suite still passes unmodified in behavior, even if the underlying component is extended rather than replaced"
+      - "mix compile --warnings-as-errors, mix test, and the frontend's own test/lint commands all pass, with real output quoted"
+    depends_on: [REQ-230, REQ-231, REQ-300, REQ-311, REQ-343]
+
+  - id: REQ-394
+    title: "Per-entity-type record authorization, with denial indistinguishable from a genuinely empty entity type"
+    owner: ELIXIR-DEV
+    status: pending
+    stage: S6
+    impl_order: 751  # Registered 2026-09-20 by ORCH from this GUI-review UAT finding.
+    description: >
+      Filed from the GUI-review UAT run of
+      test/fixtures/uat/scenarios/vortex/entity-list-filter-and-page.yaml
+      (PW-10) -- see
+      test/uat-reports/gui-review-2026-09-20-entity-list-filter-and-page.md.
+      Second of two requirements from that finding. Security-relevant --
+      route any implementation through SECURITY-REVIEWER before merge (a
+      tenant-data-path authorization change, per
+      docs/agents/instructions/security-invariants.md).
+
+      WHAT EXISTS TODAY: grepped `lib/letflow/` exhaustively for any
+      per-entity-type authorization concept (`entity_type` combined with
+      `permission`/`access`/`grant`/`role`) -- the only hit is
+      `lib/letflow/routers/entities.ex` itself, which gates `POST
+      /entities/query` behind exactly one permission, `:EntitiesQuery`
+      (`Letflow.Api.Authorization`, REQ-309) -- coarse and ALL-OR-NOTHING
+      across every entity type a tenant has. `Letflow.Entities.Query.FieldGrants`
+      (REQ-231) is the only other entity-scoped access-control primitive in
+      this codebase, and it redacts individual FIELDS within a record a
+      caller can already read -- it has no concept of denying an entire
+      entity TYPE to specific users while leaving other types visible to
+      them. A caller who holds `:EntitiesQuery` at all can query every entity
+      type that exists in their tenant; a caller who lacks it cannot query
+      any. There is no middle state.
+
+      This means EO-004's premise -- "Karl can query some record types (the
+      ones from steps 1/2) but not this one, and the denial looks exactly
+      like an empty type" -- describes a permission granularity that does not
+      exist. Separately, `Letflow.Entities.Query.Compiler.compile/2` returns
+      `{:error, :entity_type_not_found}` for an entity type absent from the
+      tenant's own definitions, which `render_query_error/2` maps to a plain
+      404 (`Response.not_found/1`, INV-5's own "not-found and cross-tenant are
+      the same bytes" discipline) -- distinguishable from a genuinely-empty,
+      EXISTING type's 200-with-empty-`items` response. So even the weaker
+      "does this type exist at all" question is currently answerable by the
+      response's HTTP status alone, for anyone who already holds
+      `:EntitiesQuery`.
+
+      THIS REQUIREMENT builds a new, per-`(user, entity_type)` authorization
+      layer -- name and design it explicitly (a design doc is required before
+      implementation; this is new tenant-data-path authorization surface,
+      not a field-grants extension) -- such that:
+
+        1. A user lacking access to a specific entity type who queries it via
+           `POST /entities/query` receives the SAME response shape, byte for
+           byte modulo `next_cursor`'s own opaque value, as a user who DOES
+           have access querying a genuinely empty (zero-row) entity type of
+           the same shape: `200`, `{"items": [], "next_cursor": null}`. Not a
+           403, not a 404, not any distinguishable envelope.
+        2. The same indistinguishability holds for
+           `GET /entities/definitions/active/:name` (and the other two
+           definition-read routes) -- a caller without access to an entity
+           type must not be able to learn its FIELD SCHEMA either (today,
+           `:EntitiesDefinitionsRead` is a second, independent, equally
+           coarse permission -- a caller could lack `:EntitiesQuery` for
+           records yet still hold `:EntitiesDefinitionsRead` and learn a
+           restricted type's full field list, or vice versa; this
+           requirement's design must state how the two permissions interact
+           once per-type denial exists, rather than leaving a caller able to
+           learn a type's shape through one route while being denied its rows
+           through the other).
+        3. `{:error, :entity_type_not_found}` (a type that does not exist AT
+           ALL in the tenant) and "a type that exists but this caller cannot
+           see" resolve to the exact same response on both routes above --
+           closing the existence-oracle gap named in this description.
+        4. The existing coarse `:EntitiesQuery`/`:EntitiesDefinitionsRead`
+           route-level permissions are NOT removed (a caller must still hold
+           the route-level permission to reach the query engine at all) --
+           this is an ADDITIONAL, finer-grained check layered on top, not a
+           replacement.
+
+      OUT OF SCOPE: the frontend screen that would let an administrator
+      author these per-type grants (a future requirement, once this backend
+      mechanism exists); REQ-393's own filter/sort/page-size UI work, which
+      this requirement does not touch.
+    acceptance_criteria:
+      - "a user without access to entity type X and a user with access to a genuinely empty entity type Y of the same shape receive byte-identical POST /entities/query response envelopes (status, body shape, headers) for their respective requests -- a test asserts this directly, comparing the two responses"
+      - "the same indistinguishability holds for GET /entities/definitions/active/:name (and its two sibling definition-read routes) -- a test asserts a caller without per-type access cannot learn the restricted type's field list any more than they can learn a nonexistent type's"
+      - "a query against a genuinely nonexistent entity type and a query against an existing-but-unauthorized entity type, by the same caller, are indistinguishable -- a test asserts this for both the query and definition-read routes"
+      - "an existing caller with only the coarse route-level permission and no per-type restriction at all is completely unaffected -- the full existing test suite for POST /entities/query, definitions reads, and FieldGrants passes unmodified"
+      - "a design doc precedes implementation, is validated by CODE-DESIGN-VALIDATOR, and is signed off by SECURITY-REVIEWER before merge, per this requirement's security-relevant status"
+      - "mix compile --warnings-as-errors and mix test both pass, with real output quoted"
+    depends_on: [REQ-230, REQ-231, REQ-300, REQ-309, REQ-311]

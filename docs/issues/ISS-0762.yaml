@@ -1,0 +1,55 @@
+id: ISS-0762
+title: >
+  REQ-371 rollback screen EO-003: cannot prove platform-wide (multi-tenant)
+  non-interference of a rollback
+discovered_by: ORCH
+discovered_in_run: WF02-REQ371-20260919
+discovered_at: "2026-09-20T12:05:27Z"
+severity: MINOR
+tags:
+  - frontend
+  - backend
+  - security
+  - scope-decision
+description: >
+  Disclosed, honest scope limitation of REQ-371's shipped rollback/
+  withdrawal screen (docs/requirements.yaml REQ-371, PR #1593, merged
+  commit c30143c7). test/fixtures/uat/scenarios/platform/definition-promotion-rollback.yaml's
+  own NOTE and lib/letflow/design/req371-rollback-withdrawal-screen.md
+  Section 7.3/8.3 both honestly disclose that the shipped e2e coverage and
+  UAT scenario only exercise a rollback within a single tenant -- there is
+  no test proving a rollback in one tenant's schema does not interfere with
+  another tenant's definitions/instances (a real multi-tenant isolation
+  concern for a mutating operation like this).
+affected_files:
+  - web/tests/e2e/pipelines/platform-definition-promotion-rollback.pipeline.e2e.spec.ts
+related_requirements:
+  - REQ-371
+related:
+  - ISS-0763  # sibling EO-005 scope-decision follow-up from the same REQ-371 disclosure
+severity_rationale: >
+  MINOR -- not a known or suspected defect, an absence of an additional
+  end-to-end proof layer on top of an already-enforced code-level
+  guarantee. See decision rationale below.
+queue_ref: "Q-762"
+github_ref: "GH-1652"
+status: declined
+decision:
+  decided_by: ORCH
+  decided_at: "2026-09-20T12:09:30Z"
+  rationale: >
+    Declining to scope a new requirement at this time. Letflow.Definitions.rollback_definition_version/4
+    (like every other tenant-data-path function in this module, e.g.
+    search_paginated/3 hardened this same session in ISS-0743) is
+    prefix-scoped per INV-1 (docs/agents/instructions/security-invariants.md)
+    -- Ecto's `prefix:` option makes cross-schema writes structurally
+    impossible, not merely convention-enforced, since each tenant lives in
+    its own Postgres schema. This is the same code-level guarantee every
+    other mutating tenant-data-path endpoint in this codebase relies on
+    without a dedicated cross-tenant e2e proof; singling out rollback for
+    an additional cross-tenant test would be inconsistent with how this
+    project already treats prefix-scoping elsewhere. Revisit only if a
+    concrete cross-tenant isolation bug is ever found in this or a sibling
+    mutating endpoint, or if a security audit specifically calls for
+    cross-tenant proof tests as a new project-wide convention (a decision
+    that would apply to many endpoints at once, not just this one).

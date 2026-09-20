@@ -1,0 +1,80 @@
+id: ISS-0745
+title: >
+  InstanceDetailPage's CancelInstanceDialog still reads nonexistent
+  instance.definition_name/instance.definition_version -- same bug class as
+  commit cb3c6c49, left unfixed at a second call site
+discovered_by: REVIEWER
+discovered_in_run: WF02-REQ371-20260919
+discovered_at: "2026-09-20T10:30:00Z"
+severity: MINOR
+tags:
+  - frontend
+  - type-safety
+  - bug
+description: >
+  REQ-371's PR #1593 (branch feature/WF02-REQ371-20260919) includes commit
+  cb3c6c49, which fixes InstanceDetailPage.tsx's "Definition" detail row --
+  it previously read `instance.definition_name` / `instance.definition_version`,
+  fields the real backend GET /api/v1/instances/:id response never sends
+  (only `definition_id` does; the page already fetches the definition
+  separately via `useDefinition(instance?.definition_id)` for exactly this
+  reason). That row is now correctly wired to the fetched `definition` object
+  (web/src/pages/instances/InstanceDetailPage.tsx:182).
+
+  Independently re-deriving that fix while reviewing the branch (REVIEWER's
+  gate) found the identical bug still present a few lines below, unfixed:
+  InstanceDetailPage.tsx:366 passes
+  `instanceName={\`${instance.definition_name} v${instance.definition_version}\`}`
+  to <CancelInstanceDialog>, which renders it verbatim as
+  "This will cancel instance {instanceName}." Since `instance` never actually
+  carries those two fields at runtime, the Cancel dialog will show the
+  literal text "This will cancel instance undefined v undefined." for every
+  instance, for any operator who opens it.
+
+  Root cause matches cb3c6c49's own diagnosis exactly:
+  `ProcessInstance.definition_name`/`definition_version` in
+  web/src/types/api.ts:106-107 are typed as required, non-optional `string`,
+  which is why neither TypeScript nor `npm run type-check` catches either
+  call site reading them off a response that never actually populates them --
+  a type-safety gap in the literal sense REVIEWER's charter (idiom §3) asks
+  to flag: a class of invalid state (reading a field the wire type promises
+  but the server never sends) that only a runtime "undefined" render catches,
+  which a corrected `@type`/interface (marking both fields optional, or
+  removing them from ProcessInstance entirely since nothing legitimately
+  reads them) would make unrepresentable.
+
+  Not caught by REQ-371's own e2e spec
+  (platform-definition-promotion-rollback.pipeline.e2e.spec.ts) because that
+  spec's cleanup cancels both fixture instances via a direct
+  `request.post(.../cancel)` API call (see pl.onCleanup), never through the
+  GUI Cancel button/dialog -- so the dialog's render path is never exercised
+  end to end by that spec.
+affected_files:
+  - web/src/pages/instances/InstanceDetailPage.tsx
+  - web/src/types/api.ts
+related_requirements:
+  - REQ-371
+  - REQ-278  # original commit (6dd6107a) that introduced the bug class
+suggested_fix: >
+  Same shape as cb3c6c49: wire CancelInstanceDialog's `instanceName` prop to
+  the already-fetched `definition` object (`definition ? `${definition.name}
+  v${definition.version}` : instance.instance_id` or similar neutral
+  fallback while the definition fetch is in flight), matching the pattern at
+  line 182. Separately worth considering: mark `definition_name`/
+  `definition_version` optional (or drop them) on `ProcessInstance` in
+  web/src/types/api.ts so a future call site reading them off `instance`
+  directly is a type error instead of a silent "undefined" render -- this is
+  the type-safety fix that would have caught both call sites (cb3c6c49's and
+  this one) at compile time rather than by manual re-derivation during
+  review.
+severity_rationale: >
+  MINOR -- cosmetic/confusing text in a confirmation dialog, not a
+  functional or data-integrity defect (the Cancel action itself still
+  targets the correct instance_id regardless of the dialog's label text).
+  Raised to REVIEWER's attention rather than silently left because it is the
+  exact same bug class as a fix that just landed on this same branch,
+  discovered while independently re-deriving that fix's correctness per this
+  gate's charter.
+queue_ref: null  # ORCH to assign via letflow-queue register_task
+github_ref: null  # ORCH to assign
+status: open

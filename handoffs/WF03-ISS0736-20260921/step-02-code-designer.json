@@ -8,8 +8,8 @@
   "file": "handoffs/WF03-ISS0736-20260921/step-02-code-designer.json",
   "created_at": "2026-09-20T19:13:45Z",
   "started_at": "2026-09-20T19:13:45Z",
-  "completed_at": null,
-  "status": "PENDING",
+  "completed_at": "2026-09-20T19:17:33Z",
+  "status": "COMPLETED",
   "priority": "HIGH",
   "context": {
     "stage": "S4",
@@ -53,19 +53,19 @@
     ]
   },
   "result": {
-    "status": "PENDING",
-    "summary": "",
-    "artifacts_out": [],
+    "status": "PASS",
+    "summary": "Design artefact written: lib/letflow/design/req378-oidc-live-revocation-check.md. Mechanism: one new private step, verify_local_account_state/2, inserted into Letflow.Plugs.AuthPipeline.authenticate_oidc/2's `with` chain between provision_user/3 and attach_auth_context/4. It (a) short-circuits to {:error, {:account, :inactive}} -> 403 'forbidden' when provisioned.user.status (REQ-073's users.status, already live-read this request by provision_user/3's own existing per-request Repo query -- zero new round trips for this half) is :inactive; (b) otherwise calls a new Letflow.Identity.list_effective_role_names/2 (one new, uncached Repo.all/2 per request joining group_members -> tenant_role on group_id, mirroring Identity.verify_api_token/2's single-round-trip precedent) and passes that LIVE role list -- not identity_context.roles (JWT-claimed) -- as attach_auth_context/4's roles argument, so a revoked role simply stops appearing on the very next request and Letflow.Api.Authorization.evaluate_access/2's existing Deny403 denies it with zero AuthPipeline-side special-casing. Deliberately does NOT extend Letflow.Identity.RoleRegistry (its moduledoc explicitly disclaims any OIDC-pipeline coupling) -- the new query lives on Letflow.Identity instead, which AuthPipeline already exclusively aliases. No migration, no new column/table (users.status, group_members, tenant_role, groups all pre-exist). GUI reachability (AC2) needs no new web/ endpoint: role revocation already goes through GroupsPage.tsx's 'Manage members' remove-button -> DELETE /groups/:id/members/:user_id, and account deactivation already goes through UserDetailPage.tsx's status select -> PATCH /api/v1/users/:id (profile_changeset already casts :status) -- both pre-existing, already-shipped write paths that the new read-side check now actually observes. AC3 confirmed satisfied automatically: both new failure branches reuse the existing reject/4 helper (same JSON shape every other 401/403 on this pipeline already returns) and the narrowed-role-set path reuses evaluate_access/2's pre-existing Deny403 -- zero new response shapes, zero web/ renderer changes. Performance note (task item e): explicitly flagged as one new Repo round trip per authenticated OIDC request, judged acceptable as-is mirroring the API-token branch's own unchallenged one-query-per-request precedent, but flagged for REVIEWER/SECURITY-REVIEWER to confirm rather than silently assumed. Gap 3 (client-side session.roles staleness after silent token refresh) explicitly confirmed OUT of scope per REQ-378's own 'gap 2 only' framing -- not fixed, not masked, stated explicitly in doc section 6. Two judgment calls flagged as open questions for REVIEWER/SECURITY-REVIEWER to explicitly sign off on rather than discover later: (1) 403-not-401 for the inactive-account case: (2) reliance on evaluate_access/2's existing empty-role-list behavior to produce the AC1/AC3 403, not independently re-verified against every route's policy in this design pass. No implementation code written -- signatures/@specs/schema shapes only, verified against this design doc's own text before commit.",
+    "artifacts_out": ["lib/letflow/design/req378-oidc-live-revocation-check.md"],
     "issues": [],
     "git_evidence": {
-      "branch_name": null,
+      "branch_name": "feature/WF03-ISS0736-20260921",
       "commit_sha_list": [],
-      "remote_branch": null,
-      "push_status": "skipped",
+      "remote_branch": "origin/feature/WF03-ISS0736-20260921",
+      "push_status": "pending",
       "pr_url": null,
       "pr_create_error": null
     },
-    "next_action": ""
+    "next_action": "Route to CODE-DESIGN-VALIDATOR to gate this design against REQ-378's 4 acceptance criteria before ELIXIR-DEV implements it."
   },
   "rework_count": 0,
   "max_rework": 3

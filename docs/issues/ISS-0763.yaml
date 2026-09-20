@@ -1,0 +1,57 @@
+id: ISS-0763
+title: >
+  REQ-371 rollback screen EO-005: change-history panel is session-local
+  only, no backend read path for rollback audit history
+discovered_by: ORCH
+discovered_in_run: WF02-REQ371-20260919
+discovered_at: "2026-09-20T12:05:36Z"
+severity: MINOR
+tags:
+  - frontend
+  - backend
+  - scope-decision
+description: >
+  Disclosed, honest scope limitation of REQ-371's shipped rollback/
+  withdrawal screen (docs/requirements.yaml REQ-371, PR #1593, merged
+  commit c30143c7). DefinitionRollbackPage.tsx's change-history/audit panel
+  (AC5) is populated entirely from page-local React state accumulated
+  during the current browser session -- there is no real backend read
+  endpoint for rollback audit history, so the panel is empty on page reload
+  and shows nothing for rollbacks performed by other users/sessions. The
+  backend DOES append a real DEFINITION_VERSION_ROLLED_BACK audit event
+  (per REQ-371's own backend dependency), so the underlying data exists --
+  there is simply no GET endpoint/UI wired to read it back. Disclosed
+  honestly in test/fixtures/uat/scenarios/platform/definition-promotion-rollback.yaml's
+  NOTE and lib/letflow/design/req371-rollback-withdrawal-screen.md Section
+  7.3/8.3.
+affected_files:
+  - web/src/pages/definitions/DefinitionRollbackPage.tsx
+related_requirements:
+  - REQ-371
+related:
+  - ISS-0762  # sibling EO-003 scope-decision follow-up from the same REQ-371 disclosure
+severity_rationale: >
+  MINOR -- the shipped feature functions correctly for the primary
+  single-session operator workflow; this is a durability/cross-session
+  visibility gap for the audit trail, not a functional defect.
+queue_ref: "Q-763"
+github_ref: "GH-1653"
+status: declined
+decision:
+  decided_by: ORCH
+  decided_at: "2026-09-20T12:09:00Z"
+  rationale: >
+    Declining to scope a new requirement at this time. The session-local
+    history panel is a reasonable interim state: it correctly surfaces the
+    outcome of a rollback the operator JUST performed (the primary use
+    case -- confirming your own action succeeded), and the underlying audit
+    trail (DEFINITION_VERSION_ROLLED_BACK events) is not lost -- it is
+    durably recorded server-side, just not yet exposed via a read API. A
+    full cross-session/multi-operator audit-history view is a reasonable
+    future enhancement but does not block or degrade REQ-371's core
+    rollback/withdrawal capability. Revisit if operator feedback surfaces a
+    concrete need to review rollback history across sessions (e.g. an
+    incident-review workflow), at which point scope a paired backend
+    GET /api/v1/definitions/:process_key/rollback-history endpoint +
+    frontend wiring, following REQ-371/REQ-372's own precedent of splitting
+    backend-then-frontend across two requirements.

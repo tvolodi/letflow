@@ -27544,6 +27544,8 @@ requirements:
     owner: ELIXIR-DEV
     status: pending
     stage: S8
+    impl_order: 729  # letflow-queue task id, GH#1592. Registered 2026-09-20 by ORCH
+      # from this GUI-review UAT finding.
     description: >
       Filed from a GUI-review sweep applying "review real screens before
       writing a blind Playwright spec" to

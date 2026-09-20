@@ -60,6 +60,12 @@ import {
 } from '../pipeline'
 import { assertServiceReadiness, resolveCredential } from '../helpers'
 
+// Allow generous time for this 5-step GUI flow against a real backend —
+// the default 30s Playwright test timeout is exceeded mid-flow (observed
+// timing out inside step 01's click after processing steps 01's earlier
+// waits/navigation), same rationale as the onboarding-wizard pipeline spec.
+test.setTimeout(300_000)
+
 const API_BASE_URL = process.env.BPM_TEST_URL ?? 'http://127.0.0.1:8080'
 
 interface RollbackPipelineState {
@@ -155,7 +161,12 @@ test.describe('Pipeline: platform-definition-promotion-rollback (PW-01)', () => 
     await pl.step('01: operator confirms current/previous version on process detail', async (s) => {
       await navigateSpa(page, '/definitions')
       await page.getByTestId('definition-search').fill(s.processKey)
-      const row = page.getByTestId('datatable-row').filter({ hasText: s.processKey })
+      // Both v1.0.0 and v2.0.0 rows match on processKey alone (both are rows
+      // for this process), so filtering on hasText: processKey resolves to 2
+      // elements and Playwright's strict mode refuses to proceed. Scope to
+      // the row that actually contains the v2 definition's own name cell —
+      // the one row that is unambiguously the released/ACTIVE version.
+      const row = page.getByTestId('datatable-row').filter({ has: page.getByTestId(`def-name-${s.definitionIdV2}`) })
       await row.waitFor({ timeout: 15_000 })
       await expect(row).toContainText(s.releasedVersion)
       await expect(row).toContainText('ACTIVE')
@@ -191,7 +202,8 @@ test.describe('Pipeline: platform-definition-promotion-rollback (PW-01)', () => 
       // version-history view" claim end to end.
       await navigateSpa(page, '/definitions')
       await page.getByTestId('definition-search').fill(s.processKey)
-      const row = page.getByTestId('datatable-row').filter({ hasText: s.processKey })
+      // Same ambiguity as step 01 — scope to the v2 row specifically.
+      const row = page.getByTestId('datatable-row').filter({ has: page.getByTestId(`def-name-${s.definitionIdV2}`) })
       await row.waitFor({ timeout: 15_000 })
       await page.getByTestId(`btn-rollback-${s.definitionIdV2}`).click()
       await page.waitForURL(`**/definitions/${s.definitionIdV2}/rollback`, { timeout: 10_000 })
@@ -249,7 +261,9 @@ test.describe('Pipeline: platform-definition-promotion-rollback (PW-01)', () => 
       // The refusal made no change — the live version is still s.previousVersion.
       await navigateSpa(page, '/definitions')
       await page.getByTestId('definition-search').fill(s.processKey)
-      const row = page.getByTestId('datatable-row').filter({ hasText: s.processKey })
+      // By this point the rollback in step 03 has made v1 the live/ACTIVE
+      // version — scope to the v1 row specifically (same ambiguity as step 01).
+      const row = page.getByTestId('datatable-row').filter({ has: page.getByTestId(`def-name-${s.definitionIdV1}`) })
       await row.waitFor({ timeout: 10_000 })
       await expect(row).toContainText(s.previousVersion)
       await expect(row).toContainText('ACTIVE')

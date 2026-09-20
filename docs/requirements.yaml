@@ -27510,7 +27510,7 @@ requirements:
   - id: REQ-371
     title: "Operator-facing rollback/withdrawal screen for a released process definition"
     owner: FRONTEND-DEV
-    status: pending
+    status: done
     stage: S8
     impl_order: 728  # letflow-queue task id, GH#1589
     description: >

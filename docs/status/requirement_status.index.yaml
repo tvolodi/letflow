@@ -4293,7 +4293,7 @@ volumes:
     path: docs/status/requirement_status.v21.yaml
     status: current
     opened: 2026-09-20
-    entries: 0
+    entries: 1
     note: >
       Opened by DOC-UPDATER's own ISS-0743 close-out, successor to volume 20
       (closed at 19 entries / 1227 frozen-prefix lines, over the 1200-line
@@ -4302,6 +4302,13 @@ volumes:
       header text verbatim (volume number, opening date and predecessor path
       updated) and an empty `history:` list, per this index's
       `roll_rule.on_exceed` procedure.
+
+      Incremented to 1 by DOC-UPDATER's own REQ-371 done-event append
+      (WF02-REQ371-20260919, 2026-09-20T11:45:52Z -- operator-facing
+      rollback/withdrawal screen for definitions) -- `grep -c "^  - req:"
+      docs/status/requirement_status.v21.yaml` = 1 on-disk entry. 190 lines /
+      10972 bytes, well under the 1200-line/120000-byte roll ceiling, so no
+      roll triggered.
 
   - volume: 20
     path: docs/status/requirement_status.v20.yaml

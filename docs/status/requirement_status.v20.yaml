@@ -845,3 +845,64 @@ history:
       from a concurrent sibling session's WIP, not introduced by this run --
       no issue file touched by this dispatch) all checked with real output
       quoted.
+  - req: SCOPE-CHANGE
+    event: done
+    agent: DOC-UPDATER
+    at: "2026-09-20T02:40:21Z"
+    note: >
+      WF-03 run WF03-ISS0729-20260920 (queue task Q-730, GH-1598) complete,
+      commit 6ffa9967, PR #1601, branch feature/WF03-ISS0729-20260920.
+      ISS-0729 (DefinitionListPage main-thread freeze in dev/StrictMode
+      when interacting with debounced search shortly after navigation,
+      causing an intermittent Playwright hang, discovered by ISSUE-FIXER
+      while root-causing REQ-371's required e2e spec) is now resolved per
+      design doc
+      lib/letflow/design/iss-0729-definitionlistpage-search-freeze-fix.md.
+      Fix: the search input's setSearch state update is now deferred
+      through a coalescing setTimeout(fn, 0), the same empirical pattern
+      web/src/utils/deferClickState.ts already established for ISS-0662's
+      analogous EntityCrudPage/DataTable sort-header freeze. Applying that
+      deferral naively introduced a secondary regression (dropped
+      characters under fast typing, since the input briefly became an
+      effectively-uncontrolled field with no single source of truth) --
+      caught by FRONTEND-DEV's own empirical testing before it shipped,
+      not left latent -- and fixed by switching the search <input> to an
+      uncontrolled field via `defaultValue`, so the DOM itself holds
+      keystroke state while the deferred setTimeout(fn, 0) only propagates
+      the value into useDefinitionSearch's debounced state. A second,
+      independent, correctness-only bug found during the same
+      investigation was also fixed: web/src/utils/highlightText.tsx's
+      global-flagged RegExp was being reused statefully (lastIndex) across
+      repeated .test() calls inside .map(), producing incorrect
+      alternating match results.
+
+      Full gate history, all PASS, each with its own independently
+      obtained empirical evidence given how intermittent this bug is:
+      CODE-DESIGN-VALIDATOR; REVIEWER, with its own independent
+      before/after proof (reverted to pre-fix code, reproduced 5/5 hangs;
+      restored the fix, obtained 8/8 clean passes); TEST-DESIGN-VALIDATOR;
+      TEST-RUNNER (10 fresh e2e runs against a freshly started dev server,
+      0/10 hangs); RELEASE-VALIDATOR (its own fresh 9-run confirmation
+      against a dev server it started itself, 0/9 hangs). FRONTEND-DEV's
+      own investigation reached 100% baseline reproduction of the freeze
+      on pre-fix code (after first catching and correcting a false
+      negative caused by a CORS test-config issue in its own harness) and
+      confirmed the fix at 0/20+ hangs across 55+ total runs. Across all
+      four independent evidence sources (FRONTEND-DEV, REVIEWER,
+      TEST-RUNNER, RELEASE-VALIDATOR), no hang recurrence was observed
+      post-fix.
+
+      docs/issues/ISS-0729.yaml flipped open -> resolved with a full
+      resolution block citing all of the above. No live-QA-deployment-
+      specific gap remains: this is a pure client-side rendering-timing
+      defect (StrictMode double-invocation interacting with a debounced
+      input's state update) with no environment-conditional behavior, per
+      RELEASE-VALIDATOR's own reasoning during its PASS. No
+      docs/requirements.yaml entry to flip (this is an ISS, not a REQ;
+      grepped ISS-0729, no hits). README.md checked (grepped
+      highlightText/DefinitionListPage/deferClickState, no hits) -- not
+      documented current behavior there, so no README update needed. No
+      docs/migration/stage-N-*.md or decisions/*.md file was named by
+      ISS-0729's affected_files -- none required updating. No merge
+      performed here -- ORCH's job next, after confirming this push's own
+      CI is green and no other agent is currently active.

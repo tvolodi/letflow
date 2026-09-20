@@ -47,9 +47,16 @@ afterEach(() => {
   sessionStorage.clear()
 })
 
+// A synthetic, non-real slug — deliberately not one of the platform's known
+// tenant slugs (see tests/guards/forbidlist.ts's tenant-slug-in-source rule,
+// which this file is not on the allowlist for since it's not a
+// tenant/company-page test). The exact string value is irrelevant to what
+// this test asserts (that logout() clears the key, whatever it holds).
+const FIXTURE_REALM_SLUG = 'gui-review-fixture-realm'
+
 describe('AuthProvider.logout — EO-002 realm residue', () => {
   it('TC-EO002-03: clears bpm_realm_slug from sessionStorage on logout', async () => {
-    sessionStorage.setItem('bpm_realm_slug', 'swiftroute')
+    sessionStorage.setItem('bpm_realm_slug', FIXTURE_REALM_SLUG)
 
     let captured: { logout: () => void } | null | undefined = null
 
@@ -70,7 +77,7 @@ describe('AuthProvider.logout — EO-002 realm residue', () => {
       </AuthProvider>,
     )
 
-    expect(sessionStorage.getItem('bpm_realm_slug')).toBe('swiftroute')
+    expect(sessionStorage.getItem('bpm_realm_slug')).toBe(FIXTURE_REALM_SLUG)
 
     await act(async () => {
       captured!.logout()

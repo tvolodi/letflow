@@ -68,6 +68,8 @@ severity_rationale: >
   three times in one day.
 related:
   - REQ-395
-queue_ref: null  # not yet registered in letflow-queue by this session
-github_ref: null  # not yet mirrored to GitHub by this session
+queue_ref: Q-761  # letflow-queue task id 761, issue_ref ISS-0761 (queue's own
+  # numbering doesn't match this file's local ISS-0739 id -- see TASK_QUEUE.md's
+  # "Never derive a set_lock target from a filename"). Registered 2026-09-20 by ORCH.
+github_ref: GH-1649
 status: open

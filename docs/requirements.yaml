@@ -27655,8 +27655,10 @@ requirements:
     owner: ELIXIR-DEV
     status: pending
     stage: S6
-    impl_order: 730  # letflow-queue task id, GH#1594. Registered 2026-09-20 by ORCH
-      # from this GUI-review UAT finding.
+    impl_order: 732  # letflow-queue task id, GH#1620. Registered 2026-09-20 by ORCH;
+      # corrects a fabricated/self-assigned id from the original filing -- 730 was
+      # never a real register_task response for this requirement (it belongs to an
+      # unrelated, already-done issue task, ISS-0730) -- see docs/anti-patterns.md.
     description: >
       Filed from a GUI-review sweep applying "review real screens before
       writing a blind Playwright spec" to
@@ -27761,7 +27763,10 @@ requirements:
     owner: ELIXIR-DEV
     status: pending
     stage: S6
-    impl_order: 731  # Registered 2026-09-20 by ORCH from this GUI-review UAT finding.
+    impl_order: 733  # letflow-queue task id, GH#1621. Registered 2026-09-20 by ORCH;
+      # corrects a fabricated/self-assigned id from the original filing -- 731 was
+      # never a real register_task response for this requirement (it belongs to an
+      # unrelated, already-done issue task, ISS-0731) -- see docs/anti-patterns.md.
     description: >
       Filed from a GUI-review sweep applying "review real screens before
       writing a blind Playwright spec" to
@@ -27842,7 +27847,9 @@ requirements:
     owner: FRONTEND-DEV
     status: pending
     stage: S8
-    impl_order: 732  # Registered 2026-09-20 by ORCH from this GUI-review UAT finding.
+    impl_order: 735  # letflow-queue task id, GH#1623. Registered 2026-09-20 by ORCH;
+      # corrects a fabricated/self-assigned id (732) that was never a real
+      # register_task response -- see docs/anti-patterns.md.
     description: >
       Follow-on to REQ-374 (file it first; this requirement is blocked on
       that backend landing). Filed from the same GUI-review sweep as
@@ -27877,7 +27884,9 @@ requirements:
     owner: ELIXIR-DEV
     status: pending
     stage: S2
-    impl_order: 733  # Registered 2026-09-20 by ORCH from this GUI-review UAT finding.
+    impl_order: 736  # letflow-queue task id, GH#1624. Registered 2026-09-20 by ORCH;
+      # corrects a fabricated/self-assigned id (733) that was never a real
+      # register_task response -- see docs/anti-patterns.md.
     description: >
       Filed from a GUI-review sweep applying "review real screens before
       writing a blind Playwright spec" to
@@ -27973,7 +27982,9 @@ requirements:
     owner: FRONTEND-DEV
     status: pending
     stage: S8
-    impl_order: 734  # Registered 2026-09-20 by ORCH from this GUI-review UAT finding.
+    impl_order: 737  # letflow-queue task id, GH#1625. Registered 2026-09-20 by ORCH;
+      # corrects a fabricated/self-assigned id (734) that was never a real
+      # register_task response -- see docs/anti-patterns.md.
     description: >
       Follow-on to REQ-376 (file it first; this requirement is blocked on
       that backend landing). Filed from the same GUI-review sweep as
@@ -28008,7 +28019,9 @@ requirements:
     owner: ELIXIR-DEV
     status: pending
     stage: S4
-    impl_order: 735  # Registered 2026-09-20 by ORCH from this GUI-review UAT finding.
+    impl_order: 738  # letflow-queue task id, GH#1626. Registered 2026-09-20 by ORCH;
+      # corrects a fabricated/self-assigned id (735) that was never a real
+      # register_task response -- see docs/anti-patterns.md.
     description: >
       Filed from the GUI-review sweep of
       test/fixtures/uat/scenarios/platform/renderer-permission-denied-surface.yaml
@@ -28099,7 +28112,9 @@ requirements:
     owner: ELIXIR-DEV
     status: pending
     stage: S2
-    impl_order: 736  # Registered 2026-09-20 by ORCH from this GUI-review UAT finding.
+    impl_order: 739  # letflow-queue task id, GH#1627. Registered 2026-09-20 by ORCH;
+      # corrects a fabricated/self-assigned id (736) that was never a real
+      # register_task response -- see docs/anti-patterns.md.
     description: >
       Filed from a GUI-review sweep applying "review real screens before
       writing a blind Playwright spec" to
@@ -28173,7 +28188,9 @@ requirements:
     owner: ELIXIR-DEV
     status: pending
     stage: S2
-    impl_order: 737  # Registered 2026-09-20 by ORCH from this GUI-review UAT finding.
+    impl_order: 740  # letflow-queue task id, GH#1628. Registered 2026-09-20 by ORCH;
+      # corrects a fabricated/self-assigned id (737) that was never a real
+      # register_task response -- see docs/anti-patterns.md.
     description: >
       Second of three requirements from the same GUI-review finding as
       REQ-379 and REQ-381 -- see REQ-379's description for the full "what
@@ -28237,7 +28254,9 @@ requirements:
     owner: FRONTEND-DEV
     status: pending
     stage: S8
-    impl_order: 738  # Registered 2026-09-20 by ORCH from this GUI-review UAT finding.
+    impl_order: 741  # letflow-queue task id, GH#1629. Registered 2026-09-20 by ORCH;
+      # corrects a fabricated/self-assigned id (738) that was never a real
+      # register_task response -- see docs/anti-patterns.md.
     description: >
       Third of three requirements from the same GUI-review finding as
       REQ-379/REQ-380 -- see REQ-379's description for the full "what
@@ -28284,7 +28303,9 @@ requirements:
     owner: ELIXIR-DEV
     status: pending
     stage: S8
-    impl_order: 739  # Registered 2026-09-20 by ORCH from this GUI-review UAT finding.
+    impl_order: 742  # letflow-queue task id, GH#1630. Registered 2026-09-20 by ORCH;
+      # corrects a fabricated/self-assigned id (739) that was never a real
+      # register_task response -- see docs/anti-patterns.md.
     description: >
       Filed from the GUI-review UAT run of
       test/fixtures/uat/scenarios/platform/tenant-branding-applied.yaml (PW-14)
@@ -28377,7 +28398,10 @@ requirements:
     owner: FRONTEND-DEV
     status: pending
     stage: S8
-    impl_order: 740  # Registered 2026-09-20 by ORCH from this GUI-review UAT finding.
+    impl_order: 743  # letflow-queue task id, GH#1631. Registered 2026-09-20 by ORCH;
+      # corrects a fabricated/self-assigned id (740, which also collided with
+      # REQ-384's own equally-fabricated 740 -- neither was ever a real
+      # register_task response) -- see docs/anti-patterns.md.
     description: >
       Second of two requirements from the same GUI-review finding as
       REQ-382 -- see REQ-382's description for the full "what exists today"
@@ -28450,7 +28474,10 @@ requirements:
     owner: FRONTEND-DEV
     status: pending
     stage: S8
-    impl_order: 740  # Registered 2026-09-20 by ORCH from this GUI-review UAT finding.
+    impl_order: 744  # letflow-queue task id, GH#1632. Registered 2026-09-20 by ORCH;
+      # corrects a fabricated/self-assigned id (740, which also collided with
+      # REQ-383's own equally-fabricated 740 -- neither was ever a real
+      # register_task response) -- see docs/anti-patterns.md.
     description: >
       Filed from the GUI-review UAT run of
       test/fixtures/uat/scenarios/platform/tenant-switch-cache-isolation.yaml (PW-15)
@@ -28504,7 +28531,9 @@ requirements:
     owner: ELIXIR-DEV
     status: pending
     stage: S9
-    impl_order: 741  # Registered 2026-09-20 by ORCH from this GUI-review UAT finding.
+    impl_order: 745  # letflow-queue task id, GH#1633. Registered 2026-09-20 by ORCH;
+      # corrects a fabricated/self-assigned id (741) that was never a real
+      # register_task response -- see docs/anti-patterns.md.
     description: >
       Filed from the same GUI-review UAT run as REQ-384 (PW-15,
       tenant-switch-cache-isolation.yaml) -- see
@@ -28559,7 +28588,9 @@ requirements:
     owner: ELIXIR-DEV
     status: pending
     stage: S6
-    impl_order: 743  # Registered 2026-09-20 by ORCH from this GUI-review UAT finding.
+    impl_order: 746  # letflow-queue task id, GH#1634. Registered 2026-09-20 by ORCH;
+      # corrects a fabricated/self-assigned id (743) that was never a real
+      # register_task response -- see docs/anti-patterns.md.
     description: >
       Filed from the GUI-review UAT run of
       test/fixtures/uat/scenarios/platform/attachment-cross-tenant-probe.yaml
@@ -28647,7 +28678,9 @@ requirements:
     owner: FRONTEND-DEV
     status: pending
     stage: S8
-    impl_order: 744  # Registered 2026-09-20 by ORCH from this GUI-review UAT finding.
+    impl_order: 747  # letflow-queue task id, GH#1635. Registered 2026-09-20 by ORCH;
+      # corrects a fabricated/self-assigned id (744) that was never a real
+      # register_task response -- see docs/anti-patterns.md.
     description: >
       Filed from the GUI-review UAT run of
       test/fixtures/uat/scenarios/platform/attachment-cross-tenant-probe.yaml
@@ -28710,7 +28743,9 @@ requirements:
     owner: ELIXIR-DEV
     status: pending
     stage: S6
-    impl_order: 745  # Registered 2026-09-20 by ORCH from this GUI-review UAT finding.
+    impl_order: 748  # letflow-queue task id, GH#1636. Registered 2026-09-20 by ORCH;
+      # corrects a fabricated/self-assigned id (745) that was never a real
+      # register_task response -- see docs/anti-patterns.md.
     description: >
       Filed from the GUI-review UAT run of
       test/fixtures/uat/scenarios/platform/attachment-cross-tenant-probe.yaml
@@ -28763,7 +28798,9 @@ requirements:
     owner: ELIXIR-DEV
     status: pending
     stage: S6
-    impl_order: 746  # Registered 2026-09-20 by ORCH from this GUI-review UAT finding.
+    impl_order: 749  # letflow-queue task id, GH#1637. Registered 2026-09-20 by ORCH;
+      # corrects a fabricated/self-assigned id (746) that was never a real
+      # register_task response -- see docs/anti-patterns.md.
     description: >
       Filed from the GUI-review UAT run of
       test/fixtures/uat/scenarios/swiftroute/shipment-attach-delivery-note.yaml
@@ -28841,7 +28878,9 @@ requirements:
     owner: ELIXIR-DEV
     status: pending
     stage: S6
-    impl_order: 747  # Registered 2026-09-20 by ORCH from this GUI-review UAT finding.
+    impl_order: 750  # letflow-queue task id, GH#1638. Registered 2026-09-20 by ORCH;
+      # corrects a fabricated/self-assigned id (747) that was never a real
+      # register_task response -- see docs/anti-patterns.md.
     description: >
       Filed from the GUI-review UAT run of
       test/fixtures/uat/scenarios/swiftroute/shipment-attach-delivery-note.yaml
@@ -28903,7 +28942,9 @@ requirements:
     owner: ELIXIR-DEV
     status: pending
     stage: S6
-    impl_order: 748  # Registered 2026-09-20 by ORCH from this GUI-review UAT finding.
+    impl_order: 751  # letflow-queue task id, GH#1639. Registered 2026-09-20 by ORCH;
+      # corrects a fabricated/self-assigned id (748) that was never a real
+      # register_task response -- see docs/anti-patterns.md.
     description: >
       Filed from the GUI-review UAT run of
       test/fixtures/uat/scenarios/swiftroute/shipment-attach-delivery-note.yaml
@@ -28968,7 +29009,9 @@ requirements:
     owner: FRONTEND-DEV
     status: pending
     stage: S8
-    impl_order: 749  # Registered 2026-09-20 by ORCH from this GUI-review UAT finding.
+    impl_order: 752  # letflow-queue task id, GH#1640. Registered 2026-09-20 by ORCH;
+      # corrects a fabricated/self-assigned id (749) that was never a real
+      # register_task response -- see docs/anti-patterns.md.
     description: >
       Filed from the GUI-review UAT run of
       test/fixtures/uat/scenarios/swiftroute/shipment-attach-delivery-note.yaml
@@ -29033,7 +29076,9 @@ requirements:
     owner: FRONTEND-DEV
     status: pending
     stage: S8
-    impl_order: 750  # Registered 2026-09-20 by ORCH from this GUI-review UAT finding.
+    impl_order: 753  # letflow-queue task id, GH#1641. Registered 2026-09-20 by ORCH;
+      # corrects a fabricated/self-assigned id (750) that was never a real
+      # register_task response -- see docs/anti-patterns.md.
     description: >
       Filed from the GUI-review UAT run of
       test/fixtures/uat/scenarios/vortex/entity-list-filter-and-page.yaml
@@ -29157,7 +29202,9 @@ requirements:
     owner: ELIXIR-DEV
     status: pending
     stage: S6
-    impl_order: 751  # Registered 2026-09-20 by ORCH from this GUI-review UAT finding.
+    impl_order: 754  # letflow-queue task id, GH#1642. Registered 2026-09-20 by ORCH;
+      # corrects a fabricated/self-assigned id (751) that was never a real
+      # register_task response -- see docs/anti-patterns.md.
     description: >
       Filed from the GUI-review UAT run of
       test/fixtures/uat/scenarios/vortex/entity-list-filter-and-page.yaml
@@ -29247,7 +29294,9 @@ requirements:
     owner: ELIXIR-DEV
     status: pending
     stage: S7
-    impl_order: 752  # Registered 2026-09-20 by ORCH from this GUI-review UAT finding.
+    impl_order: 755  # letflow-queue task id, GH#1643. Registered 2026-09-20 by ORCH;
+      # corrects a fabricated/self-assigned id (752) that was never a real
+      # register_task response -- see docs/anti-patterns.md.
     description: >
       Filed from the GUI-review UAT run of
       test/fixtures/uat/scenarios/swiftroute/shipment-high-value-happy.yaml
@@ -29324,7 +29373,9 @@ requirements:
     owner: CODE-DESIGNER
     status: pending
     stage: S7
-    impl_order: 753  # Registered 2026-09-20 by ORCH from this GUI-review UAT finding.
+    impl_order: 756  # letflow-queue task id, GH#1644. Registered 2026-09-20 by ORCH;
+      # corrects a fabricated/self-assigned id (753) that was never a real
+      # register_task response -- see docs/anti-patterns.md.
     description: >
       Filed from the GUI-review UAT run of
       test/fixtures/uat/scenarios/swiftroute/shipment-ops-timeout-escalation.yaml

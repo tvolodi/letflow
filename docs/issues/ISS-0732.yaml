@@ -50,4 +50,8 @@ fix_direction: >
   currently just succeeds).
 process_note: >
   Full evidence: test/uat-reports/gui-review-2026-09-20-definition-promotion-approved.md
+queue_ref: Q-757  # letflow-queue task id 757, issue_ref ISS-0757 (queue's own
+  # numbering doesn't match this file's local ISS-0732 id -- see TASK_QUEUE.md's
+  # "Never derive a set_lock target from a filename"). Registered 2026-09-20 by ORCH.
+github_ref: GH-1645
 status: open

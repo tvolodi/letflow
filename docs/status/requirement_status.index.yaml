@@ -4293,24 +4293,31 @@ volumes:
     path: docs/status/requirement_status.v20.yaml
     status: current
     opened: 2026-09-18
-    entries: 14
+    entries: 15
     note: >
-      Incremented to 14 by DOC-UPDATER's own ISS-0729 SCOPE-CHANGE done-event
-      append (WF03-ISS0729-20260920, 2026-09-20T02:40:21Z -- ISS-0729
-      DefinitionListPage search-freeze fix) -- `grep -c "^  - req:"
-      docs/status/requirement_status.v20.yaml` = 14 on-disk entries. 908
-      lines / 57216 bytes, well under the 1200-line/120000-byte roll
-      ceiling, so no roll triggered.
+      Incremented to 15 during a merge of two independent concurrent
+      appends, reconciled by ORCH: DOC-UPDATER's ISS-0729 SCOPE-CHANGE
+      done-event append (WF03-ISS0729-20260920, 2026-09-20T02:40:21Z --
+      ISS-0729 DefinitionListPage search-freeze fix), and ORCH's own
+      SCOPE-CHANGE done-event append (2026-09-20T02:35:00Z -- REQ-382/
+      REQ-383 filed, hybrid partially-built tenant-branding-applied
+      scenario: read/store side done, admin write path/contrast
+      validation/activity-log recording missing). Both entries are
+      present on disk (DOC-UPDATER's 02:40 entry precedes ORCH's 02:35
+      entry in file order, since each was appended independently on its
+      own branch before this merge reconciled them -- append-only means
+      preserving both, not re-sorting by timestamp) --
+      `grep -c "^  - req:" docs/status/requirement_status.v20.yaml` = 15
+      on-disk entries. 1000 lines / 63302 bytes, well under the
+      1200-line/120000-byte roll ceiling, so no roll triggered.
 
-      Incremented to 13 by ORCH's own SCOPE-CHANGE done-event append
+      Prior: Incremented to 13 by ORCH's own SCOPE-CHANGE done-event append
       (2026-09-20T02:10:24Z -- REQ-379/REQ-380/REQ-381 filed, unbuilt
       solution-pack update-conflict-resolution feature found during
       test/fixtures/uat/scenarios/platform/
       template-update-conflict-resolution.yaml review), on top of the prior
-      increment to 12 below -- `grep -c "^  - req:"
-      docs/status/requirement_status.v20.yaml` = 13 on-disk entries. 847
-      lines / 54294 bytes, well under the 1200-line/120000-byte roll
-      ceiling, so no roll triggered.
+      increment to 12 below -- 847 lines / 54294 bytes at that time, well
+      under the 1200-line/120000-byte roll ceiling, so no roll triggered.
 
       Incremented to 12 by ORCH's own SCOPE-CHANGE done-event append
       (2026-09-20T01:20:44Z -- REQ-376/REQ-377 filed, partition-based

@@ -906,3 +906,95 @@ history:
       ISS-0729's affected_files -- none required updating. No merge
       performed here -- ORCH's job next, after confirming this push's own
       CI is green and no other agent is currently active.
+  - req: SCOPE-CHANGE
+    event: done
+    agent: ORCH
+    at: "2026-09-20T02:35:00Z"
+    note: >
+      Applied the "review real screens before writing a blind Playwright
+      spec" process (11th of ~15 scenarios in today's sweep) to
+      test/fixtures/uat/scenarios/platform/tenant-branding-applied.yaml --
+      see test/uat-reports/gui-review-2026-09-20-tenant-branding-applied.md
+      for the full trace. Checked whether tenant branding/theming (a company
+      appearance settings screen, contrast validation, status-colour
+      immutability, out-of-scope-change activity-log recording) exists by
+      reading current source directly, not by trusting the scenario's own
+      pre-existing NOTE (ISS-0527) unread.
+
+      Found this scenario is genuinely a hybrid, unlike this sweep's other
+      fully-unbuilt findings: REQ-280/281/282/283 (all done) built a real
+      STORE and READ side -- Letflow.Identity.Tenant's closed-vocabulary
+      settings changeset, GET /api/tenant-config, and
+      web/src/theming/BrandingProvider.tsx's apply-on-load wiring all work.
+      Two structural guarantees hold today without needing a live UAT run to
+      confirm, matching this sweep's renderer-permission-denied-surface
+      precedent for source-determined findings: EO-002 (status-colour
+      immutability -- BRAND_COLOR_CSS_PROPERTY's allowlist has exactly one
+      key, "primary", mapped only to --color-brand-600; StatusBadge.tsx reads
+      separate --color-success/--color-warning/--color-error/--color-failure
+      tokens no tenant setting can reach) and EO-004 (irreversible-action
+      confirmation -- web/src/components/instances/CancelInstanceDialog.tsx
+      is a real focus-trapped, aria-modal dialog with explicit "cannot be
+      undone" text and a danger-styled confirm button, nothing fires until
+      clicked). A third, EO-005 (first-paint colour, no flash), is
+      confirmed BROKEN by reading BrandingProvider.tsx (applies colour in a
+      useEffect, which runs after first paint) and main.tsx (renders
+      synchronously without awaiting the pre-warmed fetchTenantConfig
+      promise) -- a real, deterministic flash on every load. Left undocketed
+      as a fix per the scenario's own on_fail metadata (severity: MINOR,
+      suggested_action: none) -- recorded, not routed to WF-03.
+
+      But the scenario's core action (steps 1/4/5: a tenant admin opens
+      appearance settings and saves a colour change) has NO real backing:
+      lib/letflow/design/req281-tenant-config-branding-key.md section 6
+      states outright that Letflow.Identity.update_tenant_settings/2 having
+      "no HTTP-reachable write path" is fine BY DESIGN for that requirement's
+      own scope; grepping every router under lib/letflow/routers/ confirms
+      zero PATCH/PUT/POST route ever calls it or writes tenants.settings; and
+      web/src/pages/admin/tenants/EditTenantPage.tsx (the only per-tenant
+      admin edit screen) has no colour/branding field at all. EO-003
+      (contrast refusal) has no code at any layer either --
+      Tenant.settings_changeset/2's validate_brand_colors/2 checks hex
+      FORMAT only, never readability/contrast. EO-001's negative half
+      (rejected out-of-scope key recorded in the operator activity log) has
+      nothing to record from, since no write path exists to reject anything
+      from -- though Letflow.Audit (lib/letflow/audit.ex) and
+      web/src/pages/admin/AuditLogPage.tsx both already exist and are
+      reusable once a write path exists.
+
+      Filed two requirements, split backend/frontend per this sweep's
+      established precedent: docs/requirements.yaml REQ-382 (owner
+      ELIXIR-DEV, stage S8, status: pending, depends_on: [REQ-280, REQ-281])
+      -- the HTTP-reachable settings-write endpoint, a new WCAG-AA
+      colour-contrast check in validate_brand_colors/2 (EO-003), and
+      rejected-out-of-scope-key Letflow.Audit recording reusing the existing
+      mechanism (EO-001's negative half), explicitly fenced against widening
+      the brand_colors allowlist itself or building a general settings-PATCH
+      endpoint; and REQ-383 (owner FRONTEND-DEV, stage S8, status: pending,
+      depends_on: [REQ-382]) -- the appearance settings screen itself,
+      including authoring and passing this scenario's own named
+      pipeline_test once the screen exists, with an explicit EO-005 note
+      that the new pipeline_test documents the known flash rather than
+      fixing it. No implementation attempted here -- this is a two-layer,
+      cross-stage gap (backend write path, frontend screen), not a
+      same-dispatch fix; no live browser session was opened against
+      qa.bizdala.com since the scenario's own primary action has nothing to
+      drive yet, matching the renderer-permission-denied-surface precedent
+      for this same "core action has no real backing" shape. UAT scenario
+      run recorded BLOCKED (with structurally-confirmed EO-002/EO-004 and a
+      documented, non-blocking EO-005 defect) in the report cited above. The
+      scenario fixture's own pipeline_test NOTE block was extended (not
+      removed -- the feature is not real) with a dated addendum citing
+      REQ-382/REQ-383 and this report, matching this sweep's established
+      precedent. No existing docs/requirements.yaml entry needed flipping
+      (REQ-382/383 are newly filed, not existing ones being closed). No
+      docs/migration/stage-N-*.md file needed updating -- this is a net-new
+      gap finding, not a change to already-documented behavior. Verified
+      mix letflow.check_req_id_collision (OK, no collision) and
+      mix letflow.check_requirements_registration (350 entries = 348
+      registered + 2 deferred + 0 neither + 0 unclassified, no new gate
+      failures) both pass with the two new entries in place.
+      mix letflow.check_issue_refs shows one pre-existing violation on
+      docs/issues/ISS-0728-exam-title-object-object-sibling-wip-rescued.yaml
+      from a concurrent sibling session's WIP, not introduced by this run --
+      no issue file touched by this dispatch.

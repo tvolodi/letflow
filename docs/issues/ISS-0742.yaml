@@ -1,0 +1,86 @@
+id: ISS-0742
+title: >
+  InstanceBoardPage submit-start-instance: rapid real double-click can fire
+  two POST /api/v1/instances calls before startInstance.isPending disables
+  the button (no useRef in-flight guard, unlike EntityCrudPage's
+  confirmDelete)
+discovered_by: REVIEWER
+discovered_in_run: WF03-ISS0740-20260920
+discovered_at: "2026-09-20T00:00:00Z"
+severity: MINOR
+tags:
+  - frontend
+  - race-condition
+description: >
+  While gating PR #1612 (ISS-0741's click-freeze fix, filed as ISS-0740 at
+  design-authoring time and renumbered to ISS-0741 after a second slot
+  collision — see ISS-0741.yaml's own NOTE), FRONTEND-DEV's design doc
+  (lib/letflow/design/iss-0739-instanceboardpage-start-dialog-click-freeze-fix.md,
+  OQ-3) flagged, but did not resolve, an empirical finding: a rapid real
+  double-click (two independent mousedown/mouseup cycles, no gap) on
+  `submit-start-instance` produced 2 created instances from one intended
+  submission in one FRONTEND-DEV trial.
+
+  REVIEWER independently reproduced this via Playwright against the live
+  backend+Keycloak stack: instrumenting `page.on('response')` for
+  `POST /api/v1/instances` and firing two real mousedown/mouseup cycles
+  back-to-back on `submit-start-instance`, 1 of 6 trials fired the POST
+  twice (two distinct `instance_id`s created from one intended submit); the
+  other 5 trials fired it 0 or 1 times (0 when the definition-name typeahead
+  hadn't resolved in time, an unrelated timing artifact of the repro
+  harness, not this defect).
+
+  Root cause: `submitStartInstance` calls `startInstance.mutateAsync(...)`
+  directly and synchronously (not wrapped in `deferClickState`); the Start
+  button's only guard against a second click is `disabled={startInstance.isPending}`,
+  a React-state read that only reflects the mutation's start after a render
+  commit. Two native click events landing within that commit's latency
+  window both reach `mutateAsync`.
+
+  This is NOT a regression introduced or worsened by ISS-0741's fix (PR
+  #1612): that fix wraps `openStartDialog`/`closeStartDialog`/the
+  pre-`await` validation-branch `setState` calls in `submitStartInstance`
+  in `deferClickState` (a non-blocking `setTimeout(fn, 0)`, see
+  web/src/utils/deferClickState.ts), none of which sits between the click
+  and the `mutateAsync(...)` call on the success path -- that call was
+  already synchronous and directly invoked, both before and after the
+  ISS-0741 diff (verified by reading both the pre-fix and post-fix
+  `web/src/pages/instances/InstanceBoardPage.tsx`; the ISS-0741 fix commit's
+  own diff stat confirms it never touches that call site's control flow).
+  Contrast with ISS-0662's `EntityCrudPage.tsx`, where `confirmDelete`
+  itself schedules `deleteMutation.mutate(recordId)` *inside*
+  `deferClickState(() => {...})` -- there, the defer widens the exposed
+  window, which is why a `deleteInFlightRef` synchronous guard was added as
+  a follow-up. `submitStartInstance` has no equivalent defer around its
+  mutate call, so no equivalent widening occurred here. Could not obtain a
+  clean pre-fix runtime baseline to double-confirm this reasoning (pre-fix
+  `openStartDialog` freezes the renderer on the very first trusted click in
+  6/6 of REVIEWER's own attempts, which blocks ever reaching the submit
+  step), so this is a code-level argument, not a runtime A/B comparison —
+  flagged as its own tracked issue rather than silently assumed either way.
+affected_files:
+  - web/src/pages/instances/InstanceBoardPage.tsx
+  - web/src/pages/entities/EntityCrudPage.tsx
+related_requirements: []
+related:
+  - ISS-0662
+  - ISS-0741
+suggested_fix: >
+  Add a `startInFlightRef` (useRef<boolean>) synchronous re-entrancy guard
+  to `submitStartInstance`, matching `EntityCrudPage.tsx`'s
+  `deleteInFlightRef` pattern exactly: set it `true` synchronously before
+  the `mutateAsync` call, check-and-return at the top of the function, reset
+  it on both the mutation's success and error paths (and whenever the start
+  dialog is reopened, per `deleteInFlightRef`'s own reset-on-reopen
+  precedent in `openDeleteConfirm`).
+severity_rationale: >
+  MINOR, not MAJOR/BLOCKER: reproduces at a low rate (1/6 in REVIEWER's own
+  trials, 1/1 in FRONTEND-DEV's single trial) and requires an unusually fast
+  literal double-click on the primary submit action, not the freeze-class
+  defect this run's sibling issues (ISS-0662/0729/0737/0738/0741) address.
+  Does not block ISS-0741/PR #1612, which fixes a different, unrelated,
+  and confirmed-100%-reproducing defect (the click freeze) and does not
+  introduce or worsen this one.
+queue_ref: null  # ORCH to assign via letflow-queue register_task
+github_ref: null  # ORCH to assign
+status: open

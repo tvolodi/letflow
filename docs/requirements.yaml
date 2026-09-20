@@ -27755,3 +27755,119 @@ requirements:
       - "PLC-01/module_ref catalog versioning is explicitly named as still out of scope in the moduledoc, with a citation of pin_resolver.ex's own existing SCOPE GAP language, not silently expanded into this requirement's scope"
       - "mix letflow.check passes, with real output quoted"
     depends_on: [REQ-059, REQ-060, REQ-191, REQ-192]
+
+  - id: REQ-374
+    title: "Platform-wide tenant-migration fanout runner: per-company apply with failure isolation, resume-outstanding, and idempotent re-run (backend)"
+    owner: ELIXIR-DEV
+    status: pending
+    stage: S6
+    impl_order: 731  # Registered 2026-09-20 by ORCH from this GUI-review UAT finding.
+    description: >
+      Filed from a GUI-review sweep applying "review real screens before
+      writing a blind Playwright spec" to
+      test/fixtures/uat/scenarios/platform/migration-partial-failure-resume.yaml
+      (test/uat-reports/gui-review-2026-09-20-migration-partial-failure-resume.md
+      has the full trace). That scenario's own stale NOTE (ISS-0527) already
+      flagged its pipeline_test as an aspirational forward-reference to a
+      Playwright spec that was never authored, gated on this same missing
+      feature. This run verified independently, by reading current source
+      rather than trusting the note, that the underlying feature genuinely
+      does not exist, in whole or in part.
+
+      WHAT EXISTS TODAY, verified 2026-09-20 by direct source read: nothing
+      in lib/letflow/ applies an arbitrary platform-defined change across
+      every tenant workspace with per-tenant failure isolation, a resumable
+      "outstanding companies only" re-run, and idempotent no-op behavior once
+      complete. The closest analogues are narrower and single-purpose:
+      Letflow.TenantProvisioning (REQ-022) provisions ONE schema at
+      onboarding time and Letflow.TenantProvisioning.ColumnPromotion /
+      ConstraintActivation (REQ-297/REQ-298) promote ONE entity definition's
+      DDL, each scoped to a single tenant transaction, not a platform-wide
+      fanout across all tenants. req022-tenant-schema-provisioning.md's own
+      design notes name this exact gap explicitly, citing R-Co's prior
+      `src/platform/migration_fanout.zig` as "a distinct orchestration layer
+      that calls runForSchema across *all* registered tenants independently
+      of any single provisioning event" and states plainly: "a future
+      requirement owns the onboarding orchestration that sequences them (not
+      invented here)." That future requirement was never filed until now.
+      Grepping lib/letflow/ for rollout/fanout/tenant_migration/
+      PlatformRollout and web/src/ for any rollout-status screen returns no
+      hits beyond this design-doc citation and this scenario file itself.
+
+      THIS REQUIREMENT (backend half; a follow-on FRONTEND-DEV requirement,
+      REQ-375, owns the operator-facing rollout-status screen once this
+      lands): build the fanout runner itself. (1) A rollout record that,
+      given a change identifier and a target scope (every active company),
+      enumerates the current company list and applies the change to each
+      company's own tenant schema in turn, transactionally per company —
+      one company's failure must not roll back or block any other company's
+      already-committed or still-pending application; (2) per-company
+      outcome persistence: SUCCEEDED (with completion timestamp) or FAILED
+      (with completion timestamp and a plain-language reason string derived
+      from the actual error, not a generic code), queryable per rollout;
+      (3) a resume operation that, given a rollout_id, re-applies the change
+      only to companies currently recorded as not-yet-succeeded, leaving
+      already-succeeded companies untouched (no re-open, no second write to
+      their schema); (4) idempotent re-run: starting the identical rollout
+      again once every company already holds the change performs zero writes
+      and reports every company as already-current; (5) the failing
+      company's workspace must be left exactly as it was pre-attempt on
+      failure — no partial DDL/data change — verified by a test that
+      exercises real work (e.g. case creation) in that company's schema
+      immediately after the failed attempt. Route/permission surface reuses
+      an existing platform-admin-only policy (Letflow.Api.Authorization) —
+      decide and record explicitly which one, or add the narrowest new one
+      needed, rather than leaving rollout endpoints unauthenticated.
+
+      SCOPE FENCE: the fanout runner, per-company outcome record, resume,
+      and idempotent re-run only. Does not define what "the change" itself
+      is in general (this requirement's own test fixture may use a single
+      concrete, realistic change — e.g. a column-promotion or DDL migration
+      — to prove the mechanism; a general plugin/registry of "kinds of
+      platform-wide change" is explicitly out of scope and not to be
+      invented here). Does not build the operator-facing rollout-status
+      screen (EO-003) — that is REQ-375.
+    acceptance_criteria:
+      - "starting a rollout against every active company, where one company's workspace is arranged to refuse the change, results in every OTHER company holding the change and the failing company recorded FAILED with a plain reason, proven by a test (EO-001)"
+      - "the failing company's workspace holds none of the change after the failed attempt, and a real write (e.g. case creation) against that company's schema succeeds immediately afterward, proven by a test (EO-002)"
+      - "each company's rollout outcome record carries a completion timestamp and, for FAILED companies, a human-readable reason string, queryable per rollout_id, proven by a test (supports EO-003's screen)"
+      - "resuming a rollout applies the change only to companies not already SUCCEEDED; companies that succeeded on the first pass show no second write and their original completion timestamp is unchanged, proven by a test (EO-004)"
+      - "starting the identical rollout again once every company already holds the change performs zero writes and reports every company as already-current, proven by a test (EO-005)"
+      - "rollout endpoints are gated behind an explicitly named platform-admin-only permission, stated in the moduledoc, proven by a test"
+      - "mix letflow.check passes, with real output quoted"
+    depends_on: [REQ-022, REQ-297, REQ-298]
+
+  - id: REQ-375
+    title: "Operator-facing rollout-status screen: per-company outcome, reason, and resume/re-run controls (frontend)"
+    owner: FRONTEND-DEV
+    status: pending
+    stage: S8
+    impl_order: 732  # Registered 2026-09-20 by ORCH from this GUI-review UAT finding.
+    description: >
+      Follow-on to REQ-374 (file it first; this requirement is blocked on
+      that backend landing). Filed from the same GUI-review sweep as
+      REQ-374 — test/fixtures/uat/scenarios/platform/migration-partial-failure-resume.yaml
+      and test/uat-reports/gui-review-2026-09-20-migration-partial-failure-resume.md.
+
+      WHAT EXISTS TODAY, verified 2026-09-20: grepping web/src/ for
+      rollout/fanout/migration-status screens returns zero hits. There is no
+      operator console page showing a platform-wide change's per-company
+      outcome, and no resume or re-run control anywhere in web/src.
+
+      THIS REQUIREMENT: a screen, reachable from the platform-admin
+      operator console, that (1) lets a PLATFORM_ADMIN start a named
+      platform-wide change against every active company; (2) lists, one row
+      per company, whether the change arrived, its completion time, and —
+      for companies that do not yet hold it — a readable reason; (3) offers
+      a resume control once a rollout has outstanding (non-succeeded)
+      companies, calling REQ-374's resume endpoint; (4) re-running a
+      completed rollout and reflects the no-op result (EO-005) without
+      implying new work happened. Wires to REQ-374's real endpoints — no
+      mock data.
+    acceptance_criteria:
+      - "the rollout-status screen renders one row per company with outcome, completion time, and reason for non-succeeded companies, matching EO-003's evidence requirement"
+      - "the resume control is visible only when a rollout has outstanding companies, and invoking it calls REQ-374's real resume endpoint (no mock)"
+      - "re-running a fully-succeeded rollout renders a no-op result (EO-005) distinguishable from a fresh run"
+      - "the screen is reachable only to a PLATFORM_ADMIN-equivalent role from the operator console navigation"
+      - "web/tests/e2e/pipelines/platform-migration-partial-failure-resume.pipeline.e2e.spec.ts is authored against this real screen and passes"
+    depends_on: [REQ-374]

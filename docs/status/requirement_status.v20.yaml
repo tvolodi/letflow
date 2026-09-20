@@ -662,3 +662,55 @@ history:
       filed, not an existing one being closed). No docs/migration/
       stage-N-*.md or decisions/*.md file needed updating -- this is a net-
       new frontend gap finding, not a change to already-documented behavior.
+  - req: SCOPE-CHANGE
+    event: done
+    agent: ORCH
+    at: "2026-09-20T01:02:22Z"
+    note: >
+      Applied the "review real screens before writing a blind Playwright
+      spec" process (7th of ~15 scenarios in today's sweep) to
+      test/fixtures/uat/scenarios/platform/migration-partial-failure-resume.yaml
+      -- see test/uat-reports/gui-review-2026-09-20-migration-partial-failure-resume.md
+      for the full trace. Checked whether a platform-wide tenant-migration
+      fanout runner (per-company apply, failure isolation, resume-outstanding,
+      idempotent re-run) and an operator-facing rollout-status screen exist by
+      reading current source directly, not by trusting the scenario's own
+      pre-existing NOTE (ISS-0527) unread. Confirmed neither exists, backend
+      or frontend: grepped lib/letflow/ for rollout/fanout/tenant_migration/
+      PlatformRollout (no functional hits -- the closest analogues,
+      Letflow.TenantProvisioning REQ-022 and ColumnPromotion/
+      ConstraintActivation REQ-297/REQ-298, each operate on ONE tenant, not a
+      platform-wide fanout), and grepped web/src for
+      rollout/fanout/migration-status/RolloutStatus/RolloutConsole (no hits).
+      req022-tenant-schema-provisioning.md's own design notes name this exact
+      gap explicitly, citing R-Co's src/platform/migration_fanout.zig, and
+      state a future requirement was meant to own it -- never filed until
+      now. Grepped docs/requirements.yaml for the same terms to confirm no
+      duplicate is already queued -- none found.
+
+      Filed two requirements, split backend/frontend per this sweep's
+      REQ-372/REQ-373 precedent: docs/requirements.yaml REQ-374 (owner
+      ELIXIR-DEV, stage S6, status: pending, depends_on REQ-022/REQ-297/
+      REQ-298) -- the fanout runner itself: per-company transactional apply,
+      per-company outcome record (timestamp + plain-language failure reason),
+      resume-outstanding-only, and idempotent no-op re-run, with an explicit
+      scope fence against inventing a general "kinds of platform-wide change"
+      registry; and REQ-375 (owner FRONTEND-DEV, stage S8, status: pending,
+      depends_on: [REQ-374]) -- the operator-facing rollout-status screen,
+      including authoring and passing this scenario's own named pipeline_test
+      once the screen exists, so this scenario does not stay perpetually
+      blocked one requirement later. No implementation attempted here per
+      this run's own explicit instruction (file the gap, do not build either
+      feature in this dispatch). UAT scenario run recorded BLOCKED in the
+      report cited above. The scenario fixture's own pipeline_test NOTE block
+      was extended (not removed -- the feature is not real) with a dated
+      addendum citing REQ-374/REQ-375 and this report, matching the
+      definition-promotion-rollback precedent earlier in this sweep. No
+      existing docs/requirements.yaml entry needed flipping (REQ-374/REQ-375
+      are newly filed, not existing ones being closed). No docs/migration/
+      stage-N-*.md or decisions/*.md file needed updating -- this is a net-new
+      gap finding, not a change to already-documented behavior. Verified
+      mix letflow.check_req_id_collision (OK, no collision) and
+      mix letflow.check_requirements_registration (342 entries = 340
+      registered + 2 deferred + 0 neither + 0 unclassified, no new gate
+      failures) both pass with the two new entries in place.

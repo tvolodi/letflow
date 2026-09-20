@@ -4293,16 +4293,20 @@ volumes:
     path: docs/status/requirement_status.v20.yaml
     status: current
     opened: 2026-09-18
-    entries: 10
+    entries: 11
     note: >
-      Incremented to 10 by ORCH's own SCOPE-CHANGE done-event append
+      Incremented to 11 by ORCH's own SCOPE-CHANGE done-event append
+      (2026-09-20T01:02:22Z -- REQ-374/REQ-375 filed, platform-wide tenant-
+      migration fanout gap found during test/fixtures/uat/scenarios/platform/
+      migration-partial-failure-resume.yaml review), on top of the prior
+      increment to 10 by ORCH's own SCOPE-CHANGE done-event append
       (2026-09-20T00:00:00Z -- REQ-371 filed, operator-facing rollback GUI
       gap found during test/fixtures/uat/scenarios/platform/
       definition-promotion-rollback.yaml review), landing on top of a
       concurrent sibling-session append (below) resolved together during
       this same merge -- `grep -c "^  - req:"
-      docs/status/requirement_status.v20.yaml` = 10 on-disk entries. 664
-      lines / 41429 bytes, well under the 1200-line/120000-byte roll
+      docs/status/requirement_status.v20.yaml` = 11 on-disk entries. 716
+      lines / 45611 bytes, well under the 1200-line/120000-byte roll
       ceiling, so no roll triggered.
 
       Incremented to 9 by DOC-UPDATER's own ISS-0728 SCOPE-CHANGE done-event

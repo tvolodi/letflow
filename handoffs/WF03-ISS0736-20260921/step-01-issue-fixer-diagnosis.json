@@ -1,0 +1,66 @@
+{
+  "handoff_id": "c1a1e001-0000-4000-8000-000000000002",
+  "run_id": "WF03-ISS0736-20260921",
+  "workflow_id": "WF-03",
+  "step": "01",
+  "from_agent": "ORCH",
+  "to_agent": "ISSUE-FIXER",
+  "file": "handoffs/WF03-ISS0736-20260921/step-01-issue-fixer-diagnosis.json",
+  "created_at": "2026-09-20T19:11:28Z",
+  "started_at": "2026-09-20T19:11:28Z",
+  "completed_at": "2026-09-20T19:12:44Z",
+  "status": "COMPLETED",
+  "priority": "HIGH",
+  "context": {
+    "stage": "S4",
+    "requirement_ids": ["REQ-378"],
+    "requirement_text": {
+      "REQ-378": "See handoffs/WF03-ISS0736-20260921/step-00-git-setup.json context.requirement_text.REQ-378 for the full verbatim requirement text (already committed to main at fb6a8d43 and present on this branch). Summary: acceptance criteria are (1) a tenant_admin action revoking a signed-in business_user's access takes effect on that user's very next request with no sign-out/reload/token-expiry wait, demonstrated by a revoke-then-immediately-retry test with no sleep/token refresh; (2) the revoking action is reachable through Letflow's own web/ GUI, not only Keycloak; (3) the resulting 403 renders through the existing QueryStateBoundary/PermissionDenied contract unchanged; (4) SECURITY-REVIEWER signs off explicitly on the chosen enforcement mechanism before merge."
+    },
+    "related_handoff_ids": ["c1a1e001-0000-4000-8000-000000000001"],
+    "artifacts_in": [
+      "docs/issues/ISS-0736.yaml",
+      "docs/requirements.yaml",
+      "lib/letflow/plugs/auth_pipeline.ex",
+      "lib/letflow/api/authorization.ex",
+      "lib/letflow/identity/role_registry.ex",
+      "lib/letflow/identity.ex",
+      "lib/letflow/oidc/claim_mapping.ex"
+    ],
+    "owned_modules": [
+      "lib/letflow/plugs/auth_pipeline.ex",
+      "lib/letflow/api/authorization.ex",
+      "lib/letflow/identity/role_registry.ex",
+      "lib/letflow/identity.ex",
+      "web/src/pages/admin/UsersPage.tsx",
+      "web/src/pages/admin/GroupsPage.tsx"
+    ]
+  },
+  "task": {
+    "description": "Step 0.5 (registry lookup) + Step 1 (diagnose), combined per WF-03.md. Step 0.5: grep docs/issues/*.yaml for status: resolved entries with similar symptoms (auth/OIDC/role revocation/live-enforcement gaps) -- note in your summary whether a prior match exists and, if so, whether this looks like a recurrence (upgrade severity to at least MAJOR if so). Step 1: independently verify ISS-0736's/REQ-378's claimed root cause by reading the actual source yourself (do not just trust the issue file's prose) -- read lib/letflow/plugs/auth_pipeline.ex's authenticate_oidc/2, lib/letflow/oidc/claim_mapping.ex's map_verified_claims/3, lib/letflow/api/authorization.ex's evaluate_access/2, lib/letflow/identity/role_registry.ex's moduledoc, and lib/letflow/identity.ex's provision_oidc_user/4 and attach_auth_context. Also read the API-token branch's existing live-DB-read precedent this fix should mirror: find and read Letflow.Identity.verify_api_token/2 (grep for it) to understand its per-request revocation-check shape, since REQ-378's suggested mechanism direction is to mirror it for the OIDC branch. Confirm or correct the issue's claimed root cause and file locations. Do NOT implement any fix. Do NOT modify any file except this handoff. Write your diagnosis into result.summary: confirmed root cause (or corrected, if your independent read differs), the exact function(s)/line(s) where the OIDC branch currently ignores Letflow-local state, what the API-token branch's precedent function actually does (signature + revocation-check mechanism), and what a fix needs to change, structured so CODE-DESIGNER can design directly from it.",
+    "acceptance_criteria": [
+      "Step 0.5 registry-lookup result stated explicitly (match found: yes/no, recurrence: yes/no)",
+      "Root cause independently re-derived from source reads, not copied from ISS-0736.yaml's prose -- cite exact module/function names and what you actually read",
+      "Identity.verify_api_token/2's existing live-DB-read mechanism described concretely (this is the precedent CODE-DESIGNER will likely mirror)",
+      "No fix implemented; no file changed other than this handoff",
+      "next_action explicitly routes to CODE-DESIGNER for fix design"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "STEP 0.5 REGISTRY LOOKUP: no prior resolved issue matches this symptom. Searched docs/issues/*.yaml for OIDC/role-revocation/live-enforcement-gap symptoms (grep for evaluate_access|map_verified_claims|RoleRegistry|authenticate_oidc|verify_api_token, plus a broader revoc/oidc/claim/deactivat sweep). Only 2 files reference any of the target symbols besides ISS-0736 itself: ISS-0116 and ISS-0112, both members of the unrelated tenant-schema-provisioning-flakiness family (ISS-0109 lineage) -- their symbol hits are incidental role_registry_test.exs mentions in a different investigation about sandbox/fixture migration, not about OIDC live-enforcement. No match found. Not a recurrence. Severity stays as filed (BLOCKER).\n\nSTEP 1 -- INDEPENDENT ROOT-CAUSE DIAGNOSIS (all read directly from source on this branch, not copied from ISS-0736.yaml's prose):\n\n1. lib/letflow/plugs/auth_pipeline.ex `authenticate_oidc/2` (private, :125-136): a `with` chain -- verify_token -> extract_realm -> resolve_tenant -> guard_realm_ownership -> map_claims -> provision_user -- ending in `attach_auth_context(conn, tenant.id, provisioned.user.id, identity_context.roles)` (:132). CONFIRMED: the roles value attached to conn.assigns[:auth_context][:roles] is `identity_context.roles`, produced by step 4a's `map_claims/2` (:294-302) alone -- `provisioned` (the JIT-provisioned/looked-up DB `User` struct from step 4b, `provision_user/3` at :311-326) is used ONLY for its `.user.id`, never for any role or status field. There is no DB read of roles anywhere in this function.\n\n2. lib/letflow/oidc/claim_mapping.ex `map_verified_claims/3` (:87-104): builds `%IdentityContext{... roles: resolve_roles(claims, config.roles_claim_paths), ...}` -- `resolve_roles/2` walks only the JWT `claims` map passed in by the caller (the bearer token's own decoded body) via `config.roles_claim_paths`; no Repo call, no argument that could reach a Letflow-local table. CONFIRMED: roles are derived exclusively from the token's own claims, freshly per request, with zero cross-check against any Letflow-local state.\n\n3. lib/letflow/api/authorization.ex `evaluate_access/2` (:778-806): takes `%AccessContext{}` (built from conn.assigns[:auth_context], per caller convention) and branches purely on `ctx.roles`/`ctx.user_id` via `has_role?/2`/`has_permission?/2`/`is_task_worker_only?/1`. It has no DB dependency of its own -- it is a pure function over whatever role list it is handed. CONFIRMED: this is the sole authorization decision point and it trusts its caller's role list completely, so the defect is entirely upstream of this function, in what populates ctx.roles (step 1/2 above).\n\n4. lib/letflow/identity/role_registry.ex moduledoc (:2-18): states verbatim 'This module has no coupling to the OIDC/claim-mapping pipeline: it does not alias or call any Letflow.Oidc.* module, and it does not call or get called by Letflow.Identity's OIDC-pipeline functions'. CONFIRMED verbatim as quoted in ISS-0736. This is the module backing web/src/pages/admin/UsersPage.tsx / GroupsPage.tsx's role/group assignment UI (per ISS-0736's affected_files; not independently re-verified against the .tsx files this run, out of scope for Step 1's source list) -- so whatever a tenant_admin does through that GUI's role assignment writes to `tenant_role`/`groups` tables this module owns, and nothing downstream ever reads them for an OIDC session.\n\n5. lib/letflow/identity.ex `provision_oidc_user/4` (:125-136) and its private callees `upsert_by_external_identity/4` (:1467-1475) -> `insert_or_fetch/4` (:1477 onward): CONFIRMED `attach_auth_context`'s roles argument traces back to `identity_context.roles` (JWT-derived, per #2), never to the provisioned/looked-up `User` row. Further finding beyond ISS-0736's own text: `Letflow.Identity.User`'s schema (lib/letflow/identity/user.ex :36-47) has NO role field at all -- `username`, `display_name`, `email`, `password_hash`, `status` (Ecto.Enum :active/:inactive, default :active -- this is REQ-073's deactivation flag), `auth_source`, `external_id`, `external_realm`. There is nowhere on the `users` row itself to even store an OIDC user's role; roles live exclusively in `tenant_role`/`groups` (RoleRegistry's tables) with no join back to `users` exercised by the auth pipeline. ADDITIONALLY, and this widens the fix's required scope beyond ISS-0736's role-only framing: the `status` field (:active/:inactive) is also never read anywhere in auth_pipeline.ex (verified via grep -- the only 'status' hits in that file are HTTP status codes) or in provision_user/3's path. So a tenant_admin deactivating a user via POST /users/:id/status (REQ-073) ALSO has zero live effect on that user's already-issued OIDC session, via the exact same defect shape as the role-revocation gap ISS-0736 names. Both role changes and account deactivation need to be covered by whatever live check the fix adds -- not role alone.\n\n6. PRECEDENT -- lib/letflow/identity.ex `verify_api_token/2` (:1152-1178, called from lib/letflow/plugs/auth_pipeline.ex `authenticate_api_token/2` :140-149 via `verify_token_credential/2` :219-224): signature `verify_api_token(plaintext :: String.t(), opts :: opts()) :: {:ok, %{user_id: Ecto.UUID.t(), roles: [String.t()]}} | {:error, :invalid} | {:error, :revoked} | {:error, :expired}`. Mechanism: hashes the plaintext token, does exactly one `Repo.get_by(ApiToken, [token_hash: token_hash], prefix: prefix)` per call -- no ETS, no process-dictionary cache, no periodic-refresh worker anywhere in the call path (moduledoc for this function states this explicitly, confirmed by reading the function body, :1157-1178). Branches on the freshly-read row: nil -> :invalid; non-nil revoked_at -> :revoked; expired expires_at -> :expired; else touches last_used_at best-effort and returns {:ok, %{user_id: token.user_id, roles: token.roles}} (:1180-1196) -- note `token.roles` here IS read live from the `api_tokens` row on every single call, which is exactly the shape the OIDC branch lacks for its own JWT-claims-only roles. This is the mechanism REQ-378/ISS-0736's fix_direction points at mirroring: one uncached `Repo` round trip per request, positioned so nothing can observe a pre-revocation value because there is no cache layer between the revoking UPDATE and the next request's read.\n\nCORRECTIONS TO ISS-0736's OWN TEXT: none found -- every claim in ISS-0736's description (function names, line-level behavior, the RoleRegistry moduledoc quote, the zero-live-enforcement conclusion) checked out against independent reads on this branch. The one addition beyond its text is #5's `User.status` finding: the gap is not role-only, it also covers REQ-073 account deactivation, which shares the identical mechanism absence. CODE-DESIGNER's fix should give authenticate_oidc/2 a new step, positioned after step 4b's provision_user/3 (so it has both `provisioned.user.id` and `tenant_id`/`schema_name` available) and before attach_auth_context/4, that does a live, uncached, per-request Repo read of the OIDC-provisioned user's current status (users.status) and current effective roles (tenant_role/groups, RoleRegistry's tables, joined by user identity) -- mirroring verify_api_token/2's shape: one Repo round trip, no cache, short-circuit to a Deny401/403-mapped error tuple (via the same handle_auth_error/2 tagged-error convention every other step already uses) when status is :inactive or the resolved role set differs from what would otherwise be used. Exact join/lookup mechanism between users and tenant_role/groups is CODE-DESIGNER's design decision, not pre-decided here.",
+    "artifacts_out": [],
+    "issues": [],
+    "git_evidence": {
+      "branch_name": null,
+      "commit_sha_list": [],
+      "remote_branch": null,
+      "push_status": "skipped",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": "Route to CODE-DESIGNER for a fix design covering REQ-378's acceptance criteria: add a live, uncached, per-request local-state check to authenticate_oidc/2 (lib/letflow/plugs/auth_pipeline.ex) mirroring Identity.verify_api_token/2's mechanism, covering both role/group changes (RoleRegistry-backed) and account status (users.status, REQ-073) -- see result.summary for exact function/line citations and the widened status-field scope finding."
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

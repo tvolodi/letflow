@@ -69,6 +69,7 @@ defmodule Letflow.Identity do
   alias Letflow.Identity.GroupMember
   alias Letflow.Identity.OnboardingRecord
   alias Letflow.Identity.Tenant
+  alias Letflow.Identity.TenantRole
   alias Letflow.Identity.User
   alias Letflow.Oidc.IdentityContext
   alias Letflow.Oidc.JitProvisioningConfig
@@ -660,6 +661,132 @@ defmodule Letflow.Identity do
 
         :ok
     end
+  end
+
+  @doc """
+  Live, uncached role-name lookup for a user (REQ-378 §1-§2 —
+  `lib/letflow/design/req378-oidc-live-revocation-check.md`): joins
+  `group_members` (this user's memberships) to `tenant_role` on
+  `tenant_role.group_id == group_members.group_id`, returning the distinct
+  set of role names currently in effect.
+
+  Deliberately added to `Letflow.Identity` rather than
+  `Letflow.Identity.RoleRegistry`, whose moduledoc states it has no coupling
+  to the OIDC/claim-mapping pipeline — see the design §2 for the full
+  reasoning.
+
+  One `Repo.all/2` per call — no caching, no ETS, no memoization, matching
+  `verify_api_token/2`'s own uncached-per-call shape so a role revocation
+  (a `group_members` row delete) takes effect on the very next call, not
+  after some refresh interval.
+
+  Returns `[]` (never an error tuple) when the user belongs to no
+  role-bearing group.
+  """
+  @spec list_effective_role_names(user_id :: Ecto.UUID.t(), opts :: opts()) :: [String.t()]
+  def list_effective_role_names(user_id, opts) do
+    prefix = Keyword.fetch!(opts, :prefix)
+
+    query =
+      from(gm in GroupMember,
+        join: tr in TenantRole,
+        on: tr.group_id == gm.group_id,
+        where: gm.user_id == ^user_id,
+        select: tr.name,
+        distinct: true
+      )
+
+    Repo.all(query, prefix: prefix)
+  end
+
+  @doc """
+  One-time sync of a JWT's claimed role names into `group_members`, closing
+  the JIT-provisioning gap `list_effective_role_names/2` alone cannot close
+  (REQ-378 §2.2 —
+  `lib/letflow/design/req378-oidc-live-revocation-check.md`): nothing else in
+  this codebase ever writes a `group_members` row from a token's claimed
+  roles, so a user with zero rows there (every OIDC user, before this
+  function's call sites started calling it) reads `roles: []` from
+  `list_effective_role_names/2` regardless of what their token claims.
+
+  Always returns a `User.t()` — never an error tuple, never raises past a
+  genuine connection failure. On any failure inside the transaction, returns
+  the original, unmodified `user` (marker still `nil`, `group_members`
+  unchanged) — deliberately self-healing, not merely fail-open: because the
+  marker stays `nil`, the very next call for this same user retries the sync
+  (§2.2.2's own reasoning for why this is safe: a transient DB error only
+  costs one request's worth of `roles: []`, the safe direction to fail in).
+
+  **Callers must only call this when `user.role_claims_synced_at` is `nil`**
+  (§2.2.3's call-site gate) — this function itself does not re-check the
+  marker, so calling it a second time for an already-synced user would
+  needlessly re-run the sync (harmless, since step 2 below is idempotent, but
+  wasteful and not this function's job to guard against).
+  """
+  @spec sync_role_claims_from_token(
+          user :: User.t(),
+          identity_context :: IdentityContext.t(),
+          opts :: opts()
+        ) :: User.t()
+  def sync_role_claims_from_token(%User{} = user, %IdentityContext{} = identity_context, opts) do
+    prefix = Keyword.fetch!(opts, :prefix)
+    group_ids = resolve_group_ids_for_role_names(identity_context.roles, opts)
+
+    result =
+      Multi.new()
+      |> Multi.run(:memberships, fn _repo, _changes ->
+        # Reuses insert_or_fetch_group_member/3 (backs add_group_member/3)
+        # directly at its lean private arity, per §2.2.2 step 2 — not
+        # add_group_member/3's own public wrapper, which would add two
+        # redundant Repo.get/3 existence checks for a Group/User this
+        # function already knows exist (the group id just came from a live
+        # tenant_role row, and `user` is the struct this function was
+        # called with). Already on_conflict: :nothing / conflict_target:
+        # [:group_id, :user_id] — idempotent, safe even if called twice.
+        Enum.each(group_ids, &insert_or_fetch_group_member(&1, user.id, prefix))
+
+        {:ok, group_ids}
+      end)
+      |> Multi.update(
+        :user,
+        Ecto.Changeset.change(user, %{role_claims_synced_at: DateTime.utc_now()}),
+        prefix: prefix
+      )
+      |> Repo.transaction()
+
+    case result do
+      {:ok, %{user: synced_user}} ->
+        synced_user
+
+      {:error, step, reason, _changes} ->
+        Logger.error(
+          "sync_role_claims_from_token/3: failed at step #{inspect(step)} " <>
+            "for user_id=#{user.id}: #{inspect(reason)}"
+        )
+
+        user
+    end
+  end
+
+  # Resolves claimed role names to the group ids that grant them, per §2.2.2
+  # step 1. Lives in Letflow.Identity, not RoleRegistry, for the identical
+  # reason list_effective_role_names/2 above does — keeps RoleRegistry's
+  # documented "no coupling to the OIDC/claim-mapping pipeline" invariant
+  # literally true. A claimed role name with no matching tenant_role row
+  # resolves to nothing for that name — not an error.
+  @spec resolve_group_ids_for_role_names(role_names :: [String.t()], opts :: opts()) ::
+          [Ecto.UUID.t()]
+  defp resolve_group_ids_for_role_names(role_names, opts) do
+    prefix = Keyword.fetch!(opts, :prefix)
+
+    query =
+      from(t in TenantRole,
+        where: t.name in ^role_names,
+        select: t.group_id,
+        distinct: true
+      )
+
+    Repo.all(query, prefix: prefix)
   end
 
   # ── Tenant administration (REQ-075) ─────────────────────────────────────
@@ -1467,7 +1594,18 @@ defmodule Letflow.Identity do
   defp upsert_by_external_identity(identity_context, tenant_id, jit_config, opts) do
     case get_by_external_identity(tenant_id, identity_context, opts) do
       %User{} = existing ->
-        {:ok, %{user: existing, created: false}}
+        # REQ-378 §2.2.3 -- sync gate: only when this row has never been
+        # synced before (marker still nil). Short-circuits before any new
+        # Repo call for the overwhelming majority of returning-user
+        # requests (marker already non-nil from a prior sync).
+        user =
+          if is_nil(existing.role_claims_synced_at) do
+            sync_role_claims_from_token(existing, identity_context, opts)
+          else
+            existing
+          end
+
+        {:ok, %{user: user, created: false}}
 
       nil ->
         insert_or_fetch(identity_context, tenant_id, jit_config, opts)
@@ -1511,7 +1649,10 @@ defmodule Letflow.Identity do
         # with our own freshly-generated id actually exists in the database —
         # Repo.get/2 on the primary key is the cheapest form of that check.
         if Repo.get(User, id, prefix: prefix) do
-          {:ok, %{user: inserted, created: true}}
+          # REQ-378 §2.2.3 -- a brand-new row's marker is always nil, so no
+          # gate check is needed here (the row cannot pre-exist).
+          synced_user = sync_role_claims_from_token(inserted, identity_context, opts)
+          {:ok, %{user: synced_user, created: true}}
         else
           re_select_on_conflict(tenant_id, identity_context, opts)
         end
@@ -1566,7 +1707,18 @@ defmodule Letflow.Identity do
   defp re_select_on_conflict(tenant_id, identity_context, opts) do
     case get_by_external_identity(tenant_id, identity_context, opts) do
       %User{} = existing ->
-        {:ok, %{user: existing, created: false}}
+        # REQ-378 §2.2.3 -- identical gate to upsert_by_external_identity/4's
+        # own %User{} = existing branch above: this is the on-conflict
+        # race-loser path's "found an existing row" outcome, and both must
+        # apply the same marker-gated sync.
+        user =
+          if is_nil(existing.role_claims_synced_at) do
+            sync_role_claims_from_token(existing, identity_context, opts)
+          else
+            existing
+          end
+
+        {:ok, %{user: user, created: false}}
 
       nil ->
         {:error, :external_identity_collision}

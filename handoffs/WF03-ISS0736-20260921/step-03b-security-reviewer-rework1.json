@@ -1,0 +1,65 @@
+{
+  "handoff_id": "c1a1e001-0000-4000-8000-000000000012",
+  "run_id": "WF03-ISS0736-20260921",
+  "workflow_id": "WF-03",
+  "step": "03b-rework1",
+  "from_agent": "ORCH",
+  "to_agent": "SECURITY-REVIEWER",
+  "file": "handoffs/WF03-ISS0736-20260921/step-03b-security-reviewer-rework1.json",
+  "created_at": "2026-09-20T21:56:15Z",
+  "started_at": "2026-09-20T21:56:15Z",
+  "completed_at": "2026-09-20T21:57:43Z",
+  "status": "COMPLETED",
+  "priority": "HIGH",
+  "context": {
+    "stage": "S4",
+    "requirement_ids": ["REQ-378"],
+    "requirement_text": {
+      "REQ-378": "See handoffs/WF03-ISS0736-20260921/step-00-git-setup.json context.requirement_text.REQ-378 for the full verbatim text. AC4: SECURITY-REVIEWER signs off explicitly on the chosen enforcement mechanism before merge."
+    },
+    "related_handoff_ids": ["c1a1e001-0000-4000-8000-000000000011"],
+    "artifacts_in": [
+      "lib/letflow/design/req378-oidc-live-revocation-check.md",
+      "handoffs/WF03-ISS0736-20260921/step-03-elixir-dev-rework1.json",
+      "handoffs/WF03-ISS0736-20260921/step-03b-security-reviewer.json",
+      "handoffs/WF03-ISS0736-20260921/step-02b-code-design-validator-rework3.json",
+      "priv/repo/migrations/20260921000001_add_role_claims_synced_at_to_users.exs",
+      "lib/letflow/identity.ex",
+      "lib/letflow/plugs/tenant_status.ex"
+    ],
+    "owned_modules": [
+      "lib/letflow/plugs/auth_pipeline.ex",
+      "lib/letflow/identity.ex",
+      "lib/letflow/identity/user.ex"
+    ]
+  },
+  "task": {
+    "description": "Your prior review (handoffs/WF03-ISS0736-20260921/step-03b-security-reviewer.json) PASSED the original §1/§2.1 mechanism. This is a re-review of the DELTA added since: §2.2's role_claims_synced_at one-time claims-to-group_members sync (Letflow.Identity.sync_role_claims_from_token/3, new migration priv/repo/migrations/20260921000001_add_role_claims_synced_at_to_users.exs) plus §2.3's 3 pre-existing test-assertion corrections (no production code). Review `git diff <your-prior-reviewed-sha>...HEAD -- lib/letflow/identity.ex lib/letflow/identity/user.ex priv/repo/migrations/20260921000001_add_role_claims_synced_at_to_users.exs` (find your prior reviewed sha from handoffs/WF03-ISS0736-20260921/step-03b-security-reviewer.json's git_evidence). Sign off explicitly on: (a) the one-way-gate safety property -- confirm sync_role_claims_from_token/3 is truly called only when role_claims_synced_at is nil, and that nothing anywhere (including this new code) ever resets that column back to nil, which would let a revoked-then-still-claiming user's access silently resurrect on their next login; (b) whether resolve_group_ids_for_role_names/2's role-name-to-group resolution could be tricked by a crafted/malicious claim value (e.g. does it do exact-match lookups only, no dynamic query construction from untrusted input); (c) tenant scoping of the new migration and the new function's queries; (d) CODE-DESIGN-VALIDATOR's rework3 re-gate flagged a MINOR, non-blocking finding worth your explicit sign-off: lib/letflow/plugs/tenant_status.ex:92-95 checks `\"PLATFORM_ADMIN\" not in roles` directly against the RAW claimed-role list (bypassing roles_from_strings/1 entirely) for its tenant-inactive-403 exemption -- confirm whether this is a pre-existing, separately-scoped issue (not caused by this branch) or whether it interacts with this fix in a way that needs addressing now; if pre-existing and out of scope, say so explicitly and note it should be filed as its own issue.",
+    "acceptance_criteria": [
+      "Explicit sign-off on the one-way-gate safety property, independently re-verified against the actual diff",
+      "Explicit assessment of resolve_group_ids_for_role_names/2's injection surface",
+      "Explicit disposition of the tenant_status.ex:92-95 raw-role-check finding (in-scope fix now, vs. pre-existing/out-of-scope with a recommendation to file separately)",
+      "If PASS: next_action routes to REVIEWER for re-review of the delta",
+      "If FAIL: name exact BLOCKER, route to rework"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "Re-reviewed the delta since prior PASS (git diff 4e726671...HEAD -- lib/letflow/identity.ex lib/letflow/identity/user.ex priv/repo/migrations/20260921000001_add_role_claims_synced_at_to_users.exs; 4e726671 is the implementation commit my prior handoff step-03b-security-reviewer.json reviewed and PASSed). Delta = §2.2's sync_role_claims_from_token/3 + resolve_group_ids_for_role_names/2 + the users.role_claims_synced_at column, plus §2.3's 3 test-assertion-only corrections (no production code, no re-review needed for those).\n\n(a) One-way-gate safety -- CONFIRMED, independently re-verified. grep 'role_claims_synced_at' across lib/ finds exactly 5 hits: the field declaration (user.ex:45), the doc comment naming the call-site gate (identity.ex:720), the single Multi.update stamp site that WRITES DateTime.utc_now() (identity.ex:752), and two call-site gate checks (`if is_nil(existing.role_claims_synced_at)`, identity.ex:1602 and :1715) that only ever READ the column to decide whether to call the sync function. No code path anywhere sets this column back to nil or to any value other than DateTime.utc_now() -- Ecto.Changeset.change/2 with a literal %{role_claims_synced_at: DateTime.utc_now()} map cannot itself be tricked into writing nil (no user-controlled input reaches this changeset; `user` is the already-loaded struct, not request params). Both call sites correctly gate `sync_role_claims_from_token/3` on nil only (upsert_by_external_identity/4 at :1602, re_select_on_conflict/3 at :1715); the third call site (insert_or_fetch/4 branch, brand-new row) calls it unconditionally, which is correct since a freshly inserted row's marker is always nil by construction (migration adds the column with no default, so every new row inserts NULL unless the insert changeset explicitly sets it, and no insert changeset in this diff or the pre-existing insert path does). On transaction failure the function returns the original unmodified user (marker still nil, self-healing/retry-safe, not fail-open toward granting access -- a failed sync leaves the user at roles: [] via list_effective_role_names/2, the safe direction). Migration itself (`null: true`, no default, no backfill) cannot resurrect an already-synced user's marker either -- it only runs once, at deploy time, before any row has a non-null value from this mechanism. PASS -- no resurrection path exists.\n\n(b) resolve_group_ids_for_role_names/2 injection surface -- CONFIRMED SAFE. Query is `from(t in TenantRole, where: t.name in ^role_names, select: t.group_id, distinct: true)` (identity.ex ~:783). This is Ecto.Query macro syntax with a pinned (^) parameter binding role_names as a bound list parameter to `IN` -- Ecto compiles this to a parameterized SQL IN clause, not string interpolation. No Repo.query/Repo.query! anywhere in the diff (confirmed via grep). role_names originates from identity_context.roles (JWT claim strings), but the query only ever uses them as exact-match equality-list values against TenantRole.name -- a crafted claim string (e.g. containing SQL metacharacters, wildcards, or a `%`/`_` LIKE-pattern character) has no special meaning in an `IN` equality comparison; it either exact-matches an existing tenant_role.name row or matches nothing. No dynamic query construction (no Ecto.Query.dynamic/1 building predicates from claim content, no string-built where-clause) -- the query shape is fixed at compile time, only the bound value list varies. INV-7 (no SQL string interpolation) -- PASS.\n\n(c) Tenant scoping -- CONFIRMED. Migration: `if prefix() do ... alter table(:users, prefix: schema)` guard is present (matches the mandatory pattern INV-1(b) requires) and the migration is registered in Letflow.TenantProvisioning.tenant_scoped_migrations/0 (tenant_provisioning.ex:561) -- confirmed both halves present, not just the file existing. sync_role_claims_from_token/3 and resolve_group_ids_for_role_names/2 both derive `prefix = Keyword.fetch!(opts, :prefix)` from the caller-supplied opts and pass `prefix: prefix` into every Repo call (Multi.update's prefix: prefix, insert_or_fetch_group_member's Repo.insert prefix: prefix via get_group_member, and resolve_group_ids_for_role_names's Repo.all prefix: prefix) -- no default/public-schema fallback, no caller-supplied tenant_id used to construct a *different* prefix than what the request's already-resolved opts carry (opts flows down unchanged from upsert_by_external_identity/4's own opts, which in turn come from the auth pipeline's already-validated tenant resolution, same provenance chain my prior PASS confirmed for list_effective_role_names/2). INV-1 (a)/(b)/(c) all satisfied for this delta. PASS.\n\n(d) tenant_status.ex:92-95 raw-role-check finding -- DISPOSITION: pre-existing, NOT introduced or worsened by this branch; in fact REQ-378 net-improves it as a side effect, but a residual code-hygiene point remains and should be filed separately. Traced conn.assigns.auth_context.roles' provenance at both call sites of attach_auth_context/4 in auth_pipeline.ex: the OIDC path (line 133) passes `live_roles` -- the DB-derived list from list_effective_role_names/2 (§1 of this same requirement, already PASSed in my prior review) -- and the API-token path (line 146) passes `verified.roles` from verify_api_token/2, which is likewise a live per-call DB-derived list (identity.ex:1279 doc comment: 'uncached per-call shape'). So on this branch, tenant_status.ex's `@platform_admin not in roles` check at :95 reads a list that is already live/DB-verified for both auth paths -- it is not reading raw, unverified JWT claim strings. Before REQ-378 (pre this run's baseline), the OIDC path's conn.assigns.auth_context.roles WAS the raw unverified JWT claim list, and tenant_status.ex's check against it was a genuine gap (a JWT falsely claiming PLATFORM_ADMIN could self-exempt from the tenant-inactive lock without any group_members backing) -- but that gap predates this branch and predates my prior-reviewed commit 4e726671 (tenant_status.ex is unchanged in both diffs I've reviewed on this run; git diff confirms no changes to it in either range). §1's fix (already-reviewed, unchanged by this delta) already remediates the substance of the gap as a side effect by making auth_context.roles live-derived everywhere it's populated. What remains is a narrower, cosmetic point CODE-DESIGN-VALIDATOR correctly flagged as MINOR: tenant_status.ex checks the raw string list directly instead of round-tripping through Authorization.roles_from_strings/1 first (as authorize.ex:105, entities.ex:2104, tasks.ex:258 all do) -- functionally inert today because 'PLATFORM_ADMIN' is one of roles_from_strings/1's six recognized closed-set literals (authorization.ex:408-426, confirmed by reading the function body per the design doc's own §2.3 analysis) so membership-check semantics are identical whether or not the list passes through that conversion first, but it is an inconsistent pattern that would silently stop being safe if roles_from_strings/1's closed set or auth_context.roles' provenance ever changed independently of each other. CONFIRMED not in scope for this fix (no functional bypass exists today, nothing in this delta touches or interacts with tenant_status.ex, and REQ-378's design doc never scoped that file). RECOMMENDATION: file a separate low-priority hygiene issue to route tenant_status.ex's PLATFORM_ADMIN check through Authorization.roles_from_strings/1 for consistency with every other auth_context.roles consumer, not required before this merge.\n\nInvariant re-scan for the delta itself: INV-1 APPLIES, satisfied (see (c)). INV-4 APPLIES (no secret material touched, logged, or serialized in the diff -- confirmed by reading Logger.error call at identity.ex, which logs only step atom, user_id, and {:error, reason} shape, no token/claim contents). INV-7 APPLIES, satisfied (see (b)). INV-8 APPLIES -- the case in sync_role_claims_from_token/3 matches {:ok, %{user: _}} and {:error, step, reason, _changes}, which is Ecto.Multi.transaction/1's full, documented return-shape contract (only those two tuple shapes are possible) -- exhaustive, no bare pattern match. PASS. INV-2/INV-3/INV-5 NOT-APPLICABLE (same reasoning as prior review -- no new API response type, S5 not started, not a lookup-by-ID endpoint). INV-6 satisfied by this review itself. INV-9 NOT-APPLICABLE (no outbound HTTP in this diff).\n\nVerdict: PASS. No BLOCKER found in the delta. Routes to REVIEWER for re-review of the delta per the handoff's own routing instruction.",
+    "artifacts_out": [
+      "handoffs/WF03-ISS0736-20260921/step-03b-security-reviewer-rework1.json"
+    ],
+    "issues": [],
+    "git_evidence": {
+      "branch_name": "feature/WF03-ISS0736-20260921",
+      "commit_sha_list": [],
+      "remote_branch": "origin/feature/WF03-ISS0736-20260921",
+      "push_status": "pending",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": "REVIEWER"
+  },
+  "rework_count": 1,
+  "max_rework": 3
+}

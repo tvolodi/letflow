@@ -1,0 +1,76 @@
+# TEST-RUNNER report -- WF03-ISS0736-20260921, step 04c rework2
+# Third full-suite gate for this run. Prior FAIL (rework1) found a
+# regression in IdentityMigration.copy_users/2 (undefined_column
+# role_claims_synced_at against legacy public.users). ELIXIR-DEV fixed
+# it in commit c0eaa581 (restrict copy_users/2 select to legacy
+# public.users columns). This run re-verifies the FULL suite from
+# scratch against a dropped-and-rebuilt test DB, per the rework1
+# precedent, to rule out stale shared-DB state.
+
+run_id: WF03-ISS0736-20260921
+step: 04c-rework2
+requirement: REQ-378
+generated_at: "2026-09-20T22:48:20Z"
+
+pre_run_actions:
+  - "git checkout feature/WF03-ISS0736-20260921 && git pull --ff-only origin feature/WF03-ISS0736-20260921 (already up to date)"
+  - "MIX_ENV=test mix ecto.drop -- dropped the shared test DB before running, to rule out stale state left by prior rework1 FAIL"
+
+backend_full_suite:
+  command: "bash scripts/test_parallel.sh"
+  partitions: 16
+  result: "4466 tests, 6 properties, 0 failures (4472/4472 passed)"
+  per_partition:
+    - {partition: 1,  tests: 207, properties: 0, failures: 0, exit: 0}
+    - {partition: 2,  tests: 293, properties: 0, failures: 0, exit: 0}
+    - {partition: 3,  tests: 250, properties: 1, failures: 0, exit: 0}
+    - {partition: 4,  tests: 357, properties: 0, failures: 0, exit: 0}
+    - {partition: 5,  tests: 478, properties: 0, failures: 0, exit: 0}
+    - {partition: 6,  tests: 284, properties: 0, failures: 0, exit: 0}
+    - {partition: 7,  tests: 330, properties: 0, failures: 0, exit: 0}
+    - {partition: 8,  tests: 269, properties: 0, failures: 0, exit: 0}
+    - {partition: 9,  tests: 211, properties: 0, failures: 0, exit: 0}
+    - {partition: 10, tests: 181, properties: 1, failures: 0, exit: 0}
+    - {partition: 11, tests: 245, properties: 2, failures: 0, exit: 0}
+    - {partition: 12, tests: 243, properties: 0, failures: 0, exit: 0}
+    - {partition: 13, tests: 216, properties: 0, failures: 0, exit: 0}
+    - {partition: 14, tests: 190, properties: 0, failures: 0, exit: 0}
+    - {partition: 15, tests: 358, properties: 2, failures: 0, exit: 0}
+    - {partition: 16, tests: 354, properties: 0, failures: 0, exit: 0}
+  status: PASS
+
+frontend_full_suite:
+  command: "npm test (vitest run --passWithNoTests --exclude tests/e2e/** --exclude tests/guards/**), run from web/"
+  test_files: "106 passed (106)"
+  tests: "728 passed (728)"
+  failures: 0
+  status: PASS
+
+req378_targeted_confirmation:
+  - test_file: test/letflow/identity_migration_test.exs
+    command: "MIX_ENV=test mix test test/letflow/identity_migration_test.exs"
+    result: "12 passed, 0 failures"
+    note: >
+      This is the file that showed 7 failures in step-04c rework1
+      (undefined_column role_claims_synced_at in copy_users/2). Confirmed
+      clean here, standalone and as part of the full parallel run above
+      (it ran inside one of the 16 partitions with 0 failures reported).
+  - test_file: test/letflow/plugs/iss0736_oidc_live_revocation_test.exs
+    command: "MIX_ENV=test mix test test/letflow/plugs/iss0736_oidc_live_revocation_test.exs"
+    result: "3 passed, 0 failures"
+  - test_file: web/src/api/__tests__/identity.removeMembers.test.ts
+    command: "npx vitest run src/api/__tests__/identity.removeMembers.test.ts (from web/)"
+    result: "1 file passed, 2 tests passed, 0 failures"
+
+overall_status: PASS
+summary: >
+  Full backend suite (16 parallel partitions, DB dropped and rebuilt
+  fresh beforehand to rule out stale state): 4472/4472 tests passed,
+  0 failures. Full frontend suite: 106/106 test files, 728/728 tests
+  passed, 0 failures. identity_migration_test.exs -- the file that
+  regressed in rework1 -- now shows 12/12 passing, confirming
+  ELIXIR-DEV's copy_users/2 select-restriction fix (commit c0eaa581)
+  resolved the regression with no new fallout elsewhere in the suite.
+  Both REQ-378 test files (backend iss0736_oidc_live_revocation_test.exs
+  and frontend identity.removeMembers.test.ts) independently re-run
+  clean. No remaining failures to triage.

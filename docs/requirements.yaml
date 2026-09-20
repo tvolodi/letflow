@@ -28017,7 +28017,7 @@ requirements:
   - id: REQ-378
     title: "Tenant-admin role/status revocation has no live effect on an OIDC-authenticated session (renderer-permission-denied-surface gap)"
     owner: ELIXIR-DEV
-    status: pending
+    status: done
     stage: S4
     impl_order: 738  # letflow-queue task id, GH#1626. Registered 2026-09-20 by ORCH;
       # corrects a fabricated/self-assigned id (735) that was never a real

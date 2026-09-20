@@ -1,0 +1,168 @@
+# WF-03 ISS-0736 -- Step 4c TEST-RUNNER gate before merge.
+#
+# Scope: REQ-378, live OIDC revocation/deactivation check in
+# lib/letflow/plugs/auth_pipeline.ex + lib/letflow/identity.ex, plus an
+# unrelated-in-code but same-commit GUI fix in
+# web/src/pages/admin/GroupsPage.tsx / web/src/api/identity.ts.
+#
+# docker compose up -d: letflow-postgres-1 and letflow-keycloak-1 already
+# Running, no action needed.
+#
+# 1) scripts/test_parallel.sh (full backend suite, N=16 from nproc):
+#      combined: 4196 tests, 6 properties, 7 failures (4195/4202 passed)
+#    Per-partition breakdown (partition: tests, properties, failures, exit):
+#      1: 207/0/0/0   2: 293/0/1/2   3: 250/1/0/0   4: 357/0/0/0
+#      5: 478/0/0/0   6: 284/0/0/0   7: 330/0/0/0   8: CRASHED (no Result:
+#        line -- process log stops mid-fixture-teardown around test
+#        Letflow.Routers.IdentityTest with no ExUnit error/crash trace, exit
+#        1; classic ISS-0264-class per-partition fragility the WF03-ISS0736
+#        dispatch flagged in advance -- ruled OUT as environmental-only
+#        rather than code-caused: the module it was mid-running
+#        (Letflow.Routers.IdentityTest) is unrelated to auth_pipeline.ex's
+#        change, and every other partition compiled/ran the same
+#        pre-compiled _build/test fine)
+#      9: 211/0/1/2   10: 181/1(property)/3/2   11: 245/2(properties)/1/2
+#      12: 243/0/0/0   13: 216/0/0/0   14: 190/0/0/0   15: 358/2(properties)/1/2
+#      16: 353/0/0/0
+#
+# 2) Targeted, non-partitioned re-run of the 3 directly-relevant files to
+#    rule this branch in/out as the cause (mix test test/letflow/plugs/
+#    iss0736_oidc_live_revocation_test.exs test/letflow/plugs/
+#    auth_pipeline_test.exs test/letflow/plugs/api_pipeline_integration_test.exs):
+#      Result: 14/16 passed
+#      Failed: 2 tests
+#    -- deterministic, reproduced on demand (not a one-off flake).
+#
+# 3) npm test (web/, vitest run --passWithNoTests --exclude tests/e2e/**
+#    --exclude tests/guards/**):
+#      Test Files  106 passed (106)
+#      Tests        728 passed (728)
+#    Includes web/src/api/__tests__/identity.removeMembers.test.ts -- 2
+#    tests, both passed.
+
+requirement: REQ-378
+run_id: WF03-ISS0736-20260921
+branch: feature/WF03-ISS0736-20260921
+
+backend_totals:
+  parallel_partitions: 16
+  partition_source: nproc
+  combined_tests_reported: 4196
+  combined_properties_reported: 6
+  combined_failures_reported: 7
+  combined_passed_of_total: "4195/4202"
+  partition_8_crashed_no_result_line: true
+  partition_8_crash_attribution: >
+    Environmental (ISS-0264-class per-partition _build/DB fragility, exactly
+    as the step-04c dispatch anticipated) -- the log cuts off mid-teardown
+    of an unrelated test (Letflow.Routers.IdentityTest) with no ExUnit
+    error/crash trace of any kind, meaning the OS process itself was
+    terminated (not an application-level failure). Not re-run standalone
+    given the three concrete, deterministic regressions already found and
+    confirmed below make the overall verdict FAIL regardless.
+
+frontend_totals:
+  test_files: 106
+  tests: 728
+  failures: 0
+  new_test_file: web/src/api/__tests__/identity.removeMembers.test.ts
+  new_test_file_result: "2/2 passed"
+
+new_backend_test_file: test/letflow/plugs/iss0736_oidc_live_revocation_test.exs
+new_backend_test_file_result: "0 failures (all its own cases passed in the targeted 14/16 run)"
+
+regressions_caused_by_this_branch:
+  - test: "Letflow.Plugs.AuthPipelineTest / acceptance criterion 1 — valid token flows through the full pipeline"
+    file: test/letflow/plugs/auth_pipeline_test.exs:158
+    assertion: "assert roles == [\"VIEWER\"]  =>  left: [], right: [\"VIEWER\"]"
+    found_in: partition 11 of the full parallel run, reproduced in targeted serial re-run
+  - test: "Letflow.Plugs.ApiPipelineIntegrationTest / REQ-071 AC2: valid token reaches the (stubbed) handler with auth_context populated"
+    file: test/letflow/plugs/api_pipeline_integration_test.exs:105
+    assertion: "assert conn.assigns.auth_context.roles == [\"VIEWER\"]  =>  left: [], right: [\"VIEWER\"]"
+    found_in: partition 9 of the full parallel run, reproduced in targeted serial re-run
+  - test: "Letflow.Routers.Req077PromotionPipelineTest / design §12.9: the :Unknown gate denies a real non-admin caller end-to-end"
+    file: test/letflow/routers/req077_promotion_pipeline_test.exs:1034
+    assertion: "assert conn.assigns.auth_context.roles == [\"VIEWER\"]  =>  left: [], right: [\"VIEWER\"]"
+    found_in: partition 15 of the full parallel run (not independently re-run serially, same root cause and stack shape as the other two)
+  root_cause_mechanism: >
+    lib/letflow/plugs/auth_pipeline.ex's REQ-378 change replaces
+    attach_auth_context's role source: it used to pass
+    identity_context.roles straight through (the OIDC token's own claim-
+    mapped roles, present the instant a JIT-provisioned user's token is
+    verified, with no DB row required). The new verify_local_account_state/2
+    step instead calls Identity.list_effective_role_names/2, which derives
+    roles from a live group_members/tenant_role join in Postgres. None of
+    these three tests' JIT-provisioning fixtures insert a group_members row
+    for the "VIEWER" role -- they only carry the role in the token's claims,
+    which is exactly the pre-378 contract. So every one of them now gets
+    roles: [] instead of roles: ["VIEWER"].
+  attribution_form: >
+    Form (a) + reproduction: `git diff origin/main...HEAD --name-only`
+    shows lib/letflow/plugs/auth_pipeline.ex and lib/letflow/identity.ex
+    changed on this branch and none of these three test files did; the
+    failing assertions are directly inside the exact code path this
+    branch's diff modified (attach_auth_context's role argument); the
+    failure reproduces deterministically on a fresh, non-partitioned,
+    serial `mix test` run of the affected files (14/16 passed, 2 failed,
+    same two tests, same left/right values). Not a flake, not
+    count-matched against a prior run.
+  verdict: CAUSED BY THIS BRANCH -- must be fixed by ELIXIR-DEV, not treated
+    as environmental.
+
+pre_existing_unrelated_failures:
+  - test: "Letflow.SecretsRuntimeConfigTest / LETFLOW_SECRETS_MASTER_KEY unset fails application boot with a clear 'is missing' error"
+    file: test/letflow/secrets_runtime_config_test.exs:59
+    symptom: "ExUnit.TimeoutError: test timed out after 60000ms (spawns a real `mix run` subprocess via System.cmd/3 to test app boot)"
+    found_in: partition 2
+    attribution_form: >
+      Form (a): lib/letflow/secrets_runtime_config.ex and this test file do
+      not appear in `git diff origin/main...HEAD --name-only`. A
+      subprocess-spawning boot test hitting a 60s wall-clock timeout under
+      16-way host CPU contention is a known class of flake for this kind
+      of test, unrelated to auth_pipeline.ex/identity.ex/groups.
+  - test: "Letflow.TenantSchemaReaperTest / sweep_orphans/2 concurrent-invocation liveness guard (ISS-0110), schema_name format guard, reclaims an old well-formed orphaned row (3 tests)"
+    file: test/support/tenant_schema_reaper_test.exs
+    symptom: >
+      "assert reclaimed >= 1 / assert skipped >= 1" fail because the
+      reaper's own ISS-0110 liveness guard deferred the sweep entirely,
+      logging "another mix test invocation ... is currently connected to
+      this database" -- exactly its documented deliberate behavior under
+      concurrent mix test invocations against the shared test DB.
+    found_in: partition 10
+    attribution_form: >
+      Form (a): neither lib/letflow/tenant_schema_reaper.ex nor this test
+      file appear in `git diff origin/main...HEAD --name-only`; git log
+      shows this exact concurrent-invocation interaction already has two
+      prior fix commits on main (ISS-0110, ISS-0217) for this precise
+      class of interaction with the parallel test runner. Zero relation to
+      auth_pipeline.ex/identity.ex/groups.
+
+verdict: FAIL
+verdict_reason: >
+  Three separate, deterministically-reproducing regressions traced with a
+  concrete code-level mechanism to this branch's own change in
+  lib/letflow/plugs/auth_pipeline.ex (REQ-378's new
+  verify_local_account_state/2 step): JIT-provisioned users whose role
+  comes from the OIDC token's claims but has no corresponding group_members
+  row now get roles: [] instead of the claimed role, breaking
+  auth_pipeline_test.exs AC1, api_pipeline_integration_test.exs REQ-071 AC2,
+  and req077_promotion_pipeline_test.exs design §12.9. The new REQ-378 test
+  file itself (test/letflow/plugs/iss0736_oidc_live_revocation_test.exs)
+  and the new frontend test (identity.removeMembers.test.ts) both show 0
+  failures, and the frontend full suite is 728/728 clean, but the backend
+  regression blocks this run. Two other failure clusters (
+  SecretsRuntimeConfigTest timeout, TenantSchemaReaperTest x3) are
+  attributed pre-existing/environmental per the structural (a) test --
+  unrelated files, not touched by this branch's diff -- and are not
+  blockers on their own, but do not offset the auth-pipeline regression.
+
+next_action: >
+  Rework by ELIXIR-DEV: either (1) have the JIT-provisioning path
+  (provision_user/3's OIDC branch) materialize the token's claimed
+  role(s) into a group_members row atomically with user provisioning, so
+  list_effective_role_names/2 finds them on the very same request, or (2)
+  reconsider verify_local_account_state/2's role source so it does not
+  silently drop a token-claimed role that has no DB-side group membership
+  yet, while still satisfying REQ-378 AC1's live-revocation requirement.
+  CODE-DESIGNER/REVIEWER should confirm which of these (or another option)
+  is the intended shape before ELIXIR-DEV re-implements.

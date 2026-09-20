@@ -1,0 +1,90 @@
+{
+  "handoff_id": "c1a1e001-0000-4000-8000-00000000000f",
+  "run_id": "WF03-ISS0736-20260921",
+  "workflow_id": "WF-03",
+  "step": "02-rework3",
+  "from_agent": "ORCH",
+  "to_agent": "CODE-DESIGNER",
+  "file": "handoffs/WF03-ISS0736-20260921/step-02-code-designer-rework3.json",
+  "created_at": "2026-09-20T21:43:56Z",
+  "started_at": "2026-09-20T21:43:56Z",
+  "completed_at": "2026-09-20T21:45:44Z",
+  "status": "COMPLETED",
+  "priority": "HIGH",
+  "context": {
+    "stage": "S4",
+    "requirement_ids": ["REQ-378"],
+    "requirement_text": {
+      "REQ-378": "See handoffs/WF03-ISS0736-20260921/step-00-git-setup.json context.requirement_text.REQ-378 for the full verbatim text."
+    },
+    "related_handoff_ids": ["c1a1e001-0000-4000-8000-00000000000e"],
+    "artifacts_in": [
+      "handoffs/WF03-ISS0736-20260921/step-02b-code-design-validator-rework2.json",
+      "lib/letflow/design/req378-oidc-live-revocation-check.md",
+      "lib/letflow/api/authorization.ex",
+      "test/letflow/plugs/auth_pipeline_test.exs",
+      "test/letflow/plugs/api_pipeline_integration_test.exs",
+      "test/letflow/routers/req077_promotion_pipeline_test.exs",
+      "test/support/token_verifier_double.ex"
+    ],
+    "owned_modules": [
+      "lib/letflow/plugs/auth_pipeline.ex",
+      "lib/letflow/identity.ex",
+      "lib/letflow/identity/user.ex"
+    ]
+  },
+  "task": {
+    "description": "FINAL REWORK (3/3) -- if this also FAILs at re-gate, ORCH escalates per docs/agents/ORCHESTRATOR.md Section 5 rather than attempting a 4th rework. Read handoffs/WF03-ISS0736-20260921/step-02b-code-design-validator-rework2.json's result.summary in full for the exact FAIL: the 3 previously-failing tests all assert `roles == [\"VIEWER\"]`, and \"VIEWER\" is NOT a member of Letflow.Api.Authorization.role()'s closed type (:PLATFORM_ADMIN | :PROCESS_DESIGNER | :PROCESS_OPERATOR | :TASK_WORKER | :AGENT_RUNNER | :CANDIDATE, lib/letflow/api/authorization.ex:195-201), so §2.2's group-resolution step correctly finds zero matching tenant_role rows for it and writes nothing to group_members -- meaning under the new design these 3 tests' literal `roles == [\"VIEWER\"]` assertion would now read `roles == []`.\n\nORCH's own investigation (do not re-derive from scratch, verify instead): read test/letflow/plugs/api_pipeline_integration_test.exs lines ~110-130 directly -- its own comment already states 'token double mints role \"VIEWER\" -- not a recognised Letflow.Api.Authorization.role(), so roles_from_strings/1 drops it and the caller holds no role at all.' That is: even BEFORE this run's fix, an unrecognized claimed role like \"VIEWER\" never granted any actual permission -- Letflow.Api.Authorization.roles_from_strings/1 (lib/letflow/api/authorization.ex:408-409) already filters conn.assigns.auth_context.roles down to the closed role() set before any access decision is made. `conn.assigns.auth_context.roles` containing the raw unrecognized string was ALWAYS an audit/observability artifact of the old pure-JWT-pass-through implementation, never a security-relevant value in its own right -- the 403 all 3 tests assert comes from roles_from_strings/1 dropping \"VIEWER\" to an empty granted-role set, not from the literal list contents.\n\nYour job: verify this reasoning is actually correct (read roles_from_strings/1's real implementation and confirm it behaves as described; confirm evaluate_access/2 is the only consumer of auth_context.roles for the actual access decision), and if confirmed, write it into the design doc as an explicit new subsection (e.g. §2.3 'Test-assertion impact') stating: (a) this requirement's whole point is that the closed-set, permission-granting portion of the role list must come from live Letflow-local state, not raw JWT claims -- an unrecognized/unmapped claim string was already inert for authorization purposes and its presence or absence in the raw list is not a security property; (b) therefore the new design correctly changes what conn.assigns.auth_context.roles contains (only DB-backed group-derived names, dropping claim strings with no local backing) and this is an intentional, in-scope consequence of REQ-378's contract change, not a regression; (c) name the exact 3 pre-existing test files and state precisely what changes in each (the literal expected value each assertion must change to, e.g. `roles == []` where currently `roles == [\"VIEWER\"]`, while every other assertion in each test -- especially the 403 status code and any other proof-of-pipeline-execution assertions -- stays unchanged, since the deny outcome is unaffected); (d) confirm this test-assertion update is authorized as part of REQ-378's implementation (not a separate TEST-DESIGNER task, since it is editing 3 pre-existing regression tests' literal expected values to match a deliberately changed, in-spec contract, not adding new coverage) and can be done by ELIXIR-DEV directly in the next implementation step. If your own verification of roles_from_strings/1 or evaluate_access/2 contradicts this reasoning, say so explicitly and design the actual correct fix instead -- do not force this conclusion if the source doesn't support it.",
+    "acceptance_criteria": [
+      "roles_from_strings/1 and evaluate_access/2's actual behavior independently verified against source, not assumed",
+      "If reasoning holds: design doc explicitly names all 3 test files and their exact required assertion changes, and confirms this is in-scope for ELIXIR-DEV to implement directly",
+      "If reasoning does NOT hold: an alternative, concrete design fix is provided instead -- do not submit a design that still fails the 3 tests without addressing why",
+      "No implementation bodies in the design doc itself"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "Hypothesis verified against actual source, confirmed correct: Authorization.roles_from_strings/1 (lib/letflow/api/authorization.ex:408-426) pattern-matches only the six literal strings in role()'s closed type and drops anything else (returns []); every call site that feeds auth_context.roles into an access decision (plugs/authorize.ex:105, routers/entities.ex:2104, routers/tasks.ex:258) routes it through roles_from_strings/1 first, and evaluate_access/2 (authorization.ex:777) only ever sees that filtered output, never the raw list. \"VIEWER\" (minted by test/support/token_verifier_double.ex:36) was therefore already inert for authorization purposes under the OLD implementation too -- it never survived roles_from_strings/1. None of the 3 tests' fixtures seed a tenant_role/group_members row for \"VIEWER\", so under the NEW live-query design (§1-§2.2) conn.assigns.auth_context.roles correctly resolves to [] instead of [\"VIEWER\"]. Wrote explicit new §2.3 'Test-assertion impact' into lib/letflow/design/req378-oidc-live-revocation-check.md naming all 3 files/lines (auth_pipeline_test.exs:167, api_pipeline_integration_test.exs:130, req077_promotion_pipeline_test.exs:1053), the exact literal change (roles == [\"VIEWER\"] -> roles == []) for each, confirmation every other assertion in each test (403 status, tenant_id, user_id, persisted-user checks, body detail) is unchanged, and explicit authorization for ELIXIR-DEV to make these 3 literal edits directly as part of REQ-378's implementation step (not a separate TEST-DESIGNER task, since no new coverage is added -- only pre-existing assertions' expected values corrected to match REQ-378's deliberately changed, in-scope contract). No implementation code added to the design doc; only @spec-level signatures and prose, matching §2-§2.2's existing style.",
+    "artifacts_out": [
+      "lib/letflow/design/req378-oidc-live-revocation-check.md"
+    ],
+    "issues": [],
+    "git_evidence": {
+      "branch_name": "feature/WF03-ISS0736-20260921",
+      "commit_sha_list": ["0016f3e3c4699d177b857a6d171133462d4d4c29"],
+      "remote_branch": "origin/feature/WF03-ISS0736-20260921",
+      "push_status": "pushed",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": "Route to CODE-DESIGN-VALIDATOR for final re-gate (step-02b rework3) of the amended design doc, specifically §2.3."
+  },
+  "rework_count": 3,
+  "max_rework": 3,
+  "gate_history": [
+    {
+      "iteration": 0,
+      "gated_at": "2026-09-20T19:21:42Z",
+      "status": "FAIL",
+      "summary": "AC2 GUI-reachability claim false against actual source.",
+      "issues": ["AC2 GUI path broken -- fixed in rework1"],
+      "next_action": "Rework CODE-DESIGNER"
+    },
+    {
+      "iteration": 1,
+      "gated_at": "2026-09-20T21:15:29Z",
+      "status": "FAIL",
+      "summary": "TEST-RUNNER: live-role-query design has no seeding path for claims-only users.",
+      "issues": ["No group_members seeding at first provisioning"],
+      "next_action": "Rework CODE-DESIGNER"
+    },
+    {
+      "iteration": 2,
+      "gated_at": "2026-09-20T21:38:22Z",
+      "status": "FAIL",
+      "summary": "CODE-DESIGN-VALIDATOR: safety argument for role_claims_synced_at sound, migration shape sound, BUT the 3 previously-failing tests still fail because they assert roles == [\"VIEWER\"] and VIEWER is not a real Authorization.role(), so it never resolves to any group_members row under the new sync design either.",
+      "issues": ["3 pre-existing tests assert a raw-claim-pass-through value that the new DB-backed design correctly no longer produces -- needs explicit scope decision, not a mechanism change"],
+      "next_action": "Rework CODE-DESIGNER -- FINAL rework"
+    }
+  ]
+}

@@ -1,0 +1,86 @@
+{
+  "handoff_id": "c1a1e001-0000-4000-8000-00000000000d",
+  "run_id": "WF03-ISS0736-20260921",
+  "workflow_id": "WF-03",
+  "step": "02-rework2",
+  "from_agent": "ORCH",
+  "to_agent": "CODE-DESIGNER",
+  "file": "handoffs/WF03-ISS0736-20260921/step-02-code-designer-rework2.json",
+  "created_at": "2026-09-20T21:32:36Z",
+  "started_at": "2026-09-20T21:32:36Z",
+  "completed_at": "2026-09-20T21:37:39Z",
+  "status": "COMPLETED",
+  "priority": "HIGH",
+  "context": {
+    "stage": "S4",
+    "requirement_ids": ["REQ-378"],
+    "requirement_text": {
+      "REQ-378": "See handoffs/WF03-ISS0736-20260921/step-00-git-setup.json context.requirement_text.REQ-378 for the full verbatim text. Acceptance criteria: (1) live revoke-takes-effect-next-request; (2) revoking action reachable through Letflow's own web/ GUI; (3) 403 renders through existing QueryStateBoundary/PermissionDenied contract unchanged; (4) SECURITY-REVIEWER signs off on the chosen mechanism before merge."
+    },
+    "related_handoff_ids": ["c1a1e001-0000-4000-8000-00000000000c"],
+    "artifacts_in": [
+      "handoffs/WF03-ISS0736-20260921/step-04c-test-runner.json",
+      "test/reports/report-20260921-WF03-ISS0736-20260921.yaml",
+      "lib/letflow/design/req378-oidc-live-revocation-check.md",
+      "lib/letflow/plugs/auth_pipeline.ex",
+      "lib/letflow/identity.ex",
+      "test/letflow/plugs/auth_pipeline_test.exs",
+      "test/letflow/plugs/api_pipeline_integration_test.exs",
+      "test/letflow/routers/req077_promotion_pipeline_test.exs"
+    ],
+    "owned_modules": [
+      "lib/letflow/plugs/auth_pipeline.ex",
+      "lib/letflow/api/authorization.ex",
+      "lib/letflow/identity/role_registry.ex",
+      "lib/letflow/identity.ex",
+      "lib/letflow/identity/user.ex",
+      "web/src/pages/admin/UsersPage.tsx",
+      "web/src/pages/admin/GroupsPage.tsx",
+      "web/src/api/identity.ts"
+    ]
+  },
+  "task": {
+    "description": "REWORK 2/3 -- this time triggered by TEST-RUNNER (Step 4c), not a validator gate, because the gap only surfaced under the full test suite: a genuine DESIGN gap, not an implementation bug. Read handoffs/WF03-ISS0736-20260921/step-04c-test-runner.json's result.summary in full for the exact failure citations. Root cause: the shipped design's live role query (Letflow.Identity.list_effective_role_names/2, reading group_members/tenant_role) returns [] for a user who has NEVER had a group_members row written for them -- which today is EVERY OIDC user, because nothing in provision_oidc_user/4 (or anywhere else) ever writes group_members from the JWT's claimed roles. Before this run's fix, roles came purely from the JWT claim every request, so this never mattered; now that AuthPipeline trusts group_members exclusively, a freshly-JIT-provisioned user (test/letflow/plugs/auth_pipeline_test.exs's 'acceptance criterion 1' test: fresh tenant, first login, expects roles == [\"VIEWER\"] read straight from the token) gets roles: [] instead, and two other pre-existing tests (test/letflow/plugs/api_pipeline_integration_test.exs:105, test/letflow/routers/req077_promotion_pipeline_test.exs:1034) break the same way. Design the fix: some mechanism must seed/sync group_members (or equivalent live-readable role state) from the JWT's claimed roles for a user who has none yet -- but it MUST NOT silently resurrect access for a user whose access was explicitly revoked via Letflow's own GUI (i.e. it must not re-write group_members from stale IdP claims on every request/login, or REQ-378's whole fix is defeated the moment that user's token is refreshed or they re-log-in). The natural shape: seed group_members from claims ONLY at the moment provision_oidc_user/4 actually INSERTS a new user row (its existing `created: true` vs `false` return value already distinguishes first-provisioning from a returning user) -- a one-time claims-to-local-state sync at account creation, never on subsequent logins. State explicitly in the design: (a) exact new function/step and where it's called (likely inside or right after provision_oidc_user/4, still within the same transaction if one exists, or immediately after); (b) exactly what it writes to group_members (which group/role rows, keyed off which claim fields -- check IdentityContext.roles' shape); (c) explicit confirmation this does NOT run for `created: false` (returning user) so a revoked user's group_members row stays revoked across future logins; (d) whether pre-existing OIDC users provisioned before this fix (who may also have zero group_members rows despite legitimately having claimed roles today) need a one-off backfill/migration, or whether that's acceptable collateral (their first request post-deploy would see roles: [] and get denied) -- if the latter is unacceptable, design a migration or a fallback; do not leave this ambiguous, name the actual decision. Amend lib/letflow/design/req378-oidc-live-revocation-check.md in place; leave already-correct sections (deactivation-status check, GroupsPage.tsx GUI fix) untouched.",
+    "acceptance_criteria": [
+      "Design explicitly closes the JIT-provisioning gap that broke the 3 cited pre-existing tests, without reintroducing the vulnerability REQ-378 exists to fix (no per-request/per-login re-sync from JWT claims that could resurrect revoked access)",
+      "Explicit statement of what happens to pre-existing OIDC users provisioned before this fix ships (backfill migration, or an explicit accepted-tradeoff statement with reasoning)",
+      "Exact function/call-site/@spec-level shape, no implementation bodies",
+      "Previously-passing design sections (deactivation check, GUI fix) left unchanged"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "Amended lib/letflow/design/req378-oidc-live-revocation-check.md to close the JIT-provisioning gap TEST-RUNNER found: §1-§2 as shipped had no path writing group_members from a JWT's claimed roles, so every OIDC user (fresh or pre-existing) reads roles: [] once AuthPipeline trusts group_members exclusively. New §2.2 adds a one-time, marker-gated sync: a new nullable users.role_claims_synced_at column (tenant-scoped migration, §2.2.1/§7), a new Letflow.Identity.sync_role_claims_from_token/3 (§2.2.2, never an error tuple, self-healing on internal failure since the marker stays nil and the next request retries), called from insert_or_fetch/4's created:true branch unconditionally and from upsert_by_external_identity/4's and re_select_on_conflict/3's existing-user (created:false) branches only when role_claims_synced_at is nil (§2.2.3). §2.2.4 argues explicitly why gating on a persisted one-time marker (never reset, including across revocation) rather than on current group_members row-count is what keeps this safe against REQ-378's own threat model: a revoked-to-zero user's marker is already non-nil from their original sync, so the gate never re-fires for them and group_members correctly stays empty; only a genuinely never-synced user (new or pre-existing) gets the one-time write. Pre-existing OIDC users are explicitly NOT left as accepted collateral and get no separate backfill migration either -- because the new column's every existing row lands NULL with no default/backfill statement, their first post-deploy request is indistinguishable from a new user's first request to the same gate, so §7 names this as the deliberate backfill answer, not an open gap. §8 (signature summary), §9 (AC mapping) and §10 (open questions, two new judgment calls flagged for REVIEWER/SECURITY-REVIEWER) updated to match. §§0-1, §2's pre-existing text, §3-§6 and §4/§4.1 (deactivation check, GroupsPage.tsx GUI fix) left untouched per the task's instruction -- diff is additive only (new §2.2, amended §7/§8/§9/§10, and the REWORK 2 header note).",
+    "artifacts_out": ["lib/letflow/design/req378-oidc-live-revocation-check.md"],
+    "issues": [],
+    "git_evidence": {
+      "branch_name": "feature/WF03-ISS0736-20260921",
+      "commit_sha_list": ["cafb82f8"],
+      "remote_branch": "origin/feature/WF03-ISS0736-20260921",
+      "push_status": "ok",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": "Route to CODE-DESIGN-VALIDATOR for re-gate of the amended design (§2.2 specifically, plus the §7/§8/§9/§10 amendments), per this rework's routing."
+  },
+  "rework_count": 2,
+  "max_rework": 3,
+  "gate_history": [
+    {
+      "iteration": 0,
+      "gated_at": "2026-09-20T19:21:42Z",
+      "status": "FAIL",
+      "summary": "CODE-DESIGN-VALIDATOR: AC2 GUI-reachability claim false against actual source.",
+      "issues": ["AC2 GUI path broken -- fixed in rework1"],
+      "next_action": "Rework CODE-DESIGNER"
+    },
+    {
+      "iteration": 1,
+      "gated_at": "2026-09-20T21:15:29Z",
+      "status": "FAIL",
+      "summary": "TEST-RUNNER (Step 4c full suite): design's live-role-query approach breaks 3 pre-existing tests because nothing ever seeds group_members from JWT claims for JIT-provisioned users, so a freshly-provisioned or previously-unsynced user now reads roles: [] instead of their claimed role.",
+      "issues": ["Live role-list design has no seeding path for claims-only users -- needs a one-time claims-to-group_members sync at first provisioning, not on every login"],
+      "next_action": "Rework CODE-DESIGNER (design-level, not implementation-level)"
+    }
+  ]
+}

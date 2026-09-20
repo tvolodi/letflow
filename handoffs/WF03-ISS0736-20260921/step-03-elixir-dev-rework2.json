@@ -1,0 +1,60 @@
+{
+  "handoff_id": "c1a1e001-0000-4000-8000-000000000017",
+  "run_id": "WF03-ISS0736-20260921",
+  "workflow_id": "WF-03",
+  "step": "03-rework2",
+  "from_agent": "ORCH",
+  "to_agent": "ELIXIR-DEV",
+  "file": "handoffs/WF03-ISS0736-20260921/step-03-elixir-dev-rework2.json",
+  "created_at": "2026-09-20T22:34:20Z",
+  "started_at": "2026-09-20T22:34:20Z",
+  "completed_at": "2026-09-20T22:36:33Z",
+  "status": "COMPLETED",
+  "priority": "HIGH",
+  "context": {
+    "stage": "S4",
+    "requirement_ids": ["REQ-378"],
+    "requirement_text": {
+      "REQ-378": "See handoffs/WF03-ISS0736-20260921/step-00-git-setup.json context.requirement_text.REQ-378 for the full verbatim text."
+    },
+    "related_handoff_ids": ["c1a1e001-0000-4000-8000-000000000016"],
+    "artifacts_in": [
+      "handoffs/WF03-ISS0736-20260921/step-04c-test-runner-rework1.json",
+      "test/reports/report-20260921-WF03-ISS0736-20260921-rework1.yaml",
+      "lib/letflow/identity_migration.ex",
+      "lib/letflow/identity/user.ex"
+    ],
+    "owned_modules": [
+      "lib/letflow/identity_migration.ex"
+    ]
+  },
+  "task": {
+    "description": "TEST-RUNNER's rework1 full-suite gate found a genuine regression this branch caused: this run added `role_claims_synced_at` to `Letflow.Identity.User` (§2.2's new field), and `lib/letflow/identity_migration.ex`'s `copy_users/2` (~line 155) has no `select:` restriction, so it now pulls that new field into a query against the LEGACY, frozen `public.users` table (which was never migrated to carry that column), causing `Postgrex.Error ... undefined_column` -- 7 test failures in test/letflow/identity_migration_test.exs. Fix: add the same kind of explicit `select:` restriction `copy_groups/2` (same module) already carries from an earlier REQ-074 column-addition hazard of this identical class -- read copy_groups/2's existing guard first and mirror its exact shape/pattern for copy_users/2, restricting the query to only the legacy columns that actually exist in public.users. Run `mix compile --warnings-as-errors` and `mix test test/letflow/identity_migration_test.exs` and quote real output confirming all pass. Also re-run the previously-regressed/REQ-378 test files (test/letflow/plugs/auth_pipeline_test.exs test/letflow/plugs/api_pipeline_integration_test.exs test/letflow/routers/req077_promotion_pipeline_test.exs test/letflow/plugs/iss0736_oidc_live_revocation_test.exs) to confirm no new regression. Run everything in the foreground -- no background Monitor waiting.",
+    "acceptance_criteria": [
+      "copy_users/2 fixed to mirror copy_groups/2's existing select-restriction pattern for this exact hazard class",
+      "mix compile --warnings-as-errors passes",
+      "test/letflow/identity_migration_test.exs passes in full, real output quoted",
+      "The 4 REQ-378-related test files still pass, real output quoted",
+      "No unrelated changes to identity_migration.ex"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "Fixed lib/letflow/identity_migration.ex's copy_users/2 (~line 153): added an explicit `select: struct(u, [:id, :username, :display_name, :email, :password_hash, :status, :auth_source, :external_id, :external_realm, :inserted_at, :updated_at])` restriction, mirroring copy_groups/2's existing guard pattern for this exact hazard class, plus a comment block explaining why (REQ-378's `role_claims_synced_at` column exists only on the new per-tenant `users` table via priv/repo/migrations/20260921000001_add_role_claims_synced_at_to_users.exs, not on the legacy frozen public.users table copy_users/2 reads from). No other lines in the module were touched. `mix compile --warnings-as-errors` -> clean, no warnings/errors ('Compiling 1 file (.ex)', exit clean). `mix test test/letflow/identity_migration_test.exs` -> 'Finished in 11.1 seconds ... Result: 12 passed', 0 failures (previously 7 failures with Postgrex undefined_column on public.users.role_claims_synced_at). Re-ran the 4 REQ-378-related files (test/letflow/plugs/auth_pipeline_test.exs test/letflow/plugs/api_pipeline_integration_test.exs test/letflow/routers/req077_promotion_pipeline_test.exs test/letflow/plugs/iss0736_oidc_live_revocation_test.exs) together -> 'Finished in 59.4 seconds ... Result: 49 passed', 0 failures -- no new regression. Judgment on gating: this delta is test-infra-adjacent (a `select:` column-list restriction in a one-time legacy-table copy utility, matching an already-approved pattern in the same module) and does not touch any tenant-data API/auth path itself -- SECURITY-REVIEWER/REVIEWER re-review is not required for this specific delta per the dispatch note, but ORCH should confirm that judgment before merge since this module does interact with identity data during cutover.",
+    "artifacts_out": [
+      "lib/letflow/identity_migration.ex"
+    ],
+    "issues": [],
+    "git_evidence": {
+      "branch_name": "feature/WF03-ISS0736-20260921",
+      "commit_sha_list": ["c0eaa581"],
+      "remote_branch": "origin/feature/WF03-ISS0736-20260921",
+      "push_status": "pushed",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": "Route to TEST-RUNNER for another full-suite re-run (mix test, full suite) to confirm no other regression, per the dispatch note's instruction; SECURITY-REVIEWER/REVIEWER re-review of this specific delta was judged not required (test-infra-adjacent select-restriction fix, no auth-path change) -- ORCH to confirm that judgment."
+  },
+  "rework_count": 2,
+  "max_rework": 3
+}

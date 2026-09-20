@@ -1,0 +1,60 @@
+{
+  "handoff_id": "c1a1e001-0000-4000-8000-000000000019",
+  "run_id": "WF03-ISS0736-20260921",
+  "workflow_id": "WF-03",
+  "step": "05",
+  "from_agent": "ORCH",
+  "to_agent": "ISSUE-FIXER",
+  "file": "handoffs/WF03-ISS0736-20260921/step-05-issue-fixer-close.json",
+  "created_at": "2026-09-20T22:49:18Z",
+  "started_at": "2026-09-20T22:49:18Z",
+  "completed_at": "2026-09-21T00:00:00Z",
+  "status": "COMPLETED",
+  "priority": "HIGH",
+  "context": {
+    "stage": "S4",
+    "requirement_ids": ["REQ-378"],
+    "requirement_text": {
+      "REQ-378": "See handoffs/WF03-ISS0736-20260921/step-00-git-setup.json context.requirement_text.REQ-378 for the full verbatim text."
+    },
+    "related_handoff_ids": ["c1a1e001-0000-4000-8000-000000000018"],
+    "artifacts_in": [
+      "docs/issues/ISS-0736.yaml",
+      "handoffs/WF03-ISS0736-20260921/step-04c-test-runner-rework2.json",
+      "handoffs/WF03-ISS0736-20260921/step-03b-security-reviewer-rework1.json",
+      "handoffs/WF03-ISS0736-20260921/step-03c-reviewer-rework1.json",
+      "test/reports/report-20260920-WF03-ISS0736-20260921-rework2.yaml"
+    ],
+    "owned_modules": []
+  },
+  "task": {
+    "description": "Close out this run. This run went through 3 rounds of design rework and 2 rounds of implementation rework before all gates PASSED (see gate_history entries across step-02b-*.json and the step-03/04c rework chain) -- final state: SECURITY-REVIEWER PASS (twice, original mechanism + delta), REVIEWER PASS (twice), full backend suite 4472/4472, full frontend suite 728/728, both REQ-378 test files green. Set docs/issues/ISS-0736.yaml's status to resolved with resolved_in_run: WF03-ISS0736-20260921 and a real UTC resolved_at timestamp, cross-referencing REQ-378 and this run. If github_issue/github_ref is set (GH-1648) and `gh` is reachable, close it with a --comment citing the resolving evidence (this run-id, the design doc path lib/letflow/design/req378-oidc-live-revocation-check.md, and the regression test paths test/letflow/plugs/iss0736_oidc_live_revocation_test.exs + web/src/api/__tests__/identity.removeMembers.test.ts) per WF-03.md's evidence-on-close rule -- do NOT close without a comment. Also file TWO new follow-up issues in docs/issues/ (status: open, following this repo's existing issue-file schema/convention -- look at ISS-0736.yaml or a recent issue file for the shape) for the two out-of-scope findings REVIEWER flagged in step-03c-reviewer-rework1.json's result.summary: (1) lib/letflow/plugs/tenant_status.ex:92-95's raw-role-check reads conn.assigns.auth_context.roles directly for its PLATFORM_ADMIN tenant-inactive-403 exemption, bypassing Authorization.roles_from_strings/1 like every other consumer -- hygiene/consistency issue, not currently exploitable per SECURITY-REVIEWER's step-03b-security-reviewer-rework1.json disposition, but should route through the same helper; (2) web/src/api/identity.ts's groupsApi.addMembers/.list/.get/.update/.delete/.members all share the same broken /api/v1/admin/groups/... prefix that .removeMembers had before this run fixed it (no matching backend route exists at that prefix) -- flagged by CODE-DESIGN-VALIDATOR during this run's design rework. Do NOT fix either now -- filing only.",
+    "acceptance_criteria": [
+      "docs/issues/ISS-0736.yaml status: resolved with resolved_in_run/resolved_at",
+      "GitHub issue closed with an evidence-citing comment (or explicitly note if gh unreachable)",
+      "Two new follow-up issues filed in docs/issues/ following the existing schema, status: open",
+      "next_action: 'Route to Step Final (git merge)'"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "Closed out ISS-0736: docs/issues/ISS-0736.yaml status set to resolved with resolved_in_run: WF03-ISS0736-20260921, resolved_at: 2026-09-21T00:00:00Z, cross-referencing REQ-378, the design doc lib/letflow/design/req378-oidc-live-revocation-check.md, and both regression test files (test/letflow/plugs/iss0736_oidc_live_revocation_test.exs, web/src/api/__tests__/identity.removeMembers.test.ts). GitHub issue GH-1648 (tvolodi/letflow#1648) closed via `gh issue close 1648 --comment ...` citing this run-id, the design doc, and both regression test paths -- evidence-on-close rule satisfied. Filed two new follow-up issues per REVIEWER's step-03c-reviewer-rework1.json out-of-scope findings, both status: open: docs/issues/ISS-0764.yaml (MINOR -- lib/letflow/plugs/tenant_status.ex:92-95's PLATFORM_ADMIN exemption reads conn.assigns.auth_context.roles raw instead of Authorization.roles_from_strings/1; not currently exploitable per SECURITY-REVIEWER's disposition, hygiene/consistency only) and docs/issues/ISS-0765.yaml (MAJOR -- web/src/api/identity.ts's groupsApi.addMembers/.list/.get/.update/.delete/.members all share the same broken /api/v1/admin/groups/... prefix that .removeMembers had before this run's fix; no matching backend route exists at that prefix). Neither follow-up issue was fixed, filing only, per task instructions.",
+    "artifacts_out": [
+      "docs/issues/ISS-0736.yaml",
+      "docs/issues/ISS-0764.yaml",
+      "docs/issues/ISS-0765.yaml"
+    ],
+    "issues": [],
+    "git_evidence": {
+      "branch_name": "feature/WF03-ISS0736-20260921",
+      "commit_sha_list": ["7a94bd3c37b844f88d2c04417428820baaf125a4"],
+      "remote_branch": "origin/feature/WF03-ISS0736-20260921",
+      "push_status": "ok",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": "Route to Step Final (git merge)"
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

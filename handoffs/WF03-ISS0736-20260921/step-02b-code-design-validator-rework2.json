@@ -1,0 +1,60 @@
+{
+  "handoff_id": "c1a1e001-0000-4000-8000-00000000000e",
+  "run_id": "WF03-ISS0736-20260921",
+  "workflow_id": "WF-03",
+  "step": "02b-rework2",
+  "from_agent": "ORCH",
+  "to_agent": "CODE-DESIGN-VALIDATOR",
+  "file": "handoffs/WF03-ISS0736-20260921/step-02b-code-design-validator-rework2.json",
+  "created_at": "2026-09-20T21:38:22Z",
+  "started_at": "2026-09-20T21:38:22Z",
+  "completed_at": "2026-09-20T21:41:31Z",
+  "status": "COMPLETED",
+  "priority": "HIGH",
+  "context": {
+    "stage": "S4",
+    "requirement_ids": ["REQ-378"],
+    "requirement_text": {
+      "REQ-378": "See handoffs/WF03-ISS0736-20260921/step-00-git-setup.json context.requirement_text.REQ-378 for the full verbatim text."
+    },
+    "related_handoff_ids": ["c1a1e001-0000-4000-8000-00000000000d"],
+    "artifacts_in": [
+      "lib/letflow/design/req378-oidc-live-revocation-check.md",
+      "handoffs/WF03-ISS0736-20260921/step-02-code-designer-rework2.json",
+      "handoffs/WF03-ISS0736-20260921/step-04c-test-runner.json"
+    ],
+    "owned_modules": [
+      "lib/letflow/plugs/auth_pipeline.ex",
+      "lib/letflow/identity.ex",
+      "lib/letflow/identity/user.ex"
+    ]
+  },
+  "task": {
+    "description": "RE-GATE after rework 2/3, this time closing a gap TEST-RUNNER found under the full suite (fresh/unsynced OIDC users got roles: [] instead of their claimed role, because nothing ever wrote group_members from JWT claims). CODE-DESIGNER added a new §2.2 to lib/letflow/design/req378-oidc-live-revocation-check.md: a new users.role_claims_synced_at nullable timestamp column + Letflow.Identity.sync_role_claims_from_token/3, called unconditionally on first provisioning and conditionally (marker still nil) on returning-user paths, one-time and never reset. Independently verify: (1) the safety argument holds -- specifically confirm the marker is truly a permanent one-way gate that CANNOT re-fire after a revocation (re-read §2.2.4's reasoning and check it against how revocation actually removes a group_members row elsewhere in this design -- revocation must not touch/reset role_claims_synced_at, or the whole point of REQ-378 breaks the moment a revoked user's token refreshes or they re-log-in); (2) the 3 previously-failing tests (test/letflow/plugs/auth_pipeline_test.exs's AC1 test, test/letflow/plugs/api_pipeline_integration_test.exs:105, test/letflow/routers/req077_promotion_pipeline_test.exs:1034 -- cited in handoffs/WF03-ISS0736-20260921/step-04c-test-runner.json) would plausibly now pass under this design -- trace through each test's exact scenario against the new sync logic's call sites; (3) migration shape is a real, valid Ecto migration shape (nullable column, no backfill needed since NULL is the correct default for every existing row -- confirm this reasoning is actually correct, not just asserted); (4) no implementation bodies, signatures/types only; (5) confirm §§0-1,3-6 (already-passed sections) are unchanged.",
+    "acceptance_criteria": [
+      "PASS only if the one-way-gate safety argument is independently verified sound against how revocation actually works in this design (does NOT touch role_claims_synced_at)",
+      "PASS only if you can trace each of the 3 previously-failing tests through the new logic and confirm they'd pass",
+      "Migration shape confirmed valid",
+      "If FAIL: name exact remaining gap, rework_count 3/3 (this is the LAST allowed rework -- if this also fails, ORCH must escalate per docs/agents/ORCHESTRATOR.md §5, not attempt a 4th rework)"
+    ]
+  },
+  "result": {
+    "status": "FAIL",
+    "summary": "Item (1) (the one-way-gate safety argument, §2.2.4) is independently verified SOUND: read lib/letflow/identity.ex:646-664 directly -- remove_group_member/3 issues one Repo.delete_all/2 against GroupMember only and never touches the users table, so role_claims_synced_at cannot be reset by a revocation; a marker set once is permanent, and the design's claim that this makes 'never synced' and 'synced then revoked' distinguishable holds. Item (3) (migration shape) is also verified: priv/repo/migrations/20260907020001_add_scan_status_to_instance_attachments.exs is a real precedent for the cited `if prefix() do` / tenant_scoped_migrations() pattern, and a nullable no-default no-backfill column is correct Ecto DSL with no data-loss risk. BUT item (2) FAILS on independent trace: all 3 previously-failing tests (auth_pipeline_test.exs AC1 'a valid bearer token...', api_pipeline_integration_test.exs:105, req077_promotion_pipeline_test.exs:1034) assert `roles == [\"VIEWER\"]` for a BRAND-NEW JIT-provisioned user authenticated via test/support/token_verifier_double.ex's fixed token, whose JWT claims `realm_access.roles: [\"VIEWER\"]` (confirmed at token_verifier_double.ex:36). \"VIEWER\" is NOT a real Letflow.Api.Authorization.role() (the closed @type role() set at lib/letflow/api/authorization.ex:195-201 is PLATFORM_ADMIN/PROCESS_DESIGNER/PROCESS_OPERATOR/TASK_WORKER/AGENT_RUNNER/CANDIDATE -- api_pipeline_integration_test.exs's own comment at the assertion site states this explicitly: \"not a recognised Letflow.Api.Authorization.role()\"), and no migration or seed path anywhere in priv/repo/migrations/ creates a `tenant_role` row named \"VIEWER\" for any tenant (grep confirmed; the only 'VIEWER' hits in lib/letflow/tenant_provisioning.ex and identity.ex are substring matches inside \"REVIEWER\"). Design §2.2.2 step 1's own resolve_group_ids_for_role_names/2 only inserts group_members rows for claimed role names that already match an existing tenant_role row -- an unmatched name (exactly \"VIEWER\"'s case here) 'resolves to nothing for that name -- not an error' (§2.2.2's own text). So for these 3 tests' fresh tenants, sync_role_claims_from_token/3 inserts zero group_members rows, yet step 3 still unconditionally stamps role_claims_synced_at (nothing in §2.2.2 gates the stamp on step 1/2 having resolved >=1 group). list_effective_role_names/2 (identity.ex:687, unchanged) then reads group_members and returns [], not [\"VIEWER\"] -- all 3 tests still fail exactly as TEST-RUNNER found, and now WORSE: the marker is permanently non-nil so no future request ever retries the sync for this user, even though nothing about their situation was actually resolved. Cross-checked against the new REQ-378 test itself (test/letflow/plugs/iss0736_oidc_live_revocation_test.exs:106-111), which does NOT rely on an unbound claim string -- it explicitly creates its own Group + TenantRole(name: \"PLATFORM_ADMIN\") + group_member fixture before asserting roles, confirming the design's own test author already knew the sync mechanism only works when a matching tenant_role row exists, and did not verify it against the 3 tests this rework was specifically tasked with fixing.",
+    "artifacts_out": [],
+    "issues": [
+      "BLOCKER: §2.2 (new REWORK 2 section) does not close the JIT-provisioning gap for the 3 tests it was written to fix. Root cause: those 3 tests' claimed role (\"VIEWER\") has no corresponding `tenant_role` row in any migration/seed, so §2.2.2's resolve_group_ids_for_role_names/2 resolves it to zero group ids, sync_role_claims_from_token/3 writes zero group_members rows, and list_effective_role_names/2 still returns [] -- the exact same failure TEST-RUNNER reported. Worse, §2.2.2 step 3 stamps role_claims_synced_at unconditionally (not gated on step 1/2 having resolved at least one group), so this failure mode is now PERMANENT for such a user (marker never nil again, no future retry) rather than merely unresolved. CODE-DESIGNER must either (a) explain what mechanism is supposed to make an unbound-but-claimed role name like \"VIEWER\" show up in the live role read (e.g. does REQ-378's own scope actually require synthesizing a group/tenant_role row for a previously-unbound claimed name, or does evaluate_access/2 need to keep consulting identity_context.roles for names outside the closed role() vocabulary?), or (b) re-derive why these 3 specific tests' expectations are supposed to change as part of this fix (and get that scope change signed off, since it is not currently stated anywhere in this design or REQ-378's AC text) -- but must not resubmit without tracing all 3 tests line-by-line against the revised mechanism, the way this gate just did."
+    ],
+    "git_evidence": {
+      "branch_name": "feature/WF03-ISS0736-20260921",
+      "commit_sha_list": ["715000ca"],
+      "remote_branch": "origin/feature/WF03-ISS0736-20260921",
+      "push_status": "ok",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": "Rework CODE-DESIGNER -- FINAL rework (rework_count now 3/3, max_rework 3). If this also fails, ORCH must escalate per docs/agents/ORCHESTRATOR.md §5, not attempt a 4th rework."
+  },
+  "rework_count": 3,
+  "max_rework": 3
+}

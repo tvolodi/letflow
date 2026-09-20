@@ -1,0 +1,65 @@
+{
+  "handoff_id": "c1a1e001-0000-4000-8000-00000000000c",
+  "run_id": "WF03-ISS0736-20260921",
+  "workflow_id": "WF-03",
+  "step": "04c",
+  "from_agent": "ORCH",
+  "to_agent": "TEST-RUNNER",
+  "file": "handoffs/WF03-ISS0736-20260921/step-04c-test-runner.json",
+  "created_at": "2026-09-20T21:15:29Z",
+  "started_at": "2026-09-20T21:15:29Z",
+  "completed_at": "2026-09-21T02:35:00Z",
+  "status": "COMPLETED",
+  "priority": "HIGH",
+  "context": {
+    "stage": "S4",
+    "requirement_ids": ["REQ-378"],
+    "requirement_text": {
+      "REQ-378": "See handoffs/WF03-ISS0736-20260921/step-00-git-setup.json context.requirement_text.REQ-378 for the full verbatim text."
+    },
+    "related_handoff_ids": ["c1a1e001-0000-4000-8000-00000000000b"],
+    "artifacts_in": [
+      "handoffs/WF03-ISS0736-20260921/step-04b-test-design-validator.json",
+      "test/letflow/plugs/iss0736_oidc_live_revocation_test.exs",
+      "web/src/api/__tests__/identity.removeMembers.test.ts"
+    ],
+    "owned_modules": [
+      "lib/letflow/plugs/auth_pipeline.ex",
+      "lib/letflow/identity.ex",
+      "web/src/api/identity.ts",
+      "web/src/pages/admin/GroupsPage.tsx"
+    ]
+  },
+  "task": {
+    "description": "Run the FULL test suite (backend `mix test` in full, and frontend `npm test`/vitest full run in web/) on feature/WF03-ISS0736-20260921 and report real pass/fail counts. Note: TEST-DESIGN-VALIDATOR's own full-suite attempt (step-04b) hit widespread unrelated failures it attributed to stale per-partition _build hardlink copies under this host's parallel runner (mirroring documented ISS-0264-class fragility) -- if you hit the same symptom, try a non-partitioned/serial `mix test` run or a fresh `_build` (`rm -rf _build/test` then recompile) before concluding it's environmental; if it recurs and is clearly unrelated to this change (different modules, pre-existing on main too), document that clearly rather than blocking indefinitely, but do not simply assume it's environmental without at least one concrete attempt to rule out this change as the cause (e.g. confirm the same class of failure exists by running the identical suite against origin/main in a throwaway worktree, or by checking the failing modules have zero relation to auth_pipeline.ex/identity.ex/groups). This run's new tests (test/letflow/plugs/iss0736_oidc_live_revocation_test.exs, web/src/api/__tests__/identity.removeMembers.test.ts) must show 0 failures specifically. Run everything in the foreground with direct output -- do not arm a background Monitor and wait passively on it.",
+    "acceptance_criteria": [
+      "Full backend suite run, real pass/fail/total counts quoted",
+      "Full frontend suite run, real pass/fail/total counts quoted",
+      "New REQ-378 tests specifically confirmed 0 failures",
+      "Any failures present are triaged: pre-existing-on-main (cite evidence) vs. caused-by-this-branch (must FAIL/PARTIAL and block if caused-by-this-branch)",
+      "If genuinely environmental and pre-existing, document the evidence for that conclusion, don't just assert it"
+    ]
+  },
+  "result": {
+    "status": "FAIL",
+    "summary": "Backend: scripts/test_parallel.sh (16 partitions) combined 4196 tests, 6 properties, 7 failures (4195/4202 passed); partition 8 crashed with no Result: line (environmental, ISS-0264-class, mid-run on an unrelated test module). Targeted serial re-run of the 3 REQ-378-relevant files: 14/16 passed, 2 failed, deterministic. Root cause: auth_pipeline.ex's new verify_local_account_state/2 step now sources conn.assigns.auth_context.roles from Identity.list_effective_role_names/2 (a live group_members/tenant_role DB query) instead of identity_context.roles (the OIDC token's own claims), so any JIT-provisioned user whose role exists only as a token claim (no group_members row yet) gets roles: [] instead of the claimed role. This breaks 3 tests: test/letflow/plugs/auth_pipeline_test.exs:158 (AC1), test/letflow/plugs/api_pipeline_integration_test.exs:105 (REQ-071 AC2), test/letflow/routers/req077_promotion_pipeline_test.exs:1034 (design section 12.9) -- all confirmed CAUSED BY THIS BRANCH via git diff (auth_pipeline.ex/identity.ex are the only changed files these tests exercise) plus deterministic reproduction. The new REQ-378 test file (test/letflow/plugs/iss0736_oidc_live_revocation_test.exs) itself shows 0 failures, satisfying that specific acceptance criterion. Two other failure clusters (Letflow.SecretsRuntimeConfigTest 60s subprocess-boot timeout in partition 2; Letflow.TenantSchemaReaperTest x3 ISS-0110 concurrent-invocation-guard defers in partition 10) are attributed pre-existing/environmental per the structural test in core-directives.md: neither file nor its dependencies appear in git diff origin/main...HEAD, and TenantSchemaReaperTest's failure mode is its own documented deliberate concurrent-invocation guard (ISS-0110/ISS-0217 already on main). Frontend: npm test in web/ -- 106 test files, 728 tests, 0 failures, including the new web/src/api/__tests__/identity.removeMembers.test.ts (2/2 passed).",
+    "artifacts_out": ["test/reports/report-20260921-WF03-ISS0736-20260921.yaml"],
+    "issues": [
+      "REGRESSION (blocking): lib/letflow/plugs/auth_pipeline.ex's REQ-378 verify_local_account_state/2 drops a JIT-provisioned user's token-claimed role when no group_members row exists yet for it, breaking auth_pipeline_test.exs AC1, api_pipeline_integration_test.exs REQ-071 AC2, and req077_promotion_pipeline_test.exs design section 12.9.",
+      "Pre-existing/environmental, not blocking: Letflow.SecretsRuntimeConfigTest subprocess-boot 60s timeout under 16-way host contention (partition 2).",
+      "Pre-existing/environmental, not blocking: Letflow.TenantSchemaReaperTest x3 -- ISS-0110 concurrent-invocation liveness guard deferring as designed (partition 10).",
+      "Environmental, not blocking: partition 8 of the full parallel run crashed (process killed, no ExUnit Result: line) mid an unrelated test (Letflow.Routers.IdentityTest) -- matches the ISS-0264-class fragility the dispatch anticipated; not re-run standalone since the verdict is already FAIL on genuine grounds."
+    ],
+    "git_evidence": {
+      "branch_name": "feature/WF03-ISS0736-20260921",
+      "commit_sha_list": ["cfd1329c"],
+      "remote_branch": "origin/feature/WF03-ISS0736-20260921",
+      "push_status": "ok",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": "Rework by ELIXIR-DEV: fix lib/letflow/plugs/auth_pipeline.ex's verify_local_account_state/2 so a JIT-provisioned user's token-claimed role is not silently dropped when no group_members row exists yet (either materialize the claimed role into group_members atomically during provisioning, or reconsider the role source) while still satisfying REQ-378 AC1's live-revocation requirement -- CODE-DESIGNER/REVIEWER should confirm the intended shape first. See test/reports/report-20260921-WF03-ISS0736-20260921.yaml for full detail."
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

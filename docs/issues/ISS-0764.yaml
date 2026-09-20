@@ -1,0 +1,46 @@
+id: ISS-0764
+title: >
+  Letflow.Plugs.TenantStatus's PLATFORM_ADMIN exemption check reads
+  conn.assigns.auth_context.roles raw instead of going through
+  Authorization.roles_from_strings/1
+discovered_by: REVIEWER
+discovered_in_run: WF03-ISS0736-20260921
+discovered_at: "2026-09-21T00:00:00Z"
+severity: MINOR
+tags:
+  - backend
+  - hygiene
+  - authorization
+description: >
+  Flagged during REQ-378's implementation review (step-03c-reviewer-rework1
+  of run WF03-ISS0736-20260921, part of ISS-0736's fix). At
+  lib/letflow/plugs/tenant_status.ex:92-95, the plug's tenant-inactive-403
+  exemption for PLATFORM_ADMIN reads conn.assigns.auth_context.roles
+  directly (a raw string-list membership check) rather than going through
+  Letflow.Api.Authorization.roles_from_strings/1 the way every other
+  authorization consumer in the codebase does. SECURITY-REVIEWER's own
+  disposition on this finding (step-03b-security-reviewer-rework1.json,
+  same run) is that it is not currently exploitable -- roles_from_strings/1
+  and the raw string comparison currently agree on PLATFORM_ADMIN's
+  representation, so there is no live bypass. This is a
+  hygiene/consistency issue: two independent code paths deriving
+  "is this actor PLATFORM_ADMIN" creates a latent risk that they diverge
+  silently if roles_from_strings/1's normalization logic ever changes
+  (case handling, aliasing, a role rename), at which point this plug's
+  raw check would go stale without any test catching it.
+affected_files:
+  - lib/letflow/plugs/tenant_status.ex
+related_requirements:
+  - REQ-378
+related:
+  - ISS-0736  # discovered as an out-of-scope finding during ISS-0736's fix review
+severity_rationale: >
+  MINOR -- not currently exploitable per SECURITY-REVIEWER's own
+  disposition; this is a code-consistency/future-drift risk, not a live
+  authorization bypass.
+fix_direction: >
+  Route lib/letflow/plugs/tenant_status.ex:92-95's PLATFORM_ADMIN check
+  through Letflow.Api.Authorization.roles_from_strings/1 like every other
+  consumer, so there is exactly one place that decides how role strings
+  map to the PLATFORM_ADMIN role.
+status: open

@@ -1,0 +1,68 @@
+{
+  "handoff_id": "c1a1e001-0000-4000-8000-00000000000a",
+  "run_id": "WF03-ISS0736-20260921",
+  "workflow_id": "WF-03",
+  "step": "04",
+  "from_agent": "ORCH",
+  "to_agent": "TEST-DESIGNER",
+  "file": "handoffs/WF03-ISS0736-20260921/step-04-test-designer.json",
+  "created_at": "2026-09-20T19:33:00Z",
+  "started_at": "2026-09-20T19:33:00Z",
+  "completed_at": "2026-09-20T21:07:44Z",
+  "status": "COMPLETED",
+  "priority": "HIGH",
+  "context": {
+    "stage": "S4",
+    "requirement_ids": ["REQ-378"],
+    "requirement_text": {
+      "REQ-378": "See handoffs/WF03-ISS0736-20260921/step-00-git-setup.json context.requirement_text.REQ-378 for the full verbatim text. Acceptance criterion 1 (the one this test must prove): a tenant_admin action that revokes a signed-in business_user's access to a specific area takes effect on that user's very next request, without requiring the user to sign out, reload, or wait for the access token to expire -- demonstrated by a test that revokes and immediately retries with no sleep or token refresh."
+    },
+    "related_handoff_ids": ["c1a1e001-0000-4000-8000-000000000009"],
+    "artifacts_in": [
+      "lib/letflow/design/req378-oidc-live-revocation-check.md",
+      "handoffs/WF03-ISS0736-20260921/step-03-elixir-dev.json",
+      "lib/letflow/plugs/auth_pipeline.ex",
+      "lib/letflow/identity.ex",
+      "docs/agents/workflows/WF-03_issue_resolving.md"
+    ],
+    "owned_modules": [
+      "lib/letflow/plugs/auth_pipeline.ex",
+      "lib/letflow/identity.ex",
+      "web/src/api/identity.ts",
+      "web/src/pages/admin/GroupsPage.tsx"
+    ]
+  },
+  "task": {
+    "description": "Write a regression test proving REQ-378's fix. This is a fix to EXISTING behavior (authenticate_oidc/2 already existed pre-fix), so WF-03.md's normal fail-then-pass rule applies, not the 'code did not exist' exception: the test must be shown to FAIL against the pre-fix code (main, or this branch with the fix reverted) and PASS against the post-fix code (this branch as-is). Concretely: (1) a test simulating an OIDC-authenticated request where the user holds a role/group membership that grants access to some route, asserting the request succeeds (200/expected data); (2) simulate the tenant_admin revoking that access (remove the group membership / deactivate the user, via the same Identity functions the GUI fix now calls -- Identity.remove_group_member/3 or the equivalent status-update function) WITHOUT re-authenticating, re-minting a JWT, or sleeping; (3) immediately retry the exact same request with the SAME still-valid JWT and assert it now returns 403 (or the account-inactive path's own status), proving the change took effect on the very next request purely from the live DB check, not from any token change. Use ExUnit + whatever test harness this codebase already uses for AuthPipeline/API route tests (grep test/ for existing auth_pipeline or authorization test files for the harness pattern -- do not invent a new one). Prove the fail-then-pass property: run this exact test file against a git worktree of main (pre-fix) or this branch with only lib/letflow/plugs/auth_pipeline.ex and lib/letflow/identity.ex reverted (git checkout main -- <paths> in a throwaway worktree), confirm it fails there, then confirm it passes on this branch as-is. State both runs' actual output in result.summary. Also add/extend a test proving AC2's GUI path works (the corrected groupsApi.removeMembers call reaches the real endpoint) -- can be a lighter unit/integration test on the identity.ts function or an existing web/ test pattern; check web/ for its existing test conventions (grep for existing *.test.ts(x) near api/identity.ts or GroupsPage.tsx) rather than inventing one.",
+    "acceptance_criteria": [
+      "Test file(s) added under test/ (backend) and/or web/ test dir (frontend) following existing conventions in this codebase, not a new pattern",
+      "Fail-then-pass proof stated with actual quoted output from both runs (pre-fix fail, post-fix pass), using a throwaway worktree for the pre-fix run per WF-03.md's isolation technique -- and the worktree/mutation is cleaned up and verified clean afterward (git status --porcelain empty) per WF-03.md's mutant-cleanup rule",
+      "The backend test uses no sleep/token-refresh and re-uses the same JWT/session across the before/after requests",
+      "A test also covers AC2's GUI-reachable path",
+      "Do NOT implement further product code -- test files only"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "Wrote test/specs/ISS-0736.md plus two test files covering REQ-378's AC1 (backend, live revocation) and AC2 (frontend, GUI-reachable path). Backend: test/letflow/plugs/iss0736_oidc_live_revocation_test.exs (Letflow.Plugs.Iss0736OidcLiveRevocationTest), 2 tests -- mirrors test/letflow/api_token_auth_pipeline_test.exs's full Letflow.Router.call/2 dispatch convention and test/letflow/plugs/auth_pipeline_test.exs's tenant-provisioning fixture pattern. Test 1 grants PLATFORM_ADMIN via Identity.create_group/2 + Identity.add_group_member/3, dispatches GET /api/v1/identity/tokens with the fixed OIDC sentinel bearer token, asserts 200 + role present, calls Identity.remove_group_member/3 (no re-auth/sleep), re-dispatches the IDENTICAL request with the IDENTICAL bearer token, asserts 403. Test 2 does the same shape via Identity.update_user_status/3(:inactive) instead, proving the account-deactivation short-circuit independently. Frontend: web/src/api/__tests__/identity.removeMembers.test.ts asserts groupsApi.removeMembers(groupId, userId) hits the real DELETE /api/v1/identity/groups/:id/members/:user_id route, not the pre-fix nonexistent /api/v1/admin/groups path -- mirrors web/src/api/__tests__/entities.test.ts's fetch-spy convention.\n\nFAIL-THEN-PASS PROOF (both real, quoted):\nBackend PASS (branch tip, after `rm -rf _build/test/lib/letflow` forced fresh --warnings-as-errors recompile): `mix test test/letflow/plugs/iss0736_oidc_live_revocation_test.exs --seed 0` -> \"Compiling 272 files (.ex)\" then \"Result: 2 passed\", zero warnings.\nBackend FAIL (throwaway `git worktree add ../letflow-iss0736-prefix main`, main=fb6a8d43, predates step-03's fix -- confirmed zero occurrences of verify_local_account_state in that commit's auth_pipeline.ex; new test file copied in unmodified): both tests fail with `assert granted_conn.status == 200` / `left: 403, right: 200` (the granted-role assertion itself fails pre-fix, proving the JWT-claims-only role read was the real gap) -> \"Result: 0/2 passed, Failed: 2 tests\". Worktree removed after (`git worktree remove --force`), `git status --porcelain` on primary checkout confirmed clean of residue.\nFrontend PASS (branch tip): `npx vitest run src/api/__tests__/identity.removeMembers.test.ts` -> \"Test Files 1 passed (1), Tests 2 passed (2)\".\nFrontend FAIL (same worktree, web/node_modules symlinked from primary checkout): `AssertionError: expected '/api/v1/admin/groups/group-1/members' to contain '/api/v1/identity/groups/group-1/members/user-1'` -> \"Test Files 1 failed (1), Tests 1 failed | 1 passed (2)\".\n\nmix letflow.check.test: two full-suite attempts in this sandboxed Windows/Docker-Postgres environment both hit widespread, UNRELATED failures across many partitions (e.g. Letflow.Engine.ServiceTaskDispatcherTest: UndefinedFunctionError for a module that genuinely exists on disk -- a stale/partial per-partition _build hardlink copy under this host's parallel runner, matching this repo's own documented ISS-0699/ISS-0428 parallel-runner fragility, not a real code defect) -- could not get a fully clean end-to-end run in this session. Positive evidence gathered directly from the full run's raw output (/tmp/check_test_run2.log, 88MB, this session only, not committed): grep -c \"default values for the optional arguments\" -> 0 (the exact ISS-0069 substring this task gates on never appears anywhere in the full-suite output); grep -n \"Letflow.Plugs.Iss0736OidcLiveRevocationTest\" (failure-header pattern) -> no matches, zero failures anywhere for this new test module; the new test's own DB writes (iss0736-admins-* group creation) appear exactly twice in the log with no adjacent failure block, matching the 2 tests. Combined with the isolated forced-fresh-recompile run above (2 passed, zero warnings), this is real evidence the new files introduce no warning and no failure, though the mandatory full-suite command itself could not be shown green in this session due to pre-existing environment resource contention unrelated to REQ-378 -- flagging this explicitly for TEST-DESIGN-VALIDATOR/TEST-RUNNER to re-attempt or independently assess rather than silently asserting a clean full run.",
+    "artifacts_out": [
+      "test/specs/ISS-0736.md",
+      "test/letflow/plugs/iss0736_oidc_live_revocation_test.exs",
+      "web/src/api/__tests__/identity.removeMembers.test.ts"
+    ],
+    "issues": [
+      "mix letflow.check.test could not be shown to pass end-to-end in this session -- two full 16-partition attempts both hit widespread, unrelated (non-REQ-378) failures attributable to this host's parallel-runner/_build-hardlink fragility, not to this change. See result.summary for the substitute evidence gathered directly from that run's own output (zero ISS-0069 substring hits, zero failures for the new test module)."
+    ],
+    "git_evidence": {
+      "branch_name": "feature/WF03-ISS0736-20260921",
+      "commit_sha_list": ["917953e7"],
+      "remote_branch": "origin/feature/WF03-ISS0736-20260921",
+      "push_status": "pushed",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": "TEST-DESIGN-VALIDATOR"
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

@@ -1,0 +1,46 @@
+id: ISS-0765
+title: >
+  web/src/api/identity.ts groupsApi.addMembers/.list/.get/.update/.delete/.members
+  all share the same broken /api/v1/admin/groups/... prefix .removeMembers
+  had before ISS-0736's fix
+discovered_by: CODE-DESIGN-VALIDATOR
+discovered_in_run: WF03-ISS0736-20260921
+discovered_at: "2026-09-21T00:00:00Z"
+severity: MAJOR
+tags:
+  - frontend
+  - api
+  - groups
+description: >
+  Flagged during REQ-378's design rework (CODE-DESIGN-VALIDATOR, run
+  WF03-ISS0736-20260921, part of ISS-0736's fix) as an out-of-scope
+  finding. web/src/api/identity.ts's groupsApi.addMembers, .list, .get,
+  .update, .delete, and .members all still call the same
+  /api/v1/admin/groups/... URL prefix that groupsApi.removeMembers used
+  before this run fixed it -- no matching backend route exists at that
+  prefix. removeMembers was corrected in scope for ISS-0736/REQ-378
+  because it was directly implicated in that fix's regression coverage;
+  the sibling group-management calls were left untouched as genuinely
+  out of scope for a live-revocation-check fix, but they carry the exact
+  same defect and are presumably equally broken at runtime today.
+affected_files:
+  - web/src/api/identity.ts
+related_requirements:
+  - REQ-378
+related:
+  - ISS-0736  # discovered as an out-of-scope finding during ISS-0736's fix (design rework)
+severity_rationale: >
+  MAJOR -- every group-management admin action other than remove-members
+  (add members, list/get/update/delete a group) is calling a URL prefix
+  with no matching backend route, i.e. likely non-functional in
+  production today; not BLOCKER only because it is confined to the
+  Groups admin surface rather than authentication/authorization itself.
+fix_direction: >
+  Audit web/src/api/identity.ts's groupsApi and the actual backend route
+  table together; correct addMembers/.list/.get/.update/.delete/.members
+  to the real /api/v1 group-management route prefix, following the same
+  correction already applied to .removeMembers in ISS-0736/REQ-378, and
+  add regression coverage mirroring
+  web/src/api/__tests__/identity.removeMembers.test.ts for each corrected
+  call.
+status: open

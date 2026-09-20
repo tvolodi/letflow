@@ -1,0 +1,63 @@
+{
+  "handoff_id": "c1a1e001-0000-4000-8000-00000000000b",
+  "run_id": "WF03-ISS0736-20260921",
+  "workflow_id": "WF-03",
+  "step": "04b",
+  "from_agent": "ORCH",
+  "to_agent": "TEST-DESIGN-VALIDATOR",
+  "file": "handoffs/WF03-ISS0736-20260921/step-04b-test-design-validator.json",
+  "created_at": "2026-09-20T21:09:58Z",
+  "started_at": "2026-09-20T21:09:58Z",
+  "completed_at": "2026-09-20T21:14:22Z",
+  "status": "COMPLETED",
+  "priority": "HIGH",
+  "context": {
+    "stage": "S4",
+    "requirement_ids": ["REQ-378"],
+    "requirement_text": {
+      "REQ-378": "See handoffs/WF03-ISS0736-20260921/step-00-git-setup.json context.requirement_text.REQ-378 for the full verbatim text."
+    },
+    "related_handoff_ids": ["c1a1e001-0000-4000-8000-00000000000a"],
+    "artifacts_in": [
+      "test/letflow/plugs/iss0736_oidc_live_revocation_test.exs",
+      "web/src/api/__tests__/identity.removeMembers.test.ts",
+      "test/specs/ISS-0736.md",
+      "handoffs/WF03-ISS0736-20260921/step-04-test-designer.json",
+      "lib/letflow/design/req378-oidc-live-revocation-check.md"
+    ],
+    "owned_modules": [
+      "lib/letflow/plugs/auth_pipeline.ex",
+      "lib/letflow/identity.ex",
+      "web/src/api/identity.ts",
+      "web/src/pages/admin/GroupsPage.tsx"
+    ]
+  },
+  "task": {
+    "description": "Hard gate on TEST-DESIGNER's coverage. Read handoffs/WF03-ISS0736-20260921/step-04-test-designer.json's result.summary in full (its fail-then-pass proof) plus the actual test files. Verify: (1) every one of REQ-378's 4 acceptance criteria has a runnable test or is otherwise covered (AC4 is a process gate, not a test -- confirm AC1/AC2/AC3 are the three that need test coverage and each has one); (2) independently re-run test/letflow/plugs/iss0736_oidc_live_revocation_test.exs and web/src/api/__tests__/identity.removeMembers.test.ts yourself and confirm they pass on this branch as-is -- quote actual output, do not trust the handoff's claim; (3) independently apply AT LEAST ONE mutant to the fix (e.g. revert just the role-list substitution in attach_auth_context's call site, or make verify_local_account_state/2 always return :active) in a throwaway worktree and confirm the backend test fails against it, then revert and verify git status clean -- this is the 'validator must independently apply at least one mutant' rule from WF-03.md's fail-then-pass section; (4) TEST-DESIGNER reported mix letflow.check.test could not be shown green end-to-end due to documented pre-existing environment fragility (ISS-0699/ISS-0428, stale _build hardlinks under this host's parallel runner) -- independently assess whether that's a credible, pre-existing, unrelated issue (check docs/issues/ISS-0699.yaml and ISS-0428.yaml exist and describe this) rather than this change's own regression; if credible, note it plainly rather than blocking on it (TEST-RUNNER's Step 4c full-suite run is the next checkpoint for this anyway).",
+    "acceptance_criteria": [
+      "Backend and frontend new tests independently re-run and confirmed passing, actual output quoted",
+      "At least one mutant independently applied and shown to fail the backend test, then reverted and verified clean (git status --porcelain empty)",
+      "AC1/AC2/AC3 coverage confirmed test-by-test, not by general impression",
+      "ISS-0699/ISS-0428 credibility check performed, not just trusted"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "AC-by-AC coverage confirmed against REQ-378's own 4 acceptance_criteria (docs/requirements.yaml lines 28103-28107), not general impression. AC4 (SECURITY-REVIEWER sign-off) is a process gate, correctly not a test. AC1 (revoke-then-immediately-retry, no sleep/refresh, same JWT) -> test/letflow/plugs/iss0736_oidc_live_revocation_test.exs test 1 (role revocation) and test 2 (account deactivation), both dispatching through the real Letflow.Router.call/2 chain with the identical 'Bearer valid-test-token' across before/after requests, no Process.sleep or re-auth call anywhere in the file (grepped). AC2 (reachable through web/'s own GUI) -> web/src/api/__tests__/identity.removeMembers.test.ts asserts groupsApi.removeMembers(groupId, userId) hits the real DELETE /api/v1/identity/groups/:id/members/:user_id route (per the handoff's own explicit allowance to test identity.ts directly rather than the full GroupsPage.tsx click path). AC3 (403 renders through existing QueryStateBoundary/PermissionDenied contract, unchanged) -> no code on that path changed (design doc §3, independently re-read: reuses the existing reject/4 helper and evaluate_access/2's existing Deny403, zero new response shapes), and pre-existing coverage of that unchanged contract already exists and was independently confirmed present: web/src/utils/classifyError.ts:17 maps both 401 and 403 to 'permission-denied' (read directly), and web/tests/unit/PermissionDenied.test.tsx (TC-PD-01..05) plus web/src/components/ui/__tests__/PermissionDenied.test.tsx assert the no-leak, fixed-copy rendering of that state -- both pre-existing and unmodified by this change, so no new AC3-specific test was owed and none is missing. No @tag :skip, no 'TODO: implement test' in either new test file or in test/specs/ISS-0736.md (grepped). No hardcoded secrets: 'Bearer valid-test-token' is the established Letflow.Oidc.TokenVerifierDouble sentinel fixture, not a real credential, matching test/letflow/plugs/auth_pipeline_test.exs's existing pattern. Both tests use unique_slug/1-generated tenant slugs plus on_exit/1 teardown -- no shared hardcoded state; each test is fully self-sufficient (own tenant/schema/group per test, no ordering dependency).\n\nIndependently re-ran both new test files myself (not trusting the handoff's claim): Backend -- `mix test test/letflow/plugs/iss0736_oidc_live_revocation_test.exs --seed 0` on branch tip (9b9ad678) -> `Result: 2 passed`. Frontend -- `npx vitest run src/api/__tests__/identity.removeMembers.test.ts` on branch tip -> `Test Files 1 passed (1)`, `Tests 2 passed (2)`.\n\nMutant independently applied (not just reading TEST-DESIGNER's reported counts): this is a fix to EXISTING behavior (authenticate_oidc/2 pre-existed), so the normal fail-then-pass rule applies rather than the 'code did not exist' exception, but I applied an independent mutant anyway per the handoff's explicit instruction. Created a throwaway detached-HEAD worktree (`git worktree add --detach ../letflow-iss0736-mutant HEAD`), symlinked deps/ (read-only) from the primary checkout, built its own separate fresh _build (deliberately NOT shared with the primary checkout, to avoid contaminating it per ISS-0699/ISS-0428/ISS-0264's documented _build-fragility class). Mutated lib/letflow/plugs/auth_pipeline.ex's verify_local_account_state/2 in the worktree to `defp verify_local_account_state(_provisioned, _tenant_id), do: {:ok, [\"PLATFORM_ADMIN\"]}` -- ignoring both the live users.status field and the live group-membership query entirely (a stronger mutant than reverting just the role-list substitution, since it also neutralizes the :inactive short-circuit test 2 depends on). Ran `mix test test/letflow/plugs/iss0736_oidc_live_revocation_test.exs --seed 0` in the worktree -> both tests failed: test 1 `assert revoked_conn.status == 403` got `left: 200, right: 403`... test 2 `assert deactivated_conn.status == 403` -> `left: 200, right: 403`, overall `Result: 0/2 passed, Failed: 2 tests`. Confirms both tests genuinely discriminate correct-vs-wrong live-check logic, not just presence-of-the-function. Removed the worktree afterward (`git worktree remove --force ../letflow-iss0736-mutant`); `git worktree list` confirms only the two pre-existing worktrees (primary + an unrelated uat-pilot one) remain; `git status --porcelain` on the primary checkout is empty except the pre-existing untracked `web/tests/e2e/.pipeline-state/` directory that was already present at session start (unrelated to this run, not created by this validation).\n\nISS-0699/ISS-0428 credibility check performed, not trusted: both docs/issues/ISS-0699.yaml and ISS-0428.yaml exist and are status: resolved, but neither actually describes the specific symptom TEST-DESIGNER cited them for (stale/partial per-partition _build hardlinks producing UndefinedFunctionError for modules that exist on disk) -- ISS-0699 is about scripts/test_parallel.sh never cleaning up its /tmp partition-log directories (disk growth, not a test-correctness issue), and ISS-0428 is about wiring the parallel runner into `mix letflow.check.test` (now resolved/shipped) with no UndefinedFunctionError symptom described. This is a citation-accuracy gap, flagged as MINOR below rather than blocking. The actual phenomenon is nonetheless credible and independently well-precedented: docs/issues/ISS-0264.yaml (read in full) documents, on a prior unrelated run, `scripts/test_parallel.sh` full-suite output with 358 failures where '357 of the 358 failures were UndefinedFunctionError/module-unavailable errors against modules not in this branch's diff, inconsistent per partition (a real missing symbol fails identically everywhere)', directly reproduced there as a false positive by re-running one such file standalone (28/28 passed, 0 failures) -- the same shared-host-contention/stale-partition-artifact class TEST-DESIGNER's evidence describes, just documented under a different issue number than the two cited. Given (a) this precedent, (b) TEST-DESIGNER's own substitute evidence (isolated forced-fresh-recompile run: 2 passed, zero warnings; zero grep hits for the ISS-0069 substring across the full run; zero failure-header hits for the new test module in the full run's own log), and (c) my own independent re-run of both new test files passing cleanly in isolation, I assess this as credible pre-existing environment fragility, not this change's own regression -- noted plainly, not blocking. TEST-RUNNER's Step 4c full-suite run remains the next checkpoint to re-attempt a clean end-to-end pass.",
+    "artifacts_out": [],
+    "issues": [
+      {"severity": "MINOR", "description": "TEST-DESIGNER's step-04 handoff and test/specs/ISS-0736.md both cite docs/issues/ISS-0699.yaml and ISS-0428.yaml as documenting the observed UndefinedFunctionError/stale-_build-hardlink full-suite symptom. Read both directly: neither actually describes that symptom (ISS-0699 is /tmp cleanup, ISS-0428 is parallel-runner-into-check.test wiring). The closer, correctly-matching precedent is docs/issues/ISS-0264.yaml, which documents the identical UndefinedFunctionError-under-parallel-contention pattern on a prior unrelated run. Recommend TEST-DESIGNER/whoever next touches test/specs/ISS-0736.md correct the citation to ISS-0264 (and optionally ISS-0110 for the adjacent too_many_connections pattern) rather than ISS-0699/ISS-0428 -- not a blocker, since the underlying credibility assessment still holds on ISS-0264's evidence.", "affected_requirement": "REQ-378"}
+    ],
+    "git_evidence": {
+      "branch_name": "feature/WF03-ISS0736-20260921",
+      "commit_sha_list": [],
+      "remote_branch": "origin/feature/WF03-ISS0736-20260921",
+      "push_status": "ok",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": "Route to TEST-RUNNER (Step 4c) for the full mix letflow.check.test / scripts/test_parallel.sh suite run -- TEST-DESIGNER could not obtain a clean end-to-end run in its own session (credible pre-existing environment fragility per the ISS-0264 precedent, see summary), so this is the checkpoint that must actually produce a clean full-suite result before REQ-378 advances further."
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

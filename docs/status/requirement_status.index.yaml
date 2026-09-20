@@ -4293,7 +4293,7 @@ volumes:
     path: docs/status/requirement_status.v21.yaml
     status: current
     opened: 2026-09-20
-    entries: 1
+    entries: 3
     note: >
       Opened by DOC-UPDATER's own ISS-0743 close-out, successor to volume 20
       (closed at 19 entries / 1227 frozen-prefix lines, over the 1200-line

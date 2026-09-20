@@ -1,0 +1,62 @@
+{
+  "handoff_id": "c1a1e001-0000-4000-8000-000000000013",
+  "run_id": "WF03-ISS0736-20260921",
+  "workflow_id": "WF-03",
+  "step": "03c-rework1",
+  "from_agent": "ORCH",
+  "to_agent": "REVIEWER",
+  "file": "handoffs/WF03-ISS0736-20260921/step-03c-reviewer-rework1.json",
+  "created_at": "2026-09-20T21:58:41Z",
+  "started_at": "2026-09-20T21:58:41Z",
+  "completed_at": null,
+  "status": "PENDING",
+  "priority": "HIGH",
+  "context": {
+    "stage": "S4",
+    "requirement_ids": ["REQ-378"],
+    "requirement_text": {
+      "REQ-378": "See handoffs/WF03-ISS0736-20260921/step-00-git-setup.json context.requirement_text.REQ-378 for the full verbatim text."
+    },
+    "related_handoff_ids": ["c1a1e001-0000-4000-8000-000000000012"],
+    "artifacts_in": [
+      "lib/letflow/design/req378-oidc-live-revocation-check.md",
+      "handoffs/WF03-ISS0736-20260921/step-03-elixir-dev-rework1.json",
+      "handoffs/WF03-ISS0736-20260921/step-03b-security-reviewer-rework1.json",
+      "priv/repo/migrations/20260921000001_add_role_claims_synced_at_to_users.exs",
+      "lib/letflow/identity.ex",
+      "lib/letflow/identity/user.ex"
+    ],
+    "owned_modules": [
+      "lib/letflow/plugs/auth_pipeline.ex",
+      "lib/letflow/identity.ex",
+      "lib/letflow/identity/user.ex"
+    ]
+  },
+  "task": {
+    "description": "SECURITY-REVIEWER already PASSED this delta (handoffs/WF03-ISS0736-20260921/step-03b-security-reviewer-rework1.json). Your gate on the delta only: idiom/style of sync_role_claims_from_token/3 and resolve_group_ids_for_role_names/2 against neighboring Identity functions; migration file follows this codebase's tenant-scoped-migration conventions (compare against a recent sibling migration); no scope creep beyond §2.2/§2.3 of the design; the 3 test-assertion corrections (test/letflow/plugs/auth_pipeline_test.exs:167, test/letflow/plugs/api_pipeline_integration_test.exs:130, test/letflow/routers/req077_promotion_pipeline_test.exs:1053) changed ONLY the named line in each file (verify via git diff, not by trust). Also confirm SECURITY-REVIEWER's two out-of-scope recommendations (file the lib/letflow/plugs/tenant_status.ex:92-95 raw-role-check hygiene issue, and the earlier-flagged groupsApi.addMembers/.list/.get/.update/.delete/.members broken-prefix sibling bug) are noted in your summary so ORCH files both post-merge.",
+    "acceptance_criteria": [
+      "Idiom/style check against neighboring Identity.ex code",
+      "Migration convention check against a real sibling migration",
+      "No scope creep beyond §2.2/§2.3",
+      "Confirmed via diff that only the single named line changed in each of the 3 test files",
+      "Both follow-up issues (tenant_status.ex raw-role-check, groupsApi broken-prefix siblings) explicitly listed in result.summary for ORCH to file"
+    ]
+  },
+  "result": {
+    "status": "PENDING",
+    "summary": "",
+    "artifacts_out": [],
+    "issues": [],
+    "git_evidence": {
+      "branch_name": null,
+      "commit_sha_list": [],
+      "remote_branch": null,
+      "push_status": "skipped",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": ""
+  },
+  "rework_count": 1,
+  "max_rework": 3
+}

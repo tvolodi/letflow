@@ -27538,3 +27538,112 @@ requirements:
       - "test/fixtures/uat/scenarios/platform/definition-promotion-rollback.yaml NOTE removed/updated and its named pipeline_test spec authored and passing"
       - "npm run type-check, npm run lint, npm run test, npm run build all pass"
     depends_on: []
+
+  - id: REQ-372
+    title: "Semantic decision-rule validation (field-existence + type-compatibility checking) for process authoring, with re-check on release submission"
+    owner: ELIXIR-DEV
+    status: pending
+    stage: S8
+    description: >
+      Filed from a GUI-review sweep applying "review real screens before
+      writing a blind Playwright spec" to
+      test/fixtures/uat/scenarios/platform/definition-type-error-blocked.yaml
+      (test/uat-reports/gui-review-2026-09-20-definition-type-error-blocked.md
+      has the full trace). That scenario's own stale NOTE (ISS-0527) already
+      flagged its pipeline_test as an aspirational forward-reference to a
+      feature never built; this run verified that independently by reading
+      current source rather than trusting the note, and confirms the
+      underlying feature genuinely does not exist, in whole or in part.
+
+      WHAT EXISTS TODAY, verified 2026-09-20 by direct source read (not
+      inference): Letflow.Definitions.Graph.validate_edge_conditions/1
+      (REQ-029) checks structural edge-condition rules (default/condition
+      conflicts, single-default-edge, and — since REQ-288 — real CEL
+      grammar validity via Letflow.Engine.Expr.parse_strict/1). None of
+      this resolves a variable NAME against anything: REQ-288's own
+      docstring for the check it replaced states it "never resolves
+      variable names," and REQ-288 itself only tightened syntax/grammar
+      checking, explicitly out of scope for name resolution.
+      Letflow.Engine.VariableSchema (REQ-109) stores each process's
+      declared fields, but a grep of lib/ for any call cross-referencing an
+      authored expression's variable references against VariableSchema
+      returns zero hits outside REQ-291's x-ui vocabulary path
+      (visible_when/computed/cross-field validation on FORM FIELDS only,
+      docs/frontend/ x-ui vocabulary) — REQ-291's own field-existence check
+      does not run against EXCLUSIVE_GATEWAY edge conditions or any
+      task-routing/assignment rule. Letflow.Definitions.Graph.check_*
+      node-attribute validators (REQ-029 CHK-09..12) require a HUMAN_TASK's
+      "role" attribute to be a non-blank STRING, not an expression — there
+      is no mechanism today for a human-task assignment rule to reference a
+      process field at all, so the scenario's "routes to a reviewer using a
+      field the process does not hold" case has no code path to even reach.
+      Nowhere in lib/letflow/ does any check compare the declared TYPE of
+      two expression operands (e.g. a money-amount field against a
+      customer-name field) — Expr.parse_strict/1 is untyped; it validates
+      syntax only. web/src's DefinitionEditorPage.tsx / ValidationSummaryBar
+      / per-node canvas annotation plumbing is real and generic (any
+      {nodeId|edgeId, message, severity} renders correctly, per-node
+      annotations already exist for SUB_PROCESS interface errors, REQ-032),
+      but nothing feeds it a field-existence or type-mismatch violation
+      today, and there is no misspelled-field-name suggestion feature
+      (grepped lib/ and web/src for did-you-mean/Levenshtein/nearest-field
+      logic — no hits).
+
+      THIS REQUIREMENT (backend half; a follow-on FRONTEND-DEV requirement,
+      sized once this lands, wires the canvas/problem-list presentation —
+      same two-step shape as REQ-288 then REQ-291): build the semantic
+      validation pass itself. Given a definition's graph and its
+      VariableSchema-declared fields, for every authored rule expression
+      (EXCLUSIVE_GATEWAY edge condition at minimum; decide and record
+      explicitly whether a HUMAN_TASK routing/assignment-by-field mechanism
+      is in scope here or is its own prerequisite gap to file separately —
+      do not silently assume one way), report ALL violations in one pass
+      (no fix-one-to-see-the-next), each violation naming the offending
+      step/rule and the rule text as authored, for two rule classes:
+      (1) a referenced variable name not present in the process's declared
+      VariableSchema fields — the violation must name the exact typed
+      string and suggest the nearest declared field name (a real
+      string-distance measure such as Levenshtein against the declared
+      field list, not a placeholder); (2) a comparison between two operands
+      whose declared VariableSchema types are not comparable (e.g. a money/
+      numeric field against a text/string field) — decide and record
+      explicitly which type pairs are and are not comparable, rather than
+      leaving the boundary implicit. This pass must re-run in full — not
+      read a cached prior result — at whatever the definition's actual
+      release/promotion submission call path is (verify at start which
+      function that is; do not assume it is the same
+      validate_definition_graph/2 the draft-save path uses without
+      confirming).
+
+      Re-verify at start rather than trusting this description: the current
+      shape of Letflow.Definitions.Graph.validate_edge_conditions/1's
+      Violation struct and call sites (REQ-288 already extended these
+      three: create/2, validate_update_graph/1 under update/2,
+      validate_definition_graph/2 — confirm they are unchanged), the exact
+      declared-field type vocabulary VariableSchema currently supports, and
+      whether any HUMAN_TASK routing-by-field mechanism has landed under a
+      different name since this filing.
+
+      SCOPE FENCE: backend field-existence and type-compatibility checking,
+      its violation shape (including the suggestion string), and re-running
+      it at release-submission time. Does not build the frontend
+      presentation (canvas problem markers, the problem-list UI, or the
+      release-submission re-check screen) — that is explicitly a follow-on
+      FRONTEND-DEV requirement once this lands, filed the same way REQ-291
+      followed REQ-288. Does not extend Letflow.Engine.Expr's grammar
+      (REQ-288's closed EXP-102 decision stands unchanged) — this
+      requirement adds a separate, subsequent semantic pass over an
+      already-parsed expression's referenced names and operand types, not a
+      grammar change.
+    acceptance_criteria:
+      - "a definition whose EXCLUSIVE_GATEWAY edge condition references a variable name absent from the definition's declared VariableSchema fields produces a violation naming the exact typed variable name and the step/edge it belongs to, proven by a test"
+      - "that violation's message includes a suggested nearest declared field name, computed by a real string-distance measure (not a placeholder or first-alphabetical fallback), proven by a test with a clear one-typo case (e.g. 'cusotmer_name' when 'customer_name' is declared)"
+      - "a definition comparing two operands of declared VariableSchema types this requirement records as non-comparable (at minimum: a numeric/money type against a text/string type) produces a violation, proven by a test; the comparable/non-comparable type-pair table is stated explicitly in the moduledoc, not left implicit"
+      - "a definition with two independent broken rules (one field-existence violation, one type-compatibility violation) produces BOTH violations in a single validation call, proven by a test — the author is never required to fix one to discover the other"
+      - "a definition with zero semantic violations validates cleanly, proven by a test, including after both of the above violations are corrected in the same test"
+      - "the semantic validation pass re-runs in full (not from a cached prior result) at the definition's actual release/promotion submission call path, proven by a test that changes the underlying VariableSchema or expression state between an earlier clean validation and the submission call, and asserts the submission call reflects the fresh state"
+      - "whether a HUMAN_TASK routing/assignment-by-field mechanism is in scope for this requirement is stated explicitly in the moduledoc with the reasoning, not left for a reader to infer from what tests do or don't cover"
+      - "git diff shows lib/letflow/engine/expr.ex unmodified, or if modified, modified only in ways that add no token/operator/builtin -- state which, per REQ-288's precedent"
+      - "no file under web/ is modified by this requirement"
+      - "mix letflow.check passes, with real output quoted"
+    depends_on: [REQ-109, REQ-288, REQ-291]

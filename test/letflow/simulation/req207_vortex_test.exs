@@ -1748,13 +1748,47 @@ defmodule Letflow.Simulation.Req207VortexTest do
       # 3''/3''') nor the harness (Signal 5), so it was promoted to
       # allowed_ids above with the full account of why. See that entry for
       # the re-derivation; it is no longer listed in this tier.
+      #
+      # REQ-393/REQ-394 (filed 2026-09-20 by ORCH, from the GUI-review UAT
+      # pass on the SISTER scenario -- the narrative UAT-RUNNER fixture at
+      # test/fixtures/uat/scenarios/vortex/entity-list-filter-and-page.yaml,
+      # NOT this test's own Letflow.Simulation.Runner fixture, but the exact
+      # same underlying scenario concept -- see
+      # test/uat-reports/gui-review-2026-09-20-entity-list-filter-and-page.md)
+      # are admitted HERE while `status: pending`, per this tier's own rule:
+      # filing builds nothing, so they are armed rather than waved through.
+      #
+      # REQ-393 (owner FRONTEND-DEV) will build a generic filter/sort/
+      # page-size entity-LIST SCREEN under `web/` -- a browser-rendered React
+      # component, not anything under `lib/letflow/` or
+      # `test/support/simulation/`. It cannot touch Signal 3''/3'''s route
+      # equality (it adds no HTTP route; it consumes the existing
+      # `POST /entities/query`) and cannot touch Signal 5 (it has no
+      # relationship whatsoever to `Letflow.Simulation.Runner`, which this
+      # test's scenario runs against -- that module has no concept of `web/`
+      # at all). REQ-394 (owner ELIXIR-DEV, security-relevant) will build a
+      # new per-entity-type authorization CHECK layered onto the two EXISTING
+      # routes (`POST /entities/query`, `GET /entities/definitions/active/:name`)
+      # -- its own acceptance criteria state explicitly that the existing
+      # coarse route-level permissions are not removed and no route is added
+      # or renamed, so it too should leave Signal 3''/3''' untouched, and it
+      # has no more relationship to `Letflow.Simulation.Runner`'s `:gui ->`
+      # dispatch clause than REQ-393 does.
+      #
+      # Both predictions are recorded here, not assumed permanently: per this
+      # tier's own contract, the moment either flips to `status: done` this
+      # tripwire fires again and the disposition must be RE-DERIVED LIVE
+      # against Signals 3''/3'''/5 as they then stand -- not waved into
+      # allowed_ids on the strength of this comment alone.
       pending_only_ids = [
         "REQ-315",
         "REQ-316",
         "REQ-317",
         "REQ-318",
         "REQ-319",
-        "REQ-320"
+        "REQ-320",
+        "REQ-393",
+        "REQ-394"
       ]
 
       refute Enum.empty?(entity_title_matches),

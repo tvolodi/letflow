@@ -7,6 +7,22 @@
 # synthetic fixtures under test/fixtures/simulation/<company>/scenarios/ instead. Do
 # not edit the ported content below except to keep it byte-identical to a re-pull of
 # the same commit.
+#
+# NOTE (ISS-0740, added during the 2026-09-20 GUI-review sweep): this scenario
+# targets R-Co's own PW-11 / sys-agent-artifact-lifecycle feature -- an automated
+# coding-worker artifact-submission pipeline (agent_task_specs.zig /
+# agent_sandboxes.zig / agent_artifacts.zig). Letflow has NOT built the equivalent
+# runtime-agent subsystem: lib/letflow/router.ex's "Deferred routes" table lists
+# Letflow.Routers.AgentRequests/AgentResponses/AgentEvents as post-S6 (runtime-agent
+# subsystem) with no owning requirement, and no stage in docs/migration/README.md's
+# S0-S9 breakdown claims it. There is no Letflow module resembling instruction
+# registration, attempt-number/content-hash delivery dedup, or a reviewer-acceptance
+# console for agent-submitted work -- confirmed by exhaustive grep across
+# lib/letflow/ and web/src/. Unlike this scenario's sibling
+# (platform-sandbox-cross-tenant-probe.yaml, ISS-0527), there is no existing Letflow
+# module a reader might mistakenly map this onto -- the subsystem is simply absent.
+# Closed as ISS-0740 (closed_not_applicable): this is R-Co source material for a
+# subsystem never adopted into Letflow's scope, not an unbuilt-but-in-scope gap.
 ---
 id: platform-agent-artifact-resubmit-idempotent
 company_id: platform

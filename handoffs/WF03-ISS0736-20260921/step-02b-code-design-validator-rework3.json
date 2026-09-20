@@ -8,8 +8,8 @@
   "file": "handoffs/WF03-ISS0736-20260921/step-02b-code-design-validator-rework3.json",
   "created_at": "2026-09-20T21:46:24Z",
   "started_at": "2026-09-20T21:46:24Z",
-  "completed_at": null,
-  "status": "PENDING",
+  "completed_at": "2026-09-20T21:48:39Z",
+  "status": "COMPLETED",
   "priority": "HIGH",
   "context": {
     "stage": "S4",
@@ -39,19 +39,26 @@
     ]
   },
   "result": {
-    "status": "PENDING",
-    "summary": "",
-    "artifacts_out": [],
-    "issues": [],
+    "status": "PASS",
+    "summary": "FINAL RE-GATE PASS (rework 3/3). Independently re-verified all four items against real source, not the design's own citations: (1) Letflow.Api.Authorization.roles_from_strings/1 (authorization.ex:408-418) reduces via role_from_string/1 (:420-426), a 6-clause exhaustive match on the closed role() type with a catch-all `nil` for anything else, dropped silently by the reduce accumulator -- read directly, confirmed roles_from_strings([\"VIEWER\"]) == []. (2) Grepped every real call site of roles_from_strings/1 and of conn.assigns.auth_context.roles across lib/: exactly 3 code call sites feed an access decision (authorize.ex:105, routers/entities.ex:2104, routers/tasks.ex:258), all route through roles_from_strings/1 before evaluate_access/2, confirmed by reading each. One additional raw-role consumer found and independently investigated: lib/letflow/plugs/tenant_status.ex:92-95 checks `@platform_admin not in roles` directly against conn.assigns.auth_context.roles (a real PLATFORM_ADMIN-exemption grant decision, bypassing roles_from_strings/1) -- this is a true statement the design's own §2.3 text does not literally claim to rule out (it scopes its claim precisely to 'into evaluate_access/2 or any role_allows?/2 check', which TenantStatus does not call), and independently confirmed immaterial to this rework's specific fix: none of the 3 named tests' fixtures ever sets tenant.status to :inactive, so that branch never fires in any of them, and 'VIEWER' != 'PLATFORM_ADMIN' either way -- reported here as a non-blocking observation, not a design defect (it does not misdescribe anything §1-§2.2 changed, and post-fix it actually becomes live-consistent too, since conn.assigns.auth_context.roles itself becomes the live-queried list for OIDC users after §1 lands). (3) Read all 3 cited test files at the cited lines directly: auth_pipeline_test.exs:167, api_pipeline_integration_test.exs:130, req077_promotion_pipeline_test.exs:1053 all currently assert `roles == [\"VIEWER\"]` exactly as the design states, and all other cited assertions in each test (refute conn.halted / tenant_id / persisted checks in file 1; conn.status==403 / tenant_id / user_id in file 2; conn.status==403 / tenant_id / body[\"detail\"]/entries-absence in file 3) are confirmed unaffected by the proposed change -- the proposed `assert roles == []` / `assert conn.assigns.auth_context.roles == []` edits are correct and sufficient to make each test pass again without weakening any of those other assertions. Also confirmed test/support/token_verifier_double.ex:36 mints realm_access.roles: [\"VIEWER\"] as cited, and read all 3 tests' own tenant-seeding helpers (insert_tenant_for_realm!/insert_bpm_default_tenant!) directly -- none seeds any tenant_role or group_members row, confirming the live query and one-time sync both correctly resolve to [] for this fixture. (4) Spot-checked §2.2's identity.ex citations (insert_or_fetch_group_member/3 exists as a private helper backing add_group_member/3, matching §2.2.2 step 2) -- nothing in §§0-2.2 needs to change as a result of §2.3's addendum; the TenantStatus finding in (2) does not require any change to §1-§2.2's design, only the observation recorded above. Design is complete, unambiguous, and contains no implementation code -- signatures/specs only throughout §§1-9.",
+    "artifacts_out": [
+      "handoffs/WF03-ISS0736-20260921/step-02b-code-design-validator-rework3.json"
+    ],
+    "issues": [
+      {
+        "severity": "MINOR",
+        "description": "lib/letflow/plugs/tenant_status.ex:92-95 reads conn.assigns.auth_context.roles directly (raw strings, checking membership of literal 'PLATFORM_ADMIN') for its tenant-inactive-403 PLATFORM_ADMIN exemption, bypassing roles_from_strings/1 -- a real access-decision call site the design's §2.3 does not enumerate. Immaterial to this rework's 3-test fix (verified: no test's fixture sets tenant.status: :inactive, and 'VIEWER' is not 'PLATFORM_ADMIN' under either the old or new role-list contents), and not a regression introduced by this design (conn.assigns.auth_context.roles itself becomes live-queried for OIDC users once §1 lands, so this plug's exemption check becomes live-consistent too, as a side effect). Flagging for SECURITY-REVIEWER's own pass, not a design-phase blocker."
+      }
+    ],
     "git_evidence": {
-      "branch_name": null,
+      "branch_name": "feature/WF03-ISS0736-20260921",
       "commit_sha_list": [],
-      "remote_branch": null,
-      "push_status": "skipped",
+      "remote_branch": "origin/feature/WF03-ISS0736-20260921",
+      "push_status": "pending",
       "pr_url": null,
       "pr_create_error": null
     },
-    "next_action": ""
+    "next_action": "Route to ELIXIR-DEV to implement lib/letflow/design/req378-oidc-live-revocation-check.md's §2.2 (one-time claims-to-group_members sync mechanism: users.role_claims_synced_at migration, Letflow.Identity.sync_role_claims_from_token/3, resolve_group_ids_for_role_names/2, and the insert_or_fetch/4 / upsert_by_external_identity/4 / re_select_on_conflict/3 call-site changes) AND §2.3's 3 test-assertion corrections (auth_pipeline_test.exs:167, api_pipeline_integration_test.exs:130, req077_promotion_pipeline_test.exs:1053 -- each a literal roles == [\"VIEWER\"] -> roles == [] change, no other assertion touched) in the same implementation pass, per this handoff's own task.acceptance_criteria item 3. SECURITY-REVIEWER's subsequent pass should also weigh this handoff's result.issues[0] (tenant_status.ex's raw-role PLATFORM_ADMIN check) even though it is out of this design's own scope."
   },
   "rework_count": 3,
   "max_rework": 3

@@ -8,8 +8,8 @@
   "file": "handoffs/WF03-ISS0736-20260921/step-02-code-designer-rework1.json",
   "created_at": "2026-09-20T19:21:42Z",
   "started_at": "2026-09-20T19:21:42Z",
-  "completed_at": null,
-  "status": "PENDING",
+  "completed_at": "2026-09-20T19:23:37Z",
+  "status": "COMPLETED",
   "priority": "HIGH",
   "context": {
     "stage": "S4",
@@ -48,19 +48,21 @@
     ]
   },
   "result": {
-    "status": "PENDING",
-    "summary": "",
-    "artifacts_out": [],
+    "status": "PASS",
+    "summary": "Amended lib/letflow/design/req378-oidc-live-revocation-check.md §4 in place (added §4.1), leaving §§0-3/5-10 unchanged, to fix the single BLOCKER from step-02b's FAIL. Independently re-verified against current source (not the previous design's own assertion): web/src/api/identity.ts:55-58's removeMembers(id, userIds) discards userIds and calls client.delete(`/api/v1/admin/groups/${id}/members`), and no backend route matches that path -- confirmed via lib/letflow/plugs/api_pipeline.ex:141 (forward(\"/identity\", to: Letflow.Routers.Identity); no /admin/groups mount exists anywhere in api_pipeline.ex or router.ex) and lib/letflow/routers/identity.ex:182 (authz_delete \"/groups/:id/members/:user_id\", :GroupsManage -> handle_remove_member/4), so the real, only matching route is DELETE /api/v1/identity/groups/:id/members/:user_id -- a single-member route, not a batch one. Fix design (signatures only, no implementation bodies): (1) web/src/api/identity.ts groupsApi.removeMembers signature changes from (id: string, userIds: string[]) discarding its argument to (id: string, userId: string) => Promise<void>, calling client.delete(`/api/v1/identity/groups/${id}/members/${userId}`) -- userId now threaded through the URL path, matching client.delete's no-body signature (client.ts:250-252) and the backend's conn.params[\"user_id\"] read; (2) web/src/pages/admin/GroupsPage.tsx's removeMember mutation (line 85-86) mutationFn changes from groupsApi.removeMembers(id, [userId]) to groupsApi.removeMembers(id, userId) -- no other line changes, the button's mutate() call site at line 234 already passed the correct {groupId, userId} shape into the mutation, the bug was entirely inside mutationFn/identity.ts. Explicitly scoped out (flagged in the doc, not silently fixed): groupsApi.addMembers/.list/.get/.update/.delete/.members share the same nonexistent /api/v1/admin/groups/... prefix bug, independently confirmed by the same api_pipeline.ex/router.ex read, but REQ-378/this handoff's task.description/step-02b's BLOCKER are all scoped to the revocation write path only -- flagged for ORCH/REQ-ANALYST as a separate follow-up requirement, not bundled in here. Deactivation half of AC2 (UserDetailPage.tsx) left completely unchanged, as instructed -- it was independently re-verified correct by step-02b and is out of this rework's scope.",
+    "artifacts_out": [
+      "lib/letflow/design/req378-oidc-live-revocation-check.md"
+    ],
     "issues": [],
     "git_evidence": {
-      "branch_name": null,
+      "branch_name": "feature/WF03-ISS0736-20260921",
       "commit_sha_list": [],
-      "remote_branch": null,
-      "push_status": "skipped",
+      "remote_branch": "origin/feature/WF03-ISS0736-20260921",
+      "push_status": "pending",
       "pr_url": null,
       "pr_create_error": null
     },
-    "next_action": ""
+    "next_action": "Route to CODE-DESIGN-VALIDATOR for re-gate (step-02b-2 or equivalent next handoff): re-verify amended §4/§4.1 against actual web/ and lib/letflow/routers/identity.ex source, confirm the corrected removeMembers signature/call site now genuinely reaches the real backend route, and confirm no other section was altered."
   },
   "rework_count": 1,
   "max_rework": 3,

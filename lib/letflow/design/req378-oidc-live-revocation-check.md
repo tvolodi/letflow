@@ -7,6 +7,12 @@ Owner (design): CODE-DESIGNER. Diagnosis input: ISSUE-FIXER's `result.summary` i
 "the diagnosis" — root cause independently re-derived there from source reads, not
 re-derived again here).
 
+**REWORK 1 note (2026-09-21):** CODE-DESIGN-VALIDATOR FAILed the prior version of this
+doc on exactly one BLOCKER — §4's role-revocation GUI-reachability claim for AC2 did not
+match actual `web/` source (`handoffs/WF03-ISS0736-20260921/step-02b-code-design-validator.json`).
+Only §4 is amended below (now split into §4 + new §4.1); §§0-3, §5-§10 are unchanged from
+the version CODE-DESIGN-VALIDATOR already independently re-verified as correct.
+
 ## 0. Problem recap (from the diagnosis, not re-argued)
 
 `Letflow.Plugs.AuthPipeline.authenticate_oidc/2` attaches
@@ -182,19 +188,95 @@ new response shapes, zero new status codes, zero new error tags visible past
 
 ## 4. GUI reachability (AC2, task item c)
 
-Both halves of the fix (role revocation, account deactivation) are reachable through
-**existing, already-shipped** `web/` GUI actions — no new endpoint and no `web/` change
-is required for AC2:
+**REWORK 1 — this section amended in place** after CODE-DESIGN-VALIDATOR's FAIL
+(`handoffs/WF03-ISS0736-20260921/step-02b-code-design-validator.json`, `result.issues[0]`)
+independently re-verified that the role-revocation half's claimed GUI path was false
+against actual `web/` source. Root cause, re-verified again here directly against
+current source (not copied from the validator's own citation):
 
-| Action | GUI path | Frontend call | Backend route | Backend write |
+- `web/src/api/identity.ts:55-58`'s `removeMembers(id, userIds)` discards `userIds`
+  (`void userIds`) and calls `client.delete(`/api/v1/admin/groups/${id}/members`)` — no
+  `user_id` segment, so the backend can never tell which member to remove even if the
+  route existed.
+- No backend route matches `/api/v1/admin/groups/:id/members` at all. Re-verified
+  directly against `lib/letflow/plugs/api_pipeline.ex:141`
+  (`forward("/identity", to: Letflow.Routers.Identity)` — there is no `forward("/admin",
+  ...)` mounting any group router anywhere in `api_pipeline.ex` or `router.ex`) and
+  `lib/letflow/routers/identity.ex:182` (`authz_delete "/groups/:id/members/:user_id",
+  :GroupsManage do handle_remove_member(conn, conn.params["id"], conn.params["user_id"],
+  ...) end`). The real, only route for single-member removal is **`DELETE
+  /api/v1/identity/groups/:id/members/:user_id`**.
+
+**Scope note (deliberately not fixed here):** `groupsApi.addMembers`, `.list`, `.get`,
+`.update`, `.delete`, `.members` in the same file also point at the nonexistent
+`/api/v1/admin/groups/...` prefix (confirmed by the same `api_pipeline.ex`/`router.ex`
+read above — no `/admin/groups` mount exists for any of them either). REQ-378's own
+scope, this handoff's `task.description`, and CODE-DESIGN-VALIDATOR's single BLOCKER are
+all limited to the role-**revocation** write path specifically, because that is the only
+one this requirement's live-read-side fix (§1-§3) depends on being genuinely writable.
+Fixing the sibling endpoints is a separate, pre-existing `web/` defect outside REQ-378's
+acceptance criteria — flagged here explicitly for ORCH/REQ-ANALYST to queue as its own
+follow-up requirement, not silently bundled into or silently left implied by this design.
+
+Both halves of the fix (role revocation, account deactivation) are reachable through
+`web/` GUI actions once the fix below lands — no new backend endpoint is needed (the
+correct route already exists and already does the right write; only the frontend's path
+and argument-threading are wrong):
+
+| Action | GUI path | Frontend call (corrected) | Backend route | Backend write |
 |---|---|---|---|---|
-| Revoke a role (remove user from a role-bearing group) | `web/src/pages/admin/GroupsPage.tsx` — "Manage members" dialog → per-member `Button variant="danger"` (`removeMember.mutate`, line 85-86, 234) | `groupsApi.removeMembers(groupId, [userId])` | `DELETE /groups/:id/members/:user_id` (`authz_delete "/groups/:id/members/:user_id"`, `routers/identity.ex`) | `Identity.remove_group_member/3` deletes the `group_members` row read live by §2.1's new query on the user's very next request |
+| Revoke a role (remove user from a role-bearing group) | `web/src/pages/admin/GroupsPage.tsx` — "Manage members" dialog → per-member `Button variant="danger"` (`removeMember.mutate`, line 85-86, 234) | `groupsApi.removeMembers(groupId, userId)` (single `userId: string`, not an array — see §4.1) | `DELETE /api/v1/identity/groups/:id/members/:user_id` (`authz_delete "/groups/:id/members/:user_id"`, `routers/identity.ex:182`, mounted at `/identity` per `api_pipeline.ex:141`) | `Identity.remove_group_member/3` deletes the `group_members` row read live by §2.1's new query on the user's very next request |
 | Deactivate an account | `web/src/pages/admin/UserDetailPage.tsx` — status `<select>` (`data-testid="admin-user-status"`, line 107) + save | `usersApi.update(id, { status: 'INACTIVE', ... })` → `client.patch('/api/v1/users/:id', body)` | `authz_patch "/users/:id"` → `handle_patch/3` → `Identity.update_user_profile/3` | `User.profile_changeset/2` (casts `:status` among others) updates `users.status`, read live by §1.1 step 2 on the user's very next request |
 
-Both write paths already exist and are already reachable via `web/`'s own admin UI
-today — **this design changes no `web/` file**. The gap REQ-378 closes is entirely on
-the read side (the auth pipeline never consulting what these writes already produce),
-not on the write/GUI side.
+The deactivation write path already exists and is already reachable via `web/`'s own
+admin UI today — unchanged from the previous design pass, independently re-confirmed
+correct by CODE-DESIGN-VALIDATOR. The revocation write path requires the `web/` fix in
+§4.1 below before it is genuinely reachable; once that lands, no backend change and no
+new endpoint are needed for either half — the gap REQ-378's read side (§1-§3) closes is
+entirely about the auth pipeline never consulting what these writes already produce, not
+about the write/GUI side, except for this one pre-existing frontend wiring bug §4.1 now
+fixes as part of making AC2 true.
+
+### 4.1 The `web/` fix — `groupsApi.removeMembers` and its `GroupsPage.tsx` call site
+
+**`web/src/api/identity.ts`** — `removeMembers`'s signature changes from a discarded
+`userIds: string[]` array to the single `userId: string` the real backend route actually
+takes (the backend route is inherently single-member: `DELETE
+/groups/:id/members/:user_id` has exactly one `:user_id` path segment, no batch form —
+`Identity.remove_group_member/3` is not a bulk operation), and its path gains the
+`/identity` mount prefix in place of the nonexistent `/admin`:
+
+```
+# web/src/api/identity.ts — groupsApi.removeMembers, corrected signature
+removeMembers: (id: string, userId: string) => Promise<void>
+  // implementation: client.delete<void>(`/api/v1/identity/groups/${id}/members/${userId}`)
+```
+
+(`client.delete<T>(path: string): Promise<T>` — `web/src/api/client.ts:250-252` — takes
+no body, which is fine now: `userId` is threaded through the URL path itself, not a
+request body, matching exactly how the real route reads `conn.params["user_id"]`.)
+
+**`web/src/pages/admin/GroupsPage.tsx`** — the `removeMember` mutation's `mutationFn`
+(line 85-86) currently wraps `userId` in a single-element array to match the old (wrong)
+array signature; it changes to pass `userId` straight through to the corrected
+single-argument `removeMembers`:
+
+```
+# web/src/pages/admin/GroupsPage.tsx — removeMember mutation, corrected mutationFn
+const removeMember = useMutation({
+  mutationFn: ({ groupId: id, userId }: { groupId: string; userId: string }) =>
+    groupsApi.removeMembers(id, userId),   // was: groupsApi.removeMembers(id, [userId])
+  ...
+})
+```
+
+No other line in `GroupsPage.tsx` changes: the mutation's call site at line 234
+(`removeMember.mutate({ groupId: groupId(activeGroup), userId: id })`) already passes the
+correct `{ groupId, userId }` shape into the mutation — the bug was entirely inside the
+`mutationFn` body and `identity.ts`'s `removeMembers` itself, not in how the button
+invokes the mutation. `addMember`'s sibling mutation (line 74-75) and its
+`groupsApi.addMembers` call are unchanged by this fix (see the scope note above — its own
+`/admin/groups` path bug is a separate, out-of-scope defect).
 
 **Not addressed by this design, and correctly not addressed** — a `tenant_admin`
 _adding_ a role via `POST /users` `role_ids`/`GroupsPage`'s add-member flow: neither the
@@ -271,6 +353,13 @@ denormalized onto `users`.
 
 # lib/letflow/plugs/auth_pipeline.ex — handle_auth_error/2 gains two new `{:error, {:account, _}}`
 # clauses (§1.2); no change to its existing clauses or its @spec (still conn -> conn).
+
+# web/src/api/identity.ts — groupsApi.removeMembers, signature corrected (§4.1, REWORK 1)
+removeMembers: (id: string, userId: string) => Promise<void>
+
+# web/src/pages/admin/GroupsPage.tsx — removeMember mutation's mutationFn threads userId
+# through instead of wrapping it in a discarded array (§4.1, REWORK 1); no signature
+# change to the mutation's own call site (line 234) or to addMember (unchanged).
 ```
 
 No `.ex`/`.tsx` implementation bodies above — every code-shaped block is either an
@@ -283,7 +372,7 @@ not introduce new ones).
 | REQ-378 AC | Design element |
 |---|---|
 | AC1 — revoke-then-immediately-retry, no sleep/refresh wait | §1 (new pipeline step, uncached per-request query), §2.1 (no cache/ETS/memoization), §5 (cost accepted as one live round trip, same as the API-token precedent) |
-| AC2 — reachable through `web/`'s own GUI, not only Keycloak | §4 (both role-revoke and deactivate paths traced to existing, already-shipped `web/` actions and backend routes — no new endpoint) |
+| AC2 — reachable through `web/`'s own GUI, not only Keycloak | §4 (deactivate path: existing, already-shipped, re-confirmed correct); §4.1 (role-revoke path: `web/` fix to `groupsApi.removeMembers`'s signature and its `GroupsPage.tsx` call site, correcting the endpoint to the real `DELETE /api/v1/identity/groups/:id/members/:user_id` route — REWORK 1) |
 | AC3 — 403 renders through existing `QueryStateBoundary`/`PermissionDenied` contract unchanged | §1.2 (403 via existing `reject/4`), §3 (no new renderer state, no new response shape, role-narrowing path reuses `evaluate_access/2`'s existing `Deny403`) |
 | AC4 — SECURITY-REVIEWER signs off on the chosen mechanism before merge | Not this design's own step to satisfy — routed as this handoff's `next_action` to `CODE-DESIGN-VALIDATOR`, and the pipeline's next stage after implementation routes to `SECURITY-REVIEWER` per WF-03/AC4's own wording; §5 pre-flags the one-query-per-request cost for that review explicitly rather than leaving it implicit |
 

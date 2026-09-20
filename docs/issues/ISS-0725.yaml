@@ -62,4 +62,31 @@ github_ref: GH-1574
 # collide with it -- both worse than a documented mismatch. This file is
 # named ISS-0725.yaml (next unused slot) instead, following ISS-0724.yaml's
 # own precedent for the identical class of collision.
-status: open
+status: resolved
+resolution: >
+  Misdiagnosis, not a real broken credential -- resolved by the companion
+  ai-dala-infra task T-0139
+  (tasks/T-0139-fix-bilimbaga-candidate-user-qa-credential.md, run
+  2026-09-19-fix-bilimbaga-candidate-user-001). Live re-verification against
+  the real, public https://auth.qa.bizdala.com/realms/bilimbaga/protocol/openid-connect/token
+  endpoint confirmed candidate-user authenticates successfully (HTTP_200,
+  correct iss/aud/realm_access.roles claims) in the bilimbaga realm, from
+  both an on-host and an external (management-workstation) vantage point --
+  reproduced, not a one-off. The seeded credential itself was never broken,
+  out of sync, or locked; seeded-users.env and Keycloak agree.
+  The original pilot's diagnostic curl/browser commands (this file's own
+  "What was actually run" evidence, and the linked gui-review report) had
+  targeted the wrong realm -- bpm-default, "LETFLOW DEFAULT REALM" -- where
+  candidate-user was never seeded at all, producing a false-positive
+  invalid_grant / "Invalid username or password" that looked exactly like a
+  genuinely broken account. admin-user's control check happened to also be
+  run against bpm-default, where an admin-user account does exist, which is
+  why it authenticated cleanly and (wrongly) ruled out a realm-wide problem
+  instead of surfacing the realm mismatch itself.
+  Nothing was changed: no Keycloak state, no seeded-users.env value, no
+  qa-login.sh/.ps1 logic. Root cause was purely in how the pilot's
+  diagnostic commands were constructed, not in the environment.
+  No repo-level fix was needed on the letflow side either -- the fix
+  direction this file originally speculated (stale seeded-users.env,
+  disabled/locked account) did not apply.
+

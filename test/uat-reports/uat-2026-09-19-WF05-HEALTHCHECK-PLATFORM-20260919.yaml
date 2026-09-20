@@ -1,0 +1,170 @@
+run_id: WF05-HEALTHCHECK-PLATFORM-20260919
+date: "2026-09-19"
+agent: UAT-RUNNER
+scope: >
+  Fresh health-check re-run of
+  test/fixtures/uat/scenarios/platform/platform-login-routing-by-role.yaml
+  (id: platform-login-routing-by-role, REQ-369) against live QA, requested
+  specifically to confirm today's landed fixes (T-0137 QA login fix,
+  ISS-0720 tenant_config.ex code fix, ISS-0721 tenant provisioning
+  event-type seeding, ISS-0722 exam manual-mode support, ISS-0724 resolved-
+  question origin separation) are actually reflected in the current QA
+  deployment, and that this scenario's own three branches all still pass
+  live. Follows up on the prior run
+  (test/uat-reports/uat-2026-09-19-WF02-REQ369-AC6AC7-final3-20260919.yaml),
+  which had found AC6/AC7 PASS but flagged that the code fix (fc55e700,
+  ISS-0720) had NOT actually reached QA via CD (its CI run failed on an
+  unrelated docs-lint violation, skipping the deploy job). This run
+  independently re-checks deploy provenance rather than assuming that gap
+  is closed.
+
+environment_target:
+  base_url: "https://qa.bizdala.com"
+  credential_source: "ai-dala-infra/scripts/qa-login.sh"
+  environment: qa
+
+pre_check_deploy_provenance:
+  method: >
+    `gh run list --limit 10` and `gh run view <id> --json jobs` against
+    the letflow repo, checked BEFORE running any scenario steps, to confirm
+    (not assume) that current main HEAD (cafb6a6a, the ISS-0724 commit
+    the dispatch names as the latest of today's five fixes) actually
+    reached QA's running process.
+  real_findings: >
+    `gh run list` shows CD (QA) run 35440777459 (triggered by cafb6a6a's
+    own CI run 35440235814, both "completed success") at 2026-09-19T11:40:57Z.
+    `gh run view 35440777459 --json jobs` shows the "Deploy to QA" job's
+    own "Deploy to QA (ubuntu-16gb-nbg1-1)" STEP with conclusion "success"
+    (not "skipped", unlike the earlier fc55e700 CD run the prior report
+    flagged) -- confirming a real deploy executed for the commit chain
+    containing all five named fixes (T-0137/ISS-0720/0721/0722/0724,
+    cafb6a6a and its ancestors on main).
+  verdict: >
+    CONFIRMED -- today's fixes are genuinely deployed to QA's running
+    process as of this run, closing the deploy-provenance gap the prior
+    run (final3-20260919) flagged for ISS-0720/fc55e700 specifically.
+
+pre_check_tenant_config_sanity:
+  command: >
+    curl -sS -D - -o body.json
+    "https://qa.bizdala.com/api/tenant-config?host=qa.bizdala.com"
+  real_response: >
+    HTTP 200, cache-control: max-age=0, private, must-revalidate (not
+    stale-cacheable).
+    {"branding":{"app_name":"Letflow","brand_colors":{"primary":"#228be6"},
+    "logo_url":null},"client_id":"letflow-web",
+    "oidc_authority":"https://auth.qa.bizdala.com/realms/bpm-default"}
+  verdict: PASS -- oidc_authority correctly points at the real QA Keycloak,
+    not localhost:8082. Consistent with the prior run's finding; still
+    correct today.
+
+credential_acquisition: >
+  Fetched fresh via `bash scripts/qa-login.sh <user>` from
+  ai-dala-infra/scripts/qa-login.sh (SSH to ubuntu-16gb-nbg1-1, real
+  seeded-users.env lookup): admin-user (PLATFORM_ADMIN), operator-user
+  (PROCESS_OPERATOR, fetched but not needed -- the named pipeline_test uses
+  worker-user for its tenant-scoped branch), worker-user (TASK_WORKER).
+  Each independently confirmed valid via a direct Keycloak password-grant
+  against https://auth.qa.bizdala.com/realms/bpm-default/protocol/openid-connect/token
+  before use. Passwords held only in-memory for this run's Playwright
+  invocation and curl calls; not written to this report or any committed
+  file.
+
+pipeline_test_execution:
+  command: >
+    cd web && E2E_BASE_URL=https://qa.bizdala.com
+    BPM_IDP_BASE_URL=https://auth.qa.bizdala.com
+    UAT_QA_ADMIN_PASSWORD=<fetched, not recorded>
+    UAT_QA_WORKER_PASSWORD=<fetched, not recorded>
+    npx playwright test
+    tests/e2e/pipelines/platform-login-routing-by-role.pipeline.e2e.spec.ts
+    --reporter=list
+  real_output: >
+    Running 3 tests using 1 worker
+    ok 1 [chromium] EO-001: PLATFORM_ADMIN lands on the distinct platform
+      dashboard (9.1s)
+    ok 2 [chromium] EO-001: tenant-scoped role (TASK_WORKER) lands on
+      workspace root with narrower nav (2.1s)
+    ok 3 [chromium] EO-001: unauthenticated visitor sees auth-loading then
+      redirects off-origin to Keycloak (3.7s)
+    3 passed (17.8s)
+  finding: >
+    All three branches (PLATFORM_ADMIN, tenant-scoped role, unauthenticated)
+    genuinely PASS against live QA -- every hard assertion in the spec
+    (URL, heading text/testid, tile visibility, quick-links visibility, nav
+    entries present/absent, off-origin redirect, auth-loading placeholder
+    seen) executed and passed, not inferred from absence of error.
+  screenshots_written: >
+    web/tests/screenshots/pipelines/platform-login-routing-by-role-admin.png,
+    -tenant-scoped.png, -unauthenticated.png (gitignored path, per this
+    repo's existing convention -- referenced by path, not committed).
+
+independent_cross_check:
+  description: >
+    Cross-checked the PLATFORM_ADMIN branch's rendered tenant-count tile
+    (observed "2" during the pipeline_test run) against a direct API call
+    bypassing the app UI entirely, obtaining a bearer token straight from
+    Keycloak.
+  method: >
+    POST https://auth.qa.bizdala.com/realms/bpm-default/protocol/openid-connect/token
+    (admin-user, password grant) -> real 200, real RS256 JWT.
+    GET https://qa.bizdala.com/api/v1/tenants with that bearer token.
+  real_response: >
+    {"items":[{"display_name":"Default Tenant",...},
+    {"display_name":"BilimBaga",...}],"next_cursor":null,"count":2}
+  verdict: PASS -- count=2 matches the rendered tile exactly. Genuine,
+    independently-derived confirmation, not a restatement of the UI's own
+    claim about itself.
+
+branch_verdicts:
+  - name: platform_admin_lands_on_platform_dashboard
+    branch_when: "fact: role, op: eq, value: PLATFORM_ADMIN"
+    eo_001: >
+      PASS -- real browser session (via loginViaRealOidcRedirect) lands on
+      /platform-dashboard; data-testid="platform-dashboard-heading" reads
+      "Platform Overview"; data-testid="tile-tenant-count" visible and,
+      per independent_cross_check above, correctly populated (2);
+      data-testid="platform-quick-links" visible with all five named links
+      (Tenants, Services, Health, Metrics, Users).
+  - name: tenant_scoped_role_lands_on_workspace_root
+    branch_when: "fact: role, op: in, value: [PROCESS_DESIGNER, PROCESS_OPERATOR, TASK_WORKER]"
+    role_used_for_run: TASK_WORKER (worker-user)
+    eo_001: >
+      PASS -- lands on "/" (TenantDashboardPage), "My Tasks" nav entry
+      visible, every PLATFORM_ADMIN-only nav entry (Users, Tenants,
+      Register Tenant, Audit, Health, Metrics) confirmed NOT visible,
+      dashboard tiles (tile-definitions, tile-instances, tile-tasks,
+      tile-instances-count, tile-tasks-count) render live (non-skeleton,
+      non-error) data.
+  - name: unauthenticated_redirects_to_external_login
+    branch_when: "else (no actor signed in)"
+    eo_001: >
+      PASS -- browser origin changes away from the app's own origin within
+      the bounded wait (real off-origin redirect to Keycloak's hosted login
+      page observed); the data-testid="auth-loading" placeholder was
+      confirmed to have rendered before that redirect via an in-page
+      MutationObserver mark (window.name), since the transition is too fast
+      for external polling to reliably observe -- same technique the spec
+      documents as independently verified against real QA.
+
+result_overall: PASS
+
+verdict: >
+  All three of platform-login-routing-by-role's branches genuinely PASS
+  against live QA today, driven end-to-end through the named pipeline_test
+  with real browser sessions, real Keycloak logins, and real assertions --
+  no mocks, no absence-of-error treated as a pass. Additionally, and
+  distinct from the scenario's own PASS/FAIL: this run closes the
+  deploy-provenance gap the immediately prior run (final3-20260919) had
+  flagged -- today's five named fixes (T-0137, ISS-0720, ISS-0721,
+  ISS-0722, ISS-0724) are confirmed, via a real, non-skipped "Deploy to QA"
+  CD step for commit cafb6a6a, to actually be running on QA's live
+  backend process, not merely merged to main. No new defects found.
+
+new_findings: "None."
+
+cleanup: >
+  No edits made to any file under web/ or lib/. New screenshot files
+  written under web/tests/screenshots/pipelines/ (gitignored, overwritten
+  in place per existing convention) and this report file. No application
+  code, migration, or config file was modified by this run.

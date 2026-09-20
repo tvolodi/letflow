@@ -4293,8 +4293,18 @@ volumes:
     path: docs/status/requirement_status.v20.yaml
     status: current
     opened: 2026-09-18
-    entries: 12
+    entries: 13
     note: >
+      Incremented to 13 by ORCH's own SCOPE-CHANGE done-event append
+      (2026-09-20T02:10:24Z -- REQ-379/REQ-380/REQ-381 filed, unbuilt
+      solution-pack update-conflict-resolution feature found during
+      test/fixtures/uat/scenarios/platform/
+      template-update-conflict-resolution.yaml review), on top of the prior
+      increment to 12 below -- `grep -c "^  - req:"
+      docs/status/requirement_status.v20.yaml` = 13 on-disk entries. 847
+      lines / 54294 bytes, well under the 1200-line/120000-byte roll
+      ceiling, so no roll triggered.
+
       Incremented to 12 by ORCH's own SCOPE-CHANGE done-event append
       (2026-09-20T01:20:44Z -- REQ-376/REQ-377 filed, partition-based
       event-history retirement gap found during test/fixtures/uat/scenarios/

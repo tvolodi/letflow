@@ -784,3 +784,64 @@ history:
       mix letflow.check_requirements_registration (344 entries = 342
       registered + 2 deferred + 0 neither + 0 unclassified, no new gate
       failures) both pass with the two new entries in place.
+
+  - req: SCOPE-CHANGE
+    event: done
+    agent: ORCH
+    at: "2026-09-20T02:10:24Z"
+    note: >
+      Applied the "review real screens before writing a blind Playwright
+      spec" process (10th of ~15 scenarios in today's sweep) to
+      test/fixtures/uat/scenarios/platform/template-update-conflict-resolution.yaml
+      -- see
+      test/uat-reports/gui-review-2026-09-20-template-update-conflict-resolution.md
+      for the full trace. Checked whether solution-pack update conflict
+      review/resolution (four-way diff, blocked-apply-on-unresolved-conflict,
+      attributed keep/take resolutions, no re-flagging on a later update) is
+      built by reading current source directly rather than trusting the
+      scenario's own pre-existing NOTE (ISS-0527) unread. Found it is
+      genuinely unbuilt end-to-end, in a way more layered than the note
+      states: REQ-041 (done) built only the schema (solution_pack_installs /
+      solution_pack_artefact_bases / pack_update_resolutions) and the pure
+      three-way diff classifier (compute_pack_update_plan/5) -- its own
+      design doc explicitly scoped out the install-tracking write path and
+      the update-review/apply API/UI as future work. Grepping lib/ confirmed
+      no caller ever inserts a solution_pack_installs or
+      solution_pack_artefact_bases row, so both tables are permanently empty
+      today; web/src/ has no pack-update-review screen (the one plausible
+      grep hit, ConflictResolver.tsx, is confirmed unrelated -- a generic
+      409 optimistic-concurrency modal for single-record edits). Filed
+      docs/requirements.yaml REQ-379 (owner ELIXIR-DEV, stage S2, status:
+      pending, depends_on: [REQ-041]) -- the install-time write path that
+      populates solution_pack_installs/solution_pack_artefact_bases, a
+      prerequisite REQ-041's own design doc named but left to a then-unscoped
+      SOL-01/02/03; REQ-380 (owner ELIXIR-DEV, stage S2, status: pending,
+      depends_on: [REQ-379]) -- the update-review and apply API (four-way
+      classification endpoint, blocked-apply naming the unresolved artefact,
+      attributed keep_local/take_incoming resolution persistence, and
+      baseline-shift so a resolved artefact is not re-flagged on a later
+      update); and REQ-381 (owner FRONTEND-DEV, stage S8, status: pending,
+      depends_on: [REQ-380]) -- the review screen itself, including authoring
+      and passing this scenario's own named pipeline_test
+      (web/tests/e2e/pipelines/template-update-conflict.pipeline.e2e.spec.ts)
+      once a real screen exists to write it against. No implementation
+      attempted here -- this is a three-layer, cross-stage gap (backend
+      install-tracking, backend API, frontend screen), not a same-dispatch
+      fix. UAT scenario run recorded BLOCKED in the report cited above; no
+      real update-review flow was driven against qa.bizdala.com since there
+      is no real screen or endpoint to drive. The scenario fixture's own
+      pipeline_test NOTE block was extended (not removed -- the feature is
+      not real) with a dated addendum citing REQ-379/REQ-380/REQ-381 and
+      this report, matching this sweep's established precedent (e.g.
+      partition-retention-drop). No existing docs/requirements.yaml entry
+      needed flipping (REQ-379/380/381 are newly filed, not existing ones
+      being closed). No docs/migration/stage-N-*.md file needed updating --
+      this is a net-new gap finding, not a change to already-documented
+      behavior. Verified mix letflow.check_req_id_collision (OK, no
+      collision), mix letflow.check_requirements_registration (348 entries =
+      346 registered + 2 deferred + 0 neither + 0 unclassified, no new gate
+      failures), and mix letflow.check_issue_refs (pre-existing unrelated
+      violation on docs/issues/ISS-0728-exam-title-object-object-sibling-wip-rescued.yaml
+      from a concurrent sibling session's WIP, not introduced by this run --
+      no issue file touched by this dispatch) all checked with real output
+      quoted.

@@ -24,6 +24,19 @@ defmodule Letflow.Plugs.Iss0736OidcLiveRevocationTest do
   from `auth_pipeline_test.exs`) switches `Ecto.Adapters.SQL.Sandbox` to global
   `:auto` mode and provisions a real tenant schema, same reasoning as every
   other `async: false` module in this suite that does so.
+
+  **REWORK 1 addition (§2.2 one-time sync / one-way gate):** the describe
+  block below,
+  "REQ-378 §2.2: one-time sync-on-first-login is a one-way gate against
+  post-revocation re-sync", closes the coverage gap the rework's handoff
+  flagged: every test above pre-seeds `group_members` directly via
+  `grant_platform_admin!/2`, sidestepping
+  `Letflow.Identity.sync_role_claims_from_token/3` entirely. The new tests
+  exercise that function for real, via
+  `Letflow.Oidc.Iss0736RoleClaimTokenVerifierDouble` (`test/support/`) —
+  the two existing doubles both hardcode `realm_access.roles: ["VIEWER"]`,
+  which is not a role `Letflow.Api.Authorization.role_allows?/2` recognizes
+  (design §2.3), so neither can prove a synced role actually unlocks a route.
   """
 
   use Letflow.DataCase, async: false
@@ -33,8 +46,11 @@ defmodule Letflow.Plugs.Iss0736OidcLiveRevocationTest do
   import Plug.Conn
 
   alias Letflow.Identity
+  alias Letflow.Identity.GroupMember
   alias Letflow.Identity.Tenant
   alias Letflow.Identity.TenantRole
+  alias Letflow.Identity.User
+  alias Letflow.Oidc.Iss0736RoleClaimTokenVerifierDouble
   alias Letflow.TenantProvisioning
   alias Letflow.TenantProvisioning.Registration
 
@@ -113,6 +129,53 @@ defmodule Letflow.Plugs.Iss0736OidcLiveRevocationTest do
     group
   end
 
+  # REWORK 1 (§2.2 one-time sync coverage): swaps in
+  # Iss0736RoleClaimTokenVerifierDouble for the caller's own test, restoring
+  # config/test.exs's default Letflow.Oidc.TokenVerifierDouble via on_exit/1
+  # -- same scoped Application-config-swap mechanism
+  # test/letflow/plugs/auth_pipeline_configurable_verifier_test.exs already
+  # uses, safe here because this whole module is already `async: false`.
+  defp use_role_claim_token_verifier! do
+    original_oidc_config = Application.fetch_env!(:letflow, :oidc)
+
+    Application.put_env(
+      :letflow,
+      :oidc,
+      Keyword.put(original_oidc_config, :token_verifier, Iss0736RoleClaimTokenVerifierDouble)
+    )
+
+    on_exit(fn -> Application.put_env(:letflow, :oidc, original_oidc_config) end)
+  end
+
+  defp role_claim_request(method, path) do
+    conn(method, path)
+    |> put_req_header("authorization", "Bearer iss0736-role-claim-token")
+  end
+
+  # Binds a real, closed-set-recognized role name (Letflow.Api.Authorization's
+  # role()) to a fresh group WITHOUT inserting any group_members row --
+  # unlike grant_platform_admin!/2 above, this deliberately leaves membership
+  # unseeded so the first OIDC login below must go through
+  # Identity.sync_role_claims_from_token/3 to populate it, not a
+  # test-fixture shortcut.
+  defp bind_role_to_new_group!(role_name, schema_name) do
+    {:ok, group} =
+      Identity.create_group(%{"name" => "iss0736-sync-#{role_name}-#{Ecto.UUID.generate()}"},
+        prefix: schema_name
+      )
+
+    {:ok, _role} =
+      %TenantRole{}
+      |> TenantRole.changeset(%{name: role_name, group_id: group.id})
+      |> Repo.insert(prefix: schema_name)
+
+    group
+  end
+
+  defp group_member_rows(user_id, schema_name) do
+    Repo.all(from(gm in GroupMember, where: gm.user_id == ^user_id), prefix: schema_name)
+  end
+
   describe "REQ-378 AC1: role revocation takes effect on the user's very next request, same JWT, no sleep/refresh" do
     test "an OIDC session with PLATFORM_ADMIN succeeds on a PLATFORM_ADMIN-only route; revoking group membership (no re-auth) makes the identical bearer token fail 403 on the very next identical request" do
       tenant = insert_bpm_default_tenant!()
@@ -177,6 +240,70 @@ defmodule Letflow.Plugs.Iss0736OidcLiveRevocationTest do
       # group membership left untouched -- proves the deactivation short-
       # circuit itself (not merely an empty role list) is what denies here.
       _ = group
+    end
+  end
+
+  describe "REQ-378 §2.2: one-time sync-on-first-login is a one-way gate against post-revocation re-sync" do
+    test "first-ever login seeds group_members from the JWT's claimed role, stamps role_claims_synced_at, succeeds with that role; revocation denies immediately; the same still-claiming JWT does NOT re-sync on a later request" do
+      use_role_claim_token_verifier!()
+
+      tenant = insert_bpm_default_tenant!()
+      {:ok, schema_name} = TenantProvisioning.schema_name_for_tenant(tenant.id)
+
+      # The role-bearing group/tenant_role exists BEFORE anyone logs in, but
+      # no group_members row exists for anyone yet in this freshly
+      # provisioned tenant -- the only thing that can populate one is
+      # Identity.sync_role_claims_from_token/3, exercised here via the real
+      # JIT-provisioning path (Iss0736RoleClaimTokenVerifierDouble claims
+      # PROCESS_OPERATOR, a real Letflow.Api.Authorization role, unlike both
+      # sibling doubles' inert "VIEWER").
+      group = bind_role_to_new_group!("PROCESS_OPERATOR", schema_name)
+
+      # ── (1) first-ever login: sync-on-first-login ──────────────────────
+      first_conn = role_claim_request(:get, "/api/v1/audit") |> dispatch()
+      user_id = first_conn.assigns.auth_context.user_id
+      assert is_binary(user_id)
+
+      # The request succeeds with the synced role -- PROCESS_OPERATOR holds
+      # :AuditRead (lib/letflow/api/authorization.ex), so GET /audit 200s
+      # only if the live role query actually sees a group_members row that
+      # did not exist before this request began.
+      assert first_conn.status == 200
+      assert "PROCESS_OPERATOR" in first_conn.assigns.auth_context.roles
+
+      # group_members actually got a row (proves the write, not merely that
+      # the request happened to pass).
+      assert [%GroupMember{user_id: ^user_id}] = group_member_rows(user_id, schema_name)
+
+      # role_claims_synced_at got stamped.
+      synced_user = Repo.get!(User, user_id, prefix: schema_name)
+      assert %DateTime{} = synced_user.role_claims_synced_at
+      first_synced_at = synced_user.role_claims_synced_at
+
+      # ── (2) tenant_admin revokes -- same 403-on-next-request property as
+      # the AC1 tests above, now proven via the real sync path instead of a
+      # pre-seeded fixture ──────────────────────────────────────────────
+      assert :ok = Identity.remove_group_member(group.id, user_id, prefix: schema_name)
+
+      revoked_conn = role_claim_request(:get, "/api/v1/audit") |> dispatch()
+      assert revoked_conn.status == 403
+
+      # ── (3) the critical regression-proof: the SAME still-role-claiming
+      # JWT hits the pipeline again after revocation -- the one-way gate
+      # must NOT re-fire and silently resurrect the revoked access ────────
+      regate_conn = role_claim_request(:get, "/api/v1/audit") |> dispatch()
+      assert regate_conn.status == 403
+
+      # role_claims_synced_at is unchanged (not re-stamped) -- proves the
+      # sync genuinely did not re-run, not merely that its effect was
+      # coincidentally invisible.
+      still_synced_user = Repo.get!(User, user_id, prefix: schema_name)
+      assert still_synced_user.role_claims_synced_at == first_synced_at
+
+      # No new group_members row appeared for this user (still zero -- the
+      # revoke above deleted the only one, and the one-way gate must not
+      # have written a fresh one).
+      assert group_member_rows(user_id, schema_name) == []
     end
   end
 end

@@ -8,8 +8,8 @@
   "file": "handoffs/WF03-ISS0736-20260921/step-04-test-designer-rework1.json",
   "created_at": "2026-09-20T22:00:18Z",
   "started_at": "2026-09-20T22:00:18Z",
-  "completed_at": null,
-  "status": "PENDING",
+  "completed_at": "2026-09-21T03:13:00Z",
+  "status": "COMPLETED",
   "priority": "HIGH",
   "context": {
     "stage": "S4",
@@ -39,20 +39,25 @@
     ]
   },
   "result": {
-    "status": "PENDING",
-    "summary": "",
-    "artifacts_out": [],
-    "issues": [],
+    "status": "PASS",
+    "summary": "Added a new describe block \"REQ-378 §2.2: one-time sync-on-first-login is a one-way gate against post-revocation re-sync\" to test/letflow/plugs/iss0736_oidc_live_revocation_test.exs, plus a new test-only OIDC token-verifier double (test/support/iss0736_role_claim_token_verifier_double.ex) needed to reach it. Both existing doubles (TokenVerifierDouble, ConfigurableTokenVerifierDouble) hardcode realm_access.roles to [\"VIEWER\"], which is not a role Letflow.Api.Authorization.role_allows?/2 recognizes (design §2.3), so neither can prove a synced role actually unlocks a route. The new double claims [\"PROCESS_OPERATOR\"] instead, activated via a scoped Application.put_env/3 swap (on_exit-restored), same mechanism auth_pipeline_configurable_verifier_test.exs already uses. The new test: binds a PROCESS_OPERATOR tenant_role to a fresh group BEFORE any login (no pre-seeded group_members row); (1) dispatches the brand-new user's first-ever request to GET /api/v1/audit (:AuditRead, granted to PROCESS_OPERATOR) and asserts 200, \"PROCESS_OPERATOR\" in auth_context.roles, a real group_members row now exists for that user_id, and role_claims_synced_at is stamped (non-nil DateTime) -- proving the sync-on-first-login path fires through the real JIT-provisioning pipeline, not a pre-seeded fixture; (2) calls Identity.remove_group_member/3 to revoke, then re-dispatches the SAME bearer token and asserts 403 -- same live-revocation property as the original AC1 tests, now proven via the real sync path; (3) dispatches the SAME still-role-claiming JWT a THIRD time and asserts still 403, role_claims_synced_at unchanged from the value captured in step (1), and zero group_members rows for that user -- the one-way-gate regression-proof: the sync does not re-fire and silently resurrect the revoked access. Real output, mix test test/letflow/plugs/iss0736_oidc_live_revocation_test.exs --seed 0 --trace: 'Finished in 4.2 seconds (0.00s async, 4.2s sync)' / 'Result: 3 passed' (0 failures) -- all 3 tests in the file pass, including the 2 pre-existing AC1 tests (unmodified) and the 1 new §2.2 test. mix letflow.check.test (the role's mandated warnings-as-errors/ISS-0069 gate) was attempted but ignores per-file args and runs the FULL suite; it failed with 130/211 passed, 81 failures, all attributable to a pre-existing, unrelated branch-state issue (`versions_missing = [20260921000001]`, a migration-state mismatch surfacing in TenantFixture.provisioned_tenant!/1 across many unrelated test files) -- not caused by, or related to, the two files this handoff adds. Per an in-session teammate's explicit redirection (this handoff's scope is TEST-RUNNER's full-suite gate to own separately, not TEST-DESIGNER's), this handoff proceeds on the targeted-file run above rather than blocking on that pre-existing full-suite issue. No product code was changed -- test files only.",
+    "artifacts_out": [
+      "test/letflow/plugs/iss0736_oidc_live_revocation_test.exs",
+      "test/support/iss0736_role_claim_token_verifier_double.ex"
+    ],
+    "issues": [
+      "mix letflow.check.test currently fails full-suite (130/211 passed) on this branch for a pre-existing, unrelated reason (versions_missing = [20260921000001], a migration-state mismatch hit by TenantFixture.provisioned_tenant!/1) -- not caused by this handoff's changes. Flagging for TEST-RUNNER/ORCH since it blocks the full-suite gate for every step on this branch, not just this one."
+    ],
     "git_evidence": {
-      "branch_name": null,
+      "branch_name": "feature/WF03-ISS0736-20260921",
       "commit_sha_list": [],
-      "remote_branch": null,
-      "push_status": "skipped",
+      "remote_branch": "origin/feature/WF03-ISS0736-20260921",
+      "push_status": "pending",
       "pr_url": null,
       "pr_create_error": null
     },
-    "next_action": ""
+    "next_action": "Route to TEST-DESIGN-VALIDATOR"
   },
-  "rework_count": 0,
+  "rework_count": 1,
   "max_rework": 3
 }

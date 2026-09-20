@@ -185,7 +185,17 @@ test.describe('Pipeline: platform-definition-promotion-rollback (PW-01)', () => 
 
     // ── Step 3 (GUI) — EO-005 setup ──────────────────────────────────────────
     await pl.step('03: EO-005 setup — operator withdraws the release with a reason', async (s) => {
-      await navigateSpa(page, `/definitions/${s.definitionIdV2}/rollback`)
+      // Reach the rollback screen by clicking `btn-rollback-${id}` on the
+      // definitions list, not by navigating straight to the URL — this is
+      // what actually exercises AC1's "reachable from the process detail /
+      // version-history view" claim end to end.
+      await navigateSpa(page, '/definitions')
+      await page.getByTestId('definition-search').fill(s.processKey)
+      const row = page.getByTestId('datatable-row').filter({ hasText: s.processKey })
+      await row.waitFor({ timeout: 15_000 })
+      await page.getByTestId(`btn-rollback-${s.definitionIdV2}`).click()
+      await page.waitForURL(`**/definitions/${s.definitionIdV2}/rollback`, { timeout: 10_000 })
+
       await page.getByTestId('rollback-target-version-select').selectOption(s.previousVersion)
       await page.getByTestId('rollback-reason-input').fill(
         'Released version routes high-value requests to the wrong reviewer.',

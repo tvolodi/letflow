@@ -226,6 +226,56 @@ describe('DefinitionRollbackPage — error rendering (§5)', () => {
   })
 })
 
+describe('DefinitionRollbackPage — "Other version…" manual-entry branch (§4 step 2)', () => {
+  it('TC-REQ371-07: selecting "Other version…" switches to a manual text input', () => {
+    setupAdmin()
+    render(<DefinitionRollbackPage />)
+
+    expect(screen.queryByTestId('rollback-target-version-manual')).not.toBeInTheDocument()
+
+    fireEvent.change(screen.getByTestId('rollback-target-version-select'), { target: { value: '__other__' } })
+
+    expect(screen.queryByTestId('rollback-target-version-select')).not.toBeInTheDocument()
+    expect(screen.getByTestId('rollback-target-version-manual')).toBeInTheDocument()
+  })
+
+  it('TC-REQ371-08: typing a version into the manual input updates state and enables Continue once reason is set', () => {
+    setupAdmin()
+    render(<DefinitionRollbackPage />)
+
+    fireEvent.change(screen.getByTestId('rollback-target-version-select'), { target: { value: '__other__' } })
+    fireEvent.change(screen.getByTestId('rollback-target-version-manual'), { target: { value: '9.9.9' } })
+
+    const continueBtn = screen.getByTestId('rollback-continue-btn')
+    expect(continueBtn).toBeDisabled() // reason still empty
+
+    fireEvent.change(screen.getByTestId('rollback-reason-input'), { target: { value: 'Manual version test.' } })
+    expect(continueBtn).not.toBeDisabled()
+
+    fireEvent.click(continueBtn)
+    expect(screen.getByTestId('rollback-confirm-dialog')).toHaveTextContent('9.9.9')
+  })
+
+  it('TC-REQ371-09: "Choose from the list instead" cancels the manual entry and reverts to the dropdown, clearing the typed value', () => {
+    setupAdmin()
+    render(<DefinitionRollbackPage />)
+
+    fireEvent.change(screen.getByTestId('rollback-target-version-select'), { target: { value: '__other__' } })
+    fireEvent.change(screen.getByTestId('rollback-target-version-manual'), { target: { value: '9.9.9' } })
+
+    fireEvent.click(screen.getByTestId('rollback-target-version-manual-cancel'))
+
+    expect(screen.queryByTestId('rollback-target-version-manual')).not.toBeInTheDocument()
+    const select = screen.getByTestId('rollback-target-version-select') as HTMLSelectElement
+    expect(select.value).toBe('')
+
+    // Confirms the manually-typed value was actually cleared, not just hidden:
+    // re-selecting "Other version…" should show a blank input, not "9.9.9".
+    fireEvent.change(select, { target: { value: '__other__' } })
+    expect(screen.getByTestId('rollback-target-version-manual')).toHaveValue('')
+  })
+})
+
 describe('classifyRollbackError — direct unit coverage (§8.1 item 6)', () => {
   it('TC-REQ371-06a: 403 -> forbidden', () => {
     expect(classifyRollbackError({ status: 403, message: 'Forbidden', code: '403' })).toBe('forbidden')

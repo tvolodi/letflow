@@ -88,4 +88,22 @@ queue_ref: Q-760  # letflow-queue task id 760, issue_ref ISS-0760 (queue's own
   # numbering doesn't match this file's local ISS-0736 id -- see TASK_QUEUE.md's
   # "Never derive a set_lock target from a filename"). Registered 2026-09-20 by ORCH.
 github_ref: GH-1648
-status: open
+status: resolved
+resolved_in_run: WF03-ISS0736-20260921
+resolved_at: "2026-09-21T00:00:00Z"
+resolution:
+  requirement: REQ-378
+  design_doc: lib/letflow/design/req378-oidc-live-revocation-check.md
+  regression_tests:
+    - test/letflow/plugs/iss0736_oidc_live_revocation_test.exs
+    - web/src/api/__tests__/identity.removeMembers.test.ts
+  summary: >
+    AuthPipeline's OIDC branch now performs a live, per-request, uncached
+    local revocation/status check (mirroring the API-token branch's
+    existing Identity.verify_api_token/2 live-DB-read precedent), so a
+    Letflow-local tenant-admin role/status change takes effect on the very
+    next request instead of waiting for JWT expiry or re-login. Gated
+    through SECURITY-REVIEWER PASS (original mechanism + delta re-review)
+    and REVIEWER PASS (twice) after 3 rounds of design rework and 2 rounds
+    of implementation rework; full backend suite 4472/4472 and full
+    frontend suite 728/728 green, both REQ-378 test files green.

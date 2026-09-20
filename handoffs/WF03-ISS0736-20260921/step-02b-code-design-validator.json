@@ -1,0 +1,65 @@
+{
+  "handoff_id": "c1a1e001-0000-4000-8000-000000000004",
+  "run_id": "WF03-ISS0736-20260921",
+  "workflow_id": "WF-03",
+  "step": "02b",
+  "from_agent": "ORCH",
+  "to_agent": "CODE-DESIGN-VALIDATOR",
+  "file": "handoffs/WF03-ISS0736-20260921/step-02b-code-design-validator.json",
+  "created_at": "2026-09-20T19:18:11Z",
+  "started_at": "2026-09-20T19:18:11Z",
+  "completed_at": null,
+  "status": "PENDING",
+  "priority": "HIGH",
+  "context": {
+    "stage": "S4",
+    "requirement_ids": ["REQ-378"],
+    "requirement_text": {
+      "REQ-378": "See handoffs/WF03-ISS0736-20260921/step-00-git-setup.json context.requirement_text.REQ-378 for the full verbatim text. Acceptance criteria: (1) a tenant_admin action revoking a signed-in business_user's access takes effect on that user's very next request with no sign-out/reload/token-expiry wait, demonstrated by a revoke-then-immediately-retry test with no sleep/token refresh; (2) the revoking action is reachable through Letflow's own web/ GUI, not only Keycloak; (3) the resulting 403 renders through the existing QueryStateBoundary/PermissionDenied contract unchanged, no new renderer state, no leaked content; (4) SECURITY-REVIEWER signs off explicitly on the chosen enforcement mechanism before merge."
+    },
+    "related_handoff_ids": ["c1a1e001-0000-4000-8000-000000000003"],
+    "artifacts_in": [
+      "lib/letflow/design/req378-oidc-live-revocation-check.md",
+      "handoffs/WF03-ISS0736-20260921/step-02-code-designer.json",
+      "handoffs/WF03-ISS0736-20260921/step-01-issue-fixer-diagnosis.json",
+      "lib/letflow/plugs/auth_pipeline.ex",
+      "lib/letflow/identity.ex",
+      "lib/letflow/api/authorization.ex"
+    ],
+    "owned_modules": [
+      "lib/letflow/plugs/auth_pipeline.ex",
+      "lib/letflow/api/authorization.ex",
+      "lib/letflow/identity/role_registry.ex",
+      "lib/letflow/identity.ex",
+      "lib/letflow/identity/user.ex",
+      "web/src/pages/admin/UsersPage.tsx",
+      "web/src/pages/admin/GroupsPage.tsx"
+    ]
+  },
+  "task": {
+    "description": "Hard gate on lib/letflow/design/req378-oidc-live-revocation-check.md. Verify every one of REQ-378's 4 acceptance criteria maps to a concrete, unambiguous design element (see requirement_text.REQ-378 above). Specifically check: (1) the live per-request revocation check (status + roles) is precisely specified -- exact function, exact query, exact short-circuit point in AuthPipeline.authenticate_oidc/2's pipeline, exact denial status code with reasoning; (2) the GUI reachability claim (existing GroupsPage.tsx member-removal / UserDetailPage.tsx status-change endpoints) is verified against the actual current source of those files and actually already write what the new backend check reads, not merely asserted; (3) the AC3 no-renderer-change claim is checked against actual QueryStateBoundary/PermissionDenied source; (4) confirm the design contains no .ex/.tsx implementation bodies, only signatures/types/schema shapes; (5) confirm gap 3 (client-side role staleness) is explicitly stated as out of scope, not silently left ambiguous; (6) resolve or explicitly flag-for-REVIEWER the design's own two open questions (403 vs 401 for inactive accounts; reliance on evaluate_access/2's existing empty-role-list behavior) -- a validator PASS must not wave through an unresolved open question without at least confirming it is safe to defer and naming who resolves it next (REVIEWER/SECURITY-REVIEWER).",
+    "acceptance_criteria": [
+      "PASS only if all 4 REQ-378 acceptance criteria map to concrete design elements with no invented details left to ELIXIR-DEV",
+      "GUI-endpoint claim independently re-verified against actual web/ source, not copied from the design doc's own assertion",
+      "Design doc's own open questions (403/401 choice; empty-role-list reliance) explicitly resolved or explicitly routed to a named downstream gate",
+      "FAIL response (if issued) names every gap by acceptance criterion, per HANDOFF_PROTOCOL.md's validator-fail worked example -- no general impression"
+    ]
+  },
+  "result": {
+    "status": "PENDING",
+    "summary": "",
+    "artifacts_out": [],
+    "issues": [],
+    "git_evidence": {
+      "branch_name": null,
+      "commit_sha_list": [],
+      "remote_branch": null,
+      "push_status": "skipped",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": ""
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

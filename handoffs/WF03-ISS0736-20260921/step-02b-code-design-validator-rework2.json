@@ -1,0 +1,58 @@
+{
+  "handoff_id": "c1a1e001-0000-4000-8000-00000000000e",
+  "run_id": "WF03-ISS0736-20260921",
+  "workflow_id": "WF-03",
+  "step": "02b-rework2",
+  "from_agent": "ORCH",
+  "to_agent": "CODE-DESIGN-VALIDATOR",
+  "file": "handoffs/WF03-ISS0736-20260921/step-02b-code-design-validator-rework2.json",
+  "created_at": "2026-09-20T21:38:22Z",
+  "started_at": "2026-09-20T21:38:22Z",
+  "completed_at": null,
+  "status": "PENDING",
+  "priority": "HIGH",
+  "context": {
+    "stage": "S4",
+    "requirement_ids": ["REQ-378"],
+    "requirement_text": {
+      "REQ-378": "See handoffs/WF03-ISS0736-20260921/step-00-git-setup.json context.requirement_text.REQ-378 for the full verbatim text."
+    },
+    "related_handoff_ids": ["c1a1e001-0000-4000-8000-00000000000d"],
+    "artifacts_in": [
+      "lib/letflow/design/req378-oidc-live-revocation-check.md",
+      "handoffs/WF03-ISS0736-20260921/step-02-code-designer-rework2.json",
+      "handoffs/WF03-ISS0736-20260921/step-04c-test-runner.json"
+    ],
+    "owned_modules": [
+      "lib/letflow/plugs/auth_pipeline.ex",
+      "lib/letflow/identity.ex",
+      "lib/letflow/identity/user.ex"
+    ]
+  },
+  "task": {
+    "description": "RE-GATE after rework 2/3, this time closing a gap TEST-RUNNER found under the full suite (fresh/unsynced OIDC users got roles: [] instead of their claimed role, because nothing ever wrote group_members from JWT claims). CODE-DESIGNER added a new §2.2 to lib/letflow/design/req378-oidc-live-revocation-check.md: a new users.role_claims_synced_at nullable timestamp column + Letflow.Identity.sync_role_claims_from_token/3, called unconditionally on first provisioning and conditionally (marker still nil) on returning-user paths, one-time and never reset. Independently verify: (1) the safety argument holds -- specifically confirm the marker is truly a permanent one-way gate that CANNOT re-fire after a revocation (re-read §2.2.4's reasoning and check it against how revocation actually removes a group_members row elsewhere in this design -- revocation must not touch/reset role_claims_synced_at, or the whole point of REQ-378 breaks the moment a revoked user's token refreshes or they re-log-in); (2) the 3 previously-failing tests (test/letflow/plugs/auth_pipeline_test.exs's AC1 test, test/letflow/plugs/api_pipeline_integration_test.exs:105, test/letflow/routers/req077_promotion_pipeline_test.exs:1034 -- cited in handoffs/WF03-ISS0736-20260921/step-04c-test-runner.json) would plausibly now pass under this design -- trace through each test's exact scenario against the new sync logic's call sites; (3) migration shape is a real, valid Ecto migration shape (nullable column, no backfill needed since NULL is the correct default for every existing row -- confirm this reasoning is actually correct, not just asserted); (4) no implementation bodies, signatures/types only; (5) confirm §§0-1,3-6 (already-passed sections) are unchanged.",
+    "acceptance_criteria": [
+      "PASS only if the one-way-gate safety argument is independently verified sound against how revocation actually works in this design (does NOT touch role_claims_synced_at)",
+      "PASS only if you can trace each of the 3 previously-failing tests through the new logic and confirm they'd pass",
+      "Migration shape confirmed valid",
+      "If FAIL: name exact remaining gap, rework_count 3/3 (this is the LAST allowed rework -- if this also fails, ORCH must escalate per docs/agents/ORCHESTRATOR.md §5, not attempt a 4th rework)"
+    ]
+  },
+  "result": {
+    "status": "PENDING",
+    "summary": "",
+    "artifacts_out": [],
+    "issues": [],
+    "git_evidence": {
+      "branch_name": null,
+      "commit_sha_list": [],
+      "remote_branch": null,
+      "push_status": "skipped",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": ""
+  },
+  "rework_count": 2,
+  "max_rework": 3
+}

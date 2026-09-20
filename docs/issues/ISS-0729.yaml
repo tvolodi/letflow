@@ -1,0 +1,88 @@
+id: ISS-0729
+title: >
+  DefinitionListPage main-thread freeze in dev/StrictMode when interacting
+  with debounced search shortly after navigation, causing an intermittent
+  Playwright hang
+discovered_by: ISSUE-FIXER
+discovered_in_run: WF02-REQ371-20260919
+discovered_at: "2026-09-20T01:20:00Z"
+severity: MAJOR
+tags:
+  - frontend
+  - performance
+  - dev-mode
+  - flake
+description: >
+  Discovered by ISSUE-FIXER while root-causing REQ-371's required e2e spec
+  (web/tests/e2e/pipelines/platform-definition-promotion-rollback.pipeline.e2e.spec.ts)
+  hanging at step 1's `definition-search` fill/click. Confirmed a genuine,
+  intermittent (60-80% reproduction rate across 11 real runs), dev-mode-only
+  (`npm run dev`, never `vite preview`) main-thread freeze: Chromium
+  renderer pegged at ~106-107% CPU continuously during the hang, no network
+  activity, CDP profiler cannot capture a stack during the freeze (mirrors
+  ISS-0662's own note about `Profiler.stop` hanging during a genuine
+  freeze). A second, independently-launched browser hitting the same dev
+  server while the first was mid-hang also hung on its own fresh page,
+  ruling out single-page corrupted state as the sole cause. Consistent with
+  ISS-0296's prior finding on this same codebase (React 18 StrictMode
+  double-invocation causing a dev-only race; use build+preview for e2e
+  tests) -- web/src/main.tsx wraps the app in React.StrictMode.
+  web/src/pages/definitions/DefinitionListPage.tsx is the only consumer of
+  `useDebounce` in the pages tree (via `useDefinitionSearch`, 300ms
+  debounce), making it the standout structural difference vs non-hanging
+  routes. Root cause not yet pinned to a single line -- likely an
+  interaction between StrictMode's double-effect-invocation and one of: the
+  `useDebounce`/`useDefinitionSearch` hook chain, a `pendingNavId`
+  navigation effect, or `DataTable.tsx`'s existing `deferClickState`
+  machinery (which ISS-0662 already patched for an analogous freeze on
+  `EntityCrudPage.tsx`/`DataTable.tsx`'s sort-header click). Needs
+  CODE-DESIGNER to design a fix, likely via the same empirical
+  mutation/deferral approach used for ISS-0662, since the CDP profiler
+  cannot capture a stack during the freeze itself.
+
+  Separately, also found (not the hang's cause, but a real correctness bug
+  in the same investigation): web/src/utils/highlightText.tsx lines 11-18
+  creates one RegExp with the global flag and calls `.test()` on it
+  repeatedly inside `.map()` -- a global-flagged regex is stateful
+  (`lastIndex`), so reusing it across `.test()` calls in a loop produces
+  incorrect alternating match results.
+
+  This blocks REQ-371's own AC6 (the required e2e spec must be authored AND
+  PASSING) from being honestly claimed, since the spec now reliably
+  exercises this exact hang via DefinitionListPage.tsx.
+affected_files:
+  - web/src/pages/definitions/DefinitionListPage.tsx
+  - web/src/hooks/useDebounce.ts
+  - web/src/hooks/useDefinitions.ts
+  - web/src/components/ui/DataTable.tsx
+  - web/src/utils/deferClickState.ts
+  - web/src/utils/highlightText.tsx
+  - web/src/main.tsx
+  - web/tests/e2e/pipelines/platform-definition-promotion-rollback.pipeline.e2e.spec.ts
+suggested_fix: >
+  Not decided here -- needs CODE-DESIGNER's own design, likely via the same
+  empirical mutation/deferral approach used for ISS-0662 (defer the
+  search-input's state-changing effect via deferClickState.ts's
+  setTimeout(fn, 0) pattern, or similar). Also fix
+  web/src/utils/highlightText.tsx's stateful global-regex reuse bug
+  (construct a fresh RegExp per call, or reset lastIndex, or use a
+  non-stateful match approach).
+severity_rationale: >
+  MAJOR -- blocks REQ-371's required e2e spec from being honestly claimed
+  as passing (AC6), and represents a genuine, if intermittent, main-thread
+  freeze reachable by any operator using the definitions search in a dev
+  build. Not yet confirmed whether production (non-StrictMode) builds are
+  affected.
+related:
+  - ISS-0662  # prior analogous main-thread freeze fix (EntityCrudPage/DataTable sort-header click), same deferClickState.ts pattern likely applicable here
+  - ISS-0296  # prior finding of the same StrictMode-double-invocation dev-only race class
+queue_ref: Q-730
+github_ref: GH-1598
+status: open
+# NOTE: filename/queue-id mismatch, same class already documented for other
+# records this session. register_task's real, atomically-allocated id for
+# this issue is 730, which per letflow-queue's own id->issue_ref rule maps
+# to issue_ref "ISS-0730" -- but that filename is ALREADY OWNED by a
+# different, unrelated, earlier-filed issue (docs/issues/ISS-0730.yaml, the
+# promotion-review-screens-unreachable defect). Filed here as ISS-0729.yaml
+# (next unused slot) instead.

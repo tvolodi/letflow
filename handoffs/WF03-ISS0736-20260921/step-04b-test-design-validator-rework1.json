@@ -8,8 +8,8 @@
   "file": "handoffs/WF03-ISS0736-20260921/step-04b-test-design-validator-rework1.json",
   "created_at": "2026-09-20T22:14:46Z",
   "started_at": "2026-09-20T22:14:46Z",
-  "completed_at": null,
-  "status": "PENDING",
+  "completed_at": "2026-09-20T22:16:55Z",
+  "status": "COMPLETED",
   "priority": "HIGH",
   "context": {
     "stage": "S4",
@@ -37,19 +37,21 @@
     ]
   },
   "result": {
-    "status": "PENDING",
-    "summary": "",
+    "status": "PASS",
+    "summary": "Independently re-ran `mix test test/letflow/plugs/iss0736_oidc_live_revocation_test.exs --seed 0` against the branch as-is (not trusting the prior handoff's claim): real output 'Finished in 4.0 seconds (0.00s async, 4.0s sync)' / 'Result: 3 passed', 0 failures -- confirms all 3 tests (the 2 pre-existing AC1 tests plus the new §2.2 one-way-gate test) genuinely pass. Applied a mutant targeting the one-way-gate specifically, in a throwaway `git worktree` (`../letflow-mutant-check`, detached at the branch's HEAD, deps/_build pointed at the main checkout's via MIX_DEPS_PATH/MIX_BUILD_PATH since a worktree does not share gitignored build artifacts): in `lib/letflow/identity.ex`'s `upsert_by_external_identity/4`, changed the call-site gate `if is_nil(existing.role_claims_synced_at) do` (line 1602, the repeat-login branch the test's 2nd and 3rd requests both go through) to `if true do`, i.e. always re-sync regardless of the marker -- exactly the one-way-gate property REQ-378 §2.2 exists to protect. Re-ran the same targeted file against the mutant: 'Finished in 4.7 seconds (0.00s async, 4.7s sync)' / 'Result: 2/3 passed' / 1 failure -- the new §2.2 one-way-gate test failed (`assert revoked_conn.status == 403` got `200`, at test line 289: the mutant's unconditional re-sync re-inserted the group_members row on the very first post-revocation request, before the one-way-gate's own later assertion at line 294-295 was even reached), while both pre-existing AC1 tests (which never exercise the sync path -- they pre-seed group_members directly) continued to pass unaffected. This is the isolation the acceptance criteria call for: the mutant is caught by, and only by, the test designed to catch it. Reverted via `git checkout -- lib/letflow/identity.ex` inside the worktree, then removed the worktree (`git worktree remove ../letflow-mutant-check --force`); verified clean with `git status --porcelain lib/ test/` in the main checkout, which returned no output (empty), confirming no residue from the probe. Re-confirmed the targeted test file was untouched and still green throughout (no edits were made to test/ at any point in this validation). Also assessed the `versions_missing = [20260921000001]` full-suite failure TEST-DESIGNER flagged: `20260921000001_add_role_claims_synced_at_to_users.exs` is exactly the migration this rework's ELIXIR-DEV step added (confirmed via `lib/letflow/tenant_provisioning.ex:561`'s manifest entry), and that same ELIXIR-DEV rework1 handoff (`handoffs/WF03-ISS0736-20260921/step-03-elixir-dev-rework1.json`) independently documents hitting the identical mechanism first-hand during its own targeted run: 'initially collided with a concurrent, still-running sibling mix test process ... holding a stale tenant_template schema built before this migration existed ... re-ran against an isolated MIX_TEST_PARTITION=_elixirdev_iss0736 database ... to avoid racing that sibling session.' A stale, pre-20260921000001 tenant_template schema cached by a concurrent process is exactly what would produce `versions_missing = [20260921000001]` when `TenantFixture.provisioned_tenant!/1` provisions from it across many unrelated full-suite files. This is plausible and consistent with documented precedent on this same branch, not merely TEST-DESIGNER's unverified say-so -- but it is a live-environment/concurrent-session state issue, not something this gate step can independently reproduce or rule out further (no access to what else was running on the machine at TEST-DESIGNER's run time). Flagging clearly, as instructed, rather than letting it resurface silently: TEST-RUNNER's full-suite gate should first re-run `mix letflow.check.test` in isolation (no concurrent `mix test`/`mix ecto` process against the same default test DB, per the same `MIX_TEST_PARTITION` workaround ELIXIR-DEV already used) before treating 130/211 as a real regression from this branch's changes.",
     "artifacts_out": [],
-    "issues": [],
+    "issues": [
+      {"severity": "MAJOR", "description": "mix letflow.check.test full-suite run currently shows 130/211 passed with versions_missing = [20260921000001] mismatches (TenantFixture.provisioned_tenant!/1) across many unrelated test files. Plausibly a stale/concurrent tenant_template-schema artifact predating this branch's new migration -- same mechanism ELIXIR-DEV's step-03-elixir-dev-rework1 hit and worked around via an isolated MIX_TEST_PARTITION DB -- rather than a defect in this rework. TEST-RUNNER must re-verify in an isolated environment (no concurrent mix test process against the same DB) before treating this as a real regression.", "affected_requirement": "REQ-378"}
+    ],
     "git_evidence": {
-      "branch_name": null,
+      "branch_name": "feature/WF03-ISS0736-20260921",
       "commit_sha_list": [],
-      "remote_branch": null,
-      "push_status": "skipped",
+      "remote_branch": "origin/feature/WF03-ISS0736-20260921",
+      "push_status": "ok",
       "pr_url": null,
       "pr_create_error": null
     },
-    "next_action": ""
+    "next_action": "Route to TEST-RUNNER for the full mix letflow.check.test suite gate -- re-run in isolation (no concurrent mix test process against the shared test DB) given the versions_missing finding flagged above before treating any full-suite failure count as caused by this branch's changes."
   },
   "rework_count": 0,
   "max_rework": 3

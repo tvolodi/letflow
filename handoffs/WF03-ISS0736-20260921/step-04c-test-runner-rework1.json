@@ -8,8 +8,8 @@
   "file": "handoffs/WF03-ISS0736-20260921/step-04c-test-runner-rework1.json",
   "created_at": "2026-09-20T22:17:47Z",
   "started_at": "2026-09-20T22:17:47Z",
-  "completed_at": null,
-  "status": "PENDING",
+  "completed_at": "2026-09-20T22:33:40Z",
+  "status": "COMPLETED",
   "priority": "HIGH",
   "context": {
     "stage": "S4",
@@ -42,19 +42,21 @@
     ]
   },
   "result": {
-    "status": "PENDING",
-    "summary": "",
-    "artifacts_out": [],
-    "issues": [],
+    "status": "FAIL",
+    "summary": "Re-ran the full suite against a verified-clean DB (dropped all 17 pre-existing letflow_test* databases first, confirmed no concurrent mix/beam processes, so every partition's ecto.create+ecto.migrate built fresh -- ruled out the versions_missing/stale-tenant_template mechanism two prior steps hit). Backend: scripts/test_parallel.sh, N=16 -- combined 4466 tests, 6 properties, 7 failures (4465/4472 passed); all 7 failures are in partition 5's Letflow.IdentityMigrationTest, a NEW cluster (Postgrex undefined_column: u0.role_claims_synced_at against the legacy public.users table). Targeted serial re-run of the 3 previously-reported regressions (auth_pipeline_test.exs, api_pipeline_integration_test.exs, req077_promotion_pipeline_test.exs) plus test/letflow/plugs/iss0736_oidc_live_revocation_test.exs: Result: 49 passed, 0 failures -- confirms all 3 prior regressions are fixed and the REQ-378 backend test file is clean. Frontend: npm test (the correct, exclude-scoped script) -- 106 test files, 728 tests, 0 failures, including web/src/api/__tests__/identity.removeMembers.test.ts (2/2 passed). Root-caused the new backend regression: lib/letflow/identity_migration.ex's copy_users/2 does a bare `from(u in User, ...)` with no `select:` restriction, so it now selects :role_claims_synced_at (added to Letflow.Identity.User's schema by this same rework commit 4d63a6a1) against the legacy, frozen public.users table, which never had that column. copy_groups/2 in the same module already carries an explicit comment defending against this exact hazard class (from REQ-074's earlier column addition) via a restricted select; copy_users/2 was never given the equivalent guard, so REQ-378's new column reopened the hole. Confirmed branch-caused via `git log --oneline main..HEAD -- lib/letflow/identity/user.ex` (only commit touching that file on this branch is 4d63a6a1). Full detail in the new report file.",
+    "artifacts_out": ["test/reports/report-20260921-WF03-ISS0736-20260921-rework1.yaml"],
+    "issues": [
+      {"severity": "BLOCKER", "description": "lib/letflow/identity_migration.ex copy_users/2 has no select: restriction, so REQ-378's new Letflow.Identity.User field :role_claims_synced_at is now queried against the legacy public.users table (which never had it), causing 7 deterministic failures in test/letflow/identity_migration_test.exs (Postgrex undefined_column error). Fix: restrict copy_users/2's select to the legacy table's real columns, mirroring copy_groups/2's existing pattern for the same hazard class.", "affected_requirement": "REQ-378"}
+    ],
     "git_evidence": {
-      "branch_name": null,
+      "branch_name": "feature/WF03-ISS0736-20260921",
       "commit_sha_list": [],
-      "remote_branch": null,
-      "push_status": "skipped",
+      "remote_branch": "origin/feature/WF03-ISS0736-20260921",
+      "push_status": "pending",
       "pr_url": null,
       "pr_create_error": null
     },
-    "next_action": ""
+    "next_action": "Route back to ELIXIR-DEV for rework (rework_count would become 2 of max 3): fix lib/letflow/identity_migration.ex copy_users/2's missing select: restriction per the report's next_action. Do NOT advance to ISSUE-FIXER/close-out until this new regression is fixed and the suite is re-run clean."
   },
   "rework_count": 1,
   "max_rework": 3

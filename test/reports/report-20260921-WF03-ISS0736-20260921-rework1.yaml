@@ -1,0 +1,183 @@
+# WF-03 ISS-0736 -- Step 4c TEST-RUNNER gate, rework1 re-run.
+#
+# Scope: same as the prior report
+# (test/reports/report-20260921-WF03-ISS0736-20260921.yaml), re-run against
+# the branch tip after §2.2/§2.3 rework (commit 4d63a6a1,
+# "feat(REQ-378): implement §2.2 one-time role-claims sync + §2.3 test
+# fixups (rework1)").
+#
+# Pre-run hygiene per the step-04c-test-runner-rework1.json dispatch: no
+# concurrent mix/beam/erl processes found (tasklist/ps checked clean), and
+# all 17 pre-existing letflow_test* databases were DROPPED before this run
+# so every partition's ecto.create+ecto.migrate builds its schema from
+# scratch -- rules out the versions_missing/stale-tenant_template mechanism
+# two prior steps hit against the shared DB.
+#
+# 1) docker compose up -d: letflow-postgres-1 and letflow-keycloak-1
+#    already Running, no action needed.
+#
+# 2) scripts/test_parallel.sh (full backend suite, N=16 from nproc,
+#    against freshly-created/migrated per-partition DBs):
+#      combined: 4466 tests, 6 properties, 7 failures (4465/4472 passed)
+#    Per-partition breakdown (partition: tests, properties, failures, exit):
+#      1: 207/0/0/0   2: 293/0/0/0   3: 250/1/0/0   4: 357/0/0/0
+#      5: 478/0/7/2   6: 284/0/0/0   7: 330/0/0/0   8: 269/0/0/0
+#      9: 211/0/0/0   10: 181/1/0/0  11: 245/2/0/0   12: 243/0/0/0
+#      13: 216/0/0/0  14: 190/0/0/0  15: 358/2/0/0   16: 354/0/0/0
+#    All 7 failures are in partition 5, all in Letflow.IdentityMigrationTest
+#    (test/letflow/identity_migration_test.exs) -- a NEW failure cluster,
+#    not one of the three previously-reported regressions and not one of
+#    the two previously-reported pre-existing/environmental clusters
+#    (neither SecretsRuntimeConfigTest nor TenantSchemaReaperTest failed
+#    this run).
+#
+# 3) Targeted, non-partitioned re-run of the 3 previously-regressed files
+#    plus both REQ-378 test files (mix test test/letflow/plugs/
+#    auth_pipeline_test.exs test/letflow/plugs/
+#    api_pipeline_integration_test.exs test/letflow/routers/
+#    req077_promotion_pipeline_test.exs test/letflow/plugs/
+#    iss0736_oidc_live_revocation_test.exs):
+#      Result: 49 passed
+#    0 failures -- confirms all 3 previously-reported regressions are fixed,
+#    and both REQ-378 backend test files show 0 failures.
+#
+# 4) npm test (web/, vitest run --passWithNoTests --exclude tests/e2e/**
+#    --exclude tests/guards/**):
+#      Test Files  106 passed (106)
+#      Tests        728 passed (728)
+#    Includes web/src/api/__tests__/identity.removeMembers.test.ts -- 2
+#    tests, both passed. (A raw `npx vitest run` with no --exclude also
+#    picks up 59 tests/e2e/**/*.pipeline.e2e.spec.ts Playwright specs and
+#    reports them FAILED with "Playwright Test did not expect
+#    test.describe() to be called here" -- that is vitest attempting to run
+#    Playwright-authored files, a pre-existing tooling mismatch the
+#    package.json `test` script's own --exclude flags exist to route
+#    around, not a real regression. `npm test` is correct command; its
+#    776-vs-728 test delta from the raw invocation is exactly those 48
+#    excluded e2e-support tests plus guard tests.)
+#
+# 5) NEW regression traced to root cause: lib/letflow/identity_migration.ex
+#    copy_users/2 (around line 155) does a bare
+#    `from(u in User, where: ...)` with NO `select:` restriction, so it
+#    selects every column Letflow.Identity.User's schema module declares --
+#    including :role_claims_synced_at, added to that schema module by this
+#    same rework commit (4d63a6a1) for REQ-378's §2.2 role-claims sync.
+#    copy_users/2 queries the LEGACY public.users table (frozen pre-D1/D2
+#    shape, about to be dropped by
+#    20260819000004_drop_legacy_public_identity_tables.exs), which has never
+#    had that column. copy_groups/2 in the same module already carries an
+#    explicit code comment (lib/letflow/identity_migration.ex, just above
+#    copy_groups/2) documenting this EXACT hazard from an earlier column
+#    addition (REQ-074's display_name/description) and defends against it
+#    with `select: struct(g, [:id, :name, :inserted_at, :updated_at])` --
+#    copy_users/2 was never given the equivalent restricted select, so
+#    REQ-378's new column reopened the same hole in the users path.
+#    Confirmed by `git log --oneline main..HEAD -- lib/letflow/identity/
+#    user.ex`: the only commit on this branch touching that schema file is
+#    4d63a6a1 (this rework commit) -- role_claims_synced_at is new on this
+#    branch, so this is a regression caused by this branch, not a
+#    pre-existing failure.
+
+requirement: REQ-378
+run_id: WF03-ISS0736-20260921
+branch: feature/WF03-ISS0736-20260921
+
+backend_totals:
+  parallel_partitions: 16
+  partition_source: nproc
+  combined_tests_reported: 4466
+  combined_properties_reported: 6
+  combined_failures_reported: 7
+  combined_passed_of_total: "4465/4472"
+  clean_db_precondition: >
+    All 17 pre-existing letflow_test* databases dropped before this run;
+    every partition's ecto.create+ecto.migrate built its schema fresh. No
+    versions_missing / stale-tenant_template symptom encountered.
+
+frontend_totals:
+  test_files: 106
+  tests: 728
+  failures: 0
+  new_test_file: web/src/api/__tests__/identity.removeMembers.test.ts
+  new_test_file_result: "2/2 passed"
+
+previously_reported_regressions_now_fixed:
+  - test: "Letflow.Plugs.AuthPipelineTest / acceptance criterion 1 — valid token flows through the full pipeline"
+    file: test/letflow/plugs/auth_pipeline_test.exs
+    status: PASS in this run (targeted serial re-run, 49/49 passed combined with the other 3 files)
+  - test: "Letflow.Plugs.ApiPipelineIntegrationTest / REQ-071 AC2"
+    file: test/letflow/plugs/api_pipeline_integration_test.exs
+    status: PASS in this run
+  - test: "Letflow.Routers.Req077PromotionPipelineTest / design §12.9"
+    file: test/letflow/routers/req077_promotion_pipeline_test.exs
+    status: PASS in this run
+
+req378_test_files_confirmed_clean:
+  - test/letflow/plugs/iss0736_oidc_live_revocation_test.exs
+  - web/src/api/__tests__/identity.removeMembers.test.ts
+
+new_regression_caused_by_this_branch:
+  - tests:
+      - "IdentityMigration.copy_tenant/2 and copy_all_tenants/0 (REQ-063 §4) an orphaned tenant_role aborts that tenant's copy with {:error, {:orphaned_tenant_role, id}}, and no partial rows are committed for that tenant"
+      - "DropLegacyPublicIdentityTables migration guard (REQ-063 §5) -- skip-on-uncopied-row once the copy is completed for every registered tenant, the guard PROCEEDS and drops all three public tables"
+      - "ISS-0060: with_only_this_tenant_visible!/2 guard fix hides the racer tenant, flips guard SKIP into PROCEED"
+      - "IdentityMigration.copy_tenant/2 and copy_all_tenants/0 (REQ-063 §4) copy_all_tenants/0 processes every registered tenant and aggregates counts"
+      - "DropLegacyPublicIdentityTables migration guard (REQ-063 §5) -- skip-on-uncopied-row an uncopied row makes the guard SKIP the drop entirely"
+      - "IdentityMigration.copy_tenant/2 and copy_all_tenants/0 (REQ-063 §4) copies groups/users/tenant_role from public into the tenant's own schema, preserving id, ordering tenant_role after groups"
+      - "IdentityMigration.copy_tenant/2 and copy_all_tenants/0 (REQ-063 §4) copy_tenant/2 is idempotent"
+    file: test/letflow/identity_migration_test.exs
+    error: "(Postgrex.Error) ERROR 42703 (undefined_column) column u0.role_claims_synced_at does not exist"
+    found_in: partition 5 of the full parallel run (all 7 failures, exit 2)
+    root_cause_file: lib/letflow/identity_migration.ex
+    root_cause_function: "copy_users/2 (around line 155)"
+    root_cause_mechanism: >
+      copy_users/2 does `from(u in User, where: ...)` with no `select:`
+      restriction, so it selects every column of the Letflow.Identity.User
+      Ecto schema -- including :role_claims_synced_at, newly added to that
+      schema by this same commit (4d63a6a1) for REQ-378 §2.2. The query
+      targets the legacy public.users table, which predates D1/D2, is
+      frozen, and never gained that column. copy_groups/2 in the same
+      module already carries an explicit comment documenting this exact
+      hazard (from REQ-074's earlier display_name/description addition) and
+      defends against it with a restricted `select: struct(g, [:id, :name,
+      :inserted_at, :updated_at])`; copy_users/2 has no equivalent guard.
+    attribution_form: >
+      Form (a) + reproduction: `git log --oneline main..HEAD -- lib/letflow/
+      identity/user.ex` shows exactly one commit on this branch,
+      4d63a6a1 (this rework), touching that schema file --
+      role_claims_synced_at is new on this branch. The failing query's
+      undefined_column error names that exact field. Deterministic: same
+      7 failures on a from-scratch DB with no prior state.
+    verdict: CAUSED BY THIS BRANCH -- must be fixed by ELIXIR-DEV, not treated
+      as environmental.
+
+verdict: FAIL
+verdict_reason: >
+  All 3 previously-reported regressions (auth_pipeline_test.exs,
+  api_pipeline_integration_test.exs, req077_promotion_pipeline_test.exs)
+  are confirmed fixed. Both REQ-378 test files
+  (iss0736_oidc_live_revocation_test.exs, identity.removeMembers.test.ts)
+  show 0 failures. Frontend full suite is 728/728 clean. However, the
+  §2.2 rework that added Letflow.Identity.User's :role_claims_synced_at
+  field introduced a NEW, deterministic regression: 7 failures in
+  test/letflow/identity_migration_test.exs, traced to
+  lib/letflow/identity_migration.ex's copy_users/2 lacking the same
+  select-restriction guard copy_groups/2 already has for exactly this
+  class of hazard. Ruled the shared-DB/versions_missing mechanism OUT
+  first (all test DBs dropped and rebuilt from scratch before this run;
+  the failure is a column-does-not-exist error inside a live query, not a
+  migration-state mismatch).
+
+next_action: >
+  Rework by ELIXIR-DEV: add a `select:` restriction to copy_users/2 in
+  lib/letflow/identity_migration.ex mirroring copy_groups/2's existing
+  pattern -- restrict the selected columns to the legacy public.users
+  table's real, frozen shape (id, tenant_id, username, display_name,
+  email, password_hash, status, auth_source, external_id, external_realm,
+  inserted_at, updated_at), excluding :role_claims_synced_at (and any
+  other column added to the User schema module after D1/D2 for the
+  per-tenant destination table only). Consider adding a moduledoc/comment
+  note on the User schema module itself warning that new fields need a
+  matching copy_users/2 select update, since this is now the second time
+  this exact hazard has fired (REQ-074 on copy_groups/2, REQ-378 on
+  copy_users/2).

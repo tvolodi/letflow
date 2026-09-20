@@ -1,0 +1,89 @@
+id: ISS-0740
+title: >
+  agent-artifact-resubmit-idempotent (PW-11) targets R-Co's own unbuilt
+  runtime-agent subsystem -- not a Letflow gap, out of scope as scoped
+discovered_by: ORCH
+discovered_in_run: gui-review-2026-09-20-agent-artifact-resubmit-idempotent
+discovered_at: "2026-09-20T00:00:00Z"
+severity: MINOR
+tags: [gui-review-sweep, out-of-scope, s7, runtime-agent]
+description: >
+  Discovered during the 18th and final scenario of this sweep,
+  test/fixtures/uat/scenarios/platform/agent-artifact-resubmit-idempotent.yaml
+  (PW-11, process_id: sys-agent-artifact-lifecycle). Per this sweep's
+  standing instruction to verify the underlying capability exists before
+  driving any browser session, this scenario's premise was checked against
+  source first.
+
+  The scenario describes R-Co's own automated-coding-worker artifact
+  pipeline: a `coordinating_agent` registers a repeatable "instruction",
+  an `authoring_agent` hands in "deliveries" against numbered attempts
+  (deduplicated by attempt-number + content, refused if the same attempt
+  number describes different work, refused outright against the live
+  environment), a human `reviewer` accepts one via an operator console, and
+  a `sweeper` retires unreviewed work past a holding period while
+  preserving accepted work still depended on. This is R-Co's own
+  self-hosting agent-development-pipeline concept, not a BPM-platform
+  feature exposed to Letflow's tenants.
+
+  Exhaustive search confirms it was never built in Letflow, and per
+  `lib/letflow/router.ex`'s own "Deferred routes" table it is not even
+  scheduled -- three routes (`Letflow.Routers.AgentRequests` <-
+  `agent_task_specs.zig`, `Letflow.Routers.AgentResponses` <-
+  `agent_sandboxes.zig`, `Letflow.Routers.AgentEvents` <-
+  `agent_artifacts.zig`) are listed as "post-S6 (runtime-agent subsystem)"
+  with no owning requirement, and no stage in `docs/migration/README.md`'s
+  full S0-S9 breakdown (S9 is the Flutter mobile tier, not this) ever
+  claims that subsystem. Confirmed by grep across `lib/letflow/` for every
+  concept the scenario needs -- instruction registration, attempt-number
+  dedup, content-hash/delivery comparison, a reviewer-acceptance console,
+  a retention sweeper for held work -- zero hits beyond the router's own
+  deferred-routes stub row. `web/src/` has no matching review screen
+  either.
+
+  This is the same category ISS-0527 already flagged for this scenario's
+  sibling, platform-sandbox-cross-tenant-probe.yaml (PW-12,
+  sys-agent-sandbox-ownership): an R-Co-internal, never-fully-built-even-
+  there concept (R-Co's own docs/workflows.yaml status for that sibling
+  was DRAFT) that does not belong ported onto any existing Letflow module
+  by resemblance of name alone. No Letflow module is even a plausible
+  false-positive mapping target here (unlike the sibling's
+  `Letflow.SandboxPool` near-miss) -- there is nothing to warn future
+  readers away from misusing, only an absent subsystem to record as out of
+  scope.
+
+  Filing this as closed_not_applicable rather than a REQ-NNN "build the
+  missing feature" entry (the disposition this sweep used for genuinely
+  in-scope-but-unbuilt gaps elsewhere): the scenario is not a gap in
+  Letflow's own product surface, it is R-Co source material for a
+  subsystem never adopted into Letflow's actual scope, per the same
+  reasoning ISS-0527's own resolution applied to its sibling file.
+affected_files:
+  - test/fixtures/uat/scenarios/platform/agent-artifact-resubmit-idempotent.yaml
+  - lib/letflow/router.ex (Deferred routes table, read-only reference)
+related:
+  - ISS-0527
+  - REQ-210
+source: >
+  lib/letflow/router.ex's "Deferred routes" moduledoc table; grep sweep
+  across lib/letflow/ and web/src/ for instruction/delivery/attempt-number/
+  reviewer-console concepts (zero hits); docs/migration/README.md's full
+  S0-S9 stage table (no stage claims a runtime-agent subsystem);
+  docs/issues/ISS-0527.yaml's resolution note on
+  platform-sandbox-cross-tenant-probe.yaml (same reasoning applied here).
+queue_ref: null   # filed directly by ORCH during the GUI-review sweep, no letflow-queue register_task call in this session
+github_ref: null  # tracked as a local record per this project's doc-only-finding convention; open to filing on request
+status: closed_not_applicable
+resolution: >
+  Closed 2026-09-20 as not applicable to Letflow's actual product scope.
+  The scenario exercises R-Co's own runtime-agent artifact-submission
+  subsystem (agent_task_specs.zig / agent_sandboxes.zig /
+  agent_artifacts.zig), which Letflow has never built and which no S0-S9
+  migration stage claims -- router.ex's own "Deferred routes" table lists
+  it as "post-S6" with no owning requirement, distinguishing it from a
+  genuine unbuilt-but-in-scope gap (the disposition used elsewhere in this
+  sweep, e.g. REQ-386/387/388 for attachment-cross-tenant-probe). No code
+  changed. No Playwright spec authored -- there is no feature for one to
+  exercise. See
+  test/uat-reports/gui-review-2026-09-20-agent-artifact-resubmit-idempotent.md
+  for the full verification trail.

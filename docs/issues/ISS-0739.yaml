@@ -1,0 +1,73 @@
+id: ISS-0739
+title: >
+  No seeded QA login credentials for tenant-business persona actors
+  (actor-swiftroute-lena/marco/alice and equivalents) -- blocks GUI-driven
+  narrative UAT scenarios that need a tenant-specific human role
+discovered_by: ORCH
+discovered_in_run: gui-review-2026-09-20-shipment-high-value-happy
+discovered_at: "2026-09-20T00:00:00Z"
+severity: MAJOR
+tags: [uat-runner, qa-infra, credentials, s7]
+description: >
+  Found while running this sweep's "review real screens before writing a
+  blind Playwright spec" process against
+  test/fixtures/uat/scenarios/swiftroute/shipment-high-value-happy.yaml
+  (PW-16) -- see
+  test/uat-reports/gui-review-2026-09-20-shipment-high-value-happy.md.
+
+  `ai-dala-infra/scripts/qa-login.sh` (the `credential_source` every WF-05
+  UAT dispatch is told to resolve actors against, per
+  .claude/agents/uat-runner.md's "Environment target" section) has exactly
+  six seeded usernames in its `ROLE_FOR` map: admin-user (PLATFORM_ADMIN),
+  designer-user (PROCESS_DESIGNER), operator-user (PROCESS_OPERATOR),
+  worker-user (TASK_WORKER), candidate-user (CANDIDATE), and
+  bilimbaga-admin-user (PLATFORM_ADMIN). None of these correspond to any
+  tenant-business persona named in the SwiftRoute/Vortex/Meridian narrative
+  UAT corpus (test/fixtures/uat/scenarios/<company>/*.yaml) -- e.g. this
+  scenario's dispatcher (actor-swiftroute-lena), ops manager
+  (actor-swiftroute-marco), or CEO (actor-swiftroute-alice), none of which
+  carry a `role-ops-manager`/`role-ceo`-style claim any seeded QA user
+  holds either.
+
+  This is not new to this scenario -- it has silently blocked at least two
+  other GUI reviews earlier in this same 2026-09-20 sweep, each noting it
+  locally without filing it as its own tracked gap:
+  test/uat-reports/gui-review-2026-09-20-tenant-branding-applied.md ("No
+  live sign-in as actor-swiftroute-alice / actor-swiftroute-marco...") and
+  test/uat-reports/gui-review-2026-09-20-renderer-permission-denied-surface.md
+  (identical wording). This filing exists so the pattern is tracked once,
+  centrally, instead of re-discovered and silently worked around by each
+  future review.
+
+  Net effect: any narrative UAT scenario whose `via: gui` steps require
+  signing in AS a specific named tenant-business persona (as opposed to a
+  generic platform role) cannot be driven end-to-end against
+  `qa.bizdala.com` today, regardless of whether the backend/frontend
+  feature the scenario exercises is otherwise fully built.
+affected_files:
+  - ai-dala-infra/scripts/qa-login.sh
+  - .claude/agents/uat-runner.md
+suggested_fix: >
+  Either (a) seed a small, stable set of tenant-persona QA users (at
+  minimum, the SwiftRoute Lena/Marco/Alice trio this and other scenarios
+  need) into the QA Keycloak realm with the correct role claims, and add
+  them to qa-login.sh's ROLE_FOR/VAR_FOR maps following the exact pattern
+  already used for the six platform-role users; or (b) give UAT-RUNNER a
+  documented, scripted way to provision an ephemeral tenant-persona user
+  with an arbitrary role claim for the duration of one scenario run (closer
+  to how REQ-205's Simulation.Runner harness already does this for its own,
+  separate synthetic-fixture layer). Whichever path is chosen, update
+  .claude/agents/uat-runner.md's "Environment target" section to state it
+  explicitly, since today's silence there is exactly why this gap was
+  independently rediscovered three times in one day before being filed.
+severity_rationale: >
+  MAJOR, not BLOCKER -- no tenant-data or security invariant is violated
+  (the absence of a credential is a safe failure mode, not a leak), but it
+  is a real, repeatedly-confirmed gap blocking honest GUI-leg verification
+  of a meaningful slice of the narrative UAT corpus, discovered independently
+  three times in one day.
+related:
+  - REQ-395
+queue_ref: null  # not yet registered in letflow-queue by this session
+github_ref: null  # not yet mirrored to GitHub by this session
+status: open

@@ -237,6 +237,7 @@ export default function TaskInboxPage() {
       {/* Right panel: task detail */}
       {selectedTaskId && (
         <TaskDetailPanel
+          key={selectedTaskId}
           taskId={selectedTaskId}
           onClose={() => setSelectedTaskId(null)}
         />
@@ -250,6 +251,18 @@ function TaskDetailPanel({ taskId, onClose }: { taskId: string; onClose: () => v
   const { session } = useAuth()
   const complete = useCompleteTask()
   const claim = useClaimTask()
+
+  // Form field values keyed by schema field name. Fed from each rendered
+  // form-field-<name> input's onChange and sent as output_variables on
+  // Complete Task -- previously these inputs were uncontrolled and every
+  // value typed into them was silently discarded, always submitting `{}`
+  // regardless of what the form showed (found during the swiftroute
+  // shipment-high-value-happy GUI review, 2026-09-20).
+  const [formValues, setFormValues] = useState<Record<string, unknown>>({})
+
+  const setFieldValue = (fieldName: string, value: unknown) => {
+    setFormValues(prev => ({ ...prev, [fieldName]: value }))
+  }
 
   // Extract user ID from JWT token
   const userId = useMemo(() => {
@@ -352,6 +365,17 @@ function TaskDetailPanel({ taskId, onClose }: { taskId: string; onClose: () => v
                     data-testid={`form-field-${fieldName}`}
                     type={fieldType === 'number' ? 'number' : fieldType === 'boolean' ? 'checkbox' : 'text'}
                     placeholder={fieldTitle}
+                    checked={fieldType === 'boolean' ? Boolean(formValues[fieldName]) : undefined}
+                    value={fieldType === 'boolean' ? undefined : (formValues[fieldName] as string | number | undefined) ?? ''}
+                    onChange={(e) => {
+                      if (fieldType === 'boolean') {
+                        setFieldValue(fieldName, e.target.checked)
+                      } else if (fieldType === 'number') {
+                        setFieldValue(fieldName, e.target.value === '' ? undefined : Number(e.target.value))
+                      } else {
+                        setFieldValue(fieldName, e.target.value)
+                      }
+                    }}
                     style={{
                       padding: '.5rem .75rem',
                       border: '1px solid var(--border-default)',
@@ -390,7 +414,7 @@ function TaskDetailPanel({ taskId, onClose }: { taskId: string; onClose: () => v
               variant="primary"
               size="md"
               data-testid="task-complete-button"
-              onClick={() => complete.mutate({ id: taskId, body: { output_variables: {} } })}
+              onClick={() => complete.mutate({ id: taskId, body: { output_variables: formValues } })}
               loading={complete.isPending}
             >
               {complete.isPending ? 'Completing…' : 'Complete Task'}

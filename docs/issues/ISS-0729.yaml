@@ -78,7 +78,7 @@ related:
   - ISS-0296  # prior finding of the same StrictMode-double-invocation dev-only race class
 queue_ref: Q-730
 github_ref: GH-1598
-status: open
+status: resolved
 # NOTE: filename/queue-id mismatch, same class already documented for other
 # records this session. register_task's real, atomically-allocated id for
 # this issue is 730, which per letflow-queue's own id->issue_ref rule maps
@@ -86,3 +86,62 @@ status: open
 # different, unrelated, earlier-filed issue (docs/issues/ISS-0730.yaml, the
 # promotion-review-screens-unreachable defect). Filed here as ISS-0729.yaml
 # (next unused slot) instead.
+resolution:
+  resolved_in_run: WF03-ISS0729-20260920
+  commit: 6ffa9967
+  pull_request: "#1601"
+  branch: feature/WF03-ISS0729-20260920
+  design_doc: lib/letflow/design/iss-0729-definitionlistpage-search-freeze-fix.md
+  summary: >
+    DefinitionListPage's intermittent dev/StrictMode main-thread freeze
+    (H1: an interaction between StrictMode's double-effect-invocation and
+    the useDebounce/useDefinitionSearch hook chain feeding a controlled
+    search <input>'s state) is fixed by deferring the search-input's
+    setSearch state update through a coalescing setTimeout(fn, 0), the
+    same empirical pattern already established by
+    web/src/utils/deferClickState.ts for ISS-0662's analogous
+    EntityCrudPage/DataTable sort-header freeze. Applying that deferral
+    naively turned the search <input> into an effectively-uncontrolled
+    field that dropped characters under fast typing (a secondary
+    regression the naive fix introduced and FRONTEND-DEV caught during
+    its own empirical testing, not left latent); the shipped fix instead
+    uses `defaultValue` (an uncontrolled input) so the DOM itself is the
+    source of truth for keystrokes, with the deferred setTimeout(fn, 0)
+    only propagating the value into `useDefinitionSearch`'s debounced
+    state, avoiding the dropped-characters regression entirely. A second,
+    independent, correctness-only bug found during the same investigation
+    was also fixed: web/src/utils/highlightText.tsx's global-flagged
+    RegExp was being reused statefully (`lastIndex`) across repeated
+    `.test()` calls inside `.map()`, producing incorrect alternating
+    match results; fixed by not reusing stateful global-regex state
+    across calls.
+  empirical_evidence_trail: >
+    FRONTEND-DEV's own investigation: first hit a false negative from a
+    CORS test-config issue in its harness, identified and corrected it,
+    then obtained a 100% baseline reproduction of the freeze on
+    pre-fix code, confirmed the H1 (deferred-setSearch) fix at 0/20+
+    hangs across 55+ total runs, and along the way caught and fixed the
+    secondary dropped-characters regression the naive deferred-setSearch
+    fix introduced (resolved via the defaultValue/uncontrolled-input
+    approach described above) before it could ship. REVIEWER's own
+    independent before/after proof: reverted the working tree to the
+    pre-fix code and reproduced 5/5 hangs, then restored the fix and
+    obtained 8/8 clean passes. TEST-RUNNER's own 10 fresh end-to-end runs
+    against a freshly started dev server: 0/10 hangs. RELEASE-VALIDATOR's
+    own independent re-verification: a further fresh 9-run confirmation,
+    also against a newly-started dev server it started itself: 0/9 hangs.
+    Across all four independent evidence sources, no hang recurrence was
+    observed post-fix.
+  live_deployment_gap: >
+    None remaining. This is a pure client-side rendering-timing defect
+    (StrictMode double-invocation interacting with a debounced input's
+    state update) with no environment-conditional behavior -- it does
+    not depend on any QA/production-only configuration, network path, or
+    backend state, so there is no live-QA-deployment-specific
+    verification gap left open here, per RELEASE-VALIDATOR's own
+    reasoning on this point during its PASS.
+  gates: >
+    CODE-DESIGN-VALIDATOR, REVIEWER, TEST-DESIGN-VALIDATOR, TEST-RUNNER,
+    and RELEASE-VALIDATOR all PASSed, each with its own independently
+    obtained empirical evidence (see empirical_evidence_trail above)
+    given the intermittent nature of the underlying bug.

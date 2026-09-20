@@ -84,6 +84,6 @@ process_note: >
   itself (QueryStateBoundary/PermissionDenied/classifyError, REQ-362) was
   independently verified correct and NOT part of this gap — see
   test/uat-reports/gui-review-2026-09-20-renderer-permission-denied-surface.md.
-queue_ref: N/A
-github_ref: N/A
+queue_ref: null
+github_ref: null
 status: open

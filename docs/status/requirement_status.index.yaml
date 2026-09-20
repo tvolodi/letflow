@@ -4293,7 +4293,7 @@ volumes:
     path: docs/status/requirement_status.v20.yaml
     status: current
     opened: 2026-09-18
-    entries: 15
+    entries: 16
     note: >
       Incremented to 15 during a merge of two independent concurrent
       appends, reconciled by ORCH: DOC-UPDATER's ISS-0729 SCOPE-CHANGE

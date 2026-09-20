@@ -998,3 +998,52 @@ history:
       docs/issues/ISS-0728-exam-title-object-object-sibling-wip-rescued.yaml
       from a concurrent sibling session's WIP, not introduced by this run --
       no issue file touched by this dispatch.
+  - req: SCOPE-CHANGE
+    event: done
+    agent: ORCH
+    at: "2026-09-20T04:07:37Z"
+    note: >
+      GUI-review UAT pass (13th of ~15) of
+      test/fixtures/uat/scenarios/platform/attachment-cross-tenant-probe.yaml
+      (PW-09). Per this sweep's process, verified the underlying capability
+      against current source (and empirically confirmed nothing exists to
+      drive in web/) rather than trusting the scenario's own stale NOTE
+      (ISS-0527) at face value. Found the backend attachment store
+      (REQ-211/212, both done) is a genuinely well-built, tenant-isolated
+      implementation -- fetch_scoped_attachment_content/3 in
+      lib/letflow/routers/instances.ex folds cross-tenant, cross-instance,
+      malformed-id, and never-issued-id cases to one byte-identical
+      {:error, :not_found} -> Response.not_found(conn) response, satisfying
+      this scenario's EO-001/EO-002 at the API layer today -- no
+      distinguishable-existence leak found, unlike the pattern this sweep
+      hit elsewhere (ISS-0736/ISS-0737). But three things this scenario
+      also requires are genuinely unbuilt: no signed/expiring-link concept
+      anywhere in the codebase (EO-003/EO-004's premise), no frontend
+      document-viewer/upload screen anywhere in web/src (grepped
+      exhaustively, zero hits), and no audit logging of a denied
+      cross-tenant attachment fetch (EO-005 -- Letflow.Audit is written to
+      only by mutations today). Filed three requirements, split
+      backend/frontend/audit per this sweep's established precedent:
+      docs/requirements.yaml REQ-386 (owner ELIXIR-DEV, stage S6, status:
+      pending, depends_on: [REQ-211, REQ-212]) -- signed, time-limited link
+      issuance and expiry enforcement without reopening the
+      existence-probing gap REQ-211/212 already closed; REQ-387 (owner
+      FRONTEND-DEV, stage S8, status: pending, depends_on: [REQ-386]) -- the
+      document-viewer screen, an API client, and this scenario's own named
+      pipeline_test authored against a real shipped feature, removing the
+      stale NOTE once both land; and REQ-388 (owner ELIXIR-DEV, stage S6,
+      status: pending, depends_on: [REQ-211, REQ-212]) -- the denied-read
+      audit-log entry, independent of the other two, explicit about not
+      introducing a new timing/response-shape side channel. No
+      implementation attempted here -- three-layer gap (signed-link
+      mechanism, frontend screen, audit logging), not a same-dispatch fix;
+      no live browser session opened against qa.bizdala.com since nothing
+      exists yet for one to drive. UAT scenario run recorded BLOCKED (with
+      the backend isolation layer's EO-001/EO-002 independently
+      re-verified as already-satisfied) in
+      test/uat-reports/gui-review-2026-09-20-attachment-cross-tenant-probe.md.
+      The scenario fixture's own stale NOTE (ISS-0527) was left in place --
+      the feature it warns about is still not real. Before merging,
+      git pull --ff-only picked up a concurrent sibling session's work
+      cleanly (ISS-0737, REQ-384/385, unrelated tenant-switch-cache-
+      isolation scenario) -- no conflicts, nothing to recover.

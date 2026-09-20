@@ -28553,3 +28553,207 @@ requirements:
       - "if REVIEWER/CODE-DESIGN-VALIDATOR conclude no real analog exists under the current architecture (i.e. EO-004 is vacuously satisfied because there is no live resolution step to fail), that conclusion is recorded in the design doc and in this scenario's own review report, rather than either building a check against nothing or silently marking the acceptance criterion done without a check"
       - "no change to REQ-126's frozen-at-creation read path (task.node_id / instance_definition_snapshots.definition_ver) is made purely to manufacture a failure mode for this requirement's own sake"
     depends_on: [REQ-126]
+
+  - id: REQ-386
+    title: "Time-limited, expiring signed URLs for instance-attachment byte content, replacing direct unbounded authenticated GET"
+    owner: ELIXIR-DEV
+    status: pending
+    stage: S6
+    impl_order: 743  # Registered 2026-09-20 by ORCH from this GUI-review UAT finding.
+    description: >
+      Filed from the GUI-review UAT run of
+      test/fixtures/uat/scenarios/platform/attachment-cross-tenant-probe.yaml
+      (PW-09) -- see
+      test/uat-reports/gui-review-2026-09-20-attachment-cross-tenant-probe.md
+      for the full trace. First of three requirements from that finding
+      (REQ-387 is the frontend document-viewer screen, blocked on this one;
+      REQ-388 is the probe-attempt audit logging, independent of both).
+
+      WHAT EXISTS TODAY, confirmed by reading current source, not assumed
+      from the scenario's own stale NOTE (ISS-0527): REQ-211/212 (both
+      `status: done`) built a fully working, tenant-isolated attachment
+      store -- `Letflow.Repository.Attachments.upload/2`/`list/2`/`get/2`/
+      `delete/2`, and `GET/POST/DELETE /instances/:id/attachments[/:id]`
+      routes in `lib/letflow/routers/instances.ex`. The isolation itself is
+      correctly built and was independently re-verified in this pass: a
+      cross-tenant fetch (attachment belongs to a different tenant's Postgres
+      schema, so `opts[:prefix]`-scoped `Repo.get/3` structurally cannot see
+      it), a cross-instance-same-tenant fetch, a malformed/never-issued UUID,
+      and a genuinely nonexistent id all fold to the exact same
+      `{:error, :not_found}` tuple in `fetch_scoped_attachment_content/3`
+      (`lib/letflow/routers/instances.ex` around line 1156), rendered via the
+      same `Response.not_found(conn)` call with no distinguishing status
+      code, header, body, or timing characteristic introduced anywhere in
+      that path -- EO-001/EO-002 of this scenario are satisfied by the
+      existing implementation, at the API layer, today.
+
+      What does NOT exist: `handle_get_attachment_content/3` serves the raw
+      byte content directly from a normal authenticated
+      `GET /instances/:id/attachments/:attachment_id` call
+      (`send_attachment_content/3`) -- there is no signed-URL concept
+      anywhere in this codebase (grepped `lib/letflow/` exhaustively for
+      `signed_url`/`presign`/an attachment-scoped `expires_in`: zero hits;
+      the only `expire`-related code in the codebase concerns OIDC tokens
+      and exam sessions, unrelated). A caller with a valid session can fetch
+      the same attachment id indefinitely, with no time bound at all. This
+      scenario's steps 4/5 and EO-003/EO-004 assume a browser-visible "link"
+      that is issued once, expires after a short, bounded time, and can be
+      re-requested fresh -- none of that exists.
+
+      THIS REQUIREMENT builds that mechanism, backend only:
+
+      1. A new endpoint (e.g. `POST /instances/:id/attachments/:attachment_id/link`,
+      same `:AttachmentsRead` permission as the existing content route) that
+      issues a signed, time-limited token (HMAC over `attachment_id` +
+      expiry timestamp + a server-held secret, or an equivalent
+      `Phoenix.Token`-style mechanism if one is already in use elsewhere in
+      this codebase -- check before inventing a second signing scheme) and
+      returns a URL/token plus its expiry. Choose and state a concrete,
+      short expiry (minutes, not hours -- name the exact value and rationale
+      in the design doc; this is a judgement call with no existing
+      requirement-stated value, flag it for REVIEWER same as REQ-211's own
+      `@max_upload_bytes` precedent).
+
+      2. The existing content-serving route (or a new one keyed by the
+      signed token instead of a bare id) verifies the token's signature and
+      expiry before calling `Attachments.get_content/2` -- an expired or
+      invalid token returns a plain, explicit "link expired, request a new
+      one" response (matching EO-003's wording requirement) and never serves
+      content, with no distinguishable difference between "expired" and
+      "tampered/invalid" beyond what's needed to satisfy EO-003's own
+      message (do not let this new check reopen the existence-probing gap
+      REQ-211/212 already closed -- an expired-token response for a foreign
+      tenant's attachment id must remain indistinguishable from one for a
+      never-issued id, per this scenario's EO-001).
+
+      3. Requesting a fresh link for the same attachment (after a prior one
+      expired) succeeds normally and serves the document (EO-004).
+
+      OUT OF SCOPE: the frontend document-viewer screen that calls this new
+      endpoint (REQ-387); any change to REQ-211/212's existing tenant/
+      instance-scoping logic, which this requirement must not weaken; audit
+      logging of denied attempts (REQ-388).
+    acceptance_criteria:
+      - "a new authenticated, :AttachmentsRead-scoped endpoint issues a signed link with a stated, bounded expiry for an existing attachment; a test asserts the link is usable to fetch the document's bytes before expiry"
+      - "the same link, presented after its stated expiry has passed, is refused with a plain-language expired-link message and no document bytes are returned -- a test asserts this without relying on a real-time sleep longer than a few seconds (inject/mock the clock or use a sub-second expiry in the test)"
+      - "requesting a fresh link for the same attachment_id after a prior link expired succeeds and serves the document normally -- a test exercises both the expired attempt and the subsequent fresh one in sequence"
+      - "an expired-or-invalid-token response for an attachment belonging to a different tenant is byte-identical (status, headers, body) to the same response for a token referencing an attachment id that was never issued at all -- a test asserts this directly, extending REQ-211/212's own not-found-folding test coverage rather than assuming it transfers"
+      - "REQ-211/212's existing cross-tenant/cross-instance not-found-folding behavior (fetch_scoped_attachment_content/3) is unchanged and its existing tests still pass"
+      - "mix compile --warnings-as-errors and mix test both pass, with real output quoted; SECURITY-REVIEWER sign-off is required before merge (this is a tenant-data access-control path per docs/agents/instructions/security-invariants.md)"
+    depends_on: [REQ-211, REQ-212]
+
+  - id: REQ-387
+    title: "Frontend document-viewer screen for instance attachments, wired to the signed-link fetch path"
+    owner: FRONTEND-DEV
+    status: pending
+    stage: S8
+    impl_order: 744  # Registered 2026-09-20 by ORCH from this GUI-review UAT finding.
+    description: >
+      Filed from the GUI-review UAT run of
+      test/fixtures/uat/scenarios/platform/attachment-cross-tenant-probe.yaml
+      (PW-09) -- see
+      test/uat-reports/gui-review-2026-09-20-attachment-cross-tenant-probe.md.
+      Second of three requirements from that finding; depends on REQ-386
+      (the backend signed-link mechanism this screen calls).
+
+      WHAT EXISTS TODAY: grepped `web/src/` exhaustively for any
+      attachment-related component, page, route, or API client (`attachment`,
+      case-insensitive) -- zero hits. `web/src/api/` has no client for
+      `GET/POST/DELETE /instances/:id/attachments*` at all. There is no
+      document-viewer screen, no upload widget on the task/instance detail
+      page, nothing a user could navigate to that would show or fail to show
+      another tenant's document. This scenario's own `pipeline_test`
+      (`web/tests/e2e/pipelines/attachment-cross-tenant.pipeline.e2e.spec.ts`)
+      does not exist either, confirming the scenario's own stale NOTE
+      (ISS-0527) is still accurate: this is a forward-reference to a feature
+      that has never been built on the frontend, at any point in this
+      project's history.
+
+      THIS REQUIREMENT builds:
+
+      1. An upload/list widget on the task or instance detail page (wherever
+      `web/src/pages/tasks/` or `web/src/pages/instances/` already renders a
+      task/instance's detail -- follow that page's existing layout
+      conventions) that calls REQ-212's upload/list routes.
+
+      2. A document-viewer route/screen (e.g. `/attachments/:id` or nested
+      under the instance detail route) that calls REQ-386's signed-link
+      endpoint, then either displays the document (PDF/image inline,
+      download link otherwise) or, for a 404/not-found response, renders a
+      plain, generic "not found" screen -- and that same generic screen,
+      verbatim, for both a foreign-tenant attachment id and a never-issued
+      one (EO-001/EO-002 at the GUI layer, not just the API layer REQ-386
+      already covers). For an expired-link response, a distinct plain
+      "link expired, request a new one" message (EO-003), with an
+      affordance to request a fresh link.
+
+      3. The permanent Playwright regression spec at this scenario's own
+      `pipeline_test` path, covering: dispatcher attaches a document and
+      captures its reference; a same-tenant user opens it normally; a
+      different-tenant user attempting the same reference and a never-issued
+      reference see byte-identical screens; an expired link shows the
+      expiry message; a fresh link works.
+
+      OUT OF SCOPE: the signed-link issuance/expiry mechanism itself
+      (REQ-386, this screen only calls it); audit logging (REQ-388).
+    acceptance_criteria:
+      - "web/src/api/ gains a typed client for the attachment upload/list/signed-link routes, matching this codebase's existing API-client conventions (see web/src/api/entities.ts or similar for the pattern to follow)"
+      - "a document-viewer screen renders the document for a same-tenant, valid, unexpired link"
+      - "the same screen, given a foreign-tenant attachment reference and a never-issued reference, renders byte-identical markup/text (a snapshot or explicit DOM assertion compares the two, not just 'both show an error')"
+      - "the same screen, given an expired-link response, renders a distinct expired-link message with no document content, and offers a way to request a fresh link"
+      - "web/tests/e2e/pipelines/attachment-cross-tenant.pipeline.e2e.spec.ts exists, is a real Playwright spec (not a stub), and passes against a running instance -- quote the real run output"
+      - "the stale NOTE (ISS-0527) in test/fixtures/uat/scenarios/platform/attachment-cross-tenant-probe.yaml is removed once this requirement and REQ-386 both ship, since the feature it warns about will then be real"
+    depends_on: [REQ-386]
+
+  - id: REQ-388
+    title: "Audit-log entry for a denied cross-tenant or otherwise-failed instance-attachment access attempt"
+    owner: ELIXIR-DEV
+    status: pending
+    stage: S6
+    impl_order: 745  # Registered 2026-09-20 by ORCH from this GUI-review UAT finding.
+    description: >
+      Filed from the GUI-review UAT run of
+      test/fixtures/uat/scenarios/platform/attachment-cross-tenant-probe.yaml
+      (PW-09) -- see
+      test/uat-reports/gui-review-2026-09-20-attachment-cross-tenant-probe.md.
+      Third of three requirements from that finding; independent of REQ-386/
+      REQ-387 (this is a read-path audit concern, not a delivery-mechanism
+      concern), though naturally lands alongside them.
+
+      WHAT EXISTS TODAY: `lib/letflow/routers/instances.ex`'s
+      `handle_get_attachment_content/3` and its `fetch_scoped_attachment_content/3`
+      helper never call into `Letflow.Audit` (or any other logging facility
+      beyond the ordinary Plug request log) on any branch, including the
+      `{:error, :not_found}` branch that a cross-tenant or never-issued
+      attachment id takes. `Letflow.Audit`'s existing `audit_entries` table
+      (REQ-195/196) is, today, written to only by mutation-shaped operations
+      (see REQ-382's own finding for the same gap on a different write
+      path) -- there is no existing precedent in this codebase for auditing
+      a *denied read*. This scenario's EO-005 requires exactly that: the
+      platform operator's activity history must show that a Vortex user
+      attempted (and was denied) access to a SwiftRoute attachment id, at
+      both steps 2 and 3, naming the actor and the time.
+
+      THIS REQUIREMENT adds one `Letflow.Audit` write on the denied branch(es)
+      of instance-attachment content access -- at minimum the cross-tenant
+      case (an attachment id that resolves to `nil` under the caller's own
+      `opts[:prefix]`) and the cross-instance-same-tenant case; a genuinely
+      malformed/never-issued UUID may reasonably be excluded if indistinguishable
+      from the above at the point the audit write would occur (state and
+      justify this boundary explicitly in the design doc -- do not silently
+      audit only some denied cases without saying which and why). The write
+      must not reintroduce a timing or response-shape difference into the
+      denied response itself (EO-001) -- fire the audit write without
+      blocking or altering `Response.not_found(conn)`'s own byte-identical
+      shape (e.g. async/`Task.start`, or synchronous but strictly after the
+      response tuple is already decided, matching whatever pattern this
+      codebase already uses for audit writes on other routes -- check
+      `Letflow.Audit`'s own callers for the existing idiom before inventing
+      a new one).
+    acceptance_criteria:
+      - "a denied instance-attachment content fetch (cross-tenant or cross-instance-same-tenant) writes exactly one Letflow.Audit entry naming the requesting actor, the attempted attachment_id, and a UTC timestamp -- a test asserts the entry's presence and content over real HTTP, not by calling a context function directly"
+      - "the audit write does not change handle_get_attachment_content/3's existing byte-identical not-found response for a foreign-tenant id vs. a never-issued id -- REQ-386's (or REQ-211/212's, if REQ-386 has not yet shipped) existing indistinguishability test still passes unmodified"
+      - "the audit write introduces no observable added latency variance between the audited (denied) branch and the non-audited (success) branch that would itself become a new timing side-channel -- state in the design doc how this was checked (e.g. async dispatch) and why it's sufficient"
+      - "web/src/pages/admin/AuditLogPage.tsx surfaces the new entry with no frontend change, matching REQ-382's own precedent for reusing the existing audit-log mechanism"
+      - "mix compile --warnings-as-errors and mix test both pass, with real output quoted; SECURITY-REVIEWER sign-off is required before merge (this is a tenant-data access-control/audit path per docs/agents/instructions/security-invariants.md)"
+    depends_on: [REQ-211, REQ-212]

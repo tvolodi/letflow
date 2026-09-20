@@ -1,0 +1,56 @@
+{
+  "handoff_id": "c1a1e001-0000-4000-8000-000000000015",
+  "run_id": "WF03-ISS0736-20260921",
+  "workflow_id": "WF-03",
+  "step": "04b-rework1",
+  "from_agent": "ORCH",
+  "to_agent": "TEST-DESIGN-VALIDATOR",
+  "file": "handoffs/WF03-ISS0736-20260921/step-04b-test-design-validator-rework1.json",
+  "created_at": "2026-09-20T22:14:46Z",
+  "started_at": "2026-09-20T22:14:46Z",
+  "completed_at": null,
+  "status": "PENDING",
+  "priority": "HIGH",
+  "context": {
+    "stage": "S4",
+    "requirement_ids": ["REQ-378"],
+    "requirement_text": {
+      "REQ-378": "See handoffs/WF03-ISS0736-20260921/step-00-git-setup.json context.requirement_text.REQ-378 for the full verbatim text."
+    },
+    "related_handoff_ids": ["c1a1e001-0000-4000-8000-000000000014"],
+    "artifacts_in": [
+      "test/letflow/plugs/iss0736_oidc_live_revocation_test.exs",
+      "test/support/iss0736_role_claim_token_verifier_double.ex",
+      "handoffs/WF03-ISS0736-20260921/step-04-test-designer-rework1.json"
+    ],
+    "owned_modules": [
+      "lib/letflow/plugs/auth_pipeline.ex",
+      "lib/letflow/identity.ex"
+    ]
+  },
+  "task": {
+    "description": "Gate the new one-way-gate test added in this rework. Independently re-run `mix test test/letflow/plugs/iss0736_oidc_live_revocation_test.exs --seed 0` yourself and confirm the real output (do not trust the handoff's claim of 3 passed). Then independently apply a mutant that breaks the one-way-gate specifically -- e.g. change the call-site guard from `role_claims_synced_at == nil` to always-true (always re-sync), or make sync_role_claims_from_token/3 unconditionally reset the marker -- in a throwaway worktree, confirm the new one-way-gate test (and only that one, ideally) fails against the mutant, then revert and verify git status clean. This is the specific security property this whole rework exists to protect, so the mutant must target exactly this, not an arbitrary line. Also independently assess: TEST-DESIGNER reported the full mix letflow.check.test hit a pre-existing `versions_missing = [20260921000001]` migration-state mismatch (130/211 passed) they attributed to being unrelated to their changes -- form your own view (is this plausibly a concurrent-session artifact from a stale test DB, e.g. another process holding a pre-migration tenant_template schema, similar to what ELIXIR-DEV's step-03-elixir-dev-rework1 already encountered and worked around) and flag it clearly for TEST-RUNNER's attention rather than letting it get silently reintroduced as a blocker there.",
+    "acceptance_criteria": [
+      "New one-way-gate test independently re-run and confirmed passing, real output quoted",
+      "A mutant targeting the one-way-gate specifically independently applied, shown to fail the relevant test, reverted, git status verified clean",
+      "versions_missing finding assessed and clearly flagged for TEST-RUNNER"
+    ]
+  },
+  "result": {
+    "status": "PENDING",
+    "summary": "",
+    "artifacts_out": [],
+    "issues": [],
+    "git_evidence": {
+      "branch_name": null,
+      "commit_sha_list": [],
+      "remote_branch": null,
+      "push_status": "skipped",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": ""
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

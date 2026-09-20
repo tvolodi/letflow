@@ -8,8 +8,8 @@
   "file": "handoffs/WF03-ISS0736-20260921/step-03-elixir-dev-rework2.json",
   "created_at": "2026-09-20T22:34:20Z",
   "started_at": "2026-09-20T22:34:20Z",
-  "completed_at": null,
-  "status": "PENDING",
+  "completed_at": "2026-09-20T22:36:33Z",
+  "status": "COMPLETED",
   "priority": "HIGH",
   "context": {
     "stage": "S4",
@@ -39,19 +39,21 @@
     ]
   },
   "result": {
-    "status": "PENDING",
-    "summary": "",
-    "artifacts_out": [],
+    "status": "PASS",
+    "summary": "Fixed lib/letflow/identity_migration.ex's copy_users/2 (~line 153): added an explicit `select: struct(u, [:id, :username, :display_name, :email, :password_hash, :status, :auth_source, :external_id, :external_realm, :inserted_at, :updated_at])` restriction, mirroring copy_groups/2's existing guard pattern for this exact hazard class, plus a comment block explaining why (REQ-378's `role_claims_synced_at` column exists only on the new per-tenant `users` table via priv/repo/migrations/20260921000001_add_role_claims_synced_at_to_users.exs, not on the legacy frozen public.users table copy_users/2 reads from). No other lines in the module were touched. `mix compile --warnings-as-errors` -> clean, no warnings/errors ('Compiling 1 file (.ex)', exit clean). `mix test test/letflow/identity_migration_test.exs` -> 'Finished in 11.1 seconds ... Result: 12 passed', 0 failures (previously 7 failures with Postgrex undefined_column on public.users.role_claims_synced_at). Re-ran the 4 REQ-378-related files (test/letflow/plugs/auth_pipeline_test.exs test/letflow/plugs/api_pipeline_integration_test.exs test/letflow/routers/req077_promotion_pipeline_test.exs test/letflow/plugs/iss0736_oidc_live_revocation_test.exs) together -> 'Finished in 59.4 seconds ... Result: 49 passed', 0 failures -- no new regression. Judgment on gating: this delta is test-infra-adjacent (a `select:` column-list restriction in a one-time legacy-table copy utility, matching an already-approved pattern in the same module) and does not touch any tenant-data API/auth path itself -- SECURITY-REVIEWER/REVIEWER re-review is not required for this specific delta per the dispatch note, but ORCH should confirm that judgment before merge since this module does interact with identity data during cutover.",
+    "artifacts_out": [
+      "lib/letflow/identity_migration.ex"
+    ],
     "issues": [],
     "git_evidence": {
-      "branch_name": null,
+      "branch_name": "feature/WF03-ISS0736-20260921",
       "commit_sha_list": [],
-      "remote_branch": null,
-      "push_status": "skipped",
+      "remote_branch": "origin/feature/WF03-ISS0736-20260921",
+      "push_status": "pending",
       "pr_url": null,
       "pr_create_error": null
     },
-    "next_action": ""
+    "next_action": "Route to TEST-RUNNER for another full-suite re-run (mix test, full suite) to confirm no other regression, per the dispatch note's instruction; SECURITY-REVIEWER/REVIEWER re-review of this specific delta was judged not required (test-infra-adjacent select-restriction fix, no auth-path change) -- ORCH to confirm that judgment."
   },
   "rework_count": 2,
   "max_rework": 3

@@ -150,10 +150,42 @@ defmodule Letflow.IdentityMigration do
     insert_all_preserving_id(rows, schema_name)
   end
 
+  # `select: struct(u, [...])` below is deliberately restricted to the columns
+  # the legacy `public.users` table actually has -- REQ-378 added
+  # `role_claims_synced_at` to the `Letflow.Identity.User` schema module (for
+  # the NEW per-tenant-schema `users` table only, via
+  # `20260921000001_add_role_claims_synced_at_to_users.exs`), and a bare
+  # `from(u in User, ...)` with no `select:` selects every column the schema
+  # module declares, which would otherwise query `role_claims_synced_at`
+  # against this legacy source table that was never migrated to carry it (it
+  # predates D1/D2 and is frozen -- this whole module only ever reads it,
+  # never writes it new columns). Restricting the select here keeps this
+  # one-time cutover copy correct against the legacy table's real, frozen
+  # shape without touching the destination schema's newer column set at all
+  # (that column simply comes across as `nil` for migrated legacy rows, which
+  # is fine -- it is nullable and no legacy row ever had a
+  # role_claims_synced_at value to preserve in the first place). Mirrors
+  # copy_groups/2's identical guard above for this exact hazard class.
   defp copy_users(tenant_id, schema_name) do
     rows =
       Repo.all(
-        from(u in User, where: fragment("? = ?", u.tenant_id, type(^tenant_id, Ecto.UUID)))
+        from(u in User,
+          where: fragment("? = ?", u.tenant_id, type(^tenant_id, Ecto.UUID)),
+          select:
+            struct(u, [
+              :id,
+              :username,
+              :display_name,
+              :email,
+              :password_hash,
+              :status,
+              :auth_source,
+              :external_id,
+              :external_realm,
+              :inserted_at,
+              :updated_at
+            ])
+        )
       )
 
     insert_all_preserving_id(rows, schema_name)

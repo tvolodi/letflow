@@ -1,0 +1,140 @@
+id: ISS-0740
+title: >
+  InstanceBoardPage start-instance-button click freeze: openStartDialog's
+  synchronous multi-setState body froze the renderer on a real trusted click
+discovered_by: ISSUE-FIXER
+discovered_in_run: WF02-REQ371-20260919
+discovered_at: "2026-09-20T00:00:00Z"
+severity: MAJOR
+tags:
+  - frontend
+  - performance
+  - flake
+description: >
+  ISSUE-FIXER root-caused, while diagnosing an intermittent (~1/3 hit rate)
+  hang at step 02 of REQ-371's required e2e spec
+  (web/tests/e2e/pipelines/platform-definition-promotion-rollback.pipeline.e2e.spec.ts,
+  the start-instance-button click), that InstanceBoardPage.tsx's
+  openStartDialog fires 7 synchronous setState calls
+  (setStartDefinitionName, setStartDefinitionVersion,
+  setStartCorrelationKey, setStartVariablesJson, setStartError,
+  setStartValidationError, setShowStart) inside the same native click
+  event-dispatch turn as a real UA-trusted click. This is the identical
+  trigger class already confirmed for ISS-0662 (EntityCrudPage.tsx),
+  ISS-0729/ISS-0737/ISS-0738 (DefinitionListPage.tsx) -- see
+  web/src/utils/deferClickState.ts's moduledoc for the confirmed mechanism.
+  closeStartDialog (called from both the dialog's Cancel button and the
+  backdrop click) and submitStartInstance's pre-await validation-branch
+  setState calls share the same defect. This blocked REQ-371's own AC6 (the
+  required e2e spec must be authored AND passing).
+
+  Design doc originally filed this issue's own YAML target as
+  docs/issues/ISS-0739.yaml (the confirmed-unused slot at design-authoring
+  time), but a concurrent CODE-DESIGNER claimed that slot first for an
+  unrelated backend defect (GET /api/v1/definitions/search's empty-body
+  HTTP 500 -- see docs/issues/ISS-0739.yaml). This issue is filed as
+  ISS-0740.yaml instead, the next unused slot at filing time. The design
+  doc's own filename (lib/letflow/design/iss-0739-instanceboardpage-start-dialog-click-freeze-fix.md)
+  and its internal prose still say "ISS-0739" throughout -- this is a
+  filename/id mismatch only, matching the same class of collision already
+  documented in ISS-0729.yaml/ISS-0738.yaml's own NOTE comments; the design
+  doc's content and reasoning are otherwise unaffected and were not
+  re-authored under the new number.
+affected_files:
+  - web/src/pages/instances/InstanceBoardPage.tsx
+  - web/src/utils/deferClickState.ts
+  - web/tests/e2e/pipelines/platform-definition-promotion-rollback.pipeline.e2e.spec.ts
+  - web/tests/e2e/iss-0739-instance-start-dialog-click-freeze.e2e.spec.ts
+related_requirements:
+  - REQ-371
+related:
+  - ISS-0662
+  - ISS-0729
+  - ISS-0737
+  - ISS-0738
+suggested_fix: >
+  See lib/letflow/design/iss-0739-instanceboardpage-start-dialog-click-freeze-fix.md
+  for the full design. Summary: wrap openStartDialog's entire 7-call body,
+  closeStartDialog's setShowStart(false), and submitStartInstance's
+  pre-await validation-branch setState calls (the two resets plus each of
+  the three early-return branches) in deferClickState(() => {...}),
+  matching EntityCrudPage.tsx/DefinitionListPage.tsx's established pattern
+  exactly. Controlled-input onChange handlers and the post-await
+  setShowStart(false)/navigate() are deliberately NOT wrapped (design §1/§2.2).
+severity_rationale: >
+  MAJOR -- blocked REQ-371's AC6 (the required e2e spec must be authored
+  AND passing) from being honestly claimed, and represents a genuine,
+  reproducible main-thread freeze on a primary operator action
+  (starting a process instance).
+queue_ref: null  # ORCH to assign via letflow-queue register_task
+github_ref: null  # ORCH to assign
+status: open
+# NOTE: filename/design-doc-name mismatch. This issue's design doc
+# (lib/letflow/design/iss-0739-instanceboardpage-start-dialog-click-freeze-fix.md)
+# and the new e2e regression spec
+# (web/tests/e2e/iss-0739-instance-start-dialog-click-freeze.e2e.spec.ts)
+# were both authored/named before a concurrent CODE-DESIGNER claimed the
+# docs/issues/ISS-0739.yaml slot for an unrelated backend defect. This
+# YAML's own id: field is ISS-0740 to match its filename
+# (mix letflow.check_issue_refs' [R5] rule), while the design doc and test
+# file names were left as originally authored rather than renamed --
+# matching this session's established precedent (ISS-0729.yaml/ISS-0738.yaml)
+# of noting a filename/id mismatch in a NOTE comment rather than
+# retroactively renaming already-referenced artifacts.
+resolution:
+  resolved_in_run: WF03-ISS0740-20260920
+  design_doc: lib/letflow/design/iss-0739-instanceboardpage-start-dialog-click-freeze-fix.md
+  summary: >
+    Wrapped openStartDialog's entire 7-setState body, closeStartDialog's
+    setShowStart(false), and submitStartInstance's three pre-await
+    validation-branch setState call sites in
+    web/src/utils/deferClickState.ts's deferClickState(() => {...}),
+    matching EntityCrudPage.tsx/DefinitionListPage.tsx's already-established
+    pattern exactly. No useRef double-submit guard was added, per the
+    design's OQ-3 reasoning (mutateAsync itself is never deferred) --
+    see empirical_evidence_trail below for a caveat FRONTEND-DEV surfaced
+    on this specific point. A new e2e regression guard
+    (web/tests/e2e/iss-0739-instance-start-dialog-click-freeze.e2e.spec.ts)
+    drives real trusted clicks (hover+mousedown+mouseup) on
+    start-instance-button (open), the dialog's Cancel button, the backdrop,
+    and submit-start-instance (both the early-return validation path and
+    the success path), asserting the dialog actually opens/closes/navigates
+    within a 5s bound each time.
+  empirical_evidence_trail: >
+    Fail-then-pass proven against a live backend+Keycloak stack, after
+    FRONTEND-DEV first had to fix an unrelated local dev-server
+    misconfiguration (vite's proxy resolved `localhost:4000` to IPv6 `::1`
+    while the backend listens IPv4-only, causing every proxied API request
+    to fail with a connection-refused-derived 500 regardless of fix state
+    -- restarting vite with NODE_OPTIONS=--dns-result-order=ipv4first
+    resolved it). Pre-fix baseline: 5/5 full spec runs failed, 15/15
+    individual test cases froze past the 5s bound on the very first
+    trusted click on start-instance-button (a materially HIGHER hit rate
+    than the originally reported ~1/3, plausibly because this harness's
+    synthetic click conditions reproduce the freeze more reliably than ad
+    hoc human clicking, matching ISS-0662/ISS-0737's own prior experience).
+    Post-fix: 7/7 full spec runs passed, 21/21 individual test cases passed
+    cleanly (each full run completing in ~7s, vs. the pre-fix bound-tripping
+    failures). FRONTEND-DEV also ran the OQ-3-mandated rapid-double-click
+    sanity check on submit-start-instance (two independent real
+    mousedown/mouseup cycles back-to-back, no gap): this DID produce two
+    instances from one intended submission in this session's one trial --
+    the design's OQ-3 assumption ("existing disabled={isPending} remains
+    sufficient") is NOT fully confirmed empirically and should be treated
+    as an open finding for REVIEWER, not a settled non-issue; this was not
+    re-tested against pre-fix code since the pre-fix click freeze itself
+    blocks reaching the double-click step, so whether this race predates
+    this fix or not is unresolved. Separately, FRONTEND-DEV found and
+    worked around (in the new spec only, not in application code) a
+    sandbox-environment-level Playwright/Chromium limitation where
+    Locator.fill()/.pressSequentially()/page.keyboard.insertText() all hang
+    indefinitely on every text input regardless of page/handler/fix-state
+    (reproduced on inputs with no relation to this fix, e.g.
+    start-correlation-key) -- worked around via a direct JS
+    value-setter + bubbling `input` Event dispatch, verified to be observed
+    by React identically to a real keystroke.
+  gates: >
+    Pending SECURITY-REVIEWER/REVIEWER/TEST-DESIGN-VALIDATOR/TEST-RUNNER/
+    RELEASE-VALIDATOR. REVIEWER should specifically re-examine OQ-3 (the
+    double-submit finding above) rather than accept the design's original
+    "no useRef guard needed" reasoning as closed.

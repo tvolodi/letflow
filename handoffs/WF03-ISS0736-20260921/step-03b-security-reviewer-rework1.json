@@ -1,0 +1,63 @@
+{
+  "handoff_id": "c1a1e001-0000-4000-8000-000000000012",
+  "run_id": "WF03-ISS0736-20260921",
+  "workflow_id": "WF-03",
+  "step": "03b-rework1",
+  "from_agent": "ORCH",
+  "to_agent": "SECURITY-REVIEWER",
+  "file": "handoffs/WF03-ISS0736-20260921/step-03b-security-reviewer-rework1.json",
+  "created_at": "2026-09-20T21:56:15Z",
+  "started_at": "2026-09-20T21:56:15Z",
+  "completed_at": null,
+  "status": "PENDING",
+  "priority": "HIGH",
+  "context": {
+    "stage": "S4",
+    "requirement_ids": ["REQ-378"],
+    "requirement_text": {
+      "REQ-378": "See handoffs/WF03-ISS0736-20260921/step-00-git-setup.json context.requirement_text.REQ-378 for the full verbatim text. AC4: SECURITY-REVIEWER signs off explicitly on the chosen enforcement mechanism before merge."
+    },
+    "related_handoff_ids": ["c1a1e001-0000-4000-8000-000000000011"],
+    "artifacts_in": [
+      "lib/letflow/design/req378-oidc-live-revocation-check.md",
+      "handoffs/WF03-ISS0736-20260921/step-03-elixir-dev-rework1.json",
+      "handoffs/WF03-ISS0736-20260921/step-03b-security-reviewer.json",
+      "handoffs/WF03-ISS0736-20260921/step-02b-code-design-validator-rework3.json",
+      "priv/repo/migrations/20260921000001_add_role_claims_synced_at_to_users.exs",
+      "lib/letflow/identity.ex",
+      "lib/letflow/plugs/tenant_status.ex"
+    ],
+    "owned_modules": [
+      "lib/letflow/plugs/auth_pipeline.ex",
+      "lib/letflow/identity.ex",
+      "lib/letflow/identity/user.ex"
+    ]
+  },
+  "task": {
+    "description": "Your prior review (handoffs/WF03-ISS0736-20260921/step-03b-security-reviewer.json) PASSED the original §1/§2.1 mechanism. This is a re-review of the DELTA added since: §2.2's role_claims_synced_at one-time claims-to-group_members sync (Letflow.Identity.sync_role_claims_from_token/3, new migration priv/repo/migrations/20260921000001_add_role_claims_synced_at_to_users.exs) plus §2.3's 3 pre-existing test-assertion corrections (no production code). Review `git diff <your-prior-reviewed-sha>...HEAD -- lib/letflow/identity.ex lib/letflow/identity/user.ex priv/repo/migrations/20260921000001_add_role_claims_synced_at_to_users.exs` (find your prior reviewed sha from handoffs/WF03-ISS0736-20260921/step-03b-security-reviewer.json's git_evidence). Sign off explicitly on: (a) the one-way-gate safety property -- confirm sync_role_claims_from_token/3 is truly called only when role_claims_synced_at is nil, and that nothing anywhere (including this new code) ever resets that column back to nil, which would let a revoked-then-still-claiming user's access silently resurrect on their next login; (b) whether resolve_group_ids_for_role_names/2's role-name-to-group resolution could be tricked by a crafted/malicious claim value (e.g. does it do exact-match lookups only, no dynamic query construction from untrusted input); (c) tenant scoping of the new migration and the new function's queries; (d) CODE-DESIGN-VALIDATOR's rework3 re-gate flagged a MINOR, non-blocking finding worth your explicit sign-off: lib/letflow/plugs/tenant_status.ex:92-95 checks `\"PLATFORM_ADMIN\" not in roles` directly against the RAW claimed-role list (bypassing roles_from_strings/1 entirely) for its tenant-inactive-403 exemption -- confirm whether this is a pre-existing, separately-scoped issue (not caused by this branch) or whether it interacts with this fix in a way that needs addressing now; if pre-existing and out of scope, say so explicitly and note it should be filed as its own issue.",
+    "acceptance_criteria": [
+      "Explicit sign-off on the one-way-gate safety property, independently re-verified against the actual diff",
+      "Explicit assessment of resolve_group_ids_for_role_names/2's injection surface",
+      "Explicit disposition of the tenant_status.ex:92-95 raw-role-check finding (in-scope fix now, vs. pre-existing/out-of-scope with a recommendation to file separately)",
+      "If PASS: next_action routes to REVIEWER for re-review of the delta",
+      "If FAIL: name exact BLOCKER, route to rework"
+    ]
+  },
+  "result": {
+    "status": "PENDING",
+    "summary": "",
+    "artifacts_out": [],
+    "issues": [],
+    "git_evidence": {
+      "branch_name": null,
+      "commit_sha_list": [],
+      "remote_branch": null,
+      "push_status": "skipped",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": ""
+  },
+  "rework_count": 1,
+  "max_rework": 3
+}

@@ -1,0 +1,73 @@
+id: ISS-0744
+title: >
+  InstanceBoardPage.tsx passes an unmemoized columns array literal to
+  DataTable, forcing wasted column-model recomputation on every render
+discovered_by: ISSUE-FIXER
+discovered_in_run: WF02-REQ371-20260919
+discovered_at: "2026-09-20T09:35:00Z"
+severity: MINOR
+tags:
+  - frontend
+  - performance
+description: >
+  Discovered while ISSUE-FIXER investigated a reported (but not
+  independently reproducible) perpetual main-thread render loop on
+  InstanceBoardPage.tsx, blocking REQ-371's required e2e spec
+  (platform-definition-promotion-rollback.pipeline.e2e.spec.ts). Across 5
+  separate reproduction attempts against the live backend+Keycloak stack
+  (cold nav, warm nav with an ACTIVE instance present, 15x rapid
+  mount/unmount cycles, a full page.goto() cold load, all polled every 1-2s
+  for 30-90+ seconds each), NO unconditional infinite render loop was
+  observed -- the originally reported freeze is currently believed to have
+  been a one-off environment artifact (plausibly accumulated e2e-fixture
+  data volume from this session's many pipeline runs, or shared-worktree
+  interference from a concurrent agent), not a reproducible code defect.
+
+  However, a real, independently-worth-fixing performance defect WAS found
+  and confirmed via CPU profiling: InstanceBoardPage.tsx:219 defines
+  `columns` as a plain array literal in the component body, not wrapped in
+  `useMemo`. DataTable.tsx:63's `useMemo(() => toColumnDefs(columns),
+  [columns])` therefore recomputes on every parent render (since the array
+  reference changes every time), invalidating TanStack Table's internal
+  `getCoreRowModel()`/`getSortedRowModel()` memoization each render and
+  forcing every column's accessor to re-run for every row on every render --
+  confirmed as hot self-time in the CPU profile even during otherwise-idle
+  passes. This alone does NOT cause additional renders (DataTable.tsx's own
+  code comment, confirmed correct against TanStack v8 behavior, notes
+  useReactTable mutates its table instance in place via setOptions rather
+  than triggering a React state update) -- it is wasted work per render, not
+  a render-loop trigger.
+
+  Since DataTable is this project's shared design-system primitive
+  (docs/frontend/design-system.md Section 7.2), this same unmemoized-columns
+  pattern likely recurs at other `<DataTable columns={...}>` call sites --
+  not scoped/confirmed here, a `grep -rn "<DataTable" web/src` sweep is
+  recommended before fixing to size the change correctly (fix
+  InstanceBoardPage.tsx only, or sweep all callers in one pass).
+affected_files:
+  - web/src/pages/instances/InstanceBoardPage.tsx
+  - web/src/components/ui/DataTable.tsx
+suggested_fix: >
+  Wrap InstanceBoardPage.tsx's `columns` definition in `useMemo(() => [...],
+  [<real deps, likely none or a stable i18n formatter ref>])` so the array
+  reference is stable across renders, matching the pattern any other
+  DataTable caller should also use. CODE-DESIGNER should first run
+  `grep -rn "<DataTable" web/src` to confirm whether this is an isolated fix
+  or a sweep across multiple pages.
+severity_rationale: >
+  MINOR -- confirmed wasted render work, not a functional defect and not
+  (on its own) the cause of the freeze that prompted this investigation. Low
+  urgency; worth fixing opportunistically, not blocking any requirement.
+related:
+  - ISS-0741  # a different, already-fixed InstanceBoardPage freeze (click-handler synchronous setState), unrelated trigger class
+related_requirements:
+  - REQ-371
+queue_ref: null  # ORCH to assign via letflow-queue register_task if promoted to active work
+github_ref: null  # ORCH to assign
+status: open
+process_note: >
+  Also noted in passing during this investigation, NOT covered by this
+  issue: the live GET /api/v1/instances response has no
+  definition_name/definition_version/updated_at fields, so the Definition
+  column renders the literal string "undefined vundefined" -- a separate,
+  pre-existing display bug worth its own issue if not already tracked.

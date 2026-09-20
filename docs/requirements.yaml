@@ -29318,3 +29318,77 @@ requirements:
       - "submitting an instance with declared_value: 400 against the same live definition produces no ceo-approval task at all, proving the CEL branch is live, not hardcoded to always route through the CEO"
       - "the scenario test/fixtures/uat/scenarios/swiftroute/shipment-high-value-happy.yaml is re-run by UAT-RUNNER once this requirement and ISS-0739 both land, and its own gui-review report is updated from BLOCKED to a real pass/fail verdict with real screenshots"
     depends_on: []
+
+  - id: REQ-396
+    title: "Add HUMAN_TASK.escalation_timer_duration to the graph schema and wire SCH-04's escalation half (timer fire -> original task non-actionable, new task assigned to escalation role), closing the deferral REQ-185/REQ-188 already named"
+    owner: CODE-DESIGNER
+    status: pending
+    stage: S7
+    impl_order: 753  # Registered 2026-09-20 by ORCH from this GUI-review UAT finding.
+    description: >
+      Filed from the GUI-review UAT run of
+      test/fixtures/uat/scenarios/swiftroute/shipment-ops-timeout-escalation.yaml
+      (PW-17, 17th of 18 GUI-review scenarios this sweep) -- see
+      test/uat-reports/gui-review-2026-09-20-shipment-ops-timeout-escalation.md.
+      Not a rediscovery: REQ-185's own text and REQ-186/187/188's shared
+      preamble (docs/requirements.yaml, ~L9736-9742 and ~L10113-10120)
+      already name this exact gap as "ALSO OUT OF SCOPE, BLOCKER NAMED:
+      SCH-04's escalation timers... the definition-side input does not
+      exist, so escalation timers need a definitions-side requirement
+      first." No requirement has since picked that up. This requirement is
+      that pickup, filed now because a real UAT scenario needs it, not
+      speculatively.
+
+      WHAT EXISTS TODAY: `POST /instances/:id/advance-timer` (ISS-0389,
+      lib/letflow/routers/instances.ex:351) is real and force-fires any
+      *existing* pending `:TIMER` node. `Letflow.Definitions.Graph` supports
+      a `:TIMER` node type with a validated `duration_iso8601` attribute
+      (CHK-12, graph.ex check_timer_duration/1 ~L815-828). Neither of these
+      is the gap.
+
+      WHAT DOES NOT EXIST: a way to attach a timeout to a `:HUMAN_TASK`
+      node itself such that (a) the timer races the human completing the
+      task, (b) firing first makes the original task non-actionable, and
+      (c) a new task is assigned to a different, escalation role.
+      `Letflow.Definitions.Graph` has no `escalation_timer_duration` (or
+      equivalent) attribute on `:HUMAN_TASK`, and no validator for one.
+      Confirmed concretely against this scenario's own process definition:
+      `test/fixtures/simulation/swiftroute/process_route_approval.yaml`
+      ("Shipment Approval," the only ProcessDefinition graph anywhere in
+      this repo matching `proc-swiftroute-shipment-approval`) has an
+      `ops-review` HUMAN_TASK (role-ops-manager) whose only non-decision
+      outgoing edge is `fallback-ops-review -> notify-requester` (which
+      leads to `end-rejected`), with the graph's own comment reading
+      "fallback for ops-review (timeout path; escalate-to-ceo not in
+      graph)". There is no `ceo-approval` edge reachable from a timed-out
+      `ops-review` at all -- the scenario's EO-001 (CEO receives the
+      escalated task, ops-manager task no longer actionable) is not a gap
+      in test coverage or QA provisioning, it describes a routing path this
+      graph cannot produce even in principle today.
+
+      SCOPE: (1) CODE-DESIGNER decides the schema/attribute shape (an
+      `escalation_timer_duration` ISO-8601 duration plus an
+      `escalation_role`-style attribute on `:HUMAN_TASK`, or an alternative
+      shape -- e.g. an explicit boundary-timer node racing the task via
+      existing `:TIMER`/gateway primitives -- if that reuses more of what
+      already exists; state the trade-off either way) and produces the
+      design artefact; (2) ELIXIR-DEV wires `Letflow.Engine`/`Letflow.Scheduler`
+      so a fired escalation timer marks the original HUMAN_TASK
+      non-actionable (matching EO-003's audit-event requirement: task moved
+      to timeout/cancelled state before the escalation task is created) and
+      creates a new task assigned to the escalation role (matching EO-001);
+      (3) update `process_route_approval.yaml` (or its live-deployed
+      counterpart once REQ-395 lands) to actually use the new attribute so
+      `ops-review`'s timeout path reaches `ceo-approval` instead of
+      `notify-requester`. NOT IN SCOPE: REQ-185/186/187/188's own
+      recurring-timer/retention machinery (untouched, already done); REQ-395's
+      live-deployment gap (separate, depended-on-by, not fixed here);
+      ISS-0739's credential-seeding gap (separate).
+    acceptance_criteria:
+      - "the design artefact under lib/letflow/design/ states the chosen schema shape for a HUMAN_TASK timeout-escalation attribute (or explicit boundary-timer alternative), with CODE-DESIGN-VALIDATOR sign-off, and explicitly cites REQ-185's/REQ-188's preamble as the blocker being closed"
+      - "Letflow.Definitions.Graph validates the new attribute(s) on :HUMAN_TASK nodes (a CHK-style structural check alongside CHK-12), with at least one test asserting a malformed value is rejected at definition-validation time, not silently accepted"
+      - "an ExUnit test proves: a HUMAN_TASK instance with the new escalation attribute set, whose timer is force-fired (via Letflow.Scheduler.fire_timer/2 or the /advance-timer route), (a) leaves the original task in a non-actionable status, (b) creates exactly one new task assigned to the escalation role, and (c) an audit_entries row shows the original task's timeout/cancelled transition ordered strictly before the new task's creation event"
+      - "process_route_approval.yaml's ops-review node is updated to carry the new attribute(s) and its fallback-ops-review edge (or equivalent) now reaches ceo-approval on timeout instead of notify-requester, with test/letflow/simulation/req206_swiftroute_test.exs (or a new test alongside it) exercising this path end to end against a real Engine.create/2 call"
+      - "test/fixtures/uat/scenarios/swiftroute/shipment-ops-timeout-escalation.yaml is re-run by UAT-RUNNER once this requirement, REQ-395, and ISS-0739 all land, and its gui-review report is updated from UNBUILT_FEATURE/BLOCKED to a real pass/fail verdict with real screenshots for step 3's CEO GUI approval"
+      - "mix test and mix compile --warnings-as-errors both pass with real output quoted"
+    depends_on: []

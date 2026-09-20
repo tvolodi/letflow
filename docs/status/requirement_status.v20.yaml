@@ -1047,3 +1047,63 @@ history:
       git pull --ff-only picked up a concurrent sibling session's work
       cleanly (ISS-0737, REQ-384/385, unrelated tenant-switch-cache-
       isolation scenario) -- no conflicts, nothing to recover.
+  - req: SCOPE-CHANGE
+    event: done
+    agent: DOC-UPDATER
+    at: "2026-09-20T05:02:49Z"
+    note: >
+      WF-03 run WF03-ISS0737-20260920 (queue task 731, queue-labeled
+      ISS-0737) complete, commit a92d8b5d, PR #1607, branch
+      feature/WF03-ISS0737-20260920. ISS-0738 (DefinitionListPage
+      def-name click -- expand version history -- main-thread freeze in
+      both dev and production builds, discovered by ISSUE-FIXER while
+      root-causing REQ-371's required e2e spec) is now resolved per design
+      doc lib/letflow/design/WF03-ISS0737-fix-design.md. Root cause: the
+      `def-name-${id}` span's onClick called setExpandedDefId/
+      setExpandedDefName synchronously inside the same native trusted
+      click's event-dispatch turn -- the same trigger class ISS-0662 fixed
+      via web/src/utils/deferClickState.ts, but that earlier pass never
+      touched this page's bespoke inline handler. Confirmed by ISSUE-FIXER
+      against the real backend+Keycloak stack in both `npm run dev` and
+      `npm run build && vite preview` (renderer CPU pegged ~95-106% during
+      the hang). Fix: wraps the handler's unchanged body in
+      `deferClickState(() => {...})`, mirroring DataTable.tsx's
+      handleHeaderClick exactly. New e2e regression guard
+      (web/tests/e2e/iss-0737-definition-name-click-freeze.e2e.spec.ts)
+      drives a real trusted click on both an unfiltered and a
+      filtered/searched def-name span, asserting expand AND collapse
+      actually apply -- fail-then-pass proven empirically (hangs past 5s
+      pre-fix on a git-stashed revert, resolves in ~9s post-fix, both
+      cases).
+
+      Full gate history, all PASS: REVIEWER (its own independent
+      before/after e2e proof, reproducing the hang on reverted pre-fix
+      code and confirming clean passes with the fix restored);
+      TEST-DESIGN-VALIDATOR; TEST-RUNNER (703/703 frontend unit tests,
+      48/48 guards, e2e freeze spec 4/4); RELEASE-VALIDATOR (independent
+      re-verification: fail-then-pass reproduction 4/4, full backend suite
+      4462/4462, frontend 703/703, and a clean trial merge against
+      REQ-371's own branch feature/WF02-REQ371-20260919 with no
+      conflicts). SECURITY-REVIEWER scoped out per the design doc -- pure
+      client-side interaction-timing change, no tenant-data path touched,
+      same scoping precedent as ISS-0729/ISS-0662.
+
+      docs/issues/ISS-0738.yaml flipped open -> resolved with a full
+      resolution block citing all of the above. This unblocks REQ-371's
+      own AC6 (the required e2e spec must be authored AND PASSING) --
+      REQ-371 itself remains status: pending, since the rollback/withdraw
+      screen this ISS was discovered while building still does not exist;
+      no docs/requirements.yaml entry to flip for ISS-0738 itself (this is
+      an ISS, not a REQ; grepped ISS-0738 and ISS-0737, no other hits).
+      README.md checked (grepped DefinitionListPage/deferClickState/
+      def-name, no hits) -- not documented current behavior there, so no
+      README update needed. No docs/migration/stage-N-*.md or
+      decisions/*.md file was named by ISS-0738's affected_files -- none
+      required updating. No queue release and no merge performed here --
+      per docs/agents/protocols/TASK_QUEUE.md's "Who calls what" table
+      ("Every other role ... No[, does not call the queue directly]") and
+      core-directives.md's "No Agent Discretion Over Task Selection or
+      Locking", releasing letflow-queue task 731 and merging PR #1607 are
+      ORCH's calls to make, not DOC-UPDATER's -- flagged here rather than
+      actioned directly, consistent with every prior DOC-UPDATER entry in
+      this volume ("No merge performed here -- ORCH's job next").

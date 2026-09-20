@@ -36,11 +36,25 @@ export default function DefinitionListPage() {
   const [pendingNavId, setPendingNavId] = useState<string | null>(null)
   const [importError, setImportError] = useState<string | null>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
+  // ISS-0729: tracks the most recently scheduled (not-yet-flushed) deferred
+  // `setSearch` timer — see the search input's `onChange` below for why this
+  // coalescing is necessary, not just `deferClickState` called directly.
+  const pendingSearchTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   const hasDesignerRole = session?.roles?.some((r) => DESIGNER_ROLES.includes(r)) ?? false
 
   // Debounce search query (300ms)
   const debouncedSearch = useDebounce(search, 300)
+
+  // ISS-0729: clear any pending deferred setSearch flush on unmount, so a
+  // late-firing timer never calls setState on an unmounted component.
+  useEffect(() => {
+    return () => {
+      if (pendingSearchTimerRef.current !== null) {
+        clearTimeout(pendingSearchTimerRef.current)
+      }
+    }
+  }, [])
 
   // Navigate to the newly-created definition after React commits all state.
   // Using useEffect ensures this runs outside the mutation's async handler,
@@ -239,8 +253,50 @@ export default function DefinitionListPage() {
           data-testid="definition-search"
           type="text"
           placeholder="Search definitions..."
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
+          defaultValue=""
+          onChange={(e) => {
+            // ISS-0729 §3 Step 1 (H1, confirmed empirically — see this
+            // requirement's design doc and the e2e regression test's own
+            // comment): deferring `setSearch` by one macrotask (the same
+            // `setTimeout(fn, 0)` mechanism as web/src/utils/deferClickState.ts)
+            // so it never runs synchronously inside the native `input`
+            // event's own trusted dispatch turn eliminated a CPU-pegged
+            // main-thread freeze confirmed at 20/20 (100%) reproduction in
+            // this investigation, down to 0/20.
+            //
+            // This input is deliberately UNCONTROLLED (no `value={search}`,
+            // just `defaultValue`): an earlier version kept it controlled and
+            // deferred `setSearch` per keystroke via `deferClickState`
+            // directly, which empirically dropped characters under rapid real
+            // typing (Playwright `pressSequentially`) — React re-syncing the
+            // DOM to an earlier, shorter `search` value once a deferred flush
+            // finally landed could stomp on characters the user had already
+            // typed live in the DOM in the meantime. Coalescing the deferred
+            // flushes (clearing any not-yet-fired timer before scheduling the
+            // next) reduced but did not eliminate this, because a fast-typing
+            // burst's individual keystrokes are usually further apart than a
+            // single macrotask, so most flushes still fire mid-burst. Making
+            // the input uncontrolled removes the hazard at its root: nothing
+            // ever writes a stale value back into this DOM node, so the
+            // browser's own native buffering is the sole source of truth for
+            // what's displayed, and `search` (used only to derive
+            // `debouncedSearch` for the query below, never fed back into this
+            // input's own display) can be updated on whatever delayed
+            // schedule is needed without any risk of corrupting live typing.
+            // Nothing else in this component reads or resets `search` for
+            // display purposes, so there is no functional loss in dropping
+            // the controlled binding. React 18 does not pool SyntheticEvents,
+            // so capturing `value` synchronously here is a clarity measure,
+            // not a correctness requirement.
+            const value = e.target.value
+            if (pendingSearchTimerRef.current !== null) {
+              clearTimeout(pendingSearchTimerRef.current)
+            }
+            pendingSearchTimerRef.current = setTimeout(() => {
+              pendingSearchTimerRef.current = null
+              setSearch(value)
+            }, 0)
+          }}
           style={{ padding: '.35rem .6rem', borderRadius: '4px', border: '1px solid var(--border-default)', fontSize: '.85rem', flex: 1, maxWidth: '280px' }}
         />
         {isSearching && searchQuery.isFetching && (

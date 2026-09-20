@@ -188,3 +188,38 @@ history:
       726/726 frontend tests, 4x e2e pipeline runs (3 clean, 1 unrelated
       cold-start flake), all 7 ACs re-derived and confirmed, clean trivial
       merge-check against origin/main.
+  - req: REQ-378
+    event: started
+    agent: ORCH
+    at: "2026-09-20T19:09:00Z"
+    note: >
+      ISS-0736/REQ-378 (OIDC session role/status revocation has no live
+      enforcement effect) picked up via WF-03 on feature/WF03-ISS0736-20260921,
+      queue task 738, mandatory SECURITY-REVIEWER gate.
+  - req: REQ-378
+    event: done
+    agent: ORCH
+    at: "2026-09-20T22:51:25Z"
+    note: >
+      Tenant-admin role/status revocation now has live per-request
+      enforcement for OIDC sessions: AuthPipeline.authenticate_oidc/2 gained
+      a live Letflow.Identity.list_effective_role_names/2 check plus a
+      users.status inactive short-circuit, replacing exclusive reliance on
+      JWT claims. A one-time role_claims_synced_at marker seeds
+      group_members from JWT claims at first login only (never re-fires,
+      so revocation can't be silently resurrected by a token refresh).
+      GroupsPage.tsx/api/identity.ts's broken member-removal wiring
+      (wrong endpoint, discarded user_id) fixed as part of AC2's GUI path.
+      Went through 3 rounds of design rework (GUI-path verification gap,
+      JIT-provisioning seeding gap, pre-existing-test-contract gap) and 2
+      rounds of implementation rework (an identity_migration.ex copy_users/2
+      column-scope regression) before all gates passed. SECURITY-REVIEWER
+      PASSED twice (original mechanism + delta), REVIEWER PASSED twice.
+      Full suite green: 4472/4472 backend, 728/728 frontend. Design:
+      lib/letflow/design/req378-oidc-live-revocation-check.md. Regression
+      tests: test/letflow/plugs/iss0736_oidc_live_revocation_test.exs,
+      web/src/api/__tests__/identity.removeMembers.test.ts. ISS-0736
+      resolved, GH-1648 closed. Two follow-up issues filed: ISS-0764 (MINOR,
+      tenant_status.ex raw-role-check hygiene) and ISS-0765 (MAJOR,
+      groupsApi sibling-endpoint broken-prefix bug). Merged via PR (Step
+      Final) on feature/WF03-ISS0736-20260921.

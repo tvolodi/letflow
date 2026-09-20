@@ -173,7 +173,13 @@ export default function InstanceDetailPage() {
 
   const detailRows: DetailRow[] = instance
     ? [
-        { key: 'Definition', value: `${instance.definition_name} v${instance.definition_version}` },
+        // `instance` has no definition_name/definition_version fields (the
+        // backend's GET /api/v1/instances/:id response only carries
+        // definition_id) — use the definition fetched separately above via
+        // useDefinition(instance?.definition_id) instead. Render a neutral
+        // placeholder while that fetch is still in flight rather than the
+        // literal string "undefined".
+        { key: 'Definition', value: definition ? `${definition.name} v${definition.version}` : '—' },
         {
           key: 'Status',
           value: <StatusBadge status={instance.status} domain="instance" size="sm" />,

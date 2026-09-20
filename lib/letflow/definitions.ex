@@ -289,6 +289,17 @@ defmodule Letflow.Definitions do
   @type search_error ::
           {:error, :query_empty}
           | {:error, :query_too_long}
+          # ISS search_paginated exception hardening -- search_paginated/3's own
+          # try/rescue catch-all, mirroring activate/2's {:transaction_failed, _}
+          # idiom but tagged distinctly: search_paginated/3 runs a single
+          # Repo.all/2, never Repo.transaction/1, so ":query_failed" names the
+          # actual failure class. Deliberately NOT folded into common_error() --
+          # see lib/letflow/design/iss-0739-search-paginated-exception-hardening.md
+          # §2.2 (note: that design doc's own filename/ISS number collided with
+          # an unrelated issue independently filed under the same ID by a
+          # concurrent agent run -- flagged for ORCH/DOC-UPDATER to renumber;
+          # the technical content below is unaffected by that collision).
+          | {:error, {:query_failed, term()}}
           | common_error()
 
   # ---------------------------------------------------------------------------------
@@ -849,24 +860,34 @@ defmodule Letflow.Definitions do
     prefix = Keyword.get(opts, :prefix)
     page_size = Map.fetch!(params, :page_size)
 
-    with :ok <- check_query_not_empty(query),
-         :ok <- check_query_not_too_long(query),
-         {:ok, _} <- TenantProvisioning.tenant_id_for_schema_name(prefix),
-         {:ok, cursor_seek} <- decode_definitions_search_cursor(Map.get(params, :cursor)) do
-      pattern = "%" <> query <> "%"
+    try do
+      with :ok <- check_query_not_empty(query),
+           :ok <- check_query_not_too_long(query),
+           {:ok, _} <- TenantProvisioning.tenant_id_for_schema_name(prefix),
+           {:ok, cursor_seek} <- decode_definitions_search_cursor(Map.get(params, :cursor)) do
+        pattern = "%" <> query <> "%"
 
-      ecto_query =
-        ProcessDefinition
-        |> where_search_match(pattern)
-        |> select_with_rank(query, pattern)
-        |> filter_by_search_cursor(query, pattern, cursor_seek)
-        |> order_by_rank_paginated(query, pattern)
-        |> limit(^(page_size + 1))
+        ecto_query =
+          ProcessDefinition
+          |> where_search_match(pattern)
+          |> select_with_rank(query, pattern)
+          |> filter_by_search_cursor(query, pattern, cursor_seek)
+          |> order_by_rank_paginated(query, pattern)
+          |> limit(^(page_size + 1))
 
-      rows = Repo.all(ecto_query, prefix: prefix)
-      {page, next_cursor} = split_definitions_search_page(rows, page_size)
+        rows = Repo.all(ecto_query, prefix: prefix)
+        {page, next_cursor} = split_definitions_search_page(rows, page_size)
 
-      {:ok, %{items: page, next_cursor: next_cursor}}
+        {:ok, %{items: page, next_cursor: next_cursor}}
+      end
+    rescue
+      # search_paginated exception hardening -- mirrors activate/2's own bare
+      # catch-all (see this module's activate/2): any exception raised while
+      # building/running the query (e.g. a real Postgrex.Error) becomes a
+      # typed result instead of an unhandled crash that would otherwise
+      # surface as Bandit's raw empty-body HTTP 500. See
+      # lib/letflow/design/iss-0739-search-paginated-exception-hardening.md.
+      exception -> {:error, {:query_failed, exception}}
     end
   end
 

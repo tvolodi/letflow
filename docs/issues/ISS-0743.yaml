@@ -1,0 +1,131 @@
+id: ISS-0743
+title: >
+  GET /api/v1/definitions/search -- Letflow.Definitions.search_paginated/3 has
+  zero exception handling, so any raised exception surfaces as Bandit's raw
+  empty-body HTTP 500 instead of a shaped JSON problem response
+discovered_by: ISSUE-FIXER
+discovered_in_run: WF02-REQ371-20260919
+discovered_at: "2026-09-20T06:00:00Z"
+severity: MAJOR
+tags:
+  - backend
+  - reliability
+  - api
+description: >
+  ISSUE-FIXER diagnosed an intermittent HTTP 500 with an EMPTY response body
+  on GET /api/v1/definitions/search, discovered blocking REQ-371's required
+  e2e spec (platform-definition-promotion-rollback.pipeline.e2e.spec.ts).
+  Route: Letflow.Router -> Letflow.Plugs.ApiPipeline ->
+  Letflow.Routers.Definitions.handle_search/1
+  (lib/letflow/routers/definitions.ex) -> Letflow.Definitions.search_paginated/3
+  (lib/letflow/definitions.ex).
+
+  Root cause could NOT be pinned to a single raising line despite ~440+ direct
+  concurrent-load reproduction attempts at the Elixir/Ecto function level
+  (zero crashes) -- so it's likely at the HTTP layer (Admission plug,
+  AuthPipeline, Plug.Parsers, or Jason response encoding) rather than a pure
+  Ecto data race in search_paginated/3 itself, and could not be forced to
+  reproduce again.
+
+  What IS certain and code-verified (the actionable, structural defect fixed
+  here regardless of the exact original trigger):
+  1. lib/letflow/plugs/api_pipeline.ex's handle_errors/2 is why ANY unrescued
+     exception anywhere in this pipeline surfaces as "500, empty body" -- a
+     deliberate crash-passthrough for admission-pool-ref release, not a bug
+     in the handler itself.
+  2. search_paginated/3 and its router handler had ZERO exception handling --
+     contrast with Letflow.Definitions.activate/2, which explicitly wraps its
+     transaction in try/rescue and converts any raised exception to a typed
+     {:error, {:transaction_failed, exception}} tuple, the established idiom
+     in this codebase for exactly this risk class.
+  3. search_paginated/3 had ZERO test coverage before this fix.
+affected_files:
+  - lib/letflow/definitions.ex
+  - lib/letflow/routers/definitions.ex
+  - test/letflow/definitions/search_paginated_test.exs
+related_requirements:
+  - REQ-371
+suggested_fix: >
+  See lib/letflow/design/iss-0739-search-paginated-exception-hardening.md for
+  the full design (filename retains its originally-authored "iss-0739" name;
+  see NOTE below for why the issue's own id diverged from it). Summary: wrap
+  search_paginated/3's with chain in a try/rescue mirroring activate/2's exact
+  shape, adding {:error, {:query_failed, exception}} to the search_error type
+  only (not the shared common_error() union, since this isn't a transactional
+  failure). No router change needed -- render_search_result/2's existing
+  catch-all {:error, _common_error} -> Response.internal_error(conn) clause
+  already structurally matches the new tuple. get_by_id/2, get_active_by_name/2,
+  list_paginated/2, and delta/2 share the identical gap but are explicitly out
+  of scope for this fix (flagged, not fixed, to avoid scope creep).
+severity_rationale: >
+  MAJOR -- blocked REQ-371's AC6 (the required e2e spec must be authored AND
+  passing) from being honestly claimed, and represents a genuine, if rare,
+  production-reachable crash symptom (a bare empty-body 500 on a primary
+  read endpoint) even though the original trigger could not be reproduced.
+root_cause_honesty_note: >
+  ~440+ reproduction attempts by ISSUE-FIXER never reproduced the original
+  crash. This fix is idiom-matching defensive hardening (bringing
+  search_paginated/3 in line with activate/2's already-established
+  try/rescue convention and closing its test-coverage gap), NOT a
+  confirmed-root-cause patch. No fail-then-pass live-crash reproduction was
+  required or attempted for this fix; instead, the new rescue path itself is
+  exercised by a real deterministic test (forcing a genuine Postgrex.Error by
+  dropping the tenant schema's process_definitions table inside a sandboxed
+  test transaction, the same technique already precedented in
+  test/letflow/audit_capture_test.exs).
+related:
+  - ISS-0740  # REQ-371's own blocking pipeline discovered both this and the InstanceBoardPage freeze (ISS-0741) at the same time
+  - ISS-0741  # InstanceBoardPage.tsx start-instance-button freeze, found and fixed in the same investigation sweep
+queue_ref: null  # ORCH to assign via letflow-queue register_task
+github_ref: null  # ORCH to assign
+status: open
+# NOTE: filename/id renumbered TWICE due to concurrent-session collisions on
+# this repo's docs/issues/ slot allocation, same class already documented
+# repeatedly this session (ISS-0729/ISS-0738/ISS-0741's own NOTE comments).
+# This defect was originally filed as docs/issues/ISS-0739.yaml (the
+# confirmed-unused slot at design-authoring time), but by the time ELIXIR-DEV
+# finished implementing, TWO separate concurrent sessions had independently
+# claimed that same filename for two different, unrelated defects (a missing
+# QA-credentials issue from a GUI-review sweep, and earlier a different
+# in-session attempt). ELIXIR-DEV correctly did not touch docs/issues/ISS-0739.yaml
+# and flagged the collision rather than resolving it silently; ORCH refiled
+# this issue as ISS-0743.yaml, the next genuinely unused slot as of this
+# fix's actual merge readiness (main's highest filed issue was ISS-0742 at
+# that time). The design doc's own filename
+# (lib/letflow/design/iss-0739-search-paginated-exception-hardening.md) and
+# its internal prose still say "ISS-0739" throughout -- filename/id mismatch
+# only, content and reasoning otherwise unaffected and not re-authored under
+# the new number.
+resolution:
+  resolved_in_run: WF03-ISS0743-20260920
+  design_doc: lib/letflow/design/iss-0739-search-paginated-exception-hardening.md
+  summary: >
+    Wrapped Letflow.Definitions.search_paginated/3's with chain in a
+    try/rescue mirroring activate/2's exact idiom (guard/Keyword.get calls
+    outside the try, bare rescue exception -> {:error, {:query_failed,
+    exception}} catch-all). Added {:error, {:query_failed, term()}} to
+    search_error() only, not common_error(). Added a doc comment above
+    render_search_result/2's existing catch-all clause noting it already
+    structurally matches the new tuple -- no router code change needed.
+    get_by_id/2, get_active_by_name/2, list_paginated/2, and delta/2 share
+    the identical unhandled-exception gap but are explicitly left unfixed
+    (flagged, out of scope for this PR).
+  empirical_evidence_trail: >
+    No fail-then-pass live-crash reproduction was required (per this fix's
+    honest root_cause_honesty_note above) -- instead, new deterministic test
+    coverage exercises the new rescue path directly: 7 new tests in
+    test/letflow/definitions/search_paginated_test.exs (happy path + cursor
+    pagination, four typed-error branches, and a forced-exception test that
+    drops the tenant's process_definitions table CASCADE inside a sandboxed
+    transaction, asserting {:error, {:query_failed, %Postgrex.Error{}}} with
+    postgres.code == :undefined_table). mix compile --warnings-as-errors
+    clean. mix test test/letflow/definitions/search_paginated_test.exs --
+    7/7 passed. mix test test/letflow/definitions/ test/letflow/routers/ --
+    1060/1060 passed.
+  gates: >
+    Implemented by ELIXIR-DEV in an isolated git worktree (this repo's
+    subagents share one working directory, and a concurrent agent's branch
+    switch mid-task reverted this fix's tracked-file edits once -- recovered
+    by redoing the work in isolation). Pending SECURITY-REVIEWER (mandatory,
+    tenant-data-read-path per INV-8) -> REVIEWER -> TEST-DESIGNER/
+    TEST-DESIGN-VALIDATOR -> TEST-RUNNER -> RELEASE-VALIDATOR.

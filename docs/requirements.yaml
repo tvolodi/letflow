@@ -29241,3 +29241,80 @@ requirements:
       - "a design doc precedes implementation, is validated by CODE-DESIGN-VALIDATOR, and is signed off by SECURITY-REVIEWER before merge, per this requirement's security-relevant status"
       - "mix compile --warnings-as-errors and mix test both pass, with real output quoted"
     depends_on: [REQ-230, REQ-231, REQ-300, REQ-309, REQ-311]
+
+  - id: REQ-395
+    title: "Deploy SwiftRoute's sequential high-value shipment-approval process definition as a live, browsable definition on a real tenant, with ops-manager/CEO actors that can actually sign in"
+    owner: ELIXIR-DEV
+    status: pending
+    stage: S7
+    impl_order: 752  # Registered 2026-09-20 by ORCH from this GUI-review UAT finding.
+    description: >
+      Filed from the GUI-review UAT run of
+      test/fixtures/uat/scenarios/swiftroute/shipment-high-value-happy.yaml
+      (PW-16, 16th of 18 GUI-review scenarios this sweep) -- see
+      test/uat-reports/gui-review-2026-09-20-shipment-high-value-happy.md.
+      Not security-relevant on its own (a definition-seeding/provisioning
+      gap, no new authorization surface), but touches actor provisioning --
+      flag for REVIEWER only, SECURITY-REVIEWER out of scope unless the
+      implementation turns out to touch the OIDC/role-claim path.
+
+      WHAT EXISTS TODAY: the sequential HUMAN_TASK chain this scenario
+      describes -- dispatcher submits, ops manager reviews, and (only when
+      declared_value > 500) the CEO must additionally co-sign before the
+      shipment releases -- is a real, provable capability of
+      `Letflow.Engine`: `test/fixtures/simulation/swiftroute/process_route_approval.yaml`
+      ("Shipment Approval") is exactly this graph (`ops-review` HUMAN_TASK ->
+      `ceo-approval-gate` EXCLUSIVE_GATEWAY with a CEL `declared_value > 500`
+      condition -> conditional `ceo-approval` HUMAN_TASK -> `release-shipment`),
+      and `test/letflow/simulation/req206_swiftroute_test.exs` already proves
+      it end-to-end against a real `Engine.create/2` call (REQ-206, done
+      2026-09-01) -- the EUR 750 case correctly reaches `ceo-approval`, not
+      `release-shipment` directly. So the ENGINE capability is not the gap.
+
+      What genuinely does not exist is this definition DEPLOYED anywhere a
+      human (or an agent driving a real browser) could reach on
+      `https://qa.bizdala.com` today. `process_route_approval.yaml` is
+      consumed only as an in-memory fixture by
+      `Letflow.Simulation.Runner.run/1` during automated test/CI runs -- it
+      is provisioned fresh (and torn down) inside that harness, never
+      persisted as a live `ProcessDefinition` row for a real `swiftroute`
+      tenant a person could open in the process-definition list screen or
+      submit an instance against via the ordinary API/GUI.
+
+      SEPARATELY, and just as blocking: this scenario's actors (dispatcher
+      Lena, ops manager Marco, CEO Alice -- `actor-swiftroute-lena/marco/alice`)
+      have no real, seeded QA login. `ai-dala-infra/scripts/qa-login.sh`'s
+      entire `ROLE_FOR` map is six generic PLATFORM-role users
+      (admin-user/designer-user/operator-user/worker-user/candidate-user/
+      bilimbaga-admin-user) -- none correspond to a tenant-business persona,
+      and none carry a `role-ops-manager`/`role-ceo` claim this process
+      definition's HUMAN_TASK nodes assign against. This is not new to this
+      scenario: two other GUI reviews earlier in this same sweep
+      (`gui-review-2026-09-20-tenant-branding-applied.md`,
+      `gui-review-2026-09-20-renderer-permission-denied-surface.md`) each
+      independently hit the identical "no live sign-in as
+      actor-swiftroute-alice/actor-swiftroute-marco" wall and noted it
+      locally without filing it -- this requirement is the first place it is
+      tracked as its own gap (see the companion issue this same review filed,
+      ISS-0739, for the credential-provisioning half specifically; this
+      requirement's own scope is the process-definition deployment half, and
+      it depends on ISS-0739's resolution to be exercisable end-to-end).
+
+      SCOPE: (1) create (or script the creation of) a persistent, live
+      `ProcessDefinition` for the `swiftroute` tenant on the QA instance,
+      matching `process_route_approval.yaml`'s graph (name may differ from
+      the fixture's internal filename, but the node/edge/condition shape
+      must match byte-for-byte in behavior); (2) confirm it is reachable
+      and submittable through the ordinary `web/` definition-list and
+      instance-submission screens, not only via direct API calls a script
+      makes; (3) explicitly out of scope is inventing new tenant-persona
+      identities in Keycloak -- that is ISS-0739's scope, this requirement
+      only needs *a* real, currently-seeded user with `role-ops-manager`/
+      `role-ceo`-equivalent claims once ISS-0739 supplies one, and should
+      name that dependency rather than duplicate it.
+    acceptance_criteria:
+      - "a ProcessDefinition matching process_route_approval.yaml's graph (sequential ops-review HUMAN_TASK, CEL-conditioned ceo-approval-gate at declared_value > 500, ceo-approval HUMAN_TASK, release-shipment) exists as a live, active definition for a real tenant on the QA instance -- not only as an in-memory Simulation.Runner fixture -- confirmed by fetching it through the ordinary definitions-list API/screen, not a direct DB query"
+      - "submitting an instance with declared_value: 750 against this live definition, via the ordinary API, produces a pending ops-review task followed by a pending ceo-approval task (not an auto-release) -- exercised for real against the QA instance and quoted"
+      - "submitting an instance with declared_value: 400 against the same live definition produces no ceo-approval task at all, proving the CEL branch is live, not hardcoded to always route through the CEO"
+      - "the scenario test/fixtures/uat/scenarios/swiftroute/shipment-high-value-happy.yaml is re-run by UAT-RUNNER once this requirement and ISS-0739 both land, and its own gui-review report is updated from BLOCKED to a real pass/fail verdict with real screenshots"
+    depends_on: []

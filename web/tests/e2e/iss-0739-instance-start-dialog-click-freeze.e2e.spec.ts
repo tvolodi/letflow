@@ -38,6 +38,7 @@
 
 import { test, expect, type Locator, type Page } from '@playwright/test'
 import { getKeycloakToken, loginWithToken, assertServiceReadiness, resolveCredential } from './helpers'
+import { typeIntoTestIdInput } from './type-into-input'
 
 const API_PREFIX = '/api/v1'
 const API_BASE_URL = process.env.BPM_TEST_URL ?? 'http://127.0.0.1:8080'
@@ -74,42 +75,13 @@ async function trustedClickBounded(locator: Locator, label: string, boundMs = BO
   }
 }
 
-/**
- * Sets a text input's value without CDP keyboard-event synthesis.
- *
- * This works around a SANDBOX-LEVEL environment limitation discovered while
- * validating this fix, entirely unrelated to ISS-0739/ISS-0740's freeze:
- * `Locator.fill()`, `.pressSequentially()`, and even `page.keyboard.insertText()`
- * all hang indefinitely (well past their own timeouts) on EVERY text input in
- * this sandbox's Playwright/Chromium build — reproduced on
- * `instance-definition-filter` (unrelated page state, no dialog) and
- * `start-correlation-key` (a plain input with no `list` attribute, wired to a
- * trivial `setStartCorrelationKey` handler this fix never touches) — proving
- * this sandbox's Chromium cannot complete CDP keyboard-event dispatch at all,
- * independent of which input, which handler, or which fix state is active.
- * `Locator.click()` (a pure mouse action) resolves normally in ~100ms, and
- * setting the DOM value via the native input-value setter + a real
- * `bubbles: true` `input` Event (exactly what a real keystroke would
- * dispatch to React) resolves in ~15ms and IS observed by React's
- * `onChange` exactly as a real keystroke would be — verified directly against
- * `start-correlation-key` before use here. This is a keyboard-synthesis
- * workaround for this sandbox only; it changes nothing about how the actual
- * mouse-click assertions below exercise the real trusted-gesture path this
- * spec is chartered to test.
- */
+// `typeIntoTestIdInput` (the sandbox `.fill()`-hang workaround — see its own
+// doc comment in `./type-into-input.ts`) now lives in a shared plain module
+// so other spec files can reuse it without importing this spec file (which
+// would re-run this file's own `test()`/`test.describe()` registrations as
+// an import side effect).
 async function typeIntoDefinitionNameInput(page: Page, value: string): Promise<void> {
-  const input = page.getByTestId('start-definition-name')
-  await input.click()
-  await page.evaluate(
-    ({ testId, text }) => {
-      const el = document.querySelector(`[data-testid="${testId}"]`) as HTMLInputElement | null
-      if (!el) throw new Error(`typeIntoDefinitionNameInput: no element for testid ${testId}`)
-      const setter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value')!.set!
-      setter.call(el, text)
-      el.dispatchEvent(new Event('input', { bubbles: true }))
-    },
-    { testId: 'start-definition-name', text: value },
-  )
+  await typeIntoTestIdInput(page, 'start-definition-name', value)
 }
 
 async function createAndActivateDefinition(

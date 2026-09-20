@@ -25,25 +25,18 @@ description: >
   undisturbed, and that a version that never ran here cannot be selected.
 
 pipeline_test: web/tests/e2e/pipelines/platform-definition-promotion-rollback.pipeline.e2e.spec.ts
-# NOTE (ISS-0527): this spec file does not exist in R-Co's own web/ tree at the
-# pinned commit either -- it is an aspirational forward-reference to a Playwright
-# test that was never authored anywhere, gated on the same missing feature this
-# scenario's own steps exercise. UAT-RUNNER cannot drive this pipeline_test yet;
-# treat any run of this scenario as BLOCKED/UNBUILT_FEATURE on the frontend leg
-# until FRONTEND-DEV authors it against a real shipped feature.
-# UAT-RUNNER drives this Playwright pipeline test for the operator's steps.
-# If this file does not exist or the test cannot run, that is a BLOCKER
-# (missing UI) and must be routed to FRONTEND-DEV before UAT can proceed.
-# NOTE (2026-09-20, ORCH gui-review pass, confirmed live against current source,
-# not re-citing ISS-0527 unread): the backend leg is NOT missing --
-# Letflow.Definitions.rollback_definition_version/4 (REQ-038) and
-# POST /api/v1/definitions/:process_key/rollback (REQ-077 R9) both exist and are
-# fully wired, including a real DEFINITION_VERSION_ROLLED_BACK audit-event append.
-# The gap is entirely in web/src: no rollback/withdraw UI, no call to the rollback
-# endpoint anywhere in web/src, and no change-history/audit screen that could show
-# EO-005. Filed as docs/requirements.yaml REQ-371 (owner FRONTEND-DEV) to build the
-# missing screen(s) and, once shipped, author and pass this pipeline_test for real.
-# Full evidence: test/uat-reports/gui-review-2026-09-20-definition-promotion-rollback.md.
+# ISS-0527 resolved 2026-09-20: the spec above now exists and drives the real
+# withdrawal flow end to end -- all five steps run via the real GUI, matching
+# this scenario's own `via: gui` declaration on every step (no step here is
+# `via: system`, unlike the sibling promotion-approved scenario). See
+# test/uat-reports/gui-review-2026-09-20-definition-promotion-rollback.md for
+# the full pilot history, including the earlier BLOCKED filing pass (REQ-371)
+# and the addendum recording this spec's authoring. EO-003's platform-wide
+# non-interference (single-tenant run only) and EO-005's durability (change
+# history is this page session's local state only, no backend read path yet --
+# see REQ-371 design Sec 7.3) remain open -- no ISS number minted for either by
+# FRONTEND-DEV; see the design doc's own Sec 7.3/Sec 8.3 disclosure and route
+# through ORCH/REQ-ANALYST if either becomes a scoped requirement.
 
 actors:
   operator: actor-platform-admin

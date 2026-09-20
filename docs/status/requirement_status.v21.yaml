@@ -169,3 +169,22 @@
 
 
 history:
+  - req: REQ-371
+    event: done
+    agent: DOC-UPDATER
+    at: "2026-09-20T11:45:52Z"
+    note: >
+      Operator-facing rollback/withdrawal screen for released process
+      definitions (web/src) shipped on feature/WF02-REQ371-20260919 (PR
+      #1593), this run's longest-running work item -- six fix cycles before
+      going green: ISS-0729, a rollback-spec row-locator scoping bug,
+      ISS-0737, ISS-0738, ISS-0741, ISS-0743, plus two final in-branch fixes
+      (a Playwright sandbox `.fill()`/`.pressSequentially()` hang workaround
+      in the rollback e2e spec, and a pre-existing InstanceDetailPage.tsx bug
+      reading nonexistent instance fields on the 'Definition' row). Passed
+      two independent REVIEWER gates (idiom/scope, all 7 acceptance criteria
+      individually confirmed satisfied each time) and RELEASE-VALIDATOR's
+      final independent re-verification: 4469/4469 backend tests,
+      726/726 frontend tests, 4x e2e pipeline runs (3 clean, 1 unrelated
+      cold-start flake), all 7 ACs re-derived and confirmed, clean trivial
+      merge-check against origin/main.

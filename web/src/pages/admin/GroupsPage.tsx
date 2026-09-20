@@ -83,7 +83,7 @@ export default function GroupsPage() {
   })
 
   const removeMember = useMutation({
-    mutationFn: ({ groupId: id, userId }: { groupId: string; userId: string }) => groupsApi.removeMembers(id, [userId]),
+    mutationFn: ({ groupId: id, userId }: { groupId: string; userId: string }) => groupsApi.removeMembers(id, userId),
     onSuccess: () => {
       if (activeGroup) {
         qc.invalidateQueries({ queryKey: queryKeys.admin.groups() })

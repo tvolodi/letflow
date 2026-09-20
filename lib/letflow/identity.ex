@@ -69,6 +69,7 @@ defmodule Letflow.Identity do
   alias Letflow.Identity.GroupMember
   alias Letflow.Identity.OnboardingRecord
   alias Letflow.Identity.Tenant
+  alias Letflow.Identity.TenantRole
   alias Letflow.Identity.User
   alias Letflow.Oidc.IdentityContext
   alias Letflow.Oidc.JitProvisioningConfig
@@ -660,6 +661,42 @@ defmodule Letflow.Identity do
 
         :ok
     end
+  end
+
+  @doc """
+  Live, uncached role-name lookup for a user (REQ-378 §1-§2 —
+  `lib/letflow/design/req378-oidc-live-revocation-check.md`): joins
+  `group_members` (this user's memberships) to `tenant_role` on
+  `tenant_role.group_id == group_members.group_id`, returning the distinct
+  set of role names currently in effect.
+
+  Deliberately added to `Letflow.Identity` rather than
+  `Letflow.Identity.RoleRegistry`, whose moduledoc states it has no coupling
+  to the OIDC/claim-mapping pipeline — see the design §2 for the full
+  reasoning.
+
+  One `Repo.all/2` per call — no caching, no ETS, no memoization, matching
+  `verify_api_token/2`'s own uncached-per-call shape so a role revocation
+  (a `group_members` row delete) takes effect on the very next call, not
+  after some refresh interval.
+
+  Returns `[]` (never an error tuple) when the user belongs to no
+  role-bearing group.
+  """
+  @spec list_effective_role_names(user_id :: Ecto.UUID.t(), opts :: opts()) :: [String.t()]
+  def list_effective_role_names(user_id, opts) do
+    prefix = Keyword.fetch!(opts, :prefix)
+
+    query =
+      from(gm in GroupMember,
+        join: tr in TenantRole,
+        on: tr.group_id == gm.group_id,
+        where: gm.user_id == ^user_id,
+        select: tr.name,
+        distinct: true
+      )
+
+    Repo.all(query, prefix: prefix)
   end
 
   # ── Tenant administration (REQ-075) ─────────────────────────────────────

@@ -128,8 +128,9 @@ defmodule Letflow.Plugs.AuthPipeline do
          {:ok, tenant} <- resolve_tenant(realm),
          :ok <- guard_realm_ownership(tenant.id, realm),
          {:ok, identity_context} <- map_claims(realm, claims),
-         {:ok, provisioned} <- provision_user(identity_context, tenant.id, realm) do
-      attach_auth_context(conn, tenant.id, provisioned.user.id, identity_context.roles)
+         {:ok, provisioned} <- provision_user(identity_context, tenant.id, realm),
+         {:ok, live_roles} <- verify_local_account_state(provisioned, tenant.id) do
+      attach_auth_context(conn, tenant.id, provisioned.user.id, live_roles)
     else
       error -> handle_auth_error(conn, error)
     end
@@ -180,6 +181,13 @@ defmodule Letflow.Plugs.AuthPipeline do
 
       {:error, {:api_token, _reason}} ->
         reject(conn, 401, "unauthorized", "invalid or expired bearer token")
+
+      {:error, {:account, :inactive}} ->
+        reject(conn, 403, "forbidden", "account is inactive")
+
+      {:error, {:account, :invalid_tenant_id}} ->
+        Logger.error("verify_local_account_state/2: invalid tenant_id post-provisioning")
+        reject(conn, 500, "internal_error", "account state verification failed")
     end
   end
 
@@ -322,6 +330,40 @@ defmodule Letflow.Plugs.AuthPipeline do
 
       {:error, :invalid_tenant_id} ->
         {:error, {:provision, :invalid_tenant_id}}
+    end
+  end
+
+  # Step new (REQ-378 §1.1) — inserted between provision_user/3 and
+  # attach_auth_context/4. Two jobs, in order:
+  #
+  #   1. `users.status` (already present on `provisioned.user` — the row
+  #      provision_user/3 just fetched/inserted this same request, so this is
+  #      a struct-field read, not a new query) — `:inactive` short-circuits
+  #      the whole request with a 403 before any role query runs.
+  #   2. `Identity.list_effective_role_names/2` — one new, uncached `Repo`
+  #      round trip per authenticated OIDC request, mirroring
+  #      `verify_api_token/2`'s own single-uncached-query shape (AC1: a role
+  #      revocation — a `group_members` row delete — takes effect on this
+  #      user's very next request, no cache/ETS/memoization anywhere in this
+  #      path).
+  #
+  # `schema_name_for_tenant/1` is re-derived here (not threaded through as a
+  # new provision_user/3 arg) to avoid changing that function's signature —
+  # same no-extra-I/O derivation provision_user/3 itself already calls.
+  defp verify_local_account_state(provisioned, tenant_id) do
+    case TenantProvisioning.schema_name_for_tenant(tenant_id) do
+      {:ok, schema_name} ->
+        case provisioned.user.status do
+          :inactive ->
+            {:error, {:account, :inactive}}
+
+          :active ->
+            roles = Identity.list_effective_role_names(provisioned.user.id, prefix: schema_name)
+            {:ok, roles}
+        end
+
+      {:error, :invalid_tenant_id} ->
+        {:error, {:account, :invalid_tenant_id}}
     end
   end
 

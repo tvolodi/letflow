@@ -8,8 +8,8 @@
   "file": "handoffs/WF03-ISS0736-20260921/step-03-elixir-dev.json",
   "created_at": "2026-09-20T19:26:02Z",
   "started_at": "2026-09-20T19:26:02Z",
-  "completed_at": null,
-  "status": "PENDING",
+  "completed_at": "2026-09-20T19:28:04Z",
+  "status": "COMPLETED",
   "priority": "HIGH",
   "context": {
     "stage": "S4",
@@ -50,19 +50,24 @@
     ]
   },
   "result": {
-    "status": "PENDING",
-    "summary": "",
-    "artifacts_out": [],
+    "status": "PASS",
+    "summary": "Implemented both halves of the design exactly as specified, no deviation from the signatures in design §8. (A) lib/letflow/identity.ex: added `list_effective_role_names/2` (new public function, aliased Letflow.Identity.TenantRole) -- group_members INNER JOIN tenant_role on group_id, `select: distinct tr.name`, `Repo.all/2` with `prefix:`, no caching, inserted right after remove_group_member/3. lib/letflow/plugs/auth_pipeline.ex: authenticate_oidc/2's `with` chain gains `{:ok, live_roles} <- verify_local_account_state(provisioned, tenant.id)` between provision_user and attach_auth_context; attach_auth_context/4's 4th arg changed from `identity_context.roles` to `live_roles`. New private verify_local_account_state/2 re-derives schema_name via TenantProvisioning.schema_name_for_tenant/1 (no new provision_user/3 arg, matching design), branches on provisioned.user.status (:inactive short-circuits with {:error, {:account, :inactive}} before any role query; :active calls list_effective_role_names/2, always {:ok, roles} including {:ok, []} -- no silent allow-by-default, no rescue/catch swallowing errors). handle_auth_error/2 gains two new clauses: {:account, :inactive} -> 403 'forbidden'/'account is inactive' via existing reject/4; {:account, :invalid_tenant_id} -> Logger.error + 500 'internal_error' (defensive-only branch per design). (B) web/src/api/identity.ts: groupsApi.removeMembers signature changed from `(id, userIds: string[])` (which discarded userIds via `void userIds` and hit the nonexistent /api/v1/admin/groups/:id/members route) to `(id: string, userId: string)` calling `client.delete('/api/v1/identity/groups/${id}/members/${userId}')` -- matches the real backend route `DELETE /api/v1/identity/groups/:id/members/:user_id`. web/src/pages/admin/GroupsPage.tsx: removeMember mutation's mutationFn changed from `groupsApi.removeMembers(id, [userId])` to `groupsApi.removeMembers(id, userId)`; no other line touched (call site at line ~234 and addMember's sibling mutation were already correct/out-of-scope per design's explicit scope note -- the sibling /admin/groups endpoints on list/get/create/update/delete/addMembers/members remain a separate, pre-existing, out-of-scope defect, not touched here). No migration needed (design §7, confirmed -- users.status, group_members, tenant_role/groups all pre-existing). No file changed outside owned_modules. `mix compile --warnings-as-errors` output: 'Compiling 6 files (.ex)' with zero warnings/errors (exit 0). `npm run type-check` (tsc -b tsconfig.json) output: empty (exit 0, no errors). `npx eslint src/api/identity.ts src/pages/admin/GroupsPage.tsx --max-warnings 0` output: empty (exit 0, no lint errors). Both judgment calls flagged in design §10 (403-not-401 for :inactive; empty role list as normal {:ok, []} not an error) implemented exactly as the design specified, restated here for SECURITY-REVIEWER's explicit sign-off per AC4.",
+    "artifacts_out": [
+      "lib/letflow/identity.ex",
+      "lib/letflow/plugs/auth_pipeline.ex",
+      "web/src/api/identity.ts",
+      "web/src/pages/admin/GroupsPage.tsx"
+    ],
     "issues": [],
     "git_evidence": {
-      "branch_name": null,
+      "branch_name": "feature/WF03-ISS0736-20260921",
       "commit_sha_list": [],
-      "remote_branch": null,
-      "push_status": "skipped",
+      "remote_branch": "origin/feature/WF03-ISS0736-20260921",
+      "push_status": "pending",
       "pr_url": null,
       "pr_create_error": null
     },
-    "next_action": ""
+    "next_action": "SECURITY-REVIEWER (mandatory -- REQ-378 AC4, tenant-data/auth path change)"
   },
   "rework_count": 0,
   "max_rework": 3

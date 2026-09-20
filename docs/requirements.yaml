@@ -28093,3 +28093,188 @@ requirements:
       - "the 403 that results renders through the existing QueryStateBoundary/PermissionDenied contract unchanged -- no new renderer state, no leaked content"
       - "SECURITY-REVIEWER signs off explicitly on the chosen enforcement mechanism before merge, given this closes a real authorization-enforcement gap, not just a UI gap"
     depends_on: []
+
+  - id: REQ-379
+    title: "Solution-pack install-tracking write path: populate solution_pack_installs/solution_pack_artefact_bases from a real install event (SOL-01/02/03 prerequisite)"
+    owner: ELIXIR-DEV
+    status: pending
+    stage: S2
+    impl_order: 736  # Registered 2026-09-20 by ORCH from this GUI-review UAT finding.
+    description: >
+      Filed from a GUI-review sweep applying "review real screens before
+      writing a blind Playwright spec" to
+      test/fixtures/uat/scenarios/platform/template-update-conflict-resolution.yaml
+      (PW-01; test/uat-reports/gui-review-2026-09-20-template-update-conflict-resolution.md
+      has the full trace). That scenario's own stale NOTE (ISS-0527) already
+      flags its pipeline_test as an aspirational forward-reference to a
+      Playwright spec never authored, gated on a missing feature. This run
+      verified independently, by reading current source rather than trusting
+      the note, exactly how much of that feature exists and how much does
+      not.
+
+      WHAT EXISTS TODAY, verified 2026-09-20 by direct source read:
+      `Letflow.Definitions.PackUpdateResolution`
+      (lib/letflow/definitions/pack_update_resolution.ex),
+      `Letflow.Definitions.SolutionPackInstall`, and
+      `Letflow.Definitions.SolutionPackArtefactBase` (schema modules under
+      lib/letflow/definitions/) exist, each backed by a real migration
+      (priv/repo/migrations/20260817083803_create_pack_update_resolutions.exs
+      and siblings), and `Letflow.Definitions.compute_pack_update_plan/5`
+      (lib/letflow/definitions.ex) exists and correctly classifies an
+      artefact's three-way diff (unchanged / clean_update / local_only /
+      conflict) given already-loaded `theirs`/`incoming`/`base` content --
+      all landed under REQ-041 (status: done). REQ-041's own design doc
+      (lib/letflow/design/req041-pack-update-diff-schema.md §1's "Not built
+      here" table) states explicitly, in its own words, that "the actual
+      solution-pack export/install path that populates
+      solution_pack_installs/solution_pack_artefact_bases from a real
+      install event" is owned by "SOL-01/02/03 (src/solution/, not scoped
+      to any stage yet)" -- i.e. this was always a known, deliberately
+      deferred gap, not an oversight. Grepping lib/ confirms no caller
+      anywhere ever inserts a `SolutionPackInstall` or
+      `SolutionPackArtefactBase` row today; both tables are permanently
+      empty in every real deployment. `Letflow.Packs.Bilimbaga` (the one
+      real installed pack referenced by earlier UAT work today) has no
+      write path into either table either.
+
+      THIS REQUIREMENT (first of three; REQ-380 owns the update-review/apply
+      API, REQ-381 owns the frontend screen): build the real install-time
+      write path. When a solution pack is installed for a tenant (via
+      whatever existing install trigger currently exists --
+      `lib/letflow/routers/solution_packs.ex`'s install route, per the
+      grep hit list gathered for this finding), additionally (1) insert one
+      `solution_pack_installs` row recording the installed version and
+      install timestamp, and (2) snapshot every artefact the pack delivers
+      into `solution_pack_artefact_bases` as that artefact's `base_content`/
+      `base_version` at install time -- the reference point every future
+      diff/update needs. Also handle the case where a tenant has since
+      locally adapted a delivered artefact: `theirs_artefacts` (the
+      tenant's current content) is read from wherever the tenant's live
+      process/artefact content already lives (not part of this
+      requirement's own schema, per REQ-041's design), so this requirement
+      only needs to guarantee the *base* snapshot is captured and never
+      silently overwritten by a later install of the same version.
+
+      SCOPE FENCE: install-time snapshot capture only. Does not build the
+      update-review computation trigger (REQ-380 wires
+      compute_pack_update_plan/5 to real data), the conflict-resolution
+      write path, or any HTTP route beyond whatever install route already
+      exists (extend it, do not invent a new one for this requirement).
+    acceptance_criteria:
+      - "installing a solution pack for a tenant inserts exactly one solution_pack_installs row recording the installed version and a real installed-at timestamp, proven by a test"
+      - "installing a solution pack for a tenant inserts one solution_pack_artefact_bases row per delivered artefact, with base_content/base_version matching the pack's own delivered content exactly (byte-for-byte, canonical form), proven by a test"
+      - "re-installing the same version does not overwrite an existing base snapshot for an artefact the tenant has since locally adapted (base_content stays the original install-time snapshot), proven by a test"
+      - "compute_pack_update_plan/5, called against real solution_pack_artefact_bases rows produced by this write path (not hand-built fixtures), correctly classifies at least one unchanged, one clean_update, one local_only, and one conflict artefact end-to-end"
+      - "mix letflow.check passes, with real output quoted"
+    depends_on: [REQ-041]
+
+  - id: REQ-380
+    title: "Solution-pack update review and apply API: four-way classification, blocked-on-unresolved-conflict apply, and attributed keep/take resolutions"
+    owner: ELIXIR-DEV
+    status: pending
+    stage: S2
+    impl_order: 737  # Registered 2026-09-20 by ORCH from this GUI-review UAT finding.
+    description: >
+      Second of three requirements from the same GUI-review finding as
+      REQ-379 and REQ-381 -- see REQ-379's description for the full "what
+      exists today" trace and
+      test/uat-reports/gui-review-2026-09-20-template-update-conflict-resolution.md.
+      Blocked on REQ-379 landing (there is nothing real to diff against
+      until install-time base/artefact snapshots exist).
+
+      WHAT'S MISSING, specific to this requirement: `lib/letflow/routers/
+      solution_packs.ex` has no route that (a) computes and returns an
+      update-review summary for a tenant's installed pack against a newer
+      offered version, grouped into the scenario's own four groups
+      (unchanged / safe-to-update / local-only / both-sides-conflict --
+      i.e. `compute_pack_update_plan/5`'s existing classification, just not
+      wired to an endpoint), (b) accepts per-artefact conflict resolutions
+      (`keep_local` / `take_incoming` / `merged`, matching
+      `PackUpdateResolution.resolution`'s enum) and persists them with
+      `resolved_by`/`resolved_at` attribution, or (c) applies an update,
+      refusing to proceed while any conflict-classified artefact has no
+      matching `pack_update_resolutions` row (`has_unresolved_conflicts`,
+      already computed by REQ-041's design §5.3) and naming the specific
+      unresolved artefact/process in the refusal response.
+
+      THIS REQUIREMENT: build all three routes/operations under
+      `lib/letflow/routers/solution_packs.ex` (or a sibling router if
+      REVIEWER judges solution_packs.ex too large already), each requiring
+      PLATFORM_ADMIN-or-tenant-admin-equivalent authorization per the
+      scenario's `actor-platform-admin`: (1) GET-style update-review
+      endpoint returning the four-way classified list (EO-001). (2) Apply
+      endpoint that 409s (or an equivalent explicit error) naming the
+      unresolved artefact when any conflict lacks a resolution (EO-002),
+      and otherwise applies the update -- untouched/unchanged artefacts are
+      left exactly as-is (EO-004), `take_incoming` artefacts are updated to
+      the incoming content, `keep_local` artefacts are left unchanged with
+      a `pack_update_resolutions` row recording who chose to keep them and
+      when (EO-003). (3) A second update-review call after a prior apply
+      must compare against the tenant's now-current state (the applied
+      version's own artefact content becomes the new `base`/`theirs`
+      baseline), not the original install -- so a previously resolved
+      artefact is not re-flagged as a fresh conflict (EO-005). This is the
+      requirement that actually calls the insert path
+      `PackUpdateResolution.insert_changeset/2` names as scaffolding for
+      (its own moduledoc, "Scope -- this requirement builds schema only").
+
+      SCOPE FENCE: backend API only, three routes/operations named above.
+      Does not build the review screen (REQ-381). Does not change
+      `compute_pack_update_plan/5`'s classification logic itself unless a
+      real defect is found while wiring it (file separately if found and
+      non-trivial).
+    acceptance_criteria:
+      - "the update-review endpoint returns each supplied artefact under exactly one of unchanged/safe-to-update/local-only/both-sides-conflict, matching compute_pack_update_plan/5's classification, for a tenant with at least one artefact in each group (EO-001)"
+      - "the apply endpoint refuses to apply and names the specific unresolved artefact when a both-sides-conflict artefact has no matching pack_update_resolutions row, and applies nothing in that case, proven by a test (EO-002)"
+      - "after applying with a keep_local resolution on an adapted artefact, that artefact's content is unchanged and a pack_update_resolutions row records resolved_by and resolved_at for it, proven by a test (EO-003)"
+      - "after applying, an artefact untouched by both the tenant and the incoming version is unchanged in content and version, proven by a test (EO-004)"
+      - "a second update-review call after the apply does not re-flag the previously keep_local-resolved artefact as a fresh conflict, proven by a test (EO-005)"
+      - "mix letflow.check passes, with real output quoted"
+    depends_on: [REQ-379]
+
+  - id: REQ-381
+    title: "Solution-pack update review screen: four-way diff, blocked-apply-on-unresolved-conflict, and per-process keep/take resolution UI"
+    owner: FRONTEND-DEV
+    status: pending
+    stage: S8
+    impl_order: 738  # Registered 2026-09-20 by ORCH from this GUI-review UAT finding.
+    description: >
+      Third of three requirements from the same GUI-review finding as
+      REQ-379/REQ-380 -- see REQ-379's description for the full "what
+      exists today" trace and
+      test/uat-reports/gui-review-2026-09-20-template-update-conflict-resolution.md.
+      Blocked on REQ-380 landing (there is no real endpoint to wire to
+      yet). Grepping web/src/ for any pack-update/diff/conflict-resolution
+      screen returns no relevant hits -- `web/src/components/ui/
+      ConflictResolver.tsx` is confirmed unrelated (a generic 409
+      optimistic-concurrency write-conflict modal for a single record's own
+      edit form, not a solution-pack update flow).
+
+      THIS REQUIREMENT: a screen, reachable from the company's pack screen,
+      that (1) shows the four-way classified update review from REQ-380's
+      endpoint when a newer pack version is offered (EO-001); (2) lets the
+      tenant admin record a keep-local/take-incoming (at minimum; merged
+      optional) decision per both-sides-conflict artefact; (3) disables (or
+      rejects with the endpoint's named-artefact message surfaced on
+      screen) the apply action while any conflict is undecided (EO-002);
+      (4) after apply, shows the kept artefact unchanged with the
+      resolution's attribution (who/when) visible somewhere on screen or in
+      pack history (EO-003), and the untouched artefact unchanged (EO-004);
+      (5) on a subsequent update offer, does not re-present the
+      already-resolved artefact as a fresh conflict (EO-005). Wires to
+      REQ-380's real endpoints -- no mock data. Once this screen is
+      confirmed correct against a real running instance, remove this
+      scenario's stale NOTE (ISS-0527) from
+      test/fixtures/uat/scenarios/platform/template-update-conflict-resolution.yaml
+      and author
+      web/tests/e2e/pipelines/template-update-conflict.pipeline.e2e.spec.ts
+      (the path the scenario's own `pipeline_test` already names) against
+      the real screen.
+    acceptance_criteria:
+      - "the update review screen lists each supplied process under one of the four groups, matching EO-001's evidence requirement"
+      - "attempting to apply with an outstanding decision leaves the update unapplied and shows the endpoint's named unresolved process, matching EO-002"
+      - "after resolving keep-local on an adapted process and applying, the screen shows that process unchanged with visible attribution (who/when), matching EO-003"
+      - "after applying, an untouched process shows the same content and version as before, matching EO-004"
+      - "a further update offered afterwards does not re-present the already-resolved process as a fresh conflict, matching EO-005"
+      - "the stale NOTE (ISS-0527) is removed from template-update-conflict-resolution.yaml and web/tests/e2e/pipelines/template-update-conflict.pipeline.e2e.spec.ts exists and passes against the real screen"
+    depends_on: [REQ-380]

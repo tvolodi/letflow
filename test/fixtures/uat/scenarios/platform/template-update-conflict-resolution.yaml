@@ -35,6 +35,25 @@ pipeline_test: web/tests/e2e/pipelines/template-update-conflict.pipeline.e2e.spe
 # UAT-RUNNER drives this pipeline test for every step performed in the browser.
 # If the file does not exist or the test cannot run, that is a BLOCKER
 # (missing UI) and must be routed to FRONTEND-DEV before UAT can proceed.
+#
+# UPDATE 2026-09-20 (ORCH, GUI-review sweep, "review real screens before writing
+# a blind Playwright spec"): re-verified this note against current source rather
+# than trusting it unread. Confirmed the underlying feature is still genuinely
+# unbuilt end-to-end, not just the Playwright spec: REQ-041 (done) built only
+# the schema (solution_pack_installs / solution_pack_artefact_bases /
+# pack_update_resolutions) and the pure three-way diff classifier
+# (Letflow.Definitions.compute_pack_update_plan/5) -- its own design doc
+# (lib/letflow/design/req041-pack-update-diff-schema.md §1) explicitly scopes out
+# the install-tracking write path, the update-review/apply API, and any UI.
+# Nothing ever inserts a solution_pack_installs or solution_pack_artefact_bases
+# row today (grepped lib/), so both tables are permanently empty in every real
+# deployment. Filed as three requirements: REQ-379 (install-tracking write path,
+# ELIXIR-DEV), REQ-380 (update-review/apply API with attributed conflict
+# resolution, ELIXIR-DEV, depends_on REQ-379), REQ-381 (this review screen +
+# this pipeline_test, FRONTEND-DEV, depends_on REQ-380). See
+# test/uat-reports/gui-review-2026-09-20-template-update-conflict-resolution.md
+# for the full trace. This NOTE stays in place (not removed) until REQ-381
+# ships a real screen to remove it against.
 
 actors:
   tenant_admin: actor-platform-admin

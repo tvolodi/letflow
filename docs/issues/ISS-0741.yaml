@@ -76,7 +76,7 @@ severity_rationale: >
   (starting a process instance).
 queue_ref: null  # ORCH to assign via letflow-queue register_task
 github_ref: null  # ORCH to assign
-status: open
+status: resolved
 # NOTE: filename/design-doc-name mismatch, TWO successive collisions. This
 # issue's design doc
 # (lib/letflow/design/iss-0739-instanceboardpage-start-dialog-click-freeze-fix.md)
@@ -162,4 +162,9 @@ resolution:
     non-blocking for this issue's own merge. REVIEWER also independently
     re-ran type-check/lint/guards/unit-tests (773/773) and the new e2e spec
     (3/3) against the live stack. TEST-DESIGN-VALIDATOR/TEST-RUNNER/
-    RELEASE-VALIDATOR pending next.
+    RELEASE-VALIDATOR pending next. UPDATE (DOC-UPDATER,
+    WF03-ISS0741-20260920): TEST-DESIGN-VALIDATOR and TEST-RUNNER also
+    PASSed. RELEASE-VALIDATOR independently re-verified with its own
+    e2e re-runs (9/9 passing) and independently confirmed the sibling
+    ISS-0662 spec flake observed in this run is unrelated shared-dev-DB
+    drift, not caused by this fix. All gates green; issue resolved.

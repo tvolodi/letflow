@@ -1107,3 +1107,61 @@ history:
       ORCH's calls to make, not DOC-UPDATER's -- flagged here rather than
       actioned directly, consistent with every prior DOC-UPDATER entry in
       this volume ("No merge performed here -- ORCH's job next").
+  - req: SCOPE-CHANGE
+    event: done
+    agent: DOC-UPDATER
+    at: "2026-09-20T07:14:07Z"
+    note: >
+      WF-03 run WF03-ISS0741-20260920 (PR #1615, branch
+      feature/WF03-ISS0741-20260920, commit 4dfc28db) complete. ISS-0741
+      (InstanceBoardPage.tsx's openStartDialog fired 7 synchronous setState
+      calls inside the same native trusted-click event-dispatch turn as
+      the start-instance-button click, freezing the renderer -- the same
+      trigger class already fixed for ISS-0662/ISS-0729/ISS-0737/ISS-0738,
+      discovered by ISSUE-FIXER while diagnosing an intermittent hang in
+      REQ-371's required e2e spec) is now resolved per design doc
+      lib/letflow/design/iss-0739-instanceboardpage-start-dialog-click-freeze-fix.md
+      (filename/id mismatch noted in the issue's own NOTE comment: this
+      issue was renumbered twice, ISS-0739 -> ISS-0740 -> ISS-0741, due to
+      two successive concurrent-slot collisions; the design doc and new
+      e2e spec filenames were left as originally authored, "iss-0739-...",
+      matching this session's established precedent). Fix: openStartDialog's
+      full 7-setState body, closeStartDialog's setShowStart(false), and
+      submitStartInstance's three pre-await validation-branch setState call
+      sites now wrapped in web/src/utils/deferClickState.ts's
+      deferClickState(() => {...}), matching EntityCrudPage.tsx/
+      DefinitionListPage.tsx's established pattern exactly. New e2e
+      regression guard
+      web/tests/e2e/iss-0739-instance-start-dialog-click-freeze.e2e.spec.ts
+      drives real trusted clicks on start-instance-button, Cancel, the
+      backdrop, and submit-start-instance (both validation-failure and
+      success paths).
+
+      Full gate history, all PASS: REVIEWER (independently reproduced a
+      pre-existing double-instance-on-rapid-double-click race via its own
+      Playwright repro, 2/6 trials, then confirmed by structural code
+      comparison against EntityCrudPage.tsx/ISS-0662 that this PR's diff
+      does not widen that pre-existing window since submitStartInstance's
+      mutateAsync call is not itself deferred -- filed separately as MINOR
+      docs/issues/ISS-0742.yaml, non-blocking; also independently re-ran
+      type-check/lint/guards/unit-tests 773/773 and the new e2e spec 3/3
+      against the live stack); TEST-DESIGN-VALIDATOR; TEST-RUNNER;
+      RELEASE-VALIDATOR (independent re-verification with its own fresh
+      e2e re-runs, 9/9 passing, and independently confirmed a sibling-spec
+      ISS-0662 flake observed during this run is unrelated shared-dev-DB
+      drift, not caused by this fix).
+
+      docs/issues/ISS-0741.yaml flipped open -> resolved, with the gates
+      note appended (append-only) recording TEST-DESIGN-VALIDATOR/
+      TEST-RUNNER/RELEASE-VALIDATOR's completion. No docs/requirements.yaml
+      entry to flip (this is an ISS, not a REQ; REQ-371 itself remains
+      pending -- unblocking its AC6 e2e-authoring gate does not itself
+      complete the rollback/withdraw screen REQ-371 is building). README.md
+      checked (grepped InstanceBoardPage/deferClickState/start-instance,
+      no hits) -- not documented current behavior there, so no README
+      update needed. No docs/migration/stage-N-*.md or decisions/*.md file
+      was named by ISS-0741's affected_files -- none required updating.
+      queue_ref is null (filed directly, not via register_task) so there
+      is no letflow-queue task to release. No merge performed here --
+      ORCH's job next, after confirming this push's own CI is green and no
+      other agent is currently active.

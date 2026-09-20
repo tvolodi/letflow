@@ -1165,3 +1165,63 @@ history:
       is no letflow-queue task to release. No merge performed here --
       ORCH's job next, after confirming this push's own CI is green and no
       other agent is currently active.
+  - req: SCOPE-CHANGE
+    event: done
+    agent: DOC-UPDATER
+    at: "2026-09-20T08:10:54Z"
+    note: >
+      WF-03 run WF03-ISS0743-20260920 (PR #1618, branch
+      feature/WF03-ISS0739-20260920) complete. ISS-0743 (GET
+      /api/v1/definitions/search -- Letflow.Definitions.search_paginated/3
+      had zero exception handling, so any raised exception surfaced as
+      Bandit's raw empty-body HTTP 500 instead of a shaped JSON problem
+      response; discovered by ISSUE-FIXER blocking REQ-371's required e2e
+      spec) is now resolved per design doc
+      lib/letflow/design/iss-0739-search-paginated-exception-hardening.md
+      (filename retains its originally-authored "iss-0739" name; see the
+      issue record's own NOTE for why the id diverged). Fix: wrapped
+      search_paginated/3's with chain in a try/rescue mirroring
+      Definitions.activate/2's exact established idiom, adding
+      {:error, {:query_failed, exception}} to search_error() only (not the
+      shared common_error() union). No router change needed --
+      render_search_result/2's existing catch-all clause already
+      structurally matches the new tuple. get_by_id/2, get_active_by_name/2,
+      list_paginated/2, and delta/2 share the identical gap but are
+      explicitly out of scope for this fix (flagged, not fixed). Honestly
+      stated per the issue's own root_cause_honesty_note: ~440+ direct
+      reproduction attempts never reproduced the original crash, so this is
+      idiom-matching defensive hardening plus new test coverage, not a
+      confirmed-root-cause patch -- the new rescue path is exercised by a
+      real deterministic test forcing a genuine Postgrex.Error (dropping the
+      tenant schema's process_definitions table inside a sandboxed test
+      transaction).
+
+      Traceability note: this issue's filename/id was renumbered TWICE due
+      to concurrent-session docs/issues/ slot collisions (originally filed
+      as ISS-0739, refiled as ISS-0743 once ORCH found two other sessions
+      had independently claimed ISS-0739.yaml for unrelated defects) --
+      same collision class already documented under ISS-0729/ISS-0738/
+      ISS-0741's own NOTE comments this session. The design doc's filename
+      and internal prose still say "ISS-0739" throughout; only the
+      issue-record filename/id changed.
+
+      Full gate history, all PASS: SECURITY-REVIEWER (mandatory,
+      tenant-data-read-path per INV-8); REVIEWER; TEST-DESIGNER/
+      TEST-DESIGN-VALIDATOR; TEST-RUNNER (full suite 4469/4469);
+      RELEASE-VALIDATOR (independent re-verification: diff-vs-design match,
+      1060/1060 targeted test pass, mix letflow.check.test clean, scope
+      confirmed to 5 files, no invariant violations).
+
+      docs/issues/ISS-0743.yaml flipped open -> resolved, with confirmation
+      of all four gate PASSes appended to its own resolution.gates field
+      (append-only edit to that prose field; the pre-existing
+      resolution: block written by prior agents was left otherwise
+      untouched). No docs/requirements.yaml entry to flip -- this is an ISS,
+      not a REQ (REQ-371, the related requirement, remains status: pending
+      independently of this fix). README.md and docs/migration/ grepped for
+      ISS-0743/ISS-0739 -- no hits; not documented current behavior there,
+      so no update needed. queue_ref is null on this issue (filed directly,
+      not via register_task) -- nothing to release via letflow-queue; per
+      docs/agents/protocols/TASK_QUEUE.md, that release is ORCH-only in any
+      case and out of scope for DOC-UPDATER. No merge performed here --
+      ORCH's/this same session's next step, after confirming CI is green.

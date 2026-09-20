@@ -4293,8 +4293,35 @@ volumes:
     path: docs/status/requirement_status.v20.yaml
     status: current
     opened: 2026-09-18
-    entries: 18
+    entries: 19
     note: >
+      Incremented to 19 by DOC-UPDATER's own rebase of
+      feature/WF03-ISS0739-20260920 (PR #1618, ISS-0743 close-out) onto
+      fresh origin/main: origin/main had independently gained ISS-0741's own
+      DOC-UPDATER append (2026-09-20T07:14:07Z -- InstanceBoardPage
+      start-dialog click-freeze fix, bumping this volume's on-disk count to
+      18 without its own index note paragraph) since this branch's own
+      ISS-0743 append (below) was first written against volume 20 at 18
+      entries. The rebase produced a real conflict in
+      docs/status/requirement_status.v20.yaml (both sides appended after the
+      same tail entry); resolved by keeping BOTH entries, in file order by
+      when each was written (origin's 07:14:07Z entry first, this branch's
+      own 08:10:54Z entry second) -- append-only means preserving both,
+      never dropping one to make the counts match a smaller number.
+      `grep -c "^  - req:" docs/status/requirement_status.v20.yaml` = 19
+      on-disk entries, recounted after the rebase, not assumed from either
+      side's own pre-rebase note. 1227 lines / 77521 bytes, well under the
+      1200-line/120000-byte roll ceiling, so no roll triggered.
+
+      Incremented to 18 by DOC-UPDATER's own ISS-0743 SCOPE-CHANGE done-event
+      append (WF03-ISS0743-20260920, 2026-09-20T08:10:54Z --
+      Letflow.Definitions.search_paginated/3 exception-hardening fix), before
+      the rebase above composed it with origin's own concurrent append -- at
+      that point in this branch's own history, `grep -c "^  - req:"
+      docs/status/requirement_status.v20.yaml` = 18 on-disk entries. 1169
+      lines / 73899 bytes, well under the 1200-line/120000-byte roll ceiling,
+      so no roll triggered.
+
       Incremented to 17 by DOC-UPDATER's own rebase of
       feature/WF03-ISS0737-20260920 onto fresh origin/main: origin/main had
       independently gained ORCH's own SCOPE-CHANGE done-event append

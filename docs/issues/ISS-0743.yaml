@@ -78,7 +78,7 @@ related:
   - ISS-0741  # InstanceBoardPage.tsx start-instance-button freeze, found and fixed in the same investigation sweep
 queue_ref: null  # ORCH to assign via letflow-queue register_task
 github_ref: null  # ORCH to assign
-status: open
+status: resolved
 # NOTE: filename/id renumbered TWICE due to concurrent-session collisions on
 # this repo's docs/issues/ slot allocation, same class already documented
 # repeatedly this session (ISS-0729/ISS-0738/ISS-0741's own NOTE comments).
@@ -126,6 +126,11 @@ resolution:
     Implemented by ELIXIR-DEV in an isolated git worktree (this repo's
     subagents share one working directory, and a concurrent agent's branch
     switch mid-task reverted this fix's tracked-file edits once -- recovered
-    by redoing the work in isolation). Pending SECURITY-REVIEWER (mandatory,
-    tenant-data-read-path per INV-8) -> REVIEWER -> TEST-DESIGNER/
-    TEST-DESIGN-VALIDATOR -> TEST-RUNNER -> RELEASE-VALIDATOR.
+    by redoing the work in isolation). SECURITY-REVIEWER (mandatory,
+    tenant-data-read-path per INV-8) PASSed -> REVIEWER PASSed ->
+    TEST-DESIGNER/TEST-DESIGN-VALIDATOR PASSed -> TEST-RUNNER PASSed (full
+    suite 4469/4469) -> RELEASE-VALIDATOR PASSed, independently
+    re-verifying diff-vs-design match, 1060/1060 targeted test pass,
+    mix letflow.check.test clean, scope confirmed to the 5 files listed
+    above, and no invariant violations. All gates PASS; DOC-UPDATER
+    confirming closure 2026-09-20.

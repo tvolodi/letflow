@@ -27871,3 +27871,134 @@ requirements:
       - "the screen is reachable only to a PLATFORM_ADMIN-equivalent role from the operator console navigation"
       - "web/tests/e2e/pipelines/platform-migration-partial-failure-resume.pipeline.e2e.spec.ts is authored against this real screen and passes"
     depends_on: [REQ-374]
+
+  - id: REQ-376
+    title: "Partition-based event-history retirement: whole-month DROP-style retirement with protected-record exemption and post-retirement replay (backend)"
+    owner: ELIXIR-DEV
+    status: pending
+    stage: S2
+    impl_order: 733  # Registered 2026-09-20 by ORCH from this GUI-review UAT finding.
+    description: >
+      Filed from a GUI-review sweep applying "review real screens before
+      writing a blind Playwright spec" to
+      test/fixtures/uat/scenarios/platform/partition-retention-drop.yaml
+      (test/uat-reports/gui-review-2026-09-20-partition-retention-drop.md has
+      the full trace). That scenario's own stale NOTE (ISS-0527) already
+      flagged its pipeline_test as an aspirational forward-reference to a
+      Playwright spec that was never authored, gated on this same missing
+      feature. This run verified independently, by reading current source
+      and every relevant decision/design record rather than trusting the
+      note, that the underlying feature genuinely does not exist, and that
+      its absence is a deliberate, already-recorded architectural deferral,
+      not an oversight.
+
+      WHAT EXISTS TODAY, verified 2026-09-20 by direct source read:
+      Letflow's `events`/`events_archive` tables
+      (priv/repo/migrations/20260816120001_create_events.exs,
+      .../20260816120005_create_events_archive.exs) are plain, unpartitioned
+      tables — no `PARTITION BY RANGE`, no monthly partitions of any kind.
+      `Letflow.EventStore.archive/1` (lib/letflow/event_store.ex, around line
+      1090) retires expired events by computing a target `event_id` set from
+      `event_retention_policies` and moving each one with a row-level
+      insert-then-delete ("phase1_insert"/"phase2_delete") — not a single
+      whole-partition DDL operation. This is a deliberate choice, not a gap
+      nobody noticed: `docs/migration/decisions/0003-ecto-schema-strategy.md`
+      Decision C point 2 explicitly defers partitioning ("unpartitioned
+      first ... rather than speculatively partitioning a table with no rows
+      yet"), and `docs/issues/ISS-0014.yaml` (resolved 2026-08-17) already
+      weighed and rejected porting R-Co's whole-partition
+      `PartitionRetention.runArchivalAging()`/`runEphemeralDrop()` model at
+      that time specifically "because it would force partitioning early,
+      contradicting 0003 Decision C's deliberate deferral, and would need
+      REVIEWER sign-off / a new decision record" — recording explicitly that
+      this was a future item, not a closed door.
+      `lib/letflow/design/req188-recurring-timers-and-retention.md` (§ on
+      R-Co's `partition_maintenance.zig`/`partition_retention.zig`) restates
+      the same deferral for the scheduler side. Grepping web/src/ for any
+      retention/retirement operator screen returns no hits.
+
+      THIS REQUIREMENT (backend half; a follow-on FRONTEND-DEV requirement,
+      REQ-377, owns the operator-facing retirement screen once this lands):
+      resolve the deferred design question and build the real mechanism.
+      (1) A decision record under docs/migration/decisions/ (or an amendment
+      explicitly cross-referenced from 0003 Decision C) that settles
+      Postgres-native monthly `PARTITION BY RANGE (created_at)` partitioning
+      for `events`/`events_archive`, gets REVIEWER sign-off per CLAUDE.md's
+      "don't silently re-decide what a decision record already settled," and
+      states the primary-key/idempotency-sidecar consequences already
+      identified in ISS-0014/0003 Decision C's own analysis (the
+      `(event_id, created_at)` PK already anticipates this; confirm whether
+      anything else must change). (2) The migration(s) that convert the
+      tables to that partitioned shape, plus the mechanism that pre-creates
+      next month's partition ahead of need (no process ever waits on
+      partition creation while running — matches this scenario's own step 1).
+      (3) A single-operation whole-partition retirement function — `DETACH`
+      (or `DROP`) rather than row-by-row DELETE — that retires one calendar
+      month of expired history in one DDL step, provably fast and
+      non-blocking to concurrent platform activity (EO-001). (4) Protected-
+      record exemption: whatever the platform's audit-retention obligation
+      is for a subset of records (see `event_retention_policies`'
+      `keep_forever` policy value, already modeled) must be enforced so a
+      protected record's home partition is never dropped out from under it,
+      or protected rows are relocated out of a to-be-dropped partition before
+      it drops — either mechanism is acceptable, but the count of protected
+      records must be provably identical before and after (EO-002). (5) Proof
+      that a process instance whose events live in an older, already-retired
+      month still replays its full history with no gap after retirement
+      (EO-003) — i.e. retirement of the *expired* partition must not silently
+      catch already-archived-but-still-referenced instance history.
+
+      SCOPE FENCE: partitioning the event-store tables and the whole-
+      partition retirement mechanism only. Does not touch
+      `Letflow.EventStore.archive/1`'s existing row-level move-to-archive
+      path unless the decision record concludes it must be retired/replaced
+      as part of adopting partitioning (state explicitly either way — do not
+      leave both mechanisms silently coexisting with no stated relationship).
+      Does not build the operator-facing retirement screen (EO-001/EO-002
+      evidence surfaces) — that is REQ-377. Does not invent a general
+      "partition any table" framework — scoped to `events`/`events_archive`
+      only, matching this scenario and 0003 Decision C's own framing.
+    acceptance_criteria:
+      - "a decision record resolving Postgres-native monthly PARTITION BY RANGE (created_at) for events/events_archive exists under docs/migration/decisions/, cross-references 0003 Decision C and ISS-0014, and carries REVIEWER sign-off"
+      - "retiring one month of expired history is a single DDL operation (DETACH/DROP, not row-by-row DELETE), proven by a test that asserts no per-row DELETE runs and that the platform accepts a concurrent write throughout (EO-001)"
+      - "the count of protected (keep_forever-policy) records is identical before and after retiring an expired month containing at least one protected record, proven by a test (EO-002)"
+      - "a process instance with history in an already-retired month still replays its complete step history with no gap and no error after retirement, proven by a test (EO-003)"
+      - "next month's partition is pre-created ahead of need; no test or code path waits on partition creation while a write is in flight"
+      - "the relationship between this mechanism and Letflow.EventStore.archive/1's existing row-level move is stated explicitly (coexist, or archive/1 retired/replaced) in the decision record or this requirement's own moduledoc updates"
+      - "mix letflow.check passes, with real output quoted"
+    depends_on: [REQ-023, REQ-026]
+
+  - id: REQ-377
+    title: "Operator-facing history-retirement screen: single-step retirement, protected-record count, and pre-retirement/post-retirement instance replay (frontend)"
+    owner: FRONTEND-DEV
+    status: pending
+    stage: S8
+    impl_order: 734  # Registered 2026-09-20 by ORCH from this GUI-review UAT finding.
+    description: >
+      Follow-on to REQ-376 (file it first; this requirement is blocked on
+      that backend landing). Filed from the same GUI-review sweep as
+      REQ-376 — test/fixtures/uat/scenarios/platform/partition-retention-drop.yaml
+      and test/uat-reports/gui-review-2026-09-20-partition-retention-drop.md.
+
+      WHAT EXISTS TODAY, verified 2026-09-20: grepping web/src/ for any
+      retention/retirement operator screen returns zero hits relevant to
+      event-history retirement. There is no operator console page for
+      retiring a month of history, no retention summary showing protected-
+      record counts, and no platform-health-while-retiring evidence surface.
+
+      THIS REQUIREMENT: a screen, reachable from the platform-admin operator
+      console, that (1) lets a PLATFORM_ADMIN retire the oldest eligible
+      month of history in one action, showing the resulting retirement
+      record (EO-001's operator-console evidence); (2) shows a retention
+      summary including the protected-record count, capturable before and
+      after a retirement for EO-002's evidence; (3) does not block or
+      degrade the rest of the console while a retirement is running
+      (reflecting EO-001's "platform stays responsive" requirement — no
+      full-page blocking spinner tied to the retirement's own duration).
+      Wires to REQ-376's real endpoints — no mock data.
+    acceptance_criteria:
+      - "the retirement screen lets a PLATFORM_ADMIN retire the oldest eligible month and displays the resulting retirement record, matching EO-001's operator-console evidence requirement"
+      - "the retention summary shows a protected-record count capturable before and after a retirement, matching EO-002's evidence requirement"
+      - "the screen is reachable only to a PLATFORM_ADMIN-equivalent role from the operator console navigation"
+      - "web/tests/e2e/pipelines/platform-partition-retention-drop.pipeline.e2e.spec.ts is authored against this real screen and passes"
+    depends_on: [REQ-376]

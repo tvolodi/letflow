@@ -34,6 +34,23 @@ pipeline_test: web/tests/e2e/pipelines/platform-partition-retention-drop.pipelin
 # UAT-RUNNER drives this Playwright pipeline test for the operator's steps.
 # If this file does not exist or the test cannot run, that is a BLOCKER
 # (missing UI) and must be routed to FRONTEND-DEV before UAT can proceed.
+#
+# ADDENDUM (2026-09-20, ORCH, GUI-review sweep, 8th of ~15 scenarios): confirmed
+# by direct source read that the underlying mechanism this scenario exercises
+# (single-step partition-based retirement, not row-by-row DELETE) does not
+# exist anywhere in lib/letflow/, and that its absence is a deliberate,
+# already-recorded architectural deferral (docs/migration/decisions/
+# 0003-ecto-schema-strategy.md Decision C point 2; docs/issues/ISS-0014.yaml),
+# not an oversight -- events/events_archive remain unpartitioned and
+# Letflow.EventStore.archive/1 still moves rows one at a time. Filed
+# REQ-376 (backend: resolve the deferred partitioning decision and build the
+# single-DDL retirement mechanism, protected-record exemption, and
+# post-retirement replay proof) and REQ-377 (frontend: the operator-facing
+# retirement screen, including this pipeline_test itself) --
+# docs/requirements.yaml. Full trace:
+# test/uat-reports/gui-review-2026-09-20-partition-retention-drop.md. Treat
+# any run of this scenario as BLOCKED/UNBUILT_FEATURE until REQ-376/REQ-377
+# ship.
 
 actors:
   operator:  actor-platform-admin

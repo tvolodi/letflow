@@ -1,0 +1,61 @@
+{
+  "handoff_id": "c1a1e001-0000-4000-8000-000000000016",
+  "run_id": "WF03-ISS0736-20260921",
+  "workflow_id": "WF-03",
+  "step": "04c-rework1",
+  "from_agent": "ORCH",
+  "to_agent": "TEST-RUNNER",
+  "file": "handoffs/WF03-ISS0736-20260921/step-04c-test-runner-rework1.json",
+  "created_at": "2026-09-20T22:17:47Z",
+  "started_at": "2026-09-20T22:17:47Z",
+  "completed_at": null,
+  "status": "PENDING",
+  "priority": "HIGH",
+  "context": {
+    "stage": "S4",
+    "requirement_ids": ["REQ-378"],
+    "requirement_text": {
+      "REQ-378": "See handoffs/WF03-ISS0736-20260921/step-00-git-setup.json context.requirement_text.REQ-378 for the full verbatim text."
+    },
+    "related_handoff_ids": ["c1a1e001-0000-4000-8000-000000000015"],
+    "artifacts_in": [
+      "handoffs/WF03-ISS0736-20260921/step-04c-test-runner.json",
+      "handoffs/WF03-ISS0736-20260921/step-04b-test-design-validator-rework1.json",
+      "test/reports/report-20260921-WF03-ISS0736-20260921.yaml"
+    ],
+    "owned_modules": [
+      "lib/letflow/plugs/auth_pipeline.ex",
+      "lib/letflow/identity.ex",
+      "lib/letflow/identity/user.ex",
+      "web/src/api/identity.ts",
+      "web/src/pages/admin/GroupsPage.tsx"
+    ]
+  },
+  "task": {
+    "description": "Re-run the full suite (backend `mix test` full, frontend full vitest run in web/) on feature/WF03-ISS0736-20260921's current tip (which now includes the §2.2/§2.3 rework since your prior FAIL in step-04c-test-runner.json). IMPORTANT: two prior handoffs in this run independently hit a `versions_missing = [20260921000001]` migration-state mismatch against the SHARED default test DB, caused by a concurrent sibling session's `mix test` process holding a `tenant_template` schema built before this run's new migration existed -- NOT a real regression, per both ELIXIR-DEV's (step-03-elixir-dev-rework1.json) and TEST-DESIGN-VALIDATOR's (step-04b-test-design-validator-rework1.json) independent first-hand encounters with the identical mechanism. Before concluding any failure is real: (1) check for concurrent mix/beam processes touching this repo's test DB (`ps`/`tasklist`-equivalent, or just check whether a fresh isolated DB fixes it); (2) if you hit `versions_missing`, recreate/migrate a clean test DB (or use an isolated `MIX_TEST_PARTITION`) rather than accepting the shared DB's possibly-stale state, exactly as both prior steps did; (3) only after ruling this out, treat any remaining failure as a real signal. Also confirm the original 3 pre-existing test regressions from your prior FAIL (test/letflow/plugs/auth_pipeline_test.exs, test/letflow/plugs/api_pipeline_integration_test.exs, test/letflow/routers/req077_promotion_pipeline_test.exs) are now genuinely fixed, and confirm all REQ-378 test files (test/letflow/plugs/iss0736_oidc_live_revocation_test.exs, web/src/api/__tests__/identity.removeMembers.test.ts) still show 0 failures. Run everything in the foreground with direct output -- no background Monitor waiting.",
+    "acceptance_criteria": [
+      "Full backend suite run against a verified-clean/isolated test DB, real pass/fail/total counts quoted",
+      "Full frontend suite run, real pass/fail/total counts quoted",
+      "The 3 previously-regressed tests confirmed passing now",
+      "All REQ-378 test files confirmed 0 failures",
+      "Any remaining failure triaged: pre-existing-on-main vs. caused-by-this-branch, with evidence"
+    ]
+  },
+  "result": {
+    "status": "PENDING",
+    "summary": "",
+    "artifacts_out": [],
+    "issues": [],
+    "git_evidence": {
+      "branch_name": null,
+      "commit_sha_list": [],
+      "remote_branch": null,
+      "push_status": "skipped",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": ""
+  },
+  "rework_count": 1,
+  "max_rework": 3
+}

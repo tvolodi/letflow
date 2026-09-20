@@ -8,8 +8,8 @@
   "file": "handoffs/WF03-ISS0736-20260921/step-03b-security-reviewer.json",
   "created_at": "2026-09-20T19:28:52Z",
   "started_at": "2026-09-20T19:28:52Z",
-  "completed_at": null,
-  "status": "PENDING",
+  "completed_at": "2026-09-20T19:30:20Z",
+  "status": "COMPLETED",
   "priority": "HIGH",
   "context": {
     "stage": "S4",
@@ -45,19 +45,21 @@
     ]
   },
   "result": {
-    "status": "PENDING",
-    "summary": "",
-    "artifacts_out": [],
+    "status": "PASS",
+    "summary": "Reviewed git diff main...feature/WF03-ISS0736-20260921 -- lib/letflow/plugs/auth_pipeline.ex lib/letflow/identity.ex lib/letflow/api/authorization.ex web/src/api/identity.ts web/src/pages/admin/GroupsPage.tsx against INV-1..INV-9. (lib/letflow/api/authorization.ex has no diff in this range -- unchanged file, no findings to report for it.)\n\nPer-invariant verdicts:\nINV-1 (tenant data isolation) -- APPLIES (new query against group_members/tenant_role, tenant-scoped tables). (a) Identity.list_effective_role_names/2 passes prefix: (Keyword.fetch!(opts, :prefix)) into Repo.all/2; GroupMember and TenantRole schemas declare bare table names with no @schema_prefix override, so prefix is caller-supplied at query time, the correct pattern -- CONFIRMED. (b) No migration added in this diff -- N/A. (c) No tenant_id write path added (read-only query) -- N/A. verify_local_account_state/2 derives the prefix itself via TenantProvisioning.schema_name_for_tenant(tenant_id), the same tenant_id resolved earlier in the pipeline by resolve_tenant/1, not caller-supplied -- correct provenance. PASS.\nINV-2 (server-side field authz) -- NOT-APPLICABLE (no new API response type; roles list is an internal auth_context field, not a serialized response body).\nINV-3 (sandboxing) -- NOT-APPLICABLE (S5 not started).\nINV-4 (secrets by reference) -- APPLIES (auth pipeline touches JWT/claims handling). No secret material logged, traced, or serialized in the diff; error branches log only \"invalid tenant_id post-provisioning\" (no token/secret value). grep for hardcoded secrets in the changed files: none. PASS.\nINV-5 (not-found/forbidden indistinguishability) -- NOT-APPLICABLE to the OIDC auth-pipeline change (not a lookup-by-ID endpoint; the 403/500 here are terminal auth-pipeline outcomes for the token-holder's own account, not a cross-tenant resource probe). Reasoned explicitly, not defaulted.\nINV-6 (new data-access paths prove scoping) -- APPLIES, satisfied by this review itself (this handoff).\nINV-7 (no SQL string interpolation) -- APPLIES. New query uses Ecto.Query macro (from/join/where/select), no Repo.query/Repo.query! anywhere in the diff. PASS.\nINV-8 (no unhandled crashes on realistic failure paths) -- APPLIES. Both new case statements are exhaustive against their source types: provisioned.user.status is Ecto.Enum values: [:active, :inactive] (2-arm case matches both), TenantProvisioning.schema_name_for_tenant/1's own @spec returns only {:ok, _} | {:error, :invalid_tenant_id} (2-arm case matches both) -- no bare/partial pattern match introduced. Repo.all/2 in list_effective_role_names/2 can still raise on a genuine DB-connection failure (unchanged risk shape vs. the existing verify_api_token/2 precedent at identity.ex:1198, which has the same exposure via Repo.get_by/3) -- this is pre-existing risk this diff does not worsen, and per Plug's own request-scoped process model an unhandled exception here 500s the single request without affecting other tenants' in-flight work, so it is not an INV-8 violation. PASS.\nINV-9 (outbound URL validation) -- NOT-APPLICABLE (no outbound HTTP request in this diff).\n\nExplicit sign-off on the enforcement mechanism (REQ-378 AC4):\n(a) Tenant scoping -- CORRECT. list_effective_role_names/2 is prefix-scoped via the tenant_id already resolved and validated earlier in the same request (resolve_tenant/1 + guard_realm_ownership/2), not re-derived from anything caller-controlled; GroupMember/TenantRole carry no cross-schema leak path. No cross-tenant role leakage possible.\n(b) Fail-closed -- CORRECT. :inactive short-circuits to {:error, {:account, :inactive}} -> 403 before any role query runs (no partial/stale role grant). schema_name_for_tenant/1 failure -> {:error, {:account, :invalid_tenant_id}} -> 500, logged, request rejected -- does not fall through to attach_auth_context/4 or substitute a default/empty-allow role set. A DB error inside Repo.all/2 raises and 500s the request rather than silently returning [] as if verified -- also fail-closed (denies, does not grant). No code path in this diff reaches attach_auth_context/4 without a live, successful role-list fetch.\n(c) Status codes -- APPROPRIATE. 403 for inactive account: only reachable by a caller already holding a valid, IdP-signed JWT for that specific account (not an unauthenticated probe), so telling that principal their own account is deactivated is normal UX, not a cross-tenant/cross-user existence leak, and is no more revealing than the existing 401 \"invalid or expired bearer token\" branch it sits beside. 500 for invalid_tenant_id is an internal-error path (tenant_id is pipeline-derived, not attacker-controlled at this point) and does not leak account state.\n(d) Performance/DoS surface -- ACCEPTABLE. One Repo.all/2 per authenticated OIDC request (join on indexed group_id/user_id-shaped foreign keys, no unbounded scan, no N+1 -- single query, distinct role names), directly mirroring verify_api_token/2's existing single-query-per-call shape already accepted for the API-token path. No new caching/memoization introduced, matching design intent (AC1: live revocation).\n(e) GroupsPage.tsx/identity.ts GUI fix -- NO NEW GAP. groupsApi.removeMembers now calls DELETE /api/v1/identity/groups/:id/members/:user_id (previously called a non-existent /api/v1/admin/groups/:id/members route with a body it silently discarded -- non-functional, not a security gap, just broken). The corrected route is registered via authz_delete \"/groups/:id/members/:user_id\", :GroupsManage (lib/letflow/routers/identity.ex:182), which is policy-gated (GroupsManage) and, per Identity.remove_group_member/3 (identity.ex:651), prefix-scoped -- a cross-tenant group_id resolves to {:error, :group_not_found} via the prefix-scoped Repo.get(Group, group_id, prefix: prefix) lookup rather than deleting anything. No tenant-scoping or authz gap introduced.\n\nVerdict: PASS. No BLOCKER found. Routes to REVIEWER per WF-03 Step 3 ordering.",
+    "artifacts_out": [
+      "handoffs/WF03-ISS0736-20260921/step-03b-security-reviewer.json"
+    ],
     "issues": [],
     "git_evidence": {
-      "branch_name": null,
+      "branch_name": "feature/WF03-ISS0736-20260921",
       "commit_sha_list": [],
-      "remote_branch": null,
-      "push_status": "skipped",
+      "remote_branch": "origin/feature/WF03-ISS0736-20260921",
+      "push_status": "pending",
       "pr_url": null,
       "pr_create_error": null
     },
-    "next_action": ""
+    "next_action": "REVIEWER"
   },
   "rework_count": 0,
   "max_rework": 3

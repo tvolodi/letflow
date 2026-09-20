@@ -4289,12 +4289,42 @@ volumes:
       changed. `entries:` will be incremented per HOW-TO-APPEND step 6 as
       real appends land.
 
+  - volume: 21
+    path: docs/status/requirement_status.v21.yaml
+    status: current
+    opened: 2026-09-20
+    entries: 0
+    note: >
+      Opened by DOC-UPDATER's own ISS-0743 close-out, successor to volume 20
+      (closed at 19 entries / 1227 frozen-prefix lines, over the 1200-line
+      roll ceiling -- the rebase reconciliation of ISS-0741's and ISS-0743's
+      concurrently-written entries crossed it). Created with volume 20's
+      header text verbatim (volume number, opening date and predecessor path
+      updated) and an empty `history:` list, per this index's
+      `roll_rule.on_exceed` procedure.
+
   - volume: 20
     path: docs/status/requirement_status.v20.yaml
-    status: current
+    status: closed
     opened: 2026-09-18
+    closed: 2026-09-20
     entries: 19
+    lines: 1262
+    bytes_working_tree: 79810
+    frozen_prefix_lines: 1227
+    frozen_prefix_sha256: "3bab1026ad2739e54fd6ff58104a75d6260642e24017e192eb15b599506d318f"
     note: >
+      Closed by DOC-UPDATER's own ISS-0743 SCOPE-CHANGE done-event append,
+      composed during feature/WF03-ISS0739-20260920's rebase onto fresh
+      origin/main (which had independently gained ISS-0741's own append) --
+      `grep -c "^  - req:" docs/status/requirement_status.v20.yaml` = 19
+      on-disk entries after the rebase, 1227 lines -- over the 1,200-line
+      roll ceiling (bytes, 77521, stayed under the 120000-byte ceiling; only
+      the line ceiling was crossed), confirmed via `wc -l` on the
+      working-tree file. Real rebase conflict on this file, resolved by
+      keeping BOTH entries (origin's ISS-0741 entry first, this branch's
+      ISS-0743 entry second) -- append-only means preserving both.
+
       Incremented to 19 by DOC-UPDATER's own rebase of
       feature/WF03-ISS0739-20260920 (PR #1618, ISS-0743 close-out) onto
       fresh origin/main: origin/main had independently gained ISS-0741's own

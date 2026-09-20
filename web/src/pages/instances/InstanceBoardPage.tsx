@@ -15,6 +15,7 @@ import { PaginationControls } from '@/components/ui/PaginationControls'
 import { classifyError, type RendererState } from '@/utils/classifyError'
 import { getRetryAfterSeconds } from '@/utils/getRetryAfterSeconds'
 import { formatDateTime, formatTime } from '@/i18n/format'
+import { deferClickState } from '@/utils/deferClickState'
 
 const STATUS_OPTIONS: InstanceStatus[] = ['ACTIVE', 'COMPLETED', 'CANCELLED', 'ERROR']
 const START_ROLES = ['PLATFORM_ADMIN', 'PROCESS_OPERATOR', 'PROCESS_DESIGNER']
@@ -145,17 +146,19 @@ export default function InstanceBoardPage() {
   }
 
   const openStartDialog = () => {
-    setStartDefinitionName(definitionName)
-    setStartDefinitionVersion(activeDefinitionByName?.version ?? '')
-    setStartCorrelationKey('')
-    setStartVariablesJson('{\n  \n}')
-    setStartError(null)
-    setStartValidationError(null)
-    setShowStart(true)
+    deferClickState(() => {
+      setStartDefinitionName(definitionName)
+      setStartDefinitionVersion(activeDefinitionByName?.version ?? '')
+      setStartCorrelationKey('')
+      setStartVariablesJson('{\n  \n}')
+      setStartError(null)
+      setStartValidationError(null)
+      setShowStart(true)
+    })
   }
 
   const closeStartDialog = () => {
-    setShowStart(false)
+    deferClickState(() => setShowStart(false))
   }
 
   const onStartDefinitionNameChange = (value: string) => {
@@ -175,11 +178,13 @@ export default function InstanceBoardPage() {
   }
 
   const submitStartInstance = async () => {
-    setStartError(null)
-    setStartValidationError(null)
+    deferClickState(() => {
+      setStartError(null)
+      setStartValidationError(null)
+    })
 
     if (!definitionId) {
-      setStartValidationError('Select a valid active definition name.')
+      deferClickState(() => setStartValidationError('Select a valid active definition name.'))
       return
     }
 
@@ -187,12 +192,12 @@ export default function InstanceBoardPage() {
     try {
       const parsed = JSON.parse(startVariablesJson) as unknown
       if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
-        setStartValidationError('Initial variables must be a JSON object.')
+        deferClickState(() => setStartValidationError('Initial variables must be a JSON object.'))
         return
       }
       parsedVariables = parsed as Record<string, unknown>
     } catch {
-      setStartValidationError('Initial variables must be valid JSON.')
+      deferClickState(() => setStartValidationError('Initial variables must be valid JSON.'))
       return
     }
 

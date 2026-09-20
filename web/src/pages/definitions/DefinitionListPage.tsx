@@ -5,6 +5,7 @@ import { useDefinitions, useDefinitionVersions, useActivateDefinition, useArchiv
 import { definitionsApi } from '@/api/definitions'
 import { useDebounce } from '@/hooks/useDebounce'
 import { highlightText } from '@/utils/highlightText'
+import { deferClickState } from '@/utils/deferClickState'
 import { useAuth } from '@/auth/AuthContext'
 import type { DefinitionStatus, ProcessDefinition, DefinitionGraph } from '@/types/api'
 import { QueryStateBoundary } from '@/components/ui/QueryStateBoundary'
@@ -161,13 +162,16 @@ export default function DefinitionListPage() {
           <span
             data-testid={`def-name-${def.id}`}
             onClick={() => {
-              if (expandedDefId === def.id) {
-                setExpandedDefId(null)
-                setExpandedDefName(null)
-              } else {
-                setExpandedDefId(def.id)
-                setExpandedDefName(def.name)
-              }
+              // ISS-0737: deferred by one macrotask — see web/src/utils/deferClickState.ts.
+              deferClickState(() => {
+                if (expandedDefId === def.id) {
+                  setExpandedDefId(null)
+                  setExpandedDefName(null)
+                } else {
+                  setExpandedDefId(def.id)
+                  setExpandedDefName(def.name)
+                }
+              })
             }}
             style={{ color: 'var(--interactive-primary)', textDecoration: 'none', cursor: 'pointer' }}
           >

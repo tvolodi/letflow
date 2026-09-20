@@ -1,0 +1,125 @@
+id: ISS-0738
+title: >
+  DefinitionListPage def-name click (expand version history) main-thread
+  freeze in both dev and production builds
+discovered_by: ISSUE-FIXER
+discovered_in_run: WF02-REQ371-20260919
+discovered_at: "2026-09-20T03:55:00Z"
+severity: MAJOR
+tags:
+  - frontend
+  - performance
+  - flake
+description: >
+  Discovered by ISSUE-FIXER while root-causing REQ-371's required e2e spec
+  (web/tests/e2e/pipelines/platform-definition-promotion-rollback.pipeline.e2e.spec.ts),
+  one step past ISS-0729's already-fixed search-input freeze.
+  web/src/pages/definitions/DefinitionListPage.tsx lines 168-176's
+  `def-name-${def.id}` span's `onClick` handler calls
+  `setExpandedDefId`/`setExpandedDefName` synchronously inside the same
+  native trusted click's event-dispatch turn -- the same general trigger
+  class ISS-0662 already confirmed and fixed via
+  web/src/utils/deferClickState.ts (`setTimeout(fn, 0)`), but that fix was
+  applied only to `DataTable.tsx`'s header-sort click and
+  `EntityCrudPage.tsx`'s handlers, never to this bespoke inline `onClick` in
+  `DefinitionListPage.tsx`. Confirmed by direct reproduction against the
+  real backend+Keycloak stack, in BOTH `npm run dev` and
+  `npm run build && vite preview` (NOT dev/StrictMode-only, unlike
+  ISS-0729) -- renderer CPU pegged continuously at ~95-106% during the
+  hang, a genuine busy-loop/freeze not an idle wait. Reproduces with or
+  without a search filter active, ruling out the highlightText/isSearching
+  code path as causal (that framing in the original observation was
+  circumstantial, since the e2e spec's own flow always searches before
+  this click to disambiguate v1/v2 rows). Was pre-existing before
+  ISS-0729's fix landed but masked, since execution never reached this
+  click at all (the search `fill()` step froze first) -- NOT introduced by
+  ISS-0729's fix. Fix validated empirically by ISSUE-FIXER: wrapping the
+  handler's existing body in `deferClickState(() => {...unchanged...})`
+  (the same pattern already used by `DataTable.tsx`'s `handleHeaderClick`
+  and `EntityCrudPage.tsx`'s handlers) eliminated the freeze in both
+  filtered and unfiltered cases in the production build, click resolved in
+  under 1s, `version-history-row` correctly became visible. This blocks
+  REQ-371's own AC6 (the required e2e spec must be authored AND PASSING)
+  from being honestly claimed.
+affected_files:
+  - web/src/pages/definitions/DefinitionListPage.tsx
+  - web/src/utils/deferClickState.ts
+  - web/tests/e2e/pipelines/platform-definition-promotion-rollback.pipeline.e2e.spec.ts
+suggested_fix: >
+  Wrap the `def-name-${id}` span's `onClick` body in `deferClickState(() =>
+  { ...unchanged... })`, exactly matching the established pattern
+  `DataTable.tsx`'s `handleHeaderClick` and `EntityCrudPage.tsx`'s handlers
+  already use (docs/frontend/iss-0662-entity-crud-page-click-freeze-fix.md
+  is the precedent design doc). Small, well-established fix class, already
+  empirically validated by ISSUE-FIXER -- likely a lightweight CODE-DESIGNER
+  pass, not a full new investigation.
+severity_rationale: >
+  MAJOR -- blocks REQ-371's required e2e spec from being honestly claimed
+  as passing (AC6), and represents a genuine main-thread freeze (confirmed
+  in BOTH dev and production builds, unlike ISS-0729) reachable by any
+  operator expanding a definition's version history on the definitions
+  list.
+related:
+  - ISS-0662  # prior analogous main-thread freeze fix (EntityCrudPage/DataTable sort-header click), same deferClickState.ts pattern applies directly here
+  - ISS-0729  # prior, distinct freeze fix on the same page's search input -- this issue's freeze was masked by ISS-0729's until that one was fixed, not caused by it
+queue_ref: Q-731
+github_ref: GH-1605
+status: resolved
+# NOTE: filename/queue-id mismatch, same class already documented for other
+# records this session. register_task's real, atomically-allocated id for
+# this issue is 731, which per letflow-queue's own id->issue_ref rule maps
+# to issue_ref "ISS-0731" -- but that filename is ALREADY OWNED by a
+# different, unrelated, earlier-filed issue (docs/issues/ISS-0731.yaml).
+# Filed here as ISS-0738.yaml (next unused slot near the current range)
+# instead.
+resolution:
+  resolved_in_run: WF03-ISS0737-20260920
+  commit: a92d8b5d
+  pull_request: "#1607"
+  branch: feature/WF03-ISS0737-20260920
+  design_doc: lib/letflow/design/WF03-ISS0737-fix-design.md
+  summary: >
+    DefinitionListPage's `def-name-${id}` span called
+    setExpandedDefId/setExpandedDefName synchronously inside the same native
+    trusted click's event-dispatch turn -- the same main-thread-freeze
+    trigger class ISS-0662 already confirmed and fixed via
+    web/src/utils/deferClickState.ts, but that earlier pass touched only
+    DataTable.tsx's header-sort click and EntityCrudPage.tsx's handlers,
+    never this page's bespoke inline onClick. Confirmed by ISSUE-FIXER
+    against the real backend+Keycloak stack in both `npm run dev` and
+    `npm run build && vite preview` (renderer CPU pegged ~95-106% during the
+    hang). Fixed by wrapping the handler's unchanged body in
+    `deferClickState(() => {...})`, mirroring DataTable.tsx's
+    handleHeaderClick exactly, per the validated design in
+    lib/letflow/design/WF03-ISS0737-fix-design.md. A new e2e regression
+    guard (web/tests/e2e/iss-0737-definition-name-click-freeze.e2e.spec.ts)
+    drives a real trusted click on both an unfiltered and a
+    filtered/searched def-name span, asserting expand AND collapse actually
+    apply. This unblocks REQ-371's AC6 (the required e2e spec must be
+    authored AND PASSING).
+  empirical_evidence_trail: >
+    Fail-then-pass proven empirically against a live backend+Keycloak stack:
+    both the unfiltered and filtered/searched cases hang past 5s on
+    pre-fix code (git-stashed revert) and resolve in ~9s total post-fix,
+    with version-history-row visibility confirmed both ways. REVIEWER's own
+    independent before/after e2e proof corroborated the same fail-then-pass
+    behavior directly, not merely on ISSUE-FIXER's/FRONTEND-DEV's say-so.
+    TEST-RUNNER ran the full suite independently: 703/703 frontend unit
+    tests, 48/48 guard tests, and the new e2e freeze spec 4/4. RELEASE-
+    VALIDATOR performed its own independent re-verification: a fresh
+    fail-then-pass reproduction (4/4), a full backend suite run
+    (4462/4462), a full frontend suite run (703/703), and a clean trial
+    merge against REQ-371's own branch
+    (feature/WF02-REQ371-20260919) with no conflicts.
+  gates: >
+    REVIEWER PASS (independent before/after e2e proof: reproduced the hang
+    on reverted pre-fix code, then confirmed clean passes with the fix
+    restored); TEST-DESIGN-VALIDATOR PASS; TEST-RUNNER PASS
+    (703/703 frontend unit tests, 48/48 guards, e2e freeze spec 4/4);
+    RELEASE-VALIDATOR PASS (independent re-verification: fail-then-pass
+    reproduction 4/4, full backend suite 4462/4462, frontend 703/703, and a
+    clean trial merge against REQ-371's branch
+    feature/WF02-REQ371-20260919 with no conflicts). SECURITY-REVIEWER
+    scoped out per the design doc -- pure client-side interaction-timing
+    change, no tenant-data path touched (same scoping precedent as
+    ISS-0729/ISS-0662).

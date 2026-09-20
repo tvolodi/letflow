@@ -714,3 +714,73 @@ history:
       mix letflow.check_requirements_registration (342 entries = 340
       registered + 2 deferred + 0 neither + 0 unclassified, no new gate
       failures) both pass with the two new entries in place.
+
+  - req: SCOPE-CHANGE
+    event: done
+    agent: ORCH
+    at: "2026-09-20T01:20:44Z"
+    note: >
+      Applied the "review real screens before writing a blind Playwright
+      spec" process (8th of ~15 scenarios in today's sweep) to
+      test/fixtures/uat/scenarios/platform/partition-retention-drop.yaml --
+      see test/uat-reports/gui-review-2026-09-20-partition-retention-drop.md
+      for the full trace. Checked whether a single-step, partition-based
+      event-history retirement mechanism (DETACH/DROP PARTITION rather than
+      row-by-row DELETE), protected-record exemption, and an operator-facing
+      retirement screen exist by reading current source and every relevant
+      decision/design/issue record directly, not by trusting the scenario's
+      own pre-existing NOTE (ISS-0527) unread.
+
+      Confirmed the feature does not exist, and that its absence is a
+      deliberate, already-recorded architectural deferral rather than an
+      oversight: priv/repo/migrations confirms events/events_archive are
+      plain unpartitioned tables (no PARTITION BY RANGE anywhere in the
+      migration set); lib/letflow/event_store.ex's archive/1 moves expired
+      rows one at a time (insert-then-delete against a computed event_id
+      set), not via any whole-partition DDL operation.
+      docs/migration/decisions/0003-ecto-schema-strategy.md Decision C point
+      2 explicitly defers partitioning, and docs/issues/ISS-0014.yaml
+      (resolved 2026-08-17) already weighed and rejected porting R-Co's
+      whole-partition PartitionRetention model at that time specifically
+      because it would need REVIEWER sign-off / a new decision record --
+      recorded as a future item, not a closed door.
+      lib/letflow/design/req188-recurring-timers-and-retention.md restates
+      the same deferral for the scheduler side. Grepped web/src for any
+      retention/retirement operator screen -- no hits. Grepped
+      docs/requirements.yaml for the same terms to confirm no duplicate is
+      already queued -- none found.
+
+      Filed two requirements, split backend/frontend per this sweep's
+      established precedent: docs/requirements.yaml REQ-376 (owner
+      ELIXIR-DEV, stage S2, status: pending, depends_on: [REQ-023, REQ-026])
+      -- resolving the deferred partitioning question via a new/amending
+      decision record with REVIEWER sign-off, the partitioned migration(s)
+      plus ahead-of-need next-partition creation, the single-DDL-operation
+      retirement function itself (EO-001), protected-record exemption
+      (EO-002), and post-retirement instance-replay proof (EO-003), with an
+      explicit scope fence against inventing a general "partition any table"
+      framework and an explicit instruction to state the relationship to
+      the existing row-level archive/1 path rather than leaving both
+      mechanisms silently coexisting; and REQ-377 (owner FRONTEND-DEV, stage
+      S8, status: pending, depends_on: [REQ-376]) -- the operator-facing
+      retirement screen, including authoring and passing this scenario's own
+      named pipeline_test once the screen exists. No implementation
+      attempted here -- this is architecturally significant (a Postgres
+      native partitioning decision affecting every tenant schema), not a
+      same-dispatch fix. UAT scenario run recorded BLOCKED in the report
+      cited above; no real retirement operation was driven against
+      qa.bizdala.com since the underlying mechanism does not exist to drive.
+      The scenario fixture's own pipeline_test NOTE block was extended (not
+      removed -- the feature is not real) with a dated addendum citing
+      REQ-376/REQ-377 and this report, matching this sweep's established
+      precedent. No existing docs/requirements.yaml entry needed flipping
+      (REQ-376/REQ-377 are newly filed, not existing ones being closed). No
+      docs/migration/stage-N-*.md file needed updating -- this is a net-new
+      gap finding referencing an existing decision record (0003), not a
+      change to already-documented behavior; 0003 itself is left unedited
+      since REQ-376's own acceptance criteria require its resolving decision
+      record to cross-reference 0003 rather than rewrite it. Verified
+      mix letflow.check_req_id_collision (OK, no collision) and
+      mix letflow.check_requirements_registration (344 entries = 342
+      registered + 2 deferred + 0 neither + 0 unclassified, no new gate
+      failures) both pass with the two new entries in place.

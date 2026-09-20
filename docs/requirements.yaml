@@ -28444,3 +28444,112 @@ requirements:
       - "the screen's own form has no field, control or code path capable of submitting a key this requirement did not itself add (i.e. cannot construct EO-001's negative half from this screen) -- stated and verified explicitly rather than left silent, since the negative half is exercised at REQ-382's API layer, not here"
       - "the stale NOTE (ISS-0527) is removed from tenant-branding-applied.yaml and web/tests/e2e/pipelines/tenant-branding.pipeline.e2e.spec.ts exists, passes against the real screen, and includes a first-paint-vs-settled-frame screenshot pair documenting EO-005's known flash (not fixing it)"
     depends_on: [REQ-382]
+
+  - id: REQ-384
+    title: "In-app company/tenant switcher for a dual-membership user, with tenant-keyed query-cache isolation across the switch"
+    owner: FRONTEND-DEV
+    status: pending
+    stage: S8
+    impl_order: 740  # Registered 2026-09-20 by ORCH from this GUI-review UAT finding.
+    description: >
+      Filed from the GUI-review UAT run of
+      test/fixtures/uat/scenarios/platform/tenant-switch-cache-isolation.yaml (PW-15)
+      -- see test/uat-reports/gui-review-2026-09-20-tenant-switch-cache-isolation.md
+      for the full trace.
+
+      WHAT EXISTS TODAY, confirmed by reading current source, not assumed from the
+      scenario's own NOTE (ISS-0527) -- that NOTE turns out to be CORRECT, not stale:
+      tenant identity in web/ comes entirely from the `tenant_slug` claim on the
+      session's own OIDC JWT (`web/src/auth/tokenUtils.ts` `resolveTenantSlug`,
+      consumed once by `AuthProvider.login`). There is no in-app company/tenant
+      selector anywhere in web/src -- grepped exhaustively (`AppShell.tsx` has no
+      tenant name display, let alone a switcher; no `switchCompany`/`switchTenant`/
+      `CompanySelector` symbol exists anywhere in web/src). Changing which company a
+      session acts as requires a fresh OIDC sign-in against a different Keycloak
+      realm (a full `signinRedirect`/`signoutRedirect` browser navigation via
+      `web/src/auth/OidcManager.ts`), which destroys the entire JS heap -- including
+      `@tanstack/react-query`'s `QueryClient` instance created once in
+      `web/src/main.tsx` -- by construction. `tenant-switch-cache-isolation.yaml`'s
+      steps 1-3 (EO-001: "switches to Vortex using the company selector, without
+      reloading the browser or signing out" and watches for stale rows mid-transition)
+      describe a feature that does not exist and cannot be built without first adding
+      an in-app tenant switcher; there is currently nothing to click.
+
+      Separately, this investigation found `web/src/api/queryKeys.ts`'s query keys
+      (e.g. `queryKeys.instances.list`, `queryKeys.tasks.list`) are NOT tenant-scoped
+      at all -- confirmed by `web/src/pages/instances/__tests__/InstanceBoardPage.tenant-isolation.test.tsx`'s
+      own TC-ENV04-09, which asserts isolation is backend-enforced only (the frontend
+      relies entirely on the JWT-scoped API response, never filtering or keying by
+      tenant client-side). This is safe TODAY only because a tenant change is always
+      accompanied by a full page reload (a fresh `QueryClient`, fresh cache, by
+      construction) -- it would NOT be safe the moment an in-app switcher is added,
+      because two tenants' `useInstances()`/`useTasks()` calls with identical filter
+      objects would collide on the exact same cache key and serve one company's rows
+      to the other. This requirement's acceptance criteria treat that as a
+      first-class part of the switcher's own design, not an afterthought.
+
+      This requirement builds the switcher AND its cache-isolation guarantee
+      together -- building one without the other would either ship a switcher that
+      can leak (EO-001's BLOCKER) or leave the scenario permanently unbuildable.
+    acceptance_criteria:
+      - "a signed-in user whose account holds membership in more than one tenant (server-side membership contract to be defined by this requirement's own design -- no such multi-membership concept exists in Letflow.Identity today either, confirmed by grep) sees an in-app control to select which tenant they are acting as, without a full-page OIDC re-authentication"
+      - "every React Query key that scopes tenant-visible data (instances, tasks, definitions, at minimum) is namespaced by the active tenant id/slug, verified by a test that switches the active tenant in a test harness and asserts the previous tenant's cached entries are neither read nor served under the new tenant's key"
+      - "switching tenants invalidates or clears every previously-tenant-scoped query before the new tenant's screens render -- a test asserts no stale row from tenant A is present in the rendered DOM at any point after a switch to tenant B, including the frame during the transition (a placeholder, not tenant A's last-rendered rows, per EO-001)"
+      - "the design doc explicitly states why per-request backend JWT scoping (today's only isolation mechanism) is insufficient once a client-side cache can outlive the JWT that populated it, and cites InstanceBoardPage.tenant-isolation.test.tsx's existing TC-ENV04-09 as the precedent this requirement must not silently break"
+      - "SECURITY-REVIEWER sign-off is required before merge -- this is a cross-tenant data-isolation mechanism, a tenant-data path per docs/agents/instructions/security-invariants.md, not an ordinary UI feature"
+    depends_on: []
+
+  - id: REQ-385
+    title: "Task-form version-mismatch fallback: explicit out-of-date message when a task's pinned form version cannot be confirmed"
+    owner: ELIXIR-DEV
+    status: pending
+    stage: S9
+    impl_order: 741  # Registered 2026-09-20 by ORCH from this GUI-review UAT finding.
+    description: >
+      Filed from the same GUI-review UAT run as REQ-384 (PW-15,
+      tenant-switch-cache-isolation.yaml) -- see
+      test/uat-reports/gui-review-2026-09-20-tenant-switch-cache-isolation.md.
+
+      WHAT EXISTS TODAY: EO-003 of that scenario ("a task shows the form it was
+      created against, not the newer published version") is already satisfied by
+      construction, not merely by convention -- confirmed by reading
+      `lib/letflow/engine/task_activation.ex` (`resolve_form_schema/1` freezes
+      `form_schema` onto the `tasks` row from the graph snapshot at activation time,
+      REQ-273) and `lib/letflow/design/req126-form-version-pinning.md` (REQ-126,
+      `status: done` in this file) which additionally exposes `form_id`/`form_version`
+      on the task read path, derived from the write-once
+      `instance_definition_snapshots.definition_ver` row, never re-derived from the
+      live `process_definitions` row. `web/src/pages/tasks/TaskInboxPage.tsx` renders
+      `task.form_schema` directly from the task payload -- there is no live
+      re-fetch-and-compare step anywhere in this path that could disagree with the
+      pinned version.
+
+      EO-004 of the same scenario ("if the platform cannot confirm the version
+      returned matches the version requested, show an out-of-date message rather
+      than the form") has no implementation anywhere -- grepped exhaustively for any
+      version-mismatch/out-of-date concept on the task-form path (as opposed to
+      `web/src/components/ui/StaleVersionError.tsx`, a DIFFERENT, already-built
+      concept: REQ-379/380/381's optimistic-concurrency 409 conflict banner for
+      record edits, unrelated to task-form version pinning). Because `form_schema`
+      is embedded directly on the `tasks` row at creation time and never re-resolved
+      against a live catalog at read time (per req126's own design doc section 2.3,
+      contrasting explicitly with `Letflow.Engine.PinResolver`'s live-resolution
+      model), there is today no code path that performs a "does the version returned
+      match the version requested" comparison at all -- EO-004 describes a failure
+      mode of a resolution step that does not exist in this architecture.
+
+      This requirement is about deciding whether EO-004's guarantee is even
+      meaningful given REQ-126's design (a genuinely different resolution model than
+      the scenario apparently assumed), and if so, what the equivalent confirmable
+      check is (e.g.: does `instance_definition_snapshots.graph` for this instance
+      still contain the `HUMAN_TASK` node named by `tasks.node_id`, with a
+      `form_schema` attribute -- a check that CAN fail if a snapshot row were ever
+      found missing per req126 design section 5's already-documented, near-impossible
+      null-join case) -- not a mechanical retrofit of an unrelated 409-conflict UI
+      onto an unrelated read path.
+    acceptance_criteria:
+      - "a CODE-DESIGNER pass states explicitly whether EO-004's scenario-level guarantee has a real analog under REQ-126's frozen-at-creation design, and if so names the exact condition that constitutes 'cannot confirm the version' for a task-form read"
+      - "if a real analog exists, GET /tasks/:id returns a distinguishable response (not a 500, not a silently-served form) for that condition, and the SPA renders an explicit out-of-date message in place of the form rather than opening it, matching EO-004's on_fail severity (MAJOR)"
+      - "if REVIEWER/CODE-DESIGN-VALIDATOR conclude no real analog exists under the current architecture (i.e. EO-004 is vacuously satisfied because there is no live resolution step to fail), that conclusion is recorded in the design doc and in this scenario's own review report, rather than either building a check against nothing or silently marking the acceptance criterion done without a check"
+      - "no change to REQ-126's frozen-at-creation read path (task.node_id / instance_definition_snapshots.definition_ver) is made purely to manufacture a failure mode for this requirement's own sake"
+    depends_on: [REQ-126]

@@ -8,6 +8,7 @@ import type { UserSession } from '@/types/api'
 import { AuthContext, type AuthContextValue } from './AuthContext'
 import { getOidcManager } from './OidcManager'
 import { tenantsApi } from '@/api/tenants'
+import { resetTenantConfigCache } from './tenantConfig'
 import { buildRedirectArgs } from './oidcRedirectArgs'
 
 export function AuthProvider({ children }: { children: ReactNode }) {
@@ -118,6 +119,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const logout = useCallback(() => {
     clearToken()
     setSessionState(null)
+    // Security: clear same-tab tenant-selection residue (bpm_realm_slug in
+    // sessionStorage, plus the in-memory TenantConfig cache) so the next
+    // person to sign in on this browser tab resolves tenant-config fresh
+    // from the URL/hostname rather than inheriting this session's company.
+    // See tenantConfig.ts's resetTenantConfigCache moduledoc.
+    resetTenantConfigCache()
     void getOidcManager().then(m => m.signoutRedirect())
   }, [])
 

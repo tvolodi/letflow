@@ -1,0 +1,113 @@
+id: ISS-0737
+title: >
+  Same-browser-tab tenant-selection residue survives sign-out: bpm_realm_slug
+  sessionStorage key never cleared by AuthProvider.logout()
+discovered_by: ORCH
+discovered_in_run: gui-review-2026-09-20-tenant-switch-cache-isolation
+discovered_at: "2026-09-20T00:00:00Z"
+severity: BLOCKER
+description: >
+  Discovered during the GUI-review pass of
+  test/fixtures/uat/scenarios/platform/tenant-switch-cache-isolation.yaml (PW-15),
+  specifically its EO-002 expected outcome ("signing out leaves nothing behind").
+  Before driving any browser session against qa.bizdala.com, this scenario's
+  premise was checked against actual source, per this sweep's standing
+  instruction to verify the underlying feature exists rather than assume it
+  from the scenario text -- see REQ-384 for the separate finding that EO-001's
+  in-app "company selector" (mid-session tenant switch without reload) does
+  not exist as a feature at all.
+
+  This is a distinct, real, currently-shipped defect in the flow the app DOES
+  support: sign out, then a different person signs in on the same browser tab.
+
+  Full trace:
+
+  `web/src/auth/tenantConfig.ts`'s `resolveRealmFromUrl()` is a deliberate
+  feature (OIDC-F-06, see its own test `tenantConfig.test.ts`): it persists a
+  `?realm=` URL parameter into `sessionStorage` under the key `bpm_realm_slug`
+  so subsequent in-SPA navigations don't need to repeat the query parameter.
+  `fetchTenantConfig()` consults this sessionStorage key BEFORE the URL and
+  BEFORE falling back to hostname resolution.
+
+  `web/src/auth/AuthProvider.tsx`'s `logout()` (before this fix) cleared only
+  the in-memory bearer token (`clearToken()`) and in-memory session state
+  (`setSessionState(null)`) before calling `signoutRedirect()`. It never
+  touched `sessionStorage`. `signoutRedirect()`/the subsequent
+  `signinRedirect()` for the next user are full-page browser navigations
+  (`window.location` assignments via oidc-client-ts) -- these destroy every
+  module-level in-memory cache (the React Query `QueryClient`, the
+  `_cachedConfig`/`_resolvedManager` module variables) by construction, but
+  `sessionStorage` survives navigation within the same tab, clearing only when
+  the tab/window itself is closed.
+
+  Net effect: on a shared machine (a dispatch desk, a factory terminal, a hot
+  desk -- exactly the scenario named in EO-002's own business_impact prose),
+  if a SwiftRoute user signs out and a Vortex user signs in on the SAME
+  browser TAB without closing it, `bpm_realm_slug` still names SwiftRoute's
+  realm. The next page load resolves `fetchTenantConfig()` (branding,
+  `oidc_authority`) against SwiftRoute's realm rather than the new
+  hostname/URL -- the Vortex user would see SwiftRoute's branding on the login
+  screen and/or have their sign-in attempt routed to the wrong OIDC authority,
+  a same-browser tenant-selection residue directly contradicting "signing out
+  leaves nothing behind."
+affected_files:
+  - web/src/auth/tenantConfig.ts
+  - web/src/auth/AuthProvider.tsx
+severity_rationale: >
+  BLOCKER, matching EO-002's own on_fail.severity: a shared machine showing
+  one customer's tenant selection/branding to the next person who signs in is
+  exactly the cross-tenant disclosure class this scenario exists to catch,
+  even though the leaked state here is session/branding metadata rather than
+  operational row data.
+fix_direction: >
+  Fixed in this same run (gui-review/tenant-switch-cache-isolation branch,
+  PR opened alongside this issue file): added `resetTenantConfigCache()` to
+  web/src/auth/tenantConfig.ts (clears the in-memory `_cachedConfig` and
+  removes `bpm_realm_slug` from sessionStorage) and wired it into
+  `AuthProvider.logout()`. Covered by
+  web/src/auth/tenantConfig.test.ts (TC-EO002-01..04) and
+  web/src/auth/__tests__/AuthProvider.logout-clears-realm.test.tsx
+  (TC-EO002-03/04, unit-level naming collision with the tenantConfig.test.ts
+  cases above -- both files independently number from TC-EO002-01). Routed
+  through SECURITY-REVIEWER before merge per this sweep's standing
+  instruction for any cross-tenant-relevant finding.
+
+  SECOND, DEEPER DEFECT found while writing the real Playwright regression
+  spec (web/tests/e2e/pipelines/tenant-cache.pipeline.e2e.spec.ts) against a
+  live local stack -- the first version of the fix above was NOT sufficient
+  on its own, confirmed by a real, reproducible e2e failure before the
+  second fix landed: `AuthProvider.logout()` calls `setSessionState(null)`
+  in the same tick as `resetTenantConfigCache()`. That state change flips
+  `ProtectedRoute`'s `isAuthenticated` to `false` on the very next render,
+  whose own `useEffect` immediately calls `getOidcManager()` again (to build
+  the next `signinRedirect()`) -- and if the browser's address bar still
+  literally reads `?realm=<slug>` at that moment (a real possibility:
+  nothing in this app strips that query parameter from the URL after the
+  first load), that re-render's own `resolveRealmFromUrl()` call silently
+  re-derives the exact same slug from the URL and writes it straight back
+  into `sessionStorage`, undoing `resetTenantConfigCache()`'s own
+  `removeItem` a tick later. `resetTenantConfigCache()` now ALSO strips a
+  `?realm=` query parameter from the current URL via
+  `history.replaceState` (no navigation), closing the path structurally
+  rather than relying on winning a race against `ProtectedRoute`'s own
+  re-render. Covered by tenantConfig.test.ts's TC-EO002-03/04 and
+  reproduced/proven fixed live by the e2e spec's EO-002 test (3 consecutive
+  clean runs against a real local Keycloak + backend + SPA stack after the
+  fix; the same spec reproducibly failed with the stale slug still present
+  before this second fix, confirming the race was real, not theoretical).
+process_note: >
+  A real browser session WAS driven, against a local stack (docker compose
+  Keycloak/Postgres already running from a prior session, plus a
+  `LETFLOW_DEV_DB_CONFIRMED=1 mix run --no-halt` backend and a `vite`/
+  `playwright` frontend started for this verification pass) -- not
+  qa.bizdala.com, but real HTTP, a real browser (Chromium via Playwright),
+  and real backend/DB state throughout, per this project's "no speculation"
+  rule. This is what surfaced the second defect above: a source-only review
+  would very plausibly have missed the ProtectedRoute re-render race. See
+  test/uat-reports/gui-review-2026-09-20-tenant-switch-cache-isolation.md
+  for the full review report, including why EO-001's own premise (an in-app
+  company selector) was found NOT to exist at all -- filed separately as
+  REQ-384.
+queue_ref: null   # filed directly by ORCH during a GUI-review sweep, no letflow-queue register_task call in this session
+github_ref: null   # tracked as a local record plus the fix landing in the same PR; open to filing on request
+status: fixed

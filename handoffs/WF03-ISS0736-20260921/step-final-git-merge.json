@@ -1,0 +1,62 @@
+{
+  "handoff_id": "c1a1e001-0000-4000-8000-00000000001a",
+  "run_id": "WF03-ISS0736-20260921",
+  "workflow_id": "WF-03",
+  "step": "final",
+  "from_agent": "ORCH",
+  "to_agent": "ELIXIR-DEV",
+  "file": "handoffs/WF03-ISS0736-20260921/step-final-git-merge.json",
+  "created_at": "2026-09-20T22:51:57Z",
+  "started_at": "2026-09-20T22:51:57Z",
+  "completed_at": null,
+  "status": "PENDING",
+  "priority": "HIGH",
+  "context": {
+    "stage": "S4",
+    "requirement_ids": ["REQ-378"],
+    "requirement_text": {
+      "REQ-378": "See handoffs/WF03-ISS0736-20260921/step-00-git-setup.json context.requirement_text.REQ-378 for the full verbatim text."
+    },
+    "related_handoff_ids": ["c1a1e001-0000-4000-8000-000000000019"],
+    "artifacts_in": [
+      "docs/agents/protocols/GIT_MERGE.md",
+      "handoffs/WF03-ISS0736-20260921/step-05-issue-fixer-close.json",
+      "handoffs/WF03-ISS0736-20260921/step-04c-test-runner-rework2.json"
+    ],
+    "owned_modules": [
+      "lib/letflow/plugs/auth_pipeline.ex",
+      "lib/letflow/api/authorization.ex",
+      "lib/letflow/identity.ex",
+      "lib/letflow/identity/user.ex",
+      "lib/letflow/identity_migration.ex",
+      "web/src/pages/admin/UsersPage.tsx",
+      "web/src/pages/admin/GroupsPage.tsx",
+      "web/src/api/identity.ts"
+    ]
+  },
+  "task": {
+    "description": "Run GIT_MERGE protocol (docs/agents/protocols/GIT_MERGE.md) in full for this run, exactly as written -- rebase onto origin/main, verify format/compile/tests, push, create PR, wait for CI, merge (squash, delete branch), local cleanup back to main. First run `git worktree list` to check whether the worktree variant applies. PR title: 'fix: OIDC session live revocation/deactivation enforcement + GroupsPage GUI fix [WF03-ISS0736-20260921]'. In the PR body's Validation section, cite: mix compile --warnings-as-errors PASS; mix test 4472 passed 0 failed (full backend suite, per handoffs/WF03-ISS0736-20260921/step-04c-test-runner-rework2.json); frontend 728/728 passed; SECURITY-REVIEWER PASS (twice -- original mechanism handoffs/WF03-ISS0736-20260921/step-03b-security-reviewer.json and delta handoffs/WF03-ISS0736-20260921/step-03b-security-reviewer-rework1.json); REVIEWER PASS (twice). Note this closes REQ-378/ISS-0736 (GH-1648, already closed) and files ISS-0764/ISS-0765 as follow-ups. If the rebase pulls in unrelated concurrent-session changes to docs/requirements.yaml or docs/status/*, resolve per GIT_MERGE.md's conflict-handling section -- these are append-only/single-line-flip files, so a conflict there should be a straightforward compose, not an escalation, unless it hits the >5-file or excluded-path threshold.",
+    "acceptance_criteria": [
+      "All GIT_MERGE.md acceptance criteria met: gh pr merge exited 0 (or PARTIAL correctly reported if gh unavailable), final branch is main, git pull --ff-only clean, git log -1 shows the squash-merge commit, git status clean",
+      "PR body's Validation section carries real counts and attribution, not a bare PASS, per GIT_MERGE.md step 7's requirement",
+      "CI (backend + frontend required status checks) confirmed green before merge, not assumed"
+    ]
+  },
+  "result": {
+    "status": "PENDING",
+    "summary": "",
+    "artifacts_out": [],
+    "issues": [],
+    "git_evidence": {
+      "branch_name": null,
+      "commit_sha_list": [],
+      "remote_branch": null,
+      "push_status": "skipped",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": ""
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

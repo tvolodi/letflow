@@ -8,8 +8,8 @@
   "file": "handoffs/WF03-ISS0736-20260921/step-03c-reviewer.json",
   "created_at": "2026-09-20T19:31:19Z",
   "started_at": "2026-09-20T19:31:19Z",
-  "completed_at": null,
-  "status": "PENDING",
+  "completed_at": "2026-09-20T19:32:15Z",
+  "status": "COMPLETED",
   "priority": "HIGH",
   "context": {
     "stage": "S4",
@@ -45,19 +45,26 @@
     ]
   },
   "result": {
-    "status": "PENDING",
-    "summary": "",
-    "artifacts_out": [],
-    "issues": [],
+    "status": "PASS",
+    "summary": "Reviewed `git diff main...feature/WF03-ISS0736-20260921` -- lib/letflow/plugs/auth_pipeline.ex, lib/letflow/identity.ex, web/src/api/identity.ts, web/src/pages/admin/GroupsPage.tsx.\n\n(1) Idiom/style vs. neighboring code -- PASS. `Identity.list_effective_role_names/2` follows the exact conventions of `verify_api_token/2` (identity.ex:1194-1215): `opts` param with `Keyword.fetch!(opts, :prefix)` at the top, `Repo.*(query, prefix: prefix)`, Ecto.Query macro (from/join/where/select), doc string with a `@spec`, no caching layer -- matches this codebase's established uncached-per-call auth-query shape. `verify_local_account_state/2` in auth_pipeline.ex mirrors `provision_user/3`'s own pattern of independently re-deriving `schema_name` from `tenant_id` via `TenantProvisioning.schema_name_for_tenant/1` rather than threading a new arg through (design explicitly calls this out and the code matches). Error tuple shapes (`{:error, {:account, :inactive}}`, `{:error, {:account, :invalid_tenant_id}}`) follow the same nested-tag convention already used by the sibling `{:error, {:api_token, _reason}}` clause immediately above it in `handle_auth_error/2` -- consistent, not a new pattern. The `with`-chain insertion point (between `provision_user` and `attach_auth_context`) is a minimal, single-clause addition, not a restructure.\n\n(2) Supervision integrity -- CONFIRMED N/A. `git diff --stat` shows only `lib/letflow/identity.ex`, `lib/letflow/plugs/auth_pipeline.ex`, `web/src/api/identity.ts`, `web/src/pages/admin/GroupsPage.tsx`, plus handoff/design docs changed. No supervisor, `Letflow.InstanceSupervisor`, `gen_statem`, or `spawn` touched. This is a synchronous Plug pipeline function addition and an Ecto read query -- no process/isolation concern.\n\n(3) Scope creep -- PASS, none found. Diff stat confirms only files inside `owned_modules` changed (`lib/letflow/api/authorization.ex` was listed in owned_modules but has zero diff -- correctly untouched, consistent with SECURITY-REVIEWER's own finding). Server-side change is exactly AC1's live check, inserted at exactly the point the design specifies, no extra abstraction (no new behaviour, no generic role-caching framework, no config knobs beyond what's needed). GUI change is exactly AC2's one-line signature/route fix. No speculative machinery ahead of REQ-378's 4 ACs.\n\n(4) Decision-record consistency -- checked, no conflict. `docs/migration/decisions/0002-oidc-integration.md` explicitly discusses JWKS caching as the only sanctioned cache in the OIDC path (assent verifies fresh per verification, no cache/TTL/refresh mechanism for anything else) and its line ~173 explicitly frames the problem this fix solves (a JWT's claims being \"cached as a standing trust fact\" is what breaks revocation) -- this diff's uncached-per-request query is directly aligned with, not contrary to, that decision's own stated concern. No decision record establishes a performance/architecture rule against a per-request DB read on the auth path -- `verify_api_token/2` is existing precedent for exactly this shape, cited correctly by both the design doc and ELIXIR-DEV's implementation. `docs/migration/decisions/0006-identity-tables-schema-per-tenant.md`'s schema-per-tenant model is respected via `prefix:`-scoped queries derived from the pipeline's own already-resolved `tenant_id`, not caller input.\n\n(5) Sibling `groupsApi` bug -- not yet filed as its own issue. `docs/issues/ISS-0736.yaml` is this run's own issue record; a grep of `docs/issues/` found no separate issue for the pre-existing, still-broken `/api/v1/admin/groups` prefix shared by `groupsApi.addMembers/.list/.get/.update/.delete/.members` (only `.removeMembers` was fixed here, correctly, per REQ-378's scope). Recommending ORCH file this as a new issue post-merge, tagged with the design doc's own note (`lib/letflow/design/req378-oidc-live-revocation-check.md`) as the pointer to what's already known about it, so it becomes claimable work rather than a finding that only lived in this run's docs.\n\nVerdict: PASS. No rework needed. No BLOCKER, no idiom crutch, no scope creep, no decision conflict. Routing to TEST-DESIGNER.",
+    "artifacts_out": [
+      "handoffs/WF03-ISS0736-20260921/step-03c-reviewer.json"
+    ],
+    "issues": [
+      {
+        "type": "follow-up-issue-recommendation",
+        "description": "groupsApi.addMembers/.list/.get/.update/.delete/.members (web/src/api/identity.ts) all still call the non-existent/broken /api/v1/admin/groups prefix -- same class of defect as the .removeMembers bug fixed in this run, but out of REQ-378's scope. Not yet filed as its own docs/issues/ISS-XXXX.yaml entry. Recommend ORCH file it post-merge."
+      }
+    ],
     "git_evidence": {
-      "branch_name": null,
+      "branch_name": "feature/WF03-ISS0736-20260921",
       "commit_sha_list": [],
-      "remote_branch": null,
-      "push_status": "skipped",
+      "remote_branch": "origin/feature/WF03-ISS0736-20260921",
+      "push_status": "pending",
       "pr_url": null,
       "pr_create_error": null
     },
-    "next_action": ""
+    "next_action": "TEST-DESIGNER"
   },
   "rework_count": 0,
   "max_rework": 3

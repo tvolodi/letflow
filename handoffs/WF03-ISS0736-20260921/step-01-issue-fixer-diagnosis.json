@@ -1,0 +1,66 @@
+{
+  "handoff_id": "c1a1e001-0000-4000-8000-000000000002",
+  "run_id": "WF03-ISS0736-20260921",
+  "workflow_id": "WF-03",
+  "step": "01",
+  "from_agent": "ORCH",
+  "to_agent": "ISSUE-FIXER",
+  "file": "handoffs/WF03-ISS0736-20260921/step-01-issue-fixer-diagnosis.json",
+  "created_at": "2026-09-20T19:11:28Z",
+  "started_at": "2026-09-20T19:11:28Z",
+  "completed_at": null,
+  "status": "PENDING",
+  "priority": "HIGH",
+  "context": {
+    "stage": "S4",
+    "requirement_ids": ["REQ-378"],
+    "requirement_text": {
+      "REQ-378": "See handoffs/WF03-ISS0736-20260921/step-00-git-setup.json context.requirement_text.REQ-378 for the full verbatim requirement text (already committed to main at fb6a8d43 and present on this branch). Summary: acceptance criteria are (1) a tenant_admin action revoking a signed-in business_user's access takes effect on that user's very next request with no sign-out/reload/token-expiry wait, demonstrated by a revoke-then-immediately-retry test with no sleep/token refresh; (2) the revoking action is reachable through Letflow's own web/ GUI, not only Keycloak; (3) the resulting 403 renders through the existing QueryStateBoundary/PermissionDenied contract unchanged; (4) SECURITY-REVIEWER signs off explicitly on the chosen enforcement mechanism before merge."
+    },
+    "related_handoff_ids": ["c1a1e001-0000-4000-8000-000000000001"],
+    "artifacts_in": [
+      "docs/issues/ISS-0736.yaml",
+      "docs/requirements.yaml",
+      "lib/letflow/plugs/auth_pipeline.ex",
+      "lib/letflow/api/authorization.ex",
+      "lib/letflow/identity/role_registry.ex",
+      "lib/letflow/identity.ex",
+      "lib/letflow/oidc/claim_mapping.ex"
+    ],
+    "owned_modules": [
+      "lib/letflow/plugs/auth_pipeline.ex",
+      "lib/letflow/api/authorization.ex",
+      "lib/letflow/identity/role_registry.ex",
+      "lib/letflow/identity.ex",
+      "web/src/pages/admin/UsersPage.tsx",
+      "web/src/pages/admin/GroupsPage.tsx"
+    ]
+  },
+  "task": {
+    "description": "Step 0.5 (registry lookup) + Step 1 (diagnose), combined per WF-03.md. Step 0.5: grep docs/issues/*.yaml for status: resolved entries with similar symptoms (auth/OIDC/role revocation/live-enforcement gaps) -- note in your summary whether a prior match exists and, if so, whether this looks like a recurrence (upgrade severity to at least MAJOR if so). Step 1: independently verify ISS-0736's/REQ-378's claimed root cause by reading the actual source yourself (do not just trust the issue file's prose) -- read lib/letflow/plugs/auth_pipeline.ex's authenticate_oidc/2, lib/letflow/oidc/claim_mapping.ex's map_verified_claims/3, lib/letflow/api/authorization.ex's evaluate_access/2, lib/letflow/identity/role_registry.ex's moduledoc, and lib/letflow/identity.ex's provision_oidc_user/4 and attach_auth_context. Also read the API-token branch's existing live-DB-read precedent this fix should mirror: find and read Letflow.Identity.verify_api_token/2 (grep for it) to understand its per-request revocation-check shape, since REQ-378's suggested mechanism direction is to mirror it for the OIDC branch. Confirm or correct the issue's claimed root cause and file locations. Do NOT implement any fix. Do NOT modify any file except this handoff. Write your diagnosis into result.summary: confirmed root cause (or corrected, if your independent read differs), the exact function(s)/line(s) where the OIDC branch currently ignores Letflow-local state, what the API-token branch's precedent function actually does (signature + revocation-check mechanism), and what a fix needs to change, structured so CODE-DESIGNER can design directly from it.",
+    "acceptance_criteria": [
+      "Step 0.5 registry-lookup result stated explicitly (match found: yes/no, recurrence: yes/no)",
+      "Root cause independently re-derived from source reads, not copied from ISS-0736.yaml's prose -- cite exact module/function names and what you actually read",
+      "Identity.verify_api_token/2's existing live-DB-read mechanism described concretely (this is the precedent CODE-DESIGNER will likely mirror)",
+      "No fix implemented; no file changed other than this handoff",
+      "next_action explicitly routes to CODE-DESIGNER for fix design"
+    ]
+  },
+  "result": {
+    "status": "PENDING",
+    "summary": "",
+    "artifacts_out": [],
+    "issues": [],
+    "git_evidence": {
+      "branch_name": null,
+      "commit_sha_list": [],
+      "remote_branch": null,
+      "push_status": "skipped",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": ""
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

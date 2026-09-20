@@ -343,6 +343,78 @@ resets it back to `nil`), so:
   (per the bullet above, a marker set on *this* first-post-deploy sync is exactly as
   permanent as a marker set at original provisioning time).
 
+## 2.3 Test-assertion impact — three pre-existing tests' `roles == ["VIEWER"]` literal (REWORK 3)
+
+**Verified directly against current source, not assumed** (this rework's own task):
+
+- `Letflow.Api.Authorization.roles_from_strings/1` (`lib/letflow/api/authorization.ex:408-418`)
+  reduces an untrusted string list through a private `role_from_string/1` clause set
+  (`:420-426`) that pattern-matches exactly the six literal role-name strings in
+  `role()`'s closed type (`:195-201`) and returns `nil` for anything else, which the
+  `Enum.reduce/3` accumulator silently drops (`nil -> acc`) — never raises, never widens.
+  `"VIEWER"` matches none of the six clauses, so `roles_from_strings(["VIEWER"])` returns
+  `[]`. Confirmed by reading the function body directly, not inferred.
+- Every call site that feeds `conn.assigns.auth_context.roles` into an actual access
+  decision routes it through `roles_from_strings/1` first — `lib/letflow/plugs/authorize.ex:105`
+  (`Authorization.AccessContext{..., roles: Authorization.roles_from_strings(conn.assigns.auth_context.roles)}`,
+  immediately consumed by `evaluate_access/2` at `:112`), and identically at
+  `lib/letflow/routers/entities.ex:2104` and `lib/letflow/routers/tasks.ex:258`. No
+  call site anywhere in `lib/letflow/` passes the raw `auth_context.roles` string list
+  into `evaluate_access/2` or any `role_allows?/2` check directly — `roles_from_strings/1`
+  is the sole, mandatory gate between "what the token/live-query produced" and "what the
+  access decision sees." `evaluate_access/2` (`authorization.ex:777-778` on) is confirmed
+  the only function making the actual allow/deny decision on this path; it never inspects
+  `conn.assigns.auth_context.roles` itself, only the already-filtered `AccessContext.roles`
+  it's handed.
+- Conclusion: both halves of ORCH's cited reasoning are correct. (a) This requirement's
+  whole point is that the closed-set, permission-granting portion of the role list must
+  come from live Letflow-local state (§1-§2.2), not raw JWT claims — an unrecognized/
+  unmapped claim string like `"VIEWER"` was already inert for authorization purposes
+  under the *old* implementation too (it never survived `roles_from_strings/1`), so its
+  presence or absence in the raw `conn.assigns.auth_context.roles` list is not itself a
+  security property; only what `roles_from_strings/1` outputs is. (b) The new design
+  (§1-§2.2) correctly changes what `conn.assigns.auth_context.roles` contains — from
+  "whatever strings the bearer JWT claimed" to "only role names presently backed by a
+  `group_members` row for this user" — and for the `TokenVerifierDouble` fixture used by
+  all three tests below (`test/support/token_verifier_double.ex:36`, which mints
+  `realm_access.roles: ["VIEWER"]` and nothing else), none of the three tests' fixture
+  setup (`insert_tenant_for_realm!/1` / `insert_bpm_default_tenant!/0`) seeds any
+  `tenant_role` row named `"VIEWER"` or any `group_members` row for the provisioned user
+  — confirmed by reading each test's own setup helpers, not assumed — so §2.1's live
+  query and §2.2's one-time sync both correctly resolve to zero matching groups for this
+  fixture, and `conn.assigns.auth_context.roles` becomes `[]` under the new design where
+  it was `["VIEWER"]` under the old one. This is an intentional, in-scope consequence of
+  REQ-378's contract change (the raw list is no longer claim-pass-through; it is now the
+  live-resolved set), not a regression.
+
+**The exact three pre-existing tests and their required literal change** — in each, only
+the cited line's expected value changes; every other assertion in each test (the 403/
+`refute conn.halted` outcome, `tenant_id`, `user_id`, `persisted`/`body` checks) is
+**unchanged**, because the deny/allow outcome downstream of `roles_from_strings/1` was
+already `[]`-equivalent for `"VIEWER"` even before this fix — only the *unfiltered* list
+these three tests happen to assert against is changing shape:
+
+| Test file | Line | Current assertion | Required new assertion | Other assertions in this test |
+|---|---|---|---|---|
+| `test/letflow/plugs/auth_pipeline_test.exs` | 167 | `assert roles == ["VIEWER"]` | `assert roles == []` | Unchanged: `refute conn.halted` (:164), `assert tenant_id == tenant.id` (:166), the `Repo.get(User, ...)`/`persisted.auth_source == :oidc` checks (:173-175) — this test calls `AuthPipeline` directly (not the full router/`Authorize` plug), so it was never a 403 test; it only asserts what reaches `conn.assigns[:auth_context]`, which is exactly the value this design changes |
+| `test/letflow/plugs/api_pipeline_integration_test.exs` | 130 | `assert conn.assigns.auth_context.roles == ["VIEWER"]` | `assert conn.assigns.auth_context.roles == []` | Unchanged: `assert conn.status == 403` (:128), `assert conn.assigns.auth_context.tenant_id == tenant.id` (:129), `assert is_binary(conn.assigns.auth_context.user_id)` (:131) — the 403 already came from `roles_from_strings/1` dropping `"VIEWER"` before this fix; it still does, now for the same reason at both the raw-list and live-query layers |
+| `test/letflow/routers/req077_promotion_pipeline_test.exs` | 1053 | `assert conn.assigns.auth_context.roles == ["VIEWER"]` | `assert conn.assigns.auth_context.roles == []` | Unchanged: `assert conn.status == 403` (:1051), `assert conn.assigns.auth_context.tenant_id == tenant.id` (:1052), `body["detail"] == "insufficient permissions"` and `refute Map.has_key?(body, "entries")` (:1056-1057) |
+
+`test/specs/REQ-021.md` (:136) and `test/specs/REQ-077.md` (:169) are prose spec
+documents that narrate the same fixture's `["VIEWER"]` output for human orientation, not
+executable assertions — CODE-DESIGN-VALIDATOR/DOC-UPDATER should confirm whether updating
+their prose to say `[]` is warranted for accuracy, but they carry no test-runner
+pass/fail consequence and are not part of "the 3 tests" this rework scopes.
+
+**Authorization to implement directly:** this is authorized as part of REQ-378's own
+implementation, for ELIXIR-DEV to make directly in the implementation step that also
+lands §1-§2.2 — **not** a separate TEST-DESIGNER task. All three edits are literal
+expected-value corrections to pre-existing regression tests, updating what they assert
+`conn.assigns.auth_context.roles` equals to match REQ-378's deliberately changed, in-scope
+contract (§1-§2's whole point: that field stops being raw-claim pass-through). No new
+test scenario, fixture, or coverage is being added — TEST-DESIGNER's role (writing new
+test specs/coverage) is not implicated.
+
 ## 3. AC3 — 403 renders through the existing contract unchanged (task item d)
 
 **Confirmed: no `web/` renderer change is needed**, and none is proposed. Both new

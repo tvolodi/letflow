@@ -8,8 +8,8 @@
   "file": "handoffs/WF03-ISS0736-20260921/step-02-code-designer-rework3.json",
   "created_at": "2026-09-20T21:43:56Z",
   "started_at": "2026-09-20T21:43:56Z",
-  "completed_at": null,
-  "status": "PENDING",
+  "completed_at": "2026-09-20T21:45:44Z",
+  "status": "COMPLETED",
   "priority": "HIGH",
   "context": {
     "stage": "S4",
@@ -43,19 +43,21 @@
     ]
   },
   "result": {
-    "status": "PENDING",
-    "summary": "",
-    "artifacts_out": [],
+    "status": "PASS",
+    "summary": "Hypothesis verified against actual source, confirmed correct: Authorization.roles_from_strings/1 (lib/letflow/api/authorization.ex:408-426) pattern-matches only the six literal strings in role()'s closed type and drops anything else (returns []); every call site that feeds auth_context.roles into an access decision (plugs/authorize.ex:105, routers/entities.ex:2104, routers/tasks.ex:258) routes it through roles_from_strings/1 first, and evaluate_access/2 (authorization.ex:777) only ever sees that filtered output, never the raw list. \"VIEWER\" (minted by test/support/token_verifier_double.ex:36) was therefore already inert for authorization purposes under the OLD implementation too -- it never survived roles_from_strings/1. None of the 3 tests' fixtures seed a tenant_role/group_members row for \"VIEWER\", so under the NEW live-query design (§1-§2.2) conn.assigns.auth_context.roles correctly resolves to [] instead of [\"VIEWER\"]. Wrote explicit new §2.3 'Test-assertion impact' into lib/letflow/design/req378-oidc-live-revocation-check.md naming all 3 files/lines (auth_pipeline_test.exs:167, api_pipeline_integration_test.exs:130, req077_promotion_pipeline_test.exs:1053), the exact literal change (roles == [\"VIEWER\"] -> roles == []) for each, confirmation every other assertion in each test (403 status, tenant_id, user_id, persisted-user checks, body detail) is unchanged, and explicit authorization for ELIXIR-DEV to make these 3 literal edits directly as part of REQ-378's implementation step (not a separate TEST-DESIGNER task, since no new coverage is added -- only pre-existing assertions' expected values corrected to match REQ-378's deliberately changed, in-scope contract). No implementation code added to the design doc; only @spec-level signatures and prose, matching §2-§2.2's existing style.",
+    "artifacts_out": [
+      "lib/letflow/design/req378-oidc-live-revocation-check.md"
+    ],
     "issues": [],
     "git_evidence": {
-      "branch_name": null,
+      "branch_name": "feature/WF03-ISS0736-20260921",
       "commit_sha_list": [],
-      "remote_branch": null,
-      "push_status": "skipped",
+      "remote_branch": "origin/feature/WF03-ISS0736-20260921",
+      "push_status": "pending",
       "pr_url": null,
       "pr_create_error": null
     },
-    "next_action": ""
+    "next_action": "Route to CODE-DESIGN-VALIDATOR for final re-gate (step-02b rework3) of the amended design doc, specifically §2.3."
   },
   "rework_count": 3,
   "max_rework": 3,

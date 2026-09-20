@@ -1,6 +1,7 @@
 /** TanStack Query hooks — query key factories + hooks for all APIs */
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { definitionsApi } from '@/api/definitions'
+import { definitionRollbackApi } from '@/api/definitionRollback'
 import type { DefinitionStatus, CreateDefinitionRequest } from '@/types/api'
 import { queryKeys } from '@/api/queryKeys'
 
@@ -61,6 +62,26 @@ export function useArchiveDefinition() {
     onSuccess: (_data, id) => {
       qc.invalidateQueries({ queryKey: definitionKeys.detail(id) })
       qc.invalidateQueries({ queryKey: definitionKeys.list({}) })
+    },
+  })
+}
+
+/** REQ-371: rollback/withdrawal mutation. See
+ *  `lib/letflow/design/req371-rollback-withdrawal-screen.md` §3 — no
+ *  `onSuccess` local change-history write here (`DefinitionRollbackPage.tsx`
+ *  owns that as component-local state, §7.2), only the query invalidations
+ *  needed so an already-mounted `InstanceBoardPage.tsx` picks up the
+ *  restored active version (§1.6/AC4).
+ */
+export function useRollbackDefinition() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (args: { processKey: string; targetVersion: string }) =>
+      definitionRollbackApi.rollback(args.processKey, { target_version: args.targetVersion }),
+    onSuccess: (_data, args) => {
+      qc.invalidateQueries({ queryKey: definitionKeys.active(args.processKey) })
+      qc.invalidateQueries({ queryKey: definitionKeys.list({}) })
+      qc.invalidateQueries({ queryKey: queryKeys.definitions.versions(args.processKey) })
     },
   })
 }

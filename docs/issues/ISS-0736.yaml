@@ -1,0 +1,89 @@
+id: ISS-0736
+title: >
+  Tenant-admin role/status revocation via Letflow's own GUI has zero live
+  enforcement effect on an OIDC-authenticated session
+discovered_by: ORCH
+discovered_in_run: gui-review-2026-09-20-renderer-permission-denied-surface
+discovered_at: "2026-09-20T00:00:00Z"
+severity: BLOCKER
+description: >
+  Discovered during the GUI-review pass of
+  test/fixtures/uat/scenarios/platform/renderer-permission-denied-surface.yaml
+  (PW-13). Before driving any browser session against qa.bizdala.com, the
+  scenario's own step 2 ("tenant_admin removes the operations manager's
+  access... via gui") was checked against actual source, per this sweep's
+  standing instruction to verify the underlying feature exists rather than
+  assume it from the scenario text.
+
+  It does not exist as a real, enforcing capability. Full trace:
+
+  `Letflow.Plugs.AuthPipeline.authenticate_oidc/2` populates
+  `conn.assigns[:auth_context][:roles]` exclusively from
+  `Letflow.Oidc.ClaimMapping.map_verified_claims/3`'s
+  `resolve_roles(claims, config.roles_claim_paths)` -- i.e. directly and only
+  from the bearer JWT's own claims, re-extracted fresh every request but
+  never cross-checked against any Letflow-local table.
+  `Letflow.Api.Authorization.evaluate_access/2` (the sole authorization
+  decision point for every `/api/v1` route) takes exactly this
+  claims-derived role list as input.
+
+  `Letflow.Identity.RoleRegistry` -- which backs
+  `web/src/pages/admin/UsersPage.tsx` / `GroupsPage.tsx`'s role/group
+  assignment UI -- states in its own moduledoc: "this module has no
+  coupling to the OIDC/claim-mapping pipeline." Confirmed independently by
+  reading `Letflow.Identity.provision_oidc_user/4`: its `attach_auth_context`
+  call uses `identity_context.roles` (JWT-derived), never the provisioned
+  DB user row's own role assignment.
+
+  Net effect: for every OIDC-authenticated session (the normal browser
+  login path for every human actor in these UAT scenarios), Letflow's own
+  admin GUI for managing users/roles/groups/account-status (including
+  `POST /users/:id/status`, REQ-073) has ZERO live enforcement effect --
+  changing a user's role or deactivating their account through this GUI
+  neither revokes access immediately nor eventually, because
+  `evaluate_access/2` never reads what that GUI wrote. The only thing that
+  actually determines an OIDC session's permissions is the external IdP's
+  (Keycloak) token claims, and Letflow's own `web/` app has no screen for
+  editing those at all.
+
+  This means the renderer-permission-denied-surface scenario's step 2 is
+  not currently GUI-drivable against a real, meaningful enforcement change
+  -- not a missing widget, but a missing backend wire-up between an
+  existing admin UI and the authorization decision it visually implies it
+  controls.
+affected_files:
+  - lib/letflow/plugs/auth_pipeline.ex
+  - lib/letflow/api/authorization.ex
+  - lib/letflow/identity/role_registry.ex
+  - lib/letflow/identity.ex (provision_oidc_user/4)
+  - web/src/pages/admin/UsersPage.tsx
+  - web/src/pages/admin/GroupsPage.tsx
+severity_rationale: >
+  BLOCKER: the tenant-admin "manage users/roles" GUI visually implies it
+  controls access, but for the dominant (OIDC) login path it controls
+  nothing -- a tenant admin who deactivates or role-downgrades a
+  compromised or offboarded user via this GUI would reasonably believe
+  access was cut off when it was not. This is exactly the "revoking
+  somebody's access would stop being a reliable control" failure mode
+  EO-001's own on_fail.business_impact describes, discovered one level
+  below where that expected outcome could even be exercised.
+fix_direction: >
+  Needs a CODE-DESIGNER pass (not a mechanical fix) — see REQ-378, filed
+  alongside this issue, for the acceptance contract. Likely shape: give
+  AuthPipeline's OIDC branch a live, per-request, uncached local check
+  (mirroring the API-token branch's existing `Identity.verify_api_token/2`
+  live-DB-read precedent) that can short-circuit to Deny403/401
+  independent of the JWT's own claims, so a Letflow-local
+  revoke/deactivate action takes effect on the very next request without
+  waiting for token expiry or re-login.
+process_note: >
+  No browser session was driven against qa.bizdala.com for this scenario --
+  per this sweep's process, the underlying capability was verified absent
+  from source first, so path 2 (file + report + move on) was taken instead
+  of path 3 (drive the real flow). The renderer state-machine contract
+  itself (QueryStateBoundary/PermissionDenied/classifyError, REQ-362) was
+  independently verified correct and NOT part of this gap — see
+  test/uat-reports/gui-review-2026-09-20-renderer-permission-denied-surface.md.
+queue_ref: N/A
+github_ref: N/A
+status: open

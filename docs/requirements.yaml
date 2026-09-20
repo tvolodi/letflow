@@ -28002,3 +28002,94 @@ requirements:
       - "the screen is reachable only to a PLATFORM_ADMIN-equivalent role from the operator console navigation"
       - "web/tests/e2e/pipelines/platform-partition-retention-drop.pipeline.e2e.spec.ts is authored against this real screen and passes"
     depends_on: [REQ-376]
+
+  - id: REQ-378
+    title: "Tenant-admin role/status revocation has no live effect on an OIDC-authenticated session (renderer-permission-denied-surface gap)"
+    owner: ELIXIR-DEV
+    status: pending
+    stage: S4
+    impl_order: 735  # Registered 2026-09-20 by ORCH from this GUI-review UAT finding.
+    description: >
+      Filed from the GUI-review sweep of
+      test/fixtures/uat/scenarios/platform/renderer-permission-denied-surface.yaml
+      (PW-13). See test/uat-reports/gui-review-2026-09-20-renderer-permission-denied-surface.md
+      for the full trace. SECURITY-RELEVANT — route through SECURITY-REVIEWER
+      before merge, not just REVIEWER.
+
+      WHAT EXISTS TODAY, verified 2026-09-20 by reading source (no code
+      changed to reach this conclusion):
+
+      1. The renderer state-machine contract itself (REQ-362) IS built and
+         correct: `web/src/components/ui/QueryStateBoundary.tsx` maps a
+         401/403 API response to `PermissionDenied` (`web/src/components/ui/PermissionDenied.tsx`),
+         which shows only "You do not have access to this area. Contact
+         your tenant administrator." plus a single role-appropriate link
+         (My Tasks / Go to Exams) -- no leaked content, confirmed by reading
+         the component (5-line render, no props threading any resource
+         data in). `web/src/utils/classifyError.ts` maps 401 AND 403 to the
+         identical `permission-denied` state, so a caller cannot distinguish
+         "not authenticated" from "authenticated but not authorized" by
+         watching the rendered screen (EO-001/EO-002 both satisfiable by the
+         existing renderer, since the frontend never branches on which
+         status code caused the state).
+
+      2. The action the scenario needs to drive
+         ("tenant_admin removes the operations manager's access to an
+         area, via GUI, while he stays signed in") has NO real, enforcing
+         GUI path today. Traced the full chain:
+         `Letflow.Plugs.AuthPipeline.authenticate_oidc/2` populates
+         `conn.assigns[:auth_context][:roles]` EXCLUSIVELY from
+         `Letflow.Oidc.ClaimMapping.map_verified_claims/3`'s
+         `resolve_roles(claims, config.roles_claim_paths)` -- i.e. directly
+         and only from the bearer JWT's own claims, re-extracted fresh on
+         every request but never cross-checked against any Letflow-local
+         table. `Letflow.Api.Authorization.evaluate_access/2` (the sole
+         authorization decision point) takes exactly this claims-derived
+         role list as input. Separately, `Letflow.Identity.RoleRegistry`
+         (backing `web/src/pages/admin/UsersPage.tsx` /
+         `GroupsPage.tsx`'s role/group assignment UI, and REQ-073's
+         `POST /users/:id/status` account-status endpoint) states in its
+         own moduledoc: "this module has no coupling to the OIDC/claim-
+         mapping pipeline" -- confirmed by reading `provision_oidc_user/4`,
+         whose `attach_auth_context` call uses `identity_context.roles`
+         (JWT-derived), never the provisioned DB user row's own role
+         assignment. Net effect: for every OIDC-authenticated session
+         (the normal browser login path every human actor in these UAT
+         scenarios uses), Letflow's OWN admin GUI for managing
+         users/roles/groups/account-status has **zero live enforcement
+         effect** -- it neither revokes access immediately nor eventually,
+         because the authorization decision never reads what it wrote.
+         The only mechanism that could actually change access for an
+         OIDC session is editing the external IdP's (Keycloak) role/group
+         claims directly -- something Letflow's own `web/` app has no
+         screen for at all.
+
+      3. Separately (lesser, already-somewhat-expected OIDC caveat): even
+         an IdP-side change would not propagate until the next token
+         issuance. `web/src/auth/AuthProvider.tsx`'s `accessTokenExpiring`
+         handler calls `signinSilent()` and updates the in-memory bearer
+         token via `setToken(newToken)`, but never re-decodes or updates
+         `session.roles` from the renewed token -- so even
+         server-side enforcement catching up on token refresh would leave
+         client-side role-gated UI (nothing currently role-gates
+         navigation client-side, per `ProtectedRoute.tsx`, but any future
+         client-side role check reading `session.roles` would be silently
+         stale after a silent renew).
+
+      THIS REQUIREMENT covers only gap 2 above (the actual enforcement
+      break) -- gap 3 is a real but secondary staleness bug, split out
+      separately if REVIEWER/SECURITY-REVIEWER judge it distinct scope
+      once 2 is designed. A CODE-DESIGNER pass is needed first to choose
+      the mechanism (e.g.: AuthPipeline's OIDC branch additionally
+      cross-checks a live Letflow-local per-user record — mirroring the
+      already-live, per-request DB check the API-token branch performs
+      via `Identity.verify_api_token/2` — and denies/short-circuits when
+      that record says revoked/inactive, independent of the JWT's own
+      claims and without waiting for token expiry) — this requirement
+      does not prescribe the design, only the observable contract below.
+    acceptance_criteria:
+      - "a tenant_admin action that revokes a signed-in business_user's access to a specific area takes effect on that user's very next request, without requiring the user to sign out, reload, or wait for the access token to expire -- demonstrated by a test that revokes and immediately retries with no sleep or token refresh"
+      - "the revoking action is reachable through Letflow's own web/ GUI (not only via direct Keycloak administration), consistent with this scenario's step 2 ('via: gui')"
+      - "the 403 that results renders through the existing QueryStateBoundary/PermissionDenied contract unchanged -- no new renderer state, no leaked content"
+      - "SECURITY-REVIEWER signs off explicitly on the chosen enforcement mechanism before merge, given this closes a real authorization-enforcement gap, not just a UI gap"
+    depends_on: []

@@ -127,7 +127,7 @@ defmodule Letflow.Plugs.ApiPipelineIntegrationTest do
       # PLATFORM_ADMIN-allowed half of the same :Unknown branch.
       assert conn.status == 403
       assert conn.assigns.auth_context.tenant_id == tenant.id
-      assert conn.assigns.auth_context.roles == ["VIEWER"]
+      assert conn.assigns.auth_context.roles == []
       assert is_binary(conn.assigns.auth_context.user_id)
     end
   end

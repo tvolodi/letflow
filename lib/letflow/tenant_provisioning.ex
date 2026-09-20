@@ -556,7 +556,9 @@ defmodule Letflow.TenantProvisioning do
     {20_260_911_000_001, Letflow.Repo.Migrations.CreateEntityRecordAttachments,
      "20260911000001_create_entity_record_attachments.exs"},
     {20_260_917_000_001, Letflow.Repo.Migrations.CreateHelpContent,
-     "20260917000001_create_help_content.exs"}
+     "20260917000001_create_help_content.exs"},
+    {20_260_921_000_001, Letflow.Repo.Migrations.AddRoleClaimsSyncedAtToUsers,
+     "20260921000001_add_role_claims_synced_at_to_users.exs"}
   ]
 
   @doc """

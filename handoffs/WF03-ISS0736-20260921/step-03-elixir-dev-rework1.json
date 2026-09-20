@@ -8,8 +8,8 @@
   "file": "handoffs/WF03-ISS0736-20260921/step-03-elixir-dev-rework1.json",
   "created_at": "2026-09-20T21:49:40Z",
   "started_at": "2026-09-20T21:49:40Z",
-  "completed_at": null,
-  "status": "PENDING",
+  "completed_at": "2026-09-21T02:58:00Z",
+  "status": "COMPLETED",
   "priority": "HIGH",
   "context": {
     "stage": "S4",
@@ -45,19 +45,27 @@
     ]
   },
   "result": {
-    "status": "PENDING",
-    "summary": "",
-    "artifacts_out": [],
+    "status": "PASS",
+    "summary": "Implemented design §2.2 (the one-time claims-to-group_members sync closing the JIT-provisioning gap) and §2.3 (3 pre-existing test-assertion corrections). (A) Added migration priv/repo/migrations/20260921000001_add_role_claims_synced_at_to_users.exs (tenant-scoped, `if prefix() do`, nullable utc_datetime_usec column, no default/backfill) and registered it in Letflow.TenantProvisioning.tenant_scoped_migrations/0's manifest. Added `field(:role_claims_synced_at, :utc_datetime_usec)` to lib/letflow/identity/user.ex (not added to any existing changeset, per §2.2.1). Added Letflow.Identity.sync_role_claims_from_token/3 (public) and resolve_group_ids_for_role_names/2 (private) to lib/letflow/identity.ex, matching §2.2.2's spec exactly: resolves claimed role names to group ids via TenantRole, inserts group_members rows via the existing insert_or_fetch_group_member/3 private helper (not add_group_member/3's public wrapper), stamps role_claims_synced_at inside one Repo.transaction/1 (Ecto.Multi), returns the original unmodified user on any failure (self-healing per §2.2.2). Wired the 3 call sites per §2.2.3: insert_or_fetch/4's created:true branch (unconditional sync, new row's marker is always nil), and both upsert_by_external_identity/4's and re_select_on_conflict/3's %User{} = existing branches (conditional on role_claims_synced_at == nil). (B) Changed exactly the 3 named assertion lines (auth_pipeline_test.exs:167, api_pipeline_integration_test.exs:130, req077_promotion_pipeline_test.exs:1053) from `roles == [\"VIEWER\"]` to `roles == []` — verified via git diff that no other line in any of the 3 files changed. `mix compile --warnings-as-errors` passed clean (0 warnings). Migration applied cleanly both against the default test-env DB (MIX_ENV=test mix ecto.migrate — ran, 1 migration, 0.0s) and inside a freshly-provisioned tenant schema during the real test run. Full targeted test run (auth_pipeline_test.exs + api_pipeline_integration_test.exs + req077_promotion_pipeline_test.exs + iss0736_oidc_live_revocation_test.exs): initially collided with a concurrent, still-running sibling `mix test` process (PID 68880, started 02:25:25, holding a stale `tenant_template` schema built before this migration existed) sharing the default letflow_test DB — re-ran against an isolated MIX_TEST_PARTITION=_elixirdev_iss0736 database (created, migrated including the new migration, then dropped after the run) to avoid racing that sibling session per this machine's concurrent-session policy. Real output: `Finished in 64.5 seconds (0.00s async, 64.5s sync)` / `Result: 48 passed` / 0 failures. web/src/api/__tests__/identity.removeMembers.test.ts: `Test Files 1 passed (1)` / `Tests 2 passed (2)` — unaffected, as expected.",
+    "artifacts_out": [
+      "priv/repo/migrations/20260921000001_add_role_claims_synced_at_to_users.exs",
+      "lib/letflow/identity/user.ex",
+      "lib/letflow/identity.ex",
+      "lib/letflow/tenant_provisioning.ex",
+      "test/letflow/plugs/auth_pipeline_test.exs",
+      "test/letflow/plugs/api_pipeline_integration_test.exs",
+      "test/letflow/routers/req077_promotion_pipeline_test.exs"
+    ],
     "issues": [],
     "git_evidence": {
-      "branch_name": null,
+      "branch_name": "feature/WF03-ISS0736-20260921",
       "commit_sha_list": [],
-      "remote_branch": null,
-      "push_status": "skipped",
+      "remote_branch": "origin/feature/WF03-ISS0736-20260921",
+      "push_status": "ok",
       "pr_url": null,
       "pr_create_error": null
     },
-    "next_action": ""
+    "next_action": "SECURITY-REVIEWER: re-review of the §2.2/§2.3 delta on top of the already-implemented §1-§2.1 (this touches the OIDC auth path's account/role provisioning again, per REQ-378 AC4 and this design's own §2.2.1 security note on role_claims_synced_at's write-only-by-2.2.2 posture)."
   },
   "rework_count": 1,
   "max_rework": 3

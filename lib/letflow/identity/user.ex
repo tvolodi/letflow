@@ -42,6 +42,7 @@ defmodule Letflow.Identity.User do
     field(:auth_source, Ecto.Enum, values: [:internal, :oidc], default: :internal)
     field(:external_id, :string)
     field(:external_realm, :string)
+    field(:role_claims_synced_at, :utc_datetime_usec)
 
     timestamps()
   end

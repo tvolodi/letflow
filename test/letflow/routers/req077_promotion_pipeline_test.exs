@@ -1050,7 +1050,7 @@ defmodule Letflow.Routers.Req077PromotionPipelineTest do
 
       assert conn.status == 403
       assert conn.assigns.auth_context.tenant_id == tenant.id
-      assert conn.assigns.auth_context.roles == ["VIEWER"]
+      assert conn.assigns.auth_context.roles == []
 
       body = Jason.decode!(conn.resp_body)
       assert body["detail"] == "insufficient permissions"

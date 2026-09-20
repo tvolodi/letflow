@@ -164,7 +164,7 @@ defmodule Letflow.Plugs.AuthPipelineTest do
       refute conn.halted
       assert %{user_id: user_id, tenant_id: tenant_id, roles: roles} = conn.assigns[:auth_context]
       assert tenant_id == tenant.id
-      assert roles == ["VIEWER"]
+      assert roles == []
 
       # Re-select from Postgres directly, rather than trusting the in-memory assign —
       # matches identity_test.exs's own persistence-check convention. Must pass

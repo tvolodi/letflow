@@ -1,0 +1,46 @@
+{
+  "handoff_id": "b2c3d4e5-0001-4000-8000-000000000003",
+  "run_id": "WF02-REQ373-20260921",
+  "workflow_id": "WF-02",
+  "step": "01b",
+  "from_agent": "ORCH",
+  "to_agent": "CODE-DESIGN-VALIDATOR",
+  "file": "handoffs/WF02-REQ373-20260921/step-01b-design-gate.json",
+  "created_at": "2026-09-21T17:21:21Z",
+  "started_at": "2026-09-21T17:21:21Z",
+  "completed_at": null,
+  "status": "IN_PROGRESS",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S6",
+    "requirement_ids": ["REQ-373"],
+    "requirement_text": {
+      "REQ-373": "See handoffs/WF02-REQ373-20260921/step-01-code-designer.json's context.requirement_text for the full text -- not restated here to avoid drift; read it there."
+    },
+    "related_handoff_ids": ["handoffs/WF02-REQ373-20260921/step-01-code-designer.json"],
+    "artifacts_in": [
+      "lib/letflow/design/req373-service-catalog-version-lifecycle.md",
+      "lib/letflow/service_catalog.ex",
+      "lib/letflow/service_catalog/entry.ex",
+      "lib/letflow/engine/pin_resolver.ex",
+      "lib/letflow/engine.ex"
+    ],
+    "owned_modules": []
+  },
+  "task": {
+    "description": "Perform WF-02 Step 1b (design gate, hard gate) for REQ-373 per docs/agents/workflows/WF-02_requirement_implementation.md and your own role file .claude/agents/code-design-validator.md. Read lib/letflow/design/req373-service-catalog-version-lifecycle.md INDEPENDENTLY and in full -- do not read CODE-DESIGNER's handoff result.summary as a substitute for reading the actual design doc. For each of REQ-373's 8 acceptance criteria (in task.acceptance_criteria below), verify it has a corresponding, unambiguous design element (no TBD/deferral). Verify: function signatures fully specified (name, inputs, outputs, error cases); error handling shape stated; cross-module dependencies listed; NO implementation code present anywhere in the doc (no literal .ex code blocks with function bodies, case/do/end blocks, or literal clause implementations -- signatures and type shapes only). Specifically check the design's own flagged issues: (1) the schema-decision reasoning (in-place columns + sibling table vs. composite key) is sound and doesn't silently break any of service_catalog.ex's 5 existing public functions; (2) AC4's retire-vs-fallback ambiguity is genuinely resolved, not left implicit; (3) the PinResolver.Lookup behaviour callback contract is correctly understood and correctly designed against (re-read lib/letflow/engine/pin_resolver.ex yourself to confirm, don't trust the design doc's own claim about it); (4) publish/retire route/permission design correctly reuses the existing :AdminServicesManage permission by name, not inventing one. FAIL immediately on any check failure -- no partial credit. Set this handoff's status to COMPLETED and fill result with your genuine independent verdict; commit and push the handoff to git before ending your turn.",
+    "acceptance_criteria": [
+      "service_catalog entries carry a version identity and an ACTIVE/RETIRED status, with the chosen schema (composite key vs. status+sibling table) stated explicitly in the moduledoc along with the reasoning, proven by a migration and a schema test",
+      "publishing a new version of an existing service_id does not alter or invalidate any already-resolved pinned_version entry recorded in a prior INSTANCE_STARTED event, proven by a test that resolves a pin, publishes a new version, and re-derives the same instance's effective pin set unchanged",
+      "a new case created after a publish resolves the newly published version via Letflow.Engine.PinResolver.resolve/4's real (non-default) Lookup, proven by a test",
+      "retiring a version prevents any NEW resolution from choosing it (a fresh resolve/4 call against the retired ref fails or falls through to the current version, whichever this requirement's own design specifies -- stated explicitly, not left ambiguous) while an instance already pinned to the retired version continues to resolve via pin_for/3 with no error, proven by a test covering both sides",
+      "Engine.create/2's pin_lookup/2 helper is wired to the real catalog-backed Lookup for catalog_entry references in place of PinResolver.default_lookup/0, proven by an integration test that starts a real instance referencing a SERVICE_TASK's service_id and confirms a :resolved (not :unresolved_catalog_ref-failing) pin is recorded",
+      "publish/retire operations are gated behind the already-shipped :AdminServicesManage permission (Letflow.Api.Authorization), not a newly invented permission name, proven by a test",
+      "PLC-01/module_ref catalog versioning is explicitly named as still out of scope in the moduledoc, with a citation of pin_resolver.ex's own existing SCOPE GAP language, not silently expanded into this requirement's scope",
+      "mix letflow.check passes, with real output quoted"
+    ]
+  },
+  "result": null,
+  "rework_count": 0,
+  "max_rework": 3
+}

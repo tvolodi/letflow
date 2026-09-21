@@ -1300,6 +1300,63 @@ defmodule Letflow.IdentityTest do
     end
   end
 
+  describe "list_effective_role_names/2 (ISS-0774 T2 — design §2.4/§3)" do
+    # docs/issues/ISS-0774.yaml: pre-fix, this query read tenant_role.name
+    # unfiltered by naming domain, so a user whose ONLY tenant_role membership was
+    # a process-definition HUMAN_TASK routing name (e.g. "role-ops-manager" from
+    # test/fixtures/simulation/swiftroute/process_route_approval.yaml) had that
+    # name feed straight into Authorization.roles_from_strings/1, which then
+    # silently dropped it (role_from_string/1's closed set), reducing their
+    # platform-role set to [] with no distinguishing signal from "genuinely no
+    # roles at all". This is the direct proof that the fix's kind: :platform_role
+    # filter (lib/letflow/identity.ex:702) is the actual mechanism closing that
+    # gap -- isolated from any router/plug machinery, unlike T4 in
+    # test/letflow/routers/tasks_test.exs which only confirms the request-time
+    # behavior structurally.
+    defp bind_role_and_membership!(schema_name, user_id, name, kind) do
+      {:ok, group} =
+        Identity.create_group(
+          %{"name" => "iss0774-t2-#{kind}-#{Ecto.UUID.generate()}"},
+          prefix: schema_name
+        )
+
+      {:ok, _role} =
+        %Letflow.Identity.TenantRole{}
+        |> Letflow.Identity.TenantRole.changeset(%{name: name, kind: kind, group_id: group.id})
+        |> Repo.insert(prefix: schema_name)
+
+      {:ok, _member} = Identity.add_group_member(group.id, user_id, prefix: schema_name)
+
+      group
+    end
+
+    test "a user holding both a :platform_role-kind and a :process_routing_role-kind tenant_role only has the platform_role-kind name appear" do
+      %{tenant: tenant, schema_name: schema_name} = provisioned_tenant!()
+      ctx = identity_context()
+      config = jit_config()
+
+      {:ok, %{user: user, created: true}} =
+        Identity.provision_oidc_user(ctx, tenant.id, config, prefix: schema_name)
+
+      # Same shape as the SwiftRoute/T-0140 fixture: a process-routing role name
+      # ("role-ops-manager") that is NOT one of
+      # Letflow.Api.Authorization.roles/0's six platform-role literals.
+      bind_role_and_membership!(schema_name, user.id, "role-ops-manager", :process_routing_role)
+
+      # Process-routing-only: effective platform role names is [], not a list
+      # containing the routing name -- this is the exact bug ISS-0774 fixed.
+      assert Identity.list_effective_role_names(user.id, prefix: schema_name) == []
+
+      bind_role_and_membership!(schema_name, user.id, "TASK_WORKER", :platform_role)
+
+      # Adding the companion platform role surfaces ONLY it -- the process-routing
+      # name never appears, regardless of how many of it the user holds.
+      assert Identity.list_effective_role_names(user.id, prefix: schema_name) == [
+               "TASK_WORKER"
+             ]
+    end
+  end
+
   # Minimal local helper mirroring Ecto's own test-helper convention (avoids pulling
   # in a full Phoenix-style ConnCase/errors_on just for this one assertion).
   defp errors_on(changeset) do

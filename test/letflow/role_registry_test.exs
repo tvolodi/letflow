@@ -461,6 +461,166 @@ defmodule Letflow.Identity.RoleRegistryTest do
     end
   end
 
+  describe "ISS-0774 T1 — upsert_role/4 kind-conditional name validation (design §2.3/§3)" do
+    # docs/issues/ISS-0774.yaml root cause: tenant_role conflated a CLOSED
+    # platform-permission-role namespace (Letflow.Api.Authorization.roles/0's six
+    # literals) with an OPEN-ended process-routing-role namespace (arbitrary
+    # process-definition-chosen HUMAN_TASK role names, e.g. "role-ops-manager" from
+    # test/fixtures/simulation/swiftroute/process_route_approval.yaml). Pre-fix,
+    # upsert_role/3 took no `kind` at all and validated only format, so a typo'd
+    # platform-role grant (e.g. "PLATFORM_ADMN") would silently create a tenant_role
+    # row nothing downstream (Authorization.role_from_string/1's closed set) would
+    # ever resolve -- a dead binding an operator would have no signal about. This
+    # describe block proves upsert_role/4's asymmetric validation: kind: :platform_role
+    # rejects loudly (§2.3), kind: :process_routing_role accepts anything
+    # format-valid (open-ended domain, unchanged from the old behavior).
+    test "kind: :platform_role with a name IN Authorization.roles/0's six literals succeeds",
+         ctx do
+      group = insert_group!(ctx)
+
+      assert {:ok, %TenantRole{name: "TASK_WORKER", kind: :platform_role}} =
+               RoleRegistry.upsert_role("TASK_WORKER", :platform_role, group.id,
+                 prefix: ctx.schema_name
+               )
+    end
+
+    test "kind: :platform_role with a name NOT in the closed set fails loudly with {:error, :name_not_a_recognized_platform_role} -- not a silent dead binding",
+         ctx do
+      group = insert_group!(ctx)
+      mistyped = "PLATFORM_ADMN"
+
+      refute mistyped in Enum.map(Letflow.Api.Authorization.roles(), &Atom.to_string/1)
+
+      assert {:error, :name_not_a_recognized_platform_role} =
+               RoleRegistry.upsert_role(mistyped, :platform_role, group.id,
+                 prefix: ctx.schema_name
+               )
+
+      # The loud rejection is not merely a return value -- no row was written either,
+      # proving this isn't "reject after insert" but "reject before any Repo call"
+      # (§2.3's own documented ordering: validate_platform_role_name/2 runs before
+      # do_upsert_role/4).
+      rows = TenantRole |> where(name: ^mistyped) |> Repo.all()
+      assert rows == []
+    end
+
+    test "kind: :process_routing_role accepts a name outside the closed platform-role set (open-ended domain, no literal-set check)",
+         ctx do
+      group = insert_group!(ctx)
+      routing_name = "role-ops-manager"
+
+      refute routing_name in Enum.map(Letflow.Api.Authorization.roles(), &Atom.to_string/1)
+
+      assert {:ok, %TenantRole{name: ^routing_name, kind: :process_routing_role}} =
+               RoleRegistry.upsert_role(routing_name, :process_routing_role, group.id,
+                 prefix: ctx.schema_name
+               )
+    end
+
+    test "kind: :process_routing_role also accepts one of the six platform-role literal strings -- no cross-domain rejection either way",
+         ctx do
+      group = insert_group!(ctx)
+
+      assert {:ok, %TenantRole{name: "TASK_WORKER", kind: :process_routing_role}} =
+               RoleRegistry.upsert_role("TASK_WORKER", :process_routing_role, group.id,
+                 prefix: ctx.schema_name
+               )
+    end
+  end
+
+  describe "ISS-0774 T3 — check_platform_role_coverage/2 (design §2.5/§3, AC2 'provable by a test')" do
+    # T2 (list_effective_role_names/2 kind-filtering) lives in
+    # test/letflow/identity_test.exs -- deliberately not duplicated here, matching
+    # this file's own moduledoc boundary (RoleRegistry's test file stays independent
+    # of Letflow.Identity's).
+    defp add_member!(ctx, group_id, user_id) do
+      %Letflow.Identity.GroupMember{}
+      |> Ecto.Changeset.change(%{group_id: group_id, user_id: user_id})
+      |> Repo.insert!(prefix: ctx.schema_name)
+    end
+
+    defp insert_user_row!(ctx) do
+      %Letflow.Identity.User{}
+      |> Ecto.Changeset.change(%{
+        username: "user-#{System.unique_integer([:positive, :monotonic])}",
+        display_name: "ISS-0774 T3 User",
+        email: "iss0774-t3-#{System.unique_integer([:positive, :monotonic])}@example.com",
+        password_hash: "__NO_PASSWORD_SET__",
+        status: :active,
+        auth_source: :internal
+      })
+      |> Repo.insert!(prefix: ctx.schema_name)
+    end
+
+    test "a user holding only process-routing roles gets {:error, {:missing_platform_role, gap}} naming the exact gap",
+         ctx do
+      user = insert_user_row!(ctx)
+      group = insert_group!(ctx)
+      add_member!(ctx, group.id, user.id)
+
+      assert {:ok, _} =
+               RoleRegistry.upsert_role("role-ops-manager", :process_routing_role, group.id,
+                 prefix: ctx.schema_name
+               )
+
+      assert {:error, {:missing_platform_role, gap}} =
+               RoleRegistry.check_platform_role_coverage(user.id, prefix: ctx.schema_name)
+
+      assert gap == %{held_process_routing_roles: ["role-ops-manager"], held_platform_roles: []}
+    end
+
+    test "the SAME user, after also being granted a companion platform role, gets :ok",
+         ctx do
+      user = insert_user_row!(ctx)
+      routing_group = insert_group!(ctx)
+      platform_group = insert_group!(ctx)
+
+      add_member!(ctx, routing_group.id, user.id)
+
+      assert {:ok, _} =
+               RoleRegistry.upsert_role(
+                 "role-ops-manager",
+                 :process_routing_role,
+                 routing_group.id,
+                 prefix: ctx.schema_name
+               )
+
+      # Still only process-routing roles held -- coverage check must still flag the gap.
+      assert {:error, {:missing_platform_role, _gap}} =
+               RoleRegistry.check_platform_role_coverage(user.id, prefix: ctx.schema_name)
+
+      add_member!(ctx, platform_group.id, user.id)
+
+      assert {:ok, _} =
+               RoleRegistry.upsert_role("TASK_WORKER", :platform_role, platform_group.id,
+                 prefix: ctx.schema_name
+               )
+
+      assert RoleRegistry.check_platform_role_coverage(user.id, prefix: ctx.schema_name) == :ok
+    end
+
+    test "a user holding at least one platform role (and no process-routing roles at all) gets :ok",
+         ctx do
+      user = insert_user_row!(ctx)
+      group = insert_group!(ctx)
+      add_member!(ctx, group.id, user.id)
+
+      assert {:ok, _} =
+               RoleRegistry.upsert_role("TASK_WORKER", :platform_role, group.id,
+                 prefix: ctx.schema_name
+               )
+
+      assert RoleRegistry.check_platform_role_coverage(user.id, prefix: ctx.schema_name) == :ok
+    end
+
+    test "a user with no tenant_role membership at all gets :ok (not this function's scenario)",
+         ctx do
+      user = insert_user_row!(ctx)
+
+      assert RoleRegistry.check_platform_role_coverage(user.id, prefix: ctx.schema_name) == :ok
+    end
+  end
+
   describe "ISS-0768 regression — prefix genuinely scopes RoleRegistry to one tenant's own schema" do
     # docs/issues/ISS-0768.yaml's own acceptance criteria: "a real test creates a
     # role for one tenant and confirms it is queryable only in that tenant's own

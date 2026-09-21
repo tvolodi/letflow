@@ -29,6 +29,7 @@ defmodule Letflow.Routers.TasksTest do
   alias Letflow.Engine.Task, as: EngineTask
   alias Letflow.Engine.TokenRecord
   alias Letflow.EventStore.InstanceProjection
+  alias Letflow.Identity
   alias Letflow.Identity.Group
   alias Letflow.Identity.GroupMember
   alias Letflow.Identity.TenantRole
@@ -599,6 +600,106 @@ defmodule Letflow.Routers.TasksTest do
     test "GET /tasks -> 403 for a caller whose only role lacks TasksRead", %{tenant: tenant} do
       conn = build_conn(:get, "/", tenant, roles: ["AGENT_RUNNER"]) |> dispatch()
       assert conn.status == 403
+    end
+  end
+
+  # ══════════════════════════════════════════════════════════════════════
+  # ISS-0774 T4 -- GET /tasks/inbox end-to-end, the SwiftRoute/T-0140 shape
+  # (docs/issues/ISS-0774.yaml, design §3/§4; AC2 + AC3)
+  # ══════════════════════════════════════════════════════════════════════
+
+  describe "ISS-0774 T4: GET /tasks/inbox, process-routing-role-only vs. +companion platform role" do
+    setup do: %{tenant: TenantFixture.provisioned_tenant!(slug_prefix: "iss0774-t4")}
+
+    # Binds a :platform_role-kind TenantRole -- distinct from this file's existing
+    # insert_role!/3, which is fixed to :process_routing_role (see that helper's
+    # own comment). Direct schema-scoped insert, matching insert_role!/3's own
+    # precedent (not RoleRegistry.upsert_role/4, which issues an unprefixed query).
+    defp insert_platform_role!(tenant, role_name, group_id) do
+      %TenantRole{}
+      |> Ecto.Changeset.change(%{name: role_name, kind: :platform_role, group_id: group_id})
+      |> Repo.insert!(prefix: tenant.schema_name)
+    end
+
+    # Reproduces the exact SwiftRoute/T-0140 diagnostic shape (ISS-0774.yaml
+    # "discovered live" section): a group bound to the process-definition's own
+    # HUMAN_TASK routing role name ("role-ops-manager", the literal string used by
+    # test/fixtures/simulation/swiftroute/process_route_approval.yaml's
+    # "ops-review" node), the user added as a member, and a real assignable task
+    # routed to that same role name -- then derives the caller's effective
+    # platform-role set via the REAL Identity.list_effective_role_names/2 (the
+    # exact function AuthPipeline calls in production), rather than hand-typing a
+    # `roles:` list into build_conn/4. This is what ties this router-level test to
+    # the actual identity-layer fix instead of merely re-asserting build_conn's
+    # own bypass mechanism.
+    test "process-routing-role-only caller (no companion platform role) still 403s -- request-time behavior unchanged",
+         %{tenant: tenant} do
+      user = insert_user!(tenant, %{username: "iss0774-ops-only"})
+      group = insert_group!(tenant, name: "iss0774-ops-reviewers")
+      insert_group_member!(tenant, group.id, user.id)
+      insert_role!(tenant, "role-ops-manager", group.id)
+
+      _task =
+        insert_task!(tenant, %{
+          node_id: "ops-review",
+          node_name: "Ops Review",
+          assignee_type: "ROLE",
+          assignee_ref: "role-ops-manager"
+        })
+
+      effective_roles = Identity.list_effective_role_names(user.id, prefix: tenant.schema_name)
+      assert effective_roles == []
+
+      conn =
+        build_conn(:get, "/inbox?page_size=50", tenant,
+          roles: effective_roles,
+          user_id: user.id
+        )
+        |> dispatch()
+
+      assert conn.status == 403
+      body = Jason.decode!(conn.resp_body)
+      assert conn |> get_resp_header("content-type") |> hd() =~ "problem+json"
+      assert body["status"] == 403
+    end
+
+    test "SAME caller, plus a companion TASK_WORKER platform-role membership: 200, and their routed task appears in the inbox",
+         %{tenant: tenant} do
+      user = insert_user!(tenant, %{username: "iss0774-ops-plus-worker"})
+
+      routing_group = insert_group!(tenant, name: "iss0774-ops-reviewers-2")
+      insert_group_member!(tenant, routing_group.id, user.id)
+      insert_role!(tenant, "role-ops-manager", routing_group.id)
+
+      task =
+        insert_task!(tenant, %{
+          node_id: "ops-review",
+          node_name: "Ops Review",
+          assignee_type: "ROLE",
+          assignee_ref: "role-ops-manager"
+        })
+
+      # Companion platform-role grant -- design §4's prescribed remedy (add each
+      # SwiftRoute persona's TASK_WORKER membership alongside their existing
+      # routing-group membership). A SEPARATE group, matching real provisioning
+      # shape (a platform-role grant is not the same group as a routing role's).
+      platform_group = insert_group!(tenant, name: "iss0774-task-workers")
+      insert_group_member!(tenant, platform_group.id, user.id)
+      insert_platform_role!(tenant, "TASK_WORKER", platform_group.id)
+
+      effective_roles = Identity.list_effective_role_names(user.id, prefix: tenant.schema_name)
+      assert effective_roles == ["TASK_WORKER"]
+
+      conn =
+        build_conn(:get, "/inbox?page_size=50", tenant,
+          roles: effective_roles,
+          user_id: user.id
+        )
+        |> dispatch()
+
+      assert conn.status == 200
+      body = Jason.decode!(conn.resp_body)
+      assert task.id in item_ids(body)
     end
   end
 

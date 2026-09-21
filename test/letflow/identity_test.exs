@@ -1174,6 +1174,128 @@ defmodule Letflow.IdentityTest do
     end
   end
 
+  # ISS-0772 regression coverage: sync_role_claims_from_token/3 must not
+  # permanently stamp role_claims_synced_at when resolve_group_ids_for_role_names/2
+  # resolves to zero group_ids for a non-empty claimed-role list -- doing so closes
+  # off this function's own designed retry-on-nil-marker self-healing (see
+  # lib/letflow/design/iss-0772-role-claims-sync-lockout-fix.md). See
+  # test/letflow/plugs/iss0736_oidc_live_revocation_test.exs:247-301 for the
+  # existing, unmodified, still-passing non-empty-grant success-path coverage this
+  # fix must not regress.
+  describe "sync_role_claims_from_token/3 (ISS-0772)" do
+    # Binds a real tenant_role row (matching role_name) to a fresh group, WITHOUT
+    # seeding any group_members row -- mirrors iss0736_oidc_live_revocation_test.exs's
+    # bind_role_to_new_group!/2.
+    defp bind_role_to_group!(role_name, schema_name) do
+      {:ok, group} =
+        Identity.create_group(
+          %{"name" => "iss0772-sync-#{role_name || "none"}-#{Ecto.UUID.generate()}"},
+          prefix: schema_name
+        )
+
+      {:ok, _role} =
+        %Letflow.Identity.TenantRole{}
+        |> Letflow.Identity.TenantRole.changeset(%{name: role_name, group_id: group.id})
+        |> Repo.insert(prefix: schema_name)
+
+      group
+    end
+
+    defp group_member_rows(user_id, schema_name) do
+      Repo.all(
+        where(Letflow.Identity.GroupMember, [gm], gm.user_id == ^user_id),
+        prefix: schema_name
+      )
+    end
+
+    test "zero-grant sync (claimed role does not resolve) does not stamp the marker, and a second call re-syncs once a grant becomes available" do
+      %{tenant: tenant, schema_name: schema_name} = provisioned_tenant!()
+      ctx = identity_context()
+      config = jit_config()
+
+      {:ok, %{user: user, created: true}} =
+        Identity.provision_oidc_user(ctx, tenant.id, config, prefix: schema_name)
+
+      claimed_ctx = identity_context(%{roles: ["ROLE_WITH_NO_MATCHING_TENANT_ROLE"]})
+
+      # (1) First call: nothing in tenant_role matches the claimed role name --
+      # resolve_group_ids_for_role_names/2 resolves to []. Pre-fix, this would
+      # unconditionally stamp role_claims_synced_at, permanently disabling retry.
+      synced_once = Identity.sync_role_claims_from_token(user, claimed_ctx, prefix: schema_name)
+
+      assert synced_once.role_claims_synced_at == nil
+      assert group_member_rows(user.id, schema_name) == []
+
+      # (2) Second call (simulating the user's next login before any tenant_role
+      # row exists for their claimed role): must not raise, and must still leave
+      # the marker nil -- proves the retry-on-nil-marker path genuinely re-executes
+      # rather than short-circuiting on stale state.
+      synced_twice = Identity.sync_role_claims_from_token(user, claimed_ctx, prefix: schema_name)
+      assert synced_twice.role_claims_synced_at == nil
+      assert group_member_rows(user.id, schema_name) == []
+
+      # (3) Now bind the claimed role name to a real group -- a THIRD call (the
+      # next login after an operator fixes the seed-data/claim-mapping gap) must
+      # succeed: this is the actual self-healing retry this fix restores.
+      group = bind_role_to_group!("ROLE_WITH_NO_MATCHING_TENANT_ROLE", schema_name)
+
+      synced_third = Identity.sync_role_claims_from_token(user, claimed_ctx, prefix: schema_name)
+      assert %DateTime{} = synced_third.role_claims_synced_at
+
+      assert [%Letflow.Identity.GroupMember{group_id: gid}] =
+               group_member_rows(user.id, schema_name)
+
+      assert gid == group.id
+    end
+
+    test "logs a warning on zero-resolution with tenant/user_id/claimed-roles, and stays silent for a genuinely empty claimed-role list" do
+      %{tenant: tenant, schema_name: schema_name} = provisioned_tenant!()
+      config = jit_config()
+
+      # ── (a) claims roles that don't resolve -- must log ──────────────────────
+      ctx_a = identity_context()
+
+      {:ok, %{user: user_a, created: true}} =
+        Identity.provision_oidc_user(ctx_a, tenant.id, config, prefix: schema_name)
+
+      claimed_ctx = identity_context(%{roles: ["UNMAPPED_ROLE_A", "UNMAPPED_ROLE_B"]})
+
+      log =
+        ExUnit.CaptureLog.capture_log(fn ->
+          Identity.sync_role_claims_from_token(user_a, claimed_ctx, prefix: schema_name)
+        end)
+
+      assert log =~ "sync_role_claims_from_token/3"
+      assert log =~ "zero group_ids resolved"
+      assert log =~ schema_name
+      assert log =~ user_a.id
+      assert log =~ "UNMAPPED_ROLE_A"
+      assert log =~ "UNMAPPED_ROLE_B"
+
+      # ── (b) claims zero roles at all -- must NOT log (distinct from (a): a
+      # genuinely empty claim list is not a mapping failure) ────────────────────
+      ctx_b = identity_context()
+
+      {:ok, %{user: user_b, created: true}} =
+        Identity.provision_oidc_user(ctx_b, tenant.id, config, prefix: schema_name)
+
+      empty_ctx = identity_context(%{roles: []})
+
+      silent_log =
+        ExUnit.CaptureLog.capture_log(fn ->
+          Identity.sync_role_claims_from_token(user_b, empty_ctx, prefix: schema_name)
+        end)
+
+      refute silent_log =~ "sync_role_claims_from_token/3"
+
+      # And the marker still isn't stamped for the empty-claim case either --
+      # same non-stamping mechanism as the non-empty-but-unresolved case, just
+      # without the warning (§2.1/§2.2 of the design).
+      user_b_after = Repo.get!(User, user_b.id, prefix: schema_name)
+      assert user_b_after.role_claims_synced_at == nil
+    end
+  end
+
   # Minimal local helper mirroring Ecto's own test-helper convention (avoids pulling
   # in a full Phoenix-style ConnCase/errors_on just for this one assertion).
   defp errors_on(changeset) do

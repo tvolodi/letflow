@@ -732,7 +732,15 @@ defmodule Letflow.Identity do
     prefix = Keyword.fetch!(opts, :prefix)
     group_ids = resolve_group_ids_for_role_names(identity_context.roles, opts)
 
-    result =
+    if identity_context.roles != [] and group_ids == [] do
+      Logger.warning(
+        "sync_role_claims_from_token/3: zero group_ids resolved for a non-empty claimed-role " <>
+          "list -- user will read roles: [] and gain no grants (tenant=#{inspect(prefix)}, " <>
+          "user_id=#{user.id}, claimed_roles=#{inspect(identity_context.roles)})"
+      )
+    end
+
+    multi =
       Multi.new()
       |> Multi.run(:memberships, fn _repo, _changes ->
         # Reuses insert_or_fetch_group_member/3 (backs add_group_member/3)
@@ -747,16 +755,39 @@ defmodule Letflow.Identity do
 
         {:ok, group_ids}
       end)
-      |> Multi.update(
-        :user,
-        Ecto.Changeset.change(user, %{role_claims_synced_at: DateTime.utc_now()}),
-        prefix: prefix
-      )
-      |> Repo.transaction()
+
+    # ISS-0772: only stamp role_claims_synced_at when >=1 grant was actually
+    # written this call. Stamping unconditionally closes off this function's
+    # own designed retry-on-nil-marker self-healing (see moduledoc) for a
+    # user whose claimed roles resolve to zero group_ids -- permanently
+    # locking them out since the marker-gated call sites
+    # (upsert_by_external_identity/4, re_select_on_conflict/3) would never
+    # call this function again. Leaving the marker nil when group_ids == []
+    # means the very next login retries the sync, identical in shape to the
+    # existing transaction-failure fallback below. See
+    # lib/letflow/design/iss-0772-role-claims-sync-lockout-fix.md §2.2 for
+    # the full reasoning, including why this does not reopen REQ-378's
+    # revocation-permanence invariant.
+    multi =
+      if group_ids != [] do
+        Multi.update(
+          multi,
+          :user,
+          Ecto.Changeset.change(user, %{role_claims_synced_at: DateTime.utc_now()}),
+          prefix: prefix
+        )
+      else
+        multi
+      end
+
+    result = Repo.transaction(multi)
 
     case result do
       {:ok, %{user: synced_user}} ->
         synced_user
+
+      {:ok, %{memberships: _}} ->
+        user
 
       {:error, step, reason, _changes} ->
         Logger.error(

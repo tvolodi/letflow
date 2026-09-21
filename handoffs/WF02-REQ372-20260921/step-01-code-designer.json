@@ -8,8 +8,8 @@
   "file": "handoffs/WF02-REQ372-20260921/step-01-code-designer.json",
   "created_at": "2026-09-21T06:55:04Z",
   "started_at": "2026-09-21T06:55:04Z",
-  "completed_at": null,
-  "status": "PENDING",
+  "completed_at": "2026-09-21T07:02:59Z",
+  "status": "COMPLETED",
   "priority": "NORMAL",
   "context": {
     "stage": "S8",
@@ -52,18 +52,23 @@
   },
   "result": {
     "status": "PASS",
-    "summary": "",
-    "artifacts_out": [],
-    "issues": [],
+    "summary": "Design complete at lib/letflow/design/req372-semantic-decision-rule-validation.md. Re-verified all 4 handoff checkpoints against current source: Graph.Violation still {code,message}, validate_edge_conditions/1's 3 call sites unchanged since REQ-288; VariableSchema's real type vocabulary is JSON Schema 'type' (string/number/integer/boolean/object/array/null, no distinct 'money' type -- money is number+inert format); no HUMAN_TASK routing-by-field mechanism exists anywhere in lib/letflow/ (grepped, confirmed absent) -- ruled OUT OF SCOPE with reasoning recorded in the design and required verbatim in the moduledoc; the release/promotion submission call path per the UAT scenario's own 'submit for release to the live workspace' wording is Letflow.Definitions.activate/2 (PD-03, same-tenant DRAFT->ACTIVE), NOT Letflow.Definitions.Promotion's cross-tenant promote_definition/3 -- confirmed activate/2 today calls no Graph validator at all. New module Letflow.Definitions.SemanticValidation (lib/letflow/definitions/semantic_validation.ex) designed with validate/2, levenshtein_distance/2, nearest_declared_field/2; reuses Graph.Violation (two new code() atoms: :undeclared_variable_reference, :incompatible_comparison_operand_types) rather than a new struct. Full comparable/non-comparable type-family table recorded (numeric/string/boolean pairwise-exclusive except self; array/object always non-comparable; :unknown/:null_literal/:unresolvable operands exempted). Deliberate, explicitly-flagged-for-REVIEWER decision: create/2 and update/2 stay unchanged (no new gate) per the UAT scenario's own narrative that a broken draft still saves and only activation is blocked; activate/2 and validate_definition_graph/2 are the two call sites wired to the new pass, both doing a fresh (uncached) VariableSchema.fetch_schemas/3 read per call, satisfying AC6. No lib/letflow/engine/expr.ex change proposed anywhere (only its existing public translate_cel_to_expr/1 and parse_strict/1 are consumed). No web/ file touched. All 10 ACs mapped explicitly in the design doc's own §6 table. 6 open questions recorded (OQ-1..OQ-6), none silently resolved.",
+    "artifacts_out": [
+      "lib/letflow/design/req372-semantic-decision-rule-validation.md"
+    ],
+    "issues": [
+      "Flagged for REVIEWER in design §3.1: create/2 and update/2 (draft-save paths) are deliberately left unchanged by this design -- the new semantic checks gate only activate/2 (release) and are surfaced read-only via validate_definition_graph/2, diverging from REQ-288's own precedent of gating create/2+update/2 for CEL grammar validity. Justified by the UAT scenario's own step-by-step narrative (a broken draft still saves; only release/activation is blocked) but is a real behavioral choice, not free of judgment -- REVIEWER should confirm or override explicitly.",
+      "owned_modules in this handoff's context does not list lib/letflow/definitions.ex, but the call-site wiring this design requires (activate/2, validate_definition_graph/2, interpret_activate_result/1) necessarily lives there -- called out explicitly in design §3 so ELIXIR-DEV does not miss it."
+    ],
     "git_evidence": {
-      "branch_name": null,
+      "branch_name": "feature/WF02-REQ372-20260921",
       "commit_sha_list": [],
       "remote_branch": null,
-      "push_status": "skipped",
+      "push_status": "pending",
       "pr_url": null,
       "pr_create_error": null
     },
-    "next_action": ""
+    "next_action": "Route to CODE-DESIGN-VALIDATOR"
   },
   "rework_count": 0,
   "max_rework": 3

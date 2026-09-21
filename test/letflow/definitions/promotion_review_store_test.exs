@@ -737,13 +737,19 @@ defmodule Letflow.Definitions.PromotionReviewStoreTest do
       end
 
       %{review: review1} =
-        insert_review_fixture!(schema_name, tenant_id, plan_overrides: %{entries: distinct_entries.()})
+        insert_review_fixture!(schema_name, tenant_id,
+          plan_overrides: %{entries: distinct_entries.()}
+        )
 
       %{review: review2} =
-        insert_review_fixture!(schema_name, tenant_id, plan_overrides: %{entries: distinct_entries.()})
+        insert_review_fixture!(schema_name, tenant_id,
+          plan_overrides: %{entries: distinct_entries.()}
+        )
 
       %{review: review3} =
-        insert_review_fixture!(schema_name, tenant_id, plan_overrides: %{entries: distinct_entries.()})
+        insert_review_fixture!(schema_name, tenant_id,
+          plan_overrides: %{entries: distinct_entries.()}
+        )
 
       all_ids = [review1.id, review2.id, review3.id]
 

@@ -411,7 +411,9 @@ defmodule Letflow.Routers.PromotionsTest do
     %{review: review} = seed_review!(schema_name, tenant_id, overrides)
 
     assert {:ok, rejected} =
-             PromotionReviewStore.reject_review(review.id, Ecto.UUID.generate(), prefix: schema_name)
+             PromotionReviewStore.reject_review(review.id, Ecto.UUID.generate(),
+               prefix: schema_name
+             )
 
     rejected
   end

@@ -261,8 +261,8 @@ and there is no throughput requirement in this requirement's acceptance criteria
    crash-recovery window §5.2 names explicitly:
    - `"pending"` → `Letflow.TenantProvisioning.run_column_promotion/1`.
    - `"ddl_failed"` → `Letflow.TenantProvisioning.retry_failed_column_promotion/1`.
-   - `"ddl_applied"` (or any other terminal-success status this column-promotion
-     lifecycle can reach — `"backfilling"`/`"backfilled"`/`"active"` per
+   - `"ddl_applied"` / `"backfilling"` / `"backfilled"` / `"active"` (terminal-success
+     states this column-promotion lifecycle can reach, per
      `Letflow.TenantProvisioning.ColumnPromotion`'s own status enum, REQ-297/298 §0) →
      **do not call any DDL function.** The DDL already succeeded (this is exactly the
      state a crash between step 1's commit and step 2's write, §5.2, leaves behind); the
@@ -276,6 +276,24 @@ and there is no throughput requirement in this requirement's acceptance criteria
      mechanism — it names the direct catch-up explicitly so the crash-recovery path
      never depends on an incidental idempotency property of a different function's
      internals.
+   - `"suspended"` — the seventh and last value in the schema's own `@statuses` list
+     (`lib/letflow/tenant_provisioning/column_promotion.ex:100`) — is **not** a fourth
+     branch here, and this is a deliberate omission, not an oversight: verified directly
+     against source (not taken on trust) that no function anywhere in
+     `Letflow.TenantProvisioning` ever writes `status: "suspended"`.
+     `suspend_column_promotion/2` (`lib/letflow/tenant_provisioning.ex:2073-2085`) is the
+     only function whose name suggests it would, and its own `@doc` states the real
+     behavior plainly: it requires `status == "active"` as a precondition and, on
+     success, writes only `query_eligible: false` and `suspend_reason` — `status` is
+     left at `"active"` by design (0024 §4, "preserves 'reached active at least once'"),
+     never changed to `"suspended"`. A grep of `lib/letflow/` for the literal string
+     `"suspended"` confirms this: every hit is in a design-doc's prose or the enum
+     declaration itself, none in a write path. So a `ColumnPromotion` row reaching
+     `apply_outstanding/1` can structurally never have `status == "suspended"` today —
+     the value exists in the enum as a forward reservation, not as a state this design's
+     own call path can observe. If a future requirement ever adds a real
+     `status: "suspended"` write, that requirement is responsible for widening this
+     branch too; this design does not pre-empt work nothing here creates a need for.
    For the first two branches, **this call is exactly REQ-297's existing, unchanged,
    already-tested transactional-per-tenant DDL path** — `apply_outstanding/1` adds no
    new DDL of its own; it only reacts to that call's result.

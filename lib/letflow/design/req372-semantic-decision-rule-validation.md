@@ -468,9 +468,19 @@ amendment:
     (there must be a "declared VariableSchema fields" set for a reference to be *absent
     from* — the AC's own wording). `declared_fields` is therefore non-empty in every AC1
     test case; §2.5.3's exemption does not trigger; behavior unchanged. **Compatible.**
-  * **AC2** (typo-suggestion via real string distance) — same reasoning as AC1: the
-    one-typo example (`cusotmer_name` vs declared `customer_name`) requires `customer_name`
-    to be declared, so `declared_fields` is non-empty. **Compatible.**
+  * **AC2** (typo-suggestion via real string distance) — the AC's own proving example
+    (`cusotmer_name` vs declared `customer_name`) requires `customer_name` to be declared,
+    so `declared_fields` is non-empty there. **Compatible.** However, the same `describe`
+    block in `test/letflow/definitions/semantic_validation_test.exs` (lines 106–113) also
+    contains a second, adjacent test — `"with zero declared fields, no suggestion clause is
+    emitted at all"` — that deliberately calls `SemanticValidation.validate(graph, %{})`
+    and asserts exactly one violation message is produced. That test **is** in the
+    empty-`declared_fields` branch this amendment now short-circuits, and this amendment
+    **breaks it as currently written**. See §2.5.4.1 below — this is not a AC2-compatibility
+    problem (AC2 itself only requires the suggestion-clause behavior for a *non-empty*
+    schema, which is untouched), it is a pre-existing, already-committed test whose own
+    premise (that an empty schema still produces a violation, just without a suggestion)
+    predates this amendment's decision and must be revised.
   * **AC3** (non-comparable type-pair violation, numeric vs text) — requires both operands
     to resolve to a real declared type family, which requires at least the compared
     field(s) to be declared; `declared_fields` is non-empty in every AC3 test case.
@@ -488,17 +498,25 @@ amendment:
     case. **Compatible** — and this amendment adds a **second**, independent way to reach
     `valid: true` (the empty-`declared_fields` short-circuit) without touching the way
     AC5's own non-empty-`declared_fields` case reaches it.
-  * **AC6** (re-runs in full at `activate/2`, reflects fresh state, not cached) — this AC's
-    own test mutates `variable_schemas` between two calls and asserts the second call
-    reflects the fresh state; both states in that test have **at least the mutated field
-    itself** declared (the test changes a field's presence/type, it does not empty the
-    schema down to zero rows), so `declared_fields` is non-empty on both calls in every
-    AC6 test case. **Compatible** — and if a *future* test exercises exactly "was clean and
-    non-empty, then every `variable_schemas` row was deleted between calls," the fresh
-    empty-map short-circuit still correctly reflects the fresh (now-empty) state on the
-    second call, same "no cache" guarantee, just resolving to the exemption's own new
-    branch instead of §2.2/§2.3's branch. Still re-runs in full, still reflects fresh
-    state — AC6's actual guarantee. **Compatible.**
+  * **AC6** (re-runs in full at `activate/2`, reflects fresh state, not cached) —
+    **correction to this design's original claim here**: the committed "reverse" AC6 test
+    (`test/letflow/definitions/semantic_validation_activation_test.exs:211-231`) does
+    **not** keep `declared_fields` non-empty across both of its calls, contrary to what
+    this subsection originally asserted. It starts with **zero** `variable_schemas` rows
+    (empty `declared_fields`), asserts the *first* `validate_definition_graph/2` call
+    returns `valid: false` with an `:undeclared_variable_reference` violation, then seeds
+    the `"amount"` row and asserts the *second* call (via `activate/2`) succeeds. That
+    first call is exactly the empty-`declared_fields` case §2.5.1's guard now
+    short-circuits to `valid: true, violations: []` — the test's first assertion is broken
+    by this amendment as currently written.
+    AC6's actual guarantee — a fresh call reflects whatever the *current* state is, never
+    a cached prior one — is not itself violated by this amendment: "zero rows declared" is
+    as legitimate a current state as "one row declared" under §2.5.1's policy, and the
+    empty-map short-circuit still reflects that current state fresh, every call, with no
+    caching. What breaks is a *stricter* claim the test itself makes on top of AC6 — that
+    the empty-declared_fields state in particular must produce a violation — which is not
+    something AC6's own wording requires and is exactly the premise §2.5.1 now overrides.
+    See §2.5.4.1 below for the required test revision.
   * **AC7** (HUMAN_TASK scope stated explicitly) — untouched by this amendment; §4's
     decision and reasoning are unchanged. **Compatible.**
   * **AC8** (`expr.ex` unmodified) — this amendment touches no `Expr` code, adds no
@@ -514,10 +532,95 @@ amendment:
     AC10. Once ELIXIR-DEV implements §2.5.3's guard, those 31 failures resolve without any
     fixture edit. **Compatible by construction — this is the fix.**
 
-No original acceptance criterion is weakened, narrowed, or made harder to satisfy by this
-amendment: AC1–AC6 all describe definitions with real, non-empty declared fields, so the
-new empty-`declared_fields` branch is simply never reached by any of their test cases, and
-AC7–AC9 are unrelated to `declared_fields` at all.
+No original acceptance criterion's own *wording* is weakened, narrowed, or made harder to
+satisfy by this amendment — see the correction above, though: the original claim in this
+subsection that AC1–AC6's *committed test cases* never reach the empty-`declared_fields`
+branch was **false** for three of them, found independently by CODE-DESIGN-VALIDATOR's
+amendment regate (`handoffs/WF02-REQ372-20260921/step-03d-design-gate-amendment.json`).
+§2.5.4.1 below acknowledges those three tests honestly and states their required
+revisions. AC7–AC9 remain unrelated to `declared_fields` and are unaffected.
+
+### 2.5.4.1 Three committed tests conflict with this amendment — required TEST-DESIGNER revisions
+
+CODE-DESIGN-VALIDATOR's amendment regate (step-03d) independently found three
+already-committed tests that construct an empty-`declared_fields` definition and assert a
+violation **is** produced — behavior §2.5.1's guard now silently overrides to
+`valid: true, violations: []`. This is acknowledged here honestly: these three tests
+**do** test behavior that now contradicts the decided semantics. **The fix is to revise
+these three tests, not to change §2.5.1's decision or §2.5.3's exemption mechanism** — the
+skip-when-empty policy stays exactly as decided above, for the reasons in §2.5.2. An empty
+`declared_fields` map means "no schema was ever declared for this process," and
+`validate/2` cannot distinguish "never had one" from "had one, then every row was later
+deleted" by construction (it only ever sees the current fetch result) — nor should it try
+to: the whole point of §2.5.1's decision is that "zero fields declared" is not itself
+information about author intent, so it is not special-cased by *how* the definition got to
+zero rows. These three tests must be revised by TEST-DESIGNER to match the amended
+semantics, as follows:
+
+  1. **`test/letflow/definitions/semantic_validation_test.exs:106-113`**
+     (`"with zero declared fields, no suggestion clause is emitted at all"`) — currently
+     calls `SemanticValidation.validate(graph, %{})` and asserts `[message] = messages(result)`
+     (exactly one violation, with no suggestion clause in its text). **Corrected
+     expectation**: `validate(graph, %{})` now returns `%{valid: true, violations: []}`
+     unconditionally per §2.5.1, so the test should assert `messages(result) == []` (no
+     violation at all, not "a violation with no suggestion clause"). The test's original
+     intent — proving `nearest_declared_field/2` degrades gracefully when there is nothing
+     to suggest against — is now moot for the *empty*-schema case specifically, since
+     `field_existence_violations/3` (and therefore `nearest_declared_field/2`) is never
+     invoked at all when `declared_fields == %{}`; that degrade-gracefully intent is
+     already covered by AC2's own non-empty-but-genuinely-unmatchable case if one exists,
+     or should be added there instead if it does not.
+  2. **`test/letflow/definitions/semantic_validation_activation_test.exs:211-231`**
+     (the "reverse" AC6 test) — its premise needs re-examination, not just its
+     assertion values. AC6 is about a fresh call reflecting **current** state, not about
+     every state-mutation direction necessarily producing a *stricter* verdict on the
+     later call than the earlier one; "schema fully cleared to (or never raised above)
+     zero declared fields" is itself a legitimate current state under §2.5.1's
+     skip-when-empty policy, and asserting a violation specifically *because* the schema
+     is empty is no longer a valid way to prove "fresh, not cached." **Corrected
+     expectation** — two acceptable paths, TEST-DESIGNER's choice, but the design
+     recommends the first:
+       * **(preferred) use a different before/after pair that never ends in an empty
+         schema.** E.g., seed the definition with `variable_schemas` for
+         `"customer_name"` only (non-empty `declared_fields`, but still missing the
+         `"amount"` field the gateway condition references) before the first call — a
+         genuine, still-valid `:undeclared_variable_reference` violation, since
+         `declared_fields` is non-empty but `"amount"` is absent from it (§2.2's ordinary
+         case, not §2.5.1's exemption) — then seed `"amount"` and assert the second call
+         (via `activate/2`) succeeds, unchanged from today. This keeps AC6's original
+         "fresh read sees the mutation, not a cached prior read" contrast intact and stays
+         entirely outside the empty-`declared_fields` branch throughout.
+       * **(acceptable, weaker) keep the zero-row start, revise the first assertion.**
+         Change the first call's expected result to `{:ok, %{valid: true, violations: []}}`
+         (consistent with §2.5.1) and drop the `Enum.any?(violations, &(&1.code ==
+         :undeclared_variable_reference))` assertion; keep the second call (post-seeding,
+         via `activate/2`) asserting success, unchanged. This still proves the second call
+         reflects fresh state — just no longer illustrates a violation-to-clean transition,
+         since both states now resolve to "no violation" for different reasons (no schema
+         at all, vs. a correctly-typed declared field).
+  3. **`test/letflow/definitions/semantic_validation_activation_test.exs:241-259`**
+     (`"a declared_fields/condition mismatch reports via the read-only endpoint"`) —
+     currently never seeds any `variable_schemas` row (empty `declared_fields`) and
+     asserts `Definitions.validate_definition_graph/2` returns `valid: false` with an
+     `:undeclared_variable_reference` violation for the `"amount"` reference. **Corrected
+     expectation**: under §2.5.1 this now returns `{:ok, %{valid: true, violations: []}}`.
+     Two ways to fix, TEST-DESIGNER's choice: either (a) assert the now-correct
+     `valid: true, violations: []` result directly (this then stops testing the
+     "mismatch reports via the read-only endpoint" behavior this test exists to prove, so
+     is the weaker option), or (b) — **preferred**, matching option 2's preferred fix
+     above — seed `variable_schemas` for a field other than `"amount"` (e.g.
+     `"customer_name"`) before calling `validate_definition_graph/2`, so `declared_fields`
+     is non-empty but still missing `"amount"`, producing a genuine §2.2 violation and
+     preserving this test's actual intent (a real semantic mismatch is reported without
+     blocking the draft save). The draft-still-`:draft` assertion at the end is unaffected
+     either way.
+
+None of these three revisions touch `lib/letflow/definitions/semantic_validation.ex`,
+`lib/letflow/definitions.ex`, or any of the ~31 pre-existing fixtures named in §2.5's
+trigger — they are confined to the two REQ-372-specific test files TEST-DESIGNER already
+owns, and none of them are among the 31 pre-existing failures this amendment exists to fix
+(step-03-test-designer.json's own evidence confirms these three passed in isolation before
+this amendment; the amendment newly breaks them, not the reverse).
 
 ### 2.5.5 Interaction with §3's call-site wiring
 

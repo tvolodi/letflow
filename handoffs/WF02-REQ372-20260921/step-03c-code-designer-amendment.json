@@ -8,8 +8,8 @@
   "file": "handoffs/WF02-REQ372-20260921/step-03c-code-designer-amendment.json",
   "created_at": "2026-09-21T08:01:19Z",
   "started_at": "2026-09-21T08:01:19Z",
-  "completed_at": "2026-09-21T08:03:20Z",
-  "status": "PENDING",
+  "completed_at": "2026-09-21T08:24:10Z",
+  "status": "COMPLETED",
   "priority": "NORMAL",
   "context": {
     "stage": "S8",
@@ -47,7 +47,7 @@
   },
   "result": {
     "status": "PASS",
-    "summary": "Amendment added as new S2.5 in lib/letflow/design/req372-semantic-decision-rule-validation.md. Decision: SemanticValidation.validate/2 skips both violation classes entirely and returns %{valid: true, violations: []} unconditionally when declared_fields == %{} (zero VariableSchema rows registered for the definition) -- option (a) from the triggering handoff. Reasoning: a process that never registered a schema has no schema to be wrong against; REQ-372 validates an existing schema, it does not mandate one exist; retroactively backfilling ~31 pre-existing fixtures (and real tenant data) is out of this requirement scope; the type-compatibility check already degrades to zero violations in this case via its existing :unresolvable exemption, so the only real gap was the field-existence check, now closed by this guard. The guard lives inside validate/2 itself (checked before any edge is walked), not at either call site, so both activate/2 (S3.2) and validate_definition_graph/2 (S3.3) get it uniformly by construction -- no call-site change needed. Compatibility with all 10 original ACs confirmed in writing in S2.5.4: AC1-AC6 all require a non-empty declared_fields by construction of their own test scenarios (a violation needs a declared set to be absent-from or type-incompatible-against), so the new empty-map branch is never reached by their test cases; AC7-AC9 are unrelated to declared_fields; AC10 is exactly what this amendment unblocks. No implementation code was written -- only @spec-level signature/behavior description was amended for validate/2 (unchanged @spec, one new documented behavior branch) and field_existence_violations/3 (signature and per-call behavior unchanged; amendment only prevents it from ever being invoked with an empty map).",
+    "summary": "REWORK ITERATION 1 complete. Revised S2.5.4 only (S2.5.1-S2.5.3 and S2.5.5 untouched -- the skip-when-empty decision and its exemption mechanism are NOT changed) in lib/letflow/design/req372-semantic-decision-rule-validation.md to honestly acknowledge the three test conflicts CODE-DESIGN-VALIDATOR's step-03d regate found, and added a new S2.5.4.1 stating the required TEST-DESIGNER revisions. Corrected the AC2 bullet: the AC's own proving example stays non-empty-declared_fields and compatible, but the adjacent test at semantic_validation_test.exs:106-113 (`validate(graph, %{})`, asserts one violation message) is now acknowledged as broken by this amendment and requiring revision. Corrected the AC6 bullet: retracted this section's own prior false claim that the committed 'reverse' AC6 test (semantic_validation_activation_test.exs:211-231) keeps declared_fields non-empty across both calls -- it does not, it starts with zero rows and asserts a violation on the first (empty) call, which this amendment's guard now overrides to valid:true/violations:[]. S2.5.4.1 states, with reasoning, that all three named tests (the two above plus semantic_validation_activation_test.exs:241-259) must be revised by TEST-DESIGNER, not that S2.5.1's decision should change: an empty declared_fields map means 'no schema was ever declared,' validate/2 cannot and should not distinguish that from 'had one, later cleared to zero rows' by construction. Corrected expectations stated per test: (1) semantic_validation_test.exs:106-113 should assert messages(result) == [] for the empty-schema call, since field_existence_violations/3 (and nearest_declared_field/2) is never invoked when declared_fields == %{} -- its original 'no suggestion clause' intent is moot for this specific case. (2) The AC6 reverse test's premise needs re-examination -- AC6 is about a fresh call reflecting CURRENT state, not about every mutation direction producing a stricter verdict, and 'schema empty' is itself a legitimate current state under skip-when-empty; recommended fix is a different before/after pair that never ends in an empty schema (seed 'customer_name' only first -- non-empty but still missing 'amount', a genuine S2.2 violation -- then seed 'amount' and assert success), with a weaker fallback of revising the first assertion in place to valid:true/violations:[] and dropping the undeclared_variable_reference check. (3) semantic_validation_activation_test.exs:241-259 should either assert the now-correct valid:true/violations:[] directly (weaker, loses its own test intent) or, preferred, seed a non-'amount' field first so the mismatch it demonstrates is a genuine S2.2 violation against a non-empty schema, preserving its 'reports without blocking draft save' intent. All three revisions are confined to the two REQ-372 test files TEST-DESIGNER owns; none touch semantic_validation.ex, definitions.ex, or any of the ~31 pre-existing fixtures.",
     "artifacts_out": [
       "lib/letflow/design/req372-semantic-decision-rule-validation.md"
     ],
@@ -58,7 +58,7 @@
         "12d6d552b3ab41dde1d21e210eadab472d5ed11e"
       ],
       "remote_branch": "origin/feature/WF02-REQ372-20260921",
-      "push_status": "pushed",
+      "push_status": "pending",
       "pr_url": null,
       "pr_create_error": null
     },

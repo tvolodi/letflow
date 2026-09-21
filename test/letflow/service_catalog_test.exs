@@ -916,7 +916,11 @@ defmodule Letflow.ServiceCatalogTest do
   describe "REQ-373 publish/3" do
     test "against a nonexistent service_id returns {:error, :not_found}" do
       assert {:error, :not_found} =
-               ServiceCatalog.publish(unique_service_id("req373-pub-missing"), "2", publish_attrs())
+               ServiceCatalog.publish(
+                 unique_service_id("req373-pub-missing"),
+                 "2",
+                 publish_attrs()
+               )
     end
 
     test "a version equal to the row's own current version returns {:error, :duplicate_version}" do

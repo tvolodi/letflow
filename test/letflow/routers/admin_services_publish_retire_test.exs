@@ -114,14 +114,14 @@ defmodule Letflow.Routers.AdminServicesPublishRetireTest do
       entry = register!()
 
       resp =
-        build_conn(:post, "/#{entry.service_id}/versions", [
+        build_conn(:post, "/#{entry.service_id}/versions",
           roles: ["PROCESS_DESIGNER"],
           body: %{
             "version" => "2",
             "endpoint_url" => "https://example.test/svc-v2",
             "timeout_ms" => 6000
           }
-        ])
+        )
         |> dispatch()
 
       assert resp.status == 403
@@ -138,14 +138,14 @@ defmodule Letflow.Routers.AdminServicesPublishRetireTest do
       entry = register!()
 
       resp =
-        build_conn(:post, "/#{entry.service_id}/versions", [
+        build_conn(:post, "/#{entry.service_id}/versions",
           roles: ["PLATFORM_ADMIN"],
           body: %{
             "version" => "2",
             "endpoint_url" => "https://example.test/svc-v2",
             "timeout_ms" => 6000
           }
-        ])
+        )
         |> dispatch()
 
       assert resp.status == 201
@@ -165,14 +165,14 @@ defmodule Letflow.Routers.AdminServicesPublishRetireTest do
       entry = register!()
 
       resp =
-        build_conn(:post, "/#{entry.service_id}/versions", [
+        build_conn(:post, "/#{entry.service_id}/versions",
           roles: ["PLATFORM_ADMIN"],
           body: %{
             "version" => entry.version,
             "endpoint_url" => "https://example.test/svc-dup",
             "timeout_ms" => 6000
           }
-        ])
+        )
         |> dispatch()
 
       assert resp.status == 409
@@ -180,14 +180,14 @@ defmodule Letflow.Routers.AdminServicesPublishRetireTest do
 
     test "a nonexistent service_id returns 404" do
       resp =
-        build_conn(:post, "/#{unique_service_id("req373-admin-router-missing")}/versions", [
+        build_conn(:post, "/#{unique_service_id("req373-admin-router-missing")}/versions",
           roles: ["PLATFORM_ADMIN"],
           body: %{
             "version" => "2",
             "endpoint_url" => "https://example.test/svc-v2",
             "timeout_ms" => 6000
           }
-        ])
+        )
         |> dispatch()
 
       assert resp.status == 404

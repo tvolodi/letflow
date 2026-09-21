@@ -53,9 +53,15 @@ defmodule Letflow.Repo.Migrations.AddServiceCatalogVersioning do
              check: "status IN ('ACTIVE', 'RETIRED')"
            )
 
-    create constraint(:service_catalog, :chk_service_catalog_version_length,
-             check: "char_length(version) <= 255"
-           )
+    # No chk_service_catalog_version_length CHECK constraint: `version` is
+    # `:string` (Ecto's default `varchar(255)`), so Postgres's own column
+    # type already enforces `char_length(version) <= 255` -- a CHECK
+    # constraint re-stating that bound is dead code the type-level limit
+    # would always satisfy first (TEST-DESIGNER finding, REQ-373 rework).
+    # Removed rather than widening the column: no requirement or design
+    # note calls for `version` to hold more than 255 chars (design §9 OQ-4
+    # only says "opaque string"), so there is nothing to make the constraint
+    # reachable *for*.
 
     # Append-only archive of every version a publish/retire supersedes
     # (design section 1/3.1). `version_id` is the PK -- copied verbatim from
@@ -90,7 +96,6 @@ defmodule Letflow.Repo.Migrations.AddServiceCatalogVersioning do
   def down do
     drop table(:service_catalog_versions)
 
-    drop constraint(:service_catalog, :chk_service_catalog_version_length)
     drop constraint(:service_catalog, :chk_service_catalog_status)
 
     alter table(:service_catalog) do

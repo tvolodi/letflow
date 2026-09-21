@@ -52,6 +52,24 @@ defmodule Letflow.ServiceCatalog.Version do
     :retired_at
   ]
 
+  # Mirrors Letflow.ServiceCatalog.Entry's own required-field parity for the
+  # fields the two schemas share (Entry has no equivalent of `service_id` as
+  # a plain field -- it's Entry's primary key -- and no `retired_at`, but
+  # both are always present on an archive row; see design §4's column table
+  # for the archive table's own not-null list). `request_schema`,
+  # `response_schema`, and `retry_policy` are deliberately excluded --
+  # legitimately nullable snapshot fields, same as on `Entry`.
+  @required_fields [
+    :version_id,
+    :service_id,
+    :version,
+    :endpoint_url,
+    :required_auth,
+    :timeout_ms,
+    :published_at,
+    :retired_at
+  ]
+
   @doc """
   Changeset for the one insert `Letflow.ServiceCatalog.publish/3` performs
   per call -- a full snapshot of the row being superseded, per design §3.1
@@ -61,6 +79,6 @@ defmodule Letflow.ServiceCatalog.Version do
   def archive_changeset(attrs) do
     %__MODULE__{}
     |> Ecto.Changeset.cast(attrs, @castable_fields)
-    |> Ecto.Changeset.validate_required(@castable_fields)
+    |> Ecto.Changeset.validate_required(@required_fields)
   end
 end

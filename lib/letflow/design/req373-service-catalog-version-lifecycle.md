@@ -189,7 +189,7 @@ these two).
    code path, no status branch needed).
 4. Update the `service_catalog` row in place via `Entry.publish_changeset/2` (new
    changeset function, §3.3): `version_id` = a freshly generated `Ecto.UUID.generate/0`,
-   `version` = the caller-supplied `version`, `status = :active`,
+   `version` = the caller-supplied `version`, `status = :ACTIVE`,
    `published_at = now`, `retired_at = nil`, plus the version-specific fields from
    `attrs`. `updated_at = now`, same stamping discipline `update_scope/2` already
    follows.
@@ -215,15 +215,15 @@ all, not because `publish/3` takes special care to avoid one.
 row — no separate version argument is needed or accepted.
 
 1. Fetch the row by `service_id`. Not found → `{:error, :not_found}`.
-2. `status == :retired` already → `{:error, :already_retired}` (an explicit error,
+2. `status == :RETIRED` already → `{:error, :already_retired}` (an explicit error,
    not a silent idempotent `:ok` — matches this codebase's existing "no silent
    no-op" discipline, e.g. `pin_resolver.ex`'s `check_no_stray_overrides/2`).
 3. Otherwise: update the row in place via `Entry.retire_changeset/1` (new changeset
-   function, §3.3) — `status = :retired`, `retired_at = now`, `updated_at = now`.
+   function, §3.3) — `status = :RETIRED`, `retired_at = now`, `updated_at = now`.
    **No `service_catalog_versions` insert here** — retiring without a following
    publish leaves the row's full technical data in place on `service_catalog`
    itself (still fetchable by `get_for_tenant/2`/`list_all/1`, just `status:
-   :retired`); the row only gets archived into the sibling table later, if and when
+   :RETIRED`); the row only gets archived into the sibling table later, if and when
    a subsequent `publish/3` supersedes it (§3.1 step 3).
 4. Return `{:ok, updated_entry}`.
 
@@ -254,7 +254,19 @@ either table, at any point, for any instance, retired-version or not. The two
 functions are connected by zero shared code — this is the same "by construction, not
 by care taken" argument as §3.1's publish invariant.
 
-### §3.3 `Entry` — two new changeset functions
+### §3.3 `Entry` — new schema field + two new changeset functions
+
+**`status`'s Ecto representation (stated explicitly, to close the exact gap the
+rework note on this design named):** `field(:status, Ecto.Enum, values: [:ACTIVE,
+:RETIRED], default: :ACTIVE)` — plain `Ecto.Enum`, no `values:` remapping, mirroring
+`required_auth`'s own uppercase-atom convention (§0: `:NONE, :API_KEY, :OAUTH2,
+:MUTUAL_TLS`) rather than `scope`'s lowercase-atom one, since the migration's DB
+`CHECK` constraint (§4) is `status IN ('ACTIVE', 'RETIRED')` and `Ecto.Enum` without an
+explicit mapping serializes an atom to the DB verbatim by casing — `:ACTIVE` reads and
+writes the string `"ACTIVE"` directly, no translation layer. Elixir-side code
+therefore pattern-matches and constructs `:ACTIVE`/`:RETIRED` (uppercase) everywhere
+in this design, never `:active`/`:retired` — every reference below and in §5 uses this
+single casing.
 
 `@spec publish_changeset(t(), map()) :: Ecto.Changeset.t()`
 `@spec retire_changeset(t()) :: Ecto.Changeset.t()`
@@ -386,9 +398,9 @@ service_id)`:
 - no row → `{:error, :not_found}` (identical to `default_lookup/0`'s permanent stub
   answer for an unregistered `service_id` — no behavior change for a definition that
   references a `service_id` nobody ever registered).
-- row with `status: :active` → `{:ok, %{resolved_id: version_id, version: version}}`
+- row with `status: :ACTIVE` → `{:ok, %{resolved_id: version_id, version: version}}`
   (the row's own `version_id`/`version` columns).
-- row with `status: :retired` → `{:error, :not_found}` — the AC4 "fails outright"
+- row with `status: :RETIRED` → `{:error, :not_found}` — the AC4 "fails outright"
   decision from §3.2, implemented at the one place `resolve/4` actually calls into.
 
 No other function is added to this module — `module_lookup`/`variable_schema_lookup`

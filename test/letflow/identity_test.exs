@@ -1174,15 +1174,15 @@ defmodule Letflow.IdentityTest do
     end
   end
 
-  # ISS-0772 regression coverage: sync_role_claims_from_token/3 must not
+  # ISS-0773 regression coverage: sync_role_claims_from_token/3 must not
   # permanently stamp role_claims_synced_at when resolve_group_ids_for_role_names/2
   # resolves to zero group_ids for a non-empty claimed-role list -- doing so closes
   # off this function's own designed retry-on-nil-marker self-healing (see
-  # lib/letflow/design/iss-0772-role-claims-sync-lockout-fix.md). See
+  # lib/letflow/design/iss-0773-role-claims-sync-lockout-fix.md). See
   # test/letflow/plugs/iss0736_oidc_live_revocation_test.exs:247-301 for the
   # existing, unmodified, still-passing non-empty-grant success-path coverage this
   # fix must not regress.
-  describe "sync_role_claims_from_token/3 (ISS-0772)" do
+  describe "sync_role_claims_from_token/3 (ISS-0773)" do
     # Binds a real tenant_role row (matching role_name) to a fresh group, WITHOUT
     # seeding any group_members row -- mirrors iss0736_oidc_live_revocation_test.exs's
     # bind_role_to_new_group!/2.

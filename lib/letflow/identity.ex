@@ -756,7 +756,7 @@ defmodule Letflow.Identity do
         {:ok, group_ids}
       end)
 
-    # ISS-0772: only stamp role_claims_synced_at when >=1 grant was actually
+    # ISS-0773: only stamp role_claims_synced_at when >=1 grant was actually
     # written this call. Stamping unconditionally closes off this function's
     # own designed retry-on-nil-marker self-healing (see moduledoc) for a
     # user whose claimed roles resolve to zero group_ids -- permanently
@@ -765,7 +765,7 @@ defmodule Letflow.Identity do
     # call this function again. Leaving the marker nil when group_ids == []
     # means the very next login retries the sync, identical in shape to the
     # existing transaction-failure fallback below. See
-    # lib/letflow/design/iss-0772-role-claims-sync-lockout-fix.md §2.2 for
+    # lib/letflow/design/iss-0773-role-claims-sync-lockout-fix.md §2.2 for
     # the full reasoning, including why this does not reopen REQ-378's
     # revocation-permanence invariant.
     multi =

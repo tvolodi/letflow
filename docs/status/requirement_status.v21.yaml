@@ -452,6 +452,20 @@ history:
       RELEASE-VALIDATOR (independently re-verified all 4 ACs plus the regression
       fix plus ISS-0775's correct filing/scoping -- full PASS). Design:
       lib/letflow/design/iss-0774-role-domain-authorization.md.
+  - req: REQ-373
+    event: started
+    agent: ORCH
+    at: "2026-09-21T17:09:10Z"
+    note: >
+      WF02-REQ373-20260921 begun (letflow-queue task 732, GH#1620, locked
+      under agent_id ORCH-letflow-c5). Backend version-status lifecycle
+      (publish/retire) for service_catalog entries, wired to a real
+      Letflow.Engine.PinResolver.Lookup implementation replacing
+      default_lookup/0 in Engine.create/2's pin_lookup/2 helper for
+      catalog_entry references. depends_on REQ-059/REQ-060/REQ-191/REQ-192
+      all confirmed done (pre-verified before this run started). Step 00
+      (git setup) PASSED on feature/WF02-REQ373-20260921, branched off
+      origin/main at 7b4b4467.
   - req: SCOPE-CHANGE
     event: done
     agent: DOC-UPDATER

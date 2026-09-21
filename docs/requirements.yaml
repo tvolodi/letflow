@@ -27653,7 +27653,7 @@ requirements:
   - id: REQ-373
     title: "Version-status lifecycle (publish/retire) for service_catalog entries, wired to PinResolver's real Lookup (backend half)"
     owner: ELIXIR-DEV
-    status: pending
+    status: in_progress
     stage: S6
     impl_order: 732  # letflow-queue task id, GH#1620. Registered 2026-09-20 by ORCH;
       # corrects a fabricated/self-assigned id from the original filing -- 730 was

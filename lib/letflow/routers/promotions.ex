@@ -23,6 +23,15 @@ defmodule Letflow.Routers.Promotions do
   | R6 | POST | `/:id/reject` | `handle_reject/2` | `PromotionReviewStore.reject_review/3` | 200 |
   | R7 | POST | `/:id/apply` | `handle_apply/2` | `Promotion.apply_review/4` | 200 |
   | R8 | POST | `/:review_id/run-assertions` | `handle_run_assertions/2` | `PromotionArtifact.from_json/1` -> `Definitions.apply_promotion_assertion_rerun/6` | 200/422 |
+  | R11 | GET | `/platform-events` | `handle_platform_events/1` | `Letflow.EventStore.list_platform_events/1` | 200 |
+
+  R11 is ISS-0733 GAP B (`lib/letflow/design/iss0733-promotion-audit-and-platform-events-read.md`
+  §2) -- a dedicated, `:Unknown`/PLATFORM_ADMIN-only read of the platform
+  sentinel's own event stream (`EventStore.platform_instance_id/0`), added
+  alongside this module's other ten routes rather than as a scoped exception
+  in `Letflow.Instances.timeline/3` (design §2.3). Declared before `/:id` so
+  the literal `platform-events` path segment is never captured by the `:id`
+  wildcard.
 
   ## The `POST /promotions` collision, resolved (F-2, a deliberate divergence from R-Co)
 
@@ -175,7 +184,9 @@ defmodule Letflow.Routers.Promotions do
   alias Letflow.Api.Error
   alias Letflow.Api.Response
   alias Letflow.Api.Validation
+  alias Letflow.Api.Pagination
   alias Letflow.Api.Validation.FieldConstraint
+  alias Letflow.EventStore
   alias Letflow.EventStore.PlatformEvents
 
   # `:Unknown`-gated (see moduledoc) -- plain macros, no policy key.
@@ -190,6 +201,13 @@ defmodule Letflow.Routers.Promotions do
 
   post "/plan" do
     handle_plan(conn)
+  end
+
+  # ISS-0733 GAP B (R11, design §2.4) -- declared before "/:id" (same
+  # ordering discipline as "/plan" above) so the literal "platform-events"
+  # segment is never captured by the :id wildcard.
+  get "/platform-events" do
+    handle_platform_events(conn)
   end
 
   get "/:id" do
@@ -738,6 +756,107 @@ defmodule Letflow.Routers.Promotions do
       "assertions_failed" => r.assertions_failed,
       "failing_assertion_ids" => r.failing_assertion_ids,
       "sandbox_id" => r.sandbox_id
+    }
+  end
+
+  # ── GET /promotions/platform-events -- R11 (design §2.4-§2.6, ISS-0733 GAP B) ─
+
+  # A new, distinct cursor-endpoint prefix -- does not collide with "A:"
+  # (Routers.Audit), "T:"/"U:" (Tenants/Identity) already in use elsewhere;
+  # decode_cursor/4's {:error, :wrong_endpoint} rejects a cursor minted by
+  # another endpoint.
+  @platform_events_cursor_prefix "PE:"
+
+  @spec handle_platform_events(Plug.Conn.t()) :: Plug.Conn.t()
+  defp handle_platform_events(conn) do
+    conn = fetch_query_params(conn)
+    query = conn.query_params
+    opts = conn.assigns.scoped_opts
+
+    with {:ok, raw_page_size} <- Pagination.parse_page_size_param(Map.get(query, "page_size")),
+         {:ok, page_size} <- Pagination.validate_page_size(raw_page_size),
+         {:ok, cursor_seek} <- parse_platform_events_cursor(Map.get(query, "cursor")) do
+      params = %{
+        prefix: Keyword.fetch!(opts, :prefix),
+        page_size: page_size,
+        cursor: cursor_seek,
+        event_type: non_empty_platform_event_type(Map.get(query, "event_type"))
+      }
+
+      render_platform_events(conn, EventStore.list_platform_events(params))
+    else
+      {:error, :invalid_page_size} ->
+        Response.bad_request(conn, "invalid page_size")
+
+      {:error, :page_size_too_large} ->
+        Response.bad_request(conn, "page_size out of range")
+
+      {:error, :invalid_cursor} ->
+        Response.bad_request(conn, "invalid cursor")
+    end
+  end
+
+  defp render_platform_events(conn, {:ok, %{items: items, next_cursor: next_cursor}}) do
+    Response.ok(conn, %{
+      "items" => Enum.map(items, &platform_event_map/1),
+      "next_cursor" => next_cursor
+    })
+  end
+
+  # Same COLLAPSE/STATUS split as Routers.Audit's parse_cursor_param/1 --
+  # every decode_cursor/4 failure (:invalid_base64, :wrong_endpoint,
+  # :expired) folds into one route-level :invalid_cursor, mapped to 400 in
+  # handle_platform_events/1's else block above.
+  defp parse_platform_events_cursor(nil), do: {:ok, nil}
+  defp parse_platform_events_cursor(""), do: {:ok, nil}
+
+  defp parse_platform_events_cursor(raw) when is_binary(raw) do
+    with {:ok, %Pagination.Cursor{inner: inner}} <-
+           Pagination.decode_cursor(
+             raw,
+             @platform_events_cursor_prefix,
+             byte_size(@platform_events_cursor_prefix)
+           ),
+         {:ok, seek} <- platform_events_seek_from_cursor(inner) do
+      {:ok, seek}
+    else
+      _invalid_base64_or_wrong_endpoint_or_expired_or_invalid_cursor ->
+        {:error, :invalid_cursor}
+    end
+  end
+
+  # Raw payload is "PE:<mint_time_us>:<sequence_num>:<event_id>", matching
+  # Routers.Audit's own "<prefix>:<mint_time_us>:<...>" layout -- the only
+  # place this cursor's internal layout is interpreted.
+  defp platform_events_seek_from_cursor(inner) do
+    with mint_colon when not is_nil(mint_colon) <- Pagination.find_nth_colon(inner, 2),
+         seq_colon when not is_nil(seq_colon) <- Pagination.find_nth_colon(inner, 3),
+         {:ok, sequence_num} <-
+           Pagination.parse_int_from_cursor(inner, mint_colon + 1, seq_colon - mint_colon - 1),
+         event_id <- binary_part(inner, seq_colon + 1, byte_size(inner) - seq_colon - 1),
+         {:ok, _} <- Ecto.UUID.cast(event_id) do
+      {:ok, {sequence_num, event_id}}
+    else
+      _invalid ->
+        {:error, :invalid_cursor}
+    end
+  end
+
+  defp non_empty_platform_event_type(nil), do: nil
+  defp non_empty_platform_event_type(""), do: nil
+  defp non_empty_platform_event_type(value) when is_binary(value), do: value
+
+  # Hand-built allowlist (design §2.6), same discipline as Routers.Audit's
+  # audit_item/1 -- never a raw struct/Jason.Encoder derivation.
+  @spec platform_event_map(EventStore.platform_event_item()) :: map()
+  defp platform_event_map(item) do
+    %{
+      "event_id" => item.event_id,
+      "event_type" => item.event_type,
+      "actor_id" => item.actor_id,
+      "timestamp" => iso8601(item.timestamp),
+      "sequence_num" => item.sequence_num,
+      "payload" => item.payload
     }
   end
 

@@ -82,12 +82,20 @@ defmodule Letflow.Definitions.Promotion do
        `uq_definition_version` unique-constraint violation ->
        `{:error, :duplicate_version}` (mapped explicitly, never a leaked
        changeset for this one case).
-    8. Two-step swap, inside the same transaction as step 7 (PD-03
+    8. Three-step swap, inside the same transaction as step 7 (PD-03
        ordering — deprecate before activate): (a) guarded `UPDATE` deprecates
        whatever row is currently `active` for this `(target_tenant_id,
        process_key)`; (b) guarded `UPDATE` activates the row this function
        itself just inserted (still `:draft`, since `create_changeset/2`
-       never casts `:status`). Inlined here rather than delegated to a real
+       never casts `:status`); (c) **(ISS-0733 GAP A)** `Audit.insert_entry/3`
+       for a `resource_type: "definition"`, `action: "definition.promote"`
+       row describing this swap, `after_state` reusing step 9's own
+       `event_attrs` shape field-for-field (see
+       `lib/letflow/design/iss0733-promotion-audit-and-platform-events-read.md`
+       §1.4) — still inside this same transaction, so a failure here rolls
+       back the whole swap, exactly like `activate_draft_row/4`
+       (`definitions.ex`) already accepts for `"definition.activate"`.
+       (a)/(b) are inlined here rather than delegated to a real
        `activate/1` — REQ-030 (that function's owner) is not a dependency of
        REQ-037 and has not shipped (see moduledoc OQ-5 in the design doc).
     9. Event-append, after the transaction commits:
@@ -98,6 +106,7 @@ defmodule Letflow.Definitions.Promotion do
 
   import Ecto.Query
 
+  alias Letflow.Audit
   alias Letflow.Definitions.ProcessDefinition
   alias Letflow.Definitions.PromotionConflict
   alias Letflow.Definitions.PromotionDigest
@@ -302,7 +311,12 @@ defmodule Letflow.Definitions.Promotion do
              source_row,
              process_key,
              actor_id,
-             target_prefix
+             target_prefix,
+             %{
+               review_id: review_id,
+               source_tenant_id: source_tenant_id,
+               target_tenant_id: target_tenant_id
+             }
            ) do
       append_promotion_event(
         event_appender,
@@ -336,13 +350,30 @@ defmodule Letflow.Definitions.Promotion do
   # REQ-064) -- it was only ever forwarded to deprecate_previous_active/3's
   # now-removed tenant_id filter; target_prefix alone already scopes every
   # write in this function to the correct tenant schema.
+  #
+  # ISS-0733 GAP A (design `lib/letflow/design/iss0733-promotion-audit-and-
+  # platform-events-read.md` §1) -- new step 8(c), inside this same
+  # transaction: Audit.insert_entry/3 for the version-pointer swap this
+  # function just performed, using `audit_context`'s review_id/
+  # source_tenant_id/target_tenant_id (do_promote_definition/7's own
+  # arguments, no new data threaded in from further up the call chain).
+  # {:error, reason} -> Repo.rollback(reason), the exact pattern
+  # activate_draft_row/4 (definitions.ex) already uses for its own
+  # Audit.insert_entry/3 call.
   @spec write_target_definition(
           ProcessDefinition.t(),
           String.t(),
           Ecto.UUID.t(),
-          String.t()
-        ) :: {:ok, ProcessDefinition.t()} | {:error, :duplicate_version | Ecto.Changeset.t()}
-  defp write_target_definition(source_row, process_key, actor_id, target_prefix) do
+          String.t(),
+          %{
+            review_id: Ecto.UUID.t() | nil,
+            source_tenant_id: Ecto.UUID.t(),
+            target_tenant_id: Ecto.UUID.t()
+          }
+        ) ::
+          {:ok, ProcessDefinition.t()}
+          | {:error, :duplicate_version | Ecto.Changeset.t() | term()}
+  defp write_target_definition(source_row, process_key, actor_id, target_prefix, audit_context) do
     attrs = %{
       name: process_key,
       version: source_row.version,
@@ -359,7 +390,22 @@ defmodule Letflow.Definitions.Promotion do
       |> case do
         {:ok, new_row} ->
           deprecate_previous_active(process_key, target_prefix)
-          activate_new_definition(new_row, target_prefix)
+          activated_row = activate_new_definition(new_row, target_prefix)
+
+          case Audit.insert_entry(
+                 Repo,
+                 promotion_audit_attrs(
+                   actor_id,
+                   activated_row,
+                   source_row,
+                   process_key,
+                   audit_context
+                 ),
+                 target_prefix
+               ) do
+            {:ok, _entry} -> activated_row
+            {:error, reason} -> Repo.rollback(reason)
+          end
 
         {:error, %Ecto.Changeset{} = changeset} ->
           if duplicate_version_error?(changeset) do
@@ -369,6 +415,48 @@ defmodule Letflow.Definitions.Promotion do
           end
       end
     end)
+  end
+
+  # ISS-0733 design §1.4 -- reuses append_promotion_event/9's own
+  # event_attrs shape field-for-field as `after_state`, not a second,
+  # independently-drifting schema. `before_state: nil` and `trace_id: nil`
+  # are both deliberate (design §1.4), matching definitions.ex's own
+  # "no meaningful before-state" precedent (record_definition_audit/5's
+  # `"definition.create"` call).
+  @spec promotion_audit_attrs(
+          Ecto.UUID.t(),
+          ProcessDefinition.t(),
+          ProcessDefinition.t(),
+          String.t(),
+          %{
+            review_id: Ecto.UUID.t() | nil,
+            source_tenant_id: Ecto.UUID.t(),
+            target_tenant_id: Ecto.UUID.t()
+          }
+        ) :: Audit.entry_attrs()
+  defp promotion_audit_attrs(actor_id, new_row, source_row, process_key, %{
+         review_id: review_id,
+         source_tenant_id: source_tenant_id,
+         target_tenant_id: target_tenant_id
+       }) do
+    %{
+      actor_id: actor_id,
+      action: "definition.promote",
+      resource_type: "definition",
+      resource_id: new_row.id,
+      before_state: nil,
+      after_state: %{
+        event_type: "DEFINITION_PROMOTED",
+        actor_id: actor_id,
+        review_id: review_id,
+        source_tenant_id: source_tenant_id,
+        target_tenant_id: target_tenant_id,
+        source_definition_id: source_row.id,
+        target_definition_id: new_row.id,
+        process_key: process_key
+      },
+      trace_id: nil
+    }
   end
 
   # Step 8(a) -- deprecate whatever row is currently active for this

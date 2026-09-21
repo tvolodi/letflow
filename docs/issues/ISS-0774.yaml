@@ -1,0 +1,73 @@
+id: ISS-0774
+title: >
+  Process-definition HUMAN_TASK routing role names (e.g. role-ops-manager)
+  are never recognized by Authorization.role_from_string/1's closed
+  platform-role atom set -- a user whose only role is a process-routing
+  name can never pass any platform API permission check
+discovered_by: ai-dala-infra-34 (peer session, T-0140 SwiftRoute role-binding), root-caused via source read by ORCH (letflow-c5)
+discovered_in_run: T-0140-seed-swiftroute-tenant-persona-qa-users (ai-dala-infra)
+discovered_at: "2026-09-21T11:30:00Z"
+severity: BLOCKER
+description: >
+  Discovered live 2026-09-21 by a peer ai-dala-infra session driving
+  T-0140 (SwiftRoute persona role-binding). After correctly creating
+  groups, binding TenantRole rows named role-ops-manager/role-ceo, and
+  adding Marco/Alice as members (all independently verified via GET),
+  fresh tokens for both users still get 403 on GET /api/v1/tasks/inbox.
+  Root-caused via source read:
+  Letflow.Api.Authorization.role_from_string/1
+  (lib/letflow/api/authorization.ex:420-426) recognizes only a CLOSED
+  set of six platform-role name strings -- "PLATFORM_ADMIN",
+  "PROCESS_DESIGNER", "PROCESS_OPERATOR", "TASK_WORKER",
+  "AGENT_RUNNER", "CANDIDATE" -- and silently drops any other string
+  (`role_from_string(_other), do: nil`).
+  Letflow.Identity.list_effective_role_names/2 (REQ-378) reads
+  tenant_role.name directly and feeds it, unfiltered by naming domain,
+  through Authorization.roles_from_strings/1 into the platform
+  permission-check path (Letflow.Plugs.Authorize, evaluate_access/2).
+  Process-definition HUMAN_TASK role assignments (e.g. `role:
+  role-ops-manager` in
+  test/fixtures/simulation/swiftroute/process_route_approval.yaml) use
+  RoleRegistry.upsert_role/3 to create tenant_role rows with these SAME
+  process-routing names, since RoleRegistry.resolve_role_in_tx/1 is the
+  engine's own role->group_id resolution mechanism for task assignment.
+  This means tenant_role (and by extension list_effective_role_names/2)
+  conflates two architecturally distinct concerns: (1) the closed,
+  fixed set of platform API permission roles, and (2) open-ended,
+  process-definition-specific HUMAN_TASK routing role names. A user
+  whose ONLY tenant_role membership is a process-routing name (not one
+  of the six platform roles) has their entire roles list reduced to []
+  the instant it passes through roles_from_strings/1, and therefore
+  fails every platform API permission check indefinitely -- not a
+  transient bug, a structural gap in the current design.
+
+  Separately (but discovered in the same diagnostic session, NOT the
+  same bug): worker-user (a pre-existing, untouched user holding the
+  recognized TASK_WORKER role name) also 403s on the same route -- that
+  failure is attributed to ISS-0773 (silent zero-grant role sync /
+  bootstrap gap), not this issue.
+affected_files:
+  - lib/letflow/api/authorization.ex
+  - lib/letflow/identity.ex
+  - lib/letflow/identity/role_registry.ex
+fix_direction: >
+  Needs a CODE-DESIGNER pass to make an explicit decision on the
+  intended relationship between the two role-name domains (see
+  acceptance criteria) rather than leaving it implicit. Candidate
+  directions: (a) a process-routing-role-only user is intentionally
+  required to ALSO hold a platform role (e.g. TASK_WORKER) for any
+  task-API access, and this should be enforced/surfaced clearly at
+  provisioning time (e.g. RoleRegistry.upsert_role/3 or a provisioning
+  helper warns/requires a platform-role companion grant); (b)
+  role_from_string/1's closed set is extended or made pluggable so any
+  process-routing role name that resolves to a group a user belongs to
+  also confers a baseline task-API permission (e.g. :TasksRead) without
+  needing a separate platform-role grant; (c) some other explicit
+  design. Needs a regression test covering a process-routing-role-only
+  user's actual GET /tasks/inbox behavior under the chosen design.
+queue_ref: Q-772  # letflow-queue task id 772, issue_ref ISS-0774 (local
+  # filename diverges from the queue id -- 0772 was already taken
+  # locally by a different issue filed by the REQ-372 pipeline).
+  # Registered 2026-09-21 by ORCH.
+github_ref: GH-1681
+status: open

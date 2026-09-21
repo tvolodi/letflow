@@ -50,3 +50,14 @@ fix_direction: >
   mutual-exclusion-race hazards. Lower priority since the project's
   standard isolated-partition test runner does not exhibit the flake.
 status: open
+process_note: >
+  UPDATE 2026-09-21 (RELEASE-VALIDATOR, during REQ-397/PR #1672's
+  re-verification): the "does NOT reproduce under scripts/test_parallel.sh"
+  claim above is now stale. The same two identity_test.exs failures
+  reproduced under scripts/test_parallel.sh's own 8-partition run
+  (partition 6: 2 failures) during this session, in addition to 2/2
+  independent non-partitioned `mix letflow.check.test` runs -- a higher
+  reproduction rate than this issue's original severity_rationale assumed.
+  Still orthogonal to REQ-397 (no file this PR touches is implicated), so
+  not treated as a blocker there, but the frequency/severity assessment
+  above may need revisiting by whoever picks this issue up next.

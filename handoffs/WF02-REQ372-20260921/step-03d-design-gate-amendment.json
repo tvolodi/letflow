@@ -9,7 +9,7 @@
   "created_at": "2026-09-21T08:03:52Z",
   "started_at": "2026-09-21T08:03:52Z",
   "completed_at": "2026-09-21T08:09:00Z",
-  "status": "COMPLETED",
+  "status": "PENDING",
   "priority": "NORMAL",
   "context": {
     "stage": "S8",
@@ -31,12 +31,13 @@
     ]
   },
   "task": {
-    "description": "Hard gate on CODE-DESIGNER's amendment (new S2.5 section) to lib/letflow/design/req372-semantic-decision-rule-validation.md, per WF-02 Step 1b's same procedure applied to this amendment. You are on branch feature/WF02-REQ372-20260921 -- verify with git branch --show-current, pull if needed. Read the amended design section directly. Verify: (1) the empty-declared_fields behavior (skip both violation classes, return {valid: true, violations: []}) is stated explicitly with real reasoning, not asserted; (2) the amendment's own claim that all 10 original acceptance criteria remain unaffected is actually verified -- re-check AC1-AC6 yourself against the actual test scenarios TEST-DESIGNER wrote (test/specs/REQ-372.md and the two test files) to confirm none of them exercises the definition with an EMPTY declared_fields map in a way that would now silently pass when it should still fail; (3) no implementation code (function bodies) was introduced by the amendment -- signature/behavior description only; (4) the fix genuinely resolves the diagnosed root cause without requiring any pre-existing fixture to be modified -- read handoffs/WF02-REQ372-20260921/step-03-test-designer.json's failure evidence and confirm the amendment's mechanism (guard inside validate/2 itself, applying uniformly to both call sites) actually closes that gap by construction. FAIL immediately on any check failure.",
+    "description": "Hard gate on CODE-DESIGNER's amendment (new S2.5 section) to lib/letflow/design/req372-semantic-decision-rule-validation.md, per WF-02 Step 1b's same procedure applied to this amendment. You are on branch feature/WF02-REQ372-20260921 -- verify with git branch --show-current, pull if needed. Read the amended design section directly. Verify: (1) the empty-declared_fields behavior (skip both violation classes, return {valid: true, violations: []}) is stated explicitly with real reasoning, not asserted; (2) the amendment's own claim that all 10 original acceptance criteria remain unaffected is actually verified -- re-check AC1-AC6 yourself against the actual test scenarios TEST-DESIGNER wrote (test/specs/REQ-372.md and the two test files) to confirm none of them exercises the definition with an EMPTY declared_fields map in a way that would now silently pass when it should still fail; (3) no implementation code (function bodies) was introduced by the amendment -- signature/behavior description only; (4) the fix genuinely resolves the diagnosed root cause without requiring any pre-existing fixture to be modified -- read handoffs/WF02-REQ372-20260921/step-03-test-designer.json's failure evidence and confirm the amendment's mechanism (guard inside validate/2 itself, applying uniformly to both call sites) actually closes that gap by construction. FAIL immediately on any check failure.\n\nRE-GATE (rework iteration 1 addressed): CODE-DESIGNER has revised S2.5.4 to (a) honestly acknowledge the three conflicting tests instead of falsely claiming compatibility, and (b) added S2.5.4.1 stating explicitly that TEST-DESIGNER must revise those three tests' expectations, with the specific corrected expectation named for each. Re-read the design fresh and confirm: does S2.5.4/S2.5.4.1 now genuinely and specifically resolve the conflict (naming each test, its current wrong-under-the-amendment assertion, and its required new assertion) rather than just gesturing at 'tests need updating'? Is the reasoning for the AC6 reverse-test's revised approach (a different before/after pair that never ends in an empty schema, rather than just weakening the assertion) sound? This is a re-gate of the same design/reasoning question, not a new implementation to review.",
     "acceptance_criteria": [
       "empty-declared_fields behavior stated explicitly with reasoning",
       "AC1-AC6 compatibility independently re-verified against the actual test scenarios, not just CODE-DESIGNER's own claim",
       "no implementation code introduced by the amendment",
-      "the amendment's mechanism plausibly closes the 31-fixture regression without requiring fixture edits"
+      "the amendment's mechanism plausibly closes the 31-fixture regression without requiring fixture edits",
+      "the three test-conflict scenarios are now explicitly and specifically reconciled (named test, current assertion, required new assertion, reasoning) -- not just acknowledged in passing"
     ]
   },
   "result": {
@@ -61,6 +62,16 @@
     },
     "next_action": "Rework CODE-DESIGNER -- resolve the conflict between S2.5's empty-declared_fields exemption and the three committed test scenarios (test/letflow/definitions/semantic_validation_test.exs:106-113, test/letflow/definitions/semantic_validation_activation_test.exs:211-231 and :241-259) that assert a violation for an empty declared_fields definition. The amendment must either change its own mechanism so those scenarios keep failing as originally intended, or explicitly revise those test expectations (routed to TEST-DESIGNER) with stated reasoning, before this design amendment can be regated."
   },
+  "gate_history": [
+    {
+      "iteration": 0,
+      "gated_at": "2026-09-21T08:09:00Z",
+      "status": "FAIL",
+      "summary": "Checks 1,3,4 passed. Check 2 FAILed: amendment's S2.5.4 falsely claimed AC1-AC6 test cases never reach the empty-declared_fields branch -- three already-committed tests do (semantic_validation_test.exs:106-113; semantic_validation_activation_test.exs:211-231 and :241-259), each asserting a violation for an empty-schema definition, which the amendment now silently suppresses.",
+      "issues": ["REQ-372-amendment-breaks-own-new-empty-declared-fields-tests (BLOCKER)"],
+      "next_action": "Rework CODE-DESIGNER: reconcile the three named tests with the amendment, either by narrowing the mechanism or explicitly revising the tests' expectations with reasoning."
+    }
+  ],
   "rework_count": 0,
   "max_rework": 3
 }

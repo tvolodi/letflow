@@ -109,6 +109,21 @@ defmodule Letflow.Definitions.SemanticValidation do
   decisions) before any validation of it could even be designed. This gap
   is filed separately and is not solved here.
 
+  ## Empty-declared_fields exemption (REQ-372 §2.5 amendment)
+
+  When `declared_fields == %{}` (the definition has zero `variable_schemas` rows —
+  `VariableSchema.fetch_schemas/3` returned an empty map), `validate/2` skips both
+  violation classes entirely and returns `%{valid: true, violations: []}`
+  unconditionally, without walking any node or edge. `VariableSchema` registration is
+  optional; a process that never registered a schema has no schema to validate
+  references or comparisons against, so treating "zero fields declared" as "every
+  reference is a typo" would invert this requirement's own intent and would block
+  activation for every pre-existing, unregistered process definition. This guard lives
+  inside `validate/2` itself, checked before any edge is walked, so both call sites
+  (`Letflow.Definitions.activate/2` and `Letflow.Definitions.validate_definition_graph/2`)
+  get it uniformly with no per-caller special-casing. For any `declared_fields` with at
+  least one entry, behavior is exactly as specified above, unchanged.
+
   ## Nested variable references
 
   `VariableSchema.variable_key` is a single flat string with no
@@ -148,8 +163,18 @@ defmodule Letflow.Definitions.SemanticValidation do
   violation and every type-compatibility violation across the whole graph
   in one pass — never short-circuits, mirroring every existing `Graph`
   check's "never short-circuits" convention.
+
+  Amendment (REQ-372 §2.5): if `declared_fields == %{}`, returns
+  `%{valid: true, violations: []}` immediately — no node/edge is walked, and
+  neither `field_existence_violations/3` nor `type_compatibility_violations/3`
+  is invoked at all for this call. See the moduledoc's "Empty-declared_fields
+  exemption" section.
   """
   @spec validate(graph :: Graph.t(), declared_fields :: declared_fields()) :: Graph.result()
+  def validate(%Graph{}, declared_fields) when declared_fields == %{} do
+    %{valid: true, violations: []}
+  end
+
   def validate(%Graph{nodes: nodes, edges: edges}, declared_fields)
       when is_map(declared_fields) do
     node_index = build_node_index(nodes)

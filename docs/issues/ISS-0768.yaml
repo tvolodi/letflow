@@ -1,0 +1,58 @@
+id: ISS-0768
+title: >
+  Letflow.Identity.RoleRegistry never threads tenant-schema prefix --
+  POST /roles always 500s (relation groups/tenant_role does not exist)
+discovered_by: ai-dala-infra-34 (peer session, T-0140 seed-swiftroute-tenant-persona-qa-users), escalated via cross-session message; confirmed by ORCH (letflow-c5)
+discovered_in_run: T-0140-seed-swiftroute-tenant-persona-qa-users (ai-dala-infra)
+discovered_at: "2026-09-21T03:05:00Z"
+severity: BLOCKER
+description: >
+  Discovered live by a peer ai-dala-infra session attempting POST /roles
+  against qa.bizdala.com while seeding SwiftRoute tenant-persona QA users
+  (T-0140, filed from ISS-0739). lib/letflow/identity/role_registry.ex
+  never threads opts :: [prefix: String.t()] through its Repo calls
+  (upsert_role/2, list_roles/0), unlike every other identity module,
+  which follows the established REQ-063/REQ-073 convention documented
+  in lib/letflow/identity.ex's moduledoc and correctly followed by
+  lib/letflow/plugs/auth_pipeline.ex (verify_api_token/2,
+  provision_oidc_user/4, list_effective_role_names/2). RoleRegistry
+  always queries the default public schema, which has no
+  groups/tenant_role tables under this project's schema-per-tenant
+  multitenancy convention. Confirmed directly by ORCH via source read:
+  `grep -n "def upsert_role\|Repo\.\|prefix"
+  lib/letflow/identity/role_registry.ex` shows zero prefix: usage
+  across all Repo calls (Repo.all, Repo.get_by, Repo.get,
+  Repo.transaction, Repo.insert), cross-checked against
+  auth_pipeline.ex's and identity.ex's correct usage. Not version skew
+  -- the peer confirmed deployed vs local role_registry.ex are
+  byte-identical aside from one unrelated commit.
+  Net effect: POST /roles (and possibly GET /roles, list_roles/0) can
+  never succeed for ANY tenant, on any deployment -- a systemic
+  multitenancy bug, not specific to one tenant or QA. Blocks the
+  tenant-admin role-management GUI for every tenant, and directly
+  blocked T-0140's role-binding half (Keycloak-side user seeding can
+  still proceed independently).
+affected_files:
+  - lib/letflow/identity/role_registry.ex
+  - lib/letflow/routers/identity.ex
+fix_direction: >
+  Add opts :: [prefix: String.t()] (no default, matching identity.ex's
+  established convention) to every public function in RoleRegistry that
+  touches Repo -- upsert_role/2, list_roles/0, and any others found by a
+  full read of the module -- and thread prefix: through every Repo.all/
+  Repo.get_by/Repo.get/Repo.transaction/Repo.insert call inside them.
+  Update the POST /roles and GET /roles handlers in
+  lib/letflow/routers/identity.ex to pass the caller's own tenant schema
+  prefix, the same way other tenant-scoped routes in that router already
+  derive it. Needs a CODE-DESIGNER pass to enumerate every affected
+  function/call site precisely (module has zero prefix: usage today) and
+  a regression test creating a role for one tenant and confirming it is
+  queryable only in that tenant's own schema (not visible via a
+  different tenant's prefix, not written to public). Also investigate
+  and record whether this is a regression or has been broken since
+  RoleRegistry shipped, to bound the blast radius of any prior
+  GET/POST /roles success claims.
+queue_ref: Q-768  # letflow-queue task id 768, issue_ref ISS-0768. Registered
+  # 2026-09-21 by ORCH.
+github_ref: GH-1665
+status: open

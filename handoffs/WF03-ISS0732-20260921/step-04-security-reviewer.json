@@ -1,0 +1,56 @@
+{
+  "handoff_id": "b1e2a3c4-0000-4000-8000-000000000006",
+  "run_id": "WF03-ISS0732-20260921",
+  "workflow_id": "WF-03",
+  "step": "04",
+  "from_agent": "ORCH",
+  "to_agent": "SECURITY-REVIEWER",
+  "file": "handoffs/WF03-ISS0732-20260921/step-04-security-reviewer.json",
+  "created_at": "2026-09-21T09:10:00Z",
+  "started_at": null,
+  "completed_at": null,
+  "status": "PENDING",
+  "priority": "HIGH",
+  "context": {
+    "stage": "S6",
+    "requirement_ids": [],
+    "requirement_text": {},
+    "related_handoff_ids": ["b1e2a3c4-0000-4000-8000-000000000005"],
+    "artifacts_in": [
+      "lib/letflow/design/iss0732-promotion-apply-assertion-gate.md",
+      "lib/letflow/definitions/promotion.ex",
+      "lib/letflow/routers/promotions.ex",
+      "test/letflow/routers/req077_promotion_pipeline_test.exs"
+    ],
+    "owned_modules": [
+      "lib/letflow/definitions/promotion.ex",
+      "lib/letflow/routers/promotions.ex"
+    ]
+  },
+  "task": {
+    "description": "Gate review on commit 4efff094 (branch feature/WF03-ISS0732-20260921), which adds a new precondition (verify_rehearsed/2) to Letflow.Definitions.Promotion.apply_review/4's with-chain, requiring a passing PromotionAssertionRun for the current plan_digest before a promotion can be released. Check against docs/agents/instructions/security-invariants.md INV-1..INV-8. This touches a tenant-data write path (definition-promotion Apply), so this gate is mandatory before REVIEWER. Specifically verify: (1) verify_rehearsed/2's tenant-scoping is correct (queries the assertion run under the same prefix/tenant context as the rest of apply_review/4, no cross-tenant leak), (2) the new error reasons/HTTP responses do not leak internal state (e.g. another tenant's assertion-run details) in their messages, (3) the existing R8 assertions_failed==0 gate and verify_apply_digest/2's constant-time comparison are genuinely untouched (diff-confirm, not just trust the handoff's claim), (4) no new attacker-controlled input reaches a query/comparison without validation.",
+    "acceptance_criteria": [
+      "PASS or FAIL verdict with specific findings against INV-1..INV-8",
+      "Confirms tenant-scoping of the new assertion-run lookup by reading the actual diff, not the design doc alone",
+      "Confirms R8/verify_apply_digest/2 are byte-for-byte untouched by diffing against origin/main",
+      "If FAIL: precise, actionable findings for ELIXIR-DEV rework (do not fix it yourself)"
+    ]
+  },
+  "result": {
+    "status": "PENDING",
+    "summary": null,
+    "artifacts_out": [],
+    "issues": [],
+    "git_evidence": {
+      "branch_name": "feature/WF03-ISS0732-20260921",
+      "commit_sha_list": [],
+      "remote_branch": null,
+      "push_status": null,
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": null
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

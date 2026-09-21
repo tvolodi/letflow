@@ -2013,3 +2013,11 @@
 2026-09-21T00:14:02Z | GATE_PASS | WF-03 | WF03-ISS0733-20260921/step-00-git-setup | ORCH | PASS (branch feature/WF03-ISS0733-20260921 created, pushed)
 2026-09-21T00:05:00Z | DISPATCH | WF-03 | WF03-ISS0733-20260921/step-01-issue-fixer-diagnosis | ORCH -> ISSUE-FIXER | PENDING
 2026-09-21T00:13:40Z | GATE_PASS | WF-03 | WF03-ISS0733-20260921/step-01-issue-fixer-diagnosis | ISSUE-FIXER -> ORCH | PASS (two real gaps found: promotion.ex never writes audit_entries; platform_instance_id timeline 404s by design -- routed to CODE-DESIGNER)
+2026-09-21T00:20:00Z | DISPATCH | WF-03 | WF03-ISS0733-20260921/step-02-code-designer | ORCH -> CODE-DESIGNER | PENDING
+2026-09-21T00:44:00Z | GATE_PASS | WF-03 | WF03-ISS0733-20260921/step-02-code-designer | CODE-DESIGNER -> ORCH | PASS (design doc lib/letflow/design/iss0733-promotion-audit-and-platform-events-read.md, commit 03d1d8bb)
+2026-09-21T00:45:00Z | DISPATCH | WF-03 | WF03-ISS0733-20260921/step-02b-code-design-validator | ORCH -> CODE-DESIGN-VALIDATOR | PENDING
+2026-09-21T01:00:00Z | GATE_FAIL | WF-03 | WF03-ISS0733-20260921/step-02b-code-design-validator | CODE-DESIGN-VALIDATOR -> ORCH | FAIL (criterion 4: literal executable Plug.Router body at design doc lines 285-289)
+2026-09-21T01:05:00Z | DISPATCH | WF-03 | WF03-ISS0733-20260921/step-02-code-designer-rework1 | ORCH -> CODE-DESIGNER | PENDING
+2026-09-21T01:18:00Z | GATE_PASS | WF-03 | WF03-ISS0733-20260921/step-02-code-designer-rework1 | CODE-DESIGNER -> ORCH | PASS (route-table shorthand substituted, commit 2c6adda3)
+2026-09-21T01:20:00Z | DISPATCH | WF-03 | WF03-ISS0733-20260921/step-02b-code-design-validator-rework1 | ORCH -> CODE-DESIGN-VALIDATOR | PENDING
+2026-09-21T01:35:00Z | GATE_PASS | WF-03 | WF03-ISS0733-20260921/step-02b-code-design-validator-rework1 | CODE-DESIGN-VALIDATOR -> ORCH | PASS (all 5 criteria verified, zero remaining implementation code, commit c46441ca)

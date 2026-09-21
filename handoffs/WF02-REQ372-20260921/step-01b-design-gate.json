@@ -8,8 +8,8 @@
   "file": "handoffs/WF02-REQ372-20260921/step-01b-design-gate.json",
   "created_at": "2026-09-21T07:03:57Z",
   "started_at": "2026-09-21T07:03:57Z",
-  "completed_at": null,
-  "status": "PENDING",
+  "completed_at": "2026-09-21T07:41:00Z",
+  "status": "COMPLETED",
   "priority": "NORMAL",
   "context": {
     "stage": "S8",
@@ -50,19 +50,23 @@
     ]
   },
   "result": {
-    "status": "PASS",
-    "summary": "",
+    "status": "FAIL",
+    "summary": "Independently verified (direct source reads, not CODE-DESIGNER's summary) every one of the five specifically-named scrutiny points and they all hold up: (a) the release/promotion call-path finding is correct -- confirmed by reading promotion.ex in full (no `Graph.` call anywhere, `create_changeset/2` copy-verbatim path) and definitions.ex (activate/2 -> run_activate_transaction/4 -> run_service_scope_validator/3 at lines 2280-2319 calls no Graph validator today, matching line numbers exactly); (b) the comparable/non-comparable type-pair table is complete, unambiguous, and correctly marks numeric vs string as VIOLATION, matching Letflow.EventStore.Registry.JsonSchema.matches_type?/2's real 7-value type vocabulary (string/number/integer/boolean/object/array/null) verified in lib/letflow/event_store/registry/json_schema.ex:82-93, including the 'format is permitted and inert' claim which is a verbatim-sourced phrase from that same file's moduledoc (not json_schema_shape.ex as the citation context could suggest, but correctly the Registry.JsonSchema module the sentence names); (c) the HUMAN_TASK-out-of-scope reasoning is genuinely grounded -- verified check_human_task_role/1 (graph.ex:760-771) requires only a non-blank plain string, and grepped all 5 files referencing Expr. under lib/letflow/ (transition.ex, graph.ex, form_schema_expressions.ex, form_expression_reevaluation.ex, entities/query/types.ex) -- none routes a HUMAN_TASK attribute through Expr; (d) confirmed zero diff to lib/letflow/engine/expr.ex on this branch (git diff --stat main...HEAD is empty for that path), and the design calls only two already-public functions (translate_cel_to_expr/1, parse_strict/1, confirmed public at expr.ex:211/550) with no grammar/token/operator/builtin addition proposed; (e) the create/2 and update/2 exclusion is explicitly and non-silently justified against the requirement's own UAT-scenario acceptance language (EO-001/EO-002, cited directly) rather than left as an unexplained narrowing, and is separately flagged for REVIEWER as a real behavioral divergence from REQ-288's precedent -- this is exactly the transparent-tradeoff shape the gate wants, not a silent gap. All 10 ACs map to a concrete, unambiguous design element; no TBD/deferral language found anywhere in the file (grepped). However, the design fails the gate's own mechanical, no-partial-credit rule against 'no implementation code -- signatures and type shapes only, not bodies' (WF-02 Step 1b check (e); .claude/agents/code-design-validator.md's 'no real .ex/.exs bodies'): section 3.2 and 3.3 contain complete, literal, copy-pasteable Elixir function bodies, not signatures.",
     "artifacts_out": [],
-    "issues": [],
+    "issues": [
+      "Design-quality dimension 'no implementation code present' (WF-02 Step 1b check 2e): section 3.3's `validate_definition_graph/2` is reproduced as a COMPLETE function body -- full `with` clause, full violations concatenation including the new `SemanticValidation.validate/2` call, full return tuple -- with no ellipsis and no 'described, not written' caveat (contrast with section 3.2's own `run_semantic_validation/2', which the doc explicitly labels 'Body (described, not written)'). This is implementation code, not a signature.",
+      "Design-quality dimension 'no implementation code present' (WF-02 Step 1b check 2e): section 3.2's call-site code block (the `%ProcessDefinition{status: :draft} = definition -> case ... end` snippet) is a complete, literal replacement for the current lines 2296-2300 of definitions.ex, not a signature or type shape -- it is implementation-ready control flow.",
+      "Design-quality dimension 'no implementation code present' (WF-02 Step 1b check 2e): section 3.2's two new `interpret_activate_result/1` private function clauses are given complete literal bodies (`do: error` for both), not signatures -- e.g. `defp interpret_activate_result({:error, {:semantic_validation_failed, _violations}} = error), do: error`."
+    ],
     "git_evidence": {
-      "branch_name": null,
+      "branch_name": "feature/WF02-REQ372-20260921",
       "commit_sha_list": [],
       "remote_branch": null,
       "push_status": "skipped",
       "pr_url": null,
       "pr_create_error": null
     },
-    "next_action": ""
+    "next_action": "Rework CODE-DESIGNER: rewrite section 3.2's call-site snippet and interpret_activate_result/1 clauses, and section 3.3's validate_definition_graph/2, as signatures/type-shape descriptions (prose plus, at most, a short pseudocode/diff-shape sketch that is NOT valid, pasteable Elixir with real bodies) -- the same treatment section 3.2 already gives run_semantic_validation/2 ('Body (described, not written)'). No other rework needed: all 10 acceptance criteria map to concrete design elements, the type-pair table, HUMAN_TASK-out-of-scope reasoning, release/promotion call-path identification, zero-expr.ex-grammar-change claim, and create/2 and update/2 exclusion were all independently verified against actual source and are sound."
   },
   "rework_count": 0,
   "max_rework": 3

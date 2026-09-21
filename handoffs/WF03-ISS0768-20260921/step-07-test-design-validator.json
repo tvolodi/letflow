@@ -1,0 +1,57 @@
+{
+  "handoff_id": "d1a2b3c4-0007-4000-8000-000000000768",
+  "run_id": "WF03-ISS0768-20260921",
+  "workflow_id": "WF-03",
+  "step": "07",
+  "from_agent": "ORCH",
+  "to_agent": "TEST-DESIGN-VALIDATOR",
+  "file": "handoffs/WF03-ISS0768-20260921/step-07-test-design-validator.json",
+  "created_at": "2026-09-21T05:15:47Z",
+  "started_at": "2026-09-21T05:15:47Z",
+  "completed_at": null,
+  "status": "PENDING",
+  "priority": "HIGH",
+  "context": {
+    "stage": "S4",
+    "requirement_ids": [],
+    "requirement_text": {},
+    "related_handoff_ids": ["d1a2b3c4-0006-4000-8000-000000000768"],
+    "artifacts_in": [
+      "docs/issues/ISS-0768.yaml",
+      "test/letflow/role_registry_test.exs",
+      "test/specs/ISS-0768.md",
+      "handoffs/WF03-ISS0768-20260921/step-06-test-designer.json"
+    ],
+    "owned_modules": [
+      "test/letflow/role_registry_test.exs"
+    ]
+  },
+  "task": {
+    "description": "Hard gate on TEST-DESIGNER's step-06 output (commit 8e9f35e8, this branch). TEST-DESIGNER added a new describe block to test/letflow/role_registry_test.exs asserting: (1) a role created under tenant A's prefix is visible via list_roles(prefix: schema_a); (2) the same role is NOT visible via list_roles(prefix: schema_b), a genuinely separate second tenant schema; (3) the row cannot be found via a direct Repo.all(TenantRole, prefix: \"public\") query, which is asserted to raise (public.tenant_role does not exist post-REQ-063). TEST-DESIGNER also reports running a live mutation test (temporarily removing prefix: from list_roles/1, confirming only the new test goes red, then reverting) as evidence the new assertion is load-bearing -- verify this claim is plausible given what the test actually asserts, though you do not need to re-run the mutation yourself. Verify: every one of ISS-0768's own acceptance criteria (docs/issues/ISS-0768.yaml) that pertains to test coverage is satisfied by a REAL, runnable assertion (not a comment, not a TODO); the two-tenant fixture (provision_second_tenant!/0) genuinely provisions an independent Postgres schema rather than reusing tenant A's; no existing test in the file was weakened or removed (diff the file yourself); the test is self-sufficient (unique names/slugs, its own on_exit cleanup, no shared mutable fixture across tests). Also independently assess TEST-DESIGNER's result.issues note about unrelated mix letflow.check.test failures (SeedTest, PublicReadTest, Iss0736OidcLiveRevocationTest, correlated with connection-pool contention) -- confirm role_registry_test.exs/RoleRegistry does not appear in that failure set, per the evidence already quoted in handoffs/WF03-ISS0768-20260921/step-06-test-designer.json, rather than re-running the full suite yourself (expensive, and TEST-RUNNER re-runs it next at step-08 anyway). Work in worktree c:\\Users\\tvolo\\dev\\ai-dala\\letflow-wf03-iss0768, branch feature/WF03-ISS0768-20260921. Hard rule: never push directly to main.",
+    "acceptance_criteria": [
+      "Every ISS-0768 test-coverage acceptance criterion mapped to a specific, real assertion in the new test, by you, not by re-reading TEST-DESIGNER's summary",
+      "provision_second_tenant!/0 confirmed to provision a genuinely independent schema (read the function, don't assume from its name)",
+      "No existing test in role_registry_test.exs weakened or removed -- confirmed by direct diff",
+      "New test confirmed self-sufficient (unique fixtures, own cleanup, no cross-test shared mutable state)",
+      "TEST-DESIGNER's unrelated-failures claim spot-checked against the evidence already in step-06's handoff, not blindly accepted",
+      "PASS or FAIL with specific named gaps if FAIL"
+    ]
+  },
+  "result": {
+    "status": "",
+    "summary": "",
+    "artifacts_out": [],
+    "issues": [],
+    "git_evidence": {
+      "branch_name": "feature/WF03-ISS0768-20260921",
+      "commit_sha_list": [],
+      "remote_branch": "origin/feature/WF03-ISS0768-20260921",
+      "push_status": "skipped",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": ""
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

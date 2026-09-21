@@ -360,7 +360,7 @@ defmodule Letflow.Routers.PromotionsTest do
     prefix <> "-" <> to_string(System.unique_integer([:positive, :monotonic]))
   end
 
-  defp req397_sample_plan(tenant_id, overrides \\ %{}) do
+  defp req397_sample_plan(tenant_id, overrides) do
     %{
       source_tenant_id: Ecto.UUID.generate(),
       target_tenant_id: tenant_id,

@@ -50,17 +50,17 @@ defmodule Letflow.Plugs.CrashLogAuthorizationRedactionTest do
     url = ~c"http://127.0.0.1:#{port}/"
     headers = [{~c"authorization", ~c"Bearer #{@sentinel_token}"}]
 
+    # `formatter: {Letflow.Obs.Logger, %{}}` -- the project's REAL configured
+    # `:logger_formatter` (see `config/*.exs`), not `capture_log/2`'s own default
+    # text formatter. This matters: Elixir's default `Logger.Formatter` silently
+    # DROPS any metadata value that is a map or list (see
+    # `lib/logger/formatter.ex`'s `metadata(_, list) when is_list(list), do: nil`
+    # clause upstream) -- so with the default formatter, `conn`/`req_headers`
+    # metadata would never be rendered at all, and this test would vacuously pass
+    # regardless of whether redaction ran. `Letflow.Obs.Logger` is the formatter
+    # actually configured for this application (it serializes maps/lists to JSON),
+    # so using it here is what makes this a genuine test of the real behavior.
     log =
-      # `formatter: {Letflow.Obs.Logger, %{}}` -- the project's REAL configured
-      # `:logger_formatter` (see `config/*.exs`), not `capture_log/2`'s own default
-      # text formatter. This matters: Elixir's default `Logger.Formatter` silently
-      # DROPS any metadata value that is a map or list (see
-      # `lib/logger/formatter.ex`'s `metadata(_, list) when is_list(list), do: nil`
-      # clause upstream) -- so with the default formatter, `conn`/`req_headers`
-      # metadata would never be rendered at all, and this test would vacuously pass
-      # regardless of whether redaction ran. `Letflow.Obs.Logger` is the formatter
-      # actually configured for this application (it serializes maps/lists to JSON),
-      # so using it here is what makes this a genuine test of the real behavior.
       capture_log([formatter: {Letflow.Obs.Logger, %{}}], fn ->
         # The server-side crash means :httpc gets a connection-closed/error result --
         # we only care about what got logged server-side, not the client-side outcome.

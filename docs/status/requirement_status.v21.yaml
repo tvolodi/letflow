@@ -489,3 +489,44 @@ history:
       separately confirmed non-regression of REQ-378's OIDC live-revocation
       mechanism and of ISS-0773's fix -- full PASS). Design:
       lib/letflow/design/iss-0775-oidc-role-sync-kind-scoping.md.
+  - req: REQ-374
+    event: done
+    agent: DOC-UPDATER
+    at: "2026-09-21T20:40:11Z"
+    note: >
+      Platform-wide tenant-migration fanout runner (backend) shipped on
+      feature/WF02-REQ374-20260921 (tip 9acdcb51), letflow-queue task 733,
+      GH-1621, stage S6. New Letflow.Platform.MigrationRollout applies an
+      arbitrary platform-defined change to every active company's own tenant
+      schema in turn, transactionally per company (one company's failure
+      neither rolls back nor blocks any other), persists a per-company
+      SUCCEEDED/FAILED outcome (completion timestamp, plain-language failure
+      reason derived from the real error), supports resuming a rollout
+      against only not-yet-succeeded companies, and is idempotent on re-run
+      once every company already holds the change. Routes in
+      lib/letflow/routers/platform_migrations.ex gated behind a new
+      explicitly-named platform-admin-only permission wired through
+      lib/letflow/plugs/api_pipeline.ex and lib/letflow/api/authorization.ex.
+      Design: lib/letflow/design/req374-tenant-migration-fanout-runner.md.
+      Went through two rounds of genuine design fixes (an apply_outstanding/1
+      crash-recovery gap, and stating the suspended-status unreachability
+      explicitly in the status enum) before CODE-DESIGN-VALIDATOR PASSED, and
+      one round of implementation fix after REVIEWER caught a real
+      silent-swallow bug (a registration conflict was being silently dropped
+      instead of raising on an unreachable status) plus applied a
+      reason-string quality fix to describe_failure_reason/1 (now handles
+      Ecto.Changeset) directly. TEST-DESIGN-VALIDATOR independently
+      reproduced fail-first mutation evidence for the new coverage in
+      test/letflow/platform/migration_rollout_test.exs and
+      test/letflow/routers/platform_migrations_test.exs. RELEASE-VALIDATOR
+      independently re-verified all 7 acceptance criteria, including AC-7
+      ("mix letflow.check passes"): two independent mix letflow.check.test
+      runs both hit exactly the pre-existing, already-tracked ISS-0766 flake
+      (test/letflow/identity_test.exs's REQ-019 AC1 tests, unrelated to any
+      file this requirement touches) and nothing else, matching the
+      established project precedent for treating this specific flake as
+      non-blocking recorded at
+      docs/status/requirement_status.v21.yaml:267-270 (ISS-0770's
+      RELEASE-VALIDATOR entry, same flake). REQ-375 (the operator-facing
+      rollout-status screen depending on this endpoint) remains pending,
+      unblocked by this merge.

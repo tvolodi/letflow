@@ -1,0 +1,55 @@
+{
+  "handoff_id": "a1b2c3d4-0000-4000-8000-000000000007",
+  "run_id": "WF03-ISS0771-20260921",
+  "workflow_id": "WF-03",
+  "step": "06",
+  "from_agent": "ORCH",
+  "to_agent": "TEST-DESIGNER",
+  "file": "handoffs/WF03-ISS0771-20260921/step-06-test-designer.json",
+  "created_at": "2026-09-21T08:02:33Z",
+  "started_at": "2026-09-21T08:02:33Z",
+  "completed_at": null,
+  "status": "PENDING",
+  "priority": "HIGH",
+  "context": {
+    "stage": "S6",
+    "requirement_ids": [],
+    "requirement_text": {},
+    "artifacts_in": [
+      "lib/letflow/design/iss0771-tenant-migration-replay-on-deploy.md",
+      "docs/issues/ISS-0771.yaml",
+      "lib/letflow/tenant_provisioning.ex",
+      "lib/letflow/tenant_provisioning/migration_replay_boot.ex"
+    ],
+    "owned_modules": [
+      "test/letflow/tenant_provisioning_test.exs",
+      "test/letflow/tenant_provisioning/migration_replay_boot_test.exs"
+    ]
+  },
+  "task": {
+    "description": "Write ExUnit tests covering Letflow.TenantProvisioning.replay_all_pending/0 (new) and Letflow.TenantProvisioning.MigrationReplayBoot (new), per WF-03's regression-test rule: since this fix ADDS new functions rather than changing existing behavior, the fail-then-pass rule is satisfied only via the MUTATION-TESTING path (see docs/agents/workflows/WF-03_issue_resolving.md, 'When the pre-fix failure is code under test does not exist' section) -- your tests must be proven SENSITIVE to the specific traps this fix exists to prevent, not merely passing against the shipped implementation. Cover at minimum: (1) idempotent no-op second run -- calling replay_all_pending/0 twice against tenants with zero pending migrations produces the same %{ok: [...], error: []} result both times with no duplicate DDL/rows; (2) one tenant's migration failure does not abort replay for other tenants -- construct a fixture where one tenant's migration state is broken (e.g. a corrupt/unreachable schema or a migration that raises) and confirm the OTHER tenants still get replayed and appear under :ok while the broken one appears under :error, in the same call; (3) a real replay against a genuinely pending tenant-scoped migration in a test fixture -- provision a tenant, then simulate a migration that was added AFTER provisioning (not yet applied to that tenant's schema), call replay_all_pending/0, and confirm it actually applies and the tenant ends up under :ok. Mutate the shipped implementation in at least 2 ways that target the specific traps this fix exists to handle (e.g. mutant 1: remove the per-tenant rescue in replay_all_pending/0's loop so one tenant's raise aborts the whole Enum -- confirm your test for (2) fails against this mutant; mutant 2: make MigrationReplayBoot.start_link/1 propagate an exception on total failure instead of always returning :ignore -- confirm this is a real risk your test suite would catch if introduced). Apply mutants in a throwaway git worktree of this branch (preferred) or apply-then-revert-and-verify in place per WF-03's isolation technique -- record which technique you used and the pass/fail counts for each mutant in result.summary. Do NOT implement the fix (already done, gated PASS through REVIEWER at step 05) -- test code only.",
+    "acceptance_criteria": [
+      "Test file(s) exist covering: idempotent no-op second run, one tenant's failure doesn't abort others, real replay against a genuinely pending migration fixture",
+      "At least 2 mutants applied against the shipped implementation, targeting the isolation guarantee and the always-:ignore guarantee specifically, with recorded pass/fail counts proving the new tests are sensitive to each",
+      "Mutants reverted and the revert verified (git status --porcelain test/ lib/ empty, and the test file re-runs green against the restored unmutated code) -- state this explicitly in result.summary",
+      "No implementation code changed in the final committed state -- only test files"
+    ]
+  },
+  "result": {
+    "status": "PENDING",
+    "summary": "",
+    "artifacts_out": [],
+    "issues": [],
+    "git_evidence": {
+      "branch_name": null,
+      "commit_sha_list": [],
+      "remote_branch": null,
+      "push_status": "skipped",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": ""
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

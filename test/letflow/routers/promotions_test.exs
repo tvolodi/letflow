@@ -42,7 +42,8 @@ defmodule Letflow.Routers.PromotionsTest do
     roles = Keyword.get(fields, :roles, ["PLATFORM_ADMIN"])
     query_string = Keyword.get(fields, :query_string, "")
 
-    path = if query_string == "", do: "/platform-events", else: "/platform-events?" <> query_string
+    path =
+      if query_string == "", do: "/platform-events", else: "/platform-events?" <> query_string
 
     tenant_id = if tenant_fixture, do: tenant_fixture.tenant_id, else: Ecto.UUID.generate()
 

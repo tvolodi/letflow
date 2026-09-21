@@ -510,7 +510,9 @@ defmodule Letflow.Definitions.PromotionTest do
       assert {:ok, result} =
                Promotion.promote_definition(actor_id, review,
                  permission_checker: allow(),
-                 event_appender: fn _event_attrs, _prefix -> {:ok, %{event_id: Ecto.UUID.generate()}} end
+                 event_appender: fn _event_attrs, _prefix ->
+                   {:ok, %{event_id: Ecto.UUID.generate()}}
+                 end
                )
 
       # 0 audit_entries rows in the SOURCE tenant's schema -- this write path

@@ -92,3 +92,37 @@ queue_ref: Q-759  # letflow-queue task id 759, issue_ref ISS-0759 (queue's own
   # "Never derive a set_lock target from a filename"). Registered 2026-09-20 by ORCH.
 github_ref: GH-1647
 status: open
+routing:
+  note: >
+    Run WF01-ISS0734-20260921 (ORCH) scoped and filed this issue's fix_direction
+    piece 1 (the review-queue/list screen) as two properly-sized requirements,
+    through REQ-ANALYST/REQ-VALIDATOR (1 rework round, depends_on fix) and
+    registered in letflow-queue. This issue's own status stays `open` rather than
+    `resolved` -- per docs/agents/protocols/ISSUE_QUEUE.md's status vocabulary,
+    `resolved` asserts a root cause was actually removed with a regression test
+    proving it, which has not happened yet; REQ-397/REQ-398 are the real fix
+    owners going forward and this issue should not be independently re-investigated
+    or re-selected as unscoped work. Close this issue's own record (or transition
+    it once both requirements ship) as a follow-on step, not in this run.
+  requirements_filed:
+    - id: REQ-397
+      title: "GET /api/v1/promotions list endpoint (paginated, filterable by status/definition)"
+      queue_task_id: 765
+      github_issue: 1659
+      covers: "fix_direction piece 1, backend half"
+    - id: REQ-398
+      title: "Frontend promotion-review list/queue page + nav entry, wired to REQ-397's list endpoint"
+      queue_task_id: 766
+      github_issue: 1660
+      depends_on_queue_task: 765
+      covers: "fix_direction piece 1, frontend half"
+  still_open: >
+    fix_direction piece 2 (whether a submit-time conflict refusal should be
+    durably recorded at all, and reshaping/wiring ConflictRejectionAlert.tsx)
+    was deliberately left unfiled by REQ-ANALYST -- the decision itself is
+    undetermined (audit-trail table vs. widened promotion_reviews status vs.
+    staying ephemeral and revising this issue's own EO-001/gui_screen
+    verification method instead), and REQ-397/REQ-398's own OUT-OF-SCOPE
+    sections cross-reference this as still open. Not registered as a queue
+    task; a future run should pose this as a design question to CODE-DESIGNER
+    before sizing it as a requirement.

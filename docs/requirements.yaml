@@ -29443,3 +29443,176 @@ requirements:
       - "test/fixtures/uat/scenarios/swiftroute/shipment-ops-timeout-escalation.yaml is re-run by UAT-RUNNER once this requirement, REQ-395, and ISS-0739 all land, and its gui-review report is updated from UNBUILT_FEATURE/BLOCKED to a real pass/fail verdict with real screenshots for step 3's CEO GUI approval"
       - "mix test and mix compile --warnings-as-errors both pass with real output quoted"
     depends_on: []
+
+  - id: REQ-397
+    title: "GET /api/v1/promotions list endpoint (paginated, filterable by status/definition), so a reviewer can discover reviews without an out-of-band reviewId"
+    owner: ELIXIR-DEV
+    status: pending
+    stage: S6
+    impl_order: 765  # letflow-queue task id, GH#1659. Registered 2026-09-21 by ORCH.
+    description: >
+      Filed from ISS-0734 (docs/issues/ISS-0734.yaml), discovered by ORCH
+      acting as UAT-RUNNER against
+      test/fixtures/uat/scenarios/platform/definition-promotion-conflict-rejected.yaml.
+      First of two requirements covering that issue's fix_direction piece 1
+      (the review-queue/list screen); REQ-398 is the frontend list page,
+      depends_on this one. ISS-0734's other piece (whether a submit-time
+      conflict refusal should be durably recorded at all) is deliberately
+      NOT covered by this requirement -- see this requirement's OUT OF SCOPE
+      section.
+
+      WHAT EXISTS TODAY, confirmed by reading current source, not assumed:
+      `lib/letflow/routers/promotions.ex` (REQ-077) has R1-R8, none of them a
+      list route -- `lib/letflow/design/iss0730-promotion-review-page-routing.md`
+      §5 states this explicitly as a non-goal of that earlier fix ("No new
+      backend endpoint. No `GET /api/v1/promotions` list route"). Every
+      existing route is `:Unknown`-policy (PLATFORM_ADMIN-only,
+      `Letflow.Plugs.Authorize`'s catch-all, see this module's own moduledoc
+      "The `:Unknown` authorization decision") and every read is schema-
+      scoped via `conn.assigns.scoped_opts`'s `prefix:` (`promotion_reviews`
+      carries no `tenant_id` column at all -- REQ-064/Decision 0006 D2; a
+      tenant's own Postgres schema is the isolation boundary). `Letflow.
+      Definitions.PromotionReviewStore` (`lib/letflow/definitions/
+      promotion_review_store.ex`) has `get_review/2` (single row by id) and
+      the five transition functions (`approve_review/4` etc.) but nothing
+      that lists/filters rows. `Letflow.Definitions.PromotionReview`'s schema
+      (`lib/letflow/definitions/promotion_review.ex:71-89`) has: `id`,
+      `plan_digest`, `def_type`, `def_id`, `serialised_plan`, `status`
+      (`Ecto.Enum`, one of `:pending_review | :approved | :rejected |
+      :applied | :failed | :superseded`), `requested_by`, `approved_by`,
+      `approved_at`, `superseded_by`, `row_version`, `inserted_at`/
+      `updated_at`.
+
+      THIS REQUIREMENT builds a new `GET /api/v1/promotions` route on
+      `lib/letflow/routers/promotions.ex`:
+
+      1. A new `Letflow.Definitions.PromotionReviewStore.list_reviews/2` (or
+      equivalently named) function, schema-scoped the same way every other
+      call in this module already is (`prefix: opts[:prefix]`, no second
+      unscoped query), returning `promotion_reviews` rows ordered most-recent
+      first (`inserted_at` descending, ties broken by `id` for determinism).
+
+      2. Pagination -- CODE-DESIGNER decides and states the concrete shape
+      (offset/limit vs. cursor-based; name the exact query-param names and
+      response envelope fields, e.g. `page`/`page_size`/`total_count` or
+      `cursor`/`next_cursor`) as an explicit design-stage decision, following
+      this codebase's existing list-endpoint convention if one already
+      exists elsewhere (check e.g. `lib/letflow/routers/definitions.ex` or
+      `lib/letflow/routers/instances.ex` for a precedent list route before
+      inventing a new shape) -- flag for REVIEWER same as REQ-386's expiry-
+      value precedent if no existing convention is found and a new one must
+      be chosen.
+
+      3. Filtering by `status` (one or more of the six enum values, caller-
+      supplied query param(s)) and by `def_id`/`def_type` (so a reviewer can
+      scope to one definition's own pending/refused/failed reviews). An
+      unrecognised `status` value is rejected with a plain 4xx naming the
+      allowed set, not silently ignored or treated as "no filter."
+
+      4. The same `:Unknown`/PLATFORM_ADMIN-only authorization as every
+      other route in this module (do not introduce a new, more permissive
+      policy for this one route without stating why in the design doc).
+
+      5. Response shape: enough per-row detail for a reviewer to identify
+      and open a review without a second round-trip per row -- at minimum
+      `id`, `status`, `def_type`, `def_id`, `requested_by`, `inserted_at`,
+      `updated_at` -- state the exact JSON shape in the design doc (a new
+      `Letflow.Api.Views` or inline map, matching this module's existing
+      response-building convention).
+
+      OUT OF SCOPE: the frontend list page and nav entry (REQ-398); any
+      change to R1-R8's existing behavior; durably recording a submit-time
+      conflict refusal that never created a `promotion_reviews` row at all
+      (ISS-0734's other, undecided piece -- there is genuinely no row for
+      this endpoint to list for a refused submission today, and this
+      requirement does not change that); reshaping or wiring
+      `web/src/components/promotions/ConflictRejectionAlert.tsx` (also part
+      of that undecided piece).
+    acceptance_criteria:
+      - "a new authenticated, PLATFORM_ADMIN-only GET /api/v1/promotions route returns a paginated list of the caller's own tenant's promotion_reviews rows, most-recent first -- a test asserts this over real HTTP, not by calling the context function directly"
+      - "a caller from a different tenant's session sees only their own tenant's rows (or none, if they have none) -- a test seeds promotion_reviews rows in two distinct tenant schemas and asserts the list response for each caller never contains the other tenant's row ids"
+      - "filtering by a single status value (e.g. status=rejected) returns only rows in that status, proven by a test that seeds rows across at least three distinct statuses and asserts the filtered response's row set exactly"
+      - "an unrecognised status filter value is rejected with a 4xx response naming the allowed status values in plain language, proven by a test"
+      - "filtering by def_id returns only that definition's own reviews, proven by a test with rows for at least two distinct def_id values"
+      - "a caller without PLATFORM_ADMIN role receives the same Deny403 this module's other routes already return, proven by a test"
+      - "the design doc states and justifies the chosen pagination shape (query params and response envelope), citing any existing list-endpoint convention found elsewhere in this codebase or stating explicitly that none was found"
+      - "mix compile --warnings-as-errors and mix test both pass, with real output quoted; SECURITY-REVIEWER sign-off is required before merge (this is a tenant-data-scoped read/list route per docs/agents/instructions/security-invariants.md, same class as REQ-394)"
+    depends_on: [REQ-035, REQ-077]
+
+  - id: REQ-398
+    title: "Frontend promotion-review list/queue page + nav entry, wired to REQ-397's list endpoint"
+    owner: FRONTEND-DEV
+    status: pending
+    stage: S8
+    impl_order: 766  # letflow-queue task id, GH#1660. Registered 2026-09-21 by ORCH.
+    description: >
+      Filed from ISS-0734 (docs/issues/ISS-0734.yaml). Second of two
+      requirements covering that issue's fix_direction piece 1; depends on
+      REQ-397 (the backend list endpoint this page calls).
+
+      WHAT EXISTS TODAY: `web/src/router.tsx` has exactly one promotion-
+      related route, the direct-URL `definitions/:id/promotions/:reviewId`
+      detail route (ISS-0730, `lib/letflow/design/
+      iss0730-promotion-review-page-routing.md`) -- confirmed by that
+      design doc's own §1 "Decision: no nav entry, no contextual link --
+      direct URL only", made explicitly BECAUSE no list endpoint existed at
+      the time ("No list endpoint exists ... so a static nav entry would
+      404 or need a placeholder list page nobody asked for"). That
+      rationale no longer holds once REQ-397 ships. `web/src/components/
+      layout/AppShell.tsx`'s `NAV_ITEMS` (lines 19-47) has no
+      promotions/review-queue entry. `web/src/api/promotions.ts` and
+      `web/src/hooks/usePromotions.ts` have no list client/hook -- only
+      `usePromotionContext`, `useApprovePromotion`, `useRejectPromotion`,
+      `useApplyPromotion`, all keyed on a single `reviewId` already in hand.
+
+      THIS REQUIREMENT builds:
+
+      1. A typed list client in `web/src/api/promotions.ts` (matching this
+      file's existing request/response typing convention) and a
+      corresponding hook in `web/src/hooks/usePromotions.ts` calling
+      REQ-397's `GET /api/v1/promotions`, with whatever pagination/filter
+      query params REQ-397's design doc settles on.
+
+      2. A new routed list page (e.g. `web/src/pages/definitions/
+      PromotionReviewListPage.tsx` or `web/src/pages/promotions/
+      PromotionReviewListPage.tsx` -- follow this codebase's existing
+      page-location convention for a top-level list, e.g.
+      `web/src/pages/admin/AuditLogPage.tsx` or `web/src/pages/tasks/
+      TaskInboxPage.tsx`, whichever is the closer precedent), gated the
+      same client-side PLATFORM_ADMIN check `PromotionReviewPage.tsx`
+      already uses (per ISS-0730's design §3.1). The page renders each
+      row's status, def_type/def_id, requested_by, and timestamps, with a
+      status filter control, and each row links to the existing
+      `definitions/:id/promotions/:reviewId` detail route (`id` here is the
+      row's own `def_id`, matching that route's existing param convention).
+
+      3. One new route entry in `web/src/router.tsx` and one new nav entry
+      in `AppShell.tsx`'s `NAV_ITEMS`, reversing ISS-0730's earlier
+      no-nav-entry decision now that its stated reason (no list endpoint)
+      no longer applies -- state this explicitly in the design doc as
+      superseding ISS-0730 §1, not a silent re-decision.
+
+      4. Loading/error/empty states following this codebase's existing
+      `QueryStateBoundary`/`classifyError` convention (same pattern
+      `PromotionReviewPage.tsx` already uses, per ISS-0730 design §3.2) --
+      an empty result set (no reviews at all) renders a plain "no reviews"
+      state, distinct from a fetch failure.
+
+      OUT OF SCOPE: the backend endpoint itself (REQ-397); any GUI submit
+      flow for creating a new promotion (ISS-0734 notes none exists today
+      and flags it as a separate, unresolved question -- this requirement
+      does not build one); `ConflictRejectionAlert.tsx` reshaping/wiring
+      (ISS-0734's undecided piece 2); a dedicated "refused submission" row
+      or filter value, since no `promotion_reviews` row is ever created for
+      a submit-time-refused submission today (this page can only ever list
+      what REQ-397's endpoint returns).
+    acceptance_criteria:
+      - "web/src/api/promotions.ts gains a typed list client and web/src/hooks/usePromotions.ts gains a corresponding hook, matching this codebase's existing API-client/hook conventions"
+      - "a new routed list page renders the rows returned by REQ-397's endpoint, including status, def_type/def_id, requested_by, and a timestamp, proven by a test using a mocked/stubbed API response with at least two distinct rows"
+      - "the page offers a status filter control that re-queries with the selected status, proven by a test asserting the query param/request changes when the filter changes"
+      - "each rendered row links to the existing definitions/:id/promotions/:reviewId detail route with the correct ids, proven by a test"
+      - "a non-PLATFORM_ADMIN session is redirected away from the list route the same way PromotionReviewPage.tsx already redirects (per ISS-0730 design §3.1), proven by a test"
+      - "an empty result set renders a distinct plain 'no reviews' state, not the fetch-failure state, proven by a test"
+      - "one new nav entry in AppShell.tsx's NAV_ITEMS reaches the new route, and the design doc states this supersedes ISS-0730 design §1's no-nav-entry decision and why"
+      - "a design-doc or code comment cross-reference notes that ISS-0734's fix_direction piece 2 (durable recording of submit-time conflict refusals) remains open and out of this requirement's scope, so a future reader does not mistake this page's absence of refused-submission rows for a bug this requirement was supposed to fix"
+    depends_on: [REQ-397]

@@ -1,0 +1,42 @@
+id: ISS-0776
+title: >
+  Two pre-existing test flakes surfaced during WF02-REQ372-20260921's
+  full-suite runs -- HelpTest tie-break and a SandboxPoolTest/ISS-0224-
+  class failure, not independently reproduced standalone
+discovered_by: RELEASE-VALIDATOR (WF02-REQ372-20260921), filed by ORCH (letflow-c5) after an independent reproduction attempt
+discovered_in_run: WF02-REQ372-20260921
+discovered_at: "2026-09-21T15:20:00Z"
+severity: MINOR
+description: >
+  Flagged (not filed) by REQ-372's RELEASE-VALIDATOR during its
+  6-attempt mix letflow.check run, as pre-existing flakes unrelated to
+  REQ-372's own diff. This session independently attempted to
+  reproduce one of the two standalone: `mix test
+  test/letflow/routers/help_test.exs` -- 13/13 passed, no failure. Not
+  reproducible standalone, consistent with a timing/contention-sensitive
+  flake that only surfaces under full-suite parallel load (matching
+  this project's established pattern for several other already-filed
+  flakes, e.g. ISS-0766). The second flake (a SandboxPoolTest failure
+  in the same failure class as the already-resolved ISS-0224) was not
+  independently reproduced by this session at all -- filed on the
+  strength of the RELEASE-VALIDATOR's secondhand report alone, honestly
+  caveated as such.
+affected_files:
+  - test/letflow/routers/help_test.exs
+  - test/letflow/sandbox_pool_test.exs
+fix_direction: >
+  Reproduce each flake for real -- likely needs a full parallel-suite
+  run (scripts/test_parallel.sh) or a targeted timing-sensitive repro,
+  not a standalone single-file run, since neither reproduced that way.
+  For the SandboxPoolTest failure specifically, determine whether it is
+  a genuine regression of ISS-0224's fix (already resolved) or a new,
+  different failure mode in the same test file before assuming either.
+  If a flake cannot be reproduced after a real, documented attempt,
+  record that explicitly rather than guessing at a fix blind.
+queue_ref: Q-774  # letflow-queue task id 774, issue_ref ISS-0776 (local
+  # filename diverges from the queue id -- 0774 was already taken
+  # locally by the process-routing-role Authorization issue, and 0775
+  # is reserved by ISS-0774's own in-progress fix branch). Registered
+  # 2026-09-21 by ORCH.
+github_ref: GH-1688
+status: open

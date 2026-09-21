@@ -170,6 +170,69 @@ defmodule Letflow.Identity.RoleRegistryTest do
     |> Repo.insert!()
   end
 
+  # ISS-0768 cross-tenant-isolation fixture: inserts a Group directly under an
+  # EXPLICIT `prefix:` rather than relying on the ambient `search_path` the way
+  # `insert_group!/1` above does. Needed because the cross-tenant test below runs
+  # its whole body in Sandbox `:auto` mode (see `provision_second_tenant!/0`'s
+  # comment for why) rather than inside `setup`'s manual-mode/`SET search_path`
+  # transaction, so there is no single ambient schema to rely on once a SECOND
+  # tenant schema is alive in the same test.
+  defp insert_group!(_ctx, prefix) do
+    %Group{}
+    |> Ecto.Changeset.change(%{
+      name: "group-#{System.unique_integer([:positive, :monotonic])}"
+    })
+    |> Repo.insert!(prefix: prefix)
+  end
+
+  # ISS-0768 regression fixture: provisions a SECOND, fully independent tenant
+  # schema so the cross-tenant-isolation test below can hold two real Postgres
+  # schemas alive at once. Mirrors `test/letflow/identity/user_test.exs`'s
+  # `provision_tenant_schema!/0` two-tenant pattern (same underlying constraint):
+  # `Ecto.Migrator` needs Sandbox `:auto` mode to run its migration replay, and
+  # switching to `:auto` mode checks in (and rolls back) whatever `:manual`-mode
+  # sandboxed transaction this file's own `setup` block above already holds for
+  # tenant A. That means the caller must have already committed anything it
+  # needs from tenant A for real (i.e. also run under `:auto` mode) BEFORE
+  # calling this — see the test below, which switches the whole Repo to `:auto`
+  # mode as its very first step, before inserting tenant A's own role, for
+  # exactly this reason.
+  #
+  # Real, committed Postgres state (a `CREATE SCHEMA` inside a transaction that
+  # later rolls back would not persist), so cleanup is explicit via `on_exit/1`,
+  # not sandbox rollback — same shape as `setup`'s own on_exit cleanup for
+  # tenant A.
+  defp provision_second_tenant! do
+    Ecto.Adapters.SQL.Sandbox.mode(Letflow.Repo, :auto)
+
+    tenant =
+      %Tenant{}
+      |> Tenant.create_changeset(
+        %{slug: unique_slug(), display_name: "ISS-0768 RoleRegistry Test (tenant B)"},
+        :disabled
+      )
+      |> Repo.insert!()
+
+    on_exit(fn ->
+      Letflow.Test.SandboxAutoMode.enter_auto_mode!(Letflow.Repo)
+
+      case TenantProvisioning.schema_name_for_tenant(tenant.id) do
+        {:ok, schema_name} -> Repo.query!(~s(DROP SCHEMA IF EXISTS "#{schema_name}" CASCADE))
+        {:error, :invalid_tenant_id} -> :ok
+      end
+
+      Repo.delete_all(from(r in Registration, where: r.tenant_id == ^tenant.id))
+      Repo.delete_all(from(t in Tenant, where: t.id == ^tenant.id))
+    end)
+
+    assert {:ok, %Registration{schema_name: schema_name}} =
+             TenantProvisioning.provision_tenant_schema(tenant.id)
+
+    assert {:ok, _applied_versions} = TenantProvisioning.replay_migrations(tenant.id)
+
+    %{tenant: tenant, schema_name: schema_name}
+  end
+
   describe "list_roles/1 (acceptance criterion 1)" do
     test "returns [] (not an error) against an empty tenant_role table", ctx do
       assert RoleRegistry.list_roles(prefix: ctx.schema_name) == []
@@ -360,6 +423,76 @@ defmodule Letflow.Identity.RoleRegistryTest do
 
       rows = TenantRole |> where(name: ^name) |> Repo.all()
       assert rows == []
+    end
+  end
+
+  describe "ISS-0768 regression — prefix genuinely scopes RoleRegistry to one tenant's own schema" do
+    # docs/issues/ISS-0768.yaml's own acceptance criteria: "a real test creates a
+    # role for one tenant and confirms it is queryable only in that tenant's own
+    # schema (not visible via a different tenant's prefix, not written to
+    # public)". Every OTHER test in this file provisions exactly one tenant
+    # schema and only ever asserts within it (see file moduledoc) -- none of them
+    # can distinguish "correctly scoped to tenant A" from "RoleRegistry ignores
+    # the prefix option and always hits whatever schema search_path happens to
+    # point at", because they never stand up a second, genuinely different
+    # schema to probe. This test does.
+    test "role created under tenant A's prefix: visible via A's own prefix, absent via tenant B's prefix, absent from public",
+         %{schema_name: schema_a} = ctx do
+      # Switch the whole Repo to :auto mode FIRST, before inserting anything --
+      # provision_second_tenant!/0 below also needs :auto mode (for
+      # Ecto.Migrator), and switching modes checks in (rolls back) whatever
+      # :manual-mode sandboxed transaction `setup` above left this process in.
+      # Doing the tenant-A insert before that switch would silently roll it back
+      # the moment tenant B gets provisioned, and this test would then be
+      # asserting on a row that was never really there. See
+      # test/letflow/identity/user_test.exs's "same username, two different
+      # tenant schemas" test for the identical constraint and fix shape.
+      Ecto.Adapters.SQL.Sandbox.mode(Letflow.Repo, :auto)
+
+      group_a = insert_group!(ctx, schema_a)
+      name = unique_name("iso")
+
+      assert {:ok, %TenantRole{name: ^name}} =
+               RoleRegistry.upsert_role(name, group_a.id, prefix: schema_a)
+
+      %{schema_name: schema_b} = provision_second_tenant!()
+      refute schema_b == schema_a
+
+      # Positive case: the role IS visible under its own tenant's prefix.
+      names_a = RoleRegistry.list_roles(prefix: schema_a) |> Enum.map(& &1.name)
+      assert name in names_a
+
+      # Negative case 1: NOT visible via a genuinely different tenant's own
+      # prefix -- a real second Postgres schema (schema_b, just provisioned
+      # above), not merely a different filter over the same underlying table.
+      names_b = RoleRegistry.list_roles(prefix: schema_b) |> Enum.map(& &1.name)
+      refute name in names_b
+
+      # Negative case 2: NOT written to `public` at all. SECURITY-REVIEWER's
+      # step-04 addendum (this test's own trigger, see ISS-0768.yaml's
+      # acceptance criteria) treats "not visible via a different tenant's
+      # prefix" and "not written to public" as two SEPARATE, both-required
+      # assertions, not one implied by the other -- negative case 1 above only
+      # proves `list_roles/1` itself resolves prefixes correctly on the READ
+      # side; it says nothing about where `upsert_role/3` actually WROTE the
+      # row. This queries `public` directly with `Repo.all/2`, entirely outside
+      # `RoleRegistry`'s own prefix handling, so it independently confirms the
+      # write itself targeted schema_a and nowhere else.
+      #
+      # REQ-063 (lib/letflow/design/req063-identity-tables-schema-per-tenant.md)
+      # moved `tenant_role` out of `public` entirely -- confirmed empirically
+      # below, `public.tenant_role` is not merely empty, it does not exist as a
+      # relation at all, which Postgres reports as `Postgrex.Error` /
+      # `undefined_table` (SQLSTATE 42P01) rather than an empty result set. That
+      # is actually the STRONGER form of "not written to public" the acceptance
+      # criterion asks for: there is structurally no table in `public` for the
+      # row to have landed in, not merely a query that happens to find zero
+      # matching rows in one that exists.
+      assert_raise Postgrex.Error, ~r/relation "public\.tenant_role" does not exist/, fn ->
+        TenantRole
+        |> where(name: ^name)
+        |> Repo.all(prefix: "public")
+      end
     end
   end
 end

@@ -454,6 +454,32 @@ defmodule Letflow.Platform.MigrationRollout do
     "This workspace is not yet provisioned and cannot receive platform changes."
   end
 
+  # register_and_seed_outcome/5's registration-conflict path
+  # (record_registration_conflict/5) calls this with the raw
+  # {:error, changeset} from register_column_promotion/4 -- without this
+  # clause it fell through to the generic inspect/1 catch-all below and
+  # stored the raw `#Ecto.Changeset<...>` struct dump (internal field
+  # names, constraint name, module name) as the outcome's "reason", which
+  # is not the "plain-language reason string" / "human-readable reason
+  # string" this requirement's own acceptance criteria require (REVIEWER
+  # finding, WF02 targeted re-check). Traverse the changeset's errors into
+  # plain text instead.
+  defp describe_failure_reason(%Ecto.Changeset{} = changeset) do
+    changeset
+    |> Ecto.Changeset.traverse_errors(fn {msg, opts} ->
+      Enum.reduce(opts, msg, fn {key, value}, acc ->
+        String.replace(acc, "%{#{key}}", to_string(value))
+      end)
+    end)
+    |> Enum.flat_map(fn {field, messages} ->
+      Enum.map(messages, fn message -> "#{field} #{message}" end)
+    end)
+    |> case do
+      [] -> "Could not register this workspace's change: " <> inspect(changeset.errors)
+      messages -> "Could not register this workspace's change: " <> Enum.join(messages, "; ")
+    end
+  end
+
   defp describe_failure_reason(reason) do
     "Could not apply the change to this workspace: " <> inspect(reason)
   end

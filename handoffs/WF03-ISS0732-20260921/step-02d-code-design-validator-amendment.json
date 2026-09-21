@@ -1,0 +1,54 @@
+{
+  "handoff_id": "b1e2a3c4-0000-4000-8000-000000000009",
+  "run_id": "WF03-ISS0732-20260921",
+  "workflow_id": "WF-03",
+  "step": "02d",
+  "from_agent": "ORCH",
+  "to_agent": "CODE-DESIGN-VALIDATOR",
+  "file": "handoffs/WF03-ISS0732-20260921/step-02d-code-design-validator-amendment.json",
+  "created_at": "2026-09-21T04:07:20Z",
+  "started_at": "2026-09-21T04:07:20Z",
+  "completed_at": null,
+  "status": "PENDING",
+  "priority": "HIGH",
+  "context": {
+    "stage": "S6",
+    "requirement_ids": [],
+    "requirement_text": {},
+    "related_handoff_ids": ["b1e2a3c4-0000-4000-8000-000000000008"],
+    "artifacts_in": [
+      "lib/letflow/design/iss0732-promotion-apply-assertion-gate.md",
+      "handoffs/WF03-ISS0732-20260921/step-02c-code-designer-amendment.json"
+    ],
+    "owned_modules": [
+      "lib/letflow/definitions/promotion.ex"
+    ]
+  },
+  "task": {
+    "description": "Hard gate on CODE-DESIGNER's new section 9 amendment to lib/letflow/design/iss0732-promotion-apply-assertion-gate.md (resolving OQ-2). Read the amendment directly. Verify it does not reject a legitimate status: :teardown_failed, assertions_failed == 0 rehearsal (this would contradict R8's own documented gate condition -- the exact regression trap this run has already been careful to avoid twice). Verify the new check is additive to, not a replacement of, the existing assertions_failed == 0 check. Verify a new, distinct error reason is used (not reusing :assertion_run_missing or :assertion_run_failed). Verify zero executable Elixir code in the amendment.",
+    "acceptance_criteria": [
+      "Amendment's chosen fix (status not in [:running]) verified to admit both :passed and :teardown_failed states, confirmed NOT status == :passed-only",
+      "Amendment's new check is additive to the existing assertions_failed == 0 check, not a replacement",
+      "A distinct new error reason is used, not reusing an existing one",
+      "Zero executable Elixir code in the amendment section",
+      "Amendment is an appended section, existing sections 1-8 unchanged"
+    ]
+  },
+  "result": {
+    "status": "PENDING",
+    "summary": "",
+    "artifacts_out": [],
+    "issues": [],
+    "git_evidence": {
+      "branch_name": null,
+      "commit_sha_list": [],
+      "remote_branch": null,
+      "push_status": "skipped",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": ""
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

@@ -1,0 +1,54 @@
+{
+  "handoff_id": "b1e2a3c4-0000-4000-8000-00000000000e",
+  "run_id": "WF03-ISS0732-20260921",
+  "workflow_id": "WF-03",
+  "step": "04b",
+  "from_agent": "ORCH",
+  "to_agent": "TEST-DESIGN-VALIDATOR",
+  "file": "handoffs/WF03-ISS0732-20260921/step-04b-test-design-validator.json",
+  "created_at": "2026-09-21T04:53:47Z",
+  "started_at": "2026-09-21T04:53:47Z",
+  "completed_at": null,
+  "status": "PENDING",
+  "priority": "HIGH",
+  "context": {
+    "stage": "S6",
+    "requirement_ids": [],
+    "requirement_text": {},
+    "related_handoff_ids": ["b1e2a3c4-0000-4000-8000-00000000000d"],
+    "artifacts_in": [
+      "handoffs/WF03-ISS0732-20260921/step-04-test-designer.json",
+      "test/letflow/routers/req077_promotion_pipeline_test.exs",
+      "docs/issues/ISS-0732.yaml"
+    ],
+    "owned_modules": [
+      "test/letflow/routers/req077_promotion_pipeline_test.exs"
+    ]
+  },
+  "task": {
+    "description": "Hard gate on TEST-DESIGNER's coverage (commit 28808b73). Independently verify every acceptance criterion has a runnable test, no skipped coverage, isolated self-sufficient fixtures. Per WF-03_issue_resolving.md's fail-then-pass section: this is a fix to EXISTING behavior, not a new module, so you must not accept the reported fail-then-pass proof on trust -- independently re-run AT LEAST the :assertion_run_missing test (ISS-0732's own headline symptom) against pre-fix code yourself (a throwaway git worktree of main, same technique TEST-DESIGNER used) and confirm it fails with the reported fail-mode, then confirm it passes on this branch. Also read all 3 new gate-path tests plus the 2 OQ-2 amendment tests directly to confirm each asserts something concrete (a specific error reason, a specific HTTP status, that nothing was written on the rejection paths) rather than a loose/weak assertion.",
+    "acceptance_criteria": [
+      "All 5 new tests (3 original gate paths + 2 OQ-2 amendment paths) read directly and confirmed to assert concrete, specific outcomes",
+      "At least the :assertion_run_missing test independently re-run against a throwaway worktree of main by YOU, confirmed to fail with the reported fail-mode, and confirmed to pass on this branch",
+      "No existing test's assertion confirmed weakened (diff-check against main)",
+      "Any throwaway worktree used is removed and its removal verified before completing this handoff"
+    ]
+  },
+  "result": {
+    "status": "PENDING",
+    "summary": "",
+    "artifacts_out": [],
+    "issues": [],
+    "git_evidence": {
+      "branch_name": null,
+      "commit_sha_list": [],
+      "remote_branch": null,
+      "push_status": "skipped",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": ""
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

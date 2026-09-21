@@ -6,8 +6,8 @@
   "from_agent": "ORCH",
   "to_agent": "ELIXIR-DEV",
   "file": "handoffs/WF03-ISS0733-20260921/step-03-elixir-dev.json",
-  "created_at": "2026-09-21T01:40:00Z",
-  "started_at": "2026-09-21T01:40:00Z",
+  "created_at": "2026-09-21T00:27:36Z",
+  "started_at": "2026-09-21T00:27:36Z",
   "completed_at": "2026-09-21T00:34:41Z",
   "status": "COMPLETED",
   "priority": "HIGH",
@@ -46,12 +46,18 @@
       "lib/letflow/event_store.ex",
       "lib/letflow/routers/promotions.ex"
     ],
-    "issues": [],
-    "next_action": "Route to SECURITY-REVIEWER (tenant-data path: new audit-entry write and a new route that surfaces source_tenant_id/target_tenant_id in a promotion event payload -- design OQ-3 explicitly flags this route for SECURITY-REVIEWER attention re: the pre-existing permission_checker always-true gap), then REVIEWER, before TEST-DESIGNER."
-  },
-  "git_evidence": {
-    "branch": "feature/WF03-ISS0733-20260921",
-    "commits": ["4d014e6d25bff739bc7624048437c1843ce5e383"]
+    "issues": [
+      {"severity": "MINOR", "description": "ORCH bookkeeping correction (mix letflow.lint_handoffs H2/H3, caught at Step Final): this handoff originally carried a non-schema top-level 'git_evidence' key (now moved into result.git_evidence) and a fabricated created_at/started_at (01:40:00Z) that postdated the agent's real completed_at (00:34:41Z) -- ORCH had estimated the dispatch timestamp from memory instead of reading the clock at dispatch, violating HANDOFF_PROTOCOL.md 1.2. Corrected to 00:27:36Z, taken from the real git commit timestamp of the dispatch commit (9a5e8843, converted from +05:00 to UTC) as the closest available honest evidence -- no live clock read exists for a past dispatch, so this is a correction, not a backfill of a value that was never recorded.", "affected_requirement": null}
+    ],
+    "next_action": "Route to SECURITY-REVIEWER (tenant-data path: new audit-entry write and a new route that surfaces source_tenant_id/target_tenant_id in a promotion event payload -- design OQ-3 explicitly flags this route for SECURITY-REVIEWER attention re: the pre-existing permission_checker always-true gap), then REVIEWER, before TEST-DESIGNER.",
+    "git_evidence": {
+      "branch_name": "feature/WF03-ISS0733-20260921",
+      "commit_sha_list": ["4d014e6d25bff739bc7624048437c1843ce5e383"],
+      "remote_branch": "origin/feature/WF03-ISS0733-20260921",
+      "push_status": "ok",
+      "pr_url": null,
+      "pr_create_error": null
+    }
   },
   "rework_count": 0,
   "max_rework": 3

@@ -8,8 +8,8 @@
   "file": "handoffs/WF02-REQ373-20260921/step-01-code-designer.json",
   "created_at": "2026-09-21T17:12:00Z",
   "started_at": "2026-09-21T17:12:00Z",
-  "completed_at": null,
-  "status": "IN_PROGRESS",
+  "completed_at": "2026-09-21T18:40:00Z",
+  "status": "COMPLETED",
   "priority": "NORMAL",
   "context": {
     "stage": "S6",
@@ -53,7 +53,19 @@
       "mix letflow.check passes, with real output quoted"
     ]
   },
-  "result": null,
+  "result": {
+    "status": "PASS",
+    "summary": "Design artefact produced at lib/letflow/design/req373-service-catalog-version-lifecycle.md. Verified branch is feature/WF02-REQ373-20260921 before writing. Re-read (not trusted from the requirement text) lib/letflow/service_catalog.ex, lib/letflow/service_catalog/entry.ex, lib/letflow/engine/pin_resolver.ex, and lib/letflow/engine.ex's exact pin_lookup/2 call site, plus lib/letflow/routers/admin_services.ex for the existing :AdminServicesManage route convention, and grepped docs/migration/decisions/ for prior versioned-entity precedent (none directly dictates this shape; 0023-entity-storage-hybrid.md's entity_def_version is a different, not-contradicting pattern, cited). SCHEMA DECISION (§1): in-place version/version_id/status/published_at/retired_at columns on service_catalog (representing the single CURRENT version) plus a new sibling table service_catalog_versions archiving every superseded version -- NOT a composite-key (service_id+version) table. Reasoning: PinResolver.Lookup.catalog_lookup/1 itself takes only service_id, never a requested version -- nothing downstream of Lookup ever needs to address a specific historical version by key, so composite-keying buys nothing at the one call site this requirement exists to wire up, while costing a severe, needless blast radius (service_id is used as a bare String.t() key by every existing ServiceCatalog function, by the SERVICE_TASK graph-node reference which has no version concept at all, and by the frozen web/src/api/services.ts wire contract -- REQ-373's own SCOPE FENCE forbids touching the graph layer, which a composite key would require). This choice leaves all five existing public functions (register/1, get_for_tenant/2, list_for_tenant/2, update_scope/2, delete/1) with zero signature/behavior change -- only register/1's insert body gains four additional stamped fields (version='1', ACTIVE, fresh version_id, published_at=now), mirroring how created_at/updated_at are already stamped rather than caller-supplied. AC4's retire-vs-fallback ambiguity is resolved explicitly: retire FAILS OUTRIGHT (reuses the existing {:unresolved_catalog_ref, ref} error, no new error variant) rather than falling through, because the schema enforces at most one ACTIVE row per service_id -- there is structurally no second ACTIVE row to fall through to. The already-pinned-instance half of AC4 is satisfied by construction, not by any code this requirement adds: pin_for/3 is a pure Enum.find/2 over an already-obtained pin list, calls no Lookup and issues no Repo query at all, so retire cannot affect it regardless of what retire does. Every design 'Change' subsection is described in prose (@spec-style signatures + prose behavior), never a literal function body/case-do-end block -- migration and router code was likewise rewritten from Ecto/Phoenix DSL code fences into column/index tables and prose after checking the actual house convention (lib/letflow/design/req191-service-catalog-core.md contains zero code fences for its own migration spec), so as not to repeat the REQ-372 rework precedent (handoffs/WF02-REQ372-20260921/step-01-code-designer.json) of literal .ex code in a design doc. All 8 acceptance criteria are mapped 1:1 to concrete design elements in §8's table. Four open questions listed explicitly (§9): no FK service_catalog_versions->service_catalog to avoid silently changing delete/1's existing error contract (OQ-1, flagged for REVIEWER); no status-based filtering added to the three existing read functions (OQ-2); the publish/retire response JSON's exact key names for the five new fields are left to ELIXIR-DEV, no wire contract exists yet (OQ-3); version strings are treated as fully opaque, no format/ordering constraint (OQ-4).",
+    "artifacts_out": [
+      "lib/letflow/design/req373-service-catalog-version-lifecycle.md"
+    ],
+    "issues": [
+      "OQ-1 (design §9): no FK constraint from the new service_catalog_versions table back to service_catalog, specifically to avoid silently giving delete/1 a new FK-violation failure mode it isn't designed to handle and this requirement isn't scoped to change. REVIEWER should confirm this tradeoff (orphaned archive rows after a delete) is acceptable, or direct a follow-up to add ON DELETE CASCADE with delete/1's own contract updated to match.",
+      "Design §1 point 2 notes the schema decision deliberately avoids any change to the graph layer (Letflow.Definitions.Graph/PromotionPlan's version-less SERVICE_TASK service_id reference) -- REVIEWER should confirm this reading of the SCOPE FENCE is correct, since it was the deciding factor against the composite-key alternative.",
+      "Design §7 route methods (POST for both publish and retire, including retire despite it being a state-transition-only action with no body) and exact path segments (/versions, /retire) are this designer's own naming call, as the task explicitly permitted -- flagged for REVIEWER/ELIXIR-DEV in case a different convention is preferred."
+    ],
+    "next_action": "Route to CODE-DESIGN-VALIDATOR"
+  },
   "rework_count": 0,
   "max_rework": 3
 }

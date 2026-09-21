@@ -177,6 +177,13 @@ defmodule Letflow.Plugs.ApiPipeline do
   # implements.
   forward("/help", to: Letflow.Routers.Help)
 
+  # REQ-374 -- the platform-wide tenant-migration fanout runner. Mounted
+  # the same way as `/tenants`/`/onboarding` above: a top-level,
+  # non-tenant-scoped sub-router (no single tenant context to scope by),
+  # gated purely by role via `:TenantsManage`. See
+  # Letflow.Routers.PlatformMigrations' own moduledoc for the route table.
+  forward("/platform-migrations", to: Letflow.Routers.PlatformMigrations)
+
   match _ do
     Letflow.Api.Response.not_found(conn)
   end

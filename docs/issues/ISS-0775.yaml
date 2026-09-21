@@ -85,7 +85,11 @@ fix_direction: >
   claiming a role-name string that matches an existing tenant_role of
   each kind, confirming the chosen design's actual group_members
   writes (or non-writes).
-queue_ref: null  # not yet registered to letflow-queue; ORCH to assign a
-  # queue task id when this is picked up.
-github_ref: null
+queue_ref: "Q-773"  # letflow-queue task id 773. NOTE: the queue service's
+  # own id/issue_ref numbering assigned "ISS-0773" -- already taken on
+  # main by the merged auth-lockout fix (PR #1680). Local filename stays
+  # ISS-0775 per the docs/issues/ collision precedent established
+  # repeatedly this session (see ISS-0771->0772->0773's own renumbering
+  # history). Registered 2026-09-21 by ORCH.
+github_ref: GH-1684
 status: open

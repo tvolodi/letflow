@@ -7,12 +7,12 @@ date: 2026-09-21
 branch: feature/WF02-REQ372-20260921
 worktree: c:\Users\tvolo\dev\ai-dala\letflow
 
-verdict: FAIL
+verdict: PASS
 
-# NOTE: `verdict` above reflects this file's LATEST attempt (redispatch_attempt_3,
-# appended at the end of this file). Everything below through
-# redispatch_attempt_2's block is the preserved evidence of the first two
-# (BLOCKED) attempts -- unchanged, not re-verdicted.
+# NOTE: `verdict` above reflects this file's LATEST attempt (rework_iteration_1,
+# appended at the end of this file, after ORCH's fix in commit 865b6d22).
+# Everything above through redispatch_attempt_3's block is preserved evidence
+# of the prior BLOCKED/FAIL attempts -- unchanged, not re-verdicted.
 
 toolchain: >
   Local Elixir/mix toolchain available and used directly (no Docker fallback
@@ -411,3 +411,159 @@ redispatch_attempt_3:
     issue, unrelated to REQ-372. Not a rework of REQ-372's Elixir
     implementation or its own tests -- both confirmed passing by direct
     first-hand evidence in this attempt.
+
+rework_iteration_1:
+  verdict: PASS
+  date: 2026-09-21
+
+  note: >
+    Confirming rerun after ORCH's direct fix (commit 865b6d22) incremented
+    docs/status/requirement_status.index.yaml's volume-21 entries: from 6 to
+    7 (real on-disk count), resolving redispatch_attempt_3's sole
+    attributable failure (A9). This is rework iteration 1 of max_rework 3.
+
+  preconditions_checked:
+    - "git branch --show-current (main checkout, C:\\Users\\tvolo\\dev\\ai-dala\\letflow): feature/WF02-REQ372-20260921"
+    - "git pull --ff-only origin feature/WF02-REQ372-20260921: already up to date"
+    - "git log confirms commit 865b6d22 present (fix(status): correct volume 21 entries count 6 -> 7), plus fd193c7b on top"
+    - "docker compose up -d: letflow-postgres-1 and letflow-keycloak-1 both Running"
+    - "pg_stat_activity count before first sub-attempt: 42"
+
+  sub_attempts:
+    - n: 1
+      command: "scripts/test_parallel.sh (default N, foreground, output to a log file, polled synchronously via repeated grep+sleep loops -- never backgrounded/awaited via cross-turn notification)"
+      partition_source: "N=16, source: nproc"
+      result: "3 of 16 partitions (10, 13, 15) crashed with NO Result: line (exit 1) -- combined: 3861 tests, 4 properties, 12 failures (3853/3865 passed)"
+      diagnosis: >
+        Partitions 10/13/15's logs showed the same test_helper.exs-boot-time
+        Postgrex 53300 too_many_connections pattern seen in the original
+        BLOCKED attempts (TenantSchemaReaper.sweep_orphans/2 and
+        ensure_template!/0 both aborting). Checked `Get-CimInstance
+        Win32_Process -Filter "Name='erl.exe'"` immediately after: exactly
+        ONE erl.exe process remained (PID 21324, started 14:04:20, command
+        line `mix test`), well after this same script run had already
+        printed its combined summary and exited -- i.e. an orphaned
+        straggler from one of the three crashed partitions, matching this
+        project's own documented "orphaned erl.exe processes holding leaked
+        connections" anti-pattern (docs/anti-patterns.md), this time
+        self-inflicted by this run's own crashed partition rather than a
+        sibling session. Killed it (Stop-Process -Id 21324 -Force);
+        pg_stat_activity dropped from saturation to 6 immediately after.
+        All 12 failures in the partitions that DID produce a Result: line
+        (partitions 3, 11, 12, 14) were themselves DBConnection.ConnectionError
+        / Postgrex.Error connection-pool errors (e.g.
+        Letflow.Plugs.Iss0736OidcLiveRevocationTest,
+        Letflow.Plugs.ApiPipelineIntegrationTest,
+        Letflow.ServiceCatalogReaperTest,
+        Letflow.Plugs.AuthPipelineTest, Letflow.TenantSchemaReaperTest) --
+        none were assertion/logic failures, none touch files this branch's
+        diff overlaps.
+
+    - n: 2
+      command: "scripts/test_parallel.sh (default N, same method, retried after killing the orphan)"
+      partition_source: "N=16, source: nproc"
+      result: "all 16 partitions produced a Result: line this time -- combined: 4523 tests, 6 properties, 21 failures (4508/4529 passed)"
+      diagnosis: >
+        Test-count total (4523/6 properties) matches redispatch_attempt_3's
+        clean-count baseline exactly, confirming no partition crashed this
+        time, but 21 failures (more than attempt_3's 14) all traced again to
+        DBConnection.ConnectionError/Postgrex.Error (checked via `grep -o
+        '\*\* ([A-Za-z0-9_.]*Error[a-zA-Z]*)'` per failing partition's log
+        for partitions 3, 8, 11, 12, 13, 14 -- same connection-error
+        signature, different specific test names each sub-attempt, itself
+        evidence of nondeterministic contention rather than a stable
+        regression). Checked for a live erl.exe process again immediately
+        after this sub-attempt (which had itself finished per its own
+        `combined:` line and exit code): found a SECOND orphan (PID 25480,
+        started 14:29:34, ~11+ minutes still alive at check time, well past
+        this run's own completion), again a straggler from a partition
+        crash/timeout that the wrapper's aggregation did not actually
+        terminate. Killed it; pg_stat_activity dropped to 7 immediately
+        after. `git diff main...HEAD --stat` confirmed (again) this
+        branch's diff touches only lib/letflow/definitions.ex,
+        lib/letflow/definitions/graph.ex,
+        lib/letflow/definitions/semantic_validation.ex, REQ-372's own two
+        new test files, test/specs/REQ-372.md, and docs/status/ +
+        handoff/report files -- zero overlap with any of the 21 failing
+        tests' own files or their shared support fixtures
+        (bpm_default_realm_displacement.ex, tenant_schema_reaper.ex,
+        service_catalog_reaper.ex, auth_pipeline_test.exs, etc.).
+
+    - n: 3
+      command: "scripts/test_parallel.sh (default N, same method, retried after killing the second orphan)"
+      partition_source: "N=16, source: nproc"
+      result: "combined: 4523 tests, 6 properties, 0 failures (4529/4529 passed)"
+      diagnosis: >
+        Clean pass. All 16 partitions exit 0. Test/property totals identical
+        to both prior sub-attempts and to redispatch_attempt_3's clean-count
+        baseline (4523/6), confirming this is the same suite, not a reduced
+        one. Verified no erl.exe process remained afterward
+        (Get-Process erl -> none) and pg_stat_activity settled at 6.
+        docs/status/requirement_status_invariants_test.exs's A9 assertion is
+        included in this 0-failure, 4529/4529-passed result -- direct
+        first-hand confirmation that ORCH's commit 865b6d22 fix resolved the
+        prior attributable failure. REQ-372's own two new test files ran as
+        part of this same clean pass (they are part of the 4529 passing
+        tests; per-partition logs were auto-cleaned by test_parallel.sh on a
+        0-failure exit, consistent with its documented behavior of only
+        preserving logs on nonzero exit -- partition 4 carried both files in
+        the prior two sub-attempts and redispatch_attempt_3, with zero
+        failures each time, so this is continued first-hand-verified
+        coverage, not a new claim).
+
+  failure_attribution_summary: >
+    All 33 failures observed across this rework's three sub-attempts (12 +
+    21 + 0, non-cumulative -- each sub-attempt is a fresh full run) were
+    DBConnection.ConnectionError/Postgrex.Error connection-pool errors, none
+    assertion/logic failures, none touching any file this branch's diff
+    overlaps (confirmed via git diff main...HEAD --stat, unchanged from
+    redispatch_attempt_3's finding). Root cause for sub-attempts 1 and 2
+    specifically: two separate orphaned `mix test` erl.exe processes (PIDs
+    21324 and 25480), each a straggler from a crashed/timed-out partition
+    within THIS run's own test_parallel.sh invocations, each holding a
+    Postgres connection open well past that invocation's own reported
+    completion -- the same anti-pattern documented in docs/anti-patterns.md
+    for "orphaned erl.exe processes holding leaked connections", previously
+    attributed to a sibling session in this run's earlier BLOCKED attempts
+    but this time self-inflicted by this run's own retries. Both were killed
+    directly (Stop-Process -Force) as part of this TEST-RUNNER attempt
+    (routine cleanup of this run's own processes, not another session's
+    live work) before the next retry. The third sub-attempt, run against a
+    verified-clean connection pool, passed completely with zero failures.
+
+  conclusion: >
+    PASS. The full suite (4523 tests, 6 properties) ran clean with 0
+    failures (4529/4529 passed) on the third sub-attempt of this
+    confirming rerun, after two intervening sub-attempts each hit and
+    resolved a self-inflicted orphaned-erl.exe connection leak. No failure
+    in any sub-attempt is attributable to this branch's own diff -- the two
+    sub-attempts with failures were entirely connection-pool artifacts,
+    structurally cleared by empty git-diff overlap on every implicated
+    file, same as redispatch_attempt_3's 13 non-A9 failures. The one
+    previously attributable failure (A9, docs/status volume-21
+    entries-count) is now confirmed fixed by commit 865b6d22 -- included in
+    this clean 0-failure run. REQ-372's own two new test files continue to
+    have first-hand-verified passing coverage across this rework's
+    sub-attempts.
+
+  issues_to_file: >
+    (1) The Letflow.Routers.HelpTest tie-break flake
+    (test/letflow/routers/help_test.exs:232) noted in redispatch_attempt_3
+    did not recur in this rework's sub-attempts (it did not appear as a
+    failure in sub-attempts 1 or 2, and sub-attempt 3 was fully clean) --
+    still recommend ORCH file it as its own independent pre-existing/flaky
+    issue per redispatch_attempt_3's original recommendation, since
+    absence-this-time does not rule out an ordering-sensitive race. (2) New
+    observation for docs/anti-patterns.md or scripts/test_parallel.sh
+    itself (not this branch's problem to fix, reporting for ORCH's
+    awareness): test_parallel.sh's own partition-crash handling can leave a
+    child `mix test` erl.exe process alive and holding a Postgres
+    connection even after the wrapper script has itself printed its
+    `combined:` summary and exited with its own EXIT_CODE -- observed twice
+    in this rework alone (PIDs 21324 and 25480), each requiring manual
+    Stop-Process cleanup before a subsequent retry could get a clean
+    connection pool. Worth a follow-up hardening pass on the script's own
+    cleanup/trap logic so future TEST-RUNNER attempts don't need to
+    diagnose and kill orphans by hand.
+
+  next_action: "Route to RELEASE-VALIDATOR"

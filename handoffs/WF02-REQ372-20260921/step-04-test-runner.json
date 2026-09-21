@@ -8,8 +8,8 @@
   "file": "handoffs/WF02-REQ372-20260921/step-04-test-runner.json",
   "created_at": "2026-09-21T08:35:22Z",
   "started_at": "2026-09-21T08:35:22Z",
-  "completed_at": "2026-09-21T09:16:29Z",
-  "status": "PENDING",
+  "completed_at": "2026-09-21T10:01:49Z",
+  "status": "COMPLETED",
   "priority": "NORMAL",
   "context": {
     "stage": "S8",
@@ -36,30 +36,30 @@
     ]
   },
   "result": {
-    "status": "FAIL",
-    "summary": "REDISPATCH ATTEMPT 3 (this attempt). ORCH killed 3 orphaned erl.exe processes (PIDs 28488/30060/46888, 45+ min mix test invocations matching docs/anti-patterns.md's leaked-connection pattern) and confirmed pg_stat_activity dropped to 6 before this redispatch. Verified branch feature/WF02-REQ372-20260921 in the main checkout, up to date with origin. Ran scripts/test_parallel.sh with full defaults (TEST_PARALLEL_N unset, N=16 from nproc), foreground, output to a log file polled synchronously (no background-notification wait). Full suite completed for the first time: all 16 partitions produced a Result: line. Combined: 4523 tests, 6 properties, 14 failures (4515/4529 passed). REQ-372's own two new test files (semantic_validation_test.exs, semantic_validation_activation_test.exs) ran in partition 4 with direct first-hand evidence: 306 passed, 0 failures. Of the 14 failures: 12 (partitions 3/8/11/13) are DBConnection.ConnectionError from residual host connection pressure, with confirmed-empty git diff on every implicated test/support file -- structurally unrelated. 1 (partition 10, Letflow.Routers.HelpTest tie-break) is a pre-existing ordering-sensitive assertion failure, also confirmed-empty diff -- structurally unrelated. 1 (partition 1, Letflow.Docs.RequirementStatusInvariantsTest's A9) IS attributable to this branch: this run's own step-00 append to docs/status/requirement_status.v21.yaml (visible in git diff main...HEAD) added a 7th history entry but never incremented the matching declared entries: 6 in docs/status/requirement_status.index.yaml (confirmed EMPTY diff on that file) -- a direct violation of that volume's own HOW-TO-APPEND step 6, caused entirely by this branch. Full detail (per-partition breakdown, stacktraces read individually, file-scope diff checks) in test/reports/report-20260921-WF02-REQ372-20260921.yaml's redispatch_attempt_3 section.",
+    "status": "PASS",
+    "summary": "REWORK ITERATION 1 (confirming rerun, this attempt). Pulled branch feature/WF02-REQ372-20260921 in the main checkout, confirmed commits 865b6d22 (ORCH's fix: docs/status/requirement_status.index.yaml volume-21 entries 6 -> 7) and fd193c7b present. Ran scripts/test_parallel.sh (default N=16 from nproc) three times, foreground, polled synchronously via file-grep+sleep loops (never backgrounded/awaited cross-turn). Sub-attempt 1: 3/16 partitions (10/13/15) crashed at ecto.create/test_helper.exs boot with too_many_connections; found and killed one orphaned erl.exe (PID 21324) left over from this run's own crashed partition, matching docs/anti-patterns.md's leaked-connection pattern -- this time self-inflicted, not a sibling session. Combined: 3861 tests, 12 failures, all connection-pool errors. Sub-attempt 2 (retry after cleanup): all 16 partitions produced a Result: line (4523 tests, 6 properties, matching the known-clean baseline count) but 21 failures, again all DBConnection.ConnectionError/Postgrex.Error; found and killed a SECOND orphaned erl.exe (PID 25480), same self-inflicted pattern. Sub-attempt 3 (retry after second cleanup): combined: 4523 tests, 6 properties, 0 failures (4529/4529 passed). Clean. docs/status A9 assertion included in this 0-failure run, confirming ORCH's fix resolved the prior attributable failure. REQ-372's own two new test files continue to have first-hand-verified passing coverage (part of the 4529 passing tests across all sub-attempts where their partition executed). All failures across sub-attempts 1 and 2 structurally clear as unrelated to this branch's diff (git diff main...HEAD --stat touches only lib/letflow/definitions*.ex, REQ-372's own new test files, test/specs/REQ-372.md, and docs/status/handoff/report files -- zero overlap with any failing test or its support fixtures). Full detail in test/reports/report-20260921-WF02-REQ372-20260921.yaml's rework_iteration_1 section.",
     "artifacts_out": [
       "test/reports/report-20260921-WF02-REQ372-20260921.yaml"
     ],
     "issues": [
       {
         "severity": "MINOR",
-        "description": "docs/status/requirement_status.index.yaml's volume-21 entries: field (declared 6) is stale against docs/status/requirement_status.v21.yaml's real 7 on-disk entries -- this branch's own step-00-git-setup append to v21.yaml added a REQ-372 'started' history entry without the matching index.yaml increment required by that file's HOW-TO-APPEND step 6. Caught by Letflow.Docs.RequirementStatusInvariantsTest's A9 assertion. Small mechanical fix: increment volume 21's entries: from 6 to 7 in docs/status/requirement_status.index.yaml with an explanatory note, same as prior volume-21 increments in that file's history. Attributable to this branch; must be fixed before this gate can PASS."
+        "description": "Letflow.Routers.HelpTest's tie-break test (test/letflow/routers/help_test.exs:232) did not recur in this rework's sub-attempts (sub-attempt 3 was fully clean), but still recommend ORCH file it as its own independent pre-existing/ordering-sensitive issue per redispatch_attempt_3's original recommendation -- absence this time does not rule out a race."
       },
       {
         "severity": "MINOR",
-        "description": "Letflow.Routers.HelpTest's tie-break test (test/letflow/routers/help_test.exs:232, 'two tied live generic rows -- the most recently updated_at one wins, deterministically') failed on an ordering assertion. git diff main...HEAD for this file is empty -- unrelated to REQ-372 or any branch currently in flight. Looks like a pre-existing flaky/ordering-sensitive test (likely two fixture rows landing on the same or too-close updated_at timestamp). Recommend queuing as its own independent issue, separate from this run."
+        "description": "scripts/test_parallel.sh's own partition-crash handling can leave a child mix test erl.exe process alive holding a Postgres connection even after the wrapper script has itself printed its combined: summary and exited -- observed twice in this rework (PIDs 21324, 25480), each requiring manual Stop-Process cleanup before a clean retry. Worth a follow-up hardening pass on the script's cleanup/trap logic so future TEST-RUNNER attempts don't need to diagnose and kill orphans by hand. Not attributable to REQ-372; a test-infrastructure robustness gap."
       }
     ],
     "git_evidence": {
       "branch_name": "feature/WF02-REQ372-20260921",
-      "commit_sha_list": ["08f67429", "c97034c5"],
+      "commit_sha_list": ["865b6d22", "fd193c7b"],
       "remote_branch": "origin/feature/WF02-REQ372-20260921",
       "push_status": "pending (will push this report/handoff update)",
       "pr_url": null,
       "pr_create_error": null
     },
-    "next_action": "Route to ORCH / DOC-UPDATER: increment docs/status/requirement_status.index.yaml's volume-21 entries: from 6 to 7 (with a HOW-TO-APPEND-step-6 note), then redispatch TEST-RUNNER for a final confirming re-run. Also file the pre-existing Letflow.Routers.HelpTest tie-break flake (test/letflow/routers/help_test.exs:232) as its own independent issue. Not a rework of REQ-372's Elixir implementation or its own two new test files -- both confirmed passing by direct first-hand evidence in this attempt (partition 4: 306 passed, 0 failures, includes both SemanticValidation test files)."
+    "next_action": "Route to RELEASE-VALIDATOR"
   },
   "rework_count": 1,
   "max_rework": 3

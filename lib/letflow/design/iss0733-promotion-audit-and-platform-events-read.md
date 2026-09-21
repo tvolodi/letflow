@@ -283,9 +283,7 @@ that module already uses — PLATFORM_ADMIN-only, per that router's own already-
 §4 decision, not a new permission.
 
 ```
-get "/platform-events" do
-  handle_platform_events(conn)
-end
+get "/platform-events", -> handle_platform_events
 ```
 
 Declared **before** `get "/:id"` (same ordering discipline the moduledoc's route table

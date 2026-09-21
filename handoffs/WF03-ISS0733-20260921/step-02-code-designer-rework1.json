@@ -8,8 +8,8 @@
   "file": "handoffs/WF03-ISS0733-20260921/step-02-code-designer-rework1.json",
   "created_at": "2026-09-21T01:05:00Z",
   "started_at": "2026-09-21T01:05:00Z",
-  "completed_at": null,
-  "status": "PENDING",
+  "completed_at": "2026-09-21T01:20:00Z",
+  "status": "COMPLETED",
   "priority": "HIGH",
   "context": {
     "stage": "S6",
@@ -32,11 +32,13 @@
     ]
   },
   "result": {
-    "status": "PENDING",
-    "summary": "",
-    "artifacts_out": [],
+    "status": "PASS",
+    "summary": "Replaced the literal do...end Plug.Router body at lines 285-289 of lib/letflow/design/iss0733-promotion-audit-and-platform-events-read.md with the project's established non-executable route-table shorthand (`get \"/platform-events\", -> handle_platform_events`), matching req077-promotion-pipeline-routes.md:339-346's own gate-passed pattern for this same router. No other section of the doc was touched; grepped the file for `do$`/`^end$`/`conn)$` patterns and found no remaining implementation-code bodies anywhere else in the doc.",
+    "artifacts_out": [
+      "lib/letflow/design/iss0733-promotion-audit-and-platform-events-read.md"
+    ],
     "issues": [],
-    "next_action": ""
+    "next_action": "Route to CODE-DESIGN-VALIDATOR for re-gate (step-02b rework)"
   },
   "rework_count": 1,
   "max_rework": 3

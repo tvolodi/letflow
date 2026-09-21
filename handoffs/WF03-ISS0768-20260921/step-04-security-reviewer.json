@@ -6,8 +6,8 @@
   "from_agent": "ORCH",
   "to_agent": "SECURITY-REVIEWER",
   "file": "handoffs/WF03-ISS0768-20260921/step-04-security-reviewer.json",
-  "created_at": "2026-09-21T09:30:00Z",
-  "started_at": null,
+  "created_at": "2026-09-21T04:20:35Z",
+  "started_at": "2026-09-21T04:20:35Z",
   "completed_at": null,
   "status": "PENDING",
   "priority": "HIGH",
@@ -17,10 +17,12 @@
     "requirement_text": {},
     "related_handoff_ids": ["d1a2b3c4-0003-4000-8000-000000000768"],
     "artifacts_in": [
+      "docs/agents/instructions/security-invariants.md",
+      "lib/letflow/design/iss0768-role-registry-tenant-prefix.md",
       "lib/letflow/identity/role_registry.ex",
       "lib/letflow/routers/identity.ex",
-      "test/letflow/role_registry_test.exs",
-      "test/letflow/routers/identity_test.exs"
+      "docs/issues/ISS-0768.yaml",
+      "handoffs/WF03-ISS0768-20260921/step-03-elixir-dev.json"
     ],
     "owned_modules": [
       "lib/letflow/identity/role_registry.ex",
@@ -28,29 +30,29 @@
     ]
   },
   "task": {
-    "description": "Gate review on commits ddfa3cdf/bc90819b (branch feature/WF03-ISS0768-20260921), which add opts[:prefix] threading to Letflow.Identity.RoleRegistry's list_roles/1, upsert_role/3, do_upsert_role/3, insert_or_update_role/3 (via Repo.all/Repo.transaction/Repo.get/Repo.insert), and update routers/identity.ex's handle_list_roles/2 and handle_upsert_role/2 to pass conn.assigns.scoped_opts. Check against docs/agents/instructions/security-invariants.md INV-1..INV-8. This is a tenant-data write/read path (role management) so this gate is mandatory before REVIEWER. Specifically verify: (1) every Repo call in the touched functions genuinely receives prefix: from opts, no call silently reverts to the default/public schema, (2) resolve_role_in_tx/1 is genuinely untouched (diff-confirm), (3) the router changes correctly derive scoped_opts the same way every other tenant-scoped route in that router does — no new bypass, (4) a role created under one tenant's prefix cannot be read back under a different prefix (read the new regression test to confirm it actually asserts this, not just that the happy path works).",
+    "description": "MANDATORY gate (this is a tenant-data-path change -- do not skip). ELIXIR-DEV implemented ISS-0768's fix (commit ddfa3cdf on this branch, feature/WF03-ISS0768-20260921, worktree c:\\Users\\tvolo\\dev\\ai-dala\\letflow-wf03-iss0768 -- work there, do not touch c:\\Users\\tvolo\\dev\\ai-dala\\letflow, a different concurrent session owns uncommitted work there on an unrelated issue): Letflow.Identity.RoleRegistry now threads opts :: [prefix: String.t()] through every Repo call (list_roles/1, upsert_role/3, do_upsert_role/3, insert_or_update_role/3), and lib/letflow/routers/identity.ex's handle_list_roles/2 and handle_upsert_role/2 pass conn.assigns.scoped_opts through. Gate this against docs/agents/instructions/security-invariants.md's INV-1..INV-8, with INV-1 (tenant data isolation) as the primary concern -- this fix's entire purpose is closing a cross-tenant/wrong-schema leak (RoleRegistry was previously always querying the public schema regardless of caller tenant). Verify by DIRECT SOURCE READ (not by trusting ELIXIR-DEV's result.summary): every Repo call in role_registry.ex genuinely carries prefix: opts[:prefix] (or is inside a Repo.transaction opened with that prefix, per the design's defense-in-depth instruction to also name prefix: explicitly on each inner call); the router's scoped_opts is genuinely the caller's OWN tenant schema (not request-supplied, not defaulted) -- trace conn.assigns.scoped_opts back to where it's set (Letflow.Api.Context.scoped_repo_opts/1 per the router's own moduledoc) and confirm it cannot be influenced by request body/query data. Also verify resolve_role_in_tx/1 was left genuinely untouched (diff it yourself) -- confirm it does not become a live cross-tenant hole given it's unreachable today (state explicitly whether its continued absence of prefix threading is an acceptable residual risk given zero live callers, per the design's own reasoning). State a verdict per invariant (APPLIES/NOT-APPLICABLE) for every INV-1..INV-8, matching HANDOFF_PROTOCOL.md's worked example shape. Hard rule: never push directly to main.",
     "acceptance_criteria": [
-      "PASS or FAIL verdict with specific findings against INV-1..INV-8",
-      "Confirms every touched Repo call receives prefix: by reading the actual diff, not the design doc alone",
-      "Confirms resolve_role_in_tx/1 is byte-for-byte untouched by diffing against origin/main",
-      "Confirms the new test genuinely proves cross-tenant isolation (not just single-tenant happy path)",
-      "If FAIL: precise, actionable findings for ELIXIR-DEV rework (do not fix it yourself)"
+      "Verdict stated for every INV-1..INV-8 (APPLIES with PASS/FAIL, or NOT-APPLICABLE with reason)",
+      "INV-1 verdict is backed by direct source read of every Repo call site in role_registry.ex, not by trusting the implementer's report",
+      "conn.assigns.scoped_opts traced to its actual source (Letflow.Api.Context.scoped_repo_opts/1 or equivalent) and confirmed not attacker-influenceable via request data",
+      "resolve_role_in_tx/1's continued lack of prefix threading is explicitly assessed as residual risk (acceptable or not), not silently passed over",
+      "PASS or FAIL with specific named gaps if FAIL"
     ]
   },
   "result": {
-    "status": "PENDING",
-    "summary": null,
+    "status": "",
+    "summary": "",
     "artifacts_out": [],
     "issues": [],
     "git_evidence": {
       "branch_name": "feature/WF03-ISS0768-20260921",
       "commit_sha_list": [],
-      "remote_branch": null,
-      "push_status": null,
+      "remote_branch": "origin/feature/WF03-ISS0768-20260921",
+      "push_status": "skipped",
       "pr_url": null,
       "pr_create_error": null
     },
-    "next_action": null
+    "next_action": ""
   },
   "rework_count": 0,
   "max_rework": 3

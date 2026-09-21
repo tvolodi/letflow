@@ -1,0 +1,53 @@
+{
+  "handoff_id": "a1b2c3d4-0000-4000-8000-000000000003",
+  "run_id": "WF03-ISS0771-20260921",
+  "workflow_id": "WF-03",
+  "step": "02",
+  "from_agent": "ORCH",
+  "to_agent": "CODE-DESIGN-VALIDATOR",
+  "file": "handoffs/WF03-ISS0771-20260921/step-02-code-design-validator.json",
+  "created_at": "2026-09-21T07:50:18Z",
+  "started_at": "2026-09-21T07:50:18Z",
+  "completed_at": null,
+  "status": "PENDING",
+  "priority": "HIGH",
+  "context": {
+    "stage": "S6",
+    "requirement_ids": [],
+    "requirement_text": {},
+    "artifacts_in": [
+      "lib/letflow/design/iss0771-tenant-migration-replay-on-deploy.md",
+      "docs/issues/ISS-0771.yaml",
+      "lib/letflow/tenant_provisioning.ex",
+      "lib/letflow/supervisor/infrastructure.ex"
+    ],
+    "owned_modules": []
+  },
+  "task": {
+    "description": "Hard gate on CODE-DESIGNER's design at lib/letflow/design/iss0771-tenant-migration-replay-on-deploy.md. Read the design doc in full, plus every file it cites, independently -- do not trust CODE-DESIGNER's own summary. Verify it covers every acceptance criterion from step-01-code-designer.json's task.acceptance_criteria, contains no implementation code bodies, and is unambiguous enough for ELIXIR-DEV to build from without inventing anything. Specifically check: (1) does the chosen option (boot-time hook) genuinely satisfy the idempotency and per-tenant-isolation guarantees as claimed, by reading the actual current code of replay_migrations/2 and list_registrations/0 in lib/letflow/tenant_provisioning.ex; (2) does the proposed child placement in lib/letflow/supervisor/infrastructure.ex actually make sense given the real current children list and ordering; (3) is the claim that MigrationReplayBoot.start_link/1 'must always return :ignore, never propagate a crash' actually sufficient to guarantee Supervisor.init/2 cannot be brought down by it -- reason about this concretely, not just accept the prose; (4) confirm no contradiction with REQ-045/Letflow.Engine's process-vs-row decision.",
+    "acceptance_criteria": [
+      "Independently re-derive, don't just copy, that the design covers all 7 acceptance criteria from step-01's dispatch",
+      "Confirm zero implementation code bodies are present in the design doc (signatures/@specs/prose only)",
+      "Confirm the idempotency and isolation claims are consistent with the real current source of lib/letflow/tenant_provisioning.ex, quoted",
+      "Confirm the supervision-tree placement claim against the real current source of lib/letflow/supervisor/infrastructure.ex, quoted",
+      "PASS or FAIL with specific, named gaps per HANDOFF_PROTOCOL.md's validator-fail worked example shape if FAIL"
+    ]
+  },
+  "result": {
+    "status": "PENDING",
+    "summary": "",
+    "artifacts_out": [],
+    "issues": [],
+    "git_evidence": {
+      "branch_name": null,
+      "commit_sha_list": [],
+      "remote_branch": null,
+      "push_status": "skipped",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": ""
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

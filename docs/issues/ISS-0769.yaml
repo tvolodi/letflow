@@ -1,36 +1,100 @@
 id: ISS-0769
 title: >
-  QA app container crash/error logging dumped a full bearer token in a
-  stack-trace
-discovered_by: ai-dala-infra-34 (peer session, T-0140), escalated via cross-session message; recorded by ORCH (letflow-c5)
-discovered_in_run: T-0140-seed-swiftroute-tenant-persona-qa-users (ai-dala-infra)
-discovered_at: "2026-09-21T03:05:00Z"
+  Crash/error logging can dump a raw Authorization bearer-token value inside
+  a stack-trace log line instead of redacting it
+discovered_by: CODE-DESIGNER
+discovered_in_run: WF02-ISS0769-20260921
+discovered_at: "2026-09-21T03:20:34Z"
 severity: MINOR
+tags:
+  - security
+  - logging
+  - backend
 description: >
-  Observed live by a peer ai-dala-infra session while reading
-  letflow-qa-app-1 container logs to diagnose ISS-0768 (RoleRegistry
-  prefix bug). The app's verbose error/crash logging included a full
-  bearer token value inside a stack-trace dump, rather than redacting
-  it. Not reproduced or captured verbatim by either session -- believed
-  short-lived (QA token, since rolled over as a precaution) and not
-  persisted anywhere in either session's own output/files. Filed as a
-  tracked, non-urgent observation: no confirmed exploitation, QA-only
-  credential, already rotated -- but real, and worth a permanent fix
-  since crash logs commonly get shipped to less-trusted log aggregation.
+  A peer session observed (not reproduced/captured verbatim -- the QA
+  credential involved has already been rotated) that a crash/error log
+  dumped a full bearer token value inside a stack-trace instead of
+  redacting it. Not confirmed exploited, but a real, permanent-worth-fixing
+  gap: crash logs commonly ship to less-trusted log aggregation.
+
+  Independently also observed and escalated by peer session
+  ai-dala-infra-34 (run T-0140-seed-swiftroute-tenant-persona-qa-users)
+  while diagnosing ISS-0768 (RoleRegistry prefix bug), via cross-session
+  escalation recorded by ORCH (letflow-c5) directly to main as a shorter
+  issue record ahead of this fuller filing -- same underlying observation
+  (a full bearer token dumped in a crash/error log, believed short-lived
+  QA token, already rotated, not reproduced/captured verbatim by either
+  session). Both filings are reconciled into this one record on merge;
+  discovery credit for the independent peer-session observation is
+  preserved here.
+
+  Root cause, confirmed by reading the actual code (not guessed):
+  `deps/bandit/lib/bandit/pipeline.ex`'s `Bandit.Pipeline.run/5` catches any
+  unrescued exception raised while dispatching a request and passes the
+  already-built `conn` (including `conn.req_headers`, which still holds the
+  raw `authorization` header value) as `Logger.error/2` metadata via
+  `Bandit.Logger.logger_metadata_for/4`. This fires on every 500 response in
+  every environment -- `opts.http`'s default `log_exceptions_with_status_codes`
+  is `500..599`, `lib/letflow/supervisor/http.ex` starts Bandit with no
+  override, and `lib/letflow/plugs/api_pipeline.ex`'s `handle_errors/2`
+  deliberately re-raises after its own admission-cleanup work (see
+  ISS-0743's own finding that every unrescued exception in this pipeline
+  surfaces as a 500).
+
+  The project already has TWO redaction layers --
+  `Letflow.Secrets.LogFilter`/`Letflow.Secrets.Redaction.redact_map/1` (a
+  `:logger` primary filter covering every log sink) and
+  `Letflow.Obs.Logger.redact_sensitive/1` (the configured
+  `:logger_formatter`, top-level-metadata-keys only) -- but BOTH have the
+  same structural blind spot: `conn.req_headers` is a list of 2-tuples
+  (`[{"authorization", "Bearer <token>"}, ...]`), and neither redaction
+  function's list-handling recognizes a 2-tuple as a redactable shape (only
+  list ITEMS that are themselves maps get recursed into/redacted). No
+  application code calls `inspect(conn)` or `inspect(conn.req_headers)`
+  directly -- confirmed by grep -- so this is not a missing redaction call
+  site, it is a shape gap in the shared redaction utility itself.
 affected_files:
-  - lib/letflow (exact logging path not yet located -- likely a
-    Plug.Exception/Logger.error path or an unredacted conn.req_headers
-    dump in a crash report; needs ISSUE-FIXER diagnosis)
-fix_direction: >
-  ISSUE-FIXER to locate the logging path that can include a raw
-  Authorization/bearer-token header or value in an error/crash log or
-  stack trace (grep for Logger.error / Plug.Exception handling around
-  request context, and any conn dump in a crash report). ELIXIR-DEV
-  redacts Authorization header / bearer token values before they reach
-  any log sink, in all environments (not QA-only). Needs a regression
-  test asserting a crash triggered mid-request does not leak the
-  request's Authorization header value into the log output.
-queue_ref: Q-769  # letflow-queue task id 769, issue_ref ISS-0769. Registered
-  # 2026-09-21 by ORCH.
-github_ref: GH-1666
+  - lib/letflow/secrets/redaction.ex
+  - lib/letflow/obs/logger.ex
+related_requirements: []
+related: []
+suggested_fix: >
+  See lib/letflow/design/iss0769-crash-log-header-redaction.md for the full
+  design. Summary: extend `Letflow.Secrets.Redaction.redact_map/1`'s list
+  handling to also redact a list item shaped as a 2-tuple `{key, value}`
+  when `key` matches the existing (unchanged) sensitive-key list
+  case-insensitively -- this closes the gap at the one shared, primary
+  `:logger` filter used by every log sink project-wide (Bandit's crash
+  logs, and any current/future `Logger.error`/`Logger.warning` call site),
+  rather than patching a single call site. `Letflow.Obs.Logger.redact_sensitive/1`
+  is then changed to delegate to `Letflow.Secrets.Redaction.redact_map/1`
+  instead of maintaining its own separate, hand-copied sensitive-key list and
+  top-level-only walk -- both defense-in-depth and removal of a two-lists
+  drift risk. No change needed to `lib/letflow/plugs/api_pipeline.ex`'s
+  `handle_errors/2`, which does not itself log anything. Fix applies
+  unconditionally (no environment-gated branch exists or is introduced) --
+  `Letflow.Application.start/2` registers the primary filter
+  unconditionally today. Regression test: a real `Bandit` listener started
+  by the test (config/test.exs's `start_http: false` only gates the app's
+  own supervised listener) fed a deliberately-raising plug and a real HTTP
+  request carrying a sentinel bearer token, captured via
+  `ExUnit.CaptureLog`, asserting the raw token never appears in the
+  captured log output while `"[REDACTED]"` does -- proving the real
+  Bandit-catch-clause path, not just the pure redaction function in
+  isolation. Two open questions flagged, not silently resolved (design
+  doc §7): (1) a secret embedded directly in an exception's `message/1`
+  text, rather than in Logger metadata, is not covered by this fix -- no
+  known call site does this today; (2) no exhaustive audit was done of
+  every other list-of-tuples log call site in the codebase, though the fix
+  is shaped generically (any sensitive-keyed 2-tuple in a list), not
+  `req_headers`-specific.
+severity_rationale: >
+  MINOR per the reporting session's own characterization -- no confirmed
+  exploitation, and the one credential known to have been involved is
+  already rotated. Still security-relevant and worth a permanent fix:
+  crash/error logs are a common destination for less-trusted log
+  aggregation, and the leak is structural (any 500 with an Authorization
+  header present triggers it, in every environment), not a one-off fluke.
+queue_ref: "Q-769"
+github_ref: "GH-1666"
 status: open

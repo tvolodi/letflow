@@ -279,6 +279,21 @@ defmodule Letflow.Obs.LoggerTest do
   end
 
   # ---------------------------------------------------------------------------
+  # ISS-0769 — redact_sensitive/1 delegates to Letflow.Secrets.Redaction and
+  # therefore also redacts sensitive-keyed 2-tuples nested inside lists
+  # (e.g. Plug.Conn.headers()), not just top-level keys.
+  # ---------------------------------------------------------------------------
+
+  test "ISS-0769: redact_sensitive/1 redacts a nested header-tuple list, not just top-level keys" do
+    meta = %{conn: %{req_headers: [{"authorization", "Bearer nested-tok"}]}}
+
+    redacted = Letflow.Obs.Logger.redact_sensitive(meta)
+
+    refute inspect(redacted) =~ "nested-tok"
+    assert inspect(redacted) =~ "[REDACTED]"
+  end
+
+  # ---------------------------------------------------------------------------
   # AC8 — reserved field names in metadata do not shadow the real output values
   # ---------------------------------------------------------------------------
 

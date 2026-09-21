@@ -69,6 +69,50 @@ defmodule Letflow.Secrets.RedactionTest do
   end
 
   # ---------------------------------------------------------------------------------
+  # ISS-0769 -- redaction of sensitive-keyed 2-tuples in lists (Plug.Conn.headers())
+  # ---------------------------------------------------------------------------------
+
+  describe "ISS-0769: redact_map/1 redacts sensitive-keyed 2-tuples inside lists" do
+    test "header-tuple redaction is case-insensitive; key name is kept" do
+      input = %{
+        req_headers: [{"authorization", "Bearer tok-123"}, {"Content-Type", "application/json"}]
+      }
+
+      redacted = Redaction.redact_map(input)
+
+      assert {"authorization", "[REDACTED]"} in redacted.req_headers
+      assert {"Content-Type", "application/json"} in redacted.req_headers
+    end
+
+    test "nested inside a struct, e.g. the actual %Plug.Conn{} shape" do
+      input = %{conn: %Plug.Conn{req_headers: [{"authorization", "Bearer secret-xyz"}]}}
+
+      redacted = Redaction.redact_map(input)
+
+      refute inspect(redacted) =~ "secret-xyz"
+      assert inspect(redacted) =~ "[REDACTED]"
+    end
+
+    test "non-sensitive 2-tuples pass through unchanged" do
+      item = {"content-type", "application/json"}
+      input = %{headers: [item]}
+
+      redacted = Redaction.redact_map(input)
+
+      assert redacted.headers == [item]
+    end
+
+    test "set-cookie / cookie header tuples are redacted wholesale" do
+      input = %{resp_headers: [{"set-cookie", "session=abc"}, {"cookie", "other=xyz"}]}
+
+      redacted = Redaction.redact_map(input)
+
+      assert {"set-cookie", "[REDACTED]"} in redacted.resp_headers
+      assert {"cookie", "[REDACTED]"} in redacted.resp_headers
+    end
+  end
+
+  # ---------------------------------------------------------------------------------
   # AC8 -- reference-redaction masking
   # ---------------------------------------------------------------------------------
 

@@ -136,6 +136,7 @@ defmodule Letflow.Definitions do
   alias Letflow.Definitions.PromotionAssertionRun
   alias Letflow.Definitions.PromotionReview
   alias Letflow.Definitions.PromotionReviewStore
+  alias Letflow.Definitions.SemanticValidation
   alias Letflow.Definitions.SolutionPackArtefactBase
   alias Letflow.Engine.VariableSchema
   alias Letflow.Repo
@@ -741,6 +742,8 @@ defmodule Letflow.Definitions do
           | {:error, :not_draft}
           | {:error, :graph_structure_invalid}
           | {:error, {:service_scope_violation, reason :: term()}}
+          | {:error, {:semantic_validation_failed, [Graph.Violation.t()]}}
+          | {:error, {:semantic_validation_precondition_failed, term()}}
           | common_error()
   def activate(id, opts) when is_list(opts) do
     prefix = Keyword.get(opts, :prefix)
@@ -1227,12 +1230,19 @@ defmodule Letflow.Definitions do
     2. `Letflow.Definitions.Graph.from_map/1`. `:error` ->
        `{:error, :graph_structure_invalid}` — a stored graph that will not
        even parse.
-    3. Exactly these three, in this order:
+    3. `Letflow.Engine.VariableSchema.fetch_schemas/3` — a FRESH read, issued
+       on every call, no caching layer anywhere in this path (REQ-372 AC6).
+       Its own `{:error, :missing_prefix}` / `{:error, :invalid_definition_id}`
+       propagate through this function's `with` chain unchanged.
+    4. Exactly these four, in this order:
        `Graph.validate_graph/1` (REQ-028 structural),
        `Graph.validate_node_attributes/1` (REQ-029 node attributes),
-       `Graph.validate_edge_conditions/1` (REQ-029 edge conditions).
-    4. The three `:violations` lists are concatenated in that order.
-       Duplicates are **not** deduplicated: the three validators produce
+       `Graph.validate_edge_conditions/1` (REQ-029 edge conditions),
+       `Letflow.Definitions.SemanticValidation.validate/2` (REQ-372 semantic
+       — field-existence and type-compatibility of `EXCLUSIVE_GATEWAY` edge
+       conditions against the freshly-fetched declared fields).
+    5. The four `:violations` lists are concatenated in that order.
+       Duplicates are **not** deduplicated: the four validators produce
        disjoint `Graph.Violation.code()` sets. `valid` is `violations == []`.
 
   **Adds no rule of its own, and calls no other validator.** In particular it
@@ -1243,20 +1253,28 @@ defmodule Letflow.Definitions do
   "REQ-028/029's validators directly". That exclusion is deliberate, and
   `activate/2` remains its owning path.
 
-  Issues exactly one query (`get_by_id/2`); everything after step 1 is pure.
+  Issues exactly two queries (`get_by_id/2` and `VariableSchema.fetch_schemas/3`);
+  everything after that is pure.
   """
   @spec validate_definition_graph(id :: Ecto.UUID.t(), opts :: opts()) ::
           {:ok, graph_validation_result()}
           | {:error, :not_found}
           | {:error, :graph_structure_invalid}
+          | {:error, :missing_prefix}
+          | {:error, :invalid_definition_id}
           | common_error()
   def validate_definition_graph(id, opts) when is_list(opts) do
+    prefix = Keyword.get(opts, :prefix)
+
     with {:ok, %ProcessDefinition{} = definition} <- get_by_id(id, opts),
-         {:ok, graph} <- convert_graph(definition.graph) do
+         {:ok, graph} <- convert_graph(definition.graph),
+         {:ok, declared_fields} <-
+           VariableSchema.fetch_schemas(Repo, definition.id, prefix: prefix) do
       violations =
         Graph.validate_graph(graph).violations ++
           Graph.validate_node_attributes(graph).violations ++
-          Graph.validate_edge_conditions(graph).violations
+          Graph.validate_edge_conditions(graph).violations ++
+          SemanticValidation.validate(graph, declared_fields).violations
 
       {:ok,
        %{
@@ -2295,8 +2313,14 @@ defmodule Letflow.Definitions do
 
         %ProcessDefinition{status: :draft} = definition ->
           case run_service_scope_validator(definition, tenant_id, validator) do
-            :ok -> activate_draft(definition, prefix, tenant_id)
-            {:error, reason} -> Repo.rollback(reason)
+            :ok ->
+              case run_semantic_validation(definition, prefix) do
+                :ok -> activate_draft(definition, prefix, tenant_id)
+                {:error, reason} -> Repo.rollback(reason)
+              end
+
+            {:error, reason} ->
+              Repo.rollback(reason)
           end
       end
     end)
@@ -2311,6 +2335,43 @@ defmodule Letflow.Definitions do
         case validator.(graph, tenant_id) do
           :ok -> :ok
           {:error, reason} -> {:error, {:service_scope_violation, reason}}
+        end
+
+      :error ->
+        {:error, :graph_structure_invalid}
+    end
+  end
+
+  # REQ-372 -- the release/promotion submission gate (design §3.2). Runs
+  # SemanticValidation.validate/2 against a FRESH VariableSchema.fetch_schemas/3
+  # read, issued inside this very transaction (definition's row already
+  # locked FOR UPDATE by run_activate_transaction/4) -- there is no cache
+  # anywhere in this path, so the only way the result can differ between two
+  # calls is if the underlying variable_schemas rows or the graph itself
+  # actually changed. Only the semantic pass is added here; validate_graph/1,
+  # validate_node_attributes/1, validate_edge_conditions/1 are deliberately
+  # NOT newly wired into activate/2 by this requirement (design §3.2, §5 OQ-6).
+  @spec run_semantic_validation(ProcessDefinition.t(), prefix :: String.t()) ::
+          :ok
+          | {:error, :graph_structure_invalid}
+          | {:error, {:semantic_validation_failed, [Graph.Violation.t()]}}
+          | {:error,
+             {:semantic_validation_precondition_failed, :missing_prefix | :invalid_definition_id}}
+  defp run_semantic_validation(%ProcessDefinition{} = definition, prefix) do
+    case Graph.from_map(definition.graph) do
+      {:ok, graph} ->
+        case VariableSchema.fetch_schemas(Repo, definition.id, prefix: prefix) do
+          {:ok, declared_fields} ->
+            case SemanticValidation.validate(graph, declared_fields) do
+              %{valid: true} ->
+                :ok
+
+              %{valid: false, violations: violations} ->
+                {:error, {:semantic_validation_failed, violations}}
+            end
+
+          {:error, reason} ->
+            {:error, {:semantic_validation_precondition_failed, reason}}
         end
 
       :error ->
@@ -2392,6 +2453,18 @@ defmodule Letflow.Definitions do
   end
 
   defp interpret_activate_result({:error, {:service_scope_violation, _reason}} = error), do: error
+
+  # REQ-372 -- pure pass-throughs (identical in shape and intent to the
+  # {:service_scope_violation, _} clause above), so this function's explicit
+  # per-shape matching stays exhaustive over activate/2's enlarged return
+  # union (INV-8: no catch-all clause added).
+  defp interpret_activate_result({:error, {:semantic_validation_failed, _violations}} = error),
+    do: error
+
+  defp interpret_activate_result(
+         {:error, {:semantic_validation_precondition_failed, _reason}} = error
+       ),
+       do: error
 
   # REQ-125 -- assign_definition_sequence/2's locking-protocol failure,
   # surfaced unchanged (common_error()). Explicit clause rather than relying

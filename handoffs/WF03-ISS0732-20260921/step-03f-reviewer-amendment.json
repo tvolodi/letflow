@@ -43,8 +43,8 @@
     "git_evidence": {
       "branch_name": "feature/WF03-ISS0732-20260921",
       "commit_sha_list": ["30919e94"],
-      "remote_branch": null,
-      "push_status": "pending",
+      "remote_branch": "feature/WF03-ISS0732-20260921",
+      "push_status": "pushed",
       "pr_url": null,
       "pr_create_error": null
     },

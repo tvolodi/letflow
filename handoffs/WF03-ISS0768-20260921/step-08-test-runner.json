@@ -8,8 +8,8 @@
   "file": "handoffs/WF03-ISS0768-20260921/step-08-test-runner.json",
   "created_at": "2026-09-21T05:17:39Z",
   "started_at": "2026-09-21T05:17:39Z",
-  "completed_at": null,
-  "status": "PENDING",
+  "completed_at": "2026-09-21T10:53:00Z",
+  "status": "COMPLETED",
   "priority": "HIGH",
   "context": {
     "stage": "S4",
@@ -34,10 +34,12 @@
     ]
   },
   "result": {
-    "status": "",
-    "summary": "",
-    "artifacts_out": [],
-    "issues": [],
+    "status": "PASS",
+    "summary": "mix compile --warnings-as-errors: exit 0, clean in both dev (MIX_ENV=dev, empty output -- nothing to recompile) and test (MIX_ENV=test, 273 own-app files, zero own-app warnings; the only warnings anywhere in the log are from dependency source jose/eqrcode, which --warnings-as-errors does not gate) envs. test/letflow/role_registry_test.exs run standalone with --trace: 'Result: 15 passed', including by-name confirmation of 'test ISS-0768 regression -- prefix genuinely scopes RoleRegistry to one tenant's own schema role created under tenant A's prefix: visible via A's own prefix, absent via tenant B's prefix, absent from public (2401.5ms) [L#439]' PASSING. Full suite via scripts/test_parallel.sh (N=16) run 4 times against the shared Postgres container (letflow-postgres-1:5462, also used by concurrent sibling sessions/worktrees on this host -- this worktree's own docker compose could not even bind 5462, already allocated). Run 1: 'combined: 1062 tests, 0 properties, 0 failures (1062/1062 passed)' but 10/16 partitions crashed at connect time (too_many_connections, pg_stat_activity showed 83 pre-existing sibling connections before the run started) -- not authoritative, most of the suite never ran. Run 2 (TEST_PARALLEL_N=2/TEST_POOL_SIZE=4): both partitions aborted exit 127 mid-run on 'FATAL 57P01 admin_shutdown terminating connection due to administrator command' -- an external actor restarted/reset the shared Postgres container mid-run (connection count dropped 83->6 right after); discarded as host noise. Run 3: 'combined: 1607 tests, 3 properties, 88 failures (1522/1610 passed)', still 10/16 partitions crashed at connect time; the 3 that completed (6, 15, 16) failed 88 tests, ALL confirmed DBConnection.ConnectionError via grep (zero non-connection-error traces among them) -- role_registry_test.exs never appears. Run 4 (authoritative -- all 16 partitions produced a Result: line, no connect-time crashes): 'combined: 4487 tests, 6 properties, 9 failures (4484/4493 passed)'. All 9 failures are in test-support concurrency-guard modules that explicitly detect a sibling mix test invocation sharing the DB and behave accordingly -- Letflow.IdentityTest (2, Ecto.NoResultsError inside BpmDefaultRealmDisplacement.with_lock/1), Letflow.ServiceCatalogReaperTest (4, returned {:deferred, :concurrent_invocation} per its own ISS-0414 guard log 'another mix test invocation ... is currently connected'), Letflow.TenantSchemaReaperTest (3, ISS-0110 guard logged the same, 0 reclaimed where the test expected >=1 under isolated conditions). None touch role_registry.ex, routers/identity.ex, or role_registry_test.exs, and this matches exactly the class of failure TEST-DESIGNER already flagged at step-06 (different failing set each run, correlated with connection-pool/concurrent-invocation signals) -- read as shared-host contention, not a regression from this branch. Full detail in test/reports/report-20260921-WF03-ISS0768-20260921.yaml.",
+    "artifacts_out": ["test/reports/report-20260921-WF03-ISS0768-20260921.yaml"],
+    "issues": [
+      "Shared Postgres host (letflow-postgres-1:5462) under heavy concurrent load from sibling sessions/worktrees during this run: this worktree's own `docker compose up -d` could not bind port 5462 (already allocated), pg_stat_activity showed 83 external connections before run 1, and one attempt (run 2) was interrupted mid-flight by an external admin_shutdown against the shared container. 3 of 4 full-suite attempts had partitions crash outright on too_many_connections/DBConnection.ConnectionError before producing any results. Only run 4 completed cleanly enough (all 16 partitions reporting) to be treated as authoritative. Flagging for ORCH visibility -- this is a host-capacity/scheduling issue across concurrent agent sessions, not something fixable from within this branch."
+    ],
     "git_evidence": {
       "branch_name": "feature/WF03-ISS0768-20260921",
       "commit_sha_list": [],
@@ -46,7 +48,7 @@
       "pr_url": null,
       "pr_create_error": null
     },
-    "next_action": ""
+    "next_action": "Route to RELEASE-VALIDATOR (or the next WF-03 step) -- role_registry_test.exs (including the new ISS-0768 describe block) confirmed passing by name; full-suite result is PASS once shared-host connection contention is accounted for, per step-06's own precedent for this same run."
   },
   "rework_count": 0,
   "max_rework": 3

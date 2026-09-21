@@ -1,0 +1,47 @@
+id: ISS-0770
+title: >
+  Plug.Conn.secret_key_base is not in the log-redaction sensitive-key list
+  -- defensive gap, not currently exploitable
+discovered_by: SECURITY-REVIEWER
+discovered_in_run: WF03-ISS0769-20260921
+discovered_at: "2026-09-21T04:00:00Z"
+severity: MINOR
+tags:
+  - security
+  - logging
+  - defensive-hardening
+description: >
+  Found while independently re-verifying the ISS-0769 bearer-token
+  log-redaction fix (PR #1668). `%Plug.Conn{}.secret_key_base` is a
+  genuine secret-shaped field that is NOT in
+  `Letflow.Secrets.Redaction`'s `@sensitive_exact_keys`/
+  `@sensitive_suffixes` list (it doesn't match `secret`, `_secret`, or any
+  other existing exact/suffix key). If a `%Plug.Conn{}` with a populated
+  `secret_key_base` were ever logged (e.g. via the same crash-log path
+  ISS-0769 just hardened), it would leak in full, unredacted.
+
+  NOT currently exploitable: confirmed via `grep -rn
+  "put_secret_key_base\|Plug.Session" lib/` that this application never
+  calls `Plug.Conn.put_secret_key_base/2` and does not use `Plug.Session`
+  anywhere in `lib/`, so `conn.secret_key_base` stays `nil` for every real
+  request today. This is a defensive/hardening gap in the shared
+  sensitive-key list, not a live vulnerability.
+affected_files:
+  - lib/letflow/secrets/redaction.ex
+related:
+  - ISS-0769  # the redaction fix this gap was found while independently re-verifying
+severity_rationale: >
+  MINOR -- confirmed not exploitable today given no code path populates
+  this field, but worth closing defensively since the field name itself
+  is secret-shaped and a future feature (e.g. adopting Plug.Session)
+  could silently reintroduce real exposure.
+suggested_fix: >
+  Add "secret_key_base" to Letflow.Secrets.Redaction's
+  @sensitive_exact_keys list (both atom and string forms, matching the
+  existing convention for authorization/cookie/set-cookie), plus a
+  regression test asserting a conn with a populated secret_key_base gets
+  redacted. Small, single-file change -- likely sized for ORCH's
+  direct-action rule or a single ELIXIR-DEV turn, no design doc needed.
+queue_ref: null  # ORCH to assign via letflow-queue register_task
+github_ref: null  # ORCH to assign
+status: open

@@ -54,6 +54,20 @@ defmodule Letflow.Secrets.RedactionTest do
       assert redacted["Api_Token"] == "[REDACTED]"
     end
 
+    test "redacts secret_key_base (ISS-0770 -- Plug.Conn-shaped secret field)" do
+      # Plug.Conn.secret_key_base is a genuine secret-shaped field; assert it is
+      # caught by the exact-key list under both atom and string key forms, using
+      # a plain conn-shaped map rather than a real %Plug.Conn{} struct so this
+      # test stays independent of the unrelated struct-support fix in-flight for
+      # ISS-0769 (PR #1668).
+      input_atom_key = %{secret_key_base: "super-secret-64-byte-value", host: "example.com"}
+      input_string_key = %{"secret_key_base" => "super-secret-64-byte-value"}
+
+      assert Redaction.redact_map(input_atom_key)[:secret_key_base] == "[REDACTED]"
+      assert Redaction.redact_map(input_atom_key)[:host] == "example.com"
+      assert Redaction.redact_map(input_string_key)["secret_key_base"] == "[REDACTED]"
+    end
+
     test "recurses into nested maps and lists of maps" do
       input = %{
         "data" => %{"nested_secret" => "inner", "safe" => "kept"},

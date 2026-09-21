@@ -8,8 +8,8 @@
   "file": "handoffs/WF02-REQ373-20260921/step-06-doc-updater.json",
   "created_at": "2026-09-21T20:56:26Z",
   "started_at": "2026-09-21T20:56:26Z",
-  "completed_at": null,
-  "status": "IN_PROGRESS",
+  "completed_at": "2026-09-21T21:01:39Z",
+  "status": "COMPLETED",
   "priority": "NORMAL",
   "context": {
     "stage": "S6",
@@ -40,7 +40,23 @@
       "README.md updated only if it actually documents behavior this change altered"
     ]
   },
-  "result": null,
+  "result": {
+    "status": "PASS",
+    "summary": "REQ-373 flipped in_progress -> done in docs/requirements.yaml. Appended a 'done' event to docs/status/requirement_status.v21.yaml (13 -> 14 on-disk entries, verified by `grep -c \"^  - req:\" ...` and git diff --numstat showing 39 insertions / 0 deletions), and incremented requirement_status.index.yaml's volume-21 `entries:` from 13 to 14 in the same commit, with the prior note preserved verbatim per the append-only rule. test/docs/requirement_status_invariants_test.exs: 20/20 passed (confirms both files' schema and the A9 entries-count invariant). README.md has zero mentions of service_catalog/ServiceCatalog/PinResolver/pin_lookup, so it was left untouched -- no documented behavior needed updating. Drafted the follow-on FRONTEND-DEV requirement as REQ-399 (next unused id after REQ-398, the file's current highest), appended at the end of docs/requirements.yaml in its established ascending-id file order, depends_on: [REQ-373], following the REQ-291/REQ-288 and REQ-398/REQ-397 precedent shape. REQ-399's description states explicitly that it needs a new backend route, GET /api/v1/instances/{id}/pins (PIN-04 AC4's own SCOPE note in pin_resolver.ex, confirmed by direct read), and explicitly decides that route is IN SCOPE of REQ-399 itself (not a separate backend prerequisite requirement), since nothing else in requirements.yaml builds it -- stated with reasoning, not left ambiguous. mix letflow.check_req_id_collision: OK (no collision). mix letflow.check_requirements_registration: REQ-399 correctly classified as DEFERRED with a non-empty rationale (R1-R6 all pass, 366 = 363 registered + 3 deferred + 0 neither + 0 unclassified).",
+    "artifacts_out": [
+      "docs/requirements.yaml",
+      "docs/status/requirement_status.v21.yaml",
+      "docs/status/requirement_status.index.yaml"
+    ],
+    "new_requirement_id": "REQ-399",
+    "issues": [
+      {
+        "severity": "MINOR",
+        "description": "mix letflow.check_deferral_staleness (part of the `mix letflow.check` alias) currently FAILS with one violation: REQ-399 (line ~29620 in docs/requirements.yaml) is classified STALE, because its `# impl_order: UNREGISTERED -- filed directly by DOC-UPDATER...` marker carries no `blocked-by: REQ-NNN` escape hatch and stage S6 is ACTIVE (80 done requirements). This is expected and self-resolving, not a defect in REQ-399's filing: DOC-UPDATER has no letflow-queue access (core-directives.md's 'No Agent Discretion Over Task Selection or Locking' reserves register_task to ORCH alone), so REQ-399 cannot be registered with a real impl_order from this role. Recommend ORCH call register_task for REQ-399 promptly (the same way REQ-398 was registered at filing time, GH#1660/queue task 766) so `mix letflow.check` is green again repo-wide before other work that runs the full check alias lands on top of this state. Until then, any run of `mix letflow.check_deferral_staleness` or the full `mix letflow.check` alias on this branch/main will report this one violation by name."
+      }
+    ],
+    "next_action": "Route to ORCH for Step Final (git merge is ORCH's own job for this run, per the handoff task -- NOT performed by DOC-UPDATER). ORCH should also call register_task for REQ-399 promptly after merge to clear the check_deferral_staleness violation described above."
+  },
   "rework_count": 0,
   "max_rework": 3
 }

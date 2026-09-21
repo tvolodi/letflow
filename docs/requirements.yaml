@@ -27653,7 +27653,7 @@ requirements:
   - id: REQ-373
     title: "Version-status lifecycle (publish/retire) for service_catalog entries, wired to PinResolver's real Lookup (backend half)"
     owner: ELIXIR-DEV
-    status: in_progress
+    status: done
     stage: S6
     impl_order: 732  # letflow-queue task id, GH#1620. Registered 2026-09-20 by ORCH;
       # corrects a fabricated/self-assigned id from the original filing -- 730 was
@@ -29616,3 +29616,103 @@ requirements:
       - "one new nav entry in AppShell.tsx's NAV_ITEMS reaches the new route, and the design doc states this supersedes ISS-0730 design §1's no-nav-entry decision and why"
       - "a design-doc or code comment cross-reference notes that ISS-0734's fix_direction piece 2 (durable recording of submit-time conflict refusals) remains open and out of this requirement's scope, so a future reader does not mistake this page's absence of refused-submission rows for a bug this requirement was supposed to fix"
     depends_on: [REQ-397]
+
+  - id: REQ-399
+    title: "Case-detail dependency-version/provenance screen, reading PinResolver's source taxonomy via a new GET /api/v1/instances/{id}/pins route"
+    owner: FRONTEND-DEV
+    status: pending
+    stage: S6
+    # impl_order: UNREGISTERED -- filed directly by DOC-UPDATER as REQ-373's
+    # own follow-on frontend requirement (REQ-291/REQ-288 and REQ-398/REQ-397
+    # precedent pattern); register via letflow-queue when picked up.
+    description: >
+      Filed as REQ-373's own named follow-on, the same way REQ-291 followed
+      REQ-288 and REQ-398 followed REQ-397: REQ-373's SCOPE FENCE explicitly
+      named this screen out of its own scope and pointed here. depends_on
+      REQ-373 alone (not REQ-059/REQ-060), because although the underlying
+      pin-resolution machinery (Letflow.Engine.PinResolver, REQ-059/REQ-060)
+      has been real and released since S4, REQ-373 is what makes a real case
+      actually resolve and record a catalog_entry pin in production at all
+      (every prior catalog_entry resolution ran against
+      PinResolver.default_lookup/0, which always returns
+      {:error, :not_found}) -- so this screen would have nothing meaningful
+      to show for a catalog dependency before REQ-373 lands.
+
+      WHAT EXISTS TODAY: Letflow.Engine.PinResolver already returns, for
+      every recorded pin, a `source` field carrying exactly the taxonomy this
+      screen needs to display -- `:resolved` (chosen automatically at
+      resolution time), `:override` (requested explicitly by the caller),
+      `:inherited` (carried down from a parent instance), and `:rebound`
+      (changed later via the PIN-05 explicit-rebind path, REQ-060). This is
+      confirmed real, already-shipped data, not something this requirement
+      computes. `pin_resolver.ex`'s own moduledoc states, under PIN-04 AC4's
+      SCOPE note, that the future read route for this data is
+      `GET /api/v1/instances/{id}/pins` -- confirmed still true by reading
+      that moduledoc directly. `web/src` has zero screen showing, for any
+      case, the list of dependency versions it is using and how each was
+      chosen -- grepped in full, no hits beyond unrelated word matches
+      (carried over from REQ-373's own verification of the same gap).
+
+      THIS REQUIREMENT NEEDS A NEW BACKEND ROUTE THAT DOES NOT YET EXIST:
+      `GET /api/v1/instances/{id}/pins`. DECISION, stated explicitly rather
+      than left ambiguous: standing up that route is IN SCOPE of this same
+      requirement, not a separate backend prerequisite requirement --
+      nothing else in `docs/requirements.yaml` builds it, PIN-04 AC4 named
+      it only as a future SCOPE note rather than committing any other
+      requirement to build it, and the route itself is a thin, read-only
+      projection of `PinResolver.reconstruct_effective_pins/2`'s
+      already-computed effective pin set (zero catalog reads by
+      construction, per that function's own existing contract) -- there is
+      no new resolution logic to design, only a response shape to expose.
+      Building it is still real ELIXIR-DEV-shaped work (a new
+      `Letflow.Routers.Instances` handler, tenant-scoped per this
+      codebase's existing prefix convention, returning each pin's
+      ref/resolved_id/version/source), and it is a tenant-data read path
+      under `docs/agents/instructions/security-invariants.md` exactly like
+      REQ-397's list route, so it carries the same mandatory
+      SECURITY-REVIEWER gate before merge even though the requirement's
+      overall owner is FRONTEND-DEV for its larger (UI) half.
+
+      THIS REQUIREMENT BUILDS:
+
+      1. The new backend route above, plus a typed client in
+      `web/src/api/instances.ts` (or the existing pins-related API module,
+      whichever this codebase's convention points to -- confirm by reading
+      `web/src/api/instances.ts` first) and a corresponding hook.
+
+      2. A dependency-version/provenance section on the existing case/
+      instance detail screen (`web/src/pages/instances/InstanceDetailPage.tsx`
+      or its current equivalent -- confirm the live filename first, since
+      REQ-371's own history volume entry above already flagged that file as
+      having read stale/nonexistent instance fields once before) listing
+      each pinned dependency's `ref`, resolved `version`, and a
+      human-readable label for its `source` (e.g. "chosen automatically" /
+      "requested explicitly" / "inherited from parent case" / "changed via
+      rebind"), matching PinResolver's four-value taxonomy exactly -- no
+      fifth bucket invented, no taxonomy value silently dropped.
+
+      3. Loading/error/empty states following this codebase's existing
+      `QueryStateBoundary`/`classifyError` convention (same pattern
+      REQ-398 and `PromotionReviewPage.tsx` already use) -- a case with zero
+      recorded pins (no catalog/module dependencies resolved at all) renders
+      a distinct plain "no dependencies" state, not the fetch-failure state.
+
+      OUT OF SCOPE: PLC-01/module_ref catalog versioning (still the
+      identical, already-named SCOPE GAP `pin_resolver.ex`'s own moduledoc
+      states, unscoped to any stage); any UI affordance to CHANGE a pin from
+      this screen (the existing PIN-05 rebind path, `POST
+      /api/v1/instances/{id}/rebind-pins`, already has its own route and any
+      GUI wiring for it is a separate requirement if one is ever filed); any
+      change to `Letflow.Engine.PinResolver` itself (this requirement only
+      reads its already-shipped `source` taxonomy through a new route, it
+      does not alter resolution logic).
+    acceptance_criteria:
+      - "the new GET /api/v1/instances/{id}/pins route returns, for a real instance, each dependency's ref, resolved_id, version and source, tenant-scoped per this codebase's existing prefix convention, proven by an integration test"
+      - "the route is a pure read of Letflow.Engine.PinResolver.reconstruct_effective_pins/2's already-computed effective pin set (zero additional catalog/module reads), proven by the test asserting no new Repo query against service_catalog or module tables is introduced for this path"
+      - "SECURITY-REVIEWER sign-off is required and obtained before merge, since this is a tenant-data-scoped read route per docs/agents/instructions/security-invariants.md, same class as REQ-397's list route"
+      - "the case-detail screen renders every one of PinResolver's four source values (:resolved, :override, :inherited, :rebound) with a distinct human-readable label, proven by a test supplying a mocked/stubbed response containing all four"
+      - "a case with zero recorded pins renders a distinct plain 'no dependencies' state, not the fetch-failure state, proven by a test"
+      - "a fetch failure from the new route renders this codebase's existing QueryStateBoundary/classifyError failure state, proven by a test"
+      - "git diff confirms Letflow.Engine.PinResolver's resolution logic is unmodified by this requirement -- only a new route consuming its existing output was added"
+      - "mix letflow.check passes and the frontend test suite passes, with real output quoted for both"
+    depends_on: [REQ-373]

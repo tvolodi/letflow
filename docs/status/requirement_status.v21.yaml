@@ -544,6 +544,45 @@ history:
       RELEASE-VALIDATOR entry, same flake). REQ-375 (the operator-facing
       rollout-status screen depending on this endpoint) remains pending,
       unblocked by this merge.
+  - req: REQ-373
+    event: done
+    agent: DOC-UPDATER
+    at: "2026-09-21T20:58:11Z"
+    note: >
+      Backend version-status lifecycle (publish/retire) for service_catalog
+      entries shipped on feature/WF02-REQ373-20260921. Schema decision
+      recorded explicitly in the moduledoc: an in-place `status`
+      Ecto.Enum ([:ACTIVE, :RETIRED]) column added directly to
+      service_catalog, plus a new sibling archive table,
+      service_catalog_versions, capturing prior versions -- NOT a
+      composite-key-versioned service_catalog table. New publish/3 and
+      retire/1 operations on Letflow.ServiceCatalog. New
+      Letflow.ServiceCatalog.PinLookup module implements a real
+      Letflow.Engine.PinResolver.Lookup, wired into Engine.create/2's
+      pin_lookup/2 helper in place of PinResolver.default_lookup/0 for
+      catalog_entry references, so a real case can now actually record a
+      resolved catalog_entry pin. Two new routes gated behind the
+      already-shipped :AdminServicesManage permission (no new permission
+      name invented). PLC-01/module_ref catalog versioning explicitly
+      named still out of scope, citing pin_resolver.ex's own existing
+      SCOPE GAP language. One rework cycle at the design gate (a
+      status-casing self-contradiction in the moduledoc), one rework
+      cycle at implementation (archive_changeset/1's over-broad
+      validate_required on fields that are nullable on an archived row,
+      found by TEST-DESIGNER), one rework cycle at the test-design gate
+      (a service_catalog_versions test-cleanup leak, found by
+      TEST-DESIGN-VALIDATOR). All gates ultimately PASSED:
+      CODE-DESIGN-VALIDATOR, SECURITY-REVIEWER (x2), REVIEWER (x2),
+      TEST-DESIGN-VALIDATOR (x2), TEST-RUNNER, RELEASE-VALIDATOR.
+      RELEASE-VALIDATOR's independent full-suite re-run: 4585/4588 (3
+      pre-existing unrelated failures, structurally cleared), plus a
+      real AC8-blocking handoff-lint defect RELEASE-VALIDATOR found and
+      fixed along the way. Follow-on FRONTEND-DEV requirement REQ-399
+      filed (case-detail dependency-version/provenance screen, depends
+      on this requirement), per the REQ-291/REQ-288 and REQ-398/REQ-397
+      precedent pattern -- names its own required new backend route,
+      GET /api/v1/instances/{id}/pins (PIN-04 AC4's own SCOPE note),
+      as in-scope for REQ-399 itself since nothing else would build it.
   - req: SCOPE-CHANGE
     event: done
     agent: DOC-UPDATER

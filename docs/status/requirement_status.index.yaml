@@ -4293,16 +4293,40 @@ volumes:
     path: docs/status/requirement_status.v21.yaml
     status: current
     opened: 2026-09-20
-    entries: 15
+    entries: 17
     note: >
-      PLACEHOLDER -- this note and the `entries:` count above will be
-      replaced with a fresh, real recount + composed history once
-      WF02-REQ373-20260921's Step Final rebase finishes applying every
-      remaining commit (this was a real 3-way collision between main's
-      already-composed REQ-374 state, ISS-0775's done-event, and this
-      run's own started-event append -- resolved with a final authoritative
-      `grep -c` recount at the end of the rebase rather than guessing the
-      intermediate count here).
+      Incremented to 17 during WF02-REQ373-20260921's own Step Final rebase
+      onto origin/main (second pass, after main advanced further with
+      ISS-0777's own done-event landing): composed REQ-373's done event
+      (2026-09-21T20:58:11Z) chronologically before ISS-0777's SCOPE-CHANGE
+      done event (2026-09-22T00:46:45Z -- two-tier entity_type/attribute
+      identifier-format validation closing the unhandled-ArgumentError
+      crash path). `grep -c "^  - req:" docs/status/requirement_status.v21.yaml`
+      = 17 on-disk entries after composition, recounted directly rather
+      than assumed. Well under the 1200-line/120000-byte roll ceiling, no
+      roll triggered. Prior notes (each describing an earlier, incomplete
+      count from only one side of one collision) preserved below verbatim.
+
+      Incremented to 15 during WF02-REQ373-20260921's own Step Final rebase
+      onto origin/main, composing THREE independent appends that collided
+      on this hunk across two separate rebase conflicts: (1) ORCH's own
+      WF02-REQ373-20260921 Step 00 append (REQ-373 started event,
+      2026-09-21T17:09:10Z, caught as a bookkeeping gap by REQ-373's own
+      Step 2a mix letflow.check run's A9 failure); (2) DOC-UPDATER's
+      ISS-0775 SCOPE-CHANGE done-event append (2026-09-21T18:20:11Z --
+      resolve_group_ids_for_role_names/2's OIDC role-claim write path
+      scoped to kind == :platform_role, closing the
+      process-routing-role-kind-name-collision gap ISS-0774's own gate
+      surfaced); (3) DOC-UPDATER's own WF02-REQ373-20260921 Step 6 append
+      (REQ-373 done event, 2026-09-21T20:58:11Z -- backend version-status
+      lifecycle for service_catalog entries plus the real PinResolver.Lookup
+      wiring). All three preserved, composed chronologically by `at:`
+      timestamp (17:09:10Z, 18:20:11Z, 20:58:11Z in that order).
+      `grep -c "^  - req:" docs/status/requirement_status.v21.yaml` = 15
+      on-disk entries after composition, recounted directly rather than
+      assumed. Well under the 1200-line/120000-byte roll ceiling, no roll
+      triggered. Prior notes (each describing an earlier, incomplete count
+      from only one side of one collision) preserved below verbatim.
 
       Incremented to 12 during WF03-ISS0774-20260921's own Step Final rebase
       onto origin/main: DOC-UPDATER's own ISS-0774 SCOPE-CHANGE done-event

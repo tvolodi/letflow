@@ -44,4 +44,21 @@ suggested_fix: >
   direct-action rule or a single ELIXIR-DEV turn, no design doc needed.
 queue_ref: null  # ORCH to assign via letflow-queue register_task
 github_ref: null  # ORCH to assign
-status: open
+status: resolved
+resolution:
+  resolved_by: PR #1669 (feature/WF03-ISS0770-20260921)
+  summary: >
+    Added "secret_key_base" to Letflow.Secrets.Redaction's
+    @sensitive_exact_keys list, per the suggested_fix, closing the
+    defensive gap: a %Plug.Conn{} with a populated secret_key_base
+    logged via any existing crash-log path (including the one ISS-0769
+    hardened) is now redacted rather than leaked in full. A regression
+    test asserting this was added alongside the fix.
+  evidence: >
+    8/8 targeted redaction tests passing, 4132/4132 in the broader
+    TEST-RUNNER run, and RELEASE-VALIDATOR's independent re-derivation:
+    472/474 on `mix letflow.check.test`, with the 2 failures confirmed
+    unrelated pre-existing flake ISS-0766.
+  gates: >
+    REVIEWER PASSED, TEST-RUNNER PASSED, RELEASE-VALIDATOR PASSED --
+    all three independently.

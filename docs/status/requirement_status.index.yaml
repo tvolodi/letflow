@@ -4293,7 +4293,7 @@ volumes:
     path: docs/status/requirement_status.v21.yaml
     status: current
     opened: 2026-09-20
-    entries: 4
+    entries: 5
     note: >
       Incremented to 4 by DOC-UPDATER's own ISS-0769 SCOPE-CHANGE done-event
       append (WF03-ISS0769-20260921, 2026-09-21T04:30:37Z -- bearer-token
@@ -4317,6 +4317,14 @@ volumes:
       docs/status/requirement_status.v21.yaml` = 1 on-disk entry. 190 lines /
       10972 bytes, well under the 1200-line/120000-byte roll ceiling, so no
       roll triggered.
+
+      Incremented to 5 by DOC-UPDATER's own ISS-0770 done-event append
+      (WF03-ISS0770-20260921, 2026-09-21T05:07:24Z -- secret_key_base added
+      to Letflow.Secrets.Redaction's sensitive-key list), appended after
+      rebasing onto origin/main's concurrently-landed ISS-0769 entry (PR
+      #1668) -- `grep -c "^  - req:" docs/status/requirement_status.v21.yaml`
+      = 5 on-disk entries. 272 lines / 15587 bytes, well under the
+      1200-line/120000-byte roll ceiling, so no roll triggered.
 
   - volume: 20
     path: docs/status/requirement_status.v20.yaml

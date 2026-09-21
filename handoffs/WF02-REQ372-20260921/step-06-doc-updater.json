@@ -47,13 +47,13 @@
     "issues": [],
     "git_evidence": {
       "branch_name": "feature/WF02-REQ372-20260921",
-      "commit_sha_list": [],
-      "remote_branch": null,
-      "push_status": "not_attempted -- docs changes left uncommitted for ORCH/Step-Final agent to commit alongside the git-merge protocol, per this handoff's docs-only scope",
+      "commit_sha_list": ["da114264"],
+      "remote_branch": "origin/feature/WF02-REQ372-20260921",
+      "push_status": "pushed -- 305bf9e3..da114264",
       "pr_url": null,
-      "pr_create_error": null
+      "pr_create_error": "Not attempted: PR creation and merge belong to WF-02's separate 'Step Final -- Git merge' step per docs/agents/workflows/WF-02_requirement_implementation.md, assigned to the Step 00 agent (ELIXIR-DEV for this run), not to Step 6 (DOC-UPDATER). Docs commit da114264 is pushed and ready for that step to include."
     },
-    "next_action": "Route to ELIXIR-DEV (this run's Step 00 agent) for Step Final -- Git merge, per docs/agents/workflows/WF-02_requirement_implementation.md's Step 6/Step Final split. ORCH: after merge, release letflow-queue task 729 (GH#1592) with status: done."
+    "next_action": "Route to ELIXIR-DEV (this run's Step 00 agent) for Step Final -- Git merge (open PR against main, wait for CI green, merge), per docs/agents/workflows/WF-02_requirement_implementation.md's Step 6/Step Final split. ORCH: after merge, release letflow-queue task 729 (GH#1592) with status: done."
   },
   "rework_count": 0,
   "max_rework": 3

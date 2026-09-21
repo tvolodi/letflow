@@ -1,0 +1,67 @@
+id: ISS-0778
+title: >
+  REQ-378's DB-backed platform-role sync (tenant_role/group_members) has no
+  seeding path -- a freshly-provisioned tenant has no way to reach a
+  working PLATFORM_ADMIN grant without manual bootstrap
+discovered_by: UAT-RUNNER (live e2e run of REQ-375's
+  platform-migration-partial-failure-resume.pipeline.e2e.spec.ts)
+discovered_in_run: WF02-REQ375-20260921 (UAT-RUNNER step)
+discovered_at: "2026-09-21T22:30:00Z"
+severity: MAJOR
+tags:
+  - backend
+  - provisioning
+  - seeding
+  - identity
+description: >
+  Found incidentally while getting a live e2e run for REQ-375 working:
+  to authenticate as a PLATFORM_ADMIN against a freshly-provisioned
+  tenant, UAT-RUNNER had to manually bootstrap `tenant_role`/
+  `group_members` rows via `Letflow.Identity`/
+  `Letflow.Identity.RoleRegistry` functions directly -- neither
+  `mix letflow.seed` nor `Letflow.TenantProvisioning`'s onboarding flow
+  creates these rows for any tenant.
+
+  This DB-backed role-sync model (REQ-378, merged 2026-09-21) is the
+  mechanism `Letflow.Identity.sync_role_claims_from_token/3` and
+  `Letflow.Identity.list_effective_role_names/2` rely on for a user's
+  effective platform roles (see also ISS-0773/ISS-0774/ISS-0775, all
+  landed the same day, all touching this same mechanism). Without a
+  seeding path, ANY freshly-provisioned tenant today has no route to a
+  working PLATFORM_ADMIN grant except manual, ad-hoc bootstrapping of
+  these rows -- which is exactly what UAT-RUNNER had to do to get
+  REQ-375's own UAT scenario working, and would presumably block any
+  future UAT/onboarding flow that assumes a newly-provisioned tenant's
+  first admin user can actually reach platform-admin-gated screens.
+affected_files:
+  - lib/letflow/tenant_provisioning.ex
+  - lib/letflow/identity.ex
+  - lib/letflow/identity/role_registry.ex
+  - priv/repo/seeds.exs  # or wherever mix letflow.seed's logic lives -- verify exact path
+related_requirements:
+  - REQ-378
+  - REQ-022
+related:
+  - ISS-0773
+  - ISS-0774
+  - ISS-0775
+severity_rationale: >
+  MAJOR -- not an active production incident (existing tenants likely
+  already have these rows from before REQ-378 shipped, or via some other
+  bootstrap this discovery didn't uncover), but a genuine onboarding-flow
+  gap that would silently break PLATFORM_ADMIN access for any newly
+  provisioned tenant going forward, discovered only incidentally rather
+  than by design.
+fix_direction: >
+  Needs a CODE-DESIGNER pass to decide where the platform-role
+  seeding/bootstrap belongs: (a) as part of
+  Letflow.TenantProvisioning's onboarding flow itself (provision a
+  default PLATFORM_ADMIN group + grant for the tenant's first admin
+  user at onboarding time); (b) as an explicit, separate
+  `mix letflow.seed`-invoked step; (c) some other explicit mechanism.
+  Needs a regression test proving a freshly-provisioned tenant's
+  intended admin user can authenticate and reach a PLATFORM_ADMIN-gated
+  endpoint without manual DB bootstrap.
+queue_ref: null  # ORCH to assign via letflow-queue register_task
+github_ref: null  # ORCH to assign
+status: open

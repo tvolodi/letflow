@@ -38,7 +38,7 @@ defmodule Letflow.Secrets.Redaction do
 
   @sensitive_exact_keys ~w(authorization password password_hash token access_token
     refresh_token bootstrap_token api_token secret client_secret credential
-    credentials set-cookie cookie)
+    credentials set-cookie cookie secret_key_base)
 
   @sensitive_suffixes ~w(_token _secret _password _credential)
 

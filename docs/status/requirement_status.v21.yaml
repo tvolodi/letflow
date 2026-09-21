@@ -254,3 +254,19 @@ history:
       (independent re-run, clean auto-merge check against unmerged PR
       #1669). Non-blocking follow-up ISS-0770 (secret_key_base gap) filed
       from this investigation.
+  - req: SCOPE-CHANGE
+    event: done
+    agent: DOC-UPDATER
+    at: "2026-09-21T05:07:24Z"
+    note: >
+      ISS-0770 resolved (secret_key_base missing from
+      Letflow.Secrets.Redaction's @sensitive_exact_keys list, found by
+      SECURITY-REVIEWER while independently re-verifying ISS-0769 on
+      PR #1668) via PR #1669 on feature/WF03-ISS0770-20260921: added
+      secret_key_base to @sensitive_exact_keys plus a regression test.
+      REVIEWER, TEST-RUNNER (4132/4132 broader run), and
+      RELEASE-VALIDATOR (independent re-verification: 8/8 targeted,
+      472/474 mix letflow.check.test, 2 failures confirmed unrelated
+      pre-existing flake ISS-0766) all PASSED independently. queue_ref
+      was null (filed directly, not via register_task), so no queue
+      task to release.

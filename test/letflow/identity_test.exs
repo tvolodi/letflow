@@ -1195,7 +1195,11 @@ defmodule Letflow.IdentityTest do
 
       {:ok, _role} =
         %Letflow.Identity.TenantRole{}
-        |> Letflow.Identity.TenantRole.changeset(%{name: role_name, group_id: group.id})
+        |> Letflow.Identity.TenantRole.changeset(%{
+          name: role_name,
+          kind: :platform_role,
+          group_id: group.id
+        })
         |> Repo.insert(prefix: schema_name)
 
       group

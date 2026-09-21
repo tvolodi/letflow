@@ -140,10 +140,15 @@ defmodule Letflow.Routers.TasksTest do
 
   # Direct insert against the tenant-schema-scoped TenantRole table (not
   # RoleRegistry.upsert_role/2, which issues an unprefixed query per the
-  # design's rework-1 note) -- binds `role_name` to `group_id`.
+  # design's rework-1 note) -- binds `role_name` to `group_id`. Every caller in
+  # this file uses an arbitrary HUMAN_TASK routing name ("approver"), never
+  # one of Letflow.Api.Authorization.roles/0's six platform-role literals, so
+  # `kind: :process_routing_role` is the correct fixed kind here (ISS-0774)
+  # -- not a caller-supplied parameter, since nothing in this file exercises
+  # the platform-role domain.
   defp insert_role!(tenant, role_name, group_id) do
     %TenantRole{}
-    |> Ecto.Changeset.change(%{name: role_name, group_id: group_id})
+    |> Ecto.Changeset.change(%{name: role_name, kind: :process_routing_role, group_id: group_id})
     |> Repo.insert!(prefix: tenant.schema_name)
   end
 

@@ -123,7 +123,11 @@ defmodule Letflow.Identity.TenantRoleTest do
     orphan_group_id = Ecto.UUID.generate()
 
     assert_raise Ecto.ConstraintError, fn ->
-      Repo.insert(%TenantRole{name: unique_role_name(), group_id: orphan_group_id})
+      Repo.insert(%TenantRole{
+        name: unique_role_name(),
+        kind: :process_routing_role,
+        group_id: orphan_group_id
+      })
     end
   end
 
@@ -131,7 +135,11 @@ defmodule Letflow.Identity.TenantRoleTest do
     group = insert_group!(ctx)
 
     assert {:ok, %TenantRole{group_id: group_id}} =
-             Repo.insert(%TenantRole{name: unique_role_name(), group_id: group.id})
+             Repo.insert(%TenantRole{
+               name: unique_role_name(),
+               kind: :process_routing_role,
+               group_id: group.id
+             })
 
     assert group_id == group.id
   end
@@ -141,10 +149,11 @@ defmodule Letflow.Identity.TenantRoleTest do
     group = insert_group!(ctx)
     name = unique_role_name()
 
-    assert {:ok, _} = Repo.insert(%TenantRole{name: name, group_id: group.id})
+    assert {:ok, _} =
+             Repo.insert(%TenantRole{name: name, kind: :process_routing_role, group_id: group.id})
 
     assert_raise Ecto.ConstraintError, fn ->
-      Repo.insert(%TenantRole{name: name, group_id: group.id})
+      Repo.insert(%TenantRole{name: name, kind: :process_routing_role, group_id: group.id})
     end
   end
 end

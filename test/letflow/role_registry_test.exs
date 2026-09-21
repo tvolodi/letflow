@@ -249,9 +249,20 @@ defmodule Letflow.Identity.RoleRegistryTest do
       name_alpha = "alpha-#{System.unique_integer([:positive, :monotonic])}"
       name_mid = "mid-#{System.unique_integer([:positive, :monotonic])}"
 
-      assert {:ok, _} = RoleRegistry.upsert_role(name_zeta, group.id, prefix: ctx.schema_name)
-      assert {:ok, _} = RoleRegistry.upsert_role(name_alpha, group.id, prefix: ctx.schema_name)
-      assert {:ok, _} = RoleRegistry.upsert_role(name_mid, group.id, prefix: ctx.schema_name)
+      assert {:ok, _} =
+               RoleRegistry.upsert_role(name_zeta, :process_routing_role, group.id,
+                 prefix: ctx.schema_name
+               )
+
+      assert {:ok, _} =
+               RoleRegistry.upsert_role(name_alpha, :process_routing_role, group.id,
+                 prefix: ctx.schema_name
+               )
+
+      assert {:ok, _} =
+               RoleRegistry.upsert_role(name_mid, :process_routing_role, group.id,
+                 prefix: ctx.schema_name
+               )
 
       names =
         RoleRegistry.list_roles(prefix: ctx.schema_name)
@@ -269,7 +280,9 @@ defmodule Letflow.Identity.RoleRegistryTest do
       nonexistent_group_id = Ecto.UUID.generate()
 
       assert {:error, :group_not_found} =
-               RoleRegistry.upsert_role(name, nonexistent_group_id, prefix: ctx.schema_name)
+               RoleRegistry.upsert_role(name, :process_routing_role, nonexistent_group_id,
+                 prefix: ctx.schema_name
+               )
 
       rows = TenantRole |> where(name: ^name) |> Repo.all()
       assert rows == []
@@ -284,12 +297,16 @@ defmodule Letflow.Identity.RoleRegistryTest do
       group_b = insert_group!(ctx)
 
       assert {:ok, %TenantRole{group_id: first_group_id}} =
-               RoleRegistry.upsert_role(name, group_a.id, prefix: ctx.schema_name)
+               RoleRegistry.upsert_role(name, :process_routing_role, group_a.id,
+                 prefix: ctx.schema_name
+               )
 
       assert first_group_id == group_a.id
 
       assert {:ok, %TenantRole{group_id: second_group_id}} =
-               RoleRegistry.upsert_role(name, group_b.id, prefix: ctx.schema_name)
+               RoleRegistry.upsert_role(name, :process_routing_role, group_b.id,
+                 prefix: ctx.schema_name
+               )
 
       assert second_group_id == group_b.id
 
@@ -308,7 +325,10 @@ defmodule Letflow.Identity.RoleRegistryTest do
       name = unique_name()
       group = insert_group!(ctx)
 
-      assert {:ok, _} = RoleRegistry.upsert_role(name, group.id, prefix: ctx.schema_name)
+      assert {:ok, _} =
+               RoleRegistry.upsert_role(name, :process_routing_role, group.id,
+                 prefix: ctx.schema_name
+               )
 
       assert RoleRegistry.resolve_role_in_tx(name) == group.id
     end
@@ -322,7 +342,10 @@ defmodule Letflow.Identity.RoleRegistryTest do
       name = unique_name()
       group = insert_group!(ctx)
 
-      assert {:ok, _} = RoleRegistry.upsert_role(name, group.id, prefix: ctx.schema_name)
+      assert {:ok, _} =
+               RoleRegistry.upsert_role(name, :process_routing_role, group.id,
+                 prefix: ctx.schema_name
+               )
 
       result =
         Repo.transaction(fn ->
@@ -360,7 +383,9 @@ defmodule Letflow.Identity.RoleRegistryTest do
       group = insert_group!(ctx)
 
       assert {:error, :invalid_role_name} =
-               RoleRegistry.upsert_role("", group.id, prefix: ctx.schema_name)
+               RoleRegistry.upsert_role("", :process_routing_role, group.id,
+                 prefix: ctx.schema_name
+               )
     end
 
     test "rejects a name longer than 128 codepoints", ctx do
@@ -368,7 +393,9 @@ defmodule Letflow.Identity.RoleRegistryTest do
       too_long = String.duplicate("a", 129)
 
       assert {:error, :invalid_role_name} =
-               RoleRegistry.upsert_role(too_long, group.id, prefix: ctx.schema_name)
+               RoleRegistry.upsert_role(too_long, :process_routing_role, group.id,
+                 prefix: ctx.schema_name
+               )
     end
 
     test "accepts a name of exactly 128 codepoints (the boundary itself is valid)", ctx do
@@ -376,7 +403,9 @@ defmodule Letflow.Identity.RoleRegistryTest do
       exactly_128 = String.duplicate("a", 128)
 
       assert {:ok, %TenantRole{name: ^exactly_128}} =
-               RoleRegistry.upsert_role(exactly_128, group.id, prefix: ctx.schema_name)
+               RoleRegistry.upsert_role(exactly_128, :process_routing_role, group.id,
+                 prefix: ctx.schema_name
+               )
     end
 
     test "rejects a name containing a control character", ctx do
@@ -384,7 +413,9 @@ defmodule Letflow.Identity.RoleRegistryTest do
       with_control_char = "role-#{<<0x01>>}-name"
 
       assert {:error, :invalid_role_name} =
-               RoleRegistry.upsert_role(with_control_char, group.id, prefix: ctx.schema_name)
+               RoleRegistry.upsert_role(with_control_char, :process_routing_role, group.id,
+                 prefix: ctx.schema_name
+               )
     end
   end
 
@@ -404,7 +435,9 @@ defmodule Letflow.Identity.RoleRegistryTest do
       group = insert_group!(ctx)
 
       assert {:ok, %TenantRole{name: "CUSTOM_APPROVER"}} =
-               RoleRegistry.upsert_role("CUSTOM_APPROVER", group.id, prefix: ctx.schema_name)
+               RoleRegistry.upsert_role("CUSTOM_APPROVER", :process_routing_role, group.id,
+                 prefix: ctx.schema_name
+               )
 
       # Not one of the five recognized Letflow.Api.Authorization.roles/0 values --
       # confirms this genuinely exercises the "outside the enum" case, not an
@@ -419,7 +452,9 @@ defmodule Letflow.Identity.RoleRegistryTest do
       name = unique_name()
 
       assert {:error, :invalid_group_id} =
-               RoleRegistry.upsert_role(name, "not-a-uuid", prefix: ctx.schema_name)
+               RoleRegistry.upsert_role(name, :process_routing_role, "not-a-uuid",
+                 prefix: ctx.schema_name
+               )
 
       rows = TenantRole |> where(name: ^name) |> Repo.all()
       assert rows == []
@@ -453,7 +488,7 @@ defmodule Letflow.Identity.RoleRegistryTest do
       name = unique_name("iso")
 
       assert {:ok, %TenantRole{name: ^name}} =
-               RoleRegistry.upsert_role(name, group_a.id, prefix: schema_a)
+               RoleRegistry.upsert_role(name, :process_routing_role, group_a.id, prefix: schema_a)
 
       %{schema_name: schema_b} = provision_second_tenant!()
       refute schema_b == schema_a

@@ -32,7 +32,7 @@ defmodule Letflow.Routers.Identity do
   * GET    /tokens                       -> Identity.list_tokens/2 (REQ-076)
   * DELETE /tokens/:id                   -> Identity.revoke_token/2 (REQ-076)
   * GET    /roles                        -> Letflow.Identity.RoleRegistry.list_roles/1 (REQ-076, ISS-0768)
-  * POST   /roles                        -> Letflow.Identity.RoleRegistry.upsert_role/3 (REQ-076, ISS-0768)
+  * POST   /roles                        -> Letflow.Identity.RoleRegistry.upsert_role/4 (REQ-076, ISS-0768, ISS-0774)
 
   ## API tokens (REQ-076, INV-4)
 
@@ -51,14 +51,30 @@ defmodule Letflow.Routers.Identity do
   `POST /roles`'s `name` field accepts any role name, not restricted to a
   closed enum (R-Co's `src/identity/role_registry.zig` validates only the
   same format constraint, never enum membership, confirmed by direct
-  read). `Letflow.Identity.RoleRegistry.upsert_role/3` (REQ-020,
-  validation logic unchanged by this requirement) already enforces exactly a **format**
+  read). `Letflow.Identity.RoleRegistry.upsert_role/4` (REQ-020,
+  format-validation logic unchanged by this requirement) already enforces exactly a **format**
   constraint (non-empty, ≤128 Unicode codepoints, no ASCII control
-  characters), never enum membership, and this route adds no stricter
-  check on top of it. `POST /roles` returns **200**, not 201 — an upsert,
+  characters) on `name` regardless of `kind`, never enum membership for a
+  `:process_routing_role`-kind row, and this route adds no stricter check on
+  top of it. `POST /roles` returns **200**, not 201 — an upsert,
   not strictly a create, so the response code reflects that update
   semantic rather than resource-creation semantics (design doc §10 OQ-5 —
   deliberate, not a status-code bug).
+
+  ## `kind` (ISS-0774)
+
+  `POST /roles` requires a `kind` field (`"platform_role"` |
+  `"process_routing_role"`) alongside `name`/`group_id` — the caller (an
+  operator provisioning a platform-permission grant, or a process-definition
+  provisioning script binding a `HUMAN_TASK` routing name) is the one place
+  that actually knows which domain it is writing, so this route does not
+  infer `kind` from `name`'s shape the way the pre-ISS-0774 code implicitly
+  did everywhere downstream. `kind: "platform_role"` additionally requires
+  `name` to be one of `Letflow.Api.Authorization.roles/0`'s six recognized
+  literals — `RoleRegistry.upsert_role/4` rejects any other value with
+  `{:error, :name_not_a_recognized_platform_role}`, surfaced here as `422`,
+  before any `Repo` call. See
+  `lib/letflow/design/iss-0774-role-domain-authorization.md` §2.3/§2.5.
 
   ## Group member listing: one served endpoint, not two (REQ-074 AC6)
 
@@ -657,6 +673,12 @@ defmodule Letflow.Routers.Identity do
 
   @upsert_role_schema [
     %FieldConstraint{name: "name", required: true, type: :string, reject_empty_string: true},
+    %FieldConstraint{
+      name: "kind",
+      required: true,
+      type: :string,
+      allowed_values: ["platform_role", "process_routing_role"]
+    },
     %FieldConstraint{name: "group_id", required: true, type: :string, reject_empty_string: true}
   ]
 
@@ -665,13 +687,34 @@ defmodule Letflow.Routers.Identity do
       {:errors, field_errors} ->
         Response.send_problem(conn, Validation.problem(field_errors))
 
-      {:ok, %{"name" => name, "group_id" => group_id}} ->
-        case RoleRegistry.upsert_role(name, group_id, opts) do
-          {:ok, role} -> Response.ok(conn, role_map(role))
-          {:error, :invalid_role_name} -> Response.unprocessable(conn, "invalid_role_name")
-          {:error, :invalid_group_id} -> Response.unprocessable(conn, "invalid_group_id")
-          {:error, :group_not_found} -> Response.not_found(conn)
-          {:error, %Ecto.Changeset{}} -> Response.unprocessable(conn, "validation failed")
+      {:ok, %{"name" => name, "kind" => kind_string, "group_id" => group_id}} ->
+        # kind_string is gated by @upsert_role_schema's allowed_values above
+        # BEFORE reaching String.to_existing_atom/1 -- mirrors
+        # handle_status_update/3's identical closed-set-then-convert shape,
+        # so the atom can never be minted from untrusted input and the
+        # conversion can never raise (both `:platform_role`/
+        # `:process_routing_role` are already loaded via
+        # Letflow.Identity.TenantRole's own Ecto.Enum field).
+        kind = String.to_existing_atom(kind_string)
+
+        case RoleRegistry.upsert_role(name, kind, group_id, opts) do
+          {:ok, role} ->
+            Response.ok(conn, role_map(role))
+
+          {:error, :invalid_role_name} ->
+            Response.unprocessable(conn, "invalid_role_name")
+
+          {:error, :invalid_group_id} ->
+            Response.unprocessable(conn, "invalid_group_id")
+
+          {:error, :group_not_found} ->
+            Response.not_found(conn)
+
+          {:error, :name_not_a_recognized_platform_role} ->
+            Response.unprocessable(conn, "name_not_a_recognized_platform_role")
+
+          {:error, %Ecto.Changeset{}} ->
+            Response.unprocessable(conn, "validation failed")
         end
     end
   end
@@ -765,6 +808,7 @@ defmodule Letflow.Routers.Identity do
     %{
       "id" => role.id,
       "name" => role.name,
+      "kind" => Atom.to_string(role.kind),
       "group_id" => role.group_id,
       "created_at" => iso8601(role.inserted_at)
     }

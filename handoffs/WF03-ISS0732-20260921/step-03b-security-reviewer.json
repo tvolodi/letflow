@@ -1,0 +1,56 @@
+{
+  "handoff_id": "b1e2a3c4-0000-4000-8000-000000000006",
+  "run_id": "WF03-ISS0732-20260921",
+  "workflow_id": "WF-03",
+  "step": "03b",
+  "from_agent": "ORCH",
+  "to_agent": "SECURITY-REVIEWER",
+  "file": "handoffs/WF03-ISS0732-20260921/step-03b-security-reviewer.json",
+  "created_at": "2026-09-21T04:01:08Z",
+  "started_at": "2026-09-21T04:01:08Z",
+  "completed_at": null,
+  "status": "PENDING",
+  "priority": "HIGH",
+  "context": {
+    "stage": "S6",
+    "requirement_ids": [],
+    "requirement_text": {},
+    "related_handoff_ids": ["b1e2a3c4-0000-4000-8000-000000000005"],
+    "artifacts_in": [
+      "handoffs/WF03-ISS0732-20260921/step-03-elixir-dev.json",
+      "lib/letflow/design/iss0732-promotion-apply-assertion-gate.md",
+      "docs/agents/instructions/security-invariants.md"
+    ],
+    "owned_modules": [
+      "lib/letflow/definitions/promotion.ex",
+      "lib/letflow/routers/promotions.ex"
+    ]
+  },
+  "task": {
+    "description": "Hard gate on ELIXIR-DEV's implementation (commit 4efff094 on this branch, `git diff main...HEAD -- lib/letflow/definitions/promotion.ex lib/letflow/routers/promotions.ex`). This closes a real security-relevant BLOCKER: a definition-promotion release could previously bypass its own mandatory rehearsal gate. Verdict per invariant, INV-1..INV-8 (or however many this repo's security-invariants.md currently enumerates), APPLIES or NOT-APPLICABLE stated for each, against the actual diff. Pay particular attention to: (1) whether the new verify_rehearsed/2 check can be bypassed by any code path that still reaches do_apply_review/3 without going through the with-chain (e.g. a second entry point); (2) whether the plan_digest comparison for the rehearsal check reuses PromotionDigest.verify_digest/2's constant-time comparison as designed, not a raw ==, since this is a security-relevant digest check; (3) whether the new 409 error responses leak any tenant-scoped or cross-tenant information beyond what the existing :invalid_transition/:digest_mismatch 409s already leak (INV-5's cross-tenant-review-id-same-response concern, already documented in promotions.ex's moduledoc, may be relevant here too); (4) that PLATFORM_ADMIN-only access to this route is unchanged by this diff.",
+    "acceptance_criteria": [
+      "Every applicable invariant given a stated verdict (PASS/FAIL) against the real diff, not a general impression",
+      "Explicit verdict on whether the new gate can be bypassed by any alternate code path",
+      "Explicit verdict on whether the digest comparison used is the constant-time one",
+      "Explicit verdict on whether the new error responses introduce any new information-disclosure surface",
+      "Explicit verdict confirming route authorization (PLATFORM_ADMIN-only) is unchanged"
+    ]
+  },
+  "result": {
+    "status": "PENDING",
+    "summary": "",
+    "artifacts_out": [],
+    "issues": [],
+    "git_evidence": {
+      "branch_name": null,
+      "commit_sha_list": [],
+      "remote_branch": null,
+      "push_status": "skipped",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": ""
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

@@ -8,8 +8,8 @@
   "file": "handoffs/WF03-ISS0768-20260921/step-04-security-reviewer.json",
   "created_at": "2026-09-21T04:20:35Z",
   "started_at": "2026-09-21T04:20:35Z",
-  "completed_at": null,
-  "status": "PENDING",
+  "completed_at": "2026-09-21T04:21:36Z",
+  "status": "COMPLETED",
   "priority": "HIGH",
   "context": {
     "stage": "S4",
@@ -40,19 +40,19 @@
     ]
   },
   "result": {
-    "status": "",
-    "summary": "",
-    "artifacts_out": [],
+    "status": "PASS",
+    "summary": "Gated ISS-0768's RoleRegistry tenant-prefix fix (commit ddfa3cdf) against security-invariants.md INV-1..INV-9. Verdict: PASS, no BLOCKER findings. INV-1 (tenant data isolation) APPLIES and PASSES -- verified by direct source read that all four Repo call sites in lib/letflow/identity/role_registry.ex now carry prefix: opts[:prefix] (list_roles/1's Repo.all/2; do_upsert_role/3's Repo.transaction/2 AND its inner Repo.get/3, matching the design's defense-in-depth instruction to name prefix: explicitly at both the transaction level and the inner call rather than relying on ambient transaction state; insert_or_update_role/3's Repo.insert/2). lib/letflow/routers/identity.ex's handle_list_roles/2 and handle_upsert_role/2 both take opts and pass it straight through to RoleRegistry, with the route macro bodies passing conn.assigns.scoped_opts unchanged from the pre-existing pattern every other route in the module already uses. conn.assigns.scoped_opts traced to its actual origin, three hops, all read directly: (1) lib/letflow/plugs/authorize.ex:98-122 sets conn.assigns.scoped_opts by calling Letflow.Api.Context.scoped_repo_opts(conn) and assigning its {:ok, opts} result, running inside AuthorizedRouter's mandatory plug chain (plug :match -> plug Authorize -> plug :dispatch, lib/letflow/api/authorized_router.ex:75-77) before any authz_get/authz_post handler body executes -- confirmed no route in identity.ex bypasses this plug. (2) Letflow.Api.Context.scoped_repo_opts/1 (lib/letflow/api/context.ex:217-230) takes only conn and reads exactly conn.assigns[:auth_context][:tenant_id] -- no path/query/header/body parameter exists on the function for a caller to substitute a tenant hint through, confirmed by reading the full function body, not just its moduledoc's claim. (3) conn.assigns.auth_context is set once, by lib/letflow/plugs/auth_pipeline.ex:370-372 (attach_auth_context/4), with tenant_id sourced from the step-2/step-4b DB-resolved value derived from the verified OIDC token's realm+claims (see auth_pipeline.ex:312-318's own comment: 'tenant_id passed here is the step-2-resolved, DB-sourced value -- never identity_context.tenant_id (the token-claimed hint field)') -- never from conn.body_params or conn.query_params. No request-controllable field reaches :prefix at any hop. resolve_role_in_tx/1 confirmed genuinely untouched: diffed directly (git diff main...HEAD -- lib/letflow/identity/role_registry.ex) and it has zero lines in the diff; git log -p --follow -S\"prefix\" -- lib/letflow/identity/role_registry.ex returns exactly one commit (ddfa3cdf, this fix) confirming no prior commit ever added or removed prefix: threading in this file -- ISS-0768 is always-broken-since-REQ-020, not a regression. Assessed as acceptable residual risk: resolve_role_in_tx/1 is confirmed unreachable from any live HTTP route today (zero callers in the codebase per grep, and it is not called from role_registry.ex's own public functions or from identity.ex), so it cannot presently produce a cross-tenant leak; the design doc's own reasoning (that the correct fix shape depends on a not-yet-designed future S3 applyTransition caller, and speculative opts-threading now would be premature) is sound and is recorded as a named follow-up rather than silently dropped. INV-2 NOT-APPLICABLE (no multi-tenant API response-shaping question in this diff beyond role_map/1, which is untouched -- field-selection review deferred until S4 per its own Reference). INV-3 NOT-APPLICABLE (S5 not started). INV-4 APPLIES, PASSES: diff introduces no secret material, no System.get_env/config change, no logging of any credential; grep of the two changed files for password/secret/token patterns returns no hits. INV-5 NOT-APPLICABLE (no new lookup-by-ID endpoint; /roles has no :id path segment). INV-6 APPLIES, PASSES: this handoff itself is the required proof-of-scoping artefact. INV-7 APPLIES, PASSES: no Repo.query/raw-SQL call anywhere in either changed file; all four Repo calls use Ecto.Query/Repo.all/Repo.get/Repo.insert with parameterised prefix: opts. INV-8 APPLIES, PASSES: diff adds no new bare {:ok, x} = external-call pattern match -- the two changed functions use case/with, unchanged from before. INV-9 NOT-APPLICABLE (no outbound HTTP/tenant-URL code path in this diff).",
+    "artifacts_out": ["handoffs/WF03-ISS0768-20260921/step-04-security-reviewer.json"],
     "issues": [],
     "git_evidence": {
       "branch_name": "feature/WF03-ISS0768-20260921",
-      "commit_sha_list": [],
+      "commit_sha_list": ["ddfa3cdf"],
       "remote_branch": "origin/feature/WF03-ISS0768-20260921",
       "push_status": "skipped",
       "pr_url": null,
       "pr_create_error": null
     },
-    "next_action": ""
+    "next_action": "Route to REVIEWER for idiom/scope-creep gate, per WF-02 Step 2c ordering (SECURITY-REVIEWER before REVIEWER)."
   },
   "rework_count": 0,
   "max_rework": 3

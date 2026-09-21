@@ -246,9 +246,10 @@ defmodule Letflow.Definitions.SemanticValidationActivationTest do
   describe "validate_definition_graph/2 -- REQ-372's semantic violations concatenated as the 4th term" do
     setup :provisioned_tenant
 
-    test "a declared_fields/condition mismatch reports via the read-only endpoint, without blocking the draft save (design §3.1)", %{
-      schema_name: schema_name
-    } do
+    test "a declared_fields/condition mismatch reports via the read-only endpoint, without blocking the draft save (design §3.1)",
+         %{
+           schema_name: schema_name
+         } do
       # "amount" is never declared at all -- create/2 itself does not gate on this
       # (design §3.1: draft-save is deliberately NOT gated by the semantic pass), so
       # the draft save below must succeed even though the condition is semantically

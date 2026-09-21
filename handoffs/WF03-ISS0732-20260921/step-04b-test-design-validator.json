@@ -8,8 +8,8 @@
   "file": "handoffs/WF03-ISS0732-20260921/step-04b-test-design-validator.json",
   "created_at": "2026-09-21T04:53:47Z",
   "started_at": "2026-09-21T04:53:47Z",
-  "completed_at": null,
-  "status": "PENDING",
+  "completed_at": "2026-09-21T04:56:26Z",
+  "status": "COMPLETED",
   "priority": "HIGH",
   "context": {
     "stage": "S6",
@@ -35,19 +35,19 @@
     ]
   },
   "result": {
-    "status": "PENDING",
-    "summary": "",
+    "status": "PASS",
+    "summary": "Independently re-derived, not trusted. (1) Read all 5 new tests directly in test/letflow/routers/req077_promotion_pipeline_test.exs (lines 404-582 on this branch): :assertion_run_missing (409, body[\"detail\"] =~ \"no assertion run has been recorded\", review stays :approved, target definition absent, PromotionAssertionRun count == 0), :assertion_run_digest_mismatch (409, detail =~ \"does not match the plan_digest being applied\", review stays :approved, definition absent), :assertion_run_failed (409, detail =~ \"recorded failing assertions\", review stays :approved, definition absent), :assertion_run_in_progress (409, detail =~ \"has not finished yet\", review stays :approved, definition absent), and the teardown_failed-still-accepted non-regression case (200, status applied, definition really moves). Every one asserts a concrete HTTP status plus a specific error-detail substring plus an actual DB-state check on the rejection paths (nothing written) -- none are loose/placeholder assertions. (2) Diff-checked test/letflow/routers/req077_promotion_pipeline_test.exs against main myself (`git diff main...HEAD -- test/letflow/routers/req077_promotion_pipeline_test.exs`, 258 lines): every changed line is a `+` addition (new describe blocks, two new fixture helpers, and 3 call sites where insert_passing_assertion_run!/3 was ADDED before an apply_promotion call that was already expected to succeed -- required by the new gate, not a weakened assertion). Zero `-` lines against any existing assertion. No existing test's assertion was weakened. (3) Independently re-ran the fail-then-pass proof myself for :assertion_run_missing (ISS-0732's headline symptom) rather than trusting TEST-DESIGNER's report: confirmed mix.lock is byte-identical between main and HEAD (`git diff main...HEAD -- mix.lock` empty) and that 4efff094 (the actual gate commit) plus 13a5dc3e are branch-only via `git log main..HEAD`. Created a throwaway worktree `git worktree add ../letflow-wt-tdv-iss0732 main`, symlinked deps/_build from this checkout (safe reuse given the identical lockfile, not a shortcut past real compilation), ran `MIX_ENV=test mix compile` clean (273 files, no errors), copied the CURRENT post-edit test file into the worktree, and ran `MIX_ENV=test mix test test/letflow/routers/req077_promotion_pipeline_test.exs:405` against pre-fix main: **0/1 passed, 1 failed** -- `Assertion with == failed / code: assert resp.status == 409 / left: 200 / right: 409` at line 423, i.e. apply succeeded with 200 where pre-fix code has no rehearsal gate at all -- exactly the reported fail-mode and exactly ISS-0732's own described defect shape. Removed the deps/_build symlinks, ran `git worktree remove ../letflow-wt-tdv-iss0732 --force`, and verified removal via both `git worktree list` (no longer listed) and `ls c:\\Users\\tvolo\\dev\\ai-dala\\` (directory absent). Then ran the identical test on THIS branch (post-fix, no worktree, read-only, no mutation to my own checkout): `MIX_ENV=test mix test test/letflow/routers/req077_promotion_pipeline_test.exs:405` -> **1 passed, 36 excluded**. Confirmed `git status --porcelain` on my own checkout shows only the pre-existing unrelated untracked `web/tests/e2e/.pipeline-state/` -- my checkout was never mutated. This is a fix to EXISTING apply_review/4 behaviour (not a new module), so the 'pre-fix failure is code-under-test-did-not-exist' exception (mandatory mutant-isolation re-run) does not apply -- the fail-then-pass proof itself, independently reproduced above with a real discriminating assertion failure (200 vs 409), is sufficient here.",
     "artifacts_out": [],
     "issues": [],
     "git_evidence": {
-      "branch_name": null,
+      "branch_name": "feature/WF03-ISS0732-20260921",
       "commit_sha_list": [],
-      "remote_branch": null,
-      "push_status": "skipped",
+      "remote_branch": "origin/feature/WF03-ISS0732-20260921",
+      "push_status": "pending",
       "pr_url": null,
       "pr_create_error": null
     },
-    "next_action": ""
+    "next_action": "Route to ORCH for Step 05 (REVIEWER/next stage of WF-03)"
   },
   "rework_count": 0,
   "max_rework": 3

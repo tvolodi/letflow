@@ -1,0 +1,57 @@
+{
+  "handoff_id": "a1b2c3d4-0000-4000-8000-00000000000c",
+  "run_id": "WF03-ISS0771-20260921",
+  "workflow_id": "WF-03",
+  "step": "12",
+  "from_agent": "ORCH",
+  "to_agent": "TEST-DESIGNER",
+  "file": "handoffs/WF03-ISS0771-20260921/step-12-test-designer-final-retry2.json",
+  "created_at": "2026-09-21T15:40:00Z",
+  "started_at": null,
+  "completed_at": null,
+  "status": "PENDING",
+  "priority": "HIGH",
+  "context": {
+    "stage": "S6",
+    "requirement_ids": [],
+    "requirement_text": {},
+    "related_handoff_ids": ["a1b2c3d4-0000-4000-8000-00000000000b"],
+    "artifacts_in": [
+      "handoffs/WF03-ISS0771-20260921/step-11-test-designer-final-retry.json",
+      "test/letflow/tenant_provisioning_test.exs",
+      "test/letflow/tenant_provisioning/migration_replay_boot_test.exs",
+      "lib/letflow/tenant_provisioning/migration_replay_boot.ex"
+    ],
+    "owned_modules": [
+      "test/letflow/tenant_provisioning_test.exs",
+      "test/letflow/tenant_provisioning/migration_replay_boot_test.exs"
+    ]
+  },
+  "task": {
+    "description": "Second retry of step-10/11's task, both of which BLOCKED on environmental Postgres connection contention (never a code defect -- targeted tests already passed 23/23 twice, in step-10's pre-check and step-11's criterion 1). ORCH has confirmed connections are now healthy (36/100, down from 87/100 earlier) and REQ-372's own concurrent heavy test load has finished. Please redo the full task: (1) mix test test/letflow/tenant_provisioning_test.exs test/letflow/tenant_provisioning/migration_replay_boot_test.exs against current HEAD, quote real output. (2) Full mix test suite once, quote real pass/fail counts, confirm the app boots. (3) Re-apply and revert both mutants (remove the per-tenant isolation rescue in replay_all_pending/0; make MigrationReplayBoot.start_link/1 propagate instead of always :ignore) IN PLACE, confirming sensitivity, then verify the revert (git status --porcelain lib/ test/ empty + green re-run). Do NOT dispatch any other agent. If you hit the same environmental contention again, report BLOCKED with real evidence -- do not retry indefinitely.",
+    "acceptance_criteria": [
+      "All 5 ISS-0771 tests pass for real against current HEAD, real mix test output quoted",
+      "Full mix test suite run once, real pass/fail counts quoted, app confirmed to boot",
+      "Both mutants re-applied and reverted in place, real pass/fail counts, revert verified",
+      "Only test files touched -- lib/ byte-identical to the REVIEWER-gated state after revert",
+      "You do not dispatch or spawn any other agent"
+    ]
+  },
+  "result": {
+    "status": "PENDING",
+    "summary": null,
+    "artifacts_out": [],
+    "issues": [],
+    "git_evidence": {
+      "branch_name": "feature/WF03-ISS0771-20260921",
+      "commit_sha_list": [],
+      "remote_branch": null,
+      "push_status": null,
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": null
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

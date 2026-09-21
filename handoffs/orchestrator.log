@@ -2029,3 +2029,5 @@
 2026-09-21T03:00:00Z | GATE_PASS | WF-03 | WF03-ISS0733-20260921/step-03c-reviewer | REVIEWER -> ORCH | PASS (transaction hygiene, design match, pagination idiom, no decision-record conflict, commit 2d0bdd1f)
 2026-09-21T03:05:00Z | DISPATCH | WF-03 | WF03-ISS0733-20260921/step-04-test-designer | ORCH -> TEST-DESIGNER | PENDING
 2026-09-21T03:50:00Z | GATE_PASS | WF-03 | WF03-ISS0733-20260921/step-04-test-designer | TEST-DESIGNER -> ORCH | PASS (GAP A fail-then-pass proven via throwaway worktree against main; GAP B 3 mutants applied in-place and reverted, each discriminating; commit 1905b395)
+2026-09-21T04:00:00Z | DISPATCH | WF-03 | WF03-ISS0733-20260921/step-04b-test-design-validator | ORCH -> TEST-DESIGN-VALIDATOR | PENDING
+2026-09-21T04:20:00Z | GATE_PASS | WF-03 | WF03-ISS0733-20260921/step-04b-test-design-validator | TEST-DESIGN-VALIDATOR -> ORCH | PASS (independently reproduced mutant 2, 26/27, clean revert verified, commit dcca48b7)

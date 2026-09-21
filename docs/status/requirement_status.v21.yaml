@@ -296,3 +296,25 @@ history:
       ISS-0768 test by name; authoritative full-suite run 4484/4493 passed,
       the 9 failures explicitly assessed as shared-Postgres-host connection
       contention among concurrent sibling sessions, not regressions.
+  - req: REQ-397
+    event: done
+    agent: DOC-UPDATER
+    at: "2026-09-21T09:29:10Z"
+    note: >
+      GET /api/v1/promotions tenant-data-scoped, paginated, filterable
+      (status/def_id) list route shipped on feature/WF02-REQ397-20260921
+      (PR #1672), so a reviewer can discover pending/rejected/etc. reviews
+      without an out-of-band reviewId. lib/letflow/routers/promotions.ex
+      gained the new route plus Letflow.Definitions.PromotionReviewStore
+      list_reviews/2, schema-scoped via prefix: same as every other call in
+      that module, same :Unknown/PLATFORM_ADMIN-only authorization as R1-R8.
+      One real ISS-0069-class fix cycle along the way (dead default-arg on
+      req397_sample_plan/2 in the test fixtures). Gates: CODE-DESIGN-VALIDATOR
+      PASSED twice (pagination-shape and filter-rejection reworks),
+      SECURITY-REVIEWER PASSED (tenant-data-scoped list route per
+      security-invariants.md, same class as REQ-394), REVIEWER PASSED,
+      TEST-DESIGN-VALIDATOR PASSED, TEST-RUNNER/RELEASE-VALIDATOR PASSED
+      twice (full suite 4515/4515 both rounds). Design:
+      lib/letflow/design/req397-promotion-review-list-route.md. REQ-398 (the
+      frontend list page depending on this endpoint) remains pending,
+      unblocked by this merge.

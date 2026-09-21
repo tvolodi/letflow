@@ -1,0 +1,54 @@
+{
+  "handoff_id": "d1a2f3b4-0001-4a1e-9c11-9f0733000006",
+  "run_id": "WF03-ISS0733-20260921",
+  "workflow_id": "WF-03",
+  "step": "02b-rework1",
+  "from_agent": "ORCH",
+  "to_agent": "CODE-DESIGN-VALIDATOR",
+  "file": "handoffs/WF03-ISS0733-20260921/step-02b-code-design-validator-rework1.json",
+  "created_at": "2026-09-21T01:20:00Z",
+  "started_at": "2026-09-21T01:20:00Z",
+  "completed_at": null,
+  "status": "PENDING",
+  "priority": "HIGH",
+  "context": {
+    "stage": "S6",
+    "requirement_ids": [],
+    "requirement_text": {},
+    "source_text": {},
+    "related_handoff_ids": ["d1a2f3b4-0001-4a1e-9c11-9f0733000005"],
+    "artifacts_in": [
+      "handoffs/WF03-ISS0733-20260921/step-02-code-designer-rework1.json",
+      "handoffs/WF03-ISS0733-20260921/step-02b-code-design-validator.json",
+      "lib/letflow/design/iss0733-promotion-audit-and-platform-events-read.md"
+    ],
+    "owned_modules": []
+  },
+  "task": {
+    "description": "Re-gate lib/letflow/design/iss0733-promotion-audit-and-platform-events-read.md after CODE-DESIGNER's rework1. Your own prior gate (step-02b, see gate_history below) PASSED criteria 1/2/3/5 and FAILed only criterion 4, citing a literal executable Plug.Router do...end body at lines 285-289. Verify directly: (a) that block is now replaced with non-executable route-table shorthand matching req077-promotion-pipeline-routes.md's own pattern, (b) no other section of the doc changed from what you already PASSED, (c) no other implementation code (.ex function body) exists anywhere else in the doc -- do a fresh full-document scan, do not assume only the reworked lines matter.",
+    "acceptance_criteria": [
+      "Lines around the formerly-flagged block now use non-executable shorthand, verified by direct read",
+      "A fresh whole-document scan finds zero remaining .ex function bodies",
+      "Criteria 1/2/3/5 from the original gate are confirmed still intact (spot-check, not a full re-derivation, since they already passed and the rework instruction was scoped to one section only)"
+    ]
+  },
+  "result": {
+    "status": "PENDING",
+    "summary": "",
+    "artifacts_out": [],
+    "issues": [],
+    "next_action": ""
+  },
+  "rework_count": 0,
+  "max_rework": 3,
+  "gate_history": [
+    {
+      "iteration": 0,
+      "gated_at": "2026-09-21T01:00:00Z",
+      "status": "FAIL",
+      "summary": "Criteria 1,2,3,5 PASS (verified accurate against real source). Criterion 4 FAILS: lines 285-289 contain a real, invocable Plug.Router get \"/platform-events\" do ... end block with a real body, not a signature/shape placeholder -- violates no-implementation-code rule on sight.",
+      "issues": ["Literal executable route body at lines 285-289, should use route-table shorthand per req077-promotion-pipeline-routes.md's own established pattern"],
+      "next_action": "Rework CODE-DESIGNER -- fix this one point only"
+    }
+  ]
+}

@@ -7,9 +7,9 @@
   "to_agent": "DOC-UPDATER",
   "file": "handoffs/WF03-ISS0771-20260921/step-15-doc-updater.json",
   "created_at": "2026-09-21T18:02:00Z",
-  "started_at": null,
+  "started_at": "2026-09-21T18:10:00Z",
   "completed_at": null,
-  "status": "PENDING",
+  "status": "IN_PROGRESS",
   "priority": "HIGH",
   "context": {
     "stage": "S6",

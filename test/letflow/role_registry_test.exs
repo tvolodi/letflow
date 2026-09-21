@@ -1,7 +1,7 @@
 defmodule Letflow.Identity.RoleRegistryTest do
   @moduledoc """
-  Tests for `Letflow.Identity.RoleRegistry` (REQ-020): `list_roles/0`,
-  `upsert_role/2`, `resolve_role_in_tx/1`. See `test/specs/REQ-020.md` for the full
+  Tests for `Letflow.Identity.RoleRegistry` (REQ-020): `list_roles/1`,
+  `upsert_role/3`, `resolve_role_in_tx/1`. See `test/specs/REQ-020.md` for the full
   test-case rationale, including why AC5 (the `@moduledoc` content requirement) has no
   runtime test here and why AC4's "never raises" clause is covered the way it is.
 
@@ -170,28 +170,91 @@ defmodule Letflow.Identity.RoleRegistryTest do
     |> Repo.insert!()
   end
 
-  describe "list_roles/0 (acceptance criterion 1)" do
-    test "returns [] (not an error) against an empty tenant_role table", _ctx do
-      assert RoleRegistry.list_roles() == []
+  # ISS-0768 cross-tenant-isolation fixture: inserts a Group directly under an
+  # EXPLICIT `prefix:` rather than relying on the ambient `search_path` the way
+  # `insert_group!/1` above does. Needed because the cross-tenant test below runs
+  # its whole body in Sandbox `:auto` mode (see `provision_second_tenant!/0`'s
+  # comment for why) rather than inside `setup`'s manual-mode/`SET search_path`
+  # transaction, so there is no single ambient schema to rely on once a SECOND
+  # tenant schema is alive in the same test.
+  defp insert_group!(_ctx, prefix) do
+    %Group{}
+    |> Ecto.Changeset.change(%{
+      name: "group-#{System.unique_integer([:positive, :monotonic])}"
+    })
+    |> Repo.insert!(prefix: prefix)
+  end
+
+  # ISS-0768 regression fixture: provisions a SECOND, fully independent tenant
+  # schema so the cross-tenant-isolation test below can hold two real Postgres
+  # schemas alive at once. Mirrors `test/letflow/identity/user_test.exs`'s
+  # `provision_tenant_schema!/0` two-tenant pattern (same underlying constraint):
+  # `Ecto.Migrator` needs Sandbox `:auto` mode to run its migration replay, and
+  # switching to `:auto` mode checks in (and rolls back) whatever `:manual`-mode
+  # sandboxed transaction this file's own `setup` block above already holds for
+  # tenant A. That means the caller must have already committed anything it
+  # needs from tenant A for real (i.e. also run under `:auto` mode) BEFORE
+  # calling this — see the test below, which switches the whole Repo to `:auto`
+  # mode as its very first step, before inserting tenant A's own role, for
+  # exactly this reason.
+  #
+  # Real, committed Postgres state (a `CREATE SCHEMA` inside a transaction that
+  # later rolls back would not persist), so cleanup is explicit via `on_exit/1`,
+  # not sandbox rollback — same shape as `setup`'s own on_exit cleanup for
+  # tenant A.
+  defp provision_second_tenant! do
+    Ecto.Adapters.SQL.Sandbox.mode(Letflow.Repo, :auto)
+
+    tenant =
+      %Tenant{}
+      |> Tenant.create_changeset(
+        %{slug: unique_slug(), display_name: "ISS-0768 RoleRegistry Test (tenant B)"},
+        :disabled
+      )
+      |> Repo.insert!()
+
+    on_exit(fn ->
+      Letflow.Test.SandboxAutoMode.enter_auto_mode!(Letflow.Repo)
+
+      case TenantProvisioning.schema_name_for_tenant(tenant.id) do
+        {:ok, schema_name} -> Repo.query!(~s(DROP SCHEMA IF EXISTS "#{schema_name}" CASCADE))
+        {:error, :invalid_tenant_id} -> :ok
+      end
+
+      Repo.delete_all(from(r in Registration, where: r.tenant_id == ^tenant.id))
+      Repo.delete_all(from(t in Tenant, where: t.id == ^tenant.id))
+    end)
+
+    assert {:ok, %Registration{schema_name: schema_name}} =
+             TenantProvisioning.provision_tenant_schema(tenant.id)
+
+    assert {:ok, _applied_versions} = TenantProvisioning.replay_migrations(tenant.id)
+
+    %{tenant: tenant, schema_name: schema_name}
+  end
+
+  describe "list_roles/1 (acceptance criterion 1)" do
+    test "returns [] (not an error) against an empty tenant_role table", ctx do
+      assert RoleRegistry.list_roles(prefix: ctx.schema_name) == []
     end
 
     test "returns all rows sorted by name ascending, proving the ORDER BY is real", ctx do
       group = insert_group!(ctx)
 
       # Names deliberately chosen so alphabetical order differs from insertion order —
-      # if list_roles/0 silently relied on insertion/primary-key order instead of a
+      # if list_roles/1 silently relied on insertion/primary-key order instead of a
       # real ORDER BY name, this would fail: inserting "zeta" then "alpha" then "mid"
       # would come back in that same insertion order, not alphabetically.
       name_zeta = "zeta-#{System.unique_integer([:positive, :monotonic])}"
       name_alpha = "alpha-#{System.unique_integer([:positive, :monotonic])}"
       name_mid = "mid-#{System.unique_integer([:positive, :monotonic])}"
 
-      assert {:ok, _} = RoleRegistry.upsert_role(name_zeta, group.id)
-      assert {:ok, _} = RoleRegistry.upsert_role(name_alpha, group.id)
-      assert {:ok, _} = RoleRegistry.upsert_role(name_mid, group.id)
+      assert {:ok, _} = RoleRegistry.upsert_role(name_zeta, group.id, prefix: ctx.schema_name)
+      assert {:ok, _} = RoleRegistry.upsert_role(name_alpha, group.id, prefix: ctx.schema_name)
+      assert {:ok, _} = RoleRegistry.upsert_role(name_mid, group.id, prefix: ctx.schema_name)
 
       names =
-        RoleRegistry.list_roles()
+        RoleRegistry.list_roles(prefix: ctx.schema_name)
         |> Enum.map(& &1.name)
         |> Enum.filter(&(&1 in [name_zeta, name_alpha, name_mid]))
 
@@ -199,20 +262,21 @@ defmodule Letflow.Identity.RoleRegistryTest do
     end
   end
 
-  describe "upsert_role/2 — group_id not found (acceptance criterion 2)" do
+  describe "upsert_role/3 — group_id not found (acceptance criterion 2)" do
     test "a syntactically-valid but nonexistent group_id returns {:error, :group_not_found} and inserts no row",
-         _ctx do
+         ctx do
       name = unique_name()
       nonexistent_group_id = Ecto.UUID.generate()
 
-      assert {:error, :group_not_found} = RoleRegistry.upsert_role(name, nonexistent_group_id)
+      assert {:error, :group_not_found} =
+               RoleRegistry.upsert_role(name, nonexistent_group_id, prefix: ctx.schema_name)
 
       rows = TenantRole |> where(name: ^name) |> Repo.all()
       assert rows == []
     end
   end
 
-  describe "upsert_role/2 — update existing binding (acceptance criterion 3)" do
+  describe "upsert_role/3 — update existing binding (acceptance criterion 3)" do
     test "called twice with the same name and a different group_id updates the binding, no duplicate row",
          ctx do
       name = unique_name()
@@ -220,12 +284,12 @@ defmodule Letflow.Identity.RoleRegistryTest do
       group_b = insert_group!(ctx)
 
       assert {:ok, %TenantRole{group_id: first_group_id}} =
-               RoleRegistry.upsert_role(name, group_a.id)
+               RoleRegistry.upsert_role(name, group_a.id, prefix: ctx.schema_name)
 
       assert first_group_id == group_a.id
 
       assert {:ok, %TenantRole{group_id: second_group_id}} =
-               RoleRegistry.upsert_role(name, group_b.id)
+               RoleRegistry.upsert_role(name, group_b.id, prefix: ctx.schema_name)
 
       assert second_group_id == group_b.id
 
@@ -244,7 +308,7 @@ defmodule Letflow.Identity.RoleRegistryTest do
       name = unique_name()
       group = insert_group!(ctx)
 
-      assert {:ok, _} = RoleRegistry.upsert_role(name, group.id)
+      assert {:ok, _} = RoleRegistry.upsert_role(name, group.id, prefix: ctx.schema_name)
 
       assert RoleRegistry.resolve_role_in_tx(name) == group.id
     end
@@ -258,7 +322,7 @@ defmodule Letflow.Identity.RoleRegistryTest do
       name = unique_name()
       group = insert_group!(ctx)
 
-      assert {:ok, _} = RoleRegistry.upsert_role(name, group.id)
+      assert {:ok, _} = RoleRegistry.upsert_role(name, group.id, prefix: ctx.schema_name)
 
       result =
         Repo.transaction(fn ->
@@ -291,18 +355,20 @@ defmodule Letflow.Identity.RoleRegistryTest do
     end
   end
 
-  describe "upsert_role/2 — name validation rejection modes (beyond the bare acceptance criteria)" do
+  describe "upsert_role/3 — name validation rejection modes (beyond the bare acceptance criteria)" do
     test "rejects an empty name", ctx do
       group = insert_group!(ctx)
 
-      assert {:error, :invalid_role_name} = RoleRegistry.upsert_role("", group.id)
+      assert {:error, :invalid_role_name} =
+               RoleRegistry.upsert_role("", group.id, prefix: ctx.schema_name)
     end
 
     test "rejects a name longer than 128 codepoints", ctx do
       group = insert_group!(ctx)
       too_long = String.duplicate("a", 129)
 
-      assert {:error, :invalid_role_name} = RoleRegistry.upsert_role(too_long, group.id)
+      assert {:error, :invalid_role_name} =
+               RoleRegistry.upsert_role(too_long, group.id, prefix: ctx.schema_name)
     end
 
     test "accepts a name of exactly 128 codepoints (the boundary itself is valid)", ctx do
@@ -310,14 +376,15 @@ defmodule Letflow.Identity.RoleRegistryTest do
       exactly_128 = String.duplicate("a", 128)
 
       assert {:ok, %TenantRole{name: ^exactly_128}} =
-               RoleRegistry.upsert_role(exactly_128, group.id)
+               RoleRegistry.upsert_role(exactly_128, group.id, prefix: ctx.schema_name)
     end
 
     test "rejects a name containing a control character", ctx do
       group = insert_group!(ctx)
       with_control_char = "role-#{<<0x01>>}-name"
 
-      assert {:error, :invalid_role_name} = RoleRegistry.upsert_role(with_control_char, group.id)
+      assert {:error, :invalid_role_name} =
+               RoleRegistry.upsert_role(with_control_char, group.id, prefix: ctx.schema_name)
     end
   end
 
@@ -325,9 +392,9 @@ defmodule Letflow.Identity.RoleRegistryTest do
     # See lib/letflow/design/req076-identity-tokens-roles-onboarding.md §5.1: R-Co's
     # role_registry.zig upsertRole/3 validates ONLY name format (non-empty, <=128
     # codepoints, no control characters) -- never enum membership against
-    # auth.Role's five-value RBAC set. Letflow.Identity.RoleRegistry.upsert_role/2
-    # (REQ-020, unchanged by REQ-076) already matches that behavior exactly. This
-    # test is the load-bearing new case AC6 asks for: a name that is NOT one of
+    # auth.Role's five-value RBAC set. Letflow.Identity.RoleRegistry.upsert_role/3
+    # (REQ-020, prefix threaded by ISS-0768) already matches that behavior exactly.
+    # This test is the load-bearing new case AC6 asks for: a name that is NOT one of
     # PLATFORM_ADMIN/PROCESS_DESIGNER/PROCESS_OPERATOR/TASK_WORKER/AGENT_RUNNER,
     # accepted anyway. The pre-existing "name validation rejection modes" describe
     # block above (empty, too-long, control-char) already supplies AC6's required
@@ -337,7 +404,7 @@ defmodule Letflow.Identity.RoleRegistryTest do
       group = insert_group!(ctx)
 
       assert {:ok, %TenantRole{name: "CUSTOM_APPROVER"}} =
-               RoleRegistry.upsert_role("CUSTOM_APPROVER", group.id)
+               RoleRegistry.upsert_role("CUSTOM_APPROVER", group.id, prefix: ctx.schema_name)
 
       # Not one of the five recognized Letflow.Api.Authorization.roles/0 values --
       # confirms this genuinely exercises the "outside the enum" case, not an
@@ -346,15 +413,86 @@ defmodule Letflow.Identity.RoleRegistryTest do
     end
   end
 
-  describe "upsert_role/2 — group_id invalid-UUID-format rejection (beyond the bare acceptance criteria)" do
+  describe "upsert_role/3 — group_id invalid-UUID-format rejection (beyond the bare acceptance criteria)" do
     test "rejects a group_id that is not a syntactically valid UUID, distinct from the not-found case",
-         _ctx do
+         ctx do
       name = unique_name()
 
-      assert {:error, :invalid_group_id} = RoleRegistry.upsert_role(name, "not-a-uuid")
+      assert {:error, :invalid_group_id} =
+               RoleRegistry.upsert_role(name, "not-a-uuid", prefix: ctx.schema_name)
 
       rows = TenantRole |> where(name: ^name) |> Repo.all()
       assert rows == []
+    end
+  end
+
+  describe "ISS-0768 regression — prefix genuinely scopes RoleRegistry to one tenant's own schema" do
+    # docs/issues/ISS-0768.yaml's own acceptance criteria: "a real test creates a
+    # role for one tenant and confirms it is queryable only in that tenant's own
+    # schema (not visible via a different tenant's prefix, not written to
+    # public)". Every OTHER test in this file provisions exactly one tenant
+    # schema and only ever asserts within it (see file moduledoc) -- none of them
+    # can distinguish "correctly scoped to tenant A" from "RoleRegistry ignores
+    # the prefix option and always hits whatever schema search_path happens to
+    # point at", because they never stand up a second, genuinely different
+    # schema to probe. This test does.
+    test "role created under tenant A's prefix: visible via A's own prefix, absent via tenant B's prefix, absent from public",
+         %{schema_name: schema_a} = ctx do
+      # Switch the whole Repo to :auto mode FIRST, before inserting anything --
+      # provision_second_tenant!/0 below also needs :auto mode (for
+      # Ecto.Migrator), and switching modes checks in (rolls back) whatever
+      # :manual-mode sandboxed transaction `setup` above left this process in.
+      # Doing the tenant-A insert before that switch would silently roll it back
+      # the moment tenant B gets provisioned, and this test would then be
+      # asserting on a row that was never really there. See
+      # test/letflow/identity/user_test.exs's "same username, two different
+      # tenant schemas" test for the identical constraint and fix shape.
+      Ecto.Adapters.SQL.Sandbox.mode(Letflow.Repo, :auto)
+
+      group_a = insert_group!(ctx, schema_a)
+      name = unique_name("iso")
+
+      assert {:ok, %TenantRole{name: ^name}} =
+               RoleRegistry.upsert_role(name, group_a.id, prefix: schema_a)
+
+      %{schema_name: schema_b} = provision_second_tenant!()
+      refute schema_b == schema_a
+
+      # Positive case: the role IS visible under its own tenant's prefix.
+      names_a = RoleRegistry.list_roles(prefix: schema_a) |> Enum.map(& &1.name)
+      assert name in names_a
+
+      # Negative case 1: NOT visible via a genuinely different tenant's own
+      # prefix -- a real second Postgres schema (schema_b, just provisioned
+      # above), not merely a different filter over the same underlying table.
+      names_b = RoleRegistry.list_roles(prefix: schema_b) |> Enum.map(& &1.name)
+      refute name in names_b
+
+      # Negative case 2: NOT written to `public` at all. SECURITY-REVIEWER's
+      # step-04 addendum (this test's own trigger, see ISS-0768.yaml's
+      # acceptance criteria) treats "not visible via a different tenant's
+      # prefix" and "not written to public" as two SEPARATE, both-required
+      # assertions, not one implied by the other -- negative case 1 above only
+      # proves `list_roles/1` itself resolves prefixes correctly on the READ
+      # side; it says nothing about where `upsert_role/3` actually WROTE the
+      # row. This queries `public` directly with `Repo.all/2`, entirely outside
+      # `RoleRegistry`'s own prefix handling, so it independently confirms the
+      # write itself targeted schema_a and nowhere else.
+      #
+      # REQ-063 (lib/letflow/design/req063-identity-tables-schema-per-tenant.md)
+      # moved `tenant_role` out of `public` entirely -- confirmed empirically
+      # below, `public.tenant_role` is not merely empty, it does not exist as a
+      # relation at all, which Postgres reports as `Postgrex.Error` /
+      # `undefined_table` (SQLSTATE 42P01) rather than an empty result set. That
+      # is actually the STRONGER form of "not written to public" the acceptance
+      # criterion asks for: there is structurally no table in `public` for the
+      # row to have landed in, not merely a query that happens to find zero
+      # matching rows in one that exists.
+      assert_raise Postgrex.Error, ~r/relation "public\.tenant_role" does not exist/, fn ->
+        TenantRole
+        |> where(name: ^name)
+        |> Repo.all(prefix: "public")
+      end
     end
   end
 end

@@ -1,0 +1,62 @@
+{
+  "handoff_id": "d1a2b3c4-0002-4000-8000-000000000768",
+  "run_id": "WF03-ISS0768-20260921",
+  "workflow_id": "WF-03",
+  "step": "02",
+  "from_agent": "ORCH",
+  "to_agent": "CODE-DESIGN-VALIDATOR",
+  "file": "handoffs/WF03-ISS0768-20260921/step-02-code-design-validator.json",
+  "created_at": "2026-09-21T03:16:37Z",
+  "started_at": "2026-09-21T03:16:37Z",
+  "completed_at": "2026-09-21T03:18:07Z",
+  "status": "COMPLETED",
+  "priority": "HIGH",
+  "context": {
+    "stage": "S4",
+    "requirement_ids": [],
+    "requirement_text": {},
+    "related_handoff_ids": ["d1a2b3c4-0001-4000-8000-000000000768"],
+    "artifacts_in": [
+      "lib/letflow/design/iss0768-role-registry-tenant-prefix.md",
+      "docs/issues/ISS-0768.yaml",
+      "lib/letflow/identity/role_registry.ex",
+      "lib/letflow/routers/identity.ex"
+    ],
+    "owned_modules": [
+      "lib/letflow/identity/role_registry.ex",
+      "lib/letflow/routers/identity.ex"
+    ]
+  },
+  "task": {
+    "description": "Hard gate on CODE-DESIGNER's design at lib/letflow/design/iss0768-role-registry-tenant-prefix.md (committed 048d28cc on this branch). Independently re-verify: every acceptance criterion in ISS-0768 (docs/issues/ISS-0768.yaml, read in full) maps to a concrete design element; no implementation code (.ex function bodies) appears anywhere in the doc; every Repo call site in role_registry.ex is accounted for (cross-check against the actual source file yourself -- do not trust the design doc's own claim that it covered every site); the router call-site changes for handle_list_roles/handle_upsert_role match the ACTUAL current code in lib/letflow/routers/identity.ex (read it yourself, do not trust the design doc's paraphrase of line numbers/current signatures); resolve_role_in_tx/1's out-of-scope decision is reasoned, not hand-waved (does its stated 'zero current callers' claim hold under your own grep?); the regression-investigation section (§4) gives ELIXIR-DEV mechanically runnable git commands, not vague guidance. Work in the worktree at c:\\Users\\tvolo\\dev\\ai-dala\\letflow-wf03-iss0768, branch feature/WF03-ISS0768-20260921 (already checked out) -- do not touch c:\\Users\\tvolo\\dev\\ai-dala\\letflow, a different concurrent session owns uncommitted work there. Hard rule: never push directly to main.",
+    "acceptance_criteria": [
+      "Every ISS-0768 acceptance criterion is independently traced to a specific section/line of the design doc, by you, not by re-reading CODE-DESIGNER's own summary",
+      "Confirmed by direct source read: every Repo call in role_registry.ex (Repo.all, Repo.get, Repo.transaction, Repo.insert -- verify the actual count and identity of these calls yourself) is covered by the design",
+      "Confirmed by direct source read: the router call-site section matches lib/letflow/routers/identity.ex's real current handle_list_roles/handle_upsert_role signatures and call sites, not a stale paraphrase",
+      "resolve_role_in_tx/1's out-of-scope reasoning checked against your own grep for callers",
+      "No .ex function body / implementation code present anywhere in the design doc",
+      "PASS or FAIL with specific named gaps if FAIL -- no 'looks good' verdicts"
+    ]
+  },
+  "result": {
+    "status": "FAIL",
+    "summary": "FAIL. Design doc lib/letflow/design/iss0768-role-registry-tenant-prefix.md contains real implementation code -- multiple fenced Elixir code blocks giving exact, copy-pasteable call-site rewrites, not just signatures/prose. This directly violates the CODE-DESIGNER mandate ('no function bodies, no actual .ex/.exs code blocks') and acceptance criterion 'No .ex function body / implementation code present anywhere in the design doc'. Per WF-02 Step 1b, one failed check fails the whole gate -- no partial credit -- so this alone is sufficient for FAIL regardless of the doc's other strengths.\n\nEvidence of the violation (fenced code blocks at lines 33-36, 48-50, 56-63, 73-80, 105-112, 118-125, 141-143, 148-150, 159-161, 165-167 of the design doc -- 10 blocks total, confirmed via `grep -n '^```'`):\n- Lines 48-50: literal rewritten call `Repo.all(from(t in TenantRole, order_by: [asc: t.name]), prefix: opts[:prefix])` -- an exact, pasteable expression, not a signature.\n- Lines 118-125: literal rewritten `Repo.insert(conflict_target: :name, on_conflict: [set: [group_id: group_id]], returning: true, prefix: opts[:prefix])` call.\n- Lines 141-143, 148-150, 159-161, 165-167: literal router body rewrites, e.g. `handle_list_roles(conn, conn.assigns.scoped_opts)` and `defp handle_list_roles(conn, opts)` given as exact code to drop into the route macro bodies.\nThese go beyond '@spec + def name/arity' (which IS permitted per the CODE-DESIGNER role and appears correctly at lines 33-36, 56-63, 73-80, 105-112 as signature blocks) into showing ELIXIR-DEV the literal implementation, which is exactly the failure mode this gate exists to catch (design step skipped in substance even though the artefact exists).\n\nPositive findings, for the record (would have been PASS on these dimensions alone):\n- ISS-0768's affected_files and Repo-call inventory (Repo.all, Repo.get_by, Repo.get, Repo.transaction, Repo.insert) are all accounted for. Verified by direct read of lib/letflow/identity/role_registry.ex: Repo.all (line 41, list_roles), Repo.get_by (line 75, resolve_role_in_tx), Repo.transaction (line 84) + Repo.get (line 85, both inside do_upsert_role), Repo.insert (line 98, insert_or_update_role) -- exactly 5 calls, matching the issue's own grep-derived inventory. Design §1.1-1.4 covers all 4 in-scope calls; §3 explicitly addresses the 5th (resolve_role_in_tx's Repo.get_by) as reasoned out-of-scope rather than silently skipped.\n- Router call-site claims verified against the actual current lib/letflow/routers/identity.ex, not the design doc's paraphrase: lines 203-209 (`handle_list_roles(conn)` / `handle_upsert_role(conn)` inside authz_get/authz_post \"/roles\") and lines 650-677 (handle_list_roles/1 body calling `RoleRegistry.list_roles()` at line 651; handle_upsert_role/1 body calling `RoleRegistry.upsert_role(name, group_id)` at line 669) match the design doc's cited line numbers and current signatures exactly. The design's cited example at line 143 (`handle_create(conn, conn.assigns.scoped_opts)`) also matches the real file verbatim.\n- resolve_role_in_tx/1's 'zero current callers' claim checked via `grep -rn resolve_role_in_tx --include=*.ex --include=*.exs .` (excluding role_registry.ex itself): the only hits are in test/letflow/role_registry_test.exs (direct unit-test calls). No production module (router, Identity, Engine) calls it. Claim holds.\n- §4's regression-investigation section gives three concrete, directly-runnable git commands (`git log -p --follow`, `git log -p --follow -S\"prefix\"`, `git log --follow --diff-filter=A --format=%H`) with stated decision criteria for each outcome -- mechanically runnable, not vague guidance.\n\nRequired rework for CODE-DESIGNER: strip every fenced code block that shows a call-site rewrite as literal executable syntax (§1.1's Repo.all snippet, §1.4's Repo.insert snippet, all of §2's route-macro/handler-body snippets) and replace with prose description of the change (which argument gains which option, in which position) plus the @spec/def name+arity only, matching the style already correctly used for the function-signature blocks.",
+    "artifacts_out": [
+      "handoffs/WF03-ISS0768-20260921/step-02-code-design-validator.json"
+    ],
+    "issues": [
+      "lib/letflow/design/iss0768-role-registry-tenant-prefix.md contains 10 fenced code blocks; several (lines 48-50, 118-125, 141-143, 148-150, 159-161, 165-167) are literal executable Elixir call-site rewrites, not signatures -- violates the CODE-DESIGNER 'no actual .ex/.exs code blocks' rule and the design-validator acceptance criterion barring implementation code in the doc."
+    ],
+    "git_evidence": {
+      "branch_name": "feature/WF03-ISS0768-20260921",
+      "commit_sha_list": [],
+      "remote_branch": "origin/feature/WF03-ISS0768-20260921",
+      "push_status": "skipped",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": "Route back to CODE-DESIGNER for rework: remove literal call-site code blocks from §1.1, §1.4, and §2; keep only @spec/def signatures and prose description of each Repo-call argument change. Re-submit to CODE-DESIGN-VALIDATOR."
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

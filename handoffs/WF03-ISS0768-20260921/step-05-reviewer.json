@@ -1,0 +1,61 @@
+{
+  "handoff_id": "d1a2b3c4-0005-4000-8000-000000000768",
+  "run_id": "WF03-ISS0768-20260921",
+  "workflow_id": "WF-03",
+  "step": "05",
+  "from_agent": "ORCH",
+  "to_agent": "REVIEWER",
+  "file": "handoffs/WF03-ISS0768-20260921/step-05-reviewer.json",
+  "created_at": "2026-09-21T04:22:21Z",
+  "started_at": "2026-09-21T04:22:21Z",
+  "completed_at": "2026-09-21T04:45:00Z",
+  "status": "COMPLETED",
+  "priority": "HIGH",
+  "context": {
+    "stage": "S4",
+    "requirement_ids": [],
+    "requirement_text": {},
+    "related_handoff_ids": ["d1a2b3c4-0003-4000-8000-000000000768", "d1a2b3c4-0004-4000-8000-000000000768"],
+    "artifacts_in": [
+      "lib/letflow/design/iss0768-role-registry-tenant-prefix.md",
+      "lib/letflow/identity/role_registry.ex",
+      "lib/letflow/routers/identity.ex",
+      "docs/issues/ISS-0768.yaml",
+      "handoffs/WF03-ISS0768-20260921/step-03-elixir-dev.json",
+      "handoffs/WF03-ISS0768-20260921/step-04-security-reviewer.json"
+    ],
+    "owned_modules": [
+      "lib/letflow/identity/role_registry.ex",
+      "lib/letflow/routers/identity.ex"
+    ]
+  },
+  "task": {
+    "description": "Hard gate, runs after SECURITY-REVIEWER's PASS (step-04, commit c1b8bccb, this branch). Check idiom, scope, and decision-record consistency for ISS-0768's fix (Letflow.Identity.RoleRegistry now threads opts :: [prefix: String.t()] through every Repo call, matching lib/letflow/identity.ex's established convention; router call sites updated to pass conn.assigns.scoped_opts). Verify: (1) the opts :: [prefix: String.t()] convention is applied exactly as lib/letflow/identity.ex and lib/letflow/plugs/auth_pipeline.ex already use it -- no invented variant (e.g. no default value, no atom-vs-string mismatch, consistent keyword-list shape); (2) no scope creep -- diff touches only role_registry.ex, routers/identity.ex, and the two test files updated to the new arities, nothing else; (3) resolve_role_in_tx/1 left genuinely untouched is the correct call given its own moduledoc (no live caller) -- REVIEWER sign-off on the design's §3 reasoning, not just SECURITY-REVIEWER's; (4) no contradiction with any decision record (docs/migration/decisions/) -- this is exactly REQ-012/0003-ecto-schema-strategy.md's schema-per-tenant convention being correctly applied, not diverged from; (5) the mix test evidence in step-03's handoff (83/83 targeted, 4479/4495 full suite, 16 pre-existing unrelated failures) is itself credible -- spot check that the 16 named failing test names genuinely have nothing to do with RoleRegistry/routers/identity.ex by reading their failure context if in doubt. Work in worktree c:\\Users\\tvolo\\dev\\ai-dala\\letflow-wf03-iss0768, branch feature/WF03-ISS0768-20260921 -- do not touch c:\\Users\\tvolo\\dev\\ai-dala\\letflow. Hard rule: never push directly to main.",
+    "acceptance_criteria": [
+      "opts :: [prefix: String.t()] usage matches lib/letflow/identity.ex's established convention exactly -- no default value, no shape divergence",
+      "Diff scope confirmed limited to role_registry.ex, routers/identity.ex, test/letflow/role_registry_test.exs, test/letflow/routers/identity_test.exs -- no unrelated file touched",
+      "resolve_role_in_tx/1 out-of-scope decision independently endorsed or challenged with reasoning",
+      "No contradiction with docs/migration/decisions/0003-ecto-schema-strategy.md or any other decision record",
+      "PASS or FAIL with specific named gaps if FAIL"
+    ]
+  },
+  "result": {
+    "status": "FAIL",
+    "summary": "Idiom/scope gate on ISS-0768's RoleRegistry tenant-prefix fix (commit ddfa3cdf). Three of four checks PASS; one hard FAIL.\n\n(1) FAIL -- opts :: [prefix: String.t()] access-pattern convention NOT matched. lib/letflow/identity/role_registry.ex's fix threads prefix via bare `opts[:prefix]` inline at every Repo call site (list_roles/1's Repo.all/2; do_upsert_role/3's Repo.transaction/2, its inner Repo.get/3; insert_or_update_role/3's Repo.insert/2 keyword list) -- 4 occurrences, confirmed by direct read. This diverges from the established codebase-wide convention: every other module that receives `opts :: [prefix: String.t()]` binds it ONCE per function via `prefix = Keyword.fetch!(opts, :prefix)` and reuses that variable, which raises KeyError immediately if `:prefix` is missing from opts, rather than silently proceeding. Confirmed by direct grep across lib/: lib/letflow/identity.ex (28 call sites, e.g. line 224, 287, 312, 327...), lib/letflow/dlq.ex, lib/letflow/webhooks.ex, lib/letflow/definitions/promotion_review_store.ex, lib/letflow/definitions/snapshot_store.ex, lib/letflow/help.ex, lib/letflow/instances.ex, lib/letflow/ordering.ex, lib/letflow/ordering/*.ex, lib/letflow/tasks.ex, lib/letflow/repository/*.ex, lib/letflow/scheduler.ex, lib/letflow/engine/snapshot_writer.ex, lib/letflow/routers/instances.ex, lib/letflow/routers/promotions.ex -- ALL use `Keyword.fetch!(opts, :prefix)`, zero exceptions found anywhere in lib/ other than this fix. identity.ex's own moduledoc states the reason for this pattern explicitly: '`:prefix` is required (no default) ... a missing prefix must never silently fall back to the ... no-longer-authoritative `public` schema.' Bare `opts[:prefix]` (Keyword/Access-style lookup) returns `nil` if `:prefix` is absent or misspelled in `opts`, and `Repo.all/insert/get/transaction` called with `prefix: nil` does not raise -- it falls through to the connection's default schema (`public`), which is exactly the silent-cross-tenant-fallback failure mode ISS-0768 exists to close. Today's only call sites (routers/identity.ex's handle_list_roles/2, handle_upsert_role/2) always supply a well-formed conn.assigns.scoped_opts, so this is not exploitable through any currently-live path -- but the whole point of the codebase's Keyword.fetch! convention (per identity.ex's own moduledoc reasoning) is to make a *future* caller that omits :prefix fail loudly instead of silently mis-scoping, and this fix's opts[:prefix] pattern does not have that property. The design doc (lib/letflow/design/iss0768-role-registry-tenant-prefix.md, section 1.1, 1.3, 1.4) is what specified `prefix: opts[:prefix]` literally and claimed this 'exactly' matches auth_pipeline.ex's convention -- that claim does not hold: auth_pipeline.ex is a CALLER that constructs `prefix: schema_name` from an already-resolved local variable, it never receives an `opts` argument and indexes into it; it is not an instance of the callee-side pattern being compared here. No module anywhere in lib/ does callee-side `opts[:prefix]` indexing as an idiom. This is a genuine, not cosmetic, idiom-convention divergence directly relevant to the bug class this fix is supposed to close, and the acceptance criterion demands an exact match with 'no shape divergence.' Required fix (route to ELIXIR-DEV, mechanical, no design change needed): bind `prefix = Keyword.fetch!(opts, :prefix)` once at the top of each of list_roles/1, upsert_role/3 (or do_upsert_role/3, since upsert_role/3 doesn't touch Repo itself), do_upsert_role/3, and insert_or_update_role/3, and use that `prefix` variable at each Repo call site instead of the inline `opts[:prefix]` expression -- same shape as identity.ex:224, 287, etc.\n\n(2) PASS -- scope creep. `git show --stat ddfa3cdf` confirms the diff touches exactly lib/letflow/identity/role_registry.ex, lib/letflow/routers/identity.ex, test/letflow/role_registry_test.exs, test/letflow/routers/identity_test.exs, plus this run's own handoff artifact (handoffs/WF03-ISS0768-20260921/step-03-elixir-dev.json) -- no unrelated file touched, no new abstraction/behaviour/macro introduced, no premature framework machinery. Matches the acceptance criterion exactly.\n\n(3) PASS -- resolve_role_in_tx/1 out-of-scope decision endorsed. Confirmed by direct read that the function is byte-for-byte unchanged in the diff, and independently by `git log -p --follow -S\"prefix\" -- lib/letflow/identity/role_registry.ex` showing only commit ddfa3cdf ever touched prefix: in this file. Design doc section 3's reasoning holds: zero live callers (grep confirms), the function's own moduledoc documents it as meant to run inside a not-yet-built S3 caller's own ambient transaction, and Ecto does not auto-propagate a transaction's prefix to inner queries (same reasoning section 1.3 item 1 already applies elsewhere in this same diff) -- so there is no concrete caller shape to design its own opts parameter against yet. Deferring it as a named follow-up rather than speculatively adding an opts param now is the correct call, not scope creep by omission.\n\n(4) PASS -- decision-record consistency. Checked against docs/migration/decisions/0003-ecto-schema-strategy.md Dimension B (schema-per-tenant via Ecto `:prefix`, `tenant_id` retained intra-schema). This fix is a direct, correct application of that already-decided convention to a module (RoleRegistry) that had never adopted it -- not a new decision, not a divergence. No contradiction found.\n\n(5) mix test evidence (step-03's handoff) spot-checked as credible: the 16 named full-suite failures (Letflow.Packs.BilimbagaExamDefinitionsTest, Letflow.ServiceCatalogTest x5, Letflow.TenantSchemaReaperTest x3, Letflow.ServiceCatalogReaperTest x3, Letflow.Routers.MetricsExpositionTest, Letflow.IdentityTest x2) are all in files/modules with no textual or functional relationship to RoleRegistry, role_registry.ex, or the /roles routes -- Letflow.IdentityTest's 2 failures are specifically named as resolve_tenant_by_realm/1 and resolve_realm_by_tenant/1, a different module (Letflow.Identity, the OIDC-pipeline functions) untouched by this diff, with a plausible, specific failure mechanism given (Ecto.NoResultsError from a shared async-fixture race in test/support/bpm_default_realm_displacement.ex). No reason to distrust this evidence.\n\nOVERALL VERDICT: FAIL. Blocking gap is (1) only -- a mechanical, well-scoped fix (swap `opts[:prefix]` for a once-bound `prefix = Keyword.fetch!(opts, :prefix)` at 4 call sites across 2-3 functions). (2)/(3)/(4)/(5) all PASS and do not need rework.",
+    "artifacts_out": ["handoffs/WF03-ISS0768-20260921/step-05-reviewer.json"],
+    "issues": [
+      "opts[:prefix] used instead of the codebase's universal Keyword.fetch!(opts, :prefix) callee-side convention in lib/letflow/identity/role_registry.ex's list_roles/1, do_upsert_role/3 (Repo.transaction and inner Repo.get), and insert_or_update_role/3 (Repo.insert) -- silently falls back to the public schema if a future caller omits :prefix, reintroducing the exact failure class ISS-0768 exists to close, even though no current call site triggers it. Fix is mechanical: bind prefix = Keyword.fetch!(opts, :prefix) once per function, reuse the variable."
+    ],
+    "git_evidence": {
+      "branch_name": "feature/WF03-ISS0768-20260921",
+      "commit_sha_list": ["ddfa3cdf3b9c001f538a2024b7479da755e16344"],
+      "remote_branch": "origin/feature/WF03-ISS0768-20260921",
+      "push_status": "skipped",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": "Route back to ELIXIR-DEV for rework: replace opts[:prefix] with a once-bound prefix = Keyword.fetch!(opts, :prefix) at the top of each affected function in lib/letflow/identity/role_registry.ex, matching lib/letflow/identity.ex's own convention exactly. No design-doc change needed -- this is an implementation-level idiom fix, not a signature/behavior change. Re-gate through REVIEWER (this step) before proceeding to TEST-DESIGNER."
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

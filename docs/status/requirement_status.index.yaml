@@ -4293,15 +4293,20 @@ volumes:
     path: docs/status/requirement_status.v21.yaml
     status: current
     opened: 2026-09-20
-    entries: 5
+    entries: 6
     note: >
-      Incremented to 4 by DOC-UPDATER's own ISS-0769 SCOPE-CHANGE done-event
-      append (WF03-ISS0769-20260921, 2026-09-21T04:30:37Z -- bearer-token
-      leakage into crash logs, plus the node-wide logger-filter-crash bug
-      found along the way) -- `grep -c "^  - req:"
-      docs/status/requirement_status.v21.yaml` = 4 on-disk entries. 256
-      lines / 14793 bytes, well under the 1200-line/120000-byte roll
-      ceiling, so no roll triggered.
+      Reconciled during this run's (WF03-ISS0768-20260921) Step Final rebase:
+      three concurrent DOC-UPDATER appends landed on volume 21 independently
+      -- ISS-0769 (bearer-token leakage into crash logs, plus a node-wide
+      logger-filter-crash bug found along the way, 2026-09-21T04:30:37Z),
+      ISS-0770 (secret_key_base missing from the redaction key list,
+      2026-09-21T05:07:24Z), and ISS-0768 (RoleRegistry tenant-schema-prefix
+      fix, confirmed not a regression, broken since REQ-020 introduction,
+      2026-09-21T05:58:34Z) -- and a plain rebase conflict on this index
+      entry composed all three rather than picking one. `grep -c "^  - req:"
+      docs/status/requirement_status.v21.yaml` = 6 on-disk entries. 298 lines
+      / 17496 bytes, well under the 1200-line/120000-byte roll ceiling, so no
+      roll triggered.
 
       Opened by DOC-UPDATER's own ISS-0743 close-out, successor to volume 20
       (closed at 19 entries / 1227 frozen-prefix lines, over the 1200-line

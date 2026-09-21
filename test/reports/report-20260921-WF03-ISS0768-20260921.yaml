@@ -1,0 +1,129 @@
+report_id: report-20260921-WF03-ISS0768-20260921
+run_id: WF03-ISS0768-20260921
+workflow_id: WF-03
+step: "08"
+agent: TEST-RUNNER
+date: 2026-09-21
+branch: feature/WF03-ISS0768-20260921
+worktree: c:\Users\tvolo\dev\ai-dala\letflow-wf03-iss0768
+
+verdict: PASS
+
+compile:
+  dev_env:
+    command: "mix compile --warnings-as-errors"
+    exit_code: 0
+    output: "(empty -- already compiled clean, nothing to recompile/warn)"
+  test_env:
+    command: "MIX_ENV=test mix compile --warnings-as-errors"
+    exit_code: 0
+    note: >
+      273 files in the `letflow` app compiled with no warnings reported for
+      own-app code (elixirc_paths(:test) = ["lib", "test/support"]). The only
+      warnings anywhere in the log are from dependency source (jose's
+      deprecated Erlang `catch ...`, eqrcode's unpinned bitstring size vars)
+      -- --warnings-as-errors does not gate dependency compilation, only the
+      current project's own compile step, and exit code was 0.
+
+role_registry_test_exs:
+  command: "mix test test/letflow/role_registry_test.exs --trace"
+  result: "Result: 15 passed"
+  iss_0768_test_confirmed_by_name: >
+    "test ISS-0768 regression -- prefix genuinely scopes RoleRegistry to one
+    tenant's own schema role created under tenant A's prefix: visible via A's
+    own prefix, absent via tenant B's prefix, absent from public (2401.5ms)
+    [L#439]" -- PASSED.
+  all_15_tests_listed: true
+
+full_suite_runs:
+  tooling: scripts/test_parallel.sh (N=16 partitions, derived from nproc)
+  shared_db_context: >
+    Postgres runs in a single shared container (letflow-postgres-1, port
+    5462) also used by other concurrent sessions/worktrees on this host
+    (confirmed via `docker ps`: this worktree's own `docker compose up -d`
+    could not bind 5462 -- already allocated -- so this run used the
+    existing shared instance, consistent with the sibling-session contention
+    step-06/TEST-DESIGNER already flagged).
+  attempts:
+    - n: 1
+      pg_connections_before: 83
+      result: "combined: 1062 tests, 0 properties, 0 failures (1062/1062 passed)"
+      note: >
+        10 of 16 partitions never produced a Result: line -- crashed at
+        connect time with Postgrex.Error 53300 too_many_connections and
+        DBConnection.ConnectionError (TenantSchemaReaper sweep aborts logged
+        the same). pg_stat_activity showed 83 pre-existing connections from
+        sibling sessions before this run even started (script's own pool-size
+        budget assumes it owns the full max_connections=100, so it does not
+        account for concurrent siblings). NOT an authoritative full-suite
+        result -- most of the suite never ran.
+    - n: 2
+      params: "TEST_PARALLEL_N=2 TEST_POOL_SIZE=4"
+      result: "combined: 0 tests, 0 properties, 0 failures (0/0 passed)"
+      note: >
+        Both partitions aborted, exit 127. Partition logs show
+        `FATAL 57P01 admin_shutdown terminating connection due to
+        administrator command` mid-run -- something external restarted/reset
+        the shared Postgres container while this run was in flight (pg
+        connection count dropped from 83 to 6 immediately after). Discarded
+        as noise from the shared-host environment, not a suite result.
+    - n: 3
+      pg_connections_before: 16
+      result: "combined: 1607 tests, 3 properties, 88 failures (1522/1610 passed)"
+      note: >
+        Still 10/16 partitions crashed at connect time (too_many_connections
+        again). The 3 partitions that did complete (6, 15, 16) failed 88
+        tests, ALL of them DBConnection.ConnectionError -- confirmed via
+        `grep -B2 "** (" partition-{6,15,16}.log | grep -v ConnectionError`,
+        which returned zero non-connection-error stack traces across all 88
+        failures. role_registry_test.exs / RoleRegistry never appears in any
+        partition log. Read as continued pool contention, not a regression.
+    - n: 4
+      pg_connections_before: 16
+      result: "combined: 4487 tests, 6 properties, 9 failures (4484/4493 passed)"
+      authoritative: true
+      note: >
+        All 16 partitions produced a Result: line this time (no connect-time
+        crashes). 9 real (non-connection-error) failures, all in test-support
+        concurrency-guard modules that explicitly detect and react to a
+        sibling mix test invocation sharing the DB -- not in
+        role_registry.ex, routers/identity.ex, or role_registry_test.exs:
+          - Letflow.IdentityTest (partition 6, 2 failures):
+            resolve_tenant_by_realm/1 / resolve_realm_by_tenant/1 --
+            Ecto.NoResultsError inside
+            Letflow.Support.BpmDefaultRealmDisplacement.with_lock/1, a
+            fixture that coordinates the seeded default tenant across
+            concurrent sibling invocations.
+          - Letflow.ServiceCatalogReaperTest (partition 9, 4 failures):
+            sweep_service_catalog_orphans/1 returned
+            {:deferred, :concurrent_invocation} instead of {:ok, ...} --
+            its own logged reason: "another mix test invocation ... is
+            currently connected to this database" (ISS-0414 guard, working
+            as designed under real sibling contention).
+          - Letflow.TenantSchemaReaperTest (partition 11, 3 failures):
+            sweep_orphans/2 -- same pattern, ISS-0110 guard logged
+            "another invocation's connection is open", so 0 rows were
+            reclaimed where the test (written for isolated/no-sibling
+            conditions) expected >= 1.
+        None of these 9 failures touch role_registry.ex, routers/identity.ex,
+        or role_registry_test.exs. All are the concurrency-guard modules
+        these tests are testing correctly detecting genuine sibling
+        contention on the shared host -- the same class of issue
+        TEST-DESIGNER flagged at step-06 (different failing set each run,
+        correlated with connection-pool/concurrent-invocation signals), not
+        a regression introduced by this branch.
+
+conclusion: >
+  PASS. mix compile --warnings-as-errors is clean in both dev and test envs.
+  test/letflow/role_registry_test.exs's full file (15/15), including the new
+  ISS-0768 cross-tenant-isolation describe block, passes by name, both in
+  isolation and never appears among any full-suite run's failures across 4
+  attempts. All observed full-suite failures (across all 4 attempts) are
+  attributable to this shared-host Postgres instance being used concurrently
+  by other sessions/worktrees: raw too_many_connections/ConnectionError
+  crashes in 3 of 4 attempts, and in the one attempt where all 16 partitions
+  completed cleanly, 9 failures that are exactly the test-support
+  concurrency-guard modules (ServiceCatalogReaperTest, TenantSchemaReaperTest,
+  IdentityTest's default-tenant displacement lock) correctly detecting and
+  reacting to a genuine sibling mix test invocation. No failure implicates
+  role_registry.ex, routers/identity.ex, or role_registry_test.exs.

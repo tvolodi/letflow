@@ -1391,7 +1391,8 @@ defmodule Letflow.Routers.IdentityTest do
       {:ok, _role} =
         Letflow.Identity.RoleRegistry.upsert_role(
           "listed-role-#{System.unique_integer([:positive])}",
-          group.id
+          group.id,
+          prefix: tenant.schema_name
         )
 
       conn =

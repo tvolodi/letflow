@@ -1,0 +1,60 @@
+id: ISS-0773
+title: >
+  sync_role_claims_from_token/3 silently writes zero role grants when
+  resolve_group_ids_for_role_names/2 resolves to an empty list -- QA
+  bpm-default admin-user gets 403 on every authenticated route despite
+  a valid token
+discovered_by: ai-dala-infra-34 (peer session, verifying QA health), independently confirmed via source read by ORCH (letflow-c5)
+discovered_in_run: T-0140-seed-swiftroute-tenant-persona-qa-users (ai-dala-infra), QA-health follow-up after ISS-0771
+discovered_at: "2026-09-21T10:00:00Z"
+severity: BLOCKER
+description: >
+  Discovered live 2026-09-21 by a peer ai-dala-infra session verifying
+  QA health after the ISS-0771 migration-replay fix landed.
+  bpm-default/admin-user mints a token fine (correct iss/aud/azp/roles
+  claims) but GET /identity/groups, /identity/roles, /identity/users,
+  /tasks/inbox all return 403 (Authorization.has_permission?/2
+  correctly denies when fed roles: []). role_claims_synced_at IS
+  getting stamped on login, proving sync_role_claims_from_token/3
+  (REQ-378) is being called -- but tenant_role/group_members/
+  user_entity_grants end up with zero rows for this user. Independently
+  confirmed the mechanism from source
+  (lib/letflow/identity.ex sync_role_claims_from_token/3): it
+  unconditionally stamps role_claims_synced_at via Multi.update, but
+  the grant-write step (Multi.run(:memberships, ...)) calls
+  resolve_group_ids_for_role_names/2, which resolves the token's
+  claimed role names against that tenant's TenantRole.name rows via
+  `where: t.name in ^role_names`. If that query returns zero
+  group_ids -- either because no TenantRole row exists with a matching
+  name, or because the token's claimed role name string doesn't match
+  what is stored -- the Enum.each silently does nothing, and the whole
+  transaction still returns {:ok, ...} with 0 grants written. No error
+  is raised, no log line distinguishes "synced N groups" from "synced
+  0 groups", so this failure mode is completely silent from the
+  caller's perspective. Because the marker (role_claims_synced_at) is
+  now permanently stamped, a real user in this state can NEVER be
+  re-synced by this function's own designed retry-on-nil-marker
+  mechanism -- the marker is not nil, so callers won't call it again,
+  permanently locking the user out until someone manually clears the
+  marker or backfills the grant rows.
+affected_files:
+  - lib/letflow/identity.ex
+fix_direction: >
+  Needs a CODE-DESIGNER pass to decide between the two candidate root
+  causes (seed-data gap vs. claim-mapping gap -- awaiting one more
+  diagnostic data point from ai-dala-infra: either a direct query of
+  bpm-default's tenant_role table, or the actual role name(s) in
+  admin-user's JWT at sync time) and the right closure for the
+  permanent-lockout hazard: most likely, only stamp
+  role_claims_synced_at when at least one grant was actually written
+  (leaving the marker nil -- and thus retryable -- when
+  resolve_group_ids_for_role_names/2 resolves to an empty list for a
+  non-empty identity_context.roles), plus a loud log line distinguishing
+  the two outcomes. Needs a regression test proving a zero-grant sync
+  does not silently succeed and does not permanently lock a user out.
+queue_ref: Q-771  # letflow-queue task id 771, issue_ref ISS-0773 (local
+  # filename diverges from the queue id -- 0771 was already taken
+  # locally by the tenant-migration-replay BLOCKER, see ISS-0771.yaml).
+  # Registered 2026-09-21 by ORCH.
+github_ref: GH-1677
+status: open

@@ -92,4 +92,51 @@ queue_ref: "Q-773"  # letflow-queue task id 773. NOTE: the queue service's
   # repeatedly this session (see ISS-0771->0772->0773's own renumbering
   # history). Registered 2026-09-21 by ORCH.
 github_ref: GH-1684
-status: open
+status: resolved
+resolution:
+  resolved_at: "2026-09-21T00:00:00Z"
+  resolved_in: feature/WF03-ISS0775-20260921 (tip a1997387)
+  pr: GH-1684
+  design_decision: >
+    CODE-DESIGNER chose candidate (a) -- restrict
+    `Letflow.Identity.resolve_group_ids_for_role_names/2`'s write-path query to
+    `kind == :platform_role` rows only -- over this issue's own tentative
+    preference for candidate (b) (restrict to `:process_routing_role` rows
+    instead). Reasoning (full detail in
+    `lib/letflow/design/iss-0775-oidc-role-sync-kind-scoping.md` section 1):
+    `resolve_group_ids_for_role_names/2` is the sole mechanism
+    `sync_role_claims_from_token/3` uses to close REQ-378's JIT-provisioning
+    gap, and its designed, load-bearing domain is `:platform_role`, not
+    `:process_routing_role` -- `list_effective_role_names/2` (the only reader
+    that ever feeds `Authorization.roles_from_strings/1`) has read `kind ==
+    :platform_role` only since ISS-0774. Adopting (b) would have severed
+    REQ-378's entire mechanism (no OIDC-claimed platform role could ever again
+    resolve to a group_id) to guard against a "legitimate IdP-federated
+    routing-role claim" use case with zero evidence anywhere in the codebase or
+    design docs that it exists or is wanted; every existing
+    `:process_routing_role`-kind binding is provisioned exclusively via
+    `RoleRegistry.upsert_role/4` + `add_group_member/3`, never via a token
+    claim, so (a) protects the constraint (b) was trying to protect vacuously,
+    by construction, while (b) would have broken the one flow that is actually
+    real and shipped.
+  fix: >
+    Added `and t.kind == :platform_role` to `resolve_group_ids_for_role_names/2`'s
+    existing `where` clause (`lib/letflow/identity.ex`). A claimed string
+    matching a `:process_routing_role`-kind `tenant_role.name` now resolves to
+    no `group_id`, identical in shape to today's existing "no matching row at
+    all" case -- not an error, not logged differently.
+  tests: >
+    T1 (platform-kind claim still writes a group_members row -- confirms no
+    REQ-378 regression), T2 (routing-kind claim writes nothing, and the
+    pre-existing zero-resolution warning still fires), T3 (one claim list
+    holding both kinds' names writes only the platform-kind membership) --
+    all added to test/letflow/identity_test.exs per test/specs/ISS-0775.md.
+  verification: >
+    Gates, all PASSED: CODE-DESIGN-VALIDATOR, SECURITY-REVIEWER, REVIEWER,
+    TEST-DESIGN-VALIDATOR, TEST-RUNNER (full suite 4566/4566 passed, 0
+    failures, plus isolated wasm_hang and lua_wallclock_race subchecks clean --
+    see test/reports/report-20260921-WF03-ISS0775-20260921.yaml).
+    RELEASE-VALIDATOR independently re-verified the design decision, the fix,
+    and T1-T3, and separately confirmed non-regression of REQ-378's OIDC
+    live-revocation mechanism and of ISS-0773's fix (both continue to pass
+    unaffected by this change) -- full PASS.

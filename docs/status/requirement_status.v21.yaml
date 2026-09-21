@@ -452,3 +452,40 @@ history:
       RELEASE-VALIDATOR (independently re-verified all 4 ACs plus the regression
       fix plus ISS-0775's correct filing/scoping -- full PASS). Design:
       lib/letflow/design/iss-0774-role-domain-authorization.md.
+  - req: SCOPE-CHANGE
+    event: done
+    agent: DOC-UPDATER
+    at: "2026-09-21T18:20:11Z"
+    note: >
+      ISS-0775 (MINOR, GH-1684, queue task 773 -- Letflow.Identity.
+      resolve_group_ids_for_role_names/2's write path, called from
+      sync_role_claims_from_token/3, matched a claimed OIDC role-name string
+      against tenant_role.name with no kind predicate, so a token claiming a
+      string that happened to match an existing :process_routing_role-kind
+      row's name got an unintended group_members row written for it) resolved
+      on feature/WF03-ISS0775-20260921 (tip a1997387). Design decision:
+      CODE-DESIGNER chose candidate (a) -- restrict the write path to kind ==
+      :platform_role rows only -- over the issue's own tentative preference for
+      candidate (b) (restrict to :process_routing_role rows), because (b) would
+      have severed REQ-378's entire OIDC JIT-provisioning mechanism (the only
+      domain list_effective_role_names/2 has read since ISS-0774) to guard a
+      "legitimate IdP-federated routing-role claim" use case with zero evidence
+      anywhere in the codebase that it exists; every real process-routing-role
+      binding is provisioned exclusively via RoleRegistry.upsert_role/4 +
+      add_group_member/3, never a token claim, so (a) satisfies that concern
+      vacuously while (b) would not have. Fix: added `and t.kind ==
+      :platform_role` to resolve_group_ids_for_role_names/2's where clause
+      (lib/letflow/identity.ex) -- a routing-kind name collision now resolves
+      to no group_id, same shape as today's existing no-match case. Tests T1-T3
+      added to test/letflow/identity_test.exs (platform-kind claim still
+      writes; routing-kind claim writes nothing and the existing zero-
+      resolution warning still fires; mixed claim list writes only the
+      platform-kind membership). Gates, all PASSED: CODE-DESIGN-VALIDATOR,
+      SECURITY-REVIEWER, REVIEWER, TEST-DESIGN-VALIDATOR, TEST-RUNNER (full
+      suite 4566/4566 passed, 0 failures, plus isolated wasm_hang and
+      lua_wallclock_race subchecks clean -- test/reports/
+      report-20260921-WF03-ISS0775-20260921.yaml), RELEASE-VALIDATOR
+      (independently re-verified the design decision, the fix, T1-T3, and
+      separately confirmed non-regression of REQ-378's OIDC live-revocation
+      mechanism and of ISS-0773's fix -- full PASS). Design:
+      lib/letflow/design/iss-0775-oidc-role-sync-kind-scoping.md.

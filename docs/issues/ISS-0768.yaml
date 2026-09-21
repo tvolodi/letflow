@@ -55,4 +55,60 @@ fix_direction: >
 queue_ref: Q-768  # letflow-queue task id 768, issue_ref ISS-0768. Registered
   # 2026-09-21 by ORCH.
 github_ref: GH-1665
-status: open
+status: resolved
+resolved_in_run: WF03-ISS0768-20260921
+resolved_at: "2026-09-21T05:58:34Z"
+resolution:
+  regression_finding: >
+    NOT a regression -- Letflow.Identity.RoleRegistry has issued unprefixed
+    (default-schema) queries since it first shipped, under REQ-020
+    (introduction commit a1c4ab9b7d61c852c612ed03a51a64cbf52d1371, "feat:
+    Per-tenant role registry (TenantRoleStore/IDN-05 equivalent)
+    [WF02-REQ020-20260816] (#40)"). Confirmed by ELIXIR-DEV's
+    `git log -p --follow -S"prefix" -- lib/letflow/identity/role_registry.ex`
+    returning a completely empty result across the file's entire 2-commit
+    history (the introduction commit plus d894d1f6, a comment/provenance-only
+    edit under REQ-251) -- no commit ever added or removed a line containing
+    "prefix". Independently corroborated by SECURITY-REVIEWER's own re-run of
+    the same command with the same empty result. ISS-0768 is therefore fixing
+    a bug present since the module's introduction, not something a later
+    change broke.
+  summary: >
+    Letflow.Identity.RoleRegistry now threads opts :: [prefix: String.t()]
+    through every Repo call, matching the codebase's established convention
+    (binding `prefix = Keyword.fetch!(opts, :prefix)` once at the top of each
+    function and reusing that variable, per REVIEWER's rework finding rather
+    than the initial `opts[:prefix]` inline form, which silently returns nil
+    on a missing key instead of raising). list_roles/0 -> list_roles/1,
+    upsert_role/2 -> upsert_role/3, do_upsert_role/2 -> do_upsert_role/3
+    (private), insert_or_update_role/2 -> insert_or_update_role/3 (private);
+    resolve_role_in_tx/1 left unchanged (zero current callers, out of scope
+    per design section 3). lib/letflow/routers/identity.ex's
+    handle_list_roles/2 and handle_upsert_role/2 now pass
+    conn.assigns.scoped_opts through to RoleRegistry, matching every other
+    route in the module. POST /roles and GET /roles now correctly scope to
+    the caller's own tenant schema instead of always querying the default
+    public schema.
+  design_doc: lib/letflow/design/iss0768-role-registry-tenant-prefix.md
+  regression_tests:
+    - test/letflow/role_registry_test.exs
+  gates: >
+    CODE-DESIGN-VALIDATOR PASSED (after one rework: step-02 FAILed on
+    implementation code appearing in the design doc). ELIXIR-DEV implemented
+    per design, reworked once for the opts[:prefix]-vs-bound-variable idiom
+    finding (REVIEWER FAIL at step-05, fixed and re-passed). SECURITY-REVIEWER
+    PASSED (step-04/04b), independently re-running and corroborating the
+    regression-vs-always-broken git history check. REVIEWER PASSED (step-05/
+    05b). TEST-DESIGNER wrote the cross-tenant-isolation regression test
+    (step-06): creates a role for one tenant and confirms it is queryable
+    only via that tenant's own prefix -- visible via tenant A's prefix,
+    absent via tenant B's prefix, absent from public. TEST-DESIGN-VALIDATOR
+    PASSED (step-07). TEST-RUNNER PASSED (step-08): mix compile
+    --warnings-as-errors clean; test/letflow/role_registry_test.exs 15/15
+    passed standalone (including the new ISS-0768 regression test by name);
+    authoritative full-suite run 4484/4493 passed, the 9 failures all
+    confirmed as shared-Postgres-host connection contention between
+    concurrent sibling sessions (DBConnection.ConnectionError /
+    concurrent-invocation guards in unrelated test-support modules), none
+    touching role_registry.ex, routers/identity.ex, or
+    role_registry_test.exs.

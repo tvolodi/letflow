@@ -270,3 +270,29 @@ history:
       pre-existing flake ISS-0766) all PASSED independently. queue_ref
       was null (filed directly, not via register_task), so no queue
       task to release.
+  - req: SCOPE-CHANGE
+    event: done
+    agent: DOC-UPDATER
+    at: "2026-09-21T05:58:34Z"
+    note: >
+      ISS-0768 (Letflow.Identity.RoleRegistry never threaded tenant-schema
+      prefix -- POST /roles always 500s, relation groups/tenant_role does
+      not exist) resolved on feature/WF03-ISS0768-20260921. RoleRegistry's
+      list_roles/upsert_role/do_upsert_role/insert_or_update_role now thread
+      opts :: [prefix: String.t()] through every Repo call, matching the
+      established Keyword.fetch!(opts, :prefix)-bound-once convention;
+      routers/identity.ex's GET/POST /roles handlers now pass
+      conn.assigns.scoped_opts through. REGRESSION FINDING: NOT a
+      regression -- broken since the module's introduction (commit
+      a1c4ab9b7d61c852c612ed03a51a64cbf52d1371, REQ-020); ELIXIR-DEV's
+      git log -p --follow -S"prefix" search returned zero hits across the
+      file's entire 2-commit history, independently corroborated by
+      SECURITY-REVIEWER's own re-run of the same command. Gated through
+      CODE-DESIGN-VALIDATOR PASS, SECURITY-REVIEWER PASS, REVIEWER PASS
+      (one rework each for design-doc scope and an opts[:prefix]-vs-bound-
+      variable idiom fix), TEST-DESIGNER's new cross-tenant-isolation
+      regression test, TEST-DESIGN-VALIDATOR PASS, and TEST-RUNNER PASS:
+      role_registry_test.exs 15/15 passed standalone including the new
+      ISS-0768 test by name; authoritative full-suite run 4484/4493 passed,
+      the 9 failures explicitly assessed as shared-Postgres-host connection
+      contention among concurrent sibling sessions, not regressions.

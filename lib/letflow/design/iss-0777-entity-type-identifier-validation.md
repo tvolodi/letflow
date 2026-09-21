@@ -277,41 +277,40 @@ Caller impact, verified:
 
 ### 4.3 `Letflow.Routers.PlatformMigrations.handle_start/1` (`platform_migrations.ex`)
 
-No change to `@start_schema`. Change the existing
+No change to `@start_schema`. The existing
 `case MigrationRollout.start_rollout(entity_type, attribute, column_spec) do` block
-(`platform_migrations.ex:120-124`) to add two new clauses **before** the existing
-catch-all `{:error, _reason} -> Response.internal_error(conn)`:
+(`platform_migrations.ex:120-124`) gains two new match clauses, both placed **before**
+the existing catch-all `{:error, _reason} -> Response.internal_error(conn)` clause (an
+`{:error, :invalid_entity_type}` / `{:error, :invalid_attribute}` tuple would otherwise
+fall into that catch-all and produce a 500 again, defeating the whole fix):
 
-```
-{:error, :invalid_entity_type} ->
-  Response.send_problem(conn, Validation.problem([
-    %FieldError{
-      field: "entity_type",
-      constraint: "identifier_format",
-      message: "entity_type must start with a lowercase letter and contain only " <>
-               "lowercase letters, digits, and underscores (max 64 characters)",
-      received: entity_type
-    }
-  ]))
+- When `start_rollout/3` returns `{:error, :invalid_entity_type}`: build one
+  `FieldError.t()` (`Letflow.Api.Validation.FieldError`, already `alias`ed by this
+  module's `Letflow.Api.Validation.FieldConstraint` neighbor — add `FieldError` to that
+  same `alias` group) with `field` set to the literal string `"entity_type"`,
+  `constraint` set to a short machine-readable atom-like string naming this class of
+  failure (e.g. `"identifier_format"` — TEST-DESIGNER/ELIXIR-DEV's exact spelling is not
+  load-bearing, but it must be stable and distinct from every other `constraint` value
+  `Letflow.Api.Validation` already emits, since Test 6.1-A asserts on it), `message` set
+  to a human-readable sentence stating the allowed shape (must communicate: starts with
+  a lowercase letter, only lowercase letters/digits/underscores after that, maximum 64
+  characters total — i.e. describe `DDL.valid_identifier?/1`'s rule in prose, not
+  restate the regex), and `received` set to the caller-supplied `entity_type` value
+  (so the client can see what it sent, same convention every other `FieldError` in this
+  codebase already follows). Pass that single-element list through the same
+  `Validation.problem/1` → `Response.send_problem/2` pair `handle_start/1`'s existing
+  `{:errors, field_errors} ->` branch already uses two lines above (line 115) — reuse,
+  do not reimplement that pairing.
+- When `start_rollout/3` returns `{:error, :invalid_attribute}`: identical shape, with
+  `field` set to `"attribute"` and `message` describing the same rule against
+  `attribute` instead of `entity_type`, `received` set to the caller-supplied
+  `attribute` value.
 
-{:error, :invalid_attribute} ->
-  Response.send_problem(conn, Validation.problem([
-    %FieldError{
-      field: "attribute",
-      constraint: "identifier_format",
-      message: "attribute must start with a lowercase letter and contain only " <>
-               "lowercase letters, digits, and underscores (max 64 characters)",
-      received: attribute
-    }
-  ]))
-```
-
-`alias Letflow.Api.Validation.FieldError` is added alongside the existing
-`Letflow.Api.Validation.FieldConstraint` alias (`platform_migrations.ex:67`).
 `Validation.problem/1` (`validation.ex:252-255`) already builds the RFC 9457 body with
-status 422 from a `[FieldError.t(), ...]` list — reused as-is, no change to that
-function. This keeps the error response shape identical to every other 422 this router
-(and every other router) already produces via the same schema-validation path, even
+status 422 from a non-empty `FieldError.t()` list — reused as-is, no change to that
+function or to `Letflow.Api.Validation` at all. This keeps the error response shape
+identical to every other 422 this router (and every other router) already produces via
+the same schema-validation path, even
 though this particular check does not run through `Validation.validate/2` itself.
 
 The existing `{:error, :column_spec_conflict} -> Response.conflict(conn, ...)` clause

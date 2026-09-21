@@ -1,0 +1,52 @@
+{
+  "handoff_id": "e1f2a3c4-0009-4000-8000-000000000771",
+  "run_id": "WF03-ISS0771-20260921",
+  "workflow_id": "WF-03",
+  "step": "09",
+  "from_agent": "ORCH",
+  "to_agent": "REVIEWER",
+  "file": "handoffs/WF03-ISS0771-20260921/step-09-reviewer-regate.json",
+  "created_at": "2026-09-21T08:35:00Z",
+  "started_at": null,
+  "completed_at": null,
+  "status": "PENDING",
+  "priority": "HIGH",
+  "context": {
+    "stage": "S6",
+    "requirement_ids": [],
+    "requirement_text": {},
+    "related_handoff_ids": ["e1f2a3c4-0008-4000-8000-000000000771"],
+    "artifacts_in": [
+      "lib/letflow/tenant_provisioning/migration_replay_boot.ex"
+    ],
+    "owned_modules": [
+      "lib/letflow/tenant_provisioning/migration_replay_boot.ex"
+    ]
+  },
+  "task": {
+    "description": "Re-gate on commit 63173958 (branch feature/WF03-ISS0771-20260921, SECURITY-REVIEWER already PASSED it at step-08/10ce0f01). This is a narrow rework fixing a real boot-crashing regression that slipped through your own earlier step-05 pass (which reviewed by reading the diff, not by booting the application). The fix adds child_spec/1 to Letflow.TenantProvisioning.MigrationReplayBoot: %{id: __MODULE__, start: {__MODULE__, :start_link, [init_arg]}, restart: :temporary, type: :worker}. Confirm this is idiomatic OTP (a plain map-form child spec is standard for a non-GenServer/Supervisor one-shot child; restart: :temporary is correct for a boot step that must never be restarted, matching the module's always-:ignore semantics), confirm no supervision-integrity issue, and confirm nothing else in the module drifted relative to what your step-05 pass already reviewed.",
+    "acceptance_criteria": [
+      "PASS or FAIL verdict",
+      "Confirms restart: :temporary is the correct choice given the module's documented one-shot/:ignore semantics (not :permanent or :transient)",
+      "Confirms via git diff that ONLY the child_spec/1 addition changed relative to what step-05 already reviewed",
+      "States whether an earlier boot-smoke-check step in WF-03 (before REVIEWER/SECURITY-REVIEWER) would be a worthwhile process improvement, per SECURITY-REVIEWER's step-08 process note -- your call, not binding on this gate's verdict"
+    ]
+  },
+  "result": {
+    "status": "PENDING",
+    "summary": null,
+    "artifacts_out": [],
+    "issues": [],
+    "git_evidence": {
+      "branch_name": "feature/WF03-ISS0771-20260921",
+      "commit_sha_list": [],
+      "remote_branch": null,
+      "push_status": null,
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": null
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

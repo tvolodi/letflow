@@ -1,0 +1,150 @@
+report_id: report-20260921-WF02-REQ372-20260921
+run_id: WF02-REQ372-20260921
+workflow_id: WF-02
+step: "04"
+agent: TEST-RUNNER
+date: 2026-09-21
+branch: feature/WF02-REQ372-20260921
+worktree: c:\Users\tvolo\dev\ai-dala\letflow
+
+verdict: BLOCKED
+
+toolchain: >
+  Local Elixir/mix toolchain available and used directly (no Docker fallback
+  needed). Postgres already running via docker compose (letflow-postgres-1,
+  port 5462, the project default -- no LETFLOW_DB_PORT override present in
+  .env).
+
+partition_source: "N=16, source: nproc (host has 16 logical CPUs)"
+
+attempts:
+  - n: 1
+    command: "scripts/test_parallel.sh (N=16, default)"
+    time: "~13:37 UTC"
+    result: "combined: 229 tests, 0 properties, 5 failures (224/229 passed)"
+    note: >
+      Only partition 13 of 16 produced a Result: line. The other 15
+      partitions crashed with 0 tests, 0 properties, exit 1 -- their logs
+      show repeated `Postgrex.Error 53300 too_many_connections` during
+      test_helper.exs boot (TenantSchemaReaper.sweep_orphans/2 and
+      TenantTemplate.ensure_template!/0 both aborted on
+      DBConnection.ConnectionError before any test module even compiled).
+      Partition 13's 5 failures are all in Letflow.Plugs.AuthPipelineTest
+      and are themselves `** (DBConnection.ConnectionError) connection not
+      available and request was dropped from queue after 4000ms` --
+      confirmed by reading the actual stacktraces (not inferred from
+      counts), e.g. failure 1 at test/letflow/plugs/auth_pipeline_test.exs:178,
+      raised from test/support/bpm_default_realm_displacement.ex:146 while
+      acquiring a Postgres advisory lock. None of the 5 failures are
+      assertion/logic failures.
+    NOT_authoritative: true
+
+  - n: 2
+    command: "TEST_PARALLEL_N=4 scripts/test_parallel.sh"
+    time: "~13:45 UTC"
+    result: "aborted at ecto.create for partition 2, exit 1, before any partition launched"
+    note: >
+      Reduced footprint (TEST_POOL_SIZE=20 for 4 partitions) did not help --
+      `mix ecto.create` itself failed with
+      `** (Mix) The database for Letflow.Repo couldn't be created: killed`,
+      preceded by repeated too_many_connections errors on db_conn_1.
+
+  - n: 3 (diagnostic, not full suite)
+    command: "mix test test/letflow/definitions/semantic_validation_test.exs test/letflow/definitions/semantic_validation_activation_test.exs"
+    time: "~13:48 UTC"
+    result: "could not even reach ecto.create -- same too_many_connections failure"
+    note: >
+      Attempted to get a low-footprint direct read on REQ-372's own new
+      tests specifically, since they did not appear in attempt 1's only
+      completed partition (grep -c 'semantic_validation' on partition 13's
+      log returned 0). Even a single, unpartitioned mix invocation could
+      not obtain a Postgres connection at all.
+
+  - n: 4
+    command: "scripts/test_parallel.sh (N=16, default)"
+    time: "~13:52 UTC"
+    result: "aborted at ecto.create for partition 3, exit 1, before any partition launched"
+    note: "Same failure class as attempt 2, ~15 minutes later."
+
+pg_saturation_evidence: >
+  Between attempts, polled `docker exec letflow-postgres-1 psql -U postgres
+  -c "SELECT count(*) FROM pg_stat_activity"` roughly every 15-25s across a
+  ~20 minute span (13:37-13:56 UTC). Every single poll failed with
+  `FATAL 53300 sorry, too many clients already` -- even the superuser
+  connection used purely to inspect activity could not get in, meaning
+  Postgres was continuously at its connection ceiling for the entire
+  investigation window, not intermittently contended.
+  `docker logs letflow-postgres-1 --tail 50` during this window shows a
+  steady stream of real application traffic against tenant_* schemas
+  (timers, events, entity_receipt, entity_column_promotions) interleaved
+  with the too_many_connections FATALs -- this is an actively running
+  sibling test/app workload, not idle/leaked connections.
+  `Get-Process | Where beam/erl` showed the same 3 erl PIDs (28488, 30060,
+  46888) alive and unchanged, with start times (13:15:27, 13:15:47,
+  13:31:28) that all PREDATE this run's own first attempt (13:37) --
+  confirming these are sibling-session processes, not artifacts of this
+  run's own (fully exited) test_parallel.sh invocations.
+
+structural_attribution:
+  - finding: >
+      15/16 partitions in attempt 1, and the sole partition in attempts
+      2/4, crashed during ecto.create/test_helper.exs boot with 0 tests
+      executed -- pure connection-pool exhaustion before any of this
+      branch's code or tests were reached. No file-scope overlap is
+      possible for a failure that occurs before compilation of any test
+      module.
+  - finding: >
+      Partition 13's 5 failures (Letflow.Plugs.AuthPipelineTest) are all
+      DBConnection.ConnectionError, not assertion failures. `git diff
+      main...HEAD --stat` for this branch touches only
+      lib/letflow/definitions.ex, lib/letflow/definitions/graph.ex,
+      lib/letflow/definitions/semantic_validation.ex,
+      test/letflow/definitions/semantic_validation_test.exs,
+      test/letflow/definitions/semantic_validation_activation_test.exs,
+      test/specs/REQ-372.md, docs/, and handoff/status files -- it does
+      not touch test/letflow/plugs/auth_pipeline_test.exs,
+      test/support/bpm_default_realm_displacement.ex, or any connection
+      pool/sandbox configuration. These 5 failures structurally clear as
+      unrelated to this branch; they are the same shared-Postgres
+      contention class documented in this run's own handoff task
+      description and in prior reports (e.g.
+      test/reports/report-20260921-WF03-ISS0768-20260921.yaml's attempts
+      1 and 3).
+  - finding: >
+      REQ-372's own new test files (semantic_validation_test.exs,
+      semantic_validation_activation_test.exs) never executed in any
+      attempt -- they did not appear in partition 13's log (grep -c
+      returned 0), and no other partition produced a Result: line. This
+      run therefore provides NO first-hand pass/fail evidence for
+      REQ-372's own acceptance-criteria tests, which is why this report
+      cannot be PASS despite the observed failures themselves clearing
+      structurally.
+
+conclusion: >
+  BLOCKED, not PASS or FAIL. Every attempt (4 total, spanning ~20 minutes)
+  was defeated by sustained Postgres connection-pool exhaustion (100/100
+  connections held continuously) caused by an active sibling session's
+  workload sharing port 5462, matching exactly the contention risk this
+  run's own handoff task description anticipated. Unlike a transient
+  spike, this did not clear across ~20 minutes of polling and 4 separate
+  attempts at varying footprints (N=16, N=4, single-file, N=16 again), and
+  the responsible processes (3 erl PIDs, unchanged throughout) predate
+  this run entirely. Where tests DID execute (attempt 1's partition 13),
+  every failure was itself a connection-pool error, not a logic/assertion
+  failure, and structurally clears as unrelated per git diff file-scope
+  (does not touch auth_pipeline_test.exs or the sandbox/pool config this
+  branch never changed). However, REQ-372's own new tests never executed
+  in any attempt, so this report cannot respond PASS -- there is no
+  first-hand evidence to speculate from, and "should pass" is exactly the
+  kind of claim this role is forbidden to make. No code or test change is
+  indicated on this branch's own merits; the blocker is host-level DB
+  contention outside this branch's diff.
+
+recommendation: >
+  Route to ORCH to either (a) coordinate with whichever sibling session
+  owns PIDs 28488/30060/46888 (possibly the uat-pilot gui-review-continuation
+  worktree, given the untracked web/tests/e2e/.pipeline-state/ files seen in
+  this run's git status) so it releases connections or finishes, then
+  redispatch TEST-RUNNER for a clean run, or (b) wait for natural
+  completion and retry. This is not a rework of REQ-372's implementation or
+  tests -- nothing in this branch's diff is implicated.

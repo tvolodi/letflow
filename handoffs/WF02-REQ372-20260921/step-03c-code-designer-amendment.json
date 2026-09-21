@@ -8,12 +8,14 @@
   "file": "handoffs/WF02-REQ372-20260921/step-03c-code-designer-amendment.json",
   "created_at": "2026-09-21T08:01:19Z",
   "started_at": "2026-09-21T08:01:19Z",
-  "completed_at": null,
-  "status": "PENDING",
+  "completed_at": "2026-09-21T08:03:20Z",
+  "status": "COMPLETED",
   "priority": "NORMAL",
   "context": {
     "stage": "S8",
-    "requirement_ids": ["REQ-372"],
+    "requirement_ids": [
+      "REQ-372"
+    ],
     "requirement_text": {
       "REQ-372": "See handoffs/WF02-REQ372-20260921/step-01-code-designer.json's context.requirement_text.REQ-372 for the full requirement text, copied verbatim from docs/requirements.yaml."
     },
@@ -44,8 +46,10 @@
   },
   "result": {
     "status": "PASS",
-    "summary": "",
-    "artifacts_out": [],
+    "summary": "Amendment added as new S2.5 in lib/letflow/design/req372-semantic-decision-rule-validation.md. Decision: SemanticValidation.validate/2 skips both violation classes entirely and returns %{valid: true, violations: []} unconditionally when declared_fields == %{} (zero VariableSchema rows registered for the definition) -- option (a) from the triggering handoff. Reasoning: a process that never registered a schema has no schema to be wrong against; REQ-372 validates an existing schema, it does not mandate one exist; retroactively backfilling ~31 pre-existing fixtures (and real tenant data) is out of this requirement scope; the type-compatibility check already degrades to zero violations in this case via its existing :unresolvable exemption, so the only real gap was the field-existence check, now closed by this guard. The guard lives inside validate/2 itself (checked before any edge is walked), not at either call site, so both activate/2 (S3.2) and validate_definition_graph/2 (S3.3) get it uniformly by construction -- no call-site change needed. Compatibility with all 10 original ACs confirmed in writing in S2.5.4: AC1-AC6 all require a non-empty declared_fields by construction of their own test scenarios (a violation needs a declared set to be absent-from or type-incompatible-against), so the new empty-map branch is never reached by their test cases; AC7-AC9 are unrelated to declared_fields; AC10 is exactly what this amendment unblocks. No implementation code was written -- only @spec-level signature/behavior description was amended for validate/2 (unchanged @spec, one new documented behavior branch) and field_existence_violations/3 (signature and per-call behavior unchanged; amendment only prevents it from ever being invoked with an empty map).",
+    "artifacts_out": [
+      "lib/letflow/design/req372-semantic-decision-rule-validation.md"
+    ],
     "issues": [],
     "git_evidence": {
       "branch_name": null,
@@ -55,7 +59,7 @@
       "pr_url": null,
       "pr_create_error": null
     },
-    "next_action": ""
+    "next_action": "Route to CODE-DESIGN-VALIDATOR for amendment regate"
   },
   "rework_count": 0,
   "max_rework": 3

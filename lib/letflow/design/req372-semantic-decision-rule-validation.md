@@ -354,6 +354,180 @@ top-level check function, composed by the caller (§3), the same way `validate_g
 functions already composed by `create/2`/`validate_definition_graph/2` rather than one
 calling another.
 
+## 2.5. AMENDMENT (2026-09-21): the zero-declared-fields exemption
+
+**Trigger**: TEST-DESIGNER's Step 3 handoff
+(`handoffs/WF02-REQ372-20260921/step-03-test-designer.json`) ran the full
+`mix letflow.check.test` suite against §3.2's `activate/2` wiring exactly as this design
+specified it, and found 31 of 32 total suite failures share one root cause: `activate/2`'s
+new hard gate (`run_semantic_validation/2` → `SemanticValidation.validate/2`) flags
+**every** `{:var, path}` reference in a gateway condition as `:undeclared_variable_reference`
+whenever a definition's `declared_fields` is the empty map — because
+`Map.has_key?/2` against `%{}` is `false` for any key. Since `VariableSchema` registration
+is optional today (§0 point 2 of this design — nothing in the pre-REQ-372 codebase ever
+required it) and the overwhelming majority of pre-existing process-definition fixtures
+across the suite (`test/letflow/simulation/req207_vortex_test.exs`,
+`req208_meridian_test.exs`, `req206_swiftroute_test.exs`,
+`test/letflow/scheduler_req188_test.exs`, `test/letflow/engine_test.exs`, and many more)
+never registered a `VariableSchema` row at all, `activate/2` as designed in §3.2 blocks
+activation for essentially every pre-existing definition with zero declared fields. This
+was not covered by OQ-1 through OQ-6 above — those flag deliberate scope narrowings within
+"a schema was declared, is it being checked correctly"; none of them anticipated "no
+schema was ever declared for this process at all." This is a real gap in this design, not
+a defect in the implementation or the tests, and is amended here rather than left for
+ELIXIR-DEV to guess at.
+
+### 2.5.1 Decision
+
+**When `declared_fields == %{}` (the definition has zero `variable_schemas` rows —
+`VariableSchema.fetch_schemas/3` returned an empty map), `SemanticValidation.validate/2`
+skips both violation classes entirely and returns `%{valid: true, violations: []}`
+unconditionally, without walking any edge.** This is decision (a) of the two the
+triggering handoff posed, not some third alternative — deliberately, for the reasons
+below.
+
+### 2.5.2 Reasoning
+
+  * **A process that never registered a schema has no schema to validate against.**
+    §2.2's field-existence check and §2.3's type-compatibility check both exist to catch
+    an authored reference or comparison that is *wrong relative to a schema the author
+    actually declared* — a typo against a real declared field, or a comparison between
+    two real declared types. When zero fields are declared, there is no author intent to
+    be wrong *against*: every `{:var, path}` reference is "undeclared" in exactly the
+    same trivial, content-free way, and every comparison operand involving a variable
+    resolves to `:unresolvable` (already exempt per §2.3's own operand-family rules) —
+    the type-compatibility check already degrades gracefully to zero violations in this
+    case by construction (§2.3's `:unresolvable` exemption), so this amendment's only
+    real effect is on the field-existence check, which had no equivalent exemption.
+  * **Treating "no schema declared" as "every reference is a typo" inverts REQ-372's own
+    intent.** The requirement's source UAT scenario
+    (`test/fixtures/uat/scenarios/platform/definition-type-error-blocked.yaml`) is about
+    an author who **did** declare fields and **did** make a mistake relative to that
+    declaration (`cusotmer_name` vs a declared `customer_name`). It says nothing about
+    a process that never adopted `VariableSchema` at all — REQ-372 does not, anywhere in
+    its acceptance criteria, assert that `VariableSchema` registration becomes mandatory
+    as a side effect of this requirement. Making it mandatory-by-implication (every
+    unregistered process now fails to activate) is new, unrequested behavior this
+    requirement's own scope does not authorize — the same class of problem §3.1 already
+    flagged for `create/2`/`update/2` (don't silently add a gate stricter than what was
+    asked).
+  * **Retroactively registering a `VariableSchema` for ~31 pre-existing fixtures is out of
+    this requirement's scope.** `VariableSchema` registration is, per §0 point 2, a
+    separate, optional mechanism with its own lifecycle; REQ-372 is scoped to *validating*
+    an existing schema when one exists, not to *mandating* one exist. Forcing every
+    pre-existing definition (fixture or real tenant data) to backfill a full schema before
+    it can ever activate again is a materially different, much larger requirement than
+    REQ-372 as written and validated (REQ-VALIDATOR gated the original requirement text,
+    not this implication) — it would also silently break real, already-activated tenant
+    workflows outside the test suite the same way it breaks fixtures.
+  * **This is the narrowest fix that satisfies the triggering handoff's own AC4**
+    ("the fix, once implemented, must not require any of the ~31 pre-existing failing
+    fixtures to be individually modified — the amendment must work by construction").
+    Skipping both checks when `declared_fields == %{}` is a single guard at the top of
+    `validate/2`, touches no fixture, and requires no seeding of `variable_schemas` rows
+    anywhere.
+
+### 2.5.3 Where the exemption lives
+
+The guard is added inside `SemanticValidation.validate/2` itself — **not** at either
+call site (`activate/2`'s `run_semantic_validation/2` helper, §3.2, or
+`validate_definition_graph/2`, §3.3) — so both call sites get the exemption uniformly by
+construction, with no risk of one caller remembering the special case and the other
+forgetting it. `validate/2`'s own `@spec` is unchanged in shape
+(`Graph.t(), declared_fields() :: Graph.result()`); only its documented behavior gains one
+new sentence, first in its body's logical order (checked before any edge is walked, not
+folded into `edge_violations/2`'s per-edge logic — a whole-graph decision, not a per-edge
+one):
+
+```
+@spec validate(graph :: Graph.t(), declared_fields :: declared_fields()) :: Graph.result()
+```
+Behavior amendment: if `declared_fields == %{}`, returns `%{valid: true, violations: []}`
+immediately — no node/edge is walked, `field_existence_violations/3` and
+`type_compatibility_violations/3` (§1.2/§2.2/§2.3) are not invoked at all for this call.
+For any `declared_fields` with at least one entry (`map_size(declared_fields) > 0`),
+behavior is **exactly** as specified in §1.2/§2.2/§2.3 above, unchanged — including the
+case where a graph references variables that are *all* absent from a *non-empty*
+`declared_fields` (that remains a real violation; the exemption is keyed on "zero fields
+declared for this process at all," not on "this particular reference wasn't found").
+
+`field_existence_violations/3`'s own signature and per-call behavior are **unchanged** —
+it still assumes a non-empty-or-empty `declared_fields` map and still flags every
+undeclared root segment exactly as §2.2 specifies; the amendment prevents it from ever
+being *called* with an empty map, rather than changing what it does when given one. No
+other function in this module changes.
+
+### 2.5.4 Compatibility with the 10 original acceptance criteria — confirmed
+
+All 10 of REQ-372's original acceptance criteria (restated in the triggering handoff's
+own `task.acceptance_criteria` and mapped in §6 above) are re-checked against this
+amendment:
+
+  * **AC1** (undeclared-variable violation names field + step/edge) — the example this AC
+    is proven against necessarily involves a definition that **did** declare fields
+    (there must be a "declared VariableSchema fields" set for a reference to be *absent
+    from* — the AC's own wording). `declared_fields` is therefore non-empty in every AC1
+    test case; §2.5.3's exemption does not trigger; behavior unchanged. **Compatible.**
+  * **AC2** (typo-suggestion via real string distance) — same reasoning as AC1: the
+    one-typo example (`cusotmer_name` vs declared `customer_name`) requires `customer_name`
+    to be declared, so `declared_fields` is non-empty. **Compatible.**
+  * **AC3** (non-comparable type-pair violation, numeric vs text) — requires both operands
+    to resolve to a real declared type family, which requires at least the compared
+    field(s) to be declared; `declared_fields` is non-empty in every AC3 test case.
+    **Compatible.**
+  * **AC4** (both violation classes from one call) — by construction requires a definition
+    with at least one declared field for the type-compatibility half to be triggerable at
+    all (§2.3's `:unresolvable` exemption means an operand referencing an undeclared field
+    can never itself produce a type-compatibility violation); `declared_fields` is
+    non-empty in every AC4 test case. **Compatible.**
+  * **AC5** (zero violations validates cleanly, including after both AC4 violations are
+    fixed in the same test) — this AC's own fixture starts as AC4's (non-empty
+    `declared_fields`) and stays non-empty through the fix; the "clean" result it asserts
+    was already `%{valid: true, violations: []}` for a non-empty-`declared_fields` graph
+    with no actual violations, which is unaffected by a guard that only fires on the empty
+    case. **Compatible** — and this amendment adds a **second**, independent way to reach
+    `valid: true` (the empty-`declared_fields` short-circuit) without touching the way
+    AC5's own non-empty-`declared_fields` case reaches it.
+  * **AC6** (re-runs in full at `activate/2`, reflects fresh state, not cached) — this AC's
+    own test mutates `variable_schemas` between two calls and asserts the second call
+    reflects the fresh state; both states in that test have **at least the mutated field
+    itself** declared (the test changes a field's presence/type, it does not empty the
+    schema down to zero rows), so `declared_fields` is non-empty on both calls in every
+    AC6 test case. **Compatible** — and if a *future* test exercises exactly "was clean and
+    non-empty, then every `variable_schemas` row was deleted between calls," the fresh
+    empty-map short-circuit still correctly reflects the fresh (now-empty) state on the
+    second call, same "no cache" guarantee, just resolving to the exemption's own new
+    branch instead of §2.2/§2.3's branch. Still re-runs in full, still reflects fresh
+    state — AC6's actual guarantee. **Compatible.**
+  * **AC7** (HUMAN_TASK scope stated explicitly) — untouched by this amendment; §4's
+    decision and reasoning are unchanged. **Compatible.**
+  * **AC8** (`expr.ex` unmodified) — this amendment touches no `Expr` code, adds no
+    token/operator/builtin; it is a single guard inside `SemanticValidation.validate/2`
+    that runs *before* any `Expr` call. **Compatible.**
+  * **AC9** (no `web/` file modified) — this amendment is confined to
+    `lib/letflow/design/req372-semantic-decision-rule-validation.md` (this file); no
+    `web/` path is touched. **Compatible.**
+  * **AC10** (`mix letflow.check` passes) — this is exactly the AC this amendment exists
+    to unblock: per the triggering handoff's own diagnosis, 31 of 32 current failures are
+    this single root cause, and the ~31 pre-existing fixtures this amendment is designed
+    not to require touching (§2.5.2's fourth point) are the ones currently failing
+    AC10. Once ELIXIR-DEV implements §2.5.3's guard, those 31 failures resolve without any
+    fixture edit. **Compatible by construction — this is the fix.**
+
+No original acceptance criterion is weakened, narrowed, or made harder to satisfy by this
+amendment: AC1–AC6 all describe definitions with real, non-empty declared fields, so the
+new empty-`declared_fields` branch is simply never reached by any of their test cases, and
+AC7–AC9 are unrelated to `declared_fields` at all.
+
+### 2.5.5 Interaction with §3's call-site wiring
+
+No change to §3.1, §3.2, or §3.3 is required. §3.2's `run_semantic_validation/2` and
+§3.3's `validate_definition_graph/2` both already call `SemanticValidation.validate/2`
+once per invocation with whatever `declared_fields` map `VariableSchema.fetch_schemas/3`
+freshly returns (possibly `%{}`); §2.5.3's guard lives entirely inside `validate/2` and
+requires no caller-side change. AC6's "re-runs in full, never cached" guarantee (§3.2) is
+unaffected — see §2.5.4's AC6 analysis above.
+
 ## 3. Call-site wiring (design, not implementation — exact changes ELIXIR-DEV makes)
 
 Both call sites below live in `lib/letflow/definitions.ex` — **not** listed in this
@@ -586,4 +760,4 @@ separately, not solved here.**
 | 7. HUMAN_TASK scope stated explicitly with reasoning | §4 |
 | 8. `expr.ex` unmodified | §0/§1/§2 — only `translate_cel_to_expr/1` and `parse_strict/1`, both already-public, are called; no grammar/token/operator/builtin change proposed anywhere in this design |
 | 9. no `web/` file modified | This entire design is backend-only (§ intro); no `web/` path appears anywhere above |
-| 10. `mix letflow.check` passes | Implementation-phase obligation (ELIXIR-DEV/TEST-RUNNER), not a design-time artifact — noted so the mapping table is complete |
+| 10. `mix letflow.check` passes | Implementation-phase obligation (ELIXIR-DEV/TEST-RUNNER), not a design-time artifact — noted so the mapping table is complete; §2.5 amendment (2026-09-21) is what makes this achievable without editing ~31 pre-existing fixtures |

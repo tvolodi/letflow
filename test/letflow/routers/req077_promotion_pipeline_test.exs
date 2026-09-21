@@ -431,7 +431,9 @@ defmodule Letflow.Routers.Req077PromotionPipelineTest do
 
       refute Repo.get_by(
                ProcessDefinition,
-               [name: process_key, status: :active, version: "2.0.0"], prefix: target.schema_name)
+               [name: process_key, status: :active, version: "2.0.0"],
+               prefix: target.schema_name
+             )
 
       assert Repo.aggregate(
                from(r in PromotionAssertionRun, where: r.review_id == ^review_id),
@@ -468,7 +470,9 @@ defmodule Letflow.Routers.Req077PromotionPipelineTest do
 
       refute Repo.get_by(
                ProcessDefinition,
-               [name: process_key, status: :active, version: "2.0.0"], prefix: target.schema_name)
+               [name: process_key, status: :active, version: "2.0.0"],
+               prefix: target.schema_name
+             )
     end
 
     test "409 :assertion_run_failed when the latest matching-digest, completed assertion run recorded failing assertions" do
@@ -497,7 +501,9 @@ defmodule Letflow.Routers.Req077PromotionPipelineTest do
 
       refute Repo.get_by(
                ProcessDefinition,
-               [name: process_key, status: :active, version: "2.0.0"], prefix: target.schema_name)
+               [name: process_key, status: :active, version: "2.0.0"],
+               prefix: target.schema_name
+             )
     end
   end
 
@@ -550,7 +556,9 @@ defmodule Letflow.Routers.Req077PromotionPipelineTest do
 
       refute Repo.get_by(
                ProcessDefinition,
-               [name: process_key, status: :active, version: "2.0.0"], prefix: target.schema_name)
+               [name: process_key, status: :active, version: "2.0.0"],
+               prefix: target.schema_name
+             )
     end
 
     test "a status: :teardown_failed run with assertions_failed == 0 is still accepted (no regression to status == :passed-only)" do

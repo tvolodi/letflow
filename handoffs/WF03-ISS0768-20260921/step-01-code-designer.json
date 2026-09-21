@@ -1,0 +1,60 @@
+{
+  "handoff_id": "d1a2b3c4-0001-4000-8000-000000000768",
+  "run_id": "WF03-ISS0768-20260921",
+  "workflow_id": "WF-03",
+  "step": "01",
+  "from_agent": "ORCH",
+  "to_agent": "CODE-DESIGNER",
+  "file": "handoffs/WF03-ISS0768-20260921/step-01-code-designer.json",
+  "created_at": "2026-09-21T03:15:00Z",
+  "started_at": "2026-09-21T03:15:00Z",
+  "completed_at": null,
+  "status": "PENDING",
+  "priority": "HIGH",
+  "context": {
+    "stage": "S4",
+    "requirement_ids": [],
+    "requirement_text": {},
+    "related_handoff_ids": ["d1a2b3c4-0000-4000-8000-000000000768"],
+    "artifacts_in": [
+      "docs/issues/ISS-0768.yaml",
+      "lib/letflow/identity/role_registry.ex",
+      "lib/letflow/routers/identity.ex",
+      "lib/letflow/identity.ex",
+      "lib/letflow/plugs/auth_pipeline.ex"
+    ],
+    "owned_modules": [
+      "lib/letflow/identity/role_registry.ex",
+      "lib/letflow/routers/identity.ex"
+    ]
+  },
+  "task": {
+    "description": "ISS-0768 is a BLOCKER, root cause already established by ORCH's own direct source read (see docs/issues/ISS-0768.yaml in full -- no ISSUE-FIXER dispatch needed): lib/letflow/identity/role_registry.ex never threads opts :: [prefix: String.t()] through any of its Repo calls, so it always queries the default public schema instead of the caller's tenant schema, and POST/GET /roles 500 for every tenant on every deployment. Produce a design artefact enumerating the exact fix -- interfaces and call sites only, no implementation code. This module has ZERO prefix: usage today, unlike lib/letflow/identity.ex's established opts :: [prefix: String.t()] convention (see that module's moduledoc, and lib/letflow/plugs/auth_pipeline.ex for a correct existing usage pattern) -- so do not assume a partial migration; enumerate every affected site from scratch. Cover: (1) role_registry.ex has three public functions that touch Repo -- list_roles/0, upsert_role/2, resolve_role_in_tx/1 -- and two private helpers they delegate to (do_upsert_role/2, insert_or_update_role/2); design the new @spec for each public function taking opts :: [prefix: String.t()] (no default, matching identity.ex's convention), and state exactly which Repo call in each function/helper (Repo.all, Repo.get_by, Repo.get, Repo.transaction, Repo.insert) gets prefix: opts[:prefix] added and how the opts thread through the private helpers and the Repo.transaction closure. (2) routers/identity.ex's handle_list_roles/1 and handle_upsert_role/1 currently call RoleRegistry.list_roles() and RoleRegistry.upsert_role(name, group_id) with no opts at all -- design the call-site change to pass conn.assigns.scoped_opts (or scoped_prefix derived the same way every other route in this module already does -- see handle_create/2, handle_list/2 etc for the established pattern) through to both functions, and update handle_list_roles/handle_upsert_role's own signatures to accept conn (they currently only take conn already, verify by reading, but do not pass opts at all internally) -- read the file yourself for the exact current call shape rather than trusting this description's paraphrase. (3) resolve_role_in_tx/1's own moduledoc says it is called from inside a caller's own Repo.transaction (a future S3 applyTransition) with no repo/connection argument -- decide and state explicitly whether this function also needs an opts param for this fix's scope (no current caller exists in the codebase today per a grep, but the moduledoc implies a future one) and give REVIEWER-checkable reasoning either way. (4) State what git blame/log investigation ELIXIR-DEV must run to answer ISS-0768's 'regression vs always-broken' acceptance criterion (e.g. git log -p --follow -- lib/letflow/identity/role_registry.ex, checking whether any prior version ever threaded opts) -- do not answer the regression question yourself, just specify the exact commands and what evidence would decide it, since ELIXIR-DEV is the implementer who must record the finding. Write the design artefact to lib/letflow/design/ following this project's existing naming convention (see lib/letflow/design/req073-identity-user-routes.md and req074-identity-group-routes.md for the two nearest siblings in the same router module). Branch feature/WF03-ISS0768-20260921 is already checked out in this worktree (c:\\Users\\tvolo\\dev\\ai-dala\\letflow-wf03-iss0768) -- work there. Hard rule, no exceptions: never push directly to main -- every change lands via branch -> PR -> CI green -> merge, pre-authorized under humanless operation per docs/migration/decisions/0004-humanless-pipeline.md, but the branch/PR/merge discipline itself is never skippable. Commit your design doc and this handoff file (status flipped to COMPLETED) to the current branch when done; do not push to main directly.",
+    "acceptance_criteria": [
+      "Design artefact created under lib/letflow/design/ enumerating every public function in role_registry.ex that needs opts :: [prefix: String.t()], with its new @spec",
+      "Every Repo call site inside role_registry.ex (Repo.all, Repo.get_by, Repo.get, Repo.transaction, Repo.insert) is named individually with the exact prefix: threading change",
+      "Call-site changes to lib/letflow/routers/identity.ex's handle_list_roles and handle_upsert_role are specified precisely, matching the router's own established scoped_opts/scoped_prefix pattern",
+      "resolve_role_in_tx/1 is explicitly addressed (in-scope with opts, or explicitly out-of-scope with stated reasoning) -- not silently skipped",
+      "Design states the exact git commands ELIXIR-DEV must run to determine regression-vs-always-broken, and what evidence would answer it",
+      "No implementation code (.ex function bodies) in the design doc -- signatures and prose only, matching CODE-DESIGN-VALIDATOR's existing gate check",
+      "Design doc committed to feature/WF03-ISS0768-20260921 in this worktree"
+    ]
+  },
+  "result": {
+    "status": "",
+    "summary": "",
+    "artifacts_out": [],
+    "issues": [],
+    "git_evidence": {
+      "branch_name": "feature/WF03-ISS0768-20260921",
+      "commit_sha_list": [],
+      "remote_branch": "origin/feature/WF03-ISS0768-20260921",
+      "push_status": "skipped",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": ""
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

@@ -178,11 +178,152 @@ defmodule Letflow.Definitions.PromotionReviewStore do
 
   import Ecto.Query
 
+  alias Letflow.Api.Pagination
   alias Letflow.Definitions.PromotionDigest
   alias Letflow.Definitions.PromotionPlan
   alias Letflow.Definitions.PromotionReview
   alias Letflow.Repo
   alias Letflow.TenantProvisioning
+
+  # New, distinct cursor-endpoint prefix (REQ-397 design §3.3) -- does not
+  # collide with "PE:" (this router's own R11 platform-events cursor), "DL:"
+  # (Definitions.list_paginated/2), or "A:"/"T:"/"U:" (Audit/Tenants/
+  # Identity, per R11's own comment citing them). decode_cursor/4's prefix
+  # check is what makes a cursor minted by one endpoint rejected by every
+  # other endpoint's decode call.
+  @promotion_reviews_list_cursor_prefix "PR:"
+
+  @type status :: PromotionReview.status()
+
+  @type list_reviews_filters :: %{
+          optional(:status) => [status()] | nil,
+          optional(:def_id) => String.t() | nil,
+          optional(:def_type) => String.t() | nil,
+          optional(:cursor) => String.t() | nil,
+          required(:page_size) => pos_integer()
+        }
+
+  @type list_reviews_result :: %{items: [PromotionReview.t()], next_cursor: String.t() | nil}
+
+  @type list_reviews_error :: :invalid_cursor | :wrong_endpoint | :expired | :invalid_schema_name
+
+  @doc """
+  Cursor-paginated, filterable read of `promotion_reviews` rows, scoped to
+  `opts[:prefix]` (NEW, REQ-397 design §3). Reuses
+  `Letflow.Api.Pagination`'s opaque-cursor codec exactly as
+  `Letflow.Definitions.list_paginated/2` (`GET /definitions`) already does --
+  `page_size`/`cursor` query params, `{items, next_cursor}` envelope, no new
+  pagination shape.
+
+  Sorted `inserted_at` DESC, `id` DESC (keyset pagination) -- the same
+  compound tiebreak `Definitions.list_paginated/2`/`Letflow.Instances.list/2`/
+  `Letflow.Identity.list_users/2` all already use, giving deterministic
+  ordering for two rows with an identical `inserted_at`.
+
+  `status` filters to one or more of the six enum values (an `IN` condition,
+  no-op when `nil`); `def_id`/`def_type` are plain exact-match filters, each
+  a no-op when `nil`. Parsing/validating raw query-param strings into this
+  function's `filters` shape (including rejecting an unrecognised `status`
+  token) is the caller's (router's) responsibility -- this function assumes
+  already-validated input, the same split of responsibility
+  `list_paginated/2` uses for `page_size`.
+
+  Opens with the same `TenantProvisioning.tenant_id_for_schema_name/1` guard
+  `list_paginated/2`/`insert_review/2` already use (see design §3.2): a list
+  query with no `WHERE id = ...` clause against a schema whose
+  `promotion_reviews` table doesn't exist would otherwise raise a raw
+  `Postgrex.Error` instead of returning a typed error.
+  """
+  @spec list_reviews(filters :: list_reviews_filters(), opts :: [prefix: String.t()]) ::
+          {:ok, list_reviews_result()} | {:error, list_reviews_error()}
+  def list_reviews(filters, opts) when is_map(filters) and is_list(opts) do
+    prefix = Keyword.fetch!(opts, :prefix)
+    page_size = Map.fetch!(filters, :page_size)
+
+    with {:ok, _} <- TenantProvisioning.tenant_id_for_schema_name(prefix),
+         {:ok, cursor_seek} <- decode_list_reviews_cursor(Map.get(filters, :cursor)) do
+      query =
+        PromotionReview
+        |> where_review_status(Map.get(filters, :status))
+        |> where_review_def_id(Map.get(filters, :def_id))
+        |> where_review_def_type(Map.get(filters, :def_type))
+        |> filter_by_list_reviews_cursor(cursor_seek)
+        |> order_by([r], desc: r.inserted_at, desc: r.id)
+        |> limit(^(page_size + 1))
+
+      rows = Repo.all(query, prefix: prefix)
+      {page, next_cursor} = split_list_reviews_page(rows, page_size)
+
+      {:ok, %{items: page, next_cursor: next_cursor}}
+    end
+  end
+
+  # ---------------------------------------------------------------------
+  # list_reviews/2 helpers (design §3.3) -- mirror
+  # Definitions.list_paginated/2's own same-named-pattern helpers.
+  # ---------------------------------------------------------------------
+
+  defp where_review_status(query, nil), do: query
+
+  defp where_review_status(query, statuses) when is_list(statuses) do
+    where(query, [r], r.status in ^statuses)
+  end
+
+  defp where_review_def_id(query, nil), do: query
+  defp where_review_def_id(query, def_id), do: where(query, [r], r.def_id == ^def_id)
+
+  defp where_review_def_type(query, nil), do: query
+  defp where_review_def_type(query, def_type), do: where(query, [r], r.def_type == ^def_type)
+
+  defp filter_by_list_reviews_cursor(query, nil), do: query
+
+  defp filter_by_list_reviews_cursor(query, {id, inserted_at_us}) do
+    ts = DateTime.from_unix!(inserted_at_us, :microsecond)
+    from(r in query, where: {r.inserted_at, r.id} < {^ts, ^id})
+  end
+
+  defp decode_list_reviews_cursor(nil), do: {:ok, nil}
+
+  defp decode_list_reviews_cursor(raw) when is_binary(raw) do
+    case Pagination.decode_cursor(
+           raw,
+           @promotion_reviews_list_cursor_prefix,
+           byte_size(@promotion_reviews_list_cursor_prefix)
+         ) do
+      {:ok, %Pagination.Cursor{} = cursor} -> {:ok, decode_list_reviews_seek(cursor)}
+      {:error, :wrong_endpoint} -> {:error, :wrong_endpoint}
+      {:error, :expired} -> {:error, :expired}
+      {:error, _invalid_base64_or_invalid_cursor} -> {:error, :invalid_cursor}
+    end
+  end
+
+  # `inner` is "PR:<mint_time_us>:<id>:<inserted_at_us>" -- same field-slot
+  # idiom as Definitions.list_paginated/2's own "DL:<mint_time_us>:<id>:
+  # <created_at_us>" (design §3.3): the first slot after the prefix is
+  # always the mint-time timestamp decode_cursor/4's own expiry check reads,
+  # never the domain inserted_at value itself.
+  defp decode_list_reviews_seek(%Pagination.Cursor{inner: inner}) do
+    prefix_len = byte_size(@promotion_reviews_list_cursor_prefix)
+    rest = binary_part(inner, prefix_len, byte_size(inner) - prefix_len)
+    [_mint_time_us_str, id_str, inserted_at_us_str] = String.split(rest, ":", parts: 3)
+    {id_str, String.to_integer(inserted_at_us_str)}
+  end
+
+  defp split_list_reviews_page(rows, page_size) when length(rows) > page_size do
+    {page, [_extra_row]} = Enum.split(rows, page_size)
+    {page, build_list_reviews_next_cursor(List.last(page))}
+  end
+
+  defp split_list_reviews_page(rows, _page_size), do: {rows, nil}
+
+  defp build_list_reviews_next_cursor(%PromotionReview{id: id, inserted_at: inserted_at}) do
+    mint_time_us = System.system_time(:microsecond)
+    inserted_at_us = DateTime.to_unix(inserted_at, :microsecond)
+
+    @promotion_reviews_list_cursor_prefix
+    |> Pagination.build_raw_cursor_timestamp_key(mint_time_us, id, inserted_at_us)
+    |> Pagination.encode_cursor()
+  end
 
   @doc """
   Reads one `promotion_reviews` row by id, scoped to `opts[:prefix]` (NEW,

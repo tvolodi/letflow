@@ -1,0 +1,47 @@
+{
+  "handoff_id": "d1a2f3b4-0001-4a1e-9c11-9f0733000011",
+  "run_id": "WF03-ISS0733-20260921",
+  "workflow_id": "WF-03",
+  "step": "04b",
+  "from_agent": "ORCH",
+  "to_agent": "TEST-DESIGN-VALIDATOR",
+  "file": "handoffs/WF03-ISS0733-20260921/step-04b-test-design-validator.json",
+  "created_at": "2026-09-21T04:00:00Z",
+  "started_at": "2026-09-21T04:00:00Z",
+  "completed_at": null,
+  "status": "PENDING",
+  "priority": "HIGH",
+  "context": {
+    "stage": "S6",
+    "requirement_ids": [],
+    "requirement_text": {},
+    "source_text": {},
+    "related_handoff_ids": ["d1a2f3b4-0001-4a1e-9c11-9f0733000010"],
+    "artifacts_in": [
+      "handoffs/WF03-ISS0733-20260921/step-04-test-designer.json",
+      "lib/letflow/design/iss0733-promotion-audit-and-platform-events-read.md",
+      "test/letflow/definitions/promotion_test.exs",
+      "test/letflow/event_store/platform_events_test.exs",
+      "test/letflow/routers/promotions_test.exs"
+    ],
+    "owned_modules": []
+  },
+  "task": {
+    "description": "Hard gate on TEST-DESIGNER's step-04 output. Read handoffs/WF03-ISS0733-20260921/step-04-test-designer.json's result.summary in full for its claimed evidence (GAP A fail-then-pass via throwaway worktree; GAP B 3 mutants applied in-place and reverted). Do NOT accept the reported pass/fail counts as given -- independently APPLY at least one of the 3 reported GAP B mutants yourself (your choice which) in your own throwaway worktree or in-place-with-verified-revert, run the affected test file(s), and confirm you reproduce the same failing-test count TEST-DESIGNER reported. Also independently confirm every acceptance criterion in the gate-approved design doc's acceptance-criteria mapping section has a corresponding test. Verify test isolation: each new/modified test file must be self-sufficient (no hidden ordering dependency on another test file's setup).",
+    "acceptance_criteria": [
+      "At least one GAP B mutant independently re-applied and re-run by this validator, with the resulting failing-test count matching TEST-DESIGNER's reported count for that mutant",
+      "Every acceptance criterion in the design doc's mapping section confirmed to have real test coverage",
+      "Test isolation confirmed -- no cross-file ordering dependency",
+      "The re-applied mutant is verified cleanly reverted (git status --porcelain empty, and a green re-run) before this handoff completes"
+    ]
+  },
+  "result": {
+    "status": "PENDING",
+    "summary": "",
+    "artifacts_out": [],
+    "issues": [],
+    "next_action": ""
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

@@ -1,0 +1,62 @@
+{
+  "handoff_id": "d1a2b3c4-0006-4000-8000-000000000768",
+  "run_id": "WF03-ISS0768-20260921",
+  "workflow_id": "WF-03",
+  "step": "06",
+  "from_agent": "ORCH",
+  "to_agent": "TEST-DESIGNER",
+  "file": "handoffs/WF03-ISS0768-20260921/step-06-test-designer.json",
+  "created_at": "2026-09-21T04:33:29Z",
+  "started_at": "2026-09-21T04:33:29Z",
+  "completed_at": null,
+  "status": "PENDING",
+  "priority": "HIGH",
+  "context": {
+    "stage": "S4",
+    "requirement_ids": [],
+    "requirement_text": {},
+    "related_handoff_ids": [
+      "d1a2b3c4-0004-4000-8000-000000000768",
+      "d1a2b3c4-004b-4000-8000-000000000768",
+      "d1a2b3c4-0005-4000-8000-000000000768",
+      "d1a2b3c4-005b-4000-8000-000000000768"
+    ],
+    "artifacts_in": [
+      "docs/issues/ISS-0768.yaml",
+      "lib/letflow/identity/role_registry.ex",
+      "test/letflow/role_registry_test.exs",
+      "handoffs/WF03-ISS0768-20260921/step-04-security-reviewer.json"
+    ],
+    "owned_modules": [
+      "test/letflow/role_registry_test.exs"
+    ]
+  },
+  "task": {
+    "description": "ISS-0768's own acceptance criteria (docs/issues/ISS-0768.yaml) require 'a real test creates a role for one tenant and confirms it is queryable only in that tenants own schema (not visible via a different tenants prefix, not written to public)'. This is NOT satisfied by the current test suite: SECURITY-REVIEWER's step-04 pass (see its result.issues, a non-blocking addendum from an independent concurrent pass) confirmed by direct read that test/letflow/role_registry_test.exs's setup provisions exactly ONE tenant schema per test and every existing test only asserts within that single schema -- there is no cross-tenant-isolation assertion anywhere in the file today. Add ONE (or more, your judgement) new test(s) to test/letflow/role_registry_test.exs that: (1) provisions TWO separate tenant schemas in the same test (follow the file's existing setup/insert_group! pattern in its own `setup` block and the two-tenant pattern already used elsewhere in this codebase for the same purpose -- grep test/letflow/identity/ and test/letflow/routers/identity_test.exs for an existing two-tenant-in-one-test fixture pattern rather than inventing a new one); (2) creates a role via RoleRegistry.upsert_role(name, group_id, prefix: tenant_a_schema) under tenant A; (3) asserts RoleRegistry.list_roles(prefix: tenant_b_schema) does NOT include that role (queried under tenant B's own prefix, a genuinely different schema, not merely a different filter on the same data); (4) asserts a direct query against the `public` schema (Repo.all(TenantRole, prefix: \"public\") or equivalent) also does not contain the role -- proving it was never written to public at all, not just correctly scoped away from tenant B. Also add or extend a case confirming RoleRegistry.list_roles(prefix: tenant_a_schema) DOES see the role -- the positive half of the assertion, not just the negative one. Do not weaken, remove, or restructure any existing test in the file. This gates SECURITY-REVIEWER's own addendum finding, so treat 'not visible via a different tenant's prefix, not written to public' as two separate, both-required assertions, not one. Branch feature/WF03-ISS0768-20260921 is checked out in worktree c:\\Users\\tvolo\\dev\\ai-dala\\letflow-wf03-iss0768 -- work there, do not touch c:\\Users\\tvolo\\dev\\ai-dala\\letflow. Hard rule: never push directly to main. You write test code only -- do not modify lib/letflow/identity/role_registry.ex or lib/letflow/routers/identity.ex. Do not run the tests yourself (TEST-RUNNER's job at step-08); it is fine to sanity-check compilation if you can, but the authoritative run happens later.",
+    "acceptance_criteria": [
+      "New test(s) provision two genuinely separate tenant schemas within one test, not a single schema with two logical partitions",
+      "A role created under tenant A's prefix is asserted present when list_roles is called with tenant A's own prefix (positive case)",
+      "The same role is asserted ABSENT when list_roles is called with tenant B's prefix (negative case, cross-tenant)",
+      "The same role is asserted ABSENT from a direct public-schema query (negative case, not written to public)",
+      "No existing test in role_registry_test.exs weakened, removed, or restructured",
+      "Test file compiles (mix compile --warnings-as-errors on the test path, or equivalent sanity check) -- real output quoted if run"
+    ]
+  },
+  "result": {
+    "status": "",
+    "summary": "",
+    "artifacts_out": [],
+    "issues": [],
+    "git_evidence": {
+      "branch_name": "feature/WF03-ISS0768-20260921",
+      "commit_sha_list": [],
+      "remote_branch": "origin/feature/WF03-ISS0768-20260921",
+      "push_status": "skipped",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": ""
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

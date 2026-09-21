@@ -8,8 +8,8 @@
   "file": "handoffs/WF03-ISS0732-20260921/step-03f-reviewer-amendment.json",
   "created_at": "2026-09-21T04:15:51Z",
   "started_at": "2026-09-21T04:15:51Z",
-  "completed_at": null,
-  "status": "PENDING",
+  "completed_at": "2026-09-21T04:31:00Z",
+  "status": "COMPLETED",
   "priority": "HIGH",
   "context": {
     "stage": "S6",
@@ -36,19 +36,19 @@
     ]
   },
   "result": {
-    "status": "PENDING",
-    "summary": "",
-    "artifacts_out": [],
+    "status": "PASS",
+    "summary": "Verified commit 30919e94 against design §9 (lib/letflow/design/iss0732-promotion-apply-assertion-gate.md) by reading the real diff and both new test bodies directly, not by trusting the commit message. lib/letflow/definitions/promotion.ex: verify_rehearsed/2's new step (status not in [:running]) is inserted strictly between the digest-match check and the unchanged assertions_failed == 0 check, matching §9.2's ordering exactly; it is additive (assertions_failed == 0 is untouched, both conditions independently evaluated -- a :running row with assertions_failed == 0 is still rejected, a :teardown_failed row with assertions_failed == 0 is still accepted); the new reason :assertion_run_in_progress is a plain atom added to apply_review_error(), preserving INV-NEW-2's flat-atom shape; no change to get_latest_assertion_run/2's query, exactly as §9.7 requires. lib/letflow/routers/promotions.ex gets exactly one new render_apply/2 409 clause, same Response.conflict/2 shape as its three siblings, no new response-shape abstraction. test/letflow/routers/req077_promotion_pipeline_test.exs: both regression tests exist in the new 'ISS-0732 §9 amendment' describe block and were read directly -- (1) inserts an assertion run with status: :running (assertions_failed: 0), asserts 409, detail =~ \"has not finished yet\", review stays :approved, and the target ProcessDefinition row is absent (nothing written, per INV-NEW-3); (2) inserts a status: :teardown_failed run (assertions_failed: 0), asserts 200, applied status, and the definition promoted to active version 2.0.0 -- correctly proving the fix excludes only :running and does not narrow to status == :passed. Both tests share insert_assertion_run!/4, which fixes assertions_failed: 0 in both call sites and varies only status, so the two tests genuinely isolate the status axis from the assertions_failed axis rather than conflating them. No scope creep: no new schema/migration, no new abstraction/behaviour/macro, no change to get_latest_assertion_run/2 or its other callers (R3/R4), no decision-record conflict -- this is a narrow, additive fix confined to verify_rehearsed/2 and one router clause, exactly the shape §9's own text commits to. OQ-2 is CLOSED: not merely flagged as non-blocking (as my prior step-03c pass characterized it), but resolved in code, with a passing regression test proving the previously-possible false-pass (a :running row satisfying the gate because its assertions_failed defaults to 0) is now rejected, and a second test proving no new regression was introduced against the already-settled teardown_failed contract. I did not re-run mix test myself (ELIXIR-DEV's log reports 56 passed/0 failures for the targeted suite; independent re-execution is TEST-RUNNER's/RELEASE-VALIDATOR's job, not this idiom/scope gate's) -- my PASS rests on direct reading of the diff and test bodies, not on trusting that log.",
+    "artifacts_out": ["handoffs/WF03-ISS0732-20260921/step-03f-reviewer-amendment.json"],
     "issues": [],
     "git_evidence": {
-      "branch_name": null,
-      "commit_sha_list": [],
+      "branch_name": "feature/WF03-ISS0732-20260921",
+      "commit_sha_list": ["30919e94"],
       "remote_branch": null,
-      "push_status": "skipped",
+      "push_status": "pending",
       "pr_url": null,
       "pr_create_error": null
     },
-    "next_action": ""
+    "next_action": "Proceed to TEST-DESIGNER (idiom/scope gate now closed for this amendment; OQ-2 fully resolved, no open items remain from this review)."
   },
   "rework_count": 0,
   "max_rework": 3

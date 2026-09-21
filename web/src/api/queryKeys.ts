@@ -152,4 +152,10 @@ export const queryKeys = {
      *  web/src/api/exam.ts's own moduledoc). */
     list: (filters?: { page_size?: number }) => [...queryKeys.exam.all, 'list', filters ?? {}] as const,
   },
+
+  /** REQ-375 §3.1 — platform migration rollout console. */
+  platformMigrations: {
+    all: ['platform-migrations'] as const,
+    status: (rolloutId: string) => [...queryKeys.platformMigrations.all, 'status', rolloutId] as const,
+  },
 }

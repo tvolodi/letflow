@@ -103,13 +103,22 @@ defmodule Letflow.Definitions.SemanticValidationTest do
       assert message =~ "nearest declared field: 'customer_name'"
     end
 
-    test "with zero declared fields, no suggestion clause is emitted at all (nearest_declared_field/2 has nothing to suggest)" do
+    test "empty declared_fields short-circuits to zero violations (§2.5.1's skip-when-empty policy, not a suggestion-less violation)" do
+      # Per lib/letflow/design/req372-semantic-decision-rule-validation.md §2.5.1/§2.5.3,
+      # an empty declared_fields map means "no schema was ever declared for this
+      # process" and validate/2 short-circuits to valid: true, violations: [] before
+      # field_existence_violations/3 (and therefore nearest_declared_field/2) ever runs
+      # -- it no longer produces a violation "with no suggestion clause"; it produces no
+      # violation at all. The degrade-gracefully-with-nothing-to-suggest-against intent
+      # this test originally covered is superseded by this amendment for the *empty*
+      # schema case specifically; see the new "empty declared_fields exemption" describe
+      # block below for that behavior's own direct positive-coverage test.
       graph = gateway_graph("cusotmer_name == \"John\"")
 
       result = SemanticValidation.validate(graph, %{})
 
-      [message] = messages(result)
-      refute message =~ "nearest declared field"
+      assert result.valid == true
+      assert messages(result) == []
     end
   end
 
@@ -304,6 +313,48 @@ defmodule Letflow.Definitions.SemanticValidationTest do
       fixed_result = SemanticValidation.validate(fixed_graph, declared_fields)
 
       assert fixed_result == %{valid: true, violations: []}
+    end
+  end
+
+  # ---------------------------------------------------------------------------------
+  # §2.5.1 empty declared_fields exemption -- direct, positive coverage. Per
+  # lib/letflow/design/req372-semantic-decision-rule-validation.md §2.5.1/§2.5.3, an
+  # empty declared_fields map ("no schema was ever declared for this process")
+  # short-circuits validate/2 to valid: true, violations: [] BEFORE either the
+  # field-existence or type-compatibility passes ever run -- this is now a real,
+  # load-bearing behavior of the module (unblocking ~31 pre-existing fixtures per the
+  # design's own §2.5.2 rationale) and needs its own direct test, not just inference
+  # from the AC2 revision above.
+  # ---------------------------------------------------------------------------------
+
+  describe "validate/2 (§2.5.1 empty declared_fields exemption) -- empty declared_fields short-circuits to zero violations regardless of how broken the conditions look" do
+    test "a graph whose EXCLUSIVE_GATEWAY conditions reference several undeclared variables and an incompatible-looking comparison still returns valid: true, violations: [] when declared_fields is %{}" do
+      graph =
+        graph(
+          [
+            node("gw1", :EXCLUSIVE_GATEWAY),
+            node("gw2", :EXCLUSIVE_GATEWAY),
+            node("a", :END),
+            node("b", :END)
+          ],
+          [
+            # Undeclared variable reference -- would ordinarily be
+            # :undeclared_variable_reference against a non-empty schema.
+            cond_edge("e1", "gw1", "a", "cusotmer_name == \"John\""),
+            # Looks like a numeric-vs-string incompatible comparison -- would
+            # ordinarily be :incompatible_comparison_operand_types against a non-empty
+            # schema declaring "amount" numeric and "customer_name" string. Both
+            # operands are themselves undeclared here, so this also would have been
+            # exempt from the type-compatibility table under §2.3's :unresolvable
+            # exemption even without §2.5.1 -- the point of this test is that §2.5.1's
+            # guard fires first and unconditionally, before either pass is reached.
+            cond_edge("e2", "gw2", "b", "amount == customer_name")
+          ]
+        )
+
+      result = SemanticValidation.validate(graph, %{})
+
+      assert result == %{valid: true, violations: []}
     end
   end
 

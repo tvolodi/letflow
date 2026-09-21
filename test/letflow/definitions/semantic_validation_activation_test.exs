@@ -208,18 +208,26 @@ defmodule Letflow.Definitions.SemanticValidationActivationTest do
       assert reread.status == :draft
     end
 
-    test "reverse: variable_schemas starts undeclared, is seeded afterward, activate/2's fresh read reflects the new clean state",
+    test "reverse: variable_schemas starts with a non-conflicting field only, \"amount\" is seeded afterward, activate/2's fresh read reflects the new clean state",
          %{schema_name: schema_name} do
       definition = create!(schema_name)
 
-      # No variable_schemas row for "amount" yet -- an earlier read would see it as
-      # undeclared.
+      # Per lib/letflow/design/req372-semantic-decision-rule-validation.md §2.5.4.1
+      # point 2 (preferred fix): seed a field OTHER than "amount" first, so
+      # declared_fields is non-empty throughout -- a bare zero-row start would fall
+      # into §2.5.1's empty-declared_fields short-circuit (valid: true, violations: [])
+      # rather than genuinely proving the re-run-not-cached point. "customer_name" is
+      # declared but the gateway condition ("amount > 100") never references it, so
+      # "amount" is still absent from a *non-empty* declared_fields map here -- a
+      # genuine §2.2 :undeclared_variable_reference, not the §2.5.1 exemption.
+      seed_schema_row!(schema_name, definition.id, "customer_name", %{"type" => "string"})
+
       assert {:ok, %{valid: false, violations: violations}} =
                Definitions.validate_definition_graph(definition.id, prefix: schema_name)
 
       assert Enum.any?(violations, &(&1.code == :undeclared_variable_reference))
 
-      # Now declare it, directly, with no cache to invalidate.
+      # Now declare "amount" too, directly, with no cache to invalidate.
       seed_schema_row!(schema_name, definition.id, "amount", %{"type" => "number"})
 
       # activate/2 issues its OWN fresh fetch_schemas/3 read -- it must see "amount" as
@@ -246,6 +254,15 @@ defmodule Letflow.Definitions.SemanticValidationActivationTest do
       # the draft save below must succeed even though the condition is semantically
       # broken.
       definition = create!(schema_name)
+
+      # Per lib/letflow/design/req372-semantic-decision-rule-validation.md §2.5.4.1
+      # point 3 (preferred fix): seed a field OTHER than "amount" first, so
+      # declared_fields is non-empty -- this keeps the demonstrated mismatch a genuine
+      # §2.2 violation (declared_fields non-empty, "amount" still absent from it)
+      # rather than relying on §2.5.1's empty-declared_fields exemption, which would
+      # silently resolve to valid: true and stop proving this test's actual intent (a
+      # real semantic mismatch is reported without blocking the draft save).
+      seed_schema_row!(schema_name, definition.id, "customer_name", %{"type" => "string"})
 
       assert {:ok, %{valid: false, violations: violations, definition_id: definition_id}} =
                Definitions.validate_definition_graph(definition.id, prefix: schema_name)

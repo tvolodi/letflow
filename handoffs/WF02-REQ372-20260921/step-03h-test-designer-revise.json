@@ -8,8 +8,8 @@
   "file": "handoffs/WF02-REQ372-20260921/step-03h-test-designer-revise.json",
   "created_at": "2026-09-21T08:17:05Z",
   "started_at": "2026-09-21T08:17:05Z",
-  "completed_at": null,
-  "status": "PENDING",
+  "completed_at": "2026-09-21T08:25:00Z",
+  "status": "COMPLETED",
   "priority": "NORMAL",
   "context": {
     "stage": "S8",
@@ -46,18 +46,22 @@
   },
   "result": {
     "status": "PASS",
-    "summary": "",
-    "artifacts_out": [],
+    "summary": "Revised all three tests identified by §2.5.4.1 as conflicting with the empty-declared_fields exemption, and added one new direct positive-coverage test for the exemption itself, per the handoff's exact instructions. (1) test/letflow/definitions/semantic_validation_test.exs:106-113 ('with zero declared fields, no suggestion clause is emitted at all') renamed to 'empty declared_fields short-circuits to zero violations (§2.5.1's skip-when-empty policy, not a suggestion-less violation)' and now asserts result.valid == true and messages(result) == [] for validate(graph, %{}). (2) test/letflow/definitions/semantic_validation_activation_test.exs:211-231 (AC6 'reverse' test) revised per §2.5.4.1 point 2's preferred fix: now seeds 'customer_name' (non-'amount') before the first validate_definition_graph/2 call so declared_fields is non-empty throughout (a genuine §2.2 :undeclared_variable_reference violation for the still-absent 'amount'), then seeds 'amount' and asserts the second activate/2 call succeeds -- preserves the original 're-run reflects fresh state, not cached' proof without ever entering the empty-schema state. (3) test/letflow/definitions/semantic_validation_activation_test.exs:241-259 ('a declared_fields/condition mismatch reports via the read-only endpoint') revised per §2.5.4.1 point 3's preferred fix (b): now seeds 'customer_name' before calling validate_definition_graph/2, keeping the demonstrated mismatch a genuine violation against a non-empty schema. (4) Added a new test in semantic_validation_test.exs, describe 'validate/2 (§2.5.1 empty declared_fields exemption)', proving validate(graph, %{}) == %{valid: true, violations: []} directly for a two-edge graph whose conditions carry an undeclared-variable reference and an undeclared-vs-undeclared comparison -- stronger, more direct coverage than inferring the exemption from test 1's revision alone. test/specs/REQ-372.md updated with a 2026-09-21 revision note at the top and a 'revised 2026-09-21' explanation under each of the three changed entries, plus a new subsection each for the read-only-endpoint test's revision and the new exemption test. Ran `mix test test/letflow/definitions/semantic_validation_test.exs test/letflow/definitions/semantic_validation_activation_test.exs` twice (before and after the spec-only edit) -- both runs: 'Finished in 5.0-5.1 seconds (0.1s async, ~5.0s sync)' / 'Result: 24 passed', 0 failures. Did not run the full mix letflow.check.test suite (not required by this handoff; TEST-RUNNER's job next).",
+    "artifacts_out": [
+      "test/letflow/definitions/semantic_validation_test.exs",
+      "test/letflow/definitions/semantic_validation_activation_test.exs",
+      "test/specs/REQ-372.md"
+    ],
     "issues": [],
     "git_evidence": {
-      "branch_name": null,
+      "branch_name": "feature/WF02-REQ372-20260921",
       "commit_sha_list": [],
-      "remote_branch": null,
-      "push_status": "skipped",
+      "remote_branch": "origin/feature/WF02-REQ372-20260921",
+      "push_status": "pending",
       "pr_url": null,
       "pr_create_error": null
     },
-    "next_action": ""
+    "next_action": "Route to TEST-DESIGN-VALIDATOR"
   },
   "rework_count": 0,
   "max_rework": 3

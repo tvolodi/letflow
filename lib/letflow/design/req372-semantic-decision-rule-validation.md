@@ -409,22 +409,16 @@ added here, since REQ-372's scope fence is this pass specifically, and adding
 `activate/2` for the first time would be new behavior this requirement doesn't ask for
 and doesn't have an AC for; flagged as §5 OQ-6, an adjacent gap this run does not close.
 
-Exact call-site change, inside `run_activate_transaction/4`'s `:draft` branch (currently
-lines 2296-2300):
-
-```
-%ProcessDefinition{status: :draft} = definition ->
-  case run_service_scope_validator(definition, tenant_id, validator) do
-    :ok ->
-      case run_semantic_validation(definition, prefix) do
-        :ok -> activate_draft(definition, prefix, tenant_id)
-        {:error, reason} -> Repo.rollback(reason)
-      end
-
-    {:error, reason} ->
-      Repo.rollback(reason)
-  end
-```
+Call-site change (described, not written), inside `run_activate_transaction/4`'s
+`:draft` branch (currently lines 2296-2300): today, once `run_service_scope_validator/3`
+returns `:ok`, that branch calls `activate_draft/3` directly. This design inserts one
+new step between those two: after `run_service_scope_validator/3` returns `:ok` (its
+existing `{:error, reason} -> Repo.rollback(reason)` outcome is untouched), the branch
+calls the new `run_semantic_validation/2` helper (below) before `activate_draft/3` runs.
+`run_semantic_validation/2` returning `:ok` proceeds to `activate_draft/3` exactly as
+before; any `{:error, reason}` it returns takes the same `Repo.rollback(reason)` path the
+`:draft` branch already uses for `run_service_scope_validator/3`'s own error outcome — no
+new rollback shape, just one more producer feeding the branch's existing error handling.
 
 New private helper (signature only):
 
@@ -460,18 +454,20 @@ call and `definition.id` is a UUID already fetched from a real, locked row.
 `{:error, {:semantic_validation_precondition_failed, term()}}`.
 
 `interpret_activate_result/1` (`lib/letflow/definitions.ex:2390-2400`) gains two new
-typed pass-through clauses (same shape as its existing `{:service_scope_violation, _}`
-and `{:sequence_conflict, _}` clauses — explicit per-shape matching, INV-8, no catch-all):
+typed pass-through clauses (described, not written; same shape as its existing
+`{:service_scope_violation, _}` and `{:sequence_conflict, _}` clauses — explicit
+per-shape matching, INV-8, no catch-all):
 
-```
-defp interpret_activate_result({:error, {:semantic_validation_failed, _violations}} = error),
-  do: error
+  * a clause pattern-matching `{:error, {:semantic_validation_failed, _violations}}`,
+    returning that same tuple unchanged;
+  * a clause pattern-matching `{:error, {:semantic_validation_precondition_failed,
+    _reason}}`, returning that same tuple unchanged.
 
-defp interpret_activate_result(
-       {:error, {:semantic_validation_precondition_failed, _reason}} = error
-     ),
-     do: error
-```
+Both are pure pass-throughs (identical in shape and intent to the existing
+`{:service_scope_violation, _}` / `{:sequence_conflict, _}` clauses immediately above
+them) — neither clause transforms, wraps, or logs the error; they exist only so
+`interpret_activate_result/1`'s explicit per-shape matching stays exhaustive over
+`activate/2`'s enlarged return union (INV-8: no catch-all clause is added).
 
 ### 3.3 `validate_definition_graph/2` — extended with this pass's own violations
 
@@ -479,33 +475,32 @@ defp interpret_activate_result(
 3 violation lists. This design adds a 4th, requiring one additional query
 (`VariableSchema.fetch_schemas/3`) — consistent with this function's own moduledoc
 statement "Issues exactly one query... plus" (that line's own count needs updating to
-"two queries" by ELIXIR-DEV, since this adds the `fetch_schemas/3` read):
+"two queries" by ELIXIR-DEV, since this adds the `fetch_schemas/3` read).
 
 ```
-def validate_definition_graph(id, opts) when is_list(opts) do
-  prefix = Keyword.get(opts, :prefix)
-
-  with {:ok, %ProcessDefinition{} = definition} <- get_by_id(id, opts),
-       {:ok, graph} <- convert_graph(definition.graph),
-       {:ok, declared_fields} <-
-         VariableSchema.fetch_schemas(Repo, definition.id, prefix: prefix) do
-    violations =
-      Graph.validate_graph(graph).violations ++
-        Graph.validate_node_attributes(graph).violations ++
-        Graph.validate_edge_conditions(graph).violations ++
-        SemanticValidation.validate(graph, declared_fields).violations
-
-    {:ok, %{definition_id: definition.id, valid: violations == [], violations: violations}}
-  end
-end
+@spec validate_definition_graph(id :: Ecto.UUID.t(), opts :: keyword()) ::
+        {:ok, %{definition_id: Ecto.UUID.t(), valid: boolean(), violations: [Graph.Violation.t()]}}
+        | common_error()
 ```
 
-`fetch_schemas/3`'s `{:error, :missing_prefix}` / `{:error, :invalid_definition_id}`
-propagate through the `with` unchanged, folding into this function's existing
-`common_error()` clause in its `@spec` (both are already `TenantProvisioning`-adjacent
-failure shapes this function's `@spec` union already has room for via `common_error()`;
-ELIXIR-DEV confirms the exact union member at implementation time — flagged rather than
-guessed here since this design doc must not invent `common_error()`'s membership).
+Change (described, not written): the function's existing `with` chain — resolve
+`definition` by `id`/`opts`, convert its stored graph via `convert_graph/1` — gains one
+more step before the violations are assembled: a `VariableSchema.fetch_schemas/3` call
+for `definition.id` under the same `prefix` already threaded through `opts`, binding the
+declared-fields map. The violations list, currently the concatenation of
+`Graph.validate_graph/1`, `Graph.validate_node_attributes/1`, and
+`Graph.validate_edge_conditions/1`'s three violation lists, gains a fourth term appended
+in the same style: `SemanticValidation.validate/2`'s own violations, called with the
+converted graph and the newly-fetched declared-fields map. The function's existing
+success shape (`{:ok, %{definition_id:, valid:, violations:}}`, `valid` computed as
+`violations == []`) is unchanged in structure — only the violations list feeding it grows
+by one more concatenated term. `fetch_schemas/3`'s own `{:error, :missing_prefix}` /
+`{:error, :invalid_definition_id}` outcomes propagate through the `with` chain's existing
+short-circuit behavior unchanged, folding into this function's existing `common_error()`
+clause in its `@spec` (both are already `TenantProvisioning`-adjacent failure shapes this
+function's `@spec` union already has room for via `common_error()`; ELIXIR-DEV confirms
+the exact union member at implementation time — flagged rather than guessed here since
+this design doc must not invent `common_error()`'s membership).
 
 This is the "earlier clean validation" half of AC6's own test shape (call
 `validate_definition_graph/2`, or `SemanticValidation.validate/2` directly, confirm

@@ -7,7 +7,12 @@ date: 2026-09-21
 branch: feature/WF02-REQ372-20260921
 worktree: c:\Users\tvolo\dev\ai-dala\letflow
 
-verdict: BLOCKED
+verdict: FAIL
+
+# NOTE: `verdict` above reflects this file's LATEST attempt (redispatch_attempt_3,
+# appended at the end of this file). Everything below through
+# redispatch_attempt_2's block is the preserved evidence of the first two
+# (BLOCKED) attempts -- unchanged, not re-verdicted.
 
 toolchain: >
   Local Elixir/mix toolchain available and used directly (no Docker fallback
@@ -252,3 +257,157 @@ redispatch_attempt_2:
     concrete ETA before a third redispatch, or (b) coordinate a dedicated
     Postgres instance/port for one of the two concurrent runs rather than
     continuing to retry against the same saturated instance.
+
+redispatch_attempt_3:
+  verdict: FAIL
+  date: 2026-09-21
+
+  note: >
+    Third redispatch. ORCH investigated directly, found the 3 erl.exe PIDs
+    (28488/30060/46888) were orphaned mix test invocations (45+ min runtime,
+    matching the "orphaned erl.exe processes holding leaked connections"
+    anti-pattern documented in docs/anti-patterns.md), NOT owned by either
+    live sibling session on this host, and killed them plus their 3 parent
+    shells. ORCH confirmed pg_stat_activity dropped to 6 connections before
+    redispatching. This attempt is the first genuine, complete full-suite
+    run of this run's whole history -- attempt 1's single lucky partition
+    aside.
+
+  preconditions_checked:
+    - "git branch --show-current (main checkout, C:\\Users\\tvolo\\dev\\ai-dala\\letflow): feature/WF02-REQ372-20260921"
+    - "git pull --ff-only origin feature/WF02-REQ372-20260921: already up to date"
+    - "docker compose up -d: letflow-postgres-1 and letflow-keycloak-1 both Running"
+    - "pg_stat_activity count before run: 38 (headroom restored, well under the 100 ceiling)"
+    - "no TEST_PARALLEL_N / LETFLOW_DB_PORT override in this checkout's .env -- ran with full defaults per redispatch instruction"
+
+  attempt:
+    command: "scripts/test_parallel.sh (default N, run to completion, foreground, output redirected to a log file and polled synchronously to avoid an unreliable background-notification wait)"
+    time: "~14:02-14:06 UTC"
+    partition_source: "N=16, source: nproc (host has 16 logical CPUs)"
+    pool_sizing: "TEST_POOL_SIZE=5 (computed: N=16, max_connections=100, superuser_reserved=3, headroom=10, nonpool_reserve=5)"
+    result: "combined: 4523 tests, 6 properties, 14 failures (4515/4529 passed)"
+    per_partition: >
+      p1: 311 tests/2 props/1 fail (exit 2); p2: 288/0/0 (exit 0); p3:
+      258/0/3 (exit 2); p4: 306/0/0 (exit 0); p5: 315/0/0 (exit 0); p6:
+      303/0/0 (exit 0); p7: 447/1/0 (exit 0); p8: 413/0/2 (exit 2); p9:
+      235/0/0 (exit 0); p10: 237/0/1 (exit 2); p11: 274/0/4 (exit 2); p12:
+      238/1/0 (exit 0); p13: 229/0/3 (exit 2); p14: 198/0/0 (exit 0); p15:
+      196/2/0 (exit 0); p16: 275/0/0 (exit 0). All 16 partitions produced a
+      Result: line -- no ecto.create-time crashes this time, confirming
+      ORCH's kill of the orphaned processes resolved the exhaustion.
+
+  req372_own_tests_execution_proof: >
+    Partition 4's log contains both of REQ-372's own new test files
+    (semantic_validation_test.exs and semantic_validation_activation_test.exs
+    -- confirmed by grep for "SemanticValidation", 3 matches), and that
+    partition's own Result line reads "306 passed, 11 excluded" -- zero
+    failures. Direct, first-hand execution evidence: REQ-372's own new tests
+    ran and passed.
+
+  failure_attribution:
+    - failure: >
+        partition 1 (1 failure): "test A9: every indexed volume's declared
+        entries: count equals what is actually on disk"
+        (Letflow.Docs.RequirementStatusInvariantsTest,
+        test/docs/requirement_status_invariants_test.exs:464) -- mismatch
+        [{"docs/status/requirement_status.v21.yaml", declared 6, actual 7}].
+      attribution: ATTRIBUTABLE TO THIS BRANCH.
+      reasoning: >
+        git diff main...HEAD -- docs/status/requirement_status.v21.yaml
+        shows this branch's own diff appends one new history entry (req:
+        REQ-372, event: started, agent: ORCH, 2026-09-21T06:54:20Z) to
+        volume 21, bringing its real on-disk entry count to 7. But git diff
+        main...HEAD -- docs/status/requirement_status.index.yaml is EMPTY --
+        this branch never touched the index, which still declares volume 21
+        at entries: 6 (index.yaml line 4296). Direct violation of that same
+        volume's own HOW-TO-APPEND step 6 ("update this volume's entries:
+        count in the index, in the same commit"), caused entirely by this
+        branch's own step-00-git-setup append. Not contention, not
+        pre-existing, not flaky -- a real bookkeeping gap in this run's own
+        diff, which is why this report's verdict is FAIL rather than PASS.
+        FIX NEEDED (out of TEST-RUNNER's own ownership -- docs/status/ is
+        DOC-UPDATER/ORCH's file, not test/letflow/ or
+        test/support/data_case.ex): increment
+        docs/status/requirement_status.index.yaml's volume-21 entries: from
+        6 to 7 and append a note per HOW-TO-APPEND step 6.
+    - failures: >
+        12 failures total: partition 3 (3, Letflow.Plugs.Iss0736OidcLiveRevocationTest),
+        partition 8 (2, Letflow.IdentityTest), partition 11 (4,
+        Letflow.Plugs.ApiPipelineIntegrationTest), partition 13 (3,
+        Letflow.Plugs.AuthPipelineTest).
+      attribution: STRUCTURALLY UNRELATED to this branch.
+      reasoning: >
+        Every one of these 12 failures' actual stacktrace (read individually)
+        is ** (DBConnection.ConnectionError) connection not available and
+        request was dropped from queue, raised from
+        test/support/bpm_default_realm_displacement.ex:146
+        (acquire_dedicated_lock!/0) while acquiring a Postgres advisory lock
+        -- residual connection contention, not assertion/logic failures. git
+        diff main...HEAD (file-scope check) touches only
+        lib/letflow/definitions.ex, lib/letflow/definitions/graph.ex,
+        lib/letflow/definitions/semantic_validation.ex, and REQ-372's own new
+        test/spec/doc files -- confirmed empty diff for
+        iss0736_oidc_live_revocation_test.exs, identity_test.exs,
+        api_pipeline_integration_test.exs, auth_pipeline_test.exs, and
+        bpm_default_realm_displacement.ex. Post-run pg_stat_activity was 42
+        (elevated from the pre-run 38/pre-kill 6 baseline, though well under
+        the 100 ceiling), consistent with other load on this shared host
+        during the run, not this branch's own code.
+    - failure: >
+        partition 10 (1 failure): "test GET /resolved -- select_live_row/2
+        tie-break two tied live generic rows -- the most recently updated_at
+        one wins, deterministically" (Letflow.Routers.HelpTest,
+        test/letflow/routers/help_test.exs:232) -- assertion mismatch on
+        which of two rows with a near-identical updated_at won a tie-break.
+      attribution: STRUCTURALLY UNRELATED to this branch.
+      reasoning: >
+        git diff main...HEAD -- test/letflow/routers/help_test.exs is empty;
+        this branch does not touch Letflow.Routers.HelpTest,
+        lib/letflow/routers/help.ex, or any tie-break/ordering logic. A real
+        assertion failure (not a connection error), but zero file-scope
+        overlap with this branch's diff -- an ordering-sensitive tie-break
+        race, pre-existing and unrelated to REQ-372.
+
+  issues_to_file: >
+    Two issues for ORCH to file/forward per ISSUE_QUEUE.md (reported back
+    here per this run's task instructions rather than calling the queue
+    directly): (1) this branch's own
+    docs/status/requirement_status.index.yaml volume-21 entries: count
+    (declared 6, actual 7) needs incrementing before this gate can go green
+    -- small, mechanical, same-branch fix, caused by this branch's own
+    step-00 append without the matching index update. (2)
+    Letflow.Routers.HelpTest's tie-break test
+    (test/letflow/routers/help_test.exs:232) failed on an ordering assertion
+    unrelated to any branch currently in flight -- looks like a
+    pre-existing flaky/ordering-sensitive test that should be queued for its
+    own independent investigation.
+
+  conclusion: >
+    FAIL. The full suite ran to completion for the first time across three
+    attempts (4523 tests, 6 properties, 14 failures, 4515/4529 passed) after
+    ORCH's kill of the orphaned erl.exe processes resolved the connection
+    exhaustion that blocked the first two attempts. REQ-372's own two new
+    test files have direct, first-hand execution evidence of passing
+    (partition 4, 306 passed/0 failed, both SemanticValidation test files
+    present). 13 of 14 failures structurally clear as unrelated to this
+    branch (12 residual-connection-contention errors with zero file-scope
+    diff overlap, 1 pre-existing ordering-sensitive test unrelated to
+    REQ-372). However, 1 failure (RequirementStatusInvariantsTest's A9 doc
+    volume-entries-count invariant) IS attributable to this branch's own
+    diff: this run's own step-00 append to
+    docs/status/requirement_status.v21.yaml did not increment the matching
+    declared count in docs/status/requirement_status.index.yaml, a
+    confirmed violation of that file's own HOW-TO-APPEND step 6. Per this
+    run's own attribution rule (structural, not count-matching -- one
+    genuinely attributable failure is enough), this gate cannot report PASS.
+
+  next_action: >
+    Route to ORCH / DOC-UPDATER: increment
+    docs/status/requirement_status.index.yaml's volume-21 entries: field
+    from 6 to 7 (append a short note per HOW-TO-APPEND step 6 describing the
+    REQ-372 started-event append), then redispatch TEST-RUNNER to
+    re-verify. Also file the pre-existing Letflow.Routers.HelpTest tie-break
+    flake (test/letflow/routers/help_test.exs:232) as its own independent
+    issue, unrelated to REQ-372. Not a rework of REQ-372's Elixir
+    implementation or its own tests -- both confirmed passing by direct
+    first-hand evidence in this attempt.

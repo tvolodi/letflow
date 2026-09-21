@@ -36,7 +36,7 @@
     "issues": [],
     "git_evidence": {
       "branch_name": "feature/WF02-REQ372-20260921",
-      "commit_sha_list": [],
+      "commit_sha_list": ["f57fec4be8ff3326027366f3f3787a304f8c1cc3"],
       "remote_branch": "origin/feature/WF02-REQ372-20260921",
       "push_status": "pending",
       "pr_url": null,

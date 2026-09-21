@@ -55,3 +55,12 @@ queue_ref: Q-757  # letflow-queue task id 757, issue_ref ISS-0757 (queue's own
   # "Never derive a set_lock target from a filename"). Registered 2026-09-20 by ORCH.
 github_ref: GH-1645
 status: open
+routing_note: >
+  WF03-ISS0732-20260921: scope split per ORCHESTRATOR.md section 10 sizing
+  judgment. This issue's own resolution covers the backend gate only
+  (lib/letflow/definitions/promotion.ex's apply_review/4) -- the
+  security-relevant BLOCKER, self-contained and enforced regardless of
+  frontend UI state. The frontend surfacing piece (NonSkippableApprovalGate.tsx
+  "release blocked -- rehearsal required" state) is filed separately as
+  ISS-0767 (letflow-queue task 767, GH#1664) rather than folded into this
+  same run.

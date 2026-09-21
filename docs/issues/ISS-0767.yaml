@@ -1,0 +1,37 @@
+id: ISS-0767
+title: >
+  NonSkippableApprovalGate.tsx does not surface a rehearsal-required
+  blocked state once apply_review/4 gains its assertion-run gate
+  (ISS-0732 follow-up)
+discovered_by: ORCH (scoping WF03-ISS0732-20260921, backend-only sizing split)
+discovered_in_run: WF03-ISS0732-20260921
+discovered_at: "2026-09-21T01:40:38Z"
+severity: MINOR
+description: >
+  ISS-0732 fixes lib/letflow/definitions/promotion.ex's apply_review/4 to
+  reject an Apply call with no passing PromotionAssertionRun for the
+  current plan_digest, returning a new error reason instead of silently
+  releasing. web/src/components/NonSkippableApprovalGate.tsx and its API
+  client have no surfaced state for this: the Apply flow currently
+  assumes apply either succeeds or hits the existing
+  digest-mismatch/invalid-transition error branches. Deliberately split
+  out of ISS-0732's own run per ORCHESTRATOR.md section 10 sizing
+  judgment -- the backend fix is the security-relevant BLOCKER and
+  stands on its own (the gate is enforced with or without this UI
+  surfacing); this piece is a UX-quality follow-on, not a same-run
+  requirement.
+affected_files:
+  - web/src/components/NonSkippableApprovalGate.tsx
+fix_direction: >
+  Once ISS-0732's backend fix lands (new error reason from apply_review/4,
+  surfaced through the API), FRONTEND-DEV adds a distinct blocked/disabled
+  state in NonSkippableApprovalGate.tsx (and its api layer) that renders a
+  clear "release blocked -- rehearsal required, run assertions first"
+  message rather than a generic error toast, matching this repo's existing
+  pattern for other apply_review error branches. Needs a frontend test
+  exercising the new state against a mocked backend response, with no
+  regression to existing digest-mismatch/invalid-transition coverage.
+queue_ref: Q-767  # letflow-queue task id 767, issue_ref ISS-0767. Registered
+  # 2026-09-21 by ORCH.
+github_ref: GH-1664
+status: open

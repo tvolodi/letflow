@@ -1,0 +1,56 @@
+{
+  "handoff_id": "b1e2a3c4-0000-4000-8000-000000000008",
+  "run_id": "WF03-ISS0732-20260921",
+  "workflow_id": "WF-03",
+  "step": "02c",
+  "from_agent": "ORCH",
+  "to_agent": "CODE-DESIGNER",
+  "file": "handoffs/WF03-ISS0732-20260921/step-02c-code-designer-amendment.json",
+  "created_at": "2026-09-21T04:05:11Z",
+  "started_at": "2026-09-21T04:05:11Z",
+  "completed_at": null,
+  "status": "PENDING",
+  "priority": "HIGH",
+  "context": {
+    "stage": "S6",
+    "requirement_ids": [],
+    "requirement_text": {},
+    "related_handoff_ids": ["b1e2a3c4-0000-4000-8000-000000000003", "b1e2a3c4-0000-4000-8000-000000000006", "b1e2a3c4-0000-4000-8000-000000000007"],
+    "artifacts_in": [
+      "lib/letflow/design/iss0732-promotion-apply-assertion-gate.md",
+      "lib/letflow/definitions/promotion.ex",
+      "lib/letflow/definitions/promotion_assertion_run.ex",
+      "handoffs/WF03-ISS0732-20260921/step-04-security-reviewer.json"
+    ],
+    "owned_modules": [
+      "lib/letflow/definitions/promotion.ex"
+    ]
+  },
+  "task": {
+    "description": "DESIGN AMENDMENT to the already-gate-approved lib/letflow/design/iss0732-promotion-apply-assertion-gate.md, resolving its own explicitly-flagged OQ-2 (design section 8) before this run merges. Read OQ-2 in full in the design doc, and read handoffs/WF03-ISS0732-20260921/step-04-security-reviewer.json's result.issues for a sibling SECURITY-REVIEWER pass's concrete finding: Letflow.Definitions.get_latest_assertion_run/2 has no `status` filter, so the MOST RECENT PromotionAssertionRun row for a review could still be `status: :running` (rehearsal in progress, not yet finished) at the moment apply_review/4's verify_rehearsed/2 reads it -- and because `assertions_failed` defaults to `0` at insert time (insert_changeset/2) and is only ever written by update_changeset/2 when the run actually completes, an in-flight, not-yet-finished rehearsal currently satisfies verify_rehearsed/2's gate exactly as if it had already passed. ORCH's ruling (concurred by a sibling ORCH session): this must be closed before merge -- it reintroduces a narrower version of the exact defect ISS-0732 exists to fix (an unrehearsed-or-not-actually-passed change reaching release). Design the fix: decide and state explicitly whether the check should require `assertion_run.status == :passed` (in ADDITION to `assertions_failed == 0`, since a `:teardown_failed` run with `assertions_failed == 0` is still a documented green gate per R8's own contract -- so `status == :passed` alone would be WRONG, it would reject a legitimate teardown-failed-but-assertions-passed rehearsal) or `assertion_run.status not in [:running]` (excluding only the in-progress state, admitting both :passed and :teardown_failed as before) -- state which of these two you choose and why, since they are NOT equivalent (the first rejects a valid teardown-failed pass; get this right, it is exactly the kind of R8-contract-consistency question this run has already been careful about twice). State the exact updated verify_rehearsed/2 (or renamed) logic as a signature/type-shape amendment to section 3 of the existing design doc (append an amendment section, do not rewrite the whole doc from scratch) -- no full function bodies, same design-doc convention as before.",
+    "acceptance_criteria": [
+      "Amendment explicitly resolves OQ-2 with a stated, justified choice between the two candidate fixes described above (or a third option, if justified)",
+      "Amendment does not silently reintroduce a status == :passed-only check that would reject a legitimate :teardown_failed + assertions_failed == 0 run (this would contradict R8's own already-documented gate condition and is a regression trap this run has hit before)",
+      "Amendment states the exact updated with-chain/verify_rehearsed logic as signatures/type-shapes/prose only, no executable Elixir code",
+      "Amendment is appended to the existing design doc as a new section, not a full rewrite",
+      "Amendment states what changes (if any) are needed in error-reason naming/HTTP-response mapping as a result of this stricter check"
+    ]
+  },
+  "result": {
+    "status": "PENDING",
+    "summary": "",
+    "artifacts_out": [],
+    "issues": [],
+    "git_evidence": {
+      "branch_name": null,
+      "commit_sha_list": [],
+      "remote_branch": null,
+      "push_status": "skipped",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": ""
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

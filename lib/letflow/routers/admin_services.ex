@@ -112,6 +112,23 @@ defmodule Letflow.Routers.AdminServices do
   cross-tenant-non-disclosure rule applies to the non-admin list endpoint
   instead (`Letflow.Routers.Services`), which is the only place a
   tenant-visibility distinction exists in this route set.
+
+  ## POST /:service_id/versions, POST /:service_id/retire (REQ-373, design
+  ## lib/letflow/design/req373-service-catalog-version-lifecycle.md §7)
+
+  Two new routes, delegating to `Letflow.ServiceCatalog.publish/3` and
+  `Letflow.ServiceCatalog.retire/1` respectively. Both `POST`, not `PATCH` --
+  neither is a partial update of the existing resource's own fields (the
+  existing `PATCH /:service_id` already owns `scope`/`owner_tenant_id`
+  updates); each is an action that creates a new fact (a new version; a
+  status transition).
+
+  Gated by the already-shipped `:AdminServicesManage` policy key -- no new
+  permission atom, no `lib/letflow/api/authorization.ex` change. That
+  module's `endpoint_policy_key/2` already maps any `POST`/`PATCH`/`DELETE`
+  path starting with `"/admin/services"` to `:AdminServicesManage` (design
+  doc §0), so these two new `POST` paths are covered by the existing
+  prefix-match clause automatically.
   """
 
   use Letflow.Api.AuthorizedRouter
@@ -136,6 +153,14 @@ defmodule Letflow.Routers.AdminServices do
 
   authz_delete "/:service_id", :AdminServicesManage do
     handle_delete(conn, conn.params["service_id"])
+  end
+
+  authz_post "/:service_id/versions", :AdminServicesManage do
+    handle_publish(conn, conn.params["service_id"])
+  end
+
+  authz_post "/:service_id/retire", :AdminServicesManage do
+    handle_retire(conn, conn.params["service_id"])
   end
 
   match _ do
@@ -262,6 +287,64 @@ defmodule Letflow.Routers.AdminServices do
     end
   end
 
+  # ── POST /admin/services/:service_id/versions (REQ-373 design §7) ─────────
+
+  defp handle_publish(conn, service_id) do
+    with {:ok, body} <- object_body(conn),
+         {:ok, version} <- fetch_version(body) do
+      attrs =
+        %{}
+        |> maybe_put(body, "endpoint_url", :endpoint_url)
+        |> maybe_put(body, "request_schema", :request_schema)
+        |> maybe_put(body, "response_schema", :response_schema)
+        |> maybe_put(body, "auth_method", :required_auth)
+        |> maybe_put(body, "timeout_ms", :timeout_ms)
+        |> maybe_put(body, "retry_policy", :retry_policy)
+
+      case ServiceCatalog.publish(service_id, version, attrs) do
+        {:ok, entry} ->
+          Response.created(conn, service_record_json(entry))
+
+        {:error, :not_found} ->
+          Response.not_found(conn)
+
+        {:error, :duplicate_version} ->
+          Response.conflict(conn, "version already exists for this service_id")
+
+        {:error, %Ecto.Changeset{}} ->
+          Response.unprocessable(conn, "validation failed")
+      end
+    else
+      {:error, :malformed_json} ->
+        Response.bad_request(conn, "request body must be a JSON object")
+
+      {:error, :missing_version} ->
+        Response.bad_request(conn, "version is required")
+    end
+  end
+
+  defp fetch_version(body) do
+    case Map.get(body, "version") do
+      version when is_binary(version) and version != "" -> {:ok, version}
+      _missing_or_invalid -> {:error, :missing_version}
+    end
+  end
+
+  # ── POST /admin/services/:service_id/retire (REQ-373 design §7) ───────────
+
+  defp handle_retire(conn, service_id) do
+    case ServiceCatalog.retire(service_id) do
+      {:ok, entry} ->
+        Response.ok(conn, service_record_json(entry))
+
+      {:error, :not_found} ->
+        Response.not_found(conn)
+
+      {:error, :already_retired} ->
+        Response.conflict(conn, "service_id is already retired")
+    end
+  end
+
   # ── Request-body helpers ───────────────────────────────────────────────────
 
   defp object_body(conn) do
@@ -292,6 +375,11 @@ defmodule Letflow.Routers.AdminServices do
   # owning its own private response-allowlist function (dlq.ex/webhooks.ex),
   # not introducing a cross-router dependency the design does not call for.
 
+  # REQ-373 design §7/§9 OQ-3 -- `version`/`version_id`/`status`/
+  # `published_at`/`retired_at` are new fields with no frozen
+  # web/src/api/services.ts wire contract yet; this follows the same
+  # snake_case/ISO-8601-timestamp convention every existing field above
+  # already uses.
   @spec service_record_json(Entry.t()) :: map()
   defp service_record_json(%Entry{} = entry) do
     %{
@@ -303,8 +391,16 @@ defmodule Letflow.Routers.AdminServices do
       "timeout_ms" => entry.timeout_ms,
       "scope" => Atom.to_string(entry.scope),
       "owner_tenant_id" => entry.owner_tenant_id,
+      "version" => entry.version,
+      "version_id" => entry.version_id,
+      "status" => Atom.to_string(entry.status),
+      "published_at" => DateTime.to_iso8601(entry.published_at),
+      "retired_at" => optional_iso8601(entry.retired_at),
       "created_at" => DateTime.to_iso8601(entry.created_at),
       "updated_at" => DateTime.to_iso8601(entry.updated_at)
     }
   end
+
+  defp optional_iso8601(nil), do: nil
+  defp optional_iso8601(%DateTime{} = dt), do: DateTime.to_iso8601(dt)
 end

@@ -93,6 +93,66 @@ defmodule Letflow.ServiceCatalog do
   so no permission is enforced here — REQ-192 wires the route/permission
   pairing. This moduledoc names them only so a future reader of this module
   doesn't independently invent a different name for the same concept.
+
+  ## REQ-373 — version/status lifecycle: THE SCHEMA DECISION (design
+  ## `lib/letflow/design/req373-service-catalog-version-lifecycle.md` §1)
+
+  **Decision: in-place `version`/`version_id`/`status`/`published_at`/
+  `retired_at` columns on `service_catalog` (representing the single CURRENT
+  version) plus a new sibling table `service_catalog_versions`
+  (`Letflow.ServiceCatalog.Version`) archiving every version a `publish/3` or
+  `retire/1` supersedes.** Not composite-key-versioned-table.
+
+  **Reasoning:**
+
+    1. The consuming contract itself never asks for a specific version —
+       `Letflow.Engine.PinResolver.Lookup.catalog_lookup/1` takes
+       `service_id` alone, "give me the currently resolvable version of X,"
+       never "give me version N of X." Composite-keying `service_catalog`
+       buys nothing at the one call site this whole requirement exists to
+       wire up (`Letflow.ServiceCatalog.PinLookup.catalog_lookup/1`): under
+       either schema shape, resolving a fresh reference means "find the row
+       for this `service_id` whose status is ACTIVE."
+    2. Blast radius on `service_id`-as-sole-key is severe and needless:
+       `service_id` is used as a bare `String.t()` identifier by this
+       module's own five pre-existing functions, `scope_validator_lookup/1`,
+       the `§4` referential guard (a `SERVICE_TASK` node's `service_id`
+       attribute — a **version-less** reference at the graph layer), and
+       `web/src/api/services.ts`'s wire contract. Composite-keying would
+       force every one of those to gain a version parameter it structurally
+       cannot supply — REQ-373's SCOPE FENCE forbids touching the graph
+       layer, so this path is a non-starter.
+    3. Every existing public function keeps its exact current signature,
+       arity, and error contract — `register/1`, `get_for_tenant/2`,
+       `list_for_tenant/2`, `update_scope/2`, `delete/1`, `list_all/1`,
+       `scope_validator_lookup/1` are all untouched except `register/1`'s
+       own insert body gaining four additional stamped fields (a new
+       service always starts life at `version: "1"`, `status: :ACTIVE`,
+       exactly as `created_at`/`updated_at` are already stamped rather than
+       caller-supplied).
+    4. Existing-row migration is a pure additive backfill (DB-level column
+       defaults for the `ALTER`, `published_at` backfilled from
+       `created_at`) — no primary key change, no data copy, no FK rewrite.
+
+  **Identity/visibility fields (`service_id`, `scope`, `owner_tenant_id`)
+  are unversioned, untouched by `publish/3`/`retire/1`.** Version-specific
+  technical fields (`endpoint_url`, `request_schema`, `response_schema`,
+  `required_auth`, `timeout_ms`, `retry_policy`, plus the four lifecycle
+  columns) are replaced wholesale by `publish/3`, frozen in place by
+  `retire/1`. `get_for_tenant/2`/`list_for_tenant/2`/`list_all/1` apply no
+  `status` filtering — a RETIRED entry remains as visible as an ACTIVE one
+  (not asked for by any acceptance criterion; see the design doc §9 OQ-2).
+
+  ## REQ-373 — PLC-01/`module_ref` catalog versioning stays out of scope
+
+  This requirement versions `catalog_entry` (`service_catalog`) references
+  only. `Letflow.Engine.PinResolver`'s own moduledoc "SCOPE GAP —
+  service_catalog (S6) and PLC-01 (unscoped) are not built" section names
+  `module_ref` resolution against PLC-01 as unscoped to any stage; PLC-01
+  does not exist in this codebase and this requirement does not build it —
+  `Letflow.ServiceCatalog.PinLookup.build/0`'s `module_lookup` stays a
+  permanent `{:error, :not_found}` stub, copied verbatim from
+  `PinResolver.default_lookup/0`.
   """
 
   import Ecto.Query
@@ -102,6 +162,7 @@ defmodule Letflow.ServiceCatalog do
   alias Letflow.Identity.Tenant
   alias Letflow.Repo
   alias Letflow.ServiceCatalog.Entry
+  alias Letflow.ServiceCatalog.Version
   alias Letflow.TenantProvisioning
   alias Letflow.Api.Pagination
 
@@ -157,7 +218,23 @@ defmodule Letflow.ServiceCatalog do
       # `attrs` -- `Entry.insert_changeset/2` deliberately never casts either
       # field (its own moduledoc), so they must be present on the struct
       # `cast/3` starts from rather than passed through `attrs`.
-      %Entry{created_at: now, updated_at: now}
+      #
+      # `version_id`/`published_at` are stamped here too (REQ-373 design §1
+      # point 3, "four additional stamped fields"), for the same reason --
+      # `Ecto.Repo.insert/2` sends every schema field's current struct value
+      # explicitly (never relying on a DB-level column default for a field
+      # the schema itself declares), so leaving these two `nil` on the base
+      # struct would insert an explicit `NULL`, not fall back to the
+      # migration's `gen_random_uuid()`/backfill default. `version`/`status`
+      # need no such stamping here -- `Entry`'s own `field/3` declarations
+      # already default them to `"1"`/`:ACTIVE`, which `%Entry{}` picks up
+      # without help.
+      %Entry{
+        created_at: now,
+        updated_at: now,
+        version_id: Ecto.UUID.generate(),
+        published_at: now
+      }
       |> Entry.insert_changeset(attrs)
       |> Repo.insert()
       |> map_insert_result()
@@ -203,6 +280,192 @@ defmodule Letflow.ServiceCatalog do
       {:service_id, {_msg, opts}} -> Keyword.get(opts, :constraint) == :unique
       _other -> false
     end)
+  end
+
+  # ===========================================================================
+  # publish/3 (REQ-373 design §3.1)
+  # ===========================================================================
+
+  @typedoc "Version-specific technical fields only — never service_id/scope/owner_tenant_id."
+  @type publish_attrs :: %{
+          required(:endpoint_url) => String.t(),
+          optional(:request_schema) => String.t() | nil,
+          optional(:response_schema) => String.t() | nil,
+          optional(:required_auth) => atom() | String.t(),
+          required(:timeout_ms) => integer(),
+          optional(:retry_policy) => String.t() | nil
+        }
+
+  @doc """
+  Publishes a new version of an existing `service_catalog` entry.
+
+  Runs inside one `Repo.transaction/1`: fetches the current row (not found
+  -> `{:error, :not_found}`), rejects a `version` equal to the current row's
+  own or to any version already archived in `service_catalog_versions` for
+  this `service_id` (-> `{:error, :duplicate_version}` — version strings are
+  opaque, no numeric-ordering assumption), archives a full snapshot of the
+  **current** row's version-specific fields into `service_catalog_versions`
+  (unconditionally — a publish following a bare retire archives the retired
+  row exactly as a publish following an active one archives that one), then
+  updates the `service_catalog` row in place: a freshly generated
+  `version_id`, the caller-supplied `version`, `status: :ACTIVE`,
+  `published_at: now`, `retired_at: nil`, plus the version-specific fields
+  from `attrs`.
+
+  **Explicit invariant:** `publish/3` touches **only** `service_catalog` and
+  `service_catalog_versions` rows. It performs zero writes to
+  `Letflow.EventStore`, zero reads/writes of any `INSTANCE_STARTED`/
+  `INSTANCE_PINS_REBOUND` event payload, and zero calls into
+  `Letflow.Engine`/`Letflow.Engine.PinResolver`. A pin is frozen into an
+  `INSTANCE_STARTED` event's payload at case-start time and is never
+  re-read live (`pin_resolver.ex`'s own "No fallback, ever" section) —
+  `publish/3` cannot disturb an already-recorded pin because there is no
+  code path connecting the two subsystems at all, not because `publish/3`
+  takes special care to avoid one.
+  """
+  @spec publish(service_id :: String.t(), version :: String.t(), publish_attrs()) ::
+          {:ok, Entry.t()}
+          | {:error, :not_found}
+          | {:error, :duplicate_version}
+          | {:error, Ecto.Changeset.t()}
+  def publish(service_id, version, attrs)
+      when is_binary(service_id) and is_binary(version) and is_map(attrs) do
+    Repo.transaction(fn -> do_publish(service_id, version, attrs) end)
+  end
+
+  defp do_publish(service_id, version, attrs) do
+    with %Entry{} = current <- Repo.get(Entry, service_id) || {:error, :not_found},
+         :ok <- check_publishable_version(current, version),
+         {:ok, _archived} <- archive_current_version(current),
+         {:ok, updated} <- apply_publish(current, version, attrs) do
+      updated
+    else
+      {:error, reason} -> Repo.rollback(reason)
+    end
+  end
+
+  defp check_publishable_version(
+         %Entry{service_id: service_id, version: current_version},
+         version
+       ) do
+    duplicate? =
+      version == current_version or
+        Repo.exists?(
+          from(v in Version, where: v.service_id == ^service_id and v.version == ^version)
+        )
+
+    if duplicate?, do: {:error, :duplicate_version}, else: :ok
+  end
+
+  defp archive_current_version(%Entry{} = current) do
+    now = DateTime.utc_now() |> DateTime.truncate(:microsecond)
+
+    attrs = %{
+      version_id: current.version_id,
+      service_id: current.service_id,
+      version: current.version,
+      endpoint_url: current.endpoint_url,
+      request_schema: current.request_schema,
+      response_schema: current.response_schema,
+      required_auth: current.required_auth,
+      timeout_ms: current.timeout_ms,
+      retry_policy: current.retry_policy,
+      published_at: current.published_at,
+      retired_at: now
+    }
+
+    attrs
+    |> Version.archive_changeset()
+    |> Repo.insert()
+  end
+
+  defp apply_publish(%Entry{} = current, version, attrs) do
+    now = DateTime.utc_now() |> DateTime.truncate(:microsecond)
+
+    publish_attrs =
+      attrs
+      |> Map.take([
+        :endpoint_url,
+        :request_schema,
+        :response_schema,
+        :required_auth,
+        :timeout_ms,
+        :retry_policy
+      ])
+      |> Map.merge(%{
+        version_id: Ecto.UUID.generate(),
+        version: version,
+        status: :ACTIVE,
+        published_at: now,
+        retired_at: nil,
+        updated_at: now
+      })
+
+    current
+    |> Entry.publish_changeset(publish_attrs)
+    |> Repo.update()
+  end
+
+  # ===========================================================================
+  # retire/1 (REQ-373 design §3.2)
+  # ===========================================================================
+
+  @doc """
+  Retires a `service_catalog` entry's current version.
+
+  Since this schema keeps exactly one live (current) version per
+  `service_id` at a time, `retire/1` always targets *the* row — no separate
+  version argument is needed or accepted. Not found -> `{:error, :not_found}`.
+  Already `status: :RETIRED` -> `{:error, :already_retired}` (an explicit
+  error, not a silent idempotent `:ok` — matches this codebase's existing
+  "no silent no-op" discipline). Otherwise updates the row in place:
+  `status: :RETIRED`, `retired_at: now`, `updated_at: now`. No
+  `service_catalog_versions` insert here — the row's full technical data
+  stays in place on `service_catalog` itself (still fetchable, just
+  `status: :RETIRED`); it only gets archived into the sibling table later,
+  if and when a subsequent `publish/3` supersedes it.
+
+  **Explicit AC4 decision — retire FAILS OUTRIGHT, never falls through:** a
+  fresh `Letflow.Engine.PinResolver.resolve/4` call against a `service_id`
+  with no ACTIVE row (because its only row was just retired and nothing has
+  published since) gets `{:error, :not_found}` from
+  `Letflow.ServiceCatalog.PinLookup.catalog_lookup/1`, which `resolve/4`
+  turns into `{:error, {:unresolved_catalog_ref, ref}}` — the **existing**
+  error variant, no new one added. This schema enforces "at most one ACTIVE
+  row per `service_id`" as a structural invariant — there is only ever one
+  live row at all, so there is no second, older-but-still-ACTIVE row to
+  "fall through to" by definition. Silently reactivating the
+  most-recently-archived version instead would also contradict
+  `pin_resolver.ex`'s own "No fallback, ever" philosophy: an admin who
+  explicitly retired a service intended it to stop resolving, full stop,
+  until a human explicitly republishes.
+
+  **Why `Letflow.Engine.PinResolver.pin_for/3` reads against an
+  already-pinned instance are entirely unaffected by retire:** `pin_for/3`
+  takes a pin list **already obtained** from an `INSTANCE_STARTED` event
+  payload and performs a pure `Enum.find/2` over that in-memory list — it
+  accepts no `Lookup.t()`, calls no `Letflow.ServiceCatalog` function, and
+  issues no `Repo` query of any kind. `retire/1` changes rows in
+  `service_catalog`/`service_catalog_versions`; `pin_for/3` never reads
+  either table, at any point, for any instance, retired-version or not. The
+  two functions are connected by zero shared code — the same "by
+  construction, not by care taken" argument as `publish/3`'s own invariant.
+  """
+  @spec retire(service_id :: String.t()) ::
+          {:ok, Entry.t()} | {:error, :not_found} | {:error, :already_retired}
+  def retire(service_id) when is_binary(service_id) do
+    case Repo.get(Entry, service_id) do
+      nil ->
+        {:error, :not_found}
+
+      %Entry{status: :RETIRED} ->
+        {:error, :already_retired}
+
+      %Entry{} = entry ->
+        entry
+        |> Entry.retire_changeset()
+        |> Repo.update()
+    end
   end
 
   # ===========================================================================

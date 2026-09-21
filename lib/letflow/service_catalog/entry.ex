@@ -44,6 +44,46 @@ defmodule Letflow.ServiceCatalog.Entry do
   — but the DB constraint is the one REQ-191's acceptance criteria actually
   test against and is authoritative; these changeset checks never replace
   it.
+
+  ## REQ-373 — version/status lifecycle (design
+  ## `lib/letflow/design/req373-service-catalog-version-lifecycle.md` §1/§3.3)
+
+  **Schema decision:** in-place `version`/`version_id`/`status`/
+  `published_at`/`retired_at` columns on this table, representing the single
+  CURRENT version, plus a new sibling table `service_catalog_versions`
+  (`Letflow.ServiceCatalog.Version`) archiving every version a `publish`/
+  `retire` supersedes — **not** a composite-key (`service_id` + `version`)
+  versioned table. `Letflow.Engine.PinResolver.Lookup.catalog_lookup/1`
+  itself takes only `service_id`, never a requested version — nothing
+  downstream of `Lookup` ever addresses a specific historical version by
+  key, so composite-keying `service_catalog` would buy nothing at the one
+  call site this exists to wire up, while forcing every existing bare
+  `service_id`-keyed caller (this module's own five functions, the
+  `SERVICE_TASK` graph-node reference, `scope_validator_lookup/1`) to gain a
+  version parameter it structurally cannot supply. See
+  `Letflow.ServiceCatalog`'s own moduledoc for the full reasoning.
+
+  `status`'s Ecto representation: plain `Ecto.Enum, values: [:ACTIVE,
+  :RETIRED]`, no `values:` remapping — mirrors `required_auth`'s own
+  uppercase-atom convention rather than `scope`'s lowercase one, since the
+  migration's DB `CHECK` constraint is `status IN ('ACTIVE', 'RETIRED')` and
+  a plain `Ecto.Enum` serializes an atom to the DB verbatim by casing.
+  Elixir-side code pattern-matches and constructs `:ACTIVE`/`:RETIRED`
+  (uppercase) everywhere — never `:active`/`:retired`.
+
+  **Retire-vs-fallback (AC4):** `Letflow.ServiceCatalog.retire/1` fails a
+  fresh resolution outright rather than falling through to any other row —
+  this schema enforces "at most one live row per `service_id`" as a
+  structural invariant (there is only ever one row at all; a superseded
+  version is *archived*, not kept as a second live row), so there is no
+  second, still-current row to fall through to by construction. See
+  `Letflow.ServiceCatalog.retire/1`'s own `@doc` for the full reasoning.
+
+  **PLC-01/`module_ref` catalog versioning stays out of scope** — this
+  schema versions `catalog_entry` (`service_catalog`) references only.
+  `pin_resolver.ex`'s own "SCOPE GAP — service_catalog (S6) and PLC-01
+  (unscoped) are not built" section names `module_ref` resolution against
+  PLC-01 as unscoped to any stage; this requirement does not change that.
   """
 
   use Ecto.Schema
@@ -64,6 +104,14 @@ defmodule Letflow.ServiceCatalog.Entry do
     field(:retry_policy, :string)
     field(:scope, Ecto.Enum, values: [:global, :tenant], default: :global)
     field(:owner_tenant_id, Ecto.UUID)
+
+    # REQ-373 (design §1/§3.3) -- version identity + lifecycle status of the
+    # single CURRENT version this row represents.
+    field(:version, :string, default: "1")
+    field(:version_id, Ecto.UUID)
+    field(:status, Ecto.Enum, values: [:ACTIVE, :RETIRED], default: :ACTIVE)
+    field(:published_at, :utc_datetime_usec)
+    field(:retired_at, :utc_datetime_usec)
 
     field(:created_at, :utc_datetime_usec)
     field(:updated_at, :utc_datetime_usec)
@@ -122,5 +170,63 @@ defmodule Letflow.ServiceCatalog.Entry do
       name: :chk_service_catalog_scope_owner_consistency,
       message: "scope/owner_tenant_id combination is invalid"
     )
+  end
+
+  @doc """
+  Changeset for `Letflow.ServiceCatalog.publish/3` (design §3.1/§3.3) --
+  replaces the row's version-specific fields wholesale with the newly
+  published version's data. `version_id`/`version`/`status`/`published_at`
+  are set by the caller (`ServiceCatalog.publish/3`), never derived here.
+  """
+  @spec publish_changeset(t(), map()) :: Ecto.Changeset.t()
+  def publish_changeset(entry, attrs) do
+    entry
+    |> cast(attrs, [
+      :version_id,
+      :version,
+      :status,
+      :published_at,
+      :retired_at,
+      :endpoint_url,
+      :request_schema,
+      :response_schema,
+      :required_auth,
+      :timeout_ms,
+      :retry_policy,
+      :updated_at
+    ])
+    |> validate_required([
+      :version_id,
+      :version,
+      :status,
+      :published_at,
+      :endpoint_url,
+      :required_auth,
+      :timeout_ms
+    ])
+    |> validate_length(:version, max: 255)
+    |> validate_length(:endpoint_url, max: 2048)
+    |> validate_number(:timeout_ms,
+      greater_than_or_equal_to: 1,
+      less_than_or_equal_to: 3_600_000
+    )
+    |> unique_constraint(:version, name: :idx_service_catalog_versions_service_id_version)
+  end
+
+  @doc """
+  Changeset for `Letflow.ServiceCatalog.retire/1` (design §3.2/§3.3) --
+  stamps `status: :RETIRED` plus `retired_at`/`updated_at` (`DateTime.utc_now/0`,
+  truncated to microsecond, read once here so both timestamps agree). Every
+  version-specific technical field stays exactly as it was (retire freezes
+  the row in place, per §2) -- no `attrs` argument, since retire never
+  accepts caller-supplied field values.
+  """
+  @spec retire_changeset(t()) :: Ecto.Changeset.t()
+  def retire_changeset(entry) do
+    now = DateTime.utc_now() |> DateTime.truncate(:microsecond)
+
+    entry
+    |> change(status: :RETIRED, retired_at: now, updated_at: now)
+    |> validate_required([:status, :retired_at, :updated_at])
   end
 end

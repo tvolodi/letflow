@@ -179,8 +179,8 @@ defmodule Letflow.ServiceCatalogTest do
       assert {:error, %Postgrex.Error{postgres: %{code: :check_violation}}} =
                Repo.query(
                  "INSERT INTO service_catalog " <>
-                   "(service_id, endpoint_url, required_auth, timeout_ms, scope, owner_tenant_id, created_at, updated_at) " <>
-                   "VALUES ($1, 'https://example.test', 'NONE', 5000, 'global', $2, now(), now())",
+                   "(service_id, endpoint_url, required_auth, timeout_ms, scope, owner_tenant_id, created_at, updated_at, published_at) " <>
+                   "VALUES ($1, 'https://example.test', 'NONE', 5000, 'global', $2, now(), now(), now())",
                  [service_id, Ecto.UUID.dump!(tenant.id)]
                )
 
@@ -194,8 +194,8 @@ defmodule Letflow.ServiceCatalogTest do
       assert {:error, %Postgrex.Error{postgres: %{code: :check_violation}}} =
                Repo.query(
                  "INSERT INTO service_catalog " <>
-                   "(service_id, endpoint_url, required_auth, timeout_ms, scope, owner_tenant_id, created_at, updated_at) " <>
-                   "VALUES ($1, 'https://example.test', 'NONE', 5000, 'tenant', NULL, now(), now())",
+                   "(service_id, endpoint_url, required_auth, timeout_ms, scope, owner_tenant_id, created_at, updated_at, published_at) " <>
+                   "VALUES ($1, 'https://example.test', 'NONE', 5000, 'tenant', NULL, now(), now(), now())",
                  [service_id]
                )
 
@@ -215,8 +215,8 @@ defmodule Letflow.ServiceCatalogTest do
       assert {:error, %Postgrex.Error{postgres: %{code: :check_violation}}} =
                Repo.query(
                  "INSERT INTO service_catalog " <>
-                   "(service_id, endpoint_url, required_auth, timeout_ms, scope, owner_tenant_id, created_at, updated_at) " <>
-                   "VALUES ($1, 'https://example.test', 'BASIC', 5000, 'global', NULL, now(), now())",
+                   "(service_id, endpoint_url, required_auth, timeout_ms, scope, owner_tenant_id, created_at, updated_at, published_at) " <>
+                   "VALUES ($1, 'https://example.test', 'BASIC', 5000, 'global', NULL, now(), now(), now())",
                  [service_id]
                )
 
@@ -230,8 +230,8 @@ defmodule Letflow.ServiceCatalogTest do
       assert {:error, %Postgrex.Error{postgres: %{code: :check_violation}}} =
                Repo.query(
                  "INSERT INTO service_catalog " <>
-                   "(service_id, endpoint_url, required_auth, timeout_ms, scope, owner_tenant_id, created_at, updated_at) " <>
-                   "VALUES ($1, 'https://example.test', 'NONE', 0, 'global', NULL, now(), now())",
+                   "(service_id, endpoint_url, required_auth, timeout_ms, scope, owner_tenant_id, created_at, updated_at, published_at) " <>
+                   "VALUES ($1, 'https://example.test', 'NONE', 0, 'global', NULL, now(), now(), now())",
                  [service_id]
                )
 
@@ -245,8 +245,8 @@ defmodule Letflow.ServiceCatalogTest do
       assert {:error, %Postgrex.Error{postgres: %{code: :check_violation}}} =
                Repo.query(
                  "INSERT INTO service_catalog " <>
-                   "(service_id, endpoint_url, required_auth, timeout_ms, scope, owner_tenant_id, created_at, updated_at) " <>
-                   "VALUES ($1, 'https://example.test', 'NONE', 3600001, 'global', NULL, now(), now())",
+                   "(service_id, endpoint_url, required_auth, timeout_ms, scope, owner_tenant_id, created_at, updated_at, published_at) " <>
+                   "VALUES ($1, 'https://example.test', 'NONE', 3600001, 'global', NULL, now(), now(), now())",
                  [service_id]
                )
 

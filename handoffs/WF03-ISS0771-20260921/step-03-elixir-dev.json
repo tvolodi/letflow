@@ -8,8 +8,8 @@
   "file": "handoffs/WF03-ISS0771-20260921/step-03-elixir-dev.json",
   "created_at": "2026-09-21T07:53:23Z",
   "started_at": "2026-09-21T07:53:23Z",
-  "completed_at": null,
-  "status": "PENDING",
+  "completed_at": "2026-09-21T08:35:00Z",
+  "status": "COMPLETED",
   "priority": "HIGH",
   "context": {
     "stage": "S6",
@@ -52,23 +52,23 @@
     }
   ],
   "result": {
-    "status": "PASS",
-    "summary": "Implemented design doc iss0771-tenant-migration-replay-on-deploy.md section 2 exactly. (2.1) Added Letflow.TenantProvisioning.replay_all_pending/0 to lib/letflow/tenant_provisioning.ex -- calls list_registrations/0, replay_migrations/2 per tenant, accumulates into %{ok: [tenant_id], error: [{tenant_id, reason}]}, with a per-call-site rescue (Layer 2) tagging unrescued exceptions as {:unexpected_exception, exception}, independent of replay_migrations/2's own existing rescue (Layer 1). Sequential Enum.reduce, no Task.async_stream, no per-tenant process. (2.2) Added new module Letflow.TenantProvisioning.MigrationReplayBoot at lib/letflow/tenant_provisioning/migration_replay_boot.ex -- not a GenServer/Supervisor, start_link/1 calls replay_all_pending/0 inside an outer try/rescue that itself can never propagate, logs Logger.warning/1 per failing tenant (tenant_id, schema_name looked up from the Registration list already in hand, reason), logs one Logger.info/1 summary line after the loop always (including 0-failed case), and always returns :ignore. (2.3) Wired Letflow.TenantProvisioning.MigrationReplayBoot into lib/letflow/supervisor/infrastructure.ex's init/1 children list immediately after the {Ecto.Migrator, ...} child and before Letflow.Oidc.ProviderRegistry, unconditionally (not behind skip_migrations?()). Also updated the module's moduledoc children-list enumeration (was stale at 19, now 20) and the two ordering-guarantee comments that referenced child indices/total-child-count by position, plus the inline comment on the Obs.Alerts.TaskSupervisor child, so the moduledoc stays accurate rather than silently stale. Real commands run in this worktree after `mix deps.get` (deps were missing in the fresh worktree, fetched successfully, no network issue): `mix compile --warnings-as-errors` -- compiled all deps and the letflow app cleanly, only warnings emitted were pre-existing ones inside dependency source (eqrcode's encode.ex bitstring-pin warnings, a deprecated mix.exs xref option warning) -- none in lib/letflow/, command exited 0. `mix format --check-formatted` -- exited 0, no output (all files formatted).",
+    "status": "SUPERSEDED",
+    "summary": "REWORK ITERATION 1 resolution: this handoff (step-03) and step-07-elixir-dev-rework.json were two concurrent ORCH-dispatched rework tracks for the identical bug (missing child_spec/1 on Letflow.TenantProvisioning.MigrationReplayBoot) against the same worktree/branch -- a dispatch race, not two different defects. On picking up step-03, I found the working tree already carried an uncommitted, in-progress child_spec/1 fix from the step-07 track (missing the `type: :worker` key my step-03 task text required) and applied that one missing key myself. Before I could commit, the coordinator (a sibling session working the step-07 track) reported it had detected the same collision, stopped the duplicate agent, independently verified the fix (23/23 targeted tests), and committed+pushed it as commit 63173958 'fix(iss-0771): add child_spec/1 to MigrationReplayBoot [WF03-ISS0771-20260921]'. I verified this independently: `git fetch origin feature/WF03-ISS0771-20260921` shows local and origin both at ef61f41e, with 63173958 in the ancestry, working tree clean (`git status` reports nothing to commit), and the committed lib/letflow/tenant_provisioning/migration_replay_boot.ex child_spec/1 matches exactly what this handoff's task asked for: %{id: __MODULE__, start: {__MODULE__, :start_link, [init_arg]}, restart: :temporary, type: :worker}. The pipeline has already progressed past this step: step-08 SECURITY-REVIEWER re-gate PASS (10ce0f01) and step-09 REVIEWER re-gate PASS (ef61f41e) are both committed and pushed on top of 63173958. Real commands I ran independently before discovering the collision: `mix compile --warnings-as-errors` -- exited 0, no warnings. `mix format --check-formatted` -- exited 0, no output. A `mix test` run I started produced no captured output before the working tree was superseded by the other track's commit mid-run, so I did not get first-hand mix test pass/fail counts from my own run -- but step-07's task record and the coordinator's report state 23/23 targeted tests passed and a full suite run was required by that track's acceptance criteria before it was gated through step-08/09, and those two later gates would not have PASSed against a suite that couldn't boot. No separate commit was made from step-03 -- there is nothing left to commit (working tree clean, fix already on origin).",
     "artifacts_out": [
-      "lib/letflow/tenant_provisioning.ex",
-      "lib/letflow/tenant_provisioning/migration_replay_boot.ex",
-      "lib/letflow/supervisor/infrastructure.ex"
+      "lib/letflow/tenant_provisioning/migration_replay_boot.ex"
     ],
-    "issues": [],
+    "issues": [
+      {"severity": "PROCESS", "description": "ORCH dispatched two concurrent rework tracks (step-03 and step-07-elixir-dev-rework.json) for the same bug against the same worktree/branch, causing a race. No code defect resulted (the sibling session caught and resolved the collision before a conflicting commit landed), but ORCH's dispatch logic should be checked to avoid double-dispatching rework for one gate_history FAIL.", "affected_requirement": null}
+    ],
     "git_evidence": {
       "branch_name": "feature/WF03-ISS0771-20260921",
-      "commit_sha_list": ["80cffbb306723d28c25fa23e6660eacc83b12a0d"],
-      "remote_branch": null,
-      "push_status": "skipped",
+      "commit_sha_list": ["63173958"],
+      "remote_branch": "origin/feature/WF03-ISS0771-20260921",
+      "push_status": "pushed (by sibling session, verified via git fetch)",
       "pr_url": null,
       "pr_create_error": null
     },
-    "next_action": "route to SECURITY-REVIEWER"
+    "next_action": "none -- already routed through step-08/step-09 and re-gated PASS by the step-07 track; no further action needed on step-03"
   },
   "rework_count": 1,
   "max_rework": 3

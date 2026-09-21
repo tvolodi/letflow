@@ -20,52 +20,63 @@ defmodule Letflow.Supervisor.Infrastructure do
   "leaf, independently-startable, no ordering dependency" placement
   reasoning that child's own comment above already states.
 
+  ISS-0771 (design `iss0771-tenant-migration-replay-on-deploy.md` §2.2/§2.3)
+  adds one further child, `Letflow.TenantProvisioning.MigrationReplayBoot`,
+  bringing the total to 20 -- placed immediately after `{Ecto.Migrator,
+  ...}` and before `Letflow.Oidc.ProviderRegistry`, deliberately NOT gated
+  by `skip_migrations?()`; see that module's own moduledoc for the full
+  reasoning.
+
   ## Children, in order
 
   1. `Letflow.Repo`
   2. `Ecto.Migrator`
-  3. `Letflow.Oidc.ProviderRegistry` (REQ-370: a `DynamicSupervisor` of
+  3. `Letflow.TenantProvisioning.MigrationReplayBoot` (ISS-0771: a one-shot
+     boot hook that replays tenant-scoped migrations against every
+     already-provisioned tenant; `start_link/1` always returns `:ignore` --
+     see that module's own moduledoc)
+  4. `Letflow.Oidc.ProviderRegistry` (REQ-370: a `DynamicSupervisor` of
      per-realm `Oidcc.ProviderConfiguration.Worker`s, replacing the former
      single static worker child — see that module's own moduledoc and
      `lib/letflow/design/req370-multi-issuer-oidc-verification.md` §4)
-  4. `Letflow.Registry` (generic `Registry`)
-  5. `Letflow.Metrics.Registry`
-  6. `Letflow.Plugs.PublicReadRateLimit.Bucket`
-  7. `Letflow.Admission`
-  8. `Letflow.InstanceSupervisor`
-  9. `Letflow.SandboxPool.TaskSupervisor`
-  10. `Letflow.SandboxPool`
-  11. `Letflow.Engine.PluginTaskSupervisor`
-  12. `Letflow.Engine.Wasm.InvocationLease`
-  13. `Letflow.Engine.PluginRegistry`
-  14. `Letflow.Engine.Lua.TaskSupervisor`
-  15. `Letflow.Engine.Wasm.ModuleRegistryTaskSupervisor`
-  16. `Letflow.Engine.Wasm.CapabilityGateTaskSupervisor`
-  17. `Letflow.Engine.Wasm.ModuleVersionRegistry`
-  18. `Letflow.Engine.Wasm.ModuleVersionRegistryTaskSupervisor`
-  19. `Letflow.Obs.Alerts.TaskSupervisor`
+  5. `Letflow.Registry` (generic `Registry`)
+  6. `Letflow.Metrics.Registry`
+  7. `Letflow.Plugs.PublicReadRateLimit.Bucket`
+  8. `Letflow.Admission`
+  9. `Letflow.InstanceSupervisor`
+  10. `Letflow.SandboxPool.TaskSupervisor`
+  11. `Letflow.SandboxPool`
+  12. `Letflow.Engine.PluginTaskSupervisor`
+  13. `Letflow.Engine.Wasm.InvocationLease`
+  14. `Letflow.Engine.PluginRegistry`
+  15. `Letflow.Engine.Lua.TaskSupervisor`
+  16. `Letflow.Engine.Wasm.ModuleRegistryTaskSupervisor`
+  17. `Letflow.Engine.Wasm.CapabilityGateTaskSupervisor`
+  18. `Letflow.Engine.Wasm.ModuleVersionRegistry`
+  19. `Letflow.Engine.Wasm.ModuleVersionRegistryTaskSupervisor`
+  20. `Letflow.Obs.Alerts.TaskSupervisor`
 
   ## Ordering guarantees preserved (both load-bearing, unchanged from
   `Letflow.Application`'s own prior flat list)
 
-    * ISS-0224: child 9 (`SandboxPool.TaskSupervisor`) precedes child 10
+    * ISS-0224: child 10 (`SandboxPool.TaskSupervisor`) precedes child 11
       (`{Letflow.SandboxPool, []}`) -- unchanged relative order. Every
       `SandboxPool` DB operation runs under this `Task.Supervisor` via
       `Task.Supervisor.async_nolink/3`; registering it after its dependant
       would leave a window in which a `claim/2` call exits `:noproc` inside
       a pool callback and kills the pool.
-    * ISS-0429: child 19 (`Obs.Alerts.TaskSupervisor`) is the LAST child of
+    * ISS-0429: child 20 (`Obs.Alerts.TaskSupervisor`) is the LAST child of
       this supervisor. Its "must precede either Poller's first tick"
       guarantee is now a SUPERVISOR-BOUNDARY guarantee, not merely a
       list-position fact: `Letflow.Supervisor.Pollers` is started only
       after this entire module's own `Supervisor.start_link/3` call (from
       `Letflow.Application.start/2`) has returned `{:ok, pid}`, which
-      happens only once every one of these 19 children -- including this
+      happens only once every one of these 20 children -- including this
       last one -- has itself finished starting. No interleaving is
       possible between this supervisor's last child starting and
       `Letflow.Supervisor.Pollers`' first child starting, since an entire
       supervisor boundary sits between them.
-    * ISS-0418: child 12 (`Engine.Wasm.InvocationLease`) has no ordering
+    * ISS-0418: child 13 (`Engine.Wasm.InvocationLease`) has no ordering
       dependency in either direction, mirroring `Letflow.Admission`'s own
       "no ordering dependency" precedent (see that module's moduledoc) --
       its `init/1` reads only static application config, makes no `Repo`
@@ -73,12 +84,21 @@ defmodule Letflow.Supervisor.Infrastructure do
       process. Placed directly after `PluginTaskSupervisor` as a
       readability choice (both are WASM/plugin-dispatch infrastructure),
       not a correctness requirement.
-    * REQ-352: child 6 (`Plugs.PublicReadRateLimit.Bucket`) has no ordering
+    * REQ-352: child 7 (`Plugs.PublicReadRateLimit.Bucket`) has no ordering
       dependency in either direction, mirroring `Letflow.Metrics.Registry`'s
       own "leaf, independently-startable" precedent immediately above it --
       its `init/1` creates a fresh named ETS table and reads no other
       supervised process. Placed directly after `Metrics.Registry` as a
       readability choice, not a correctness requirement.
+    * ISS-0771: child 3 (`TenantProvisioning.MigrationReplayBoot`) has one
+      ordering dependency, in one direction only -- it must follow child 2
+      (`{Ecto.Migrator, ...}`), since global/public-schema migrations must be
+      fully applied before any tenant-scoped replay runs. It has no
+      dependents: nothing later in this list, or in
+      `Letflow.Supervisor.Http`/`Letflow.Supervisor.Pollers` (both start only
+      after this entire supervisor has finished), reads anything
+      `MigrationReplayBoot` produces -- its value is the blocking replay
+      side-effect itself, completed before `start_link/1` returns `:ignore`.
 
   ## `Letflow.InstanceSupervisor` placement
 
@@ -157,6 +177,18 @@ defmodule Letflow.Supervisor.Infrastructure do
       Letflow.Repo,
       {Ecto.Migrator,
        repos: Application.fetch_env!(:letflow, :ecto_repos), skip: skip_migrations?()},
+      # ISS-0771 (design iss0771-tenant-migration-replay-on-deploy.md §2.2/§2.3): a
+      # minimal, one-shot boot-time child that replays tenant-scoped migrations
+      # against every already-provisioned tenant on every application start -- the
+      # public-schema Ecto.Migrator child above only covers the public/default
+      # schema, and nothing previously replayed migrations for tenants that already
+      # existed before a new tenant-scoped migration merged. Deliberately NOT gated
+      # by skip_migrations?() -- see the module's own moduledoc for why. Positioned
+      # here: after Ecto.Migrator (global/public-schema migrations must be fully
+      # applied first) and before every other child, so no request can reach any
+      # route until tenant-scoped replay has finished for every tenant.
+      # start_link/1 always returns :ignore, never raises -- see its own moduledoc.
+      Letflow.TenantProvisioning.MigrationReplayBoot,
       # REQ-370 (design req370-multi-issuer-oidc-verification.md §4): a
       # DynamicSupervisor owning one Oidcc.ProviderConfiguration.Worker per
       # trusted realm, started lazily on first verification attempt rather
@@ -264,8 +296,9 @@ defmodule Letflow.Supervisor.Infrastructure do
       # first :tick runs with ZERO delay (`Process.send_after(self(), :tick, 0)` in
       # poller.ex's init/1) and, from that very first tick, can dispatch to this
       # supervisor via fire_hooks/4 -- since Letflow.Supervisor.Pollers only starts
-      # after this ENTIRE supervisor (all 19 children, ISS-0418's InvocationLease
-      # and REQ-352's PublicReadRateLimit.Bucket additions included) has finished starting, this
+      # after this ENTIRE supervisor (all 20 children, ISS-0418's InvocationLease,
+      # REQ-352's PublicReadRateLimit.Bucket, and ISS-0771's MigrationReplayBoot
+      # additions included) has finished starting, this
       # name is guaranteed registered before any Poller's first tick can run,
       # matching the ISS-0429 guarantee restated in this module's own moduledoc.
       {Task.Supervisor, name: Letflow.Obs.Alerts.TaskSupervisor}

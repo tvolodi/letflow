@@ -398,6 +398,59 @@ defmodule Letflow.TenantProvisioning do
     end
   end
 
+  @doc """
+  Replays tenant-scoped migrations against every provisioned tenant --
+  `list_registrations/0` enumerated, `replay_migrations/2` called per tenant
+  with the default manifest (`tenant_scoped_migrations/0`). The boot-time
+  entry point ISS-0771 closes (see
+  `lib/letflow/design/iss0771-tenant-migration-replay-on-deploy.md`): no
+  deploy or boot path previously replayed migrations against tenants that
+  already existed before a new tenant-scoped migration merged.
+
+  Pure orchestration over two already-existing primitives -- `list_registrations/0`
+  and `replay_migrations/2` -- no new query. Never raises: Layer 1 is
+  `replay_migrations/2`'s own internal `rescue` (unchanged, already converts
+  every exception it can reach into a tagged `{:error, _}`); Layer 2 is the
+  `rescue` around each per-tenant call below, independent of Layer 1, so this
+  function's exception-safety does not depend on `replay_migrations/2`
+  continuing to catch everything forever (design doc §4). A tenant whose call
+  raises past Layer 1 is recorded as `{tenant_id, {:unexpected_exception,
+  exception}}` -- a reason distinguishable from `replay_migrations/2`'s own
+  three tagged reasons.
+
+  Sequential `Enum`, not `Task.async_stream/3` -- deliberate (design doc §4):
+  correctness at current tenant counts needs no concurrency, and a shared
+  Task-per-tenant shape would reintroduce the same "concurrent process per
+  unit-of-work" question REQ-045 already resolved against for running
+  instances.
+
+  Idempotent: calling this any number of times against fully-migrated tenants
+  is a safe no-op (design doc §3) -- it adds no new idempotency mechanism of
+  its own, only composes `replay_migrations/2`'s existing guarantees.
+  """
+  @spec replay_all_pending() :: %{
+          ok: [tenant_id :: Ecto.UUID.t()],
+          error: [{tenant_id :: Ecto.UUID.t(), reason :: term()}]
+        }
+  def replay_all_pending do
+    list_registrations()
+    |> Enum.reduce(%{ok: [], error: []}, fn %Registration{tenant_id: tenant_id}, acc ->
+      try do
+        case replay_migrations(tenant_id) do
+          {:ok, _applied_versions} ->
+            %{acc | ok: [tenant_id | acc.ok]}
+
+          {:error, reason} ->
+            %{acc | error: [{tenant_id, reason} | acc.error]}
+        end
+      rescue
+        exception ->
+          %{acc | error: [{tenant_id, {:unexpected_exception, exception}} | acc.error]}
+      end
+    end)
+    |> then(fn %{ok: ok, error: error} -> %{ok: Enum.reverse(ok), error: Enum.reverse(error)} end)
+  end
+
   # {version, module, filename} for every tenant-scoped migration, in ascending
   # version order. The third element exists only so tenant_scoped_migrations/0
   # can load the module — see that function's @doc. The version integers MUST

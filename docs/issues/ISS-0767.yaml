@@ -21,17 +21,35 @@ description: >
   surfacing); this piece is a UX-quality follow-on, not a same-run
   requirement.
 affected_files:
-  - web/src/components/NonSkippableApprovalGate.tsx
+  - web/src/components/promotions/NonSkippableApprovalGate.tsx  # corrected path --
+    # the file lives under components/promotions/, not components/ directly;
+    # this entry originally omitted the promotions/ segment.
+  - web/src/api/promotions.ts
 fix_direction: >
-  Once ISS-0732's backend fix lands (new error reason from apply_review/4,
-  surfaced through the API), FRONTEND-DEV adds a distinct blocked/disabled
-  state in NonSkippableApprovalGate.tsx (and its api layer) that renders a
-  clear "release blocked -- rehearsal required, run assertions first"
-  message rather than a generic error toast, matching this repo's existing
-  pattern for other apply_review error branches. Needs a frontend test
-  exercising the new state against a mocked backend response, with no
-  regression to existing digest-mismatch/invalid-transition coverage.
+  Once ISS-0732's backend fix lands (new error reasons from apply_review/4,
+  surfaced through the API), FRONTEND-DEV adds a distinct blocked state in
+  NonSkippableApprovalGate.tsx (and its api layer) that renders a clear
+  "release blocked -- rehearsal required, run assertions first" message
+  rather than a generic error toast, matching this repo's existing pattern
+  for other apply_review error branches. Needs a frontend test exercising
+  the new state against a mocked backend response, with no regression to
+  existing digest-mismatch/invalid-transition coverage.
+
+  CORRECTION (added by CODE-DESIGNER, 2026-09-21, see
+  lib/letflow/design/iss0767-non-skippable-gate-rehearsal-blocked-state.md
+  §0): this issue's original filing guessed the backend error shape as
+  "e.g. :assertion_run_required or :assertions_failed" -- a single reason,
+  wrongly named. Neither name exists. ISS-0732 actually shipped FOUR
+  distinct error reasons from apply_review/4, all HTTP 409, disambiguated
+  only by the RFC 9457 `detail` string (not by status or `type`, which are
+  identical across all five 409 cases including the pre-existing
+  :digest_mismatch): `:assertion_run_missing`, `:assertion_run_digest_mismatch`,
+  `:assertion_run_in_progress`, and `:assertion_run_failed`. The linked
+  design surfaces all four as distinct UI states (a deliberate design
+  choice, not a default) rather than collapsing them into one generic
+  message -- see that design's §2 for the reasoning.
 queue_ref: Q-767  # letflow-queue task id 767, issue_ref ISS-0767. Registered
   # 2026-09-21 by ORCH.
 github_ref: GH-1664
 status: open
+design_ref: lib/letflow/design/iss0767-non-skippable-gate-rehearsal-blocked-state.md

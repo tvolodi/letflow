@@ -27542,7 +27542,7 @@ requirements:
   - id: REQ-372
     title: "Semantic decision-rule validation (field-existence + type-compatibility checking) for process authoring, with re-check on release submission"
     owner: ELIXIR-DEV
-    status: pending
+    status: in_progress
     stage: S8
     impl_order: 729  # letflow-queue task id, GH#1592. Registered 2026-09-20 by ORCH
       # from this GUI-review UAT finding.

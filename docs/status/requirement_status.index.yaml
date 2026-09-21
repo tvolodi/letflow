@@ -4293,14 +4293,18 @@ volumes:
     path: docs/status/requirement_status.v21.yaml
     status: current
     opened: 2026-09-20
-    entries: 9
+    entries: 10
     note: >
-      Incremented to 9 by DOC-UPDATER's own ISS-0773 SCOPE-CHANGE done-event
-      append (WF03-ISS0772-20260921, 2026-09-21T13:14:36Z -- permanent-lockout
-      zero-grant role-claims-sync fix) -- `grep -c "^  - req:"
-      docs/status/requirement_status.v21.yaml` = 9 on-disk entries. 373 lines /
-      21660 bytes, well under the 1200-line/120000-byte roll ceiling, so no
-      roll triggered.
+      Incremented to 10 during WF02-REQ372-20260921 Step Final's SECOND
+      rebase onto main (main advanced again, with DOC-UPDATER's own
+      ISS-0773 SCOPE-CHANGE done-event, WF03-ISS0772-20260921,
+      2026-09-21T13:14:36Z -- permanent-lockout zero-grant role-claims-sync
+      fix, between the first rebase/push and the PR's mergeability check):
+      v21.yaml itself auto-merged cleanly, so the real on-disk count is the
+      authority here, not either side's own prior note -- `grep -c
+      "^  - req:" docs/status/requirement_status.v21.yaml` = 10 on-disk
+      entries, recounted directly rather than assumed. Prior notes preserved
+      below for history.
 
       Incremented to 4 by DOC-UPDATER's own ISS-0769 SCOPE-CHANGE done-event
       append (WF03-ISS0769-20260921, 2026-09-21T04:30:37Z -- bearer-token

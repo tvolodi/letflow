@@ -8,8 +8,8 @@
   "file": "handoffs/WF02-REQ372-20260921/step-03i-test-design-validator.json",
   "created_at": "2026-09-21T08:21:01Z",
   "started_at": "2026-09-21T08:21:01Z",
-  "completed_at": null,
-  "status": "IN_PROGRESS",
+  "completed_at": "2026-09-21T13:35:00Z",
+  "status": "COMPLETED",
   "priority": "NORMAL",
   "context": {
     "stage": "S8",
@@ -52,18 +52,18 @@
   },
   "result": {
     "status": "PASS",
-    "summary": "",
+    "summary": "Read test/specs/REQ-372.md and both test files independently (not TEST-DESIGNER's summaries). Ran `mix test test/letflow/definitions/semantic_validation_test.exs test/letflow/definitions/semantic_validation_activation_test.exs` myself: 'Finished in 5.3 seconds (0.1s async, 5.2s sync)' / 'Result: 24 passed', 0 failures, 0 skipped. AC-by-AC: AC1 (semantic_validation_test.exs:71-88) -- asserts exact edge id, source node id, and verbatim misspelled variable name in the message. AC2 (95-160) -- worked-example test plus 4 levenshtein/nearest_declared_field tests, including the 'farther-but-alphabetically-first loses' test that specifically rules out a fallback implementation. AC3 (168-231) -- 6 tests covering both VIOLATION and OK cells, the integer-is-numeric convention, the null-guard exemption, array-never-comparable, and the unresolved-operand exemption; moduledoc (semantic_validation.ex lines 56-91) states the full 5x5 type-family table explicitly in prose, confirmed by direct read. AC4 (239-277) -- both violation classes from one validate/2 call, across two edges and within a single edge's single condition. AC5 (285-317) -- fresh-clean fixture plus the fix-path test starting from AC4's exact broken definition and correcting both problems in the same test body. AC6 (semantic_validation_activation_test.exs:174-239) -- the re-run-not-cached test mutates variable_schemas via Repo.update_all (bypassing VariableSchema's changeset/upsert path, no cache-invalidation hook exists anywhere in this path, confirmed by reading fetch_schemas/3 and activate/2's call chain) and asserts activate/2 reflects the NEW incompatible-type violation, definition still :draft; reverse-direction companion proves the fresh-read point in the other direction (newly valid). AC7 -- moduledoc lines 93-110 states the HUMAN_TASK-routing-out-of-scope decision explicitly with grep-verified reasoning; the one related test (semantic_validation_test.exs:369-380) is correctly framed as a scope-boundary guard, not AC7 proof, matching the spec's own framing. AC8 -- `git diff main...HEAD --stat -- lib/letflow/engine/expr.ex` is empty: unmodified. AC9 -- `git diff main...HEAD --name-only | grep '^web/'` is empty: no web/ file touched. AC10 -- not a test-code criterion per the spec itself (explicitly TEST-RUNNER's Step 4 obligation); TEST-DESIGNER's step-03h handoff already quotes a real passing run of both files (24 passed x2). I additionally attempted `mix letflow.check.test` myself as a sanity check: it failed on DB connection exhaustion ('too_many_connections', 'connection not available... request was dropped from queue') caused by a concurrent sibling test session sharing this Postgres instance (the log explicitly names another live mix test invocation and a live TenantSchemaReaper deferral for that reason) -- an environmental contention issue from a sibling session, not a defect in these two test files or their fixtures, and outside this gate's scope per the spec's own AC10 note. Cross-cutting checks (a)-(e): no @tag :skip anywhere (grep confirmed), no 'TODO' anywhere (grep confirmed), no hardcoded secrets/connection strings (grep confirmed), every DB-backed test provisions its own tenant via provisioned_tenant/1 and uses unique_name/1 (System.unique_integer-suffixed) + Ecto.UUID.generate() for created_by -- no shared hardcoded ids, no cross-test pollution, no execution-order dependency (async: true for the pure file, async: false + per-test tenant provisioning for the DB-backed file). Post-amendment consistency check: all three revised tests were read directly and confirmed to test the AMENDED behavior -- (1) semantic_validation_test.exs:106-122 now asserts valid: true / messages == [] for declared_fields == %{}, matching §2.5.1; (2) the AC6 reverse test (activation test 211-239) seeds 'customer_name' before the first call so declared_fields is non-empty throughout (a genuine :undeclared_variable_reference for the still-absent 'amount'), never entering the empty-schema exemption state, then seeds 'amount' and asserts activate/2 succeeds; (3) the validate_definition_graph/2 wiring test (249-276) likewise seeds 'customer_name' first, keeping its demonstrated mismatch a genuine §2.2 violation rather than relying on the exemption. The new direct exemption test (semantic_validation_test.exs:330-359) was read and confirmed to build a two-edge graph with a real undeclared-variable-referencing condition and a real undeclared-vs-undeclared comparison, call validate(graph, %{}), and assert the literal result == %{valid: true, violations: []} -- genuinely proving the guard fires unconditionally before either pass runs, not merely reusing AC2's incidental coverage.",
     "artifacts_out": [],
     "issues": [],
     "git_evidence": {
-      "branch_name": null,
+      "branch_name": "feature/WF02-REQ372-20260921",
       "commit_sha_list": [],
-      "remote_branch": null,
-      "push_status": "skipped",
+      "remote_branch": "origin/feature/WF02-REQ372-20260921",
+      "push_status": "pending",
       "pr_url": null,
       "pr_create_error": null
     },
-    "next_action": ""
+    "next_action": "Route to TEST-RUNNER (4)"
   },
   "rework_count": 0,
   "max_rework": 3

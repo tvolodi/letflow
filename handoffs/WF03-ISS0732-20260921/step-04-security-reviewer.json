@@ -7,9 +7,9 @@
   "to_agent": "SECURITY-REVIEWER",
   "file": "handoffs/WF03-ISS0732-20260921/step-04-security-reviewer.json",
   "created_at": "2026-09-21T09:10:00Z",
-  "started_at": null,
-  "completed_at": null,
-  "status": "PENDING",
+  "started_at": "2026-09-21T09:20:00Z",
+  "completed_at": "2026-09-21T04:02:36Z",
+  "status": "COMPLETED",
   "priority": "HIGH",
   "context": {
     "stage": "S6",
@@ -37,19 +37,32 @@
     ]
   },
   "result": {
-    "status": "PENDING",
-    "summary": null,
-    "artifacts_out": [],
-    "issues": [],
+    "status": "PASS",
+    "summary": "Reviewed commit 4efff094 (lib/letflow/definitions/promotion.ex, lib/letflow/routers/promotions.ex) and the test-fixture follow-up commit against origin/main via `git diff origin/main...HEAD`. INV-1..INV-8 assessed individually below; no BLOCKER found. verify_rehearsed/2's lookup reuses the pre-existing, prefix-scoped Letflow.Definitions.get_latest_assertion_run/2 (definitions.ex untouched by this diff -- confirmed via `git diff origin/main...HEAD -- lib/letflow/definitions.ex` returning empty), so no new query bypasses tenant scoping. verify_apply_digest/2 and R8's assertions_failed==0 gate (promotions.ex run-assertions handler) are confirmed byte-for-byte untouched -- neither function appears in either diff hunk; only new type-union members, a doc-comment renumber, one new `with` clause, and one new private function were added to promotion.ex, and only three new render_apply/2 clauses were added to promotions.ex (inserted between the existing :invalid_transition and {:promotion_failed, :forbidden} clauses, none of the surrounding clauses modified).",
+    "artifacts_out": [
+      "handoffs/WF03-ISS0732-20260921/step-04-security-reviewer.json"
+    ],
+    "issues": [
+      "INV-1 (Tenant data isolation) -- APPLIES. verify_rehearsed/2 (lib/letflow/definitions/promotion.ex:625-641, new) calls Letflow.Definitions.get_latest_assertion_run(review.id, opts), an existing, unmodified function (lib/letflow/definitions.ex:1179-1197) that scopes its Repo.one/2 call via `prefix: Keyword.fetch!(opts, :prefix)` -- the same :prefix mechanism 0003 mandates, and the same `opts` value already threaded through apply_review/4's other calls (get_review/2, and now this). No new query bypasses :prefix. (b) no migration in this diff. (c) no tenant_id field involved -- PromotionAssertionRun rows are looked up by review_id within the already-resolved prefix, not by a caller-supplied tenant identifier. Verdict: SATISFIED.",
+      "INV-2 (Server-side field authorisation) -- NOT-APPLICABLE. Reference states 'no multi-tenant API surface exists (S4 not started)'; independently, the three new render_apply/2 clauses (lib/letflow/routers/promotions.ex:632-652) each emit a single fixed detail string via Response.conflict/2 with no assertion-run fields (no run id, no digest value, no timestamps, no other tenant's identifiers) serialised into the body -- confirmed by reading the literal strings in the diff.",
+      "INV-3 (Untrusted runtime sandboxing) -- NOT-APPLICABLE. No Lua/WASM path touched.",
+      "INV-4 (Secrets by reference only) -- NOT-APPLICABLE. No secret material in this diff; confirmed no new config/env/token handling.",
+      "INV-5 (Not-found/forbidden indistinguishability) -- NOT-APPLICABLE. Reference states S4 not started; independently, get_latest_assertion_run/2's prefix-scoped lookup can only ever see rows in the caller's own resolved tenant schema (schema-per-tenant physically isolates other tenants' rows), so there is no cross-tenant 'exists but not yours' branch for this lookup to distinguish in the first place.",
+      "INV-6 (New data-access path proves its scoping) -- APPLIES and is SATISFIED by this handoff itself: PASS status, INV-1..INV-8 individually assessed above.",
+      "INV-7 (No SQL string interpolation) -- APPLIES. `grep -n Repo.query lib/letflow/definitions/promotion.ex lib/letflow/routers/promotions.ex` -- no hits in either changed file; verify_rehearsed/2 goes through the existing Ecto.Query-based get_latest_assertion_run/2, no raw SQL introduced.",
+      "INV-8 (No unhandled crashes on realistic failure paths) -- APPLIES. verify_rehearsed/2's `case` on get_latest_assertion_run/2's result has an explicit clause for both {:error, :not_found} and {:ok, assertion_run} -- no bare match, no missing branch. plan_digest and assertion_run.plan_digest are compared only via PromotionDigest.verify_digest/2 (already-audited constant-time comparator used elsewhere in this same module for the same reason, per design §2.1 step 2) -- not a raw `==` that could behave unexpectedly, and not a new call to that function's own internals. `grep -n '^\\s*{:ok, .*} = ' lib/letflow/definitions/promotion.ex` produces no new hits introduced by this diff.",
+      "INV-9 (SSRF/outbound URL validation) -- NOT-APPLICABLE. No outbound HTTP request added.",
+      "NON-BLOCKING, routed to REVIEWER not SECURITY-REVIEWER: design doc OQ-2 (lib/letflow/design/iss0732-promotion-apply-assertion-gate.md:315-333) correctly flags that get_latest_assertion_run/2 has no `status` filter, so a concurrent in-flight run (status: :running, assertions_failed defaults to 0 per insert_changeset/2) could satisfy verify_rehearsed/2's gate if it happens to be the most recent row for that review_id at read time. This is a same-tenant race/business-logic correctness question (does a not-yet-completed rehearsal wrongly count as passing), not a tenant-isolation, secret-leakage, SQL-injection, or unhandled-crash defect -- none of INV-1..INV-9 covers it, so it is not a SECURITY-REVIEWER BLOCKER. Flagging for REVIEWER to decide whether it warrants a follow-up (e.g. requiring status not in [:running] in addition to assertions_failed == 0) before or after this ships, per the design doc's own request."
+    ],
     "git_evidence": {
       "branch_name": "feature/WF03-ISS0732-20260921",
-      "commit_sha_list": [],
-      "remote_branch": null,
-      "push_status": null,
+      "commit_sha_list": ["4efff094"],
+      "remote_branch": "origin/feature/WF03-ISS0732-20260921",
+      "push_status": "pending (will push updated handoff after this commit)",
       "pr_url": null,
       "pr_create_error": null
     },
-    "next_action": null
+    "next_action": "Route to REVIEWER (idiom/OTP/scope-creep gate) per WF-02 Step 2c ordering. Carry forward the non-blocking OQ-2 in-flight-run race note for REVIEWER's own judgment call -- not a rework requirement from this gate."
   },
   "rework_count": 0,
   "max_rework": 3

@@ -208,88 +208,72 @@ _common_error} -> Response.internal_error(conn)`).
 
 ### 3.3 Query shape
 
-```
-prefix = Keyword.fetch!(opts, :prefix)
-page_size = Map.fetch!(filters, :page_size)
+`list_reviews/2`'s body, in prose (mirrors `Definitions.list_paginated/2`'s own
+shape exactly, §0): resolve `prefix` and `page_size` from `opts`/`filters`; guard
+the prefix via `TenantProvisioning.tenant_id_for_schema_name/1` (§3.2); decode the
+caller's `cursor` (see below); build one `Ecto.Query` over `PromotionReview` by
+successively applying a status filter, a `def_id` filter, a `def_type` filter, and
+a cursor-boundary filter, each a no-op when its corresponding input is `nil`; order
+the query `desc: inserted_at, desc: id` (§3.4); `limit` to `page_size + 1` rows;
+run it via `Repo.all(query, prefix: prefix)`; split the result into the returned
+page plus an optional `next_cursor` (the standard "fetch one extra row to detect a
+next page" idiom `split_definitions_list_page/2` already uses, §0). Returns `{:ok,
+%{items: [...], next_cursor: ...}}` on success.
 
-with {:ok, _} <- TenantProvisioning.tenant_id_for_schema_name(prefix),
-     {:ok, cursor_seek} <- decode_promotion_reviews_list_cursor(Map.get(filters, :cursor)) do
-  query =
-    PromotionReview
-    |> where_review_status(Map.get(filters, :status))
-    |> where_def_id(Map.get(filters, :def_id))
-    |> where_def_type(Map.get(filters, :def_type))
-    |> filter_by_promotion_reviews_list_cursor(cursor_seek)
-    |> order_by([r], desc: r.inserted_at, desc: r.id)
-    |> limit(^(page_size + 1))
+Private helper responsibilities (each a direct sibling of one of `definitions.ex`'s
+same-named-pattern helpers, §0 — named here by responsibility and input/output
+shape, not by literal code):
 
-  rows = Repo.all(query, prefix: prefix)
-  {page, next_cursor} = split_promotion_reviews_list_page(rows, page_size)
-  {:ok, %{items: page, next_cursor: next_cursor}}
-end
-```
-
-Private helpers, each a direct sibling of `definitions.ex`'s same-named-pattern
-helpers (§0), fragment/shape only — no literal SQL, no function bodies:
-
-  * `where_review_status(query, nil)` → `query` unchanged.
-    `where_review_status(query, statuses)` when `statuses` is a non-empty list of
-    atoms → `where([r], r.status in ^statuses)`. (Filters by **one or more**
-    statuses per AC3/description item 3 — see §4 for how the router turns a
-    caller-supplied comma-separated string into this list, and why comma-separated
-    rather than repeated `status=` params.)
-  * `where_def_id(query, nil)` → unchanged. `where_def_id(query, def_id)` when
-    `def_id` is a non-empty string → `where([r], r.def_id == ^def_id)`. Exact-match,
-    `def_id` is not a UUID (it holds `plan.process_key`, a string) — no `Ecto.UUID.cast/1`
-    step, unlike path-parameter review-id handling elsewhere in this router.
-  * `where_def_type(query, nil)` → unchanged. `where_def_type(query, def_type)` when
-    `def_type` is a non-empty string → `where([r], r.def_type == ^def_type)`.
-    Exact-match, no enum validation — `def_type` is deliberately open-ended per the
-    schema's own Open Question 1 (§0), so an unrecognized `def_type` value is simply
-    "no rows match," never rejected the way an unrecognized `status` value is (§4).
-  * `decode_promotion_reviews_list_cursor(nil)` → `{:ok, nil}`.
-    `decode_promotion_reviews_list_cursor(raw)` when `raw` is a binary → delegates to
-    `Pagination.decode_cursor(raw, @promotion_reviews_list_cursor_prefix,
-    byte_size(@promotion_reviews_list_cursor_prefix))`, mapping `{:ok, %Pagination.Cursor{}}`
-    through a `decode_promotion_reviews_list_seek/1` step and passing `{:error,
-    :wrong_endpoint}`/`{:error, :expired}` through unchanged, collapsing
-    `:invalid_base64`/any other decode failure to `{:error, :invalid_cursor}` — the
-    exact three-way collapse `decode_definitions_list_cursor/1` already performs.
-  * `@promotion_reviews_list_cursor_prefix "PR:"` — a new, distinct cursor-endpoint
-    prefix. Does not collide with `"PE:"` (this same router's R11 platform-events
-    cursor) or `"DL:"` (`Definitions.list_paginated/2`'s cursor,
-    `decode_definitions_list_cursor/1`'s own comment) or `"A:"`/`"T:"`/`"U:"` (Audit/
-    Tenants/Identity, per R11's own comment citing them) — `decode_cursor/4`'s prefix
-    check (`check_prefix/2`) is what makes a cursor minted by one endpoint rejected
-    by every other endpoint's decode call (`{:error, :wrong_endpoint}`).
-  * The decoded cursor payload layout is `"PR:<mint_time_us>:<id>:<inserted_at_us>"`
-    — same field-slot idiom as `"DL:<mint_time_us>:<id>:<created_at_us>"`
-    (§0's "more mature" idiom note): the first slot after the prefix is always the
-    *mint-time* timestamp `decode_cursor/4`'s own expiry check reads, never the
-    domain `inserted_at` value itself (putting a domain timestamp there would make a
+  * **Status filter.** No-op on `nil`; on a non-empty list of status atoms,
+    restricts the query to rows whose `status` is a member of that list (an `IN`
+    condition) — this is what lets the filter accept **one or more** statuses per
+    AC3/description item 3 (see §4 for how the router turns a caller-supplied
+    comma-separated string into this list, and why comma-separated rather than
+    repeated `status=` params).
+  * **`def_id` filter.** No-op on `nil`; on a non-empty string, restricts the query
+    to rows with an exact `def_id` match. `def_id` is not a UUID (it holds
+    `plan.process_key`, a string) — no `Ecto.UUID.cast/1` step, unlike
+    path-parameter review-id handling elsewhere in this router.
+  * **`def_type` filter.** No-op on `nil`; on a non-empty string, restricts the
+    query to rows with an exact `def_type` match. No enum validation —
+    `def_type` is deliberately open-ended per the schema's own Open Question 1
+    (§0), so an unrecognized `def_type` value simply matches "no rows," never
+    rejected the way an unrecognized `status` value is (§4).
+  * **Cursor decode.** `nil` cursor input → no boundary filter (first page).
+    Non-nil input is decoded via `Pagination.decode_cursor/4` against a new,
+    endpoint-distinct cursor prefix, `@promotion_reviews_list_cursor_prefix
+    "PR:"` — distinct from `"PE:"` (this same router's R11 platform-events
+    cursor), `"DL:"` (`Definitions.list_paginated/2`'s cursor), and `"A:"`/`"T:"`/
+    `"U:"` (Audit/Tenants/Identity, per R11's own comment citing them) —
+    `decode_cursor/4`'s prefix check is what makes a cursor minted by one endpoint
+    rejected by every other endpoint's decode call (`{:error, :wrong_endpoint}`).
+    A successful decode is further parsed into the two sort-key fields the cursor
+    boundary filter needs (row `id` and `inserted_at`, as microseconds); a decode
+    failure collapses to the same three-way error set
+    `decode_definitions_list_cursor/1` already returns (`:wrong_endpoint`,
+    `:expired`, or `:invalid_cursor` for anything else, including a malformed
+    base64 payload).
+  * **Cursor payload layout:** `"PR:<mint_time_us>:<id>:<inserted_at_us>"` — same
+    field-slot idiom as `"DL:<mint_time_us>:<id>:<created_at_us>"` (§0's "more
+    mature" idiom note): the first slot after the prefix is always the *mint-time*
+    timestamp `decode_cursor/4`'s own expiry check reads, never the domain
+    `inserted_at` value itself (putting a domain timestamp there would make a
     cursor built from an old-but-still-`pending_review` row appear already-expired
-    at mint time — same defect `identity.ex`'s moduledoc already documents avoiding).
-    `decode_promotion_reviews_list_seek/1` parses this exactly as
-    `decode_definitions_list_seek/1` does: split on `:`, `parts: 3`, discard the
-    mint-time segment, return `{id_str, String.to_integer(inserted_at_us_str)}`.
-  * `filter_by_promotion_reviews_list_cursor(query, nil)` → unchanged.
-    `filter_by_promotion_reviews_list_cursor(query, {id, inserted_at_us})` →
-    `ts = DateTime.from_unix!(inserted_at_us, :microsecond)`, then
-    `where([r], {r.inserted_at, r.id} < {^ts, ^id})` — a strict tuple-less-than over
-    the same `(inserted_at, id)` DESC ordering the outer query sorts by, matching
-    `filter_by_definitions_list_cursor/2`'s pattern exactly (this is what makes
+    at mint time — the same defect `identity.ex`'s moduledoc documents avoiding).
+  * **Cursor boundary filter.** No-op when there is no decoded cursor (first
+    page); otherwise restricts the query to rows strictly "after" the decoded
+    `(inserted_at, id)` pair under the same DESC ordering the outer query sorts
+    by (a tuple-less-than comparison, matching
+    `filter_by_definitions_list_cursor/2`'s pattern exactly) — this is what makes
     "next page continues strictly after the last row already returned" correct
-    under DESC ordering with a determinstic `id` tiebreak — AC1's "most-recent
+    under DESC ordering with a deterministic `id` tiebreak (AC1's "most-recent
     first ... ties broken by id for determinism" requirement).
-  * `split_promotion_reviews_list_page(rows, page_size)` when `length(rows) >
-    page_size` → drop the trailing probe row, build `next_cursor` from the *last
-    row of the kept page* via `build_promotion_reviews_list_next_cursor/1`.
-    `split_promotion_reviews_list_page(rows, _page_size)` otherwise → `{rows, nil}`.
-  * `build_promotion_reviews_list_next_cursor(%PromotionReview{id: id, inserted_at:
-    inserted_at})` → `mint_time_us = System.system_time(:microsecond)`,
-    `inserted_at_us = DateTime.to_unix(inserted_at, :microsecond)`, then
-    `Pagination.build_raw_cursor_timestamp_key(@promotion_reviews_list_cursor_prefix,
-    mint_time_us, id, inserted_at_us) |> Pagination.encode_cursor()`.
+  * **Page split.** When the query returned more than `page_size` rows, drop the
+    trailing probe row and derive `next_cursor` from the last row of the kept
+    page (mint a fresh mint-time, encode that row's `id`/`inserted_at` into the
+    `"PR:..."` payload shape above via `Pagination.build_raw_cursor_timestamp_key/4`
+    + `Pagination.encode_cursor/1`). When the query returned `page_size` or fewer
+    rows, `next_cursor` is `nil` (last page).
 
 ### 3.4 Ordering (AC1)
 
@@ -303,11 +287,9 @@ cited in §0).
 
 ### 4.1 Declaration and placement
 
-```
-get "/" do
-  handle_list_reviews(conn)
-end
-```
+`get "/"`, dispatching to a new private handler, `handle_list_reviews/1` (one
+`conn` argument, matching every other zero-path-param handler in this module —
+`handle_submit/1`, `handle_plan/1`, `handle_platform_events/1`).
 
 Declared using the plain `get` macro (no `:policy_key`) — same `:Unknown`-gated
 mechanism every other route in this module already uses (see §5). Placed **after**
@@ -323,47 +305,30 @@ ordering-safety argument from scratch.
 
 ### 4.2 Handler
 
-```
-defp handle_list_reviews(conn) do
-  conn = fetch_query_params(conn)
-  query = conn.query_params
-  opts = conn.assigns.scoped_opts
+`@spec handle_list_reviews(Plug.Conn.t()) :: Plug.Conn.t()`
 
-  with {:ok, statuses} <- parse_status_filter_param(Map.get(query, "status")),
-       {:ok, raw_page_size} <- Pagination.parse_page_size_param(Map.get(query, "page_size")),
-       {:ok, page_size} <- Pagination.validate_page_size(raw_page_size) do
-    filters = %{
-      status: statuses,
-      def_id: non_empty(Map.get(query, "def_id")),
-      def_type: non_empty(Map.get(query, "def_type")),
-      cursor: Map.get(query, "cursor"),
-      page_size: page_size
-    }
+Query-parameter handling mirrors `Routers.Definitions`'s `handle_list/1` and this
+same file's own `handle_platform_events/1` (§0): fetch query params, then validate
+`status`, `page_size` in a `with`-chain alongside `Pagination.parse_page_size_param/1`
++ `validate_page_size/1` (same two-step page-size validation every list route in
+this codebase already performs). On success, assemble a `filters` map — `status`
+(parsed list-or-nil, §4.3), `def_id`/`def_type` (raw query values passed through
+`non_empty/1`, described below), `cursor` (raw query value, decoding happens inside
+`list_reviews/2`), `page_size` — and call
+`PromotionReviewStore.list_reviews(filters, conn.assigns.scoped_opts)`, rendering
+the result via `render_list_reviews/2` (§4.4). On any validation failure, respond
+with a `400` naming the specific problem: an invalid `status` token gets the
+message in §4.3; `Pagination.parse_page_size_param/1`/`validate_page_size/1`'s two
+error atoms (`:invalid_page_size`, `:page_size_too_large`) get the same two
+messages `Routers.Definitions`'s/`Routers.Instances`'s own list handlers already
+use verbatim ("invalid page_size" / "page_size out of range").
 
-    render_list_reviews(conn, PromotionReviewStore.list_reviews(filters, opts))
-  else
-    {:error, :invalid_status} ->
-      Response.bad_request(
-        conn,
-        "status must be one or more of: pending_review, approved, rejected, applied, failed, superseded"
-      )
-
-    {:error, :invalid_page_size} ->
-      Response.bad_request(conn, "invalid page_size")
-
-    {:error, :page_size_too_large} ->
-      Response.bad_request(conn, "page_size out of range")
-  end
-end
-```
-
-`non_empty/1` is the same private helper `handle_run_assertions`'s sibling routes
-already use elsewhere in this codebase's routers (`tasks.ex`'s own `non_empty/1`,
-§0) — `nil`/`""` → `nil` (no filter), any other binary passed through unchanged. This
-module does not currently define `non_empty/1`; this design adds one private copy to
-`promotions.ex` (three-line pattern-match function, not shared code — every router
-file that needs it already defines its own copy rather than importing a shared
-helper, matching this codebase's existing per-file duplication of that one idiom).
+`non_empty/1` is the same private helper `tasks.ex`'s own list handler already uses
+(§0) — `nil`/`""` maps to `nil` (no filter), any other binary passes through
+unchanged. This module does not currently define `non_empty/1`; this design adds
+one private copy to `promotions.ex` (not shared code — every router file that needs
+it already defines its own copy rather than importing a shared helper, matching
+this codebase's existing per-file duplication of that one idiom).
 
 ### 4.3 `status` filter parsing — accepts one or more values (AC3, description item 3)
 
@@ -386,92 +351,46 @@ identically with `curl`/every HTTP client's plain query-string building, and eve
 filter value here is a closed six-member enum with no legal comma in any member, so
 there is no ambiguity between "the delimiter" and "a value."
 
-```
-defp parse_status_filter_param(nil), do: {:ok, nil}
-defp parse_status_filter_param(""), do: {:ok, nil}
+`@spec parse_status_filter_param(String.t() | nil) :: {:ok, [PromotionReview.status()] | nil} | {:error, :invalid_status}`
 
-defp parse_status_filter_param(raw) when is_binary(raw) do
-  raw
-  |> String.split(",")
-  |> Enum.map(&String.trim/1)
-  |> Enum.reject(&(&1 == ""))
-  |> parse_status_values([])
-end
-
-defp parse_status_values([], []), do: {:ok, nil}
-defp parse_status_values([], acc), do: {:ok, Enum.reverse(acc)}
-
-defp parse_status_values([raw | rest], acc) do
-  case status_atom(raw) do
-    {:ok, atom} -> parse_status_values(rest, [atom | acc])
-    :error -> {:error, :invalid_status}
-  end
-end
-
-defp status_atom("pending_review"), do: {:ok, :pending_review}
-defp status_atom("approved"), do: {:ok, :approved}
-defp status_atom("rejected"), do: {:ok, :rejected}
-defp status_atom("applied"), do: {:ok, :applied}
-defp status_atom("failed"), do: {:ok, :failed}
-defp status_atom("superseded"), do: {:ok, :superseded}
-defp status_atom(_other), do: :error
-```
-
-The **first** unrecognized token in the comma-separated list short-circuits the whole
-filter to `{:error, :invalid_status}` (via `parse_status_values/2`'s non-tail-recursive
-`:error` propagation) — a request with one valid and one invalid status value is
-rejected outright, never silently reduced to "just the valid one," matching AC4's "an
-unrecognised status value is rejected... not silently ignored." An all-empty/only-
-commas input (`?status=` or `?status=,,`) reduces to `nil` (no filter) rather than an
-error — consistent with `def_id`/`def_type`'s "empty string == absent filter" idiom
-and with `tasks.ex`'s own `parse_instance_id_param(nil)`/`non_empty("")` precedent of
-treating an empty param as "not supplied," not as "supplied but invalid."
+Behavior, by input shape (a sibling of `tasks.ex`'s `parse_status_param/1`, §0,
+widened from single-value to a list): `nil` and `""` both map to `{:ok, nil}` (no
+filter — consistent with `def_id`/`def_type`'s "empty string == absent filter"
+idiom and `tasks.ex`'s own `parse_instance_id_param(nil)`/`non_empty("")`
+precedent of treating an empty param as "not supplied," not "supplied but
+invalid"). Any other binary is split on `,`, each piece trimmed, empty pieces
+dropped (so `?status=` or `?status=,,` also reduces to no filter); each remaining
+piece is mapped against the six literal enum-value strings
+(`"pending_review"`/`"approved"`/`"rejected"`/`"applied"`/`"failed"`/`"superseded"`)
+to its corresponding atom. If every piece maps successfully, the result is `{:ok,
+list_of_atoms}`; if any single piece fails to match one of the six literals, the
+**whole filter** fails as `{:error, :invalid_status}` — a request mixing one valid
+and one invalid status token is rejected outright, never silently reduced to "just
+the valid ones," matching AC4's "an unrecognised status value is rejected ... not
+silently ignored."
 
 ### 4.4 Response rendering (AC1, AC5)
 
-```
-defp render_list_reviews(conn, {:ok, %{items: items, next_cursor: next_cursor}}) do
-  Response.ok(conn, %{
-    "items" => Enum.map(items, &promotion_review_list_item_map/1),
-    "next_cursor" => next_cursor
-  })
-end
+`@spec render_list_reviews(Plug.Conn.t(), {:ok, PromotionReviewStore.list_reviews_result()} | {:error, PromotionReviewStore.list_reviews_error()}) :: Plug.Conn.t()`
 
-defp render_list_reviews(conn, {:error, :invalid_cursor}),
-  do: Response.bad_request(conn, "invalid cursor")
-
-defp render_list_reviews(conn, {:error, :wrong_endpoint}),
-  do: Response.bad_request(conn, "cursor is not valid for this endpoint")
-
-defp render_list_reviews(conn, {:error, :expired}),
-  do: Response.send_problem(conn, Error.cursor_expired())
-
-defp render_list_reviews(conn, {:error, _other}), do: Response.internal_error(conn)
-```
-
-This exactly mirrors `Routers.Definitions`'s `render_list_result/2` (§0) — same four
-named branches plus the same catch-all, so `{:error, :invalid_schema_name}` (§3.2)
-falls into the unmapped `{:error, _other}` branch, same as `Definitions.list_paginated/2`'s
-own unmapped-error handling.
+Four named clauses plus a catch-all, exactly mirroring `Routers.Definitions`'s
+`render_list_result/2` (§0): `{:ok, %{items: items, next_cursor: next_cursor}}` →
+`200` with `%{"items" => <mapped items, §4.5>, "next_cursor" => next_cursor}`;
+`{:error, :invalid_cursor}` → `400` "invalid cursor"; `{:error, :wrong_endpoint}` →
+`400` "cursor is not valid for this endpoint"; `{:error, :expired}` → the shared
+`Error.cursor_expired/0` problem document (§0); any other error (including
+`{:error, :invalid_schema_name}`, §3.2) → `500` via the same unmapped-error
+catch-all `Definitions.list_paginated/2`'s own router call site already relies on.
 
 ### 4.5 Response item shape (AC5, description item 5)
 
-```
-@spec promotion_review_list_item_map(PromotionReview.t()) :: map()
-defp promotion_review_list_item_map(review) do
-  %{
-    "id" => review.id,
-    "status" => Atom.to_string(review.status),
-    "def_type" => review.def_type,
-    "def_id" => review.def_id,
-    "requested_by" => review.requested_by,
-    "inserted_at" => iso8601(review.inserted_at),
-    "updated_at" => iso8601(review.updated_at)
-  }
-end
-```
+`@spec promotion_review_list_item_map(PromotionReview.t()) :: map()`
 
-Exactly the 7 keys REQ-397's description item 5 names, in the same order, reusing
+A 7-key allowlist map, in this exact order: `"id"` (the review's own `id`),
+`"status"` (`Atom.to_string/1` of the enum value, matching `review_context_map/1`'s
+own status-rendering convention), `"def_type"`, `"def_id"`, `"requested_by"` (all
+three straight field reads), `"inserted_at"`/`"updated_at"` (both run through this
+module's existing `iso8601/1` private helper, unchanged). REQ-397's description item 5 names, in the same order, reusing
 this module's own `iso8601/1` private helper unchanged (already correct for
 `%DateTime{}}`, which is what `PromotionReview.inserted_at`/`updated_at` always are —
 see §0). `"id"` (not `"review_id"`) — deliberately different from `review_context_map/1`'s

@@ -1,0 +1,73 @@
+{
+  "handoff_id": "a1b2c3d4-0001-4000-8000-000000000004",
+  "run_id": "WF02-REQ372-20260921",
+  "workflow_id": "WF-02",
+  "step": "02a",
+  "from_agent": "ORCH",
+  "to_agent": "ELIXIR-DEV",
+  "file": "handoffs/WF02-REQ372-20260921/step-02a-elixir-dev.json",
+  "created_at": "2026-09-21T07:11:51Z",
+  "started_at": "2026-09-21T07:11:51Z",
+  "completed_at": null,
+  "status": "PENDING",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S8",
+    "requirement_ids": ["REQ-372"],
+    "requirement_text": {
+      "REQ-372": "See handoffs/WF02-REQ372-20260921/step-01-code-designer.json's context.requirement_text.REQ-372 for the full requirement text, copied verbatim from docs/requirements.yaml."
+    },
+    "related_handoff_ids": [
+      "a1b2c3d4-0001-4000-8000-000000000002",
+      "a1b2c3d4-0001-4000-8000-000000000003"
+    ],
+    "artifacts_in": [
+      "lib/letflow/design/req372-semantic-decision-rule-validation.md",
+      "handoffs/WF02-REQ372-20260921/step-01-code-designer.json",
+      "lib/letflow/definitions/graph.ex",
+      "lib/letflow/engine/variable_schema.ex",
+      "lib/letflow/engine/expr.ex",
+      "lib/letflow/definitions.ex",
+      "lib/letflow/definitions/promotion.ex"
+    ],
+    "owned_modules": [
+      "lib/letflow/definitions/graph.ex",
+      "lib/letflow/engine/variable_schema.ex",
+      "lib/letflow/definitions/semantic_validation.ex",
+      "lib/letflow/definitions.ex"
+    ]
+  },
+  "task": {
+    "description": "Implement REQ-372 per the CODE-DESIGN-VALIDATOR-approved design at lib/letflow/design/req372-semantic-decision-rule-validation.md (read it in full -- it is the source of truth for the module name, function signatures, the comparable/non-comparable type-pair table, the release/promotion call-site change, and the HUMAN_TASK-out-of-scope decision; do not re-derive any of these from scratch, they are already settled and gated). You are on branch feature/WF02-REQ372-20260921 -- verify with git branch --show-current before touching any file; STOP and report FAIL if it is not that branch.\n\nFollow WF-02 Step 2a's procedure (docs/agents/workflows/WF-02_requirement_implementation.md): implement lib/letflow/**/*.ex per the design (the new module, plus the call-site change in lib/letflow/definitions.ex wiring activate/2 and validate_definition_graph/2 to it, plus any Graph.Violation extension needed in lib/letflow/definitions/graph.ex for the two new violation codes per the design). This requirement needs NO new migration (pure validation logic over already-persisted data) -- if you find you need one, STOP and report back, since the design did not call for one. mix compile --warnings-as-errors must exit 0. mix format --check-formatted must pass (run mix format first if needed).\n\nHARD SCOPE FENCE, repeated because it is load-bearing: (1) lib/letflow/engine/expr.ex must be left UNMODIFIED -- REQ-288's EXP-102 grammar decision is closed; this requirement only consumes Expr's already-public, already-parsed output (translate_cel_to_expr/1, parse_strict/1). If you find you cannot implement the design without touching expr.ex, STOP and report back rather than modifying it. (2) NOTHING under web/ may be touched -- this is a backend-only requirement; frontend presentation is an explicit follow-on requirement, not part of this one. (3) The moduledoc of your new module MUST state explicitly, in prose (not left for a reader to infer): the full comparable/non-comparable type-pair table from the design, AND the HUMAN_TASK-routing-out-of-scope decision with its reasoning (grounded in the design's own grep-verified finding that no HUMAN_TASK-to-field routing mechanism exists anywhere in lib/letflow/ today).\n\nImplement the nearest-field suggestion using a REAL Levenshtein (or equivalent) string-distance algorithm -- not a placeholder, not a first-alphabetical fallback, not a stub that always returns the same suggestion. Ensure ALL violations across both rule classes (field-existence and type-compatibility) are collected and returned together from a single validation call -- no early return on the first violation found. Ensure the pass wired into the release/promotion submission call path re-fetches VariableSchema fresh on every call (no caching/memoization across calls) -- this is load-bearing for AC6 (the re-run-not-cached acceptance criterion), and the design's own §3.3 change description states how.\n\nSelf-review checklist before completing (from WF-02 Step 2a): no string interpolation of tenant/user input into raw SQL; no unresolved {:ok, _} = match on a path reachable from external I/O; every new public function has a one-line @doc; if any existing function's signature changed, confirm every call site still compiles (mix compile --warnings-as-errors is the mechanical check for this).\n\nClaim the handoff (status IN_PROGRESS), implement, verify compile/format, then set status COMPLETED with a genuine first-hand result. next_action on PASS: \"Route to SECURITY-REVIEWER (2c)\". Do not touch created_at/started_at. Commit all new/changed files plus the updated handoff, push to origin/feature/WF02-REQ372-20260921. Never push to main.",
+    "acceptance_criteria": [
+      "a definition whose EXCLUSIVE_GATEWAY edge condition references a variable name absent from the definition's declared VariableSchema fields produces a violation naming the exact typed variable name and the step/edge it belongs to (tests come in Step 3, but the implementation must genuinely support this observably -- e.g. via iex/a quick manual exercise if you want to sanity-check, not required to write the test yourself here)",
+      "that violation's message includes a suggested nearest declared field name, computed by a real string-distance measure (not a placeholder or first-alphabetical fallback)",
+      "a definition comparing two operands of declared VariableSchema types recorded as non-comparable (at minimum: numeric/money vs text/string) produces a violation; the comparable/non-comparable type-pair table is stated explicitly in the moduledoc, not left implicit",
+      "a definition with two independent broken rules (one field-existence violation, one type-compatibility violation) produces BOTH violations in a single validation call -- no fix-one-to-see-the-next",
+      "a definition with zero semantic violations validates cleanly",
+      "the semantic validation pass re-runs in full (not from a cached prior result) at the definition's actual release/promotion submission call path",
+      "whether a HUMAN_TASK routing/assignment-by-field mechanism is in scope for this requirement is stated explicitly in the moduledoc with the reasoning",
+      "git diff shows lib/letflow/engine/expr.ex unmodified",
+      "no file under web/ is modified by this requirement",
+      "mix compile --warnings-as-errors exits 0",
+      "mix format --check-formatted passes"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "",
+    "artifacts_out": [],
+    "issues": [],
+    "git_evidence": {
+      "branch_name": null,
+      "commit_sha_list": [],
+      "remote_branch": null,
+      "push_status": "skipped",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": ""
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

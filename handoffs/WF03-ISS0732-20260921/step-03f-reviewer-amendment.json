@@ -1,0 +1,55 @@
+{
+  "handoff_id": "b1e2a3c4-0000-4000-8000-00000000000c",
+  "run_id": "WF03-ISS0732-20260921",
+  "workflow_id": "WF-03",
+  "step": "03f",
+  "from_agent": "ORCH",
+  "to_agent": "REVIEWER",
+  "file": "handoffs/WF03-ISS0732-20260921/step-03f-reviewer-amendment.json",
+  "created_at": "2026-09-21T04:15:51Z",
+  "started_at": "2026-09-21T04:15:51Z",
+  "completed_at": null,
+  "status": "PENDING",
+  "priority": "HIGH",
+  "context": {
+    "stage": "S6",
+    "requirement_ids": [],
+    "requirement_text": {},
+    "related_handoff_ids": ["b1e2a3c4-0000-4000-8000-00000000000a", "b1e2a3c4-0000-4000-8000-00000000000b"],
+    "artifacts_in": [
+      "handoffs/WF03-ISS0732-20260921/step-03d-elixir-dev-amendment.json",
+      "handoffs/WF03-ISS0732-20260921/step-03e-security-reviewer-amendment.json",
+      "lib/letflow/design/iss0732-promotion-apply-assertion-gate.md"
+    ],
+    "owned_modules": [
+      "lib/letflow/definitions/promotion.ex",
+      "lib/letflow/routers/promotions.ex"
+    ]
+  },
+  "task": {
+    "description": "Re-gate on amendment commit 30919e94 (idiom/scope/decision-record gate, after SECURITY-REVIEWER's PASS on this same amendment). Your prior pass on this run (step-03c) explicitly left OQ-2 open as 'non-blocking' -- ORCH overrode that and required it closed before merge (confirmed by a concurring sibling ORCH session). Verify the amendment now closes it correctly: read section 9 of lib/letflow/design/iss0732-promotion-apply-assertion-gate.md and the real diff, confirm the two new regression tests (status: :running rejected; status: :teardown_failed + assertions_failed == 0 still accepted) actually exist and actually assert what they claim, and confirm no scope creep or decision-record conflict introduced by this incremental change.",
+    "acceptance_criteria": [
+      "Confirms the amendment matches design section 9 exactly (step ordering, additive not replacing, new error reason)",
+      "Confirms both new regression tests exist in test/letflow/routers/req077_promotion_pipeline_test.exs and independently verified to assert the right thing (read them directly)",
+      "Confirms no scope creep, no decision-record conflict introduced by the amendment",
+      "Explicit statement that OQ-2 is now considered CLOSED, not merely 'flagged as non-blocking' as your prior pass characterized it"
+    ]
+  },
+  "result": {
+    "status": "PENDING",
+    "summary": "",
+    "artifacts_out": [],
+    "issues": [],
+    "git_evidence": {
+      "branch_name": null,
+      "commit_sha_list": [],
+      "remote_branch": null,
+      "push_status": "skipped",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": ""
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

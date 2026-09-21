@@ -1140,7 +1140,9 @@ defmodule Letflow.TenantProvisioning.ColumnPromotionTest do
 
       count_before =
         Repo.aggregate(
-          from(cp in ColumnPromotion, where: cp.entity_type == ^entity_type and cp.attribute == ^attribute),
+          from(cp in ColumnPromotion,
+            where: cp.entity_type == ^entity_type and cp.attribute == ^attribute
+          ),
           :count
         )
 
@@ -1153,7 +1155,9 @@ defmodule Letflow.TenantProvisioning.ColumnPromotionTest do
 
       count_after =
         Repo.aggregate(
-          from(cp in ColumnPromotion, where: cp.entity_type == ^entity_type and cp.attribute == ^attribute),
+          from(cp in ColumnPromotion,
+            where: cp.entity_type == ^entity_type and cp.attribute == ^attribute
+          ),
           :count
         )
 

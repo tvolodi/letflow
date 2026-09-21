@@ -6741,6 +6741,24 @@
       "released_lock": true,
       "last_known_step": "Step Final COMPLETED PASS (squash-merged 384ad8af, PR #1662)",
       "note": "ISS-0733/GH#1646, letflow-queue task 758. Diagnosis found two independent audit/read-path gaps (promotion.ex never calls Letflow.Audit; platform_instance_id timeline endpoint 404s by design) -- routed to CODE-DESIGNER, not a same-session fix."
+    },
+    {
+      "run_id": "WF03-ISS0732-20260921",
+      "workflow_id": "WF-03",
+      "requirement_ids": [],
+      "stage": "S6",
+      "status": "IN_PROGRESS",
+      "owned_modules": [
+        "lib/letflow/definitions/promotion.ex",
+        "lib/letflow/routers/promotions.ex",
+        "web/src/components/NonSkippableApprovalGate.tsx",
+        "docs/issues/ISS-0732.yaml"
+      ],
+      "lock_acquired_at": "2026-09-21T01:38:11Z",
+      "lock_released_at": null,
+      "released_lock": false,
+      "last_known_step": "Step 00 COMPLETED PASS (branch feature/WF03-ISS0732-20260921, commit 456e15b7)",
+      "note": "ISS-0732/GH#1645, letflow-queue task 757 (queue_ref Q-757). BLOCKER: apply_review/4 never checks a passed rehearsal (PromotionAssertionRun) before allowing promotion to release -- only checks plan_digest match and status == :approved. Routed to ISSUE-FIXER for diagnosis, then CODE-DESIGNER for a new precondition mirroring R8's own assertion-run gate condition (assertions_failed == 0)."
     }
   ]
 }

@@ -622,4 +622,63 @@ defmodule Letflow.Platform.MigrationRolloutTest do
       assert outcome_for(result, inactive.tenant_id) == nil
     end
   end
+
+  # ---------------------------------------------------------------------
+  # ISS-0777 -- start_rollout/3's own fail-fast identifier-format check.
+  # See lib/letflow/design/iss-0777-entity-type-identifier-validation.md
+  # §6.2 and test/specs/ISS-0777.md.
+  #
+  # The load-bearing property here (SECURITY-REVIEWER's own finding) is
+  # that the check runs BEFORE start_rollout/3's first Repo call -- so an
+  # invalid pair produces ZERO writes of any kind, not merely an eventual
+  # {:error, _}. Every test below counts rows directly against Postgres
+  # before/after, rather than trusting the return value alone.
+  # ---------------------------------------------------------------------
+
+  describe "ISS-0777 -- start_rollout/3 rejects an invalid identifier before any write" do
+    test "an invalid entity_type returns {:error, :invalid_entity_type} immediately, with zero Rollout/Outcome/ColumnPromotion rows written" do
+      entity_type = "pl-rollout-95a456dd"
+      attribute = unique_attribute("sku")
+
+      rollout_count_before = Repo.aggregate(Rollout, :count)
+      outcome_count_before = Repo.aggregate(Outcome, :count)
+      promotion_count_before = Repo.aggregate(ColumnPromotion, :count)
+
+      assert MigrationRollout.start_rollout(entity_type, attribute, column_spec()) ==
+               {:error, :invalid_entity_type}
+
+      assert Repo.aggregate(Rollout, :count) == rollout_count_before
+      assert Repo.aggregate(Outcome, :count) == outcome_count_before
+      assert Repo.aggregate(ColumnPromotion, :count) == promotion_count_before
+      assert Repo.get_by(Rollout, entity_type: entity_type, attribute: attribute) == nil
+    end
+
+    test "an invalid attribute (valid entity_type) returns {:error, :invalid_attribute} immediately, with zero rows written" do
+      entity_type = "invoice"
+      attribute = "some-attr"
+
+      rollout_count_before = Repo.aggregate(Rollout, :count)
+
+      assert MigrationRollout.start_rollout(entity_type, attribute, column_spec()) ==
+               {:error, :invalid_attribute}
+
+      assert Repo.aggregate(Rollout, :count) == rollout_count_before
+      assert Repo.get_by(Rollout, entity_type: entity_type, attribute: attribute) == nil
+    end
+
+    test "entity_type is checked before attribute -- a call with both invalid reports :invalid_entity_type, deterministically" do
+      assert MigrationRollout.start_rollout("bad-entity", "bad-attr", column_spec()) ==
+               {:error, :invalid_entity_type}
+    end
+
+    test "no regression: a fully valid pair still starts a rollout exactly as before the fix" do
+      attribute = unique_attribute("amount")
+      company = active_company!("iss0777-happy-path")
+      cleanup_rollout_on_exit!("invoice", attribute)
+
+      assert {:ok, result} = MigrationRollout.start_rollout("invoice", attribute, column_spec())
+      assert result.rollout.status in ["running", "completed"]
+      assert outcome_for(result, company.tenant_id) != nil
+    end
+  end
 end

@@ -244,4 +244,135 @@ defmodule Letflow.Routers.PlatformMigrationsTest do
       assert moduledoc =~ "PLATFORM_ADMIN"
     end
   end
+
+  # ---------------------------------------------------------------------
+  # ISS-0777 -- entity_type/attribute identifier-format validation.
+  # See lib/letflow/design/iss-0777-entity-type-identifier-validation.md
+  # §6.1 and test/specs/ISS-0777.md for the full rationale.
+  #
+  # Before this fix, an invalid entity_type/attribute (e.g. the hyphenated
+  # value below) reached Letflow.TenantProvisioning.checked_table_name/1's
+  # raise (ArgumentError) unhandled, surfacing as a bare HTTP 500. Every
+  # test in this block asserts the NEW clean 422 behavior -- by
+  # construction, a 422 with a FieldError body (not a crash, not a 500)
+  # proves the unhandled raise is no longer reachable via this route.
+  # ---------------------------------------------------------------------
+
+  describe "ISS-0777 -- identifier-format validation at the router boundary" do
+    test "Test A: the issue's own exact repro value (hyphenated entity_type) is rejected with a clean 422, not a 500" do
+      entity_type = "pl-rollout-95a456dd"
+      attribute = "sku"
+
+      resp =
+        build_conn(:post, "/rollouts",
+          roles: ["PLATFORM_ADMIN"],
+          body: start_body(entity_type, attribute)
+        )
+        |> dispatch()
+
+      assert resp.status == 422
+
+      body = Jason.decode!(resp.resp_body)
+      assert body["status"] == 422
+      assert [field_error] = body["errors"]
+      assert field_error["field"] == "entity_type"
+      assert field_error["constraint"] == "identifier_format"
+      assert field_error["received"] == entity_type
+
+      # Rejected before any write -- neither table gained a row for this
+      # entity_type, proving the rejection happens before checked_table_name/1
+      # is ever reached, not merely before a 200 response is sent.
+      assert Repo.get_by(Rollout, entity_type: entity_type, attribute: attribute) == nil
+
+      assert Repo.aggregate(
+               from(cp in Letflow.TenantProvisioning.ColumnPromotion,
+                 where: cp.entity_type == ^entity_type
+               ),
+               :count
+             ) == 0
+    end
+
+    test "Test B: a hyphenated attribute (valid entity_type) is rejected with a clean 422, not a 500" do
+      entity_type = "invoice"
+      attribute = "some-attr"
+
+      resp =
+        build_conn(:post, "/rollouts",
+          roles: ["PLATFORM_ADMIN"],
+          body: start_body(entity_type, attribute)
+        )
+        |> dispatch()
+
+      assert resp.status == 422
+
+      body = Jason.decode!(resp.resp_body)
+      assert [field_error] = body["errors"]
+      assert field_error["field"] == "attribute"
+      assert field_error["constraint"] == "identifier_format"
+      assert field_error["received"] == attribute
+
+      assert Repo.get_by(Rollout, entity_type: entity_type, attribute: attribute) == nil
+    end
+
+    test "Test C: every other identifier shape DDL's regex rejects is also cleanly rejected, no row written" do
+      invalid_entity_types = [
+        # uppercase
+        "Entity_Type",
+        # leading digit
+        "9entity",
+        # 65 chars -- one over the 64-char cap
+        String.duplicate("a", 65),
+        # space
+        "entity type",
+        # dot
+        "entity.type"
+      ]
+
+      for entity_type <- invalid_entity_types do
+        attribute = "sku"
+
+        resp =
+          build_conn(:post, "/rollouts",
+            roles: ["PLATFORM_ADMIN"],
+            body: start_body(entity_type, attribute)
+          )
+          |> dispatch()
+
+        assert resp.status == 422, "expected 422 for entity_type #{inspect(entity_type)}"
+
+        body = Jason.decode!(resp.resp_body)
+        assert [field_error] = body["errors"]
+        assert field_error["field"] == "entity_type"
+        assert field_error["constraint"] == "identifier_format"
+
+        assert Repo.get_by(Rollout, entity_type: entity_type, attribute: attribute) == nil
+      end
+    end
+
+    test "Test D: the legitimate (underscored) form of the issue's fixture value is NOT over-rejected" do
+      # Same shape as the issue's own hyphenated repro value, but with
+      # underscores instead of hyphens -- the legitimate form REQ-375's
+      # fixture naming convention actually produces once corrected. Proves
+      # the fix's regex does not accidentally reject a value it should
+      # accept.
+      attribute = "pl_rollout_95a456dd"
+      entity_type = "invoice"
+
+      company = TenantFixture.provisioned_tenant!(slug_prefix: "iss0777-valid-d")
+      create_active_definition!(company.schema_name, entity_type)
+      cleanup_rollout_on_exit!(entity_type, attribute)
+
+      resp =
+        build_conn(:post, "/rollouts",
+          roles: ["PLATFORM_ADMIN"],
+          body: start_body(entity_type, attribute)
+        )
+        |> dispatch()
+
+      assert resp.status == 200
+      body = Jason.decode!(resp.resp_body)
+      assert is_binary(body["rollout"]["id"])
+      assert Repo.get_by(Rollout, entity_type: entity_type, attribute: attribute) != nil
+    end
+  end
 end

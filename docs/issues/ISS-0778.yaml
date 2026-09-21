@@ -62,6 +62,11 @@ fix_direction: >
   Needs a regression test proving a freshly-provisioned tenant's
   intended admin user can authenticate and reach a PLATFORM_ADMIN-gated
   endpoint without manual DB bootstrap.
-queue_ref: null  # ORCH to assign via letflow-queue register_task
-github_ref: null  # ORCH to assign
+queue_ref: "Q-777"  # letflow-queue task id 777. NOTE: the queue service's
+  # own id/issue_ref numbering assigned "ISS-0777" -- already taken on
+  # main by this same commit's sibling issue (the actual ISS-0777.yaml
+  # file). Local filename stays ISS-0778 per the docs/issues/ collision
+  # precedent established repeatedly this session. Registered
+  # 2026-09-21 by ORCH.
+github_ref: GH-1697
 status: open

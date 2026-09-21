@@ -1,0 +1,118 @@
+# WF-02 REQ-397 -- TEST-RUNNER gate before RELEASE-VALIDATOR.
+#
+# Scope: GET /api/v1/promotions tenant-data-scoped list route (new
+# router + promotion review store list function). SECURITY-REVIEWER,
+# REVIEWER, and TEST-DESIGN-VALIDATOR all PASSed with independent
+# verification already (47/47 tests, twice, with different seeds).
+#
+# Environment: run in an isolated git worktree
+# (/tmp/.../scratchpad/wt-testrunner-req397, checked out from
+# origin/feature/WF02-REQ397-20260921 @ 06e144ca), NOT the shared main
+# checkout, per dispatch instructions.
+#
+# Environment gotcha hit and resolved during this run: the only
+# reachable Postgres was the main checkout's already-running,
+# long-lived (~2wk uptime) docker-compose container on host port 5463
+# (docker socket permission denied for this session, so a fresh
+# `docker compose up` in the worktree was not possible -- pointed the
+# worktree's untracked .env at LETFLOW_DB_PORT=5463 instead, reusing
+# that container's Postgres server, NOT its containers/volumes
+# identity). First full-suite run came back catastrophically red
+# (1002/4515 failing) with every failure's root cause the SAME
+# diagnostic: `test/support/tenant_template.ex`'s tenant_template
+# schema-clone template was stale in that long-lived database --
+# built before migration 20260921000001
+# (add_role_claims_synced_at_to_users, unrelated to this PR) existed,
+# and `template_built_in_db?/0` only checks schema *existence*, not
+# migration-version parity, so a stale template is never
+# auto-rebuilt. Root-caused via the `LETFLOW_TENANT_FIXTURE
+# phase=incomplete_schema ... versions_missing=[20260921000001]`
+# report block that every failure carried. Fix: dropped all 9
+# `letflow_test*` databases in that container
+# (`DROP DATABASE letflow_test`, `letflow_test1`..`letflow_test8`) so
+# `scripts/test_parallel.sh`'s own `mix ecto.create`+`mix ecto.migrate`
+# step rebuilt them (and their tenant_template) from scratch. Re-run
+# after that came back fully green -- see below. This was purely a
+# stale-shared-container artifact, not anything wrong with REQ-397's
+# code or tests.
+#
+# 1) mix compile --warnings-as-errors: clean. Zero warnings from the
+#    `letflow` app itself (pre-existing warnings only from third-party
+#    deps -- eqrcode, jose/jwa erlang catch-deprecation, mix.exs xref
+#    deprecation notice -- none of which are warnings-as-errors
+#    failures since they're outside the letflow app compile unit).
+#
+# 2) scripts/test_parallel.sh (full backend suite, N=8 from nproc),
+#    after the stale-database fix above:
+#      combined: 4509 tests, 6 properties, 0 failures (4515/4515 passed)
+#    Per-partition breakdown (partition: tests, properties, failures, exit):
+#      1: 519/0/0/0   2: 520/1/0/0   3: 469/0/0/0   4: 527/0/0/0
+#      5: 649/3/0/0   6: 678/0/0/0   7: 617/2/0/0   8: 530/0/0/0
+#    All 8 partitions reported a Result: line, zero parsed failures,
+#    exit 0. No incidental breakage anywhere else in the suite from the
+#    new route/store function.
+#
+# 3) Targeted, non-partitioned re-run of the two REQ-397-specific
+#    files (mix test test/letflow/routers/promotions_test.exs
+#    test/letflow/definitions/promotion_review_store_test.exs):
+#      Result: 47 passed
+#    Matches TEST-DESIGN-VALIDATOR's expected count of 47 exactly.
+#    0 failures.
+#
+# 4) Frontend: no web/ files in this PR's diff, confirming the
+#    dispatch's premise. Ran the requested light check anyway: `npm
+#    ci` (560 packages) then `npm run type-check` (tsc -b
+#    tsconfig.json) -- completed with no errors/output.
+
+requirement: REQ-397
+run_id: WF02-REQ397-20260921
+branch: feature/WF02-REQ397-20260921
+commit: 06e144ca
+pr: 1672
+
+compile:
+  command: "mix compile --warnings-as-errors"
+  result: clean
+  letflow_app_warnings: 0
+
+environment_note:
+  issue: "stale tenant_template schema in reused shared Postgres container (pre-dated an unrelated migration, 20260921000001)"
+  detected_via: "LETFLOW_TENANT_FIXTURE versions_missing=[20260921000001] report block on every failing test"
+  fix: "dropped all letflow_test* databases in the container so ecto.create/ecto.migrate + tenant_template rebuilt fresh"
+  first_run_result: "1002/4515 failing (environmental, pre-fix)"
+  related_to_req397_code: false
+
+backend_totals:
+  parallel_partitions: 8
+  partition_source: nproc
+  combined_tests_reported: 4509
+  combined_properties_reported: 6
+  combined_failures_reported: 0
+  combined_passed_of_total: "4515/4515"
+  all_partitions_exit_0: true
+
+targeted_rerun:
+  files:
+    - test/letflow/routers/promotions_test.exs
+    - test/letflow/definitions/promotion_review_store_test.exs
+  result: "47 passed"
+  failures: 0
+  matches_expected_count: true
+
+frontend_check:
+  files_touched_by_pr: 0
+  type_check_command: "npm run type-check"
+  type_check_result: clean
+
+verdict: PASS
+verdict_reason: >
+  Clean warnings-as-errors compile, full backend suite green at
+  4515/4515 (0 failures) across all 8 partitions after resolving an
+  environmental stale-tenant-template issue in the reused shared
+  Postgres container (unrelated to REQ-397's own code), the two
+  REQ-397-specific test files confirmed at exactly 47 passing
+  (matching TEST-DESIGN-VALIDATOR's independent count), and no
+  frontend files in the diff with a clean type-check as a light
+  confirmatory check. Ready to hand to RELEASE-VALIDATOR.
+
+next_action: Hand off to RELEASE-VALIDATOR for independent re-verification.

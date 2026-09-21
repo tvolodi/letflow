@@ -1,0 +1,51 @@
+{
+  "handoff_id": "a1b2c3d4-0000-4000-8000-000000000001",
+  "run_id": "WF03-ISS0771-20260921",
+  "workflow_id": "WF-03",
+  "step": "00",
+  "from_agent": "ORCH",
+  "to_agent": "ORCH",
+  "file": "handoffs/WF03-ISS0771-20260921/step-00-git-setup.json",
+  "created_at": "2026-09-21T07:44:35Z",
+  "started_at": "2026-09-21T07:44:35Z",
+  "completed_at": "2026-09-21T07:45:10Z",
+  "status": "COMPLETED",
+  "priority": "HIGH",
+  "context": {
+    "stage": "S6",
+    "requirement_ids": [],
+    "requirement_text": {},
+    "artifacts_in": ["docs/issues/ISS-0771.yaml"],
+    "owned_modules": [
+      "deploy/redeploy-qa.sh",
+      ".github/workflows/cd.yml",
+      "lib/letflow/tenant_provisioning.ex",
+      "lib/letflow/application.ex"
+    ]
+  },
+  "task": {
+    "description": "Per docs/agents/protocols/GIT_SETUP.md: create feature/WF03-ISS0771-20260921 off latest origin/main. Note: this session's primary checkout already held an unrelated in-flight WF02-REQ372 run's uncommitted state, so this run uses the worktree variant -- git fetch origin main, git worktree add a new dedicated worktree branching directly from the fetched origin/main ref, push -u immediately as the coordination signal.",
+    "acceptance_criteria": [
+      "git fetch origin main succeeds",
+      "new worktree checked out at feature/WF03-ISS0771-20260921 pointing at origin/main's fetched tip",
+      "git push -u origin feature/WF03-ISS0771-20260921 exits 0"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "Ran: git fetch origin main (fetched dccc53e5, which is the commit that filed docs/issues/ISS-0771.yaml itself -- confirming the issue record is already on main). git worktree add .claude/worktrees/WF03-ISS0771-20260921 -b feature/WF03-ISS0771-20260921 origin/main -- succeeded, HEAD at dccc53e5. git push -u origin feature/WF03-ISS0771-20260921 -- succeeded, new branch published, tracking set up. Used the worktree variant of GIT_SETUP.md rather than checking out main directly in the primary checkout, because the primary checkout (C:/Users/tvolo/dev/ai-dala/letflow) was holding feature/WF02-REQ372-20260921 with untracked in-progress files at run start -- checking out main there risked disrupting that other active run, per ORCHESTRATOR.md 7.1's concern about two ORCH-role actors sharing one checkout.",
+    "artifacts_out": [],
+    "issues": [],
+    "git_evidence": {
+      "branch_name": "feature/WF03-ISS0771-20260921",
+      "commit_sha_list": [],
+      "remote_branch": "origin/feature/WF03-ISS0771-20260921",
+      "push_status": "ok",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": "Route to CODE-DESIGNER (Step 2 fix design) -- ISSUE-FIXER Step 0.5/1 skipped by direct human instruction, root cause already diagnosed in docs/issues/ISS-0771.yaml"
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

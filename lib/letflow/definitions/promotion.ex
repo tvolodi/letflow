@@ -537,12 +537,16 @@ defmodule Letflow.Definitions.Promotion do
           :review_not_found
           | :digest_mismatch
           | :invalid_transition
+          | :assertion_run_missing
+          | :assertion_run_digest_mismatch
+          | :assertion_run_in_progress
+          | :assertion_run_failed
           | {:promotion_failed, promote_error()}
 
   @doc """
   R7's apply *orchestration* (NEW, REQ-077 design §9.3) — `PromotionReviewStore`
   deliberately does not call `promote_definition/3` (see its own moduledoc); this
-  is that orchestrator. Four steps, each short-circuiting:
+  is that orchestrator. Five steps, each short-circuiting:
 
     1. `PromotionReviewStore.get_review/2`. `{:error, :review_not_found}` ->
        return unchanged. Nothing written.
@@ -553,7 +557,18 @@ defmodule Letflow.Definitions.Promotion do
        this is what makes AC4's "does not re-apply" true, not
        `mark_review_applied/2`'s own status guard (which would only fire AFTER
        the promotion already committed).
-    4. `promote_definition/3`.
+    4. `verify_rehearsed/2` (NEW, ISS-0732 design §2, amended §9) -- a
+       matching-digest, terminal, zero-failure `promotion_assertion_runs` row
+       must exist for this review before the promotion may proceed:
+       * no run recorded at all -> `{:error, :assertion_run_missing}`.
+       * latest run's `plan_digest` doesn't match the digest being applied
+         (constant-time compare) -> `{:error, :assertion_run_digest_mismatch}`.
+       * latest matching-digest run is still `status: :running` (in-flight) ->
+         `{:error, :assertion_run_in_progress}`.
+       * latest matching-digest, terminal run has `assertions_failed > 0` ->
+         `{:error, :assertion_run_failed}`.
+       Nothing written on any of these four paths.
+    5. `promote_definition/3`.
        * `{:error, reason}` -> `PromotionReviewStore.mark_review_failed/2`
          (result ignored — a concurrent transition there must not mask the
          real failure), then `{:error, {:promotion_failed, reason}}`.
@@ -586,7 +601,8 @@ defmodule Letflow.Definitions.Promotion do
   def apply_review(review_id, actor_id, plan_digest, opts) do
     with {:ok, review} <- PromotionReviewStore.get_review(review_id, opts),
          :ok <- verify_apply_digest(review, plan_digest),
-         :ok <- verify_approved(review) do
+         :ok <- verify_approved(review),
+         :ok <- verify_rehearsed(review, plan_digest, opts) do
       do_apply_review(review, actor_id, opts)
     end
   end
@@ -601,6 +617,41 @@ defmodule Letflow.Definitions.Promotion do
 
   defp verify_approved(%PromotionReview{status: :approved}), do: :ok
   defp verify_approved(_review), do: {:error, :invalid_transition}
+
+  # ISS-0732 design §2.1 (amended §9) -- gates apply_review/4 on a
+  # matching-digest, terminal (not :running), zero-failure assertion run.
+  # Pure read-then-branch, no writes, same shape as verify_apply_digest/2
+  # and verify_approved/1 above. The status check (step 3) runs strictly
+  # before the assertions_failed check (step 4, unchanged from the original
+  # step 3) -- see design §9.2's rationale: a :running row's
+  # assertions_failed is always 0 by construction, so checking it first
+  # would never catch an in-flight rehearsal.
+  @spec verify_rehearsed(
+          review :: PromotionReview.t(),
+          plan_digest :: String.t(),
+          opts :: [prefix: String.t()]
+        ) :: :ok | {:error, apply_review_error()}
+  defp verify_rehearsed(review, plan_digest, opts) do
+    case Letflow.Definitions.get_latest_assertion_run(review.id, opts) do
+      {:error, :not_found} ->
+        {:error, :assertion_run_missing}
+
+      {:ok, assertion_run} ->
+        if PromotionDigest.verify_digest(assertion_run.plan_digest, plan_digest) do
+          if assertion_run.status not in [:running] do
+            if assertion_run.assertions_failed == 0 do
+              :ok
+            else
+              {:error, :assertion_run_failed}
+            end
+          else
+            {:error, :assertion_run_in_progress}
+          end
+        else
+          {:error, :assertion_run_digest_mismatch}
+        end
+    end
+  end
 
   defp do_apply_review(review, actor_id, opts) do
     case promote_definition(actor_id, review, opts) do

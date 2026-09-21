@@ -1,0 +1,66 @@
+{
+  "handoff_id": "b1e2a3c4-0000-4000-8000-000000000002",
+  "run_id": "WF03-ISS0732-20260921",
+  "workflow_id": "WF-03",
+  "step": "01",
+  "from_agent": "ORCH",
+  "to_agent": "ISSUE-FIXER",
+  "file": "handoffs/WF03-ISS0732-20260921/step-01-issue-fixer-diagnosis.json",
+  "created_at": "2026-09-21T01:38:44Z",
+  "started_at": "2026-09-21T01:38:44Z",
+  "completed_at": "2026-09-21T01:39:46Z",
+  "status": "COMPLETED",
+  "priority": "HIGH",
+  "context": {
+    "stage": "S6",
+    "requirement_ids": [],
+    "requirement_text": {},
+    "related_handoff_ids": [],
+    "artifacts_in": [
+      "docs/issues/ISS-0732.yaml",
+      "lib/letflow/definitions/promotion.ex",
+      "lib/letflow/routers/promotions.ex",
+      "lib/letflow/definitions.ex"
+    ],
+    "owned_modules": [
+      "lib/letflow/definitions/promotion.ex",
+      "lib/letflow/routers/promotions.ex",
+      "web/src/components/NonSkippableApprovalGate.tsx",
+      "docs/issues/ISS-0732.yaml"
+    ]
+  },
+  "task": {
+    "description": "WF-03 Steps 0.5 and 1 combined, on branch feature/WF03-ISS0732-20260921 (already checked out). Step 0.5: search docs/issues/*.yaml (status: resolved) for a prior entry with matching symptoms (promotion apply / rehearsal / assertion-run gating) -- note ISS-0733 is a sibling issue in the same module but a DIFFERENT gap (audit/read-path, not release gating), so it is not a prior fix of THIS defect; state in your summary whether it's related context only. Step 1: reproduce/confirm the root cause directly by reading lib/letflow/definitions/promotion.ex's apply_review/4 (around line 586) and its private verify_apply_digest/2 and verify_approved/1 -- confirm for yourself, by reading the actual code (not by trusting ISS-0732.yaml's prose alone), that: (a) apply_review/4's `with` chain checks only get_review/2, verify_apply_digest/2, verify_approved/1 before calling do_apply_review/3 -> promote_definition/3; (b) there is no call anywhere in that chain to Letflow.Definitions.get_latest_assertion_run/2 or any other assertion-run check; (c) grep promotion.ex and lib/letflow/definitions/promotion_review_store.ex for 'assertion'/'rehears' to confirm zero hits relevant to gating apply. Also read lib/letflow/routers/promotions.ex's moduledoc section '## The assertion-run gate condition (design §7.5)' (around line 119) -- this states the EXISTING gate condition R8 uses (assertions_failed == 0, NOT status == :passed) that a fix here should mirror for consistency. Also read Letflow.Definitions.get_latest_assertion_run/2's own @spec/@doc (lib/letflow/definitions.ex around line 1175) to confirm its return shape (what it returns when no run exists, and what fields a PromotionAssertionRun struct/row carries, especially plan_digest and assertions_failed). State root cause, affected files/functions, and what a fix needs to change (a new precondition step in apply_review/4's `with` chain, evaluated after verify_approved/1 and before do_apply_review/3, requiring a matching-digest assertion run with assertions_failed == 0) in result.summary. Do NOT implement the fix.",
+    "acceptance_criteria": [
+      "result.summary states whether a prior resolved issue matches this defect's symptoms (Step 0.5)",
+      "result.summary confirms, from direct code reading (cites exact file:line), that apply_review/4 has no assertion-run precondition",
+      "result.summary states the exact return shape of get_latest_assertion_run/2 (what it returns on no-run, and which field is the digest, which is the failure count)",
+      "result.summary states the exact gate condition promotions.ex documents for R8 (assertions_failed == 0) and recommends the fix mirror it rather than checking status == :passed",
+      "result.next_action routes to CODE-DESIGNER for fix design",
+      "the fix itself is NOT implemented in this step"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "Step 0.5 (registry lookup): grepped docs/issues/*.yaml for rehears|assertion.run|apply_review|assertion_run -- 7 hits (ISS-0733, ISS-0732 itself, ISS-0735, ISS-0731, ISS-0730, ISS-0214, ISS-0109). None is a prior fix of THIS defect (apply_review/4 never checking a passed assertion run before releasing): ISS-0731 (resolved) is a frontend rehearsal-response-shape mismatch; ISS-0730 (resolved) is about compute_promotion_plan/5 and the rehearsal-rerun endpoint's own mechanics, not a gate on apply; ISS-0214/ISS-0109 (status: instrumented, not resolved) are migration-ordering/table-existence flakes in promotion_assertion_rerun tests, unrelated to gating logic. ISS-0733 (resolved, same run's sibling, WF03-ISS0733-20260921) fixed a DIFFERENT gap in the SAME module -- missing audit/read-path for DEFINITION_PROMOTED events -- not release gating; it is related context only (confirms promotion.ex was touched very recently and is still under active fix cycles) and not a prior fix of this defect. No recurrence; this is a genuinely new, unfixed gap.\n\nStep 1 (root cause, confirmed by direct code reading): lib/letflow/definitions/promotion.ex:586-592 apply_review/4's `with` chain is exactly: {:ok, review} <- PromotionReviewStore.get_review/2, :ok <- verify_apply_digest(review, plan_digest) [promotion.ex:594-600, compares review.plan_digest via PromotionDigest.verify_digest/2], :ok <- verify_approved(review) [promotion.ex:602-603, pattern-matches status: :approved only] -- then unconditionally calls do_apply_review/3 (:605) -> promote_definition/3. There is no fourth precondition and no call anywhere in apply_review/4, do_apply_review/3, or promote_definition/3 to Letflow.Definitions.get_latest_assertion_run/2 or any other assertion-run lookup. Grepped lib/letflow/definitions/promotion.ex and lib/letflow/definitions/promotion_review_store.ex for 'assertion' and 'rehears' -- zero matches in both files. Root cause confirmed exactly as ISS-0732.yaml states, not merely trusted: apply_review/4 can transition a review straight from :approved to :applied with zero PromotionAssertionRun ever having existed for it.\n\nget_latest_assertion_run/2 return shape (lib/letflow/definitions.ex:1175-1197): @spec is (review_id, opts) :: {:ok, PromotionAssertionRun.t()} | {:error, :not_found}. On no run existing (or an un-castable review_id) it returns {:error, :not_found} -- NOT {:ok, nil} -- so a fix's `with` chain can pattern-match {:ok, run} <- get_latest_assertion_run(...) directly. It queries `from(r in PromotionAssertionRun, where: r.review_id == ^uuid, order_by: [desc: r.started_at, desc: r.id], limit: 1)`, i.e. the most recent run only. PromotionAssertionRun's schema (lib/letflow/definitions/promotion_assertion_run.ex:52-76): the digest field is `plan_digest :string` (64-char lowercase hex, validated at insert), and the failure-count field is `assertions_failed :integer, default: 0` (written once by update_changeset/2 alongside status/assertions_total/assertions_passed/failing_assertion_ids/completed_at). `status` is a separate 4-value Ecto.Enum (:running/:passed/:failed/:teardown_failed) that is NOT the field to gate on.\n\nGate condition to mirror (lib/letflow/routers/promotions.ex moduledoc, '## The assertion-run gate condition (design §7.5)', lines 119-127): R8's own 200-vs-422 split keys on assertions_failed == 0, explicitly NOT on status == :passed -- confirmed in code at promotions.ex:720-721 (render_run_assertions matches %{assertions_failed: 0} => 200) and :727-728 (n > 0 => 422). The moduledoc states this is deliberate: a status: :teardown_failed result with assertions_failed == 0 still counts as a green gate, and porting an R-Co-style `result.status != .failed` check would silently disagree with that already-documented contract.\n\nFix needed (not implemented here): apply_review/4's `with` chain needs a new precondition evaluated after verify_approved(review) and before do_apply_review/3 is called -- something equivalent to `{:ok, assertion_run} <- get_latest_assertion_run(review.id, opts)`, `:ok <- verify_digest_match(assertion_run.plan_digest, plan_digest)` (the assertion run must be for the SAME plan_digest currently being applied, not a stale run against an older plan), then `:ok <- verify_assertions_passed(assertion_run)` implemented as `assertions_failed == 0` (mirroring promotions.ex's R8 condition), each mapped to a distinct {:error, ...} reason (e.g. :no_assertion_run, :assertion_run_digest_mismatch, :assertions_failed) so callers/tests can distinguish cases. This is backend business-logic scope requiring CODE-DESIGNER + ELIXIR-DEV + SECURITY-REVIEWER + REVIEWER + TEST-DESIGNER, plus a corresponding FRONTEND-DEV follow-up for web/src/components/NonSkippableApprovalGate.tsx to surface a 'release blocked -- rehearsal required' state once the backend returns one.",
+    "artifacts_out": [],
+    "issues": [
+      {
+        "id": "ISS-0732",
+        "severity": "BLOCKER",
+        "description": "Confirmed by direct code reading: apply_review/4 (lib/letflow/definitions/promotion.ex:586-592) has no precondition on Letflow.Definitions.get_latest_assertion_run/2 -- a review can be applied immediately after approval with zero PromotionAssertionRun ever having run, releasing an unrehearsed change. Root cause and required fix shape are stated in full in result.summary."
+      }
+    ],
+    "git_evidence": {
+      "branch_name": "feature/WF03-ISS0732-20260921",
+      "commit_sha_list": [],
+      "remote_branch": null,
+      "push_status": "skipped",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": "Route to CODE-DESIGNER: design a new precondition step in apply_review/4's `with` chain (lib/letflow/definitions/promotion.ex), evaluated after verify_approved/1 and before do_apply_review/3, that calls Letflow.Definitions.get_latest_assertion_run/2, verifies the returned run's plan_digest matches the plan_digest being applied, and verifies assertions_failed == 0 (mirroring lib/letflow/routers/promotions.ex's documented R8 gate condition, NOT status == :passed). Design must also account for the corresponding frontend gap in web/src/components/NonSkippableApprovalGate.tsx (no 'rehearsal required' blocked state exists today)."
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

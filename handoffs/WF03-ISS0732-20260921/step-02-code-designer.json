@@ -1,0 +1,60 @@
+{
+  "handoff_id": "b1e2a3c4-0000-4000-8000-000000000003",
+  "run_id": "WF03-ISS0732-20260921",
+  "workflow_id": "WF-03",
+  "step": "02",
+  "from_agent": "ORCH",
+  "to_agent": "CODE-DESIGNER",
+  "file": "handoffs/WF03-ISS0732-20260921/step-02-code-designer.json",
+  "created_at": "2026-09-21T01:41:31Z",
+  "started_at": "2026-09-21T01:41:31Z",
+  "completed_at": "2026-09-21T02:05:00Z",
+  "status": "COMPLETED",
+  "priority": "HIGH",
+  "context": {
+    "stage": "S6",
+    "requirement_ids": [],
+    "requirement_text": {},
+    "related_handoff_ids": ["b1e2a3c4-0000-4000-8000-000000000002"],
+    "artifacts_in": [
+      "handoffs/WF03-ISS0732-20260921/step-01-issue-fixer-diagnosis.json",
+      "docs/issues/ISS-0732.yaml",
+      "lib/letflow/definitions/promotion.ex",
+      "lib/letflow/definitions.ex",
+      "lib/letflow/definitions/promotion_assertion_run.ex",
+      "lib/letflow/routers/promotions.ex"
+    ],
+    "owned_modules": [
+      "lib/letflow/definitions/promotion.ex"
+    ]
+  },
+  "task": {
+    "description": "BACKEND SCOPE ONLY for this run (the frontend NonSkippableApprovalGate.tsx surfacing piece is deliberately split out as ISS-0767, letflow-queue task 767 -- do not design frontend changes here). Read handoffs/WF03-ISS0732-20260921/step-01-issue-fixer-diagnosis.json's result.summary in full -- it is ISSUE-FIXER's complete first-hand diagnosis, including the exact fix shape it recommends, the exact @spec/return-shape of get_latest_assertion_run/2, and the exact gate condition (assertions_failed == 0) promotions.ex's moduledoc already documents for R8. Produce a gate-approved design artefact (lib/letflow/design/ per this repo's own convention, e.g. lib/letflow/design/iss0732-promotion-apply-assertion-gate.md) for a NEW precondition in Letflow.Definitions.Promotion.apply_review/4's `with` chain (lib/letflow/definitions/promotion.ex), inserted after verify_approved/1 and before do_apply_review/3 is called, that: (1) calls Letflow.Definitions.get_latest_assertion_run(review.id, opts); (2) on {:error, :not_found}, short-circuits with a new, DISTINCT apply_review_error() reason (do not reuse :invalid_transition -- callers/tests/the frontend need to distinguish 'never rehearsed' from 'wrong review state'); (3) on {:ok, assertion_run}, verifies assertion_run.plan_digest matches the plan_digest being applied (a STALE rehearsal against an older plan must not satisfy the gate -- use the same constant-time PromotionDigest.verify_digest/2 comparison verify_apply_digest/2 already uses, not a raw ==); on mismatch, a distinct error reason (do not conflate with the top-level digest_mismatch, which is a different check against a different pair of digests -- name it so the two are never confusable in a log or test failure message); (4) verifies assertion_run.assertions_failed == 0 (never status == :passed, per the ISSUE-FIXER diagnosis and promotions.ex's own documented gate condition) -- on failure, a distinct error reason. Design must state: the exact new @spec for apply_review_error() (add the new reason(s) as a union member, do not silently widen an existing catch-all), the exact new with-chain clause(s) and their ordering, the exact new private function signature(s) (verify_rehearsed/2 or similar -- design decides the name/shape, not a prescribed one), what changes (if anything) in R7's router handler (lib/letflow/routers/promotions.ex handle_apply/2) to map the new error reason(s) to an HTTP status/error body consistent with this module's existing 409-for-:invalid_transition / 409-for-:digest_mismatch pattern (a plausible default is another 409 with its own detail string, since this is also a state-transition-not-permitted case -- state and justify whichever status CODE-DESIGNER picks), and a plain-English worked example of the exact sequence of calls/returns for the three new failure paths (no rehearsal / stale rehearsal / failed rehearsal) plus the one success path. Design artefacts carry signatures, type shapes, and prose only -- NO implementation code (no full function bodies) per this repo's design-doc convention (see CODE-DESIGN-VALIDATOR's own gate criteria).",
+    "acceptance_criteria": [
+      "Design covers every one of ISS-0732's stated requirements: a review cannot be applied without a matching-digest, assertions_failed == 0 PromotionAssertionRun",
+      "Design distinguishes all 3 new failure modes (no rehearsal / stale-digest rehearsal / failed rehearsal) with distinct, named error reasons -- none reuses :invalid_transition or :digest_mismatch",
+      "Design states the exact new apply_review_error() @spec union",
+      "Design states the exact with-chain insertion point (after verify_approved/1, before do_apply_review/3) and ordering relative to the existing checks",
+      "Design states what R7's router handler (handle_apply/2) must do with each new error reason, with an HTTP status and justification",
+      "Design contains zero full function bodies / executable Elixir code blocks (signatures and type shapes only)",
+      "Design explicitly states the frontend piece is out of scope for this design (covered by ISS-0767 instead)"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "Wrote lib/letflow/design/iss0732-promotion-apply-assertion-gate.md, gate-approved-format design for ISS-0732 (backend-only, per task scope -- the NonSkippableApprovalGate.tsx frontend piece is explicitly out of scope, routed to ISS-0767). Design adds a 4th `with`-chain clause `:ok <- verify_rehearsed(review, plan_digest, opts)` to apply_review/4 (lib/letflow/definitions/promotion.ex:586-592), inserted after verify_approved/1 and before do_apply_review/3, exactly as ISSUE-FIXER's diagnosis specified. verify_rehearsed/2 (new private fn, @spec (PromotionReview.t(), String.t(), [prefix: String.t()]) :: :ok | {:error, apply_review_error()}) does 3 short-circuiting sub-checks: (1) Letflow.Definitions.get_latest_assertion_run(review.id, opts), {:error, :not_found} -> {:error, :assertion_run_missing}; (2) on {:ok, run}, PromotionDigest.verify_digest(run.plan_digest, plan_digest) (same constant-time comparator verify_apply_digest/2 uses, NOT raw ==) -- mismatch -> {:error, :assertion_run_digest_mismatch} (deliberately distinct name from the existing top-level :digest_mismatch, which compares a different pair -- review.plan_digest vs caller plan_digest); (3) run.assertions_failed == 0 (never status == :passed, mirroring promotions.ex's documented R8 gate condition) -- failure -> {:error, :assertion_run_failed}. apply_review_error() @spec extended with all 3 new atoms as additional union members (nothing removed/widened). R7 router: handle_apply/2 needs no change (it already forwards apply_review/4's raw result); render_apply/2 (lib/letflow/routers/promotions.ex:622-659) gets 3 new clauses, each mapping to Response.conflict/2 (409) with its own detail string -- justified as a state-transition-not-permitted case consistent with this route's existing :invalid_transition/:digest_mismatch 409s, but each kept as its own distinct clause (not folded into invalid_transition_response/1) since, unlike :invalid_transition, none of the 3 new reasons conflates an illegal edge with a race and each can safely carry its own specific detail text. Design contains a worked plain-English example for all 4 paths (success + 3 failure modes) per the task's requirement, and 2 explicitly-flagged open questions (OQ-1: frontend UI-copy granularity, deferred to ISS-0767; OQ-2: whether a still-:running assertion run, whose assertions_failed defaults to 0, should also be excluded by verify_rehearsed/2 -- flagged for SECURITY-REVIEWER/REVIEWER, not silently resolved here). Zero implementation code in the doc -- @specs, type unions, and prose only; the one `with`-chain snippet shown is explicitly labelled as illustrative ordering, not a literal function body.",
+    "artifacts_out": ["lib/letflow/design/iss0732-promotion-apply-assertion-gate.md"],
+    "issues": [],
+    "git_evidence": {
+      "branch_name": "feature/WF03-ISS0732-20260921",
+      "commit_sha_list": [],
+      "remote_branch": null,
+      "push_status": "skipped",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": "Route to CODE-DESIGN-VALIDATOR to gate this design before ELIXIR-DEV implements apply_review/4's new precondition and R7's render_apply/2 clauses."
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

@@ -175,6 +175,27 @@ defmodule Letflow.Routers.Req077PromotionPipelineTest do
     build_conn(:post, "/#{review_id}/apply", caller_tenant, conn_fields) |> promotions()
   end
 
+  # ISS-0732 -- apply_review/4 now gates on a matching-digest, zero-failure
+  # promotion_assertion_runs row (see verify_rehearsed/2). Every fixture below
+  # that calls apply_promotion/4 expecting it to succeed must first record a
+  # passing rehearsal for that (review_id, plan_digest) pair -- inserted
+  # directly (bypassing the real R8 HTTP/SandboxPool round trip, which AC1's
+  # own R8 describe block below already exercises) since these fixtures only
+  # need the row to exist, not to re-verify R8's own behaviour.
+  defp insert_passing_assertion_run!(tenant, review_id, plan_digest) do
+    %PromotionAssertionRun{
+      review_id: review_id,
+      idempotency_key: "req077-fixture-#{System.unique_integer([:positive, :monotonic])}",
+      plan_digest: plan_digest,
+      status: :passed,
+      assertions_total: 1,
+      assertions_passed: 1,
+      assertions_failed: 0,
+      completed_at: DateTime.utc_now()
+    }
+    |> Repo.insert!(prefix: tenant.schema_name)
+  end
+
   # A syntactically-valid (64-lowercase-hex) but WRONG digest -- required
   # because PromotionDigest.verify_digest/2's binary clause raises on unequal
   # lengths (design §8.4), so every digest-mismatch fixture below must itself
@@ -343,6 +364,217 @@ defmodule Letflow.Routers.Req077PromotionPipelineTest do
         submit!(target, source.tenant_id, target.tenant_id, process_key, user_id: requester)
 
       assert approve(target, review_id, digest, user_id: Ecto.UUID.generate()).status == 200
+
+      insert_passing_assertion_run!(target, review_id, digest)
+
+      resp = apply_promotion(target, review_id, digest)
+
+      assert resp.status == 200
+      assert Jason.decode!(resp.resp_body) == %{"review_id" => review_id, "status" => "applied"}
+
+      assert Repo.get!(PromotionReview, review_id, prefix: target.schema_name).status == :applied
+
+      assert Repo.get_by!(ProcessDefinition, [name: process_key, status: :active],
+               prefix: target.schema_name
+             ).version == "2.0.0"
+    end
+  end
+
+  # ISS-0732 design §2/§3 -- the three ORIGINAL gate paths (pre-dating the §9
+  # OQ-2 amendment): no rehearsal recorded at all, a rehearsal recorded
+  # against a stale/different plan_digest, and a completed rehearsal that
+  # recorded failing assertions. These are what ISS-0732.yaml itself reports
+  # as observed live against QA (the :assertion_run_missing path is the
+  # issue's own headline symptom -- apply succeeding with ZERO
+  # PromotionAssertionRun ever having existed for the review).
+  defp insert_failed_assertion_run!(tenant, review_id, plan_digest, failed_count) do
+    %PromotionAssertionRun{
+      review_id: review_id,
+      idempotency_key: "req077-fixture-#{System.unique_integer([:positive, :monotonic])}",
+      plan_digest: plan_digest,
+      status: :failed,
+      assertions_total: failed_count + 1,
+      assertions_passed: 1,
+      assertions_failed: failed_count,
+      completed_at: DateTime.utc_now()
+    }
+    |> Repo.insert!(prefix: tenant.schema_name)
+  end
+
+  describe "ISS-0732 §2/§3: verify_rehearsed/2 rejects missing/stale/failed rehearsals" do
+    test "409 :assertion_run_missing when apply is called with ZERO PromotionAssertionRun ever having existed for the review (ISS-0732's own headline symptom)" do
+      source = provisioned_tenant("req077-iss0732-missing-src")
+      target = provisioned_tenant("req077-iss0732-missing-tgt")
+      process_key = unique_process_key()
+      insert_active_definition!(source.schema_name, %{name: process_key, version: "2.0.0"})
+
+      requester = Ecto.UUID.generate()
+
+      %{"review_id" => review_id, "plan_digest" => digest} =
+        submit!(target, source.tenant_id, target.tenant_id, process_key, user_id: requester)
+
+      assert approve(target, review_id, digest, user_id: Ecto.UUID.generate()).status == 200
+
+      # No PromotionAssertionRun row is ever inserted here -- this is exactly
+      # the live-QA sequence ISS-0732.yaml reports: approve, then apply,
+      # with no rehearsal run in between.
+      resp = apply_promotion(target, review_id, digest)
+
+      assert resp.status == 409
+      body = Jason.decode!(resp.resp_body)
+      assert body["detail"] =~ "no assertion run has been recorded"
+
+      # Nothing written -- INV-NEW-3: review stays :approved, target
+      # definition is untouched.
+      assert Repo.get!(PromotionReview, review_id, prefix: target.schema_name).status ==
+               :approved
+
+      refute Repo.get_by(
+               ProcessDefinition,
+               [name: process_key, status: :active, version: "2.0.0"],
+               prefix: target.schema_name
+             )
+
+      assert Repo.aggregate(
+               from(r in PromotionAssertionRun, where: r.review_id == ^review_id),
+               :count,
+               prefix: target.schema_name
+             ) == 0
+    end
+
+    test "409 :assertion_run_digest_mismatch when the latest assertion run was recorded against a different plan_digest than the one being applied" do
+      source = provisioned_tenant("req077-iss0732-digest-src")
+      target = provisioned_tenant("req077-iss0732-digest-tgt")
+      process_key = unique_process_key()
+      insert_active_definition!(source.schema_name, %{name: process_key, version: "2.0.0"})
+
+      requester = Ecto.UUID.generate()
+
+      %{"review_id" => review_id, "plan_digest" => digest} =
+        submit!(target, source.tenant_id, target.tenant_id, process_key, user_id: requester)
+
+      assert approve(target, review_id, digest, user_id: Ecto.UUID.generate()).status == 200
+
+      # A rehearsal exists, but for a stale/different plan than the one
+      # actually being applied.
+      insert_passing_assertion_run!(target, review_id, wrong_digest())
+
+      resp = apply_promotion(target, review_id, digest)
+
+      assert resp.status == 409
+      body = Jason.decode!(resp.resp_body)
+      assert body["detail"] =~ "does not match the plan_digest being applied"
+
+      assert Repo.get!(PromotionReview, review_id, prefix: target.schema_name).status ==
+               :approved
+
+      refute Repo.get_by(
+               ProcessDefinition,
+               [name: process_key, status: :active, version: "2.0.0"],
+               prefix: target.schema_name
+             )
+    end
+
+    test "409 :assertion_run_failed when the latest matching-digest, completed assertion run recorded failing assertions" do
+      source = provisioned_tenant("req077-iss0732-failed-src")
+      target = provisioned_tenant("req077-iss0732-failed-tgt")
+      process_key = unique_process_key()
+      insert_active_definition!(source.schema_name, %{name: process_key, version: "2.0.0"})
+
+      requester = Ecto.UUID.generate()
+
+      %{"review_id" => review_id, "plan_digest" => digest} =
+        submit!(target, source.tenant_id, target.tenant_id, process_key, user_id: requester)
+
+      assert approve(target, review_id, digest, user_id: Ecto.UUID.generate()).status == 200
+
+      insert_failed_assertion_run!(target, review_id, digest, 2)
+
+      resp = apply_promotion(target, review_id, digest)
+
+      assert resp.status == 409
+      body = Jason.decode!(resp.resp_body)
+      assert body["detail"] =~ "recorded failing assertions"
+
+      assert Repo.get!(PromotionReview, review_id, prefix: target.schema_name).status ==
+               :approved
+
+      refute Repo.get_by(
+               ProcessDefinition,
+               [name: process_key, status: :active, version: "2.0.0"],
+               prefix: target.schema_name
+             )
+    end
+  end
+
+  # ISS-0732 design §9 amendment (OQ-2) -- verify_rehearsed/2 also rejects a
+  # matching-digest run that has not reached a terminal status yet
+  # (status: :running), in ADDITION to the pre-existing assertions_failed == 0
+  # check. Reuses insert_passing_assertion_run!/3's shape but with an
+  # explicit, non-default status so the two failure/non-failure axes
+  # (status vs. assertions_failed) can be exercised independently.
+  defp insert_assertion_run!(tenant, review_id, plan_digest, status) do
+    %PromotionAssertionRun{
+      review_id: review_id,
+      idempotency_key: "req077-fixture-#{System.unique_integer([:positive, :monotonic])}",
+      plan_digest: plan_digest,
+      status: status,
+      assertions_total: 1,
+      assertions_passed: 1,
+      assertions_failed: 0,
+      completed_at: DateTime.utc_now()
+    }
+    |> Repo.insert!(prefix: tenant.schema_name)
+  end
+
+  describe "ISS-0732 §9 amendment: verify_rehearsed/2 rejects an in-progress rehearsal" do
+    test "409 :assertion_run_in_progress when the latest matching-digest run is status: :running, even though assertions_failed == 0" do
+      source = provisioned_tenant("req077-iss0732-running-src")
+      target = provisioned_tenant("req077-iss0732-running-tgt")
+      process_key = unique_process_key()
+      insert_active_definition!(source.schema_name, %{name: process_key, version: "2.0.0"})
+
+      requester = Ecto.UUID.generate()
+
+      %{"review_id" => review_id, "plan_digest" => digest} =
+        submit!(target, source.tenant_id, target.tenant_id, process_key, user_id: requester)
+
+      assert approve(target, review_id, digest, user_id: Ecto.UUID.generate()).status == 200
+
+      insert_assertion_run!(target, review_id, digest, :running)
+
+      resp = apply_promotion(target, review_id, digest)
+
+      assert resp.status == 409
+      body = Jason.decode!(resp.resp_body)
+      assert body["detail"] =~ "has not finished yet"
+
+      # Nothing written -- INV-NEW-3 (design §9.6): review stays :approved,
+      # target definition is untouched.
+      assert Repo.get!(PromotionReview, review_id, prefix: target.schema_name).status ==
+               :approved
+
+      refute Repo.get_by(
+               ProcessDefinition,
+               [name: process_key, status: :active, version: "2.0.0"],
+               prefix: target.schema_name
+             )
+    end
+
+    test "a status: :teardown_failed run with assertions_failed == 0 is still accepted (no regression to status == :passed-only)" do
+      source = provisioned_tenant("req077-iss0732-teardown-src")
+      target = provisioned_tenant("req077-iss0732-teardown-tgt")
+      process_key = unique_process_key()
+      insert_active_definition!(source.schema_name, %{name: process_key, version: "2.0.0"})
+
+      requester = Ecto.UUID.generate()
+
+      %{"review_id" => review_id, "plan_digest" => digest} =
+        submit!(target, source.tenant_id, target.tenant_id, process_key, user_id: requester)
+
+      assert approve(target, review_id, digest, user_id: Ecto.UUID.generate()).status == 200
+
+      insert_assertion_run!(target, review_id, digest, :teardown_failed)
 
       resp = apply_promotion(target, review_id, digest)
 
@@ -616,6 +848,7 @@ defmodule Letflow.Routers.Req077PromotionPipelineTest do
         submit!(target, source.tenant_id, target.tenant_id, process_key, user_id: requester)
 
       assert approve(target, review_id, digest, user_id: other_actor).status == 200
+      insert_passing_assertion_run!(target, review_id, digest)
       assert apply_promotion(target, review_id, digest).status == 200
 
       target_definition_before =
@@ -654,6 +887,7 @@ defmodule Letflow.Routers.Req077PromotionPipelineTest do
         submit!(target, source.tenant_id, target.tenant_id, process_key, user_id: requester)
 
       assert approve(target, review_id, digest, user_id: other_actor).status == 200
+      insert_passing_assertion_run!(target, review_id, digest)
       assert apply_promotion(target, review_id, digest).status == 200
 
       # requester approving their OWN already-applied review -- self_approval_gate

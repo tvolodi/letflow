@@ -1,0 +1,55 @@
+{
+  "handoff_id": "b1e2a3c4-0000-4000-8000-000000000007",
+  "run_id": "WF03-ISS0732-20260921",
+  "workflow_id": "WF-03",
+  "step": "03c",
+  "from_agent": "ORCH",
+  "to_agent": "REVIEWER",
+  "file": "handoffs/WF03-ISS0732-20260921/step-03c-reviewer.json",
+  "created_at": "2026-09-21T04:02:58Z",
+  "started_at": "2026-09-21T04:02:58Z",
+  "completed_at": "2026-09-21T04:04:08Z",
+  "status": "COMPLETED",
+  "priority": "HIGH",
+  "context": {
+    "stage": "S6",
+    "requirement_ids": [],
+    "requirement_text": {},
+    "related_handoff_ids": ["b1e2a3c4-0000-4000-8000-000000000005", "b1e2a3c4-0000-4000-8000-000000000006"],
+    "artifacts_in": [
+      "handoffs/WF03-ISS0732-20260921/step-03-elixir-dev.json",
+      "handoffs/WF03-ISS0732-20260921/step-03b-security-reviewer.json",
+      "lib/letflow/design/iss0732-promotion-apply-assertion-gate.md"
+    ],
+    "owned_modules": [
+      "lib/letflow/definitions/promotion.ex",
+      "lib/letflow/routers/promotions.ex"
+    ]
+  },
+  "task": {
+    "description": "Hard gate on OTP idiom, supervision integrity, scope creep, and decision-record consistency. Runs after SECURITY-REVIEWER (PASSED). Review the real diff `git diff main...HEAD -- lib/letflow/definitions/promotion.ex lib/letflow/routers/promotions.ex test/letflow/routers/req077_promotion_pipeline_test.exs` against the gate-approved design (lib/letflow/design/iss0732-promotion-apply-assertion-gate.md). Confirm: (1) implementation matches the design (error-reason names, with-chain ordering, gate condition assertions_failed == 0 not status == :passed); (2) no scope creep beyond the design's stated backend-only scope; (3) the test-fixture fix in req077_promotion_pipeline_test.exs (a new insert_passing_assertion_run!/3 helper, used to unblock 3 pre-existing fixtures that never recorded a rehearsal) does not weaken any existing assertion -- read the diff of that test file directly to confirm this yourself, don't take ELIXIR-DEV's word for it; (4) no decision-record conflict (this touches the already-established promotion-pipeline design, REQ-077, and D-8/D-5/INV-5 conventions documented in promotions.ex's own moduledoc -- confirm nothing here silently contradicts one of those).",
+    "acceptance_criteria": [
+      "Implementation verified against design doc, clause-by-clause, not just 'looks consistent'",
+      "No scope creep beyond backend gate (frontend confirmed untouched)",
+      "Test-fixture diff in req077_promotion_pipeline_test.exs independently read and confirmed non-weakening",
+      "No decision-record or established-convention conflict found, or one flagged if found"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "Reviewed the real diff (git diff main...HEAD on lib/letflow/definitions/promotion.ex, lib/letflow/routers/promotions.ex, test/letflow/routers/req077_promotion_pipeline_test.exs) clause-by-clause against lib/letflow/design/iss0732-promotion-apply-assertion-gate.md. (1) Implementation matches design exactly: verify_rehearsed/2 is inserted as the 4th with-chain clause after verify_approved/1 and before do_apply_review/3, exactly as designed; the three new error reasons (:assertion_run_missing, :assertion_run_digest_mismatch, :assertion_run_failed) match the design's names and step order (get_latest_assertion_run -> :not_found check -> PromotionDigest.verify_digest/2 constant-time compare on assertion_run.plan_digest vs. applied plan_digest -> assertions_failed == 0 check, deliberately not status == :passed). This matches promotions.ex's own already-documented moduledoc contract ('## The assertion-run gate condition (design Sec7.5)', lines 119-124), so the new gate reinforces rather than contradicts that existing convention. render_apply/2 gets three new clauses, each a plain Response.conflict/2 with its own detail string per design Sec5.2, matching the adjacent existing clause shapes (:digest_mismatch at :627-628). apply_review_error() union is extended additively (3 new atom members, nothing removed/widened), preserving INV-NEW-2's 'no caller pattern-matching shape needs to change' property. (2) No scope creep: git diff --stat main...HEAD shows only the intended files plus handoff/doc bookkeeping -- web/ is untouched, confirming the design's stated backend-only scope (ISS-0767 correctly left for a separate design). No new behaviours/abstractions beyond what Sec2 calls for; verify_rehearsed/2 is private, pure read-then-branch, same shape as its siblings verify_apply_digest/2 and verify_approved/1 -- not a new pattern. (3) Independently read the test-file diff directly (not taking ELIXIR-DEV's word): insert_passing_assertion_run!/3 is a new private fixture helper; grepped every apply_promotion(...) call site in the test file (12 call sites) and confirmed the helper was added at exactly the 3 sites that reach the :approved status and expect a genuine apply success (lines ~370, ~643, ~682) -- each call is a pure setup-only insertion placed before the existing assert/resp line, with no existing assert weakened, loosened, or removed. The other 9 call sites (pending/rejected/applied/failed/superseded/missing-id 409 and 404 cases) never reach verify_rehearsed/2 in the with-chain (they fail earlier on status or existence checks) and correctly were left untouched. Repo.insert!/PromotionAssertionRun alias usage in the helper matches this test file's own pre-existing Repo-usage pattern (lines 123/196/233 etc.) and does not conflict with the AC6 'no Repo. in route modules' grep test, which only scans production router files, not this test file. (4) No decision-record or established-convention conflict: cross-checked promotions.ex's own moduledoc sections for D-8 ('single-atom 409 rule', lines 91-103), D-5 ('assertion-run idempotency preserved by omission', lines 105-117), and INV-5 (cross-tenant/nonexistent review same response, lines 77-89) -- the new clauses are additive, do not fold into invalid_transition_response/1 (correctly avoiding conflating with D-8's single-atom rule, which the design itself calls out as a deliberate distinction), do not touch idempotency-key handling (D-5 scope), and do not add any new existence/lookup path that could reintroduce an INV-5 violation. OQ-2 (possible in-flight :status == :running rehearsal false-pass) is explicitly flagged by the design as open and NOT silently resolved by this diff -- correct, since resolving it would have been scope creep beyond this design; worth carrying forward as a follow-up issue but does not block this gate, since the design explicitly reuses REQ-077's existing unfiltered get_latest_assertion_run/2 read rather than diverging from established behaviour.",
+    "artifacts_out": [],
+    "issues": [],
+    "git_evidence": {
+      "branch_name": "feature/WF03-ISS0732-20260921",
+      "commit_sha_list": [],
+      "remote_branch": null,
+      "push_status": "pending",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": "Proceed to TEST-DESIGNER (step-04). Optional non-blocking follow-up: consider filing OQ-2 (in-flight :running assertion run false-pass potential) as a docs/issues/ entry for future triage, per design Sec8 OQ-2 -- not required for this gate to pass."
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

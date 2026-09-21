@@ -40,6 +40,16 @@ defmodule Letflow.TenantProvisioning.MigrationReplayBoot do
   alias Letflow.TenantProvisioning
   alias Letflow.TenantProvisioning.Registration
 
+  @spec child_spec(term()) :: Supervisor.child_spec()
+  def child_spec(init_arg) do
+    %{
+      id: __MODULE__,
+      start: {__MODULE__, :start_link, [init_arg]},
+      restart: :temporary,
+      type: :worker
+    }
+  end
+
   @spec start_link(term()) :: {:ok, pid()} | :ignore
   def start_link(_init_arg) do
     try do

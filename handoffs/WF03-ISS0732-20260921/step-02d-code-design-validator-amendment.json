@@ -8,8 +8,8 @@
   "file": "handoffs/WF03-ISS0732-20260921/step-02d-code-design-validator-amendment.json",
   "created_at": "2026-09-21T04:07:20Z",
   "started_at": "2026-09-21T04:07:20Z",
-  "completed_at": null,
-  "status": "PENDING",
+  "completed_at": "2026-09-21T04:22:10Z",
+  "status": "COMPLETED",
   "priority": "HIGH",
   "context": {
     "stage": "S6",
@@ -35,19 +35,19 @@
     ]
   },
   "result": {
-    "status": "PENDING",
-    "summary": "",
+    "status": "PASS",
+    "summary": "Read §9 of lib/letflow/design/iss0732-promotion-apply-assertion-gate.md directly (lines 335-508) and confirmed via `git diff 4655635a 7e54e897 -- lib/letflow/design/iss0732-promotion-apply-assertion-gate.md` that the commit is a pure append (only new `+` lines from '## 9. AMENDMENT' onward; §§1-8 byte-identical). All five acceptance criteria verified independently: (1) §9.1 explicitly evaluates and rejects candidate (A) `status == :passed` by name, for exactly the reason flagged (it would reject a legitimate :teardown_failed/assertions_failed==0 rehearsal, contradicting R8's documented gate condition); chosen fix (B) `status not in [:running]` is confirmed in §9.1's own text to admit :passed, :failed, and :teardown_failed (excludes only :running, one of four enum values). (2) §9.1 and §9.2 both state in plain language that the new status check and the existing assertions_failed==0 check are both required, independent, non-collapsed sub-checks -- §2.1's original step 3 is renumbered step 4 and left textually unchanged, with the new status check inserted as a new step 3 before it, not replacing it. (3) New error reason `:assertion_run_in_progress` (§9.3) is distinct from the three prior new reasons (:assertion_run_missing, :assertion_run_digest_mismatch, :assertion_run_failed) and from the pre-existing plain-atom reasons; §9.3's prose explicitly distinguishes it from :assertion_run_missing and :assertion_run_failed by caller-facing meaning. (4) No executable Elixir in §9 -- the fenced block in §9.2 is numbered plain-English prose steps (not Elixir syntax), and the `@type`/`@spec` additions in §9.3 are type-shape declarations only, consistent with the accepted style of the unchanged §§1-8. (5) Confirmed via git diff that §9 is a strict append with zero modification to §§1-8's existing text.",
     "artifacts_out": [],
     "issues": [],
     "git_evidence": {
-      "branch_name": null,
+      "branch_name": "feature/WF03-ISS0732-20260921",
       "commit_sha_list": [],
       "remote_branch": null,
       "push_status": "skipped",
       "pr_url": null,
       "pr_create_error": null
     },
-    "next_action": ""
+    "next_action": "Route to next step per WF-03 (proceed toward implementation/re-merge now that OQ-2 is resolved in-design); no rework required."
   },
   "rework_count": 0,
   "max_rework": 3

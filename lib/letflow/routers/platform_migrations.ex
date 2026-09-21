@@ -65,6 +65,7 @@ defmodule Letflow.Routers.PlatformMigrations do
   alias Letflow.Api.Response
   alias Letflow.Api.Validation
   alias Letflow.Api.Validation.FieldConstraint
+  alias Letflow.Api.Validation.FieldError
   alias Letflow.Platform.MigrationRollout
 
   authz_post "/rollouts", :TenantsManage do
@@ -118,9 +119,46 @@ defmodule Letflow.Routers.PlatformMigrations do
         case column_spec_from_request(raw_spec) do
           {:ok, column_spec} ->
             case MigrationRollout.start_rollout(entity_type, attribute, column_spec) do
-              {:ok, rollout_result} -> Response.ok(conn, rollout_result_map(rollout_result))
-              {:error, :column_spec_conflict} -> Response.conflict(conn, "column_spec conflict")
-              {:error, _reason} -> Response.internal_error(conn)
+              {:ok, rollout_result} ->
+                Response.ok(conn, rollout_result_map(rollout_result))
+
+              {:error, :invalid_entity_type} ->
+                Response.send_problem(
+                  conn,
+                  Validation.problem([
+                    %FieldError{
+                      field: "entity_type",
+                      constraint: "identifier_format",
+                      message:
+                        "entity_type must start with a lowercase letter and contain only " <>
+                          "lowercase letters, digits, and underscores after that, up to 64 " <>
+                          "characters total",
+                      received: entity_type
+                    }
+                  ])
+                )
+
+              {:error, :invalid_attribute} ->
+                Response.send_problem(
+                  conn,
+                  Validation.problem([
+                    %FieldError{
+                      field: "attribute",
+                      constraint: "identifier_format",
+                      message:
+                        "attribute must start with a lowercase letter and contain only " <>
+                          "lowercase letters, digits, and underscores after that, up to 64 " <>
+                          "characters total",
+                      received: attribute
+                    }
+                  ])
+                )
+
+              {:error, :column_spec_conflict} ->
+                Response.conflict(conn, "column_spec conflict")
+
+              {:error, _reason} ->
+                Response.internal_error(conn)
             end
 
           {:error, message} ->

@@ -74,6 +74,7 @@ defmodule Letflow.Platform.MigrationRollout do
 
   import Ecto.Query
 
+  alias Letflow.Entities.Definition.DDL
   alias Letflow.Identity.Tenant
   alias Letflow.Platform.MigrationRollout.Outcome
   alias Letflow.Platform.MigrationRollout.Rollout
@@ -124,12 +125,26 @@ defmodule Letflow.Platform.MigrationRollout do
             optional(:references_entity) => String.t(),
             optional(:generated_as) => String.t() | nil
           }
-        ) :: {:ok, rollout_result()} | {:error, term()}
+        ) ::
+          {:ok, rollout_result()}
+          | {:error, :invalid_entity_type}
+          | {:error, :invalid_attribute}
+          | {:error, :column_spec_conflict}
+          | {:error, term()}
   def start_rollout(entity_type, attribute, column_spec)
       when is_binary(entity_type) and is_binary(attribute) and is_map(column_spec) do
-    case Repo.get_by(Rollout, entity_type: entity_type, attribute: attribute) do
-      nil -> start_new_rollout(entity_type, attribute, column_spec)
-      %Rollout{} = existing -> continue_existing_rollout(existing, column_spec)
+    cond do
+      not DDL.valid_identifier?(entity_type) ->
+        {:error, :invalid_entity_type}
+
+      not DDL.valid_identifier?(attribute) ->
+        {:error, :invalid_attribute}
+
+      true ->
+        case Repo.get_by(Rollout, entity_type: entity_type, attribute: attribute) do
+          nil -> start_new_rollout(entity_type, attribute, column_spec)
+          %Rollout{} = existing -> continue_existing_rollout(existing, column_spec)
+        end
     end
   end
 

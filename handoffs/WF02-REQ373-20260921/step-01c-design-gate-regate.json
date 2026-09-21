@@ -8,8 +8,8 @@
   "file": "handoffs/WF02-REQ373-20260921/step-01c-design-gate-regate.json",
   "created_at": "2026-09-21T17:27:01Z",
   "started_at": "2026-09-21T17:27:01Z",
-  "completed_at": null,
-  "status": "IN_PROGRESS",
+  "completed_at": "2026-09-21T17:45:00Z",
+  "status": "COMPLETED",
   "priority": "NORMAL",
   "context": {
     "stage": "S6",
@@ -37,7 +37,19 @@
       "status field's Ecto representation (Ecto.Enum declaration + values: mapping) is stated explicitly and used consistently (no casing contradiction) throughout the entire document"
     ]
   },
-  "result": null,
+  "result": {
+    "verdict": "PASS",
+    "reviewed_by": "CODE-DESIGN-VALIDATOR",
+    "reviewed_at": "2026-09-21T17:45:00Z",
+    "design_artefact": "lib/letflow/design/req373-service-catalog-version-lifecycle.md",
+    "checks_passed": [
+      "(a) Ecto.Enum declaration now explicit and unambiguous: §3.3 line 260-261 states `field(:status, Ecto.Enum, values: [:ACTIVE, :RETIRED], default: :ACTIVE)`, with an explanatory paragraph tying the uppercase-atom choice to required_auth's own convention and to Ecto.Enum's default verbatim-casing serialization against the migration's uppercase DB CHECK constraint -- no remapping ambiguity left.",
+      "(b) Grepped the entire document (case-insensitive) for :active/:retired/'active'/'ACTIVE' literal-casing variants myself, not trusting the rework note's claimed section list -- every status literal in the doc (lines 133, 192, 218, 222, 226, 260-268, 275, 285, 305, 307, 321, 401, 403) is uppercase :ACTIVE/:RETIRED or \"ACTIVE\"/\"RETIRED\". The one lowercase occurrence (line 268, '...never `:active`/`:retired`') is explanatory prose disclaiming the old casing, not a literal usage -- no missed lowercase status atom anywhere in the document, including sections outside the rework's claimed §3.1-3.3/§5 list (checked §1, §2, §4, §6, §7, §8, §9 too, none use status atoms at all or already used uppercase).",
+      "(c) Spot-checked two of the prior PASS's checks for unrelated alteration: §3.2's AC4 retire-vs-fallback resolution (lines 230-243, 'retire FAILS OUTRIGHT, never falls through' with the same structural reasoning) and §0's PinResolver.Lookup contract description (lines 30-37, catalog_lookup taking service_id alone) both read byte-equivalent in substance to the version that earned the prior PASS; §7's :AdminServicesManage permission reuse (lines 442-447) also unchanged. No unrelated content drift detected."
+    ],
+    "checks_failed": [],
+    "summary": "PASS. Independently re-read the full design doc and grepped it end-to-end for status-casing literals rather than trusting the rework note's claimed scope. The status field is now declared as a plain `Ecto.Enum, values: [:ACTIVE, :RETIRED], default: :ACTIVE` (§3.3), and every status literal across the entire document -- migration (§4), publish/retire behavior (§3.1/§3.2), and catalog_lookup (§5) -- consistently uses uppercase :ACTIVE/:RETIRED, matching the migration's uppercase DB CHECK constraint. No lowercase status atom remains anywhere. Spot-checks of the AC4 retire-vs-fallback resolution and the PinResolver.Lookup contract usage confirm no unrelated content was altered by the rework. Design is cleared to proceed to WF-02 Step 2 (ELIXIR-DEV implementation)."
+  },
   "rework_count": 1,
   "max_rework": 3
 }

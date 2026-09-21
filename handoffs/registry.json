@@ -6727,7 +6727,7 @@
       "workflow_id": "WF-03",
       "requirement_ids": [],
       "stage": "S6",
-      "status": "IN_PROGRESS",
+      "status": "COMPLETED",
       "owned_modules": [
         "lib/letflow/definitions/promotion.ex",
         "lib/letflow/audit.ex",
@@ -6737,9 +6737,9 @@
         "docs/issues/ISS-0733.yaml"
       ],
       "lock_acquired_at": "2026-09-21T00:14:02Z",
-      "lock_released_at": null,
-      "released_lock": false,
-      "last_known_step": "Step 01 COMPLETED PASS (ISSUE-FIXER diagnosis)",
+      "lock_released_at": "2026-09-21T01:45:00Z",
+      "released_lock": true,
+      "last_known_step": "Step Final COMPLETED PASS (squash-merged 384ad8af, PR #1662)",
       "note": "ISS-0733/GH#1646, letflow-queue task 758. Diagnosis found two independent audit/read-path gaps (promotion.ex never calls Letflow.Audit; platform_instance_id timeline endpoint 404s by design) -- routed to CODE-DESIGNER, not a same-session fix."
     }
   ]

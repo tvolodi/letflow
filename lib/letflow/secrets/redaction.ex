@@ -13,6 +13,27 @@ defmodule Letflow.Secrets.Redaction do
   is NOT caught and will appear in log output in plaintext. This module
   provides no content-based detection of secret-shaped values — it is a
   name-based denylist, not a guarantee.
+
+  List handling also recognizes a `{key, value}` 2-tuple whose `key` matches
+  the sensitive-key rules above — the `Plug.Conn.headers()` shape
+  (`[{"authorization", "Bearer ..."}, ...]`). This closes the gap where a raw
+  `conn` (and its `req_headers`) reaches `Logger` metadata, e.g. via Bandit's
+  own crash-logging path (see `docs/issues/ISS-0769.yaml`). As with maps,
+  this keys on the tuple's first element (the header name) only — a secret
+  value embedded inside a non-sensitive-named header's value, or elsewhere
+  in a free-text string, is still not caught.
+
+  A struct value (e.g. `%Plug.Conn{}`) is normalized to a plain map
+  (`Map.from_struct/1`) before the same recursive walk runs — arbitrary
+  structs do not implement `Enumerable`, so without this normalization a
+  struct anywhere in the metadata (top-level or nested) raises
+  `Protocol.UndefinedError` inside this module. Since this module runs as a
+  `:logger` primary filter, an uncaught exception here does not just fail to
+  redact one event — Erlang's `:logger` permanently removes a filter that
+  raises, silently disabling redaction for every subsequent log event on the
+  node until restart. The struct's type identity is not preserved in the
+  output (this module's contract was already "returns a map", not "returns
+  the same struct type").
   """
 
   @sensitive_exact_keys ~w(authorization password password_hash token access_token
@@ -33,6 +54,10 @@ defmodule Letflow.Secrets.Redaction do
   as-is.
   """
   @spec redact_map(map()) :: map()
+  def redact_map(map) when is_struct(map) do
+    map |> Map.from_struct() |> redact_map()
+  end
+
   def redact_map(map) when is_map(map) do
     Map.new(map, fn {key, value} ->
       if sensitive_key?(key) do
@@ -47,8 +72,14 @@ defmodule Letflow.Secrets.Redaction do
 
   defp redact_value(value) when is_list(value) do
     Enum.map(value, fn
-      item when is_map(item) -> redact_map(item)
-      item -> item
+      item when is_map(item) ->
+        redact_map(item)
+
+      {key, _value} = item when is_binary(key) or is_atom(key) ->
+        if sensitive_key?(key), do: {key, @redacted}, else: item
+
+      item ->
+        item
     end)
   end
 

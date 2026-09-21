@@ -3,6 +3,11 @@ defmodule Letflow.Obs.Logger do
   OTP `:logger_formatter` implementation for Letflow. Emits one newline-terminated
   JSON object per log entry with structured fields, trace-id propagation, and
   sensitive-value redaction.
+
+  `redact_sensitive/1` delegates to `Letflow.Secrets.Redaction.redact_map/1` for
+  the authoritative sensitive-key list and recursive/tuple-aware redaction
+  behavior, rather than maintaining its own separate list — see
+  `docs/issues/ISS-0769.yaml`.
   """
 
   @behaviour :logger_formatter
@@ -23,39 +28,6 @@ defmodule Letflow.Obs.Logger do
                      "component",
                      "message"
                    ])
-
-  @exact_sensitive MapSet.new([
-                     :authorization,
-                     :password,
-                     :password_hash,
-                     :token,
-                     :access_token,
-                     :refresh_token,
-                     :bootstrap_token,
-                     :api_token,
-                     :secret,
-                     :client_secret,
-                     :credential,
-                     :credentials,
-                     :cookie,
-                     "authorization",
-                     "password",
-                     "password_hash",
-                     "token",
-                     "access_token",
-                     "refresh_token",
-                     "bootstrap_token",
-                     "api_token",
-                     "secret",
-                     "client_secret",
-                     "credential",
-                     "credentials",
-                     # string-only: hyphenated header name
-                     "set-cookie",
-                     "cookie"
-                   ])
-
-  @sensitive_suffixes ["_token", "_secret", "_password", "_credential"]
 
   # Work-bound (not a cycle guard — BEAM terms built through normal code cannot be
   # cyclic) for safe_value/2's recursive descent into metadata. See design doc
@@ -216,27 +188,16 @@ defmodule Letflow.Obs.Logger do
   defp jason_encodable?(v), do: Jason.Encoder.impl_for(v) not in [nil, Jason.Encoder.Any]
 
   @doc """
-  Replaces values for sensitive keys with `"[REDACTED]"`. Only top-level keys
-  are checked; nested maps are not traversed.
+  Replaces values for sensitive keys with `"[REDACTED]"`. Delegates to
+  `Letflow.Secrets.Redaction.redact_map/1` for the authoritative sensitive-key
+  list and recursive/tuple-aware walk — behavior strictly broadens versus the
+  prior top-level-only implementation (a superset fix; every previously
+  redacted case is still redacted).
   """
   @spec redact_sensitive(map()) :: map()
   def redact_sensitive(meta) when is_map(meta) do
-    Map.new(meta, fn {k, v} ->
-      if sensitive_key?(k), do: {k, "[REDACTED]"}, else: {k, v}
-    end)
+    Letflow.Secrets.Redaction.redact_map(meta)
   end
-
-  defp sensitive_key?(k) when is_atom(k) do
-    MapSet.member?(@exact_sensitive, k) or
-      Enum.any?(@sensitive_suffixes, &String.ends_with?(Atom.to_string(k), &1))
-  end
-
-  defp sensitive_key?(k) when is_binary(k) do
-    MapSet.member?(@exact_sensitive, k) or
-      Enum.any?(@sensitive_suffixes, &String.ends_with?(k, &1))
-  end
-
-  defp sensitive_key?(_), do: false
 
   @doc """
   Runs `fun` under a freshly generated trace id. Restores (or clears) the prior

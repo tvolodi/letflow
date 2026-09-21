@@ -8,8 +8,8 @@
   "file": "handoffs/WF03-ISS0732-20260921/step-03-elixir-dev.json",
   "created_at": "2026-09-21T01:45:31Z",
   "started_at": "2026-09-21T01:45:31Z",
-  "completed_at": null,
-  "status": "PENDING",
+  "completed_at": "2026-09-21T09:05:00Z",
+  "status": "COMPLETED",
   "priority": "HIGH",
   "context": {
     "stage": "S6",
@@ -40,19 +40,26 @@
     ]
   },
   "result": {
-    "status": "PENDING",
-    "summary": "",
-    "artifacts_out": [],
-    "issues": [],
+    "status": "PASS",
+    "summary": "Implemented the gate-approved design exactly: added private verify_rehearsed/2 to lib/letflow/definitions/promotion.ex's apply_review/4 with-chain (inserted after verify_approved/1, before do_apply_review/3), 3 new apply_review_error() union members (:assertion_run_missing, :assertion_run_digest_mismatch, :assertion_run_failed), and 3 new render_apply/2 clauses in lib/letflow/routers/promotions.ex (each Response.conflict/2, 409, with its own design-specified detail string). Existing R8 assertions_failed==0 gate condition and verify_apply_digest/2's constant-time comparison untouched.\n\nmix compile --warnings-as-errors: clean, 0 warnings/errors.\n\nTargeted suite (test/letflow/definitions/promotion_test.exs + test/letflow/routers/promotions_test.exs + test/letflow/routers/req077_promotion_pipeline_test.exs, 54 tests total via a single run):\n  Finished in 60.1 seconds (0.00s async, 60.1s sync)\n  Result: 54 passed\n0 failures.\n\nImplementing verify_rehearsed/2 broke 3 pre-existing tests in test/letflow/routers/req077_promotion_pipeline_test.exs (AC1 R7 happy-path apply, and both AC4 already-applied fixtures) because those fixtures called apply after approve without ever recording a rehearsal -- correctly started 409'ing under the new gate. Fixed by adding an `insert_passing_assertion_run!/3` test helper (directly inserts a matching-digest, status: :passed, assertions_failed: 0 PromotionAssertionRun row, bypassing the real R8 HTTP/SandboxPool round trip that AC1's own R8 describe block already exercises) and calling it at the 3 affected call sites before apply. No assertions in those tests were weakened -- each still checks its original, unrelated behaviour (self-approval-gate ordering, 409-on-already-applied invariance, R7 happy path).\n\nFull mix test, run twice:\n  Run A (before the req077 test-fixture fix): 'Finished in 2169.1 seconds (17.6s async, 2151.5s sync)' / 'Result: 4490/4495 passed (6/6 properties, 4484/4489 tests), 23 excluded' / 'Failed: 5 tests' -- all 5 were: 3x the req077 fixture-gap tests just fixed above, plus 2x Letflow.IdentityTest resolve_tenant_by_realm/1 and resolve_realm_by_tenant/1 (REQ-019 AC1) -- confirmed via `git stash` against this same branch unmodified: those 2 fail there too (52/54 on test/letflow/identity_test.exs alone), i.e. pre-existing, already tracked as ISS-0766 per ORCH (flaky under shared non-partitioned DB state), not caused by this change.\n  Run B (after the fix, full suite): 'Finished in 2805.3 seconds (22.4s async, 2782.8s sync)' / 'Result: 4487/4495 passed (6/6 properties, 4481/4489 tests), 23 excluded' / 'Failed: 8 tests' -- the 2 ISS-0766 IdentityTest failures again, PLUS 6 new failures, all in Letflow.TenantSchemaReaperTest/Letflow.ServiceCatalogReaperTest. Diagnosed, not assumed: each of those 6 failures' own log line reads verbatim 'TenantSchemaReaper.sweep_orphans/2: deferring this sweep entirely -- another mix test invocation (application_name != ...) is currently connected to this database ... (ISS-0110)' / the equivalent ISS-0414 line for the service-catalog sweep -- i.e. the module's own documented concurrency guard detected a second live `mix test` connection and correctly deferred, which reads as a failed assertion under this suite's fixed test IDs. Confirmed environmental, not code fallout: (a) `Get-CimInstance Win32_Process -Filter \"Name='erl.exe'\"` during Run B showed 2 concurrent plain `mix test` processes (no --no-color) that were not mine (I ran only --no-color invocations) -- almost certainly a sibling Claude session/agent in this same repo per this session's own sibling-session guidance; (b) re-ran `mix test test/support/tenant_schema_reaper_test.exs` standalone afterward and it reproduced the identical 3/6-passed failure with the identical ISS-0110 deferral log line while those sibling erl.exe processes were still present -- deterministic reproduction of the stated cause, not a guess. Did not kill those processes (not mine to kill; sibling-session discretion favors not disrupting another agent's in-flight run). No full run without sibling interference was captured before completing this handoff, given the ~35-45 min full-suite cost and the already-conclusive standalone reproduction; RELEASE-VALIDATOR or a later full-suite run once sibling sessions are idle should show 4489/4495 (only the 2 known ISS-0766 failures) if this diagnosis holds -- flagged in issues/next_action below rather than asserted as fact.\n\nDid not touch verify_apply_digest/2's constant-time comparison or the existing R8 assertions_failed==0 gate condition anywhere.",
+    "artifacts_out": [
+      "lib/letflow/definitions/promotion.ex",
+      "lib/letflow/routers/promotions.ex",
+      "test/letflow/routers/req077_promotion_pipeline_test.exs"
+    ],
+    "issues": [
+      "2 pre-existing failures in test/letflow/identity_test.exs (resolve_tenant_by_realm/1, resolve_realm_by_tenant/1) reproduce with and without this change -- already tracked as ISS-0766 per ORCH, not a regression from this handoff.",
+      "6 failures observed in one full-suite run (Letflow.TenantSchemaReaperTest x3, Letflow.ServiceCatalogReaperTest x3) were caused by a concurrent sibling mix test invocation on this machine tripping the reaper modules' own documented ISS-0110/ISS-0414 concurrency-deferral guards, reproduced standalone with the exact same log line -- not a regression from this change, but not independently re-verified in complete isolation (no idle-machine full run captured). Recommend RELEASE-VALIDATOR (or a later full run once no sibling mix test is active) confirm 4489/4495 passed with only the 2 ISS-0766 failures remaining."
+    ],
     "git_evidence": {
-      "branch_name": null,
+      "branch_name": "feature/WF03-ISS0732-20260921",
       "commit_sha_list": [],
       "remote_branch": null,
       "push_status": "skipped",
       "pr_url": null,
       "pr_create_error": null
     },
-    "next_action": ""
+    "next_action": "Route to SECURITY-REVIEWER (tenant-data path: apply_review/4 gates a definition-promotion write path) then REVIEWER, per WF-02 Step 2a/2b -- ELIXIR-DEV does not self-approve or advance past these gates. Optionally re-run full mix test once no sibling session is active to confirm the 6 reaper-test failures clear."
   },
   "rework_count": 0,
   "max_rework": 3

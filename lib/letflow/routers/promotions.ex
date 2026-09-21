@@ -629,6 +629,27 @@ defmodule Letflow.Routers.Promotions do
 
   defp render_apply(conn, {:error, :invalid_transition}), do: invalid_transition_response(conn)
 
+  defp render_apply(conn, {:error, :assertion_run_missing}),
+    do:
+      Response.conflict(
+        conn,
+        "no assertion run has been recorded for this review; run assertions before applying"
+      )
+
+  defp render_apply(conn, {:error, :assertion_run_digest_mismatch}),
+    do:
+      Response.conflict(
+        conn,
+        "the most recent assertion run does not match the plan_digest being applied; re-run assertions against the current plan"
+      )
+
+  defp render_apply(conn, {:error, :assertion_run_failed}),
+    do:
+      Response.conflict(
+        conn,
+        "the most recent assertion run recorded failing assertions; applying is blocked until a rehearsal with zero failures is recorded"
+      )
+
   defp render_apply(conn, {:error, {:promotion_failed, :forbidden}}),
     do: Response.forbidden(conn, "insufficient permissions")
 

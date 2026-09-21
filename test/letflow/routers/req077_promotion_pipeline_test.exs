@@ -175,6 +175,27 @@ defmodule Letflow.Routers.Req077PromotionPipelineTest do
     build_conn(:post, "/#{review_id}/apply", caller_tenant, conn_fields) |> promotions()
   end
 
+  # ISS-0732 -- apply_review/4 now gates on a matching-digest, zero-failure
+  # promotion_assertion_runs row (see verify_rehearsed/2). Every fixture below
+  # that calls apply_promotion/4 expecting it to succeed must first record a
+  # passing rehearsal for that (review_id, plan_digest) pair -- inserted
+  # directly (bypassing the real R8 HTTP/SandboxPool round trip, which AC1's
+  # own R8 describe block below already exercises) since these fixtures only
+  # need the row to exist, not to re-verify R8's own behaviour.
+  defp insert_passing_assertion_run!(tenant, review_id, plan_digest) do
+    %PromotionAssertionRun{
+      review_id: review_id,
+      idempotency_key: "req077-fixture-#{System.unique_integer([:positive, :monotonic])}",
+      plan_digest: plan_digest,
+      status: :passed,
+      assertions_total: 1,
+      assertions_passed: 1,
+      assertions_failed: 0,
+      completed_at: DateTime.utc_now()
+    }
+    |> Repo.insert!(prefix: tenant.schema_name)
+  end
+
   # A syntactically-valid (64-lowercase-hex) but WRONG digest -- required
   # because PromotionDigest.verify_digest/2's binary clause raises on unequal
   # lengths (design §8.4), so every digest-mismatch fixture below must itself
@@ -343,6 +364,8 @@ defmodule Letflow.Routers.Req077PromotionPipelineTest do
         submit!(target, source.tenant_id, target.tenant_id, process_key, user_id: requester)
 
       assert approve(target, review_id, digest, user_id: Ecto.UUID.generate()).status == 200
+
+      insert_passing_assertion_run!(target, review_id, digest)
 
       resp = apply_promotion(target, review_id, digest)
 
@@ -616,6 +639,7 @@ defmodule Letflow.Routers.Req077PromotionPipelineTest do
         submit!(target, source.tenant_id, target.tenant_id, process_key, user_id: requester)
 
       assert approve(target, review_id, digest, user_id: other_actor).status == 200
+      insert_passing_assertion_run!(target, review_id, digest)
       assert apply_promotion(target, review_id, digest).status == 200
 
       target_definition_before =
@@ -654,6 +678,7 @@ defmodule Letflow.Routers.Req077PromotionPipelineTest do
         submit!(target, source.tenant_id, target.tenant_id, process_key, user_id: requester)
 
       assert approve(target, review_id, digest, user_id: other_actor).status == 200
+      insert_passing_assertion_run!(target, review_id, digest)
       assert apply_promotion(target, review_id, digest).status == 200
 
       # requester approving their OWN already-applied review -- self_approval_gate

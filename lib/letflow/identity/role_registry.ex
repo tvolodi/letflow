@@ -38,7 +38,8 @@ defmodule Letflow.Identity.RoleRegistry do
   """
   @spec list_roles(opts :: [prefix: String.t()]) :: [TenantRole.t()]
   def list_roles(opts) do
-    Repo.all(from(t in TenantRole, order_by: [asc: t.name]), prefix: opts[:prefix])
+    prefix = Keyword.fetch!(opts, :prefix)
+    Repo.all(from(t in TenantRole, order_by: [asc: t.name]), prefix: prefix)
   end
 
   @doc """
@@ -90,9 +91,11 @@ defmodule Letflow.Identity.RoleRegistry do
           opts :: [prefix: String.t()]
         ) :: {:ok, TenantRole.t()} | {:error, upsert_error()}
   defp do_upsert_role(name, group_id, opts) do
+    prefix = Keyword.fetch!(opts, :prefix)
+
     Repo.transaction(
       fn ->
-        case Repo.get(Group, group_id, prefix: opts[:prefix]) do
+        case Repo.get(Group, group_id, prefix: prefix) do
           nil ->
             Repo.rollback(:group_not_found)
 
@@ -100,7 +103,7 @@ defmodule Letflow.Identity.RoleRegistry do
             insert_or_update_role(name, group_id, opts)
         end
       end,
-      prefix: opts[:prefix]
+      prefix: prefix
     )
   end
 
@@ -110,13 +113,15 @@ defmodule Letflow.Identity.RoleRegistry do
           opts :: [prefix: String.t()]
         ) :: TenantRole.t()
   defp insert_or_update_role(name, group_id, opts) do
+    prefix = Keyword.fetch!(opts, :prefix)
+
     case %TenantRole{}
          |> TenantRole.changeset(%{name: name, group_id: group_id})
          |> Repo.insert(
            conflict_target: :name,
            on_conflict: [set: [group_id: group_id]],
            returning: true,
-           prefix: opts[:prefix]
+           prefix: prefix
          ) do
       {:ok, role} -> role
       {:error, changeset} -> Repo.rollback(changeset)

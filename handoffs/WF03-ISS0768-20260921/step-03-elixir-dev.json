@@ -8,8 +8,8 @@
   "file": "handoffs/WF03-ISS0768-20260921/step-03-elixir-dev.json",
   "created_at": "2026-09-21T03:21:30Z",
   "started_at": "2026-09-21T03:21:30Z",
-  "completed_at": "2026-09-21T09:20:00Z",
-  "status": "PENDING",
+  "completed_at": "2026-09-21T09:45:00Z",
+  "status": "COMPLETED",
   "priority": "HIGH",
   "context": {
     "stage": "S4",
@@ -59,7 +59,8 @@
       "pr_url": null,
       "pr_create_error": null
     },
-    "next_action": "Route to SECURITY-REVIEWER (tenant-data path: RoleRegistry queries now cross tenant-schema boundaries via prefix) then REVIEWER per WF-03/WF-02 Step 2a-2d gating; TEST-DESIGNER writes the new cross-tenant-isolation regression test at step-05 after those gates pass."
+    "next_action": "Route to SECURITY-REVIEWER (tenant-data path: RoleRegistry queries now cross tenant-schema boundaries via prefix) then REVIEWER per WF-03/WF-02 Step 2a-2d gating; TEST-DESIGNER writes the new cross-tenant-isolation regression test at step-05 after those gates pass.",
+    "rework_1_note": "REWORK ITERATION 1 (this pass): REVIEWER FAILed the prior COMPLETED result (see handoffs/WF03-ISS0768-20260921/step-05-reviewer.json, commit ade45ff0) on one finding -- list_roles/1, do_upsert_role/3, and insert_or_update_role/3 used bare `opts[:prefix]` inline at each Repo call site instead of the codebase's established convention (binding `prefix = Keyword.fetch!(opts, :prefix)` once at the top of the function and reusing that variable), confirmed by REVIEWER's grep across lib/letflow/identity.ex and every other module using this opts::[prefix: String.t()] pattern -- zero exceptions anywhere else. `opts[:prefix]` silently returns nil on a missing key instead of raising, which is exactly the failure class ISS-0768 exists to close. Fixed mechanically in lib/letflow/identity/role_registry.ex: added `prefix = Keyword.fetch!(opts, :prefix)` as the first line of list_roles/1, do_upsert_role/3, and insert_or_update_role/3, and replaced every `opts[:prefix]` at a Repo call site (Repo.all, Repo.transaction's own prefix opt, the inner Repo.get, and Repo.insert) with that `prefix` variable. Verified upsert_role/3 itself does not touch Repo directly (it only delegates to do_upsert_role/3 via a `with`), so it needed no fetch of its own -- confirmed by re-reading the current source before editing, not assumed. resolve_role_in_tx/1 remains untouched -- confirmed by `git diff` on role_registry.ex showing zero lines changed outside the three targeted functions. No change to routers/identity.ex was needed or made (the rework note scoped the fix to role_registry.ex's Repo-call-site convention only).\n\nRe-verification: `mix compile --warnings-as-errors` -- exit 0, output `Compiling 247 files (.ex)` / `Generated letflow app`, no warnings or errors (deps resolved via MIX_DEPS_PATH pointed read-only at the sibling worktree c:\\Users\\tvolo\\dev\\ai-dala\\letflow\\deps, confirmed mix.lock byte-identical via `diff` before use; MIX_BUILD_PATH stayed local to this worktree's own _build, nothing written back to the sibling repo). `mix test test/letflow/role_registry_test.exs test/letflow/routers/identity_test.exs` -- `Finished in 273.8 seconds (0.00s async, 273.8s sync)` / `Result: 83 passed`, 0 failures, same 83-test count as the pre-rework run (no test files touched this iteration, only role_registry.ex's three function bodies)."
   },
   "rework_count": 1,
   "max_rework": 3

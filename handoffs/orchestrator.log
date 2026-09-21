@@ -2063,3 +2063,4 @@
 2026-09-21T04:15:51Z | DISPATCH | WF-03 | WF03-ISS0732-20260921/step-03f-reviewer-amendment | ORCH -> REVIEWER | PENDING
 2026-09-21T04:25:00Z | GATE_PASS | WF-03 | WF03-ISS0732-20260921/step-03f-reviewer-amendment | REVIEWER -> ORCH | PASS (OQ-2 CLOSED per this pass, matches design 9.2 exactly, both new tests independently verified, no scope creep, commit ae0ea81b)
 2026-09-21T04:17:21Z | DISPATCH | WF-03 | WF03-ISS0732-20260921/step-04-test-designer | ORCH -> TEST-DESIGNER | PENDING
+2026-09-21T05:10:00Z | GATE_PASS | WF-03 | WF03-ISS0732-20260921/step-04-test-designer | TEST-DESIGNER -> ORCH | PASS (3 new tests for original ISS-0732 gate paths, fail-then-pass proven via throwaway worktree against main, 37/37 in target file, full check.test 4490/4497 -- 7 unrelated AuthPipeline/ISS-0736 failures flagged for TEST-RUNNER, commit 28808b73)

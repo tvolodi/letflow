@@ -8,8 +8,8 @@
   "file": "handoffs/WF03-ISS0733-20260921/step-04b-test-design-validator.json",
   "created_at": "2026-09-21T04:00:00Z",
   "started_at": "2026-09-21T04:00:00Z",
-  "completed_at": null,
-  "status": "PENDING",
+  "completed_at": "2026-09-21T06:05:00Z",
+  "status": "COMPLETED",
   "priority": "HIGH",
   "context": {
     "stage": "S6",
@@ -36,11 +36,13 @@
     ]
   },
   "result": {
-    "status": "PENDING",
-    "summary": "",
-    "artifacts_out": [],
+    "status": "PASS",
+    "summary": "Independently re-applied GAP B mutant 2 (wrong instance_id filter): edited lib/letflow/event_store.ex's list_platform_events/1, changed `where([e], e.instance_id == ^platform_instance_id())` to `where([e], e.instance_id != ^Ecto.UUID.generate())`, in place (not a worktree). `mix test test/letflow/event_store/platform_events_test.exs test/letflow/routers/promotions_test.exs` => 'Result: 26/27 passed / Failed: 1 test' -- exactly matches TEST-DESIGNER's reported count for this mutant (1/27). Failing test: 'ISS-0733 GAP B -- list_platform_events/1 cursor pagination: page_size < row count returns has_more via a non-nil next_cursor, and the next page continues correctly with no overlap' (the mutated predicate still returns rows via the negated-random-UUID trick, but breaks the cursor-continuity assertion since instance_id scoping no longer holds; matches the designer's own catch). Revert: `git checkout -- lib/letflow/event_store.ex` -> `git status --porcelain` => empty (only pre-existing unrelated untracked `web/tests/e2e/.pipeline-state/`, not touched by this work) -- CLEAN. Re-run: same 2 files => 'Result: 27 passed' -- green.\n\nAcceptance-criteria mapping (design doc §5) independently checked against the 3 test files: (1) GAP A transactionality decision (§1.1-1.3) -- covered by promotion_test.exs's 'ISS-0733 GAP A' describe block, test 1 (fresh source+target tenants, asserts 0 audit rows both schemas pre-promotion, exactly 1 post-promotion in target only, 0 in source) and test 2 (event_appender failure does not roll back the already-committed audit row -- proves the pre-commit-transaction join, not post-commit). (2) audit_entry action/details shape (§1.4) -- same test 1 asserts action/resource_type/resource_id/actor_id/before_state plus all 8 after_state keys field-for-field against the design's literal shape. (3) GAP B read-path decision + authz boundary (§2.1-2.6) -- promotions_test.exs 'authz -- PLATFORM_ADMIN only' describe (PLATFORM_ADMIN 200, TASK_WORKER 403 no leak, no-roles 403), 'tenant scoping' describe (cross-tenant isolation), 'response shape' describe (exact 2-key envelope / 6-key item, no stray count key), 'event_type filter' describe (narrows/omit-returns-all), 'pagination' describe (cursor round-trip no overlap, exact boundary, invalid cursor 400, wrong-endpoint-prefix cursor 400, empty stream) -- all map onto §2.4/§2.5/§2.6 directly; platform_events_test.exs's 'ISS-0733 GAP B -- list_platform_events/1' describe corroborates the same at the context-function layer (ordering/fields, instance_id-scoping trap, event_type filter, cursor round-trip, exact boundary, empty stream). (4) 'No .ex function bodies' is a design-doc-only criterion (verified: the design file contains @spec/signature/prose only, no function bodies) -- not a test-coverage criterion. (5) 'Does not weaken existing definitions.ex Audit call sites or GET /api/v1/instances/:id/timeline' -- confirmed independently via `git diff --stat main...HEAD -- lib/`: only lib/letflow/definitions/promotion.ex, lib/letflow/event_store.ex, and lib/letflow/routers/promotions.ex changed; lib/letflow/definitions.ex, lib/letflow/instances.ex, and lib/letflow/routers/instances.ex are untouched on this branch, so this criterion holds by construction exactly as the design doc (§2.7, §3) and TEST-DESIGNER's summary state.\n\nTest isolation confirmed across all 3 files: each test provisions its own tenant(s) via TenantFixture.provisioned_tenant! with a distinct slug_prefix per describe block/test, uses Ecto.UUID.generate()/System.unique_integer([:positive, :monotonic]) for every process_key/event_type/idempotency_key, and all 3 files declare `use Letflow.DataCase, async: false` with real Postgres CREATE SCHEMA per tenant -- no shared hardcoded tenant/schema/row id, no fixture reused across files, no reliance on another test file's setup or execution order. No @tag :skip anywhere in any of the 3 files; no 'TODO: implement test' left in the design doc's mapping section; no hardcoded secrets/connection strings observed.",
+    "artifacts_out": [
+      "handoffs/WF03-ISS0733-20260921/step-04b-test-design-validator.json"
+    ],
     "issues": [],
-    "next_action": ""
+    "next_action": "Route to ORCH for step-05 (TEST-RUNNER / next WF-03 stage)."
   },
   "rework_count": 0,
   "max_rework": 3

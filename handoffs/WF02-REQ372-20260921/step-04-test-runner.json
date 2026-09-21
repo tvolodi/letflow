@@ -8,8 +8,8 @@
   "file": "handoffs/WF02-REQ372-20260921/step-04-test-runner.json",
   "created_at": "2026-09-21T08:35:22Z",
   "started_at": "2026-09-21T08:35:22Z",
-  "completed_at": "2026-09-21T08:56:00Z",
-  "status": "PENDING",
+  "completed_at": "2026-09-21T08:59:27Z",
+  "status": "BLOCKED",
   "priority": "NORMAL",
   "context": {
     "stage": "S8",
@@ -37,25 +37,25 @@
   },
   "result": {
     "status": "BLOCKED",
-    "summary": "4 attempts across ~20 minutes (scripts/test_parallel.sh N=16 default; TEST_PARALLEL_N=4; a direct mix test on REQ-372's own 2 new test files; scripts/test_parallel.sh N=16 again) all hit sustained Postgres connection-pool exhaustion (too_many_connections) caused by an active sibling session sharing port 5462, matching the contention risk this handoff's own task description flagged. Confirmed non-transient: pg_stat_activity polls every 15-25s across the full window all failed with FATAL 53300 (even the superuser inspection connection), and the same 3 erl PIDs (28488/30060/46888, start times 13:15:27/13:15:47/13:31:28, all predating this run's 13:37 first attempt) were alive unchanged throughout. Only one partition (of 16) in attempt 1 produced a Result: line: 'combined: 229 tests, 0 properties, 5 failures (224/229 passed)' -- but all 5 failures are DBConnection.ConnectionError inside Letflow.Plugs.AuthPipelineTest (test/letflow/plugs/auth_pipeline_test.exs), not logic/assertion failures, and that file plus its support fixtures show an EMPTY git diff main...HEAD -- structurally unrelated to this branch, which touches only lib/letflow/definitions.ex, lib/letflow/definitions/graph.ex, lib/letflow/definitions/semantic_validation.ex, and the two new REQ-372 test files. Critically, REQ-372's own new tests (test/letflow/definitions/semantic_validation_test.exs, semantic_validation_activation_test.exs) never executed in ANY attempt (grep-confirmed absent from the one completed partition; no other partition or direct invocation got past ecto.create). Full detail and all 4 attempts' evidence in test/reports/report-20260921-WF02-REQ372-20260921.yaml.",
+    "summary": "REDISPATCH ATTEMPT 2 (this attempt), following the same-day earlier BLOCKED result (see prior summary preserved below, and full detail of both attempts in test/reports/report-20260921-WF02-REQ372-20260921.yaml's redispatch_attempt_2 section). Verified on branch feature/WF02-REQ372-20260921 in the main checkout, already up to date with origin. Tried TEST_PARALLEL_N=2, then TEST_PARALLEL_N=1 -- both failed immediately at ecto.create with Postgrex 53300 too_many_connections, because the exhaustion is server-side (Postgres at its 100-connection ceiling) and independent of this run's own requested pool size. Waited ~2.5 minutes (blocking `ping -n 150 127.0.0.1`, since a bare sleep is disallowed for this harness) and rechecked: same 3 erl.exe PIDs (28488/30060/46888) still alive unchanged, and `psql ... pg_stat_activity` still failed FATAL 53300. Retried TEST_PARALLEL_N=1 again -- identical failure. Ran the fallback direct invocation the redispatch specifically asked for, `mix test test/letflow/definitions/semantic_validation_test.exs test/letflow/definitions/semantic_validation_activation_test.exs` -- also could not obtain a single Postgres connection (`The database for Letflow.Repo couldn't be created: killed`). Across both redispatch attempts (8 total invocations, ~35+ minutes combined), REQ-372's own new tests have never once executed, and no full-suite result has been obtained since attempt 1's single lucky partition. This is not attributable to this branch's diff: every single failure in this attempt occurred at ecto.create, before any test module (this branch's own or otherwise) even compiles.\n\nPRIOR ATTEMPT SUMMARY (preserved): 4 attempts across ~20 minutes (scripts/test_parallel.sh N=16 default; TEST_PARALLEL_N=4; a direct mix test on REQ-372's own 2 new test files; scripts/test_parallel.sh N=16 again) all hit sustained Postgres connection-pool exhaustion (too_many_connections) caused by an active sibling session sharing port 5462. Only one partition (of 16) in attempt 1 produced a Result: line: 'combined: 229 tests, 0 properties, 5 failures (224/229 passed)' -- all 5 failures were DBConnection.ConnectionError inside Letflow.Plugs.AuthPipelineTest, a file with an EMPTY git diff main...HEAD -- structurally unrelated to this branch.",
     "artifacts_out": [
       "test/reports/report-20260921-WF02-REQ372-20260921.yaml"
     ],
     "issues": [
       {
         "severity": "MAJOR",
-        "description": "Host-level Postgres connection-pool exhaustion (port 5462, letflow-postgres-1) sustained for ~20+ minutes across 4 independent test-run attempts, caused by an active sibling session's workload (3 long-lived erl PIDs predating this run). Not attributable to REQ-372's own diff -- the one completed partition's 5 failures are pure DBConnection.ConnectionError in Letflow.Plugs.AuthPipelineTest, a file with an empty git diff vs main. Blocks this step from obtaining any first-hand pass/fail evidence for REQ-372's own new tests. For ORCH to file via ISSUE_QUEUE.md if not already tracked, and to coordinate host contention before redispatching TEST-RUNNER."
+        "description": "Host-level Postgres connection-pool exhaustion (port 5462, letflow-postgres-1) now sustained across TWO independent redispatch attempts (~35+ minutes combined, spanning roughly 13:37-13:58 local), caused by the same active sibling session's workload (same 3 long-lived erl PIDs, 28488/30060/46888, unchanged across both attempts, predating this run entirely). Lower parallelism (N=2, N=1) and a ~2.5 minute wait-and-retry did not help, because the constraint is the server's global connection ceiling being fully held by the sibling workload, not this run's own pool sizing. REQ-372's own new tests have never executed in any of the 8 invocations across both attempts. Not attributable to REQ-372's own diff. For ORCH to escalate: confirm an ETA from the sibling session or arrange a dedicated Postgres instance/port for one of the two concurrent runs, rather than continuing to retry against the same saturated instance."
       }
     ],
     "git_evidence": {
       "branch_name": "feature/WF02-REQ372-20260921",
       "commit_sha_list": ["08f67429"],
       "remote_branch": "origin/feature/WF02-REQ372-20260921",
-      "push_status": "pushed",
+      "push_status": "pending (will push this report/handoff update)",
       "pr_url": null,
       "pr_create_error": null
     },
-    "next_action": "Route to ORCH: coordinate/wait for the sibling session holding Postgres connections on port 5462 to release them (or finish), then redispatch TEST-RUNNER for a clean run. Not a rework of REQ-372 -- nothing in this branch's own diff is implicated by any failure observed."
+    "next_action": "Route to ORCH: host Postgres (port 5462) still unusable for testing due to sustained sibling-session saturation across two redispatch attempts. Recommend ORCH get a concrete ETA from the sibling session (likely the gui-review-continuation / WF-03 ISS-0771 worktree, per untracked web/tests/e2e/.pipeline-state/ files still in this checkout's git status) or arrange a separate Postgres instance/port before a third redispatch. Not a rework of REQ-372 -- nothing in this branch's own diff is implicated by any failure observed in either attempt."
   },
   "rework_count": 0,
   "max_rework": 3

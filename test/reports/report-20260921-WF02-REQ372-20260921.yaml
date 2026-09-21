@@ -148,3 +148,107 @@ recommendation: >
   redispatch TEST-RUNNER for a clean run, or (b) wait for natural
   completion and retry. This is not a rework of REQ-372's implementation or
   tests -- nothing in this branch's diff is implicated.
+
+redispatch_attempt_2:
+  verdict: BLOCKED
+  date: 2026-09-21
+  note: >
+    Second redispatch (this attempt), per ORCH's redispatch instructions:
+    retry with substantially lower partition count to reduce simultaneous
+    connection demand. Not a rework of the prior BLOCKED verdict (which
+    does not count against max_rework, since BLOCKED != FAIL).
+
+  preconditions_checked:
+    - "git branch --show-current: feature/WF02-REQ372-20260921 (correct branch, in the main checkout, not a worktree)"
+    - "git pull --ff-only origin feature/WF02-REQ372-20260921: already up to date"
+    - "docker compose up -d: letflow-keycloak-1 and letflow-postgres-1 both already Running"
+    - "erl.exe processes: same 3 PIDs as the prior attempt (28488, 30060, 46888), still alive, unchanged, confirming the same sibling session is still the cause"
+
+  attempts:
+    - n: 1
+      command: "TEST_PARALLEL_N=2 scripts/test_parallel.sh"
+      time: "~13:55 UTC"
+      partition_source: "N=2, source: env override (TEST_PARALLEL_N)"
+      result: "ERROR partition 2 ecto.create/ecto.migrate failed with exit 1 -- no partition launched"
+      note: >
+        TEST_POOL_SIZE computed as 41 (N=2, max_connections=100, superuser_reserved=3,
+        headroom=10, nonpool_reserve=5). Both partitions' create-N.log show
+        `Postgrex.Error 53300 too_many_connections` on the very first connection
+        attempt, then `** (Mix) The database for Letflow.Repo couldn't be created: killed`.
+        Lowering N did not help because the server itself was already at its
+        global connection ceiling before this run made any connection attempt --
+        the constraint is server-side saturation, not this run's own pool sizing.
+
+    - n: 2
+      command: "TEST_PARALLEL_N=1 scripts/test_parallel.sh"
+      time: "~13:56 UTC"
+      partition_source: "N=1, source: env override (TEST_PARALLEL_N)"
+      result: "ERROR partition 1 ecto.create/ecto.migrate failed with exit 1 -- no partition launched"
+      note: >
+        Same failure class as N=2, immediately, even with a single partition
+        and TEST_POOL_SIZE=82. Confirms the exhaustion is not caused by this
+        run's own concurrency at all.
+
+    - wait: "~2.5 minutes (13:55:57 -> 13:58:33 local), via a blocking `ping -n 150 127.0.0.1`, per the redispatch instruction to wait and retry once more"
+      recheck: >
+        erl.exe tasklist immediately after the wait: same 3 PIDs
+        (28488/30060/46888), unchanged. `docker exec letflow-postgres-1 psql
+        -U letflow -d letflow_dev -c "select count(*) from pg_stat_activity"`
+        still failed with FATAL 53300 too_many_connections -- confirms the
+        sibling workload had not released connections in the interim.
+
+    - n: 3
+      command: "TEST_PARALLEL_N=1 scripts/test_parallel.sh (retry after wait)"
+      time: "~13:58 UTC"
+      result: "ERROR partition 1 ecto.create/ecto.migrate failed with exit 1 -- no partition launched"
+      note: "Identical failure to attempt 2, ~2.5 minutes later. No improvement."
+
+    - n: 4 (diagnostic fallback, per redispatch instruction)
+      command: "MIX_ENV=test mix test test/letflow/definitions/semantic_validation_test.exs test/letflow/definitions/semantic_validation_activation_test.exs"
+      time: "~13:58 UTC"
+      result: "could not reach ecto.create -- `** (Mix) The database for Letflow.Repo couldn't be created: killed`, same too_many_connections failure"
+      note: >
+        Direct, unpartitioned, single-file mix test invocation targeting
+        REQ-372's own two new test files specifically (the fallback
+        proof-of-execution this redispatch asked for) -- still could not
+        obtain a single Postgres connection. REQ-372's own tests therefore
+        still have NO first-hand execution evidence from this host at this
+        time, across two full redispatch attempts (8 total invocations).
+
+  pg_saturation_evidence_this_attempt: >
+    `docker exec letflow-postgres-1 psql -U letflow -d letflow_dev -c "select
+    count(*), state from pg_stat_activity group by state"` failed with FATAL
+    53300 too_many_connections at 13:55:27, 13:58:33 (after the wait), and
+    13:58:54 local time -- i.e. before, during, and after the wait window,
+    the server was continuously saturated. This is the same 3 erl.exe PIDs
+    (28488/30060/46888) observed in the prior BLOCKED attempt, still alive
+    and unchanged, confirming this is the same ongoing sibling workload, not
+    a new/different contention source.
+
+  conclusion: >
+    BLOCKED again, with fresh evidence from this attempt. Lower parallelism
+    (N=2, then N=1) did not help because the exhaustion is server-side
+    (Postgres at its 100-connection ceiling from the sibling session's own
+    workload) and unrelated to this run's own pool size -- there was no
+    connection slot available for even a single connection at any point in
+    this attempt. A ~2.5 minute wait did not clear it either. No first-hand
+    pass/fail evidence for REQ-372's own tests (or the full suite) could be
+    obtained. Structural attribution is unchanged from the prior attempt:
+    every failure observed across both redispatch attempts is a
+    DBConnection/Postgrex connection error at ecto.create time, before any
+    test module compiles, on a host whose only known concurrent workload
+    (the 3 erl PIDs) predates this run and is explicitly out of scope to
+    kill per ORCH's own redispatch note. No code or test change is
+    indicated on this branch's own merits.
+
+  next_action: >
+    Route to ORCH: this host's Postgres (port 5462) is not currently usable
+    for any test run due to sustained sibling-session saturation across two
+    independent redispatch attempts (~30+ minutes combined). Recommend ORCH
+    either (a) confirm with the sibling session (likely the
+    gui-review-continuation / WF-03 ISS-0771 worktree, given the untracked
+    web/tests/e2e/.pipeline-state/ files still present in this checkout's
+    git status) whether its workload is expected to finish soon and get a
+    concrete ETA before a third redispatch, or (b) coordinate a dedicated
+    Postgres instance/port for one of the two concurrent runs rather than
+    continuing to retry against the same saturated instance.

@@ -1,0 +1,60 @@
+{
+  "handoff_id": "b1e2a3c4-0000-4000-8000-000000000002",
+  "run_id": "WF03-ISS0732-20260921",
+  "workflow_id": "WF-03",
+  "step": "01",
+  "from_agent": "ORCH",
+  "to_agent": "ISSUE-FIXER",
+  "file": "handoffs/WF03-ISS0732-20260921/step-01-issue-fixer-diagnosis.json",
+  "created_at": "2026-09-21T01:38:44Z",
+  "started_at": "2026-09-21T01:38:44Z",
+  "completed_at": null,
+  "status": "PENDING",
+  "priority": "HIGH",
+  "context": {
+    "stage": "S6",
+    "requirement_ids": [],
+    "requirement_text": {},
+    "related_handoff_ids": [],
+    "artifacts_in": [
+      "docs/issues/ISS-0732.yaml",
+      "lib/letflow/definitions/promotion.ex",
+      "lib/letflow/routers/promotions.ex",
+      "lib/letflow/definitions.ex"
+    ],
+    "owned_modules": [
+      "lib/letflow/definitions/promotion.ex",
+      "lib/letflow/routers/promotions.ex",
+      "web/src/components/NonSkippableApprovalGate.tsx",
+      "docs/issues/ISS-0732.yaml"
+    ]
+  },
+  "task": {
+    "description": "WF-03 Steps 0.5 and 1 combined, on branch feature/WF03-ISS0732-20260921 (already checked out). Step 0.5: search docs/issues/*.yaml (status: resolved) for a prior entry with matching symptoms (promotion apply / rehearsal / assertion-run gating) -- note ISS-0733 is a sibling issue in the same module but a DIFFERENT gap (audit/read-path, not release gating), so it is not a prior fix of THIS defect; state in your summary whether it's related context only. Step 1: reproduce/confirm the root cause directly by reading lib/letflow/definitions/promotion.ex's apply_review/4 (around line 586) and its private verify_apply_digest/2 and verify_approved/1 -- confirm for yourself, by reading the actual code (not by trusting ISS-0732.yaml's prose alone), that: (a) apply_review/4's `with` chain checks only get_review/2, verify_apply_digest/2, verify_approved/1 before calling do_apply_review/3 -> promote_definition/3; (b) there is no call anywhere in that chain to Letflow.Definitions.get_latest_assertion_run/2 or any other assertion-run check; (c) grep promotion.ex and lib/letflow/definitions/promotion_review_store.ex for 'assertion'/'rehears' to confirm zero hits relevant to gating apply. Also read lib/letflow/routers/promotions.ex's moduledoc section '## The assertion-run gate condition (design §7.5)' (around line 119) -- this states the EXISTING gate condition R8 uses (assertions_failed == 0, NOT status == :passed) that a fix here should mirror for consistency. Also read Letflow.Definitions.get_latest_assertion_run/2's own @spec/@doc (lib/letflow/definitions.ex around line 1175) to confirm its return shape (what it returns when no run exists, and what fields a PromotionAssertionRun struct/row carries, especially plan_digest and assertions_failed). State root cause, affected files/functions, and what a fix needs to change (a new precondition step in apply_review/4's `with` chain, evaluated after verify_approved/1 and before do_apply_review/3, requiring a matching-digest assertion run with assertions_failed == 0) in result.summary. Do NOT implement the fix.",
+    "acceptance_criteria": [
+      "result.summary states whether a prior resolved issue matches this defect's symptoms (Step 0.5)",
+      "result.summary confirms, from direct code reading (cites exact file:line), that apply_review/4 has no assertion-run precondition",
+      "result.summary states the exact return shape of get_latest_assertion_run/2 (what it returns on no-run, and which field is the digest, which is the failure count)",
+      "result.summary states the exact gate condition promotions.ex documents for R8 (assertions_failed == 0) and recommends the fix mirror it rather than checking status == :passed",
+      "result.next_action routes to CODE-DESIGNER for fix design",
+      "the fix itself is NOT implemented in this step"
+    ]
+  },
+  "result": {
+    "status": "PENDING",
+    "summary": "",
+    "artifacts_out": [],
+    "issues": [],
+    "git_evidence": {
+      "branch_name": null,
+      "commit_sha_list": [],
+      "remote_branch": null,
+      "push_status": "skipped",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": ""
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

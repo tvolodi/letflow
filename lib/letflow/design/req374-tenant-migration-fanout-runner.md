@@ -256,10 +256,27 @@ matching REQ-297's own sequential `Enum.reduce` in `run_column_promotion_for_all
 since per-company DDL contention is already arbitrated by the per-schema advisory lock
 and there is no throughput requirement in this requirement's acceptance criteria):
 
-1. Drives the underlying `ColumnPromotion` row to a terminal state:
-   `Letflow.TenantProvisioning.run_column_promotion/1` if the outcome's `column_promotion_id`
-   row is still `"pending"`, or `Letflow.TenantProvisioning.retry_failed_column_promotion/1`
-   if it is `"ddl_failed"`. **This call is exactly REQ-297's existing, unchanged,
+1. Drives the underlying `ColumnPromotion` row to a terminal state, branching on the
+   row's own `status` — **three** branches, not two, the third covering the
+   crash-recovery window §5.2 names explicitly:
+   - `"pending"` → `Letflow.TenantProvisioning.run_column_promotion/1`.
+   - `"ddl_failed"` → `Letflow.TenantProvisioning.retry_failed_column_promotion/1`.
+   - `"ddl_applied"` (or any other terminal-success status this column-promotion
+     lifecycle can reach — `"backfilling"`/`"backfilled"`/`"active"` per
+     `Letflow.TenantProvisioning.ColumnPromotion`'s own status enum, REQ-297/298 §0) →
+     **do not call any DDL function.** The DDL already succeeded (this is exactly the
+     state a crash between step 1's commit and step 2's write, §5.2, leaves behind); the
+     only work left is catching the outcome row up to reality. Treat this branch
+     identically to a `{:ok, _column_promotion}` result from `run_column_promotion/1` in
+     step 2 below — write `status: "succeeded"`, `completed_at: now`, `reason: nil`,
+     without ever re-entering the advisory-locked DDL path for a column that is already
+     there. Calling `run_column_promotion/1` again here would also be safe in practice
+     (`check_additive_only/3`'s real `information_schema` check produces its own
+     `:idempotent_skip` branch), but this design does not rely on that as the stated
+     mechanism — it names the direct catch-up explicitly so the crash-recovery path
+     never depends on an incidental idempotency property of a different function's
+     internals.
+   For the first two branches, **this call is exactly REQ-297's existing, unchanged,
    already-tested transactional-per-tenant DDL path** — `apply_outstanding/1` adds no
    new DDL of its own; it only reacts to that call's result.
 2. In a **separate** transaction from step 1 (deliberately — see §5.2 for why), updates

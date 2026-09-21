@@ -145,7 +145,9 @@ defmodule Letflow.Platform.MigrationRolloutTest do
       end
 
       Repo.delete_all(
-        from(cp in ColumnPromotion, where: cp.entity_type == ^entity_type and cp.attribute == ^attribute)
+        from(cp in ColumnPromotion,
+          where: cp.entity_type == ^entity_type and cp.attribute == ^attribute
+        )
       )
     end)
   end

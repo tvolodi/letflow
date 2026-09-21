@@ -128,7 +128,10 @@ defmodule Letflow.Routers.PlatformMigrationsTest do
       attribute = "sku"
 
       resp =
-        build_conn(:post, "/rollouts", roles: ["PROCESS_DESIGNER"], body: start_body(entity_type, attribute))
+        build_conn(:post, "/rollouts",
+          roles: ["PROCESS_DESIGNER"],
+          body: start_body(entity_type, attribute)
+        )
         |> dispatch()
 
       assert resp.status == 403

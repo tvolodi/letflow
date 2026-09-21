@@ -567,3 +567,110 @@ rework_iteration_1:
     diagnose and kill orphans by hand.
 
   next_action: "Route to RELEASE-VALIDATOR"
+
+confirming_rerun_after_format_fix:
+  timestamp: "2026-09-21T15:41:52Z"
+  trigger: >
+    RELEASE-VALIDATOR's own independent Step 5 re-run found a NEW,
+    genuinely attributable AC10 failure after this run's rework_iteration_1
+    PASS: mix letflow.check failed on `mix format --check-formatted` for
+    test/letflow/definitions/semantic_validation_activation_test.exs (a
+    multi-line test-header wrap needing reflow -- unrelated to test logic).
+    Step 4's own earlier run only ran `mix test` / scripts/test_parallel.sh,
+    never `mix letflow.check`, so it could not have caught this. TEST-DESIGNER
+    fixed it in commit f57fec4b (step-03j). This is a confirming re-run of
+    that fix, not rework of this agent's own prior work.
+
+  branch_verification: >
+    Confirmed on branch feature/WF02-REQ372-20260921 in the main checkout
+    (not a worktree). `git pull --ff-only origin feature/WF02-REQ372-20260921`
+    reported already up to date; local HEAD (02ad9270) already contains
+    f57fec4b (chore(test-designer): WF02-REQ372-20260921 Step 03j -- mix
+    format fix for AC10), confirmed via `git log --oneline`.
+
+  postgres_headroom_check: >
+    `docker exec letflow-postgres-1 psql -U letflow -d postgres -c
+    "select count(*) from pg_stat_activity;"` returned 6 before starting --
+    no contention, no orphaned erl.exe processes needed killing this time.
+
+  scripts_test_parallel_sh:
+    command: "bash scripts/test_parallel.sh"
+    partition_count_n: 16
+    partition_count_source: nproc
+    polling_method: >
+      Foreground Bash call redirected to a log file; when the harness
+      auto-backgrounded it past its own 600s tool timeout, polled
+      synchronously via a blocking `until grep -q EXIT: ...; do sleep 15;
+      done` loop in a further foreground Bash call (never watched via
+      Monitor, never ended the turn waiting on a cross-turn notification).
+    result: "combined: 4523 tests, 6 properties, 1 failures (4528/4529 passed)"
+    failure_detail: >
+      Partition 15: Letflow.SandboxPoolTest "provisioning does not block
+      the pool's mailbox (ISS-0224 regression) RT-6 (death path c): the
+      provisioning worker Task crashing fails the claim without taking the
+      pool, a slot or a schema with it" (test/letflow/sandbox_pool_test.exs:1087)
+      -- `refute MapSet.member?(final, o_schema)` failed, got true.
+      ISS-0224 (status: resolved) is a pre-existing sandbox-pool
+      concurrency issue from run WF03-ISS0220-20260822, unrelated to
+      REQ-372 (semantic decision-rule validation). This is a known
+      timing-sensitive regression-guard test for that issue's fix, not
+      new application logic REQ-372 touches.
+    structural_attribution: >
+      `git diff main...HEAD --stat` for this branch touches only
+      lib/letflow/definitions.ex, lib/letflow/definitions/graph.ex,
+      lib/letflow/definitions/semantic_validation.ex, REQ-372's own two new
+      test files, test/specs/REQ-372.md, docs/requirements.yaml,
+      docs/status/*, and handoffs/reports under
+      handoffs/WF02-REQ372-20260921/ and test/reports/ -- zero overlap
+      with test/letflow/sandbox_pool_test.exs or anything under
+      lib/letflow/sandbox_pool*.ex. Structurally clears per
+      core-directives.md's Failure Attribution Is Structural rule.
+    recommendation: >
+      Flag as a new pre-existing/flaky-test issue for ORCH to file per
+      ISSUE_QUEUE.md (not filed by TEST-RUNNER directly) -- a
+      timing-sensitive death-path regression test for already-resolved
+      ISS-0224 that failed once here but did NOT reproduce moments later
+      inside mix letflow.check's own internal 16-partition test run
+      (see below), consistent with a genuine race rather than a
+      deterministic break.
+
+  mix_letflow_check:
+    command: "mix letflow.check"
+    polling_method: "Same foreground-Bash-then-synchronous-poll pattern as scripts/test_parallel.sh above."
+    result: >
+      Exit code 0. All gates in the alias passed: letflow.check_toolchain
+      (WARNING only -- Rust 1.93.1 running vs 1.97.1 pinned, does not gate,
+      pre-existing per docs/migration/decisions/0005-pin-formatting-toolchain.md),
+      letflow.check_requirements_registration (365 entries = 363
+      registered + 2 deferred + 0 neither + 0 unclassified), letflow.check_req_id_collision
+      (OK, no collision with origin/main), letflow.check_deferral_staleness,
+      letflow.lint_handoffs, letflow.check_async_sandbox_reachability (OK,
+      84 async:true files scanned, 0 violations), letflow.check_issue_refs,
+      letflow.check_uat_scenario_schema, `format --check-formatted`
+      (silent pass -- confirms TEST-DESIGNER's f57fec4b fix holds),
+      `compile --warnings-as-errors` (passed), and letflow.check.test
+      (internal 16-partition full suite: "OK -- no test failures, no
+      ISS-0069 warnings (16 partitions)", plus several follow-on isolated
+      reruns for known-flaky-in-isolation categories -- wasm_hang 5/5
+      passed, lua_wallclock_race passed, each explicitly "OK" with 0
+      failures).
+    significance: >
+      mix letflow.check's own internal full test run (16 partitions) came
+      back with NO failures at all, including no recurrence of the
+      SandboxPoolTest ISS-0224 death-path flake seen in the standalone
+      scripts/test_parallel.sh run moments earlier. This corroborates the
+      structural-attribution call above: the failure is a genuine
+      intermittent race in a pre-existing regression test, not a
+      REQ-372 regression and not a deterministic break.
+
+  combined_verdict: >
+    scripts/test_parallel.sh: 4528/4529 passed, 1 pre-existing/unrelated
+    flake (structurally cleared, recommended for filing). mix letflow.check:
+    fully clean (exit 0), including format-check (confirms AC10 fix),
+    compile --warnings-as-errors, and its own independent internal full
+    test run with 0 failures. REQ-372's own two new test files
+    (test/letflow/definitions/semantic_validation_test.exs,
+    test/letflow/definitions/semantic_validation_activation_test.exs) are
+    covered by both runs.
+
+  next_action: "Route to RELEASE-VALIDATOR for confirming re-verification"

@@ -9,7 +9,7 @@
   "created_at": "2026-09-21T08:35:22Z",
   "started_at": "2026-09-21T08:35:22Z",
   "completed_at": "2026-09-21T10:01:49Z",
-  "status": "PENDING",
+  "status": "COMPLETED",
   "priority": "NORMAL",
   "context": {
     "stage": "S8",
@@ -37,29 +37,29 @@
   },
   "result": {
     "status": "PASS",
-    "summary": "REWORK ITERATION 1 (confirming rerun, this attempt). Pulled branch feature/WF02-REQ372-20260921 in the main checkout, confirmed commits 865b6d22 (ORCH's fix: docs/status/requirement_status.index.yaml volume-21 entries 6 -> 7) and fd193c7b present. Ran scripts/test_parallel.sh (default N=16 from nproc) three times, foreground, polled synchronously via file-grep+sleep loops (never backgrounded/awaited cross-turn). Sub-attempt 1: 3/16 partitions (10/13/15) crashed at ecto.create/test_helper.exs boot with too_many_connections; found and killed one orphaned erl.exe (PID 21324) left over from this run's own crashed partition, matching docs/anti-patterns.md's leaked-connection pattern -- this time self-inflicted, not a sibling session. Combined: 3861 tests, 12 failures, all connection-pool errors. Sub-attempt 2 (retry after cleanup): all 16 partitions produced a Result: line (4523 tests, 6 properties, matching the known-clean baseline count) but 21 failures, again all DBConnection.ConnectionError/Postgrex.Error; found and killed a SECOND orphaned erl.exe (PID 25480), same self-inflicted pattern. Sub-attempt 3 (retry after second cleanup): combined: 4523 tests, 6 properties, 0 failures (4529/4529 passed). Clean. docs/status A9 assertion included in this 0-failure run, confirming ORCH's fix resolved the prior attributable failure. REQ-372's own two new test files continue to have first-hand-verified passing coverage (part of the 4529 passing tests across all sub-attempts where their partition executed). All failures across sub-attempts 1 and 2 structurally clear as unrelated to this branch's diff (git diff main...HEAD --stat touches only lib/letflow/definitions*.ex, REQ-372's own new test files, test/specs/REQ-372.md, and docs/status/handoff/report files -- zero overlap with any failing test or its support fixtures). Full detail in test/reports/report-20260921-WF02-REQ372-20260921.yaml's rework_iteration_1 section.",
+    "summary": "CONFIRMING RE-RUN after AC10 format fix (this attempt). Pulled branch feature/WF02-REQ372-20260921 in the main checkout (already up to date); confirmed commit f57fec4b present in local HEAD (02ad9270). Postgres headroom checked first (6 connections, no contention, no orphans to clean this time). Ran scripts/test_parallel.sh (default N=16 from nproc) once, foreground, polled synchronously via a blocking grep+sleep loop after the harness auto-backgrounded the call past its own tool timeout (never awaited a cross-turn notification). Result: combined 4523 tests, 6 properties, 1 failure (4528/4529 passed) -- partition 15's Letflow.SandboxPoolTest ISS-0224 death-path regression test (test/letflow/sandbox_pool_test.exs:1087, RT-6 death path c) flaked. Structurally clears: git diff main...HEAD --stat has zero overlap with sandbox_pool_test.exs or any sandbox-pool lib file; this branch only touches lib/letflow/definitions*.ex, REQ-372's own two new test files, test/specs/REQ-372.md, and status/handoff/report files. Then ran `mix letflow.check` (the full alias, not just mix test) as specifically requested since it's the exact check that caught the prior AC10 gap: exit code 0, fully clean -- toolchain check only WARNs (pre-existing Rust version mismatch, does not gate), `format --check-formatted` passed silently (confirms TEST-DESIGNER's f57fec4b fix holds), `compile --warnings-as-errors` passed, and its own internal 16-partition full test run came back with explicit 'OK -- no test failures, no ISS-0069 warnings', including NO recurrence of the SandboxPoolTest flake seen in the standalone run -- corroborating that it's a genuine intermittent race in a pre-existing regression test, not a REQ-372 regression. REQ-372's own two new test files are covered clean in both runs. Full detail in test/reports/report-20260921-WF02-REQ372-20260921.yaml's confirming_rerun_after_format_fix section.",
     "artifacts_out": [
       "test/reports/report-20260921-WF02-REQ372-20260921.yaml"
     ],
     "issues": [
       {
         "severity": "MINOR",
-        "description": "Letflow.Routers.HelpTest's tie-break test (test/letflow/routers/help_test.exs:232) did not recur in this rework's sub-attempts (sub-attempt 3 was fully clean), but still recommend ORCH file it as its own independent pre-existing/ordering-sensitive issue per redispatch_attempt_3's original recommendation -- absence this time does not rule out a race."
+        "description": "NEW this attempt: Letflow.SandboxPoolTest's ISS-0224 death-path regression test (test/letflow/sandbox_pool_test.exs:1087, 'provisioning does not block the pool's mailbox ... RT-6 (death path c)') failed once in a standalone scripts/test_parallel.sh run (partition 15) but did not recur moments later inside mix letflow.check's own internal 16-partition run. ISS-0224 itself is already status: resolved; this is its regression-guard test flaking, unrelated to REQ-372 (zero diff overlap). Recommend ORCH file this as a new pre-existing/flaky-test issue per ISSUE_QUEUE.md."
       },
       {
         "severity": "MINOR",
-        "description": "scripts/test_parallel.sh's own partition-crash handling can leave a child mix test erl.exe process alive holding a Postgres connection even after the wrapper script has itself printed its combined: summary and exited -- observed twice in this rework (PIDs 21324, 25480), each requiring manual Stop-Process cleanup before a clean retry. Worth a follow-up hardening pass on the script's cleanup/trap logic so future TEST-RUNNER attempts don't need to diagnose and kill orphans by hand. Not attributable to REQ-372; a test-infrastructure robustness gap."
+        "description": "Carried forward from rework_iteration_1: Letflow.Routers.HelpTest's tie-break test (test/letflow/routers/help_test.exs:232) is a previously-observed ordering-sensitive flake, still recommended for its own independent issue filing -- did not reproduce in this attempt's runs either, consistent with intermittency."
       }
     ],
     "git_evidence": {
       "branch_name": "feature/WF02-REQ372-20260921",
-      "commit_sha_list": ["865b6d22", "fd193c7b"],
+      "commit_sha_list": ["f57fec4b", "02ad9270"],
       "remote_branch": "origin/feature/WF02-REQ372-20260921",
       "push_status": "pending (will push this report/handoff update)",
       "pr_url": null,
       "pr_create_error": null
     },
-    "next_action": "Route to RELEASE-VALIDATOR"
+    "next_action": "Route to RELEASE-VALIDATOR for confirming re-verification"
   },
   "rework_count": 1,
   "max_rework": 3

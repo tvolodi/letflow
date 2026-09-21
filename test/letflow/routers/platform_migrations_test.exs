@@ -248,20 +248,49 @@ defmodule Letflow.Routers.PlatformMigrationsTest do
   # ---------------------------------------------------------------------
   # ISS-0777 -- entity_type/attribute identifier-format validation.
   # See lib/letflow/design/iss-0777-entity-type-identifier-validation.md
-  # §6.1 and test/specs/ISS-0777.md for the full rationale.
+  # §6.1 and test/specs/ISS-0777.md for the full rationale, and that spec's
+  # own "Pre-fix vs. post-fix verification" section for how each test
+  # below was actually confirmed against the pre-fix commit (5a8f24c1),
+  # not merely asserted.
   #
-  # Before this fix, an invalid entity_type/attribute (e.g. the hyphenated
-  # value below) reached Letflow.TenantProvisioning.checked_table_name/1's
-  # raise (ArgumentError) unhandled, surfacing as a bare HTTP 500. Every
-  # test in this block asserts the NEW clean 422 behavior -- by
-  # construction, a 422 with a FieldError body (not a crash, not a 500)
-  # proves the unhandled raise is no longer reachable via this route.
+  # An invalid entity_type reached Letflow.TenantProvisioning.checked_table_name/1's
+  # raise (ArgumentError) UNHANDLED pre-fix, surfacing as a bare HTTP 500
+  # (Test A, C). An invalid attribute (valid entity_type) is a DIFFERENT
+  # pre-fix shape: execute_add_column/4 already had its own `rescue`
+  # wrapping its identifier re-checks (REQ-298/REQ-301's own defence in
+  # depth), so pre-fix it never crashed -- it silently wrote a
+  # ColumnPromotion row with an invalid column_name, attempted (and
+  # correctly failed) the ALTER TABLE, and returned a plain HTTP 200 with
+  # the outcome marked "failed" (Test B). Both are real defects ISS-0777
+  # fixes (row briefly created with a bad value either way), but only the
+  # entity_type path was ever an unhandled crash -- the per-test comments
+  # below state which shape each one demonstrates.
   # ---------------------------------------------------------------------
 
   describe "ISS-0777 -- identifier-format validation at the router boundary" do
+    # TEST-DESIGN-VALIDATOR finding (WF-03 rework): without a real, ACTIVE
+    # company provisioned, active_company_tenant_ids/0 resolves to zero
+    # rows, so pre-fix code never even reaches
+    # register_column_promotion/4's insert -- the request "passes" for a
+    # reason having nothing to do with the actual fix (apply_outstanding/1's
+    # loop is simply empty), and neither checked_table_name/1 nor
+    # execute_add_column/4 is ever exercised. Every test below provisions
+    # one real active company first (Test D's own original technique), so
+    # pre-fix code genuinely reaches the code path each test means to
+    # cover, and post-fix code genuinely pre-empts it with a clean 422.
+
     test "Test A: the issue's own exact repro value (hyphenated entity_type) is rejected with a clean 422, not a 500" do
       entity_type = "pl-rollout-95a456dd"
       attribute = "sku"
+
+      # A real active company so register_column_promotion/4's :all-tenant
+      # resolution (pre-fix) actually creates a ColumnPromotion row and
+      # apply_outstanding/1 actually drives run_column_promotion/1 against
+      # it -- otherwise checked_table_name/1's raise is never reached at
+      # all, regardless of whether the fix is present (see describe-level
+      # comment above).
+      TenantFixture.provisioned_tenant!(slug_prefix: "iss0777-test-a")
+      cleanup_rollout_on_exit!(entity_type, attribute)
 
       resp =
         build_conn(:post, "/rollouts",
@@ -292,9 +321,29 @@ defmodule Letflow.Routers.PlatformMigrationsTest do
              ) == 0
     end
 
-    test "Test B: a hyphenated attribute (valid entity_type) is rejected with a clean 422, not a 500" do
+    test "Test B: a hyphenated attribute (valid entity_type) is rejected with a clean 422 -- pre-fix it was NOT a crash, but a silently-written invalid row and a misleading 200" do
       entity_type = "invoice"
       attribute = "some-attr"
+
+      # Needs a real active company AND an active "invoice" definition --
+      # pre-fix, entity_type alone passes checked_table_name/1 (it's
+      # valid), so ensure_entity_table/2 must actually succeed in creating
+      # the real table for do_run_column_promotion/2 to reach
+      # check_additive_only/3 and then execute_add_column/4.
+      #
+      # Verified directly (test/specs/ISS-0777.md): unlike entity_type,
+      # execute_add_column/4 already wraps its own identifier re-checks in
+      # a `rescue` (REQ-298/REQ-301 defence in depth) -- so pre-fix this
+      # does NOT crash. It silently: (1) writes a ColumnPromotion row with
+      # column_name "some-attr", (2) attempts and correctly fails the real
+      # ALTER TABLE, (3) returns a plain HTTP 200 with that company's
+      # outcome marked "failed" and a last_error string -- no 422, no
+      # up-front rejection, and (briefly, until run_column_promotion marks
+      # it ddl_failed) an invalid-format row on record. Post-fix, none of
+      # that happens: the request is rejected before any row exists.
+      company = TenantFixture.provisioned_tenant!(slug_prefix: "iss0777-test-b")
+      create_active_definition!(company.schema_name, entity_type)
+      cleanup_rollout_on_exit!(entity_type, attribute)
 
       resp =
         build_conn(:post, "/rollouts",
@@ -328,8 +377,15 @@ defmodule Letflow.Routers.PlatformMigrationsTest do
         "entity.type"
       ]
 
+      # One real active company, shared across every value in this table --
+      # same reason as Test A: without it, checked_table_name/1 is never
+      # reached pre-fix (no active company means apply_outstanding/1's loop
+      # is empty, regardless of the fix).
+      TenantFixture.provisioned_tenant!(slug_prefix: "iss0777-test-c")
+
       for entity_type <- invalid_entity_types do
         attribute = "sku"
+        cleanup_rollout_on_exit!(entity_type, attribute)
 
         resp =
           build_conn(:post, "/rollouts",

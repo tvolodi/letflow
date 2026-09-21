@@ -4293,8 +4293,23 @@ volumes:
     path: docs/status/requirement_status.v21.yaml
     status: current
     opened: 2026-09-20
-    entries: 11
+    entries: 12
     note: >
+      Incremented to 12 during WF03-ISS0774-20260921's own Step Final rebase
+      onto origin/main: DOC-UPDATER's own ISS-0774 SCOPE-CHANGE done-event
+      append (2026-09-21T16:23:31Z -- process-routing-role vs. platform-role
+      tenant_role domain split, plus the copy_tenant_roles/2 legacy-table
+      regression found and fixed mid-pipeline) landed on top of the
+      already-reconciled REQ-372/ISS-0773 state (11 entries) below -- v21.yaml
+      itself produced a real rebase conflict on this hunk (both sides had
+      appended independently), resolved by composing chronologically
+      (REQ-372 done at 13:28:21Z before ISS-0774 done at 16:23:31Z), losing
+      neither entry. `grep -c "^  - req:" docs/status/requirement_status.v21.yaml`
+      = 12 on-disk entries, recounted directly rather than assumed after the
+      merge. 454 lines / 26719 bytes, well under the 1200-line/120000-byte
+      roll ceiling, so no roll triggered. Prior notes preserved below for
+      history.
+
       Incremented to 11 during WF02-REQ372-20260921 Step Final's THIRD
       rebase-conflict resolution on this index entry: DOC-UPDATER's own
       REQ-372 `done` append (Step 6, 13:28:21Z) landed on top of the

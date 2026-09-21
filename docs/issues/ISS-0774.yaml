@@ -70,4 +70,51 @@ queue_ref: Q-772  # letflow-queue task id 772, issue_ref ISS-0774 (local
   # locally by a different issue filed by the REQ-372 pipeline).
   # Registered 2026-09-21 by ORCH.
 github_ref: GH-1681
-status: open
+status: resolved
+resolution: >
+  Fixed on feature/WF03-ISS0774-20260921 (tip d3a38c4a). CODE-DESIGNER made the
+  explicit decision this issue asked for (candidate (c) in `fix_direction`, refined):
+  `tenant_role` gains a `kind` column (`:platform_role` | `:process_routing_role`,
+  migration 20260921000002_add_kind_to_tenant_role.exs, deterministically backfilled
+  via Authorization.roles/0's six recognized literals), and
+  Letflow.Identity.list_effective_role_names/2 is filtered to `kind ==
+  :platform_role` before feeding Authorization.roles_from_strings/1, so a
+  process-routing-role-only user's tenant_role membership no longer collapses their
+  platform-permission roles list to []. Design:
+  lib/letflow/design/iss-0774-role-domain-authorization.md.
+
+  All 4 ACs met per the design's own AC-mapping (S7): AC1 (explicit decision, not
+  left implicit, with rejected alternatives named) -- design doc SS1/1.2/1.3; AC2
+  (a process-routing-role-only user gets a request-path 403 that IS an explicit,
+  actionable signal by design, not a silent black hole, covered by tests T3/T4) --
+  design doc S2.5/2.6/3; AC3 (SwiftRoute UAT scenario unblocked) -- design doc S3;
+  AC4 (`mix letflow.check` passes) -- confirmed clean at merge tip.
+
+  Regression found and fixed mid-pipeline (commit d3a38c4a, after TEST-RUNNER's
+  first pass): `Letflow.Identity.TenantRole`'s Ecto schema unconditionally declaring
+  `:kind` broke `IdentityMigration.copy_tenant_roles/2`'s bare `select: tr` query
+  against the legacy `public.tenant_role` table, which has no `kind` column
+  (Postgrex 42703 undefined_column) -- the one-time cutover copy path, untouched by
+  this issue's own tenant-scoped migration. Fixed the same way its two siblings
+  (`copy_groups/2`, `copy_users/2`) already handle this exact schema-drift hazard:
+  restrict the query's `select` to the legacy table's real columns and classify
+  `kind` in Elixir per-row (same deterministic rule as the migration backfill)
+  before insert. Verified against real Postgres:
+  test/letflow/identity_migration_test.exs 12/12 (was failing before the fix), plus
+  identity_test.exs/role_registry_test.exs/routers/tasks_test.exs/routers/identity_test.exs
+  207/207, run twice independently, same result.
+
+  Separately, REVIEWER independently re-verified (and SECURITY-REVIEWER had already
+  flagged) that the design's own OQ-1 justification for leaving
+  `resolve_group_ids_for_role_names/2`'s OIDC-claim write path unfiltered by `kind`
+  rested on a factually wrong premise (`ClaimMapping.resolve_roles/2` does not
+  closed-set-filter claimed role strings). Confirmed pre-existing (zero diff hits on
+  that function/path in this PR) and out of this issue's own scope -- correctly
+  filed as its own issue, ISS-0775 (MINOR, queue task 773, GH-1684), rather than
+  folded into this fix or silently left undocumented.
+
+  Gates, all PASSED: CODE-DESIGN-VALIDATOR, SECURITY-REVIEWER (x2 -- second pass a
+  targeted re-check on the regression fix), REVIEWER (x2, same), TEST-DESIGN-VALIDATOR,
+  TEST-RUNNER (x2, final result 4539/4539 passed 0 failures), RELEASE-VALIDATOR
+  (independently re-verified all 4 ACs plus the regression fix plus ISS-0775's
+  correct filing/scoping -- full PASS).

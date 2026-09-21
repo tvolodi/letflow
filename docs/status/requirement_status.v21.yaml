@@ -416,3 +416,39 @@ history:
       (git merge) is routed separately per docs/agents/workflows/
       WF-02_requirement_implementation.md to the Step 00 agent
       (ELIXIR-DEV).
+  - req: SCOPE-CHANGE
+    event: done
+    agent: DOC-UPDATER
+    at: "2026-09-21T16:23:31Z"
+    note: >
+      ISS-0774 (process-definition HUMAN_TASK routing role names, e.g.
+      role-ops-manager, were never recognized by Authorization.role_from_string/1's
+      closed platform-role atom set -- a user whose only tenant_role was a
+      process-routing name had their entire roles list reduced to [] by
+      roles_from_strings/1 and failed every platform API permission check
+      indefinitely) resolved on feature/WF03-ISS0774-20260921 (tip d3a38c4a).
+      Fix: tenant_role gains a kind column (:platform_role | :process_routing_role,
+      deterministically backfilled from Authorization.roles/0's six literals), and
+      Letflow.Identity.list_effective_role_names/2 is filtered to kind ==
+      :platform_role before feeding roles_from_strings/1. All 4 ACs met (explicit
+      decision with rejected alternatives named; process-routing-role-only user
+      gets an explicit actionable 403 signal, covered by tests T3/T4; SwiftRoute
+      UAT scenario unblocked; mix letflow.check clean). Regression found and fixed
+      mid-pipeline (commit d3a38c4a): IdentityMigration.copy_tenant_roles/2's bare
+      `select: tr` broke against the legacy public.tenant_role table (no kind
+      column there, Postgrex 42703) -- fixed the same way its copy_groups/2 and
+      copy_users/2 siblings already handle this schema-drift hazard, restricting
+      the select and classifying kind in Elixir per-row before insert;
+      identity_migration_test.exs 12/12 (was failing before), 207/207 across the
+      identity/role_registry/tasks/identity-router suites, run twice. Separately,
+      REVIEWER independently re-verified SECURITY-REVIEWER's finding that the
+      design's own OQ-1 premise (claim that OIDC tokens can only ever claim one of
+      the six platform-role strings) was factually wrong; confirmed pre-existing,
+      zero diff hits in this PR, correctly filed as its own issue rather than
+      folded in or left undocumented -- ISS-0775 (MINOR, queue task 773, GH-1684).
+      Gates, all PASSED: CODE-DESIGN-VALIDATOR, SECURITY-REVIEWER (x2 -- second
+      pass a targeted re-check on the regression fix), REVIEWER (x2, same),
+      TEST-DESIGN-VALIDATOR, TEST-RUNNER (x2, final 4539/4539 passed 0 failures),
+      RELEASE-VALIDATOR (independently re-verified all 4 ACs plus the regression
+      fix plus ISS-0775's correct filing/scoping -- full PASS). Design:
+      lib/letflow/design/iss-0774-role-domain-authorization.md.

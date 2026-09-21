@@ -52,10 +52,12 @@
     ],
     "issues": [],
     "git_evidence": {
-      "branch_name": null,
-      "commit_sha_list": [],
-      "remote_branch": null,
-      "push_status": "skipped",
+      "branch_name": "feature/WF02-REQ372-20260921",
+      "commit_sha_list": [
+        "12d6d552b3ab41dde1d21e210eadab472d5ed11e"
+      ],
+      "remote_branch": "origin/feature/WF02-REQ372-20260921",
+      "push_status": "pushed",
       "pr_url": null,
       "pr_create_error": null
     },

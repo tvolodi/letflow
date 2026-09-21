@@ -78,7 +78,7 @@
     ],
     "git_evidence": {
       "branch_name": "feature/WF02-REQ373-20260921",
-      "commit_sha_list": ["128e5a834f3e2d8322d4a4f9e0d1c613099811d4"],
+      "commit_sha_list": ["d60c060bff0a855b419d542cdf17acaf349a0e3e"],
       "remote_branch": "origin/feature/WF02-REQ373-20260921",
       "push_status": "pushed"
     },

@@ -6747,7 +6747,7 @@
       "workflow_id": "WF-03",
       "requirement_ids": [],
       "stage": "S6",
-      "status": "IN_PROGRESS",
+      "status": "COMPLETED",
       "owned_modules": [
         "lib/letflow/definitions/promotion.ex",
         "lib/letflow/routers/promotions.ex",
@@ -6755,10 +6755,10 @@
         "docs/issues/ISS-0732.yaml"
       ],
       "lock_acquired_at": "2026-09-21T01:38:11Z",
-      "lock_released_at": null,
-      "released_lock": false,
-      "last_known_step": "Step 00 COMPLETED PASS (branch feature/WF03-ISS0732-20260921, commit 456e15b7)",
-      "note": "ISS-0732/GH#1645, letflow-queue task 757 (queue_ref Q-757). BLOCKER: apply_review/4 never checks a passed rehearsal (PromotionAssertionRun) before allowing promotion to release -- only checks plan_digest match and status == :approved. Routed to ISSUE-FIXER for diagnosis, then CODE-DESIGNER for a new precondition mirroring R8's own assertion-run gate condition (assertions_failed == 0)."
+      "lock_released_at": "2026-09-21T06:47:23Z",
+      "released_lock": true,
+      "last_known_step": "Step Final COMPLETED PASS (squash-merged 4fa39200, PR #1671)",
+      "note": "ISS-0732/GH#1645, letflow-queue task 757 (queue_ref Q-757). BLOCKER: apply_review/4 never checked a passed rehearsal (PromotionAssertionRun) before allowing promotion to release. Fixed with a new verify_rehearsed/2 precondition (matching-digest, assertions_failed == 0, and -- per a design-amendment rework cycle closing OQ-2, found mid-run by a sibling ORCH session's own SECURITY-REVIEWER pass -- status not in [:running]). Frontend surfacing split out as ISS-0767 (queue task 767, GH#1664), NonSkippableApprovalGate.tsx NOT touched by this run despite being listed in owned_modules -- that lock line covers the reservation this run made for a possible in-scope frontend piece, released unused."
     }
   ]
 }

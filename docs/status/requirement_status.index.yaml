@@ -4293,8 +4293,17 @@ volumes:
     path: docs/status/requirement_status.v21.yaml
     status: current
     opened: 2026-09-20
-    entries: 10
+    entries: 11
     note: >
+      Incremented to 11 during WF02-REQ372-20260921 Step Final's THIRD
+      rebase-conflict resolution on this index entry: DOC-UPDATER's own
+      REQ-372 `done` append (Step 6, 13:28:21Z) landed on top of the
+      already-reconciled ISS-0773 addition (13:14:36Z) above, and v21.yaml
+      itself auto-merged cleanly for this hunk -- `grep -c "^  - req:"
+      docs/status/requirement_status.v21.yaml` = 11 on-disk entries,
+      recounted directly rather than assumed. Prior notes preserved below
+      for history.
+
       Incremented to 10 during WF02-REQ372-20260921 Step Final's SECOND
       rebase onto main (main advanced again, with DOC-UPDATER's own
       ISS-0773 SCOPE-CHANGE done-event, WF03-ISS0772-20260921,
@@ -4314,13 +4323,16 @@ volumes:
       lines / 14793 bytes, well under the 1200-line/120000-byte roll
       ceiling, so no roll triggered.
 
-      Incremented to 7 by ORCH (WF02-REQ372-20260921), fixing a bookkeeping
-      omission this same run introduced: Step 00 appended a REQ-372 `started`
-      event directly to docs/status/requirement_status.v21.yaml but never
-      updated this index entry's own `entries:` count at the time, caught by
-      TEST-RUNNER's Step 4 run of
-      test/docs/requirement_status_invariants_test.exs (assertion A9).
-      `grep -c "^  - req:" docs/status/requirement_status.v21.yaml` = 7
+      Incremented to 8 by DOC-UPDATER (WF02-REQ372-20260921 Step 6), after
+      appending the REQ-372 `done` event. Recounted, not assumed:
+      `grep -c "^  - req:" docs/status/requirement_status.v21.yaml` = 8.
+      Prior note for context: incremented to 7 by ORCH (WF02-REQ372-20260921),
+      fixing a bookkeeping omission this same run introduced: Step 00
+      appended a REQ-372 `started` event directly to
+      docs/status/requirement_status.v21.yaml but never updated this index
+      entry's own `entries:` count at the time, caught by TEST-RUNNER's
+      Step 4 run of test/docs/requirement_status_invariants_test.exs
+      (assertion A9).
       on-disk entries, recounted directly rather than assumed. 310 lines /
       18053 bytes, well under the 1200-line/120000-byte roll ceiling, so no
       roll triggered.

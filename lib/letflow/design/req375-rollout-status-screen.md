@@ -66,9 +66,16 @@ Same mechanism as `DefinitionRollbackPage.tsx` and `PlatformDashboardPage.tsx`
 (`web/src/pages/dashboard/PlatformDashboardPage.tsx:29-33`), not a new gating
 primitive: the page component itself reads `useAuth().session.roles`, computes
 `isPlatformAdmin = session?.roles.includes('PLATFORM_ADMIN') ?? false`, and renders
-`<Navigate to="/instances" replace />` immediately when false — before any data
-fetching, so an unauthorized user never issues a single `platform-migrations` request.
-This is a **client-side route guard**, not a new server permission decision — REQ-374's
+`<Navigate to="/instances" replace />` before returning any of the page's real markup.
+React's rules of hooks require `useRolloutStatus`/`useTenantNameLookup`'s underlying
+`useQuery` calls to be invoked unconditionally, ahead of this early return — so a
+non-admin who deep-links directly to the URL does cause the component to issue its
+`platform-migrations`/tenant-list requests before the redirect commits (mirroring
+`PlatformDashboardPage.tsx:23-32`'s identical pattern, not a new gap this design
+introduces). Those requests still 403 at the real backend gate (§7 of the REQ-374
+design's `:TenantsManage` check), so no tenant data reaches the unauthorized client;
+the guard's actual guarantee is "never render the screen," not "never issue a
+request." This is a **client-side route guard**, not a new server permission decision — REQ-374's
 `:TenantsManage` permission check on every one of the three HTTP endpoints (§7 of the
 REQ-374 design, unchanged by this requirement) is what actually enforces the
 restriction; the client-side check is a UX courtesy (hide the screen, avoid a 403

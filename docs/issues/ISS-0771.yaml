@@ -1,0 +1,58 @@
+id: ISS-0771
+title: >
+  No deploy-time step replays tenant-scoped migrations against existing
+  tenants -- caused a full QA outage
+discovered_by: ai-dala-infra-34 (peer session, T-0140), diagnosed and root-caused by ORCH (letflow-c5)
+discovered_in_run: T-0140-seed-swiftroute-tenant-persona-qa-users (ai-dala-infra)
+discovered_at: "2026-09-21T06:50:00Z"
+severity: BLOCKER
+description: >
+  Discovered live 2026-09-21 via a peer ai-dala-infra session, which
+  reported a full outage of authenticated functionality across both QA
+  tenants (bpm-default, bilimbaga) shortly after ISS-0768 deployed to
+  qa.bizdala.com. Root cause independently traced by this session:
+  the outage was NOT caused by ISS-0768 itself (commit 06193bde only
+  touches lib/letflow/identity/role_registry.ex and
+  lib/letflow/routers/identity.ex). The real cause: REQ-378 (commit
+  4cb53277, PR #1655, merged hours earlier) added a PER-TENANT migration
+  (priv/repo/migrations/20260921000001_add_role_claims_synced_at_to_users.exs,
+  guarded by an `if prefix() do` check, registered in
+  Letflow.TenantProvisioning.tenant_scoped_migrations/0) that is never
+  automatically applied to EXISTING tenant schemas --
+  deploy/redeploy-qa.sh restarts the app container and relies on
+  Ecto.Migrator running automatically on boot, but that only covers the
+  public/default schema; tenant-scoped migrations only auto-apply to
+  brand-new tenants at provisioning time (see
+  Letflow.TenantProvisioning.replay_migrations/2, the manual per-tenant
+  reapply function). So the column silently never existed on either
+  existing QA tenant schema from the moment PR #1655 merged, until
+  AuthPipeline.authenticate_oidc queried it and every authenticated
+  request started 500ing. Remediated live via
+  Letflow.TenantProvisioning.replay_migrations/2 called manually per
+  tenant through a remote console -- but this is a real, repeatable
+  deploy-pipeline gap: any future tenant-scoped migration will silently
+  break every existing tenant the same way unless someone remembers to
+  manually replay it after every deploy.
+affected_files:
+  - deploy/redeploy-qa.sh
+  - .github/workflows/cd.yml
+  - lib/letflow/tenant_provisioning.ex
+fix_direction: >
+  Add an automatic step (either a new step in deploy/redeploy-qa.sh
+  invoked after the app container restarts, or a boot-time hook in
+  lib/letflow/application.ex's supervision tree) that calls
+  Letflow.TenantProvisioning.replay_migrations/2 for every tenant
+  returned by list_registrations/0 on every deploy, not only at
+  new-tenant provisioning time. Must be idempotent (safe to run when
+  there are zero pending tenant-scoped migrations) and must not let one
+  tenant's migration failure silently abort the rest -- log/report each
+  tenant's result individually. Needs a CODE-DESIGNER pass to decide
+  where this hook belongs (deploy script vs. application boot) and a
+  regression test or clear design rationale proving the no-op-safe and
+  isolated-failure properties.
+queue_ref: Q-770  # letflow-queue task id 770, issue_ref ISS-0771 (local
+  # filename diverges from the queue id -- 770 was already taken locally
+  # by the unrelated secret_key_base redaction issue, see ISS-0770.yaml).
+  # Registered 2026-09-21 by ORCH.
+github_ref: GH-1674
+status: open

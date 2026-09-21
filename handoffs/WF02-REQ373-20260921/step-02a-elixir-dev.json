@@ -1,0 +1,61 @@
+{
+  "handoff_id": "b2c3d4e5-0001-4000-8000-000000000005",
+  "run_id": "WF02-REQ373-20260921",
+  "workflow_id": "WF-02",
+  "step": "02a",
+  "from_agent": "ORCH",
+  "to_agent": "ELIXIR-DEV",
+  "file": "handoffs/WF02-REQ373-20260921/step-02a-elixir-dev.json",
+  "created_at": "2026-09-21T17:28:15Z",
+  "started_at": "2026-09-21T17:28:15Z",
+  "completed_at": null,
+  "status": "IN_PROGRESS",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S6",
+    "requirement_ids": ["REQ-373"],
+    "requirement_text": {
+      "REQ-373": "See handoffs/WF02-REQ373-20260921/step-01-code-designer.json's context.requirement_text for the full text -- not restated here to avoid drift; read it there."
+    },
+    "related_handoff_ids": [
+      "handoffs/WF02-REQ373-20260921/step-01-code-designer.json",
+      "handoffs/WF02-REQ373-20260921/step-01c-design-gate-regate.json"
+    ],
+    "artifacts_in": [
+      "lib/letflow/design/req373-service-catalog-version-lifecycle.md",
+      "lib/letflow/service_catalog.ex",
+      "lib/letflow/service_catalog/entry.ex",
+      "lib/letflow/engine/pin_resolver.ex",
+      "lib/letflow/engine.ex",
+      "lib/letflow_web/router.ex",
+      "lib/letflow/api/authorization.ex"
+    ],
+    "owned_modules": [
+      "lib/letflow/service_catalog.ex",
+      "lib/letflow/service_catalog/entry.ex",
+      "lib/letflow/service_catalog/*",
+      "lib/letflow/engine/pin_resolver.ex",
+      "lib/letflow/engine.ex",
+      "lib/letflow_web/router.ex",
+      "lib/letflow_web/controllers/service_catalog*",
+      "lib/letflow/routers/*service_catalog*",
+      "priv/repo/migrations/*"
+    ]
+  },
+  "task": {
+    "description": "Implement REQ-373 per the validated design at lib/letflow/design/req373-service-catalog-version-lifecycle.md (PASSED design gate, handoffs/WF02-REQ373-20260921/step-01c-design-gate-regate.json). Verify branch first: `git branch --show-current` MUST equal feature/WF02-REQ373-20260921 -- STOP and report FAIL if not. This is a BACKEND-ONLY change: do not touch anything under web/.\n\nFollow WF-02 Step 2a's procedure (docs/agents/workflows/WF-02_requirement_implementation.md): implement lib/letflow/**/*.ex per the design; write priv/repo/migrations/*.exs per the design's DB spec; run `mix compile --warnings-as-errors` (fix and retry on failure); run `mix ecto.migrate` against a real/Docker-provisioned test DB per docs/anti-patterns.md's Docker fallback if no local toolchain (verify docs/anti-patterns.md's 'No Elixir/mix toolchain' entry first -- a toolchain IS present on this host at /c/Program Files/Elixir/bin/mix per that entry, check before concluding otherwise); run `mix format --check-formatted` (fix formatting if it fails). Self-review checklist per WF-02 Step 2a: no string interpolation of tenant/user input into raw SQL; no unresolved {:ok, _} = match on an external-I/O-reachable path; every state transition persisted via Letflow.Repo inside the transition; new public functions have a one-line @doc; every call site of any changed function signature still compiles.\n\nSpecifically implement, per the design doc: (1) the schema decision -- status column (Ecto.Enum, values: [:ACTIVE, :RETIRED]) plus version identity directly on service_catalog, plus the new service_catalog_versions sibling archive table, with the reasoning stated in the moduledoc verbatim in substance; (2) a publish/N operation creating a new ACTIVE version, archiving the prior version's snapshot into service_catalog_versions, without touching any already-recorded INSTANCE_STARTED pin payload; (3) a retire/N operation that fails resolution for NEW resolve/4 calls outright (per the design's explicit AC4 resolution -- no fallback to current version) while leaving PinResolver.pin_for/3 unaffected (structural: pin_for/3 never queries the catalog); (4) a new module implementing PinResolver.Lookup's catalog_lookup contract backed by the versioned catalog (module_lookup remains out of scope for PLC-01 -- explicitly return :not_found or equivalent, do not build module_ref resolution); (5) wire this new Lookup into Engine.create/2's pin_lookup/2 helper in place of PinResolver.default_lookup/0 for catalog_entry references ONLY -- variable_schema/module_ref pin_lookup/2 behavior must remain byte-unchanged; (6) publish/retire HTTP routes per the design, gated by the EXISTING :AdminServicesManage permission (verify lib/letflow/api/authorization.ex's existing prefix-match clause covers the new route paths -- if it doesn't automatically, you MUST NOT invent a new permission atom, adjust the route paths to match the existing policy's prefix instead, or flag this in issues for REVIEWER if genuinely unresolvable); (7) the migration exactly per the design's column/index/constraint spec.\n\nDo NOT modify lib/letflow/engine/pin_resolver.ex's existing PIN-01..05 machinery beyond what the design explicitly calls for (the Lookup wiring at the create/2 call site) -- this is released, tested machinery per the requirement text, not something to refactor. Do NOT build PLC-01/module_ref catalog versioning -- explicitly out of scope, confirm your moduledoc states this with a citation of pin_resolver.ex's own SCOPE GAP language, per the requirement's own AC7.\n\nWrite a moduledoc on every new/changed core module stating the schema decision and its reasoning (AC1), the retire-vs-fallback decision (AC4), and the PLC-01 out-of-scope citation (AC7) -- these three moduledoc statements are independently checked by SECURITY-REVIEWER/REVIEWER/RELEASE-VALIDATOR later, do not skip them.\n\nRun `mix letflow.check` yourself and quote real output before completing this handoff (AC8 requires this eventually at RELEASE-VALIDATOR, but confirm it compiles/formats/passes locally first so REVIEWER isn't blocked by a trivial failure). Commit and push all new/changed files (explicit filenames, never -A) to origin feature/WF02-REQ373-20260921 before ending your turn. Complete the handoff with your genuine PASS/FAIL result and artifacts_out listing every file touched.",
+    "acceptance_criteria": [
+      "mix compile --warnings-as-errors exits 0",
+      "all migrations apply cleanly against a fresh DB",
+      "no SQL string interpolation of tenant/user data",
+      "all callers of any changed function signature compile",
+      "publish/retire operations gated behind :AdminServicesManage, no new permission invented",
+      "PLC-01/module_ref explicitly out of scope, cited in moduledoc",
+      "moduledoc states the schema decision (AC1) and retire-vs-fallback decision (AC4) with reasoning",
+      "no file under web/ modified"
+    ]
+  },
+  "result": null,
+  "rework_count": 0,
+  "max_rework": 3
+}

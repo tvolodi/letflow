@@ -33,6 +33,31 @@ fix_direction: >
   different failure mode in the same test file before assuming either.
   If a flake cannot be reproduced after a real, documented attempt,
   record that explicitly rather than guessing at a fix blind.
+
+  ISSUE-FIXER ATTEMPT (2026-09-21, 4 real documented runs, no fix
+  routed -- see full detail in this session's ORCH record):
+  Run 1 (TEST_PARALLEL_N=4, clean single run): 4552/4552 passed, 0
+  failures anywhere including both target files. Runs 2a/2b (two
+  concurrent 4-partition suites, deliberately reproducing the exact
+  contention condition ISS-0224's own fix note used) were both killed
+  by the OS for low memory before ecto.create/migrate completed on
+  either suite -- this host cannot sustain 8 concurrent partitions with
+  real Postgres provisioning, a real environment ceiling, not a test
+  result. Runs 3 and 4 (single N=4 retries immediately after) both hit
+  transient FATAL 53300 too_many_connections at ecto.create before any
+  test executed -- matches this project's already-documented ISS-0222
+  launch-time connection-spike pattern, environmental noise from the
+  OOM incident's lingering connections, not a code-path failure.
+  CONCLUSION: neither flake reproduced in 4 real attempts (1 clean
+  pass with 0 failures, 3 further attempts invalidated by this host's
+  own capacity limits before reaching either test). No root cause
+  identified for either -- none is claimed. This host's memory/
+  connection headroom appears to be the actual limiting factor for
+  reproducing the original two-concurrent-suite condition, not
+  anything in the test code itself. Recommend retrying on a host with
+  more memory headroom, or leaving this open as secondhand-report-only
+  pending a future attempt. No CODE-DESIGNER routing performed --
+  nothing to hand off without a confirmed root cause.
 queue_ref: Q-774  # letflow-queue task id 774, issue_ref ISS-0776 (local
   # filename diverges from the queue id -- 0774 was already taken
   # locally by the process-routing-role Authorization issue, and 0775

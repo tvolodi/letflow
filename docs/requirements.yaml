@@ -29622,9 +29622,11 @@ requirements:
     owner: FRONTEND-DEV
     status: pending
     stage: S6
-    # impl_order: UNREGISTERED -- filed directly by DOC-UPDATER as REQ-373's
-    # own follow-on frontend requirement (REQ-291/REQ-288 and REQ-398/REQ-397
-    # precedent pattern); register via letflow-queue when picked up.
+    impl_order: 775  # letflow-queue task id, GH#1694. Registered 2026-09-21T21:03:34Z
+      # by ORCH via direct curl (letflow-queue MCP tool unavailable this
+      # session; token sourced from the primary checkout's .env per
+      # TASK_QUEUE.md's documented recovery path). depends_on queue task 732
+      # (REQ-373).
     description: >
       Filed as REQ-373's own named follow-on, the same way REQ-291 followed
       REQ-288 and REQ-398 followed REQ-397: REQ-373's SCOPE FENCE explicitly

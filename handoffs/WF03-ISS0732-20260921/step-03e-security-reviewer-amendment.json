@@ -8,8 +8,8 @@
   "file": "handoffs/WF03-ISS0732-20260921/step-03e-security-reviewer-amendment.json",
   "created_at": "2026-09-21T04:14:20Z",
   "started_at": "2026-09-21T04:14:20Z",
-  "completed_at": null,
-  "status": "PENDING",
+  "completed_at": "2026-09-21T04:15:10Z",
+  "status": "COMPLETED",
   "priority": "HIGH",
   "context": {
     "stage": "S6",
@@ -35,19 +35,19 @@
     ]
   },
   "result": {
-    "status": "PENDING",
-    "summary": "",
+    "status": "PASS",
+    "summary": "Re-gated the incremental amendment commit 30919e94 (on top of already-security-reviewed 4efff094) against `git diff main...HEAD -- lib/letflow/definitions/promotion.ex lib/letflow/routers/promotions.ex`. Scope test: applies -- this touches an apply_review/4 mutation gate (lookup-by-ID + response-shaping) on a tenant-scoped entity. Assessed all 8 invariants against the diff:\n\nINV-1 (tenant data isolation) -- APPLIES, PASS. The diff adds no new query. `verify_rehearsed/2`'s only data access is the pre-existing, already-reviewed `Letflow.Definitions.get_latest_assertion_run/2` (lib/letflow/definitions.ex:1179-1197), unchanged by this commit -- confirmed it calls `Repo.one(query, prefix: prefix)` with `prefix = Keyword.fetch!(opts, :prefix)`, i.e. (a) satisfied (prefix-scoped), (b)/(c) not implicated (no new table/migration, no new tenant_id field). The amendment is pure in-memory branching on the struct already fetched.\nINV-2 -- NOT-APPLICABLE (S4 not started).\nINV-3 -- NOT-APPLICABLE (S5 not started).\nINV-4 (secrets) -- APPLIES, PASS. No secret material touched; the two new atoms/messages carry no credential or token data.\nINV-5 -- NOT-APPLICABLE (S4 not started; this is a status-gate on an existing authorized review lookup, not a new lookup-by-ID surface).\nINV-6 (new data-access path proves scoping) -- APPLIES, PASS. This handoff itself is the proof; INV-1 above states which sub-checks applied and how confirmed.\nINV-7 (no SQL interpolation) -- APPLIES, PASS. No `Repo.query`/raw SQL anywhere in the diff; `verify_rehearsed/2` only pattern-matches/branches on an already-fetched struct field (`assertion_run.status`).\nINV-8 (no unhandled crashes) -- APPLIES, PASS. The new branch is a plain `if/else` on a field of a struct already confirmed non-nil by the preceding `case` (`{:ok, assertion_run}`); no new bare pattern match that can raise on realistic input.\n\nRace closure (task's second acceptance criterion): confirmed by reading the full `with` chain in `apply_review/4` (`with {:ok, review} <- get_review, :ok <- verify_apply_digest, :ok <- verify_approved, :ok <- verify_rehearsed(review, plan_digest, opts) do do_apply_review(...) end`) -- `verify_rehearsed/2` now checks `assertion_run.status not in [:running]` strictly before the `assertions_failed == 0` check (both inside the same digest-match branch), so a `:running` row (whose `assertions_failed` is always 0 by construction) can no longer fall through to the previously-exploitable `:ok` branch. Any `{:error, :assertion_run_in_progress}` short-circuits the `with` and `do_apply_review/3` (and therefore `promote_definition/3`) is never reached -- there is no other call site of `do_apply_review/3` in the module. This matches the new regression test in the same commit (`test/letflow/routers/req077_promotion_pipeline_test.exs`, 'rejects an in-progress rehearsal') which asserts the review stays `:approved` and the target definition is untouched on a `:running` fixture, and the sibling `:teardown_failed` test proves the fix is additive (excludes only `:running`, not narrowed to `:passed`-only). No remaining bypass found.\n\nInformation disclosure (task's third acceptance criterion): the new 409 for `:assertion_run_in_progress` ('the most recent assertion run for this review has not finished yet; wait for it to complete or re-run assertions before applying') discloses nothing beyond what the caller -- an authenticated actor on this review's own tenant, already authorized to call apply on this review_id -- already necessarily knows (that a rehearsal was attempted). It is the same information class as the three existing 409s for this review_id (`:assertion_run_missing`, `:assertion_run_digest_mismatch`, `:assertion_run_failed`): no cross-tenant data, no digest value, no other tenant's review state. `lib/letflow/routers/promotions.ex` clause ordering confirmed: the new `render_apply(conn, {:error, :assertion_run_in_progress})` clause (lib/letflow/routers/promotions.ex:646) sits among distinct-atom sibling clauses with no catch-all above it that could shadow it, and produces `Response.conflict/2` (409) via the same helper as its siblings -- consistent shape, no new status-code class introduced.\n\nVerdict: PASS. The amendment closes the OQ-2 gap completely, introduces no new invariant violation, and stays within the disclosure envelope of the already-reviewed base.",
     "artifacts_out": [],
     "issues": [],
     "git_evidence": {
-      "branch_name": null,
-      "commit_sha_list": [],
-      "remote_branch": null,
-      "push_status": "skipped",
+      "branch_name": "feature/WF03-ISS0732-20260921",
+      "commit_sha_list": ["30919e94"],
+      "remote_branch": "origin/feature/WF03-ISS0732-20260921",
+      "push_status": "pending",
       "pr_url": null,
       "pr_create_error": null
     },
-    "next_action": ""
+    "next_action": "Route to REVIEWER per WF-03 Step 3's gate sequence (idiom/OTP/scope-creep/decision-record gate, runs after SECURITY-REVIEWER)."
   },
   "rework_count": 0,
   "max_rework": 3

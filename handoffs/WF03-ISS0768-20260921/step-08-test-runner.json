@@ -1,0 +1,53 @@
+{
+  "handoff_id": "d1a2b3c4-0008-4000-8000-000000000768",
+  "run_id": "WF03-ISS0768-20260921",
+  "workflow_id": "WF-03",
+  "step": "08",
+  "from_agent": "ORCH",
+  "to_agent": "TEST-RUNNER",
+  "file": "handoffs/WF03-ISS0768-20260921/step-08-test-runner.json",
+  "created_at": "2026-09-21T05:17:39Z",
+  "started_at": "2026-09-21T05:17:39Z",
+  "completed_at": null,
+  "status": "PENDING",
+  "priority": "HIGH",
+  "context": {
+    "stage": "S4",
+    "requirement_ids": [],
+    "requirement_text": {},
+    "related_handoff_ids": ["d1a2b3c4-0007-4000-8000-000000000768"],
+    "artifacts_in": [
+      "docs/issues/ISS-0768.yaml",
+      "test/letflow/role_registry_test.exs",
+      "handoffs/WF03-ISS0768-20260921/step-06-test-designer.json"
+    ],
+    "owned_modules": []
+  },
+  "task": {
+    "description": "Run the authoritative full test suite for ISS-0768's fix (branch feature/WF03-ISS0768-20260921, worktree c:\\Users\\tvolo\\dev\\ai-dala\\letflow-wf03-iss0768 -- work there, do not touch c:\\Users\\tvolo\\dev\\ai-dala\\letflow, a different concurrent session owns uncommitted work there on an unrelated issue). Run mix compile --warnings-as-errors and the full mix test suite (or mix letflow.check.test if that is this project's standard full-check alias -- check mix.exs's aliases). Quote real output verbatim in your result -- never predict. IMPORTANT: run every command as a normal FOREGROUND Bash call, not backgrounded and not via a Monitor/run_in_background wait-for-notification pattern -- a full suite run can take 10-50 minutes on this codebase and that is fine, just let the tool call block until it returns rather than arming a background watcher (this stalled a prior agent on this exact run three times in a row). Prior agents in this SAME run (TEST-DESIGNER at step-06) already ran mix letflow.check.test twice and found real but UNRELATED failures (Mix.Tasks.Letflow.SeedTest, Letflow.Routers.PublicReadTest, Letflow.Plugs.Iss0736OidcLiveRevocationTest -- a DIFFERENT failing set each run) correlated with live Postgrex too_many_connections/DBConnection.ConnectionError errors and a TenantSchemaReaper note about a concurrent sibling mix test invocation on the same shared Postgres host -- read handoffs/WF03-ISS0768-20260921/step-06-test-designer.json's result.issues for the full account before concluding a new failure is a regression from this change. If your own run shows failures, cross-reference: same unstable set (connection-pool contention, not this change) vs. a new/different failure that could implicate role_registry.ex, routers/identity.ex, or role_registry_test.exs specifically -- treat only the latter as this run's problem. Confirm specifically that all tests in test/letflow/role_registry_test.exs pass, including the new ISS-0768 cross-tenant-isolation describe block.",
+    "acceptance_criteria": [
+      "mix compile --warnings-as-errors output quoted, clean",
+      "Full mix test (or mix letflow.check.test) output quoted verbatim, not predicted",
+      "test/letflow/role_registry_test.exs's full file, including the new ISS-0768 describe block, confirmed passing by name in the quoted output",
+      "Any failure outside role_registry_test.exs/role_registry.ex/routers/identity.ex is assessed against the known connection-pool-contention pattern from step-06 before being called a regression",
+      "PASS/FAIL/PARTIAL stated with real evidence"
+    ]
+  },
+  "result": {
+    "status": "",
+    "summary": "",
+    "artifacts_out": [],
+    "issues": [],
+    "git_evidence": {
+      "branch_name": "feature/WF03-ISS0768-20260921",
+      "commit_sha_list": [],
+      "remote_branch": "origin/feature/WF03-ISS0768-20260921",
+      "push_status": "skipped",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": ""
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

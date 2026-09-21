@@ -1,0 +1,59 @@
+{
+  "handoff_id": "a1b2c3d4-0000-4000-8000-000000000004",
+  "run_id": "WF03-ISS0771-20260921",
+  "workflow_id": "WF-03",
+  "step": "03",
+  "from_agent": "ORCH",
+  "to_agent": "ELIXIR-DEV",
+  "file": "handoffs/WF03-ISS0771-20260921/step-03-elixir-dev.json",
+  "created_at": "2026-09-21T07:53:23Z",
+  "started_at": "2026-09-21T07:53:23Z",
+  "completed_at": null,
+  "status": "PENDING",
+  "priority": "HIGH",
+  "context": {
+    "stage": "S6",
+    "requirement_ids": [],
+    "requirement_text": {},
+    "artifacts_in": [
+      "lib/letflow/design/iss0771-tenant-migration-replay-on-deploy.md",
+      "docs/issues/ISS-0771.yaml",
+      "lib/letflow/tenant_provisioning.ex",
+      "lib/letflow/supervisor/infrastructure.ex"
+    ],
+    "owned_modules": [
+      "lib/letflow/tenant_provisioning.ex",
+      "lib/letflow/tenant_provisioning/migration_replay_boot.ex",
+      "lib/letflow/supervisor/infrastructure.ex"
+    ]
+  },
+  "task": {
+    "description": "Implement lib/letflow/design/iss0771-tenant-migration-replay-on-deploy.md exactly, gated PASS by CODE-DESIGN-VALIDATOR (see step-02-code-design-validator.json's result). Implement all of section 2: (2.1) Letflow.TenantProvisioning.replay_all_pending/0 added to lib/letflow/tenant_provisioning.ex; (2.2) new module Letflow.TenantProvisioning.MigrationReplayBoot at lib/letflow/tenant_provisioning/migration_replay_boot.ex; (2.3) wire MigrationReplayBoot as a new child in lib/letflow/supervisor/infrastructure.ex's init/1 children list, positioned exactly as specified (immediately after {Ecto.Migrator, ...}, before Letflow.Oidc.ProviderRegistry), NOT gated by skip_migrations?(). Follow section 3's idempotency guarantee and section 4's two-layer per-tenant isolation guarantee (sequential Enum + rescue at each call site, plus the existing rescue inside replay_migrations/2 -- do not use Task.async_stream). Follow the logging behavior in 2.2 exactly: a Logger line per failing tenant naming tenant_id, schema_name, and reason, plus one always-logged summary line after the loop (N ok, M failed) including the healthy 0-failed case. MigrationReplayBoot.start_link/1 must always return :ignore, never propagate a crash, exactly as section 2.2/3 state. CODE-DESIGN-VALIDATOR's gate also recorded one MINOR non-gating documentation issue in the design doc (Ecto.Migrator.run/4 raises on failure and returns a bare list on success -- the {:ok, _} wrap is replay_migrations/2's own, not Migrator.run's) -- this does not require a design amendment, just make sure your implementation does not rely on a mistaken belief that Migrator.run/4 itself returns {:ok, _}. After implementing: run mix compile --warnings-as-errors and mix format --check-formatted and quote the real output -- do not claim success without running them.",
+    "acceptance_criteria": [
+      "replay_all_pending/0 exists with the exact @spec from design section 2.1, calls list_registrations/0 and replay_migrations/2 per tenant, returns %{ok: [...], error: [...]}",
+      "MigrationReplayBoot module exists at lib/letflow/tenant_provisioning/migration_replay_boot.ex with start_link/1 always returning :ignore",
+      "infrastructure.ex's children list includes Letflow.TenantProvisioning.MigrationReplayBoot immediately after the Ecto.Migrator child and before Letflow.Oidc.ProviderRegistry, unconditionally (not behind skip_migrations?())",
+      "Per-tenant failure isolation: one tenant's rescue does not prevent iteration over the remaining tenants (both replay_migrations/2's own existing rescue AND a second rescue at replay_all_pending/0's own call site)",
+      "mix compile --warnings-as-errors passes, real output quoted in result.summary",
+      "mix format --check-formatted passes, real output quoted in result.summary",
+      "No new supervised process per tenant (no Task.async_stream, no per-tenant GenServer/Supervisor child)"
+    ]
+  },
+  "result": {
+    "status": "PENDING",
+    "summary": "",
+    "artifacts_out": [],
+    "issues": [],
+    "git_evidence": {
+      "branch_name": null,
+      "commit_sha_list": [],
+      "remote_branch": null,
+      "push_status": "skipped",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": ""
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

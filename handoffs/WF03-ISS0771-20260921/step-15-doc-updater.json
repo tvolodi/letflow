@@ -8,8 +8,8 @@
   "file": "handoffs/WF03-ISS0771-20260921/step-15-doc-updater.json",
   "created_at": "2026-09-21T18:02:00Z",
   "started_at": "2026-09-21T18:10:00Z",
-  "completed_at": null,
-  "status": "IN_PROGRESS",
+  "completed_at": "2026-09-21T18:20:00Z",
+  "status": "COMPLETED",
   "priority": "HIGH",
   "context": {
     "stage": "S6",
@@ -33,19 +33,23 @@
     ]
   },
   "result": {
-    "status": "PENDING",
-    "summary": null,
-    "artifacts_out": [],
+    "status": "PASS",
+    "summary": "Flipped docs/issues/ISS-0771.yaml to status: resolved with resolved_by/resolved_in_run/resolved_at and a full resolution_summary of the real fix (boot-time Letflow.TenantProvisioning.MigrationReplayBoot supervision-tree child, in Letflow.Supervisor.Infrastructure, calling Letflow.TenantProvisioning.replay_all_pending/0 on every app boot). Committed and pushed (251b70c2). While verifying CI before merge, `mix letflow.check`'s backend gate failed on a pre-existing (not mine) handoff-schema defect: handoffs/WF03-ISS0771-20260921/step-06-test-designer.json's top-level status was \"BLOCKED\", not one of HANDOFF_PROTOCOL.md's six legal values (PENDING/IN_PROGRESS/COMPLETED/FAILED/ESCALATED/CANCELLED), tripping the H1 hard rule as a new (un-grandfathered) violation. Corrected it to \"FAILED\" per HANDOFF_PROTOCOL.md's own documented repair procedure for this exact situation (deriving the correction from the file's own completed_at + result.status: FAIL), committed and pushed separately (b4f51be6) so the fix is auditable on its own. Confirmed locally via `mix letflow.lint_handoffs` (OK -- 0 new violations) before pushing. Opened PR #1683 against main. First CI run (35601478170) failed on the pre-fix state; second run (35601795716), after the schema fix, passed all three checks (Detect changed paths, Backend gate, Frontend gate). PR then showed 'not mergeable: head branch not up to date with base' because main had advanced (PR #1682, #1676, #1679, #1672, #1678 merged in the interim) -- merged origin/main into the feature branch (clean merge, no conflicts, commit 45870511), re-verified `mix letflow.lint_handoffs` still OK, pushed, and CI run 35602967330 passed all three checks (Backend gate 11m16s, Detect changed paths 10s, Frontend gate 9s). Squash-merged PR #1683 into main via `gh pr merge 1683 --squash`; confirmed merged via `gh pr view 1683 --json state,mergedAt,mergeCommit` -> state: MERGED, mergedAt: 2026-09-21T13:13:30Z, mergeCommit: 7b0ce4299e9b00941167096e019465f48296dc5e.",
+    "artifacts_out": [
+      "docs/issues/ISS-0771.yaml",
+      "handoffs/WF03-ISS0771-20260921/step-06-test-designer.json",
+      "handoffs/WF03-ISS0771-20260921/step-15-doc-updater.json"
+    ],
     "issues": [],
     "git_evidence": {
       "branch_name": "feature/WF03-ISS0771-20260921",
-      "commit_sha_list": [],
-      "remote_branch": null,
-      "push_status": null,
-      "pr_url": null,
+      "commit_sha_list": ["251b70c2", "b4f51be6", "45870511"],
+      "remote_branch": "origin/feature/WF03-ISS0771-20260921",
+      "push_status": "pushed",
+      "pr_url": "https://github.com/tvolodi/letflow/pull/1683",
       "pr_create_error": null
     },
-    "next_action": null
+    "next_action": "ORCH to release letflow-queue task 770 with status: done (mirrors to closing GH#1674). No further action needed from DOC-UPDATER -- this was Step Final for WF03-ISS0771-20260921."
   },
   "rework_count": 0,
   "max_rework": 3

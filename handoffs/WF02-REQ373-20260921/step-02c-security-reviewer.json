@@ -72,9 +72,9 @@
       "mix test test/letflow/api/authorization_enforcement_test.exs -- 16 passed",
       "mix test test/letflow/service_catalog_test.exs test/support/service_catalog_reaper_test.exs -- 38 passed (migration applies cleanly against real Postgres)"
     ],
-    "summary": "PASS. All 5 applicable invariants (INV-1, INV-4, INV-6, INV-7, INV-8; INV-6 is the meta-gate this handoff itself closes) satisfied; INV-2/3/5/9 correctly NOT-APPLICABLE. The four specific scrutiny points in the task (route gating, no SQL interpolation, retire fail-closed behavior, tenant scoping) were each independently re-derived from source and, where possible, from an actual `mix test` run against Postgres rather than taken on ELIXIR-DEV's word."
+    "summary": "PASS. All 5 applicable invariants (INV-1, INV-4, INV-6, INV-7, INV-8; INV-6 is the meta-gate this handoff itself closes) satisfied; INV-2/3/5/9 correctly NOT-APPLICABLE. The four specific scrutiny points in the task (route gating, no SQL interpolation, retire fail-closed behavior, tenant scoping) were each independently re-derived from source and, where possible, from an actual `mix test` run against Postgres rather than taken on ELIXIR-DEV's word.",
+    "next_action": "Route to REVIEWER (2d)"
   },
   "rework_count": 0,
-  "max_rework": 3,
-  "next_action": "Route to REVIEWER (2d)"
+  "max_rework": 3
 }

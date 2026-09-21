@@ -8,8 +8,8 @@
   "file": "handoffs/WF03-ISS0768-20260921/step-07-test-design-validator.json",
   "created_at": "2026-09-21T05:15:47Z",
   "started_at": "2026-09-21T05:15:47Z",
-  "completed_at": null,
-  "status": "PENDING",
+  "completed_at": "2026-09-21T06:05:00Z",
+  "status": "COMPLETED",
   "priority": "HIGH",
   "context": {
     "stage": "S4",
@@ -38,19 +38,19 @@
     ]
   },
   "result": {
-    "status": "",
-    "summary": "",
+    "status": "PASS",
+    "summary": "Verified commit 8e9f35e8 directly (read the file, diffed against e725eb4c, read library sources) -- every ISS-0768 test-coverage acceptance criterion is satisfied by a real, runnable assertion in the new 'ISS-0768 regression' describe block in test/letflow/role_registry_test.exs: (1) positive case `assert name in names_a` from `RoleRegistry.list_roles(prefix: schema_a)`; (2) negative/cross-tenant case `refute name in names_b` from `RoleRegistry.list_roles(prefix: schema_b)` where schema_b comes from a genuinely separate provisioned tenant (`refute schema_b == schema_a` asserted inline); (3) negative/public case `assert_raise Postgrex.Error, ~r/relation \"public\\.tenant_role\" does not exist/` against a direct `Repo.all(TenantRole, prefix: \"public\")` -- confirmed against priv/repo/migrations/20260819000004_drop_legacy_public_identity_tables.exs line 168 (`DROP TABLE IF EXISTS public.tenant_role CASCADE;`), so this is the correct, stronger form of 'not written to public' (structurally absent, not merely empty), matching ISS-0768.yaml's fix_direction wording. No TODO/comment placeholders -- all real code. provision_second_tenant!/0 read line-by-line: it inserts a genuinely new Tenant row, calls TenantProvisioning.provision_tenant_schema/1 and replay_migrations/1 (both confirmed to exist at lib/letflow/tenant_provisioning.ex:297 and :372), and switches Repo Sandbox to :auto mode first specifically so the CREATE SCHEMA is really committed Postgres state, not a rolled-back sandbox transaction -- this mirrors test/letflow/identity/user_test.exs's own provision_tenant_schema!/0 two-tenant pattern (grepped and cross-read directly, same ordering constraint documented and solved the same way), so it is a genuinely independent second schema, not tenant A reused. Diff verified via `git diff --numstat e725eb4c 8e9f35e8 -- test/letflow/role_registry_test.exs` = '133 insertions(+), 0 deletions(-)' -- pure addition, no existing test line touched, removed, or restructured. New test is self-sufficient: unique group name via System.unique_integer, unique role name via unique_name('iso'), unique tenant slug via TenantSlugFixture.unique_slug, and its own on_exit callback (re-enters auto mode, drops schema_b's Postgres schema via DROP SCHEMA CASCADE, deletes the Registration and Tenant rows it created) -- no dependency on another test having run, no shared mutable fixture across tests (insert_group!/2 and provision_second_tenant!/0 are both self-contained new helpers, arity-distinct from the file's pre-existing insert_group!/1, no collision). TEST-DESIGNER's mutation-test claim (stripping prefix: from list_roles/1's Repo.all/2 call reproduces the defect and fails only the new test, 14/15 vs 15/15) is plausible given what the new test actually asserts: RoleRegistry.list_roles/1 (lib/letflow/identity/role_registry.ex:39-43) does `prefix = Keyword.fetch!(opts, :prefix); Repo.all(..., prefix: prefix)` -- removing the prefix: opt would make it fall back to Repo's default search_path (not schema_a), so the positive-case assertion (`name in names_a`) is exactly the first thing that would go red, matching the quoted failure ('Positive case failed first ... fell back to whatever search_path pointed at') and matching TEST-DESIGNER's quoted stack trace location (role_registry_test.exs:439, the positive-case line). Spot-checked the unrelated-failures claim against step-06's own quoted evidence (Mix.Tasks.Letflow.SeedTest, Letflow.Routers.PublicReadTest, Letflow.Plugs.Iss0736OidcLiveRevocationTest, different set each of two runs, correlated with live too_many_connections/DBConnection.ConnectionError and a TenantSchemaReaper note about a concurrent sibling mix test session on the same DB) -- role_registry_test.exs/RoleRegistry is not named in either failure set per that evidence, and the explanation (shared-host Postgres connection-pool contention from a concurrent session, not a code regression) is internally consistent and plausible; did not re-run the full suite myself per the task's explicit instruction that TEST-RUNNER does this next at step-08. Also confirmed no deps/ installed in this worktree (as TEST-DESIGNER's spec notes), so did not attempt to re-run mix compile/mix test myself here -- verification was by direct source read/diff instead, which is sufficient for this gate.",
     "artifacts_out": [],
     "issues": [],
     "git_evidence": {
       "branch_name": "feature/WF03-ISS0768-20260921",
-      "commit_sha_list": [],
+      "commit_sha_list": ["8e9f35e8"],
       "remote_branch": "origin/feature/WF03-ISS0768-20260921",
       "push_status": "skipped",
       "pr_url": null,
       "pr_create_error": null
     },
-    "next_action": ""
+    "next_action": "Route to TEST-RUNNER (WF-03 step 8) for the authoritative full mix test / mix letflow.check.test run."
   },
   "rework_count": 0,
   "max_rework": 3

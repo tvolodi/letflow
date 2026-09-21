@@ -1,7 +1,7 @@
 defmodule Letflow.Identity.RoleRegistryTest do
   @moduledoc """
-  Tests for `Letflow.Identity.RoleRegistry` (REQ-020): `list_roles/0`,
-  `upsert_role/2`, `resolve_role_in_tx/1`. See `test/specs/REQ-020.md` for the full
+  Tests for `Letflow.Identity.RoleRegistry` (REQ-020): `list_roles/1`,
+  `upsert_role/3`, `resolve_role_in_tx/1`. See `test/specs/REQ-020.md` for the full
   test-case rationale, including why AC5 (the `@moduledoc` content requirement) has no
   runtime test here and why AC4's "never raises" clause is covered the way it is.
 
@@ -170,28 +170,28 @@ defmodule Letflow.Identity.RoleRegistryTest do
     |> Repo.insert!()
   end
 
-  describe "list_roles/0 (acceptance criterion 1)" do
-    test "returns [] (not an error) against an empty tenant_role table", _ctx do
-      assert RoleRegistry.list_roles() == []
+  describe "list_roles/1 (acceptance criterion 1)" do
+    test "returns [] (not an error) against an empty tenant_role table", ctx do
+      assert RoleRegistry.list_roles(prefix: ctx.schema_name) == []
     end
 
     test "returns all rows sorted by name ascending, proving the ORDER BY is real", ctx do
       group = insert_group!(ctx)
 
       # Names deliberately chosen so alphabetical order differs from insertion order —
-      # if list_roles/0 silently relied on insertion/primary-key order instead of a
+      # if list_roles/1 silently relied on insertion/primary-key order instead of a
       # real ORDER BY name, this would fail: inserting "zeta" then "alpha" then "mid"
       # would come back in that same insertion order, not alphabetically.
       name_zeta = "zeta-#{System.unique_integer([:positive, :monotonic])}"
       name_alpha = "alpha-#{System.unique_integer([:positive, :monotonic])}"
       name_mid = "mid-#{System.unique_integer([:positive, :monotonic])}"
 
-      assert {:ok, _} = RoleRegistry.upsert_role(name_zeta, group.id)
-      assert {:ok, _} = RoleRegistry.upsert_role(name_alpha, group.id)
-      assert {:ok, _} = RoleRegistry.upsert_role(name_mid, group.id)
+      assert {:ok, _} = RoleRegistry.upsert_role(name_zeta, group.id, prefix: ctx.schema_name)
+      assert {:ok, _} = RoleRegistry.upsert_role(name_alpha, group.id, prefix: ctx.schema_name)
+      assert {:ok, _} = RoleRegistry.upsert_role(name_mid, group.id, prefix: ctx.schema_name)
 
       names =
-        RoleRegistry.list_roles()
+        RoleRegistry.list_roles(prefix: ctx.schema_name)
         |> Enum.map(& &1.name)
         |> Enum.filter(&(&1 in [name_zeta, name_alpha, name_mid]))
 
@@ -199,20 +199,21 @@ defmodule Letflow.Identity.RoleRegistryTest do
     end
   end
 
-  describe "upsert_role/2 — group_id not found (acceptance criterion 2)" do
+  describe "upsert_role/3 — group_id not found (acceptance criterion 2)" do
     test "a syntactically-valid but nonexistent group_id returns {:error, :group_not_found} and inserts no row",
-         _ctx do
+         ctx do
       name = unique_name()
       nonexistent_group_id = Ecto.UUID.generate()
 
-      assert {:error, :group_not_found} = RoleRegistry.upsert_role(name, nonexistent_group_id)
+      assert {:error, :group_not_found} =
+               RoleRegistry.upsert_role(name, nonexistent_group_id, prefix: ctx.schema_name)
 
       rows = TenantRole |> where(name: ^name) |> Repo.all()
       assert rows == []
     end
   end
 
-  describe "upsert_role/2 — update existing binding (acceptance criterion 3)" do
+  describe "upsert_role/3 — update existing binding (acceptance criterion 3)" do
     test "called twice with the same name and a different group_id updates the binding, no duplicate row",
          ctx do
       name = unique_name()
@@ -220,12 +221,12 @@ defmodule Letflow.Identity.RoleRegistryTest do
       group_b = insert_group!(ctx)
 
       assert {:ok, %TenantRole{group_id: first_group_id}} =
-               RoleRegistry.upsert_role(name, group_a.id)
+               RoleRegistry.upsert_role(name, group_a.id, prefix: ctx.schema_name)
 
       assert first_group_id == group_a.id
 
       assert {:ok, %TenantRole{group_id: second_group_id}} =
-               RoleRegistry.upsert_role(name, group_b.id)
+               RoleRegistry.upsert_role(name, group_b.id, prefix: ctx.schema_name)
 
       assert second_group_id == group_b.id
 
@@ -244,7 +245,7 @@ defmodule Letflow.Identity.RoleRegistryTest do
       name = unique_name()
       group = insert_group!(ctx)
 
-      assert {:ok, _} = RoleRegistry.upsert_role(name, group.id)
+      assert {:ok, _} = RoleRegistry.upsert_role(name, group.id, prefix: ctx.schema_name)
 
       assert RoleRegistry.resolve_role_in_tx(name) == group.id
     end
@@ -258,7 +259,7 @@ defmodule Letflow.Identity.RoleRegistryTest do
       name = unique_name()
       group = insert_group!(ctx)
 
-      assert {:ok, _} = RoleRegistry.upsert_role(name, group.id)
+      assert {:ok, _} = RoleRegistry.upsert_role(name, group.id, prefix: ctx.schema_name)
 
       result =
         Repo.transaction(fn ->
@@ -291,18 +292,20 @@ defmodule Letflow.Identity.RoleRegistryTest do
     end
   end
 
-  describe "upsert_role/2 — name validation rejection modes (beyond the bare acceptance criteria)" do
+  describe "upsert_role/3 — name validation rejection modes (beyond the bare acceptance criteria)" do
     test "rejects an empty name", ctx do
       group = insert_group!(ctx)
 
-      assert {:error, :invalid_role_name} = RoleRegistry.upsert_role("", group.id)
+      assert {:error, :invalid_role_name} =
+               RoleRegistry.upsert_role("", group.id, prefix: ctx.schema_name)
     end
 
     test "rejects a name longer than 128 codepoints", ctx do
       group = insert_group!(ctx)
       too_long = String.duplicate("a", 129)
 
-      assert {:error, :invalid_role_name} = RoleRegistry.upsert_role(too_long, group.id)
+      assert {:error, :invalid_role_name} =
+               RoleRegistry.upsert_role(too_long, group.id, prefix: ctx.schema_name)
     end
 
     test "accepts a name of exactly 128 codepoints (the boundary itself is valid)", ctx do
@@ -310,14 +313,15 @@ defmodule Letflow.Identity.RoleRegistryTest do
       exactly_128 = String.duplicate("a", 128)
 
       assert {:ok, %TenantRole{name: ^exactly_128}} =
-               RoleRegistry.upsert_role(exactly_128, group.id)
+               RoleRegistry.upsert_role(exactly_128, group.id, prefix: ctx.schema_name)
     end
 
     test "rejects a name containing a control character", ctx do
       group = insert_group!(ctx)
       with_control_char = "role-#{<<0x01>>}-name"
 
-      assert {:error, :invalid_role_name} = RoleRegistry.upsert_role(with_control_char, group.id)
+      assert {:error, :invalid_role_name} =
+               RoleRegistry.upsert_role(with_control_char, group.id, prefix: ctx.schema_name)
     end
   end
 
@@ -325,9 +329,9 @@ defmodule Letflow.Identity.RoleRegistryTest do
     # See lib/letflow/design/req076-identity-tokens-roles-onboarding.md §5.1: R-Co's
     # role_registry.zig upsertRole/3 validates ONLY name format (non-empty, <=128
     # codepoints, no control characters) -- never enum membership against
-    # auth.Role's five-value RBAC set. Letflow.Identity.RoleRegistry.upsert_role/2
-    # (REQ-020, unchanged by REQ-076) already matches that behavior exactly. This
-    # test is the load-bearing new case AC6 asks for: a name that is NOT one of
+    # auth.Role's five-value RBAC set. Letflow.Identity.RoleRegistry.upsert_role/3
+    # (REQ-020, prefix threaded by ISS-0768) already matches that behavior exactly.
+    # This test is the load-bearing new case AC6 asks for: a name that is NOT one of
     # PLATFORM_ADMIN/PROCESS_DESIGNER/PROCESS_OPERATOR/TASK_WORKER/AGENT_RUNNER,
     # accepted anyway. The pre-existing "name validation rejection modes" describe
     # block above (empty, too-long, control-char) already supplies AC6's required
@@ -337,7 +341,7 @@ defmodule Letflow.Identity.RoleRegistryTest do
       group = insert_group!(ctx)
 
       assert {:ok, %TenantRole{name: "CUSTOM_APPROVER"}} =
-               RoleRegistry.upsert_role("CUSTOM_APPROVER", group.id)
+               RoleRegistry.upsert_role("CUSTOM_APPROVER", group.id, prefix: ctx.schema_name)
 
       # Not one of the five recognized Letflow.Api.Authorization.roles/0 values --
       # confirms this genuinely exercises the "outside the enum" case, not an
@@ -346,12 +350,13 @@ defmodule Letflow.Identity.RoleRegistryTest do
     end
   end
 
-  describe "upsert_role/2 — group_id invalid-UUID-format rejection (beyond the bare acceptance criteria)" do
+  describe "upsert_role/3 — group_id invalid-UUID-format rejection (beyond the bare acceptance criteria)" do
     test "rejects a group_id that is not a syntactically valid UUID, distinct from the not-found case",
-         _ctx do
+         ctx do
       name = unique_name()
 
-      assert {:error, :invalid_group_id} = RoleRegistry.upsert_role(name, "not-a-uuid")
+      assert {:error, :invalid_group_id} =
+               RoleRegistry.upsert_role(name, "not-a-uuid", prefix: ctx.schema_name)
 
       rows = TenantRole |> where(name: ^name) |> Repo.all()
       assert rows == []

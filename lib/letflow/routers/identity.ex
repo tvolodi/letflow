@@ -31,8 +31,8 @@ defmodule Letflow.Routers.Identity do
   * POST   /tokens                       -> Identity.create_token/3 (REQ-076)
   * GET    /tokens                       -> Identity.list_tokens/2 (REQ-076)
   * DELETE /tokens/:id                   -> Identity.revoke_token/2 (REQ-076)
-  * GET    /roles                        -> Letflow.Identity.RoleRegistry.list_roles/0 (REQ-076)
-  * POST   /roles                        -> Letflow.Identity.RoleRegistry.upsert_role/2 (REQ-076)
+  * GET    /roles                        -> Letflow.Identity.RoleRegistry.list_roles/1 (REQ-076, ISS-0768)
+  * POST   /roles                        -> Letflow.Identity.RoleRegistry.upsert_role/3 (REQ-076, ISS-0768)
 
   ## API tokens (REQ-076, INV-4)
 
@@ -51,8 +51,8 @@ defmodule Letflow.Routers.Identity do
   `POST /roles`'s `name` field accepts any role name, not restricted to a
   closed enum (R-Co's `src/identity/role_registry.zig` validates only the
   same format constraint, never enum membership, confirmed by direct
-  read). `Letflow.Identity.RoleRegistry.upsert_role/2` (REQ-020,
-  unchanged by this requirement) already enforces exactly a **format**
+  read). `Letflow.Identity.RoleRegistry.upsert_role/3` (REQ-020,
+  validation logic unchanged by this requirement) already enforces exactly a **format**
   constraint (non-empty, ≤128 Unicode codepoints, no ASCII control
   characters), never enum membership, and this route adds no stricter
   check on top of it. `POST /roles` returns **200**, not 201 — an upsert,
@@ -201,11 +201,11 @@ defmodule Letflow.Routers.Identity do
   end
 
   authz_get "/roles", :RolesManage do
-    handle_list_roles(conn)
+    handle_list_roles(conn, conn.assigns.scoped_opts)
   end
 
   authz_post "/roles", :RolesManage do
-    handle_upsert_role(conn)
+    handle_upsert_role(conn, conn.assigns.scoped_opts)
   end
 
   match _ do
@@ -647,8 +647,8 @@ defmodule Letflow.Routers.Identity do
 
   # ── GET /roles (design §6.1, AC6) ────────────────────────────────────────
 
-  defp handle_list_roles(conn) do
-    roles = RoleRegistry.list_roles()
+  defp handle_list_roles(conn, opts) do
+    roles = RoleRegistry.list_roles(opts)
 
     Response.ok(conn, %{"items" => Enum.map(roles, &role_map/1)})
   end
@@ -660,13 +660,13 @@ defmodule Letflow.Routers.Identity do
     %FieldConstraint{name: "group_id", required: true, type: :string, reject_empty_string: true}
   ]
 
-  defp handle_upsert_role(conn) do
+  defp handle_upsert_role(conn, opts) do
     case Validation.validate(@upsert_role_schema, conn.body_params) do
       {:errors, field_errors} ->
         Response.send_problem(conn, Validation.problem(field_errors))
 
       {:ok, %{"name" => name, "group_id" => group_id}} ->
-        case RoleRegistry.upsert_role(name, group_id) do
+        case RoleRegistry.upsert_role(name, group_id, opts) do
           {:ok, role} -> Response.ok(conn, role_map(role))
           {:error, :invalid_role_name} -> Response.unprocessable(conn, "invalid_role_name")
           {:error, :invalid_group_id} -> Response.unprocessable(conn, "invalid_group_id")

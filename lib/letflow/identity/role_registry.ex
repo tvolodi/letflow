@@ -36,9 +36,9 @@ defmodule Letflow.Identity.RoleRegistry do
   Returns every role binding sorted by `name` ascending. Returns `[]` (not an error)
   when `tenant_role` is empty.
   """
-  @spec list_roles() :: [TenantRole.t()]
-  def list_roles do
-    Repo.all(from(t in TenantRole, order_by: [asc: t.name]))
+  @spec list_roles(opts :: [prefix: String.t()]) :: [TenantRole.t()]
+  def list_roles(opts) do
+    Repo.all(from(t in TenantRole, order_by: [asc: t.name]), prefix: opts[:prefix])
   end
 
   @doc """
@@ -47,12 +47,16 @@ defmodule Letflow.Identity.RoleRegistry do
   an existing group and upserts on `name` conflict (updating only `group_id`) inside one
   transaction.
   """
-  @spec upsert_role(name :: String.t(), group_id :: Ecto.UUID.t() | String.t()) ::
+  @spec upsert_role(
+          name :: String.t(),
+          group_id :: Ecto.UUID.t() | String.t(),
+          opts :: [prefix: String.t()]
+        ) ::
           {:ok, TenantRole.t()} | {:error, upsert_error()}
-  def upsert_role(name, group_id) do
+  def upsert_role(name, group_id, opts) do
     with :ok <- validate_role_name(name),
          {:ok, normalized_group_id} <- Ecto.UUID.cast(group_id) do
-      do_upsert_role(name, normalized_group_id)
+      do_upsert_role(name, normalized_group_id, opts)
     else
       :error -> {:error, :invalid_group_id}
       {:error, reason} -> {:error, reason}
@@ -80,25 +84,39 @@ defmodule Letflow.Identity.RoleRegistry do
     _ -> nil
   end
 
-  defp do_upsert_role(name, group_id) do
-    Repo.transaction(fn ->
-      case Repo.get(Group, group_id) do
-        nil ->
-          Repo.rollback(:group_not_found)
+  @spec do_upsert_role(
+          name :: String.t(),
+          group_id :: Ecto.UUID.t(),
+          opts :: [prefix: String.t()]
+        ) :: {:ok, TenantRole.t()} | {:error, upsert_error()}
+  defp do_upsert_role(name, group_id, opts) do
+    Repo.transaction(
+      fn ->
+        case Repo.get(Group, group_id, prefix: opts[:prefix]) do
+          nil ->
+            Repo.rollback(:group_not_found)
 
-        %Group{} ->
-          insert_or_update_role(name, group_id)
-      end
-    end)
+          %Group{} ->
+            insert_or_update_role(name, group_id, opts)
+        end
+      end,
+      prefix: opts[:prefix]
+    )
   end
 
-  defp insert_or_update_role(name, group_id) do
+  @spec insert_or_update_role(
+          name :: String.t(),
+          group_id :: Ecto.UUID.t(),
+          opts :: [prefix: String.t()]
+        ) :: TenantRole.t()
+  defp insert_or_update_role(name, group_id, opts) do
     case %TenantRole{}
          |> TenantRole.changeset(%{name: name, group_id: group_id})
          |> Repo.insert(
            conflict_target: :name,
            on_conflict: [set: [group_id: group_id]],
-           returning: true
+           returning: true,
+           prefix: opts[:prefix]
          ) do
       {:ok, role} -> role
       {:error, changeset} -> Repo.rollback(changeset)

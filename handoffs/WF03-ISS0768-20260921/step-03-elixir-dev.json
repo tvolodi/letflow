@@ -8,8 +8,8 @@
   "file": "handoffs/WF03-ISS0768-20260921/step-03-elixir-dev.json",
   "created_at": "2026-09-21T03:21:30Z",
   "started_at": "2026-09-21T03:21:30Z",
-  "completed_at": null,
-  "status": "PENDING",
+  "completed_at": "2026-09-21T09:20:00Z",
+  "status": "COMPLETED",
   "priority": "HIGH",
   "context": {
     "stage": "S4",
@@ -42,9 +42,14 @@
     ]
   },
   "result": {
-    "status": "",
-    "summary": "",
-    "artifacts_out": [],
+    "status": "PASS",
+    "summary": "Implemented exactly per lib/letflow/design/iss0768-role-registry-tenant-prefix.md: role_registry.ex now has list_roles/1, upsert_role/3, do_upsert_role/3 (private), insert_or_update_role/3 (private), each threading opts :: [prefix: String.t()] into their Repo call (Repo.all/2, Repo.transaction/2 with prefix on the transaction call itself plus explicit prefix: on the inner Repo.get/3 and Repo.insert/2 too, per the design's defense-in-depth instruction). resolve_role_in_tx/1 is byte-for-byte unchanged (confirmed: `git diff` on role_registry.ex shows zero touched lines in that function). routers/identity.ex: handle_list_roles/2 and handle_upsert_role/2 now take opts as a second param, and the route macro bodies for GET/POST /roles pass conn.assigns.scoped_opts, matching every other route in the module (e.g. handle_create(conn, conn.assigns.scoped_opts) at line 143).\n\nREGRESSION-VS-ALWAYS-BROKEN FINDING (ran exactly the design section-4 commands against this worktree's real history): `git log -p --follow -S\"prefix\" -- lib/letflow/identity/role_registry.ex` returned a COMPLETELY EMPTY result -- no commit in this file's history has ever added or removed a line containing the string 'prefix'. Corroborating check: `git log --follow --diff-filter=A --format=%H -- lib/letflow/identity/role_registry.ex` names the file's sole introduction commit as a1c4ab9b7d61c852c612ed03a51a64cbf52d1371 ('feat: Per-tenant role registry (TenantRoleStore/IDN-05 equivalent) [WF02-REQ020-20260816] (#40)'); `git show a1c4ab9b7d61c852c612ed03a51a64cbf52d1371 -- lib/letflow/identity/role_registry.ex | grep prefix` matched nothing. The file's entire commit history is exactly two commits (`git log --follow --oneline`): a1c4ab9b (introduction) and d894d1f6 ('fix(REQ-251): apply .zig provenance-marking convention -- identity.ex + identity/* + oidc/* (#983)', a comment/provenance-only edit). CONCLUSION: this is NOT a regression -- Letflow.Identity.RoleRegistry has issued unprefixed (default-schema) queries since it first shipped under REQ-020; ISS-0768 is fixing a bug that has existed since the module's introduction, not something a later commit broke.\n\nmix compile --warnings-as-errors: exit 0, clean (no errors/warnings reported for the letflow app; only pre-existing third-party dep warnings from jose/eqrcode/mix.exs's own deprecated xref option, none from this change). This worktree had no deps/_build fetched and no network access, so MIX_DEPS_PATH was pointed read-only at the sibling worktree c:\\Users\\tvolo\\dev\\ai-dala\\letflow\\deps (mix.lock is byte-identical between both worktrees, confirmed via `diff`); nothing was written back to that other repo -- MIX_BUILD_PATH stayed local to this worktree's own _build.\n\nmix test test/letflow/role_registry_test.exs test/letflow/routers/identity_test.exs: 'Finished in 84.0 seconds (0.00s async, 84.0s sync) / Result: 83 passed'. Updated both files' RoleRegistry.list_roles/upsert_role call sites to the new /1 and /3 arities, adding prefix: ctx.schema_name (role_registry_test.exs, using its existing per-test provisioned tenant schema) / prefix: tenant.schema_name (routers/identity_test.exs, matching that file's own established Repo.aggregate(..., prefix: tenant.schema_name) pattern elsewhere in the same file) -- no new tenant-schema fixture pattern invented, and no new cross-tenant-isolation test written (that is TEST-DESIGNER's step-05 job).\n\nFull mix test (whole repo, real Postgres, single run, MIX_DEPS_PATH pointed at the sibling worktree's deps as above): 'Finished in 2910.2 seconds (20.3s async, 2889.9s sync) / Result: 4479/4495 passed (6/6 properties, 4473/4489 tests), 23 excluded / Failed: 16 tests'. All 16 failures are OUTSIDE this change's scope and files: Letflow.Packs.BilimbagaExamDefinitionsTest (1, atomizer-mirror whitelist check), Letflow.ServiceCatalogTest (5, update_scope/delete referential-guard AC6/AC7 cases), Letflow.TenantSchemaReaperTest (3, sweep_orphans/2), Letflow.ServiceCatalogReaperTest (3, sweep_service_catalog_orphans/1), Letflow.Routers.MetricsExpositionTest (1), and Letflow.IdentityTest (2, resolve_tenant_by_realm/1 and resolve_realm_by_tenant/1 -- these are Letflow.Identity's own OIDC-pipeline functions, a DIFFERENT module from Letflow.Identity.RoleRegistry, and this fix touches neither). Inspected the two IdentityTest failures directly: both raise Ecto.NoResultsError from test/support/bpm_default_realm_displacement.ex's with_lock/1 helper failing to find the seeded 'bpm-default' tenant -- a shared-fixture contention/race in this suite's async default-tenant seeding helper, not anything list_roles/1, upsert_role/3, or scoped_opts touches. None of the 16 failing tests reference RoleRegistry, role_registry.ex, routers/identity.ex's roles routes, or scoped_opts anywhere in their failure output. Did not additionally run the full suite against main to diff byte-for-byte (a ~49-minute single run already; a second full run was judged not worth the latency given zero file-path overlap between the 16 failures and this change's owned_modules) -- flagging this explicitly rather than silently asserting it, per acceptance criterion's '0 regressions vs main for files outside this run's scope': the evidence for that claim is file-scope non-overlap, not a diffed re-run.",
+    "artifacts_out": [
+      "lib/letflow/identity/role_registry.ex",
+      "lib/letflow/routers/identity.ex",
+      "test/letflow/role_registry_test.exs",
+      "test/letflow/routers/identity_test.exs"
+    ],
     "issues": [],
     "git_evidence": {
       "branch_name": "feature/WF03-ISS0768-20260921",
@@ -54,7 +59,7 @@
       "pr_url": null,
       "pr_create_error": null
     },
-    "next_action": ""
+    "next_action": "Route to SECURITY-REVIEWER (tenant-data path: RoleRegistry queries now cross tenant-schema boundaries via prefix) then REVIEWER per WF-03/WF-02 Step 2a-2d gating; TEST-DESIGNER writes the new cross-tenant-isolation regression test at step-05 after those gates pass."
   },
   "rework_count": 0,
   "max_rework": 3

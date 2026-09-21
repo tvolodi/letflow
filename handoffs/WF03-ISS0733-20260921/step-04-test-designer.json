@@ -1,0 +1,50 @@
+{
+  "handoff_id": "d1a2f3b4-0001-4a1e-9c11-9f0733000010",
+  "run_id": "WF03-ISS0733-20260921",
+  "workflow_id": "WF-03",
+  "step": "04",
+  "from_agent": "ORCH",
+  "to_agent": "TEST-DESIGNER",
+  "file": "handoffs/WF03-ISS0733-20260921/step-04-test-designer.json",
+  "created_at": "2026-09-21T03:05:00Z",
+  "started_at": "2026-09-21T03:05:00Z",
+  "completed_at": null,
+  "status": "PENDING",
+  "priority": "HIGH",
+  "context": {
+    "stage": "S6",
+    "requirement_ids": [],
+    "requirement_text": {},
+    "source_text": {},
+    "related_handoff_ids": ["d1a2f3b4-0001-4a1e-9c11-9f0733000007", "d1a2f3b4-0001-4a1e-9c11-9f0733000009"],
+    "artifacts_in": [
+      "handoffs/WF03-ISS0733-20260921/step-03-elixir-dev.json",
+      "handoffs/WF03-ISS0733-20260921/step-03c-reviewer.json",
+      "lib/letflow/design/iss0733-promotion-audit-and-platform-events-read.md",
+      "docs/issues/ISS-0733.yaml"
+    ],
+    "owned_modules": [
+      "test/letflow/definitions/promotion_test.exs",
+      "test/letflow/event_store/platform_events_test.exs",
+      "test/letflow/routers/promotions_test.exs"
+    ]
+  },
+  "task": {
+    "description": "Write regression tests proving ISS-0733's two gaps are fixed. This run has TWO distinct fail-first situations -- handle each per WF-03_issue_resolving.md's own rule for which applies: GAP A (write path) is a fix to EXISTING behaviour (promote_definition/3 already existed pre-fix) -- write a test that calls promote_definition/3 (or apply_review/4) with a real event_appender and asserts exactly one audit_entries row now exists with action 'definition.promote' and the expected after_state fields (source_tenant_id, target_tenant_id, source_definition_id, target_definition_id, process_key) after a successful promotion. Prove this genuinely fails pre-fix and passes post-fix: check out main (pre-fix) in a throwaway worktree, run an equivalent assertion (0 audit entries after a successful promotion) to confirm it holds pre-fix, then confirm post-fix on this branch it finds exactly 1. GAP B (read path) is NEW code (list_platform_events/1 and GET /promotions/platform-events did not exist pre-fix at all) -- the fail-first rule is trivially satisfied by UndefinedFunctionError/404, which proves nothing about correctness. Per WF-03's 'non-existence' section, MUTATE the shipped logic in throwaway ways targeting real traps (e.g.: wrong instance_id filter picks up non-platform events; cursor pagination off-by-one includes/excludes a boundary row; missing PLATFORM_ADMIN authz check lets an unauthorized caller through; event_type filter ignored) and record which tests fail for each mutant, in a throwaway git worktree, cleanly removed afterward -- verify with git status --porcelain empty and a clean re-run to green. Write the tests as real ExUnit test files under test/letflow/. Do not implement any fix code -- tests only.",
+    "acceptance_criteria": [
+      "GAP A: at least one test demonstrated to fail (0 audit entries found) against main and pass (1 correct entry found) against this branch, both runs' output quoted",
+      "GAP B: mutation coverage recorded for at least 3 distinct real traps (authz bypass, wrong instance_id/tenant scoping, pagination boundary), each mutant's failing test count quoted",
+      "Every mutation applied in a throwaway worktree or reverted-and-verified in place (git status --porcelain empty, re-run green, both quoted)",
+      "Tests cover the design doc's stated acceptance-criteria mapping section in full"
+    ]
+  },
+  "result": {
+    "status": "PENDING",
+    "summary": "",
+    "artifacts_out": [],
+    "issues": [],
+    "next_action": ""
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

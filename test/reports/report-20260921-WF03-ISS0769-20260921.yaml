@@ -1,0 +1,97 @@
+# WF-03 ISS-0769 -- TEST-RUNNER gate before RELEASE-VALIDATOR.
+#
+# Scope: bearer-token leakage into crash logs via Bandit's crash-logging
+# path -- struct-normalization + 2-tuple redaction change in the global
+# :logger primary filter (lib/letflow/secrets/redaction.ex,
+# lib/letflow/obs/logger.ex or equivalent, plus the crash-log
+# authorization redaction plug). SECURITY-REVIEWER and REVIEWER both
+# PASSed with independent fail-then-pass re-runs already.
+#
+# Environment: run in an isolated git worktree
+# (/tmp/.../scratchpad/wt-testrunner-iss0769, checked out from
+# origin/feature/WF03-ISS0769-20260921 @ 4868eb4c), NOT the shared main
+# checkout, per dispatch instructions (heavy concurrent multi-session
+# activity on this repo). The main checkout's docker-compose project
+# (letflow-postgres-1) was already running on host port 5462/5463 and a
+# second unrelated checkout ("letflow") also held 5462 -- to avoid any
+# port collision, this worktree got its own untracked .env
+# (LETFLOW_DB_PORT=5473, LETFLOW_KEYCLOAK_PORT=8093) and its own
+# docker-compose project (wt-testrunner-iss0769-postgres-1 /
+# wt-testrunner-iss0769-keycloak-1), never touching the other
+# checkouts' containers.
+#
+# 1) mix compile --warnings-as-errors: clean. Zero warnings from the
+#    `letflow` app itself (some pre-existing warnings from third-party
+#    deps -- eqrcode, jose/jwa erlang catch-deprecation, mix.exs xref
+#    deprecation notice -- none of which are warnings-as-errors failures
+#    since they're outside the letflow app compile unit).
+#
+# 2) scripts/test_parallel.sh (full backend suite, N=8 from nproc):
+#      combined: 4492 tests, 6 properties, 0 failures (4498/4498 passed)
+#    Per-partition breakdown (partition: tests, properties, failures, exit):
+#      1: 519/0/0/0   2: 520/1/0/0   3: 468/0/0/0   4: 527/0/0/0
+#      5: 647/3/0/0   6: 678/0/0/0   7: 603/2/0/0   8: 530/0/0/0
+#    All 8 partitions reported a Result: line, zero parsed failures,
+#    exit 0. No incidental breakage anywhere else in the suite from the
+#    struct-normalization / 2-tuple redaction change to the global
+#    :logger primary filter.
+#
+# 3) Targeted, non-partitioned re-run of the 3 directly-relevant files
+#    (mix test test/letflow/secrets/redaction_test.exs
+#    test/letflow/obs/logger_test.exs
+#    test/letflow/plugs/crash_log_authorization_redaction_test.exs):
+#      Result: 26 passed
+#    Matches REVIEWER's expected count of 26 exactly. 0 failures.
+#
+# 4) Frontend: `git diff --stat origin/main...HEAD -- web/` is empty --
+#    this PR touches no frontend files, confirming the dispatch's
+#    premise. Ran the requested light check anyway: `npm ci` (560
+#    packages) then `npm run type-check` (tsc -b tsconfig.json) --
+#    completed with no errors.
+
+requirement: ISS-0769
+run_id: WF03-ISS0769-20260921
+branch: feature/WF03-ISS0769-20260921
+commit: 4868eb4c
+pr: 1668
+
+compile:
+  command: "mix compile --warnings-as-errors"
+  result: clean
+  letflow_app_warnings: 0
+
+backend_totals:
+  parallel_partitions: 8
+  partition_source: nproc
+  combined_tests_reported: 4492
+  combined_properties_reported: 6
+  combined_failures_reported: 0
+  combined_passed_of_total: "4498/4498"
+  all_partitions_exit_0: true
+
+targeted_rerun:
+  files:
+    - test/letflow/secrets/redaction_test.exs
+    - test/letflow/obs/logger_test.exs
+    - test/letflow/plugs/crash_log_authorization_redaction_test.exs
+  result: "26 passed"
+  failures: 0
+  matches_reviewer_expected_count: true
+
+frontend_check:
+  files_touched_by_pr: 0
+  git_diff_stat_web_dir: empty
+  type_check_command: "npm run type-check"
+  type_check_result: clean
+
+verdict: PASS
+verdict_reason: >
+  Clean warnings-as-errors compile, full backend suite green at
+  4498/4498 (0 failures) across all 8 partitions, the three
+  directly-relevant redaction/crash-log test files confirmed at exactly
+  26 passing (matching REVIEWER's independent count), and no frontend
+  files in the diff with a clean type-check as a light confirmatory
+  check. No environmental flakes or crashed partitions encountered this
+  run. Ready to hand to RELEASE-VALIDATOR.
+
+next_action: Hand off to RELEASE-VALIDATOR for independent re-verification.

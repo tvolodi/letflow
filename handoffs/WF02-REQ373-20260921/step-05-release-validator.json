@@ -1,0 +1,54 @@
+{
+  "handoff_id": "b2c3d4e5-0001-4000-8000-000000000010",
+  "run_id": "WF02-REQ373-20260921",
+  "workflow_id": "WF-02",
+  "step": "05",
+  "from_agent": "ORCH",
+  "to_agent": "RELEASE-VALIDATOR",
+  "file": "handoffs/WF02-REQ373-20260921/step-05-release-validator.json",
+  "created_at": "2026-09-21T20:06:26Z",
+  "started_at": "2026-09-21T20:06:26Z",
+  "completed_at": null,
+  "status": "IN_PROGRESS",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S6",
+    "requirement_ids": ["REQ-373"],
+    "requirement_text": {
+      "REQ-373": "See handoffs/WF02-REQ373-20260921/step-01-code-designer.json's context.requirement_text for the full text -- not restated here to avoid drift; read it there."
+    },
+    "related_handoff_ids": [
+      "handoffs/WF02-REQ373-20260921/step-04-test-runner.json"
+    ],
+    "artifacts_in": [
+      "lib/letflow/design/req373-service-catalog-version-lifecycle.md",
+      "lib/letflow/service_catalog.ex",
+      "lib/letflow/service_catalog/entry.ex",
+      "lib/letflow/service_catalog/version.ex",
+      "lib/letflow/service_catalog/pin_lookup.ex",
+      "lib/letflow/engine.ex",
+      "lib/letflow/routers/admin_services.ex",
+      "test/letflow/service_catalog_test.exs",
+      "test/letflow/engine_pin_resolver_catalog_test.exs",
+      "test/letflow/routers/admin_services_publish_retire_test.exs",
+      "test/reports/report-20260921-WF02-REQ373-20260921.yaml"
+    ],
+    "owned_modules": []
+  },
+  "task": {
+    "description": "Perform WF-02 Step 5 (release validation) for REQ-373 per docs/agents/workflows/WF-02_requirement_implementation.md. Independently RE-RUN scripts/test_parallel.sh yourself -- do not trust TEST-RUNNER's report alone; run it synchronously in the foreground (per core-directives.md's 'No Background Wait For A Cross-Turn Notification' -- this applies to you specifically). Your re-run will not reproduce Step 4's exact result and that is expected; do not treat a differing count as confirmation or regression -- attribute any failure structurally yourself, do not accept Step 4's attributions on its say-so.\n\nConfirm every one of REQ-373's 8 acceptance criteria is satisfied -- check each one explicitly against the actual code/test, not against any prior step's summary: (1) version identity + ACTIVE/RETIRED status with schema decision + reasoning in moduledoc, migration + schema test; (2) publish doesn't disturb an already-resolved pin, proven by test; (3) new case after publish resolves the new version via the real Lookup, proven by test; (4) retire is two-sided (fails new resolution, pin_for/3 unaffected), proven by test; (5) Engine.create/2's pin_lookup/2 wired to real Lookup for catalog_entry, proven by integration test; (6) publish/retire gated by :AdminServicesManage, no new permission, proven by test; (7) PLC-01/module_ref explicitly out of scope in moduledoc with citation; (8) mix letflow.check passes, real output quoted. Also run `mix letflow.check` yourself and quote the real output as part of AC8's own verification.\n\nCheck docs/status/requirement_status.yaml (via the index) and docs/requirements.yaml for staleness relative to what actually shipped -- confirm REQ-373 is still correctly `in_progress` (not yet flipped to done, that's DOC-UPDATER's job next) and that the started event already recorded matches what actually shipped. Complete the handoff with PASS -> 'Route to DOC-UPDATER' or FAIL naming the blocking issue and which agent it routes back to. Commit and push (explicit filenames, never -A) before ending your turn.",
+    "acceptance_criteria": [
+      "service_catalog entries carry a version identity and an ACTIVE/RETIRED status, with the chosen schema stated explicitly in the moduledoc along with the reasoning, proven by a migration and a schema test",
+      "publishing a new version of an existing service_id does not alter or invalidate any already-resolved pinned_version entry recorded in a prior INSTANCE_STARTED event, proven by a test",
+      "a new case created after a publish resolves the newly published version via PinResolver.resolve/4's real Lookup, proven by a test",
+      "retiring a version prevents any NEW resolution from choosing it while an instance already pinned to the retired version continues to resolve via pin_for/3 with no error, proven by a test covering both sides",
+      "Engine.create/2's pin_lookup/2 helper is wired to the real catalog-backed Lookup for catalog_entry references, proven by an integration test",
+      "publish/retire operations are gated behind :AdminServicesManage, not a newly invented permission name, proven by a test",
+      "PLC-01/module_ref catalog versioning is explicitly named as still out of scope in the moduledoc, citing pin_resolver.ex's own SCOPE GAP language",
+      "mix letflow.check passes, with real output quoted"
+    ]
+  },
+  "result": null,
+  "rework_count": 0,
+  "max_rework": 3
+}

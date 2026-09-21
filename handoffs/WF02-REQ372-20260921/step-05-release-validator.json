@@ -1,0 +1,68 @@
+{
+  "handoff_id": "a1b2c3d4-0001-4000-8000-000000000010",
+  "run_id": "WF02-REQ372-20260921",
+  "workflow_id": "WF-02",
+  "step": "05",
+  "from_agent": "ORCH",
+  "to_agent": "RELEASE-VALIDATOR",
+  "file": "handoffs/WF02-REQ372-20260921/step-05-release-validator.json",
+  "created_at": "2026-09-21T10:02:25Z",
+  "started_at": "2026-09-21T10:02:25Z",
+  "completed_at": "2026-09-21T13:27:17Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S8",
+    "requirement_ids": ["REQ-372"],
+    "requirement_text": {
+      "REQ-372": "See handoffs/WF02-REQ372-20260921/step-01-code-designer.json's context.requirement_text.REQ-372 for the full requirement text, copied verbatim from docs/requirements.yaml."
+    },
+    "related_handoff_ids": ["a1b2c3d4-0001-4000-8000-00000000000f"],
+    "artifacts_in": [
+      "handoffs/WF02-REQ372-20260921/step-04-test-runner.json",
+      "test/reports/report-20260921-WF02-REQ372-20260921.yaml",
+      "lib/letflow/design/req372-semantic-decision-rule-validation.md",
+      "lib/letflow/definitions/semantic_validation.ex",
+      "lib/letflow/definitions/graph.ex",
+      "lib/letflow/definitions.ex",
+      "test/specs/REQ-372.md",
+      "test/letflow/definitions/semantic_validation_test.exs",
+      "test/letflow/definitions/semantic_validation_activation_test.exs",
+      "docs/requirements.yaml",
+      "docs/status/requirement_status.v21.yaml"
+    ],
+    "owned_modules": []
+  },
+  "task": {
+    "description": "Independently re-verify REQ-372 before it is marked done, per WF-02 Step 5 (docs/agents/workflows/WF-02_requirement_implementation.md) -- do not trust TEST-RUNNER's report alone. You are on branch feature/WF02-REQ372-20260921 -- verify with git branch --show-current, pull if needed. Independently re-run scripts/test_parallel.sh yourself (do not just read TEST-RUNNER's report.yaml) -- this branch's full run history includes several transient connection-pool failures caused by leaked/orphaned erl.exe processes (both from a sibling session earlier in this run's history, and self-inflicted stragglers from crashed partitions later) -- if you hit the same class of failure, the fix that has worked twice on this run is: identify erl.exe processes still alive holding Postgres connections well after the wrapper script itself reports completion, confirm via docker exec letflow-postgres-1 psql -U letflow -d postgres -c \"select count(*) from pg_stat_activity;\" that the count is near/at the ceiling, kill the stragglers, and retry -- do not treat a connection-pool error alone as this requirement's own regression without checking git diff main...HEAD for file-scope overlap first.\n\nConfirm every one of the 10 acceptance criteria in task.acceptance_criteria below against the ACTUAL code and tests directly -- not against TEST-RUNNER's or TEST-DESIGNER's summaries. Specifically re-verify AC10 ('mix letflow.check passes, with real output quoted') by running mix letflow.check yourself and quoting the real output (this is the one criterion that specifically demands the full check alias, not just mix test). Check docs/requirements.yaml and docs/status/requirement_status.v21.yaml for staleness relative to what actually shipped (REQ-372 should currently read status: in_progress with one 'started' event -- DOC-UPDATER's flip to 'done' plus its own event happens at the NEXT step, so do not expect 'done' yet, but do confirm the 'started' event and in_progress status are both present and correctly formed).\n\nCONFIRMING RE-VERIFICATION: your prior FAIL correctly caught a real AC10 gap (mix letflow.check format check failing on test/letflow/definitions/semantic_validation_activation_test.exs). TEST-DESIGNER fixed it (commit f57fec4b) and TEST-RUNNER re-confirmed clean on both scripts/test_parallel.sh (4528/4529, the 1 failure being Letflow.SandboxPoolTest's ISS-0224 death-path test -- an already-resolved-ISS flaky test with zero diff overlap, structurally cleared) and mix letflow.check (exit 0, fully clean, including format --check-formatted). Pull this branch fresh, confirm commit 91693742 is present, and re-run mix letflow.check yourself one more time (this is the specific check your prior FAIL was about) to give this a genuine independent PASS/FAIL verdict -- do not rubber-stamp TEST-RUNNER's report.",
+    "acceptance_criteria": [
+      "a definition whose EXCLUSIVE_GATEWAY edge condition references a variable name absent from the definition's declared VariableSchema fields produces a violation naming the exact typed variable name and the step/edge it belongs to, proven by a test",
+      "that violation's message includes a suggested nearest declared field name, computed by a real string-distance measure (not a placeholder or first-alphabetical fallback), proven by a test with a clear one-typo case (e.g. 'cusotmer_name' when 'customer_name' is declared)",
+      "a definition comparing two operands of declared VariableSchema types this requirement records as non-comparable (at minimum: a numeric/money type against a text/string type) produces a violation, proven by a test; the comparable/non-comparable type-pair table is stated explicitly in the moduledoc, not left implicit",
+      "a definition with two independent broken rules (one field-existence violation, one type-compatibility violation) produces BOTH violations in a single validation call, proven by a test -- the author is never required to fix one to discover the other",
+      "a definition with zero semantic violations validates cleanly, proven by a test, including after both of the above violations are corrected in the same test",
+      "the semantic validation pass re-runs in full (not from a cached prior result) at the definition's actual release/promotion submission call path, proven by a test that changes the underlying VariableSchema or expression state between an earlier clean validation and the submission call, and asserts the submission call reflects the fresh state",
+      "whether a HUMAN_TASK routing/assignment-by-field mechanism is in scope for this requirement is stated explicitly in the moduledoc with the reasoning, not left for a reader to infer from what tests do or don't cover",
+      "git diff shows lib/letflow/engine/expr.ex unmodified, or if modified, modified only in ways that add no token/operator/builtin -- state which, per REQ-288's precedent",
+      "no file under web/ is modified by this requirement",
+      "mix letflow.check passes, with real output quoted"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "CONFIRMING RE-VERIFICATION (RELEASE-VALIDATOR, second pass): pulled feature/WF02-REQ372-20260921 fresh, confirmed commit 91693742 present (git log --oneline -3 shows 688e2a30 -> 91693742 -> 02ad9270), working tree clean aside from this handoff. AC1-AC9 re-confirmed directly against code, same as the prior pass, still true against current HEAD: field-existence violation naming exact typed variable + edge (semantic_validation.ex:320-350, AC1), real Wagner-Fischer levenshtein_distance/2 producing a suggested nearest field (lines 190-251, AC2, with a dedicated 'real string-distance' describe block at semantic_validation_test.exs:125), explicit comparable/non-comparable type table in the moduledoc (lines 56-91, AC3), both violation classes collected in one non-short-circuiting validate/2 pass (lines 178-188, edge_violations/2 at 297-307, AC4), clean-after-both-fixes test (semantic_validation_test.exs AC5 describe block, lines 285-329), fresh-re-run-not-cached proven by a mutate-between-calls test (semantic_validation_activation_test.exs AC6 describe block at line 174), HUMAN_TASK routing explicitly out-of-scope with reasoning in the moduledoc (lines 93-110, AC7). git diff main...HEAD --stat confirms lib/letflow/engine/expr.ex and web/ both show zero changes (AC8, AC9) -- 28 files changed, all under docs/, handoffs/, lib/letflow/definitions*, lib/letflow/design/, test/letflow/definitions/, test/specs/. docs/requirements.yaml still reads status: in_progress for REQ-372 (line 27545) and docs/status/requirement_status.v21.yaml carries exactly one well-formed 'started' event (2026-09-21T06:54:20Z, agent ORCH, line 299-311), no premature 'done' -- not stale.\n\nAC10: `mix format --check-formatted test/letflow/definitions/semantic_validation_activation_test.exs` re-confirmed exit 0 (the specific file my prior FAIL caught is still fixed). Independently ran the FULL `mix letflow.check` myself six separate times this pass (not reusing TEST-RUNNER's report) due to genuine, confirmed host-wide Postgres connection-pool contention from concurrent sibling-session mix test runs sharing this dev host's single Postgres instance (max_connections=100, this repo's own 16-way test_parallel.sh runner plus a concurrent sibling both drawing from the same pool) -- coordinated live with the 'main' orchestrating session via SendMessage across the run (confirmed sibling PIDs 53628/26968/tp628758 were all its own ISS-0771 dispatch, not orphaned stragglers; did not kill any of them, per this run's own guidance to distinguish live sibling work from genuine orphans). Attempts 1-5 (logs at C:\\Users\\tvolo\\AppData\\Local\\Temp\\rv_letflow_check_req372_confirm.log, _retry.log, _attempt4.log, _attempt5.log) failed with too_many_connections/DBConnection.ConnectionError storms (15-248 occurrences per attempt) scattered across partitions, plus one isolated case (attempt 5) of a single genuinely pre-existing flaky test (Letflow.Routers.HelpTest's select_live_row/2 updated_at tie-break, test/letflow/routers/help_test.exs -- a file with zero diff overlap with this requirement, same test class my original FAIL pass had already identified as a pre-existing timestamp-resolution flake) -- every failure across all 6 attempts was in a file outside this requirement's diff scope, never in lib/letflow/definitions* or its tests. Once 'main' confirmed a genuinely exclusive window (its own ISS-0771 TEST-RUNNER step had landed, nothing else DB-heavy queued), attempt 6 (log: C:\\Users\\tvolo\\AppData\\Local\\Temp\\rv_letflow_check_req372_attempt6.log, partition logs were under /tmp/letflow_test_parallel.DcW4mr/) ran fully clean: EXIT_CODE=0. Real quoted output: 'letflow.lint_handoffs: OK -- 0 new violations across 2731 handoff files...'; 'letflow.check_async_sandbox_reachability: OK -- 84 async:true test file(s) scanned...0 new violations.'; 'mix letflow.check.test: OK -- no test failures, no ISS-0069 warnings (16 partitions, logs: C:/Users/tvolo/AppData/Local/Temp/letflow_test_parallel.DcW4mr).'; 'mix letflow.check.test: OK -- 5/5 isolated wasm_hang tests passed, each in its own subprocess.'; 'mix letflow.check.test: OK -- isolated :lua_wallclock_race run also passed clean.'; final line 'EXIT_CODE=0'. Since `format --check-formatted` and `compile --warnings-as-errors` both run earlier in the same `letflow.check` alias chain (mix.exs lines 145-191) and Mix aliases halt on the first nonzero step, letflow.check.test's own success on this run entails both of those also passed clean, not just the test step. All 10 acceptance criteria confirmed genuinely, first-hand, against a real clean run -- not a rubber-stamp of TEST-RUNNER's report.",
+    "artifacts_out": [],
+    "issues": [],
+    "git_evidence": {
+      "branch_name": "feature/WF02-REQ372-20260921",
+      "commit_sha_list": ["91693742", "688e2a30"],
+      "remote_branch": "origin/feature/WF02-REQ372-20260921",
+      "push_status": "pending",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": "Route to DOC-UPDATER to flip REQ-372 to done in docs/requirements.yaml and append the 'done' event to docs/status/requirement_status.v21.yaml."
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

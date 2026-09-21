@@ -1,0 +1,66 @@
+{
+  "handoff_id": "a1b2c3d4-0001-4000-8000-00000000000f",
+  "run_id": "WF02-REQ372-20260921",
+  "workflow_id": "WF-02",
+  "step": "04",
+  "from_agent": "ORCH",
+  "to_agent": "TEST-RUNNER",
+  "file": "handoffs/WF02-REQ372-20260921/step-04-test-runner.json",
+  "created_at": "2026-09-21T08:35:22Z",
+  "started_at": "2026-09-21T08:35:22Z",
+  "completed_at": "2026-09-21T10:01:49Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S8",
+    "requirement_ids": ["REQ-372"],
+    "requirement_text": {
+      "REQ-372": "See handoffs/WF02-REQ372-20260921/step-01-code-designer.json's context.requirement_text.REQ-372 for the full requirement text, copied verbatim from docs/requirements.yaml."
+    },
+    "related_handoff_ids": ["a1b2c3d4-0001-4000-8000-00000000000e"],
+    "artifacts_in": [
+      "test/specs/REQ-372.md",
+      "test/letflow/definitions/semantic_validation_test.exs",
+      "test/letflow/definitions/semantic_validation_activation_test.exs",
+      "docs/anti-patterns.md"
+    ],
+    "owned_modules": []
+  },
+  "task": {
+    "description": "Run the full suite per WF-02 Step 4 (docs/agents/workflows/WF-02_requirement_implementation.md): scripts/test_parallel.sh, not just REQ-372's own new tests (Unblock-Everything). You are on branch feature/WF02-REQ372-20260921 -- verify with git branch --show-current, pull if needed. NOTE: this host may have sibling concurrent WF-03 sessions sharing the same Postgres port (5462) -- a prior gate step on this same run hit transient 'too_many_connections' contention from a concurrent sibling test run when it tried mix letflow.check.test directly (not scripts/test_parallel.sh). If you hit connection exhaustion, retry once after a short pause, and if it recurs, diagnose whether it's genuinely this branch's own regression or shared-host contention by checking git diff main...HEAD for file-scope overlap with any failing test before treating it as this run's problem -- do NOT block this step's PASS verdict on contention that structurally clears per core-directives.md's failure-attribution rules. If no local toolchain is available, use the Docker fallback in docs/anti-patterns.md and say so explicitly -- never report PASS without having actually run it.\n\nREDISPATCH (not a rework -- your prior attempt reported BLOCKED, not FAIL, so this does not count against max_rework): your first attempt (4 tries over ~20 minutes) hit sustained Postgres connection-pool exhaustion on shared port 5462 from a genuinely concurrent sibling session (three long-running erl.exe/beam processes, PIDs 28488/30060/46888, confirmed still alive and unchanged by ORCH just now). ORCH did not kill those processes (they belong to another active session, not ours, and killing another session's live work without clear evidence it is dead is out of scope for this run). Try again now with a SUBSTANTIALLY LOWER partition count to reduce simultaneous connection demand -- e.g. `TEST_PARALLEL_N=2 scripts/test_parallel.sh` (or even N=1 if 2 still exhausts the pool) -- state which N you used and why in your report. If it still exhausts the pool at N=1, wait ~2-3 minutes (the sibling session's workload may finish) and retry once more before reporting BLOCKED again. Specifically confirm REQ-372's own two new test files (test/letflow/definitions/semantic_validation_test.exs, test/letflow/definitions/semantic_validation_activation_test.exs) actually execute and their real pass/fail result, even if you have to run just those two files directly with `mix test` as a fallback proof-of-execution alongside a best-effort full-suite run.\n\nREDISPATCH 2: ORCH investigated directly. The three erl.exe processes (PIDs 28488/30060/46888) turned out NOT to belong to either active sibling session on this host (both `main` and `gui-review-continuation` were asked directly and disclaimed ownership; gui-review-continuation's own task targets a remote QA instance, not local Postgres). Each was a `mix test` invocation that had been running 45+ minutes with no completion -- far beyond any normal test-run duration -- parented by still-alive but otherwise-idle `sh` processes, matching this project's own documented 'orphaned erl.exe processes holding leaked connections' anti-pattern (cited by name in WF-02's own Step 4 procedure text). ORCH killed all three erl.exe processes and their three parent shells (PIDs 6548/70036/48928) via PowerShell Stop-Process, then confirmed via `docker exec letflow-postgres-1 psql -U letflow -d postgres -c \"select count(*) from pg_stat_activity;\"` that the connection count dropped to 6 (from saturated). Postgres should now have full headroom. Retry the full suite now (default TEST_PARALLEL_N, no need to under-provision this time) and report the real result.\n\nREWORK ITERATION 1: your redispatch-3 attempt PASSED on DB availability but FAILed on ONE genuinely attributable failure -- test/docs/requirement_status_invariants_test.exs's A9 assertion, because docs/status/requirement_status.index.yaml's volume 21 entries: count (6) hadn't been incremented when ORCH's own Step 00 appended a REQ-372 started event to docs/status/requirement_status.v21.yaml (real on-disk count 7). ORCH has now fixed this directly: docs/status/requirement_status.index.yaml's volume 21 entries: is corrected to 7 with an explanatory note (commit 865b6d22 on this branch). Pull this branch fresh and re-run the full suite once more (same command, default N) to confirm: (a) A9 now passes, (b) no new failure was introduced, (c) the same 13 failures from redispatch-3 (12 DBConnection.ConnectionError host-contention failures plus 1 HelpTest tie-break flake) either no longer occur (if the earlier contention was transient) or still structurally clear as unrelated to this branch (empty git diff on the implicated files) -- do not just assume they clear again, re-verify. Report the real combined totals and your attribution for anything non-zero. This is rework iteration 1 of max_rework 3.\n\nCONFIRMING RE-RUN (not a rework of your own work -- your rework-1 PASS, 4529/4529 0 failures, was correct at the time and is not being reworked; TEST-DESIGNER's file was the actual gap): RELEASE-VALIDATOR's own independent Step 5 re-run (step-05-release-validator.json) found a NEW, genuinely attributable AC10 failure after your PASS: mix letflow.check failed on mix format --check-formatted for test/letflow/definitions/semantic_validation_activation_test.exs (a multi-line test-header wrap needing reflow -- unrelated to test logic, and not something Step 4's own mix test run would have caught since it only ran mix test, not the full mix letflow.check alias). TEST-DESIGNER has since fixed this (step-03j-test-designer-format-fix.json, commit f57fec4b) and confirmed mix format --check-formatted passes and the two REQ-372 test files still pass (24 passed, 0 failures). Pull this branch fresh (confirm f57fec4b is present) and run the full suite ONE more time to give RELEASE-VALIDATOR a clean baseline to re-verify against, including running mix letflow.check yourself this time (not just mix test) since that's the exact check that caught the prior gap.",
+    "acceptance_criteria": [
+      "scripts/test_parallel.sh run to completion (or Docker fallback used, stated explicitly)",
+      "combined pass/fail totals reported with real numbers, derived partition count N and its source stated",
+      "every failure structurally attributed per core-directives.md's Failure Attribution Is Structural, Never By Count-Matching -- pre-existing/unrelated failures filed and forwarded per ISSUE_QUEUE.md (report back to ORCH which ids, do not call the queue yourself), not silently folded into 'known issues'",
+      "test/reports/report-<date>-WF02-REQ372-20260921.yaml written with the actual output"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "CONFIRMING RE-RUN after AC10 format fix (this attempt). Pulled branch feature/WF02-REQ372-20260921 in the main checkout (already up to date); confirmed commit f57fec4b present in local HEAD (02ad9270). Postgres headroom checked first (6 connections, no contention, no orphans to clean this time). Ran scripts/test_parallel.sh (default N=16 from nproc) once, foreground, polled synchronously via a blocking grep+sleep loop after the harness auto-backgrounded the call past its own tool timeout (never awaited a cross-turn notification). Result: combined 4523 tests, 6 properties, 1 failure (4528/4529 passed) -- partition 15's Letflow.SandboxPoolTest ISS-0224 death-path regression test (test/letflow/sandbox_pool_test.exs:1087, RT-6 death path c) flaked. Structurally clears: git diff main...HEAD --stat has zero overlap with sandbox_pool_test.exs or any sandbox-pool lib file; this branch only touches lib/letflow/definitions*.ex, REQ-372's own two new test files, test/specs/REQ-372.md, and status/handoff/report files. Then ran `mix letflow.check` (the full alias, not just mix test) as specifically requested since it's the exact check that caught the prior AC10 gap: exit code 0, fully clean -- toolchain check only WARNs (pre-existing Rust version mismatch, does not gate), `format --check-formatted` passed silently (confirms TEST-DESIGNER's f57fec4b fix holds), `compile --warnings-as-errors` passed, and its own internal 16-partition full test run came back with explicit 'OK -- no test failures, no ISS-0069 warnings', including NO recurrence of the SandboxPoolTest flake seen in the standalone run -- corroborating that it's a genuine intermittent race in a pre-existing regression test, not a REQ-372 regression. REQ-372's own two new test files are covered clean in both runs. Full detail in test/reports/report-20260921-WF02-REQ372-20260921.yaml's confirming_rerun_after_format_fix section.",
+    "artifacts_out": [
+      "test/reports/report-20260921-WF02-REQ372-20260921.yaml"
+    ],
+    "issues": [
+      {
+        "severity": "MINOR",
+        "description": "NEW this attempt: Letflow.SandboxPoolTest's ISS-0224 death-path regression test (test/letflow/sandbox_pool_test.exs:1087, 'provisioning does not block the pool's mailbox ... RT-6 (death path c)') failed once in a standalone scripts/test_parallel.sh run (partition 15) but did not recur moments later inside mix letflow.check's own internal 16-partition run. ISS-0224 itself is already status: resolved; this is its regression-guard test flaking, unrelated to REQ-372 (zero diff overlap). Recommend ORCH file this as a new pre-existing/flaky-test issue per ISSUE_QUEUE.md."
+      },
+      {
+        "severity": "MINOR",
+        "description": "Carried forward from rework_iteration_1: Letflow.Routers.HelpTest's tie-break test (test/letflow/routers/help_test.exs:232) is a previously-observed ordering-sensitive flake, still recommended for its own independent issue filing -- did not reproduce in this attempt's runs either, consistent with intermittency."
+      }
+    ],
+    "git_evidence": {
+      "branch_name": "feature/WF02-REQ372-20260921",
+      "commit_sha_list": ["f57fec4b", "02ad9270"],
+      "remote_branch": "origin/feature/WF02-REQ372-20260921",
+      "push_status": "pending (will push this report/handoff update)",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": "Route to RELEASE-VALIDATOR for confirming re-verification"
+  },
+  "rework_count": 1,
+  "max_rework": 3
+}

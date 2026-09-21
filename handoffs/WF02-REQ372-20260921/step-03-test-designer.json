@@ -1,0 +1,88 @@
+{
+  "handoff_id": "a1b2c3d4-0001-4000-8000-000000000007",
+  "run_id": "WF02-REQ372-20260921",
+  "workflow_id": "WF-02",
+  "step": "03",
+  "from_agent": "ORCH",
+  "to_agent": "TEST-DESIGNER",
+  "file": "handoffs/WF02-REQ372-20260921/step-03-test-designer.json",
+  "created_at": "2026-09-21T07:22:11Z",
+  "started_at": "2026-09-21T07:22:11Z",
+  "completed_at": "2026-09-21T07:58:58Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S8",
+    "requirement_ids": ["REQ-372"],
+    "requirement_text": {
+      "REQ-372": "See handoffs/WF02-REQ372-20260921/step-01-code-designer.json's context.requirement_text.REQ-372 for the full requirement text, copied verbatim from docs/requirements.yaml."
+    },
+    "related_handoff_ids": [
+      "a1b2c3d4-0001-4000-8000-000000000004",
+      "a1b2c3d4-0001-4000-8000-000000000006"
+    ],
+    "artifacts_in": [
+      "lib/letflow/design/req372-semantic-decision-rule-validation.md",
+      "lib/letflow/definitions/semantic_validation.ex",
+      "lib/letflow/definitions/graph.ex",
+      "lib/letflow/definitions.ex",
+      "docs/guides/test_developer_guide.md",
+      "test/letflow/definitions/graph_test.exs",
+      "test/letflow/definitions_test.exs"
+    ],
+    "owned_modules": [
+      "test/letflow/definitions/semantic_validation_test.exs",
+      "test/letflow/definitions_test.exs",
+      "test/specs/REQ-372.md"
+    ]
+  },
+  "task": {
+    "description": "Write the test spec and test code for REQ-372, per WF-02 Step 3's procedure (docs/agents/workflows/WF-02_requirement_implementation.md) and .claude/agents/test-designer.md. Scope test first: this requirement has real application-executable surface (a new module, lib/letflow/definitions/semantic_validation.ex, plus modified call sites in lib/letflow/definitions.ex) -- proceed to the full procedure (do not skip to RELEASE-VALIDATOR).\n\nYou are on branch feature/WF02-REQ372-20260921 -- verify with git branch --show-current, pull if needed.\n\nWrite test/specs/REQ-372.md (requirement text, test cases, why each exists) and test code under test/letflow/ (test/letflow/definitions/semantic_validation_test.exs for the new module's own unit tests, plus additions to test/letflow/definitions_test.exs -- or a new test file if that suits better, your call -- for the call-site integration tests against activate/2 and validate_definition_graph/2). Read lib/letflow/design/req372-semantic-decision-rule-validation.md for the exact function signatures and semantics you're testing against, and read the actual implementation in lib/letflow/definitions/semantic_validation.ex and lib/letflow/definitions.ex directly (not just the design -- the design describes intent, the implementation is what actually runs).\n\nEvery one of the 10 acceptance criteria in this handoff's task.acceptance_criteria must have at least one test case that would fail if the behavior were violated -- map each one explicitly in test/specs/REQ-372.md. In particular, these are NOT optional and each needs its own clearly-named test:\n1. Undeclared-variable-reference violation naming the exact typed variable name and the step/edge it belongs to.\n2. That violation's suggested nearest declared field name for a clear one-typo case: 'cusotmer_name' when 'customer_name' is declared -- assert the exact suggested name appears in the violation message.\n3. Non-comparable type-pair violation, at minimum numeric/money vs text/string.\n4. BOTH violation classes appearing together from a SINGLE validation call when a definition has one of each -- assert both violations are present in one result, not two separate calls.\n5. A definition with zero semantic violations validates cleanly -- including a test that starts from the broken definition in test 4, corrects BOTH violations, and re-validates clean in the same test (proving the fix path, not just a fresh clean fixture).\n6. THE RE-RUN-NOT-CACHED TEST (this is the one most likely to be under-tested -- design it carefully): call the release/promotion submission path (activate/2, per the design) once when the definition and its VariableSchema are clean/valid; then CHANGE the underlying state between calls (e.g. mutate the VariableSchema to remove a field a condition now references, or change a field's declared type to make a previously-fine comparison now non-comparable) WITHOUT going through any cache-invalidation hook; call activate/2 (or whatever the actual submission path is) again and assert the SECOND call reflects the fresh, now-invalid state (i.e. it fails/blocks for the NEW reason) rather than reusing a stale/cached validation result from the first call. This proves AC6 mechanically, not just documentation-wise.\n7. No test is required to prove the HUMAN_TASK-in-scope decision itself (that's a moduledoc/doc criterion, not a test), but do NOT write a test that accidentally implies HUMAN_TASK routing is covered.\n\nFollow the existing property-test convention where the codebase already uses one for state-machine-adjacent logic (check test/letflow/definitions_test.exs and test/letflow/definitions/graph_test.exs for existing style/fixture patterns and match them -- per-test unique data, no shared hardcoded IDs, no wall-clock/unseeded-randomness dependence, tests self-sufficient and not dependent on execution order).\n\nDo NOT write or run mix test yourself in a way that substitutes for TEST-RUNNER's own step -- your job is to write correct, complete tests; TEST-RUNNER runs them next. You MAY do a local sanity compile/run to confirm your own tests aren't obviously broken, but the formal run is Step 4's job.\n\nClaim the handoff (status IN_PROGRESS), write the tests, then set status COMPLETED with a genuine first-hand result. next_action on PASS: \"Route to TEST-DESIGN-VALIDATOR\". Do not touch created_at/started_at. Commit all new/changed test files plus the updated handoff, push to origin/feature/WF02-REQ372-20260921. Never push to main, never touch web/.",
+    "acceptance_criteria": [
+      "a definition whose EXCLUSIVE_GATEWAY edge condition references a variable name absent from the definition's declared VariableSchema fields produces a violation naming the exact typed variable name and the step/edge it belongs to, proven by a test",
+      "that violation's message includes a suggested nearest declared field name, computed by a real string-distance measure (not a placeholder or first-alphabetical fallback), proven by a test with a clear one-typo case (e.g. 'cusotmer_name' when 'customer_name' is declared)",
+      "a definition comparing two operands of declared VariableSchema types this requirement records as non-comparable (at minimum: a numeric/money type against a text/string type) produces a violation, proven by a test; the comparable/non-comparable type-pair table is stated explicitly in the moduledoc, not left implicit",
+      "a definition with two independent broken rules (one field-existence violation, one type-compatibility violation) produces BOTH violations in a single validation call, proven by a test -- the author is never required to fix one to discover the other",
+      "a definition with zero semantic violations validates cleanly, proven by a test, including after both of the above violations are corrected in the same test",
+      "the semantic validation pass re-runs in full (not from a cached prior result) at the definition's actual release/promotion submission call path, proven by a test that changes the underlying VariableSchema or expression state between an earlier clean validation and the submission call, and asserts the submission call reflects the fresh state",
+      "whether a HUMAN_TASK routing/assignment-by-field mechanism is in scope for this requirement is stated explicitly in the moduledoc with the reasoning, not left for a reader to infer from what tests do or don't cover",
+      "git diff shows lib/letflow/engine/expr.ex unmodified, or if modified, modified only in ways that add no token/operator/builtin -- state which, per REQ-288's precedent",
+      "no file under web/ is modified by this requirement",
+      "mix letflow.check passes, with real output quoted"
+    ]
+  },
+  "result": {
+    "status": "FAIL",
+    "summary": "Test design/code itself is complete and correct: test/specs/REQ-372.md maps all 10 ACs to specific test cases; test/letflow/definitions/semantic_validation_test.exs (20 pure tests, async: true, mirrors graph_test.exs fixture style) covers AC1/AC2/AC3/AC4/AC5/AC7 and all pass in isolation (`mix test test/letflow/definitions/semantic_validation_test.exs` -> 'Result: 20 passed'); test/letflow/definitions/semantic_validation_activation_test.exs (3 DB-backed tests, Letflow.DataCase, mirrors store_test.exs's provisioned_tenant/1 pattern) covers AC6 (the re-run-not-cached test, both directions) and the validate_definition_graph/2 4th-term wiring, and all pass in isolation ('Result: 3 passed'). HOWEVER: `mix letflow.check.test`, run in full per the handoff's own AC10, does NOT pass, and this is a genuine pre-existing implementation regression, not a defect in these new test files. Real quoted output (scripts/test_parallel.sh's own aggregate line): 'combined: 4522 tests, 6 properties, 32 failures (4496/4528 passed)'. Of those 32 failures, 31 are the SAME root cause and are new regressions introduced by this run's own lib/letflow/definitions.ex wiring (run_semantic_validation/2 inside activate/2, design doc SS3.2): every one of the 31 fails with `{:error, {:semantic_validation_failed, [%Violation{code: :undeclared_variable_reference, ...}]}}` on an `assert {:ok, ...} = Definitions.activate(...)` call, because activate/2 now hard-gates on SemanticValidation.validate/2 against a definition's `variable_schemas` rows, and essentially every pre-existing test fixture across the suite (test/letflow/simulation/req207_vortex_test.exs, req208_meridian_test.exs, req206_swiftroute_test.exs, runner_test.exs, runner_template_and_outcomes_test.exs, seed_idempotency_test.exs, scheduler_req188_test.exs, engine_execution_error_test.exs, engine_test.exs, and more) builds gateway conditions referencing variables (e.g. 'order_value_eur', 'does_not_exist', 'capacity_decision') that were never registered via VariableSchema -- something no pre-REQ-372 code path required. Example real failure (test/letflow/scheduler_req188_test.exs:194): `assert {:ok, %{definition: activated}} = Definitions.activate(definition.id, prefix: schema_name)` got `{:error, {:semantic_validation_failed, [%Letflow.Definitions.Graph.Violation{code: :undeclared_variable_reference, message: \"Edge 'e4' (from EXCLUSIVE_GATEWAY node 'gw') condition references undeclared variable 'does_not_exist'; rule as authored: \\\"variables.does_not_exist == 1\\\"\"}]}}`. The 32nd failure (test/docs/requirement_status_invariants_test.exs A9, 'RequirementStatusInvariantsTest') is unrelated to REQ-372 -- a docs-volume declared-entry-count drift (docs/status/requirement_status.v21.yaml declares 6, actually has 7), a pre-existing housekeeping gap in an earlier commit on this branch, not touched by this run's own test design work. This is a real, first-hand, blocking finding: REQ-372's activate/2 wiring as currently implemented breaks activate/2 for the overwhelming majority of the existing test suite's fixtures, which is a functional regression this requirement's own design did not anticipate (its OQ-6 flagged a different, narrower gap -- structural checks not being added to activate/2 -- not this one: the semantic check itself blocking every fixture that never populated variable_schemas at all). TEST-DESIGNER does not implement lib/letflow/ code and cannot fix this; it is reported here rather than silently worked around.",
+    "artifacts_out": [
+      "test/specs/REQ-372.md",
+      "test/letflow/definitions/semantic_validation_test.exs",
+      "test/letflow/definitions/semantic_validation_activation_test.exs"
+    ],
+    "issues": [
+      {
+        "id": "REQ-372-activate-semantic-gate-breaks-existing-fixtures",
+        "severity": "BLOCKER",
+        "description": "lib/letflow/definitions.ex's run_semantic_validation/2, wired into activate/2's :draft branch (design doc SS3.2), hard-fails activate/2 for any definition whose EXCLUSIVE_GATEWAY conditions reference a variable not present in that definition's own variable_schemas rows -- with no allowance for 'this definition never declared any variables at all' (the pre-REQ-372 norm across nearly the entire existing test suite). Confirmed via a full mix letflow.check.test run: 31 of 32 total suite failures are this exact {:error, {:semantic_validation_failed, [%Violation{code: :undeclared_variable_reference}]}} shape, hitting test/letflow/simulation/req207_vortex_test.exs, req208_meridian_test.exs, req206_swiftroute_test.exs, runner_test.exs, runner_template_and_outcomes_test.exs, seed_idempotency_test.exs, test/letflow/scheduler_req188_test.exs, test/letflow/engine_execution_error_test.exs, test/letflow/engine_test.exs, and others. Needs ELIXIR-DEV (and likely CODE-DESIGNER re-review of design doc SS3.2's own scope) resolution -- e.g. either every pre-existing fixture needs variable_schemas rows seeded, or the design needs an explicit carve-out for a definition with zero declared variable_schemas rows -- before this requirement's own AC10 (mix letflow.check passes) can be satisfied. Not something TEST-DESIGNER can fix (no lib/letflow/ write access in this role) or should route around.",
+        "evidence": "Full mix letflow.check.test output saved to C:\\Users\\tvolo\\AppData\\Local\\Temp\\claude_req372_check_test.log (this session's scratch area, not committed): 'combined: 4522 tests, 6 properties, 32 failures (4496/4528 passed)'; representative failure at test/letflow/scheduler_req188_test.exs:194 quoted in result.summary above."
+      },
+      {
+        "id": "REQ-372-unrelated-docs-invariant-drift",
+        "severity": "MINOR",
+        "description": "test/docs/requirement_status_invariants_test.exs's A9 check fails: docs/status/requirement_status.v21.yaml declares 6 entries, actually has 7. Pre-existing on this branch, unrelated to REQ-372's own code paths -- flagged for whoever owns docs/status housekeeping, not blocking this handoff's own verdict beyond being one more reason mix letflow.check.test as a whole does not currently pass.",
+        "evidence": "test/docs/requirement_status_invariants_test.exs:464, mismatches == [{\"docs/status/requirement_status.v21.yaml\", 6, 7}]"
+      }
+    ],
+    "git_evidence": {
+      "branch_name": "feature/WF02-REQ372-20260921",
+      "commit_sha_list": ["1a0b810111e226925ac43dd300de494004ae20c4"],
+      "remote_branch": "origin/feature/WF02-REQ372-20260921",
+      "push_status": "pushed",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": "Do NOT route to TEST-DESIGN-VALIDATOR yet -- route to ORCH for reassignment to ELIXIR-DEV (and CODE-DESIGNER for a design-doc SS3.2 scope re-check) to resolve the activate/2 semantic-gate regression documented in issue REQ-372-activate-semantic-gate-breaks-existing-fixtures before test-design validation proceeds; the two new test files themselves (test/letflow/definitions/semantic_validation_test.exs, test/letflow/definitions/semantic_validation_activation_test.exs) and test/specs/REQ-372.md are complete, each independently passing, and need no rework once the implementation regression is fixed -- TEST-DESIGN-VALIDATOR can review their content in parallel with that fix if ORCH prefers, but the mix letflow.check.test gate (AC10) will keep failing until the regression itself is resolved."
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

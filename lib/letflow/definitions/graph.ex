@@ -124,6 +124,21 @@ defmodule Letflow.Definitions.Graph do
   for why. The diff-based "only re-check edges whose condition text
   changed" alternative was also considered and deliberately deferred as
   out of scope (design doc §3 point 3, §6 OQ-1).
+
+  ## Semantic decision-rule validation codes (REQ-372) — NOT wired into any check here
+
+  `:undeclared_variable_reference` and `:incompatible_comparison_operand_types`
+  are added to `Violation.code()`'s closed union for
+  `Letflow.Definitions.SemanticValidation.validate/2` — a `@type` edit only,
+  zero logic change to this module. `SemanticValidation` is a fourth,
+  independent top-level check function (alongside `validate_graph/1`,
+  `validate_node_attributes/1`, `validate_edge_conditions/1`), composed
+  directly by `Letflow.Definitions`, not folded into
+  `validate_node_attributes/1`/`validate_edge_conditions/1` and not called
+  from anywhere in this module. See
+  `lib/letflow/design/req372-semantic-decision-rule-validation.md` and
+  `Letflow.Definitions.SemanticValidation`'s own moduledoc for the full
+  field-existence/type-compatibility contract.
   """
 
   alias Letflow.Engine.Expr
@@ -219,6 +234,8 @@ defmodule Letflow.Definitions.Graph do
             | :form_schema_expression_invalid
             | :form_schema_expression_out_of_scope
             | :form_schema_computed_field_cycle
+            | :undeclared_variable_reference
+            | :incompatible_comparison_operand_types
 
     @type t :: %__MODULE__{
             code: code(),

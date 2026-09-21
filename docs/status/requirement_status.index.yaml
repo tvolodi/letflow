@@ -4293,14 +4293,27 @@ volumes:
     path: docs/status/requirement_status.v21.yaml
     status: current
     opened: 2026-09-20
-    entries: 9
+    entries: 11
     note: >
-      Incremented to 9 by DOC-UPDATER's own ISS-0773 SCOPE-CHANGE done-event
-      append (WF03-ISS0772-20260921, 2026-09-21T13:14:36Z -- permanent-lockout
-      zero-grant role-claims-sync fix) -- `grep -c "^  - req:"
-      docs/status/requirement_status.v21.yaml` = 9 on-disk entries. 373 lines /
-      21660 bytes, well under the 1200-line/120000-byte roll ceiling, so no
-      roll triggered.
+      Incremented to 11 during WF02-REQ372-20260921 Step Final's THIRD
+      rebase-conflict resolution on this index entry: DOC-UPDATER's own
+      REQ-372 `done` append (Step 6, 13:28:21Z) landed on top of the
+      already-reconciled ISS-0773 addition (13:14:36Z) above, and v21.yaml
+      itself auto-merged cleanly for this hunk -- `grep -c "^  - req:"
+      docs/status/requirement_status.v21.yaml` = 11 on-disk entries,
+      recounted directly rather than assumed. Prior notes preserved below
+      for history.
+
+      Incremented to 10 during WF02-REQ372-20260921 Step Final's SECOND
+      rebase onto main (main advanced again, with DOC-UPDATER's own
+      ISS-0773 SCOPE-CHANGE done-event, WF03-ISS0772-20260921,
+      2026-09-21T13:14:36Z -- permanent-lockout zero-grant role-claims-sync
+      fix, between the first rebase/push and the PR's mergeability check):
+      v21.yaml itself auto-merged cleanly, so the real on-disk count is the
+      authority here, not either side's own prior note -- `grep -c
+      "^  - req:" docs/status/requirement_status.v21.yaml` = 10 on-disk
+      entries, recounted directly rather than assumed. Prior notes preserved
+      below for history.
 
       Incremented to 4 by DOC-UPDATER's own ISS-0769 SCOPE-CHANGE done-event
       append (WF03-ISS0769-20260921, 2026-09-21T04:30:37Z -- bearer-token
@@ -4310,9 +4323,23 @@ volumes:
       lines / 14793 bytes, well under the 1200-line/120000-byte roll
       ceiling, so no roll triggered.
 
-      Reconciled during WF03-ISS0768-20260921's own Step Final rebase: three
-      concurrent DOC-UPDATER appends landed on volume 21 independently --
-      ISS-0769 (bearer-token leakage into crash logs, plus a node-wide
+      Incremented to 8 by DOC-UPDATER (WF02-REQ372-20260921 Step 6), after
+      appending the REQ-372 `done` event. Recounted, not assumed:
+      `grep -c "^  - req:" docs/status/requirement_status.v21.yaml` = 8.
+      Prior note for context: incremented to 7 by ORCH (WF02-REQ372-20260921),
+      fixing a bookkeeping omission this same run introduced: Step 00
+      appended a REQ-372 `started` event directly to
+      docs/status/requirement_status.v21.yaml but never updated this index
+      entry's own `entries:` count at the time, caught by TEST-RUNNER's
+      Step 4 run of test/docs/requirement_status_invariants_test.exs
+      (assertion A9).
+      on-disk entries, recounted directly rather than assumed. 310 lines /
+      18053 bytes, well under the 1200-line/120000-byte roll ceiling, so no
+      roll triggered.
+
+      Reconciled during this run's (WF03-ISS0768-20260921) Step Final rebase:
+      three concurrent DOC-UPDATER appends landed on volume 21 independently
+      -- ISS-0769 (bearer-token leakage into crash logs, plus a node-wide
       logger-filter-crash bug found along the way, 2026-09-21T04:30:37Z),
       ISS-0770 (secret_key_base missing from the redaction key list,
       2026-09-21T05:07:24Z), and ISS-0768 (RoleRegistry tenant-schema-prefix

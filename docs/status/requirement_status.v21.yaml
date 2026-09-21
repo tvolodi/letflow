@@ -296,6 +296,18 @@ history:
       ISS-0768 test by name; authoritative full-suite run 4484/4493 passed,
       the 9 failures explicitly assessed as shared-Postgres-host connection
       contention among concurrent sibling sessions, not regressions.
+  - req: REQ-372
+    event: started
+    agent: ORCH
+    at: "2026-09-21T06:54:20Z"
+    note: >
+      WF02-REQ372-20260921 begun (letflow-queue task 729, GH#1592, locked
+      under agent_id ORCH-letflow-c5). Backend semantic decision-rule
+      validation pass (field-existence + type-compatibility checking) for
+      EXCLUSIVE_GATEWAY edge conditions, re-run in full at the definition's
+      release/promotion submission path. depends_on REQ-109/REQ-288/REQ-291
+      all confirmed done. Step 00 (git setup) PASSED on
+      feature/WF02-REQ372-20260921.
   - req: REQ-397
     event: done
     agent: DOC-UPDATER
@@ -371,3 +383,36 @@ history:
       REVIEWER PASSED, TEST-DESIGN-VALIDATOR PASSED, TEST-RUNNER PASSED,
       RELEASE-VALIDATOR PASSED. Design:
       lib/letflow/design/iss-0773-role-claims-sync-lockout-fix.md.
+  - req: REQ-372
+    event: done
+    agent: DOC-UPDATER
+    at: "2026-09-21T13:28:21Z"
+    note: >
+      Backend semantic decision-rule validation shipped: new
+      Letflow.Definitions.SemanticValidation module performs field-existence
+      checking (referenced variable name absent from the definition's
+      declared VariableSchema fields, with a Levenshtein-based nearest-
+      field-name suggestion) and type-compatibility checking (comparison
+      between two operands whose declared VariableSchema types are not
+      comparable, e.g. numeric/money vs. text/string) for
+      EXCLUSIVE_GATEWAY edge conditions. Wired into
+      Letflow.Definitions.activate/2 and validate_definition_graph/2 so
+      the pass re-runs in full (not from a cached result) at the
+      definition's actual release/promotion submission path. Design
+      amendment (design doc section 2.5) exempts definitions with zero
+      declared VariableSchema fields from the check, to avoid retroactively
+      breaking pre-existing definitions that never registered one.
+      HUMAN_TASK routing/assignment-by-field checking is explicitly
+      out of scope for this requirement (recorded in the module's
+      moduledoc) -- there is no existing mechanism for a human-task
+      assignment rule to reference a process field, so that case has no
+      code path to reach. RELEASE-VALIDATOR independently confirmed all
+      10 acceptance criteria PASS: mix letflow.check clean exit 0
+      (lint_handoffs, check_async_sandbox_reachability, format,
+      compile --warnings-as-errors, full test suite 16/16 partitions with
+      0 ISS-0069 warnings, wasm_hang isolated tests, lua_wallclock_race
+      all OK). lib/letflow/engine/expr.ex unmodified; no web/ file
+      touched. This event covers WF-02 Step 6 (docs only) -- Step Final
+      (git merge) is routed separately per docs/agents/workflows/
+      WF-02_requirement_implementation.md to the Step 00 agent
+      (ELIXIR-DEV).

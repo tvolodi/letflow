@@ -1,0 +1,61 @@
+{
+  "handoff_id": "a1b2c3d4-0001-4000-8000-000000000005",
+  "run_id": "WF02-REQ372-20260921",
+  "workflow_id": "WF-02",
+  "step": "02c",
+  "from_agent": "ORCH",
+  "to_agent": "SECURITY-REVIEWER",
+  "file": "handoffs/WF02-REQ372-20260921/step-02c-security-reviewer.json",
+  "created_at": "2026-09-21T07:18:10Z",
+  "started_at": "2026-09-21T07:18:10Z",
+  "completed_at": "2026-09-21T08:05:00Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S8",
+    "requirement_ids": ["REQ-372"],
+    "requirement_text": {
+      "REQ-372": "See handoffs/WF02-REQ372-20260921/step-01-code-designer.json's context.requirement_text.REQ-372 for the full requirement text, copied verbatim from docs/requirements.yaml."
+    },
+    "related_handoff_ids": ["a1b2c3d4-0001-4000-8000-000000000004"],
+    "artifacts_in": [
+      "handoffs/WF02-REQ372-20260921/step-02a-elixir-dev.json",
+      "lib/letflow/definitions/semantic_validation.ex",
+      "lib/letflow/definitions/graph.ex",
+      "lib/letflow/definitions.ex",
+      "docs/agents/instructions/security-invariants.md"
+    ],
+    "owned_modules": [
+      "lib/letflow/definitions/graph.ex",
+      "lib/letflow/engine/variable_schema.ex",
+      "lib/letflow/definitions/semantic_validation.ex",
+      "lib/letflow/definitions.ex"
+    ]
+  },
+  "task": {
+    "description": "Hard gate per WF-02 Step 2c (docs/agents/workflows/WF-02_requirement_implementation.md) on ELIXIR-DEV's REQ-372 implementation. You are on branch feature/WF02-REQ372-20260921 -- verify with git branch --show-current, pull if needed. Run: git diff main...HEAD to see the full diff (lib/letflow/definitions/semantic_validation.ex new; lib/letflow/definitions/graph.ex and lib/letflow/definitions.ex modified). Run the scope test first: does this diff touch a tenant-data path per docs/agents/instructions/security-invariants.md's applicability notes? This change reads VariableSchema (tenant-scoped process-definition data) and Graph structures, and wires into activate/2 (a promotion/activation call path that persists definition status) -- make your own genuine scope determination rather than assuming either way; if IN SCOPE, run the full INV-1..INV-8 procedure (APPLIES/NOT-APPLICABLE per invariant, verify each APPLIES one); if OUT OF SCOPE, state the one-clause reason plainly. FAIL immediately on any APPLIES invariant failing -- all BLOCKER, no partial credit.",
+    "acceptance_criteria": [
+      "scope test explicitly answered (in scope / out of scope) with stated reasoning, not assumed",
+      "every invariant INV-1..INV-8 given an explicit APPLIES or NOT-APPLICABLE verdict if in scope",
+      "every APPLIES invariant's 'How to verify' check actually run, not asserted",
+      "no tenant-data leak or cross-tenant read introduced by VariableSchema fetch changes in validate_definition_graph/2 or activate/2's new run_semantic_validation/2 helper"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "SCOPE: in scope -- new tenant-data access path. Letflow.Definitions.validate_definition_graph/2 and the new run_semantic_validation/2 helper (called from activate/2) each now issue a fresh Letflow.Engine.VariableSchema.fetch_schemas/3 read (tenant-scoped variable_schemas table) and feed it plus the Graph into the new pure Letflow.Definitions.SemanticValidation.validate/2. INV-1 and INV-6 apply per security-invariants.md's applicability note (checkable diff touching a tenant-scoped table's read path). INV-4, INV-7, INV-8 checked as always-live. INV-2/3/5/9 not applicable (no API response shaping, no scripting sandbox, no lookup-by-ID endpoint, no outbound HTTP). Verdicts: INV-1 APPLIES/PASS -- (a) fetch_schemas/3 requires and enforces a non-empty :prefix (validate_prefix/1, lib/letflow/engine/variable_schema.ex:470-475) and issues repo.all(prefix: prefix) (line 344), never a default/public-schema read; both new call sites (Definitions.validate_definition_graph/2 and the new run_semantic_validation/2) pass through the same prefix already threaded through get_by_id/2 (which itself validates prefix via TenantProvisioning.tenant_id_for_schema_name/1 before any Repo.get, lib/letflow/definitions.ex:571-580) -- no new prefix-resolution mechanism introduced, existing convention reused correctly. (b) no migration in this diff -- variable_schemas is a pre-existing table, not newly created here. (c) variable_schemas carries no tenant_id column at all (per its own moduledoc, Decision 0006 D2 -- schema-prefix-only scoping), so there is no caller-supplied tenant_id field to mis-attribute; not applicable. definition_id passed to fetch_schemas/3 is always definition.id from the already prefix-scoped fetched row, never a bare caller string. INV-4 APPLIES/PASS -- no secret material read, logged, or serialised anywhere in the new code; grep for System.get_env/hardcoded-secret patterns over the changed files returns nothing relevant. INV-6 APPLIES/PASS -- this SECURITY-REVIEWER handoff itself is the required proof-of-scoping artifact for the new fetch_schemas/3 call sites. INV-7 APPLIES/PASS -- grep for Repo.query over the three changed files hits only pre-existing lines outside this diff (e.g. definitions.ex:1536, unrelated to REQ-372); the new code path uses only Ecto.Query (from/2, VariableSchema's existing parameterised query) with zero raw SQL. INV-8 APPLIES/PASS -- grep for bare '{:ok, ...} =' matches over the three changed files hits only pre-existing lines outside this diff; the new code uses typed with/case chains throughout (validate_definition_graph/2's with-chain, run_semantic_validation/2's nested case on fetch_schemas/3 and SemanticValidation.validate/2, interpret_activate_result/1's new explicit pass-through clauses for the two new error shapes -- no catch-all added, consistent with INV-8's own exhaustive-matching guidance). The two hd(path) calls in semantic_validation.ex (field_existence_violations/3, operand_family/2) are safe by construction: {:var, path} nodes only ever originate from Expr's parser via String.split(ident, \".\") on a non-empty lexed identifier, which never returns [] -- same 'immediately after a value the same function already validated' exemption INV-8 itself carves out. INV-2/INV-3/INV-5/INV-9: NOT-APPLICABLE -- no API response-shaping code, no scripting/plugin sandbox, no lookup-by-ID endpoint, no outbound tenant-controlled URL in this diff.",
+    "artifacts_out": [],
+    "issues": [],
+    "git_evidence": {
+      "branch_name": "feature/WF02-REQ372-20260921",
+      "commit_sha_list": ["25b1d7a1"],
+      "remote_branch": "origin/feature/WF02-REQ372-20260921",
+      "push_status": "pushed",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": "Route to REVIEWER (2d)"
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

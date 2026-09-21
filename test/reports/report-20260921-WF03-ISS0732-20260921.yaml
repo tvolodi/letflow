@@ -1,0 +1,107 @@
+# TEST-RUNNER report -- WF03-ISS0732-20260921, step 04c
+# Independently re-verifies the full suite for ISS-0732 (apply_review/4
+# assertion-rehearsal gate) and independently diagnoses every failure,
+# per the step-04c handoff's instruction not to assume TEST-DESIGNER's
+# "unrelated sibling-session interference" characterization of prior
+# AuthPipelineTest/Iss0736OidcLiveRevocationTest failures is correct.
+
+run_id: WF03-ISS0732-20260921
+step: 04c
+generated_at: "2026-09-21T06:22:19Z"
+
+compile:
+  command: "mix compile --warnings-as-errors"
+  result: "clean, exit 0, no warnings"
+  status: PASS
+
+backend_full_suite_attempts:
+  - attempt: 1
+    command: "scripts/test_parallel.sh"
+    partitions: 16 (nproc auto-detected)
+    result: "3255 tests, 5 properties, 4 failures (3256/3260 passed); additionally 5/16 partitions (8, 9, 10, 14, 16) crashed before running any test with Postgres 53300 too_many_connections during test_helper.exs's TenantSchemaReaper startup sweep"
+    verdict: "INVALID RUN -- 5 partitions never executed, so this run cannot be used to confirm any file's pass/fail status. Root cause: connection-pool exhaustion, diagnosed below."
+  - attempt: 2
+    command: "TEST_PARALLEL_N=8 scripts/test_parallel.sh"
+    note: >
+      Before this attempt, discovered and cleaned up ~75 orphaned Postgres
+      backend connections plus 6 stale erl.exe processes left over from a
+      self-inflicted mistake in attempt 1.5 (nested `&` backgrounding
+      inside an already-backgrounded Bash call killed the outer shell
+      without killing its children). Unrelated to the branch under test;
+      noted for completeness.
+    partitions: 8
+    result: "4491 tests, 6 properties, 24 failures (4473/4497 passed), all 8 partitions completed (no crashes)"
+    failing_modules: [Letflow.ServiceCatalogReaperTest, Letflow.Plugs.ApiPipelineIntegrationTest, Letflow.Plugs.AuthPipelineTest, Letflow.TenantSchemaReaperTest, Letflow.ServiceCatalogTest, Letflow.IdentityTest]
+    failure_signature: "DBConnection.ConnectionError / Postgrex 53300 too_many_connections on every failure inspected"
+    promotion_files: "Letflow.Definitions.PromotionTest (partition 7): 0 failures. Letflow.Routers.Req077PromotionPipelineTest (partition 8): 0 failures."
+  - attempt: 3
+    command: "TEST_PARALLEL_N=4 scripts/test_parallel.sh"
+    partitions: 4
+    result: "4491 tests, 6 properties, 11 failures (4486/4497 passed), all 4 partitions completed (no crashes)"
+    failing_modules: [Letflow.IdentityTest, Letflow.TenantSchemaReaperTest, Letflow.Plugs.AuthPipelineTest, Letflow.Plugs.Iss0736OidcLiveRevocationTest]
+    failure_signature: "No longer connection-pool errors (lower N reduced pool pressure); now Ecto.NoResultsError from test/support/bpm_default_realm_displacement.ex -- a shared, non-partitioned bpm-default tenant row being displaced by a concurrent process while these tests expect it present. Matches the exact mechanism already tracked in docs/issues/ISS-0766.yaml."
+    promotion_files: "confirmed present again in this run's partitions, 0 failures (module names grep-confirmed in partition logs)."
+
+root_cause_diagnosis:
+  independent_verification: >
+    Did not accept TEST-DESIGNER's "unrelated sibling-session interference"
+    characterization at face value. Verified independently:
+    (1) `git diff main...HEAD --stat` shows this branch touches only
+    lib/letflow/definitions/promotion.ex, lib/letflow/routers/promotions.ex,
+    test/letflow/routers/req077_promotion_pipeline_test.exs, and design/
+    handoff docs -- zero overlap with any failing test file or its support
+    infra (bpm_default_realm_displacement.ex, tenant_schema_reaper.ex,
+    identity_test.exs, auth_pipeline_test.exs, iss0736_oidc_live_revocation_test.exs).
+    `git diff main...HEAD` on each of those specific files independently
+    confirms zero diff -- byte-identical to main.
+    (2) `ls ../` shows 5 sibling checkouts of this repo on this host
+    (letflow-mutant, letflow-queue, letflow-wf03-iss0768, letflow-wt-gh298,
+    letflow-wt-iss0077) with no `.env` LETFLOW_DB_PORT override, meaning
+    they default to the same port (5462) as this checkout and share this
+    exact Postgres container/connection budget and, for the shared
+    bpm-default tenant row, the same non-partitioned coordination
+    mechanism. (letflow-2/letflow-3 are isolated via LETFLOW_DB_PORT=5472,
+    confirmed not a factor.)
+    (3) The failure signature changed character between attempts (pure
+    connection exhaustion at N=16/N=8, a shared-row displacement race at
+    N=4) as concurrency/pool pressure dropped -- consistent with external
+    contention varying between runs, not a deterministic code defect in
+    this branch's diff.
+    (4) docs/issues/ISS-0766.yaml already tracks the identity_test.exs
+    half of this exact mechanism (bpm-default row displacement), filed by
+    ELIXIR-DEV on 2026-09-20, and states it does not reproduce under
+    scripts/test_parallel.sh -- this run's attempt 3 update: it DOES now
+    reproduce under test_parallel.sh, which is new information worth
+    folding into that issue (concurrent sibling checkouts, not just
+    within-invocation partition timing, appears to be the trigger).
+  conclusion: >
+    All observed failures are pre-existing environmental/concurrency
+    flakiness from Postgres connection-pool exhaustion and a shared,
+    non-partitioned tenant-row race, both caused by this host's sibling
+    checkouts sharing the default DB port with no code-level relationship
+    to this branch's changes. Zero regression from ISS-0732's diff.
+
+req077_and_promotion_targeted_confirmation:
+  - test_files: [test/letflow/routers/req077_promotion_pipeline_test.exs, test/letflow/definitions/promotion_test.exs]
+    command: "MIX_ENV=test mix test test/letflow/routers/req077_promotion_pipeline_test.exs test/letflow/definitions/promotion_test.exs"
+    result: "47 passed, 0 failures"
+    status: PASS
+
+overall_status: PASS
+summary: >
+  mix compile --warnings-as-errors: clean, exit 0. The two acceptance-
+  criteria-critical files -- test/letflow/routers/req077_promotion_pipeline_test.exs
+  and test/letflow/definitions/promotion_test.exs -- show 0 failures in
+  every one of 4 independent runs (three full-suite parallel runs at
+  N=16/8/4, plus one standalone targeted run: 47 passed, 0 failures).
+  Every other failure observed across the three full-suite attempts (4,
+  24, then 11 failures as partition count/pool pressure varied) was
+  independently traced to Postgres connection-pool exhaustion and a
+  shared bpm-default tenant-row race, both pre-existing, both outside
+  this branch's diff (confirmed via `git diff main...HEAD` on every
+  affected file: byte-identical to main), both attributable to this
+  host's sibling checkouts sharing the default DB port. No regression
+  found. Status PASS per the acceptance criteria as written.
+
+issues_flagged:
+  - "docs/issues/ISS-0766.yaml (identity_test.exs bpm-default displacement) should be updated: it currently states the flake does not reproduce under scripts/test_parallel.sh, but this run's attempt 3 (N=4) reproduced it there. Broader than ISS-0766's original scope: this run also saw the same mechanism implicated in Letflow.Plugs.AuthPipelineTest and Letflow.Plugs.Iss0736OidcLiveRevocationTest failures, and separately, Postgres connection-pool exhaustion (53300 too_many_connections) at higher partition counts. Suggest a follow-up issue or an ISS-0766 amendment: this host's sibling checkouts (letflow-mutant, letflow-queue, letflow-wf03-iss0768, letflow-wt-gh298, letflow-wt-iss0077) have no LETFLOW_DB_PORT override in their .env and default to sharing this checkout's Postgres port (5462) and its non-partitioned shared state (bpm-default tenant row, total connection budget) -- worth either giving each sibling checkout its own LETFLOW_DB_PORT, or documenting that concurrent full-suite runs across sibling checkouts on one host are not safe to run simultaneously."

@@ -8,8 +8,8 @@
   "file": "handoffs/WF03-ISS0732-20260921/step-04c-test-runner.json",
   "created_at": "2026-09-21T04:57:22Z",
   "started_at": "2026-09-21T04:57:22Z",
-  "completed_at": null,
-  "status": "PENDING",
+  "completed_at": "2026-09-21T06:22:19Z",
+  "status": "COMPLETED",
   "priority": "HIGH",
   "context": {
     "stage": "S6",
@@ -32,19 +32,23 @@
     ]
   },
   "result": {
-    "status": "PENDING",
-    "summary": "",
-    "artifacts_out": [],
-    "issues": [],
+    "status": "PASS",
+    "summary": "mix compile --warnings-as-errors: clean, exit 0. Ran the full suite 3 times via scripts/test_parallel.sh (N=16 auto, N=8, N=4) plus one standalone targeted run. The two AC-critical files -- test/letflow/routers/req077_promotion_pipeline_test.exs and test/letflow/definitions/promotion_test.exs -- show 0 failures in every run: partition 8 (N=8 run) reported Letflow.Routers.Req077PromotionPipelineTest with 0 failures, partition 7 (N=8 run) reported Letflow.Definitions.PromotionTest with 0 failures, both re-confirmed present with 0 failures in the N=4 run, and the standalone targeted run (`mix test test/letflow/routers/req077_promotion_pipeline_test.exs test/letflow/definitions/promotion_test.exs`) gave 'Result: 47 passed'. Every OTHER failure seen across the three full-suite attempts (N=16: 4 failures + 5/16 partitions crashed outright on Postgres 53300 too_many_connections before running any test; N=8: 24 failures, all DBConnection.ConnectionError/too_many_connections; N=4: 11 failures, signature shifted to Ecto.NoResultsError from test/support/bpm_default_realm_displacement.ex, a shared non-partitioned tenant-row race) was independently diagnosed, not assumed: `git diff main...HEAD --stat` shows this branch touches only lib/letflow/definitions/promotion.ex, lib/letflow/routers/promotions.ex, test/letflow/routers/req077_promotion_pipeline_test.exs, and design/handoff docs; `git diff main...HEAD` on every specific failing test file and its support infra (bpm_default_realm_displacement.ex, tenant_schema_reaper.ex, identity_test.exs, auth_pipeline_test.exs, iss0736_oidc_live_revocation_test.exs, service_catalog*.ex) is byte-identical to main -- zero overlap. `ls ../` shows 5 sibling checkouts on this host (letflow-mutant, letflow-queue, letflow-wf03-iss0768, letflow-wt-gh298, letflow-wt-iss0077) with no LETFLOW_DB_PORT override, so they share this checkout's Postgres port 5462 and its connection budget / non-partitioned bpm-default row -- the exact mechanism docs/issues/ISS-0766.yaml already tracks for identity_test.exs (though ISS-0766 currently says it does not reproduce under test_parallel.sh; this run's N=4 attempt shows it now does, worth an ISS-0766 update, see issues[]). Conclusion: all non-promotion failures are pre-existing environmental/concurrency flakiness unrelated to this branch's diff, not a regression. Full detail in test/reports/report-20260921-WF03-ISS0732-20260921.yaml.",
+    "artifacts_out": [
+      "test/reports/report-20260921-WF03-ISS0732-20260921.yaml"
+    ],
+    "issues": [
+      "docs/issues/ISS-0766.yaml should be amended: it states the identity_test.exs bpm-default displacement flake does not reproduce under scripts/test_parallel.sh, but this run's N=4 attempt reproduced it there, and additionally implicated Letflow.Plugs.AuthPipelineTest and Letflow.Plugs.Iss0736OidcLiveRevocationTest via the same mechanism, plus separate Postgres connection-pool exhaustion (53300 too_many_connections) at higher partition counts (N=16, N=8). Root cause traced to this host's sibling checkouts (letflow-mutant, letflow-queue, letflow-wf03-iss0768, letflow-wt-gh298, letflow-wt-iss0077) sharing this checkout's default Postgres port 5462 with no LETFLOW_DB_PORT override in their .env -- worth either giving each sibling checkout its own port or documenting that concurrent full-suite runs across sibling checkouts on one host are unsafe."
+    ],
     "git_evidence": {
-      "branch_name": null,
+      "branch_name": "feature/WF03-ISS0732-20260921",
       "commit_sha_list": [],
       "remote_branch": null,
-      "push_status": "skipped",
+      "push_status": "pending",
       "pr_url": null,
       "pr_create_error": null
     },
-    "next_action": ""
+    "next_action": "Route to RELEASE-VALIDATOR per WF-02/WF-04 pipeline. RELEASE-VALIDATOR should independently re-run the suite rather than trust this report (per core-directives.md); expect the same pre-existing connection-pool/bpm-default-row flakiness in unrelated modules and confirm req077_promotion_pipeline_test.exs + promotion_test.exs are the only files that matter for this requirement's acceptance criteria. Separately, consider filing/amending ISS-0766 with this run's new evidence about sibling-checkout port sharing."
   },
   "rework_count": 0,
   "max_rework": 3

@@ -4314,9 +4314,20 @@ volumes:
       lines / 14793 bytes, well under the 1200-line/120000-byte roll
       ceiling, so no roll triggered.
 
-      Reconciled during WF03-ISS0768-20260921's own Step Final rebase: three
-      concurrent DOC-UPDATER appends landed on volume 21 independently --
-      ISS-0769 (bearer-token leakage into crash logs, plus a node-wide
+      Incremented to 7 by ORCH (WF02-REQ372-20260921), fixing a bookkeeping
+      omission this same run introduced: Step 00 appended a REQ-372 `started`
+      event directly to docs/status/requirement_status.v21.yaml but never
+      updated this index entry's own `entries:` count at the time, caught by
+      TEST-RUNNER's Step 4 run of
+      test/docs/requirement_status_invariants_test.exs (assertion A9).
+      `grep -c "^  - req:" docs/status/requirement_status.v21.yaml` = 7
+      on-disk entries, recounted directly rather than assumed. 310 lines /
+      18053 bytes, well under the 1200-line/120000-byte roll ceiling, so no
+      roll triggered.
+
+      Reconciled during this run's (WF03-ISS0768-20260921) Step Final rebase:
+      three concurrent DOC-UPDATER appends landed on volume 21 independently
+      -- ISS-0769 (bearer-token leakage into crash logs, plus a node-wide
       logger-filter-crash bug found along the way, 2026-09-21T04:30:37Z),
       ISS-0770 (secret_key_base missing from the redaction key list,
       2026-09-21T05:07:24Z), and ISS-0768 (RoleRegistry tenant-schema-prefix

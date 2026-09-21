@@ -6765,7 +6765,7 @@
       "workflow_id": "WF-03",
       "requirement_ids": [],
       "stage": "S6",
-      "status": "IN_PROGRESS",
+      "status": "DONE",
       "owned_modules": [
         "deploy/redeploy-qa.sh",
         ".github/workflows/cd.yml",
@@ -6774,10 +6774,27 @@
         "docs/issues/ISS-0771.yaml"
       ],
       "lock_acquired_at": "2026-09-21T07:44:35Z",
-      "lock_released_at": null,
-      "released_lock": false,
-      "last_known_step": "Step 00 GIT SETUP (ORCH-executed) COMPLETED PASS -- branch feature/WF03-ISS0771-20260921 created in a new worktree (.claude/worktrees/WF03-ISS0771-20260921) off origin/main@dccc53e5, pushed",
-      "note": "ISS-0771/GH#1674, letflow-queue task 770 (queue_ref Q-770; queue's own mirrored issue_ref field reads ISS-0770 due to an id collision noted in the issue yaml -- queue_task_id 770 is authoritative). Root cause already diagnosed by ORCH (letflow-c5) prior to this run per the issue yaml -- ISSUE-FIXER Step 0.5/1 skipped by direct instruction; routes straight to CODE-DESIGNER (Step 2). Run performed in a dedicated git worktree, not the primary checkout, because the primary checkout held an unrelated in-flight WF02-REQ372 run's uncommitted state at run start."
+      "lock_released_at": "2026-09-21T15:14:12Z",
+      "released_lock": true,
+      "last_known_step": "Step Final COMPLETED PASS (squash-merged 7b0ce429, PR #1683; docs-follow-up handoff record PR merged separately)",
+      "note": "ISS-0771/GH#1674, letflow-queue task 770 (queue_ref Q-770; queue's own mirrored issue_ref field reads ISS-0770 due to an id collision noted in the issue yaml -- queue_task_id 770 is authoritative). Root cause already diagnosed by ORCH (letflow-c5) prior to this run per the issue yaml -- ISSUE-FIXER Step 0.5/1 skipped by direct instruction; routes straight to CODE-DESIGNER (Step 2). Run performed in a dedicated git worktree, not the primary checkout, because the primary checkout held an unrelated in-flight WF02-REQ372 run's uncommitted state at run start. Resolved: boot-time Letflow.TenantProvisioning.MigrationReplayBoot child of Letflow.Supervisor.Infrastructure, one rework round for a missing child_spec/1 boot-crash regression caught by TEST-DESIGNER, three independent full-suite confirmations (TEST-DESIGNER/TEST-DESIGN-VALIDATOR/TEST-RUNNER). See RUN_DONE in handoffs/orchestrator.log for full detail."
+    },
+    {
+      "run_id": "WF02-REQ372-20260921",
+      "workflow_id": "WF-02",
+      "requirement_ids": ["REQ-372"],
+      "stage": "S8",
+      "status": "DONE",
+      "owned_modules": [
+        "lib/letflow/definitions/semantic_validation.ex",
+        "lib/letflow/definitions.ex",
+        "docs/requirements.yaml"
+      ],
+      "lock_acquired_at": "2026-09-21T06:50:20Z",
+      "lock_released_at": "2026-09-21T15:28:16Z",
+      "released_lock": true,
+      "last_known_step": "Step Final COMPLETED PASS (squash-merged 5160cc52, PR #1685; docs-follow-up handoff record PR #1686 merged separately)",
+      "note": "REQ-372/GH#1592, letflow-queue task 729 (queue_ref Q-729). Delivered Letflow.Definitions.SemanticValidation: field-existence + type-compatibility checking for EXCLUSIVE_GATEWAY edge conditions, wired into both the draft-save and release/promotion-submission paths. One design rework round (a false AC-compatibility claim in an amendment), a zero-declared-fields exemption added (design §2.5). RELEASE-VALIDATOR needed 6 attempts to get a clean mix letflow.check run due to host-wide Postgres contention shared with the concurrently-running ISS-0771 run, resolved via explicit cross-agent coordination. Step Final hit two rebase-conflict rounds (main advanced twice mid-run), both confined to docs/status/requirement_status.v21.yaml bookkeeping. See RUN_DONE in handoffs/orchestrator.log for full detail."
     }
   ]
 }

@@ -27761,7 +27761,7 @@ requirements:
   - id: REQ-374
     title: "Platform-wide tenant-migration fanout runner: per-company apply with failure isolation, resume-outstanding, and idempotent re-run (backend)"
     owner: ELIXIR-DEV
-    status: pending
+    status: done
     stage: S6
     impl_order: 733  # letflow-queue task id, GH#1621. Registered 2026-09-20 by ORCH;
       # corrects a fabricated/self-assigned id from the original filing -- 731 was

@@ -586,6 +586,18 @@ defmodule Letflow.Api.Authorization do
   def endpoint_policy_key("GET", "/onboarding/:id"), do: :TenantsManage
   def endpoint_policy_key("GET", "/onboarding"), do: :TenantsManage
 
+  # REQ-374 -- platform-wide tenant-migration fanout runner
+  # (Letflow.Routers.PlatformMigrations), a top-level sibling router mounted
+  # at /platform-migrations (not under Letflow.Routers.Identity's own
+  # /identity mount). Reuses the existing :TenantsManage permission -- same
+  # risk class and same PLATFORM_ADMIN-only intent as Letflow.Routers.Tenants
+  # and Letflow.Routers.Onboarding (design doc §7). No new permission added.
+  def endpoint_policy_key("POST", "/platform-migrations/rollouts"), do: :TenantsManage
+  def endpoint_policy_key("GET", "/platform-migrations/rollouts/:id"), do: :TenantsManage
+
+  def endpoint_policy_key("POST", "/platform-migrations/rollouts/:id/resume"),
+    do: :TenantsManage
+
   # REQ-076 -- role registry routes (Letflow.Routers.Identity, mounted
   # relative to /identity, matching the "/tokens" convention above). A new,
   # distinct :RolesManage permission -- see role_allows?/2's PROCESS_DESIGNER

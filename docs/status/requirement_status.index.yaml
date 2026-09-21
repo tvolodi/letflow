@@ -4293,9 +4293,12 @@ volumes:
     path: docs/status/requirement_status.v21.yaml
     status: current
     opened: 2026-09-20
-    entries: 13
+    entries: 14
     note: >
-      Incremented to 13 by DOC-UPDATER's own ISS-0775 SCOPE-CHANGE done-event
+      Incremented to 14 by DOC-UPDATER's own REQ-374 done-event append
+      (2026-09-21T20:40:11Z -- platform-wide tenant-migration fanout runner
+      backend, feature/WF02-REQ374-20260921). Previously incremented to 13 by
+      DOC-UPDATER's own ISS-0775 SCOPE-CHANGE done-event
       append (2026-09-21T18:20:11Z -- resolve_group_ids_for_role_names/2's
       OIDC role-claim write path scoped to kind == :platform_role, closing
       the process-routing-role-kind-name-collision gap ISS-0774's own gate

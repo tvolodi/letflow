@@ -2041,3 +2041,4 @@
 2026-09-21T01:38:11Z | GATE_PASS | WF-03 | WF03-ISS0732-20260921/step-00-git-setup | ORCH | PASS (branch feature/WF03-ISS0732-20260921 created, pushed)
 2026-09-21T01:38:44Z | DISPATCH | WF-03 | WF03-ISS0732-20260921/step-01-issue-fixer-diagnosis | ORCH -> ISSUE-FIXER | PENDING
 2026-09-21T01:39:46Z | GATE_PASS | WF-03 | WF03-ISS0732-20260921/step-01-issue-fixer-diagnosis | ISSUE-FIXER -> ORCH | PASS (root cause confirmed: apply_review/4 has no assertion-run precondition; fix shape recommended mirroring R8's assertions_failed == 0 gate)
+2026-09-21T01:40:58Z | REGISTER | ADHOC | WF03-ISS0732-20260921 | ORCH | task 767 registered (task_type: issue), issue_ref ISS-0767, github_issue_number 1664 -- frontend NonSkippableApprovalGate.tsx follow-up split out of this run per ORCHESTRATOR.md section 10 sizing judgment; docs/issues/ISS-0767.yaml filed, ISS-0732.yaml routing_note added

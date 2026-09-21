@@ -1,0 +1,63 @@
+{
+  "handoff_id": "a1b2c3d4-0000-4000-8000-00000000000a",
+  "run_id": "WF03-ISS0771-20260921",
+  "workflow_id": "WF-03",
+  "step": "10",
+  "from_agent": "ORCH",
+  "to_agent": "TEST-DESIGNER",
+  "file": "handoffs/WF03-ISS0771-20260921/step-10-test-designer-final.json",
+  "created_at": "2026-09-21T08:38:20Z",
+  "started_at": "2026-09-21T08:38:20Z",
+  "completed_at": "2026-09-21T13:52:00Z",
+  "status": "COMPLETED",
+  "priority": "HIGH",
+  "context": {
+    "stage": "S6",
+    "requirement_ids": [],
+    "requirement_text": {},
+    "artifacts_in": [
+      "handoffs/WF03-ISS0771-20260921/step-06-test-designer.json",
+      "handoffs/WF03-ISS0771-20260921/step-07-elixir-dev-rework.json",
+      "test/letflow/tenant_provisioning_test.exs",
+      "test/letflow/tenant_provisioning/migration_replay_boot_test.exs",
+      "lib/letflow/tenant_provisioning/migration_replay_boot.ex"
+    ],
+    "owned_modules": [
+      "test/letflow/tenant_provisioning_test.exs",
+      "test/letflow/tenant_provisioning/migration_replay_boot_test.exs"
+    ]
+  },
+  "task": {
+    "description": "Your step-06 result was BLOCKED because the shipped code (at that time) crashed the app on boot -- MigrationReplayBoot had no child_spec/1. That has since been fixed (child_spec/1 added, commit 63173958) and re-gated PASS by SECURITY-REVIEWER (step-08) and REVIEWER (step-09), both already committed to this branch (HEAD is now past those). Your job now: redo the verification you could only do via a throwaway-worktree shim last time, for REAL, directly in this branch's current (fixed) state -- no shim needed anymore. (1) Run `mix test test/letflow/tenant_provisioning_test.exs test/letflow/tenant_provisioning/migration_replay_boot_test.exs` directly against this branch's current HEAD and confirm all 5 tests pass for real, quoting output. (2) Run the FULL suite `mix test` once and confirm the app boots (no Supervisor.init crash) and report the overall pass/fail counts. (3) Re-run your 2 mutants (remove the per-tenant isolation rescue in replay_all_pending/0; make MigrationReplayBoot.start_link/1 propagate instead of always :ignore) IN PLACE in this actual worktree this time (git checkout -- <path> to revert each, verified), confirming the same sensitivity you found before (isolation tests fail under mutant 1, the :ignore test fails under mutant 2) now holds against the real fixed code, not a shim. Revert both mutants and VERIFY the revert per WF-03's rule: git status --porcelain lib/ test/ empty, and the test file re-runs green. Do NOT dispatch any other agent yourself under any circumstance -- if you find a new blocking defect, report BLOCKED/FAIL in this handoff's result and STOP; ORCH will route the rework.",
+    "acceptance_criteria": [
+      "All 5 ISS-0771 tests pass for real against this branch's current (post-fix) HEAD, real mix test output quoted",
+      "Full mix test suite run once, real pass/fail counts quoted, app confirmed to boot (no Supervisor.init crash)",
+      "Both mutants re-applied and reverted in place in this real worktree (not a throwaway shim), with real pass/fail counts for each, and the revert verified per WF-03's isolation-technique rule (git status --porcelain lib/ test/ empty + green re-run)",
+      "Only test files committed in your final commit -- lib/ must be byte-identical to the REVIEWER-gated state (git diff --stat against HEAD~0's lib/ empty after your revert)",
+      "You do not dispatch or spawn any other agent -- report BLOCKED/FAIL and stop if you find a new defect"
+    ]
+  },
+  "result": {
+    "status": "BLOCKED",
+    "summary": "Confirmed HEAD (91ea1646) and a clean working tree (git status --porcelain empty) before starting, matching the branch state step-09/reconcile left it in. Attempted the required verification but could not run ANY `mix test` invocation, real or targeted, because the shared Postgres instance this worktree depends on (container letflow-postgres-1, port 5462, shared across sibling worktrees/sessions per this session's own concurrent-agent context) is completely connection-saturated -- not by my own process, by pre-existing load from other sessions.\n\nEVIDENCE (real, quoted, not speculated):\n1. `mix test test/letflow/tenant_provisioning_test.exs test/letflow/tenant_provisioning/migration_replay_boot_test.exs` (first attempt): '13:39:04.223 [error] Postgrex.Protocol ... failed to connect: ** (Postgrex.Error) FATAL 53300 (too_many_connections) sorry, too many clients already' repeated for multiple connection attempts, then '** (Mix) The database for Letflow.Repo couldn't be created: killed'.\n2. Retried with `TEST_POOL_SIZE=2` (minimal pool) -- identical FATAL 53300 too_many_connections failure.\n3. Attempted to inspect server-side connection state directly: `psql` is not installed in this shell (`psql: command not found`, exit 127), so I went via `docker exec letflow-postgres-1 psql -U letflow -d postgres -c \"SELECT 1;\"` -- same result: 'psql: error: connection to server on socket \"/var/run/postgresql/.s.PGSQL.5432\" failed: FATAL: sorry, too many clients already'. Retried the identical docker-exec probe as BOTH the `letflow` app user and the `postgres` superuser -- both refused with the same FATAL 53300, meaning even Postgres's own reserved superuser connection slots are exhausted, not just the app pool.\n4. `docker exec letflow-postgres-1 sh -c \"ps aux | grep postgres | wc -l\"` -> 108 postgres-related processes inside the container, checked twice roughly 10-15 seconds apart, unchanged at 108 both times -- indicates a sustained/stuck saturation, not momentary contention that would clear itself between polls.\n5. Armed a background poll (`until docker exec letflow-postgres-1 psql ... ; do sleep 5; done`) and separately re-probed manually several times across roughly 5 minutes wall-clock (retry immediately, +20s, +45s attempted, +10s) -- every single probe in that window returned the same FATAL 53300, including the most recent probe immediately before writing this result.\n\nI did not modify any Postgres config (max_connections, superuser_reserved_connections) or kill/restart the container -- that is an infra/environment action outside TEST-DESIGNER's mandate and outside this handoff's scope (the container is shared with sibling sessions per this session's own SendMessage context: 'main', 'gui-review-continuation', and the requesting agent aa22adeb170e56981), and unilaterally bouncing shared infra another session may depend on is not mine to decide. Per the requesting agent's explicit instruction ('if the DB is still saturated after a reasonable retry, don't wait indefinitely: report BLOCKED... report back to me'), stopping here rather than waiting indefinitely or attempting an infra fix.\n\nNo test files were changed in this step -- the existing test/letflow/tenant_provisioning_test.exs, test/letflow/tenant_provisioning/migration_replay_boot_test.exs, and test/specs/ISS-0771.md (all already committed prior to this step, per step-06/1e2d9006) needed no edits; nothing here required editing them since the blocker is environmental, not a coverage gap. No mutants were applied in this step because no mutant re-verification could be run without a working DB connection -- applying and then trying to assess pass/fail counts against mutated code would be meaningless without the ability to run `mix test` at all right now.\n\nNOT DONE (blocked, none of the 5 acceptance criteria could be executed for real): (1) targeted 5-test run against post-fix HEAD -- blocked by DB saturation; (2) full `mix test` suite run -- blocked, same cause; (3) both mutants re-applied/reverted in place with real pass/fail counts -- blocked, same cause; (4) lib/ byte-identical confirmation after revert -- moot, no mutants were applied this step, and `git status --porcelain` on this checkout is confirmed empty (lib/ untouched) both before and after this attempt; (5) no other agent dispatched or spawned by me -- satisfied.\n\nRECOMMENDATION: this is an environment/infra condition (Postgres connection exhaustion on the shared letflow-postgres-1 container, likely from other concurrent sessions/worktrees), not a defect in the ISS-0771 code or in the already-written test files. Re-dispatch this same step once the shared DB has free connection slots (verify first with a trivial `docker exec letflow-postgres-1 psql -U letflow -d postgres -c \"SELECT 1;\"` before re-running the full verification) -- no rework of test code is needed, only a clean re-run of the same commands this handoff already specifies.",
+    "artifacts_out": [],
+    "issues": [
+      {
+        "severity": "BLOCKER",
+        "description": "Shared Postgres container letflow-postgres-1 (port 5462) is fully connection-saturated (FATAL 53300 too_many_connections) for both the app user and the postgres superuser, confirmed via direct docker-exec psql probes and repeated `mix test` attempts (with default and TEST_POOL_SIZE=2 pool sizes) over ~5 minutes of retries. 108 postgres processes observed inside the container, unchanged across two checks ~10-15s apart. This is environment/infra resource contention from concurrent sibling sessions sharing the same DB container, not a code defect in this branch's HEAD (91ea1646) or in the already-committed ISS-0771 test files. No mix test invocation (targeted or full-suite) could be run at all in this attempt as a result.",
+        "blocking": true
+      }
+    ],
+    "git_evidence": {
+      "branch_name": "feature/WF03-ISS0771-20260921",
+      "commit_sha_list": [],
+      "remote_branch": null,
+      "push_status": "skipped",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": "BLOCKED on environment (shared Postgres connection exhaustion, not a code defect) -- re-dispatch TEST-DESIGNER for this same step once the shared DB (letflow-postgres-1) has free connection capacity again (verify with a trivial docker-exec psql probe first). No test-code rework needed; re-run the exact commands this handoff already specifies once the DB is reachable."
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

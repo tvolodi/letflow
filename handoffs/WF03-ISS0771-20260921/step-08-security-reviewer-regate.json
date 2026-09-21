@@ -1,0 +1,51 @@
+{
+  "handoff_id": "e1f2a3c4-0008-4000-8000-000000000771",
+  "run_id": "WF03-ISS0771-20260921",
+  "workflow_id": "WF-03",
+  "step": "08",
+  "from_agent": "ORCH",
+  "to_agent": "SECURITY-REVIEWER",
+  "file": "handoffs/WF03-ISS0771-20260921/step-08-security-reviewer-regate.json",
+  "created_at": "2026-09-21T08:30:00Z",
+  "started_at": "2026-09-21T08:28:39Z",
+  "completed_at": "2026-09-21T08:29:03Z",
+  "status": "COMPLETED",
+  "priority": "HIGH",
+  "context": {
+    "stage": "S6",
+    "requirement_ids": [],
+    "requirement_text": {},
+    "related_handoff_ids": ["e1f2a3c4-0007-4000-8000-000000000771"],
+    "artifacts_in": [
+      "lib/letflow/tenant_provisioning/migration_replay_boot.ex"
+    ],
+    "owned_modules": [
+      "lib/letflow/tenant_provisioning/migration_replay_boot.ex"
+    ]
+  },
+  "task": {
+    "description": "Re-gate on commit 63173958 (branch feature/WF03-ISS0771-20260921), a narrow rework fixing a real boot-crashing regression your step-04 pass did not catch (it reviewed by reading the diff, not by running it -- flag whether that should change your own process). The fix adds child_spec/1 to Letflow.TenantProvisioning.MigrationReplayBoot: %{id: __MODULE__, start: {__MODULE__, :start_link, [init_arg]}, restart: :temporary, type: :worker}. Confirm this narrow addition introduces no new security concern (it's a plain Elixir Supervisor.child_spec() map, no user input, no new Repo call, no new data-access path) and that nothing else in the module changed (diff-confirm against the version your step-04 pass already reviewed).",
+    "acceptance_criteria": [
+      "PASS or FAIL verdict",
+      "Confirms via git diff that ONLY the child_spec/1 addition changed relative to what step-04 already reviewed -- no other behavior drift",
+      "States explicitly whether this class of defect (a boot-crash from a missing behaviour callback) falls under any existing INV or is out of this gate's scope, for the record"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "Re-gate on commit 63173958 confirmed. `git show 63173958` (only content-bearing commit since the version reviewed at step-04) touches exactly two files: the step-07 handoff JSON and lib/letflow/tenant_provisioning/migration_replay_boot.ex, and the latter's diff is a pure addition of one public function -- child_spec/1 -- inserted between the moduledoc and start_link/1, returning a literal map %{id: __MODULE__, start: {__MODULE__, :start_link, [init_arg]}, restart: :temporary, type: :worker}. No existing line was touched, reordered, or removed; start_link/1, run_replay/0, the try/rescue, and the moduledoc are byte-identical to the version step-04 reviewed (confirmed by diffing the commit patch directly, not just re-reading the file). Scope test against security-invariants.md: this specific diff hunk is a plain Supervisor.child_spec() map literal -- no user/tenant input, no Repo/Ecto call, no data read or write, no response shaping, no secret resolution, no SQL, no I/O of any kind; it only tells the supervisor how to start an already-reviewed process. It therefore does not itself open, modify, or touch a tenant-data path, so none of INV-1/INV-4/INV-7/INV-8 (the four live invariants) attach to this hunk specifically: INV-1 (tenant isolation) NOT-APPLICABLE -- no query, schema, or migration in this diff; INV-4 (secrets) NOT-APPLICABLE -- no secret material anywhere in a child_spec map; INV-7 (SQL interpolation) NOT-APPLICABLE -- no SQL of any kind; INV-8 (unhandled crashes) NOT-APPLICABLE to this hunk -- the map literal cannot raise, and it changes nothing about the already-reviewed try/rescue around run_replay/0. INV-2/3/5 remain NOT-APPLICABLE (pre-S4/S5). INV-9 NOT-APPLICABLE (no outbound HTTP). Per the task's third acceptance criterion: the defect this commit fixes (a boot crash from a missing behaviour callback, i.e. Supervisor.init/2 raising because the child module didn't implement child_spec/1) is an availability/correctness defect, not a security one -- it does not fall under any INV-1..INV-9 (none of those invariants govern supervision-tree wiring or startup-callback completeness), so it is correctly out of this gate's scope and was rightly caught by TEST-DESIGNER/ELIXIR-DEV rather than SECURITY-REVIEWER. Process note per the handoff's own prompt: my step-04 pass (and this one) reviewed by reading the diff/module source, not by booting the application -- that is consistent with SECURITY-REVIEWER's mandate (security-invariants.md scope, not boot-health), and boot-crash detection is TEST-DESIGNER/TEST-RUNNER's job (which is exactly what caught it in step-06); no process change recommended for this role specifically, but flagging for ORCH that a lightweight 'does the app boot' smoke check earlier in WF-03 (before this gate) could have caught it a step sooner.",
+    "artifacts_out": [],
+    "issues": [],
+    "git_evidence": {
+      "branch_name": "feature/WF03-ISS0771-20260921",
+      "commit_sha_list": ["63173958"],
+      "remote_branch": "origin/feature/WF03-ISS0771-20260921",
+      "push_status": "pending",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": "Proceed to REVIEWER re-gate on the same narrow diff, then re-dispatch TEST-DESIGNER per step-07's standing offer."
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

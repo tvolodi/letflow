@@ -1,0 +1,61 @@
+{
+  "handoff_id": "a1b2c3d4-0000-4000-8000-000000000002",
+  "run_id": "WF03-ISS0771-20260921",
+  "workflow_id": "WF-03",
+  "step": "01",
+  "from_agent": "ORCH",
+  "to_agent": "CODE-DESIGNER",
+  "file": "handoffs/WF03-ISS0771-20260921/step-01-code-designer.json",
+  "created_at": "2026-09-21T07:46:00Z",
+  "started_at": "2026-09-21T07:46:00Z",
+  "completed_at": "2026-09-21T07:49:49Z",
+  "status": "COMPLETED",
+  "priority": "HIGH",
+  "context": {
+    "stage": "S6",
+    "requirement_ids": [],
+    "requirement_text": {},
+    "artifacts_in": [
+      "docs/issues/ISS-0771.yaml",
+      "lib/letflow/tenant_provisioning.ex",
+      "deploy/redeploy-qa.sh",
+      ".github/workflows/cd.yml",
+      "lib/letflow/application.ex",
+      "docs/agents/instructions/security-invariants.md"
+    ],
+    "owned_modules": [
+      "lib/letflow/design/"
+    ]
+  },
+  "task": {
+    "description": "Root cause is already fully diagnosed in docs/issues/ISS-0771.yaml (read it in full) -- do NOT re-diagnose. Summary: this repo uses schema-per-tenant multitenancy. Tenant-scoped Ecto migrations (registered in Letflow.TenantProvisioning.tenant_scoped_migrations/0) are only auto-applied to a tenant AT PROVISIONING TIME. There is no deploy-time step that replays pending tenant-scoped migrations against tenants that already existed before the migration was added -- deploy/redeploy-qa.sh only restarts the app container and relies on Ecto.Migrator running on boot, which only covers the public/default schema. This caused a real production-like incident (full QA outage) remediated live by manually calling Letflow.TenantProvisioning.replay_migrations/2 per tenant. Produce a design artefact under lib/letflow/design/ deciding exactly where the automatic fix belongs. Weigh both options explicitly and justify the choice: (A) a new step added to deploy/redeploy-qa.sh (an mix run -e one-liner or dedicated mix task that loops Letflow.TenantProvisioning.list_registrations/0 and calls replay_migrations/2 on each, invoked after the app container is confirmed up), OR (B) a boot-time hook in lib/letflow/application.ex's supervision tree that does the same automatically on every app start (covers mix phx.server/local-dev too, which (A) does not). The design must specify: the exact module/function signature(s) with @spec, where in the supervision tree or deploy script the call sits, the idempotency guarantee (must be a safe no-op when nothing is pending -- state how replay_migrations/2 already achieves or needs to achieve this), and the per-tenant failure-isolation guarantee (one tenant's migration failure must be logged/reported individually and must NOT abort replay for the remaining tenants -- state exactly how, e.g. Enum.map with rescue per tenant vs a Task.async_stream with :on_timeout/:exit handling). No implementation code -- design artefact only (signatures, @specs, and prose rationale). This is real production-incident-derived work; be conservative -- state explicitly what could still go wrong with your chosen approach and why it is acceptable.",
+    "acceptance_criteria": [
+      "Design explicitly compares option (A) deploy-script step vs option (B) boot-time application hook, and states which is chosen and why, including why the other was rejected",
+      "Design specifies exact new/changed function signature(s) with @spec, and their exact call site (supervision tree child spec, or deploy script step)",
+      "Design states the idempotency guarantee explicitly and how it is achieved -- must be safe as a no-op",
+      "Design states the per-tenant isolation guarantee explicitly -- one tenant's failure must not abort others, and must be individually logged/reported",
+      "Design does not contradict Letflow.Engine's documented process-vs-row decision (no supervised process per tenant/instance) or any other existing decision record",
+      "Design states whether this touches a tenant-data path per docs/agents/instructions/security-invariants.md's scope test, for SECURITY-REVIEWER's benefit at the next gate",
+      "No implementation code bodies in the design document -- signatures and prose only"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "Design produced at lib/letflow/design/iss0771-tenant-migration-replay-on-deploy.md. Chose Option B (boot-time hook) over Option A (deploy-script step): a deploy-script step is exactly as forgettable as the deploy-time replay call that caused the incident, and does not cover mix phx.server/local dev, whereas a supervised one-shot child covers every current and future app-start path structurally. New Letflow.TenantProvisioning.replay_all_pending/0 orchestrates list_registrations/0 + replay_migrations/2 per tenant with sequential Enum + rescue isolation (Task.async_stream explicitly rejected -- unneeded complexity at current scale and same per-unit-of-work process shape REQ-045 moved away from). New Letflow.TenantProvisioning.MigrationReplayBoot module is placed in lib/letflow/supervisor/infrastructure.ex's children list immediately after the existing {Ecto.Migrator, ...} child, start_link/1 always returns :ignore regardless of per-tenant outcomes so a broken tenant migration can never crash Supervisor.init/2. Idempotency is achieved entirely via existing replay_migrations/2 guarantees (Ecto.Migrator.run/4's schema_migrations tracking, maybe_seed_platform_event_types/2's duplicate-tolerant seeding, mark_migrations_applied/1's idempotent update_all) -- no new idempotency mechanism added. Security-invariants scope test included: INV-1/INV-4/INV-6/INV-7/INV-8 apply and are satisfied (no new query/DDL mechanism, inherits REQ-190's log redaction filter, no unhandled-crash path); INV-2/3/5/9 not applicable. No implementation code bodies -- signatures, @specs, and prose only.",
+    "artifacts_out": [
+      "lib/letflow/design/iss0771-tenant-migration-replay-on-deploy.md"
+    ],
+    "issues": [],
+    "git_evidence": {
+      "branch_name": "feature/WF03-ISS0771-20260921",
+      "commit_sha_list": [],
+      "remote_branch": null,
+      "push_status": "skipped",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": "Dispatch to CODE-DESIGN-VALIDATOR to gate this design before ELIXIR-DEV implements it."
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

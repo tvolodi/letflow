@@ -1,0 +1,62 @@
+id: ISS-0772
+title: >
+  Letflow.Secrets.LogFilter only redacts Logger metadata, never the message
+  string -- ISS-0771's design doc and MigrationReplayBoot's moduledoc claim
+  it covers message-interpolated logging, which it does not
+discovered_by: SECURITY-REVIEWER (step-04, WF03-ISS0771-20260921), confirmed by REVIEWER (step-05)
+discovered_in_run: WF03-ISS0771-20260921
+discovered_at: "2026-09-21T08:01:08Z"
+severity: MINOR
+tags:
+  - security
+  - logging
+  - documentation
+description: >
+  Found while gating ISS-0771's boot-time tenant-migration-replay hook.
+  `lib/letflow/design/iss0771-tenant-migration-replay-on-deploy.md` (L349-357)
+  and `Letflow.TenantProvisioning.MigrationReplayBoot`'s own moduledoc justify
+  INV-4 compliance by claiming `Letflow.Secrets.LogFilter` "already redacts
+  any secret-shaped metadata regardless." This is imprecise:
+  `LogFilter.filter/2` (`lib/letflow/secrets/log_filter.ex` L27-29) redacts
+  only `log_event.meta` (the Logger metadata map), never `log_event.msg`. Every
+  new `Logger` call added in `lib/letflow/tenant_provisioning/migration_replay_boot.ex`
+  builds its content via message string interpolation/concatenation
+  (`Exception.format(...)  <> ...`, `"...reason=#{inspect(reason)}"`), not via
+  metadata keys -- so `LogFilter`'s redaction mechanism does not actually
+  apply to this logging, contrary to what both docs claim.
+
+  NOT currently exploitable: independently confirmed (twice -- SECURITY-REVIEWER
+  step-04 and REVIEWER step-05) that none of the values these calls log
+  (`tenant_id`, `schema_name`, and the tagged reason shapes
+  `:tenant_not_provisioned` / `{:migration_failed, exception}` /
+  `{:event_type_seed_failed, term}` / `{:unexpected_exception, exception}`) are
+  secret-shaped today. This is a documentation-accuracy and defensive-hardening
+  gap, not a live vulnerability -- but the stated justification would mislead a
+  future change that logs a genuinely secret-shaped value through this same
+  message-interpolation pattern, trusting a filter that does not cover it.
+affected_files:
+  - lib/letflow/design/iss0771-tenant-migration-replay-on-deploy.md
+  - lib/letflow/tenant_provisioning/migration_replay_boot.ex
+  - lib/letflow/secrets/log_filter.ex
+related:
+  - ISS-0771 # the run this gap was found while gating
+severity_rationale: >
+  MINOR -- confirmed not exploitable today (no secret-shaped value currently
+  flows through these call sites), but worth closing because the stated
+  justification is factually wrong and would mislead whoever next adds a
+  Logger call to this module or copies its pattern elsewhere.
+suggested_fix: >
+  Either (a) correct both docs (design doc L349-357, MigrationReplayBoot's
+  moduledoc) to state accurately that LogFilter covers metadata only and that
+  these specific calls are safe because their content is independently
+  confirmed non-secret-shaped, not because LogFilter redacts them; or (b),
+  preferably, convert the three Logger calls in migration_replay_boot.ex to
+  pass tenant_id/schema_name/reason as Logger metadata (`Logger.warning("tenant
+  migration replay failed", tenant_id: tenant_id, schema_name: schema_name,
+  reason: reason)`) rather than string-interpolating into the message, so
+  LogFilter's existing mechanism genuinely covers this call site going
+  forward. Small, isolated change -- likely sized for a single ELIXIR-DEV turn,
+  no new design doc needed.
+queue_ref: null  # ORCH to assign via letflow-queue register_task
+github_ref: null  # ORCH to assign
+status: open

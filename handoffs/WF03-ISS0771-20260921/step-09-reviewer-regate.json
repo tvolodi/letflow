@@ -1,0 +1,54 @@
+{
+  "handoff_id": "e1f2a3c4-0009-4000-8000-000000000771",
+  "run_id": "WF03-ISS0771-20260921",
+  "workflow_id": "WF-03",
+  "step": "09",
+  "from_agent": "ORCH",
+  "to_agent": "REVIEWER",
+  "file": "handoffs/WF03-ISS0771-20260921/step-09-reviewer-regate.json",
+  "created_at": "2026-09-21T08:35:00Z",
+  "started_at": "2026-09-21T08:40:00Z",
+  "completed_at": "2026-09-21T08:52:00Z",
+  "status": "COMPLETED",
+  "priority": "HIGH",
+  "context": {
+    "stage": "S6",
+    "requirement_ids": [],
+    "requirement_text": {},
+    "related_handoff_ids": ["e1f2a3c4-0008-4000-8000-000000000771"],
+    "artifacts_in": [
+      "lib/letflow/tenant_provisioning/migration_replay_boot.ex"
+    ],
+    "owned_modules": [
+      "lib/letflow/tenant_provisioning/migration_replay_boot.ex"
+    ]
+  },
+  "task": {
+    "description": "Re-gate on commit 63173958 (branch feature/WF03-ISS0771-20260921, SECURITY-REVIEWER already PASSED it at step-08/10ce0f01). This is a narrow rework fixing a real boot-crashing regression that slipped through your own earlier step-05 pass (which reviewed by reading the diff, not by booting the application). The fix adds child_spec/1 to Letflow.TenantProvisioning.MigrationReplayBoot: %{id: __MODULE__, start: {__MODULE__, :start_link, [init_arg]}, restart: :temporary, type: :worker}. Confirm this is idiomatic OTP (a plain map-form child spec is standard for a non-GenServer/Supervisor one-shot child; restart: :temporary is correct for a boot step that must never be restarted, matching the module's always-:ignore semantics), confirm no supervision-integrity issue, and confirm nothing else in the module drifted relative to what your step-05 pass already reviewed.",
+    "acceptance_criteria": [
+      "PASS or FAIL verdict",
+      "Confirms restart: :temporary is the correct choice given the module's documented one-shot/:ignore semantics (not :permanent or :transient)",
+      "Confirms via git diff that ONLY the child_spec/1 addition changed relative to what step-05 already reviewed",
+      "States whether an earlier boot-smoke-check step in WF-03 (before REVIEWER/SECURITY-REVIEWER) would be a worthwhile process improvement, per SECURITY-REVIEWER's step-08 process note -- your call, not binding on this gate's verdict"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "Re-gate on commit 63173958 confirmed via `git show 63173958` and a full read of the current module. `git show 63173958 --stat` touches exactly two files: the step-07 handoff JSON and lib/letflow/tenant_provisioning/migration_replay_boot.ex; the latter's diff (`git show 63173958 -- lib/letflow/tenant_provisioning/migration_replay_boot.ex`) is a pure insertion of one function, child_spec/1, between the moduledoc and start_link/1 -- no line of start_link/1, run_replay/0, the try/rescue, the moduledoc, or the aliases was touched, reordered, or removed. This matches what my step-05 pass (handoff a1b2c3d4-0000-4000-8000-000000000006, commit 80cffbb3) already reviewed byte-for-byte on everything except this new addition, so nothing else in the module drifted.\n\nOTP idiom on the addition itself: child_spec/1 returns a plain map literal (`%{id: __MODULE__, start: {__MODULE__, :start_link, [init_arg]}, restart: :temporary, type: :worker}`) -- this is the standard, idiomatic form for a child that is neither a GenServer/Supervisor/other OTP behaviour providing its own default child_spec/1 nor going through `use GenServer`'s auto-generated one; a plain module implementing only start_link/1 must supply this map itself for `Supervisor.init/2` to accept a bare module-name child-spec entry (as infrastructure.ex L191 does: `Letflow.TenantProvisioning.MigrationReplayBoot,`). No macro, no `use`, no framework abstraction reached for -- correctly minimal for what this one-shot boot step needs, consistent with the module's own documented 'not a GenServer/Supervisor' shape that my step-05 pass already confirmed.\n\nrestart: :temporary is the correct choice, not :permanent or :transient. The module's moduledoc and start_link/1 are unchanged and still document that this child always returns :ignore (never {:error, _}, never a raised exception -- the outer try/rescue guarantees this) after running its one-shot replay exactly once at boot. `:temporary` means the supervisor never restarts this child regardless of exit reason, which is exactly right for a step that must run precisely once per boot and never again -- `:transient` would only avoid restarting on a *normal* exit while still restarting on an abnormal one (irrelevant here since :ignore is neither a normal nor abnormal *exit* in the restart sense -- :ignore children aren't tracked as restartable at all -- but :temporary is the semantically correct declaration of intent: this child is not meant to be restarted, full stop), and `:permanent` would be actively wrong, implying the supervisor should keep relaunching a process that always immediately returns :ignore, which reads as a bug to any future maintainer. type: :worker is also correct/conventional -- :worker is the default classification for any non-Supervisor child, including one-shot boot hooks like this.\n\nSupervision integrity: no change to the supervision tree shape. This is still a single, unsupervised-by-anything-new, one-shot :ignore child of Letflow.Supervisor.Infrastructure at the same position (child 3, after {Ecto.Migrator, ...}, before Letflow.Oidc.ProviderRegistry) that step-05 already verified against infrastructure.ex's moduledoc and real children list; the child_spec/1 addition doesn't move it, doesn't add a new child, doesn't introduce a process-per-tenant (still zero -- replay_all_pending/0 is a plain Enum.reduce with no spawn/Task, matching REQ-045/Letflow.Engine's process-vs-row precedent, already confirmed at step-05). No shared state, no singleton process, no unsupervised spawn introduced.\n\nScope creep: none. This is the single narrowest possible fix for a boot-crashing regression (Supervisor.init/2 raising because a bare-module child-spec entry required a child_spec/1 the module didn't have) -- one public function, no new abstraction, no behaviour reached for ahead of need, nothing beyond what SECURITY-REVIEWER's step-08 pass and this task's own framing describe.\n\nProcess-improvement question (non-binding on this verdict, per the task's own framing): yes, worth it. An early, cheap boot-smoke-check step in WF-03 (something as simple as `mix compile` plus a one-line `Application.ensure_all_started(:letflow)` / `mix run --no-start` sanity check, or even just running the existing test suite's ExUnit boot path) placed right after ELIXIR-DEV's implementation step and before REVIEWER/SECURITY-REVIEWER would have caught this exact class of defect (a diff that compiles cleanly and reads correctly line-by-line but crashes the OTP application tree at runtime) a full two review passes earlier than TEST-DESIGNER actually caught it at step-06. Both REVIEWER and SECURITY-REVIEWER's gates are diff/source reads by design -- neither mandate covers 'does the app actually boot' -- so this gap is a real process seam, not a failure of either individual gate. Recommend ORCH consider a lightweight boot-smoke-check step in WF-03 (and WF-02, if it shares this shape) between implementation and the review gates, but this is advisory and does not block this PASS.\n\nPASS. All four re-gate questions confirmed.",
+    "artifacts_out": [
+      "handoffs/WF03-ISS0771-20260921/step-09-reviewer-regate.json"
+    ],
+    "issues": [],
+    "git_evidence": {
+      "branch_name": "feature/WF03-ISS0771-20260921",
+      "commit_sha_list": ["63173958"],
+      "remote_branch": "origin/feature/WF03-ISS0771-20260921",
+      "push_status": "pending",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": "route to TEST-DESIGNER (re-dispatch per step-07's standing offer / step-08's next_action)"
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

@@ -55,4 +55,28 @@ queue_ref: Q-770  # letflow-queue task id 770, issue_ref ISS-0771 (local
   # by the unrelated secret_key_base redaction issue, see ISS-0770.yaml).
   # Registered 2026-09-21 by ORCH.
 github_ref: GH-1674
-status: open
+status: resolved
+resolved_by: DOC-UPDATER
+resolved_in_run: WF03-ISS0771-20260921
+resolved_at: "2026-09-21T18:15:00Z"
+resolution_summary: >
+  Fixed via a boot-time supervision-tree hook, not a deploy-script step:
+  Letflow.TenantProvisioning.MigrationReplayBoot
+  (lib/letflow/tenant_provisioning/migration_replay_boot.ex) is now a
+  child of Letflow.Supervisor.Infrastructure
+  (lib/letflow/supervisor/infrastructure.ex) that runs on every app boot
+  and calls the new Letflow.TenantProvisioning.replay_all_pending/0
+  (lib/letflow/tenant_provisioning.ex), which iterates every tenant
+  returned by list_registrations/0 and replays pending tenant-scoped
+  migrations per tenant, logging/reporting each tenant's result
+  individually so one tenant's migration failure cannot abort the rest.
+  Idempotent by construction (Ecto.Migrator no-ops with zero pending
+  migrations). CODE-DESIGNER/CODE-DESIGN-VALIDATOR passed the design;
+  ELIXIR-DEV implemented it, with a rework fixing a missing
+  child_spec/1 boot-crash defect that TEST-DESIGNER caught, re-gated by
+  SECURITY-REVIEWER/REVIEWER; TEST-DESIGNER/TEST-DESIGN-VALIDATOR/
+  TEST-RUNNER independently confirmed 23/23 targeted tests plus a full
+  mix test suite run, with only 2 pre-existing, unrelated, already
+  documented flaky failures in test/letflow/identity_test.exs.
+  Verified end-to-end in WF03-ISS0771-20260921 (steps 1-14); this step
+  closes the loop by flipping status and merging to main.

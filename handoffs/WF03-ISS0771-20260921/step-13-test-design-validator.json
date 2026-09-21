@@ -1,0 +1,66 @@
+{
+  "handoff_id": "a1b2c3d4-0000-4000-8000-00000000000d",
+  "run_id": "WF03-ISS0771-20260921",
+  "workflow_id": "WF-03",
+  "step": "13",
+  "from_agent": "ORCH",
+  "to_agent": "TEST-DESIGN-VALIDATOR",
+  "file": "handoffs/WF03-ISS0771-20260921/step-13-test-design-validator.json",
+  "created_at": "2026-09-21T17:26:00Z",
+  "started_at": "2026-09-21T17:30:00Z",
+  "completed_at": "2026-09-21T17:45:00Z",
+  "status": "COMPLETED",
+  "priority": "HIGH",
+  "context": {
+    "stage": "S6",
+    "requirement_ids": [],
+    "requirement_text": {},
+    "related_handoff_ids": ["a1b2c3d4-0000-4000-8000-00000000000c"],
+    "artifacts_in": [
+      "handoffs/WF03-ISS0771-20260921/step-12-test-designer-final-retry2.json",
+      "test/letflow/tenant_provisioning_test.exs",
+      "test/letflow/tenant_provisioning/migration_replay_boot_test.exs"
+    ],
+    "owned_modules": [
+      "test/letflow/tenant_provisioning_test.exs",
+      "test/letflow/tenant_provisioning/migration_replay_boot_test.exs"
+    ]
+  },
+  "task": {
+    "description": "Validate TEST-DESIGNER's step-12 result (PASS, commit 98d8ad2a): targeted tests 23/23 passing, full suite 4511/4513 (2 pre-existing unrelated failures), both mutants reverted cleanly (lib/ byte-identical to REVIEWER-gated state). TEST-DESIGNER flagged an honest, non-blocking judgment call for you: neither of the two mutants (removing the per-tenant isolation rescue in replay_all_pending/0; making MigrationReplayBoot.start_link/1 propagate instead of always :ignore) was actually caught by any test, because Letflow.TenantProvisioning.replay_migrations/1's own internal rescue (lib/letflow/tenant_provisioning.ex:395-397) already converts every exception into {:error, {:migration_failed, exception}} before either outer-layer rescue can ever trigger. This is documented defense-in-depth (\"two independent layers\" per the modules' own moduledocs), not necessarily a coverage gap -- but make your own independent judgment: is the outer-layer rescue coverage in ISS-0771's own tests still meaningfully exercising anything real, or is it structurally dead code under every test scenario that exists? If the latter, decide whether that's acceptable (defense-in-depth for a code path no test can reach is still defensible) or whether it should be flagged as a follow-up (e.g., a test that bypasses replay_migrations/1's own rescue somehow, to actually exercise the outer layer) -- your call, state your reasoning either way in the result.",
+    "acceptance_criteria": [
+      "PASS or FAIL verdict on TEST-DESIGNER's overall coverage (all 5 acceptance criteria of ISS-0771's own issue text genuinely proven by a real, runnable test)",
+      "Independent judgment call on the uncatchable-mutant finding, with reasoning",
+      "Confirms the two full-suite failures are genuinely pre-existing/unrelated (not this issue's scope) by your own check, not by trusting TEST-DESIGNER's claim alone",
+      "If FAIL: precise, actionable findings for TEST-DESIGNER rework"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "Independently re-verified TEST-DESIGNER's step-12 PASS. (1) Targeted tests: `mix test test/letflow/tenant_provisioning_test.exs test/letflow/tenant_provisioning/migration_replay_boot_test.exs` against HEAD 6766956a -> 'Finished in 22.9 seconds' / 'Result: 23 passed', 0 failures, run by me directly -- matches TEST-DESIGNER's claim exactly. Cross-checked all 5 ISS-0771 acceptance criteria (idempotent no-op, per-tenant isolation, real pending-migration replay, start_link/1 always :ignore, healthy-path summary logging) against test/specs/ISS-0771.md and the test file bodies: each has a real, runnable, non-skipped test (grep for `@tag :skip`/`TODO` in both test files and the spec: zero hits). Fixtures use `TenantFixture.provisioned_tenant!/1` with unique slug prefixes and self-contained `on_exit/1` teardown -- no shared hardcoded state, no inter-test ordering dependency, no hardcoded secrets/connection strings (grepped both test files). (2) Full-suite failure attribution: did NOT blindly trust TEST-DESIGNER's claim -- ran test/letflow/identity_test.exs myself twice, independently, and reproduced the identical 2 failures both times ('resolve_tenant_by_realm/1 resolves the seeded default tenant (bpm-default)...' and the mirrored 'resolve_realm_by_tenant/1' test), both raising Ecto.NoResultsError at test/support/bpm_default_realm_displacement.ex:118 inside `with_lock/1` -- exact match to TEST-DESIGNER's claim. Read that helper's own moduledoc: it explicitly documents this precise cross-OS-process race (two concurrent `mix test` invocations sharing one non-partitioned test DB racing the single migration-seeded 'bpm-default' tenant row) as a previously-reproduced, known class, with a real Postgres advisory-lock mitigation that still has this one narrow window. Confirmed identity_test.exs/bpm_default_realm_displacement.ex are untouched by ISS-0771's diff and outside TEST-DESIGNER's owned_modules -- genuinely pre-existing and unrelated, not a regression from this fix. (3) Mandatory mutant re-application (WF-03 'code under test does not exist' rule, since this is 100% new code): applied TEST-DESIGNER's step-06-documented combined mutant 1 myself, first-hand, in a throwaway worktree (`../iss0771-tdv-mutant-check`, created off HEAD 6766956a, removed after use via `git worktree remove --force`) -- removed replay_all_pending/0's outer per-tenant rescue AND changed replay_migrations/1's own Layer-1 rescue clause from `exception -> {:error, {:migration_failed, exception}}` to `exception -> reraise exception, __STACKTRACE__`. Measured myself: 'Finished in 5.1 seconds' / 'Result: 21/23 passed' -- exactly 2 failures, exactly the two isolation-dependent tests ('one tenant's broken schema does not abort replay for a healthy sibling tenant' and 'start_link/1 returns :ignore and logs the failing tenant even when a tenant's replay fails'), matching TEST-DESIGNER's step-06 mutation-testing evidence precisely. Reverted via `git checkout -- lib/letflow/tenant_provisioning.ex`; verified `git status --porcelain lib/ test/` empty in the mutant worktree, then reran targeted tests there -> 'Result: 23 passed' again, confirming a clean revert before removing the worktree. This checkout's own `git status --porcelain` shows only this handoff file modified throughout.",
+    "artifacts_out": [],
+    "issues": [
+      {
+        "severity": "INFO",
+        "description": "Independent judgment call on the uncatchable-mutant finding (task's specific ask): the NARROW single-layer mutant re-tested at step-10/11/12 (remove only replay_all_pending/0's outer rescue, leaving replay_migrations/1's Layer-1 rescue intact) is correctly, and unavoidably, uncatchable by any test -- Layer 1 mathematically absorbs every reachable exception before Layer 2 is ever reached, so no test written against real (non-mocked) Postgres could ever observe Layer 2's removal in isolation. This is NOT evidence of a coverage gap, nor is it a fresh open question: TEST-DESIGNER's own step-06 handoff already produced the correct, stronger experiment -- a COMBINED mutant that also breaks Layer 1's rescue (making it reraise instead of returning a tagged tuple) -- and that combined mutant WAS caught (21/23, the 2 Layer-2-dependent tests failing). I reproduced that exact combined-mutant result myself in a throwaway worktree (see result.summary) and got the identical 21/23 split. Conclusion: the outer rescue is proven load-bearing, not decorative or dead code -- it is unreachable only under the narrower, weaker mutant, which is expected given the design's own stated two-layers-in-series architecture. No follow-up needed; TEST-DESIGNER's INFO note undersold this slightly by not cross-referencing step-06's own stronger evidence when re-flagging it at step-12, but did not misstate anything and appropriately deferred the judgment call rather than silently resolving it. Acceptable defense-in-depth, coverage genuinely proven via mutation testing, not merely asserted.",
+        "blocking": false
+      },
+      {
+        "severity": "INFO",
+        "description": "The 2 full-suite failures (test/letflow/identity_test.exs, REQ-019 AC1) are confirmed by me, independently and twice, to be a genuine pre-existing/unrelated flake (documented cross-process race in test/support/bpm_default_realm_displacement.ex, a file neither owned by TEST-DESIGNER nor touched by ISS-0771's diff or either mutant). Consistent with TEST-DESIGNER's claim. Worth a separate tracked issue if one does not already exist, but out of scope for this gate and not blocking.",
+        "blocking": false
+      }
+    ],
+    "git_evidence": {
+      "branch_name": "feature/WF03-ISS0771-20260921",
+      "commit_sha_list": [],
+      "remote_branch": null,
+      "push_status": null,
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": "ORCH: route to TEST-RUNNER for the full-suite confirming run (or directly onward per WF-03's next gate) -- TEST-DESIGN-VALIDATOR PASS. No rework needed. Both INFO items are non-blocking judgment calls, independently attested above, not open questions for the next agent to resolve."
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

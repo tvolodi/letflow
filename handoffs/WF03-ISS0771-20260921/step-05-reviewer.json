@@ -1,0 +1,73 @@
+{
+  "handoff_id": "a1b2c3d4-0000-4000-8000-000000000006",
+  "run_id": "WF03-ISS0771-20260921",
+  "workflow_id": "WF-03",
+  "step": "05",
+  "from_agent": "ORCH",
+  "to_agent": "REVIEWER",
+  "file": "handoffs/WF03-ISS0771-20260921/step-05-reviewer.json",
+  "created_at": "2026-09-21T07:59:44Z",
+  "started_at": "2026-09-21T07:59:44Z",
+  "completed_at": "2026-09-21T08:03:00Z",
+  "status": "COMPLETED",
+  "priority": "HIGH",
+  "context": {
+    "stage": "S6",
+    "requirement_ids": [],
+    "requirement_text": {},
+    "artifacts_in": [
+      "lib/letflow/design/iss0771-tenant-migration-replay-on-deploy.md",
+      "docs/issues/ISS-0771.yaml",
+      "handoffs/WF03-ISS0771-20260921/step-04-security-reviewer.json"
+    ],
+    "owned_modules": [
+      "lib/letflow/tenant_provisioning.ex",
+      "lib/letflow/tenant_provisioning/migration_replay_boot.ex",
+      "lib/letflow/supervisor/infrastructure.ex"
+    ]
+  },
+  "task": {
+    "description": "Hard gate on this diff (git diff main...HEAD for the three owned_modules files, commit 80cffbb3). Check idiomatic OTP usage, supervision integrity, scope creep, and decision-record consistency. SECURITY-REVIEWER already PASSed at step 04 (see its result -- one non-blocking MINOR filed about LogFilter only covering log metadata, not message strings, which the new Logger calls in migration_replay_boot.ex don't use; you may weigh in on whether that MINOR should be fixed now or deferred). Specifically verify: (1) MigrationReplayBoot is correctly NOT a GenServer/Supervisor per the design's explicit 'no supervised process per tenant' decision and REQ-045's process-vs-row precedent; (2) the supervision-tree child placement and ordering claims in infrastructure.ex's updated moduledoc/comments are accurate against the real file, not just copy-pasted from the design doc; (3) no scope creep beyond the design (e.g. no unrequested reconciliation sweep, no unrequested mix task); (4) idiomatic Elixir -- rescue clauses, Enum usage, Logger calls follow this codebase's conventions.",
+    "acceptance_criteria": [
+      "Confirm MigrationReplayBoot introduces no supervised process per tenant and does not contradict REQ-045/Letflow.Engine's process-vs-row decision",
+      "Confirm supervision-tree ordering/moduledoc updates in infrastructure.ex are accurate against the real file content, not stale copy",
+      "Confirm no scope creep beyond the gated design (compare against lib/letflow/design/iss0771-tenant-migration-replay-on-deploy.md section 2's exact signatures)",
+      "Confirm idiomatic OTP/Elixir usage in the new and changed code",
+      "Weigh in on SECURITY-REVIEWER's filed MINOR (LogFilter metadata-only coverage) -- fix now or defer, with reasoning",
+      "PASS or FAIL with specific named gaps if FAIL"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "Reviewed git diff main...HEAD -- lib/letflow/tenant_provisioning.ex lib/letflow/tenant_provisioning/migration_replay_boot.ex lib/letflow/supervisor/infrastructure.ex (commit 80cffbb3) directly against the four gate questions.\n\n(1) NOT a GenServer/Supervisor -- confirmed. MigrationReplayBoot has `require Logger` and two private/public functions only, `use`s nothing, registers no name, holds no state, runs no receive loop. `start_link/1` (migration_replay_boot.ex L26-35) calls `run_replay()` synchronously inside a `try/rescue` and unconditionally returns `:ignore` as its last expression, matching the design's own stated shape exactly (design doc §2.2). Also no per-tenant process is spawned anywhere: `replay_all_pending/0` (tenant_provisioning.ex L401-...) is a plain `Enum.reduce` over `list_registrations/0`'s result, calling `replay_migrations/2` inline in the same process -- no `Task.async_stream/3`, no `spawn`, no per-tenant supervision of any kind. This does not contradict REQ-045/Letflow.Engine's process-vs-row precedent (no process-per-unit-of-work is introduced at all, for tenants or otherwise) and is consistent with `Letflow.InstanceSupervisor`'s deliberate emptiness.\n\n(2) Supervision-tree ordering/moduledoc claims -- confirmed accurate against the real file, not stale copy. Read infrastructure.ex L20-308 in full: the numbered children list (1-20) in the moduledoc matches the literal `children = [...]` list in `init/1` (L176-305) position-for-position -- `MigrationReplayBoot` is child 3 in both the prose list and the real code, placed immediately after `{Ecto.Migrator, ...}` (child 2) and before `Letflow.Oidc.ProviderRegistry` (child 4), exactly as claimed. Every renumbered cross-reference (ISS-0224's child 9->10, ISS-0429's child 19->20/'19 children'->'20 children', ISS-0418's child 12->13, REQ-352's child 6->7) was actually updated in the diff, not left stale -- checked each one against its new position in the real list. The new ISS-0771 ordering-guarantee paragraph (children list, 'one ordering dependency, in one direction only... must follow child 2') matches the real code: `Letflow.Repo` and `{Ecto.Migrator, ...}` do precede `MigrationReplayBoot` in the literal list, and `Supervisor.init(children, strategy: :one_for_one)` (L307) starts them in list order per `Supervisor`'s own documented contract, so the ordering claim holds.\n\n(3) No scope creep -- confirmed against design doc §2's exact signatures. Diff adds exactly `replay_all_pending/0` (tenant_provisioning.ex, matches §2.1's `@spec` verbatim: `%{ok: [tenant_id], error: [{tenant_id, reason}]}`) and `Letflow.TenantProvisioning.MigrationReplayBoot` with `start_link/1` (matches §2.2's `@spec` verbatim). No reconciliation sweep, no new `mix` task, no new public function beyond §2.1/§2.2, no new supervised child beyond the one §2.3 names. `list_registrations/0` (used by both the new code and MigrationReplayBoot) is unchanged/pre-existing (already flagged and accepted at REQ-191's own review, per its moduledoc L268-271) -- not new surface from this diff.\n\n(4) Idiomatic OTP/Elixir -- mostly idiomatic, one observation (non-blocking). `Enum.reduce` with list-prepend-then-reverse accumulator (tenant_provisioning.ex L437-454) is the standard idiom for this shape. Bare `rescue exception ->` catch-alls in both new call sites are appropriate here, not lazy blanket-rescue misuse -- both are explicitly justified as an intentional second independent safety layer (design doc §4/§3's own stated redundancy reasoning), not a substitute for typed error handling, and both convert to a tagged `{:error, ...}`/log-and-:ignore rather than swallowing silently. One observation: `MigrationReplayBoot.run_replay/0` calls `TenantProvisioning.list_registrations/0` itself (to build `registrations_by_tenant_id` for schema_name lookup) AND `TenantProvisioning.replay_all_pending/0` internally calls `list_registrations/0` again -- two `Repo.all(Registration)` calls per boot instead of the one the design doc's §2.2 text implies ('schema_name looked up from the same Registration the loop already has in hand -- no extra query'). Confirmed via `Repo.all(Registration)` at L275 that this is a cheap, small-table, unprefixed query with no tenant-schema I/O, so this is a minor efficiency/design-fidelity nit, not a correctness or security defect -- flagging per the design's own stated intent rather than requiring rework.\n\nSECURITY-REVIEWER's filed MINOR (LogFilter covers only Logger metadata, not message strings; the new Logger calls in migration_replay_boot.ex string-interpolate into the message, so LogFilter's redaction does not actually apply to them, contrary to what the design doc and this module's own moduledoc claim) -- my ruling: DEFER, do not block or rework this run for it. Reasoning: (a) SECURITY-REVIEWER independently confirmed, and I independently re-confirmed by reading every new Logger call site, that none of the values actually logged today (tenant_id, schema_name, the four tagged reason shapes) are secret-shaped -- there is no live INV-4 violation in this diff; (b) the defect is a documentation-accuracy/defensive-hardening gap (an incorrect justification, not an incorrect outcome), the same class and severity as this codebase's own ISS-0770 precedent, which was filed and resolved as its own later run rather than blocking the run that found it; (c) fixing it properly (converting three Logger calls to pass metadata instead of string-interpolating, per the suggested_fix) is a clean, independently-scoped, single-file change with no dependency on this run's own boot-hook logic -- exactly the shape ISSUE_QUEUE.md's protocol describes as 'adjacent, not blocking.' I filed it as docs/issues/ISS-0772.yaml (queue_ref/github_ref null, ORCH to assign) so it is claimable work rather than an observation that only reached this handoff's prose.\n\nPASS. All four gate questions confirmed; the one efficiency observation and the one deferred documentation-accuracy issue are both non-blocking.",
+    "artifacts_out": [
+      "handoffs/WF03-ISS0771-20260921/step-05-reviewer.json",
+      "docs/issues/ISS-0772.yaml"
+    ],
+    "issues": [
+      {
+        "severity": "MINOR",
+        "description": "MigrationReplayBoot.run_replay/0 calls TenantProvisioning.list_registrations/0 directly (for schema_name lookup) in addition to TenantProvisioning.replay_all_pending/0's own internal list_registrations/0 call -- two Repo.all(Registration) queries per boot where the design doc's §2.2 text implied one ('no extra query'). Cheap, unprefixed, small-table query; not a correctness or security defect. Not filed as a separate docs/issues/ record -- noted here as a design-fidelity observation for whoever next touches this module.",
+        "blocking": false
+      },
+      {
+        "severity": "MINOR",
+        "description": "Filed as docs/issues/ISS-0772.yaml: LogFilter redacts only Logger metadata, never the message string, so the design doc's and MigrationReplayBoot's moduledoc's INV-4 justification ('LogFilter already redacts any secret-shaped metadata regardless') is factually inaccurate for these specific message-interpolated Logger calls. No live violation (independently confirmed twice -- SECURITY-REVIEWER and REVIEWER -- that no secret-shaped value is currently logged this way). Ruling: defer, do not rework this run.",
+        "blocking": false
+      }
+    ],
+    "git_evidence": {
+      "branch_name": "feature/WF03-ISS0771-20260921",
+      "commit_sha_list": [
+        "80cffbb306723d28c25fa23e6660eacc83b12a0d"
+      ],
+      "remote_branch": null,
+      "push_status": "skipped",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": "route to TEST-DESIGNER"
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

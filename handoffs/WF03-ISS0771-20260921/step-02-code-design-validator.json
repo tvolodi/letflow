@@ -1,0 +1,60 @@
+{
+  "handoff_id": "a1b2c3d4-0000-4000-8000-000000000003",
+  "run_id": "WF03-ISS0771-20260921",
+  "workflow_id": "WF-03",
+  "step": "02",
+  "from_agent": "ORCH",
+  "to_agent": "CODE-DESIGN-VALIDATOR",
+  "file": "handoffs/WF03-ISS0771-20260921/step-02-code-design-validator.json",
+  "created_at": "2026-09-21T07:50:18Z",
+  "started_at": "2026-09-21T07:50:18Z",
+  "completed_at": "2026-09-21T07:52:37Z",
+  "status": "COMPLETED",
+  "priority": "HIGH",
+  "context": {
+    "stage": "S6",
+    "requirement_ids": [],
+    "requirement_text": {},
+    "artifacts_in": [
+      "lib/letflow/design/iss0771-tenant-migration-replay-on-deploy.md",
+      "docs/issues/ISS-0771.yaml",
+      "lib/letflow/tenant_provisioning.ex",
+      "lib/letflow/supervisor/infrastructure.ex"
+    ],
+    "owned_modules": []
+  },
+  "task": {
+    "description": "Hard gate on CODE-DESIGNER's design at lib/letflow/design/iss0771-tenant-migration-replay-on-deploy.md. Read the design doc in full, plus every file it cites, independently -- do not trust CODE-DESIGNER's own summary. Verify it covers every acceptance criterion from step-01-code-designer.json's task.acceptance_criteria, contains no implementation code bodies, and is unambiguous enough for ELIXIR-DEV to build from without inventing anything. Specifically check: (1) does the chosen option (boot-time hook) genuinely satisfy the idempotency and per-tenant-isolation guarantees as claimed, by reading the actual current code of replay_migrations/2 and list_registrations/0 in lib/letflow/tenant_provisioning.ex; (2) does the proposed child placement in lib/letflow/supervisor/infrastructure.ex actually make sense given the real current children list and ordering; (3) is the claim that MigrationReplayBoot.start_link/1 'must always return :ignore, never propagate a crash' actually sufficient to guarantee Supervisor.init/2 cannot be brought down by it -- reason about this concretely, not just accept the prose; (4) confirm no contradiction with REQ-045/Letflow.Engine's process-vs-row decision.",
+    "acceptance_criteria": [
+      "Independently re-derive, don't just copy, that the design covers all 7 acceptance criteria from step-01's dispatch",
+      "Confirm zero implementation code bodies are present in the design doc (signatures/@specs/prose only)",
+      "Confirm the idempotency and isolation claims are consistent with the real current source of lib/letflow/tenant_provisioning.ex, quoted",
+      "Confirm the supervision-tree placement claim against the real current source of lib/letflow/supervisor/infrastructure.ex, quoted",
+      "PASS or FAIL with specific, named gaps per HANDOFF_PROTOCOL.md's validator-fail worked example shape if FAIL"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "Independently re-read the design doc in full plus the real current source of both cited files (not CODE-DESIGNER's summary). All 7 step-01 acceptance criteria are covered: (1) §1 compares Option A/B and rejects A for two structural reasons (forgettable single-entry-point, no local-dev coverage); (2) §2 gives exact @specs for replay_all_pending/0 and MigrationReplayBoot.start_link/1 plus the exact children-list call site; (3) §3 states the no-op idempotency guarantee explicitly; (4) §4 states the per-tenant isolation guarantee explicitly (two-layer rescue); (5) §4 point 3 explicitly reasons about REQ-045 and concludes no contradiction; (6) §5 runs the security-invariants scope test (INV-1/4/6/7/8 applicable+satisfied, INV-2/3/5/9 correctly not applicable -- verified INV-9's actual text at security-invariants.md:264-277 is outbound-URL/webhook-specific, confirming the design's exclusion reasoning rather than just trusting it); (7) design contains only @specs/function heads with no bodies (replay_all_pending/0 and start_link/1 are shown as bare signatures, §2.2's behavior is explicitly prose-only ('Body (prose, no implementation code)'), and §2.3's children-list snippet is a call-site quotation, not new logic. Idempotency/isolation claims checked against real source: list_registrations/0 (lib/letflow/tenant_provisioning.ex:273-276, plain Repo.all(Registration), matches 'enumerate every provisioned tenant' claim); replay_migrations/2 (lines 364-399) confirmed to already try/rescue the whole Ecto.Migrator.run/4 + event-seed with chain into {:error, {:migration_failed, exception}}, matching the design's Layer-1 claim; mark_migrations_applied/1 (lines 703-708, unconditional Repo.update_all) and maybe_seed_platform_event_types/2 (lines 1078-1088, duplicate_event_type_version treated as :cont, :ok) confirmed idempotent exactly as the design states. Supervision placement checked against real source: lib/letflow/supervisor/infrastructure.ex:157-169 confirms {Ecto.Migrator, ...} is immediately followed (after an intervening comment block) by Letflow.Oidc.ProviderRegistry -- the design's proposed insertion point for MigrationReplayBoot between those two is the real current gap, not a stale line reference. skip_migrations?/0 (lines 284-288, RELEASE_NAME==nil) confirmed to actually skip Migrator locally, supporting the design's 'no equivalent local-dev path exists for tenant-scoped replay, so do not gate this child the same way' reasoning. Reasoned concretely (not accepting the prose) about task point (3): does 'always returns :ignore' guarantee the child cannot bring down supervisor start? Elixir's rescue does not catch throw/exit -- so the guarantee only holds if no code on this path can deliver a raw EXIT signal to the calling process. Checked: replay_migrations/2's call chain (Ecto.Migrator.run/4, Repo.query!, Registry.register_type/2) all go through GenServer/pool calls, not raw process links, so no linked-process EXIT is plausible on this path -- the two-layer rescue (Layer 1 inside replay_migrations/2, Layer 2 + outer try/rescue in MigrationReplayBoot itself) is sufficient in practice, and OTP's supervisor start machinery itself additionally catches an escaping raise/error from a child's start function and converts it to {:error, _} rather than crashing outright -- so even a hypothetical gap in the two rescue layers would surface as a failed supervisor start, not a silent process crash, matching the design's own §1 statement that this is 'Supervisor.start_link/2' failing (not literally init/2, which only builds the child spec list -- the design's own wording is more precise here than the task's shorthand). One MINOR documentation imprecision found and recorded, not gating: design §3 point 1 attributes a '{:ok, []}' return directly to Ecto.Migrator.run/4 itself ('a fully-migrated tenant returns {:ok, []}'), but the real source's own moduledoc for replay_migrations/2 (tenant_provisioning.ex:344-349) states plainly that 'Ecto.Migrator.run/4 itself returns a bare list on success and *raises* on failure' -- the {:ok, _} tuple is replay_migrations/2's own wrapping, not Migrator.run's return shape. This does not affect implementability (ELIXIR-DEV is not re-implementing Migrator.run, and the design's own §2.1 elsewhere correctly distinguishes {:ok, _}/{:error, _} as replay_migrations/2's return), so it does not fail any of the 5 acceptance criteria, but is recorded per core-directives.md's 'never resolve a conflict silently.' No 'TBD'/deferral language found for any required element; open questions in §6 are explicitly out-of-scope follow-ups, not gaps in what ELIXIR-DEV needs to build now. Verdict: PASS.",
+    "artifacts_out": [
+      "handoffs/WF03-ISS0771-20260921/step-02-code-design-validator.json"
+    ],
+    "issues": [
+      {
+        "severity": "MINOR",
+        "description": "Design doc lib/letflow/design/iss0771-tenant-migration-replay-on-deploy.md §3 point 1 attributes a '{:ok, []}' return directly to Ecto.Migrator.run/4 ('a fully-migrated tenant returns {:ok, []} (empty applied_versions)'). The real source's own moduledoc for replay_migrations/2 (lib/letflow/tenant_provisioning.ex:344-349) states Ecto.Migrator.run/4 itself 'returns a bare list on success and raises on failure' -- the {:ok, _} tuple is replay_migrations/2's own wrapping around that bare list, not Migrator.run's own return shape. Does not affect implementability or any of the 5 gate acceptance criteria (ELIXIR-DEV does not touch Migrator.run itself, and the design's own §2.1 elsewhere correctly distinguishes the wrapped return), recorded for the source to fix on a future pass."
+      }
+    ],
+    "git_evidence": {
+      "branch_name": "feature/WF03-ISS0771-20260921",
+      "commit_sha_list": [],
+      "remote_branch": null,
+      "push_status": "skipped",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": "Dispatch to ELIXIR-DEV to implement lib/letflow/design/iss0771-tenant-migration-replay-on-deploy.md §2's signatures (replay_all_pending/0, MigrationReplayBoot.start_link/1, and the infrastructure.ex children-list insertion)."
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

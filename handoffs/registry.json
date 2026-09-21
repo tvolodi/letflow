@@ -6759,6 +6759,25 @@
       "released_lock": true,
       "last_known_step": "Step Final COMPLETED PASS (squash-merged 4fa39200, PR #1671)",
       "note": "ISS-0732/GH#1645, letflow-queue task 757 (queue_ref Q-757). BLOCKER: apply_review/4 never checked a passed rehearsal (PromotionAssertionRun) before allowing promotion to release. Fixed with a new verify_rehearsed/2 precondition (matching-digest, assertions_failed == 0, and -- per a design-amendment rework cycle closing OQ-2, found mid-run by a sibling ORCH session's own SECURITY-REVIEWER pass -- status not in [:running]). Frontend surfacing split out as ISS-0767 (queue task 767, GH#1664), NonSkippableApprovalGate.tsx NOT touched by this run despite being listed in owned_modules -- that lock line covers the reservation this run made for a possible in-scope frontend piece, released unused."
+    },
+    {
+      "run_id": "WF03-ISS0771-20260921",
+      "workflow_id": "WF-03",
+      "requirement_ids": [],
+      "stage": "S6",
+      "status": "IN_PROGRESS",
+      "owned_modules": [
+        "deploy/redeploy-qa.sh",
+        ".github/workflows/cd.yml",
+        "lib/letflow/tenant_provisioning.ex",
+        "lib/letflow/application.ex",
+        "docs/issues/ISS-0771.yaml"
+      ],
+      "lock_acquired_at": "2026-09-21T07:44:35Z",
+      "lock_released_at": null,
+      "released_lock": false,
+      "last_known_step": "Step 00 GIT SETUP (ORCH-executed) COMPLETED PASS -- branch feature/WF03-ISS0771-20260921 created in a new worktree (.claude/worktrees/WF03-ISS0771-20260921) off origin/main@dccc53e5, pushed",
+      "note": "ISS-0771/GH#1674, letflow-queue task 770 (queue_ref Q-770; queue's own mirrored issue_ref field reads ISS-0770 due to an id collision noted in the issue yaml -- queue_task_id 770 is authoritative). Root cause already diagnosed by ORCH (letflow-c5) prior to this run per the issue yaml -- ISSUE-FIXER Step 0.5/1 skipped by direct instruction; routes straight to CODE-DESIGNER (Step 2). Run performed in a dedicated git worktree, not the primary checkout, because the primary checkout held an unrelated in-flight WF02-REQ372 run's uncommitted state at run start."
     }
   ]
 }

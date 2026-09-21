@@ -28,6 +28,7 @@ defmodule Letflow.TenantProvisioningTest do
   import Ecto.Query
 
   alias Letflow.Identity.Tenant
+  alias Letflow.TenantFixture
   alias Letflow.TenantProvisioning
   alias Letflow.TenantProvisioning.MigrationFixture
   alias Letflow.TenantProvisioning.Registration
@@ -80,6 +81,57 @@ defmodule Letflow.TenantProvisioningTest do
 
   defp drop_schema!(schema_name) do
     Repo.query!(~s(DROP SCHEMA IF EXISTS "#{schema_name}" CASCADE))
+  end
+
+  # --- ISS-0771 helpers (replay_all_pending/0 describe block) ---------------------
+
+  defp tenant_table_count(schema_name) do
+    %{rows: [[count]]} =
+      Repo.query!(
+        "SELECT count(*) FROM information_schema.tables WHERE table_schema = $1",
+        [schema_name]
+      )
+
+    count
+  end
+
+  defp registration_row_count(tenant_id) do
+    Registration |> where([r], r.tenant_id == ^tenant_id) |> Repo.aggregate(:count)
+  end
+
+  defp users_role_claims_synced_at_column_exists?(schema_name) do
+    %{rows: rows} =
+      Repo.query!(
+        "SELECT 1 FROM information_schema.columns " <>
+          "WHERE table_schema = $1 AND table_name = 'users' AND column_name = 'role_claims_synced_at'",
+        [schema_name]
+      )
+
+    rows != []
+  end
+
+  # REQ-378's own migration (ISS-0771's incident hinged on exactly this one) --
+  # reused here deliberately, since it is the real-world case this issue exists to
+  # close, not an arbitrary stand-in.
+  @pending_migration_version 20_260_921_000_001
+
+  defp mark_migration_pending!(schema_name) do
+    Repo.query!(~s(ALTER TABLE "#{schema_name}".users DROP COLUMN role_claims_synced_at))
+
+    Repo.query!(
+      ~s(DELETE FROM "#{schema_name}".schema_migrations WHERE version = $1),
+      [@pending_migration_version]
+    )
+  end
+
+  defp migration_recorded?(schema_name) do
+    %{rows: rows} =
+      Repo.query!(
+        ~s(SELECT 1 FROM "#{schema_name}".schema_migrations WHERE version = $1),
+        [@pending_migration_version]
+      )
+
+    rows != []
   end
 
   # Minimal local helper mirroring Ecto's own test-helper convention (identical to the
@@ -498,6 +550,95 @@ defmodule Letflow.TenantProvisioningTest do
                )
 
       refute table_exists_in_schema?("public", "req022_demo_marker")
+    end
+  end
+
+  # ---------------------------------------------------------------------------------
+  # ISS-0771: Letflow.TenantProvisioning.replay_all_pending/0, the boot-time-hook
+  # orchestration function -- see test/specs/ISS-0771.md and
+  # lib/letflow/design/iss0771-tenant-migration-replay-on-deploy.md for the full
+  # rationale. Because this is a brand-new function (not a change to existing
+  # behavior), the WF-03 fail-then-pass rule is satisfied only via mutation testing,
+  # recorded in this run's TEST-DESIGNER handoff -- not restated here.
+  #
+  # Uses Letflow.TenantFixture.provisioned_tenant!/1 (test/support/tenant_fixture.ex)
+  # for every provisioned tenant below -- the established fixture for this codebase,
+  # not new provisioning machinery. It flips Letflow.Repo to Sandbox :auto mode itself
+  # and registers its own on_exit/1 teardown (drops the schema, deletes the
+  # Registration and Tenant rows), matching this file's own async: false,
+  # non-transactional pattern for the two describe blocks above.
+  # ---------------------------------------------------------------------------------
+
+  describe "replay_all_pending/0 (ISS-0771)" do
+    test "calling it twice against a fully migrated tenant is a safe no-op both times" do
+      %{tenant_id: tenant_id, schema_name: schema_name} =
+        TenantFixture.provisioned_tenant!(slug_prefix: "iss0771-idempotent")
+
+      # Settle first -- provisioned_tenant!/1 already yields a fully migrated schema
+      # (its own assert_schema_complete!/2 already checked this), but calling once
+      # more up front makes the "both subsequent calls are identical" comparison below
+      # exercise the true steady state rather than depend on that assumption.
+      settle = TenantProvisioning.replay_all_pending()
+      assert tenant_id in settle.ok
+      refute Enum.any?(settle.error, fn {id, _reason} -> id == tenant_id end)
+
+      table_count_before = tenant_table_count(schema_name)
+
+      first = TenantProvisioning.replay_all_pending()
+      second = TenantProvisioning.replay_all_pending()
+
+      assert tenant_id in first.ok
+      assert tenant_id in second.ok
+      refute Enum.any?(first.error, fn {id, _reason} -> id == tenant_id end)
+      refute Enum.any?(second.error, fn {id, _reason} -> id == tenant_id end)
+
+      # No duplicate DDL: the schema's own table count is unchanged across both calls.
+      assert tenant_table_count(schema_name) == table_count_before
+
+      # No duplicate rows: still exactly one Registration row for this tenant.
+      assert registration_row_count(tenant_id) == 1
+    end
+
+    test "one tenant's broken schema does not abort replay for a healthy sibling tenant" do
+      healthy = TenantFixture.provisioned_tenant!(slug_prefix: "iss0771-healthy")
+      broken = TenantFixture.provisioned_tenant!(slug_prefix: "iss0771-broken")
+
+      # Simulates the design doc's own "corrupt/unreachable schema" example -- the
+      # Registration row still points at a schema_name that no longer physically
+      # exists, so Ecto.Migrator.run/4's prefix-scoped work has nothing to run
+      # against and raises.
+      Repo.query!(~s(DROP SCHEMA IF EXISTS "#{broken.schema_name}" CASCADE))
+
+      result = TenantProvisioning.replay_all_pending()
+      broken_tenant_id = broken.tenant_id
+
+      assert healthy.tenant_id in result.ok
+
+      assert {^broken_tenant_id, reason} =
+               Enum.find(result.error, fn {id, _reason} -> id == broken_tenant_id end)
+
+      assert match?({:migration_failed, _exception}, reason)
+    end
+
+    test "actually applies a migration that is pending against an already-provisioned tenant" do
+      %{tenant_id: tenant_id, schema_name: schema_name} =
+        TenantFixture.provisioned_tenant!(slug_prefix: "iss0771-pending")
+
+      assert users_role_claims_synced_at_column_exists?(schema_name)
+      assert migration_recorded?(schema_name)
+
+      mark_migration_pending!(schema_name)
+
+      refute users_role_claims_synced_at_column_exists?(schema_name)
+      refute migration_recorded?(schema_name)
+
+      result = TenantProvisioning.replay_all_pending()
+
+      assert tenant_id in result.ok
+      refute Enum.any?(result.error, fn {id, _reason} -> id == tenant_id end)
+
+      assert users_role_claims_synced_at_column_exists?(schema_name)
+      assert migration_recorded?(schema_name)
     end
   end
 end

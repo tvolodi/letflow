@@ -1,0 +1,67 @@
+{
+  "handoff_id": "a1b2c3d4-0000-4000-8000-000000000005",
+  "run_id": "WF03-ISS0771-20260921",
+  "workflow_id": "WF-03",
+  "step": "04",
+  "from_agent": "ORCH",
+  "to_agent": "SECURITY-REVIEWER",
+  "file": "handoffs/WF03-ISS0771-20260921/step-04-security-reviewer.json",
+  "created_at": "2026-09-21T07:56:51Z",
+  "started_at": "2026-09-21T07:56:51Z",
+  "completed_at": "2026-09-21T07:58:41Z",
+  "status": "COMPLETED",
+  "priority": "HIGH",
+  "context": {
+    "stage": "S6",
+    "requirement_ids": [],
+    "requirement_text": {},
+    "artifacts_in": [
+      "lib/letflow/design/iss0771-tenant-migration-replay-on-deploy.md",
+      "docs/agents/instructions/security-invariants.md",
+      "docs/issues/ISS-0771.yaml"
+    ],
+    "owned_modules": [
+      "lib/letflow/tenant_provisioning.ex",
+      "lib/letflow/tenant_provisioning/migration_replay_boot.ex",
+      "lib/letflow/supervisor/infrastructure.ex"
+    ]
+  },
+  "task": {
+    "description": "Gate this diff (git diff main...feature/WF03-ISS0771-20260921, or just this branch's commits 80cffbb3 onward -- run `git log --oneline main..HEAD` and `git diff main...HEAD -- lib/letflow/tenant_provisioning.ex lib/letflow/tenant_provisioning/migration_replay_boot.ex lib/letflow/supervisor/infrastructure.ex` to see the real diff) against docs/agents/instructions/security-invariants.md. This touches Letflow.TenantProvisioning (tenant schema migration replay) and the supervision tree boot path -- run your own scope test rather than assuming it applies or doesn't; state your reasoning either way per invariant, per the worked example shape in HANDOFF_PROTOCOL.md ('security-reviewer-scoped'). CODE-DESIGN-VALIDATOR already assessed the design doc's own INV-1/4/6/7/8 claims at the design-review stage (see step-02 result) -- your job here is to re-verify against the ACTUAL SHIPPED CODE, not the design doc's prose, since implementation can diverge from design.",
+    "acceptance_criteria": [
+      "State APPLIES or NOT-APPLICABLE for every invariant in security-invariants.md, with a one-clause reason each",
+      "For every APPLIES invariant, cite the actual diff/line evidence for PASS or name the specific violation for FAIL",
+      "Specifically verify: does replay_all_pending/0 or MigrationReplayBoot introduce any new query/DDL path outside the existing prefix:-scoped Ecto.Migrator.run/4 mechanism (INV-1)?",
+      "Specifically verify: does the new Logger output in migration_replay_boot.ex ever log a secret-shaped value (a migration exception's message, a connection string) unredacted, and is it confirmed the LogFilter is registered before this child starts (INV-4)?",
+      "Specifically verify: can MigrationReplayBoot.start_link/1 actually crash Letflow.Supervisor.Infrastructure's own startup under any code path you can find in the real diff (INV-8)?"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "Scope test: this diff touches Letflow.TenantProvisioning (tenant-scoped migration replay orchestration) and the Infrastructure supervisor boot path -> a tenant-data path (INV-6 trigger). Reviewed git diff main...HEAD -- lib/letflow/tenant_provisioning.ex lib/letflow/tenant_provisioning/migration_replay_boot.ex lib/letflow/supervisor/infrastructure.ex (commit 80cffbb3) directly, not the design doc's prose.\n\nINV-1 (tenant data isolation) -- APPLIES (touches tenant-scoped migration replay, S1 done/S2 migrations exist per applicability note). PASS. replay_all_pending/0 (tenant_provisioning.ex ~L401-455) is pure Enum orchestration over the pre-existing, unchanged replay_migrations/2 (L372-399), which still calls Ecto.Migrator.run(Repo, migrations, :up, prefix: schema_name, ...) at L383-387 -- the exact 0003-decided mechanism, byte-identical to before this diff (confirmed via diff: replay_migrations/2's body has zero changes). MigrationReplayBoot issues no Repo/query calls of its own -- run_replay/0 only calls TenantProvisioning.list_registrations/0 (pre-existing, queries the Registration table, not tenant business data) and TenantProvisioning.replay_all_pending/0. No new migration file in this diff (git show --stat confirms only infrastructure.ex, tenant_provisioning.ex, migration_replay_boot.ex changed -- no priv/repo/migrations/*.exs). (a) confirmed prefix-scoped; (b) no new table created by this diff, N/A; (c) no tenant_id column introduced by this diff, N/A. No new query/DDL path outside the existing prefix:-scoped Ecto.Migrator.run/4 mechanism.\n\nINV-2 (server-side field authorisation) -- NOT-APPLICABLE. No API response type or serialisation path touched; S4 has not started.\n\nINV-3 (untrusted runtime sandboxing) -- NOT-APPLICABLE. No Lua/WASM scripting path touched; S5 has not started.\n\nINV-4 (secrets by reference only) -- APPLIES (new Logger calls added in migration_replay_boot.ex). PASS, with one non-blocking documentation correction filed as an issue. Verified: (1) Letflow.Application.start/2 (lib/letflow/application.ex L19-22) registers :logger.add_primary_filter(:letflow_secrets_redaction, {&Letflow.Secrets.LogFilter.filter/2, %{}}) as the literal first statement of start/2, strictly before the Supervisor tree (which contains Infrastructure -> MigrationReplayBoot) is started later in the same function -- confirmed the filter is registered before this child starts. (2) Inspected every new Logger call: Logger.error (boot.ex L37-40, unexpected-exception path) logs Exception.format(:error, exception, __STACKTRACE__); Logger.warning (L64-66, per-tenant failure) logs tenant_id, schema_name, inspect(reason) where reason is one of replay_migrations/2's own tagged reasons (:tenant_not_provisioned, {:migration_failed, exception}, {:event_type_seed_failed, term}) or {:unexpected_exception, exception}; Logger.info (L69) logs only ok/error counts. None of tenant_id, schema_name, or these tagged-reason shapes are secret material per INV-4's definition (API keys, webhook signing keys, OIDC client secrets, database URLs) -- confirmed no code path threads a resolved secret (env var, config value, connection string) into any of these calls. Correction filed as a non-blocking issue below: the design doc (iss0771-tenant-migration-replay-on-deploy.md L349-357) and this module's own moduledoc claim LogFilter 'already redacts any secret-shaped metadata regardless' as the reason INV-4 is satisfied -- but Letflow.Secrets.LogFilter.filter/2 (log_filter.ex L27-29) only redacts log_event.meta (the metadata map), never log_event.msg. All of this diff's new Logger calls build their content via string interpolation/concatenation into the MESSAGE (Exception.format(...) <> ..., \"...reason=#{inspect(reason)}\"), not via Logger metadata keys -- so LogFilter's redaction mechanism does NOT actually cover this logging, contrary to what both docs claim. This is not a BLOCKER here because independent verification (above) confirms none of the actual values logged are secret-shaped, so no live violation exists today -- but the stated justification is factually wrong and would mislead a future change that logs something secret-shaped through this same message-interpolation pattern, trusting a filter that doesn't apply. Filed as issue for doc correction / follow-up hardening, not a rework trigger.\n\nINV-5 (not-found/forbidden indistinguishability) -- NOT-APPLICABLE. No lookup-by-ID endpoint touched; S4 has not started.\n\nINV-6 (new data-access paths prove their scoping) -- APPLIES (meta-invariant, always in scope for a new caller of tenant data). PASS -- this handoff is the proof artefact: INV-1/INV-4/INV-7/INV-8 explicitly assessed above against the actual shipped diff, each with cited evidence, independent of the design doc's own (step-02) assessment.\n\nINV-7 (no SQL string interpolation) -- APPLIES (Ecto already in use, diff touches tenant_provisioning.ex). PASS. grep -rn \"Repo.query\" across the three owned_modules finds only pre-existing Repo.query! call sites in tenant_provisioning.ex (L307, 321, 1225, 1269, 1578, 1604, 1709, 1825, 2030, 2172, 2223, 2239, 2278) -- confirmed via the diff that none of these lines were added, changed, or touched by commit 80cffbb3 (the diff's only addition is replay_all_pending/0, which issues zero Repo.query calls, only calling replay_migrations/2 and list_registrations/0). migration_replay_boot.ex and infrastructure.ex contain no Repo.query calls at all. No new raw-SQL string interpolation introduced by this diff.\n\nINV-8 (no unhandled crashes on realistic failure paths) -- APPLIES (new boot-time child touching DB I/O and per-tenant data in the supervision boot path). PASS. Verified two independent rescue layers survive in the shipped code: Layer 1 is replay_migrations/2's own unchanged try/rescue (tenant_provisioning.ex L378-397) converting any Ecto.Migrator.run/4 raise into {:error, {:migration_failed, exception}}. Layer 2 is replay_all_pending/0's own per-tenant try/rescue (L~430-450) around each replay_migrations/2 call, independent of Layer 1, converting any exception into {:unexpected_exception, exception} tagged into the :error list rather than propagating -- confirmed one tenant's migration failure cannot abort the loop over remaining tenants. Layer 3 is MigrationReplayBoot.start_link/1's own top-level try/rescue (migration_replay_boot.ex L27-41) around the entire run_replay/0 call, unconditionally returning :ignore after the try/rescue block regardless of whether the rescue fired -- confirmed by reading the literal code shape (rescue clause only logs; :ignore is the function's last expression, outside and after the try). Specific check requested: can start_link/1 crash Infrastructure's own startup under any code path in the real diff? No exception-raising path was found that escapes all three rescue layers. One residual, narrow, non-diff-introduced risk noted for completeness: `rescue` catches raised exceptions only, not `:exit` signals -- a hard DBConnection/GenServer.call timeout during list_registrations/0 or Ecto.Migrator.run/4 could in theory surface as a process :exit rather than a raised exception, which would not be caught by try/rescue and would crash start_link/1, in turn failing Infrastructure's Supervisor.init/2. This is not a NEW risk class introduced by this diff, however: the pre-existing {Ecto.Migrator, ...} child immediately before MigrationReplayBoot in the same supervisor already carries the identical DB-unavailable-at-boot exposure, and INV-8's rule text explicitly scopes its concern to 'tenant-controlled input' crashing a shared process (a DB-down infra failure at boot is not tenant-controlled input, and failing to boot without a working DB is not itself unreasonable for this class of failure). No tenant-controlled-data path was found that reaches an unrescued raise or exit -- every per-tenant failure (including reasons derived from tenant-scoped migration content) is caught by Layer 2 before it can reach start_link/1's own try. PASS.",
+    "artifacts_out": [
+      "handoffs/WF03-ISS0771-20260921/step-04-security-reviewer.json"
+    ],
+    "issues": [
+      {
+        "severity": "MINOR",
+        "invariant": "INV-4",
+        "description": "Design doc (lib/letflow/design/iss0771-tenant-migration-replay-on-deploy.md L349-357) and Letflow.TenantProvisioning.MigrationReplayBoot's own moduledoc justify INV-4 compliance by claiming Letflow.Secrets.LogFilter 'already redacts any secret-shaped metadata regardless.' This is imprecise: LogFilter.filter/2 (lib/letflow/secrets/log_filter.ex L27-29) redacts only log_event.meta, never log_event.msg, and every new Logger call in migration_replay_boot.ex builds its content via message string interpolation/concatenation, not via metadata keys -- so LogFilter's redaction does not actually apply to this logging. No live violation exists today because none of the values currently logged (tenant_id, schema_name, migration-failure reason shapes) are secret-shaped, so this is not a BLOCKER against the current diff -- but the stated justification would mislead a future change that logs a genuinely secret-shaped value through this same message-interpolation pattern. Recommend a follow-up doc correction (design doc + moduledoc) and/or converting these Logger calls to pass tenant_id/schema_name/reason as Logger metadata (so LogFilter's existing mechanism genuinely covers them) rather than string-interpolating into the message.",
+        "blocking": false
+      }
+    ],
+    "git_evidence": {
+      "branch_name": "feature/WF03-ISS0771-20260921",
+      "commit_sha_list": [
+        "80cffbb306723d28c25fa23e6660eacc83b12a0d"
+      ],
+      "remote_branch": null,
+      "push_status": "skipped",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": "route to REVIEWER"
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

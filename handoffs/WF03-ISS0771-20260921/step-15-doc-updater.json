@@ -1,0 +1,52 @@
+{
+  "handoff_id": "a1b2c3d4-0000-4000-8000-00000000000f",
+  "run_id": "WF03-ISS0771-20260921",
+  "workflow_id": "WF-03",
+  "step": "15",
+  "from_agent": "ORCH",
+  "to_agent": "DOC-UPDATER",
+  "file": "handoffs/WF03-ISS0771-20260921/step-15-doc-updater.json",
+  "created_at": "2026-09-21T18:02:00Z",
+  "started_at": "2026-09-21T18:10:00Z",
+  "completed_at": null,
+  "status": "IN_PROGRESS",
+  "priority": "HIGH",
+  "context": {
+    "stage": "S6",
+    "requirement_ids": [],
+    "requirement_text": {},
+    "related_handoff_ids": ["a1b2c3d4-0000-4000-8000-00000000000e"],
+    "artifacts_in": [
+      "docs/issues/ISS-0771.yaml",
+      "lib/letflow/tenant_provisioning/migration_replay_boot.ex",
+      "lib/letflow/tenant_provisioning.ex",
+      "lib/letflow/supervisor/infrastructure.ex"
+    ],
+    "owned_modules": []
+  },
+  "task": {
+    "description": "All gates PASSED for ISS-0771 (BLOCKER, GH#1674): CODE-DESIGNER/CODE-DESIGN-VALIDATOR, ELIXIR-DEV implementation (incl. a rework fixing a missing child_spec/1 boot-crash defect TEST-DESIGNER caught, re-gated by SECURITY-REVIEWER/REVIEWER), TEST-DESIGNER/TEST-DESIGN-VALIDATOR/TEST-RUNNER all independently confirmed 23/23 targeted tests and full-suite results (only 2 pre-existing, unrelated, already-documented flaky failures in test/letflow/identity_test.exs). Flip docs/issues/ISS-0771.yaml's status to resolved, with a resolved_by/resolved_in_run/resolved_at, and a summary of the real fix (boot-time MigrationReplayBoot supervision-tree child calling Letflow.TenantProvisioning.replay_all_pending/0). Then open a PR for this branch against main, wait for CI, and merge once green -- this is Step Final for this WF-03 run.",
+    "acceptance_criteria": [
+      "docs/issues/ISS-0771.yaml status flipped to resolved with real evidence summary",
+      "PR opened, CI green, merged to main",
+      "letflow-queue task 770 released with status: done (mirrors to closing GH#1674) -- ORCH will handle the queue release itself after your merge, just confirm the PR is merged in your result"
+    ]
+  },
+  "result": {
+    "status": "PENDING",
+    "summary": null,
+    "artifacts_out": [],
+    "issues": [],
+    "git_evidence": {
+      "branch_name": "feature/WF03-ISS0771-20260921",
+      "commit_sha_list": [],
+      "remote_branch": null,
+      "push_status": null,
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": null
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

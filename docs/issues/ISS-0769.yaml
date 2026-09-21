@@ -1,0 +1,36 @@
+id: ISS-0769
+title: >
+  QA app container crash/error logging dumped a full bearer token in a
+  stack-trace
+discovered_by: ai-dala-infra-34 (peer session, T-0140), escalated via cross-session message; recorded by ORCH (letflow-c5)
+discovered_in_run: T-0140-seed-swiftroute-tenant-persona-qa-users (ai-dala-infra)
+discovered_at: "2026-09-21T03:05:00Z"
+severity: MINOR
+description: >
+  Observed live by a peer ai-dala-infra session while reading
+  letflow-qa-app-1 container logs to diagnose ISS-0768 (RoleRegistry
+  prefix bug). The app's verbose error/crash logging included a full
+  bearer token value inside a stack-trace dump, rather than redacting
+  it. Not reproduced or captured verbatim by either session -- believed
+  short-lived (QA token, since rolled over as a precaution) and not
+  persisted anywhere in either session's own output/files. Filed as a
+  tracked, non-urgent observation: no confirmed exploitation, QA-only
+  credential, already rotated -- but real, and worth a permanent fix
+  since crash logs commonly get shipped to less-trusted log aggregation.
+affected_files:
+  - lib/letflow (exact logging path not yet located -- likely a
+    Plug.Exception/Logger.error path or an unredacted conn.req_headers
+    dump in a crash report; needs ISSUE-FIXER diagnosis)
+fix_direction: >
+  ISSUE-FIXER to locate the logging path that can include a raw
+  Authorization/bearer-token header or value in an error/crash log or
+  stack trace (grep for Logger.error / Plug.Exception handling around
+  request context, and any conn dump in a crash report). ELIXIR-DEV
+  redacts Authorization header / bearer token values before they reach
+  any log sink, in all environments (not QA-only). Needs a regression
+  test asserting a crash triggered mid-request does not leak the
+  request's Authorization header value into the log output.
+queue_ref: Q-769  # letflow-queue task id 769, issue_ref ISS-0769. Registered
+  # 2026-09-21 by ORCH.
+github_ref: GH-1666
+status: open

@@ -1,0 +1,44 @@
+{
+  "handoff_id": "d1a2f3b4-0001-4a1e-9c11-9f0733000002",
+  "run_id": "WF03-ISS0733-20260921",
+  "workflow_id": "WF-03",
+  "step": "01",
+  "from_agent": "ORCH",
+  "to_agent": "ISSUE-FIXER",
+  "file": "handoffs/WF03-ISS0733-20260921/step-01-issue-fixer-diagnosis.json",
+  "created_at": "2026-09-21T00:05:00Z",
+  "started_at": "2026-09-21T00:05:00Z",
+  "completed_at": "2026-09-21T00:13:40Z",
+  "status": "COMPLETED",
+  "priority": "HIGH",
+  "context": {
+    "stage": "S6",
+    "requirement_ids": [],
+    "requirement_text": {},
+    "source_text": {},
+    "related_handoff_ids": [],
+    "artifacts_in": ["docs/issues/ISS-0733.yaml", "lib/letflow/definitions/promotion.ex"],
+    "owned_modules": []
+  },
+  "task": {
+    "description": "Diagnose ISS-0733 (no DEFINITION_PROMOTED audit/event entry found via any queried surface after a real promotion release). Read docs/issues/ISS-0733.yaml in full. Trace: (1) whether opts[:event_appender] wired to apply_review/4 in production is Letflow.EventStore.PlatformEvents.append_definition_promoted/2, a stub, or something else; (2) whether EventStore.append/2 actually supports the platform_instance_id sentinel append, tracing the current code rather than trusting promotion.ex's moduledoc which may be stale; (3) run or write a real test to observe whether the append succeeds for a genuine apply_review/4 call; (4) if it succeeds, find why GET /api/v1/audit and GET /api/v1/instances/.../timeline can't find it -- is there a real platform-events read path anywhere; (5) if it silently fails, find where/why and whether do_apply_review/3's failure path (marking the review :failed) is what actually happened for the real pilot review. Diagnosis only -- no fix. Report root cause, file/line evidence, and a sizing recommendation (same-session ELIXIR-DEV fix vs CODE-DESIGNER pass vs split via REQ-ANALYST).",
+    "acceptance_criteria": [
+      "Reproduces/traces the real code path rather than diagnosing from the bug report's prose alone",
+      "States definitively whether the event append succeeds or fails today, with evidence (test run or direct trace)",
+      "Identifies every read-path gap separately from the write-path question",
+      "Gives a concrete sizing recommendation naming the files a fix would touch"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "Root cause: TWO independent missing-write/missing-read-path gaps, not a silently-failing event append. (1) Event-append side is NOT silently failing: lib/letflow/routers/promotions.ex:594-597 wires event_appender: &PlatformEvents.append_definition_promoted/2 (real adapter, not a stub); platform_events.ex:64-100 builds event_attrs matching the DEFINITION_PROMOTED schema_version 2 registered in tenant_provisioning.ex:927-965. Ran `mix test test/letflow/event_store/platform_events_test.exs` for real: 9 passed, driving the real producer chain end to end and confirming a real INSERT INTO events with instance_id = platform_instance_id() commits successfully (instance_projections deliberately stays empty for the sentinel -- event_store.ex:875-876's own documented design). Caveat: this holds only for a tenant whose event_type_registry was backfilled to schema_version 2 (ISS-0332, resolved 2026-08-26) -- whether QA's real tenants had that backfill run is an operational fact outside the repo, not a code bug if unconfirmed. Conclusion: the pilot review almost certainly reports :applied correctly and the event genuinely lands in the events table. (2) GET /api/v1/audit real bug: lib/letflow/routers/audit.ex:15-24 documents that since REQ-196 /audit reads ONLY from the audit_entries table (Letflow.Audit.Entry), never the event store. Rows appear only via explicit Letflow.Audit.insert_entry/3 calls -- grepped every caller: lib/letflow/definitions.ex:1903 (definition lifecycle) and lib/letflow/engine/task_activation.ex. lib/letflow/definitions/promotion.ex and lib/letflow/routers/promotions.ex call Letflow.Audit NOWHERE. This exactly explains the pilot's two audit-query observations (source tenant showed only definition.create/activate; target tenant showed only Engine-generated instance/task/artifact entries) -- promotion.ex's write_target_definition/4 (lines 345-372) inlines its own raw Repo.insert/Repo.update_all with no Audit call, and append_promotion_event/9 (411-446) only calls the event-store adapter. Even a 100%-succeeding append will never show in /audit -- it is structurally wired to the wrong table. (3) GET /api/v1/instances/:platform_instance_id/timeline real bug: instances.ex:169-198's timeline/3 calls ensure_instance_exists/2 first, which requires a real instance_projections row -- and platform_instance_id/0's own doc (event_store.ex:871-879) states it is 'Never inserted into instance_projections' by design. So this endpoint 404s for EVERY caller, always, regardless of whether any platform event was ever appended -- the issue's premise that this endpoint is a documented read surface for platform events is not borne out by current code. No dedicated platform-events read endpoint exists anywhere in lib/letflow/routers/ (grepped, none found). SIZING RECOMMENDATION: needs a CODE-DESIGNER pass, not a same-session ELIXIR-DEV fix. Reasons: (a) a new write path is needed -- should the audit-entry write join promotion.ex's write_target_definition/4 transaction (like every other Audit.insert_entry call site) or follow the event-append's deliberate after-commit pattern (step 9, OQ-1)? That's an unresolved design call the moduledoc already flags, not implementation detail. (b) a new/changed read path is needed -- either a dedicated platform-scoped events endpoint, or special-casing ensure_instance_exists/timeline/3 to bypass the instance_projections check for the platform sentinel -- both carry authz-shape decisions (who can read platform-wide promotion events). (c) multiple files with no single obvious shape: lib/letflow/definitions/promotion.ex, lib/letflow/audit.ex, lib/letflow/instances.ex, and/or a new router file or lib/letflow/routers/promotions.ex / instances.ex. Recommends CODE-DESIGNER resolve both gaps together in one design doc (both trace to EO-004's single acceptance criterion) rather than pre-splitting into separate requirements.",
+    "artifacts_out": [],
+    "issues": [
+      {"severity": "MAJOR", "description": "lib/letflow/definitions/promotion.ex calls Letflow.Audit nowhere -- promotion writes never produce an audit_entries row, so GET /api/v1/audit structurally can never show a promotion.", "affected_requirement": null},
+      {"severity": "MAJOR", "description": "GET /api/v1/instances/:platform_instance_id/timeline 404s unconditionally for every caller by design (platform_instance_id is deliberately never inserted into instance_projections) -- no platform-scoped events read endpoint exists anywhere.", "affected_requirement": null}
+    ],
+    "next_action": "Route to Step 2 -- CODE-DESIGNER fix design covering both the audit-entry write-path gap and the platform-events read-path gap for EO-004"
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

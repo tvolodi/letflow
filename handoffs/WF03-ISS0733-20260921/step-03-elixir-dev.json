@@ -1,0 +1,64 @@
+{
+  "handoff_id": "d1a2f3b4-0001-4a1e-9c11-9f0733000007",
+  "run_id": "WF03-ISS0733-20260921",
+  "workflow_id": "WF-03",
+  "step": "03",
+  "from_agent": "ORCH",
+  "to_agent": "ELIXIR-DEV",
+  "file": "handoffs/WF03-ISS0733-20260921/step-03-elixir-dev.json",
+  "created_at": "2026-09-21T00:27:36Z",
+  "started_at": "2026-09-21T00:27:36Z",
+  "completed_at": "2026-09-21T00:34:41Z",
+  "status": "COMPLETED",
+  "priority": "HIGH",
+  "context": {
+    "stage": "S6",
+    "requirement_ids": [],
+    "requirement_text": {},
+    "source_text": {},
+    "related_handoff_ids": ["d1a2f3b4-0001-4a1e-9c11-9f0733000006"],
+    "artifacts_in": [
+      "lib/letflow/design/iss0733-promotion-audit-and-platform-events-read.md",
+      "handoffs/WF03-ISS0733-20260921/step-01-issue-fixer-diagnosis.json",
+      "docs/issues/ISS-0733.yaml"
+    ],
+    "owned_modules": [
+      "lib/letflow/definitions/promotion.ex",
+      "lib/letflow/audit.ex",
+      "lib/letflow/event_store.ex",
+      "lib/letflow/routers/promotions.ex"
+    ]
+  },
+  "task": {
+    "description": "Implement the gate-approved design at lib/letflow/design/iss0733-promotion-audit-and-platform-events-read.md in full -- follow it exactly, do not deviate from its transactionality decision (GAP A: audit-entry write inside promote_definition/3's pre-commit transaction, via a widened write_target_definition/5) or its read-path decision (GAP B: new GET /promotions/platform-events route + Letflow.EventStore.list_platform_events/1, PLATFORM_ADMIN-gated, not an Instances.timeline/3 change). Implement every @spec and data shape the design states. Run mix compile --warnings-as-errors and mix test for the affected modules (definitions/promotion_test.exs, audit_test.exs, routers/promotions_test.exs, event_store_test.exs or their equivalents -- check what exists) before completing -- quote the real command output, do not claim success without running it.",
+    "acceptance_criteria": [
+      "Implementation matches the gate-approved design doc's signatures/shapes exactly -- no silent deviation",
+      "mix compile --warnings-as-errors passes with zero warnings",
+      "Existing tests for lib/letflow/definitions/promotion.ex, lib/letflow/audit.ex, lib/letflow/routers/promotions.ex, lib/letflow/instances.ex all still pass unchanged (no test-asserted behaviour regressed)",
+      "The new GET /promotions/platform-events route and Letflow.EventStore.list_platform_events/1 exist and are reachable, gated per the design's stated authz boundary"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "Implemented the gate-approved design exactly. GAP A: write_target_definition/4 -> /5 in lib/letflow/definitions/promotion.ex; the widened function now takes an audit_context map (review_id/source_tenant_id/target_tenant_id, already available to do_promote_definition/7) and, as a new step 8(c) INSIDE the same Repo.transaction/1 that deprecates the previous active row and activates the new one, calls Audit.insert_entry(Repo, attrs, target_prefix) with action \"definition.promote\", resource_type \"definition\", resource_id = new_row.id, before_state nil, after_state field-for-field identical to append_promotion_event/9's own DEFINITION_PROMOTED event_attrs, trace_id nil -- {:error, reason} -> Repo.rollback(reason), the same pattern activate_draft_row/4 in definitions.ex already uses. No public-function signature changed (promote_definition/3, promote_active_definition/5, apply_review/4 untouched); lib/letflow/audit.ex and lib/letflow/instances.ex were not modified, per the design's files-touched table. GAP B: new GET /promotions/platform-events route (R11) added to lib/letflow/routers/promotions.ex, declared before get \"/:id\" so the literal path segment isn't captured by the :id wildcard; :Unknown-gated via the plain get macro (no policy key), matching every other route in that router (PLATFORM_ADMIN-only per Letflow.Api.Authorization.evaluate_access/2's catch-all). Backed by a new Letflow.EventStore.list_platform_events/1 (queries events where instance_id == platform_instance_id(), optional event_type filter, ordered asc: sequence_number, page_size+1/drop-extra-row cursor idiom, decoded payload returned as-is). Response is a hand-built allowlist map (event_id/event_type/actor_id/timestamp/sequence_num/payload) with a distinct \"PE:\" cursor-endpoint prefix (does not collide with \"A:\"/\"T:\"/\"U:\" already in use). Real command output: `mix compile --warnings-as-errors` -> clean compile, zero warnings, on all three edits (verified after each file and again at the end). `mix test test/letflow/definitions/promotion_test.exs test/letflow/audit_test.exs test/letflow/event_store_test.exs test/letflow/routers/req077_promotion_pipeline_test.exs` -> 'Finished in 78.6 seconds ... Result: 77 passed'. `mix test test/letflow/definitions_test.exs test/letflow/entities/definitions_test.exs test/letflow/routers/definitions_test.exs test/letflow/routers/instances_test.exs` -> 'Finished in 81.9 seconds ... Result: 133 passed'. 210 tests total, 0 failures, 0 regressions across every acceptance-criterion-named suite plus lib/letflow/instances.ex's own router test (untouched code path, confirmed still green).",
+    "artifacts_out": [
+      "lib/letflow/definitions/promotion.ex",
+      "lib/letflow/event_store.ex",
+      "lib/letflow/routers/promotions.ex"
+    ],
+    "issues": [
+      {"severity": "MINOR", "description": "ORCH bookkeeping correction (mix letflow.lint_handoffs H2/H3, caught at Step Final): this handoff originally carried a non-schema top-level 'git_evidence' key (now moved into result.git_evidence) and a fabricated created_at/started_at (01:40:00Z) that postdated the agent's real completed_at (00:34:41Z) -- ORCH had estimated the dispatch timestamp from memory instead of reading the clock at dispatch, violating HANDOFF_PROTOCOL.md 1.2. Corrected to 00:27:36Z, taken from the real git commit timestamp of the dispatch commit (9a5e8843, converted from +05:00 to UTC) as the closest available honest evidence -- no live clock read exists for a past dispatch, so this is a correction, not a backfill of a value that was never recorded.", "affected_requirement": null}
+    ],
+    "next_action": "Route to SECURITY-REVIEWER (tenant-data path: new audit-entry write and a new route that surfaces source_tenant_id/target_tenant_id in a promotion event payload -- design OQ-3 explicitly flags this route for SECURITY-REVIEWER attention re: the pre-existing permission_checker always-true gap), then REVIEWER, before TEST-DESIGNER.",
+    "git_evidence": {
+      "branch_name": "feature/WF03-ISS0733-20260921",
+      "commit_sha_list": ["4d014e6d25bff739bc7624048437c1843ce5e383"],
+      "remote_branch": "origin/feature/WF03-ISS0733-20260921",
+      "push_status": "ok",
+      "pr_url": null,
+      "pr_create_error": null
+    }
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

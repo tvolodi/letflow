@@ -61,4 +61,15 @@ queue_ref: Q-758  # letflow-queue task id 758, issue_ref ISS-0758 (queue's own
   # numbering doesn't match this file's local ISS-0733 id -- see TASK_QUEUE.md's
   # "Never derive a set_lock target from a filename"). Registered 2026-09-20 by ORCH.
 github_ref: GH-1646
-status: open
+status: resolved
+resolved_in_run: WF03-ISS0733-20260921
+resolved_at: "2026-09-21T01:13:54Z"
+resolution_note: >
+  promotion.ex now writes an audit_entries row inside its existing
+  transaction (GAP A), and a new GET /promotions/platform-events +
+  Letflow.EventStore.list_platform_events/1 gives EO-004 a real
+  platform-scoped read surface (GAP B), per
+  lib/letflow/design/iss0733-promotion-audit-and-platform-events-read.md.
+  Regression tests: test/letflow/definitions/promotion_test.exs,
+  test/letflow/event_store/platform_events_test.exs,
+  test/letflow/routers/promotions_test.exs. Full suite 4492/4492 green.

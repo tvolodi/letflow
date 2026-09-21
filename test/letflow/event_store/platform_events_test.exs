@@ -746,4 +746,184 @@ defmodule Letflow.EventStore.PlatformEventsTest do
       assert reread_review.superseded_by == result.event_id
     end
   end
+
+  # ---------------------------------------------------------------------------------
+  # ISS-0733 GAP B -- Letflow.EventStore.list_platform_events/1 (design §2.5).
+  # Brand-new code (did not exist pre-fix at all) -- per WF-03's "non-existence"
+  # section, a fail-first run only proves UndefinedFunctionError, not
+  # correctness, so this coverage is corroborated by mutation testing
+  # (see the WF-03 handoff's result.summary for the mutant runs/counts) rather
+  # than by a fail-then-pass proof against main.
+  # ---------------------------------------------------------------------------------
+
+  describe "ISS-0733 GAP B -- list_platform_events/1" do
+    test "returns platform-sentinel events ascending by sequence_number, with real payload/actor_id/event_id" do
+      %{tenant_id: tenant_id, schema_name: schema_name} =
+        provisioned_tenant("req0733-gapb-order")
+
+      event_type = register_event_type!(tenant_id)
+      actor_id = Ecto.UUID.generate()
+
+      assert {:ok, %{event: e1}} =
+               EventStore.append_platform_event(
+                 platform_attrs(event_type, %{actor_id: actor_id}),
+                 prefix: schema_name
+               )
+
+      assert {:ok, %{event: e2}} =
+               EventStore.append_platform_event(
+                 platform_attrs(event_type, %{actor_id: actor_id}),
+                 prefix: schema_name
+               )
+
+      assert {:ok, %{items: items, next_cursor: nil}} =
+               EventStore.list_platform_events(%{prefix: schema_name, page_size: 50})
+
+      assert Enum.map(items, & &1.event_id) == [e1.event_id, e2.event_id]
+      assert Enum.map(items, & &1.sequence_num) == [1, 2]
+
+      [item1, _item2] = items
+      assert item1.event_type == event_type
+      assert item1.actor_id == actor_id
+      assert item1.payload == %{}
+      assert %DateTime{} = item1.timestamp
+    end
+
+    test "a real (non-platform) instance's own events are never returned -- instance_id scoping trap" do
+      %{tenant_id: tenant_id, schema_name: schema_name} =
+        provisioned_tenant("req0733-gapb-instscope")
+
+      event_type = register_event_type!(tenant_id)
+      real_instance_id = Ecto.UUID.generate()
+      seed_projection!(schema_name, real_instance_id, :active)
+
+      assert {:ok, %{event: platform_event}} =
+               EventStore.append_platform_event(platform_attrs(event_type), prefix: schema_name)
+
+      # A real instance's own event, inserted directly (append/2's own path is
+      # exercised elsewhere; this only needs a real row under a DIFFERENT
+      # instance_id to prove list_platform_events/1 does not pick it up).
+      other_event_id = Ecto.UUID.generate()
+
+      %Event{}
+      |> Event.insert_changeset(%{
+        event_id: other_event_id,
+        created_at: DateTime.utc_now() |> DateTime.truncate(:microsecond),
+        instance_id: real_instance_id,
+        event_type: event_type,
+        payload: %{},
+        actor_id: Ecto.UUID.generate(),
+        sequence_number: 1,
+        idempotency_key: unique_idempotency_key("other-instance")
+      })
+      |> Repo.insert!(prefix: schema_name)
+
+      assert {:ok, %{items: items}} =
+               EventStore.list_platform_events(%{prefix: schema_name, page_size: 50})
+
+      event_ids = Enum.map(items, & &1.event_id)
+      assert platform_event.event_id in event_ids
+      refute other_event_id in event_ids
+    end
+
+    test "event_type narrows the result set, never widens it" do
+      %{tenant_id: tenant_id, schema_name: schema_name} =
+        provisioned_tenant("req0733-gapb-eventtype")
+
+      type_a = register_event_type!(tenant_id)
+      type_b = register_event_type!(tenant_id)
+
+      assert {:ok, %{event: event_a}} =
+               EventStore.append_platform_event(platform_attrs(type_a), prefix: schema_name)
+
+      assert {:ok, %{event: _event_b}} =
+               EventStore.append_platform_event(platform_attrs(type_b), prefix: schema_name)
+
+      assert {:ok, %{items: items}} =
+               EventStore.list_platform_events(%{
+                 prefix: schema_name,
+                 page_size: 50,
+                 event_type: type_a
+               })
+
+      assert Enum.map(items, & &1.event_id) == [event_a.event_id]
+      assert Enum.all?(items, &(&1.event_type == type_a))
+    end
+
+    test "cursor pagination: page_size < row count returns has_more via a non-nil next_cursor, and the next page continues correctly with no overlap" do
+      %{tenant_id: tenant_id, schema_name: schema_name} =
+        provisioned_tenant("req0733-gapb-cursor")
+
+      event_type = register_event_type!(tenant_id)
+
+      events =
+        for _ <- 1..3 do
+          assert {:ok, %{event: event}} =
+                   EventStore.append_platform_event(platform_attrs(event_type),
+                     prefix: schema_name
+                   )
+
+          event
+        end
+
+      assert {:ok, %{items: page1, next_cursor: cursor}} =
+               EventStore.list_platform_events(%{prefix: schema_name, page_size: 2})
+
+      assert length(page1) == 2
+      assert is_binary(cursor)
+
+      {:ok, %Letflow.Api.Pagination.Cursor{inner: inner}} =
+        Letflow.Api.Pagination.decode_cursor(cursor, "PE:", 3)
+
+      seq_colon = Letflow.Api.Pagination.find_nth_colon(inner, 3)
+      mint_colon = Letflow.Api.Pagination.find_nth_colon(inner, 2)
+
+      {:ok, seq} =
+        Letflow.Api.Pagination.parse_int_from_cursor(
+          inner,
+          mint_colon + 1,
+          seq_colon - mint_colon - 1
+        )
+
+      event_id = binary_part(inner, seq_colon + 1, byte_size(inner) - seq_colon - 1)
+
+      assert {:ok, %{items: page2, next_cursor: nil}} =
+               EventStore.list_platform_events(%{
+                 prefix: schema_name,
+                 page_size: 2,
+                 cursor: {seq, event_id}
+               })
+
+      assert length(page2) == 1
+
+      page1_ids = Enum.map(page1, & &1.event_id)
+      page2_ids = Enum.map(page2, & &1.event_id)
+      assert MapSet.disjoint?(MapSet.new(page1_ids), MapSet.new(page2_ids))
+      assert Enum.sort(page1_ids ++ page2_ids) == Enum.sort(Enum.map(events, & &1.event_id))
+    end
+
+    test "page_size exact boundary -- exactly page_size rows yields next_cursor: nil, not a false has_more" do
+      %{tenant_id: tenant_id, schema_name: schema_name} =
+        provisioned_tenant("req0733-gapb-boundary")
+
+      event_type = register_event_type!(tenant_id)
+
+      for _ <- 1..2 do
+        assert {:ok, _} =
+                 EventStore.append_platform_event(platform_attrs(event_type), prefix: schema_name)
+      end
+
+      assert {:ok, %{items: items, next_cursor: nil}} =
+               EventStore.list_platform_events(%{prefix: schema_name, page_size: 2})
+
+      assert length(items) == 2
+    end
+
+    test "an empty sentinel stream returns items: [], next_cursor: nil, not an error" do
+      %{schema_name: schema_name} = provisioned_tenant("req0733-gapb-empty")
+
+      assert {:ok, %{items: [], next_cursor: nil}} =
+               EventStore.list_platform_events(%{prefix: schema_name, page_size: 50})
+    end
+  end
 end

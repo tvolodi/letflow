@@ -1,0 +1,56 @@
+{
+  "handoff_id": "d1a2f3b4-0001-4a1e-9c11-9f0733000010",
+  "run_id": "WF03-ISS0733-20260921",
+  "workflow_id": "WF-03",
+  "step": "04",
+  "from_agent": "ORCH",
+  "to_agent": "TEST-DESIGNER",
+  "file": "handoffs/WF03-ISS0733-20260921/step-04-test-designer.json",
+  "created_at": "2026-09-21T00:40:33Z",
+  "started_at": "2026-09-21T00:40:33Z",
+  "completed_at": "2026-09-21T00:58:43Z",
+  "status": "COMPLETED",
+  "priority": "HIGH",
+  "context": {
+    "stage": "S6",
+    "requirement_ids": [],
+    "requirement_text": {},
+    "source_text": {},
+    "related_handoff_ids": ["d1a2f3b4-0001-4a1e-9c11-9f0733000007", "d1a2f3b4-0001-4a1e-9c11-9f0733000009"],
+    "artifacts_in": [
+      "handoffs/WF03-ISS0733-20260921/step-03-elixir-dev.json",
+      "handoffs/WF03-ISS0733-20260921/step-03c-reviewer.json",
+      "lib/letflow/design/iss0733-promotion-audit-and-platform-events-read.md",
+      "docs/issues/ISS-0733.yaml"
+    ],
+    "owned_modules": [
+      "test/letflow/definitions/promotion_test.exs",
+      "test/letflow/event_store/platform_events_test.exs",
+      "test/letflow/routers/promotions_test.exs"
+    ]
+  },
+  "task": {
+    "description": "Write regression tests proving ISS-0733's two gaps are fixed. This run has TWO distinct fail-first situations -- handle each per WF-03_issue_resolving.md's own rule for which applies: GAP A (write path) is a fix to EXISTING behaviour (promote_definition/3 already existed pre-fix) -- write a test that calls promote_definition/3 (or apply_review/4) with a real event_appender and asserts exactly one audit_entries row now exists with action 'definition.promote' and the expected after_state fields (source_tenant_id, target_tenant_id, source_definition_id, target_definition_id, process_key) after a successful promotion. Prove this genuinely fails pre-fix and passes post-fix: check out main (pre-fix) in a throwaway worktree, run an equivalent assertion (0 audit entries after a successful promotion) to confirm it holds pre-fix, then confirm post-fix on this branch it finds exactly 1. GAP B (read path) is NEW code (list_platform_events/1 and GET /promotions/platform-events did not exist pre-fix at all) -- the fail-first rule is trivially satisfied by UndefinedFunctionError/404, which proves nothing about correctness. Per WF-03's 'non-existence' section, MUTATE the shipped logic in throwaway ways targeting real traps (e.g.: wrong instance_id filter picks up non-platform events; cursor pagination off-by-one includes/excludes a boundary row; missing PLATFORM_ADMIN authz check lets an unauthorized caller through; event_type filter ignored) and record which tests fail for each mutant, in a throwaway git worktree, cleanly removed afterward -- verify with git status --porcelain empty and a clean re-run to green. Write the tests as real ExUnit test files under test/letflow/. Do not implement any fix code -- tests only.",
+    "acceptance_criteria": [
+      "GAP A: at least one test demonstrated to fail (0 audit entries found) against main and pass (1 correct entry found) against this branch, both runs' output quoted",
+      "GAP B: mutation coverage recorded for at least 3 distinct real traps (authz bypass, wrong instance_id/tenant scoping, pagination boundary), each mutant's failing test count quoted",
+      "Every mutation applied in a throwaway worktree or reverted-and-verified in place (git status --porcelain empty, re-run green, both quoted)",
+      "Tests cover the design doc's stated acceptance-criteria mapping section in full"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "GAP A (write path, fix to existing promote_definition/3): added a describe block 'ISS-0733 GAP A -- audit_entries row' to test/letflow/definitions/promotion_test.exs with 2 tests -- (1) a successful promotion writes exactly one action='definition.promote' audit_entries row in the TARGET tenant's schema, asserting resource_type/resource_id/actor_id/before_state(nil)/after_state field-for-field (event_type, actor_id, review_id, source_tenant_id, target_tenant_id, source_definition_id, target_definition_id, process_key), and asserting 0 rows in the SOURCE schema; (2) an event_appender failure still leaves the audit row committed (it joined the version-pointer swap's own pre-commit transaction, not the post-commit event-append). FAIL-THEN-PASS PROOF (both runs quoted, both against the SAME test file, via a throwaway `git worktree add ../letflow-main-worktree main`, removed after with `git worktree remove ../letflow-main-worktree --force`; deps/build shared read-only via MIX_DEPS_PATH/MIX_BUILD_PATH so no network was needed): PRE-FIX (main, commit 6f1314f2) -- `MIX_DEPS_PATH=../letflow/deps MIX_BUILD_PATH=../letflow/_build mix test test/letflow/definitions/promotion_test.exs` => 'Result: 8/10 passed / Failed: 2 tests'; test 1: 'Assertion with == failed / code: assert length(entries) == 1 / left: 0 / right: 1' (test/letflow/definitions/promotion_test.exs:521); test 2: 'match (=) failed / code: assert [entry] = Repo.all(Entry, prefix: target_schema) / left: [entry] / right: []' (test/letflow/definitions/promotion_test.exs:579) -- both fail exactly as expected (0 audit entries, pre-fix). POST-FIX (this branch, feature/WF03-ISS0733-20260921): `mix test test/letflow/definitions/promotion_test.exs` => 'Result: 10 passed' -- both new tests, plus the 8 pre-existing REQ-037 tests, all green. Post-run `git worktree list` confirmed only the main worktree remained; `git status --porcelain` in the primary repo showed only the intended promotion_test.exs modification.\n\nGAP B (read path, list_platform_events/1 + GET /promotions/platform-events -- brand-new code, did not exist pre-fix at all): added test/letflow/event_store/platform_events_test.exs describe 'ISS-0733 GAP B -- list_platform_events/1' (6 tests: ordering/real fields, instance_id-scoping trap, event_type filter narrows-only, cursor round-trip with no overlap, exact page_size boundary => next_cursor nil, empty stream) -- 15/15 pass in that file overall. Added new file test/letflow/routers/promotions_test.exs for R11 (12 tests: PLATFORM_ADMIN 200 / non-admin role 403 / no-roles 403, cross-tenant scoping, exact 6-key item / 2-key envelope response shape, event_type filter narrows/omit-returns-all, cursor round-trip + exact boundary + invalid cursor 400 + wrong-endpoint-prefix cursor 400, empty stream) -- 12/12 pass. Per WF-03's 'non-existence' section, fail-first here only proves UndefinedFunctionError/404 (proves nothing about correctness), so MUTATION TESTING was performed instead, covering exactly the 3 traps named in this handoff's acceptance criteria, all applied IN PLACE (not a worktree) with git checkout -- <file> revert, each individually verified via `git status --porcelain` (empty) and a clean green re-run (both quoted per mutant) --\n\nMutant 1 (authz bypass, lib/letflow/api/authorization.ex evaluate_access/2's :Unknown branch changed from `if has_role?(ctx.roles, :PLATFORM_ADMIN) do` to `if true do`): `mix test test/letflow/routers/promotions_test.exs` => 'Result: 10/12 passed / Failed: 2 tests' -- caught both 'a non-PLATFORM_ADMIN role (e.g. TASK_WORKER) gets 403' and 'a caller with no roles at all gets 403'. Revert: `git checkout -- lib/letflow/api/authorization.ex` -> `git status --porcelain -- lib/letflow/api/authorization.ex` => empty (CLEAN). Re-run: `mix test test/letflow/routers/promotions_test.exs` => 'Result: 12 passed'.\n\nMutant 2 (wrong instance_id filter, lib/letflow/event_store.ex list_platform_events/1's `where([e], e.instance_id == ^platform_instance_id())` changed to `where([e], e.instance_id != ^Ecto.UUID.generate())`, dropping the platform-sentinel scoping entirely): `mix test test/letflow/event_store/platform_events_test.exs test/letflow/routers/promotions_test.exs` => 'Result: 26/27 passed / Failed: 1 test' -- caught 'a real (non-platform) instance's own events are never returned -- instance_id scoping trap'. Revert: `git checkout -- lib/letflow/event_store.ex` -> `git status --porcelain -- lib/letflow/event_store.ex` => empty (CLEAN). Re-run: same 2 files => 'Result: 27 passed'.\n\nMutant 3 (pagination boundary off-by-one, apply_platform_cursor/2's first disjunct changed from `e.sequence_number > ^seq` to `e.sequence_number >= ^seq`, re-including the prior page's boundary row): `mix test test/letflow/event_store/platform_events_test.exs test/letflow/routers/promotions_test.exs` => 'Result: 25/27 passed / Failed: 2 tests' -- caught both the context-level and router-level 'cursor pagination ... no overlap' tests (page 2 re-included the boundary row, breaking the disjointness assertion). Revert: `git checkout -- lib/letflow/event_store.ex` -> `git status --porcelain -- lib/letflow/event_store.ex` => empty (CLEAN). Re-run: same 2 files => 'Result: 27 passed'.\n\nFinal `git status --porcelain` (whole repo, after all 3 mutants reverted) showed only the 4 intended additions (3 test files + this handoff), zero leftover mutation. `mix letflow.check.test` (full suite + isolated :wasm_hang subprocesses + isolated :lua_wallclock_race, ISS-0069 dead-default-argument substring gate) exited 0 -- final visible lines: 'Result: 11 passed, 4507 excluded' / 'mix letflow.check.test: OK -- isolated :lua_wallclock_race run also passed clean.' (earlier per-stage OK lines for the main partitioned suite and the :wasm_hang isolated runs scrolled past the terminal's captured tail, but the task's own Mix.raise-on-any-failure contract means exit code 0 is conclusive for all three stages, main suite included).\n\nDesign doc's acceptance-criteria-mapping section (§5) is fully covered: GAP A transactionality/shape (§1.1-§1.4) by promotion_test.exs's GAP A tests; GAP B read-path decision/authz boundary (§2.1-§2.6) by promotions_test.exs's authz+scoping+shape tests and platform_events_test.exs's context-function tests; the untouched-behaviour criterion (§2.7, GET /instances/:id/timeline unchanged) is not separately re-tested here since this design touches zero lines of instances.ex/routers/instances.ex (confirmed by the files-touched table and by `list_platform_events`/`handle_platform_events` living in event_store.ex/routers/promotions.ex only) -- no test in this repository's existing instances-timeline suite was touched or needed to change.",
+    "artifacts_out": [
+      "test/letflow/definitions/promotion_test.exs",
+      "test/letflow/event_store/platform_events_test.exs",
+      "test/letflow/routers/promotions_test.exs"
+    ],
+    "issues": [
+      {"severity": "MINOR", "description": "ORCH bookkeeping correction (mix letflow.lint_handoffs H2, caught at Step Final): this handoff's created_at/started_at (originally 03:05:00Z) were fabricated from memory rather than a real clock read at dispatch, postdating the agent's real completed_at (00:58:43Z). Corrected to 00:40:33Z, taken from the dispatch commit's real git timestamp (7ebaaa9c, converted from +05:00 to UTC).", "affected_requirement": null}
+    ],
+    "next_action": "Route to TEST-DESIGN-VALIDATOR (step-05) to independently verify coverage, including re-applying at least one of the 3 reported GAP B mutants itself per WF-03's non-existence-case mandate."
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

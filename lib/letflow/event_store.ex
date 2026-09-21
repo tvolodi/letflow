@@ -115,6 +115,7 @@ defmodule Letflow.EventStore do
     StoredPayload
   }
 
+  alias Letflow.Api.Pagination
   alias Letflow.EventStore.Registry
   alias Letflow.Repo
   alias Letflow.TenantProvisioning
@@ -1056,6 +1057,130 @@ defmodule Letflow.EventStore do
           error
       end
     end
+  end
+
+  @typedoc """
+  ISS-0733 GAP B (`lib/letflow/design/iss0733-promotion-audit-and-platform-events-read.md`
+  §2.5) — one row of `list_platform_events/1`'s result. `payload` is already
+  a decoded map at the Ecto level (`Event.payload`'s `:map` type) — not
+  re-encoded to a JSON string for the response.
+  """
+  @type platform_event_item :: %{
+          event_id: Ecto.UUID.t(),
+          event_type: String.t(),
+          actor_id: Ecto.UUID.t() | nil,
+          timestamp: DateTime.t(),
+          sequence_num: integer(),
+          payload: map()
+        }
+
+  @typedoc """
+  Input to `list_platform_events/1`. `:cursor` is an already-decoded
+  `{sequence_number, event_id}` seek pair — decoding the opaque cursor
+  string itself stays a router-owned concern, matching `Letflow.Audit`'s
+  own `list_params()` division of labor (`:cursor` there is likewise
+  already-decoded).
+  """
+  @type list_platform_events_params :: %{
+          required(:prefix) => String.t(),
+          required(:page_size) => pos_integer(),
+          optional(:cursor) => {integer(), Ecto.UUID.t()} | nil,
+          optional(:event_type) => String.t() | nil
+        }
+
+  @doc """
+  ISS-0733 GAP B (design §2.5) — cursor-paginated read of the platform
+  sentinel's own event stream (`instance_id == platform_instance_id()`),
+  inside the tenant schema named by `params.prefix`. Backs
+  `Letflow.Routers.Promotions`'s `GET /platform-events` (R11).
+
+  `params[:event_type]`, when present, narrows to that exact `event_type`
+  only (mirrors `Letflow.Routers.Audit`'s `resource_type` filter — narrows
+  only, never widens). Ordered `asc: sequence_number` — the same ordering
+  `query_instance_events/3` already uses for a real instance's own event
+  page, and consistent with `uq_event_sequence`'s
+  `(instance_id, sequence_number)` uniqueness (the sentinel's own sequence
+  is gap-tolerant-monotone exactly like any real instance's).
+
+  `page_size + 1`/drop-the-extra-row idiom, same as `Letflow.Audit.list_entries/1`
+  and `Letflow.ServiceCatalog.list_all/1`.
+  """
+  @spec list_platform_events(list_platform_events_params()) ::
+          {:ok, %{items: [platform_event_item()], next_cursor: String.t() | nil}}
+  def list_platform_events(params) when is_map(params) do
+    prefix = Map.fetch!(params, :prefix)
+    page_size = Map.fetch!(params, :page_size)
+    cursor = Map.get(params, :cursor)
+    event_type = Map.get(params, :event_type)
+
+    rows =
+      Event
+      |> where([e], e.instance_id == ^platform_instance_id())
+      |> apply_platform_event_type(event_type)
+      |> apply_platform_cursor(cursor)
+      |> order_by([e], asc: e.sequence_number)
+      |> limit(^(page_size + 1))
+      |> Repo.all(prefix: prefix)
+
+    {rows, has_more} = split_platform_events_page(rows, page_size)
+    items = Enum.map(rows, &platform_event_item/1)
+
+    {:ok, %{items: items, next_cursor: platform_events_next_cursor(items, has_more)}}
+  end
+
+  defp apply_platform_event_type(query, nil), do: query
+  defp apply_platform_event_type(query, ""), do: query
+
+  defp apply_platform_event_type(query, event_type),
+    do: where(query, [e], e.event_type == ^event_type)
+
+  defp apply_platform_cursor(query, nil), do: query
+
+  defp apply_platform_cursor(query, {seq, event_id}) do
+    where(
+      query,
+      [e],
+      e.sequence_number > ^seq or (e.sequence_number == ^seq and e.event_id > ^event_id)
+    )
+  end
+
+  # Same idiom as Letflow.Audit.list_entries/1's split_list_page/2.
+  defp split_platform_events_page(rows, page_size) do
+    if length(rows) > page_size do
+      {Enum.take(rows, page_size), true}
+    else
+      {rows, false}
+    end
+  end
+
+  defp platform_event_item(%Event{} = event) do
+    %{
+      event_id: event.event_id,
+      event_type: event.event_type,
+      actor_id: event.actor_id,
+      timestamp: event.created_at,
+      sequence_num: event.sequence_number,
+      payload: event.payload
+    }
+  end
+
+  # Design §2.6 -- a new, distinct cursor-endpoint prefix ("PE:"), so
+  # Pagination.decode_cursor/4's {:error, :wrong_endpoint} rejects a cursor
+  # minted by another endpoint (does not collide with "A:"/"IL:"/"IH:"/
+  # "IT:"/"T:"/"U:" already in use elsewhere in this codebase).
+  @platform_events_cursor_prefix "PE:"
+
+  defp platform_events_next_cursor([], _has_more), do: nil
+  defp platform_events_next_cursor(_items, false), do: nil
+
+  defp platform_events_next_cursor(items, true) do
+    last = List.last(items)
+    mint_time_us = System.system_time(:microsecond)
+    seek_key = "#{last.sequence_num}:#{last.event_id}"
+
+    @platform_events_cursor_prefix
+    |> Pagination.build_raw_cursor(mint_time_us, seek_key)
+    |> Pagination.encode_cursor()
   end
 
   @type archive_opts :: [prefix: String.t(), retention_days: non_neg_integer()]

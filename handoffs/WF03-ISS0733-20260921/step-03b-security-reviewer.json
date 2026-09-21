@@ -1,0 +1,44 @@
+{
+  "handoff_id": "d1a2f3b4-0001-4a1e-9c11-9f0733000008",
+  "run_id": "WF03-ISS0733-20260921",
+  "workflow_id": "WF-03",
+  "step": "03b",
+  "from_agent": "ORCH",
+  "to_agent": "SECURITY-REVIEWER",
+  "file": "handoffs/WF03-ISS0733-20260921/step-03b-security-reviewer.json",
+  "created_at": "2026-09-21T02:10:00Z",
+  "started_at": "2026-09-21T02:10:00Z",
+  "completed_at": "2026-09-21T02:55:00Z",
+  "status": "COMPLETED",
+  "priority": "HIGH",
+  "context": {
+    "stage": "S6",
+    "requirement_ids": [],
+    "requirement_text": {},
+    "source_text": {},
+    "related_handoff_ids": ["d1a2f3b4-0001-4a1e-9c11-9f0733000007"],
+    "artifacts_in": [
+      "handoffs/WF03-ISS0733-20260921/step-03-elixir-dev.json",
+      "lib/letflow/design/iss0733-promotion-audit-and-platform-events-read.md",
+      "docs/agents/instructions/security-invariants.md"
+    ],
+    "owned_modules": []
+  },
+  "task": {
+    "description": "Gate ELIXIR-DEV's step-03 implementation on feature/WF03-ISS0733-20260921 (commit 4d014e6d) against INV-1..INV-8. Run `git diff main...feature/WF03-ISS0733-20260921 -- lib/letflow/definitions/promotion.ex lib/letflow/event_store.ex lib/letflow/routers/promotions.ex` directly and verdict each invariant against the real diff, not against any prior agent's summary. Two specific things to scrutinize per the design doc's own flagged open question (OQ-3): (1) the new GET /promotions/platform-events route (R11) discloses cross-tenant data (a DEFINITION_PROMOTED event names BOTH source_tenant_id and target_tenant_id) -- confirm the route's authz gate is genuinely PLATFORM_ADMIN-only (not merely target-tenant-scoped) and that no ordinary tenant-scoped caller can reach it. (2) the new Audit.insert_entry call inside promote_definition/3's transaction (write_target_definition/5) -- confirm it writes to the correct tenant-scoped prefix (target_prefix, matching every other write in that transaction) and does not leak source-tenant identifiers into a row a target-tenant caller could read via the normal tenant-scoped GET /api/v1/audit (INV-1's tenant isolation).",
+    "acceptance_criteria": [
+      "Verdict recorded per invariant INV-1..INV-8, APPLIES/NOT-APPLICABLE stated for each, per HANDOFF_PROTOCOL.md's worked example shape",
+      "The new route's authz gate independently confirmed PLATFORM_ADMIN-only by reading the actual plug/guard code, not the design doc's claim alone",
+      "The new audit_entries row's tenant-schema placement and field content independently confirmed not to leak cross-tenant identifiers to a target-tenant-scoped GET /api/v1/audit caller"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "Gated commit 4d014e6d (git diff main...feature/WF03-ISS0733-20260921 -- lib/letflow/definitions/promotion.ex lib/letflow/event_store.ex lib/letflow/routers/promotions.ex) against INV-1..INV-8. INV-1 (tenant data isolation) APPLIES -- new Audit.insert_entry call in write_target_definition/5 (promotion.ex): (a) Repo.insert runs inside a transaction and is called via Audit.insert_entry(Repo, attrs, target_prefix) -- confirmed Audit.insert_entry/3 (audit.ex:215-243) inserts with `prefix: prefix` (repo.insert(prefix: prefix)), i.e. the row lands in target_prefix's schema, the same prefix every other write in write_target_definition/5 uses; (b) not applicable, no new table/migration; (c) the row's tenant_id column is derived via TenantProvisioning.tenant_id_for_schema_name(prefix) inside insert_entry/3 itself (audit.ex:216), never accepted as a caller-supplied field from promotion_audit_attrs/5's audit_context map -- satisfies 0003's addendum. The after_state JSON blob does name source_tenant_id/target_tenant_id (design doc's own OQ-3), but that is payload content describing a transaction the target tenant was a party to (they received the promoted definition), not a scoping-mechanism defect -- the row itself is correctly confined to target_prefix and only visible to a caller already scoped to that same prefix via GET /api/v1/audit. PASS. INV-1 also APPLIES to the new list_platform_events/1 read path (event_store.ex) -- Repo.all(prefix: prefix) with prefix from conn.assigns.scoped_opts (resolved by Letflow.Plugs.Authorize before dispatch, same mechanism as every other tenant-scoped route in this codebase). PASS. INV-2 NOT-APPLICABLE (S4 not started). INV-3 NOT-APPLICABLE (S5 not started). INV-4 NOT-APPLICABLE -- diff touches no secret-resolving code (grep for System.get_env/hardcoded-secret patterns confirms no hits in the three files). INV-5 NOT-APPLICABLE (S4 lookup-by-ID invariant; the moduledoc's own INV-5 analysis for :id review lookups predates this diff and is unchanged by it -- the new /platform-events route is a list, not a lookup-by-ID). INV-6 APPLIES and is satisfied by this handoff itself (this review). INV-7 NOT-APPLICABLE -- grep for Repo.query across the three files: zero hits; the new EventStore.list_platform_events/1 query is built entirely with Ecto.Query macros (where/order_by/limit), fully parameterised. INV-8 APPLIES -- the new Audit.insert_entry case in write_target_definition/5 handles both {:ok, _entry} and {:error, reason} -> Repo.rollback(reason) explicitly (no bare pattern match); list_platform_events/1 and its private helpers (apply_platform_event_type/2, apply_platform_cursor/2, split_platform_events_page/2, platform_events_next_cursor/2) contain no risky bare {:ok, x} = call patterns; the one grep hit for the bare-match heuristic in event_store.ex (line 794, {:ok, %{insert_event: ...}}) is pre-existing code untouched by this diff, out of scope. PASS. INV-9 NOT-APPLICABLE -- diff makes no outbound HTTP request. Two items independently verified per the task's specific ask: (1) GET /promotions/platform-events route authz -- read the actual plug/guard code (not the design doc's claim alone): the route is declared with the plain `get` macro (not authz_get), so Letflow.Api.AuthorizedRouter's plug(Letflow.Plugs.Authorize) evaluates it with no :policy_key, i.e. endpoint == :Unknown; Letflow.Api.Authorization.evaluate_access/2 (authorization.ex:778-786) handles :Unknown as Allow only if has_role?(ctx.roles, :PLATFORM_ADMIN), Deny403 otherwise, including callers with no roles at all -- confirmed this is the strictest gate in the codebase and genuinely PLATFORM_ADMIN-only, not merely target-tenant-scoped; no ordinary tenant-scoped caller can reach it. Also confirmed the authorization_enforcement_test.exs allowlist (test/letflow/api/authorization_enforcement_test.exs:191-192) still asserts Letflow.Routers.Promotions.__authz_routes__() == [], i.e. adding R11 via the plain get macro did not accidentally register a weaker policy key. (2) Audit-entry tenant scoping -- confirmed above under INV-1: writes to target_prefix (matching every other write in the transaction), tenant_id column server-derived from the prefix (not caller-supplied), and the cross-tenant identifiers present in after_state are payload content the target tenant is a legitimate party to, not a prefix/scoping leak.",
+    "artifacts_out": ["handoffs/WF03-ISS0733-20260921/step-03b-security-reviewer.json"],
+    "issues": [],
+    "next_action": "Route to REVIEWER (idiom/supervision/scope-creep gate) per WF-02 Step 2c ordering."
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

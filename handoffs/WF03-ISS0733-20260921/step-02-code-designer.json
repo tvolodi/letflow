@@ -1,0 +1,57 @@
+{
+  "handoff_id": "d1a2f3b4-0001-4a1e-9c11-9f0733000003",
+  "run_id": "WF03-ISS0733-20260921",
+  "workflow_id": "WF-03",
+  "step": "02",
+  "from_agent": "ORCH",
+  "to_agent": "CODE-DESIGNER",
+  "file": "handoffs/WF03-ISS0733-20260921/step-02-code-designer.json",
+  "created_at": "2026-09-21T00:20:00Z",
+  "started_at": "2026-09-21T00:20:00Z",
+  "completed_at": "2026-09-21T00:22:07Z",
+  "status": "COMPLETED",
+  "priority": "HIGH",
+  "context": {
+    "stage": "S6",
+    "requirement_ids": [],
+    "requirement_text": {},
+    "source_text": {},
+    "related_handoff_ids": ["d1a2f3b4-0001-4a1e-9c11-9f0733000002"],
+    "artifacts_in": [
+      "handoffs/WF03-ISS0733-20260921/step-01-issue-fixer-diagnosis.json",
+      "docs/issues/ISS-0733.yaml",
+      "lib/letflow/definitions/promotion.ex",
+      "lib/letflow/audit.ex",
+      "lib/letflow/instances.ex",
+      "lib/letflow/routers/promotions.ex",
+      "lib/letflow/routers/instances.ex",
+      "lib/letflow/event_store.ex"
+    ],
+    "owned_modules": [
+      "lib/letflow/definitions/promotion.ex",
+      "lib/letflow/audit.ex",
+      "lib/letflow/instances.ex",
+      "lib/letflow/routers/promotions.ex",
+      "lib/letflow/routers/instances.ex"
+    ]
+  },
+  "task": {
+    "description": "Design a fix for ISS-0733's two confirmed gaps -- read step-01-issue-fixer-diagnosis.json's result.summary in full for the diagnosis; do not re-derive it. EO-004 (test/fixtures/uat/scenarios/platform/definition-promotion-approved.yaml) requires the change history for a promotion to be queryable showing proposal, approval-with-approver-name, and release in order with timestamps. Two design decisions this artefact must settle: GAP A (write path) -- lib/letflow/definitions/promotion.ex's promote_definition/3 (via do_promote_definition/7 -> write_target_definition/4 and append_promotion_event/9) never calls Letflow.Audit.insert_entry/3, so GET /api/v1/audit structurally can never show a promotion. Every other Letflow.Audit.insert_entry/3 call site (lib/letflow/definitions.ex:1903's record_definition_audit/5) runs INSIDE the same Repo.transaction/1 as the write it records -- but promotion.ex's event-append deliberately happens AFTER its transaction commits (design already on record, moduledoc step 9/OQ-1: the event-appender's own transactionality is not assumed, and a post-commit failure does not roll back the version-pointer move). Decide and specify: does the new audit-entry write join the pre-commit transaction (matching every other Audit call site, but then it happens even if the post-commit event-append later fails), or does it run alongside/after the event-append (matching promotion's own established post-commit pattern, but deviating from Audit's normal same-transaction guarantee)? State the decision and the exact call site(s) and audit_entry action/details shape (event_type DEFINITION_PROMOTED payload already exists in append_promotion_event/9 at promotion.ex:422-431 -- reuse its shape for the audit entry's details, do not invent a second schema). This decision must not weaken any existing test-asserted behaviour of definitions.ex's own audit call sites. GAP B (read path) -- GET /api/v1/instances/:platform_instance_id/timeline 404s unconditionally by design (lib/letflow/instances.ex:169-198's ensure_instance_exists/2 requires a real instance_projections row, and platform_instance_id/0 is deliberately never inserted there per event_store.ex:871-879). Design EITHER (a) a new dedicated platform-events read endpoint (e.g. GET /api/v1/audit already may now surface promotion entries once GAP A ships -- assess whether that alone satisfies EO-004, since audit_entries already carries actor/timestamp/action, or whether a dedicated endpoint is still needed for the raw event-store record), OR (b) a scoped exception in instances.ex's timeline/3 path for the platform sentinel. State which, and why the other was rejected. Any new/changed route needs an authz shape decided explicitly (who can read platform-wide promotion history -- this is NOT necessarily the same authorization boundary as a normal per-instance timeline, since a promotion event names two tenants). Design artefact only, in lib/letflow/design/ -- interfaces, @specs, schema/data shapes, authz decision, and the transactionality decision above, in prose and signatures. No implementation code (no .ex function bodies).",
+    "acceptance_criteria": [
+      "States and justifies the GAP A transactionality decision (audit-entry write joins the pre-commit transaction, or runs post-commit alongside the event-append) with an explicit @spec-level description of the new/changed call site(s) in promotion.ex",
+      "Specifies the exact audit_entry action/details shape for a promotion, reusing the DEFINITION_PROMOTED event payload's fields rather than inventing a second schema",
+      "States and justifies the GAP B read-path decision (whether GET /api/v1/audit alone now satisfies EO-004 once GAP A ships, or a new/changed endpoint is still needed) with the authz boundary named explicitly if a new/changed route is designed",
+      "No .ex function bodies -- signatures and shapes only",
+      "Does not weaken any existing test-asserted behaviour of lib/letflow/definitions.ex's own Audit call sites or of GET /api/v1/instances/:id/timeline for a real (non-platform) instance id"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "Design artefact at lib/letflow/design/iss0733-promotion-audit-and-platform-events-read.md closes both gaps ISSUE-FIXER diagnosed. GAP A (write path): the new Letflow.Audit.insert_entry/3 call joins promotion.ex's pre-commit Repo.transaction/1 (write_target_definition/4 widened to /5 with a new audit_context param carrying review_id/source_tenant_id/target_tenant_id, called from within the same transaction as the version-pointer swap, same invocation idiom definitions.ex's activate_draft_row/4 already uses), NOT alongside/after the post-commit event-append -- because Audit's own moduledoc already decided capture happens 'as one more step in the same transaction as the mutation' (AC8), and tying it to the event-append's success would reproduce ISS-0733's own symptom one layer up (a genuinely-committed promotion with no audit trail whenever the append fails for an unrelated reason, e.g. an un-backfilled event_type_registry per ISS-0332). The audit_entry's action/details shape reuses append_promotion_event/9's existing event_attrs verbatim as after_state (action: \"definition.promote\", resource_type: \"definition\", resource_id: new_row.id, before_state: nil -- explained, not silently omitted), so no second schema is invented. GAP B (read path): a new GET /promotions/platform-events route (R11) on Letflow.Routers.Promotions, backed by a new Letflow.EventStore.list_platform_events/1, rather than a scoped exception in Instances.timeline/3 -- because platform_instance_id never having an instance_projections row is a documented invariant, and because a promotion event's payload names a second tenant (source_tenant_id), which the existing :InstancesRead permission on /instances/:id/timeline was never scoped to disclose. The new route reuses Routers.Promotions's own already-established :Unknown/PLATFORM_ADMIN-only gate rather than :InstancesRead or :AuditRead. GET /api/v1/audit alone does not satisfy EO-004 even once GAP A ships, stated explicitly: audit_entries is tenant-scoped (INV-1) so no single tenant's /audit view can show a cross-tenant promotion's full history, and the raw event-store row remains the only source-of-truth proof of what PlatformEvents.append_definition_promoted/2 actually persisted (the exact fact ISS-0733's pilot could not confirm). Two open questions are flagged rather than silently resolved: EO-004's 'proposal'/'approval' legs (PromotionReviewStore has zero Audit calls) are out of this design's scope per the handoff's own task text, and SECURITY-REVIEWER should confirm the new route's authz given it surfaces source_tenant_id to a target-tenant-scoped caller. No .ex function bodies anywhere in the doc -- signatures/@specs/data shapes/prose only. lib/letflow/audit.ex and lib/letflow/instances.ex are untouched by this design (read-only inputs), so neither definitions.ex's existing Audit call sites nor GET /api/v1/instances/:id/timeline for a real instance id are affected.",
+    "artifacts_out": ["lib/letflow/design/iss0733-promotion-audit-and-platform-events-read.md"],
+    "issues": [],
+    "next_action": "Route to CODE-DESIGN-VALIDATOR to gate this design before ELIXIR-DEV implements it"
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

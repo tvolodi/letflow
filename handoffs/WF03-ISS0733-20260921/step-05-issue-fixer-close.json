@@ -1,0 +1,48 @@
+{
+  "handoff_id": "d1a2f3b4-0001-4a1e-9c11-9f0733000013",
+  "run_id": "WF03-ISS0733-20260921",
+  "workflow_id": "WF-03",
+  "step": "05",
+  "from_agent": "ORCH",
+  "to_agent": "ISSUE-FIXER",
+  "file": "handoffs/WF03-ISS0733-20260921/step-05-issue-fixer-close.json",
+  "created_at": "2026-09-21T01:13:40Z",
+  "started_at": "2026-09-21T01:13:40Z",
+  "completed_at": "2026-09-21T01:13:54Z",
+  "status": "COMPLETED",
+  "priority": "HIGH",
+  "context": {
+    "stage": "S6",
+    "requirement_ids": [],
+    "requirement_text": {},
+    "source_text": {},
+    "related_handoff_ids": [],
+    "artifacts_in": [
+      "docs/issues/ISS-0733.yaml",
+      "handoffs/WF03-ISS0733-20260921/step-01-issue-fixer-diagnosis.json",
+      "handoffs/WF03-ISS0733-20260921/step-03-elixir-dev.json",
+      "handoffs/WF03-ISS0733-20260921/step-04-test-designer.json",
+      "handoffs/WF03-ISS0733-20260921/step-04c-test-runner.json"
+    ],
+    "owned_modules": ["docs/issues/ISS-0733.yaml"]
+  },
+  "task": {
+    "description": "Close ISS-0733 per WF-03_issue_resolving.md Step 5. This run shipped a real fix with a regression test (fail-then-pass for GAP A, mutation-tested for GAP B), all gates PASS, full suite 4492/4492 green -- so the outcome is 'resolved', not 'instrumented' or 'no_defect'. Update docs/issues/ISS-0733.yaml: status: resolved, resolved_in_run: WF03-ISS0733-20260921, resolved_at: <real UTC timestamp from the clock>. Add a short resolution note summarizing: promotion.ex now writes an audit_entries row inside its existing transaction (GAP A), and a new GET /promotions/platform-events + Letflow.EventStore.list_platform_events/1 gives EO-004 a real platform-scoped read surface (GAP B), per lib/letflow/design/iss0733-promotion-audit-and-platform-events-read.md. Do not change any other field. github_ref is GH-1646 -- close it: `gh issue close 1646 --comment \"Fixed in WF03-ISS0733-20260921. See docs/issues/ISS-0733.yaml and the regression tests at test/letflow/definitions/promotion_test.exs, test/letflow/event_store/platform_events_test.exs, test/letflow/routers/promotions_test.exs.\"` -- only if `gh` is reachable and authenticated; if not, state that plainly and flag it for ORCH to close at Step Final instead.",
+    "acceptance_criteria": [
+      "docs/issues/ISS-0733.yaml status flipped to resolved with resolved_in_run/resolved_at (real clock timestamp)",
+      "GitHub issue 1646 closed with a --comment citing the resolving evidence, or the close explicitly deferred to ORCH with a stated reason if gh is unreachable",
+      "No other field in ISS-0733.yaml altered"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "docs/issues/ISS-0733.yaml updated: status: resolved, resolved_in_run: WF03-ISS0733-20260921, resolved_at: 2026-09-21T01:13:54Z, plus a resolution_note summarizing the GAP A (promotion.ex audit_entries write inside its existing transaction) and GAP B (GET /promotions/platform-events + EventStore.list_platform_events/1) fixes and their regression tests. No other field changed. gh was reachable and authenticated (tvolodi); GitHub issue 1646 closed with the specified --comment citing docs/issues/ISS-0733.yaml and the three regression test files.",
+    "artifacts_out": ["docs/issues/ISS-0733.yaml"],
+    "issues": [
+      {"severity": "MINOR", "description": "ORCH bookkeeping correction (mix letflow.lint_handoffs H2, caught at Step Final): this handoff's created_at/started_at (originally 05:05:00Z) were fabricated from memory rather than a real clock read at dispatch, postdating the agent's real completed_at (01:13:54Z). Corrected to 01:13:40Z, taken from the dispatch commit's real git timestamp (ade31948, converted from +05:00 to UTC).", "affected_requirement": null}
+    ],
+    "next_action": "ORCH may proceed to Step Final for run WF03-ISS0733-20260921."
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

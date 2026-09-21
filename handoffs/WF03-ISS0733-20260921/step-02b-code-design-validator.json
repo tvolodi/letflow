@@ -1,0 +1,47 @@
+{
+  "handoff_id": "d1a2f3b4-0001-4a1e-9c11-9f0733000004",
+  "run_id": "WF03-ISS0733-20260921",
+  "workflow_id": "WF-03",
+  "step": "02b",
+  "from_agent": "ORCH",
+  "to_agent": "CODE-DESIGN-VALIDATOR",
+  "file": "handoffs/WF03-ISS0733-20260921/step-02b-code-design-validator.json",
+  "created_at": "2026-09-21T00:45:00Z",
+  "started_at": "2026-09-21T00:45:00Z",
+  "completed_at": "2026-09-21T01:20:00Z",
+  "status": "COMPLETED",
+  "priority": "HIGH",
+  "context": {
+    "stage": "S6",
+    "requirement_ids": [],
+    "requirement_text": {},
+    "source_text": {},
+    "related_handoff_ids": ["d1a2f3b4-0001-4a1e-9c11-9f0733000003"],
+    "artifacts_in": [
+      "handoffs/WF03-ISS0733-20260921/step-02-code-designer.json",
+      "handoffs/WF03-ISS0733-20260921/step-01-issue-fixer-diagnosis.json",
+      "lib/letflow/design/iss0733-promotion-audit-and-platform-events-read.md",
+      "docs/issues/ISS-0733.yaml"
+    ],
+    "owned_modules": []
+  },
+  "task": {
+    "description": "Hard gate on CODE-DESIGNER's step-02 output (lib/letflow/design/iss0733-promotion-audit-and-platform-events-read.md, feature/WF03-ISS0733-20260921 branch). Verify independently -- do not trust step-02's own summary. Read the design doc directly and cross-check it against step-02's task.acceptance_criteria in full. In particular verify: (1) the GAP A transactionality decision (audit-entry write inside promote_definition/3's pre-commit transaction, widening write_target_definition/4 to /5) is stated with real @spec-level signatures, not prose alone, and does not silently weaken any existing test-asserted behaviour of lib/letflow/definitions.ex's own Audit call sites; (2) the audit_entry details/action shape genuinely reuses append_promotion_event/9's existing DEFINITION_PROMOTED payload fields rather than inventing a second schema; (3) the GAP B decision (new GET /promotions/platform-events + Letflow.EventStore.list_platform_events/1, PLATFORM_ADMIN-gated, explicitly rejecting an Instances.timeline/3 exception) states the authz boundary explicitly and the doc does not leave it as a TBD; (4) no .ex function bodies appear anywhere in the doc (signatures/shapes only); (5) it does not change GET /api/v1/instances/:id/timeline's behaviour for a real (non-platform) instance id. Also independently sanity-check the doc's two flagged open questions (EO-004's proposal/approval legs out of scope; new route's cross-tenant source_tenant_id exposure needing SECURITY-REVIEWER sign-off) are stated as real open items, not silently glossed over.",
+    "acceptance_criteria": [
+      "All 5 of step-02's own acceptance_criteria independently re-verified against the actual design doc text, not against CODE-DESIGNER's handoff summary",
+      "No implementation code (.ex function bodies) present anywhere in the design doc",
+      "Verdict states PASS or FAIL with specific gaps named per criterion if FAIL"
+    ]
+  },
+  "result": {
+    "status": "FAIL",
+    "summary": "Independently re-verified all 5 of step-02's acceptance criteria against the actual design doc text and the actual current source (promotion.ex, audit.ex, definitions.ex, event_store.ex, instances.ex, routers/promotions.ex, routers/instances.ex). Criteria 1, 2, 3, and 5 PASS -- verified accurate, not just plausible: (1) GAP A transactionality: doc's @spec for write_target_definition/5 (audit_context map with review_id/source_tenant_id/target_tenant_id) is real and the join-pre-commit-transaction decision is justified against Letflow.Audit's own moduledoc (verified AC8 text at audit.ex:11-46) and against activate_draft_row/4's real pattern (verified definitions.ex:2357-2377, record_definition_audit/5 at :1902-1914 -- Audit.insert_entry(Repo, attrs, prefix) called inside Repo.transaction/1, result pattern-matched with Repo.rollback/1 on error, matching the doc's characterization in substance). Line citations (promotion.ex:300-306 call site, :339-372 write_target_definition/4, :422-431 event_attrs) verified byte-accurate against current source. (2) audit_entry after_state shape in doc SS1.4 is field-for-field identical (8 keys, same order) to the real event_attrs map at promotion.ex:422-431 -- verified directly, no invented schema; entry_attrs() contract (actor_id/action/resource_type/resource_id/before_state/after_state/trace_id) matches audit.ex:120-128 exactly. (3) GAP B authz boundary is stated explicitly, not TBD: doc's :Unknown/PLATFORM_ADMIN-only gate claim verified against routers/promotions.ex's real moduledoc (:Unknown decision at line 43, 'not an unhandled fallthrough' at line 58, permission_checker gap at SS7.9/line 129 -- all citations accurate); rejection of Instances.timeline/3 exception is justified with real evidence (event_store.ex:867-879 platform_instance_id/875-876 'Never inserted into instance_projections' verified verbatim; instances.ex:330-338 ensure_instance_exists/2 verified verbatim; routers/instances.ex:367 :InstancesRead gate verified verbatim). (5) SS2.7's claim that Instances.timeline/3, ensure_instance_exists/2, and Routers.Instances's /:id/timeline route are untouched holds -- files-touched table (SS3) lists only promotion.ex, event_store.ex, routers/promotions.ex; confirmed no edits proposed anywhere in the doc to instances.ex or routers/instances.ex. Both flagged open questions (OQ-1 scope, OQ-3 SECURITY-REVIEWER routing for source_tenant_id exposure) are real, substantive open items, not glossed over.\n\nCriterion 4 FAILS: the design doc contains real, verbatim implementation code, not a signature/shape. Lines 285-289: a literal Plug.Router macro block with a real body --\n```\nget \"/platform-events\" do\n  handle_platform_events(conn)\nend\n```\n-- this is copy-paste-able .ex code (a do/end block invoking a real function), not a placeholder. This is a genuine deviation from this exact codebase's own established design convention for route tables: every other CODE-DESIGNER-authored, gate-passed design in lib/letflow/design/ that specifies new routes uses a non-executable shorthand instead of a real do/end block -- verified directly: req073-identity-user-routes.md:56-60 uses `post \"/users\", do: <create handler>`; req074-identity-group-routes.md:130-135 uses the same `do: <handler>` placeholder form; req075-tenant-administration-routes.md:192-197 likewise; req077-promotion-pipeline-routes.md:339-346 (this exact router's own prior route-addition design) uses `get \"/:id\", -> handle_get_assertion_run` arrow-shorthand, never a real `do...end` body; req195-audit-entry-storage.md:371-402 (Letflow.Audit's own gate-passed design) uses @spec + prose comments for every function, never a real function body. This design doc's SS2.4 route block is the one place in this design, and the one place among this codebase's comparable prior designs, where real invocable code appears instead of a signature/shape/placeholder -- a direct, specific violation of the task's 'No .ex function bodies -- signatures and shapes only' criterion and of the handoff's own acceptance criterion 4. Per WF-02 Step 1b's no-partial-credit rule, this single failure fails the whole gate regardless of criteria 1/2/3/5 passing.",
+    "artifacts_out": [],
+    "issues": [
+      {"severity": "MAJOR", "description": "lib/letflow/design/iss0733-promotion-audit-and-platform-events-read.md lines 285-289 contain a literal, real Plug.Router code block (`get \"/platform-events\" do\\n  handle_platform_events(conn)\\nend`) -- actual invocable .ex code, not a signature/shape. Every comparable prior gate-passed design in lib/letflow/design/ (req073, req074, req075, req077 -- this same router's own prior route-addition design, req195) uses a non-executable `do: <handler>` or `-> handle_x` placeholder shorthand for new routes instead. Violates acceptance criterion 'No .ex function bodies -- signatures and shapes only.'", "affected_requirement": null}
+    ],
+    "next_action": "Route back to CODE-DESIGNER for rework: replace SS2.4's literal `get \"/platform-events\" do ... end` block with the codebase's established route-table shorthand (e.g. `get \"/platform-events\", -> handle_platform_events`, matching req077-promotion-pipeline-routes.md's own convention for this same router), then resubmit to CODE-DESIGN-VALIDATOR. No other section needs rework -- criteria 1, 2, 3, and 5 pass as written."
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

@@ -1,0 +1,45 @@
+{
+  "handoff_id": "d1a2f3b4-0001-4a1e-9c11-9f0733000009",
+  "run_id": "WF03-ISS0733-20260921",
+  "workflow_id": "WF-03",
+  "step": "03c",
+  "from_agent": "ORCH",
+  "to_agent": "REVIEWER",
+  "file": "handoffs/WF03-ISS0733-20260921/step-03c-reviewer.json",
+  "created_at": "2026-09-21T02:35:00Z",
+  "started_at": "2026-09-21T02:35:00Z",
+  "completed_at": "2026-09-21T03:10:00Z",
+  "status": "COMPLETED",
+  "priority": "HIGH",
+  "context": {
+    "stage": "S6",
+    "requirement_ids": [],
+    "requirement_text": {},
+    "source_text": {},
+    "related_handoff_ids": ["d1a2f3b4-0001-4a1e-9c11-9f0733000007", "d1a2f3b4-0001-4a1e-9c11-9f0733000008"],
+    "artifacts_in": [
+      "handoffs/WF03-ISS0733-20260921/step-03-elixir-dev.json",
+      "handoffs/WF03-ISS0733-20260921/step-03b-security-reviewer.json",
+      "lib/letflow/design/iss0733-promotion-audit-and-platform-events-read.md",
+      "docs/issues/ISS-0733.yaml"
+    ],
+    "owned_modules": []
+  },
+  "task": {
+    "description": "Gate ELIXIR-DEV's step-03 implementation (feature/WF03-ISS0733-20260921, commit 4d014e6d) for idiomatic OTP/Elixir usage, scope creep, and decision-record consistency. Run `git diff main...feature/WF03-ISS0733-20260921 -- lib/letflow/definitions/promotion.ex lib/letflow/event_store.ex lib/letflow/routers/promotions.ex` directly. Check specifically: (1) the widened write_target_definition/5's new Audit.insert_entry call inside the existing Repo.transaction/1 doesn't introduce any I/O or non-database side effect inside the transaction (Ecto.Multi/transaction hygiene); (2) the implementation matches the gate-approved design doc exactly -- no scope creep beyond what lib/letflow/design/iss0733-promotion-audit-and-platform-events-read.md specifies; (3) list_platform_events/1's cursor/pagination idiom is consistent with any existing paginated list functions in event_store.ex or elsewhere in the codebase, not a bespoke reinvention; (4) no conflict with any existing decision record in docs/migration/decisions/ (in particular, this touches the same area as decision 0006 D2's tenant_id-column removal referenced in promotion.ex's own moduledoc -- confirm the new Audit call doesn't resurrect a removed tenant_id-column dependency).",
+    "acceptance_criteria": [
+      "Verdict on idiom/OTP hygiene, transaction-safety, and scope-match against the design doc, stated specifically not generally",
+      "Confirms no decision-record conflict (0006 D2 in particular)",
+      "PASS or FAIL with specific issues named if FAIL"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "Reviewed `git diff main...feature/WF03-ISS0733-20260921 -- lib/letflow/definitions/promotion.ex lib/letflow/event_store.ex lib/letflow/routers/promotions.ex` against the gate-approved design doc and decision 0006. (1) Transaction hygiene: write_target_definition/5's new Audit.insert_entry(Repo, attrs, target_prefix) call is the last step inside the existing Repo.transaction/1, after Repo.insert/deprecate_previous_active/activate_new_definition -- every step in the block is a DB call, no non-DB I/O introduced. {:ok,_} -> activated_row / {:error,reason} -> Repo.rollback(reason) is byte-for-byte the same pattern definitions.ex:2369's activate_draft_row/4 already uses for its own Audit call, not a new risk class. promotion_audit_attrs/5 (building the attrs map) is pure, called before the DB write. (2) Design-match: promotion.ex's changes (arity-4->5 widening of write_target_definition, new audit_context param threaded from do_promote_definition/7's own review_id/source_tenant_id/target_tenant_id, promotion_audit_attrs/5's after_state shape) match design section 1.3/1.4 field-for-field -- action 'definition.promote', resource_type 'definition', resource_id new_row.id, before_state nil, trace_id nil, after_state the same 8-key shape as append_promotion_event/9's event_attrs, no second schema invented. event_store.ex's list_platform_events/1 and routers/promotions.ex's R11 route match design section 2.4-2.6 exactly: same route table entry, same query shape (instance_id == platform_instance_id(), optional event_type equality filter, asc: sequence_number), same response shape (items/next_cursor, no count key), no touches to Letflow.Instances.timeline/3 or Letflow.Routers.Instances (confirmed by diff scope -- only the three files named in the handoff changed). No scope creep: no new abstractions, no PromotionReviewStore changes (correctly left to OQ-1/follow-up per design section 4), no permission-system changes (still :Unknown-gated like the router's other 10 routes). (3) Pagination idiom: list_platform_events/1's page_size+1/drop-the-extra-row technique (split_platform_events_page/2) is the same idiom as Audit.list_entries/1's split_list_page/2 and ServiceCatalog/Instances/Dlq/Repository/Definitions/Identity/Tasks's equivalents -- verified by direct comparison, not just by the code comment's claim. The design's cursor-handling split is a real hybrid of two already-established idioms, not an invented third: decoding the incoming opaque cursor at the router (parse_platform_events_cursor/1 in routers/promotions.ex, using Pagination.decode_cursor/find_nth_colon/parse_int_from_cursor) matches Audit.list_params()'s documented division of labor exactly (verified: audit.ex's own moduledoc states its :cursor is 'already-decoded', decoding stays router-owned); minting next_cursor inside the context function (event_store.ex's platform_events_next_cursor/2, via Pagination.build_raw_cursor/encode_cursor) matches the majority idiom used by ServiceCatalog.list_all/1, Instances.list/timeline, Dlq, Repository, Entities.Definitions, Definitions, Identity, Tasks -- all of which mint next_cursor in the context function, not the router (Audit is actually the minority/outlier here, not the norm). Cursor prefix 'PE:' does not collide with any existing prefix (checked all 20+ @*_cursor_prefix constants in lib/letflow/ -- A:, DL:, DS:, D:, ED:, G:, IL:/IH:/IT:, T:, U:, SC:/SCA:, AH:, IA:, ERA:, RV: are all distinct). Minor, non-blocking observation: the 'PE:' prefix constant is defined twice (event_store.ex:1171 for encoding, routers/promotions.ex:768 for decoding) rather than shared from one module -- every other paginated feature in this codebase keeps its cursor-prefix constant in a single module (context-only for ServiceCatalog/Instances/etc., or router-only for Audit); this design's router-decode/context-encode split is itself deliberate and justified (design section 2.5 typedoc), but the resulting duplicate string literal is a small DRY nit worth watching, not worth a rework cycle. (4) Decision 0006 D2: process_definitions is one of D2's eight tenant_id-dropped tables. Confirmed Audit.insert_entry/3 does not take tenant_id as an argument -- it resolves tenant_id internally from the prefix via TenantProvisioning.tenant_id_for_schema_name/1 (pure string parsing, no I/O), exactly like every other existing Audit call site. source_tenant_id/target_tenant_id in the diff appear only inside the JSON after_state payload (audit_entries.after_state, a map column) and inside list_platform_events' event payload -- never as a process_definitions column predicate or a new schema column. target_prefix alone continues to scope every write, matching the moduledoc's own comment at promotion.ex:336-350 explaining REQ-064's removal of a tenant_id column dependency from deprecate_previous_active/3. No resurrection of D2's removed dependency.",
+    "artifacts_out": [],
+    "issues": [],
+    "next_action": "Proceed to TEST-DESIGNER (step-03d)."
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

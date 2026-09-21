@@ -40,18 +40,46 @@ description: >
 affected_files:
   - lib/letflow/identity.ex
 fix_direction: >
-  Needs a CODE-DESIGNER pass to decide between the two candidate root
-  causes (seed-data gap vs. claim-mapping gap -- awaiting one more
-  diagnostic data point from ai-dala-infra: either a direct query of
-  bpm-default's tenant_role table, or the actual role name(s) in
-  admin-user's JWT at sync time) and the right closure for the
-  permanent-lockout hazard: most likely, only stamp
-  role_claims_synced_at when at least one grant was actually written
-  (leaving the marker nil -- and thus retryable -- when
+  CONFIRMED (2026-09-21, ai-dala-infra live diagnosis): this is the
+  seed-data-gap branch, not claim-mapping. bpm-default's tenant_role
+  table (schema tenant_fa2c7dbb049b4c448646185deb22707c) has ZERO rows
+  -- confirmed via a direct SELECT. A fresh admin-user token was
+  independently confirmed to carry the exact literal claim
+  "PLATFORM_ADMIN" in both realm_access.roles and a top-level roles
+  claim -- no case/naming mismatch. Further source-level investigation
+  (lib/letflow/identity/role_registry.ex) shows RoleRegistry.upsert_role/3
+  (the write path for tenant_role, i.e. POST /identity/roles) requires
+  a PRE-EXISTING Group row (Repo.get(Group, group_id, ...) ->
+  :group_not_found otherwise) -- and there is no seed/bootstrap code
+  anywhere in this codebase that auto-creates a default admin Group or
+  PLATFORM_ADMIN role for any tenant. The only write path for
+  tenant_role has always been this exact endpoint, which was completely
+  broken (ISS-0768, no tenant-prefix threading) from REQ-020's original
+  ship until a few hours before this issue was filed. It is very
+  plausible bpm-default (and possibly other long-lived tenants) has
+  simply never had anyone successfully call this endpoint -- not a
+  runtime bug exercised repeatedly, but a bootstrap step nobody could
+  ever complete until ISS-0768 merged. Operationally, this may be
+  unblockable via one or two POST calls against the now-working
+  endpoint (create a Group if none exists, then bind PLATFORM_ADMIN to
+  it) rather than needing a code fix to become healthy again -- ORCH
+  and ai-dala-infra are pursuing that in parallel to this filing.
+
+  Regardless of the operational unblock, the CODE-level defect
+  described above (sync_role_claims_from_token/3 permanently stamping
+  role_claims_synced_at even on a zero-grant sync, closing off its own
+  designed retry path) is real and independent of root cause -- needs
+  a CODE-DESIGNER pass to decide the right closure: most likely, only
+  stamp role_claims_synced_at when at least one grant was actually
+  written (leaving the marker nil -- and thus retryable -- when
   resolve_group_ids_for_role_names/2 resolves to an empty list for a
   non-empty identity_context.roles), plus a loud log line distinguishing
-  the two outcomes. Needs a regression test proving a zero-grant sync
-  does not silently succeed and does not permanently lock a user out.
+  the two outcomes. Also worth deciding whether Letflow should have an
+  explicit bootstrap/seed mechanism for a tenant's first PLATFORM_ADMIN
+  group+role (a related but distinct scope question -- flag for
+  REQ-ANALYST rather than silently bundling into this fix if it's
+  sizable). Needs a regression test proving a zero-grant sync does not
+  silently succeed and does not permanently lock a user out.
 queue_ref: Q-771  # letflow-queue task id 771, issue_ref ISS-0773 (local
   # filename diverges from the queue id -- 0771 was already taken
   # locally by the tenant-migration-replay BLOCKER, see ISS-0771.yaml).

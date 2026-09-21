@@ -8,8 +8,8 @@
   "file": "handoffs/WF03-ISS0733-20260921/step-05-issue-fixer-close.json",
   "created_at": "2026-09-21T05:05:00Z",
   "started_at": "2026-09-21T05:05:00Z",
-  "completed_at": null,
-  "status": "PENDING",
+  "completed_at": "2026-09-21T01:13:54Z",
+  "status": "COMPLETED",
   "priority": "HIGH",
   "context": {
     "stage": "S6",
@@ -35,11 +35,11 @@
     ]
   },
   "result": {
-    "status": "PENDING",
-    "summary": "",
-    "artifacts_out": [],
+    "status": "PASS",
+    "summary": "docs/issues/ISS-0733.yaml updated: status: resolved, resolved_in_run: WF03-ISS0733-20260921, resolved_at: 2026-09-21T01:13:54Z, plus a resolution_note summarizing the GAP A (promotion.ex audit_entries write inside its existing transaction) and GAP B (GET /promotions/platform-events + EventStore.list_platform_events/1) fixes and their regression tests. No other field changed. gh was reachable and authenticated (tvolodi); GitHub issue 1646 closed with the specified --comment citing docs/issues/ISS-0733.yaml and the three regression test files.",
+    "artifacts_out": ["docs/issues/ISS-0733.yaml"],
     "issues": [],
-    "next_action": ""
+    "next_action": "ORCH may proceed to Step Final for run WF03-ISS0733-20260921."
   },
   "rework_count": 0,
   "max_rework": 3

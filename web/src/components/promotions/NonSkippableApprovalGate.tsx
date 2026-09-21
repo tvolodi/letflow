@@ -127,6 +127,87 @@ function ExtraFieldsError(props: { message?: string }) {
   )
 }
 
+// ── Rehearsal gate error (HTTP 409, apply-time assertion-run gate — ISS-0732/ISS-0767) ──
+//
+// Four distinct server-side reasons, all HTTP 409, all byte-identical in
+// `status`/`type`/`title` (every one goes through `Letflow.Api.Error.conflict/1`),
+// disambiguated only by the RFC 9457 `detail` string. See
+// `lib/letflow/design/iss0767-non-skippable-gate-rehearsal-blocked-state.md` §0-§3
+// for the full reasoning; this mirrors `classifyRollbackError`
+// (`web/src/pages/definitions/DefinitionRollbackPage.tsx`) 1:1.
+
+export type RehearsalGateErrorKind =
+  | 'assertion_run_missing'
+  | 'assertion_run_digest_mismatch'
+  | 'assertion_run_in_progress'
+  | 'assertion_run_failed'
+  | 'not_rehearsal_related'
+
+export function classifyApplyRehearsalError(err: {
+  status?: number
+  details?: Record<string, unknown>
+}): RehearsalGateErrorKind {
+  if (err.status !== 409) return 'not_rehearsal_related'
+  const detail = typeof err.details?.detail === 'string' ? err.details.detail : undefined
+  if (detail === 'no assertion run has been recorded for this review; run assertions before applying') {
+    return 'assertion_run_missing'
+  }
+  if (
+    detail ===
+    'the most recent assertion run does not match the plan_digest being applied; re-run assertions against the current plan'
+  ) {
+    return 'assertion_run_digest_mismatch'
+  }
+  if (
+    detail ===
+    'the most recent assertion run for this review has not finished yet; wait for it to complete or re-run assertions before applying'
+  ) {
+    return 'assertion_run_in_progress'
+  }
+  if (
+    detail ===
+    'the most recent assertion run recorded failing assertions; applying is blocked until a rehearsal with zero failures is recorded'
+  ) {
+    return 'assertion_run_failed'
+  }
+  return 'not_rehearsal_related'
+}
+
+function RehearsalGateError(props: { kind: RehearsalGateErrorKind }): React.ReactElement | null {
+  switch (props.kind) {
+    case 'assertion_run_missing':
+      return (
+        <InlineError
+          testId="rehearsal-gate-error-missing"
+          message="This plan has not been rehearsed yet. Run assertions before applying — Apply is blocked until a rehearsal is recorded for the current plan."
+        />
+      )
+    case 'assertion_run_digest_mismatch':
+      return (
+        <InlineError
+          testId="rehearsal-gate-error-stale"
+          message="The most recent rehearsal was run against an earlier version of this plan. Re-run assertions against the current plan before applying."
+        />
+      )
+    case 'assertion_run_in_progress':
+      return (
+        <InlineError
+          testId="rehearsal-gate-error-in-progress"
+          message="A rehearsal is currently running for this plan. Wait for it to finish, then try Apply again — do not start a second rehearsal."
+        />
+      )
+    case 'assertion_run_failed':
+      return (
+        <InlineError
+          testId="rehearsal-gate-error-failed"
+          message="The most recent rehearsal recorded failing assertions. Applying is blocked until a rehearsal with zero failures is recorded — fix the plan or target and re-run assertions."
+        />
+      )
+    case 'not_rehearsal_related':
+      return null
+  }
+}
+
 // ── Assertion item ─────────────────────────────────────────────────────────────
 
 function AssertionItem(props: { artifact_id: string; assertion_type: string; passed: boolean }) {
@@ -179,6 +260,7 @@ export function NonSkippableApprovalGate(props: NonSkippableApprovalGateProps): 
   const [extraFieldsError, setExtraFieldsError] = useState(false)
   const [generalError, setGeneralError] = useState<string | null>(null)
   const [promotionConflict, setPromotionConflict] = useState<{ targetActiveVersion?: string } | null>(null)
+  const [rehearsalGateError, setRehearsalGateError] = useState<RehearsalGateErrorKind | null>(null)
 
   const isSelfApproval = review.requested_by === currentUserId
   const canApprove = !isSelfApproval && review.status === 'pending_review'
@@ -239,6 +321,7 @@ export function NonSkippableApprovalGate(props: NonSkippableApprovalGateProps): 
   async function handleApply() {
     setDigestError(false)
     setPromotionConflict(null)
+    setRehearsalGateError(null)
     setTransitionError(false)
     setExtraFieldsError(false)
     setGeneralError(null)
@@ -246,7 +329,12 @@ export function NonSkippableApprovalGate(props: NonSkippableApprovalGateProps): 
     try {
       await onApply(review.id, review.plan_digest)
     } catch (err: unknown) {
-      const err2 = err as { status?: number; code?: string; message?: string; details?: { conflicts?: Array<{ target_active_version?: string }> } }
+      const err2 = err as {
+        status?: number
+        code?: string
+        message?: string
+        details?: { conflicts?: Array<{ target_active_version?: string }>; detail?: string }
+      }
       // ISS-0735: HTTP 409 from /apply is not always a digest mismatch --
       // `POST /apply`'s own conflict re-check (the target tenant having
       // moved past this review's base_version since approval, EO-004's own
@@ -255,8 +343,17 @@ export function NonSkippableApprovalGate(props: NonSkippableApprovalGateProps): 
       // Checking `code` (the response's `type`) before falling back to a
       // bare status check keeps these two 409s from collapsing into the
       // same, sometimes-wrong message.
+      const rehearsalGateKind = classifyApplyRehearsalError(err2)
       if (err2.status === 409 && err2.code?.endsWith('/promotion-conflict')) {
         setPromotionConflict({ targetActiveVersion: err2.details?.conflicts?.[0]?.target_active_version })
+      } else if (rehearsalGateKind !== 'not_rehearsal_related') {
+        // ISS-0767: apply_review/4's assertion-run gate (ISS-0732) also
+        // returns 409, as one of four `detail` strings distinct from the
+        // pre-existing `:digest_mismatch` 409. This check MUST run before
+        // the bare `status === 409` digest-mismatch fallback below --
+        // otherwise all four of these new 409s would be silently swallowed
+        // into a misleading "Plan digest mismatch" message.
+        setRehearsalGateError(rehearsalGateKind)
       } else if (err2.status === 409 || err2.code === 'PLAN_DIGEST_MISMATCH') {
         setDigestError(true)
       } else if (err2.status === 400 || err2.code === 'INVALID_REVIEW_TRANSITION') {
@@ -397,6 +494,7 @@ export function NonSkippableApprovalGate(props: NonSkippableApprovalGateProps): 
       {selfApprovalError && <SelfApprovalError />}
       {digestError && <DigestMismatchError />}
       {promotionConflict && <PromotionConflictError targetActiveVersion={promotionConflict.targetActiveVersion} />}
+      {rehearsalGateError && <RehearsalGateError kind={rehearsalGateError} />}
       {transitionError && <TransitionError />}
       {extraFieldsError && <ExtraFieldsError />}
       {generalError && <InlineError testId="general-error" message={generalError} />}

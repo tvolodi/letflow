@@ -252,24 +252,75 @@ defmodule Letflow.Platform.MigrationRollout do
   end
 
   defp register_and_seed_outcome(rollout_id, tenant_id, entity_type, attribute, column_spec) do
-    with {:ok, [promotion]} <-
-           TenantProvisioning.register_column_promotion(
-             entity_type,
-             attribute,
-             column_spec,
-             [tenant_id]
-           ) do
-      outcome_attrs = %{
-        rollout_id: rollout_id,
-        tenant_id: tenant_id,
-        column_promotion_id: promotion.id,
-        status: "pending"
-      }
+    case TenantProvisioning.register_column_promotion(
+           entity_type,
+           attribute,
+           column_spec,
+           [tenant_id]
+         ) do
+      {:ok, [promotion]} ->
+        outcome_attrs = %{
+          rollout_id: rollout_id,
+          tenant_id: tenant_id,
+          column_promotion_id: promotion.id,
+          status: "pending"
+        }
 
-      Repo.insert!(Outcome.changeset(%Outcome{}, outcome_attrs))
+        Repo.insert!(Outcome.changeset(%Outcome{}, outcome_attrs))
+
+      {:error, changeset} ->
+        record_registration_conflict(rollout_id, tenant_id, entity_type, attribute, changeset)
     end
 
     :ok
+  end
+
+  # register_column_promotion/4's only realistic failure mode for a single,
+  # already-validated tenant_id is entity_column_promotions' own
+  # (tenant_id, entity_type, attribute) unique-constraint -- a genuinely
+  # reachable condition since ColumnPromotion is a public, independently
+  # callable row and a tenant could already hold a matching row (from an
+  # earlier, non-rollout registration) before this rollout ever targets
+  # that pair. Previously this `{:error, _}` fell through a `with`'s
+  # missing `else` silently -- the company ended up with NO outcome row at
+  # all (not pending, not failed, just absent from rollout_status/1),
+  # breaking AC1/EO-001's "the failing company recorded FAILED with a
+  # plain reason" contract for this failure class (REVIEWER finding, WF02
+  # rework). Fixed here: record the company as "failed" instead.
+  #
+  # An outcome row's column_promotion_id is NOT NULL + FK, so recording
+  # the failure still needs a real promotion row to point at -- the
+  # conflicting row IS that promotion (that's exactly why the unique
+  # constraint fired), so it is looked up by the same natural key and
+  # linked to, not synthesized.
+  defp record_registration_conflict(rollout_id, tenant_id, entity_type, attribute, changeset) do
+    case Repo.get_by(ColumnPromotion,
+           tenant_id: tenant_id,
+           entity_type: entity_type,
+           attribute: attribute
+         ) do
+      %ColumnPromotion{} = promotion ->
+        outcome_attrs = %{
+          rollout_id: rollout_id,
+          tenant_id: tenant_id,
+          column_promotion_id: promotion.id,
+          status: "failed",
+          completed_at: naive_now(),
+          reason: describe_failure_reason(changeset)
+        }
+
+        Repo.insert!(Outcome.changeset(%Outcome{}, outcome_attrs))
+
+      nil ->
+        # No conflicting row exists despite register_column_promotion/4
+        # returning {:error, _} -- not a condition this module's own
+        # single write path can produce. Raised rather than silently
+        # dropped, so a genuinely unexpected failure here is never
+        # swallowed either.
+        raise "Letflow.Platform.MigrationRollout: register_column_promotion/4 failed for " <>
+                "tenant #{tenant_id} (#{entity_type}.#{attribute}) with no matching " <>
+                "entity_column_promotions row to attribute the failure to: #{inspect(changeset)}"
+    end
   end
 
   # ---------------------------------------------------------------------
@@ -293,16 +344,19 @@ defmodule Letflow.Platform.MigrationRollout do
   #
   # "suspended" (the seventh, last @statuses value on
   # Letflow.TenantProvisioning.ColumnPromotion) is deliberately NOT a
-  # fourth branch here -- verified directly against source, not taken on
-  # trust, that no function anywhere in Letflow.TenantProvisioning ever
-  # writes status: "suspended" (suspend_column_promotion/2 requires
-  # status == "active" as a precondition and leaves status at "active" by
-  # design, per 0024 §4). A ColumnPromotion row reaching this function can
-  # structurally never have status == "suspended" today, so this case does
-  # not add a branch for a value it can never observe -- matching this
-  # codebase's existing idiom of a case/cond that covers only the
-  # reachable values (e.g. checked_table_name/1's own posture on an
-  # unreachable :invalid_entity_type).
+  # fourth *reachable-value* branch above the catch-all below -- verified
+  # directly against source, not taken on trust, that no function anywhere
+  # in Letflow.TenantProvisioning ever writes status: "suspended"
+  # (suspend_column_promotion/2 requires status == "active" as a
+  # precondition and leaves status at "active" by design, per 0024 §4). A
+  # ColumnPromotion row reaching this function can structurally never have
+  # status == "suspended" today. This mirrors
+  # Letflow.TenantProvisioning.checked_table_name/1's real posture on its
+  # own unreachable value (tenant_provisioning.ex:1463-1473): an explicit
+  # `raise ArgumentError` catch-all with a clear message, never a bare,
+  # implicit CaseClauseError left to fall out on its own (corrected here
+  # per REVIEWER -- the prior comment cited that function as doing the
+  # opposite of what it actually does).
   defp apply_one_outcome(%Outcome{} = outcome) do
     promotion = Repo.get!(ColumnPromotion, outcome.column_promotion_id)
 
@@ -319,6 +373,10 @@ defmodule Letflow.Platform.MigrationRollout do
           # DDL path for a column that is already there. Only the
           # outcome-row catch-up (step 2) is needed.
           {:ok, promotion}
+
+        other ->
+          raise ArgumentError,
+                "ColumnPromotion #{promotion.id} has unexpected status: #{inspect(other)}"
       end
 
     # Step 2 (design §4.4): a SEPARATE transaction from step 1, deliberately

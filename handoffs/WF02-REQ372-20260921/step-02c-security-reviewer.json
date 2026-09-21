@@ -1,0 +1,61 @@
+{
+  "handoff_id": "a1b2c3d4-0001-4000-8000-000000000005",
+  "run_id": "WF02-REQ372-20260921",
+  "workflow_id": "WF-02",
+  "step": "02c",
+  "from_agent": "ORCH",
+  "to_agent": "SECURITY-REVIEWER",
+  "file": "handoffs/WF02-REQ372-20260921/step-02c-security-reviewer.json",
+  "created_at": "2026-09-21T07:18:10Z",
+  "started_at": "2026-09-21T07:18:10Z",
+  "completed_at": null,
+  "status": "PENDING",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S8",
+    "requirement_ids": ["REQ-372"],
+    "requirement_text": {
+      "REQ-372": "See handoffs/WF02-REQ372-20260921/step-01-code-designer.json's context.requirement_text.REQ-372 for the full requirement text, copied verbatim from docs/requirements.yaml."
+    },
+    "related_handoff_ids": ["a1b2c3d4-0001-4000-8000-000000000004"],
+    "artifacts_in": [
+      "handoffs/WF02-REQ372-20260921/step-02a-elixir-dev.json",
+      "lib/letflow/definitions/semantic_validation.ex",
+      "lib/letflow/definitions/graph.ex",
+      "lib/letflow/definitions.ex",
+      "docs/agents/instructions/security-invariants.md"
+    ],
+    "owned_modules": [
+      "lib/letflow/definitions/graph.ex",
+      "lib/letflow/engine/variable_schema.ex",
+      "lib/letflow/definitions/semantic_validation.ex",
+      "lib/letflow/definitions.ex"
+    ]
+  },
+  "task": {
+    "description": "Hard gate per WF-02 Step 2c (docs/agents/workflows/WF-02_requirement_implementation.md) on ELIXIR-DEV's REQ-372 implementation. You are on branch feature/WF02-REQ372-20260921 -- verify with git branch --show-current, pull if needed. Run: git diff main...HEAD to see the full diff (lib/letflow/definitions/semantic_validation.ex new; lib/letflow/definitions/graph.ex and lib/letflow/definitions.ex modified). Run the scope test first: does this diff touch a tenant-data path per docs/agents/instructions/security-invariants.md's applicability notes? This change reads VariableSchema (tenant-scoped process-definition data) and Graph structures, and wires into activate/2 (a promotion/activation call path that persists definition status) -- make your own genuine scope determination rather than assuming either way; if IN SCOPE, run the full INV-1..INV-8 procedure (APPLIES/NOT-APPLICABLE per invariant, verify each APPLIES one); if OUT OF SCOPE, state the one-clause reason plainly. FAIL immediately on any APPLIES invariant failing -- all BLOCKER, no partial credit.",
+    "acceptance_criteria": [
+      "scope test explicitly answered (in scope / out of scope) with stated reasoning, not assumed",
+      "every invariant INV-1..INV-8 given an explicit APPLIES or NOT-APPLICABLE verdict if in scope",
+      "every APPLIES invariant's 'How to verify' check actually run, not asserted",
+      "no tenant-data leak or cross-tenant read introduced by VariableSchema fetch changes in validate_definition_graph/2 or activate/2's new run_semantic_validation/2 helper"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "",
+    "artifacts_out": [],
+    "issues": [],
+    "git_evidence": {
+      "branch_name": null,
+      "commit_sha_list": [],
+      "remote_branch": null,
+      "push_status": "skipped",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": ""
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

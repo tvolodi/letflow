@@ -1391,6 +1391,7 @@ defmodule Letflow.Routers.IdentityTest do
       {:ok, _role} =
         Letflow.Identity.RoleRegistry.upsert_role(
           "listed-role-#{System.unique_integer([:positive])}",
+          :process_routing_role,
           group.id,
           prefix: tenant.schema_name
         )
@@ -1404,7 +1405,7 @@ defmodule Letflow.Routers.IdentityTest do
       assert Map.has_key?(body, "items")
 
       for item <- body["items"] do
-        assert Map.keys(item) |> Enum.sort() == ["created_at", "group_id", "id", "name"]
+        assert Map.keys(item) |> Enum.sort() == ["created_at", "group_id", "id", "kind", "name"]
       end
     end
 
@@ -1415,7 +1416,11 @@ defmodule Letflow.Routers.IdentityTest do
       conn =
         build_conn(:post, "/roles", tenant,
           roles: ["PLATFORM_ADMIN"],
-          body: %{"name" => "CUSTOM_APPROVER", "group_id" => group.id}
+          body: %{
+            "name" => "CUSTOM_APPROVER",
+            "kind" => "process_routing_role",
+            "group_id" => group.id
+          }
         )
         |> dispatch()
 
@@ -1434,7 +1439,7 @@ defmodule Letflow.Routers.IdentityTest do
       conn =
         build_conn(:post, "/roles", tenant,
           roles: ["PLATFORM_ADMIN"],
-          body: %{"name" => "", "group_id" => group.id}
+          body: %{"name" => "", "kind" => "process_routing_role", "group_id" => group.id}
         )
         |> dispatch()
 
@@ -1447,7 +1452,11 @@ defmodule Letflow.Routers.IdentityTest do
       conn =
         build_conn(:post, "/roles", tenant,
           roles: ["TASK_WORKER"],
-          body: %{"name" => "some-role", "group_id" => group.id}
+          body: %{
+            "name" => "some-role",
+            "kind" => "process_routing_role",
+            "group_id" => group.id
+          }
         )
         |> dispatch()
 
@@ -1461,7 +1470,11 @@ defmodule Letflow.Routers.IdentityTest do
       conn =
         build_conn(:post, "/roles", tenant,
           roles: ["PROCESS_DESIGNER"],
-          body: %{"name" => "designer-granted-role", "group_id" => group.id}
+          body: %{
+            "name" => "designer-granted-role",
+            "kind" => "process_routing_role",
+            "group_id" => group.id
+          }
         )
         |> dispatch()
 

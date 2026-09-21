@@ -19,15 +19,25 @@ defmodule Letflow.Identity.RoleRegistry do
 
   import Ecto.Query
 
+  alias Letflow.Api.Authorization
   alias Letflow.Identity.Group
+  alias Letflow.Identity.GroupMember
   alias Letflow.Identity.TenantRole
   alias Letflow.Repo
+
+  @type kind :: TenantRole.kind()
 
   @type upsert_error ::
           :invalid_role_name
           | :invalid_group_id
           | :group_not_found
+          | :name_not_a_recognized_platform_role
           | Ecto.Changeset.t()
+
+  @type coverage_gap :: %{
+          held_process_routing_roles: [String.t()],
+          held_platform_roles: [String.t()]
+        }
 
   @max_name_codepoints 128
   @control_char_pattern ~r/[\x00-\x1F\x7F]/u
@@ -43,26 +53,58 @@ defmodule Letflow.Identity.RoleRegistry do
   end
 
   @doc """
-  Inserts or updates the `(name -> group_id)` binding: validates `name`'s format and
-  `group_id`'s UUID syntax before any DB round-trip, then confirms `group_id` references
-  an existing group and upserts on `name` conflict (updating only `group_id`) inside one
+  Inserts or updates the `(name -> group_id)` binding for the given `kind` domain
+  (ISS-0774): validates `name`'s format, `kind == :platform_role`'s membership in
+  `Letflow.Api.Authorization.roles/0`'s six literal strings, and `group_id`'s UUID
+  syntax before any DB round-trip, then confirms `group_id` references an existing
+  group and upserts on `name` conflict (updating `group_id` and `kind`) inside one
   transaction.
+
+  `kind` is a required, non-defaulted parameter — deliberately call-site-breaking
+  over the prior `upsert_role/3`, so every caller states which domain it is writing
+  rather than falling through a default that could silently mis-tag a row (design
+  §2.3). `kind == :platform_role` additionally requires `name` to be one of
+  `Letflow.Api.Authorization.roles/0`'s six recognized literals — any other value
+  returns `{:error, :name_not_a_recognized_platform_role}` before any `Repo` call,
+  loudly rejecting a typo'd platform-role grant instead of silently creating a dead
+  role binding nothing ever resolves. `kind == :process_routing_role` gets no such
+  literal-set check — that domain is open-ended by design (any
+  process-definition-chosen string), only `validate_role_name/1`'s existing format
+  checks apply.
   """
   @spec upsert_role(
           name :: String.t(),
+          kind :: kind(),
           group_id :: Ecto.UUID.t() | String.t(),
           opts :: [prefix: String.t()]
         ) ::
           {:ok, TenantRole.t()} | {:error, upsert_error()}
-  def upsert_role(name, group_id, opts) do
+  def upsert_role(name, kind, group_id, opts)
+      when kind in [:platform_role, :process_routing_role] do
     with :ok <- validate_role_name(name),
+         :ok <- validate_platform_role_name(kind, name),
          {:ok, normalized_group_id} <- Ecto.UUID.cast(group_id) do
-      do_upsert_role(name, normalized_group_id, opts)
+      do_upsert_role(name, kind, normalized_group_id, opts)
     else
       :error -> {:error, :invalid_group_id}
       {:error, reason} -> {:error, reason}
     end
   end
+
+  @spec validate_platform_role_name(kind(), String.t()) ::
+          :ok | {:error, :name_not_a_recognized_platform_role}
+  defp validate_platform_role_name(:process_routing_role, _name), do: :ok
+
+  defp validate_platform_role_name(:platform_role, name) do
+    if name in platform_role_names() do
+      :ok
+    else
+      {:error, :name_not_a_recognized_platform_role}
+    end
+  end
+
+  @spec platform_role_names() :: [String.t()]
+  defp platform_role_names, do: Enum.map(Authorization.roles(), &Atom.to_string/1)
 
   @doc """
   Transition-time role resolution: looks up `name`'s bound `group_id`. Meant to be
@@ -85,12 +127,73 @@ defmodule Letflow.Identity.RoleRegistry do
     _ -> nil
   end
 
+  @doc """
+  Provisioning-time signal (ISS-0774 AC2, design §2.5): does `user_id` hold at
+  least one platform role, given everything they currently hold?
+
+  Computes the same `group_members ⋈ tenant_role` join
+  `Letflow.Identity.list_effective_role_names/2` uses but **unfiltered by
+  `kind`** (reads both domains), partitions the result, and:
+
+    * `held_platform_roles != []` → `:ok` — the user holds at least one
+      platform role, regardless of what else they hold.
+    * `held_platform_roles == [] and held_process_routing_roles != []` →
+      `{:error, {:missing_platform_role, coverage_gap}}` — names the exact
+      gap: this user's only `tenant_role` membership(s) are process-routing
+      names, none of which confer any platform permission by themselves.
+    * `held_platform_roles == [] and held_process_routing_roles == []` →
+      `:ok` — a user with no `tenant_role` membership at all is an ordinary,
+      unprovisioned-for-any-role user, not this function's scenario.
+
+  This is a **pure read/check**, not a gate — it does not block
+  `Letflow.Identity.add_group_member/3` or any other write path. It exists to
+  be called explicitly, by a provisioning script immediately after binding a
+  user's group memberships, or by a regression test — not auto-wired into any
+  existing call site (design §2.5, OQ-2).
+  """
+  @spec check_platform_role_coverage(user_id :: Ecto.UUID.t(), opts :: [prefix: String.t()]) ::
+          :ok | {:error, {:missing_platform_role, coverage_gap()}}
+  def check_platform_role_coverage(user_id, opts) do
+    prefix = Keyword.fetch!(opts, :prefix)
+
+    query =
+      from(gm in GroupMember,
+        join: tr in TenantRole,
+        on: tr.group_id == gm.group_id,
+        where: gm.user_id == ^user_id,
+        select: {tr.kind, tr.name},
+        distinct: true
+      )
+
+    {held_platform_roles, held_process_routing_roles} =
+      query
+      |> Repo.all(prefix: prefix)
+      |> Enum.reduce({[], []}, fn
+        {:platform_role, name}, {platform, routing} -> {[name | platform], routing}
+        {:process_routing_role, name}, {platform, routing} -> {platform, [name | routing]}
+      end)
+
+    case held_platform_roles do
+      [] when held_process_routing_roles != [] ->
+        {:error,
+         {:missing_platform_role,
+          %{
+            held_process_routing_roles: Enum.sort(held_process_routing_roles),
+            held_platform_roles: []
+          }}}
+
+      _ ->
+        :ok
+    end
+  end
+
   @spec do_upsert_role(
           name :: String.t(),
+          kind :: kind(),
           group_id :: Ecto.UUID.t(),
           opts :: [prefix: String.t()]
         ) :: {:ok, TenantRole.t()} | {:error, upsert_error()}
-  defp do_upsert_role(name, group_id, opts) do
+  defp do_upsert_role(name, kind, group_id, opts) do
     prefix = Keyword.fetch!(opts, :prefix)
 
     Repo.transaction(
@@ -100,7 +203,7 @@ defmodule Letflow.Identity.RoleRegistry do
             Repo.rollback(:group_not_found)
 
           %Group{} ->
-            insert_or_update_role(name, group_id, opts)
+            insert_or_update_role(name, kind, group_id, opts)
         end
       end,
       prefix: prefix
@@ -109,17 +212,18 @@ defmodule Letflow.Identity.RoleRegistry do
 
   @spec insert_or_update_role(
           name :: String.t(),
+          kind :: kind(),
           group_id :: Ecto.UUID.t(),
           opts :: [prefix: String.t()]
         ) :: TenantRole.t()
-  defp insert_or_update_role(name, group_id, opts) do
+  defp insert_or_update_role(name, kind, group_id, opts) do
     prefix = Keyword.fetch!(opts, :prefix)
 
     case %TenantRole{}
-         |> TenantRole.changeset(%{name: name, group_id: group_id})
+         |> TenantRole.changeset(%{name: name, group_id: group_id, kind: kind})
          |> Repo.insert(
            conflict_target: :name,
-           on_conflict: [set: [group_id: group_id]],
+           on_conflict: [set: [group_id: group_id, kind: kind]],
            returning: true,
            prefix: prefix
          ) do

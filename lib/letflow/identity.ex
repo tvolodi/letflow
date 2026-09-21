@@ -682,6 +682,14 @@ defmodule Letflow.Identity do
 
   Returns `[]` (never an error tuple) when the user belongs to no
   role-bearing group.
+
+  **ISS-0774**: filtered to `tenant_role` rows with `kind == :platform_role`
+  — this is the one and only function whose output ever reaches
+  `Letflow.Api.Authorization.roles_from_strings/1`, so a process-routing
+  role name (a `HUMAN_TASK` routing group binding, structurally unrelated to
+  platform permissions — see `lib/letflow/design/iss-0774-role-domain-authorization.md`
+  §0) can never reach that untrusted-input-shaped conversion via this path,
+  regardless of how many process-routing roles the user holds.
   """
   @spec list_effective_role_names(user_id :: Ecto.UUID.t(), opts :: opts()) :: [String.t()]
   def list_effective_role_names(user_id, opts) do
@@ -691,7 +699,7 @@ defmodule Letflow.Identity do
       from(gm in GroupMember,
         join: tr in TenantRole,
         on: tr.group_id == gm.group_id,
-        where: gm.user_id == ^user_id,
+        where: gm.user_id == ^user_id and tr.kind == :platform_role,
         select: tr.name,
         distinct: true
       )

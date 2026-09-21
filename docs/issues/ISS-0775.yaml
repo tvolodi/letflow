@@ -1,0 +1,95 @@
+id: ISS-0775
+title: >
+  Letflow.Identity.sync_role_claims_from_token/3's write path (via
+  resolve_group_ids_for_role_names/2) is not filtered by tenant_role.kind
+  and not gated by Authorization.role_from_string/1's closed set -- an
+  IdP token claiming an arbitrary string can write unintended
+  group_members rows for any tenant_role (of either kind) whose name it
+  happens to match
+discovered_by: REVIEWER (WF-02 Step 2d gate on ISS-0774's fix, resolving an
+  item SECURITY-REVIEWER flagged during its own pass on the same PR)
+discovered_in_run: WF03-ISS0774-20260921 (REVIEWER gate, commit 606a20f8)
+discovered_at: "2026-09-21T00:00:00Z"
+severity: MINOR
+description: >
+  ISS-0774's design doc (`lib/letflow/design/iss-0774-role-domain-authorization.md`
+  §5, OQ-1) originally justified leaving
+  `Letflow.Identity.resolve_group_ids_for_role_names/2` unfiltered by the
+  new `tenant_role.kind` column on the claim that "a token can only ever
+  claim one of the six platform-role strings in the first place, per
+  Letflow.Oidc.ClaimMapping's existing closed mapping." SECURITY-REVIEWER
+  verified this premise is factually wrong during ISS-0774's security
+  gate, and REVIEWER independently re-verified it during the idiom/scope
+  gate that followed: `Letflow.Oidc.ClaimMapping.resolve_roles/2`
+  (lib/letflow/oidc/claim_mapping.ex:166-176) does not closed-set-filter
+  anything -- it passes whatever string list the IdP token's configured
+  claim path carries straight through unfiltered. The actual closed-set
+  gate, `Letflow.Api.Authorization.role_from_string/1`, is applied only
+  on the separate request-time `AuthPipeline`/`roles_from_strings/1`
+  path -- never on `identity_context.roles` before
+  `Letflow.Identity.sync_role_claims_from_token/3`
+  (lib/letflow/identity.ex:739) passes it into
+  `resolve_group_ids_for_role_names/2` (lib/letflow/identity.ex:818),
+  which matches `t.name in ^role_names` against the full `tenant_role`
+  table regardless of `kind`.
+
+  Practical effect: a user whose OIDC token claims an arbitrary string
+  that happens to match an existing `tenant_role.name` -- of EITHER
+  `kind` -- gets a `group_members` row written for that group, whether
+  or not they legitimately hold that role by any platform-recognized
+  grant. Blast radius is bounded, not open: ISS-0774's own `kind` filter
+  on `Letflow.Identity.list_effective_role_names/2` means such a row can
+  never reach `Authorization.roles_from_strings/1` or confer any
+  platform permission (that function only reads `kind == :platform_role`
+  rows) -- so this cannot itself cause a platform-privilege escalation.
+  The actual exposure is unintended `:process_routing_role`-kind group
+  membership: a token holder gains HUMAN_TASK task-assignment eligibility
+  for a routing group they never legitimately earned, if their IdP
+  token (or a misconfigured/compromised IdP) happens to claim a string
+  matching that group's bound role name.
+
+  This is pre-existing behavior, not introduced by ISS-0774's diff --
+  `resolve_group_ids_for_role_names/2` and `sync_role_claims_from_token/3`
+  have zero diff hits in that PR (confirmed against
+  `git diff origin/main...origin/feature/WF03-ISS0774-20260921` for
+  lib/letflow/identity.ex). Fixing it was out of ISS-0774's own scope
+  (that issue is about the platform-role/process-routing-role conflation
+  in the read path feeding Authorization, not about hardening the OIDC
+  claim-to-group-membership write path against an untrusted or
+  misconfigured IdP claims source).
+affected_files:
+  - lib/letflow/identity.ex
+  - lib/letflow/oidc/claim_mapping.ex
+fix_direction: >
+  Needs a CODE-DESIGNER pass to pick one of: (a) apply the same
+  `kind: :platform_role`-style discipline `list_effective_role_names/2`
+  now has to `resolve_group_ids_for_role_names/2`'s write path too --
+  probably wrong on its own, since a legitimate use case (a process-routing
+  role claimed by name, e.g. an IdP-federated routing assignment) may
+  exist and would be broken by an outright kind-restriction; (b)
+  restrict `resolve_group_ids_for_role_names/2`'s write path to only
+  match against `:process_routing_role`-kind rows, never
+  `:platform_role`-kind rows (since platform roles are meant to reach a
+  user only via `list_effective_role_names/2`'s own group-membership
+  read path, provisioned by an admin through `RoleRegistry.upsert_role/4`
+  + `add_group_member/3`, not by an arbitrary OIDC claim string) --
+  this reads as the more targeted fix, closing the theoretical
+  "IdP claims a string matching a platform-role name" case entirely
+  while leaving legitimate process-routing-role claim-driven group
+  membership untouched; (c) validate claimed role strings against
+  `Authorization.role_from_string/1`'s closed set OR an existing
+  `:process_routing_role`-kind tenant_role name before writing any
+  group_members row, rejecting anything else with a logged warning
+  (mirrors ISS-0773's own logging-not-silent-drop precedent); (d) some
+  other explicit design. Needs a regression test covering a token
+  claiming a role-name string that matches an existing tenant_role of
+  each kind, confirming the chosen design's actual group_members
+  writes (or non-writes).
+queue_ref: "Q-773"  # letflow-queue task id 773. NOTE: the queue service's
+  # own id/issue_ref numbering assigned "ISS-0773" -- already taken on
+  # main by the merged auth-lockout fix (PR #1680). Local filename stays
+  # ISS-0775 per the docs/issues/ collision precedent established
+  # repeatedly this session (see ISS-0771->0772->0773's own renumbering
+  # history). Registered 2026-09-21 by ORCH.
+github_ref: GH-1684
+status: open

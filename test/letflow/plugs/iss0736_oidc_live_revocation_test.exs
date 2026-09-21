@@ -120,7 +120,7 @@ defmodule Letflow.Plugs.Iss0736OidcLiveRevocationTest do
 
     {:ok, _role} =
       %TenantRole{}
-      |> TenantRole.changeset(%{name: "PLATFORM_ADMIN", group_id: group.id})
+      |> TenantRole.changeset(%{name: "PLATFORM_ADMIN", kind: :platform_role, group_id: group.id})
       |> Repo.insert(prefix: schema_name)
 
     {:ok, %{member: _member, created: true}} =
@@ -166,7 +166,7 @@ defmodule Letflow.Plugs.Iss0736OidcLiveRevocationTest do
 
     {:ok, _role} =
       %TenantRole{}
-      |> TenantRole.changeset(%{name: role_name, group_id: group.id})
+      |> TenantRole.changeset(%{name: role_name, kind: :platform_role, group_id: group.id})
       |> Repo.insert(prefix: schema_name)
 
     group

@@ -29,6 +29,7 @@ defmodule Letflow.IdentityMigration do
 
   import Ecto.Query
 
+  alias Letflow.Api.Authorization
   alias Letflow.Identity.Group
   alias Letflow.Identity.TenantRole
   alias Letflow.Identity.User
@@ -215,9 +216,20 @@ defmodule Letflow.IdentityMigration do
               join: g in Group,
               on: tr.group_id == g.id,
               where: fragment("? = ?", g.tenant_id, type(^tenant_id, Ecto.UUID)),
-              select: tr
+              # ISS-0774: restricted to the legacy public.tenant_role table's
+              # actual (frozen) column set -- mirrors copy_groups/2's and
+              # copy_users/2's own identical-purpose `select: struct(x, [...])`
+              # guard above. ISS-0774's `kind` column was added only to the
+              # NEW per-tenant-schema `tenant_role` table (destination side of
+              # this copy); the legacy source table was never migrated to
+              # carry it and a bare `select: tr` would query a column that
+              # does not exist there, raising `Postgrex.Error: undefined_column`
+              # (the exact regression this comment documents and this fix
+              # closes). `kind` is filled in per-row below, not selected here.
+              select: struct(tr, [:id, :name, :group_id, :inserted_at])
             )
           )
+          |> Enum.map(&with_legacy_kind/1)
 
         insert_all_preserving_id(rows, schema_name)
 
@@ -225,6 +237,26 @@ defmodule Letflow.IdentityMigration do
         {:error, {:orphaned_tenant_role, orphan_id}}
     end
   end
+
+  # Classifies a legacy row's `kind` the exact same deterministic way
+  # ISS-0774's own migration backfill classifies pre-existing rows (see
+  # priv/repo/migrations/20260921000002_add_kind_to_tenant_role.exs):
+  # :platform_role iff `name` is one of Letflow.Api.Authorization.roles/0's
+  # six recognized literals, :process_routing_role otherwise. Applied here
+  # (Elixir-side, post-query) rather than at the SQL layer because the legacy
+  # source table has no `kind` column to select in the first place -- see
+  # copy_tenant_roles/2's own comment above.
+  @spec with_legacy_kind(TenantRole.t()) :: TenantRole.t()
+  defp with_legacy_kind(%TenantRole{name: name} = tenant_role) do
+    if name in platform_role_names() do
+      %{tenant_role | kind: :platform_role}
+    else
+      %{tenant_role | kind: :process_routing_role}
+    end
+  end
+
+  @spec platform_role_names() :: [String.t()]
+  defp platform_role_names, do: Enum.map(Authorization.roles(), &Atom.to_string/1)
 
   defp find_orphaned_tenant_role do
     Repo.one(

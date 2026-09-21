@@ -11,7 +11,7 @@
 
 import React from 'react'
 
-export type StatusBadgeDomain = 'definition' | 'instance' | 'task' | 'timer' | 'dlq' | 'rollout-outcome'
+export type StatusBadgeDomain = 'definition' | 'instance' | 'task' | 'timer' | 'dlq' | 'rollout' | 'rollout-outcome'
 
 export interface StatusBadgeProps {
   status: string
@@ -52,7 +52,19 @@ const TASK_STATUSES: Record<string, ResolvedStatus> = {
   CANCELLED: { background: 'var(--color-neutral-200)', text: 'var(--color-neutral-600)' },
 }
 
-// REQ-375 §7 — rollout-outcome domain (RolloutOutcomeTable's status column).
+// REQ-375 §2/§7 — two DISTINCT enums live on a RolloutResult, and mixing them
+// under one domain table was a bug a REVIEWER caught (rollout.status is
+// 'running'|'completed'; outcome.status is 'pending'|'succeeded'|'failed' —
+// disjoint value sets, so one shared table silently fell through to
+// FALLBACK for every rollout-level badge). Two separate tables/domains now:
+
+// `rollout` domain — RolloutSummaryHeader's own rollout.status badge.
+const ROLLOUT_STATUSES: Record<string, ResolvedStatus> = {
+  running: { background: 'var(--color-info-light)', text: 'var(--color-info-dark)', dot: 'var(--color-info)', pulse: true },
+  completed: { background: 'var(--color-success-light)', text: 'var(--color-success-dark)', dot: 'var(--color-success)' },
+}
+
+// `rollout-outcome` domain — RolloutOutcomeTable's per-company status column.
 // Maps REQ-374's own outcome-status enum (~w(pending succeeded failed)) onto
 // existing tokens, matching the neutral/success/error convention the other
 // domain tables above already use.
@@ -69,6 +81,7 @@ const STATUS_TABLES: Partial<Record<StatusBadgeDomain, Record<string, ResolvedSt
   definition: DEFINITION_STATUSES,
   instance: INSTANCE_STATUSES,
   task: TASK_STATUSES,
+  rollout: ROLLOUT_STATUSES,
   'rollout-outcome': ROLLOUT_OUTCOME_STATUSES,
 }
 

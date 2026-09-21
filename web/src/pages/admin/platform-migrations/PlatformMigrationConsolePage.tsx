@@ -196,7 +196,11 @@ function RolloutSummaryHeader(props: { rollout: RolloutResult['rollout'] }): Rea
           {rollout.entity_type}.{rollout.attribute}
         </h3>
         <span data-testid="rollout-status-badge">
-          <StatusBadge status={rollout.status} domain="rollout-outcome" size="sm" />
+          {/* rollout.status is the ROLLOUT-level enum ('running'|'completed'),
+              a disjoint set from outcome.status ('pending'|'succeeded'|'failed') —
+              use the distinct `rollout` domain, not `rollout-outcome` (REVIEWER
+              caught these being conflated under one table; see StatusBadge.tsx). */}
+          <StatusBadge status={rollout.status} domain="rollout" size="sm" />
         </span>
       </div>
       <div data-testid="rollout-id-display" style={{ fontSize: '.8rem', color: 'var(--text-secondary)', fontFamily: 'var(--font-mono)' }}>

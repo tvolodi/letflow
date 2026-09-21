@@ -46,6 +46,7 @@ defmodule Letflow.Definitions.PromotionTest do
 
   import Ecto.Query
 
+  alias Letflow.Audit.Entry
   alias Letflow.Definitions.PromotionDigest
   alias Letflow.Definitions.PromotionReview
   alias Letflow.Definitions.Promotion
@@ -457,6 +458,126 @@ defmodule Letflow.Definitions.PromotionTest do
                  permission_checker: allow(),
                  event_appender: fn _attrs, _prefix -> {:ok, %{}} end
                )
+    end
+  end
+
+  # ---------------------------------------------------------------------------------
+  # ISS-0733 GAP A -- write_target_definition/5's new step 8(c)
+  # (`lib/letflow/design/iss0733-promotion-audit-and-platform-events-read.md`
+  # §1) writes exactly one `audit_entries` row, in the TARGET tenant's own
+  # schema, for a successful promotion. Pre-fix (`main`,
+  # `write_target_definition/4`), `promote_definition/3` never calls
+  # `Letflow.Audit` at all -- 0 rows after a successful promotion. This is the
+  # exact regression this test is designed to prove: run unmodified against
+  # `main` in a throwaway worktree, it finds 0; against this branch, it finds
+  # exactly 1 with the fields §1.4 specifies. See the WF-03 handoff's
+  # `result.summary` for both runs' quoted output.
+  # ---------------------------------------------------------------------------------
+
+  describe "ISS-0733 GAP A -- audit_entries row" do
+    test "a successful promotion writes one definition.promote audit row in the target schema" do
+      %{tenant_id: source_tenant_id, schema_name: source_schema} = provisioned_tenant()
+      %{tenant_id: target_tenant_id, schema_name: target_schema} = provisioned_tenant()
+
+      process_key = unique_process_key()
+
+      source_def =
+        insert_active_definition!(source_schema, %{
+          name: process_key,
+          version: "1.0.0",
+          graph: %{"nodes" => [], "edges" => []}
+        })
+
+      plan = %{
+        source_tenant_id: source_tenant_id,
+        target_tenant_id: target_tenant_id,
+        process_key: process_key,
+        source_definition_id: source_def.id,
+        target_definition_id: nil,
+        base_version: nil,
+        entries: []
+      }
+
+      review = review_for(plan)
+      actor_id = Ecto.UUID.generate()
+
+      # Before the promotion, both schemas' audit_entries tables are empty --
+      # this pins that the row below is genuinely produced by THIS call, not
+      # a pre-existing fixture.
+      assert Repo.aggregate(Entry, :count, prefix: source_schema) == 0
+      assert Repo.aggregate(Entry, :count, prefix: target_schema) == 0
+
+      assert {:ok, result} =
+               Promotion.promote_definition(actor_id, review,
+                 permission_checker: allow(),
+                 event_appender: fn _event_attrs, _prefix -> {:ok, %{event_id: Ecto.UUID.generate()}} end
+               )
+
+      # 0 audit_entries rows in the SOURCE tenant's schema -- this write path
+      # only ever touches the target tenant (design §1.5).
+      assert Repo.aggregate(Entry, :count, prefix: source_schema) == 0
+
+      entries = Repo.all(Entry, prefix: target_schema)
+      assert length(entries) == 1
+      assert [entry] = entries
+
+      assert entry.action == "definition.promote"
+      assert entry.resource_type == "definition"
+      assert entry.resource_id == result.target_definition_id
+      assert entry.actor_id == actor_id
+      assert entry.before_state == nil
+
+      assert entry.after_state["event_type"] == "DEFINITION_PROMOTED"
+      assert entry.after_state["actor_id"] == actor_id
+      assert entry.after_state["review_id"] == review.id
+      assert entry.after_state["source_tenant_id"] == source_tenant_id
+      assert entry.after_state["target_tenant_id"] == target_tenant_id
+      assert entry.after_state["source_definition_id"] == source_def.id
+      assert entry.after_state["target_definition_id"] == result.target_definition_id
+      assert entry.after_state["process_key"] == process_key
+    end
+
+    test "an event_appender failure does not roll back the already-committed audit row" do
+      %{tenant_id: source_tenant_id, schema_name: source_schema} = provisioned_tenant()
+      %{tenant_id: target_tenant_id, schema_name: target_schema} = provisioned_tenant()
+
+      process_key = unique_process_key()
+
+      source_def =
+        insert_active_definition!(source_schema, %{
+          name: process_key,
+          version: "1.0.0",
+          graph: %{"nodes" => [], "edges" => []}
+        })
+
+      plan = %{
+        source_tenant_id: source_tenant_id,
+        target_tenant_id: target_tenant_id,
+        process_key: process_key,
+        source_definition_id: source_def.id,
+        target_definition_id: nil,
+        base_version: nil,
+        entries: []
+      }
+
+      review = review_for(plan)
+
+      failing_event_appender = fn _event_attrs, _prefix -> {:error, :event_store_unavailable} end
+
+      assert {:error, :event_store_unavailable} =
+               Promotion.promote_definition(Ecto.UUID.generate(), review,
+                 permission_checker: allow(),
+                 event_appender: failing_event_appender
+               )
+
+      # design §1.1/§3.2 step 9: the audit write (step 8c) is inside the SAME
+      # transaction as the version-pointer swap (steps 7-8), which already
+      # committed before step 9 (the event-append) ever runs -- so a failing
+      # event_appender must NOT undo the audit row, exactly like it does not
+      # undo the version-pointer move itself (already pinned by the sibling
+      # `opts[:event_appender]` describe block above).
+      assert [entry] = Repo.all(Entry, prefix: target_schema)
+      assert entry.action == "definition.promote"
     end
   end
 end

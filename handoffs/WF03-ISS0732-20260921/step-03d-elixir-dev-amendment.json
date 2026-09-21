@@ -8,8 +8,8 @@
   "file": "handoffs/WF03-ISS0732-20260921/step-03d-elixir-dev-amendment.json",
   "created_at": "2026-09-21T04:08:33Z",
   "started_at": "2026-09-21T04:08:33Z",
-  "completed_at": null,
-  "status": "PENDING",
+  "completed_at": "2026-09-21T04:13:28Z",
+  "status": "COMPLETED",
   "priority": "HIGH",
   "context": {
     "stage": "S6",
@@ -37,19 +37,23 @@
     ]
   },
   "result": {
-    "status": "PENDING",
-    "summary": "",
-    "artifacts_out": [],
+    "status": "PASS",
+    "summary": "Implemented design §9 (OQ-2 amendment) additively on top of commit 4efff094. verify_rehearsed/2 (lib/letflow/definitions/promotion.ex) gained a new step 3 -- `assertion_run.status not in [:running]` -- run after the existing digest-match check and strictly before the existing (renumbered step 4) `assertions_failed == 0` check, exactly per §9.2's ordering. On status == :running it returns {:error, :assertion_run_in_progress}, a new plain-atom member added to apply_review_error() (not a tuple, per INV-NEW-2). The existing assertions_failed == 0 check, the :assertion_run_missing / :assertion_run_digest_mismatch / :assertion_run_failed branches, and the digest constant-time comparison are all untouched. lib/letflow/routers/promotions.ex render_apply/2 gained one new clause: {:error, :assertion_run_in_progress} -> Response.conflict/2, 409, detail 'the most recent assertion run for this review has not finished yet; wait for it to complete or re-run assertions before applying' -- same shape/rationale as the three existing new 409 clauses (§5.2/§9.5), not folded into invalid_transition_response/1. test/letflow/routers/req077_promotion_pipeline_test.exs: insert_passing_assertion_run!/3 already inserted status: :passed (no change needed there -- it was already correct from commit 4efff094, so the 3 existing happy-path fixtures needed no edits). Added a new describe block 'ISS-0732 §9 amendment: verify_rehearsed/2 rejects an in-progress rehearsal' with a new insert_assertion_run!/4 helper (parameterised status) and two new tests: (1) a status: :running matching-digest run -> apply_promotion returns 409 with detail matching 'has not finished yet', review stays :approved, target definition is not promoted (nothing written, INV-NEW-3); (2) a status: :teardown_failed, assertions_failed == 0 run -> apply_promotion still returns 200/applied, proving the fix is an ADDITIONAL exclusion of :running only, not a regression to status == :passed-only (guards against candidate (A) from §9.1, which was explicitly rejected).\n\n`mix compile --warnings-as-errors` (full project): clean, no output beyond 'Compiling 4 files (.ex)', 0 warnings, 0 errors.\n\nTargeted suite (`mix test test/letflow/definitions/promotion_test.exs test/letflow/routers/promotions_test.exs test/letflow/routers/req077_promotion_pipeline_test.exs`), run twice (once during initial verification, once for final quoted evidence): both runs ended `Finished in ~82-98 seconds (0.00s async, ...s sync)` / `Result: 56 passed` -- 0 failures both times (56 = the prior 54 plus the 2 new regression tests added here). No skips, no excludes hit.",
+    "artifacts_out": [
+      "lib/letflow/definitions/promotion.ex",
+      "lib/letflow/routers/promotions.ex",
+      "test/letflow/routers/req077_promotion_pipeline_test.exs"
+    ],
     "issues": [],
     "git_evidence": {
-      "branch_name": null,
+      "branch_name": "feature/WF03-ISS0732-20260921",
       "commit_sha_list": [],
-      "remote_branch": null,
-      "push_status": "skipped",
+      "remote_branch": "origin/feature/WF03-ISS0732-20260921",
+      "push_status": "pending",
       "pr_url": null,
       "pr_create_error": null
     },
-    "next_action": ""
+    "next_action": "Route to SECURITY-REVIEWER (tenant-data path: apply_review/4 gates a promotion-apply mutation) then REVIEWER, per WF-03 Step 3's gate sequence -- same gates the original commit 4efff094 already needed, now re-run against this additive amendment."
   },
   "rework_count": 0,
   "max_rework": 3

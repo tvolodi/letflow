@@ -539,6 +539,7 @@ defmodule Letflow.Definitions.Promotion do
           | :invalid_transition
           | :assertion_run_missing
           | :assertion_run_digest_mismatch
+          | :assertion_run_in_progress
           | :assertion_run_failed
           | {:promotion_failed, promote_error()}
 
@@ -556,15 +557,17 @@ defmodule Letflow.Definitions.Promotion do
        this is what makes AC4's "does not re-apply" true, not
        `mark_review_applied/2`'s own status guard (which would only fire AFTER
        the promotion already committed).
-    4. `verify_rehearsed/2` (NEW, ISS-0732 design §2) -- a matching-digest,
-       zero-failure `promotion_assertion_runs` row must exist for this review
-       before the promotion may proceed:
+    4. `verify_rehearsed/2` (NEW, ISS-0732 design §2, amended §9) -- a
+       matching-digest, terminal, zero-failure `promotion_assertion_runs` row
+       must exist for this review before the promotion may proceed:
        * no run recorded at all -> `{:error, :assertion_run_missing}`.
        * latest run's `plan_digest` doesn't match the digest being applied
          (constant-time compare) -> `{:error, :assertion_run_digest_mismatch}`.
-       * latest matching-digest run has `assertions_failed > 0` ->
+       * latest matching-digest run is still `status: :running` (in-flight) ->
+         `{:error, :assertion_run_in_progress}`.
+       * latest matching-digest, terminal run has `assertions_failed > 0` ->
          `{:error, :assertion_run_failed}`.
-       Nothing written on any of these three paths.
+       Nothing written on any of these four paths.
     5. `promote_definition/3`.
        * `{:error, reason}` -> `PromotionReviewStore.mark_review_failed/2`
          (result ignored — a concurrent transition there must not mask the
@@ -615,9 +618,14 @@ defmodule Letflow.Definitions.Promotion do
   defp verify_approved(%PromotionReview{status: :approved}), do: :ok
   defp verify_approved(_review), do: {:error, :invalid_transition}
 
-  # ISS-0732 design §2.1 -- gates apply_review/4 on a matching-digest, passed
-  # assertion run. Pure read-then-branch, no writes, same shape as
-  # verify_apply_digest/2 and verify_approved/1 above.
+  # ISS-0732 design §2.1 (amended §9) -- gates apply_review/4 on a
+  # matching-digest, terminal (not :running), zero-failure assertion run.
+  # Pure read-then-branch, no writes, same shape as verify_apply_digest/2
+  # and verify_approved/1 above. The status check (step 3) runs strictly
+  # before the assertions_failed check (step 4, unchanged from the original
+  # step 3) -- see design §9.2's rationale: a :running row's
+  # assertions_failed is always 0 by construction, so checking it first
+  # would never catch an in-flight rehearsal.
   @spec verify_rehearsed(
           review :: PromotionReview.t(),
           plan_digest :: String.t(),
@@ -630,10 +638,14 @@ defmodule Letflow.Definitions.Promotion do
 
       {:ok, assertion_run} ->
         if PromotionDigest.verify_digest(assertion_run.plan_digest, plan_digest) do
-          if assertion_run.assertions_failed == 0 do
-            :ok
+          if assertion_run.status not in [:running] do
+            if assertion_run.assertions_failed == 0 do
+              :ok
+            else
+              {:error, :assertion_run_failed}
+            end
           else
-            {:error, :assertion_run_failed}
+            {:error, :assertion_run_in_progress}
           end
         else
           {:error, :assertion_run_digest_mismatch}

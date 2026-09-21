@@ -643,6 +643,13 @@ defmodule Letflow.Routers.Promotions do
         "the most recent assertion run does not match the plan_digest being applied; re-run assertions against the current plan"
       )
 
+  defp render_apply(conn, {:error, :assertion_run_in_progress}),
+    do:
+      Response.conflict(
+        conn,
+        "the most recent assertion run for this review has not finished yet; wait for it to complete or re-run assertions before applying"
+      )
+
   defp render_apply(conn, {:error, :assertion_run_failed}),
     do:
       Response.conflict(

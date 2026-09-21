@@ -102,4 +102,38 @@ queue_ref: Q-771  # letflow-queue task id 771, issue_ref ISS-0773 (local
   # locally by the tenant-migration-replay BLOCKER, see ISS-0771.yaml).
   # Registered 2026-09-21 by ORCH.
 github_ref: GH-1677
-status: open
+status: resolved
+resolution: >
+  Fixed on feature/WF03-ISS0772-20260921 (PR #1680). sync_role_claims_from_token/3
+  (lib/letflow/identity.ex) no longer unconditionally stamps role_claims_synced_at:
+  the grant-write step now distinguishes a zero-grant resolution from a real sync via
+  a Logger.warning call and a conditional Multi.update on the marker -- when
+  resolve_group_ids_for_role_names/2 resolves to an empty list for a non-empty
+  identity_context.roles, the marker is left nil, so the function's own designed
+  retry-on-nil-marker path fires again on the user's next login instead of a
+  one-time-only silent lockout. Design: lib/letflow/design/
+  iss-0773-role-claims-sync-lockout-fix.md.
+
+  Evidence: RELEASE-VALIDATOR independently reproduced the bug fail-then-pass (built
+  the pre-fix code, confirmed the zero-grant/permanent-marker failure live, then
+  confirmed the fix resolves it), reran the full 59/59 identity_test.exs suite green,
+  and ran a full `mix letflow.check.test` clean. REQ-378's revocation-permanence
+  invariant (a revoked user must not be re-granted by a stale token/marker state) was
+  independently re-derived by RELEASE-VALIDATOR against this change and confirmed
+  preserved -- the conditional marker-stamping only ever leaves the marker MORE
+  retryable (nil instead of stamped), never grants access it would not otherwise have
+  reached.
+
+  Gates, all PASSED: CODE-DESIGN-VALIDATOR (x2 -- second pass after fixing a real
+  design-doc-provenance gap, see process note below), SECURITY-REVIEWER (x2),
+  REVIEWER, TEST-DESIGN-VALIDATOR, TEST-RUNNER, RELEASE-VALIDATOR.
+
+  Process note for future sessions: mid-pipeline, CODE-DESIGN-VALIDATOR's first pass
+  approved a design doc that existed only in a worktree that was later discarded --
+  the doc was never actually committed to the branch. SECURITY-REVIEWER caught the
+  gap (design doc absent from the diff it was reviewing) and the doc was then
+  properly committed (58cd093d, "docs(design): commit ISS-0773 design doc, correct
+  ISS-0772 refs to ISS-0773") before CODE-DESIGN-VALIDATOR re-passed against the
+  committed artifact. Lesson: a design-doc approval is only valid against a
+  committed, diffable file -- never against worktree-local state a later step may
+  discard.

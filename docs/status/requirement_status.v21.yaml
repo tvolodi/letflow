@@ -346,3 +346,28 @@ history:
       against lib/letflow/definitions/promotion.ex). All four gates
       passed independently, no rework cycles. Design:
       lib/letflow/design/iss0767-non-skippable-gate-rehearsal-blocked-state.md.
+  - req: SCOPE-CHANGE
+    event: done
+    agent: DOC-UPDATER
+    at: "2026-09-21T13:14:36Z"
+    note: >
+      ISS-0773 (sync_role_claims_from_token/3 silently wrote zero role grants on
+      a zero-grant resolve_group_ids_for_role_names/2 result, permanently
+      stamping role_claims_synced_at and closing off the function's own
+      designed retry path -- QA bpm-default/bilimbaga admin-users 403'd on
+      every authenticated route despite valid tokens) resolved on
+      feature/WF03-ISS0772-20260921 (PR #1680). Fix: a Logger.warning on
+      zero-grant resolution plus conditional Multi.update marker-stamping, so
+      a zero-grant sync leaves the marker nil and naturally retries on next
+      login instead of permanently locking the user out. Evidence:
+      RELEASE-VALIDATOR's own fresh fail-then-pass reproduction, 59/59
+      identity_test.exs, full `mix letflow.check.test` clean, REQ-378's
+      revocation-permanence invariant independently re-derived and confirmed
+      preserved (marker only ever becomes MORE retryable, never grants
+      unearned access). Gates: CODE-DESIGN-VALIDATOR PASSED twice (second pass
+      after fixing a real design-doc-provenance gap -- a design doc that
+      existed only in a since-discarded worktree, caught by SECURITY-REVIEWER,
+      fixed by properly committing it), SECURITY-REVIEWER PASSED twice,
+      REVIEWER PASSED, TEST-DESIGN-VALIDATOR PASSED, TEST-RUNNER PASSED,
+      RELEASE-VALIDATOR PASSED. Design:
+      lib/letflow/design/iss-0773-role-claims-sync-lockout-fix.md.

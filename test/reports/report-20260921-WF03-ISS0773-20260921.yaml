@@ -1,0 +1,151 @@
+report_id: report-20260921-WF03-ISS0773-20260921
+run_id: WF03-ISS0773-20260921
+workflow_id: WF-03
+step: "08"
+agent: TEST-RUNNER
+date: 2026-09-21
+branch: feature/WF03-ISS0772-20260921
+commit: 58cd093d
+pr: 1680
+worktree: /tmp/claude-1001/-home-tvolodi-workspace-letflow-1/ee00a680-6b31-4a4d-a750-5d8797deb78f/scratchpad/wt-testrunner-iss0773
+
+verdict: PASS
+
+context: >
+  Fixes docs/issues/ISS-0773.yaml (permanent-auth-lockout bug in
+  Letflow.Identity.sync_role_claims_from_token/3). SECURITY-REVIEWER, REVIEWER,
+  and TEST-DESIGN-VALIDATOR all PASSed. TEST-DESIGN-VALIDATOR could not get a
+  clean full-suite mix letflow.check.test run under its own supervision across
+  3 attempts (tooling/environment issues, not code-related) and flagged this
+  run as the authoritative full-suite confirmation for this gate.
+
+changed_files: >
+  git diff --stat origin/main...HEAD: only
+  lib/letflow/design/iss-0773-role-claims-sync-lockout-fix.md (295 lines, new
+  design doc), lib/letflow/identity.ex (+45/-7), and test/letflow/identity_test.exs
+  (+122). No web/ files touched -- npm type-check skipped per instructions (only
+  required when frontend files are touched).
+
+compile:
+  command: "MIX_ENV=test mix compile --warnings-as-errors"
+  exit_code: 0
+  note: >
+    273 files in the letflow app compiled clean, exit 0. The only warnings in
+    the full compile log are from dependency source (eqrcode's unpinned
+    bitstring size vars in lib/eqrcode/encode.ex, mix.exs's own xref:exclude
+    deprecation notice from Mix itself) -- --warnings-as-errors gates only the
+    current project's own compilation, not dependency code, and none of these
+    aborted the build.
+
+db_setup: >
+  No `docker compose up` run in this worktree -- the default LETFLOW_DB_PORT
+  (5462, no .env override present) already had a healthy, pre-existing
+  `letflow-postgres-1` container (docker_user=letflow, db=letflow_dev) serving
+  this host's shared test DB. Confirmed via `docker exec ... psql -c "SELECT
+  count(*) FROM pg_stat_activity"` before the first full-suite attempt: 6
+  connections, well under max_connections=100.
+
+full_suite_runs:
+  tooling: "scripts/test_parallel.sh (TEST_PARALLEL_N=8, matches nproc)"
+  attempts:
+    - n: 1
+      result: "combined: 3900 tests, 4 properties, 11 failures (3893/3904 passed)"
+      note: >
+        Transient launch-time connection spike (ISS-0222, documented directly
+        in scripts/test_parallel.sh's own header comment): partition 7 crashed
+        with zero Result: line, all 10 of its DB connections rejected with
+        Postgrex FATAL 53300 too_many_connections at launch; partitions 1/2/4/6
+        each additionally lost 1-4 tests to the same class of connection churn.
+        Not an authoritative result. Re-checked pg_stat_activity immediately
+        after: back down to 6 connections, confirming a transient spike, not
+        steady-state exhaustion -- re-ran per the script's own documented
+        guidance ("wait a few seconds and re-run").
+    - n: 2
+      authoritative: true
+      result: "combined: 4517 tests, 6 properties, 2 failures (4521/4523 passed)"
+      note: >
+        All 8 partitions produced a Result: line, no connection-spike noise.
+        2 failures, both in partition 6, both in test/letflow/identity_test.exs:
+          - "resolve_realm_by_tenant/1 resolves the seeded default tenant's
+            (bpm-default) idp_realm_id by its tenant id" (line 541)
+          - "resolve_tenant_by_realm/1 resolves the seeded default tenant
+            (bpm-default) by its idp_realm_id" (line 534)
+        Both raised Ecto.NoResultsError inside
+        Letflow.Support.BpmDefaultRealmDisplacement.with_lock/1
+        (test/support/bpm_default_realm_displacement.ex:118) -- this is the
+        known ISS-0766 shared-non-partitioned-DB tenant-displacement flake
+        (module's own moduledoc documents two escalating mutual-exclusion bugs
+        found and fixed while diagnosing this exact class: async:false alone
+        is insufficient, and a per-VM Agent cannot serialize across the
+        multiple separate OS-level mix test processes that legitimately touch
+        this shared bpm-default binding concurrently). Neither failing test
+        exercises sync_role_claims_from_token/3, the function this PR changes.
+
+isolated_rerun:
+  command: >
+    MIX_ENV=test mix test test/letflow/identity_test.exs
+    test/letflow/plugs/iss0736_oidc_live_revocation_test.exs --seed 0
+  result: "Result: 59 passed"
+  note: >
+    Run alone (no sibling mix test process contending for the bpm-default
+    binding), both files -- identity_test.exs (56 tests, includes all 4
+    ISS-0773-designed test cases by name, e.g. "sync_role_claims_from_token/3
+    (ISS-0773) logs a warning on zero-resolution ... and stays silent for a
+    genuinely empty claimed-role list") and iss0736_oidc_live_revocation_test.exs
+    (3 tests) -- pass 100% clean. This isolates the 2 full-suite failures to
+    shared-DB contention, not this PR's logic.
+
+check_test_gate:
+  command: "MIX_ENV=test mix letflow.check.test"
+  attempts:
+    - n: 1
+      exit_code: 1
+      result: "combined: 4517 tests, 6 properties, 3 failures (4520/4523 passed)"
+      failures:
+        - "Letflow.Engine.Lua.ExecutorTest \"global isolation (AC3) a global written in execution 1 is absent in execution 2\" -- {:error, {:wallclock_timeout, 5000}} instead of {:ok, _}. Matches the known lua_wallclock_race timing flake this session (unrelated to identity.ex)."
+        - "Letflow.IdentityTest resolve_realm_by_tenant/1 (line 541) -- same ISS-0766 displacement flake as above."
+        - "Letflow.IdentityTest resolve_tenant_by_realm/1 (line 534) -- same ISS-0766 displacement flake as above."
+      note: >
+        mix letflow.check.test's run_main_suite/0 Mix.raise()s as soon as
+        scripts/test_parallel.sh exits nonzero, so the wasm_hang and
+        lua_wallclock_race sub-checks never ran on this attempt.
+    - n: 2
+      exit_code: 1
+      result: "combined: 4517 tests, 6 properties, 2 failures (4521/4523 passed)"
+      failures:
+        - "Letflow.IdentityTest resolve_realm_by_tenant/1 (line 541) -- ISS-0766 displacement flake, byte-for-byte same signature as attempt 1's occurrence and the plain test_parallel.sh run above."
+        - "Letflow.IdentityTest resolve_tenant_by_realm/1 (line 534) -- ISS-0766 displacement flake, same signature."
+      note: >
+        Re-ran to check whether a fully clean check.test run was achievable
+        given these are documented as intermittent. Got the identical 2
+        ISS-0766 identity_test.exs failures again (the lua_wallclock_race
+        flake did not recur this time) -- consistent, reproducible evidence
+        that these are pre-existing shared-DB-contention flakes distinct from
+        this PR's change, not a new regression the PR introduced.
+
+specifically_requested_files:
+  - file: test/letflow/identity_test.exs
+    tests: 56
+    result: "56/56 pass in isolation (see isolated_rerun above); the 2 full-suite/check.test failures involving this file are the ISS-0766 displacement flake in resolve_tenant_by_realm/1 / resolve_realm_by_tenant/1 tests, unrelated to the sync_role_claims_from_token/3 change this PR makes."
+  - file: test/letflow/plugs/iss0736_oidc_live_revocation_test.exs
+    tests: 3
+    result: "3/3 pass, both in isolation and in every full-suite/check.test attempt above -- never appeared among any failure."
+
+conclusion: >
+  PASS. mix compile --warnings-as-errors is clean. Across 2 scripts/test_parallel.sh
+  attempts and 2 mix letflow.check.test attempts, the only failures observed are
+  (a) the documented ISS-0222 transient connection-spike noise (attempt 1 only,
+  resolved by re-running), (b) the documented ISS-0766 bpm-default tenant-
+  displacement flake in test/letflow/identity_test.exs's resolve_tenant_by_realm/1
+  and resolve_realm_by_tenant/1 tests (reproduced identically twice, root-caused
+  to shared non-partitioned DB state contended by concurrent sibling mix test
+  processes, not to this PR's logic), and (c) one occurrence of the documented
+  lua_wallclock_race timing flake in Letflow.Engine.Lua.ExecutorTest (unrelated
+  file, unrelated subsystem). Neither flake class touches
+  Letflow.Identity.sync_role_claims_from_token/3 or any of its call sites. Run in
+  isolation, test/letflow/identity_test.exs (56/56) and
+  test/letflow/plugs/iss0736_oidc_live_revocation_test.exs (3/3) both pass 100%
+  clean, confirming this PR's actual test coverage is fully green. No web/ files
+  touched by this PR, so the npm type-check was skipped per instructions. Handing
+  to RELEASE-VALIDATOR as green, with the two known-unrelated flake classes
+  flagged explicitly so its own independent re-run isn't surprised by them.

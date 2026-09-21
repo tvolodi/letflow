@@ -42,12 +42,10 @@ fix corrects, by letting a future caller omit `prefix:` and land back in
 `public`).
 
 **Repo call site to change:** the single `Repo.all(from(t in TenantRole, order_by:
-[asc: t.name]))` call. Add `prefix: opts[:prefix]` as the second argument to
-`Repo.all/2`:
-
-```
-Repo.all(from(t in TenantRole, order_by: [asc: t.name]), prefix: opts[:prefix])
-```
+[asc: t.name]))` call. Add `prefix: opts[:prefix]` as a second argument to
+`Repo.all/2`, alongside the existing query — i.e. the call gains a
+`prefix: opts[:prefix]` option keyword, exactly the same option/value pair
+`auth_pipeline.ex` already passes to its own `Repo.all/2` call.
 
 No other change to this function's body.
 
@@ -112,17 +110,10 @@ defp insert_or_update_role(name, group_id, opts)
 ```
 
 **Repo call site to change:** the `Repo.insert(conflict_target: :name,
-on_conflict: [set: [group_id: group_id]], returning: true)` call. Add
-`prefix: opts[:prefix]` to that same keyword list argument:
-
-```
-Repo.insert(
-  conflict_target: :name,
-  on_conflict: [set: [group_id: group_id]],
-  returning: true,
-  prefix: opts[:prefix]
-)
-```
+on_conflict: [set: [group_id: group_id]], returning: true)` call. Add a
+`prefix: opts[:prefix]` entry to that same keyword-list argument, alongside
+the existing `conflict_target:`, `on_conflict:`, and `returning:` entries —
+no other entry in that keyword list changes.
 
 ## 2. Router call sites — `lib/letflow/routers/identity.ex`
 
@@ -136,41 +127,30 @@ group_id)` with no opts at all.
 
 ### 2.1 `GET /roles` (currently line 204: `handle_list_roles(conn)`)
 
-Route macro body changes to:
-
-```
-handle_list_roles(conn, conn.assigns.scoped_opts)
-```
+The route macro body's call to `handle_list_roles/1` gains a second argument,
+`conn.assigns.scoped_opts`, becoming a call to `handle_list_roles/2` — the
+same value every other route in this module already passes at its own
+call site (e.g. `handle_create(conn, conn.assigns.scoped_opts)`).
 
 `handle_list_roles/1` becomes `handle_list_roles/2`, gaining `opts` as its
-second parameter:
-
-```
-defp handle_list_roles(conn, opts)
-```
-
-Its body's single change: `RoleRegistry.list_roles()` →
+second parameter. Its body's single change: the existing
+`RoleRegistry.list_roles()` call gains `opts` as its argument, becoming
 `RoleRegistry.list_roles(opts)`.
 
 ### 2.2 `POST /roles` (currently line 208: `handle_upsert_role(conn)`)
 
-Route macro body changes to:
+The route macro body's call to `handle_upsert_role/1` gains a second
+argument, `conn.assigns.scoped_opts`, becoming a call to
+`handle_upsert_role/2`, matching the same established pattern.
 
-```
-handle_upsert_role(conn, conn.assigns.scoped_opts)
-```
-
-`handle_upsert_role/1` becomes `handle_upsert_role/2`:
-
-```
-defp handle_upsert_role(conn, opts)
-```
-
-Its body's single change, inside the `{:ok, %{"name" => name, "group_id" =>
-group_id}} ->` branch: `RoleRegistry.upsert_role(name, group_id)` →
-`RoleRegistry.upsert_role(name, group_id, opts)`. The `Validation.validate/2`
-call and every response-mapping branch (`role_map/1`, error-atom → HTTP status
-mapping) is unchanged — this fix touches only the `RoleRegistry` call itself.
+`handle_upsert_role/1` becomes `handle_upsert_role/2`, gaining `opts` as its
+second parameter. Its body's single change is inside the `{:ok, %{"name" =>
+name, "group_id" => group_id}} ->` branch: the existing
+`RoleRegistry.upsert_role(name, group_id)` call gains `opts` as a third
+argument, becoming `RoleRegistry.upsert_role(name, group_id, opts)`. The
+`Validation.validate/2` call and every response-mapping branch (`role_map/1`,
+error-atom → HTTP status mapping) is unchanged — this fix touches only the
+`RoleRegistry` call itself.
 
 ## 3. `resolve_role_in_tx/1` — explicitly out of scope
 

@@ -8,8 +8,8 @@
   "file": "handoffs/WF03-ISS0768-20260921/step-01-code-designer.json",
   "created_at": "2026-09-21T03:15:00Z",
   "started_at": "2026-09-21T03:15:00Z",
-  "completed_at": "2026-09-21T03:16:13Z",
-  "status": "PENDING",
+  "completed_at": "2026-09-21T03:45:00Z",
+  "status": "COMPLETED",
   "priority": "HIGH",
   "context": {
     "stage": "S4",
@@ -42,7 +42,7 @@
   },
   "result": {
     "status": "PASS",
-    "summary": "Design artefact lib/letflow/design/iss0768-role-registry-tenant-prefix.md written. Enumerates new @specs for list_roles/1, upsert_role/3, do_upsert_role/3, insert_or_update_role/3, naming the exact prefix: opts[:prefix] addition at each Repo call (Repo.all, Repo.transaction, Repo.get, Repo.insert). Specifies router call-site changes in lib/letflow/routers/identity.ex: handle_list_roles/1->2 and handle_upsert_role/1->2 both gain an opts param, route macro bodies pass conn.assigns.scoped_opts (matching every other route in the module). resolve_role_in_tx/1 explicitly scoped OUT of this fix with stated reasoning (no live caller today; a future S3 applyTransition caller's own design must revisit it). Section 4 specifies the exact git log -p --follow / git log -p --follow -S\"prefix\" / git log --follow --diff-filter=A commands and the evidence that would decide regression-vs-always-broken -- left unanswered for ELIXIR-DEV to run and record per the handoff's instruction. No implementation code (.ex bodies) included.",
+    "summary": "REWORK ITERATION 1 applied: edited lib/letflow/design/iss0768-role-registry-tenant-prefix.md in place, presentation-only fix per CODE-DESIGN-VALIDATOR's FAIL. Replaced the three literal-implementation-code fenced blocks CODE-DESIGN-VALIDATOR flagged (former lines 48-50 Repo.all rewrite, 118-125 Repo.insert rewrite, and all four router handler-body rewrites in section 2: route macro calls and defp signatures for handle_list_roles/handle_upsert_role) with prose describing which argument/keyword-list entry is added at each call site. Left every @spec/def-signature-only block (list_roles/1, upsert_role/3, do_upsert_role/3, insert_or_update_role/3) untouched, as instructed. Verified via grep that only @spec blocks and the section-4 git-command blocks remain fenced; no implementation code (full rewritten Repo calls or function bodies) remains anywhere in the doc. No substance changed: the Repo-call inventory, router call-site targets, resolve_role_in_tx/1 out-of-scope reasoning (section 3), and section 4's git investigation commands are exactly as before.",
     "artifacts_out": [
       "lib/letflow/design/iss0768-role-registry-tenant-prefix.md"
     ],
@@ -55,7 +55,7 @@
       "pr_url": null,
       "pr_create_error": null
     },
-    "next_action": "Dispatch to CODE-DESIGN-VALIDATOR for step-02 gate check."
+    "next_action": "Dispatch to CODE-DESIGN-VALIDATOR for step-02 gate re-check (rework iteration 1)."
   },
   "rework_count": 1,
   "max_rework": 3

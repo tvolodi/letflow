@@ -1186,7 +1186,14 @@ defmodule Letflow.IdentityTest do
     # Binds a real tenant_role row (matching role_name) to a fresh group, WITHOUT
     # seeding any group_members row -- mirrors iss0736_oidc_live_revocation_test.exs's
     # bind_role_to_new_group!/2.
-    defp bind_role_to_group!(role_name, schema_name) do
+    #
+    # ISS-0775: widened from /2 to /3 -- takes an explicit `kind` param instead of
+    # always inserting :platform_role, so this same helper can exercise both kinds
+    # of tenant_role row against the write path's new kind predicate (design
+    # lib/letflow/design/iss-0775-oidc-role-sync-kind-scoping.md §3) without a
+    # second near-duplicate helper. Deliberately call-site-breaking -- every
+    # existing call site below is updated to pass :platform_role explicitly.
+    defp bind_role_to_group!(role_name, kind, schema_name) do
       {:ok, group} =
         Identity.create_group(
           %{"name" => "iss0772-sync-#{role_name || "none"}-#{Ecto.UUID.generate()}"},
@@ -1197,7 +1204,7 @@ defmodule Letflow.IdentityTest do
         %Letflow.Identity.TenantRole{}
         |> Letflow.Identity.TenantRole.changeset(%{
           name: role_name,
-          kind: :platform_role,
+          kind: kind,
           group_id: group.id
         })
         |> Repo.insert(prefix: schema_name)
@@ -1241,7 +1248,8 @@ defmodule Letflow.IdentityTest do
       # (3) Now bind the claimed role name to a real group -- a THIRD call (the
       # next login after an operator fixes the seed-data/claim-mapping gap) must
       # succeed: this is the actual self-healing retry this fix restores.
-      group = bind_role_to_group!("ROLE_WITH_NO_MATCHING_TENANT_ROLE", schema_name)
+      group =
+        bind_role_to_group!("ROLE_WITH_NO_MATCHING_TENANT_ROLE", :platform_role, schema_name)
 
       synced_third = Identity.sync_role_claims_from_token(user, claimed_ctx, prefix: schema_name)
       assert %DateTime{} = synced_third.role_claims_synced_at
@@ -1297,6 +1305,107 @@ defmodule Letflow.IdentityTest do
       # without the warning (§2.1/§2.2 of the design).
       user_b_after = Repo.get!(User, user_b.id, prefix: schema_name)
       assert user_b_after.role_claims_synced_at == nil
+    end
+  end
+
+  # ISS-0775 regression coverage: resolve_group_ids_for_role_names/2's write path
+  # must only ever resolve a claimed role name against a :platform_role-kind
+  # tenant_role row, never a :process_routing_role-kind one -- see
+  # lib/letflow/design/iss-0775-oidc-role-sync-kind-scoping.md §3 (T1-T3 below map
+  # 1:1 to that design's own T1-T3). Reuses this file's ISS-0773
+  # bind_role_to_group!/3 and group_member_rows/2 helpers (widened to take an
+  # explicit `kind` param for this purpose).
+  describe "sync_role_claims_from_token/3 — kind-scoped write path (ISS-0775)" do
+    test "T1: a claimed name matching a :platform_role-kind row still writes group_members (no REQ-378 regression)" do
+      %{tenant: tenant, schema_name: schema_name} = provisioned_tenant!()
+      ctx = identity_context()
+      config = jit_config()
+
+      {:ok, %{user: user, created: true}} =
+        Identity.provision_oidc_user(ctx, tenant.id, config, prefix: schema_name)
+
+      group = bind_role_to_group!("TASK_WORKER", :platform_role, schema_name)
+
+      claimed_ctx = identity_context(%{roles: ["TASK_WORKER"]})
+      synced = Identity.sync_role_claims_from_token(user, claimed_ctx, prefix: schema_name)
+
+      assert %DateTime{} = synced.role_claims_synced_at
+
+      assert [%Letflow.Identity.GroupMember{group_id: gid}] =
+               group_member_rows(user.id, schema_name)
+
+      assert gid == group.id
+
+      # Closes the loop end-to-end with the read path ISS-0774 already
+      # established (design §3, final paragraph) -- the write just performed is
+      # actually visible via list_effective_role_names/2 too, not just as a raw
+      # group_members row.
+      assert Identity.list_effective_role_names(user.id, prefix: schema_name) == [
+               "TASK_WORKER"
+             ]
+    end
+
+    test "T2: a claimed name matching a :process_routing_role-kind row writes nothing, and the zero-resolution warning fires" do
+      %{tenant: tenant, schema_name: schema_name} = provisioned_tenant!()
+      ctx = identity_context()
+      config = jit_config()
+
+      {:ok, %{user: user, created: true}} =
+        Identity.provision_oidc_user(ctx, tenant.id, config, prefix: schema_name)
+
+      bind_role_to_group!("role-ops-manager", :process_routing_role, schema_name)
+
+      claimed_ctx = identity_context(%{roles: ["role-ops-manager"]})
+
+      log =
+        ExUnit.CaptureLog.capture_log(fn ->
+          synced = Identity.sync_role_claims_from_token(user, claimed_ctx, prefix: schema_name)
+          assert synced.role_claims_synced_at == nil
+        end)
+
+      assert group_member_rows(user.id, schema_name) == []
+
+      # The claim was seen and deliberately not granted -- not silently dropped
+      # before reaching this function at all (mirrors the existing ISS-0773
+      # zero-resolution warning test, re-asserted here for this specific,
+      # kind-mismatch input shape rather than assumed).
+      assert log =~ "sync_role_claims_from_token/3"
+      assert log =~ "zero group_ids resolved"
+      assert log =~ "role-ops-manager"
+
+      user_after = Repo.get!(User, user.id, prefix: schema_name)
+      assert user_after.role_claims_synced_at == nil
+
+      assert Identity.list_effective_role_names(user.id, prefix: schema_name) == []
+    end
+
+    test "T3: one token claiming both a :platform_role-kind and a :process_routing_role-kind name (that collide across kinds) writes only the platform-kind membership" do
+      %{tenant: tenant, schema_name: schema_name} = provisioned_tenant!()
+      ctx = identity_context()
+      config = jit_config()
+
+      {:ok, %{user: user, created: true}} =
+        Identity.provision_oidc_user(ctx, tenant.id, config, prefix: schema_name)
+
+      platform_group = bind_role_to_group!("TASK_WORKER", :platform_role, schema_name)
+      _routing_group = bind_role_to_group!("role-ops-manager", :process_routing_role, schema_name)
+
+      # Both names claimed in the SAME token -- this is the one shape that can't
+      # pass by accident of a single-tenant_role fixture or test ordering (design
+      # §3, T3's own rationale).
+      claimed_ctx = identity_context(%{roles: ["TASK_WORKER", "role-ops-manager"]})
+      synced = Identity.sync_role_claims_from_token(user, claimed_ctx, prefix: schema_name)
+
+      assert %DateTime{} = synced.role_claims_synced_at
+
+      assert [%Letflow.Identity.GroupMember{group_id: gid}] =
+               group_member_rows(user.id, schema_name)
+
+      assert gid == platform_group.id
+
+      assert Identity.list_effective_role_names(user.id, prefix: schema_name) == [
+               "TASK_WORKER"
+             ]
     end
   end
 

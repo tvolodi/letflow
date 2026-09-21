@@ -4293,8 +4293,16 @@ volumes:
     path: docs/status/requirement_status.v21.yaml
     status: current
     opened: 2026-09-20
-    entries: 12
+    entries: 13
     note: >
+      Incremented to 13 by DOC-UPDATER's own ISS-0775 SCOPE-CHANGE done-event
+      append (2026-09-21T18:20:11Z -- resolve_group_ids_for_role_names/2's
+      OIDC role-claim write path scoped to kind == :platform_role, closing
+      the process-routing-role-kind-name-collision gap ISS-0774's own gate
+      surfaced). `grep -c "^  - req:" docs/status/requirement_status.v21.yaml`
+      = 13 on-disk entries, recounted directly rather than assumed. Prior
+      notes preserved below for history.
+
       Incremented to 12 during WF03-ISS0774-20260921's own Step Final rebase
       onto origin/main: DOC-UPDATER's own ISS-0774 SCOPE-CHANGE done-event
       append (2026-09-21T16:23:31Z -- process-routing-role vs. platform-role

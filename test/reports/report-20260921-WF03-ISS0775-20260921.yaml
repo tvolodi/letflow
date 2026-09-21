@@ -1,0 +1,101 @@
+report_id: report-20260921-WF03-ISS0775-20260921
+run_id: WF03-ISS0775-20260921
+workflow_id: WF-03
+step: "08"
+agent: TEST-RUNNER
+date: 2026-09-21
+branch: feature/WF03-ISS0775-20260921
+commit: 0f3d2edcdb830f68f3ff15849686225b40a4eef6
+worktree: /tmp/claude-1001/-home-tvolodi-workspace-letflow-1/ee00a680-6b31-4a4d-a750-5d8797deb78f/scratchpad/wt-iss0775-design
+
+verdict: PASS
+
+context: >
+  ISS-0775 fix -- scopes the OIDC role-claim sync write path
+  (Letflow.Identity.sync_role_claims_from_token/3) to platform_role kind only.
+  TEST-DESIGN-VALIDATOR already PASSed the added regression coverage (T1-T3)
+  in test/letflow/identity_test.exs before this run was requested.
+
+changed_files: >
+  git diff --stat origin/main...HEAD: lib/letflow/design/iss-0775-oidc-role-sync-kind-scoping.md
+  (293 lines, new design doc), lib/letflow/identity.ex (+12/-5), test/letflow/identity_test.exs
+  (+115), test/specs/ISS-0775.md (124 lines, new spec doc). No web/ files touched.
+
+db_setup: >
+  No `docker compose up` run in this worktree. Default LETFLOW_DB_PORT (5462,
+  no untracked .env override present) already had a healthy, pre-existing
+  `letflow-postgres-1` container serving this host's shared test DB.
+
+command_run: "mix letflow.check.test (LETFLOW_DB_PORT=5462)"
+
+first_attempt:
+  exit_code: 1
+  result: "combined: 4560 tests, 6 properties, 1022 failures (3544/4566 passed)"
+  root_cause: >
+    Not a regression from this PR. All sampled failures bottomed out in
+    TENANT_TEMPLATE_SELF_CHECK-style Letflow.TenantFixture.provisioned_tenant!/1
+    errors naming versions_missing -- the documented stale `tenant_template`
+    schema hazard (docs/anti-patterns.md, "Stale tenant_template schema
+    surviving a migration-adding commit"). 2574 occurrences of
+    versions_missing/TENANT_TEMPLATE_SELF_CHECK across the run's combined log.
+    Confirmed root cause via `docker exec letflow-postgres-1 psql -U letflow
+    -d letflow_dev -c "SELECT datname FROM pg_database WHERE datname LIKE
+    'letflow_test%'"`: 18 stale letflow_test* databases accumulated from
+    earlier, unrelated sessions on this shared host container. Checked
+    pg_stat_activity first (0 active connections to any letflow_test* db) to
+    confirm it was safe to drop them without disturbing another agent's
+    in-flight run.
+  fix_applied: >
+    Dropped all 18 stale letflow_test* databases (letflow_test,
+    letflow_test1-16, letflow_test99) via `DROP DATABASE IF EXISTS` against
+    letflow_dev, then re-ran mix letflow.check.test from scratch so the test
+    alias's own ecto.create/ecto.migrate and tenant_template.ex's
+    ensure_template!/0 rebuilt everything fresh against this branch's actual
+    migration set.
+
+second_attempt:
+  authoritative: true
+  exit_code: 0
+  main_suite:
+    command: "scripts/test_parallel.sh (TEST_PARALLEL_N=8)"
+    result: "combined: 4560 tests, 6 properties, 0 failures (4566/4566 passed)"
+    per_partition: >
+      partition 1: 591 tests, 2 properties, 0 failures, exit 0;
+      partition 2: 535 tests, 0 properties, 0 failures, exit 0;
+      partition 3: 533 tests, 0 properties, 0 failures, exit 0;
+      partition 4: 501 tests, 1 property, 0 failures, exit 0;
+      partition 5: 602 tests, 0 properties, 0 failures, exit 0;
+      partition 6: 473 tests, 0 properties, 0 failures, exit 0;
+      partition 7: 655 tests, 1 property, 0 failures, exit 0;
+      partition 8: 670 tests, 2 properties, 0 failures, exit 0.
+    outcome: "mix letflow.check.test: OK -- no test failures, no ISS-0069 warnings (8 partitions)."
+  wasm_hang_subcheck:
+    result: "Result: 1 passed, 11 excluded"
+    outcome: "mix letflow.check.test: OK -- 5/5 isolated wasm_hang tests passed, each in its own subprocess."
+  lua_wallclock_race_subcheck:
+    result: "Result: 11 passed, 4581 excluded"
+    outcome: "mix letflow.check.test: OK -- isolated :lua_wallclock_race run also passed clean."
+
+known_flake_classes_checked:
+  - class: lua_wallclock_race (Letflow.Engine.Lua.ExecutorTest, wallclock_timeout under host CPU contention)
+    observed_this_run: false
+    note: "Did not appear in the main suite or in the dedicated isolated re-run (11/11 passed)."
+  - class: "ISS-0766 (test/letflow/identity_test.exs resolve_tenant_by_realm/1 / resolve_realm_by_tenant/1, Ecto.NoResultsError under shared non-partitioned DB state)"
+    observed_this_run: false
+    note: >
+      Did not appear anywhere in the authoritative (second) run. identity_test.exs
+      ran as part of the 4566-test main suite with 0 failures overall, and this
+      specific describe block was not implicated.
+
+unclassified_failures: "none -- the authoritative run is fully clean, 0 failures across all three gate stages"
+
+conclusion: >
+  PASS. First mix letflow.check.test attempt failed broadly (1022/4566) due to
+  a pre-existing, documented infrastructure hazard (stale tenant_template schema
+  from earlier sessions sharing this host's persistent Postgres volume) -- not a
+  code defect in this branch. After dropping the 18 stale letflow_test* databases
+  and re-running from scratch, the authoritative run is fully green: main suite
+  4566/4566 passed (0 failures), wasm_hang subcheck 5/5 passed, lua_wallclock_race
+  subcheck 11/11 passed. Neither documented flake class (lua_wallclock_race,
+  ISS-0766 identity_test.exs displacement) occurred in the authoritative run.
+  No unclassified failures. Handing to RELEASE-VALIDATOR as green.

@@ -812,7 +812,15 @@ defmodule Letflow.Identity do
   # reason list_effective_role_names/2 above does — keeps RoleRegistry's
   # documented "no coupling to the OIDC/claim-mapping pipeline" invariant
   # literally true. A claimed role name with no matching tenant_role row
-  # resolves to nothing for that name — not an error.
+  # resolves to nothing for that name — not an error. Scoped to
+  # `kind == :platform_role` (ISS-0775): an OIDC-claimed string must only
+  # ever be able to write a group_members row for a platform-role-kind
+  # binding, mirroring list_effective_role_names/2's own kind filter above —
+  # never a :process_routing_role-kind row, which this write path has no
+  # legitimate reason to touch (see
+  # lib/letflow/design/iss-0775-oidc-role-sync-kind-scoping.md §1.2). A
+  # claimed name matching only a :process_routing_role-kind row resolves to
+  # nothing for that name, identical in shape to "no matching row at all".
   @spec resolve_group_ids_for_role_names(role_names :: [String.t()], opts :: opts()) ::
           [Ecto.UUID.t()]
   defp resolve_group_ids_for_role_names(role_names, opts) do
@@ -820,7 +828,7 @@ defmodule Letflow.Identity do
 
     query =
       from(t in TenantRole,
-        where: t.name in ^role_names,
+        where: t.name in ^role_names and t.kind == :platform_role,
         select: t.group_id,
         distinct: true
       )

@@ -8,8 +8,8 @@
   "file": "handoffs/WF03-ISS0732-20260921/step-02c-code-designer-amendment.json",
   "created_at": "2026-09-21T04:05:11Z",
   "started_at": "2026-09-21T04:05:11Z",
-  "completed_at": null,
-  "status": "PENDING",
+  "completed_at": "2026-09-21T04:06:37Z",
+  "status": "COMPLETED",
   "priority": "HIGH",
   "context": {
     "stage": "S6",
@@ -37,19 +37,21 @@
     ]
   },
   "result": {
-    "status": "PENDING",
-    "summary": "",
-    "artifacts_out": [],
+    "status": "COMPLETED",
+    "summary": "Resolved OQ-2 by appending a new section 9 (\"AMENDMENT (2026-09-21) - resolving OQ-2\") to lib/letflow/design/iss0732-promotion-apply-assertion-gate.md. Chose candidate (B): require assertion_run.status not in [:running] as an ADDITIONAL condition alongside the existing assertions_failed == 0 check, not a replacement for it, and not candidate (A) (status == :passed), which was rejected because it would reject a legitimate :teardown_failed + assertions_failed == 0 run, contradicting R8's already-documented gate contract. verify_rehearsed/2's step 3 (new) checks status not in [:running] before the renumbered step 4 (assertions_failed == 0, unchanged), because a :running row's assertions_failed is always 0 by construction (insert_changeset/2 defaults) so the old check alone would never distinguish an in-flight rehearsal from a genuinely passed one. Added one new apply_review_error() union member, :assertion_run_in_progress (distinct from :assertion_run_missing and :assertion_run_failed), one new worked example, one new render_apply/2 clause mapped to 409 Conflict (same rationale as the three existing new clauses - a precondition-not-met/conflicts-with-current-state case, not 422, not folded into invalid_transition_response/1), and restated INV-NEW-1 as strengthened (status not :running AND assertions_failed == 0). get_latest_assertion_run/2 itself is deliberately left unchanged (no new status filter added to its query) per OQ-2's own suggested resolution path - the fix lives entirely in verify_rehearsed/2's branching on the already-returned row.",
+    "artifacts_out": [
+      "lib/letflow/design/iss0732-promotion-apply-assertion-gate.md"
+    ],
     "issues": [],
     "git_evidence": {
-      "branch_name": null,
+      "branch_name": "feature/WF03-ISS0732-20260921",
       "commit_sha_list": [],
-      "remote_branch": null,
-      "push_status": "skipped",
+      "remote_branch": "origin/feature/WF03-ISS0732-20260921",
+      "push_status": "pending",
       "pr_url": null,
       "pr_create_error": null
     },
-    "next_action": ""
+    "next_action": "Route to CODE-DESIGN-VALIDATOR to re-gate the amended design doc before ELIXIR-DEV implements verify_rehearsed/2's updated logic."
   },
   "rework_count": 0,
   "max_rework": 3

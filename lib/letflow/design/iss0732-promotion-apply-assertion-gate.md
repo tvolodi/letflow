@@ -331,3 +331,177 @@ of conflicting versions) to attach.
   documented-elsewhere reason (R8's own `assertions_failed == 0` contract).
   This OQ is about a *different*, narrower question (an in-flight run) than
   that already-settled one (a completed run's outcome field).
+
+## 9. AMENDMENT (2026-09-21) — resolving OQ-2
+
+Requested by ORCH (`handoffs/WF03-ISS0732-20260921/step-02c-code-designer-amendment.json`)
+after a sibling SECURITY-REVIEWER pass (`step-04-security-reviewer.json`,
+`result.issues`, final bullet) confirmed OQ-2's race is real and routed it here
+for a design decision before merge. This section is an addition to the design
+above — §§1-8 are unchanged and still normative; nothing here rewrites them.
+
+### 9.1 Chosen fix: `status not in [:running]`, kept strictly ADDITIONAL to
+    the existing `assertions_failed == 0` check — not a `status == :passed`
+    check
+
+Two candidates were on the table:
+
+- **(A) `assertion_run.status == :passed`** — rejected. `PromotionAssertionRun`
+  is a 4-value `Ecto.Enum` (`lib/letflow/definitions/promotion_assertion_run.ex:57-60`):
+  `:running | :passed | :failed | :teardown_failed`. §2.1 step 3 (unchanged by
+  this amendment) already establishes, and R8's own documented gate condition
+  (`lib/letflow/routers/promotions.ex` moduledoc, "## The assertion-run gate
+  condition (design §7.5)") already requires, that a `status: :teardown_failed`
+  run with `assertions_failed == 0` is a legitimate green gate — teardown
+  failing after every assertion already passed must not block promotion.
+  `status == :passed` alone would reject that run, silently narrowing an
+  already-shipped, already-documented contract. Rejected outright, per the
+  handoff's own explicit instruction not to reintroduce this exact regression.
+- **(B) `assertion_run.status not in [:running]`** (equivalently: `status in
+  [:passed, :failed, :teardown_failed]`), evaluated as an ADDITIONAL condition
+  alongside the existing `assertions_failed == 0` check, not a replacement for
+  it — **chosen**. This excludes only the one problematic value (`:running`,
+  an in-flight rehearsal whose `assertions_failed` is still at its
+  `insert_changeset/2`-time default of `0` by construction, not because it
+  passed anything) while admitting both `:passed` and `:teardown_failed`
+  exactly as §2.1 step 3 already does. It is not equivalent to (A): (B) is a
+  strictly weaker exclusion than (A)'s inclusion — (A) admits one status,
+  (B) excludes one status out of four, admitting the other three. `:failed`
+  survives (B)'s status check but is still rejected by the unchanged
+  `assertions_failed == 0` check whenever `update_changeset/2` recorded any
+  failing assertion for it (the expected shape of a `:failed` row); (B) adds
+  no new leniency there.
+
+Both conditions are required — `status not in [:running]` **and**
+`assertions_failed == 0`. Neither alone is sufficient: `status not in
+[:running]` alone would (in principle, if `update_changeset/2` were ever
+called with a nonzero `assertions_failed` under `status: :passed`, which
+should not happen but is not a structural invariant enforced by the schema)
+not itself re-check the failure count; `assertions_failed == 0` alone is
+exactly OQ-2's bug. Keeping both as independent, explicit sub-checks (rather
+than collapsing them into one combined boolean) also keeps each violation
+mapped to its own distinct, diagnosable error reason (§9.2).
+
+### 9.2 Updated `verify_rehearsed/2` logic — amendment to §2.1
+
+§2.1's numbered step 3 (`assertions_failed == 0` check) is renumbered step 4
+and gains a new step 3 immediately before it, run only after step 2's digest
+match succeeds and before the (renumbered) assertions-failed check:
+
+```
+3. Check assertion_run.status not in [:running] — i.e. the rehearsal has
+   reached a terminal state (:passed, :failed, or :teardown_failed), not
+   still in-flight.
+   - status == :running → {:error, :assertion_run_in_progress} (§9.3).
+   - status in [:passed, :failed, :teardown_failed] → continue to step 4.
+4. (unchanged from original step 3) Check assertion_run.assertions_failed
+   == 0 — not assertion_run.status == :passed.
+   - assertions_failed > 0 → {:error, :assertion_run_failed}.
+   - assertions_failed == 0 → :ok.
+```
+
+Rationale for running the new status check *before* the assertions-failed
+check, not after or combined: a `:running` row's `assertions_failed` is
+always `0` by construction (`insert_changeset/2`'s column defaults — the
+field is not castable at insert time and is only ever written once, by
+`update_changeset/2`, on completion). Checking `assertions_failed == 0`
+first would therefore never distinguish an in-flight run from a genuinely
+passed one — the new step must run first (or as an independently-evaluated
+AND-branch that short-circuits before the old one), never after it, or it
+is dead code that never fires.
+
+`verify_rehearsed/2`'s `@spec` (§2.1) is unchanged — same input/output
+shape, one more branch in its `apply_review_error()` return range (§9.3).
+
+### 9.3 `apply_review_error()` — one more new union member
+
+§3's new-member list (`:assertion_run_missing`, `:assertion_run_digest_mismatch`,
+`:assertion_run_failed`) gains a fourth:
+
+```
+@type apply_review_error ::
+        :review_not_found
+        | :digest_mismatch
+        | :invalid_transition
+        | :assertion_run_missing
+        | :assertion_run_digest_mismatch
+        | :assertion_run_in_progress
+        | :assertion_run_failed
+        | {:promotion_failed, promote_error()}
+```
+
+#### `:assertion_run_in_progress`
+
+The most recent, matching-digest `promotion_assertion_runs` row exists but
+has not finished (`status == :running`) — a `run-assertions` call is
+racing with (or was abandoned before completing ahead of) this `apply`
+call. Distinct from `:assertion_run_missing` (no row exists at all) and from
+`:assertion_run_failed` (a row exists, finished, and recorded failures) —
+callers/tests/the frontend must be able to tell "still rehearsing, try again
+shortly" apart from both "never rehearsed" and "rehearsal finished and
+failed," since the correct caller action differs (retry after a wait, vs.
+kick off a fresh `run-assertions`, vs. fix the plan and re-rehearse).
+
+This keeps INV-NEW-2 (§7) intact: the new reason is a plain atom, not a
+tuple, so no caller pattern-matching on `{:error, atom()}` needs to change
+shape, only add one more clause — same property the original three new
+reasons already preserved.
+
+### 9.4 Worked example — amendment to §4
+
+**5. Rehearsal in progress (new).** `get_latest_assertion_run(review.id,
+opts)` returns `{:ok, run}` where `run.plan_digest` matches the applied
+`plan_digest` (step 2 passes) but `run.status == :running` (a concurrent
+`run-assertions` call has claimed the idempotency key and inserted its
+anchor row but not yet reached its single final `update_changeset/2`).
+`verify_rehearsed/2` returns `{:error, :assertion_run_in_progress}` at the
+new step 3, before the `assertions_failed` check (whose value is `0` here
+only because it is still at its insert-time default, not because anything
+passed) is ever reached. `apply_review/4` short-circuits with that error.
+Nothing is written — same INV-NEW-3 guarantee as every other failure path.
+
+### 9.5 R7 router changes — amendment to §5
+
+One new `render_apply/2` clause, same shape and same 409 rationale as the
+three existing new clauses (§5.2 — this is a precondition-not-met,
+conflicts-with-current-review-state case, not a 422 or a fold into
+`invalid_transition_response/1`, for the same reasons already given there):
+
+- `{:error, :assertion_run_in_progress}` → `Response.conflict/2` with detail
+  along the lines of "the most recent assertion run for this review has not
+  finished yet; wait for it to complete or re-run assertions before
+  applying".
+
+No other §5 content changes — the three original new clauses and their
+rationale are unaffected by this amendment.
+
+### 9.6 Invariants — amendment to §7
+
+**INV-NEW-1** (§7) is restated, strictly strengthened, not weakened:
+`apply_review/4` never calls `do_apply_review/3` unless a
+`promotion_assertion_runs` row exists for `review.id` whose `plan_digest`
+matches the plan_digest being applied, whose `status` is *not* `:running`,
+AND whose `assertions_failed == 0`. INV-NEW-2, INV-NEW-3, and INV-NEW-4
+(§7) are unchanged and continue to hold — the new reason is a plain atom
+(INV-NEW-2), the new failure path writes nothing (INV-NEW-3), and no new
+comparator is introduced (INV-NEW-4 concerns the digest comparison only,
+which this amendment does not touch).
+
+### 9.7 OQ-2 — resolved
+
+OQ-2 (§8) is resolved by §§9.1-9.6 above: `get_latest_assertion_run/2`
+itself is still **not** changed (no new `status` filter is added to its
+query, exactly as OQ-2's own text anticipated as one legitimate
+resolution path) — the fix instead lives entirely in `verify_rehearsed/2`,
+which now branches on the returned row's `status` field itself rather than
+filtering it out of the query. This keeps `get_latest_assertion_run/2`'s
+existing callers (R3/R4, per OQ-2's own text) untouched and their
+"read whatever the latest row is, running or not" semantics unchanged —
+only `apply_review/4`'s gate becomes stricter, exactly the surface OQ-2
+flagged as the one that must not silently regress into ISS-0732's original
+defect shape.
+
+### 9.8 Open questions
+
+None added by this amendment. OQ-1 (§8) remains open and out of scope, as
+before.

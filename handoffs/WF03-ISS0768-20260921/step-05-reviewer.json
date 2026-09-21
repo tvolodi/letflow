@@ -1,0 +1,59 @@
+{
+  "handoff_id": "d1a2b3c4-0005-4000-8000-000000000768",
+  "run_id": "WF03-ISS0768-20260921",
+  "workflow_id": "WF-03",
+  "step": "05",
+  "from_agent": "ORCH",
+  "to_agent": "REVIEWER",
+  "file": "handoffs/WF03-ISS0768-20260921/step-05-reviewer.json",
+  "created_at": "2026-09-21T04:22:21Z",
+  "started_at": "2026-09-21T04:22:21Z",
+  "completed_at": null,
+  "status": "PENDING",
+  "priority": "HIGH",
+  "context": {
+    "stage": "S4",
+    "requirement_ids": [],
+    "requirement_text": {},
+    "related_handoff_ids": ["d1a2b3c4-0003-4000-8000-000000000768", "d1a2b3c4-0004-4000-8000-000000000768"],
+    "artifacts_in": [
+      "lib/letflow/design/iss0768-role-registry-tenant-prefix.md",
+      "lib/letflow/identity/role_registry.ex",
+      "lib/letflow/routers/identity.ex",
+      "docs/issues/ISS-0768.yaml",
+      "handoffs/WF03-ISS0768-20260921/step-03-elixir-dev.json",
+      "handoffs/WF03-ISS0768-20260921/step-04-security-reviewer.json"
+    ],
+    "owned_modules": [
+      "lib/letflow/identity/role_registry.ex",
+      "lib/letflow/routers/identity.ex"
+    ]
+  },
+  "task": {
+    "description": "Hard gate, runs after SECURITY-REVIEWER's PASS (step-04, commit c1b8bccb, this branch). Check idiom, scope, and decision-record consistency for ISS-0768's fix (Letflow.Identity.RoleRegistry now threads opts :: [prefix: String.t()] through every Repo call, matching lib/letflow/identity.ex's established convention; router call sites updated to pass conn.assigns.scoped_opts). Verify: (1) the opts :: [prefix: String.t()] convention is applied exactly as lib/letflow/identity.ex and lib/letflow/plugs/auth_pipeline.ex already use it -- no invented variant (e.g. no default value, no atom-vs-string mismatch, consistent keyword-list shape); (2) no scope creep -- diff touches only role_registry.ex, routers/identity.ex, and the two test files updated to the new arities, nothing else; (3) resolve_role_in_tx/1 left genuinely untouched is the correct call given its own moduledoc (no live caller) -- REVIEWER sign-off on the design's §3 reasoning, not just SECURITY-REVIEWER's; (4) no contradiction with any decision record (docs/migration/decisions/) -- this is exactly REQ-012/0003-ecto-schema-strategy.md's schema-per-tenant convention being correctly applied, not diverged from; (5) the mix test evidence in step-03's handoff (83/83 targeted, 4479/4495 full suite, 16 pre-existing unrelated failures) is itself credible -- spot check that the 16 named failing test names genuinely have nothing to do with RoleRegistry/routers/identity.ex by reading their failure context if in doubt. Work in worktree c:\\Users\\tvolo\\dev\\ai-dala\\letflow-wf03-iss0768, branch feature/WF03-ISS0768-20260921 -- do not touch c:\\Users\\tvolo\\dev\\ai-dala\\letflow. Hard rule: never push directly to main.",
+    "acceptance_criteria": [
+      "opts :: [prefix: String.t()] usage matches lib/letflow/identity.ex's established convention exactly -- no default value, no shape divergence",
+      "Diff scope confirmed limited to role_registry.ex, routers/identity.ex, test/letflow/role_registry_test.exs, test/letflow/routers/identity_test.exs -- no unrelated file touched",
+      "resolve_role_in_tx/1 out-of-scope decision independently endorsed or challenged with reasoning",
+      "No contradiction with docs/migration/decisions/0003-ecto-schema-strategy.md or any other decision record",
+      "PASS or FAIL with specific named gaps if FAIL"
+    ]
+  },
+  "result": {
+    "status": "",
+    "summary": "",
+    "artifacts_out": [],
+    "issues": [],
+    "git_evidence": {
+      "branch_name": "feature/WF03-ISS0768-20260921",
+      "commit_sha_list": [],
+      "remote_branch": "origin/feature/WF03-ISS0768-20260921",
+      "push_status": "skipped",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": ""
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

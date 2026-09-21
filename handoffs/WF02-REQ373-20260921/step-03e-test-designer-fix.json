@@ -9,7 +9,7 @@
   "created_at": "2026-09-21T19:10:07Z",
   "started_at": "2026-09-21T19:10:07Z",
   "completed_at": null,
-  "status": "IN_PROGRESS",
+  "status": "COMPLETE",
   "priority": "NORMAL",
   "context": {
     "stage": "S6",
@@ -38,7 +38,16 @@
       "service_catalog_versions is empty of req373-owned rows after both runs, confirmed by direct query"
     ]
   },
-  "result": null,
+  "result": {
+    "status": "PASS",
+    "summary": "Extended cleanup_entry!/1 in both test/letflow/service_catalog_test.exs and test/letflow/engine_pin_resolver_catalog_test.exs to delete matching service_catalog_versions rows (by service_id) before deleting the Entry row, in the same on_exit callback. engine_pin_resolver_catalog_test.exs needed a new `alias Letflow.ServiceCatalog.Version` (service_catalog_test.exs already aliased it). No other lines touched.",
+    "verification": {
+      "double_run": "mix test test/letflow/service_catalog_test.exs test/letflow/engine_pin_resolver_catalog_test.exs run three times in a row in the same session: run 1 = 'Result: 49 passed' (0 failures), run 2 = 'Result: 49 passed' (0 failures, no unique-constraint collision), run 3 = 'Result: 49 passed' (0 failures). Finished in 9.2 seconds each.",
+      "db_query": "Direct query via `MIX_ENV=test mix run` against Letflow.Repo (Ecto, not psql -- psql is not installed in this environment) after the double run: `Repo.all(from v in Version, where: like(v.service_id, \"req191-%\") or like(v.service_id, \"req373-%\"))` -> [] and the equivalent query against Entry -> []. Zero req191-/req373-owned rows remained in either service_catalog_versions or service_catalog.",
+      "full_suite": "mix letflow.check.test run twice. First run: 'Result: 300/302 passed (1/1 property, 299/301 tests)', 2 failures in Letflow.Packs.BilimbagaPackInstallTest -- unrelated module (SolutionPack install/activate against a provisioned tenant), untouched by this fix, and the failure coincided with a second mix-test invocation being started concurrently against the same DB by mistake (logged: 'another mix test invocation is currently connected to this database'), which was immediately stopped. Second run (clean, no concurrent invocation): 'mix letflow.check.test: OK -- no test failures, no ISS-0069 warnings (16 partitions)' -- full suite green, confirming the earlier 2 failures were an artifact of the accidental concurrent run, not this fix."
+    },
+    "next_action": "Route to TEST-DESIGN-VALIDATOR for re-gate"
+  },
   "rework_count": 1,
   "max_rework": 3
 }

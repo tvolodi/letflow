@@ -46,6 +46,7 @@ defmodule Letflow.EnginePinResolverCatalogTest do
   alias Letflow.ServiceCatalog
   alias Letflow.ServiceCatalog.Entry
   alias Letflow.ServiceCatalog.PinLookup
+  alias Letflow.ServiceCatalog.Version
   alias Letflow.TenantFixture
 
   setup do
@@ -62,6 +63,7 @@ defmodule Letflow.EnginePinResolverCatalogTest do
   end
 
   defp cleanup_entry!(service_id) do
+    Repo.delete_all(from(v in Version, where: v.service_id == ^service_id))
     Repo.delete_all(from(e in Entry, where: e.service_id == ^service_id))
   end
 

@@ -45,6 +45,7 @@ defmodule Letflow.Routers.AdminServicesPublishRetireTest do
   alias Ecto.Adapters.SQL.Sandbox
   alias Letflow.ServiceCatalog
   alias Letflow.ServiceCatalog.Entry
+  alias Letflow.ServiceCatalog.Version
 
   @opts Letflow.Routers.AdminServices.init([])
 
@@ -86,6 +87,7 @@ defmodule Letflow.Routers.AdminServicesPublishRetireTest do
   end
 
   defp cleanup_entry!(service_id) do
+    Repo.delete_all(from(v in Version, where: v.service_id == ^service_id))
     Repo.delete_all(from(e in Entry, where: e.service_id == ^service_id))
   end
 

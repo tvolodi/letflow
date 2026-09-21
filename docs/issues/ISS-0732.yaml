@@ -54,7 +54,28 @@ queue_ref: Q-757  # letflow-queue task id 757, issue_ref ISS-0757 (queue's own
   # numbering doesn't match this file's local ISS-0732 id -- see TASK_QUEUE.md's
   # "Never derive a set_lock target from a filename"). Registered 2026-09-20 by ORCH.
 github_ref: GH-1645
-status: open
+status: resolved
+resolved_in_run: WF03-ISS0732-20260921
+resolved_at: "2026-09-21T06:24:48Z"
+resolution_note: >
+  lib/letflow/definitions/promotion.ex's apply_review/4 now gates the
+  :applied transition on a base check (a passed PromotionAssertionRun
+  exists for the review's current plan_digest, assertions_failed == 0)
+  plus an OQ-2 amendment closed during this run's step-02c/02d/03d-03f
+  re-gate (rejects an in-progress/not-yet-completed assertion run for the
+  same digest, closing the race where a rehearsal was started but not
+  finished before Apply was clicked). Both paths are covered by
+  fail-then-pass regression coverage in
+  test/letflow/routers/req077_promotion_pipeline_test.exs (TEST-DESIGNER
+  step-04, independently re-run by TEST-DESIGN-VALIDATOR step-04b and by
+  TEST-RUNNER step-04c, which confirmed 0 failures in that file plus
+  test/letflow/definitions/promotion_test.exs across three full-suite
+  attempts and a standalone targeted run: "Result: 47 passed"). Fixed on
+  branch feature/WF03-ISS0732-20260921, not yet merged to main -- merge
+  happens at this run's Step Final. The frontend surfacing piece
+  (NonSkippableApprovalGate.tsx "release blocked -- rehearsal required"
+  state) is intentionally out of scope for this closure; see
+  routing_note below for ISS-0767/GH#1664.
 routing_note: >
   WF03-ISS0732-20260921: scope split per ORCHESTRATOR.md section 10 sizing
   judgment. This issue's own resolution covers the backend gate only

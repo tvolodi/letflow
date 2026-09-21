@@ -8,8 +8,8 @@
   "file": "handoffs/WF02-REQ373-20260921/step-01b-design-gate.json",
   "created_at": "2026-09-21T17:21:21Z",
   "started_at": "2026-09-21T17:21:21Z",
-  "completed_at": null,
-  "status": "IN_PROGRESS",
+  "completed_at": "2026-09-21T18:05:00Z",
+  "status": "COMPLETED",
   "priority": "NORMAL",
   "context": {
     "stage": "S6",
@@ -40,7 +40,29 @@
       "mix letflow.check passes, with real output quoted"
     ]
   },
-  "result": null,
+  "result": {
+    "verdict": "FAIL",
+    "reviewed_by": "CODE-DESIGN-VALIDATOR",
+    "reviewed_at": "2026-09-21T18:05:00Z",
+    "design_artefact": "lib/letflow/design/req373-service-catalog-version-lifecycle.md",
+    "checks_passed": [
+      "All 8 ACs have a mapped design element in §8 table; no TBD/deferral language found",
+      "No literal implementation code present -- the doc's one fenced code block (§0, lines 54-59) is a verbatim quote of EXISTING engine.ex source for re-verification, not new code",
+      "Schema-decision reasoning (§1: in-place columns + sibling table, not composite key) independently re-derived against pin_resolver.ex's actual Lookup.catalog_lookup contract (service_id alone, no version arg) -- sound, and correctly traced against service_catalog.ex's actual 5 core functions (register/1, get_for_tenant/2, list_for_tenant/2, update_scope/2, delete/1) plus list_all/1/scope_validator_lookup/1 -- all confirmed untouched in signature/arity/error-contract by reading service_catalog.ex and entry.ex directly",
+      "AC4 retire-vs-fallback ambiguity is genuinely resolved, not implicit: §3.2 states 'retire FAILS OUTRIGHT, never falls through' with an explicit structural reasoning paragraph, and separately names why pin_for/3 (already-pinned instances) is unaffected (structural: pin_for/3 never queries the catalog) -- verified against pin_resolver.ex's actual pin_for/3 body (pure Enum.find/2 over an in-memory list, zero Repo/Lookup calls)",
+      "PinResolver.Lookup contract correctly understood: re-read lib/letflow/engine/pin_resolver.ex directly -- Lookup is a plain struct (not an OTP behaviour), catalog_lookup :: (service_id -> {:ok, %{resolved_id, version}} | {:error, :not_found}), takes service_id alone. §5's catalog_lookup/1 spec and build/0's copy-default_lookup-for-module/variable_schema-fields description match this exactly.",
+      "Publish/retire route design reuses :AdminServicesManage by name, not a new permission -- verified directly in lib/letflow/api/authorization.ex: the existing prefix-match clause (lines 562-564, `endpoint_policy_key(method, \"/admin/services\" <> _rest) when method in [\"POST\",\"PATCH\",\"DELETE\"], do: :AdminServicesManage`) automatically covers both new POST routes with zero authorization.ex change, exactly as §0/§7 claim"
+    ],
+    "checks_failed": [
+      {
+        "requirement_id": "REQ-373",
+        "acceptance_criteria": ["AC1", "AC3", "AC4"],
+        "design_sections": ["§1", "§2", "§3.2", "§3.3", "§4", "§5"],
+        "defect": "The new `status` field's representation is internally self-contradictory and never reconciled -- a genuine ambiguity, not a stylistic nit. §4's migration fixes the DB-level CHECK constraint and column default to UPPERCASE strings ('ACTIVE'/'RETIRED': `CHECK (status IN ('ACTIVE', 'RETIRED'))`, default `\"ACTIVE\"`), matching this codebase's own established convention for an uppercase-valued Ecto.Enum (required_auth: atoms :NONE/:API_KEY/:OAUTH2/:MUTUAL_TLS map by default Ecto.Enum behavior to identically-cased DB strings 'NONE'/'API_KEY'/... -- confirmed by reading entry.ex and the base migration directly). But §3.2's retire/1 behavior description ('status = :retired'), §3.2's already-retired guard ('status == :retired'), and §5's catalog_lookup/1 behavior ('row with status: :active ->', 'row with status: :retired ->') all repeatedly pattern-match on LOWERCASE atoms :active/:retired. Under this codebase's own default Ecto.Enum convention (atom's own casing becomes the DB string verbatim, as already true for both required_auth and scope), lowercase atoms :active/:retired would store as lowercase 'active'/'retired' -- directly contradicting §4's uppercase CHECK constraint and column default. The design never declares `status` as `Ecto.Enum` at all (unlike §0's own bullet, which explicitly annotates required_auth and scope as '(Ecto.Enum)' but conspicuously never does so for status), and never states a custom `values: [active: \"ACTIVE\", retired: \"RETIRED\"]` mapping that would reconcile lowercase-atom-in-code with uppercase-string-in-DB. This is not an open question CODE-DESIGNER flagged (absent from §9's OQ-1..OQ-4) -- it is an unflagged, load-bearing self-contradiction between two sections of the same document. It directly undermines AC1 ('ACTIVE/RETIRED status... schema... stated explicitly'), AC3 (catalog_lookup's ACTIVE-row match), and AC4 (retire's status-transition guard and the RETIRED-row match) -- an ELIXIR-DEV implementer following §5's literal prose (lowercase atoms) would ship a schema/CHECK-constraint mismatch or a changeset cast failure; one following §4's literal DB values would contradict §3.2/§5's own described pattern matches. Fix required: CODE-DESIGNER must pick one casing convention and state explicitly (a) whether `status` is `Ecto.Enum` on Entry's schema and (b) its exact `values:` mapping (plain `[:ACTIVE, :RETIRED]` to align with required_auth's own uppercase-atom convention, or an explicit `[active: \"ACTIVE\", retired: \"RETIRED\"]` mapping if lowercase atoms are intentionally preferred at the Elixir call-site level), then make every status literal in §3.2/§5/§8 consistent with that choice."
+      }
+    ],
+    "summary": "FAIL. Independently re-verified §0's claims against service_catalog.ex, entry.ex, pin_resolver.ex, and authorization.ex directly (not the design's own self-report) -- the schema-decision reasoning, AC4 retire-vs-fallback resolution, PinResolver.Lookup contract usage, and permission reuse all check out correctly. However, the design leaves the new `status` column's Ecto representation unspecified and internally contradictory: the migration (§4) fixes uppercase DB values ('ACTIVE'/'RETIRED') while the behavior prose (§3.2, §5) repeatedly pattern-matches on lowercase atoms (:active/:retired), with no Ecto.Enum declaration or value-mapping anywhere reconciling the two. This is exactly the kind of implementation-blocking ambiguity the design gate exists to catch. Routing back to CODE-DESIGNER for rework -- do not have ELIXIR-DEV guess which casing is correct."
+  },
   "rework_count": 0,
   "max_rework": 3
 }

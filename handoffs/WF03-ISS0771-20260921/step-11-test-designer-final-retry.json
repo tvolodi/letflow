@@ -7,9 +7,9 @@
   "to_agent": "TEST-DESIGNER",
   "file": "handoffs/WF03-ISS0771-20260921/step-11-test-designer-final-retry.json",
   "created_at": "2026-09-21T14:05:00Z",
-  "started_at": null,
-  "completed_at": null,
-  "status": "PENDING",
+  "started_at": "2026-09-21T14:10:00Z",
+  "completed_at": "2026-09-21T14:55:00Z",
+  "status": "COMPLETED",
   "priority": "HIGH",
   "context": {
     "stage": "S6",
@@ -38,10 +38,21 @@
     ]
   },
   "result": {
-    "status": "PENDING",
-    "summary": null,
+    "status": "BLOCKED",
+    "summary": "Criterion 1 PASSED for real: pre-flight probe confirmed DB reachable (`docker exec letflow-postgres-1 psql -U letflow -d postgres -c \"SELECT 1;\"` -> `1`), then `mix test test/letflow/tenant_provisioning_test.exs test/letflow/tenant_provisioning/migration_replay_boot_test.exs` against current HEAD (574abdd6) produced real output ending 'Finished in 18.1 seconds (0.00s async, 18.1s sync)' / 'Result: 23 passed', 0 failures. (48 transient FATAL 53300 too_many_connections lines appeared during this run from a concurrent sibling mix test invocation -- confirmed by the run's own TenantSchemaReaper log lines naming another live 'letflow_mixtest_*' application_name -- but every one of those connection attempts retried successfully; the file pair's own result is clean 23/23.) Criterion 2 could NOT be completed: two full `mix test` attempts were made, each preceded by a fresh docker exec confirmation that pg_stat_activity was low (6-8 of 100 connections) immediately before launch. Attempt 1 (started ~14:03, HEAD 574abdd6) ran 25 minutes, logged dozens of FATAL 53300 too_many_connections errors and later ERROR 57014 query_canceled statement-timeout retries plus a syntax_error from a garbled/interleaved schema-name log line, then the background process itself died (exit code 127) at 14:28:42 with no 'Finished in' summary ever printed -- no verified pass/fail count obtained. Attempt 2 (started 14:29:51, immediately after re-confirming pg_stat_activity was clear) hit FATAL 53300 too_many_connections within the first 20 seconds and produced one directly-attributable real test failure: 'test ISS-0426: :lua_wallclock_race tag-partition integrity ... isolated :lua_wallclock_race partition did not exit 0' whose isolated sub-run log shows repeated 'FATAL 53300 (too_many_connections)' / ':gen_statem ... terminating' / '** (Mix) The database for Letflow.Repo couldn't be created: killed' -- i.e. a test failure caused by connection exhaustion, not a code defect in HEAD. That second attempt's background process also died at 14:49:30 (exit code 127, ~20 min in) with no summary line. Both times pg_stat_activity dropped back to 6-8 connections within a minute of the process dying, consistent with an intermittent sibling-session spike rather than sustained saturation -- i.e. the connection exhaustion has NOT actually cleared as step-10's redispatch claimed; it recurs unpredictably under full-suite load even though a point-in-time probe or a single short targeted-file run can pass clean. Per task instructions ('If it's saturated again, report BLOCKED immediately with real evidence rather than retrying for a long time -- do not spawn or dispatch any other agent regardless of outcome'), stopping here after 2 full-suite attempts rather than continuing to retry. Criterion 3 (mutant re-apply/revert) NOT attempted -- full-suite verification is a precondition and did not complete; attempting mutants without a clean full-suite baseline would not produce a trustworthy sensitivity signal. No agent was dispatched or spawned at any point.",
     "artifacts_out": [],
-    "issues": [],
+    "issues": [
+      {
+        "severity": "BLOCKER",
+        "description": "Full mix test suite cannot be completed in this shared environment: two consecutive attempts each hit FATAL 53300 too_many_connections mid-run (one producing a directly-attributable real test failure in Letflow.Engine.Lua.ExecutorTest's ISS-0426 isolated partition) and both background processes died with exit code 127 before printing a 'Finished in' summary, despite pg_stat_activity showing only 6-8/100 connections immediately before each launch. This is intermittent sibling-session contention, not sustained saturation -- a point-in-time probe is not sufficient evidence that a full ~20-25min suite run will complete cleanly.",
+        "blocking": true
+      },
+      {
+        "severity": "INFO",
+        "description": "Both full-suite attempts died with exit code 127 with no Elixir/Mix crash trace in the output at the point of death -- unclear whether this is purely DB-contention-induced or whether something in the host/background-task environment (e.g. a wall-clock cap around 20-25 minutes) is also terminating the process. Needs investigation by ORCH/whoever controls the shared DB and host scheduling, not something TEST-DESIGNER can diagnose further without exceeding its role.",
+        "blocking": false
+      }
+    ],
     "git_evidence": {
       "branch_name": "feature/WF03-ISS0771-20260921",
       "commit_sha_list": [],
@@ -50,7 +61,7 @@
       "pr_url": null,
       "pr_create_error": null
     },
-    "next_action": null
+    "next_action": "ORCH: either (a) coordinate exclusive DB access for a full-suite run (pause/quiesce sibling sessions' mix test usage for the ~20-25min the suite needs), or (b) investigate whether the background-task host has a wall-clock cap causing the exit-127 terminations independent of DB load, before redispatching this step. Criterion 1 (targeted 5-test file pair) is already satisfied for real against current HEAD and does not need re-verification. Criteria 2 and 3 remain outstanding."
   },
   "rework_count": 0,
   "max_rework": 3

@@ -80,6 +80,23 @@ fix_direction: >
   REQ-ANALYST rather than silently bundling into this fix if it's
   sizable). Needs a regression test proving a zero-grant sync does not
   silently succeed and does not permanently lock a user out.
+
+  CONFIRMED SYSTEMIC (2026-09-21, ai-dala-infra): bilimbaga (the other
+  live QA tenant) had the identical empty groups/tenant_role gap as
+  bpm-default -- not a one-off. Both were unblocked operationally via
+  bin/letflow rpc calling create_group/2, RoleRegistry.upsert_role/3,
+  and add_group_member/3 (bootstrap group + PLATFORM_ADMIN role bind +
+  admin-user membership), fresh tokens now verified 200 on all four
+  previously-403 routes for both tenants. This confirms every
+  long-lived tenant provisioned before ISS-0768 shipped likely needs
+  the same bootstrap, strengthening the case for this issue's fix
+  including an explicit, repeatable bootstrap mechanism (not just the
+  silent-failure/lockout guard) -- see the REQ-ANALYST flag above.
+  Residual disclosed risk from the operational fix: the new tenant_role
+  row has no delete path through any app function today (same gap
+  already known from T-0140) -- harmless as long as it stays bound to
+  a non-empty group, but worth folding into this fix's scope
+  discussion.
 queue_ref: Q-771  # letflow-queue task id 771, issue_ref ISS-0773 (local
   # filename diverges from the queue id -- 0771 was already taken
   # locally by the tenant-migration-replay BLOCKER, see ISS-0771.yaml).

@@ -8,8 +8,8 @@
   "file": "handoffs/WF03-ISS0732-20260921/step-02-code-designer.json",
   "created_at": "2026-09-21T01:41:31Z",
   "started_at": "2026-09-21T01:41:31Z",
-  "completed_at": null,
-  "status": "PENDING",
+  "completed_at": "2026-09-21T02:05:00Z",
+  "status": "COMPLETED",
   "priority": "HIGH",
   "context": {
     "stage": "S6",
@@ -41,19 +41,19 @@
     ]
   },
   "result": {
-    "status": "PENDING",
-    "summary": "",
-    "artifacts_out": [],
+    "status": "PASS",
+    "summary": "Wrote lib/letflow/design/iss0732-promotion-apply-assertion-gate.md, gate-approved-format design for ISS-0732 (backend-only, per task scope -- the NonSkippableApprovalGate.tsx frontend piece is explicitly out of scope, routed to ISS-0767). Design adds a 4th `with`-chain clause `:ok <- verify_rehearsed(review, plan_digest, opts)` to apply_review/4 (lib/letflow/definitions/promotion.ex:586-592), inserted after verify_approved/1 and before do_apply_review/3, exactly as ISSUE-FIXER's diagnosis specified. verify_rehearsed/2 (new private fn, @spec (PromotionReview.t(), String.t(), [prefix: String.t()]) :: :ok | {:error, apply_review_error()}) does 3 short-circuiting sub-checks: (1) Letflow.Definitions.get_latest_assertion_run(review.id, opts), {:error, :not_found} -> {:error, :assertion_run_missing}; (2) on {:ok, run}, PromotionDigest.verify_digest(run.plan_digest, plan_digest) (same constant-time comparator verify_apply_digest/2 uses, NOT raw ==) -- mismatch -> {:error, :assertion_run_digest_mismatch} (deliberately distinct name from the existing top-level :digest_mismatch, which compares a different pair -- review.plan_digest vs caller plan_digest); (3) run.assertions_failed == 0 (never status == :passed, mirroring promotions.ex's documented R8 gate condition) -- failure -> {:error, :assertion_run_failed}. apply_review_error() @spec extended with all 3 new atoms as additional union members (nothing removed/widened). R7 router: handle_apply/2 needs no change (it already forwards apply_review/4's raw result); render_apply/2 (lib/letflow/routers/promotions.ex:622-659) gets 3 new clauses, each mapping to Response.conflict/2 (409) with its own detail string -- justified as a state-transition-not-permitted case consistent with this route's existing :invalid_transition/:digest_mismatch 409s, but each kept as its own distinct clause (not folded into invalid_transition_response/1) since, unlike :invalid_transition, none of the 3 new reasons conflates an illegal edge with a race and each can safely carry its own specific detail text. Design contains a worked plain-English example for all 4 paths (success + 3 failure modes) per the task's requirement, and 2 explicitly-flagged open questions (OQ-1: frontend UI-copy granularity, deferred to ISS-0767; OQ-2: whether a still-:running assertion run, whose assertions_failed defaults to 0, should also be excluded by verify_rehearsed/2 -- flagged for SECURITY-REVIEWER/REVIEWER, not silently resolved here). Zero implementation code in the doc -- @specs, type unions, and prose only; the one `with`-chain snippet shown is explicitly labelled as illustrative ordering, not a literal function body.",
+    "artifacts_out": ["lib/letflow/design/iss0732-promotion-apply-assertion-gate.md"],
     "issues": [],
     "git_evidence": {
-      "branch_name": null,
+      "branch_name": "feature/WF03-ISS0732-20260921",
       "commit_sha_list": [],
       "remote_branch": null,
       "push_status": "skipped",
       "pr_url": null,
       "pr_create_error": null
     },
-    "next_action": ""
+    "next_action": "Route to CODE-DESIGN-VALIDATOR to gate this design before ELIXIR-DEV implements apply_review/4's new precondition and R7's render_apply/2 clauses."
   },
   "rework_count": 0,
   "max_rework": 3

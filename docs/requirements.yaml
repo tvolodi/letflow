@@ -29447,7 +29447,7 @@ requirements:
   - id: REQ-397
     title: "GET /api/v1/promotions list endpoint (paginated, filterable by status/definition), so a reviewer can discover reviews without an out-of-band reviewId"
     owner: ELIXIR-DEV
-    status: pending
+    status: done
     stage: S6
     impl_order: 765  # letflow-queue task id, GH#1659. Registered 2026-09-21 by ORCH.
     description: >

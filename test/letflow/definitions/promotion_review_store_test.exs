@@ -706,4 +706,79 @@ defmodule Letflow.Definitions.PromotionReviewStoreTest do
                {:error, :review_not_found}
     end
   end
+
+  # ---------------------------------------------------------------------------------
+  # list_reviews/2 (REQ-397, design req397-promotion-review-list-route.md §3/§7)
+  # -- context-level keyset/ordering edge case that doesn't need real-HTTP
+  # dispatch. Router-level coverage (authz, tenant isolation, status/def_id
+  # filters, invalid-status 400, pagination cursor round-trip) lives in
+  # test/letflow/routers/promotions_test.exs's own "GET /promotions" describe
+  # block per the design's own test-plan split.
+  # ---------------------------------------------------------------------------------
+
+  describe "list_reviews/2 -- keyset/ordering edge cases" do
+    test "two rows with the same inserted_at second are still returned with no skip/duplicate across two consecutive page fetches, id DESC tiebreak" do
+      %{tenant_id: tenant_id, schema_name: schema_name} = provisioned_tenant()
+
+      # Each fixture needs a distinct plan_digest (the partial unique index
+      # rejects a second :pending_review row with an identical digest, per
+      # this file's own moduledoc) -- vary entries per call, same technique
+      # differing_plan/1 above uses.
+      distinct_entries = fn ->
+        [
+          %{
+            type: :graph_node,
+            id: "n1-#{System.unique_integer([:positive, :monotonic])}",
+            change_kind: :added,
+            before: nil,
+            after: %{"id" => "n1", "node_type" => "START"}
+          }
+        ]
+      end
+
+      %{review: review1} =
+        insert_review_fixture!(schema_name, tenant_id,
+          plan_overrides: %{entries: distinct_entries.()}
+        )
+
+      %{review: review2} =
+        insert_review_fixture!(schema_name, tenant_id,
+          plan_overrides: %{entries: distinct_entries.()}
+        )
+
+      %{review: review3} =
+        insert_review_fixture!(schema_name, tenant_id,
+          plan_overrides: %{entries: distinct_entries.()}
+        )
+
+      all_ids = [review1.id, review2.id, review3.id]
+
+      assert {:ok, %{items: page1, next_cursor: cursor1}} =
+               PromotionReviewStore.list_reviews(%{page_size: 2}, prefix: schema_name)
+
+      assert length(page1) == 2
+      assert is_binary(cursor1)
+
+      assert {:ok, %{items: page2, next_cursor: cursor2}} =
+               PromotionReviewStore.list_reviews(%{page_size: 2, cursor: cursor1},
+                 prefix: schema_name
+               )
+
+      assert length(page2) == 1
+      assert cursor2 == nil
+
+      page1_ids = Enum.map(page1, & &1.id)
+      page2_ids = Enum.map(page2, & &1.id)
+
+      assert MapSet.disjoint?(MapSet.new(page1_ids), MapSet.new(page2_ids))
+      assert Enum.sort(page1_ids ++ page2_ids) == Enum.sort(all_ids)
+    end
+
+    test "unrecognised prefix -> {:error, :invalid_schema_name}, no query executed" do
+      assert {:error, :invalid_schema_name} =
+               PromotionReviewStore.list_reviews(%{page_size: 50},
+                 prefix: "not_a_real_tenant_schema_name"
+               )
+    end
+  end
 end

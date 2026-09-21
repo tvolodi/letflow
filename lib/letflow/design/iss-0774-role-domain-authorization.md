@@ -413,14 +413,42 @@ here so ELIXIR-DEV/whoever owns the T-0140 fixture does not have to rediscover i
 
 ## 5. Open questions (explicit, not silently resolved)
 
-**OQ-1 — `resolve_group_ids_for_role_names/2`'s `kind`-blindness (§2.4).** Left
-unfiltered because no realistic input can currently make it ambiguous (a token can only
-ever claim one of the six platform-role strings, per `Letflow.Oidc.ClaimMapping`'s
-existing closed mapping — confirmed by grep, not by assumption, before writing this
-paragraph). If a future requirement widens what `ClaimMapping` can produce, this function
-would need the identical `kind: :platform_role` filter `list_effective_role_names/2` now
-has. Flagged for REVIEWER to confirm the "safe unchanged" reasoning holds, or to require
-the filter added defensively now rather than left as a documented assumption.
+**OQ-1 — `resolve_group_ids_for_role_names/2`'s `kind`-blindness (§2.4).**
+**Corrected 2026-09-21 by REVIEWER — the premise below was checked and is wrong.**
+This paragraph originally claimed the function was safe to leave unfiltered because "a
+token can only ever claim one of the six platform-role strings, per
+`Letflow.Oidc.ClaimMapping`'s existing closed mapping." That is false:
+`Letflow.Oidc.ClaimMapping.resolve_roles/2` (`lib/letflow/oidc/claim_mapping.ex:166-176`)
+does not closed-set-filter anything — it iterates the configured claim paths and passes
+whatever string list the IdP token carries straight through unfiltered (mapping non-string
+array elements to `""`, but otherwise verbatim). The actual closed-set gate,
+`Authorization.role_from_string/1`, sits only on the separate request-time
+`AuthPipeline`/`Authorization.roles_from_strings/1` path — it is never applied to
+`identity_context.roles` before `sync_role_claims_from_token/3` passes it into
+`resolve_group_ids_for_role_names/2` (`lib/letflow/identity.ex:741`), which matches on
+`t.name in ^role_names` against the full `tenant_role` table regardless of `kind`.
+
+**Corrected reasoning, and why this is left unchanged in this PR anyway:** an IdP token
+that claims an arbitrary string happening to match a `:process_routing_role`-kind
+`tenant_role.name` (e.g. `role-ops-manager`) will cause
+`sync_role_claims_from_token/3` to write a `group_members` row for that routing group —
+group membership the token holder did not legitimately earn via this platform's own
+`kind: :platform_role` grant path. The blast radius is bounded, not open: this fix's own
+`kind` filter on `list_effective_role_names/2` (§2.4 above) means that
+`group_members` row can **never** reach `Authorization.roles_from_strings/1` or confer
+any platform permission — `list_effective_role_names/2` only ever reads `kind ==
+:platform_role` rows. The exposure is confined to unintended routing-group membership
+(HUMAN_TASK task-assignment eligibility for that group), not privilege escalation. This
+is also **pre-existing, unchanged behavior**: `resolve_group_ids_for_role_names/2` and
+`sync_role_claims_from_token/3` have zero diff hits in this PR (confirmed against
+`git diff origin/main...` for `lib/letflow/identity.ex`), and fixing it is out of
+ISS-0774's own scope (ISS-0774 is about the platform-role/process-routing-role
+conflation in the *read* path feeding `Authorization`, not about hardening the OIDC
+claim-to-group-membership write path against an untrusted/misconfigured IdP). Accepted
+as a documented known-limitation rather than a blocker for this PR — filed as
+**ISS-0775** for a follow-on fix (apply the same `kind: :platform_role`-style
+discipline to the write path, or reject unrecognized claimed role strings outright)
+tracked separately, not gating TEST-DESIGNER on this PR.
 
 **OQ-2 — Should `check_platform_role_coverage/2` be wired into any existing provisioning
 call site automatically, rather than left as an opt-in check a script must remember to

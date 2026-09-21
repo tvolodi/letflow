@@ -1,0 +1,105 @@
+id: ISS-0773
+title: >
+  sync_role_claims_from_token/3 silently writes zero role grants when
+  resolve_group_ids_for_role_names/2 resolves to an empty list -- QA
+  bpm-default admin-user gets 403 on every authenticated route despite
+  a valid token
+discovered_by: ai-dala-infra-34 (peer session, verifying QA health), independently confirmed via source read by ORCH (letflow-c5)
+discovered_in_run: T-0140-seed-swiftroute-tenant-persona-qa-users (ai-dala-infra), QA-health follow-up after ISS-0771
+discovered_at: "2026-09-21T10:00:00Z"
+severity: BLOCKER
+description: >
+  Discovered live 2026-09-21 by a peer ai-dala-infra session verifying
+  QA health after the ISS-0771 migration-replay fix landed.
+  bpm-default/admin-user mints a token fine (correct iss/aud/azp/roles
+  claims) but GET /identity/groups, /identity/roles, /identity/users,
+  /tasks/inbox all return 403 (Authorization.has_permission?/2
+  correctly denies when fed roles: []). role_claims_synced_at IS
+  getting stamped on login, proving sync_role_claims_from_token/3
+  (REQ-378) is being called -- but tenant_role/group_members/
+  user_entity_grants end up with zero rows for this user. Independently
+  confirmed the mechanism from source
+  (lib/letflow/identity.ex sync_role_claims_from_token/3): it
+  unconditionally stamps role_claims_synced_at via Multi.update, but
+  the grant-write step (Multi.run(:memberships, ...)) calls
+  resolve_group_ids_for_role_names/2, which resolves the token's
+  claimed role names against that tenant's TenantRole.name rows via
+  `where: t.name in ^role_names`. If that query returns zero
+  group_ids -- either because no TenantRole row exists with a matching
+  name, or because the token's claimed role name string doesn't match
+  what is stored -- the Enum.each silently does nothing, and the whole
+  transaction still returns {:ok, ...} with 0 grants written. No error
+  is raised, no log line distinguishes "synced N groups" from "synced
+  0 groups", so this failure mode is completely silent from the
+  caller's perspective. Because the marker (role_claims_synced_at) is
+  now permanently stamped, a real user in this state can NEVER be
+  re-synced by this function's own designed retry-on-nil-marker
+  mechanism -- the marker is not nil, so callers won't call it again,
+  permanently locking the user out until someone manually clears the
+  marker or backfills the grant rows.
+affected_files:
+  - lib/letflow/identity.ex
+fix_direction: >
+  CONFIRMED (2026-09-21, ai-dala-infra live diagnosis): this is the
+  seed-data-gap branch, not claim-mapping. bpm-default's tenant_role
+  table (schema tenant_fa2c7dbb049b4c448646185deb22707c) has ZERO rows
+  -- confirmed via a direct SELECT. A fresh admin-user token was
+  independently confirmed to carry the exact literal claim
+  "PLATFORM_ADMIN" in both realm_access.roles and a top-level roles
+  claim -- no case/naming mismatch. Further source-level investigation
+  (lib/letflow/identity/role_registry.ex) shows RoleRegistry.upsert_role/3
+  (the write path for tenant_role, i.e. POST /identity/roles) requires
+  a PRE-EXISTING Group row (Repo.get(Group, group_id, ...) ->
+  :group_not_found otherwise) -- and there is no seed/bootstrap code
+  anywhere in this codebase that auto-creates a default admin Group or
+  PLATFORM_ADMIN role for any tenant. The only write path for
+  tenant_role has always been this exact endpoint, which was completely
+  broken (ISS-0768, no tenant-prefix threading) from REQ-020's original
+  ship until a few hours before this issue was filed. It is very
+  plausible bpm-default (and possibly other long-lived tenants) has
+  simply never had anyone successfully call this endpoint -- not a
+  runtime bug exercised repeatedly, but a bootstrap step nobody could
+  ever complete until ISS-0768 merged. Operationally, this may be
+  unblockable via one or two POST calls against the now-working
+  endpoint (create a Group if none exists, then bind PLATFORM_ADMIN to
+  it) rather than needing a code fix to become healthy again -- ORCH
+  and ai-dala-infra are pursuing that in parallel to this filing.
+
+  Regardless of the operational unblock, the CODE-level defect
+  described above (sync_role_claims_from_token/3 permanently stamping
+  role_claims_synced_at even on a zero-grant sync, closing off its own
+  designed retry path) is real and independent of root cause -- needs
+  a CODE-DESIGNER pass to decide the right closure: most likely, only
+  stamp role_claims_synced_at when at least one grant was actually
+  written (leaving the marker nil -- and thus retryable -- when
+  resolve_group_ids_for_role_names/2 resolves to an empty list for a
+  non-empty identity_context.roles), plus a loud log line distinguishing
+  the two outcomes. Also worth deciding whether Letflow should have an
+  explicit bootstrap/seed mechanism for a tenant's first PLATFORM_ADMIN
+  group+role (a related but distinct scope question -- flag for
+  REQ-ANALYST rather than silently bundling into this fix if it's
+  sizable). Needs a regression test proving a zero-grant sync does not
+  silently succeed and does not permanently lock a user out.
+
+  CONFIRMED SYSTEMIC (2026-09-21, ai-dala-infra): bilimbaga (the other
+  live QA tenant) had the identical empty groups/tenant_role gap as
+  bpm-default -- not a one-off. Both were unblocked operationally via
+  bin/letflow rpc calling create_group/2, RoleRegistry.upsert_role/3,
+  and add_group_member/3 (bootstrap group + PLATFORM_ADMIN role bind +
+  admin-user membership), fresh tokens now verified 200 on all four
+  previously-403 routes for both tenants. This confirms every
+  long-lived tenant provisioned before ISS-0768 shipped likely needs
+  the same bootstrap, strengthening the case for this issue's fix
+  including an explicit, repeatable bootstrap mechanism (not just the
+  silent-failure/lockout guard) -- see the REQ-ANALYST flag above.
+  Residual disclosed risk from the operational fix: the new tenant_role
+  row has no delete path through any app function today (same gap
+  already known from T-0140) -- harmless as long as it stays bound to
+  a non-empty group, but worth folding into this fix's scope
+  discussion.
+queue_ref: Q-771  # letflow-queue task id 771, issue_ref ISS-0773 (local
+  # filename diverges from the queue id -- 0771 was already taken
+  # locally by the tenant-migration-replay BLOCKER, see ISS-0771.yaml).
+  # Registered 2026-09-21 by ORCH.
+github_ref: GH-1677
+status: open

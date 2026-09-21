@@ -24,6 +24,15 @@ defmodule Letflow.Routers.Promotions do
   | R7 | POST | `/:id/apply` | `handle_apply/2` | `Promotion.apply_review/4` | 200 |
   | R8 | POST | `/:review_id/run-assertions` | `handle_run_assertions/2` | `PromotionArtifact.from_json/1` -> `Definitions.apply_promotion_assertion_rerun/6` | 200/422 |
   | R11 | GET | `/platform-events` | `handle_platform_events/1` | `Letflow.EventStore.list_platform_events/1` | 200 |
+  | R12 | GET | `/` | `handle_list_reviews/1` | `PromotionReviewStore.list_reviews/2` | 200 |
+
+  R12 is REQ-397 (`lib/letflow/design/req397-promotion-review-list-route.md`)
+  -- a paginated, filterable list of the caller's own tenant's
+  `promotion_reviews` rows, so a reviewer can discover reviews without an
+  out-of-band review id. Declared last among this module's routes (design
+  §4.1), after `POST /:review_id/run-assertions` and before `match _` --
+  purely stylistic, since a plain `GET /` cannot be captured by any `:id`-
+  shaped wildcard in this module regardless of declaration order.
 
   R11 is ISS-0733 GAP B (`lib/letflow/design/iss0733-promotion-audit-and-platform-events-read.md`
   §2) -- a dedicated, `:Unknown`/PLATFORM_ADMIN-only read of the platform
@@ -232,6 +241,15 @@ defmodule Letflow.Routers.Promotions do
 
   post "/:review_id/run-assertions" do
     handle_run_assertions(conn, conn.params["review_id"])
+  end
+
+  # R12 (design §4.1) -- declared last among this module's routes, mirroring
+  # Routers.Definitions's own `authz_get "/"` placement. Purely
+  # stylistic/consistency-driven: `GET /` cannot be captured by `GET /:id`,
+  # `GET /:id/context`, or `GET /platform-events` regardless of declaration
+  # order, since none of those patterns matches an empty path segment.
+  get "/" do
+    handle_list_reviews(conn)
   end
 
   match _ do
@@ -885,6 +903,129 @@ defmodule Letflow.Routers.Promotions do
       "timestamp" => iso8601(item.timestamp),
       "sequence_num" => item.sequence_num,
       "payload" => item.payload
+    }
+  end
+
+  # ── GET /promotions -- R12, review-queue list (design §4) ───────────────
+
+  @spec handle_list_reviews(Plug.Conn.t()) :: Plug.Conn.t()
+  defp handle_list_reviews(conn) do
+    conn = fetch_query_params(conn)
+    query = conn.query_params
+    opts = conn.assigns.scoped_opts
+
+    with {:ok, status_filter} <- parse_status_filter_param(Map.get(query, "status")),
+         {:ok, raw_page_size} <- Pagination.parse_page_size_param(Map.get(query, "page_size")),
+         {:ok, page_size} <- Pagination.validate_page_size(raw_page_size) do
+      filters = %{
+        status: status_filter,
+        def_id: non_empty(Map.get(query, "def_id")),
+        def_type: non_empty(Map.get(query, "def_type")),
+        cursor: Map.get(query, "cursor"),
+        page_size: page_size
+      }
+
+      render_list_reviews(conn, PromotionReviewStore.list_reviews(filters, opts))
+    else
+      {:error, :invalid_status} ->
+        Response.bad_request(
+          conn,
+          "status must be one or more of (comma-separated): pending_review, approved, rejected, applied, failed, superseded"
+        )
+
+      {:error, :invalid_page_size} ->
+        Response.bad_request(conn, "invalid page_size")
+
+      {:error, :page_size_too_large} ->
+        Response.bad_request(conn, "page_size out of range")
+    end
+  end
+
+  defp render_list_reviews(conn, {:ok, %{items: items, next_cursor: next_cursor}}) do
+    Response.ok(conn, %{
+      "items" => Enum.map(items, &promotion_review_list_item_map/1),
+      "next_cursor" => next_cursor
+    })
+  end
+
+  defp render_list_reviews(conn, {:error, :invalid_cursor}),
+    do: Response.bad_request(conn, "invalid cursor")
+
+  defp render_list_reviews(conn, {:error, :wrong_endpoint}),
+    do: Response.bad_request(conn, "cursor is not valid for this endpoint")
+
+  defp render_list_reviews(conn, {:error, :expired}),
+    do: Response.send_problem(conn, Error.cursor_expired())
+
+  # Includes {:error, :invalid_schema_name} (design §3.2) -- not explicitly
+  # branched on, matching Routers.Definitions's own render_list_result/2
+  # unmapped-error catch-all precedent.
+  defp render_list_reviews(conn, {:error, _other}), do: Response.internal_error(conn)
+
+  # `status` accepts one or more comma-separated values (design §4.3) -- a
+  # single query param, not repeated `status=` params or `status[]=`
+  # bracket-array syntax (see the design doc for why). `nil`/`""` and an
+  # all-empty-after-split value (`?status=` or `?status=,,`) both mean "no
+  # filter." Any single unrecognised piece rejects the WHOLE filter, never
+  # silently reducing it to the valid subset.
+  @spec parse_status_filter_param(String.t() | nil) ::
+          {:ok, [PromotionReview.status()] | nil} | {:error, :invalid_status}
+  defp parse_status_filter_param(nil), do: {:ok, nil}
+  defp parse_status_filter_param(""), do: {:ok, nil}
+
+  defp parse_status_filter_param(raw) when is_binary(raw) do
+    pieces =
+      raw
+      |> String.split(",")
+      |> Enum.map(&String.trim/1)
+      |> Enum.reject(&(&1 == ""))
+
+    case pieces do
+      [] -> {:ok, nil}
+      _ -> parse_status_pieces(pieces, [])
+    end
+  end
+
+  defp parse_status_pieces([], acc), do: {:ok, Enum.reverse(acc)}
+
+  defp parse_status_pieces([piece | rest], acc) do
+    case status_filter_atom(piece) do
+      {:ok, atom} -> parse_status_pieces(rest, [atom | acc])
+      :error -> {:error, :invalid_status}
+    end
+  end
+
+  defp status_filter_atom("pending_review"), do: {:ok, :pending_review}
+  defp status_filter_atom("approved"), do: {:ok, :approved}
+  defp status_filter_atom("rejected"), do: {:ok, :rejected}
+  defp status_filter_atom("applied"), do: {:ok, :applied}
+  defp status_filter_atom("failed"), do: {:ok, :failed}
+  defp status_filter_atom("superseded"), do: {:ok, :superseded}
+  defp status_filter_atom(_other), do: :error
+
+  # Same "empty string == absent filter" idiom tasks.ex's own list handler
+  # already uses (design §4.2) -- this module does not currently define
+  # non_empty/1; every router file that needs it defines its own copy
+  # rather than importing a shared helper.
+  defp non_empty(nil), do: nil
+  defp non_empty(""), do: nil
+  defp non_empty(value) when is_binary(value), do: value
+
+  # 7-key allowlist, in this exact order (design §4.5). Deliberately
+  # excludes plan_digest/serialised_plan/approved_by/approved_at/
+  # superseded_by/row_version -- none is named in REQ-397's acceptance
+  # criteria, and a reviewer who needs any of them already has
+  # GET /promotions/:id/context (R4) one click away via this row's own id.
+  @spec promotion_review_list_item_map(PromotionReview.t()) :: map()
+  defp promotion_review_list_item_map(review) do
+    %{
+      "id" => review.id,
+      "status" => Atom.to_string(review.status),
+      "def_type" => review.def_type,
+      "def_id" => review.def_id,
+      "requested_by" => review.requested_by,
+      "inserted_at" => iso8601(review.inserted_at),
+      "updated_at" => iso8601(review.updated_at)
     }
   end
 

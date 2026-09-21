@@ -30,6 +30,8 @@ defmodule Letflow.Routers.PromotionsTest do
   import Plug.Conn
 
   alias Letflow.Api.Pagination
+  alias Letflow.Definitions.PromotionDigest
+  alias Letflow.Definitions.PromotionReviewStore
   alias Letflow.EventStore
   alias Letflow.EventStore.Registry
   alias Letflow.TenantFixture
@@ -320,6 +322,368 @@ defmodule Letflow.Routers.PromotionsTest do
     test "an empty platform-events stream returns items: [], next_cursor: nil" do
       tenant = provisioned_tenant("req11-page-empty")
       resp = get_platform_events(tenant)
+
+      assert resp.status == 200
+      body = Jason.decode!(resp.resp_body)
+      assert body["items"] == []
+      assert body["next_cursor"] == nil
+    end
+  end
+
+  # ===========================================================================
+  # GET /promotions -- R12 (REQ-397, design req397-promotion-review-list-route.md)
+  # ===========================================================================
+
+  defp build_list_conn(tenant_fixture, fields) do
+    roles = Keyword.get(fields, :roles, ["PLATFORM_ADMIN"])
+    query_string = Keyword.get(fields, :query_string, "")
+
+    path = if query_string == "", do: "/", else: "/?" <> query_string
+
+    tenant_id = if tenant_fixture, do: tenant_fixture.tenant_id, else: Ecto.UUID.generate()
+
+    conn(:get, path)
+    |> assign(:auth_context, %{
+      user_id: Keyword.get(fields, :user_id, Ecto.UUID.generate()),
+      tenant_id: tenant_id,
+      roles: roles
+    })
+    |> assign(:trace_id, "req397-list-test-trace-id")
+  end
+
+  defp list_reviews_http(tenant, fields \\ []) do
+    build_list_conn(tenant, fields)
+    |> Letflow.Routers.Promotions.call(@promotions_opts)
+  end
+
+  defp req397_process_key(prefix \\ "req397-proc") do
+    prefix <> "-" <> to_string(System.unique_integer([:positive, :monotonic]))
+  end
+
+  defp req397_sample_plan(tenant_id, overrides) do
+    %{
+      source_tenant_id: Ecto.UUID.generate(),
+      target_tenant_id: tenant_id,
+      process_key: req397_process_key(),
+      source_definition_id: Ecto.UUID.generate(),
+      target_definition_id: nil,
+      base_version: nil,
+      entries: [
+        %{
+          type: :graph_node,
+          id: "n1-#{System.unique_integer([:positive, :monotonic])}",
+          change_kind: :added,
+          after: %{"id" => "n1", "node_type" => "START"},
+          before: nil
+        }
+      ]
+    }
+    |> Map.merge(overrides)
+  end
+
+  # Inserts one :pending_review row via the real insert_review/2 call (never a
+  # direct Repo.insert! -- design §7's fixture-discipline rule).
+  defp seed_review!(schema_name, tenant_id, overrides \\ %{}) do
+    plan = req397_sample_plan(tenant_id, overrides)
+    digest = PromotionDigest.compute_plan_digest(plan)
+
+    assert {:ok, review} =
+             PromotionReviewStore.insert_review(
+               %{plan: plan, digest: digest, requested_by: Ecto.UUID.generate()},
+               prefix: schema_name
+             )
+
+    %{review: review, plan: plan, digest: digest}
+  end
+
+  defp seed_approved_review!(schema_name, tenant_id, overrides \\ %{}) do
+    %{review: review, digest: digest} = seed_review!(schema_name, tenant_id, overrides)
+
+    assert {:ok, approved} =
+             PromotionReviewStore.approve_review(review.id, Ecto.UUID.generate(), digest,
+               prefix: schema_name
+             )
+
+    approved
+  end
+
+  defp seed_rejected_review!(schema_name, tenant_id, overrides \\ %{}) do
+    %{review: review} = seed_review!(schema_name, tenant_id, overrides)
+
+    assert {:ok, rejected} =
+             PromotionReviewStore.reject_review(review.id, Ecto.UUID.generate(),
+               prefix: schema_name
+             )
+
+    rejected
+  end
+
+  # ---------------------------------------------------------------------------
+  # AC1 -- authenticated PLATFORM_ADMIN-only, paginated, most-recent-first.
+  # ---------------------------------------------------------------------------
+
+  describe "GET /promotions -- AC1 (paginated, most-recent-first, real HTTP)" do
+    test "returns the caller's own tenant's rows, most-recent first" do
+      tenant = provisioned_tenant("req397-order")
+
+      %{review: r1} = seed_review!(tenant.schema_name, tenant.tenant_id)
+      Process.sleep(2)
+      %{review: r2} = seed_review!(tenant.schema_name, tenant.tenant_id)
+      Process.sleep(2)
+      %{review: r3} = seed_review!(tenant.schema_name, tenant.tenant_id)
+
+      resp = list_reviews_http(tenant)
+
+      assert resp.status == 200
+      body = Jason.decode!(resp.resp_body)
+      ids = Enum.map(body["items"], & &1["id"])
+
+      assert ids == [r3.id, r2.id, r1.id]
+    end
+  end
+
+  # ---------------------------------------------------------------------------
+  # AC2 -- cross-tenant isolation.
+  # ---------------------------------------------------------------------------
+
+  describe "GET /promotions -- AC2 (cross-tenant isolation)" do
+    test "a caller from tenant A never sees tenant B's rows, and vice versa" do
+      tenant_a = provisioned_tenant("req397-iso-a")
+      tenant_b = provisioned_tenant("req397-iso-b")
+
+      %{review: review_a} = seed_review!(tenant_a.schema_name, tenant_a.tenant_id)
+      %{review: review_b} = seed_review!(tenant_b.schema_name, tenant_b.tenant_id)
+
+      resp_a = list_reviews_http(tenant_a)
+      resp_b = list_reviews_http(tenant_b)
+
+      assert resp_a.status == 200
+      assert resp_b.status == 200
+
+      ids_a = Jason.decode!(resp_a.resp_body)["items"] |> Enum.map(& &1["id"])
+      ids_b = Jason.decode!(resp_b.resp_body)["items"] |> Enum.map(& &1["id"])
+
+      assert review_a.id in ids_a
+      refute review_b.id in ids_a
+
+      assert review_b.id in ids_b
+      refute review_a.id in ids_b
+    end
+  end
+
+  # ---------------------------------------------------------------------------
+  # AC3 -- status filter (single + multi-value union).
+  # ---------------------------------------------------------------------------
+
+  describe "GET /promotions -- AC3 (status filter, single and multi-value)" do
+    test "status=rejected returns only the rejected row(s)" do
+      tenant = provisioned_tenant("req397-status-single")
+
+      %{review: pending} = seed_review!(tenant.schema_name, tenant.tenant_id)
+      approved = seed_approved_review!(tenant.schema_name, tenant.tenant_id)
+      rejected = seed_rejected_review!(tenant.schema_name, tenant.tenant_id)
+
+      resp = list_reviews_http(tenant, query_string: "status=rejected")
+
+      assert resp.status == 200
+      ids = Jason.decode!(resp.resp_body)["items"] |> Enum.map(& &1["id"])
+
+      assert ids == [rejected.id]
+      refute pending.id in ids
+      refute approved.id in ids
+    end
+
+    test "status=approved,rejected returns the union of both statuses" do
+      tenant = provisioned_tenant("req397-status-multi")
+
+      %{review: pending} = seed_review!(tenant.schema_name, tenant.tenant_id)
+      approved = seed_approved_review!(tenant.schema_name, tenant.tenant_id)
+      rejected = seed_rejected_review!(tenant.schema_name, tenant.tenant_id)
+
+      resp = list_reviews_http(tenant, query_string: "status=approved,rejected")
+
+      assert resp.status == 200
+      ids = Jason.decode!(resp.resp_body)["items"] |> Enum.map(& &1["id"])
+
+      assert Enum.sort(ids) == Enum.sort([approved.id, rejected.id])
+      refute pending.id in ids
+    end
+  end
+
+  # ---------------------------------------------------------------------------
+  # AC4 -- unrecognised status value rejects the WHOLE filter with 400.
+  # ---------------------------------------------------------------------------
+
+  describe "GET /promotions -- AC4 (invalid status filter -> 400, whole filter rejected)" do
+    test "status=bogus_value -> 400 naming the allowed set" do
+      tenant = provisioned_tenant("req397-status-bogus")
+
+      resp = list_reviews_http(tenant, query_string: "status=bogus_value")
+
+      assert resp.status == 400
+      body = Jason.decode!(resp.resp_body)
+
+      for allowed <- ~w(pending_review approved rejected applied failed superseded) do
+        assert body["detail"] =~ allowed
+      end
+    end
+
+    test "status=rejected,bogus_value -> 400, not silently reduced to the valid subset" do
+      tenant = provisioned_tenant("req397-status-mixed")
+      _rejected = seed_rejected_review!(tenant.schema_name, tenant.tenant_id)
+
+      resp = list_reviews_http(tenant, query_string: "status=rejected,bogus_value")
+
+      assert resp.status == 400
+    end
+  end
+
+  # ---------------------------------------------------------------------------
+  # AC5 -- def_id filter.
+  # ---------------------------------------------------------------------------
+
+  describe "GET /promotions -- AC5 (def_id filter)" do
+    test "def_id=<value> returns only that definition's own reviews" do
+      tenant = provisioned_tenant("req397-defid")
+
+      %{review: review_1, plan: plan_1} = seed_review!(tenant.schema_name, tenant.tenant_id)
+      %{review: review_2} = seed_review!(tenant.schema_name, tenant.tenant_id)
+
+      refute review_1.def_id == review_2.def_id
+
+      resp = list_reviews_http(tenant, query_string: "def_id=#{plan_1.process_key}")
+
+      assert resp.status == 200
+      ids = Jason.decode!(resp.resp_body)["items"] |> Enum.map(& &1["id"])
+
+      assert ids == [review_1.id]
+    end
+  end
+
+  # ---------------------------------------------------------------------------
+  # AC6 -- non-PLATFORM_ADMIN -> 403 (same Deny403 every other route returns).
+  # ---------------------------------------------------------------------------
+
+  describe "GET /promotions -- AC6 (authz, non-PLATFORM_ADMIN -> 403)" do
+    test "a non-PLATFORM_ADMIN role gets 403, no review data leaks" do
+      tenant = provisioned_tenant("req397-authz-deny")
+      %{review: review} = seed_review!(tenant.schema_name, tenant.tenant_id)
+
+      resp = list_reviews_http(tenant, roles: ["TASK_WORKER"])
+
+      assert resp.status == 403
+      body = Jason.decode!(resp.resp_body)
+      assert body["status"] == 403
+      refute Map.has_key?(body, "items")
+      refute resp.resp_body =~ review.id
+    end
+
+    test "a caller with no roles at all gets 403" do
+      tenant = provisioned_tenant("req397-authz-noroles")
+      resp = list_reviews_http(tenant, roles: [])
+      assert resp.status == 403
+    end
+  end
+
+  # ---------------------------------------------------------------------------
+  # Response shape (AC5's description item 5) -- 7-key allowlist, exactly.
+  # ---------------------------------------------------------------------------
+
+  describe "GET /promotions -- response shape (design §4.5)" do
+    test "envelope has exactly items/next_cursor; item has exactly the 7 named keys" do
+      tenant = provisioned_tenant("req397-shape")
+      %{review: review} = seed_review!(tenant.schema_name, tenant.tenant_id)
+
+      resp = list_reviews_http(tenant)
+
+      assert resp.status == 200
+      body = Jason.decode!(resp.resp_body)
+
+      assert Map.keys(body) |> Enum.sort() == Enum.sort(["items", "next_cursor"])
+      assert [item] = body["items"]
+
+      assert Map.keys(item) |> Enum.sort() ==
+               Enum.sort([
+                 "id",
+                 "status",
+                 "def_type",
+                 "def_id",
+                 "requested_by",
+                 "inserted_at",
+                 "updated_at"
+               ])
+
+      assert item["id"] == review.id
+      assert item["status"] == "pending_review"
+      assert item["def_type"] == review.def_type
+      assert item["def_id"] == review.def_id
+      assert item["requested_by"] == review.requested_by
+      assert is_binary(item["inserted_at"])
+      assert is_binary(item["updated_at"])
+    end
+  end
+
+  # ---------------------------------------------------------------------------
+  # Pagination -- cursor round-trip + wrong-endpoint cursor rejection.
+  # ---------------------------------------------------------------------------
+
+  describe "GET /promotions -- pagination" do
+    test "a page_size smaller than the row count returns a non-nil next_cursor; the next page continues with no overlap" do
+      tenant = provisioned_tenant("req397-page-cursor")
+
+      reviews =
+        for _ <- 1..3 do
+          %{review: review} = seed_review!(tenant.schema_name, tenant.tenant_id)
+          Process.sleep(2)
+          review
+        end
+
+      resp1 = list_reviews_http(tenant, query_string: "page_size=2")
+      assert resp1.status == 200
+      body1 = Jason.decode!(resp1.resp_body)
+      assert length(body1["items"]) == 2
+      assert is_binary(body1["next_cursor"])
+
+      resp2 =
+        list_reviews_http(tenant,
+          query_string: "page_size=2&cursor=#{URI.encode_www_form(body1["next_cursor"])}"
+        )
+
+      assert resp2.status == 200
+      body2 = Jason.decode!(resp2.resp_body)
+      assert length(body2["items"]) == 1
+      assert body2["next_cursor"] == nil
+
+      page1_ids = Enum.map(body1["items"], & &1["id"])
+      page2_ids = Enum.map(body2["items"], & &1["id"])
+      assert MapSet.disjoint?(MapSet.new(page1_ids), MapSet.new(page2_ids))
+      assert Enum.sort(page1_ids ++ page2_ids) == Enum.sort(Enum.map(reviews, & &1.id))
+    end
+
+    test "an invalid (garbage) cursor is rejected with 400" do
+      tenant = provisioned_tenant("req397-page-badcursor")
+      resp = list_reviews_http(tenant, query_string: "cursor=not-a-valid-cursor")
+      assert resp.status == 400
+    end
+
+    test "a cursor minted with a different endpoint's prefix (\"PE:\", this same router's R11) is rejected with 400" do
+      tenant = provisioned_tenant("req397-page-wrongendpoint")
+
+      wrong_endpoint_cursor =
+        Pagination.build_raw_cursor("PE:", System.system_time(:microsecond), "some-key")
+        |> Pagination.encode_cursor()
+
+      resp =
+        list_reviews_http(tenant,
+          query_string: "cursor=#{URI.encode_www_form(wrong_endpoint_cursor)}"
+        )
+
+      assert resp.status == 400
+    end
+
+    test "an empty promotion_reviews table returns items: [], next_cursor: nil" do
+      tenant = provisioned_tenant("req397-page-empty")
+      resp = list_reviews_http(tenant)
 
       assert resp.status == 200
       body = Jason.decode!(resp.resp_body)

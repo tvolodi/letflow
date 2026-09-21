@@ -1,0 +1,51 @@
+{
+  "handoff_id": "b1e2a3c4-0000-4000-8000-00000000000f",
+  "run_id": "WF03-ISS0732-20260921",
+  "workflow_id": "WF-03",
+  "step": "04c",
+  "from_agent": "ORCH",
+  "to_agent": "TEST-RUNNER",
+  "file": "handoffs/WF03-ISS0732-20260921/step-04c-test-runner.json",
+  "created_at": "2026-09-21T04:57:22Z",
+  "started_at": "2026-09-21T04:57:22Z",
+  "completed_at": null,
+  "status": "PENDING",
+  "priority": "HIGH",
+  "context": {
+    "stage": "S6",
+    "requirement_ids": [],
+    "requirement_text": {},
+    "related_handoff_ids": ["b1e2a3c4-0000-4000-8000-00000000000d", "b1e2a3c4-0000-4000-8000-00000000000e"],
+    "artifacts_in": [
+      "handoffs/WF03-ISS0732-20260921/step-04-test-designer.json",
+      "handoffs/WF03-ISS0732-20260921/step-04b-test-design-validator.json"
+    ],
+    "owned_modules": []
+  },
+  "task": {
+    "description": "Run the full suite (mix compile --warnings-as-errors, then mix letflow.check.test or mix test as this repo's convention dictates) on branch feature/WF03-ISS0732-20260921 and independently diagnose every failure -- do not assume TEST-DESIGNER's characterization of the 7 prior failures (Letflow.Plugs.AuthPipelineTest, Letflow.Plugs.Iss0736OidcLiveRevocationTest) as 'unrelated sibling-session interference' is correct; verify it yourself. Confirm zero failures in test/letflow/routers/req077_promotion_pipeline_test.exs and test/letflow/definitions/promotion_test.exs specifically. If other failures appear, diagnose whether they are pre-existing (reproduce against main in a throwaway worktree if genuinely uncertain) or a real regression from this branch's changes. Run commands synchronously in the foreground -- do not arm a background Monitor and wait on it.",
+    "acceptance_criteria": [
+      "mix compile --warnings-as-errors clean, quoted",
+      "Zero failures in req077_promotion_pipeline_test.exs and promotion_test.exs, quoted",
+      "Every other failure in the full run independently diagnosed as pre-existing/unrelated (with evidence) or flagged as a real regression",
+      "If any regression is found, status is FAIL with specifics, not PASS with a caveat"
+    ]
+  },
+  "result": {
+    "status": "PENDING",
+    "summary": "",
+    "artifacts_out": [],
+    "issues": [],
+    "git_evidence": {
+      "branch_name": null,
+      "commit_sha_list": [],
+      "remote_branch": null,
+      "push_status": "skipped",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": ""
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

@@ -75,6 +75,10 @@ fix_direction: >
   real validation exists. Needs a regression test proving a
   hyphenated/invalid entity_type is rejected cleanly at the API layer,
   never reaching DDL execution.
-queue_ref: null  # ORCH to assign via letflow-queue register_task
-github_ref: null  # ORCH to assign
+queue_ref: "Q-776"  # letflow-queue task id 776. NOTE: the queue service's
+  # own id/issue_ref numbering assigned "ISS-0776" -- already taken on
+  # main by an earlier issue. Local filename stays ISS-0777 per the
+  # docs/issues/ collision precedent established repeatedly this
+  # session. Registered 2026-09-21 by ORCH.
+github_ref: GH-1696
 status: open

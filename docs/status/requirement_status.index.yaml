@@ -4295,16 +4295,14 @@ volumes:
     opened: 2026-09-20
     entries: 15
     note: >
-      Incremented to 14 by DOC-UPDATER's own REQ-374 done-event append
-      (2026-09-21T20:40:11Z -- platform-wide tenant-migration fanout runner
-      backend, feature/WF02-REQ374-20260921). Previously incremented to 13 by
-      DOC-UPDATER's own ISS-0775 SCOPE-CHANGE done-event
-      append (2026-09-21T18:20:11Z -- resolve_group_ids_for_role_names/2's
-      OIDC role-claim write path scoped to kind == :platform_role, closing
-      the process-routing-role-kind-name-collision gap ISS-0774's own gate
-      surfaced). `grep -c "^  - req:" docs/status/requirement_status.v21.yaml`
-      = 13 on-disk entries, recounted directly rather than assumed. Prior
-      notes preserved below for history.
+      PLACEHOLDER -- this note and the `entries:` count above will be
+      replaced with a fresh, real recount + composed history once
+      WF02-REQ373-20260921's Step Final rebase finishes applying every
+      remaining commit (this was a real 3-way collision between main's
+      already-composed REQ-374 state, ISS-0775's done-event, and this
+      run's own started-event append -- resolved with a final authoritative
+      `grep -c` recount at the end of the rebase rather than guessing the
+      intermediate count here).
 
       Incremented to 12 during WF03-ISS0774-20260921's own Step Final rebase
       onto origin/main: DOC-UPDATER's own ISS-0774 SCOPE-CHANGE done-event

@@ -4293,8 +4293,15 @@ volumes:
     path: docs/status/requirement_status.v21.yaml
     status: current
     opened: 2026-09-20
-    entries: 8
+    entries: 9
     note: >
+      Incremented to 9 by DOC-UPDATER's own ISS-0773 SCOPE-CHANGE done-event
+      append (WF03-ISS0772-20260921, 2026-09-21T13:14:36Z -- permanent-lockout
+      zero-grant role-claims-sync fix) -- `grep -c "^  - req:"
+      docs/status/requirement_status.v21.yaml` = 9 on-disk entries. 373 lines /
+      21660 bytes, well under the 1200-line/120000-byte roll ceiling, so no
+      roll triggered.
+
       Incremented to 4 by DOC-UPDATER's own ISS-0769 SCOPE-CHANGE done-event
       append (WF03-ISS0769-20260921, 2026-09-21T04:30:37Z -- bearer-token
       leakage into crash logs, plus the node-wide logger-filter-crash bug

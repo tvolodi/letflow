@@ -318,3 +318,31 @@ history:
       lib/letflow/design/req397-promotion-review-list-route.md. REQ-398 (the
       frontend list page depending on this endpoint) remains pending,
       unblocked by this merge.
+  - req: SCOPE-CHANGE
+    event: done
+    agent: DOC-UPDATER
+    at: "2026-09-21T10:23:22Z"
+    note: >
+      ISS-0767 (NonSkippableApprovalGate.tsx did not surface a
+      rehearsal-required blocked state once apply_review/4 gained its
+      assertion-run gate, ISS-0732 follow-up) resolved on
+      feature/WF03-ISS0767-20260921 (PR #1679). Added
+      classifyApplyRehearsalError (exact-string-match on the RFC 9457
+      `detail` string) and one RehearsalGateError UI block per reason,
+      covering all four distinct apply_review/4 blocked states
+      (:assertion_run_missing, :assertion_run_digest_mismatch,
+      :assertion_run_in_progress, :assertion_run_failed), inserted ahead
+      of the pre-existing bare status===409 digest-mismatch fallback in
+      handleApply's catch chain -- a critical handler-ordering fix, since
+      all five 409 cases share identical status/type/title and are
+      disambiguated only by `detail`. Confirms the CORRECTION already on
+      record in ISS-0767.yaml: the issue's original filing guessed a
+      single, wrongly-named error reason; the actual shipped shape is
+      four reasons. Gates: CODE-DESIGN-VALIDATOR PASSED,
+      REVIEWER PASSED (empirically reproduced the ordering bug
+      before/after the fix), TEST-RUNNER PASSED (739/739 full suite +
+      48/48 targeted), RELEASE-VALIDATOR PASSED (independent full
+      re-check plus byte-verification of the four `detail` strings
+      against lib/letflow/definitions/promotion.ex). All four gates
+      passed independently, no rework cycles. Design:
+      lib/letflow/design/iss0767-non-skippable-gate-rehearsal-blocked-state.md.

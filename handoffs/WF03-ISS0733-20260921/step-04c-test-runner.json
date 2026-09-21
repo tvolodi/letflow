@@ -1,0 +1,43 @@
+{
+  "handoff_id": "d1a2f3b4-0001-4a1e-9c11-9f0733000012",
+  "run_id": "WF03-ISS0733-20260921",
+  "workflow_id": "WF-03",
+  "step": "04c",
+  "from_agent": "ORCH",
+  "to_agent": "TEST-RUNNER",
+  "file": "handoffs/WF03-ISS0733-20260921/step-04c-test-runner.json",
+  "created_at": "2026-09-21T04:25:00Z",
+  "started_at": "2026-09-21T04:25:00Z",
+  "completed_at": null,
+  "status": "PENDING",
+  "priority": "HIGH",
+  "context": {
+    "stage": "S6",
+    "requirement_ids": [],
+    "requirement_text": {},
+    "source_text": {},
+    "related_handoff_ids": ["d1a2f3b4-0001-4a1e-9c11-9f0733000011"],
+    "artifacts_in": [
+      "handoffs/WF03-ISS0733-20260921/step-04-test-designer.json",
+      "handoffs/WF03-ISS0733-20260921/step-04b-test-design-validator.json"
+    ],
+    "owned_modules": []
+  },
+  "task": {
+    "description": "Run the full backend test suite on feature/WF03-ISS0733-20260921 (checkout/pull it first) and report real pass/fail counts. Use mix letflow.check.test (or mix test if that alias doesn't exist -- check first) for the complete suite, not just the touched files. Also run mix compile --warnings-as-errors. Quote the actual output.",
+    "acceptance_criteria": [
+      "Full suite run with real quoted output, zero failures",
+      "mix compile --warnings-as-errors clean",
+      "Confirms which files changed relative to main (git diff --stat main...HEAD)"
+    ]
+  },
+  "result": {
+    "status": "PENDING",
+    "summary": "",
+    "artifacts_out": [],
+    "issues": [],
+    "next_action": ""
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

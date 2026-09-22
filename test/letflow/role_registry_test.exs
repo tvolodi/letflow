@@ -621,6 +621,86 @@ defmodule Letflow.Identity.RoleRegistryTest do
     end
   end
 
+  describe "ISS-0778 T1 — seed_default_platform_role_groups/1 (design §3.1/§2.4)" do
+    # docs/issues/ISS-0778.yaml root cause (design §0): no code path anywhere in this
+    # codebase ever created a tenant_role row binding a platform-role literal to a
+    # group, for any tenant -- so a freshly-provisioned tenant had no route to a
+    # working PLATFORM_ADMIN (or any other platform-role) grant, even with a
+    # correctly-configured IdP. This describe block is the unit-level proof that the
+    # new seeding function itself does what the design claims: seeds all six
+    # Letflow.Api.Authorization.roles/0 literals as group+tenant_role bindings, and is
+    # idempotent under re-invocation (design §2.4 -- required for both the normal
+    # onboarding-creation path and TenantOnboarding.recover_provisioning/1 to be safe
+    # to call more than once against the same tenant).
+    test "seeds all six platform-role literals as group+tenant_role bindings, in Authorization.roles/0's own order, and a second call converges on the same bindings (no duplicates)",
+         ctx do
+      expected_names = Enum.map(Letflow.Api.Authorization.roles(), &Atom.to_string/1)
+
+      assert {:ok, roles} =
+               RoleRegistry.seed_default_platform_role_groups(prefix: ctx.schema_name)
+
+      assert length(roles) == 6
+      assert Enum.map(roles, & &1.name) == expected_names
+      assert Enum.all?(roles, &(&1.kind == :platform_role))
+
+      # Exactly six Group rows and six TenantRole rows exist -- not merely that the
+      # function's return value looked right, matching this project's established
+      # "re-select from Postgres directly" persistence-test convention.
+      assert Repo.aggregate(Group, :count, prefix: ctx.schema_name) == 6
+      assert Repo.aggregate(TenantRole, :count, prefix: ctx.schema_name) == 6
+
+      group_ids_first = roles |> Enum.map(& &1.group_id) |> Enum.sort()
+
+      # Idempotency (design §2.4): calling it a SECOND time against the same,
+      # already-seeded tenant schema must converge on the IDENTICAL six group_ids
+      # (get-or-create-by-name found the existing groups, upsert_role/4's own
+      # on-conflict upsert overwrote each binding with the same values) -- no
+      # duplicate groups row, no duplicate tenant_role row, no error.
+      assert {:ok, roles2} =
+               RoleRegistry.seed_default_platform_role_groups(prefix: ctx.schema_name)
+
+      assert Enum.map(roles2, & &1.name) == expected_names
+      assert Enum.all?(roles2, &(&1.kind == :platform_role))
+
+      group_ids_second = roles2 |> Enum.map(& &1.group_id) |> Enum.sort()
+      assert group_ids_second == group_ids_first
+
+      assert Repo.aggregate(Group, :count, prefix: ctx.schema_name) == 6
+      assert Repo.aggregate(TenantRole, :count, prefix: ctx.schema_name) == 6
+    end
+
+    test "against a tenant schema that already has unrelated process-routing-role bindings, only the six platform-role names are affected",
+         ctx do
+      # A process-routing-role binding pre-exists (a HUMAN_TASK routing group, exactly
+      # the ISS-0774 domain distinction this codebase already draws) -- proves seeding
+      # is scoped to the platform-role literal set, not "every row in tenant_role".
+      routing_group = insert_group!(ctx)
+
+      assert {:ok, %TenantRole{name: "role-ops-manager", kind: :process_routing_role}} =
+               RoleRegistry.upsert_role(
+                 "role-ops-manager",
+                 :process_routing_role,
+                 routing_group.id,
+                 prefix: ctx.schema_name
+               )
+
+      assert {:ok, roles} =
+               RoleRegistry.seed_default_platform_role_groups(prefix: ctx.schema_name)
+
+      assert length(roles) == 6
+      refute "role-ops-manager" in Enum.map(roles, & &1.name)
+
+      # Total tenant_role count is 6 (seeded) + 1 (pre-existing routing row) -- the
+      # routing row survived untouched, not overwritten or deleted.
+      assert Repo.aggregate(TenantRole, :count, prefix: ctx.schema_name) == 7
+
+      assert %TenantRole{kind: :process_routing_role, group_id: unchanged_group_id} =
+               Repo.get_by(TenantRole, [name: "role-ops-manager"], prefix: ctx.schema_name)
+
+      assert unchanged_group_id == routing_group.id
+    end
+  end
+
   describe "ISS-0768 regression — prefix genuinely scopes RoleRegistry to one tenant's own schema" do
     # docs/issues/ISS-0768.yaml's own acceptance criteria: "a real test creates a
     # role for one tenant and confirms it is queryable only in that tenant's own

@@ -19,6 +19,18 @@
  *   run after a CONFIRMED successful silent switch (design §6.1's own
  *   "a failed switch must not leave the user logged into neither tenant"
  *   guarantee, checked here at the cache layer).
+ * TC-REQ384-22 (TEST-DESIGNER audit addition): the cache-isolation race
+ *   SECURITY-REVIEWER analyzed — a straggler tenant-A fetch that was already
+ *   in flight when the switch started, and whose queryFn ignores the abort
+ *   signal and resolves LATE (after AuthProvider's own
+ *   `cancelQueries`+`removeQueries` pair has already run) — must not
+ *   repopulate the tenant-A-keyed cache entry. `cancelQueries` marks the
+ *   in-flight fetch cancelled; TanStack Query discards a cancelled fetch's
+ *   eventual resolution rather than writing it to the cache. Neither
+ *   ELIXIR-DEV nor FRONTEND-DEV's inline coverage included a test that
+ *   actually has an in-flight fetch racing the switch (TC-REQ384-07 only
+ *   covers a fetch that already SETTLED before the switch, via
+ *   `setQueryData`) — this closes that gap.
  */
 import * as jestDomMatchers from '@testing-library/jest-dom/matchers'
 import { render, cleanup, act } from '@testing-library/react'
@@ -76,6 +88,7 @@ const TENANT_B_TOKEN =
 
 import { AuthProvider } from '../AuthProvider'
 import { AuthContext } from '../AuthContext'
+import { tenantRoot } from '@/api/queryKeys'
 
 afterEach(() => {
   cleanup()
@@ -169,5 +182,94 @@ describe('AuthProvider.switchTenant — REQ-384 §5.3/§7.3.1 cache-clear mechan
     expect(queryClient.getQueryData(tenantAKey)).toBeDefined()
     expect(getCaptured()!.session?.tenant_id).toBe('tid-a')
     expect(mockSetToken).not.toHaveBeenCalled()
+  })
+
+  it('TC-REQ384-22: switchTenant actually cancels the outgoing tenant\'s in-flight queries, in order, BEFORE removing them (the straggler-fetch race SECURITY-REVIEWER analyzed)', async () => {
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+    const tenantAKey = ['tenant', 'tid-a', 'instances', 'list', {}] as const
+
+    // Verified by direct experiment (this test file, temporarily dropping
+    // AuthProvider.tsx's own `cancelQueries` call): TanStack Query's
+    // `removeQueries` alone already deletes the Query instance from the
+    // client's internal map, so a plain `getQueryData` check after a late
+    // resolution passes regardless of whether `cancelQueries` ran --
+    // asserting only on `getQueryData` would NOT catch a regression that
+    // drops the `cancelQueries` call design §7.3.1 requires (wasted
+    // in-flight network requests, and any observer still subscribed to the
+    // stale query object during the removeQueries-to-late-resolution window
+    // would still see the straggler's data via onSuccess/state updates that
+    // don't route through getQueryData). The load-bearing, regression-
+    // sensitive assertion is therefore that `cancelQueries` is actually
+    // invoked, scoped to the outgoing tenant's own prefix, and strictly
+    // BEFORE `removeQueries` -- exactly what §7.3.1 specifies as mechanism
+    // (1) of the three-part AC3 guarantee.
+    const cancelSpy = vi.spyOn(queryClient, 'cancelQueries')
+    const removeSpy = vi.spyOn(queryClient, 'removeQueries')
+
+    // A queryFn that deliberately ignores its AbortSignal (the realistic
+    // worst case -- many fetchers do not wire the signal through) and
+    // resolves only when the test tells it to, simulating a slow network
+    // response landing AFTER the switch's own cancelQueries/removeQueries
+    // pair has already run.
+    let resolveStraggler!: (value: { items: { instance_id: string }[]; next_cursor: null }) => void
+    const stragglerPromise = new Promise<{ items: { instance_id: string }[]; next_cursor: null }>((resolve) => {
+      resolveStraggler = resolve
+    })
+
+    // Kick off the in-flight fetch (mirrors a real screen's useInstances()
+    // call that was mid-request when the user clicked the switcher) without
+    // awaiting it -- it is still pending when switchTenant runs below.
+    const inFlightFetch = queryClient.fetchQuery({
+      queryKey: tenantAKey,
+      queryFn: () => stragglerPromise,
+    })
+    // Swallow the eventual cancellation rejection so it doesn't surface as
+    // an unhandled rejection in this test.
+    inFlightFetch.catch(() => {})
+
+    mockAttemptSilentSwitch.mockResolvedValue({
+      outcome: 'silent_ok',
+      user: { access_token: TENANT_B_TOKEN },
+    })
+    mockGetBySlug.mockResolvedValue({
+      slug: 'tenant-b',
+      tenant_id: 'tid-b',
+      display_name: 'Tenant B',
+      tenant_type: 'production',
+      production_tenant_display_name: null,
+    })
+
+    const getCaptured = renderAuthProvider(queryClient)
+
+    let outcome: string | undefined
+    await act(async () => {
+      outcome = await getCaptured()!.switchTenant('tenant-b')
+    })
+
+    expect(outcome).toBe('ok')
+
+    // cancelQueries ran, scoped to the OUTGOING tenant's prefix.
+    expect(cancelSpy).toHaveBeenCalledWith({ queryKey: tenantRoot('tid-a') })
+    // removeQueries ran against the same prefix.
+    expect(removeSpy).toHaveBeenCalledWith({ queryKey: tenantRoot('tid-a') })
+    // Ordering: cancel strictly before remove -- cancelling AFTER removal
+    // would leave the window open for the straggler's late resolution to
+    // recreate the query entry the way `fetchQuery`/observers do.
+    expect(cancelSpy.mock.invocationCallOrder[0]).toBeLessThan(removeSpy.mock.invocationCallOrder[0])
+
+    // Behavioral corroboration: the entry is gone immediately after the switch.
+    expect(queryClient.getQueryData(tenantAKey)).toBeUndefined()
+
+    // The straggler's response finally lands, well after the switch.
+    await act(async () => {
+      resolveStraggler({ items: [{ instance_id: 'late-tenant-a-row' }], next_cursor: null })
+      await stragglerPromise
+      await Promise.resolve()
+    })
+
+    // Still gone -- the cancelled fetch's late resolution was discarded, not
+    // written back into the cache under the switched-away-from tenant's key.
+    expect(queryClient.getQueryData(tenantAKey)).toBeUndefined()
+    expect(getCaptured()!.session?.tenant_id).toBe('tid-b')
   })
 })

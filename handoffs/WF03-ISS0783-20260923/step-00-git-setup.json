@@ -1,0 +1,47 @@
+{
+  "handoff_id": "a1b2c3d4-0783-4000-8000-000000000000",
+  "run_id": "WF03-ISS0783-20260923",
+  "workflow_id": "WF-03",
+  "step": "00",
+  "from_agent": "FRONTEND-DEV",
+  "to_agent": "FRONTEND-DEV",
+  "file": "handoffs/WF03-ISS0783-20260923/step-00-git-setup.json",
+  "created_at": "2026-09-22T20:56:28Z",
+  "started_at": "2026-09-22T20:56:28Z",
+  "completed_at": "2026-09-22T20:57:10Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S6",
+    "issue_id": "ISS-0783",
+    "queue_ref": "Q-782",
+    "github_ref": "GH-1725",
+    "related_handoff_ids": [],
+    "artifacts_in": ["docs/issues/ISS-0783.yaml"]
+  },
+  "task": {
+    "description": "WF-03 Step 00 (GIT_SETUP.md): create and push the feature branch for ISS-0783's fix run before any file changes are made. This is a primary (non-worktree) checkout, confirmed via `git worktree list` (only two other entries, both dedicated worktree paths distinct from this primary checkout), so the standard (non-worktree-variant) procedure applies.",
+    "acceptance_criteria": [
+      "git pull --ff-only origin main exits 0",
+      "git branch --show-current outputs feature/WF03-ISS0783-fix-20260923",
+      "git push -u origin feature/WF03-ISS0783-fix-20260923 exits 0"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "git checkout main; git pull --ff-only origin main -> already up to date with origin/main (no divergence). git worktree list showed this checkout is primary (2 secondary worktree entries present, both dedicated paths, neither holding main), so the non-worktree procedure applied. No stale local branch from a prior aborted run existed. git checkout -b feature/WF03-ISS0783-fix-20260923; git branch --show-current confirmed feature/WF03-ISS0783-fix-20260923; git push -u origin feature/WF03-ISS0783-fix-20260923 succeeded (new branch, tracking set up). tasklist /FI \"IMAGENAME eq erl.exe\" showed no running BEAM processes and git status --porcelain showed only a pre-existing untracked web/tests/e2e/.pipeline-state/ directory unrelated to this run, so no shared-checkout coordination conflict was present at setup time.",
+    "artifacts_out": [],
+    "issues": [],
+    "git_evidence": {
+      "branch_name": "feature/WF03-ISS0783-fix-20260923",
+      "commit_sha_list": [],
+      "remote_branch": "origin/feature/WF03-ISS0783-fix-20260923",
+      "push_status": "ok",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": "Route to ISSUE-FIXER for Step 0.5 (registry lookup) and Step 1 (diagnose)"
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

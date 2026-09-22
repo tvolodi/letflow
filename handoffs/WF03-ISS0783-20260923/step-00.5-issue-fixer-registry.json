@@ -1,0 +1,51 @@
+{
+  "handoff_id": "a1b2c3d4-0783-4000-8000-000000000001",
+  "run_id": "WF03-ISS0783-20260923",
+  "workflow_id": "WF-03",
+  "step": "00.5",
+  "from_agent": "FRONTEND-DEV",
+  "to_agent": "ISSUE-FIXER",
+  "file": "handoffs/WF03-ISS0783-20260923/step-00.5-issue-fixer-registry.json",
+  "created_at": "2026-09-22T20:56:48Z",
+  "started_at": "2026-09-22T20:56:48Z",
+  "completed_at": "2026-09-22T21:00:24Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S6",
+    "issue_id": "ISS-0783",
+    "queue_ref": "Q-782",
+    "github_ref": "GH-1725",
+    "branch": "feature/WF03-ISS0783-fix-20260923",
+    "related_handoff_ids": ["handoffs/WF03-ISS0783-20260923/step-00-git-setup.json"],
+    "artifacts_in": [
+      "docs/issues/ISS-0783.yaml",
+      "web/src/auth/TenantSwitcher.tsx",
+      "web/src/auth/AuthProvider.tsx"
+    ]
+  },
+  "task": {
+    "description": "WF-03 Step 0.5 + Step 1 for ISS-0783, combined in one dispatch per this run's precedent (see handoffs/WF03-ISS0782-20260923/step-00.5-issue-fixer-registry.json and step-01-issue-fixer-diagnose.json for the expected two-file output shape). Step 0.5: read docs/issues/*.yaml for status: resolved entries with similar symptoms (a UI element not disabled during an in-flight async call, allowing a duplicate concurrent call) and cite any match; if a clear match recurs, flag severity at least MAJOR regardless of ISS-0783's own MINOR rating. Step 1: DIAGNOSE, not fix. Read docs/issues/ISS-0783.yaml in full (already in artifacts_in) for the pre-existing context -- discovery run, severity rationale, and the SECURITY-REVIEWER/REVIEWER tenant-isolation-safety finding already established during REQ-384's WF-02 pipeline. Then reproduce the double-click/concurrent-switchTenant-call behavior directly, not from the issue's prose alone -- write or run a throwaway React Testing Library test (or equivalent) against web/src/auth/TenantSwitcher.tsx with a deferred/controllable switchTenant mock (e.g. a manually-resolved Promise) that proves: (a) clicking a second tenant option/trigger while the first switchTenant() call is still pending currently invokes switchTenant() a second time, and (b) neither the trigger nor the option buttons are disabled during that pending window today. Quote the actual test output, not a description of expected behavior. Trace root cause to the exact lines in TenantSwitcher.tsx (and cite why AuthProvider.tsx's switchingToTenantSlug does NOT cover this window -- read its actual set/reset points to confirm the issue's own claim about its post-silent_ok lifetime). Do NOT implement the fix -- produce a diagnosis for CODE-DESIGNER, including what a fix needs to change (a local in-flight boolean state, set for the whole onSelect handler and reset in a finally, gating the trigger/option/retry buttons' disabled prop) and any additional detail CODE-DESIGNER needs (exact prop/handler names, exact button elements in the current JSX) that the issue's own suggested_fix prose left unspecified. Write both step-00.5 and step-01 handoff files yourself following the schema in docs/agents/shared/HANDOFF_PROTOCOL.md section 2, commit them to this branch (feature/WF03-ISS0783-fix-20260923), and set this file's own status to COMPLETED when done.",
+    "acceptance_criteria": [
+      "Step 0.5: docs/issues/ checked for a resolved prior match; result states whether one was found",
+      "Step 1: reproduction is real (actual test run and quoted output), not restated bug-report prose",
+      "Step 1: root cause traced to exact TenantSwitcher.tsx lines/handlers, with AuthProvider.tsx's switchingToTenantSlug lifetime independently re-confirmed (not just cited from the issue file) as not covering this window",
+      "Step 1: explicit statement of what a fix must change, precise enough for CODE-DESIGNER to design from without re-deriving it",
+      "Does NOT implement the fix",
+      "Both step-00.5 and step-01 handoff files written, schema-valid, and committed to feature/WF03-ISS0783-fix-20260923"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "Searched all 300+ entries in docs/issues/*.yaml (status: resolved and otherwise) for a prior match on 'UI element not disabled during an in-flight async call, allowing a duplicate concurrent call'. No prior resolved entry matches this symptom class against a real, existing component -- this is not a recurrence. (ISS-0737, 'clear same-tab tenant residue on sign-out', touches AuthProvider/tenant state but is a different symptom -- session-storage residue at logout, not double-submit re-entrancy -- and is unrelated.) HOWEVER, Step 0.5's lookup surfaced a more important finding that supersedes the 'is this a recurrence' question: ISS-0783's own premise does not hold against the current codebase. web/src/auth/TenantSwitcher.tsx does not exist (confirmed: no such file anywhere in the working tree or in git history -- `git log --all -S switchTenant` finds zero commits ever touching that symbol in source, only this issue's own docs/issues/ISS-0783.yaml and its handoff files). AuthProvider.tsx (read in full) has no switchTenant function and no switchingToTenantSlug field -- its only session-mutating functions are login/logout/setSession. The commit ISS-0783 cites as the origin of the bug, 23a67263, does not exist in this repository (`git show 23a67263` -> 'unknown revision'). REQ-384 ('In-app company/tenant switcher...'), the requirement ISS-0783 claims to have been discovered during, has docs/requirements.yaml status: pending with depends_on: [] and no status-history 'started' event anywhere in docs/status/ -- it has never been implemented, only filed. REQ-384's own description (written 2026-09-20, still accurate today per my independent grep) states explicitly: 'no switchCompany/switchTenant/CompanySelector symbol exists anywhere in web/src'. Severity is not being flagged up to MAJOR as a recurrence, because this is not a recurrence of a real prior bug -- it is a report describing a defect in a feature that was never built. See step-01's diagnosis for full detail and the reproduction evidence proving non-existence directly rather than trusting the report's prose.",
+    "artifacts_out": [
+      "handoffs/WF03-ISS0783-20260923/step-01-issue-fixer-diagnose.json"
+    ],
+    "issues": [
+      "ISS-0783's premise (a bug in TenantSwitcher.tsx / AuthProvider.switchingToTenantSlug) does not match the current codebase -- no such component, function, or field exists, and the requirement (REQ-384) it claims to have been discovered during is still status: pending, never implemented."
+    ],
+    "next_action": "Route to step-01 diagnosis (also produced in this dispatch) rather than CODE-DESIGNER directly -- step-01 recommends ORCH re-triage ISS-0783 rather than proceeding to a fix design."
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

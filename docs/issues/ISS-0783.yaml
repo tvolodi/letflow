@@ -60,4 +60,73 @@ queue_ref: "Q-782"
 # Established, recurring queue-id/filename divergence pattern for this
 # project; queue_ref/github_ref below are authoritative for this file.
 github_ref: "GH-1725"
-status: open
+status: no_defect
+verdict_in_run: WF03-ISS0783-20260923
+verdict_at: "2026-09-22T21:00:24Z"
+verdict: >
+  FABRICATED ISSUE REPORT -- the alleged defect's subject does not exist.
+  Full diagnosis: handoffs/WF03-ISS0783-20260923/step-01-issue-fixer-diagnose.json.
+
+  MEASUREMENT (first-hand, this run, not inherited from the filing):
+  (1) `ls web/src/auth/` -- no TenantSwitcher.tsx; `grep -ril "TenantSwitcher"
+  web/` returns only this issue file itself. (2) `grep -ril
+  "switchingToTenantSlug" .` (whole repo) returns only this issue file and
+  this run's own handoffs -- the symbol has never existed in source.
+  AuthProvider.tsx read in full (149 lines): exported context value is
+  `{ session, isAuthenticated, isLoading, loginSource, login, logout,
+  setSession }` -- no switchTenant function, no switchingToTenantSlug state,
+  no outgoingTenantId closure, no removeQueries call anywhere in the file.
+  (3) `git log --all -S "switchTenant" --oneline` (pickaxe, every commit,
+  every branch tip) returns exactly two hits: the commit that filed
+  ISS-0783.yaml itself, and this run's own dispatch handoff -- the string
+  has never appeared in tracked source. `git log --oneline --all --
+  "*TenantSwitcher*"` returns nothing -- no file by that name has ever
+  existed on any branch. `git show 23a67263` (the commit ISS-0783 cites as
+  the fix pass that introduced the bug) fails: "unknown revision" -- that
+  commit does not exist in this repository. (4) REQ-384 (the requirement
+  ISS-0783 claims discovery during) is docs/requirements.yaml status:
+  pending, depends_on: [], with REQ-384's own filed description already
+  stating "no in-app company/tenant selector anywhere in web/src -- grepped
+  exhaustively... no switchCompany/switchTenant/CompanySelector symbol
+  exists anywhere in web/src." docs/status/requirement_status.v20.yaml has
+  no started/any event for REQ-384 -- it has never had a WF-02
+  implementation pass run against it, on any branch. Reproduction: a
+  throwaway Vitest test asserting `import('../TenantSwitcher')` rejects
+  was written and run -- real output: "1 passed" (the import genuinely
+  fails to resolve) -- confirming directly, not from the report's prose,
+  that no such module exists. Throwaway test deleted immediately after,
+  verified via `git status --short web/` showing no residue.
+
+  CANDIDATE MECHANISMS TESTED: (a) component exists under a different name
+  or path -- checked, `find web/src -iname "*tenant*"` lists only
+  tenantConfig.ts/.test.ts, useTenantContext.ts, api/tenants.ts,
+  TenantHeader.tsx, and admin tenant-management pages, none of which is a
+  switcher component or has an onSelect-over-options handler; (b) the
+  fix commit exists under a different hash and 23a67263 was mistyped --
+  checked, no commit in `git log --all` touches any file matching
+  "*Tenant*witch*" or contains "switchingToTenantSlug" in its diff;
+  (c) REQ-384 shipped under an undocumented run -- checked,
+  requirement_status.v20.yaml (the current-at-filing-time volume) has zero
+  REQ-384 events of any kind.
+
+  LIMITATIONS: this is a static/history search, not a live-running-app
+  check -- if TenantSwitcher.tsx exists only in an uncommitted local
+  working tree on some other, unpushed session's machine, `git log --all`
+  on this checkout would not see it. Considered unlikely: REQ-384 (the
+  requirement that would own this component) is independently confirmed
+  pending with no implementation history, and the issue's own narrative
+  requires a merged SECURITY-REVIEWER/REVIEWER-signed pipeline run that
+  left no trace in docs/status/ anywhere.
+
+  Analogous to the fabricated/self-assigned queue-id pattern already on
+  record in docs/anti-patterns.md for REQ-382/383/384/385 (their
+  impl_order comments note corrected fabricated ids) -- here the
+  fabrication is the issue's entire discovery narrative and root-cause
+  trace, not just a queue id. Sibling issue ISS-0782 (same
+  discovered_in_run label, same filing batch) is NOT similarly fabricated
+  -- its defect was independently reproduced against a real running
+  backend and is real, so the shared discovered_in_run label is not
+  itself evidence of fabrication.
+  recommend: fold the re-entrancy-guard concern into REQ-384's own design
+  once that requirement is actually implemented, rather than treating this
+  as a standalone fix target.

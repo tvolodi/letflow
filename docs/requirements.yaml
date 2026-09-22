@@ -28301,7 +28301,7 @@ requirements:
   - id: REQ-382
     title: "HTTP-reachable tenant-branding write path: PATCH endpoint, colour-contrast refusal, and rejected-out-of-scope-key activity-log recording"
     owner: ELIXIR-DEV
-    status: pending
+    status: done
     stage: S8
     impl_order: 742  # letflow-queue task id, GH#1630. Registered 2026-09-20 by ORCH;
       # corrects a fabricated/self-assigned id (739) that was never a real

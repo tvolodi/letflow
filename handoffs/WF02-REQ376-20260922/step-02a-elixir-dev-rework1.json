@@ -1,0 +1,74 @@
+{
+  "handoff_id": "c3d4e5f6-0002-4000-8000-000000000002",
+  "run_id": "WF02-REQ376-20260922",
+  "workflow_id": "WF-02",
+  "step": "02a",
+  "from_agent": "ELIXIR-DEV",
+  "to_agent": "SECURITY-REVIEWER",
+  "file": "handoffs/WF02-REQ376-20260922/step-02a-elixir-dev-rework1.json",
+  "created_at": "2026-09-22T11:45:00Z",
+  "started_at": "2026-09-22T11:15:00Z",
+  "completed_at": "2026-09-22T11:45:00Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S2",
+    "requirement_ids": ["REQ-376"],
+    "requirement_text": {
+      "REQ-376": "See handoffs/WF02-REQ376-20260922/step-02a-elixir-dev.json's context.requirement_text for the full text -- not restated here to avoid drift."
+    },
+    "related_handoff_ids": [
+      "handoffs/WF02-REQ376-20260922/step-02a-elixir-dev.json",
+      "handoffs/WF02-REQ376-20260922/step-02c-security-reviewer.json",
+      "handoffs/WF02-REQ376-20260922/step-02d-reviewer.json",
+      "handoffs/WF02-REQ376-20260922/step-03-test-designer.json",
+      "handoffs/WF02-REQ376-20260922/step-03b-test-design-validator.json"
+    ],
+    "artifacts_in": [
+      "handoffs/WF02-REQ376-20260922/step-03b-test-design-validator.json",
+      "lib/letflow/event_store/partition_maintenance.ex",
+      "lib/letflow/design/req376-partition-event-retirement.md",
+      "docs/migration/decisions/0037-event-store-partitioning-and-whole-partition-retirement.md"
+    ],
+    "owned_modules": [
+      "lib/letflow/event_store.ex",
+      "lib/letflow/event_store/partition_maintenance.ex",
+      "lib/letflow/scheduler.ex",
+      "lib/letflow/scheduler/poller.ex",
+      "lib/letflow/tenant_provisioning.ex",
+      "priv/repo/migrations/20260922*.exs"
+    ]
+  },
+  "task": {
+    "description": "WF-02 Step 2a rework1: fix the EO-002 defect TEST-DESIGN-VALIDATOR's Step 3b gate found -- retire_month/3's §4.4a keep_forever relocation broke step 4's ATTACH precondition, deterministic 23514 check_violation on 3/3 real Postgres 16 runs whenever the target month held a keep_forever row. Rework instructions proposed moving 4.4a to run after ATTACH, still targeting events_archive_default -- verify against real Postgres before implementing, and find/implement the actual correct fix if that proposal doesn't hold.",
+    "acceptance_criteria": [
+      "test/letflow/event_store/partition_maintenance_test.exs's EO-002 test passes against real Postgres 16, confirmed by ELIXIR-DEV directly (not just implied)",
+      "the fix is re-verified end-to-end against real Postgres (not just mix test) via a throwaway mix run script against a freshly provisioned tenant, exercising the exact EO-002 fixture shape",
+      "retire_month/3 remains idempotent/resumable per §4.3.1 -- a resumed :already_retired call still reports an accurate protected_rows_relocated, not a stale/hardcoded value",
+      "decision 0037 and the design doc's §4.4 are updated to state the corrected mechanism, clearly labeled as a further implementation-discovered correction",
+      "mix compile --warnings-as-errors and mix format --check-formatted both clean, real output quoted"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "Read step-03b-test-design-validator.json (TEST-DESIGN-VALIDATOR's FAIL, the EO-002 finding: relocate-then-ATTACH breaks ATTACH's own precondition since 4.4a's relocated row sits in-range in events_archive_default at ATTACH time -- confirmed deterministic, 3/3 real Postgres 16 runs, 23514 check_violation) and step-03-test-designer.json (the EO-002 test itself, test/letflow/event_store/partition_maintenance_test.exs:647) before touching code.\n\nThis rework's own dispatch instructions proposed a specific fix: move relocate_protected_rows/2 (4.4a) to run AFTER attach_partition!/4 (step 4) succeeds, still targeting events_archive_default directly, reasoning that once ATTACH has completed there is no ATTACH precondition left to violate. Per this rework's own explicit instruction to 're-verify against real Postgres yourself before considering this done', I implemented that proposal first and ran the real EO-002 test against real Postgres 16 (docker letflow-postgres-1, port 5462) -- it FAILED with a NEW error: `23514 check_violation`, \"new row for relation \\\"events_archive_default\\\" violates partition constraint\", raised from the post-ATTACH INSERT itself.\n\nRoot-caused with a minimal, isolated two-statement reproduction against this workspace's real Postgres 16 (not this module's own code): CREATE a RANGE-partitioned parent with a DEFAULT partition, INSERT an in-range row into the DEFAULT partition (succeeds, nothing else claims that range yet), then ATTACH a sibling partition covering that same range (FAILS -- exactly TEST-DESIGN-VALIDATOR's finding, confirming the ORIGINAL bug). Then, separately: DELETE that row, ATTACH the sibling FIRST (succeeds, default now empty), then INSERT an in-range row directly into the DEFAULT partition (FAILS -- \"violates partition constraint\", the NEW error this rework's proposed fix hits). Together these prove Postgres's default-partition mechanism enforces, unconditionally in BOTH directions, that no row in a table's DEFAULT partition may ever fall within the range of any sibling partition attached to the same parent -- there is no ordering of relocate-vs-ATTACH within the current schema that lets a keep_forever row durably occupy events_archive_default for the exact month that also gets its own dedicated ATTACHed partition. This rework's own suggested resolution does not hold; the underlying issue is structural, not an ordering bug.\n\nCorrected mechanism, implemented: since decision 0037 already commits this design to NEVER DROP a partition (only DETACH+ATTACH, permanently), a keep_forever row needs no separate physical relocation at all -- it is already carried across from events to events_archive intact by the same whole-partition DETACH/ATTACH that carries every other row in that month, with no row copy. relocate_protected_rows/2 (which did INSERT-then-DELETE) is replaced with count_protected_rows/2 -- read-only, one SELECT count(*), zero DML -- called after ATTACH (do_detached_standalone/6) and, for correct resumed-call reporting, again on the :already_retired no-op path (do_already_retired/4), so protected_rows_relocated is always accurate rather than hardcoded to 0 on resume. Documented honestly, in both the code comment and the decision/design docs, that the ORIGINAL design goal (physically separating keep_forever rows into events_archive_default so a hypothetical future per-partition-DROP purge tier could drop a whole month without losing protected data) is not achievable via this destination for a month with its own retired partition -- proven structurally impossible, not merely unimplemented -- and is out of REQ-376's scope regardless, since no DROP-capable purge tier exists in this codebase today.\n\nVerification:\n- `MIX_ENV=test mix test test/letflow/event_store/partition_maintenance_test.exs --seed 0|1|42`: 11/13 passed on all three seeds (previously 10/13 with EO-002 among the 3 failures). EO-002 now passes deterministically on all three. The two other failures (a UUID-binary-encoding bug in the 'correction (a)' test, a flaky :pending_detach induction race) are TEST-DESIGNER's own separate rework per this run's own dispatch instructions -- confirmed unrelated (same two tests, same failure signatures TEST-DESIGN-VALIDATOR's own handoff already attributed to test-code bugs, not this module).\n- A throwaway `mix run` script (scratchpad, not committed) against a freshly provisioned tenant schema (real Postgres 16, same docker instance) reproduced the exact EO-002 fixture shape end-to-end, outside ExUnit: seeded one keep_forever row + one ordinary row in an eligible past month, called retire_month/3 fresh -- `{:ok, %{protected_rows_relocated: 1, resumed_from: :not_started}}` -- confirmed protected count across events+events_archive unchanged (1 before, 1 after), events table's own total row count 0 post-retirement, then called retire_month/3 again against the now-retired month -- `{:ok, %{protected_rows_relocated: 1, resumed_from: :already_retired}}`, confirming the resumed-call count is genuinely recomputed, not stale -- printed `VERIFY: PASS`.\n- `MIX_ENV=test mix compile --warnings-as-errors --force`: `Compiling 282 files (.ex)` / `Generated letflow app`, clean, 0 warnings.\n- `mix format --check-formatted`: exit 0.\n\nUpdated docs/migration/decisions/0037-event-store-partitioning-and-whole-partition-retirement.md with a new, clearly-labeled 'Implementation-discovered correction #2 (ELIXIR-DEV rework, WF-02 Step 2a rework1, 2026-09-22)' section (appended after REVIEWER's existing sign-off, not overwriting it) stating the full empirical evidence and the corrected mechanism. Updated lib/letflow/design/req376-partition-event-retirement.md's §4.4/§4.4a/§4.5 in place with matching dated correction notes, consistent with REVIEWER's own established precedent (step-02d) of amending these documents directly for implementation-discovered corrections.\n\nDid not touch test/letflow/event_store/partition_maintenance_test.exs (TEST-DESIGNER's own domain, per this run's explicit instruction) beyond running it read-only for verification. Did not touch the two unrelated pre-existing test bugs (UUID encoding, :pending_detach race) -- out of scope for this rework per its own instructions.",
+    "artifacts_out": [
+      "lib/letflow/event_store/partition_maintenance.ex",
+      "lib/letflow/design/req376-partition-event-retirement.md",
+      "docs/migration/decisions/0037-event-store-partitioning-and-whole-partition-retirement.md"
+    ],
+    "next_action": "Route to SECURITY-REVIEWER (2c) for re-gate, then REVIEWER (2d) for re-gate",
+    "issues": [
+      {
+        "severity": "MAJOR",
+        "description": "This rework's own dispatch instructions proposed relocating keep_forever rows into events_archive_default AFTER ATTACH as the fix -- verified against real Postgres and found to ALSO fail (a different, symmetric 23514 check_violation from the original bug), not merely a reordering issue. The underlying goal (keep_forever rows physically separated into events_archive_default for a month that also gets its own dedicated ATTACHed partition) is structurally impossible in Postgres's default-partition model, confirmed via an isolated minimal reproduction independent of this module's code. Implemented the only correct resolution found: no physical relocation at all, relying on decision 0037's existing 'never DROP a partition' commitment for keep_forever durability, with a read-only count replacing the relocation. REVIEWER/CODE-DESIGNER should confirm this resolution is accepted -- it changes decision 0037's originally-stated purpose for events_archive_default's keep_forever role (now stated as unachievable-and-unnecessary for REQ-376's actual scope), not just an implementation detail."
+      },
+      {
+        "severity": "MINOR",
+        "description": "protected_rows_relocated's field name is now slightly misleading (retained for API/return-shape stability with the EO-002 test's own assertions, which this rework was instructed not to change) -- it reports a COUNT of keep_forever rows the retirement covered, not a count of rows physically relocated, since none are relocated any more. Documented explicitly in the code comment on count_protected_rows/2 and in decision 0037's new correction section. Flagged for REVIEWER/TEST-DESIGNER to consider a field rename (e.g. protected_rows_present) in a future, non-urgent cleanup if this reads as confusing to a future maintainer -- not done here since it would require a coordinated test-code change outside this rework's scope."
+      }
+    ]
+  },
+  "rework_count": 1,
+  "max_rework": 3
+}

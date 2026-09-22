@@ -1,0 +1,53 @@
+{
+  "handoff_id": "c3d4e5f6-0004-4000-8000-000000000004",
+  "run_id": "WF02-REQ376-20260922",
+  "workflow_id": "WF-02",
+  "step": "02d",
+  "from_agent": "ORCH",
+  "to_agent": "REVIEWER",
+  "file": "handoffs/WF02-REQ376-20260922/step-02d-reviewer-regate3.json",
+  "created_at": "2026-09-22T15:30:00Z",
+  "started_at": "2026-09-22T15:30:00Z",
+  "completed_at": "2026-09-22T15:50:00Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S2",
+    "requirement_ids": ["REQ-376"],
+    "requirement_text": {
+      "REQ-376": "See handoffs/WF02-REQ376-20260922/step-02a-elixir-dev.json's context.requirement_text for the full text -- not restated here to avoid drift."
+    },
+    "related_handoff_ids": [
+      "handoffs/WF02-REQ376-20260922/step-02d-reviewer-regate2.json",
+      "handoffs/WF02-REQ376-20260922/step-02c-security-reviewer-regate3.json"
+    ],
+    "artifacts_in": [
+      "test/letflow/scheduler/poller_test.exs",
+      "test/support/tenant_template.ex",
+      "docs/status/requirement_status.index.yaml",
+      "docs/anti-patterns.md"
+    ],
+    "owned_modules": []
+  },
+  "task": {
+    "description": "WF-02 Step 2d RE-GATE 3, covering commit 19bc0a52 (git diff 53f2e8e3...19bc0a52): 16 poller_test.exs state-map fixes for the widened Poller state shape (new last_partition_maintenance_run_at field), tenant_template.ex clone-vs-template parity self-check fixes (check_table_set/2, constraint_rows/1, index_defs/2, check_ruled_out_properties/2) filtering the known, deliberate 7-table partition-management asymmetry via the pre-existing req376_partition_management_table?/1 predicate, and a status-index count correction. Scrutinize specifically whether the parity-check fix is a genuine, principled correction reusing the same predicate already established/reviewed at use site 1, applied consistently -- or whether it weakens the self-check beyond its justified scope.",
+    "acceptance_criteria": [
+      "diff 53f2e8e3...19bc0a52 read in full",
+      "checked against REVIEWER's four questions and docs/anti-patterns.md",
+      "parity-check filter verified to reuse req376_partition_management_table?/1 (not new ad-hoc logic) and to filter only the documented, deliberate asymmetry, not a broader class that could mask a real future regression",
+      "poller_test.exs fix verified mechanical (matches real state-shape widening), not an assertion loosening",
+      "PASS/FAIL verdict with next_action"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "Read `git diff 53f2e8e3...19bc0a52` in full (8 files, +678/-25): test/letflow/scheduler/poller_test.exs, test/support/tenant_template.ex, docs/status/requirement_status.index.yaml, docs/anti-patterns.md, plus handoff/report artifacts.\n\nPoller_test.exs -- MECHANICAL, no assertion weakened. All 16 changed sites add `last_partition_maintenance_run_at: nil` to hand-built `%{...}` state maps passed directly into `Poller.handle_info(:tick, state)`. This matches a real, already-reviewed production state-shape widening from this same requirement (the Poller now tracks partition-maintenance scheduling alongside retention). No assertion on the resulting `new_state`/`state_after_*` was loosened, removed, or replaced -- every existing `assert new_state.last_retention_run_at == ...` etc. is untouched; the diff only adds the missing key so the handler doesn't crash/mis-branch on `state.last_partition_maintenance_run_at` being absent (a `KeyError` or nil-vs-missing distinction the widened handler now depends on).\n\ntenant_template.ex parity-check fix -- GENUINE, correctly scoped, reuses the established predicate consistently, does not weaken the self-check beyond its justified scope. Verified directly:\n\n1. `req376_partition_management_table?/1` (test/support/tenant_fixture.ex:408-412) is the SAME predicate already reviewed and in production use at use site 1 (assert_template_parity_against_independent_reference!/1, tenant_fixture.ex:449-457) since an earlier gate -- this diff is not inventing a new whitelist, it is applying the existing one at three more call sites (check_table_set/2, constraint_rows/1, index_defs/2) plus a narrowly-scoped variant at a fourth (check_ruled_out_properties/2).\n2. The predicate's definition matches exactly the 7 tables the task description names: the 4 fixed migration-conversion artifacts (events_default, events_archive_default, the two *_pre_partition_20260922 rollback-safety-net tables) plus the dynamic events_y<year>m<month>/events_archive_y<year>m<month> regex match. It does NOT match events or events_archive themselves (the top-level parents) -- confirmed by reading the predicate body and its doc comment.\n3. check_table_set/2 filters the predicate ONLY out of the `missing` set (reference-has, candidate-lacks), never out of `ref_tables`/`extra` -- so use site 1's own self-check (both sides genuinely partitioned, both legitimately have all 7 tables) is unaffected; a real future regression where a `:clone` schema is MISSING one of its own real tables (not one of these 7) still reports.\n4. constraint_rows/1 and index_defs/2 reject rows for exactly those 7 tables' own local constraints/indexes -- i.e., their own PK/CHECK/index definitions, which a clone genuinely never has by design (CREATE TABLE LIKE ... INCLUDING ALL cannot copy PARTITION BY, a documented Postgres limitation, not a bug). Both filters leave every other table's constraints/indexes -- including events/events_archive's own -- compared with zero tolerance. constraint_rows/1's added `con.conparentid = 0` clause excludes Postgres's own internal per-partition child constraint rows (the same standard idiom already used by readd_foreign_keys!/1 for the identical reason), not a broader exclusion.\n5. check_ruled_out_properties/2's normalize_relkind/1 fix is the narrowest of the four: it only touches the `relkind` field ('p' partitioned vs 'r' ordinary), only for `table in [\"events\", \"events_archive\"]` specifically (the two top-level parents themselves, not the 7 filtered-out children), and only collapses that one field to a shared marker before comparison -- every other field in the ruled-out-properties row (relrowsecurity, relforcerowsecurity, relispartition, reltablespace) is still compared byte-for-byte for these two tables, and every field for every other table is unaffected. This is the correct, minimal fix for the one truly asymmetric field (a clone cannot be partitioned), not a broad allowance.\n\nNo evidence any of these four filters could hide a real future parity regression for one of the 7 tables' own legitimate properties -- the predicate is precise (fixed-name list + a narrow regex for calendar-month children), reused rather than re-derived, and applied only at the specific dimension/field where the deliberate by-design asymmetry actually lives. This is a genuine correction of a self-check that was flagging correct-by-design provisioning behavior as a defect, not a weakening.\n\ndocs/status/requirement_status.index.yaml -- a straightforward count correction (19 -> 20 entries, with `grep -c` recount cited) after a prior rework's `started` event was appended without bumping the declared count. No load-bearing content changed.\n\ndocs/anti-patterns.md -- two new entries (zombie BEAM VM connection exhaustion from an interrupted test run, and a note on this run's shared-checkout concurrent-session contention). Documentation only, consistent with the established format, no contradiction with existing entries.\n\nAgainst the four REVIEWER questions: idiomatic (no GenServer-doing-gen_statem's-job pattern; the Poller state-map fixes are plain test-fixture updates), supervision untouched (zero process/spawn/supervision changes -- test-only diff throughout), no type-safety gap (no new application transition logic; the Poller's state shape widening itself was already reviewed in an earlier gate), no scope creep (this rework is strictly a fix for TEST-RUNNER-attributed regressions plus a docs count correction -- no new abstraction, behaviour, or generalization introduced). Checked against docs/anti-patterns.md -- no entry contradicted; two entries added are consistent with the file's existing format and this run's own documented incidents.",
+    "artifacts_out": [
+      "handoffs/WF02-REQ376-20260922/step-02d-reviewer-regate3.json"
+    ],
+    "next_action": "Route to TEST-RUNNER (4) re-run",
+    "issues": []
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

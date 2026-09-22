@@ -509,11 +509,12 @@ defmodule Letflow.Definitions.SolutionPack do
        `action: :left_unchanged`, no write. `:clean_update` -> advance
        `solution_pack_artefact_bases` to `entry.incoming`, `action:
        :advanced_to_incoming`. `:conflict` (now guaranteed resolved) ->
-       look up the deciding resolution -- from this call's own
-       `resolutions` list first, falling back to the already-persisted
-       `pack_update_resolutions` row when this call submitted nothing new
-       for that artefact -- and advance the base per `:take_incoming`/
-       `:merged`, or leave it untouched per `:keep_local`.
+       always look up the deciding resolution from the persisted
+       `pack_update_resolutions` row (ISS-0781: never from this call's own
+       `resolutions` argument, even when this call itself just submitted a
+       value for that artefact -- step 3's insert is visible here via
+       same-transaction read-your-writes) -- and advance the base per
+       `:take_incoming`/`:merged`, or leave it untouched per `:keep_local`.
     7. Commit; return `{:ok, apply_result()}`.
 
   `theirs_artefacts`/`incoming_artefacts` are caller-supplied, same
@@ -751,39 +752,25 @@ defmodule Letflow.Definitions.SolutionPack do
 
   # Guaranteed `resolved == true` by `check_no_unresolved_conflicts/1` having
   # already passed -- a matching resolution exists, either among this call's
-  # own `resolutions` (submitted just now, step 3) or from an earlier call
-  # (the persisted `pack_update_resolutions` row, looked up fresh here since
-  # this call submitted nothing new for it).
+  # own `resolutions` (submitted just now, step 3) or from an earlier call.
+  # Either way, the applied action is always determined by reading the
+  # persisted `pack_update_resolutions` row (`apply_from_persisted_resolution/5`),
+  # never this call's own `resolutions` argument directly (ISS-0781): the row
+  # is the sole source of truth `resolution_exists?/5` already treats it as,
+  # and `insert_submitted_resolutions/6` (step 3) always runs earlier in this
+  # same transaction, so a first-ever submission is visible here via
+  # read-your-writes -- this branch is not reachable for an artefact this call
+  # itself just submitted for the first time with a different outcome, because
+  # the row already reflects that same submission by the time this reads it.
   defp apply_entry(
          %{classification: :conflict} = entry,
          tenant_id,
          pack_id,
          target_version,
-         resolutions,
+         _resolutions,
          now
        ) do
-    case find_submitted_resolution(resolutions, entry) do
-      %{resolution: :keep_local} ->
-        {:ok, applied_entry_map(entry, :left_unchanged)}
-
-      %{resolution: :take_incoming} ->
-        with {:ok, _base} <-
-               advance_base(tenant_id, pack_id, target_version, entry, entry.incoming, now) do
-          {:ok, applied_entry_map(entry, :advanced_to_incoming)}
-        end
-
-      %{resolution: :merged, resolved_content: content} ->
-        with {:ok, _base} <- advance_base(tenant_id, pack_id, target_version, entry, content, now) do
-          {:ok, applied_entry_map(entry, :advanced_to_merged)}
-        end
-
-      nil ->
-        apply_from_persisted_resolution(tenant_id, pack_id, target_version, entry, now)
-    end
-  end
-
-  defp find_submitted_resolution(resolutions, %{artefact_type: type, artefact_id: id}) do
-    Enum.find(resolutions, &(&1.artefact_type == type and &1.artefact_id == id))
+    apply_from_persisted_resolution(tenant_id, pack_id, target_version, entry, now)
   end
 
   defp apply_from_persisted_resolution(tenant_id, pack_id, target_version, entry, now) do

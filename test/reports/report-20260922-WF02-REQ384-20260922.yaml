@@ -1,0 +1,100 @@
+report_id: report-20260922-WF02-REQ384-20260922
+run_id: WF02-REQ384-20260922
+workflow_id: WF-02
+step: "04"
+agent: TEST-RUNNER
+date: 2026-09-22
+branch: feature/WF02-REQ384-20260922
+commit: 2ac1ed74
+
+verdict: PASS
+
+context: >
+  REQ-384 (in-app company/tenant switcher for a dual-membership user, with
+  tenant-keyed query-cache isolation across the switch) is a backend+frontend
+  requirement that already passed SECURITY-REVIEWER, REVIEWER, TEST-DESIGNER (two
+  rounds), and TEST-DESIGN-VALIDATOR (two rounds). Ran both the backend strict gate
+  (mix letflow.check.test, TEST_PARALLEL_N=4) and the frontend strict gate (npm run
+  test / guards / tsc -b / lint, run individually) independently, per WF-02 Step 4 /
+  WF-04 Step 1.
+
+environment_notes: >
+  Reused the existing worktree at wt-req384-testdesign (already checked out at HEAD
+  2ac1ed74, clean working tree, deps and _build already present) rather than creating
+  a second worktree for the same branch -- `git worktree add` for
+  feature/WF02-REQ384-20260922 refused because that worktree already existed.
+  Postgres/Keycloak (letflow-1-postgres-1 / letflow-1-keycloak-1) were already
+  running in the main checkout via docker compose (host port 5463, matching the main
+  checkout's untracked .env LETFLOW_DB_PORT=5463). The worktree itself has no local
+  .env (git worktrees don't share untracked files), so LETFLOW_DB_PORT=5463 was
+  passed explicitly on the mix invocation to point at the already-running container.
+  Docker required sudo (`sudo -n docker compose up -d`, passwordless) in this
+  sandbox -- plain `docker` gets permission-denied on the socket (user not in the
+  `docker` group). This host runs many unrelated containers for other checkouts/
+  projects; confirmed letflow-1-postgres-1 was this checkout's own container, not a
+  shared one, before proceeding.
+
+command_run_backend: "LETFLOW_DB_PORT=5463 TEST_PARALLEL_N=4 mix letflow.check.test"
+n_derivation: "Explicit override, TEST_PARALLEL_N=4 per task instructions (ISS-0219 OOM/exit=137 hazard at 8-way parallelism on this host, documented in docs/anti-patterns.md)."
+
+backend_result:
+  format_check: "mix format --check-formatted: clean (folded into letflow.check.test's own pipeline, no separate failure reported)."
+  compile_check: "mix compile --warnings-as-errors: clean (pre-compile step succeeded before any partition launched)."
+  main_suite: >
+    partition 1: 1176 tests, 1 property, 0 failures, exit 0
+    partition 2: 1056 tests, 2 properties, 0 failures, exit 0
+    partition 3: 1215 tests, 1 property, 0 failures, exit 0
+    partition 4: 1243 tests, 2 properties, 0 failures, exit 0
+    combined: 4690 tests, 6 properties, 0 failures (4696/4696 passed).
+    "mix letflow.check.test: OK -- no test failures, no ISS-0069 warnings (4
+    partitions, logs: /tmp/letflow_test_parallel.G6Nq7V)."
+  wasm_hang: "mix letflow.check.test: OK -- 5/5 isolated wasm_hang tests passed, each in its own subprocess."
+  lua_wallclock_race: "mix letflow.check.test: OK -- isolated :lua_wallclock_race run also passed clean (Result: 11 passed, 4711 excluded)."
+  known_flakes_seen: >
+    None of the three pre-disclosed known flakes (ISS-0766 identity_test.exs,
+    lua_wallclock_race, Letflow.Scheduler.PollerTest/REQ-218 AC3) appeared in this
+    run -- the full run, including both isolated subprocess reruns, was clean on the
+    first attempt. No tenant_template staleness hazard encountered either (no
+    provisioned_tenant!/versions_missing errors in any partition log).
+  overall: "mix letflow.check.test exited 0 end to end -- format, compile --warnings-as-errors, the partitioned full suite, and both isolated subprocess reruns all passed clean."
+
+command_run_frontend: "cd web && npm run test; npm run guards; npx tsc -b; npm run lint  (run as four separate commands, each checked individually)"
+frontend_result:
+  unit_tests: >
+    Test Files 115 passed (115); Tests 813 passed (813). Duration 31.78s. Matches
+    (and exactly meets) the task's stated expectation of 115+ files / 813+ tests,
+    confirming REQ-384's new coverage is included and green.
+  guards: >
+    Test Files 4 passed (4); Tests 48 passed (48) -- meta-control.spec.ts,
+    source-scan.spec.ts, bundle-scan.spec.ts (includes a real `tsc -b && vite build`,
+    2451 modules transformed, built in 11.60s -- only pre-existing >500kB chunk-size
+    advisory warnings, not errors), role-set.spec.ts. All green.
+  type_check: "npx tsc -b: clean, no output, exit 0."
+  lint: "eslint . --ext ts,tsx --report-unused-disable-directives --max-warnings 0: clean, no output, exit 0."
+  e2e_exclusion_verified: >
+    web/package.json's "test" script is literally `vitest run --passWithNoTests
+    --exclude "tests/e2e/**" --exclude "tests/guards/**"` -- confirmed by reading
+    package.json directly rather than assuming, so
+    web/tests/e2e/pipelines/tenant-cache.pipeline.e2e.spec.ts (including its new
+    EO-001 test) is excluded from both `npm run test` and `npm run guards` by
+    construction, not merely by absence from the output. Not attempted here, as
+    instructed -- it needs a live docker/Keycloak/multi-tenant backend stack this
+    sandbox does not provide; deferred to UAT-RUNNER as already disclosed.
+
+overall_verdict_reasoning: >
+  Backend: fully green on the first attempt -- 4696/4696 tests across 4 partitions,
+  0 failures, plus format/compile/wasm_hang/lua_wallclock_race all clean; none of the
+  three pre-disclosed known-flake patterns or the tenant_template staleness hazard
+  were encountered, so there is nothing to re-run in isolation or excuse. Frontend:
+  fully green across all four independently-run gates -- 813/813 unit tests, 48/48
+  guard tests (including a real production build), clean type-check, clean lint.
+  The e2e spec's exclusion was verified structurally (reading the exclude glob in
+  package.json), not just inferred from its absence in the test-run output.
+
+conclusion: >
+  PASS. Backend: 4696/4696 tests green across 4 partitions (TEST_PARALLEL_N=4), plus
+  clean format/compile/wasm_hang(5/5)/lua_wallclock_race gates -- no known flakes
+  observed, no regressions. Frontend: 813/813 unit tests, 48/48 guard tests, clean
+  tsc -b, clean lint -- all four gates green independently. New EO-001 e2e spec
+  confirmed excluded from this sandbox's run by package.json's own exclude glob,
+  deferred to UAT-RUNNER as disclosed. Routes forward to RELEASE-VALIDATOR.

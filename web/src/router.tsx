@@ -34,6 +34,8 @@ import ExamSessionResultPage from '@/pages/exam/ExamSessionResultPage'
 import BilimBagaAdminPage from '@/pages/admin/bilimbaga/BilimBagaAdminPage'
 import BilimBagaEntityRoute from '@/pages/admin/bilimbaga/BilimBagaEntityRoute'
 import PlatformMigrationConsolePage from '@/pages/admin/platform-migrations/PlatformMigrationConsolePage'
+import SolutionPackUpdateLauncherPage from '@/pages/solution-packs/SolutionPackUpdateLauncherPage'
+import SolutionPackUpdateReviewPage from '@/pages/solution-packs/SolutionPackUpdateReviewPage'
 
 export const router = createBrowserRouter([
   {
@@ -79,6 +81,14 @@ export const router = createBrowserRouter([
       { path: 'admin/bilimbaga', element: <BilimBagaAdminPage /> },
       { path: 'admin/bilimbaga/:entityType', element: <BilimBagaEntityRoute /> },
       { path: 'admin/platform-migrations', element: <PlatformMigrationConsolePage /> },
+      // REQ-381: solution-pack update review screen. `/solution-packs` IS
+      // the minimal "company's pack screen" entry point (design §4.1, no
+      // real pack inventory exists yet -- OQ-2); the review route is
+      // direct-navigation-only (reached via the launcher's
+      // navigate(..., { state })), same convention as
+      // `definitions/:id/promotions/:reviewId`.
+      { path: 'solution-packs', element: <SolutionPackUpdateLauncherPage /> },
+      { path: 'solution-packs/:packId/update-review', element: <SolutionPackUpdateReviewPage /> },
       { path: 'dlq', element: <DlqPage /> },
       { path: 'webhooks', element: <WebhooksPage /> },
       { path: 'exam', element: <ExamListPage /> },

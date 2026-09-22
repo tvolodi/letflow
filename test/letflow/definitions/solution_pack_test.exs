@@ -786,6 +786,29 @@ defmodule Letflow.Definitions.SolutionPackTest do
   defp artefact_input(type, id, content),
     do: %{artefact_type: type, artefact_id: id, content: content}
 
+  # >32 entries deliberately escapes BEAM's "flatmap" map representation.
+  # TEST-DESIGN-VALIDATOR's own mutation testing found that a <=32-key fixture
+  # (this helper's original shape) CANNOT discriminate a broken/deleted
+  # canonicalizer: Erlang/Elixir maps with at most 32 keys ("flatmaps") always
+  # iterate in term order, which for binary keys is byte-lexicographic --
+  # identical to what `Enum.sort/1` produces. So `canonicalize_artefact_content/1`
+  # replaced outright by a bare `Jason.encode!/1` (canonicalization deleted
+  # entirely) still produced byte-identical output to this file's own
+  # independent `req379_canonicalize/1` for every small fixture, and all 21
+  # tests kept passing. Above 32 keys, Erlang switches to a hash-array-mapped
+  # trie whose iteration order is hash-bucket order, not lexicographic --
+  # empirically confirmed for this exact key shape (`elixir -e` against 40
+  # "field_NN" keys: `Map.keys/1` came back in a genuinely unsorted order, not
+  # ascending field_01..field_40) -- so a missing/broken sort step here is
+  # actually observable. See the fail-then-pass mutation re-verification in
+  # this describe block's own commit message / handoff for the two concrete
+  # mutants this was checked against.
+  defp req379_large_unsorted_map(tag) do
+    for n <- 40..1//-1, into: %{} do
+      {"field_" <> String.pad_leading(Integer.to_string(n), 2, "0"), "#{tag}-#{n}"}
+    end
+  end
+
   # A graph whose top-level "metadata" key is NOT part of Graph.from_map/1's
   # validated shape (only "nodes"/"edges" are read there -- graph.ex:282-291)
   # but IS part of the raw map ProcessDefinition.create_changeset/2 casts
@@ -793,14 +816,15 @@ defmodule Letflow.Definitions.SolutionPackTest do
   # no key-filtering) -- so this survives storage untouched and gives AC2's
   # test real, non-trivial nested-key-order data to canonicalize, without
   # needing a HUMAN_TASK/SERVICE_TASK node's own attribute-validation rules.
-  # Map literal keys are deliberately NOT already alphabetical at any level, so
-  # a canonicalizer that only sorted the top level (or didn't sort at all)
-  # would produce a different byte sequence than one that sorts recursively.
+  # The nested "large" key holds a >32-key map (see
+  # req379_large_unsorted_map/1 above) specifically so this fixture can
+  # discriminate a broken/missing sort step, not just "some" key reordering.
   defp req379_graph_with_metadata(tag) do
     Map.merge(graph_start_end(), %{
       "metadata" => %{
         "zebra" => tag,
-        "apple" => %{"nested_zulu" => true, "nested_alpha" => false, "id" => tag}
+        "apple" => %{"nested_zulu" => true, "nested_alpha" => false, "id" => tag},
+        "large" => req379_large_unsorted_map(tag)
       }
     })
   end

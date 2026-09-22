@@ -1,0 +1,126 @@
+report_id: report-20260922-WF02-REQ381-20260922
+run_id: WF02-REQ381-20260922
+workflow_id: WF-02
+step: "04"
+agent: TEST-RUNNER
+date: 2026-09-22
+branch: feature/WF02-REQ381-20260922
+commit: 94e79d78
+
+verdict: PASS
+
+context: >
+  REQ-381 (solution-pack update review screen) is a frontend-heavy requirement: only
+  test/fixture files and one new ExUnit golden-fixture test changed on the backend
+  side (test/fixtures/canonical_json/golden_cases.json modified, test/specs/REQ-381.md
+  and web/src/components/solution-packs/__tests__/ added). Ran both the backend strict
+  gate (mix letflow.check.test plus its format/compile prerequisites) and the frontend
+  strict gate (npm run check) independently, per WF-02 Step 4 / WF-04 Step 1.
+
+environment_notes: >
+  Worktree wt-req381-impl uses its own dockerized Postgres (wt-req381-impl-postgres-1,
+  host port 5481 via this worktree's untracked .env LETFLOW_DB_PORT=5481), already
+  running and healthy -- no docker compose up needed for Postgres. `docker compose up
+  -d` additionally tried to start this worktree's own Keycloak container but failed
+  (host port 8082 already bound by another checkout's Keycloak); Postgres was
+  unaffected and no test in this suite needs Keycloak, so this was not a blocker.
+  Docker required sudo (`sudo -n docker ...`, passwordless) in this sandbox --
+  plain `docker` gets a permission-denied on the socket.
+
+backend_pool_contention: >
+  First two full-suite attempts (nproc-derived N=8, then a second run at N=8 which
+  itself only completed because leftover partition processes were still consuming
+  connections from the first attempt) hit Postgrex "too_many_connections"/
+  DBConnection.ConnectionError storms and left partitions 3-8 hung indefinitely
+  (still running, still holding connections, 30-50% CPU each) rather than exiting --
+  this is the documented ISS-0219/ISS-0222 class in scripts/test_parallel.sh's own
+  header comments (this host's Postgres/CPU budget cannot sustain nproc-derived
+  parallelism; TEST_PARALLEL_N=4 is the documented, previously-verified workaround).
+  Killed the hung processes (`pkill -9 -f "mix test --partitions"`), confirmed
+  pg_stat_activity drained back to baseline (~6 connections), and re-ran with
+  TEST_PARALLEL_N=4 throughout for the remainder of this session. One later mid-run
+  overlap (a `timeout 590` wrapper SIGTERM'd the outer mix task while
+  test_parallel.sh's own background partition jobs kept running orphaned, then a
+  fresh detached run was started before those orphans were confirmed dead) was
+  caught and cleaned up the same way before the final accepted run. TEST-DESIGNER
+  independently hit the same host's resource ceiling in its own audit (per a
+  mid-session coordinator note: 8-way parallelism OOM'd this 15Gi-RAM host, exit=137)
+  -- consistent with this being a host-capacity fact, not a REQ-381 code issue.
+
+command_run_backend: "TEST_PARALLEL_N=4 mix letflow.check.test"
+n_derivation: "Explicit override, TEST_PARALLEL_N=4 (ISS-0219 workaround, confirmed necessary live this session -- N=8 hung partitions 3-8 on connection-pool exhaustion twice before this override was applied)."
+
+backend_result:
+  format_check: "mix format --check-formatted: clean, exit 0."
+  compile_check: "mix compile --warnings-as-errors --force: clean recompile of 256 files, exit 0, zero warnings."
+  main_suite: "Result: 1244/1246 passed (1/1 property, 1243/1245 tests), 1 excluded. Failed: 2 tests."
+  main_suite_failures: >
+    Both failures, reproduced identically across two independent TEST_PARALLEL_N=4
+    full-suite runs: Letflow.IdentityTest "resolve_tenant_by_realm/1 and
+    resolve_realm_by_tenant/1 (REQ-019 acceptance criterion 1)" -- both
+    resolve_realm_by_tenant/1 and resolve_tenant_by_realm/1 sub-tests, both raising
+    Ecto.NoResultsError from insert_default_tenant!/test/support/
+    bpm_default_realm_displacement.ex:118 while looking up the shared "bpm-default"
+    seeded tenant row. This is exactly the pre-disclosed ISS-0766 known flake
+    (test/letflow/identity_test.exs, shared-DB-state race across concurrent
+    partitions racing the same seeded tenant row) named explicitly in this task's
+    instructions. Per instructions, re-ran the file in isolation to confirm the
+    known-flake pattern rather than dismissing outright: `mix test
+    test/letflow/identity_test.exs` alone -> Result: 62 passed, 0 failures --
+    confirms the failure is a parallel-partition contention artifact, not a real
+    assertion regression, and not touched by REQ-381's changes (REQ-381 touched no
+    identity/tenant-realm code).
+  wasm_hang_and_lua_wallclock_race: >
+    mix letflow.check.test's own run/1 aborts (Mix.raise) after the main suite step
+    reports real failures, before reaching run_wasm_hang_tests/0 or
+    run_lua_wallclock_race_tests/0 -- so these two isolated-subprocess stages were
+    run manually, matching exactly what the mix task itself would have run, once
+    connections were confirmed drained:
+      - `mix test --only lua_wallclock_race`: Result: 11 passed, 4683 excluded. 0
+        failures.
+      - `mix test --only wasm_hang --dry-run` discovered 5 {file,line} pairs
+        (host_api_write_test.exs:461, plugin_handler_test.exs:495/392/155,
+        call_timeout_test.exs:79); ran each as its own fresh `mix test <file>:<line>`
+        subprocess per the task's documented ISS-0418 isolation design -- all 5
+        passed (1 passed each, 0 failures each; the "GenServer.call ... EXIT time
+        out" log lines under plugin_handler_test.exs:495 are the test's own
+        deliberate hang-and-timeout assertion firing as designed, not a crash).
+  iss0069_substring_check: "Not separately gated this run -- the task raised on real test failures before reaching this check; the substring did not appear in any partition log inspected."
+
+command_run_frontend: "cd web && npm run check  (= npm run type-check && npm run lint && npm run test && npm run guards)"
+frontend_result:
+  type_check: "tsc -b tsconfig.json: clean, no output, exit 0 (chained && proceeded to lint)."
+  lint: "eslint . --ext ts,tsx --report-unused-disable-directives --max-warnings 0: clean, no output, exit 0 (chained && proceeded to test)."
+  unit_tests: "Test Files 111 passed (111); Tests 792 passed (792). Includes REQ-381's new component tests (web/src/components/solution-packs/__tests__/) and canonicalization tests, all passing."
+  guards: >
+    Test Files 4 passed (4); Tests 48 passed (48) -- meta-control.spec.ts,
+    source-scan.spec.ts, bundle-scan.spec.ts (includes a real `tsc -b && vite build`,
+    2441 modules transformed, build succeeded in 11.88s), role-set.spec.ts. All green.
+  e2e_exclusion_verified: >
+    web/tests/e2e/pipelines/template-update-conflict.pipeline.e2e.spec.ts never
+    appears anywhere in the full `npm run check` log (grepped for
+    "template-update-conflict": zero matches) -- confirms npm run test's own
+    `--exclude "tests/e2e/**"` flag keeps this Playwright spec out of the vitest run
+    picked up by `npm run check`/`npm run guards`, matching what TEST-DESIGNER/
+    TEST-DESIGN-VALIDATOR disclosed. Not attempted here, as instructed -- it needs a
+    live docker/Keycloak/backend stack this sandbox does not provide; deferred to
+    UAT-RUNNER.
+
+overall_verdict_reasoning: >
+  Frontend: fully green, zero exceptions (792 unit tests + 48 guard tests, type-check
+  and lint clean, real vite build succeeds). Backend: main suite is green modulo the
+  one pre-disclosed, independently-reproduced-as-flake ISS-0766 failure pair (confirmed
+  isolated-file run passes 62/62); format, compile --warnings-as-errors, the
+  lua_wallclock_race isolated subprocess, and all 5 wasm_hang isolated subprocesses are
+  all clean. REQ-381 touched no lib/ code, no identity/tenant-realm logic, and no code
+  path plausibly connected to the IdentityTest flake -- so PASS is the honest verdict
+  for REQ-381's own change, with the ISS-0766 flake called out explicitly rather than
+  silently absorbed, exactly as instructed.
+
+conclusion: >
+  PASS. Frontend: 792/792 unit tests + 48/48 guard tests green, type-check/lint/build
+  clean. Backend: 1244/1246 main-suite tests green (the 2 failures are the pre-known
+  ISS-0766 identity_test.exs shared-DB-state flake, confirmed via isolated single-file
+  rerun at 62/62), plus format/compile/lua_wallclock_race/wasm_hang all independently
+  verified clean. e2e spec correctly excluded from this sandbox's run and deferred to
+  UAT-RUNNER as disclosed. Routes forward to RELEASE-VALIDATOR.

@@ -1,0 +1,121 @@
+run_id: WF02-REQ381-AC6-20260922
+date: "2026-09-22"
+agent: UAT-RUNNER
+requirement: REQ-381
+branch: feature/WF02-REQ381-20260922
+purpose: >
+  REQ-381 AC6 requires the e2e Playwright spec
+  (web/tests/e2e/pipelines/template-update-conflict.pipeline.e2e.spec.ts) to exist
+  and pass against the real screen. Every prior agent (FRONTEND-DEV, TEST-DESIGNER,
+  TEST-DESIGN-VALIDATOR, TEST-RUNNER) lacked docker/live-stack access and deferred
+  execution to UAT-RUNNER. This run performs that execution against a real,
+  locally-stood-up instance (Postgres + Keycloak via docker compose, the actual
+  `mix run --no-halt` backend, the actual Vite dev server, real Chromium via
+  Playwright) — no mocks, no interception.
+
+environment:
+  kind: local (stood up by UAT-RUNNER for this run — no ORCH-supplied base_url/
+    credential_source was in this dispatch; this was a direct handoff from another
+    agent, not a WF-05 ORCH dispatch, so the "Environment target" section's
+    required-field check does not apply to this run)
+  postgres: docker compose (root docker-compose.yml), worktree-scoped port 5481
+  keycloak: docker compose (root docker-compose.yml), worktree-scoped port 8092,
+    realm bpm-default imported from priv/keycloak/realms, admin-user/admin-pass
+    confirmed to carry role PLATFORM_ADMIN (decoded real JWT)
+  backend: mix run --no-halt, port 4000, confirmed healthy via GET /health -> 200
+    {"status":"ok"}
+  frontend: vite dev server spawned by playwright's own webServer config, port 4173
+  playwright: 1.60.0, chromium installed via `npx playwright install chromium
+    --with-deps`
+
+command_run: >
+  cd web && VITE_API_BASE_URL=http://127.0.0.1:4000 BPM_TEST_URL=http://127.0.0.1:4000
+  BPM_IDP_BASE_URL=http://localhost:8092 E2E_BASE_URL=http://127.0.0.1:4173
+  npx playwright test tests/e2e/pipelines/template-update-conflict.pipeline.e2e.spec.ts
+  --config=playwright.config.ts --grep-invert @manual
+
+scenarios:
+  - id: template-update-conflict-resolution
+    fixture: test/fixtures/uat/scenarios/platform/template-update-conflict-resolution.yaml
+    spec: web/tests/e2e/pipelines/template-update-conflict.pipeline.e2e.spec.ts
+    first_attempt:
+      verdict: FAIL
+      failing_step: "01: install pack v1 -- three fixture processes"
+      observed_evidence: >
+        POST /api/v1/solution-packs/install against the real backend returned a
+        real HTTP 422 problem+json body: {"status":422,"type":".../unprocessable-entity",
+        "title":"Unprocessable Entity","detail":"validation failed"}. Reproduced
+        independently with a hand-built minimal pack document via curl against the
+        same live instance -- same 422.
+      root_cause: >
+        SPEC AUTHORING BUG, not a REQ-381 implementation defect. The spec's own
+        `graphFor()` fixture helper (template-update-conflict.pipeline.e2e.spec.ts
+        lines 64-76) builds a HUMAN_TASK node with `attributes: null`. The real,
+        pre-existing backend graph validator
+        (lib/letflow/definitions/graph.ex, CHK-09, ~line 775-785) requires every
+        HUMAN_TASK node to carry a non-empty (after trim) "role" string attribute,
+        surfaced through the router as {:error, :graph_structure_invalid} ->
+        422 "validation failed" (lib/letflow/routers/solution_packs.ex:338-346).
+        This validation rule predates REQ-381 and is unrelated to anything REQ-381
+        built; the fixture helper never accounted for it.
+    diagnostic_rerun:
+      note: >
+        To determine whether REQ-381's actual implementation (the two new screens,
+        the wiring to REQ-380's endpoints, the canonicalization utility) works at
+        all, UAT-RUNNER applied a one-line, NOT-COMMITTED, diagnostic-only local
+        edit (attributes: null -> attributes: { role: 'reviewer' } on the
+        HUMAN_TASK node in graphFor()), reran the spec against the same live
+        instance, then reverted the edit via `git checkout --` before finishing
+        this run. The worktree is confirmed clean of this change
+        (git diff --stat shows only the pre-existing, unrelated
+        test/fixtures/canonical_json/golden_cases.json diff and untracked files
+        that predate this run).
+      verdict: PASS
+      evidence: >
+        `npx playwright test tests/e2e/pipelines/template-update-conflict.pipeline.e2e.spec.ts`
+        output: "Running 1 test using 1 worker" / "1 passed (7.5s)". All six
+        pl.step stages executed against real HTTP/real Postgres/real Chromium:
+        pack v1 install (API), tenant adaptation of adapted-proc (API), EO-001
+        review screen showing all four classification groups (GUI, real
+        navigation to /solution-packs/:packId/update-review), EO-002 blocked-apply
+        with the real 409 naming the real artefact id, EO-003/EO-004 keep-local
+        resolve + apply + attribution text assertion, EO-005 same-version
+        re-review showing the resolved entry under "Already resolved" and NOT
+        under "Needs a decision". No step's gate failed.
+    also_fixed_locally_not_committed:
+      - >
+        Discovered en route (environment-level, not a code defect): Playwright's
+        webServer-spawned Vite dev server proxies API calls to
+        `process.env.VITE_API_BASE_URL || 'http://localhost:4000'`
+        (web/vite.config.ts:62-68). On this host, Node resolves bare "localhost"
+        to ::1 (IPv6) first, but the backend's Bandit listener binds 0.0.0.0
+        (IPv4-only), so the dev server's own proxy calls to /health,
+        /api/tenant-config, etc. failed with ECONNREFUSED until
+        VITE_API_BASE_URL=http://127.0.0.1:4000 was set explicitly on the
+        playwright invocation. This did not block the spec's own gates in the
+        first run (which failed earlier, at the API-only install step, before any
+        page navigation), but would have blocked every GUI step once install
+        succeeded. Confirmed this is a local dev-stack quirk, not application
+        code, by inspecting vite.config.ts's proxy target expression directly.
+
+overall_verdict: BLOCKED_ON_SPEC_BUG
+summary: >
+  REQ-381's actual implementation (the two new screens, the API wiring to
+  REQ-380, the canonicalizeArtefactContent port) is demonstrated working against
+  a real running instance -- the diagnostic rerun is a genuine, unmocked pass of
+  every EO-001..EO-005 assertion. AC6's "spec exists and passes against the real
+  screen" is NOT yet satisfied as committed, because the spec's own fixture data
+  trips a real, pre-existing, unrelated graph-validation rule (HUMAN_TASK nodes
+  require a non-empty "role" attribute) that the spec's `graphFor()` helper never
+  supplies. This is a one-line fix confined to the spec file, not any file under
+  REQ-381's own change set (lib/letflow/routers/solution_packs.ex,
+  lib/letflow/definitions/graph.ex, and web/src/... under REQ-381's scope are all
+  unmodified and working correctly).
+recommended_action: >
+  Route back to TEST-DESIGNER (not ELIXIR-DEV/FRONTEND-DEV) to add
+  attributes: { role: 'reviewer' } (or any non-blank role string) to the
+  HUMAN_TASK node literal in graphFor() at
+  web/tests/e2e/pipelines/template-update-conflict.pipeline.e2e.spec.ts:68, then
+  re-dispatch UAT-RUNNER once committed to confirm the committed spec passes
+  as-is (already proven to pass with this exact fix applied locally). No backend
+  or frontend implementation change is needed.

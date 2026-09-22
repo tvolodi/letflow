@@ -10,9 +10,9 @@
  * this spec implements, and `test/uat-reports/gui-review-2026-09-20-migration-partial-failure-resume.md`
  * for the gap trace that originally filed REQ-374/REQ-375.
  *
- * ## The one real infra addition this spec needed (read before touching auth)
+ * ## Two real infra additions this spec needed (read before touching auth)
  *
- * REQ-374's `start_rollout/3` has NO per-company scope parameter (confirmed
+ * 1. REQ-374's `start_rollout/3` has NO per-company scope parameter (confirmed
  * by reading `lib/letflow/platform/migration_rollout.ex`'s
  * `active_company_tenant_ids/0` and `lib/letflow/routers/platform_migrations.ex`'s
  * request body — every call targets EVERY :active, provisioned tenant on the
@@ -29,6 +29,32 @@
  * conflict this produces is real, and `check_additive_only/3` detects it via
  * a genuine `information_schema.columns` read.
  *
+ * 2. UAT-RUNNER's first live run (against the ISS-0777-fixed backend)
+ * surfaced a second real gap: `do_run_column_promotion/2` calls
+ * `ensure_entity_table/2` BEFORE `check_additive_only/3`, and that function's
+ * table-doesn't-exist-yet branch (`create_and_populate_entity_table/3`)
+ * requires a real, ACTIVE `Letflow.Entities.EntityDefinition` for the target
+ * `entity_type` to already exist in that tenant's schema — with none
+ * registered, `Definitions.get_active_definition_by_name/2` genuinely returns
+ * `{:error, :not_found}` and the company FAILS instead of succeeding. This
+ * spec's own poisoned company (bilimbaga) never hits that branch at all — its
+ * `entity_<entity_type>` table already exists (via the poison step above), so
+ * `entity_table_exists?/2` short-circuits straight to `check_additive_only/3`
+ * — but the two HEALTHY companies (bpm-default, swiftroute) do need a real,
+ * active entity definition registered first, or they fail too, for an
+ * unrelated reason, breaking the whole scenario at step 02.
+ * `../db-exec.ts`'s `createActiveEntityDefinition` calls the real
+ * `Letflow.Entities.Definitions.create_definition/2` +
+ * `.activate_definition/4` context functions directly via
+ * `mix run --no-start -e` (same repo checkout backing the server under
+ * test) — the exact functions `migration_rollout_test.exs`'s own
+ * `create_active_definition!/3` fixture calls, not a raw-SQL reimplementation
+ * of entity-definition persistence. No HTTP endpoint could do this instead:
+ * `POST /entities/definitions`/`.../activate` resolve their target tenant
+ * from the CALLING TOKEN's own Keycloak realm, and no known
+ * `:EntitiesDefinitionsWrite`-permission fixture user exists in bilimbaga's
+ * or swiftroute's own realms for this pair.
+ *
  * Login/session setup uses the SAME `loginWithToken`
  * (`sessionStorage.__e2e_session` injection after a real Keycloak
  * password-grant token) every other pipeline spec in this directory already
@@ -44,8 +70,11 @@
  *     the same fixture tenants `platform-definition-promotion-rollback` and
  *     `platform-definition-promotion-conflict-rejected` already resolve),
  *     designating bilimbaga as the one poisoned company (precondition 1/2)
- *   → pre-step: poison bilimbaga's schema with a same-named, conflicting-type
- *     ("bigint" vs. the rollout's own "text") column (precondition 2/3)
+ *   → pre-step: register + activate a real EntityDefinition for the target
+ *     entity_type in the two HEALTHY companies (bpm-default, swiftroute), so
+ *     they can genuinely succeed; poison bilimbaga's schema with a
+ *     same-named, conflicting-type ("bigint" vs. the rollout's own "text")
+ *     column, so it genuinely fails (precondition 2/3)
  *   → 01 (GUI): operator starts the rollout targeting every active company
  *   → 02 (system, asserted from step 01's own response): failure isolation —
  *     bilimbaga FAILED with a reason, bpm-default/swiftroute SUCCEEDED
@@ -97,7 +126,13 @@ import {
 } from '../pipeline'
 import { assertServiceReadiness, resolveCredential } from '../helpers'
 import { typeIntoTestIdInput } from '../type-into-input'
-import { runSqlAgainstDevPostgres, tenantSchemaName, poisonCompanySchemaSql, cureCompanySchemaSql } from '../db-exec'
+import {
+  runSqlAgainstDevPostgres,
+  tenantSchemaName,
+  poisonCompanySchemaSql,
+  cureCompanySchemaSql,
+  createActiveEntityDefinition,
+} from '../db-exec'
 
 // Multi-step real-backend GUI flow, same rationale as the sibling
 // platform-definition-promotion-rollback spec's own 300s budget.
@@ -154,8 +189,9 @@ test.describe('Pipeline: platform-migration-partial-failure-resume (PW-04)', () 
     })
 
     // ── Pre-step (preconditions 1-3): resolve >= 3 real active companies,
-    //    designate one poisoned ────────────────────────────────────────────
-    await pl.step('pre: resolve 3 real active companies; poison one with a real conflicting-type column', async (s) => {
+    //    make the two healthy ones ABLE to succeed, make the one poisoned
+    //    company UNABLE to ────────────────────────────────────────────────
+    await pl.step('pre: resolve 3 real active companies; register+activate the target entity for the healthy two; poison the third with a real conflicting-type column', async (s) => {
       const bpmDefault = await resolveTenantContext(request, 'bpm-default', adminToken)
       const bilimbaga = await resolveTenantContext(request, 'bilimbaga', adminToken)
       const swiftroute = await resolveTenantContext(request, 'swiftroute', adminToken)
@@ -167,6 +203,18 @@ test.describe('Pipeline: platform-migration-partial-failure-resume (PW-04)', () 
       // Precondition 3: fresh, never-used-before entity_type/attribute pair
       // -- fixtureId guarantees this, so "no rollout exists yet for this
       // pair" holds without a separate GET/check.
+
+      // The two HEALTHY companies must have a real, ACTIVE EntityDefinition
+      // for the target entity_type BEFORE the rollout runs, or
+      // ensure_entity_table/2's create-branch fails them for an unrelated
+      // reason (UAT-RUNNER's live-run finding — see this file's own header
+      // comment, "Two real infra additions"). The poisoned company must NOT
+      // get one: its table already exists (poisoned below), so
+      // ensure_entity_table/2 never reaches that branch for it either way.
+      for (const tenantId of s.healthyTenantIds) {
+        createActiveEntityDefinition(tenantSchemaName(tenantId), s.targetEntityType)
+      }
+
       runSqlAgainstDevPostgres(poisonCompanySchemaSql(s.poisonedSchema, s.tableName, s.targetAttribute))
     })
 
@@ -198,7 +246,20 @@ test.describe('Pipeline: platform-migration-partial-failure-resume (PW-04)', () 
       await expect(poisonedStatus).toHaveAttribute('data-status', 'failed')
       const poisonedReason = await page.getByTestId(`rollout-outcome-reason-${s.poisonedTenantId}`).innerText()
       pl.gate(poisonedReason.trim().length > 0, 'the poisoned company must show a non-empty reason (EO-003)')
-      await expect(page.getByTestId(`rollout-outcome-completed-${s.poisonedTenantId}`)).toHaveText('—')
+      // NOT the em-dash placeholder: REQ-374's record_outcome_result/2 sets
+      // completed_at the instant an outcome leaves 'pending', for 'failed'
+      // exactly as much as for 'succeeded' (migration_rollout_test.exs
+      // asserts a non-nil completed_at for every outcome, including the one
+      // it deliberately poisons). The em-dash is reserved for a genuinely
+      // still-pending outcome, which this poisoned company never is by the
+      // time step 1's response renders. See commit 29a72762's own finding
+      // (UAT-RUNNER, "new_finding_2") for the prior wrong assumption this
+      // corrects.
+      const poisonedCompletedAtFirstPass = await page.getByTestId(`rollout-outcome-completed-${s.poisonedTenantId}`).innerText()
+      pl.gate(
+        poisonedCompletedAtFirstPass.trim() !== '—' && poisonedCompletedAtFirstPass.trim().length > 0,
+        'the poisoned (failed) company must show a real completed-at, not the em-dash placeholder',
+      )
 
       for (const tenantId of s.healthyTenantIds) {
         const status = page.getByTestId(`rollout-outcome-status-${tenantId}`).getByTestId('status-badge')

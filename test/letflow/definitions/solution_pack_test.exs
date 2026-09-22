@@ -848,7 +848,8 @@ defmodule Letflow.Definitions.SolutionPackTest do
           ]
         })
 
-      assert {:ok, result} = SolutionPack.install(doc, Ecto.UUID.generate(), prefix: tenant.schema_name)
+      assert {:ok, result} =
+               SolutionPack.install(doc, Ecto.UUID.generate(), prefix: tenant.schema_name)
 
       rows =
         Repo.all(
@@ -857,7 +858,8 @@ defmodule Letflow.Definitions.SolutionPackTest do
           )
         )
 
-      assert length(rows) == 1, "expected exactly one solution_pack_installs row, got #{length(rows)}"
+      assert length(rows) == 1,
+             "expected exactly one solution_pack_installs row, got #{length(rows)}"
 
       [row] = rows
       assert row.installed_version == doc["version"]
@@ -891,7 +893,9 @@ defmodule Letflow.Definitions.SolutionPackTest do
           ]
         })
 
-      assert {:ok, result} = SolutionPack.install(doc, Ecto.UUID.generate(), prefix: tenant.schema_name)
+      assert {:ok, result} =
+               SolutionPack.install(doc, Ecto.UUID.generate(), prefix: tenant.schema_name)
+
       assert length(result.installed_definitions) == 2
 
       base_rows =
@@ -1060,7 +1064,9 @@ defmodule Letflow.Definitions.SolutionPackTest do
 
       doc = pack_document(%{definitions: definitions})
 
-      assert {:ok, result} = SolutionPack.install(doc, Ecto.UUID.generate(), prefix: tenant.schema_name)
+      assert {:ok, result} =
+               SolutionPack.install(doc, Ecto.UUID.generate(), prefix: tenant.schema_name)
+
       assert length(result.installed_definitions) == 4
 
       new_id_by_process_key =
@@ -1080,8 +1086,13 @@ defmodule Letflow.Definitions.SolutionPackTest do
           {process_key, base.base_content}
         end
 
-      artefact_id_for = fn bucket -> Map.fetch!(new_id_by_process_key, Map.fetch!(keys, bucket)) end
-      base_content_for = fn bucket -> Map.fetch!(base_content_by_process_key, Map.fetch!(keys, bucket)) end
+      artefact_id_for = fn bucket ->
+        Map.fetch!(new_id_by_process_key, Map.fetch!(keys, bucket))
+      end
+
+      base_content_for = fn bucket ->
+        Map.fetch!(base_content_by_process_key, Map.fetch!(keys, bucket))
+      end
 
       different_content = fn bucket, tag ->
         req379_canonical_json(%{"different_for" => Atom.to_string(bucket), "tag" => tag})
@@ -1090,8 +1101,16 @@ defmodule Letflow.Definitions.SolutionPackTest do
       artefact_type = "process_definition"
 
       theirs_artefacts = [
-        artefact_input(artefact_type, artefact_id_for.(:unchanged), base_content_for.(:unchanged)),
-        artefact_input(artefact_type, artefact_id_for.(:clean_update), base_content_for.(:clean_update)),
+        artefact_input(
+          artefact_type,
+          artefact_id_for.(:unchanged),
+          base_content_for.(:unchanged)
+        ),
+        artefact_input(
+          artefact_type,
+          artefact_id_for.(:clean_update),
+          base_content_for.(:clean_update)
+        ),
         artefact_input(
           artefact_type,
           artefact_id_for.(:local_only),
@@ -1105,13 +1124,21 @@ defmodule Letflow.Definitions.SolutionPackTest do
       ]
 
       incoming_artefacts = [
-        artefact_input(artefact_type, artefact_id_for.(:unchanged), base_content_for.(:unchanged)),
+        artefact_input(
+          artefact_type,
+          artefact_id_for.(:unchanged),
+          base_content_for.(:unchanged)
+        ),
         artefact_input(
           artefact_type,
           artefact_id_for.(:clean_update),
           different_content.(:clean_update, "incoming")
         ),
-        artefact_input(artefact_type, artefact_id_for.(:local_only), base_content_for.(:local_only)),
+        artefact_input(
+          artefact_type,
+          artefact_id_for.(:local_only),
+          base_content_for.(:local_only)
+        ),
         artefact_input(
           artefact_type,
           artefact_id_for.(:conflict),
@@ -1130,7 +1157,11 @@ defmodule Letflow.Definitions.SolutionPackTest do
 
       entry_for_bucket = fn bucket ->
         artefact_id = artefact_id_for.(bucket)
-        Enum.find(plan.entries, &(&1.artefact_type == artefact_type and &1.artefact_id == artefact_id))
+
+        Enum.find(
+          plan.entries,
+          &(&1.artefact_type == artefact_type and &1.artefact_id == artefact_id)
+        )
       end
 
       unchanged_entry = entry_for_bucket.(:unchanged)

@@ -232,6 +232,55 @@ jobs:
     # completion immune to cancellation.
     if: ${{ !cancelled() }}
 
+    # ISS-0779: `--health-cmd "pg_isready -U letflow"` (no `-d`) was NOT a check that
+    # the target database exists -- it was not even a check that the specific
+    # database it happened to probe (defaults to the `-U` value when `-d` is
+    # omitted, i.e. a database literally named "letflow", which nothing here ever
+    # creates -- POSTGRES_DB only creates "letflow_dev") exists either. `pg_isready`
+    # (and the `PQping`/`PQpingParams` libpq call it wraps) treats ANY response from
+    # the postmaster -- including a `FATAL: database "letflow" does not exist` or
+    # `FATAL: role "letflow" does not exist` reply -- as proof the SERVER is up, and
+    # reports "accepting connections" regardless. This is exactly what live CI
+    # evidence for this issue showed: the Postgres service container's own log
+    # recorded repeated `FATAL: database "letflow" does not exist` replies (from
+    # this health-cmd's own probes, well before `POSTGRES_DB`'s entrypoint-driven
+    # `CREATE DATABASE letflow_dev` step had even run) while the health check itself
+    # was reporting healthy on the very first attempt -- so GitHub Actions started
+    # the job's `mix ecto.create` step immediately, racing ahead of the container
+    # entrypoint's own user/database bootstrap. Confirmed via the Postgres docs/
+    # `pg_isready` behavior (an "invalid database"/"invalid authorization" FATAL is
+    # explicitly one of the responses `PQpingParams` maps to `PQPING_OK`, not
+    # `PQPING_REJECT`) that simply adding `-d letflow_dev` here would NOT have fixed
+    # this: `pg_isready` would still report "accepting" the instant the postmaster
+    # answers at all, FATAL-database-doesn't-exist reply included -- so a same-shape
+    # `pg_isready -U letflow -d letflow_dev` health-cmd is not a real fix, only a
+    # cosmetic one.
+    #
+    # Fix: replace the health-cmd with a real, authenticated `psql` query against
+    # `letflow_dev` -- the database `POSTGRES_DB` actually creates. Unlike
+    # `pg_isready`, a `psql ... -c 'SELECT 1'` genuinely fails (nonzero exit) when
+    # the target database doesn't exist yet or the `letflow` role/password isn't
+    # provisioned yet, because it has to complete real authentication and query
+    # execution, not just get *a* response from the postmaster. This forces Docker's
+    # health-check polling to keep the service "starting" (not "healthy") until the
+    # entrypoint's full bootstrap (role + password + `CREATE DATABASE letflow_dev`)
+    # has actually finished, which is the one guarantee `pg_isready` could never give
+    # here regardless of which `-d` value it was passed.
+    #
+    # AC3 (docs/issues/ISS-0779.yaml): neither `mix ecto.create` nor
+    # `scripts/test_parallel.sh` has any retry/wait logic for this exact condition
+    # today, so this is not a duplicate of existing retry logic. Ecto's own
+    # `storage_up` (deps/ecto_sql/lib/ecto/adapters/postgres.ex, `run_query/2`) opens
+    # exactly one `Postgrex.start_link/1` with `backoff_type: :stop` (no reconnect
+    # loop) and returns whatever that single attempt yields; `test_parallel.sh`'s
+    # Step 1.7 calls `mix ecto.create`/`mix ecto.migrate` per partition with no
+    # surrounding wait loop at all. This fix does not add a retry loop next to those
+    # -- it moves the *only* real guard against this race to the one place that can
+    # enforce it before any of those steps run at all: the service container's own
+    # health gate, which GitHub Actions already blocks every later job step on.
+    # `--health-retries` raised from 10 to 30 (interval unchanged at 2s, so ~60s+
+    # budget instead of ~20s) since a real authenticated query naturally needs a
+    # little longer to first succeed than a bare TCP/protocol probe did.
     services:
       postgres:
         image: postgres:16
@@ -242,10 +291,10 @@ jobs:
         ports:
           - 5462:5432
         options: >-
-          --health-cmd "pg_isready -U letflow"
+          --health-cmd "PGPASSWORD=letflow psql -U letflow -d letflow_dev -h 127.0.0.1 -c 'SELECT 1'"
           --health-interval 2s
           --health-timeout 5s
-          --health-retries 10
+          --health-retries 30
 
     steps:
       - name: Check out repository

@@ -50,6 +50,10 @@ const NAV_ITEMS: NavItem[] = [
   // platform-wide tenant-migration fanout runner. Same :TenantsManage
   // (PLATFORM_ADMIN-only) risk class as admin/tenants, admin/onboarding.
   { to: '/admin/platform-migrations', label: 'Platform Migrations', roles: ['PLATFORM_ADMIN'] },
+  // REQ-377: operator-facing history-retirement screen for REQ-376's
+  // whole-partition retirement mechanism. Same :TenantsManage
+  // (PLATFORM_ADMIN-only) risk class as admin/platform-migrations.
+  { to: '/admin/event-retention', label: 'Event Retention', roles: ['PLATFORM_ADMIN'] },
 ]
 
 export function AppShell() {

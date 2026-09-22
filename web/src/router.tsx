@@ -34,6 +34,7 @@ import ExamSessionResultPage from '@/pages/exam/ExamSessionResultPage'
 import BilimBagaAdminPage from '@/pages/admin/bilimbaga/BilimBagaAdminPage'
 import BilimBagaEntityRoute from '@/pages/admin/bilimbaga/BilimBagaEntityRoute'
 import PlatformMigrationConsolePage from '@/pages/admin/platform-migrations/PlatformMigrationConsolePage'
+import EventRetentionPage from '@/pages/admin/event-retention/EventRetentionPage'
 
 export const router = createBrowserRouter([
   {
@@ -79,6 +80,7 @@ export const router = createBrowserRouter([
       { path: 'admin/bilimbaga', element: <BilimBagaAdminPage /> },
       { path: 'admin/bilimbaga/:entityType', element: <BilimBagaEntityRoute /> },
       { path: 'admin/platform-migrations', element: <PlatformMigrationConsolePage /> },
+      { path: 'admin/event-retention', element: <EventRetentionPage /> },
       { path: 'dlq', element: <DlqPage /> },
       { path: 'webhooks', element: <WebhooksPage /> },
       { path: 'exam', element: <ExamListPage /> },

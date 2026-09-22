@@ -1,0 +1,55 @@
+{
+  "handoff_id": "c3d4e5f6-0002-4000-8000-000000000002",
+  "run_id": "WF02-REQ376-20260922",
+  "workflow_id": "WF-02",
+  "step": "01b",
+  "from_agent": "ORCH",
+  "to_agent": "CODE-DESIGN-VALIDATOR",
+  "file": "handoffs/WF02-REQ376-20260922/step-01b-code-design-validator-v2.json",
+  "supersedes": "handoffs/WF02-REQ376-20260922/step-01b-code-design-validator.json",
+  "rework_of": "handoffs/WF02-REQ376-20260922/step-01-code-designer-v2.json",
+  "created_at": "2026-09-22T00:00:00Z",
+  "started_at": "2026-09-22T00:00:00Z",
+  "completed_at": "2026-09-22T00:00:00Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S6",
+    "requirement_ids": ["REQ-376"],
+    "related_handoff_ids": [
+      "handoffs/WF02-REQ376-20260922/step-01b-code-design-validator.json",
+      "handoffs/WF02-REQ376-20260922/step-01-code-designer-v2.json"
+    ],
+    "artifacts_in": [
+      "docs/migration/decisions/0037-event-store-partitioning-and-whole-partition-retirement.md",
+      "lib/letflow/design/req376-partition-event-retirement.md"
+    ],
+    "owned_modules": []
+  },
+  "task": {
+    "description": "WF-02 Step 1b RE-GATE (rework attempt 1 of 3) for REQ-376. Re-run the full 12-point gate on the reworked design artefacts, with particular scrutiny on whether the three previously-cited defects (SS4.3 header/body statement-count inconsistency; missing crash-recovery/idempotent-resume mechanism with matching @spec error case; unaddressed Postgres 'pending detach'/FINALIZE requirement) are genuinely resolved, and on the newly-introduced events_archive no-forward-pre-creation + events_archive_default reconciliation mechanism (does it quietly break EO-001's non-blocking claim; is its scan/lock behavior bounded and described).",
+    "acceptance_criteria": [
+      "a decision record resolving Postgres-native monthly PARTITION BY RANGE (created_at) for events/events_archive exists under docs/migration/decisions/, cross-references 0003 Decision C and ISS-0014, and carries REVIEWER sign-off (pending -- see decision record's own Sign-off section)",
+      "retiring one month of expired history is designed as a short whole-partition DDL sequence (DETACH/ATTACH, not row-by-row DELETE), honestly stated as a sequence rather than mislabeled as one statement, with idempotent crash-recovery/resume via catalog state, an explicit stuck-pending-detach error case, and a stated test shape proving no per-row DELETE runs in the retirement steps, the platform accepts a concurrent write throughout (EO-001), and a crash mid-sequence can be resumed correctly",
+      "the protected-record (keep_forever-policy) exemption mechanism is specified, with a stated test shape proving the count is identical before/after retiring a month containing at least one protected record (EO-002)",
+      "the architectural mechanism making an already-retired month's process-instance history still replay with no gap is specified (EO-003)",
+      "the pre-creation mechanism is specified such that no test or code path ever waits on partition creation while a write is in flight",
+      "the relationship between the new mechanism and Letflow.EventStore.archive/1's existing row-level move is stated explicitly (coexist, with archive/1 unchanged) in both the decision record and the design doc",
+      "every acceptance criterion maps to a concrete design element -- no TBD; open questions listed explicitly instead"
+    ]
+  },
+  "result": {
+    "status": "FAIL",
+    "summary": "11 of 12 gate checks pass, including all three previously-cited defects now genuinely resolved: (1) SS4.3's header is internally consistent -- it now honestly states retire_month/3 is a short SEQUENCE of DDL statements, not one statement, because DETACH CONCURRENTLY cannot run inside a transaction, and explicitly reframes AC2's real requirement as 'every statement operates on the whole partition as a unit; none of them iterates or issues a DELETE/UPDATE per row of ordinary event data' -- a defensible reading of the acceptance criterion's literal text, since the criterion's own parenthetical ('DETACH/DROP, not row-by-row DELETE') is contrasting whole-partition operations against per-row DELETE, not mandating a literal single Postgres statement. (2) A genuine, concrete, catalog-detected (pg_inherits/inhdetachpending, never self-stored) state machine (SS4.3.1, four states: :not_started/:pending_detach/:detached_standalone/:already_retired) now drives retire_month/3, making every call -- first or resumed -- idempotent by construction; a new {:error, {:stuck_pending_detach, reason}} @spec case (SS4.1) covers the one state needing operator attention; SS4.3.3 states three concrete crash-recovery test sub-cases including exactly the scenario requested (stop after DETACH/before ATTACH, re-call retire_month/3, assert resume via :detached_standalone completes steps 3-5 with no double-DETACH and resumed_from names the path) plus a pending-detach/FINALIZE sub-case and an idempotent already-retired no-op sub-case. (3) Postgres's pending-detach/FINALIZE requirement is now specifically handled, not just mentioned in prose -- SS4.3.1 State :pending_detach names the exact catalog column (inhdetachpending), the exact recovery statement (ALTER TABLE events DETACH PARTITION ... FINALIZE), and its own failure path, and SS4.3.2 cites the Postgres 14+-documented column by name. All other originally-passing checks remain passing on re-read (decision record cross-references, AC1 pending sign-off, AC6 relationship statement, EO-002 mechanism/test shape, EO-003 read/2 union, AC5 pre-creation non-blocking, full @spec error shapes, no .ex/.exs implementation code, cross-module dependencies, DB schema changes fully described, open questions explicit and non-load-bearing).\n\nFAILS on check 4 again, on a new defect this rework itself introduced while fixing the first three: section 4.4b (events_archive_default reconciliation, added in this revision to satisfy step 4's ATTACH precondition) is asserted to be 'bounded, small-in-practice' (S4.4, line ~467) with no supporting argument and no batching/chunking, unlike 4.4a's keep_forever relocation, whose smallness claim is actually justified ('the whole reason keep_forever exists is that it's the exception, not the common case', section 4.4). 4.4b has no analogous justification, and the design's own retention model makes the 'small' claim implausible on its face: archive/1 continuously moves any row whose event_type has a keep_days/keep_count policy shorter than min_partition_age_days into events_archive_default throughout the ~min_partition_age_days window before a month becomes retirement-eligible (section 4.2 -- min_partition_age_days is 'deliberately conservative', i.e. long); for any tenant with short-keep_days policies on high-volume event types, that means a large fraction of a given month's total event volume could already be sitting in events_archive_default by the time that month retires, not a small exception set. Section 4.4b's own mechanism (SELECT the full matching row set from events_archive_default, then for every row found, INSERT into the still-live events_y<year>m<month> partition and DELETE from events_archive_default, all inside one single Repo.transaction/1, no chunking, no row-count cap) is unaddressed for what happens at scale: no discussion of transaction duration, lock hold time, or whether a large single transaction here could delay or contend with concurrent archive/1 runs or concurrent append/2 traffic against the still-attached target-month partition it inserts into, and no open question is filed acknowledging this the way OQ1 already does for the analogous single-transaction backfill concern in section 2.1 migration 3. Section 5's EO-001 'consolidated statement' claims no step in retire_month/3 ever takes a lock stronger than SHARE UPDATE EXCLUSIVE against a live partition, but does not analyze 4.4b's transaction under that claim at all -- an omission, not a proof, for the one step this rework itself just added ahead of DETACH. This is exactly the class of gap the task brief flagged as needing verification (is the reconciliation step's scan/lock behavior bounded and described) and it is not: the SELECT itself is index-backed (parent-level idx_archive_time on created_at propagates to the default partition) and therefore not a blind scan, but the unbounded, unbatched, single-transaction INSERT+DELETE over however many rows accumulated is a genuine, unaddressed gap that could threaten EO-001's non-blocking claim at realistic data volumes, not a nitpick.",
+    "artifacts_out": [],
+    "next_action": "Rework CODE-DESIGNER",
+    "issues": [
+      "AC2/EO-001 (design doc S4.4/S4.4b): the newly-added events_archive_default reconciliation step (required for section 4.3 step 4's ATTACH to succeed) is asserted 'bounded, small-in-practice' with no supporting argument, unlike 4.4a's keep_forever relocation whose smallness is actually justified by keep_forever's designed rarity. Given archive/1 continuously routes any row with a keep_days/keep_count policy shorter than the (deliberately long) min_partition_age_days window into events_archive_default throughout that whole window, the reconciled row set for a given month could be a large fraction of that month's total volume, not small.",
+      "AC2/EO-001 (design doc S4.4b): the reconciliation's SELECT + per-row INSERT (into the still-live target-month partition) + DELETE (from events_archive_default) is specified as a single, unchunked Repo.transaction/1 with no row-count bound or batching strategy, and no analysis of transaction duration or lock-hold time at realistic scale -- unlike section 2.1 migration 3's analogous single-transaction backfill concern, which the design explicitly flags as open question OQ1. No equivalent open question is filed for 4.4b.",
+      "AC2/EO-001 (design doc S5): the 'EO-001 consolidated statement' claims no step in retire_month/3 ever takes a lock stronger than SHARE UPDATE EXCLUSIVE against a live partition, but does not analyze 4.4b's transaction (newly added by this rework) against that claim at all -- the claim is stated for FINALIZE's exception case but silently omits 4.4b, the other step this rework introduced ahead of DETACH."
+    ],
+    "rework_ceiling_note": "This FAIL would make the next CODE-DESIGNER pass rework attempt 2 of 3 (max_rework: 3). If that attempt also fails the gate, ORCH/REVIEWER should be alerted before a third and final rework is dispatched, per WF-02's rework ceiling."
+  },
+  "rework_count": 1,
+  "max_rework": 3
+}

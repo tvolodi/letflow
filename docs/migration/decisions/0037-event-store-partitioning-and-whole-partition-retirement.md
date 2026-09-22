@@ -271,3 +271,88 @@ corrections rather than leaving superseded framing to mislead a future reader.
 This changes the retirement DDL sequence itself (removes an `INSERT`/`DELETE` pair from
 the runtime path entirely), so it re-enters SECURITY-REVIEWER (Step 2c) and REVIEWER
 (Step 2d) for re-gate before TEST-DESIGN-VALIDATOR re-runs Step 3b.
+
+## Sign-off (re-gate, correction #2)
+
+REVIEWER (WF-02 Step 2d re-gate, REQ-376, run WF02-REQ376-20260922) —
+2026-09-22T12:05:00Z — **PASS.** This is an amendment to, not a replacement of, the
+sign-off above — that PASS stays on record against the implementation it reviewed.
+Reviewed `git diff HEAD~4..HEAD -- lib/letflow/event_store/partition_maintenance.ex`
+in full, `step-02a-elixir-dev-rework1.json`, `step-02c-security-reviewer-regate.json`
+(PASS), this decision's "Implementation-discovered correction #2" section, and the
+design doc's §4.4/4.4a/4.5/§8 in full.
+
+- **Design-doc internal consistency (task point 1):** confirmed consistent. §4.4/4.4a
+  were rewritten in place, not merely annotated — every sentence describing the old
+  relocate-then-something mechanism carries a same-dated `[IMPLEMENTATION-DISCOVERED
+  CORRECTION, further, ...]` marker and is followed by the corrected, read-only
+  framing; no paragraph anywhere in §4.4/4.4a still asserts physical relocation as the
+  live mechanism (checked with `grep -n relocat` across both docs and the module —
+  every remaining hit is either historical narration inside a correction note, 4.4b's
+  own still-real relocation mechanism describing the *reconciliation* batch loop
+  (unaffected by this rework, correctly untouched), or the `protected_rows_relocated`
+  field name itself, already flagged MINOR/deliberately unrenamed). §4.5's EO-002 test
+  shape needed no edit and none was made — it was already written as "count before,
+  same count summed across `events` ∪ `events_archive` after," which is exactly what
+  `count_protected_rows/2`'s read-only, post-`ATTACH` shape produces; it never assumed
+  a relocation mechanism to begin with. §8's AC coverage map row for AC3/EO-002 already
+  read "4.4a `keep_forever` accounting, read-only" before this re-gate (ELIXIR-DEV's own
+  edit) — correct, left as is. Found one residual stale word in
+  `lib/letflow/event_store/partition_maintenance.ex`'s own §4.4 index comment (line
+  ~646, "§4.4a (keep_forever relocation, runs AFTER attach...)") — a code comment, not
+  a design/decision doc, and not load-bearing for anyone's PASS, but worth the one-line
+  fix for the same reason as everything else in this gate: no comment should describe a
+  mechanism the code next to it no longer implements. Fixed directly (same commit) to
+  "keep_forever accounting, read-only". Recompiled clean afterward
+  (`MIX_ENV=test mix compile --warnings-as-errors --force`: 282 files, 0 warnings;
+  `mix format --check-formatted`: exit 0) — comment-only change, no behavior risk.
+- **Logical soundness of the core claim (task point 2), independently verified, not
+  taken on ELIXIR-DEV's word:** the claim is TRUE, and only for this decision's current
+  scope — which the docs already say explicitly, so no further caveat is required as a
+  PASS condition. Reasoning: decision 0037's retirement primitive is `DETACH`+`ATTACH`
+  only, never `DROP` (stated as a hard exclusion in "What this decision does NOT do,"
+  not a soft default) — `DETACH`/`ATTACH` are pg_inherits/pg_class catalog operations;
+  neither one deletes a row or rewrites a page. Every row physically present in a
+  month's partition when it is detached from `events` is still physically present, in
+  the same table (now reparented), when it is attached to `events_archive` — this holds
+  for a `keep_forever` row exactly as it holds for any other row, with no
+  `keep_forever`-specific step required, because the guarantee comes from the DDL
+  primitive itself, not from anything row-selective. That is sufficient for EO-002
+  *today* and stays sufficient *indefinitely into the future, unconditionally* — as
+  long as no future code path ever issues `DROP` against a partition holding
+  `keep_forever` rows, which is exactly what decision 0037 currently guarantees
+  (no `DROP` exists anywhere in this codebase; confirmed by `grep -rn "DROP TABLE\|DROP
+  PARTITION\|drop_partition" lib/letflow/event_store/` returning nothing beyond this
+  module's own constraint-drop helper, `drop_bounds_constraint!/3`, which drops a
+  `CHECK` constraint, not a partition or table). The claim's truth is therefore
+  conditional on decision 0037's own current scope holding, and the docs already say so
+  in exactly those terms — decision 0037's pre-existing "What this decision does NOT
+  do" section already names the future-DROP-tier door as deliberately left open, and
+  this rework's own "Implementation-discovered correction #2" section (added the same
+  commit as the fix, before this re-gate) already states explicitly that "if a
+  per-partition-DROP purge tier is ever built, protecting `keep_forever` rows from
+  *that* specific operation will need its own mechanism at that time" and names the two
+  most plausible resolutions (exempt partitions holding protected rows from that future
+  `DROP`, or relocate protected rows to a table genuinely outside this partition scheme
+  immediately before that specific `DROP`). The design doc's §4.4a "What this gives up,
+  honestly stated" paragraph says the identical thing in the implementation's own words.
+  **Ruling: this is already the correct and sufficient caveat, present in both the
+  decision record and the design doc, added at the same time as the fix rather than
+  left for later discovery — no additional statement is required as a condition of this
+  PASS.** A future DROP-capable purge tier's own design work (not REQ-376's) is where
+  the actual protection mechanism belongs, exactly as both docs already say; re-stating
+  the same caveat a third time here would be redundant, not more correct.
+- **Supervision / idiom / scope creep (task point 3):** no change since the first-pass
+  PASS and the Step 2c re-gate's own carried-forward reasoning. The diff since my prior
+  sign-off is confined to `partition_maintenance.ex`'s internal DML mechanism
+  (INSERT+DELETE → one read-only `SELECT count(*)`, called from a different point in
+  the same two call sites) plus doc updates — no new process, no new supervision
+  surface, no new abstraction, no framework-shaped code introduced ahead of need. Net
+  change is a reduction in code (one function shrinks from ~25 lines of
+  transactional DML to ~10 lines of a single query), which is the opposite direction
+  from scope creep.
+- **Decision-record consistency:** no conflict with any other `docs/migration/decisions/`
+  record introduced by this diff.
+
+No blocking gap found. Route to TEST-DESIGN-VALIDATOR (Step 3b) for re-gate once
+TEST-DESIGNER's own rework (the two unrelated test-code bugs) lands.

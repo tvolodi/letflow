@@ -643,8 +643,8 @@ defmodule Letflow.EventStore.PartitionMaintenance do
 
   # -- §4.4 step 1 (4.4b -- events_archive_default reconciliation, runs
   # BEFORE detach, called directly from do_not_started/4) and, further down
-  # this module, §4.4a (keep_forever relocation, runs AFTER attach, called
-  # from do_detached_standalone/6 and do_already_retired/4) -------------
+  # this module, §4.4a (keep_forever accounting, read-only, runs AFTER
+  # attach, called from do_detached_standalone/6 and do_already_retired/4) -
 
   # §4.4b -- batched, bounded reconciliation. Fixed-size batches, one
   # Repo.transaction/1 per batch, SELECT...LIMIT with no OFFSET (each

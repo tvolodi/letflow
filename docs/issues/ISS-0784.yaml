@@ -1,0 +1,66 @@
+id: ISS-0784
+title: >
+  No operator-facing signal when task activation rolls back on
+  {:invalid_form_schema, ...} -- two independent design passes have now
+  converged on the same never-actioned gap
+discovered_by: REVIEWER
+discovered_in_run: WF02-REQ385-20260922
+discovered_at: "2026-09-22T21:45:00Z"
+severity: MINOR
+tags:
+  - backend
+  - observability
+  - operator-ux
+description: >
+  Found while REVIEWER-ing REQ-385's design doc (task-form version-mismatch
+  fallback, `lib/letflow/design/req385-task-form-version-mismatch-fallback.md`),
+  which concluded EO-004's version-mismatch guarantee is vacuous under
+  REQ-126's frozen-at-creation architecture. CODE-DESIGNER's REQ-385 pass
+  identified a genuinely different, real failure mode as a nearer analog
+  (out of REQ-385's own scope per AC4, which forbids manufacturing a
+  failure condition for that requirement's own sake): when
+  `Letflow.Engine.TaskActivation.resolve_form_schema/1` rejects a malformed
+  form schema at activation time (`{:invalid_form_schema, ...}`), the
+  whole activation transaction rolls back per INV-8 -- correct and safe --
+  but nothing currently surfaces this to an operator. The task simply never
+  activates, with no audit trail or visible signal explaining why.
+
+  This is not a newly-discovered gap: `lib/letflow/design/req273-form-schema-activation.md`
+  section 7's own OQ-2 already asked "whether the {:invalid_form_schema, ...}
+  error tuple should surface through Letflow.Audit" and flagged it for
+  REVIEWER -- but no `docs/issues/` record or audit-path change was ever
+  made to act on it. REQ-385's design (section 6, OQ-1) independently
+  rediscovered the same gap four weeks later. Two independent design
+  passes converging on the identical unactioned operator-visibility gap
+  is itself the signal this should become claimable work rather than a
+  third design doc's footnote.
+affected_files:
+  - lib/letflow/engine/task_activation.ex
+  - lib/letflow/audit.ex
+related_requirements:
+  - REQ-273
+  - REQ-385
+severity_rationale: >
+  MINOR -- correctness/safety is unaffected (the rollback itself is
+  correct per INV-8; a malformed schema never silently activates a task).
+  Impact is purely operational: an operator has no way to see why a task
+  never appeared, beyond directly inspecting application logs. Not
+  data-loss or a security concern.
+suggested_fix: >
+  Surface the `{:invalid_form_schema, reason}` rollback through
+  `Letflow.Audit` (or whatever this project's established audit-trail
+  mechanism is for other transaction-rollback conditions -- check how
+  similar activation-time failures are already audited, if any, for
+  precedent) so an operator/PROCESS_DESIGNER can see, per-instance, that
+  activation was attempted and rejected, and why. Likely sized for a
+  single ELIXIR-DEV turn with a design doc, given it touches an
+  audit-trail write path (check docs/agents/instructions/security-invariants.md
+  for whether this counts as a tenant-data path requiring SECURITY-REVIEWER).
+queue_ref: "Q-783"
+# NOTE: letflow-queue's task 783 auto-titled itself "ISS-0783" from its own
+# atomically-allocated id, but the real on-disk filename is ISS-0784.yaml --
+# slot ISS-0783 was already taken by this same session's TenantSwitcher
+# re-entrancy issue. Established, recurring queue-id/filename divergence
+# pattern for this project; queue_ref/github_ref below are authoritative.
+github_ref: "GH-1731"
+status: open

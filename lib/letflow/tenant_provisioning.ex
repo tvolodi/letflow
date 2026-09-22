@@ -629,7 +629,9 @@ defmodule Letflow.TenantProvisioning do
     {20_260_922_000_007, Letflow.Repo.Migrations.BackfillEventsArchivePartitioned,
      "20260922000007_backfill_events_archive_partitioned.exs"},
     {20_260_922_000_008, Letflow.Repo.Migrations.SwapEventsArchivePartitioned,
-     "20260922000008_swap_events_archive_partitioned.exs"}
+     "20260922000008_swap_events_archive_partitioned.exs"},
+    {20_260_922_000_009, Letflow.Repo.Migrations.RetargetEventPayloadStoreFkey,
+     "20260922000009_retarget_event_payload_store_fkey.exs"}
   ]
 
   @doc """
@@ -663,8 +665,14 @@ defmodule Letflow.TenantProvisioning do
   `timers` (`lib/letflow/design/req186-scheduler-core.md` §1), and REQ-183
   one more: `webhook_delivery_attempts`
   (`lib/letflow/design/req183-webhook-delivery-dispatch.md` §1), and REQ-376
-  eight more: the `events`/`events_archive` partitioning conversion set
-  (`lib/letflow/design/req376-partition-event-retirement.md` §2.1) —
+  nine more: the `events`/`events_archive` partitioning conversion set
+  (`lib/letflow/design/req376-partition-event-retirement.md` §2.1), including
+  a post-hoc 9th migration
+  (`20260922000009_retarget_event_payload_store_fkey.exs`) that retargets
+  `event_payload_store`'s composite FK away from the renamed-aside
+  `events_pre_partition_20260922` table -- migration 4's table rename does
+  not retarget a pre-existing FK, since Postgres binds FKs by OID, not name
+  (decision 0037's third correction has the full incident writeup) —
   entries in total (see `@tenant_scoped_migration_manifest` itself for the
   authoritative, up-to-date count), ordered by version. Every future tenant-scoped migration must append its
   own entry to `@tenant_scoped_migration_manifest`, in addition to following the

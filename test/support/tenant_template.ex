@@ -817,6 +817,26 @@ defmodule Letflow.Test.TenantTemplate do
   # the clone schema's qualifier throughout the definition string BEFORE
   # execution -- skipping this reproduces the FK object but points it at the
   # template's own tables.
+  #
+  # REQ-376 addition: `AND con.conparentid = 0` excludes Postgres's own
+  # INTERNAL per-partition child constraints. A foreign key that references a
+  # PARTITIONED table (event_payload_store -> events, since REQ-376) is
+  # represented in pg_constraint as one top-level constraint PLUS one
+  # additional child constraint per partition of the REFERENCED table
+  # (conparentid pointing back at the top-level row) -- an undocumented-in-
+  # application-terms Postgres implementation detail for validating the FK
+  # against each partition individually, not a second logical FK. Without
+  # this filter, this query returned one row per events_y<year>m<month>/
+  # events_default partition in addition to the real
+  # event_payload_store_event_id_fkey row, and blindly replaying every one of
+  # them here failed outright: a CLONED tenant's events table is deliberately
+  # plain/unpartitioned (this module's own do_clone/2 uses `CREATE TABLE
+  # (LIKE ... INCLUDING ALL)`, which does not copy PARTITION BY -- see
+  # Letflow.TenantFixture.req376_partition_management_table?/1's doc), so it
+  # has no events_default/events_y... children for those child constraints to
+  # reference ("relation events_default does not exist"). `conparentid = 0`
+  # is the standard Postgres idiom for "this constraint has no parent
+  # constraint" (pg_constraint.conparentid is 0, never NULL, when absent).
   defp readd_foreign_keys!(clone_schema) do
     %{rows: rows} =
       Repo.query!(
@@ -825,7 +845,7 @@ defmodule Letflow.Test.TenantTemplate do
         FROM pg_constraint con
         JOIN pg_class rel ON rel.oid = con.conrelid
         JOIN pg_namespace nsp ON nsp.oid = rel.relnamespace
-        WHERE nsp.nspname = $1 AND con.contype = 'f'
+        WHERE nsp.nspname = $1 AND con.contype = 'f' AND con.conparentid = 0
         """,
         [@template_schema]
       )

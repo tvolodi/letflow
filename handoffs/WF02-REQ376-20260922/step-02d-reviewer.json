@@ -1,0 +1,71 @@
+{
+  "handoff_id": "c3d4e5f6-0004-4000-8000-000000000001",
+  "run_id": "WF02-REQ376-20260922",
+  "workflow_id": "WF-02",
+  "step": "02d",
+  "from_agent": "ORCH",
+  "to_agent": "REVIEWER",
+  "file": "handoffs/WF02-REQ376-20260922/step-02d-reviewer.json",
+  "created_at": "2026-09-22T11:05:00Z",
+  "started_at": "2026-09-22T11:05:00Z",
+  "completed_at": "2026-09-22T11:25:00Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S2",
+    "requirement_ids": ["REQ-376"],
+    "requirement_text": {
+      "REQ-376": "See handoffs/WF02-REQ376-20260922/step-02a-elixir-dev.json's context.requirement_text for the full text (Postgres-native monthly PARTITION BY RANGE (created_at) for events/events_archive, whole-month DETACH+ATTACH retirement, keep_forever protected-record exemption, post-retirement replay EO-003) -- not restated here to avoid drift."
+    },
+    "related_handoff_ids": [
+      "handoffs/WF02-REQ376-20260922/step-02a-elixir-dev.json",
+      "handoffs/WF02-REQ376-20260922/step-02c-security-reviewer.json"
+    ],
+    "artifacts_in": [
+      "docs/migration/decisions/0037-event-store-partitioning-and-whole-partition-retirement.md",
+      "lib/letflow/design/req376-partition-event-retirement.md",
+      "lib/letflow/event_store/partition_maintenance.ex",
+      "lib/letflow/event_store.ex",
+      "lib/letflow/scheduler.ex",
+      "lib/letflow/scheduler/poller.ex",
+      "lib/letflow/tenant_provisioning.ex",
+      "priv/repo/migrations/20260922000001_create_events_partitioned.exs",
+      "priv/repo/migrations/20260922000002_create_events_p_initial_partitions.exs",
+      "priv/repo/migrations/20260922000003_backfill_events_partitioned.exs",
+      "priv/repo/migrations/20260922000004_swap_events_partitioned.exs",
+      "priv/repo/migrations/20260922000005_create_events_archive_partitioned.exs",
+      "priv/repo/migrations/20260922000006_create_events_archive_p_initial_partitions.exs",
+      "priv/repo/migrations/20260922000007_backfill_events_archive_partitioned.exs",
+      "priv/repo/migrations/20260922000008_swap_events_archive_partitioned.exs"
+    ],
+    "owned_modules": []
+  },
+  "task": {
+    "description": "WF-02 Step 2d: REVIEWER hard gate on REQ-376's implementation (git diff main...HEAD on feature/WF02-REQ376-20260922) -- idiomatic OTP usage, supervision integrity, type-safety gaps, scope creep, docs/anti-patterns.md consistency, AND sign-off of decision 0037 (currently DRAFT), which must explicitly rule on ELIXIR-DEV's two flagged MAJOR design deviations (events_default self-heal detach/reattach; archived_at fast-default column before ATTACH), plus assess the Poller/Scheduler partition-maintenance wiring for idiom consistency with the existing retention-sweep pattern and check EventStore.read/2's union-with-events_archive change for scope.",
+    "acceptance_criteria": [
+      "diff reviewed against docs/anti-patterns.md and the four REVIEWER questions (idiomatic vs crutch, supervision, type-safety gaps, scope creep)",
+      "both ELIXIR-DEV-flagged MAJOR deviations explicitly ruled on: accept / direct different resolution / require decision-record amendment",
+      "decision 0037's DRAFT status resolved: either REVIEWER sign-off appended (PASS) or FAIL returned with concrete rework directions",
+      "Poller/Scheduler wiring checked for idiom consistency with the existing maybe_run_retention_sweep/2 pattern",
+      "EventStore.read/2 behavior change checked for scope (does not silently touch anything outside REQ-376's fence)"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "Read ELIXIR-DEV's implementation handoff (step-02a) and SECURITY-REVIEWER's PASS (step-02c) in full, then git diff main...HEAD, decision 0037, the design doc (lib/letflow/design/req376-partition-event-retirement.md), and the actual code (lib/letflow/event_store/partition_maintenance.ex in full, the scheduler.ex/poller.ex/event_store.ex/tenant_provisioning.ex diffs, and the migration set) -- not ELIXIR-DEV's self-report alone.\n\n**Idiomatic vs. crutch:** N/A for gen_statem/state-machine concerns -- this requirement is Postgres DDL/maintenance work, not a process state machine. The catalog-state-detected retirement dispatch (design §4.3.1, `catalog_state/2` in partition_maintenance.ex) is idiomatic: it uses Postgres's own catalogs (`pg_inherits.inhdetachpending`, existence checks) as the single source of truth rather than inventing bespoke bookkeeping to track what Postgres already tracks -- correct call, matches the design's own stated philosophy.\n\n**Supervision integrity:** unaffected. `Letflow.EventStore.PartitionMaintenance` is a plain context module (Repo.query!/Repo.transaction/1 throughout), consistent with REQ-045's Process-vs-row decision (Letflow.Engine's moduledoc, 'Process-vs-row decision') -- no new process, no spawn, no change to Letflow.InstanceSupervisor's deliberately-empty state (confirmed via grep: zero InstanceSupervisor/GenServer(new)/gen_statem/spawn hits in the diff besides Poller's pre-existing GenServer). Letflow.Scheduler.Poller's new `last_partition_maintenance_run_at` state field and `maybe_run_partition_maintenance/2` are a structural mirror of the existing `last_retention_run_at`/`maybe_run_retention_sweep/2` pair -- same config-gate (`partition_maintenance_enabled?/0`) / cadence-gate (`partition_maintenance_due?/1`) / `run_sweep` (Task.async_stream, Admission-bounded) / `with_admission` / rescue-and-log-via-`log_task_raise` shape, confirmed line-by-line against `maybe_run_retention_sweep/2`. No isolation regression, no new supervision surface, no idiom deviation.\n\n**Type-safety gaps:** none beyond ELIXIR-DEV's own MINOR note (Repo.query!/raising vs. this module's own typed-tuple convention) -- not a blocker; see ruling below. No new class of invalid state was introduced that a struct/Ecto.Enum change could make unrepresentable instead.\n\n**Scope creep:** none found. No generic 'partition any table' framework -- every mechanism (naming, DDL shape, catalog checks) is events/events_archive-specific, per the design's own §1 scope fence, confirmed by reading all 8 migrations and the full module. `EventStore.read/2`'s union-with-`events_archive` change is in scope, not silent creep: EO-003/AC4 and decision 0037's own 'Relationship to archive/1' section require it explicitly; the change is documented in both the decision record and inline code comments, and is a strict closing of a pre-existing, independently-flagged gap (req026-event-read-archive-platform-sentinels.md §11 OQ-3), stated as such rather than discovered incidentally. `archived_event_to_event/1` correctly excludes `archived_at` from the returned %Event{} struct so existing callers see no shape change -- confirmed both call sites (lib/letflow/entities/record/projector.ex:134,240) are unaffected pattern matches.\n\n**Ruling on the two flagged MAJOR deviations -- both ACCEPTED as implemented, with decision 0037/the design doc amended by REVIEWER (this same commit) to state the corrected mechanism, rather than leaving the original under-specified framing uncorrected:**\n\n1. `events_default` temporary detach/reattach around `DETACH PARTITION ... CONCURRENTLY`. Accepted. This is the only viable resolution given Postgres's documented restriction (DETACH...CONCURRENTLY flatly rejects a parent with an attached DEFAULT partition, and `events` always has one) -- not a workaround of convenience but a structural necessity, confirmed against real Postgres 16 behavior per ELIXIR-DEV's testing. The fix is itself metadata-only (both the temporary detach and reattach are catalog operations, not row-scoped), idempotent (checks `default_partition_attached?/1` before acting), and self-healing via the unconditional reattach-at-top-of-every-call -- consistent with, not a departure from, §4.3.1's 'catalog-detected, never self-persisted' philosophy. The narrow write-failure window during the brief detach/reattach is an honestly-stated, bounded trade-off (§3.2's months_ahead:2 lookahead keeps events_default empty in steady state, so the window's blast radius is small) and materially better than the only alternative (dropping the events_default safety net entirely, which would remove AC5/OQ1's protection permanently, not just narrowly). Amended design doc §4.3 step 2 in place to state this mechanism.\n2. `ensure_archived_at_column!/1`'s fast-default `archived_at` column add immediately before `ATTACH PARTITION`. Accepted. Also a structural necessity (ATTACH PARTITION requires the child to already carry every parent column; events_archive has one events-shaped partitions don't). The constant-literal default (a DateTime.utc_now() snapshot, explicitly not a now() function call) correctly invokes Postgres's v11+ fast-default optimization, keeping this metadata-only -- verified this claim is substantively correct, not just asserted: a volatile now() default would force a full-table rewrite, which the code comment and the implementation both correctly avoid. Does not change decision 0037's 'same physical table, just reparented, no row copy' framing's substance -- no row is copied or rewritten, only the catalog's column list changes before the metadata-only ATTACH. Amended design doc §4.3 step 4 in place to state this mechanism. Also independently verified: `relocate_protected_rows/2`'s own INSERT INTO events_archive (§4.4a, the keep_forever path) is a genuine row-level DML statement (not a DDL default), so its own `(now() AT TIME ZONE 'utc')` per-row value is correct and unrelated to the ATTACH fast-default concern -- no conflation between the two archived_at-setting code paths.\n\nBoth rulings recorded as decision 0037's sign-off condition; doc amendments made directly by REVIEWER in this same commit (doc-only, not implementation-shaping, not worth bouncing back to CODE-DESIGNER for rework per this gate's own instructions).\n\n**MINOR note (Repo.query!/raising vs. typed-tuple convention):** acknowledged, not required to fix now. `retire_month/3` has no live caller anywhere in this diff (confirmed by grep across lib/ and priv/repo/migrations/) -- design doc's own OQ5 explicitly defers 'who/what calls retire_month/3, and how often' to REQ-377's operator-screen design, which hasn't been written yet. Tightening error-tuple typing ahead of a real caller's actual error-handling needs would be guessing at a contract REQ-377 will define -- not premature engineering to block on now. Matches this codebase's own migration-file `repo().query!/1,2` convention. Flagged for revisit at REQ-377 implementation time.\n\n**Decision-record consistency:** no conflict found with any other docs/migration/decisions/ record. 0003 Decision B (schema-per-tenant) and Decision C points 1/3 are explicitly and correctly stated as untouched; 0006 D2 (tenant_id drop) is correctly respected (no tenant_id reintroduced anywhere in the new DDL). No framework/library choice in this diff contradicts a settled decision.\n\n**docs/anti-patterns.md:** read (currently has only the toolchain-availability entry, example shape otherwise empty) -- nothing in this diff matches any logged anti-pattern; ELIXIR-DEV's real-Postgres verification (not just mix compile) is itself the pattern anti-patterns.md's toolchain entry argues for.\n\n**Decision 0037 status: DRAFT -> ACCEPTED.** REVIEWER sign-off line appended to the decision record's Sign-off section (dated 2026-09-22T11:20:00Z), with an 'Implementation-discovered corrections' section added just above it cross-referencing the two design-doc amendments rather than duplicating their full text. REQ-376 acceptance criterion 1 ('...carries REVIEWER sign-off') is now met.",
+    "artifacts_out": [
+      "handoffs/WF02-REQ376-20260922/step-02d-reviewer.json",
+      "docs/migration/decisions/0037-event-store-partitioning-and-whole-partition-retirement.md",
+      "lib/letflow/design/req376-partition-event-retirement.md"
+    ],
+    "next_action": "Route to TEST-DESIGNER (3)",
+    "issues": [
+      {
+        "severity": "MINOR",
+        "description": "PartitionMaintenance uses Repo.query!/1,2 (raising) rather than this module's own typed {:ok,_}/{:error,_} convention for underlying Postgrex calls. Not required to fix now: retire_month/3 has no live caller in this diff (REQ-377's operator screen, design doc OQ5, is what will decide the caller contract). Revisit at REQ-377 implementation time when a real caller's error-handling needs are known."
+      }
+    ]
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

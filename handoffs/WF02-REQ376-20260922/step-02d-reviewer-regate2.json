@@ -1,0 +1,63 @@
+{
+  "handoff_id": "c3d4e5f6-0004-4000-8000-000000000003",
+  "run_id": "WF02-REQ376-20260922",
+  "workflow_id": "WF-02",
+  "step": "02d",
+  "from_agent": "ORCH",
+  "to_agent": "REVIEWER",
+  "file": "handoffs/WF02-REQ376-20260922/step-02d-reviewer-regate2.json",
+  "created_at": "2026-09-22T13:00:00Z",
+  "started_at": "2026-09-22T13:00:00Z",
+  "completed_at": "2026-09-22T13:20:00Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S2",
+    "requirement_ids": ["REQ-376"],
+    "requirement_text": {
+      "REQ-376": "See handoffs/WF02-REQ376-20260922/step-02a-elixir-dev.json's context.requirement_text for the full text -- not restated here to avoid drift."
+    },
+    "related_handoff_ids": [
+      "handoffs/WF02-REQ376-20260922/step-02d-reviewer.json",
+      "handoffs/WF02-REQ376-20260922/step-02d-reviewer-regate.json",
+      "handoffs/WF02-REQ376-20260922/step-02c-security-reviewer-regate2.json",
+      "handoffs/WF02-REQ376-20260922/step-03-test-designer-rework1.json",
+      "handoffs/WF02-REQ376-20260922/step-03-test-designer-fix2.json"
+    ],
+    "artifacts_in": [
+      "priv/repo/migrations/20260922000009_retarget_event_payload_store_fkey.exs",
+      "lib/letflow/tenant_provisioning.ex",
+      "test/support/tenant_template.ex",
+      "test/letflow/event_store_test.exs",
+      "test/letflow/event_store/partition_maintenance_test.exs",
+      "docs/anti-patterns.md",
+      "docs/migration/decisions/0037-event-store-partitioning-and-whole-partition-retirement.md"
+    ],
+    "owned_modules": []
+  },
+  "task": {
+    "description": "WF-02 Step 2d RE-GATE 2, covering everything new since commit 631e6316 through HEAD (8762c2ea): migration 9 (event_payload_store FK retarget), two test/support/tenant_template.ex catalog-query filter fixes, partition_maintenance_test.exs's Task-kill synchronization fixes (plus docs/anti-patterns.md entry), and a corrected event_store_test.exs AC2 assertion for EO-003 union-read behavior. Assess: (a) migration 9's architectural soundness and consistency with decision 0037/design doc, (b) the two tenant_template.ex fixes are legitimate, correctly-scoped test-infra bug fixes that don't weaken any real assertion, (c) the event_store_test.exs assertion change is a genuine correction of stale behavior, not a gamed/weakened assertion.",
+    "acceptance_criteria": [
+      "diff 631e6316...HEAD read in full",
+      "checked against REVIEWER's four questions (idiom/crutch, supervision, type-safety, scope creep) and docs/anti-patterns.md",
+      "migration 9 independently verified against the original FK's real target and against decision 0037/design doc consistency",
+      "tenant_template.ex fixes verified to route through pre-existing oracles, not new ad-hoc logic, and to not touch application code",
+      "event_store_test.exs assertion change verified against real, unchanged application logic (query_instance_events/3's union), not assumed",
+      "PASS/FAIL verdict with next_action"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "Read `git diff 631e6316...HEAD` in full (10 files, +495/-12): migration 9 (`priv/repo/migrations/20260922000009_retarget_event_payload_store_fkey.exs`), its `tenant_provisioning.ex` manifest registration, two `test/support/tenant_template.ex` catalog-query filters, `partition_maintenance_test.exs`'s two Task-kill/handshake synchronization fixes plus a matching `docs/anti-patterns.md` entry, and the `event_store_test.exs` AC2 assertion rewrite. Also read TEST-DESIGNER's rework1/fix2 handoffs and SECURITY-REVIEWER's re-gate2 PASS for context.\n\n(a) Migration 9 -- ARCHITECTURALLY SOUND, consistent with decision 0037's scope. Root cause is real and independently verified: `event_payload_store`'s original FK does reference `:events` (`priv/repo/migrations/20260816120004_create_event_payload_store.exs:67`), and Postgres binds FKs by OID not name, so migration 4's `RENAME`-based swap (`20260922000004_swap_events_partitioned.exs`) silently leaves the FK pointed at the renamed-aside table -- confirmed as the actual cause of 50/261 rework1 failures, not inferred. Grep confirmed `event_payload_store` is the only FK anywhere referencing `events`/`events_archive`, so the fix's declared scope (one migration, one constraint) is accurate, not underclaimed. The fix itself (drop + recreate by unqualified name, same columns/ON DELETE RESTRICT/constraint name, `execute/1,2` for the composite-column DDL the `constraint/3` DSL can't express) matches the established style of migrations 4/8 for this same requirement -- not a crutch, a correctly-scoped DDL retarget. `down/0` restores the original (defective) target, consistent with this migration set's existing convention of `down` reversing structure rather than fixing forward.\n\nOne genuine gap found: migration 9's own header comment and `tenant_provisioning.ex`'s manifest doc both cite \"decision 0037's third correction\" for the incident writeup, and the design doc's §2.1 migration list \"as updated\" -- neither existed. Per the established precedent from this run's prior re-gate (which fixed a stale code comment directly as a PASS condition rather than routing back), I wrote the missing decision-record section myself: `docs/migration/decisions/0037-event-store-partitioning-and-whole-partition-retirement.md` now has an \"Implementation-discovered correction #3\" section (root cause, fix, and an explicit no-scope-creep ruling) plus a dated \"Sign-off (re-gate 2, correction #3)\" section. The design doc's §2.1 list still says \"six migrations\" and was NOT edited to enumerate the 9th -- filed as non-blocking documentation debt for DOC-UPDATER rather than a rework condition, since it's an enumeration/count staleness in a section whose substance (the retirement mechanism itself) is unaffected, not a correctness or consistency gap in the load-bearing decision record.\n\n(b) The two `tenant_template.ex` fixes -- LEGITIMATE, correctly scoped, no assertion weakened. `readd_foreign_keys!/1`'s `AND con.conparentid = 0` filter excludes Postgres's own internal per-partition child FK constraints (a `pg_constraint` implementation detail of any FK referencing a partitioned table) from being replayed into a deliberately-unpartitioned `:clone`-path test schema -- confirmed `conparentid = 0` is the standard Postgres idiom for \"no parent constraint,\" not an invented heuristic. `recreate_sequences!/1`'s filter to `Letflow.TenantFixture.expected_tenant_tables/0` routes through a pre-existing, already-established oracle (verified present at `test/support/tenant_fixture.ex:350-351`, already used by every other clone-path step) rather than new ad-hoc logic -- excludes only the rollback-safety-net `*_pre_partition_20260922` tables that were never part of the clone's table set to begin with. Both fixes are confined to `test/support/`, touch no application code, and each is documented with a reproduction detail (exact error message / failure count) rather than an unverified guess.\n\n(c) `event_store_test.exs`'s AC2 rewrite -- GENUINE CORRECTION, not weakened or gamed. Independently confirmed `query_instance_events/3` (`lib/letflow/event_store.ex:1275-1291`) is real, pre-existing application logic (predates this diff) that unions `events` and `events_archive` and re-sorts by `sequence_number` -- so a fully-archived instance genuinely is readable via `read/2`, and the old `{:ok, []}` assertion encoded stale pre-EO-003 behavior. The new assertion is strictly stronger than what it replaces: it checks `event_id`, `instance_id`, `sequence_number`, and `event_type` on the returned event, not just a shape match.\n\nAlso reviewed the `partition_maintenance_test.exs` synchronization fixes (real handshake via `assert_receive` before the detacher starts, and a `pg_stat_activity` poll confirming the killed Task's Postgres backend actually disconnected before releasing the holder transaction) and the matching `docs/anti-patterns.md` entry -- sound test-infrastructure fixes for a genuine missing-synchronization defect class (`Task.shutdown(:brutal_kill)` returning is not synchronous with DBConnection's teardown), using `wait_until` (pre-existing shared helper, already used in `poller_test.exs`/`sandbox_pool_test.exs`), not a new invented primitive.\n\nAgainst the four REVIEWER questions: idiomatic (execute/1,2 DDL matches precedent, no GenServer-doing-gen_statem's-job pattern anywhere in this diff), supervision untouched (zero process/spawn/supervision changes -- this is a plain-context-module migration and test-infra diff throughout), no type-safety gap (FK-target correctness at the DDL layer, not new application transition logic -- nothing to queue), no scope creep (migration 9 is a bug fix to unrelated migration-4 plumbing that REQ-376 exposed, not an expansion of decision 0037's own retirement-mechanism scope; the test fixes are narrowly targeted at the two defect classes TEST-DESIGNER's rework diagnosed, no speculative generalization). Checked against `docs/anti-patterns.md` -- no entry contradicted by this diff, and this diff itself adds one correctly.",
+    "artifacts_out": [
+      "handoffs/WF02-REQ376-20260922/step-02d-reviewer-regate2.json",
+      "docs/migration/decisions/0037-event-store-partitioning-and-whole-partition-retirement.md"
+    ],
+    "next_action": "Route to TEST-DESIGN-VALIDATOR re-gate, then TEST-RUNNER (4)",
+    "issues": [
+      "Non-blocking: design doc lib/letflow/design/req376-partition-event-retirement.md §2.1 still enumerates 'six migrations' and was not updated to list the 9th (event_payload_store FK retarget). The load-bearing decision record (docs/migration/decisions/0037-...md) now has the full writeup (Implementation-discovered correction #3, added this gate); the design doc's own list is an enumeration/count staleness only, substance unaffected. Filed here as a note for DOC-UPDATER, not a rework condition."
+    ]
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

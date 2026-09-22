@@ -1,0 +1,71 @@
+{
+  "handoff_id": "c3d4e5f6-0006-4000-8000-000000000001",
+  "run_id": "WF02-REQ376-20260922",
+  "workflow_id": "WF-02",
+  "step": "03",
+  "from_agent": "ORCH",
+  "to_agent": "TEST-DESIGNER",
+  "file": "handoffs/WF02-REQ376-20260922/step-03-test-designer.json",
+  "created_at": "2026-09-22T06:19:28Z",
+  "started_at": "2026-09-22T06:19:28Z",
+  "completed_at": "2026-09-22T06:19:28Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S2",
+    "requirement_ids": ["REQ-376"],
+    "requirement_text": {
+      "REQ-376": "See handoffs/WF02-REQ376-20260922/step-02a-elixir-dev.json's context.requirement_text for the full text (Postgres-native monthly PARTITION BY RANGE (created_at) for events/events_archive, whole-month DETACH+ATTACH retirement, keep_forever protected-record exemption, post-retirement replay EO-003) -- not restated here to avoid drift."
+    },
+    "related_handoff_ids": [
+      "handoffs/WF02-REQ376-20260922/step-02a-elixir-dev.json",
+      "handoffs/WF02-REQ376-20260922/step-02c-security-reviewer.json",
+      "handoffs/WF02-REQ376-20260922/step-02d-reviewer.json"
+    ],
+    "artifacts_in": [
+      "docs/migration/decisions/0037-event-store-partitioning-and-whole-partition-retirement.md",
+      "lib/letflow/design/req376-partition-event-retirement.md",
+      "lib/letflow/event_store/partition_maintenance.ex",
+      "lib/letflow/event_store.ex",
+      "lib/letflow/scheduler.ex",
+      "lib/letflow/scheduler/poller.ex"
+    ],
+    "owned_modules": []
+  },
+  "task": {
+    "description": "WF-02 Step 3: write ExUnit tests covering every REQ-376 acceptance criterion per the design doc's own stated test shapes -- AC2/EO-001 (no per-row DELETE, concurrent-write-safe), the 3 crash-recovery/idempotent-resume sub-cases, EO-002 (keep_forever count identical), EO-003 (replay after retirement), the §4.4b batched reconciliation, AC5 pre-creation/idempotency, both REVIEWER-accepted implementation corrections (events_default self-heal, archived_at fast-default), and the two error cases -- using real Postgres per DIRECTIVE T-1, self-contained per DIRECTIVE T-4.",
+    "acceptance_criteria": [
+      "test/specs/REQ-376.md written, mapping every in-scope acceptance criterion to concrete test cases with rationale, not a restatement of the criterion",
+      "test code under test/letflow/event_store/partition_maintenance_test.exs (new file), real Postgres via Letflow.DataCase, no mocks",
+      "AC2/EO-001's two test shapes covered: zero per-row DELETE/row-scoped INSERT during retirement, and a concurrent write completing without being blocked",
+      "all 3 crash-recovery sub-cases covered, including a genuinely induced (not merely asserted) pending-detach state for :pending_detach",
+      "EO-002 covered with a count taken across events UNION events_archive, not events alone",
+      "EO-003 covered: an instance spanning two months replays complete/gap-free/error-free after the older month retires",
+      "§4.4b reconciliation covered with a small reconciliation_batch_size override exercising at least 2 batches, config restored after",
+      "AC5 pre-creation and idempotency covered",
+      "both REVIEWER-accepted implementation corrections each get their own explicit test",
+      ":partition_not_eligible and :partition_not_found error cases covered",
+      "mix compile --warnings-as-errors (lib + test paths) confirmed clean before handoff, real output quoted"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "Read step-02a (implementation + both flagged MAJOR deviations), step-02d (REVIEWER's ruling, both deviations ACCEPTED), decision 0037 (ACCEPTED, with its 'Implementation-discovered corrections' section), the amended design doc (lib/letflow/design/req376-partition-event-retirement.md, §4.3 steps 2/4 amended), and the actual implementation (lib/letflow/event_store/partition_maintenance.ex in full, the read/2 union in lib/letflow/event_store.ex, Scheduler/Poller wiring, the migration set) before writing anything.\n\nWrote test/specs/REQ-376.md mapping REQ-376's 4 executable acceptance criteria (EO-001/AC2, EO-002/AC3, EO-003/AC4, AC5) to 13 concrete test cases with rationale (AC1/AC6/AC7 are doc-only or already covered at Step 2a, noted as such rather than silently skipped). Explicitly justified why this is not a StreamData property-test surface the way process_instance_test.exs is: retire_month/3's catalog-state dispatch is a small, closed, exhaustively-enumerated set (5 branches) each covered by its own explicit example case, not a sequence of application-level actions to randomize.\n\nWrote test/letflow/event_store/partition_maintenance_test.exs (new file, ~860 lines) against real Postgres via Letflow.DataCase, async: false (Sandbox :auto mode, mirroring event_store_test.exs's own established pattern and its cited ExUnit async-draining guarantee -- load-bearing here too, since this file's query-log capture via :telemetry.attach/4 on [:letflow, :repo, :query] is only a reliable signal when nothing else in the suite can be issuing a query concurrently). Self-contained per DIRECTIVE T-4 -- every fixture helper (provisioned_tenant/1, seed_event!/5, seed_instance_sequence!/2,3, table_count/2, seed_retention_policy!/1) is a deliberate duplication of event_store_test.exs's own helpers of the same shape, not an import.\n\nCoverage, by test-spec case number: (1) AC2/EO-001 no-per-row-DELETE, via real telemetry query-log capture against a month fixture with nothing to reconcile; (2) EO-001 concurrent-write, a Task-spawned direct insert into a different live partition, bounded Task.await/2 while retire_month/3 runs against an unrelated month; (3) crash-recovery :detached_standalone, steps run by hand outside retire_month/3; (4) crash-recovery :pending_detach -- a GENUINELY INDUCED interrupted DETACH ... CONCURRENTLY against real Postgres 16 (a held-open transaction on a separate connection forces Postgres's own two-phase detach to block after committing phase 1, the blocked connection is then killed via Task.shutdown(:brutal_kill), leaving a real pg_inherits.inhdetachpending = true state -- not merely asserted/simulated, per this handoff's own instruction to prefer real induction where reliably possible); (5) crash-recovery :already_retired idempotent no-op, query-log-asserted no re-issued ATTACH/DETACH; (6) EO-002, count taken across events UNION events_archive with protected_rows_relocated: 1 asserted directly; (7) §4.4b batched reconciliation, reconciliation_batch_size overridden to 3 against 7 pre-seeded events_archive_default rows (ceil(7/3) = 3 batches), config restored via with_event_retention_override/2's unconditional after block; (8) EO-003, a 2-month-spanning instance replays complete/ordered/gap-free after the older month retires; (9) AC5 pre-creation, ensure_future_partitions/2 with months_ahead: 5 against a freshly-migrated tenant (already has months_ahead_default/0 = 2 from the migration) creates exactly the 3 additional months and is idempotent on a second call; (10) REVIEWER correction (a), events_default confirmed still attached as DEFAULT after retirement AND functioning (a far-future insert confirmed via tableoid::regclass::text to physically land there, not just cataloged); (11) REVIEWER correction (b), every retired-partition row's archived_at confirmed non-null via direct SQL, and read/2's returned %Event{} structs confirmed via Map.has_key?/2 to carry no :archived_at key; (12)/(13) :partition_not_eligible (current month, real default 400-day min_partition_age_days, no override) and :partition_not_found (a month 50 years out).\n\nBLOCKING DEFECT FOUND AND FIXED (Unblock-Everything): the very first compile/run attempt failed before any test file even loaded -- test_helper.exs's unconditional Letflow.Test.TenantTemplate.ensure_template!() call raised TENANT_TEMPLATE_SELF_CHECK_FAILED (table set mismatch: 7 extra tables -- events_default, events_archive_default, events_pre_partition_20260922, events_archive_pre_partition_20260922, and 3 calendar-month-dependent events_y<year>m<month> partitions). Root cause: REQ-376's migrations gave events/events_archive physical tables that test/support/tenant_fixture.ex's @expected_tenant_tables (a hard-coded, strict-equality oracle, INV-F-7) could not have anticipated -- and, structurally, never CAN enumerate as fixed literal strings for the events_y<year>m<month> class, since which ones exist after a fresh replay_migrations/2 depends on the calendar month at migration-run time. This blocked the ENTIRE suite, not just this file's own tests, since ensure_template!/0 runs unconditionally at suite startup regardless of which tests actually use the :clone template path. Fixed narrowly, without touching lib/: added Letflow.TenantFixture.req376_partition_management_table?/1 (a predicate recognizing both the 4 fixed migration-artifact names and the events_y<year>m<month>/events_archive_y<year>m<month> pattern), and used it to filter the 'extra' side only in test/support/tenant_template.ex's template_self_check!/1 and test/letflow/support/tenant_fixture_test.exs's C6 oracle-rot test -- @expected_tenant_tables itself (45 entries) is deliberately UNCHANGED, since it also drives Letflow.Test.TenantTemplate's do_clone/2 cloning loop, and these REQ-376 artifacts are migration-conversion-only (a cloned tenant's events table is never itself partitioned in the first place -- CREATE TABLE (LIKE ... INCLUDING ALL) does not copy the PARTITION BY clause, a documented Postgres LIKE limitation, so there is nothing for the clone path to model here). Verified the fix directly: re-ran the same compile/build probe after the fix and the tenant_template build now succeeds cleanly with zero mismatch. Also found and cleaned up one stray tenant_schemas/tenants row left behind by the pre-fix failed build attempt (a throwaway registration whose staging schema had already been dropped by build_template!/0's own rescue path, but whose bookkeeping row survived) -- confirmed via mix run this leaves zero residue and the reaper's own 'malformed schema_name' warning no longer appears on a fresh run.\n\nCompile confirmation (mix compile --warnings-as-errors does not itself compile test/*_test.exs -- elixirc_paths(:test) is only [\"lib\", \"test/support\"], so ordinary test files are compiled by ExUnit's own require step when mix test runs; used `mix test <files> --warnings-as-errors --only compile_only_never_matches --seed 0` to force a real, fresh, warnings-as-errors compile of every test file named without executing any test body, per this handoff's own instruction not to run the suite myself):\n\n  MIX_ENV=test mix test test/letflow/event_store/partition_maintenance_test.exs test/letflow/event_store_test.exs test/letflow/support/tenant_fixture_test.exs test/support/tenant_template_test.exs --warnings-as-errors --only compile_only_never_matches --seed 0\n  => ... Running ExUnit with seed: 0, max_cases: 32\n     Excluding tags: [:test, :keycloak, :wasm_hang, :lua_wallclock_race]\n     Including tags: [:compile_only_never_matches]\n     All tests have been excluded.\n     Finished in 0.4 seconds (0.00s async, 0.4s sync)\n     Result: 0 tests, 62 excluded\n  (zero warnings, zero errors, tenant_template build succeeded with no TENANT_TEMPLATE_SELF_CHECK_FAILED and no orphan-schema warning)\n\nAlso ran, separately, the ordinary lib+test/support compile:\n\n  MIX_ENV=test mix compile --warnings-as-errors --force\n  => Compiling 282 files (.ex)\n     Generated letflow app\n  (clean, zero warnings)\n\nA real, un-fixable-away ISS-0069-class dead-default-argument warning was caught and fixed along the way (not left for TEST-DESIGN-VALIDATOR to catch): unique_type_name/1's `\\\\ \"PM\"` default was never exercised (every call site passes an explicit prefix) -- removed the default, matching docs/anti-patterns.md's documented entry for this exact class. unique_idempotency_key/1's own `\\\\ \"IDK\"` default IS exercised at every call site (never called with an explicit prefix), so it was left as-is.\n\nDid not run mix letflow.check.test (the full suite) -- that is TEST-RUNNER's Step 4, per this handoff's own explicit instruction not to run the tests myself.",
+    "artifacts_out": [
+      "test/specs/REQ-376.md",
+      "test/letflow/event_store/partition_maintenance_test.exs",
+      "test/support/tenant_fixture.ex",
+      "test/support/tenant_template.ex",
+      "test/letflow/support/tenant_fixture_test.exs"
+    ],
+    "next_action": "Route to TEST-DESIGN-VALIDATOR (3b)",
+    "issues": [
+      {
+        "severity": "MAJOR",
+        "description": "REQ-376's migrations introduced physical table names (events_default, events_archive_default, events_pre_partition_20260922, events_archive_pre_partition_20260922, and the calendar-month-dependent events_y<year>m<month>/events_archive_y<year>m<month> family) that test/support/tenant_fixture.ex's @expected_tenant_tables hard-coded oracle (INV-F-7) could not anticipate -- blocking the entire test suite's startup (test_helper.exs's unconditional Letflow.Test.TenantTemplate.ensure_template!() call), not just this run's own tests. Fixed here (Unblock-Everything) via a new Letflow.TenantFixture.req376_partition_management_table?/1 predicate, applied only to the two strict-equality checks that compare a genuinely :replay-provisioned schema against the static oracle (tenant_template.ex's template_self_check!/1, and tenant_fixture_test.exs's C6 oracle-rot test) -- @expected_tenant_tables itself, and Letflow.Test.TenantTemplate's do_clone/2 cloning loop that also reads it, are deliberately left unchanged, since a cloned tenant's events/events_archive are never themselves partitioned (CREATE TABLE LIKE ... INCLUDING ALL does not copy PARTITION BY) and so have no REQ-376 artifact to model. REVIEWER/RELEASE-VALIDATOR should confirm this scoping is correct -- in particular, that no other test file's own hard-coded table-count/table-set assertion (beyond the two fixed here and the tenant_fixture_test.exs 'length(...) == 45' assertion, which is correctly UNCHANGED since @expected_tenant_tables itself is unchanged) was missed. Grepped test/ for 'expected_tenant_tables' and 'template_self_check' and found no further call site."
+      }
+    ]
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

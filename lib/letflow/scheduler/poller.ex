@@ -12,12 +12,15 @@ defmodule Letflow.Scheduler.Poller do
   ## State (REQ-188 addition — no longer "no meaningful state")
 
   Prior to REQ-188 this GenServer carried no meaningful state between
-  ticks — a pure scheduling loop. REQ-188 widens `state` from `%{}` to
-  `%{last_retention_run_at: DateTime.t() | nil}`, the ONE field this
-  process now carries, solely to track retention-sweep cadence (see
-  `Letflow.Scheduler.retention_due?/1`). It is initialized to `nil` in
-  `init/1` and updated only when a retention sweep actually runs. No other
-  state is introduced; the timer-poll loop itself remains stateless.
+  ticks — a pure scheduling loop. REQ-188 widened `state` from `%{}` to
+  `%{last_retention_run_at: DateTime.t() | nil}`, solely to track
+  retention-sweep cadence (see `Letflow.Scheduler.retention_due?/1`). REQ-376
+  adds a second, symmetric field, `last_partition_maintenance_run_at`, to
+  track the partition pre-creation sweep's own cadence the exact same way
+  (`Letflow.Scheduler.partition_maintenance_due?/1`). Both are initialized to
+  `nil` in `init/1` and updated only when their respective sweep actually
+  runs. No other state is introduced; the timer-poll loop itself remains
+  stateless.
 
   Config (`config :letflow, :scheduler, [...]`, `Letflow.Scheduler`'s own
   accessors) is read fresh on every tick, so a runtime override (e.g. a
@@ -203,7 +206,8 @@ defmodule Letflow.Scheduler.Poller do
 
   @type state :: %{
           last_retention_run_at: DateTime.t() | nil,
-          last_tick_started_at: DateTime.t() | nil
+          last_tick_started_at: DateTime.t() | nil,
+          last_partition_maintenance_run_at: DateTime.t() | nil
         }
 
   # See "REQ-219 addition" moduledoc section above. Resolved once at
@@ -221,7 +225,11 @@ defmodule Letflow.Scheduler.Poller do
   def start_link(_opts) do
     GenServer.start_link(
       __MODULE__,
-      %{last_retention_run_at: nil, last_tick_started_at: nil},
+      %{
+        last_retention_run_at: nil,
+        last_tick_started_at: nil,
+        last_partition_maintenance_run_at: nil
+      },
       name: __MODULE__
     )
   end
@@ -257,12 +265,16 @@ defmodule Letflow.Scheduler.Poller do
 
           maybe_refresh_active_instances(schemas)
           retention_state = maybe_run_retention_sweep(schemas, state)
+
+          partition_maintenance_state =
+            maybe_run_partition_maintenance(schemas, retention_state)
+
           maybe_run_alert_detection(schemas, observed_lag_ms, get_last_tick_started_at(state))
           maybe_run_ordering_cycle(schemas)
           maybe_run_ordering_sweeper(schemas)
           maybe_run_ordering_metrics(schemas)
           maybe_run_deadline_sweep(schemas)
-          Map.put(retention_state, :last_tick_started_at, now)
+          Map.put(partition_maintenance_state, :last_tick_started_at, now)
 
         :error ->
           MetricsRegistry.mark_active_instances_refresh_failed()
@@ -381,6 +393,31 @@ defmodule Letflow.Scheduler.Poller do
       end)
 
       %{state | last_retention_run_at: DateTime.utc_now()}
+    else
+      state
+    end
+  end
+
+  # REQ-376 §3.1 -- the ensure_future_partitions/2 pre-creation sweep,
+  # wired onto this same tick, exact same shape as maybe_run_retention_sweep/2
+  # (config-gated, cadence-gated via Scheduler.partition_maintenance_due?/1,
+  # iterated per tenant schema via run_sweep/4 at the same Admission-bounded
+  # concurrency as every other sweep here).
+  defp maybe_run_partition_maintenance(schemas, state) do
+    if Scheduler.partition_maintenance_enabled?() and
+         Scheduler.partition_maintenance_due?(state.last_partition_maintenance_run_at) do
+      run_sweep(schemas, :partition_maintenance, Admission.global_cap(), fn schema_name ->
+        try do
+          with_admission(schema_name, :partition_maintenance, fn ->
+            Scheduler.run_partition_maintenance_sweep(schema_name)
+          end)
+        rescue
+          error ->
+            log_task_raise(schema_name, :partition_maintenance, error, __STACKTRACE__)
+        end
+      end)
+
+      %{state | last_partition_maintenance_run_at: DateTime.utc_now()}
     else
       state
     end

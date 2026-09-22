@@ -1,0 +1,55 @@
+{
+  "handoff_id": "c3d4e5f6-0003-4000-8000-000000000004",
+  "run_id": "WF02-REQ376-20260922",
+  "workflow_id": "WF-02",
+  "step": "02c",
+  "from_agent": "ORCH",
+  "to_agent": "SECURITY-REVIEWER",
+  "file": "handoffs/WF02-REQ376-20260922/step-02c-security-reviewer-regate3.json",
+  "created_at": "2026-09-22T09:40:00Z",
+  "started_at": "2026-09-22T09:40:00Z",
+  "completed_at": "2026-09-22T09:52:00Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S2",
+    "requirement_ids": ["REQ-376"],
+    "requirement_text": {
+      "REQ-376": "See handoffs/WF02-REQ376-20260922/step-02a-elixir-dev.json's context.requirement_text for the full text -- not restated here to avoid drift."
+    },
+    "related_handoff_ids": [
+      "handoffs/WF02-REQ376-20260922/step-02c-security-reviewer.json",
+      "handoffs/WF02-REQ376-20260922/step-02c-security-reviewer-regate.json",
+      "handoffs/WF02-REQ376-20260922/step-02c-security-reviewer-regate2.json",
+      "handoffs/WF02-REQ376-20260922/step-02a-elixir-dev-rework3.json",
+      "handoffs/WF02-REQ376-20260922/step-04-test-runner.json"
+    ],
+    "artifacts_in": [
+      "docs/agents/instructions/security-invariants.md",
+      "test/letflow/scheduler/poller_test.exs",
+      "test/support/tenant_template.ex",
+      "docs/status/requirement_status.index.yaml"
+    ],
+    "owned_modules": []
+  },
+  "task": {
+    "description": "WF-02 Step 2c RE-GATE #3, covering commit 19bc0a52 only (`git diff 53f2e8e3...19bc0a52`): rework3 fixing 3 TEST-RUNNER-attributed Step 4 regressions -- poller_test.exs state-map shape, tenant_template.ex clone-vs-template parity filters, and a status-index count correction.",
+    "acceptance_criteria": [
+      "diff since prior PASS (regate2, through 118cbecd/e2e1e054) re-read directly, not taken from self-reports",
+      "scope test run explicitly against this diff",
+      "INV-1..INV-8 explicitly assessed (APPLIES/NOT-APPLICABLE) with reasoning if in scope",
+      "PASS/FAIL verdict with next_action"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "Read `git diff 53f2e8e3...19bc0a52 --stat` and the full diff for all three changed files: test/letflow/scheduler/poller_test.exs, test/support/tenant_template.ex, docs/status/requirement_status.index.yaml.\n\nSCOPE TEST. None of the four scope-test triggers in this agent's own instructions are hit by this diff:\n- No API route reading/writing tenant-scoped data touched (no lib/letflow/*_controller.ex or router change).\n- No priv/repo/migrations/*.exs added or modified (grep of the diff stat confirms; only test/ and docs/ paths changed).\n- No secret/config/env-var resolution touched.\n- No response-shaping code for a tenant-scoped entity, no lookup-by-ID handler.\n\nFile-by-file: (1) test/letflow/scheduler/poller_test.exs -- adds `last_partition_maintenance_run_at: nil` to 16 hand-built ExUnit test state maps, matching Poller's state shape widened by this requirement's earlier commits. Pure test-fixture edit, asserts against an already-reviewed production module, adds no new production code path. (2) test/support/tenant_template.ex -- extends the template-vs-clone parity self-check (`check_table_set/2`, `constraint_rows/1`, `index_defs/2`, `check_ruled_out_properties/2`, new private `normalize_relkind/1` helper) to correctly exclude/normalize the 7 REQ-376 partition-management artifacts and the `events`/`events_archive` relkind divergence that a genuine `replay_migrations/2`-built reference schema has and a `:clone`-provisioned schema legitimately never has (`CREATE TABLE (LIKE ... INCLUDING ALL)` cannot copy `PARTITION BY`). This is the same test-support file already ruled out of scope for tenant-isolation purposes in both prior PASS gates on this requirement (regate and regate2) -- same reasoning applies: `test/support/` is excluded from the release build, never reachable from a live tenant-provisioning code path, and operates only against the fixed `tenant_template` fixture schema plus ephemeral per-test tenant fixture schemas created/torn down within ExUnit runs, never real tenant data. Checked the new SQL specifically: the only query text change is appending ` AND con.conparentid = 0` to `constraint_rows/1`'s existing parameterized query (`WHERE nsp.nspname = $1`) -- `schema_name` remains a bound parameter, not interpolated; the added clause is a hardcoded catalog-column literal comparison, not a new interpolation point. The rest of the diff (`Enum.reject`/`Enum.map` filtering by `Letflow.TenantFixture.req376_partition_management_table?/1`) is Elixir-side list filtering against a hardcoded predicate, no new SQL surface at all. (3) docs/status/requirement_status.index.yaml -- a documentation-only entry-count correction (19->20) plus an explanatory note; no code, no schema, no secret.\n\nScope test result: OUT OF SCOPE -- no tenant-data path touched (no API route, no migration, no secret resolution, no tenant-scoped response shaping, no lookup-by-ID handler). Consistent with the scope-out determination already reached independently for test/support/tenant_template.ex in both prior PASS gates on this same requirement (regate: 118cbecd, regate2: covering the same file's earlier extension). Per this agent's own scope-test instructions, when the diff touches none of the four trigger classes the correct outcome is to record that explicitly and complete PASS without running INV-1..INV-8 against it.\n\nINV-1 through INV-8: not run -- correctly not applicable, since this diff does not approach a tenant-data path, a migration, or a secret. No invariant is APPLIES here; there is nothing to verify.\n\nOverall: out of scope, PASS. No production code, no migration, no secret, no tenant-facing response/lookup surface touched by commit 19bc0a52.",
+    "artifacts_out": [
+      "handoffs/WF02-REQ376-20260922/step-02c-security-reviewer-regate3.json"
+    ],
+    "next_action": "Route to REVIEWER (2d)",
+    "issues": []
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

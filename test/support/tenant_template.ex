@@ -439,7 +439,22 @@ defmodule Letflow.Test.TenantTemplate do
   # replay_migrations/2 (not derived from or compared against itself).
   defp template_self_check!(schema_name) do
     expected = MapSet.new(Letflow.TenantFixture.expected_tenant_tables())
-    actual = MapSet.new(tables_in(schema_name))
+
+    # REQ-376: the STAGING schema is built via a genuine replay_migrations/2
+    # (do_build_template!/1, step 2, above), so it carries real
+    # events_default/events_archive_default/*_pre_partition_20260922/
+    # events_y<year>m<month> physical tables that
+    # Letflow.TenantFixture.expected_tenant_tables/0 deliberately does not
+    # enumerate (see that function's own doc). Filtered out of the "extra"
+    # side only -- see Letflow.TenantFixture.req376_partition_management_table?/1's
+    # own doc for why these specifically cannot be hard-coded the way every
+    # other table is. The "missing" side is unaffected: none of these were
+    # ever expected, so they can never appear there.
+    actual =
+      schema_name
+      |> tables_in()
+      |> Enum.reject(&Letflow.TenantFixture.req376_partition_management_table?/1)
+      |> MapSet.new()
 
     missing = MapSet.difference(expected, actual)
     extra = MapSet.difference(actual, expected)
@@ -802,6 +817,26 @@ defmodule Letflow.Test.TenantTemplate do
   # the clone schema's qualifier throughout the definition string BEFORE
   # execution -- skipping this reproduces the FK object but points it at the
   # template's own tables.
+  #
+  # REQ-376 addition: `AND con.conparentid = 0` excludes Postgres's own
+  # INTERNAL per-partition child constraints. A foreign key that references a
+  # PARTITIONED table (event_payload_store -> events, since REQ-376) is
+  # represented in pg_constraint as one top-level constraint PLUS one
+  # additional child constraint per partition of the REFERENCED table
+  # (conparentid pointing back at the top-level row) -- an undocumented-in-
+  # application-terms Postgres implementation detail for validating the FK
+  # against each partition individually, not a second logical FK. Without
+  # this filter, this query returned one row per events_y<year>m<month>/
+  # events_default partition in addition to the real
+  # event_payload_store_event_id_fkey row, and blindly replaying every one of
+  # them here failed outright: a CLONED tenant's events table is deliberately
+  # plain/unpartitioned (this module's own do_clone/2 uses `CREATE TABLE
+  # (LIKE ... INCLUDING ALL)`, which does not copy PARTITION BY -- see
+  # Letflow.TenantFixture.req376_partition_management_table?/1's doc), so it
+  # has no events_default/events_y... children for those child constraints to
+  # reference ("relation events_default does not exist"). `conparentid = 0`
+  # is the standard Postgres idiom for "this constraint has no parent
+  # constraint" (pg_constraint.conparentid is 0, never NULL, when absent).
   defp readd_foreign_keys!(clone_schema) do
     %{rows: rows} =
       Repo.query!(
@@ -810,7 +845,7 @@ defmodule Letflow.Test.TenantTemplate do
         FROM pg_constraint con
         JOIN pg_class rel ON rel.oid = con.conrelid
         JOIN pg_namespace nsp ON nsp.oid = rel.relnamespace
-        WHERE nsp.nspname = $1 AND con.contype = 'f'
+        WHERE nsp.nspname = $1 AND con.contype = 'f' AND con.conparentid = 0
         """,
         [@template_schema]
       )
@@ -890,6 +925,24 @@ defmodule Letflow.Test.TenantTemplate do
     # finding 3 (the robust one, not pg_depend walking) -- just invoked once,
     # set-based, over every column in information_schema.columns for this
     # schema, instead of once per column from Elixir.
+    #
+    # REQ-376 addition: `tenant_template` physically also holds
+    # `events_pre_partition_20260922`/`events_archive_pre_partition_20260922`
+    # (the rollback-safety-net tables migration 4/8 rename aside) and the
+    # dynamic `events_y<year>m<month>`/`events_default` partition set --
+    # real physical tables in `information_schema.columns` for this schema,
+    # but deliberately NOT part of `expected_tenant_tables/0`, so step 3
+    # above never `CREATE TABLE (LIKE ...)`s them into `clone_schema`. Both
+    # renamed-aside tables carry their own `global_seq` sequence (migration
+    # 4/8's own rename-in-place), which this query picked up unfiltered and
+    # tried to recreate against a clone table that was never created --
+    # "relation events_pre_partition_20260922 does not exist" on every
+    # :clone-path test tenant provisioned after tenant_template was built
+    # from the REQ-376 migration set (same defect class as
+    # readd_foreign_keys!/1's own conparentid fix, just a different catalog
+    # view). Filtered to exactly the table set step 3 actually clones.
+    clone_table_names = MapSet.new(Letflow.TenantFixture.expected_tenant_tables())
+
     %{rows: rows} =
       Repo.query!(
         """
@@ -903,6 +956,7 @@ defmodule Letflow.Test.TenantTemplate do
 
     rows
     |> Enum.reject(fn [_table, _column, seq] -> is_nil(seq) end)
+    |> Enum.filter(fn [table, _column, _seq] -> MapSet.member?(clone_table_names, table) end)
     |> Enum.each(fn [table, column, qualified_seq] ->
       # qualified_seq is schema-qualified, e.g. "tenant_template.events_global_seq_seq"
       # (double-quoted per Postgres's own rendering when needed). Extract
@@ -1006,11 +1060,49 @@ defmodule Letflow.Test.TenantTemplate do
   end
 
   # dimension #1: table set, set-equal, both directions.
+  #
+  # REQ-376 rework3 fix: `tables_in/1` on the REFERENCE (template) side
+  # includes the 7 partition-management artifacts
+  # `Letflow.TenantFixture.req376_partition_management_table?/1` recognizes
+  # (`events_default`/`events_archive_default`, the two
+  # `*_pre_partition_20260922` rollback-safety-net tables, and the dynamic
+  # `events_y<year>m<month>`/`events_archive_y<year>m<month>` calendar-month
+  # children) -- physical objects that exist ONLY because `tenant_template`
+  # is built via a genuine `replay_migrations/2` (which runs REQ-376's
+  # partitioning migrations for real). A `:clone`-provisioned schema is, BY
+  # DESIGN, plain/unpartitioned (`do_clone/2`'s own `CREATE TABLE (LIKE ...
+  # INCLUDING ALL)` does not and cannot copy `PARTITION BY` -- a documented
+  # Postgres limitation, not a bug; see `readd_foreign_keys!/1`'s and
+  # `structural_indexdef/1`'s own comments, and
+  # `req376_partition_management_table?/1`'s doc, for the same fact
+  # established at each of this module's other catalog-query sites) and so
+  # never has these tables at all -- their absence from a clone is the
+  # CORRECT, intended output of provisioning, not something this dimension
+  # should ever have flagged as "missing". Reject them from the reference
+  # side before flagging it as "missing" -- exactly the same oracle
+  # `template_self_check!/1` (use site 1) already trusts for this identical
+  # asymmetry -- not a new whitelist invented for this fix. Deliberately
+  # filters only the `missing` set (tables present in the reference,
+  # absent from the candidate), NOT `ref_tables`/`extra` themselves: this
+  # same function ALSO serves use site 1's self-check
+  # (`assert_template_parity_against_independent_reference!/1`), where BOTH
+  # sides are genuinely `replay_migrations/2`-built and DO both have every
+  # one of these tables -- pre-filtering `ref_tables` there would make the
+  # candidate's real copies of them look like false "extra" tables instead
+  # of correctly matching. Filtering only `missing` is safe for both use
+  # sites: a table absent from `missing` in the first place needs no
+  # filtering, and a `:clone` candidate's legitimate absence is exactly
+  # what `missing` would otherwise (wrongly) report.
   defp check_table_set(reference_schema, candidate_schema) do
     ref_tables = MapSet.new(tables_in(reference_schema))
     cand_tables = MapSet.new(tables_in(candidate_schema))
 
-    missing = MapSet.difference(ref_tables, cand_tables)
+    missing =
+      ref_tables
+      |> MapSet.difference(cand_tables)
+      |> Enum.reject(&Letflow.TenantFixture.req376_partition_management_table?/1)
+      |> MapSet.new()
+
     extra = MapSet.difference(cand_tables, ref_tables)
 
     []
@@ -1130,6 +1222,23 @@ defmodule Letflow.Test.TenantTemplate do
     end
   end
 
+  # REQ-376 rework3 fix, two filters, same reasoning as
+  # `check_table_set/2`'s and `readd_foreign_keys!/1`'s own comments:
+  #
+  #   1. `con.conparentid = 0` -- excludes Postgres's own INTERNAL
+  #      per-partition child constraints (the same `pg_constraint`
+  #      implementation detail `readd_foreign_keys!/1` already filters when
+  #      REPLAYING constraints into a clone; unfiltered here, dimension #3
+  #      also READ them straight off the reference schema and reported them
+  #      as "missing" from every clone, since a clone's own
+  #      `event_payload_store` FK never gets these Postgres-internal child
+  #      rows in the first place -- reused, not reinvented).
+  #   2. `req376_partition_management_table?/1` -- rejects constraint rows
+  #      belonging to the 7 partition-management tables themselves (their
+  #      own local PK/CHECK constraints, e.g. `events_default`'s own
+  #      primary key), which a `:clone`-provisioned schema never has at all
+  #      (see `check_table_set/2`'s comment for why that absence is
+  #      correct, not a defect).
   defp constraint_rows(schema_name) do
     %{rows: rows} =
       Repo.query!(
@@ -1138,12 +1247,14 @@ defmodule Letflow.Test.TenantTemplate do
         FROM pg_constraint con
         JOIN pg_class rel ON rel.oid = con.conrelid
         JOIN pg_namespace nsp ON nsp.oid = rel.relnamespace
-        WHERE nsp.nspname = $1
+        WHERE nsp.nspname = $1 AND con.conparentid = 0
         """,
         [schema_name]
       )
 
-    rows
+    Enum.reject(rows, fn [table_name, _contype, _def_sql] ->
+      Letflow.TenantFixture.req376_partition_management_table?(table_name)
+    end)
   end
 
   # dimension #4: indexes -- TWO separate assertions, both mandatory
@@ -1218,6 +1329,16 @@ defmodule Letflow.Test.TenantTemplate do
     end)
   end
 
+  # REQ-376 rework3 fix: same `req376_partition_management_table?/1` filter
+  # as `check_table_set/2` and `constraint_rows/1` above -- `pg_indexes`
+  # lists one physical index row PER PARTITION for every index declared on
+  # a partitioned parent (each of `events`/`events_archive`'s 7 partition
+  # children gets its own physical copy of every parent index), none of
+  # which a `:clone`-provisioned schema ever has (see `check_table_set/2`'s
+  # comment). `structural_indexdef/1`'s own "ONLY " strip already makes the
+  # PARENT table's own index defs agree across the two sides -- this filter
+  # only removes the CHILD partitions' own duplicate index rows, which have
+  # no clone-side counterpart to agree with at all.
   defp index_defs(schema_name) do
     %{rows: rows} =
       Repo.query!(
@@ -1225,7 +1346,11 @@ defmodule Letflow.Test.TenantTemplate do
         [schema_name]
       )
 
-    Enum.map(rows, fn [table, def_sql] ->
+    rows
+    |> Enum.reject(fn [table, _def_sql] ->
+      Letflow.TenantFixture.req376_partition_management_table?(table)
+    end)
+    |> Enum.map(fn [table, def_sql] ->
       {table, structural_indexdef(normalize(def_sql, schema_name))}
     end)
   end
@@ -1242,6 +1367,23 @@ defmodule Letflow.Test.TenantTemplate do
     case String.split(def_sql, " ON ", parts: 2) do
       [prefix, rest] ->
         unique? = String.contains?(prefix, "UNIQUE")
+        # REQ-376: `events`/`events_archive` are this codebase's first
+        # PARTITION BY tables. Postgres's own pg_indexes.indexdef for an
+        # index declared on a partitioned PARENT reads "... ON ONLY
+        # <table> ..." (it does not recurse into child partitions), while
+        # a `:clone`-provisioned tenant's `events`/`events_archive` are
+        # always plain, non-partitioned tables (`CREATE TABLE (LIKE ...
+        # INCLUDING ALL)` does not copy `PARTITION BY` — see
+        # `req376_partition_management_table?/1`'s own comment in
+        # tenant_fixture.ex for the same underlying fact), so a clone's
+        # equivalent index never carries "ONLY". Stripping it here is what
+        # makes the template (partitioned) and clone (not) sides of this
+        # structural comparison agree — without it, EVERY :clone-based
+        # tenant fixture in the whole suite fails at
+        # rename_indexes_to_template_names!/2, not just REQ-376's own
+        # tests (reproduced: 50 failing tests before this fix, all
+        # TENANT_TEMPLATE_CLONE_FAILED on events_pkey/events_archive_pkey).
+        rest = String.replace_prefix(rest, "ONLY ", "")
         "#{if unique?, do: "UNIQUE", else: "NOT UNIQUE"} ON #{rest}"
 
       [only] ->
@@ -1639,6 +1781,19 @@ defmodule Letflow.Test.TenantTemplate do
   # dimension #12: RLS, partitioning, tablespace, ownership -- checked and
   # asserted equal (not-applicable today, but a live check, not a silent
   # omission).
+  #
+  # REQ-376 rework3 fix: `relkind` is the one field in this row this
+  # dimension must NOT compare byte-for-byte for `events`/`events_archive`
+  # specifically -- the reference (template, genuinely `replay_migrations/2`
+  # built) reads "p" (partitioned table) for both, while a `:clone`-
+  # provisioned schema's own `events`/`events_archive` are, by design,
+  # plain "r" (ordinary) tables (see `check_table_set/2`'s comment for the
+  # full reasoning: `CREATE TABLE (LIKE ... INCLUDING ALL)` cannot copy
+  # `PARTITION BY` at all). Every OTHER ruled-out property on every table
+  # (including `relispartition`, which stays `false` on both sides for
+  # these two top-level parents -- only their CHILDREN would read `true`,
+  # and no child table is ever a `common_table` here since a clone never
+  # has one) is still compared with zero tolerance, exactly as before.
   defp check_ruled_out_properties(reference_schema, candidate_schema) do
     common_tables =
       MapSet.intersection(
@@ -1656,13 +1811,33 @@ defmodule Letflow.Test.TenantTemplate do
       [_ref_owner | ref_rest] = ref
       [_cand_owner | cand_rest] = cand
 
-      if ref_rest != cand_rest do
+      [ref_norm, cand_norm] =
+        if table in ["events", "events_archive"] do
+          [normalize_relkind(ref_rest), normalize_relkind(cand_rest)]
+        else
+          [ref_rest, cand_rest]
+        end
+
+      if ref_norm != cand_norm do
         [
           "ruled-out property mismatch table=#{table}: reference=#{inspect(ref)} candidate=#{inspect(cand)}"
         ]
       else
         []
       end
+    end)
+  end
+
+  # `[relrowsecurity, relforcerowsecurity, relkind, relispartition, reltablespace]`
+  # -- position 3 (0-indexed) is `relkind`. "p" (partitioned) and "r"
+  # (ordinary) are the only two values REQ-376 legitimately produces here
+  # (a partitioned parent on the reference side, a plain table on the
+  # candidate side); collapse both to a single marker so the two sides can
+  # still be compared on every OTHER position.
+  defp normalize_relkind(row) do
+    List.update_at(row, 2, fn
+      kind when kind in ["p", "r"] -> :table_or_partitioned_parent
+      other -> other
     end)
   end
 

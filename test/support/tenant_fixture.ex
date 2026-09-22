@@ -342,9 +342,74 @@ defmodule Letflow.TenantFixture do
   a throwaway tenant and asserts set equality against `information_schema.tables` in
   **both** directions (design §3.3, INV-F-7). Without that test, this list must not be
   hard-coded. Excludes `schema_migrations` — see the module attribute's comment.
+
+  Also, as of REQ-376, deliberately excludes every table
+  `req376_partition_management_table?/1` recognizes — see that function's own doc for
+  why those specifically cannot be enumerated here the same way every other table is.
   """
   @spec expected_tenant_tables() :: [String.t()]
   def expected_tenant_tables, do: @expected_tenant_tables
+
+  # REQ-376 (lib/letflow/design/req376-partition-event-retirement.md §2/§4.3) gave
+  # `events`/`events_archive` a set of physical tables this module's static
+  # `@expected_tenant_tables` oracle cannot enumerate the same way as every other
+  # table, for two distinct reasons:
+  #
+  #   1. `events_default`, `events_archive_default`, and the two renamed-aside
+  #      rollback-safety-net tables (`events_pre_partition_20260922`,
+  #      `events_archive_pre_partition_20260922`, design §2.1 migration 4/8) are
+  #      FIXED names, but are migration-conversion ARTIFACTS, not part of the
+  #      "logical" table set a test tenant is provisioned to expose -- they exist
+  #      only because Postgres cannot convert an existing table to partitioned
+  #      in place (design §2). Adding them to `@expected_tenant_tables` would also
+  #      make `Letflow.Test.TenantTemplate`'s `do_clone/2` try to
+  #      `CREATE TABLE (LIKE ... INCLUDING ALL)` them into every cloned test
+  #      tenant, which is pointless there: `CREATE TABLE (LIKE partitioned_parent
+  #      INCLUDING ALL)` does not itself copy the `PARTITION BY` clause (a
+  #      documented Postgres LIKE limitation, not a bug here), so a *cloned*
+  #      tenant's `events`/`events_archive` are already plain, unpartitioned
+  #      tables with no DEFAULT/dedicated-month children to model.
+  #   2. `events_y<year>m<month>` / `events_archive_y<year>m<month>` (design §2.2)
+  #      are literally NOT a fixed set of names -- which ones exist after a fresh
+  #      `replay_migrations/2` depends on the calendar month at migration-run
+  #      time (`Letflow.EventStore.PartitionMaintenance.months_ahead_default/0`'s
+  #      own lookahead, migration 2's identical one-time window) -- a hard-coded
+  #      list of literal names would go stale every calendar month by
+  #      construction, which is exactly the kind of hard-coding INV-F-7's own
+  #      oracle-rot test exists to catch, not something to paper over with a
+  #      list that is wrong more often than it's right.
+  #
+  # Both classes are still real, structurally-necessary tables under a genuine
+  # `:replay` provisioning (`Letflow.TenantProvisioning.provision_tenant_schema/1`
+  # + `replay_migrations/2`, exactly what `Letflow.Test.TenantTemplate`'s own
+  # staging-schema build uses) -- callers comparing an ACTUAL replayed schema's
+  # table set against `expected_tenant_tables/0` (this module's own C6
+  # oracle-rot test; `Letflow.Test.TenantTemplate`'s `template_self_check!/1`)
+  # must filter them out of the "extra" side of that comparison via this
+  # predicate first, rather than either (a) hard-coding a set of names that
+  # goes stale, or (b) weakening the strict-equality check itself for every
+  # other table too.
+  @req376_fixed_partition_management_tables [
+    "events_archive_default",
+    "events_archive_pre_partition_20260922",
+    "events_default",
+    "events_pre_partition_20260922"
+  ]
+
+  @req376_dynamic_partition_table_pattern ~r/^events(_archive)?_y\d{4}m(0[1-9]|1[0-2])$/
+
+  @doc """
+  True for a table name that is one of REQ-376's partition-management
+  artifacts (see this function's neighboring module-attribute comment for the
+  two classes and why neither belongs in `expected_tenant_tables/0`) — every
+  other table name is `false`, including every table `expected_tenant_tables/0`
+  itself lists.
+  """
+  @spec req376_partition_management_table?(String.t()) :: boolean()
+  def req376_partition_management_table?(table_name) when is_binary(table_name) do
+    table_name in @req376_fixed_partition_management_tables or
+      Regex.match?(@req376_dynamic_partition_table_pattern, table_name)
+  end
 
   # -----------------------------------------------------------------------------------
   # Provisioning steps -- the two production primitives (:replay path) are sequenced

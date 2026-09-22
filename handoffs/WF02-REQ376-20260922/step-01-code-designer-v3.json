@@ -1,0 +1,61 @@
+{
+  "handoff_id": "c3d4e5f6-0001-4000-8000-000000000003",
+  "run_id": "WF02-REQ376-20260922",
+  "workflow_id": "WF-02",
+  "step": "01",
+  "from_agent": "ORCH",
+  "to_agent": "CODE-DESIGNER",
+  "file": "handoffs/WF02-REQ376-20260922/step-01-code-designer-v3.json",
+  "created_at": "2026-09-22T00:00:00Z",
+  "started_at": "2026-09-22T00:00:00Z",
+  "completed_at": "2026-09-22T00:00:00Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S6",
+    "requirement_ids": ["REQ-376"],
+    "requirement_text": {
+      "REQ-376": "Partition events/events_archive (monthly PARTITION BY RANGE (created_at)) and build a whole-partition retirement mechanism (DETACH, not row-by-row DELETE), with a keep_forever protected-record exemption (EO-002), a pre-creation mechanism for future partitions with no write ever waiting on partition creation (AC5), and proof that an already-retired month's history still replays with no gap (EO-003). Resolves the deferral 0003 Decision C point 2 and ISS-0014 left open. See docs/requirements.yaml REQ-376 for full text."
+    },
+    "related_handoff_ids": [
+      "handoffs/WF02-REQ376-20260922/step-01-code-designer-v2.json",
+      "handoffs/WF02-REQ376-20260922/step-01b-code-design-validator-v2.json"
+    ],
+    "artifacts_in": [
+      "docs/migration/decisions/0037-event-store-partitioning-and-whole-partition-retirement.md",
+      "lib/letflow/design/req376-partition-event-retirement.md",
+      "handoffs/WF02-REQ376-20260922/step-01b-code-design-validator-v2.json",
+      "lib/letflow/event_store.ex"
+    ],
+    "owned_modules": []
+  },
+  "task": {
+    "description": "REWORK (attempt 2 of 3, last safe attempt before WF-02's rework ceiling). CODE-DESIGN-VALIDATOR's second gate FAILed on a single narrow gap: design doc S4.4b (events_archive_default reconciliation, added in the prior rework to satisfy S4.3 step 4's ATTACH precondition) asserted 'bounded, small-in-practice' with no supporting argument, unlike S4.4a's keep_forever relocation whose smallness is justified by keep_forever's designed rarity. archive/1 continuously routes any row whose keep_days/keep_count policy is shorter than the deliberately-long min_partition_age_days window into events_archive_default throughout that entire window, so the reconciled set for a given month could be a large fraction of that month's volume, not small. The mechanism (SELECT + per-row INSERT/DELETE) ran as one unchunked Repo.transaction/1 with no row-count cap, no batching discussion, and no analysis against S5's own EO-001 lock-strength claim -- and no equivalent open question was filed, unlike OQ1's treatment of the analogous single-transaction backfill concern in S2.1. Fix narrowly: checked lib/letflow/event_store.ex's actual archive/1 phase1_insert/phase2_delete for an existing chunking pattern to reuse (none exists -- archive/1 itself processes its full target-event-id set in one unchunked Repo.transaction/1 per phase, with no Enum.chunk_every/batch_size anywhere in the file), so introduced a new bounded-batch mechanism for S4.4b rather than reusing a nonexistent one: fixed-size batches (config knob reconciliation_batch_size, default 5000, same location/pattern as min_partition_age_days), one Repo.transaction/1 per batch, looped via LIMIT+ORDER BY (no OFFSET -- each batch's DELETE naturally advances the next SELECT) until a batch returns fewer than the batch size. Added an explicit lock/duration bound argument checked against S5's EO-001 claim: each batch transaction's lock footprint is constant (row-level locks on batch_size rows only, never on events/events_archive parent relations, never conflicting with concurrent DML on other months/tenants) independent of the reconciled set's total size -- the structural difference from the failed revision's unsubstantiated 'small' claim. Added a crash-recovery consistency note (the loop resumes correctly on retry via the same :not_started catalog state, since already-relocated batches are simply absent from the next SELECT). Filed new open question OQ7 (S7) for the genuine remaining uncertainty -- reconciliation_batch_size's default and the real per-tenant reconciled-set volume are unmeasured until production data exists, matching how OQ1 treats the analogous backfill-size question. Did not touch S4.3/S4.3.1 crash recovery, FINALIZE handling, or AC2 framing -- those passed gate 2 and were left alone. No implementation code written.",
+    "acceptance_criteria": [
+      "a decision record resolving Postgres-native monthly PARTITION BY RANGE (created_at) for events/events_archive exists under docs/migration/decisions/, cross-references 0003 Decision C and ISS-0014, and carries REVIEWER sign-off (pending -- see decision record's own Sign-off section)",
+      "retiring one month of expired history is designed as a short whole-partition DDL sequence (DETACH/ATTACH, not row-by-row DELETE), honestly stated as a sequence rather than mislabeled as one statement, with idempotent crash-recovery/resume via catalog state, an explicit stuck-pending-detach error case, and a stated test shape proving no per-row DELETE runs in the retirement steps, the platform accepts a concurrent write throughout (EO-001), and a crash mid-sequence can be resumed correctly",
+      "the protected-record (keep_forever-policy) exemption mechanism is specified, with a stated test shape proving the count is identical before/after retiring a month containing at least one protected record (EO-002)",
+      "the architectural mechanism making an already-retired month's process-instance history still replay with no gap is specified (EO-003)",
+      "the pre-creation mechanism is specified such that no test or code path ever waits on partition creation while a write is in flight",
+      "the relationship between the new mechanism and Letflow.EventStore.archive/1's existing row-level move is stated explicitly (coexist, with archive/1 unchanged) in both the decision record and the design doc",
+      "every acceptance criterion maps to a concrete design element -- no TBD; open questions listed explicitly instead"
+    ]
+  },
+  "result": {
+    "status": "COMPLETED",
+    "summary": "Amended lib/letflow/design/req376-partition-event-retirement.md S4.4b in place (no re-branch, same feature/WF02-REQ376-20260922 branch). Confirmed via lib/letflow/event_store.ex that archive/1's phase1_insert/phase2_delete has no existing chunking pattern to reuse -- both process the full target-event-id set in one unchunked Repo.transaction/1 each, so a new batching mechanism was designed for S4.4b rather than copied. Changes: (1) S4.4b rewritten with an explicit 'why this population is not assumed small' argument contrasting it with 4.4a's keep_forever rarity justification; (2) the reconciliation mechanism is now fixed-size batches (new config knob reconciliation_batch_size, default 5000, same Application.get_env(:letflow, :event_retention, ...) location as min_partition_age_days), each batch its own Repo.transaction/1, looped via SELECT ... ORDER BY created_at, event_id LIMIT <batch_size> (no OFFSET) terminating when a batch returns fewer rows than the batch size; (3) added a 'bound checked against S5's EO-001 non-blocking claim' paragraph: each batch transaction's lock footprint (row-level only, on batch_size rows, never on parent relations, never conflicting with concurrent DML elsewhere) is constant regardless of total reconciled-set size -- more batches lengthen step 1's overall wall-clock time but never a single transaction's lock duration; (4) added a crash-recovery consistency note tying the batch loop back into S4.3.1's existing catalog-detected :not_started resume path (no separate bookkeeping needed -- already-relocated rows are simply absent on retry); (5) revised the shared 4.4a/4.4b summary paragraph to state each step's boundedness argument on its own distinct grounds (4.4a: rarity; 4.4b: structural per-batch cap) rather than a shared 'small-in-practice' claim; (6) filed new S7 OQ7 for the genuine remaining gap (reconciliation_batch_size's default and real per-tenant reconciled-set volume are unmeasured pre-production), placed after OQ6 for sequential numbering. S4.3/S4.3.1 (crash recovery, FINALIZE, catalog state machine), the AC2 framing, and every other previously-passing section were not touched. No .ex/.exs implementation code written. Committed and pushed to feature/WF02-REQ376-20260922.",
+    "artifacts_out": [
+      "lib/letflow/design/req376-partition-event-retirement.md"
+    ],
+    "next_action": "Route to CODE-DESIGN-VALIDATOR (attempt 3 of 3 -- rework ceiling; escalate to ORCH/REVIEWER if this also FAILs)",
+    "issues": [
+      "OQ1 (unchanged, S7): backfill transaction size not measured against real per-tenant row counts -- ELIXIR-DEV to check before implementing.",
+      "OQ4 (unchanged, S7): min_partition_age_days config key specified with no proposed default number -- left for ELIXIR-DEV/REVIEWER once event_retention_policies has real production data.",
+      "OQ5 (unchanged, S7): who/what calls retire_month/3 (automatic Poller sweep vs. operator/REQ-377-triggered) left to REQ-377's own design.",
+      "OQ6 (unchanged, S7): {:error, {:stuck_pending_detach, reason}} has no specified automatic retry or alerting path -- left for REQ-377/a follow-up.",
+      "OQ7 (new, S7): reconciliation_batch_size's default (5000) and the real per-tenant events_archive_default reconciled-set volume are both unmeasured until production data exists -- the per-batch lock/duration bound holds regardless, but the default and any operational metric/alerting around it (batch count, total reconciled per call) are left for ELIXIR-DEV/REVIEWER to revisit once real archive/1 volumes are observable, matching OQ1's treatment of the analogous backfill-size question."
+    ]
+  },
+  "rework_count": 2,
+  "max_rework": 3
+}

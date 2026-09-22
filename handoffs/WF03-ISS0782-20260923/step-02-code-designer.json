@@ -1,0 +1,48 @@
+{
+  "handoff_id": "c1d2e3f4-0782-4000-8000-000000000003",
+  "run_id": "WF03-ISS0782-20260923",
+  "workflow_id": "WF-03",
+  "step": "02",
+  "from_agent": "CODE-DESIGNER",
+  "to_agent": "CODE-DESIGN-VALIDATOR",
+  "file": "handoffs/WF03-ISS0782-20260923/step-02-code-designer.json",
+  "created_at": "2026-09-23T02:05:00Z",
+  "started_at": "2026-09-23T01:50:00Z",
+  "completed_at": "2026-09-23T02:05:00Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S6",
+    "issue_id": "ISS-0782",
+    "queue_ref": "Q-781",
+    "github_ref": "GH-1722",
+    "branch": "feature/WF03-ISS0782-fix-20260923",
+    "related_handoff_ids": ["handoffs/WF03-ISS0782-20260923/step-01-issue-fixer-diagnose.json"],
+    "artifacts_in": [
+      "web/src/api/identity.ts",
+      "handoffs/WF03-ISS0782-20260923/step-01-issue-fixer-diagnose.json"
+    ]
+  },
+  "task": {
+    "description": "WF-03 Step 2: produce the fix design for ISS-0782 (design only, no implementation) covering the exact before/after path for each of the 5 in-scope call sites in web/src/api/identity.ts (usersApi.list/get/create/update, rolesApi.list), confirming this is a pure string-literal change with no request/response shape or type change, and explicitly noting no shim/adapter is introduced per FRONTEND-DEV's mandate.",
+    "acceptance_criteria": [
+      "exact before/after path stated for each of the 5 in-scope call sites, matching the diagnosis handoff's verified mapping",
+      "confirms no new types, no request/response shape change",
+      "explicitly states no shim/adapter/normalization layer is being introduced -- this is a direct path fix",
+      "explicitly scopes out resetPassword/delete (no backend route), other rolesApi/tokensApi methods (not called by Users screen), and groupsApi.list (ISS-0765's scope), with the groupsApi.list residual gap noted rather than silently dropped",
+      "notes the existing live e2e spec (f5-admin-users.e2e.spec.ts) as a known asset for TEST-DESIGNER without designing the test itself",
+      "no implementation code (no .ts code fences with real function bodies -- only literal before/after path strings)"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "Design artefact written to lib/letflow/design/iss0782-identity-api-route-fix.md. Covers all 5 in-scope call sites from the ISSUE-FIXER diagnosis with exact before/after path literals (usersApi.list: /api/v1/users -> /api/v1/identity/users; usersApi.get: /api/v1/users/:id -> /api/v1/identity/users/:id; usersApi.create: /api/v1/admin/users -> /api/v1/identity/users; usersApi.update: /api/v1/users/:id -> /api/v1/identity/users/:id; rolesApi.list: /api/v1/admin/roles -> /api/v1/identity/roles), each tied to its source line in web/src/api/identity.ts (16, 19, 22, 25, 66). Confirms pure string-literal change: no new/changed TypeScript types, no change to client.ts or any HTTP wrapper, no request/response JSON shape change (real backend already returns the same User/Role/PagedResponse shapes these functions already declare), no caller-side wiring changes needed in useAdminUsers.ts/UsersPage.tsx/UserDetailPage.tsx. States explicitly no shim/adapter/normalization layer is introduced -- each path literal is edited in place, no new file/module/interceptor. Scope section documents the decision to leave groupsApi.list (also broken, also reachable from UserDetailPage.tsx via useAdminGroups) to ISS-0765 rather than folding it in here, and explicitly flags the residual gap: UserDetailPage's group-membership section stays broken until ISS-0765 is worked, even though the Users list/create/edit flows are fully fixed by this design. Also explicitly scopes out usersApi.resetPassword/.delete (no matching backend route at any prefix -- separate missing-backend-endpoint gap), and rolesApi.get/.create/.update/.delete/.grantPermission/.revokePermission plus tokensApi.* (not called by the Users admin screen). Notes web/tests/e2e/f5-admin-users.e2e.spec.ts as an existing live-backend e2e asset for TEST-DESIGNER to decide whether to reuse as the fail-then-pass regression test or augment, without designing the test itself, and flags identity.removeMembers.test.ts's mocked-fetch-assertion convention as a reasonable complementary pattern per the diagnosis's own suggestion. Includes an acceptance-criteria-to-design-element mapping table and an explicit 'no open questions' close -- all five call sites and the scope boundary were fully resolved by the diagnosis handoff, nothing left for ELIXIR-DEV/FRONTEND-DEV to guess at. No implementation code included -- only literal before/after path strings inside prose/markdown, no .ts code fences with function bodies.",
+    "artifacts_out": [
+      "lib/letflow/design/iss0782-identity-api-route-fix.md"
+    ],
+    "issues": [],
+    "next_action": "Route to CODE-DESIGN-VALIDATOR"
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

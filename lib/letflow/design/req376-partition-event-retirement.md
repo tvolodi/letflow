@@ -106,11 +106,20 @@ already uses (`if prefix() do ... end`, registered in
    copied, never generated).
 6. **`create_events_archive_p_initial_partitions.exs`**, **`backfill_events_archive_partitioned.exs`**,
    **`swap_events_archive_partitioned.exs`** — same three-step shape as migrations
-   2/3/4, applied to `events_archive`. `events_archive`'s own default partition
-   (`events_archive_default`) is where a whole-partition retirement's `ATTACH` target
-   resolves to if the destination month partition doesn't exist yet — see §4.3's
-   pre-creation-ordering requirement, which exists specifically to make that never
-   happen in practice.
+   2/3/4, applied to `events_archive`, but **only for calendar months that already
+   have historical rows in `events_archive` at migration time** — this migration set
+   does not pre-create any *future* dedicated month partition for `events_archive`.
+   `events_archive`'s own default partition (`events_archive_default`) is the
+   deliberate destination for every row `archive/1` moves into `events_archive` for a
+   month that has not yet been whole-month-retired — see §3.2 (revised) for why no
+   ongoing sweep pre-creates a dedicated `events_archive` month partition ahead of
+   retirement, and §4.4 for how rows that accumulated in `events_archive_default` are
+   reconciled at retirement time. This is a correction from this design's prior
+   revision, which described the pre-creation sweep as covering `events_archive`'s
+   future months the same way it covers `events`' — that was inconsistent with
+   `retire_month/3`'s own `ATTACH` step (§4.3), which requires the destination range to
+   be *unclaimed* by any existing `events_archive` partition at attach time, not
+   already occupied by a pre-created one.
 
 ### 2.2 Partition-naming convention
 
@@ -164,20 +173,37 @@ sub-minute tick; no reason to check every tick). `months_ahead` default: `2`.
 
 ### 3.2 What it does, per tenant schema, per call
 
-For each of `events`/`events_archive`: compute the set of calendar months from the
-current month through `current_month + months_ahead`; for each month with no existing
-partition (`information_schema`/`pg_inherits`-based existence check — a `SELECT
-EXISTS` query, not a DDL attempt-and-catch), issue one `CREATE TABLE ... PARTITION OF
-... FOR VALUES FROM (...) TO (...)` (`IF NOT EXISTS` is not valid syntax for `PARTITION
-OF` in Postgres, so the existence check must precede the `CREATE TABLE`, not follow a
-failed attempt). This is a metadata-only operation against an as-yet-empty relation —
-sub-millisecond, and it takes no lock that conflicts with concurrent DML on any
-*other* partition (only a lock on the parent's own DDL-relevant catalog state, held
-briefly). No write path (`append/2`, `archive/1`, the new retirement function) ever
-creates a partition itself or waits on one — by construction, since this sweep always
-runs far enough ahead (`months_ahead: 2`) that the partition an `append/2` call would
-need already exists by the time that month starts, provided the sweep has run at
-least once in the preceding ~28 days (its daily cadence gives wide margin).
+**Revised** (was: "for each of `events`/`events_archive`, symmetrically" — corrected
+here because that symmetry is what produced §4.3's original `ATTACH`-target
+contradiction; see §2.1 item 6's note):
+
+- **For `events`:** compute the set of calendar months from the current month through
+  `current_month + months_ahead`; for each month with no existing partition
+  (`information_schema`/`pg_inherits`-based existence check — a `SELECT EXISTS`
+  query, not a DDL attempt-and-catch), issue one `CREATE TABLE ... PARTITION OF ...
+  FOR VALUES FROM (...) TO (...)` (`IF NOT EXISTS` is not valid syntax for `PARTITION
+  OF` in Postgres, so the existence check must precede the `CREATE TABLE`, not follow
+  a failed attempt). This is a metadata-only operation against an as-yet-empty
+  relation — sub-millisecond, and it takes no lock that conflicts with concurrent DML
+  on any *other* partition (only a lock on the parent's own DDL-relevant catalog
+  state, held briefly). No write path (`append/2`) ever creates a partition itself or
+  waits on one — by construction, since this sweep always runs far enough ahead
+  (`months_ahead: 2`) that the partition an `append/2` call would need already exists
+  by the time that month starts, provided the sweep has run at least once in the
+  preceding ~28 days (its daily cadence gives wide margin).
+- **For `events_archive`: this sweep does nothing.** `events_archive` gets no
+  forward-looking dedicated month partitions from `PartitionMaintenance`. Its only
+  partitions are created by (a) the one-time migration backfill (§2.1 item 6, historical
+  months only) and (b) `retire_month/3`'s own `ATTACH` step (§4.3), each exactly once,
+  for exactly the month being retired, at the moment it retires. Until a month is
+  retired, every row `archive/1` moves into `events_archive` for that month routes into
+  `events_archive_default` — this is the DEFAULT partition doing exactly the job a
+  DEFAULT partition exists for (a catch-all for ranges with no dedicated partition
+  yet), not a soft-failure case as §3.3's `events`-side default-partition discussion
+  is. `archive/1` itself is unchanged by this (per decision 0037's scope fence) — it
+  already just `INSERT`s into `events_archive` the parent table; which physical
+  partition Postgres routes that into is entirely a function of which partitions
+  exist, which this design controls without touching `archive/1`'s own code.
 
 ### 3.3 Open question — OQ1 (pre-creation)
 
@@ -200,21 +226,37 @@ New function, same module as the pre-creation mechanism family —
 
 ```
 @spec retire_month(schema_name :: String.t(), year :: pos_integer(), month :: 1..12) ::
-        {:ok, %{retired_partition: String.t(), protected_rows_relocated: non_neg_integer()}}
+        {:ok, %{retired_partition: String.t(), protected_rows_relocated: non_neg_integer(),
+                default_partition_rows_reconciled: non_neg_integer(), resumed_from: atom()}}
         | {:error, :invalid_schema_name}
         | {:error, :partition_not_eligible}
         | {:error, :partition_not_found}
-        | {:error, :destination_partition_missing}
+        | {:error, {:stuck_pending_detach, term()}}
         | {:error, term()}
 ```
 
 `:partition_not_eligible` — the month is not yet past `min_partition_age_days`
-(§4.2). `:partition_not_found` — no `events_y<year>m<month>` partition exists for
-that schema (already retired, or never created). `:destination_partition_missing` —
-`events_archive`'s corresponding month partition doesn't exist yet; this function
-never creates it inline (that would be exactly the "wait on partition creation" AC5
-forbids) — it is the pre-creation sweep's (§3) job to guarantee this never happens by
-running the pre-creation sweep against `events_archive` with the same lookahead.
+(§4.2). `:partition_not_found` — no `events_y<year>m<month>` partition exists under
+`events`, under `events_archive`, or standalone, for that schema/month (never created
+— eligibility implies it should exist; this is a real error, distinct from "already
+fully retired," which is a success no-op per §4.3.1 State 3). `:destination_partition_missing`
+is **removed** from this revision — it described a precondition that no longer
+applies now that `events_archive` never has a pre-existing dedicated partition for an
+unretired month (§3.2 revised, §2.1 item 6); `retire_month/3`'s own `ATTACH` step is
+what creates that destination, so "missing" was never a real failure mode once §3.2
+stopped pre-creating it. `{:stuck_pending_detach, reason}` — new in this revision
+(§4.3.1 State 1): the catalog shows an interrupted `DETACH ... CONCURRENTLY` left in
+Postgres's own "pending detach" state, and the recovery `FINALIZE` statement itself
+failed (e.g. blocked by a concurrent conflicting operation) — this is the one case
+that needs operator attention rather than resolving itself on the next retry, and is
+surfaced as its own error shape rather than folded into the catch-all `{:error,
+term()}` specifically so callers/alerts can distinguish "transient, retry" from
+"routine, already retried and it's still stuck."
+
+`resumed_from` in the success map names which §4.3.1 state the call actually started
+from (`:not_started` | `:pending_detach` | `:detached_standalone` |
+`:already_retired`) — included so a caller (or a test) can assert which recovery path
+a given call exercised, not just that it returned `:ok`.
 
 ### 4.2 Eligibility rule
 
@@ -244,79 +286,189 @@ platform's actual audit-retention obligation (§4.4) — a `keep_days`/`keep_cou
 row that leaves `events` "early" is merely an implementation-visible detail; a
 `keep_forever` row's *disposition* is the audited invariant.
 
-### 4.3 DDL sequence (one call to `retire_month/3`, one Postgres transaction where
-Postgres allows it — DETACH CONCURRENTLY cannot run inside a transaction block, so
-the sequence below is two Postgres statements outside an explicit transaction,
-documented as such rather than papered over)
+### 4.3 Retirement sequence (AC2 — whole-partition operations, not row-by-row; crash-recoverable)
 
-1. **Protected-row relocation** (§4.4) — runs first, and only touches rows within the
-   target month's partition; skipped entirely (zero queries beyond the one `SELECT
-   EXISTS` check) if no `event_retention_policies` row has `policy: :keep_forever`
-   for the target month's tenant schema — **this is the case AC2's "no per-row DELETE
-   runs" test exercises**: a month with no `keep_forever`-policy rows present triggers
-   zero row-level statements, going straight to step 2.
-2. `ALTER TABLE #{prefix()}.events DETACH PARTITION #{prefix()}.events_y<year>m<month>
-   CONCURRENTLY` — Postgres 14+ (this project runs Postgres 16, per
-   `docker-compose.yml`'s `image: postgres:16`). `CONCURRENTLY` here is what makes
-   AC2's "the platform accepts a concurrent write throughout" provable: a plain
-   (non-`CONCURRENTLY`) `DETACH PARTITION` takes an `ACCESS EXCLUSIVE` lock on the
-   parent for its (brief but nonzero) duration, which would block concurrent inserts
-   into *other* partitions of the same parent too; `DETACH ... CONCURRENTLY` instead
-   takes a lock that permits concurrent DML throughout, at the cost of running in two
-   internal phases Postgres manages itself (this is exactly the primitive Postgres 14
-   added for this use case — routine partition retirement against a live table).
+**Honest framing, replacing this design's prior (internally inconsistent) header:**
+`retire_month/3` is a short SEQUENCE of DDL statements, not literally one Postgres
+statement — `DETACH ... CONCURRENTLY` cannot run inside a transaction block (a
+documented Postgres restriction), so this cannot be collapsed into a single atomic
+statement or a single transaction. AC2's actual requirement — read from its own text,
+"single DDL operation, no secret row-by-row work" — is satisfied in the sense that
+matters: **every statement in the sequence operates on the whole partition as one
+unit; none of them iterates or issues a `DELETE`/`UPDATE` per row of ordinary event
+data.** (§4.4's protected-row/default-partition reconciliation is the one place
+genuinely-row-scoped work happens, and it is explicitly carved out below as a small,
+bounded, separately-tested pre-step — not part of AC2's "no per-row DELETE" claim,
+exactly as this design already distinguished for `keep_forever` in the prior
+revision.)
+
+Because the sequence spans multiple statements outside one transaction, and
+`DETACH ... CONCURRENTLY` is itself a Postgres two-phase primitive that can be left
+mid-flight by a crash, `retire_month/3` **must be idempotent and resumable**: a second
+call against a month already partway through retirement must detect exactly which
+step completed — via catalog state, never via its own bookkeeping table — and resume
+from there, rather than erroring or re-attempting (and potentially double-running) a
+completed step.
+
+#### 4.3.1 State machine (catalog-detected, not stored)
+
+`retire_month/3` always starts by querying catalog state (§4.3.2) for
+`events_y<year>m<month>` and dispatches on what it finds. State is never persisted by
+this design — every call, first or resumed, re-derives it, which is what makes every
+call idempotent by construction.
+
+| State | Catalog signature | Action |
+|---|---|---|
+| `:not_started` | child of `events` via `pg_inherits`, `inhdetachpending = false` | run step 1 (§4.4), then step 2 |
+| `:pending_detach` | child of `events` via `pg_inherits`, `inhdetachpending = true` | Postgres's own documented recovery path for an interrupted concurrent detach: `ALTER TABLE events DETACH PARTITION events_y<year>m<month> FINALIZE`; on success, continue at step 3; on failure, return `{:error, {:stuck_pending_detach, reason}}` (§4.1) |
+| `:detached_standalone` | exists in the schema, appears in no `pg_inherits` row as a child of either `events` or `events_archive` | resume at step 3 — check for `chk_partition_bounds_<year>_<month>` by name (existence check, not attempt-and-catch) before (re-)issuing `ADD CONSTRAINT`/`VALIDATE CONSTRAINT`, since a prior crash may have completed one but not the other |
+| `:already_retired` | child of `events_archive` via `pg_inherits` | fully done already — drop `chk_partition_bounds_<year>_<month>` if it still exists (idempotent cleanup, step 5), and return `{:ok, ...}` with `default_partition_rows_reconciled: 0` and `resumed_from: :already_retired`: **a successful no-op, not an error** |
+| (none of the above) | no matching relation under any name | `{:error, :partition_not_found}` |
+
+#### 4.3.2 Catalog checks used
+
+- Child-of-`events`, and its pending-detach flag: `SELECT i.inhdetachpending FROM
+  pg_inherits i JOIN pg_class c ON c.oid = i.inhrelid WHERE c.relname =
+  'events_y<year>m<month>' AND i.inhparent = '#{prefix()}.events'::regclass`.
+- Child-of-`events_archive`: same shape, `i.inhparent =
+  '#{prefix()}.events_archive'::regclass`.
+- Exists but is nobody's child (standalone): a positive `SELECT 1 FROM pg_class WHERE
+  relnamespace = '#{prefix()}'::regnamespace AND relname =
+  'events_y<year>m<month>'` with both `pg_inherits` queries above returning no row.
+
+`pg_inherits.inhdetachpending` is the Postgres-14+-documented column this design
+relies on for the pending-detach signal — cited, not re-derived, per this project's
+"don't re-litigate what's already established" discipline applied to Postgres's own
+documented catalog behavior (same discipline §5 already applies to `DETACH ...
+CONCURRENTLY`'s non-blocking guarantee).
+
+#### 4.3.3 The steps themselves
+
+1. **Protected-row and default-partition reconciliation** (§4.4, revised) — runs only
+   from `:not_started`; skipped entirely (zero row-level queries beyond the two
+   `SELECT EXISTS`/count checks) if there is nothing to reconcile.
+2. `ALTER TABLE #{prefix()}.events DETACH PARTITION
+   #{prefix()}.events_y<year>m<month> CONCURRENTLY` — Postgres 14+ (this project runs
+   Postgres 16, per `docker-compose.yml`'s `image: postgres:16`). `CONCURRENTLY` is
+   what makes AC2's "the platform accepts a concurrent write throughout" provable: a
+   plain (non-`CONCURRENTLY`) `DETACH PARTITION` takes an `ACCESS EXCLUSIVE` lock on
+   the parent for its (brief but nonzero) duration, blocking concurrent DML on *other*
+   partitions of the same parent too; `DETACH ... CONCURRENTLY` instead takes a lock
+   that permits concurrent DML throughout, at the cost of running in the two internal
+   phases this section's state machine is built around.
 3. `ALTER TABLE #{prefix()}.events_y<year>m<month> ADD CONSTRAINT
    chk_partition_bounds_<year>_<month> CHECK (created_at >= '<month-start>' AND
    created_at < '<next-month-start>') NOT VALID`, then `ALTER TABLE ... VALIDATE
    CONSTRAINT chk_partition_bounds_<year>_<month>` — `VALIDATE CONSTRAINT` takes only
-   `SHARE UPDATE EXCLUSIVE` (does not block reads or writes, even on the table being
-   validated), and scans only the now-detached, standalone table itself, never
-   `events` or `events_archive`'s live partitions. This is the standard Postgres
-   fast-attach idiom: with this exact matching constraint already validated, the
-   subsequent `ATTACH PARTITION` in step 4 can skip its own default full-table
-   validation scan.
+   `SHARE UPDATE EXCLUSIVE` (blocks neither reads nor writes, even on the table being
+   validated) and scans only the standalone table itself, never `events` or
+   `events_archive`'s live partitions. Standard Postgres fast-attach idiom: with this
+   exact constraint pre-validated, step 4's `ATTACH PARTITION` skips its own default
+   full-table validation scan.
 4. `ALTER TABLE #{prefix()}.events_archive ATTACH PARTITION
    #{prefix()}.events_y<year>m<month> FOR VALUES FROM ('<month-start>') TO
-   ('<next-month-start>')` — metadata-only given step 3's pre-validated matching
-   constraint; requires the destination partition name to not already exist under
-   `events_archive` (guaranteed by construction: this partition was never anything
-   but `events`'s own partition of that name, so its rename onto `events_archive`
-   cannot collide).
+   ('<next-month-start>')` — metadata-only given step 3's pre-validated constraint.
+   Requires the target range to be unclaimed by any existing `events_archive`
+   partition, which §3.2 (revised) now guarantees by construction: `events_archive`
+   never has a pre-created dedicated partition for a not-yet-retired month, so this
+   `ATTACH` is always the first (and only) time that range gets a dedicated
+   `events_archive` partition. It also requires `events_archive_default` to hold no
+   row matching the target range at the moment of `ATTACH` — a documented Postgres
+   precondition whenever a default partition exists — which is exactly what step 1's
+   reconciliation guarantees ahead of this step.
 5. `ALTER TABLE #{prefix()}.events_y<year>m<month> DROP CONSTRAINT
-   chk_partition_bounds_<year>_<month>` — cleanup; the constraint's only purpose was
-   the fast-attach optimization in steps 3–4, and `events_archive`'s own partition
-   bound already enforces the same range going forward, so the standalone CHECK is
-   redundant once attached.
+   chk_partition_bounds_<year>_<month>` — cleanup; `events_archive`'s own partition
+   bound enforces the same range going forward, so the standalone CHECK is redundant
+   once attached.
 
-No `DROP` anywhere in this sequence — the physical table and its rows persist
-throughout, first as `events`'s partition, then (uninterrupted, no data movement)
-as `events_archive`'s. This is what makes EO-003 hold by construction (§6).
+No `DROP` of the partition or its rows anywhere in this sequence — the physical table
+persists throughout, first as `events`'s partition, then (after step 1's reconciliation
+folds in whatever had accumulated in `events_archive_default` for that month) as
+`events_archive`'s. This is what makes EO-003 hold by construction (§6).
 
-**AC2 test shape (evidence, not code):** a test asserting zero `DELETE`/row-level
-statements ran during a `retire_month/3` call against a month fixture containing no
-`keep_forever` rows — e.g. instrument via `Ecto.Adapters.SQL.Sandbox` telemetry or a
-`Postgrex.Telemetry`/query-log capture asserting no `DELETE FROM` appears in the
-captured statement log for that call — combined with a concurrent-write assertion:
-a second process performs an `append/2` call (or a raw insert into an unrelated
-partition/month) concurrently with the `retire_month/3` call and is proven to
-complete without blocking (e.g. bounded by a short timeout, or by asserting the
-concurrent write's own wall-clock duration is not inflated by the retirement call's
-presence).
+**AC2 test shape (evidence, not code):**
+- *No per-row work in the retirement steps themselves:* a test asserting zero
+  `DELETE`/row-level statements ran during steps 2–5 of a `retire_month/3` call
+  against a month fixture with nothing to reconcile (no `keep_forever` rows, no
+  `events_archive_default` rows in range) — e.g. via `Postgrex.Telemetry`/query-log
+  capture scoped to exclude step 1's queries, asserting no `DELETE FROM`/row-scoped
+  `INSERT` appears for steps 2–5.
+- *Concurrent-write, non-blocking:* a second process performs an `append/2` call (or a
+  raw insert into an unrelated partition/month) concurrently with the `retire_month/3`
+  call and is proven to complete without blocking (bounded by a short timeout, or by
+  asserting the concurrent write's own wall-clock duration is not inflated by the
+  retirement call's presence).
+- *Crash-recovery / idempotent resume (new in this revision):* three sub-cases, each
+  simulating a crash by stopping the sequence after a given step (e.g. running steps
+  1..N directly against the test database, outside `retire_month/3`, then calling
+  `retire_month/3` fresh) and asserting the resumed call completes correctly and
+  `resumed_from` names the expected state:
+  1. Stop after step 2 (DETACH completed) but before step 3 → call `retire_month/3`
+     again → asserts it detects `:detached_standalone` and completes steps 3–5,
+     `resumed_from: :detached_standalone`.
+  2. Simulate a Postgres-level pending-detach (cancel/interrupt a `DETACH ...
+     CONCURRENTLY` mid-flight against a Postgres 16 test instance, or directly assert
+     against `pg_inherits.inhdetachpending` if the test harness can't reliably induce
+     the interrupted state) → call `retire_month/3` → asserts it issues `FINALIZE` and
+     completes, `resumed_from: :pending_detach`.
+  3. Call `retire_month/3` a second time against a month that already fully retired
+     (state `:already_retired`) → asserts `{:ok, ...}` with
+     `default_partition_rows_reconciled: 0`, `resumed_from: :already_retired`, and no
+     `ATTACH`/`DETACH` statement is re-issued (query-log assertion, same technique as
+     the no-per-row-work case above).
 
-### 4.4 Protected-record (`keep_forever`) exemption
+### 4.4 Step 1, in full: `events_archive_default` reconciliation + protected-record (`keep_forever`) relocation
 
-Before step 2 above, for the target month: `SELECT event_id, created_at FROM
+This step now does two things, both before step 2's `DETACH`, both required for step
+4's `ATTACH` to succeed cleanly, both using the same insert-then-confirmed-delete
+idiom. **Order matters and is fixed: 4.4b runs before 4.4a.** Running 4.4a
+(`keep_forever` relocation into `events_archive_default`) before 4.4b (sweeping
+`events_archive_default` back into the partition) would move the just-relocated
+`keep_forever` rows right back out again on the very next sub-step — harmless but
+wasteful. Running 4.4b first means it only ever sweeps `archive/1`'s pre-existing
+early-moved rows; 4.4a's `keep_forever` rows then land in
+`events_archive_default` and simply stay there (still `events_archive`, still
+counted by EO-002, §4.5) rather than round-tripping.
+
+**4.4b — `events_archive_default` reconciliation (new in this revision, required for
+§4.3 step 4's `ATTACH` to succeed; runs first):** Postgres refuses to `ATTACH` a new
+partition whose range overlaps rows already sitting in the parent's `DEFAULT`
+partition — it scans `events_archive_default` as part of the `ATTACH` DDL and errors
+if any row there falls in `[month-start, next-month-start)`. Rows are there because
+`archive/1`'s ordinary early per-row moves for this month always land in
+`events_archive_default` until this month is retired (§3.2 revised). Before step 2:
+`SELECT event_id, created_at FROM #{prefix()}.events_archive_default WHERE created_at
+>= '<month-start>' AND created_at < '<next-month-start>'`; for every row found,
+relocate it **out of `events_archive_default` and into the still-standalone (at this
+point, still attached to `events`) `events_y<year>m<month>` table** — `INSERT INTO
+#{prefix()}.events_y<year>m<month> (...) SELECT ...` then `DELETE FROM
+#{prefix()}.events_archive_default WHERE event_id = ANY(...) AND created_at =
+ANY(...)`, same idiom, one `Repo.transaction/1`. This looks like moving rows from
+`events_archive` back into `events`, but it is not a policy reversal: these rows are
+about to become part of `events_archive` again, permanently, the moment step 4's
+`ATTACH` runs — moving them into the not-yet-detached partition first is what lets
+the whole-partition `DETACH`+`ATTACH` carry them across in one motion instead of a
+second per-row `INSERT`/`DELETE` pair after `ATTACH`. `default_partition_rows_reconciled`
+in the `{:ok, ...}` return (§4.1) reports this count.
+
+**4.4a — `keep_forever` relocation (mechanism unchanged from the prior revision,
+corrected only in destination):** `SELECT event_id, created_at FROM
 #{prefix()}.events_y<year>m<month> WHERE event_type IN (<event_types with a global
 event_retention_policies row where policy = 'keep_forever'>)`. If this returns rows,
-they are relocated — `INSERT INTO #{prefix()}.events_archive (...) SELECT ...` (into
-whatever partition of `events_archive` their own `created_at` already routes to,
-which by construction already exists per §3's pre-creation guarantee) followed by
-`DELETE FROM #{prefix()}.events_y<year>m<month> WHERE event_id = ANY(<relocated ids>)
-AND created_at = ANY(<relocated created_ats>)`, both inside one `Repo.transaction/1`,
-matching `archive_phase1_insert`/`archive_phase2_delete`'s existing
-insert-then-confirmed-delete idiom (`lib/letflow/event_store.ex` around line 1490) —
-reused deliberately rather than inventing a third pattern for the same
-insert-then-delete shape this codebase already has one canonical version of.
+they are relocated — `INSERT INTO #{prefix()}.events_archive (...) SELECT ...`
+(routes to `events_archive_default`, per §3.2 revised — **not** "a dedicated
+partition that already exists," which was this design's prior, now-corrected,
+assumption) followed by `DELETE FROM #{prefix()}.events_y<year>m<month> WHERE
+event_id = ANY(<relocated ids>) AND created_at = ANY(<relocated created_ats>)`, both
+inside one `Repo.transaction/1`, matching `archive_phase1_insert`/`archive_phase2_delete`'s
+existing insert-then-confirmed-delete idiom (`lib/letflow/event_store.ex` around line
+1490).
+
+Both 4.4a and 4.4b are bounded, small-in-practice, per-row pre-steps — **not** part of
+AC2's "no per-row DELETE" claim, which is specifically about steps 2–5 (§4.3.3),
+exactly as this design already distinguished for `keep_forever` alone in the prior
+revision; 4.4b extends the same reasoning to the newly-identified default-partition
+precondition rather than introducing a new exception category.
 
 This relocation is bounded to however many `keep_forever`-policy rows the target
 month actually contains — expected to be small (the whole reason `keep_forever` exists
@@ -365,7 +517,14 @@ parent table in a way that blocks DML on other partitions. `DETACH ... CONCURREN
 is the one step whose non-blocking behavior is a documented Postgres 14+ guarantee
 rather than this design's own derivation — cited, not re-derived, per this project's
 "don't re-litigate what's already established" discipline applied to Postgres's own
-documented behavior.
+documented behavior. `FINALIZE` (§4.3.1 State `:pending_detach`) is the one step this
+claim does not extend to unconditionally: Postgres finalizes an interrupted concurrent
+detach by briefly taking a stronger lock than routine `DETACH ... CONCURRENTLY`
+does — acceptable here because it only ever runs on the rare crash-recovery path
+(§4.3.1), never on a first, uninterrupted call, so it does not weaken EO-001's claim
+about the routine case. The catalog reads in §4.3.2 that every call opens with
+(idempotency dispatch) are plain `SELECT`s against system catalogs — no lock beyond
+what any ordinary read already takes.
 
 ## 6. EO-003 — replay after retirement (architectural mechanism)
 
@@ -417,10 +576,17 @@ closes the loop `retire_month/3`'s DETACH+ATTACH design opened.
   never dropped by any migration in this design — left as a deliberate rollback
   safety net with no stated expiry. A follow-up requirement or an explicit ops
   decision should set a soak period and a cleanup migration; not decided here.
-- **OQ3 (§3.3):** whether `PartitionMaintenance` should alert when the
-  `*_default`/`*_archive_default` partitions receive any rows (a sign the lookahead
+- **OQ3 (§3.3, revised):** whether `PartitionMaintenance` should alert when `events`'s
+  own `events_default` partition receives any rows (a sign the `events`-side lookahead
   window was insufficient at some point) — left for REQ-377 or a follow-up to decide,
-  not resolved here.
+  not resolved here. **Not applicable to `events_archive_default`** any more: per §3.2
+  (revised), `events_archive_default` holding rows is the expected, designed-for
+  steady state for any not-yet-retired month (every `archive/1` early move lands
+  there by construction), so its row count is not itself a signal of anything wrong —
+  only §4.4b's reconciliation count (`default_partition_rows_reconciled`) at
+  retirement time is a meaningful metric, and whether *that* should be
+  alerted/tracked operationally is folded into this same open question rather than
+  treated separately.
 - **OQ4:** `min_partition_age_days`'s actual default value is left unspecified by
   this design (a config key exists, §4.2, but no default number is proposed) —
   ELIXIR-DEV/REVIEWER should set one grounded in this platform's actual expected
@@ -435,15 +601,23 @@ closes the loop `retire_month/3`'s DETACH+ATTACH design opened.
   design should decide this, since "who/what calls `retire_month/3`, and how often"
   is squarely an operator-facing-screen design question this requirement's scope
   fence excludes.
+- **OQ6 (new, §4.3.1):** `{:error, {:stuck_pending_detach, reason}}` (§4.1) is
+  surfaced as a return value, but this design does not specify what, if anything,
+  automatically retries it (a Poller re-sweep? manual operator re-invocation only?)
+  nor what alerting/visibility a stuck pending-detach state gets in the interim
+  (a month stuck here is not silently wrong — `events`' own read/write path is
+  entirely unaffected, per Postgres's own two-phase design — but it does block that
+  month's retirement indefinitely until resolved). Left for REQ-377/a follow-up,
+  same as OQ3/OQ5, rather than guessed at here.
 
 ## 8. Acceptance-criteria coverage map
 
 | AC | Design element |
 |----|----|
 | 1 | `docs/migration/decisions/0037-...md` (this design's companion decision record), pending REVIEWER sign-off |
-| 2 (EO-001) | §4.3 DDL sequence (DETACH CONCURRENTLY, no per-row DELETE in the common path), §5 |
-| 3 (EO-002) | §4.4 protected-record relocation, §4.5 test shape |
+| 2 (EO-001) | §4.3 retirement sequence (whole-partition DDL only in steps 2–5, honest "sequence not single-statement" framing, §4.3.1 crash-recovery state machine, §5); crash-recovery/idempotent-resume test shape in §4.3.3 |
+| 3 (EO-002) | §4.4 (4.4a `keep_forever` relocation + 4.4b `events_archive_default` reconciliation), §4.5 test shape |
 | 4 (EO-003) | §6 `read/2` union extension |
-| 5 | §3 pre-creation mechanism, `months_ahead: 2` default |
-| 6 | Decision 0037's "Relationship to `archive/1`" section, restated in §4.2/§4.3 here |
+| 5 | §3 pre-creation mechanism, `months_ahead: 2` default (revised to `events`-only, §3.2) |
+| 6 | Decision 0037's "Relationship to `archive/1`" section, restated in §4.2/§4.3/§3.2 here |
 | 7 | Not a design-time concern — ELIXIR-DEV runs `mix letflow.check` at implementation time and quotes real output |

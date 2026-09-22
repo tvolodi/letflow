@@ -165,19 +165,22 @@ internal control-flow fix, not an API shape change.
 
 ## 4. Existing regression test — required changes
 
-`test/letflow/routers/solution_packs_update_test.exs:439-550`
+`test/letflow/routers/solution_packs_update_test.exs:439-551`
 (`describe "Regression: a resolved artefact's attribution is immutable (on_conflict:
-:nothing)"`) currently documents and asserts the OLD, buggy contract at lines 531-549: it
-explicitly asserts `entry["action"] == "advanced_to_incoming"` and
-`base_after.base_content == incoming_content` for the SECOND call, i.e. it asserts the
-second call's differing submission governs the action — exactly the behavior ISS-0781
-says must stop.
+:nothing)"`) currently documents and asserts the OLD, buggy contract at lines 531-550: it
+explicitly asserts `entry["action"] == "advanced_to_incoming"` (line 546),
+`base_after.base_content == incoming_content` (line 549), **and**
+`base_after.base_version == target_version` (line 550) for the SECOND call, i.e. it
+asserts the second call's differing submission governs the action — exactly the
+behavior ISS-0781 says must stop. All three assertions belong to the same buggy-contract
+block and all three must change together; line 550 is not a separate, unrelated
+assertion and is explicitly in scope alongside lines 546 and 549.
 
 Required change: replace the "what the immutability claim does NOT cover" block
-(lines 531-549 inclusive, from the comment through the two closing assertions) with
-assertions matching the corrected contract — action AND base content must now track the
-**first** call's `keep_local` resolution, not the second call's `take_incoming`
-submission:
+(lines 531-550 inclusive, from the comment through all three closing assertions) with
+assertions matching the corrected contract — action, base content, AND base version must
+now all track the **first** call's `keep_local` resolution, not the second call's
+`take_incoming` submission:
 
 - `entry["action"]` (from `second_body_json`, same `entry_for(second_body_json,
   artefact_id)` lookup already used) must now assert `== "left_unchanged"` (the FIRST
@@ -192,11 +195,27 @@ submission:
   artefact_id, "1.0.0", base_content)` at line 455, so the correct assertion is
   `base_after.base_content == base_content`, the untouched original, since `keep_local`
   never calls `advance_base/6` at all).
+- `base_after.base_version` must now assert `== "1.0.0"` (the literal version string
+  `insert_base!/6` seeded at line 455), **not** `target_version` (`"2.0.0"`).
+  `advance_base/6` is the only place `base_version` is ever written
+  (`solution_pack.ex`, `advance_base/6`'s `attrs` map sets `base_version:
+  target_version`), and under the corrected contract `advance_base/6` is never called at
+  all across either the first call (`keep_local` → `:left_unchanged`, no write) or the
+  second call (now also resolved via the persisted `keep_local` row →
+  `:left_unchanged`, no write) — so the base row's `base_version` column is never
+  touched by this test's two apply calls and stays exactly what `insert_base!/6` set it
+  to before either call ran. Asserting `target_version` here (as the current test does)
+  is only true under the OLD buggy contract, where the second call's own
+  `take_incoming` submission drove an `advance_base/6` call that stamped
+  `base_version: target_version` — that write path no longer executes at all once the
+  fix lands, so this assertion is not merely wrong-value but wrong-code-path, and must
+  change together with the other two, not independently.
 - The comment block explaining this (lines 531-544) must be rewritten to state the
   corrected contract: the second call's differing submission has **no effect on the
   applied action either**, not just no effect on the persisted row — attribution and
-  applied action are now both governed by the first-ever persisted resolution,
-  consistently.
+  applied action (including every field `advance_base/6` would otherwise have written:
+  `base_content` and `base_version` alike) are now both governed by the first-ever
+  persisted resolution, consistently.
 - The `describe` block's own title (line 439, `"Regression: a resolved artefact's
   attribution is immutable (on_conflict: :nothing)"`) should be widened, e.g.
   `"Regression: a resolved artefact's attribution AND applied action are both immutable
@@ -237,25 +256,52 @@ touching the row-level test:
   the correct new behavior requires actively advancing the base (not just leaving it
   alone), rules that out. Concretely:
   - First call: `resolution: "take_incoming"`. Assert (as the existing test already does
-    for the mirror case) `action == "advanced_to_incoming"` and
-    `base_after.base_content == incoming_content` for THIS first call.
+    for the mirror case) `action == "advanced_to_incoming"`,
+    `base_after.base_content == incoming_content`, **and**
+    `base_after.base_version == target_version` for THIS first call — `advance_base/6`
+    runs here (this is the one call in this pairing where a write genuinely happens),
+    stamping `base_version: target_version` exactly as `advance_base/6`'s `attrs` map
+    always does on a `:take_incoming`/`:merged`/`:clean_update` action, so all three
+    fields (content, version, and — per §4.1's pattern — nothing about the resolution
+    row itself yet, since this is the first-ever submission) must be asserted together
+    here, not just content.
   - Second call, same artefact/target_version, different actor: `resolution:
     "keep_local"`. Assert the row still shows the FIRST call's `take_incoming`/
     `first_actor`/`first_resolved_at` (mirroring the existing row-immutability
     assertions). Assert the SECOND call's `entry["action"] == "advanced_to_incoming"`
     (the first call's action, not `"left_unchanged"`) and that the base is **still**
-    `incoming_content` (unchanged by the second call — no re-advance to `keep_local`'s
-    no-write semantics, and critically, no double-write or third state).
+    `incoming_content` with `base_version` **still** `target_version` (unchanged by the
+    second call — `apply_from_persisted_resolution/5`'s `:take_incoming` branch calls
+    `advance_base/6` again on this second call, but with the same `entry.incoming` and
+    the same `target_version` this call was itself invoked with, so the write is
+    idempotent: no re-advance to `keep_local`'s no-write semantics, no double-write, and
+    critically no third state — assert `base_version == target_version` explicitly
+    rather than leaving it unchecked, since an idempotent-looking write is exactly the
+    kind of thing a future regression could silently break by, e.g., advancing to the
+    wrong version on the redundant second write).
 - **Also cover `:merged`**: a third resolution kind exists (`merged` with
   `resolved_content`). Add (or extend the pair above into a triple) a case where the
   first call resolves `merged` with specific `resolved_content`, and the second call
   submits a different resolution kind (e.g. `take_incoming`) for the same tuple — assert
   the second call's action is `"advanced_to_merged"` with the FIRST call's
-  `resolved_content`, not the second call's `incoming_content`. This is the case most
-  likely to regress silently, since `:merged`'s `resolved_content` is data carried on the
-  resolution row itself (not derivable from `entry.incoming`), making it the clearest
-  demonstration that the action must read the persisted row's full content, not just its
-  resolution-kind tag.
+  `resolved_content` **and** `base_after.base_version == target_version` (same
+  reasoning as the reverse-pairing case above: `advance_base/6`'s `:merged` branch also
+  stamps `base_version: target_version` on both the first call's original write and the
+  second call's idempotent re-write), not the second call's `incoming_content`. This is
+  the case most likely to regress silently, since `:merged`'s `resolved_content` is data
+  carried on the resolution row itself (not derivable from `entry.incoming`), making it
+  the clearest demonstration that the action must read the persisted row's full content,
+  not just its resolution-kind tag.
+
+**General rule for all three tests (the existing one and both new ones in §4.2), stated
+explicitly so TEST-DESIGNER cannot omit it the way the pre-fix version of this design
+did**: every assertion this design specifies for `entry["action"]` and
+`base_after.base_content` must be paired with an assertion of `base_after.base_version`
+in the same test, because `base_version` is written by exactly the same
+`advance_base/6` call (or not written at all, when the action is `:left_unchanged`) that
+determines `base_content` — the two fields are never allowed to be checked
+independently of each other in this test file, and a test that asserts one without the
+other is incomplete under this design.
 
 All three new/extended tests belong in
 `test/letflow/routers/solution_packs_update_test.exs`, in the same describe block as the

@@ -245,40 +245,44 @@ touching the row-level test:
 - **Test name**: something naming the exact property, e.g. `"a second apply call
   submitting a DIFFERENT resolution for an already-resolved artefact applies the FIRST
   call's resolution, not its own"`.
-- **Setup**: same shape as the existing test (two actors, `keep_local` then
-  `take_incoming` on the same artefact/target_version) OR the reverse pairing
-  (`take_incoming` first, `keep_local` second) — include the reverse pairing as a
-  **second** new test (or a parameterised/table-driven pair) specifically because the
-  existing test's `keep_local`→`take_incoming` ordering has a false-negative risk: if a
-  future regression made `apply_entry/6` fall back to `:left_unchanged` by default on any
-  bug (e.g. an exception swallowed into a default case), a `keep_local`-first test could
-  pass for the wrong reason. A `take_incoming`-first, `keep_local`-second variant, where
-  the correct new behavior requires actively advancing the base (not just leaving it
-  alone), rules that out. Concretely:
-  - First call: `resolution: "take_incoming"`. Assert (as the existing test already does
-    for the mirror case) `action == "advanced_to_incoming"`,
-    `base_after.base_content == incoming_content`, **and**
-    `base_after.base_version == target_version` for THIS first call — `advance_base/6`
-    runs here (this is the one call in this pairing where a write genuinely happens),
-    stamping `base_version: target_version` exactly as `advance_base/6`'s `attrs` map
-    always does on a `:take_incoming`/`:merged`/`:clean_update` action, so all three
-    fields (content, version, and — per §4.1's pattern — nothing about the resolution
-    row itself yet, since this is the first-ever submission) must be asserted together
-    here, not just content.
-  - Second call, same artefact/target_version, different actor: `resolution:
-    "keep_local"`. Assert the row still shows the FIRST call's `take_incoming`/
-    `first_actor`/`first_resolved_at` (mirroring the existing row-immutability
-    assertions). Assert the SECOND call's `entry["action"] == "advanced_to_incoming"`
-    (the first call's action, not `"left_unchanged"`) and that the base is **still**
-    `incoming_content` with `base_version` **still** `target_version` (unchanged by the
-    second call — `apply_from_persisted_resolution/5`'s `:take_incoming` branch calls
-    `advance_base/6` again on this second call, but with the same `entry.incoming` and
-    the same `target_version` this call was itself invoked with, so the write is
-    idempotent: no re-advance to `keep_local`'s no-write semantics, no double-write, and
-    critically no third state — assert `base_version == target_version` explicitly
-    rather than leaving it unchecked, since an idempotent-looking write is exactly the
-    kind of thing a future regression could silently break by, e.g., advancing to the
-    wrong version on the redundant second write).
+- **Setup, corrected (REVIEWER, WF03-ISS0781-20260922 gate)**: the reverse pairing as
+  originally specified here — `take_incoming` first, identical resubmission of the same
+  `incoming` second, `keep_local` on the second call — is **not reachable**.
+  `run_apply_update/8` re-runs `compute_pack_update_plan/5` from scratch on every call,
+  and by the second call `advance_base/6` has already written
+  `base_content == incoming_content` from the first call. Re-submitting the *same*
+  `incoming` on the second call makes `Definitions.classify_artefact/3`
+  (`lib/letflow/definitions.ex:487-491`) see `base == incoming` and reclassify the entry
+  as `:local_only`, not `:conflict` — the entry never reaches `apply_entry/6`'s
+  `:conflict` clause (or `apply_from_persisted_resolution/5`) on the second call at all,
+  so the scenario as literally specified above cannot exercise the code path it was
+  written to test. ELIXIR-DEV hit this while implementing and left a `NOTE` at the
+  corresponding point in `test/letflow/routers/solution_packs_update_test.exs`
+  documenting the same finding, confirmed independently by SECURITY-REVIEWER during its
+  ISS-0781 pass and again by REVIEWER here. The reachable fixture for this exact
+  ordering, if it were added, would need the second call's `incoming` to differ from
+  *both* the new `base` (`incoming_content`, set by the first call) and `theirs` — a
+  third distinct value, so `classify_artefact/3` still lands on `:conflict` on the
+  second call.
+- **Resolution — no separate reverse-pairing test required.** The concern the reverse
+  pairing was meant to guard against — a future regression silently defaulting
+  `apply_entry/6`'s `:conflict` clause to `:left_unchanged` (e.g. a swallowed exception
+  falling through to a default branch) so that a `keep_local`-first test could pass for
+  the wrong reason — is already fully covered by the `:merged` test below (§4.2, second
+  bullet): its first call asserts `action == "advanced_to_merged"` (ruling out a
+  silent default-to-`:left_unchanged`), and its second call asserts the action, content,
+  and version *all* still match the first call's `:merged` resolution despite a
+  differently-shaped second submission (`take_incoming`). Because the fixed
+  `apply_entry/6` clause takes an unconditional `_resolutions`-ignoring path — it no
+  longer dispatches on the current call's submitted resolution value at all — there is
+  no code branch left that could distinguish a second submission of `keep_local` from
+  one of `take_incoming`; both are equally ignored by construction. A dedicated
+  `take_incoming`→`keep_local` test would add no additional branch coverage over what
+  the existing (extended) `keep_local`→`take_incoming` test and the new `:merged` test
+  already establish together — one proves a persisted no-write resolution survives a
+  differing write-shaped resubmission, the other proves a persisted write-with-
+  independent-content resolution survives one too. Do not add the reverse-pairing test;
+  the two tests already present are sufficient coverage of the underlying property.
 - **Also cover `:merged`**: a third resolution kind exists (`merged` with
   `resolved_content`). Add (or extend the pair above into a triple) a case where the
   first call resolves `merged` with specific `resolved_content`, and the second call

@@ -250,9 +250,7 @@ defmodule Letflow.TenantOnboardingTest do
     end
 
     defp drop_group_insert_sabotage!(schema_name) do
-      Repo.query!(
-        "DROP TRIGGER IF EXISTS iss0778_sabotage_trigger ON \"#{schema_name}\".groups"
-      )
+      Repo.query!("DROP TRIGGER IF EXISTS iss0778_sabotage_trigger ON \"#{schema_name}\".groups")
 
       Repo.query!("DROP FUNCTION IF EXISTS \"#{schema_name}\".iss0778_sabotage_group_insert()")
     end

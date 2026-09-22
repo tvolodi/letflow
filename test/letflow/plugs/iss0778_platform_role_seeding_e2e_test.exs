@@ -96,9 +96,7 @@ defmodule Letflow.Plugs.Iss0778PlatformRoleSeedingE2eTest do
     user = insert_user!(tenant)
 
     {:ok, %{plaintext: plaintext}} =
-      Identity.create_token(user.id, %{roles: roles, expires_at: nil},
-        prefix: tenant.schema_name
-      )
+      Identity.create_token(user.id, %{roles: roles, expires_at: nil}, prefix: tenant.schema_name)
 
     {plaintext, tenant.tenant.slug}
   end

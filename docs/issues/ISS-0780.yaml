@@ -1,0 +1,66 @@
+id: ISS-0780
+title: >
+  CORS config's @allow_headers does not include x-bpm-user-id -- any
+  genuinely cross-origin (non-proxied) authenticated frontend deployment
+  would have every request rejected by the browser's CORS preflight
+discovered_by: UAT-RUNNER (live e2e run of REQ-375's
+  platform-migration-partial-failure-resume.pipeline.e2e.spec.ts, second
+  attempt after ISS-0777's fix)
+discovered_in_run: WF02-REQ375-20260921 (UAT-RUNNER step, post-ISS-0777)
+discovered_at: "2026-09-22T01:10:00Z"
+severity: MINOR
+tags:
+  - backend
+  - frontend
+  - cors
+  - deployment
+description: >
+  Found incidentally while getting a live e2e run for REQ-375 working
+  against an isolated second backend instance. UAT-RUNNER initially set
+  `VITE_API_BASE_URL` to point the frontend at that instance -- this
+  environment variable is read by both Vite's dev-proxy config AND
+  `web/src/api/client.ts` (which uses it to build an ABSOLUTE fetch URL,
+  turning every request into a genuine cross-origin browser request
+  instead of a same-origin request routed through the dev proxy).
+
+  With a genuine cross-origin request, the browser's CORS preflight
+  correctly failed: `lib/letflow/plugs/cors.ex`'s `@allow_headers`
+  (around line 69) is `"authorization, content-type"` -- it does not
+  include `x-bpm-user-id`, a header `client.ts` sends on every
+  authenticated request. Confirmed directly via a manual curl
+  preflight against the real backend: the header is rejected.
+
+  This means any real, non-dev-proxied cross-origin deployment of the
+  Letflow SPA (frontend served from a different origin than the API,
+  which is a normal production topology, e.g. a CDN-fronted SPA calling
+  an API on a separate subdomain) would have every authenticated
+  request blocked by the browser before it ever reaches the backend.
+  This did not block REQ-375's own UAT run once the setup was corrected
+  to use same-origin dev-proxying instead (the intended local-dev
+  topology), so it is not a currently-live production incident for this
+  project's own deployment topology as far as this discovery could
+  tell -- but it is a real, reproducible defect that would surface the
+  moment a genuinely cross-origin deployment topology is used.
+affected_files:
+  - lib/letflow/plugs/cors.ex
+related_requirements:
+  - REQ-374
+  - REQ-375
+severity_rationale: >
+  MINOR -- not a currently-exploitable or currently-live-broken path for
+  this project's own known deployment topology (same-origin via
+  dev-proxy or a reverse proxy), but a genuine, reproducible defect that
+  would silently break authentication for a different, equally
+  legitimate deployment topology (a truly cross-origin SPA/API split).
+fix_direction: >
+  Add `x-bpm-user-id` to `lib/letflow/plugs/cors.ex`'s `@allow_headers`
+  list. Needs a regression test proving a CORS preflight (`OPTIONS`)
+  request with `Access-Control-Request-Headers: x-bpm-user-id` receives
+  an `Access-Control-Allow-Headers` response that includes it. Worth
+  auditing whether any other headers `web/src/api/client.ts` sends
+  (check its full header set) are similarly missing from this list,
+  rather than fixing only the one header this discovery happened to
+  hit.
+queue_ref: null  # ORCH to assign via letflow-queue register_task
+github_ref: null  # ORCH to assign
+status: open

@@ -1138,3 +1138,45 @@ history:
       step. REQ-385 (EO-004's task-form version-mismatch fallback, filed
       from the same GUI-review report) remains pending, unaffected by this
       merge.
+  - req: REQ-385
+    event: done
+    agent: DOC-UPDATER
+    at: "2026-09-22T21:26:11Z"
+    note: >
+      EO-004's task-form version-mismatch fallback (filed from the same
+      GUI-review report as REQ-384) closed via a documented-vacuous
+      conclusion, not implementation -- an unusual close-out named
+      explicitly here because it departs from this volume's usual
+      shape. CODE-DESIGNER's design pass
+      (lib/letflow/design/req385-task-form-version-mismatch-fallback.md)
+      found no real analog for EO-004's guarantee exists under REQ-126's
+      frozen-at-creation architecture: tasks.form_schema is written
+      exactly once at activation (TaskActivation.resolve_form_schema/1)
+      and never re-resolved against a live catalog on any subsequent
+      read, so there is no "version requested vs. version returned"
+      comparison for a mismatch to describe. The one real-but-different
+      condition on this path -- a task whose instance_definition_snapshots
+      row is missing, confirmed reachable only via direct DB manipulation
+      outside every lib/letflow/ write path -- degrades only the
+      form_version display label to nil, never the form itself, and is a
+      metadata-completeness gap, not a version mismatch (design doc
+      §3.1-3.2). AC1 states this verdict explicitly; AC2 does not trigger
+      (conditioned on a real analog existing); AC3/AC4 are satisfied by
+      the design doc itself recording the conclusion and proposing no
+      code change. CODE-DESIGN-VALIDATOR PASSED (adversarially
+      re-confirmed the verdict rather than trusting CODE-DESIGNER's
+      self-report) and REVIEWER PASSED (idiom/decision-record-consistency
+      gate, addendum recorded in
+      test/uat-reports/gui-review-2026-09-20-tenant-switch-cache-isolation.md
+      so a future UAT run treats EO-004 as N/A-by-design rather than
+      re-investigating it). No ELIXIR-DEV/FRONTEND-DEV/SECURITY-REVIEWER/
+      TEST-DESIGNER/TEST-RUNNER/RELEASE-VALIDATOR steps apply -- the
+      design+review pipeline is this requirement's entire lifecycle per
+      its own AC3, so there is no code diff and no test run to report.
+      Follow-up gap found along the way (two independent design passes,
+      REQ-273's OQ-2 and REQ-385's own OQ-1, converged on the same
+      never-actioned operator-visibility gap around activation-time
+      {:invalid_form_schema, ...} rollback) filed separately as ISS-0784
+      (MINOR, queue task 783, GH-1731) rather than folded into this
+      requirement's own scope. Merged via PR on
+      feature/WF02-REQ385-20260922.

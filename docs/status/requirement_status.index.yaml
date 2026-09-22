@@ -4293,8 +4293,16 @@ volumes:
     path: docs/status/requirement_status.v21.yaml
     status: current
     opened: 2026-09-20
-    entries: 30
+    entries: 31
     note: >
+      Incremented to 31 by DOC-UPDATER's own REQ-385 done-event append
+      (WF02-REQ385-20260922's Step 6 -- an unusual close-out via
+      documented-vacuous-conclusion, no code diff, see the entry's own
+      note). Recounted directly post-append: `grep -c "^  - req:"
+      docs/status/requirement_status.v21.yaml` = 31 on-disk entries. 1182
+      lines / 72761 bytes, well under the 1200-line/120000-byte roll
+      ceiling, so no roll triggered. Prior notes preserved below verbatim.
+
       Incremented to 30 by DOC-UPDATER's own REQ-384 done-event append
       (WF02-REQ384-20260922's Step 6, on feature/WF02-REQ384-20260922 after
       merging origin/main and resolving a real, additive-only conflict

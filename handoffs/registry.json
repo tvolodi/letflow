@@ -6801,7 +6801,7 @@
       "workflow_id": "WF-02",
       "requirement_ids": ["REQ-373"],
       "stage": "S6",
-      "status": "IN_PROGRESS",
+      "status": "DONE",
       "owned_modules": [
         "lib/letflow/service_catalog.ex",
         "lib/letflow/service_catalog/entry.ex",
@@ -6814,10 +6814,10 @@
         "docs/requirements.yaml"
       ],
       "lock_acquired_at": "2026-09-21T17:09:58Z",
-      "lock_released_at": null,
-      "released_lock": false,
-      "last_known_step": "Step 00 COMPLETED PASS (branch feature/WF02-REQ373-20260921 off origin/main@7b4b4467)",
-      "note": "REQ-373/GH#1620, letflow-queue task 732. Backend version-status lifecycle (publish/retire) for service_catalog entries plus a real PinResolver.Lookup wired into Engine.create/2's pin_lookup/2. depends_on REQ-059/REQ-060/REQ-191/REQ-192 all confirmed done. Scope fence: no web/ changes, no PLC-01."
+      "lock_released_at": "2026-09-22T02:26:59Z",
+      "released_lock": true,
+      "last_known_step": "Step Final COMPLETED PASS (squash-merged b1e13d27, PR #1699)",
+      "note": "REQ-373/GH#1620, letflow-queue task 732. Backend version-status lifecycle (publish/retire) for service_catalog entries plus a real PinResolver.Lookup wired into Engine.create/2's pin_lookup/2. depends_on REQ-059/REQ-060/REQ-191/REQ-192 all confirmed done. Scope fence: no web/ changes, no PLC-01. Step Final took two extra rebases past the original merge: (1) resolved a migration-timestamp collision with REQ-374 (20260921000003 duplicated, renamed to 20260921000004) discovered only after fixing an observability gap in scripts/test_parallel.sh that had been silently swallowing the real ecto.create/migrate error -- filed as ISS-0779, though that issue's own filed theory (a pg_isready Postgres-service race) turned out to be a secondary red herring, not the actual root cause; (2) the branch went CONFLICTING against main after further work merged and stopped registering any CI runs at all (confirmed via the Actions API directly, not just gh pr checks) even after a close/reopen -- resolved by a real second rebase onto origin/main (status-history append-order conflicts composed chronologically again, final verified entries: 17), which is what finally produced a fresh CI run. Released letflow-queue task 732 with force:true because it was locked under an earlier agent_id from this same continuous session (letflow-c5-orch or similar) that this run's own release_lock call could not match -- verified safe via the actual merged PR and closed GH#1620 before forcing."
     }
   ]
 }

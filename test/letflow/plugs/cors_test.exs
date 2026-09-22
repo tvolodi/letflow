@@ -185,9 +185,30 @@ defmodule Letflow.Plugs.CorsTest do
                ["GET, POST, PUT, PATCH, DELETE, OPTIONS"]
 
       assert get_resp_header(conn, "access-control-allow-headers") ==
-               ["authorization, content-type"]
+               ["authorization, content-type, idempotency-key, if-match, x-bpm-user-id"]
 
       assert get_resp_header(conn, "access-control-max-age") == ["600"]
+    end
+
+    test "ISS-0780 regression: x-bpm-user-id, if-match, and idempotency-key are all allowed on preflight" do
+      conn =
+        conn(:options, "/api/v1/anything")
+        |> put_req_header("origin", @allowed_origin)
+        |> put_req_header("access-control-request-method", "POST")
+        |> put_req_header(
+          "access-control-request-headers",
+          "x-bpm-user-id, if-match, idempotency-key"
+        )
+        |> call()
+
+      assert conn.status == 204
+
+      [allow_headers] = get_resp_header(conn, "access-control-allow-headers")
+      allowed = allow_headers |> String.split(", ") |> Enum.map(&String.trim/1)
+
+      assert "x-bpm-user-id" in allowed
+      assert "if-match" in allowed
+      assert "idempotency-key" in allowed
     end
 
     test "preflight response is neither the 404 catch-all nor a normal 200 route response" do

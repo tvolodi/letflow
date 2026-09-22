@@ -68,4 +68,6 @@ queue_ref: "Q-779"  # letflow-queue task id 779. NOTE: the queue service's
   # precedent established repeatedly this session. Registered
   # 2026-09-22 by ORCH.
 github_ref: GH-1704
-status: open
+status: resolved
+resolved_in_run: "WF03-ISS0780-20260922"
+resolved_at: "2026-09-22T03:22:13Z"

@@ -1,0 +1,63 @@
+{
+  "handoff_id": "c1d2e3f4-0780-4000-8000-000000000004",
+  "run_id": "WF03-ISS0780-20260922",
+  "workflow_id": "WF-03",
+  "step": "02b",
+  "from_agent": "CODE-DESIGN-VALIDATOR",
+  "to_agent": "ORCH",
+  "file": "handoffs/WF03-ISS0780-20260922/step-02b-design-gate.json",
+  "created_at": "2026-09-22T09:00:00Z",
+  "started_at": "2026-09-22T08:45:00Z",
+  "completed_at": "2026-09-22T09:00:00Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S6",
+    "issue_id": "ISS-0780",
+    "queue_ref": "Q-779",
+    "github_ref": "GH-1704",
+    "branch": "feature/WF03-ISS0780-fix-20260922",
+    "related_handoff_ids": [
+      "handoffs/WF03-ISS0780-20260922/step-01-issue-fixer-diagnose.json",
+      "handoffs/WF03-ISS0780-20260922/step-02-code-designer.json"
+    ],
+    "artifacts_in": [
+      "handoffs/WF03-ISS0780-20260922/step-02-code-designer.json",
+      "handoffs/WF03-ISS0780-20260922/step-01-issue-fixer-diagnose.json",
+      "docs/issues/ISS-0780.yaml",
+      "lib/letflow/plugs/cors.ex",
+      "test/letflow/plugs/cors_test.exs",
+      "web/src/api/client.ts",
+      "web/src/api/entities.ts",
+      "web/src/api/onboarding.ts"
+    ]
+  },
+  "task": {
+    "description": "WF-03 Step 2 gate: verify CODE-DESIGNER's inline design for ISS-0780 against fix_direction, spot-check the diagnosis's header audit directly, confirm the no-standalone-design-doc ceremony call is actually consistent with the ISS-0529 precedent, confirm no implementation code is present, and assess the single-combined-test recommendation.",
+    "acceptance_criteria": [
+      "design covers every part of ISS-0780's fix_direction (add x-bpm-user-id; regression test; audit other client.ts headers)",
+      "corrected @allow_headers value is correct and complete against an independent spot-check of client.ts/entities.ts/onboarding.ts",
+      "no-standalone-design-doc call is consistent with how ISS-0529 was actually handled",
+      "design contains no implementation code",
+      "single-combined-test recommendation for Step 4 is defensible"
+    ]
+  },
+  "result": {
+    "verdict": "PASS",
+    "reviewed_by": "CODE-DESIGN-VALIDATOR",
+    "reviewed_at": "2026-09-22T09:00:00Z",
+    "design_artefact": "handoffs/WF03-ISS0780-20260922/step-02-code-designer.json (result.summary; no lib/letflow/design/ file, per the CODE-DESIGNER's flagged ceremony call)",
+    "checks_passed": [
+      "fix_direction coverage: read docs/issues/ISS-0780.yaml directly. All three fix_direction items are covered -- (1) x-bpm-user-id added to @allow_headers, (2) a regression test is specified proving preflight clearance for it, (3) the design documents an explicit audit of other web/src/api/*.ts headers (not just the one header this issue happened to hit), matching fix_direction's 'worth auditing whether any other headers... are similarly missing' instruction verbatim.",
+      "@allow_headers value independently spot-checked, not trusted from the diagnosis: read lib/letflow/plugs/cors.ex directly (current value 'authorization, content-type' at line 69, moduledoc at lines 66-68 as described) and grepped/read web/src/api/client.ts (lines 74-84, 204-209: Authorization + Content-Type + x-bpm-user-id, the last extracted via extractUserIdFromToken from the JWT sub claim, sent on every authenticated request), web/src/api/entities.ts (lines 66-83: If-Match threaded through client.putWithHeaders for the ifMatch-supplied case), and web/src/api/onboarding.ts (lines 86-117: Idempotency-Key via client.postWithHeaders). Also grepped web/src for every postWithHeaders/putWithHeaders/headers-object call site: the only production hits are client.ts, entities.ts, onboarding.ts -- every other match is under web/src/api/__tests__/*.test.ts (test fetch mocks). This independently confirms the diagnosis's audit claim of exactly five CORS-relevant headers, two already allowed and three missing, with no fourth candidate. The design's stated new value 'authorization, content-type, idempotency-key, if-match, x-bpm-user-id' is both complete (all five present) and correctly alphabetically ordered (authorization < content-type < idempotency-key < if-match < x-bpm-user-id -- 'idempotency-key' sorts before 'if-match' at the fourth character, 'd' < 'f', verified by direct string comparison, not assumed).",
+      "ISS-0529 precedent check: read lib/letflow/plugs/cors.ex's own moduledoc, which cites ISS-0529 inline, and ran `git log --all --oneline | grep 0529` plus `git show --stat` on the ISS-0529 fix commit (3d5dc481, 'fix(iss-0529): expand CORS @default_origins to all 4 localhost/4173/5173 combinations'). The commit's file list is docs/issues/ISS-0529.yaml, docs/status/*, handoffs/registry.json, lib/letflow/plugs/cors.ex, test/letflow/plugs/cors_test.exs -- no lib/letflow/design/ file was added or touched, and `ls lib/letflow/design/` today has no iss-0529/iss0529 file. This directly confirms CODE-DESIGNER's factual claim: ISS-0529 (also an additive lib/letflow/plugs/cors.ex constant-allowlist fix, also with new cors_test.exs regression coverage) shipped with no standalone design doc. The size comparison (ISS-0780: one string constant + a comment, no new branching logic, vs. ISS-0777: two-tier validation logic across two modules, which did get iss0777-entity-type-identifier-validation.md) is also accurate on direct inspection of cors.ex (origin_allowed?/1, handle_allowed/2, preflight_request?/1 are all untouched by this fix -- @allow_headers is read straight into put_resp_header/3 with zero branching). The ceremony-level call is sound; no standalone design doc was required.",
+      "no implementation code present: the handoff's design section states the corrected @allow_headers string, the replacement moduledoc comment text, the corrected test assertion literal, and the new test's shape/assertions -- all presented as exact target values/prose and structural instructions (what to assert, where to place it, why), not as a diff or a fenced .ex/.exs code block with a real function body. The document's own closing line makes this explicit ('all of the above are exact literal values/comment text... not function bodies, case/cond logic, or module structure changes'), and control flow (handle_allowed/2, preflight_request?/1) is correctly identified as untouched.",
+      "single-combined-test recommendation is defensible: independently confirmed @allow_headers has no branching (a single static string written unconditionally into one response header per matched-origin preflight, per cors.ex lines 99-104) -- unlike ISS-0529's @default_origins, which is matched through origin_allowed?/1's real per-origin Enum membership check, giving each origin its own code path worth a separate test. With no branching on the headers value, three single-header tests would exercise the identical code path three times with no additional coverage; one combined preflight test reproducing fix_direction's literal multi-header case, paired with assertion (3)'s corrected full-string pin (which already gives exact-value regression coverage), is proportionate and non-redundant."
+    ],
+    "checks_failed": [],
+    "summary": "PASS. Verified all three fix_direction items from docs/issues/ISS-0780.yaml are covered by the design. Independently re-derived the header audit from web/src/api/client.ts, entities.ts, and onboarding.ts (not trusted from the diagnosis) and confirmed the corrected @allow_headers value -- 'authorization, content-type, idempotency-key, if-match, x-bpm-user-id' -- is both complete and correctly alphabetically ordered. Confirmed via `git show --stat` on ISS-0529's actual fix commit that it shipped with no lib/letflow/design/ file, validating CODE-DESIGNER's ceremony-parity claim for this same-file, no-branching, single-constant fix; ISS-0780 is smaller in scope than ISS-0529 (no per-item conditional logic at all, vs. ISS-0529's real origin_allowed?/1 membership check), so no standalone design doc is required here either. The design contains values/prose and structural test instructions only, no implementation code. The single-combined-test recommendation for Step 4 is technically sound given @allow_headers has zero branching -- three single-header tests would add no path coverage beyond one. No issues found. Route to Step 3 (ELIXIR-DEV) with the design as-is.",
+    "route_to": "ELIXIR-DEV"
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

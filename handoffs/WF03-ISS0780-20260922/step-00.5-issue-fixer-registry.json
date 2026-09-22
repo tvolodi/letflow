@@ -1,0 +1,40 @@
+{
+  "handoff_id": "c1d2e3f4-0780-4000-8000-000000000001",
+  "run_id": "WF03-ISS0780-20260922",
+  "workflow_id": "WF-03",
+  "step": "00.5",
+  "from_agent": "ISSUE-FIXER",
+  "to_agent": "ISSUE-FIXER",
+  "file": "handoffs/WF03-ISS0780-20260922/step-00.5-issue-fixer-registry.json",
+  "created_at": "2026-09-22T07:20:00Z",
+  "started_at": "2026-09-22T07:10:00Z",
+  "completed_at": "2026-09-22T07:20:00Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S6",
+    "issue_id": "ISS-0780",
+    "queue_ref": "Q-779",
+    "github_ref": "GH-1704",
+    "branch": "feature/WF03-ISS0780-fix-20260922",
+    "related_handoff_ids": [],
+    "artifacts_in": ["docs/issues/ISS-0780.yaml"]
+  },
+  "task": {
+    "description": "WF-03 Step 0.5: search docs/issues/*.yaml for a status: resolved entry whose description mentions matching symptoms (CORS, allow_headers, cors.ex) to ISS-0780 (missing x-bpm-user-id, and audited If-Match/Idempotency-Key, in Letflow.Plugs.Cors's @allow_headers).",
+    "acceptance_criteria": [
+      "grep docs/issues/*.yaml for cors/allow_headers mentions",
+      "for each hit, determine whether it is the same symptom class (same root cause recurring) or a different CORS-adjacent issue",
+      "state in result.summary whether a prior match was found, and if so, whether this is a recurrence requiring a severity bump"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "Searched docs/issues/*.yaml (case-insensitive grep on 'cors|allow_headers') -- 3 hits: ISS-0529, ISS-0729, and ISS-0780 itself. ISS-0729 is unrelated (DefinitionListPage main-thread-freeze issue; 'cors' only appears there inside an unrelated aside about FRONTEND-DEV's own test harness hitting 'a false negative from a CORS test-config issue' during investigation -- not a defect in lib/letflow/plugs/cors.ex). ISS-0529 (status: resolved, resolving_run WF03-ISS0530-20260908) IS the same module (lib/letflow/plugs/cors.ex, test/letflow/plugs/cors_test.exs) and same general CORS-allowlist-omission class, but a DIFFERENT root cause and a DIFFERENT list: ISS-0529 was about @default_origins (the ORIGIN allowlist) missing http://localhost:4173, causing the tenant-config bootstrap preflight to be silently rejected and the SPA to fall back to a hardcoded Keycloak authority. ISS-0780 is about @allow_headers (the request-HEADER allowlist) missing x-bpm-user-id (and, per this run's own audit below, If-Match and Idempotency-Key too) -- a distinct constant in the same file, guarding a distinct CORS preflight dimension (allowed request headers, not allowed origins). No prior docs/issues/ entry addresses @allow_headers's header set at all; ISS-0529's own regression tests (test/letflow/plugs/cors_test.exs) do not touch @allow_headers. CONCLUSION: no clear match / no recurrence -- this is a genuinely new defect, not a re-occurrence of ISS-0529's fixed root cause. Severity stays at the filed MINOR pending Step 1's own reproduction (see step-01 handoff); no severity bump warranted since there is no prior fix of this exact root cause that failed to hold.",
+    "artifacts_out": [],
+    "issues": [],
+    "next_action": "Proceed to Step 1 (diagnose/reproduce)"
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

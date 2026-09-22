@@ -1,0 +1,52 @@
+{
+  "handoff_id": "e1f2a3b4-0780-4000-8000-000000000005",
+  "run_id": "WF03-ISS0780-20260922",
+  "workflow_id": "WF-03",
+  "step": "05",
+  "from_agent": "ORCH",
+  "to_agent": "ISSUE-FIXER",
+  "file": "handoffs/WF03-ISS0780-20260922/step-05-issue-fixer-close.json",
+  "created_at": "2026-09-22T03:22:13Z",
+  "started_at": "2026-09-22T03:22:13Z",
+  "completed_at": "2026-09-22T03:22:42Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S6",
+    "issue_id": "ISS-0780",
+    "queue_ref": "Q-779",
+    "github_ref": "GH-1704",
+    "branch": "feature/WF03-ISS0780-fix-20260922",
+    "related_handoff_ids": [
+      "handoffs/WF03-ISS0780-20260922/step-03b-security-reviewer.json",
+      "handoffs/WF03-ISS0780-20260922/step-03c-reviewer.json",
+      "handoffs/WF03-ISS0780-20260922/step-04b-test-design-validator.json",
+      "handoffs/WF03-ISS0780-20260922/step-04c-test-runner.json"
+    ],
+    "artifacts_in": [
+      "docs/issues/ISS-0780.yaml"
+    ]
+  },
+  "task": {
+    "description": "WF-03 Step 5: close ISS-0780 per docs/agents/workflows/WF-03_issue_resolving.md. Set docs/issues/ISS-0780.yaml status: resolved with resolved_in_run/resolved_at, close GH-1704 with an evidence-carrying comment, and append a status-history event to the current requirement_status volume.",
+    "acceptance_criteria": [
+      "docs/issues/ISS-0780.yaml flipped to status: resolved with resolved_in_run/resolved_at, real UTC timestamp",
+      "GH-1704 closed via gh issue close with a --comment citing the run-id, issue file, and regression test path",
+      "GitHub close verified via gh issue view (state, closedAt), not assumed",
+      "one status-history event appended to the current requirement_status volume, entries: recount verified directly via grep, not assumed"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "Closed ISS-0780. Local record docs/issues/ISS-0780.yaml flipped to status: resolved with resolved_in_run: \"WF03-ISS0780-20260922\" and resolved_at: \"2026-09-22T03:22:13Z\" (real UTC timestamp from `date -u`). This status is legitimate: the root cause (lib/letflow/plugs/cors.ex's @allow_headers omitting x-bpm-user-id) was actually removed by commit 3d1bb946, gated PASS by SECURITY-REVIEWER and REVIEWER (handoffs step-03b-security-reviewer.json, step-03c-reviewer.json), and proven by a fail-then-pass regression test at test/letflow/plugs/cors_test.exs (commit d71d761e), gated PASS by TEST-DESIGN-VALIDATOR (step-04b-test-design-validator.json) and independently confirmed by TEST-RUNNER's full-suite run: 4619/4619 passed (commit 0cfcb71d). GitHub mirror GH-1704 closed via `gh issue close 1704 --comment \"Fixed in WF03-ISS0780-20260922. See docs/issues/ISS-0780.yaml and the regression test at test/letflow/plugs/cors_test.exs.\"` -- confirmed via `gh issue view 1704 --json state,closedAt`: state CLOSED, closedAt 2026-09-22T03:22:42Z. This satisfies the evidence-on-close requirement (comment citing run-id, issue file, and regression test path). Also appended one 'resolved' status-history event (req: SCOPE-CHANGE, event: resolved, agent: ISSUE-FIXER; corrected to event: done in a follow-up commit 4104a61b per the documented req/event vocabulary) to the current status-history volume docs/status/requirement_status.v21.yaml (found via docs/status/requirement_status.index.yaml's status: current marker at volume 21). Recounted directly after the append: `grep -c \"^  - req:\" docs/status/requirement_status.v21.yaml` = 18, matching the index's declared entries: field which was updated from 17 to 18 in the same edit (per the REQ-373 drift-incident precedent -- verified match, not assumed). v21.yaml is 643 lines / 39194 bytes, well under the 1200-line/120000-byte roll ceiling, no roll triggered.",
+    "artifacts_out": [
+      "docs/issues/ISS-0780.yaml",
+      "docs/status/requirement_status.v21.yaml",
+      "docs/status/requirement_status.index.yaml"
+    ],
+    "issues": [],
+    "next_action": "Route to Step Final (git merge)"
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

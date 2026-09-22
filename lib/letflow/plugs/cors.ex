@@ -63,10 +63,18 @@ defmodule Letflow.Plugs.Cors do
   # `Letflow.Plugs.TenantStatus`'s `@write_methods`, plus GET/OPTIONS).
   @allow_methods "GET, POST, PUT, PATCH, DELETE, OPTIONS"
 
-  # The two request headers the SPA actually sends (`client.ts`): the bearer
-  # token and the JSON content type. Deliberately an explicit allowlist, not
-  # an echo of the request's `access-control-request-headers` value.
-  @allow_headers "authorization, content-type"
+  # The request headers the SPA actually sends, audited against web/src in full
+  # (ISS-0780) -- keep it that way. Deliberately an explicit allowlist, not an
+  # echo of the request's `access-control-request-headers` value:
+  #   * authorization    -- bearer token, every authenticated request (client.ts)
+  #   * content-type     -- JSON body (client.ts)
+  #   * idempotency-key  -- POST /api/v1/onboarding (web/src/api/onboarding.ts,
+  #                         via client.postWithHeaders)
+  #   * if-match         -- optimistic-concurrency PUT (web/src/api/entities.ts,
+  #                         REQ-336, via client.putWithHeaders)
+  #   * x-bpm-user-id    -- JWT `sub` claim, every authenticated request
+  #                         (client.ts) -- the header ISS-0780 was filed over
+  @allow_headers "authorization, content-type, idempotency-key, if-match, x-bpm-user-id"
 
   # 10 minutes — bounds how often a browser re-preflights. No correctness
   # dependency on the exact value.

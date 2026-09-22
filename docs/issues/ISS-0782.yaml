@@ -1,0 +1,60 @@
+id: ISS-0782
+title: >
+  web/src/api/identity.ts calls the non-existent GET /api/v1/users instead of
+  GET /api/v1/identity/users -- breaks the entire Users admin screen against
+  any real backend
+discovered_by: UAT-RUNNER
+discovered_in_run: WF02-REQ384-20260922
+discovered_at: "2026-09-22T19:10:00Z"
+severity: MAJOR
+tags:
+  - frontend
+  - regression
+  - admin-ui
+description: >
+  Found while UAT-RUNNER attempted to run REQ-384's new EO-001 live e2e test
+  (tenant-switch cache isolation), which uses the /admin/users screen as its
+  visible proof-of-isolation surface. The real screen showed "Something went
+  wrong loading this content." Independently reproduced with a minimal
+  Playwright script capturing console/network: the SPA calls
+  `GET /api/v1/users` and `GET /api/v1/admin/roles`, both real 404s.
+
+  Confirmed via curl with a real admin token that the CORRECT route
+  (`GET /api/v1/identity/users?search=...`) returns real data fine --
+  backend and data are correct, this is a pure frontend routing defect.
+  `web/src/api/identity.ts` hardcodes `/api/v1/users` instead of
+  `/api/v1/identity/users`. `lib/letflow/plugs/api_pipeline.ex` only ever
+  forwards `/identity`, never a bare `/users` -- there has never been a
+  working `/api/v1/users` route in this codebase.
+
+  Confirmed unrelated to REQ-384: `git diff main -- web/src/api/identity.ts`
+  on REQ-384's branch is empty, and `main`'s own router already only mounts
+  `/identity`. This breaks the Users admin screen for every tenant, not
+  something REQ-384 introduced or can fix within its own scope.
+affected_files:
+  - web/src/api/identity.ts
+related_requirements:
+  - REQ-384
+severity_rationale: >
+  MAJOR -- a whole admin screen (Users) is completely non-functional against
+  any real backend (not a mock-only issue), for every tenant, discovered only
+  because this is apparently the first time this screen was exercised against
+  a live instance rather than mocked unit/component tests. No known
+  workaround from the UI.
+suggested_fix: >
+  Change web/src/api/identity.ts's user-listing/role-listing call sites from
+  `/api/v1/users`/`/api/v1/admin/roles` to the real, already-existing
+  `/api/v1/identity/users` (and equivalent for roles -- check
+  lib/letflow/plugs/api_pipeline.ex and lib/letflow/routers/identity.ex for
+  the real role-listing path). Small, likely single-file frontend fix.
+  Should get a live e2e regression test added for the Users admin screen
+  once fixed (apparently none exists that runs against a real backend --
+  only mocked unit tests, which is exactly why this went undetected).
+queue_ref: "Q-781"
+# NOTE: letflow-queue's task 781 auto-titled itself "ISS-0781" from its own
+# atomically-allocated id, but the real on-disk filename is ISS-0782.yaml --
+# slot ISS-0781 was already taken by a concurrent session's issue. This is
+# the established, recurring queue-id/filename divergence pattern for this
+# project; queue_ref/github_ref below are authoritative for this file.
+github_ref: "GH-1722"
+status: open

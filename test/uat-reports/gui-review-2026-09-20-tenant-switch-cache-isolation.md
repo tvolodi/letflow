@@ -238,3 +238,34 @@ entry, not restated here.
 `pending`** — this report's other filing is unaffected by REQ-384's
 completion and still needs its own CODE-DESIGNER pass to decide whether
 EO-004 has a real analog under REQ-126's frozen-at-creation design.
+
+**Addendum (REVIEWER, 2026-09-22, REQ-385 idiom/scope gate) — EO-004's
+CODE-DESIGNER pass has now run and reached a definitive verdict, recorded
+in `lib/letflow/design/req385-task-form-version-mismatch-fallback.md`:
+EO-004's guarantee is vacuously satisfied under REQ-126's frozen-at-creation
+design.** `tasks.form_schema` is written exactly once, at activation, from
+the instance's own frozen snapshot, and is never re-resolved against a live
+catalog on any subsequent read (`lib/letflow/engine/task_activation.ex`'s
+`resolve_form_schema/1`, `Letflow.Routers.Tasks`'s read path) — there is no
+"version requested vs. version returned" comparison for this failure mode
+to describe, and no such comparison should be built for it (design doc §1,
+§2, §5). The one real-but-different condition on this path — a task whose
+`instance_definition_snapshots` row is missing, degrading only the
+`form_version` *display label* to `nil`, never the form itself — was
+confirmed reachable only via direct DB manipulation outside every
+`lib/letflow/` write path (design doc §3.1), and is a metadata-completeness
+gap, not a version mismatch (design doc §3.2). REVIEWER independently
+reviewed this design doc for decision-record consistency (no conflict found
+against `docs/migration/decisions/`) and rigor (PASS, per its own
+handoff) and confirmed this conclusion.
+
+This addendum exists specifically so this scenario's own EO-004 wording is
+not re-litigated from scratch by a future UAT run: the scenario source file
+(`test/fixtures/uat/scenarios/platform/tenant-switch-cache-isolation.yaml`)
+is a byte-identical port from R-Co and carries its own explicit header
+instruction not to edit the ported content except to keep it byte-identical
+to a re-pull of the same commit — so EO-004's wording there is deliberately
+left as-is rather than reworded to match this architecture. A future run
+against this scenario should treat EO-004 as **N/A-by-design** for
+Letflow's current form-pinning architecture (per this addendum and the
+REQ-385 design doc it cites), not as an unresolved gap to re-investigate.

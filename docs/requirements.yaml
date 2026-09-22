@@ -28529,7 +28529,28 @@ requirements:
   - id: REQ-385
     title: "Task-form version-mismatch fallback: explicit out-of-date message when a task's pinned form version cannot be confirmed"
     owner: ELIXIR-DEV
-    status: pending
+    # DONE 2026-09-22 via documented-vacuous-conclusion, NOT implementation:
+    # CODE-DESIGNER's design pass
+    # (lib/letflow/design/req385-task-form-version-mismatch-fallback.md)
+    # concludes EO-004's guarantee has no real analog under REQ-126's
+    # frozen-at-creation architecture -- tasks.form_schema is written once
+    # at activation and never re-resolved against a live catalog on any
+    # subsequent read, so there is no "version requested vs. version
+    # returned" comparison for this failure mode to describe (AC1). AC2 is
+    # therefore not triggered (conditioned on "if a real analog exists");
+    # AC3/AC4 are satisfied by the design doc itself recording that verdict
+    # and proposing no code change. CODE-DESIGN-VALIDATOR and REVIEWER both
+    # independently re-derived and confirmed this conclusion (no rubber
+    # stamp) -- REVIEWER's addendum is recorded in the originating UAT
+    # report, test/uat-reports/gui-review-2026-09-20-tenant-switch-cache-isolation.md.
+    # No ELIXIR-DEV/FRONTEND-DEV/SECURITY-REVIEWER/TEST-DESIGNER/
+    # TEST-RUNNER/RELEASE-VALIDATOR steps apply -- the design+review
+    # pipeline is this requirement's entire lifecycle per its own AC3. A
+    # real-but-out-of-scope gap found along the way (operator-visibility
+    # into activation-time {:invalid_form_schema, ...} rollback) was filed
+    # separately as ISS-0784 (queue task 783, GH-1731) rather than folded
+    # in here.
+    status: done
     stage: S9
     impl_order: 745  # letflow-queue task id, GH#1633. Registered 2026-09-20 by ORCH;
       # corrects a fabricated/self-assigned id (741) that was never a real

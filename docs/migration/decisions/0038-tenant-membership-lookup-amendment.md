@@ -121,7 +121,54 @@ PENDING.
 
 ## SECURITY-REVIEWER sign-off
 
-PENDING — in particular, independently re-derive point 1 above (that
-`GET /me/memberships` cannot be used to enumerate or discover another
-human's accounts) against INV-1/INV-2/INV-6, the same three invariants
-REQ-384's design §3 AC5 row already names.
+**RATIFIED** (2026-09-22, `SECURITY-REVIEWER`, commit `2edf7ca6`). Re-derived
+all four conditions directly against the shipped code, not the design doc's
+claims about it:
+
+1. **Non-self-service, caller's-own-identity-only.** `lib/letflow/routers/me.ex`'s
+   `handle_list_memberships/1` derives `user_id`/`home_tenant_id` exclusively
+   from `conn.assigns.auth_context` (populated by `AuthPipeline` from the
+   verified JWT) and `prefix` from `conn.assigns.scoped_opts`. The route
+   accepts no query parameter, body, or path segment of any kind — there is
+   no code path by which a caller can supply an email or another identity to
+   look up. `Identity.get_user/2` is called with the caller's own
+   `user_id`/`prefix`, never a caller-supplied value. Confirmed by reading
+   the full handler; grepped for any `conn.params`/`conn.query_params` use in
+   `me.ex` — none exists.
+2. **Admin-write-only, no JIT/claim-mapping writes.** `grep -rn
+   "tenant_memberships\|TenantMembership" lib/` shows exactly three files:
+   the migration, the schema module (`create_changeset/2` only, no
+   `update_changeset/2`, matching `GroupMember`'s insert-or-delete-only
+   shape), and `identity.ex`'s `list_memberships_for_subject/1` (a read,
+   `Repo.all`, no insert/update/delete). No router other than `me.ex` (a
+   `GET`-only route) references it. `lib/letflow/plugs/auth_pipeline.ex` and
+   `lib/letflow/identity.ex`'s JIT-provisioning functions
+   (`provision_oidc_user/4`, `verify_realm_ownership/2`) are **not present in
+   this diff at all** (confirmed via `git diff --stat`) — the claim-mapping
+   pipeline is untouched, not merely claimed-untouched. No write path ships
+   with this branch, matching the migration header's own statement.
+3. **No shared `users` row.** `TenantMembership`'s schema
+   (`lib/letflow/identity/tenant_membership.ex`) has no password, role, or
+   session field — `id`, `subject_key`, `tenant_id` (FK), `display_label`,
+   timestamps only. It is a pointer table, not an identity table. Decision
+   0006 D1 (per-tenant-schema `users`) is unmodified by this diff.
+4. **Realm→tenant resolution (0006 R5) untouched.** `auth_pipeline.ex` does
+   not appear in the diff; `me.ex`'s handler runs after normal
+   `AuthPipeline`/`TenantStatus` resolution (mounted via
+   `forward("/me", to: Letflow.Routers.Me)` in `api_pipeline.ex`, alongside
+   every other tenant-scoped sub-router, not specially exempted). Nothing in
+   `tenant_memberships` or its query path participates in resolving which
+   tenant a request is authenticated against.
+
+All four conditions hold as **structural** properties of the shipped code,
+not policy promises. INV-1 (business-data isolation: this table carries no
+business data, only tenant metadata), INV-2 (field selection is server-side
+— `me.ex`'s `home_tenant_json/1`/`membership_json/1` explicitly allowlist
+four fields, `idp_realm_id` never touched), and INV-6 (this record plus
+REQ-384's design constitute the required scoping proof) are satisfied. This
+amendment authorizes exactly the narrow mechanism described and nothing
+wider — the "what remains foreclosed" list above stays intact.
+
+Full review detail (CANDIDATE-exclusion precedent check, frontend
+cache-isolation mechanism review, INV-1..9 pass/fail table) recorded in this
+run's SECURITY-REVIEWER handoff for REQ-384/queue-task-744.

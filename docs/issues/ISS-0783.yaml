@@ -60,10 +60,46 @@ queue_ref: "Q-782"
 # Established, recurring queue-id/filename divergence pattern for this
 # project; queue_ref/github_ref below are authoritative for this file.
 github_ref: "GH-1725"
-status: no_defect
-verdict_in_run: WF03-ISS0783-20260923
-verdict_at: "2026-09-22T21:00:24Z"
-verdict: >
+status: open
+correction_2026-09-22T21:22:00Z: >
+  REOPENED by ORCH. The `no_defect: FABRICATED ISSUE REPORT` verdict below
+  was a FALSE NEGATIVE, not a correct diagnosis -- both the alleged defect
+  and its cited evidence are real and now independently re-confirmed on
+  `main`: `web/src/auth/TenantSwitcher.tsx` exists (`ls` confirms),
+  `AuthProvider.tsx` has `switchTenant`/`switchingToTenantSlug`, and
+  `git show 23a67263` resolves cleanly to "fix(REQ-384): wire
+  OidcCallbackPage's silent-iframe branch + stop unmounting TenantSwitcher
+  mid-attempt" -- all landed via REQ-384's merge to `main` at `3fc17582`,
+  commit timestamp *after* the WF03-ISS0783-20260923 investigation below
+  was run against `main`.
+
+  Root cause of the false negative: at the moment ISSUE-FIXER investigated
+  (2026-09-22 ~21:00 UTC), REQ-384 was mid-flight on an UNMERGED feature
+  branch (`feature/WF02-REQ384-20260922`) in this concurrent ORCH session
+  -- a real, in-progress WF-02 pipeline run with SECURITY-REVIEWER and
+  REVIEWER sign-offs already recorded on that branch, just not yet on
+  `main`. ISSUE-FIXER's own report explicitly named and then dismissed
+  this exact possibility ("if TenantSwitcher.tsx exists only in an
+  uncommitted local working tree on some other, unpushed session's
+  machine, `git log --all` on this checkout would not see it ...
+  considered unlikely") -- the dismissal was wrong; that is precisely
+  what had happened, on a PUSHED (not just local) branch `git log --all`
+  on that checkout should have been able to see if it had fetched
+  first. REQ-384 merged minutes later, superseding both the "pending"
+  status and the "never implemented" characterization ISSUE-FIXER relied
+  on.
+
+  Correction: ISS-0783's original description/severity_rationale/
+  suggested_fix below (filed by TEST-DESIGNER, independently confirmed
+  non-exploitable-but-real by SECURITY-REVIEWER and REVIEWER during
+  REQ-384's actual WF-02 pipeline run) stand as accurate and are restored
+  to `status: open`. Do not re-close as no_defect without first running
+  `git fetch --all` and re-checking against the current `main` tip --
+  see the new anti-patterns.md entry this correction prompted.
+status_history_note: >
+  Prior verdict (now superseded, kept below for the record): no_defect,
+  verdict_in_run WF03-ISS0783-20260923, verdict_at 2026-09-22T21:00:24Z.
+superseded_verdict: >
   FABRICATED ISSUE REPORT -- the alleged defect's subject does not exist.
   Full diagnosis: handoffs/WF03-ISS0783-20260923/step-01-issue-fixer-diagnose.json.
 

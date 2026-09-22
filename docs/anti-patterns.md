@@ -3188,3 +3188,46 @@ Future DOC-UPDATER dispatch prompts should say explicitly: *any* commit
 after PR creation, including a one-field addendum recording the PR's own
 identity, goes through a new branch+PR+CI, never a direct push, even
 when the original PR has already merged.
+
+## ISSUE-FIXER closed a real issue as "fabricated" because it investigated an unmerged concurrent-session branch as if it were `main`'s final state (2026-09-22, ISS-0783)
+
+TEST-DESIGNER filed ISS-0783 (a real, minor re-entrancy gap in
+`TenantSwitcher.tsx`) mid-flight during REQ-384's WF-02 pipeline run, on a
+pushed-but-not-yet-merged feature branch (`feature/WF02-REQ384-20260922`).
+Both SECURITY-REVIEWER and REVIEWER independently confirmed the finding
+was real (non-exploitable for tenant isolation, but genuine) as part of
+that same in-progress run. A concurrent ORCH session picked up ISS-0783
+via the queue, dispatched ISSUE-FIXER, and ISSUE-FIXER — checking only
+`git log --all`/`ls` against its own checkout of `main` — found no
+`TenantSwitcher.tsx`, no `switchingToTenantSlug`, and commit `23a67263`
+"unknown revision," and closed the issue as `no_defect: FABRICATED ISSUE
+REPORT`. All of that was true of `main` at that exact moment, but false
+of reality: REQ-384's branch (with all of it) merged to `main` minutes
+later. ISSUE-FIXER's own report explicitly named this exact possibility
+("if TenantSwitcher.tsx exists only in an uncommitted local working tree
+on some other, unpushed session's machine, `git log --all` on this
+checkout would not see it") and then talked itself out of it ("considered
+unlikely") using REQ-384's `status: pending` in `docs/requirements.yaml`
+as corroborating evidence — but `status: pending` is exactly what an
+in-progress WF-02 run on an unmerged branch looks like from outside that
+session; it is not evidence the branch doesn't exist. The branch *was*
+pushed to origin the whole time — `git log --all` requires a fetch to see
+another session's freshly-pushed remote branch, and nothing in the report
+confirms a `git fetch --all`/`git fetch origin` was run immediately before
+the pickaxe search.
+
+**Correct alternative:** before closing any issue as `no_defect`
+(especially with language as strong as "fabricated"), `git fetch --all`
+(or at minimum `git fetch origin`) first, then check open PRs/branches
+(`gh pr list`, `git branch -r`) for one that plausibly owns the requirement
+the issue cites, not just the merged history on `main`. A requirement's
+`status: pending` in `docs/requirements.yaml` is not proof no
+implementation is in flight — this project's own heavy concurrent-session
+model (documented elsewhere in this file) means "pending" and "actively
+being built on a pushed branch right now, by a different session" are
+frequently the same state. When a `no_defect` investigation's own stated
+limitations describe a scenario that would produce exactly the symptoms
+observed, do not dismiss that scenario as "unlikely" using evidence
+(a status field) that is equally consistent with the scenario being true.
+Reserve "fabricated" for cases where the described mechanism is
+impossible, not merely "not found in my current fetch of `main`."

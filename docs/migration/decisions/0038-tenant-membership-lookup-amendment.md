@@ -1,8 +1,8 @@
 # 0038 — Amendment: narrow, admin-only exception to 0006 §3.3's cross-tenant-lookup foreclosure, for switcher membership listing only
 
-Status: decided (2026-09-22, `CODE-DESIGNER`, REQ-384), pending `REVIEWER` and
-`SECURITY-REVIEWER` sign-off (sections below left as explicit PENDING
-placeholders — not filled in by `CODE-DESIGNER`).
+Status: decided and ratified (2026-09-22). Drafted by `CODE-DESIGNER`
+(REQ-384); both required gates now signed off — `SECURITY-REVIEWER`
+RATIFIED (commit `2edf7ca6`) and `REVIEWER` RATIFIED (below).
 Owner: `ORCH` (this record amends decision `0006` §3.3/§7 item 3 by reference;
 implementation is scheduled by REQ-384's own design,
 `lib/letflow/design/req384-tenant-switcher-cache-isolation.md`, not by this
@@ -117,7 +117,76 @@ narrower question of whether the *lookup mechanism itself* reopens 0006.
 
 ## REVIEWER sign-off
 
-PENDING.
+**RATIFIED** (2026-09-22, `REVIEWER`, REQ-384/queue-task-744). Independent
+judgment from a decision-record-consistency/architectural-integrity
+standpoint, distinct from SECURITY-REVIEWER's INV-1..8 remit above — the
+question here is whether this amendment quietly erodes 0006's broader intent,
+not whether the mechanism is safe.
+
+Read 0006 in full and this record's four conditions against it:
+
+1. **The amendment is scoped to exactly the gap it names, not wider.** 0006
+   §3.3 forecloses two things via one "e.g.": a caller-suppliable
+   cross-tenant email lookup, and a single `users` row spanning tenants
+   without a per-tenant row. This record only reopens the first, and even
+   that only for the narrow, structurally-bounded shape point 1 describes
+   (derived exclusively from the caller's own already-authenticated
+   identity, never a request parameter). The second foreclosure — no shared
+   `users` row — is not merely left alone, it is restated as a condition
+   (point 3) and is satisfied by construction: `tenant_memberships` carries
+   no password/role/session field, every tenant a human reaches still gets
+   its own independently-provisioned per-schema `users` row via its own
+   realm's JIT provisioning. D1 (0006's actual per-schema `users` shape) is
+   untouched by this record or by the shipped code.
+2. **R5's bijection is not reopened.** 0006's central technical result — that
+   realm→tenant resolution is a verified 1:1 bijection and is the sole
+   mechanism that decides which tenant a *request* is authenticated against
+   — is condition 4, restated rather than assumed, and is true of the
+   shipped code: `tenant_memberships` has no read path in `AuthPipeline`, and
+   `me.ex`'s handler runs strictly after normal tenant resolution. A
+   membership row answers "what could this human switch to," never "who is
+   this request from." 0006 §3's entire load-bearing argument (R5's
+   bijection backing the `users_external_identity_partial_index` relocation)
+   stays exactly as true after this amendment as before it.
+3. **D3's tier is used correctly, and the record is honest about not
+   over-claiming it.** `tenant_memberships` is public-schema, real-FK-to-
+   `tenants`, same tier as `tenant_schemas`/`solution_pack_installs` — a
+   correct application of D3's precedent for *where the table lives*. The
+   record explicitly declines to let that fact alone carry the argument (see
+   "Why this record exists," which retracts the earlier draft's D3-by-
+   analogy reasoning) and instead argues the capability question on its own
+   terms. That is the right call — D3 justifies schema placement, not lookup
+   semantics, and conflating the two is exactly the mistake
+   CODE-DESIGN-VALIDATOR caught in the earlier draft.
+4. **The admin-write-only gate is a real, not cosmetic, boundary.** Point 2's
+   claim — that nothing in JIT/claim-mapping ever writes this table — holds
+   both as a design constraint (§1.1: "nothing in the JIT-provisioning or
+   claim-mapping pipeline writes it") and, independently verified against
+   the shipped diff, as a structural fact: `auth_pipeline.ex` does not
+   appear in this diff at all, and `TenantMembership` exposes only
+   `create_changeset/2`, mirroring `GroupMember`'s existing insert-or-delete
+   convention rather than inventing a new one. No write route ships with
+   REQ-384 (OQ-2, correctly deferred rather than silently built).
+5. **Scope of the exception matches Letflow's own stated remit for decision
+   amendments.** This is a narrow, four-condition carve-out written as an
+   amendment to 0006 rather than a silent divergence or a fresh, competing
+   decision record — the correct move per this project's "don't silently
+   re-decide what a decision record already settled" rule
+   (`CLAUDE.md`). §3.3's foreclosure list and §7 item 3 are both updated by
+   reference, not deleted or reinterpreted, and the "what remains foreclosed"
+   section preserves everything this amendment does not touch (self-service
+   lookup, caller-suppliable keys, JIT-created memberships, any relaxation
+   of realm→tenant resolution).
+
+**Conclusion: 0038 is a sound, narrowly-scoped amendment.** It resolves the
+one specific gap between REQ-384's requirement and 0006's text without
+loosening any of 0006's structural guarantees (per-schema `users`, R5's
+bijection, admin-only trust tier for platform-wide tables). OQ-1's residual
+risk (two humans sharing an email string across tenants could be linked by an
+admin) is a policy/product-scope question for REQ-384's own acceptance, not a
+0006-consistency defect, and the record correctly declines to resolve it
+here rather than smuggling a policy judgment into a decision-record
+amendment.
 
 ## SECURITY-REVIEWER sign-off
 

@@ -1,0 +1,236 @@
+report_id: report-20260922-WF02-REQ376-20260922
+run_id: WF02-REQ376-20260922
+workflow_id: WF-02
+step: "04"
+agent: TEST-RUNNER
+date: 2026-09-22
+branch: feature/WF02-REQ376-20260922
+commit: 0f9743f32ac5c9492fdfd265706981cf61cd4ed7
+
+verdict: FAIL
+
+context: >
+  Independent re-verification of ELIXIR-DEV rework2's own full-suite claim
+  (4593/4632, 39 failures, all classified pre-existing/unrelated). Per
+  core-directives.md's "Failure Attribution Is Structural, Never By
+  Count-Matching", every failure below was individually inspected against
+  `git diff --name-only origin/main...HEAD` and its actual stack trace/log
+  output -- not accepted on the strength of the prior report or a matching
+  count. That re-check overturns part of rework2's classification: 18 of
+  this run's 38 failures are structurally attributable to THIS branch (not
+  pre-existing), and rework2 mis-filed 17 of them (16 PollerTest + 1
+  TenantTemplateTest) as unrelated. This step therefore FAILs and routes
+  back rather than forward to RELEASE-VALIDATOR.
+
+pre_run_environment_check: >
+  Per docs/anti-patterns.md's "An interrupted mix letflow.check.test/
+  scripts/test_parallel.sh run leaves zombie BEAM VMs..." entry (added this
+  same run, ELIXIR-DEV Step 2a rework2): checked for zombie erl.exe
+  processes and stale Postgres connections before starting. Found ONE
+  erl.exe (PID 13228, started 14:54:11, cmdline "mix test --no-color", no
+  MIX_TEST_PARTITION) actively issuing fresh queries against letflow_test
+  (pg_stat_activity showed queries <1s old, not stale) -- a genuinely live
+  concurrent session, not a zombie. Confirmed via SendMessage with both
+  other active agents in this session (main, gui-review-continuation) that
+  neither owns it; this host is documented (same anti-patterns.md entry,
+  same run) as shared concurrently by multiple untracked Claude Code
+  sessions. Did NOT kill it (no evidence of staleness, per personal
+  operating rules' recoverability/blast-radius test -- killing a live
+  session's real work is not autonomous). scripts/test_parallel.sh's own
+  partitioned databases (letflow_test1..4) are isolated from whatever plain
+  `letflow_test` PID 13228 holds, so proceeded without cleanup; this
+  turned out to be the direct cause of 20 of the 38 failures below (route 3
+  evidence, not assumed).
+
+command_run: "TEST_PARALLEL_N=4 scripts/test_parallel.sh"
+n_derivation: >
+  Explicit override, TEST_PARALLEL_N=4 (source: env override, confirmed in
+  the script's own "test_parallel: N=4 (source: env override)" log line) --
+  NOT nproc-derived. This host's nproc/getconf both report 16, but
+  docs/anti-patterns.md (ISS-0219, reaffirmed by this run's own ELIXIR-DEV
+  rework2 finding) documents that this host's Postgres/CPU budget cannot
+  sustain nproc-derived parallelism and that N=4 is the value verified
+  clean here; followed that precedent rather than the raw nproc value.
+
+execution_notes: >
+  Launched via `nohup ... &` with the PID captured to a scratchpad file,
+  then polled to completion with repeated blocking foreground Bash calls
+  (`kill -0 $PID` in a sleep loop, tailing the log each time) -- never
+  backgrounded via the Bash tool's run_in_background flag, never watched
+  via Monitor, never ended the turn expecting a cross-turn notification,
+  per core-directives.md's "No Background Wait For A Cross-Turn
+  Notification" (ISS-0213/ISS-0223). Total wall time ~48 minutes
+  (15:22-16:10 partition timestamps in the per-partition logs). Exit code 1
+  (real ExUnit failures, not a script/tooling defect) preserved
+  /tmp/letflow_test_parallel.7UuFSt (TEST_PARALLEL_KEEP_LOGS unset, but the
+  script keeps logs automatically on any non-clean run).
+
+result:
+  combined: "combined: 4626 tests, 6 properties, 38 failures (4594/4632 passed)"
+  per_partition: >
+    partition 1: 1246 tests, 2 properties, 17 failures, exit 2;
+    partition 2: 1103 tests, 0 properties, 12 failures, exit 2;
+    partition 3: 1171 tests, 2 properties, 1 failures, exit 2;
+    partition 4: 1106 tests, 2 properties, 8 failures, exit 2.
+  prior_report_comparison: >
+    ELIXIR-DEV rework2 (same commit range, different run): 39 failures
+    (4593/4632). This run: 38 failures (4594/4632). The 1-count difference
+    is itself evidence of the connection-contention mechanism below (an
+    intermittent too_many_connections/DBConnection.ConnectionError set,
+    sensitive to exactly how much of the other concurrent session's load
+    overlapped this run's window) -- consistent with core-directives.md's
+    explicit warning that "a count differing by one or two is NOT evidence
+    of regression" in either direction. Not used as attribution evidence
+    for any individual failure below; each is attributed independently.
+
+failures_attributable_to_this_branch:
+  summary: "18 of 38 failures -- BLOCKS this step. Route 1 evidence: the failing module or its direct dependency is in `git diff --name-only origin/main...HEAD`, and the mechanism is independently confirmed causal, not merely uncleared."
+  groups:
+    - group: "Letflow.Scheduler.PollerTest (16 failures)"
+      route: "1 (branch caused it) -- lib/letflow/scheduler/poller.ex and lib/letflow/scheduler.ex are both in the diff (REQ-376 §3.1's partition-maintenance sweep)."
+      evidence: >
+        `git diff origin/main...HEAD -- lib/letflow/scheduler/poller.ex` shows
+        `state` widened from `%{last_retention_run_at, last_tick_started_at}`
+        to also require `last_partition_maintenance_run_at`, and
+        `handle_info(:tick, state)` now unconditionally calls the new
+        `maybe_run_partition_maintenance/2` (poller.ex line ~270). Every
+        failure's actual stack trace (directly read, not inferred):
+        `** (KeyError) key :last_partition_maintenance_run_at not found in:
+        %{last_retention_run_at: nil}` raised from
+        `lib/letflow/scheduler/poller.ex:408:
+        Letflow.Scheduler.Poller.maybe_run_partition_maintenance/2`, called
+        from `poller.ex:270: handle_info/2`. `test/letflow/scheduler/poller_test.exs`
+        is NOT in this branch's diff -- it is a pre-existing file (its
+        failing tests carry REQ-188/REQ-218/ISS-0421/ISS-0444/ISS-0695
+        labels, unrelated requirements) whose ~16 hand-constructed state
+        literals (e.g. `%{last_retention_run_at: nil}`,
+        `Poller.handle_info(:tick, %{last_retention_run_at: nil})`) were
+        never updated for the new required key this branch's poller.ex now
+        demands. This is a real regression this branch introduced into a
+        test file it did not touch: either poller.ex needs to tolerate a
+        missing key defensively (mirroring how `get_last_tick_started_at/1`
+        already handles a partial state map elsewhere in the same file), or
+        poller_test.exs's raw state literals need the new field added.
+      test_names_sample: >
+        "AC5: the retention runner is disabled by default", "REQ-218 AC3
+        (per-schema clause)", "ISS-0695 ... admission_decision telemetry
+        emission" (x2), "REQ-218 AC5", "REQ-218 AC2", "AC6: enabling
+        retention invokes archive/1" (x2), "ISS-0444 ... does not crash the
+        tick" (x3), "REQ-218 AC1", "ISS-0421 regression", "ISS-0421 AC1" --
+        full list in partition-1.log, lines 95371-123521.
+      route_back_to: ELIXIR-DEV (application-code compatibility fix in
+        poller.ex, or test-code fix in poller_test.exs -- ELIXIR-DEV should
+        decide which per core-directives' "route real bugs to ELIXIR-DEV
+        rather than loosening the test").
+
+    - group: "Letflow.Test.TenantTemplateTest (1 failure)"
+      route: "1 (branch caused it), corroborated by route 2 reasoning (cannot reproduce at merge-base)."
+      evidence: >
+        Failure: "clone-vs-template parity (design §3.4 use site 2) a real
+        clone matches the template across all 13 dimensions"
+        (test/support/tenant_template_test.exs:64). Actual diff output
+        (read directly, partition-3.log lines 49596-49720): dim #1 (table
+        set) missing exactly the 7 partition-child tables this branch's own
+        migrations create (`events_default`,
+        `events_pre_partition_20260922`, `events_y2026m09/10/11`,
+        `events_archive_default`, `events_archive_pre_partition_20260922`);
+        dim #3 (constraints) missing exactly the corresponding 11 PK/FK
+        constraints (including `event_payload_store`'s composite FK against
+        each partition child). `lib/letflow/tenant_provisioning.ex` is in
+        this branch's diff (registers REQ-376's 9 new migrations). Route 2
+        check: this test file (test/support/tenant_template_test.exs) is
+        NOT in the diff and exists unmodified on origin/main -- but on
+        origin/main, `events`/`events_archive` are plain non-partitioned
+        tables (no partition children, no per-partition FKs exist to be
+        "missing"), so this specific failure mode cannot occur at the
+        merge-base: there would be nothing for the clone-vs-template dims
+        to disagree about. This failure is therefore newly introduced by
+        this branch's own schema change (declarative partitioning of
+        events/events_archive), not pre-existing, even though its root
+        mechanism (Postgres `CREATE TABLE ... LIKE ... INCLUDING ALL`
+        cannot replicate `PARTITION BY` structure or per-partition FKs --
+        a genuine, independently-verifiable Postgres limitation, not a
+        coding mistake) is the same mechanism ELIXIR-DEV rework2 already
+        identified. rework2's classification of this as "pre-existing...
+        not introduced by... this FK-retarget migration" conflates "root
+        cause is an inherent DB limitation" with "failure is pre-existing"
+        -- they are not the same thing here; the failure is new.
+      route_back_to: ELIXIR-DEV/CODE-DESIGNER -- the `:clone` tenant
+        provisioning strategy needs either a real fix (teach the clone path
+        to replicate partition structure) or an explicit, reviewed decision
+        that `:clone` is out of scope for partitioned tables, with this
+        test updated to assert the new legitimate asymmetry instead of
+        silently failing. Decision 0037 does not currently make this
+        determination -- it documents two *different*, already-fixed
+        catalog-query bugs (over-inclusion of internal partition-child FK
+        rows and pre_partition tables into the clone), not this
+        under-inclusion gap.
+
+    - group: "Letflow.Docs.RequirementStatusInvariantsTest (1 failure)"
+      route: "1 (branch caused it)."
+      evidence: >
+        "A9: every indexed volume's declared entries: count equals what is
+        actually on disk" -- fails with declared=19, actual=20 for
+        docs/status/requirement_status.v21.yaml. `git diff
+        origin/main...HEAD -- docs/status/requirement_status.v21.yaml`
+        shows exactly one entry appended (REQ-376 `started`, by
+        ELIXIR-DEV, at 2026-09-22T05:07:11Z) -- the +1 the test measures.
+        docs/status/requirement_status.index.yaml (the file carrying the
+        declared `entries: 19` for volume 21, confirmed at line 4293) is
+        NOT in this branch's diff -- HOW-TO-APPEND step 6 (bump the
+        index's declared count in the same commit as the append) was
+        missed.
+      route_back_to: ELIXIR-DEV or DOC-UPDATER -- trivial one-line fix
+        (docs/status/requirement_status.index.yaml's volume-21 `entries:`
+        19 -> 20, with a note per the volume's own convention). Did not
+        apply the fix myself -- outside TEST-RUNNER's ownership
+        (test/letflow/process_instance_test.exs and new test/ files only)
+        and the routing instruction is to report and route back, not patch
+        docs in place.
+
+failures_structurally_cleared_as_pre_existing:
+  summary: >
+    20 of 38 failures -- does NOT block this step, filed-and-forwarded.
+    Route 1 (module/dependency not in `git diff --name-only
+    origin/main...HEAD`) AND Route 3 (demonstrated mechanism, measured
+    directly in the log output, not asserted): every one of these 20
+    failures' actual error is either `** (DBConnection.ConnectionError) ...
+    connection not available` / `Postgrex.Error) FATAL 53300
+    (too_many_connections)`, or the by-design "another mix test invocation
+    ... is currently connected" concurrent-invocation-guard deferral
+    (ISS-0110/ISS-0414's own documented behavior, sensitive to genuine
+    concurrency by design per those modules' moduledocs). Both mechanisms
+    trace directly to the independently-confirmed live concurrent session
+    (PID 13228, plain `mix test`, not this run's partitioned invocation)
+    sharing this host's single Postgres instance and its 100-connection
+    budget alongside this run's own 4 x TEST_POOL_SIZE=20 = 80 connections
+    -- not to anything in this branch's diff.
+  groups:
+    - group: "Letflow.Plugs.ApiPipelineIntegrationTest (4)"
+      mechanism: "DBConnection.ConnectionError / too_many_connections, in test/support/bpm_default_realm_displacement.ex's own dedicated-lock acquisition -- not this branch's diff (api_pipeline_integration_test.exs, bpm_default_realm_displacement.ex, api pipeline modules all absent from git diff)."
+    - group: "Letflow.ServiceCatalogReaperTest (4)"
+      mechanism: "Mix of too_many_connections and {:deferred, :concurrent_invocation} (the by-design ISS-0414 guard correctly detecting PID 13228's live connection). test/support/service_catalog_reaper_test.exs and tenant_schema_reaper.ex both absent from diff."
+    - group: "Letflow.Plugs.Iss0736OidcLiveRevocationTest (3)"
+      mechanism: "Same too_many_connections in bpm_default_realm_displacement.ex's lock acquisition. iss0736_oidc_live_revocation_test.exs absent from diff."
+    - group: "Letflow.IdentityTest (1)"
+      mechanism: "Same too_many_connections in bpm_default_realm_displacement.ex's lock acquisition. identity_test.exs absent from diff."
+    - group: "Letflow.TenantSchemaReaperTest (3)"
+      mechanism: "Mix of too_many_connections and the by-design ISS-0110 concurrent-invocation guard (skipped/reclaimed assertions failing because PID 13228's live connection legitimately defers the sweep). tenant_schema_reaper_test.exs and tenant_schema_reaper.ex both absent from diff."
+    - group: "Letflow.Plugs.AuthPipelineTest (5)"
+      mechanism: "Same too_many_connections in bpm_default_realm_displacement.ex's lock acquisition. auth_pipeline_test.exs absent from diff."
+
+compile_and_format: "Not independently re-run this step (ELIXIR-DEV rework2 already confirmed both clean against this exact commit this same run: `mix compile --warnings-as-errors --force` 0 warnings, `mix format --check-formatted` exit 0; no lib/ changes landed since)."
+
+logs_preserved: "/tmp/letflow_test_parallel.7UuFSt (all 4 partition-N.log files, full raw ExUnit output, kept automatically by test_parallel.sh because exit_code=1)."
+
+conclusion: >
+  FAIL. 18 of 38 failures are structurally attributable to this branch (16
+  PollerTest + 1 TenantTemplateTest + 1 RequirementStatusInvariantsTest),
+  contradicting ELIXIR-DEV rework2's "all 39 pre-existing/unrelated"
+  classification for at least 17 of those (the RequirementStatusInvariantsTest
+  one was not part of rework2's run). This step routes back to ELIXIR-DEV
+  (poller.ex/poller_test.exs compatibility, the :clone partition-replication
+  gap, and the requirement_status.index.yaml count) rather than forward to
+  RELEASE-VALIDATOR. The remaining 20 failures are cleared as pre-existing/
+  environmental (live concurrent-session Postgres contention on this shared
+  host) and are filed-and-forwarded, not blocking on their own.

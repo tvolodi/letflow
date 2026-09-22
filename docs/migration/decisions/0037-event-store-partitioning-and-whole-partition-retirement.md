@@ -356,3 +356,102 @@ design doc's §4.4/4.4a/4.5/§8 in full.
 
 No blocking gap found. Route to TEST-DESIGN-VALIDATOR (Step 3b) for re-gate once
 TEST-DESIGNER's own rework (the two unrelated test-code bugs) lands.
+
+## Implementation-discovered correction #3 (REVIEWER, WF-02 Step 2d re-gate 2, run WF02-REQ376-20260922, 2026-09-22)
+
+TEST-DESIGNER's rework1 full-suite run surfaced a defect in migration 4
+(`20260922000004_swap_events_partitioned.exs`), not in this decision's retirement logic:
+`event_payload_store`'s pre-existing composite FK
+(`event_payload_store_event_id_fkey`, `20260816120004_create_event_payload_store.exs`)
+still points at the renamed-aside `events_pre_partition_20260922` table instead of the
+new partitioned `events` table. Postgres binds a foreign key to its target by OID, not
+by name, so `ALTER TABLE events RENAME TO events_pre_partition_20260922` followed by
+`ALTER TABLE events_p RENAME TO events` (migration 4's own swap mechanism) silently
+leaves any pre-existing FK pointed at the original, now-renamed-away OID — an FK
+violation on every `event_payload_store` insert for an event created after the swap.
+Confirmed as the root cause of 50/261 rework1 full-suite failures, and confirmed narrow
+in scope: `event_payload_store`'s is the only FK anywhere in the codebase referencing
+`events` or `events_archive` (grepped every migration for `references(:events` /
+`references(:events_archive`); `events_archive` has zero incoming FKs, so migration 8's
+identical rename-based swap introduced no equivalent defect.
+
+**Fix:** a 9th migration,
+`priv/repo/migrations/20260922000009_retarget_event_payload_store_fkey.exs`, drops and
+recreates the constraint by name against `events` (unqualified), which Postgres
+resolves against the *current* `events` table, correctly rebinding to its OID. Same
+columns, same `ON DELETE RESTRICT`, same constraint name as the original — a retarget,
+not a redesign. `down/0` restores the pre-existing (defective) target, matching the
+existing migrations' convention of `down` reversing structure, not "fixing forward."
+Registered in `Letflow.TenantProvisioning.tenant_scoped_migrations/0`, same `if
+prefix()` guard as every other tenant-scoped migration in this set.
+
+Two related test-infrastructure fixes, in `test/support/tenant_template.ex`, were also
+needed once `tenant_template` was rebuilt from the full REQ-376 migration set,
+including migration 9 — both are catalog-query filtering bugs in the `:clone`
+test-tenant fast path, not application defects, and neither weakens any assertion:
+`readd_foreign_keys!/1` was replaying Postgres's own internal per-partition child FK
+constraints (a `pg_constraint` implementation detail of FKs against a partitioned
+table, `conparentid <> 0`) into a deliberately-unpartitioned clone schema; filtered to
+`conparentid = 0` (top-level constraints only). `recreate_sequences!/1` was scanning
+every physical table in `tenant_template`, including the rollback-safety-net
+`*_pre_partition_20260922` tables that are deliberately excluded from the clone's table
+set; filtered to `Letflow.TenantFixture.expected_tenant_tables/0`, the same oracle every
+other clone-path step already uses.
+
+**Ruling — no scope creep, no crutch:** migration 9 is a straight correctness fix for a
+real, load-bearing defect (any tenant provisioned after migration 4 via
+`replay_migrations`, not just via `:clone`, would eventually hit this FK violation on
+ordinary write traffic — confirmed directly against `tenant_template`'s own `\d
+event_payload_store`, not just inferred from the clone-path test failures). It does not
+expand decision 0037's own scope (retirement mechanism, EO-002/EO-003) and needed no
+amendment to §4/§5/§6 of the design doc or to this decision's Decision/Reasoning
+sections — it is a bug fix to unrelated migration 4 plumbing that REQ-376's own
+partitioning work exposed, not a new design choice.
+
+**Documentation-consistency note (non-blocking):** migration 9's own header comment and
+`Letflow.TenantProvisioning`'s manifest doc both point here as "decision 0037's third
+correction" and the design doc's §2.1 migration list "as updated" — this section is that
+missing write-up, added as a condition of this PASS rather than left for later
+discovery (same precedent as correction #2's stale-comment fix). The design doc's own
+§2.1 list still reads "six migrations" and was not edited to enumerate the 9th
+(narrower, less centrally load-bearing than a decision-record gap) — filed as a
+non-blocking documentation debt item for DOC-UPDATER, not a rework condition.
+
+## Sign-off (re-gate 2, correction #3)
+
+REVIEWER (WF-02 Step 2d re-gate 2, REQ-376, run WF02-REQ376-20260922) —
+2026-09-22 — **PASS.** Amendment to, not replacement of, the two sign-offs above.
+Reviewed `git diff 631e6316...HEAD` in full (migration 9, the two
+`tenant_template.ex` catalog-query filters, the `partition_maintenance_test.exs`
+synchronization fixes and their `docs/anti-patterns.md` entry, and the
+`event_store_test.exs` AC2 assertion update) against the four REVIEWER questions:
+
+- **Idiomatic vs. crutch:** migration 9 uses `execute/1,2` for both directions, the
+  same style already established by migrations 4/8 for DDL the `constraint/3` DSL
+  cannot express (composite-column FK). Not a crutch — matches precedent, has a
+  reasoned justification in its own header for why the DSL is insufficient here.
+- **Supervision:** untouched. No process/supervision-surface change anywhere in this
+  diff.
+- **Type-safety gaps:** none found. This is FK-target correctness at the DDL layer, not
+  new application-level transition logic.
+- **Scope creep:** none. See "no scope creep, no crutch" ruling above.
+
+Independently verified: `event_payload_store`'s original FK does reference `:events`
+(`priv/repo/migrations/20260816120004_create_event_payload_store.exs` line 67), so
+migration 9's premise is accurate, not assumed. `Letflow.TenantFixture.expected_tenant_tables/0`
+and `req376_partition_management_table?/1` are pre-existing, already-established
+oracles (not new logic invented for this fix), so the `recreate_sequences!/1` filter
+routes through the same machinery every other clone-path step already trusts.
+`query_instance_events/3`'s `events`/`events_archive` union (pre-existing application
+code, unchanged by this diff) independently confirms the `event_store_test.exs` AC2
+rewrite is a correction of stale pre-REQ-376 behavior, not a weakened or gamed
+assertion — the new assertion checks specific field values
+(`event_id`/`instance_id`/`sequence_number`/`event_type`), strictly stronger than the
+old bare `{:ok, []}` check it replaces. The two `tenant_template.ex` fixes stay
+correctly scoped to test infrastructure and do not touch application code or weaken any
+real assertion, per the same reasoning above.
+
+Wrote this section (the missing decision-record write-up migration 9's own comments
+already assumed) as a condition of PASS. No rework required.
+
+Route to TEST-DESIGN-VALIDATOR (Step 3b) re-gate, then TEST-RUNNER (Step 4).

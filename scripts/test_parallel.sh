@@ -296,6 +296,9 @@ while [ "$i" -le "$N" ]; do
     in_flight=$((in_flight - 1))
     if [ "$finished_exit" -ne 0 ]; then
       echo "test_parallel: ERROR partition $finished_partition ecto.create/ecto.migrate failed with exit $finished_exit -- no partition launched (see $tmp_dir/create-$finished_partition.log)" >&2
+      echo "test_parallel: ---- create-$finished_partition.log content (ISS-0779: printed inline since this dir is not a CI artifact) ----" >&2
+      cat "$tmp_dir/create-$finished_partition.log" >&2
+      echo "test_parallel: ---- end create-$finished_partition.log ----" >&2
       exit 1
     fi
   fi
@@ -319,6 +322,9 @@ while [ "$in_flight" -gt 0 ]; do
   in_flight=$((in_flight - 1))
   if [ "$finished_exit" -ne 0 ]; then
     echo "test_parallel: ERROR partition $finished_partition ecto.create/ecto.migrate failed with exit $finished_exit -- no partition launched (see $tmp_dir/create-$finished_partition.log)" >&2
+    echo "test_parallel: ---- create-$finished_partition.log content (ISS-0779: printed inline since this dir is not a CI artifact) ----" >&2
+    cat "$tmp_dir/create-$finished_partition.log" >&2
+    echo "test_parallel: ---- end create-$finished_partition.log ----" >&2
     exit 1
   fi
 done

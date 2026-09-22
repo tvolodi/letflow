@@ -27845,7 +27845,7 @@ requirements:
   - id: REQ-375
     title: "Operator-facing rollout-status screen: per-company outcome, reason, and resume/re-run controls (frontend)"
     owner: FRONTEND-DEV
-    status: pending
+    status: done
     stage: S8
     impl_order: 735  # letflow-queue task id, GH#1623. Registered 2026-09-20 by ORCH;
       # corrects a fabricated/self-assigned id (732) that was never a real

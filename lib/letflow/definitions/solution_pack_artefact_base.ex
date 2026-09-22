@@ -65,13 +65,29 @@ defmodule Letflow.Definitions.SolutionPackArtefactBase do
   Structural changeset for creating or wholesale-replacing an artefact base
   snapshot row. Does no I/O.
 
-  Named `upsert_changeset/2`, not `insert_changeset/2` — unlike
-  `SolutionPackInstall`'s row, this row's whole reason for existing is to be
-  replaced wholesale (new `base_content`/`base_version`/`captured_at`) each
-  time a future install/update-application requirement completes. REQ-041
-  does not build that write path — this changeset only specifies the field
-  shape such a future `Repo.insert/2`-with-`on_conflict`-replace call would
-  use.
+  Named `upsert_changeset/2`, not `insert_changeset/2`, because it is reused
+  by two distinct call sites with two distinct write semantics (REQ-379
+  design §4):
+
+    * **Install-time capture**
+      (`Letflow.Definitions.SolutionPack.capture_artefact_bases/4`, REQ-379):
+      insert-if-absent — the caller passes this changeset to `Repo.insert/2`
+      with `on_conflict: :nothing, conflict_target: [:tenant_id, :pack_id,
+      :artefact_type, :artefact_id]`, so a base snapshot, once captured, is
+      never overwritten by a later call for the same key. This is
+      deliberate: the base is "what the pack delivered at the moment it
+      first became this artefact's reference point," and must not move just
+      because the same content was installed again — a tenant may have since
+      locally adapted the artefact.
+    * **A future update-application call site** (REQ-380, not built yet):
+      would legitimately want wholesale replace — `Repo.insert/2` with an
+      `on_conflict: :replace_all`-style option (or equivalent) — so that
+      after an update is applied and a conflict resolved, the base advances
+      to the new content.
+
+  This changeset itself is identical either way (structural cast/validate
+  only); only the caller's chosen `Repo.insert/2` options differ per call
+  site.
   """
   @spec upsert_changeset(t(), attrs :: map()) :: Ecto.Changeset.t()
   def upsert_changeset(base, attrs) do

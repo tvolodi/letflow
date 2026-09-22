@@ -176,6 +176,7 @@ defmodule Letflow.Definitions.SolutionPack do
   alias Letflow.Definitions.ExportImport
   alias Letflow.Definitions.JsonSchemaShape
   alias Letflow.Definitions.ProcessDefinition
+  alias Letflow.Definitions.SolutionPackArtefactBase
   alias Letflow.Definitions.SolutionPackInstall
   alias Letflow.Engine.VariableSchema
   alias Letflow.Entities.EntityDefinition
@@ -240,6 +241,17 @@ defmodule Letflow.Definitions.SolutionPack do
         }
 
   @type role_checklist_entry :: %{role_name: String.t(), bound: boolean()}
+
+  @typedoc """
+  One artefact snapshot to capture into `solution_pack_artefact_bases` at
+  install time (REQ-379 design §5.1). `content` is the artefact's own
+  delivered content, pre-canonicalization.
+  """
+  @type artefact_snapshot :: %{
+          artefact_type: String.t(),
+          artefact_id: Ecto.UUID.t(),
+          content: map()
+        }
 
   @typedoc "One entity definition installed by `install/3` (REQ-305)."
   @type installed_entity_definition :: %{
@@ -388,12 +400,19 @@ defmodule Letflow.Definitions.SolutionPack do
        `{:error, :duplicate_pack_install}`.
     6. `Letflow.Definitions.create/2` per packed definition, with
        `name: process_key` and `created_by: actor_id`, recording the
-       `source_definition_id -> new_definition_id` mapping, then
+       `source_definition_id -> new_definition_id` mapping.
+    6b. REQ-379: `capture_artefact_bases/4` — one insert-if-absent
+       `solution_pack_artefact_bases` row per definition just created in step
+       6 (`artefact_type: "process_definition"`, `artefact_id` = the new
+       `ProcessDefinition.id`, `base_content` = canonicalized
+       `packed.graph`), sharing this install's single `captured_at` instant
+       with the `solution_pack_installs` row from step 5. Then
        `Letflow.Entities.Definitions.create_definition/2` per packed entity
        definition (`:inactive`-only, 0026 §2).
-    6a. ISS-0647: if the entity types just created in step 6 cover both
-       entity types `Letflow.Packs.Bilimbaga`'s answer-key fields are
-       declared against, seed that pack's `entity_field_restrictions` rows
+    6a. ISS-0647: if the entity types just created in the entity-definitions
+       step cover both entity types `Letflow.Packs.Bilimbaga`'s answer-key
+       fields are declared against, seed that pack's
+       `entity_field_restrictions` rows
        (`seed_pack_specific_field_restrictions/2`) -- the one
        pack-identity-conditioned branch in this otherwise-generic installer;
        see that function's own comment for why.
@@ -957,9 +976,19 @@ defmodule Letflow.Definitions.SolutionPack do
   # ── install/3 steps 5-8 (transactional) ───────────────────────────────────
 
   defp run_install(parsed, decoded_schemas, tenant_id, actor_id, opts) do
+    captured_at = DateTime.truncate(DateTime.utc_now(), :microsecond)
+
     Repo.transaction(fn ->
-      with {:ok, install} <- insert_install_row(parsed, tenant_id),
+      with {:ok, install} <- insert_install_row(parsed, tenant_id, captured_at),
            {:ok, installed} <- create_packed_definitions(parsed.definitions, actor_id, opts),
+           {:ok, _bases} <-
+             capture_artefact_bases(
+               tenant_id,
+               parsed.pack_id,
+               parsed.version,
+               artefact_snapshots_from(installed),
+               captured_at
+             ),
            {:ok, installed_entities} <-
              create_packed_entity_definitions(parsed.entity_definitions, actor_id, opts),
            :ok <- seed_pack_specific_field_restrictions(installed_entities, opts),
@@ -980,13 +1009,13 @@ defmodule Letflow.Definitions.SolutionPack do
     end)
   end
 
-  defp insert_install_row(parsed, tenant_id) do
+  defp insert_install_row(parsed, tenant_id, captured_at) do
     %SolutionPackInstall{}
     |> SolutionPackInstall.insert_changeset(%{
       tenant_id: tenant_id,
       pack_id: parsed.pack_id,
       installed_version: parsed.version,
-      installed_at: DateTime.truncate(DateTime.utc_now(), :microsecond)
+      installed_at: captured_at
     })
     |> Repo.insert()
     |> case do
@@ -1033,6 +1062,124 @@ defmodule Letflow.Definitions.SolutionPack do
       {:error, _reason} = error -> error
     end
   end
+
+  # Maps `create_packed_definitions/3`'s `{packed_definition, %ProcessDefinition{}}`
+  # accumulator to the artefact-snapshot shape `capture_artefact_bases/4` takes.
+  # Pure, no I/O. Scope decision (REQ-379 design §1): process definitions only --
+  # `variable_schemas`/`entity_definitions` are not captured by this requirement.
+  # `artefact_id` is deliberately `created.id` (the newly-created, tenant-local
+  # `ProcessDefinition.id`), never `packed.definition_id` (the source tenant's id) --
+  # see design §2 for why only the former is ever resolvable by a future `theirs`
+  # lookup against this tenant's own schema.
+  @spec artefact_snapshots_from([{packed_definition(), ProcessDefinition.t()}]) ::
+          [artefact_snapshot()]
+  defp artefact_snapshots_from(installed) do
+    Enum.map(installed, fn {packed, %ProcessDefinition{} = created} ->
+      %{artefact_type: "process_definition", artefact_id: created.id, content: packed.graph}
+    end)
+  end
+
+  @doc """
+  Captures one `solution_pack_artefact_bases` row per `artefact_snapshots` entry
+  (REQ-379 design §5.1), insert-if-absent.
+
+  Must run inside the caller's already-open `Repo.transaction/1` (called from
+  `run_install/5`) -- this function opens no transaction of its own.
+
+  For each snapshot, in order: canonicalizes `content` (identical algorithm to
+  `Letflow.Definitions.PromotionDigest.canonicalize/1` -- recursively sort map
+  keys, rebuild via `Jason.OrderedObject.new/1`, map over lists without
+  reordering, convert atoms via `Atom.to_string/1`, pass everything else
+  through unchanged, then `Jason.encode!/1`), builds a
+  `SolutionPackArtefactBase.upsert_changeset/2` with the given `tenant_id`,
+  `pack_id`, `base_version`, the snapshot's `artefact_type`/`artefact_id`, the
+  canonicalized `base_content`, and the single shared `captured_at` instant
+  (passed in, not read per row, so every row from one install shares one
+  timestamp), then `Repo.insert/2` with `on_conflict: :nothing,
+  conflict_target: [:tenant_id, :pack_id, :artefact_type, :artefact_id]`.
+
+  This is deliberately NOT `upsert_changeset/2`'s anticipated wholesale-replace
+  write -- this call site (install-time capture) must never overwrite an
+  existing base snapshot for an artefact the tenant has since locally adapted
+  (AC3). A conflicting insert is a silent, successful no-op: the pre-existing
+  row is left untouched, and the returned struct for that entry reflects the
+  attempted (not necessarily persisted) snapshot -- callers must not rely on
+  the return value to distinguish a fresh insert from a no-op skip (design
+  §5.1).
+
+  A genuine changeset error (e.g. a future value exceeding `artefact_type`'s
+  or `artefact_id`'s 255-byte column limits) returns `{:error, changeset}`,
+  which `run_install/5`'s existing `with`/`else` -> `Repo.rollback/1` clause
+  turns into a full install rollback, consistent with every other step.
+  """
+  @spec capture_artefact_bases(
+          tenant_id :: Ecto.UUID.t(),
+          pack_id :: String.t(),
+          base_version :: String.t(),
+          artefact_snapshots :: [artefact_snapshot()],
+          captured_at :: DateTime.t()
+        ) :: {:ok, [SolutionPackArtefactBase.t()]} | {:error, Ecto.Changeset.t()}
+  def capture_artefact_bases(tenant_id, pack_id, base_version, artefact_snapshots, captured_at) do
+    Enum.reduce_while(artefact_snapshots, {:ok, []}, fn snapshot, {:ok, acc} ->
+      attrs = %{
+        tenant_id: tenant_id,
+        pack_id: pack_id,
+        artefact_type: snapshot.artefact_type,
+        artefact_id: snapshot.artefact_id,
+        base_version: base_version,
+        base_content: canonicalize_artefact_content(snapshot.content),
+        captured_at: captured_at
+      }
+
+      %SolutionPackArtefactBase{}
+      |> SolutionPackArtefactBase.upsert_changeset(attrs)
+      |> Repo.insert(
+        on_conflict: :nothing,
+        conflict_target: [:tenant_id, :pack_id, :artefact_type, :artefact_id]
+      )
+      |> case do
+        {:ok, base} -> {:cont, {:ok, [base | acc]}}
+        {:error, _reason} = error -> {:halt, error}
+      end
+    end)
+    |> case do
+      {:ok, acc} -> {:ok, Enum.reverse(acc)}
+      {:error, _reason} = error -> error
+    end
+  end
+
+  # Identical algorithm to Letflow.Definitions.PromotionDigest.canonicalize/1
+  # (design §3, OQ-2) -- that function is `defp`, so this is a second,
+  # independent implementation of the same four steps, not a shared call.
+  # Recursively sort map keys, rebuild via Jason.OrderedObject.new/1 so sorted
+  # order survives encoding, map over lists without reordering them, convert
+  # atoms via Atom.to_string/1, pass everything else through unchanged, then
+  # Jason.encode!/1 (default output has no insignificant whitespace).
+  @spec canonicalize_artefact_content(map()) :: String.t()
+  defp canonicalize_artefact_content(content) do
+    content
+    |> canonicalize_json()
+    |> Jason.encode!()
+  end
+
+  defp canonicalize_json(value) when is_map(value) do
+    value
+    |> Map.keys()
+    |> Enum.sort()
+    |> Enum.map(fn key -> {key, canonicalize_json(Map.get(value, key))} end)
+    |> Jason.OrderedObject.new()
+  end
+
+  defp canonicalize_json(value) when is_list(value) do
+    Enum.map(value, &canonicalize_json/1)
+  end
+
+  defp canonicalize_json(value)
+       when is_atom(value) and not is_boolean(value) and not is_nil(value) do
+    Atom.to_string(value)
+  end
+
+  defp canonicalize_json(value), do: value
 
   # Every entity definition lands in the caller's own schema via
   # `opts[:prefix]` and nowhere else -- no `tenant_id`, `schema_name`, or

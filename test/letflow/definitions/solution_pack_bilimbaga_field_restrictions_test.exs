@@ -44,6 +44,7 @@ defmodule Letflow.Definitions.SolutionPackBilimbagaFieldRestrictionsTest do
   import Plug.Conn
 
   alias Letflow.Definitions.SolutionPack
+  alias Letflow.Definitions.SolutionPackArtefactBase
   alias Letflow.Definitions.SolutionPackInstall
   alias Letflow.Entities.Definitions
   alias Letflow.Entities.EntityDefinition
@@ -102,6 +103,11 @@ defmodule Letflow.Definitions.SolutionPackBilimbagaFieldRestrictionsTest do
     # (callbacks run in reverse registration order).
     on_exit(fn ->
       Repo.delete_all(from(i in SolutionPackInstall, where: i.tenant_id == ^fixture.tenant_id))
+
+      Repo.delete_all(
+        from(b in SolutionPackArtefactBase, where: b.tenant_id == ^fixture.tenant_id)
+      )
+
       Repo.delete_all(from(cp in ColumnPromotion, where: cp.tenant_id == ^fixture.tenant_id))
     end)
 

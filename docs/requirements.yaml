@@ -28110,7 +28110,7 @@ requirements:
   - id: REQ-379
     title: "Solution-pack install-tracking write path: populate solution_pack_installs/solution_pack_artefact_bases from a real install event (SOL-01/02/03 prerequisite)"
     owner: ELIXIR-DEV
-    status: pending
+    status: done
     stage: S2
     impl_order: 739  # letflow-queue task id, GH#1627. Registered 2026-09-20 by ORCH;
       # corrects a fabricated/self-assigned id (736) that was never a real

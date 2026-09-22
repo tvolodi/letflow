@@ -1,0 +1,48 @@
+{
+  "handoff_id": "c1d2e3f4-0780-4000-8000-000000000002",
+  "run_id": "WF03-ISS0780-20260922",
+  "workflow_id": "WF-03",
+  "step": "01",
+  "from_agent": "ISSUE-FIXER",
+  "to_agent": "CODE-DESIGNER",
+  "file": "handoffs/WF03-ISS0780-20260922/step-01-issue-fixer-diagnose.json",
+  "created_at": "2026-09-22T08:05:00Z",
+  "started_at": "2026-09-22T07:20:00Z",
+  "completed_at": "2026-09-22T08:05:00Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S6",
+    "issue_id": "ISS-0780",
+    "queue_ref": "Q-779",
+    "github_ref": "GH-1704",
+    "branch": "feature/WF03-ISS0780-fix-20260922",
+    "related_handoff_ids": ["handoffs/WF03-ISS0780-20260922/step-00.5-issue-fixer-registry.json"],
+    "artifacts_in": [
+      "lib/letflow/plugs/cors.ex",
+      "test/letflow/plugs/cors_test.exs",
+      "web/src/api/client.ts",
+      "web/src/api/entities.ts",
+      "web/src/api/onboarding.ts"
+    ]
+  },
+  "task": {
+    "description": "WF-03 Step 1: reproduce ISS-0780 directly (real command output, not restated bug-report prose), trace to root cause, and audit whether other request headers web/src sends are similarly missing from Letflow.Plugs.Cors's @allow_headers. Do NOT implement the fix -- produce a diagnosis for CODE-DESIGNER.",
+    "acceptance_criteria": [
+      "reproduction quotes real output (not a description of expected output)",
+      "root cause traced to exact module/line/constant",
+      "explains why the existing cors_test.exs suite did not catch this",
+      "audits web/src for every header sent via client.ts / postWithHeaders / putWithHeaders / any other custom fetch header, cross-checked against @allow_headers",
+      "final list of headers needed in @allow_headers is stated explicitly"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "ROOT CAUSE: lib/letflow/plugs/cors.ex line 69, `@allow_headers \"authorization, content-type\"` -- a hardcoded, explicit allowlist (by design, not an echo of the request's access-control-request-headers; see the module's own moduledoc comment at line 66-68) that was never updated as web/src grew new authenticated-request headers beyond the original two. This constant is read directly into the `access-control-allow-headers` response header on every CORS preflight (cors.ex lines 99-104, handle_allowed/2), with no other path that could add headers at runtime.\n\nREPRODUCTION (real, not restated): Built a throwaway script (not committed; run via `mix run`, deleted after) that starts the app against the isolated MIX_ENV=test/MIX_TEST_PARTITION=1 database (per this project's shared-dev-DB-refusal guard in lib/letflow/repo.ex -- never touched letflow_dev) and dispatches a real Plug.Test conn through Letflow.Router.call/2, exactly matching cors_test.exs's own established convention (router-level, not calling Letflow.Plugs.Cors.call/2 in isolation):\n\n  conn(:options, \"/api/v1/anything\")\n  |> put_req_header(\"origin\", \"http://localhost:5173\")\n  |> put_req_header(\"access-control-request-method\", \"POST\")\n  |> put_req_header(\"access-control-request-headers\", \"x-bpm-user-id, content-type, authorization, if-match, idempotency-key\")\n  |> Letflow.Router.call(opts)\n\nActual output (MIX_ENV=test MIX_TEST_PARTITION=1 mix run <script>):\n  status: 204\n  access-control-allow-headers: [\"authorization, content-type\"]\n\nConfirms the defect directly: a real preflight requesting clearance for x-bpm-user-id (and if-match, idempotency-key) from an allowed origin gets back an access-control-allow-headers value that omits all three -- a genuinely cross-origin browser would then refuse to send those headers on the actual follow-up request, and any backend route depending on x-bpm-user-id (which is most of the authenticated API surface, per client.ts) would never see it.\n\nWHY EXISTING TESTS DIDN'T CATCH IT: test/letflow/plugs/cors_test.exs's one preflight-header-set assertion (line 187-188) pins the CURRENT (bugged) value verbatim: `assert get_resp_header(conn, \"access-control-allow-headers\") == [\"authorization, content-type\"]`. It is a byte-for-byte characterization test of @allow_headers's existing contents, not a test derived from what web/src actually sends -- so it passed both before x-bpm-user-id was added to client.ts and continues to pass now, because it never cross-checks against the frontend's real header usage. There is no test anywhere (backend or frontend) that asserts @allow_headers is a superset of every header the SPA actually sends.\n\nFRONTEND HEADER AUDIT (what web/src actually sends on authenticated/CORS-relevant requests, verified by direct grep + read, not assumption):\n  1. `Authorization` -- web/src/api/client.ts line 79 (request()) and line 205 (getWithToken). Already in @allow_headers.\n  2. `Content-Type` -- client.ts line 75 (request(), set to 'application/json' unless FormData). Already in @allow_headers.\n  3. `x-bpm-user-id` -- client.ts lines 80-84 (request(), extracted via extractUserIdFromToken/2 from the JWT `sub` claim) and lines 206-208 (getWithToken). Sent on every authenticated request that has a token. NOT in @allow_headers -- this is the issue as filed.\n  4. `If-Match` -- NOT sent by client.ts itself; sent by callers via `client.putWithHeaders`. Verified one real caller: web/src/api/entities.ts line 79-82 (`client.putWithHeaders<EntityRecord>(..., ifMatch ? { 'If-Match': ifMatch } : {})`), documented there as REQ-336's optimistic-concurrency PUT. NOT in @allow_headers.\n  5. `Idempotency-Key` -- NOT sent by client.ts itself; sent by the one caller of `client.postWithHeaders`: web/src/api/onboarding.ts line 114-117 (`client.postWithHeaders(..., { 'Idempotency-Key': idempotencyKey })`). NOT in @allow_headers.\n\nSearched for a fourth candidate as the issue's fix_direction asked (grepped web/src for every caller of postWithHeaders/putWithHeaders, and separately for any other headers:{...}/headers[...]=/new Headers( usage outside client.ts): only the two callers above use postWithHeaders/putWithHeaders (entities.ts and onboarding.ts); every other headers-object hit found is inside web/src/api/__tests__/*.test.ts or a component test, i.e. test-mock fetch stubs, not production request code. No other production caller sets a custom header directly on `fetch`/`client.*` outside client.ts's own request()/getWithToken(). So the complete, verified set of headers the SPA can send that are CORS-preflight-relevant is: authorization, content-type, x-bpm-user-id, if-match, idempotency-key -- of these, the first two are already allowed and the last three are not.\n\nAFFECTED FILES: lib/letflow/plugs/cors.ex (the @allow_headers constant, line 69, and its moduledoc comment at lines 66-68 documenting 'the two request headers the SPA actually sends' -- now stale, needs updating to reflect all five); test/letflow/plugs/cors_test.exs (line 187-188's pinned assertion needs updating to the new value, plus new regression coverage per WF-03's fail-then-pass requirement).\n\nWHAT A FIX NEEDS TO CHANGE: lib/letflow/plugs/cors.ex line 69's @allow_headers value from \"authorization, content-type\" to a value additionally including x-bpm-user-id, if-match, and idempotency-key (exact casing/ordering/comma-formatting is CODE-DESIGNER's call, matching the existing lowercase-with-', '-separator style), plus updating the stale moduledoc comment above it so it doesn't keep asserting only two headers exist. No other module needs to change -- this is a single-constant, additive, non-tenant-data-path fix (same class SECURITY-REVIEWER already passed for ISS-0529: additive CORS allowlist change, no credentials involved).",
+    "artifacts_out": [],
+    "issues": [],
+    "next_action": "Route to CODE-DESIGNER for fix design (WF-03 Step 2): update lib/letflow/plugs/cors.ex's @allow_headers to include x-bpm-user-id, if-match, idempotency-key (and refresh its moduledoc comment), with a regression test proving preflight coverage for all three added headers, per the fail-then-pass requirement in docs/agents/workflows/WF-03_issue_resolving.md."
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

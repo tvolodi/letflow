@@ -1,0 +1,53 @@
+{
+  "handoff_id": "wf03-iss0780-step03a",
+  "run_id": "WF03-ISS0780-20260922",
+  "workflow_id": "WF-03",
+  "step": "03a",
+  "from_agent": "ORCH",
+  "to_agent": "ELIXIR-DEV",
+  "file": "handoffs/WF03-ISS0780-20260922/step-03a-elixir-dev.json",
+  "created_at": "2026-09-22T00:00:00Z",
+  "started_at": "2026-09-22T00:00:00Z",
+  "completed_at": "2026-09-22T00:00:00Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S6",
+    "issue_ids": ["ISS-0780"],
+    "related_handoff_ids": [
+      "handoffs/WF03-ISS0780-20260922/step-01-issue-fixer-diagnose.json",
+      "handoffs/WF03-ISS0780-20260922/step-02-code-designer.json",
+      "handoffs/WF03-ISS0780-20260922/step-02b-design-gate.json"
+    ],
+    "artifacts_in": [
+      "lib/letflow/plugs/cors.ex",
+      "test/letflow/plugs/cors_test.exs"
+    ],
+    "owned_modules": [
+      "lib/letflow/plugs/cors.ex",
+      "test/letflow/plugs/cors_test.exs"
+    ]
+  },
+  "task": {
+    "description": "Implement ISS-0780's fix per CODE-DESIGN-VALIDATOR-approved design (step-02b-design-gate.json PASS): update lib/letflow/plugs/cors.ex's @allow_headers to include the two missing headers found by the diagnosis's audit (idempotency-key, if-match) alongside x-bpm-user-id (the header the issue was filed over), refresh the moduledoc comment to describe all five headers and their source call sites, and update test/letflow/plugs/cors_test.exs's pre-existing pinned-value assertion so it stops characterizing the bug.",
+    "acceptance_criteria": [
+      "@allow_headers == \"authorization, content-type, idempotency-key, if-match, x-bpm-user-id\"",
+      "moduledoc comment lists all five headers with their source call sites",
+      "existing cors_test.exs pinned assertion updated to match, still passes",
+      "mix compile clean",
+      "no file outside lib/letflow/plugs/cors.ex and test/letflow/plugs/cors_test.exs touched"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "Changed lib/letflow/plugs/cors.ex line 69's @allow_headers from \"authorization, content-type\" to \"authorization, content-type, idempotency-key, if-match, x-bpm-user-id\", exactly matching CODE-DESIGNER's decided value (independently re-verified by CODE-DESIGN-VALIDATOR). Rewrote the preceding comment block (was: \"The two request headers the SPA actually sends... token and the JSON content type\") to list all five headers and cite their source call sites (authorization/content-type: client.ts; idempotency-key: web/src/api/onboarding.ts via client.postWithHeaders; if-match: web/src/api/entities.ts via client.putWithHeaders, REQ-336; x-bpm-user-id: client.ts JWT sub claim, the header ISS-0780 was filed over), plus an explicit 'audited against web/src in full (ISS-0780) -- keep it that way' note per the design.\n\nUpdated test/letflow/plugs/cors_test.exs's existing pinned assertion (was line 187-188, asserting the buggy two-header value verbatim) to assert the corrected five-header value, so it no longer characterizes the pre-fix bug as correct behavior.\n\nVerification, real output quoted: `mix compile` -- clean, 2 files compiled, no warnings/errors. `mix test test/letflow/plugs/cors_test.exs` -- `Result: 18 passed` (all pre-existing cors_test.exs coverage, including the corrected pinned assertion, green). The new fail-then-pass regression test proving the fix (per fix_direction's explicit ask -- OPTIONS preflight with Access-Control-Request-Headers: x-bpm-user-id) is Step 4's responsibility (TEST-DESIGNER), not written here, per WF-03's step split.\n\nSelf-review: no state-transition/Repo-persistence concern (this is a stateless Plug config constant, not a gen_statem transition). No migration involved. Change is a single constant plus its comment and one test assertion -- proportionate to the design's own ceremony call (no separate lib/letflow/design/ doc, confirmed appropriate by CODE-DESIGN-VALIDATOR against ISS-0529 precedent).",
+    "artifacts_out": [
+      "lib/letflow/plugs/cors.ex",
+      "test/letflow/plugs/cors_test.exs"
+    ],
+    "issues": [],
+    "next_action": "Route to SECURITY-REVIEWER (CORS allow-list is part of the API's cross-origin trust boundary -- tenant-data-adjacent) and REVIEWER"
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

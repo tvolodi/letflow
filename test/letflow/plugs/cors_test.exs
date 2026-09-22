@@ -185,7 +185,7 @@ defmodule Letflow.Plugs.CorsTest do
                ["GET, POST, PUT, PATCH, DELETE, OPTIONS"]
 
       assert get_resp_header(conn, "access-control-allow-headers") ==
-               ["authorization, content-type"]
+               ["authorization, content-type, idempotency-key, if-match, x-bpm-user-id"]
 
       assert get_resp_header(conn, "access-control-max-age") == ["600"]
     end

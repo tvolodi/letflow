@@ -312,6 +312,7 @@ defmodule Letflow.Routers.Instances do
   alias Letflow.Repository.Artifact
   alias Letflow.Repository.Attachment
   alias Letflow.Repository.Attachments
+  alias Letflow.Repository.AttachmentLinks
   alias Letflow.Scheduler
 
   @idempotency_key_header "idempotency-key"
@@ -389,6 +390,21 @@ defmodule Letflow.Routers.Instances do
 
   authz_delete "/:id/attachments/:attachment_id", :AttachmentsManage do
     handle_delete_attachment(conn, conn.params["id"], conn.params["attachment_id"])
+  end
+
+  # REQ-386 -- signed, time-limited attachment links. Same ordering hazard
+  # class as the REQ-212 routes above: both have one more literal path
+  # segment than the bare /:id/attachments/:attachment_id route so there is
+  # no segment-count collision either way, but they are declared here,
+  # grouped with the other attachment routes and above the bare
+  # `authz_get "/:id"` below, matching this router's own "longer, more
+  # specific suffixes first" convention (design §3.3).
+  authz_post "/:id/attachments/:attachment_id/link", :AttachmentsRead do
+    handle_issue_attachment_link(conn, conn.params["id"], conn.params["attachment_id"])
+  end
+
+  authz_get "/:id/attachments/:attachment_id/link-content", :AttachmentsRead do
+    handle_get_attachment_link_content(conn, conn.params["id"], conn.params["attachment_id"])
   end
 
   authz_get "/:id", :InstancesRead do
@@ -1221,6 +1237,115 @@ defmodule Letflow.Routers.Instances do
   defp strip_control_characters(value) do
     String.replace(value, ~r/[\x00-\x1F\x7F]/, "")
   end
+
+  # ── POST /instances/:id/attachments/:attachment_id/link (REQ-386 design §3.1) ──
+
+  # Mints a signed, time-limited token for an attachment the caller has
+  # already proven access to. Reuses fetch_scoped_attachment_metadata/3
+  # verbatim (the same private helper DELETE already uses) -- issuing a link
+  # needs proof of access, not the byte content itself, so this never
+  # touches repository_artifacts.
+  defp handle_issue_attachment_link(conn, raw_id, raw_attachment_id) do
+    opts = conn.assigns.scoped_opts
+    tenant_id = conn.assigns.auth_context.tenant_id
+
+    with {:ok, instance_id} <- cast_instance_id(raw_id),
+         {:ok, _attachment} <-
+           fetch_scoped_attachment_metadata(raw_attachment_id, instance_id, opts),
+         {:ok, %{token: token, expires_at: expires_at}} <-
+           AttachmentLinks.issue(raw_attachment_id, tenant_id) do
+      render_attachment_link(conn, raw_id, raw_attachment_id, token, expires_at)
+    else
+      {:error, :invalid_instance_id} ->
+        Response.unprocessable(conn, "instance_id is not a valid UUID")
+
+      {:error, :not_found} ->
+        Response.not_found(conn)
+
+      {:error, :invalid_tenant} ->
+        Response.internal_error(conn)
+
+      {:error, {:secret_write_failed, _reason}} ->
+        Response.internal_error(conn)
+    end
+  end
+
+  defp render_attachment_link(conn, raw_id, raw_attachment_id, token, expires_at) do
+    Response.ok(conn, %{
+      "attachment_id" => raw_attachment_id,
+      "token" => token,
+      "url" => link_content_url(raw_id, raw_attachment_id, token),
+      "expires_at" => DateTime.to_iso8601(expires_at),
+      "expires_in_seconds" => 300
+    })
+  end
+
+  # No scheme/host -- matches every other response shape in this codebase,
+  # none of which construct absolute URLs.
+  @spec link_content_url(String.t(), String.t(), String.t()) :: String.t()
+  defp link_content_url(instance_id, attachment_id, token) do
+    "/instances/#{instance_id}/attachments/#{attachment_id}/link-content?link_token=#{URI.encode_www_form(token)}"
+  end
+
+  # ── GET /instances/:id/attachments/:attachment_id/link-content (REQ-386 design §3.2) ──
+
+  # Deliberately a separate route/handler from handle_get_attachment_content/3
+  # above -- not a modification of it. The existing route, its existing
+  # handler, and every function it calls (fetch_scoped_attachment_content/3
+  # included) are byte-for-byte unmodified by this requirement; this handler
+  # calls the same function a second time, from a second call site, with the
+  # attachment id recovered from a verified token rather than the raw path
+  # segment.
+  defp handle_get_attachment_link_content(conn, raw_id, raw_attachment_id) do
+    opts = conn.assigns.scoped_opts
+    tenant_id = conn.assigns.auth_context.tenant_id
+    conn = fetch_query_params(conn)
+    link_token = conn.query_params["link_token"]
+
+    with {:ok, instance_id} <- cast_instance_id(raw_id),
+         {:ok, decoded_attachment_id} <- verify_link_token(link_token, tenant_id),
+         :ok <- check_attachment_id_matches(decoded_attachment_id, raw_attachment_id),
+         {:ok, attachment, artifact} <-
+           fetch_scoped_attachment_content(decoded_attachment_id, instance_id, opts) do
+      send_attachment_content(conn, attachment, artifact)
+    else
+      {:error, :invalid_instance_id} ->
+        Response.unprocessable(conn, "instance_id is not a valid UUID")
+
+      {:error, :expired_or_invalid} ->
+        Response.attachment_link_expired(conn)
+
+      {:error, :not_found} ->
+        Response.not_found(conn)
+
+      {:error, :content_missing} ->
+        Response.internal_error(conn)
+
+      {:error, :not_available} ->
+        Response.conflict(conn, "attachment content is not currently available")
+    end
+  end
+
+  # A missing/non-binary link_token is exactly as invalid as a malformed one
+  # -- same shared response, no separate branch (design §3.2 step 4).
+  @spec verify_link_token(term(), Ecto.UUID.t()) ::
+          {:ok, String.t()} | {:error, :expired_or_invalid}
+  defp verify_link_token(link_token, tenant_id) when is_binary(link_token) do
+    AttachmentLinks.verify(link_token, tenant_id)
+  end
+
+  defp verify_link_token(_link_token, _tenant_id), do: {:error, :expired_or_invalid}
+
+  # A validly-signed, unexpired token naming a *different* attachment than
+  # the URL it was presented on is an integrity failure of the token/URL
+  # pairing -- folded into the same expired-or-invalid response as every
+  # other verification failure (design §3.2 step 5), not :not_found, so
+  # there remains exactly one failure class for "the token doesn't check
+  # out."
+  @spec check_attachment_id_matches(String.t(), String.t()) ::
+          :ok | {:error, :expired_or_invalid}
+  defp check_attachment_id_matches(decoded_attachment_id, decoded_attachment_id), do: :ok
+  defp check_attachment_id_matches(_decoded, _raw), do: {:error, :expired_or_invalid}
 
   # ── DELETE /instances/:id/attachments/:attachment_id (REQ-212 design §3.4) ──
 

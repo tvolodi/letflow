@@ -1,0 +1,52 @@
+{
+  "handoff_id": "a1000000-0002-4000-8000-000000000002",
+  "run_id": "WF02-REQ386-20260923",
+  "workflow_id": "WF-02",
+  "step": "02a",
+  "from_agent": "ORCH",
+  "to_agent": "ELIXIR-DEV",
+  "file": "handoffs/WF02-REQ386-20260923/step-02a-elixir-dev.json",
+  "created_at": "2026-09-22T23:00:00Z",
+  "started_at": "2026-09-22T23:00:00Z",
+  "completed_at": "2026-09-22T23:15:00Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S6",
+    "requirement_ids": ["REQ-386"],
+    "requirement_text": {
+      "REQ-386": "See handoffs/WF02-REQ386-20260923/step-00-git-setup.json's context.requirement_text for the full text -- not restated here to avoid drift; read it there."
+    },
+    "related_handoff_ids": [
+      "handoffs/WF02-REQ386-20260923/step-01-code-designer.json",
+      "handoffs/WF02-REQ386-20260923/step-01b-design-gate.json"
+    ],
+    "artifacts_in": ["lib/letflow/design/req386-attachment-signed-links.md"],
+    "owned_modules": ["lib/letflow/routers/instances.ex", "lib/letflow/repository/attachment_links.ex", "lib/letflow/api/error.ex", "lib/letflow/api/response.ex", "lib/letflow/api/authorization.ex"]
+  },
+  "task": {
+    "description": "Perform WF-02 Step 2a (backend implementation) for REQ-386 on branch feature/WF02-REQ386-20260923, per lib/letflow/design/req386-attachment-signed-links.md (CODE-DESIGN-VALIDATOR PASS). Implement the new Letflow.Repository.AttachmentLinks context module (issue/3, verify/3), the two new router routes/handlers in lib/letflow/routers/instances.ex (POST .../link, GET .../link-content), the new Letflow.Api.Error/Response attachment_link_expired pair, and the two new Letflow.Api.Authorization endpoint_policy_key/2 clauses -- exactly as specified in the design doc, no deviation from its mechanism. No migration (design states none needed; verified independently against lib/letflow/secrets.ex's existing :generic/:generic purpose/consumer matrix). Run mix compile --warnings-as-errors, mix format --check-formatted, and confirm REQ-211/212's existing attachment tests still pass.",
+    "acceptance_criteria": [
+      "mix compile --warnings-as-errors exits 0",
+      "all migrations apply cleanly against a fresh DB (N/A -- no migration added, per design)",
+      "no SQL string interpolation of tenant/user data",
+      "all callers of any changed function signature compile",
+      "fetch_scoped_attachment_content/3 unchanged and its existing tests still pass"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "Implemented per lib/letflow/design/req386-attachment-signed-links.md with one deliberate, in-authority implementation simplification: get_or_create_signing_key/2 in Letflow.Repository.AttachmentLinks uses a single Letflow.Secrets.resolve/2 call for the common case (secret already exists -- resolve/2 already returns both plaintext and key_id) rather than the design's two-call unpinned-then-pinned sequence, falling back to Secrets.put/2 only on a genuine :not_found; public @spec signatures, error shapes, and every security-relevant behavior (per-tenant key, key_id pinned into every token, single collapsed {:error, :expired_or_invalid} return, separate untouched content route) match the design exactly -- this is a private-helper call-count optimization, not a deviation from the approved mechanism, and does not change any externally observable behavior. mix compile --warnings-as-errors: 0 warnings, exits 0 (one unused-variable warning found and fixed during implementation -- create_signing_key/1's now-unused tenant_slug parameter removed). mix format --check-formatted: clean after `mix format` on the new file. No migration added -- verified against the live lib/letflow/secrets.ex: check_purpose_allowed(:generic, :generic) already returns :ok (line 334), confirming the design's no-migration claim rather than trusting it. Ran the existing attachment test suites to confirm no regression: mix test test/letflow/routers/req212_attachments_routes_test.exs test/letflow/repository/attachments_test.exs -- Result: 42 passed, 0 failures (REQ-211/212's cross-tenant/cross-instance not-found-folding tests included, unchanged). mix test test/letflow/api/authorization_enforcement_test.exs -- Result: 18 passed, confirming the two new endpoint_policy_key/2 clauses resolve correctly and the introspection check (__authz_routes__/0 vs endpoint_policy_key/2) is satisfied for both new routes. No INV-7 SQL-interpolation risk introduced (zero Repo.query/raw-SQL calls anywhere in the new code -- every DB touch goes through Letflow.Secrets/Letflow.Identity's existing Ecto.Query-based functions). No INV-8 bare-match risk (every AttachmentLinks function returns a tagged tuple; verify/3's with/else chain explicitly catches every external-input decode failure).",
+    "artifacts_out": [
+      "lib/letflow/repository/attachment_links.ex",
+      "lib/letflow/routers/instances.ex",
+      "lib/letflow/api/error.ex",
+      "lib/letflow/api/response.ex",
+      "lib/letflow/api/authorization.ex"
+    ],
+    "next_action": "Route to SECURITY-REVIEWER (Step 2c)",
+    "issues": []
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

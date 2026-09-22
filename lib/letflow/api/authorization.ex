@@ -668,6 +668,15 @@ defmodule Letflow.Api.Authorization do
   def endpoint_policy_key("GET", "/instances/:id/attachments/:attachment_id"),
     do: :AttachmentsRead
 
+  # REQ-386 — signed, time-limited attachment links. Same :AttachmentsRead
+  # permission as the existing content route (see design
+  # lib/letflow/design/req386-attachment-signed-links.md §5).
+  def endpoint_policy_key("POST", "/instances/:id/attachments/:attachment_id/link"),
+    do: :AttachmentsRead
+
+  def endpoint_policy_key("GET", "/instances/:id/attachments/:attachment_id/link-content"),
+    do: :AttachmentsRead
+
   # REQ-309 — entity-subsystem routes (the future `Letflow.Routers.Entities`,
   # mounted at `/entities`), per design
   # `lib/letflow/design/req308-entity-http-surface.md` §1's route table and §3's

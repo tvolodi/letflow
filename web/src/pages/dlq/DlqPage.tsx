@@ -2,7 +2,7 @@ import { useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { dlqApi } from '@/api/dlq'
-import { queryKeys } from '@/api/queryKeys'
+import { useTenantScopedQueryKeys } from '@/api/useTenantScopedQueryKeys'
 import { useAuth } from '@/auth/AuthContext'
 import type { DlqEntry } from '@/types/api'
 import { QueryStateBoundary } from '@/components/ui/QueryStateBoundary'
@@ -126,6 +126,7 @@ interface RetryAttempt {
 export default function DlqPage() {
   const qc = useQueryClient()
   const { session } = useAuth()
+  const tenantKeys = useTenantScopedQueryKeys()
   const [search, setSearch] = useState('')
   const [statusFilter, setStatusFilter] = useState('')
   const [sourceTypeFilter, setSourceTypeFilter] = useState('')
@@ -139,7 +140,7 @@ export default function DlqPage() {
   const cursor = cursorStack.length > 0 ? cursorStack[cursorStack.length - 1] : undefined
 
   const { data, isLoading, isError, error, refetch } = useQuery({
-    queryKey: queryKeys.dlq.list({ search, status: statusFilter, source_type: sourceTypeFilter, cursor }),
+    queryKey: tenantKeys.dlq.list({ search, status: statusFilter, source_type: sourceTypeFilter, cursor }),
     queryFn: () => dlqApi.list({
       search: search || undefined,
       status: statusFilter || undefined,
@@ -167,8 +168,8 @@ export default function DlqPage() {
       setActionError('Retry failed. Please try again.')
     },
     onSuccess: (_result, id) => {
-      qc.invalidateQueries({ queryKey: queryKeys.dlq.list() })
-      qc.invalidateQueries({ queryKey: queryKeys.dlq.detail(id) })
+      qc.invalidateQueries({ queryKey: tenantKeys.dlq.list() })
+      qc.invalidateQueries({ queryKey: tenantKeys.dlq.detail(id) })
     },
   })
 
@@ -187,8 +188,8 @@ export default function DlqPage() {
       setActionError('Discard failed. Please try again.')
     },
     onSuccess: (_result, id) => {
-      qc.invalidateQueries({ queryKey: queryKeys.dlq.list() })
-      qc.invalidateQueries({ queryKey: queryKeys.dlq.detail(id) })
+      qc.invalidateQueries({ queryKey: tenantKeys.dlq.list() })
+      qc.invalidateQueries({ queryKey: tenantKeys.dlq.detail(id) })
       if (selectedId === id) setSelectedId(null)
     },
   })

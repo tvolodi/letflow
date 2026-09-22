@@ -10,22 +10,24 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { eventRetentionApi } from '@/api/eventRetention'
 import type { Retirement, RetirementResult, RetentionSummary } from '@/api/eventRetention'
-import { queryKeys } from '@/api/queryKeys'
+import { useTenantScopedQueryKeys } from '@/api/useTenantScopedQueryKeys'
 import type { ApiError } from '@/types/api'
 
 export function useRetentionSummary() {
+  const eventRetentionKeys = useTenantScopedQueryKeys().eventRetention
   return useQuery<RetentionSummary, ApiError>({
-    queryKey: queryKeys.eventRetention.summary(),
+    queryKey: eventRetentionKeys.summary(),
     queryFn: eventRetentionApi.summary,
   })
 }
 
 export function useStartRetirement() {
   const qc = useQueryClient()
+  const eventRetentionKeys = useTenantScopedQueryKeys().eventRetention
   return useMutation<Retirement, ApiError, void>({
     mutationFn: () => eventRetentionApi.start(),
     onSuccess: (data: Retirement) => {
-      qc.invalidateQueries({ queryKey: queryKeys.eventRetention.retirement(data.id) })
+      qc.invalidateQueries({ queryKey: eventRetentionKeys.retirement(data.id) })
     },
   })
 }
@@ -37,8 +39,9 @@ export function useStartRetirement() {
 // callback just checks in periodically rather than the mutation itself
 // blocking until completion.
 export function useRetirementStatus(retirementId: string | null) {
+  const eventRetentionKeys = useTenantScopedQueryKeys().eventRetention
   return useQuery<RetirementResult, ApiError>({
-    queryKey: queryKeys.eventRetention.retirement(retirementId ?? ''),
+    queryKey: eventRetentionKeys.retirement(retirementId ?? ''),
     queryFn: () => eventRetentionApi.status(retirementId as string),
     enabled: !!retirementId,
     refetchInterval: (query) =>

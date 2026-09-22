@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { usersApi, rolesApi, groupsApi } from '@/api/identity'
-import { queryKeys } from '@/api/queryKeys'
+import { useTenantScopedQueryKeys } from '@/api/useTenantScopedQueryKeys'
 
 export type AdminUserFilters = {
   search: string
@@ -10,8 +10,9 @@ export type AdminUserFilters = {
 }
 
 export function useAdminUsers(filters: AdminUserFilters) {
+  const adminKeys = useTenantScopedQueryKeys().admin
   return useQuery({
-    queryKey: queryKeys.admin.users(filters),
+    queryKey: adminKeys.users(filters),
     queryFn: () =>
       usersApi.list({
         search: filters.search || undefined,
@@ -23,55 +24,61 @@ export function useAdminUsers(filters: AdminUserFilters) {
 }
 
 export function useAdminUser(userId: string) {
+  const adminKeys = useTenantScopedQueryKeys().admin
   return useQuery({
-    queryKey: queryKeys.admin.userDetail(userId),
+    queryKey: adminKeys.userDetail(userId),
     queryFn: () => usersApi.get(userId),
     enabled: userId.length > 0,
   })
 }
 
 export function useAdminRoles() {
+  const adminKeys = useTenantScopedQueryKeys().admin
   return useQuery({
-    queryKey: queryKeys.admin.roles(),
+    queryKey: adminKeys.roles(),
     queryFn: () => rolesApi.list(),
   })
 }
 
 export function useAdminGroups() {
+  const adminKeys = useTenantScopedQueryKeys().admin
   return useQuery({
-    queryKey: queryKeys.admin.groups(),
+    queryKey: adminKeys.groups(),
     queryFn: () => groupsApi.list(),
   })
 }
 
 export function useCreateAdminUser() {
   const queryClient = useQueryClient()
+  const adminKeys = useTenantScopedQueryKeys().admin
   return useMutation({
     mutationFn: usersApi.create,
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: queryKeys.admin.users() })
+      queryClient.invalidateQueries({ queryKey: adminKeys.users() })
     },
   })
 }
 
 export function useUpdateAdminUser(userId: string) {
   const queryClient = useQueryClient()
+  const adminKeys = useTenantScopedQueryKeys().admin
   return useMutation({
     mutationFn: (body: Parameters<typeof usersApi.update>[1]) => usersApi.update(userId, body),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: queryKeys.admin.userDetail(userId) })
-      queryClient.invalidateQueries({ queryKey: queryKeys.admin.users() })
+      queryClient.invalidateQueries({ queryKey: adminKeys.userDetail(userId) })
+      queryClient.invalidateQueries({ queryKey: adminKeys.users() })
     },
   })
 }
 
 export function useDeactivateAdminUser(userId: string) {
   const queryClient = useQueryClient()
+  const adminKeys = useTenantScopedQueryKeys().admin
   return useMutation({
     mutationFn: () => usersApi.update(userId, { status: 'INACTIVE', is_active: false }),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: queryKeys.admin.userDetail(userId) })
-      queryClient.invalidateQueries({ queryKey: queryKeys.admin.users() })
+      queryClient.invalidateQueries({ queryKey: adminKeys.userDetail(userId) })
+      queryClient.invalidateQueries({ queryKey: adminKeys.users() })
     },
   })
 }

@@ -3,7 +3,7 @@ import { useTenantContext } from '@/auth/useTenantContext'
 import { definitionsApi } from '@/api/definitions'
 import { instancesApi } from '@/api/instances'
 import { tasksApi } from '@/api/tasks'
-import { queryKeys } from '@/api/queryKeys'
+import { useTenantScopedQueryKeys } from '@/api/useTenantScopedQueryKeys'
 import { QueryStateBoundary } from '@/components/ui/QueryStateBoundary'
 import { classifyError, type RendererState } from '@/utils/classifyError'
 
@@ -22,19 +22,20 @@ function SkeletonBox(): JSX.Element {
 
 export default function TenantDashboardPage(): JSX.Element {
   const { tenantDisplayName, isUnknown } = useTenantContext()
+  const tenantKeys = useTenantScopedQueryKeys()
 
   const { data: definitions, isLoading: loadingDefs, isError: errorDefs, error: defsError, refetch: refetchDefs } = useQuery({
-    queryKey: queryKeys.definitions.list({ page_size: 5 }),
+    queryKey: tenantKeys.definitions.list({ page_size: 5 }),
     queryFn: () => definitionsApi.list({ page_size: 5 }),
   })
 
   const { data: instances, isLoading: loadingInstances } = useQuery({
-    queryKey: queryKeys.instances.list({ status: ['ACTIVE'], page_size: 1 }),
+    queryKey: tenantKeys.instances.list({ status: ['ACTIVE'], page_size: 1 }),
     queryFn: () => instancesApi.list({ status: ['ACTIVE'], page_size: 1 }),
   })
 
   const { data: tasks, isLoading: loadingTasks } = useQuery({
-    queryKey: queryKeys.tasks.list({ status: 'PENDING', page_size: 1 }),
+    queryKey: tenantKeys.tasks.list({ status: 'PENDING', page_size: 1 }),
     queryFn: () => tasksApi.list({ status: 'PENDING', page_size: 1 }),
   })
 

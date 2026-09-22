@@ -3,17 +3,10 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { definitionsApi } from '@/api/definitions'
 import { definitionRollbackApi } from '@/api/definitionRollback'
 import type { DefinitionStatus, CreateDefinitionRequest } from '@/types/api'
-import { queryKeys } from '@/api/queryKeys'
-
-export const definitionKeys = {
-  all: queryKeys.definitions.all,
-  list: queryKeys.definitions.list,
-  detail: queryKeys.definitions.detail,
-  active: queryKeys.definitions.active,
-  search: queryKeys.definitions.search,
-}
+import { useTenantScopedQueryKeys } from '@/api/useTenantScopedQueryKeys'
 
 export function useDefinitions(params?: { status?: DefinitionStatus; name?: string }) {
+  const definitionKeys = useTenantScopedQueryKeys().definitions
   return useQuery({
     queryKey: definitionKeys.list(params ?? {}),
     queryFn: () => definitionsApi.list(params),
@@ -21,6 +14,7 @@ export function useDefinitions(params?: { status?: DefinitionStatus; name?: stri
 }
 
 export function useDefinition(id: string) {
+  const definitionKeys = useTenantScopedQueryKeys().definitions
   return useQuery({
     queryKey: definitionKeys.detail(id),
     queryFn: () => definitionsApi.get(id),
@@ -30,15 +24,17 @@ export function useDefinition(id: string) {
 
 export function useCreateDefinition() {
   const qc = useQueryClient()
+  const definitionKeys = useTenantScopedQueryKeys().definitions
   return useMutation({
     mutationFn: (body: CreateDefinitionRequest) => definitionsApi.create(body),
-    onSuccess: () => qc.invalidateQueries({ queryKey: definitionKeys.all }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: definitionKeys.all() }),
   })
 }
 
 export function useDefinitionVersions(name: string) {
+  const definitionKeys = useTenantScopedQueryKeys().definitions
   return useQuery({
-    queryKey: queryKeys.definitions.versions(name),
+    queryKey: definitionKeys.versions(name),
     queryFn: () => definitionsApi.getVersions(name),
     enabled: !!name,
   })
@@ -46,6 +42,7 @@ export function useDefinitionVersions(name: string) {
 
 export function useActivateDefinition() {
   const qc = useQueryClient()
+  const definitionKeys = useTenantScopedQueryKeys().definitions
   return useMutation({
     mutationFn: (id: string) => definitionsApi.activate(id),
     onSuccess: (_data, id) => {
@@ -57,6 +54,7 @@ export function useActivateDefinition() {
 
 export function useArchiveDefinition() {
   const qc = useQueryClient()
+  const definitionKeys = useTenantScopedQueryKeys().definitions
   return useMutation({
     mutationFn: (id: string) => definitionsApi.archive(id),
     onSuccess: (_data, id) => {
@@ -75,18 +73,20 @@ export function useArchiveDefinition() {
  */
 export function useRollbackDefinition() {
   const qc = useQueryClient()
+  const definitionKeys = useTenantScopedQueryKeys().definitions
   return useMutation({
     mutationFn: (args: { processKey: string; targetVersion: string }) =>
       definitionRollbackApi.rollback(args.processKey, { target_version: args.targetVersion }),
     onSuccess: (_data, args) => {
       qc.invalidateQueries({ queryKey: definitionKeys.active(args.processKey) })
       qc.invalidateQueries({ queryKey: definitionKeys.list({}) })
-      qc.invalidateQueries({ queryKey: queryKeys.definitions.versions(args.processKey) })
+      qc.invalidateQueries({ queryKey: definitionKeys.versions(args.processKey) })
     },
   })
 }
 
 export function useDefinitionSearch(query: string, options?: { limit?: number; offset?: number }) {
+  const definitionKeys = useTenantScopedQueryKeys().definitions
   const limit = options?.limit ?? 20
   const offset = options?.offset ?? 0
   return useQuery({

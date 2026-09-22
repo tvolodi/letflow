@@ -42,74 +42,125 @@ function sortStatuses(statuses?: InstanceStatus[]): InstanceStatus[] | undefined
   return [...statuses].sort()
 }
 
+/**
+ * REQ-384 §7.1 — tenant-keyed query-cache isolation.
+ *
+ * Every group backed by per-tenant-schema or per-tenant-filtered data takes
+ * the active tenant id as its FIRST argument and leads its key array with
+ * `['tenant', tenantId, ...]` — React Query matches/invalidates by key-array
+ * PREFIX, so the tenant id must lead, not trail, for a single
+ * `removeQueries({ queryKey: ['tenant', tenantId] })` call (AuthProvider's
+ * `switchTenant`, see `web/src/auth/AuthProvider.tsx`) to address exactly one
+ * tenant's whole cache subtree in one call.
+ *
+ * Call sites should almost never call these builders directly with a
+ * hand-supplied `tenantId` — use `useTenantScopedQueryKeys()`
+ * (`web/src/api/useTenantScopedQueryKeys.ts`), which partially applies the
+ * active tenant id from `useAuth()` so every call site keeps the exact same
+ * calling shape it had before this requirement (`queryKeys.instances.list(filters)`
+ * with no `tenantId` parameter at the call site). The raw, tenant-parameterized
+ * builders below exist so that partial application, and only that, has one
+ * place to do it.
+ *
+ * Groups that are NOT tenant-scoped (unchanged shape, no tenant prefix) are
+ * `admin.tenants`/`admin.tenantDetail` (the public-schema `tenants` list
+ * itself — platform-wide, not "this tenant's business data"), `onboarding`
+ * (pre-authentication, no tenant session exists yet), `admin.health`/
+ * `admin.metrics` (infrastructure liveness/Prometheus exposition, no tenant
+ * dimension in the response shape at all), and `me` (REQ-384 §6.1 — the
+ * membership list a user consults in order to switch, not data scoped to
+ * whichever tenant happens to be active).
+ */
+/**
+ * REQ-384 §7.3.1 — the whole-tenant-subtree prefix key `AuthProvider`'s
+ * `switchTenant` cancels/removes on a switch: every tenant-scoped group's
+ * own `.all(tenantId)` is `[...tenantRoot(tenantId), <group>]`, so removing
+ * this one key removes every tenant-scoped group in a single prefix-matched
+ * call.
+ */
+export function tenantRoot(tenantId: string) {
+  return ['tenant', tenantId] as const
+}
+
 export const queryKeys = {
   instances: {
-    all: ['instances'] as const,
-    list: (filters: InstanceListFilters) => [
-      ...queryKeys.instances.all,
+    all: (tenantId: string) => ['tenant', tenantId, 'instances'] as const,
+    list: (tenantId: string, filters: InstanceListFilters) => [
+      ...queryKeys.instances.all(tenantId),
       'list',
       {
         ...filters,
         status: sortStatuses(filters.status),
       },
     ] as const,
-    detail: (id: string) => [...queryKeys.instances.all, 'detail', id] as const,
-    events: (id: string, filters?: EventFilters) =>
-      [...queryKeys.instances.all, 'events', id, filters ?? {}] as const,
-    timeline: (id: string, cursor: string | null, pageSize: number) =>
-      [...queryKeys.instances.all, 'timeline', id, cursor, pageSize] as const,
+    detail: (tenantId: string, id: string) => [...queryKeys.instances.all(tenantId), 'detail', id] as const,
+    events: (tenantId: string, id: string, filters?: EventFilters) =>
+      [...queryKeys.instances.all(tenantId), 'events', id, filters ?? {}] as const,
+    timeline: (tenantId: string, id: string, cursor: string | null, pageSize: number) =>
+      [...queryKeys.instances.all(tenantId), 'timeline', id, cursor, pageSize] as const,
   },
 
   definitions: {
-    all: ['definitions'] as const,
-    list: (filters: DefinitionListFilters) => [...queryKeys.definitions.all, 'list', filters] as const,
-    detail: (id: string) => [...queryKeys.definitions.all, 'detail', id] as const,
-    active: (name: string) => [...queryKeys.definitions.all, 'active', name] as const,
-    versions: (name: string) => [...queryKeys.definitions.all, 'versions', name] as const,
-    search: (query: string, limit?: number, offset?: number) =>
-      [...queryKeys.definitions.all, 'search', query, limit, offset] as const,
+    all: (tenantId: string) => ['tenant', tenantId, 'definitions'] as const,
+    list: (tenantId: string, filters: DefinitionListFilters) =>
+      [...queryKeys.definitions.all(tenantId), 'list', filters] as const,
+    detail: (tenantId: string, id: string) => [...queryKeys.definitions.all(tenantId), 'detail', id] as const,
+    active: (tenantId: string, name: string) => [...queryKeys.definitions.all(tenantId), 'active', name] as const,
+    versions: (tenantId: string, name: string) => [...queryKeys.definitions.all(tenantId), 'versions', name] as const,
+    search: (tenantId: string, query: string, limit?: number, offset?: number) =>
+      [...queryKeys.definitions.all(tenantId), 'search', query, limit, offset] as const,
   },
 
   tasks: {
-    all: ['tasks'] as const,
-    list: (filters: TaskListFilters) => [...queryKeys.tasks.all, 'list', filters] as const,
-    detail: (id: string) => [...queryKeys.tasks.all, 'detail', id] as const,
-    inbox: () => [...queryKeys.tasks.all, 'inbox'] as const,
+    all: (tenantId: string) => ['tenant', tenantId, 'tasks'] as const,
+    list: (tenantId: string, filters: TaskListFilters) => [...queryKeys.tasks.all(tenantId), 'list', filters] as const,
+    detail: (tenantId: string, id: string) => [...queryKeys.tasks.all(tenantId), 'detail', id] as const,
+    inbox: (tenantId: string) => [...queryKeys.tasks.all(tenantId), 'inbox'] as const,
   },
 
   admin: {
+    // Tenant-scoped admin sub-groups (per-tenant-schema/per-tenant-filtered data).
+    audit: (tenantId: string, filters?: AdminAuditFilters) =>
+      ['tenant', tenantId, 'admin', 'audit', filters ?? {}] as const,
+    groups: (tenantId: string) => ['tenant', tenantId, 'admin', 'groups'] as const,
+    groupMembers: (tenantId: string, groupId: string) =>
+      ['tenant', tenantId, 'admin', 'group-members', groupId] as const,
+    tokens: (tenantId: string) => ['tenant', tenantId, 'admin', 'tokens'] as const,
+    users: (tenantId: string, filters?: { search?: string; status?: string; page?: number; page_size?: number }) =>
+      ['tenant', tenantId, 'admin', 'users', filters ?? {}] as const,
+    userDetail: (tenantId: string, id: string) => ['tenant', tenantId, 'admin', 'user', id] as const,
+    roles: (tenantId: string) => ['tenant', tenantId, 'admin', 'roles'] as const,
+    services: (tenantId: string, filters?: { after_id?: string; limit?: number }) =>
+      ['tenant', tenantId, 'admin', 'services', filters ?? {}] as const,
+
+    // NOT tenant-scoped — public-schema `tenants` list / infra-liveness endpoints.
+    // See this file's moduledoc for why these stay exempt.
     all: ['admin'] as const,
-    audit: (filters?: AdminAuditFilters) => [...queryKeys.admin.all, 'audit', filters ?? {}] as const,
-    groups: () => [...queryKeys.admin.all, 'groups'] as const,
-    groupMembers: (groupId: string) => [...queryKeys.admin.all, 'group-members', groupId] as const,
     health: () => [...queryKeys.admin.all, 'health'] as const,
     metrics: () => [...queryKeys.admin.all, 'metrics'] as const,
-    tokens: () => [...queryKeys.admin.all, 'tokens'] as const,
-    users: (filters?: { search?: string; status?: string; page?: number; page_size?: number }) =>
-      [...queryKeys.admin.all, 'users', filters ?? {}] as const,
-    userDetail: (id: string) => [...queryKeys.admin.all, 'user', id] as const,
-    roles: () => [...queryKeys.admin.all, 'roles'] as const,
     tenants: (filters?: { search?: string; cursor?: string; page_size?: number }) =>
       [...queryKeys.admin.all, 'tenants', filters ?? {}] as const,
     tenantDetail: (slug: string) => [...queryKeys.admin.all, 'tenant', slug] as const,
-    services: (filters?: { after_id?: string; limit?: number }) =>
-      [...queryKeys.admin.all, 'services', filters ?? {}] as const,
   },
 
   dlq: {
-    all: ['dlq'] as const,
-    list: (filters?: { search?: string; status?: string; source_type?: string; cursor?: string; page_size?: number }) =>
-      [...queryKeys.dlq.all, 'list', filters ?? {}] as const,
-    detail: (id: string) => [...queryKeys.dlq.all, 'detail', id] as const,
+    all: (tenantId: string) => ['tenant', tenantId, 'dlq'] as const,
+    list: (
+      tenantId: string,
+      filters?: { search?: string; status?: string; source_type?: string; cursor?: string; page_size?: number },
+    ) => [...queryKeys.dlq.all(tenantId), 'list', filters ?? {}] as const,
+    detail: (tenantId: string, id: string) => [...queryKeys.dlq.all(tenantId), 'detail', id] as const,
   },
 
   webhooks: {
-    all: ['webhooks'] as const,
-    list: () => [...queryKeys.webhooks.all, 'list'] as const,
-    detail: (id: string) => [...queryKeys.webhooks.all, 'detail', id] as const,
-    deliveries: (id: string, limit = 20) => [...queryKeys.webhooks.all, 'deliveries', id, limit] as const,
+    all: (tenantId: string) => ['tenant', tenantId, 'webhooks'] as const,
+    list: (tenantId: string) => [...queryKeys.webhooks.all(tenantId), 'list'] as const,
+    detail: (tenantId: string, id: string) => [...queryKeys.webhooks.all(tenantId), 'detail', id] as const,
+    deliveries: (tenantId: string, id: string, limit = 20) =>
+      [...queryKeys.webhooks.all(tenantId), 'deliveries', id, limit] as const,
   },
 
+  // NOT tenant-scoped — pre-authentication, no tenant session exists yet.
   onboarding: {
     all: ['onboarding'] as const,
     status: (id: string) => ['onboarding', 'status', id] as const,
@@ -117,59 +168,70 @@ export const queryKeys = {
   },
 
   promotions: {
-    all: ['promotions'] as const,
-    context: (reviewId: string) => [...queryKeys.promotions.all, 'context', reviewId] as const,
+    all: (tenantId: string) => ['tenant', tenantId, 'promotions'] as const,
+    context: (tenantId: string, reviewId: string) => [...queryKeys.promotions.all(tenantId), 'context', reviewId] as const,
   },
 
   entities: {
-    all: ['entities'] as const,
-    definition: (entityType: string) => [...queryKeys.entities.all, 'definition', entityType] as const,
-    records: (entityType: string, filters?: { cursor?: string; page_size?: number; filters?: unknown }) =>
-      [...queryKeys.entities.all, 'records', entityType, filters ?? {}] as const,
+    all: (tenantId: string) => ['tenant', tenantId, 'entities'] as const,
+    definition: (tenantId: string, entityType: string) =>
+      [...queryKeys.entities.all(tenantId), 'definition', entityType] as const,
+    records: (tenantId: string, entityType: string, filters?: { cursor?: string; page_size?: number; filters?: unknown }) =>
+      [...queryKeys.entities.all(tenantId), 'records', entityType, filters ?? {}] as const,
   },
 
   modules: {
-    all: ['modules'] as const,
-    list: (filters?: { cursor?: string; page_size?: number }) => [...queryKeys.modules.all, 'list', filters ?? {}] as const,
-    detail: (moduleId: string, version: string) => [...queryKeys.modules.all, 'detail', moduleId, version] as const,
-    shares: (moduleId: string) => [...queryKeys.modules.all, 'shares', moduleId] as const,
+    all: (tenantId: string) => ['tenant', tenantId, 'modules'] as const,
+    list: (tenantId: string, filters?: { cursor?: string; page_size?: number }) =>
+      [...queryKeys.modules.all(tenantId), 'list', filters ?? {}] as const,
+    detail: (tenantId: string, moduleId: string, version: string) =>
+      [...queryKeys.modules.all(tenantId), 'detail', moduleId, version] as const,
+    shares: (tenantId: string, moduleId: string) => [...queryKeys.modules.all(tenantId), 'shares', moduleId] as const,
   },
 
   help: {
-    all: ['help'] as const,
+    all: (tenantId: string) => ['tenant', tenantId, 'help'] as const,
     /** REQ-366 §2.2 — one key per (screenId, processDefinitionId) pair
      *  `useHelpContent` resolves. */
-    resolved: (screenId: string, processDefinitionId: string | null) =>
-      [...queryKeys.help.all, 'resolved', screenId, processDefinitionId] as const,
+    resolved: (tenantId: string, screenId: string, processDefinitionId: string | null) =>
+      [...queryKeys.help.all(tenantId), 'resolved', screenId, processDefinitionId] as const,
   },
 
   exam: {
-    all: ['exam'] as const,
-    session: (sessionId: string) => [...queryKeys.exam.all, 'session', sessionId] as const,
+    all: (tenantId: string) => ['tenant', tenantId, 'exam'] as const,
+    session: (tenantId: string, sessionId: string) => [...queryKeys.exam.all(tenantId), 'session', sessionId] as const,
     /** ExamListPage's own list key (REQ-338) — deliberately not
      *  `queryKeys.entities.records(...)`: that group is REQ-336's own
      *  addition and REQ-338 does not depend on REQ-336 (see
      *  web/src/api/exam.ts's own moduledoc). */
-    list: (filters?: { page_size?: number }) => [...queryKeys.exam.all, 'list', filters ?? {}] as const,
+    list: (tenantId: string, filters?: { page_size?: number }) =>
+      [...queryKeys.exam.all(tenantId), 'list', filters ?? {}] as const,
   },
 
   /** REQ-375 §3.1 — platform migration rollout console. */
   platformMigrations: {
-    all: ['platform-migrations'] as const,
-    status: (rolloutId: string) => [...queryKeys.platformMigrations.all, 'status', rolloutId] as const,
+    all: (tenantId: string) => ['tenant', tenantId, 'platform-migrations'] as const,
+    status: (tenantId: string, rolloutId: string) => [...queryKeys.platformMigrations.all(tenantId), 'status', rolloutId] as const,
   },
 
   /** REQ-381 design §3.2 — solution-pack update review/apply screen. */
   solutionPackUpdate: {
-    all: ['solutionPackUpdate'] as const,
-    review: (packId: string, targetVersion: string) =>
-      [...queryKeys.solutionPackUpdate.all, 'review', packId, targetVersion] as const,
+    all: (tenantId: string) => ['tenant', tenantId, 'solutionPackUpdate'] as const,
+    review: (tenantId: string, packId: string, targetVersion: string) =>
+      [...queryKeys.solutionPackUpdate.all(tenantId), 'review', packId, targetVersion] as const,
   },
 
   /** REQ-377 §3.2 — operator-facing history-retirement screen. */
   eventRetention: {
-    all: ['event-retention'] as const,
-    summary: () => [...queryKeys.eventRetention.all, 'summary'] as const,
-    retirement: (id: string) => [...queryKeys.eventRetention.all, 'retirement', id] as const,
+    all: (tenantId: string) => ['tenant', tenantId, 'event-retention'] as const,
+    summary: (tenantId: string) => [...queryKeys.eventRetention.all(tenantId), 'summary'] as const,
+    retirement: (tenantId: string, id: string) => [...queryKeys.eventRetention.all(tenantId), 'retirement', id] as const,
+  },
+
+  /** REQ-384 §6.1 — the membership list a user consults in order to switch.
+   *  Deliberately NOT tenant-scoped — see this file's moduledoc. */
+  me: {
+    all: ['me'] as const,
+    memberships: () => [...queryKeys.me.all, 'memberships'] as const,
   },
 }

@@ -95,6 +95,8 @@ function mockAuth(roles: string[]) {
     login: vi.fn(),
     logout: vi.fn(),
     setSession: vi.fn(),
+    switchTenant: vi.fn(),
+    switchingToTenantSlug: null,
   } as unknown as ReturnType<typeof useAuth>)
 }
 

@@ -7,22 +7,24 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { platformMigrationsApi } from '@/api/platformMigrations'
 import type { RolloutResult, StartRolloutRequest } from '@/api/platformMigrations'
-import { queryKeys } from '@/api/queryKeys'
+import { useTenantScopedQueryKeys } from '@/api/useTenantScopedQueryKeys'
 import type { ApiError } from '@/types/api'
 
 export function useStartRollout() {
   const qc = useQueryClient()
+  const platformMigrationsKeys = useTenantScopedQueryKeys().platformMigrations
   return useMutation<RolloutResult, ApiError, StartRolloutRequest>({
     mutationFn: (body: StartRolloutRequest) => platformMigrationsApi.start(body),
     onSuccess: (data: RolloutResult) => {
-      qc.invalidateQueries({ queryKey: queryKeys.platformMigrations.status(data.rollout.id) })
+      qc.invalidateQueries({ queryKey: platformMigrationsKeys.status(data.rollout.id) })
     },
   })
 }
 
 export function useRolloutStatus(rolloutId: string | null) {
+  const platformMigrationsKeys = useTenantScopedQueryKeys().platformMigrations
   return useQuery<RolloutResult, ApiError>({
-    queryKey: queryKeys.platformMigrations.status(rolloutId ?? ''),
+    queryKey: platformMigrationsKeys.status(rolloutId ?? ''),
     queryFn: () => platformMigrationsApi.status(rolloutId as string),
     enabled: !!rolloutId,
     // §3.2 — no polling: start/resume are synchronous (REQ-374 design §1),
@@ -33,10 +35,11 @@ export function useRolloutStatus(rolloutId: string | null) {
 
 export function useResumeRollout() {
   const qc = useQueryClient()
+  const platformMigrationsKeys = useTenantScopedQueryKeys().platformMigrations
   return useMutation<RolloutResult, ApiError, string>({
     mutationFn: (rolloutId: string) => platformMigrationsApi.resume(rolloutId),
     onSuccess: (data: RolloutResult) => {
-      qc.invalidateQueries({ queryKey: queryKeys.platformMigrations.status(data.rollout.id) })
+      qc.invalidateQueries({ queryKey: platformMigrationsKeys.status(data.rollout.id) })
     },
   })
 }

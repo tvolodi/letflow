@@ -1,8 +1,7 @@
 import { createBrowserRouter } from 'react-router-dom'
 import { ProtectedRoute } from '@/auth/ProtectedRoute'
 import OidcCallbackPage from '@/pages/OidcCallbackPage'
-import { AppShell } from '@/components/layout/AppShell'
-import { ErrorBoundary } from '@/components/layout/ErrorBoundary'
+import { AuthenticatedShellRoot } from '@/components/layout/AuthenticatedShellRoot'
 import ProcessModulesPage from '@/pages/admin/modules/ProcessModulesPage'
 import TenantDashboardPage from '@/pages/dashboard/TenantDashboardPage'
 import PlatformDashboardPage from '@/pages/dashboard/PlatformDashboardPage'
@@ -47,9 +46,7 @@ export const router = createBrowserRouter([
     path: '/',
     element: (
       <ProtectedRoute>
-        <ErrorBoundary>
-          <AppShell />
-        </ErrorBoundary>
+        <AuthenticatedShellRoot />
       </ProtectedRoute>
     ),
     children: [

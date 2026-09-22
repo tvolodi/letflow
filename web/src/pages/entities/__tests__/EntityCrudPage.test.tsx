@@ -40,6 +40,27 @@ vi.mock('@/api/entities', () => ({
   },
 }))
 
+// REQ-384: EntityCrudPage now resolves tenant-scoped query keys via
+// useTenantScopedQueryKeys(), which reads useAuth().session.tenant_id. This
+// suite never exercised auth/tenant identity, so a fixed authenticated
+// session is sufficient here.
+vi.mock('@/auth/AuthContext', () => ({
+  useAuth: () => ({
+    session: {
+      token: 'tok',
+      display_name: 'Test User',
+      roles: ['PLATFORM_ADMIN'],
+      loginSource: 'oidc',
+      tenant_slug: 'fixture-tenant',
+      tenant_display_name: 'Fixture Tenant',
+      tenant_id: 'tid-entity-crud',
+      tenant_type: 'test',
+      production_tenant_display_name: null,
+    },
+    isAuthenticated: true,
+  }),
+}))
+
 import { useQuery, useMutation } from '@tanstack/react-query'
 import { entitiesApi } from '@/api/entities'
 import { EntityCrudPage } from '@/pages/entities/EntityCrudPage'
@@ -229,7 +250,9 @@ function installMocksFor(c: Case) {
 
   mockUseQuery.mockImplementation((opts: unknown) => {
     const { queryKey } = opts as { queryKey: readonly unknown[] }
-    if (queryKey[1] === 'definition') {
+    // REQ-384 §7.1: keys are now tenant-prefixed --
+    // ['tenant', tenantId, 'entities', 'definition'|'records', ...].
+    if (queryKey[3] === 'definition') {
       return { data: definition, isLoading: false, isError: false, error: null, refetch: vi.fn() } as unknown as ReturnType<typeof useQuery>
     }
     return { data: page, isLoading: false, isError: false, error: null, refetch: vi.fn() } as unknown as ReturnType<typeof useQuery>
@@ -318,7 +341,7 @@ describe('ISS-0663 — default records list excludes soft-deleted rows', () => {
     // prove what request it actually issues.
     const recordsCall = mockUseQuery.mock.calls.find(([opts]) => {
       const { queryKey } = opts as { queryKey: readonly unknown[] }
-      return queryKey[1] === 'records'
+      return queryKey[3] === 'records'
     })
     expect(recordsCall).toBeDefined()
     const [{ queryKey, queryFn }] = recordsCall as [{ queryKey: readonly unknown[]; queryFn: () => unknown }]
@@ -326,7 +349,7 @@ describe('ISS-0663 — default records list excludes soft-deleted rows', () => {
     // The queryKey (distinct from the fk-reference widget's own internal
     // queryRecords calls, which bypass useQuery entirely) must include the
     // filter too, so the cache key matches the actual request shape.
-    expect(queryKey[3]).toMatchObject({
+    expect(queryKey[5]).toMatchObject({
       filters: [{ field: 'deleted', op: 'eq', value: false }],
     })
 

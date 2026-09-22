@@ -15,7 +15,7 @@ import { useDefinition, useCreateDefinition } from '@/hooks/useDefinitions'
 import { definitionsApi } from '@/api/definitions'
 import { useAuth } from '@/auth/AuthContext'
 import { useTenantContext } from '@/auth/useTenantContext'
-import { queryKeys } from '@/api/queryKeys'
+import { useTenantScopedQueryKeys } from '@/api/useTenantScopedQueryKeys'
 import type { DefinitionGraph } from '@/types/api'
 import type { CanvasNodeData, CanvasEdgeData } from '@/utils/canvas/graphToFlow'
 import { graphToFlow } from '@/utils/canvas/graphToFlow'
@@ -80,6 +80,7 @@ export default function DefinitionEditorPage() {
   const { session } = useAuth()
   const { tenantType, productionDisplayName, tenantId } = useTenantContext()
   const qc = useQueryClient()
+  const tenantKeys = useTenantScopedQueryKeys()
 
   const [name, setName] = useState('')
   const [version, setVersion] = useState('1.0.0')
@@ -222,7 +223,7 @@ export default function DefinitionEditorPage() {
     try {
       await definitionsApi.promote(tenantId, def.name)
       setShowPromoteModal(false)
-      qc.invalidateQueries({ queryKey: queryKeys.definitions.all })
+      qc.invalidateQueries({ queryKey: tenantKeys.definitions.all() })
       setPromoteMessage('Definition promoted. A DRAFT version is now available in production.')
       setTimeout(() => setPromoteMessage(null), 4000)
     } catch (e: unknown) {

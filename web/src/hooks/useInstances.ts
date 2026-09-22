@@ -2,15 +2,7 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { instancesApi } from '@/api/instances'
 import type { InstanceStatus, StartInstanceRequest } from '@/types/api'
-import { queryKeys } from '@/api/queryKeys'
-
-export const instanceKeys = {
-  all: queryKeys.instances.all,
-  list: queryKeys.instances.list,
-  detail: queryKeys.instances.detail,
-  events: queryKeys.instances.events,
-  timeline: queryKeys.instances.timeline,
-}
+import { useTenantScopedQueryKeys } from '@/api/useTenantScopedQueryKeys'
 
 export interface EventFilters {
   event_type?: string
@@ -24,6 +16,7 @@ export function useInstances(params?: {
   cursor?: string
   page_size?: number
 }) {
+  const instanceKeys = useTenantScopedQueryKeys().instances
   const filters = {
     status: params?.status,
     definition_id: params?.definition_id,
@@ -38,6 +31,7 @@ export function useInstances(params?: {
 }
 
 export function useInstance(id: string) {
+  const instanceKeys = useTenantScopedQueryKeys().instances
   return useQuery({
     queryKey: instanceKeys.detail(id),
     queryFn: () => instancesApi.get(id),
@@ -46,6 +40,7 @@ export function useInstance(id: string) {
 }
 
 export function useInstanceEvents(id: string, filters?: EventFilters) {
+  const instanceKeys = useTenantScopedQueryKeys().instances
   return useQuery({
     queryKey: instanceKeys.events(id, filters),
     queryFn: () => instancesApi.events(id, filters),
@@ -58,6 +53,7 @@ export function useInstanceTimeline(
   params?: { cursor?: string; page_size?: number },
   enabled = true,
 ) {
+  const instanceKeys = useTenantScopedQueryKeys().instances
   const cursor = params?.cursor ?? null
   const pageSize = params?.page_size ?? 50
 
@@ -70,14 +66,16 @@ export function useInstanceTimeline(
 
 export function useStartInstance() {
   const qc = useQueryClient()
+  const instanceKeys = useTenantScopedQueryKeys().instances
   return useMutation({
     mutationFn: (body: StartInstanceRequest) => instancesApi.start(body),
-    onSuccess: () => qc.invalidateQueries({ queryKey: instanceKeys.all }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: instanceKeys.all() }),
   })
 }
 
 export function useCancelInstance() {
   const qc = useQueryClient()
+  const instanceKeys = useTenantScopedQueryKeys().instances
   return useMutation({
     mutationFn: ({ id, reason }: { id: string; reason?: string }) =>
       instancesApi.cancel(id, reason),
@@ -94,7 +92,7 @@ export function useCancelInstance() {
     },
     onSettled: (_data, _err, { id }) => {
       qc.invalidateQueries({ queryKey: instanceKeys.detail(id) })
-      qc.invalidateQueries({ queryKey: instanceKeys.all })
+      qc.invalidateQueries({ queryKey: instanceKeys.all() })
     },
   })
 }

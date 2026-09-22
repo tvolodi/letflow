@@ -27,6 +27,27 @@ vi.mock('@/api/help', () => ({
   helpApi: { getResolved: vi.fn() },
 }))
 
+// REQ-384: useHelpContent now resolves a tenant-scoped query key via
+// useTenantScopedQueryKeys(), which reads useAuth().session.tenant_id. This
+// suite exercises only the hook's own status-branching logic (useQuery is
+// mocked entirely), so a fixed authenticated session is sufficient here.
+vi.mock('@/auth/AuthContext', () => ({
+  useAuth: () => ({
+    session: {
+      token: 'tok',
+      display_name: 'Test User',
+      roles: ['PLATFORM_ADMIN'],
+      loginSource: 'oidc',
+      tenant_slug: 'fixture-tenant',
+      tenant_display_name: 'Fixture Tenant',
+      tenant_id: 'tid-help-content',
+      tenant_type: 'test',
+      production_tenant_display_name: null,
+    },
+    isAuthenticated: true,
+  }),
+}))
+
 import { useHelpContent } from '../useHelpContent'
 import type { ResolvedHelpContent } from '@/types/help'
 

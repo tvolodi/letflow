@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useSearchParams } from 'react-router-dom'
 import { webhooksApi } from '@/api/dlq'
-import { queryKeys } from '@/api/queryKeys'
+import { useTenantScopedQueryKeys } from '@/api/useTenantScopedQueryKeys'
 import { WebhookSubscriptionDetailPanel } from '@/components/webhooks/WebhookSubscriptionDetailPanel'
 import type { WebhookSubscription } from '@/types/api'
 import { QueryStateBoundary } from '@/components/ui/QueryStateBoundary'
@@ -50,6 +50,7 @@ function isValidHttpUrl(value: string): boolean {
 
 export default function WebhooksPage() {
   const qc = useQueryClient()
+  const tenantKeys = useTenantScopedQueryKeys()
   const [searchParams, setSearchParams] = useSearchParams()
   const [creating, setCreating] = useState(false)
   const [form, setForm] = useState<CreateFormState>({ targetUrl: '', secret: '', eventTypes: [] })
@@ -57,7 +58,7 @@ export default function WebhooksPage() {
   const [oneTimeSecret, setOneTimeSecret] = useState<string | null>(null)
 
   const { data, isLoading, isError, error, refetch } = useQuery({
-    queryKey: queryKeys.webhooks.list(),
+    queryKey: tenantKeys.webhooks.list(),
     queryFn: () => webhooksApi.list(),
   })
 
@@ -84,7 +85,7 @@ export default function WebhooksPage() {
       event_types: form.eventTypes,
     }),
     onSuccess: (created) => {
-      qc.invalidateQueries({ queryKey: queryKeys.webhooks.list() })
+      qc.invalidateQueries({ queryKey: tenantKeys.webhooks.list() })
       setCreating(false)
       setForm({ targetUrl: '', secret: '', eventTypes: [] })
       setFormError(null)
@@ -95,12 +96,12 @@ export default function WebhooksPage() {
   const updateWebhook = useMutation({
     mutationFn: ({ id, nextStatus }: { id: string; nextStatus: 'ACTIVE' | 'PAUSED' }) =>
       webhooksApi.update(id, { status: nextStatus, is_active: nextStatus === 'ACTIVE' }),
-    onSuccess: () => qc.invalidateQueries({ queryKey: queryKeys.webhooks.list() }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: tenantKeys.webhooks.list() }),
   })
 
   const deleteWebhook = useMutation({
     mutationFn: (id: string) => webhooksApi.delete(id),
-    onSuccess: () => qc.invalidateQueries({ queryKey: queryKeys.webhooks.list() }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: tenantKeys.webhooks.list() }),
   })
 
   const handleToggleEventType = (eventType: string): void => {

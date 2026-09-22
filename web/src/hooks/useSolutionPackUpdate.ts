@@ -8,7 +8,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { solutionPacksApi } from '@/api/solutionPacks'
 import type { PackUpdateApplyRequest, PackUpdateReviewResponse, PackArtefactInput } from '@/api/solutionPacks'
-import { queryKeys } from '@/api/queryKeys'
+import { useTenantScopedQueryKeys } from '@/api/useTenantScopedQueryKeys'
 import type { ApiError } from '@/types/api'
 
 export function useSolutionPackUpdateReview(
@@ -17,8 +17,9 @@ export function useSolutionPackUpdateReview(
   theirsArtefacts: PackArtefactInput[],
   incomingArtefacts: PackArtefactInput[],
 ) {
+  const solutionPackUpdateKeys = useTenantScopedQueryKeys().solutionPackUpdate
   return useQuery<PackUpdateReviewResponse, ApiError>({
-    queryKey: queryKeys.solutionPackUpdate.review(packId, targetVersion),
+    queryKey: solutionPackUpdateKeys.review(packId, targetVersion),
     queryFn: () =>
       solutionPacksApi.updateReview(packId, {
         target_version: targetVersion,
@@ -31,6 +32,7 @@ export function useSolutionPackUpdateReview(
 
 export function useSolutionPackUpdateApply() {
   const qc = useQueryClient()
+  const solutionPackUpdateKeys = useTenantScopedQueryKeys().solutionPackUpdate
   return useMutation<
     Awaited<ReturnType<typeof solutionPacksApi.updateApply>>,
     ApiError,
@@ -41,7 +43,7 @@ export function useSolutionPackUpdateApply() {
       // EO-004/EO-005: force the re-fetch that makes "after apply" on-screen
       // assertions real, not a locally-patched cache guess (design §4.5).
       void qc.invalidateQueries({
-        queryKey: queryKeys.solutionPackUpdate.review(packId, body.target_version),
+        queryKey: solutionPackUpdateKeys.review(packId, body.target_version),
       })
     },
   })

@@ -17,7 +17,7 @@ import { Navigate, useSearchParams } from 'react-router-dom'
 import { useAuth } from '@/auth/AuthContext'
 import { useRetentionSummary, useStartRetirement, useRetirementStatus } from '@/hooks/useEventRetention'
 import type { RetentionSummary, RetirementOutcome, RetirementResult } from '@/api/eventRetention'
-import { queryKeys } from '@/api/queryKeys'
+import { useTenantScopedQueryKeys } from '@/api/useTenantScopedQueryKeys'
 import { useQueryClient } from '@tanstack/react-query'
 import { PageLayout } from '@/components/ui/PageLayout'
 import { Button } from '@/components/ui/Button'
@@ -163,6 +163,7 @@ export default function EventRetentionPage(): React.ReactElement {
   const [startError, setStartError] = useState<string | null>(null)
 
   const qc = useQueryClient()
+  const tenantKeys = useTenantScopedQueryKeys()
   const summaryQuery = useRetentionSummary()
   const startRetirement = useStartRetirement()
   const statusQuery = useRetirementStatus(activeRetirementId)
@@ -172,8 +173,12 @@ export default function EventRetentionPage(): React.ReactElement {
   const retirementStatus = statusQuery.data?.retirement.status
   useEffect(() => {
     if (retirementStatus === 'completed' || retirementStatus === 'failed') {
-      void qc.invalidateQueries({ queryKey: queryKeys.eventRetention.summary() })
+      void qc.invalidateQueries({ queryKey: tenantKeys.eventRetention.summary() })
     }
+    // tenantKeys is a fresh object every render (useTenantScopedQueryKeys is
+    // unmemoized) but derived only from the stable session tenant id — safe
+    // to omit, re-including it would re-run this effect every render.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [retirementStatus, qc])
 
   if (!isPlatformAdmin) {

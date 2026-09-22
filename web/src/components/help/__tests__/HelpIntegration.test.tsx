@@ -48,6 +48,30 @@ vi.mock('@/api/client', () => ({
   client: { get: vi.fn() },
 }))
 
+// REQ-384: useHelpContent now resolves a tenant-scoped query key via
+// useTenantScopedQueryKeys(), which reads useAuth().session.tenant_id. This
+// integration test exercises the real useHelpContent/useQuery chain but was
+// never wrapped in a real <AuthProvider> (it only mocks client.get, per this
+// file's own moduledoc) -- a fixed, authenticated session mock is sufficient
+// here since no test in this file asserts anything about auth/tenant
+// identity itself.
+vi.mock('@/auth/AuthContext', () => ({
+  useAuth: () => ({
+    session: {
+      token: 'tok',
+      display_name: 'Test User',
+      roles: ['PLATFORM_ADMIN'],
+      loginSource: 'oidc',
+      tenant_slug: 'fixture-tenant',
+      tenant_display_name: 'Fixture Tenant',
+      tenant_id: 'tid-help-integration',
+      tenant_type: 'test',
+      production_tenant_display_name: null,
+    },
+    isAuthenticated: true,
+  }),
+}))
+
 afterEach(() => {
   vi.clearAllMocks()
   cleanup()

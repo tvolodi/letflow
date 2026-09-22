@@ -23,7 +23,7 @@
 
 import { useQuery } from '@tanstack/react-query'
 import { helpApi } from '@/api/help'
-import { queryKeys } from '@/api/queryKeys'
+import { useTenantScopedQueryKeys } from '@/api/useTenantScopedQueryKeys'
 import type { ApiError } from '@/types/api'
 import type { ResolvedHelpContent } from '@/types/help'
 
@@ -38,8 +38,9 @@ function isNotFound(error: unknown): boolean {
 }
 
 export function useHelpContent(screenId: string, processDefinitionId?: string): UseHelpContentResult {
+  const helpKeys = useTenantScopedQueryKeys().help
   const query = useQuery({
-    queryKey: queryKeys.help.resolved(screenId, processDefinitionId ?? null),
+    queryKey: helpKeys.resolved(screenId, processDefinitionId ?? null),
     queryFn: () => helpApi.getResolved(screenId, processDefinitionId),
     enabled: !!screenId,
     // A 404 (no help authored yet) is a stable, expected outcome, not a

@@ -1,7 +1,8 @@
 import React, { useState, useEffect, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useQueryClient } from '@tanstack/react-query'
-import { useDefinitions, useDefinitionVersions, useActivateDefinition, useArchiveDefinition, useCreateDefinition, useDefinitionSearch, definitionKeys } from '@/hooks/useDefinitions'
+import { useDefinitions, useDefinitionVersions, useActivateDefinition, useArchiveDefinition, useCreateDefinition, useDefinitionSearch } from '@/hooks/useDefinitions'
+import { useTenantScopedQueryKeys } from '@/api/useTenantScopedQueryKeys'
 import { definitionsApi } from '@/api/definitions'
 import { useDebounce } from '@/hooks/useDebounce'
 import { highlightText } from '@/utils/highlightText'
@@ -23,6 +24,7 @@ const DESIGNER_ROLES = ['PROCESS_DESIGNER', 'PLATFORM_ADMIN']
 export default function DefinitionListPage() {
   const navigate = useNavigate()
   const qc = useQueryClient()
+  const tenantKeys = useTenantScopedQueryKeys()
   const { session } = useAuth()
   const [status, setStatus] = useState<DefinitionStatus | undefined>()
   const [search, setSearch] = useState('')
@@ -137,7 +139,7 @@ export default function DefinitionListPage() {
 
       const result = await definitionsApi.importJson(parsed)
       setImportError(null)
-      qc.invalidateQueries({ queryKey: definitionKeys.all })
+      qc.invalidateQueries({ queryKey: tenantKeys.definitions.all() })
       navigate(`/definitions/${result.id}`)
     } catch (err: unknown) {
       const apiErr = err as { status?: number; message?: string }

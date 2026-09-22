@@ -17,6 +17,7 @@
 import * as jestDomMatchers from '@testing-library/jest-dom/matchers'
 import { render, cleanup, act } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 expect.extend(jestDomMatchers)
 
 const { mockClearToken, mockSignoutRedirect } = vi.hoisted(() => ({
@@ -40,6 +41,13 @@ vi.mock('../OidcManager', () => ({
 
 import { AuthProvider } from '../AuthProvider'
 import { AuthContext } from '../AuthContext'
+
+// REQ-384: AuthProvider now reads useQueryClient() (for switchTenant's
+// cache-clear step, §5.3), so it must be rendered under a QueryClientProvider.
+function renderWithQueryClient(ui: React.ReactElement) {
+  const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+  return render(<QueryClientProvider client={queryClient}>{ui}</QueryClientProvider>)
+}
 
 afterEach(() => {
   cleanup()
@@ -71,7 +79,7 @@ describe('AuthProvider.logout — EO-002 realm residue', () => {
       )
     }
 
-    render(
+    renderWithQueryClient(
       <AuthProvider>
         <Capture />
       </AuthProvider>,
@@ -100,7 +108,7 @@ describe('AuthProvider.logout — EO-002 realm residue', () => {
       )
     }
 
-    render(
+    renderWithQueryClient(
       <AuthProvider>
         <Capture />
       </AuthProvider>,

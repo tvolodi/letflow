@@ -106,6 +106,8 @@ describe('ISS-0730 regression — promotion review route wiring', () => {
       login: vi.fn(),
       logout: vi.fn(),
       setSession: vi.fn(),
+    switchTenant: vi.fn(),
+    switchingToTenantSlug: null,
     })
 
     const targetUrl = '/definitions/def-1/promotions/review-42'
@@ -135,6 +137,8 @@ describe('ISS-0730 regression — promotion review route wiring', () => {
       login: vi.fn(),
       logout: vi.fn(),
       setSession: vi.fn(),
+    switchTenant: vi.fn(),
+    switchingToTenantSlug: null,
     })
 
     const targetUrl = '/definitions/def-1/promotions/review-42'

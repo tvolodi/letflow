@@ -26,6 +26,7 @@ defmodule Letflow.TenantOnboardingTest do
   import Ecto.Query
 
   alias Letflow.Identity.Tenant
+  alias Letflow.Identity.TenantRole
   alias Letflow.TenantOnboarding
   alias Letflow.TenantOnboarding.BrokenMigrationFixture
   alias Letflow.TenantProvisioning
@@ -137,6 +138,185 @@ defmodule Letflow.TenantOnboardingTest do
       assert registration_count(tenant.id) == 1
       assert %Tenant{status: :active} = Repo.get(Tenant, tenant.id)
       assert table_exists_in_schema?(schema_name, "users")
+    end
+  end
+
+  # ISS-0778 T3 (design §3.3/§5): provision_and_migrate/1 gains a THIRD step
+  # (RoleRegistry.seed_default_platform_role_groups/1) between migration replay and
+  # activation. This describe block proves that step is genuinely exercised by the
+  # real onboarding-orchestration sequence -- not merely that the seeding function
+  # itself works in isolation (that is T1, test/letflow/role_registry_test.exs) --
+  # and proves design §3.3's explicit ordering claim: a role-seeding failure blocks
+  # activation (tenant stays :migrating, not :active) and is recoverable once the
+  # underlying failure clears, the same way any other partial-provisioning failure
+  # already is (AC9, the describe block above).
+  describe "ISS-0778 T3: provision_and_migrate/1 seeds platform roles as part of real provisioning" do
+    setup do
+      Ecto.Adapters.SQL.Sandbox.mode(Letflow.Repo, :auto)
+
+      # Mirrors Letflow.Routers.Onboarding.handle_create/1's own real behavior
+      # (design §3's AC10 status lifecycle: "status" => "migrating" at creation) --
+      # not insert_tenant!/0's bare default (:active), so the failure test below can
+      # actually observe "activation was blocked" rather than "an already-active
+      # tenant stayed active".
+      tenant =
+        %Tenant{}
+        |> Tenant.create_changeset(
+          %{
+            slug: Letflow.TenantSlugFixture.unique_slug("iss0778-t3"),
+            display_name: "ISS-0778 T3 Test Tenant",
+            status: "migrating"
+          },
+          :disabled
+        )
+        |> Repo.insert!()
+
+      on_exit(fn ->
+        case TenantProvisioning.schema_name_for_tenant(tenant.id) do
+          {:ok, schema_name} ->
+            Repo.query!(~s(DROP SCHEMA IF EXISTS "#{schema_name}" CASCADE))
+
+          {:error, :invalid_tenant_id} ->
+            :ok
+        end
+
+        Repo.delete_all(from(r in Registration, where: r.tenant_id == ^tenant.id))
+        Repo.delete_all(from(t in Tenant, where: t.id == ^tenant.id))
+      end)
+
+      %{tenant: tenant}
+    end
+
+    defp tenant_role_rows(schema_name) do
+      Repo.all(from(t in TenantRole, order_by: [asc: t.name]), prefix: schema_name)
+    end
+
+    # ISS-0778 T3 failure-path fixture: installs a real, deterministic Postgres
+    # AFTER INSERT trigger on <schema>.groups that deletes the just-inserted row
+    # whenever its name matches `role_name`, synchronously, inside the SAME
+    # transaction as the INSERT itself -- not a race, not a sleep, not unseeded
+    # randomness (test_developer_guide.md principle 3 / DIRECTIVE T-1: real Postgres,
+    # no mocked database).
+    #
+    # This exploits RoleRegistry.get_or_create_group_by_name/2's OWN EXISTING
+    # defensive post-insert verification (lib/letflow/identity/role_registry.ex's
+    # insert_group/2, written for the "on_conflict :nothing raced against a
+    # concurrent insert" case: `if Repo.get(Group, id, prefix: prefix) do ... else
+    # fetch_group_by_name(...) end`) -- the trigger makes that check genuinely
+    # observe a vanished row every single time, deterministically, so
+    # get_or_create_group_by_name/2 falls through to fetch_group_by_name/2, finds
+    # nothing either, and returns {:error, :group_not_found} for real. No
+    # modification to any lib/ code.
+    #
+    # Why this specific mechanism, not a simpler one (documented, not just chosen
+    # by default): every one of RoleRegistry's OWN explicit validation branches
+    # (name format, the closed platform-role-name-literal check) is structurally
+    # unreachable for a name that already IS one of
+    # Letflow.Api.Authorization.roles/0's own six literals by construction --
+    # seed_default_platform_role_groups/1 never passes it anything else. The
+    # genuinely reachable failure modes are (a) a real concurrent-delete race
+    # against Repo.get(Group, group_id) inside do_upsert_role/4's own transaction
+    # (non-deterministic, rejected -- would be exactly the "unseeded randomness"
+    # this project's test guide forbids), or (b) infrastructure-level corruption
+    # (e.g. a dropped unique index), which Ecto does NOT convert into a graceful
+    # {:error, _} -- Repo.insert/Repo.get raise an uncaught Postgrex.Error for that
+    # class of failure instead, which would crash provision_and_migrate/1 rather
+    # than exercising its documented {:error, {:role_seeding_failed, _}} tagged-error
+    # branch. This trigger-based sabotage is the one mechanism that is BOTH fully
+    # deterministic AND produces the exact graceful failure shape the design (§3.3)
+    # documents.
+    # Plain double-quoted Elixir strings below, NOT the ~s(...) sigil -- Elixir's
+    # sigil reader treats a bare "$" specially even inside ~s(...) (confirmed
+    # empirically: `~s($$)` raises `SyntaxError: unexpected token: "$"` at compile
+    # time, while a plain `"$$"` string does not), and Postgres's dollar-quoted
+    # function-body syntax (`AS $$ ... $$`) needs a literal, unescaped `$$`.
+    defp install_group_insert_sabotage!(schema_name, role_name) do
+      Repo.query!("
+        CREATE FUNCTION \"#{schema_name}\".iss0778_sabotage_group_insert() RETURNS trigger AS $$
+        BEGIN
+          DELETE FROM \"#{schema_name}\".groups WHERE id = NEW.id;
+          RETURN NEW;
+        END;
+        $$ LANGUAGE plpgsql;
+      ")
+
+      Repo.query!("
+        CREATE TRIGGER iss0778_sabotage_trigger
+        AFTER INSERT ON \"#{schema_name}\".groups
+        FOR EACH ROW
+        WHEN (NEW.name = '#{role_name}')
+        EXECUTE FUNCTION \"#{schema_name}\".iss0778_sabotage_group_insert();
+      ")
+    end
+
+    defp drop_group_insert_sabotage!(schema_name) do
+      Repo.query!("DROP TRIGGER IF EXISTS iss0778_sabotage_trigger ON \"#{schema_name}\".groups")
+
+      Repo.query!("DROP FUNCTION IF EXISTS \"#{schema_name}\".iss0778_sabotage_group_insert()")
+    end
+
+    test "a freshly-provisioned tenant has all six tenant_role rows present, with no extra manual step",
+         %{tenant: tenant} do
+      assert {:ok, %Registration{schema_name: schema_name}} =
+               TenantOnboarding.provision_and_migrate(tenant.id)
+
+      rows = tenant_role_rows(schema_name)
+      expected_names = Enum.map(Letflow.Api.Authorization.roles(), &Atom.to_string/1)
+
+      assert length(rows) == 6
+      assert Enum.map(rows, & &1.name) |> Enum.sort() == Enum.sort(expected_names)
+      assert Enum.all?(rows, &(&1.kind == :platform_role))
+
+      # AC10's status-flip step also ran -- the tenant genuinely reached :active,
+      # not merely that seeding succeeded in isolation.
+      assert %Tenant{status: :active} = Repo.get(Tenant, tenant.id)
+    end
+
+    test "seeding failure blocks activation (tenant stays :migrating) and is recoverable once the failure clears",
+         %{tenant: tenant} do
+      # Provision + migrate directly first -- real Postgres schema, groups/
+      # tenant_role tables exist with their normal DDL -- so this test can install
+      # its own sabotage trigger against a clean, already-migrated schema BEFORE
+      # calling TenantOnboarding.provision_and_migrate/1 for real. Both primitives
+      # are idempotent (design §2.4/§11), so provision_and_migrate/1 re-running them
+      # below is a genuine no-op, not a second real provisioning -- the ONLY new
+      # work that call performs is the role-seeding step under test.
+      assert {:ok, %Registration{schema_name: schema_name}} =
+               TenantProvisioning.provision_tenant_schema(tenant.id)
+
+      assert {:ok, _applied_versions} = TenantProvisioning.replay_migrations(tenant.id)
+
+      install_group_insert_sabotage!(schema_name, "PLATFORM_ADMIN")
+
+      assert {:error, {:role_seeding_failed, :group_not_found}} =
+               TenantOnboarding.provision_and_migrate(tenant.id)
+
+      # Activation was blocked -- design §3.3's load-bearing claim: letting a tenant
+      # reach :active with its role bindings unseeded would reproduce ISS-0778 under
+      # a different trigger (a role-seed DB error instead of "nobody ever wrote the
+      # seeding code").
+      assert %Tenant{status: :migrating} = Repo.get(Tenant, tenant.id)
+
+      # No partial platform-role bindings survived either -- seeding halted on the
+      # FIRST role name in Authorization.roles/0's own declared order
+      # ("PLATFORM_ADMIN"), before any of the other five were even attempted.
+      assert tenant_role_rows(schema_name) == []
+
+      drop_group_insert_sabotage!(schema_name)
+
+      # Recoverable (design §3.3's other half, same mechanism as AC9 above): the
+      # SAME recovery entry point, re-invoked once the underlying failure clears,
+      # converges correctly.
+      assert {:ok, %Registration{schema_name: ^schema_name}} =
+               TenantOnboarding.recover_provisioning(tenant.id)
+
+      rows = tenant_role_rows(schema_name)
+      expected_names = Enum.map(Letflow.Api.Authorization.roles(), &Atom.to_string/1)
+
+      assert length(rows) == 6
+      assert Enum.map(rows, & &1.name) |> Enum.sort() == Enum.sort(expected_names)
+
+      assert %Tenant{status: :active} = Repo.get(Tenant, tenant.id)
     end
   end
 end

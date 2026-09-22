@@ -1466,6 +1466,89 @@ defmodule Letflow.IdentityTest do
     end
   end
 
+  # ISS-0778 T2 (design §5): docs/issues/ISS-0778.yaml's root cause was that no code
+  # path anywhere in this codebase ever created a tenant_role row binding a
+  # platform-role literal (e.g. "PLATFORM_ADMIN") to a group -- so
+  # sync_role_claims_from_token/3 and list_effective_role_names/2 themselves were
+  # already correct (design §0), but had nothing to resolve against for ANY
+  # freshly-provisioned tenant. This describe block is the direct, unit-level proof
+  # that RoleRegistry.seed_default_platform_role_groups/1 (T1, tested in
+  # test/letflow/role_registry_test.exs) is what closes that gap for the real,
+  # unmodified sync mechanism -- not a coincidental pass. Deliberately shows the
+  # BEFORE state too (claim resolves to nothing, matching UAT-RUNNER's own discovery
+  # per the issue) alongside the AFTER state, on the SAME user and SAME claim, so the
+  # only variable between the two assertions is whether seeding has run.
+  # NOTE(ISS-0030): describe/test names kept short -- ExUnit's combined
+  # "test " <> describe <> " " <> test_name atom is capped at 255 chars (BEAM
+  # SystemLimitError). Full rationale in this describe block's own comment above.
+  describe "ISS-0778 T2: sync_role_claims_from_token/3 after seeding" do
+    test "before seeding: PLATFORM_ADMIN claim resolves to zero grants; after seeding, the SAME claim/user resolves and syncs" do
+      %{tenant: tenant, schema_name: schema_name} = provisioned_tenant!()
+      ctx = identity_context()
+      config = jit_config()
+
+      {:ok, %{user: user, created: true}} =
+        Identity.provision_oidc_user(ctx, tenant.id, config, prefix: schema_name)
+
+      claimed_ctx = identity_context(%{roles: ["PLATFORM_ADMIN"]})
+
+      # ── BEFORE seeding ────────────────────────────────────────────────────────
+      # No tenant_role row exists yet binding "PLATFORM_ADMIN" to any group on this
+      # freshly-provisioned tenant -- resolve_group_ids_for_role_names/2 resolves to
+      # [], so the sync writes nothing and (ISS-0773's self-healing marker
+      # behavior) leaves role_claims_synced_at nil so a later retry can still
+      # succeed once the gap is closed.
+      before_seed = Identity.sync_role_claims_from_token(user, claimed_ctx, prefix: schema_name)
+      assert before_seed.role_claims_synced_at == nil
+      assert Identity.list_effective_role_names(user.id, prefix: schema_name) == []
+
+      # ── ISS-0778's fix: seed the platform-role group/tenant_role bindings ───────
+      assert {:ok, _roles} =
+               Letflow.Identity.RoleRegistry.seed_default_platform_role_groups(
+                 prefix: schema_name
+               )
+
+      # ── AFTER seeding ────────────────────────────────────────────────────────
+      # The IDENTICAL claimed_ctx, the SAME user, the SAME unmodified
+      # sync_role_claims_from_token/3 -- now resolves and syncs, proving the seeded
+      # row is genuinely usable by the existing JIT sync mechanism, not just that a
+      # row exists somewhere unrelated.
+      after_seed = Identity.sync_role_claims_from_token(user, claimed_ctx, prefix: schema_name)
+      assert %DateTime{} = after_seed.role_claims_synced_at
+
+      assert Identity.list_effective_role_names(user.id, prefix: schema_name) == [
+               "PLATFORM_ADMIN"
+             ]
+    end
+
+    test "seeding closes the gap for all six platform-role literals (design §2.1)" do
+      %{tenant: tenant, schema_name: schema_name} = provisioned_tenant!()
+      config = jit_config()
+
+      assert {:ok, _roles} =
+               Letflow.Identity.RoleRegistry.seed_default_platform_role_groups(
+                 prefix: schema_name
+               )
+
+      for role_name <- Enum.map(Letflow.Api.Authorization.roles(), &Atom.to_string/1) do
+        ctx = identity_context()
+
+        {:ok, %{user: user, created: true}} =
+          Identity.provision_oidc_user(ctx, tenant.id, config, prefix: schema_name)
+
+        claimed_ctx = identity_context(%{roles: [role_name]})
+
+        synced = Identity.sync_role_claims_from_token(user, claimed_ctx, prefix: schema_name)
+
+        assert %DateTime{} = synced.role_claims_synced_at
+
+        assert Identity.list_effective_role_names(user.id, prefix: schema_name) == [
+                 role_name
+               ]
+      end
+    end
+  end
+
   # Minimal local helper mirroring Ecto's own test-helper convention (avoids pulling
   # in a full Phoenix-style ConnCase/errors_on just for this one assertion).
   defp errors_on(changeset) do

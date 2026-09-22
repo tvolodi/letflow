@@ -69,4 +69,63 @@ queue_ref: "Q-777"  # letflow-queue task id 777. NOTE: the queue service's
   # precedent established repeatedly this session. Registered
   # 2026-09-21 by ORCH.
 github_ref: GH-1697
-status: open
+status: resolved
+resolution:
+  resolved_at: "2026-09-22T06:30:00Z"
+  resolved_by: DOC-UPDATER
+  branch: feature/WF03-ISS0778-20260922
+  pr: GH-1697
+  summary: >
+    Fixed via WF-03 on feature/WF03-ISS0778-20260922 (tip babecb0f).
+    CODE-DESIGNER's design (lib/letflow/design/iss-0778-platform-role-seeding.md)
+    resolved the `fix_direction` question in favor of option (a): platform-role
+    seeding lives inside `Letflow.TenantProvisioning`'s onboarding flow itself,
+    not a separate `mix letflow.seed`-invoked step. New
+    `Letflow.Identity.RoleRegistry.seed_default_platform_role_groups/1` (plus
+    `get_or_create_group_by_name/2`) idempotently binds all six
+    `Letflow.Api.Authorization.roles/0` platform-role literals to groups as
+    `kind: :platform_role`, wired into
+    `Letflow.TenantOnboarding.provision_and_migrate/1` as a new step between
+    migration replay and activation -- a seeding failure surfaces as
+    `{:error, {:role_seeding_failed, reason}}` and leaves the tenant at
+    `:migrating`, recoverable via the existing `recover_provisioning/1` path.
+    `Letflow.Routers.Tenants.provision_and_respond/2` and
+    `Mix.Tasks.Letflow.Seed.provision_and_replay/2` -- previously both calling
+    `TenantProvisioning`'s two primitives directly and each independently
+    reproducing the same seeding gap -- are now unified onto this same
+    `provision_and_migrate/1` path, closing the root cause: no code path ever
+    created the `tenant_role` rows `sync_role_claims_from_token/3` needs to
+    resolve an IdP-claimed platform-role token into a grant. No migration, no
+    schema change.
+
+    TEST-DESIGNER built a 4-tier regression suite (identity_test.exs,
+    role_registry_test.exs, tenant_onboarding_test.exs, plus a full live
+    e2e HTTP test in
+    test/letflow/plugs/iss0778_platform_role_seeding_e2e_test.exs proving a
+    freshly-provisioned tenant's admin user can authenticate via normal OIDC
+    login and reach a PLATFORM_ADMIN-gated endpoint with zero manual DB
+    bootstrap), documented with full AC mapping and mutation-testing evidence
+    in test/specs/ISS-0778.md (two mutants applied/measured/reverted: dropping
+    the seeding step from `provision_and_migrate/1`'s with-chain, 88/91
+    passed; wrong `kind` tag in the seeding loop, 86/91 passed --
+    TEST-DESIGN-VALIDATOR independently reproduced this fail-then-pass
+    evidence itself rather than trusting the report). All 4 files together:
+    91 passed, forced fresh `mix compile --warnings-as-errors` zero warnings.
+
+    Gates, all PASSED: CODE-DESIGN-VALIDATOR (independent source
+    verification), SECURITY-REVIEWER (privilege correctness of the seeded
+    `:platform_role` kind tag, idempotency/race-safety of
+    `get_or_create_group_by_name/2` under concurrent provisioning, and
+    tenant-schema isolation -- traced through the Ecto internals of the
+    unique-constraint/retry path), REVIEWER (idiom, scope -- confirmed the
+    `provision_and_respond/2`/`provision_and_replay/2` unification did not
+    change either caller's externally observable behavior beyond closing the
+    gap), TEST-DESIGN-VALIDATOR (independent mutation reproduction, both
+    mutants), TEST-RUNNER, and RELEASE-VALIDATOR (independent full
+    re-derivation of all acceptance criteria; also independently caught a
+    real `mix format --check-formatted` gap in two test files
+    (`tenant_onboarding_test.exs`'s `drop_group_insert_sabotage!/1` and the
+    e2e test's `mint_caller!/2`) that every earlier gate had missed -- fixed
+    in commit babecb0f with no semantic change, re-verified 4 passed, and
+    RELEASE-VALIDATOR confirmed `mix format --check-formatted` clean
+    repo-wide before final PASS).

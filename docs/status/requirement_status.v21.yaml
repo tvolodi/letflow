@@ -689,3 +689,42 @@ history:
       passed (commit 0cfcb71d). GitHub mirror GH-1704 closed with a
       resolved-comment citing this run-id and the regression test path.
       All handoffs under handoffs/WF03-ISS0780-20260922/.
+  - req: SCOPE-CHANGE
+    event: done
+    agent: DOC-UPDATER
+    at: "2026-09-22T06:35:11Z"
+    note: >
+      ISS-0778 (MAJOR, queue task 777, GH-1697 -- REQ-378's DB-backed
+      platform-role sync had no seeding path, so a freshly-provisioned
+      tenant had no route to a working PLATFORM_ADMIN grant without manual
+      tenant_role/group_members bootstrap, discovered incidentally by
+      UAT-RUNNER during REQ-375's live e2e run) resolved on
+      feature/WF03-ISS0778-20260922 (tip babecb0f). Design decision: seed
+      platform-role group bindings for all six Authorization.roles/0
+      literals (kind: :platform_role) via new
+      RoleRegistry.seed_default_platform_role_groups/1, wired directly into
+      Letflow.TenantOnboarding.provision_and_migrate/1 as a step between
+      migration replay and activation -- option (a) from the issue's own
+      fix_direction, over a separate mix letflow.seed-only step, because it
+      unifies routers/tenants.ex's provision_and_respond/2 and
+      mix.tasks.letflow.seed.ex's provision_and_replay/2 onto the same
+      shared onboarding path instead of leaving two independent call sites
+      to each reproduce the same gap. A seeding failure surfaces as
+      {:error, {:role_seeding_failed, reason}}, leaving the tenant at
+      :migrating, recoverable via the existing recover_provisioning/1 path.
+      No migration, no schema change. 4-tier regression suite (identity_test.exs,
+      role_registry_test.exs, tenant_onboarding_test.exs, plus a full live
+      e2e HTTP test proving OIDC login to a PLATFORM_ADMIN-gated endpoint
+      with zero manual bootstrap), with mutation-testing evidence for two
+      mutants (dropped seeding step: 88/91 passed; wrong kind tag: 86/91
+      passed) documented in test/specs/ISS-0778.md. Gates, all PASSED:
+      CODE-DESIGN-VALIDATOR (independent source verification),
+      SECURITY-REVIEWER (privilege correctness, idempotency/race-safety of
+      get_or_create_group_by_name/2, tenant isolation -- deep Ecto-internals
+      trace), REVIEWER (idiom, scope), TEST-DESIGN-VALIDATOR (independent
+      mutation reproduction), TEST-RUNNER, and RELEASE-VALIDATOR
+      (independent full re-derivation of all acceptance criteria; also
+      independently caught and confirmed the fix for a real
+      mix format --check-formatted gap in two test files that every earlier
+      gate had missed, commit babecb0f, no semantic change). Design:
+      lib/letflow/design/iss-0778-platform-role-seeding.md.

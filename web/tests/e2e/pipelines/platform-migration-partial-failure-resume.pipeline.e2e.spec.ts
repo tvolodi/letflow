@@ -127,7 +127,17 @@ test.describe('Pipeline: platform-migration-partial-failure-resume (PW-04)', () 
     await loginWithToken(page, adminToken)
 
     const fixtureId = randomUUID().slice(0, 8)
-    const targetEntityType = `pl-rollout-${fixtureId}`
+    // ISS-0777: entity_type/attribute now go straight into a Postgres
+    // table/column name (`Letflow.TenantProvisioning.table_name_for_entity_type/1`
+    // -- "entity_" <> entity_type) and the backend enforces identifier
+    // format (lowercase letters/digits/underscores only, no hyphens) via a
+    // real 422 rather than crashing. A UUID-derived fixture id is pure hex
+    // (no hyphen appears within the first 8 chars of a v4 UUID's own first
+    // block), but the SEPARATOR joining it to a literal prefix must be an
+    // underscore too, not a hyphen, or the backend correctly rejects this
+    // spec's own fixture. `pl_rollout_${fixtureId}` — same uniqueness
+    // guarantee as before, just a valid identifier.
+    const targetEntityType = `pl_rollout_${fixtureId}`
     const targetAttribute = 'tax_id'
 
     const pl = createPipeline<RolloutPipelineState>('platform-migration-partial-failure-resume', { page, request })

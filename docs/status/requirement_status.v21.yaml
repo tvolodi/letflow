@@ -728,3 +728,43 @@ history:
       mix format --check-formatted gap in two test files that every earlier
       gate had missed, commit babecb0f, no semantic change). Design:
       lib/letflow/design/iss-0778-platform-role-seeding.md.
+  - req: REQ-379
+    event: done
+    agent: DOC-UPDATER
+    at: "2026-09-22T09:30:31Z"
+    note: >
+      Solution-pack install-time write path shipped on
+      feature/WF02-REQ379-20260922 (tip 803d55e3), letflow-queue task 739,
+      GH-1627, stage S2, depends_on REQ-041 (done). CORRECTION TO THE
+      REQUIREMENT'S OWN PREMISE: REQ-379's own description in this file and
+      the GUI-review report it was filed from
+      (test/uat-reports/gui-review-2026-09-20-template-update-conflict-resolution.md)
+      both claimed "no caller anywhere ever inserts a SolutionPackInstall
+      row" -- this was factually stale by the time of the 2026-09-20 GUI
+      review that repeated it: Letflow.Definitions.SolutionPack.install/3
+      already inserted that row, landed under REQ-078 (commit 92fd7a6e,
+      2026-08-22), a month before the review. CODE-DESIGN-VALIDATOR
+      independently verified this finding against source and history before
+      the design gate passed. The real, narrow gap this requirement closed
+      was solution_pack_artefact_bases never being written at install time;
+      AC1 (the solution_pack_installs row) was already-existing REQ-078
+      behavior that this branch added regression-test coverage for, not new
+      functionality. What actually shipped: install/3 now also snapshots
+      every delivered artefact into solution_pack_artefact_bases as that
+      artefact's base_content/base_version at install time, and a
+      re-install of the same version does not overwrite an existing base
+      snapshot for an artefact the tenant has since locally adapted.
+      compute_pack_update_plan/5 (REQ-041) verified end-to-end against real
+      rows produced by this write path, covering all four classifications
+      (unchanged/clean_update/local_only/conflict). Gates, all PASSED:
+      CODE-DESIGN-VALIDATOR (independently verified the AC1-already-exists
+      finding above), SECURITY-REVIEWER, REVIEWER, TEST-DESIGN-VALIDATOR
+      (caught and confirmed the fix for a subtle AC2 test-discriminating-
+      power gap via real mutation testing, commit f8f3bd28), TEST-RUNNER
+      (4630/4630 full suite), RELEASE-VALIDATOR (independent full
+      re-derivation of all 5 acceptance criteria, including the stale-
+      premise correction). Design:
+      lib/letflow/design/req379-solution-pack-install-write-path.md.
+      REQ-380 (update-review/apply API) and REQ-381 (frontend screen),
+      both depending on this requirement, remain pending, unblocked by
+      this merge.

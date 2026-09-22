@@ -925,6 +925,24 @@ defmodule Letflow.Test.TenantTemplate do
     # finding 3 (the robust one, not pg_depend walking) -- just invoked once,
     # set-based, over every column in information_schema.columns for this
     # schema, instead of once per column from Elixir.
+    #
+    # REQ-376 addition: `tenant_template` physically also holds
+    # `events_pre_partition_20260922`/`events_archive_pre_partition_20260922`
+    # (the rollback-safety-net tables migration 4/8 rename aside) and the
+    # dynamic `events_y<year>m<month>`/`events_default` partition set --
+    # real physical tables in `information_schema.columns` for this schema,
+    # but deliberately NOT part of `expected_tenant_tables/0`, so step 3
+    # above never `CREATE TABLE (LIKE ...)`s them into `clone_schema`. Both
+    # renamed-aside tables carry their own `global_seq` sequence (migration
+    # 4/8's own rename-in-place), which this query picked up unfiltered and
+    # tried to recreate against a clone table that was never created --
+    # "relation events_pre_partition_20260922 does not exist" on every
+    # :clone-path test tenant provisioned after tenant_template was built
+    # from the REQ-376 migration set (same defect class as
+    # readd_foreign_keys!/1's own conparentid fix, just a different catalog
+    # view). Filtered to exactly the table set step 3 actually clones.
+    clone_table_names = MapSet.new(Letflow.TenantFixture.expected_tenant_tables())
+
     %{rows: rows} =
       Repo.query!(
         """
@@ -938,6 +956,7 @@ defmodule Letflow.Test.TenantTemplate do
 
     rows
     |> Enum.reject(fn [_table, _column, seq] -> is_nil(seq) end)
+    |> Enum.filter(fn [table, _column, _seq] -> MapSet.member?(clone_table_names, table) end)
     |> Enum.each(fn [table, column, qualified_seq] ->
       # qualified_seq is schema-qualified, e.g. "tenant_template.events_global_seq_seq"
       # (double-quoted per Postgres's own rendering when needed). Extract

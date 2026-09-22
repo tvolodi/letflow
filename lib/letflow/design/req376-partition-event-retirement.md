@@ -347,15 +347,41 @@ CONCURRENTLY`'s non-blocking guarantee).
 1. **Protected-row and default-partition reconciliation** (§4.4, revised) — runs only
    from `:not_started`; skipped entirely (zero row-level queries beyond the two
    `SELECT EXISTS`/count checks) if there is nothing to reconcile.
-2. `ALTER TABLE #{prefix()}.events DETACH PARTITION
-   #{prefix()}.events_y<year>m<month> CONCURRENTLY` — Postgres 14+ (this project runs
-   Postgres 16, per `docker-compose.yml`'s `image: postgres:16`). `CONCURRENTLY` is
-   what makes AC2's "the platform accepts a concurrent write throughout" provable: a
-   plain (non-`CONCURRENTLY`) `DETACH PARTITION` takes an `ACCESS EXCLUSIVE` lock on
-   the parent for its (brief but nonzero) duration, blocking concurrent DML on *other*
-   partitions of the same parent too; `DETACH ... CONCURRENTLY` instead takes a lock
-   that permits concurrent DML throughout, at the cost of running in the two internal
-   phases this section's state machine is built around.
+2. **[REVIEWER amendment, WF-02 Step 2d, 2026-09-22 — corrects an implementation-blocking
+   gap this design did not anticipate]** `ALTER TABLE #{prefix()}.events DETACH
+   PARTITION #{prefix()}.events_y<year>m<month> CONCURRENTLY` — Postgres 14+ (this
+   project runs Postgres 16, per `docker-compose.yml`'s `image: postgres:16`).
+   `CONCURRENTLY` is what makes AC2's "the platform accepts a concurrent write
+   throughout" provable: a plain (non-`CONCURRENTLY`) `DETACH PARTITION` takes an
+   `ACCESS EXCLUSIVE` lock on the parent for its (brief but nonzero) duration, blocking
+   concurrent DML on *other* partitions of the same parent too; `DETACH ...
+   CONCURRENTLY` instead takes a lock that permits concurrent DML throughout, at the
+   cost of running in the two internal phases this section's state machine is built
+   around.
+   **Precondition this design missed:** Postgres rejects `DETACH PARTITION ...
+   CONCURRENTLY` outright (`55000 object_not_in_prerequisite_state`, "cannot detach
+   partitions concurrently when a default partition exists") whenever the parent
+   carries a DEFAULT partition — and `events` always does (`events_default`, §2.1
+   migration 2's own AC5/OQ1 safety net), so this step as originally specified could
+   never succeed as written; not an edge case, every call would hit it. **Corrected
+   mechanism, as implemented in `Letflow.EventStore.PartitionMaintenance`:**
+   `events_default` is temporarily, idempotently detached immediately before this step
+   (`ensure_default_partition_detached!/1`) and reattached immediately after
+   (`ensure_default_partition_reattached!/1`); the reattach is also called
+   unconditionally at the top of every `retire_month/3` call (before the §4.3.1 state
+   dispatch), so a crash mid-window self-heals on the next call for any month, matching
+   this section's own "catalog-detected, never self-persisted" philosophy rather than
+   adding a bookkeeping mechanism. **Trade-off, accepted by REVIEWER:** for the brief
+   window between `events_default`'s own detach and reattach, a write whose
+   `created_at` falls outside every pre-created partition's range (the exact case
+   `events_default` exists to catch, §3.3 OQ3) would fail instead of being caught by
+   the safety net. Accepted because the window is narrow (both the temporary detach and
+   reattach are themselves metadata-only catalog operations, not row-scoped work) and
+   the case it can turn into a hard failure is already designed to be rare in steady
+   state (§3.2's `months_ahead: 2` lookahead keeps `events_default` empty in the
+   ordinary case) — a materially better trade-off than the alternative of dropping the
+   DEFAULT partition safety net entirely, which would remove AC5/OQ1's protection for
+   every ordinary tick, not just this narrow window during a retirement call.
 3. `ALTER TABLE #{prefix()}.events_y<year>m<month> ADD CONSTRAINT
    chk_partition_bounds_<year>_<month> CHECK (created_at >= '<month-start>' AND
    created_at < '<next-month-start>') NOT VALID`, then `ALTER TABLE ... VALIDATE
@@ -376,6 +402,24 @@ CONCURRENTLY`'s non-blocking guarantee).
    row matching the target range at the moment of `ATTACH` — a documented Postgres
    precondition whenever a default partition exists — which is exactly what step 1's
    reconciliation guarantees ahead of this step.
+   **[REVIEWER amendment, WF-02 Step 2d, 2026-09-22 — corrects an implementation-blocking
+   gap this design did not anticipate]** This step has a second precondition decision
+   0037's "same physical table, just reparented, no row copy" EO-003 framing did not
+   account for: `ATTACH PARTITION` requires the child table to already carry every
+   column the parent has, and `events_archive` has one column `events` does not
+   (`archived_at`) — confirmed empirically (`42804 datatype_mismatch`, "child table is
+   missing column \"archived_at\""). **Corrected mechanism, as implemented:**
+   immediately before this `ATTACH`, `ensure_archived_at_column!/1` adds the column to
+   the retiring partition with a CONSTANT literal-timestamp default (a snapshot of
+   `DateTime.utc_now()` taken once and formatted as a literal — never a `now()`
+   function call, which would be volatile and force a full-table rewrite instead).
+   Postgres's v11+ fast-default optimization applies to a true constant default,
+   keeping this a metadata-only catalog change, not a per-row table rewrite — so it
+   stays consistent with AC2's "whole-unit DDL, no per-row work" property, and does not
+   change the "no row copy" framing's substance: the physical rows are still never
+   copied or rewritten, only the catalog's column list changes. Accepted by REVIEWER as
+   the correct resolution; the retiring partition ends up byte-for-byte
+   `events_archive`-shaped by the time `ATTACH` runs, exactly as EO-003 intends.
 5. `ALTER TABLE #{prefix()}.events_y<year>m<month> DROP CONSTRAINT
    chk_partition_bounds_<year>_<month>` — cleanup; `events_archive`'s own partition
    bound enforces the same range going forward, so the standalone CHECK is redundant

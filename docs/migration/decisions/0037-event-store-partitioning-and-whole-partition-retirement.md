@@ -1,8 +1,8 @@
 # 0037 — Event-store monthly partitioning and whole-partition retirement
 
-Status: **DRAFT — pending REVIEWER sign-off** (see sign-off block at the end of this
-file). Owner: CODE-DESIGNER (draft), REVIEWER (sign-off), ELIXIR-DEV (implements).
-Filed for REQ-376.
+Status: **ACCEPTED — REVIEWER sign-off recorded 2026-09-22** (see sign-off block at the
+end of this file). Owner: CODE-DESIGNER (draft), REVIEWER (sign-off), ELIXIR-DEV
+(implements). Filed for REQ-376.
 
 Amends: `0003-ecto-schema-strategy.md` Decision C point 2 (the partitioning
 deferral). Cross-references: `docs/issues/ISS-0014.yaml` (resolved 2026-08-17,
@@ -111,8 +111,84 @@ around now"). This decision is that retrofit, arriving with the PK/idempotency
 groundwork already in place exactly as 0003 intended, at effectively zero rework cost
 to either.
 
+## Implementation-discovered corrections (REVIEWER, WF-02 Step 2d)
+
+Two structural Postgres restrictions ELIXIR-DEV's real-Postgres-16 verification
+surfaced that this decision's mechanics section (the design doc, §4.3) did not
+anticipate — neither changes this decision's substance, both are corrected in the
+design doc itself (`lib/letflow/design/req376-partition-event-retirement.md` §4.3
+steps 2 and 4, amended inline with dated REVIEWER notes) rather than restated here:
+
+1. `DETACH PARTITION ... CONCURRENTLY` (step 2) cannot run while `events` carries its
+   `events_default` DEFAULT partition — which it always does. Resolved by a
+   self-healing, idempotent temporary detach/reattach of `events_default` around the
+   real detach.
+2. `ATTACH PARTITION` onto `events_archive` (step 4) requires the retiring partition to
+   already carry `events_archive`'s `archived_at` column. Resolved by adding that
+   column with a constant-literal default immediately before `ATTACH` (Postgres's
+   fast-default optimization keeps it metadata-only, no full-table rewrite).
+
+Both were independently assessed for security-invariant consequence by
+SECURITY-REVIEWER (`handoffs/WF02-REQ376-20260922/step-02c-security-reviewer.json`,
+PASS, no INV violated) and for architecture/idiom soundness by REVIEWER (see sign-off
+below) — accepted as implemented in `Letflow.EventStore.PartitionMaintenance`. This
+decision's "same physical table, just reparented, no row copy" framing for EO-003
+still holds in substance: no row is ever copied or rewritten by either correction,
+only catalog-level DDL sequencing and column list changed from the design's original
+(under-specified) description.
+
 ## Sign-off
 
-REVIEWER sign-off pending — to be added by REVIEWER at WF-02 Step 2d, as a dated line
-appended directly below this one, before REQ-376's acceptance criterion 1 is
-considered met. Do not backfill or simulate a sign-off line here.
+REVIEWER (WF-02 Step 2d, REQ-376, run WF02-REQ376-20260922) — 2026-09-22T11:20:00Z —
+**PASS.** Reviewed the diff (`git diff main...HEAD`), ELIXIR-DEV's implementation
+handoff (`step-02a-elixir-dev.json`) and SECURITY-REVIEWER's PASS
+(`step-02c-security-reviewer.json`), this decision record, and the design doc in full.
+
+- **Idiomatic vs. crutch:** N/A for `:gen_statem`/state-machine concerns — this
+  requirement is DDL/maintenance work, not a process state machine. The
+  catalog-state-detected retirement dispatch (§4.3.1, `catalog_state/2`) is an
+  idiomatic use of Postgres's own catalogs as the single source of truth, not
+  bespoke bookkeeping duplicating what Postgres already tracks — correct call.
+- **Supervision:** unaffected. `PartitionMaintenance` is a plain context module
+  (`Repo.query!`/`Repo.transaction/1`), consistent with REQ-045's Process-vs-row
+  decision (`Letflow.Engine`'s moduledoc) — no new process, no `spawn`, no change to
+  `Letflow.InstanceSupervisor`'s deliberately-empty state. `Letflow.Scheduler.Poller`'s
+  new `last_partition_maintenance_run_at` field and `maybe_run_partition_maintenance/2`
+  are a byte-for-byte structural mirror of the existing
+  `last_retention_run_at`/`maybe_run_retention_sweep/2` pair (same config-gate/cadence-gate/
+  `run_sweep`/`with_admission`/rescue-and-log shape) — no isolation regression, no new
+  supervision surface.
+  Approved.
+- **Type-safety gaps:** none found beyond ELIXIR-DEV's own MINOR note (below).
+- **Scope creep:** none. No generic "partition any table" framework — every mechanism
+  is `events`/`events_archive`-specific, exactly per the design's own §1 scope fence.
+  `EventStore.read/2`'s union-with-`events_archive` change is in scope (EO-003/AC4 and
+  decision 0037's own "Relationship to `archive/1`" section require it explicitly, and
+  it is documented, not silent) — it closes a pre-existing, independently-flagged gap
+  (req026 §11 OQ-3) as a stated side effect, not an undocumented one.
+- **Two flagged MAJOR deviations (events_default self-heal; archived_at fast-default
+  column):** both **accepted as implemented**. Both are the only viable resolutions
+  given the Postgres restrictions involved (confirmed against Postgres 16 documented
+  behavior, not merely asserted); both preserve AC2's whole-unit/no-per-row-work
+  property (the self-heal detach/reattach is itself metadata-only; the fast-default
+  column add is metadata-only for existing rows, not a rewrite); both are
+  self-healing/idempotent, consistent with §4.3.1's catalog-detected philosophy rather
+  than introducing new bookkeeping. The self-heal's narrow write-failure window is an
+  honest, bounded trade-off, materially better than the only alternative (dropping the
+  `events_default` safety net entirely). Design doc §4.3 steps 2 and 4 amended in place
+  (this same commit) to state the corrected mechanism, rather than leaving the
+  original under-specified framing to mislead a future reader — required as a PASS
+  condition, done directly by REVIEWER per this gate's own instructions (doc-only,
+  not implementation-shaping, not worth a CODE-DESIGNER rework round).
+- **MINOR note (Repo.query!/raising vs. typed-tuple convention in
+  `PartitionMaintenance`):** acknowledged, not required to fix now. `retire_month/3`
+  has no live caller anywhere in this diff (confirmed by grep) — REQ-377's own design
+  (design doc OQ5) is what will decide who/what calls it and how often; tightening
+  error-tuple typing ahead of that caller existing would be guessing at a contract
+  REQ-377 hasn't written yet. Matches this codebase's own migration-file
+  `repo().query!/1,2` convention. Revisit at REQ-377 implementation time, when a real
+  caller's error-handling needs are known.
+- **Decision-record consistency:** no conflict with any other `docs/migration/decisions/`
+  record. Confirmed no framework/library choice here contradicts an existing decision.
+
+No blocking gap found. Route to TEST-DESIGNER (WF-02 Step 3).

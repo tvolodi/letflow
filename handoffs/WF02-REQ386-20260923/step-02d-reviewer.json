@@ -1,0 +1,59 @@
+{
+  "handoff_id": "a1000000-0002-4000-8000-00000000002d",
+  "run_id": "WF02-REQ386-20260923",
+  "workflow_id": "WF-02",
+  "step": "02d",
+  "from_agent": "ORCH",
+  "to_agent": "REVIEWER",
+  "file": "handoffs/WF02-REQ386-20260923/step-02d-reviewer.json",
+  "created_at": "2026-09-22T23:14:18Z",
+  "started_at": "2026-09-22T23:14:18Z",
+  "completed_at": "2026-09-22T23:14:18Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S6",
+    "requirement_ids": ["REQ-386"],
+    "requirement_text": {
+      "REQ-386": "See handoffs/WF02-REQ386-20260923/step-00-git-setup.json's context.requirement_text for the full text -- not restated here to avoid drift; read it there."
+    },
+    "related_handoff_ids": [
+      "handoffs/WF02-REQ386-20260923/step-01-code-designer.json",
+      "handoffs/WF02-REQ386-20260923/step-01b-design-gate.json",
+      "handoffs/WF02-REQ386-20260923/step-02a-elixir-dev.json",
+      "handoffs/WF02-REQ386-20260923/step-02c-security-reviewer.json"
+    ],
+    "artifacts_in": [
+      "lib/letflow/repository/attachment_links.ex",
+      "lib/letflow/routers/instances.ex",
+      "lib/letflow/api/error.ex",
+      "lib/letflow/api/response.ex",
+      "lib/letflow/api/authorization.ex",
+      "lib/letflow/design/req386-attachment-signed-links.md"
+    ],
+    "owned_modules": []
+  },
+  "task": {
+    "description": "Perform WF-02 Step 2d (idiom review, HARD GATE) for REQ-386 on branch feature/WF02-REQ386-20260923 per .claude/agents/reviewer.md's four questions: idiomatic vs. crutch, supervision integrity, type-safety gaps, scope creep. Check against docs/anti-patterns.md and docs/migration/decisions/ (0003, 0016 in particular). Confirm ELIXIR-DEV's single-resolve-call deviation from the design's stated two-resolve sequence (Step 2a handoff) is a legitimate private-implementation simplification, not a behavior change.",
+    "acceptance_criteria": [
+      "Idiomatic vs. crutch assessed for Letflow.Repository.AttachmentLinks against Letflow.Dlq/Letflow.Webhooks/Letflow.Repository.Attachments precedent",
+      "Supervision integrity confirmed N/A (no process) rather than a missed-process case",
+      "@spec presence/accuracy checked for every new public function; implementation checked against the validated design for unauthorized behavior",
+      "Scope creep checked -- no REQ-387/REQ-388 work, no edits to fetch_scoped_attachment_content/3 or fetch_scoped_attachment_metadata/3",
+      "docs/anti-patterns.md and relevant docs/migration/decisions/ records checked for contradiction"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "Read git diff main...HEAD in full (lib/letflow/repository/attachment_links.ex new [234 lines], lib/letflow/routers/instances.ex +125 lines pure addition, lib/letflow/api/{error,response,authorization}.ex small additive changes, design doc). Reviewed against the four standard questions.\n\n1. IDIOMATIC VS. CRUTCH -- PASS. Letflow.Repository.AttachmentLinks is a plain Ecto-context-shaped module (no process, no Repo call of its own beyond what Letflow.Secrets/Letflow.Identity already perform internally) matching this codebase's established Letflow.Dlq/Letflow.Webhooks/Letflow.Repository.Attachments shape -- its own moduledoc says so explicitly and the shape checks out on read: two public functions (issue/3, verify/3), both returning tagged tuples, private helpers doing one thing each. It reuses Letflow.Webhooks' own HMAC-signing pattern (:crypto.mac(:hmac, :sha256, key, payload)) rather than inventing a second signing scheme, and reuses Letflow.Secrets end to end for key storage rather than rolling ad hoc key persistence -- both are exactly the 'check before inventing a second mechanism' instruction the requirement text itself calls out, followed correctly. verify/3's with/else collapsing eight structurally distinct failure branches (malformed token, two Base64 decode failures, guarded JSON-shape failure, unknown tenant, wrong/unresolvable signing key, HMAC mismatch, expiry) into one `else _ -> {:error, :expired_or_invalid}` clause is idiomatic Elixir, not a contorted workaround -- it's the same with/else pattern Letflow.Secrets.resolve/2 itself already uses for its own multi-cause tenant-check collapsing, and SECURITY-REVIEWER's Step 2c already traced all eight branches individually and confirmed each genuinely falls through the same else. check_attachment_id_matches/2's function-head pattern match (matching-bound-variable clause vs. catch-all) is a clean, idiomatic way to express 'equal or not' without an explicit == inside a body.\n\nThe deliberate deviation (get_or_create_signing_key/2 uses one Secrets.resolve/2 call instead of the design's stated unpinned-existence-check-then-pinned-resolve two-call sequence): CONFIRMED legitimate, not a behavior change. Read Letflow.Secrets.resolve/2's actual implementation (lib/letflow/secrets.ex L258-328): the unpinned path (fetch_secret/4 with key_id nil) already selects the newest :active row and decrypt/1 already returns {plaintext, key_id, purpose} from that exact resolved row in one round trip -- there is no information the design's second (pinned) call would obtain that the first call doesn't already carry, since the key being pinned to IS the row the unpinned call just resolved. If anything the one-call version is slightly SAFER than the design's two-call version: two separate resolve/2 calls have a real (if narrow) TOCTOU window in which a rotation could complete between call 1 (existence check) and call 2 (pinned fetch), whereas the shipped single-call version has no such window because both the key_id and the plaintext it signs with come from the same row read. This is a private-implementation simplification of get_or_create_signing_key/2's internals; issue/3's public contract (@spec, return shape, what it signs) is unchanged. Not a crutch, not scope creep -- filed as a non-blocking note below for the record per this gate's own instruction not to drop findings silently, but does not block PASS.\n\n2. SUPERVISION -- N/A, correctly so. No process is introduced anywhere in this diff -- confirmed by reading the full new file and the router additions: no spawn, no GenServer/gen_statem, no Task.start, nothing registered with Letflow.InstanceSupervisor or any other supervisor. A stateless HMAC-sign/verify operation has no state to isolate and no crash domain worth its own process; collapsing it into a plain function call is the correct idiom here, not a place a process SHOULD have been used. This is also consistent with CLAUDE.md's REQ-045/Letflow.Engine 'process-vs-row' precedent already settled for this codebase -- no reason for a token-signing helper to buck that decision by reaching for a process where the rest of the codebase doesn't.\n\n3. TYPE-SAFETY GAPS -- @specs present and accurate on both public functions (issue/3, verify/3) and on every private helper that has one declared (link_content_url/3, verify_link_token/2, check_attachment_id_matches/2 in instances.ex); read each against its actual clauses and found no mismatch between declared and actual return shapes. Implementation matches the validated design in every respect checked: 5-minute fixed expiry (design flagged this as a judgment call for REVIEWER, same precedent class as REQ-211's @max_upload_bytes -- accepting it, it's an internal defense-in-depth bound layered on top of the :AttachmentsRead-gated pipeline, not the sole control), injectable clock via opts[:now] for deterministic expiry tests (matches AC2's test-without-real-sleep requirement), token payload carrying no tenant field (matches design §7's 'tenant is never derived from the token' invariant), and the 404-vs-410 status split SECURITY-REVIEWER's Step 2c already traced structurally. No class of invalid state jumped out that a @type/struct change would make unrepresentable beyond what's already runtime-checked here -- the token payload's shape is guarded inline at decode time (is_binary/is_integer pattern match, L143 in attachment_links.ex) rather than deserialized into an untyped map and trusted, which is itself the safer of the two options. Not filing a type-safety issue for this diff -- nothing rose to that bar.\n\n4. SCOPE CREEP -- none found. Confirmed via git diff --stat and per-file review: only lib/letflow/repository/attachment_links.ex (new), lib/letflow/routers/instances.ex (pure addition, +125/-0 per diff stat), lib/letflow/api/{authorization,error,response}.ex (small additive changes: two new endpoint_policy_key/2 clauses, one new Error/Response constructor pair), the design doc, and run bookkeeping (requirements.yaml status flip, status-history volume, handoff files) are touched. No REQ-387 (frontend) files under web/ touched. No REQ-388 (audit logging) code. fetch_scoped_attachment_content/3 and fetch_scoped_attachment_metadata/3 are confirmed byte-for-byte unmodified -- diff stat shows instances.ex as pure insertion (no deletions), and the new handlers call these two functions from new call sites rather than editing their bodies, matching the requirement text's explicit 'OUT OF SCOPE: ... any change to REQ-211/212's existing tenant/instance-scoping logic' instruction and instances.ex's own inline comment confirming this design choice. No new abstraction (behaviour, macro, generic plumbing) introduced ahead of what REQ-386 needs -- AttachmentLinks is a two-function module sized to exactly this requirement, no generic 'signed-token' framework built out ahead of a second consumer.\n\ndocs/anti-patterns.md: read the full entry-title index: no entry matches this diff's shape (no gen_statem/supervision mistake class, no secrets/HMAC-pattern entry, no relevant migration/test-fixture entry -- this REQ has no migration at all). Nothing to flag against.\n\ndocs/migration/decisions/: checked 0016-secrets-storage-backend.md (secrets storage/rotation/reference-syntax decision) -- AttachmentLinks uses Letflow.Secrets end to end (put/2 for creation, resolve/2 for lookup, sec://tenant/... reference syntax, purpose: :generic/consumer: :generic, already a legal pair per 0016's own matrix) with no second signing-key storage path introduced -- fully consistent, not a silent second mechanism. Checked 0003-ecto-schema-strategy.md's general per-tenant-schema rule -- N/A here since this diff adds no new table at all (Letflow.Secrets' own global-table placement was already settled and reviewed under 0016, not reopened by this diff). No decision-record contradiction found.\n\nVERDICT: PASS. No crutch, no broken/missing supervision, no scope creep found.",
+    "artifacts_out": [
+      "handoffs/WF02-REQ386-20260923/step-02d-reviewer.json"
+    ],
+    "next_action": "Route to TEST-DESIGNER (Step 3)",
+    "issues": [
+      "NON-BLOCKING, for the record: get_or_create_signing_key/2 (lib/letflow/repository/attachment_links.ex) uses a single Secrets.resolve/2 call for the common case instead of the design doc's stated unpinned-existence-check-then-pinned-resolve two-call sequence (design lib/letflow/design/req386-attachment-signed-links.md, step 3/step 4 of the issue/3 flow). Confirmed by reading Letflow.Secrets.resolve/2's implementation that this is a legitimate simplification, not a behavior change -- the single call already returns both plaintext and the resolved key_id from the same row, so a second pinned call would re-fetch information already in hand, and the one-call version has no TOCTOU window between existence-check and pinned-fetch that the two-call version has. Recording here per this gate's own instruction that a flagged item not be dropped silently, even though it does not block PASS. No action needed unless a future reader wants the design doc's prose updated to match the shipped simplification."
+    ]
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

@@ -37,6 +37,7 @@ defmodule Letflow.Definitions.SolutionPackTest do
 
   import Ecto.Query, only: [from: 2]
 
+  alias Letflow.Definitions
   alias Letflow.Definitions.ProcessDefinition
   alias Letflow.Definitions.SolutionPack
   alias Letflow.Definitions.SolutionPackArtefactBase
@@ -208,12 +209,6 @@ defmodule Letflow.Definitions.SolutionPackTest do
     )
   end
 
-  # Same LIFO on_exit reasoning as req078_supporting_routes_test.exs's own
-  # cleanup_solution_pack_installs!/1 -- solution_pack_installs is a REQ-041
-  # GLOBAL table TenantFixture has no knowledge of, so it must be cleaned up
-  # before TenantFixture's own on_exit drops the tenants row it references
-  # (solution_pack_installs_tenant_id_fkey). Register this AFTER the tenant
-  # fixture call in test body order so ExUnit's LIFO on_exit runs this first.
   # Recursively turns every atom map key into a string key -- what a real JSON
   # decode of a route's request body would hand `install/3` (its own moduledoc:
   # "the raw decoded JSON body"), applied here to `export/4`'s atom-keyed
@@ -240,18 +235,6 @@ defmodule Letflow.Definitions.SolutionPackTest do
 
   defp stringify_keys(list) when is_list(list), do: Enum.map(list, &stringify_keys/1)
   defp stringify_keys(other), do: other
-
-  defp cleanup_solution_pack_installs!(tenant_id) do
-    on_exit(fn ->
-      Repo.delete_all(from(s in SolutionPackInstall, where: s.tenant_id == ^tenant_id))
-
-      # REQ-379: capture_artefact_bases/4 now writes solution_pack_artefact_bases
-      # rows carrying the same tenant_id.tenants FK -- same LIFO on_exit
-      # reasoning as the solution_pack_installs delete above, extended to this
-      # second GLOBAL table.
-      Repo.delete_all(from(b in SolutionPackArtefactBase, where: b.tenant_id == ^tenant_id))
-    end)
-  end
 
   defp process_definition_count(schema_name, name) do
     Repo.aggregate(from(d in ProcessDefinition, where: d.name == ^name), :count, :id,
@@ -757,6 +740,400 @@ defmodule Letflow.Definitions.SolutionPackTest do
                EntityDefinitions.get_definition_by_name(installed_name, tenant_b.schema_name)
 
       assert installed.logical_shape_version == original.logical_shape_version
+    end
+  end
+
+  # ═══════════════════════════════════════════════════════════════════════════
+  # REQ-379 -- solution-pack install-tracking write path
+  # (lib/letflow/design/req379-solution-pack-install-write-path.md)
+  # `solution_pack_installs`/`solution_pack_artefact_bases` capture at real
+  # install time, via `run_install/5`'s new `capture_artefact_bases/4` step.
+  # See test/specs/REQ-379.md for the full AC -> test-case mapping.
+  # ═══════════════════════════════════════════════════════════════════════════
+
+  # Independent, test-local re-implementation of `canonicalize_artefact_content/1`
+  # (solution_pack.ex, private) -- same four steps (design §3): recursively sort
+  # map keys, rebuild via Jason.OrderedObject.new/1 so sorted order survives
+  # encoding, map over lists without reordering, convert atoms via
+  # Atom.to_string/1, pass everything else through unchanged, then
+  # Jason.encode!/1. Written independently (not by copy-pasting the private
+  # function under test) so this test can actually catch a canonicalization bug
+  # in the implementation rather than trivially agreeing with it.
+  defp req379_canonicalize(value) when is_map(value) and not is_struct(value) do
+    value
+    |> Map.keys()
+    |> Enum.sort()
+    |> Enum.map(fn key -> {key, req379_canonicalize(Map.get(value, key))} end)
+    |> Jason.OrderedObject.new()
+  end
+
+  defp req379_canonicalize(value) when is_list(value), do: Enum.map(value, &req379_canonicalize/1)
+
+  defp req379_canonicalize(value)
+       when is_atom(value) and not is_boolean(value) and not is_nil(value),
+       do: Atom.to_string(value)
+
+  defp req379_canonicalize(value), do: value
+
+  defp req379_canonical_json(value), do: value |> req379_canonicalize() |> Jason.encode!()
+
+  defp process_definition_count_by_id(schema_name, id) do
+    Repo.aggregate(from(d in ProcessDefinition, where: d.id == ^id), :count, :id,
+      prefix: schema_name
+    )
+  end
+
+  defp artefact_input(type, id, content),
+    do: %{artefact_type: type, artefact_id: id, content: content}
+
+  # A graph whose top-level "metadata" key is NOT part of Graph.from_map/1's
+  # validated shape (only "nodes"/"edges" are read there -- graph.ex:282-291)
+  # but IS part of the raw map ProcessDefinition.create_changeset/2 casts
+  # verbatim into the :graph column (process_definition.ex:97, :graph, :map,
+  # no key-filtering) -- so this survives storage untouched and gives AC2's
+  # test real, non-trivial nested-key-order data to canonicalize, without
+  # needing a HUMAN_TASK/SERVICE_TASK node's own attribute-validation rules.
+  # Map literal keys are deliberately NOT already alphabetical at any level, so
+  # a canonicalizer that only sorted the top level (or didn't sort at all)
+  # would produce a different byte sequence than one that sorts recursively.
+  defp req379_graph_with_metadata(tag) do
+    Map.merge(graph_start_end(), %{
+      "metadata" => %{
+        "zebra" => tag,
+        "apple" => %{"nested_zulu" => true, "nested_alpha" => false, "id" => tag}
+      }
+    })
+  end
+
+  describe "REQ-379 AC1 -- install inserts exactly one solution_pack_installs row" do
+    test "exactly one row, installed_version matches, installed_at is real and recent" do
+      # Regression test on ALREADY-EXISTING behavior (design §0): insert_install_row/2
+      # predates this branch (REQ-078). Still required because REQ-379's AC1 says
+      # "proven by a test," and this branch's own refactor (§5.2: insert_install_row/2
+      # now takes a shared `captured_at` argument instead of reading the clock itself)
+      # must not silently break it.
+      tenant = TenantFixture.provisioned_tenant!(slug_prefix: "req379-ac1")
+      cleanup_solution_pack_installs!(tenant.tenant_id)
+
+      before_install = DateTime.utc_now()
+
+      doc =
+        pack_document(%{
+          definitions: [
+            packed_definition_json(Ecto.UUID.generate(), unique("req379-ac1-pd"))
+          ]
+        })
+
+      assert {:ok, result} = SolutionPack.install(doc, Ecto.UUID.generate(), prefix: tenant.schema_name)
+
+      rows =
+        Repo.all(
+          from(s in SolutionPackInstall,
+            where: s.tenant_id == ^tenant.tenant_id and s.pack_id == ^doc["pack_id"]
+          )
+        )
+
+      assert length(rows) == 1, "expected exactly one solution_pack_installs row, got #{length(rows)}"
+
+      [row] = rows
+      assert row.installed_version == doc["version"]
+      assert row.id == result.install_id
+      refute is_nil(row.installed_at)
+
+      # Real, non-sentinel timestamp -- brackets it against a `DateTime.utc_now/0`
+      # read taken just before the install call, and against a fresh one taken now.
+      assert DateTime.compare(row.installed_at, before_install) in [:gt, :eq]
+      assert DateTime.compare(row.installed_at, DateTime.utc_now()) in [:lt, :eq]
+    end
+  end
+
+  describe "REQ-379 AC2 -- install captures one canonical base row per delivered definition" do
+    test "one row per definition, real artefact_id, base_version matches, base_content byte-for-byte canonical" do
+      tenant = TenantFixture.provisioned_tenant!(slug_prefix: "req379-ac2")
+      cleanup_solution_pack_installs!(tenant.tenant_id)
+
+      source_id_1 = Ecto.UUID.generate()
+      source_id_2 = Ecto.UUID.generate()
+      process_key_1 = unique("req379-ac2-pd1")
+      process_key_2 = unique("req379-ac2-pd2")
+      graph_1 = req379_graph_with_metadata("graph-one")
+      graph_2 = req379_graph_with_metadata("graph-two")
+
+      doc =
+        pack_document(%{
+          definitions: [
+            packed_definition_json(source_id_1, process_key_1, graph_1),
+            packed_definition_json(source_id_2, process_key_2, graph_2)
+          ]
+        })
+
+      assert {:ok, result} = SolutionPack.install(doc, Ecto.UUID.generate(), prefix: tenant.schema_name)
+      assert length(result.installed_definitions) == 2
+
+      base_rows =
+        Repo.all(
+          from(b in SolutionPackArtefactBase,
+            where: b.tenant_id == ^tenant.tenant_id and b.pack_id == ^doc["pack_id"]
+          )
+        )
+
+      assert length(base_rows) == 2,
+             "expected exactly one solution_pack_artefact_bases row per delivered definition"
+
+      by_new_id =
+        Map.new(result.installed_definitions, fn installed ->
+          {installed.new_definition_id, installed}
+        end)
+
+      graphs_by_process_key = %{process_key_1 => graph_1, process_key_2 => graph_2}
+
+      for row <- base_rows do
+        assert row.artefact_type == "process_definition"
+        assert row.base_version == doc["version"]
+        refute is_nil(row.captured_at)
+
+        installed = Map.fetch!(by_new_id, row.artefact_id)
+        expected_graph = Map.fetch!(graphs_by_process_key, installed.process_key)
+
+        # Structural equality via decode -- proves it's valid, semantically-equal JSON
+        # (a plain JSON round trip of the expected graph, key order irrelevant to
+        # Elixir map equality).
+        assert Jason.decode!(row.base_content) == Jason.decode!(Jason.encode!(expected_graph))
+
+        # Byte-for-byte canonical-form equality -- proves SORTED-KEY canonical
+        # form specifically, not merely "some valid JSON encoding of the right
+        # data." A key-ordering bug in the implementation would pass the
+        # structural check above but fail this one.
+        assert row.base_content == req379_canonical_json(expected_graph)
+      end
+
+      # Every artefact_id this write path used is a real, installed
+      # ProcessDefinition.id in the installing tenant's own schema (design §2/INV-ARTB-3)
+      # -- not the pack's source-tenant definition_id.
+      for row <- base_rows do
+        assert process_definition_count_by_id(tenant.schema_name, row.artefact_id) == 1
+        refute row.artefact_id in [source_id_1, source_id_2]
+      end
+    end
+  end
+
+  describe "REQ-379 AC3 -- re-capture never overwrites an existing base snapshot" do
+    test "second capture_artefact_bases/4 call for the same key is a silent no-op, original base_content survives" do
+      # Architectural note (design §10.3): a literal second SolutionPack.install/3
+      # call for the same (tenant_id, pack_id) always fails with
+      # {:error, :duplicate_pack_install} (uq_solution_pack_install_active,
+      # REQ-078) before reaching any artefact-base code -- there is no real
+      # HTTP/install/3 re-install path to exercise AC3 through today. This test
+      # therefore calls capture_artefact_bases/4 directly, which the design made
+      # public specifically for this seam (design §5.1, §10.3).
+      tenant = TenantFixture.provisioned_tenant!(slug_prefix: "req379-ac3")
+      cleanup_solution_pack_installs!(tenant.tenant_id)
+
+      pack_id = unique("req379-ac3-pack")
+      artefact_id = Ecto.UUID.generate()
+      captured_at = ~U[2026-01-02 03:04:05.000000Z]
+
+      content_a = %{"content" => "original", "nested" => %{"z" => 1, "a" => 2}}
+      content_b = %{"content" => "attempted-overwrite", "nested" => %{"z" => 99, "a" => 98}}
+
+      snapshot = fn content ->
+        [%{artefact_type: "process_definition", artefact_id: artefact_id, content: content}]
+      end
+
+      # 1. First capture: content A lands.
+      assert {:ok, [base_a]} =
+               SolutionPack.capture_artefact_bases(
+                 tenant.tenant_id,
+                 pack_id,
+                 "1.0.0",
+                 snapshot.(content_a),
+                 captured_at
+               )
+
+      assert base_a.base_content == req379_canonical_json(content_a)
+
+      rows_after_first =
+        Repo.all(
+          from(b in SolutionPackArtefactBase,
+            where:
+              b.tenant_id == ^tenant.tenant_id and b.pack_id == ^pack_id and
+                b.artefact_id == ^artefact_id
+          )
+        )
+
+      assert length(rows_after_first) == 1
+      assert hd(rows_after_first).base_content == req379_canonical_json(content_a)
+
+      # 2. Simulate the tenant having since locally adapted the artefact --
+      # this touches only process_definitions in a real install flow (design
+      # §10.3 step 2); solution_pack_artefact_bases itself is never touched by
+      # a local edit. No DB mutation is required here for this assertion to be
+      # meaningful: the point under test is what the SECOND
+      # capture_artefact_bases/4 call does to the base row, not the local edit
+      # itself.
+
+      # 3. Second capture attempt: SAME key, SAME base_version ("the same
+      # version"), DIFFERENT content B -- simulating what a re-delivered pack
+      # would attempt to write. Must not raise, and must not error.
+      assert {:ok, [base_b_attempted]} =
+               SolutionPack.capture_artefact_bases(
+                 tenant.tenant_id,
+                 pack_id,
+                 "1.0.0",
+                 snapshot.(content_b),
+                 captured_at
+               )
+
+      # Per design §5.1: the returned struct reflects the ATTEMPTED snapshot on
+      # a no-op conflict, not necessarily DB state -- so this assertion is
+      # deliberately about the DB read below, not about base_b_attempted's own
+      # base_content field.
+      assert is_struct(base_b_attempted, SolutionPackArtefactBase)
+
+      # 4. THE AC3 ASSERTION: still exactly one row for this key, and its
+      # base_content is STILL canonical(A) -- never canonical(B).
+      rows_after_second =
+        Repo.all(
+          from(b in SolutionPackArtefactBase,
+            where:
+              b.tenant_id == ^tenant.tenant_id and b.pack_id == ^pack_id and
+                b.artefact_id == ^artefact_id
+          )
+        )
+
+      assert length(rows_after_second) == 1,
+             "a conflicting capture_artefact_bases/4 call must never insert a second row"
+
+      [surviving_row] = rows_after_second
+      assert surviving_row.id == hd(rows_after_first).id
+      assert surviving_row.base_content == req379_canonical_json(content_a)
+      refute surviving_row.base_content == req379_canonical_json(content_b)
+    end
+  end
+
+  describe "REQ-379 AC4 -- compute_pack_update_plan/5 against real base rows classifies all four outcomes" do
+    test "install four real definitions, classify unchanged/clean_update/local_only/conflict end to end" do
+      tenant = TenantFixture.provisioned_tenant!(slug_prefix: "req379-ac4")
+      cleanup_solution_pack_installs!(tenant.tenant_id)
+
+      # Four distinct process keys so each installed definition/base row is
+      # unambiguously correlated back to its intended classification bucket.
+      keys = %{
+        unchanged: unique("req379-ac4-unchanged"),
+        clean_update: unique("req379-ac4-clean-update"),
+        local_only: unique("req379-ac4-local-only"),
+        conflict: unique("req379-ac4-conflict")
+      }
+
+      definitions =
+        for {bucket, process_key} <- keys do
+          packed_definition_json(
+            Ecto.UUID.generate(),
+            process_key,
+            req379_graph_with_metadata(Atom.to_string(bucket))
+          )
+        end
+
+      doc = pack_document(%{definitions: definitions})
+
+      assert {:ok, result} = SolutionPack.install(doc, Ecto.UUID.generate(), prefix: tenant.schema_name)
+      assert length(result.installed_definitions) == 4
+
+      new_id_by_process_key =
+        Map.new(result.installed_definitions, &{&1.process_key, &1.new_definition_id})
+
+      base_content_by_process_key =
+        for {process_key, artefact_id} <- new_id_by_process_key, into: %{} do
+          base =
+            Repo.one!(
+              from(b in SolutionPackArtefactBase,
+                where:
+                  b.tenant_id == ^tenant.tenant_id and b.pack_id == ^doc["pack_id"] and
+                    b.artefact_id == ^artefact_id
+              )
+            )
+
+          {process_key, base.base_content}
+        end
+
+      artefact_id_for = fn bucket -> Map.fetch!(new_id_by_process_key, Map.fetch!(keys, bucket)) end
+      base_content_for = fn bucket -> Map.fetch!(base_content_by_process_key, Map.fetch!(keys, bucket)) end
+
+      different_content = fn bucket, tag ->
+        req379_canonical_json(%{"different_for" => Atom.to_string(bucket), "tag" => tag})
+      end
+
+      artefact_type = "process_definition"
+
+      theirs_artefacts = [
+        artefact_input(artefact_type, artefact_id_for.(:unchanged), base_content_for.(:unchanged)),
+        artefact_input(artefact_type, artefact_id_for.(:clean_update), base_content_for.(:clean_update)),
+        artefact_input(
+          artefact_type,
+          artefact_id_for.(:local_only),
+          different_content.(:local_only, "theirs")
+        ),
+        artefact_input(
+          artefact_type,
+          artefact_id_for.(:conflict),
+          different_content.(:conflict, "theirs")
+        )
+      ]
+
+      incoming_artefacts = [
+        artefact_input(artefact_type, artefact_id_for.(:unchanged), base_content_for.(:unchanged)),
+        artefact_input(
+          artefact_type,
+          artefact_id_for.(:clean_update),
+          different_content.(:clean_update, "incoming")
+        ),
+        artefact_input(artefact_type, artefact_id_for.(:local_only), base_content_for.(:local_only)),
+        artefact_input(
+          artefact_type,
+          artefact_id_for.(:conflict),
+          different_content.(:conflict, "incoming")
+        )
+      ]
+
+      assert {:ok, plan} =
+               Definitions.compute_pack_update_plan(
+                 tenant.tenant_id,
+                 doc["pack_id"],
+                 "2.0.0",
+                 theirs_artefacts,
+                 incoming_artefacts
+               )
+
+      entry_for_bucket = fn bucket ->
+        artefact_id = artefact_id_for.(bucket)
+        Enum.find(plan.entries, &(&1.artefact_type == artefact_type and &1.artefact_id == artefact_id))
+      end
+
+      unchanged_entry = entry_for_bucket.(:unchanged)
+      assert unchanged_entry.classification == :unchanged
+      assert unchanged_entry.base == base_content_for.(:unchanged)
+
+      clean_update_entry = entry_for_bucket.(:clean_update)
+      assert clean_update_entry.classification == :clean_update
+      assert clean_update_entry.base == base_content_for.(:clean_update)
+
+      local_only_entry = entry_for_bucket.(:local_only)
+      assert local_only_entry.classification == :local_only
+      assert local_only_entry.base == base_content_for.(:local_only)
+
+      conflict_entry = entry_for_bucket.(:conflict)
+      assert conflict_entry.classification == :conflict
+      assert conflict_entry.base == base_content_for.(:conflict)
+
+      # Sanity guard against a §2 key-choice regression (using the pack's
+      # source_definition_id instead of the real installed ProcessDefinition.id
+      # as artefact_id): confirms every `base` in the plan really came from
+      # THIS write path's own row, correlated by the real installed id, not a
+      # coincidental match.
+      for bucket <- [:unchanged, :clean_update, :local_only, :conflict] do
+        entry = entry_for_bucket.(bucket)
+        refute is_nil(entry.base), "#{bucket} artefact unexpectedly had no matching base row"
+      end
     end
   end
 end

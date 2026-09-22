@@ -218,3 +218,23 @@ UNBUILT_FEATURE" framing for the frontend leg remains accurate, not stale.
 - `web/`'s full `vitest` suite: 73 files / 521 tests, all passing, run
   before and after this change (no regression).
 - `npx tsc --noEmit -p tsconfig.app.json`: clean.
+
+## Closing note (2026-09-22, DOC-UPDATER)
+
+**REQ-384 (EO-001's in-app tenant switcher + tenant-keyed query-cache
+isolation) is now `done`**, shipped on `feature/WF02-REQ384-20260922` and
+merged to `main`. It built the in-app switcher this report found missing
+(a new `Letflow.Routers.Me` `GET /me/memberships` endpoint plus a
+`tenant_memberships` table on the backend, and a `TenantSwitcher` UI
+component with tenant-namespaced React Query keys on the frontend),
+closing the EO-001 gap this report filed it for. Full pipeline history —
+CODE-DESIGNER, SECURITY-REVIEWER (mandatory per this report's own
+`depends_on`-free filing), REVIEWER, TEST-DESIGNER/TEST-DESIGN-VALIDATOR,
+TEST-RUNNER, and RELEASE-VALIDATOR's independent re-verification — is
+recorded in `docs/status/requirement_status.v21.yaml`'s REQ-384 `done`
+entry, not restated here.
+
+**REQ-385 (EO-004's task-form version-mismatch fallback) remains
+`pending`** — this report's other filing is unaffected by REQ-384's
+completion and still needs its own CODE-DESIGNER pass to decide whether
+EO-004 has a real analog under REQ-126's frozen-at-creation design.

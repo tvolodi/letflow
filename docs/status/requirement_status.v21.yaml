@@ -1084,3 +1084,57 @@ history:
       in docs/requirements.yaml), so none was touched. This event covers WF-02
       Step 6 (docs only) -- Step Final (git merge) is routed separately to
       ELIXIR-DEV per docs/agents/workflows/WF-02_requirement_implementation.md.
+  - req: REQ-384
+    event: done
+    agent: DOC-UPDATER
+    at: "2026-09-22T20:59:03Z"
+    note: >
+      In-app company/tenant switcher for a dual-membership user, with
+      tenant-keyed React Query cache isolation across the switch, shipped on
+      feature/WF02-REQ384-20260922, letflow-queue task 744, GH-1632, stage
+      S8, depends_on []. Filed from the GUI-review UAT run of
+      tenant-switch-cache-isolation (PW-15) -- see
+      test/uat-reports/gui-review-2026-09-20-tenant-switch-cache-isolation.md,
+      closed out with this event. Part A (backend): new tenant_memberships
+      table, a list-membership lookup, and GET /me/memberships
+      (Letflow.Routers.Me), amending decision
+      docs/migration/decisions/0038-tenant-membership-lookup-amendment.md
+      (both SECURITY-REVIEWER and REVIEWER ratified the amendment
+      separately). Part B (frontend): a TenantSwitcher component allowing an
+      in-app tenant change without a full-page OIDC re-authentication, plus
+      tenant-namespacing every React Query key that scopes tenant-visible
+      data (instances, tasks, definitions), so a switch invalidates/clears
+      every previously-tenant-scoped query before the new tenant's screens
+      render -- closing the cache-leak hazard the design doc explicitly
+      names relative to InstanceBoardPage.tenant-isolation.test.tsx's
+      existing TC-ENV04-09 precedent. Went through TEST-DESIGNER/
+      TEST-DESIGN-VALIDATOR rework (EO-001 spec-authoring bugs, a
+      switchingToTenantSlug timing gap, an OidcCallbackPage silent-iframe
+      wiring bug found and fixed) before all gates passed. RELEASE-VALIDATOR
+      independently re-verified at final HEAD 132f426b: a live e2e re-run of
+      EO-001 itself (1 passed), full frontend suite 818/818, full backend
+      suite 4696/4696, scope confirmed clean, and both decision 0038
+      sign-offs confirmed substantive (not rubber-stamped). Real merge
+      conflict against concurrently-landed REQ-382 found by
+      RELEASE-VALIDATOR (both requirements append entries to the same
+      @routers/@mount_prefix lists in lib/letflow/identity.ex and
+      test/letflow/api/authorization_enforcement_test.exs) -- resolved by
+      DOC-UPDATER at Step 6 by keeping both REQ-382's and REQ-384's entries
+      (a pure additive-list collision, not a semantic conflict), re-verified
+      with mix compile --warnings-as-errors (clean) and a fresh run of
+      test/letflow/api/authorization_enforcement_test.exs (18/18 passed) plus
+      test/letflow/identity_test.exs + test/letflow/routers/tenant_settings_test.exs
+      (75/75 passed) post-resolution. test/reports/
+      report-20260922-WF02-REQ384-20260922.yaml (TEST-RUNNER's Step 4
+      report) is pinned to a stale commit 2ac1ed74 predating the final
+      OIDC-fix commits; rather than fabricate a new TEST-RUNNER run, a
+      stale_commit_note was added to that report pointing to
+      RELEASE-VALIDATOR's own independent final-HEAD re-verification as the
+      authoritative proof for HEAD 132f426b. Design:
+      lib/letflow/design/req384-tenant-switcher-cache-isolation.md. No
+      docs/migration/stage-N-*.md file was named by REQ-384's own
+      acceptance criteria; the one decisions/*.md file it did name
+      (0038) was confirmed already amended and doubly ratified before this
+      step. REQ-385 (EO-004's task-form version-mismatch fallback, filed
+      from the same GUI-review report) remains pending, unaffected by this
+      merge.

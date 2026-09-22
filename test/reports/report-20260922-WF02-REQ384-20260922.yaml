@@ -6,6 +6,16 @@ agent: TEST-RUNNER
 date: 2026-09-22
 branch: feature/WF02-REQ384-20260922
 commit: 2ac1ed74
+stale_commit_note: >
+  This report is pinned to 2ac1ed74, which predates two later commits on this
+  branch (fe7dedb1, 23a67263, 132f426b -- the final OIDC-fix and unit-coverage
+  commits). It is NOT re-pinned to final HEAD 132f426b here because doing so
+  would misrepresent a run that was never re-executed against that commit.
+  The authoritative final-HEAD proof is RELEASE-VALIDATOR's own independent
+  re-verification at Step 5 (a live e2e re-run itself: 1 passed; full frontend
+  suite 818/818; full backend suite 4696/4696), performed directly against
+  HEAD 132f426b -- see this run's Step 5 handoff/report for that evidence
+  rather than treating this Step 4 report as covering the final commit.
 
 verdict: PASS
 

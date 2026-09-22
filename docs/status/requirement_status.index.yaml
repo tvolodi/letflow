@@ -4293,8 +4293,18 @@ volumes:
     path: docs/status/requirement_status.v21.yaml
     status: current
     opened: 2026-09-20
-    entries: 29
+    entries: 30
     note: >
+      Incremented to 30 by DOC-UPDATER's own REQ-384 done-event append
+      (WF02-REQ384-20260922's Step 6, on feature/WF02-REQ384-20260922 after
+      merging origin/main and resolving a real, additive-only conflict
+      against concurrently-landed REQ-382 in lib/letflow/identity.ex and
+      test/letflow/api/authorization_enforcement_test.exs). Recounted
+      directly post-append: `grep -c "^  - req:"
+      docs/status/requirement_status.v21.yaml` = 30 on-disk entries. 1140
+      lines / 70178 bytes, well under the 1200-line/120000-byte roll
+      ceiling, so no roll triggered. Prior notes preserved below verbatim.
+
       Incremented to 29 during WF02-REQ382-20260922's own Step Final rebase
       onto origin/main, resolving a conflict on this same field: origin/main
       had already advanced to 28 via WF02-REQ381-20260922's own Step Final

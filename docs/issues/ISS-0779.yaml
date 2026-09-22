@@ -1,0 +1,58 @@
+id: ISS-0779
+title: >
+  CI backend gate races Postgres service-container database creation
+  against pg_isready's health check -- causes intermittent, sometimes-
+  repeated "database letflow does not exist" failures unrelated to any
+  PR's own code
+discovered_by: ORCH (letflow-c5), while merging REQ-373 (PR #1699)
+discovered_in_run: WF02-REQ373-20260921 (Step Final)
+discovered_at: "2026-09-21T23:36:00Z"
+severity: MAJOR
+description: >
+  Discovered live 2026-09-21/22 while merging REQ-373: PR #1699's backend
+  gate failed 4 consecutive times with the identical mechanism, each with
+  ~25 retries roughly 2 seconds apart hitting `FATAL: database "letflow"
+  does not exist`, followed by the Postgres service container's own init
+  log showing `CREATE DATABASE` completing only AFTER all app-side
+  retries had already exhausted. Corroborated as a real, repo-wide flake
+  (not specific to this branch/PR) by an unrelated main-push CI run (id
+  35655965051, ~2026-09-21T21:14) failing with the same pattern around
+  the same general time window.
+
+  Root cause: .github/workflows/ci.yml's postgres service health check
+  (line ~245, `--health-cmd "pg_isready -U letflow"`) only confirms the
+  Postgres SERVER is accepting connections -- it does not and cannot
+  confirm the target `letflow` DATABASE (created by the container's own
+  POSTGRES_DB-driven docker-entrypoint init step) has finished being
+  created. These are two genuinely separate milestones in postgres:16's
+  own container startup sequence: "server ready to accept connections"
+  happens before the entrypoint script's CREATE DATABASE step for
+  POSTGRES_DB. GitHub Actions starts the job's own steps (including mix
+  ecto.create) as soon as the health check passes, which can race ahead
+  of the CREATE DATABASE step under some load/timing conditions -- and
+  this session observed it losing that race 4/4 consecutive times in one
+  evening, well past what "rare flake" would suggest.
+affected_files:
+  - .github/workflows/ci.yml
+fix_direction: >
+  The CI workflow's readiness check needs to be changed so the backend
+  job does not start ecto.create until the target database actually
+  exists (not merely until the server accepts connections) -- candidate
+  approaches: a custom health-cmd that also checks database existence
+  (e.g. `pg_isready -U letflow -d letflow` or a psql SELECT 1 against the
+  named database), an explicit wait/retry step before mix ecto.create
+  with a real, generous budget, or removing reliance on POSTGRES_DB
+  auto-creation entirely in favor of ecto.create always creating the
+  database itself with its own adequate retry logic. If mix ecto.create
+  (or test_parallel.sh) already has retry logic for this exact
+  condition, state explicitly why it wasn't sufficient here and what
+  changed, rather than just adding a duplicate retry loop. Verify the
+  fix by intentionally reproducing the race locally or by observing
+  several consecutive green CI runs post-fix, not just asserting it
+  works.
+queue_ref: Q-778  # letflow-queue task id 778, issue_ref ISS-0779 (local
+  # filename diverges from the queue id -- 0778 was already taken
+  # locally by an unrelated issue filed by another session in the same
+  # window). Registered 2026-09-21 by ORCH.
+github_ref: GH-1700
+status: open

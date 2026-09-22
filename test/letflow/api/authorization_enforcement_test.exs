@@ -73,7 +73,12 @@ defmodule Letflow.Api.AuthorizationEnforcementTest do
     # REQ-366 §1 -- Letflow.Routers.Help's single route declares :HelpRead,
     # backed by a real endpoint_policy_key/2 clause, so it resolves through
     # the normal path above and is not (and may not be) added to @allowlist.
-    Letflow.Routers.Help
+    Letflow.Routers.Help,
+    # REQ-384 Part A -- Letflow.Routers.Me's single route declares
+    # :MembershipsRead, backed by a real endpoint_policy_key/2 clause, so it
+    # resolves through the normal path above and is not (and may not be)
+    # added to @allowlist.
+    Letflow.Routers.Me
   ]
 
   # `Letflow.Plugs.ApiPipeline`'s own `forward/2` mount prefix per router
@@ -106,7 +111,8 @@ defmodule Letflow.Api.AuthorizationEnforcementTest do
     Letflow.Routers.AdminServices => "/admin/services",
     Letflow.Routers.Entities => "/entities",
     Letflow.Routers.ExamSessions => "/exam-sessions",
-    Letflow.Routers.Help => "/help"
+    Letflow.Routers.Help => "/help",
+    Letflow.Routers.Me => "/me"
   }
 
   # {method, path_template, reason} -- a route whose declared policy key is

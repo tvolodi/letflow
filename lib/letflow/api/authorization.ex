@@ -190,6 +190,30 @@ defmodule Letflow.Api.Authorization do
   `CANDIDATE` excluded (this implementation) and widening ISS-0646's closed
   set for `:HelpRead` specifically (design §1.3's literal instruction). See
   `Letflow.Routers.Help`'s own moduledoc for the same note.
+
+  ## `MembershipsRead` (REQ-384 Part A) — genuinely new, CANDIDATE excluded for the same reason as `HelpRead`
+
+  One new atom for `Letflow.Routers.Identity`'s `GET /me/memberships` route
+  (design `lib/letflow/design/req384-tenant-switcher-cache-isolation.md`
+  §2.2). Real `endpoint_policy_key/2` clause and identity
+  `required_permission/1` clause, same shape as `HelpRead`/`Entities*` above.
+
+  Design §2.2 states this is "any authenticated user, no extra role gate —
+  a user reading their own membership list is not a privileged operation."
+  This module implements that as widely as `HelpRead`'s own precedent
+  allows: `role_allows?/2` grants `:MembershipsRead` to `PLATFORM_ADMIN`,
+  `PROCESS_DESIGNER`, `PROCESS_OPERATOR`, `TASK_WORKER`, and `AGENT_RUNNER`,
+  but **not** `CANDIDATE` — for the identical reason `HelpRead` excludes it
+  (see that section above): `test/letflow/api/authorization_test.exs`'s
+  ISS-0646 closed-set invariant ("CANDIDATE must hold exactly its six
+  ExamSession*/ExamCertificateIssue permissions and nothing else") already
+  settled `CANDIDATE`'s permission set as closed, so widening it here would
+  silently re-decide that closed-set invariant rather than route it through
+  REVIEWER/SECURITY-REVIEWER, which is exactly the deviation `HelpRead`
+  already flags and defers to those two gates. A candidate account
+  switching tenants was not named by any of REQ-384's acceptance criteria
+  either. Flagged the same way as `HelpRead`'s section above, not silently
+  narrowed.
   """
 
   @type role ::
@@ -238,6 +262,7 @@ defmodule Letflow.Api.Authorization do
           | :ExamCertificateIssue
           | :PublicReadHandlesIssue
           | :HelpRead
+          | :MembershipsRead
 
   @type access_decision_kind :: :Allow | :Deny403 | :AllowWithRowFilter
 
@@ -292,6 +317,7 @@ defmodule Letflow.Api.Authorization do
           | :ExamCertificateIssue
           | :PublicReadHandlesIssue
           | :HelpRead
+          | :MembershipsRead
           | :Unknown
 
   @type task_row_scope :: :all | {:own_user_and_groups, String.t()}
@@ -342,7 +368,8 @@ defmodule Letflow.Api.Authorization do
     :ExamSessionReportEvent,
     :ExamCertificateIssue,
     :PublicReadHandlesIssue,
-    :HelpRead
+    :HelpRead,
+    :MembershipsRead
   ]
 
   @doc "All six `Role` values, R-Co's exact names plus ISS-0646's `CANDIDATE`. See `roles_from_strings/1` for untrusted-input conversion."
@@ -350,7 +377,7 @@ defmodule Letflow.Api.Authorization do
   def roles, do: @roles
 
   @doc """
-  All thirty-seven `Permission` values — R-Co's fourteen, plus REQ-075's
+  All thirty-eight `Permission` values — R-Co's fourteen, plus REQ-075's
   `:TenantsManage`, plus REQ-076's `:RolesManage`, plus REQ-212's
   `:AttachmentsManage`/`:AttachmentsRead`, plus ISS-0389's
   `:InstancesAdvanceTimer`, plus REQ-309's four entity-subsystem permissions
@@ -363,7 +390,7 @@ defmodule Letflow.Api.Authorization do
   permissions (`:ExamSessionStart`, `:ExamSessionRead`, `:ExamSessionSave`,
   `:ExamSessionSubmit`, `:ExamSessionReportEvent`), plus REQ-355's
   `:ExamCertificateIssue`, plus REQ-352's `:PublicReadHandlesIssue`, plus
-  REQ-366's `:HelpRead`.
+  REQ-366's `:HelpRead`, plus REQ-384's `:MembershipsRead`.
 
   The stated count is asserted against `length(permissions())` by
   `test/letflow/api/authorization_test.exs` (REQ-309 AC1), computed rather than
@@ -790,6 +817,12 @@ defmodule Letflow.Api.Authorization do
   # lib/letflow/design/req366-help-display-panel.md §1.1/§1.3.
   def endpoint_policy_key("GET", "/help/resolved"), do: :HelpRead
 
+  # REQ-384 Part A — Letflow.Routers.Me's single route, mounted at /me by
+  # Letflow.Plugs.ApiPipeline (full path /api/v1/me/memberships, per design
+  # §2.2's explicit route). See this module's moduledoc "MembershipsRead"
+  # section.
+  def endpoint_policy_key("GET", "/me/memberships"), do: :MembershipsRead
+
   def endpoint_policy_key(_method, _path), do: :Unknown
 
   @doc """
@@ -922,6 +955,7 @@ defmodule Letflow.Api.Authorization do
   # REQ-366 — identity clause (policy-key name == permission name), same
   # shape as Entities*/ExamSession*/PublicReadHandlesIssue above.
   def required_permission(:HelpRead), do: :HelpRead
+  def required_permission(:MembershipsRead), do: :MembershipsRead
 
   def required_permission(:Unknown), do: :MetricsRead
 
@@ -973,7 +1007,12 @@ defmodule Letflow.Api.Authorization do
         # REQ-366 (design §1.3, this module's moduledoc "HelpRead" section):
         # help content is a read-only UI affordance meant to assist every
         # authenticated user regardless of role.
-        :HelpRead
+        :HelpRead,
+        # REQ-384 (design §2.2, this module's moduledoc "MembershipsRead"
+        # section): a user reading their own membership list is not a
+        # privileged operation, same "assist every authenticated user"
+        # class as :HelpRead above.
+        :MembershipsRead
       ]
 
   def role_allows?(:PROCESS_OPERATOR, permission),
@@ -1011,7 +1050,9 @@ defmodule Letflow.Api.Authorization do
         :EntitiesAttachmentsManage,
         :EntitiesAttachmentsRead,
         # REQ-366 (design §1.3): see PROCESS_DESIGNER clause's comment above.
-        :HelpRead
+        :HelpRead,
+        # REQ-384: see PROCESS_DESIGNER clause's comment above.
+        :MembershipsRead
       ]
 
   def role_allows?(:TASK_WORKER, permission),
@@ -1035,7 +1076,9 @@ defmodule Letflow.Api.Authorization do
         # existing instance-scoped :AttachmentsRead-only grant.
         :EntitiesAttachmentsRead,
         # REQ-366 (design §1.3): see PROCESS_DESIGNER clause's comment above.
-        :HelpRead
+        :HelpRead,
+        # REQ-384: see PROCESS_DESIGNER clause's comment above.
+        :MembershipsRead
       ]
 
   # REQ-366 -- the one exception to this role's otherwise total, unconditional
@@ -1045,6 +1088,10 @@ defmodule Letflow.Api.Authorization do
   # way CANDIDATE does (see this module's moduledoc "HelpRead" section for
   # why CANDIDATE is deliberately excluded instead).
   def role_allows?(:AGENT_RUNNER, :HelpRead), do: true
+  # REQ-384: see this module's moduledoc "MembershipsRead" section -- same
+  # "assist every authenticated user regardless of role" exception as
+  # :HelpRead above.
+  def role_allows?(:AGENT_RUNNER, :MembershipsRead), do: true
   def role_allows?(:AGENT_RUNNER, _permission), do: false
 
   # ISS-0646 (decision 0013 addendum): CANDIDATE is a dedicated role for

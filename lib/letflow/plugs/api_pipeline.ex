@@ -192,6 +192,13 @@ defmodule Letflow.Plugs.ApiPipeline do
   # the route table.
   forward("/event-retention", to: Letflow.Routers.EventRetention)
 
+  # REQ-384 Part A -- the tenant switcher's own membership-listing route.
+  # Mounted at /me (full path /api/v1/me/memberships, design §2.2's own
+  # explicit choice), not /identity -- a deliberately distinct top-level
+  # mount, since this is a "my own account" concept, not an
+  # identity-administration one. See Letflow.Routers.Me's own moduledoc.
+  forward("/me", to: Letflow.Routers.Me)
+
   match _ do
     Letflow.Api.Response.not_found(conn)
   end

@@ -151,35 +151,54 @@ export function AuthProvider({ children }: { children: ReactNode }) {
    * component can re-render against the new `session.tenant_id` while a
    * tenant-A-keyed cache entry still exists — closing the placeholder-vs-
    * stale-row race §7.3 names explicitly.
+   *
+   * `switchingToTenantSlug` (and the `AuthenticatedShellRoot` unmount/remount
+   * of `AppShell` — and therefore `TenantSwitcher` — it drives) is set ONLY
+   * once a silent switch is actually confirmed ('silent_ok'), never merely
+   * while attempting one. Setting it for the whole attempt (as this used to)
+   * unmounted `TenantSwitcher` the instant a user clicked an option and
+   * remounted a FRESH instance once the attempt settled — so on
+   * 'interaction_required'/'error', the calling `TenantSwitcher` instance's
+   * own `onSelect` (§6.1) was setting local state (`interactionRequiredSlug`/
+   * `errorSlug`) on an already-unmounted component: a silent no-op, so
+   * neither affordance ever rendered even though `switchTenant` itself had
+   * resolved correctly (confirmed live: attemptSilentSwitch resolves
+   * 'interaction_required' in well under a second, but the UI never showed
+   * it). This also matches AC1's own boundary more precisely than the old
+   * code did: interaction_required means NO switch happened at all — tenant
+   * A's own screen (sidebar included) must stay exactly as it was, not swap
+   * to a transition placeholder for an attempt that didn't pan out.
    */
   const switchTenant = useCallback(async (targetSlug: string): Promise<SwitchTenantOutcome> => {
-    setSwitchingToTenantSlug(targetSlug)
     try {
       const result = await attemptSilentSwitch(targetSlug)
 
       if (result.outcome === 'interaction_required') return 'interaction_required'
       if (result.outcome === 'error') return 'error'
 
-      const newToken = result.user.access_token
-      const newSession = await buildSessionFromToken(newToken)
+      setSwitchingToTenantSlug(targetSlug)
+      try {
+        const newToken = result.user.access_token
+        const newSession = await buildSessionFromToken(newToken)
 
-      // Step 1 (§7.3.1): cancel in-flight tenant-A fetches so a slow response
-      // can't land after the switch and repopulate a tenant-A-keyed entry,
-      // then REMOVE (not invalidate) the outgoing tenant's whole subtree in
-      // one prefix-matched call.
-      const outgoingTenantId = session?.tenant_id
-      if (outgoingTenantId) {
-        await qc.cancelQueries({ queryKey: tenantRoot(outgoingTenantId) })
-        qc.removeQueries({ queryKey: tenantRoot(outgoingTenantId) })
+        // Step 1 (§7.3.1): cancel in-flight tenant-A fetches so a slow response
+        // can't land after the switch and repopulate a tenant-A-keyed entry,
+        // then REMOVE (not invalidate) the outgoing tenant's whole subtree in
+        // one prefix-matched call.
+        const outgoingTenantId = session?.tenant_id
+        if (outgoingTenantId) {
+          await qc.cancelQueries({ queryKey: tenantRoot(outgoingTenantId) })
+          qc.removeQueries({ queryKey: tenantRoot(outgoingTenantId) })
+        }
+
+        setToken(newToken)
+        setSessionState(newSession)
+        return 'ok'
+      } finally {
+        setSwitchingToTenantSlug(null)
       }
-
-      setToken(newToken)
-      setSessionState(newSession)
-      return 'ok'
     } catch {
       return 'error'
-    } finally {
-      setSwitchingToTenantSlug(null)
     }
   }, [qc, session?.tenant_id])
 

@@ -2,7 +2,7 @@
 
 import { useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { getOidcManager } from '@/auth/OidcManager'
+import { getOidcManager, oidcManager } from '@/auth/OidcManager'
 import { useAuth } from '@/auth/AuthContext'
 import { setToken } from '@/api/client'
 import { decodeTokenPayload, resolveDisplayName } from '@/auth/tokenUtils'
@@ -31,7 +31,39 @@ export default function OidcCallbackPage() {
     if (_callbackStarted) return
     _callbackStarted = true
 
-    ;(async () => {
+    // REQ-384 fix: this route doubles as oidc-client-ts's silent_redirect_uri
+    // target when AuthProvider.switchTenant() (via attemptSilentSwitch() in
+    // tenantOidcRegistry.ts) calls signinSilent() -- tenantOidcRegistry never
+    // sets a distinct silent_redirect_uri, so oidc-client-ts defaults it to
+    // the same redirect_uri used for the normal top-level login flow.
+    // signinSilent() opens a HIDDEN IFRAME at that URI and blocks on
+    // something inside it calling signinSilentCallback(). Previously this
+    // page unconditionally ran the top-level signinRedirectCallback() flow no
+    // matter where it loaded, so nothing ever relayed the iframe's callback
+    // URL back to the parent window -- the pending signinSilent() promise
+    // hung forever, in every environment, regardless of whether the target
+    // realm actually had an SSO session to find.
+    //
+    // oidc-client-ts's IFrameNavigator.callback() (invoked by
+    // signinSilentCallback()) is a stateless postMessage relay to
+    // window.parent -- it doesn't touch this window's manager state at all --
+    // so any UserManager instance works here; no need to resolve the
+    // tenant-specific manager or thread a separate silent_redirect_uri
+    // through the registry. Detect "I'm the hidden iframe" and relay instead
+    // of running the full sign-in flow (which would also be wrong here: this
+    // iframe is a throwaway document, and this app never expects a redirect
+    // callback to load inside a frame in any other legitimate flow).
+    if (window.self !== window.top) {
+      oidcManager.signinSilentCallback().catch(() => {
+        // The relay itself may throw (e.g. malformed callback URL) but that's
+        // independent of whether the parent window's pending signinSilent()
+        // promise settles -- oidc-client-ts resolves/rejects it based on what
+        // was actually relayed, or its own timeout. Nothing more to do here.
+      })
+      return
+    }
+
+    (async () => {
       try {
         const m = await getOidcManager()
         const user = await m.signinRedirectCallback()

@@ -28396,7 +28396,7 @@ requirements:
   - id: REQ-383
     title: "Company appearance settings screen: apply/adjust branding colours, surface contrast refusal, surface rejected-out-of-scope-change confirmation"
     owner: FRONTEND-DEV
-    status: pending
+    status: done
     stage: S8
     impl_order: 743  # letflow-queue task id, GH#1631. Registered 2026-09-20 by ORCH;
       # corrects a fabricated/self-assigned id (740, which also collided with

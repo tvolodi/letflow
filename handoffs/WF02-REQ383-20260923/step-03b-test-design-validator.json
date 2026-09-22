@@ -1,0 +1,47 @@
+{
+  "handoff_id": "a0000000-0004-4000-8000-00000000000b",
+  "run_id": "WF02-REQ383-20260923",
+  "workflow_id": "WF-02",
+  "step": "03b",
+  "from_agent": "ORCH",
+  "to_agent": "TEST-DESIGN-VALIDATOR",
+  "file": "handoffs/WF02-REQ383-20260923/step-03b-test-design-validator.json",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S8",
+    "requirement_ids": ["REQ-383"],
+    "related_handoff_ids": [
+      "handoffs/WF02-REQ383-20260923/step-00-git-setup.json",
+      "handoffs/WF02-REQ383-20260923/step-03-test-designer.json"
+    ],
+    "artifacts_in": [
+      "test/specs/REQ-383.md",
+      "web/src/components/ui/__tests__/StatusBadge.test.tsx",
+      "web/tests/e2e/pipelines/tenant-branding.pipeline.e2e.spec.ts",
+      "web/src/pages/admin/AppearanceSettingsPage.tsx",
+      "web/src/api/tenantSettings.ts",
+      "test/fixtures/uat/scenarios/platform/tenant-branding-applied.yaml"
+    ]
+  },
+  "task": {
+    "description": "WF-02 Step 3b (Test design gate, hard gate) for REQ-383 per docs/agents/workflows/WF-02_requirement_implementation.md. Independently re-verify TEST-DESIGNER's 'no gap found' claim against each of REQ-383's 5 acceptance criteria.",
+    "acceptance_criteria": [
+      "Every AC has >=1 runnable test, not skipped",
+      "No TODO: implement test left in the spec",
+      "Test fixtures are per-test isolated, no cross-test pollution",
+      "Tests are self-sufficient, no ordering dependency",
+      "No hardcoded secrets/connection strings",
+      "AC4's construction/enumeration verification method independently confirmed as the requirement's own stated method, not a TEST-DESIGNER rationalization"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "Independently read test/specs/REQ-383.md, StatusBadge.test.tsx's REQ-383/AC3 describe block (TC-REQ383-01..04), all 3 tests in tenant-branding.pipeline.e2e.spec.ts, AppearanceSettingsPage.tsx, and tenantSettings.ts. All 5 checklist items pass for all 5 ACs:\n\n(a) Runnable test per AC, none skipped: AC1 -> e2e 'EO-001/AC1' test (confirmation banner + live --color-brand-600 read via getComputedStyle, no page.reload()). AC2 -> e2e 'EO-003/AC2' test (error banner text asserted non-empty, NOT matching raw-blob patterns %\\{|Ecto.Changeset|\"errors\":|changeset, matching plain-language pattern 4.5|contrast|WCAG, plus unchanged --color-brand-600 and zero confirmation count). AC3 -> StatusBadge.test.tsx TC-REQ383-01..04, calling the REAL unmocked applyBrandingColors (imported directly from web/src/theming/applyBranding.ts, not a stub) and asserting byte-identical style values before/after, plus TC-REQ383-04's explicit not.toBe('var(--color-brand-600)') pin. AC4 -> verified by construction/enumeration (see below), matching the requirement's own stated method. AC5 -> confirmed test/fixtures/uat/scenarios/platform/tenant-branding-applied.yaml has zero 'ISS-0527' matches (grepped directly), and the e2e 'EO-005' test exists with the required first-paint/settled-frame screenshot pair and a polarity-sensitive flash assertion. Grepped all three test files for TODO|skip|xit(|test.skip|it.skip -- zero matches in any.\n\n(b) No 'TODO: implement test' anywhere in test/specs/REQ-383.md -- confirmed by grep, zero matches.\n\n(c)/(d) e2e test isolation, read carefully per the assigned focus: all 3 tests in tenant-branding.pipeline.e2e.spec.ts independently call seedBrandColor(request, adminToken, PASSING_COLOR) as their own first browser-facing action (test 1 line 68, test 2 line 102, test 3 line 138) via a direct API PATCH to /api/v1/tenant/settings -- none of the 3 reads readAppliedPrimary() or any UI state left over from a prior test before first re-seeding it itself. seedBrandColor is idempotent (a PATCH that sets a known absolute value, not a relative/incremental one), so re-running it in any order or in isolation produces the same starting state every time -- test 2's baseline assertion (line 108: baselineColor === PASSING_COLOR) and test 3's pre-navigation seed both hold whether or not the other tests ran, and in whatever order Playwright schedules them. No test reads or depends on DOM/browser state a previous test left behind; each opens its own page context relationship via loginWithToken+navigateSpa (test 3 additionally uses a deliberately fresh page.goto for its first-paint capture, unrelated to ordering). Ran the same check across StatusBadge.test.tsx: afterEach(cleanup, vi.clearAllMocks) resets the DOM between every test in the file, and each TC-REQ383-0x test calls its own render() and captures its own before/after snapshot inline -- no shared module-level state, no dependency on execution order. Both files pass (c) and (d).\n\n(e) No hardcoded secrets: #1864AB/#228be6 are non-secret test-fixture hex colours, independently confirmed (grep on test/letflow/routers/tenant_settings_test.exs) to be the exact same values that file's own REQ-382 AC2 test uses for its passing/failing contrast cases -- deliberate cross-file fixture parity, not a credential or connection string. Credentials in the e2e spec go through resolveCredential('UAT_QA_ADMIN_PASSWORD', 'admin-pass') and getKeycloakToken, the existing env-var-backed helper pattern already used by every other pipeline spec in web/tests/e2e/pipelines/ -- no literal token/password/connection-string found.\n\nAC4 construction/enumeration claim independently re-verified: read handoffs/WF02-REQ383-20260923/step-00-git-setup.json's context.requirement_text directly (not the spec's paraphrase). It states verbatim: 'since this screen's own form cannot construct an out-of-scope key by construction, this criterion is satisfied by confirming the screen has no way to submit one, not by testing a server-side reject path a same-origin form can never trigger' -- this is the requirement's own stated verification method, not a TEST-DESIGNER rationalization. Independently re-read AppearanceSettingsPage.tsx and tenantSettings.ts and confirmed the enumeration by construction still holds against the actual shipped file: exactly one <input type=\"color\" id=\"brand-color-primary\"> (line 154-160) bound to exactly one state variable (draftColor), exactly one mutation.mutate(draftColor) call site (line 108), exactly one request-body constructor (tenantSettingsApi.patchBrandColorPrimary's literal { settings: { brand_colors: { primary } } }, tenantSettings.ts lines 32-35) with no spread/Object.assign/dynamic key/raw-JSON escape hatch and no other client.patch/post/put call anywhere in either file. Confirmed by direct reading, not by trusting the spec's claim.\n\nNo check failed. PASS.",
+    "artifacts_out": [],
+    "next_action": "Route to TEST-RUNNER (4)",
+    "issues": []
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

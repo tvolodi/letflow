@@ -1,0 +1,57 @@
+{
+  "handoff_id": "d4e5f6a7-0004-4000-8000-000000000004",
+  "run_id": "WF02-REQ383-20260923",
+  "workflow_id": "WF-02",
+  "step": "02d",
+  "from_agent": "ORCH",
+  "to_agent": "REVIEWER",
+  "file": "handoffs/WF02-REQ383-20260923/step-02d-reviewer.json",
+  "created_at": "2026-09-22T21:33:36Z",
+  "started_at": "2026-09-22T21:33:36Z",
+  "completed_at": "2026-09-22T21:33:36Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S8",
+    "requirement_ids": ["REQ-383"],
+    "requirement_text": {
+      "REQ-383": "See handoffs/WF02-REQ383-20260923/step-00-git-setup.json's context.requirement_text for the full text -- not restated here to avoid drift; read it there."
+    },
+    "related_handoff_ids": [
+      "handoffs/WF02-REQ383-20260923/step-02b-frontend-dev.json",
+      "handoffs/WF02-REQ383-20260923/step-02c-security-reviewer.json"
+    ],
+    "artifacts_in": [
+      "web/src/api/tenantSettings.ts",
+      "web/src/pages/admin/AppearanceSettingsPage.tsx",
+      "web/src/router.tsx",
+      "web/src/components/ui/__tests__/StatusBadge.test.tsx",
+      "test/fixtures/uat/scenarios/platform/tenant-branding-applied.yaml",
+      "web/tests/e2e/pipelines/tenant-branding.pipeline.e2e.spec.ts",
+      "lib/letflow/design/req383-appearance-settings-screen.md"
+    ],
+    "owned_modules": []
+  },
+  "task": {
+    "description": "WF-02 Step 2d (REVIEWER hard gate) for REQ-383, per docs/agents/workflows/WF-02_requirement_implementation.md and .claude/agents/reviewer.md. Frontend-only change (tenant appearance settings screen calling REQ-382's already-merged PATCH /api/v1/tenant/settings). Applied the four reviewer questions, checked docs/anti-patterns.md, and specifically verified FRONTEND-DEV's two claimed deviations from the design doc's literal draft (hardcoded hex fallback removed; named CSS colours used in regression test in place of hex literals) against both the guard suite's actual regex and the design intent those deviations touch.",
+    "acceptance_criteria": [
+      "idiomatic-vs-crutch verdict against web/'s existing conventions",
+      "supervision question explicitly answered (N/A for frontend-only, confirmed no backend/OTP file touched)",
+      "type-safety gap check (any/unchecked casts/loose typing)",
+      "scope-creep check against the file list and against EditTenantPage.tsx/client.ts/other drift items",
+      "the two documented deviations independently verified, not trusted from the handoff narrative",
+      "docs/anti-patterns.md checked for a matching mistake pattern"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "Reviewed the full diff (git diff main --stat / git diff main for tracked-file changes, direct Read for the three new files) against .claude/agents/reviewer.md's four questions.\n\n1. Idiomatic vs. crutch: idiomatic, follows web/'s existing conventions exactly, nothing invented. web/src/api/tenantSettings.ts follows the web/src/api/<domain>.ts + client.<verb>() pattern used by tenants.ts (client.patch<T>(url, body)), correctly kept as its own module rather than folded into tenants.ts since REQ-382's endpoint has no target-tenant path parameter (its own moduledoc states this rationale explicitly). AppearanceSettingsPage.tsx uses useMutation (TanStack Query) exactly as EditTenantPage.tsx does, calls useToast() the same way, places the PLATFORM_ADMIN role guard after all hooks in the same byte-identical shape as EditTenantPage.tsx line 116-117, and reuses the same inline style-object convention (labelStyle/fieldGroupStyle) rather than introducing a new styling approach. It reuses BrandingProvider.tsx's own applyBrandingColors/BRAND_COLOR_CSS_PROPERTY (REQ-283 infrastructure) rather than duplicating branding logic -- read applyBranding.ts/brandingDefaults.ts in full and confirmed applyBrandingColors iterates only its own closed allowlist's keys, never the caller object's keys, so this screen cannot widen which CSS custom properties get written.\n\n2. Supervision: not applicable. Confirmed via `git diff main --stat` that no lib/letflow/ or priv/repo/migrations/ file is touched -- every changed/new file is under web/, test/fixtures/, web/tests/, or lib/letflow/design/ (a markdown design doc, not code). No OTP/supervision surface exists in this diff.\n\n3. Type-safety gaps: none introduced. No `any` anywhere in the new/changed files. `const apiErr = err as ApiError` in the onError handler is the same narrowing-cast shape EditTenantPage.tsx already uses (`err as { status?: number }`), followed by a typeof guard (`typeof detail === 'string'`) before use, not a blind cast used unchecked. TenantSettingsPatchResponse.settings is typed Record<string, unknown> for the full merged-settings map, which is appropriate -- it is a passthrough display value never destructured/trusted for logic, and REQ-382's actual response shape is open-ended by design (arbitrary tenant settings, not just brand_colors). No new class of representable-but-invalid state is introduced by this diff (no new discriminated unions/enums needed) -- nothing to file under docs/issues/ for this one.\n\n4. Scope creep: none found. router.tsx's diff is exactly one import line + one route entry, nothing else touched in that file. StatusBadge.test.tsx's diff is additive-only (one new describe block, 4 new tests), no existing test changed. tenant-branding-applied.yaml's diff removes only the stale ISS-0527 NOTE block (now factually superseded now that the pipeline_test file exists and is real) and leaves the ADDENDUM and everything else untouched -- matches design doc §7's stated scope. web/src/api/client.ts and web/src/api/tenants.ts are both unmodified (confirmed by reading them -- no diff exists for either). EditTenantPage.tsx is not touched. No drift item from web/README.md, and no REQ-119/120/121 concern, is fixed in passing anywhere in this diff.\n\nFRONTEND-DEV's two claimed deviations, independently verified rather than trusted from the handoff:\n(a) Removed '#1c64f2' hardcoded fallback hex literal from draftColor's initial state. Confirmed in the actual file: both appliedColor and draftColor derive purely from readCurrentAppliedPrimary() (getComputedStyle read of the SAME --color-brand-600 custom property applyBrandingColors/BrandingProvider write to), with an explicit code comment explaining the empty-string fallback is a legal state (tokens.css's cascade default then applies). The one remaining literal-looking string in the file is `'var(--color-brand-600)'` used as the preview swatch's fallback background when appliedColor is empty -- this is a CSS custom-property reference, not a colour literal, and reads the same property name BRAND_COLOR_CSS_PROPERTY.primary resolves to (brandingDefaults.ts), so it cannot drift from the real allowlisted property. This is a genuine guard-compliance fix that also improves on the design's literal draft (one fewer hardcoded colour anywhere in application code), not a coverage weakening.\n(b) StatusBadge.test.tsx's regression block uses named CSS colours (rebeccapurple/darkorange/seagreen/midnightblue) as applyBrandingColors() inputs instead of hex literals. Read web/tests/guards/forbidlist.ts's literal-colour regex directly: `/#[0-9a-fA-F]{3,8}\\b|(?<![.a-zA-Z0-9_$])rgba?\\([^)]+\\)|(?<![.a-zA-Z0-9_$])hsla?\\([^)]+\\)/` -- it matches only hex/rgb()/hsla() forms, never CSS named colours, so this is a real, correctly-targeted guard-compliance fix, not a loophole invented to dodge the guard's intent. Substantively, the AC3/EO-002 regression test's claim is that a tenant brand-colour change (ANY valid CSS colour string passed into the real, unmocked applyBrandingColors -- see the describe block's own comment citing design doc §6) must never alter StatusBadge's own resolved styles. applyBrandingColors treats its `primary` argument as an opaque string passed straight to `style.setProperty` -- it does no hex-specific parsing, validation, or contrast computation (that only happens server-side, REQ-382), so a named colour exercises the exact same code path, with the exact same assertion semantics (before/after style equality, and never-equals-var(--color-brand-600) in TC-REQ383-04), as a hex literal would. Nothing about the test's proof is weakened by the substitution -- the four tests still assert byte-for-byte identity of StatusBadge's DOM style output across a real call to the un-mocked branding function.\n\ndocs/anti-patterns.md checked: no entry in the file matches this diff's shape (grepped for frontend/literal-colour/guard/React/TypeScript-related entries; the two hits found -- a frontend regression-test verification note and an unrelated frontend/backend contract-mismatch entry -- do not apply here). No new anti-pattern found worth adding.\n\nNo BLOCKER, no rework needed. One non-blocking note for the record: the swatch's `appliedColor || 'var(--color-brand-600)'` fallback is a CSS-variable *reference* rather than a resolved colour, which is correct behaviourally, but worth flagging as the kind of small inline styling detail that would benefit from a shared helper if a third settings screen ever needs the same 'read applied brand colour or show unset' pattern -- not scope creep to add now, just worth watching.",
+    "artifacts_out": [
+      "handoffs/WF02-REQ383-20260923/step-02d-reviewer.json"
+    ],
+    "next_action": "Route to TEST-DESIGNER (3)",
+    "issues": []
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

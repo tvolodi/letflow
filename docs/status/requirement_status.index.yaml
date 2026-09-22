@@ -4291,10 +4291,31 @@ volumes:
 
   - volume: 21
     path: docs/status/requirement_status.v21.yaml
-    status: current
+    status: closed
     opened: 2026-09-20
-    entries: 31
+    closed: 2026-09-22
+    entries: 32
+    lines: 1271
+    bytes_working_tree: 79932
+    frozen_prefix_lines: 1235
+    frozen_prefix_sha256: "a3c3cc240566775702ddef4322aefdc1050b3f7611f2c624d7e73bdec435c5bc"
     note: >
+      Closed by DOC-UPDATER's own REQ-383 done-event append, composed during
+      feature/WF02-REQ383-20260923's own Step Final rebase onto fresh
+      origin/main (which had independently gained REQ-384's and REQ-385's own
+      appends since REQ-383's entry was first written against a stale
+      baseline). Real rebase conflict on this file (both sides appended after
+      the same tail entry), resolved by keeping BOTH -- origin's REQ-384/
+      REQ-385 entries first, this branch's REQ-383 entry appended last -- and
+      on this index file's own `entries:`/`note:` field, resolved the same
+      way (both sides' increments are real and additive; final count is
+      origin's 31 plus this branch's own +1). Recounted directly post-rebase:
+      `grep -c "^  - req:" docs/status/requirement_status.v21.yaml` = 32
+      on-disk entries, 1235 lines -- over the 1,200-line roll ceiling (bytes,
+      77556, stayed under the 120000-byte ceiling; only the line ceiling was
+      crossed) -- rolled to volume 22 per the roll rule. No entry was moved,
+      edited or deleted.
+
       Incremented to 31 by DOC-UPDATER's own REQ-385 done-event append
       (WF02-REQ385-20260922's Step 6 -- an unusual close-out via
       documented-vacuous-conclusion, no code diff, see the entry's own
@@ -4584,6 +4605,18 @@ volumes:
       #1668) -- `grep -c "^  - req:" docs/status/requirement_status.v21.yaml`
       = 5 on-disk entries. 272 lines / 15587 bytes, well under the
       1200-line/120000-byte roll ceiling, so no roll triggered.
+
+  - volume: 22
+    path: docs/status/requirement_status.v22.yaml
+    status: current
+    opened: 2026-09-22
+    entries: 0
+    note: >
+      Opened by DOC-UPDATER's own REQ-383 done-event append rolling volume
+      21 (WF02-REQ383-20260923's Step Final rebase onto origin/main), per
+      this index's `roll_rule.on_exceed` procedure. `entries:` will be
+      incremented in place as real events land -- this file currently
+      contains only the header and an empty `history:` list.
 
   - volume: 20
     path: docs/status/requirement_status.v20.yaml

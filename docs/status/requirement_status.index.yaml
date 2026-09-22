@@ -4293,18 +4293,18 @@ volumes:
     path: docs/status/requirement_status.v21.yaml
     status: current
     opened: 2026-09-20
-    entries: 23
+    entries: 24
     note: >
-      Incremented to 23 during WF02-REQ376-20260922's own Step Final rebase
-      onto origin/main: this hunk conflicted because both sides had
-      independently incremented from a common ancestor with DIFFERENT real
-      entries appended (main's own REQ-380 done-event append at 22, and this
-      run's REQ-376 `started`-event-count-correction at 20). Recounted
-      directly post-rebase: `grep -c "^  - req:"
-      docs/status/requirement_status.v21.yaml` = 23 on-disk entries at this
-      point in the rebase sequence (further REQ-376 commits later in this
-      same rebase append more events and will bump this count again). Well
-      under the 1200-line/120000-byte roll ceiling, no roll triggered.
+      Incremented to 24 during WF02-REQ376-20260922's own Step Final rebase
+      onto origin/main, resolving a second, nested conflict on this same
+      field: both sides had independently incremented from a common
+      ancestor with DIFFERENT real entries appended (main's own REQ-380
+      done-event append at 22, and this run's own REQ-376
+      done-event-plus-count-correction sequence at 21). Recounted directly
+      post-rebase: `grep -c "^  - req:"
+      docs/status/requirement_status.v21.yaml` = 24 on-disk entries. 868
+      lines / 53571 bytes, well under the 1200-line/120000-byte roll
+      ceiling, so no roll triggered. Prior notes preserved below verbatim.
 
       Incremented to 19 during WF03-ISS0780-20260922's own Step Final rebase
       onto origin/main: this hunk conflicted because both sides had

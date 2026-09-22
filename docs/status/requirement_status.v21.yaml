@@ -825,3 +825,44 @@ history:
       strategy.md Decision C and docs/issues/ISS-0014.yaml, with REVIEWER
       sign-off. Backend half; REQ-377 (frontend, already filed,
       impl_order 737) is the follow-on operator screen.
+  - req: REQ-376
+    event: done
+    agent: DOC-UPDATER
+    at: "2026-09-22T12:06:47Z"
+    note: >
+      Postgres-native monthly PARTITION BY RANGE (created_at) partitioning
+      for events/events_archive shipped on feature/WF02-REQ376-20260922,
+      per decision docs/migration/decisions/
+      0037-event-store-partitioning-and-whole-partition-retirement.md
+      (amends 0003 Decision C point 2, cross-references ISS-0014, REVIEWER
+      sign-off recorded 2026-09-22). Whole-month DETACH+ATTACH retirement
+      replaces row-by-row DELETE for expired history, proven single-DDL
+      and non-blocking to concurrent writes (EO-001); keep_forever-policy
+      records are provably identical in count before/after retirement
+      (EO-002); an instance with history in an already-retired month still
+      replays complete, gap-free history afterward (EO-003); next month's
+      partition is pre-created ahead of need with a real idempotent
+      lookahead sweep (AC5), no write path ever waits on partition
+      creation; the pre-existing Letflow.EventStore.archive/1 row-level
+      move path is explicitly stated to coexist, not be retired/replaced.
+      RELEASE-VALIDATOR independently re-verified all 6 acceptance
+      criteria against the real code/tests/decision record (not against
+      prior self-reports), re-ran the REQ-376-specific test suites
+      directly against Postgres, and spot-checked the EO-001/EO-002/EO-003
+      test bodies line-by-line to confirm genuine mechanism proofs (real
+      captured SQL / concurrent-write / cross-table count / cross-month
+      replay assertions), not return-value-only checks. Went through 2
+      design reworks, 3 implementation reworks, 2 test-design reworks, 2
+      test-runner rounds and 2 release-validator rounds before all gates
+      passed -- the final release-validator round (PASS,
+      step-05-release-validator-final.json) re-confirmed a fresh
+      mix letflow.lint_handoffs 0-violation run after the prior FAIL
+      (step-05-release-validator.json) found and ELIXIR-DEV/TEST-RUNNER
+      corrected two handoff-schema violations in this run's own artifacts
+      (a completed_at/started_at ordering inversion and a non-schema
+      metadata key); full rework history preserved in
+      handoffs/WF02-REQ376-20260922/, not restated further here.
+      TEST-RUNNER's final full-suite run: 4632/4632 passed. Design:
+      lib/letflow/design/req376-partition-event-retirement.md. REQ-377
+      (the operator-facing retirement screen depending on this backend)
+      remains pending, unblocked by this merge.

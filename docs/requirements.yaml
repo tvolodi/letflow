@@ -27882,7 +27882,7 @@ requirements:
   - id: REQ-376
     title: "Partition-based event-history retirement: whole-month DROP-style retirement with protected-record exemption and post-retirement replay (backend)"
     owner: ELIXIR-DEV
-    status: in_progress
+    status: done
     stage: S2
     impl_order: 736  # letflow-queue task id, GH#1624. Registered 2026-09-20 by ORCH;
       # corrects a fabricated/self-assigned id (733) that was never a real

@@ -61,6 +61,11 @@ fix_direction: >
   (check its full header set) are similarly missing from this list,
   rather than fixing only the one header this discovery happened to
   hit.
-queue_ref: null  # ORCH to assign via letflow-queue register_task
-github_ref: null  # ORCH to assign
+queue_ref: "Q-779"  # letflow-queue task id 779. NOTE: the queue service's
+  # own id/issue_ref numbering assigned "ISS-0779" -- already taken on
+  # main by an unrelated CI-race issue filed by a concurrent session.
+  # Local filename stays ISS-0780 per the docs/issues/ collision
+  # precedent established repeatedly this session. Registered
+  # 2026-09-22 by ORCH.
+github_ref: GH-1704
 status: open

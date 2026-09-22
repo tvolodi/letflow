@@ -1,0 +1,60 @@
+{
+  "handoff_id": "a1000000-0003-4000-8000-000000000003",
+  "run_id": "WF02-REQ386-20260923",
+  "workflow_id": "WF-02",
+  "step": "03",
+  "from_agent": "ORCH",
+  "to_agent": "TEST-DESIGNER",
+  "file": "handoffs/WF02-REQ386-20260923/step-03-test-designer.json",
+  "created_at": "2026-09-22T22:56:26Z",
+  "started_at": "2026-09-22T22:56:26Z",
+  "completed_at": "2026-09-22T23:46:26Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S6",
+    "requirement_ids": ["REQ-386"],
+    "requirement_text": {
+      "REQ-386": "Time-limited, expiring signed URLs for instance-attachment byte content, replacing direct unbounded authenticated GET. WHAT EXISTS TODAY: REQ-211/212 built a tenant-isolated attachment store; cross-tenant, cross-instance-same-tenant, malformed/never-issued-UUID, and genuinely-nonexistent-id all fold to the same {:error, :not_found} in fetch_scoped_attachment_content/3, rendered via Response.not_found(conn) -- this behavior is UNCHANGED by REQ-386 and its existing tests (test/letflow/routers/req212_attachments_routes_test.exs, test/letflow/repository/attachments_test.exs) must still pass untouched. THIS REQUIREMENT added: (1) POST /instances/:id/attachments/:attachment_id/link (:AttachmentsRead-scoped) -- mints a signed, time-limited token (5-minute/300-second expiry) and returns {attachment_id, token, url, expires_at, expires_in_seconds}. (2) GET /instances/:id/attachments/:attachment_id/link-content?link_token=... (:AttachmentsRead-scoped) -- verifies the token before serving content; an expired-or-invalid token returns 410 with a fixed plain-language detail via Response.attachment_link_expired/1, never document bytes. (3) A fresh link request for the same attachment_id after a prior one expired succeeds normally. (4) An expired-or-invalid-token response for a cross-tenant attachment must be byte-identical (status/headers/body) to the response for a token referencing a never-issued attachment id."
+    },
+    "related_handoff_ids": [
+      "handoffs/WF02-REQ386-20260923/step-02d-reviewer.json",
+      "handoffs/WF02-REQ386-20260923/step-02c-security-reviewer.json",
+      "handoffs/WF02-REQ386-20260923/step-01-code-designer.json"
+    ],
+    "artifacts_in": [
+      "lib/letflow/repository/attachment_links.ex",
+      "lib/letflow/routers/instances.ex",
+      "lib/letflow/api/error.ex",
+      "lib/letflow/api/response.ex",
+      "lib/letflow/design/req386-attachment-signed-links.md",
+      "test/letflow/routers/req212_attachments_routes_test.exs"
+    ],
+    "owned_modules": []
+  },
+  "task": {
+    "description": "Perform WF-02 Step 3 (test design) for REQ-386 on branch feature/WF02-REQ386-20260923 per docs/agents/workflows/WF-02_requirement_implementation.md Step 3. Scope test: real executable surface (new context module Letflow.Repository.AttachmentLinks + two new routes) -- proceed to full procedure. Write test/specs/REQ-386.md and test code under test/letflow/ covering all 6 acceptance criteria, especially AC4's byte-identical cross-tenant-vs-never-issued assertion. Do NOT modify test/letflow/routers/req212_attachments_routes_test.exs or test/letflow/repository/attachments_test.exs. No wall-clock sleep -- use AttachmentLinks.issue/3's/verify/3's injectable now: option throughout.",
+    "acceptance_criteria": [
+      "Every acceptance criterion (1-6) has >=1 test case that would fail if violated",
+      "AC4's byte-identical assertion constructed exactly as specified: cross-tenant-presented token vs. never-issued attachment id, same status/headers/body",
+      "No test depends on wall-clock time (Process.sleep) or unseeded randomness",
+      "test/letflow/routers/req212_attachments_routes_test.exs and test/letflow/repository/attachments_test.exs left byte-for-byte untouched",
+      "mix letflow.check.test run and real output quoted before handing off to TEST-DESIGN-VALIDATOR"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "Scope test: YES, real executable surface (Letflow.Repository.AttachmentLinks.issue/3+verify/3, two new HTTP routes) -- proceeded to full test-design procedure, not routed to Step 5.\n\nWrote test/specs/REQ-386.md (16 test cases mapped to all 6 ACs, plus an explicit 'AC4 construction' section walking through the cross-tenant-vs-never-issued mechanism).\n\nWrote test/letflow/repository/attachment_links_test.exs (12 tests, unit-level, Letflow.DataCase real Postgres): valid round-trip, exact-300s expiry bound, expired via injected clock (both a normal past-expiry case and a strict-boundary case at exactly expires_at), fresh issuance after a prior one expired (AC3's statelessness), malformed token (no separator / bad base64 / bad JSON / empty string, 4 cases), wrong-tenant token (signed under tenant A, verified under tenant B, no expiry involved), tampered payload (payload segment swapped for a different well-formed payload, original signature kept), tampered signature (single byte flipped). Every expiry-dependent case uses AttachmentLinks' own opts[:now] injection -- zero Process.sleep anywhere.\n\nWrote test/letflow/routers/req386_attachment_links_routes_test.exs (11 tests, route-level, same Letflow.DataCase/dispatch-Instances.call/2 idiom as req212_attachments_routes_test.exs): AC1 (issue response shape, issued link usable before expiry with correct bytes/content-type/content-disposition, 404 for a nonexistent attachment_id on issue), AC2 (expired token -> 410 with the exact fixed detail string and an explicit assertion that neither the real document bytes nor a \"content\" key appear anywhere in the body; malformed link_token and missing link_token both also -> 410), AC3 (expired attempt fails, then a fresh link for the SAME attachment_id issued via a real POST and used successfully), AC4 (two cases: (a) tenant 2's caller presents tenant 1's validly-issued-but-foreign token against tenant 2's own real, different attachment_id vs. against a fabricated never-issued UUID -- asserted status/content-type header/full resp_body byte-identical, no trace_id normalization needed since build_conn/4 assigns a fixed trace_id on every request, mirroring req212's own established technique; (b) a simpler expired-vs-garbage-token byte-identical case for the same tenant), permission enforcement (AGENT_RUNNER, which this router's own moduledoc documents as holding neither AttachmentsRead nor AttachmentsManage, gets 403 on both new routes).\n\nSince the route handlers (handle_issue_attachment_link/3, handle_get_attachment_link_content/3) call AttachmentLinks.issue/verify with NO now: option of their own (confirmed by reading lib/letflow/routers/instances.ex directly -- the injectable clock is a Letflow.Repository.AttachmentLinks-boundary-only affordance, not threaded through the HTTP layer), every route-level 'expired' test mints an already-past-expiry token directly via AttachmentLinks.issue/3's own now: option (an already-past DateTime.utc_now()-301s) and then presents that token through a normal HTTP GET -- the route's own verify call always uses real wall-clock time, and since the token's own embedded expires_at is already in the past relative to ANY real 'now', it is deterministically expired the instant it's presented. No Process.sleep anywhere in either test file -- confirmed by grep, zero hits.\n\nVerification run: mix letflow.check.test (full suite via scripts/test_parallel.sh, plus isolated wasm_hang/lua_wallclock_race subprocesses) -- ran to completion synchronously (~470s main suite + isolated runs), real output captured to a log file and read in full (118,956 lines). Result: exited 1 due to 2 PRE-EXISTING, UNRELATED failures in test/letflow/identity_test.exs (REQ-019 acceptance criterion 1, resolve_tenant_by_realm/1 and resolve_realm_by_tenant/1 -- both Ecto.NoResultsError from test/support/bpm_default_realm_displacement.ex's with_lock/1 helper failing to find the seeded bpm-default tenant). Structural attribution per core-directives.md: `git status --porcelain` shows this run's diff is EXCLUSIVELY 3 new untracked files (test/specs/REQ-386.md, test/letflow/repository/attachment_links_test.exs, test/letflow/routers/req386_attachment_links_routes_test.exs) -- test/letflow/identity_test.exs and test/support/bpm_default_realm_displacement.ex do not appear in this diff at all, so route 1 (structurally, this branch cannot have caused it) applies cleanly. No ISS-0069 'default values for the optional arguments' substring was found attributable to my new code (the run never reached that check because it hard-failed earlier on the 2 real IdentityTest failures, which is itself a defect in that unrelated area, not evidence about my files).\n\nRan mix test on JUST the two new files in isolation to directly confirm they compile and pass cleanly: 'Result: 23 passed' (12 unit + 11 route tests), 0 failures, matching this spec's own case count exactly.\n\nReporting the 2 identity_test.exs failures to ORCH per 'No Issue Left Local-Only' -- these are pre-existing, unrelated to REQ-386's scope, and should be filed as their own issue (title suggestion: 'Letflow.IdentityTest REQ-019 bpm-default realm resolution tests fail with Ecto.NoResultsError' via test/support/bpm_default_realm_displacement.ex's with_lock/1) rather than blocking this step's PASS, per Unblock-Everything's scope boundary and Failure Attribution being structural.",
+    "artifacts_out": [
+      "test/specs/REQ-386.md",
+      "test/letflow/repository/attachment_links_test.exs",
+      "test/letflow/routers/req386_attachment_links_routes_test.exs"
+    ],
+    "next_action": "Route to TEST-DESIGN-VALIDATOR (Step 3b)",
+    "issues": [
+      "NOT THIS RUN'S SCOPE, forwarded per 'No Issue Left Local-Only': test/letflow/identity_test.exs's two REQ-019 tests (resolve_tenant_by_realm/1, resolve_realm_by_tenant/1, both around line 534-542) fail on this branch with Ecto.NoResultsError from test/support/bpm_default_realm_displacement.ex:118's with_lock/1 helper -- 'expected at least one result but got none' querying Letflow.Identity.Tenant where idp_realm_id == \"bpm-default\". Structurally cleared as pre-existing/unrelated to REQ-386: git status --porcelain shows this run's diff touches only 3 new test files under test/specs/ and test/letflow/{repository,routers}/, neither identity_test.exs nor bpm_default_realm_displacement.ex among them. ORCH should register this as its own queued issue rather than this run absorbing it."
+    ]
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

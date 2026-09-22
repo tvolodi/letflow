@@ -4293,8 +4293,23 @@ volumes:
     path: docs/status/requirement_status.v21.yaml
     status: current
     opened: 2026-09-20
-    entries: 28
+    entries: 29
     note: >
+      Incremented to 29 during WF02-REQ382-20260922's own Step Final rebase
+      onto origin/main, resolving a conflict on this same field: origin/main
+      had already advanced to 28 via WF02-REQ381-20260922's own Step Final
+      merge (itself resolving REQ-381 vs REQ-377's 26-vs-27 conflict, see
+      the immediately-preceding note below), while this branch's own
+      DOC-UPDATER had independently incremented to 28 for REQ-382's own
+      done-event append from a now-stale 27 baseline. Both sides' real
+      entries were preserved in the merged requirement_status.v21.yaml
+      (REQ-381 done ahead of REQ-382 done, matching their real `at:`
+      timestamps -- 16:08:43Z then 19:09:21Z). Recounted directly
+      post-rebase: `grep -c "^  - req:"
+      docs/status/requirement_status.v21.yaml` = 29 on-disk entries. 1086
+      lines / 67783 bytes, well under the 1200-line/120000-byte roll
+      ceiling, so no roll triggered. Prior notes preserved below verbatim.
+
       Incremented to 28 during WF02-REQ381-20260922's own Step Final merge
       of origin/main, resolving a conflict on this same field: this
       branch's own DOC-UPDATER had incremented to 26 for REQ-381's
@@ -4308,6 +4323,19 @@ volumes:
       docs/status/requirement_status.v21.yaml` = 28 on-disk entries. 1033
       lines / 63097 bytes, well under the 1200-line/120000-byte roll
       ceiling, so no roll triggered. Prior notes preserved below verbatim.
+      Corrected to 27 during WF02-REQ377-20260922's own Step Final rebase
+      onto origin/main, resolving a nested conflict on this same field:
+      both sides had independently incremented from a common ancestor
+      with DIFFERENT real entries appended (main's own ISS-0781
+      SCOPE-CHANGE/done-event append at 25, via
+      WF03-ISS0781-20260922's Step 6; and this run's own REQ-377
+      started+done pair, appended on top of a stale 24 baseline at what
+      this run's own DOC-UPDATER incorrectly declared as 26). Recounted
+      directly post-rebase: `grep -c "^  - req:"
+      docs/status/requirement_status.v21.yaml` = 27 on-disk entries. 987
+      lines / 61089 bytes, well under the 1200-line/120000-byte roll
+      ceiling, so no roll triggered. Prior notes preserved below
+      verbatim.
 
       Incremented to 25 by DOC-UPDATER's own ISS-0781 SCOPE-CHANGE/done-event
       append (WF03-ISS0781-20260922, Step 6), merged on top of a concurrent

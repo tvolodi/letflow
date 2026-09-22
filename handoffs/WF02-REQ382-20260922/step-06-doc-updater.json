@@ -1,0 +1,59 @@
+{
+  "handoff_id": "req382-step06",
+  "run_id": "WF02-REQ382-20260922",
+  "workflow_id": "WF-02",
+  "step": "06",
+  "from_agent": "ORCH",
+  "to_agent": "DOC-UPDATER",
+  "file": "handoffs/WF02-REQ382-20260922/step-06-doc-updater.json",
+  "created_at": "2026-09-22T19:09:21Z",
+  "started_at": "2026-09-22T19:09:21Z",
+  "completed_at": "2026-09-22T19:09:21Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S8",
+    "requirement_ids": ["REQ-382"],
+    "requirement_text": {
+      "REQ-382": "See docs/requirements.yaml (id: REQ-382) for the full text -- not restated here to avoid drift."
+    },
+    "related_handoff_ids": [
+      "handoffs/WF02-REQ382-20260922/step-05-release-validator.json"
+    ],
+    "artifacts_in": [
+      "handoffs/WF02-REQ382-20260922/step-05-release-validator.json"
+    ],
+    "owned_modules": []
+  },
+  "task": {
+    "description": "WF-02 Step 6 (Documentation Update) for REQ-382 per docs/agents/workflows/WF-02_requirement_implementation.md. Flip requirements.yaml status, append a done event to the current run-history volume, check README.md for staleness this requirement introduced, confirm no migration/decisions file was named by REQ-382's own acceptance criteria, complete this handoff, commit and push.",
+    "acceptance_criteria": [
+      "docs/requirements.yaml REQ-382 status flipped pending -> done",
+      "one done event appended (never rewritten) to the current run-history volume, with a real UTC clock timestamp, verified via git diff --numstat showing 0 deletions",
+      "requirement_status.index.yaml's current-volume entries count incremented to match the on-disk entry count",
+      "README.md checked for staleness caused by this requirement's new PATCH endpoint; updated if a current, reliable per-endpoint listing exists and would now be incomplete, otherwise say so explicitly",
+      "REQ-382's acceptance criteria re-read to confirm no docs/migration/stage-N-*.md or docs/migration/decisions/*.md file was named",
+      "artifacts_out lists every file actually touched, by name",
+      "handoff committed and pushed to feature/WF02-REQ382-20260922"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "docs/requirements.yaml: REQ-382's `status:` field flipped from `pending` to `done` (single-line diff, line 28304, nothing else touched). docs/status/requirement_status.v21.yaml (the current run-history volume per requirement_status.index.yaml): appended one `req: REQ-382, event: done` entry (agent: DOC-UPDATER, at: 2026-09-22T19:09:21Z, real UTC clock timestamp) summarizing the shipped PATCH /api/v1/tenant/settings endpoint, the WCAG AA contrast refusal, the partial-apply + audit-log recording of rejected out-of-scope keys, and RELEASE-VALIDATOR's independent PASS -- append verified via `git diff --numstat` (53 insertions, 0 deletions) and a `tail -n 8` re-read confirming the note text landed intact. File now 1040 lines / 64689 bytes, still well under the 1200-line/120000-byte roll ceiling (confirmed by `wc -l`/`wc -c`), so no roll was triggered. docs/status/requirement_status.index.yaml: volume 21's `entries:` count incremented from 27 to 28 to match the on-disk count (confirmed via `grep -c \"^  - req:\" docs/status/requirement_status.v21.yaml` = 28), following this file's own established convention of stacking a new dated note above the prior notes rather than overwriting them.\n\nREADME.md: read in full 'Migration status' and the API-surface description under 'What's here today'/'Running it'. Found that section already describes a pre-S4 snapshot (`Letflow.Router` serving only `/health`, `GET /api/tenant-config`, `GET /api/mobile/tenant-config`, explicitly stating 'This is the only working HTTP endpoint today') that predates REQ-382 entirely -- Stage 3/S4/S8 have long since shipped dozens of routers and routes (tenant_settings.ex among many others: promotions.ex, platform_migrations.ex, event_retention.ex, solution_packs.ex, etc. per this same run-history volume) that this listing already omits, independent of REQ-382. There is no other, currently-accurate per-endpoint API-surface listing/table anywhere else in README.md (checked; only this one stale section exists). Patching this one line to add REQ-382's new route would misleadingly imply the surrounding listing is otherwise current when it is not -- so, per the task's own instruction to say so explicitly rather than invent/patch a section that isn't reliable, README.md was left unmodified. This pre-existing, broader staleness (not introduced by REQ-382) is flagged here for a dedicated future doc-cleanup task rather than patched piecemeal in this step.\n\nRe-read REQ-382's acceptance_criteria in docs/requirements.yaml directly (all 6 listed): none names a docs/migration/stage-N-*.md or docs/migration/decisions/*.md file. Confirmed no such file needed touching for this step.",
+    "artifacts_out": [
+      "docs/requirements.yaml",
+      "docs/status/requirement_status.v21.yaml",
+      "docs/status/requirement_status.index.yaml",
+      "handoffs/WF02-REQ382-20260922/step-06-doc-updater.json"
+    ],
+    "next_action": "Route to ELIXIR-DEV for Step Final",
+    "issues": [
+      {
+        "severity": "MINOR",
+        "description": "README.md's 'What's here today'/'Running it' HTTP-endpoint listing is stale independent of REQ-382 -- it predates S4-S8 and still claims GET /health is 'the only working HTTP endpoint today', omitting dozens of routes shipped since. Not fixed here (out of this step's narrow scope, and a single-line patch would not make the section accurate); worth its own dedicated doc-cleanup task."
+      }
+    ]
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

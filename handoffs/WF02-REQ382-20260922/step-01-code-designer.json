@@ -1,0 +1,49 @@
+{
+  "handoff_id": "c0de5182-0001-4000-8000-000000000001",
+  "run_id": "WF02-REQ382-20260922",
+  "workflow_id": "WF-02",
+  "step": "01",
+  "from_agent": "ORCH",
+  "to_agent": "CODE-DESIGNER",
+  "file": "handoffs/WF02-REQ382-20260922/step-01-code-designer.json",
+  "created_at": "2026-09-22T16:38:14Z",
+  "started_at": "2026-09-22T16:38:14Z",
+  "completed_at": "2026-09-22T16:38:14Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S8",
+    "requirement_ids": ["REQ-382"],
+    "requirement_text": {
+      "REQ-382": "HTTP-reachable tenant-branding write path: PATCH endpoint, colour-contrast refusal, and rejected-out-of-scope-key activity-log recording (queue task 742, GH#1630). REQ-280/281/282/283 (all done) built the store and read side of tenant branding: Letflow.Identity.Tenant.settings_changeset/2 validates a closed brand_colors vocabulary (today exactly one key, \"primary\", 6-digit-hex format check only) via validate_brand_colors/2, and Letflow.Identity.update_tenant_settings/2 persists it. GET /api/tenant-config and GET /api/mobile/tenant-config serve it back out. web/src/theming/ applies it to --color-brand-600 on load. No HTTP-reachable write path exists today. THIS REQUIREMENT adds three things, all backend, none GUI work: (1) an authenticated, tenant-scoped write endpoint (e.g. PATCH /api/v1/tenant/settings), mounted behind Letflow.Plugs.ApiPipeline/AuthPipeline, restricted to a tenant-admin-class role -- follow the router family's existing role-check convention, do not invent a new one -- accepting a partial settings map and delegating to Letflow.Identity.update_tenant_settings/2 exactly as it exists today (do not change that function's own casting discipline); a request with only recognized keys/valid values succeeds and is visible on the next GET /api/tenant-config call. (2) Colour-contrast refusal (WCAG 2.1 AA, 4.5:1 normal text) -- add a contrast-ratio check (standard relative-luminance formula) to settings_changeset/2's validate_brand_colors/2, checking submitted brand_colors.primary against tokens.css's page/card background; state the exact threshold and formula used; reject with a plain-language error message the caller can surface verbatim; a rejected changeset must not partially apply -- the previously-stored colour stays in effect. (3) Rejected out-of-scope-key recording: when the PATCH request's raw input contains a key TenantSettings' closed vocabulary doesn't recognize, or a brand_colors sub-key beyond \"primary\", the endpoint must (a) apply only the recognized/valid part of the request (never fail the whole request for one out-of-scope key) and (b) write exactly one Letflow.Audit entry naming the tenant, the actor, the rejected key(s), and the attempted value(s). Explicitly out of scope: extending the brand_colors allowlist beyond \"primary\"; a general \"any tenant setting can be PATCHed\" endpoint beyond what brand_colors/app_name/logo_url already validate."
+    },
+    "related_handoff_ids": [],
+    "artifacts_in": [],
+    "owned_modules": [
+      "lib/letflow/routers/tenant_settings.ex",
+      "lib/letflow/identity/color_contrast.ex"
+    ]
+  },
+  "task": {
+    "description": "Perform WF-02 Step 1 (code design) for REQ-382 on branch feature/WF02-REQ382-20260922 per docs/agents/workflows/WF-02_requirement_implementation.md. Read docs/guides/backend_developer_guide.md, the relevant docs/migration/stage-8-*.md, docs/agents/instructions/security-invariants.md, docs/anti-patterns.md, and the existing source (lib/letflow/identity/tenant.ex, lib/letflow/identity.ex, lib/letflow/identity/tenant_settings.ex, lib/letflow/audit.ex, lib/letflow/audit/entry.ex, lib/letflow/routers/tenant_config.ex, lib/letflow/routers/tenants.ex, lib/letflow/routers/audit.ex, lib/letflow/api/authorization.ex, lib/letflow/api/authorized_router.ex, web/src/styles/tokens.css, web/src/pages/admin/AuditLogPage.tsx) to confirm the existing role-check convention, audit-entry shape, and reference background colours before designing. Write lib/letflow/design/req382-tenant-branding-write-path.md: public function signatures (@spec-style), the new route and router module, the contrast-check function signature/formula/threshold, the audit-entry shape, invariants (INV-1/INV-4/INV-7/INV-8 explicitly), DB touched (none new), cross-module dependencies, and open questions (not silently resolved). Validate every acceptance criterion maps to a concrete design element -- no TBDs. No implementation code -- signatures and type shapes only.",
+    "acceptance_criteria": [
+      "AC1: new authenticated tenant-admin-scoped route accepts settings PATCH; valid brand_colors.primary round-trips through GET /api/tenant-config on the next call -- testable over real HTTP",
+      "AC2: a hex-valid but WCAG-AA-failing colour is refused with a plain-language message naming why; previously-stored colour is unchanged after the attempt",
+      "AC3: a request with an out-of-allowlist top-level key or out-of-allowlist brand_colors sub-key applies only the recognized/valid part, never 500s or rejects the whole request for that reason alone",
+      "AC4: the same rejected-key request writes exactly one Letflow.Audit entry naming tenant/actor/rejected key(s)/attempted value(s); AuditLogPage's existing query must surface it with zero frontend changes -- design must confirm the audit entry shape matches what that page's existing query already reads",
+      "AC5: settings_changeset/2's cast list stays scoped to :settings only; TenantSettings' closed top-level key vocabulary is unchanged -- this endpoint must not be able to touch :status, :slug, :idp_realm_id, or :display_name",
+      "AC6: mix compile --warnings-as-errors and mix test must both pass (downstream on ELIXIR-DEV/TEST-RUNNER, but design must not preclude it); SECURITY-REVIEWER sign-off is mandatory before merge -- design with INV-4/INV-7/INV-8 (and any other applicable invariant) explicitly in mind"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "Wrote lib/letflow/design/req382-tenant-branding-write-path.md covering all three parts of REQ-382. Route: PATCH /api/v1/tenant/settings via a new Letflow.Routers.TenantSettings (use Letflow.Api.AuthorizedRouter, authz_patch \"/\", :TenantsManage -- reusing the existing :TenantsManage permission rather than minting a new atom, since the codebase's 5-role matrix has no dedicated tenant-admin role and only PLATFORM_ADMIN holds :TenantsManage/:UsersManage/:GroupsManage today, confirmed by reading lib/letflow/api/authorization.ex's role_allows?/2 clauses directly -- matching three existing precedents (onboarding, platform-migrations, event-retention) that reuse :TenantsManage for a new endpoint on the same risk class). New forward(\"/tenant/settings\", ...) in ApiPipeline; one new endpoint_policy_key/2 clause; no new role_allows?/2 or required_permission/1 clause needed. Contrast check: new pure module Letflow.Identity.ColorContrast (relative_luminance/1, contrast_ratio/2, meets_wcag_aa_normal_text?/2) implementing the WCAG 2.1 SC 1.4.3 sRGB relative-luminance formula verbatim, 4.5:1 normal-text threshold, checked against both tokens.css reference backgrounds (--surface-page #F8F9FA and --surface-card #FFFFFF, both flagged as a documented, unavoidable cross-language literal duplication with no automated drift check yet). Wired into Tenant.validate_brand_colors/2's existing per-key Enum.reduce (same {:settings, message} plain-language error shape already used elsewhere; validate_change/3's existing behavior already guarantees the whole changeset -- and therefore nothing -- is persisted on failure, satisfying AC2's previous-colour-unchanged requirement with no new code). Rejected-key recording: router partitions raw request keys against two new small public accessors (TenantSettings.allowed_keys/0, Tenant.brand_colors_allowed_keys/0 -- both just expose existing private module attributes, no change to cast/1 or validate_brand_colors/2's own enforcement), applies only the recognized/filtered part via a new Letflow.Identity.get_tenant/1 lookup plus a router-level shallow top-level merge against the tenant's current settings (called out explicitly as OQ-1, a judgment call beyond any single AC's literal wording, needed to avoid a data-loss footgun since Ecto cast/3 replaces :map fields wholesale rather than merging), then calls Letflow.Identity.update_tenant_settings/2 completely unchanged. Exactly one Letflow.Audit entry (action tenant_settings.reject_unrecognized_keys, resource_type tenant_settings, resource_id tenant.id, actor_id from auth_context, after_state carrying both rejected_top_level_keys and rejected_brand_colors_keys with their raw attempted values) is written via Audit.insert_entry/3 directly (not Ecto.Multi-wrapped with the settings write, since wrapping would require either changing update_tenant_settings/2's internals or duplicating its body -- both rejected; flagged as OQ-3 for SECURITY-REVIEWER). Confirmed AuditLogPage.tsx needs zero frontend change: it renders audit_item/1's generic 8-key shape for any audit_entries row regardless of writer, same precedent REQ-376/377 already established. Every acceptance criterion mapped to a concrete design element in the doc's closing table (section 9); INV-1/INV-4/INV-7/INV-8 mapped explicitly in section 7; four open questions (merge-semantics judgment call, brand_colors non-deep-merge, non-atomic audit write, exact WCAG error-message wording) listed explicitly rather than silently resolved, per this workflow step's own instruction. No implementation code included -- signatures, module/function shapes, and prose algorithm steps only.",
+    "artifacts_out": [
+      "lib/letflow/design/req382-tenant-branding-write-path.md"
+    ],
+    "next_action": "Route to CODE-DESIGN-VALIDATOR",
+    "issues": []
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

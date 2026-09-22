@@ -604,6 +604,18 @@ defmodule Letflow.Api.Authorization do
   def endpoint_policy_key("POST", "/tenants/:slug/deactivate"), do: :TenantsManage
   def endpoint_policy_key("POST", "/tenants/:slug/reactivate"), do: :TenantsManage
 
+  # REQ-382 -- authenticated write path onto the caller's OWN tenant.settings
+  # (Letflow.Routers.TenantSettings), a top-level sibling router mounted at
+  # /tenant/settings (not /tenants/:slug -- there is no target-tenant path
+  # parameter at all; the tenant patched is always the caller's own, from
+  # conn.assigns.auth_context.tenant_id). Reuses the existing :TenantsManage
+  # permission -- same risk class and same PLATFORM_ADMIN-only intent as
+  # Letflow.Routers.Tenants, Letflow.Routers.Onboarding,
+  # Letflow.Routers.PlatformMigrations, and Letflow.Routers.EventRetention
+  # (design doc lib/letflow/design/req382-tenant-branding-write-path.md §1).
+  # No new permission added.
+  def endpoint_policy_key("PATCH", "/tenant/settings"), do: :TenantsManage
+
   # REQ-076 -- onboarding (Letflow.Routers.Onboarding), a top-level sibling
   # router mounted at /onboarding (not under Letflow.Routers.Identity's own
   # /identity mount). Reuses the existing :TenantsManage permission -- same

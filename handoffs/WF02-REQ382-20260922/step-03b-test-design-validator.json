@@ -1,0 +1,52 @@
+{
+  "handoff_id": "req382-step03b",
+  "run_id": "WF02-REQ382-20260922",
+  "workflow_id": "WF-02",
+  "step": "03b",
+  "from_agent": "ORCH",
+  "to_agent": "TEST-DESIGN-VALIDATOR",
+  "file": "handoffs/WF02-REQ382-20260922/step-03b-test-design-validator.json",
+  "created_at": "2026-09-22T22:10:00Z",
+  "started_at": "2026-09-22T22:10:00Z",
+  "completed_at": "2026-09-22T22:22:00Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S8",
+    "requirement_ids": ["REQ-382"],
+    "requirement_text": {
+      "REQ-382": "See test/specs/REQ-382.md and lib/letflow/design/req382-tenant-branding-write-path.md for the full text."
+    },
+    "related_handoff_ids": [
+      "handoffs/WF02-REQ382-20260922/step-03-test-designer.json"
+    ],
+    "artifacts_in": [
+      "test/specs/REQ-382.md",
+      "test/letflow/routers/tenant_settings_test.exs",
+      "test/letflow/identity/color_contrast_test.exs"
+    ],
+    "owned_modules": []
+  },
+  "task": {
+    "description": "WF-02 Step 3b (Test Design Gate -- HARD GATE) for REQ-382. Verify each of the 6 acceptance criteria has runnable, self-sufficient test coverage with no skip/TODO, distinct fixture data per test, no hardcoded secrets, and actually run the tests to confirm the real result rather than trusting the Step 3 handoff's claimed count.",
+    "acceptance_criteria": [
+      "AC1: authenticated PATCH round-trips through GET /api/tenant-config over real HTTP",
+      "AC2: WCAG-AA-failing colour refused with plain-language message naming why; previous colour unchanged (both asserted)",
+      "AC3: out-of-allowlist top-level/sub-key applies only recognized part, never 500s",
+      "AC4: exactly one Letflow.Audit entry naming tenant/actor/rejected key(s)/value(s), surfaced via AuditLogPage's existing query with no frontend change",
+      "AC5: endpoint structurally cannot touch :status/:slug/:idp_realm_id/:display_name",
+      "AC6: mix compile --warnings-as-errors / mix test pass"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "Independently read test/specs/REQ-382.md, test/letflow/routers/tenant_settings_test.exs, and test/letflow/identity/color_contrast_test.exs in full (not just the Step 3 handoff summary). Per-AC coverage check: AC1 -> 'AC1: authenticated PATCH round-trips through GET /api/tenant-config' describe block, 1 test, dispatches a real PATCH through Letflow.Routers.TenantSettings.call/2 (real Authorize plug pipeline) then a real unauthenticated GET /api/tenant-config through the full Letflow.Router -- not a direct call to update_tenant_settings/2. AC2 -> 1 test asserting 422, error detail containing '4.5' and 'contrast'/'WCAG', AND Repo.get!/2 showing the prior #1864AB colour unchanged -- both halves of the AC asserted in one test as required. AC3 -> 3 tests: top-level key dropped, brand_colors sub-key dropped, request consisting only of bad keys still 200/no-op -- covers the 500-avoidance edge case explicitly. AC4 -> 3 tests: positive case (exactly one audit entry, count==1, both rejected top-level and sub-key categories named with their raw attempted values, retrieved via a real GET /api/v1/audit dispatch through Letflow.Routers.Audit.call/2 mirroring req196_audit_route_test.exs -- proving AuditLogPage's existing query surfaces it), negative control (no entry when request is fully clean), and a second negative control (no entry on a value-validation/WCAG rejection, only key-rejections audited). AC5 -> 1 test naming all four protected fields plus a legitimate key, asserting the legitimate key applies and all four protected columns are byte-identical after reload. AC6 -> verified directly below, not merely cited from the spec. No @tag :skip anywhere in either test file (grep confirmed zero matches), no 'TODO: implement test' anywhere in the spec or test files (grep confirmed zero matches). Fixture isolation: grepped all 13 TenantFixture.provisioned_tenant!(slug_prefix: ...) call sites in tenant_settings_test.exs -- all 13 use distinct prefixes (req382-ac1, ac2, ac3-top, ac3-sub, ac3-onlybad, ac4, ac4-clean, ac4-wcag, ac5, merge, authz-403, authz-noroles, authz-401); each test provisions its own tenant and no test reads another test's row or relies on execution order (each describe block's tests build their own conn/tenant from scratch). No hardcoded secrets/connection strings found (grepped for password|secret|postgres://|ecto://|api_key|token=<hex> across both test files -- zero matches; the only tokens present are the router's own auth_context maps built inline with Ecto.UUID.generate()). This is a WF-02 (new feature) test-design gate, not a WF-03 regression test, so the pre-fix-failure/mutant-application requirement in this agent's own procedure does not apply here.\n\nVerification run performed directly by this agent, not trusted from the Step 3 handoff: before running, checked `tasklist //FI \"IMAGENAME eq erl.exe\"` and found exactly one erl.exe process (PID 21496); `Get-CimInstance Win32_Process` showed its CommandLine was `mix letflow.check.test`, started 2026-09-22T22:17:25, i.e. a live, currently-running process (not an orphan matching the Step 3 handoff's earlier 19-process pileup) -- left it alone rather than killing a possibly-concurrent sibling session's run. `MIX_ENV=test mix compile --warnings-as-errors` -- clean, no output, no warnings. `MIX_ENV=test mix test test/letflow/identity/color_contrast_test.exs test/letflow/routers/tenant_settings_test.exs` -- real quoted result: 'Finished in 49.9 seconds (0.2s async, 49.6s sync)' / 'Result: 26 passed', 0 failures. Test counts independently verified by grep: 13 `  test ` occurrences in tenant_settings_test.exs + 13 in color_contrast_test.exs = 26, matching both the run output and the Step 3 handoff's claim (claim corroborated, not merely copied). All 6 acceptance criteria have genuine, passing, non-skipped coverage. PASS -- no rework needed.",
+    "artifacts_out": [
+      "handoffs/WF02-REQ382-20260922/step-03b-test-design-validator.json"
+    ],
+    "next_action": "Route to TEST-RUNNER (Step 4)",
+    "issues": []
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

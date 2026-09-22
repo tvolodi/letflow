@@ -127,6 +127,15 @@ test.describe('F5 admin users UI (ADM-UI-01..04)', () => {
 
     await navigateSpa(page, '/admin/users')
     await expect(page.getByRole('heading', { name: 'Users' })).toBeVisible({ timeout: 10_000 })
+    // ISS-0782 regression guard: before the fix, usersApi.list/rolesApi.list
+    // hit nonexistent backend routes (/api/v1/users, /api/v1/admin/roles)
+    // and the query error state rendered FetchError's exact copy instead of
+    // the table (web/src/components/ui/FetchError.tsx) -- this is the exact
+    // symptom UAT-RUNNER captured filing ISS-0782. Assert that error state
+    // is absent before asserting the table itself, so a future regression
+    // reproducing the same routing defect fails here with a clear message
+    // rather than a bare visibility timeout on admin-users-table.
+    await expect(page.getByText('Something went wrong loading this content.')).not.toBeVisible()
     await expect(page.getByTestId('admin-users-table')).toBeVisible()
     await expect(page.getByRole('columnheader', { name: 'Username' })).toBeVisible()
     await expect(page.getByRole('columnheader', { name: 'Display name' })).toBeVisible()

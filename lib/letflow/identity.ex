@@ -942,8 +942,14 @@ defmodule Letflow.Identity do
   instead of `slug`). Used by `Letflow.Routers.Me`'s `GET /me/memberships`
   handler to render the "always includes the caller's own current tenant"
   entry (design §2.2 point 4).
+
+  Also used for the same shape of lookup by `Letflow.Routers.TenantSettings`
+  (REQ-382), which only has `conn.assigns.auth_context.tenant_id` (a UUID)
+  available and needs the tenant's own `slug` to call
+  `update_tenant_settings/2` (that function's own signature is unchanged by
+  this requirement).
   """
-  @spec get_tenant(id :: Ecto.UUID.t()) :: {:ok, Tenant.t()} | {:error, :not_found}
+  @spec get_tenant(id :: Ecto.UUID.t() | String.t()) :: {:ok, Tenant.t()} | {:error, :not_found}
   def get_tenant(id) do
     case Repo.get(Tenant, id) do
       %Tenant{} = tenant -> {:ok, tenant}

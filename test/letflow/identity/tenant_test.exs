@@ -247,15 +247,19 @@ defmodule Letflow.Identity.TenantTest do
     test "brand_colors: a valid #RRGGBB primary color round-trips through the database" do
       tenant = insert_tenant!()
 
+      # #1864AB (a dark blue) meets the WCAG AA 4.5:1 contrast minimum
+      # (REQ-382) against both tokens.css reference backgrounds; #228be6
+      # (this test's fixture before REQ-382) does not (~3.4:1/~3.6:1) and is
+      # covered by the WCAG-rejection tests below instead.
       {:ok, updated} =
         tenant
         |> Tenant.settings_changeset(%{
-          "settings" => %{"brand_colors" => %{"primary" => "#228be6"}}
+          "settings" => %{"brand_colors" => %{"primary" => "#1864AB"}}
         })
         |> Repo.update()
 
       reloaded = Repo.get!(Tenant, updated.id)
-      assert reloaded.settings == %{"brand_colors" => %{"primary" => "#228be6"}}
+      assert reloaded.settings == %{"brand_colors" => %{"primary" => "#1864AB"}}
     end
 
     test "brand_colors: a non-hex-format value is rejected" do

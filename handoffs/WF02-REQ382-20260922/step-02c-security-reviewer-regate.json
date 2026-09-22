@@ -1,0 +1,51 @@
+{
+  "handoff_id": "req382-step02c-regate",
+  "run_id": "WF02-REQ382-20260922",
+  "workflow_id": "WF-02",
+  "step": "02c",
+  "from_agent": "ORCH",
+  "to_agent": "SECURITY-REVIEWER",
+  "file": "handoffs/WF02-REQ382-20260922/step-02c-security-reviewer-regate.json",
+  "created_at": "2026-09-22T21:45:00Z",
+  "started_at": "2026-09-22T21:45:00Z",
+  "completed_at": "2026-09-22T21:55:00Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S8",
+    "requirement_ids": ["REQ-382"],
+    "requirement_text": {
+      "REQ-382": "See handoffs/WF02-REQ382-20260922/step-01-code-designer.json's context and lib/letflow/design/req382-tenant-branding-write-path.md for the full text -- not restated here to avoid drift."
+    },
+    "related_handoff_ids": [
+      "handoffs/WF02-REQ382-20260922/step-02c-security-reviewer.json",
+      "handoffs/WF02-REQ382-20260922/step-02a-elixir-dev-rework1.json"
+    ],
+    "artifacts_in": [
+      "test/letflow/api/authorization_enforcement_test.exs",
+      "lib/letflow/design/req382-tenant-branding-write-path.md"
+    ],
+    "owned_modules": []
+  },
+  "task": {
+    "description": "Re-run WF-02 Step 2c (Security Gate) for REQ-382 on branch feature/WF02-REQ382-20260922 after ELIXIR-DEV's rework (commit b9a681c1) addressing the sole prior FAIL: Letflow.Routers.TenantSettings absent from test/letflow/api/authorization_enforcement_test.exs's @routers list and @mount_prefix map. Verify the fix directly rather than trusting the rework report, confirm the rework was scoped only to that fix plus the design-doc correction, and confirm nothing else changed that would require a fresh full invariant pass.",
+    "acceptance_criteria": [
+      "Letflow.Routers.TenantSettings confirmed present, correctly spelled, in both @routers and @mount_prefix (mount path /tenant/settings) by direct file read",
+      "mix test test/letflow/api/authorization_enforcement_test.exs run and real result quoted",
+      "confirmed the new router is genuinely walked by the test loop (test count with vs without the registration compared), not merely present in an ignored list",
+      "diff between prior-FAIL commit (f19afae9) and rework commit (b9a681c1) inspected to confirm scope was limited to the test file + design-doc correction (+ handoff artifact), with no unrelated changes that would require re-running INV-1..INV-8 from scratch",
+      "handoff written to handoffs/WF02-REQ382-20260922/step-02c-security-reviewer-regate.json and committed/pushed to feature/WF02-REQ382-20260922"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "Re-gate only -- prior pass (handoffs/WF02-REQ382-20260922/step-02c-security-reviewer.json) already ran INV-1..INV-9 in full against the real diff and passed all applicable invariants (INV-1, INV-2, INV-4, INV-6, INV-7, INV-8 PASS; INV-3, INV-5, INV-9 NOT-APPLICABLE) and ruled OQ-3 (non-transactional audit write) acceptable; none of that is re-litigated here since nothing in scope for those invariants changed.\n\nScope verification: `git diff f19afae9 b9a681c1 --stat` shows exactly three files changed: handoffs/WF02-REQ382-20260922/step-02a-elixir-dev-rework1.json (new, the rework report), lib/letflow/design/req382-tenant-branding-write-path.md (the design-doc correction), and test/letflow/api/authorization_enforcement_test.exs (the fix). No lib/letflow/routers/tenant_settings.ex, lib/letflow/identity*, lib/letflow/api/authorization.ex, or lib/letflow/plugs/api_pipeline.ex changes -- confirming no new invariant-relevant surface was touched. A fresh full INV-1..INV-9 pass is therefore not required.\n\nFix verification (direct source read of test/letflow/api/authorization_enforcement_test.exs post-rework): `Letflow.Routers.TenantSettings` is present in `@routers` (appended after `Letflow.Routers.Help`, correctly spelled, with an explanatory comment citing REQ-382 and this review) and in `@mount_prefix` as `Letflow.Routers.TenantSettings => \"/tenant/settings\"` -- correct mount path, matching lib/letflow/plugs/api_pipeline.ex's actual forward/2 prefix for this router.\n\nTest run (post-rework, HEAD b9a681c1): `mix test test/letflow/api/authorization_enforcement_test.exs` -> `Result: 17 passed`, zero failures.\n\nDrift-detection-loop verification: reverted test/letflow/api/authorization_enforcement_test.exs to its pre-rework content (git checkout f19afae9 -- <file>) and re-ran the same suite in the same working tree -> `Result: 16 passed`. 17 vs 16 confirms the `for router <- @routers do ... end` loop is genuinely generating one additional assertion for Letflow.Routers.TenantSettings, not merely listing it inertly. Working tree restored to b9a681c1's content afterward (git checkout b9a681c1 -- <file>); git status clean relative to HEAD.\n\nDesign-doc correction verified: lib/letflow/design/req382-tenant-branding-write-path.md's prior false \"automatically covered\" claim (lines 583-587) is now replaced with an accurate description of the @routers/@mount_prefix gating mechanism plus a dated correction note attributing and dating the fix, rather than being silently deleted -- satisfies the instruction to correct visibly, not erase.\n\nVerdict: the sole prior BLOCKER is resolved, verified by direct evidence (not by trusting the rework report), and no new scope was introduced. PASS.",
+    "artifacts_out": [
+      "handoffs/WF02-REQ382-20260922/step-02c-security-reviewer-regate.json"
+    ],
+    "next_action": "Route to REVIEWER (Step 2d)",
+    "issues": []
+  },
+  "rework_count": 1,
+  "max_rework": 3
+}

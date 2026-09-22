@@ -1,0 +1,61 @@
+{
+  "handoff_id": "c1d2e3f4-0782-4000-8000-000000000004",
+  "run_id": "WF03-ISS0782-20260923",
+  "workflow_id": "WF-03",
+  "step": "04",
+  "from_agent": "TEST-DESIGNER",
+  "to_agent": "TEST-DESIGN-VALIDATOR",
+  "file": "handoffs/WF03-ISS0782-20260923/step-04-test-designer.json",
+  "created_at": "2026-09-23T01:35:00Z",
+  "started_at": "2026-09-23T00:50:00Z",
+  "completed_at": "2026-09-23T01:35:00Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S6",
+    "issue_id": "ISS-0782",
+    "queue_ref": "Q-781",
+    "github_ref": "GH-1722",
+    "branch": "feature/WF03-ISS0782-fix-20260923",
+    "related_handoff_ids": [
+      "handoffs/WF03-ISS0782-20260923/step-01-issue-fixer-diagnose.json",
+      "handoffs/WF03-ISS0782-20260923/step-03b-security-reviewer.json",
+      "handoffs/WF03-ISS0782-20260923/step-03c-reviewer.json"
+    ],
+    "artifacts_in": [
+      "web/src/api/identity.ts",
+      "lib/letflow/design/iss0782-identity-api-route-fix.md",
+      "web/src/api/__tests__/identity.removeMembers.test.ts",
+      "web/tests/e2e/f5-admin-users.e2e.spec.ts",
+      "web/src/pages/admin/UsersPage.tsx",
+      "web/src/hooks/useAdminUsers.ts",
+      "web/src/components/ui/QueryStateBoundary.tsx",
+      "web/src/components/ui/FetchError.tsx",
+      "web/src/utils/classifyError.ts"
+    ]
+  },
+  "task": {
+    "description": "WF-03 Step 4: write a regression test for ISS-0782 (identity.ts routing fix, commit 2e36f8c2) and prove it fails against the pre-fix commit and passes against the fix, at both a fast mocked level and a live e2e level (per the issue's own suggested_fix calling out mocked-only coverage as the gap that let this ship undetected).",
+    "acceptance_criteria": [
+      "mocked fetch-URL assertion test added covering all 5 fixed call sites (usersApi.list/get/create/update, rolesApi.list), mirroring identity.removeMembers.test.ts's convention",
+      "determine whether the existing f5-admin-users.e2e.spec.ts already catches this bug live, or needs augmentation, and act accordingly",
+      "fail-then-pass proven for real: pre-fix code run and shown to fail, post-fix code run and shown to pass, both quoted verbatim",
+      "no unreverted mutation left in the tree; git status clean before handoff"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "Added two test assets, both committed to feature/WF03-ISS0782-fix-20260923 (commit 390e242e, pushed) -- full detail and exact commands/output in test/specs/ISS-0782.md, condensed here:\n\n1) web/src/api/__tests__/identity.usersRoles.test.ts (new) -- mocked window.fetch spy, mirrors identity.removeMembers.test.ts's convention, one test per fixed call site (usersApi.list/get/create/update, rolesApi.list), asserting the exact real path is hit and the exact wrong path is not. FAIL-THEN-PASS, isolated via a throwaway git worktree at the pre-fix commit (2e36f8c2^ = a1cb9604) with ONLY the new test file copied in (node_modules junctioned from the main checkout, no reinstall): `npx vitest run src/api/__tests__/identity.usersRoles.test.ts` -> 5 failed / 5, each on the exact pre-fix literal (e.g. `expected '/api/v1/users/u-1' to contain '/api/v1/identity/users/u-1'`, `expected '/api/v1/admin/roles' to contain '/api/v1/identity/roles'`). Worktree removed after. Same command on this branch (post-fix) -> 5 passed / 5 in 7ms. Full repo vitest suite (`npm run test`) also run on this branch afterward: 112 files / 797 tests passed, no regressions.\n\n2) web/tests/e2e/f5-admin-users.e2e.spec.ts (augmented, not duplicated) -- read the file in full first. Determined its ADM-UI-01 test already drives the real Users admin screen via real login + real backend and its admin-users-table visibility assertion WOULD already fail pre-fix (QueryStateBoundary renders FetchError instead of children on a query error, and a 404 classifies as 'fetch-failure' per classifyError.ts) -- so it did not need a new spec file, only a more explicit, self-documenting assertion so a future regression fails on a named line instead of a bare timeout. Added: `await expect(page.getByText('Something went wrong loading this content.')).not.toBeVisible()` directly above the existing admin-users-table check -- this is FetchError's exact copy and the exact symptom text UAT-RUNNER captured filing ISS-0782.\n\n   LIVE fail-then-pass proof: started this checkout's own backend for real (`LETFLOW_DEV_DB_CONFIRMED=1 mix run --no-halt`, confirmed 'Running Letflow.Router with Bandit 1.12.5 at 0.0.0.0:4000') against the already-running letflow-postgres-1 (:5462) / letflow-keycloak-1 (:8093) containers -- no new containers started; coordinated with the 'main' agent first (no erl.exe running, confirmed clear to proceed). Ran `BPM_IDP_BASE_URL=http://localhost:8093 BPM_TEST_URL=http://127.0.0.1:4000 npx playwright test tests/e2e/f5-admin-users.e2e.spec.ts -g \"ADM-UI-01: user list\"`.\n\n   Pre-fix: web/src/api/identity.ts temporarily overwritten in place with `git show 2e36f8c2^:web/src/api/identity.ts` (the one file the fix touches -- nothing else in the tree changed). Real output: 'Retry #1: Error: expect(locator).not.toBeVisible() failed -- Locator: getByText(\\'Something went wrong loading this content.\\') -- Expected: not visible -- Received: visible -- 14 x locator resolved to <p>Something went wrong loading this content.</p>' -- live, real browser, real backend, reproducing the exact reported symptom (both usersApi.list and rolesApi.list 404 simultaneously). Working tree restored via cp of the saved post-fix content; verified byte-identical (`diff` empty) and `git status --porcelain web/src/api/identity.ts` empty before proceeding.\n\n   Post-fix (this branch's real identity.ts, same command): the new assertion now PASSES -- 'Something went wrong loading this content.' is no longer rendered, proving ISS-0782's routing defect is fixed. IMPORTANT CAVEAT: the test still does not reach a full green run in this dev environment -- it fails one assertion later, on admin-users-table visibility, because the page renders PermissionDenied's 'You do not have access to this area. Contact your tenant administrator.' instead (a 403, not a 404). This is a SEPARATE, pre-existing environment gap, already independently identified in Step 1's diagnosis (curl reproduction found 403 on /api/v1/identity/users and /api/v1/identity/roles -- a route match, i.e. a policy denial, not a routing miss) and corroborated live here via the backend's own log: 'sync_role_claims_from_token/3: zero group_ids resolved for a non-empty claimed-role list -- user will read roles: [] and gain no grants (claimed_roles=[\"PLATFORM_ADMIN\"])'. This dev realm's admin-user has no UsersManage/RolesManage group mapping -- unrelated to identity.ts's path literals, not touched by this fix's scope, not something to paper over by loosening the test. This is why test asset (1), the mocked unit test, is this run's fully-green fail-then-pass proof; test asset (2) demonstrates the specific ISS-0782 symptom flips from present to absent live, isolating the exact defect, but a full ADM-UI-01..04 live PASS is blocked on this separate, already-diagnosed permission-provisioning gap in the shared dev realm.\n\n   Backend (erl.exe) stopped after (taskkill); letflow-postgres-1/letflow-keycloak-1 left running and untouched, as found.\n\ntest/specs/ISS-0782.md written with the criterion-by-criterion mapping, why each test exists (not a restatement), and the full fail-then-pass command/output transcript for both levels.\n\nGit state: git status --porcelain shows no leftover mutation (the pre-fix identity.ts swap was verified reverted before commit); only the three intended files (identity.usersRoles.test.ts, f5-admin-users.e2e.spec.ts, test/specs/ISS-0782.md) are in commit 390e242e. Committed and pushed to origin/feature/WF03-ISS0782-fix-20260923.",
+    "artifacts_out": [
+      "web/src/api/__tests__/identity.usersRoles.test.ts",
+      "web/tests/e2e/f5-admin-users.e2e.spec.ts",
+      "test/specs/ISS-0782.md"
+    ],
+    "issues": [
+      "Pre-existing, unrelated environment gap found and NOT fixed (out of scope for this issue): the shared dev Keycloak realm's admin-user (BPM_E2E_ADMIN_USERNAME=admin-user) has zero group_ids resolved for its claimed PLATFORM_ADMIN role, so it receives no UsersManage/RolesManage grants and gets 403 permission-denied on the now-correctly-routed /api/v1/identity/users and /api/v1/identity/roles endpoints. This blocks f5-admin-users.e2e.spec.ts's ADM-UI-01..04 from a full green run in this environment even post-fix, independent of ISS-0782. ISSUE-FIXER's Step 1 diagnosis already surfaced this via curl (403 vs 404) but did not file it separately. Flagging for ORCH/ISSUE-FIXER: likely warrants its own issue (dev-realm group-mapping seed gap) so live e2e admin-screen coverage can actually reach green, distinct from ISS-0782's own scope."
+    ],
+    "next_action": "Route to TEST-DESIGN-VALIDATOR"
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

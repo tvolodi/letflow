@@ -1,0 +1,66 @@
+{
+  "handoff_id": "c1d2e3f4-0782-4000-8000-000000000004",
+  "run_id": "WF03-ISS0782-20260923",
+  "workflow_id": "WF-03",
+  "step": "02b",
+  "from_agent": "CODE-DESIGN-VALIDATOR",
+  "to_agent": "ORCH",
+  "file": "handoffs/WF03-ISS0782-20260923/step-02b-design-gate.json",
+  "created_at": "2026-09-22T19:47:20Z",
+  "started_at": "2026-09-22T19:35:00Z",
+  "completed_at": "2026-09-22T19:47:20Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S6",
+    "issue_id": "ISS-0782",
+    "queue_ref": "Q-781",
+    "github_ref": "GH-1722",
+    "branch": "feature/WF03-ISS0782-fix-20260923",
+    "related_handoff_ids": [
+      "handoffs/WF03-ISS0782-20260923/step-01-issue-fixer-diagnose.json",
+      "handoffs/WF03-ISS0782-20260923/step-02-code-designer.json"
+    ],
+    "artifacts_in": [
+      "handoffs/WF03-ISS0782-20260923/step-02-code-designer.json",
+      "handoffs/WF03-ISS0782-20260923/step-01-issue-fixer-diagnose.json",
+      "lib/letflow/design/iss0782-identity-api-route-fix.md",
+      "web/src/api/identity.ts",
+      "lib/letflow/plugs/api_pipeline.ex",
+      "lib/letflow/routers/identity.ex"
+    ]
+  },
+  "task": {
+    "description": "WF-03 Step 2b gate: verify CODE-DESIGNER's design (lib/letflow/design/iss0782-identity-api-route-fix.md) covers all 5 in-scope call sites (usersApi.list/get/create/update, rolesApi.list) with correct before/after paths, contains no implementation code, is unambiguous enough to implement directly, correctly scopes out groupsApi (ISS-0765), resetPassword/delete (no backend route), and other rolesApi/tokensApi methods, and introduces no shim/adapter. Routes independently re-checked against lib/letflow/plugs/api_pipeline.ex and lib/letflow/routers/identity.ex rather than trusted from the design doc's restatement.",
+    "acceptance_criteria": [
+      "exact before/after path stated for each of the 5 in-scope call sites, matching the diagnosis handoff's verified mapping",
+      "confirms no new types, no request/response shape change",
+      "explicitly states no shim/adapter/normalization layer is being introduced -- this is a direct path fix",
+      "explicitly scopes out resetPassword/delete (no backend route), other rolesApi/tokensApi methods (not called by Users screen), and groupsApi.list (ISS-0765's scope), with the groupsApi.list residual gap noted rather than silently dropped",
+      "notes the existing live e2e spec (f5-admin-users.e2e.spec.ts) as a known asset for TEST-DESIGNER without designing the test itself",
+      "no implementation code (no .ts code fences with real function bodies -- only literal before/after path strings)"
+    ]
+  },
+  "result": {
+    "verdict": "PASS",
+    "reviewed_by": "CODE-DESIGN-VALIDATOR",
+    "reviewed_at": "2026-09-22T19:47:20Z",
+    "design_artefact": "lib/letflow/design/iss0782-identity-api-route-fix.md",
+    "checks_passed": [
+      "Route mount independently re-verified, not trusted from the design doc's restatement: grepped `forward(` in lib/letflow/plugs/api_pipeline.ex (lines 141-194) -- confirms `forward(\"/identity\", to: Letflow.Routers.Identity)` at line 141 is the only mount touching this router, and no `/users`, `/admin/users`, `/admin/roles`, `/admin/groups`, or `/auth/tokens` forward exists anywhere in the pipeline (full list: /identity, /tenants, /tenant/settings, /instances, /definitions, /tasks, /promotions, /onboarding, /solution-packs, /audit, /dlq, /webhooks, /services, /admin/services, /entities, /exam-sessions, /public-read-handles, /help, /platform-migrations, /event-retention). Read lib/letflow/routers/identity.ex in full: `authz_post \"/users\"`, `authz_get \"/users\"`, `authz_get \"/users/:id\"`, `authz_patch \"/users/:id\"` (lines 158-172) and `authz_get \"/roles\"` (line 219) are real, mounted-under-/identity routes -- so the real paths are exactly `/api/v1/identity/users`, `/api/v1/identity/users/:id`, `/api/v1/identity/roles`, matching the design's stated 'after' values for all 5 call sites.",
+      "All 5 in-scope call sites independently re-read from web/src/api/identity.ts against the design's claimed before/after and line numbers: usersApi.list line 16 (`'/api/v1/users'` -> design's `'/api/v1/identity/users'`, correct), usersApi.get line 19 (`` `/api/v1/users/${id}` `` -> `` `/api/v1/identity/users/${id}` ``, correct), usersApi.create line 22 (`'/api/v1/admin/users'` -> `'/api/v1/identity/users'`, correct -- backend has no /admin/users mount at all, so this is also correctly identified as a full-prefix change not just a /users vs /identity/users swap), usersApi.update line 25 (`` `/api/v1/users/${id}` `` -> `` `/api/v1/identity/users/${id}` ``, correct, PATCH verb unchanged), rolesApi.list line 66 (`'/api/v1/admin/roles'` -> `'/api/v1/identity/roles'`, correct). All 5 line numbers match the actual file exactly; no drift between the design and the current source.",
+      "No new types / no request-response shape change: independently confirmed identity.ts declares no new interfaces for this change -- User/Role/PagedResponse<T> types are untouched, and identity.ex's user_map/1 (lines 728-740) and role_map (lines 806-815) response builders are unrelated to and unaffected by a client-side path literal change. The design's claim that this is a pure string-literal edit holds.",
+      "No shim/adapter/normalization layer: confirmed by reading the design doc's 'No shim/adapter introduced' section and cross-checking identity.ts -- there is exactly one client.get/post/patch call per API method, one path literal each, no interceptor/wrapper file referenced or created. The design edits the literal in place, consistent with FRONTEND-DEV's mandate.",
+      "Scope-out correctness independently verified against identity.ex and identity.ts, not trusted from the design's restatement: (a) usersApi.resetPassword (line 28, `/api/v1/users/:id/reset-password`) and usersApi.delete (line 31, `/api/v1/users/:id` DELETE) -- read identity.ex's full route list (lines 158-225): the only /users/:id-adjacent routes are GET/PATCH /users/:id and POST /users/:id/status; there is no DELETE /users/:id and no /users/:id/reset-password route at any prefix. The design's claim of 'no matching backend route exists' is correct, and scoping these out (rather than 'fixing' a path that still 404s) is the right call. (b) groupsApi.list (lines 37-59 of identity.ts) -- confirmed groupsApi.list also hits a wrong path (`/api/v1/admin/groups` vs. real `authz_get \"/groups\"` under /identity, i.e. `/api/v1/identity/groups`) and is reachable from UserDetailPage.tsx per the diagnosis; the design explicitly defers it to ISS-0765 and explicitly states the residual gap (UserDetailPage's group-membership section stays broken) rather than silently dropping it -- this is a documented, reasoned scope boundary, not an omission. (c) rolesApi.get/.create/.update/.delete/.grantPermission/.revokePermission (lines 69-84) and tokensApi.* (lines 90-98) -- cross-checked against identity.ex: the router has no id-scoped role routes at all (only bare GET/POST /roles) and no /permissions sub-routes, so these frontend methods have no backend counterpart regardless; correctly out of scope since the diagnosis also confirmed zero callers from the Users admin screen for any of these.",
+      "Existing e2e asset correctly flagged as informational only: the design's 'Existing test asset' section names web/tests/e2e/f5-admin-users.e2e.spec.ts for TEST-DESIGNER's later decision without prescribing test content or asserting it as this doc's own deliverable -- consistent with 'design only, no test design' scope.",
+      "No implementation code: the document contains no `.ts`/`.tsx` fenced code blocks with real function bodies -- every before/after value is an inline single-line literal (the existing call expression's path argument, quoted verbatim, and its replacement), matching the acceptance criterion's own wording. No new function, hook, component, or module body is written anywhere in the doc.",
+      "Unambiguous enough to implement directly: every one of the 5 edits names its exact source line, its exact before string, and its exact after string, with verb/argument-shape unchanged noted per site -- nothing is left for FRONTEND-DEV to infer or guess. The 'Open questions' section closes with an explicit 'None', consistent with direct re-inspection finding no remaining ambiguity."
+    ],
+    "checks_failed": [],
+    "summary": "PASS. Independently re-derived the route mount and all 5 before/after paths from lib/letflow/plugs/api_pipeline.ex and lib/letflow/routers/identity.ex rather than trusting the design doc's restatement -- confirmed /identity is the router's only mount (no /users, /admin/*, or /auth/tokens forward exists), and the real backend paths (/api/v1/identity/users, /api/v1/identity/users/:id, /api/v1/identity/roles) exactly match the design's stated 'after' values for usersApi.list/get/create/update and rolesApi.list. All 5 line numbers and before-string literals in the design match the current web/src/api/identity.ts exactly. No implementation code is present -- only inline before/after path literals, no fenced .ts code with real bodies. Scope-out of resetPassword/delete (verified no matching backend route at any prefix), groupsApi.list (correctly deferred to ISS-0765 with the residual gap explicitly stated, not silently dropped), other rolesApi methods and tokensApi.* (verified no backend counterpart and no Users-screen caller) is all independently correct. No shim/adapter language present. The design is unambiguous and implementable as-is.",
+    "issues": [],
+    "next_action": "Route to FRONTEND-DEV for implementation"
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

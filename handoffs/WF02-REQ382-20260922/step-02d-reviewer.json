@@ -1,0 +1,58 @@
+{
+  "handoff_id": "req382-step02d-reviewer",
+  "run_id": "WF02-REQ382-20260922",
+  "workflow_id": "WF-02",
+  "step": "02d",
+  "from_agent": "ORCH",
+  "to_agent": "REVIEWER",
+  "file": "handoffs/WF02-REQ382-20260922/step-02d-reviewer.json",
+  "created_at": "2026-09-22T22:10:00Z",
+  "started_at": "2026-09-22T22:10:00Z",
+  "completed_at": "2026-09-22T22:30:00Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S8",
+    "requirement_ids": ["REQ-382"],
+    "requirement_text": {
+      "REQ-382": "See handoffs/WF02-REQ382-20260922/step-01-code-designer.json's context and lib/letflow/design/req382-tenant-branding-write-path.md for the full text -- not restated here to avoid drift."
+    },
+    "related_handoff_ids": [
+      "handoffs/WF02-REQ382-20260922/step-02c-security-reviewer.json",
+      "handoffs/WF02-REQ382-20260922/step-02c-security-reviewer-regate.json"
+    ],
+    "artifacts_in": [
+      "lib/letflow/routers/tenant_settings.ex",
+      "lib/letflow/identity/color_contrast.ex",
+      "lib/letflow/identity/tenant.ex",
+      "lib/letflow/identity/tenant_settings.ex",
+      "lib/letflow/identity.ex",
+      "lib/letflow/api/authorization.ex",
+      "lib/letflow/plugs/api_pipeline.ex",
+      "lib/letflow/design/req382-tenant-branding-write-path.md"
+    ],
+    "owned_modules": []
+  },
+  "task": {
+    "description": "Run WF-02 Step 2d (Idiom Review -- hard gate) for REQ-382 on branch feature/WF02-REQ382-20260922 per .claude/agents/reviewer.md and docs/agents/workflows/WF-02_requirement_implementation.md Step 2d. Check the diff against idiomatic-vs-crutch, supervision integrity, type-safety gaps, and scope creep; check docs/anti-patterns.md; rule explicitly on two judgment calls ELIXIR-DEV made beyond the design doc's literal text: (a) the router's shallow top-level merge before calling Identity.update_tenant_settings/2 (design doc SS6 OQ-1, CODE-DESIGN-VALIDATOR passed it as a stated design decision), (b) making Tenant.brand_colors_allowed_keys/0 and TenantSettings.allowed_keys/0 public accessors onto previously-private module attributes.",
+    "acceptance_criteria": [
+      "Diff read in full (all 6 lib/ files + design doc), not just the router",
+      "All four standard REVIEWER questions answered explicitly",
+      "docs/anti-patterns.md checked for applicable entries",
+      "Explicit PASS/FAIL ruling with reasoning on judgment call (a) -- merge semantics",
+      "Explicit PASS/FAIL ruling with reasoning on judgment call (b) -- public accessors, confirmed read-only by direct file read",
+      "Handoff written and pushed to feature/WF02-REQ382-20260922"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "Reviewed the full diff: lib/letflow/routers/tenant_settings.ex (new), lib/letflow/identity/color_contrast.ex (new), lib/letflow/identity/tenant.ex, lib/letflow/identity/tenant_settings.ex, lib/letflow/identity.ex, lib/letflow/api/authorization.ex, lib/letflow/plugs/api_pipeline.ex, plus the design doc's SS6 OQ-1..OQ-4 resolutions and the test-fixture/enforcement-test diffs.\n\n1. Idiomatic vs. crutch -- PASS. Letflow.Routers.TenantSettings uses Letflow.Api.AuthorizedRouter and authz_patch/3 identically to Tenants, Identity, Definitions, Webhooks, AdminServices. No parallel authorization mechanism invented. endpoint_policy_key/2 gets one ordinary new clause; api_pipeline.ex gets one ordinary forward/2. Clean fit with existing convention.\n\n2. Supervision -- not applicable, no OTP process involved in this diff.\n\n3. Type-safety gaps -- one minor, non-blocking observation: Letflow.Identity.ColorContrast.channel_to_linear/1 calls String.to_integer(hex_byte, 16) without validating hex digits; a malformed-but-6-char value would raise. Not a live bug -- the sole caller (Tenant.validate_brand_colors/2) only reaches the contrast check after @hex_color_regex has already matched in the same cond, so this path is currently unreachable with bad input. Did not file a docs/issues/ entry -- this is a defensive-hardening nit on a currently-guarded pure function, not a class of invalid state a struct/type change would make unrepresentable in a way that changes behavior; noted here for the record per the 'don't let an observation die in summary only' instruction, but judged below the bar that warrants a queued issue.\n\n4. Scope creep -- PASS, none found. brand_colors allowlist unchanged (still just 'primary'), no general 'any tenant setting' endpoint, no migration added, the two new public accessors expose only compile-time literals (see judgment call b). Stays within REQ-382's stated scope and its own 'explicitly out of scope' list (SS6 OQ-2's future brand_colors sub-key growth correctly deferred, not preemptively built).\n\ndocs/anti-patterns.md -- no entries apply to this diff's shape (toolchain-path, status-history-overwrite, SQL-fragment-duplication entries are all orthogonal).\n\nJudgment call (a) -- shallow top-level merge: AGREE with CODE-DESIGN-VALIDATOR, this is correctly a design decision resolved at that level, not something that needed to escalate to REQ-ANALYST or a human sign-off. The alternative (applying update_tenant_settings/2's literal whole-field-replace semantics directly to a partial PATCH body) would silently erase sibling settings keys on the very first partial update -- an objectively wrong reading of the requirement's own 'partial settings map' language, not a defensible competing interpretation that needed arbitration. The merge lives in the router only; update_tenant_settings/2's contract for every other existing caller (Letflow.Routers.Tenants included) is unchanged, so the blast radius is contained to this one new endpoint, documented in the design doc, and reversible without touching shared code. No objection to how this was resolved.\n\nJudgment call (b) -- public allowed_keys accessors: verified by direct read of both lib/letflow/identity/tenant.ex and lib/letflow/identity/tenant_settings.ex. Both new functions (brand_colors_allowed_keys/0, allowed_keys/0) are zero-arity, return the existing @module_attribute list verbatim, take no arguments, and have no mutation path. validate_brand_colors/2 and TenantSettings.cast/1 remain the sole enforcement points for the closed vocabularies and are unchanged by this diff; the router only reads the same list back to pre-filter before those functions run downstream. Confirmed read-only -- does not weaken either module's closed-vocabulary invariant. No objection.\n\nAlso spot-checked the SECURITY-REVIEWER Step 2c rework (enforcement-test registration fix, commit b9a681c1) as part of reading the full diff -- correctly wired (Letflow.Routers.TenantSettings present in both @routers and @mount_prefix with the correct /tenant/settings path), consistent with the regate's own findings; not re-litigated here, just confirmed present in the diff REVIEWER is gating.",
+    "artifacts_out": [
+      "handoffs/WF02-REQ382-20260922/step-02d-reviewer.json"
+    ],
+    "next_action": "Route to TEST-DESIGNER (Step 3)",
+    "issues": []
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

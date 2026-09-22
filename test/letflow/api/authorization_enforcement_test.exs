@@ -78,7 +78,16 @@ defmodule Letflow.Api.AuthorizationEnforcementTest do
     # :MembershipsRead, backed by a real endpoint_policy_key/2 clause, so it
     # resolves through the normal path above and is not (and may not be)
     # added to @allowlist.
-    Letflow.Routers.Me
+    Letflow.Routers.Me,
+    # REQ-382 -- Letflow.Routers.TenantSettings' single route declares
+    # :TenantsManage, backed by a real endpoint_policy_key/2 clause
+    # (PATCH /tenant/settings), so it resolves through the normal path above
+    # and is not (and may not be) added to @allowlist. Flagged during
+    # SECURITY-REVIEWER's Step 2c review that the design doc's claim of
+    # "automatic coverage" was false until this router was actually
+    # registered here -- see
+    # handoffs/WF02-REQ382-20260922/step-02c-security-reviewer.json.
+    Letflow.Routers.TenantSettings
   ]
 
   # `Letflow.Plugs.ApiPipeline`'s own `forward/2` mount prefix per router
@@ -112,7 +121,8 @@ defmodule Letflow.Api.AuthorizationEnforcementTest do
     Letflow.Routers.Entities => "/entities",
     Letflow.Routers.ExamSessions => "/exam-sessions",
     Letflow.Routers.Help => "/help",
-    Letflow.Routers.Me => "/me"
+    Letflow.Routers.Me => "/me",
+    Letflow.Routers.TenantSettings => "/tenant/settings"
   }
 
   # {method, path_template, reason} -- a route whose declared policy key is

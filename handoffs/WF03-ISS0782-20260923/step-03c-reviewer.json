@@ -1,0 +1,61 @@
+{
+  "handoff_id": "c1d2e3f4-0782-4000-8000-000000000006",
+  "run_id": "WF03-ISS0782-20260923",
+  "workflow_id": "WF-03",
+  "step": "03c",
+  "from_agent": "REVIEWER",
+  "to_agent": "ORCH",
+  "file": "handoffs/WF03-ISS0782-20260923/step-03c-reviewer.json",
+  "created_at": "2026-09-23T20:10:00Z",
+  "started_at": "2026-09-23T20:05:00Z",
+  "completed_at": "2026-09-23T20:10:00Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S6",
+    "issue_id": "ISS-0782",
+    "commit": "2e36f8c2",
+    "branch": "feature/WF03-ISS0782-fix-20260923",
+    "related_handoff_ids": [
+      "handoffs/WF03-ISS0782-20260923/step-01-issue-fixer-diagnose.json",
+      "handoffs/WF03-ISS0782-20260923/step-02-code-designer.json",
+      "handoffs/WF03-ISS0782-20260923/step-02b-design-gate.json",
+      "handoffs/WF03-ISS0782-20260923/step-03a-frontend-dev.json",
+      "handoffs/WF03-ISS0782-20260923/step-03b-security-reviewer.json"
+    ],
+    "artifacts_in": ["web/src/api/identity.ts"]
+  },
+  "task": {
+    "description": "WF-03 Step 3 idiom/scope review gate for ISS-0782's identity.ts routing fix, ahead of TEST-DESIGNER.",
+    "acceptance_criteria": [
+      "implementation matches approved design's 5 before/after literals exactly",
+      "no scope creep beyond the 5 approved call sites in web/src/api/identity.ts",
+      "no decision-record conflict",
+      "no shim/adapter, no new state-management/routing/auth-token-storage introduced",
+      "no leftover debug code or stray comments",
+      "code style consistent with rest of file"
+    ]
+  },
+  "result": {
+    "verdict": "PASS",
+    "reviewed_by": "REVIEWER",
+    "reviewed_at": "2026-09-23T20:10:00Z",
+    "checks_passed": [
+      "Design conformance: read git show 2e36f8c2 -- web/src/api/identity.ts directly and compared each hunk against the design doc's 'Call-site changes (exact before/after)' section byte-for-byte: usersApi.list '/api/v1/users' -> '/api/v1/identity/users'; usersApi.get `/api/v1/users/${id}` -> `/api/v1/identity/users/${id}`; usersApi.create '/api/v1/admin/users' -> '/api/v1/identity/users'; usersApi.update `/api/v1/users/${id}` -> `/api/v1/identity/users/${id}`; rolesApi.list '/api/v1/admin/roles' -> '/api/v1/identity/roles'. All five match exactly, no wording/format deviation. Verb, params/body arguments, and template-literal interpolation are unchanged at every site, as the design specified.",
+      "Scope: git show 2e36f8c2 --stat shows exactly one code file changed (web/src/api/identity.ts, +5/-5) plus expected pipeline handoff/design JSON and markdown artefacts (step-00.5 through step-03a handoffs, the design doc itself) -- no other application code touched. Read the full current web/src/api/identity.ts and confirmed every line the design doc lists under 'Explicitly unchanged in this file (do not touch)' is in fact still on its original wrong-prefix path: usersApi.resetPassword (line 28, still /api/v1/users/:id/reset-password) and usersApi.delete (line 31, still /api/v1/users/:id); all of groupsApi.* (lines 36-60, still /api/v1/admin/groups*, ISS-0765's scope, except removeMembers which was already on /api/v1/identity/groups/... from a prior unrelated fix -- not touched by this commit); rolesApi.get/.create/.update/.delete/.grantPermission/.revokePermission (lines 68-84, still /api/v1/admin/roles*); tokensApi.* (lines 89-98, still /api/v1/auth/tokens*). Exactly the 5 approved call sites changed, nothing else.",
+      "Decision-record conflict: scanned docs/migration/decisions/ -- none govern API-client routing conventions or the identity/users/roles URL shape; 0011-frontend-ownership.md and 0012-mobile-tier-stack.md are unaffected. No conflict, no silent re-decision of anything on record.",
+      "Frontend idiom/scope-creep check per FRONTEND-DEV's mandate: no shim, adapter, request interceptor, or path-normalization layer introduced -- each of the 5 sites is a single string-literal edit at its one existing call site, consistent with the design's 'No shim/adapter introduced' section and independently confirmed true by reading the diff. No new state-management library, routing logic, or auth-token-storage mechanism appears anywhere in this diff -- not applicable to a URL-literal fix, and confirmed absent.",
+      "No leftover debug code or stray comments: diff contains no console.log/debugger/TODO/commented-out code; no comments were added or removed by this change at all (identity.ts carries no per-call-site comments before or after, only the pre-existing section-header banner comments, none of which this diff touches).",
+      "Code style: the 5 edited lines keep the file's existing conventions untouched -- same arrow-function-per-property shape, same single-quote string literals for static paths and template-literal for interpolated ones, same trailing-comma-free object-property style as every unedited sibling line in usersApi/groupsApi/rolesApi/tokensApi. No formatting drift.",
+      "Idiom / process shape: pure client-side URL string literals feeding an existing client.get/post/patch wrapper -- no process, GenServer/gen_statem, or supervision-tree involvement; not applicable to this change's shape and nothing here collapses any backend isolation boundary.",
+      "Type-safety gap check (informational, non-blocking): no new transition logic or new class of invalid state is introduced -- return types (User, Role, PagedResponse<T>) and function signatures are unchanged at all 5 sites. Not filing a type-safety issue for this change.",
+      "SECURITY-REVIEWER's prior PASS (step-03b) independently re-derived the same 5-line diff and the same route/authz facts from source; this review's independent stat/diff read reaches the same scope conclusion by a different check (design-doc line-by-line comparison rather than route/authz tracing), corroborating rather than duplicating it."
+    ],
+    "checks_failed": [],
+    "issues": [],
+    "summary": "PASS. All 5 edited call sites in web/src/api/identity.ts match the CODE-DESIGN-VALIDATOR-approved design's before/after literals exactly (verb, params, body, and interpolation all unchanged). git show --stat confirms only identity.ts plus expected pipeline artefacts changed; the file's full current content was read and every 'explicitly unchanged' site the design named is confirmed still untouched. No decision-record conflict, no shim/adapter, no new state-management/routing/auth-token-storage, no leftover debug code, no stray comments, and style is consistent with the rest of the file. No process/supervision-shaped complexity introduced. No issues filed.",
+    "next_action": "Route to TEST-DESIGNER"
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

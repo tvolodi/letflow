@@ -130,4 +130,6 @@ resolution: >
   identity_test.exs -- unrelated to this branch, confirmed via isolated
   rerun 62/62 passed).
 
-resolved_at: "2026-09-22T13:05:00Z"
+resolved_at: "2026-09-22T13:44:02Z"
+pr: "#1718"
+merge_commit: efb0ba9086f019abaacbcd6f7eb3b2cf1bedc353

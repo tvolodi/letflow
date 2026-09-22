@@ -1,0 +1,50 @@
+{
+  "handoff_id": "c0de5182-0002-4000-8000-000000000002",
+  "run_id": "WF02-REQ382-20260922",
+  "workflow_id": "WF-02",
+  "step": "01b",
+  "from_agent": "ORCH",
+  "to_agent": "CODE-DESIGN-VALIDATOR",
+  "file": "handoffs/WF02-REQ382-20260922/step-01b-code-design-validator.json",
+  "created_at": "2026-09-22T16:40:00Z",
+  "started_at": "2026-09-22T16:40:00Z",
+  "completed_at": "2026-09-22T16:40:00Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S8",
+    "requirement_ids": ["REQ-382"],
+    "requirement_text": {
+      "REQ-382": "See handoffs/WF02-REQ382-20260922/step-01-code-designer.json's context.requirement_text for the full text -- not restated here to avoid drift; read it there."
+    },
+    "related_handoff_ids": [
+      "handoffs/WF02-REQ382-20260922/step-01-code-designer.json"
+    ],
+    "artifacts_in": [
+      "lib/letflow/design/req382-tenant-branding-write-path.md"
+    ],
+    "owned_modules": []
+  },
+  "task": {
+    "description": "Perform WF-02 Step 1b (Design Gate) for REQ-382 on branch feature/WF02-REQ382-20260922 per docs/agents/workflows/WF-02_requirement_implementation.md. Read lib/letflow/design/req382-tenant-branding-write-path.md independently (not CODE-DESIGNER's own handoff summary). For each of the 6 acceptance criteria: verify a corresponding design element exists, no TBD/deferral language on a MUST item, function signatures are fully specified including error shape, cross-module dependencies are listed, and no actual implementation code (bodies) is present -- signatures/type shapes/prose algorithm only. Also verify scope discipline (no brand_colors allowlist expansion beyond primary, no general any-setting endpoint, no unjustified new migration) and that the design's 4 flagged open questions are genuinely non-blocking (flagged-for-confirmation) rather than gaps that leave AC2-4 ambiguous for ELIXIR-DEV to silently resolve.",
+    "acceptance_criteria": [
+      "AC1: new authenticated tenant-admin-scoped route accepts settings PATCH; valid brand_colors.primary round-trips through GET /api/tenant-config on the next call -- testable over real HTTP",
+      "AC2: a hex-valid but WCAG-AA (4.5:1)-failing colour is refused with a plain-language message naming why; previously-stored colour is unchanged after the attempt (no partial apply on a rejected changeset)",
+      "AC3: a request with an out-of-allowlist top-level key or out-of-allowlist brand_colors sub-key applies only the recognized/valid part, never 500s or rejects the whole request for that reason alone",
+      "AC4: the same rejected-key request writes exactly one Letflow.Audit entry naming tenant/actor/rejected key(s)/attempted value(s); AuditLogPage's existing query must surface it with zero frontend changes",
+      "AC5: settings_changeset/2's cast list stays scoped to :settings only; TenantSettings' closed top-level key vocabulary is unchanged -- endpoint must not be able to touch :status, :slug, :idp_realm_id, or :display_name",
+      "AC6: design shows INV-4/INV-7/INV-8 (and other applicable invariants) were considered, with nothing structurally incompatible with them; SECURITY-REVIEWER sign-off remains mandatory before merge"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "Read lib/letflow/design/req382-tenant-branding-write-path.md in full (not the CODE-DESIGNER handoff summary). All 6 acceptance criteria map to concrete design elements: AC1 -> §1 route/authz declaration + §3 steps 1-9(b), with §0 independently confirming GET /api/tenant-config already reads tenant.settings live so no read-side change is needed for the round-trip. AC2 -> §2.4 (contrast check wired into validate_brand_colors/2's existing per-key reduce, same {:settings, message} error tuple shape) + §2.5 (Letflow.Identity.ColorContrast: relative_luminance/1, contrast_ratio/2, meets_wcag_aa_normal_text?/2, all with @spec, WCAG 2.1 SC 1.4.3 formula stated in full prose, 4.5:1 threshold explicit, both reference backgrounds named with source citations to tokens.css) + §3 step 7 (verbatim surfacing) + explicit statement that validate_change/3's existing whole-field-invalid behavior guarantees no partial persistence -- previously-stored colour unchanged is therefore a structural consequence, not a new code path that could be gotten wrong. AC3 -> §3 steps 1 and 3-6 (non-map-body guard, top-level and brand_colors sub-key partitioning against the two new pure allowlist accessors, shallow top-level merge, delegation to the unchanged update_tenant_settings/2); step 7 is explicitly scoped as a distinct failure class (value validation) so it doesn't contradict AC3's 'never rejects the whole request for [a rejected key] alone.' AC4 -> §4 gives the full entry_attrs() map (actor_id, action, resource_type, resource_id, before_state, after_state with both rejected-key sub-maps carrying raw attempted values, trace_id), called via the existing Audit.insert_entry/3 with prefix from conn.assigns.scoped_opts; §3 step 9(a) gates exactly one call behind one if; §0 confirms AuditLogPage.tsx's audit_item/1 renders any audit_entries row generically (REQ-376/377 precedent cited), so zero frontend change is a verified fact, not an assumption. AC5 -> §2.4 states settings_changeset/2's signature and cast list are unchanged; §1/§3 never call update_changeset/2, admin_patch_changeset/2, or status_changeset/2 -- the only Tenant-mutating call in this design is update_tenant_settings/2, structurally incapable of touching :status/:slug/:idp_realm_id/:display_name. AC6 -> §7 maps INV-1/INV-4/INV-7/INV-8 individually against concrete design elements (global-table tenant read/write vs. prefix-scoped audit write only; no secret material touched, failure-path log line names only tenant id + reason; no raw SQL anywhere; every branch of get_tenant/1 and update_tenant_settings/2 explicitly matched, non-map body guarded) -- nothing in the design uses raw SQL interpolation or an unguarded {:ok,_} = match on external-I/O-reachable code; SECURITY-REVIEWER sign-off is correctly left as a downstream mandatory gate (§9 AC6 row), not claimed as satisfied here. No TBD/deferral language found on any MUST item. No .ex function bodies with real control-flow logic are present -- the only code-shaped fragments are trivial one-line wiring/declarations consistent with this codebase's own router/pipeline convention (the forward/2 call, the authz_patch route declaration delegating to handle_patch/1, and one endpoint_policy_key/2 clause mirroring three cited existing precedents) rather than implementation of the endpoint's actual logic, which is given only as numbered prose steps in §3. Scope discipline confirmed: brand_colors allowlist stays at 'primary' only (OQ-2 explicitly defers any widening to a future requirement), no general any-setting endpoint (only the existing 5-key TenantSettings vocabulary), no new migration (§5 confirms reuse of existing tenants.settings and audit_entries). Reviewed the design's 4 flagged open questions against the 'genuinely non-blocking' bar: OQ-1 (shallow top-level merge) is a stated, concrete, already-implemented-in-the-algorithm decision (§3 step 5) flagged only for confirmation of intent, not left ambiguous -- ELIXIR-DEV has an unambiguous merge algorithm to build from either way. OQ-2 (brand_colors non-deep-merge) is genuinely out of this requirement's scope per the requirement's own exclusion list and does not affect AC2-4's current single-sub-key behavior. OQ-3 (non-atomic audit write) states the exact accepted behavior on audit-write failure (log, do not fail the HTTP response) -- a policy question for SECURITY-REVIEWER, not an implementation ambiguity. OQ-4 (exact WCAG error wording) is explicitly permitted slack by AC2's own text ('a plain-language message,' no exact-string test named) and the design already supplies a near-final template naming threshold, ratio, and failing background(s). None of the 4 open questions leave AC2, AC3, or AC4 ambiguous for ELIXIR-DEV to silently resolve; all are correctly flagged rather than either silently resolved or left as implementation-blocking gaps.",
+    "artifacts_out": [
+      "handoffs/WF02-REQ382-20260922/step-01b-code-design-validator.json"
+    ],
+    "next_action": "Route to ELIXIR-DEV (Step 2a)",
+    "issues": []
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

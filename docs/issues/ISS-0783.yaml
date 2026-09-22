@@ -1,0 +1,63 @@
+id: ISS-0783
+title: >
+  TenantSwitcher.tsx's trigger button isn't disabled while a switch is
+  pending -- a second switchTenant call can fire before the first resolves
+discovered_by: TEST-DESIGNER
+discovered_in_run: WF02-REQ384-20260922
+discovered_at: "2026-09-22T20:02:47Z"
+severity: MINOR
+tags:
+  - frontend
+  - ux
+  - auth
+description: >
+  Found during REQ-384's OIDC silent-callback fix pass (commit 23a67263):
+  once `AuthProvider.switchTenant()`'s `switchingToTenantSlug` was
+  correctly narrowed to only cover the period from a confirmed `silent_ok`
+  outcome onward (rather than the whole switch attempt, which was the
+  actual bug being fixed there), `TenantSwitcher.tsx`'s trigger/option
+  buttons are no longer implicitly disabled for the full duration of a
+  pending switch. Since the trigger was never explicitly disabled either,
+  a user can now click a second tenant option before the first
+  `switchTenant()` call resolves, firing a second concurrent OIDC
+  silent-auth attempt.
+
+  Both SECURITY-REVIEWER and REVIEWER independently traced this and
+  confirmed it does NOT cross-contaminate tenant caches or violate
+  tenant isolation: each `switchTenant` call captures its own
+  `outgoingTenantId` in its own closure at call time, `removeQueries` is
+  prefix-scoped and idempotent per call, and the final `setSessionState`
+  simply reflects whichever call resolves last (last-resolved-wins,
+  not a corrupted intermediate state). The impact is a wasted concurrent
+  OIDC silent-auth network attempt and a potentially confusing UI state
+  on rapid double-click/double-select, not a security or data-isolation
+  defect.
+affected_files:
+  - web/src/auth/TenantSwitcher.tsx
+related_requirements:
+  - REQ-384
+severity_rationale: >
+  MINOR -- non-exploitable for tenant isolation (independently confirmed
+  by both SECURITY-REVIEWER and REVIEWER during REQ-384's WF-02 pipeline);
+  impact is wasted network calls and UX confusion, not data leakage or a
+  security boundary violation. Explicitly accepted as non-blocking for
+  REQ-384's own merge by both gates.
+suggested_fix: >
+  Give TenantSwitcher.tsx its own local in-flight flag (set for the whole
+  onSelect call, reset in a finally) to disable the trigger/option/retry
+  buttons while switchTenant() is pending -- don't reuse AuthProvider's
+  switchingToTenantSlug, which has a deliberately different (post-silent_ok)
+  lifetime tied to the cache-clear/remount mechanism, not UI re-entrancy
+  guarding. Should ship with its own unit test (e.g. assert the trigger is
+  disabled while a deferred switchTenant mock is pending, and that a
+  second click while disabled does not invoke switchTenant a second time).
+  Small, single-file frontend fix -- likely sized for ORCH's direct-action
+  rule or a single FRONTEND-DEV turn, no design doc needed.
+queue_ref: "Q-782"
+# NOTE: letflow-queue's task 782 auto-titled itself "ISS-0782" from its own
+# atomically-allocated id, but the real on-disk filename is ISS-0783.yaml --
+# slot ISS-0782 was already taken by this same session's identity.ts issue.
+# Established, recurring queue-id/filename divergence pattern for this
+# project; queue_ref/github_ref below are authoritative for this file.
+github_ref: "GH-1725"
+status: open

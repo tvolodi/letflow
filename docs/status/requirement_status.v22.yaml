@@ -169,6 +169,17 @@
 
 
 history:
+  - req: REQ-386
+    event: started
+    agent: ELIXIR-DEV
+    at: 2026-09-22T22:51:01Z
+    note: >
+      WF02-REQ386-20260923 started -- time-limited signed URLs for
+      instance-attachment byte content (letflow-queue task 746, GH#1634).
+      Branch feature/WF02-REQ386-20260923 created and pushed (Step 00 PASS).
+      Depends on REQ-211/REQ-212 (both done) -- extends
+      fetch_scoped_attachment_content/3's not-found-folding coverage rather
+      than replacing it.
   - req: SCOPE-CHANGE
     event: done
     agent: DOC-UPDATER

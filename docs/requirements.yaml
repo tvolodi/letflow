@@ -28607,7 +28607,7 @@ requirements:
   - id: REQ-386
     title: "Time-limited, expiring signed URLs for instance-attachment byte content, replacing direct unbounded authenticated GET"
     owner: ELIXIR-DEV
-    status: pending
+    status: in_progress
     stage: S6
     impl_order: 746  # letflow-queue task id, GH#1634. Registered 2026-09-20 by ORCH;
       # corrects a fabricated/self-assigned id (743) that was never a real

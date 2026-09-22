@@ -4610,8 +4610,17 @@ volumes:
     path: docs/status/requirement_status.v22.yaml
     status: current
     opened: 2026-09-22
-    entries: 1
+    entries: 2
     note: >
+      Incremented to 2 during WF02-REQ386-20260923's own Step Final rebase
+      onto origin/main: composed REQ-386's started event (2026-09-22T22:51:01Z)
+      chronologically before ISS-0784's SCOPE-CHANGE done event
+      (2026-09-23T00:57:17Z). `grep -c "^  - req:"
+      docs/status/requirement_status.v22.yaml` = 2 on-disk entries after
+      composition, recounted directly rather than assumed. Well under the
+      1200-line/120000-byte roll ceiling, no roll triggered. Prior note
+      preserved below verbatim.
+
       Incremented to 1 by DOC-UPDATER's own ISS-0784 SCOPE-CHANGE done-event
       append (WF03-ISS0784-20260922's Step 6, composed during this run's own
       rebase onto fresh origin/main after REQ-383's done-event append had

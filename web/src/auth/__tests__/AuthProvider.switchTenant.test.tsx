@@ -273,3 +273,160 @@ describe('AuthProvider.switchTenant — REQ-384 §5.3/§7.3.1 cache-clear mechan
     expect(getCaptured()!.session?.tenant_id).toBe('tid-b')
   })
 })
+
+/**
+ * REQ-384 fix regression coverage (REVIEWER gap, WF02-REQ384-20260922) --
+ * `switchingToTenantSlug` drives AuthenticatedShellRoot's unmount/remount of
+ * AppShell (and therefore TenantSwitcher). AuthProvider.tsx's own comment
+ * above `switchTenant` explains the bug this guards against: the code used
+ * to set `switchingToTenantSlug` for the WHOLE attempt (covering the
+ * `attemptSilentSwitch` call itself), which unmounted `TenantSwitcher` the
+ * instant the user clicked an option -- so on `interaction_required`/`error`
+ * the calling `TenantSwitcher` instance's own `onSelect` was setting local
+ * state on an already-unmounted component, a silent no-op that meant neither
+ * affordance ever rendered even though `switchTenant` itself resolved
+ * correctly. The fix moves `setSwitchingToTenantSlug` to run only AFTER
+ * `attemptSilentSwitch` confirms `'silent_ok'`, in a `try/finally` that
+ * resets it to `null` once the switch (successful or not) completes.
+ *
+ * These tests use a deferred (controllable), never an immediately-resolved,
+ * mock for `attemptSilentSwitch`/`tenantsApi.getBySlug` specifically so the
+ * assertions can observe `switchingToTenantSlug`'s value WHILE the call is
+ * still in flight -- an immediately-resolved mock collapses the pending
+ * window to nothing and could not distinguish "never set" from "set and
+ * unset before we could observe it."
+ *
+ * TC-REQ384-25: while `attemptSilentSwitch` is pending and after it resolves
+ *   `'interaction_required'`, `switchingToTenantSlug` stays `null` throughout.
+ * TC-REQ384-26: same, for an `'error'` outcome.
+ * TC-REQ384-27: on a confirmed `'silent_ok'`, `switchingToTenantSlug` is
+ *   still `null` while `attemptSilentSwitch` itself is pending, becomes the
+ *   target slug only once `'silent_ok'` is confirmed (observed here while a
+ *   deferred `tenantsApi.getBySlug` call inside `buildSessionFromToken` is
+ *   still in flight), and returns to `null` once the switch completes.
+ */
+describe('AuthProvider.switchTenant — switchingToTenantSlug lifecycle (REVIEWER gap)', () => {
+  function deferred<T>() {
+    let resolve!: (value: T) => void
+    const promise = new Promise<T>((res) => {
+      resolve = res
+    })
+    return { promise, resolve }
+  }
+
+  it("TC-REQ384-25: switchingToTenantSlug stays null through a pending-then-'interaction_required' outcome", async () => {
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+    const attempt = deferred<{ outcome: string }>()
+    mockAttemptSilentSwitch.mockReturnValue(attempt.promise)
+
+    const getCaptured = renderAuthProvider(queryClient)
+
+    let switchPromise!: Promise<string>
+    await act(async () => {
+      switchPromise = getCaptured()!.switchTenant('tenant-b')
+      // Flush a microtask so switchTenant has actually started (called
+      // attemptSilentSwitch and is now awaiting the still-pending deferred
+      // promise) without resolving it yet.
+      await Promise.resolve()
+    })
+
+    // Still pending: switchingToTenantSlug must not have been set merely
+    // because an attempt STARTED.
+    expect(getCaptured()!.switchingToTenantSlug).toBeNull()
+
+    let outcome: string | undefined
+    await act(async () => {
+      attempt.resolve({ outcome: 'interaction_required' })
+      outcome = await switchPromise
+    })
+
+    expect(outcome).toBe('interaction_required')
+    expect(getCaptured()!.switchingToTenantSlug).toBeNull()
+    expect(mockSetToken).not.toHaveBeenCalled()
+  })
+
+  it("TC-REQ384-26: switchingToTenantSlug stays null through a pending-then-'error' outcome", async () => {
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+    const attempt = deferred<{ outcome: string }>()
+    mockAttemptSilentSwitch.mockReturnValue(attempt.promise)
+
+    const getCaptured = renderAuthProvider(queryClient)
+
+    let switchPromise!: Promise<string>
+    await act(async () => {
+      switchPromise = getCaptured()!.switchTenant('tenant-b')
+      await Promise.resolve()
+    })
+
+    expect(getCaptured()!.switchingToTenantSlug).toBeNull()
+
+    let outcome: string | undefined
+    await act(async () => {
+      attempt.resolve({ outcome: 'error' })
+      outcome = await switchPromise
+    })
+
+    expect(outcome).toBe('error')
+    expect(getCaptured()!.switchingToTenantSlug).toBeNull()
+    expect(mockSetToken).not.toHaveBeenCalled()
+  })
+
+  it("TC-REQ384-27: switchingToTenantSlug is set to the target slug only once 'silent_ok' is confirmed, and clears once the switch completes", async () => {
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+    const attempt = deferred<{ outcome: string; user: { access_token: string } }>()
+    const getBySlug = deferred<{
+      slug: string
+      tenant_id: string
+      display_name: string
+      tenant_type: string
+      production_tenant_display_name: string | null
+    }>()
+    mockAttemptSilentSwitch.mockReturnValue(attempt.promise)
+    mockGetBySlug.mockReturnValue(getBySlug.promise)
+
+    const getCaptured = renderAuthProvider(queryClient)
+
+    let switchPromise!: Promise<string>
+    await act(async () => {
+      switchPromise = getCaptured()!.switchTenant('tenant-b')
+      await Promise.resolve()
+    })
+
+    // attemptSilentSwitch itself is still pending -- must not be set yet.
+    expect(getCaptured()!.switchingToTenantSlug).toBeNull()
+
+    await act(async () => {
+      // Confirms 'silent_ok'. switchTenant now proceeds synchronously into
+      // setSwitchingToTenantSlug(targetSlug) and then calls
+      // buildSessionFromToken, which awaits the still-pending
+      // tenantsApi.getBySlug deferred -- so switchTenant is paused there,
+      // giving us a real in-flight window to observe.
+      attempt.resolve({ outcome: 'silent_ok', user: { access_token: TENANT_B_TOKEN } })
+      await Promise.resolve()
+      await Promise.resolve()
+    })
+
+    // Set ONLY after silent_ok was confirmed -- this is the load-bearing
+    // assertion this test exists for.
+    expect(getCaptured()!.switchingToTenantSlug).toBe('tenant-b')
+    // Still mid-flight: the switch hasn't landed yet.
+    expect(getCaptured()!.session?.tenant_id).toBe('tid-a')
+
+    let outcome: string | undefined
+    await act(async () => {
+      getBySlug.resolve({
+        slug: 'tenant-b',
+        tenant_id: 'tid-b',
+        display_name: 'Tenant B',
+        tenant_type: 'production',
+        production_tenant_display_name: null,
+      })
+      outcome = await switchPromise
+    })
+
+    expect(outcome).toBe('ok')
+    // Cleared once the switch (successful) completes.
+    expect(getCaptured()!.switchingToTenantSlug).toBeNull()
+    expect(getCaptured()!.session?.tenant_id).toBe('tid-b')
+  })
+})

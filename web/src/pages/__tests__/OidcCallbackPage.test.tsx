@@ -22,6 +22,7 @@ expect.extend(jestDomMatchers)
 const mockNavigate = vi.fn()
 const mockSetSession = vi.fn()
 const mockSigninRedirectCallback = vi.fn()
+const mockSigninSilentCallback = vi.fn()
 
 vi.mock('react-router-dom', () => ({
   useNavigate: () => mockNavigate,
@@ -35,6 +36,13 @@ vi.mock('@/auth/OidcManager', () => ({
   getOidcManager: vi.fn(async () => ({
     signinRedirectCallback: mockSigninRedirectCallback,
   })),
+  // REQ-384 fix: the page also imports the module-level `oidcManager`
+  // singleton directly (used only by the hidden-iframe relay branch, never
+  // by the top-level signinRedirectCallback flow) -- see
+  // OidcCallbackPage.tsx's `window.self !== window.top` branch.
+  oidcManager: {
+    signinSilentCallback: mockSigninSilentCallback,
+  },
 }))
 
 vi.mock('@/api/client', () => ({
@@ -161,5 +169,73 @@ describe('ISS-0726 — OidcCallbackPage restore-priority navigation', () => {
       expect(mockNavigate).toHaveBeenCalledWith('/', { replace: true })
     })
     expect(mockNavigate).not.toHaveBeenCalledWith('//evil.com', { replace: true })
+  })
+})
+
+/**
+ * REQ-384 fix regression coverage (REVIEWER gap, WF02-REQ384-20260922) --
+ * OidcCallbackPage.tsx doubles as oidc-client-ts's `silent_redirect_uri`
+ * target when AuthProvider.switchTenant() -> attemptSilentSwitch() calls
+ * `signinSilent()`, which opens this SAME route inside a hidden iframe.
+ * Before the fix, the page unconditionally ran the top-level
+ * `signinRedirectCallback()` flow regardless of where it loaded, so the
+ * iframe's callback URL was never relayed back to the parent window and the
+ * pending `signinSilent()` promise hung forever. The fix branches on
+ * `window.self !== window.top` and relays via `signinSilentCallback()`
+ * instead, skipping the top-level flow entirely in that case.
+ *
+ * TC-REQ384-23: loaded inside a frame (window.top !== window.self) ->
+ *   `oidcManager.signinSilentCallback()` is called and
+ *   `getOidcManager()`/`signinRedirectCallback()` is never invoked.
+ * TC-REQ384-24: loaded at top level (the default jsdom topology,
+ *   window.top === window.self, matching every test above) ->
+ *   `signinRedirectCallback()` runs and `signinSilentCallback()` is never
+ *   invoked -- the two branches are mutually exclusive.
+ */
+describe('REQ-384 — OidcCallbackPage hidden-iframe relay branch', () => {
+  const realTop = window.top
+
+  afterEach(() => {
+    // Restore jsdom's default topology (window.top === window.self) so this
+    // describe block's frame simulation never leaks into another test file
+    // or a later test in this one.
+    Object.defineProperty(window, 'top', { value: realTop, configurable: true })
+  })
+
+  it('TC-REQ384-23: inside a hidden iframe, relays via signinSilentCallback and never runs the top-level redirect-callback flow', async () => {
+    vi.resetModules()
+    Object.defineProperty(window, 'top', { value: {}, configurable: true })
+    expect(window.top).not.toBe(window.self)
+
+    mockSigninSilentCallback.mockResolvedValue(undefined)
+
+    const { default: OidcCallbackPage } = await import('@/pages/OidcCallbackPage')
+    render(<OidcCallbackPage />)
+
+    await waitFor(() => {
+      expect(mockSigninSilentCallback).toHaveBeenCalledTimes(1)
+    })
+    expect(mockSigninRedirectCallback).not.toHaveBeenCalled()
+    expect(mockNavigate).not.toHaveBeenCalled()
+    expect(mockSetSession).not.toHaveBeenCalled()
+  })
+
+  it('TC-REQ384-24: at the top level (not framed), runs signinRedirectCallback and never touches signinSilentCallback', async () => {
+    vi.resetModules()
+    // window.top already === window.self here (jsdom default, restored by
+    // this describe block's own afterEach) -- asserted explicitly so this
+    // test fails loudly if that assumption ever stops holding.
+    expect(window.top).toBe(window.self)
+
+    const token = fakeToken(['PROCESS_OPERATOR'])
+    mockSigninRedirectCallback.mockResolvedValue({ access_token: token })
+
+    const { default: OidcCallbackPage } = await import('@/pages/OidcCallbackPage')
+    render(<OidcCallbackPage />)
+
+    await waitFor(() => {
+      expect(mockNavigate).toHaveBeenCalledWith('/', { replace: true })
+    })
+    expect(mockSigninSilentCallback).not.toHaveBeenCalled()
   })
 })

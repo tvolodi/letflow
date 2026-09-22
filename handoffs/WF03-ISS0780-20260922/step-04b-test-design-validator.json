@@ -1,0 +1,51 @@
+{
+  "handoff_id": "c1d2e3f4-0780-4000-8000-000000000006",
+  "run_id": "WF03-ISS0780-20260922",
+  "workflow_id": "WF-03",
+  "step": "04b",
+  "from_agent": "TEST-DESIGN-VALIDATOR",
+  "to_agent": "ORCH",
+  "file": "handoffs/WF03-ISS0780-20260922/step-04b-test-design-validator.json",
+  "created_at": "2026-09-22T09:35:00Z",
+  "started_at": "2026-09-22T09:15:00Z",
+  "completed_at": "2026-09-22T09:35:00Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S6",
+    "issue_id": "ISS-0780",
+    "queue_ref": "Q-779",
+    "github_ref": "GH-1704",
+    "branch": "feature/WF03-ISS0780-fix-20260922",
+    "related_handoff_ids": [
+      "handoffs/WF03-ISS0780-20260922/step-02-code-designer.json",
+      "handoffs/WF03-ISS0780-20260922/step-04-test-designer.json"
+    ],
+    "artifacts_in": [
+      "handoffs/WF03-ISS0780-20260922/step-04-test-designer.json",
+      "handoffs/WF03-ISS0780-20260922/step-02-code-designer.json",
+      "test/letflow/plugs/cors_test.exs"
+    ]
+  },
+  "task": {
+    "description": "WF-03 Step 4b: independently validate TEST-DESIGNER's ISS-0780 regression test -- shape conformance to the CODE-DESIGNER design, and an independently-reproduced fail-then-pass proof (not a re-read of TEST-DESIGNER's quoted output).",
+    "acceptance_criteria": [
+      "new test matches CODE-DESIGNER's specified shape: combined preflight, membership assertion (not full-string equality), covers all three missing headers",
+      "validator personally re-runs the post-fix test file and quotes real PASS output",
+      "validator personally reproduces the pre-fix FAILURE via its own throwaway git worktree at 2ed97a50, quotes real output, and removes the worktree",
+      "no isolated coverage gaps: all three headers (x-bpm-user-id, if-match, idempotency-key) are actually asserted, not just the fix_direction exemplar",
+      "no changes outside test/letflow/plugs/cors_test.exs and handoffs/"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "Read the new test at test/letflow/plugs/cors_test.exs:193-212 directly. It matches CODE-DESIGNER's step-02 design exactly: single combined OPTIONS /api/v1/anything preflight, access-control-request-headers: \"x-bpm-user-id, if-match, idempotency-key\" (fix_direction's literal exemplar first, other two audited headers alongside), asserts conn.status == 204, then splits the single access-control-allow-headers response value on \", \" and asserts membership (`in`) of all three header names individually -- not full-string equality, and not a single-header check. Placed in the existing 'AC3: preflight OPTIONS request, matched origin' describe block immediately after the pinned exact-string assertion test, per design. No other test in the file was altered by this addition (the pre-existing pinned assertion at line 187-188 already reads the corrected 5-header value, which is ELIXIR-DEV/REVIEWER's prior work, out of this gate's scope).\n\nINDEPENDENT PASS-SIDE REPRODUCTION (this branch, post-fix): ran `MIX_ENV=test mix test test/letflow/plugs/cors_test.exs` myself. Real output: `Finished in 0.1 seconds (0.00s async, 0.1s sync)` / `Result: 19 passed`. All 19 tests green, including the new regression test.\n\nINDEPENDENT FAIL-SIDE REPRODUCTION (own throwaway worktree, not TEST-DESIGNER's): created `git worktree add ../letflow-tdv-iss0780-prefix 2ed97a50` myself. Verified before editing that the worktree's lib/letflow/plugs/cors.ex still had the pre-fix `@allow_headers \"authorization, content-type\"` (grep confirmed, untouched). Inserted only the new test function (byte-identical to the one on this branch) into that worktree's test/letflow/plugs/cors_test.exs, touching nothing in lib/. Linked deps/_build into the worktree via temporary Windows directory junctions (borrowed from the main checkout) to run mix test without a fresh deps fetch, then removed both junctions (`cmd /c rmdir deps`, `cmd /c rmdir _build` -- verified gone) before removing the worktree. Ran `MIX_ENV=test mix test test/letflow/plugs/cors_test.exs` there. Real failing output:\n\n  1) test AC3: preflight OPTIONS request, matched origin ISS-0780 regression: x-bpm-user-id, if-match, and idempotency-key are all allowed on preflight (Letflow.Plugs.CorsTest)\n     test/letflow/plugs/cors_test.exs:193\n     Assertion with in failed\n     code:  assert \"x-bpm-user-id\" in allowed\n     left:  \"x-bpm-user-id\"\n     right: [\"authorization\", \"content-type\"]\n     stacktrace:\n       test/letflow/plugs/cors_test.exs:209: (test)\n\n  Result: 18/19 passed\n  Failed: 1 test\n\nThis matches TEST-DESIGNER's claimed output exactly (same failing assertion, same right-hand list, same 18/19 count) -- independently confirmed, not copied. Removed the worktree afterward (`git worktree remove --force ../letflow-tdv-iss0780-prefix`); `git worktree list` no longer shows it, and `git status --porcelain` on the main checkout shows no residue from this validation (only a pre-existing unrelated untracked `web/tests/e2e/.pipeline-state/` dir, not touched by this gate).\n\nCOVERAGE CHECK: all three added headers (x-bpm-user-id, if-match, idempotency-key) are individually asserted via separate `assert \"<name>\" in allowed` lines -- not just the fix_direction literal exemplar (x-bpm-user-id) in isolation. No gap.\n\nSCOPE CHECK: `git show --stat d71d761e` shows exactly two files changed -- test/letflow/plugs/cors_test.exs (+21) and handoffs/WF03-ISS0780-20260922/step-04-test-designer.json (+57). lib/letflow/plugs/cors.ex is untouched by this commit, consistent with the fix already being in 3d1bb946.\n\nNo skip tags, no TODO-implement placeholders, no shared hardcoded state dependency (each test builds its own conn via Plug.Test, no fixtures shared across tests), tests are self-sufficient (no ordering dependency -- async: false is file-level, not because tests depend on each other's side effects; the one stateful test, the Application.put_env override test, uses on_exit/1 to restore state and does not affect this new test). No hardcoded secrets/connection strings.\n\nAll five acceptance criteria met. Gate: PASS.",
+    "artifacts_out": [
+      "handoffs/WF03-ISS0780-20260922/step-04b-test-design-validator.json"
+    ],
+    "issues": [],
+    "next_action": "Route to ORCH for WF-03 Step 5 (merge/CI) -- TEST-DESIGNER's flagged local stale-partition-DB issue (16 leftover letflow_test1..16 databases) was self-remediated by TEST-DESIGNER and is not a code defect; no action needed from this gate beyond noting it in case it recurs on shared infra."
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

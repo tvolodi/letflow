@@ -28186,7 +28186,7 @@ requirements:
   - id: REQ-380
     title: "Solution-pack update review and apply API: four-way classification, blocked-on-unresolved-conflict apply, and attributed keep/take resolutions"
     owner: ELIXIR-DEV
-    status: pending
+    status: done
     stage: S2
     impl_order: 740  # letflow-queue task id, GH#1628. Registered 2026-09-20 by ORCH;
       # corrects a fabricated/self-assigned id (737) that was never a real

@@ -6,8 +6,6 @@
   "from_agent": "ORCH",
   "to_agent": "CODE-DESIGN-VALIDATOR",
   "file": "handoffs/WF02-REQ376-20260922/step-01b-code-design-validator-v2.json",
-  "supersedes": "handoffs/WF02-REQ376-20260922/step-01b-code-design-validator.json",
-  "rework_of": "handoffs/WF02-REQ376-20260922/step-01-code-designer-v2.json",
   "created_at": "2026-09-22T00:00:00Z",
   "started_at": "2026-09-22T00:00:00Z",
   "completed_at": "2026-09-22T00:00:00Z",

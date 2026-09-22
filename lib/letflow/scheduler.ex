@@ -97,6 +97,16 @@ defmodule Letflow.Scheduler do
   @default_retention_enabled false
   @default_retention_interval_ms 86_400_000
   @default_retention_days 90
+
+  # REQ-376 §3.1 -- the ensure_future_partitions/2 pre-creation sweep.
+  # Defaults to ENABLED (unlike retention_enabled?/0's false default) --
+  # this sweep is non-destructive (create-if-missing partition metadata
+  # only) and its entire purpose is AC5's safety property ("no write ever
+  # waits on partition creation"), which only holds if it actually runs by
+  # default. Daily cadence: partition creation is cheap and infrequent
+  # relative to the poller's sub-minute tick.
+  @default_partition_maintenance_enabled true
+  @default_partition_maintenance_interval_ms 86_400_000
   # Per lib/letflow/design/iss0421-poller-bounded-concurrency.md §4a/§7 -- the
   # per-task budget for Letflow.Scheduler.Poller's Task.async_stream/3 calls.
   @default_sweep_task_timeout_ms 10_000
@@ -669,5 +679,67 @@ defmodule Letflow.Scheduler do
 
   def retention_due?(%DateTime{} = last_run_at) do
     DateTime.diff(DateTime.utc_now(), last_run_at, :millisecond) >= retention_interval_ms()
+  end
+
+  # ===========================================================================
+  # Periodic partition-maintenance runner (REQ-376 §3.1)
+  # ===========================================================================
+
+  @spec partition_maintenance_enabled?() :: boolean()
+  def partition_maintenance_enabled? do
+    case Keyword.fetch(scheduler_config(), :partition_maintenance_enabled) do
+      {:ok, value} -> value
+      :error -> @default_partition_maintenance_enabled
+    end
+  end
+
+  @spec partition_maintenance_interval_ms() :: pos_integer()
+  def partition_maintenance_interval_ms do
+    scheduler_config()[:partition_maintenance_interval_ms] ||
+      @default_partition_maintenance_interval_ms
+  end
+
+  @doc """
+  Runs one partition-maintenance sweep for a single tenant schema (REQ-376
+  §3.1). Unconditional -- does NOT itself check `partition_maintenance_enabled?/0`;
+  that gate lives in the caller (`Letflow.Scheduler.Poller`'s `:tick`
+  handler), mirroring `run_retention_sweep/1`'s own division of labor. Thin
+  wrapper around `Letflow.EventStore.PartitionMaintenance.ensure_future_partitions/2`.
+  """
+  @spec run_partition_maintenance_sweep(tenant_schema :: String.t()) ::
+          {:ok, %{events_created: [String.t()], archive_created: [String.t()]}}
+          | {:error, term()}
+  def run_partition_maintenance_sweep(tenant_schema) when is_binary(tenant_schema) do
+    EventStore.PartitionMaintenance.ensure_future_partitions(tenant_schema)
+  rescue
+    error in Postgrex.Error ->
+      if match?(
+           %Postgrex.Error{postgres: %{code: code}}
+           when code in [:undefined_table, :undefined_schema],
+           error
+         ) do
+        Logger.warning(
+          "scheduler: tenant schema unavailable, skipping partition maintenance sweep for this tick",
+          schema: tenant_schema,
+          reason: :schema_unavailable
+        )
+
+        {:error, {:schema_unavailable, tenant_schema}}
+      else
+        reraise error, __STACKTRACE__
+      end
+  end
+
+  @doc """
+  Pure predicate (no DB access) deciding whether a partition-maintenance
+  sweep is due (mirrors `retention_due?/1`'s exact shape). `nil` means
+  "never run before" -- due immediately.
+  """
+  @spec partition_maintenance_due?(last_run_at :: DateTime.t() | nil) :: boolean()
+  def partition_maintenance_due?(nil), do: true
+
+  def partition_maintenance_due?(%DateTime{} = last_run_at) do
+    DateTime.diff(DateTime.utc_now(), last_run_at, :millisecond) >=
+      partition_maintenance_interval_ms()
   end
 end

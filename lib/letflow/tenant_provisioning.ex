@@ -613,7 +613,23 @@ defmodule Letflow.TenantProvisioning do
     {20_260_921_000_001, Letflow.Repo.Migrations.AddRoleClaimsSyncedAtToUsers,
      "20260921000001_add_role_claims_synced_at_to_users.exs"},
     {20_260_921_000_002, Letflow.Repo.Migrations.AddKindToTenantRole,
-     "20260921000002_add_kind_to_tenant_role.exs"}
+     "20260921000002_add_kind_to_tenant_role.exs"},
+    {20_260_922_000_001, Letflow.Repo.Migrations.CreateEventsPartitioned,
+     "20260922000001_create_events_partitioned.exs"},
+    {20_260_922_000_002, Letflow.Repo.Migrations.CreateEventsPInitialPartitions,
+     "20260922000002_create_events_p_initial_partitions.exs"},
+    {20_260_922_000_003, Letflow.Repo.Migrations.BackfillEventsPartitioned,
+     "20260922000003_backfill_events_partitioned.exs"},
+    {20_260_922_000_004, Letflow.Repo.Migrations.SwapEventsPartitioned,
+     "20260922000004_swap_events_partitioned.exs"},
+    {20_260_922_000_005, Letflow.Repo.Migrations.CreateEventsArchivePartitioned,
+     "20260922000005_create_events_archive_partitioned.exs"},
+    {20_260_922_000_006, Letflow.Repo.Migrations.CreateEventsArchivePInitialPartitions,
+     "20260922000006_create_events_archive_p_initial_partitions.exs"},
+    {20_260_922_000_007, Letflow.Repo.Migrations.BackfillEventsArchivePartitioned,
+     "20260922000007_backfill_events_archive_partitioned.exs"},
+    {20_260_922_000_008, Letflow.Repo.Migrations.SwapEventsArchivePartitioned,
+     "20260922000008_swap_events_archive_partitioned.exs"}
   ]
 
   @doc """
@@ -646,7 +662,9 @@ defmodule Letflow.TenantProvisioning do
   (`lib/letflow/design/req181-webhooks-core.md` §1), REQ-186 one more:
   `timers` (`lib/letflow/design/req186-scheduler-core.md` §1), and REQ-183
   one more: `webhook_delivery_attempts`
-  (`lib/letflow/design/req183-webhook-delivery-dispatch.md` §1) —
+  (`lib/letflow/design/req183-webhook-delivery-dispatch.md` §1), and REQ-376
+  eight more: the `events`/`events_archive` partitioning conversion set
+  (`lib/letflow/design/req376-partition-event-retirement.md` §2.1) —
   entries in total (see `@tenant_scoped_migration_manifest` itself for the
   authoritative, up-to-date count), ordered by version. Every future tenant-scoped migration must append its
   own entry to `@tenant_scoped_migration_manifest`, in addition to following the

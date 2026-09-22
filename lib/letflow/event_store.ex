@@ -1256,12 +1256,53 @@ defmodule Letflow.EventStore do
 
   # Design doc §4.2 STEP 2 -- the real read, filters applied, ordered by
   # sequence_number ASC. May legitimately return [].
+  #
+  # REQ-376 §6 (EO-003) -- extended to query BOTH `events` and
+  # `events_archive` and merge the results, closing the pre-existing gap
+  # req026-event-read-archive-platform-sentinels.md §11 OQ-3 already flagged
+  # ("no function reads events back out of events_archive"). This is what
+  # makes an already-whole-partition-retired month (docs/migration/decisions/
+  # 0037-...md) still replay with no gap: retire_month/3 never deletes a row,
+  # it only ever changes which table a given month's partition is a child
+  # of, so this instance's history is always findable across the union of
+  # both tables regardless of which side any given event currently lives on.
+  # Correctness does not depend on either query being individually sorted --
+  # the merge step below re-sorts the combined set by sequence_number, the
+  # same invariant (INV-RD-2) this function already guaranteed pre-REQ-376.
+  # ArchivedEvent rows are normalized into %Event{} structs (same field
+  # overlap minus `archived_at`) so every existing caller of read/2 keeps
+  # seeing a homogeneous list of %Event{} structs, unchanged.
   defp query_instance_events(instance_id, schema_name, filter) do
-    Event
-    |> where([e], e.instance_id == ^instance_id)
-    |> apply_read_filter(filter)
-    |> order_by([e], asc: e.sequence_number)
-    |> Repo.all(prefix: schema_name)
+    live_events =
+      Event
+      |> where([e], e.instance_id == ^instance_id)
+      |> apply_read_filter(filter)
+      |> Repo.all(prefix: schema_name)
+
+    archived_events =
+      ArchivedEvent
+      |> where([e], e.instance_id == ^instance_id)
+      |> apply_read_filter(filter)
+      |> Repo.all(prefix: schema_name)
+      |> Enum.map(&archived_event_to_event/1)
+
+    (live_events ++ archived_events)
+    |> Enum.sort_by(& &1.sequence_number)
+  end
+
+  defp archived_event_to_event(%ArchivedEvent{} = archived) do
+    %Event{
+      event_id: archived.event_id,
+      created_at: archived.created_at,
+      instance_id: archived.instance_id,
+      event_type: archived.event_type,
+      payload: archived.payload,
+      actor_id: archived.actor_id,
+      sequence_number: archived.sequence_number,
+      idempotency_key: archived.idempotency_key,
+      metadata: archived.metadata,
+      global_seq: archived.global_seq
+    }
   end
 
   # Design doc §4.3 -- up_to_sequence wins outright over up_to_timestamp if

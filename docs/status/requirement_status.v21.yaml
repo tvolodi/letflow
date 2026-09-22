@@ -670,7 +670,7 @@ history:
       PLATFORM_ADMIN-only screen reachability, and the e2e pipeline spec
       itself passing) confirmed done.
   - req: SCOPE-CHANGE
-    event: resolved
+    event: done
     agent: ISSUE-FIXER
     at: "2026-09-22T03:22:13Z"
     note: >

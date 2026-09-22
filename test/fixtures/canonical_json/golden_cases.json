@@ -1,0 +1,162 @@
+[
+  {
+    "expected": "{\"alpha\":2,\"mid\":3,\"zeta\":1}",
+    "input": {
+      "alpha": 2,
+      "mid": 3,
+      "zeta": 1
+    },
+    "name": "simple_key_reordering"
+  },
+  {
+    "expected": "{\"a\":1,\"b\":{\"a\":2,\"m\":3,\"z\":1}}",
+    "input": {
+      "a": 1,
+      "b": {
+        "a": 2,
+        "m": 3,
+        "z": 1
+      }
+    },
+    "name": "nested_object_reordering"
+  },
+  {
+    "expected": "{\"a\":2,\"b\":1,\"items\":[3,1,2]}",
+    "input": {
+      "a": 2,
+      "b": 1,
+      "items": [
+        3,
+        1,
+        2
+      ]
+    },
+    "name": "array_order_preserved"
+  },
+  {
+    "expected": "{\"nodes\":[{\"attrs\":null,\"id\":\"n2\",\"type\":\"TASK\"},{\"attrs\":null,\"id\":\"n1\",\"type\":\"START\"}]}",
+    "input": {
+      "nodes": [
+        {
+          "attrs": null,
+          "id": "n2",
+          "type": "TASK"
+        },
+        {
+          "attrs": null,
+          "id": "n1",
+          "type": "START"
+        }
+      ]
+    },
+    "name": "array_of_objects_each_reordered"
+  },
+  {
+    "expected": "{\"apple\":2,\"café\":1,\"zebra\":4,\"日本語\":3}",
+    "input": {
+      "apple": 2,
+      "café": 1,
+      "zebra": 4,
+      "日本語": 3
+    },
+    "name": "mixed_ascii_non_ascii_bmp_keys"
+  },
+  {
+    "expected": "{\"flag_false\":false,\"flag_true\":true,\"nothing\":null,\"zero\":0}",
+    "input": {
+      "flag_false": false,
+      "flag_true": true,
+      "nothing": null,
+      "zero": 0
+    },
+    "name": "booleans_and_null"
+  },
+  {
+    "expected": "{\"negative\":-7,\"positive\":42,\"zero\":0}",
+    "input": {
+      "negative": -7,
+      "positive": 42,
+      "zero": 0
+    },
+    "name": "small_integers"
+  },
+  {
+    "expected": "{\"large\":123456789012345,\"max_safe\":9007199254740991}",
+    "input": {
+      "large": 123456789012345,
+      "max_safe": 9007199254740991
+    },
+    "name": "large_safe_integers"
+  },
+  {
+    "expected": "{\"e\":2.71828,\"negative_float\":-1.5,\"pi\":3.14159,\"small\":0.0001}",
+    "input": {
+      "e": 2.71828,
+      "negative_float": -1.5,
+      "pi": 3.14159,
+      "small": 0.0001
+    },
+    "name": "decimal_floats"
+  },
+  {
+    "expected": "{\"empty_arr\":[],\"empty_obj\":{}}",
+    "input": {
+      "empty_arr": [],
+      "empty_obj": {}
+    },
+    "name": "empty_object_and_array"
+  },
+  {
+    "expected": "{\"backslash\":\"a\\\\b\",\"multibyte\":\"héllo wörld — 日本語 — emoji 🎉\",\"newline\":\"line1\\nline2\",\"quote\":\"she said \\\"hi\\\"\",\"tab\":\"a\\tb\"}",
+    "input": {
+      "backslash": "a\\b",
+      "multibyte": "héllo wörld — 日本語 — emoji 🎉",
+      "newline": "line1\nline2",
+      "quote": "she said \"hi\"",
+      "tab": "a\tb"
+    },
+    "name": "control_characters_and_multibyte_utf8"
+  },
+  {
+    "expected": "{\"edges\":[{\"id\":\"e2\",\"source\":\"n2\",\"target\":\"n3\"},{\"id\":\"e1\",\"source\":\"n1\",\"target\":\"n2\"}],\"nodes\":[{\"attributes\":null,\"id\":\"n3\",\"label\":\"End\",\"node_type\":\"END\"},{\"attributes\":null,\"id\":\"n1\",\"label\":\"Start\",\"node_type\":\"START\"},{\"attributes\":{\"assignee_ref\":\"admin-user\",\"assignee_type\":\"user\",\"role\":\"admin-user\"},\"id\":\"n2\",\"label\":\"Review\",\"node_type\":\"HUMAN_TASK\"}]}",
+    "input": {
+      "edges": [
+        {
+          "id": "e2",
+          "source": "n2",
+          "target": "n3"
+        },
+        {
+          "id": "e1",
+          "source": "n1",
+          "target": "n2"
+        }
+      ],
+      "nodes": [
+        {
+          "attributes": null,
+          "id": "n3",
+          "label": "End",
+          "node_type": "END"
+        },
+        {
+          "attributes": null,
+          "id": "n1",
+          "label": "Start",
+          "node_type": "START"
+        },
+        {
+          "attributes": {
+            "assignee_ref": "admin-user",
+            "assignee_type": "user",
+            "role": "admin-user"
+          },
+          "id": "n2",
+          "label": "Review",
+          "node_type": "HUMAN_TASK"
+        }
+      ]
+    },
+    "name": "realistic_process_graph"
+  }
+]

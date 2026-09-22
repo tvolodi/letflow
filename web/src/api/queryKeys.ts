@@ -159,6 +159,13 @@ export const queryKeys = {
     status: (rolloutId: string) => [...queryKeys.platformMigrations.all, 'status', rolloutId] as const,
   },
 
+  /** REQ-381 design §3.2 — solution-pack update review/apply screen. */
+  solutionPackUpdate: {
+    all: ['solutionPackUpdate'] as const,
+    review: (packId: string, targetVersion: string) =>
+      [...queryKeys.solutionPackUpdate.all, 'review', packId, targetVersion] as const,
+  },
+
   /** REQ-377 §3.2 — operator-facing history-retirement screen. */
   eventRetention: {
     all: ['event-retention'] as const,

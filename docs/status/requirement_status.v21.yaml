@@ -985,3 +985,49 @@ history:
       UAT-RUNNER/WF-05-class environment and was correctly left to that
       later pass, not faked or skipped silently here. Design:
       lib/letflow/design/req377-history-retirement-screen.md.
+  - req: REQ-381
+    event: done
+    agent: DOC-UPDATER
+    at: "2026-09-22T16:08:43Z"
+    note: >
+      Solution-pack update review screen (web/src) shipped on
+      feature/WF02-REQ381-20260922 (tip a12f179f), letflow-queue task 741,
+      GH-1629, stage S8, depends_on REQ-380 (done). Third and last of the
+      three requirements filed from
+      test/uat-reports/gui-review-2026-09-20-template-update-conflict-resolution.md
+      (REQ-379 install-time write path, REQ-380 update-review/apply API,
+      REQ-381 this screen); all three now done, closing that GUI-review
+      finding's chain in full. Screen reachable from the company's pack
+      screen, wired to REQ-380's real endpoints (no mock data), showing the
+      four-way classified update review (EO-001), a
+      keep-local/take-incoming decision per both-sides-conflict artefact,
+      blocked-apply with the endpoint's own named-artefact message while any
+      conflict is undecided (EO-002), post-apply attribution (who/when)
+      visible for kept artefacts (EO-003) with untouched artefacts left
+      unchanged (EO-004), and no re-presentation of an already-resolved
+      artefact as a fresh conflict on a later update offer (EO-005). Per the
+      requirement's own acceptance criteria, the scenario fixture's stale
+      NOTE (ISS-0527) was removed from
+      test/fixtures/uat/scenarios/platform/template-update-conflict-resolution.yaml
+      and web/tests/e2e/pipelines/template-update-conflict.pipeline.e2e.spec.ts
+      was authored against the real screen. One real spec-authoring bug
+      found and fixed mid-pipeline by UAT-RUNNER's own diagnostic run
+      (test/uat-reports/uat-2026-09-22-WF02-REQ381-AC6-20260922.yaml,
+      BLOCKED_ON_SPEC_BUG): the spec's graphFor() fixture helper built a
+      HUMAN_TASK node with attributes: null, tripping a real, pre-existing,
+      unrelated graph-validator rule (lib/letflow/definitions/graph.ex
+      CHK-09) requiring a non-empty role attribute -- not a REQ-381
+      implementation defect; UAT-RUNNER's own diagnostic local edit proved
+      the real implementation passes all six EO-001..EO-005 pl.step stages
+      end-to-end, then the fix (a non-blank role string on the fixture's
+      HUMAN_TASK node) was committed for real (commit 6f9ccfff). Gates, all
+      PASSED: CODE-DESIGN-VALIDATOR, SECURITY-REVIEWER, REVIEWER,
+      TEST-DESIGN-VALIDATOR, TEST-RUNNER (frontend 792/792 unit +
+      48/48 guard tests green, type-check/lint/build clean; backend main
+      suite 1244/1246, the 2 failures being the pre-disclosed ISS-0766
+      identity_test.exs flake, independently confirmed via isolated
+      rerun 62/62, unrelated to REQ-381's changes), RELEASE-VALIDATOR
+      (final independent re-verification: live e2e re-run PASS, full
+      backend suite PASS modulo the same known ISS-0766 flake, frontend
+      suite PASS, scope confirmed clean, mergeable against main). Design:
+      lib/letflow/design/req381-solution-pack-update-review-screen.md.

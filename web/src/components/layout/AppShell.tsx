@@ -50,6 +50,13 @@ const NAV_ITEMS: NavItem[] = [
   // platform-wide tenant-migration fanout runner. Same :TenantsManage
   // (PLATFORM_ADMIN-only) risk class as admin/tenants, admin/onboarding.
   { to: '/admin/platform-migrations', label: 'Platform Migrations', roles: ['PLATFORM_ADMIN'] },
+  // REQ-381: solution-pack update review screen. `/solution-packs` needs a
+  // discoverable nav link (unlike PromotionReviewPage.tsx's deliberate
+  // no-nav-entry choice) -- REQ-381's own text requires the review screen
+  // be "reachable from the company's pack screen," and the launcher page
+  // serves that role (design §7). PLATFORM_ADMIN-only, same OQ-3 judgment
+  // call as the launcher/review pages' own role gate (design §4.1).
+  { to: '/solution-packs', label: 'Solution Packs', roles: ['PLATFORM_ADMIN'] },
   // REQ-377: operator-facing history-retirement screen for REQ-376's
   // whole-partition retirement mechanism. Same :TenantsManage
   // (PLATFORM_ADMIN-only) risk class as admin/platform-migrations.

@@ -1,0 +1,32 @@
+{
+  "handoff_id": "req377-step01b-001",
+  "run_id": "WF02-REQ377-20260922",
+  "workflow_id": "WF-02",
+  "step": "01b",
+  "from_agent": "ORCH",
+  "to_agent": "CODE-DESIGN-VALIDATOR",
+  "file": "handoffs/WF02-REQ377-20260922/step-01b-code-design-validator.json",
+  "started_at": "2026-09-22T13:05:00Z",
+  "completed_at": "2026-09-22T13:09:00Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": { "stage": "S8", "requirement_ids": ["REQ-377"], "owned_modules": [] },
+  "task": {
+    "description": "WF-02 Step 1b: design gate on lib/letflow/design/req377-history-retirement-screen.md (initial draft).",
+    "acceptance_criteria": [
+      "the retirement screen lets a PLATFORM_ADMIN retire the oldest eligible month and displays the resulting retirement record",
+      "the retention summary shows a protected-record count capturable before and after a retirement",
+      "the screen is reachable only to a PLATFORM_ADMIN-equivalent role",
+      "web/tests/e2e/pipelines/platform-partition-retention-drop.pipeline.e2e.spec.ts is authored against this real screen and passes"
+    ]
+  },
+  "result": {
+    "status": "FAIL",
+    "summary": "FAIL on two MAJOR issues, independently verified against source: (1) SS1's async-design justification falsely claimed no index exists on event_type -- idx_events_type_p and idx_archive_type_p actually exist on the partitioned parents and propagate to every partition (priv/repo/migrations/20260922000001 line 114, ...000005 line 52). (2) The shared 'oldest eligible month' helper underlying both AC1 and AC2 had no function signature/name/module specified, left as an open fork (OQ5) rather than resolved. :TenantsManage precedent, AC coverage map, DB migration spec, and absence of implementation code all independently verified correct.",
+    "artifacts_out": [],
+    "next_action": "Rework CODE-DESIGNER",
+    "issues": ["REQ-377-DESIGN-1 (MAJOR, false index claim)", "REQ-377-DESIGN-2 (MAJOR, unspecified helper signature)"]
+  },
+  "rework_count": 1,
+  "max_rework": 3
+}

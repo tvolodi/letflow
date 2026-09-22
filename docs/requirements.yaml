@@ -28252,7 +28252,7 @@ requirements:
   - id: REQ-381
     title: "Solution-pack update review screen: four-way diff, blocked-apply-on-unresolved-conflict, and per-process keep/take resolution UI"
     owner: FRONTEND-DEV
-    status: pending
+    status: done
     stage: S8
     impl_order: 741  # letflow-queue task id, GH#1629. Registered 2026-09-20 by ORCH;
       # corrects a fabricated/self-assigned id (738) that was never a real

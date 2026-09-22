@@ -4293,8 +4293,14 @@ volumes:
     path: docs/status/requirement_status.v21.yaml
     status: current
     opened: 2026-09-20
-    entries: 25
+    entries: 26
     note: >
+      Incremented to 26 by DOC-UPDATER's own REQ-381 done-event append
+      (WF02-REQ381-20260922, Step 6) -- `grep -c "^  - req:"
+      docs/status/requirement_status.v21.yaml` = 26 on-disk entries. 957
+      lines / 58437 bytes, well under the 1200-line/120000-byte roll
+      ceiling, so no roll triggered.
+
       Incremented to 25 by DOC-UPDATER's own ISS-0781 SCOPE-CHANGE/done-event
       append (WF03-ISS0781-20260922, Step 6), merged on top of a concurrent
       origin/main advance (REQ-376's two events, already present on main by

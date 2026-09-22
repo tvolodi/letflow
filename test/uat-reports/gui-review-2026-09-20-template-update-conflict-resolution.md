@@ -136,3 +136,20 @@ screen to write one against. `web/tests/e2e/pipelines/
 template-update-conflict.pipeline.e2e.spec.ts` remains unauthored, now
 explicitly the responsibility of REQ-381's acceptance criteria once the
 feature ships.
+
+## Closed out (2026-09-22, DOC-UPDATER)
+
+All three requirements filed from this finding are now `done`:
+REQ-379 (install-time write path, 2026-09-22), REQ-380 (update-review/apply
+API, 2026-09-22), REQ-381 (this review screen, feature/WF02-REQ381-20260922,
+tip `a12f179f`). The stale NOTE (ISS-0527) was removed from
+`test/fixtures/uat/scenarios/platform/template-update-conflict-resolution.yaml`
+and `web/tests/e2e/pipelines/template-update-conflict.pipeline.e2e.spec.ts`
+was authored and passes against the real screen, confirmed by
+RELEASE-VALIDATOR's independent live e2e re-run. See
+`docs/status/requirement_status.v21.yaml` for the run-history entries
+(REQ-379/REQ-380/REQ-381 `done` events) and
+`test/uat-reports/uat-2026-09-22-WF02-REQ381-AC6-20260922.yaml` for
+UAT-RUNNER's diagnostic run that isolated a spec-authoring bug (unrelated to
+REQ-381's own implementation) later fixed on commit `6f9ccfff`. This finding
+is fully resolved; no further work is outstanding from this report.

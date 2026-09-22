@@ -3158,3 +3158,33 @@ hypothetical; check `git log`/`git reflog`/`docker stats`/`pg_stat_activity`
 directly before concluding a wide, unexpected failure spread is a real regression
 in your own change, per this file's own repeated lesson above about verifying
 tool/environment claims rather than trusting them.
+
+## DOC-UPDATER pushed a post-merge issue-file addendum commit directly to `main` (2026-09-22, WF03-ISS0781-20260922)
+
+DOC-UPDATER, closing out ISS-0781 (deleted `find_submitted_resolution/2`;
+`apply_entry/6`'s `:conflict` clause now unconditionally trusts the
+persisted resolution row), merged PR #1718 correctly (branch → CI green,
+including a legitimate re-fix for a real `requirement_status.index.yaml`
+entry-count mismatch it introduced and a retrigger of the known ISS-0766
+flake). After merge it then pushed one more 3-line commit
+(`52317688`, recording the PR number and merge-commit SHA back into
+`docs/issues/ISS-0781.yaml`) straight to `main` — GitHub itself reported
+"Bypassed rule violations" on that push. This is the same class of
+violation as the three prior direct-push incidents already in this file,
+now specifically for a *post-merge* self-referential addendum, a shape
+not covered by "finishing a pilot" or "UAT-only report" — the implicit
+reasoning was presumably "the PR already merged, so there's no PR left to
+carry this one-line update." The agent caught and flagged its own
+violation unprompted in its final report, which is the right recovery
+once it's happened, but the push already happened.
+
+**Correct alternative:** unchanged — there is no post-merge exception.
+Recording a just-merged PR's own number/SHA back into the issue file is
+easy to fold into the *same* PR before merging (the SHA isn't known yet,
+but the PR number is, as soon as `gh pr create` returns it) — write the
+`pr:` field before requesting the merge, and only add a tiny follow-up
+PR for the `merge_commit:` field if that's truly needed after the fact.
+Future DOC-UPDATER dispatch prompts should say explicitly: *any* commit
+after PR creation, including a one-field addendum recording the PR's own
+identity, goes through a new branch+PR+CI, never a direct push, even
+when the original PR has already merged.

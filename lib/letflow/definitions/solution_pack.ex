@@ -175,6 +175,7 @@ defmodule Letflow.Definitions.SolutionPack do
   alias Letflow.Definitions
   alias Letflow.Definitions.ExportImport
   alias Letflow.Definitions.JsonSchemaShape
+  alias Letflow.Definitions.PackUpdateResolution
   alias Letflow.Definitions.ProcessDefinition
   alias Letflow.Definitions.SolutionPackArtefactBase
   alias Letflow.Definitions.SolutionPackInstall
@@ -290,6 +291,45 @@ defmodule Letflow.Definitions.SolutionPack do
           | {:error, :missing_prefix}
           | Definitions.create_error()
           | Letflow.Entities.Definitions.create_error()
+          | Definitions.common_error()
+
+  @typedoc """
+  One caller-submitted conflict resolution on an `update-apply` call
+  (REQ-380 design §4.3, §4.2). `resolved_content` is required iff
+  `resolution == :merged`, and must be `nil` for `:keep_local`/`:take_incoming`
+  -- the router's own `@update_apply_schema` validation already enforces this
+  correlation before this function is ever called; `apply_pack_update/6`
+  re-checks it defensively (design §4.3 step 2, mirrors
+  `decode_variable_schema/1`'s own two-layer validation precedent).
+  """
+  @type resolution_input :: %{
+          artefact_type: String.t(),
+          artefact_id: String.t(),
+          resolution: PackUpdateResolution.resolution(),
+          resolved_content: String.t() | nil
+        }
+
+  @typedoc "One entry of `apply_pack_update/6`'s `apply_result()` (REQ-380 design §4.3)."
+  @type applied_entry :: %{
+          artefact_type: String.t(),
+          artefact_id: String.t(),
+          classification: Definitions.classification(),
+          action: :advanced_to_incoming | :advanced_to_merged | :left_unchanged
+        }
+
+  @type apply_result :: %{
+          pack_id: String.t(),
+          target_version: String.t(),
+          applied_entries: [applied_entry()],
+          resolutions_recorded: non_neg_integer()
+        }
+
+  @type apply_error ::
+          {:error, {:unresolved_conflict, artefact_type :: String.t(), artefact_id :: String.t()}}
+          | {:error,
+             {:invalid_resolution, artefact_type :: String.t(), artefact_id :: String.t(),
+              reason :: :not_a_conflict}}
+          | {:error, :empty_artefact_set}
           | Definitions.common_error()
 
   @default_pack_version "1.0.0"
@@ -441,6 +481,362 @@ defmodule Letflow.Definitions.SolutionPack do
          {:ok, tenant_id} <- TenantProvisioning.tenant_id_for_schema_name(prefix(opts)) do
       run_install(parsed, decoded_schemas, tenant_id, actor_id, opts)
     end
+  end
+
+  @doc """
+  Applies a solution-pack update for one tenant's install of `pack_id`
+  against `target_version` (REQ-380 design §4.3). Single atomic operation,
+  entirely inside one `Letflow.Repo.transaction/1`:
+
+    1. `TenantProvisioning.tenant_id_for_schema_name/1` on `opts[:prefix]`.
+    2. Defensive structural guard on `resolutions` (`resolved_content`
+       present iff `resolution == :merged`) -- the router's own validation
+       already enforces this; this is a second, defensive layer, not
+       user-facing (design §4.3 step 2).
+    3. Insert every submitted `resolutions` entry via
+       `PackUpdateResolution.insert_changeset/2`, `Repo.insert(on_conflict:
+       :nothing, conflict_target: [:tenant_id, :pack_id, :target_version,
+       :artefact_type, :artefact_id])` -- first-recorded resolution wins,
+       permanently, for a given `(tenant_id, pack_id, target_version,
+       artefact_type, artefact_id)` (design §4.3 step 3, OQ-3).
+    4. `Letflow.Definitions.compute_pack_update_plan/5`, re-run **inside the
+       same transaction** so it sees the resolutions step 3 just inserted.
+    5. If any `:conflict`-classified entry is still unresolved, roll back
+       the entire transaction -- **including step 3's inserts** (design
+       §4.4) -- returning `{:error, {:unresolved_conflict, artefact_type,
+       artefact_id}}` naming the first such entry in `plan.entries` order.
+    6. Otherwise, for each plan entry: `:unchanged`/`:local_only` ->
+       `action: :left_unchanged`, no write. `:clean_update` -> advance
+       `solution_pack_artefact_bases` to `entry.incoming`, `action:
+       :advanced_to_incoming`. `:conflict` (now guaranteed resolved) ->
+       look up the deciding resolution -- from this call's own
+       `resolutions` list first, falling back to the already-persisted
+       `pack_update_resolutions` row when this call submitted nothing new
+       for that artefact -- and advance the base per `:take_incoming`/
+       `:merged`, or leave it untouched per `:keep_local`.
+    7. Commit; return `{:ok, apply_result()}`.
+
+  `theirs_artefacts`/`incoming_artefacts` are caller-supplied, same
+  contract as `compute_pack_update_plan/5` (§2 of the design doc) --
+  `apply_pack_update/6` has no other way to source them yet (OQ-2).
+
+  `base_content`/`base_version` are advanced via
+  `SolutionPackArtefactBase.upsert_changeset/2` with `on_conflict:
+  {:replace, [:base_content, :base_version, :captured_at, :updated_at]}` --
+  the wholesale-replace write that module's own moduledoc names this
+  function as the intended caller for. Content is written as-is: both
+  `entry.incoming` and a `resolutions[].resolved_content` are already
+  canonical-JSON text by the time they reach this function (design §6,
+  "Canonicalization is the caller's responsibility, at every entry point")
+  -- unlike `capture_artefact_bases/4`'s own `packed.graph` **map** input,
+  neither is re-canonicalized here.
+  """
+  @spec apply_pack_update(
+          pack_id :: String.t(),
+          target_version :: String.t(),
+          theirs_artefacts :: [Definitions.artefact_input()],
+          incoming_artefacts :: [Definitions.artefact_input()],
+          resolutions :: [resolution_input()],
+          opts :: Definitions.opts() | [prefix: String.t(), actor_id: Ecto.UUID.t()]
+        ) :: {:ok, apply_result()} | apply_error()
+  def apply_pack_update(
+        pack_id,
+        target_version,
+        theirs_artefacts,
+        incoming_artefacts,
+        resolutions,
+        opts
+      )
+      when is_list(opts) do
+    with {:ok, tenant_id} <- TenantProvisioning.tenant_id_for_schema_name(prefix(opts)) do
+      :ok = assert_resolution_shapes!(resolutions)
+      actor_id = Keyword.fetch!(opts, :actor_id)
+      now = DateTime.truncate(DateTime.utc_now(), :microsecond)
+
+      Repo.transaction(fn ->
+        case run_apply_update(
+               pack_id,
+               target_version,
+               theirs_artefacts,
+               incoming_artefacts,
+               resolutions,
+               tenant_id,
+               actor_id,
+               now
+             ) do
+          {:ok, result} -> result
+          {:error, reason} -> Repo.rollback(reason)
+        end
+      end)
+    end
+  end
+
+  # ── apply_pack_update/6 helpers (REQ-380 design §4.3) ─────────────────────
+
+  # Defensive, programmer-error-only guard (design §4.3 step 2): the router's
+  # own `@update_apply_schema`/`validate_resolution_input/1` already reject a
+  # malformed resolutions[] entry before this function is ever reached, so a
+  # failure here means the router itself let a bad shape through -- not
+  # something a caller can trigger via a well-formed HTTP request, hence a
+  # raise (mirrors `Keyword.fetch!/2`'s own no-default stance) rather than a
+  # typed apply_error() member.
+  defp assert_resolution_shapes!(resolutions) do
+    Enum.each(resolutions, fn
+      %{resolution: :merged, resolved_content: content}
+      when is_binary(content) and content != "" ->
+        :ok
+
+      %{resolution: :merged} = resolution ->
+        raise ArgumentError,
+              "resolution :merged requires a non-empty resolved_content: #{inspect(resolution)}"
+
+      %{resolution: other, resolved_content: nil} when other in [:keep_local, :take_incoming] ->
+        :ok
+
+      %{resolution: other} = resolution when other in [:keep_local, :take_incoming] ->
+        raise ArgumentError,
+              "resolution #{other} must not carry resolved_content: #{inspect(resolution)}"
+    end)
+
+    :ok
+  end
+
+  defp run_apply_update(
+         pack_id,
+         target_version,
+         theirs_artefacts,
+         incoming_artefacts,
+         resolutions,
+         tenant_id,
+         actor_id,
+         now
+       ) do
+    with {:ok, recorded_count} <-
+           insert_submitted_resolutions(
+             resolutions,
+             tenant_id,
+             pack_id,
+             target_version,
+             actor_id,
+             now
+           ),
+         {:ok, plan} <-
+           Definitions.compute_pack_update_plan(
+             tenant_id,
+             pack_id,
+             target_version,
+             theirs_artefacts,
+             incoming_artefacts
+           ),
+         :ok <- check_no_unresolved_conflicts(plan),
+         {:ok, applied_entries} <-
+           apply_plan_entries(plan.entries, tenant_id, pack_id, target_version, resolutions, now) do
+      {:ok,
+       %{
+         pack_id: pack_id,
+         target_version: target_version,
+         applied_entries: applied_entries,
+         resolutions_recorded: recorded_count
+       }}
+    end
+  end
+
+  # Insert-if-absent (design §4.3 step 3, OQ-3). `is_nil(id)` is how Ecto
+  # reports an `on_conflict: :nothing` no-op: with no row returned by
+  # Postgres' `RETURNING`, the autogenerated primary key is never populated
+  # on the struct handed back, while every other field still reflects the
+  # attempted (not necessarily persisted) attrs -- so `id == nil` is the one
+  # reliable signal a fresh row was *not* inserted, distinguishing "already
+  # resolved by an earlier call" from "recorded by this call" for
+  # `resolutions_recorded`'s count.
+  defp insert_submitted_resolutions(
+         resolutions,
+         tenant_id,
+         pack_id,
+         target_version,
+         actor_id,
+         now
+       ) do
+    Enum.reduce_while(resolutions, {:ok, 0}, fn resolution, {:ok, count} ->
+      attrs = %{
+        tenant_id: tenant_id,
+        pack_id: pack_id,
+        target_version: target_version,
+        artefact_type: resolution.artefact_type,
+        artefact_id: resolution.artefact_id,
+        resolution: resolution.resolution,
+        resolved_content: resolution.resolved_content,
+        resolved_by: actor_id,
+        resolved_at: now
+      }
+
+      %PackUpdateResolution{}
+      |> PackUpdateResolution.insert_changeset(attrs)
+      |> Repo.insert(
+        on_conflict: :nothing,
+        conflict_target: [:tenant_id, :pack_id, :target_version, :artefact_type, :artefact_id]
+      )
+      |> case do
+        {:ok, %PackUpdateResolution{id: nil}} -> {:cont, {:ok, count}}
+        {:ok, %PackUpdateResolution{}} -> {:cont, {:ok, count + 1}}
+        {:error, _reason} = error -> {:halt, error}
+      end
+    end)
+  end
+
+  # Design §4.3 step 5 -- names the first unresolved conflict, in
+  # `plan.entries` order, i.e. `compute_pack_update_plan/5`'s own
+  # deterministic first-seen order.
+  defp check_no_unresolved_conflicts(plan) do
+    if plan.has_unresolved_conflicts do
+      entry = Enum.find(plan.entries, &(&1.classification == :conflict and not &1.resolved))
+      {:error, {:unresolved_conflict, entry.artefact_type, entry.artefact_id}}
+    else
+      :ok
+    end
+  end
+
+  # Design §4.3 step 6. All-or-nothing: the first base-advancement failure
+  # aborts the whole reduce, flowing into `run_apply_update/8`'s `with` ->
+  # `apply_pack_update/6`'s `Repo.transaction/1` -> `Repo.rollback/1` path,
+  # same shape every other multi-step write in this module already uses.
+  defp apply_plan_entries(entries, tenant_id, pack_id, target_version, resolutions, now) do
+    Enum.reduce_while(entries, {:ok, []}, fn entry, {:ok, acc} ->
+      case apply_entry(entry, tenant_id, pack_id, target_version, resolutions, now) do
+        {:ok, applied} -> {:cont, {:ok, [applied | acc]}}
+        {:error, _reason} = error -> {:halt, error}
+      end
+    end)
+    |> case do
+      {:ok, acc} -> {:ok, Enum.reverse(acc)}
+      {:error, _reason} = error -> error
+    end
+  end
+
+  defp apply_entry(
+         %{classification: :unchanged} = entry,
+         _tenant_id,
+         _pack_id,
+         _target_version,
+         _resolutions,
+         _now
+       ) do
+    {:ok, applied_entry_map(entry, :left_unchanged)}
+  end
+
+  defp apply_entry(
+         %{classification: :local_only} = entry,
+         _tenant_id,
+         _pack_id,
+         _target_version,
+         _resolutions,
+         _now
+       ) do
+    {:ok, applied_entry_map(entry, :left_unchanged)}
+  end
+
+  defp apply_entry(
+         %{classification: :clean_update} = entry,
+         tenant_id,
+         pack_id,
+         target_version,
+         _resolutions,
+         now
+       ) do
+    with {:ok, _base} <-
+           advance_base(tenant_id, pack_id, target_version, entry, entry.incoming, now) do
+      {:ok, applied_entry_map(entry, :advanced_to_incoming)}
+    end
+  end
+
+  # Guaranteed `resolved == true` by `check_no_unresolved_conflicts/1` having
+  # already passed -- a matching resolution exists, either among this call's
+  # own `resolutions` (submitted just now, step 3) or from an earlier call
+  # (the persisted `pack_update_resolutions` row, looked up fresh here since
+  # this call submitted nothing new for it).
+  defp apply_entry(
+         %{classification: :conflict} = entry,
+         tenant_id,
+         pack_id,
+         target_version,
+         resolutions,
+         now
+       ) do
+    case find_submitted_resolution(resolutions, entry) do
+      %{resolution: :keep_local} ->
+        {:ok, applied_entry_map(entry, :left_unchanged)}
+
+      %{resolution: :take_incoming} ->
+        with {:ok, _base} <-
+               advance_base(tenant_id, pack_id, target_version, entry, entry.incoming, now) do
+          {:ok, applied_entry_map(entry, :advanced_to_incoming)}
+        end
+
+      %{resolution: :merged, resolved_content: content} ->
+        with {:ok, _base} <- advance_base(tenant_id, pack_id, target_version, entry, content, now) do
+          {:ok, applied_entry_map(entry, :advanced_to_merged)}
+        end
+
+      nil ->
+        apply_from_persisted_resolution(tenant_id, pack_id, target_version, entry, now)
+    end
+  end
+
+  defp find_submitted_resolution(resolutions, %{artefact_type: type, artefact_id: id}) do
+    Enum.find(resolutions, &(&1.artefact_type == type and &1.artefact_id == id))
+  end
+
+  defp apply_from_persisted_resolution(tenant_id, pack_id, target_version, entry, now) do
+    Repo.get_by(PackUpdateResolution,
+      tenant_id: tenant_id,
+      pack_id: pack_id,
+      target_version: target_version,
+      artefact_type: entry.artefact_type,
+      artefact_id: entry.artefact_id
+    )
+    |> case do
+      %PackUpdateResolution{resolution: :keep_local} ->
+        {:ok, applied_entry_map(entry, :left_unchanged)}
+
+      %PackUpdateResolution{resolution: :take_incoming} ->
+        with {:ok, _base} <-
+               advance_base(tenant_id, pack_id, target_version, entry, entry.incoming, now) do
+          {:ok, applied_entry_map(entry, :advanced_to_incoming)}
+        end
+
+      %PackUpdateResolution{resolution: :merged, resolved_content: content} ->
+        with {:ok, _base} <- advance_base(tenant_id, pack_id, target_version, entry, content, now) do
+          {:ok, applied_entry_map(entry, :advanced_to_merged)}
+        end
+    end
+  end
+
+  defp advance_base(tenant_id, pack_id, target_version, entry, content, now) do
+    attrs = %{
+      tenant_id: tenant_id,
+      pack_id: pack_id,
+      artefact_type: entry.artefact_type,
+      artefact_id: entry.artefact_id,
+      base_version: target_version,
+      base_content: content,
+      captured_at: now
+    }
+
+    %SolutionPackArtefactBase{}
+    |> SolutionPackArtefactBase.upsert_changeset(attrs)
+    |> Repo.insert(
+      on_conflict: {:replace, [:base_content, :base_version, :captured_at, :updated_at]},
+      conflict_target: [:tenant_id, :pack_id, :artefact_type, :artefact_id]
+    )
+  end
+
+  defp applied_entry_map(entry, action) do
+    %{
+      artefact_type: entry.artefact_type,
+      artefact_id: entry.artefact_id,
+      classification: entry.classification,
+      action: action
+    }
   end
 
   # ── export/3 helpers ──────────────────────────────────────────────────────

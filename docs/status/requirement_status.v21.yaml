@@ -768,3 +768,44 @@ history:
       REQ-380 (update-review/apply API) and REQ-381 (frontend screen),
       both depending on this requirement, remain pending, unblocked by
       this merge.
+  - req: REQ-380
+    event: done
+    agent: DOC-UPDATER
+    at: "2026-09-22T11:22:04Z"
+    note: >
+      Solution-pack update-review/apply API shipped on
+      feature/WF02-REQ380-20260922 (tip 1f436807), letflow-queue task 740,
+      GH-1628, stage S2, depends_on REQ-379 (done). Three routes/operations
+      added under lib/letflow/routers/solution_packs.ex: (1) update-review
+      endpoint returning each artefact under exactly one of
+      unchanged/safe-to-update/local-only/both-sides-conflict, matching
+      compute_pack_update_plan/5's existing classification (EO-001); (2)
+      apply endpoint that refuses to apply and names the specific
+      unresolved artefact when a both-sides-conflict artefact has no
+      matching pack_update_resolutions row (EO-002), otherwise applies --
+      untouched artefacts left as-is (EO-004), take_incoming artefacts
+      updated to incoming content, keep_local artefacts left unchanged
+      with a pack_update_resolutions row recording resolved_by/resolved_at
+      (EO-003); (3) a second update-review call after a prior apply
+      compares against the tenant's now-current state, not the original
+      install, so a previously keep_local-resolved artefact is not
+      re-flagged as a fresh conflict (EO-005). All gates PASSED:
+      CODE-DESIGN-VALIDATOR, SECURITY-REVIEWER (deep
+      canonicalization-corruption-risk trace), REVIEWER (fixed a real
+      design-doc contradiction directly, plus a clean targeted re-check on
+      a route-policy allowlist fix), TEST-DESIGN-VALIDATOR (real mutation
+      testing, plus surfaced/confirmed a genuine follow-up finding),
+      TEST-RUNNER (4639/4641, only known ISS-0766 flake), RELEASE-VALIDATOR
+      (independent full re-derivation of all 6 acceptance criteria).
+      Non-blocking follow-up ISS-0781 (MINOR, GH-1714, queue task 780)
+      filed and already resolved separately: apply_entry/6's :conflict
+      clause honors a later call's own submitted resolution for the
+      applied action even when it differs from the immutable, already-
+      persisted pack_update_resolutions attribution row, so the audit
+      trail can end up describing a decision that no longer matches the
+      tenant's actual current content state -- found by TEST-DESIGNER
+      during this run's own test-design gate, independently confirmed by
+      TEST-DESIGN-VALIDATOR, does not violate any REQ-380 acceptance
+      criterion (none covers the two-call scenario), tracked and merged as
+      its own issue. REQ-381 (the review screen depending on this
+      requirement) remains pending, unblocked by this merge.

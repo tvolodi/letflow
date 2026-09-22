@@ -4293,8 +4293,14 @@ volumes:
     path: docs/status/requirement_status.v21.yaml
     status: current
     opened: 2026-09-20
-    entries: 21
+    entries: 22
     note: >
+      Incremented to 22 by DOC-UPDATER's own REQ-380 done-event append
+      (Step 6, WF02-REQ380-20260922) -- `grep -c "^  - req:"
+      docs/status/requirement_status.v21.yaml` = 22 on-disk entries,
+      recounted directly rather than assumed. Well under the
+      1200-line/120000-byte roll ceiling, no roll triggered.
+
       Incremented to 19 during WF03-ISS0780-20260922's own Step Final rebase
       onto origin/main: this hunk conflicted because both sides had
       independently incremented from the same 18-entry ancestor with a

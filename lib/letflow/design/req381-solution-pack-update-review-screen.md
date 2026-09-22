@@ -637,7 +637,7 @@ REQ-380's real endpoints — no mock data."
    via `request.post` (API-level, matching how the promotion specs create their own
    fixture data directly against the API rather than through a GUI form, since the
    scenario's own steps 1/preconditions are `via: system`/setup, not GUI).
-3. **Adapt two processes** — via the existing definitions-update path (`PUT`/`POST
+3. **Adapt one process** — via the existing definitions-update path (`PUT`/`POST
    /definitions/:id`, whatever the existing mutation route is — reused, not
    invented), so the tenant's live content for `adapted-proc` differs from the
    installed base, while `unchanged-proc` stays byte-identical.

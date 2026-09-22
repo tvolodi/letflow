@@ -436,7 +436,7 @@ defmodule Letflow.Routers.SolutionPacksUpdateTest do
   # Regression: resolution immutability (OQ-3) -- first-attribution-wins
   # ═══════════════════════════════════════════════════════════════════════════
 
-  describe "Regression: a resolved artefact's attribution is immutable (on_conflict: :nothing)" do
+  describe "Regression: a resolved artefact's attribution AND applied action are both immutable (first-decision-wins)" do
     test "a second apply call submitting a DIFFERENT resolution for an already-resolved artefact does not overwrite the persisted resolved_by/resolved_at/resolution row" do
       tenant = TenantFixture.provisioned_tenant!(slug_prefix: "req380-immut")
       pack_id = unique("req380-immut-pack")
@@ -528,26 +528,137 @@ defmodule Letflow.Routers.SolutionPacksUpdateTest do
       assert row_after_second.resolved_by == first_actor
       assert row_after_second.resolved_at == first_resolved_at
 
-      # What the immutability claim does NOT cover -- confirmed here so this
-      # test documents the real behavior rather than assuming a broader
-      # immutability than the design states: design §4.3 step 6 has
-      # apply_entry/6 for a :conflict entry consult THIS CALL's OWN
-      # `resolutions` list first (`find_submitted_resolution/2`,
-      # solution_pack.ex), not a re-read of the persisted row, whenever
-      # this call names the artefact at all -- the DB re-read
-      # (`apply_from_persisted_resolution/5`) is only reached when THIS
-      # call submits nothing for that artefact. So the second call's own
-      # "take_incoming" submission governs the ACTION this call takes
-      # (advances the base to `incoming`), even though the DB
-      # attribution row it tried to insert was a silent `on_conflict:
-      # :nothing` no-op and still reads "keep_local"/first_actor above.
-      # Attribution is immutable; the per-call applied action is not.
+      # ISS-0781: the applied action is ALSO immutable, not just the
+      # attribution row. apply_entry/6's :conflict clause now always reads
+      # the persisted pack_update_resolutions row
+      # (apply_from_persisted_resolution/5) to decide the action -- never
+      # this call's own `resolutions` argument -- so the second call's
+      # differing "take_incoming" submission has NO effect on the action
+      # either. The action, base_content, and base_version all continue to
+      # reflect the FIRST call's persisted "keep_local" resolution: no
+      # write, since apply_entry/6's :keep_local branch is :left_unchanged
+      # and never calls advance_base/6, so the base row stays exactly what
+      # insert_base!/6 seeded it to before either call ran.
       entry = entry_for(second_body_json, artefact_id)
-      assert entry["action"] == "advanced_to_incoming"
+      assert entry["action"] == "left_unchanged"
 
       base_after = fetch_base(tenant.tenant_id, pack_id, artefact_type, artefact_id)
-      assert base_after.base_content == incoming_content
-      assert base_after.base_version == target_version
+      assert base_after.base_content == base_content
+      assert base_after.base_version == "1.0.0"
+    end
+
+    # NOTE (ELIXIR-DEV, ISS-0781 implementation): the design doc (§4.2) also
+    # specifies a reverse-ordering case (take_incoming first, keep_local
+    # second, identical resubmission both calls) as a required new test.
+    # That exact scenario is NOT reachable as literally described: once the
+    # first call's :take_incoming resolution runs, advance_base/6 writes
+    # base_content = entry.incoming, so on an identical second submission
+    # Definitions.classify_artefact/3 (lib/letflow/definitions.ex:487-491)
+    # sees base == incoming and reclassifies the entry as :local_only, not
+    # :conflict -- it never reaches apply_entry/6's :conflict clause
+    # (or apply_from_persisted_resolution/5) at all on the second call.
+    # Confirmed by running the scenario exactly as specified: the second
+    # call's action came back "left_unchanged", not "advanced_to_incoming".
+    # This is a real gap in the design doc's test-scenario assumption
+    # (it did not account for compute_pack_update_plan/5 re-classifying
+    # against the now-advanced base), not a defect in this fix -- left for
+    # CODE-DESIGNER/TEST-DESIGNER to resolve with a corrected fixture
+    # (e.g. a differing second-call incoming payload that keeps the entry
+    # classified :conflict) rather than silently landing a scenario that
+    # cannot pass for the reason the design doc states.
+
+    test "a second apply call submitting a DIFFERENT resolution for an already-resolved artefact applies the FIRST call's :merged resolved_content, not its own" do
+      tenant = TenantFixture.provisioned_tenant!(slug_prefix: "req380-immut-merge")
+      pack_id = unique("req380-immut-merge-pack")
+      cleanup_pack_update_tables!(tenant.tenant_id)
+      artefact_type = "process_definition"
+      target_version = "2.0.0"
+
+      first_actor = Ecto.UUID.generate()
+      second_actor = Ecto.UUID.generate()
+
+      artefact_id = Ecto.UUID.generate()
+      base_content = "base-#{artefact_id}"
+      theirs_content = "theirs-adapted-#{artefact_id}"
+      incoming_content = "incoming-offered-#{artefact_id}"
+      merged_content = "merged-by-first-actor-#{artefact_id}"
+
+      insert_base!(tenant.tenant_id, pack_id, artefact_type, artefact_id, "1.0.0", base_content)
+
+      artefacts_body = %{
+        "theirs_artefacts" => [artefact_input(artefact_type, artefact_id, theirs_content)],
+        "incoming_artefacts" => [artefact_input(artefact_type, artefact_id, incoming_content)]
+      }
+
+      first_body =
+        Map.merge(artefacts_body, %{
+          "target_version" => target_version,
+          "resolutions" => [
+            %{
+              "artefact_type" => artefact_type,
+              "artefact_id" => artefact_id,
+              "resolution" => "merged",
+              "resolved_content" => merged_content
+            }
+          ]
+        })
+
+      first_resp =
+        build_conn(:post, "/#{pack_id}/update-apply", tenant,
+          body: first_body,
+          user_id: first_actor
+        )
+        |> Letflow.Routers.SolutionPacks.call(@solution_packs_opts)
+
+      assert first_resp.status == 200
+      first_body_json = Jason.decode!(first_resp.resp_body)
+
+      first_entry = entry_for(first_body_json, artefact_id)
+      assert first_entry["action"] == "advanced_to_merged"
+
+      base_after_first = fetch_base(tenant.tenant_id, pack_id, artefact_type, artefact_id)
+      assert base_after_first.base_content == merged_content
+      assert base_after_first.base_version == target_version
+
+      second_body =
+        Map.merge(artefacts_body, %{
+          "target_version" => target_version,
+          "resolutions" => [
+            %{
+              "artefact_type" => artefact_type,
+              "artefact_id" => artefact_id,
+              "resolution" => "take_incoming"
+            }
+          ]
+        })
+
+      second_resp =
+        build_conn(:post, "/#{pack_id}/update-apply", tenant,
+          body: second_body,
+          user_id: second_actor
+        )
+        |> Letflow.Routers.SolutionPacks.call(@solution_packs_opts)
+
+      assert second_resp.status == 200
+      second_body_json = Jason.decode!(second_resp.resp_body)
+
+      assert [row_after_second] = resolution_rows(tenant.tenant_id, pack_id, target_version)
+      assert row_after_second.resolution == :merged
+      assert row_after_second.resolved_by == first_actor
+      assert row_after_second.resolved_content == merged_content
+
+      # Action-level: the second call's "take_incoming" submission has no
+      # effect -- the action still reflects the FIRST call's :merged
+      # resolution, with the FIRST call's resolved_content, not the second
+      # call's incoming_content. This is the case most likely to regress
+      # silently, since resolved_content is data carried on the resolution
+      # row itself, not derivable from entry.incoming.
+      second_entry = entry_for(second_body_json, artefact_id)
+      assert second_entry["action"] == "advanced_to_merged"
+
+      base_after_second = fetch_base(tenant.tenant_id, pack_id, artefact_type, artefact_id)
+      assert base_after_second.base_content == merged_content
+      assert base_after_second.base_version == target_version
     end
   end
 

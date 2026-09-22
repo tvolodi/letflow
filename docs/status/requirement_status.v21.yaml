@@ -866,3 +866,46 @@ history:
       lib/letflow/design/req376-partition-event-retirement.md. REQ-377
       (the operator-facing retirement screen depending on this backend)
       remains pending, unblocked by this merge.
+  - req: SCOPE-CHANGE
+    event: done
+    agent: DOC-UPDATER
+    at: "2026-09-22T13:05:00Z"
+    note: >
+      ISS-0781 (MINOR, GH-1714, queue task 780 -- REQ-380's apply_entry/6
+      :conflict clause let a later call's own submitted resolution govern
+      the applied action even when it differed from the immutable,
+      already-persisted pack_update_resolutions attribution row, making
+      the audit trail potentially misleading about what state change
+      actually occurred) resolved on feature/WF03-ISS0781-20260922 (tip
+      0e701d60). CODE-DESIGNER chose candidate (a) from the issue's own
+      fix_direction: the applied action now always honors the persisted
+      resolution row (true first-decision-wins semantics), consistent
+      with the row's own on_conflict: :nothing immutability. Design:
+      lib/letflow/design/iss-0781-attribution-applied-action-consistency.md.
+      Implementation (commit f48e64ab): find_submitted_resolution/2
+      deleted outright; apply_entry/6's :conflict clause now calls
+      apply_from_persisted_resolution/5 unconditionally instead of
+      checking the current call's own resolutions argument first --
+      insert_submitted_resolutions/6 (step 3) always runs earlier in the
+      same transaction, so a first-ever submission is still visible here
+      via read-your-writes and applies correctly; only a second, differing
+      call for an already-persisted artefact now has its applied action
+      match the row instead of diverging. Regression test extended,
+      test/letflow/routers/solution_packs_update_test.exs:433-546 (now
+      439-663), asserting both halves: the row stays unchanged AND the
+      base advance matches the ORIGINAL persisted resolution, not the
+      second call's differing submission; a second test added for the
+      :merged resolution kind. Two mid-pipeline self-caught corrections:
+      design doc S4.2's unreachable reverse-ordering test scenario fixed
+      by REVIEWER (commit 27e958f7); test/specs/REQ-380.md's stale
+      find_submitted_resolution/2 references fixed by TEST-DESIGNER
+      (commit 0e701d60). Gates, all PASSED: CODE-DESIGN-VALIDATOR,
+      SECURITY-REVIEWER, REVIEWER, TEST-DESIGNER, TEST-DESIGN-VALIDATOR,
+      TEST-RUNNER, RELEASE-VALIDATOR (independent re-verification,
+      full-suite run 4640/4642 passed, the only 2 failures being the
+      pre-existing, already-tracked ISS-0766 flake in identity_test.exs,
+      unrelated to this branch, confirmed via isolated rerun 62/62
+      passed). docs/issues/ISS-0781.yaml flipped open -> resolved. No
+      docs/migration/stage-N-*.md or decisions/*.md file was named by
+      ISS-0781's acceptance criteria. Merged via PR (Step Final routed to
+      ORCH per WF-03).

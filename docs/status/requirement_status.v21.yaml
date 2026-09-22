@@ -669,3 +669,23 @@ history:
       control gated on outstanding companies, EO-005 no-op re-run display,
       PLATFORM_ADMIN-only screen reachability, and the e2e pipeline spec
       itself passing) confirmed done.
+  - req: SCOPE-CHANGE
+    event: resolved
+    agent: ISSUE-FIXER
+    at: "2026-09-22T03:22:13Z"
+    note: >
+      ISS-0780 (MINOR, queue task Q-779, GH-1704 -- lib/letflow/plugs/cors.ex's
+      @allow_headers omitted x-bpm-user-id, blocking every genuinely
+      cross-origin authenticated request at the browser's CORS preflight;
+      discovered incidentally by UAT-RUNNER during REQ-375's live e2e run)
+      resolved on feature/WF03-ISS0780-fix-20260922. Fix (commit 3d1bb946):
+      added x-bpm-user-id, if-match and idempotency-key to @allow_headers,
+      gated PASS by SECURITY-REVIEWER and REVIEWER (handoffs
+      step-03b-security-reviewer.json, step-03c-reviewer.json). Regression
+      test added at test/letflow/plugs/cors_test.exs (commit d71d761e),
+      shown fail-then-pass against pre-fix/post-fix code, gated PASS by
+      TEST-DESIGN-VALIDATOR (step-04b-test-design-validator.json) and
+      independently confirmed by TEST-RUNNER's full-suite run: 4619/4619
+      passed (commit 0cfcb71d). GitHub mirror GH-1704 closed with a
+      resolved-comment citing this run-id and the regression test path.
+      All handoffs under handoffs/WF03-ISS0780-20260922/.

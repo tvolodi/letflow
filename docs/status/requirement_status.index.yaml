@@ -4293,8 +4293,21 @@ volumes:
     path: docs/status/requirement_status.v21.yaml
     status: current
     opened: 2026-09-20
-    entries: 18
+    entries: 19
     note: >
+      Incremented to 19 during WF03-ISS0780-20260922's own Step Final rebase
+      onto origin/main: this hunk conflicted because both sides had
+      independently incremented from the same 18-entry ancestor with a
+      DIFFERENT real entry (REQ-375's own `done` event below, and this run's
+      ISS-0780 SCOPE-CHANGE `resolved` event) -- composed chronologically by
+      `at:` timestamp (REQ-375 done 2026-09-22T01:46:38Z, then ISS-0780
+      resolved 2026-09-22T03:22:13Z), losing neither entry. `grep -c "^  - req:"
+      docs/status/requirement_status.v21.yaml` = 19 on-disk entries,
+      recounted directly rather than assumed after composition. Well under
+      the 1200-line/120000-byte roll ceiling, no roll triggered. Prior notes
+      (each describing an earlier, incomplete count from only one side of one
+      collision) preserved below verbatim.
+
       Incremented to 18 during WF02-REQ375-20260921's own Step Final rebase
       onto origin/main (second pass, after main advanced further with
       REQ-373's/ISS-0777's own done-event landings): composed REQ-375's own
@@ -4305,6 +4318,13 @@ volumes:
       assumed. Well under the 1200-line/120000-byte roll ceiling, no roll
       triggered. Prior notes (each describing an earlier, incomplete count
       from only one side of one collision) preserved below verbatim.
+
+      Incremented to 18 by ISSUE-FIXER's own ISS-0780 SCOPE-CHANGE
+      resolved-event append (Step 5, WF03-ISS0780-20260922) --
+      `grep -c "^  - req:" docs/status/requirement_status.v21.yaml` = 18
+      on-disk entries, recounted directly rather than assumed. Well under
+      the 1200-line/120000-byte roll ceiling, no roll triggered. Prior
+      notes preserved below verbatim.
 
       Incremented to 17 during WF02-REQ373-20260921's own Step Final rebase
       onto origin/main (second pass, after main advanced further with

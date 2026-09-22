@@ -1,0 +1,53 @@
+{
+  "handoff_id": "a0000000-0005-4000-8000-00000000000d",
+  "run_id": "WF02-REQ383-20260923",
+  "workflow_id": "WF-02",
+  "step": "05",
+  "from_agent": "ORCH",
+  "to_agent": "RELEASE-VALIDATOR",
+  "file": "handoffs/WF02-REQ383-20260923/step-05-release-validator.json",
+  "created_at": "2026-09-22T22:07:33Z",
+  "started_at": "2026-09-22T22:07:33Z",
+  "completed_at": "2026-09-22T22:07:33Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S8",
+    "requirement_ids": ["REQ-383"],
+    "related_handoff_ids": [
+      "handoffs/WF02-REQ383-20260923/step-04-test-runner.json"
+    ],
+    "artifacts_in": [
+      "test/specs/REQ-383.md",
+      "web/src/components/ui/__tests__/StatusBadge.test.tsx",
+      "web/tests/e2e/pipelines/tenant-branding.pipeline.e2e.spec.ts",
+      "web/src/pages/admin/AppearanceSettingsPage.tsx",
+      "web/src/api/tenantSettings.ts",
+      "web/src/router.tsx",
+      "test/fixtures/uat/scenarios/platform/tenant-branding-applied.yaml",
+      "test/reports/report-20260923-WF02-REQ383-20260923.yaml"
+    ],
+    "owned_modules": []
+  },
+  "task": {
+    "description": "Perform WF-02 Step 5 (release validation) for REQ-383 per docs/agents/workflows/WF-02_requirement_implementation.md. Independently re-run scripts/test_parallel.sh (full backend suite) and web/'s four gates (type-check, lint, test, guards) rather than trusting TEST-RUNNER's Step 4 report. Re-derive any failure attribution structurally per core-directives.md's 'Failure Attribution Is Structural, Never By Count-Matching'. Confirm all 5 REQ-383 acceptance criteria against the actual current code/tests. Check docs/requirements.yaml and docs/status/requirement_status.index.yaml for staleness.",
+    "acceptance_criteria": [
+      "scripts/test_parallel.sh independently re-run to completion, real output quoted, partition count and source recorded",
+      "web/'s 4 gates independently re-run from web/, real output quoted for each",
+      "every failure structurally attributed per core-directives.md, not by count-matching against Step 4's report",
+      "each of REQ-383's 5 acceptance criteria confirmed against actual code/tests, not against prior step summaries",
+      "docs/requirements.yaml and requirement_status volumes checked for staleness relative to what actually shipped"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "Backend: independently re-ran scripts/test_parallel.sh (N=16, source: nproc) synchronously to completion (auto-backgrounded by the tool at its 120s default timeout; polled its output file to completion within this same turn via a blocking wait, per core-directives.md's 'No Background Wait For A Cross-Turn Notification'). Combined: 4706 tests, 6 properties, 2 failures (4710/4712 passed) across all 16 partitions -- same totals as Step 4's report, but this is NOT accepted on count-match alone. Located the 2 failures in partition 13's log (test/letflow/identity_test.exs:534 resolve_tenant_by_realm/1, :541 resolve_realm_by_tenant/1) and independently re-derived the pre-existing attribution: (route 1) git diff (working-tree, since this branch carries no commits yet ahead of origin/main) --name-only shows only test/fixtures/uat/scenarios/platform/tenant-branding-applied.yaml, web/src/components/ui/__tests__/StatusBadge.test.tsx, web/src/router.tsx modified plus new files under web/src/api|pages, web/tests/e2e/, test/specs/, lib/letflow/design/ -- none of identity_test.exs, bpm_default_realm_displacement.ex, lib/letflow/identity.ex, or the seed migration are touched; (route 3) read docs/issues/ISS-0766.yaml directly -- status: open, same file/lines/mechanism (bpm-default tenant row race under test/support/bpm_default_realm_displacement.ex), and its own process_note (added 2026-09-21 by a prior RELEASE-VALIDATOR run) already documents this exact failure reproducing under scripts/test_parallel.sh itself, so no new issue filing is warranted. PASS confirmed independently, not copied.\n\nFrontend (from web/, all independently re-run this step, real output quoted): npm run type-check -- PASS (tsc -b, zero output/errors). npm run lint -- PASS (eslint --max-warnings 0, zero output/errors). npm test -- --run -- PASS (vitest: 112 test files, 801 tests, 0 failed). npm run guards -- PASS (vitest: 4 guard spec files, 48 tests, 0 failed, including a real production vite build scanned by bundle-scan.spec.ts with 0 violations). All match Step 4's reported totals; re-run independently rather than cited.\n\nAcceptance criteria -- each confirmed by reading the actual artefact:\nAC1 (submit/round-trip/confirmation): read AppearanceSettingsPage.tsx -- mutation.onSuccess calls applyBrandingColors({primary}) (the same function BrandingProvider.tsx uses on load), sets appliedColor and confirmationVisible, no reload. Confirmed exercised by tenant-branding.pipeline.e2e.spec.ts's EO-001/AC1 test (fills a new colour, clicks save, asserts the confirmation testid visible and --color-brand-600 updated with no page.reload()).\nAC2 (contrast-refused message + previous colour stays): read the onError handler -- sets errorMessage from the API error's detail/message, explicitly does NOT call applyBrandingColors or touch appliedColor (comment states why: nothing overwrote the DOM custom property). Confirmed exercised by the EO-003/AC2 e2e test -- asserts error banner visible, text excludes raw Ecto/changeset blobs and matches /4.5|contrast|WCAG/i, and --color-brand-600 unchanged from baseline.\nAC3 (StatusBadge regression): read StatusBadge.test.tsx's new 'REQ-383/AC3' describe block -- 4 test cases import and call the REAL applyBrandingColors from '@/theming/applyBranding' (not a mock/stub) against definition/DEPRECATED, instance/ACTIVE, task/PENDING, and rollout/running badges, asserting style is byte-identical before/after and never resolves to var(--color-brand-600). Confirmed real, not a stub call.\nAC4 (no out-of-scope-key path): read tenantSettings.ts -- patchBrandColorPrimary(primary) always sends the single literal shape { settings: { brand_colors: { primary } } }, typed via TenantSettingsPatchBody; AppearanceSettingsPage.tsx has exactly one input bound to draftColor and one mutation call site (mutation.mutate(draftColor)) with no other field/control. Closed by construction -- confirmed independently, not accepted on the design doc's say-so.\nAC5 (stale NOTE removed + e2e spec exists): grepped tenant-branding-applied.yaml for ISS-0527 -- zero matches (removed, diff confirms only the NOTE block was deleted, pipeline_test: key and the replacement UAT-RUNNER note retained). Confirmed web/tests/e2e/pipelines/tenant-branding.pipeline.e2e.spec.ts exists with 3 tests: EO-001/AC1, EO-003/AC2, and EO-005 (captures firstPaintColor via shot() before expect.poll settles, then settledColor via a second shot() -- a real first-paint-vs-settled-frame screenshot pair, and the test asserts the flash exists per the scenario's own MINOR/suggested_action:none framing, not that it's fixed).\n\nStaleness check: docs/requirements.yaml's REQ-383 entry still shows status: pending (grepped directly) -- correct, DOC-UPDATER has not run yet. docs/status/requirement_status.index.yaml names volume 21 (docs/status/requirement_status.v21.yaml, status: current) as the current volume; grepped it for REQ-383 -- no entry yet, also correct/expected pre-DOC-UPDATER. No staleness found.",
+    "artifacts_out": [
+      "handoffs/WF02-REQ383-20260923/step-05-release-validator.json"
+    ],
+    "next_action": "Route to DOC-UPDATER",
+    "issues": []
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

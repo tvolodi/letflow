@@ -1,0 +1,117 @@
+run_id: WF02-REQ383-20260923
+workflow_id: WF-02
+step: "04"
+agent: TEST-RUNNER
+requirement_ids:
+  - REQ-383
+branch: feature/WF02-REQ383-20260923
+generated_at: "2026-09-22T21:51:41Z"
+change_scope:
+  note: >
+    REQ-383 is frontend-only. No commits exist yet on this branch ahead of
+    origin/main (`git diff origin/main...HEAD --stat` is empty), so scope was
+    confirmed via the uncommitted working-tree diff instead: `git diff main
+    --name-only` shows only test/fixtures/uat/scenarios/platform/
+    tenant-branding-applied.yaml, web/src/components/ui/__tests__/
+    StatusBadge.test.tsx, and web/src/router.tsx as modified, plus new
+    untracked files (lib/letflow/design/req383-appearance-settings-screen.md,
+    test/specs/REQ-383.md, web/src/api/tenantSettings.ts,
+    web/src/pages/admin/AppearanceSettingsPage.tsx,
+    web/tests/e2e/pipelines/tenant-branding.pipeline.e2e.spec.ts,
+    handoffs/WF02-REQ383-20260923/). No lib/letflow/ or
+    priv/repo/migrations/ file touched.
+environment:
+  toolchain: "local: /c/Program Files/Elixir/bin/mix (Mix 1.20.3, Erlang/OTP 29)"
+  postgres_container: "letflow-postgres-1 (docker, port 5462) -- already running and healthy; docker compose up was NOT run (shared, non-worktree checkout already had a live container serving the compose-declared port)"
+  erl_processes_before_run: "none (tasklist /FI \"IMAGENAME eq erl.exe\" returned no matching tasks)"
+backend_suite:
+  command: scripts/test_parallel.sh
+  partition_count_N: 16
+  partition_count_source: nproc
+  execution_mode: "synchronous foreground poll within this turn (per core-directives.md's No Background Wait For A Cross-Turn Notification -- the tool auto-backgrounded the long-running call at its 120s default timeout, so this run polled the background task's own output file to completion inside a single blocking Bash call rather than ending the turn)"
+  combined_totals:
+    tests: 4706
+    properties: 6
+    failures: 2
+    passed: 4710
+    total: 4712
+  per_partition:
+    - {partition: 1, tests: 252, properties: 0, failures: 0, exit: 0}
+    - {partition: 2, tests: 334, properties: 0, failures: 0, exit: 0}
+    - {partition: 3, tests: 292, properties: 1, failures: 0, exit: 0}
+    - {partition: 4, tests: 411, properties: 0, failures: 0, exit: 0}
+    - {partition: 5, tests: 354, properties: 0, failures: 0, exit: 0}
+    - {partition: 6, tests: 338, properties: 2, failures: 0, exit: 0}
+    - {partition: 7, tests: 407, properties: 0, failures: 0, exit: 0}
+    - {partition: 8, tests: 240, properties: 0, failures: 0, exit: 0}
+    - {partition: 9, tests: 230, properties: 0, failures: 0, exit: 0}
+    - {partition: 10, tests: 213, properties: 0, failures: 0, exit: 0}
+    - {partition: 11, tests: 333, properties: 0, failures: 0, exit: 0}
+    - {partition: 12, tests: 267, properties: 2, failures: 0, exit: 0}
+    - {partition: 13, tests: 374, properties: 1, failures: 2, exit: 2}
+    - {partition: 14, tests: 164, properties: 0, failures: 0, exit: 0}
+    - {partition: 15, tests: 270, properties: 0, failures: 0, exit: 0}
+    - {partition: 16, tests: 227, properties: 0, failures: 0, exit: 0}
+  raw_output_tail: |
+    test_parallel: N=16 (source: nproc)
+    test_parallel: TEST_POOL_SIZE=5 (computed: N=16, max_connections=100, superuser_reserved=3, headroom=10, nonpool_reserve=5)
+    test_parallel: all 16 partition databases created+migrated
+    test_parallel: TEST_PARALLEL_GROUP=tp1236734 (shared by all 16 partitions)
+    partition 13: 374 tests, 1 property, 2 failures, exit 2
+    ---
+    combined: 4706 tests, 6 properties, 2 failures (4710/4712 passed)
+  failures:
+    - test: "resolve_realm_by_tenant/1 resolves the seeded default tenant's (bpm-default) idp_realm_id by its tenant id"
+      file: "test/letflow/identity_test.exs:541"
+      error: "Ecto.NoResultsError: expected at least one result but got none in query: from t0 in Letflow.Identity.Tenant, where: t0.idp_realm_id == ^\"bpm-default\" -- via test/support/bpm_default_realm_displacement.ex:118 (with_lock/1)"
+    - test: "resolve_tenant_by_realm/1 resolves the seeded default tenant (bpm-default) by its idp_realm_id"
+      file: "test/letflow/identity_test.exs:534"
+      error: "Ecto.NoResultsError: expected at least one result but got none in query: from t0 in Letflow.Identity.Tenant, where: t0.idp_realm_id == ^\"bpm-default\" -- via test/support/bpm_default_realm_displacement.ex:118 (with_lock/1)"
+  attribution:
+    verdict: pre-existing, not attributable to this branch
+    routes_shown:
+      route_1: >
+        Structural: neither test/letflow/identity_test.exs,
+        test/support/bpm_default_realm_displacement.ex,
+        lib/letflow/identity.ex, nor
+        priv/repo/migrations/20260918173137_seed_default_tenant.exs appear
+        in this branch's diff (git diff main --name-only shows only
+        test/fixtures/uat/scenarios/platform/tenant-branding-applied.yaml,
+        web/src/components/ui/__tests__/StatusBadge.test.tsx,
+        web/src/router.tsx as modified, none of which this failing
+        mechanism depends on).
+      route_3: >
+        Demonstrated mechanism already on record: docs/issues/ISS-0766.yaml
+        (status: open, filed 2026-09-20, ELIXIR-DEV) documents this EXACT
+        pair of REQ-019 AC1 tests intermittently failing under the shared,
+        non-partitioned bpm-default tenant row displaced by another test's
+        test/support/bpm_default_realm_displacement.ex on_exit ordering --
+        same two test names, same file, same mechanism (advisory-lock-
+        scoped read racing a concurrent displace!/0 restoration across
+        parallel mix test partitions sharing one Postgres instance).
+    conclusion: >
+      Both failures are pre-existing and already tracked under ISS-0766
+      (open). No new issue filed -- reported here per core-directives.md
+      ("A failure not covered by an existing issue record is called out as
+      such and filed" -- this one IS covered). Does not block this step's
+      PASS verdict and is not routed back to FRONTEND-DEV/TEST-DESIGNER.
+frontend_suite:
+  working_directory: web/
+  commands:
+    - command: "npm run type-check"
+      result: PASS
+      output_summary: "tsc -b tsconfig.json -- no errors, no output"
+    - command: "npm run lint"
+      result: PASS
+      output_summary: "eslint . --ext ts,tsx --report-unused-disable-directives --max-warnings 0 -- no errors, no output"
+    - command: "npm test -- --run"
+      result: PASS
+      output_summary: "vitest run -- 112 test files passed (112), 801 tests passed (801), 0 failed. Includes web/src/components/ui/__tests__/StatusBadge.test.tsx (16 tests) modified on this branch and web/src/router.tsx's routing (exercised via other route/nav tests) -- all passing."
+    - command: "npm run guards"
+      result: PASS
+      output_summary: "vitest run tests/guards/meta-control.spec.ts tests/guards/source-scan.spec.ts tests/guards/bundle-scan.spec.ts tests/guards/role-set.spec.ts -- 4 test files passed (4), 48 tests passed (48), including a real production build (vite build) scanned by bundle-scan.spec.ts with no guard violations."
+overall_verdict: PASS
+next_action: "Route to RELEASE-VALIDATOR"
+notes:
+  - "Backend suite's 2 failures are structurally attributed as pre-existing (ISS-0766) per core-directives.md's Failure Attribution rule -- not this run's problem, not fixed here, not filed as a new issue since ISS-0766 already covers it exactly."
+  - "Frontend gates were independently re-run in this step (not cited from FRONTEND-DEV's Step 2b report) per WF-02 Step 4's own procedure."

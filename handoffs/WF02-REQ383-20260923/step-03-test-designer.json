@@ -1,0 +1,56 @@
+{
+  "handoff_id": "d4e5f6a7-0005-4000-8000-000000000005",
+  "run_id": "WF02-REQ383-20260923",
+  "workflow_id": "WF-02",
+  "step": "03",
+  "from_agent": "ORCH",
+  "to_agent": "TEST-DESIGNER",
+  "file": "handoffs/WF02-REQ383-20260923/step-03-test-designer.json",
+  "created_at": "2026-09-23T02:35:00Z",
+  "started_at": "2026-09-23T02:35:00Z",
+  "completed_at": "2026-09-23T02:55:00Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S8",
+    "requirement_ids": ["REQ-383"],
+    "requirement_text": {
+      "REQ-383": "See handoffs/WF02-REQ383-20260923/step-00-git-setup.json's context.requirement_text for the full text -- not restated here to avoid drift; read it there."
+    },
+    "related_handoff_ids": [
+      "handoffs/WF02-REQ383-20260923/step-02b-frontend-dev.json",
+      "handoffs/WF02-REQ383-20260923/step-02c-security-reviewer.json",
+      "handoffs/WF02-REQ383-20260923/step-02d-reviewer.json"
+    ],
+    "artifacts_in": [
+      "lib/letflow/design/req383-appearance-settings-screen.md",
+      "web/src/pages/admin/AppearanceSettingsPage.tsx",
+      "web/src/api/tenantSettings.ts",
+      "web/src/router.tsx",
+      "web/src/components/ui/__tests__/StatusBadge.test.tsx",
+      "web/tests/e2e/pipelines/tenant-branding.pipeline.e2e.spec.ts",
+      "test/fixtures/uat/scenarios/platform/tenant-branding-applied.yaml"
+    ],
+    "owned_modules": ["test/specs"]
+  },
+  "task": {
+    "description": "WF-02 Step 3 (test design) for REQ-383 per docs/agents/workflows/WF-02_requirement_implementation.md. FRONTEND-DEV already wrote substantial test coverage alongside its implementation (StatusBadge regression tests + a 3-test e2e pipeline spec), unusual for this pipeline's normal design->implement->THEN-test-design shape. Ran the Step 3 scope test (YES, real executable surface), then independently re-verified every one of REQ-383's 5 acceptance criteria against the ACTUAL test assertions (not file names) to determine whether existing coverage was sufficient or whether a gap needed closing with new test code.",
+    "acceptance_criteria": [
+      "every acceptance criterion has at least one test case that would fail if the criterion were violated, OR (for AC4, whose own text specifies construction/enumeration as its verification method) an explicit construction/enumeration verification",
+      "test specs written before/alongside test code, not as an afterthought",
+      "no test depends on wall-clock time or unseeded randomness",
+      "if existing coverage already satisfies every acceptance criterion, say so explicitly rather than inventing busywork"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "Scope test: YES, real application-executable surface (React component + API client + regression/e2e tests). Read lib/letflow/design/req383-appearance-settings-screen.md in full, then independently re-verified each of REQ-383's 5 acceptance criteria against the actual test assertions in web/src/components/ui/__tests__/StatusBadge.test.tsx and web/tests/e2e/pipelines/tenant-branding.pipeline.e2e.spec.ts, plus a direct read of AppearanceSettingsPage.tsx and a grep of tenant-branding-applied.yaml for the NOTE removal.\n\nFinding: NO GAP. Every criterion is already covered by a real, failing-if-violated test:\n- AC1 (submit + round-trip + confirmation, immediate effect no reload): e2e test 1 asserts the confirmation banner appears AND reads the live --color-brand-600 custom property to prove the new colour took effect, explicitly without ever calling page.reload() -- the correct proof for 'no full reload required'.\n- AC2 (contrast-refused: plain-language message, previous colour stays): e2e test 2 asserts the error banner is non-empty, matches WCAG/contrast wording, does NOT match Ecto/changeset-blob patterns, AND that the live colour is unchanged from baseline -- closes the exact client.ts details.detail-vs-message footgun the design doc's own S0 flagged.\n- AC3 (StatusBadge colours unaffected): 4 unit tests (TC-REQ383-01..04) capture StatusBadge's resolved inline styles before/after a REAL (unmocked) applyBrandingColors() call and assert byte-for-byte identity, plus an explicit never-equals-var(--color-brand-600) check -- a genuine regression test, not a restated code-reading claim.\n- AC4 (no out-of-scope-key path): verified by construction/enumeration by reading the finished AppearanceSettingsPage.tsx directly -- exactly one form control, one state variable, one mutation call site, one literal request-body object with two hardcoded keys, no spread/dynamic-key/escape-hatch anywhere. This matches AC4's OWN acceptance-criteria text, which specifies this verification method explicitly ('stated and verified explicitly... not by testing a server-side reject path a same-origin form can never trigger') -- a runnable test here would be testing REQ-382's server-side logic (already covered by tenant_settings_test.exs's AC3), not this screen, so none was written.\n- AC5 (stale NOTE removed, e2e spec exists/passes with screenshot pair): grepped tenant-branding-applied.yaml -- zero ISS-0527 matches, pipeline_test: still names the now-real spec file. e2e test 3 (EO-005) captures the required first-paint/settled-frame screenshot pair and asserts the flash's polarity as a documented-not-fixed regression pin.\n\nWrote test/specs/REQ-383.md mapping all 5 acceptance criteria to their existing test cases with why-each-exists rationale (matching the established test/specs/REQ-382.md convention). No new test code was written -- inventing a duplicate or trivially-different test against already-correct code would be exactly the manufactured-busywork anti-pattern this role is forbidden from producing, and FRONTEND-DEV's own gate run (quoted in step-02b-frontend-dev.json: type-check exit 0, lint exit 0, 801/801 tests passed, guards 48/48 passed) already covers these files -- TEST-RUNNER's Step 4 re-runs the full suite independently regardless.\n\nNo wall-clock/unseeded-randomness dependency in any of the reviewed tests (e2e fixture colours are hardcoded hex literals matching the backend's own WCAG test fixtures, not derived at runtime; EO-005's poll has a fixed timeout, not a sleep).",
+    "artifacts_out": [
+      "test/specs/REQ-383.md"
+    ],
+    "next_action": "Route to TEST-DESIGN-VALIDATOR",
+    "issues": []
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

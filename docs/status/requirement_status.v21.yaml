@@ -1180,3 +1180,92 @@ history:
       (MINOR, queue task 783, GH-1731) rather than folded into this
       requirement's own scope. Merged via PR on
       feature/WF02-REQ385-20260922.
+  - req: REQ-383
+    event: done
+    agent: DOC-UPDATER
+    at: "2026-09-22T22:08:43Z"
+    note: >
+      Tenant appearance settings screen (web/src/pages/admin/
+      AppearanceSettingsPage.tsx) shipped on feature/WF02-REQ383-20260923,
+      stage S8, depends_on REQ-382 (done), letflow-queue task 743, GH#1631 --
+      second and last of the two requirements from the same GUI-review
+      finding as REQ-382. Lets a tenant admin submit a new
+      brand_colors.primary value through REQ-382's real PATCH
+      /api/v1/tenant/settings endpoint (web/src/api/tenantSettings.ts's
+      patchBrandColorPrimary/1, always the single literal
+      { settings: { brand_colors: { primary } } } shape, closed by
+      construction -- no out-of-scope-key path exists from this screen's
+      form). On success, mutation.onSuccess calls the same
+      applyBrandingColors used by BrandingProvider.tsx on load and shows a
+      confirmation with no page reload (AC1/EO-001). On a contrast-refused
+      submission, the onError handler surfaces the endpoint's plain-language
+      message and deliberately never touches the applied colour, leaving the
+      previous one visibly in effect (AC2/EO-003). A new StatusBadge.test.tsx
+      REQ-383/AC3 regression suite calls the real applyBrandingColors against
+      definition/instance/task/rollout badges and asserts their styles are
+      byte-identical before/after, confirming platform status colours stay
+      structurally unaffected (AC3/EO-002). Per the requirement's own
+      acceptance criteria, the stale NOTE (ISS-0527) was removed from
+      test/fixtures/uat/scenarios/platform/tenant-branding-applied.yaml and
+      web/tests/e2e/pipelines/tenant-branding.pipeline.e2e.spec.ts was
+      authored against the real screen (AC5), including an EO-005
+      first-paint-vs-settled-frame screenshot pair documenting the known,
+      MINOR/suggested_action:none flash rather than fixing it (out of scope
+      per the requirement's own EO-005 note). Gates: TEST-RUNNER PASSED
+      (test/reports/report-20260923-WF02-REQ383-20260923.yaml).
+      RELEASE-VALIDATOR independently re-verified all 5 acceptance criteria
+      against the actual code/tests (not prior step summaries), independently
+      re-ran scripts/test_parallel.sh (4710/4712, N=16 partitions) and web's
+      four gates (type-check/lint/test/guards, all clean, 801 unit + 48 guard
+      tests), structurally re-deriving the only 2 backend failures as the
+      already-tracked, pre-existing ISS-0766 identity-realm race (confirmed
+      via git diff --name-only against this branch's actual changed files --
+      identity_test.exs and its dependencies untouched -- and via
+      docs/issues/ISS-0766.yaml's own process_note already documenting this
+      exact failure) -- zero REQ-383-attributable failures. Design:
+      lib/letflow/design/req383-appearance-settings-screen.md. web/README.md
+      checked for staleness (admin pages/routes/known-gaps sections): REQ-383
+      is not named anywhere in it and nothing there described the prior
+      absence of an appearance/branding screen, so it was left unchanged.
+      This event covers WF-02 Step 6 (docs only) -- Step Final (git merge) is
+      routed separately to FRONTEND-DEV per docs/agents/workflows/
+      WF-02_requirement_implementation.md. Appended after REQ-385's entry
+      during this run's own Step Final rebase onto origin/main (REQ-385
+      landed concurrently, on a separate branch, after this event was
+      originally written) -- purely additive, no semantic conflict.
+# ─────────────────────────────────────────────────────────────────────────────
+# VOLUME 21 — CLOSED 2026-09-22. DO NOT APPEND TO THIS FILE.
+# This volume holds the complete requirement run history from 2026-09-20 through
+# 2026-09-22 (32 entries, 1235 frozen-prefix lines before this closure footer).
+# It is frozen: every line above this comment is preserved byte-for-byte. Closed
+# by DOC-UPDATER's own REQ-383 done-event append (composed during
+# feature/WF02-REQ383-20260923's own Step Final rebase onto fresh origin/main,
+# which had independently gained REQ-384's and REQ-385's own appends), which
+# brought this file to 1235 lines -- over the declared roll_rule ceiling
+# (max_lines: 1200) -- confirmed via `wc -l` on the working-tree file per this
+# volume's own "WHEN THIS VOLUME IS FULL" procedure. Byte count (77556) stayed
+# under the 120000-byte ceiling; only the line ceiling was crossed.
+# Reads of this volume are TARGETED reads only -- a line range or a pattern
+# match, never a whole-file read. Use whichever your shell has:
+#   Read tool with offset/limit (works everywhere), or
+#   Bash:       grep -n PATTERN FILE   /   sed -n 'START,ENDp' FILE
+#   PowerShell: Select-String -Path FILE -Pattern PATTERN
+#               (Get-Content FILE)[START..END]
+#
+# NEW ENTRIES GO TO THE CURRENT VOLUME. Find it in:
+#   docs/status/requirement_status.index.yaml
+# which, as of this closure, names:
+#   docs/status/requirement_status.v22.yaml
+#
+# Why this file was closed: DOC-UPDATER's own REQ-383 done-event append,
+# composed during this run's rebase onto fresh origin/main (which had
+# independently gained REQ-384's and REQ-385's own appends after REQ-383's
+# entry was originally written), brought the on-disk count to 32 entries
+# across 1235 lines -- over the roll ceiling. No entry above this footer was
+# moved, edited or deleted.
+#
+# KNOWN ANOMALIES IN THIS VOLUME: none new. This closure followed a real
+# rebase conflict on this file (both branches had appended after the same
+# tail entry) resolved by keeping BOTH entries, in file order by when each was
+# written (origin's REQ-384/REQ-385 entries first, this branch's REQ-383 entry
+# last) -- see this volume's own entries for the full account.

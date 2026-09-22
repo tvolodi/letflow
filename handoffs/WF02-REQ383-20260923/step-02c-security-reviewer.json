@@ -1,0 +1,54 @@
+{
+  "handoff_id": "d4e5f6a7-0003-4000-8000-000000000003",
+  "run_id": "WF02-REQ383-20260923",
+  "workflow_id": "WF-02",
+  "step": "02c",
+  "from_agent": "ORCH",
+  "to_agent": "SECURITY-REVIEWER",
+  "file": "handoffs/WF02-REQ383-20260923/step-02c-security-reviewer.json",
+  "created_at": "2026-09-23T02:35:00Z",
+  "started_at": "2026-09-23T02:35:00Z",
+  "completed_at": "2026-09-23T02:55:00Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S8",
+    "requirement_ids": ["REQ-383"],
+    "requirement_text": {
+      "REQ-383": "See handoffs/WF02-REQ383-20260923/step-00-git-setup.json's context.requirement_text for the full text -- not restated here to avoid drift; read it there."
+    },
+    "related_handoff_ids": [
+      "handoffs/WF02-REQ383-20260923/step-02b-frontend-dev.json"
+    ],
+    "artifacts_in": [
+      "web/src/api/tenantSettings.ts",
+      "web/src/pages/admin/AppearanceSettingsPage.tsx",
+      "web/src/router.tsx",
+      "web/src/components/ui/__tests__/StatusBadge.test.tsx",
+      "test/fixtures/uat/scenarios/platform/tenant-branding-applied.yaml",
+      "web/tests/e2e/pipelines/tenant-branding.pipeline.e2e.spec.ts",
+      "lib/letflow/design/req383-appearance-settings-screen.md"
+    ],
+    "owned_modules": []
+  },
+  "task": {
+    "description": "WF-02 Step 2c (SECURITY-REVIEWER hard gate) for REQ-383, per docs/agents/workflows/WF-02_requirement_implementation.md and docs/agents/instructions/security-invariants.md. Scope test against the diff (no commits yet on this branch -- diffed working tree vs main since main...HEAD was empty), run INV-1..INV-8 APPLIES/NOT-APPLICABLE and verify each APPLIES invariant against the real shipped files, not the design doc's claims.",
+    "acceptance_criteria": [
+      "explicit scope test result stated",
+      "each of INV-1..INV-8 given an explicit APPLIES/NOT-APPLICABLE verdict",
+      "every APPLIES invariant independently verified against real code, not trusted from the design doc/handoff",
+      "PLATFORM_ADMIN guard, request-body shape closure, error-detail rendering, token handling, and tenant-scoping source all explicitly checked"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "Scope test: this diff touches an admin settings-write flow for tenant branding (a tenant-data path per the dispatch instructions), so the gate was run for real rather than short-circuited on 'frontend-only'. No lib/letflow/ or priv/repo/migrations/ file is touched (confirmed via git diff main --stat: only web/src/router.tsx, web/src/components/ui/__tests__/StatusBadge.test.tsx, test/fixtures/uat/scenarios/platform/tenant-branding-applied.yaml modified, plus new files web/src/api/tenantSettings.ts, web/src/pages/admin/AppearanceSettingsPage.tsx, web/tests/e2e/pipelines/tenant-branding.pipeline.e2e.spec.ts, lib/letflow/design/req383-appearance-settings-screen.md, handoffs/WF02-REQ383-20260923/**). No new Ecto schema, migration, or API route handler is added -- REQ-382's PATCH /api/v1/tenant/settings endpoint was merged previously and is unmodified here.\n\nINV-1 (tenant data isolation): NOT-APPLICABLE. No new/changed Ecto schema module or migration in this diff -- REQ-383 adds only a frontend client and screen consuming an already-shipped, already-INV-1-reviewed backend endpoint (REQ-382). The frontend never resolves or sends a tenant_id itself: confirmed by reading web/src/api/tenantSettings.ts in full -- patchBrandColorPrimary(primary) sends only {settings:{brand_colors:{primary}}} to /api/v1/tenant/settings, no tenant-id parameter anywhere in the URL, body, or headers, matching REQ-382's own design (tenant resolved server-side from conn.assigns.auth_context.tenant_id, per the module's own doc comment lines 3-8).\n\nINV-2 (server-side field authorisation): NOT-APPLICABLE -- no new API response type; the response shape (TenantSettingsPatchResponse) is a pass-through display of REQ-382's already-server-authorised response, not re-filtered or re-exposed with new fields client-side.\n\nINV-3 (sandboxing): NOT-APPLICABLE -- S5 not started, no scripting/plugin surface touched.\n\nINV-4 (secrets by reference only): APPLIES (live). Verified: grep for token/secret/password/Authorization literals in the new/changed files found none hardcoded. web/tests/e2e/pipelines/tenant-branding.pipeline.e2e.spec.ts's seedBrandColor(request, token, primary) takes token as a caller-supplied parameter (authHeaders(token)), not a literal. web/src/api/client.ts (the in-memory bearer-token holder) is unmodified -- confirmed via `git diff main -- web/src/api/client.ts` returning empty. PASS.\n\nINV-5 (not-found/forbidden indistinguishability): NOT-APPLICABLE -- no lookup-by-ID endpoint; PATCH /api/v1/tenant/settings has no ID path parameter (S4 lookup-by-ID surface not implicated).\n\nINV-6 (new data-access paths prove their scoping): APPLIES as the meta-invariant this handoff itself satisfies -- this handoff states explicit APPLIES/NOT-APPLICABLE verdicts with verification for each of INV-1..INV-8, matching its How-to-verify requirement. PASS.\n\nINV-7 (no SQL string interpolation): NOT-APPLICABLE -- no SQL, no lib/ or priv/repo/ file touched. (Confirmed no Repo.query hits possible since no Elixir file is in the diff.)\n\nINV-8 (no unhandled crashes on realistic failure paths): APPLIES -- read AppearanceSettingsPage.tsx's onError handler in full: `const apiErr = err as ApiError; const detail = apiErr.details?.['detail']; setErrorMessage(typeof detail === 'string' ? detail : apiErr.message)`. This is a defensive typed-narrowing path (optional chaining + typeof guard), not a bare pattern match that can throw -- a malformed/absent details object safely falls through to apiErr.message rather than raising. No JSON.stringify, String(err), or raw details-object render found anywhere in the component (grep for JSON.stringify/String(err) in the new files returned no hits) -- confirms the error path cannot leak apiErr.details' full contents (which could include internal validation-engine detail) into the DOM; only the .detail string field or the top-level .message is ever rendered. PASS.\n\nINV-9 (SSRF outbound URL validation): NOT-APPLICABLE -- no outbound HTTP request derived from tenant-controlled input is added; this screen only calls Letflow's own already-validated API client.\n\nExplicit checks requested in the dispatch, all verified against the real shipped files (not the design doc's claims):\n- PLATFORM_ADMIN guard: confirmed present in AppearanceSettingsPage.tsx line 101 (`if (!session?.roles.includes('PLATFORM_ADMIN')) return <Navigate to=\"/instances\" replace />`), placed after all hooks, byte-identical pattern to web/src/pages/admin/tenants/EditTenantPage.tsx line 116-117.\n- Request-body shape closure (AC4): confirmed by reading both files -- tenantSettingsApi.patchBrandColorPrimary builds exactly one literal object `{ settings: { brand_colors: { primary } } }` typed as `satisfies TenantSettingsPatchBody`, no spread/dynamic-key/rest-param. AppearanceSettingsPage.tsx has exactly one form control (input type=color) bound to exactly one state variable (draftColor) and exactly one mutation call site (mutation.mutate(draftColor)). No code path can inject an out-of-scope key.\n- Error-handler leak check: as under INV-8 above -- only .detail (string, type-guarded) or .message ever reaches the DOM; full ApiError.details object is never rendered or stringified.\n- Token handling: web/src/api/client.ts unmodified (empty diff), in-memory-only token model unchanged, FNFR-06 intact.\n- Tenant-scoping source: no tenant id is read, stored, or sent by the frontend anywhere in this diff; the endpoint resolves it server-side per REQ-382, unchanged here.\n\nNo BLOCKER found on any APPLIES invariant.",
+    "artifacts_out": [
+      "handoffs/WF02-REQ383-20260923/step-02c-security-reviewer.json"
+    ],
+    "next_action": "Route to REVIEWER (2d)",
+    "issues": []
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

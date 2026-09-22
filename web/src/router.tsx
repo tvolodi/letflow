@@ -17,6 +17,7 @@ import UserDetailPage from '@/pages/admin/UserDetailPage'
 import GroupsPage from '@/pages/admin/GroupsPage'
 import TokensPage from '@/pages/admin/TokensPage'
 import AuditLogPage from '@/pages/admin/AuditLogPage'
+import AppearanceSettingsPage from '@/pages/admin/AppearanceSettingsPage'
 import HealthDashboardPage from '@/pages/admin/HealthDashboardPage'
 import MetricsPage from '@/pages/admin/MetricsPage'
 import DlqPage from '@/pages/dlq/DlqPage'
@@ -66,6 +67,7 @@ export const router = createBrowserRouter([
       { path: 'admin/groups', element: <GroupsPage /> },
       { path: 'admin/tokens', element: <TokensPage /> },
       { path: 'admin/audit', element: <AuditLogPage /> },
+      { path: 'admin/appearance', element: <AppearanceSettingsPage /> },
       { path: 'admin/health', element: <HealthDashboardPage /> },
       { path: 'admin/metrics', element: <MetricsPage /> },
       { path: 'admin/onboarding', element: <RegisterTenantPage /> },

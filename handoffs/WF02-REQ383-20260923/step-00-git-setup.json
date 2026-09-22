@@ -1,0 +1,41 @@
+{
+  "handoff_id": "a0000000-0001-4000-8000-000000000000",
+  "run_id": "WF02-REQ383-20260923",
+  "workflow_id": "WF-02",
+  "step": "00",
+  "from_agent": "ORCH",
+  "to_agent": "FRONTEND-DEV",
+  "file": "handoffs/WF02-REQ383-20260923/step-00-git-setup.json",
+  "created_at": "2026-09-23T00:00:00Z",
+  "started_at": "2026-09-23T00:00:00Z",
+  "completed_at": "2026-09-23T00:05:00Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S8",
+    "requirement_ids": ["REQ-383"],
+    "requirement_text": {
+      "REQ-383": "Company appearance settings screen: apply/adjust branding colours, surface contrast refusal, surface rejected-out-of-scope-change confirmation. Second of two requirements from the same GUI-review finding as REQ-382 -- see REQ-382's description for the full 'what exists today' trace and test/uat-reports/gui-review-2026-09-20-tenant-branding-applied.md. Blocked on REQ-382 landing (there is no real endpoint to wire to yet, now merged). Grepping web/src/pages/admin/ confirms there is no appearance/branding settings screen today -- EditTenantPage.tsx (the only per-tenant admin edit screen) has no colour/branding field at all, only display_name. THIS REQUIREMENT: a tenant-admin-reachable screen (e.g. under web/src/pages/admin/tenants/ alongside EditTenantPage.tsx, or a dedicated web/src/pages/admin/AppearanceSettingsPage.tsx -- CODE-DESIGNER's call) that (1) lets the tenant admin submit a new brand_colors.primary value and calls REQ-382's endpoint (EO-001's positive half); (2) on a successful save, shows a plain confirmation and the applied colour takes effect immediately without a full page reload being required to see it reflected somewhere on the same screen; (3) on a request that also attempts an out-of-scope change (any field this screen does not itself expose -- since this screen's own form cannot construct an out-of-scope key by construction, this criterion is satisfied by confirming the screen has no way to submit one, not by testing a server-side reject path a same-origin form can never trigger); (4) on a contrast-refused submission (REQ-382's new validation), shows the endpoint's plain-language refusal message and leaves the previous colour visibly in effect, never a raw validation-error blob (EO-003); (5) confirms platform status colours (approved/waiting/failed, e.g. on web/src/components/ui/StatusBadge.tsx-rendered screens) are unaffected by any tenant colour change, which already holds structurally today (BRAND_COLOR_CSS_PROPERTY's allowlist has exactly one key, 'primary', mapped only to --color-brand-600 -- --color-success/--color-warning/--color-error/--color-failure are separate custom properties web/src/theming/applyBranding.ts never touches; this criterion needs a regression test, not new code) -- EO-002. Once this screen is confirmed correct against a real running instance, remove this scenario's stale NOTE (ISS-0527) from test/fixtures/uat/scenarios/platform/tenant-branding-applied.yaml and author web/tests/e2e/pipelines/tenant-branding.pipeline.e2e.spec.ts (the path the scenario's own pipeline_test already names) against the real screen, including a first-paint screenshot for EO-005. EO-005 NOTE (documented, not this requirement's job to fix): web/src/theming/BrandingProvider.tsx applies branding in a useEffect, which runs strictly after first paint, and main.tsx renders the app tree synchronously without awaiting the pre-warmed fetchTenantConfig promise -- so the very first drawn frame always shows tokens.css's platform-default --color-brand-600, then swaps to the tenant's colour once the network round-trip resolves. This is a real, confirmed flash, but the scenario's own EO-005 carries severity: MINOR and suggested_action: none -- so this requirement's own EO-005 acceptance criterion only asks the new pipeline_test to DOCUMENT the flash (screenshot the first frame vs. the settled frame), not eliminate it. Fixing it is out of scope here."
+    },
+    "related_handoff_ids": [],
+    "artifacts_in": [],
+    "owned_modules": ["web/src/pages/admin", "web/src/theming", "web/tests/e2e/pipelines", "test/fixtures/uat/scenarios/platform/tenant-branding-applied.yaml"]
+  },
+  "task": {
+    "description": "WF-02 Step 00 (Git Setup) for REQ-383, per docs/agents/protocols/GIT_SETUP.md, non-worktree procedure (primary checkout, verified via git worktree list). Branch feature/WF02-REQ383-20260923.",
+    "acceptance_criteria": [
+      "git pull --ff-only exited 0",
+      "git branch --show-current outputs feature/WF02-REQ383-20260923",
+      "git push -u origin feature/WF02-REQ383-20260923 exited 0"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "main was already up to date with origin/main (fast-forward pull no-op). Created and checked out feature/WF02-REQ383-20260923 from main, pushed with upstream tracking set. git worktree list confirmed this is the primary checkout (two other worktrees exist for unrelated runs, not this one), so the standard (non-worktree) procedure applies.",
+    "artifacts_out": ["branch: feature/WF02-REQ383-20260923"],
+    "next_action": "Route to CODE-DESIGNER (Step 1)",
+    "issues": []
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

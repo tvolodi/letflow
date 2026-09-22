@@ -1,0 +1,66 @@
+{
+  "handoff_id": "c3d4e5f6-0001-4000-8000-000000000001",
+  "run_id": "WF02-REQ383-20260923",
+  "workflow_id": "WF-02",
+  "step": "01",
+  "from_agent": "ORCH",
+  "to_agent": "CODE-DESIGNER",
+  "file": "handoffs/WF02-REQ383-20260923/step-01-code-designer.json",
+  "created_at": "2026-09-22T21:20:40Z",
+  "started_at": "2026-09-22T21:20:40Z",
+  "completed_at": "2026-09-22T21:20:40Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S8",
+    "requirement_ids": ["REQ-383"],
+    "requirement_text": {
+      "REQ-383": "Company appearance settings screen: apply/adjust branding colours, surface contrast refusal, surface rejected-out-of-scope-change confirmation. Second of two requirements from the same GUI-review finding as REQ-382 (already merged -- see lib/letflow/routers/tenant_settings.ex and its design doc lib/letflow/design/req382-tenant-branding-write-path.md, plus test/uat-reports/gui-review-2026-09-20-tenant-branding-applied.md). Grepping web/src/pages/admin/ confirms there is no appearance/branding settings screen today -- EditTenantPage.tsx (the only per-tenant admin edit screen) has no colour/branding field at all, only display_name. THIS REQUIREMENT: a tenant-admin-reachable screen (e.g. under web/src/pages/admin/tenants/ alongside EditTenantPage.tsx, or a dedicated web/src/pages/admin/AppearanceSettingsPage.tsx -- CODE-DESIGNER's call) that: (1) lets the tenant admin submit a new brand_colors.primary value and calls REQ-382's endpoint PATCH /api/v1/tenant/settings (EO-001's positive half); (2) on a successful save, shows a plain confirmation and the applied colour takes effect immediately without a full page reload being required to see it reflected somewhere on the same screen; (3) on a request that also attempts an out-of-scope change (any field this screen does not itself expose) -- since this screen's own form cannot construct an out-of-scope key by construction, this criterion is satisfied by confirming the screen has no way to submit one, not by testing a server-side reject path a same-origin form can never trigger; (4) on a contrast-refused submission (REQ-382's new WCAG-AA validation, returns 422 with a plain-language message via Response.unprocessable), shows the endpoint's plain-language refusal message on screen and leaves the previous colour visibly in effect -- never a raw validation-error blob (EO-003); (5) confirms platform status colours (approved/waiting/failed, e.g. on web/src/components/ui/StatusBadge.tsx-rendered screens) are unaffected by any tenant colour change -- this already holds structurally today (BRAND_COLOR_CSS_PROPERTY's allowlist has exactly one key, 'primary', mapped only to --color-brand-600; --color-success/--color-warning/--color-error/--color-failure are separate custom properties web/src/theming/applyBranding.ts never touches). This criterion needs a regression TEST, not new code (EO-002). Once the screen is confirmed correct, remove the stale NOTE (ISS-0527) from test/fixtures/uat/scenarios/platform/tenant-branding-applied.yaml, and author web/tests/e2e/pipelines/tenant-branding.pipeline.e2e.spec.ts (the path the scenario's own pipeline_test field already names) against the real screen, including a first-paint-vs-settled-frame screenshot pair documenting EO-005's known flash (web/src/theming/BrandingProvider.tsx applies branding in a useEffect which runs after first paint, and main.tsx renders synchronously without awaiting the pre-warmed fetchTenantConfig promise -- so the very first frame always shows the platform-default colour, then swaps once the network round-trip resolves). This is DOCUMENTED, not fixed -- EO-005 is severity MINOR / suggested_action none."
+    },
+    "related_handoff_ids": [
+      "handoffs/WF02-REQ383-20260923/step-00-git-setup.json"
+    ],
+    "artifacts_in": [
+      "lib/letflow/routers/tenant_settings.ex",
+      "lib/letflow/design/req382-tenant-branding-write-path.md",
+      "lib/letflow/api/response.ex",
+      "lib/letflow/api/error.ex",
+      "web/src/pages/admin/tenants/EditTenantPage.tsx",
+      "web/src/theming/applyBranding.ts",
+      "web/src/theming/BrandingProvider.tsx",
+      "web/src/theming/brandingDefaults.ts",
+      "web/src/theming/BrandingContext.tsx",
+      "web/src/components/ui/StatusBadge.tsx",
+      "web/src/api/tenants.ts",
+      "web/src/api/client.ts",
+      "web/src/api/queryKeys.ts",
+      "web/src/auth/tenantConfig.ts",
+      "web/src/hooks/useToast.ts",
+      "web/src/router.tsx",
+      "web/tests/e2e/pipelines/tenant-cache.pipeline.e2e.spec.ts",
+      "test/fixtures/uat/scenarios/platform/tenant-branding-applied.yaml"
+    ],
+    "owned_modules": ["web/src/pages/admin/AppearanceSettingsPage.tsx", "web/src/api/tenantSettings.ts"]
+  },
+  "task": {
+    "description": "Perform WF-02 Step 1 (code design) for REQ-383 per docs/agents/workflows/WF-02_requirement_implementation.md. Read the merged REQ-382 backend (lib/letflow/routers/tenant_settings.ex, lib/letflow/api/response.ex, lib/letflow/api/error.ex) to get the exact success/error response shapes; read the existing frontend admin-page/API-client/theming conventions (EditTenantPage.tsx, applyBranding.ts, BrandingProvider.tsx, StatusBadge.tsx, tenants.ts, client.ts, queryKeys.ts, useToast.ts, router.tsx); read the stale-NOTE fixture (tenant-branding-applied.yaml) for its exact pipeline_test path. Produce lib/letflow/design/req383-appearance-settings-screen.md: component tree/file-layout decision (justified), API call shape (TS interfaces), state shape (form/mutation/error/previous-applied-colour retention), how confirmation and immediate local effect work without reload, the allowlist-closure argument for the no-out-of-scope-key criterion, the StatusBadge regression test design, the e2e spec design (including the first-paint/settled-frame screenshot pair), and the tenant-branding-applied.yaml NOTE-removal as an explicit design element. No implementation code -- signatures/types/shapes only.",
+    "acceptance_criteria": [
+      "a tenant admin can submit a new brand_colors.primary value through the screen, it round-trips through REQ-382's endpoint, and a confirmation is shown, matching EO-001's positive half",
+      "submitting a contrast-refused colour shows that endpoint's plain-language message on screen and the previously-applied colour remains visibly in effect -- no raw validation-error blob, matching EO-003",
+      "a regression test confirms StatusBadge's approved/waiting/failed colours are unchanged after a tenant colour change -- matching EO-002",
+      "the screen's own form has no field/control/code path capable of submitting a key this requirement did not itself add -- stated and verified explicitly",
+      "the stale NOTE (ISS-0527) is removed from tenant-branding-applied.yaml and web/tests/e2e/pipelines/tenant-branding.pipeline.e2e.spec.ts exists, passes against the real screen, and includes a first-paint-vs-settled-frame screenshot pair documenting EO-005's known flash"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "Read the merged REQ-382 backend (lib/letflow/routers/tenant_settings.ex, lib/letflow/api/response.ex, lib/letflow/api/error.ex) to confirm exact success/422 response shapes -- notably that web/src/api/client.ts's ApiError.message on a 422 carries the generic RFC-9457 title ('Unprocessable Entity'), not the plain-language WCAG message, which only reaches the client via err.details.detail; this is called out explicitly in the design so FRONTEND-DEV reads the right field. Wrote lib/letflow/design/req383-appearance-settings-screen.md: a new top-level page web/src/pages/admin/AppearanceSettingsPage.tsx (routed admin/appearance, no :slug -- justified against EditTenantPage.tsx's per-tenant-by-slug shape vs. this endpoint's caller-is-implicit design), a new web/src/api/tenantSettings.ts module with TenantSettingsPatchBody/TenantSettingsPatchResponse TS interfaces, component-state shape separating draftColor (editable) from appliedColor (only updated on success, never on failure -- the mechanism that keeps the previous colour visibly in effect on a 422 by construction), the applyBrandingColors() direct-call mechanism for immediate same-screen effect without reload, an exhaustive enumeration proving the form has exactly one literal request-body constructor incapable of emitting any out-of-scope key, a StatusBadge regression-test design extending the existing StatusBadge.test.tsx, a 3-test e2e spec design for web/tests/e2e/pipelines/tenant-branding.pipeline.e2e.spec.ts (AC1 success+immediate-effect, AC2 contrast-refusal+previous-colour-retained, EO-005 first-paint-vs-settled-frame screenshot pair), and the tenant-branding-applied.yaml NOTE(ISS-0527)-removal as its own design element (with the later ADDENDUM block explicitly left in place). Four open questions recorded (OQ-1..OQ-4: DOM-read vs cache-read justification, queryKeys addition timing, e2e test isolation mechanism, nav-link placement) -- none silently resolved. No implementation code written anywhere in the design doc.",
+    "artifacts_out": [
+      "lib/letflow/design/req383-appearance-settings-screen.md"
+    ],
+    "next_action": "Route to CODE-DESIGN-VALIDATOR",
+    "issues": []
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

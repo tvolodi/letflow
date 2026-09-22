@@ -1377,7 +1377,9 @@ defmodule Letflow.Engine do
       definition,
       new_instance_state.status,
       current_node_ids,
-      initial_variables
+      initial_variables,
+      Map.get(attrs, :actor_id),
+      prefix
     )
   end
 
@@ -1704,7 +1706,9 @@ defmodule Letflow.Engine do
          definition,
          status,
          current_node_ids,
-         initial_variables
+         initial_variables,
+         _actor_id,
+         _prefix
        ) do
     {:ok,
      %{
@@ -1722,14 +1726,37 @@ defmodule Letflow.Engine do
   # raw changeset/term() through, matching those catch-all clauses); this
   # just unwraps Ecto.Multi's {:error, failed_step, reason, changes_so_far}
   # envelope around whatever reason each step already produced.
+  #
+  # ISS-0784 -- additionally, when `reason` is the `{:invalid_form_schema,
+  # node_id, form_schema_reason}` rejection surfacing from
+  # `TaskActivation.append_multi/6`, records a best-effort audit entry in a
+  # second, independent transaction, opened only now that `Repo.transaction/1`
+  # has already returned this `{:error, ...}` and rolled back (design §3).
+  # Any other `reason` shape is byte-identical to before this issue.
   defp interpret_create_result(
          {:error, _failed_step, reason, _changes},
-         _instance_id,
+         instance_id,
          _definition,
          _status,
          _current_node_ids,
-         _initial_variables
+         _initial_variables,
+         actor_id,
+         prefix
        ) do
+    case reason do
+      {:invalid_form_schema, node_id, form_schema_reason} ->
+        record_task_activation_rejection_audit(
+          instance_id,
+          node_id,
+          form_schema_reason,
+          actor_id,
+          prefix
+        )
+
+      _other ->
+        :ok
+    end
+
     {:error, reason}
   end
 
@@ -1974,7 +2001,7 @@ defmodule Letflow.Engine do
     |> Repo.transaction()
     |> maybe_snapshot_after_complete_task(prefix)
     |> emit_task_completed_telemetry(prefix)
-    |> interpret_complete_result()
+    |> interpret_complete_result(actor_id, prefix)
   end
 
   # REQ-194 (design req194-prometheus-metrics.md §7, OBS-02 family 2): fires
@@ -2463,8 +2490,29 @@ defmodule Letflow.Engine do
             end)
 
           case repo.transaction(multi) do
-            {:ok, changes} -> {:ok, changes}
-            {:error, _failed_step, reason, _changes} -> {:error, reason}
+            {:ok, changes} ->
+              {:ok, changes}
+
+            {:error, _failed_step, reason, _changes} ->
+              # ISS-0784 -- best-effort audit signal, recorded in a second,
+              # independent transaction only now that this one has already
+              # rolled back (design §3). Any other reason shape is
+              # byte-identical to before this issue.
+              case reason do
+                {:invalid_form_schema, node_id, form_schema_reason} ->
+                  record_task_activation_rejection_audit(
+                    timer.instance_id,
+                    node_id,
+                    form_schema_reason,
+                    actor_id,
+                    prefix
+                  )
+
+                _other ->
+                  :ok
+              end
+
+              {:error, reason}
           end
 
         {:execution_error, error_args} ->
@@ -2814,8 +2862,29 @@ defmodule Letflow.Engine do
             end)
 
           case repo.transaction(multi) do
-            {:ok, _changes} -> {:ok, :advanced}
-            {:error, _failed_step, reason, _changes} -> {:error, reason}
+            {:ok, _changes} ->
+              {:ok, :advanced}
+
+            {:error, _failed_step, reason, _changes} ->
+              # ISS-0784 -- best-effort audit signal, recorded in a second,
+              # independent transaction only now that this one has already
+              # rolled back (design §3). Any other reason shape is
+              # byte-identical to before this issue.
+              case reason do
+                {:invalid_form_schema, node_id, form_schema_reason} ->
+                  record_task_activation_rejection_audit(
+                    dispatch.instance_id,
+                    node_id,
+                    form_schema_reason,
+                    EventStore.platform_actor_id(),
+                    prefix
+                  )
+
+                _other ->
+                  :ok
+              end
+
+              {:error, reason}
           end
 
         {:execution_error, error_args} ->
@@ -3905,6 +3974,85 @@ defmodule Letflow.Engine do
     )
   end
 
+  # ISS-0784 (`lib/letflow/design/iss0784-task-activation-rollback-audit-signal.md`)
+  # -- records that a task-activation attempt was rejected by
+  # `TaskActivation.resolve_form_schema/1`'s `{:invalid_form_schema, node_id,
+  # reason}` check and the enclosing transaction was rolled back per INV-8.
+  #
+  # Called ONLY from the failure branch of each of the four
+  # `{:error, _failed_step, reason, _changes} -> {:error, reason}` unwrap
+  # points (design §2/§3) -- NEVER as a step folded into the Multi that just
+  # failed, because `Ecto.Multi`'s all-or-nothing semantics would roll this
+  # write back right along with the failed attempt it's meant to record
+  # (design §3). This function opens its own, independent
+  # `Repo.transaction/1`, run and awaited synchronously, strictly after the
+  # caller's own `repo.transaction(multi)` has already returned its
+  # `{:error, ...}` and Postgres has released the failed attempt's locks.
+  #
+  # Best-effort per design §6, matching `snapshot_instance/4`'s own
+  # established "log and swallow" convention (~line 1465): a failure writing
+  # this audit entry is logged via `Logger.warning/1` and never propagated --
+  # it must never turn the original `{:invalid_form_schema, ...}` rollback
+  # into a different error, and must never raise.
+  @spec record_task_activation_rejection_audit(
+          instance_id :: Ecto.UUID.t(),
+          node_id :: String.t(),
+          reason :: {:not_well_formed, path :: [String.t()]} | :too_deep,
+          actor_id :: Ecto.UUID.t() | nil,
+          prefix :: String.t()
+        ) :: :ok
+  defp record_task_activation_rejection_audit(instance_id, node_id, reason, actor_id, prefix) do
+    attrs = %{
+      actor_id: actor_id,
+      action: "task_activation.rejected",
+      resource_type: "instance",
+      resource_id: instance_id,
+      before_state: nil,
+      after_state: %{
+        "node_id" => node_id,
+        "reason" => encode_form_schema_rejection_reason(reason)
+      },
+      trace_id: nil
+    }
+
+    case Repo.transaction(fn -> Audit.insert_entry(Repo, attrs, prefix) end) do
+      {:ok, {:ok, _entry}} ->
+        :ok
+
+      {:ok, {:error, insert_reason}} ->
+        Logger.warning(
+          "Letflow.Audit.insert_entry/3 failed recording task_activation.rejected for " <>
+            "instance #{instance_id} (node #{node_id}): #{inspect(insert_reason)}"
+        )
+
+        :ok
+
+      {:error, rollback_reason} ->
+        Logger.warning(
+          "Repo.transaction/1 failed recording task_activation.rejected for instance " <>
+            "#{instance_id} (node #{node_id}): #{inspect(rollback_reason)}"
+        )
+
+        :ok
+    end
+  end
+
+  # ISS-0784 design §4.2 -- exhaustive encoder over
+  # `Letflow.Definitions.JsonSchemaShape.check/1`'s own two-member error
+  # union (minus the outer `:error` tag), for a JSON-safe `after_state`.
+  # Deliberately has no catch-all clause: if that union ever grows a third
+  # member, this fails to compile until updated (design §4.2/§10 OQ-2), which
+  # is the intended signal rather than a silently masked new rejection shape.
+  @spec encode_form_schema_rejection_reason({:not_well_formed, path :: [String.t()]} | :too_deep) ::
+          map()
+  defp encode_form_schema_rejection_reason({:not_well_formed, path}) do
+    %{"code" => "not_well_formed", "path" => path}
+  end
+
+  defp encode_form_schema_rejection_reason(:too_deep) do
+    %{"code" => "too_deep", "path" => nil}
+  end
+
   defp complete_task_row(repo, %Task{} = task, actor_id, output_variables, completed_at, prefix) do
     attrs = %{
       status: :completed,
@@ -4028,7 +4176,11 @@ defmodule Letflow.Engine do
   # durably persist, not roll back). Distinguished from the success clause
   # below purely via :complete_task_outcome's own tag, not by which optional
   # keys are present.
-  defp interpret_complete_result({:ok, %{complete_task_outcome: {:execution_error, error_args}}}) do
+  defp interpret_complete_result(
+         {:ok, %{complete_task_outcome: {:execution_error, error_args}}},
+         _actor_id,
+         _prefix
+       ) do
     {:error, {:instance_execution_error, error_args.error_type, error_args.affected}}
   end
 
@@ -4041,7 +4193,9 @@ defmodule Letflow.Engine do
               {:advanced, %InstanceState{} = final_instance_state, _prepared_children,
                _prepared_timers, _prepared_service_task_dispatches},
             task_complete: %Task{} = completed_task
-          }}
+          }},
+         _actor_id,
+         _prefix
        ) do
     {:ok,
      %{
@@ -4059,7 +4213,35 @@ defmodule Letflow.Engine do
   # raw changeset/term() through, matching those catch-all clauses); this
   # just unwraps Ecto.Multi's {:error, failed_step, reason, changes_so_far}
   # envelope around whatever reason each step already produced.
-  defp interpret_complete_result({:error, _failed_step, reason, _changes}) do
+  #
+  # ISS-0784 -- additionally, when `reason` is the `{:invalid_form_schema,
+  # node_id, form_schema_reason}` rejection surfacing from
+  # `TaskActivation.append_multi_from_existing_records/7` (via the hop-chain
+  # advance dispatched from `:transition`), records a best-effort audit entry
+  # in a second, independent transaction, opened only now that
+  # `Repo.transaction/1` has already returned this `{:error, ...}` and rolled
+  # back (design §3). `instance_id` is read from `_changes.task.instance_id`
+  # -- the `:task` step is always fetched first and is always present in
+  # `changes_so_far` by the time any later `:task_records`-keyed step can
+  # fail (design §2 row 2). Any other `reason` shape is byte-identical to
+  # before this issue.
+  defp interpret_complete_result({:error, _failed_step, reason, changes}, actor_id, prefix) do
+    case reason do
+      {:invalid_form_schema, node_id, form_schema_reason} ->
+        instance_id = Map.fetch!(changes, :task).instance_id
+
+        record_task_activation_rejection_audit(
+          instance_id,
+          node_id,
+          form_schema_reason,
+          actor_id,
+          prefix
+        )
+
+      _other ->
+        :ok
+    end
+
     {:error, reason}
   end
 

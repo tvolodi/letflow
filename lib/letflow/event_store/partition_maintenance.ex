@@ -196,6 +196,78 @@ defmodule Letflow.EventStore.PartitionMaintenance do
   end
 
   # ===========================================================================
+  # eligible_months/1 (REQ-377 design §2.1, OQ5) -- lists a schema's
+  # currently-attached `events` monthly partitions that have aged past
+  # min_partition_age_days/0, i.e. are eligible for retire_month/3. This
+  # module already owns partition-catalog knowledge (catalog_state/2's
+  # pg_inherits shape, min_partition_age_days/0's aging constant), so the
+  # "list + filter" logic belongs here rather than duplicated in a caller --
+  # Letflow.EventStore.RetentionOperations is this function's only caller.
+  # ===========================================================================
+
+  @doc """
+  Lists tenant schema `schema_name`'s currently-attached `events` monthly
+  partitions (`events_yYYYYmMM`, excluding `events_default`) that are
+  eligible to retire -- i.e. whose month has aged past
+  `min_partition_age_days/0` -- in ascending `{year, month}` order.
+
+  Read-only (no side effects beyond the catalog query's own implicit
+  `AccessShareLock`). Returns `[]`, never an error tuple, for a schema with
+  no partitions, no eligible month yet, or an invalid `schema_name` -- this
+  is the expected, common state for a fresh/low-volume tenant, not a
+  failure.
+  """
+  @spec eligible_months(schema_name :: String.t()) :: [{year :: pos_integer(), month :: 1..12}]
+  def eligible_months(schema_name) when is_binary(schema_name) do
+    case TenantProvisioning.tenant_id_for_schema_name(schema_name) do
+      {:ok, _tenant_id} ->
+        schema_name
+        |> attached_events_month_partitions()
+        |> Enum.filter(fn {year, month} -> eligible?(year, month) end)
+        |> Enum.sort()
+
+      {:error, :invalid_schema_name} ->
+        []
+    end
+  end
+
+  # Lists every `events_yYYYYmMM` partition currently attached (via
+  # pg_inherits) to `events` in `schema_name` -- same catalog-query shape as
+  # child_of?/3, generalized from "is this one specific partition attached"
+  # to "list every attached month partition." `events_default` never
+  # matches the LIKE pattern's `events_y...m..` shape, so it is excluded
+  # without a separate exclusion clause.
+  defp attached_events_month_partitions(schema_name) do
+    %Postgrex.Result{rows: rows} =
+      Repo.query!(
+        """
+        SELECT c.relname
+        FROM pg_inherits i
+        JOIN pg_class c ON c.oid = i.inhrelid
+        JOIN pg_namespace n ON n.oid = c.relnamespace
+        JOIN pg_class p ON p.oid = i.inhparent
+        JOIN pg_namespace pn ON pn.oid = p.relnamespace
+        WHERE n.nspname = $1 AND pn.nspname = $1 AND p.relname = 'events'
+          AND c.relname LIKE 'events\\_y%m%' ESCAPE '\\'
+        """,
+        [schema_name]
+      )
+
+    rows
+    |> Enum.map(fn [relname] -> parse_month_partition_name(relname) end)
+    |> Enum.reject(&is_nil/1)
+  end
+
+  @month_partition_name ~r/^events_y(\d+)m(\d{2})$/
+
+  defp parse_month_partition_name(relname) do
+    case Regex.run(@month_partition_name, relname) do
+      [_, year_str, month_str] -> {String.to_integer(year_str), String.to_integer(month_str)}
+      nil -> nil
+    end
+  end
+
+  # ===========================================================================
   # retire_month/3 (§4 -- AC2/AC3/AC4)
   # ===========================================================================
 

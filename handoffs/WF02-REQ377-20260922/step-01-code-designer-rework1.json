@@ -1,0 +1,32 @@
+{
+  "handoff_id": "req377-step01-rework1",
+  "run_id": "WF02-REQ377-20260922",
+  "workflow_id": "WF-02",
+  "step": "01",
+  "from_agent": "ORCH",
+  "to_agent": "CODE-DESIGNER",
+  "file": "handoffs/WF02-REQ377-20260922/step-01-code-designer-rework1.json",
+  "started_at": "2026-09-22T13:10:00Z",
+  "completed_at": "2026-09-22T13:14:00Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": { "stage": "S8", "requirement_ids": ["REQ-377"], "owned_modules": [] },
+  "task": {
+    "description": "Rework CODE-DESIGNER design for REQ-377 per CODE-DESIGN-VALIDATOR's rejection -- fix false index claim in SS1 and unspecified helper function in SS2.1/SS7.",
+    "acceptance_criteria": [
+      "AC1: PLATFORM_ADMIN can retire the oldest eligible month and see the resulting retirement record",
+      "AC2: retention summary (incl. protected-record count) displayed and unchanged before/after a retirement",
+      "AC3: the screen is reachable only to a PLATFORM_ADMIN-equivalent role",
+      "AC4: an E2E pipeline spec passes against the real screen"
+    ]
+  },
+  "result": {
+    "status": "success",
+    "summary": "Fixed both MAJOR issues in place. (1) Corrected the false 'no index on event_type' claim; re-derived the async architecture's justification honestly on ensure_bounds_constraint!/5's VALIDATE CONSTRAINT full-partition sequential scan alone, fanned out across every tenant schema -- sufficient standalone justification. (2) Added full signature for PartitionMaintenance.eligible_months/1 plus shared private RetentionOperations.oldest_eligible_month_platform_wide/0 helper called by both retention_summary/0 and retire_oldest_eligible_month/1. OQ5 marked resolved.",
+    "artifacts_out": ["lib/letflow/design/req377-history-retirement-screen.md"],
+    "next_action": "Route to CODE-DESIGN-VALIDATOR",
+    "issues": []
+  },
+  "rework_count": 1,
+  "max_rework": 3
+}

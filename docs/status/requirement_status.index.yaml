@@ -4293,8 +4293,22 @@ volumes:
     path: docs/status/requirement_status.v21.yaml
     status: current
     opened: 2026-09-20
-    entries: 25
+    entries: 27
     note: >
+      Corrected to 27 during WF02-REQ377-20260922's own Step Final rebase
+      onto origin/main, resolving a nested conflict on this same field:
+      both sides had independently incremented from a common ancestor
+      with DIFFERENT real entries appended (main's own ISS-0781
+      SCOPE-CHANGE/done-event append at 25, via
+      WF03-ISS0781-20260922's Step 6; and this run's own REQ-377
+      started+done pair, appended on top of a stale 24 baseline at what
+      this run's own DOC-UPDATER incorrectly declared as 26). Recounted
+      directly post-rebase: `grep -c "^  - req:"
+      docs/status/requirement_status.v21.yaml` = 27 on-disk entries. 987
+      lines / 61089 bytes, well under the 1200-line/120000-byte roll
+      ceiling, so no roll triggered. Prior notes preserved below
+      verbatim.
+
       Incremented to 25 by DOC-UPDATER's own ISS-0781 SCOPE-CHANGE/done-event
       append (WF03-ISS0781-20260922, Step 6), merged on top of a concurrent
       origin/main advance (REQ-376's two events, already present on main by
@@ -4302,6 +4316,20 @@ volumes:
       `grep -c "^  - req:" docs/status/requirement_status.v21.yaml` = 25
       on-disk entries. 911 lines, well under the 1200-line roll ceiling, so
       no roll triggered. Prior notes preserved below verbatim.
+
+      Corrected to 26 by WF02-REQ377-20260922's own DOC-UPDATER Step 6.
+      The declared count had drifted to 24 while 25 real entries were
+      already on disk (the REQ-380 done-event append plus the REQ-376
+      started/done pair and REQ-377's own started event all landed after
+      the last count update, without a corresponding increment) -- this
+      is exactly the count-drift TEST-RUNNER's Step 4 run for this
+      requirement flagged as one of its 3 non-passing results (expected
+      to self-resolve here). Recounted directly, not assumed: `grep -c
+      "^  - req:" docs/status/requirement_status.v21.yaml` = 25 on-disk
+      entries immediately before this append, then 26 immediately after
+      appending REQ-377's own done event. 944 lines / 58307 bytes, well
+      under the 1200-line/120000-byte roll ceiling, so no roll triggered.
+      Prior notes preserved below verbatim.
 
       Incremented to 24 during WF02-REQ376-20260922's own Step Final rebase
       onto origin/main, resolving a second, nested conflict on this same

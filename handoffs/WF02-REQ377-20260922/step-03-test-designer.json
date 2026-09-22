@@ -1,0 +1,39 @@
+{
+  "handoff_id": "req377-step03-001",
+  "run_id": "WF02-REQ377-20260922",
+  "workflow_id": "WF-02",
+  "step": "03",
+  "from_agent": "ORCH",
+  "to_agent": "TEST-DESIGNER",
+  "file": "handoffs/WF02-REQ377-20260922/step-03-test-designer.json",
+  "started_at": "2026-09-22T13:32:00Z",
+  "completed_at": "2026-09-22T13:49:00Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": { "stage": "S8", "requirement_ids": ["REQ-377"], "owned_modules": [] },
+  "task": {
+    "description": "WF-02 Step 3: write ExUnit tests for RetentionOperations/Letflow.Routers.EventRetention and the E2E pipeline spec named in AC4.",
+    "acceptance_criteria": [
+      "AC1: retire oldest eligible month, display resulting retirement record",
+      "AC2: retention summary incl. protected-record count, capturable before/after",
+      "AC3: screen reachable only to PLATFORM_ADMIN-equivalent role",
+      "AC4: platform-partition-retention-drop.pipeline.e2e.spec.ts authored and passing"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "17 new ExUnit tests (context + router layer) all pass against real Postgres, no mocking. New E2E pipeline spec authored against the real screen/API (no msw/mocks), solving the real-eligible-month fixture problem by fabricating a genuinely backdated events partition via direct DDL (web/tests/e2e/db-exec.ts's pickEligibleBackdatedMonth/createBackdatedEventPartitionSql/seedHistoricalEventSql -- real CREATE TABLE ... PARTITION OF events DDL, real seeded event row, no server-config bypass). Found and fixed one real pre-existing regression caused by this run's own diff: test/letflow/supervisor/infrastructure_test.exs's exact-child-list assertion was stale after RetirementTaskSupervisor's addition (19->20 children).",
+    "artifacts_out": [
+      "test/specs/REQ-377.md",
+      "test/letflow/event_store/retention_operations_test.exs",
+      "test/letflow/routers/event_retention_test.exs",
+      "web/tests/e2e/pipelines/platform-partition-retention-drop.pipeline.e2e.spec.ts",
+      "web/tests/e2e/db-exec.ts",
+      "test/letflow/supervisor/infrastructure_test.exs"
+    ],
+    "next_action": "Route to TEST-DESIGN-VALIDATOR",
+    "issues": ["2 pre-existing unrelated failures observed during self-check (Letflow.IdentityTest realm-resolution race, RequirementStatusInvariantsTest A9 status-index drift) -- not REQ-377 regressions, forwarded for TEST-RUNNER/RELEASE-VALIDATOR visibility"]
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

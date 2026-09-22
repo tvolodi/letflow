@@ -1,0 +1,51 @@
+{
+  "handoff_id": "req377-step05-001",
+  "run_id": "WF02-REQ377-20260922",
+  "workflow_id": "WF-02",
+  "step": "05",
+  "from_agent": "ORCH",
+  "to_agent": "RELEASE-VALIDATOR",
+  "file": "handoffs/WF02-REQ377-20260922/step-05-release-validator.json",
+  "started_at": "2026-09-22T14:20:00Z",
+  "completed_at": "2026-09-22T14:52:00Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S8",
+    "requirement_ids": ["REQ-377"],
+    "related_handoff_ids": [
+      "handoffs/WF02-REQ377-20260922/step-04-test-runner.json"
+    ],
+    "owned_modules": []
+  },
+  "task": {
+    "description": "WF-02 Step 5: independent release validation of REQ-377 (history-retirement operator screen, backend + frontend + E2E spec). Re-run scripts/test_parallel.sh independently (do not trust TEST-RUNNER's report alone), confirm every AC against actual code/tests, attempt to execute AC4's E2E spec live and report explicitly if that isn't possible rather than claiming it passed, check docs/status and docs/requirements.yaml for staleness.",
+    "acceptance_criteria": [
+      "the retirement screen lets a PLATFORM_ADMIN retire the oldest eligible month and displays the resulting retirement record, matching EO-001's operator-console evidence requirement",
+      "the retention summary shows a protected-record count capturable before and after a retirement, matching EO-002's evidence requirement",
+      "the screen is reachable only to a PLATFORM_ADMIN-equivalent role from the operator console navigation",
+      "web/tests/e2e/pipelines/platform-partition-retention-drop.pipeline.e2e.spec.ts is authored against this real screen and passes"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "Independently re-ran scripts/test_parallel.sh (foreground, blocking): 4665 tests, 6 properties, 3 failures, 4668/4671 passed -- same total as TEST-RUNNER's report, but independently re-derived (not count-matched): (1) Letflow.Docs.RequirementStatusInvariantsTest A9, declared 24 vs actual 25 entries in v21.yaml, traced via git log main..HEAD to this run's own Step 00 status-flip commit (3b945648) appending an entry without bumping the index count -- this run's own expected artifact, to be closed by Step 6. (2) Letflow.IdentityTest resolve_tenant_by_realm/1 + resolve_realm_by_tenant/1 (x2), git diff --name-only main...HEAD contains zero identity/realm files (branch cannot be the cause), stack trace matches docs/issues/ISS-0766.yaml's exact mechanism -- demonstrated pre-existing mechanism. mix letflow.check.test also run to completion: fails for the identical real-test reasons, no ISS-0069 warning-class recurrence. AC1-AC3 verified directly against lib/letflow/routers/event_retention.ex, EventRetentionPage.tsx, and real ExUnit coverage. AC4 could NOT be executed live -- no running backend/Keycloak-fixture stack in this environment (checked: no app server on 8080/4000, only Postgres+Keycloak containers up, no Letflow app process running anywhere in this shared checkout; Playwright's webServer block only spawns the frontend dev server, not the backend/realm/tenant-fixture stack the spec needs -- that is WF-05/UAT-RUNNER's infrastructure). Reported this explicitly rather than speculating a live pass: reviewed the spec's source in full instead, confirmed it drives the real screen with no mocks and every data-testid selector it depends on exists in the real shipped EventRetentionPage.tsx -- static verification, not execution. docs/requirements.yaml REQ-377 correctly still showed in_progress at the time of this check (DOC-UPDATER flips it in Step 6, after this validator). docs/status/requirement_status.index.yaml confirmed v21 current; REQ-376 (depends_on) confirmed done.",
+    "artifacts_out": [
+      "lib/letflow/routers/event_retention.ex",
+      "lib/letflow/event_store/retention_operations.ex",
+      "web/src/pages/admin/event-retention/EventRetentionPage.tsx",
+      "web/tests/e2e/pipelines/platform-partition-retention-drop.pipeline.e2e.spec.ts",
+      "test/letflow/routers/event_retention_test.exs",
+      "test/letflow/event_store/retention_operations_test.exs"
+    ],
+    "next_action": "Route to DOC-UPDATER",
+    "issues": [
+      {
+        "severity": "MINOR",
+        "description": "AC4's E2E spec was verified statically only (not executed) -- this environment has no running Letflow backend/Keycloak-fixture stack (BPM_TEST_URL unreachable, only Postgres+Keycloak containers up, no app server). A UAT-RUNNER/WF-05-class environment is needed to execute it live before this AC is closed by live evidence rather than code review. Not treated as blocking: this matches this codebase's own established precedent (platform-migration-partial-failure-resume's E2E spec was similarly authored in its own WF-02 run and executed live only later, via UAT-RUNNER)."
+      }
+    ]
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

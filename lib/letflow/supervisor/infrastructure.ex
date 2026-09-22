@@ -27,6 +27,12 @@ defmodule Letflow.Supervisor.Infrastructure do
   by `skip_migrations?()`; see that module's own moduledoc for the full
   reasoning.
 
+  REQ-377 (design `req377-history-retirement-screen.md` §1) adds one
+  further child, `Letflow.EventStore.RetirementTaskSupervisor`, bringing the
+  total to 21 -- placed directly before `Letflow.Obs.Alerts.TaskSupervisor`
+  so that child's own documented "must be LAST" invariant is preserved; see
+  its own child-spec comment below.
+
   ## Children, in order
 
   1. `Letflow.Repo`
@@ -54,7 +60,8 @@ defmodule Letflow.Supervisor.Infrastructure do
   17. `Letflow.Engine.Wasm.CapabilityGateTaskSupervisor`
   18. `Letflow.Engine.Wasm.ModuleVersionRegistry`
   19. `Letflow.Engine.Wasm.ModuleVersionRegistryTaskSupervisor`
-  20. `Letflow.Obs.Alerts.TaskSupervisor`
+  20. `Letflow.EventStore.RetirementTaskSupervisor`
+  21. `Letflow.Obs.Alerts.TaskSupervisor`
 
   ## Ordering guarantees preserved (both load-bearing, unchanged from
   `Letflow.Application`'s own prior flat list)
@@ -109,16 +116,18 @@ defmodule Letflow.Supervisor.Infrastructure do
 
   ## Task.Supervisor sprawl review (REQ-220, closes ISS-0425 part 3)
 
-  This supervisor owns 7 separate `Task.Supervisor`s (unaffected by ISS-0418's
+  This supervisor owns 8 separate `Task.Supervisor`s (unaffected by ISS-0418's
   `InvocationLease` addition or REQ-352's `PublicReadRateLimit.Bucket`
-  addition, both ordinary `GenServer`s, not `Task.Supervisor`s). RECOMMENDATION: KEEP
-  ALL 7 SEPARATE. None share a crash domain or a resource-contention
-  profile that would make consolidation meaningfully safer or cheaper, and
-  each pairing a reader might plausibly propose merging already has a
-  stated, on-record reason not to (see below). Consolidated here so a
-  reader does not need to hunt 7 separate scattered comments to see why
-  none should merge; each one's own comment at its child-spec site above
-  remains the source of truth for its individual justification.
+  addition, both ordinary `GenServer`s, not `Task.Supervisor`s; REQ-377 adds
+  the 8th, `Letflow.EventStore.RetirementTaskSupervisor`).
+  RECOMMENDATION: KEEP ALL 8 SEPARATE. None share a crash domain or a
+  resource-contention profile that would make consolidation meaningfully
+  safer or cheaper, and each pairing a reader might plausibly propose
+  merging already has a stated, on-record reason not to (see below).
+  Consolidated here so a reader does not need to hunt 8 separate scattered
+  comments to see why none should merge; each one's own comment at its
+  child-spec site above remains the source of truth for its individual
+  justification.
 
     * `SandboxPool.TaskSupervisor` (ISS-0224) -- isolates `SandboxPool`'s
       own Ecto-sandbox-ownership `async_nolink` calls so a `claim/2`
@@ -140,6 +149,9 @@ defmodule Letflow.Supervisor.Infrastructure do
       nested instantiation-attempt task.
     * `Obs.Alerts.TaskSupervisor` (ISS-0429) -- I/O-bound HTTP alert-hook
       delivery, unrelated to any sandbox/plugin/Lua/Wasm concern above.
+    * `EventStore.RetirementTaskSupervisor` (REQ-377) -- platform-wide
+      event-history retirement fanout (DDL/partition-maintenance dispatch),
+      an independent concern from every other supervisor above.
 
   TWO CONSOLIDATION CANDIDATES CONSIDERED AND REJECTED:
 
@@ -160,7 +172,7 @@ defmodule Letflow.Supervisor.Infrastructure do
 
   NOT IN THIS REQUIREMENT: no Task.Supervisor removed, renamed, or merged
   as a side effect of this review -- see this section's own recommendation
-  (KEEP ALL 7). All 7 remain inside this module, matching REQ-219's own
+  (KEEP ALL 8). All 8 remain inside this module, matching REQ-219's own
   layer assignment.
   """
 
@@ -284,6 +296,19 @@ defmodule Letflow.Supervisor.Infrastructure do
       {Letflow.Engine.Wasm.ModuleVersionRegistry,
        name: Letflow.Engine.Wasm.ModuleVersionRegistry},
       {Task.Supervisor, name: Letflow.Engine.Wasm.ModuleVersionRegistryTaskSupervisor},
+      # REQ-377 (design req377-history-retirement-screen.md §1): dedicated
+      # Task.Supervisor for Letflow.EventStore.RetentionOperations'
+      # async 202+poll platform-wide event-history retirement fanout
+      # (Task.Supervisor.async_nolink/3 from the HTTP-triggering request,
+      # Task.Supervisor.async_stream/4 internally per tenant schema).
+      # Deliberately its own supervisor, not a reuse of any Wasm/Lua/Sandbox
+      # supervisor above -- DDL/partition-maintenance dispatch is an
+      # independent concern from those, mirroring
+      # Wasm.ModuleRegistryTaskSupervisor's own "independent concern"
+      # reasoning. No other child depends on start order here; placed before
+      # Obs.Alerts.TaskSupervisor only to preserve THAT child's own
+      # documented "must be LAST" invariant below.
+      {Task.Supervisor, name: Letflow.EventStore.RetirementTaskSupervisor},
       # ISS-0429 (design lib/letflow/design/iss0429-async-alert-hook-delivery.md §1):
       # dedicated Task.Supervisor isolating alert-hook delivery's HTTP POST +
       # retry/backoff loop (Letflow.Obs.Alerts.deliver_with_retry/4, dispatched from

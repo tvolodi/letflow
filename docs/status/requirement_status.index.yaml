@@ -4293,7 +4293,7 @@ volumes:
     path: docs/status/requirement_status.v21.yaml
     status: current
     opened: 2026-09-20
-    entries: 14
+    entries: 15
     note: >
       Incremented to 14 by DOC-UPDATER's own REQ-374 done-event append
       (2026-09-21T20:40:11Z -- platform-wide tenant-migration fanout runner

@@ -530,3 +530,41 @@ history:
       RELEASE-VALIDATOR entry, same flake). REQ-375 (the operator-facing
       rollout-status screen depending on this endpoint) remains pending,
       unblocked by this merge.
+  - req: SCOPE-CHANGE
+    event: done
+    agent: DOC-UPDATER
+    at: "2026-09-22T00:46:45Z"
+    note: >
+      ISS-0777 (BLOCKER, queue task 776, GH-1696 -- Letflow.Platform.
+      MigrationRollout.start_rollout/3 crashed with an unhandled ArgumentError
+      (bare 500) when entity_type contained a hyphen or any character rejected
+      by DDL.valid_identifier?/1, no request-time format validation existing
+      anywhere on the write path, blocking REQ-375's own AC5) resolved on
+      feature/WF03-ISS0777-20260921 (tip 4193e277). Design: two-tier
+      identifier-format validation -- a regex `pattern` constraint on
+      entity_type/attribute in platform_migrations.ex's @start_schema (via
+      the existing Letflow.Api.Validation mechanism) as the first tier, plus
+      a second check inside Letflow.TenantProvisioning.
+      register_column_promotion/4 itself as defense-in-depth so every caller
+      of that function, not just this router, is protected from the same
+      crash path -- CODE-DESIGN-VALIDATOR's first pass required this second
+      crash-path be made explicit before approving. ELIXIR-DEV implemented
+      both tiers, returning a clean 422-class error instead of ever reaching
+      checked_table_name/1's raise, and corrected the stale "already
+      validated" comment at that call site. Test-validity issue found and
+      corrected: TEST-DESIGNER's first regression tests (Tests A/B/C)
+      asserted the 422 response but did not provision an active tenant
+      before invoking the router, so the request never actually reached the
+      code path that used to crash -- the tests could pass even with the bug
+      still present. TEST-DESIGN-VALIDATOR caught this and required rework;
+      the fix (commit a880edb8, "Tests A/B/C now provision a real active
+      tenant") was independently re-verified twice with genuine
+      fail-then-pass evidence, once by TEST-DESIGN-VALIDATOR against the
+      reworked tests and again by RELEASE-VALIDATOR re-running the full
+      suite independently. Gates, all PASSED: CODE-DESIGN-VALIDATOR (one
+      rework round), SECURITY-REVIEWER, REVIEWER, TEST-DESIGN-VALIDATOR (one
+      rework round, the test-validity fix above), TEST-RUNNER,
+      RELEASE-VALIDATOR (final independent full-suite run: 4591/4593 passed,
+      the only 2 non-passing being the pre-existing documented ISS-0766
+      flake, unrelated). Design:
+      lib/letflow/design/iss-0777-entity-type-identifier-validation.md.

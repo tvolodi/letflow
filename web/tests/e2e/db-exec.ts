@@ -199,3 +199,113 @@ export function createActiveEntityDefinition(schema: string, entityType: string)
     stdio: 'inherit',
   })
 }
+
+/**
+ * REQ-377 fixture helpers for `platform-partition-retention-drop.pipeline.e2e.spec.ts`
+ * -- producing a REAL month of event history old enough to be eligible for
+ * `Letflow.EventStore.PartitionMaintenance.retire_month/3` against the real,
+ * shipped `min_partition_age_days/0` default (400 days), not a shortened
+ * test-only override.
+ *
+ * Why this can't just reuse `min_partition_age_days`'s config override
+ * technique: `test/letflow/event_store/partition_maintenance_test.exs` and
+ * `test/letflow/routers/event_retention_test.exs` override
+ * `Application.put_env(:letflow, :event_retention, min_partition_age_days: 1)`
+ * from INSIDE the same BEAM node the test runs in -- that process IS the one
+ * that later reads the override back. This e2e spec drives a SEPARATE,
+ * already-running server process (`BPM_TEST_URL`) over real HTTP; there is
+ * no supported HTTP surface to change that server's own Application env at
+ * runtime, and restarting it mid-suite would be far riskier than the
+ * alternative below. Instead: create a partition whose month genuinely IS
+ * more than 400 days in the past -- `eligible?/2`'s real, unmodified
+ * `today >= last_day(month) + min_partition_age_days` check then finds it
+ * eligible on its own, no server-side config change of any kind needed.
+ * `PartitionMaintenance.ensure_future_partitions/2` only ever creates
+ * partitions looking FORWARD from "now" (§3 of its own moduledoc), so a
+ * partition this old is never auto-created -- it must be fabricated
+ * directly, the same real-DDL technique `poisonCompanySchemaSql` above
+ * already established for a different fixture need.
+ *
+ * `daysAgoOffset` is derived from the caller's own fixture id (not a fixed
+ * literal) so that a repeat run of this spec against the SAME long-lived
+ * dev/CI Postgres instance targets a fresh, never-previously-retired month
+ * rather than colliding with a month an earlier run already retired (once
+ * `retire_month/3` detaches a month's partition from `events`, that same
+ * month can never become "eligible" again -- it is no longer attached, so
+ * `eligible_months/1` simply stops listing it, which would make a second
+ * run's `oldest_eligible_month` computation either pick a different month
+ * anyway or -- if this were the LAST eligible month platform-wide --
+ * surface a spurious `:no_eligible_month`/409 having nothing to do with a
+ * real defect). Spread across ~8 years of possible months (401..3521 days
+ * back) so collision probability across independent runs stays negligible
+ * -- the same "fixture-unique, not shared" discipline
+ * `platform-migration-partial-failure-resume`'s own `fixtureId`-derived
+ * `entity_type`/`attribute` already establishes for a different resource,
+ * applied here to a calendar month instead of an identifier string. This is
+ * a real calendar-date computation from a fixture id, not unseeded
+ * wall-clock-dependent randomness affecting pass/fail -- the spec's
+ * assertions never depend on which particular month was chosen, only that
+ * IT exists and becomes retired.
+ */
+export interface BackdatedMonth {
+  year: number
+  month: number
+  /** `events_y<year>m<MM>` -- the exact partition name PartitionMaintenance itself derives. */
+  partitionName: string
+}
+
+/** Picks a real calendar month strictly more than 400 days before today, deterministically from `fixtureId`. */
+export function pickEligibleBackdatedMonth(fixtureId: string): BackdatedMonth {
+  const seed = parseInt(fixtureId.replace(/-/g, '').slice(0, 8), 16)
+  const daysAgoOffset = 401 + (seed % 3120) // 401..3521 days back (> 400-day min_partition_age_days, spread ~8 years)
+
+  const target = new Date()
+  target.setUTCDate(target.getUTCDate() - daysAgoOffset)
+  const year = target.getUTCFullYear()
+  const month = target.getUTCMonth() + 1 // JS months are 0-based; partition-name/bounds convention is 1-based
+
+  return { year, month, partitionName: `events_y${year}m${String(month).padStart(2, '0')}` }
+}
+
+function pad2(n: number): string {
+  return String(n).padStart(2, '0')
+}
+
+/** `[fromInclusive, toExclusive)` calendar-month bounds, same convention `month_bounds_str/2` uses on the ExUnit side. */
+function monthBoundsStr(year: number, month: number): { from: string; to: string } {
+  const nextMonth = month === 12 ? 1 : month + 1
+  const nextYear = month === 12 ? year + 1 : year
+  return { from: `${year}-${pad2(month)}-01`, to: `${nextYear}-${pad2(nextMonth)}-01` }
+}
+
+/**
+ * Real DDL: attaches a new `events_y<year>m<MM>` partition to `events` for a
+ * real, backdated calendar-month range -- mirrors
+ * `partition_maintenance_test.exs`'s own `create_events_month_partition!/3`
+ * and priv/repo/migrations/20260922000002_create_events_p_initial_partitions.exs's
+ * `create_month_partition!/3` DDL shape exactly.
+ */
+export function createBackdatedEventPartitionSql(schema: string, month: BackdatedMonth): string {
+  const { from, to } = monthBoundsStr(month.year, month.month)
+  return `CREATE TABLE "${schema}"."${month.partitionName}" PARTITION OF "${schema}".events FOR VALUES FROM ('${from}') TO ('${to}');`
+}
+
+/**
+ * Seeds ONE real event row inside the backdated partition above (mid-month,
+ * so it always routes into that exact partition regardless of month
+ * length) -- so this scenario retires a month that genuinely held history,
+ * not an empty partition. Column list mirrors
+ * `20260922000001_create_events_partitioned.exs`'s real `events_p` column
+ * list (pre-swap `events`/`events_p` are the same shape); `global_seq` is
+ * left to its own sequence default. A fresh, real UUID per call (never a
+ * shared literal) keeps repeat runs from colliding on `event_id`'s PK.
+ */
+export function seedHistoricalEventSql(schema: string, month: BackdatedMonth, eventId: string, instanceId: string): string {
+  const midMonth = `${month.year}-${pad2(month.month)}-15 12:00:00`
+  return `
+    INSERT INTO "${schema}"."events"
+      (event_id, created_at, instance_id, event_type, payload, actor_id, sequence_number, idempotency_key, metadata)
+    VALUES
+      ('${eventId}', '${midMonth}', '${instanceId}', 'req377_e2e_seed_event', '{}'::jsonb, '${instanceId}', 1, 'req377-e2e-${eventId}', '{}'::jsonb);
+  `
+}

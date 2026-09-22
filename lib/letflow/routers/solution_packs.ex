@@ -147,7 +147,10 @@ defmodule Letflow.Routers.SolutionPacks do
   alias Letflow.Api.Response
   alias Letflow.Api.Validation
   alias Letflow.Api.Validation.FieldConstraint
+  alias Letflow.Api.Validation.FieldError
+  alias Letflow.Definitions
   alias Letflow.Definitions.SolutionPack
+  alias Letflow.TenantProvisioning
 
   # REQ-131: endpoint_policy_key/2 has no clause for either route (see
   # "Authorization gap" below) -- :DefinitionsRead/:DefinitionsCreate are
@@ -166,6 +169,21 @@ defmodule Letflow.Routers.SolutionPacks do
 
   authz_post "/install", :DefinitionsCreate do
     handle_install(conn)
+  end
+
+  # REQ-380 (design lib/letflow/design/req380-pack-update-review-apply-api.md
+  # §3.1/§4.1): both reuse the closest-matching existing policy key, same
+  # judgment call as /export and /install above -- update-review reads and
+  # classifies only (:DefinitionsRead), update-apply mutates
+  # pack_update_resolutions/solution_pack_artefact_bases
+  # (:DefinitionsCreate -> :DefinitionsWrite). Flagged for REVIEWER, not
+  # silently decided (design §3.1/§4.1, OQ-1).
+  authz_post "/:pack_id/update-review", :DefinitionsRead do
+    handle_update_review(conn, conn.params["pack_id"])
+  end
+
+  authz_post "/:pack_id/update-apply", :DefinitionsCreate do
+    handle_update_apply(conn, conn.params["pack_id"])
   end
 
   match _ do
@@ -352,6 +370,419 @@ defmodule Letflow.Routers.SolutionPacks do
       conn,
       "variable schema #{inspect(key)} is not a well-formed JSON Schema document"
     )
+  end
+
+  # ── POST /solution-packs/:pack_id/update-review (design §3) ──────────────
+
+  @update_review_schema [
+    %FieldConstraint{
+      name: "target_version",
+      required: true,
+      type: :string,
+      reject_empty_string: true,
+      max_length: 255
+    },
+    %FieldConstraint{name: "theirs_artefacts", required: true, type: :array, min_items: 0},
+    %FieldConstraint{name: "incoming_artefacts", required: true, type: :array, min_items: 0}
+  ]
+
+  defp handle_update_review(conn, pack_id) do
+    case object_body(conn) do
+      :error ->
+        Response.bad_request(conn, "invalid body")
+
+      {:ok, body} ->
+        case Validation.validate(@update_review_schema, body) do
+          {:errors, field_errors} ->
+            Response.send_problem(conn, Validation.problem(field_errors))
+
+          {:ok, attrs} ->
+            run_update_review(conn, pack_id, attrs)
+        end
+    end
+  end
+
+  defp run_update_review(conn, pack_id, attrs) do
+    target_version = Map.fetch!(attrs, "target_version")
+    theirs_raw = Map.fetch!(attrs, "theirs_artefacts")
+    incoming_raw = Map.fetch!(attrs, "incoming_artefacts")
+
+    case validate_artefact_entries("theirs_artefacts", theirs_raw) ++
+           validate_artefact_entries("incoming_artefacts", incoming_raw) do
+      [_ | _] = field_errors ->
+        Response.send_problem(conn, Validation.problem(field_errors))
+
+      [] ->
+        if theirs_raw == [] and incoming_raw == [] do
+          Response.unprocessable(
+            conn,
+            "theirs_artefacts and incoming_artefacts must not both be empty"
+          )
+        else
+          compute_and_render_review(
+            conn,
+            pack_id,
+            target_version,
+            Enum.map(theirs_raw, &to_artefact_input/1),
+            Enum.map(incoming_raw, &to_artefact_input/1)
+          )
+        end
+    end
+  end
+
+  defp compute_and_render_review(conn, pack_id, target_version, theirs, incoming) do
+    with {:ok, tenant_id} <- TenantProvisioning.tenant_id_for_schema_name(prefix(conn)),
+         {:ok, plan} <-
+           Definitions.compute_pack_update_plan(
+             tenant_id,
+             pack_id,
+             target_version,
+             theirs,
+             incoming
+           ) do
+      Response.ok(conn, update_review_response_map(pack_id, target_version, plan))
+    else
+      # Route-level pre-check above makes this unreachable in practice --
+      # defensive only, same "type-table-vs-error-map drift" idiom
+      # render_install/2's last-resort clause documents (design §3.4).
+      {:error, :empty_artefact_set} ->
+        Response.internal_error(conn)
+
+      # tenant_id_for_schema_name/1 failure -- a route-construction bug
+      # (unscoped request reaching this handler), same treatment
+      # render_install/2 gives :missing_prefix/:invalid_schema_name.
+      {:error, _reason} ->
+        Response.internal_error(conn)
+    end
+  end
+
+  # ── POST /solution-packs/:pack_id/update-apply (design §4) ───────────────
+
+  @update_apply_schema [
+    %FieldConstraint{
+      name: "target_version",
+      required: true,
+      type: :string,
+      reject_empty_string: true,
+      max_length: 255
+    },
+    %FieldConstraint{name: "theirs_artefacts", required: true, type: :array, min_items: 0},
+    %FieldConstraint{name: "incoming_artefacts", required: true, type: :array, min_items: 0},
+    %FieldConstraint{name: "resolutions", required: true, type: :array, min_items: 0}
+  ]
+
+  @resolution_values ["keep_local", "take_incoming", "merged"]
+
+  defp handle_update_apply(conn, pack_id) do
+    case object_body(conn) do
+      :error ->
+        Response.bad_request(conn, "invalid body")
+
+      {:ok, body} ->
+        case Validation.validate(@update_apply_schema, body) do
+          {:errors, field_errors} ->
+            Response.send_problem(conn, Validation.problem(field_errors))
+
+          {:ok, attrs} ->
+            run_update_apply(conn, pack_id, attrs)
+        end
+    end
+  end
+
+  defp run_update_apply(conn, pack_id, attrs) do
+    target_version = Map.fetch!(attrs, "target_version")
+    theirs_raw = Map.fetch!(attrs, "theirs_artefacts")
+    incoming_raw = Map.fetch!(attrs, "incoming_artefacts")
+    resolutions_raw = Map.fetch!(attrs, "resolutions")
+
+    field_errors =
+      validate_artefact_entries("theirs_artefacts", theirs_raw) ++
+        validate_artefact_entries("incoming_artefacts", incoming_raw) ++
+        validate_resolution_entries(resolutions_raw)
+
+    case field_errors do
+      [_ | _] ->
+        Response.send_problem(conn, Validation.problem(field_errors))
+
+      [] ->
+        if theirs_raw == [] and incoming_raw == [] do
+          Response.unprocessable(
+            conn,
+            "theirs_artefacts and incoming_artefacts must not both be empty"
+          )
+        else
+          apply_with_actor(
+            conn,
+            pack_id,
+            target_version,
+            Enum.map(theirs_raw, &to_artefact_input/1),
+            Enum.map(incoming_raw, &to_artefact_input/1),
+            Enum.map(resolutions_raw, &to_resolution_input/1)
+          )
+        end
+    end
+  end
+
+  # `opts[:actor_id]` (`pack_update_resolutions.resolved_by`) is read from
+  # this same actor_id/1 helper this router already has, not a
+  # caller-supplied body field (design §6, "resolved_by attribution"). A nil
+  # actor is a route-construction bug (auth pipeline not run), same
+  # treatment install_document/1 already gives that case.
+  defp apply_with_actor(conn, pack_id, target_version, theirs, incoming, resolutions) do
+    case actor_id(conn) do
+      actor_id when is_binary(actor_id) ->
+        opts = Keyword.put(conn.assigns.scoped_opts, :actor_id, actor_id)
+
+        render_update_apply(
+          conn,
+          SolutionPack.apply_pack_update(
+            pack_id,
+            target_version,
+            theirs,
+            incoming,
+            resolutions,
+            opts
+          )
+        )
+
+      nil ->
+        Response.internal_error(conn)
+    end
+  end
+
+  defp render_update_apply(conn, {:ok, result}), do: Response.ok(conn, apply_result_map(result))
+
+  defp render_update_apply(conn, {:error, {:unresolved_conflict, artefact_type, artefact_id}}) do
+    # Caller-supplied values, safe to echo -- same reasoning render_install/2's
+    # `key` echo convention uses for caller-submitted identifiers (design §4.5).
+    Response.conflict(
+      conn,
+      "unresolved conflict on artefact_type=#{artefact_type} artefact_id=#{artefact_id}"
+    )
+  end
+
+  # Route-level pre-check above makes this unreachable in practice --
+  # defensive only, same as compute_and_render_review/5's own clause.
+  defp render_update_apply(conn, {:error, :empty_artefact_set}),
+    do: Response.internal_error(conn)
+
+  # Clause of last resort -- covers common_error() members and
+  # {:invalid_resolution, ...} (not reachable through this router's own
+  # validation, design §4.5), same "type-table-vs-error-map drift" idiom
+  # render_install/2's trailing catch-all documents.
+  defp render_update_apply(conn, {:error, _unexpected}), do: Response.internal_error(conn)
+
+  # ── update-review/update-apply shared helpers ─────────────────────────────
+
+  defp prefix(conn), do: Keyword.get(conn.assigns.scoped_opts, :prefix)
+
+  defp to_artefact_input(%{"artefact_type" => type, "artefact_id" => id, "content" => content}) do
+    %{artefact_type: type, artefact_id: id, content: content}
+  end
+
+  defp to_resolution_input(
+         %{"artefact_type" => type, "artefact_id" => id, "resolution" => resolution} = entry
+       ) do
+    %{
+      artefact_type: type,
+      artefact_id: id,
+      resolution: resolution_atom(resolution),
+      resolved_content: Map.get(entry, "resolved_content")
+    }
+  end
+
+  defp resolution_atom("keep_local"), do: :keep_local
+  defp resolution_atom("take_incoming"), do: :take_incoming
+  defp resolution_atom("merged"), do: :merged
+
+  # No per-element-shape rule exists in the FieldConstraint vocabulary
+  # (design §3.2), so each artefact entry is validated here, after
+  # Validation.validate/2 has already established the enclosing field is a
+  # (possibly empty) array -- same "post-check after array-type validation"
+  # idiom export_with_ids/3's own Enum.all?/2 check already works around.
+  defp validate_artefact_entries(field_name, list) do
+    list
+    |> Enum.with_index()
+    |> Enum.reduce([], fn {entry, index}, acc ->
+      case validate_artefact_entry(entry) do
+        :ok -> acc
+        {:error, reason} -> [artefact_field_error(field_name, index, reason) | acc]
+      end
+    end)
+    |> Enum.reverse()
+  end
+
+  defp validate_artefact_entry(entry) when is_map(entry) do
+    with {:ok, _type} <- fetch_bounded_string(entry, "artefact_type"),
+         {:ok, _id} <- fetch_bounded_string(entry, "artefact_id"),
+         {:ok, _content} <- fetch_string(entry, "content") do
+      :ok
+    end
+  end
+
+  defp validate_artefact_entry(_not_an_object), do: {:error, :not_an_object}
+
+  defp artefact_field_error(field_name, index, reason) do
+    %FieldError{
+      field: "#{field_name}[#{index}]",
+      constraint: "artefact_shape",
+      message: artefact_shape_message(reason)
+    }
+  end
+
+  defp artefact_shape_message(:not_an_object), do: "artefact entry must be a JSON object"
+  defp artefact_shape_message({:blank, key}), do: "#{key} must not be empty"
+  defp artefact_shape_message({:too_long, key}), do: "#{key} must not exceed 255 bytes"
+
+  defp artefact_shape_message({:missing_or_wrong_type, key}),
+    do: "#{key} is required and must be a string"
+
+  # Each `resolutions[]` entry validated here (design §4.2): `artefact_type`/
+  # `artefact_id` share the same non-empty/≤255-byte rule as artefact
+  # entries above; `resolution` must be exactly one of the three
+  # `PackUpdateResolution.resolution()` wire strings; `resolved_content` is
+  # required (non-empty string) iff `resolution == "merged"`, and must be
+  # absent or `null` for the other two.
+  defp validate_resolution_entries(list) do
+    list
+    |> Enum.with_index()
+    |> Enum.reduce([], fn {entry, index}, acc ->
+      case validate_resolution_entry(entry) do
+        :ok -> acc
+        {:error, reason} -> [resolution_field_error(index, reason) | acc]
+      end
+    end)
+    |> Enum.reverse()
+  end
+
+  defp validate_resolution_entry(entry) when is_map(entry) do
+    with {:ok, _type} <- fetch_bounded_string(entry, "artefact_type"),
+         {:ok, _id} <- fetch_bounded_string(entry, "artefact_id"),
+         {:ok, resolution} <- fetch_resolution_value(entry),
+         :ok <- check_resolved_content(entry, resolution) do
+      :ok
+    end
+  end
+
+  defp validate_resolution_entry(_not_an_object), do: {:error, :not_an_object}
+
+  defp fetch_resolution_value(entry) do
+    case Map.get(entry, "resolution") do
+      value when value in @resolution_values -> {:ok, value}
+      _other -> {:error, :invalid_resolution_value}
+    end
+  end
+
+  defp check_resolved_content(entry, "merged") do
+    case Map.get(entry, "resolved_content") do
+      value when is_binary(value) and value != "" -> :ok
+      _other -> {:error, :missing_resolved_content}
+    end
+  end
+
+  defp check_resolved_content(entry, _keep_local_or_take_incoming) do
+    case Map.get(entry, "resolved_content") do
+      nil -> :ok
+      _present -> {:error, :unexpected_resolved_content}
+    end
+  end
+
+  defp resolution_field_error(index, reason) do
+    %FieldError{
+      field: "resolutions[#{index}]",
+      constraint: "resolution_shape",
+      message: resolution_shape_message(reason)
+    }
+  end
+
+  defp resolution_shape_message(:not_an_object), do: "resolution entry must be a JSON object"
+  defp resolution_shape_message({:blank, key}), do: "#{key} must not be empty"
+  defp resolution_shape_message({:too_long, key}), do: "#{key} must not exceed 255 bytes"
+
+  defp resolution_shape_message({:missing_or_wrong_type, key}),
+    do: "#{key} is required and must be a string"
+
+  defp resolution_shape_message(:invalid_resolution_value),
+    do: "resolution must be one of \"keep_local\", \"take_incoming\", \"merged\""
+
+  defp resolution_shape_message(:missing_resolved_content),
+    do:
+      "resolved_content is required and must be a non-empty string when resolution is \"merged\""
+
+  defp resolution_shape_message(:unexpected_resolved_content),
+    do: "resolved_content must be absent or null unless resolution is \"merged\""
+
+  defp fetch_bounded_string(map, key) do
+    case Map.get(map, key) do
+      value when is_binary(value) and byte_size(value) == 0 -> {:error, {:blank, key}}
+      value when is_binary(value) and byte_size(value) > 255 -> {:error, {:too_long, key}}
+      value when is_binary(value) -> {:ok, value}
+      _other -> {:error, {:missing_or_wrong_type, key}}
+    end
+  end
+
+  defp fetch_string(map, key) do
+    case Map.get(map, key) do
+      value when is_binary(value) -> {:ok, value}
+      _other -> {:error, {:missing_or_wrong_type, key}}
+    end
+  end
+
+  # ── Response allowlists (INV-2) — update-review/update-apply ─────────────
+
+  # Wire-name mapping (design §3.3): classify_artefact/3's internal atoms vs
+  # EO-001's own four-way vocabulary. Deliberate translation, not accidental
+  # drift.
+  defp classification_wire(:unchanged), do: "unchanged"
+  defp classification_wire(:clean_update), do: "safe_to_update"
+  defp classification_wire(:local_only), do: "local_only"
+  defp classification_wire(:conflict), do: "both_sides_conflict"
+
+  defp action_wire(:advanced_to_incoming), do: "advanced_to_incoming"
+  defp action_wire(:advanced_to_merged), do: "advanced_to_merged"
+  defp action_wire(:left_unchanged), do: "left_unchanged"
+
+  # Hand-built, explicit key list (INV-2) -- never a bare pass-through of
+  # compute_pack_update_plan/5's own plan() map. base/theirs/incoming content
+  # strings are deliberately NOT echoed (design §6, "Response never echoes
+  # raw content").
+  defp update_review_response_map(pack_id, target_version, plan) do
+    %{
+      "pack_id" => pack_id,
+      "target_version" => target_version,
+      "entries" => Enum.map(plan.entries, &plan_entry_map/1),
+      "has_unresolved_conflicts" => plan.has_unresolved_conflicts
+    }
+  end
+
+  defp plan_entry_map(entry) do
+    %{
+      "artefact_type" => entry.artefact_type,
+      "artefact_id" => entry.artefact_id,
+      "classification" => classification_wire(entry.classification),
+      "resolved" => entry.resolved
+    }
+  end
+
+  # Hand-built, explicit key list (INV-2) -- never a bare pass-through of
+  # apply_pack_update/6's own apply_result() map. resolved_content/incoming
+  # content strings are deliberately NOT echoed (design §6).
+  defp apply_result_map(result) do
+    %{
+      "pack_id" => result.pack_id,
+      "target_version" => result.target_version,
+      "applied_entries" => Enum.map(result.applied_entries, &applied_entry_wire_map/1),
+      "resolutions_recorded" => result.resolutions_recorded
+    }
+  end
+
+  defp applied_entry_wire_map(entry) do
+    %{
+      "artefact_type" => entry.artefact_type,
+      "artefact_id" => entry.artefact_id,
+      "classification" => classification_wire(entry.classification),
+      "action" => action_wire(entry.action)
+    }
   end
 
   # ── Shared helpers ────────────────────────────────────────────────────────

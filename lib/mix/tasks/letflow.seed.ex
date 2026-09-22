@@ -16,11 +16,11 @@ defmodule Mix.Tasks.Letflow.Seed do
   required, same as `mix ecto.setup`/`mix run` (see `Letflow.Repo.init/2`).
 
   Creates the `bpm-default` tenant row (`idp_realm_id` and `slug` both
-  `"bpm-default"`), provisions its Postgres schema, and replays that
-  schema's migrations -- the same
-  `Letflow.Identity.create_tenant/1` -> `Letflow.TenantProvisioning.provision_tenant_schema/1`
-  -> `Letflow.TenantProvisioning.replay_migrations/1` chain `POST /tenants`
-  uses.
+  `"bpm-default"`), provisions its Postgres schema, replays that schema's
+  migrations, and (ISS-0778) seeds its six platform-role group bindings --
+  the same
+  `Letflow.Identity.create_tenant/1` -> `Letflow.TenantOnboarding.provision_and_migrate/1`
+  chain `POST /tenants` uses.
 
   Idempotent -- safe to re-run against a database that already has the
   `bpm-default` tenant; re-running converges rather than erroring.
@@ -29,7 +29,7 @@ defmodule Mix.Tasks.Letflow.Seed do
   use Mix.Task
 
   alias Letflow.Identity
-  alias Letflow.TenantProvisioning
+  alias Letflow.TenantOnboarding
 
   @attrs %{
     "slug" => "bpm-default",
@@ -69,25 +69,34 @@ defmodule Mix.Tasks.Letflow.Seed do
   end
 
   defp provision_and_replay(tenant_id, verb) do
-    case TenantProvisioning.provision_tenant_schema(tenant_id) do
-      {:ok, _registration} ->
-        case TenantProvisioning.replay_migrations(tenant_id) do
-          {:ok, applied_versions} ->
-            Mix.shell().info(
-              "mix letflow.seed: OK -- bpm-default tenant #{verb} (id #{tenant_id}), " <>
-                "#{length(applied_versions)} migration(s) applied."
-            )
+    case TenantOnboarding.provision_and_migrate(tenant_id) do
+      {:ok, registration} ->
+        Mix.shell().info(
+          "mix letflow.seed: OK -- bpm-default tenant #{verb} (id #{tenant_id}), " <>
+            "schema #{registration.schema_name} migrated and role-seeded."
+        )
 
-          {:error, reason} ->
-            Mix.raise(
-              "mix letflow.seed: FAILED -- replay_migrations/1 for tenant #{tenant_id}: " <>
-                inspect(reason)
-            )
-        end
+      {:error, {:provisioning_failed, reason}} ->
+        Mix.raise(
+          "mix letflow.seed: FAILED -- provision_tenant_schema/1 for tenant #{tenant_id}: " <>
+            inspect(reason)
+        )
+
+      {:error, {:migration_failed, reason}} ->
+        Mix.raise(
+          "mix letflow.seed: FAILED -- replay_migrations/1 for tenant #{tenant_id}: " <>
+            inspect(reason)
+        )
+
+      {:error, {:role_seeding_failed, reason}} ->
+        Mix.raise(
+          "mix letflow.seed: FAILED -- seed_default_platform_role_groups/1 for tenant " <>
+            "#{tenant_id}: " <> inspect(reason)
+        )
 
       {:error, reason} ->
         Mix.raise(
-          "mix letflow.seed: FAILED -- provision_tenant_schema/1 for tenant #{tenant_id}: " <>
+          "mix letflow.seed: FAILED -- provision_and_migrate/1 for tenant #{tenant_id}: " <>
             inspect(reason)
         )
     end

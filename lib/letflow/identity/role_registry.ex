@@ -107,6 +107,95 @@ defmodule Letflow.Identity.RoleRegistry do
   defp platform_role_names, do: Enum.map(Authorization.roles(), &Atom.to_string/1)
 
   @doc """
+  ISS-0778: seeds the group/role bindings for all six platform roles
+  (`Letflow.Api.Authorization.roles/0`, via this module's own
+  `platform_role_names/0` — no new literal list invented). For each name, in
+  `Authorization.roles/0`'s own declared order: get-or-creates a `Group`
+  named after that literal (`get_or_create_group_by_name/2`), then binds it
+  via the existing, unmodified `upsert_role/4` as `kind: :platform_role`.
+
+  Idempotent under re-invocation against a tenant whose `groups`/`tenant_role`
+  rows may already exist (design §2.4) — a second call converges on the same
+  six bindings rather than erroring or duplicating rows. This is what makes
+  it safe to call both from the normal onboarding-creation path and from
+  `Letflow.TenantOnboarding.recover_provisioning/1`.
+
+  Returns the first `{:error, _}` immediately on either step's failure — no
+  partial-success return value. The individual writes already made by this
+  call are **not** rolled back (matches this module's and
+  `Letflow.TenantOnboarding`'s existing no-compensating-rollback precedent);
+  a retried call converges via idempotency instead.
+  """
+  @spec seed_default_platform_role_groups(opts :: [prefix: String.t()]) ::
+          {:ok, [TenantRole.t()]} | {:error, term()}
+  def seed_default_platform_role_groups(opts) do
+    Enum.reduce_while(platform_role_names(), {:ok, []}, fn name, {:ok, acc} ->
+      with {:ok, %Group{id: group_id}} <- get_or_create_group_by_name(name, opts),
+           {:ok, %TenantRole{} = role} <- upsert_role(name, :platform_role, group_id, opts) do
+        {:cont, {:ok, [role | acc]}}
+      else
+        {:error, reason} -> {:halt, {:error, reason}}
+      end
+    end)
+    |> case do
+      {:ok, roles} -> {:ok, Enum.reverse(roles)}
+      {:error, _reason} = error -> error
+    end
+  end
+
+  @doc """
+  Get-or-create a `Group` by `name` (ISS-0778 design §3.2). Checks first
+  (`Repo.get_by/3`), unlike this module's `insert_or_fetch_*` helpers, which
+  always attempt the insert first — this helper's common case
+  post-first-provisioning-call is "already exists" (idempotent
+  re-invocation), so it checks first. Falls back to an `on_conflict: :nothing`
+  insert, and re-fetches by `name` if a concurrent caller won the race —
+  mirroring `Letflow.TenantProvisioning`'s `insert_or_fetch_registration/2`
+  "insert raced, fetch the winner's row" shape.
+  """
+  @spec get_or_create_group_by_name(name :: String.t(), opts :: [prefix: String.t()]) ::
+          {:ok, Group.t()} | {:error, Ecto.Changeset.t()}
+  def get_or_create_group_by_name(name, opts) do
+    prefix = Keyword.fetch!(opts, :prefix)
+
+    case Repo.get_by(Group, [name: name], prefix: prefix) do
+      %Group{} = group ->
+        {:ok, group}
+
+      nil ->
+        insert_group(name, prefix)
+    end
+  end
+
+  defp insert_group(name, prefix) do
+    changeset = Group.create_changeset(%Group{}, %{"name" => name})
+
+    case Repo.insert(changeset,
+           on_conflict: :nothing,
+           conflict_target: :name,
+           returning: true,
+           prefix: prefix
+         ) do
+      {:ok, %Group{id: id} = group} ->
+        if Repo.get(Group, id, prefix: prefix) do
+          {:ok, group}
+        else
+          fetch_group_by_name(name, prefix)
+        end
+
+      {:error, %Ecto.Changeset{} = changeset} ->
+        {:error, changeset}
+    end
+  end
+
+  defp fetch_group_by_name(name, prefix) do
+    case Repo.get_by(Group, [name: name], prefix: prefix) do
+      %Group{} = group -> {:ok, group}
+      nil -> {:error, :group_not_found}
+    end
+  end
+
+  @doc """
   Transition-time role resolution: looks up `name`'s bound `group_id`. Meant to be
   called from inside a caller's own `Repo.transaction/1` (a future S3 `applyTransition`)
   — takes no repo/connection argument itself, since Ecto's transaction context is

@@ -91,6 +91,7 @@ defmodule Letflow.TenantOnboarding do
   requirement is obligated to ship.
   """
 
+  alias Letflow.Identity.RoleRegistry
   alias Letflow.Identity.Tenant
   alias Letflow.Repo
   alias Letflow.TenantProvisioning
@@ -126,12 +127,31 @@ defmodule Letflow.TenantOnboarding do
        branch a still-broken migration (a genuine, persistent failure, not the
        transient one being recovered from) surfaces through; this function
        does not swallow a real migration failure into a false success.
-    3. On success: flip the tenant's status to `:active` if it is not already,
+    3. `Letflow.Identity.RoleRegistry.seed_default_platform_role_groups/1`
+       (ISS-0778) — seeds the group/role bindings for all six platform roles
+       (`Letflow.Api.Authorization.roles/0`), scoped to this tenant's own
+       schema (`prefix: registration.schema_name`). Idempotent (design §2.4)
+       — a second call converges on the same six bindings. Unlike
+       `activate_tenant/1`'s own status-flip below, a failure here **is**
+       treated as a hard provisioning failure: it propagates as `{:error,
+       {:role_seeding_failed, reason}}` and the tenant is **not** activated,
+       staying at `:migrating`. Letting a tenant reach `:active` with its
+       role bindings unseeded would reproduce ISS-0778 under a different
+       trigger (a role-seed DB error instead of "nobody ever wrote the
+       seeding code") — `:active` is meant to mean "this tenant is actually
+       ready," which now includes "an IdP-claimed platform-role token can
+       actually reach a grant." A tenant left at `:migrating` by a seeding
+       failure recovers the same way any other partial-provisioning failure
+       already does — `recover_provisioning/1` re-invokes this same `with`
+       chain, and the seeding step's idempotency converges correctly on
+       retry even if a prior attempt partially wrote some of the six
+       bindings before failing.
+    4. On success: flip the tenant's status to `:active` if it is not already,
        via `Letflow.Identity.Tenant.status_changeset/2` + `Repo.update/2`,
        scoped to `%{status: :active}` only. Idempotent: if the tenant is
        already `:active` (e.g. a second invocation), the update is a no-op
        write of the same value.
-    4. Re-fetch the `Registration` row and return `{:ok, registration}` — the
+    5. Re-fetch the `Registration` row and return `{:ok, registration}` — the
        up-to-date row, with `migrations_applied_at` reflecting step 2's own
        write.
 
@@ -144,9 +164,11 @@ defmodule Letflow.TenantOnboarding do
           | {:error, :tenant_not_found}
           | {:error, {:provisioning_failed, term()}}
           | {:error, {:migration_failed, Exception.t()}}
+          | {:error, {:role_seeding_failed, term()}}
   def provision_and_migrate(tenant_id) do
-    with {:ok, _registration} <- provision(tenant_id),
-         {:ok, _applied_versions} <- TenantProvisioning.replay_migrations(tenant_id) do
+    with {:ok, registration} <- provision(tenant_id),
+         {:ok, _applied_versions} <- TenantProvisioning.replay_migrations(tenant_id),
+         {:ok, _tenant_roles} <- seed_platform_roles(registration.schema_name) do
       activate_tenant(tenant_id)
       {:ok, Repo.get_by(Registration, tenant_id: tenant_id)}
     end
@@ -157,6 +179,13 @@ defmodule Letflow.TenantOnboarding do
       {:ok, _registration} = ok -> ok
       {:error, :tenant_not_found} = error -> error
       {:error, reason} -> {:error, {:provisioning_failed, reason}}
+    end
+  end
+
+  defp seed_platform_roles(schema_name) do
+    case RoleRegistry.seed_default_platform_role_groups(prefix: schema_name) do
+      {:ok, _tenant_roles} = ok -> ok
+      {:error, reason} -> {:error, {:role_seeding_failed, reason}}
     end
   end
 

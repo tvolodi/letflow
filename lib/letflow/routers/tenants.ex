@@ -18,7 +18,7 @@ defmodule Letflow.Routers.Tenants do
 
   | Handler     | Method/path                          | Domain fn(s) called                                                                                    | Auth            | Response                    |
   |-------------|---------------------------------------|---------------------------------------------------------------------------------------------------------|-----------------|-----------------------------|
-  | create      | `POST /tenants`                       | `Identity.create_tenant/1` -> `TenantProvisioning.provision_tenant_schema/1` -> `TenantProvisioning.replay_migrations/2` | `:TenantsManage` | 201, `tenant_map/1`         |
+  | create      | `POST /tenants`                       | `Identity.create_tenant/1` -> `TenantOnboarding.provision_and_migrate/1` | `:TenantsManage` | 201, `tenant_map/1`         |
   | list        | `GET /tenants`                        | `Identity.list_tenants/1`                                                                                | `:TenantsManage` | 200, paginated `tenant_map`  |
   | get         | `GET /tenants/:slug`                  | `Identity.get_tenant_by_slug/1`                                                                          | `:TenantsManage` | 200, `tenant_map/1`         |
   | patch       | `PATCH /tenants/:slug`                | `Identity.get_tenant_by_slug/1` then `Identity.patch_tenant/2`                                           | `:TenantsManage` | 200, `tenant_map/1`         |
@@ -76,13 +76,16 @@ defmodule Letflow.Routers.Tenants do
   ## Relationship to REQ-076 (AC7)
 
   `POST /tenants` (this requirement) and REQ-076's onboarding endpoint are
-  two HTTP entry points into the same underlying provisioning primitives
-  (`Letflow.TenantProvisioning.provision_tenant_schema/1` +
-  `Letflow.TenantProvisioning.replay_migrations/2`) — not two divergent
-  tenant-creation code paths. This one is the PLATFORM_ADMIN-driven
-  direct-creation path; REQ-076's is the self-service signup path. Both
-  must call the same `Letflow.TenantProvisioning` functions; neither
-  reimplements schema creation or migration replay itself.
+  two HTTP entry points into the same underlying provisioning sequence —
+  `Letflow.TenantOnboarding.provision_and_migrate/1` (ISS-0778) — not two
+  divergent tenant-creation code paths. This one is the PLATFORM_ADMIN-driven
+  direct-creation path; REQ-076's is the self-service signup path. Both call
+  the same `TenantOnboarding.provision_and_migrate/1`, which itself sequences
+  `Letflow.TenantProvisioning.provision_tenant_schema/1`,
+  `Letflow.TenantProvisioning.replay_migrations/2`, and (ISS-0778)
+  `Letflow.Identity.RoleRegistry.seed_default_platform_role_groups/1`;
+  neither route reimplements schema creation, migration replay, or role
+  seeding itself.
 
   ## Deactivation-status statement (AC5)
 
@@ -158,6 +161,7 @@ defmodule Letflow.Routers.Tenants do
   alias Letflow.EventStore.PlatformEvents
   alias Letflow.Identity
   alias Letflow.Identity.Tenant
+  alias Letflow.TenantOnboarding
   alias Letflow.TenantProvisioning
 
   @tenants_cursor_prefix "T:"
@@ -252,8 +256,7 @@ defmodule Letflow.Routers.Tenants do
   # delete here: it orphans a real Postgres schema (ISS-0230/GH#468). The
   # recovery path is REQ-076's, not this function's.
   defp provision_and_respond(conn, tenant) do
-    with {:ok, _registration} <- TenantProvisioning.provision_tenant_schema(tenant.id),
-         {:ok, _applied_versions} <- TenantProvisioning.replay_migrations(tenant.id) do
+    with {:ok, _registration} <- TenantOnboarding.provision_and_migrate(tenant.id) do
       Response.created(conn, tenant_map(tenant))
     else
       _provisioning_or_replay_error -> Response.internal_error(conn)

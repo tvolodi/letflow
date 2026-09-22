@@ -339,8 +339,12 @@ already established for its own mandatory caller-supplied identity input.
      "untouched by incoming" half gets the identical no-write treatment for the
      same reason).
    - `classification == :clean_update` → advance: `SolutionPackArtefactBase.upsert_changeset/2`
-     with `base_content: canonicalize_artefact_content(entry.incoming), base_version:
-     target_version, captured_at: now`, `Repo.insert(on_conflict: {:replace,
+     with `base_content: entry.incoming, base_version:
+     target_version, captured_at: now` — `entry.incoming` is already canonical-JSON
+     text (§6, "Canonicalization is the caller's responsibility, at every entry
+     point"); stored as-is, **not** re-canonicalized (`canonicalize_artefact_content/1`
+     expects a decoded map, not text — calling it here would be a type mismatch this
+     layer never has to resolve), `Repo.insert(on_conflict: {:replace,
      [:base_content, :base_version, :captured_at, :updated_at]}, conflict_target:
      [:tenant_id, :pack_id, :artefact_type, :artefact_id])` — the wholesale-replace
      path `SolutionPackArtefactBase.upsert_changeset/2`'s own moduledoc names this
@@ -358,10 +362,10 @@ already established for its own mandatory caller-supplied identity input.
        prior call, or in step 3 of this call) is the durable attribution record;
        nothing else changes.
      - `:take_incoming` → advance the base exactly like `:clean_update` above
-       (`base_content` ← canonicalized `entry.incoming`, `base_version` ←
+       (`base_content` ← `entry.incoming`, stored as-is, `base_version` ←
        `target_version`). `action: :advanced_to_incoming`.
      - `:merged` → advance the base to the **resolution's own `resolved_content`**,
-       not `entry.incoming` (`base_content` ← canonicalized `resolved_content`,
+       not `entry.incoming` (`base_content` ← `resolved_content`, stored as-is,
        `base_version` ← `target_version`). `action: :advanced_to_merged`.
 7. Commit; return `{:ok, %{pack_id: ..., target_version: ..., applied_entries: ...,
    resolutions_recorded: <count of step-3 inserts that actually inserted a fresh row>}}`.

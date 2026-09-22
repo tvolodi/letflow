@@ -57,6 +57,10 @@ const NAV_ITEMS: NavItem[] = [
   // serves that role (design §7). PLATFORM_ADMIN-only, same OQ-3 judgment
   // call as the launcher/review pages' own role gate (design §4.1).
   { to: '/solution-packs', label: 'Solution Packs', roles: ['PLATFORM_ADMIN'] },
+  // REQ-377: operator-facing history-retirement screen for REQ-376's
+  // whole-partition retirement mechanism. Same :TenantsManage
+  // (PLATFORM_ADMIN-only) risk class as admin/platform-migrations.
+  { to: '/admin/event-retention', label: 'Event Retention', roles: ['PLATFORM_ADMIN'] },
 ]
 
 export function AppShell() {

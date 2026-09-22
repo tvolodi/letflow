@@ -21,6 +21,17 @@ defmodule Letflow.Supervisor.InfrastructureTest do
   19 -- placed directly after `Letflow.Metrics.Registry`, unaffected
   ordering everywhere else.
 
+  REQ-377 (`lib/letflow/design/req377-history-retirement-screen.md` §1) added
+  a further child, `Letflow.EventStore.RetirementTaskSupervisor` (the
+  dedicated `Task.Supervisor` `RetentionOperations.retire_oldest_eligible_month/1`
+  dispatches its platform-wide tenant-schema fanout under -- see that
+  module's own moduledoc), bringing this list from 19 to 20 -- placed
+  directly before `Letflow.Obs.Alerts.TaskSupervisor`, matching
+  `lib/letflow/supervisor/infrastructure.ex`'s own updated moduledoc
+  ("bringing the total to 21" top-level+nested children). ISS-0429's own
+  "last child" invariant (test below) is unaffected: `Obs.Alerts.TaskSupervisor`
+  remains the last child either way.
+
   Read-only against the already-running, application-supervised singletons
   -- no restart, no config mutation, safe to run `async: true`.
 
@@ -56,7 +67,7 @@ defmodule Letflow.Supervisor.InfrastructureTest do
     refute Letflow.Scheduler.Poller in ids
   end
 
-  test "Letflow.Supervisor.Infrastructure owns the 19 expected children, in order" do
+  test "Letflow.Supervisor.Infrastructure owns the 20 expected children, in order" do
     children = Supervisor.which_children(Letflow.Supervisor.Infrastructure)
 
     ids =
@@ -95,10 +106,15 @@ defmodule Letflow.Supervisor.InfrastructureTest do
              Letflow.Engine.Wasm.CapabilityGateTaskSupervisor,
              Letflow.Engine.Wasm.ModuleVersionRegistry,
              Letflow.Engine.Wasm.ModuleVersionRegistryTaskSupervisor,
+             # REQ-377: dedicated Task.Supervisor for the platform-wide
+             # event-history-retirement fanout (RetentionOperations.retire_oldest_eligible_month/1).
+             # No ordering dependency -- placed directly before
+             # Obs.Alerts.TaskSupervisor per infrastructure.ex's own child list.
+             Letflow.EventStore.RetirementTaskSupervisor,
              Letflow.Obs.Alerts.TaskSupervisor
            ]
 
-    assert length(ids) == 19
+    assert length(ids) == 20
   end
 
   test "ISS-0224: SandboxPool.TaskSupervisor precedes SandboxPool" do

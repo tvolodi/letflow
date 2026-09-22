@@ -1,0 +1,146 @@
+report_id: report-20260922-WF02-REQ377-20260922
+run_id: WF02-REQ377-20260922
+workflow_id: WF-02
+step: "04"
+agent: TEST-RUNNER
+date: 2026-09-22
+branch: feature/WF02-REQ377-20260922
+commit: 2179ec34bb4c52fab773a06b538ca5a5febbdc3e
+
+verdict: PASS
+
+context: >
+  Independent re-verification of TEST-DESIGNER's own full-suite claim (4665
+  tests, 6 properties, 3 failures -> after fixing 1 real regression it
+  introduced itself, a clean 2-remaining-failure state reproduced across 3
+  runs). Per core-directives.md's "Failure Attribution Is Structural, Never
+  By Count-Matching", every failure below was individually inspected against
+  `git diff --name-only main...HEAD` and its actual stack trace/log output --
+  not accepted on the strength of the prior report or a matching count. This
+  run's own count (3 failures) differs from TEST-DESIGNER's reported
+  steady-state (2 failures); the extra one is independently attributed below
+  to this branch's own Step 00 status-flip commit, not treated as
+  corroboration of TEST-DESIGNER's count.
+
+pre_run_environment_check: >
+  `tasklist //FI "IMAGENAME eq erl.exe"` showed no live BEAM processes
+  before starting -- no zombie/concurrent session to coordinate around.
+  `docker compose ps` showed letflow-postgres-1 and letflow-keycloak-1
+  already up and healthy (shared, non-worktree checkout per this run's
+  instructions); did not run `docker compose up -d` again since the stack
+  was already running and this checkout is documented as sharing containers
+  -- avoided any risk of clobbering another session's compose state.
+
+command_run: "scripts/test_parallel.sh"
+n_derivation: "N=16, source: nproc (script's own log line: \"test_parallel: N=16 (source: nproc)\"). No TEST_PARALLEL_N override was set."
+
+execution_notes: >
+  The Bash tool auto-backgrounded the run after its 600s default timeout
+  (not a choice I made -- run_in_background was never passed). Per
+  core-directives.md's "No Background Wait For A Cross-Turn Notification"
+  (ISS-0213/ISS-0223), did not rely on the eventual cross-turn completion
+  notification to resume: polled the background task's own output file
+  synchronously via repeated blocking Bash calls with short in-call sleep
+  loops until the combined summary line appeared, reading real output each
+  time rather than guessing. Total wall time ~13 minutes (19:07-19:21
+  partition timestamps in the per-partition logs). Exit code 1 (real ExUnit
+  failures) preserved /tmp/letflow_test_parallel.3baJSj (TEST_PARALLEL_KEEP_LOGS
+  unset, but the script keeps logs automatically on any non-clean run).
+
+result:
+  combined: "combined: 4665 tests, 6 properties, 3 failures (4668/4671 passed)"
+  per_partition: >
+    partition 1: 437 tests, 0 properties, 1 failures, exit 2; partitions
+    2-10, 12-16: 0 failures each, exit 0; partition 11: 313 tests, 0
+    properties, 2 failures, exit 2. (Property counts: 2 on partition 4, 2 on
+    partition 9, 1 on partition 12, 1 on partition 16, 0 elsewhere -- 6
+    total, matches combined line.)
+
+failures_attributable_to_this_branch:
+  summary: >
+    0 of 3 -- does NOT block, but 1 is a direct, expected side effect of
+    this branch's own Step 00 commit (not a defect to fix in this step).
+  groups:
+    - group: "Letflow.Docs.RequirementStatusInvariantsTest, A9 (1 failure)"
+      route: "1 (branch-caused), but expected/transient, not a regression to route back."
+      evidence: >
+        "A9: every indexed volume's declared entries: count equals what is
+        actually on disk" fails with declared=24, actual=25 for
+        docs/status/requirement_status.v21.yaml. `git diff --name-only
+        main...HEAD` includes docs/status/requirement_status.v21.yaml;
+        `git diff main...HEAD -- docs/status/requirement_status.v21.yaml`
+        shows exactly one entry appended (REQ-377 `started`, commit
+        3b945648, already on this branch since Step 00 -- "WF-02 run
+        WF02-REQ377-20260922 started... Step 00 git setup + status flip").
+        `grep -c "^  - req:" docs/status/requirement_status.v21.yaml` = 25
+        on disk; docs/status/requirement_status.index.yaml line 4296 still
+        declares `entries: 24` for this volume. The index's own history
+        notes (e.g. line ~4439) document this exact sequence as the
+        standard/expected pattern: Step 00 appends a `started` event
+        without updating the index count, caught by A9, corrected later
+        (HOW-TO-APPEND step 6, normally DOC-UPDATER's job at WF-02 Step 6).
+        Mechanism fully demonstrated, not assumed.
+      route_back_to: >
+        None for this step. Per the task brief, this is expected to
+        self-resolve when DOC-UPDATER's Step 6 appends this run's own
+        completion status event and bumps the index count in the same
+        commit -- not a defect for ELIXIR-DEV/FRONTEND-DEV to fix now.
+        Flagging here only so RELEASE-VALIDATOR doesn't mistake it for a
+        new regression on its own independent re-run.
+
+failures_structurally_cleared_as_pre_existing:
+  summary: "2 of 3 -- does NOT block, filed-and-forwarded, already tracked."
+  groups:
+    - group: "Letflow.IdentityTest, REQ-019 AC1 resolve_tenant_by_realm/1 and resolve_realm_by_tenant/1 (2 failures)"
+      route: "1 (module/dependency not in `git diff --name-only main...HEAD`) -- both failing files (test/letflow/identity_test.exs, test/support/bpm_default_realm_displacement.ex) are absent from this branch's diff."
+      evidence: >
+        Both failures raise `** (Ecto.NoResultsError) expected at least one
+        result but got none in query: from t0 in Letflow.Identity.Tenant,
+        where: t0.idp_realm_id == ^"bpm-default"` inside
+        `test/support/bpm_default_realm_displacement.ex:118
+        with_lock/1`. This exact pair of tests/mechanism is already tracked
+        as docs/issues/ISS-0766.yaml (opened 2026-09-20, discovered by
+        ELIXIR-DEV during an unrelated run, severity MINOR,
+        tags: [backend, test-flake, shared-db-isolation]) -- a documented
+        intermittent race where another test's on_exit restoration of the
+        bpm-default tenant row does not complete before these two tests
+        run. ISS-0766's own process_note records it reproducing under
+        scripts/test_parallel.sh in at least one other session, consistent
+        with this run. Neither file this branch touches
+        (lib/letflow/routers/event_retention.ex,
+        lib/letflow/event_store/retention_operations.ex,
+        lib/letflow/supervisor/infrastructure.ex, etc. -- see
+        `git diff --name-only main...HEAD` for the full list) is anywhere
+        near identity/realm resolution.
+      route_back_to: "None -- already an open, tracked issue (ISS-0766). Not this step's job to file or fix."
+
+compile_and_format: "Not independently re-run this step -- test_parallel.sh's own pre-compile step (`MIX_ENV=test mix compile`, run once before any partition launched, per its own logged step) completed without error before any partition started; no separate `mix format --check-formatted` was run since this step's scope is test execution, not formatting."
+
+logs_preserved: "/tmp/letflow_test_parallel.3baJSj (all 16 partition-N.log files, full raw ExUnit output, kept automatically by test_parallel.sh because exit_code=1)."
+
+task:
+  description: "Operator-facing history-retirement screen: single-step retirement, protected-record count, and pre-retirement/post-retirement instance replay (frontend), wired to REQ-376's real backend, plus the backend admin route(s) this run named as in-scope."
+  acceptance_criteria:
+    - "the retirement screen lets a PLATFORM_ADMIN retire the oldest eligible month and displays the resulting retirement record, matching EO-001's operator-console evidence requirement"
+    - "the retention summary shows a protected-record count capturable before and after a retirement, matching EO-002's evidence requirement"
+    - "the screen is reachable only to a PLATFORM_ADMIN-equivalent role from the operator console navigation"
+    - "web/tests/e2e/pipelines/platform-partition-retention-drop.pipeline.e2e.spec.ts is authored against this real screen and passes"
+
+result_summary:
+  status: PASS
+  summary: >
+    4665 tests, 6 properties, 3 failures, 4668/4671 passed. All 3 failures
+    independently, structurally cleared: 2 are a pre-existing, already-
+    tracked flake (ISS-0766, files not touched by this branch) and 1 is an
+    expected, self-resolving side effect of this branch's own Step 00
+    status-flip commit (docs status-index count drift, corrected at Step 6).
+    Zero failures attributable to REQ-377's actual implementation
+    (Letflow.Routers.EventRetention, Letflow.EventStore.RetentionOperations,
+    RetirementTaskSupervisor, or the frontend screen/wiring) or to the
+    infrastructure_test.exs fix TEST-DESIGNER made.
+  artifacts_out:
+    - /tmp/letflow_test_parallel.3baJSj (16 partition logs, raw ExUnit output)
+    - test/reports/report-20260922-WF02-REQ377-20260922.yaml (this report)
+  next_action: "Route to RELEASE-VALIDATOR"
+  issues:
+    - "None newly discovered this step. ISS-0766 (Letflow.IdentityTest flake) remains open, already filed by ELIXIR-DEV -- not re-filed here."

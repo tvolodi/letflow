@@ -184,6 +184,14 @@ defmodule Letflow.Plugs.ApiPipeline do
   # Letflow.Routers.PlatformMigrations' own moduledoc for the route table.
   forward("/platform-migrations", to: Letflow.Routers.PlatformMigrations)
 
+  # REQ-377 -- the operator-facing platform-wide event-history retirement
+  # screen's backend HTTP surface. Mounted here for the same structural
+  # reason /platform-migrations is: a platform-wide, cross-tenant fanout
+  # with no single tenant :prefix to scope by, gated purely by role via
+  # :TenantsManage. See Letflow.Routers.EventRetention's own moduledoc for
+  # the route table.
+  forward("/event-retention", to: Letflow.Routers.EventRetention)
+
   match _ do
     Letflow.Api.Response.not_found(conn)
   end

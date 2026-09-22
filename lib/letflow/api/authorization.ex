@@ -598,6 +598,17 @@ defmodule Letflow.Api.Authorization do
   def endpoint_policy_key("POST", "/platform-migrations/rollouts/:id/resume"),
     do: :TenantsManage
 
+  # REQ-377 -- platform-wide event-history retirement screen
+  # (Letflow.Routers.EventRetention), a top-level sibling router mounted at
+  # /event-retention (not under Letflow.Routers.Identity's own /identity
+  # mount). Reuses the existing :TenantsManage permission -- same risk
+  # class and same PLATFORM_ADMIN-only intent as Letflow.Routers.Tenants,
+  # Letflow.Routers.Onboarding, and Letflow.Routers.PlatformMigrations
+  # (design doc §2.3). No new permission added.
+  def endpoint_policy_key("GET", "/event-retention/summary"), do: :TenantsManage
+  def endpoint_policy_key("POST", "/event-retention/retirements"), do: :TenantsManage
+  def endpoint_policy_key("GET", "/event-retention/retirements/:id"), do: :TenantsManage
+
   # REQ-076 -- role registry routes (Letflow.Routers.Identity, mounted
   # relative to /identity, matching the "/tokens" convention above). A new,
   # distinct :RolesManage permission -- see role_allows?/2's PROCESS_DESIGNER

@@ -11,7 +11,7 @@
 
 import React from 'react'
 
-export type StatusBadgeDomain = 'definition' | 'instance' | 'task' | 'timer' | 'dlq' | 'rollout' | 'rollout-outcome'
+export type StatusBadgeDomain = 'definition' | 'instance' | 'task' | 'timer' | 'dlq' | 'rollout' | 'rollout-outcome' | 'event-retirement' | 'event-retirement-outcome'
 
 export interface StatusBadgeProps {
   status: string
@@ -74,6 +74,25 @@ const ROLLOUT_OUTCOME_STATUSES: Record<string, ResolvedStatus> = {
   pending: { background: 'var(--color-info-light)', text: 'var(--color-info-dark)', dot: 'var(--color-info)', pulse: true },
 }
 
+// REQ-377 -- `event-retirement` domain: EventHistoryRetirement.status
+// ('running'|'completed'|'failed'), disjoint from the per-tenant outcome
+// enum below. Mirrors the rollout/rollout-outcome split above for the same
+// reason (two distinct enums must not share one lookup table).
+const EVENT_RETIREMENT_STATUSES: Record<string, ResolvedStatus> = {
+  running: { background: 'var(--color-info-light)', text: 'var(--color-info-dark)', dot: 'var(--color-info)', pulse: true },
+  completed: { background: 'var(--color-success-light)', text: 'var(--color-success-dark)', dot: 'var(--color-success)' },
+  failed: { background: 'var(--color-error-light)', text: 'var(--color-error-dark)', dot: 'var(--color-error)' },
+}
+
+// `event-retirement-outcome` domain -- RetirementStatusPanel's per-tenant
+// outcome table status column (~w(pending succeeded skipped failed)).
+const EVENT_RETIREMENT_OUTCOME_STATUSES: Record<string, ResolvedStatus> = {
+  succeeded: { background: 'var(--color-success-light)', text: 'var(--color-success-dark)', dot: 'var(--color-success)' },
+  skipped: { background: 'var(--color-neutral-200)', text: 'var(--color-neutral-600)', dot: 'var(--color-neutral-400)' },
+  failed: { background: 'var(--color-error-light)', text: 'var(--color-error-dark)', dot: 'var(--color-error)' },
+  pending: { background: 'var(--color-info-light)', text: 'var(--color-info-dark)', dot: 'var(--color-info)', pulse: true },
+}
+
 // timer/dlq: no status table exists anywhere in design-system.md (spec gap,
 // tracked as OQ-3 in lib/letflow/design/req272-design-system-primitives-group1.md).
 // Every status in these domains resolves through FALLBACK below.
@@ -83,6 +102,8 @@ const STATUS_TABLES: Partial<Record<StatusBadgeDomain, Record<string, ResolvedSt
   task: TASK_STATUSES,
   rollout: ROLLOUT_STATUSES,
   'rollout-outcome': ROLLOUT_OUTCOME_STATUSES,
+  'event-retirement': EVENT_RETIREMENT_STATUSES,
+  'event-retirement-outcome': EVENT_RETIREMENT_OUTCOME_STATUSES,
 }
 
 function resolveStatus(domain: StatusBadgeDomain, status: string): ResolvedStatus {

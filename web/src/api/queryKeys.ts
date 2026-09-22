@@ -165,4 +165,11 @@ export const queryKeys = {
     review: (packId: string, targetVersion: string) =>
       [...queryKeys.solutionPackUpdate.all, 'review', packId, targetVersion] as const,
   },
+
+  /** REQ-377 §3.2 — operator-facing history-retirement screen. */
+  eventRetention: {
+    all: ['event-retention'] as const,
+    summary: () => [...queryKeys.eventRetention.all, 'summary'] as const,
+    retirement: (id: string) => [...queryKeys.eventRetention.all, 'retirement', id] as const,
+  },
 }

@@ -36,6 +36,7 @@ import BilimBagaEntityRoute from '@/pages/admin/bilimbaga/BilimBagaEntityRoute'
 import PlatformMigrationConsolePage from '@/pages/admin/platform-migrations/PlatformMigrationConsolePage'
 import SolutionPackUpdateLauncherPage from '@/pages/solution-packs/SolutionPackUpdateLauncherPage'
 import SolutionPackUpdateReviewPage from '@/pages/solution-packs/SolutionPackUpdateReviewPage'
+import EventRetentionPage from '@/pages/admin/event-retention/EventRetentionPage'
 
 export const router = createBrowserRouter([
   {
@@ -89,6 +90,7 @@ export const router = createBrowserRouter([
       // `definitions/:id/promotions/:reviewId`.
       { path: 'solution-packs', element: <SolutionPackUpdateLauncherPage /> },
       { path: 'solution-packs/:packId/update-review', element: <SolutionPackUpdateReviewPage /> },
+      { path: 'admin/event-retention', element: <EventRetentionPage /> },
       { path: 'dlq', element: <DlqPage /> },
       { path: 'webhooks', element: <WebhooksPage /> },
       { path: 'exam', element: <ExamListPage /> },

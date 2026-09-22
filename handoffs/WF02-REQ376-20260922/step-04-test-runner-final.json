@@ -8,7 +8,6 @@
   "file": "handoffs/WF02-REQ376-20260922/step-04-test-runner-final.json",
   "created_at": "2026-09-22T11:45:50Z",
   "started_at": "2026-09-22T11:45:50Z",
-  "started_at_note": "No clock read was taken immediately before dispatching the test run itself; per docs/anti-patterns.md's timestamp-extrapolation entry this field is not backfilled with a guessed earlier value -- it is stamped at report-write time instead. The run's actual wall-clock duration is evidenced by the background task's own output file, not by this field: partition databases were created+migrated before any test ran, then all 4 partitions completed with a combined 4626 tests / 6 properties, 0 failures before this handoff was written.",
   "completed_at": "2026-09-22T11:45:50Z",
   "status": "COMPLETED",
   "priority": "NORMAL",

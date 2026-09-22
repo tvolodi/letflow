@@ -65,7 +65,7 @@ function graphFor(fixtureId: string, label: string) {
   return {
     nodes: [
       { id: 'n1', node_type: 'START', label: 'Start', attributes: null },
-      { id: 'n2', node_type: 'HUMAN_TASK', label: `${label} ${fixtureId}`, attributes: null },
+      { id: 'n2', node_type: 'HUMAN_TASK', label: `${label} ${fixtureId}`, attributes: { role: 'reviewer' } },
       { id: 'n3', node_type: 'END', label: 'End', attributes: null },
     ],
     edges: [

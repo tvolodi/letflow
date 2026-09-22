@@ -293,7 +293,17 @@ describe('REQ-375 — RolloutOutcomeTable / Row field mapping (AC1/EO-003)', () 
       rolloutResult({
         outcomes: [
           outcome({ tenant_id: 'good-co', status: 'succeeded', completed_at: '2026-09-21T10:05:00Z', reason: null }),
-          outcome({ tenant_id: 'poisoned-co', status: 'failed', completed_at: null, reason: 'column type conflict: existing bigint, requested text' }),
+          // REQ-374's record_outcome_result/2 sets completed_at the instant
+          // status leaves 'pending' -- for BOTH succeeded and failed
+          // (migration_rollout_test.exs asserts a non-nil completed_at for
+          // every outcome, poisoned one included). A failed outcome's
+          // completed_at is therefore a real timestamp here, not null --
+          // matching UAT-RUNNER's live-run finding (WF02-REQ375-e2e-live-
+          // 20260922): the component correctly rendered the real timestamp
+          // for a failed row; it was this test's own fixture/assertion that
+          // baked in the wrong assumption (null implies "only while
+          // pending", silently conflated with "only on success").
+          outcome({ tenant_id: 'poisoned-co', status: 'failed', completed_at: '2026-09-21T10:06:00Z', reason: 'column type conflict: existing bigint, requested text' }),
         ],
       }),
     )
@@ -307,9 +317,12 @@ describe('REQ-375 — RolloutOutcomeTable / Row field mapping (AC1/EO-003)', () 
     expect(screen.getByTestId('rollout-outcome-reason-good-co')).toHaveTextContent('')
     expect(screen.getByTestId('rollout-outcome-completed-good-co')).not.toHaveTextContent('—')
 
-    // Non-succeeded row: reason IS rendered, completed-at is the em-dash placeholder.
+    // Non-succeeded (failed) row: reason IS rendered, AND completed-at
+    // renders the real timestamp -- NOT the em-dash placeholder. The
+    // em-dash is reserved for a genuinely null completed_at, which only
+    // occurs while status === 'pending' (never for 'failed').
     expect(screen.getByTestId('rollout-outcome-reason-poisoned-co')).toHaveTextContent('column type conflict: existing bigint, requested text')
-    expect(screen.getByTestId('rollout-outcome-completed-poisoned-co')).toHaveTextContent('—')
+    expect(screen.getByTestId('rollout-outcome-completed-poisoned-co')).not.toHaveTextContent('—')
 
     // Status badges use the rollout-outcome domain (TC-REQ375-03/04 in
     // StatusBadge.test.tsx cover the domain's own token resolution).
@@ -317,5 +330,27 @@ describe('REQ-375 — RolloutOutcomeTable / Row field mapping (AC1/EO-003)', () 
       .toHaveAttribute('data-status', 'succeeded')
     expect(screen.getByTestId('rollout-outcome-status-poisoned-co').querySelector('[data-testid="status-badge"]'))
       .toHaveAttribute('data-status', 'failed')
+  })
+
+  it('TC-REQ375-19: a genuinely pending outcome (completed_at actually null) is the only case rendering the em-dash placeholder', async () => {
+    // Regression test for UAT-RUNNER's live-run finding
+    // (WF02-REQ375-e2e-live-20260922, "new_finding_2"): REQ-374's
+    // record_outcome_result/2 sets completed_at the instant status leaves
+    // 'pending', for BOTH 'succeeded' and 'failed' -- so the em-dash must be
+    // reserved for the genuinely-still-pending case only, never inferred
+    // from status !== 'succeeded'.
+    mockUseAuth.mockReturnValue({ session: PLATFORM_ADMIN_SESSION } as unknown as ReturnType<typeof useAuth>)
+    render(<PlatformMigrationConsolePage />)
+
+    startAndResolve(
+      rolloutResult({
+        outcomes: [
+          outcome({ tenant_id: 'still-pending', status: 'pending', completed_at: null, reason: null }),
+        ],
+      }),
+    )
+
+    await waitFor(() => expect(screen.getByTestId('rollout-outcome-table')).toBeInTheDocument())
+    expect(screen.getByTestId('rollout-outcome-completed-still-pending')).toHaveTextContent('—')
   })
 })

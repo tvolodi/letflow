@@ -1,0 +1,61 @@
+{
+  "handoff_id": "c1d2e3f4-0780-4000-8000-000000000005",
+  "run_id": "WF03-ISS0780-20260922",
+  "workflow_id": "WF-03",
+  "step": "03c",
+  "from_agent": "REVIEWER",
+  "to_agent": "ORCH",
+  "file": "handoffs/WF03-ISS0780-20260922/step-03c-reviewer.json",
+  "created_at": "2026-09-22T00:00:00Z",
+  "started_at": "2026-09-22T00:00:00Z",
+  "completed_at": "2026-09-22T00:00:00Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S6",
+    "issue_id": "ISS-0780",
+    "commit": "3d1bb946",
+    "branch": "feature/WF03-ISS0780-fix-20260922",
+    "related_handoff_ids": [
+      "handoffs/WF03-ISS0780-20260922/step-02-code-designer.json",
+      "handoffs/WF03-ISS0780-20260922/step-02b-design-gate.json",
+      "handoffs/WF03-ISS0780-20260922/step-03a-elixir-dev.json"
+    ],
+    "artifacts_in": [
+      "lib/letflow/plugs/cors.ex",
+      "test/letflow/plugs/cors_test.exs"
+    ]
+  },
+  "task": {
+    "description": "WF-03 Step 3 idiom/scope review gate for ISS-0780's CORS allow-headers fix, ahead of TEST-DESIGNER.",
+    "acceptance_criteria": [
+      "implementation matches approved design's decided value/comment/assertion",
+      "no scope creep beyond the two owned files (handoff JSON additions expected)",
+      "no unneeded process/supervision-shaped complexity introduced",
+      "no docs/migration/decisions/ conflict",
+      "mix compile and mix test test/letflow/plugs/cors_test.exs run directly, real output quoted"
+    ]
+  },
+  "result": {
+    "verdict": "PASS",
+    "reviewed_by": "REVIEWER",
+    "reviewed_at": "2026-09-22T00:00:00Z",
+    "checks_passed": [
+      "Design conformance: @allow_headers at lib/letflow/plugs/cors.ex:77 reads exactly \"authorization, content-type, idempotency-key, if-match, x-bpm-user-id\" -- byte-for-byte the value CODE-DESIGNER decided and CODE-DESIGN-VALIDATOR independently re-derived from web/src. test/letflow/plugs/cors_test.exs:187-188's pinned assertion was updated to the identical string, so it no longer characterizes the pre-fix bug.",
+      "Moduledoc/comment: the replacement comment block (cors.ex:66-77) covers the same five headers with the same source-call-site attributions the design specified (client.ts for authorization/content-type/x-bpm-user-id, entities.ts/REQ-336 for if-match, onboarding.ts for idempotency-key) plus the 'audited against web/src in full (ISS-0780) -- keep it that way' anti-drift marker the design called for. Wording is restructured into a bulleted per-header list rather than the design's flowing-prose draft, but the design's own handoff explicitly frames its comment text as CODE-DESIGNER's intent for ELIXIR-DEV to render, not a literal transcript requirement -- the bulleted form is equivalent in content and arguably more legible; not a deviation worth blocking on.",
+      "Scope: `git show --stat 3d1bb946` shows exactly lib/letflow/plugs/cors.ex (+16/-5) and test/letflow/plugs/cors_test.exs (+1/-1) as code changes, plus five new handoffs/WF03-ISS0780-20260922/*.json files -- expected pipeline artefacts, not scope creep. No file outside the two owned modules was touched.",
+      "Idiom / process shape: this is a plain module-attribute string constant consumed by put_resp_header/3 in an existing Plug -- no new process, GenServer/gen_statem, supervision tree, or state machine is introduced or implied. The plug's existing control flow (handle_allowed/2, preflight_request?/1, origin_allowed?/1) is untouched, confirmed by direct read of lib/letflow/plugs/cors.ex. Nothing here collapses or bypasses Letflow.InstanceSupervisor or any other supervision boundary -- not applicable to this change's shape.",
+      "Type-safety gap check (informational, non-blocking per REVIEWER's own charter): @allow_headers is a single opaque string by design (per CODE-DESIGNER's stated rationale -- no other code treats it as a list), matching this file's pre-existing convention for @allow_methods and @max_age. No new class of invalid state is introduced; not filing a type-safety issue for this change.",
+      "Scope-creep check (question 4): no abstraction, behaviour, macro, or generic plumbing was added ahead of need -- the fix is proportionate to a single constant + comment + one test assertion, matching the ISS-0529 precedent CODE-DESIGN-VALIDATOR already verified by commit inspection.",
+      "Decision-record conflict: scanned docs/migration/decisions/ (0001-0020+); none address CORS header allowlists, and the change does not touch the web-framework (0001), frontend-ownership (0011), or frontend-architecture (0020) decisions in any way that contradicts them. No conflict.",
+      "mix compile: run directly, clean -- no warnings or errors, no output.",
+      "mix test test/letflow/plugs/cors_test.exs: run directly -- `Finished in 0.1 seconds (0.00s async, 0.1s sync)` / `Result: 18 passed`, matching ELIXIR-DEV's claimed count exactly."
+    ],
+    "checks_failed": [],
+    "issues": [],
+    "summary": "PASS. Implementation matches the CODE-DESIGN-VALIDATOR-approved design exactly on the load-bearing points (the @allow_headers value and the test assertion, both byte-for-byte); the moduledoc comment is a content-equivalent bulleted rendering of the design's prose draft, which the design handoff itself treats as intent rather than a literal transcript. Diff is scoped to the two owned files plus expected handoff JSON. No process/supervision complexity was introduced -- this is a static Plug config constant, and the file's existing control flow is untouched. No docs/migration/decisions/ conflict. mix compile is clean and mix test test/letflow/plugs/cors_test.exs independently reproduces 18 passed. No issues filed.",
+    "next_action": "Route to TEST-DESIGNER (Step 4) -- SECURITY-REVIEWER's parallel gate on the same commit is independent and not waited on here."
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

@@ -1,0 +1,72 @@
+{
+  "handoff_id": "wf03-iss0780-step03b",
+  "run_id": "WF03-ISS0780-20260922",
+  "workflow_id": "WF-03",
+  "step": "03b",
+  "from_agent": "ORCH",
+  "to_agent": "SECURITY-REVIEWER",
+  "file": "handoffs/WF03-ISS0780-20260922/step-03b-security-reviewer.json",
+  "created_at": "2026-09-22T00:00:00Z",
+  "started_at": "2026-09-22T00:00:00Z",
+  "completed_at": "2026-09-22T00:00:00Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S6",
+    "issue_ids": ["ISS-0780"],
+    "related_handoff_ids": [
+      "handoffs/WF03-ISS0780-20260922/step-01-issue-fixer-diagnose.json",
+      "handoffs/WF03-ISS0780-20260922/step-02-code-designer.json",
+      "handoffs/WF03-ISS0780-20260922/step-02b-design-gate.json",
+      "handoffs/WF03-ISS0780-20260922/step-03a-elixir-dev.json"
+    ],
+    "artifacts_in": [
+      "lib/letflow/plugs/cors.ex",
+      "test/letflow/plugs/cors_test.exs"
+    ]
+  },
+  "task": {
+    "description": "WF-03 Step 3 security gate (hard gate) for ISS-0780's fix: lib/letflow/plugs/cors.ex's @allow_headers grew from 'authorization, content-type' to 'authorization, content-type, idempotency-key, if-match, x-bpm-user-id', plus a matching test-assertion update in test/letflow/plugs/cors_test.exs. Commit 3d1bb946 on feature/WF03-ISS0780-fix-20260922.",
+    "acceptance_criteria": [
+      "Confirm CORS allow-headers widening does not weaken origin allow-listing, no-credentials, or any authn/authz mechanism",
+      "Confirm x-bpm-user-id is not trusted server-side as an authorization source",
+      "INV-4/7/8 assessed against the actual diff"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "scope_test": "IN SCOPE -- this is a change resolving response-shaping/request-header handling on the CORS trust boundary of the API's cross-origin surface. Not a migration, not a lookup-by-ID handler, not a tenant-data-table change, but it does touch secret-adjacent header plumbing (authorization header remains allowed) and is explicitly called out by ELIXIR-DEV's handoff as tenant-data-adjacent -- reviewed in full rather than taking the out-of-scope shortcut.",
+    "diff_used": "git diff main...HEAD -- lib/letflow/plugs/cors.ex test/letflow/plugs/cors_test.exs (also reviewed full current lib/letflow/plugs/cors.ex source, not just the diff hunk).",
+    "invariant_assessment": {
+      "INV-1": "NOT-APPLICABLE -- no tenant-scoped table, schema, or migration touched. This plug operates entirely pre-tenant-resolution, on request headers only.",
+      "INV-2": "NOT-APPLICABLE -- no response body field selection involved; this is a request-header allowlist for CORS preflight, not response serialisation.",
+      "INV-3": "NOT-APPLICABLE -- S5 not started.",
+      "INV-4": "APPLIES -- SATISFIED. Ran both grep commands from INV-4's How-to-verify. No secret material introduced, nothing hardcoded, no plaintext threaded through a log/struct/return value. The diff adds header *names* to a CORS allowlist string constant -- it does not touch how the authorization header's value (the bearer token) is read, logged, or stored anywhere; Cors.call/2 never inspects or forwards the authorization header's contents, only reflects header *names* back in access-control-allow-headers.",
+      "INV-5": "NOT-APPLICABLE -- S4 lookup-by-ID endpoints not started.",
+      "INV-6": "APPLIES -- SATISFIED by this handoff itself.",
+      "INV-7": "NOT-APPLICABLE -- no SQL anywhere in this diff.",
+      "INV-8": "APPLIES -- SATISFIED. Cors.call/2's existing control flow (handle/2, handle_allowed/2, preflight_request?/1) is unchanged by this diff -- pure pattern matches on conn/header-list values that cannot raise on malformed input (get_req_header always returns a list, List.first/1 on an empty list returns nil which handle/2's own nil clause already handles). No new external I/O, no new `{:ok, x} = ...` pattern introduced.",
+      "INV-9": "NOT-APPLICABLE -- no outbound HTTP request involved."
+    },
+    "specific_scrutiny_findings": {
+      "1_attack_surface_widened": "CONFIRMED correct reasoning, verified by reading the full file (not assumed). access-control-allow-headers is a browser-enforced preflight response header: it only governs which request headers a browser is willing to *attach* when calling an already origin-allowed target (per this plug's own moduledoc, 'No credentials, ever' + origin allow-listing are the actual trust boundary, not this header). It has zero effect on non-browser callers (curl, server-to-server), zero effect on requests from a non-allow-listed origin (handle/2's origin_allowed?/1 branch still returns conn unchanged with no CORS headers at all for those, so the preflight allow-headers value is never even emitted to them), and zero effect on what the SERVER accepts once a request arrives -- Plug/Phoenix have always accepted arbitrary request headers server-side regardless of this plug; this header only ever constrained what a *browser* would attach. Widening it from 2 to 5 header names lets an already-origin-allowed browser page attach 3 more headers it was already able to send from curl/fetch outside CORS. No new capability is granted to an attacker who does not already control an allow-listed origin.",
+      "2_origin_allowlist_and_credentials_untouched": "CONFIRMED via diff, not assumption. git diff shows only two hunks: the @allow_headers constant (comment + value) in cors.ex, and the corresponding pinned assertion in cors_test.exs. @default_origins, origin_allowed?/1, allowed_origins/0, put_cors_headers/2 (which sets access-control-allow-origin and vary but never access-control-allow-credentials), and every authentication/authorization module (auth_pipeline.ex, authorization.ex) are untouched -- confirmed both by the diff itself and by grep showing auth_pipeline.ex still derives identity solely from the 'authorization' (bearer JWT) and 'x-tenant-slug' headers, unchanged.",
+      "3_x_bpm_user_id_not_trusted_serverside": "CONFIRMED -- no blind trust exists in the current Elixir backend. grep for the header (case-insensitive, 'bpm.user.id'/'bpm_user_id'/'x-bpm-user-id') across lib/ returns only lib/letflow/plugs/cors.ex (the allowlist entry and its comment) and two design docs (req075-tenant-administration-routes.md, req077-promotion-pipeline-routes.md) -- both of which document this exact concern as an issue that was found and ALREADY MITIGATED: req077's own D-6 finding states the header is 'unauthenticated' and its historical trust was specific to R-Co's predecessor main.zig codebase, explicitly superseded in Letflow by 'roles come from the verified bearer token via Letflow.Plugs.AuthPipeline / Authorization.roles_from_strings/1; actor_id from conn.assigns.auth_context.user_id'. grep -n get_req_header across lib/letflow/plugs/ confirms AuthPipeline reads only 'x-tenant-slug' and 'authorization' -- no Elixir route or plug in this codebase reads x-bpm-user-id as an identity/authorization input today. CORS-allowing the header only lets the browser attach it (client.ts sends it, presumably for logging/telemetry/tracing purposes); since nothing server-side consumes it as an authority, allowing it through CORS introduces no privilege-escalation path. No issue to flag against this diff. (Should a future change start deriving actor identity from this header server-side, that would be a new INV-2/INV-8-relevant defect at that time, not created by this diff.)",
+      "4_other_inv_concerns": "None found. mix compile clean (per ELIXIR-DEV's report); independently re-ran mix test test/letflow/plugs/cors_test.exs -- Result: 18 passed, including the updated pinned assertion for the new 5-header value."
+    },
+    "verification_commands_run": [
+      "git diff main...HEAD -- lib/letflow/plugs/cors.ex test/letflow/plugs/cors_test.exs",
+      "Read full lib/letflow/plugs/cors.ex source",
+      "grep -rniE x-bpm-user-id / bpm.user.id / bpm_user_id across lib/",
+      "grep -n get_req_header lib/letflow/plugs/*.ex",
+      "grep -rn System.get_env config/ lib/ (INV-4)",
+      "grep -rniE secret-pattern heuristic (INV-4)",
+      "mix test test/letflow/plugs/cors_test.exs -- Result: 18 passed"
+    ],
+    "summary": "PASS. Scope test: in scope, reviewed in full. Applicable invariants (INV-4, INV-6, INV-8) satisfied; INV-1/2/3/5/7/9 correctly NOT-APPLICABLE for this diff shape. The moduledoc's own claim that access-control-allow-headers is not itself a trust boundary is correct and independently re-derived from source, not taken on faith. Origin allow-listing, no-credentials invariant, and all authn/authz code are untouched by this diff (confirmed via diff, not assumption). x-bpm-user-id is not trusted server-side as an authorization source anywhere in the current Elixir codebase -- confirmed by grep, and the concern is already documented as mitigated (vs. R-Co's predecessor) in existing design docs. No issues found.",
+    "issues": [],
+    "next_action": "Route to REVIEWER (WF-03 next step)"
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

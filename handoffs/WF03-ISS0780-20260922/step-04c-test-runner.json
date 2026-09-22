@@ -1,57 +1,50 @@
 {
-  "step": "WF-03 Step 4c",
-  "agent": "TEST-RUNNER",
-  "issue": "ISS-0780",
-  "branch": "feature/WF03-ISS0780-fix-20260922",
-  "commit": "873f956f6ed51e09a40a62989a7a4064b2d6df28",
-  "timestamp_utc": "2026-09-22T03:21:36Z",
-  "scope": "Final full-suite verification pass before merge/close, following SECURITY-REVIEWER, REVIEWER, and TEST-DESIGN-VALIDATOR sign-off on the CORS allow-headers fix and its regression test.",
-  "environment": {
-    "docker_compose": "letflow-postgres-1 and letflow-keycloak-1 already running (docker compose up -d, no-op)",
-    "runner": "scripts/test_parallel.sh",
-    "partitions": 16,
-    "partition_source": "N=16 (source: nproc)"
+  "handoff_id": "d0e1f2a3-0780-4000-8000-00000000000c",
+  "run_id": "WF03-ISS0780-20260922",
+  "workflow_id": "WF-03",
+  "step": "04c",
+  "from_agent": "ORCH",
+  "to_agent": "TEST-RUNNER",
+  "file": "handoffs/WF03-ISS0780-20260922/step-04c-test-runner.json",
+  "created_at": "2026-09-22T03:21:36Z",
+  "started_at": "2026-09-22T03:21:36Z",
+  "completed_at": "2026-09-22T03:21:36Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S6",
+    "issue_id": "ISS-0780",
+    "queue_ref": "Q-779",
+    "github_ref": "GH-1704",
+    "branch": "feature/WF03-ISS0780-fix-20260922",
+    "commit": "873f956f6ed51e09a40a62989a7a4064b2d6df28",
+    "related_handoff_ids": [
+      "handoffs/WF03-ISS0780-20260922/step-04b-test-design-validator.json"
+    ],
+    "artifacts_in": [
+      "lib/letflow/plugs/cors.ex",
+      "test/letflow/plugs/cors_test.exs"
+    ]
   },
-  "command": "scripts/test_parallel.sh",
+  "task": {
+    "description": "WF-03 Step 4c: final full-suite verification pass before merge/close, following SECURITY-REVIEWER, REVIEWER, and TEST-DESIGN-VALIDATOR sign-off on the CORS allow-headers fix and its regression test. Run scripts/test_parallel.sh to completion and quote real combined results.",
+    "acceptance_criteria": [
+      "scripts/test_parallel.sh run to completion, real output quoted",
+      "combined pass/fail totals reported per partition and in aggregate",
+      "the new CORS regression test confirmed included and passing within the combined run",
+      "any failure attributable to this branch routes back for rework before this step can PASS"
+    ]
+  },
   "result": {
     "status": "PASS",
-    "combined_tests": 4613,
-    "combined_properties": 6,
-    "combined_failures": 0,
-    "combined_passed_of_total": "4619/4619",
-    "exit_code": 0
+    "summary": "scripts/test_parallel.sh (N=16, source: nproc) ran to completion. Combined: 4613 tests, 6 properties, 0 failures (4619/4619 passed) across all 16 partitions, every partition exit 0. Per-partition: partition 1: 407 tests/0 properties/0 failures/exit 0; partition 2: 202/2/0/0; partition 3: 311/0/0/0; partition 4: 194/2/0/0; partition 5: 401/0/0/0; partition 6: 234/0/0/0; partition 7: 468/0/0/0; partition 8: 279/0/0/0; partition 9: 307/0/0/0; partition 10: 262/0/0/0; partition 11: 304/1/0/0; partition 12: 327/1/0/0; partition 13: 196/0/0/0; partition 14: 313/0/0/0; partition 15: 228/0/0/0; partition 16: 180/0/0/0. The new CORS regression test (test/letflow/plugs/cors_test.exs) was included in this run (no isolated single-file run performed separately, per instructions -- this was the full-suite final verification, not a one-file spot check); all partitions report 0 failures, so it passed within the combined run. No pre-existing/unrelated failures encountered; no stale letflow_test1..N database remediation was needed this run. Docker compose: letflow-postgres-1 and letflow-keycloak-1 already running (docker compose up -d, no-op).",
+    "artifacts_out": [
+      "lib/letflow/plugs/cors.ex",
+      "test/letflow/plugs/cors_test.exs"
+    ],
+    "issues": [],
+    "next_action": "Route to Step 5 (close ISS-0780)"
   },
-  "per_partition_summary": [
-    "partition 1: 407 tests, 0 properties, 0 failures, exit 0",
-    "partition 2: 202 tests, 2 properties, 0 failures, exit 0",
-    "partition 3: 311 tests, 0 properties, 0 failures, exit 0",
-    "partition 4: 194 tests, 2 properties, 0 failures, exit 0",
-    "partition 5: 401 tests, 0 properties, 0 failures, exit 0",
-    "partition 6: 234 tests, 0 properties, 0 failures, exit 0",
-    "partition 7: 468 tests, 0 properties, 0 failures, exit 0",
-    "partition 8: 279 tests, 0 properties, 0 failures, exit 0",
-    "partition 9: 307 tests, 0 properties, 0 failures, exit 0",
-    "partition 10: 262 tests, 0 properties, 0 failures, exit 0",
-    "partition 11: 304 tests, 1 property, 0 failures, exit 0",
-    "partition 12: 327 tests, 1 property, 0 failures, exit 0",
-    "partition 13: 196 tests, 0 properties, 0 failures, exit 0",
-    "partition 14: 313 tests, 0 properties, 0 failures, exit 0",
-    "partition 15: 228 tests, 0 properties, 0 failures, exit 0",
-    "partition 16: 180 tests, 0 properties, 0 failures, exit 0"
-  ],
-  "cors_regression_test": {
-    "file": "test/letflow/plugs/cors_test.exs",
-    "included_in_run": true,
-    "note": "No isolated single-file run performed separately; this was the full-suite run per instructions (final verification before merge, not a one-file spot check). All partitions report 0 failures, so the CORS test passed within the combined run."
-  },
-  "diagnosis": {
-    "failures_found": 0,
-    "stale_partition_db_issue_hit": false,
-    "notes": "No pre-existing/unrelated failures encountered this run; no remediation of stale letflow_test1..N databases was needed."
-  },
-  "changed_files_under_test": [
-    "lib/letflow/plugs/cors.ex",
-    "test/letflow/plugs/cors_test.exs"
-  ],
-  "conclusion": "Clean PASS. Full suite green (4613 tests / 6 properties / 0 failures, 4619/4619) on commit 873f956f with the CORS allow-headers fix and its regression test in place. Routing recommendation: proceed to Step 5 (close ISS-0780)."
+  "rework_count": 0,
+  "max_rework": 3
 }

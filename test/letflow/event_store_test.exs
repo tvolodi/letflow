@@ -665,12 +665,18 @@ defmodule Letflow.EventStoreTest do
 
   # -----------------------------------------------------------------------------------
   # Acceptance criterion 2: "read/2 against an instance_id with no events returns an
-  # explicit not-found error, not an empty list" -- plus the flip side the design doc
-  # (§4.2) specifically proves: an instance that DID have events but had them all
-  # archived returns a legitimate empty list, not a not-found error.
+  # explicit not-found error, not an empty list" -- plus the flip side REQ-376 §6
+  # (EO-003) now guarantees: an instance that DID have events, all of which have since
+  # been archived (moved to events_archive), still replays its complete history via
+  # read/2's events/events_archive union -- NOT a not-found error, and (post-REQ-376)
+  # NOT a silently-empty list either, since query_instance_events/3 now finds archived
+  # rows too. Pre-REQ-376 this test asserted {:ok, []} here, because read/2 only ever
+  # queried the live `events` table and an archived event was invisible to it; REQ-376
+  # (docs/migration/decisions/0037-...md, design doc §6) deliberately closed that gap
+  # so that a fully-archived instance is still fully readable, not just non-erroring.
   # -----------------------------------------------------------------------------------
 
-  describe "read/2: not-found vs. legitimately-empty (AC2)" do
+  describe "read/2: not-found vs. still-readable-when-fully-archived (AC2)" do
     test "an instance_id with no instance_sequence row (never appended to) returns {:error, :instance_not_found}, never {:ok, []}" do
       %{schema_name: schema_name} = provisioned_tenant()
 
@@ -678,27 +684,38 @@ defmodule Letflow.EventStoreTest do
                EventStore.read(Ecto.UUID.generate(), prefix: schema_name)
     end
 
-    test "an instance that had events, now fully archived, returns {:ok, []} -- NOT :instance_not_found" do
+    test "an instance that had events, now fully archived, still replays them via read/2 -- NOT :instance_not_found, NOT silently empty (EO-003)" do
       %{tenant_id: tenant_id, schema_name: schema_name} = provisioned_tenant()
       instance_id = Ecto.UUID.generate()
       event_type = unique_type_name()
       seed_instance_sequence!(schema_name, instance_id)
 
       old_created_at = ~U[2020-01-01 00:00:00.000000Z]
-      seed_event!(schema_name, tenant_id, instance_id, event_type, 1, old_created_at)
+
+      %Event{event_id: event_id} =
+        seed_event!(schema_name, tenant_id, instance_id, event_type, 1, old_created_at)
 
       assert table_count(Event, schema_name) == 1
 
       assert {:ok, %{moved_count: 1}} =
                EventStore.archive(prefix: schema_name, retention_days: 30)
 
+      # The row is gone from the live `events` table -- moved (not copied) to
+      # `events_archive`, per archive/1's own move semantics.
       assert table_count(Event, schema_name) == 0
 
       # instance_sequence's row is untouched (INV-AR-2) -- this instance still
       # "exists" from read/2's STEP 1 point of view.
       assert %InstanceSequence{} = Repo.get(InstanceSequence, instance_id, prefix: schema_name)
 
-      assert {:ok, []} = EventStore.read(instance_id, prefix: schema_name)
+      # REQ-376 EO-003: query_instance_events/3 unions `events` and
+      # `events_archive`, so the archived event is still found -- read/2 does
+      # NOT return {:ok, []} here anymore.
+      assert {:ok, [event]} = EventStore.read(instance_id, prefix: schema_name)
+      assert event.event_id == event_id
+      assert event.instance_id == instance_id
+      assert event.sequence_number == 1
+      assert event.event_type == event_type
     end
   end
 

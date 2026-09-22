@@ -439,7 +439,22 @@ defmodule Letflow.Test.TenantTemplate do
   # replay_migrations/2 (not derived from or compared against itself).
   defp template_self_check!(schema_name) do
     expected = MapSet.new(Letflow.TenantFixture.expected_tenant_tables())
-    actual = MapSet.new(tables_in(schema_name))
+
+    # REQ-376: the STAGING schema is built via a genuine replay_migrations/2
+    # (do_build_template!/1, step 2, above), so it carries real
+    # events_default/events_archive_default/*_pre_partition_20260922/
+    # events_y<year>m<month> physical tables that
+    # Letflow.TenantFixture.expected_tenant_tables/0 deliberately does not
+    # enumerate (see that function's own doc). Filtered out of the "extra"
+    # side only -- see Letflow.TenantFixture.req376_partition_management_table?/1's
+    # own doc for why these specifically cannot be hard-coded the way every
+    # other table is. The "missing" side is unaffected: none of these were
+    # ever expected, so they can never appear there.
+    actual =
+      schema_name
+      |> tables_in()
+      |> Enum.reject(&Letflow.TenantFixture.req376_partition_management_table?/1)
+      |> MapSet.new()
 
     missing = MapSet.difference(expected, actual)
     extra = MapSet.difference(actual, expected)

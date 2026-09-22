@@ -402,7 +402,23 @@ defmodule Letflow.Support.TenantFixtureTest do
       # and the unfiltered set equality below would then fail for the wrong reason.
       {:ok, state} = TenantFixture.capture_schema_state(tenant_id)
 
-      observed = state.tables_present
+      # REQ-376: `provisioned_tenant!/1` above uses its default `template: :clone`,
+      # whose `do_clone/2` only ever materializes what `expected_tenant_tables/0`
+      # itself lists (see that function's own doc), so this particular call site
+      # is not actually expected to observe any REQ-376 partition-management
+      # artifact (events_default, events_archive_default, the two
+      # *_pre_partition_20260922 rollback-safety-net tables, or
+      # events_y<year>m<month>). This filter is a defensive no-op for the
+      # :clone path today, and correctly future-proofs this same "both
+      # directions" comparison for a :replay-provisioned schema (which DOES
+      # carry them, exactly as `Letflow.Test.TenantTemplate`'s own
+      # `template_self_check!/1` -- against a genuinely :replay-built staging
+      # schema -- already needs the identical filter) should this test, or a
+      # copy of it, ever switch template modes.
+      observed =
+        state.tables_present
+        |> Enum.reject(&TenantFixture.req376_partition_management_table?/1)
+
       expected = TenantFixture.expected_tenant_tables()
 
       assert observed != []

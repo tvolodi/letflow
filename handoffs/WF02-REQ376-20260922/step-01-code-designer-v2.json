@@ -1,0 +1,56 @@
+{
+  "handoff_id": "c3d4e5f6-0001-4000-8000-000000000002",
+  "run_id": "WF02-REQ376-20260922",
+  "workflow_id": "WF-02",
+  "step": "01",
+  "from_agent": "ORCH",
+  "to_agent": "CODE-DESIGNER",
+  "file": "handoffs/WF02-REQ376-20260922/step-01-code-designer-v2.json",
+  "created_at": "2026-09-22T00:00:00Z",
+  "started_at": "2026-09-22T00:00:00Z",
+  "completed_at": "2026-09-22T00:00:00Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S6",
+    "requirement_ids": ["REQ-376"],
+    "requirement_text": {
+      "REQ-376": "Partition events/events_archive (monthly PARTITION BY RANGE (created_at)) and build a whole-partition retirement mechanism (DETACH, not row-by-row DELETE), with a keep_forever protected-record exemption (EO-002), a pre-creation mechanism for future partitions with no write ever waiting on partition creation (AC5), and proof that an already-retired month's history still replays with no gap (EO-003). Resolves the deferral 0003 Decision C point 2 and ISS-0014 left open. See docs/requirements.yaml REQ-376 for full text."
+    },
+    "related_handoff_ids": ["handoffs/WF02-REQ376-20260922/step-01-code-designer.json", "handoffs/WF02-REQ376-20260922/step-01b-code-design-validator.json"],
+    "artifacts_in": [
+      "docs/migration/decisions/0037-event-store-partitioning-and-whole-partition-retirement.md",
+      "lib/letflow/design/req376-partition-event-retirement.md",
+      "handoffs/WF02-REQ376-20260922/step-01b-code-design-validator.json"
+    ],
+    "owned_modules": []
+  },
+  "task": {
+    "description": "REWORK (attempt 2 of 3). CODE-DESIGN-VALIDATOR FAILed the prior design on check 4 (AC2's single-DDL/no-row-by-row-work requirement): (1) old §4.3's header claimed the retirement sequence was 'two Postgres statements outside a transaction' while its own body listed five ALTER TABLE statements plus a conditional relocation transaction -- internally inconsistent; (2) no crash/failure recovery semantics were specified for a crash between DETACH and ATTACH, which would silently drop a partition out of read/2's union, reopening the EO-003 gap at the operational layer with no matching @spec error case; (3) Postgres's documented 'pending detach' / FINALIZE requirement for an interrupted DETACH ... CONCURRENTLY was not addressed despite the design relying on CONCURRENTLY's two-phase behavior for its EO-001 claim. Fix via direction (a) from the FAIL notice: reconcile the header honestly (a short DDL sequence, not literally one statement; AC2's real intent -- no per-row DELETE -- is satisfied because every retirement-DDL statement operates on the whole partition), add idempotent crash-recovery/resume via Postgres catalog state (pg_inherits), add a new @spec error case for a stuck pending-detach state, and handle FINALIZE explicitly.",
+    "acceptance_criteria": [
+      "a decision record resolving Postgres-native monthly PARTITION BY RANGE (created_at) for events/events_archive exists under docs/migration/decisions/, cross-references 0003 Decision C and ISS-0014, and carries REVIEWER sign-off (pending -- see decision record's own Sign-off section)",
+      "retiring one month of expired history is designed as a short whole-partition DDL sequence (DETACH/ATTACH, not row-by-row DELETE), honestly stated as a sequence rather than mislabeled as one statement, with idempotent crash-recovery/resume via catalog state, an explicit stuck-pending-detach error case, and a stated test shape proving no per-row DELETE runs in the retirement steps, the platform accepts a concurrent write throughout (EO-001), and a crash mid-sequence can be resumed correctly",
+      "the protected-record (keep_forever-policy) exemption mechanism is specified, with a stated test shape proving the count is identical before/after retiring a month containing at least one protected record (EO-002)",
+      "the architectural mechanism making an already-retired month's process-instance history still replay with no gap is specified (EO-003)",
+      "the pre-creation mechanism is specified such that no test or code path ever waits on partition creation while a write is in flight",
+      "the relationship between the new mechanism and Letflow.EventStore.archive/1's existing row-level move is stated explicitly (coexist, with archive/1 unchanged) in both the decision record and the design doc",
+      "every acceptance criterion maps to a concrete design element -- no TBD; open questions listed explicitly instead"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "Amended lib/letflow/design/req376-partition-event-retirement.md in place (no re-branch, same feature/WF02-REQ376-20260922 branch). Fixes for the three cited defects: (1) Section 4.3 rewritten -- header now honestly states retire_month/3 is a short sequence of DDL statements (DETACH CONCURRENTLY cannot run inside a transaction, so it cannot be one statement), with AC2's real intent (no per-row DELETE) satisfied because every retirement-DDL statement (steps 2-5) operates on the whole partition as a unit; the one genuinely row-scoped work (protected-record/default-partition reconciliation, section 4.4) is explicitly carved out as a separate, small, bounded, pre-step, exactly as the prior revision already did for keep_forever alone. (2) Added section 4.3.1, a catalog-detected (pg_inherits-based, never self-stored) state machine with five states (:not_started, :pending_detach, :detached_standalone, :already_retired, not-found) that retire_month/3 dispatches on at the start of every call, making every call -- first or resumed after a crash -- idempotent by construction; a resumed call after a crash between DETACH and ATTACH now completes correctly instead of silently dropping the partition out of read/2's union. Added default_partition_rows_reconciled and resumed_from fields to the {:ok, ...} return shape so tests/callers can assert which recovery path fired. Added three crash-recovery test-shape sub-cases (resume after DETACH-before-ATTACH, resume from a Postgres-level pending-detach via FINALIZE, and idempotent no-op re-call against an already-fully-retired month) in section 4.3.3. (3) Added explicit handling of Postgres's documented pending-detach/FINALIZE requirement for an interrupted DETACH ... CONCURRENTLY (state :pending_detach in the table, section 4.3.2's inhdetachpending catalog check), plus a new @spec error case {:error, {:stuck_pending_detach, reason}} (section 4.1) for when FINALIZE itself fails and needs operator attention -- distinguished from the catch-all {:error, term()} specifically so it can be alerted on separately. While reworking section 4.3/4.4 I also found and fixed a second, previously-unflagged inconsistency this rework surfaced: the prior revision's section 4.4 assumed events_archive already had a pre-created dedicated month partition for the target month by retirement time (per the old section 3's symmetric pre-creation sweep), which directly contradicts section 4.3 step 4's ATTACH (attaching the just-detached table AS a new partition requires that range be unclaimed -- Postgres does not allow two partitions covering the same range). Fixed by revising section 3.2: the pre-creation sweep's months-ahead lookahead now applies to events only; events_archive gets no forward-looking dedicated partitions -- archive/1's early per-row moves for a not-yet-retired month always route to events_archive_default (the DEFAULT partition doing its designed job), and retire_month/3's own ATTACH step is the only thing that ever creates a dedicated events_archive month partition. Added a new section 4.4b (events_archive_default reconciliation, ordered before 4.4a's keep_forever relocation to avoid a pointless round-trip) that sweeps any accumulated events_archive_default rows for the target month back into the still-attached-to-events partition before DETACH, satisfying Postgres's own precondition that ATTACH be preceded by no matching rows sitting in the destination parent's DEFAULT partition. Updated section 2.1 item 6, the :destination_partition_missing error removal (section 4.1, replaced -- explained, not silently dropped), section 5 (EO-001, noting FINALIZE's brief stronger lock is confined to the rare crash-recovery path so does not weaken the routine-case non-blocking claim), section 7 OQ3 (revised: events_archive_default holding rows is now expected steady-state, not a lookahead-insufficiency signal), and added OQ6 (stuck-pending-detach operational alerting/retry, left to REQ-377/follow-up). Section 8's AC coverage map updated to point at the new subsections. Did not write any .ex/.exs implementation code -- design artefact only, per this role's hard constraint. Committed and pushed to feature/WF02-REQ376-20260922.",
+    "artifacts_out": [
+      "lib/letflow/design/req376-partition-event-retirement.md"
+    ],
+    "next_action": "Route to CODE-DESIGN-VALIDATOR (attempt 2 of 3)",
+    "issues": [
+      "OQ1 (unchanged from prior revision, design doc section 7): backfill transaction size not measured against real per-tenant row counts -- ELIXIR-DEV to check before implementing.",
+      "OQ4 (unchanged, section 7): min_partition_age_days config key specified with no proposed default number -- left for ELIXIR-DEV/REVIEWER once event_retention_policies has real production data.",
+      "OQ5 (unchanged, section 7): who/what calls retire_month/3 (automatic Poller sweep vs. operator/REQ-377-triggered) left to REQ-377's own design.",
+      "OQ6 (new, section 7): {:error, {:stuck_pending_detach, reason}} has no specified automatic retry or alerting path -- left for REQ-377/a follow-up, same treatment as OQ3/OQ5."
+    ]
+  },
+  "rework_count": 1,
+  "max_rework": 3
+}

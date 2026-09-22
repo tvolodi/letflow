@@ -1,0 +1,55 @@
+{
+  "handoff_id": "c3d4e5f6-0007-4000-8000-000000000005",
+  "run_id": "WF02-REQ376-20260922",
+  "workflow_id": "WF-02",
+  "step": "03b",
+  "from_agent": "TEST-DESIGN-VALIDATOR",
+  "to_agent": "TEST-RUNNER",
+  "file": "handoffs/WF02-REQ376-20260922/step-03b-test-design-validator-regate2.json",
+  "created_at": "2026-09-22T14:35:00Z",
+  "started_at": "2026-09-22T14:15:00Z",
+  "completed_at": "2026-09-22T14:35:00Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S2",
+    "requirement_ids": ["REQ-376"],
+    "related_handoff_ids": [
+      "handoffs/WF02-REQ376-20260922/step-03-test-designer-fix2.json",
+      "handoffs/WF02-REQ376-20260922/step-03b-test-design-validator.json"
+    ],
+    "artifacts_in": [
+      "test/letflow/event_store_test.exs",
+      "lib/letflow/event_store.ex",
+      "lib/letflow/design/req376-partition-event-retirement.md"
+    ]
+  },
+  "task": {
+    "description": "Re-gate TEST-DESIGNER's fix2 (commit 16dad285): a rewrite of the PRE-EXISTING 'read/2: not-found vs. legitimately-empty (AC2)' describe block's second test in test/letflow/event_store_test.exs, which had encoded the OLD pre-REQ-376 behavior ({:ok, []} for a fully-archived instance) now stale against query_instance_events/3's new events/events_archive union-read.",
+    "acceptance_criteria": [
+      "rewritten assertion verified correct against design doc §6 (EO-003) and the actual current query_instance_events/3 implementation, not just that it compiles",
+      "rewrite is a genuine strengthening/correction (real field-level assertions), not a weakened/trivial assertion gaming the gate",
+      "no TODO: implement test, no @tag :skip without a passing counterpart",
+      "fixtures use per-test unique data, self-sufficient, no cross-test pollution",
+      "no hardcoded secrets/connection strings",
+      "TEST-DESIGNER's claim of grepping for other stale archive( -> read assertions spot-checked independently",
+      "sibling not-found test confirmed genuinely unrelated and unaffected"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "Read test/letflow/event_store_test.exs lines 666-720 (the full describe block as it now stands on HEAD, not the handoff's self-report) directly. Read lib/letflow/design/req376-partition-event-retirement.md §6 (EO-003) and lib/letflow/event_store.ex's query_instance_events/3 (lines 1275-1291) directly.\n\n1. Correctness verified independently: design §6 states query_instance_events/3 changes from a single Repo.all/2 against Event to two queries (Event and ArchivedEvent, both scoped by instance_id and apply_read_filter/2), concatenated and re-sorted by sequence_number. The current implementation at event_store.ex:1275-1291 does exactly this -- live_events query against Event, archived_events query against ArchivedEvent mapped via archived_event_to_event/1, concatenated and Enum.sort_by(& &1.sequence_number). This is a genuine union-read; the rewritten test's expectation ({:ok, [event]} for a fully-archived single-event instance, not {:ok, []}) is the correct, design-consistent outcome, not merely a compiling assertion.\n\n2. Rewrite is a genuine strengthening, not a gamed/loosened assertion: the new test (event_store_test.exs:687-719) captures the seeded event's event_id from seed_event!/6's return, archives it via EventStore.archive/1, confirms table_count(Event)==0 (row genuinely moved, not copied) and InstanceSequence still present (INV-AR-2), then asserts {:ok, [event]} = EventStore.read(...) with four field-level checks: event.event_id == event_id, event.instance_id == instance_id, event.sequence_number == 1, event.event_type == event_type. This is field-level verification in the same style as the file's AC1 describe block, not a trivial 'list is non-empty' check.\n\n3. No @tag :skip, no 'TODO: implement test' anywhere in the file (grepped, 0 matches).\n\n4. Fixtures: instance_id and event_type are freshly generated per test (Ecto.UUID.generate(), unique_type_name()); provisioned_tenant() gives each test its own tenant schema. No shared/hardcoded state; test is self-sufficient (no dependency on execution order or other tests having run).\n\n5. No hardcoded secrets or connection strings found (grepped the changed region; only fixture UUIDs and timestamps).\n\n6. Spot-checked TEST-DESIGNER's grep claim myself: located all 8 EventStore.archive( call sites in test/letflow/event_store_test.exs (lines 701 [this test], 793, 799, 833, 865, 885, 1069, 1103). Read the surrounding code for the other 7 (AC4 idempotency-of-archive, AC6 retention-policy x3, INV-AR-2, event_payload_store FK-ordering) -- confirmed none of them call read/2 or point_in_time/3 afterward; they only assert table_count/Repo.get_by directly against Event/ArchivedEvent. Also checked test/letflow/engine/reconstruction_test.exs's AC3 describe block ('events partly archived... reconstruct to the correct merged state', lines 338-380), the one other place in the suite that exercises archive/1 alongside a subsequent read-shaped assertion (via Reconstruction.reconstruct_instance/2) -- it was already written to expect the correct post-REQ-376 merged-state outcome (asserts identical tokens/variables/status before and after archival), so it is not a second stale assertion needing rework; it's pre-existing REQ-376 test-suite work, out of scope for this fix. No other stale 'archived event invisible to read' assumption found. Claim confirmed.\n\n7. Sibling test ('an instance_id with no instance_sequence row (never appended to) returns {:error, :instance_not_found}, never {:ok, []}', event_store_test.exs:680-685) is untouched and genuinely unrelated -- it exercises ensure_instance_started/2's STEP 1 existence check (instance_sequence row absence), a code path the query_instance_events/3 union change does not touch at all.\n\nIndependently re-ran the test (not trusting the handoff's reported numbers): confirmed 0 active letflow_test connections via docker exec letflow-postgres-1 psql pg_stat_activity check first, then `mix test test/letflow/event_store_test.exs`: Result: 28 passed, 0 failures, finished in 38.2s. Matches the file's full test count.",
+    "artifacts_out": [
+      "handoffs/WF02-REQ376-20260922/step-03b-test-design-validator-regate2.json"
+    ],
+    "next_action": "Route to TEST-RUNNER (4)",
+    "issues": [
+      {
+        "severity": "MINOR",
+        "description": "Carried forward from step-03-test-designer-fix2.json: mix letflow.check.test's full-suite gate has not yet been run clean for this fix due to earlier cross-session Postgres contention. TEST-RUNNER's step 4 (full scripts/test_parallel.sh run) will exercise this naturally; no separate action needed here."
+      }
+    ]
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

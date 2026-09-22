@@ -1,0 +1,56 @@
+{
+  "handoff_id": "c3d4e5f6-0003-4000-8000-000000000003",
+  "run_id": "WF02-REQ376-20260922",
+  "workflow_id": "WF-02",
+  "step": "02c",
+  "from_agent": "ORCH",
+  "to_agent": "SECURITY-REVIEWER",
+  "file": "handoffs/WF02-REQ376-20260922/step-02c-security-reviewer-regate2.json",
+  "created_at": "2026-09-22T09:14:54Z",
+  "started_at": "2026-09-22T09:14:54Z",
+  "completed_at": "2026-09-22T09:20:00Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S2",
+    "requirement_ids": ["REQ-376"],
+    "requirement_text": {
+      "REQ-376": "See handoffs/WF02-REQ376-20260922/step-02a-elixir-dev.json's context.requirement_text for the full text -- not restated here to avoid drift."
+    },
+    "related_handoff_ids": [
+      "handoffs/WF02-REQ376-20260922/step-02c-security-reviewer.json",
+      "handoffs/WF02-REQ376-20260922/step-02c-security-reviewer-regate.json",
+      "handoffs/WF02-REQ376-20260922/step-04-test-designer-rework1.json"
+    ],
+    "artifacts_in": [
+      "docs/agents/instructions/security-invariants.md",
+      "priv/repo/migrations/20260922000009_retarget_event_payload_store_fkey.exs",
+      "lib/letflow/tenant_provisioning.ex",
+      "test/support/tenant_template.ex",
+      "test/letflow/event_store/partition_maintenance_test.exs",
+      "docs/anti-patterns.md"
+    ],
+    "owned_modules": []
+  },
+  "task": {
+    "description": "WF-02 Step 2c RE-GATE #2, covering commits since the 631e6316 reviewer 2d re-gate: 756d95a0 (TEST-DESIGN-VALIDATOR rework1 test-sync fixes), 2159910f (handoff), 160b1be0 (new migration 20260922000009 + tenant_template.ex conparentid filter), 118cbecd (recreate_sequences!/1 clone-table filter). Diff read directly via `git diff 631e6316..118cbecd`.",
+    "acceptance_criteria": [
+      "diff since prior PASS re-read directly, not taken from self-reports",
+      "scope test run explicitly for both the new migration and the test-support changes",
+      "INV-1 and INV-7 freshly verified against the new migration's DDL",
+      "INV-2..INV-9 explicitly assessed (APPLIES/NOT-APPLICABLE) with reasoning",
+      "PASS/FAIL verdict with next_action"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "Read `git diff 631e6316..118cbecd --stat` and the full diff for every changed file: docs/anti-patterns.md, handoffs/WF02-REQ376-20260922/step-03-test-designer-rework1.json, lib/letflow/tenant_provisioning.ex, priv/repo/migrations/20260922000009_retarget_event_payload_store_fkey.exs, test/letflow/event_store/partition_maintenance_test.exs, test/specs/REQ-376.md, test/support/tenant_template.ex.\n\nSCOPE TEST. Two distinct surfaces in this diff:\n(1) priv/repo/migrations/20260922000009_retarget_event_payload_store_fkey.exs, registered in lib/letflow/tenant_provisioning.ex's @tenant_scoped_migration_manifest -- IN SCOPE. It is a tenant-scoped migration (`if prefix() do` guard, matches the task handoff's framing) running DDL (DROP/ADD CONSTRAINT) inside each tenant's own schema.\n(2) test/support/tenant_template.ex and test/letflow/event_store/partition_maintenance_test.exs -- OUT OF SCOPE for INV-1/INV-6/INV-7 tenant-isolation purposes. Reasoning (consistent with the prior two PASS handoffs' established position for this requirement): both files operate exclusively against `tenant_template` (a fixed, non-tenant fixture schema used only to seed test-provisioned clone schemas) and ephemeral per-test tenant fixture schemas created and torn down within ExUnit runs. Confirmed by re-reading the diff: `readd_foreign_keys!/1`'s query runs `WHERE nsp.nspname = $1 ... AND con.conparentid = 0` against `@template_schema` (a module attribute pointing at the fixture template, not a live tenant schema, bound as a query parameter not interpolated); `recreate_sequences!/1`'s new filter (`clone_table_names = MapSet.new(Letflow.TenantFixture.expected_tenant_tables())`) restricts an Elixir-side Enum.filter, not a SQL string, to a hardcoded expected-table list -- no new SQL surface. Neither file is reachable from a production tenant-provisioning code path (`test/support/` is excluded from the `mix` release build) and neither ever touches real tenant data. docs/anti-patterns.md and the handoff JSON are documentation only. Scope test result: only the new migration is a tenant-data path; the rest is test-only infrastructure and correctly out of scope, stated explicitly per the dispatch's request.\n\nINV-1 (tenant data isolation) -- APPLIES to migration 9. Verified: (a) both `execute/1` calls run only `if prefix() do` (mirrors migrations 4/8's own established guard, already reviewed and accepted in this requirement's prior PASS handoffs) -- `schema = prefix()` is Ecto.Migration's own prefix callback, set by the tenant migrator per-schema at migration-run time, not caller/request-supplied; this is the exact same provenance already verified for migrations 4 and 8 in the first-pass PASS, no new mechanism introduced. (b) The migration doesn't create or leave anything in `public` -- it only ALTERs an existing tenant-schema table's constraint, scoped by the same `\"#{schema}\".` qualifier on every identifier in both ALTER statements (event_payload_store, events, events_pre_partition_20260922 -- checked line by line). (c) No `tenant_id` column touched; this migration only retargets a composite FK's referenced table, doesn't add/change any tenant_id-bearing column. PASS.\n\nINV-7 (no SQL string interpolation of tenant/user input) -- APPLIES. `grep -rn \"Repo.query\" priv/repo/migrations/20260922000009_retarget_event_payload_store_fkey.exs` returns no hits (the migration uses `execute/1` with raw DDL, not `Repo.query`, consistent with migrations 4/8's precedent already accepted -- Ecto's DSL has no composite-FK ALTER equivalent, documented at length in the migration's own header comment). The only interpolated value is `schema` (= `prefix()`), which is system-derived per INV-1's finding above, never user/request/tenant-supplied data reaching the interpolation point -- same discipline as every other identifier interpolation already reviewed in this requirement's other migrations. No literal user-controlled value (event_id, event_type, etc.) is interpolated anywhere in this file -- both ALTER statements carry only schema-qualified, hardcoded identifier names (event_payload_store, events, events_pre_partition_20260922, column names, constraint name). PASS.\n\nINV-2, INV-3, INV-5 -- NOT-APPLICABLE, unchanged (no client-facing API response type, no scripting/plugin sandbox, no lookup-by-ID endpoint anywhere in this diff).\n\nINV-4 (secrets by reference only) -- APPLIES (live), re-checked: `grep -rniE \"(password|secret|client_secret|token)\\s*(=|:)\\s*\\\"[^\\\"]{8,}\\\"\"` style review of the diff by hand finds only the word \"tokens\" as a table/module name in tenant_provisioning.ex's existing manifest comments (unrelated pre-existing entries, e.g. `create_tokens.exs`, `api_tokens_tenant_scoped.exs`) -- no credential material, no config/env touched anywhere in this diff. PASS.\n\nINV-6 (new data-access paths prove their scoping) -- APPLIES, satisfied by this handoff: migration 9 is a new data-access path (new DDL against a tenant table) and this handoff states explicitly which invariants apply and how each is satisfied, per the meta-invariant's own requirement.\n\nINV-8 (no unhandled crashes on realistic failure paths) -- APPLIES (live) to the migration: both `execute/1` calls are Ecto.Migration DSL, which already raises on genuine DDL failure by framework design (a migration is expected to halt the migration run on error, not silently continue) -- consistent with every other migration in this manifest, not a new pattern. The test file's `Repo.query!/2`/`Repo.query!/3` raising calls (partition_maintenance_test.exs) are test-only, run inside ExUnit's own failure-isolation, not a shared production process -- not in scope for this invariant's \"shared process\" concern. PASS as applied.\n\nINV-9 (tenant-controlled outbound URL validation) -- NOT-APPLICABLE, unchanged (no outbound HTTP in this diff).\n\nOverall: no applicable invariant failed. The new migration follows the exact provenance/guard/raw-DDL pattern already established and accepted for migrations 4 and 8 in this requirement's earlier PASS gates -- no new risk introduced. The test-support changes are correctly out of scope (test-only fixture schemas, never reachable from a real tenant's data).",
+    "artifacts_out": [
+      "handoffs/WF02-REQ376-20260922/step-02c-security-reviewer-regate2.json"
+    ],
+    "next_action": "Route to REVIEWER (2d)",
+    "issues": []
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

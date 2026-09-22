@@ -1,0 +1,66 @@
+{
+  "handoff_id": "c3d4e5f6-0001-4000-8000-000000000001",
+  "run_id": "WF02-REQ376-20260922",
+  "workflow_id": "WF-02",
+  "step": "01",
+  "from_agent": "ORCH",
+  "to_agent": "CODE-DESIGNER",
+  "file": "handoffs/WF02-REQ376-20260922/step-01-code-designer.json",
+  "created_at": "2026-09-22T00:00:00Z",
+  "started_at": "2026-09-22T00:00:00Z",
+  "completed_at": "2026-09-22T00:00:00Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S6",
+    "requirement_ids": ["REQ-376"],
+    "requirement_text": {
+      "REQ-376": "Partition events/events_archive (monthly PARTITION BY RANGE (created_at)) and build a whole-partition retirement mechanism (DETACH, not row-by-row DELETE), with a keep_forever protected-record exemption (EO-002), a pre-creation mechanism for future partitions with no write ever waiting on partition creation (AC5), and proof that an already-retired month's history still replays with no gap (EO-003). Resolves the deferral 0003 Decision C point 2 and ISS-0014 left open. See docs/requirements.yaml REQ-376 for full text."
+    },
+    "related_handoff_ids": [],
+    "artifacts_in": [
+      "docs/migration/decisions/0003-ecto-schema-strategy.md",
+      "docs/issues/ISS-0014.yaml",
+      "lib/letflow/event_store.ex",
+      "priv/repo/migrations/20260816120001_create_events.exs",
+      "priv/repo/migrations/20260816120005_create_events_archive.exs",
+      "priv/repo/migrations/20260817181240_create_event_retention_policies.exs",
+      "priv/repo/migrations/20260820000001_drop_tenant_id_events.exs",
+      "priv/repo/migrations/20260820000002_drop_tenant_id_events_archive.exs",
+      "lib/letflow/design/req023-event-store-schema.md",
+      "lib/letflow/design/req026-event-read-archive-platform-sentinels.md",
+      "lib/letflow/tenant_provisioning.ex",
+      "lib/letflow/scheduler/poller.ex",
+      "lib/letflow/scheduler.ex"
+    ],
+    "owned_modules": []
+  },
+  "task": {
+    "description": "WF-02 Step 1 for REQ-376 (backend half of the deferred event-store partitioning question; REQ-377 owns the follow-on operator screen). Produce the design artefact(s) only -- no implementation .ex/.exs code. Must include: (1) a decision-record DRAFT under docs/migration/decisions/ resolving Postgres-native monthly PARTITION BY RANGE (created_at) for events/events_archive, cross-referencing 0003 Decision C and ISS-0014, stating the PK/idempotency-sidecar consequences and the explicit relationship to Letflow.EventStore.archive/1 -- flagged as pending REVIEWER sign-off (REVIEWER signs at WF-02 Step 2d, not here). (2) A design doc covering exact migration DDL shape, the pre-creation mechanism (where it runs, how it never blocks a write), the retirement function's public interface (@spec, error cases), the protected-record exemption mechanism, and the architectural mechanism making EO-003 (replay of an already-retired month) hold. List open questions explicitly rather than guessing.",
+    "acceptance_criteria": [
+      "a decision record resolving Postgres-native monthly PARTITION BY RANGE (created_at) for events/events_archive exists under docs/migration/decisions/, cross-references 0003 Decision C and ISS-0014, and carries REVIEWER sign-off (pending -- see decision record's own Sign-off section)",
+      "retiring one month of expired history is designed as a single DDL operation (DETACH/DROP, not row-by-row DELETE), with a stated test shape proving no per-row DELETE runs and the platform accepts a concurrent write throughout (EO-001)",
+      "the protected-record (keep_forever-policy) exemption mechanism is specified, with a stated test shape proving the count is identical before/after retiring a month containing at least one protected record (EO-002)",
+      "the architectural mechanism making an already-retired month's process-instance history still replay with no gap is specified (EO-003)",
+      "the pre-creation mechanism is specified such that no test or code path ever waits on partition creation while a write is in flight",
+      "the relationship between the new mechanism and Letflow.EventStore.archive/1's existing row-level move is stated explicitly (coexist, with archive/1 unchanged) in both the decision record and the design doc",
+      "every acceptance criterion maps to a concrete design element -- no TBD; open questions listed explicitly instead"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "Verified independently (source read, not the requirement text alone) that events/events_archive are unpartitioned today (20260816120001/...005 migrations), archive/1 is a row-level insert-then-delete (event_store.ex ~line 1215-1571), tenant_id has since been dropped from both tables (REQ-064/Decision 0006-D2, migrations 20260820000001/000002), and read/2 (event_store.ex ~line 933) never queries events_archive -- an already-flagged, still-open gap (req026 design doc's own §11 OQ-3) that this design closes as a necessary side effect of EO-003. Wrote docs/migration/decisions/0037-event-store-partitioning-and-whole-partition-retirement.md (draft, pending REVIEWER sign-off) and lib/letflow/design/req376-partition-event-retirement.md. Key design decisions: (a) no PK change needed -- (event_id, created_at) already satisfies Postgres's partition-key-in-every-unique-index rule, confirming 0003 Decision C's own forward-looking bet paid off; (b) retirement uses DETACH PARTITION ... CONCURRENTLY (Postgres 16, confirmed via docker-compose.yml) from events followed by a fast-attach (pre-validated CHECK constraint) ONTO events_archive -- never DROP -- specifically because DROP would permanently destroy data EO-003 requires still be replayable, and this makes EO-003 hold by construction once read/2 is extended to union events + events_archive; (c) archive/1 is explicitly kept, unchanged, coexisting at a finer (per-event-type keep_days/keep_count) granularity below the new whole-month mechanism, both converging on events_archive with no conflict (archive/1's existing on_conflict: :nothing insert is naturally idempotent against a row arriving via the partition path first); (d) keep_forever protected-record exemption is a small pre-step relocation (reusing archive_phase1_insert/archive_phase2_delete's existing insert-then-confirmed-delete idiom) before the DDL sequence, explicitly scoped as distinct from AC2's 'no per-row DELETE' claim (that claim covers the retirement DDL itself, tested against a fixture with zero protected rows; EO-002 uses a separate fixture with at least one); (e) pre-creation is a new Letflow.EventStore.PartitionMaintenance module (ensure_future_partitions/2, retire_month/3) driven by a new Poller sweep, months_ahead: 2 default, with a DEFAULT partition on both tables as a soft-failure safety net if the lookahead is ever exhausted. Five open questions listed explicitly in design doc §7 (backfill transaction size at real data volumes; when to drop the pre-partition rollback-safety tables; default-partition alerting; min_partition_age_days' actual numeric default; who/what calls retire_month/3 -- left to REQ-377). Did not write any .ex/.exs implementation code, per this role's hard constraint.",
+    "artifacts_out": [
+      "docs/migration/decisions/0037-event-store-partitioning-and-whole-partition-retirement.md",
+      "lib/letflow/design/req376-partition-event-retirement.md"
+    ],
+    "next_action": "Route to CODE-DESIGN-VALIDATOR",
+    "issues": [
+      "OQ1 (design doc §7): backfill transaction size for the create-new+backfill+rename migration approach not measured against real per-tenant row counts -- ELIXIR-DEV should check before implementing and flag back if a chunked/batched backfill is needed instead of the single-statement INSERT...SELECT described in §2.1.",
+      "OQ4 (design doc §7): min_partition_age_days config key is specified but given no proposed default number -- deliberately left for ELIXIR-DEV/REVIEWER to set once event_retention_policies has real production data to reason from, rather than guessing a number with no basis.",
+      "OQ5 (design doc §7): who/what calls retire_month/3 (an automatic Poller sweep vs. operator/REQ-377-triggered only) is explicitly left to REQ-377's own design, since REQ-376's scope fence excludes the operator-facing screen."
+    ]
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

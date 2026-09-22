@@ -283,7 +283,11 @@ defmodule Letflow.Scheduler.PollerTest do
       assert Application.get_env(:letflow, :scheduler) == nil
       assert Scheduler.retention_enabled?() == false
 
-      assert {:noreply, new_state} = Poller.handle_info(:tick, %{last_retention_run_at: nil})
+      assert {:noreply, new_state} =
+               Poller.handle_info(:tick, %{
+                 last_retention_run_at: nil,
+                 last_partition_maintenance_run_at: nil
+               })
 
       assert new_state.last_retention_run_at == nil
       assert table_count(Event, schema_name) == 1
@@ -297,10 +301,14 @@ defmodule Letflow.Scheduler.PollerTest do
       seed_event!(schema_name, instance_id, ~U[2020-01-01 00:00:00.000000Z])
 
       state =
-        Enum.reduce(1..5, %{last_retention_run_at: nil}, fn _, state ->
-          assert {:noreply, next_state} = Poller.handle_info(:tick, state)
-          next_state
-        end)
+        Enum.reduce(
+          1..5,
+          %{last_retention_run_at: nil, last_partition_maintenance_run_at: nil},
+          fn _, state ->
+            assert {:noreply, next_state} = Poller.handle_info(:tick, state)
+            next_state
+          end
+        )
 
       assert state.last_retention_run_at == nil
       assert table_count(Event, schema_name) == 1
@@ -329,7 +337,12 @@ defmodule Letflow.Scheduler.PollerTest do
       assert table_count(Event, schema_name) == 2
       assert table_count(ArchivedEvent, schema_name) == 0
 
-      assert {:noreply, new_state} = Poller.handle_info(:tick, %{last_retention_run_at: nil})
+      assert {:noreply, new_state} =
+               Poller.handle_info(:tick, %{
+                 last_retention_run_at: nil,
+                 last_partition_maintenance_run_at: nil
+               })
+
       assert %DateTime{} = new_state.last_retention_run_at
 
       assert table_count(Event, schema_name) == 1
@@ -356,7 +369,10 @@ defmodule Letflow.Scheduler.PollerTest do
       seed_event!(schema_name, instance_id, old_created_at)
 
       assert {:noreply, state_after_first} =
-               Poller.handle_info(:tick, %{last_retention_run_at: nil})
+               Poller.handle_info(:tick, %{
+                 last_retention_run_at: nil,
+                 last_partition_maintenance_run_at: nil
+               })
 
       assert %DateTime{} = first_run_at = state_after_first.last_retention_run_at
       assert table_count(Event, schema_name) == 0
@@ -535,7 +551,12 @@ defmodule Letflow.Scheduler.PollerTest do
 
       assert {:ok, probe_ref} = Admission.try_acquire(:global)
 
-      state = %{last_retention_run_at: nil, last_tick_started_at: nil}
+      state = %{
+        last_retention_run_at: nil,
+        last_tick_started_at: nil,
+        last_partition_maintenance_run_at: nil
+      }
+
       assert {:noreply, state_after_zero} = Poller.handle_info(:tick, state)
 
       for {schema_name, timer_id} <- schemas do
@@ -563,7 +584,12 @@ defmodule Letflow.Scheduler.PollerTest do
           {schema_name, timer_id}
         end
 
-      state = %{last_retention_run_at: nil, last_tick_started_at: nil}
+      state = %{
+        last_retention_run_at: nil,
+        last_tick_started_at: nil,
+        last_partition_maintenance_run_at: nil
+      }
+
       assert {:noreply, _new_state} = Poller.handle_info(:tick, state)
 
       for {schema_name, timer_id} <- schemas do
@@ -594,7 +620,12 @@ defmodule Letflow.Scheduler.PollerTest do
 
     antagonist = Task.async(&ac3_antagonist_loop/0)
 
-    state = %{last_retention_run_at: nil, last_tick_started_at: nil}
+    state = %{
+      last_retention_run_at: nil,
+      last_tick_started_at: nil,
+      last_partition_maintenance_run_at: nil
+    }
+
     {:noreply, _new_state} = Poller.handle_info(:tick, state)
 
     Task.shutdown(antagonist, :brutal_kill)
@@ -765,7 +796,12 @@ defmodule Letflow.Scheduler.PollerTest do
     assert {:ok, probe_ref} = Admission.try_acquire(:global)
     attach_ac3b_admission_probe(self(), schema_name, probe_ref)
 
-    state = %{last_retention_run_at: nil, last_tick_started_at: nil}
+    state = %{
+      last_retention_run_at: nil,
+      last_tick_started_at: nil,
+      last_partition_maintenance_run_at: nil
+    }
+
     assert {:noreply, _new_state} = Poller.handle_info(:tick, state)
 
     # Safety-net confirmation only -- by the time this returns, the handler
@@ -838,7 +874,12 @@ defmodule Letflow.Scheduler.PollerTest do
 
       attach_admission_decision_collector(self(), schema_name)
 
-      state = %{last_retention_run_at: nil, last_tick_started_at: nil}
+      state = %{
+        last_retention_run_at: nil,
+        last_tick_started_at: nil,
+        last_partition_maintenance_run_at: nil
+      }
+
       assert {:noreply, _new_state} = Poller.handle_info(:tick, state)
 
       assert_receive {:admission_decision, measurements, metadata}, 2_000
@@ -862,7 +903,12 @@ defmodule Letflow.Scheduler.PollerTest do
       assert {:ok, probe_ref} = Admission.try_acquire(:global)
       attach_admission_decision_collector(self(), schema_name)
 
-      state = %{last_retention_run_at: nil, last_tick_started_at: nil}
+      state = %{
+        last_retention_run_at: nil,
+        last_tick_started_at: nil,
+        last_partition_maintenance_run_at: nil
+      }
+
       assert {:noreply, _new_state} = Poller.handle_info(:tick, state)
 
       assert_receive {:admission_decision, measurements, metadata}, 2_000
@@ -900,7 +946,11 @@ defmodule Letflow.Scheduler.PollerTest do
       %{schema_name: real_schema_name} = provisioned_tenant("req218-ac5-real")
       timer_id = due_timer_for!(real_schema_name, "req218-ac5")
 
-      state = %{last_retention_run_at: nil, last_tick_started_at: nil}
+      state = %{
+        last_retention_run_at: nil,
+        last_tick_started_at: nil,
+        last_partition_maintenance_run_at: nil
+      }
 
       # Must not crash the calling (test) process -- maybe_run_ordering_cycle/1's
       # (and _sweeper/1's and _metrics/1's) existing `rescue _ -> :ok` must still
@@ -966,7 +1016,12 @@ defmodule Letflow.Scheduler.PollerTest do
           {schema_name, timer_id}
         end
 
-      state = %{last_retention_run_at: nil, last_tick_started_at: nil}
+      state = %{
+        last_retention_run_at: nil,
+        last_tick_started_at: nil,
+        last_partition_maintenance_run_at: nil
+      }
+
       assert {:noreply, _new_state} = Poller.handle_info(:tick, state)
 
       for {schema_name, timer_id} <- schemas do
@@ -1003,7 +1058,11 @@ defmodule Letflow.Scheduler.PollerTest do
       %{schema_name: real_schema_name} = provisioned_tenant("iss0421-ac1-real")
       timer_id = due_timer_for!(real_schema_name, "iss0421-ac1")
 
-      state = %{last_retention_run_at: nil, last_tick_started_at: nil}
+      state = %{
+        last_retention_run_at: nil,
+        last_tick_started_at: nil,
+        last_partition_maintenance_run_at: nil
+      }
 
       log =
         ExUnit.CaptureLog.capture_log(fn ->
@@ -1142,7 +1201,11 @@ defmodule Letflow.Scheduler.PollerTest do
       %{schema_name: real_schema_name} = provisioned_tenant("iss0444-order-a-real")
       timer_id = due_timer_for!(real_schema_name, "iss0444-order-a")
 
-      state = %{last_retention_run_at: nil, last_tick_started_at: nil}
+      state = %{
+        last_retention_run_at: nil,
+        last_tick_started_at: nil,
+        last_partition_maintenance_run_at: nil
+      }
 
       log =
         ExUnit.CaptureLog.capture_log(fn ->
@@ -1160,7 +1223,11 @@ defmodule Letflow.Scheduler.PollerTest do
 
       bad_schema_name = registered_but_unprovisioned_schema_name!()
 
-      state = %{last_retention_run_at: nil, last_tick_started_at: nil}
+      state = %{
+        last_retention_run_at: nil,
+        last_tick_started_at: nil,
+        last_partition_maintenance_run_at: nil
+      }
 
       log =
         ExUnit.CaptureLog.capture_log(fn ->
@@ -1188,7 +1255,11 @@ defmodule Letflow.Scheduler.PollerTest do
 
       bad_schema_name = registered_but_unprovisioned_schema_name!()
 
-      state = %{last_retention_run_at: nil, last_tick_started_at: nil}
+      state = %{
+        last_retention_run_at: nil,
+        last_tick_started_at: nil,
+        last_partition_maintenance_run_at: nil
+      }
 
       log =
         ExUnit.CaptureLog.capture_log(fn ->

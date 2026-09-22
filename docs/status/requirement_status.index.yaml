@@ -4619,7 +4619,6 @@ volumes:
       `grep -c "^  - req:" docs/status/requirement_status.v22.yaml` = 3
       on-disk entries after composition, recounted directly rather than
       assumed. Prior notes preserved below verbatim.
-
       Incremented to 2 during WF02-REQ386-20260923's own Step Final rebase
       onto origin/main: composed REQ-386's started event (2026-09-22T22:51:01Z)
       chronologically before ISS-0784's SCOPE-CHANGE done event

@@ -1,0 +1,49 @@
+{
+  "handoff_id": "wf03-iss0782-step03a",
+  "run_id": "WF03-ISS0782-20260923",
+  "workflow_id": "WF-03",
+  "step": "03a",
+  "from_agent": "ORCH",
+  "to_agent": "FRONTEND-DEV",
+  "file": "handoffs/WF03-ISS0782-20260923/step-03a-frontend-dev.json",
+  "created_at": "2026-09-23T00:50:00Z",
+  "started_at": "2026-09-23T00:50:00Z",
+  "completed_at": "2026-09-23T00:52:00Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S6",
+    "issue_ids": ["ISS-0782"],
+    "related_handoff_ids": [
+      "handoffs/WF03-ISS0782-20260923/step-01-issue-fixer-diagnose.json",
+      "handoffs/WF03-ISS0782-20260923/step-02-code-designer.json",
+      "handoffs/WF03-ISS0782-20260923/step-02b-design-gate.json"
+    ],
+    "artifacts_in": ["web/src/api/identity.ts", "lib/letflow/design/iss0782-identity-api-route-fix.md"],
+    "owned_modules": ["web/src/api/identity.ts"]
+  },
+  "task": {
+    "description": "Implement ISS-0782's fix per CODE-DESIGN-VALIDATOR-approved design (step-02b-design-gate.json PASS): edit the 5 hardcoded path literals in web/src/api/identity.ts's usersApi.list/get/create/update and rolesApi.list so they hit the real /api/v1/identity/* mount instead of the nonexistent /api/v1/users and /api/v1/admin/roles paths.",
+    "acceptance_criteria": [
+      "usersApi.list GET path is /api/v1/identity/users",
+      "usersApi.get GET path is /api/v1/identity/users/:id",
+      "usersApi.create POST path is /api/v1/identity/users",
+      "usersApi.update PATCH path is /api/v1/identity/users/:id",
+      "rolesApi.list GET path is /api/v1/identity/roles",
+      "no other call site in identity.ts changed (groupsApi, tokensApi, unused rolesApi/usersApi methods untouched)",
+      "npm run type-check passes",
+      "npm run lint passes",
+      "npm run guards passes",
+      "npm test passes"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "Edited web/src/api/identity.ts exactly per the approved design: usersApi.list (line 16) '/api/v1/users' -> '/api/v1/identity/users'; usersApi.get (line 19) '/api/v1/users/${id}' -> '/api/v1/identity/users/${id}'; usersApi.create (line 22) '/api/v1/admin/users' -> '/api/v1/identity/users'; usersApi.update (line 25) '/api/v1/users/${id}' -> '/api/v1/identity/users/${id}'; rolesApi.list (line 66) '/api/v1/admin/roles' -> '/api/v1/identity/roles'. Pure string-literal changes, no type/shape changes, no other file touched. Verified: `npm run type-check` clean (tsc -b, no output = success); `npm run lint` clean (eslint 0 warnings); `npm run guards` PASS (4 test files, 48 tests, including bundle-scan against a real vite production build); `npm test -- --run` PASS (111 test files, 792 tests, 0 failures). No shim/adapter introduced -- direct literal fix matching the real backend contract, consistent with FRONTEND-DEV's mandate.",
+    "artifacts_out": ["web/src/api/identity.ts"],
+    "issues": [],
+    "next_action": "Route to SECURITY-REVIEWER"
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

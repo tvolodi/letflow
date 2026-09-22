@@ -1,0 +1,40 @@
+{
+  "handoff_id": "c1d2e3f4-0782-4000-8000-000000000001",
+  "run_id": "WF03-ISS0782-20260923",
+  "workflow_id": "WF-03",
+  "step": "00.5",
+  "from_agent": "ISSUE-FIXER",
+  "to_agent": "ISSUE-FIXER",
+  "file": "handoffs/WF03-ISS0782-20260923/step-00.5-issue-fixer-registry.json",
+  "created_at": "2026-09-23T00:00:00Z",
+  "started_at": "2026-09-22T23:40:00Z",
+  "completed_at": "2026-09-23T00:00:00Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S6",
+    "issue_id": "ISS-0782",
+    "queue_ref": "Q-781",
+    "github_ref": "GH-1722",
+    "branch": "feature/WF03-ISS0782-fix-20260923",
+    "related_handoff_ids": [],
+    "artifacts_in": ["docs/issues/ISS-0782.yaml"]
+  },
+  "task": {
+    "description": "WF-03 Step 0.5: search docs/issues/*.yaml for a status: resolved entry whose description mentions matching symptoms (web/src/api/identity.ts calling a non-existent /api/v1/... path instead of the real /api/v1/identity/... router mount) to ISS-0782 (usersApi/rolesApi 404s against the running backend, breaking the Users admin screen).",
+    "acceptance_criteria": [
+      "grep docs/issues/*.yaml for identity.ts / usersApi / rolesApi / groupsApi / /admin/groups / /admin/roles / /admin/users mentions",
+      "for each hit, determine whether it is the same symptom class (same root cause recurring, i.e. a fix that already shipped for this exact file/root-cause and didn't hold) or a related-but-distinct issue",
+      "state in result.summary whether a prior RESOLVED match was found, and if so, whether this is a recurrence requiring a severity bump; also note any related OPEN issues even though they don't independently trigger a recurrence bump"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "Searched docs/issues/*.yaml for 'identity.ts|usersApi|rolesApi|groupsApi|tokensApi' -- 4 hits: ISS-0782 (this issue), ISS-0736 (resolved), ISS-0765 (open), ISS-0764 (open, unrelated -- TenantStatus's PLATFORM_ADMIN exemption reading conn.assigns.auth_context.roles raw, no identity.ts involvement, a false-positive keyword hit on 'roles').\n\nISS-0736 (status: resolved, resolved_in_run WF03-ISS0736-20260921) is NOT a symptom match for ISS-0782 itself -- its own root cause was OIDC live-revocation enforcement (REQ-378) -- but its resolution incidentally corrected ONE call site in this exact file for the exact same underlying defect CLASS: web/src/api/identity.ts's groupsApi.removeMembers was calling a nonexistent 'DELETE /api/v1/admin/groups/:id/members' (no /admin/groups mount anywhere in lib/letflow/plugs/api_pipeline.ex) and was corrected to the real router-backed 'DELETE /api/v1/identity/groups/:id/members/:user_id', with regression coverage added at web/src/api/__tests__/identity.removeMembers.test.ts. CODE-DESIGN-VALIDATOR on that same run (WF03-ISS0736-20260921) flagged as an out-of-scope finding that every OTHER groupsApi call (addMembers/.list/.get/.update/.delete/.members) still shares the identical broken /api/v1/admin/groups/... prefix -- that finding was filed separately as ISS-0765 (status: open, MAJOR, unresolved as of this run) rather than fixed in-scope of REQ-378.\n\nCONCLUSION: no prior RESOLVED entry addresses ISS-0782's own affected call sites (usersApi.list/get/create/update and rolesApi.list, per web/src/pages/admin/UsersPage.tsx + UserDetailPage.tsx -- see Step 1 handoff) -- this is not a recurrence of an already-fixed root cause, so no severity bump on that basis. However this IS the third distinct filed occurrence of the SAME defect class in the SAME file (identity.ts hardcoding a nonexistent /api/v1/admin/... or bare /api/v1/... prefix instead of the real /api/v1/identity/... router mount): ISS-0736 fixed one call site (removeMembers), ISS-0765 (still open) covers the rest of groupsApi, and this issue (ISS-0782) covers usersApi + rolesApi. web/src/api/identity.ts has never received one comprehensive audit against the real router table -- each fix so far has been reactive and single-call-site/single-object scoped. Noting this pattern for CODE-DESIGNER and ORCH: worth a follow-up recommendation (not expanding THIS issue's scope) that identity.ts's remaining objects (tokensApi, and the still-unrouted usersApi.delete/.resetPassword and rolesApi.get/.update/.delete/.grantPermission/.revokePermission, none of which have a matching backend route at all, routed or not) get one full audit pass rather than discovering the rest piecemeal via UAT. Severity stays at ISS-0782's filed MAJOR; this run does not overlap ISS-0765's already-open scope (groupsApi) except incidentally where UserDetailPage.tsx also calls groupsApi.list -- flagged explicitly in the Step 1 handoff for CODE-DESIGNER to decide whether to include that one shared call site here or defer to ISS-0765.",
+    "artifacts_out": [],
+    "issues": [],
+    "next_action": "Proceed to Step 1 (diagnose/reproduce)"
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

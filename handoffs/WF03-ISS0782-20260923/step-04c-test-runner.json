@@ -1,0 +1,53 @@
+{
+  "handoff_id": "d1e2f3a4-0782-4000-8000-00000000000c",
+  "run_id": "WF03-ISS0782-20260923",
+  "workflow_id": "WF-03",
+  "step": "04c",
+  "from_agent": "TEST-DESIGN-VALIDATOR",
+  "to_agent": "TEST-RUNNER",
+  "file": "handoffs/WF03-ISS0782-20260923/step-04c-test-runner.json",
+  "created_at": "2026-09-22T20:10:14Z",
+  "started_at": "2026-09-22T20:10:14Z",
+  "completed_at": "2026-09-22T20:20:00Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S6",
+    "issue_id": "ISS-0782",
+    "queue_ref": "Q-781",
+    "github_ref": "GH-1722",
+    "branch": "feature/WF03-ISS0782-fix-20260923",
+    "commit": "c1c6e430",
+    "related_handoff_ids": [
+      "handoffs/WF03-ISS0782-20260923/step-04b-test-design-validator.json"
+    ],
+    "artifacts_in": [
+      "web/src/api/identity.ts",
+      "web/src/api/__tests__/identity.usersRoles.test.ts",
+      "web/tests/e2e/f5-admin-users.e2e.spec.ts"
+    ]
+  },
+  "task": {
+    "description": "WF-03 Step 4c: run the frontend verification suite for ISS-0782's identity.ts routing fix (npm run type-check, npm run lint, npm test -- --run, npm run guards) and report real pass/fail counts. Confirmed via git diff --name-only a1cb9604...HEAD that this branch's changes are entirely within web/ (no lib/letflow/ or priv/repo/migrations/ files touched), so mix test/mix compile is out of scope for this run.",
+    "acceptance_criteria": [
+      "npm run type-check, npm run lint, npm test -- --run, npm run guards all run to completion with real output quoted",
+      "scope confirmation (git diff --name-only) that no backend files changed, justifying skipping mix test",
+      "attempt to run the new e2e spec against a real backend if one is live, coordinating with other active agents on this shared checkout first; report what was observed if not run"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "Shared, non-worktree checkout. tasklist /FI \"IMAGENAME eq erl.exe\" showed no live Erlang/backend processes before starting; no other agent (main, gui-review-continuation) reported a running backend, and localhost:4000/localhost:5173 both refused connections, so nothing was clobbered and no backend was started by this run. git diff --name-only a1cb9604...HEAD confirmed scope: handoffs/*, lib/letflow/design/iss0782-identity-api-route-fix.md, test/specs/ISS-0782.md, web/src/api/__tests__/identity.usersRoles.test.ts, web/src/api/identity.ts, web/tests/e2e/f5-admin-users.e2e.spec.ts -- no lib/letflow/ application code or priv/repo/migrations/ touched, so mix test/mix compile is correctly out of scope for this run. All four required commands run from web/: (1) npm run type-check (tsc -b tsconfig.json) -- clean exit, no errors. (2) npm run lint (eslint . --ext ts,tsx --report-unused-disable-directives --max-warnings 0) -- clean exit, no warnings/errors. (3) npm test -- --run (vitest run --passWithNoTests --exclude tests/e2e/** --exclude tests/guards/**) -- Test Files: 112 passed (112); Tests: 797 passed (797); 0 failed; includes web/src/api/__tests__/identity.usersRoles.test.ts (5 tests, all passed). Duration 18.87s. (4) npm run guards (meta-control, source-scan, bundle-scan, role-set specs, includes a production build) -- Test Files: 4 passed (4); Tests: 48 passed (48); build succeeded (dist output, expected >500kB vendor chunk size warning only, not an error). No failures in any of the four required commands. E2E: web/tests/e2e/f5-admin-users.e2e.spec.ts was NOT run against a real backend -- no live backend or dev server was found (no erl.exe process, connection refused on localhost:4000 and localhost:5173), and starting docker compose/the backend was not attempted given the shared-checkout caution and no coordination signal that another agent needed or already had one up. This matches TEST-DESIGN-VALIDATOR's note that full e2e green is separately blocked by a known, out-of-scope Keycloak permission-provisioning gap in the dev realm -- not exercised or newly diagnosed in this run.",
+    "artifacts_out": [
+      "web/src/api/identity.ts",
+      "web/src/api/__tests__/identity.usersRoles.test.ts",
+      "web/tests/e2e/f5-admin-users.e2e.spec.ts"
+    ],
+    "issues": [
+      "e2e spec f5-admin-users.e2e.spec.ts not executed this run: no live backend available in this shared checkout at run time. Known separate blocker (Keycloak dev-realm permission provisioning gap) already flagged by TEST-DESIGN-VALIDATOR as out of scope for ISS-0782."
+    ],
+    "next_action": "Route to ISSUE-FIXER for Step 5 (close issue)"
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

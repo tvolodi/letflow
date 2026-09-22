@@ -13,16 +13,16 @@ import type {
 
 export const usersApi = {
   list: (params?: { page?: number; page_size?: number; search?: string; status?: string }) =>
-    client.get<PagedResponse<User>>('/api/v1/users', params as Record<string, unknown>),
+    client.get<PagedResponse<User>>('/api/v1/identity/users', params as Record<string, unknown>),
 
   get: (id: string) =>
-    client.get<User>(`/api/v1/users/${id}`),
+    client.get<User>(`/api/v1/identity/users/${id}`),
 
   create: (body: { username: string; email: string; display_name: string; password: string; role_ids?: string[] }) =>
-    client.post<User>('/api/v1/admin/users', body),
+    client.post<User>('/api/v1/identity/users', body),
 
   update: (id: string, body: Partial<{ display_name: string; email: string; status: 'ACTIVE' | 'INACTIVE'; is_active: boolean; role_ids: string[]; group_ids: string[] }>) =>
-    client.patch<User>(`/api/v1/users/${id}`, body),
+    client.patch<User>(`/api/v1/identity/users/${id}`, body),
 
   resetPassword: (id: string, newPassword: string) =>
     client.post<void>(`/api/v1/users/${id}/reset-password`, { password: newPassword }),
@@ -63,7 +63,7 @@ export const groupsApi = {
 
 export const rolesApi = {
   list: () =>
-    client.get<PagedResponse<Role>>('/api/v1/admin/roles'),
+    client.get<PagedResponse<Role>>('/api/v1/identity/roles'),
 
   get: (id: string) =>
     client.get<Role>(`/api/v1/admin/roles/${id}`),

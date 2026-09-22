@@ -1,0 +1,68 @@
+{
+  "handoff_id": "wf03-iss0782-step03b",
+  "run_id": "WF03-ISS0782-20260923",
+  "workflow_id": "WF-03",
+  "step": "03b",
+  "from_agent": "ORCH",
+  "to_agent": "SECURITY-REVIEWER",
+  "file": "handoffs/WF03-ISS0782-20260923/step-03b-security-reviewer.json",
+  "created_at": "2026-09-23T19:50:00Z",
+  "started_at": "2026-09-23T19:50:00Z",
+  "completed_at": "2026-09-23T19:55:00Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S6",
+    "issue_ids": ["ISS-0782"],
+    "related_handoff_ids": [
+      "handoffs/WF03-ISS0782-20260923/step-01-issue-fixer-diagnose.json",
+      "handoffs/WF03-ISS0782-20260923/step-02-code-designer.json",
+      "handoffs/WF03-ISS0782-20260923/step-02b-design-gate.json",
+      "handoffs/WF03-ISS0782-20260923/step-03a-frontend-dev.json"
+    ],
+    "artifacts_in": ["web/src/api/identity.ts"]
+  },
+  "task": {
+    "description": "WF-03 Step 3 security gate (hard gate) for ISS-0782's fix: web/src/api/identity.ts's usersApi.list/get/create/update and rolesApi.list corrected from hardcoded, nonexistent /api/v1/users and /api/v1/admin/roles path literals to the real, already-mounted /api/v1/identity/users and /api/v1/identity/roles paths. Commit 2e36f8c2 on feature/WF03-ISS0782-fix-20260923.",
+    "acceptance_criteria": [
+      "Confirm the new paths are real, authz-gated backend routes, not something granting broader access than the old (nonexistent) ones",
+      "Confirm no tenant-isolation regression, no auth/authz bypass, no token-handling change, no response-shaping change, no shim/adapter hiding a contract gap",
+      "INV-1..INV-9 assessed against the actual diff"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "scope_test": "IN SCOPE -- this changes how the frontend calls the users/roles admin API (a tenant-data-path change: response-shaping/lookup-by-ID access for tenant-scoped Users/Roles admin screens), so SECURITY-REVIEWER sign-off applies per the handoff's own framing, even though the diff is 5 URL string literals with no backend code touched.",
+    "diff_used": "git show 2e36f8c2 -- web/src/api/identity.ts (also independently read lib/letflow/routers/identity.ex in full, and lib/letflow/router.ex's forward chain, rather than trusting the design doc's claim that the routes exist and are authz-gated).",
+    "independent_route_verification": "Confirmed directly from source, not taken on faith from the design doc: lib/letflow/router.ex line 130 forwards '/api/v1' to Letflow.Plugs.ApiPipeline; lib/letflow/routers/identity.ex moduledoc (lines 1-7) confirms this sub-router is mounted at '/identity' by that pipeline, giving exact full paths '/api/v1/identity/users' and '/api/v1/identity/roles' -- matching all 5 edited literals exactly. grep of lib/letflow/routers/identity.ex confirms each targeted route is authz-gated and scoped: 'authz_post \"/users\", :UsersManage' (line 158), 'authz_get \"/users\", :UsersManage' (162), 'authz_get \"/users/:id\", :UsersManage' (166), 'authz_patch \"/users/:id\", :UsersManage' (170), 'authz_get \"/roles\", :RolesManage' (219) -- all pass conn.assigns.scoped_opts (tenant-prefix scoping resolved upstream by Letflow.Api.Context.scoped_repo_opts/1 per the moduledoc) into their handlers. The old, nonexistent paths ('/api/v1/users', '/api/v1/admin/users', '/api/v1/admin/roles') returned 404 (unroutable) -- the new paths grant exactly the same authz-gated, tenant-scoped access already designed for this admin screen, not anything broader. No new route, handler, or authz rule was added or changed by this diff; only the frontend's client-side literal now points at a route that always existed.",
+    "invariant_assessment": {
+      "INV-1": "APPLIES (diff touches how a tenant-scoped resource -- Users/Roles -- is accessed) -- SATISFIED. No Ecto schema, migration, or query-scoping code is touched by this diff at all -- it is purely a frontend TypeScript path-literal change. The backend-side tenant scoping mechanism (scoped_opts / :prefix resolution in Letflow.Routers.Identity) is completely unchanged; this diff only makes the frontend reach the already-correctly-scoped route instead of 404ing before ever reaching it. (a)/(b)/(c) of INV-1's verify procedure are not applicable to this diff's file (no schema/migration in scope) -- backend scoping was already reviewed and is unchanged.",
+      "INV-2": "NOT-APPLICABLE -- no response body field selection changed. Design doc confirms (and independent read of identity.ts confirms) return types User/Role/PagedResponse<T> are untouched; server-side field selection in Letflow.Routers.Identity's handlers is untouched by this diff.",
+      "INV-3": "NOT-APPLICABLE -- S5 not started.",
+      "INV-4": "APPLIES -- SATISFIED. Ran grep -rniE secret-pattern heuristic and System.get_env check scoped to the changed file's area; the diff contains only URL path string literals, no token/secret/credential material introduced, logged, or serialised. No change to client.ts's auth-token attachment logic.",
+      "INV-5": "NOT-APPLICABLE -- no not-found/forbidden response-shape logic changed; that logic lives entirely server-side in Letflow.Routers.Identity's existing (unchanged) handlers.",
+      "INV-6": "APPLIES -- SATISFIED by this handoff itself, plus the independent route verification above (new-to-the-frontend data-access path demonstrated to reach an existing, already-scoped backend route, not a new one).",
+      "INV-7": "NOT-APPLICABLE -- no SQL anywhere in this diff (TypeScript file only).",
+      "INV-8": "NOT-APPLICABLE -- no Elixir error-handling path touched; TypeScript call sites' signatures, parameter types, and error handling are unchanged (confirmed via design doc's 'Confirmation: pure string-literal change' and by reading the diff -- only the string argument changes, not the function bodies' control flow).",
+      "INV-9": "NOT-APPLICABLE -- no outbound HTTP request derived from tenant-controlled input; these are fixed, hardcoded first-party API paths, not tenant-supplied URLs."
+    },
+    "specific_scrutiny_findings": {
+      "no_broader_access_granted": "CONFIRMED by independent source read (router.ex + routers/identity.ex), not by trusting the design doc. Old paths were unroutable (404); new paths reach routes already gated by authz_get/authz_post/authz_patch on :UsersManage / :RolesManage with tenant-scoped opts. Net effect is strictly 'goes from broken to working as originally intended,' not 'goes from restricted to permissive.'",
+      "no_token_handling_change": "CONFIRMED -- diff touches only the first argument (URL path) of existing client.get/post/patch calls; the client wrapper (web/src/api/client.ts) that attaches auth headers is untouched, and not present in this diff at all.",
+      "no_response_shaping_change": "CONFIRMED -- return types (PagedResponse<User>, User, PagedResponse<Role>) unchanged; no new parsing/mapping logic introduced.",
+      "no_shim_or_adapter": "CONFIRMED -- exactly one literal edited per call site, no new function, module, interceptor, or normalization layer. Matches FRONTEND-DEV's own claim in step-03a and is independently verified true by reading the diff.",
+      "no_other_call_site_touched": "CONFIRMED -- diff shows exactly 5 changed lines (usersApi.list/get/create/update, rolesApi.list); groupsApi.*, tokensApi.*, rolesApi.get/create/update/delete/grantPermission/revokePermission, usersApi.resetPassword/delete are all absent from the diff, matching the design doc's explicit scope boundary."
+    },
+    "verification_commands_run": [
+      "git show 2e36f8c2 -- web/src/api/identity.ts",
+      "grep -n 'authz_get|authz_post|authz_patch|scoped_opts' lib/letflow/routers/identity.ex",
+      "grep -n forward lib/letflow/router.ex",
+      "Read lib/letflow/routers/identity.ex moduledoc + route declarations in full"
+    ],
+    "summary": "PASS. Scope test: in scope (tenant-data-path, per handoff framing), reviewed in full. Applicable invariants INV-1, INV-4, INV-6 satisfied; INV-2/3/5/7/8/9 correctly NOT-APPLICABLE for this diff's shape (pure frontend URL-literal fix, no backend/SQL/error-handling code touched). Independently verified (not trusted from the design doc) that /api/v1/identity/users and /api/v1/identity/roles are real, currently-mounted, authz-gated, tenant-scoped routes in lib/letflow/routers/identity.ex, reached via lib/letflow/router.ex's /api/v1 -> ApiPipeline -> /identity mount chain. No tenant-isolation regression, no auth/authz bypass, no token-handling change, no response-shaping change, no shim/adapter introduced. No issues found.",
+    "issues": [],
+    "next_action": "Route to REVIEWER"
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

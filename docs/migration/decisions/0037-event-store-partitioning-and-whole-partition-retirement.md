@@ -192,3 +192,82 @@ handoff (`step-02a-elixir-dev.json`) and SECURITY-REVIEWER's PASS
   record. Confirmed no framework/library choice here contradicts an existing decision.
 
 No blocking gap found. Route to TEST-DESIGNER (WF-02 Step 3).
+
+## Implementation-discovered correction #2 (ELIXIR-DEV rework, WF-02 Step 2a rework1, 2026-09-22)
+
+TEST-DESIGN-VALIDATOR's Step 3b gate (`handoffs/WF02-REQ376-20260922/step-03b-test-design-validator.json`)
+found, by independently re-running the real test suite against Postgres 16 three times
+(seeds 0/1/42, all deterministic), that §4.4a's `keep_forever` relocation — as
+implemented per the sign-off above — broke step 4's own `ATTACH` precondition: 4.4a's
+rows landed in `events_archive_default` for the target month's own range, still sitting
+there when `ATTACH` ran immediately afterward, and Postgres correctly refused it
+(`23514 check_violation`).
+
+This rework's own dispatch instructions proposed a specific fix — move 4.4a to run
+*after* `ATTACH` succeeds, still targeting `events_archive_default` directly. ELIXIR-DEV
+verified that proposal against real Postgres 16 before implementing it and found **it
+does not work either**, for a reason deeper than ordering: a two-statement minimal
+reproduction (`CREATE TABLE ... PARTITION BY RANGE`, a `DEFAULT` partition, `ATTACH` a
+sibling covering a range, then `INSERT` an in-range row directly into the `DEFAULT`
+partition) confirms Postgres's default-partition mechanism rejects an in-range `INSERT`
+into a `DEFAULT` partition *whenever any sibling partition already claims that range* —
+symmetric to the already-known "`ATTACH` rejects an already-populated-in-range default"
+precondition. Combined, these two facts mean: **for the exact calendar month being
+retired, `events_archive_default` can never durably hold a row in that month's range,
+neither before, during, nor after that month's own dedicated partition is attached to
+`events_archive` — no ordering of steps within the current schema resolves this.**
+
+**Corrected resolution, implemented in `Letflow.EventStore.PartitionMaintenance`:**
+§4.4a's original goal — physically relocating `keep_forever` rows into
+`events_archive_default` so a *hypothetical future* per-partition-DROP purge tier could
+one day drop a whole month's partition without losing protected data — is not
+achievable via that destination for a month that keeps its own dedicated retired
+partition, which every month does under this design (decision 0037 already commits to
+**never** `DROP`ing a partition; only `DETACH`+`ATTACH`, permanently). Given that,
+`keep_forever` rows need no separate physical relocation at all: they are already
+carried across from `events` to `events_archive`, intact, by the same whole-partition
+`DETACH`/`ATTACH` that carries every other row in that month, with no row copy — exactly
+as durable as any other retained row, because nothing in this codebase ever drops a
+retired partition. §4.4a is now **read-only**: it counts how many `keep_forever`-policy
+rows the retiring partition carries (`count_protected_rows/2`, informational value for
+`protected_rows_relocated`) and issues no `INSERT`/`DELETE`. This is a narrower, more
+honest claim than the original design's, does not weaken any currently-live guarantee
+(EO-002's count-preserved invariant still holds — verified against real Postgres, see
+below — because the whole-partition transfer itself preserves the row), and does not
+foreclose future work: if a per-partition-DROP purge tier is ever designed, protecting
+`keep_forever` rows from *that* specific operation will need its own mechanism at that
+time (most likely exempting a partition with protected rows from that future `DROP`
+entirely, or relocating such rows to a table outside this date-range partition scheme
+immediately before that specific `DROP` — genuinely new work, out of REQ-376's scope,
+flagged here for whoever designs that tier).
+
+`docs/agents/instructions/security-invariants.md` INV-7 is unaffected (no new
+interpolation site; the removed `INSERT`/`DELETE` pair predated this change under the
+same identifier-only-interpolation discipline the rest of this module already
+documents). Design doc §4.4 updated in place (`lib/letflow/design/req376-partition-event-retirement.md`,
+same commit) with the full empirical evidence, matching REVIEWER's own established
+precedent (above) of amending these documents directly for implementation-discovered
+corrections rather than leaving superseded framing to mislead a future reader.
+
+**Verification (ELIXIR-DEV, this rework):**
+- `MIX_ENV=test mix test test/letflow/event_store/partition_maintenance_test.exs --seed 0|1|42`
+  — EO-002 passes on all three seeds (previously failed 3/3, deterministic
+  `23514 check_violation`). The suite's other two pre-existing, unrelated failures
+  (a UUID-binary-encoding bug in the "correction (a)" test, a flaky race in the
+  `:pending_detach` induction) are TEST-DESIGNER's own separate rework and are expected
+  to still fail here.
+- A throwaway `mix run` script against a freshly provisioned tenant schema (real
+  Postgres 16, `letflow-postgres-1`, port 5462) reproduced the exact EO-002 fixture
+  shape end-to-end outside ExUnit: seeded one `keep_forever` row and one ordinary row in
+  an eligible past month, called `retire_month/3` fresh (`{:ok, %{protected_rows_relocated: 1,
+  resumed_from: :not_started}}`), confirmed the protected count across `events` UNION
+  `events_archive` unchanged (1 before, 1 after) and `events`'s own total row count is 0
+  post-retirement, then called `retire_month/3` again against the same now-retired month
+  (`{:ok, %{protected_rows_relocated: 1, resumed_from: :already_retired}}`, confirming
+  resumed-call reporting is accurate, not hard-coded) — printed `VERIFY: PASS`.
+- `mix compile --warnings-as-errors --force` (MIX_ENV=test): clean, 0 warnings.
+  `mix format --check-formatted`: exit 0.
+
+This changes the retirement DDL sequence itself (removes an `INSERT`/`DELETE` pair from
+the runtime path entirely), so it re-enters SECURITY-REVIEWER (Step 2c) and REVIEWER
+(Step 2d) for re-gate before TEST-DESIGN-VALIDATOR re-runs Step 3b.

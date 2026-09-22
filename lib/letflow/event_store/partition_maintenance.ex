@@ -357,8 +357,12 @@ defmodule Letflow.EventStore.PartitionMaintenance do
   # -- §4.3.3 the steps themselves ---------------------------------------------
 
   defp do_not_started(schema_name, year, month, partition) do
-    {default_reconciled, protected_relocated} =
-      reconcile_step_1(schema_name, year, month, partition)
+    # §4.4b only, here -- the pre-detach step is now JUST the
+    # events_archive_default reconciliation (see this module's own
+    # "IMPLEMENTATION-DISCOVERED CORRECTION (further, found by testing)"
+    # comment on count_protected_rows/2 below for why 4.4a's original
+    # physical-relocation mechanism is gone entirely, not merely reordered).
+    default_reconciled = reconcile_default_partition(schema_name, year, month, partition)
 
     detach_partition!(schema_name, partition)
 
@@ -368,7 +372,6 @@ defmodule Letflow.EventStore.PartitionMaintenance do
       month,
       partition,
       default_reconciled,
-      protected_relocated,
       :not_started
     )
   end
@@ -376,7 +379,7 @@ defmodule Letflow.EventStore.PartitionMaintenance do
   defp do_pending_detach(schema_name, year, month, partition) do
     case finalize_detach(schema_name, partition) do
       :ok ->
-        do_detached_standalone(schema_name, year, month, partition, 0, 0, :pending_detach)
+        do_detached_standalone(schema_name, year, month, partition, 0, :pending_detach)
 
       {:error, reason} ->
         {:error, {:stuck_pending_detach, reason}}
@@ -390,7 +393,6 @@ defmodule Letflow.EventStore.PartitionMaintenance do
       month,
       partition,
       default_reconciled,
-      0,
       :detached_standalone
     )
   end
@@ -401,7 +403,6 @@ defmodule Letflow.EventStore.PartitionMaintenance do
          month,
          partition,
          default_reconciled,
-         protected_relocated,
          resumed_from
        ) do
     constraint = bounds_constraint_name(year, month)
@@ -410,6 +411,16 @@ defmodule Letflow.EventStore.PartitionMaintenance do
     ensure_bounds_constraint!(schema_name, partition, constraint, from_bound, to_bound)
     attach_partition!(schema_name, partition, from_bound, to_bound)
     drop_bounds_constraint!(schema_name, partition, constraint)
+
+    # §4.4a, corrected: count_protected_rows/2 is read-only now (see its own
+    # comment for the full "why") -- runs after ATTACH purely to report how
+    # many keep_forever rows this retired partition carries; it never
+    # mutates anything, so its position relative to ATTACH has no
+    # correctness consequence either way (kept here, after, since the count
+    # is only meaningful/cheap to state once the partition's final row set
+    # -- including anything §4.4b swept in from events_archive_default -- is
+    # settled).
+    protected_relocated = count_protected_rows(schema_name, partition)
 
     {:ok,
      %{
@@ -424,10 +435,16 @@ defmodule Letflow.EventStore.PartitionMaintenance do
     constraint = bounds_constraint_name(year, month)
     drop_bounds_constraint!(schema_name, partition, constraint)
 
+    # Same read-only count as do_detached_standalone/6's final step, re-run
+    # here so a resumed call against an already-fully-retired month still
+    # reports an accurate protected_rows_relocated instead of a hardcoded 0
+    # -- see count_protected_rows/2's own comment.
+    protected_relocated = count_protected_rows(schema_name, partition)
+
     {:ok,
      %{
        retired_partition: partition,
-       protected_rows_relocated: 0,
+       protected_rows_relocated: protected_relocated,
        default_partition_rows_reconciled: 0,
        resumed_from: :already_retired
      }}
@@ -552,12 +569,15 @@ defmodule Letflow.EventStore.PartitionMaintenance do
 
   # §4.3.3 step 4 -- metadata-only ATTACH given step 3's pre-validated
   # constraint. Requires events_archive_default to hold no row in-range at
-  # this moment -- guaranteed by step 1's reconciliation (§4.4b) having
-  # already run (on :not_started) or having already been run by a prior
-  # call (on a resumed state -- the reconciliation is itself idempotent,
-  # §4.4b crash-recovery note: already-relocated rows are gone from
-  # events_archive_default, so a resumed call's own step 1 -- if re-entered
-  # -- naturally sees nothing left to move).
+  # this moment -- guaranteed by §4.4b's events_archive_default
+  # reconciliation having already run (on :not_started) or having already
+  # been run by a prior call (on a resumed state -- the reconciliation is
+  # itself idempotent, §4.4b crash-recovery note: already-relocated rows are
+  # gone from events_archive_default, so a resumed call's own §4.4b -- if
+  # re-entered -- naturally sees nothing left to move). §4.4a's keep_forever
+  # accounting is now read-only (see count_protected_rows/2's own comment
+  # for why physical relocation is impossible here), so it plays no part in
+  # this precondition at all.
   # ANOTHER material deviation from the approved design, discovered only by
   # testing against real Postgres -- flagged here for REVIEWER's Step 2d
   # attention, same as the default-partition finding at the top of
@@ -621,14 +641,10 @@ defmodule Letflow.EventStore.PartitionMaintenance do
     :ok
   end
 
-  # -- §4.4 step 1, in full: events_archive_default reconciliation (4.4b,
-  # runs first) + keep_forever relocation (4.4a, runs second) ---------------
-
-  defp reconcile_step_1(schema_name, year, month, partition) do
-    default_reconciled = reconcile_default_partition(schema_name, year, month, partition)
-    protected_relocated = relocate_protected_rows(schema_name, partition)
-    {default_reconciled, protected_relocated}
-  end
+  # -- §4.4 step 1 (4.4b -- events_archive_default reconciliation, runs
+  # BEFORE detach, called directly from do_not_started/4) and, further down
+  # this module, §4.4a (keep_forever relocation, runs AFTER attach, called
+  # from do_detached_standalone/6 and do_already_retired/4) -------------
 
   # §4.4b -- batched, bounded reconciliation. Fixed-size batches, one
   # Repo.transaction/1 per batch, SELECT...LIMIT with no OFFSET (each
@@ -707,47 +723,80 @@ defmodule Letflow.EventStore.PartitionMaintenance do
     :ok
   end
 
-  # §4.4a -- keep_forever relocation, unbatched (bounded by keep_forever's
-  # designed rarity, §4.4). Runs SECOND (after 4.4b) so its relocated rows
-  # land in events_archive_default and simply stay there rather than
-  # round-tripping (§4.4's own "order matters" note).
-  defp relocate_protected_rows(schema_name, partition) do
+  # §4.4a -- keep_forever accounting.
+  #
+  # IMPLEMENTATION-DISCOVERED CORRECTION (further, found by testing --
+  # TEST-DESIGN-VALIDATOR's Step 3b EO-002 gate, 2026-09-22, and confirmed by
+  # ELIXIR-DEV's own independent empirical re-check during this rework):
+  # this function used to physically relocate keep_forever rows via
+  # INSERT-then-DELETE into `events_archive_default` -- first (in the
+  # originally-approved design and its first implementation) BEFORE
+  # `detach_partition!/2`, relying on `events_archive` parent-table routing;
+  # then (this rework's first attempt, per this rework's own task
+  # instructions) AFTER `attach_partition!/4`, targeting
+  # `events_archive_default` directly. BOTH ARE IMPOSSIBLE, not just the
+  # first: Postgres's default-partition mechanism enforces, unconditionally,
+  # that NO row in a DEFAULT partition may ever fall within the range of any
+  # sibling partition attached to the same parent -- checked constructively
+  # on `ATTACH` (rejects an `ATTACH` if the default already holds an
+  # in-range row: `23514 check_violation`, confirmed 3/3 real Postgres 16
+  # runs at Step 3b) and reactively on plain `INSERT` once that sibling IS
+  # attached (rejects the `INSERT` itself: `23514 check_violation`,
+  # "new row for relation \"events_archive_default\" violates partition
+  # constraint" -- confirmed independently via a minimal two-statement
+  # reproduction against this workspace's real Postgres 16 instance during
+  # this rework, isolated from the rest of this module's own logic). There
+  # is no third ordering: for the exact calendar month this call is
+  # retiring, `events_archive_default` can NEVER durably hold a row in that
+  # month's range, neither before, during, nor after this month's own
+  # `ATTACH`, for as long as that month has its own dedicated
+  # `events_archive` partition (which `retire_month/3` always gives it, by
+  # design).
+  #
+  # Given that, decision 0037/this design's §4.4a original goal --
+  # physically moving keep_forever rows into `events_archive_default` so a
+  # HYPOTHETICAL future per-partition-DROP purge tier could drop a whole
+  # month's partition without losing protected data -- cannot be achieved by
+  # relocating rows anywhere within the CURRENT schema for a month that gets
+  # its own retired partition; the only table that can hold such a row is
+  # the retiring partition itself.
+  #
+  # Correct resolution (this rework): no physical relocation at all.
+  # Decision 0037 already commits this design to NEVER `DROP` a partition --
+  # only `DETACH`+`ATTACH`, permanently -- so every row in the retiring
+  # partition, keep_forever or not, already survives this call intact,
+  # carried across from `events` to `events_archive` by the whole-partition
+  # `DETACH`/`ATTACH` itself (§4.3.3), with no row copy. A keep_forever row
+  # needs no SEPARATE protection mechanism today: it is exactly as
+  # permanently retained as every other row in its month, because nothing in
+  # this codebase ever drops a retired partition. This function is now
+  # read-only -- it counts how many keep_forever-policy rows the retiring
+  # partition carries (for `protected_rows_relocated`'s informational value:
+  # "how many protected rows this retirement covered", not "how many rows
+  # were physically moved") and issues no `INSERT`/`DELETE`. §4.4b's own
+  # reconciliation (above) already folds in any keep_forever row that had
+  # separately landed in `events_archive_default` via `archive/1`'s early
+  # per-row path before this month retired, so this count is accurate
+  # regardless of a row's origin. If a future per-partition-DROP purge tier
+  # is ever built, protecting keep_forever rows from IT will need its own
+  # mechanism at that time (most likely: exempting matching partitions from
+  # that future DROP entirely, or moving keep_forever rows to a table
+  # outside this partition scheme's date-range constraint before that
+  # specific DROP) -- out of REQ-376's scope, flagged here for whoever
+  # designs that tier.
+  defp count_protected_rows(schema_name, partition) do
     keep_forever_types = keep_forever_event_types()
 
     if keep_forever_types == [] do
       0
     else
-      %Postgrex.Result{rows: rows} =
+      %Postgrex.Result{rows: [[count]]} =
         Repo.query!(
-          ~s{SELECT event_id, created_at FROM "#{schema_name}"."#{partition}" WHERE event_type = ANY($1)},
+          ~s{SELECT count(*) FROM "#{schema_name}"."#{partition}" WHERE event_type = ANY($1)},
           [keep_forever_types]
         )
 
-      case rows do
-        [] ->
-          0
-
-        _ ->
-          event_ids = Enum.map(rows, fn [event_id, _created_at] -> event_id end)
-          created_ats = Enum.map(rows, fn [_event_id, created_at] -> created_at end)
-
-          # Explicit column list, never `SELECT *`: the destination
-          # `events_archive` shape carries one extra column (`archived_at`)
-          # the source `events`-partition table does not have.
-          Repo.transaction(fn ->
-            Repo.query!(
-              ~s{INSERT INTO "#{schema_name}"."events_archive" (event_id, created_at, instance_id, event_type, payload, actor_id, sequence_number, idempotency_key, metadata, global_seq, archived_at) SELECT event_id, created_at, instance_id, event_type, payload, actor_id, sequence_number, idempotency_key, metadata, global_seq, (now() AT TIME ZONE 'utc') FROM "#{schema_name}"."#{partition}" WHERE event_id = ANY($1) AND created_at = ANY($2)},
-              [event_ids, created_ats]
-            )
-
-            Repo.query!(
-              ~s{DELETE FROM "#{schema_name}"."#{partition}" WHERE event_id = ANY($1) AND created_at = ANY($2)},
-              [event_ids, created_ats]
-            )
-          end)
-
-          length(rows)
-      end
+      count
     end
   end
 

@@ -461,18 +461,19 @@ folds in whatever had accumulated in `events_archive_default` for that month) as
      `ATTACH`/`DETACH` statement is re-issued (query-log assertion, same technique as
      the no-per-row-work case above).
 
-### 4.4 Step 1, in full: `events_archive_default` reconciliation + protected-record (`keep_forever`) relocation
+### 4.4 Step 1 (`events_archive_default` reconciliation) and `keep_forever` accounting
 
-This step now does two things, both before step 2's `DETACH`, both required for step
-4's `ATTACH` to succeed cleanly, both using the same insert-then-confirmed-delete
-idiom. **Order matters and is fixed: 4.4b runs before 4.4a.** Running 4.4a
-(`keep_forever` relocation into `events_archive_default`) before 4.4b (sweeping
-`events_archive_default` back into the partition) would move the just-relocated
-`keep_forever` rows right back out again on the very next sub-step — harmless but
-wasteful. Running 4.4b first means it only ever sweeps `archive/1`'s pre-existing
-early-moved rows; 4.4a's `keep_forever` rows then land in
-`events_archive_default` and simply stay there (still `events_archive`, still
-counted by EO-002, §4.5) rather than round-tripping.
+**[IMPLEMENTATION-DISCOVERED CORRECTION, further, 2026-09-22 — see §4.4a below for the
+full evidence]** This subsection originally described two DML pre-steps, both run
+before step 2's `DETACH`, with a fixed 4.4b-before-4.4a ordering to avoid one relocating
+into the other's target. That framing is now obsolete: only 4.4b is a real DML pre-step
+any more. **4.4b runs before `DETACH` (§4.3 step 2), exactly as before** — Postgres
+refuses `ATTACH` (step 4) if `events_archive_default` holds any row in the target
+month's range, so this reconciliation must complete first. **4.4a is no longer a
+relocation at all** — it is a read-only count, and can run at any point once the
+retiring partition's row set is final (this implementation runs it last, after `ATTACH`,
+for that reason) — see its own subsection below for why physical relocation turned out
+to be impossible, not merely reorderable.
 
 **4.4b — `events_archive_default` reconciliation, batched (revised in this rework —
 was an unbounded single transaction; required for §4.3 step 4's `ATTACH` to succeed;
@@ -552,55 +553,69 @@ copied), so the next `SELECT` naturally picks up only what remains. No separate
 crash-recovery bookkeeping is needed for the batch loop itself, consistent with
 §4.3.1's general "catalog-detected, never self-persisted" state design.
 
-**4.4a — `keep_forever` relocation (mechanism unchanged from the prior revision,
-corrected only in destination):** `SELECT event_id, created_at FROM
-#{prefix()}.events_y<year>m<month> WHERE event_type IN (<event_types with a global
-event_retention_policies row where policy = 'keep_forever'>)`. If this returns rows,
-they are relocated — `INSERT INTO #{prefix()}.events_archive (...) SELECT ...`
-(routes to `events_archive_default`, per §3.2 revised — **not** "a dedicated
-partition that already exists," which was this design's prior, now-corrected,
-assumption) followed by `DELETE FROM #{prefix()}.events_y<year>m<month> WHERE
-event_id = ANY(<relocated ids>) AND created_at = ANY(<relocated created_ats>)`, both
-inside one `Repo.transaction/1`, matching `archive_phase1_insert`/`archive_phase2_delete`'s
-existing insert-then-confirmed-delete idiom (`lib/letflow/event_store.ex` around line
-1490).
+**4.4a — `keep_forever` accounting.**
 
-Both 4.4a and 4.4b are bounded per-row pre-steps — **not** part of AC2's "no per-row
-DELETE" claim, which is specifically about steps 2–5 (§4.3.3), exactly as this design
-already distinguished for `keep_forever` alone in the prior revision; 4.4b extends the
-same exception category to the newly-identified default-partition precondition, but on
-different grounds: 4.4a is bounded because `keep_forever` rows are rare by design
-(argued above); 4.4b is bounded because its batched mechanism caps each transaction's
-row count and lock duration by construction, independent of how large the total
-reconciled set turns out to be (argued in the "Bound checked against §5's EO-001"
-paragraph above) — not because the total is assumed small.
+**[IMPLEMENTATION-DISCOVERED CORRECTION, further — ELIXIR-DEV, WF-02 Step 2a rework1,
+2026-09-22, confirmed by TEST-DESIGN-VALIDATOR's Step 3b gate and ELIXIR-DEV's own
+independent real-Postgres re-verification]** The mechanism this subsection originally
+specified — relocating `keep_forever` rows via `INSERT`-then-`DELETE` into
+`events_archive_default` — is **not achievable at all** for a month that gets its own
+dedicated `events_archive` partition (which every month does, by this design's own
+§4.3). Confirmed empirically two ways: (1) TEST-DESIGN-VALIDATOR's Step 3b gate found
+this original ordering (relocate before `DETACH`) leaves the relocated row sitting
+in-range in `events_archive_default` at the exact moment step 4's `ATTACH` runs,
+violating `ATTACH`'s own documented precondition (`23514 check_violation`, 3/3 real
+Postgres 16 runs). (2) ELIXIR-DEV verified the seemingly obvious fix — relocate *after*
+`ATTACH` instead — against real Postgres 16 before implementing it, and found the
+*same* error class from the opposite direction: once the target month's own partition
+is attached, Postgres's default-partition mechanism itself refuses any `INSERT` into
+`events_archive_default` whose value falls in that already-claimed range (`23514
+check_violation`, "new row for relation \"events_archive_default\" violates partition
+constraint" — confirmed via a minimal two-statement reproduction against this
+workspace's own Postgres 16 instance, independent of this module's other logic).
+Together these prove there is **no ordering** of steps within the current schema under
+which a row can durably occupy `events_archive_default` for a date range that also has
+its own dedicated attached partition — not before `ATTACH`, not after, not "in between."
 
-This relocation is bounded to however many `keep_forever`-policy rows the target
-month actually contains — expected to be small (the whole reason `keep_forever` exists
-is that it's the *exception*, not the common case) — and is a **distinct operation
-from the whole-month retirement DDL itself**, not a violation of AC2's "no per-row
-DELETE" claim: AC2's claim is about the *retirement* step (§4.3 steps 2–5, which never
-issue a DELETE), while this relocation is a separate, explicitly-scoped, and
-explicitly-tested (EO-002) pre-step that only runs when protected rows are actually
-present. **This distinction is stated explicitly here, not left for a reader to infer**,
-per this design's own obligation not to leave an open question unstated: a test
-proving AC2's "no per-row DELETE" claim must use a month fixture with zero
-`keep_forever` rows; a test proving EO-002 must use a month fixture with at least one,
-and both are legitimate, non-contradictory tests of the same function.
+**Corrected mechanism:** no physical relocation. `retire_month/3`'s whole-partition
+`DETACH`/`ATTACH` (§4.3) already carries every row in the retiring month — `keep_forever`
+or not — across from `events` to `events_archive` intact, with no row copy, and decision
+0037 already commits this design to **never** `DROP` a partition (only `DETACH`+`ATTACH`,
+permanently). A `keep_forever` row therefore needs no separate protection mechanism
+today: it is exactly as durably retained as every other row in its month, because
+nothing in this codebase ever drops a retired partition. §4.4a is now read-only:
+`SELECT count(*) FROM #{prefix()}.events_y<year>m<month> WHERE event_type IN (<event_types
+with a global event_retention_policies row where policy = 'keep_forever'>)`, run once the
+retiring partition's final row set is settled (after §4.4b's own reconciliation has
+folded in anything `archive/1` had separately moved into `events_archive_default`
+earlier). The count feeds `protected_rows_relocated` in the `{:ok, ...}` return —
+informational ("how many protected rows this retirement covered"), not "how many rows
+were physically moved," since none are. No `Repo.transaction/1`, no `INSERT`, no
+`DELETE` — issues zero row-level queries beyond the one `SELECT count(*)`.
 
-**Why relocation (not "never dropped" alone) is still needed despite §4.3 never
-dropping anything:** even though the whole-month DETACH+ATTACH sequence never
-destroys data, a `keep_forever` row landing in `events_archive` via the *general*
-whole-partition path is not itself wrong — but leaving the exemption unimplemented
-would mean this design has no mechanism that specifically *proves* a `keep_forever`
-row's continued existence is a first-class, load-bearing invariant rather than an
-accidental byproduct of "we happen not to drop things." Decision 0037 reserves the
-right to add a second-tier `events_archive`-own-partition purge-by-DROP later (out of
-this decision's scope, door deliberately left open) — when that lands, its own DROP
-step will need exactly this relocation mechanism to keep `keep_forever` rows safe, so
-building it now, and proving it with EO-002, is not speculative: it is the one piece
-of this decision's design that a *future*, DROP-capable retirement tier will directly
-depend on.
+**What this gives up, honestly stated:** the *original* goal — physically separating
+`keep_forever` rows from their own month's partition so a **hypothetical future**
+per-partition-DROP purge tier (decision 0037's own "door deliberately left open," never
+built) could drop that partition without losing protected data — cannot be achieved by
+this design at all, for the reason proven above (Postgres's own default-partition
+semantics, not an implementation gap). This is not a regression against anything
+currently promised: no DROP-capable purge tier exists in this codebase today, so no
+existing guarantee weakens. If/when such a tier is designed, protecting `keep_forever`
+rows from *that specific* future `DROP` will need its own mechanism at that time —
+most plausibly, exempting any partition holding a `keep_forever` row from that future
+DROP entirely (a `keep_forever`-partitioned-DROP tier would need to check for this
+before dropping anyway), or relocating `keep_forever` rows to a table genuinely outside
+this date-range partition scheme immediately before that specific DROP. Flagged here,
+explicitly, for whoever designs that tier — not solved by this design, which only needs
+to prove `keep_forever` rows survive *its own* retirement, and does (§4.5).
+
+4.4b remains a bounded per-row pre-step — **not** part of AC2's "no per-row DELETE"
+claim, which is specifically about steps 2–5 (§4.3.3): 4.4b is bounded because its
+batched mechanism caps each transaction's row count and lock duration by construction,
+independent of how large the total reconciled set turns out to be (argued in the "Bound
+checked against §5's EO-001" paragraph above) — not because the total is assumed small.
+4.4a, now read-only, issues no per-row DML at all and so raises no AC2 question in the
+first place.
 
 ### 4.5 EO-002 test shape (evidence, not code)
 
@@ -608,9 +623,11 @@ depend on.
 WHERE policy = 'keep_forever'` (or equivalently, a fixture-seeded known count) before
 `retire_month/3`; the same count, now summed across `events` ∪ `events_archive` (both
 now covered by `read/2`'s union, §6, or a direct query against both tables), after —
-asserted equal. The count must be taken *across both tables*, not just `events`,
-since a successful relocation moves rows out of `events` by design; asserting the
-count in `events` alone before/after would incorrectly read as "records lost."
+asserted equal. The count must be taken *across both tables*, not just `events`, since
+whole-partition retirement moves the row's home table from `events` to `events_archive`
+by design (§4.4a, corrected: no separate relocation — the whole-month `DETACH`/`ATTACH`
+itself is what carries it across); asserting the count in `events` alone before/after
+would incorrectly read as "records lost."
 
 ## 5. EO-001 (non-blocking, concurrent-write-safe) — consolidated statement
 
@@ -736,7 +753,7 @@ closes the loop `retire_month/3`'s DETACH+ATTACH design opened.
 |----|----|
 | 1 | `docs/migration/decisions/0037-...md` (this design's companion decision record), pending REVIEWER sign-off |
 | 2 (EO-001) | §4.3 retirement sequence (whole-partition DDL only in steps 2–5, honest "sequence not single-statement" framing, §4.3.1 crash-recovery state machine, §5); crash-recovery/idempotent-resume test shape in §4.3.3 |
-| 3 (EO-002) | §4.4 (4.4a `keep_forever` relocation + 4.4b `events_archive_default` reconciliation), §4.5 test shape |
+| 3 (EO-002) | §4.4 (4.4a `keep_forever` accounting, read-only + 4.4b `events_archive_default` reconciliation), §4.5 test shape |
 | 4 (EO-003) | §6 `read/2` union extension |
 | 5 | §3 pre-creation mechanism, `months_ahead: 2` default (revised to `events`-only, §3.2) |
 | 6 | Decision 0037's "Relationship to `archive/1`" section, restated in §4.2/§4.3/§3.2 here |

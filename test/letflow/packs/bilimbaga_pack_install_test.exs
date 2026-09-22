@@ -42,6 +42,7 @@ defmodule Letflow.Packs.BilimbagaPackInstallTest do
 
   alias Letflow.Definitions.ExportImport
   alias Letflow.Definitions.SolutionPack
+  alias Letflow.Definitions.SolutionPackArtefactBase
   alias Letflow.Entities.Definitions
   alias Letflow.Entities.EntityDefinition
   alias Letflow.Entities.Query.Compiler
@@ -100,6 +101,13 @@ defmodule Letflow.Packs.BilimbagaPackInstallTest do
         from(i in Letflow.Definitions.SolutionPackInstall,
           where: i.tenant_id == ^fixture.tenant_id
         )
+      )
+
+      # REQ-379: capture_artefact_bases/4 now writes solution_pack_artefact_bases
+      # rows carrying the same tenant_id -> tenants FK -- same class of
+      # global-table FK as solution_pack_installs above.
+      Letflow.Repo.delete_all(
+        from(b in SolutionPackArtefactBase, where: b.tenant_id == ^fixture.tenant_id)
       )
 
       # Same class of global-table FK: entity_column_promotions is global and

@@ -39,6 +39,7 @@ defmodule Letflow.Definitions.SolutionPackTest do
 
   alias Letflow.Definitions.ProcessDefinition
   alias Letflow.Definitions.SolutionPack
+  alias Letflow.Definitions.SolutionPackArtefactBase
   alias Letflow.Definitions.SolutionPackInstall
   alias Letflow.Engine.VariableSchema
   alias Letflow.Entities.Definitions, as: EntityDefinitions
@@ -63,6 +64,12 @@ defmodule Letflow.Definitions.SolutionPackTest do
   defp cleanup_solution_pack_installs!(tenant_id) do
     on_exit(fn ->
       Repo.delete_all(from(s in SolutionPackInstall, where: s.tenant_id == ^tenant_id))
+
+      # REQ-379: capture_artefact_bases/4 now writes solution_pack_artefact_bases
+      # rows carrying the same tenant_id.tenants FK -- same LIFO on_exit
+      # reasoning as the solution_pack_installs delete above, extended to this
+      # second GLOBAL table.
+      Repo.delete_all(from(b in SolutionPackArtefactBase, where: b.tenant_id == ^tenant_id))
     end)
   end
 
@@ -237,6 +244,12 @@ defmodule Letflow.Definitions.SolutionPackTest do
   defp cleanup_solution_pack_installs!(tenant_id) do
     on_exit(fn ->
       Repo.delete_all(from(s in SolutionPackInstall, where: s.tenant_id == ^tenant_id))
+
+      # REQ-379: capture_artefact_bases/4 now writes solution_pack_artefact_bases
+      # rows carrying the same tenant_id.tenants FK -- same LIFO on_exit
+      # reasoning as the solution_pack_installs delete above, extended to this
+      # second GLOBAL table.
+      Repo.delete_all(from(b in SolutionPackArtefactBase, where: b.tenant_id == ^tenant_id))
     end)
   end
 

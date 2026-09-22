@@ -909,3 +909,23 @@ history:
       docs/migration/stage-N-*.md or decisions/*.md file was named by
       ISS-0781's acceptance criteria. Merged via PR (Step Final routed to
       ORCH per WF-03).
+  - req: REQ-377
+    event: started
+    agent: FRONTEND-DEV
+    at: "2026-09-22T12:57:54Z"
+    note: >
+      WF-02 run WF02-REQ377-20260922 started (letflow-queue task 737,
+      GH#1625). Branch feature/WF02-REQ377-20260922 created and pushed
+      from origin/main. Scope: operator-facing history-retirement screen
+      (PLATFORM_ADMIN, single-action retirement of the oldest eligible
+      month, retention summary with protected-record count before/after,
+      non-blocking while running), wired to REQ-376's real backend.
+      REQ-376 built the retirement mechanism itself
+      (Letflow.EventStore.PartitionMaintenance) but shipped no HTTP API
+      surface -- confirmed by grep, no router/controller exposes it. Per
+      the REQ-399/REQ-398 precedent (naming a required new backend
+      route as in-scope rather than treating it as a blocker), this run
+      names and builds the required admin-only backend route(s) as part
+      of REQ-377 itself, following the lib/letflow/routers/
+      platform_migrations.ex precedent (PLATFORM_ADMIN catch-all, no
+      new permission invented).

@@ -309,3 +309,44 @@ export function seedHistoricalEventSql(schema: string, month: BackdatedMonth, ev
       ('${eventId}', '${midMonth}', '${instanceId}', 'req377_e2e_seed_event', '{}'::jsonb, '${instanceId}', 1, 'req377-e2e-${eventId}', '{}'::jsonb);
   `
 }
+
+/**
+ * REQ-384 EO-001 fixture helper for `tenant-cache.pipeline.e2e.spec.ts` --
+ * inserts a real `tenant_memberships` row directly via SQL.
+ *
+ * Why direct SQL, not an HTTP write: `priv/repo/migrations/20260922000011_create_tenant_memberships.exs`'s
+ * own header comment and `lib/letflow/identity/tenant_membership.ex`'s moduledoc
+ * both state this table is ADMIN-WRITE-ONLY and that "no application-code writer
+ * ships with REQ-384" -- `Letflow.Identity` exposes only
+ * `list_memberships_for_subject/1` (read), never a create function, and no
+ * router mounts a write route for this table (design
+ * `lib/letflow/design/req384-tenant-switcher-cache-isolation.md` SS1.1, OQ-2).
+ * This is the exact same "no HTTP path exists for the fixture this spec needs"
+ * situation `createActiveEntityDefinition` above documents for a different
+ * table -- direct SQL is the only real, non-mocked way to create this row.
+ *
+ * `subjectKey` must already be normalized (lower-cased, trimmed) exactly as
+ * `TenantMembership.normalize_subject_key/1`'s write-side changeset would --
+ * this helper does not re-normalize, matching that module's own "normalize
+ * once, at the caller" discipline.
+ *
+ * Public-schema table (no tenant-prefixed schema qualifier) -- same tier as
+ * `tenants` itself (design SS1.1).
+ */
+export function insertTenantMembershipSql(
+  id: string,
+  subjectKey: string,
+  tenantId: string,
+  displayLabel: string,
+): string {
+  return `
+    INSERT INTO tenant_memberships (id, subject_key, tenant_id, display_label, inserted_at, updated_at)
+    VALUES ('${id}', '${subjectKey}', '${tenantId}', '${displayLabel}', NOW(), NOW())
+    ON CONFLICT (subject_key, tenant_id) DO NOTHING;
+  `
+}
+
+/** Cleanup counterpart to `insertTenantMembershipSql` -- removes exactly the row this test run created. */
+export function deleteTenantMembershipSql(id: string): string {
+  return `DELETE FROM tenant_memberships WHERE id = '${id}';`
+}

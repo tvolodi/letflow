@@ -9,16 +9,29 @@
  *
  * What the source investigation found, and why this spec covers what it covers:
  *
- *   - EO-001 (mid-session company switch via a selector, without reload) has NO
- *     underlying feature at all — grepped exhaustively, no in-app tenant/company
- *     switcher exists anywhere in web/src (AppShell.tsx doesn't even display the
- *     tenant name). Tenant identity is fixed for the life of an OIDC session
- *     (`tenant_slug` claim on the JWT); changing company requires a fresh sign-in
- *     against a different Keycloak realm, a full browser navigation that destroys
- *     the JS heap (including the React Query cache) by construction. There is
- *     nothing to click, so EO-001 cannot be driven and is not attempted here —
- *     filed as REQ-384. This is a rare case where the scenario fixture's own
- *     "aspirational, unbuilt" NOTE turns out to be correct, not stale.
+ *   - EO-001 (mid-session company switch via a selector, without reload) had NO
+ *     underlying feature when this file was first authored (2026-09-20) — see
+ *     the historical note this replaces, preserved in git history at commit
+ *     `2b7f4a28`'s parent. REQ-384 has since shipped (`TenantSwitcher.tsx`,
+ *     `AuthProvider.switchTenant`, tenant-keyed React Query cache) and this
+ *     file now drives it for real below: provisions a second, genuinely
+ *     separate tenant (its own Keycloak realm, own schema) via the real
+ *     onboarding saga, grants the acting admin a `tenant_memberships` row into
+ *     it (no HTTP write path ships with REQ-384 for that table — design SS1.1,
+ *     OQ-2 — so this is done via direct SQL, the same real-DDL-direct
+ *     technique `db-exec.ts`'s own moduledoc already established for a
+ *     different fixture need), then clicks the real `TenantSwitcher` control
+ *     and asserts the four-way isolation guarantee AC1-AC3 describe. See the
+ *     test body for why it asserts on TWO possible real outcomes rather than
+ *     one — `lib/letflow/design/req384-tenant-switcher-cache-isolation.md`
+ *     SS10's own OQ-3 leaves open whether this environment's Keycloak realms
+ *     are federated enough for the silent cross-realm switch to ever succeed,
+ *     and that is not something this spec can assume either way.
+ *     TEST-DESIGNER could not run this test live (no docker/live-stack access
+ *     in that environment) — statically verified against the real shipped
+ *     source only (testids, routes, API/SQL contracts). Flagged for
+ *     UAT-RUNNER to execute live before RELEASE-VALIDATOR signs off REQ-384's
+ *     TEST-DESIGNER follow-ups.
  *
  *   - EO-002 (signing out leaves nothing behind) IS the real, supported flow —
  *     and a genuine defect was found and fixed in this same change:
@@ -61,12 +74,18 @@ import {
   loginWithToken,
   navigateSpa,
   authHeaders,
+  resolveTenantContext,
   shot,
 } from '../pipeline'
-import { assertServiceReadiness, resolveCredential } from '../helpers'
+import { assertServiceReadiness, resolveCredential, BPM_IDP_BASE_URL } from '../helpers'
+import { runSqlAgainstDevPostgres, insertTenantMembershipSql, deleteTenantMembershipSql } from '../db-exec'
 
 const APP_BASE_URL = process.env.E2E_BASE_URL ?? 'http://127.0.0.1:4173'
 const API_BASE_URL = process.env.BPM_TEST_URL ?? 'http://127.0.0.1:8080'
+
+// Seeded verbatim in priv/keycloak/realms/bpm-default.json -- the "admin-user"
+// account's own email, used as this test's tenant_memberships subject_key.
+const BPM_DEFAULT_ADMIN_EMAIL = 'admin@letflow.local'
 
 interface TenantCachePipelineState {
   adminToken: string
@@ -76,7 +95,249 @@ interface TenantCachePipelineState {
   taskId: string
 }
 
+interface Eo001State {
+  adminToken: string
+  fixtureId: string
+  tenantAMarkerUsername: string
+  tenantAMarkerUserId: string
+  tenantBSlug: string
+  tenantBAdminUsername: string
+  tenantBId: string
+  tenantBDisplayLabel: string
+  membershipId: string
+}
+
 test.describe('Pipeline: tenant-switch-cache-isolation (PW-15)', () => {
+  test('EO-001: switching tenants via the in-app control never shows stale tenant-A data', async ({ page, request }) => {
+    // Onboarding a real second tenant (its own Keycloak realm, own schema
+    // migration) can genuinely take ~60-120s in this suite's other specs
+    // (see onboarding-wizard.pipeline.e2e.spec.ts / env04.e2e.spec.ts's Suite
+    // C fixture) -- generous budget for the same reason.
+    test.setTimeout(300_000)
+
+    await assertServiceReadiness(request, API_BASE_URL)
+
+    const fixtureId = randomUUID().slice(0, 8)
+    const pl = createPipeline<Eo001State>('tenant-switch-cache-isolation-eo001', { page, request })
+    pl.state.fixtureId = fixtureId
+    pl.state.tenantAMarkerUsername = `req384-eo001-a-${fixtureId}`
+    pl.state.tenantBSlug = `req384-eo001-b-${fixtureId}`
+    pl.state.tenantBAdminUsername = `req384-eo001-b-admin-${fixtureId}`
+    pl.state.tenantBDisplayLabel = `Tenant B Fixture [${fixtureId}]`
+
+    // ── Cleanup: deactivate the marker user, delete the membership row, best-
+    // effort delete tenant B's Keycloak realm (mirrors env04.e2e.spec.ts's own
+    // cleanupOnboardedTestTenantFixture -- there is no tenant-record DELETE
+    // endpoint in this API version either, same gap onboarding-wizard's own
+    // pipeline spec already documents). ─────────────────────────────────────
+    pl.onCleanup(async (s) => {
+      if (s.tenantAMarkerUserId) {
+        await request.patch(`${API_BASE_URL}/api/v1/users/${s.tenantAMarkerUserId}`, {
+          headers: authHeaders(s.adminToken),
+          data: { status: 'INACTIVE', is_active: false },
+        }).catch(() => {})
+      }
+      if (s.membershipId) {
+        runSqlAgainstDevPostgres(deleteTenantMembershipSql(s.membershipId))
+      }
+      if (s.tenantBSlug) {
+        try {
+          const masterTokenResp = await request.post(
+            `${BPM_IDP_BASE_URL}/realms/master/protocol/openid-connect/token`,
+            {
+              headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+              form: { client_id: 'admin-cli', username: 'admin', password: 'admin', grant_type: 'password' },
+            },
+          )
+          if (masterTokenResp.ok()) {
+            const masterToken = ((await masterTokenResp.json()) as { access_token: string }).access_token
+            await request.delete(`${BPM_IDP_BASE_URL}/admin/realms/${s.tenantBSlug}`, {
+              headers: { Authorization: `Bearer ${masterToken}` },
+            })
+          }
+        } catch { /* best-effort cleanup only */ }
+      }
+    })
+
+    // ── Step 01: tenant A = bpm-default (already provisioned); seed a
+    // distinctive tenant-A-only marker user so a later "no stale tenant-A
+    // content" assertion has something concrete to look for. ────────────────
+    await pl.step('01: resolve tenant A, seed a distinctive tenant-A marker user', async (s) => {
+      s.adminToken = await getKeycloakToken(
+        request, 'admin-user', resolveCredential('UAT_QA_ADMIN_PASSWORD', 'admin-pass'),
+      )
+      await resolveTenantContext(request, 'bpm-default', s.adminToken) // sanity: tenant A really resolves
+
+      const markerResp = await request.post(`${API_BASE_URL}/api/v1/users`, {
+        headers: authHeaders(s.adminToken),
+        data: {
+          username: s.tenantAMarkerUsername,
+          display_name: `REQ-384 EO-001 Tenant-A Marker ${s.fixtureId}`,
+          email: `${s.tenantAMarkerUsername}@example.com`,
+          status: 'ACTIVE',
+        },
+      })
+      pl.gate(markerResp.ok(), `tenant-A marker user create failed: ${markerResp.status()} ${await markerResp.text()}`)
+      const markerBody = await markerResp.json() as { id?: string; user_id?: string }
+      s.tenantAMarkerUserId = markerBody.id ?? markerBody.user_id ?? ''
+      pl.gate(!!s.tenantAMarkerUserId, 'tenant-A marker user response must include an id')
+    })
+
+    // ── Step 02: onboard tenant B for real (own realm, own schema) — the same
+    // technique env04.e2e.spec.ts's Suite C fixture already established. ────
+    await pl.step('02: onboard a genuinely separate tenant B', async (s) => {
+      const onboardResp = await request.post(`${API_BASE_URL}/api/v1/onboarding`, {
+        headers: {
+          Authorization: `Bearer ${s.adminToken}`,
+          'Content-Type': 'application/json',
+          'Idempotency-Key': randomUUID(),
+        },
+        data: {
+          slug: s.tenantBSlug,
+          display_name: `REQ-384 EO-001 Tenant B ${s.fixtureId}`,
+          admin_email: `${s.tenantBAdminUsername}@example.com`,
+          admin_username: s.tenantBAdminUsername,
+          admin_display_name: `Tenant B Admin ${s.fixtureId}`,
+          hostname: `${s.tenantBSlug}.example.com`,
+        },
+      })
+      pl.gate(onboardResp.ok(), `tenant B onboarding request failed: ${onboardResp.status()} ${await onboardResp.text()}`)
+      const { onboarding_id: onboardingId } = await onboardResp.json() as { onboarding_id: string }
+
+      let tenantBId: string | undefined
+      for (let i = 0; i < 40; i++) {
+        await new Promise((r) => setTimeout(r, 3_000))
+        const pollResp = await request.get(`${API_BASE_URL}/api/v1/onboarding/${onboardingId}`, {
+          headers: { Authorization: `Bearer ${s.adminToken}` },
+        })
+        if (!pollResp.ok()) continue
+        const pollBody = await pollResp.json() as { state: string; tenant_id?: string }
+        if (pollBody.state === 'completed' && pollBody.tenant_id) { tenantBId = pollBody.tenant_id; break }
+        pl.gate(pollBody.state !== 'failed', 'tenant B onboarding saga must not fail')
+      }
+      pl.gate(!!tenantBId, 'tenant B onboarding must complete within the poll window')
+      s.tenantBId = tenantBId as string
+    })
+
+    // ── Step 03: grant admin-user (tenant A's own admin, by email) a
+    // membership into tenant B. No HTTP write path ships with REQ-384 for
+    // tenant_memberships (design SS1.1/OQ-2) — direct SQL is the only real
+    // way to create this row (see db-exec.ts's insertTenantMembershipSql). ──
+    await pl.step('03: grant tenant-B membership via direct SQL (no HTTP write path exists)', async (s) => {
+      s.membershipId = randomUUID()
+      runSqlAgainstDevPostgres(
+        insertTenantMembershipSql(s.membershipId, BPM_DEFAULT_ADMIN_EMAIL, s.tenantBId, s.tenantBDisplayLabel),
+      )
+    })
+
+    // ── Step 04: drive the real switcher, assert whichever real outcome this
+    // environment actually produces. ────────────────────────────────────────
+    await pl.step('04: switch tenants via the real UI control, assert isolation', async (s) => {
+      await loginWithToken(page, s.adminToken)
+      await navigateSpa(page, '/admin/users')
+
+      await page.getByTestId('admin-users-search').fill(s.tenantAMarkerUsername)
+      await page.getByRole('button', { name: 'Apply' }).click()
+      await expect(page.getByTestId('datatable-row').filter({ hasText: s.tenantAMarkerUsername }))
+        .toBeVisible({ timeout: 10_000 })
+
+      // AC1: the render gate — a user with >1 membership (home tenant A +
+      // the tenant-B row seeded in step 03) sees the control at all.
+      await expect(page.getByTestId('tenant-switcher')).toBeVisible({ timeout: 10_000 })
+      await page.getByTestId('tenant-switcher-trigger').click()
+
+      const option = page.getByTestId(`tenant-switcher-option-${s.tenantBSlug}`)
+      await expect(option).toBeVisible({ timeout: 10_000 })
+      // display_label (seeded above) must be preferred over tenant_display_name
+      // — the same property TC-REQ384-18 proves at the unit level, here proven
+      // through a real GET /me/memberships response.
+      await expect(option).toHaveText(s.tenantBDisplayLabel)
+
+      await option.click()
+
+      // Poll the live DOM from the instant the option is clicked. Any
+      // snapshot in this window that shows the REAL (non-transition) shell
+      // — i.e. contains a rendered data table row — while still carrying
+      // tenant-A's marker text would be exactly the mid-transition stale-row
+      // bug AC3 exists to catch. Wrapped in try/catch: a remount
+      // (AuthenticatedShellRoot's `key={session.tenant_id}` swap) can destroy
+      // the execution context mid-read, the same lesson EO-002 above already
+      // documents for a different navigation.
+      const domSnapshots: string[] = []
+      let polling = true
+      const pollLoop = (async () => {
+        while (polling) {
+          try { domSnapshots.push(await page.content()) } catch { /* context torn down mid-remount; skip this tick */ }
+          await new Promise((r) => setTimeout(r, 50))
+        }
+      })()
+
+      // Real outcome branches on infra this design doc's own OQ-3 leaves
+      // unresolved (lib/letflow/design/req384-tenant-switcher-cache-isolation.md
+      // SS10): a silent cross-realm switch (`manager.signinSilent()`) only
+      // succeeds if tenant A's and tenant B's Keycloak realms are federated to
+      // a shared upstream IdP with a shared SSO session — not something this
+      // test controls or can assume either way. Both real, correctly-
+      // implemented outcomes are asserted below; whichever this live
+      // environment actually produces is itself a legitimate UAT-RUNNER
+      // finding on OQ-3, not a test bug in either branch.
+      await Promise.race([
+        page.getByTestId('tenant-switcher-interaction-required').waitFor({ state: 'visible', timeout: 30_000 }),
+        page.getByTestId('datatable-row').filter({ hasText: s.tenantBAdminUsername }).waitFor({ state: 'visible', timeout: 30_000 }),
+      ]).catch(() => { /* neither settled within budget — surfaced by the gate below */ })
+
+      polling = false
+      await pollLoop
+
+      const interactionRequired = await page.getByTestId('tenant-switcher-interaction-required').isVisible().catch(() => false)
+      const switchedToB = await page.getByTestId('datatable-row').filter({ hasText: s.tenantBAdminUsername }).isVisible().catch(() => false)
+      pl.gate(
+        interactionRequired || switchedToB,
+        'switching must produce one of the two real, implemented outcomes (interaction_required fallback, or a completed silent switch) within 30s',
+      )
+
+      if (interactionRequired) {
+        // AC1's exact boundary: no automatic full-page re-auth happened —
+        // tenant A's own data is still authoritative on screen — but an
+        // explicit, user-initiated sign-in affordance is offered, and
+        // clicking it drives a real navigation toward tenant B's own realm
+        // (never a silent/automatic one).
+        await expect(page.getByTestId('datatable-row').filter({ hasText: s.tenantAMarkerUsername }))
+          .toBeVisible()
+        await expect(page.getByTestId('tenant-switcher-sign-in')).toBeVisible()
+
+        const navigatedTowardTenantB = await Promise.race([
+          page.waitForURL((url) => url.href.includes(`/realms/${s.tenantBSlug}/`), { timeout: 15_000 }).then(() => true),
+          page.getByTestId('tenant-switcher-sign-in').click().then(() => false as boolean),
+        ]).catch(() => false)
+        void navigatedTowardTenantB // best-effort — signinRedirect's real target depends on live OIDC config this test does not control end-to-end; the affordance's presence and click-ability above is the load-bearing assertion.
+        await shot(page, 'tenant-switch-cache-isolation', 'eo001-interaction-required-fallback')
+      } else {
+        // Full silent switch succeeded — assert the four-way isolation
+        // guarantee AC1-AC3 describe together.
+        await expect(page.getByTestId('datatable-row').filter({ hasText: s.tenantBAdminUsername }))
+          .toBeVisible({ timeout: 10_000 })
+        await expect(page.getByTestId('datatable-row').filter({ hasText: s.tenantAMarkerUsername }))
+          .toHaveCount(0)
+
+        const transitionSeen = domSnapshots.some((html) => html.includes('tenant-switch-transition'))
+        pl.gate(transitionSeen, 'the dedicated TenantSwitchTransitionScreen (data-testid="tenant-switch-transition") must have appeared at least once during the switch')
+
+        const staleFrames = domSnapshots.filter(
+          (html) => html.includes('datatable-row') && html.includes(s.tenantAMarkerUsername),
+        )
+        pl.gate(
+          staleFrames.length === 0,
+          `no polled DOM frame between click and settle may show tenant-A's marker row inside the real (non-transition) shell — found ${staleFrames.length} such frame(s)`,
+        )
+
+        await shot(page, 'tenant-switch-cache-isolation', 'eo001-switched-to-tenant-b-clean')
+      }
+    })
+
+    await pl.runCleanup()
+  })
+
   test('EO-002: sign-out clears same-tab tenant-selection residue (bpm_realm_slug)', async ({ page, request }) => {
     await assertServiceReadiness(request, API_BASE_URL)
 

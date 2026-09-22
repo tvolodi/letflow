@@ -3101,3 +3101,60 @@ depending on its absence (here: `pg_stat_activity` no longer showing the killed
 Task's own SQL statement) rather than trusting the kill call's return as the
 synchronization point. A bounded `wait_until`-style poll against the real external
 system, not a `Process.sleep` guess, both times.
+
+## An interrupted `mix letflow.check.test`/`scripts/test_parallel.sh` run leaves zombie BEAM VMs that exhaust the next run's Postgres connections (REQ-376, ELIXIR-DEV Step 2a rework2, 2026-09-22)
+
+A Bash tool call whose own timeout fires mid-run (or whose 10-minute hard cap is
+reached, since `scripts/test_parallel.sh`'s full run on this host regularly exceeds
+that) kills the *foreground* `test_parallel.sh`/`mix test` process, but its
+background children — the N `MIX_TEST_PARTITION=<i> mix test --partitions N &`
+processes the script itself forks — are not part of that process's own job-control
+group in every shell invocation shape, and survive as orphaned `erl.exe` VMs. Each
+one keeps its full `TEST_POOL_SIZE` of Postgrex connections checked out
+indefinitely (nothing ever calls `Ecto.Adapters.SQL.Sandbox.checkin/2` on an
+orphan). Left running, they silently degrade or outright break every *subsequent*
+run against the same Postgres instance — first as slow/flaky "another mix test
+invocation is currently connected" `TenantSchemaReaper` defer logs (benign on their
+own, and expected during a genuinely-concurrent run per ISS-0110/ISS-0414's own
+design), then as real `FATAL 53300 (too_many_connections)` and
+`DBConnection.ConnectionError` failures once enough zombies accumulate — which
+LOOK like a real regression (a wide, seemingly-random spread of unrelated test
+failures across modules that have nothing to do with the change under test) and
+can easily be misdiagnosed as one, or as another live session's real concurrent
+usage, when it is neither. Confirmed directly on this host: `docker stats` showed
+`letflow-postgres-1` pinned at 419% CPU with 16 lingering `erl.exe` processes (all
+sharing one identical `StartTime`, i.e. all orphans of one earlier interrupted
+run) still alive; killing them (`Get-Process erl | Stop-Process -Force`) dropped
+Postgres to 17% CPU and `pg_stat_activity` from dozens of connections down to the
+idle baseline (6) immediately, and the very next clean run's real failure count
+dropped from 1048/4626 (heavily connection-error-contaminated) to a real 39/4632 —
+the actual number, not a symptom of exhausted connections.
+
+**Correct alternative:** before trusting any `mix letflow.check.test`/
+`scripts/test_parallel.sh` result that follows an interrupted, killed, or
+Bash-tool-timed-out prior run (including one you interrupted yourself, e.g. via
+Ctrl+C-equivalent or a tool call hitting its own timeout), check for and kill
+leftover `erl.exe`/BEAM processes first (`Get-Process erl | Stop-Process -Force`
+on Windows; `pkill -9 beam.smp` on Linux) and confirm `pg_stat_activity`'s
+connection count is back near baseline before re-running — don't just re-run and
+trust the new number. Separately: this host's real full-suite run reliably exceeds
+both the Bash tool's default (120s) and maximum (600s) single-call timeout, so
+launch it as a true background OS process (`nohup ... &`, capturing the PID) and
+poll it with repeated *blocking* foreground calls (`kill -0 $pid` in a loop) rather
+than passing a large `timeout` value to one Bash call — a timeout equal to the
+tool's own hard cap does not get auto-backgrounded the way a shorter one does; it
+gets killed outright, which is itself how this exact zombie-process condition gets
+created in the first place. Also: this host's Postgres/CPU budget cannot sustain
+`nproc`-derived parallelism (ISS-0219 already documents this) — always set
+`TEST_PARALLEL_N=4` here.
+
+**Separately, on this run:** this repository checkout is shared, concurrently, by
+multiple Claude Code agent sessions (not separate worktrees) — confirmed via `git
+reflog` showing commits this session never authored interleaved with its own, and
+a `git diff` against an independently-authored migration file coming back empty
+because another concurrent session had already written and committed the
+byte-identical fix. Sibling-session file/DB contention on this host is not
+hypothetical; check `git log`/`git reflog`/`docker stats`/`pg_stat_activity`
+directly before concluding a wide, unexpected failure spread is a real regression
+in your own change, per this file's own repeated lesson above about verifying
+tool/environment claims rather than trusting them.

@@ -182,7 +182,11 @@ defmodule Letflow.Routers.SolutionPacksUpdateTest do
 
       incoming_artefacts = [
         artefact_input(artefact_type, ids.unchanged, base.(:unchanged)),
-        artefact_input(artefact_type, ids.safe_to_update, different.(:safe_to_update, "incoming")),
+        artefact_input(
+          artefact_type,
+          ids.safe_to_update,
+          different.(:safe_to_update, "incoming")
+        ),
         artefact_input(artefact_type, ids.local_only, base.(:local_only)),
         artefact_input(
           artefact_type,
@@ -216,7 +220,9 @@ defmodule Letflow.Routers.SolutionPacksUpdateTest do
       for {bucket, wire} <- expected_wire do
         entry = entry_for(resp_body, Map.fetch!(ids, bucket))
         refute is_nil(entry), "expected an entry for bucket #{bucket}"
-        assert entry["classification"] == wire, "bucket #{bucket} misclassified: #{inspect(entry)}"
+
+        assert entry["classification"] == wire,
+               "bucket #{bucket} misclassified: #{inspect(entry)}"
       end
 
       # Genuinely exercises all four groups, not merely "doesn't contradict" --

@@ -134,6 +134,15 @@ defmodule Letflow.Api.AuthorizationEnforcementTest do
      "no Authorization.endpoint_policy_key/2 clause exists for this route; route declares " <>
        ":DefinitionsCreate directly (required_permission/1 already maps it to :DefinitionsWrite), " <>
        "same reasoning as /solution-packs/export above"},
+    {"POST", "/solution-packs/:pack_id/update-review",
+     "no Authorization.endpoint_policy_key/2 clause exists for this route (REQ-380/design §3.1); " <>
+       "route declares :DefinitionsRead directly (lib/letflow/routers/solution_packs.ex), reusing " <>
+       "the closest-matching existing policy key, same reasoning as /solution-packs/export above " <>
+       "(OQ-1, flagged for REVIEWER)"},
+    {"POST", "/solution-packs/:pack_id/update-apply",
+     "no Authorization.endpoint_policy_key/2 clause exists for this route (REQ-380/design §4.1); " <>
+       "route declares :DefinitionsCreate directly (required_permission/1 already maps it to " <>
+       ":DefinitionsWrite), same reasoning as /solution-packs/install above (flagged for REVIEWER)"},
     {"POST", "/definitions/:id/validate",
      "no Authorization.endpoint_policy_key/2 clause exists for this route (REQ-078/design §1); " <>
        "route declares :DefinitionsRead directly (lib/letflow/routers/definitions.ex), closing a " <>

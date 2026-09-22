@@ -105,7 +105,11 @@ defmodule Letflow.Routers.EventRetentionTest do
   defp cleanup_retirement_rows_on_exit!(retirement_id) do
     on_exit(fn ->
       Ecto.Adapters.SQL.Sandbox.mode(Letflow.Repo, :auto)
-      Repo.delete_all(from(o in EventHistoryRetirementOutcome, where: o.retirement_id == ^retirement_id))
+
+      Repo.delete_all(
+        from(o in EventHistoryRetirementOutcome, where: o.retirement_id == ^retirement_id)
+      )
+
       Repo.delete_all(from(r in EventHistoryRetirement, where: r.id == ^retirement_id))
     end)
   end
@@ -200,6 +204,7 @@ defmodule Letflow.Routers.EventRetentionTest do
         # freshly-migrated-from-scratch schema instead.
         company =
           TenantFixture.provisioned_tenant!(slug_prefix: "req377-happy-path", template: :replay)
+
         {year, month} = eligible_past_month()
         create_events_month_partition!(company.schema_name, year, month)
 

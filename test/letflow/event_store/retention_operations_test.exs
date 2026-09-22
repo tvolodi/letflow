@@ -199,7 +199,11 @@ defmodule Letflow.EventStore.RetentionOperationsTest do
   defp cleanup_retirement_rows_on_exit!(retirement_id) do
     on_exit(fn ->
       Ecto.Adapters.SQL.Sandbox.mode(Letflow.Repo, :auto)
-      Repo.delete_all(from(o in EventHistoryRetirementOutcome, where: o.retirement_id == ^retirement_id))
+
+      Repo.delete_all(
+        from(o in EventHistoryRetirementOutcome, where: o.retirement_id == ^retirement_id)
+      )
+
       Repo.delete_all(from(r in EventHistoryRetirement, where: r.id == ^retirement_id))
     end)
   end

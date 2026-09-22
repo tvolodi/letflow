@@ -27980,7 +27980,7 @@ requirements:
   - id: REQ-377
     title: "Operator-facing history-retirement screen: single-step retirement, protected-record count, and pre-retirement/post-retirement instance replay (frontend)"
     owner: FRONTEND-DEV
-    status: in_progress
+    status: done
     stage: S8
     impl_order: 737  # letflow-queue task id, GH#1625. Registered 2026-09-20 by ORCH;
       # corrects a fabricated/self-assigned id (734) that was never a real

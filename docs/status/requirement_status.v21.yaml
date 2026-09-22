@@ -929,3 +929,59 @@ history:
       of REQ-377 itself, following the lib/letflow/routers/
       platform_migrations.ex precedent (PLATFORM_ADMIN catch-all, no
       new permission invented).
+  - req: REQ-377
+    event: done
+    agent: DOC-UPDATER
+    at: "2026-09-22T14:59:02Z"
+    note: >
+      Operator-facing history-retirement screen shipped on
+      feature/WF02-REQ377-20260922, letflow-queue task 737, GH#1625, stage
+      S8, depends_on REQ-376 (done). Per the ORCH-approved scope decision
+      recorded in lib/letflow/design/req377-history-retirement-screen.md §0,
+      the backend HTTP surface was built as IN-SCOPE work for this
+      requirement itself, not a separate requirement -- REQ-376 shipped
+      the retirement mechanism (Letflow.EventStore.PartitionMaintenance)
+      but zero HTTP API surface (confirmed by grep, no router/controller
+      exposed it), following the REQ-399/REQ-398 precedent of naming a
+      required new backend route as in-scope rather than a blocker. What
+      shipped: new Letflow.EventStore.RetentionOperations context module
+      (retention_summary/0, retire_oldest_eligible_month/1,
+      retirement_status/1) plus PartitionMaintenance.eligible_months/1;
+      two new global tables (event_history_retirements,
+      event_history_retirement_outcomes); new
+      Letflow.Routers.EventRetention mounted at /api/v1/event-retention
+      (GET summary, POST retirements returning 202 for the async
+      platform-wide fanout, GET retirements/:id for polling), gated on
+      the existing :TenantsManage/PLATFORM_ADMIN-only permission, no new
+      permission invented; a dedicated
+      Letflow.EventStore.RetirementTaskSupervisor for the async fanout
+      across every tenant schema, matching Letflow.Scheduler.Poller's
+      established Task.Supervisor.async_stream/3 pattern. Frontend: new
+      web/src/pages/admin/event-retention/EventRetentionPage.tsx
+      (RetentionSummaryCard, RetireOldestMonthButton,
+      RetirementStatusPanel with 2s polling while status === "running",
+      no full-page blocking spinner), new web/src/api/eventRetention.ts,
+      useEventRetention.ts hooks, nav entry and router entry, both
+      role-gated to PLATFORM_ADMIN. Went through 1 design-rework round
+      (step-01-code-designer-rework1.json) before CODE-DESIGN-VALIDATOR
+      PASSED (step-01b-code-design-validator-regate.json). SECURITY-REVIEWER
+      PASSED (step-02c-security-reviewer.json) and REVIEWER PASSED
+      (step-02d-reviewer.json), no rework needed at either gate.
+      TEST-DESIGN-VALIDATOR PASSED (step-03b-test-design-validator.json).
+      TEST-RUNNER's Step 4 report: 4668/4671 passed, 3 pre-existing
+      failures -- 2x the already-tracked ISS-0766 identity-realm race, 1x
+      this run's own status-index count drift, expected to self-resolve at
+      this Step 6 (see this same event's index-count fix below).
+      RELEASE-VALIDATOR (Step 5) independently re-ran the suite
+      (4668/4671, same 3 pre-existing failures structurally re-derived)
+      and verified AC1-AC3 directly against code: PASS, with one MINOR,
+      non-blocking gap explicitly noted rather than concealed -- AC4 (the
+      E2E pipeline spec,
+      web/tests/e2e/pipelines/platform-partition-retention-drop.pipeline.e2e.spec.ts)
+      was verified STATICALLY only (matches the real screen's
+      data-testid/component shape 1:1, no mocks anywhere in it) but was
+      NOT executed live: no running backend/Keycloak-fixture stack exists
+      in this WF-02 environment. Live execution of this spec requires a
+      UAT-RUNNER/WF-05-class environment and was correctly left to that
+      later pass, not faked or skipped silently here. Design:
+      lib/letflow/design/req377-history-retirement-screen.md.

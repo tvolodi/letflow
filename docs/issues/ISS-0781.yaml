@@ -1,0 +1,89 @@
+id: ISS-0781
+title: >
+  REQ-380's apply_pack_update/6 -- a later apply call's own submitted
+  resolution governs the applied action even when it differs from the
+  immutable, already-persisted pack_update_resolutions attribution row,
+  making the audit trail potentially misleading about what state change
+  actually occurred
+discovered_by: TEST-DESIGNER, independently confirmed by TEST-DESIGN-VALIDATOR
+  (REQ-380's WF-02 test-design gate)
+discovered_in_run: WF02-REQ380-20260922 (TEST-DESIGNER/TEST-DESIGN-VALIDATOR steps)
+discovered_at: "2026-09-22T10:45:00Z"
+severity: MINOR
+tags:
+  - backend
+  - data-integrity
+  - audit-trail
+  - solution-packs
+description: >
+  Found while writing REQ-380's regression tests. `pack_update_resolutions`
+  rows are genuinely immutable (`on_conflict: :nothing`, confirmed by
+  SECURITY-REVIEWER during REQ-380's own security gate) -- a second
+  submission for an already-resolved `(tenant_id, pack_id, target_version,
+  artefact_type, artefact_id)` tuple never overwrites the original
+  `resolution`/`resolved_by`/`resolved_at`.
+
+  However, `Letflow.Definitions.SolutionPack.apply_entry/6`'s `:conflict`
+  clause (`lib/letflow/definitions/solution_pack.ex:757-783`, via
+  `find_submitted_resolution/2` at lines 785-787) checks the CURRENT
+  call's own submitted `resolutions` list FIRST, and only falls back to
+  re-reading the persisted resolution row when the artefact is absent
+  from the current call's submission. This means: if a caller resolves
+  an artefact `keep_local` on call 1 (base unchanged, resolution row
+  persisted with `resolved_by: userA`), then submits a DIFFERENT
+  resolution (e.g. `take_incoming`) for the SAME artefact/target_version
+  on call 2, call 2's own submission governs THAT call's action -- the
+  base row IS advanced to reflect `take_incoming`, even though the
+  resolution row's insert silently no-ops and still reads the original
+  `keep_local`/`userA` attribution.
+
+  Net effect: the durable audit trail (who resolved this conflict, and
+  how) can end up actively misleading -- it documents a decision
+  ("keep_local", attributed to userA) that no longer matches the
+  tenant's actual current content state (which reflects a later,
+  different, unattributed-in-the-row decision that was actually
+  applied).
+
+  Confirmed via direct source trace by two independent agents (TEST-
+  DESIGNER, TEST-DESIGN-VALIDATOR) and demonstrated by a real, passing
+  regression test that asserts BOTH halves of this behavior explicitly
+  (the row stays unchanged AND the base is actually advanced) --
+  test/letflow/routers/solution_packs_update_test.exs:433-546,
+  "Regression: a resolved artefact's attribution is immutable (on_conflict:
+  :nothing)". This is documented, real, current behavior on `main` as of
+  REQ-380's merge, not a hypothetical.
+affected_files:
+  - lib/letflow/definitions/solution_pack.ex
+related_requirements:
+  - REQ-380
+severity_rationale: >
+  MINOR -- not a security/privilege-escalation issue (both calls
+  originate from the tenant's own authenticated, permission-gated
+  caller; no cross-tenant or unauthorized-actor path), and no acceptance
+  criterion in REQ-380 covers the two-call scenario, so this doesn't
+  violate anything the requirement actually promised. But it's a real
+  data-integrity/audit-trail-accuracy gap worth closing: an operator or
+  future auditor reading `pack_update_resolutions` could draw a
+  materially wrong conclusion about what happened to a tenant's content.
+fix_direction: >
+  Needs a CODE-DESIGNER pass to decide the intended contract explicitly
+  (REQ-380's own design doc §9 OQ-3 already flagged the immutability
+  question but under-specified this exact consequence). Candidate
+  directions: (a) make the APPLIED ACTION also honor the persisted
+  resolution once one exists, ignoring a later call's differing
+  submission for that artefact (true "first decision wins" semantics,
+  consistent with the row's own immutability); (b) allow a later call to
+  supersede the applied action AND update the resolution row to match
+  (a real "you can change your mind" flow, with resolved_by/resolved_at
+  updated to reflect the correction -- would need on_conflict: :replace
+  instead of :nothing, and likely a resolution-history/audit log if
+  overwriting the original attribution is itself undesirable); (c) some
+  other explicit design, e.g. reject a later call's differing submission
+  for an already-resolved artefact outright with a clear error rather
+  than silently diverging row-vs-action. Needs a regression test proving
+  whichever contract is chosen holds (the existing test at
+  test/letflow/routers/solution_packs_update_test.exs:433-546 documents
+  current behavior and would need updating to match the new contract).
+queue_ref: null  # ORCH to assign via letflow-queue register_task
+github_ref: null  # ORCH to assign
+status: open

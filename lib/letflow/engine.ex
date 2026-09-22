@@ -2494,24 +2494,24 @@ defmodule Letflow.Engine do
               {:ok, changes}
 
             {:error, _failed_step, reason, _changes} ->
-              # ISS-0784 -- best-effort audit signal, recorded in a second,
-              # independent transaction only now that this one has already
-              # rolled back (design §3). Any other reason shape is
-              # byte-identical to before this issue.
-              case reason do
-                {:invalid_form_schema, node_id, form_schema_reason} ->
-                  record_task_activation_rejection_audit(
-                    timer.instance_id,
-                    node_id,
-                    form_schema_reason,
-                    actor_id,
-                    prefix
-                  )
-
-                _other ->
-                  :ok
-              end
-
+              # ISS-0784 follow-up fix (ISS-0784, root-caused by
+              # TEST-DESIGNER against real Postgres): this function's own
+              # `repo.transaction(multi)` call above is NOT the outermost
+              # transaction boundary on this call path -- it is called from
+              # `Letflow.Scheduler.fire_timer/2`'s own already-open
+              # `Repo.transaction/1` (a real Postgres SAVEPOINT here, per
+              # that function's own moduledoc note), which is still open
+              # when this clause runs. Calling
+              # `record_task_activation_rejection_audit/5` from here would
+              # only ever write into that same still-open outer
+              # transaction/connection, not a genuinely independent one --
+              # it would be rolled back right along with everything else
+              # once `fire_timer/2`'s own `case do {:error, reason} ->
+              # Repo.rollback(reason) end` fires. The audit write is
+              # therefore issued by `Letflow.Scheduler.attempt_fire/2`
+              # instead, strictly after `fire_timer/2`'s own
+              # `Repo.transaction/1` has fully returned (see that module).
+              # Any `reason` shape here is byte-identical to before ISS-0784.
               {:error, reason}
           end
 
@@ -2866,24 +2866,21 @@ defmodule Letflow.Engine do
               {:ok, :advanced}
 
             {:error, _failed_step, reason, _changes} ->
-              # ISS-0784 -- best-effort audit signal, recorded in a second,
-              # independent transaction only now that this one has already
-              # rolled back (design §3). Any other reason shape is
-              # byte-identical to before this issue.
-              case reason do
-                {:invalid_form_schema, node_id, form_schema_reason} ->
-                  record_task_activation_rejection_audit(
-                    dispatch.instance_id,
-                    node_id,
-                    form_schema_reason,
-                    EventStore.platform_actor_id(),
-                    prefix
-                  )
-
-                _other ->
-                  :ok
-              end
-
+              # ISS-0784 follow-up fix (ISS-0784, same root cause as
+              # persist_timer_fired_advance/7's own sibling clause above):
+              # this function's own `repo.transaction(multi)` call runs
+              # nested inside `advance_after_service_task_outcome/4`'s own
+              # already-open `repo.transaction(fn -> ... end)` (same `repo`
+              # module, same process/connection) -- NOT a genuinely
+              # independent transaction. Recording the rejection audit here
+              # would roll back right along with `advance_after_service_task_outcome/4`'s
+              # own `repo.rollback(reason)` once this `{:error, reason}`
+              # propagates up through `advance_service_task_dispatch/4`.
+              # The audit write is issued instead by
+              # `Letflow.Engine.ServiceTaskDispatcher.call_advance_after_service_task_outcome/3`,
+              # strictly after `advance_after_service_task_outcome/4`'s own
+              # `repo.transaction/1` has fully returned (see that module).
+              # Any `reason` shape here is byte-identical to before ISS-0784.
               {:error, reason}
           end
 
@@ -3979,21 +3976,43 @@ defmodule Letflow.Engine do
   # `TaskActivation.resolve_form_schema/1`'s `{:invalid_form_schema, node_id,
   # reason}` check and the enclosing transaction was rolled back per INV-8.
   #
-  # Called ONLY from the failure branch of each of the four
+  # Called from the failure branch of each of the four
   # `{:error, _failed_step, reason, _changes} -> {:error, reason}` unwrap
   # points (design §2/§3) -- NEVER as a step folded into the Multi that just
   # failed, because `Ecto.Multi`'s all-or-nothing semantics would roll this
   # write back right along with the failed attempt it's meant to record
   # (design §3). This function opens its own, independent
-  # `Repo.transaction/1`, run and awaited synchronously, strictly after the
-  # caller's own `repo.transaction(multi)` has already returned its
-  # `{:error, ...}` and Postgres has released the failed attempt's locks.
+  # `Repo.transaction/1`, run and awaited synchronously, and must only ever
+  # be invoked once the DB-level transaction that produced the rejection has
+  # genuinely closed (committed or rolled back) -- not merely "returned
+  # `{:error, ...}` from an inner `Ecto.Multi`" if that inner call itself
+  # runs nested inside a still-open outer transaction.
+  #
+  # ISS-0784 follow-up fix -- sites 1/2 (`interpret_create_result/8`,
+  # `interpret_complete_result/3`, both above, in this module) call this
+  # directly from their own inline clause, because `create/2`/
+  # `complete_task/3` open the *only* transaction on those call paths, so
+  # `repo.transaction(multi)` returning `{:error, ...}` there really does
+  # mean the DB-level transaction has closed. Sites 3/4
+  # (`persist_timer_fired_advance/7`, `do_persist_service_task_advance/10`,
+  # both above) do NOT call this directly any more -- TEST-DESIGNER proved
+  # against real Postgres that both are reached from inside a further-out
+  # caller's own already-open transaction
+  # (`Letflow.Scheduler.fire_timer/2`, `Letflow.Engine.advance_after_service_task_outcome/4`
+  # respectively), so calling this function from inside those two inline
+  # clauses would only ever write into that same still-open outer
+  # transaction and be rolled back with it. This function is `@doc false def`
+  # (not `defp`) specifically so `Letflow.Scheduler.attempt_fire/2` and
+  # `Letflow.Engine.ServiceTaskDispatcher.call_advance_after_service_task_outcome/3`
+  # can call it themselves, strictly after their own respective outer
+  # transaction has fully returned.
   #
   # Best-effort per design §6, matching `snapshot_instance/4`'s own
   # established "log and swallow" convention (~line 1465): a failure writing
   # this audit entry is logged via `Logger.warning/1` and never propagated --
   # it must never turn the original `{:invalid_form_schema, ...}` rollback
   # into a different error, and must never raise.
+  @doc false
   @spec record_task_activation_rejection_audit(
           instance_id :: Ecto.UUID.t(),
           node_id :: String.t(),
@@ -4001,7 +4020,7 @@ defmodule Letflow.Engine do
           actor_id :: Ecto.UUID.t() | nil,
           prefix :: String.t()
         ) :: :ok
-  defp record_task_activation_rejection_audit(instance_id, node_id, reason, actor_id, prefix) do
+  def record_task_activation_rejection_audit(instance_id, node_id, reason, actor_id, prefix) do
     attrs = %{
       actor_id: actor_id,
       action: "task_activation.rejected",

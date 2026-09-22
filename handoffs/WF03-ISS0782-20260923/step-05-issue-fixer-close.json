@@ -1,0 +1,49 @@
+{
+  "handoff_id": "8473bb83-0fc2-4e2f-8a60-9a13b6fd01b7",
+  "run_id": "WF03-ISS0782-20260923",
+  "workflow_id": "WF-03",
+  "step": "05",
+  "from_agent": "ORCH",
+  "to_agent": "ISSUE-FIXER",
+  "file": "handoffs/WF03-ISS0782-20260923/step-05-issue-fixer-close.json",
+  "created_at": "2026-09-22T20:11:14Z",
+  "started_at": "2026-09-22T20:11:14Z",
+  "completed_at": "2026-09-22T20:11:26Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S8",
+    "issue_id": "ISS-0782",
+    "queue_ref": "Q-781",
+    "github_ref": "GH-1722",
+    "branch": "feature/WF03-ISS0782-fix-20260923",
+    "related_handoff_ids": [
+      "handoffs/WF03-ISS0782-20260923/step-03b-security-reviewer.json",
+      "handoffs/WF03-ISS0782-20260923/step-03c-reviewer.json",
+      "handoffs/WF03-ISS0782-20260923/step-04b-test-design-validator.json",
+      "handoffs/WF03-ISS0782-20260923/step-04c-test-runner.json"
+    ],
+    "artifacts_in": [
+      "docs/issues/ISS-0782.yaml"
+    ]
+  },
+  "task": {
+    "description": "WF-03 Step 5: close ISS-0782 per docs/agents/workflows/WF-03_issue_resolving.md. Set docs/issues/ISS-0782.yaml status: resolved with resolved_in_run/resolved_at, close GH-1722 with an evidence-carrying comment.",
+    "acceptance_criteria": [
+      "docs/issues/ISS-0782.yaml flipped to status: resolved with resolved_in_run/resolved_at, real UTC timestamp",
+      "GH-1722 closed via gh issue close with a --comment citing the run-id, issue file, and regression test path",
+      "GitHub close verified via gh issue view (state, closedAt), not assumed"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "Closed ISS-0782. Local record docs/issues/ISS-0782.yaml flipped to status: resolved with resolved_in_run: \"WF03-ISS0782-20260923\" and resolved_at: \"2026-09-22T20:11:14Z\" (real UTC timestamp from PowerShell [DateTime]::UtcNow). This status is legitimate: the root cause (web/src/api/identity.ts hardcoding the non-existent /api/v1/users and /api/v1/admin/roles routes instead of the real /api/v1/identity/users and /api/v1/identity/roles mount, per lib/letflow/plugs/api_pipeline.ex which only ever forwards /identity) was actually removed by commit 2e36f8c2 ('ISS-0782: fix web/src/api/identity.ts routing to real /api/v1/identity/* mount'), gated PASS by SECURITY-REVIEWER and REVIEWER (commit 8aa7d512's handoffs), and proven by a fail-then-pass regression test (commit 390e242e, 'add fail-then-pass regression test for Users admin screen routing') gated PASS by TEST-DESIGN-VALIDATOR (commit c1c6e430) which independently reproduced the fail-then-pass result, and independently confirmed by TEST-RUNNER (commit 6daee2d3): 797/797 unit tests, 48/48 guard tests, type-check/lint clean. GitHub mirror GH-1722 closed via `gh issue close 1722 --comment \"Fixed in WF03-ISS0782-20260923. See docs/issues/ISS-0782.yaml and the regression test at web/src/api/__tests__/identity.usersRoles.test.ts (mocked fail-then-pass proof) and web/tests/e2e/f5-admin-users.e2e.spec.ts (live e2e augmentation). Fix: web/src/api/identity.ts routes corrected from nonexistent /api/v1/users and /api/v1/admin/roles to the real /api/v1/identity/users and /api/v1/identity/roles.\"` -- confirmed via `gh issue view 1722 --json state,closedAt`: state CLOSED, closedAt 2026-09-22T20:11:26Z. This satisfies the evidence-on-close requirement (comment citing run-id, issue file, and regression test paths). `gh auth status` confirmed authenticated (tvolodi, github.com, token scopes repo/workflow/etc.) before the close was attempted -- not assumed.",
+    "artifacts_out": [
+      "docs/issues/ISS-0782.yaml"
+    ],
+    "issues": [],
+    "next_action": "Route to Step Final (git merge)"
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

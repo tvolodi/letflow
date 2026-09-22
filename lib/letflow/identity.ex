@@ -932,6 +932,22 @@ defmodule Letflow.Identity do
   end
 
   @doc """
+  Fetches a single tenant by its `id` (REQ-382) — mirrors
+  `get_tenant_by_slug/1` exactly, keyed by `id` instead of `slug`. Added for
+  `Letflow.Routers.TenantSettings`, which only has
+  `conn.assigns.auth_context.tenant_id` (a UUID) available and needs the
+  tenant's own `slug` to call `update_tenant_settings/2` (that function's own
+  signature is unchanged by this requirement).
+  """
+  @spec get_tenant(id :: Ecto.UUID.t() | String.t()) :: {:ok, Tenant.t()} | {:error, :not_found}
+  def get_tenant(id) do
+    case Repo.get(Tenant, id) do
+      %Tenant{} = tenant -> {:ok, tenant}
+      nil -> {:error, :not_found}
+    end
+  end
+
+  @doc """
   Same lookup as `get_tenant_by_slug/1`, but swallows any exception into
   `{:error, :lookup_failed}` instead of letting it propagate. Shared by the two
   unauthenticated tenant-config bootstrap routes

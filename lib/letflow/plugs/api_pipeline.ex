@@ -140,6 +140,7 @@ defmodule Letflow.Plugs.ApiPipeline do
 
   forward("/identity", to: Letflow.Routers.Identity)
   forward("/tenants", to: Letflow.Routers.Tenants)
+  forward("/tenant/settings", to: Letflow.Routers.TenantSettings)
   forward("/instances", to: Letflow.Routers.Instances)
   forward("/definitions", to: Letflow.Routers.Definitions)
   forward("/tasks", to: Letflow.Routers.Tasks)

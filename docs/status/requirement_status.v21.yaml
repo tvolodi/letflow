@@ -1031,3 +1031,56 @@ history:
       backend suite PASS modulo the same known ISS-0766 flake, frontend
       suite PASS, scope confirmed clean, mergeable against main). Design:
       lib/letflow/design/req381-solution-pack-update-review-screen.md.
+  - req: REQ-382
+    event: done
+    agent: DOC-UPDATER
+    at: "2026-09-22T19:09:21Z"
+    note: >
+      HTTP-reachable tenant-branding write path shipped on
+      feature/WF02-REQ382-20260922, stage S8, depends_on REQ-280/REQ-281
+      (done). New PATCH /api/v1/tenant/settings
+      (lib/letflow/routers/tenant_settings.ex), authenticated/tenant-admin-
+      scoped via the standard AuthorizedRouter pipeline, delegating to the
+      pre-existing Letflow.Identity.update_tenant_settings/2 unchanged. Three
+      things landed: (1) AC1 real-HTTP round-trip of a valid brand_colors.primary
+      value through GET /api/tenant-config, confirmed by a test dispatching
+      through the actual router mount, not a direct context call; (2) AC2 a new
+      WCAG 2.1 AA (4.5:1) colour-contrast check in
+      lib/letflow/identity/color_contrast.ex, wired into
+      Tenant.settings_changeset/2's validate_brand_colors/2, rejecting a
+      hex-valid-but-low-contrast primary colour against both tokens.css
+      reference backgrounds with a plain-language message naming the
+      threshold, leaving the previously-stored colour unchanged on refusal;
+      (3) AC3/AC4 a request with an out-of-allowlist top-level key or
+      brand_colors sub-key applies only its recognized/valid part (never a
+      500 or whole-request failure) and writes exactly one Letflow.Audit entry
+      naming tenant/actor/rejected key(s)/attempted value(s), surfaced by the
+      existing AuditLogPage.tsx query with no frontend change. AC5 confirmed
+      unchanged: settings_changeset/2's cast list stays [:settings] only,
+      endpoint cannot touch status/slug/idp_realm_id/display_name. Gates:
+      SECURITY-REVIEWER PASSED (one regate round, a router-registration gap
+      in authorization_enforcement_test.exs's @routers/@mount_prefix list
+      found and fixed, then independently drift-tested via a revert-rerun-
+      restore loop), REVIEWER PASSED, TEST-DESIGN-VALIDATOR PASSED,
+      RELEASE-VALIDATOR independently re-verified all 6 acceptance criteria
+      against real source/tests (not prior step summaries), independently
+      re-ran scripts/test_parallel.sh (4696/4699) and mix letflow.check.test
+      (4695/4699), structurally attributing every failure via
+      git diff --name-only main...HEAD to pre-existing/environmental causes
+      (documented ISS-0766 realm race, a tenant-fixture provisioning race, and
+      one transient shared-checkout partition-8 flake independently
+      reconfirmed 58/58 clean in isolation) -- zero REQ-382-attributable
+      failures in either run. Design:
+      lib/letflow/design/req382-tenant-branding-write-path.md (path per
+      step-01-code-designer.json; see handoffs/WF02-REQ382-20260922/ for full
+      gate history). README.md's "What's here today" HTTP-endpoint listing was
+      checked and found to already predate S4-S8 entirely (it still describes
+      only /health plus the two GET tenant-config routes as "the only working
+      HTTP endpoint today"), so it was left as-is rather than patched for only
+      this one new route -- flagged as a pre-existing, broader staleness gap
+      for a dedicated doc-cleanup task, not something this step's scope covers.
+      No docs/migration/stage-N-*.md or docs/migration/decisions/*.md file was
+      named by REQ-382's own acceptance criteria (confirmed by re-reading them
+      in docs/requirements.yaml), so none was touched. This event covers WF-02
+      Step 6 (docs only) -- Step Final (git merge) is routed separately to
+      ELIXIR-DEV per docs/agents/workflows/WF-02_requirement_implementation.md.

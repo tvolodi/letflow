@@ -324,13 +324,18 @@ defmodule Letflow.Exam.CertificateTest do
       assert issued.branding_snapshot["app_name"] == "Original Co"
 
       # Mutate branding AFTER issuance.
+      # #ffffff would now fail REQ-382's WCAG AA contrast check against the
+      # near-white page/card background -- #1864AB (a dark blue) is used
+      # instead so this changeset still succeeds; the test only cares that
+      # branding changed to a DIFFERENT value after issuance, not this
+      # specific one.
       assert {:ok, _changed_again} =
                Repo.get(Tenant, tenant_id)
                |> Tenant.settings_changeset(%{
                  settings: %{
                    "app_name" => "Rebranded Co",
                    "logo_url" => nil,
-                   "brand_colors" => %{"primary" => "#ffffff"}
+                   "brand_colors" => %{"primary" => "#1864AB"}
                  }
                })
                |> Repo.update()

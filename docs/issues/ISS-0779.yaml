@@ -55,4 +55,36 @@ queue_ref: Q-778  # letflow-queue task id 778, issue_ref ISS-0779 (local
   # locally by an unrelated issue filed by another session in the same
   # window). Registered 2026-09-21 by ORCH.
 github_ref: GH-1700
-status: open
+status: resolved
+resolution:
+  resolved_by: ELIXIR-DEV (direct action per ORCHESTRATOR.md §10 sizing rule),
+    merged by ORCH
+  resolved_at: "2026-09-22T04:10:00Z"
+  pr: "#1708"
+  merge_commit: 10a861b7
+  summary: >
+    Root cause: the old health-cmd `pg_isready -U letflow` (no `-d`) defaults
+    its probe database to the `-U` value, i.e. it checks a database literally
+    named "letflow" -- which nothing in this config ever creates
+    (POSTGRES_DB=letflow_dev only creates "letflow_dev"; config/test.exs
+    targets "letflow_test..."). That explains the observed `FATAL: database
+    "letflow" does not exist` messages: they were pg_isready's own probe
+    failing, not the app's. Critically, pg_isready/PQpingParams treats ANY
+    FATAL reply from the postmaster (including "database does not exist") as
+    proof the server is alive (PQPING_OK, not PQPING_REJECT) -- so the health
+    check reported "healthy" on the very first postmaster response,
+    regardless of whether the entrypoint's POSTGRES_DB/POSTGRES_USER
+    bootstrap had finished. This means a naive fix of adding `-d
+    letflow_dev` to pg_isready would NOT have worked (same false-accept
+    quirk). Fix: replaced health-cmd with a real authenticated `psql -U
+    letflow -d letflow_dev -c 'SELECT 1'` query, and raised
+    --health-retries 10->30 to give the stricter check a generous budget.
+    Empirically reproduced the race live via a standalone docker run
+    (caught the exact old-health-cmd-accepts/new-health-cmd-still-failing
+    window), then verified the new health-cmd across 30 consecutive 0.2s
+    polls with zero false-accepts. Confirmed neither mix ecto.create nor
+    scripts/test_parallel.sh has any pre-existing retry logic for this
+    condition (AC3) -- this is the first guard at the point GitHub Actions
+    already blocks every job step on. Verified via 3 consecutive real green
+    CI runs on PR #1708 (35682886691, 35683685361, 35684401419), each
+    confirming mix letflow.check (AC4) passes.

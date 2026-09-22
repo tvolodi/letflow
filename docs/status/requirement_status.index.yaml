@@ -4293,8 +4293,19 @@ volumes:
     path: docs/status/requirement_status.v21.yaml
     status: current
     opened: 2026-09-20
-    entries: 17
+    entries: 18
     note: >
+      Incremented to 18 during WF02-REQ375-20260921's own Step Final rebase
+      onto origin/main (second pass, after main advanced further with
+      REQ-373's/ISS-0777's own done-event landings): composed REQ-375's own
+      done event (2026-09-22T01:46:38Z -- operator-facing rollout-status
+      screen) after the already-reconciled 17-entry state left by the prior
+      rebase. `grep -c "^  - req:" docs/status/requirement_status.v21.yaml`
+      = 18 on-disk entries after composition, recounted directly rather than
+      assumed. Well under the 1200-line/120000-byte roll ceiling, no roll
+      triggered. Prior notes (each describing an earlier, incomplete count
+      from only one side of one collision) preserved below verbatim.
+
       Incremented to 17 during WF02-REQ373-20260921's own Step Final rebase
       onto origin/main (second pass, after main advanced further with
       ISS-0777's own done-event landing): composed REQ-373's done event
@@ -4327,6 +4338,24 @@ volumes:
       assumed. Well under the 1200-line/120000-byte roll ceiling, no roll
       triggered. Prior notes (each describing an earlier, incomplete count
       from only one side of one collision) preserved below verbatim.
+
+      [Superseded pre-rebase note from this same REQ-375 append, kept for
+      the record per this file's never-delete-a-prior-note convention: at
+      the time this note was first written (2026-09-22T01:46:38Z, before
+      the second rebase below composed it with REQ-373's/ISS-0777's own
+      concurrently-landed entries), it read: "Incremented to 16 by
+      DOC-UPDATER's own REQ-375 done-event append (2026-09-22T01:46:38Z --
+      operator-facing rollout-status screen, feature/WF02-REQ375-20260921).
+      Previously incremented to 14 by DOC-UPDATER's own REQ-374 done-event
+      append (2026-09-21T20:40:11Z -- platform-wide tenant-migration fanout
+      runner backend, feature/WF02-REQ374-20260921). Previously incremented
+      to 13 by DOC-UPDATER's own ISS-0775 SCOPE-CHANGE done-event append
+      (2026-09-21T18:20:11Z -- resolve_group_ids_for_role_names/2's OIDC
+      role-claim write path scoped to kind == :platform_role, closing the
+      process-routing-role-kind-name-collision gap ISS-0774's own gate
+      surfaced)." That count (16/13) was accurate against the pre-rebase
+      tree it was written against, but is stale now; the 18-entry count
+      above supersedes it.]
 
       Incremented to 12 during WF03-ISS0774-20260921's own Step Final rebase
       onto origin/main: DOC-UPDATER's own ISS-0774 SCOPE-CHANGE done-event

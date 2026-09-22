@@ -621,3 +621,51 @@ history:
       the only 2 non-passing being the pre-existing documented ISS-0766
       flake, unrelated). Design:
       lib/letflow/design/iss-0777-entity-type-identifier-validation.md.
+  - req: REQ-375
+    event: done
+    agent: DOC-UPDATER
+    at: "2026-09-22T01:46:38Z"
+    note: >
+      Operator-facing rollout-status screen (web/src) shipped on
+      feature/WF02-REQ375-20260921 (tip 04467459), letflow-queue task 735,
+      GH-1623, stage S8, depends_on REQ-374 (done). Every implementation/
+      review gate PASSED on the first pipeline pass (CODE-DESIGN-VALIDATOR,
+      SECURITY-REVIEWER, REVIEWER, TEST-DESIGN-VALIDATOR, TEST-RUNNER), but
+      real live UAT testing against a genuinely running instance
+      subsequently found FOUR real defects that unit-level and design-time
+      review had not caught -- the lesson worth stating plainly for future
+      readers: passing gates and passing unit tests do not by themselves
+      prove a screen works end-to-end against real data. (1) ISS-0777
+      (BLOCKER): MigrationRollout.start_rollout/3 crashed with a bare 500 on
+      an entity_type containing a hyphen -- no request-time identifier-
+      format validation existed anywhere on the write path this screen's
+      AC5 depends on. Fixed and merged separately as its own issue
+      (feature/WF03-ISS0777-20260921, tip 4193e277) with two-tier validation
+      (router-level pattern constraint plus defense-in-depth inside
+      TenantProvisioning.register_column_promotion/4); this branch was
+      blocked on that landing first. (2) The e2e spec's own fixture used a
+      hyphenated entity_type identifier, which the new (correct) validation
+      then rejected -- fixed by switching the fixture to an underscore-
+      joined identifier (`pl_rollout_${fixtureId}`, commit 4013642f). (3)
+      The e2e spec provisioned an active EntityDefinition for only one of
+      the three test companies, so the other two healthy companies
+      legitimately 404/not-found'd against a real backend that correctly
+      required one -- fixed by adding a real
+      createActiveEntityDefinition provisioning step (db-exec.ts) for both
+      remaining healthy companies (commit 04467459). (4) A completed_at/
+      em-dash display assumption baked into both a unit-test fixture and
+      the e2e spec turned out to not match confirmed-correct production
+      behavior -- fixed in both test artifacts (commit 29a72762), not in
+      production code, once RELEASE-VALIDATOR/UAT-RUNNER confirmed the
+      production display logic was already right. All four fixes verified
+      by UAT-RUNNER's own live e2e re-runs (culminating in a genuine
+      all-7-steps full pass, test/uat-reports/
+      uat-2026-09-22-WF02-REQ375-e2e-live-20260922b.yaml), then
+      RELEASE-VALIDATOR independently re-confirmed PASS with its own
+      separate, fresh, live e2e rollout run against the same running
+      instance -- a second real pass distinct from UAT-RUNNER's, not a
+      re-read of UAT-RUNNER's report. All 5 acceptance criteria (per-
+      company outcome/reason rows matching EO-003, real (no-mock) resume
+      control gated on outstanding companies, EO-005 no-op re-run display,
+      PLATFORM_ADMIN-only screen reachability, and the e2e pipeline spec
+      itself passing) confirmed done.

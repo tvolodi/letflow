@@ -46,6 +46,10 @@ const NAV_ITEMS: NavItem[] = [
   // frontend-visible role -- citing the same role-registry checklist
   // REQ-328's pack install established, rather than inventing a role name.
   { to: '/admin/bilimbaga',      label: 'Question Bank',    roles: ['PLATFORM_ADMIN', 'PROCESS_OPERATOR'] },
+  // REQ-375: operator-facing rollout-status screen for REQ-374's
+  // platform-wide tenant-migration fanout runner. Same :TenantsManage
+  // (PLATFORM_ADMIN-only) risk class as admin/tenants, admin/onboarding.
+  { to: '/admin/platform-migrations', label: 'Platform Migrations', roles: ['PLATFORM_ADMIN'] },
 ]
 
 export function AppShell() {

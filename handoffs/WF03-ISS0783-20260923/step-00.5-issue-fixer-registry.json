@@ -8,8 +8,8 @@
   "file": "handoffs/WF03-ISS0783-20260923/step-00.5-issue-fixer-registry.json",
   "created_at": "2026-09-22T20:56:48Z",
   "started_at": "2026-09-22T20:56:48Z",
-  "completed_at": null,
-  "status": "PENDING",
+  "completed_at": "2026-09-22T21:00:24Z",
+  "status": "COMPLETED",
   "priority": "NORMAL",
   "context": {
     "stage": "S6",
@@ -37,10 +37,14 @@
   },
   "result": {
     "status": "PASS",
-    "summary": "",
-    "artifacts_out": [],
-    "issues": [],
-    "next_action": ""
+    "summary": "Searched all 300+ entries in docs/issues/*.yaml (status: resolved and otherwise) for a prior match on 'UI element not disabled during an in-flight async call, allowing a duplicate concurrent call'. No prior resolved entry matches this symptom class against a real, existing component -- this is not a recurrence. (ISS-0737, 'clear same-tab tenant residue on sign-out', touches AuthProvider/tenant state but is a different symptom -- session-storage residue at logout, not double-submit re-entrancy -- and is unrelated.) HOWEVER, Step 0.5's lookup surfaced a more important finding that supersedes the 'is this a recurrence' question: ISS-0783's own premise does not hold against the current codebase. web/src/auth/TenantSwitcher.tsx does not exist (confirmed: no such file anywhere in the working tree or in git history -- `git log --all -S switchTenant` finds zero commits ever touching that symbol in source, only this issue's own docs/issues/ISS-0783.yaml and its handoff files). AuthProvider.tsx (read in full) has no switchTenant function and no switchingToTenantSlug field -- its only session-mutating functions are login/logout/setSession. The commit ISS-0783 cites as the origin of the bug, 23a67263, does not exist in this repository (`git show 23a67263` -> 'unknown revision'). REQ-384 ('In-app company/tenant switcher...'), the requirement ISS-0783 claims to have been discovered during, has docs/requirements.yaml status: pending with depends_on: [] and no status-history 'started' event anywhere in docs/status/ -- it has never been implemented, only filed. REQ-384's own description (written 2026-09-20, still accurate today per my independent grep) states explicitly: 'no switchCompany/switchTenant/CompanySelector symbol exists anywhere in web/src'. Severity is not being flagged up to MAJOR as a recurrence, because this is not a recurrence of a real prior bug -- it is a report describing a defect in a feature that was never built. See step-01's diagnosis for full detail and the reproduction evidence proving non-existence directly rather than trusting the report's prose.",
+    "artifacts_out": [
+      "handoffs/WF03-ISS0783-20260923/step-01-issue-fixer-diagnose.json"
+    ],
+    "issues": [
+      "ISS-0783's premise (a bug in TenantSwitcher.tsx / AuthProvider.switchingToTenantSlug) does not match the current codebase -- no such component, function, or field exists, and the requirement (REQ-384) it claims to have been discovered during is still status: pending, never implemented."
+    ],
+    "next_action": "Route to step-01 diagnosis (also produced in this dispatch) rather than CODE-DESIGNER directly -- step-01 recommends ORCH re-triage ISS-0783 rather than proceeding to a fix design."
   },
   "rework_count": 0,
   "max_rework": 3

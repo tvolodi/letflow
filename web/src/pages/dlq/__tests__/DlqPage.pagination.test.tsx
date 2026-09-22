@@ -87,7 +87,10 @@ function installUseQueryMock(): void {
   requestedCursors = []
   mockUseQuery.mockImplementation((opts: unknown) => {
     const { queryKey } = opts as { queryKey: readonly unknown[] }
-    const filters = (queryKey[2] ?? {}) as { cursor?: string }
+    // REQ-384 §7.1: queryKeys.dlq.list is now tenant-prefixed —
+    // ['tenant', tenantId, 'dlq', 'list', filters] — so filters is at index
+    // 4, not 2.
+    const filters = (queryKey[4] ?? {}) as { cursor?: string }
     requestedCursors.push(filters.cursor)
     const page = PAGES[filters.cursor ?? '__page1__']
     return {
@@ -132,6 +135,8 @@ describe('REQ-277 — DlqPage pagination adaptation (cursor-stack -> PaginationC
       login: vi.fn(),
       logout: vi.fn(),
       setSession: vi.fn(),
+    switchTenant: vi.fn(),
+    switchingToTenantSlug: null,
     })
 
     renderDlqPage()
@@ -152,6 +157,8 @@ describe('REQ-277 — DlqPage pagination adaptation (cursor-stack -> PaginationC
       login: vi.fn(),
       logout: vi.fn(),
       setSession: vi.fn(),
+    switchTenant: vi.fn(),
+    switchingToTenantSlug: null,
     })
 
     renderDlqPage()
@@ -191,6 +198,8 @@ describe('REQ-277 — DlqPage pagination adaptation (cursor-stack -> PaginationC
       login: vi.fn(),
       logout: vi.fn(),
       setSession: vi.fn(),
+    switchTenant: vi.fn(),
+    switchingToTenantSlug: null,
     })
 
     renderDlqPage()

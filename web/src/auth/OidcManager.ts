@@ -4,7 +4,10 @@ import { UserManager, InMemoryWebStorage, WebStorageStateStore } from 'oidc-clie
 import type { UserManagerSettings } from 'oidc-client-ts'
 import { fetchTenantConfig } from './tenantConfig'
 
-function buildOidcSettings(authority: string, clientId: string): UserManagerSettings {
+/** Exported for `tenantOidcRegistry.ts` (REQ-384 §5.2) — the per-tenant
+ *  registry builds `UserManagerSettings` the same way this file's own
+ *  `getOidcManager()` does, just per-slug instead of once. */
+export function buildOidcSettings(authority: string, clientId: string): UserManagerSettings {
   const normalizedAuthority = authority.replace(/\/+$/, '')
   return {
     authority: normalizedAuthority,

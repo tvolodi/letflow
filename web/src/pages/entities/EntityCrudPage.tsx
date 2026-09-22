@@ -37,7 +37,7 @@ import { useMemo, useRef, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useIntl, type IntlShape } from 'react-intl'
 import { entitiesApi } from '@/api/entities'
-import { queryKeys } from '@/api/queryKeys'
+import { useTenantScopedQueryKeys } from '@/api/useTenantScopedQueryKeys'
 import type { ApiError, EntityFieldDef, EntityQueryFilterClause, EntityRecord } from '@/types/api'
 import { PageLayout } from '@/components/ui/PageLayout'
 import { Button } from '@/components/ui/Button'
@@ -96,6 +96,7 @@ export interface EntityCrudPageProps {
 function EntityCrudPageInner({ entityType }: EntityCrudPageProps) {
   const intl = useIntl()
   const qc = useQueryClient()
+  const tenantKeys = useTenantScopedQueryKeys()
   const uiLocale = resolveUiLocale([intl.locale])
 
   const [cursorStack, setCursorStack] = useState<string[]>([])
@@ -120,12 +121,12 @@ function EntityCrudPageInner({ entityType }: EntityCrudPageProps) {
   const cursor = cursorStack.length > 0 ? cursorStack[cursorStack.length - 1] : undefined
 
   const definitionQuery = useQuery({
-    queryKey: queryKeys.entities.definition(entityType),
+    queryKey: tenantKeys.entities.definition(entityType),
     queryFn: () => entitiesApi.getActiveDefinition(entityType),
   })
 
   const recordsQuery = useQuery({
-    queryKey: queryKeys.entities.records(entityType, { cursor, page_size: PAGE_SIZE, filters: EXCLUDE_DELETED_FILTERS }),
+    queryKey: tenantKeys.entities.records(entityType, { cursor, page_size: PAGE_SIZE, filters: EXCLUDE_DELETED_FILTERS }),
     queryFn: () => entitiesApi.queryRecords(entityType, { cursor, page_size: PAGE_SIZE, filters: EXCLUDE_DELETED_FILTERS }),
   })
 
@@ -145,7 +146,7 @@ function EntityCrudPageInner({ entityType }: EntityCrudPageProps) {
   }, [fields, intl, uiLocale])
 
   const invalidateList = () => {
-    void qc.invalidateQueries({ queryKey: queryKeys.entities.all })
+    void qc.invalidateQueries({ queryKey: tenantKeys.entities.all() })
   }
 
   const createMutation = useMutation({

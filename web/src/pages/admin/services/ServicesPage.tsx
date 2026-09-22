@@ -3,7 +3,7 @@
 import { useRef, useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { servicesApi, type RegisterServiceBody, type ServiceRecord } from '@/api/services'
-import { queryKeys } from '@/api/queryKeys'
+import { useTenantScopedQueryKeys } from '@/api/useTenantScopedQueryKeys'
 import { useAuth } from '@/auth/AuthContext'
 import { QueryStateBoundary } from '@/components/ui/QueryStateBoundary'
 import { Button } from '@/components/ui/Button'
@@ -17,6 +17,7 @@ import { classifyError, type RendererState } from '@/utils/classifyError'
  */
 export default function ServicesPage() {
   const queryClient = useQueryClient()
+  const tenantKeys = useTenantScopedQueryKeys()
   const { session } = useAuth()
 
   {/* CUSTOM: role-gate */}
@@ -32,7 +33,7 @@ export default function ServicesPage() {
   const createFormRef = useRef<HTMLFormElement>(null)
   const editFormRef = useRef<HTMLFormElement>(null)
 
-  const listQueryKey = queryKeys.admin.services()
+  const listQueryKey = tenantKeys.admin.services()
   const listQuery = useQuery({
     queryKey: listQueryKey,
     queryFn: () =>

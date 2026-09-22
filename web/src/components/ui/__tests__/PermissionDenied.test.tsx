@@ -41,6 +41,8 @@ async function renderPermissionDeniedWithSession(session: { roles: string[] } | 
     login: vi.fn(),
     logout: vi.fn(),
     setSession: vi.fn(),
+    switchTenant: vi.fn(),
+    switchingToTenantSlug: null,
   } as ReturnType<typeof useAuth>)
 
   const { PermissionDenied } = await import('../PermissionDenied')

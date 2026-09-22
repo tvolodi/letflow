@@ -12,7 +12,14 @@
  */
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { resolveRealmFromUrl, resetTenantConfigCache } from './tenantConfig'
+
+const { mockClientGet } = vi.hoisted(() => ({ mockClientGet: vi.fn() }))
+
+vi.mock('@/api/client', () => ({
+  client: { get: (...args: unknown[]) => mockClientGet(...args) },
+}))
+
+import { resolveRealmFromUrl, resetTenantConfigCache, fetchTenantConfig, fetchTenantConfigForSlug } from './tenantConfig'
 
 describe('resolveRealmFromUrl', () => {
   beforeEach(() => {
@@ -113,5 +120,86 @@ describe('resetTenantConfigCache', () => {
     expect(window.location.search).toBe('')
 
     window.history.pushState({}, '', originalUrl)
+  })
+})
+
+/**
+ * REQ-384 §5.2 / TEST-DESIGNER audit gap: `fetchTenantConfigForSlug` is the
+ * function CODE-DESIGN-VALIDATOR's rework specifically required to be
+ * genuinely per-slug-keyed and to NEVER read or write this file's own
+ * single-value `_cachedConfig` (the bug class this whole design exists to
+ * prevent, relocated from the query cache into the auth layer -- see
+ * tenantConfig.ts's own `fetchTenantConfigForSlug` moduledoc comment).
+ * FRONTEND-DEV wrote no dedicated test for this property; these are new.
+ */
+describe('fetchTenantConfigForSlug — REQ-384 §5.2 (never touches _cachedConfig)', () => {
+  beforeEach(() => {
+    sessionStorage.clear()
+    mockClientGet.mockReset()
+    resetTenantConfigCache()
+    vi.stubGlobal('location', { search: '' })
+  })
+
+  afterEach(() => {
+    vi.unstubAllGlobals()
+    sessionStorage.clear()
+  })
+
+  it('TC-REQ384-13: populating _cachedConfig via fetchTenantConfig for tenant A does NOT leak into fetchTenantConfigForSlug for tenant B', async () => {
+    mockClientGet.mockResolvedValueOnce({ oidc_authority: 'https://idp/realms/tenant-a', client_id: 'client-a' })
+
+    // Populate the SINGLE-VALUE _cachedConfig with tenant A's config, the way
+    // a first sign-in / single-membership user's fetchTenantConfig() call
+    // would.
+    const configA = await fetchTenantConfig('tenant-a.example.com')
+    expect(configA.oidc_authority).toBe('https://idp/realms/tenant-a')
+
+    mockClientGet.mockResolvedValueOnce({ oidc_authority: 'https://idp/realms/tenant-b', client_id: 'client-b' })
+
+    // Act: ask for tenant B's config via the per-slug path. If this
+    // incorrectly read _cachedConfig, it would return tenant A's config
+    // without ever calling client.get a second time.
+    const configB = await fetchTenantConfigForSlug('tenant-b')
+
+    expect(configB.oidc_authority).toBe('https://idp/realms/tenant-b')
+    expect(configB).not.toEqual(configA)
+    // A real network call was made for tenant B, not a cache hit off _cachedConfig.
+    expect(mockClientGet).toHaveBeenCalledTimes(2)
+    expect(mockClientGet).toHaveBeenNthCalledWith(2, '/api/tenant-config', { realm: 'tenant-b' })
+  })
+
+  it('TC-REQ384-14: fetchTenantConfigForSlug does not write into _cachedConfig (getCachedTenantConfig / fetchTenantConfig stay unaffected)', async () => {
+    mockClientGet.mockResolvedValueOnce({ oidc_authority: 'https://idp/realms/tenant-c', client_id: 'client-c' })
+
+    await fetchTenantConfigForSlug('tenant-c')
+
+    // fetchTenantConfig has never been called, so _cachedConfig must still be
+    // unpopulated -- a fresh fetchTenantConfig call must hit the network
+    // again, not silently return tenant C's config.
+    mockClientGet.mockResolvedValueOnce({ oidc_authority: 'https://idp/realms/tenant-default', client_id: 'client-default' })
+    const configViaHostname = await fetchTenantConfig('some-other-host.example.com')
+
+    expect(configViaHostname.oidc_authority).toBe('https://idp/realms/tenant-default')
+    expect(mockClientGet).toHaveBeenCalledTimes(2)
+  })
+
+  it('TC-REQ384-15: two different slugs each get their own genuinely-cached (second call does not re-fetch) config, keyed independently', async () => {
+    mockClientGet.mockResolvedValueOnce({ oidc_authority: 'https://idp/realms/tenant-x', client_id: 'client-x' })
+    mockClientGet.mockResolvedValueOnce({ oidc_authority: 'https://idp/realms/tenant-y', client_id: 'client-y' })
+
+    const x1 = await fetchTenantConfigForSlug('tenant-x')
+    const y1 = await fetchTenantConfigForSlug('tenant-y')
+    expect(mockClientGet).toHaveBeenCalledTimes(2)
+
+    // Second call for tenant-x is a genuine cache hit (own Map, no 3rd network call)...
+    const x2 = await fetchTenantConfigForSlug('tenant-x')
+    expect(mockClientGet).toHaveBeenCalledTimes(2)
+    expect(x2).toEqual(x1)
+
+    // ...and tenant-y's cached value was never disturbed by tenant-x's fetch.
+    const y2 = await fetchTenantConfigForSlug('tenant-y')
+    expect(mockClientGet).toHaveBeenCalledTimes(2)
+    expect(y2).toEqual(y1)
+    expect(y2).not.toEqual(x2)
   })
 })

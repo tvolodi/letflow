@@ -4,8 +4,9 @@ import { useAuth } from '@/auth/AuthContext'
 import { ApiConnectivityBanner } from './ApiConnectivityBanner'
 import { TestEnvironmentBanner } from './TestEnvironmentBanner'
 import { TenantHeader } from './TenantHeader'
+import { TenantSwitcher } from '@/auth/TenantSwitcher'
 import { dlqApi } from '@/api/dlq'
-import { queryKeys } from '@/api/queryKeys'
+import { useTenantScopedQueryKeys } from '@/api/useTenantScopedQueryKeys'
 import { useBranding } from '@/theming/BrandingContext'
 
 type Role = 'PLATFORM_ADMIN' | 'PROCESS_DESIGNER' | 'PROCESS_OPERATOR' | 'TASK_WORKER' | 'CANDIDATE'
@@ -65,11 +66,12 @@ const NAV_ITEMS: NavItem[] = [
 
 export function AppShell() {
   const { session, logout } = useAuth()
+  const tenantKeys = useTenantScopedQueryKeys()
   const { appName, logoUrl } = useBranding()
 
   const dlqThreshold = Number(import.meta.env.VITE_DLQ_ALERT_THRESHOLD ?? '10')
   const { data: dlqSummary } = useQuery({
-    queryKey: queryKeys.dlq.list({ status: 'pending', page_size: 101 }),
+    queryKey: tenantKeys.dlq.list({ status: 'pending', page_size: 101 }),
     queryFn: () => dlqApi.list({ status: 'pending', page_size: 101 }),
     refetchInterval: 15000,
   })
@@ -103,6 +105,7 @@ export function AppShell() {
         </div>
 
         <TenantHeader />
+        <TenantSwitcher />
 
         <nav style={{ flex: 1 }}>
           {visibleNav.map((n) => (

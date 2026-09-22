@@ -8,7 +8,7 @@ import { useDefinition } from '@/hooks/useDefinitions'
 import { useAuth } from '@/auth/AuthContext'
 import { usePolling } from '@/hooks/usePolling'
 import { useHistoryScrubber } from '@/hooks/useHistoryScrubber'
-import { queryKeys } from '@/api/queryKeys'
+import { useTenantScopedQueryKeys } from '@/api/useTenantScopedQueryKeys'
 import { graphToFlow, type CanvasNodeData, type CanvasEdgeData } from '@/utils/canvas/graphToFlow'
 import { mergeTimelineItems } from './timelineUtils'
 import type { TimelineEntry } from '@/types/api'
@@ -93,13 +93,14 @@ function useReadonlyGraph(
 export default function InstanceDetailPage() {
   const { id } = useParams<{ id: string }>()
   const { session } = useAuth()
+  const tenantKeys = useTenantScopedQueryKeys()
 
   const { data: instance, isLoading, isError, error, refetch } = useInstance(id!)
   const { data: definition } = useDefinition(instance?.definition_id ?? '')
   const { data: pendingTasks } = useTasks({ status: 'PENDING', instance_id: id })
   const cancel = useCancelInstance()
 
-  const detailQueryKey = id ? queryKeys.instances.detail(id) : queryKeys.instances.all
+  const detailQueryKey = id ? tenantKeys.instances.detail(id) : tenantKeys.instances.all()
   const polling = usePolling({ queryKeyPrefix: detailQueryKey, enabled: !!id })
 
   const [activeTab, setActiveTab] = useState<'graph' | 'history' | 'timeline'>('history')

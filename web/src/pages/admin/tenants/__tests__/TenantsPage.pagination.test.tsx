@@ -131,6 +131,8 @@ describe('ISS-0711 §4 — TenantsPage cursor-based pagination', () => {
       login: vi.fn(),
       logout: vi.fn(),
       setSession: vi.fn(),
+    switchTenant: vi.fn(),
+    switchingToTenantSlug: null,
     })
 
     renderTenantsPage()
@@ -152,6 +154,8 @@ describe('ISS-0711 §4 — TenantsPage cursor-based pagination', () => {
       login: vi.fn(),
       logout: vi.fn(),
       setSession: vi.fn(),
+    switchTenant: vi.fn(),
+    switchingToTenantSlug: null,
     })
 
     renderTenantsPage()
@@ -191,6 +195,8 @@ describe('ISS-0711 §4 — TenantsPage cursor-based pagination', () => {
       login: vi.fn(),
       logout: vi.fn(),
       setSession: vi.fn(),
+    switchTenant: vi.fn(),
+    switchingToTenantSlug: null,
     })
 
     renderTenantsPage()
@@ -225,6 +231,8 @@ describe('ISS-0711 §4 — TenantsPage cursor-based pagination', () => {
       login: vi.fn(),
       logout: vi.fn(),
       setSession: vi.fn(),
+    switchTenant: vi.fn(),
+    switchingToTenantSlug: null,
     })
 
     renderTenantsPage()

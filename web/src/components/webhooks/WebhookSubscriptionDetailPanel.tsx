@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { webhooksApi } from '@/api/dlq'
-import { queryKeys } from '@/api/queryKeys'
+import { useTenantScopedQueryKeys } from '@/api/useTenantScopedQueryKeys'
 import { WebhookDeliveryAttemptsTable } from '@/components/webhooks/WebhookDeliveryAttemptsTable'
 import type { WebhookSubscription } from '@/types/api'
 import { formatDateTime } from '@/i18n/format'
@@ -39,9 +39,10 @@ export function WebhookSubscriptionDetailPanel({
 }: WebhookSubscriptionDetailPanelProps) {
   const closeButtonRef = useRef<HTMLButtonElement | null>(null)
   const subscriptionId = resolveSubscriptionId(subscription)
+  const tenantKeys = useTenantScopedQueryKeys()
 
   const deliveriesQuery = useQuery({
-    queryKey: queryKeys.webhooks.deliveries(subscriptionId, 20),
+    queryKey: tenantKeys.webhooks.deliveries(subscriptionId, 20),
     queryFn: () => webhooksApi.getDeliveries(subscriptionId, { limit: 20 }),
     enabled: isOpen,
   })

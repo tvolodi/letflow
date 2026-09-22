@@ -101,6 +101,8 @@ describe('ISS-0289 regression — admin/users detail route wiring', () => {
       login: vi.fn(),
       logout: vi.fn(),
       setSession: vi.fn(),
+    switchTenant: vi.fn(),
+    switchingToTenantSlug: null,
     })
 
     const targetUrl = '/admin/users/user-42'

@@ -64,6 +64,8 @@ async function renderAppShellWithBranding(brandingConfig: unknown) {
     login: vi.fn(),
     logout: vi.fn(),
     setSession: vi.fn(),
+    switchTenant: vi.fn(),
+    switchingToTenantSlug: null,
   })
 
   const clientModule = await import('@/api/client')

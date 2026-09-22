@@ -1,7 +1,7 @@
 import { useMemo, useState, type CSSProperties } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { tokensApi, usersApi } from '@/api/identity'
-import { queryKeys } from '@/api/queryKeys'
+import { useTenantScopedQueryKeys } from '@/api/useTenantScopedQueryKeys'
 import type { ApiToken, IssuedToken, User } from '@/types/api'
 import { QueryStateBoundary } from '@/components/ui/QueryStateBoundary'
 import { Button } from '@/components/ui/Button'
@@ -52,6 +52,7 @@ function formatDate(value?: string | null): string {
 
 export default function TokensPage() {
   const qc = useQueryClient()
+  const tenantKeys = useTenantScopedQueryKeys()
   const toast = useToast()
   const [creating, setCreating] = useState(false)
   const [form, setForm] = useState({ user_id: '', roles: '', expires_at: '' })
@@ -60,12 +61,12 @@ export default function TokensPage() {
   const [pendingRevoke, setPendingRevoke] = useState<TokenRow | null>(null)
 
   const { data: tokenList, isLoading, isError, error, refetch } = useQuery({
-    queryKey: queryKeys.admin.tokens(),
+    queryKey: tenantKeys.admin.tokens(),
     queryFn: () => tokensApi.list(),
   })
 
   const { data: users } = useQuery({
-    queryKey: queryKeys.admin.users({ page_size: 200 }),
+    queryKey: tenantKeys.admin.users({ page_size: 200 }),
     queryFn: () => usersApi.list({ page_size: 200 }),
   })
 
@@ -85,7 +86,7 @@ export default function TokensPage() {
       })
     },
     onSuccess: (res) => {
-      qc.invalidateQueries({ queryKey: queryKeys.admin.tokens() })
+      qc.invalidateQueries({ queryKey: tenantKeys.admin.tokens() })
       setIssuedToken(res)
       setCreating(false)
       setCreateError('')
@@ -96,7 +97,7 @@ export default function TokensPage() {
 
   const revokeToken = useMutation({
     mutationFn: (id: string) => tokensApi.revoke(id),
-    onSuccess: () => qc.invalidateQueries({ queryKey: queryKeys.admin.tokens() }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: tenantKeys.admin.tokens() }),
   })
 
   // DataTable has no per-row style hook, so the revoked-row strikethrough/

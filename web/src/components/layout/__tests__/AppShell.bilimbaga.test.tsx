@@ -59,6 +59,8 @@ async function renderAppShellAs(roles: string[]) {
     login: vi.fn(),
     logout: vi.fn(),
     setSession: vi.fn(),
+    switchTenant: vi.fn(),
+    switchingToTenantSlug: null,
   })
 
   const { BrandingProvider } = await import('@/theming/BrandingProvider')

@@ -309,3 +309,124 @@ export function seedHistoricalEventSql(schema: string, month: BackdatedMonth, ev
       ('${eventId}', '${midMonth}', '${instanceId}', 'req377_e2e_seed_event', '{}'::jsonb, '${instanceId}', 1, 'req377-e2e-${eventId}', '{}'::jsonb);
   `
 }
+
+/**
+ * REQ-384 EO-001 fixture helper for `tenant-cache.pipeline.e2e.spec.ts` --
+ * creates and activates a real process definition DIRECTLY inside tenant B's
+ * own schema, bypassing HTTP entirely.
+ *
+ * Why direct `mix run`, not an HTTP `POST /api/v1/definitions`: exactly the
+ * same gap `createActiveEntityDefinition` above documents for a different
+ * resource -- `Letflow.Definitions.create/2`/`activate/2` resolve their
+ * target tenant schema from the CALLING TOKEN's own Keycloak realm
+ * (`conn.assigns.scoped_opts`, `lib/letflow/routers/definitions.ex`), so an
+ * HTTP write into tenant B's schema would need a real admin credential
+ * that can actually authenticate AS tenant B. None exists here: REQ-384's
+ * `POST /api/v1/onboarding` (`Letflow.Routers.Onboarding.handle_create/1`)
+ * explicitly does not provision a Keycloak realm/client/admin-user for the
+ * tenant it creates (see that module's own moduledoc, "What is deliberately
+ * NOT ported") -- `Letflow.Identity.create_tenant/1` is called with
+ * `oidc_mode: :disabled`, so tenant B's `idp_realm_id` stays nil and no
+ * Keycloak-side account for `admin_email`/`admin_username` is ever created.
+ * There is therefore no real bearer token this test could obtain that is
+ * scoped to tenant B -- direct `mix run --no-start -e` against the already-
+ * provisioned real schema (confirmed synchronously ready by the time
+ * `POST /onboarding` returns, per that router's own moduledoc) is the only
+ * real, non-mocked way to seed tenant-B-owned data for this fixture.
+ */
+export function createActiveDefinitionInSchema(schema: string, name: string, version: string): void {
+  const elixirScript = `
+    {:ok, _} = Application.ensure_all_started(:postgrex)
+    {:ok, _} = Application.ensure_all_started(:ecto_sql)
+    {:ok, _} = Letflow.Repo.start_link()
+
+    schema = "${schema}"
+    name = "${name}"
+    version = "${version}"
+
+    graph = %{
+      "nodes" => [
+        %{"id" => "n1", "node_type" => "START", "label" => "Start", "attributes" => nil},
+        %{
+          "id" => "n2",
+          "node_type" => "HUMAN_TASK",
+          "label" => "Task",
+          "attributes" => %{"role" => "admin-user", "assignee_type" => "user", "assignee_ref" => "admin-user"}
+        },
+        %{"id" => "n3", "node_type" => "END", "label" => "End", "attributes" => nil}
+      ],
+      "edges" => [
+        %{"id" => "e1", "source" => "n1", "target" => "n2"},
+        %{"id" => "e2", "source" => "n2", "target" => "n3"}
+      ]
+    }
+
+    attrs = %{
+      name: name,
+      version: version,
+      description: "REQ-384 EO-001 tenant-B marker fixture (tenant-cache.pipeline.e2e.spec.ts)",
+      graph: graph,
+      created_by: Ecto.UUID.generate()
+    }
+
+    {:ok, definition} = Letflow.Definitions.create(attrs, prefix: schema)
+    {:ok, _activated} = Letflow.Definitions.activate(definition.id, prefix: schema)
+
+    IO.puts("createActiveDefinitionInSchema: OK id=#{definition.id}")
+  `
+
+  execFileSync('mix', ['run', '--no-start', '-e', elixirScript], {
+    cwd: REPO_ROOT,
+    // Letflow.Repo.init/2's require_dev_db_confirmation guard (config/dev.exs)
+    // refuses to connect to the shared letflow_dev database without this --
+    // the deliberate escape hatch that guard's own error text names for
+    // "genuinely need the interactive dev environment" use. Required here
+    // (unlike `createActiveEntityDefinition` above, written before that
+    // guard existed): this script MUST land in the same letflow_dev database
+    // the real running BPM_TEST_URL backend serves from -- tenant B's schema
+    // only exists there, not in any MIX_TEST_PARTITION test database.
+    env: { ...process.env, MIX_ENV: process.env.MIX_ENV ?? 'dev', LETFLOW_DEV_DB_CONFIRMED: '1' },
+    stdio: 'inherit',
+  })
+}
+
+/**
+ * REQ-384 EO-001 fixture helper for `tenant-cache.pipeline.e2e.spec.ts` --
+ * inserts a real `tenant_memberships` row directly via SQL.
+ *
+ * Why direct SQL, not an HTTP write: `priv/repo/migrations/20260922000011_create_tenant_memberships.exs`'s
+ * own header comment and `lib/letflow/identity/tenant_membership.ex`'s moduledoc
+ * both state this table is ADMIN-WRITE-ONLY and that "no application-code writer
+ * ships with REQ-384" -- `Letflow.Identity` exposes only
+ * `list_memberships_for_subject/1` (read), never a create function, and no
+ * router mounts a write route for this table (design
+ * `lib/letflow/design/req384-tenant-switcher-cache-isolation.md` SS1.1, OQ-2).
+ * This is the exact same "no HTTP path exists for the fixture this spec needs"
+ * situation `createActiveEntityDefinition` above documents for a different
+ * table -- direct SQL is the only real, non-mocked way to create this row.
+ *
+ * `subjectKey` must already be normalized (lower-cased, trimmed) exactly as
+ * `TenantMembership.normalize_subject_key/1`'s write-side changeset would --
+ * this helper does not re-normalize, matching that module's own "normalize
+ * once, at the caller" discipline.
+ *
+ * Public-schema table (no tenant-prefixed schema qualifier) -- same tier as
+ * `tenants` itself (design SS1.1).
+ */
+export function insertTenantMembershipSql(
+  id: string,
+  subjectKey: string,
+  tenantId: string,
+  displayLabel: string,
+): string {
+  return `
+    INSERT INTO tenant_memberships (id, subject_key, tenant_id, display_label, inserted_at, updated_at)
+    VALUES ('${id}', '${subjectKey}', '${tenantId}', '${displayLabel}', NOW(), NOW())
+    ON CONFLICT (subject_key, tenant_id) DO NOTHING;
+  `
+}
+
+/** Cleanup counterpart to `insertTenantMembershipSql` -- removes exactly the row this test run created. */
+export function deleteTenantMembershipSql(id: string): string {
+  return `DELETE FROM tenant_memberships WHERE id = '${id}';`
+}

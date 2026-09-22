@@ -73,6 +73,8 @@ function setupAdmin() {
     login: vi.fn(),
     logout: vi.fn(),
     setSession: vi.fn(),
+    switchTenant: vi.fn(),
+    switchingToTenantSlug: null,
   } as unknown as ReturnType<typeof useAuth>)
   vi.mocked(useDefinition).mockReturnValue({
     data: ACTIVE_DEF,
@@ -103,6 +105,8 @@ describe('DefinitionRollbackPage — role gating', () => {
       login: vi.fn(),
       logout: vi.fn(),
       setSession: vi.fn(),
+    switchTenant: vi.fn(),
+    switchingToTenantSlug: null,
     } as unknown as ReturnType<typeof useAuth>)
     vi.mocked(useDefinition).mockReturnValue({ data: undefined, isLoading: false, isError: false, error: null, refetch: vi.fn() } as unknown as ReturnType<typeof useDefinition>)
     vi.mocked(useDefinitionVersions).mockReturnValue({ data: undefined, isLoading: false } as unknown as ReturnType<typeof useDefinitionVersions>)

@@ -101,6 +101,8 @@ describe('ENV-04 — TenantsPage [TEST] badge', () => {
       login: vi.fn(),
       logout: vi.fn(),
       setSession: vi.fn(),
+    switchTenant: vi.fn(),
+    switchingToTenantSlug: null,
     })
     mockUseQuery.mockReturnValue({
       data: TENANT_LIST,

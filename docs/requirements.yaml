@@ -28472,7 +28472,7 @@ requirements:
   - id: REQ-384
     title: "In-app company/tenant switcher for a dual-membership user, with tenant-keyed query-cache isolation across the switch"
     owner: FRONTEND-DEV
-    status: pending
+    status: done
     stage: S8
     impl_order: 744  # letflow-queue task id, GH#1632. Registered 2026-09-20 by ORCH;
       # corrects a fabricated/self-assigned id (740, which also collided with

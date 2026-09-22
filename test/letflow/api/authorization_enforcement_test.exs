@@ -74,6 +74,11 @@ defmodule Letflow.Api.AuthorizationEnforcementTest do
     # backed by a real endpoint_policy_key/2 clause, so it resolves through
     # the normal path above and is not (and may not be) added to @allowlist.
     Letflow.Routers.Help,
+    # REQ-384 Part A -- Letflow.Routers.Me's single route declares
+    # :MembershipsRead, backed by a real endpoint_policy_key/2 clause, so it
+    # resolves through the normal path above and is not (and may not be)
+    # added to @allowlist.
+    Letflow.Routers.Me,
     # REQ-382 -- Letflow.Routers.TenantSettings' single route declares
     # :TenantsManage, backed by a real endpoint_policy_key/2 clause
     # (PATCH /tenant/settings), so it resolves through the normal path above
@@ -116,6 +121,7 @@ defmodule Letflow.Api.AuthorizationEnforcementTest do
     Letflow.Routers.Entities => "/entities",
     Letflow.Routers.ExamSessions => "/exam-sessions",
     Letflow.Routers.Help => "/help",
+    Letflow.Routers.Me => "/me",
     Letflow.Routers.TenantSettings => "/tenant/settings"
   }
 

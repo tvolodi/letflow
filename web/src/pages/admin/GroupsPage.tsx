@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { groupsApi, usersApi } from '@/api/identity'
-import { queryKeys } from '@/api/queryKeys'
+import { useTenantScopedQueryKeys } from '@/api/useTenantScopedQueryKeys'
 import type { Group, User } from '@/types/api'
 import { QueryStateBoundary } from '@/components/ui/QueryStateBoundary'
 import { Button } from '@/components/ui/Button'
@@ -35,6 +35,7 @@ function formatUser(user: User): string {
 
 export default function GroupsPage() {
   const qc = useQueryClient()
+  const tenantKeys = useTenantScopedQueryKeys()
   const [creating, setCreating] = useState(false)
   const [form, setForm] = useState({ name: '', display_name: '', description: '' })
   const [activeGroup, setActiveGroup] = useState<GroupRow | null>(null)
@@ -42,7 +43,7 @@ export default function GroupsPage() {
   const [selectedUserId, setSelectedUserId] = useState('')
 
   const { data, isLoading, isError, error, refetch } = useQuery({
-    queryKey: queryKeys.admin.groups(),
+    queryKey: tenantKeys.admin.groups(),
     queryFn: () => groupsApi.list(),
   })
 
@@ -51,13 +52,13 @@ export default function GroupsPage() {
   const rendererState: RendererState = isLoading ? 'loading' : isError ? classifyError(error) : 'success'
 
   const { data: members } = useQuery({
-    queryKey: queryKeys.admin.groupMembers(activeGroupId),
+    queryKey: tenantKeys.admin.groupMembers(activeGroupId),
     queryFn: () => groupsApi.members(activeGroupId),
     enabled: Boolean(activeGroup),
   })
 
   const { data: users } = useQuery({
-    queryKey: queryKeys.admin.users({ page_size: 200 }),
+    queryKey: tenantKeys.admin.users({ page_size: 200 }),
     queryFn: () => usersApi.list({ page_size: 200 }),
     enabled: Boolean(activeGroup),
   })
@@ -65,7 +66,7 @@ export default function GroupsPage() {
   const createGroup = useMutation({
     mutationFn: (body: typeof form) => groupsApi.create(body),
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: queryKeys.admin.groups() })
+      qc.invalidateQueries({ queryKey: tenantKeys.admin.groups() })
       setCreating(false)
       setForm({ name: '', display_name: '', description: '' })
     },
@@ -75,8 +76,8 @@ export default function GroupsPage() {
     mutationFn: ({ groupId: id, userId }: { groupId: string; userId: string }) => groupsApi.addMembers(id, [userId]),
     onSuccess: () => {
       if (activeGroup) {
-        qc.invalidateQueries({ queryKey: queryKeys.admin.groups() })
-        qc.invalidateQueries({ queryKey: queryKeys.admin.groupMembers(groupId(activeGroup)) })
+        qc.invalidateQueries({ queryKey: tenantKeys.admin.groups() })
+        qc.invalidateQueries({ queryKey: tenantKeys.admin.groupMembers(groupId(activeGroup)) })
       }
       setSelectedUserId('')
     },
@@ -86,15 +87,15 @@ export default function GroupsPage() {
     mutationFn: ({ groupId: id, userId }: { groupId: string; userId: string }) => groupsApi.removeMembers(id, userId),
     onSuccess: () => {
       if (activeGroup) {
-        qc.invalidateQueries({ queryKey: queryKeys.admin.groups() })
-        qc.invalidateQueries({ queryKey: queryKeys.admin.groupMembers(groupId(activeGroup)) })
+        qc.invalidateQueries({ queryKey: tenantKeys.admin.groups() })
+        qc.invalidateQueries({ queryKey: tenantKeys.admin.groupMembers(groupId(activeGroup)) })
       }
     },
   })
 
   const deleteGroup = useMutation({
     mutationFn: (id: string) => groupsApi.delete(id),
-    onSuccess: () => qc.invalidateQueries({ queryKey: queryKeys.admin.groups() }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: tenantKeys.admin.groups() }),
   })
 
   const availableUsers = useMemo(() => {

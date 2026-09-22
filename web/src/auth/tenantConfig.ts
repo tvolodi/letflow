@@ -70,6 +70,38 @@ export function getCachedTenantConfig(): TenantConfig {
 }
 
 /**
+ * REQ-384 §5.2 — per-slug-keyed tenant-config cache for the multi-realm
+ * OIDC manager registry (`tenantOidcRegistry.ts`).
+ *
+ * Deliberately a SEPARATE `Map<string, TenantConfig>`, never reading or
+ * writing this file's own `_cachedConfig` above. `_cachedConfig` is a
+ * single module-level value that ignores its argument once populated — it
+ * was written for, and is only correct under, the single-live-tenant-per-tab
+ * precondition (destroyed and rebuilt fresh on every full-page reload).
+ * Reusing it naively for a second, concurrently-live tenant would silently
+ * return tenant A's already-cached config for tenant B's slug — exactly the
+ * class of bug REQ-384 exists to prevent, relocated from the query cache
+ * into the auth layer. This cache is genuinely keyed by slug, so tenant A's
+ * and tenant B's configs can coexist.
+ */
+const _configBySlug = new Map<string, TenantConfig>()
+
+export async function fetchTenantConfigForSlug(slug: string): Promise<TenantConfig> {
+  const cached = _configBySlug.get(slug)
+  if (cached) return cached
+
+  try {
+    const data = await client.get<TenantConfig>('/api/tenant-config', { realm: slug })
+    _configBySlug.set(slug, data)
+    return data
+  } catch {
+    const fallback = { oidc_authority: DEFAULT_AUTHORITY, client_id: DEFAULT_CLIENT_ID }
+    _configBySlug.set(slug, fallback)
+    return fallback
+  }
+}
+
+/**
  * Clears every trace of "which company this browser tab is talking to" —
  * both the in-memory `TenantConfig` cache and the `bpm_realm_slug`
  * sessionStorage key `resolveRealmFromUrl` writes on a `?realm=` load.

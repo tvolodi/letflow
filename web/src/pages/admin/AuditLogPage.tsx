@@ -1,7 +1,7 @@
 import { Fragment, useMemo, useState } from 'react'
 import { Navigate } from 'react-router-dom'
 import { useQuery, type UseQueryResult } from '@tanstack/react-query'
-import { queryKeys } from '@/api/queryKeys'
+import { useTenantScopedQueryKeys } from '@/api/useTenantScopedQueryKeys'
 import { auditApi, type AuditEntry, type AuditLogFilters } from '@/api/audit'
 import type { CursorPage } from '@/types/api'
 import { JsonDiffView } from '@/components/ui/JsonDiffView'
@@ -33,8 +33,9 @@ function isFilterRangeValid(from?: string, to?: string): boolean {
 }
 
 export function useAuditLog(filters: AuditLogFilters): UseQueryResult<CursorPage<AuditEntry>> {
+  const adminKeys = useTenantScopedQueryKeys().admin
   return useQuery({
-    queryKey: queryKeys.admin.audit(filters),
+    queryKey: adminKeys.audit(filters),
     queryFn: () => auditApi.list(filters),
     refetchInterval: 30_000,
   })
@@ -42,6 +43,7 @@ export function useAuditLog(filters: AuditLogFilters): UseQueryResult<CursorPage
 
 export default function AuditLogPage() {
   const { session } = useAuth()
+  const adminKeys = useTenantScopedQueryKeys().admin
   const isPlatformAdmin = Boolean(session?.roles.includes('PLATFORM_ADMIN'))
 
   const [actor, setActor] = useState('')
@@ -64,7 +66,7 @@ export default function AuditLogPage() {
 
   const validFilters = isValidIsoDate(from) && isValidIsoDate(to) && isFilterRangeValid(from, to)
   const { data, isLoading, isError, error, isFetching, refetch } = useQuery({
-    queryKey: queryKeys.admin.audit(filters),
+    queryKey: adminKeys.audit(filters),
     queryFn: () => auditApi.list(filters),
     enabled: validFilters,
     refetchInterval: 30_000,

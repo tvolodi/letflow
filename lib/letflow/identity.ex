@@ -69,6 +69,7 @@ defmodule Letflow.Identity do
   alias Letflow.Identity.GroupMember
   alias Letflow.Identity.OnboardingRecord
   alias Letflow.Identity.Tenant
+  alias Letflow.Identity.TenantMembership
   alias Letflow.Identity.TenantRole
   alias Letflow.Identity.User
   alias Letflow.Oidc.IdentityContext
@@ -932,12 +933,21 @@ defmodule Letflow.Identity do
   end
 
   @doc """
-  Fetches a single tenant by its `id` (REQ-382) — mirrors
-  `get_tenant_by_slug/1` exactly, keyed by `id` instead of `slug`. Added for
-  `Letflow.Routers.TenantSettings`, which only has
-  `conn.assigns.auth_context.tenant_id` (a UUID) available and needs the
-  tenant's own `slug` to call `update_tenant_settings/2` (that function's own
-  signature is unchanged by this requirement).
+  Fetches a single tenant by `id`. Not itself named by REQ-384's design
+  (`lib/letflow/design/req384-tenant-switcher-cache-isolation.md` §2.2),
+  which specifies resolving the caller's own home-tenant entry but not the
+  mechanics of turning `conn.assigns.auth_context.tenant_id` into a
+  slug/display_name — added as the minimal, natural extension that step
+  needs (mirrors `get_tenant_by_slug/1`'s own shape exactly, keyed on `id`
+  instead of `slug`). Used by `Letflow.Routers.Me`'s `GET /me/memberships`
+  handler to render the "always includes the caller's own current tenant"
+  entry (design §2.2 point 4).
+
+  Also used for the same shape of lookup by `Letflow.Routers.TenantSettings`
+  (REQ-382), which only has `conn.assigns.auth_context.tenant_id` (a UUID)
+  available and needs the tenant's own `slug` to call
+  `update_tenant_settings/2` (that function's own signature is unchanged by
+  this requirement).
   """
   @spec get_tenant(id :: Ecto.UUID.t() | String.t()) :: {:ok, Tenant.t()} | {:error, :not_found}
   def get_tenant(id) do
@@ -1106,6 +1116,45 @@ defmodule Letflow.Identity do
     @tenants_cursor_prefix
     |> Pagination.build_raw_cursor_timestamp_key(mint_time_us, inserted_at_us, id)
     |> Pagination.encode_cursor()
+  end
+
+  # ── Tenant memberships (REQ-384) ─────────────────────────────────────────
+  #
+  # Public-schema query, no opts/:prefix -- same tier as list_tenants/1
+  # above (tenant_memberships is a public-schema table per design §1.1, not
+  # tenant-scoped). See
+  # lib/letflow/design/req384-tenant-switcher-cache-isolation.md §2.1.
+
+  @doc """
+  Lists every tenant a `subject_key` (normalized email) holds an admin-
+  granted membership in, joined against `tenants` for display fields,
+  ordered by `Tenant.display_name` ascending (design §2.1).
+
+  `subject_key` is expected to already be normalized by the caller via
+  `Letflow.Identity.TenantMembership.normalize_subject_key/1` — this
+  function does not itself re-normalize, matching the design's own
+  ordering (normalize once, at the caller, then query).
+
+  Always returns `{:ok, list}` — `{:ok, []}` when the subject has no
+  memberships beyond their own home tenant, never an error tuple. The
+  caller (the `GET /me/memberships` handler) decides whether the home
+  tenant is prepended to the response; this function only ever reflects
+  `tenant_memberships` rows.
+  """
+  @spec list_memberships_for_subject(subject_key :: String.t()) ::
+          {:ok, [%{tenant: Tenant.t(), display_label: String.t() | nil}]}
+  def list_memberships_for_subject(subject_key) when is_binary(subject_key) do
+    rows =
+      from(tm in TenantMembership,
+        join: t in Tenant,
+        on: t.id == tm.tenant_id,
+        where: tm.subject_key == ^subject_key,
+        order_by: [asc: t.display_name],
+        select: %{tenant: t, display_label: tm.display_label}
+      )
+      |> Repo.all()
+
+    {:ok, rows}
   end
 
   # ── API tokens (REQ-076) ─────────────────────────────────────────────────

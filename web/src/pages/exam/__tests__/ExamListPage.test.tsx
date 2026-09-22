@@ -34,6 +34,27 @@ vi.mock('@/api/exam', () => ({
   },
 }))
 
+// REQ-384: ExamListPage now resolves a tenant-scoped query key via
+// useTenantScopedQueryKeys(), which reads useAuth().session.tenant_id. This
+// suite never exercised auth/tenant identity, so a fixed authenticated
+// session is sufficient here.
+vi.mock('@/auth/AuthContext', () => ({
+  useAuth: () => ({
+    session: {
+      token: 'tok',
+      display_name: 'Test User',
+      roles: ['CANDIDATE'],
+      loginSource: 'oidc',
+      tenant_slug: 'fixture-tenant',
+      tenant_display_name: 'Fixture Tenant',
+      tenant_id: 'tid-exam-list',
+      tenant_type: 'test',
+      production_tenant_display_name: null,
+    },
+    isAuthenticated: true,
+  }),
+}))
+
 import ExamListPage from '@/pages/exam/ExamListPage'
 import { examMessages } from '@/i18n/examMessages'
 

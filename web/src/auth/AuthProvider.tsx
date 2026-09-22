@@ -2,16 +2,63 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import type { ReactNode } from 'react'
+import { useQueryClient } from '@tanstack/react-query'
 import { clearToken, setToken, tryRestoreE2eSession } from '@/api/client'
 import { decodeTokenPayload, resolveDisplayName, resolveTenantSlug } from './tokenUtils'
 import type { UserSession } from '@/types/api'
-import { AuthContext, type AuthContextValue } from './AuthContext'
+import { AuthContext, type AuthContextValue, type SwitchTenantOutcome } from './AuthContext'
 import { getOidcManager } from './OidcManager'
+import { attemptSilentSwitch } from './tenantOidcRegistry'
+import { tenantRoot } from '@/api/queryKeys'
 import { tenantsApi } from '@/api/tenants'
 import { resetTenantConfigCache } from './tenantConfig'
 import { buildRedirectArgs } from './oidcRedirectArgs'
 
+/** Shared by `login()` (authorization-code-flow callback) and
+ *  `switchTenant()` (§5.3 — silent-auth outcome) — both produce the SAME
+ *  `UserSession` shape from a raw access token, just sourced differently. */
+async function buildSessionFromToken(token: string): Promise<UserSession> {
+  const payload = decodeTokenPayload(token)
+  if (payload === null) {
+    throw { status: 400, message: 'Token format is invalid.', code: 'TOKEN_DECODE_INVALID', details: undefined }
+  }
+  if (!payload.roles || payload.roles.length === 0) {
+    throw { status: 400, message: 'Token does not contain role assignments. Contact your administrator.', code: 'TOKEN_MISSING_ROLES', details: undefined }
+  }
+
+  const tenantSlug = resolveTenantSlug(payload)
+  let tenantDisplayName: string | null = null
+  let tenantId: string | null = null
+  let tenantType: 'production' | 'test' | null = null
+  let productionTenantDisplayName: string | null = null
+  if (tenantSlug) {
+    try {
+      const tenant = await tenantsApi.getBySlug(tenantSlug)
+      tenantDisplayName = tenant.display_name
+      tenantId = tenant.tenant_id ?? null
+      tenantType = tenant.tenant_type ?? null
+      productionTenantDisplayName = tenant.production_tenant_display_name ?? null
+    } catch {
+      console.error('[AuthProvider] Could not resolve tenant display name', tenantSlug)
+      // tenantDisplayName stays null → rendered as 'Unknown workspace'
+    }
+  }
+
+  return {
+    token,
+    display_name: resolveDisplayName(payload),
+    roles: payload.roles,
+    loginSource: 'oidc',
+    tenant_slug: tenantSlug,
+    tenant_display_name: tenantDisplayName,
+    tenant_id: tenantId,
+    tenant_type: tenantType,
+    production_tenant_display_name: productionTenantDisplayName,
+  }
+}
+
 export function AuthProvider({ children }: { children: ReactNode }) {
+  const qc = useQueryClient()
   const [session, setSessionState] = useState<UserSession | null>(() => {
     // E2E support: restore session from sessionStorage if present (written by test runner)
     const e2e = tryRestoreE2eSession()
@@ -31,6 +78,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return null
   })
   const isLoading = false
+  const [switchingToTenantSlug, setSwitchingToTenantSlug] = useState<string | null>(null)
 
   // React to session-expired events dispatched by the API client.
   // Redirect to Keycloak login via OIDC.
@@ -75,45 +123,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [])
 
   const login = useCallback(async (token: string) => {
-    const payload = decodeTokenPayload(token)
-    if (payload === null) {
-      throw { status: 400, message: 'Token format is invalid.', code: 'TOKEN_DECODE_INVALID', details: undefined }
-    }
-    if (!payload.roles || payload.roles.length === 0) {
-      throw { status: 400, message: 'Token does not contain role assignments. Contact your administrator.', code: 'TOKEN_MISSING_ROLES', details: undefined }
-    }
-
+    const newSession = await buildSessionFromToken(token)
     setToken(token)
-
-    const tenantSlug = resolveTenantSlug(payload)
-    let tenantDisplayName: string | null = null
-    let tenantId: string | null = null
-    let tenantType: 'production' | 'test' | null = null
-    let productionTenantDisplayName: string | null = null
-    if (tenantSlug) {
-      try {
-        const tenant = await tenantsApi.getBySlug(tenantSlug)
-        tenantDisplayName = tenant.display_name
-        tenantId = tenant.tenant_id ?? null
-        tenantType = tenant.tenant_type ?? null
-        productionTenantDisplayName = tenant.production_tenant_display_name ?? null
-      } catch {
-        console.error('[AuthProvider] Could not resolve tenant display name', tenantSlug)
-        // tenantDisplayName stays null → rendered as 'Unknown workspace'
-      }
-    }
-
-    setSessionState({
-      token,
-      display_name: resolveDisplayName(payload),
-      roles: payload.roles,
-      loginSource: 'oidc',
-      tenant_slug: tenantSlug,
-      tenant_display_name: tenantDisplayName,
-      tenant_id: tenantId,
-      tenant_type: tenantType,
-      production_tenant_display_name: productionTenantDisplayName,
-    })
+    setSessionState(newSession)
   }, [])
 
   const logout = useCallback(() => {
@@ -132,6 +144,64 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setSessionState(s)
   }, [])
 
+  /**
+   * REQ-384 §5.3 — in-app tenant switch, no full-page OIDC re-authentication.
+   * The step ORDER below is the mechanism behind AC3 (§7.3): the outgoing
+   * tenant's cache subtree is removed BEFORE `setSessionState` runs, so no
+   * component can re-render against the new `session.tenant_id` while a
+   * tenant-A-keyed cache entry still exists — closing the placeholder-vs-
+   * stale-row race §7.3 names explicitly.
+   *
+   * `switchingToTenantSlug` (and the `AuthenticatedShellRoot` unmount/remount
+   * of `AppShell` — and therefore `TenantSwitcher` — it drives) is set ONLY
+   * once a silent switch is actually confirmed ('silent_ok'), never merely
+   * while attempting one. Setting it for the whole attempt (as this used to)
+   * unmounted `TenantSwitcher` the instant a user clicked an option and
+   * remounted a FRESH instance once the attempt settled — so on
+   * 'interaction_required'/'error', the calling `TenantSwitcher` instance's
+   * own `onSelect` (§6.1) was setting local state (`interactionRequiredSlug`/
+   * `errorSlug`) on an already-unmounted component: a silent no-op, so
+   * neither affordance ever rendered even though `switchTenant` itself had
+   * resolved correctly (confirmed live: attemptSilentSwitch resolves
+   * 'interaction_required' in well under a second, but the UI never showed
+   * it). This also matches AC1's own boundary more precisely than the old
+   * code did: interaction_required means NO switch happened at all — tenant
+   * A's own screen (sidebar included) must stay exactly as it was, not swap
+   * to a transition placeholder for an attempt that didn't pan out.
+   */
+  const switchTenant = useCallback(async (targetSlug: string): Promise<SwitchTenantOutcome> => {
+    try {
+      const result = await attemptSilentSwitch(targetSlug)
+
+      if (result.outcome === 'interaction_required') return 'interaction_required'
+      if (result.outcome === 'error') return 'error'
+
+      setSwitchingToTenantSlug(targetSlug)
+      try {
+        const newToken = result.user.access_token
+        const newSession = await buildSessionFromToken(newToken)
+
+        // Step 1 (§7.3.1): cancel in-flight tenant-A fetches so a slow response
+        // can't land after the switch and repopulate a tenant-A-keyed entry,
+        // then REMOVE (not invalidate) the outgoing tenant's whole subtree in
+        // one prefix-matched call.
+        const outgoingTenantId = session?.tenant_id
+        if (outgoingTenantId) {
+          await qc.cancelQueries({ queryKey: tenantRoot(outgoingTenantId) })
+          qc.removeQueries({ queryKey: tenantRoot(outgoingTenantId) })
+        }
+
+        setToken(newToken)
+        setSessionState(newSession)
+        return 'ok'
+      } finally {
+        setSwitchingToTenantSlug(null)
+      }
+    } catch {
+      return 'error'
+    }
+  }, [qc, session?.tenant_id])
+
   const value: AuthContextValue = useMemo(
     () => ({
       session,
@@ -141,8 +211,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       login,
       logout,
       setSession,
+      switchTenant,
+      switchingToTenantSlug,
     }),
-    [session, isLoading, login, logout, setSession],
+    [session, isLoading, login, logout, setSession, switchTenant, switchingToTenantSlug],
   )
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>

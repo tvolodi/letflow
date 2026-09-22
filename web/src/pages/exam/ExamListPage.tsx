@@ -45,7 +45,7 @@ import { useNavigate } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { useIntl } from 'react-intl'
 import { examApi, type ExamRecord } from '@/api/exam'
-import { queryKeys } from '@/api/queryKeys'
+import { useTenantScopedQueryKeys } from '@/api/useTenantScopedQueryKeys'
 import { PageLayout } from '@/components/ui/PageLayout'
 import { Button } from '@/components/ui/Button'
 import { QueryStateBoundary } from '@/components/ui/QueryStateBoundary'
@@ -85,9 +85,10 @@ function ExamListPageInner() {
   const intl = useIntl()
   const navigate = useNavigate()
   const uiLocale = resolveUiLocale([intl.locale])
+  const tenantKeys = useTenantScopedQueryKeys()
 
   const examsQuery = useQuery({
-    queryKey: queryKeys.exam.list({ page_size: 100 }),
+    queryKey: tenantKeys.exam.list({ page_size: 100 }),
     queryFn: () => examApi.listAvailableExams({ page_size: 100 }),
   })
 

@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { usersApi, rolesApi } from '@/api/identity'
-import { queryKeys } from '@/api/queryKeys'
+import { useTenantScopedQueryKeys } from '@/api/useTenantScopedQueryKeys'
 import type { User } from '@/types/api'
 import { useNavigate } from 'react-router-dom'
 import { QueryStateBoundary } from '@/components/ui/QueryStateBoundary'
@@ -32,6 +32,7 @@ function displayUsername(user: User): string {
 export default function UsersPage() {
   const navigate = useNavigate()
   const qc = useQueryClient()
+  const tenantKeys = useTenantScopedQueryKeys()
   const [creating, setCreating] = useState(false)
   const [searchDraft, setSearchDraft] = useState('')
   const [searchApplied, setSearchApplied] = useState('')
@@ -39,7 +40,7 @@ export default function UsersPage() {
   const [createRoleIds, setCreateRoleIds] = useState<string[]>([])
   const [error, setError] = useState<string | null>(null)
 
-  const usersQueryKey = queryKeys.admin.users({ search: searchApplied || undefined })
+  const usersQueryKey = tenantKeys.admin.users({ search: searchApplied || undefined })
 
   const { data, isLoading, isError, error: queryError, refetch } = useQuery({
     queryKey: usersQueryKey,
@@ -47,14 +48,14 @@ export default function UsersPage() {
   })
 
   const { data: roles } = useQuery({
-    queryKey: queryKeys.admin.roles(),
+    queryKey: tenantKeys.admin.roles(),
     queryFn: () => rolesApi.list(),
   })
 
   const createUser = useMutation({
     mutationFn: () => usersApi.create({ ...form, role_ids: createRoleIds }),
     onSuccess: (createdUser) => {
-      qc.invalidateQueries({ queryKey: queryKeys.admin.users() })
+      qc.invalidateQueries({ queryKey: tenantKeys.admin.users() })
       setCreating(false)
       setForm({ username: '', email: '', display_name: '', password: '' })
       setCreateRoleIds([])

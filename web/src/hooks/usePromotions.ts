@@ -1,19 +1,15 @@
 /** TanStack Query hooks for promotion reviews (PRM-02 – PRM-05) */
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { promotionsApi } from '@/api/promotions'
-import { queryKeys } from '@/api/queryKeys'
+import { useTenantScopedQueryKeys } from '@/api/useTenantScopedQueryKeys'
 import type {
   ApprovePromotionRequest,
   ApplyPromotionRequest,
 } from '@/api/promotions'
 
-export const promotionKeys = {
-  all: queryKeys.promotions.all,
-  context: queryKeys.promotions.context,
-}
-
 /** Fetch GET /api/v1/promotions/{reviewId}/context */
 export function usePromotionContext(reviewId: string) {
+  const promotionKeys = useTenantScopedQueryKeys().promotions
   return useQuery({
     queryKey: promotionKeys.context(reviewId),
     queryFn: () => promotionsApi.getContext(reviewId),
@@ -24,6 +20,7 @@ export function usePromotionContext(reviewId: string) {
 /** Mutation: POST /api/v1/promotions/{reviewId}/approve */
 export function useApprovePromotion() {
   const qc = useQueryClient()
+  const promotionKeys = useTenantScopedQueryKeys().promotions
   return useMutation({
     mutationFn: ({ reviewId, body }: { reviewId: string; body: ApprovePromotionRequest }) =>
       promotionsApi.approve(reviewId, body),
@@ -36,6 +33,7 @@ export function useApprovePromotion() {
 /** Mutation: POST /api/v1/promotions/{reviewId}/reject */
 export function useRejectPromotion() {
   const qc = useQueryClient()
+  const promotionKeys = useTenantScopedQueryKeys().promotions
   return useMutation({
     mutationFn: (reviewId: string) => promotionsApi.reject(reviewId),
     onSuccess: (_data, reviewId) => {
@@ -47,6 +45,7 @@ export function useRejectPromotion() {
 /** Mutation: POST /api/v1/promotions/{reviewId}/apply */
 export function useApplyPromotion() {
   const qc = useQueryClient()
+  const promotionKeys = useTenantScopedQueryKeys().promotions
   return useMutation({
     mutationFn: ({ reviewId, body }: { reviewId: string; body: ApplyPromotionRequest }) =>
       promotionsApi.apply(reviewId, body),

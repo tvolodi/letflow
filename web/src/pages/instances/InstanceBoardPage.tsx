@@ -1,11 +1,11 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { useQueryClient } from '@tanstack/react-query'
-import { useInstances, instanceKeys, useStartInstance } from '@/hooks/useInstances'
+import { useInstances, useStartInstance } from '@/hooks/useInstances'
 import { useDefinitions, useDefinition } from '@/hooks/useDefinitions'
 import { useAuth } from '@/auth/AuthContext'
 import { usePolling } from '@/hooks/usePolling'
-import { queryKeys } from '@/api/queryKeys'
+import { useTenantScopedQueryKeys } from '@/api/useTenantScopedQueryKeys'
 import type { ProcessInstance, InstanceStatus } from '@/types/api'
 import { QueryStateBoundary } from '@/components/ui/QueryStateBoundary'
 import { DataTable, type DataTableColumn } from '@/components/ui/DataTable'
@@ -44,6 +44,7 @@ export default function InstanceBoardPage() {
   const qc = useQueryClient()
   const { session } = useAuth()
   const [searchParams, setSearchParams] = useSearchParams()
+  const tenantKeys = useTenantScopedQueryKeys()
 
   const statusFilters = useMemo(() => parseStatusFilter(searchParams), [searchParams])
   const definitionName = searchParams.get('definitionName') ?? ''
@@ -83,7 +84,7 @@ export default function InstanceBoardPage() {
     cursor,
     page_size: pageSize,
   })
-  const polling = usePolling({ queryKeyPrefix: queryKeys.instances.all })
+  const polling = usePolling({ queryKeyPrefix: tenantKeys.instances.all() })
 
   const startInstance = useStartInstance()
 
@@ -207,7 +208,7 @@ export default function InstanceBoardPage() {
         correlation_key: startCorrelationKey.trim() || undefined,
         initial_variables: parsedVariables,
       })
-      await qc.invalidateQueries({ queryKey: instanceKeys.all })
+      await qc.invalidateQueries({ queryKey: tenantKeys.instances.all() })
       setShowStart(false)
       navigate(`/instances/${created.instance_id}`)
     } catch (err: unknown) {

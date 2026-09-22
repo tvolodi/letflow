@@ -1,0 +1,87 @@
+report_id: report-20260922-WF02-REQ376-20260922-final
+run_id: WF02-REQ376-20260922
+workflow_id: WF-02
+step: "04"
+agent: TEST-RUNNER
+date: 2026-09-22
+branch: feature/WF02-REQ376-20260922
+commit: 07b3458370d3f0383557a71b4583dcfbf799bf3d
+
+verdict: PASS
+
+context: >
+  FINAL re-run of Step 4 after ELIXIR-DEV rework3
+  (handoffs/WF02-REQ376-20260922/step-02a-elixir-dev-rework3.json), which fixed all
+  three failure groups this step's prior run (report-20260922-WF02-REQ376-20260922.yaml,
+  verdict FAIL) attributed structurally to this branch: 16x PollerTest KeyError,
+  1x TenantTemplateTest clone-vs-template parity, 1x RequirementStatusInvariantsTest
+  stale index count. rework3 touched only test/support/tenant_template.ex,
+  test/letflow/scheduler/poller_test.exs, and docs/status/requirement_status.index.yaml
+  -- zero lib/ files -- so per core-directives.md this is independently re-verified here
+  rather than trusted from ELIXIR-DEV's own self-reported clean run (4626 tests,
+  6 properties, 0 failures, 4632/4632).
+
+pre_run_environment_check: >
+  Per docs/anti-patterns.md's "An interrupted mix letflow.check.test/
+  scripts/test_parallel.sh run leaves zombie BEAM VMs..." entry: checked for
+  lingering erl.exe/beam.smp processes before starting
+  (`Get-Process erl -ErrorAction SilentlyContinue`, `Get-Process beam.smp
+  -ErrorAction SilentlyContinue`) -- none found, clean baseline, no cleanup needed.
+  `docker compose ps` showed letflow-postgres-1 and letflow-keycloak-1 already up
+  and healthy (this checkout does not run `docker compose up` fresh when the
+  containers are already healthy). No untracked `.env` LETFLOW_DB_PORT override
+  present, so the default port 5462 applies to both compose and Ecto, as expected.
+
+command_run: "TEST_PARALLEL_N=4 scripts/test_parallel.sh"
+n_derivation: >
+  Explicit override, TEST_PARALLEL_N=4 (env override, confirmed by the script's own
+  "test_parallel: N=4 (source: env override)" log line) -- matching this host's
+  established precedent from the two prior rounds of this same run (ISS-0219;
+  this host's Postgres/CPU budget cannot sustain raw nproc-derived parallelism).
+
+execution_notes: >
+  Ran as a normal, blocking, foreground Bash call. The call exceeded the Bash
+  tool's own hard timeout cap and was auto-moved to a background OS process by
+  the tool infrastructure itself (not requested via run_in_background) -- per
+  docs/anti-patterns.md's zombie-BEAM entry this is exactly the shape that can
+  orphan partition processes if the run is abandoned, so the run was NOT
+  abandoned: it was polled to completion with repeated blocking foreground Bash
+  calls in a sleep-and-grep loop against the background task's own output file,
+  all within this same turn -- never via Monitor, never by ending the turn to
+  wait for a cross-turn notification (core-directives.md ISS-0213/ISS-0223). The
+  process ran to its own natural completion (exit code 0); no kill, no
+  interruption, so no zombie BEAM risk was introduced by this run itself.
+
+result:
+  combined: "combined: 4626 tests, 6 properties, 0 failures (4632/4632 passed)"
+  per_partition: >
+    partition 1: 1246 tests, 2 properties, 0 failures, exit 0;
+    partition 2: 1103 tests, 0 properties, 0 failures, exit 0;
+    partition 3: 1171 tests, 2 properties, 0 failures, exit 0;
+    partition 4: 1106 tests, 2 properties, 0 failures, exit 0.
+  prior_report_comparison: >
+    This step's own prior run (report-20260922-WF02-REQ376-20260922.yaml): 38
+    failures (4594/4632), 18 structurally attributable to this branch. This run:
+    0 failures (4632/4632). Not accepted on count alone -- there is nothing left
+    to structurally attribute since the failure count is zero; the three
+    previously-attributed groups (PollerTest, TenantTemplateTest,
+    RequirementStatusInvariantsTest) were individually confirmed absent from this
+    run's per-partition logs, and no new failure appeared anywhere else in the
+    combined 4632-test run.
+
+failures_attributable_to_this_branch:
+  summary: "0 failures. Nothing to attribute -- full suite green."
+
+failures_structurally_cleared_as_pre_existing:
+  summary: "0 failures. No connection-contention or concurrent-session symptoms observed this run (no too_many_connections / DBConnection.ConnectionError / concurrent-invocation-guard deferrals in any partition log), unlike the prior Step 4 run on this same branch."
+
+compile_and_format: "Not independently re-run this step -- rework3's own handoff (step-02a-elixir-dev-rework3.json) reports both clean against this exact commit, and rework3 touched only test/ and docs/status/ files (zero lib/ changes), so compile/format state is unchanged from what was last verified against lib/ content."
+
+logs_preserved: "Background task output captured to this session's scratchpad (tasks/bfuzmafyq.output); test_parallel.sh's own per-partition logs are not retained on a clean (exit 0) run, per the script's own behavior of only keeping /tmp/letflow_test_parallel.* logs on non-clean exits."
+
+conclusion: >
+  PASS. Full suite: 4626 tests, 6 properties, 0 failures (4632/4632 passed),
+  independently re-verified via scripts/test_parallel.sh (TEST_PARALLEL_N=4),
+  confirming ELIXIR-DEV rework3 fixed all three previously-attributed failure
+  groups with no regressions introduced elsewhere. Routes forward to
+  RELEASE-VALIDATOR.

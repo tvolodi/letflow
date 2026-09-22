@@ -1,0 +1,62 @@
+{
+  "handoff_id": "b2c3d4e5-0001-4000-8000-000000000011",
+  "run_id": "WF02-REQ373-20260921",
+  "workflow_id": "WF-02",
+  "step": "06",
+  "from_agent": "ORCH",
+  "to_agent": "DOC-UPDATER",
+  "file": "handoffs/WF02-REQ373-20260921/step-06-doc-updater.json",
+  "created_at": "2026-09-21T20:56:26Z",
+  "started_at": "2026-09-21T20:56:26Z",
+  "completed_at": "2026-09-21T21:01:39Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S6",
+    "requirement_ids": ["REQ-373"],
+    "requirement_text": {
+      "REQ-373": "See handoffs/WF02-REQ373-20260921/step-01-code-designer.json's context.requirement_text for the full text -- not restated here to avoid drift; read it there."
+    },
+    "related_handoff_ids": [
+      "handoffs/WF02-REQ373-20260921/step-05-release-validator.json"
+    ],
+    "artifacts_in": [
+      "docs/requirements.yaml",
+      "docs/status/requirement_status.index.yaml",
+      "docs/status/requirement_status.v21.yaml"
+    ],
+    "owned_modules": [
+      "docs/requirements.yaml",
+      "docs/status/requirement_status.v21.yaml"
+    ]
+  },
+  "task": {
+    "description": "Perform WF-02 Step 6 (documentation update) for REQ-373 per docs/agents/workflows/WF-02_requirement_implementation.md. TWO pieces of work:\n\n(1) FLIP REQ-373's status in docs/requirements.yaml from 'in_progress' to 'done'. Append a 'done' event to the CURRENT run-history volume (docs/status/requirement_status.v21.yaml -- confirmed current via the index; read the volume in full first per its own HOW-TO-APPEND procedure, append, never rewrite) with a REAL UTC timestamp from the clock (run `date -u +\"%Y-%m-%dT%H:%M:%SZ\"` or PowerShell equivalent yourself, do not estimate). The note should summarize what shipped: schema decision (in-place status column on service_catalog + status Ecto.Enum [:ACTIVE,:RETIRED] + new service_catalog_versions sibling archive table -- NOT composite-key-versioned), publish/3 and retire/1 operations, the new Letflow.ServiceCatalog.PinLookup module wired into Engine.create/2's pin_lookup/2 in place of PinResolver.default_lookup/0 for catalog_entry references, two new :AdminServicesManage-gated routes, one rework cycle at the design gate (status casing self-contradiction), one rework cycle at implementation (archive_changeset/1 over-broad validate_required on nullable fields, found by TEST-DESIGNER), one rework cycle at test-design gate (service_catalog_versions cleanup leak, found by TEST-DESIGN-VALIDATOR), all gates ultimately PASSED (CODE-DESIGN-VALIDATOR, SECURITY-REVIEWER x2, REVIEWER x2, TEST-DESIGN-VALIDATOR x2, TEST-RUNNER, RELEASE-VALIDATOR), RELEASE-VALIDATOR's independent full-suite re-run 4585/4588 (3 pre-existing unrelated failures, structurally cleared) plus a real AC8-blocking handoff-lint defect RELEASE-VALIDATOR found and fixed. Update requirement_status.index.yaml's volume 21 entries: count to match (increment by one in the same commit) per its own HOW-TO-APPEND step 6 -- do not skip this, a prior step in this same run already had to fix a stale count.\n\nUpdate README.md ONLY if it documents current behavior this change altered (e.g. if it lists service_catalog's schema/capabilities anywhere) -- check first, don't assume.\n\n(2) DRAFT THE FOLLOW-ON FRONTEND REQUIREMENT as a new pending entry appended to docs/requirements.yaml in file order (after REQ-373's own entry, before whatever comes next -- check the file's actual numbering convention/ordering first). Pattern: REQ-291 followed REQ-288 (grep 'id: REQ-291' in docs/requirements.yaml for the exact wording pattern to adapt -- same shape used for REQ-397/398 following REQ-372). The new requirement: a case-detail screen (owner: FRONTEND-DEV) showing, for a given process instance, each dependency's version and whether it was chosen automatically, requested explicitly, or inherited -- reading Letflow.Engine.PinResolver's existing `source` field taxonomy (:resolved/:override/:inherited/:rebound), via a new GET /api/v1/instances/{id}/pins route (PIN-04 AC4's own SCOPE note already names this future route -- confirm by reading pin_resolver.ex yourself). Give it the next unused REQ-NNN id (check the highest existing id in the file first), stage S6 (matches this requirement's stage), status: pending, depends_on: [REQ-373], and a full description + acceptance_criteria following this file's established schema (look at 2-3 neighboring entries for the exact field shape/style before writing). State explicitly in its description that this requirement needs a new backend route (GET /api/v1/instances/{id}/pins) that does not yet exist -- name whether that route itself is this new requirement's own scope (likely yes, since nothing else would build it) or a separate backend prerequisite; decide and state explicitly, don't leave ambiguous.\n\nComplete the handoff with artifacts_out listing every file touched (docs/requirements.yaml, docs/status/requirement_status.v21.yaml, docs/status/requirement_status.index.yaml, README.md if touched), and the new requirement's exact id in your result.summary. next_action: 'Route to ELIXIR-DEV/ORCH for Step Final' (Step Final is performed by ORCH directly for this run, NOT by you -- do not attempt the git merge yourself). Commit and push (explicit filenames, never -A) to origin feature/WF02-REQ373-20260921 before ending your turn.",
+    "acceptance_criteria": [
+      "REQ-373 status flipped pending/in_progress -> done in docs/requirements.yaml",
+      "done event appended to requirement_status.v21.yaml with a real UTC timestamp",
+      "requirement_status.index.yaml's volume 21 entries: count incremented to match",
+      "a new pending FRONTEND-DEV requirement drafted and appended to docs/requirements.yaml, depends_on REQ-373, following the established schema and REQ-291/REQ-288 precedent pattern",
+      "README.md updated only if it actually documents behavior this change altered"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "REQ-373 flipped in_progress -> done in docs/requirements.yaml. Appended a 'done' event to docs/status/requirement_status.v21.yaml (13 -> 14 on-disk entries, verified by `grep -c \"^  - req:\" ...` and git diff --numstat showing 39 insertions / 0 deletions), and incremented requirement_status.index.yaml's volume-21 `entries:` from 13 to 14 in the same commit, with the prior note preserved verbatim per the append-only rule. test/docs/requirement_status_invariants_test.exs: 20/20 passed (confirms both files' schema and the A9 entries-count invariant). README.md has zero mentions of service_catalog/ServiceCatalog/PinResolver/pin_lookup, so it was left untouched -- no documented behavior needed updating. Drafted the follow-on FRONTEND-DEV requirement as REQ-399 (next unused id after REQ-398, the file's current highest), appended at the end of docs/requirements.yaml in its established ascending-id file order, depends_on: [REQ-373], following the REQ-291/REQ-288 and REQ-398/REQ-397 precedent shape. REQ-399's description states explicitly that it needs a new backend route, GET /api/v1/instances/{id}/pins (PIN-04 AC4's own SCOPE note in pin_resolver.ex, confirmed by direct read), and explicitly decides that route is IN SCOPE of REQ-399 itself (not a separate backend prerequisite requirement), since nothing else in requirements.yaml builds it -- stated with reasoning, not left ambiguous. mix letflow.check_req_id_collision: OK (no collision). mix letflow.check_requirements_registration: REQ-399 correctly classified as DEFERRED with a non-empty rationale (R1-R6 all pass, 366 = 363 registered + 3 deferred + 0 neither + 0 unclassified).",
+    "artifacts_out": [
+      "docs/requirements.yaml",
+      "docs/status/requirement_status.v21.yaml",
+      "docs/status/requirement_status.index.yaml"
+    ],
+    "new_requirement_id": "REQ-399",
+    "issues": [
+      {
+        "severity": "MINOR",
+        "description": "mix letflow.check_deferral_staleness (part of the `mix letflow.check` alias) currently FAILS with one violation: REQ-399 (line ~29620 in docs/requirements.yaml) is classified STALE, because its `# impl_order: UNREGISTERED -- filed directly by DOC-UPDATER...` marker carries no `blocked-by: REQ-NNN` escape hatch and stage S6 is ACTIVE (80 done requirements). This is expected and self-resolving, not a defect in REQ-399's filing: DOC-UPDATER has no letflow-queue access (core-directives.md's 'No Agent Discretion Over Task Selection or Locking' reserves register_task to ORCH alone), so REQ-399 cannot be registered with a real impl_order from this role. Recommend ORCH call register_task for REQ-399 promptly (the same way REQ-398 was registered at filing time, GH#1660/queue task 766) so `mix letflow.check` is green again repo-wide before other work that runs the full check alias lands on top of this state. Until then, any run of `mix letflow.check_deferral_staleness` or the full `mix letflow.check` alias on this branch/main will report this one violation by name."
+      }
+    ],
+    "next_action": "Route to ORCH for Step Final (git merge is ORCH's own job for this run, per the handoff task -- NOT performed by DOC-UPDATER). ORCH should also call register_task for REQ-399 promptly after merge to clear the check_deferral_staleness violation described above."
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

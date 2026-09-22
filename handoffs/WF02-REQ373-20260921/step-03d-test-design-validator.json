@@ -1,0 +1,66 @@
+{
+  "handoff_id": "b2c3d4e5-0001-4000-8000-00000000000c",
+  "run_id": "WF02-REQ373-20260921",
+  "workflow_id": "WF-02",
+  "step": "03d",
+  "from_agent": "ORCH",
+  "to_agent": "TEST-DESIGN-VALIDATOR",
+  "file": "handoffs/WF02-REQ373-20260921/step-03d-test-design-validator.json",
+  "created_at": "2026-09-21T19:05:04Z",
+  "started_at": "2026-09-21T19:05:04Z",
+  "completed_at": "2026-09-21T19:09:04Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S6",
+    "requirement_ids": ["REQ-373"],
+    "requirement_text": {
+      "REQ-373": "See handoffs/WF02-REQ373-20260921/step-01-code-designer.json's context.requirement_text for the full text -- not restated here to avoid drift; read it there."
+    },
+    "related_handoff_ids": [
+      "handoffs/WF02-REQ373-20260921/step-03-test-designer.json",
+      "handoffs/WF02-REQ373-20260921/step-03a-elixir-dev-fix.json"
+    ],
+    "artifacts_in": [
+      "test/specs/req373-service-catalog-version-lifecycle.md",
+      "test/letflow/service_catalog_test.exs",
+      "test/letflow/engine_pin_resolver_catalog_test.exs",
+      "test/letflow/routers/admin_services_publish_retire_test.exs"
+    ],
+    "owned_modules": []
+  },
+  "task": {
+    "description": "Perform WF-02 Step 3b (test design gate, HARD GATE) for REQ-373 per docs/agents/workflows/WF-02_requirement_implementation.md and your role file .claude/agents/test-design-validator.md. Read the test spec and test source files INDEPENDENTLY. For each of REQ-373's 8 acceptance criteria, verify: (a) at least one runnable test targets it (not @tag :skip without a passing counterpart); (b) no 'TODO: implement test' left in the spec; (c) test fixtures use per-test unique data, no cross-test pollution; (d) tests are self-sufficient, don't depend on other tests running first; (e) no hardcoded secrets/connection strings.\n\nSPECIFICALLY INVESTIGATE a flagged concern from ELIXIR-DEV's rework (step-03a-elixir-dev-fix.json result): a test-isolation gap in test/letflow/engine_pin_resolver_catalog_test.exs's unique_service_id/1 fixture -- it uses System.unique_integer/1, which resets per BEAM VM restart, while service_catalog_versions is deliberately append-only and never cleaned between runs, so repeated mix test invocations in the same BEAM session can collide with leftover archive rows from an earlier run within that same session. Determine whether this is a genuine self-sufficiency/isolation violation (check (c)/(d) above) that must be fixed before this gate can PASS, or an acceptable characteristic given how ExUnit/Ecto sandbox mode actually isolates test runs (Ecto.Adapters.SQL.Sandbox typically rolls back each test's transaction, which would make this concern moot for a SINGLE mix test invocation but real only for the literal multiple-invocations-in-one-BEAM-session scenario ELIXIR-DEV described) -- verify by reading how service_catalog_versions rows are actually written (inside a sandboxed transaction or not) rather than assuming either way.\n\nFAIL immediately on any check failure -- no partial credit. Set status to COMPLETED, commit and push before ending your turn.",
+    "acceptance_criteria": [
+      "service_catalog entries carry a version identity and an ACTIVE/RETIRED status, with the chosen schema (composite key vs. status+sibling table) stated explicitly in the moduledoc along with the reasoning, proven by a migration and a schema test",
+      "publishing a new version of an existing service_id does not alter or invalidate any already-resolved pinned_version entry recorded in a prior INSTANCE_STARTED event, proven by a test that resolves a pin, publishes a new version, and re-derives the same instance's effective pin set unchanged",
+      "a new case created after a publish resolves the newly published version via Letflow.Engine.PinResolver.resolve/4's real (non-default) Lookup, proven by a test",
+      "retiring a version prevents any NEW resolution from choosing it while an instance already pinned to the retired version continues to resolve via pin_for/3 with no error, proven by a test covering both sides",
+      "Engine.create/2's pin_lookup/2 helper is wired to the real catalog-backed Lookup for catalog_entry references in place of PinResolver.default_lookup/0, proven by an integration test",
+      "publish/retire operations are gated behind the already-shipped :AdminServicesManage permission, not a newly invented permission name, proven by a test",
+      "PLC-01/module_ref catalog versioning is explicitly named as still out of scope in the moduledoc (not a test-code requirement)",
+      "mix letflow.check passes, with real output quoted (TEST-RUNNER's job, not this gate's)"
+    ]
+  },
+  "result": {
+    "verdict": "FAIL",
+    "agent_id": "TEST-DESIGN-VALIDATOR",
+    "checks": {
+      "a_every_ac_has_runnable_test": "PASS -- read test/specs/req373-service-catalog-version-lifecycle.md and all 3 test files independently. AC1/AC2/AC3/AC4/AC5/AC6 each map to a specific describe/test in service_catalog_test.exs, engine_pin_resolver_catalog_test.exs, or admin_services_publish_retire_test.exs; grepped all three files for '@tag :skip' -- none found. AC7/AC8 are explicitly non-test-code checks per the task's own instruction and the spec's own AC7/AC8 sections, verified separately (AC7: read lib/letflow/service_catalog/pin_lookup.ex lines 1-20 -- moduledoc does state module_lookup stays a permanent {:error, :not_found} stub and cites the SCOPE GAP language; AC8 is explicitly TEST-RUNNER's job, not this gate's).",
+      "b_no_todo_stub": "PASS -- grepped all 3 test files for 'TODO'; none found.",
+      "c_d_isolation_self_sufficiency": "FAIL -- see investigation below. This is the primary and disqualifying finding.",
+      "e_no_hardcoded_secrets": "PASS -- grepped all 3 test files for password/secret/SECRET/postgres:// connection strings; none found beyond the repo-wide test master-key convention which is not in these files at all."
+    },
+    "isolation_investigation": {
+      "question": "Is the flagged concern (unique_service_id/1's System.unique_integer resetting per BEAM restart, colliding with never-cleaned service_catalog_versions rows) a genuine isolation violation, or moot under Ecto Sandbox rollback for a single mix test invocation?",
+      "method": "Did not trust ELIXIR-DEV's report or the spec's own framing. Read test/support/data_case.ex (confirms Sandbox.checkout + on_exit-driven rollback is the DEFAULT DataCase behavior) and lib/letflow/service_catalog.ex's publish/3 (confirms it runs inside one plain Repo.transaction/1, no separate process/connection -- so IF the surrounding sandbox transaction rolls back, the nested transaction's writes roll back with it). Then read both test files' own setup blocks: BOTH service_catalog_test.exs (line 61-64, pre-existing REQ-191 file, its own moduledoc lines 26-60 explains why) and engine_pin_resolver_catalog_test.exs (line 51-54, new REQ-373 file, explicitly mirrors the same reasoning) call `Sandbox.mode(Letflow.Repo, :auto)` in their own `setup do` block -- this deliberately replaces DataCase's default shared-transaction-with-rollback behavior with real, committed writes, specifically so multi-process on_exit callbacks (tenant schema teardown, provisioned_tenant!/1) can run after the test process exits. Both files therefore rely entirely on explicit on_exit cleanup, not sandbox rollback, for every row they write to any GLOBAL (non-tenant-schema) table -- service_catalog included.\n\nThen verified empirically rather than by inference alone, against the real test Postgres DB (MIX_ENV=test mix run -e, before touching any test code):\n1. BEFORE running anything: service_catalog_versions already held 3 leftover req373-prefixed rows (req373-admin-router-svc-2, req373-svc-10, req373-svc-12, all version \"1\") from a prior run/session, while service_catalog itself (the Entry table) held 0 req373 rows -- i.e. Entry cleanup is working, Version cleanup is not.\n2. Ran `mix test test/letflow/engine_pin_resolver_catalog_test.exs --seed 0` alone: Result: 5 passed, 0 failures.\n3. Re-queried immediately after: service_catalog_versions now held 5 req373 rows -- 2 NEW ones (req373-svc-1, req373-svc-3, both version \"1\") appeared, added by that single run's AC3 test (which calls publish/3, archiving the pre-publish row). service_catalog itself was back to 0 req373 rows (correctly cleaned).\n4. Read cleanup_entry!/1 in BOTH files: `Repo.delete_all(from(e in Entry, where: e.service_id == ^service_id))` -- deletes ONLY from Entry, never from Version, in either file. service_catalog_test.exs even `alias`es `Letflow.ServiceCatalog.Version` and uses it in three assertions (lines 966/982/1011) but never in a cleanup query.",
+      "conclusion": "GENUINE VIOLATION, not moot under sandbox. The task's own hedge (\"moot for a SINGLE mix test invocation... real only for multiple-invocations-in-one-BEAM-session\") does not hold: sandbox rollback never applies to this table at all in either file, by the files' own deliberate :auto-mode design, so every service_catalog_versions row a test's publish/3 call creates is a REAL, PERMANENT commit to the shared Postgres database from the very first invocation, not just on a second one. I measured this directly (steps 1-3 above) rather than trusting ELIXIR-DEV's report of it. This means: (a) re-running this suite in a fresh BEAM VM will regenerate the same unique_integer-derived service_ids and collide with these permanently-leaked rows on the (service_id, version) unique index -- exactly the DBConnection/Postgrex.Error ELIXIR-DEV already reproduced once and had to work around with a manual cleanup script rather than a real fix; (b) this is check (c)'s 'no cross-test pollution' failing in the most literal sense -- the pollution is real, present in the DB right now, and self-inflicted by every run of these tests, not a hypothetical. This is not an acceptable characteristic of the append-only design (an archive table being permanent in PRODUCTION is correct and intentional; a TEST run leaking permanent rows into the shared test database on every invocation is not the same thing and is not covered by the design doc's 'deliberately append-only' framing, which is about production semantics, not test hygiene).",
+      "scope_note": "This bug already exists, unfixed, in the pre-existing service_catalog_test.exs (REQ-191's file) too -- but publish/3 (the only code path that writes to service_catalog_versions) is itself new in REQ-373, so REQ-373's own new tests are what actually exercise and expose this leak in that file for the first time; it is in scope for this gate, not a pre-existing-and-unrelated defect to file separately.",
+      "hygiene_note": "Cleaned up the 5 req373-prefixed leftover service_catalog_versions rows I found (3 pre-existing + 2 created by my own verification run) via a one-off Repo.delete_all so the next run starts from a clean table; no test or lib file was touched to do this."
+    },
+    "summary": "FAIL. AC coverage (a/b/e) is solid across all 3 files -- every acceptance criterion maps to a real, unskipped test, no TODOs, no hardcoded secrets. But check (c)/(d) fails on a genuine, empirically-confirmed test-isolation defect: cleanup_entry!/1 in both service_catalog_test.exs and engine_pin_resolver_catalog_test.exs deletes only Entry rows, never the Version (service_catalog_versions) rows publish/3 archives -- and because both files deliberately run in Sandbox :auto mode (real commits, not rollback) for this global table, every such row is a permanent leak into the shared test database. Verified directly: ran the new test file once and watched 2 new permanently-committed rows appear; found 3 more already left over from an earlier session before I touched anything. This is exactly the collision mechanism ELIXIR-DEV's rework note described, and it is real from the very first invocation, not only across repeated ones. Required fix, routed back to TEST-DESIGNER: extend cleanup_entry!/1 in both files to also `Repo.delete_all(from(v in Version, where: v.service_id == ^service_id))` in the same on_exit, so archived version rows are cleaned up per-test exactly like Entry rows are.",
+    "next_action": "Rework TEST-DESIGNER: add service_catalog_versions cleanup (by service_id) to cleanup_entry!/1 in both test/letflow/service_catalog_test.exs and test/letflow/engine_pin_resolver_catalog_test.exs, then re-route to TEST-DESIGN-VALIDATOR."
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

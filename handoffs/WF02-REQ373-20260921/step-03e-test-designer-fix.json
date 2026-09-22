@@ -1,0 +1,53 @@
+{
+  "handoff_id": "b2c3d4e5-0001-4000-8000-00000000000d",
+  "run_id": "WF02-REQ373-20260921",
+  "workflow_id": "WF-02",
+  "step": "03e",
+  "from_agent": "ORCH",
+  "to_agent": "TEST-DESIGNER",
+  "file": "handoffs/WF02-REQ373-20260921/step-03e-test-designer-fix.json",
+  "created_at": "2026-09-21T19:10:07Z",
+  "started_at": "2026-09-21T19:10:07Z",
+  "completed_at": null,
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S6",
+    "requirement_ids": ["REQ-373"],
+    "requirement_text": {
+      "REQ-373": "See handoffs/WF02-REQ373-20260921/step-01-code-designer.json's context.requirement_text for the full text -- not restated here to avoid drift; read it there."
+    },
+    "related_handoff_ids": [
+      "handoffs/WF02-REQ373-20260921/step-03-test-designer.json",
+      "handoffs/WF02-REQ373-20260921/step-03d-test-design-validator.json"
+    ],
+    "artifacts_in": [
+      "test/letflow/service_catalog_test.exs",
+      "test/letflow/engine_pin_resolver_catalog_test.exs"
+    ],
+    "owned_modules": [
+      "test/letflow/service_catalog_test.exs",
+      "test/letflow/engine_pin_resolver_catalog_test.exs"
+    ]
+  },
+  "task": {
+    "description": "REWORK ITERATION 1 (targeted fixture fix). TEST-DESIGN-VALIDATOR FAILed on ONE dimension: test/letflow/service_catalog_test.exs and test/letflow/engine_pin_resolver_catalog_test.exs both explicitly set Sandbox.mode(Letflow.Repo, :auto) for the global service_catalog table (real committed writes, no rollback -- needed for multi-process on_exit teardown), but cleanup_entry!/1 in BOTH files deletes only from Entry (service_catalog), never from Version (service_catalog_versions) -- permanently leaking an archive row into the shared test DB on every single invocation. TEST-DESIGN-VALIDATOR confirmed this empirically (5 passed tests left 2 new permanently-committed rows) and already cleaned up the leaked rows it found/caused via a one-off Repo.delete_all -- you do not need to clean the DB, only fix the test code.\n\nFix: extend cleanup_entry!/1 in BOTH files to also delete matching service_catalog_versions rows (by service_id, since that's the archive table's natural foreign reference) in the same on_exit callback, before or alongside the Entry deletion. Do not touch anything else -- narrow fix only. AC coverage (a/b/e checks: every AC has a runnable test, no TODOs, no hardcoded secrets) already PASSED and does not need rework.\n\nAfter fixing, run the two affected test files TWICE IN A ROW in the same session yourself (mix test test/letflow/service_catalog_test.exs test/letflow/engine_pin_resolver_catalog_test.exs, then run it again immediately) and quote real output confirming no unique-constraint collision on the second run and that service_catalog_versions is empty of req373-owned rows after both runs (query it directly to confirm, don't just trust the test's own exit code). Complete the handoff with PASS/FAIL, commit and push (explicit filenames, never -A) before ending your turn. next_action: 'Route to TEST-DESIGN-VALIDATOR for re-gate'.",
+    "acceptance_criteria": [
+      "cleanup_entry!/1 in both files deletes matching service_catalog_versions rows",
+      "running the two test files twice in a row in the same session produces zero unique-constraint collisions",
+      "service_catalog_versions is empty of req373-owned rows after both runs, confirmed by direct query"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "Extended cleanup_entry!/1 in both test/letflow/service_catalog_test.exs and test/letflow/engine_pin_resolver_catalog_test.exs to delete matching service_catalog_versions rows (by service_id) before deleting the Entry row, in the same on_exit callback. engine_pin_resolver_catalog_test.exs needed a new `alias Letflow.ServiceCatalog.Version` (service_catalog_test.exs already aliased it). No other lines touched.",
+    "verification": {
+      "double_run": "mix test test/letflow/service_catalog_test.exs test/letflow/engine_pin_resolver_catalog_test.exs run three times in a row in the same session: run 1 = 'Result: 49 passed' (0 failures), run 2 = 'Result: 49 passed' (0 failures, no unique-constraint collision), run 3 = 'Result: 49 passed' (0 failures). Finished in 9.2 seconds each.",
+      "db_query": "Direct query via `MIX_ENV=test mix run` against Letflow.Repo (Ecto, not psql -- psql is not installed in this environment) after the double run: `Repo.all(from v in Version, where: like(v.service_id, \"req191-%\") or like(v.service_id, \"req373-%\"))` -> [] and the equivalent query against Entry -> []. Zero req191-/req373-owned rows remained in either service_catalog_versions or service_catalog.",
+      "full_suite": "mix letflow.check.test run twice. First run: 'Result: 300/302 passed (1/1 property, 299/301 tests)', 2 failures in Letflow.Packs.BilimbagaPackInstallTest -- unrelated module (SolutionPack install/activate against a provisioned tenant), untouched by this fix, and the failure coincided with a second mix-test invocation being started concurrently against the same DB by mistake (logged: 'another mix test invocation is currently connected to this database'), which was immediately stopped. Second run (clean, no concurrent invocation): 'mix letflow.check.test: OK -- no test failures, no ISS-0069 warnings (16 partitions)' -- full suite green, confirming the earlier 2 failures were an artifact of the accidental concurrent run, not this fix."
+    },
+    "next_action": "Route to TEST-DESIGN-VALIDATOR for re-gate"
+  },
+  "rework_count": 1,
+  "max_rework": 3
+}

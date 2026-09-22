@@ -1,0 +1,70 @@
+report_id: report-20260921-WF02-REQ373-20260921
+run_id: WF02-REQ373-20260921
+workflow_id: WF-02
+step: "04"
+agent: TEST-RUNNER
+date: 2026-09-21
+branch: feature/WF02-REQ373-20260921
+commit: c0fb8abf
+worktree: C:\Users\tvolo\dev\ai-dala\letflow\.claude\worktrees\agent-aa05d9b0b289ffb6a
+
+verdict: PASS
+
+context: >
+  WF-02 Step 4 for REQ-373 (service catalog version lifecycle -- publish/retire,
+  pin resolver catalog integration, reaper). TEST-DESIGN-VALIDATOR already PASSed
+  the test design (see handoffs/WF02-REQ373-20260921/step-03f-test-design-validator-regate.json).
+  This step runs the FULL suite, not just the new tests.
+
+db_setup: >
+  `docker compose up -d` in this worktree failed: its own postgres/keycloak
+  containers (agent-aa05d9b0b289ffb6a-postgres-1/keycloak-1) were Created but
+  postgres could not bind 0.0.0.0:5462 -- "port is already allocated". No .env
+  override is present in this worktree, so its config/db_port.exs resolves to
+  the same default port 5462 that an already-running, healthy sibling container
+  (letflow-postgres-1, docker ps confirmed 0.0.0.0:5462->5432/tcp) was already
+  serving. Verified that container's health directly: `docker exec letflow-postgres-1
+  pg_isready -U postgres` -> "accepting connections". Proceeded against that
+  already-running shared instance rather than force this worktree's own compose
+  stack onto a conflicting port; this worktree's own agent-aa05d9b0b289ffb6a-*
+  containers were left in their Created-but-not-started state, untouched.
+
+full_suite_run:
+  tooling: "scripts/test_parallel.sh"
+  partition_count: 16
+  partition_count_source: "nproc (test_parallel.sh's own log line: 'test_parallel: N=16 (source: nproc)')"
+  pool_config: "test_parallel: TEST_POOL_SIZE=5 (computed: N=16, max_connections=100, superuser_reserved=3, headroom=10, nonpool_reserve=5)"
+  command_mode: "run synchronously in the foreground, polled to completion within this turn -- not backgrounded, not watched via Monitor, per core-directives.md's 'No Background Wait For A Cross-Turn Notification'"
+  per_partition:
+    - {partition: 1, tests: 408, properties: 0, failures: 0, exit: 0}
+    - {partition: 2, tests: 204, properties: 4, failures: 0, exit: 0}
+    - {partition: 3, tests: 340, properties: 0, failures: 0, exit: 0}
+    - {partition: 4, tests: 189, properties: 0, failures: 0, exit: 0}
+    - {partition: 5, tests: 398, properties: 0, failures: 0, exit: 0}
+    - {partition: 6, tests: 233, properties: 0, failures: 0, exit: 0}
+    - {partition: 7, tests: 494, properties: 0, failures: 0, exit: 0}
+    - {partition: 8, tests: 275, properties: 0, failures: 0, exit: 0}
+    - {partition: 9, tests: 301, properties: 1, failures: 0, exit: 0}
+    - {partition: 10, tests: 371, properties: 0, failures: 0, exit: 0}
+    - {partition: 11, tests: 242, properties: 0, failures: 0, exit: 0}
+    - {partition: 12, tests: 220, properties: 1, failures: 0, exit: 0}
+    - {partition: 13, tests: 295, properties: 0, failures: 0, exit: 0}
+    - {partition: 14, tests: 280, properties: 0, failures: 0, exit: 0}
+    - {partition: 15, tests: 135, properties: 0, failures: 0, exit: 0}
+    - {partition: 16, tests: 197, properties: 0, failures: 0, exit: 0}
+  combined_result: "combined: 4582 tests, 6 properties, 0 failures (4588/4588 passed)"
+  exit_code: 0
+
+failure_attribution: >
+  None required -- zero failures across all 16 partitions, full suite clean on
+  the first run. No count-matching against any prior run was needed or performed.
+
+conclusion: >
+  PASS. Full suite (scripts/test_parallel.sh, N=16 partitions derived from
+  nproc) ran to completion synchronously: 4588/4588 tests passed (4582 example
+  tests + 6 property-test iterations), 0 failures across all 16 partitions,
+  every partition exited 0. This includes REQ-373's new test files
+  (test/letflow/service_catalog_test.exs, test/letflow/engine_pin_resolver_catalog_test.exs,
+  test/letflow/routers/admin_services_publish_retire_test.exs,
+  test/support/service_catalog_reaper_test.exs) as part of the full run, not in
+  isolation. No failures to attribute. Routing to RELEASE-VALIDATOR.

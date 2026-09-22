@@ -1,0 +1,59 @@
+{
+  "handoff_id": "b2c3d4e5-0001-4000-8000-000000000001",
+  "run_id": "WF02-REQ373-20260921",
+  "workflow_id": "WF-02",
+  "step": "00",
+  "from_agent": "ORCH",
+  "to_agent": "ORCH",
+  "file": "handoffs/WF02-REQ373-20260921/step-00-git-setup.json",
+  "created_at": "2026-09-21T17:09:10Z",
+  "started_at": "2026-09-21T17:09:10Z",
+  "completed_at": "2026-09-21T17:09:10Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S6",
+    "requirement_ids": ["REQ-373"],
+    "requirement_text": {
+      "REQ-373": "Filed from a GUI-review sweep applying \"review real screens before writing a blind Playwright spec\" to test/fixtures/uat/scenarios/platform/instance-pin-survives-catalog-change.yaml (test/uat-reports/gui-review-2026-09-20-instance-pin-survives-catalog-change.md has the full trace). That scenario's own stale NOTE (ISS-0527) already flagged its pipeline_test as an aspirational forward-reference to a feature never built; this run verified that independently by reading current source rather than trusting the note, and confirms the underlying feature genuinely does not exist, in whole or in part.\n\nWHAT EXISTS TODAY, verified 2026-09-20 by direct source read (not inference): Letflow.Engine.PinResolver (REQ-059, PIN-01..04) and Letflow.Engine.PinResolver's PIN-05 explicit-rebind sibling (REQ-060) implement the full event-sourced MACHINERY this scenario's steps exercise -- freezing every versioned catalog_entry/module/variable_schema dependency into the INSTANCE_STARTED event payload at case-start time (never re-read live), replay-deriving the effective pin set purely from already-appended events (reconstruct_effective_pins/2, zero catalog reads by construction), child-instance inheritance with conflict recording, and a real, already-shipped PIN-05 rebind path that appends exactly one INSTANCE_PINS_REBOUND event carrying ref/prior_version/new_version/actor/reason per changed entry, atomically, all-or-nothing. This is confirmed real, tested, and RELEASED machinery, not a stub.\n\nWhat does NOT exist: pin_resolver.ex's own moduledoc states this SCOPE GAP explicitly and by name (\"service_catalog (S6) and PLC-01 (unscoped) are not built\") -- confirmed still true by reading lib/letflow/service_catalog.ex and lib/letflow/service_catalog/entry.ex in full. The service_catalog table (REQ-191/REQ-192, both done) has NO version or status column whatsoever -- service_id is the table's own primary key, one row per service, with no concept of \"a version of this connection\" at all. There is therefore no way to publish a second version of a shared connection, no way to retire an old version, and no real Letflow.Engine.PinResolver.Lookup implementation anywhere in the shipped codebase (only Letflow.ServiceCatalog.scope_validator_lookup/1, which builds a DIFFERENT Lookup type -- ServiceScopeValidator.Lookup, for global/tenant scope comparison, not PinResolver.Lookup). Every call to PinResolver.resolve/4 in Engine.create/2 today runs against PinResolver.default_lookup/0, whose catalog_lookup/module_lookup always return {:error, :not_found} -- meaning a real, currently-shipped case can never actually record a resolved catalog_entry pin at all today; only variable_schema pins and caller-supplied overrides are exercised in production. web/src has zero screen showing, for any case, the list of dependency versions it is using and how each was chosen (auto/explicit/inherited) -- grepped in full, no hits beyond unrelated word matches.\n\nTHIS REQUIREMENT (backend half, matching REQ-372's precedent of splitting backend-then-frontend across two requirements): (1) add a version identity and a status (at minimum ACTIVE/RETIRED) to service_catalog entries -- decide and record explicitly whether this is a new version-scoped table (service_id + version as a composite key, service_catalog's current row becoming \"the currently-resolvable version\" pointer) or an in-place status column plus a new sibling table for prior versions; either is acceptable if the decision and its reasoning are stated in the moduledoc, not left implicit; (2) a publish operation that creates a new version without disturbing any already-pinned reference to the prior one; (3) a retire operation that stops the retired version from being chosen by any NEW resolution while leaving it fully resolvable for PinResolver.pin_for/3 reads against an already-pinned instance (PIN-03 AC3's own SCOPE GAP, named in pin_resolver.ex, is exactly what this closes); (4) a real Letflow.Engine.PinResolver.Lookup implementation backed by this versioned catalog, wired into Engine.create/2's pin_lookup/2 helper in place of default_lookup/0 for catalog_entry references (module_ref resolution against PLC-01 remains out of scope -- PLC-01 does not exist in this codebase at all and is unscoped to any stage; do not attempt to build it here). Route/permission surface for publish/retire reuses SVC-04's already-shipped :AdminServicesManage policy (Letflow.Api.Authorization) -- do not invent a new permission name.\n\nSCOPE FENCE: backend version/status lifecycle, the real PinResolver.Lookup wiring, and the publish/retire routes. Does not build the frontend case-detail version-with-provenance screen -- that is explicitly a follow-on FRONTEND-DEV requirement once this lands, filed the same way REQ-291 followed REQ-288 (must show, per EO-003, each dependency's version and whether it was chosen automatically, requested explicitly, or inherited -- Letflow.Engine.PinResolver already returns a `source` field with exactly this taxonomy (:resolved/:override/:inherited/:rebound), so that screen is a read of already-shipped data once a route exposes it -- PIN-04 AC4's own SCOPE note already names GET /api/v1/instances/{id}/pins as the future route). Does not build PLC-01 (module_ref/sub-process catalog versioning) -- that stays the identical, already-named SCOPE GAP pin_resolver.ex's own moduledoc states, unscoped to any stage."
+    },
+    "related_handoff_ids": [],
+    "artifacts_in": [],
+    "owned_modules": [
+      "lib/letflow/service_catalog.ex",
+      "lib/letflow/service_catalog/entry.ex",
+      "lib/letflow/service_catalog/*",
+      "lib/letflow/engine/pin_resolver.ex",
+      "lib/letflow/engine.ex",
+      "lib/letflow_web/router.ex",
+      "lib/letflow_web/controllers/service_catalog*",
+      "priv/repo/migrations/*service_catalog*version*",
+      "lib/letflow/design/req373-*.md"
+    ]
+  },
+  "task": {
+    "description": "Perform WF-02 Step 00 (git setup) for REQ-373 per docs/agents/protocols/GIT_SETUP.md, executed directly by ORCH (per this run's dispatch instructions -- ORCH performs both Step 00 and Step Final itself for this run rather than delegating to ELIXIR-DEV, since WF-02 requires Step Final be the same agent as Step 00). Run-id: WF02-REQ373-20260921. Branch: feature/WF02-REQ373-20260921. Backend-only run -- no web/ changes permitted. This checkout is a SECONDARY git worktree (git worktree list showed 3 entries: primary at C:/Users/tvolo/dev/ai-dala/letflow on main, and two other worktrees). `git checkout main` failed here ('main' already used by primary worktree) -- worked around by branching from the worktree's existing HEAD then `git reset --hard origin/main` (after `git fetch origin main`) to land the new branch exactly at origin/main's tip (7b4b4467), then `git push --force-with-lease` to republish. Verified branch points at origin/main exactly, not a stale/ahead/behind ref.",
+    "acceptance_criteria": [
+      "branch feature/WF02-REQ373-20260921 exists locally and on origin",
+      "branch HEAD equals origin/main's HEAD at time of creation (7b4b4467)",
+      "git push succeeded (no error)"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "git fetch origin main showed origin/main at 7b4b4467 (advanced from this worktree's prior HEAD cdab6815 by one commit, #1691, ISS-0776 diagnosis record). `git checkout main` failed as expected in this secondary worktree ('main' already used by worktree at the primary checkout) -- not an error condition, the documented worktree constraint. Created feature/WF02-REQ373-20260921 off the worktree's then-current HEAD, then `git reset --hard origin/main` to land it exactly at 7b4b4467, confirmed via `git log --oneline -3`. `git push --force-with-lease origin feature/WF02-REQ373-20260921` succeeded (republishing over the earlier stale push). Branch is clean, based on latest main, ready for Step 1.",
+    "artifacts_out": ["branch: feature/WF02-REQ373-20260921"],
+    "issues": [],
+    "git_evidence": {
+      "branch_name": "feature/WF02-REQ373-20260921",
+      "commit_sha_list": ["7b4b4467"],
+      "remote_branch": "origin/feature/WF02-REQ373-20260921",
+      "push_status": "ok",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": "ORCH flips REQ-373 to in_progress, logs started event, routes to CODE-DESIGNER (Step 1)"
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

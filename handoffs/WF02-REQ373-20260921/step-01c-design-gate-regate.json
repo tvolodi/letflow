@@ -1,0 +1,55 @@
+{
+  "handoff_id": "b2c3d4e5-0001-4000-8000-000000000004",
+  "run_id": "WF02-REQ373-20260921",
+  "workflow_id": "WF-02",
+  "step": "01c",
+  "from_agent": "ORCH",
+  "to_agent": "CODE-DESIGN-VALIDATOR",
+  "file": "handoffs/WF02-REQ373-20260921/step-01c-design-gate-regate.json",
+  "created_at": "2026-09-21T17:27:01Z",
+  "started_at": "2026-09-21T17:27:01Z",
+  "completed_at": "2026-09-21T17:45:00Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S6",
+    "requirement_ids": ["REQ-373"],
+    "requirement_text": {
+      "REQ-373": "See handoffs/WF02-REQ373-20260921/step-01-code-designer.json's context.requirement_text for the full text -- not restated here to avoid drift; read it there."
+    },
+    "related_handoff_ids": [
+      "handoffs/WF02-REQ373-20260921/step-01-code-designer.json",
+      "handoffs/WF02-REQ373-20260921/step-01b-design-gate.json"
+    ],
+    "artifacts_in": [
+      "lib/letflow/design/req373-service-catalog-version-lifecycle.md",
+      "lib/letflow/service_catalog.ex",
+      "lib/letflow/service_catalog/entry.ex",
+      "lib/letflow/engine/pin_resolver.ex",
+      "lib/letflow/engine.ex"
+    ],
+    "owned_modules": []
+  },
+  "task": {
+    "description": "RE-GATE of REQ-373's design after rework iteration 1. Your prior handoff (step-01b-design-gate.json) FAILed the design on exactly one dimension: the new `status` field's casing was internally self-contradictory (uppercase DB migration vs lowercase behavior-prose atoms, no Ecto.Enum declaration). CODE-DESIGNER's rework (commit 6cbcaa5f) claims to have reconciled this by declaring `status` as a plain `Ecto.Enum, values: [:ACTIVE, :RETIRED]` (uppercase Elixir-side atoms matching required_auth's own convention) and updating every status literal across the doc to match. Re-read lib/letflow/design/req373-service-catalog-version-lifecycle.md INDEPENDENTLY and in full -- do not trust the rework's own self-report. Specifically: (a) confirm the Ecto.Enum declaration and values: mapping is now stated explicitly and unambiguously; (b) grep/scan the ENTIRE document yourself for any remaining lowercase :active/:retired literal that was missed by the rework -- do not assume the rework note's claimed section list (§3.1-3.3, §5) was exhaustive, check the whole file; (c) confirm no other content was altered beyond what the casing reconciliation required (the prior PASS checks -- schema-decision reasoning, AC4 retire-vs-fallback resolution, PinResolver.Lookup contract usage, :AdminServicesManage permission reuse -- should remain byte-equivalent in substance; spot check at least two of them still hold). Do NOT re-run the full first-pass gate from scratch if it wastes effort duplicating already-confirmed-sound sections, but DO independently verify rather than trust that nothing regressed. FAIL if any lowercase status atom remains anywhere in the document, or if the Ecto.Enum declaration is still missing/ambiguous, or if any unrelated content was altered. Otherwise PASS. Set this handoff's status to COMPLETED with your genuine verdict, commit and push before ending your turn.",
+    "acceptance_criteria": [
+      "service_catalog entries carry a version identity and an ACTIVE/RETIRED status, with the chosen schema stated explicitly in the moduledoc along with the reasoning, proven by a migration and a schema test",
+      "status field's Ecto representation (Ecto.Enum declaration + values: mapping) is stated explicitly and used consistently (no casing contradiction) throughout the entire document"
+    ]
+  },
+  "result": {
+    "verdict": "PASS",
+    "reviewed_by": "CODE-DESIGN-VALIDATOR",
+    "reviewed_at": "2026-09-21T17:45:00Z",
+    "design_artefact": "lib/letflow/design/req373-service-catalog-version-lifecycle.md",
+    "checks_passed": [
+      "(a) Ecto.Enum declaration now explicit and unambiguous: §3.3 line 260-261 states `field(:status, Ecto.Enum, values: [:ACTIVE, :RETIRED], default: :ACTIVE)`, with an explanatory paragraph tying the uppercase-atom choice to required_auth's own convention and to Ecto.Enum's default verbatim-casing serialization against the migration's uppercase DB CHECK constraint -- no remapping ambiguity left.",
+      "(b) Grepped the entire document (case-insensitive) for :active/:retired/'active'/'ACTIVE' literal-casing variants myself, not trusting the rework note's claimed section list -- every status literal in the doc (lines 133, 192, 218, 222, 226, 260-268, 275, 285, 305, 307, 321, 401, 403) is uppercase :ACTIVE/:RETIRED or \"ACTIVE\"/\"RETIRED\". The one lowercase occurrence (line 268, '...never `:active`/`:retired`') is explanatory prose disclaiming the old casing, not a literal usage -- no missed lowercase status atom anywhere in the document, including sections outside the rework's claimed §3.1-3.3/§5 list (checked §1, §2, §4, §6, §7, §8, §9 too, none use status atoms at all or already used uppercase).",
+      "(c) Spot-checked two of the prior PASS's checks for unrelated alteration: §3.2's AC4 retire-vs-fallback resolution (lines 230-243, 'retire FAILS OUTRIGHT, never falls through' with the same structural reasoning) and §0's PinResolver.Lookup contract description (lines 30-37, catalog_lookup taking service_id alone) both read byte-equivalent in substance to the version that earned the prior PASS; §7's :AdminServicesManage permission reuse (lines 442-447) also unchanged. No unrelated content drift detected."
+    ],
+    "checks_failed": [],
+    "summary": "PASS. Independently re-read the full design doc and grepped it end-to-end for status-casing literals rather than trusting the rework note's claimed scope. The status field is now declared as a plain `Ecto.Enum, values: [:ACTIVE, :RETIRED], default: :ACTIVE` (§3.3), and every status literal across the entire document -- migration (§4), publish/retire behavior (§3.1/§3.2), and catalog_lookup (§5) -- consistently uses uppercase :ACTIVE/:RETIRED, matching the migration's uppercase DB CHECK constraint. No lowercase status atom remains anywhere. Spot-checks of the AC4 retire-vs-fallback resolution and the PinResolver.Lookup contract usage confirm no unrelated content was altered by the rework. Design is cleared to proceed to WF-02 Step 2 (ELIXIR-DEV implementation)."
+  },
+  "rework_count": 1,
+  "max_rework": 3
+}

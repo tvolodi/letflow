@@ -85,6 +85,12 @@ defmodule Letflow.ServiceCatalogReaperTest do
       |> Entry.insert_changeset(attrs)
       |> Ecto.Changeset.put_change(:created_at, now)
       |> Ecto.Changeset.put_change(:updated_at, now)
+      # REQ-373 -- version_id/published_at have no schema-level default (unlike
+      # version/status), so a direct-changeset fixture bypassing
+      # Letflow.ServiceCatalog.register/1 must stamp them itself, same as
+      # created_at/updated_at just above.
+      |> Ecto.Changeset.put_change(:version_id, Ecto.UUID.generate())
+      |> Ecto.Changeset.put_change(:published_at, now)
       |> Repo.insert!()
 
     on_exit(fn -> cleanup_entry!(entry.service_id) end)

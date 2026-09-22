@@ -1,0 +1,80 @@
+{
+  "handoff_id": "b2c3d4e5-0001-4000-8000-000000000007",
+  "run_id": "WF02-REQ373-20260921",
+  "workflow_id": "WF-02",
+  "step": "02d",
+  "from_agent": "ORCH",
+  "to_agent": "REVIEWER",
+  "file": "handoffs/WF02-REQ373-20260921/step-02d-reviewer.json",
+  "created_at": "2026-09-21T18:21:50Z",
+  "started_at": "2026-09-21T18:21:50Z",
+  "completed_at": "2026-09-21T18:40:00Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S6",
+    "requirement_ids": ["REQ-373"],
+    "requirement_text": {
+      "REQ-373": "See handoffs/WF02-REQ373-20260921/step-01-code-designer.json's context.requirement_text for the full text -- not restated here to avoid drift; read it there."
+    },
+    "related_handoff_ids": [
+      "handoffs/WF02-REQ373-20260921/step-02a-elixir-dev.json",
+      "handoffs/WF02-REQ373-20260921/step-02c-security-reviewer.json"
+    ],
+    "artifacts_in": [
+      "priv/repo/migrations/20260921000003_add_service_catalog_versioning.exs",
+      "lib/letflow/service_catalog/entry.ex",
+      "lib/letflow/service_catalog/version.ex",
+      "lib/letflow/service_catalog/pin_lookup.ex",
+      "lib/letflow/service_catalog.ex",
+      "lib/letflow/engine.ex",
+      "lib/letflow/routers/admin_services.ex",
+      "lib/letflow/design/req373-service-catalog-version-lifecycle.md",
+      "docs/anti-patterns.md",
+      "docs/migration/decisions/"
+    ],
+    "owned_modules": []
+  },
+  "task": {
+    "description": "Perform WF-02 Step 2d (idiom review, HARD GATE) for REQ-373 per docs/agents/workflows/WF-02_requirement_implementation.md, using your existing procedure in .claude/agents/reviewer.md: idiomatic OTP vs. crutch, supervision integrity, type-safety gaps, scope creep, consistency with docs/migration/decisions/ records. Read `git diff origin/main...HEAD` yourself.\n\nSpecifically confirm: (1) SCOPE -- PLC-01/module_ref catalog versioning was NOT touched or built (grep the diff for any module_ref resolution logic that shouldn't be there); (2) SCOPE -- no file under web/ was modified anywhere in this diff; (3) lib/letflow/engine/pin_resolver.ex's existing PIN-01..05 machinery was NOT modified beyond the Engine.create/2 pin_lookup/2 call-site change (this is released, tested machinery per the requirement text -- confirm ELIXIR-DEV didn't refactor it); (4) idiom -- publish/3 and retire/1 in service_catalog.ex use proper Ecto transactions/changesets, not ad-hoc Repo calls; (5) SECURITY-REVIEWER flagged one design open question (OQ-1: no FK from service_catalog_versions back to service_catalog, to avoid changing delete/1's error contract) -- confirm or override this tradeoff explicitly in your verdict; (6) decision-record consistency -- confirm the schema decision (in-place status column + sibling archive table) doesn't contradict any docs/migration/decisions/ record; (7) moduledoc quality -- confirm the schema-decision reasoning (AC1), retire-vs-fallback decision (AC4), and PLC-01 out-of-scope citation (AC7) are all actually present and substantively stated in the new/changed moduledocs, not just claimed in the handoff. FAIL if a genuine crutch, broken supervision, or scope creep is found; otherwise PASS with any non-blocking notes recorded. Set this handoff's status to COMPLETED with your genuine independent verdict, commit and push before ending your turn.",
+    "acceptance_criteria": [
+      "no scope creep into PLC-01/module_ref",
+      "no web/ files touched",
+      "pin_resolver.ex's PIN-01..05 machinery unmodified beyond the documented call-site change",
+      "idiomatic Ecto/OTP usage, no crutch",
+      "moduledoc states schema decision (AC1), retire-vs-fallback decision (AC4), and PLC-01 out-of-scope citation (AC7) substantively"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "diff_used": "git diff origin/main...HEAD (22 files, matches context.artifacts_in)",
+    "findings": {
+      "1_plc01_scope": "CONFIRMED clean. grep for module_ref across the full diff shows only moduledoc prose citing it as explicitly OUT of scope (entry.ex, service_catalog.ex, pin_lookup.ex all state this). Letflow.ServiceCatalog.PinLookup.build/0's module_lookup field is copied verbatim from PinResolver.default_lookup/0 (permanent {:error, :not_found} stub) -- no module_ref resolution logic of any kind was built.",
+      "2_web_untouched": "CONFIRMED. `git diff origin/main...HEAD --stat` shows zero files under web/ -- all 22 changed files are lib/, priv/repo/migrations/, test/, docs/, and handoffs/.",
+      "3_pin_resolver_untouched": "CONFIRMED. `git diff origin/main...HEAD -- lib/letflow/engine/pin_resolver.ex` is empty -- the file was not touched at all. The only Engine-side change is engine.ex's pin_lookup/2 private helper, which swaps PinResolver.default_lookup() for PinLookup.build() on one line, with attrs[:pin_lookup] passthrough and the prefix-unused contract both preserved unchanged. This matches the requirement's own constraint that PIN-01..05 is released, tested machinery not to be refactored.",
+      "4_idiom_ecto": "Idiomatic. publish/3 runs inside Repo.transaction/1 via a private do_publish/3 using a `with`/else->Repo.rollback chain (fetch current row, check_publishable_version, archive_current_version via Version.archive_changeset/1 + Repo.insert, apply_publish via Entry.publish_changeset/2 + Repo.update). retire/1 uses Entry.retire_changeset/1 + Repo.update, explicit :already_retired instead of a silent idempotent :ok (matches the codebase's stated 'no silent no-op' discipline). No raw Repo.query/SQL string-building in either function -- SECURITY-REVIEWER's own grep for Repo.query across the diff already confirmed zero hits. No crutch found (no ad-hoc Repo.update_all bypassing a changeset, no hand-rolled state machine standing in for gen_statem/changeset validation -- this is plain CRUD-shaped domain logic, not a state-machine-shaped problem, so GenServer/gen_statem concerns don't apply here to begin with).",
+      "5_oq1_fk_tradeoff": "REVIEWER DECISION: CONFIRM the no-FK tradeoff as shipped (no rework needed). service_catalog_versions is an append-only audit/archive table with no live-resolution role (PinLookup.catalog_lookup/1 only ever reads the current service_catalog row, never the archive table) -- an orphaned archive row after a rare admin delete/1 is a referential-integrity blemish, not a correctness or security hazard, and the alternative (ON DELETE CASCADE) would silently expand delete/1's error/behavior contract beyond what this requirement's ACs asked for, which is the right thing to avoid mid-requirement. This is exactly the kind of scope-fence discipline REQ-373's SCOPE FENCE calls for. Worth a follow-up issue only if RELEASE-VALIDATOR or a future requirement decides archive-row hygiene on delete matters -- not blocking here.",
+      "6_decision_record_consistency": "CONFIRMED no contradiction. Searched docs/migration/decisions/ for every file mentioning 'version' (0001, 0003, 0004, 0005, 0009, 0010, 0012, 0014, 0016, 0018, 0019, 0020, 0021, 0022, 0023, 0024, 0026, 0027, 0029, 0030, 0033, 0036). None mandate a composite-key versioned-entity shape or forbid a status-column-plus-sibling-archive-table shape; 0003 (ecto-schema-strategy)'s own versioning example is a tenant-scoped unique constraint pattern (uq_definition_tenant_version), not a composite-PK requirement, and is about a different, tenant-scoped table -- service_catalog's global-table status (itself a REVIEWER-signed-off pre-existing divergence, per SECURITY-REVIEWER's INV-1 finding) is inherited, not re-litigated, by this migration. No conflict.",
+      "7_moduledoc_quality": "CONFIRMED substantively present, not just claimed. lib/letflow/service_catalog.ex's moduledoc has a full dedicated '## REQ-373 -- version/status lifecycle: THE SCHEMA DECISION' section with 4 numbered reasoning points (AC1) plus a separate PLC-01-out-of-scope section (AC7) citing pin_resolver.ex's SCOPE GAP language by name. entry.ex's moduledoc restates the schema decision, states the Ecto.Enum casing convention rationale, and has its own retire-vs-fallback paragraph (AC4) plus its own PLC-01-out-of-scope paragraph (AC7). retire/1's own @doc has the most detailed AC4 reasoning (structural 'at most one live row' argument, explicit rejection of silent reactivation, and a distinct explanation of why pin_for/3 is structurally unaffected). None of these are placeholder or one-line claims -- all three ACs are substantively reasoned in prose, in multiple locations, cross-referencing each other correctly."
+    },
+    "supervision": "N/A for this diff -- no process/OTP concerns; this is Ecto-schema/context-module CRUD work per REQ-045's process-vs-row decision (Letflow.Engine's own moduledoc), consistent with the rest of this codebase's running-instance shape.",
+    "type_safety_gap": "None found worth filing. status is already Ecto.Enum (not a free string), version is a validated-length string by design (opaque, no numeric-ordering assumption per publish/3's own doc), and the publish/retire error contracts are already closed, finite tagged tuples rather than raw exceptions.",
+    "verification_commands_run": [
+      "git diff origin/main...HEAD --stat",
+      "git diff origin/main...HEAD -- lib/letflow/engine.ex",
+      "git diff origin/main...HEAD -- lib/letflow/engine/pin_resolver.ex (empty -- confirms untouched)",
+      "git diff origin/main...HEAD | grep -n module_ref",
+      "git diff origin/main...HEAD -- lib/letflow/service_catalog.ex",
+      "git diff origin/main...HEAD -- lib/letflow/service_catalog/entry.ex",
+      "git diff origin/main...HEAD -- lib/letflow/routers/admin_services.ex",
+      "cat lib/letflow/service_catalog/pin_lookup.ex",
+      "cat lib/letflow/service_catalog/version.ex",
+      "cat priv/repo/migrations/20260921000003_add_service_catalog_versioning.exs",
+      "grep -n -A15 OQ-1 lib/letflow/design/req373-service-catalog-version-lifecycle.md",
+      "grep -lri version docs/migration/decisions/*.md; grep -n -i version docs/migration/decisions/0003-ecto-schema-strategy.md"
+    ],
+    "summary": "PASS. No scope creep (PLC-01/module_ref genuinely untouched, web/ genuinely untouched), pin_resolver.ex's PIN-01..05 machinery genuinely unmodified (empty diff on that file), publish/3 and retire/1 are idiomatic Ecto (transactions, changesets, no raw SQL, no ad-hoc Repo calls), the no-FK OQ-1 tradeoff is confirmed as the right call given the scope fence, no decision-record contradiction, and all three required moduledoc statements (AC1 schema decision, AC4 retire-vs-fallback, AC7 PLC-01 citation) are substantively present in both changed core modules, not merely claimed in the handoff."
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

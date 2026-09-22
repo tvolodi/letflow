@@ -1,0 +1,46 @@
+{
+  "handoff_id": "b2c3d4e5-0001-4000-8000-00000000000f",
+  "run_id": "WF02-REQ373-20260921",
+  "workflow_id": "WF-02",
+  "step": "04",
+  "from_agent": "ORCH",
+  "to_agent": "TEST-RUNNER",
+  "file": "handoffs/WF02-REQ373-20260921/step-04-test-runner.json",
+  "created_at": "2026-09-21T19:44:12Z",
+  "started_at": "2026-09-21T19:44:12Z",
+  "completed_at": "2026-09-21T20:05:25Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S6",
+    "requirement_ids": ["REQ-373"],
+    "requirement_text": {
+      "REQ-373": "See handoffs/WF02-REQ373-20260921/step-01-code-designer.json's context.requirement_text for the full text -- not restated here to avoid drift; read it there."
+    },
+    "related_handoff_ids": [
+      "handoffs/WF02-REQ373-20260921/step-03f-test-design-validator-regate.json"
+    ],
+    "artifacts_in": [],
+    "owned_modules": []
+  },
+  "task": {
+    "description": "Perform WF-02 Step 4 (test run) for REQ-373 per docs/agents/workflows/WF-02_requirement_implementation.md. Run scripts/test_parallel.sh -- the FULL suite, not just the new tests. Per core-directives.md's 'No Background Wait For A Cross-Turn Notification': run this synchronously, to completion, in the same turn -- never Bash/PowerShell run_in_background, never Monitor, never ScheduleWakeup for this. If no local toolchain, use the Docker fallback in docs/anti-patterns.md (a toolchain IS present on this host per that entry -- verify before concluding otherwise).\n\nWrite test/reports/report-<date>-WF02-REQ373-20260921.yaml with actual output, including derived partition count N and its source, and the combined pass/fail totals. For ANY failure, attribute it structurally per core-directives.md's 'Failure Attribution Is Structural, Never By Count-Matching' -- name the exact route (1/2/3) and evidence for each, never by count-matching against a previous run. A failure attributable to THIS branch (its module or dependencies appear in `git diff --name-only origin/main...HEAD`, and you cannot structurally clear it) routes back to ELIXIR-DEV/TEST-DESIGNER for rework. A failure structurally cleared as pre-existing is filed-and-forwarded (report the finding to me, do not call the queue/gh yourself) and does NOT block this step's PASS.\n\nComplete the handoff with PASS/FAIL/PARTIAL, artifacts_out including the report file, next_action PASS -> 'Route to RELEASE-VALIDATOR'. Commit and push (explicit filenames, never -A) to origin feature/WF02-REQ373-20260921 before ending your turn.",
+    "acceptance_criteria": [
+      "scripts/test_parallel.sh run to completion, real output quoted",
+      "test/reports/report-<date>-WF02-REQ373-20260921.yaml written with partition count, source, combined totals",
+      "every failure structurally attributed per core-directives.md, not by count-matching",
+      "any failure attributable to this branch routes back for rework before this step can PASS"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "scripts/test_parallel.sh (N=16, source: nproc) ran to completion, foreground/synchronous, polled within this turn. Combined: 4582 tests, 6 properties, 0 failures (4588/4588 passed) across all 16 partitions, every partition exit 0. No docker compose up needed in this worktree -- its own compose stack failed to bind the default port 5462 (already allocated); verified and used an already-running, healthy sibling container (letflow-postgres-1) serving that same port instead. Zero failures, so no structural attribution was required.",
+    "artifacts_out": [
+      "test/reports/report-20260921-WF02-REQ373-20260921.yaml"
+    ],
+    "next_action": "Route to RELEASE-VALIDATOR",
+    "issues": []
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

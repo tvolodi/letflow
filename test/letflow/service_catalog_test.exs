@@ -45,6 +45,7 @@ defmodule Letflow.ServiceCatalogTest do
   alias Letflow.Identity.Tenant
   alias Letflow.ServiceCatalog
   alias Letflow.ServiceCatalog.Entry
+  alias Letflow.ServiceCatalog.Version
   alias Letflow.TenantFixture
 
   # `service_catalog` is a GLOBAL table -- unlike the tenant-schema-scoped
@@ -91,6 +92,7 @@ defmodule Letflow.ServiceCatalogTest do
   end
 
   defp cleanup_entry!(service_id) do
+    Repo.delete_all(from(v in Version, where: v.service_id == ^service_id))
     Repo.delete_all(from(e in Entry, where: e.service_id == ^service_id))
   end
 
@@ -179,8 +181,8 @@ defmodule Letflow.ServiceCatalogTest do
       assert {:error, %Postgrex.Error{postgres: %{code: :check_violation}}} =
                Repo.query(
                  "INSERT INTO service_catalog " <>
-                   "(service_id, endpoint_url, required_auth, timeout_ms, scope, owner_tenant_id, created_at, updated_at) " <>
-                   "VALUES ($1, 'https://example.test', 'NONE', 5000, 'global', $2, now(), now())",
+                   "(service_id, endpoint_url, required_auth, timeout_ms, scope, owner_tenant_id, created_at, updated_at, published_at) " <>
+                   "VALUES ($1, 'https://example.test', 'NONE', 5000, 'global', $2, now(), now(), now())",
                  [service_id, Ecto.UUID.dump!(tenant.id)]
                )
 
@@ -194,8 +196,8 @@ defmodule Letflow.ServiceCatalogTest do
       assert {:error, %Postgrex.Error{postgres: %{code: :check_violation}}} =
                Repo.query(
                  "INSERT INTO service_catalog " <>
-                   "(service_id, endpoint_url, required_auth, timeout_ms, scope, owner_tenant_id, created_at, updated_at) " <>
-                   "VALUES ($1, 'https://example.test', 'NONE', 5000, 'tenant', NULL, now(), now())",
+                   "(service_id, endpoint_url, required_auth, timeout_ms, scope, owner_tenant_id, created_at, updated_at, published_at) " <>
+                   "VALUES ($1, 'https://example.test', 'NONE', 5000, 'tenant', NULL, now(), now(), now())",
                  [service_id]
                )
 
@@ -215,8 +217,8 @@ defmodule Letflow.ServiceCatalogTest do
       assert {:error, %Postgrex.Error{postgres: %{code: :check_violation}}} =
                Repo.query(
                  "INSERT INTO service_catalog " <>
-                   "(service_id, endpoint_url, required_auth, timeout_ms, scope, owner_tenant_id, created_at, updated_at) " <>
-                   "VALUES ($1, 'https://example.test', 'BASIC', 5000, 'global', NULL, now(), now())",
+                   "(service_id, endpoint_url, required_auth, timeout_ms, scope, owner_tenant_id, created_at, updated_at, published_at) " <>
+                   "VALUES ($1, 'https://example.test', 'BASIC', 5000, 'global', NULL, now(), now(), now())",
                  [service_id]
                )
 
@@ -230,8 +232,8 @@ defmodule Letflow.ServiceCatalogTest do
       assert {:error, %Postgrex.Error{postgres: %{code: :check_violation}}} =
                Repo.query(
                  "INSERT INTO service_catalog " <>
-                   "(service_id, endpoint_url, required_auth, timeout_ms, scope, owner_tenant_id, created_at, updated_at) " <>
-                   "VALUES ($1, 'https://example.test', 'NONE', 0, 'global', NULL, now(), now())",
+                   "(service_id, endpoint_url, required_auth, timeout_ms, scope, owner_tenant_id, created_at, updated_at, published_at) " <>
+                   "VALUES ($1, 'https://example.test', 'NONE', 0, 'global', NULL, now(), now(), now())",
                  [service_id]
                )
 
@@ -245,8 +247,8 @@ defmodule Letflow.ServiceCatalogTest do
       assert {:error, %Postgrex.Error{postgres: %{code: :check_violation}}} =
                Repo.query(
                  "INSERT INTO service_catalog " <>
-                   "(service_id, endpoint_url, required_auth, timeout_ms, scope, owner_tenant_id, created_at, updated_at) " <>
-                   "VALUES ($1, 'https://example.test', 'NONE', 3600001, 'global', NULL, now(), now())",
+                   "(service_id, endpoint_url, required_auth, timeout_ms, scope, owner_tenant_id, created_at, updated_at, published_at) " <>
+                   "VALUES ($1, 'https://example.test', 'NONE', 3600001, 'global', NULL, now(), now(), now())",
                  [service_id]
                )
 
@@ -822,6 +824,192 @@ defmodule Letflow.ServiceCatalogTest do
         |> Enum.filter(&String.contains?(String.downcase(&1), "service_catalog"))
 
       assert matches == []
+    end
+  end
+
+  # ---------------------------------------------------------------------------------
+  # REQ-373 AC1 -- version identity + ACTIVE/RETIRED status. See
+  # test/specs/req373-service-catalog-version-lifecycle.md for the full
+  # rationale. Design authority:
+  # lib/letflow/design/req373-service-catalog-version-lifecycle.md §1/§4.
+  # ---------------------------------------------------------------------------------
+
+  describe "REQ-373 AC1: version identity + ACTIVE/RETIRED status columns" do
+    test "register/1 stamps a fresh row with version: \"1\", status: :ACTIVE, a version_id, published_at, and a nil retired_at" do
+      entry = register!(%{scope: :global})
+
+      assert entry.version == "1"
+      assert entry.status == :ACTIVE
+      assert is_binary(entry.version_id)
+      assert %DateTime{} = entry.published_at
+      assert entry.retired_at == nil
+    end
+
+    test "a database-level CHECK rejects status = 'BOGUS' -- chk_service_catalog_status" do
+      service_id = unique_service_id()
+      on_exit(fn -> cleanup_entry!(service_id) end)
+
+      assert {:error, %Postgrex.Error{postgres: %{code: :check_violation}}} =
+               Repo.query(
+                 "INSERT INTO service_catalog " <>
+                   "(service_id, endpoint_url, required_auth, timeout_ms, scope, owner_tenant_id, " <>
+                   "created_at, updated_at, version, version_id, status, published_at) " <>
+                   "VALUES ($1, 'https://example.test', 'NONE', 5000, 'global', NULL, " <>
+                   "now(), now(), '1', gen_random_uuid(), 'BOGUS', now())",
+                 [service_id]
+               )
+
+      refute Repo.get(Entry, service_id)
+    end
+
+    # NOTE (real finding, confirmed by running this test against the actual
+    # migration): `version`'s Ecto migration type is plain `:string`, which the
+    # Postgres adapter renders as `varchar(255)` by default (same as every
+    # other `:string` column on this table, e.g. `endpoint_url`, whose own
+    # 2048-char limit is therefore ALSO only ever enforced at the changeset
+    # level, never the database's, for the identical reason). Postgres itself
+    # rejects a value that doesn't fit the column's own type width before it
+    # ever reaches CHECK-constraint evaluation, so `chk_service_catalog_version_length`
+    # (bound at the identical 255 the column type already enforces) can never
+    # actually fire via any insert path -- the type-level rejection always
+    # wins first. This test asserts the real, observed failure mode
+    # (`:string_data_right_truncation`) rather than the design's stated one
+    # (`:check_violation`) -- the acceptance criterion ("an over-length version
+    # is rejected by the database") still holds, just via a different, and
+    # here provably unreachable, mechanism than the migration's own comment
+    # implies. Flagged for REVIEWER/ELIXIR-DEV rather than silently
+    # rewritten to hide the discrepancy.
+    test "a 256-character version string is rejected by the database (via the varchar(255) column type -- chk_service_catalog_version_length is provably unreachable, see note above)" do
+      service_id = unique_service_id()
+      on_exit(fn -> cleanup_entry!(service_id) end)
+      too_long_version = String.duplicate("v", 256)
+
+      assert {:error, %Postgrex.Error{postgres: %{code: :string_data_right_truncation}}} =
+               Repo.query(
+                 "INSERT INTO service_catalog " <>
+                   "(service_id, endpoint_url, required_auth, timeout_ms, scope, owner_tenant_id, " <>
+                   "created_at, updated_at, version, version_id, status, published_at) " <>
+                   "VALUES ($1, 'https://example.test', 'NONE', 5000, 'global', NULL, " <>
+                   "now(), now(), $2, gen_random_uuid(), 'ACTIVE', now())",
+                 [service_id, too_long_version]
+               )
+
+      refute Repo.get(Entry, service_id)
+    end
+  end
+
+  # ---------------------------------------------------------------------------------
+  # REQ-373 -- publish/3 and retire/1 core behavior. Not individually numbered
+  # acceptance criteria, but load-bearing infrastructure every AC2-5 test in
+  # test/letflow/engine_pin_resolver_catalog_test.exs builds on -- see this
+  # file's own spec doc.
+  # ---------------------------------------------------------------------------------
+
+  defp publish_attrs(overrides \\ %{}) do
+    %{
+      endpoint_url: "https://example.test/svc-v2",
+      required_auth: :NONE,
+      timeout_ms: 6_000
+    }
+    |> Map.merge(overrides)
+  end
+
+  describe "REQ-373 publish/3" do
+    test "against a nonexistent service_id returns {:error, :not_found}" do
+      assert {:error, :not_found} =
+               ServiceCatalog.publish(
+                 unique_service_id("req373-pub-missing"),
+                 "2",
+                 publish_attrs()
+               )
+    end
+
+    test "a version equal to the row's own current version returns {:error, :duplicate_version}" do
+      entry = register!(%{scope: :global})
+
+      assert {:error, :duplicate_version} =
+               ServiceCatalog.publish(entry.service_id, entry.version, publish_attrs())
+    end
+
+    test "a version equal to an already-archived version returns {:error, :duplicate_version} -- checks service_catalog_versions, not only the live row" do
+      entry = register!(%{scope: :global})
+
+      assert {:ok, _v2} = ServiceCatalog.publish(entry.service_id, "2", publish_attrs())
+
+      # "1" is no longer the live row's version (that's now "2") but it IS
+      # archived in service_catalog_versions -- the duplicate check must catch
+      # this, not only compare against the current row.
+      assert {:error, :duplicate_version} =
+               ServiceCatalog.publish(entry.service_id, "1", publish_attrs())
+    end
+
+    test "a successful publish archives the previous row's snapshot and updates the live row in place" do
+      entry = register!(%{scope: :global, endpoint_url: "https://example.test/svc-v1"})
+      original_version_id = entry.version_id
+
+      assert {:ok, updated} =
+               ServiceCatalog.publish(
+                 entry.service_id,
+                 "2",
+                 publish_attrs(%{endpoint_url: "https://example.test/svc-v2"})
+               )
+
+      # Live row updated in place.
+      assert updated.service_id == entry.service_id
+      assert updated.version == "2"
+      assert updated.status == :ACTIVE
+      assert updated.endpoint_url == "https://example.test/svc-v2"
+      assert updated.retired_at == nil
+      assert updated.version_id != original_version_id
+
+      # Previous version's full snapshot archived under its OWN (pre-publish)
+      # version_id, never regenerated.
+      archived = Repo.get(Version, original_version_id)
+      assert archived
+      assert archived.service_id == entry.service_id
+      assert archived.version == "1"
+      assert archived.endpoint_url == "https://example.test/svc-v1"
+      assert %DateTime{} = archived.retired_at
+    end
+
+    test "publishing following a bare retire archives the retired row exactly as publishing following an active one would" do
+      entry = register!(%{scope: :global})
+      assert {:ok, retired} = ServiceCatalog.retire(entry.service_id)
+      assert retired.status == :RETIRED
+
+      assert {:ok, updated} = ServiceCatalog.publish(entry.service_id, "2", publish_attrs())
+
+      assert updated.status == :ACTIVE
+      archived = Repo.get(Version, retired.version_id)
+      assert archived
+      assert archived.version == "1"
+    end
+  end
+
+  describe "REQ-373 retire/1" do
+    test "against a nonexistent service_id returns {:error, :not_found}" do
+      assert {:error, :not_found} = ServiceCatalog.retire(unique_service_id("req373-ret-missing"))
+    end
+
+    test "against an already-RETIRED row returns {:error, :already_retired}, not a silent :ok" do
+      entry = register!(%{scope: :global})
+      assert {:ok, _retired} = ServiceCatalog.retire(entry.service_id)
+
+      assert {:error, :already_retired} = ServiceCatalog.retire(entry.service_id)
+    end
+
+    test "a successful retire sets status: :RETIRED, stamps retired_at, and leaves every version-specific field untouched -- no service_catalog_versions insert" do
+      entry = register!(%{scope: :global, endpoint_url: "https://example.test/svc-retire"})
+
+      assert {:ok, retired} = ServiceCatalog.retire(entry.service_id)
+
+      assert retired.status == :RETIRED
+      assert %DateTime{} = retired.retired_at
+      assert retired.endpoint_url == entry.endpoint_url
+      assert retired.version == entry.version
+      assert retired.version_id == entry.version_id
+
+      refute Repo.get(Version, entry.version_id)
     end
   end
 end

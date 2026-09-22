@@ -1,0 +1,80 @@
+{
+  "handoff_id": "b2c3d4e5-0001-4000-8000-000000000006",
+  "run_id": "WF02-REQ373-20260921",
+  "workflow_id": "WF-02",
+  "step": "02c",
+  "from_agent": "ORCH",
+  "to_agent": "SECURITY-REVIEWER",
+  "file": "handoffs/WF02-REQ373-20260921/step-02c-security-reviewer.json",
+  "created_at": "2026-09-21T18:17:34Z",
+  "started_at": "2026-09-21T18:17:34Z",
+  "completed_at": "2026-09-21T18:20:44Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S6",
+    "requirement_ids": ["REQ-373"],
+    "requirement_text": {
+      "REQ-373": "See handoffs/WF02-REQ373-20260921/step-01-code-designer.json's context.requirement_text for the full text -- not restated here to avoid drift; read it there."
+    },
+    "related_handoff_ids": [
+      "handoffs/WF02-REQ373-20260921/step-01c-design-gate-regate.json",
+      "handoffs/WF02-REQ373-20260921/step-02a-elixir-dev.json"
+    ],
+    "artifacts_in": [
+      "priv/repo/migrations/20260921000003_add_service_catalog_versioning.exs",
+      "lib/letflow/service_catalog/entry.ex",
+      "lib/letflow/service_catalog/version.ex",
+      "lib/letflow/service_catalog/pin_lookup.ex",
+      "lib/letflow/service_catalog.ex",
+      "lib/letflow/engine.ex",
+      "lib/letflow/routers/admin_services.ex",
+      "docs/agents/instructions/security-invariants.md"
+    ],
+    "owned_modules": []
+  },
+  "task": {
+    "description": "Perform WF-02 Step 2c (security gate, HARD GATE) for REQ-373 per docs/agents/workflows/WF-02_requirement_implementation.md and your own role file .claude/agents/security-reviewer.md. This diff touches a tenant-data path (service_catalog entries are tenant-scoped resources, and the new publish/retire routes and PinResolver.Lookup wiring change how tenant-scoped catalog references resolve during instance creation) -- this is IN SCOPE, do not take the out-of-scope PASS shortcut. Read `git diff main...HEAD` yourself (do not trust ELIXIR-DEV's self-report) and the artifacts_in list above. For each of INV-1..INV-8 in security-invariants.md, determine APPLIES or NOT-APPLICABLE and run its 'How to verify' check for every APPLIES invariant. Specifically scrutinize: (1) the two new publish/retire routes are genuinely gated by :AdminServicesManage (re-derive by reading lib/letflow/api/authorization.ex's actual prefix-match logic against the new route paths yourself, not by trusting ELIXIR-DEV's claim it 'automatically covers' them); (2) no tenant-id/user-input string interpolation into raw SQL anywhere in the new migration or new modules; (3) the retire operation's failure mode for NEW resolutions (verify it fails closed, not open -- a security-relevant property, since 'falls through to current version' vs 'fails outright' has different blast-radius implications for an admin retiring a compromised/broken service version) matches what the design specified and what ELIXIR-DEV actually implemented; (4) tenant scoping -- confirm service_catalog/service_catalog_versions reads/writes remain correctly tenant-schema-scoped (prefix-based), no cross-tenant leak introduced by the new archive table or the new Lookup module. FAIL immediately on any applicable invariant failing -- all BLOCKER, no partial credit. Set this handoff's status to COMPLETED with your genuine independent verdict, commit and push before ending your turn.",
+    "acceptance_criteria": [
+      "publish/retire operations are gated behind the already-shipped :AdminServicesManage permission (Letflow.Api.Authorization), not a newly invented permission name, proven by a test",
+      "no SQL string interpolation of tenant/user data",
+      "tenant scoping preserved for all new/changed data paths",
+      "retire operation's fail-closed behavior for NEW resolutions matches the design's explicit AC4 resolution"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "scope_test": "IN SCOPE -- diff touches service_catalog (tenant-visible catalog table), a new migration adding version/status columns + a sibling archive table, two new admin-permission-gated routes, and PinResolver.Lookup wiring that changes tenant-facing instance-creation resolution behavior.",
+    "diff_used": "git diff origin/main...HEAD (local `main` ref was stale, pointing at an ancestor of origin/main -- confirmed via `git fetch origin main` + `git merge-base HEAD origin/main` == origin/main's tip, so origin/main...HEAD is the correct scope; matches context.artifacts_in exactly: 21 files, service_catalog.ex/entry.ex/version.ex/pin_lookup.ex/admin_services.ex/engine.ex/the new migration/its design doc/its tests).",
+    "invariant_assessment": {
+      "INV-1": "APPLIES -- SATISFIED. (a) service_catalog is a deliberately GLOBAL table (no :prefix scoping), a divergence from decision 0003 that was already REVIEWER-signed-off 2026-08-30 (WF02-REQ191-20260830 Step 2d, recorded in lib/letflow/service_catalog/entry.ex's own moduledoc) -- REQ-373 only adds columns/a sibling table to that already-decided-global table, it does not introduce or expand the divergence. Confirmed no @schema_prefix and no opts[:prefix] anywhere in the new code. (b) the new service_catalog_versions table is created in the same migration with no prefix -- correct, it inherits the parent table's own global-ness by construction, not an oversight. (c) no tenant_id column exists on either table at all (owner_tenant_id is a distinct visibility field predating this diff, unrelated to write-scoping) -- so the caller-supplied-tenant_id attribution hazard 0003's addendum guards against does not apply here.",
+      "INV-2": "NOT-APPLICABLE -- S4 (multi-tenant API surface / field-authorisation) has not started per security-invariants.md.",
+      "INV-3": "NOT-APPLICABLE -- S5 (sandboxing) has not started.",
+      "INV-4": "APPLIES -- SATISFIED. Ran both grep commands from INV-4's How-to-verify against the diff's files; no secret material introduced, nothing hardcoded, no plaintext threaded through a return value/log/struct field.",
+      "INV-5": "NOT-APPLICABLE -- S4 lookup-by-ID endpoints not started; also note the new not-found/RETIRED-catalog-lookup path (PinLookup.catalog_lookup/1) is an internal engine resolution helper, not a tenant-facing HTTP lookup-by-ID endpoint, so INV-5's cross-tenant-probe shape doesn't apply to it even once S4 lands.",
+      "INV-6": "APPLIES -- SATISFIED by this handoff itself (the meta-invariant this SECURITY-REVIEWER pass exists to close).",
+      "INV-7": "APPLIES -- SATISFIED. grep for Repo.query across lib/ and priv/repo/migrations/ shows zero hits inside any of this diff's new/changed files (service_catalog.ex, entry.ex, version.ex, pin_lookup.ex, admin_services.ex, the new migration) -- every write goes through Ecto.Query/Ecto.Changeset composition. The migration's one raw execute(\"UPDATE service_catalog SET published_at = created_at WHERE published_at IS NULL\") is a fixed literal string with zero interpolation of any kind (tenant, user, or otherwise).",
+      "INV-8": "APPLIES -- SATISFIED. Heuristic grep hits in the changed/touched files are all `case`/`with` clause patterns (e.g. `{:ok, %Pagination.Cursor{} = cursor} ->`), not bare `{:ok, x} = external_call()` matches. publish/3 and retire/1 both use `with`/`case` with every realistic failure branch handled (:not_found, :duplicate_version, %Ecto.Changeset{}, :already_retired) and are wrapped in Repo.transaction/1 with Repo.rollback/1 on error -- no unhandled crash path reachable from admin-supplied (still authenticated, still not raw external-network) input.",
+      "INV-9": "NOT-APPLICABLE -- this diff makes no outbound HTTP request from tenant-controlled input; publish/3 stores an endpoint_url as catalog data, it does not call it."
+    },
+    "specific_scrutiny_findings": {
+      "1_route_gating": "CONFIRMED by independent re-derivation, not by trusting ELIXIR-DEV's comment. The two new routes are declared `authz_post \"/:service_id/versions\", :AdminServicesManage` and `authz_post \"/:service_id/retire\", :AdminServicesManage` in lib/letflow/routers/admin_services.ex -- this is a DIRECT compile-time policy-key declaration (Letflow.Api.AuthorizedRouter's authz_post/3 macro sets `private: %{policy_key: :AdminServicesManage}` on the route itself), enforced by Letflow.Plugs.Authorize reading conn.private[:policy_key] -- it does NOT depend on Authorization.endpoint_policy_key/2's prefix-match clause at request-enforcement time at all (that function is used by a separate consistency check, not by the runtime authorize plug). Re-ran test/letflow/api/authorization_enforcement_test.exs (16/16 passed, real `mix test` run against Postgres, not read-only inspection) which independently walks AdminServices.__authz_routes__/0, builds the full path '/admin/services/:service_id/versions' and '/admin/services/:service_id/retire', and asserts each resolves to the SAME real, present Authorization.endpoint_policy_key/2 clause (`/admin/services\" <> _rest` when method in [POST,PATCH,DELETE] -> :AdminServicesManage) -- no new permission atom was invented, both checks agree, and this satisfies the handoff's 'proven by a test' acceptance criterion via a pre-existing generalized enforcement test that automatically covers any new authz_* route in this router.",
+      "2_no_sql_interpolation": "CONFIRMED. grep -rn \"Repo.query\" lib/ priv/repo/migrations/ shows zero hits in any file this diff touches; the migration's raw execute/1 call is a fixed string, no fragment interpolation of tenant/user data anywhere in the new migration or new modules.",
+      "3_retire_fails_closed": "CONFIRMED, matches design AC4 and matches what ELIXIR-DEV actually implemented (not merely its self-report). PinLookup.catalog_lookup/1: %Entry{status: :RETIRED} -> {:error, :not_found} -- identical to the no-row-at-all case, with no fallback branch of any kind (no 'most recent version', no reactivation). ServiceCatalog.retire/1 flips the SAME row to status: :RETIRED (this schema holds exactly one live row per service_id, not a multi-version-active table), so there is no second, older-but-still-ACTIVE row a resolution could silently fall through to -- fail-closed is a structural property of the schema shape, not merely an if-branch choice. Confirmed via source read of both service_catalog.ex's retire/1 and pin_lookup.ex's catalog_lookup/1, cross-checked against the design doc's own AC4 language.",
+      "4_tenant_scoping": "CONFIRMED, no cross-tenant leak. service_catalog / service_catalog_versions are both deliberately GLOBAL tables (pre-existing, REVIEWER-approved divergence from decision 0003, see INV-1 above) -- there is no tenant schema for a query against them to leak across, by design. PinLookup.build/0's catalog_lookup/1 performs `Repo.get(Entry, service_id)` with no prefix, consistent with that global-table design and with Engine.pin_lookup/2's own prefix parameter being unused (matches the pre-existing 2-arity spec). No new tenant-scoped read/write path was introduced by this diff; the archive table (service_catalog_versions) is equally global and carries no tenant_id or prefix concept, by the same inherited design."
+    },
+    "verification_commands_run": [
+      "git fetch origin main; git merge-base HEAD origin/main",
+      "git diff origin/main...HEAD --stat / -- <specific files>",
+      "grep -rn \"Repo.query\" lib/ priv/repo/migrations/ --include=*.ex --include=*.exs",
+      "grep -n \"^\\s*{:ok, .*} = \" lib/letflow/service_catalog.ex lib/letflow/service_catalog/*.ex lib/letflow/routers/admin_services.ex lib/letflow/engine.ex",
+      "grep -rn \"System.get_env\" / secret-pattern greps (INV-4)",
+      "mix test test/letflow/api/authorization_enforcement_test.exs -- 16 passed",
+      "mix test test/letflow/service_catalog_test.exs test/support/service_catalog_reaper_test.exs -- 38 passed (migration applies cleanly against real Postgres)"
+    ],
+    "summary": "PASS. All 5 applicable invariants (INV-1, INV-4, INV-6, INV-7, INV-8; INV-6 is the meta-gate this handoff itself closes) satisfied; INV-2/3/5/9 correctly NOT-APPLICABLE. The four specific scrutiny points in the task (route gating, no SQL interpolation, retire fail-closed behavior, tenant scoping) were each independently re-derived from source and, where possible, from an actual `mix test` run against Postgres rather than taken on ELIXIR-DEV's word.",
+    "next_action": "Route to REVIEWER (2d)"
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

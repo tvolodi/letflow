@@ -174,7 +174,7 @@ defmodule Letflow.Routers.TenantConfigTest do
                  "settings" => %{
                    "app_name" => "Acme Corp",
                    "logo_url" => "https://acme.example.com/logo.png",
-                   "brand_colors" => %{"primary" => "#ff00aa"}
+                   "brand_colors" => %{"primary" => "#1864AB"}
                  }
                })
 
@@ -185,7 +185,7 @@ defmodule Letflow.Routers.TenantConfigTest do
       assert body["branding"] == %{
                "app_name" => "Acme Corp",
                "logo_url" => "https://acme.example.com/logo.png",
-               "brand_colors" => %{"primary" => "#ff00aa"}
+               "brand_colors" => %{"primary" => "#1864AB"}
              }
     end
 

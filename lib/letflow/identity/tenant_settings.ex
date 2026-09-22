@@ -34,6 +34,16 @@ defmodule Letflow.Identity.TenantSettings do
   def type, do: :map
 
   @doc """
+  The closed top-level key vocabulary (REQ-382) — exposes `@allowed_keys` so
+  a caller (`Letflow.Routers.TenantSettings`) can partition a raw request
+  body into recognized/rejected top-level keys using the exact same list
+  `cast/1` itself enforces, rather than an independently-drifting second
+  copy of this vocabulary.
+  """
+  @spec allowed_keys() :: [String.t()]
+  def allowed_keys, do: @allowed_keys
+
+  @doc """
   Casts an input map, rejecting the first unrecognized top-level key
   (deterministic: input's own key order) with a typed, field-scoped error
   naming that key. Never silently drops an unknown key, never silently

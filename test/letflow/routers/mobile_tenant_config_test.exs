@@ -400,7 +400,7 @@ defmodule Letflow.Routers.MobileTenantConfigTest do
                  "settings" => %{
                    "app_name" => "Acme Corp",
                    "logo_url" => "https://acme.example.com/logo.png",
-                   "brand_colors" => %{"primary" => "#ff00aa"},
+                   "brand_colors" => %{"primary" => "#1864AB"},
                    "locales" => ["en", "fr"],
                    "default_locale" => "fr"
                  }
@@ -413,7 +413,7 @@ defmodule Letflow.Routers.MobileTenantConfigTest do
       assert body["branding"] == %{
                "app_name" => "Acme Corp",
                "logo_url" => "https://acme.example.com/logo.png",
-               "primary_color" => "#ff00aa"
+               "primary_color" => "#1864AB"
              }
 
       assert body["locales"] == ["en", "fr"]

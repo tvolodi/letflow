@@ -60,6 +60,7 @@ defmodule Letflow.Identity.Tenant do
   use Ecto.Schema
   import Ecto.Changeset
 
+  alias Letflow.Identity.ColorContrast
   alias Letflow.Identity.TenantSettings
 
   @primary_key {:id, :binary_id, autogenerate: true}
@@ -252,6 +253,27 @@ defmodule Letflow.Identity.Tenant do
   @brand_colors_allowed_keys ~w(primary)
   @hex_color_regex ~r/^#[0-9A-Fa-f]{6}$/
 
+  # REQ-382 §2.6 — the two `tokens.css` reference background surfaces
+  # `brand_colors.primary` renders as interactive/link text against
+  # (`--surface-page`/`--surface-card`). Typed once here rather than parsed
+  # live from `tokens.css` (no CSS-parsing mechanism exists in this Elixir
+  # codebase, and building one for two literals would be disproportionate) —
+  # if `tokens.css`'s values ever change, these two literals must be updated
+  # in lockstep; there is no automated check tying them together today (see
+  # design doc §2.6, flagged as an open question for a future drift-detecting
+  # test, out of this requirement's own scope).
+  @surface_page_hex "#F8F9FA"
+  @surface_card_hex "#FFFFFF"
+
+  @doc """
+  The closed `brand_colors` sub-key vocabulary (REQ-382) — exposes
+  `@brand_colors_allowed_keys` so a caller (`Letflow.Routers.TenantSettings`)
+  can partition a raw `brand_colors` map into recognized/rejected sub-keys
+  using the exact same list `validate_brand_colors/2` itself enforces.
+  """
+  @spec brand_colors_allowed_keys() :: [String.t()]
+  def brand_colors_allowed_keys, do: @brand_colors_allowed_keys
+
   defp validate_brand_colors(errors, %{"brand_colors" => brand_colors})
        when is_map(brand_colors) do
     unrecognized_key =
@@ -265,10 +287,16 @@ defmodule Letflow.Identity.Tenant do
 
       true ->
         Enum.reduce(brand_colors, errors, fn {key, value}, acc ->
-          if is_binary(value) and Regex.match?(@hex_color_regex, value) do
-            acc
-          else
-            [{:settings, "brand_colors.#{key} must be a 6-digit hex color (#RRGGBB)"} | acc]
+          cond do
+            not (is_binary(value) and Regex.match?(@hex_color_regex, value)) ->
+              [{:settings, "brand_colors.#{key} must be a 6-digit hex color (#RRGGBB)"} | acc]
+
+            not ColorContrast.meets_wcag_aa_normal_text?(value, @surface_page_hex) or
+                not ColorContrast.meets_wcag_aa_normal_text?(value, @surface_card_hex) ->
+              [{:settings, brand_colors_contrast_error(key, value)} | acc]
+
+            true ->
+              acc
           end
         end)
     end
@@ -279,6 +307,21 @@ defmodule Letflow.Identity.Tenant do
   end
 
   defp validate_brand_colors(errors, _settings), do: errors
+
+  # REQ-382 §2.4 — plain-language, verbatim-surfaceable error naming the
+  # threshold, both computed ratios, and which reference background(s)
+  # failed, so the caller isn't left guessing how close the submitted color
+  # came to passing.
+  defp brand_colors_contrast_error(key, value) do
+    page_ratio = Float.round(ColorContrast.contrast_ratio(value, @surface_page_hex), 2)
+    card_ratio = Float.round(ColorContrast.contrast_ratio(value, @surface_card_hex), 2)
+    min_ratio = ColorContrast.aa_normal_text_min_ratio()
+
+    "brand_colors.#{key} (#{value}) does not meet the WCAG AA contrast minimum " <>
+      "(#{min_ratio}:1) against the page/card background; computed contrast ratio is " <>
+      "#{page_ratio}:1 against #{@surface_page_hex} (page) and #{card_ratio}:1 against " <>
+      "#{@surface_card_hex} (card)"
+  end
 
   @locale_regex ~r/^[a-z]{2,3}(-[A-Z]{2})?$/
 

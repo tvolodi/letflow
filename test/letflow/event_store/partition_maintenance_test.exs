@@ -322,6 +322,22 @@ defmodule Letflow.EventStore.PartitionMaintenanceTest do
     child_of?(schema_name, "events_default", "events")
   end
 
+  # Whether a real Postgres backend is still (or again) running the
+  # DETACH ... CONCURRENTLY statement for `partition_name`, per
+  # pg_stat_activity -- used to confirm a killed detacher Task's
+  # underlying connection has actually been torn down server-side, not
+  # just that the owning Elixir process is gone (DBConnection's teardown
+  # of the checked-out connection is asynchronous with the Task's death).
+  defp alter_partition_backend_active?(schema_name, partition_name) do
+    %Postgrex.Result{rows: rows} =
+      Repo.query!(
+        ~s{SELECT 1 FROM pg_stat_activity WHERE query ILIKE $1},
+        ["%DETACH PARTITION \"#{schema_name}\".\"#{partition_name}\"%"]
+      )
+
+    rows != []
+  end
+
   # ===========================================================================
   # Query-log capture -- real :telemetry, the same [:letflow, :repo, :query]
   # event test/letflow/metrics/registry_test.exs's own
@@ -594,10 +610,25 @@ defmodule Letflow.EventStore.PartitionMaintenanceTest do
         # Postgres's own two-phase DETACH CONCURRENTLY to block in its
         # second (wait-for-old-snapshots) phase after committing phase 1
         # (inhdetachpending = true), giving a real window to interrupt it in.
+        #
+        # The holder and detacher are two independently-scheduled BEAM
+        # processes with no inherent ordering guarantee between "holder
+        # launched" and "holder's transaction has actually opened and taken
+        # its snapshot" -- without a real handshake, the detacher can (and,
+        # empirically, sometimes does) run its whole DETACH CONCURRENTLY to
+        # completion before the holder's snapshot even exists, so the
+        # interrupted state is never reached. test_pid explicitly hands off
+        # to a message send only AFTER the holder's SELECT has executed
+        # inside the open transaction, and the detacher is not started until
+        # that message is received -- a genuine ready-signal, not a timing
+        # guess.
+        test_pid = self()
+
         {:ok, holder} =
           Task.start(fn ->
             Repo.transaction(fn ->
               Repo.query!(~s{SELECT count(*) FROM "#{schema_name}"."events"})
+              send(test_pid, :holder_snapshot_open)
 
               receive do
                 :release -> :ok
@@ -606,6 +637,10 @@ defmodule Letflow.EventStore.PartitionMaintenanceTest do
               end
             end)
           end)
+
+        assert_receive :holder_snapshot_open,
+                       5_000,
+                       "holder transaction never reported its snapshot as open"
 
         detacher =
           Task.async(fn ->
@@ -621,6 +656,23 @@ defmodule Letflow.EventStore.PartitionMaintenanceTest do
         # now leaves a genuine, real interrupted-detach state behind, the
         # same shape a crashed BEAM node would leave mid-retirement.
         Task.shutdown(detacher, :brutal_kill)
+
+        # Killing the detacher's Elixir process is not synchronous with its
+        # underlying Postgres backend actually disconnecting -- DBConnection
+        # tears down the checked-out connection asynchronously after
+        # noticing the owner died. If the holder's blocking transaction is
+        # released too soon, the still-technically-alive backend can finish
+        # the DETACH for real before the disconnect reaches it, so the
+        # "interrupted" state is never actually reached (the detach just
+        # completes instead) -- empirically reproduced. Confirm, via a real,
+        # externally-observable Postgres fact (the backend running this
+        # exact ALTER statement is no longer present in pg_stat_activity),
+        # that the kill has actually taken effect before releasing holder.
+        assert wait_until(
+                 fn -> not alter_partition_backend_active?(schema_name, partition) end,
+                 3_000
+               ),
+               "detacher's Postgres backend was still running the ALTER after Task.shutdown/2"
 
         send(holder, :release)
 
@@ -790,10 +842,14 @@ defmodule Letflow.EventStore.PartitionMaintenanceTest do
         event =
           seed_event!(schema_name, far_future_instance, unique_type_name("FAR"), 1, far_future_ts)
 
+        # Repo.query!/3 is raw SQL -- it bypasses Ecto.Query's schema-driven
+        # UUID casting, so a canonical dashed-string UUID must be dumped to
+        # its 16-byte binary form by hand before use as a `uuid`-typed bind
+        # parameter, or Postgrex rejects it with a DBConnection.EncodeError.
         %Postgrex.Result{rows: [[relname]]} =
           Repo.query!(
             ~s{SELECT tableoid::regclass::text FROM "#{schema_name}"."events" WHERE event_id = $1},
-            [event.event_id]
+            [Ecto.UUID.dump!(event.event_id)]
           )
 
         assert relname =~ "events_default"

@@ -3071,3 +3071,33 @@ mid-pilot/mid-review fixes. Future dispatch prompts for any review/pilot
 role that might touch code should state the no-direct-push rule
 explicitly, the same fix already applied to UAT-only dispatches above —
 apparently that fix didn't generalize to "review" framed work either.
+
+## `Task.shutdown(:brutal_kill)` on a DB-connection-holding Task is not synchronous with the connection actually dying (REQ-376, TEST-DESIGN-VALIDATOR Step 3b rework1, 2026-09-22)
+
+`test/letflow/event_store/partition_maintenance_test.exs`'s `:pending_detach`
+crash-recovery induction kills a `Task.async/1`-spawned process mid-`DETACH
+PARTITION ... CONCURRENTLY` to leave a genuine interrupted-detach state behind, then
+releases a second, separately-held blocking transaction. `Task.shutdown(pid,
+:brutal_kill)` returning does **not** mean the killed Task's checked-out
+Postgrex/DBConnection connection has actually disconnected from its Postgres
+backend yet — that teardown happens asynchronously once DBConnection's pool notices
+the owner process died. Releasing the blocking transaction immediately after
+`Task.shutdown/2` returns races that teardown: if the release wins, the
+still-technically-alive backend can finish the `DETACH` for real before the kill
+signal reaches it, so the state the test meant to leave behind never actually
+exists — this reproduced deterministically (3/3 real-Postgres runs, one of two
+failure modes TEST-DESIGN-VALIDATOR's gate caught). A parallel bug in the same test
+(no handshake at all between the holder Task starting and its transaction/snapshot
+actually being open) caused the other failure mode, both misdiagnosed at first
+glance as "flakiness" rather than two distinct missing-synchronization bugs.
+
+**Correct alternative:** never assume a killed process's held resources (DB
+connections, file handles, ports) are released by the time the kill call returns.
+Add a real handshake before proceeding to the process's *start* (a message send once
+the resource is actually acquired, confirmed via `assert_receive/3`, not launch
+order) — the fix already used for the ordering bug — **and** poll an
+externally-observable fact that confirms the resource is actually torn down before
+depending on its absence (here: `pg_stat_activity` no longer showing the killed
+Task's own SQL statement) rather than trusting the kill call's return as the
+synchronization point. A bounded `wait_until`-style poll against the real external
+system, not a `Process.sleep` guess, both times.

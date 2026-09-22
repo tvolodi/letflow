@@ -1257,6 +1257,23 @@ defmodule Letflow.Test.TenantTemplate do
     case String.split(def_sql, " ON ", parts: 2) do
       [prefix, rest] ->
         unique? = String.contains?(prefix, "UNIQUE")
+        # REQ-376: `events`/`events_archive` are this codebase's first
+        # PARTITION BY tables. Postgres's own pg_indexes.indexdef for an
+        # index declared on a partitioned PARENT reads "... ON ONLY
+        # <table> ..." (it does not recurse into child partitions), while
+        # a `:clone`-provisioned tenant's `events`/`events_archive` are
+        # always plain, non-partitioned tables (`CREATE TABLE (LIKE ...
+        # INCLUDING ALL)` does not copy `PARTITION BY` — see
+        # `req376_partition_management_table?/1`'s own comment in
+        # tenant_fixture.ex for the same underlying fact), so a clone's
+        # equivalent index never carries "ONLY". Stripping it here is what
+        # makes the template (partitioned) and clone (not) sides of this
+        # structural comparison agree — without it, EVERY :clone-based
+        # tenant fixture in the whole suite fails at
+        # rename_indexes_to_template_names!/2, not just REQ-376's own
+        # tests (reproduced: 50 failing tests before this fix, all
+        # TENANT_TEMPLATE_CLONE_FAILED on events_pkey/events_archive_pkey).
+        rest = String.replace_prefix(rest, "ONLY ", "")
         "#{if unique?, do: "UNIQUE", else: "NOT UNIQUE"} ON #{rest}"
 
       [only] ->

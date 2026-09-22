@@ -581,11 +581,18 @@ change to `Letflow.Audit.Entry`'s schema, no change to
 side REQ-382 explicitly does not touch), no migration.
 
 `test/letflow/api/authorization_enforcement_test.exs` (REQ-131) introspects
-every `use Letflow.Api.AuthorizedRouter` router's `__authz_routes__/0` — this
-new router and its one `authz_patch` route are automatically covered by that
-existing mechanism; no new test-infrastructure change is implied by this
-design, only that ELIXIR-DEV's new router correctly `use`s
-`Letflow.Api.AuthorizedRouter` (§1) rather than plain `Plug.Router`.
+every `use Letflow.Api.AuthorizedRouter` router's `__authz_routes__/0` — but
+**only for routers actually registered in that test's own `@routers` list
+and `@mount_prefix` map** (a router absent from either is never walked, per
+that test module's own comment on `Letflow.Routers.Entities`'s entry).
+**Correction (SECURITY-REVIEWER, Step 2c, 2026-09-22):** this section
+originally claimed the new router was "automatically covered" — that was
+false; `Letflow.Routers.TenantSettings` was not present in either list.
+ELIXIR-DEV added it to both (`@routers`, `@mount_prefix["/tenant/settings"]`)
+as part of the Step 2c rework — see
+`handoffs/WF02-REQ382-20260922/step-02c-security-reviewer.json`. `use`ing
+`Letflow.Api.AuthorizedRouter` (§1) rather than plain `Plug.Router` was
+necessary but not sufficient on its own.
 
 ---
 

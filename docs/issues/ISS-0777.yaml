@@ -81,4 +81,46 @@ queue_ref: "Q-776"  # letflow-queue task id 776. NOTE: the queue service's
   # docs/issues/ collision precedent established repeatedly this
   # session. Registered 2026-09-21 by ORCH.
 github_ref: GH-1696
-status: open
+status: resolved
+resolution:
+  resolved_at: "2026-09-22T00:00:00Z"
+  resolved_by: DOC-UPDATER
+  branch: feature/WF03-ISS0777-20260921
+  pr: GH-1696
+  summary: >
+    Fixed via WF-03 on feature/WF03-ISS0777-20260921 (tip 4193e277).
+    CODE-DESIGNER's design added a two-tier identifier-format validation:
+    a regex `pattern` constraint on `entity_type`/`attribute` in
+    `platform_migrations.ex`'s `@start_schema` (via the existing
+    `Letflow.Api.Validation` mechanism) as the first tier, plus a second
+    check inside `Letflow.TenantProvisioning.register_column_promotion/4`
+    itself as a defense-in-depth tier so every caller of that function --
+    not just this one router -- is protected from the same crash path.
+    CODE-DESIGN-VALIDATOR's first pass required this second-crash-path
+    finding be made explicit in the design (the router-only check alone
+    would still leave `register_column_promotion/4` callers exposed);
+    the design was revised to §4.3 prose/spec level and re-approved.
+    ELIXIR-DEV implemented both tiers, returning a clean 422-class error
+    instead of ever reaching `checked_table_name/1`'s raise, and
+    corrected the stale/incorrect "already validated" comment at that
+    call site. SECURITY-REVIEWER and REVIEWER both passed the change.
+
+    Test-validity issue found and corrected: TEST-DESIGNER's first
+    regression tests (Tests A/B/C) asserted the 422 response but did not
+    provision an active tenant before invoking the router, so the
+    request never actually reached the code path that used to crash --
+    the tests could pass even with the bug still present.
+    TEST-DESIGN-VALIDATOR caught this and required rework; the fix
+    (commit a880edb8, "Tests A/B/C now provision a real active tenant")
+    was independently re-verified twice with genuine fail-then-pass
+    evidence: once by TEST-DESIGN-VALIDATOR against the reworked tests,
+    and again by RELEASE-VALIDATOR re-running the full suite
+    independently rather than trusting the prior report. A subsequent
+    commit (4193e277) ran `mix format` on the test file with no
+    behavioral change.
+
+    RELEASE-VALIDATOR's final independent run: 4591/4593 tests passed,
+    the only 2 non-passing being the pre-existing documented ISS-0766
+    flake, unrelated to this change. All gates (design,
+    design-validation, security, review, test-design,
+    test-design-validation, test-run, release-validation) PASSed.

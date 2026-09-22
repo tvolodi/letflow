@@ -1103,4 +1103,92 @@ defmodule Letflow.TenantProvisioning.ColumnPromotionTest do
       assert Enum.count(all_schema_indexes, &(&1 == "idx_shared_name")) == 1
     end
   end
+
+  # ---------------------------------------------------------------------------------
+  # ISS-0777 -- register_column_promotion/4's own identifier-format check
+  # (the defence-in-depth layer, independent of start_rollout/3's own
+  # check -- see lib/letflow/design/iss-0777-entity-type-identifier-validation.md
+  # §2/§4.2 and test/specs/ISS-0777.md). Called directly here, not via
+  # MigrationRollout, so this layer is proven to work on its own.
+  # ---------------------------------------------------------------------------------
+
+  describe "ISS-0777 -- register_column_promotion/4 rejects an invalid identifier before any write" do
+    test "an invalid entity_type returns {:error, :invalid_entity_type} immediately, with zero ColumnPromotion rows written, no transaction side effect" do
+      entity_type = "pl-rollout-95a456dd"
+      attribute = "sku"
+
+      count_before =
+        Repo.aggregate(from(cp in ColumnPromotion, where: cp.entity_type == ^entity_type), :count)
+
+      assert TenantProvisioning.register_column_promotion(
+               entity_type,
+               attribute,
+               %{pg_type: "text", nullable: true},
+               :all
+             ) == {:error, :invalid_entity_type}
+
+      count_after =
+        Repo.aggregate(from(cp in ColumnPromotion, where: cp.entity_type == ^entity_type), :count)
+
+      assert count_after == count_before
+      assert count_after == 0
+    end
+
+    test "an invalid attribute (valid entity_type) returns {:error, :invalid_attribute} immediately, with zero rows written" do
+      entity_type = "invoice"
+      attribute = "some-attr"
+
+      count_before =
+        Repo.aggregate(
+          from(cp in ColumnPromotion,
+            where: cp.entity_type == ^entity_type and cp.attribute == ^attribute
+          ),
+          :count
+        )
+
+      assert TenantProvisioning.register_column_promotion(
+               entity_type,
+               attribute,
+               %{pg_type: "text", nullable: true},
+               :all
+             ) == {:error, :invalid_attribute}
+
+      count_after =
+        Repo.aggregate(
+          from(cp in ColumnPromotion,
+            where: cp.entity_type == ^entity_type and cp.attribute == ^attribute
+          ),
+          :count
+        )
+
+      assert count_after == count_before
+      assert count_after == 0
+    end
+
+    test "entity_type is checked before attribute -- both invalid reports :invalid_entity_type, deterministically" do
+      assert TenantProvisioning.register_column_promotion(
+               "bad-entity",
+               "bad-attr",
+               %{pg_type: "text", nullable: true},
+               :all
+             ) == {:error, :invalid_entity_type}
+    end
+
+    test "no regression: register_column_promotion/4's own AC1 happy path (real, Validator-checked entity_type/attribute) still succeeds unchanged" do
+      %{tenant_id: tenant_id, schema_name: schema} = provisioned_tenant()
+      create_active_definition!(schema)
+
+      assert {:ok, [row]} =
+               TenantProvisioning.register_column_promotion(
+                 "invoice",
+                 "amount",
+                 %{pg_type: "text", nullable: true},
+                 [tenant_id]
+               )
+
+      assert row.entity_type == "invoice"
+      assert row.attribute == "amount"
+      assert row.status == "pending"
+    end
+  end
 end

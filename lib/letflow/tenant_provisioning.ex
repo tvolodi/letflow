@@ -1304,9 +1304,26 @@ defmodule Letflow.TenantProvisioning do
             optional(:generated_as) => String.t() | nil
           },
           tenant_ids :: [Ecto.UUID.t()] | :all
-        ) :: {:ok, [ColumnPromotion.t()]} | {:error, term()}
+        ) ::
+          {:ok, [ColumnPromotion.t()]}
+          | {:error, :invalid_entity_type}
+          | {:error, :invalid_attribute}
+          | {:error, term()}
   def register_column_promotion(entity_type, attribute, column_spec, tenant_ids)
       when is_binary(entity_type) and is_binary(attribute) and is_map(column_spec) do
+    cond do
+      not DDL.valid_identifier?(entity_type) ->
+        {:error, :invalid_entity_type}
+
+      not DDL.valid_identifier?(attribute) ->
+        {:error, :invalid_attribute}
+
+      true ->
+        do_register_column_promotion(entity_type, attribute, column_spec, tenant_ids)
+    end
+  end
+
+  defp do_register_column_promotion(entity_type, attribute, column_spec, tenant_ids) do
     tenant_ids = resolve_tenant_ids(tenant_ids)
     pg_type = Map.fetch!(column_spec, :pg_type)
     references_entity = Map.get(column_spec, :references_entity)
@@ -1452,14 +1469,23 @@ defmodule Letflow.TenantProvisioning do
     end
   end
 
-  # entity_type/column_name were already validated as safe identifiers at
-  # register_column_promotion/4 time -- re-checked here anyway (defence in
-  # depth matching DDL's own posture) and raised as an ArgumentError, never
-  # silently proceeded, if a stored row somehow holds an unsafe value (which
-  # would mean some write path bypassed register_column_promotion/4
-  # entirely). This is why :invalid_entity_type is not in run_column_promotion/1's
-  # own @spec -- it is unreachable via any function on this module's own
-  # public surface.
+  # As of ISS-0777, entity_type IS validated before a ColumnPromotion row can
+  # exist for it -- at register_column_promotion/4's own entry (this module),
+  # for every caller, and additionally at
+  # Letflow.Platform.MigrationRollout.start_rollout/3's entry, before that
+  # function ever reaches register_column_promotion/4, for the
+  # platform-migration-rollout write path specifically. This raise remains
+  # reachable only if a ColumnPromotion row was written by some path that
+  # bypasses register_column_promotion/4 entirely (e.g. a direct
+  # Repo.insert/Repo.insert! against the schema, or a future write path added
+  # without reading this comment) -- a genuine internal-invariant violation,
+  # not a value this module's own public write surface can currently produce.
+  # Re-checked here anyway (defence in depth matching DDL's own posture) and
+  # raised as an ArgumentError, never silently proceeded, rather than
+  # converted to a tagged {:error, _} -- this is intentionally a loud
+  # last-resort assertion, not normal control flow. This is why
+  # :invalid_entity_type is not in run_column_promotion/1's own @spec -- it
+  # is unreachable via any function on this module's own public surface.
   defp checked_table_name(promotion) do
     case table_name_for_entity_type(promotion.entity_type) do
       {:ok, table_name} ->

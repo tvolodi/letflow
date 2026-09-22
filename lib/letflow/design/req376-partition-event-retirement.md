@@ -430,26 +430,83 @@ early-moved rows; 4.4a's `keep_forever` rows then land in
 `events_archive_default` and simply stay there (still `events_archive`, still
 counted by EO-002, §4.5) rather than round-tripping.
 
-**4.4b — `events_archive_default` reconciliation (new in this revision, required for
-§4.3 step 4's `ATTACH` to succeed; runs first):** Postgres refuses to `ATTACH` a new
-partition whose range overlaps rows already sitting in the parent's `DEFAULT`
-partition — it scans `events_archive_default` as part of the `ATTACH` DDL and errors
-if any row there falls in `[month-start, next-month-start)`. Rows are there because
-`archive/1`'s ordinary early per-row moves for this month always land in
-`events_archive_default` until this month is retired (§3.2 revised). Before step 2:
-`SELECT event_id, created_at FROM #{prefix()}.events_archive_default WHERE created_at
->= '<month-start>' AND created_at < '<next-month-start>'`; for every row found,
-relocate it **out of `events_archive_default` and into the still-standalone (at this
-point, still attached to `events`) `events_y<year>m<month>` table** — `INSERT INTO
-#{prefix()}.events_y<year>m<month> (...) SELECT ...` then `DELETE FROM
-#{prefix()}.events_archive_default WHERE event_id = ANY(...) AND created_at =
-ANY(...)`, same idiom, one `Repo.transaction/1`. This looks like moving rows from
-`events_archive` back into `events`, but it is not a policy reversal: these rows are
-about to become part of `events_archive` again, permanently, the moment step 4's
-`ATTACH` runs — moving them into the not-yet-detached partition first is what lets
-the whole-partition `DETACH`+`ATTACH` carry them across in one motion instead of a
-second per-row `INSERT`/`DELETE` pair after `ATTACH`. `default_partition_rows_reconciled`
-in the `{:ok, ...}` return (§4.1) reports this count.
+**4.4b — `events_archive_default` reconciliation, batched (revised in this rework —
+was an unbounded single transaction; required for §4.3 step 4's `ATTACH` to succeed;
+runs first):** Postgres refuses to `ATTACH` a new partition whose range overlaps rows
+already sitting in the parent's `DEFAULT` partition — it scans `events_archive_default`
+as part of the `ATTACH` DDL and errors if any row there falls in `[month-start,
+next-month-start)`. Rows are there because `archive/1`'s ordinary early per-row moves
+for this month always land in `events_archive_default` until this month is retired
+(§3.2 revised).
+
+**Why this population is not assumed small (unlike 4.4a's `keep_forever` rows):**
+`keep_forever`'s smallness (4.4a) is justified by design — `keep_forever` is
+deliberately the exception, not the common case, among retention policies. No
+equivalent argument holds for 4.4b: `events_archive_default` receives *every* row
+`archive/1` moves for this month, for the entire span between whatever `keep_days`/
+`keep_count` made each row eligible and this month's own (deliberately conservative,
+§4.2) `min_partition_age_days` retirement eligibility. That span is designed to be
+long, and the reconciled set scales with this tenant's actual archived-event volume
+for the month — a quantity this design has no basis to bound as "small" at design
+time (see OQ7 below). The mechanism must therefore be bounded by construction, not by
+assumption about the data.
+
+**Mechanism — fixed-size batches, one `Repo.transaction/1` per batch:** a new config
+knob, `Application.get_env(:letflow, :event_retention, reconciliation_batch_size:
+5000)` (same config location/pattern as `min_partition_age_days`, §4.2). Loop:
+
+- `SELECT event_id, created_at FROM #{prefix()}.events_archive_default WHERE
+  created_at >= '<month-start>' AND created_at < '<next-month-start>' ORDER BY
+  created_at, event_id LIMIT <reconciliation_batch_size>` (no `OFFSET` — each
+  iteration's `DELETE` removes exactly the rows just processed, so the next `SELECT`
+  naturally advances over what remains; `ORDER BY` gives deterministic, resumable
+  batch boundaries).
+- For the batch returned (possibly `[]`, ending the loop): relocate it **out of
+  `events_archive_default` and into the still-standalone (at this point, still
+  attached to `events`) `events_y<year>m<month>` table** — `INSERT INTO
+  #{prefix()}.events_y<year>m<month> (...) SELECT ...` then `DELETE FROM
+  #{prefix()}.events_archive_default WHERE event_id = ANY(...) AND created_at =
+  ANY(...)`, same insert-then-confirmed-delete idiom as `archive_phase1_insert`/
+  `archive_phase2_delete` — including their own already-established pattern of
+  splitting insert and delete across separate transaction boundaries where needed;
+  here insert+delete share one transaction per batch since both target disjoint
+  tables from `events`/`events_archive`'s live partitions and the row set is
+  batch-bounded.
+- Loop terminates when a `SELECT` returns fewer than `reconciliation_batch_size`
+  rows. `default_partition_rows_reconciled` in the `{:ok, ...}` return (§4.1) reports
+  the summed count across all batches.
+
+This looks like moving rows from `events_archive` back into `events`, but it is not a
+policy reversal: these rows are about to become part of `events_archive` again,
+permanently, the moment step 4's `ATTACH` runs — moving them into the not-yet-detached
+partition first is what lets the whole-partition `DETACH`+`ATTACH` carry them across in
+one motion instead of a second per-row `INSERT`/`DELETE` pair after `ATTACH`.
+
+**Bound checked against §5's EO-001 non-blocking claim:** each batch transaction
+takes only row-level locks — on the `reconciliation_batch_size` rows being deleted
+from `events_archive_default` and the matching rows being inserted into
+`events_y<year>m<month>` — never a lock on the `events` or `events_archive` parent
+relations, and never a lock that conflicts with concurrent DML against any other
+month's partition, any other tenant's schema, or (in steady state) this same month's
+partition, since a month only becomes retirement-eligible once
+`min_partition_age_days` has passed and ordinary `append/2` traffic writes rows with
+`created_at` close to "now", not backdated into an already-aging month. This per-batch
+lock footprint is **constant, independent of the reconciled set's total size** —
+running 1 batch or 500 batches makes the same EO-001 claim per batch; a larger total
+population lengthens step 1's overall wall-clock duration (more batches, run
+sequentially, each its own bounded transaction) but never lengthens any single lock's
+duration beyond one `reconciliation_batch_size`-row transaction. This is the load-bearing
+difference from the prior (failed) revision: that version's bound was an unsubstantiated
+claim about total size; this version's bound is structural (per-transaction, not
+per-month) and holds regardless of total size.
+
+**Crash-recovery consistency (§4.3.1):** a crash mid-loop leaves the partition still
+attached to `events` with `inhdetachpending = false` — catalog state still reads
+`:not_started` on the next call, so `retire_month/3` resumes by re-entering this same
+loop; already-relocated batches are no longer in `events_archive_default` (moved, not
+copied), so the next `SELECT` naturally picks up only what remains. No separate
+crash-recovery bookkeeping is needed for the batch loop itself, consistent with
+§4.3.1's general "catalog-detected, never self-persisted" state design.
 
 **4.4a — `keep_forever` relocation (mechanism unchanged from the prior revision,
 corrected only in destination):** `SELECT event_id, created_at FROM
@@ -464,11 +521,15 @@ inside one `Repo.transaction/1`, matching `archive_phase1_insert`/`archive_phase
 existing insert-then-confirmed-delete idiom (`lib/letflow/event_store.ex` around line
 1490).
 
-Both 4.4a and 4.4b are bounded, small-in-practice, per-row pre-steps — **not** part of
-AC2's "no per-row DELETE" claim, which is specifically about steps 2–5 (§4.3.3),
-exactly as this design already distinguished for `keep_forever` alone in the prior
-revision; 4.4b extends the same reasoning to the newly-identified default-partition
-precondition rather than introducing a new exception category.
+Both 4.4a and 4.4b are bounded per-row pre-steps — **not** part of AC2's "no per-row
+DELETE" claim, which is specifically about steps 2–5 (§4.3.3), exactly as this design
+already distinguished for `keep_forever` alone in the prior revision; 4.4b extends the
+same exception category to the newly-identified default-partition precondition, but on
+different grounds: 4.4a is bounded because `keep_forever` rows are rare by design
+(argued above); 4.4b is bounded because its batched mechanism caps each transaction's
+row count and lock duration by construction, independent of how large the total
+reconciled set turns out to be (argued in the "Bound checked against §5's EO-001"
+paragraph above) — not because the total is assumed small.
 
 This relocation is bounded to however many `keep_forever`-policy rows the target
 month actually contains — expected to be small (the whole reason `keep_forever` exists
@@ -609,6 +670,21 @@ closes the loop `retire_month/3`'s DETACH+ATTACH design opened.
   entirely unaffected, per Postgres's own two-phase design — but it does block that
   month's retirement indefinitely until resolved). Left for REQ-377/a follow-up,
   same as OQ3/OQ5, rather than guessed at here.
+- **OQ7 (new, §4.4b):** `reconciliation_batch_size`'s default (5000, proposed in
+  §4.4b) is picked with no production data behind it, same category of gap as OQ4's
+  `min_partition_age_days` — this design has no basis to estimate how many rows
+  actually accumulate in `events_archive_default` per tenant per month in practice
+  (that population scales with archived-event volume over the entire
+  `min_partition_age_days` window, which itself has no chosen default yet per OQ4),
+  so neither the batch size nor the resulting number-of-batches/step-1-wall-clock-time
+  for a real tenant is known until this ships. The per-batch lock/duration bound
+  (§4.4b) holds regardless of this number, so this open question is about tuning and
+  operational visibility (should step 1 emit a metric for batch count/total
+  reconciled per call? should very large counts alert, analogous to OQ3's
+  `events_default` alerting question?), not about correctness — ELIXIR-DEV/REVIEWER
+  should revisit the default once real `archive/1`/`events_archive_default` volumes
+  are observable, matching how OQ1 treats the analogous single-transaction-backfill
+  sizing question as open rather than guessed at.
 
 ## 8. Acceptance-criteria coverage map
 

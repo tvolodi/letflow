@@ -1,0 +1,51 @@
+{
+  "handoff_id": "c3d4e5f6-0002-4000-8000-000000000001",
+  "run_id": "WF02-REQ376-20260922",
+  "workflow_id": "WF-02",
+  "step": "01b",
+  "from_agent": "ORCH",
+  "to_agent": "CODE-DESIGN-VALIDATOR",
+  "file": "handoffs/WF02-REQ376-20260922/step-01b-code-design-validator.json",
+  "created_at": "2026-09-22T00:00:00Z",
+  "started_at": "2026-09-22T00:00:00Z",
+  "completed_at": "2026-09-22T00:00:00Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S6",
+    "requirement_ids": ["REQ-376"],
+    "related_handoff_ids": [
+      "handoffs/WF02-REQ376-20260922/step-01-code-designer.json"
+    ],
+    "artifacts_in": [
+      "docs/migration/decisions/0037-event-store-partitioning-and-whole-partition-retirement.md",
+      "lib/letflow/design/req376-partition-event-retirement.md"
+    ],
+    "owned_modules": []
+  },
+  "task": {
+    "description": "WF-02 Step 1b for REQ-376 -- hard gate on CODE-DESIGNER's design artefacts (decision record 0037 + req376 design doc). Verify each of REQ-376's 7 acceptance criteria maps to a concrete, unambiguous, buildable design element; verify AC1's sign-off block exists (pending, not yet signed -- expected at this stage); verify AC6's archive/1 relationship is stated explicitly and coherently; verify AC2's single-DDL/no-row-by-row claim actually holds and does not secretly require row-level work for EO-002/EO-003; verify EO-003's read-path union is concrete; verify EO-002's exemption mechanism and test-proof shape are concrete; verify AC5's pre-creation mechanism is genuinely out-of-band and non-blocking; verify every function signature is fully specified with error shapes; verify no implementation code is present; verify cross-module dependencies and DB schema changes are fully described; verify open questions are listed explicitly and none is load-bearing for the 7 ACs. FAIL immediately and completely on any single failed check.",
+    "acceptance_criteria": [
+      "a decision record resolving Postgres-native monthly PARTITION BY RANGE (created_at) for events/events_archive exists under docs/migration/decisions/, cross-references 0003 Decision C and ISS-0014, and carries REVIEWER sign-off (pending -- see decision record's own Sign-off section)",
+      "retiring one month of expired history is designed as a single DDL operation (DETACH/DROP, not row-by-row DELETE), with a stated test shape proving no per-row DELETE runs and the platform accepts a concurrent write throughout (EO-001)",
+      "the protected-record (keep_forever-policy) exemption mechanism is specified, with a stated test shape proving the count is identical before/after retiring a month containing at least one protected record (EO-002)",
+      "the architectural mechanism making an already-retired month's process-instance history still replay with no gap is specified (EO-003)",
+      "the pre-creation mechanism is specified such that no test or code path ever waits on partition creation while a write is in flight",
+      "the relationship between the new mechanism and Letflow.EventStore.archive/1's existing row-level move is stated explicitly (coexist, with archive/1 unchanged) in both the decision record and the design doc",
+      "every acceptance criterion maps to a concrete design element -- no TBD; open questions listed explicitly instead"
+    ]
+  },
+  "result": {
+    "status": "FAIL",
+    "summary": "10 of 12 gate checks pass (decision record cross-references 0003 Decision C point 2 and ISS-0014 concretely and states the approach in buildable detail; AC1's pending-sign-off block exists correctly, not simulated; AC6's archive/1 relationship is stated explicitly and coherently in both artefacts with a concrete idempotent-convergence argument; EO-003's read/2 union extension is concrete, naming the exact private helper and merge/re-sort behavior; EO-002's exemption mechanism and test-proof shape are concrete; AC5's pre-creation sweep is genuinely out-of-band (daily Poller cadence, months_ahead:2 lookahead, DEFAULT-partition soft-failure net, no write path ever creates or waits on a partition); public function signatures (ensure_future_partitions/2, retire_month/3) carry full @spec and tagged error shapes; no .ex/.exs implementation code is present anywhere in either artefact -- DDL is stated as migration shape/execute/1 content, which is the explicitly-scoped exception; cross-module dependencies (Poller, Scheduler, TenantProvisioning, EventStore, Repo) are listed; DB schema changes (six new migrations, partition-parent DDL, indexes, naming convention, default partitions, sequence handling) are fully described). FAILS on check 4 (AC2 'single DDL operation' + no secret row-by-row work for EO-002/EO-003): the design doc's own section 4.3 header claims the retirement sequence is 'two Postgres statements outside an explicit transaction,' but the body it introduces enumerates five sequential ALTER TABLE statements (DETACH CONCURRENTLY; ADD CONSTRAINT ... NOT VALID; VALIDATE CONSTRAINT; ATTACH PARTITION; DROP CONSTRAINT) plus a conditional protected-row relocation transaction ahead of them -- the header's own statement count is internally inconsistent with the design it introduces, which is exactly the kind of ambiguity this gate exists to catch before ELIXIR-DEV has to guess at it. More substantively, no failure/recovery semantics are specified for a crash or error between step 2 (DETACH CONCURRENTLY) and step 4 (ATTACH PARTITION): if the process retiring a month dies after DETACH succeeds but before ATTACH completes, the partition is left attached to neither events nor events_archive -- read/2's union (section 6) would silently stop finding that month's events, which is precisely the EO-003 gap ('no gap in replay') this design exists to close, now reintroduced at the operational layer with no detection or repair path. retire_month/3's error tuple list (section 4.1) has no case for this state (e.g. :partition_orphaned or :retirement_incomplete), and the design does not address Postgres's own documented behavior that an interrupted DETACH CONCURRENTLY can leave a partition in a 'pending detach' state requiring an explicit FINALIZE before it can be reasoned about again. Given this requirement's own text flags 'expect real scrutiny' and AC2 explicitly calls for a single DDL operation, a five-plus-statement sequence with an unaddressed partial-failure window is a genuine, load-bearing gap, not a nitpick -- it must be resolved (either a real single-DDL primitive, or an explicit idempotent/resumable recovery path with matching error cases and a test shape proving recovery) before this proceeds to ELIXIR-DEV.",
+    "artifacts_out": [],
+    "next_action": "Rework CODE-DESIGNER",
+    "issues": [
+      "AC2/EO-001 (design doc SS4.3): header claims 'two Postgres statements outside an explicit transaction' but the sequence it introduces has five ALTER TABLE statements plus a conditional relocation transaction -- internally inconsistent statement count, not a single DDL operation as AC2 requires.",
+      "AC2/EO-003 (design doc SS4.1, SS4.3): no error case, detection mechanism, or recovery path is specified for a crash/failure between DETACH (step 2) and ATTACH (step 4) -- a partition left detached from events and not yet attached to events_archive would silently vanish from read/2's union, reopening the exact 'no gap in replay' guarantee EO-003 requires. retire_month/3's @spec error list has no matching case (e.g. :partition_orphaned) and no idempotent-retry behavior is described.",
+      "AC2 (design doc SS4.3): Postgres's own documented 'pending detach' state for an interrupted DETACH PARTITION ... CONCURRENTLY (requiring ALTER TABLE ... DETACH PARTITION ... FINALIZE) is not mentioned or accounted for, despite the design relying specifically on CONCURRENTLY's two-phase behavior for its EO-001 non-blocking claim."
+    ]
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

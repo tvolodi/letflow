@@ -1,0 +1,106 @@
+run_id: WF02-REQ386-20260923
+workflow_id: WF-02
+step: "04"
+agent: TEST-RUNNER
+requirement_ids:
+  - REQ-386
+branch: feature/WF02-REQ386-20260923
+generated_at: "2026-09-23T05:01:00Z"
+change_scope:
+  note: >
+    git diff --name-only main...HEAD shows: docs/requirements.yaml,
+    docs/status/requirement_status.index.yaml,
+    docs/status/requirement_status.v22.yaml,
+    handoffs/WF02-REQ386-20260923/step-00..03b*.json,
+    lib/letflow/api/authorization.ex, lib/letflow/api/error.ex,
+    lib/letflow/api/response.ex,
+    lib/letflow/design/req386-attachment-signed-links.md,
+    lib/letflow/repository/attachment_links.ex,
+    lib/letflow/routers/instances.ex,
+    test/letflow/repository/attachment_links_test.exs,
+    test/letflow/routers/req386_attachment_links_routes_test.exs,
+    test/specs/REQ-386.md. Backend-only change (signed, time-limited
+    attachment links). No lib/letflow/identity.ex, no
+    test/support/bpm_default_realm_displacement.ex, no
+    test/letflow/identity_test.exs, no tenant-realm migration touched.
+environment:
+  postgres_container: "letflow-postgres-1 (docker, port 5462) -- already running and healthy per docker ps; docker compose up was NOT run (container already serving the resolved port; config/db_port.exs resolves 5462 -- no LETFLOW_DB_PORT override in env or .env)"
+backend_suite:
+  command: scripts/test_parallel.sh
+  partition_count_N: 16
+  partition_count_source: nproc
+  execution_mode: "synchronous foreground run within this turn (per core-directives.md's No Background Wait For A Cross-Turn Notification -- the harness auto-backgrounded the long-running call at its own default timeout; this run polled the background task's own output file to completion inside a single blocking Bash loop rather than ending the turn or relying on the cross-turn notification to resume work)"
+  combined_totals:
+    tests: 4740
+    properties: 6
+    failures: 2
+    passed: 4744
+    total: 4746
+  per_partition:
+    - {partition: 1, tests: 248, properties: 0, failures: 0, exit: 0}
+    - {partition: 2, tests: 372, properties: 0, failures: 0, exit: 0}
+    - {partition: 3, tests: 244, properties: 0, failures: 0, exit: 0}
+    - {partition: 4, tests: 292, properties: 0, failures: 0, exit: 0}
+    - {partition: 5, tests: 374, properties: 0, failures: 0, exit: 0}
+    - {partition: 6, tests: 414, properties: 0, failures: 0, exit: 0}
+    - {partition: 7, tests: 461, properties: 3, failures: 0, exit: 0}
+    - {partition: 8, tests: 322, properties: 0, failures: 0, exit: 0}
+    - {partition: 9, tests: 251, properties: 0, failures: 0, exit: 0}
+    - {partition: 10, tests: 215, properties: 0, failures: 0, exit: 0}
+    - {partition: 11, tests: 288, properties: 0, failures: 0, exit: 0}
+    - {partition: 12, tests: 242, properties: 0, failures: 0, exit: 0}
+    - {partition: 13, tests: 324, properties: 1, failures: 0, exit: 0}
+    - {partition: 14, tests: 239, properties: 0, failures: 2, exit: 2}
+    - {partition: 15, tests: 241, properties: 0, failures: 0, exit: 0}
+    - {partition: 16, tests: 213, properties: 2, failures: 0, exit: 0}
+  raw_output_tail: |
+    test_parallel: N=16 (source: nproc)
+    test_parallel: TEST_POOL_SIZE=5 (computed: N=16, max_connections=100, superuser_reserved=3, headroom=10, nonpool_reserve=5)
+    test_parallel: all 16 partition databases created+migrated
+    test_parallel: TEST_PARALLEL_GROUP=tp1274768 (shared by all 16 partitions)
+    partition 14: 239 tests, 0 properties, 2 failures, exit 2
+    ---
+    combined: 4740 tests, 6 properties, 2 failures (4744/4746 passed)
+    test_parallel: preserving /tmp/letflow_test_parallel.BSif9t (exit_code=1, TEST_PARALLEL_KEEP_LOGS=unset)
+  failures:
+    - test: "resolve_tenant_by_realm/1 resolves the seeded default tenant (bpm-default) by its idp_realm_id (REQ-019 acceptance criterion 1)"
+      file: "test/letflow/identity_test.exs:534"
+      error: "Ecto.NoResultsError: expected at least one result but got none in query: from t0 in Letflow.Identity.Tenant, where: t0.idp_realm_id == ^\"bpm-default\" -- via test/support/bpm_default_realm_displacement.ex:118 (with_lock/1)"
+    - test: "resolve_realm_by_tenant/1 resolves the seeded default tenant's (bpm-default) idp_realm_id by its tenant id (REQ-019 acceptance criterion 1)"
+      file: "test/letflow/identity_test.exs:541"
+      error: "Ecto.NoResultsError: expected at least one result but got none in query: from t0 in Letflow.Identity.Tenant, where: t0.idp_realm_id == ^\"bpm-default\" -- via test/support/bpm_default_realm_displacement.ex:118 (with_lock/1)"
+  attribution:
+    verdict: pre-existing, not attributable to this branch
+    routes_shown:
+      route_1: >
+        Structural: git diff --name-only main...HEAD for this branch touches
+        only lib/letflow/api/authorization.ex, lib/letflow/api/error.ex,
+        lib/letflow/api/response.ex, lib/letflow/repository/attachment_links.ex,
+        lib/letflow/routers/instances.ex (plus test/specs and this branch's own
+        test files) -- none of test/letflow/identity_test.exs,
+        test/support/bpm_default_realm_displacement.ex, or any
+        Letflow.Identity/Tenant module. Grepped the five changed lib/ files for
+        idp_realm_id / bpm-default / resolve_tenant_by_realm / resolve_realm_by_tenant
+        -- zero matches, confirming no code or data path this branch changed
+        overlaps the failing mechanism (tenant-realm resolution under
+        Letflow.Support.BpmDefaultRealmDisplacement.with_lock/1's advisory-lock-
+        scoped read racing a concurrent displace!/0 across parallel partitions
+        sharing one Postgres instance).
+      route_3: >
+        Demonstrated mechanism already on record: docs/issues/ISS-0766.yaml
+        documents this exact pair of REQ-019 AC1 test names, same file, same
+        line numbers, same error and same mechanism, and multiple prior WF-02
+        Step 4 runs on unrelated branches (e.g. WF02-REQ383-20260923's report)
+        reproduced the identical two failures under the same
+        with_lock/1 call site.
+    conclusion: >
+      Both failures are pre-existing and already tracked under ISS-0766 (open).
+      No new issue filed -- this occurrence is reported here as confirming,
+      already-covered evidence, per core-directives.md's Failure Attribution
+      rule. Does not block this step's PASS verdict and is not routed back to
+      ELIXIR-DEV/TEST-DESIGNER.
+overall_verdict: PASS
+next_action: "Route to RELEASE-VALIDATOR"
+notes:
+  - "REQ-386 is backend-only (signed, time-limited attachment links) -- no web/ changes in this branch's diff, so no frontend gates were run for this step."
+  - "The 2 failures are structurally attributed as pre-existing (ISS-0766) per core-directives.md's Failure Attribution rule -- not this run's problem, not fixed here."

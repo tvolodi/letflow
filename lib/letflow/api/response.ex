@@ -146,6 +146,14 @@ defmodule Letflow.Api.Response do
   @spec not_found(Plug.Conn.t()) :: Plug.Conn.t()
   def not_found(conn), do: send_problem(conn, Error.not_found())
 
+  @doc """
+  HTTP 410 — Attachment Link Expired (REQ-386). Takes no `detail`, same
+  INV-5-shaped reasoning as `not_found/1` -- see
+  `Letflow.Api.Error.attachment_link_expired/0`.
+  """
+  @spec attachment_link_expired(Plug.Conn.t()) :: Plug.Conn.t()
+  def attachment_link_expired(conn), do: send_problem(conn, Error.attachment_link_expired())
+
   @doc "HTTP 409 — Conflict."
   @spec conflict(Plug.Conn.t(), String.t()) :: Plug.Conn.t()
   def conflict(conn, detail), do: send_problem(conn, Error.conflict(detail))

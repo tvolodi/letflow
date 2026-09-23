@@ -1,0 +1,56 @@
+{
+  "handoff_id": "a1000000-0003-4000-8000-00000000003b",
+  "run_id": "WF02-REQ386-20260923",
+  "workflow_id": "WF-02",
+  "step": "03b",
+  "from_agent": "ORCH",
+  "to_agent": "TEST-DESIGN-VALIDATOR",
+  "file": "handoffs/WF02-REQ386-20260923/step-03b-test-design-validator.json",
+  "created_at": "2026-09-23T04:30:00Z",
+  "started_at": "2026-09-23T04:30:00Z",
+  "completed_at": "2026-09-23T04:50:00Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S6",
+    "requirement_ids": ["REQ-386"],
+    "requirement_text": {
+      "REQ-386": "Time-limited, expiring signed URLs for instance-attachment byte content. See handoffs/WF02-REQ386-20260923/step-03-test-designer.json's context.requirement_text for full text."
+    },
+    "related_handoff_ids": [
+      "handoffs/WF02-REQ386-20260923/step-03-test-designer.json"
+    ],
+    "artifacts_in": [
+      "test/specs/REQ-386.md",
+      "test/letflow/repository/attachment_links_test.exs",
+      "test/letflow/routers/req386_attachment_links_routes_test.exs",
+      "lib/letflow/repository/attachment_links.ex"
+    ],
+    "owned_modules": []
+  },
+  "task": {
+    "description": "Perform WF-02 Step 3b (test design gate, hard gate) for REQ-386 per docs/agents/workflows/WF-02_requirement_implementation.md Step 3b. Read test spec and both test source files independently and in full. Verify all 6 acceptance criteria have runnable coverage, no skip/TODO, fixtures per-test-unique and self-sufficient, no hardcoded secrets, and scrutinize AC4's byte-identical test specifically. Independently run the new tests and quote real output.",
+    "acceptance_criteria": [
+      "Every AC (1-6) has >=1 runnable test, verified by reading test code directly",
+      "No @tag :skip without passing counterpart, no TODO left in spec/tests",
+      "Fixtures use per-test unique data, no cross-test pollution",
+      "Tests self-sufficient, no ordering dependency",
+      "No hardcoded secrets/connection strings",
+      "AC4 test genuinely constructs a cross-tenant-presented token vs. a genuinely-never-issued attachment id, compares status+headers+body, any normalization narrow/justified",
+      "AC2 uses injected clock (now: option), not Process.sleep",
+      "req212_attachments_routes_test.exs and attachments_test.exs NOT modified",
+      "Independently run the new test files and quote real pass/fail counts"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "Read test/specs/REQ-386.md, test/letflow/repository/attachment_links_test.exs, test/letflow/routers/req386_attachment_links_routes_test.exs, and lib/letflow/repository/attachment_links.ex in full (not just TEST-DESIGNER's handoff summary).\n\nPer-AC coverage verified by reading actual test code (not spec claims): AC1 -> attachment_links_test.exs 'valid round-trip' + 'expires_at is exactly 300 seconds...' (unit) and req386_attachment_links_routes_test.exs 'AC1: POST .../link' describe block, 3 tests (response shape, usable-before-expiry with byte/content-type/content-disposition assertions, 404 for nonexistent id). AC2 -> unit 'verify/3: expired token (injected clock, no sleep)' 2 tests (past-301s and exact-boundary strict-> cases) + route-level 'AC2...' describe block 3 tests (410 with exact fixed detail string 'This link has expired or is no longer valid. Request a new link and try again.', explicit refute of leaked bytes/content key; malformed token; missing token param). AC3 -> unit 'issue/3: a fresh issuance...' + route-level 'AC3: fresh link after a prior one expired' exercising expired->fresh->success end to end via real HTTP. AC4 -> route-level 'AC4:...' describe block, 2 tests (see scrutiny below) + underlying unit mechanism tests (wrong-tenant token, tampered payload, tampered signature) that establish WHY AC4 holds. AC5 -> verified test/letflow/routers/req212_attachments_routes_test.exs and test/letflow/repository/attachments_test.exs are absent from `git diff --stat main...HEAD` (confirmed myself, empty diff for both paths) and `git status --porcelain` shows no modification to either. AC6 -> verified myself: `mix compile --warnings-as-errors` exits clean (no output, no warnings), and `mix test` on the two new files passes (see below).\n\nNo @tag :skip anywhere in either test file (grep confirmed zero hits for 'skip'/'@tag' in the REQ-386 test files). No 'TODO: implement test' in the spec or either test file (grep confirmed only unrelated prose hits in the spec, no literal TODO markers).\n\nFixture isolation: every test calls `provisioned_tenant(unique_slug_prefix)` with a distinct slug_prefix per test (e.g. 'req386-roundtrip', 'req386-expiry-bound', 'req386-expired', 'req386-ac4-tenant1'/'req386-ac4-tenant2', etc. -- no two tests share a slug_prefix), and every `attachment_id`/`instance_id` is freshly generated via `Ecto.UUID.generate()` or `Attachments.upload!/2` per test. Letflow.DataCase's per-test tenant-schema provision/drop (confirmed in the test output: CREATE SCHEMA on setup, DROP SCHEMA CASCADE on teardown) means no test depends on another test's data or ordering; async: false matches the codebase's existing tenant-fixture convention (req212_attachments_routes_test.exs) rather than being a new pattern. No test reads a `secrets` row created by a different test -- AttachmentLinks lazily creates its own per-tenant signing key on first issuance within each test's own freshly-provisioned tenant.\n\nNo hardcoded secrets or connection strings in either test file -- grep confirmed no DB URL, no static HMAC key, no credential literal; signing keys are generated at runtime via `:crypto.strong_rand_bytes(32)` inside the context module, never a test-supplied constant.\n\nAC4 scrutiny (the hardest criterion): the test constructs a GENUINE cross-tenant-presented token, not two independently-invalid tokens that coincidentally match. Read lib/letflow/repository/attachment_links.ex directly to confirm the mechanism: `issue/3` mints tenant_1_token via a real `AttachmentLinks.issue(tenant_1_attachment.id, tenant_1.tenant_id)` call (validly signed under tenant_1's own per-tenant secret, unexpired) -- this is confirmed as a real, valid, currently-unexpired token for tenant_1, not a garbage string. It is then presented by tenant_2's caller (real, different, provisioned tenant) against two different attachment_id values in the URL: (a) tenant_2's own real, different, uploaded attachment, and (b) a wholly fabricated UUID never uploaded or issued by anyone. `verify/3`'s implementation (read directly, lines 133-155) resolves the signing key exclusively via `resolve_signing_key(tenant_slug, key_id, tenant_id)` where `tenant_id` is always the verifying caller's own authenticated tenant (tenant_2 in both cases) -- the token itself carries no tenant field at all, so this is a structurally genuine cross-tenant presentation, and the code path never inspects the URL's attachment_id before the HMAC-mismatch failure (check_attachment_id_matches/2 and fetch_scoped_attachment_content/3 are unreached on this failure path, consistent with the `with`/`else` chain collapsing at the `:crypto.hash_equals` step). The assertion compares `status`, the `content-type` response header, AND the full `resp_body` (not merely status code) between the two responses -- `assert cross_tenant_conn.resp_body == never_issued_conn.resp_body` is a genuine full-body byte comparison. No normalization is applied at all (not even a narrow one) because both conns are built through the same `build_conn/4` helper which assigns a fixed, constant `trace_id: \"fixed-test-trace-id\"` on every request -- there is no per-request-varying field (e.g. a real trace_id) to normalize away, since the test harness pins it. Compared against req212_attachments_routes_test.exs's own precedent for this exact technique (line 60/80: identical `assign(:trace_id, \"fixed-test-trace-id\")`, and line 382's own `assert never_existed_conn.resp_body == get_conn.resp_body` byte-identical pattern) -- REQ-386's new test uses the identical, no-normalization-needed technique, not a looser one. A second, simpler AC4 case (expired-vs-garbage-token, same tenant) additionally confirmed.\n\nAC2 clock-injection check: grep across both new test files for 'Process.sleep' returns zero hits. The unit test file injects `now:` directly into `issue/3`/`verify/3` per case. The route-level file cannot thread a fake clock through the HTTP layer (route handlers call issue/verify with no now: option, confirmed by reading lib/letflow/repository/attachment_links.ex's public API and the route test's own moduledoc) -- so its 'expired' tests instead mint an ALREADY-past-expiry token via `AttachmentLinks.issue/3`'s own `now:` option (`DateTime.add(DateTime.utc_now(), -301, :second)`) and then present that pre-expired token through a completely normal, un-delayed HTTP call. This is a legitimate deterministic technique, not a disguised real-time wait -- no sleep, no timing race, the token is expired relative to any real 'now' the instant it exists.\n\nIndependent verification run (mine, not trusting TEST-DESIGNER's report): `mix compile --warnings-as-errors` -> clean exit, zero output, zero warnings. `mix test test/letflow/repository/attachment_links_test.exs test/letflow/routers/req386_attachment_links_routes_test.exs` -> 'Finished in 17.2 seconds (0.00s async, 17.2s sync)' / 'Result: 23 passed' -- 0 failures, matching TEST-DESIGNER's own reported count exactly, independently re-derived against a real Postgres container (letflow-postgres-1, port 5462, already running per `docker ps`).\n\nNo issues found. All Step 3b checks pass.",
+    "artifacts_out": [
+      "handoffs/WF02-REQ386-20260923/step-03b-test-design-validator.json"
+    ],
+    "next_action": "Route to TEST-RUNNER (Step 4)",
+    "issues": []
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

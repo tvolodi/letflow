@@ -205,6 +205,29 @@ defmodule Letflow.Api.Error do
     }
   end
 
+  @doc """
+  HTTP 410 — Attachment Link Expired (REQ-386).
+
+  Takes no `detail` argument, deliberately -- same INV-5 shape as
+  `not_found/0`. `Letflow.Repository.AttachmentLinks.verify/3` collapses six
+  structurally distinct failure causes (malformed token, bad JSON, unknown
+  tenant, unresolvable/wrong-tenant signing key, signature mismatch, expiry)
+  into one `{:error, :expired_or_invalid}` value, and this constructor is the
+  only response ever built from it -- so a signed link that has genuinely
+  expired and a token that was never validly issued (e.g. for a foreign
+  tenant's attachment, or an attachment id that never existed at all)
+  produce byte-identical response bodies, matching REQ-386's own AC4.
+  """
+  @spec attachment_link_expired() :: t()
+  def attachment_link_expired do
+    %__MODULE__{
+      type: @problems_base <> "attachment-link-expired",
+      title: "Attachment Link Expired",
+      status: 410,
+      detail: "This link has expired or is no longer valid. Request a new link and try again."
+    }
+  end
+
   @doc "HTTP 409 — Conflict."
   @spec conflict(String.t()) :: t()
   def conflict(detail) do

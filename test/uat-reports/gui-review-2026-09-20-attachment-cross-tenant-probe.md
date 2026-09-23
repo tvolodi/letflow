@@ -137,12 +137,16 @@ re-verification (final verdict PASS, mergeable, architecturally sound) — is
 recorded in `docs/status/requirement_status.v22.yaml`'s REQ-388 `done` entry,
 not restated here.
 
-**This is only a partial close of the three-part chain this report filed.
-REQ-386 (signed, time-limited link issuance/expiry) and REQ-387 (the
-frontend document-viewer screen and its Playwright spec) both remain
-`status: pending`** in `docs/requirements.yaml` as of this note. EO-003/
-EO-004 (expiry mechanism) and the GUI-layer half of EO-001/EO-002, plus the
-stale NOTE (ISS-0527) removal that REQ-387's own acceptance criteria makes
-conditional on both REQ-386 and REQ-387 shipping, are all still open. Do not
-read this note as the scenario being fully resolved — only the audit-logging
-third of it is.
+**This is still only a partial close of the three-part chain this report
+filed.** REQ-386 (signed, time-limited link issuance/expiry) also shipped
+concurrently — merged to `main` as PR #1735 while this REQ-388 doc-update
+was in flight — and is now `status: done` too, per its own pipeline
+history in `docs/status/requirement_status.v22.yaml`. **REQ-387 (the
+frontend document-viewer screen and its Playwright spec) remains
+`status: pending`** in `docs/requirements.yaml` as of this note — two of
+three requirements from this finding are now done, one is not. The
+GUI-layer half of EO-001/EO-002/EO-003/EO-004, and the stale NOTE
+(ISS-0527) removal that REQ-387's own acceptance criteria makes conditional
+on both REQ-386 and REQ-387 shipping, are all still open pending REQ-387.
+Do not read this note as the scenario being fully resolved — only the
+backend signed-link and audit-logging two-thirds of it are.

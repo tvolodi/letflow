@@ -1,0 +1,55 @@
+{
+  "handoff_id": "a1000000-0006-4000-8000-000000000006",
+  "run_id": "WF02-REQ386-20260923",
+  "workflow_id": "WF-02",
+  "step": "06",
+  "from_agent": "ORCH",
+  "to_agent": "DOC-UPDATER",
+  "file": "handoffs/WF02-REQ386-20260923/step-06-doc-updater.json",
+  "created_at": "2026-09-23T00:53:00Z",
+  "started_at": "2026-09-23T00:53:00Z",
+  "completed_at": "2026-09-23T00:54:09Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S6",
+    "requirement_ids": ["REQ-386"],
+    "requirement_text": {
+      "REQ-386": "Time-limited, expiring signed URLs for instance-attachment byte content, replacing direct unbounded authenticated GET. Full text in docs/requirements.yaml, read directly (awk-scoped) for this run."
+    },
+    "related_handoff_ids": [
+      "handoffs/WF02-REQ386-20260923/step-05-release-validator.json"
+    ],
+    "artifacts_in": [
+      "docs/requirements.yaml",
+      "docs/status/requirement_status.index.yaml",
+      "docs/status/requirement_status.v22.yaml",
+      "README.md",
+      "docs/migration/stage-6-operational-cross-cutting.md"
+    ],
+    "owned_modules": []
+  },
+  "task": {
+    "description": "Perform WF-02 Step 6 (documentation update) for REQ-386 per docs/agents/workflows/WF-02_requirement_implementation.md Step 6 and core-directives.md's 'Bookkeeping Is Not Optional'. Flip REQ-386 to done in docs/requirements.yaml, append a done event to the current run-history volume (v22, confirmed current via the index and via origin/main having no newer volume), update README.md if it documents behavior this requirement changed, and check whether docs/migration/stage-6-operational-cross-cutting.md needs a consistency note for REQ-386 the way it has one for REQ-211/212.",
+    "acceptance_criteria": [
+      "docs/requirements.yaml REQ-386 status: in_progress -> done",
+      "a `done` event appended to docs/status/requirement_status.v22.yaml (confirmed current), timestamp from the clock, append verified via git diff --numstat (0 deletions) and a tail re-read",
+      "docs/status/requirement_status.index.yaml volume 22 entries: count incremented in the same commit and re-verified against grep -c on disk",
+      "README.md updated if it documents the instance-attachment route surface at REQ-211/212's granularity; explicit statement of why not, otherwise",
+      "docs/migration/stage-6-operational-cross-cutting.md checked for whether REQ-386 needs a note for consistency with the REQ-211/212 note; explicit statement of why not, otherwise"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "Confirmed branch feature/WF02-REQ386-20260923 (git branch --show-current) and that it is up to date with origin/main (merge-base HEAD origin/main == origin/main HEAD, rev-list --left-right --count HEAD...origin/main = 10 0) before touching any bookkeeping file, so docs/status/requirement_status.index.yaml's volume-22-current state was not stale.\n\n1. docs/requirements.yaml: REQ-386's status field (line 28610) flipped from `in_progress` to `done`. No other field touched.\n\n2. Read docs/status/requirement_status.index.yaml in full first: volume 22 (docs/status/requirement_status.v22.yaml) is `status: current`, entries: 1 on disk (the REQ-386 `started` event from Step 00). Read volume 22 in full (182 lines, well under the 1200/120000 roll ceiling) per its own HOW-TO-APPEND procedure. Appended one `done` event (req: REQ-386, agent: DOC-UPDATER, at: 2026-09-23T00:53:45Z from `date -u`, five-field shape matching the volume's documented schema exactly). Verified via `git diff --numstat docs/status/requirement_status.v22.yaml` = `22\\t0` (22 insertions, 0 deletions -- pure append) and via `tail -n 20` re-read confirming the note text landed intact, no backtick-eaten spans. File is now 204 lines / 11845 bytes -- no roll triggered. Then incremented volume 22's `entries:` count in docs/status/requirement_status.index.yaml from 1 to 2, with a provenance note matching the index's own established note style (mirroring the REQ-383/ISS-0770 precedent notes already in that file), in the same turn/commit as the run-history append. Re-verified: `grep -c \"^  - req:\" docs/status/requirement_status.v22.yaml` = 2, matching the index's new `entries: 2`.\n\n3. README.md: NOT changed. Checked explicitly per Step 6's instruction: grepped README.md for 'attachment' (case-insensitive) -- zero hits; grepped for '/attachments' -- zero hits. Read the 'What's here today' section (lines 59-79) in full: it documents only Letflow.Router's top-level bootstrap/health/CORS routes and explicitly defers to 'Letflow.Router's own moduledoc for the full route table' rather than listing routes itself -- i.e. README.md does not document the instance-attachment API surface at any granularity, so REQ-211/212's own routes were never added here in the first place. There is nothing in README.md for REQ-386's two route-level changes (the new signed-link-issuing endpoint and the token-gated content route) to be kept in sync with. No README.md change made.\n\n4. docs/migration/stage-6-operational-cross-cutting.md: NOT changed. REQ-386's acceptance criteria name no docs/migration/stage-N-*.md or docs/migration/decisions/*.md file, so nothing was required to be confirmed-updated by the implementing agent for that specific check. Checked the broader consistency question anyway per Step 6 instructions: this stage doc carries a provenance note (added 2026-09-01, lines 111-124) recording REQ-211/212 specifically because they introduced a wholly new subsystem (closing GH#769/ISS-0390, 'missing attachment/document-upload subsystem') into S6 after the stage's own 'S6 is now complete' line was already written -- the doc's established pattern is to append a note when a *new subsystem* lands in an already-closed stage, not to enumerate every later requirement that extends an already-recorded subsystem (REQ-225..REQ-231 got one contiguous note for the same reason: a genuinely new subsystem, not a per-requirement log). REQ-386 extends REQ-211/212's already-documented attachment subsystem (adds signed, time-limited links atop the existing store) rather than introducing a new one, so it does not fit this doc's own note-worthiness criterion. Decision: no new note added, for consistency with the doc's actual pattern rather than a superficial reading of 'REQ-211/212 got a note so REQ-386 should too'.",
+    "artifacts_out": [
+      "docs/requirements.yaml",
+      "docs/status/requirement_status.v22.yaml",
+      "docs/status/requirement_status.index.yaml"
+    ],
+    "next_action": "Route to ELIXIR-DEV for Step Final",
+    "issues": []
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

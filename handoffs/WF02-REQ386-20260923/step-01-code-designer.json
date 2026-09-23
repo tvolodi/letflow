@@ -1,0 +1,46 @@
+{
+  "handoff_id": "a1000000-0002-4000-8000-000000000001",
+  "run_id": "WF02-REQ386-20260923",
+  "workflow_id": "WF-02",
+  "step": "01",
+  "from_agent": "ORCH",
+  "to_agent": "CODE-DESIGNER",
+  "file": "handoffs/WF02-REQ386-20260923/step-01-code-designer.json",
+  "created_at": "2026-09-22T23:01:17Z",
+  "started_at": "2026-09-22T23:01:17Z",
+  "completed_at": "2026-09-22T23:01:40Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S6",
+    "requirement_ids": ["REQ-386"],
+    "requirement_text": {
+      "REQ-386": "See handoffs/WF02-REQ386-20260923/step-00-git-setup.json's context.requirement_text for the full text -- not restated here to avoid drift; read it there."
+    },
+    "related_handoff_ids": ["handoffs/WF02-REQ386-20260923/step-00-git-setup.json"],
+    "artifacts_in": [],
+    "owned_modules": ["lib/letflow/routers/instances.ex", "lib/letflow/repository/attachments.ex", "lib/letflow/design/req386-*.md"]
+  },
+  "task": {
+    "description": "Perform WF-02 Step 1 (code design) for REQ-386 per docs/agents/workflows/WF-02_requirement_implementation.md. Write lib/letflow/design/req386-attachment-signed-links.md covering: token issuance endpoint, token verification mechanism, all new/changed function signatures with @spec-style types, the exact token byte/field composition, the JSON response shapes (issuance success and expired/invalid error), invariants (INV-1/4/5/6/7/8), DB impact (or explicit statement of none), cross-module dependencies, the chosen expiry value with rationale (flagged for REVIEWER), and an explicit mechanical walk-through of how the byte-identical expired-or-invalid response (cross-tenant vs. never-issued attachment id) is achieved. No implementation code -- signatures and shapes only.",
+    "acceptance_criteria": [
+      "A new authenticated, :AttachmentsRead-scoped endpoint issues a signed link with a stated, bounded expiry for an existing attachment",
+      "The same link presented after its stated expiry has passed is refused with a plain-language expired-link message and no document bytes returned; design makes this testable without a real-time sleep (injectable clock)",
+      "Requesting a fresh link for the same attachment_id after a prior link expired succeeds and serves the document normally",
+      "An expired-or-invalid-token response for a cross-tenant attachment is byte-identical (status, headers, body) to the same response for a token referencing a never-issued attachment id",
+      "fetch_scoped_attachment_content/3's existing behavior is unchanged; its existing tests still pass",
+      "mix compile --warnings-as-errors and mix test both pass (verified at Step 2a, not this step); SECURITY-REVIEWER sign-off required before merge -- design explicitly assesses INV-1/4/5/6/7/8"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "Wrote lib/letflow/design/req386-attachment-signed-links.md. Mechanism: a new context module Letflow.Repository.AttachmentLinks mints a stateless, self-contained, per-tenant HMAC-SHA256-signed token (attachment_id + expiry unix timestamp + secret key_id, JSON-encoded, base64url payload + base64url signature joined by '.') via a new POST /instances/:id/attachments/:attachment_id/link route (:AttachmentsRead, placed before the bare GET/DELETE .../:attachment_id routes per the requirement's own instruction). Signing key is per-tenant, stored via the ALREADY-SHIPPED Letflow.Secrets table (namespace 'attachments', purpose :generic -- no change to Letflow.Secrets itself, since :generic/:generic is already a legal purpose/consumer pair), lazily created on first issuance. Chosen expiry: 300 seconds (5 minutes), flagged for REVIEWER per the @max_upload_bytes precedent. Verification (Letflow.Repository.AttachmentLinks.verify/3), called from a NEW, separate GET /instances/:id/attachments/:attachment_id/link-content route (not a modification of the existing bare-id content route/handler), collapses every failure mode (malformed token, bad JSON, unknown tenant, wrong-tenant-resolved secret, signature mismatch, expiry, attachment-id/path mismatch) into one {:error, :expired_or_invalid} value rendered by exactly one new response helper (Letflow.Api.Error/Response.attachment_link_expired/0-1, 410) with no caller-suppliable detail -- verification runs and fails BEFORE fetch_scoped_attachment_content/3 is ever called, so a cross-tenant real attachment id and a never-issued one take the identical call sequence on the failure path (full mechanical argument in the design's INV-5 section). fetch_scoped_attachment_content/3 and fetch_scoped_attachment_metadata/3 are reused verbatim, zero edits -- the new content route is a second call site, not a modified one, so AC5 holds structurally. No migration: verification is stateless computation plus a Letflow.Secrets.resolve/2 call against the pre-existing secrets table; no 'issued links' registry table. Two new Letflow.Api.Authorization.endpoint_policy_key/2 clauses added (both map to the existing :AttachmentsRead permission -- no new permission atom, no role-matrix change), required by the existing authorization_enforcement_test.exs introspection mechanism. Three open questions flagged, not silently resolved: OQ-1 (token-serving route stays behind the standard bearer-token pipeline rather than becoming unauthenticated-reachable, because Letflow.Api.AuthorizedRouter's own moduledoc states no route on a router using it bypasses Letflow.Plugs.Authorize -- building a bypass route is a materially larger, separately-reviewable architecture change out of this requirement's 'mechanism, backend only' scope; flagged for REVIEWER and for REQ-387 to decide if a truly unauthenticated embed is later needed), OQ-2 (token payload has no version field), OQ-3 (response JSON key names are this design's own choice, no existing consumer to bind against).",
+    "artifacts_out": [
+      "lib/letflow/design/req386-attachment-signed-links.md"
+    ],
+    "next_action": "Route to CODE-DESIGN-VALIDATOR (Step 1b)",
+    "issues": []
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

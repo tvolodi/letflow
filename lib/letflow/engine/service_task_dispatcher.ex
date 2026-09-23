@@ -601,10 +601,69 @@ defmodule Letflow.Engine.ServiceTaskDispatcher do
            Repo,
            tenant_schema
          ) do
-      {:ok, :advanced} -> {:ok, {:advance, :applied}}
-      {:ok, :error_set} -> {:ok, {:give_up, :applied}}
-      {:ok, :already_final} -> {:ok, :already_final}
-      {:error, reason} -> {:error, reason}
+      {:ok, :advanced} ->
+        {:ok, {:advance, :applied}}
+
+      {:ok, :error_set} ->
+        {:ok, {:give_up, :applied}}
+
+      {:ok, :already_final} ->
+        {:ok, :already_final}
+
+      # ISS-0784 follow-up fix -- a task-activation rejection
+      # (`Letflow.Engine.TaskActivation.resolve_form_schema/1`'s
+      # `{:invalid_form_schema, node_id, reason}`) surfaces here as
+      # `Letflow.Engine.advance_after_service_task_outcome/4`'s own
+      # `{:error, reason}` return, AFTER that function's own
+      # `repo.transaction/1` has already fully returned (and, since we're in
+      # this branch, already rolled back). This is deliberately NOT handled
+      # inside `Letflow.Engine.do_persist_service_task_advance/10`'s own
+      # inline clause any more -- that clause runs nested inside this same
+      # still-open outer transaction, so recording the audit there would
+      # have been rolled back right along with the rest of the failed
+      # attempt (same defect class TEST-DESIGNER proved for site 3 against
+      # real Postgres). Recording it here, once
+      # `advance_after_service_task_outcome/4` has genuinely returned, is a
+      # real, independent write.
+      {:error, {:invalid_form_schema, node_id, form_schema_reason}} = error ->
+        maybe_audit_task_activation_rejection(
+          dispatch_id,
+          node_id,
+          form_schema_reason,
+          tenant_schema
+        )
+
+        error
+
+      {:error, reason} ->
+        {:error, reason}
+    end
+  end
+
+  # ISS-0784 follow-up fix -- re-fetches the dispatch row (no lock; the
+  # locked read inside `advance_after_service_task_outcome/4`'s own
+  # transaction is long gone by the time this runs, that transaction having
+  # already returned) purely to recover `instance_id`, the one piece of
+  # context the `{:error, reason}` return does not carry. Best-effort like
+  # the helper it calls: a `nil` row is a no-op, not a crash.
+  defp maybe_audit_task_activation_rejection(
+         dispatch_id,
+         node_id,
+         form_schema_reason,
+         tenant_schema
+       ) do
+    case Repo.get(ServiceTaskDispatch, dispatch_id, prefix: tenant_schema) do
+      nil ->
+        :ok
+
+      %ServiceTaskDispatch{instance_id: instance_id} ->
+        Letflow.Engine.record_task_activation_rejection_audit(
+          instance_id,
+          node_id,
+          form_schema_reason,
+          EventStore.platform_actor_id(),
+          tenant_schema
+        )
     end
   end
 

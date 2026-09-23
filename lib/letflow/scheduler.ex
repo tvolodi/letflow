@@ -496,8 +496,12 @@ defmodule Letflow.Scheduler do
       end
 
     case result do
-      {:ok, :fired} -> :fired
-      {:ok, :already_final} -> :already_final
+      {:ok, :fired} ->
+        :fired
+
+      {:ok, :already_final} ->
+        :already_final
+
       # REQ-187 design doc §7.2 -- a real SCH-03 race (the instance became
       # terminal via a concurrent cancel_instance/3/completion between this
       # timer's own claim and advance_after_timer_fired/3's own
@@ -505,8 +509,56 @@ defmodule Letflow.Scheduler do
       # BEFORE the generic {:error, _reason} catch-all below so it never
       # wrongly increments fire_error_count / eventually lands the timer in
       # dlq_entries.
-      {:error, {:instance_not_active, _status}} -> :already_final
-      {:error, _reason} -> safe_record_fire_failure(timer_id, tenant_schema)
+      {:error, {:instance_not_active, _status}} ->
+        :already_final
+
+      # ISS-0784 follow-up fix -- a task-activation rejection
+      # (`Letflow.Engine.TaskActivation.resolve_form_schema/1`'s
+      # `{:invalid_form_schema, node_id, reason}`) surfaces here as
+      # `fire_timer/2`'s own `{:error, reason}` return, AFTER its
+      # `Repo.transaction/1` has already fully returned (and, since we're in
+      # this branch, already rolled back). This is deliberately NOT handled
+      # inside `Letflow.Engine.persist_timer_fired_advance/7`'s own inline
+      # clause any more -- TEST-DESIGNER proved against real Postgres that
+      # doing so there just wrote into `fire_timer/2`'s own still-open outer
+      # transaction, and the audit row was rolled back right along with the
+      # rest of the failed attempt. Recording it here, once `fire_timer/2`
+      # has genuinely returned, is a real, independent write.
+      {:error, {:invalid_form_schema, node_id, form_schema_reason}} ->
+        maybe_audit_task_activation_rejection(
+          timer_id,
+          node_id,
+          form_schema_reason,
+          tenant_schema
+        )
+
+        safe_record_fire_failure(timer_id, tenant_schema)
+
+      {:error, _reason} ->
+        safe_record_fire_failure(timer_id, tenant_schema)
+    end
+  end
+
+  # ISS-0784 follow-up fix -- re-fetches the timer (no lock; `fire_timer/2`'s
+  # own locked read is long gone by the time this runs, its transaction
+  # having already returned) purely to recover `instance_id`, the one piece
+  # of context `fire_timer/2`'s `{:error, reason}` return does not carry.
+  # Best-effort like the helper it calls: a `nil` timer (implausible --
+  # `fire_timer/2` just proved this row existed a moment ago -- but not
+  # impossible if it's since been deleted) is a no-op, not a crash.
+  defp maybe_audit_task_activation_rejection(timer_id, node_id, form_schema_reason, tenant_schema) do
+    case Repo.get(Timer, timer_id, prefix: tenant_schema) do
+      nil ->
+        :ok
+
+      %Timer{instance_id: instance_id} ->
+        Letflow.Engine.record_task_activation_rejection_audit(
+          instance_id,
+          node_id,
+          form_schema_reason,
+          EventStore.platform_actor_id(),
+          tenant_schema
+        )
     end
   end
 

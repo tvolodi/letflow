@@ -37,12 +37,14 @@ defmodule Letflow.Engine.ServiceTaskWiringTest do
 
   import Ecto.Query
 
+  alias Letflow.Audit
   alias Letflow.Definitions
   alias Letflow.Engine
   alias Letflow.Engine.ServiceTaskDispatcher
   alias Letflow.Engine.ServiceTaskDispatcher.ServiceTaskDispatch
   alias Letflow.Engine.Task, as: EngineTask
   alias Letflow.Engine.TokenRecord
+  alias Letflow.EventStore
   alias Letflow.EventStore.Event
   alias Letflow.EventStore.InstanceProjection
   alias Letflow.TenantFixture
@@ -157,6 +159,41 @@ defmodule Letflow.Engine.ServiceTaskWiringTest do
         %{"id" => "e1", "source" => "start", "target" => "ht"},
         %{"id" => "e2", "source" => "ht", "target" => "svc"},
         %{"id" => "e3", "source" => "svc", "target" => "end"}
+      ]
+    }
+  end
+
+  # ISS-0784 site 4 fixture -- START -> SERVICE_TASK(endpoint) ->
+  # HUMAN_TASK(malformed form_schema) -> END. `ServiceTaskDispatcher.poll_and_dispatch/1`
+  # resolving the SERVICE_TASK dispatch row against a real (test-server)
+  # 2xx response advances the hop chain straight into
+  # `TaskActivation.append_multi_from_existing_records/7` for the HUMAN_TASK
+  # node, which rejects the malformed `form_schema` -- surfacing at
+  # `do_persist_service_task_advance/10`'s own inline
+  # `{:error, _failed_step, reason, _changes} -> ...` clause (design §2 row 4),
+  # the sibling of `timer_wiring_test.exs`'s own site-3 fixture, proving the
+  # ISS-0784 follow-up fix generalizes to the service-task-outcome call site
+  # too, not just the timer-fired one.
+  defp graph_service_task_then_malformed_form_schema_task_end(endpoint, form_schema) do
+    %{
+      "nodes" => [
+        %{"id" => "start", "node_type" => "START"},
+        %{
+          "id" => "svc",
+          "node_type" => "SERVICE_TASK",
+          "attributes" => %{"endpoint" => endpoint, "timeout_ms" => 5_000}
+        },
+        %{
+          "id" => "task",
+          "node_type" => "HUMAN_TASK",
+          "attributes" => %{"role" => "approver", "form_schema" => form_schema}
+        },
+        %{"id" => "end", "node_type" => "END"}
+      ],
+      "edges" => [
+        %{"id" => "e1", "source" => "start", "target" => "svc"},
+        %{"id" => "e2", "source" => "svc", "target" => "task"},
+        %{"id" => "e3", "source" => "task", "target" => "end"}
       ]
     }
   end
@@ -1097,6 +1134,83 @@ defmodule Letflow.Engine.ServiceTaskWiringTest do
       # design's own "one Regex.replace/3 call" minimal scope).
       assert rendered == "http://127.0.0.1:#{port}/hook?ref={{variables.other}}"
       refute rendered =~ "SHOULD_NOT_APPEAR"
+    end
+  end
+
+  # ---------------------------------------------------------------------------------
+  # ISS-0784 site 4 -- `do_persist_service_task_advance/10`'s inline
+  # `{:error, _failed_step, reason, _changes}` clause (design §2 row 4).
+  # TEST-DESIGNER's own root-cause writeup (`test/specs/ISS-0784.md`) named
+  # this site as sharing the identical defect class site 3 already proved
+  # against real Postgres (`timer_wiring_test.exs`'s own "ISS-0784 site 3"
+  # describe block), by construction, without adding its own repro this
+  # requires the heavier HTTP-test-server fixture. This describe block adds
+  # that direct repro -- proving ELIXIR-DEV's fix (moving the audit write
+  # from inside `do_persist_service_task_advance/10`'s own inline clause out
+  # to `ServiceTaskDispatcher.call_advance_after_service_task_outcome/3`,
+  # strictly after `Engine.advance_after_service_task_outcome/4`'s own
+  # transaction has fully returned) actually generalizes to this call site,
+  # not just site 3's.
+  # ---------------------------------------------------------------------------------
+
+  describe "ISS-0784 site 4: service-task-outcome rejection audited with platform actor_id" do
+    test "poll_and_dispatch/1 into a malformed form_schema records the audit entry" do
+      enable_ssrf_bypass()
+      %{url: server_url} = WebhookTestServer.start(200, ~s({"ok":true}))
+
+      %{schema_name: schema_name} = provisioned_tenant()
+
+      definition =
+        active_definition!(
+          schema_name,
+          graph_service_task_then_malformed_form_schema_task_end(
+            server_url,
+            %{"properties" => "not-an-object"}
+          )
+        )
+
+      assert {:ok, result} = Engine.create(base_attrs(definition), prefix: schema_name)
+      instance_id = result.instance_id
+
+      assert [%ServiceTaskDispatch{status: "pending"}] = dispatches_for(schema_name, instance_id)
+
+      # ServiceTaskDispatcher.poll_and_dispatch/1 is the real entry point --
+      # attempt_dispatch/2 (its own, already-committed transaction) resolves
+      # the real HTTP call to :advance, then call_advance_after_service_task_outcome/3
+      # re-enters the engine strictly after that transaction has returned,
+      # which is exactly where the ISS-0784 follow-up fix now issues the
+      # audit write (see service_task_dispatcher.ex).
+      assert %{claimed: 1, advanced: 0, retried: 0, given_up: 0} =
+               ServiceTaskDispatcher.poll_and_dispatch(schema_name)
+
+      # INV-ISS0784-2 -- the rolled-back attempt's own rows never reappear:
+      # no HUMAN_TASK "task" row was ever committed. The dispatch row itself
+      # stays "advanced" (set by handle_success/3 inside attempt_dispatch/2's
+      # own, separate, already-committed transaction -- untouched by this
+      # rollback, matching do_persist_service_task_advance/10's own
+      # moduledoc note that it never re-updates that status).
+      refute Enum.any?(Repo.all(EngineTask, prefix: schema_name), &(&1.node_id == "task"))
+      assert [%ServiceTaskDispatch{status: "advanced"}] = dispatches_for(schema_name, instance_id)
+
+      assert [entry] =
+               Enum.filter(
+                 Repo.all(Audit.Entry, prefix: schema_name),
+                 &(&1.action == "task_activation.rejected")
+               )
+
+      assert entry.resource_type == "instance"
+      assert entry.resource_id == instance_id
+      # The genuinely distinct assertion this test exists for, mirroring
+      # site 3's own: a system-driven cascade's actor_id is the platform
+      # actor, not any real user's actor_id.
+      assert entry.actor_id == EventStore.platform_actor_id()
+      assert entry.before_state == nil
+      assert entry.after_state["node_id"] == "task"
+
+      assert entry.after_state["reason"] == %{
+               "code" => "not_well_formed",
+               "path" => ["properties"]
+             }
     end
   end
 end

@@ -40,12 +40,14 @@ defmodule Letflow.Engine.TimerWiringTest do
 
   import Ecto.Query
 
+  alias Letflow.Audit
   alias Letflow.Definitions
   alias Letflow.Engine
   alias Letflow.Engine.Reconstruction
   alias Letflow.Engine.Task, as: EngineTask
   alias Letflow.Engine.TaskActivation
   alias Letflow.Engine.TokenRecord
+  alias Letflow.EventStore
   alias Letflow.EventStore.Event
   alias Letflow.EventStore.InstanceProjection
   alias Letflow.Scheduler
@@ -259,6 +261,39 @@ defmodule Letflow.Engine.TimerWiringTest do
         %{"id" => "e4", "source" => "task_a", "target" => "join"},
         %{"id" => "e5", "source" => "tmr_b", "target" => "join"},
         %{"id" => "e6", "source" => "join", "target" => "end"}
+      ]
+    }
+  end
+
+  # ISS-0784 site 3 fixture -- START -> TIMER(duration) -> HUMAN_TASK(malformed
+  # form_schema) -> END. Firing the timer (a system-driven cascade, no HTTP
+  # request in scope) advances the hop chain straight into
+  # `TaskActivation.append_multi_from_existing_records/7` for the HUMAN_TASK
+  # node, which rejects the malformed `form_schema` -- surfacing at
+  # `persist_timer_fired_advance/7`'s own inline
+  # `{:error, _failed_step, reason, _changes} -> ...` clause (design §2 row 3),
+  # the one call site that sources `actor_id` from
+  # `EventStore.platform_actor_id()` rather than any real user's `actor_id`.
+  defp graph_timer_then_malformed_form_schema_task_end(duration, form_schema) do
+    %{
+      "nodes" => [
+        %{"id" => "start", "node_type" => "START"},
+        %{
+          "id" => "tmr",
+          "node_type" => "TIMER",
+          "attributes" => %{"duration_iso8601" => duration}
+        },
+        %{
+          "id" => "task",
+          "node_type" => "HUMAN_TASK",
+          "attributes" => %{"role" => "approver", "form_schema" => form_schema}
+        },
+        %{"id" => "end", "node_type" => "END"}
+      ],
+      "edges" => [
+        %{"id" => "e1", "source" => "start", "target" => "tmr"},
+        %{"id" => "e2", "source" => "tmr", "target" => "task"},
+        %{"id" => "e3", "source" => "task", "target" => "end"}
       ]
     }
   end
@@ -836,6 +871,85 @@ defmodule Letflow.Engine.TimerWiringTest do
 
       [final_timer] = timers_for(schema_name, instance_id)
       assert final_timer.status == "fired"
+    end
+  end
+
+  # ---------------------------------------------------------------------------------
+  # ISS-0784 site 3 -- persist_timer_fired_advance/7's inline
+  # `{:error, _failed_step, reason, _changes}` clause (design §2 row 3). This
+  # is the gap REVIEWER explicitly flagged: neither shipped test (both live
+  # in engine_test.exs's "create/2 (ISS-0784)" describe block) exercises the
+  # `EventStore.platform_actor_id()` sourcing for `actor_id` -- both shipped
+  # tests only cover create/2's real-user-actor_id path (design §2 row 1).
+  # This describe block closes that gap directly: a timer fire is a
+  # system-driven cascade with no real requesting actor in scope, so
+  # asserting the resulting audit entry's actor_id equals
+  # `EventStore.platform_actor_id()` verbatim is the whole point.
+  # ---------------------------------------------------------------------------------
+
+  describe "ISS-0784 site 3: a timer-fired cascade's task-activation rejection is audited with the platform actor_id" do
+    test "TIMER fires into a HUMAN_TASK with a malformed form_schema; the audit entry's actor_id is EventStore.platform_actor_id()" do
+      %{schema_name: schema_name} = provisioned_tenant()
+
+      definition =
+        active_definition!(
+          schema_name,
+          graph_timer_then_malformed_form_schema_task_end(
+            "P0D",
+            %{"properties" => "not-an-object"}
+          )
+        )
+
+      assert {:ok, result} = Engine.create(base_attrs(definition), prefix: schema_name)
+      instance_id = result.instance_id
+
+      assert [%Timer{status: "pending"}] = timers_for(schema_name, instance_id)
+
+      # Scheduler.poll_and_fire/1 re-enters advance_after_timer_fired/3 ->
+      # persist_timer_fired_advance/7, entirely inside the scheduler's own
+      # process -- no real user actor_id is ever in scope on this path,
+      # which is exactly why this call site (design §2 row 3) sources
+      # actor_id from EventStore.platform_actor_id() instead.
+      #
+      # This is NOT a "fired" outcome: persist_timer_fired_advance/7 returns
+      # {:error, {:invalid_form_schema, ...}}, which attempt_fire/2 (scheduler.ex,
+      # ISS-303/ISS-0618 failure accounting) routes through the generic
+      # `{:error, _reason} -> safe_record_fire_failure/2` clause (not the
+      # `{:error, {:instance_not_active, _}} -> :already_final` special case),
+      # incrementing the timer's own fire_error_count in a SEPARATE, later
+      # transaction and reporting :errored back to poll_and_fire/1's tally --
+      # confirmed by first running this assertion as `%{fired: 1}` (this
+      # session's own mutation-style check, not asserted from documentation).
+      assert %{errored: 1, fired: 0} = Scheduler.poll_and_fire(schema_name)
+
+      # INV-ISS0784-2 -- the rolled-back attempt's own rows never reappear:
+      # no HUMAN_TASK "task" row was ever committed, and the timer itself
+      # (armed before the rejection, in a separate already-committed
+      # transaction) stays "pending", not "fired" -- persist_timer_fired_advance/7's
+      # own transaction (which would have flipped it) rolled back whole.
+      refute Enum.any?(Repo.all(EngineTask, prefix: schema_name), &(&1.node_id == "task"))
+      assert [%Timer{status: "pending"}] = timers_for(schema_name, instance_id)
+
+      assert [entry] =
+               Enum.filter(
+                 Repo.all(Audit.Entry, prefix: schema_name),
+                 &(&1.action == "task_activation.rejected")
+               )
+
+      assert entry.resource_type == "instance"
+      assert entry.resource_id == instance_id
+      # The genuinely distinct assertion this test exists for (REVIEWER's
+      # flagged gap): a system-driven cascade's actor_id is the platform
+      # actor, not any real user's actor_id -- no user-supplied actor_id was
+      # ever passed into this call at all.
+      assert entry.actor_id == EventStore.platform_actor_id()
+      assert entry.before_state == nil
+      assert entry.after_state["node_id"] == "task"
+
+      assert entry.after_state["reason"] == %{
+               "code" => "not_well_formed",
+               "path" => ["properties"]
+             }
     end
   end
 end

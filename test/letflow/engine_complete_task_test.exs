@@ -30,6 +30,7 @@ defmodule Letflow.EngineCompleteTaskTest do
 
   import Ecto.Query
 
+  alias Letflow.Audit
   alias Letflow.Definitions
   alias Letflow.Engine
   alias Letflow.Engine.Task, as: EngineTask
@@ -209,6 +210,40 @@ defmodule Letflow.EngineCompleteTaskTest do
     Event
     |> where([e], e.instance_id == ^instance_id and e.event_type == "TASK_COMPLETED")
     |> Repo.all(prefix: schema_name)
+  end
+
+  # ISS-0784 site 2 fixture -- START -> task_a(HUMAN_TASK, well-formed) ->
+  # task_b(HUMAN_TASK, malformed form_schema) -> END. Completing task_a
+  # drives activation of task_b, which rejects at
+  # `TaskActivation.append_multi_from_existing_records/7` inside
+  # `complete_task/3`'s own Multi (design §2 row 2) -- the whole point being
+  # that `instance_id` for the rejection-audit call is read from
+  # `changes.task.instance_id` (the already-fetched `:task` step, task_a's
+  # own row), NOT from any argument complete_task/3 was called with
+  # directly, which is the one genuinely different code path vs. site 1's
+  # create/2 (where instance_id is create/2's own 2nd positional arg).
+  defp graph_human_task_then_malformed_form_schema_task_end(form_schema) do
+    %{
+      "nodes" => [
+        %{"id" => "start", "node_type" => "START"},
+        %{
+          "id" => "task_a",
+          "node_type" => "HUMAN_TASK",
+          "attributes" => %{"role" => "approver_a"}
+        },
+        %{
+          "id" => "task_b",
+          "node_type" => "HUMAN_TASK",
+          "attributes" => %{"role" => "approver_b", "form_schema" => form_schema}
+        },
+        %{"id" => "end", "node_type" => "END"}
+      ],
+      "edges" => [
+        %{"id" => "e1", "source" => "start", "target" => "task_a"},
+        %{"id" => "e2", "source" => "task_a", "target" => "task_b"},
+        %{"id" => "e3", "source" => "task_b", "target" => "end"}
+      ]
+    }
   end
 
   # ---------------------------------------------------------------------------------
@@ -414,6 +449,68 @@ defmodule Letflow.EngineCompleteTaskTest do
   # AC5 -- moduledoc states the S4 (HTTP status mapping / IDN-03 assignee
   # authorization) scope boundary. Pure, no DB.
   # ---------------------------------------------------------------------------------
+
+  # ---------------------------------------------------------------------------------
+  # ISS-0784 site 2 -- interpret_complete_result/3's catch-all clause. Already
+  # covered end-to-end at site 1 (`engine_test.exs`'s "create/2 (ISS-0784)"
+  # describe block, real actor_id, instance_id read straight from create/2's
+  # own 2nd positional arg). This block does NOT re-derive the audit-entry
+  # field-shape assertions (action/resource_type/before_state/after_state
+  # encoding) that block already proves -- it exists solely to prove the one
+  # thing genuinely different about this call site per design §2 row 2:
+  # `instance_id` here is read out of `changes.task.instance_id` (the
+  # already-fetched `:task` Multi step, task_a's row) rather than from any
+  # argument threaded directly into complete_task/3 -- a real, distinct
+  # sourcing path worth its own assertion, not a "structurally identical,
+  # skip it" case.
+  # ---------------------------------------------------------------------------------
+
+  describe "complete_task/3 (ISS-0784) -- a cascade task-activation rejection is recorded with instance_id from changes.task" do
+    test "completing task_a triggers task_b's malformed-form_schema rejection; the audit entry's resource_id is task_a's own instance_id" do
+      %{schema_name: schema_name} = provisioned_tenant()
+
+      graph =
+        graph_human_task_then_malformed_form_schema_task_end(%{"properties" => "not-an-object"})
+
+      {instance_id, task_a} = start_instance_with_pending_task!(schema_name, graph)
+      assert task_a.node_id == "task_a"
+
+      attrs = complete_attrs()
+
+      assert {:error, {:invalid_form_schema, "task_b", {:not_well_formed, ["properties"]}}} =
+               Engine.complete_task(task_a.id, attrs, prefix: schema_name)
+
+      # INV-ISS0784-3 -- task_a itself must not have been left COMPLETED by
+      # the rolled-back attempt; the whole Multi (including task_a's own
+      # completion step) rolled back with it.
+      reloaded_task_a = Repo.get!(EngineTask, task_a.id, prefix: schema_name)
+      assert reloaded_task_a.status == :pending
+
+      # No task_b row was ever committed either.
+      refute Enum.any?(Repo.all(EngineTask, prefix: schema_name), &(&1.node_id == "task_b"))
+
+      assert [entry] =
+               Enum.filter(
+                 Repo.all(Audit.Entry, prefix: schema_name),
+                 &(&1.action == "task_activation.rejected")
+               )
+
+      assert entry.resource_type == "instance"
+      # The genuinely distinct assertion this test exists for: resource_id
+      # equals task_a's own instance_id, sourced from
+      # `changes.task.instance_id` inside interpret_complete_result/3's
+      # catch-all clause -- not from any argument complete_task/3 itself
+      # received directly (complete_task/3 is called with only a task_id).
+      assert entry.resource_id == instance_id
+      assert entry.actor_id == attrs.actor_id
+      assert entry.after_state["node_id"] == "task_b"
+
+      assert entry.after_state["reason"] == %{
+               "code" => "not_well_formed",
+               "path" => ["properties"]
+             }
+    end
+  end
 
   describe "AC5 -- moduledoc states the S4 scope boundary for complete_task/3" do
     test "names both HTTP status-code mapping and IDN-03 assignee authorization as out of scope" do

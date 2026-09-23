@@ -24,6 +24,7 @@ defmodule Letflow.EngineTest do
 
   use Letflow.DataCase, async: false
 
+  alias Letflow.Audit
   alias Letflow.Definitions
   alias Letflow.Engine
   alias Letflow.EventStore.InstanceProjection
@@ -1020,6 +1021,66 @@ defmodule Letflow.EngineTest do
                Engine.create(base_attrs(definition), prefix: schema_name)
 
       assert task_count(schema_name) == 0
+    end
+  end
+
+  describe "create/2 (ISS-0784) -- a task-activation rejection is recorded as an audit entry after rollback" do
+    test "a JSON-array form_schema rejection produces exactly one task_activation.rejected audit entry, readable after rollback" do
+      %{schema_name: schema_name} = provisioned_tenant()
+
+      definition =
+        active_definition!(schema_name, graph_start_human_task_end_with_form_schema([1, 2, 3]))
+
+      attrs = base_attrs(definition)
+
+      assert {:error, {:invalid_form_schema, "task", {:not_well_formed, []}}} =
+               Engine.create(attrs, prefix: schema_name)
+
+      # INV-ISS0784-2 -- the rolled-back Multi's own rows never reappear, but
+      # the audit row itself is independently committed.
+      assert task_count(schema_name) == 0
+      assert projection_count(schema_name) == 0
+
+      assert [entry] =
+               Enum.filter(
+                 Repo.all(Audit.Entry, prefix: schema_name),
+                 &(&1.action == "task_activation.rejected")
+               )
+
+      assert entry.resource_type == "instance"
+      # INV-ISS0784-1 -- resource_id is the instance's own id; create/2
+      # generates it internally and never returns it on the error path, so
+      # this only asserts it's a well-formed UUID (the specific value has no
+      # caller-observable oracle here).
+      assert {:ok, _} = Ecto.UUID.cast(entry.resource_id)
+      assert entry.actor_id == attrs.actor_id
+      assert entry.before_state == nil
+      assert entry.after_state["node_id"] == "task"
+      assert entry.after_state["reason"] == %{"code" => "not_well_formed", "path" => []}
+    end
+
+    test "a \"properties\" shape rejection encodes the offending path in after_state" do
+      %{schema_name: schema_name} = provisioned_tenant()
+
+      definition =
+        active_definition!(
+          schema_name,
+          graph_start_human_task_end_with_form_schema(%{"properties" => "not-an-object"})
+        )
+
+      assert {:error, {:invalid_form_schema, "task", {:not_well_formed, ["properties"]}}} =
+               Engine.create(base_attrs(definition), prefix: schema_name)
+
+      assert [entry] =
+               Enum.filter(
+                 Repo.all(Audit.Entry, prefix: schema_name),
+                 &(&1.action == "task_activation.rejected")
+               )
+
+      assert entry.after_state["reason"] == %{
+               "code" => "not_well_formed",
+               "path" => ["properties"]
+             }
     end
   end
 

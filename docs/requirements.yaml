@@ -28762,7 +28762,7 @@ requirements:
   - id: REQ-388
     title: "Audit-log entry for a denied cross-tenant or otherwise-failed instance-attachment access attempt"
     owner: ELIXIR-DEV
-    status: pending
+    status: done
     stage: S6
     impl_order: 748  # letflow-queue task id, GH#1636. Registered 2026-09-20 by ORCH;
       # corrects a fabricated/self-assigned id (745) that was never a real

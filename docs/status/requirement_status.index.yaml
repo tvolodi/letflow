@@ -4610,8 +4610,19 @@ volumes:
     path: docs/status/requirement_status.v22.yaml
     status: current
     opened: 2026-09-22
-    entries: 3
+    entries: 4
     note: >
+      Incremented to 4 by DOC-UPDATER's own merge of origin/main into
+      feature/WF02-REQ388-20260923 (Step 6/7, resolving a merge conflict in
+      this index caused by REQ-386's concurrent merge to main landing its
+      own two events -- started and done -- in this same volume before
+      REQ-388's done-event append was pushed). `grep -c "^  - req:"
+      docs/status/requirement_status.v22.yaml` = 4 on-disk entries,
+      recounted directly rather than assumed: REQ-386 started, REQ-386
+      done, ISS-0784 SCOPE-CHANGE done, REQ-388 done. 269 lines / 15691
+      bytes, well under the 1200-line/120000-byte roll ceiling, so no roll
+      triggered. Prior notes preserved below verbatim.
+
       Incremented to 3 during WF02-REQ386-20260923's own Step Final rebase
       onto origin/main (second conflict, Step 6's own done-event append):
       composed REQ-386's done event (2026-09-23T00:53:45Z) chronologically

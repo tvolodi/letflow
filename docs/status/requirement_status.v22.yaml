@@ -242,3 +242,28 @@ history:
       No docs/migration/stage-N-*.md or decisions/*.md file was named by
       this issue's acceptance criteria. Merged via PR on
       feature/WF03-ISS0784-20260922.
+  - req: REQ-388
+    event: done
+    agent: DOC-UPDATER
+    at: "2026-09-23T03:28:33Z"
+    note: >
+      Audit-log entry for a denied cross-tenant or otherwise-failed instance-
+      attachment access attempt, filed from the GUI-review UAT run
+      (test/uat-reports/gui-review-2026-09-20-attachment-cross-tenant-probe.md,
+      third of three requirements from that finding -- REQ-386/REQ-387 remain
+      pending). Adds an `Letflow.Audit` write on the denied branches
+      (cross-tenant and cross-instance-same-tenant) of
+      `fetch_scoped_attachment_content/3` in
+      `lib/letflow/routers/instances.ex`, without altering the existing
+      byte-identical `Response.not_found(conn)` shape (EO-001) -- the audit
+      write fires strictly after the response tuple is decided, matching this
+      codebase's existing audit-write idiom. Design:
+      lib/letflow/design/req388-attachment-access-denial-audit.md. No
+      docs/migration/stage-N-*.md or decisions/*.md file was named by this
+      requirement's acceptance criteria; web/src/pages/admin/AuditLogPage.tsx
+      needed no frontend change per its own AC, confirmed by the diff (no
+      web/ files touched). Full pipeline history -- CODE-DESIGNER,
+      SECURITY-REVIEWER, REVIEWER, TEST-DESIGNER (found and fixed a
+      design-doc arity mismatch), TEST-RUNNER, RELEASE-VALIDATOR (final
+      verdict PASS, mergeable, architecturally sound) -- on
+      feature/WF02-REQ388-20260923 (tip f4a9b9c9), merged via PR.

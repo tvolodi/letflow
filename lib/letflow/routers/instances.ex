@@ -298,12 +298,15 @@ defmodule Letflow.Routers.Instances do
 
   use Letflow.Api.AuthorizedRouter
 
+  require Logger
+
   alias Letflow.Api.Context
   alias Letflow.Api.Error
   alias Letflow.Api.Pagination
   alias Letflow.Api.Response
   alias Letflow.Api.Validation
   alias Letflow.Api.Validation.FieldConstraint
+  alias Letflow.Audit
   alias Letflow.Engine
   alias Letflow.Engine.PinRebind
   alias Letflow.Engine.PinResolver
@@ -1139,7 +1142,7 @@ defmodule Letflow.Routers.Instances do
 
     with {:ok, instance_id} <- cast_instance_id(raw_id),
          {:ok, attachment, artifact} <-
-           fetch_scoped_attachment_content(raw_attachment_id, instance_id, opts) do
+           fetch_scoped_attachment_content(raw_attachment_id, instance_id, opts, conn) do
       send_attachment_content(conn, attachment, artifact)
     else
       {:error, :not_found} ->
@@ -1169,21 +1172,30 @@ defmodule Letflow.Routers.Instances do
   # attachment_id (:invalid_id) folds to the same tuple too, matching
   # Letflow.Routers.Dlq's own :invalid_id -> not_found precedent for a
   # cross-tenant-probeable UUID.
-  @spec fetch_scoped_attachment_content(String.t(), Ecto.UUID.t(), keyword()) ::
+  @spec fetch_scoped_attachment_content(String.t(), Ecto.UUID.t(), keyword(), Plug.Conn.t()) ::
           {:ok, Attachment.t(), Artifact.t()}
           | {:error, :not_found | :content_missing | :not_available}
-  defp fetch_scoped_attachment_content(raw_attachment_id, instance_id, opts) do
+  defp fetch_scoped_attachment_content(raw_attachment_id, instance_id, opts, conn) do
     case Attachments.get_content(raw_attachment_id, opts) do
       {:ok, %Attachment{instance_id: ^instance_id} = attachment, artifact} ->
         {:ok, attachment, artifact}
 
-      {:ok, %Attachment{}, _artifact} ->
+      {:ok, %Attachment{} = attachment, _artifact} ->
+        record_attachment_access_denied_audit(
+          attachment.id,
+          attachment,
+          instance_id,
+          opts,
+          conn
+        )
+
         {:error, :not_found}
 
       {:error, :invalid_id} ->
         {:error, :not_found}
 
       {:error, :not_found} ->
+        record_attachment_access_denied_audit(raw_attachment_id, nil, instance_id, opts, conn)
         {:error, :not_found}
 
       {:error, :content_missing} ->
@@ -1191,6 +1203,66 @@ defmodule Letflow.Routers.Instances do
 
       {:error, :not_available} ->
         {:error, :not_available}
+    end
+  end
+
+  # REQ-388 design §2/§5 -- one Letflow.Audit entry on each denied branch of a
+  # GET .../attachments/:attachment_id fetch (cross-tenant/never-issued,
+  # fused per §3, and cross-instance-same-tenant). Reuses
+  # TenantSettings.maybe_record_rejected_keys/5's own synchronous,
+  # same-process, log-and-swallow idiom (§1) -- no async/Task.start
+  # mechanism exists elsewhere in this codebase for an audit write. Both call
+  # sites do the exact same shape of work (one Audit.insert_entry/3 call),
+  # so this design's own addition does not introduce a new timing
+  # distinguisher between the two audited branches (design §4).
+  @spec record_attachment_access_denied_audit(
+          String.t(),
+          Attachment.t() | nil,
+          Ecto.UUID.t(),
+          keyword(),
+          Plug.Conn.t()
+        ) :: :ok
+  defp record_attachment_access_denied_audit(
+         attachment_id,
+         found_attachment,
+         instance_id,
+         opts,
+         conn
+       ) do
+    prefix = Keyword.fetch!(opts, :prefix)
+    reason = if found_attachment, do: "cross_instance", else: "cross_tenant_or_not_found"
+
+    attrs = %{
+      actor_id: conn.assigns.auth_context.user_id,
+      action: "attachment.access_denied",
+      resource_type: "attachment",
+      resource_id: attachment_id,
+      before_state: nil,
+      after_state: %{
+        "instance_id" => instance_id,
+        "reason" => reason
+      },
+      trace_id: conn.assigns[:trace_id]
+    }
+
+    case Audit.insert_entry(Letflow.Repo, attrs, prefix) do
+      {:ok, _entry} ->
+        :ok
+
+      {:error, error_reason} ->
+        # Best-effort, log-and-swallow (design §5, mirroring
+        # TenantSettings.maybe_record_rejected_keys/5 and
+        # Engine.record_task_activation_rejection_audit/5's own INV-8
+        # discipline) -- an audit-write failure must never turn this
+        # already-decided 404 into a 500, and must never delay the caller
+        # beyond whatever insert_entry/3 itself takes.
+        Logger.error(
+          "attachment.access_denied audit write failed " <>
+            "(attachment_id=#{attachment_id}, instance_id=#{instance_id}): " <>
+            inspect(error_reason)
+        )
+
+        :ok
     end
   end
 
@@ -1290,12 +1362,17 @@ defmodule Letflow.Routers.Instances do
   # ── GET /instances/:id/attachments/:attachment_id/link-content (REQ-386 design §3.2) ──
 
   # Deliberately a separate route/handler from handle_get_attachment_content/3
-  # above -- not a modification of it. The existing route, its existing
-  # handler, and every function it calls (fetch_scoped_attachment_content/3
-  # included) are byte-for-byte unmodified by this requirement; this handler
-  # calls the same function a second time, from a second call site, with the
-  # attachment id recovered from a verified token rather than the raw path
-  # segment.
+  # above -- not a modification of it. The existing route and its existing
+  # handler are unmodified by this requirement; this handler calls the same
+  # fetch_scoped_attachment_content/4 helper a second time, from a second
+  # call site, with the attachment id recovered from a verified token rather
+  # than the raw path segment. NOTE (merge of REQ-386/REQ-388, both
+  # concurrently in flight against this same helper): REQ-388 widened
+  # fetch_scoped_attachment_content/3 to /4 to carry `conn` through to its
+  # own denied-access audit write (record_attachment_access_denied_audit/5)
+  # -- this call site passes `conn` too, so a denied fetch through the
+  # signed-link path is audited exactly the same way as one through the
+  # plain-GET path, with no separate/duplicated audit logic needed here.
   defp handle_get_attachment_link_content(conn, raw_id, raw_attachment_id) do
     opts = conn.assigns.scoped_opts
     tenant_id = conn.assigns.auth_context.tenant_id
@@ -1306,7 +1383,7 @@ defmodule Letflow.Routers.Instances do
          {:ok, decoded_attachment_id} <- verify_link_token(link_token, tenant_id),
          :ok <- check_attachment_id_matches(decoded_attachment_id, raw_attachment_id),
          {:ok, attachment, artifact} <-
-           fetch_scoped_attachment_content(decoded_attachment_id, instance_id, opts) do
+           fetch_scoped_attachment_content(decoded_attachment_id, instance_id, opts, conn) do
       send_attachment_content(conn, attachment, artifact)
     else
       {:error, :invalid_instance_id} ->

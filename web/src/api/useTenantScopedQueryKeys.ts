@@ -98,6 +98,7 @@ export function useTenantScopedQueryKeys() {
       all: () => queryKeys.entities.all(tenantId),
       definition: queryKeys.entities.definition.bind(null, tenantId),
       records: queryKeys.entities.records.bind(null, tenantId),
+      browserRecords: queryKeys.entities.browserRecords.bind(null, tenantId),
     },
     modules: {
       all: () => queryKeys.modules.all(tenantId),

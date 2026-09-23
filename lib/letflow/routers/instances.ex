@@ -1362,12 +1362,17 @@ defmodule Letflow.Routers.Instances do
   # ── GET /instances/:id/attachments/:attachment_id/link-content (REQ-386 design §3.2) ──
 
   # Deliberately a separate route/handler from handle_get_attachment_content/3
-  # above -- not a modification of it. The existing route, its existing
-  # handler, and every function it calls (fetch_scoped_attachment_content/3
-  # included) are byte-for-byte unmodified by this requirement; this handler
-  # calls the same function a second time, from a second call site, with the
-  # attachment id recovered from a verified token rather than the raw path
-  # segment.
+  # above -- not a modification of it. The existing route and its existing
+  # handler are unmodified by this requirement; this handler calls the same
+  # fetch_scoped_attachment_content/4 helper a second time, from a second
+  # call site, with the attachment id recovered from a verified token rather
+  # than the raw path segment. NOTE (merge of REQ-386/REQ-388, both
+  # concurrently in flight against this same helper): REQ-388 widened
+  # fetch_scoped_attachment_content/3 to /4 to carry `conn` through to its
+  # own denied-access audit write (record_attachment_access_denied_audit/5)
+  # -- this call site passes `conn` too, so a denied fetch through the
+  # signed-link path is audited exactly the same way as one through the
+  # plain-GET path, with no separate/duplicated audit logic needed here.
   defp handle_get_attachment_link_content(conn, raw_id, raw_attachment_id) do
     opts = conn.assigns.scoped_opts
     tenant_id = conn.assigns.auth_context.tenant_id
@@ -1378,7 +1383,7 @@ defmodule Letflow.Routers.Instances do
          {:ok, decoded_attachment_id} <- verify_link_token(link_token, tenant_id),
          :ok <- check_attachment_id_matches(decoded_attachment_id, raw_attachment_id),
          {:ok, attachment, artifact} <-
-           fetch_scoped_attachment_content(decoded_attachment_id, instance_id, opts) do
+           fetch_scoped_attachment_content(decoded_attachment_id, instance_id, opts, conn) do
       send_attachment_content(conn, attachment, artifact)
     else
       {:error, :invalid_instance_id} ->

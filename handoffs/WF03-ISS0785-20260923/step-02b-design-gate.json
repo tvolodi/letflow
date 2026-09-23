@@ -1,0 +1,33 @@
+{
+  "handoff_id": "WF03-ISS0785-20260923-step-02b",
+  "run_id": "WF03-ISS0785-20260923",
+  "workflow": "WF-03",
+  "step": "Step 2b (Design Gate)",
+  "to_agent": "CODE-DESIGN-VALIDATOR",
+  "from_agent": "ORCH",
+  "status": "PENDING",
+  "created_at": "2026-09-23T04:21:55Z",
+  "started_at": "2026-09-23T04:21:55Z",
+  "context": {
+    "branch_name": "feature/WF03-ISS0785-20260923",
+    "issue_id": "ISS-0785",
+    "design_doc": "lib/letflow/design/iss0785-attachment-instance-check.md",
+    "artifacts_in": [
+      "docs/issues/ISS-0785.yaml",
+      "lib/letflow/design/iss0785-attachment-instance-check.md",
+      "lib/letflow/repository/attachments.ex",
+      "lib/letflow/routers/instances.ex",
+      "handoffs/WF03-ISS0785-20260923/step-02-code-designer.json"
+    ]
+  },
+  "task": {
+    "description": "Execute Step 2b (Design Gate -- HARD GATE) for ISS-0785 per WF-03's Step 2 procedure.\n\nWorkspace: c:\\Users\\tvolo\\dev\\ai-dala\\letflow\nBranch: feature/WF03-ISS0785-20260923\n\nYou are the independent validator. Read the design document directly (lib/letflow/design/iss0785-attachment-instance-check.md) and the issue acceptance criteria (docs/issues/ISS-0785.yaml). Do NOT rely on CODE-DESIGNER's result.summary as a substitute for reading the actual design doc.\n\nAlso read lib/letflow/repository/attachments.ex and lib/letflow/routers/instances.ex to verify the design against the actual source.\n\nCheck against WF-03's Step 2 acceptance criteria:\n1. Does the design address EVERY acceptance criterion in docs/issues/ISS-0785.yaml?\n2. Are ALL function signatures fully specified (name, inputs, outputs, error cases)?\n3. Is error handling shape explicit ({:error, :not_found} for denied paths)?\n4. Cross-module dependencies listed?\n5. Is there NO implementation code (no function bodies, no actual .ex code blocks)?\n6. Does the `with` chain order guarantee the instance check fires BEFORE the blob read?\n7. Is INV-5 (response-shape indistinguishability) explicitly preserved in the design?\n8. Does the design avoid changing `get/2`'s signature (constraint from ISS-0785.yaml)?\n\nIf PASS: complete handoff with PASS verdict and what you independently verified.\nIf FAIL: list exactly which criteria are unmet, so CODE-DESIGNER can rework.\n\nOutput:\n1. Write handoffs/WF03-ISS0785-20260923/step-02b-design-gate.json with status COMPLETED, result.status PASS or FAIL\n2. git add handoffs/WF03-ISS0785-20260923/step-02b-design-gate.json\n3. git commit -m 'fix(WF03-ISS0785-20260923): Step 2b -- design gate [PASS/FAIL]'\n4. git push\n\nReport back: PASS or FAIL with your independent findings",
+    "acceptance_criteria": [
+      "Independently verified design doc against issue acceptance criteria (not from CODE-DESIGNER's self-report)",
+      "Verified no implementation code in design doc",
+      "Verified with chain order: instance check before blob read",
+      "Verified INV-5 preservation argument is present and sound"
+    ]
+  },
+  "result": null
+}

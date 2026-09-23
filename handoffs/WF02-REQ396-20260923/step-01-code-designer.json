@@ -35,5 +35,27 @@
       "No implementation code"
     ]
   },
-  "result": null
+  "result": {
+    "status": "COMPLETED",
+    "verdict": "PASS",
+    "completed_at": "2026-09-23T19:15:00Z",
+    "approach": "Option A — new attributes on :HUMAN_TASK",
+    "design_doc": "lib/letflow/design/req396-human-task-escalation-timer.md",
+    "key_decisions": [
+      "Option A chosen over Option B: no new node type; attributes on :HUMAN_TASK follow CHK-09/CHK-12 pattern",
+      "New attributes: escalation_timer_duration (ISO-8601) and escalation_role (string), co-required",
+      "New CHK-21 check_human_task_escalation/1 with 3 violation codes: invalid_escalation_timer, missing_escalation_role, missing_escalation_timer_duration",
+      "New pending_event {:escalation_timer_armed, token_id, node_id} emitted by dispatch_human_task/3 when attribute present",
+      "New transition_event {:escalation_timer_fired, token_id} handled by dispatch_escalation_timer_fired/4",
+      "do_fire/2 routes timer_type: 'escalation' to advance_after_escalation_timer_fired/3 (new Engine function)",
+      "Audit ordering enforced by Ecto.Multi step order: cancel original task BEFORE new task creation",
+      "Original task non-actionable status: :cancelled (existing atom, no new atom needed)",
+      "timer_type 'escalation' already in @timer_types in Letflow.Scheduler.Timer",
+      "process_route_approval.yaml: ops-review gets new attributes; fallback-ops-review retargeted to ceo-approval",
+      "3 open questions flagged for ELIXIR-DEV: OQ-1 (P0D validity), OQ-2 (cancel_reason column), OQ-3 (separate ESCALATION_TIMER_FIRED domain event)"
+    ],
+    "reviewer_flags": [
+      "Option A vs Option B trade-off requires REVIEWER sign-off per design doc §2.2"
+    ]
+  }
 }

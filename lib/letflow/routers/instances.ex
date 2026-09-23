@@ -1198,7 +1198,23 @@ defmodule Letflow.Routers.Instances do
         {:error, :not_found}
 
       {:error, :not_found} ->
-        record_attachment_access_denied_audit(raw_attachment_id, nil, instance_id, opts, conn)
+        # ISS-0785: get_content/3 now rejects cross-instance before the blob read, so
+        # both cross-instance and cross-tenant/never-issued land here as :not_found.
+        # Do a cheap tenant-scoped existence check to restore the audit distinction.
+        found_attachment =
+          case Attachments.get(raw_attachment_id, opts) do
+            {:ok, attachment} -> attachment
+            _ -> nil
+          end
+
+        record_attachment_access_denied_audit(
+          raw_attachment_id,
+          found_attachment,
+          instance_id,
+          opts,
+          conn
+        )
+
         {:error, :not_found}
 
       {:error, :content_missing} ->

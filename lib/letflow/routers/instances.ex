@@ -1162,7 +1162,7 @@ defmodule Letflow.Routers.Instances do
   # INV-RT-1 (this codebase's project-wide route-layer boundary -- no
   # Repo.* call may be issued directly from lib/letflow/routers/, enforced
   # by test/letflow/routers/req078_supporting_routes_test.exs's T-19 test):
-  # both the byte content lookup (Attachments.get_content/2's own second
+  # both the byte content lookup (Attachments.get_content/3's own second
   # Repo.get against repository_artifacts) and this handler's two 404
   # checks are delegated to the context module rather than issued here.
   #
@@ -1176,10 +1176,13 @@ defmodule Letflow.Routers.Instances do
           {:ok, Attachment.t(), Artifact.t()}
           | {:error, :not_found | :content_missing | :not_available}
   defp fetch_scoped_attachment_content(raw_attachment_id, instance_id, opts, conn) do
-    case Attachments.get_content(raw_attachment_id, opts) do
+    case Attachments.get_content(raw_attachment_id, instance_id, opts) do
       {:ok, %Attachment{instance_id: ^instance_id} = attachment, artifact} ->
         {:ok, attachment, artifact}
 
+      # defense-in-depth: instance check now handled upstream in get_content/3;
+      # get_content/3 returns {:error, :not_found} for cross-instance before
+      # reaching here -- kept per design §5.1, AC5/AC6/INV-5 (ISS-0785)
       {:ok, %Attachment{} = attachment, _artifact} ->
         record_attachment_access_denied_audit(
           attachment.id,
@@ -1195,7 +1198,23 @@ defmodule Letflow.Routers.Instances do
         {:error, :not_found}
 
       {:error, :not_found} ->
-        record_attachment_access_denied_audit(raw_attachment_id, nil, instance_id, opts, conn)
+        # ISS-0785: get_content/3 now rejects cross-instance before the blob read, so
+        # both cross-instance and cross-tenant/never-issued land here as :not_found.
+        # Do a cheap tenant-scoped existence check to restore the audit distinction.
+        found_attachment =
+          case Attachments.get(raw_attachment_id, opts) do
+            {:ok, attachment} -> attachment
+            _ -> nil
+          end
+
+        record_attachment_access_denied_audit(
+          raw_attachment_id,
+          found_attachment,
+          instance_id,
+          opts,
+          conn
+        )
+
         {:error, :not_found}
 
       {:error, :content_missing} ->

@@ -1,0 +1,87 @@
+{
+    "handoff_id":  "WF03-ISS0785-20260923-step-03d",
+    "run_id":  "WF03-ISS0785-20260923",
+    "step":  "Step 3d (Idiom/OTP Review Gate)",
+    "to_agent":  "REVIEWER",
+    "from_agent":  "ORCH",
+    "status":  "COMPLETED",
+    "created_at":  "2026-09-23T04:31:36Z",
+    "started_at":  "2026-09-23T04:31:36Z",
+    "context":  {
+                    "branch_name":  "feature/WF03-ISS0785-20260923",
+                    "issue_id":  "ISS-0785",
+                    "stage":  "S6",
+                    "prior_gates_passed":  "CODE-DESIGN-VALIDATOR (PASS), SECURITY-REVIEWER (PASS)",
+                    "artifacts_in":  [
+                                         "lib/letflow/repository/attachments.ex",
+                                         "lib/letflow/routers/instances.ex",
+                                         "test/letflow/repository/attachments_test.exs",
+                                         "lib/letflow/design/iss0785-attachment-instance-check.md"
+                                     ]
+                },
+    "task":  {
+                 "description":  "Execute Step 3d (REVIEWER -- HARD GATE) for ISS-0785 per WF-03.\n\nWorkspace: c:\\Users\\tvolo\\dev\\ai-dala\\letflow\nBranch: feature/WF03-ISS0785-20260923\n\nRead the diff: git diff main...feature/WF03-ISS0785-20260923 -- lib/letflow/repository/attachments.ex lib/letflow/routers/instances.ex test/letflow/repository/attachments_test.exs\n\nAlso read lib/letflow/repository/attachments.ex and lib/letflow/routers/instances.ex in full context.\n\nCheck:\n1. OTP idiom correctness -- is the with chain, pattern matching, and private function structure idiomatic Elixir?\n2. No supervision-tree changes (this fix is pure function-level, no new processes/supervisors)\n3. Scope creep -- does the diff touch only the files needed for ISS-0785? No unrelated changes?\n4. Decision record consistency -- does the fix align with REQ-211/212\u0027s established design decisions (no cross-tenant data leak, same response shape for all denial paths)?\n5. The dead-branch annotation in instances.ex -- is the comment clear and accurate?\n6. @spec correctness -- is the updated get_content/3 @spec syntactically and semantically correct Elixir?\n7. check_instance_match/2 implementation -- are the two function heads in the right order? (Pin-match head first, wildcard head second)\n\nVerdict: PASS or FAIL.\n\nOutput:\n1. Write handoffs/WF03-ISS0785-20260923/step-03d-reviewer.json with status COMPLETED, result.status PASS or FAIL\n2. git add handoffs/WF03-ISS0785-20260923/step-03d-reviewer.json\n3. git commit -m \u0027fix(WF03-ISS0785-20260923): Step 3d -- idiom review gate [PASS/FAIL]\u0027\n4. git push\n\nReport: PASS or FAIL with brief findings",
+                 "acceptance_criteria":  [
+                                             "OTP idiom and with-chain structure reviewed",
+                                             "No scope creep confirmed",
+                                             "No supervision-tree changes confirmed",
+                                             "@spec for get_content/3 syntactically correct",
+                                             "check_instance_match/2 function head order correct (pin-match first)"
+                                         ]
+             },
+    "completed_at":  "2026-09-23T04:45:00Z",
+    "result":  {
+                   "status":  "PASS",
+                   "findings":  [
+                                    {
+                                        "id":  1,
+                                        "check":  "OTP/Elixir idiom -- check_instance_match/2",
+                                        "verdict":  "PASS",
+                                        "notes":  "Two-head private function is well-formed. First head uses Elixir\u0027s cross-argument variable-equality pattern (%Attachment{instance_id: instance_id}, instance_id) -- idiomatic and correct; no guard needed. Pin-match head first, catch-all (%Attachment{}, _instance_id) second. Consistent with check_scan_status_clean/1\u0027s shape in the same module."
+                                    },
+                                    {
+                                        "id":  2,
+                                        "check":  "with-chain structure and return shapes",
+                                        "verdict":  "PASS",
+                                        "notes":  "Chain order matches design doc §4: get/2 → check_instance_match → check_scan_status_clean → blob read. Inserting check_instance_match before check_scan_status_clean is correct and required: cross-instance denial must not reveal scan_status (side-channel). All arms use {:ok, value} and :ok shapes. with short-circuits at check_instance_match returning {:error, :not_found} before the blob Repo.get -- 1 round-trip cost preserved (INV-5)."
+                                    },
+                                    {
+                                        "id":  3,
+                                        "check":  "@spec for get_content/3",
+                                        "verdict":  "PASS",
+                                        "notes":  "Syntactically valid named-parameter form. Return union {:error, :invalid_id | :not_found | :content_missing | :not_available} matches all actual return paths: get/2 yields :invalid_id and :not_found, check_instance_match yields :not_found, check_scan_status_clean yields :not_available, blob miss yields :content_missing. No omissions."
+                                    },
+                                    {
+                                        "id":  4,
+                                        "check":  "Scope creep",
+                                        "verdict":  "PASS",
+                                        "notes":  "Diff strictly limited to attachments.ex, instances.ex, and attachments_test.exs. No unrelated function changes. No abstractions or framework machinery introduced."
+                                    },
+                                    {
+                                        "id":  5,
+                                        "check":  "Supervision tree",
+                                        "verdict":  "PASS",
+                                        "notes":  "Zero new processes, supervisors, or spawns. Pure function-level change throughout."
+                                    },
+                                    {
+                                        "id":  6,
+                                        "check":  "Decision record consistency (REQ-211/212, design §5.1)",
+                                        "verdict":  "PASS",
+                                        "notes":  ":not_found is the unified denial atom for all denial paths (cross-tenant, cross-instance, never-issued, malformed UUID) -- consistent with AC5/AC6/INV-5. Tenant scope unchanged (prefix-threaded through get/2). Implementation matches design doc iss0785-attachment-instance-check.md exactly: signature, chain order, call site update, dead-branch retention decision (§5b)."
+                                    },
+                                    {
+                                        "id":  7,
+                                        "check":  "Dead-branch annotation in instances.ex",
+                                        "verdict":  "PASS",
+                                        "notes":  "Both comments are accurate. First arm comment (\u0027defense-in-depth: instance check now handled upstream in get_content/3\u0027) correctly describes changed semantics. Second arm comment correctly identifies it as dead after ISS-0785 and states why it is retained. No misleading framing."
+                                    },
+                                    {
+                                        "id":  8,
+                                        "check":  "Observation (non-blocking, forwarded to TEST-DESIGNER)",
+                                        "verdict":  "NOTE",
+                                        "notes":  "Test file updates only update existing call sites to the new arity. No new test covers the cross-instance denial path (get_content(id, other_instance_id, opts) -\u003e {:error, :not_found}). This is TEST-DESIGNER\u0027s responsibility and does not block PASS here, but TEST-DESIGNER must add a test for the cross-instance case."
+                                    }
+                                ],
+                   "summary":  "PASS. All seven gate checks clear. Implementation is idiomatic Elixir -- check_instance_match/2 function heads are ordered correctly, with-chain is correct, @spec is syntactically and semantically valid, no scope creep, no supervision changes, consistent with REQ-211/212 design. One non-blocking note forwarded to TEST-DESIGNER: a new test for the cross-instance denial path (wrong instance_id -\u003e {:error, :not_found}) is absent and must be added."
+               }
+}

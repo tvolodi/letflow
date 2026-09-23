@@ -224,13 +224,15 @@ defmodule Letflow.Repository.AttachmentsTest do
   # ---------------------------------------------------------------------------------
 
   describe "ISS-0399: clean upload is scanned, marked :clean, and servable" do
-    test "a non-EICAR upload gets scan_status: :clean and its content is fetchable via get_content/2" do
+    test "a non-EICAR upload gets scan_status: :clean and its content is fetchable via get_content/3" do
       %{schema_name: schema} = provisioned_tenant("iss0399-clean")
 
       assert {:ok, attachment} = Attachments.upload(upload_attrs(), prefix: schema)
       assert attachment.scan_status == :clean
 
-      assert {:ok, ^attachment, artifact} = Attachments.get_content(attachment.id, prefix: schema)
+      assert {:ok, ^attachment, artifact} =
+               Attachments.get_content(attachment.id, attachment.instance_id, prefix: schema)
+
       assert artifact.content == "hello attachment bytes"
     end
   end
@@ -369,9 +371,11 @@ defmodule Letflow.Repository.AttachmentsTest do
 
       assert pending_attachment.scan_status == :pending
 
-      # Mutant C target: the scan_status != :clean gate in get_content/2 must
+      # Mutant C target: the scan_status != :clean gate in get_content/3 must
       # reject this, not just :infected/:error.
-      assert Attachments.get_content(pending_attachment.id, prefix: schema) ==
+      assert Attachments.get_content(pending_attachment.id, pending_attachment.instance_id,
+               prefix: schema
+             ) ==
                {:error, :not_available}
 
       # Metadata is still readable -- only byte-serving is gated (design §4.2).
@@ -411,7 +415,9 @@ defmodule Letflow.Repository.AttachmentsTest do
         |> Attachment.changeset(infected_attrs)
         |> Repo.insert(prefix: schema)
 
-      assert Attachments.get_content(infected_attachment.id, prefix: schema) ==
+      assert Attachments.get_content(infected_attachment.id, infected_attachment.instance_id,
+               prefix: schema
+             ) ==
                {:error, :not_available}
     end
   end
@@ -611,6 +617,41 @@ defmodule Letflow.Repository.AttachmentsTest do
       # in this run has touched it (ISS-0401).
       Code.ensure_loaded?(Repository)
       assert function_exported?(Repository, :upsert_content, 6)
+    end
+  end
+
+  # ---------------------------------------------------------------------------------
+  # ISS-0785 regression -- cross-instance-same-tenant denial in get_content/3
+  # must return {:error, :not_found} before any artifact blob read.
+  #
+  # Pre-fix failure evidence: the old get_content/2 had no instance_id parameter at
+  # all; calling get_content/3 on pre-fix code raises UndefinedFunctionError at
+  # runtime (trivially satisfied). Per WF-03 procedure for the "code did not exist"
+  # case, a mutation of check_instance_match/2 is also reported in the handoff.
+  # ---------------------------------------------------------------------------------
+
+  describe "ISS-0785: cross-instance-same-tenant denial in get_content/3" do
+    test "returns {:error, :not_found} when the attachment belongs to a different instance in the same tenant" do
+      %{schema_name: schema} = provisioned_tenant("iss0785-cross-instance")
+
+      instance_a = Ecto.UUID.generate()
+      instance_b = Ecto.UUID.generate()
+
+      assert {:ok, attachment} =
+               Attachments.upload(
+                 upload_attrs(instance_id: instance_a),
+                 prefix: schema
+               )
+
+      # instance_b is a valid UUID in the same tenant schema but does not own
+      # this attachment -- check_instance_match/2 must fire before the blob read
+      # and return {:error, :not_found}.
+      assert Attachments.get_content(attachment.id, instance_b, prefix: schema) ==
+               {:error, :not_found}
+
+      # Confirm the owning instance (instance_a) can still retrieve the content.
+      assert {:ok, ^attachment, _artifact} =
+               Attachments.get_content(attachment.id, instance_a, prefix: schema)
     end
   end
 end

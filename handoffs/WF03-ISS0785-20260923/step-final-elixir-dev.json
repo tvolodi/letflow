@@ -1,0 +1,34 @@
+{
+    "handoff_id":  "WF03-ISS0785-20260923-step-final",
+    "run_id":  "WF03-ISS0785-20260923",
+    "step":  "Step Final",
+    "to_agent":  "ELIXIR-DEV",
+    "from_agent":  "ORCH",
+    "status":  "PENDING",
+    "created_at":  "2026-09-23T06:12:38Z",
+    "started_at":  "2026-09-23T06:12:38Z",
+    "context":  {
+                    "branch_name":  "feature/WF03-ISS0785-20260923",
+                    "issue_id":  "ISS-0785",
+                    "all_gates_passed":  true,
+                    "queue_task_id":  784,
+                    "queue_agent_id":  "orch-main",
+                    "queue_endpoint":  "https://queue-test.ai-dala.com",
+                    "queue_auth_token_env":  "QUEUE_AUTH_TOKEN (from .env: 8e88290747e5cd89cc94887ba3f887c72add7f2e2e06cd49cab6bcd307c5198f)",
+                    "conflict_note":  "REQ-388 merged to main as e605dbb5 before this branch. REQ-388 also modified lib/letflow/routers/instances.ex (fetch_scoped_attachment_content). Expect a conflict in instances.ex at the call to Attachments.get_content. Resolve by composing both changes: REQ-388\u0027s audit logging additions + ISS-0785\u0027s instance_id threading. Read both sides carefully. Per GIT_MERGE.md: during rebase, --ours is main (incoming), --theirs is our branch. DO NOT use --ours or --theirs flags; read conflict markers and resolve manually."
+                },
+    "task":  {
+                 "description":  "Execute Step Final (GIT MERGE) for WF03-ISS0785-20260923 per docs/agents/protocols/GIT_MERGE.md.\n\nWorkspace: c:\\Users\\tvolo\\dev\\ai-dala\\letflow\nBranch: feature/WF03-ISS0785-20260923\nMix: \u0026 \u0027C:/Program Files/Elixir/bin/mix\u0027\nQUEUE_AUTH_TOKEN: 8e88290747e5cd89cc94887ba3f887c72add7f2e2e06cd49cab6bcd307c5198f\n\nKEY NOTE: REQ-388 merged to main (e605dbb5) and also touched lib/letflow/routers/instances.ex (fetch_scoped_attachment_content). Expect a CONFLICT in instances.ex when rebasing. Resolve by composing both changes:\n- REQ-388\u0027s audit logging (deny-event logging after the access check)\n- ISS-0785\u0027s fix (pass instance_id to get_content/3)\n\nREMEMBER: During `git rebase`, --ours = main\u0027s version, --theirs = our branch. Read conflict markers and hand-resolve. After resolving, re-read the file to verify the composition is correct.\n\nGIT_MERGE.md procedure:\n1. Verify branch = feature/WF03-ISS0785-20260923\n2. git status -- check for uncommitted files (handoffs/orchestrator.log and handoffs/registry.json may be dirty). If so, stage and commit them with message: \u0027fix(WF03-ISS0785-20260923): Step Final -- finalize ORCH artifacts\u0027\n3. git fetch origin main\n4. git rebase origin/main\n   - Handle conflicts in instances.ex: compose REQ-388\u0027s audit logging + ISS-0785\u0027s instance_id threading\n   - After resolving, verify with: \u0026 \u0027C:/Program Files/Elixir/bin/mix\u0027 compile --warnings-as-errors\n5. Verify tests: \u0026 \u0027C:/Program Files/Elixir/bin/mix\u0027 test -- no new failures attributable to this branch\n6. git push -u origin feature/WF03-ISS0785-20260923 --force-with-lease (rebase changes history)\n7. gh pr create --title \u0027ISS-0785: fix timing side-channel in attachment get_content/3\u0027 --body \u0027Closes #1736. Threads instance_id into Attachments.get_content/3 with check_instance_match/2 guard before artifact blob read. Cross-instance-same-tenant denial now costs 1 round-trip (was 2). Regression test included.\u0027\n8. Wait for CI green (gh pr checks)\n9. gh pr merge --squash --delete-branch\n10. git checkout main; git pull --ff-only\n11. Release queue lock: POST https://queue-test.ai-dala.com/tasks/784/release {\"agent_id\": \"orch-main\", \"status\": \"done\"} Authorization: Bearer 8e88290747e5cd89cc94887ba3f887c72add7f2e2e06cd49cab6bcd307c5198f\n12. Update registry entry for WF03-ISS0785-20260923: status COMPLETED, released_lock true, lock_released_at current UTC, last_known_step \u0027Step Final COMPLETED PASS -- merged to main, lock released\u0027\n13. Complete handoff with PASS",
+                 "acceptance_criteria":  [
+                                             "Rebased cleanly onto latest main (including REQ-388\u0027s changes)",
+                                             "instances.ex conflict resolved composing both REQ-388 and ISS-0785 changes",
+                                             "mix compile --warnings-as-errors exits 0",
+                                             "mix test shows no new failures attributable to this branch",
+                                             "PR opened and CI green",
+                                             "PR merged via squash, branch deleted",
+                                             "Queue task 784 released as done",
+                                             "Registry entry updated to COMPLETED"
+                                         ]
+             },
+    "result":  null
+}

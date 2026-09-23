@@ -1,0 +1,39 @@
+{
+    "handoff_id":  "WF03-ISS0785-20260923-step-00",
+    "run_id":  "WF03-ISS0785-20260923",
+    "step":  "Step 00",
+    "to_agent":  "ELIXIR-DEV",
+    "from_agent":  "ORCH",
+    "status":  "COMPLETED",
+    "created_at":  "2026-09-23T03:56:46Z",
+    "started_at":  "2026-09-23T03:56:46Z",
+    "context":  {
+                    "branch_name":  "feature/WF03-ISS0785-20260923",
+                    "issue_id":  "ISS-0785",
+                    "stage":  "S6",
+                    "issue_text":  "Cross-instance-same-tenant attachment-content denial is timing-distinguishable from cross-tenant/never-issued denial via an unconditional artifact-blob read. Affects lib/letflow/repository/attachments.ex (~362-445). get_content/2 reads the full artifact byte blob unconditionally whenever the attachment metadata row exists, regardless of instance_id. The instance_id check in fetch_scoped_attachment_content/4 (instances.ex ~1156) happens AFTER get_content/2 returns. This makes cross-instance-same-tenant denials cost 2 Repo round-trips vs 1 for cross-tenant/never-issued. See docs/issues/ISS-0785.yaml for full detail.",
+                    "owned_modules":  [
+                                          "lib/letflow/repository/attachments.ex",
+                                          "lib/letflow/routers/instances.ex"
+                                      ],
+                    "artifacts_in":  [
+                                         "docs/issues/ISS-0785.yaml"
+                                     ]
+                },
+    "task":  {
+                 "description":  "Execute Step 00 (GIT SETUP) for WF03-ISS0785-20260923 per docs/agents/protocols/GIT_SETUP.md.\n\nBranch name: feature/WF03-ISS0785-20260923\n\nSteps:\n1. git checkout main\n2. git pull --ff-only origin main\n3. git checkout -b feature/WF03-ISS0785-20260923\n4. Stage and commit ORCH\u0027s already-written files: handoffs/registry.json, handoffs/orchestrator.log, handoffs/WF03-ISS0785-20260923/step-00-git-setup.json (this file)\n   Commit message: \u0027fix(WF03-ISS0785-20260923): Step 00 git setup -- registry entry, branch setup\u0027\n5. git push -u origin feature/WF03-ISS0785-20260923\n\nNOTE: The tree currently has these uncommitted files to stage:\n- handoffs/registry.json (WF03-ISS0785 entry added by ORCH)\n- handoffs/orchestrator.log (ORCH dispatch log entries)\n- handoffs/WF03-ISS0785-20260923/step-00-git-setup.json (this file)\n- scripts/fix_registry.py (scratch script, DO NOT commit)\n\nStage only the three handoff/registry files above (not scripts/fix_registry.py, not web/tests/e2e/.pipeline-state/).\n\nOn PASS: complete handoff with status COMPLETED, result.status PASS.",
+                 "acceptance_criteria":  [
+                                             "git branch --show-current outputs feature/WF03-ISS0785-20260923",
+                                             "git push -u origin feature/WF03-ISS0785-20260923 exits 0",
+                                             "Registry entry, orchestrator.log, and this handoff file are committed on the branch"
+                                         ]
+             },
+    "result":  {
+                   "status":  "PASS",
+                   "summary":  "Checked out main, pulled --ff-only (already up to date), created branch feature/WF03-ISS0785-20260923, staged and committed handoffs/registry.json + handoffs/orchestrator.log + handoffs/WF03-ISS0785-20260923/step-00-git-setup.json, pushed to origin. Commit: 48245094 fix(WF03-ISS0785-20260923): Step 00 git setup -- registry entry, branch setup",
+                   "commit_sha":  "48245094",
+                   "artifacts_out":  [
+                                         "branch: feature/WF03-ISS0785-20260923"
+                                     ]
+               }
+}

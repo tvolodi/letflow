@@ -1,0 +1,52 @@
+{
+    "handoff_id":  "WF03-ISS0785-20260923-step-03a",
+    "run_id":  "WF03-ISS0785-20260923",
+    "step":  "Step 3 (Implement)",
+    "to_agent":  "ELIXIR-DEV",
+    "from_agent":  "ORCH",
+    "status":  "COMPLETED",
+    "created_at":  "2026-09-23T04:24:15Z",
+    "started_at":  "2026-09-23T04:24:15Z",
+    "completed_at":  "2026-09-23T04:40:00Z",
+    "context":  {
+                    "branch_name":  "feature/WF03-ISS0785-20260923",
+                    "issue_id":  "ISS-0785",
+                    "stage":  "S6",
+                    "design_doc":  "lib/letflow/design/iss0785-attachment-instance-check.md",
+                    "diagnosis_summary":  "Timing side-channel in get_content/2 (attachments.ex): unconditional artifact blob read before instance_id check. Fix: thread instance_id into get_content/2 (making it get_content/3) with a new check_instance_match/2 guard in the with chain BEFORE the blob read.",
+                    "design_gate_status":  "PASS (CODE-DESIGN-VALIDATOR, commit on feature/WF03-ISS0785-20260923)",
+                    "concurrent_run_note":  "WF02-REQ388-20260923 (audit logging) is active on origin/feature/WF02-REQ388-20260923 and also modifies lib/letflow/routers/instances.ex. It should merge before this branch reaches Step Final. At Step Final, rebase onto main (which will include REQ-388\u0027s merged changes) and resolve any call-site conflicts accordingly.",
+                    "artifacts_in":  [
+                                         "lib/letflow/design/iss0785-attachment-instance-check.md",
+                                         "lib/letflow/repository/attachments.ex",
+                                         "lib/letflow/routers/instances.ex",
+                                         "docs/guides/backend_developer_guide.md"
+                                     ]
+                },
+    "task":  {
+                 "description":  "Execute Step 3 (Implement) for ISS-0785 per WF-03 and the approved design doc.\n\nWorkspace: c:\\Users\\tvolo\\dev\\ai-dala\\letflow\nBranch: feature/WF03-ISS0785-20260923\nMix binary: \u0027C:/Program Files/Elixir/bin/mix\u0027\n\nIMPLEMENT the approved design in lib/letflow/design/iss0785-attachment-instance-check.md:\n\n1. lib/letflow/repository/attachments.ex:\n   a. Add new private function `check_instance_match/2` with two function heads:\n      - match: `%Attachment{instance_id: ^instance_id}` → `:ok`\n      - non-match: `%Attachment{}` → `{:error, :not_found}`\n   b. Modify `get_content/2` → `get_content/3`: add `instance_id` as second parameter\n   c. Update the `with` chain: insert `check_instance_match(attachment, instance_id)` AFTER `get/2` returns and BEFORE `check_scan_status_clean/1`\n   d. Update the `@spec` for `get_content` to include `instance_id :: Ecto.UUID.t()`\n   e. Run `mix format lib/letflow/repository/attachments.ex` after changes\n\n2. lib/letflow/routers/instances.ex:\n   a. Update the call site in `fetch_scoped_attachment_content` to pass `instance_id`:\n      `Attachments.get_content(raw_attachment_id, instance_id, opts)`\n   b. The existing `{:ok, %Attachment{instance_id: ^instance_id} = attachment, artifact}` pattern match is now redundant but keep it as defense-in-depth (per design decision §9). Add a `# defense-in-depth: instance check now handled upstream in get_content/3` comment.\n   c. Run `mix format lib/letflow/routers/instances.ex` after changes\n\n3. Verify compile: `\u0026 \u0027C:/Program Files/Elixir/bin/mix\u0027 compile --warnings-as-errors`\n   If any warnings-as-errors: fix them.\n\n4. Run tests to check for regressions: `\u0026 \u0027C:/Program Files/Elixir/bin/mix\u0027 test --no-start`\n   Note: existing call sites to `get_content/2` in test files will now fail with arity error.\n   Fix those call sites by threading in the appropriate `instance_id` from the test context.\n   Look for tests in test/letflow/repository/attachments_test.exs and any other file calling get_content/2.\n\n5. Commit the implementation:\n   git add lib/letflow/repository/attachments.ex lib/letflow/routers/instances.ex\n   git commit -m \u0027fix(WF03-ISS0785-20260923): Step 3 -- thread instance_id into get_content/3, add check_instance_match/2\u0027\n   git push\n\n6. Write handoffs/WF03-ISS0785-20260923/step-03a-elixir-dev.json with status COMPLETED, result.status PASS or FAIL, actual compile/test output quoted.",
+                 "acceptance_criteria":  [
+                                             "check_instance_match/2 added as private function with two heads",
+                                             "get_content/3 with instance_id parameter added as second arg",
+                                             "with chain order: get/2 → check_instance_match/2 → check_scan_status_clean/1 → Repo.get blob",
+                                             "call site in instances.ex updated to pass instance_id",
+                                             "mix compile --warnings-as-errors exits 0",
+                                             "mix test shows no new failures (pre-existing failures OK, but no regressions from this change)",
+                                             "mix format clean"
+                                         ]
+             },
+    "result":  {
+                   "status":  "PASS",
+                   "commit_sha":  "da00869f",
+                   "branch":  "feature/WF03-ISS0785-20260923",
+                   "files_changed":  [
+                                         "lib/letflow/repository/attachments.ex",
+                                         "lib/letflow/routers/instances.ex",
+                                         "test/letflow/repository/attachments_test.exs"
+                                     ],
+                   "compile":  "mix compile --warnings-as-errors: exit 0 (clean)",
+                   "tests":  "mix test: exit 0 (full suite, no failures)",
+                   "format":  "mix format: exit 0 (clean)",
+                   "summary":  "Added check_instance_match/2 (two heads: matching instance_id returns :ok, mismatch returns {:error, :not_found}). Promoted get_content/2 to get_content/3 with instance_id as second parameter. with chain order: get/2 -\u003e check_instance_match/2 -\u003e check_scan_status_clean/1 -\u003e Repo.get blob. Updated call site in instances.ex fetch_scoped_attachment_content/3 to pass instance_id; added defense-in-depth and dead-branch comments on existing pin-match. Updated 3 test call sites in attachments_test.exs to pass attachment.instance_id as second arg. Updated moduledoc and section comment references from get_content/2 to get_content/3. All acceptance criteria met."
+               }
+}

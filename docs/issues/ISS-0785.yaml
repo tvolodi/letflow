@@ -72,4 +72,6 @@ queue_ref: "Q-784"
 # Established, recurring queue-id/filename divergence pattern for this
 # project; queue_ref/github_ref below are authoritative for this file.
 github_ref: "GH-1736"
-status: open
+status: resolved
+resolved_in_run: "WF03-ISS0785-20260923"
+resolved_at: "2026-09-23T06:11:50Z"

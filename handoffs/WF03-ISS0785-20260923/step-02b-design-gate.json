@@ -1,0 +1,36 @@
+{
+    "handoff_id":  "WF03-ISS0785-20260923-step-02b",
+    "run_id":  "WF03-ISS0785-20260923",
+    "step":  "Step 2b (Design Gate)",
+    "to_agent":  "CODE-DESIGN-VALIDATOR",
+    "from_agent":  "ORCH",
+    "status":  "COMPLETED",
+    "created_at":  "2026-09-23T04:21:55Z",
+    "started_at":  "2026-09-23T04:21:55Z",
+    "context":  {
+                    "branch_name":  "feature/WF03-ISS0785-20260923",
+                    "issue_id":  "ISS-0785",
+                    "design_doc":  "lib/letflow/design/iss0785-attachment-instance-check.md",
+                    "artifacts_in":  [
+                                         "docs/issues/ISS-0785.yaml",
+                                         "lib/letflow/design/iss0785-attachment-instance-check.md",
+                                         "lib/letflow/repository/attachments.ex",
+                                         "lib/letflow/routers/instances.ex",
+                                         "handoffs/WF03-ISS0785-20260923/step-02-code-designer.json"
+                                     ]
+                },
+    "task":  {
+                 "description":  "Execute Step 2b (Design Gate -- HARD GATE) for ISS-0785 per WF-03\u0027s Step 2 procedure.\n\nWorkspace: c:\\Users\\tvolo\\dev\\ai-dala\\letflow\nBranch: feature/WF03-ISS0785-20260923\n\nYou are the independent validator. Read the design document directly (lib/letflow/design/iss0785-attachment-instance-check.md) and the issue acceptance criteria (docs/issues/ISS-0785.yaml). Do NOT rely on CODE-DESIGNER\u0027s result.summary as a substitute for reading the actual design doc.\n\nAlso read lib/letflow/repository/attachments.ex and lib/letflow/routers/instances.ex to verify the design against the actual source.\n\nCheck against WF-03\u0027s Step 2 acceptance criteria:\n1. Does the design address EVERY acceptance criterion in docs/issues/ISS-0785.yaml?\n2. Are ALL function signatures fully specified (name, inputs, outputs, error cases)?\n3. Is error handling shape explicit ({:error, :not_found} for denied paths)?\n4. Cross-module dependencies listed?\n5. Is there NO implementation code (no function bodies, no actual .ex code blocks)?\n6. Does the `with` chain order guarantee the instance check fires BEFORE the blob read?\n7. Is INV-5 (response-shape indistinguishability) explicitly preserved in the design?\n8. Does the design avoid changing `get/2`\u0027s signature (constraint from ISS-0785.yaml)?\n\nIf PASS: complete handoff with PASS verdict and what you independently verified.\nIf FAIL: list exactly which criteria are unmet, so CODE-DESIGNER can rework.\n\nOutput:\n1. Write handoffs/WF03-ISS0785-20260923/step-02b-design-gate.json with status COMPLETED, result.status PASS or FAIL\n2. git add handoffs/WF03-ISS0785-20260923/step-02b-design-gate.json\n3. git commit -m \u0027fix(WF03-ISS0785-20260923): Step 2b -- design gate [PASS/FAIL]\u0027\n4. git push\n\nReport back: PASS or FAIL with your independent findings",
+                 "acceptance_criteria":  [
+                                             "Independently verified design doc against issue acceptance criteria (not from CODE-DESIGNER\u0027s self-report)",
+                                             "Verified no implementation code in design doc",
+                                             "Verified with chain order: instance check before blob read",
+                                             "Verified INV-5 preservation argument is present and sound"
+                                         ]
+             },
+    "completed_at":  "2026-09-23T04:35:00Z",
+    "result":  {
+                   "status":  "PASS",
+                   "summary":  "Independently verified design doc (lib/letflow/design/iss0785-attachment-instance-check.md) against ISS-0785.yaml and actual source files. All 8 criteria pass.\n\nC1 (All ACs covered): §8 AC mapping table covers every item from ISS-0785.yaml description and suggested_fix. No gaps.\n\nC2 (Signatures fully specified): get_content/3 in §2 has full @spec with id::String.t(), instance_id::Ecto.UUID.t(), opts(), and all four return atoms. check_instance_match/2 in §3 has full @spec with :ok | {:error, :not_found}.\n\nC3 (Error handling shape explicit): §3 names {:error, :not_found} as the cross-instance denial atom. §6 INV-5 table confirms it is the same atom as all other denial paths — no new error atoms introduced.\n\nC4 (with-chain order, instance check before blob read): §4 explicitly lays out the four-step chain: get/2 (step 1) → check_instance_match/2 (step 2, NEW) → check_scan_status_clean/1 (step 3) → Repo.get blob (step 4). Rationale for inserting before scan gate given. No blob read on cross-instance denial is explicitly stated.\n\nC5 (INV-5 preservation): §6 has a four-row table with before/after Repo trip counts for every denial class. Cross-instance goes from 2 to 1 trip; cross-tenant, never-issued, and :invalid_id paths all unchanged. Argument is present and sound.\n\nC6 (No implementation code): No def/defp bodies, no do...end blocks. Code blocks in §5b quote existing source for context and are labeled accordingly. All new elements are @spec notation and prose descriptions of function heads.\n\nC7 (get/2 unchanged): §6 explicitly states get/2 keeps its existing 2-argument @spec. Verified against actual source — lib/letflow/repository/attachments.ex defines get/2 with the unchanged signature.\n\nC8 (Cross-module dependencies listed): §5a names fetch_scoped_attachment_content/3 in instances.ex as the call site, shows current and updated call with instance_id sourcing traced through the existing with-chain parameter. §10 documents the REQ-388 concurrent-run relationship (logically independent changes).\n\nSource accuracy verified: actual instances.ex source at lines 1172-1195 confirms the current call is Attachments.get_content(raw_attachment_id, opts), the pin-match pattern described in §5b exists exactly as quoted, and instance_id is already bound earlier in the with-chain at both call sites (lines 1142, 1309) as stated in §5a."
+               }
+}

@@ -1,0 +1,61 @@
+{
+    "handoff_id":  "WF03-ISS0785-20260923-step-01",
+    "run_id":  "WF03-ISS0785-20260923",
+    "step":  "Step 0.5 + Step 1",
+    "to_agent":  "ISSUE-FIXER",
+    "from_agent":  "ORCH",
+    "status":  "COMPLETED",
+    "created_at":  "2026-09-23T04:13:56Z",
+    "started_at":  "2026-09-23T04:13:56Z",
+    "completed_at":  "2026-09-23T04:30:00Z",
+    "context":  {
+                    "branch_name":  "feature/WF03-ISS0785-20260923",
+                    "issue_id":  "ISS-0785",
+                    "issue_file":  "docs/issues/ISS-0785.yaml",
+                    "stage":  "S6",
+                    "issue_text":  "Cross-instance-same-tenant attachment-content denial is timing-distinguishable from cross-tenant/never-issued denial via an unconditional artifact-blob read.\n\nFull detail in docs/issues/ISS-0785.yaml.\n\nSummary: Letflow.Repository.Attachments.get_content/2 (lib/letflow/repository/attachments.ex ~362-445) performs an unconditional Repo.get on the artifact blob whenever the attachment metadata row exists, regardless of instance_id. The instance_id check in fetch_scoped_attachment_content/4 (lib/letflow/routers/instances.ex ~1156) happens AFTER get_content/2 returns. This makes cross-instance-same-tenant denials cost 2 Repo round-trips (second reads the full artifact byte blob) vs 1 for cross-tenant/never-issued. This is a timing side-channel that distinguishes two classes of denial that REQ-211/212 explicitly intends to be indistinguishable.\n\nSuggested fix (from ISS-0785.yaml): Reorder get_content/2\u0027s lookup so instance_id check happens before the artifact blob read, OR thread instance_id into get_content/2 so it can fold the cross-instance case into the same single-round-trip nil path.",
+                    "related_requirements":  [
+                                                 "REQ-211",
+                                                 "REQ-212",
+                                                 "REQ-388"
+                                             ],
+                    "affected_files":  [
+                                           "lib/letflow/repository/attachments.ex"
+                                       ],
+                    "severity":  "MINOR",
+                    "artifacts_in":  [
+                                         "docs/issues/ISS-0785.yaml",
+                                         "lib/letflow/repository/attachments.ex",
+                                         "lib/letflow/routers/instances.ex"
+                                     ]
+                },
+    "task":  {
+                 "description":  "Execute Step 0.5 (Registry Lookup) and Step 1 (Diagnose) for ISS-0785 per docs/agents/workflows/WF-03_issue_resolving.md.\n\nWorkspace: c:\\Users\\tvolo\\dev\\ai-dala\\letflow\nBranch: feature/WF03-ISS0785-20260923\n\nSTEP 0.5 — REGISTRY LOOKUP:\n1. Scan docs/issues/*.yaml for resolved entries with similar symptoms (timing side-channel, attachment cross-instance, existence-probing, Attachments.get_content).\n2. Check if this exact issue has been fixed before (same root cause recurrence pattern?).\n3. Note findings in result.\n\nSTEP 1 — DIAGNOSE (No Speculation rule applies):\n1. Read the actual source files directly -- do NOT diagnose from the issue\u0027s prose alone.\n2. Read lib/letflow/repository/attachments.ex in full, especially get/2, get_content/2, check_scan_status_clean/1.\n3. Read lib/letflow/routers/instances.ex around fetch_scoped_attachment_content (search for that function).\n4. Trace the actual call chain: fetch_scoped_attachment_content/4 -\u003e Attachments.get_content/2 -\u003e get/2 -\u003e check_scan_status_clean/1 -\u003e Repo.get(Artifact, ...). Confirm the timing gap is real by reading the actual code, not the issue\u0027s description.\n5. Determine the precise fix: should instance_id be threaded into get_content/2, or should the caller (instances.ex) check instance_id BEFORE calling get_content/2?\n6. Write the diagnosis into result.summary: root cause (actual code lines), exact fix needed, what a fix must NOT break (REQ-211/212\u0027s existing cross-tenant isolation invariants).\n7. DO NOT implement the fix -- produce a diagnosis for CODE-DESIGNER.\n\nAfter completing both steps:\n1. Write handoffs/WF03-ISS0785-20260923/step-01-issue-fixer.json with status COMPLETED, result.status PASS, detailed summary.\n2. git add handoffs/WF03-ISS0785-20260923/step-01-issue-fixer.json\n3. git commit -m \u0027fix(WF03-ISS0785-20260923): Step 0.5 + Step 1 -- registry lookup + diagnosis\u0027\n4. git push\n\nReport back: your diagnosis of the root cause and recommended fix approach.",
+                 "acceptance_criteria":  [
+                                             "Step 0.5: documented whether a prior match was found in docs/issues/*.yaml",
+                                             "Step 1: root cause confirmed by reading actual source (not just repeating issue description)",
+                                             "Exact lines/functions identified where the unconditional blob read occurs",
+                                             "Fix approach stated clearly (thread instance_id into get_content/2, OR check before calling)",
+                                             "No implementation -- diagnosis only"
+                                         ]
+             },
+    "result":  {
+                   "status":  "PASS",
+                   "step_05_registry_lookup":  {
+                                                   "searched":  "docs/issues/*.yaml",
+                                                   "query_terms":  [
+                                                                       "timing",
+                                                                       "side-channel",
+                                                                       "attachment.*content",
+                                                                       "get_content",
+                                                                       "cross.instance"
+                                                                   ],
+                                                   "matches_found":  false,
+                                                   "nearest_resolved_issue":  "ISS-0399 (attachment content scanning, resolved) -- related only in that it also touches get_content/2 and the scan_status gate; ISS-0399\u0027s symptom was an unscanned-content leak, NOT a timing distinguisher between denial classes. No prior match with the same root cause.",
+                                                   "recurrence":  false,
+                                                   "conclusion":  "No prior resolved entry with matching symptoms. ISS-0785 is a first occurrence. Severity unchanged (MINOR)."
+                                               },
+                   "summary":  "ROOT CAUSE (confirmed from actual source)\n\nCALL CHAIN TRACED:\n\n1. handle_get_attachment_content/3 (instances.ex ~1137) calls fetch_scoped_attachment_content/3 (instances.ex ~1175).\n\n2. fetch_scoped_attachment_content/3 (instances.ex ~1175-1192) immediately calls Attachments.get_content(raw_attachment_id, opts) with NO instance_id argument. The instance_id check only happens AFTER get_content/2 returns:\n\n   case Attachments.get_content(raw_attachment_id, opts) do\n     {:ok, %Attachment{instance_id: ^instance_id} = attachment, artifact} -\u003e {:ok, attachment, artifact}\n     {:ok, %Attachment{}, _artifact} -\u003e {:error, :not_found}  # cross-instance: blob already read, discarded here\n     ...\n   end\n\n3. get_content/2 (attachments.ex ~417-424) has no instance_id parameter:\n\n   def get_content(id, opts) when is_list(opts) do\n     prefix = Keyword.fetch!(opts, :prefix)\n     with {:ok, attachment} \u003c- get(id, opts),              # 1st Repo.get: Attachment row\n          :ok \u003c- check_scan_status_clean(attachment) do\n       case Repo.get(Artifact, attachment.content_hash, prefix: prefix) do  # 2nd Repo.get: FULL blob read\n         %Artifact{} = artifact -\u003e {:ok, attachment, artifact}\n         nil -\u003e {:error, :content_missing}\n       end\n     end\n   end\n\nTIMING GAP (exact):\n\n- Cross-tenant / never-issued: get(id, opts) at attachments.ex ~418 returns {:error, :not_found}; with short-circuits; NO blob read. Cost: 1 Repo round-trip.\n\n- Cross-instance-same-tenant: get(id, opts) at attachments.ex ~418 returns {:ok, attachment} (row exists, belongs to different instance in same tenant); check_scan_status_clean passes; Repo.get(Artifact, attachment.content_hash, ...) at attachments.ex ~421 fires and reads the full binary content column. get_content/2 returns {:ok, attachment, artifact}. Then fetch_scoped_attachment_content/3 at instances.ex ~1180 checks attachment.instance_id, finds mismatch, returns {:error, :not_found} -- discarding the blob. Cost: 2 Repo round-trips (second reads full binary blob).\n\nThis is a real, measurable timing distinguisher. The same gap affects both call sites of fetch_scoped_attachment_content/3 in instances.ex (handle_get_attachment_content/3 at ~1137 and handle_get_attachment_link_content/3 at ~1302).\n\nCALLER INVENTORY: Attachments.get_content/2 has exactly ONE production caller: instances.ex via fetch_scoped_attachment_content/3. EntityAttachments.get_content/2 (entity_attachments.ex) is a different module/function, unaffected.\n\nRECOMMENDED FIX: Option A -- Thread instance_id into get_content/2\n\nChange signature to get_content(id, instance_id, opts) and add a check_instance_match/2 guard in the with chain BEFORE the blob read:\n\n  with {:ok, attachment} \u003c- get(id, opts),\n       :ok \u003c- check_instance_match(attachment, instance_id),   # NEW: short-circuits here for wrong-instance\n       :ok \u003c- check_scan_status_clean(attachment) do\n    case Repo.get(Artifact, ...) do ...                         # only fires for correct-instance case\n\n  defp check_instance_match(%Attachment{instance_id: iid}, iid), do: :ok\n  defp check_instance_match(%Attachment{}, _iid), do: {:error, :not_found}\n\nOrdering: instance check -\u003e scan check -\u003e blob read. The cross-instance path returns {:error, :not_found} after 1 round-trip (same as cross-tenant), eliminating the timing gap.\n\nThe caller in instances.ex ~1176 is updated to pass instance_id. Its {:ok, %Attachment{}, _artifact} branch (currently the cross-instance discard) becomes structurally unreachable and should be removed.\n\nOption B (caller checks instance via Attachments.get/2 first): adds a 3rd Repo round-trip to the happy path, introduces TOCTOU window. Not recommended.\n\nOption C (add instance_id WHERE clause in get/2): more invasive; get/2 has other callers (DELETE path) that don\u0027t need instance scoping at that level. Not recommended without broader impact analysis.\n\nWHAT THE FIX MUST NOT BREAK:\n\n1. REQ-211/212 cross-tenant isolation: opts[:prefix] remains the sole tenant scope guard; the new instance_id check is an additional filter within the already-tenant-scoped lookup, never a replacement.\n\n2. Response-shape indistinguishability (AC5/AC6/INV-5): all denied branches must still return {:error, :not_found} from fetch_scoped_attachment_content/3. check_instance_match/2 returns {:error, :not_found} (not a new atom) to preserve this.\n\n3. scan_status gate (ISS-0399): instance check before scan check before blob read is correct and safe. A wrong-instance attachment must not trigger the scan check (no point).\n\n4. Existing test coverage for REQ-211/212: all tests exercising get_content/2 directly need the new instance_id argument. TEST-DESIGNER must add timing-indistinguishability tests confirming cross-instance-same-tenant path now costs 1 round-trip, not 2.\n\n5. INV-RT-1: fix stays entirely in lib/letflow/repository/attachments.ex plus call-site update in lib/letflow/routers/instances.ex. No Repo.* call added to the router layer.",
+                   "next_action":  "Route to CODE-DESIGNER for fix design. Option A: thread instance_id into get_content/2, add check_instance_match/2 private guard before blob read, update both call sites in instances.ex fetch_scoped_attachment_content/3, update typespec, update tests."
+               }
+}

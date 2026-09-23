@@ -68,7 +68,7 @@ defmodule Letflow.Repository.Attachments do
   before either `repository_artifacts` or `instance_attachments` is written --
   an infected or scan-failed upload is never persisted at all, so there is
   structurally no code path that can serve an unscanned/infected attachment's
-  bytes (see `get_content/2`'s own moduledoc for the defense-in-depth gate
+  bytes (see `get_content/3`'s own moduledoc for the defense-in-depth gate
   covering pre-existing rows). The scanner adapter is resolved via
   `Application.get_env(:letflow, :attachment_scanner,
   Letflow.Repository.AttachmentScanner.SignatureHeuristic)` -- the same
@@ -377,7 +377,7 @@ defmodule Letflow.Repository.Attachments do
   end
 
   # ===========================================================================
-  # get_content/2 (REQ-212 addendum -- INV-RT-1)
+  # get_content/3 (REQ-212 addendum -- INV-RT-1; ISS-0785: instance_id threaded in)
   # ===========================================================================
 
   @doc """
@@ -429,13 +429,14 @@ defmodule Letflow.Repository.Attachments do
   byte-serving is gated, because that is the only path that can leak actual
   file content.
   """
-  @spec get_content(id :: String.t(), opts()) ::
+  @spec get_content(id :: String.t(), instance_id :: Ecto.UUID.t(), opts()) ::
           {:ok, Attachment.t(), Artifact.t()}
           | {:error, :invalid_id | :not_found | :content_missing | :not_available}
-  def get_content(id, opts) when is_list(opts) do
+  def get_content(id, instance_id, opts) when is_list(opts) do
     prefix = Keyword.fetch!(opts, :prefix)
 
     with {:ok, attachment} <- get(id, opts),
+         :ok <- check_instance_match(attachment, instance_id),
          :ok <- check_scan_status_clean(attachment) do
       case Repo.get(Artifact, attachment.content_hash, prefix: prefix) do
         %Artifact{} = artifact -> {:ok, attachment, artifact}
@@ -443,6 +444,9 @@ defmodule Letflow.Repository.Attachments do
       end
     end
   end
+
+  defp check_instance_match(%Attachment{instance_id: instance_id}, instance_id), do: :ok
+  defp check_instance_match(%Attachment{}, _instance_id), do: {:error, :not_found}
 
   defp check_scan_status_clean(%Attachment{scan_status: :clean}), do: :ok
   defp check_scan_status_clean(%Attachment{}), do: {:error, :not_available}

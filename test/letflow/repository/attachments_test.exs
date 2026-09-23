@@ -224,13 +224,13 @@ defmodule Letflow.Repository.AttachmentsTest do
   # ---------------------------------------------------------------------------------
 
   describe "ISS-0399: clean upload is scanned, marked :clean, and servable" do
-    test "a non-EICAR upload gets scan_status: :clean and its content is fetchable via get_content/2" do
+    test "a non-EICAR upload gets scan_status: :clean and its content is fetchable via get_content/3" do
       %{schema_name: schema} = provisioned_tenant("iss0399-clean")
 
       assert {:ok, attachment} = Attachments.upload(upload_attrs(), prefix: schema)
       assert attachment.scan_status == :clean
 
-      assert {:ok, ^attachment, artifact} = Attachments.get_content(attachment.id, prefix: schema)
+      assert {:ok, ^attachment, artifact} = Attachments.get_content(attachment.id, attachment.instance_id, prefix: schema)
       assert artifact.content == "hello attachment bytes"
     end
   end
@@ -369,9 +369,9 @@ defmodule Letflow.Repository.AttachmentsTest do
 
       assert pending_attachment.scan_status == :pending
 
-      # Mutant C target: the scan_status != :clean gate in get_content/2 must
+      # Mutant C target: the scan_status != :clean gate in get_content/3 must
       # reject this, not just :infected/:error.
-      assert Attachments.get_content(pending_attachment.id, prefix: schema) ==
+      assert Attachments.get_content(pending_attachment.id, pending_attachment.instance_id, prefix: schema) ==
                {:error, :not_available}
 
       # Metadata is still readable -- only byte-serving is gated (design §4.2).
@@ -411,7 +411,7 @@ defmodule Letflow.Repository.AttachmentsTest do
         |> Attachment.changeset(infected_attrs)
         |> Repo.insert(prefix: schema)
 
-      assert Attachments.get_content(infected_attachment.id, prefix: schema) ==
+      assert Attachments.get_content(infected_attachment.id, infected_attachment.instance_id, prefix: schema) ==
                {:error, :not_available}
     end
   end

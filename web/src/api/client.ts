@@ -62,19 +62,9 @@ function extractUserIdFromToken(token: string): string | null {
 
 // ── Core request ───────────────────────────────────────────────────────────────
 
-async function request<T>(
-  path: string,
-  options: RequestInit = {},
-  behavior: { suppressSessionExpiredEvent?: boolean } = {},
-  parseAs: 'json' | 'text' = 'json',
-): Promise<T> {
+function buildRequestHeaders(extraHeaders?: Record<string, string>): Record<string, string> {
   const token = getToken()
-  const isFormData = options.body instanceof FormData
-
-  const headers: Record<string, string> = {
-    ...(isFormData ? {} : { 'Content-Type': 'application/json' }),
-    ...(options.headers as Record<string, string>),
-  }
+  const headers: Record<string, string> = { ...extraHeaders }
   if (token) {
     headers['Authorization'] = `Bearer ${token}`
     // Extract user ID from JWT and send as required x-bpm-user-id header
@@ -83,9 +73,17 @@ async function request<T>(
       headers['x-bpm-user-id'] = userId
     }
   }
+  return headers
+}
 
-  const response = await window.fetch(`${BASE_URL}${path}`, { ...options, headers })
-
+/** Shared non-2xx handling for both request() (json/text) and getBlob()
+ *  (binary). Throws the same ApiError shape either way — callers branch on
+ *  err.status, not on a blob-specific error type (design §2.2). Returns
+ *  normally (does not throw) when response.ok. */
+async function throwOnErrorResponse(
+  response: Response,
+  behavior: { suppressSessionExpiredEvent?: boolean } = {},
+): Promise<void> {
   if (response.status === 401) {
     if (!behavior.suppressSessionExpiredEvent) {
       window.dispatchEvent(new CustomEvent('auth:session-expired'))
@@ -143,6 +141,24 @@ async function request<T>(
       details,
     })
   }
+}
+
+async function request<T>(
+  path: string,
+  options: RequestInit = {},
+  behavior: { suppressSessionExpiredEvent?: boolean } = {},
+  parseAs: 'json' | 'text' = 'json',
+): Promise<T> {
+  const isFormData = options.body instanceof FormData
+
+  const headers: Record<string, string> = buildRequestHeaders({
+    ...(isFormData ? {} : { 'Content-Type': 'application/json' }),
+    ...(options.headers as Record<string, string>),
+  })
+
+  const response = await window.fetch(`${BASE_URL}${path}`, { ...options, headers })
+
+  await throwOnErrorResponse(response, behavior)
 
   if (response.status === 204) {
     return (parseAs === 'text' ? '' : undefined) as T
@@ -177,6 +193,30 @@ export const client = {
         )}`
       : path
     return request<T>(url)
+  },
+  /** Fetches a binary response as a Blob, attaching the same Authorization/
+   *  x-bpm-user-id headers request() already attaches for json/text calls
+   *  (design §2.2). On a non-2xx response, throws the same ApiError shape
+   *  request()'s existing !response.ok branch does (401/429/409/generic) --
+   *  callers branch on err.status (404/410/other), not on a blob-specific
+   *  error type. Used for attachment content bytes, which are never JSON. */
+  async getBlob(path: string, params?: Record<string, unknown>): Promise<{ blob: Blob; contentType: string }> {
+    const url = params
+      ? `${path}?${new URLSearchParams(
+          Object.fromEntries(
+            Object.entries(params).filter((entry): entry is [string, string] => {
+              const v = entry[1];
+              return v !== undefined && v !== null && v !== '';
+            }),
+          ),
+        )}`
+      : path
+    const headers = buildRequestHeaders()
+    const response = await window.fetch(`${BASE_URL}${url}`, { headers })
+    await throwOnErrorResponse(response)
+    const blob = await response.blob()
+    const contentType = response.headers.get('Content-Type') ?? blob.type ?? 'application/octet-stream'
+    return { blob, contentType }
   },
   getText(path: string, params?: Record<string, unknown>): Promise<string> {
     const url = params

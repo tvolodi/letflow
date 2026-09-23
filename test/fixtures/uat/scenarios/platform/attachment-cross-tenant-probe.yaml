@@ -25,15 +25,6 @@ description: >
   sees is indistinguishable from asking for a document that has never existed.
 
 pipeline_test: web/tests/e2e/pipelines/attachment-cross-tenant.pipeline.e2e.spec.ts
-# NOTE (ISS-0527): this spec file does not exist in R-Co's own web/ tree at the
-# pinned commit either -- it is an aspirational forward-reference to a Playwright
-# test that was never authored anywhere, gated on the same missing feature this
-# scenario's own steps exercise. UAT-RUNNER cannot drive this pipeline_test yet;
-# treat any run of this scenario as BLOCKED/UNBUILT_FEATURE on the frontend leg
-# until FRONTEND-DEV authors it against a real shipped feature.
-# UAT-RUNNER drives this Playwright pipeline test for all steps. If this file does
-# not exist or the test cannot run, that is a BLOCKER (missing UI) and must be
-# routed to FRONTEND-DEV before UAT can proceed.
 
 actors:
   swiftroute_dispatcher: actor-swiftroute-lena

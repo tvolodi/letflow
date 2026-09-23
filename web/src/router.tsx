@@ -11,6 +11,7 @@ import PromotionReviewPage from '@/pages/definitions/PromotionReviewPage'
 import DefinitionRollbackPage from '@/pages/definitions/DefinitionRollbackPage'
 import InstanceBoardPage from '@/pages/instances/InstanceBoardPage'
 import InstanceDetailPage from '@/pages/instances/InstanceDetailPage'
+import AttachmentViewerPage from '@/pages/instances/AttachmentViewerPage'
 import TaskInboxPage from '@/pages/tasks/TaskInboxPage'
 import UsersPage from '@/pages/admin/UsersPage'
 import UserDetailPage from '@/pages/admin/UserDetailPage'
@@ -61,6 +62,7 @@ export const router = createBrowserRouter([
       { path: 'definitions/:id/rollback', element: <DefinitionRollbackPage /> },
       { path: 'instances', element: <InstanceBoardPage /> },
       { path: 'instances/:id', element: <InstanceDetailPage /> },
+      { path: 'instances/:id/attachments/:attachmentId', element: <AttachmentViewerPage /> },
       { path: 'tasks', element: <TaskInboxPage /> },
       { path: 'admin/users', element: <UsersPage /> },
       { path: 'admin/users/:userId', element: <UserDetailPage /> },

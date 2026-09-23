@@ -202,6 +202,43 @@ export interface AppendEventRequest {
   metadata?: Record<string, string>
 }
 
+// ── Attachments (S8, REQ-212/386/387) ──────────────────────────────────────────
+//
+// Field names/casing match the shipped JSON verbatim (`attachment_json/1` and the
+// `POST .../link` response body — lib/letflow/design/req387-attachment-document-viewer.md
+// §0/§2.1) — no camelCase translation layer.
+
+export interface Attachment {
+  id: string
+  instance_id: string
+  file_name: string
+  content_type: string
+  byte_size: number
+  uploaded_by: string
+  description: string | null
+  created_at: string
+}
+
+export interface AttachmentsPage {
+  items: Attachment[]
+  next_cursor: string | null
+}
+
+export interface AttachmentLink {
+  attachment_id: string
+  token: string
+  url: string
+  expires_at: string // ISO8601
+  expires_in_seconds: number
+}
+
+/** Result of a successful attachment-bytes fetch — never persisted, only ever
+ *  held in page-local state for the lifetime of one viewer-page mount. */
+export interface AttachmentBlob {
+  blob: Blob
+  contentType: string
+}
+
 // ── Entities (S10 P4, REQ-336) ─────────────────────────────────────────────────
 //
 // Mirrors lib/letflow/entities/definition.ex's `field_def()`/`t()` document

@@ -98,6 +98,8 @@ export const queryKeys = {
       [...queryKeys.instances.all(tenantId), 'events', id, filters ?? {}] as const,
     timeline: (tenantId: string, id: string, cursor: string | null, pageSize: number) =>
       [...queryKeys.instances.all(tenantId), 'timeline', id, cursor, pageSize] as const,
+    attachments: (tenantId: string, instanceId: string) =>
+      [...queryKeys.instances.all(tenantId), 'attachments', instanceId] as const,
   },
 
   definitions: {

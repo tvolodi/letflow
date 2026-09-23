@@ -97,6 +97,7 @@ defmodule Letflow.Repository.Attachments do
   alias Letflow.Api.Pagination
   alias Letflow.Repo
   alias Letflow.Repository
+  alias Letflow.Identity.Tenant
   alias Letflow.Repository.Artifact
   alias Letflow.Repository.Attachment
   alias Letflow.TenantProvisioning
@@ -181,6 +182,7 @@ defmodule Letflow.Repository.Attachments do
   @spec upload(upload_attrs(), opts()) ::
           {:ok, Attachment.t()}
           | {:error, :file_too_large}
+          | {:error, :storage_quota_exceeded}
           | {:error, :infected, verdict :: String.t()}
           | {:error, :scan_unavailable}
           | {:error, Ecto.Changeset.t()}
@@ -237,7 +239,8 @@ defmodule Letflow.Repository.Attachments do
          content_type,
          measured_byte_size
        ) do
-    with {:ok, tenant_id} <- TenantProvisioning.tenant_id_for_schema_name(prefix) do
+    with {:ok, tenant_id} <- TenantProvisioning.tenant_id_for_schema_name(prefix),
+         :ok <- check_storage_quota(prefix, tenant_id, measured_byte_size) do
       Repo.transaction(fn ->
         Repository.upsert_content(
           prefix,
@@ -472,6 +475,53 @@ defmodule Letflow.Repository.Attachments do
 
     with {:ok, attachment} <- get(id, opts) do
       Repo.delete(attachment, prefix: prefix)
+    end
+  end
+
+  # ===========================================================================
+  # get_storage_usage/1 (REQ-390 design §4)
+  # ===========================================================================
+
+  @doc """
+  Returns the sum of `byte_size` across all `instance_attachments` rows in the
+  tenant's own Postgres schema, computed on read. Returns `{:ok, 0}` when the
+  tenant has no attachments (COALESCE semantics). Called by REQ-392's quota
+  display route and internally by `check_storage_quota/3`.
+  """
+  @spec get_storage_usage(opts()) :: {:ok, non_neg_integer()}
+  def get_storage_usage(opts) when is_list(opts) do
+    prefix = Keyword.fetch!(opts, :prefix)
+
+    raw =
+      Repo.one(
+        from(a in "instance_attachments",
+          select: coalesce(sum(a.byte_size), 0)
+        ),
+        prefix: prefix
+      )
+
+    # SUM on a raw string table returns Decimal (type unknown at compile time); normalize.
+    usage =
+      case raw do
+        nil -> 0
+        %Decimal{} = d -> Decimal.to_integer(d)
+        n when is_integer(n) -> n
+      end
+
+    {:ok, usage}
+  end
+
+  # REQ-390 design §5 -- runs after tenant_id_for_schema_name, before Repo.transaction.
+  @spec check_storage_quota(String.t(), Ecto.UUID.t(), non_neg_integer()) ::
+          :ok | {:error, :storage_quota_exceeded}
+  defp check_storage_quota(prefix, tenant_id, new_bytes) do
+    {:ok, current_usage} = get_storage_usage(prefix: prefix)
+    %Tenant{storage_allowance_bytes: allowance} = Repo.get(Tenant, tenant_id)
+
+    if current_usage + new_bytes > allowance do
+      {:error, :storage_quota_exceeded}
+    else
+      :ok
     end
   end
 

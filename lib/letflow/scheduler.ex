@@ -147,9 +147,12 @@ defmodule Letflow.Scheduler do
         ) :: Ecto.Multi.t() | {:ok, Timer.t()} | {:error, Ecto.Changeset.t()}
   def create(%Multi{} = multi, attrs, opts) when is_map(attrs) and is_list(opts) do
     prefix = Keyword.fetch!(opts, :prefix)
+    # REQ-396: callers that arm escalation timers supply step_name: to avoid
+    # colliding with the default :scheduler_timer step used for deadline timers.
+    step_name = Keyword.get(opts, :step_name, :scheduler_timer)
     changeset = build_arm_changeset(attrs, prefix)
 
-    Multi.insert(multi, :scheduler_timer, changeset, prefix: prefix)
+    Multi.insert(multi, step_name, changeset, prefix: prefix)
   end
 
   def create(Repo, attrs, opts) when is_map(attrs) and is_list(opts) do
@@ -301,16 +304,17 @@ defmodule Letflow.Scheduler do
            |> Repo.update(prefix: tenant_schema),
          {:ok, _append_result} <-
            append_timer_fired_event(timer, now, fired_late, tenant_schema),
-         # REQ-187 design doc §7.1 -- the poller's fire path re-entering the
-         # engine to advance the token off the :TIMER node, still inside
-         # this same Repo.transaction/1 fire_timer/2 already opened (Ecto
-         # nests advance_after_timer_fired/3's own internal Multi as a real
-         # Postgres SAVEPOINT here). `Repo` is Letflow.Repo itself -- the
-         # literal repo module, not an Ecto.Multi-injected one, since this
-         # call is an ordinary sequential call inside an already-open
-         # transaction function, not a Multi.run/3 callback.
+         # REQ-396: escalation timers route to advance_after_escalation_timer_fired/3
+         # (cancel original task, create new task at escalation target).
+         # All other timer types follow the existing advance_after_timer_fired/3 path.
          {:ok, :advanced} <-
-           Letflow.Engine.advance_after_timer_fired(timer, Repo, tenant_schema),
+           (case timer.timer_type do
+              "escalation" ->
+                Letflow.Engine.advance_after_escalation_timer_fired(timer, Repo, tenant_schema)
+
+              _ ->
+                Letflow.Engine.advance_after_timer_fired(timer, Repo, tenant_schema)
+            end),
          # REQ-188 §1.2 -- the LAST step of this with chain, still inside
          # fire_timer/2's one transaction. `timer` here is the struct
          # captured BEFORE fire_changeset/2's update -- none of the

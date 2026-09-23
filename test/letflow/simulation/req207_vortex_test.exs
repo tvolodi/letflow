@@ -117,6 +117,44 @@ defmodule Letflow.Simulation.Req207VortexTest do
   `BLOCKED_ON_DEPENDENCY`, still on S8's GUI-step harness (Signal 5), still
   nothing under `lib/` left for this scenario to wait on.
 
+  ## REQ-394 lands, 2026-09-23 (re-derived, not waved through)
+
+  REQ-394 ("Per-entity-type record authorization, with denial indistinguishable
+  from a genuinely empty entity type") flipped `status: done` and the
+  `pending_only_ids` tripwire fired exactly as armed. Re-derivation, not a
+  guess: read the requirement text, its design doc
+  (`lib/letflow/design/req394-per-entity-type-authorization.md`), and diffed
+  its landed commit (`bd77a129`) against `main` for
+  `lib/letflow/routers/entities.ex`.
+
+  Finding: REQ-394 layers a new `Letflow.Entities.TypeAccess.authorized?/3`
+  check ONTO the two EXISTING routes this scenario's six `:gui` steps already
+  depend on (`POST /entities/query`, `GET /entities/definitions/active/:name`)
+  -- it adds no route, removes no route, renames no route, and mints no new
+  permission atom consumed by `Letflow.Routers.Entities`. Confirmed live, not
+  assumed: `git diff main..bd77a129 -- lib/letflow/routers/entities.ex` touches
+  only handler bodies (threading `conn.assigns.auth_context.user_id` through
+  and a `TypeAccess.authorized?/3` call before `Compiler.compile/2`'s result is
+  used) -- no `authz_post`/`authz_get` declaration is added, removed, or
+  retargeted, so Signal 3'' below (asserting `__authz_routes__/0`'s route set
+  by EQUALITY) never moved and required no edit. `runner.ex` is untouched by
+  REQ-394's commit (its own diff stat lists only
+  `lib/letflow/routers/entities.ex` and `test/letflow/routers/entities_test.exs`)
+  and remains absent from this branch's diff, so Signal 5's harness blocker is
+  likewise untouched.
+
+  So, exactly like REQ-315/317/319/320 before it, REQ-394 closes no gap this
+  scenario was waiting on: its own denial-vs-empty-type behavior only changes
+  what an UNAUTHORIZED caller sees, and this scenario's fixture (per PW-10 /
+  the sister UAT scenario at
+  `test/fixtures/uat/scenarios/vortex/entity-list-filter-and-page.yaml`) never
+  exercises a denied type. The disposition itself is UNCHANGED: still
+  `BLOCKED_ON_DEPENDENCY`, still on S8's GUI-step harness (Signal 5), still
+  nothing under `lib/` left for this scenario to wait on. REQ-394 was admitted
+  to `allowed_ids` on the strength of this completed re-derivation, the same
+  basis REQ-315/317/319/320 were -- not silenced by deletion or by a blind move
+  into `allowed_ids` without re-checking Signals 3''/5 first.
+
   Full reasoning and the complete re-derivation history live in that describe
   block's own comments; `test/specs/REQ-310.md` states the test cases.
 
@@ -1413,6 +1451,23 @@ defmodule Letflow.Simulation.Req207VortexTest do
           # re-derivation is complete and its output is what Signal 3''
           # below now asserts, exactly the REQ-310/311 precedent.
           "REQ-315",
+          # REQ-394, promoted from pending_only_ids on 2026-09-23 after its status
+          # flipped to done and the tripwire fired exactly as armed. Re-derived
+          # in full (see the moduledoc's "REQ-394 lands" section above), not
+          # waved through: it layers a new per-entity-type authorization check
+          # onto the two EXISTING routes this scenario depends on (POST
+          # /entities/query, GET /entities/definitions/active/:name) -- no
+          # route added, removed, or renamed on Letflow.Routers.Entities
+          # (confirmed live via `git diff main..bd77a129 --
+          # lib/letflow/routers/entities.ex`, which touches only handler
+          # bodies, never an authz_post/authz_get declaration), and
+          # test/support/simulation/runner.ex is untouched by its commit. So
+          # neither Signal 3'' (route-set equality) nor Signal 5 (the harness
+          # blocker) moved, and this scenario's fixture never exercises a
+          # denied entity type, so REQ-394's own denial-vs-empty-type behavior
+          # change is never observed by these six steps either way. Disposition
+          # unchanged: still blocked on S8's GUI harness (Signal 5).
+          "REQ-394",
           # REQ-317/318/319/320, admitted 2026-09-12 -- the S10 gap 3
           # part-2/gap 12 batch filed alongside REQ-315..320 (main commits
           # ac492a25/6fdcbcd8/9cf2c177). All four are `status: pending` --
@@ -1778,39 +1833,49 @@ defmodule Letflow.Simulation.Req207VortexTest do
       # NOT this test's own Letflow.Simulation.Runner fixture, but the exact
       # same underlying scenario concept -- see
       # test/uat-reports/gui-review-2026-09-20-entity-list-filter-and-page.md)
-      # are admitted HERE while `status: pending`, per this tier's own rule:
-      # filing builds nothing, so they are armed rather than waved through.
+      # were admitted HERE while `status: pending`, per this tier's own rule:
+      # filing builds nothing, so they were armed rather than waved through.
       #
-      # REQ-393 (owner FRONTEND-DEV) will build a generic filter/sort/
-      # page-size entity-LIST SCREEN under `web/` -- a browser-rendered React
+      # REQ-393 (owner FRONTEND-DEV) built a generic filter/sort/page-size
+      # entity-LIST SCREEN under `web/` -- a browser-rendered React
       # component, not anything under `lib/letflow/` or
-      # `test/support/simulation/`. It cannot touch Signal 3''/3'''s route
-      # equality (it adds no HTTP route; it consumes the existing
-      # `POST /entities/query`) and cannot touch Signal 5 (it has no
+      # `test/support/simulation/`. It flipped `status: done` on 2026-09-23
+      # (PR #1754, merge commit ac751a7d) and this tripwire fired exactly as
+      # armed. Re-derivation, confirmed rather than assumed: its diff touches
+      # neither Signal 3''/3'''s route equality (it adds no HTTP route; it
+      # consumes the existing `POST /entities/query`) nor Signal 5 (it has no
       # relationship whatsoever to `Letflow.Simulation.Runner`, which this
       # test's scenario runs against -- that module has no concept of `web/`
-      # at all). REQ-394 (owner ELIXIR-DEV, security-relevant) will build a
-      # new per-entity-type authorization CHECK layered onto the two EXISTING
-      # routes (`POST /entities/query`, `GET /entities/definitions/active/:name`)
-      # -- its own acceptance criteria state explicitly that the existing
-      # coarse route-level permissions are not removed and no route is added
-      # or renamed, so it too should leave Signal 3''/3''' untouched, and it
-      # has no more relationship to `Letflow.Simulation.Runner`'s `:gui ->`
-      # dispatch clause than REQ-393 does.
+      # at all). It was promoted to allowed_ids above (DOC-UPDATER's own
+      # WF02-REQ393-20260923 Step Final pass) with that account; it is no
+      # longer listed in this tier.
       #
-      # Both predictions are recorded here, not assumed permanently: per this
-      # tier's own contract, the moment either flips to `status: done` this
-      # tripwire fires again and the disposition must be RE-DERIVED LIVE
-      # against Signals 3''/3'''/5 as they then stand -- not waved into
-      # allowed_ids on the strength of this comment alone.
+      # REQ-394 (owner ELIXIR-DEV, security-relevant) flipped `status: done`
+      # on 2026-09-23 and this tripwire fired exactly as armed. The
+      # re-derivation the prediction below called for is complete -- see the
+      # moduledoc's "REQ-394 lands" section and the allowed_ids entry above --
+      # and confirmed the prediction: it layers a per-entity-type
+      # authorization CHECK onto the two EXISTING routes (`POST
+      # /entities/query`, `GET /entities/definitions/active/:name`) without
+      # adding, removing, or renaming any route, so Signal 3''/3''' stayed
+      # untouched, and it has no relationship to `Letflow.Simulation.Runner`'s
+      # `:gui ->` dispatch clause (runner.ex absent from its diff), so Signal 5
+      # stayed untouched too. It was promoted to allowed_ids above with the
+      # full re-derivation account; it is no longer listed in this tier.
+      #
+      # Both predictions were recorded here, not assumed permanently, per
+      # this tier's own contract: the moment either flipped to `status: done`
+      # this tripwire fires again and the disposition must be RE-DERIVED
+      # LIVE against Signals 3''/3'''/5 as they then stand -- not waved into
+      # allowed_ids on the strength of a comment alone. Both re-derivations
+      # above are complete and neither id remains in this tier.
       pending_only_ids = [
         "REQ-315",
         "REQ-316",
         "REQ-317",
         "REQ-318",
         "REQ-319",
-        "REQ-320",
-        "REQ-394"
+        "REQ-320"
       ]
 
       refute Enum.empty?(entity_title_matches),

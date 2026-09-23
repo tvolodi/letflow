@@ -4610,8 +4610,16 @@ volumes:
     path: docs/status/requirement_status.v22.yaml
     status: current
     opened: 2026-09-22
-    entries: 8
+    entries: 9
     note: >
+      Incremented to 9 by FRONTEND-DEV's WF02-REQ393-20260923 Step Final
+      rebase: composed REQ-393 started (2026-09-23T10:15:15Z) chronologically
+      before REQ-391 done (2026-09-23T11:39:43Z). `grep -c "^  - req:"
+      docs/status/requirement_status.v22.yaml` = 9 on-disk entries,
+      recounted directly rather than assumed. Well under the
+      1200-line/120000-byte roll ceiling, so no roll triggered.
+      Prior notes preserved below verbatim.
+
       Incremented to 8 by DOC-UPDATER's own REQ-391 done-event append
       (WF02-REQ391-20260923 Step 6, including the REQ-390 merge-
       reconciliation cycle). `grep -c "^  - req:"
@@ -4621,11 +4629,6 @@ volumes:
       triggered. Prior notes preserved below verbatim.
 
       Incremented to 5 by DOC-UPDATER's own REQ-387 done-event append
-      (WF02-REQ387-20260923 Step 6). `grep -c "^  - req:"
-      docs/status/requirement_status.v22.yaml` = 5 on-disk entries,
-      recounted directly rather than assumed. 305 lines / 17939 bytes,
-      well under the 1200-line/120000-byte roll ceiling, so no roll
-      triggered. Prior notes preserved below verbatim.
 
       Incremented to 4 by DOC-UPDATER's own merge of origin/main into
       feature/WF02-REQ388-20260923 (Step 6/7, resolving a merge conflict in

@@ -2149,3 +2149,5 @@
 2026-09-23T09:37:55Z | PASS | WF02-REQ390-20260923 | step-06-doc-updater | DOC-UPDATER → ORCH | PASS -- REQ-390 done, v22 events verified
 2026-09-23T09:38:29Z | DISPATCH | WF02-REQ390-20260923 | step-final-elixir-dev | ORCH → ELIXIR-DEV | PENDING
 2026-09-23T10:08:55Z | COMPLETED | WF02-REQ390-20260923 | step-final-elixir-dev | ELIXIR-DEV → COMPLETED | PR #1749 merged as a3156299 | queue task 750 released HTTP 200 | registry COMPLETED | admin override: signature_heuristic flake attributed route 2
+2026-09-23T10:12:25Z | DONE | WF02-REQ390-20260923 | step-final-elixir-dev | ELIXIR-DEV → ORCH | COMPLETED -- PR#1749 merged (a3156299), bookkeeping PR#1750, queue task 750 released
+2026-09-23T10:14:28Z | DISPATCH | WF02-REQ393-20260923 | step-00-git-setup | ORCH → FRONTEND-DEV | PENDING

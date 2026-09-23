@@ -1,0 +1,34 @@
+{
+  "handoff_id": "WF02-REQ393-20260923-step-00",
+  "run_id": "WF02-REQ393-20260923",
+  "workflow": "WF-02",
+  "step": "Step 00",
+  "to_agent": "FRONTEND-DEV",
+  "from_agent": "ORCH",
+  "status": "PENDING",
+  "created_at": "2026-09-23T10:13:55Z",
+  "started_at": "2026-09-23T10:13:55Z",
+  "context": {
+    "branch_name": "feature/WF02-REQ393-20260923",
+    "requirement_ids": ["REQ-393"],
+    "stage": "S8",
+    "requirement_text": {
+      "REQ-393": "Generic, tenant-agnostic entity-list browse screen with filter builder, sort control, and page-size control wired to POST /entities/query. WHAT EXISTS TODAY: EntityCrudPage.tsx (REQ-343) is BilimBaga-only, uses compile-time EXCLUDE_DELETED_FILTERS, client-side sort only (no sort clause to server), hardcoded PAGE_SIZE=25 constant. WHAT IS NEEDED: A generic entity-list screen (new component or extended EntityCrudPage) that: (1) renders a filter builder (field/operator/value rows, driven by EntityDefinition queried:true fields, submitted as filters array); (2) renders a sort control (field+direction) sent as sort array to POST /entities/query, disabling client-side sort; (3) renders a page-size control surfacing :page_size_too_large 400 as readable message; (4) surfaces :field_not_allowed 422 as readable message naming the specific field; (5) writes real Playwright spec at web/tests/e2e/pipelines/entity-list-query.pipeline.e2e.spec.ts covering filter, sort-then-page, non-searchable-filter rejection, over-limit-page-size rejection. OUT OF SCOPE: Vortex provisioning, REQ-394 entity-type authorization, BilimBaga regression. AC: filter builder exists and drives POST query; sort control sends server-side sort verified across 2+ pages; page-size control shows readable error; field_not_allowed rejection shows readable message; Playwright spec passes against running instance; BilimBaga not regressed; compile/test/lint all pass."
+    },
+    "owned_modules": [
+      "web/src/pages/entities/",
+      "web/src/components/",
+      "web/tests/e2e/pipelines/entity-list-query.pipeline.e2e.spec.ts"
+    ],
+    "artifacts_in": []
+  },
+  "task": {
+    "description": "Execute Step 00 (GIT SETUP) for WF02-REQ393-20260923 per docs/agents/protocols/GIT_SETUP.md.\n\nBranch: feature/WF02-REQ393-20260923\n\nUncommitted files to stage (by explicit name):\n- handoffs/registry.json (REQ-393 entry)\n- handoffs/orchestrator.log\n- handoffs/WF02-REQ393-20260923/step-00-git-setup.json (this file)\n- docs/requirements.yaml (flip REQ-393 pending → in_progress)\n- docs/status/requirement_status.v22.yaml (append started event)\n- docs/status/requirement_status.index.yaml (increment entries)\n\nDO NOT stage: scripts/fix_registry.py, web/tests/e2e/.pipeline-state/\n\nProcedure:\n1. git checkout main\n2. git pull --ff-only origin main\n3. Flip REQ-393 status to in_progress in docs/requirements.yaml\n4. Append started event to current status volume (check index for current volume)\n5. git checkout -b feature/WF02-REQ393-20260923\n6. Stage and commit the 6 files above\n   Commit msg: 'feat(WF02-REQ393-20260923): Step 00 -- git setup, requirement started'\n7. git push -u origin feature/WF02-REQ393-20260923\n8. Complete handoff PASS",
+    "acceptance_criteria": [
+      "Branch feature/WF02-REQ393-20260923 created and pushed",
+      "REQ-393 status flipped to in_progress",
+      "Started event appended to status volume"
+    ]
+  },
+  "result": null
+}

@@ -1,0 +1,35 @@
+{
+  "handoff_id": "WF02-REQ396-20260923-step-03",
+  "run_id": "WF02-REQ396-20260923",
+  "workflow": "WF-02",
+  "step": "Step 3 (Test Design)",
+  "to_agent": "TEST-DESIGNER",
+  "from_agent": "ORCH",
+  "status": "PENDING",
+  "created_at": "2026-09-23T19:47:27Z",
+  "started_at": "2026-09-23T19:47:27Z",
+  "context": {
+    "branch_name": "feature/WF02-REQ396-20260923",
+    "requirement_ids": ["REQ-396"],
+    "reviewer_notes": "CHK-21 cond edge case (non-binary non-nil falls through to wrong code) -- non-blocking, YAML always produces strings. update_all uses string literals against Ecto.Enum -- non-blocking, correct stored values.",
+    "artifacts_in": [
+      "lib/letflow/definitions/graph.ex",
+      "lib/letflow/engine.ex",
+      "lib/letflow/engine/transition.ex",
+      "lib/letflow/scheduler.ex",
+      "test/letflow/definitions/graph_test.exs",
+      "test/letflow/simulation/req206_swiftroute_test.exs",
+      "docs/requirements.yaml (REQ-396 ACs)"
+    ]
+  },
+  "task": {
+    "description": "Execute Step 3 (Test Design) for REQ-396.\n\nWorkspace: c:\\Users\\tvolo\\dev\\ai-dala\\letflow\nBranch: feature/WF02-REQ396-20260923\nMix: & 'C:/Program Files/Elixir/bin/mix'\n\nREQ-396 ACs requiring tests:\n- AC2: Graph validates new attributes; malformed value rejected at definition-validation time\n- AC3: ExUnit proves timer fire -> (a) non-actionable original task, (b) one new task to escalation role, (c) audit ordering\n- AC4: process_route_approval.yaml ops-review timeout path reaches ceo-approval (end-to-end Engine.create/2 test)\n- AC5: Deferred (UAT re-run, requires REQ-395 + ISS-0739)\n- AC6: mix test passes\n\nWrite tests for ACs 2, 3, 4:\n\n### AC2 -- graph_test.exs\nAdd tests:\n- :HUMAN_TASK with valid escalation_timer_duration + escalation_role: no validation error\n- :HUMAN_TASK with only escalation_timer_duration (missing escalation_role): expect :missing_escalation_role violation\n- :HUMAN_TASK with only escalation_role (missing escalation_timer_duration): expect :missing_escalation_timer_duration violation\n- :HUMAN_TASK with invalid escalation_timer_duration format: expect :invalid_escalation_timer violation\n\n### AC3 -- new test file or add to simulation test\nWrite an ExUnit test that:\n1. Creates a process instance with a HUMAN_TASK node that has escalation_timer_duration + escalation_role set\n2. Force-fires the escalation timer via Letflow.Scheduler.fire_timer/2 (or advance-timer route)\n3. Asserts (a): the original HUMAN_TASK is in a non-actionable status\n4. Asserts (b): exactly one new task exists assigned to the escalation role\n5. Asserts (c): audit_entries shows the original task's timeout/cancel transition before the new task's creation\n\nLook at test/letflow/simulation/ for patterns on how to create instances and fire timers.\n\n### AC4 -- req206_swiftroute_test.exs\nAdd or update a test that exercises the ops-review escalation path:\n- Creates an instance of process_route_approval\n- Gets to the ops-review HUMAN_TASK state\n- Force-fires the escalation timer\n- Asserts the ops-review task becomes non-actionable\n- Asserts the ceo-approval task is created\n\nRun: & 'C:/Program Files/Elixir/bin/mix' test test/letflow/definitions/graph_test.exs test/letflow/simulation/req206_swiftroute_test.exs\n\nAfter:\n1. Write handoffs/WF02-REQ396-20260923/step-03-test-designer.json COMPLETED PASS\n2. git add all test files + handoff\n3. git commit + push\n\nReport: tests written and pass counts",
+    "acceptance_criteria": [
+      "AC2: 4 graph validation tests (valid, missing one, missing other, invalid format)",
+      "AC3: ExUnit proves timer fire -> non-actionable + new task + audit ordering",
+      "AC4: req206 test exercises escalation path end-to-end",
+      "All tests pass"
+    ]
+  },
+  "result": null
+}

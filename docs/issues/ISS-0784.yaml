@@ -63,4 +63,55 @@ queue_ref: "Q-783"
 # re-entrancy issue. Established, recurring queue-id/filename divergence
 # pattern for this project; queue_ref/github_ref below are authoritative.
 github_ref: "GH-1731"
-status: open
+status: resolved
+resolved_in_run: WF03-ISS0784-20260922
+resolved_at: "2026-09-22T23:42:37Z"
+resolution: >
+  Fixed on feature/WF03-ISS0784-20260922 (tip 129a5095), design
+  lib/letflow/design/iss0784-task-activation-rollback-audit-signal.md.
+
+  ORIGINAL FIX: task-activation rejections (Letflow.Engine.TaskActivation
+  .resolve_form_schema/1 returning {:invalid_form_schema, reason}, and the
+  transaction rollback it triggers per INV-8) are now recorded via a new
+  record_task_activation_rejection_audit/5 helper, wired at all four call
+  sites that can hit this rollback: Engine.create/2, Engine.complete_task/3,
+  Scheduler's timer-fired advance path, and the service-task-outcome advance
+  path. An operator can now see, per-instance, that activation was attempted
+  and rejected, and why -- closing the gap two independent design passes
+  (REQ-273 OQ-2, REQ-385 OQ-1) had separately flagged and never acted on.
+
+  SIGNIFICANT MID-CYCLE CORRECTION (the main reason this record is worth
+  reading in full): TEST-DESIGNER's own regression tests proved, directly
+  against Postgres, that sites 3 and 4 (persist_timer_fired_advance/7 and
+  do_persist_service_task_advance/10) wrote ZERO audit_entries rows on a
+  real rejection -- the audit write was silently rolling back along with
+  everything else, completely defeating the feature at exactly those two
+  sites. Root cause: both call sites invoked
+  record_task_activation_rejection_audit/5 from inside an inline error
+  clause that itself runs nested inside the CALLER's own already-open outer
+  transaction (Scheduler.fire_timer/2, Engine.advance_after_service_task_outcome/4)
+  -- the helper's own `Repo.transaction/1` was not actually independent, just
+  a nested call sharing that same open connection, so its work rolled back
+  with the caller's failure instead of surviving it. Sites 1/2 (create/2,
+  complete_task/3) were already correct and untouched.
+
+  FIX for the correction (commit 6c716637): moved the audit write out of the
+  inner helper and into the two OUTER callers -- Scheduler.attempt_fire/2 and
+  ServiceTaskDispatcher.call_advance_after_service_task_outcome/3 -- which
+  now issue it strictly AFTER their own Repo.transaction/1 has fully
+  returned, so it lands in its own true, independent transaction outside the
+  one that just rolled back. record_task_activation_rejection_audit/5 was
+  exposed (was defp, now @doc false def) so both outer callers can reach it.
+  A site-4 regression test was added (service_task_wiring_test.exs) proving
+  the fix generalizes beyond the one TEST-DESIGNER wrote for site 3
+  (timer_wiring_test.exs, now genuinely passing instead of documenting the
+  defect).
+
+  Gated through CODE-DESIGN-VALIDATOR (caught and required a fix for a false
+  "no new UI" claim in the original design), ELIXIR-DEV, TEST-DESIGNER (found
+  and documented the transaction-boundary defect above with real fail-then-
+  pass Postgres evidence), and RELEASE-VALIDATOR, whose final verdict was
+  PASS/mergeable, independently tracing and confirming the transaction-
+  boundary fix sound. No docs/migration/stage-N-*.md or decisions/*.md file
+  was named by this issue's acceptance criteria. PR: (opened this step, see
+  DOC-UPDATER's own handoff/commit for the URL).

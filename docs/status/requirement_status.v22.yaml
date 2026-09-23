@@ -169,3 +169,43 @@
 
 
 history:
+  - req: SCOPE-CHANGE
+    event: done
+    agent: DOC-UPDATER
+    at: "2026-09-23T00:57:17Z"
+    note: >
+      ISS-0784 (MINOR, queue task 783, GH-1731 -- no operator-facing signal
+      when task activation rolls back on {:invalid_form_schema, ...}, a gap
+      two independent design passes, REQ-273 OQ-2 and REQ-385 OQ-1, had each
+      separately flagged and never acted on) resolved on
+      feature/WF03-ISS0784-20260922 (tip 129a5095). ORIGINAL FIX: a new
+      record_task_activation_rejection_audit/5 helper records the rejection
+      via Letflow.Audit at all four call sites that can hit the rollback --
+      Engine.create/2, Engine.complete_task/3, the timer-fired advance path,
+      and the service-task-outcome advance path. SIGNIFICANT MID-CYCLE
+      CORRECTION, worth flagging prominently: TEST-DESIGNER proved directly
+      against Postgres that sites 3/4 (persist_timer_fired_advance/7,
+      do_persist_service_task_advance/10) wrote zero audit_entries rows on a
+      real rejection -- the audit write was nested inside the caller's own
+      already-open outer transaction (Scheduler.fire_timer/2,
+      Engine.advance_after_service_task_outcome/4), so it silently rolled
+      back along with the failed attempt, completely defeating the feature
+      at exactly those two sites. Fixed (commit 6c716637) by moving the
+      audit write to the two outer callers (Scheduler.attempt_fire/2,
+      ServiceTaskDispatcher.call_advance_after_service_task_outcome/3),
+      issued strictly after their own Repo.transaction/1 returns, in its own
+      true independent transaction; record_task_activation_rejection_audit/5
+      exposed (was defp) so both callers can reach it; a new site-4
+      regression test (service_task_wiring_test.exs) proves the fix
+      generalizes beyond TEST-DESIGNER's original site-3 test
+      (timer_wiring_test.exs). Gates: CODE-DESIGN-VALIDATOR (one rework
+      round -- caught and required a fix for a false "no new UI" claim in
+      the original design), ELIXIR-DEV, TEST-DESIGNER (found and documented
+      the transaction-boundary defect above with real fail-then-pass
+      Postgres evidence), RELEASE-VALIDATOR (final verdict PASS/mergeable,
+      independently traced and confirmed the transaction-boundary fix
+      sound). Design:
+      lib/letflow/design/iss0784-task-activation-rollback-audit-signal.md.
+      No docs/migration/stage-N-*.md or decisions/*.md file was named by
+      this issue's acceptance criteria. Merged via PR on
+      feature/WF03-ISS0784-20260922.

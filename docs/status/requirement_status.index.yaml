@@ -4610,8 +4610,16 @@ volumes:
     path: docs/status/requirement_status.v22.yaml
     status: current
     opened: 2026-09-22
-    entries: 0
+    entries: 1
     note: >
+      Incremented to 1 by DOC-UPDATER's own ISS-0784 SCOPE-CHANGE done-event
+      append (WF03-ISS0784-20260922's Step 6, composed during this run's own
+      rebase onto fresh origin/main after REQ-383's done-event append had
+      already rolled volume 21 to this volume from under it). `grep -c
+      "^  - req:" docs/status/requirement_status.v22.yaml` = 1 on-disk entry.
+      211 lines / 12411 bytes, well under the 1200-line/120000-byte roll
+      ceiling, so no roll triggered. Prior note preserved below verbatim.
+
       Opened by DOC-UPDATER's own REQ-383 done-event append rolling volume
       21 (WF02-REQ383-20260923's Step Final rebase onto origin/main), per
       this index's `roll_rule.on_exceed` procedure. `entries:` will be

@@ -22,6 +22,15 @@ const NAV_ITEMS: NavItem[] = [
   { to: '/tasks',         label: 'My Tasks',    roles: ['PLATFORM_ADMIN', 'PROCESS_OPERATOR', 'TASK_WORKER'] },
   { to: '/exam',          label: 'Exams',       roles: ['CANDIDATE'] },
   { to: '/definitions',  label: 'Definitions', roles: ['PLATFORM_ADMIN', 'PROCESS_DESIGNER'] },
+  // REQ-398: promotion-review list/queue page. Supersedes ISS-0730 §1's
+  // "no nav entry, no contextual link -- direct URL only" decision for
+  // PromotionReviewPage.tsx, now that REQ-397's list endpoint exists --
+  // that decision's own stated rationale ("no list endpoint exists") no
+  // longer holds, and this is a global nav entry to a list page, not the
+  // contextual per-definition link ISS-0730 §1 separately declined. Same
+  // PLATFORM_ADMIN-only class as REQ-397's server-side authorization and
+  // this page's own client-side redirect (ISS-0730 §3.1 pattern, reused).
+  { to: '/promotions',   label: 'Promotion Reviews', roles: ['PLATFORM_ADMIN'] },
   { to: '/dlq',           label: 'DLQ',         roles: ['PLATFORM_ADMIN', 'PROCESS_OPERATOR'] },
   { to: '/webhooks',      label: 'Webhooks',    roles: ['PLATFORM_ADMIN', 'PROCESS_OPERATOR'] },
   { to: '/admin/users',   label: 'Users',       roles: ['PLATFORM_ADMIN'] },

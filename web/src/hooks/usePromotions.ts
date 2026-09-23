@@ -5,6 +5,7 @@ import { useTenantScopedQueryKeys } from '@/api/useTenantScopedQueryKeys'
 import type {
   ApprovePromotionRequest,
   ApplyPromotionRequest,
+  PromotionReviewListFilters,
 } from '@/api/promotions'
 
 /** Fetch GET /api/v1/promotions/{reviewId}/context */
@@ -14,6 +15,21 @@ export function usePromotionContext(reviewId: string) {
     queryKey: promotionKeys.context(reviewId),
     queryFn: () => promotionsApi.getContext(reviewId),
     enabled: !!reviewId,
+  })
+}
+
+/**
+ * Fetch GET /api/v1/promotions (REQ-398). No `enabled` guard — unlike
+ * `usePromotionContext`, this query has no required path param that could
+ * be empty. No `refetchInterval` either — a considered omission (design
+ * doc §3.1): a manual re-query on filter change is what AC3 requires, not
+ * live polling.
+ */
+export function usePromotionReviewList(filters: PromotionReviewListFilters) {
+  const promotionKeys = useTenantScopedQueryKeys().promotions
+  return useQuery({
+    queryKey: promotionKeys.list(filters),
+    queryFn: () => promotionsApi.list(filters),
   })
 }
 

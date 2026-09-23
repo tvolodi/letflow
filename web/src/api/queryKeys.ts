@@ -172,6 +172,9 @@ export const queryKeys = {
   promotions: {
     all: (tenantId: string) => ['tenant', tenantId, 'promotions'] as const,
     context: (tenantId: string, reviewId: string) => [...queryKeys.promotions.all(tenantId), 'context', reviewId] as const,
+    /** REQ-398 §3.2 — same shape as `dlq.list`. */
+    list: (tenantId: string, filters?: { status?: string; def_id?: string; def_type?: string; cursor?: string; page_size?: number }) =>
+      [...queryKeys.promotions.all(tenantId), 'list', filters ?? {}] as const,
   },
 
   entities: {

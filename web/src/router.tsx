@@ -8,6 +8,7 @@ import PlatformDashboardPage from '@/pages/dashboard/PlatformDashboardPage'
 import DefinitionListPage from '@/pages/definitions/DefinitionListPage'
 import DefinitionEditorPage from '@/pages/definitions/DefinitionEditorPage'
 import PromotionReviewPage from '@/pages/definitions/PromotionReviewPage'
+import PromotionReviewListPage from '@/pages/promotions/PromotionReviewListPage'
 import DefinitionRollbackPage from '@/pages/definitions/DefinitionRollbackPage'
 import InstanceBoardPage from '@/pages/instances/InstanceBoardPage'
 import InstanceDetailPage from '@/pages/instances/InstanceDetailPage'
@@ -61,6 +62,10 @@ export const router = createBrowserRouter([
       { path: 'definitions/:id', element: <DefinitionEditorPage /> },
       { path: 'definitions/:id/promotions/:reviewId', element: <PromotionReviewPage /> },
       { path: 'definitions/:id/rollback', element: <DefinitionRollbackPage /> },
+      // REQ-398: top-level promotion-review list/queue page, sibling to
+      // /definitions and /instances — not nested under definitions/*
+      // since it browses reviews across every definition.
+      { path: 'promotions', element: <PromotionReviewListPage /> },
       { path: 'instances', element: <InstanceBoardPage /> },
       { path: 'instances/:id', element: <InstanceDetailPage /> },
       { path: 'instances/:id/attachments/:attachmentId', element: <AttachmentViewerPage /> },

@@ -14,6 +14,7 @@ import { mergeTimelineItems } from './timelineUtils'
 import type { TimelineEntry } from '@/types/api'
 import { EventHistoryPanel } from '@/components/instances/EventHistoryPanel'
 import { AttachmentPanel } from '@/components/instances/AttachmentPanel'
+import { InstancePinsPanel } from '@/components/instances/InstancePinsPanel'
 import { TimelineFeed } from '@/components/instances/TimelineFeed'
 import { HistoryScrubber } from '@/components/instances/HistoryScrubber'
 import { ProcessGraphWithTokens } from '@/components/instances/ProcessGraphWithTokens'
@@ -311,6 +312,11 @@ export default function InstanceDetailPage() {
       <section style={{ marginBottom: '1.25rem' }}>
         <h3 style={{ marginBottom: '.5rem' }}>Attachments</h3>
         <AttachmentPanel instanceId={id!} />
+      </section>
+
+      <section style={{ marginBottom: '1.25rem' }}>
+        <h3 style={{ marginBottom: '.5rem' }}>Dependency Versions</h3>
+        <InstancePinsPanel instanceId={id!} />
       </section>
 
       <div style={{ display: 'flex', gap: '.5rem', borderBottom: '1px solid var(--border-default)', marginBottom: '1rem' }}>

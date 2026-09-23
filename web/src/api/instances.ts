@@ -6,6 +6,7 @@ import type {
   InstanceStatus,
   EventRecord,
   TimelinePage,
+  InstancePinsResponse,
 } from '@/types/api'
 
 export const instancesApi = {
@@ -47,4 +48,9 @@ export const instancesApi = {
 
   reconstruct: (id: string) =>
     client.get<ProcessInstance>(`/api/v1/instances/${id}/reconstruct`),
+
+  // REQ-399: already-shipped route (REQ-080) — pure read of
+  // PinResolver.reconstruct_effective_pins/2, no query params.
+  getPins: (id: string) =>
+    client.get<InstancePinsResponse>(`/api/v1/instances/${id}/pins`),
 }

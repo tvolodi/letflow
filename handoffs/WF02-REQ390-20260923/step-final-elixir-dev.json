@@ -4,9 +4,9 @@
     "step":  "Step Final",
     "to_agent":  "ELIXIR-DEV",
     "from_agent":  "ORCH",
-    "status":  "PENDING",
-    "created_at":  "2026-09-23T09:37:59Z",
-    "started_at":  "2026-09-23T09:37:59Z",
+    "status":  "COMPLETED",
+    "completed_at":  "2026-09-23T10:08:55Z",
+
     "context":  {
                     "branch_name":  "feature/WF02-REQ390-20260923",
                     "requirement_ids":  [
@@ -30,6 +30,20 @@
                                              "Registry updated to COMPLETED"
                                          ]
              },
-    "result":  null,
+    "status": "COMPLETED",
+    "completed_at": "2026-09-23T10:08:55Z",
+    "result":  {
+        "status": "PASS",
+        "completed_at": "2026-09-23T10:08:55Z",
+        "summary": "Step Final PASS. PR #1749 squash-merged as a3156299. Queue task 750 released (HTTP 200). Registry updated to COMPLETED. CI: 4759/4760 passed; 1 failure in signature_heuristic_test.exs attributed route 2 (SignatureHeuristic not touched by REQ-390, test passes locally 7/7) -- --admin override used per GIT_MERGE.md §8b with attribution in PR body. H3 lint violations fixed (workflow→workflow_id, rework_result nested under result).",
+        "git_evidence": {
+            "pr_number": 1749,
+            "merge_commit_sha": "a3156299",
+            "branch_deleted": true,
+            "admin_override_used": true,
+            "admin_override_reason": "CI/Backend gate failed: 1 failure in test/letflow/repository/attachment_scanner/signature_heuristic_test.exs:51. Structural attribution route 2: SignatureHeuristic module not modified by this branch (diff: attachments.ex, identity/tenant.ex, migration only). Test passes locally 7/7 exit 0 on this branch. Pre-existing flake.",
+            "queue_release_status": 200
+        }
+    },
     "workflow_id":  "WF-02"
 }

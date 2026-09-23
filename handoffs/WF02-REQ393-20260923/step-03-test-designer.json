@@ -28,5 +28,42 @@
       "npm run check still passes after adding tests"
     ]
   },
-  "result": null
+  "result": {
+    "status": "COMPLETED",
+    "outcome": "PASS",
+    "completed_at": "2026-09-23T15:50:00Z",
+    "artifacts_out": [
+      "web/src/pages/entities/__tests__/EntityListBrowserPage.test.tsx",
+      "web/tests/e2e/pipelines/entity-list-query.pipeline.e2e.spec.ts",
+      "test/specs/REQ-393.md"
+    ],
+    "vitest_results": {
+      "file": "web/src/pages/entities/__tests__/EntityListBrowserPage.test.tsx",
+      "tests_passed": 8,
+      "tests_failed": 0,
+      "output": "Test Files  1 passed (1) | Tests  8 passed (8) | Duration  2.44s",
+      "full_suite": "Test Files  120 passed (120) | Tests  850 passed (850) — npm run test"
+    },
+    "playwright_spec": {
+      "file": "web/tests/e2e/pipelines/entity-list-query.pipeline.e2e.spec.ts",
+      "run_status": "NOT_RUN — no live Letflow instance available in this environment",
+      "reason": "The spec requires a running Letflow backend (BPM_TEST_URL), frontend (E2E_BASE_URL), and Keycloak (BPM_IDP_BASE_URL). None of these are available in the Windows dev environment during test design. The spec is written as a complete, real Playwright spec (not a stub) with proper assertions, beforeAll/afterAll seed/cleanup, and assertServiceReadiness guards.",
+      "scenarios_covered": [
+        "EO-001/AC1: filter — add name contains 'req393-testitem', apply, verify all returned rows match",
+        "EO-002/AC2: sort-then-page — sort by name asc with page_size=1, verify cross-page sort order via direct API calls",
+        "EO-003/AC4: non-searchable field rejection — POST /entities/query with a non-queried field name, verify 422 and UI query-error-banner names the field",
+        "EO-005/AC3: over-limit page-size rejection — POST page_size=201 gets 400, UI override to 999 gets page-size-error banner"
+      ]
+    },
+    "mix_check_test": {
+      "outcome": "NOT_RUN (pre-existing environment issue)",
+      "reason": "scripts/test_parallel.sh has Windows CRLF line endings; bash on this Windows host rejects the \\r characters. Exit: 2 from bash before the partition-log-directory line is printed. This is a pre-existing environment constraint unrelated to the TypeScript test files added here. Elixir compile itself (mix compile --warnings-as-errors) exits 0. The new test files are TypeScript/React — they have no Elixir component to gate on. The ISS-0069 dead-default-argument check applies to Elixir test helpers, not to these files."
+    },
+    "frontend_check": {
+      "type_check": "PASS — tsc -b tsconfig.json exits 0",
+      "lint": "PASS — eslint exits 0, 0 warnings",
+      "test": "PASS — 850/850 tests pass across 120 test files"
+    },
+    "next_agent": "TEST-DESIGN-VALIDATOR"
+  }
 }

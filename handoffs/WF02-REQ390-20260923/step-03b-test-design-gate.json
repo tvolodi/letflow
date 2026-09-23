@@ -5,7 +5,7 @@
   "step": "Step 3b (Test Design Gate)",
   "to_agent": "TEST-DESIGN-VALIDATOR",
   "from_agent": "ORCH",
-  "status": "PENDING",
+  "status": "COMPLETED",
   "created_at": "2026-09-23T08:42:18Z",
   "started_at": "2026-09-23T08:42:18Z",
   "context": {
@@ -28,5 +28,17 @@
       "Tests are isolated"
     ]
   },
-  "result": null
+  "result": {
+    "status": "PASS",
+    "completed_at": "2026-09-23T08:55:00Z",
+    "verdict": "PASS",
+    "findings": {
+      "AC1": "COVERED — get_storage_usage/1 called after upload, asserts == byte_size(raw_bytes)",
+      "AC2": "COVERED — {:error, :storage_quota_exceeded} asserted; Repo.aggregate(Artifact,:count)==0 (repository_artifacts) and Repo.aggregate(Attachment,:count)==0 (instance_attachments) both asserted",
+      "AC3a": "COVERED — 100-byte upload against 1-byte allowance triggers :storage_quota_exceeded without hitting per-file ceiling",
+      "AC3b": "COVERED — 26_214_401-byte upload against 1 GiB allowance triggers :file_too_large without triggering quota",
+      "AC4": "COVERED — same test as AC1: after delete/2, get_storage_usage/1 returns {:ok, 0}",
+      "isolation": "PASS — each test uses provisioned_tenant/1 with a unique slug prefix; no shared state, no @tag :skip, no hardcoded secrets"
+    }
+  }
 }

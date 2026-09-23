@@ -1763,10 +1763,11 @@ defmodule Letflow.Routers.EntitiesTest do
   # ═══════════════════════════════════════════════════════════════════════
 
   describe "REQ-311 AC5 -- compile_error() members map to design §4's statuses" do
-    test ":entity_type_not_found -> 404" do
+    test ":entity_type_not_found -> 200 {\"items\": [], \"next_cursor\": null} (REQ-394 -- deliberately no longer 404, see req394 design §2.2)" do
       ctx = tenant_ctx("req311-ce-404")
       conn = query(ctx, %{"entity_type" => "no-such-entity-type"})
-      assert conn.status == 404
+      assert conn.status == 200
+      assert Jason.decode!(conn.resp_body) == %{"items" => [], "next_cursor" => nil}
     end
 
     test "{:field_not_allowed, _} -> 422" do
@@ -2053,10 +2054,14 @@ defmodule Letflow.Routers.EntitiesTest do
       cross_tenant = query(ctx, %{"entity_type" => "hidden_type"}, trace_id: trace)
       nonexistent = query(ctx, %{"entity_type" => "absolutely_no_such_type"}, trace_id: trace)
 
-      assert cross_tenant.status == 404
+      # REQ-394 (design §2.2): :entity_type_not_found is no longer a 404 for
+      # this route -- it is the same 200 {"items": [], "next_cursor": null}
+      # envelope a genuinely-empty, visible type produces. Deliberate change
+      # from this test's original 404 assertion.
+      assert cross_tenant.status == 200
 
       # ONE assertion comparing the whole documents -- not two separate
-      # "both are 404" assertions, which would pass even if the bodies
+      # "both are 200" assertions, which would pass even if the bodies
       # differed and leaked existence.
       assert {cross_tenant.status, cross_tenant.resp_body} ==
                {nonexistent.status, nonexistent.resp_body}

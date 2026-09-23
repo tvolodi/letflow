@@ -312,10 +312,12 @@ defmodule Letflow.Support.TenantFixtureTest do
       # 39 to 41 -- REQ-231 added entity_field_restrictions and
       # user_entity_grants, bumping it from 41 to 43 -- REQ-316 added
       # entity_record_attachments, bumping it from 43 to 44 -- REQ-364 added
-      # help_content, bumping it from 44 to 45.
+      # help_content, bumping it from 44 to 45 -- REQ-394 added
+      # entity_type_restrictions and user_entity_type_grants, bumping it
+      # from 45 to 47.
       # test/support/tenant_fixture.ex's own @expected_tenant_tables
-      # list already carries all 45.)
-      assert length(TenantFixture.expected_tenant_tables()) == 45
+      # list already carries all 47.)
+      assert length(TenantFixture.expected_tenant_tables()) == 47
       assert length(state.manifest_versions) > 0
     end
 

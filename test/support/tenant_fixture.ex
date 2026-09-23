@@ -115,8 +115,11 @@ defmodule Letflow.TenantFixture do
   @phase_replay_failed "replay_failed"
   @phase_incomplete_schema "incomplete_schema"
 
-  # The 22 tables the @tenant_scoped_migration_manifest's `create table(..., prefix:
-  # prefix())` migrations produce. `schema_migrations` is deliberately NOT here: it is
+  # The tables the @tenant_scoped_migration_manifest's `create table(..., prefix:
+  # prefix())` migrations produce (47 as of REQ-394 -- see
+  # test/letflow/support/tenant_fixture_test.exs's own running count comment
+  # for the bump history; this list, not that count, is authoritative).
+  # `schema_migrations` is deliberately NOT here: it is
   # the migrator's own bookkeeping, and its CONTENTS are captured separately as
   # `applied_versions`. Guarded against rot by this module's own oracle test (design
   # §3.3, INV-F-7) — removing that test invalidates this hard-coded list.
@@ -138,6 +141,7 @@ defmodule Letflow.TenantFixture do
     "entity_record_attachments",
     "entity_record_latest",
     "entity_type_instances",
+    "entity_type_restrictions",
     "event_idempotency",
     "event_payload_store",
     "event_type_registry",
@@ -162,6 +166,7 @@ defmodule Letflow.TenantFixture do
     "timers",
     "tokens",
     "user_entity_grants",
+    "user_entity_type_grants",
     "users",
     "variable_schemas",
     "webhook_delivery_attempts",

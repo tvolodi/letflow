@@ -1,0 +1,35 @@
+{
+  "handoff_id": "WF02-REQ393-20260923-step-03b",
+  "run_id": "WF02-REQ393-20260923",
+  "workflow": "WF-02",
+  "step": "Step 3b (Test Design Gate)",
+  "to_agent": "TEST-DESIGN-VALIDATOR",
+  "from_agent": "ORCH",
+  "status": "PENDING",
+  "created_at": "2026-09-23T10:52:36Z",
+  "started_at": "2026-09-23T10:52:36Z",
+  "context": {
+    "branch_name": "feature/WF02-REQ393-20260923",
+    "requirement_ids": ["REQ-393"],
+    "test_files": [
+      "web/src/pages/entities/__tests__/EntityListBrowserPage.test.tsx",
+      "web/tests/e2e/pipelines/entity-list-query.pipeline.e2e.spec.ts"
+    ],
+    "playwright_not_run_note": "The Playwright spec was NOT run against a live instance -- no live stack available in this environment. It is a complete, real spec (not a stub). TEST-DESIGN-VALIDATOR must verify the spec covers all 4 required scenarios from AC5, and flag whether this is a BLOCKER for the gate.",
+    "artifacts_in": [
+      "web/src/pages/entities/__tests__/EntityListBrowserPage.test.tsx",
+      "web/tests/e2e/pipelines/entity-list-query.pipeline.e2e.spec.ts",
+      "docs/requirements.yaml (REQ-393 acceptance_criteria)"
+    ]
+  },
+  "task": {
+    "description": "Execute Step 3b (TEST-DESIGN-VALIDATOR -- HARD GATE) for REQ-393.\n\nWorkspace: c:\\Users\\tvolo\\dev\\ai-dala\\letflow\nBranch: feature/WF02-REQ393-20260923\n\nRead independently:\n1. web/src/pages/entities/__tests__/EntityListBrowserPage.test.tsx\n2. web/tests/e2e/pipelines/entity-list-query.pipeline.e2e.spec.ts\n3. docs/requirements.yaml REQ-393 acceptance_criteria (7 ACs)\n\nCheck each:\n\nA. Vitest unit tests:\n- TC-EFB-01..04: filter builder coverage adequate?\n- TC-ELBP-01..04: page component coverage adequate?\n- Are the error scenarios (422, 400) specifically tested?\n- Is AC1 (filter builder drives end-to-end) covered?\n\nB. Playwright spec:\n- Is it a REAL spec (not a stub)? Does it have actual Playwright assertions and page interactions?\n- Scenario 1 (filter): does it seed data and assert filtered results match?\n- Scenario 2 (sort-then-page): does it verify server-driven order across 2 pages?\n- Scenario 3 (non-searchable field): does it trigger the 422 and assert the field name in the error?\n- Scenario 4 (over-limit page size): does it trigger the 400 and assert the limit in the error?\n- AC5 says the spec must PASS against a running instance. The spec was NOT RUN. Is this a BLOCKER?\n  - Decision guidance: if the spec is structurally complete (correct Playwright syntax, correct assertions, would clearly pass/fail against a live instance), PASS with a noted gap (unrun spec). If the spec is a stub or clearly wrong, FAIL.\n\nC. Overall AC coverage:\n- Map each of the 7 ACs to test coverage. Any uncovered?\n\nVerdict: PASS (with note about unrun Playwright spec) or FAIL.\n\nOutput:\n1. Write handoffs/WF02-REQ393-20260923/step-03b-test-design-gate.json COMPLETED PASS or FAIL\n2. git add + commit + push\n\nReport: PASS or FAIL with AC coverage table",
+    "acceptance_criteria": [
+      "Vitest tests cover error scenarios (422 field_not_allowed, 400 page_size_too_large)",
+      "Playwright spec covers all 4 AC5 scenarios",
+      "Playwright spec is real (not a stub)",
+      "All 7 REQ-393 ACs mapped to coverage"
+    ]
+  },
+  "result": null
+}

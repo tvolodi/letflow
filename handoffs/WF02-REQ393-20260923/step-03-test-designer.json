@@ -1,69 +1,70 @@
-{
-  "handoff_id": "WF02-REQ393-20260923-step-03",
-  "run_id": "WF02-REQ393-20260923",
-  "workflow": "WF-02",
-  "step": "Step 3 (Test Design)",
-  "to_agent": "TEST-DESIGNER",
-  "from_agent": "ORCH",
-  "status": "PENDING",
-  "created_at": "2026-09-23T10:39:18Z",
-  "started_at": "2026-09-23T10:39:18Z",
-  "context": {
-    "branch_name": "feature/WF02-REQ393-20260923",
-    "requirement_ids": ["REQ-393"],
-    "stage": "S8",
-    "test_scope": "Vitest unit tests for the component + Playwright e2e spec. Both are required by REQ-393 AC5 (real Playwright spec). However, the Playwright spec must run against a live instance, which may not be available in this environment. Write both: the vitest tests now, and the Playwright spec file now (it must be a REAL spec, not a stub, even if we can't run it without a live instance).",
-    "artifacts_in": [
-      "web/src/pages/entities/EntityListBrowserPage.tsx",
-      "web/src/components/entities/EntityFilterBuilder.tsx",
-      "web/tests/e2e/pipelines/",
-      "docs/requirements.yaml (REQ-393 acceptance_criteria)"
-    ]
-  },
-  "task": {
-    "description": "Execute Step 3 (Test Design) for REQ-393.\n\nWorkspace: c:\\Users\\tvolo\\dev\\ai-dala\\letflow\nBranch: feature/WF02-REQ393-20260923\n\nTWO deliverables:\n\n### A. Vitest unit tests\n\nWrite unit tests for the components. Look at existing test patterns in web/tests/ for guidance.\n\nCoverage needed:\n- EntityFilterBuilder: renders empty state, adds a filter row, removes a filter row, calls onSubmit with correct filter clauses\n- EntityListBrowserPage: renders loading state, renders error state (field_not_allowed, page_size_too_large), renders table with results\n\nTest file: web/tests/unit/pages/entities/EntityListBrowserPage.test.tsx (or similar path following existing patterns)\n\nRun: `cd web && npx vitest run tests/unit/...` to verify\n\n### B. Playwright E2E spec\n\nWrite the REAL spec at: web/tests/e2e/pipelines/entity-list-query.pipeline.e2e.spec.ts\n\nThe spec MUST cover these 4 scenarios (REQ-393 AC5):\n1. Filter: add a filter clause (e.g. field=name, op=contains, value='test'), apply it, verify the returned list contains only matching items\n2. Sort-then-page: sort by a field, page to the second page, verify the sort order is preserved (server-driven)\n3. Non-searchable field rejection: attempt to filter on a field not in the queried allowlist, verify the error message names that specific field\n4. Over-limit page-size: request page_size > platform limit, verify the error message names the limit\n\nBase the spec on existing pipeline spec patterns in web/tests/e2e/pipelines/. The entity type to use is probably 'tag' (simplest BilimBaga type) -- check if it's available or choose the simplest available type.\n\nNOTE: The spec may not be runnable without a live instance in this environment. Write it as a complete, runnable spec anyway. If you cannot run it, state that explicitly in the handoff.\n\nAfter completing:\n1. Write handoffs/WF02-REQ393-20260923/step-03-test-designer.json COMPLETED PASS\n2. git add all test files + handoff\n3. git commit + push\n\nReport: what tests were written, vitest pass counts if run, and whether the Playwright spec was run",
-    "acceptance_criteria": [
-      "Vitest unit tests written and pass",
-      "Playwright e2e spec written (real, not stub) covering all 4 scenarios",
-      "npm run check still passes after adding tests"
-    ]
-  },
-  "result": {
-    "status": "COMPLETED",
-    "outcome": "PASS",
-    "completed_at": "2026-09-23T15:50:00Z",
-    "artifacts_out": [
-      "web/src/pages/entities/__tests__/EntityListBrowserPage.test.tsx",
-      "web/tests/e2e/pipelines/entity-list-query.pipeline.e2e.spec.ts",
-      "test/specs/REQ-393.md"
-    ],
-    "vitest_results": {
-      "file": "web/src/pages/entities/__tests__/EntityListBrowserPage.test.tsx",
-      "tests_passed": 8,
-      "tests_failed": 0,
-      "output": "Test Files  1 passed (1) | Tests  8 passed (8) | Duration  2.44s",
-      "full_suite": "Test Files  120 passed (120) | Tests  850 passed (850) — npm run test"
-    },
-    "playwright_spec": {
-      "file": "web/tests/e2e/pipelines/entity-list-query.pipeline.e2e.spec.ts",
-      "run_status": "NOT_RUN — no live Letflow instance available in this environment",
-      "reason": "The spec requires a running Letflow backend (BPM_TEST_URL), frontend (E2E_BASE_URL), and Keycloak (BPM_IDP_BASE_URL). None of these are available in the Windows dev environment during test design. The spec is written as a complete, real Playwright spec (not a stub) with proper assertions, beforeAll/afterAll seed/cleanup, and assertServiceReadiness guards.",
-      "scenarios_covered": [
-        "EO-001/AC1: filter — add name contains 'req393-testitem', apply, verify all returned rows match",
-        "EO-002/AC2: sort-then-page — sort by name asc with page_size=1, verify cross-page sort order via direct API calls",
-        "EO-003/AC4: non-searchable field rejection — POST /entities/query with a non-queried field name, verify 422 and UI query-error-banner names the field",
-        "EO-005/AC3: over-limit page-size rejection — POST page_size=201 gets 400, UI override to 999 gets page-size-error banner"
-      ]
-    },
-    "mix_check_test": {
-      "outcome": "NOT_RUN (pre-existing environment issue)",
-      "reason": "scripts/test_parallel.sh has Windows CRLF line endings; bash on this Windows host rejects the \\r characters. Exit: 2 from bash before the partition-log-directory line is printed. This is a pre-existing environment constraint unrelated to the TypeScript test files added here. Elixir compile itself (mix compile --warnings-as-errors) exits 0. The new test files are TypeScript/React — they have no Elixir component to gate on. The ISS-0069 dead-default-argument check applies to Elixir test helpers, not to these files."
-    },
-    "frontend_check": {
-      "type_check": "PASS — tsc -b tsconfig.json exits 0",
-      "lint": "PASS — eslint exits 0, 0 warnings",
-      "test": "PASS — 850/850 tests pass across 120 test files"
-    },
-    "next_agent": "TEST-DESIGN-VALIDATOR"
-  }
+﻿{
+    "handoff_id":  "WF02-REQ393-20260923-step-03",
+    "run_id":  "WF02-REQ393-20260923",
+    "step":  "Step 3 (Test Design)",
+    "to_agent":  "TEST-DESIGNER",
+    "from_agent":  "ORCH",
+    "status":  "PENDING",
+    "created_at":  "2026-09-23T10:39:18Z",
+    "started_at":  "2026-09-23T10:39:18Z",
+    "context":  {
+                    "branch_name":  "feature/WF02-REQ393-20260923",
+                    "requirement_ids":  [
+                                            "REQ-393"
+                                        ],
+                    "stage":  "S8",
+                    "test_scope":  "Vitest unit tests for the component + Playwright e2e spec. Both are required by REQ-393 AC5 (real Playwright spec). However, the Playwright spec must run against a live instance, which may not be available in this environment. Write both: the vitest tests now, and the Playwright spec file now (it must be a REAL spec, not a stub, even if we can\u0027t run it without a live instance).",
+                    "artifacts_in":  [
+                                         "web/src/pages/entities/EntityListBrowserPage.tsx",
+                                         "web/src/components/entities/EntityFilterBuilder.tsx",
+                                         "web/tests/e2e/pipelines/",
+                                         "docs/requirements.yaml (REQ-393 acceptance_criteria)"
+                                     ]
+                },
+    "task":  {
+                 "description":  "Execute Step 3 (Test Design) for REQ-393.\n\nWorkspace: c:\\Users\\tvolo\\dev\\ai-dala\\letflow\nBranch: feature/WF02-REQ393-20260923\n\nTWO deliverables:\n\n### A. Vitest unit tests\n\nWrite unit tests for the components. Look at existing test patterns in web/tests/ for guidance.\n\nCoverage needed:\n- EntityFilterBuilder: renders empty state, adds a filter row, removes a filter row, calls onSubmit with correct filter clauses\n- EntityListBrowserPage: renders loading state, renders error state (field_not_allowed, page_size_too_large), renders table with results\n\nTest file: web/tests/unit/pages/entities/EntityListBrowserPage.test.tsx (or similar path following existing patterns)\n\nRun: `cd web \u0026\u0026 npx vitest run tests/unit/...` to verify\n\n### B. Playwright E2E spec\n\nWrite the REAL spec at: web/tests/e2e/pipelines/entity-list-query.pipeline.e2e.spec.ts\n\nThe spec MUST cover these 4 scenarios (REQ-393 AC5):\n1. Filter: add a filter clause (e.g. field=name, op=contains, value=\u0027test\u0027), apply it, verify the returned list contains only matching items\n2. Sort-then-page: sort by a field, page to the second page, verify the sort order is preserved (server-driven)\n3. Non-searchable field rejection: attempt to filter on a field not in the queried allowlist, verify the error message names that specific field\n4. Over-limit page-size: request page_size \u003e platform limit, verify the error message names the limit\n\nBase the spec on existing pipeline spec patterns in web/tests/e2e/pipelines/. The entity type to use is probably \u0027tag\u0027 (simplest BilimBaga type) -- check if it\u0027s available or choose the simplest available type.\n\nNOTE: The spec may not be runnable without a live instance in this environment. Write it as a complete, runnable spec anyway. If you cannot run it, state that explicitly in the handoff.\n\nAfter completing:\n1. Write handoffs/WF02-REQ393-20260923/step-03-test-designer.json COMPLETED PASS\n2. git add all test files + handoff\n3. git commit + push\n\nReport: what tests were written, vitest pass counts if run, and whether the Playwright spec was run",
+                 "acceptance_criteria":  [
+                                             "Vitest unit tests written and pass",
+                                             "Playwright e2e spec written (real, not stub) covering all 4 scenarios",
+                                             "npm run check still passes after adding tests"
+                                         ]
+             },
+    "result":  {
+                   "status":  "COMPLETED",
+                   "outcome":  "PASS",
+                   "completed_at":  "2026-09-23T15:50:00Z",
+                   "artifacts_out":  [
+                                         "web/src/pages/entities/__tests__/EntityListBrowserPage.test.tsx",
+                                         "web/tests/e2e/pipelines/entity-list-query.pipeline.e2e.spec.ts",
+                                         "test/specs/REQ-393.md"
+                                     ],
+                   "vitest_results":  {
+                                          "file":  "web/src/pages/entities/__tests__/EntityListBrowserPage.test.tsx",
+                                          "tests_passed":  8,
+                                          "tests_failed":  0,
+                                          "output":  "Test Files  1 passed (1) | Tests  8 passed (8) | Duration  2.44s",
+                                          "full_suite":  "Test Files  120 passed (120) | Tests  850 passed (850) — npm run test"
+                                      },
+                   "playwright_spec":  {
+                                           "file":  "web/tests/e2e/pipelines/entity-list-query.pipeline.e2e.spec.ts",
+                                           "run_status":  "NOT_RUN — no live Letflow instance available in this environment",
+                                           "reason":  "The spec requires a running Letflow backend (BPM_TEST_URL), frontend (E2E_BASE_URL), and Keycloak (BPM_IDP_BASE_URL). None of these are available in the Windows dev environment during test design. The spec is written as a complete, real Playwright spec (not a stub) with proper assertions, beforeAll/afterAll seed/cleanup, and assertServiceReadiness guards.",
+                                           "scenarios_covered":  [
+                                                                     "EO-001/AC1: filter — add name contains \u0027req393-testitem\u0027, apply, verify all returned rows match",
+                                                                     "EO-002/AC2: sort-then-page — sort by name asc with page_size=1, verify cross-page sort order via direct API calls",
+                                                                     "EO-003/AC4: non-searchable field rejection — POST /entities/query with a non-queried field name, verify 422 and UI query-error-banner names the field",
+                                                                     "EO-005/AC3: over-limit page-size rejection — POST page_size=201 gets 400, UI override to 999 gets page-size-error banner"
+                                                                 ]
+                                       },
+                   "mix_check_test":  {
+                                          "outcome":  "NOT_RUN (pre-existing environment issue)",
+                                          "reason":  "scripts/test_parallel.sh has Windows CRLF line endings; bash on this Windows host rejects the \\r characters. Exit: 2 from bash before the partition-log-directory line is printed. This is a pre-existing environment constraint unrelated to the TypeScript test files added here. Elixir compile itself (mix compile --warnings-as-errors) exits 0. The new test files are TypeScript/React — they have no Elixir component to gate on. The ISS-0069 dead-default-argument check applies to Elixir test helpers, not to these files."
+                                      },
+                   "frontend_check":  {
+                                          "type_check":  "PASS — tsc -b tsconfig.json exits 0",
+                                          "lint":  "PASS — eslint exits 0, 0 warnings",
+                                          "test":  "PASS — 850/850 tests pass across 120 test files"
+                                      },
+                   "next_agent":  "TEST-DESIGN-VALIDATOR"
+               }
 }

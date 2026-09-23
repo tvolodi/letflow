@@ -5,7 +5,7 @@
   "step": "Step 3c (Security Gate)",
   "to_agent": "SECURITY-REVIEWER",
   "from_agent": "ORCH",
-  "status": "PENDING",
+  "status": "COMPLETED",
   "created_at": "2026-09-23T04:28:36Z",
   "started_at": "2026-09-23T04:28:36Z",
   "context": {
@@ -30,5 +30,77 @@
       "Cross-tenant isolation (get/2 without instance_id) still intact"
     ]
   },
-  "result": null
+  "completed_at": "2026-09-23T04:35:00Z",
+  "result": {
+    "status": "PASS",
+    "invariants": [
+      {
+        "inv": "INV-1",
+        "verdict": "APPLIES → PASS",
+        "rationale": "get/2 prefix-scoping unchanged (Repo.get(Attachment, id, prefix: prefix)); check_instance_match/2 is pure in-memory struct comparison, issues no Repo call; no migration or schema module introduced. Checked: (a) prefix scoping present, (b) no new table, (c) no tenant_id write path."
+      },
+      {
+        "inv": "INV-2",
+        "verdict": "NOT-APPLICABLE",
+        "rationale": "S4 not started; no multi-tenant API serialisation surface in this diff."
+      },
+      {
+        "inv": "INV-3",
+        "verdict": "NOT-APPLICABLE",
+        "rationale": "S5 not started; no Lua/WASM sandbox path in this diff."
+      },
+      {
+        "inv": "INV-4",
+        "verdict": "APPLIES → PASS",
+        "rationale": "grep for System.get_env/password/secret/client_secret/Repo.query in the diff returned 0 hits. No secrets, env vars, logging of sensitive material, or config resolution introduced."
+      },
+      {
+        "inv": "INV-5",
+        "verdict": "APPLIES → PASS",
+        "rationale": "All three denial paths now cost exactly 1 DB round-trip: (1) cross-tenant/never-issued: Repo.get(Attachment) returns nil → {:error, :not_found}, 0 further DB; (2) cross-instance-same-tenant: Repo.get(Attachment) returns row → check_instance_match/2 struct field comparison (zero DB) → {:error, :not_found}, blob read never reached; (3) invalid-id: Ecto.UUID.cast fails → {:error, :invalid_id} before any Repo call. The with-chain order in get_content/3 is confirmed: get/2 → check_instance_match → check_scan_status_clean → Repo.get(Artifact) — instance check provably precedes blob read."
+      },
+      {
+        "inv": "INV-6",
+        "verdict": "APPLIES → PASS",
+        "rationale": "This SECURITY-REVIEWER handoff is the explicit proof-of-scoping record for the modified data-access path. No unreviewed new path merges without this gate."
+      },
+      {
+        "inv": "INV-7",
+        "verdict": "APPLIES → PASS",
+        "rationale": "grep for Repo.query in the diff returned 0 hits. check_instance_match/2 is pure Elixir pattern matching; no raw SQL introduced."
+      },
+      {
+        "inv": "INV-8",
+        "verdict": "APPLIES → PASS",
+        "rationale": "get_content/3 uses a with chain (typed results). check_instance_match/2 returns :ok or {:error, :not_found} — no crash path. No bare {:ok, x} = pattern on external I/O introduced."
+      },
+      {
+        "inv": "INV-9",
+        "verdict": "NOT-APPLICABLE",
+        "rationale": "No outbound HTTP calls introduced in this diff."
+      }
+    ],
+    "specific_findings": [
+      {
+        "finding": "Timing fix confirmed via with-chain inspection",
+        "detail": "Cross-instance-same-tenant denial now exits at check_instance_match/2 (zero DB after the first Repo.get(Attachment)), equalling the 1-round-trip cost of cross-tenant/never-issued denial. The 2-vs-1 round-trip distinguisher described in ISS-0785 is closed."
+      },
+      {
+        "finding": "check_instance_match/2 is pure struct comparison — constant-time not required",
+        "detail": "Matches %Attachment{instance_id: ^instance_id} pattern. UUIDs are not secrets; an attacker with a valid session already knows their own instance IDs. The sub-microsecond structural comparison is unmeasurable across any real network path and is not a timing signal in INV-5's sense."
+      },
+      {
+        "finding": "No new timing distinguisher introduced",
+        "detail": "All denied branches converge at {:error, :not_found} after 1 round-trip. check_scan_status_clean is also pure struct comparison; blob read only reached on fully-passing happy path."
+      },
+      {
+        "finding": "Defense-in-depth dead branch in instances.ex is sound security posture",
+        "detail": "The retained {:ok, %Attachment{instance_id: ^instance_id}} match is correctly commented as dead after the ISS-0785 fix. Keeping it ensures that if check_instance_match were ever removed from the context module, the router-layer check would still prevent cross-instance content leakage. No maintenance confusion risk given the explicit comments."
+      },
+      {
+        "finding": "INV-1 backward-compat: get/2 unchanged",
+        "detail": "fetch_scoped_attachment_metadata/3 in instances.ex still uses Attachments.get/2 directly (metadata-only, no instance check needed at that layer). get/2 signature is unchanged. No callers broken."
+      }
+    ]
+  }
 }

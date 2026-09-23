@@ -4610,8 +4610,18 @@ volumes:
     path: docs/status/requirement_status.v22.yaml
     status: current
     opened: 2026-09-22
-    entries: 14
+    entries: 15
     note: >
+      Incremented to 15 by DOC-UPDATER's own REQ-399 done-event append
+      (WF02-REQ399-20260923, 2026-09-23T22:23:29Z -- case-detail dependency-
+      version/provenance panel consuming REQ-080's already-shipped
+      GET /:id/pins route, plus a new telemetry test as this cycle's real
+      backend contribution). `grep -c "^  - req:"
+      docs/status/requirement_status.v22.yaml` = 15 on-disk entries,
+      recounted directly rather than assumed. 499 lines / 29280 bytes,
+      well under the 1200-line/120000-byte roll ceiling, so no roll
+      triggered. Prior notes preserved below verbatim.
+
       Incremented to 14 by DOC-UPDATER's own REQ-396 done-event append
       (WF02-REQ396-20260923, 2026-09-23T20:18:19Z -- HUMAN_TASK
       escalation_timer_duration schema + SCH-04 escalation wiring).

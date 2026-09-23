@@ -468,3 +468,32 @@ history:
       remains a HUMAN_TASK (CHK-21, engine wiring) per the release-validator
       PASS report. README.md not touched -- zero "escalation" hits; no
       documented current-behavior surface to keep in sync.
+  - req: REQ-399
+    event: done
+    agent: DOC-UPDATER
+    at: "2026-09-23T22:23:29Z"
+    note: >
+      WF02-REQ399-20260923 Step 6 -- full pipeline passed (CODE-DESIGN-
+      VALIDATOR, SECURITY-REVIEWER dispatched directly by ORCH as a
+      standalone subagent PASS, REVIEWER, TEST-DESIGN-VALIDATOR, TEST-RUNNER,
+      RELEASE-VALIDATOR verdict MERGEABLE, all 8 ACs independently confirmed,
+      backend suite 4783/4783 clean on a second uncontaminated run). Ships
+      a case-detail dependency-version/provenance panel on the instance
+      detail page, covering all four PinResolver source values
+      (:resolved/:override/:inherited/:rebound) with distinct human-readable
+      labels, plus loading/error/empty QueryStateBoundary states. NOTABLE:
+      this cycle's real backend contribution was NOT a new route --
+      GET /api/v1/instances/{id}/pins already shipped under REQ-080; this
+      cycle's backend work (feca389b) is a new telemetry test proving that
+      route issues zero additional catalog/module reads (AC2), confirming
+      Letflow.Engine.PinResolver.reconstruct_effective_pins/2's existing
+      contract holds. Frontend: 171cf1e8 (panel) and 6c573e6a (AC4/AC5/AC6
+      test coverage). Design: 2183c0d0. Status flipped in
+      docs/requirements.yaml. README.md not touched -- no "pin"-related
+      documented current-behavior surface to keep in sync. No
+      docs/migration/stage-N-*.md or decisions/*.md file was named by this
+      requirement's acceptance criteria. SECURITY-REVIEWER's PASS has no
+      separate handoffs/*.json artifact (dispatched directly, not through
+      the formal workflow script) -- its findings are recorded in full in
+      this cycle's PR body instead. Merged via PR on
+      feature/WF02-REQ399-20260923.

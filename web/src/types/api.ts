@@ -224,6 +224,31 @@ export interface AttachmentsPage {
   next_cursor: string | null
 }
 
+// ── Dependency-version/provenance (REQ-399, PinResolver.effective_pin()) ───────
+
+/** Mirrors `Letflow.Engine.PinResolver.source()` — exactly four values, no
+ *  fifth. Kept as a string union (not a TS enum), matching this codebase's
+ *  existing convention for backend-atom-as-string wire fields. */
+export type EffectivePinSource = 'resolved' | 'override' | 'inherited' | 'rebound'
+
+/** Mirrors `Letflow.Engine.PinResolver.kind()`. */
+export type EffectivePinKind = 'catalog_entry' | 'variable_schema' | 'module'
+
+/** Mirrors `pin_map/1`'s response projection
+ *  (`lib/letflow/routers/instances.ex`) field-for-field — no adapter needed. */
+export interface EffectivePin {
+  kind: EffectivePinKind
+  ref: string
+  resolved_id: string | null
+  version: string
+  source: EffectivePinSource
+}
+
+export interface InstancePinsResponse {
+  instance_id: string
+  pins: EffectivePin[]
+}
+
 export interface AttachmentLink {
   attachment_id: string
   token: string

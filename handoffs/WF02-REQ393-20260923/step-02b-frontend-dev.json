@@ -1,0 +1,40 @@
+{
+  "handoff_id": "WF02-REQ393-20260923-step-02b",
+  "run_id": "WF02-REQ393-20260923",
+  "workflow": "WF-02",
+  "step": "Step 2b (Frontend Implementation)",
+  "to_agent": "FRONTEND-DEV",
+  "from_agent": "ORCH",
+  "status": "PENDING",
+  "created_at": "2026-09-23T10:25:23Z",
+  "started_at": "2026-09-23T10:25:23Z",
+  "context": {
+    "branch_name": "feature/WF02-REQ393-20260923",
+    "requirement_ids": ["REQ-393"],
+    "stage": "S8",
+    "design_doc": "lib/letflow/design/req393-entity-list-query-ui.md",
+    "design_gate_status": "PASS (CODE-DESIGN-VALIDATOR, commit 2e61001e)",
+    "critical_api_fact": "SortClause field is 'dir' not 'direction' -- confirmed from web/src/api.ts:352",
+    "artifacts_in": [
+      "lib/letflow/design/req393-entity-list-query-ui.md",
+      "web/src/pages/entities/EntityCrudPage.tsx",
+      "web/src/components/ui/DataTable.tsx",
+      "web/src/config/bilimbagaEntities.ts",
+      "web/src/api.ts",
+      "web/src/router.tsx",
+      "docs/guides/frontend_developer_guide.md"
+    ]
+  },
+  "task": {
+    "description": "Execute Step 2b (Frontend Implementation) for REQ-393.\n\nWorkspace: c:\\Users\\tvolo\\dev\\ai-dala\\letflow\nBranch: feature/WF02-REQ393-20260923\n\nREAD the design doc FIRST: lib/letflow/design/req393-entity-list-query-ui.md\n\nIMPLEMENT:\n\n### 1. New component: web/src/pages/entities/EntityListBrowserPage.tsx\n\nFeatures:\n- Fetch EntityDefinition to get queried:true fields for the filter builder\n- Filter builder: field/operator/value rows, 'Add filter' button, 'Search' button\n- Sort control: field dropdown + dir (asc/desc) dropdown\n- Page-size control: select from [25, 50, 100, 250]\n- Table (DataTable) with sortable: false on all columns\n- Error display for :field_not_allowed (422) and :page_size_too_large (400)\n- Cursor-based pagination using POST /entities/query's cursor\n\n### 2. Router: web/src/router.tsx\n\nAdd route: `/entities/:entityType` → EntityListBrowserPage\nKeep existing `/admin/bilimbaga/:entityType` → EntityCrudPage unchanged\n\n### 3. Run frontend checks\n```\nnpm run typecheck  (or tsc --noEmit)\nnpm run lint\nnpm test (vitest -- unit tests only, not e2e)\n```\n\n### 4. CRITICAL: SortClause uses `dir` not `direction`\nThe api.ts type at line 352 uses `dir`. Do NOT use `direction`.\n\n### 5. Commit\ngit add web/src/pages/entities/EntityListBrowserPage.tsx web/src/router.tsx (+ any other new files)\ngit commit -m 'feat(WF02-REQ393-20260923): Step 2b -- EntityListBrowserPage (filter, sort, page-size controls)'\ngit push\n\n### 6. Complete handoff\nWrite handoffs/WF02-REQ393-20260923/step-02b-frontend-dev.json COMPLETED PASS or FAIL with:\n- Files created/modified\n- typecheck/lint/test exit codes\n- Commit SHA\n\nReport: files created, check results, commit SHA",
+    "acceptance_criteria": [
+      "EntityListBrowserPage.tsx created with filter builder, sort control, page-size control",
+      "Route /entities/:entityType added",
+      "SortClause uses dir not direction",
+      "DataTable columns have sortable: false",
+      "npm run typecheck exits 0",
+      "npm run lint exits 0"
+    ]
+  },
+  "result": null
+}

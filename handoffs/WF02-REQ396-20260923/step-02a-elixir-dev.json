@@ -1,0 +1,39 @@
+{
+  "handoff_id": "WF02-REQ396-20260923-step-02a",
+  "run_id": "WF02-REQ396-20260923",
+  "workflow": "WF-02",
+  "step": "Step 2a (Backend Implementation)",
+  "to_agent": "ELIXIR-DEV",
+  "from_agent": "ORCH",
+  "status": "PENDING",
+  "created_at": "2026-09-23T19:13:23Z",
+  "started_at": "2026-09-23T19:13:23Z",
+  "context": {
+    "branch_name": "feature/WF02-REQ396-20260923",
+    "requirement_ids": ["REQ-396"],
+    "stage": "S7",
+    "design_doc": "lib/letflow/design/req396-human-task-escalation-timer.md",
+    "design_gate_status": "PASS (CODE-DESIGN-VALIDATOR)",
+    "key_design_decisions": "Option A: new attributes escalation_timer_duration (ISO-8601) + escalation_role on :HUMAN_TASK. CHK-21 (check_human_task_escalation/1) with co-required constraint and 3 violation codes. dispatch_human_task/3 emits escalation_timer_armed event. do_fire/2 routes escalation timer to advance_after_escalation_timer_fired/3. dispatch_escalation_timer_fired/4 uses default/fallback edge with Ecto.Multi enforcing cancel_original_task before task_activation. process_route_approval.yaml: ops-review gets both attributes, fallback edge retargeted to ceo-approval.",
+    "artifacts_in": [
+      "lib/letflow/design/req396-human-task-escalation-timer.md",
+      "lib/letflow/definitions/graph.ex",
+      "lib/letflow/engine/transition.ex",
+      "lib/letflow/scheduler.ex",
+      "test/fixtures/simulation/swiftroute/process_route_approval.yaml"
+    ]
+  },
+  "task": {
+    "description": "Execute Step 2a (Backend Implementation) for REQ-396 per the approved design.\n\nWorkspace: c:\\Users\\tvolo\\dev\\ai-dala\\letflow\nBranch: feature/WF02-REQ396-20260923\nMix: & 'C:/Program Files/Elixir/bin/mix'\n\nREAD the design doc FIRST: lib/letflow/design/req396-human-task-escalation-timer.md\n\nIMPLEMENT (in this order):\n\n### 1. lib/letflow/definitions/graph.ex\n- Add `escalation_timer_duration` and `escalation_role` to the :HUMAN_TASK node's accepted attributes\n- Add CHK-21: `check_human_task_escalation/1` private function with co-required constraint\n  - If both present: validate duration_iso8601 (same pattern as CHK-12's check_timer_duration/1)\n  - If one present without the other: return violation code\n  - If neither present: :ok\n- Call CHK-21 from validate_human_task/1 (or equivalent dispatch)\n- Add @spec for the new private function\n\n### 2. lib/letflow/engine/transition.ex (or lib/letflow/engine/)\n- In dispatch_human_task/3: if the node has escalation_timer_duration, emit/insert an escalation timer alongside the normal task creation\n  - The timer should be associated with the HUMAN_TASK token, type 'escalation'\n- In do_fire/2 (or the timer-fire dispatcher): route 'escalation' timer type to a new advance_after_escalation_timer_fired/3 function\n  - advance_after_escalation_timer_fired/3: use the node's default/fallback edge\n    - In an Ecto.Multi: first step: transition original HUMAN_TASK to :cancelled (non-actionable), write audit entry\n    - Second step: create new task assigned to escalation_role\n    - Return the appropriate result\n\n### 3. test/fixtures/simulation/swiftroute/process_route_approval.yaml\n- Update the ops-review HUMAN_TASK node:\n  - Add escalation_timer_duration: \"PT5M\" (or a suitable test value)\n  - Add escalation_role: the role that should receive the escalated task (likely 'role-ceo-approver' or similar -- check what role is used in the graph)\n- Update the fallback-ops-review edge target from notify-requester to ceo-approval (or create the ceo-approval node if needed)\n\n### 4. Verify\n```powershell\n& 'C:/Program Files/Elixir/bin/mix' compile --warnings-as-errors\n& 'C:/Program Files/Elixir/bin/mix' test test/letflow/definitions/graph_test.exs\n& 'C:/Program Files/Elixir/bin/mix' test test/letflow/simulation/req206_swiftroute_test.exs\n```\n\nFix any errors. The simulation test may need updating if the YAML changes affect existing scenarios.\n\n### 5. Commit\n```powershell\n& 'C:/Program Files/Elixir/bin/mix' format lib/letflow/definitions/graph.ex lib/letflow/engine/transition.ex\ngit add lib/letflow/definitions/graph.ex lib/letflow/engine/transition.ex test/fixtures/simulation/swiftroute/process_route_approval.yaml\ngit commit -m 'feat(WF02-REQ396-20260923): Step 2a -- HUMAN_TASK escalation timer (CHK-21, dispatch, YAML)'\ngit push\n```\n\n### 6. Complete handoff\nWrite handoffs/WF02-REQ396-20260923/step-02a-elixir-dev.json COMPLETED PASS or FAIL with actual compile/test output.\n\nReport: files changed, compile exit code, test output, commit SHA",
+    "acceptance_criteria": [
+      "CHK-21 added to graph.ex with co-required constraint and 3 violation codes",
+      "dispatch_human_task/3 arms escalation timer when attribute present",
+      "advance_after_escalation_timer_fired/3 uses Ecto.Multi with cancel before new task",
+      "process_route_approval.yaml updated: both attributes on ops-review, fallback edge to ceo-approval",
+      "mix compile --warnings-as-errors exits 0",
+      "graph_test.exs passes",
+      "req206_swiftroute_test.exs passes (or new failures explained)"
+    ]
+  },
+  "result": null
+}

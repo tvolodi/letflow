@@ -2709,10 +2709,10 @@ defmodule Letflow.Engine do
                 Letflow.Engine.Task
                 |> where(
                   [t],
-                  t.token_id == ^timer.token_id and t.status == "PENDING"
+                  t.token_id == ^timer.token_id and t.status == :pending
                 )
                 |> inner_repo.update_all(
-                  [set: [status: "CANCELLED", cancelled_at: now]],
+                  [set: [status: :cancelled, cancelled_at: now]],
                   prefix: prefix
                 )
 

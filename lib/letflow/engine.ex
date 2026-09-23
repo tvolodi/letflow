@@ -666,6 +666,9 @@ defmodule Letflow.Engine do
   defp prepare_timer_arms(pending_events, graph, instance_id, now) do
     timer_arms = Enum.filter(pending_events, &match?({:timer_armed, _token_id, _node_id}, &1))
 
+    escalation_arms =
+      Enum.filter(pending_events, &match?({:escalation_timer_armed, _token_id, _node_id}, &1))
+
     # CODE-DESIGN-VALIDATOR's own resolution of design doc §13 OQ-3
     # (handoff task description item "REQUIRED ADDITION"): Letflow.Scheduler.create/2's
     # Multi branch hardcodes the literal step name :scheduler_timer
@@ -680,22 +683,46 @@ defmodule Letflow.Engine do
       node_ids = Enum.map(timer_arms, fn {:timer_armed, _token_id, node_id} -> node_id end)
       {:error, {:multiple_timers_in_one_hop_chain_not_supported, node_ids}}
     else
-      timer_arms
-      |> Enum.reduce_while({:ok, []}, fn {:timer_armed, token_id, node_id}, {:ok, acc} ->
-        case Enum.find(graph.nodes, &(&1.id == node_id)) do
-          nil ->
-            {:halt, {:error, {:graph_structure_invalid, {:unknown_node_id, node_id}}}}
+      # Escalation timer arms use compound step names ({:scheduler_escalation_timer, token_record_id})
+      # in build_timer_arms_multi/4, so multiple escalation arms in the same hop chain are safe.
+      escalation_result =
+        escalation_arms
+        |> Enum.reduce_while({:ok, []}, fn {:escalation_timer_armed, token_id, node_id},
+                                           {:ok, acc} ->
+          case Enum.find(graph.nodes, &(&1.id == node_id)) do
+            nil ->
+              {:halt, {:error, {:graph_structure_invalid, {:unknown_node_id, node_id}}}}
 
-          node ->
-            case resolve_timer_arm_attrs(node, node_id, instance_id, now) do
-              {:ok, arm_attrs} -> {:cont, {:ok, [{token_id, arm_attrs} | acc]}}
-              {:error, reason} -> {:halt, {:error, reason}}
-            end
+            node ->
+              case resolve_escalation_timer_arm_attrs(node, node_id, instance_id, now) do
+                {:ok, arm_attrs} -> {:cont, {:ok, [{token_id, arm_attrs} | acc]}}
+                {:error, reason} -> {:halt, {:error, reason}}
+              end
+          end
+        end)
+        |> case do
+          {:ok, acc} -> {:ok, Enum.reverse(acc)}
+          {:error, reason} -> {:error, reason}
         end
-      end)
-      |> case do
-        {:ok, acc} -> {:ok, Enum.reverse(acc)}
-        {:error, reason} -> {:error, reason}
+
+      with {:ok, escalation_prepared} <- escalation_result do
+        timer_arms
+        |> Enum.reduce_while({:ok, []}, fn {:timer_armed, token_id, node_id}, {:ok, acc} ->
+          case Enum.find(graph.nodes, &(&1.id == node_id)) do
+            nil ->
+              {:halt, {:error, {:graph_structure_invalid, {:unknown_node_id, node_id}}}}
+
+            node ->
+              case resolve_timer_arm_attrs(node, node_id, instance_id, now) do
+                {:ok, arm_attrs} -> {:cont, {:ok, [{token_id, arm_attrs} | acc]}}
+                {:error, reason} -> {:halt, {:error, reason}}
+              end
+          end
+        end)
+        |> case do
+          {:ok, acc} -> {:ok, escalation_prepared ++ Enum.reverse(acc)}
+          {:error, reason} -> {:error, reason}
+        end
       end
     end
   end
@@ -725,11 +752,44 @@ defmodule Letflow.Engine do
     end
   end
 
+  # REQ-396: mirrors resolve_timer_arm_attrs/4 but reads escalation_timer_duration
+  # and sets timer_type: "escalation". CHK-21 already validates the duration at
+  # definition-approval time, so an invalid value here is defensive-only.
+  defp resolve_escalation_timer_arm_attrs(
+         %Graph.Node{attributes: attributes},
+         node_id,
+         instance_id,
+         now
+       ) do
+    case Map.get(attributes || %{}, "escalation_timer_duration") do
+      value when is_binary(value) ->
+        case Graph.parse_iso8601_duration(value) do
+          {:ok, seconds} ->
+            {:ok,
+             %{
+               instance_id: instance_id,
+               timer_type: "escalation",
+               node_id: node_id,
+               fire_at: DateTime.add(now, seconds, :second)
+             }}
+
+          :error ->
+            {:error, {:invalid_timer_duration, node_id, value}}
+        end
+
+      other ->
+        {:error, {:invalid_timer_duration, node_id, other}}
+    end
+  end
+
   # REQ-187 design doc §3.2 -- wires prepare_timer_arms/4's own output into
   # the caller's already-open Multi, reusing Letflow.Scheduler.create/2's
   # own documented Multi.t()-accepting branch (one Multi.insert/4 step per
   # timer, named :scheduler_timer -- prepare_timer_arms/4's own defensive
-  # guard above ensures this is called with at most one entry per Multi).
+  # guard above ensures this is called with at most one deadline-timer entry
+  # per Multi). REQ-396: escalation timers pass step_name: to Scheduler.create/2
+  # so each gets a unique compound step name, preventing collisions when
+  # multiple :HUMAN_TASK nodes with escalation are armed in one hop chain.
   @spec build_timer_arms_multi(
           Multi.t(),
           [{token_id :: String.t(), arm_attrs :: map()}],
@@ -739,7 +799,18 @@ defmodule Letflow.Engine do
   defp build_timer_arms_multi(multi, prepared_timers, id_map, prefix) do
     Enum.reduce(prepared_timers, multi, fn {token_id, arm_attrs}, acc_multi ->
       token_record_id = Map.fetch!(id_map, token_id)
-      Scheduler.create(acc_multi, Map.put(arm_attrs, :token_id, token_record_id), prefix: prefix)
+      complete_attrs = Map.put(arm_attrs, :token_id, token_record_id)
+
+      opts =
+        case arm_attrs.timer_type do
+          "escalation" ->
+            [prefix: prefix, step_name: {:scheduler_escalation_timer, token_record_id}]
+
+          _ ->
+            [prefix: prefix]
+        end
+
+      Scheduler.create(acc_multi, complete_attrs, opts)
     end)
   end
 
@@ -2522,6 +2593,204 @@ defmodule Letflow.Engine do
           # scope): a SubProcess prepare failure here simply rolls back this
           # whole attempt, same as any other advance_after_timer_fired/3
           # failure.
+          {:error, {:execution_error_not_supported_for_timer_fire, error_args}}
+      end
+    end
+  end
+
+  # =========================================================================
+  # advance_after_escalation_timer_fired/3 (REQ-396, design doc §4.3)
+  # =========================================================================
+
+  # Called from Letflow.Scheduler.do_fire/2 when timer_type == "escalation",
+  # still inside fire_timer/2's already-open Repo.transaction/1. Mirrors
+  # advance_after_timer_fired/3 but dispatches {:escalation_timer_fired, ...}
+  # (which unconditionally follows the fallback edge) and adds a
+  # :cancel_original_task Multi step before :task_activation so the original
+  # HUMAN_TASK row is non-actionable before the new task is created.
+  @doc false
+  @spec advance_after_escalation_timer_fired(Timer.t(), Ecto.Repo.t(), prefix :: String.t()) ::
+          {:ok, :advanced} | {:error, {:instance_not_active, atom()}} | {:error, term()}
+  def advance_after_escalation_timer_fired(%Timer{} = timer, repo, prefix) do
+    with {:ok, projection} <- fetch_and_lock_instance_projection(repo, timer.instance_id, prefix),
+         {:ok, snapshot_and_state} <-
+           build_snapshot_and_state_for_timer(repo, timer, projection, prefix),
+         {:ok, advanced_state, pending_events} <-
+           dispatch_escalation_timer_fired_hop_chain(snapshot_and_state),
+         {:ok, _changes} <-
+           persist_escalation_timer_fired_advance(
+             repo,
+             timer,
+             projection,
+             snapshot_and_state,
+             advanced_state,
+             pending_events,
+             prefix
+           ) do
+      {:ok, :advanced}
+    end
+  end
+
+  # Dispatches {:escalation_timer_fired, token_id} and runs advance_until_stable/4.
+  # Mirrors dispatch_timer_fired_hop_chain/1 exactly (same error shape).
+  defp dispatch_escalation_timer_fired_hop_chain(%{
+         graph: graph,
+         seed_instance_state: %InstanceState{} = seed_state,
+         own_token_id: own_token_id
+       }) do
+    hop_limit = length(graph.nodes) * 4 + 10
+
+    case Transition.transition(graph, seed_state, {:escalation_timer_fired, own_token_id}) do
+      {:ok, new_instance_state, _pending_events} ->
+        newly_pending =
+          tokens_needing_dispatch(seed_state.tokens, new_instance_state.tokens, own_token_id)
+
+        case advance_until_stable(graph, new_instance_state, newly_pending, hop_limit - 1) do
+          {:ok, advanced_state, pending_events} -> {:ok, advanced_state, pending_events}
+          {:error, reason} -> {:error, {:transition_failed, reason}}
+        end
+
+      {:error, reason} ->
+        {:error, {:transition_failed, reason}}
+    end
+  end
+
+  # Persists state changes for an escalation timer fire. Mirrors
+  # persist_timer_fired_advance/7 but adds :cancel_original_task as the first
+  # Multi step (before :task_activation) so audit ordering (AC-3c) is
+  # satisfied: the original HUMAN_TASK row's cancelled_at is set before the
+  # new task's inserted_at.
+  defp persist_escalation_timer_fired_advance(
+         repo,
+         %Timer{} = timer,
+         %InstanceProjection{} = projection,
+         %{
+           graph: graph,
+           seed_instance_state: seed_state,
+           original_active_tokens: original_active_tokens
+         },
+         %InstanceState{} = advanced_state,
+         pending_events,
+         prefix
+       ) do
+    actor_id = EventStore.platform_actor_id()
+    idempotency_key = "escalation_timer_fired:#{timer.id}"
+    now = DateTime.utc_now() |> DateTime.truncate(:microsecond)
+
+    with {:ok, tenant_id} <- TenantProvisioning.tenant_id_for_schema_name(prefix),
+         {:ok, prepared_timers} <-
+           prepare_timer_arms(pending_events, graph, timer.instance_id, now),
+         {:ok, prepared_service_task_dispatches} <-
+           prepare_service_task_dispatch_abort_on_empty_url(
+             pending_events,
+             graph,
+             timer.instance_id,
+             advanced_state.variables,
+             now
+           ),
+         {:ok, sub_process_outcome} <-
+           prepare_sub_process_children_for_completion(
+             advanced_state,
+             original_active_tokens,
+             graph,
+             pending_events,
+             projection,
+             actor_id,
+             idempotency_key,
+             prefix
+           ) do
+      case sub_process_outcome do
+        {:advanced, final_instance_state, prepared_children} ->
+          multi =
+            Multi.new()
+            # AC-3c: cancel the original HUMAN_TASK before creating the new task.
+            |> Multi.run(:cancel_original_task, fn inner_repo, _changes ->
+              {_count, _} =
+                Letflow.Engine.Task
+                |> where(
+                  [t],
+                  t.token_id == ^timer.token_id and t.status == "PENDING"
+                )
+                |> inner_repo.update_all(
+                  [set: [status: "CANCELLED", cancelled_at: now]],
+                  prefix: prefix
+                )
+
+              {:ok, :cancelled}
+            end)
+            |> Multi.merge(fn _changes ->
+              Multi.new()
+              |> Multi.run({:hop_chain_token_records, timer.instance_id}, fn repo2, _changes ->
+                insert_hop_chain_new_token_records(
+                  repo2,
+                  timer.instance_id,
+                  original_active_tokens,
+                  final_instance_state.tokens,
+                  prefix
+                )
+              end)
+              |> Multi.merge(fn changes ->
+                {id_map, hop_chain_new_records} =
+                  Map.fetch!(changes, {:hop_chain_token_records, timer.instance_id})
+
+                resolved_final_instance_state = rewrite_token_ids(final_instance_state, id_map)
+
+                Multi.new()
+                |> TaskActivation.append_multi_from_existing_records(
+                  timer.instance_id,
+                  graph,
+                  seed_state.pending_task_nodes,
+                  resolved_final_instance_state,
+                  prefix
+                )
+                |> reconcile_token_records(
+                  hop_chain_new_records ++ original_active_tokens,
+                  resolved_final_instance_state,
+                  now,
+                  prefix
+                )
+              end)
+            end)
+            |> Multi.merge(fn _changes ->
+              id_map =
+                Map.new(prepared_timers, fn {token_id, _arm_attrs} -> {token_id, token_id} end)
+
+              build_timer_arms_multi(Multi.new(), prepared_timers, id_map, prefix)
+            end)
+            |> Multi.merge(fn _changes ->
+              id_map =
+                Map.new(prepared_service_task_dispatches, fn %{token_id: token_id} ->
+                  {token_id, token_id}
+                end)
+
+              build_service_task_dispatch_multi(
+                Multi.new(),
+                prepared_service_task_dispatches,
+                id_map,
+                tenant_id,
+                prefix
+              )
+            end)
+            |> append_sub_process_children_creation_multi(
+              prepared_children,
+              timer.instance_id,
+              actor_id,
+              idempotency_key,
+              prefix
+            )
+            |> Multi.run(:projection, fn inner_repo, _changes ->
+              reconcile_projection(inner_repo, projection, final_instance_state, now, prefix)
+            end)
+
+          case repo.transaction(multi) do
+            {:ok, changes} ->
+              {:ok, changes}
+
+            {:error, _failed_step, reason, _changes} ->
+              {:error, reason}
+          end
+
+        {:execution_error, error_args} ->
           {:error, {:execution_error_not_supported_for_timer_fire, error_args}}
       end
     end

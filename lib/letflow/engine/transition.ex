@@ -120,6 +120,7 @@ defmodule Letflow.Engine.Transition do
           | {:complete_task, token_id :: String.t()}
           | {:sub_process_completed, token_id :: String.t()}
           | {:timer_fired, token_id :: String.t()}
+          | {:escalation_timer_fired, token_id :: String.t()}
 
   @typedoc """
   PROVENANCE (historical, not current decision authority):
@@ -157,6 +158,7 @@ defmodule Letflow.Engine.Transition do
           | {:sub_process_start, token_id :: String.t(), node_id :: String.t()}
           | {:timer_armed, token_id :: String.t(), node_id :: String.t()}
           | {:service_task_dispatch_requested, token_id :: String.t(), node_id :: String.t()}
+          | {:escalation_timer_armed, token_id :: String.t(), node_id :: String.t()}
 
   @typedoc """
   Every failure `transition/3` can return. `:unknown_event_type` and
@@ -191,6 +193,7 @@ defmodule Letflow.Engine.Transition do
           | {:token_not_at_human_task, node_type :: atom(), node_id :: String.t()}
           | {:token_not_waiting_on_child, node_type :: atom(), node_id :: String.t()}
           | {:token_not_at_timer, node_type :: atom(), node_id :: String.t()}
+          | {:token_not_at_human_task_for_escalation, node_type :: atom(), node_id :: String.t()}
 
   @typedoc """
   One entry per non-default outgoing edge of an `:EXCLUSIVE_GATEWAY` whose
@@ -279,6 +282,21 @@ defmodule Letflow.Engine.Transition do
 
               node ->
                 dispatch_timer_fired(definition_snapshot, instance_state, token, node)
+            end
+        end
+
+      {:escalation_timer_fired, token_id} ->
+        case find_token(instance_state.tokens, token_id) do
+          nil ->
+            {:error, {:unknown_token_id, token_id}}
+
+          token ->
+            case find_node(definition_snapshot.nodes, token.node_id) do
+              nil ->
+                {:error, {:unknown_node_id, token.node_id}}
+
+              node ->
+                dispatch_escalation_timer_fired(definition_snapshot, instance_state, token, node)
             end
         end
 
@@ -413,9 +431,24 @@ defmodule Letflow.Engine.Transition do
   # automatic outgoing traversal. The same Token.t() value is appended to
   # pending_task_nodes; this is the only dispatch clause that ever appends
   # to it (the guard for REQ-047's future tasks-row materialization).
-  defp dispatch_human_task(%InstanceState{} = instance_state, token, _node) do
+  # REQ-396: if the node carries escalation_timer_duration, also emits an
+  # {:escalation_timer_armed, token_id, node_id} pending_event so the impure
+  # caller (Letflow.Engine) can arm the escalation timer via
+  # Letflow.Scheduler.create/2 -- mirrors {:timer_armed, ...}'s pattern.
+  defp dispatch_human_task(%InstanceState{} = instance_state, token, node) do
     new_pending = instance_state.pending_task_nodes ++ [token]
-    {:ok, %InstanceState{instance_state | pending_task_nodes: new_pending}, []}
+    new_state = %InstanceState{instance_state | pending_task_nodes: new_pending}
+
+    escalation_events =
+      case get_in(node, [Access.key(:attributes), Access.key("escalation_timer_duration")]) do
+        value when is_binary(value) and byte_size(value) > 0 ->
+          [{:escalation_timer_armed, token.token_id, node.id}]
+
+        _ ->
+          []
+      end
+
+    {:ok, new_state, escalation_events}
   end
 
   # --- {:complete_task, token_id} (REQ-048 design doc §5, EE-04) -------------
@@ -648,6 +681,52 @@ defmodule Letflow.Engine.Transition do
          id: node_id
        }) do
     {:error, {:token_not_at_timer, node_type, node_id}}
+  end
+
+  # {:escalation_timer_fired, token_id} (REQ-396 design doc §4.1) -- the
+  # caller's explicit "this escalation timer just fired, advance token off
+  # the :HUMAN_TASK via its default/fallback edge" signal. Unlike
+  # {:complete_task, token_id}, conditioned edges are skipped entirely --
+  # escalation fires unconditionally via the fallback path (the human did not
+  # act within the deadline, so no decision variable is set).
+  @spec dispatch_escalation_timer_fired(Graph.t(), InstanceState.t(), Token.t(), Node.t()) ::
+          {:ok, InstanceState.t(), [pending_event()]}
+          | {:error,
+             {:token_not_at_human_task_for_escalation, node_type :: atom(), node_id :: String.t()}}
+          | {:error,
+             {:no_matching_edge, node_id :: String.t(),
+              evaluated_conditions :: [evaluated_condition()]}}
+  defp dispatch_escalation_timer_fired(
+         definition_snapshot,
+         %InstanceState{} = instance_state,
+         %Token{} = token,
+         %Node{node_type: :HUMAN_TASK} = node
+       ) do
+    # Skip conditioned edges entirely -- unconditionally follow the fallback edge.
+    outgoing_edges = Enum.filter(definition_snapshot.edges, &(&1.source == node.id))
+
+    {_conditioned, default_edges} =
+      Enum.split_with(outgoing_edges, &really_conditioned?/1)
+
+    case List.first(default_edges) do
+      nil ->
+        {:error, {:no_matching_edge, node.id, []}}
+
+      edge ->
+        advance_token(instance_state, token, edge.target)
+    end
+  end
+
+  # Defensive guard -- should be unreachable (advance_after_escalation_timer_fired/3
+  # in Letflow.Engine verifies the token is at a :HUMAN_TASK before dispatching),
+  # kept for totality discipline.
+  defp dispatch_escalation_timer_fired(
+         _definition_snapshot,
+         _instance_state,
+         _token,
+         %Node{node_type: node_type, id: node_id}
+       ) do
+    {:error, {:token_not_at_human_task_for_escalation, node_type, node_id}}
   end
 
   # --- :SERVICE_TASK (REQ-215 design doc §1.4) --------------------------------

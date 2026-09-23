@@ -236,6 +236,9 @@ defmodule Letflow.Definitions.Graph do
             | :form_schema_computed_field_cycle
             | :undeclared_variable_reference
             | :incompatible_comparison_operand_types
+            | :invalid_escalation_timer
+            | :missing_escalation_role
+            | :missing_escalation_timer_duration
 
     @type t :: %__MODULE__{
             code: code(),
@@ -401,7 +404,10 @@ defmodule Letflow.Definitions.Graph do
   `interface` attribute, delegated to `Letflow.Definitions.SubProcessInterface`)
   plus CHK-20 (`check_form_schema_expressions/1`, REQ-291 — HUMAN_TASK's
   optional `form_schema` attribute's `x-ui` logic keys, delegated to
-  `Letflow.Definitions.FormSchemaExpressions`) against every node in `graph`
+  `Letflow.Definitions.FormSchemaExpressions`)
+  plus CHK-21 (`check_human_task_escalation/1`, REQ-396 — HUMAN_TASK's
+  optional co-required `escalation_timer_duration`/`escalation_role` pair)
+  against every node in `graph`
   and returns every violation found — never short-circuits, same
   unconditional-concatenation construction as `validate_graph/1`. Does not
   call `validate_graph/1` and does not verify structural validity as a
@@ -416,7 +422,8 @@ defmodule Letflow.Definitions.Graph do
         &check_service_task_timeout/1,
         &check_timer_duration/1,
         &check_sub_process_interface/1,
-        &check_form_schema_expressions/1
+        &check_form_schema_expressions/1,
+        &check_human_task_escalation/1
       ]
       |> Enum.flat_map(& &1.(graph))
 
@@ -885,6 +892,57 @@ defmodule Letflow.Definitions.Graph do
         node.id,
         node.attributes
       )
+    end)
+  end
+
+  # CHK-21: a HUMAN_TASK node's optional escalation attributes are
+  # co-required — both escalation_timer_duration and escalation_role must
+  # be present or both absent. When present, escalation_timer_duration must
+  # be a valid ISO-8601 duration string (same parser as CHK-12). "P0D" is
+  # accepted, consistent with CHK-12's own treatment of that edge case
+  # (OQ-1 in req396 design doc).
+  @spec check_human_task_escalation(t()) :: [Violation.t()]
+  defp check_human_task_escalation(%__MODULE__{nodes: nodes}) do
+    nodes
+    |> Enum.filter(&(&1.node_type == :HUMAN_TASK))
+    |> Enum.flat_map(fn node ->
+      attrs = node.attributes || %{}
+      raw_duration = Map.get(attrs, "escalation_timer_duration")
+      raw_role = Map.get(attrs, "escalation_role")
+      has_duration = not is_nil(raw_duration)
+      has_role = not is_nil(raw_role) and is_binary(raw_role) and String.trim(raw_role) != ""
+
+      cond do
+        has_duration and is_binary(raw_duration) and not valid_iso8601_duration?(raw_duration) ->
+          [
+            %Violation{
+              code: :invalid_escalation_timer,
+              message:
+                "Node '#{node.id}' (HUMAN_TASK) has an invalid 'escalation_timer_duration' attribute (#{inspect(raw_duration)}); must be a valid ISO-8601 duration string"
+            }
+          ]
+
+        has_duration and not has_role ->
+          [
+            %Violation{
+              code: :missing_escalation_role,
+              message:
+                "Node '#{node.id}' (HUMAN_TASK) has 'escalation_timer_duration' but is missing a non-empty 'escalation_role' attribute"
+            }
+          ]
+
+        not has_duration and not is_nil(raw_role) ->
+          [
+            %Violation{
+              code: :missing_escalation_timer_duration,
+              message:
+                "Node '#{node.id}' (HUMAN_TASK) has 'escalation_role' but is missing 'escalation_timer_duration'"
+            }
+          ]
+
+        true ->
+          []
+      end
     end)
   end
 

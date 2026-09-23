@@ -1,75 +1,76 @@
 {
-  "handoff_id": "WF02-REQ396-20260923-step-02d",
-  "run_id": "WF02-REQ396-20260923",
-  "workflow": "WF-02",
-  "step": "Step 2d (Idiom Review Gate)",
-  "to_agent": "REVIEWER",
-  "from_agent": "ORCH",
-  "status": "COMPLETED",
-  "created_at": "2026-09-23T19:42:04Z",
-  "started_at": "2026-09-23T19:42:04Z",
-  "context": {
-    "branch_name": "feature/WF02-REQ396-20260923",
-    "requirement_ids": ["REQ-396"],
-    "prior_gates": "CODE-DESIGN-VALIDATOR PASS, SECURITY-REVIEWER PASS",
-    "design_decision_requiring_reviewer_sign_off": "Option A (new HUMAN_TASK attributes) vs Option B (boundary-timer node) -- CODE-DESIGNER flagged this explicitly for REVIEWER sign-off",
-    "artifacts_in": [
-      "lib/letflow/definitions/graph.ex",
-      "lib/letflow/engine/transition.ex",
-      "lib/letflow/engine.ex",
-      "lib/letflow/scheduler.ex",
-      "lib/letflow/design/req396-human-task-escalation-timer.md"
-    ]
-  },
-  "task": {
-    "description": "Execute Step 2d (REVIEWER HARD GATE) for REQ-396.\n\nWorkspace: c:\\Users\\tvolo\\dev\\ai-dala\\letflow\nBranch: feature/WF02-REQ396-20260923\n\nRead the diff: git diff main...feature/WF02-REQ396-20260923 -- lib/letflow/\nAlso read the design doc: lib/letflow/design/req396-human-task-escalation-timer.md\n\nCheck:\n1. OTP idiom: are the new functions idiomatic Elixir? with chains, pattern matching, Ecto.Multi?\n2. DESIGN DECISION SIGN-OFF (REQUIRED): Option A (new HUMAN_TASK attributes) was flagged for REVIEWER review. Is this the right approach for Letflow's architecture? Does it create any concerning coupling with the engine vs graph boundary?\n3. Supervision-tree changes: no new GenServer/process spawning? (Should be none)\n4. Scope creep: diff touches only files needed for REQ-396?\n5. Decision-record consistency: does this align with existing stage-7 design decisions?\n6. @spec coverage: new public functions have @spec?\n7. CHK-21 placement: is it correctly integrated into graph.ex's validation chain?\n\nVerdict: PASS or FAIL with explicit Option A/B sign-off.\n\nOutput:\n1. Write handoffs/WF02-REQ396-20260923/step-02d-reviewer.json COMPLETED PASS or FAIL\n2. git add + commit + push\n\nReport: PASS or FAIL with Option A sign-off decision",
-    "acceptance_criteria": [
-      "OTP idiom correct",
-      "Option A/B decision explicitly signed off",
-      "No supervision-tree changes",
-      "No scope creep",
-      "@spec coverage adequate"
-    ]
-  },
-  "completed_at": "2026-09-24T00:00:00Z",
-  "result": {
-    "verdict": "PASS",
-    "option_ab_signoff": "OPTION A CONFIRMED. Inline `escalation_timer_duration`/`escalation_role` attributes on :HUMAN_TASK are architecturally correct for this scope. The CHK-09/CHK-12 precedent is an exact match. Option B (:BOUNDARY_TIMER node) would require parallel-token racing semantics — cancelling one token when the other fires — a fundamentally new engine primitive with no precedent in the current codebase and no AC-driven payoff for this requirement. The 'invisible timer' drawback is real, documented in the design doc §2.2, and acceptable.",
-    "findings": [
-      {
-        "check": "OTP/Elixir idiom",
-        "result": "PASS",
-        "notes": "with chains throughout advance_after_escalation_timer_fired/3 and persist_escalation_timer_fired_advance/7. dispatch_escalation_timer_fired/4 uses two proper pattern-matched function clauses (first clause guards :HUMAN_TASK via %Node{node_type: :HUMAN_TASK} = node in the function head — not a case/cond doing type dispatch). cond in check_human_task_escalation/1 is idiomatic for the three-arm validation logic. Ecto.Multi usage correct and consistent with all existing persist_*_advance paths."
-      },
-      {
-        "check": "Supervision tree",
-        "result": "PASS",
-        "notes": "No GenServer.start_link, Task.Supervisor.start_child, spawn, or spawn_link in the diff. Scheduler.create/2's step_name: opt extension is purely additive and backward-compatible (Keyword.get with default :scheduler_timer)."
-      },
-      {
-        "check": "Scope creep",
-        "result": "PASS",
-        "notes": "Diff touches exactly: lib/letflow/definitions/graph.ex, lib/letflow/engine.ex, lib/letflow/engine/transition.ex, lib/letflow/scheduler.ex, test/fixtures/simulation/swiftroute/process_route_approval.yaml, plus design doc and handoff/docs files. No abstractions introduced ahead of their requirement."
-      },
-      {
-        "check": "Decision-record consistency",
-        "result": "PASS",
-        "notes": "advance_after_escalation_timer_fired/3 structure, do_fire/2 branching on timer_type, identity id_map for timer arms, and Scheduler.create/2 step_name: opt are all direct extensions of the REQ-187/stage-7 established patterns. Verified: the existing advance_after_timer_fired/3 path uses the same identity id_map at its timer arms Multi.merge step (engine.ex ~L2530), with an inline comment confirming the token IDs are already real persisted records by that point."
-      },
-      {
-        "check": "@spec coverage",
-        "result": "PASS",
-        "notes": "advance_after_escalation_timer_fired/3: @spec present. check_human_task_escalation/1: @spec present (graph.ex L904). dispatch_escalation_timer_fired/4: @spec present in transition.ex."
-      },
-      {
-        "check": "CHK-21 placement",
-        "result": "PASS",
-        "notes": "Correctly appended to the validate_node_attributes/1 check list after check_form_schema_expressions/1. Reuses valid_iso8601_duration?/1 already in graph.ex. Three new Violation.code() variants appended to the closed union @type."
-      }
-    ],
-    "observations_non_blocking": [
-      "cond in check_human_task_escalation/1 has an unreachable edge case: a non-binary non-nil escalation_timer_duration (e.g. integer) falls through the is_binary/1 guard on the first clause and may emit :missing_escalation_role instead of :invalid_escalation_timer. YAML always produces strings for attribute values; unreachable in normal operation.",
-      "cancel_original_task Multi.run uses raw string literals \"PENDING\"/\"CANCELLED\" in update_all where/set clauses against an Ecto.Enum field, bypassing Ecto cast validation. Works because those are the exact underlying stored strings. Note for future maintainers."
-    ]
-  }
+    "handoff_id":  "WF02-REQ396-20260923-step-02d",
+    "run_id":  "WF02-REQ396-20260923",
+    "step":  "Step 2d (Idiom Review Gate)",
+    "to_agent":  "REVIEWER",
+    "from_agent":  "ORCH",
+    "status":  "COMPLETED",
+    "created_at":  "2026-09-23T19:42:04Z",
+    "started_at":  "2026-09-23T19:42:04Z",
+    "context":  {
+                    "branch_name":  "feature/WF02-REQ396-20260923",
+                    "requirement_ids":  [
+                                            "REQ-396"
+                                        ],
+                    "prior_gates":  "CODE-DESIGN-VALIDATOR PASS, SECURITY-REVIEWER PASS",
+                    "design_decision_requiring_reviewer_sign_off":  "Option A (new HUMAN_TASK attributes) vs Option B (boundary-timer node) -- CODE-DESIGNER flagged this explicitly for REVIEWER sign-off",
+                    "artifacts_in":  [
+                                         "lib/letflow/definitions/graph.ex",
+                                         "lib/letflow/engine/transition.ex",
+                                         "lib/letflow/engine.ex",
+                                         "lib/letflow/scheduler.ex",
+                                         "lib/letflow/design/req396-human-task-escalation-timer.md"
+                                     ]
+                },
+    "task":  {
+                 "description":  "Execute Step 2d (REVIEWER HARD GATE) for REQ-396.\n\nWorkspace: c:\\Users\\tvolo\\dev\\ai-dala\\letflow\nBranch: feature/WF02-REQ396-20260923\n\nRead the diff: git diff main...feature/WF02-REQ396-20260923 -- lib/letflow/\nAlso read the design doc: lib/letflow/design/req396-human-task-escalation-timer.md\n\nCheck:\n1. OTP idiom: are the new functions idiomatic Elixir? with chains, pattern matching, Ecto.Multi?\n2. DESIGN DECISION SIGN-OFF (REQUIRED): Option A (new HUMAN_TASK attributes) was flagged for REVIEWER review. Is this the right approach for Letflow\u0027s architecture? Does it create any concerning coupling with the engine vs graph boundary?\n3. Supervision-tree changes: no new GenServer/process spawning? (Should be none)\n4. Scope creep: diff touches only files needed for REQ-396?\n5. Decision-record consistency: does this align with existing stage-7 design decisions?\n6. @spec coverage: new public functions have @spec?\n7. CHK-21 placement: is it correctly integrated into graph.ex\u0027s validation chain?\n\nVerdict: PASS or FAIL with explicit Option A/B sign-off.\n\nOutput:\n1. Write handoffs/WF02-REQ396-20260923/step-02d-reviewer.json COMPLETED PASS or FAIL\n2. git add + commit + push\n\nReport: PASS or FAIL with Option A sign-off decision",
+                 "acceptance_criteria":  [
+                                             "OTP idiom correct",
+                                             "Option A/B decision explicitly signed off",
+                                             "No supervision-tree changes",
+                                             "No scope creep",
+                                             "@spec coverage adequate"
+                                         ]
+             },
+    "completed_at":  "2026-09-24T00:00:00Z",
+    "result":  {
+                   "verdict":  "PASS",
+                   "option_ab_signoff":  "OPTION A CONFIRMED. Inline `escalation_timer_duration`/`escalation_role` attributes on :HUMAN_TASK are architecturally correct for this scope. The CHK-09/CHK-12 precedent is an exact match. Option B (:BOUNDARY_TIMER node) would require parallel-token racing semantics — cancelling one token when the other fires — a fundamentally new engine primitive with no precedent in the current codebase and no AC-driven payoff for this requirement. The \u0027invisible timer\u0027 drawback is real, documented in the design doc §2.2, and acceptable.",
+                   "findings":  [
+                                    {
+                                        "check":  "OTP/Elixir idiom",
+                                        "result":  "PASS",
+                                        "notes":  "with chains throughout advance_after_escalation_timer_fired/3 and persist_escalation_timer_fired_advance/7. dispatch_escalation_timer_fired/4 uses two proper pattern-matched function clauses (first clause guards :HUMAN_TASK via %Node{node_type: :HUMAN_TASK} = node in the function head — not a case/cond doing type dispatch). cond in check_human_task_escalation/1 is idiomatic for the three-arm validation logic. Ecto.Multi usage correct and consistent with all existing persist_*_advance paths."
+                                    },
+                                    {
+                                        "check":  "Supervision tree",
+                                        "result":  "PASS",
+                                        "notes":  "No GenServer.start_link, Task.Supervisor.start_child, spawn, or spawn_link in the diff. Scheduler.create/2\u0027s step_name: opt extension is purely additive and backward-compatible (Keyword.get with default :scheduler_timer)."
+                                    },
+                                    {
+                                        "check":  "Scope creep",
+                                        "result":  "PASS",
+                                        "notes":  "Diff touches exactly: lib/letflow/definitions/graph.ex, lib/letflow/engine.ex, lib/letflow/engine/transition.ex, lib/letflow/scheduler.ex, test/fixtures/simulation/swiftroute/process_route_approval.yaml, plus design doc and handoff/docs files. No abstractions introduced ahead of their requirement."
+                                    },
+                                    {
+                                        "check":  "Decision-record consistency",
+                                        "result":  "PASS",
+                                        "notes":  "advance_after_escalation_timer_fired/3 structure, do_fire/2 branching on timer_type, identity id_map for timer arms, and Scheduler.create/2 step_name: opt are all direct extensions of the REQ-187/stage-7 established patterns. Verified: the existing advance_after_timer_fired/3 path uses the same identity id_map at its timer arms Multi.merge step (engine.ex ~L2530), with an inline comment confirming the token IDs are already real persisted records by that point."
+                                    },
+                                    {
+                                        "check":  "@spec coverage",
+                                        "result":  "PASS",
+                                        "notes":  "advance_after_escalation_timer_fired/3: @spec present. check_human_task_escalation/1: @spec present (graph.ex L904). dispatch_escalation_timer_fired/4: @spec present in transition.ex."
+                                    },
+                                    {
+                                        "check":  "CHK-21 placement",
+                                        "result":  "PASS",
+                                        "notes":  "Correctly appended to the validate_node_attributes/1 check list after check_form_schema_expressions/1. Reuses valid_iso8601_duration?/1 already in graph.ex. Three new Violation.code() variants appended to the closed union @type."
+                                    }
+                                ],
+                   "observations_non_blocking":  [
+                                                     "cond in check_human_task_escalation/1 has an unreachable edge case: a non-binary non-nil escalation_timer_duration (e.g. integer) falls through the is_binary/1 guard on the first clause and may emit :missing_escalation_role instead of :invalid_escalation_timer. YAML always produces strings for attribute values; unreachable in normal operation.",
+                                                     "cancel_original_task Multi.run uses raw string literals \"PENDING\"/\"CANCELLED\" in update_all where/set clauses against an Ecto.Enum field, bypassing Ecto cast validation. Works because those are the exact underlying stored strings. Note for future maintainers."
+                                                 ]
+               }
 }

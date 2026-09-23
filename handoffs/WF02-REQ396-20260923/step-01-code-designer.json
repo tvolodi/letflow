@@ -1,61 +1,62 @@
 {
-  "handoff_id": "WF02-REQ396-20260923-step-01",
-  "run_id": "WF02-REQ396-20260923",
-  "workflow": "WF-02",
-  "step": "Step 1",
-  "to_agent": "CODE-DESIGNER",
-  "from_agent": "ORCH",
-  "status": "PENDING",
-  "created_at": "2026-09-23T18:38:25Z",
-  "started_at": "2026-09-23T18:38:25Z",
-  "context": {
-    "branch_name": "feature/WF02-REQ396-20260923",
-    "requirement_ids": ["REQ-396"],
-    "stage": "S7",
-    "requirement_text": {
-      "REQ-396": "Add HUMAN_TASK.escalation_timer_duration to graph schema and wire SCH-04 escalation half. WHAT EXISTS: POST /instances/:id/advance-timer force-fires TIMER nodes; Letflow.Definitions.Graph validates :TIMER with duration_iso8601 (CHK-12). WHAT DOES NOT EXIST: No timeout on :HUMAN_TASK that (a) races the human, (b) makes original task non-actionable, (c) creates new task assigned to escalation role. SCOPE: CODE-DESIGNER decides schema shape (escalation_timer_duration + escalation_role on :HUMAN_TASK, OR boundary-timer node approach reusing existing :TIMER/:GATEWAY primitives); ELIXIR-DEV wires Engine/Scheduler; update process_route_approval.yaml. NOT IN SCOPE: REQ-185/186/187/188 recurring timers; REQ-395 live deployment; ISS-0739 credentials. ACs: design doc citing REQ-185/REQ-188 blocker closed; Graph validates new attributes with test rejecting malformed; ExUnit proves timer fire -> (a) non-actionable, (b) one new task to escalation role, (c) audit ordering; process_route_approval.yaml updated; mix test + compile pass."
-    },
-    "artifacts_in": [
-      "lib/letflow/definitions/graph.ex",
-      "lib/letflow/engine/transition.ex",
-      "lib/letflow/scheduler.ex",
-      "test/fixtures/simulation/swiftroute/process_route_approval.yaml",
-      "docs/migration/stage-7-*.md",
-      "docs/guides/backend_developer_guide.md"
-    ]
-  },
-  "task": {
-    "description": "Execute Step 1 (Code Design) for REQ-396.\n\nWorkspace: c:\\Users\\tvolo\\dev\\ai-dala\\letflow\nBranch: feature/WF02-REQ396-20260923\n\nDESIGN ONLY -- no implementation code.\n\nRead FIRST:\n1. lib/letflow/definitions/graph.ex -- full file, especially :HUMAN_TASK definition, CHK-12 (check_timer_duration/1), and how other node attributes are validated\n2. lib/letflow/engine/transition.ex -- how tasks are transitioned (look for HUMAN_TASK handling)\n3. lib/letflow/scheduler.ex -- how timers are fired (fire_timer/2 logic)\n4. test/fixtures/simulation/swiftroute/process_route_approval.yaml -- the ops-review HUMAN_TASK node\n5. docs/requirements.yaml REQ-185 and REQ-188 preambles (L9736-9742, L10113-10120) -- the escalation deferral text\n\nDesign DECISION (PRIMARY):\n\n**Option A: New attributes on :HUMAN_TASK**\n- Add `escalation_timer_duration` (ISO-8601 string, optional) and `escalation_role` (string, optional) to :HUMAN_TASK nodes\n- Validated by a new CHK-style check in graph.ex\n- Engine creates a shadow :TIMER node at HUMAN_TASK start\n- When timer fires: transition HUMAN_TASK to non-actionable, create new task to escalation_role\n\n**Option B: Boundary-timer node**\n- Add an explicit `:BOUNDARY_TIMER` node type racing the :HUMAN_TASK\n- Reuses existing :TIMER machinery more directly\n- More explicit in the graph definition but adds a new node type\n\nDecide which approach and state the rationale (trade-offs: attribute approach is simpler, boundary-timer is more explicit). Flag for CODE-DESIGN-VALIDATOR AND REVIEWER sign-off.\n\nWrite design doc: lib/letflow/design/req396-human-task-escalation-timer.md\n\nInclude:\n1. Chosen approach with rationale, citing Option A vs B trade-offs\n2. New attributes (if Option A): names, types, validation rules (what makes a valid escalation_timer_duration? what makes a valid escalation_role?)\n3. New graph validator (CHK-style): function name, what it checks, error shape\n4. Engine behavior: what happens when escalation timer fires? Specific state transitions for HUMAN_TASK (non-actionable status name?), new task creation (which fields?), audit event ordering\n5. process_route_approval.yaml sketch: what the updated ops-review node looks like with the new attribute(s)\n6. AC traceability: map each AC to a design element\n7. Citation of REQ-185/REQ-188 preamble as the blocker being closed\n\nAfter:\n1. Write lib/letflow/design/req396-human-task-escalation-timer.md\n2. Write handoffs/WF02-REQ396-20260923/step-01-code-designer.json COMPLETED PASS\n3. git add + commit + push\n\nReport: chosen approach and key design decisions",
-    "acceptance_criteria": [
-      "Approach chosen (A or B) with rationale",
-      "New attributes/node-type specified with validation rules",
-      "Engine behavior on timer fire fully described",
-      "AC traceability complete",
-      "REQ-185/REQ-188 blocker cited",
-      "No implementation code"
-    ]
-  },
-  "result": {
-    "status": "COMPLETED",
-    "verdict": "PASS",
-    "completed_at": "2026-09-23T19:15:00Z",
-    "approach": "Option A — new attributes on :HUMAN_TASK",
-    "design_doc": "lib/letflow/design/req396-human-task-escalation-timer.md",
-    "key_decisions": [
-      "Option A chosen over Option B: no new node type; attributes on :HUMAN_TASK follow CHK-09/CHK-12 pattern",
-      "New attributes: escalation_timer_duration (ISO-8601) and escalation_role (string), co-required",
-      "New CHK-21 check_human_task_escalation/1 with 3 violation codes: invalid_escalation_timer, missing_escalation_role, missing_escalation_timer_duration",
-      "New pending_event {:escalation_timer_armed, token_id, node_id} emitted by dispatch_human_task/3 when attribute present",
-      "New transition_event {:escalation_timer_fired, token_id} handled by dispatch_escalation_timer_fired/4",
-      "do_fire/2 routes timer_type: 'escalation' to advance_after_escalation_timer_fired/3 (new Engine function)",
-      "Audit ordering enforced by Ecto.Multi step order: cancel original task BEFORE new task creation",
-      "Original task non-actionable status: :cancelled (existing atom, no new atom needed)",
-      "timer_type 'escalation' already in @timer_types in Letflow.Scheduler.Timer",
-      "process_route_approval.yaml: ops-review gets new attributes; fallback-ops-review retargeted to ceo-approval",
-      "3 open questions flagged for ELIXIR-DEV: OQ-1 (P0D validity), OQ-2 (cancel_reason column), OQ-3 (separate ESCALATION_TIMER_FIRED domain event)"
-    ],
-    "reviewer_flags": [
-      "Option A vs Option B trade-off requires REVIEWER sign-off per design doc §2.2"
-    ]
-  }
+    "handoff_id":  "WF02-REQ396-20260923-step-01",
+    "run_id":  "WF02-REQ396-20260923",
+    "step":  "Step 1",
+    "to_agent":  "CODE-DESIGNER",
+    "from_agent":  "ORCH",
+    "status":  "PENDING",
+    "created_at":  "2026-09-23T18:38:25Z",
+    "started_at":  "2026-09-23T18:38:25Z",
+    "context":  {
+                    "branch_name":  "feature/WF02-REQ396-20260923",
+                    "requirement_ids":  [
+                                            "REQ-396"
+                                        ],
+                    "stage":  "S7",
+                    "requirement_text":  {
+                                             "REQ-396":  "Add HUMAN_TASK.escalation_timer_duration to graph schema and wire SCH-04 escalation half. WHAT EXISTS: POST /instances/:id/advance-timer force-fires TIMER nodes; Letflow.Definitions.Graph validates :TIMER with duration_iso8601 (CHK-12). WHAT DOES NOT EXIST: No timeout on :HUMAN_TASK that (a) races the human, (b) makes original task non-actionable, (c) creates new task assigned to escalation role. SCOPE: CODE-DESIGNER decides schema shape (escalation_timer_duration + escalation_role on :HUMAN_TASK, OR boundary-timer node approach reusing existing :TIMER/:GATEWAY primitives); ELIXIR-DEV wires Engine/Scheduler; update process_route_approval.yaml. NOT IN SCOPE: REQ-185/186/187/188 recurring timers; REQ-395 live deployment; ISS-0739 credentials. ACs: design doc citing REQ-185/REQ-188 blocker closed; Graph validates new attributes with test rejecting malformed; ExUnit proves timer fire -\u003e (a) non-actionable, (b) one new task to escalation role, (c) audit ordering; process_route_approval.yaml updated; mix test + compile pass."
+                                         },
+                    "artifacts_in":  [
+                                         "lib/letflow/definitions/graph.ex",
+                                         "lib/letflow/engine/transition.ex",
+                                         "lib/letflow/scheduler.ex",
+                                         "test/fixtures/simulation/swiftroute/process_route_approval.yaml",
+                                         "docs/migration/stage-7-*.md",
+                                         "docs/guides/backend_developer_guide.md"
+                                     ]
+                },
+    "task":  {
+                 "description":  "Execute Step 1 (Code Design) for REQ-396.\n\nWorkspace: c:\\Users\\tvolo\\dev\\ai-dala\\letflow\nBranch: feature/WF02-REQ396-20260923\n\nDESIGN ONLY -- no implementation code.\n\nRead FIRST:\n1. lib/letflow/definitions/graph.ex -- full file, especially :HUMAN_TASK definition, CHK-12 (check_timer_duration/1), and how other node attributes are validated\n2. lib/letflow/engine/transition.ex -- how tasks are transitioned (look for HUMAN_TASK handling)\n3. lib/letflow/scheduler.ex -- how timers are fired (fire_timer/2 logic)\n4. test/fixtures/simulation/swiftroute/process_route_approval.yaml -- the ops-review HUMAN_TASK node\n5. docs/requirements.yaml REQ-185 and REQ-188 preambles (L9736-9742, L10113-10120) -- the escalation deferral text\n\nDesign DECISION (PRIMARY):\n\n**Option A: New attributes on :HUMAN_TASK**\n- Add `escalation_timer_duration` (ISO-8601 string, optional) and `escalation_role` (string, optional) to :HUMAN_TASK nodes\n- Validated by a new CHK-style check in graph.ex\n- Engine creates a shadow :TIMER node at HUMAN_TASK start\n- When timer fires: transition HUMAN_TASK to non-actionable, create new task to escalation_role\n\n**Option B: Boundary-timer node**\n- Add an explicit `:BOUNDARY_TIMER` node type racing the :HUMAN_TASK\n- Reuses existing :TIMER machinery more directly\n- More explicit in the graph definition but adds a new node type\n\nDecide which approach and state the rationale (trade-offs: attribute approach is simpler, boundary-timer is more explicit). Flag for CODE-DESIGN-VALIDATOR AND REVIEWER sign-off.\n\nWrite design doc: lib/letflow/design/req396-human-task-escalation-timer.md\n\nInclude:\n1. Chosen approach with rationale, citing Option A vs B trade-offs\n2. New attributes (if Option A): names, types, validation rules (what makes a valid escalation_timer_duration? what makes a valid escalation_role?)\n3. New graph validator (CHK-style): function name, what it checks, error shape\n4. Engine behavior: what happens when escalation timer fires? Specific state transitions for HUMAN_TASK (non-actionable status name?), new task creation (which fields?), audit event ordering\n5. process_route_approval.yaml sketch: what the updated ops-review node looks like with the new attribute(s)\n6. AC traceability: map each AC to a design element\n7. Citation of REQ-185/REQ-188 preamble as the blocker being closed\n\nAfter:\n1. Write lib/letflow/design/req396-human-task-escalation-timer.md\n2. Write handoffs/WF02-REQ396-20260923/step-01-code-designer.json COMPLETED PASS\n3. git add + commit + push\n\nReport: chosen approach and key design decisions",
+                 "acceptance_criteria":  [
+                                             "Approach chosen (A or B) with rationale",
+                                             "New attributes/node-type specified with validation rules",
+                                             "Engine behavior on timer fire fully described",
+                                             "AC traceability complete",
+                                             "REQ-185/REQ-188 blocker cited",
+                                             "No implementation code"
+                                         ]
+             },
+    "result":  {
+                   "status":  "COMPLETED",
+                   "verdict":  "PASS",
+                   "completed_at":  "2026-09-23T19:15:00Z",
+                   "approach":  "Option A — new attributes on :HUMAN_TASK",
+                   "design_doc":  "lib/letflow/design/req396-human-task-escalation-timer.md",
+                   "key_decisions":  [
+                                         "Option A chosen over Option B: no new node type; attributes on :HUMAN_TASK follow CHK-09/CHK-12 pattern",
+                                         "New attributes: escalation_timer_duration (ISO-8601) and escalation_role (string), co-required",
+                                         "New CHK-21 check_human_task_escalation/1 with 3 violation codes: invalid_escalation_timer, missing_escalation_role, missing_escalation_timer_duration",
+                                         "New pending_event {:escalation_timer_armed, token_id, node_id} emitted by dispatch_human_task/3 when attribute present",
+                                         "New transition_event {:escalation_timer_fired, token_id} handled by dispatch_escalation_timer_fired/4",
+                                         "do_fire/2 routes timer_type: \u0027escalation\u0027 to advance_after_escalation_timer_fired/3 (new Engine function)",
+                                         "Audit ordering enforced by Ecto.Multi step order: cancel original task BEFORE new task creation",
+                                         "Original task non-actionable status: :cancelled (existing atom, no new atom needed)",
+                                         "timer_type \u0027escalation\u0027 already in @timer_types in Letflow.Scheduler.Timer",
+                                         "process_route_approval.yaml: ops-review gets new attributes; fallback-ops-review retargeted to ceo-approval",
+                                         "3 open questions flagged for ELIXIR-DEV: OQ-1 (P0D validity), OQ-2 (cancel_reason column), OQ-3 (separate ESCALATION_TIMER_FIRED domain event)"
+                                     ],
+                   "reviewer_flags":  [
+                                          "Option A vs Option B trade-off requires REVIEWER sign-off per design doc §2.2"
+                                      ]
+               }
 }

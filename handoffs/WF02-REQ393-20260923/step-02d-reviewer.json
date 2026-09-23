@@ -5,7 +5,7 @@
   "step": "Step 2d (Idiom Review Gate)",
   "to_agent": "REVIEWER",
   "from_agent": "ORCH",
-  "status": "PENDING",
+  "status": "COMPLETED",
   "created_at": "2026-09-23T10:36:29Z",
   "started_at": "2026-09-23T10:36:29Z",
   "context": {
@@ -28,5 +28,24 @@
       "No debug artifacts"
     ]
   },
-  "result": null
+  "completed_at": "2026-09-23T10:45:00Z",
+  "result": {
+    "status": "COMPLETED",
+    "verdict": "PASS",
+    "findings": {
+      "react_idiom": "PASS — useState/useEffect/useMemo used correctly; no setState inside useMemo; useEffect([recordsError]) is synchronous with no async; all list renderings have keys.",
+      "scope_creep": "PASS — 5 files changed: queryKeys.ts and useTenantScopedQueryKeys.ts (additive-only for browserRecords key), EntityFilterBuilder.tsx (new), EntityListBrowserPage.tsx (new), router.tsx (one route added). All directly required by REQ-393.",
+      "design_consistency": "PASS — New page component (not a modification of EntityCrudPage); sortable: false on all DataTable columns including fallback record_id column; tenantId via useTenantScopedQueryKeys; matches design doc §1, §2, §3.",
+      "sort_clause_field_name": "PASS — SortClause emits { field, dir } — uses 'dir' throughout, matching api.ts:352 and EntityQuerySortClause type.",
+      "bilimbaga_route": "PASS — EntityCrudPage.tsx and BilimBagaEntityRoute.tsx not in changed file list; only reference is a comment in queryKeys.ts.",
+      "debug_artifacts": "PASS — Zero matches for console.log, debugger, TODO in the diff."
+    },
+    "test_designer_notes": [
+      "EntityFilterBuilder is purely presentational (no internal state) — unit-test by passing rows prop and asserting onChange calls.",
+      "Committed-params pattern: Search button press is required to fire the records query — tests must simulate the click, not just set filter state.",
+      "retry: false on recordsQuery — no retry noise in error-path tests.",
+      "All interactive elements carry data-testid: entity-filter-builder, filter-row, filter-field, filter-op, filter-value, filter-remove, filter-add, sort-field, sort-dir, page-size, search-button, query-error-banner, page-size-error.",
+      "Error surfacing: 400 → pageSizeError, other → queryError. Mock entitiesApi.queryRecords to throw with .status property to exercise both branches."
+    ]
+  }
 }

@@ -5,7 +5,7 @@
   "step": "Step 3 (Test Design)",
   "to_agent": "TEST-DESIGNER",
   "from_agent": "ORCH",
-  "status": "PENDING",
+  "status": "COMPLETED",
   "created_at": "2026-09-23T08:33:59Z",
   "started_at": "2026-09-23T08:33:59Z",
   "context": {
@@ -30,5 +30,27 @@
       "All new tests pass"
     ]
   },
-  "result": null
+  "result": {
+    "status": "PASS",
+    "completed_at": "2026-09-23T13:42:00Z",
+    "summary": "Scope test: YES — real executable surface (get_storage_usage/1, upload/2 with :storage_quota_exceeded path, check_storage_quota/3). Wrote test/specs/REQ-390.md and 4 new tests in test/letflow/repository/attachments_test.exs covering all 5 acceptance criteria (AC1+AC4 combined per spec text, AC2, AC3×2). Added import Ecto.Query, only: [from: 2] at module level and a set_storage_allowance!/2 helper (two required args, no defaults). All 28 tests in the file pass (24 pre-existing + 4 new).",
+    "test_run": {
+      "command": "mix test test/letflow/repository/attachments_test.exs --no-color (MIX_ENV=test)",
+      "exit_code": 0,
+      "result_line": "28 passed",
+      "iss0069_check": "output grepped for 'default values for the optional arguments' -- no match (clean)",
+      "note": "mix letflow.check.test could not run: scripts/test_parallel.sh requires Erlang in the WSL bash environment (erl not found in WSL). Equivalent checks performed: mix compile --warnings-as-errors exit 0, targeted test run exit 0, ISS-0069 grep clean."
+    },
+    "artifacts_out": [
+      "test/specs/REQ-390.md",
+      "test/letflow/repository/attachments_test.exs"
+    ],
+    "tests_written": [
+      "get_storage_usage/1 returns correct byte count after upload and after delete (AC1, AC4)",
+      "upload/2 refuses an upload that would exceed storage quota -- no DB rows created (AC2)",
+      "storage_quota_exceeded triggers without hitting file_too_large (AC3)",
+      "file_too_large triggers without triggering storage_quota (AC3)"
+    ],
+    "next_action": "Route to TEST-DESIGN-VALIDATOR (Step 3b)"
+  }
 }

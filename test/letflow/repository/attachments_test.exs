@@ -13,10 +13,19 @@ defmodule Letflow.Repository.AttachmentsTest do
 
   use Letflow.DataCase, async: false
 
+  import Ecto.Query, only: [from: 2]
+
   alias Letflow.Repository
   alias Letflow.Repository.Artifact
   alias Letflow.Repository.Attachment
   alias Letflow.Repository.Attachments
+
+  defp set_storage_allowance!(tenant_id, allowance) do
+    Repo.update_all(
+      from(t in Letflow.Identity.Tenant, where: t.id == ^tenant_id),
+      set: [storage_allowance_bytes: allowance]
+    )
+  end
 
   defp provisioned_tenant(slug_prefix \\ "req211-attach") do
     Letflow.TenantFixture.provisioned_tenant!(
@@ -629,6 +638,64 @@ defmodule Letflow.Repository.AttachmentsTest do
   # runtime (trivially satisfied). Per WF-03 procedure for the "code did not exist"
   # case, a mutation of check_instance_match/2 is also reported in the handoff.
   # ---------------------------------------------------------------------------------
+
+  # ---------------------------------------------------------------------------------
+  # REQ-390 -- per-tenant storage-quota tracking and queryable usage figure.
+  # AC1: usage correct immediately after upload (tested together with AC4 in one test).
+  # AC2: over-quota upload refused with {:error, :storage_quota_exceeded}, no DB rows.
+  # AC3: quota check and per-file check independently triggerable.
+  # AC4: delete reduces usage on the very next read (tested together with AC1).
+  # ---------------------------------------------------------------------------------
+
+  describe "REQ-390: per-tenant storage quota and usage tracking" do
+    test "get_storage_usage/1 returns correct byte count after upload and after delete (AC1, AC4)" do
+      %{schema_name: schema} = provisioned_tenant("req390-usage")
+      raw_bytes = "hello attachment bytes"
+
+      assert {:ok, 0} = Attachments.get_storage_usage(prefix: schema)
+
+      assert {:ok, attachment} =
+               Attachments.upload(upload_attrs(raw_bytes: raw_bytes), prefix: schema)
+
+      assert {:ok, usage_after_upload} = Attachments.get_storage_usage(prefix: schema)
+      assert usage_after_upload == byte_size(raw_bytes)
+
+      assert {:ok, _deleted} = Attachments.delete(attachment.id, prefix: schema)
+      assert {:ok, 0} = Attachments.get_storage_usage(prefix: schema)
+    end
+
+    test "upload/2 refuses an upload that would exceed storage quota -- no DB rows created (AC2)" do
+      %{schema_name: schema, tenant_id: tenant_id} = provisioned_tenant("req390-quota")
+      set_storage_allowance!(tenant_id, 1)
+
+      assert Attachments.upload(upload_attrs(), prefix: schema) ==
+               {:error, :storage_quota_exceeded}
+
+      assert Repo.aggregate(Artifact, :count, prefix: schema) == 0
+      assert Repo.aggregate(Attachment, :count, prefix: schema) == 0
+    end
+
+    test "storage_quota_exceeded triggers without hitting file_too_large (AC3)" do
+      %{schema_name: schema, tenant_id: tenant_id} = provisioned_tenant("req390-ac3a")
+      # 100 bytes: well under the 25 MiB per-file ceiling, but over a 1-byte allowance
+      raw_bytes = :binary.copy("x", 100)
+      set_storage_allowance!(tenant_id, 1)
+
+      assert Attachments.upload(upload_attrs(raw_bytes: raw_bytes), prefix: schema) ==
+               {:error, :storage_quota_exceeded}
+    end
+
+    test "file_too_large triggers without triggering storage_quota (AC3)" do
+      # Default allowance is 1 GiB; 26_214_401 bytes exceeds the 25 MiB per-file
+      # ceiling and is well under the 1 GiB quota, so file_too_large fires before
+      # the quota check is reached.
+      %{schema_name: schema} = provisioned_tenant("req390-ac3b")
+      oversized = :binary.copy("a", 26_214_401)
+
+      assert Attachments.upload(upload_attrs(raw_bytes: oversized), prefix: schema) ==
+               {:error, :file_too_large}
+    end
+  end
 
   describe "ISS-0785: cross-instance-same-tenant denial in get_content/3" do
     test "returns {:error, :not_found} when the attachment belongs to a different instance in the same tenant" do

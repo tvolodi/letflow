@@ -1,6 +1,9 @@
 # Design: per-`(user, entity_type)` record authorization, with denial indistinguishable from a genuinely empty type (REQ-394)
 
-**Status:** design, pending CODE-DESIGN-VALIDATOR.
+**Status:** implemented and merged. Passed the full pipeline: CODE-DESIGN-VALIDATOR,
+SECURITY-REVIEWER, and REVIEWER PASSed the design/implementation; TEST-DESIGN-VALIDATOR,
+TEST-RUNNER, and RELEASE-VALIDATOR PASSed the implementation (RELEASE-VALIDATOR verdict:
+MERGEABLE, no blocking defects).
 **Requirement:** REQ-394 (`docs/requirements.yaml`, letflow-queue task 754, GH-1642, stage S6).
 **Filed from:** the GUI-review UAT run of
 `test/fixtures/uat/scenarios/vortex/entity-list-filter-and-page.yaml` (PW-10) — see

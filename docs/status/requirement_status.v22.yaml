@@ -451,3 +451,8 @@ history:
       in docs/requirements.yaml. Full pipeline on
       feature/WF02-REQ398-20260923 (54d8e6a6 design, 17a5292c implementation,
       a2a0b878 tests, 17b8fcd3 guard fix), merged via PR.
+  - req: REQ-396
+    event: started
+    agent: ELIXIR-DEV
+    at: "2026-09-23T18:37:05Z"
+    note: "WF02-REQ396-20260923 started"

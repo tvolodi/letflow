@@ -1,0 +1,34 @@
+{
+  "handoff_id": "WF02-REQ390-20260923-step-02c",
+  "run_id": "WF02-REQ390-20260923",
+  "workflow": "WF-02",
+  "step": "Step 2c (Security Gate)",
+  "to_agent": "SECURITY-REVIEWER",
+  "from_agent": "ORCH",
+  "status": "PENDING",
+  "created_at": "2026-09-23T08:23:52Z",
+  "started_at": "2026-09-23T08:23:52Z",
+  "context": {
+    "branch_name": "feature/WF02-REQ390-20260923",
+    "requirement_ids": ["REQ-390"],
+    "stage": "S6",
+    "impl_summary": "Added get_storage_usage/1 (SUM query), check_storage_quota/3, quota check in do_upload_after_scan/6 before DB writes. New migration adds storage_allowance_bytes bigint DEFAULT 1GiB to tenants. Identity.Tenant schema updated with new field.",
+    "artifacts_in": [
+      "lib/letflow/repository/attachments.ex",
+      "lib/letflow/identity/tenant.ex",
+      "priv/repo/migrations/20260923000001_add_storage_allowance_bytes_to_tenants.exs",
+      "docs/agents/instructions/security-invariants.md"
+    ]
+  },
+  "task": {
+    "description": "Execute Step 2c (SECURITY GATE -- HARD GATE) for REQ-390.\n\nWorkspace: c:\\Users\\tvolo\\dev\\ai-dala\\letflow\nBranch: feature/WF02-REQ390-20260923\n\nRead security-invariants.md and the diff:\ngit diff main...feature/WF02-REQ390-20260923 -- lib/letflow/repository/attachments.ex lib/letflow/identity/tenant.ex priv/repo/migrations/\n\nCheck security invariants. Key concerns for this change:\n1. INV-1 (tenant isolation): does get_storage_usage/1 query correctly scope to the tenant's own prefix? No cross-tenant data leak?\n2. INV-3 (no cross-tenant data): the SUM query must only count the calling tenant's instance_attachments, not all tenants. Verify the prefix is used correctly.\n3. INV-5 (response shape): does {:error, :storage_quota_exceeded} reveal any information to the caller about other tenants? (No, it only says 'your tenant's quota is exceeded'.)\n4. INV-4 (no secrets in responses): does the error response expose any sensitive data (e.g., the actual usage figure or another tenant's data)?\n5. INV-7 (no SQL injection): is the prefix passed to the SUM query safely as an Ecto option, not string-interpolated?\n6. Migration safety: does the migration add the column with a safe default? Does it risk any data exposure?\n7. Does the quota check happen BEFORE any DB write (no partial writes on quota refusal)?\n\nVerdict: PASS or FAIL.\n\nOutput:\n1. Write handoffs/WF02-REQ390-20260923/step-02c-security-reviewer.json status COMPLETED, result PASS or FAIL\n2. git add handoffs/WF02-REQ390-20260923/step-02c-security-reviewer.json\n3. git commit -m 'feat(WF02-REQ390-20260923): Step 2c -- security gate [PASS/FAIL]'\n4. git push\n\nReport: PASS or FAIL with findings",
+    "acceptance_criteria": [
+      "get_storage_usage/1 scopes correctly to calling tenant only",
+      "No cross-tenant data leak via the quota mechanism",
+      "No SQL injection via prefix parameter",
+      "Error response does not expose other tenants' data",
+      "Migration is safe (has default, no data exposure)"
+    ]
+  },
+  "result": null
+}

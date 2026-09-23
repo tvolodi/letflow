@@ -81,6 +81,34 @@ describe('AttachmentViewerPage — ViewerStatus state machine', () => {
     expect(fetchLinkContent).toHaveBeenCalledWith(INSTANCE_ID, ATTACHMENT_ID, 'tok-1')
   })
 
+  it('renders content via a browser-local blob: object URL, never the raw backend link-content URL (D1)', async () => {
+    issueLink.mockResolvedValue({
+      attachment_id: ATTACHMENT_ID,
+      token: 'tok-1',
+      url: '/ignored',
+      expires_at: '2026-09-23T00:05:00Z',
+      expires_in_seconds: 300,
+    })
+    const blob = new Blob(['%PDF-1.4'], { type: 'application/pdf' })
+    fetchLinkContent.mockResolvedValue({ blob, contentType: 'application/pdf' })
+
+    renderPage()
+
+    await waitFor(() => {
+      expect(screen.getByTestId('attachment-content')).toBeInTheDocument()
+    })
+    const iframe = screen.getByTestId('attachment-content').querySelector('iframe')
+    expect(iframe).not.toBeNull()
+    const src = iframe!.getAttribute('src') ?? ''
+    // D1: must be a same-origin blob: object URL created from the
+    // authenticated fetch's bytes -- never a direct pointer at the backend
+    // link-content route (which the browser would fetch with no
+    // Authorization header and 401 against).
+    expect(src.startsWith('blob:')).toBe(true)
+    expect(src).not.toContain('/api/v1/instances/')
+    expect(src).not.toContain('link-content')
+  })
+
   it('renders AttachmentNotFoundScreen (zero props) when link issuance 404s', async () => {
     issueLink.mockRejectedValue(apiError(404))
 

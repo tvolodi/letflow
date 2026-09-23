@@ -2179,3 +2179,25 @@
 2026-09-23T17:12:59Z | DISPATCH | WF02-REQ393-20260923 | step-final-frontend-dev | ORCH → FRONTEND-DEV | PENDING
 2026-09-23T18:33:15Z | DONE | WF02-REQ393-20260923 | step-final-frontend-dev | FRONTEND-DEV → ORCH | COMPLETED -- PR#1754 merged (ac751a7d), bookkeeping PR#1756 (a5e05a7c), queue task 753 released
 2026-09-23T18:35:37Z | DISPATCH | WF02-REQ396-20260923 | step-00-git-setup | ORCH → ELIXIR-DEV | PENDING
+2026-09-23T18:38:17Z | PASS | WF02-REQ396-20260923 | step-00-git-setup | ELIXIR-DEV → ORCH | PASS -- branch created, REQ-396 in_progress, 4f1d294e
+2026-09-23T18:39:16Z | DISPATCH | WF02-REQ396-20260923 | step-01-code-designer | ORCH → CODE-DESIGNER | PENDING
+2026-09-23T18:48:17Z | PASS | WF02-REQ396-20260923 | step-01-code-designer | CODE-DESIGNER → ORCH | PASS -- Option A chosen, CHK-21, escalation_timer_duration + escalation_role
+2026-09-23T18:49:05Z | DISPATCH | WF02-REQ396-20260923 | step-01b-design-gate | ORCH → CODE-DESIGN-VALIDATOR | PENDING
+2026-09-23T19:13:18Z | PASS | WF02-REQ396-20260923 | step-01b-design-gate | CODE-DESIGN-VALIDATOR → ORCH | PASS -- all 8 criteria, audit ordering verified
+2026-09-23T19:14:09Z | DISPATCH | WF02-REQ396-20260923 | step-02a-elixir-dev | ORCH → ELIXIR-DEV | PENDING
+2026-09-23T19:38:19Z | PASS | WF02-REQ396-20260923 | step-02a-elixir-dev | ELIXIR-DEV → ORCH | PASS -- compile 0, graph 67/68 (1 pre-existing), simulation 4/4, d4aee471
+2026-09-23T19:38:46Z | DISPATCH | WF02-REQ396-20260923 | step-02c-security-reviewer | ORCH → SECURITY-REVIEWER | PENDING
+2026-09-23T19:41:58Z | PASS | WF02-REQ396-20260923 | step-02c-security-reviewer | SECURITY-REVIEWER → ORCH | PASS -- INV-1/4/7/8 verified, audit ordering confirmed
+2026-09-23T19:42:30Z | DISPATCH | WF02-REQ396-20260923 | step-02d-reviewer | ORCH → REVIEWER | PENDING
+2026-09-23T19:47:20Z | PASS | WF02-REQ396-20260923 | step-02d-reviewer | REVIEWER → ORCH | PASS -- Option A signed off, OTP idiom clean, 2 non-blocking notes
+2026-09-23T19:47:58Z | DISPATCH | WF02-REQ396-20260923 | step-03-test-designer | ORCH → TEST-DESIGNER | PENDING
+2026-09-23T20:01:00Z | PASS | WF02-REQ396-20260923 | step-03-test-designer | TEST-DESIGNER → ORCH | PASS -- 6 new tests, 77/78 (1 pre-existing). Bug fixed: Ecto.Enum atoms not strings
+2026-09-23T20:01:28Z | DISPATCH | WF02-REQ396-20260923 | step-03b-test-design-gate | ORCH → TEST-DESIGN-VALIDATOR | PENDING
+2026-09-23T20:04:59Z | PASS | WF02-REQ396-20260923 | step-03b-test-design-gate | TEST-DESIGN-VALIDATOR → ORCH | PASS -- AC2/3/4 verified, AC5 deferred correctly, audit via cancelled_at/inserted_at
+2026-09-23T20:05:23Z | DISPATCH | WF02-REQ396-20260923 | step-04-test-runner | ORCH → TEST-RUNNER | PENDING
+2026-09-23T20:07:43Z | PASS | WF02-REQ396-20260923 | step-04-test-runner | TEST-RUNNER → ORCH | PASS -- compile 0, 77/78 (1 pre-existing grep/enoent), d053b0bb
+2026-09-23T20:08:12Z | DISPATCH | WF02-REQ396-20260923 | step-05-release-validator | ORCH → RELEASE-VALIDATOR | PENDING
+2026-09-23T20:16:52Z | PASS | WF02-REQ396-20260923 | step-05-release-validator | RELEASE-VALIDATOR → ORCH | PASS -- all 6 ACs verified, AC5 deferred correctly
+2026-09-23T20:17:18Z | DISPATCH | WF02-REQ396-20260923 | step-06-doc-updater | ORCH → DOC-UPDATER | PENDING
+2026-09-23T20:19:19Z | PASS | WF02-REQ396-20260923 | step-06-doc-updater | DOC-UPDATER → ORCH | PASS -- REQ-396 done, v22 entry 12 verified
+2026-09-23T20:19:52Z | DISPATCH | WF02-REQ396-20260923 | step-final-elixir-dev | ORCH → ELIXIR-DEV | PENDING

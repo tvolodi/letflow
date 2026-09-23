@@ -28697,7 +28697,7 @@ requirements:
   - id: REQ-387
     title: "Frontend document-viewer screen for instance attachments, wired to the signed-link fetch path"
     owner: FRONTEND-DEV
-    status: pending
+    status: done
     stage: S8
     impl_order: 747  # letflow-queue task id, GH#1635. Registered 2026-09-20 by ORCH;
       # corrects a fabricated/self-assigned id (744) that was never a real

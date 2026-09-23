@@ -267,3 +267,39 @@ history:
       design-doc arity mismatch), TEST-RUNNER, RELEASE-VALIDATOR (final
       verdict PASS, mergeable, architecturally sound) -- on
       feature/WF02-REQ388-20260923 (tip f4a9b9c9), merged via PR.
+  - req: REQ-387
+    event: done
+    agent: DOC-UPDATER
+    at: "2026-09-23T07:25:03Z"
+    note: >
+      WF02-REQ387-20260923 Step 6 -- RELEASE-VALIDATOR final verdict PASS,
+      mergeable, fresh independent live e2e re-run confirmed. Ships the
+      frontend document-viewer for instance attachments: a typed API client
+      (web/src/api/attachments.ts), an upload/list widget
+      (web/src/components/instances/AttachmentPanel.tsx via
+      web/src/hooks/useAttachments.ts), and
+      web/src/pages/instances/AttachmentViewerPage.tsx routing to
+      byte-identical AttachmentNotFoundScreen.tsx for foreign-tenant and
+      never-issued references, a distinct AttachmentLinkExpiredScreen.tsx
+      with a fresh-link affordance, and AttachmentSuccessView.tsx/
+      AttachmentErrorScreen.tsx for the remaining cases. Calls REQ-386's
+      signed-link endpoint. Permanent Playwright regression spec
+      web/tests/e2e/pipelines/attachment-cross-tenant.pipeline.e2e.spec.ts
+      authored and passing against a real running instance -- an earlier
+      run in this same cycle (commit 7a643088) found and fixed the spec
+      never provisioning Keycloak, then UAT-RUNNER's live re-run confirmed
+      PASS. The stale ISS-0527 NOTE in
+      test/fixtures/uat/scenarios/platform/attachment-cross-tenant-probe.yaml
+      is removed (confirmed via diff against origin/main), since REQ-386 and
+      this requirement have both now shipped and the feature it warned about
+      is real. This completes the 3-part attachment-cross-tenant chain filed
+      from the same 2026-09-20 GUI-review finding
+      (test/uat-reports/gui-review-2026-09-20-attachment-cross-tenant-probe.md)
+      -- REQ-386 (backend signed-link, done) and REQ-388 (audit logging,
+      done) both independently confirmed done in docs/requirements.yaml
+      before writing this entry. Status flipped in docs/requirements.yaml.
+      README.md not touched -- greped for "attachment": zero hits, same as
+      REQ-386's own note recorded; no documented current-behavior surface
+      to keep in sync. No docs/migration/stage-N-*.md or decisions/*.md
+      file was named by this requirement's acceptance criteria. Merged via
+      PR on feature/WF02-REQ387-20260923 (tip 88346cd6).

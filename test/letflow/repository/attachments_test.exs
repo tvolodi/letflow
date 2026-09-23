@@ -13,6 +13,8 @@ defmodule Letflow.Repository.AttachmentsTest do
 
   use Letflow.DataCase, async: false
 
+  alias Letflow.EventStore.InstanceProjection
+  alias Letflow.Instances
   alias Letflow.Repository
   alias Letflow.Repository.Artifact
   alias Letflow.Repository.Attachment
@@ -23,6 +25,28 @@ defmodule Letflow.Repository.AttachmentsTest do
       slug_prefix: slug_prefix,
       display_name: "REQ-211 Attachments Test Tenant"
     )
+  end
+
+  # REQ-391 §2.3: EventStore.append/2's M1 active_instance_guard requires a
+  # real, ACTIVE instance_projections row to exist for the given instance_id
+  # -- upload/2's own primary write has no such requirement (attachments can
+  # be added to instances this module never checks the state of), so the
+  # post-commit history-event append is a silent, logged no-op against a
+  # synthetic instance_id with no backing projection row. Tests that assert
+  # the history entry itself (as opposed to upload/2's own unaffected return
+  # value) need a real projection row -- seeded directly, matching
+  # test/letflow/event_store_test.exs's own `seed_projection!/4` idiom (that
+  # file's moduledoc: "a direct Repo.insert against instance_projections,
+  # NEVER via append/2 itself").
+  defp seed_active_instance_projection!(schema_name, instance_id) do
+    %InstanceProjection{}
+    |> InstanceProjection.insert_changeset(%{
+      instance_id: instance_id,
+      status: :active,
+      last_event_seq: 0,
+      definition_id: Ecto.UUID.generate()
+    })
+    |> Repo.insert!(prefix: schema_name)
   end
 
   defp upload_attrs(overrides \\ []) do
@@ -520,7 +544,8 @@ defmodule Letflow.Repository.AttachmentsTest do
                  prefix: schema
                )
 
-      assert {:ok, _deleted} = Attachments.delete(attachment_1.id, prefix: schema)
+      assert {:ok, _deleted} =
+               Attachments.delete(attachment_1.id, Ecto.UUID.generate(), prefix: schema)
 
       assert Attachments.get(attachment_1.id, prefix: schema) == {:error, :not_found}
       assert {:ok, _} = Attachments.get(attachment_2.id, prefix: schema)
@@ -652,6 +677,102 @@ defmodule Letflow.Repository.AttachmentsTest do
       # Confirm the owning instance (instance_a) can still retrieve the content.
       assert {:ok, ^attachment, _artifact} =
                Attachments.get_content(attachment.id, instance_a, prefix: schema)
+    end
+  end
+
+  # ---------------------------------------------------------------------------------
+  # REQ-391 §2 -- upload/2 and delete/2 each record one instance-history
+  # entry (ATTACHMENT_ATTACHED / ATTACHMENT_REMOVED), naming the action,
+  # file_name, and actor. Light inline coverage per ELIXIR-DEV's own handoff
+  # (TEST-DESIGNER writes the full AC coverage later in this pipeline).
+  # ---------------------------------------------------------------------------------
+
+  describe "REQ-391 AC1 -- upload/2 records an ATTACHMENT_ATTACHED history entry" do
+    test "produces a history/timeline entry naming the file and uploading actor" do
+      %{schema_name: schema} = provisioned_tenant("req391-attach")
+      instance_id = Ecto.UUID.generate()
+      uploaded_by = Ecto.UUID.generate()
+      seed_active_instance_projection!(schema, instance_id)
+
+      assert {:ok, attachment} =
+               Attachments.upload(
+                 upload_attrs(
+                   instance_id: instance_id,
+                   file_name: "delivery-note.pdf",
+                   uploaded_by: uploaded_by
+                 ),
+                 prefix: schema
+               )
+
+      # Asserted over the existing history/timeline read path (Letflow.Instances),
+      # not by inspecting the events table directly.
+      assert {:ok, %{items: items}} =
+               Instances.history(instance_id, %{page_size: 50}, prefix: schema)
+
+      assert [event] = Enum.filter(items, &(&1.event_type == "ATTACHMENT_ATTACHED"))
+      assert event.actor_id == uploaded_by
+      assert event.payload["attachment_id"] == attachment.id
+      assert event.payload["file_name"] == "delivery-note.pdf"
+
+      assert {:ok, %{items: timeline_items}} =
+               Instances.timeline(instance_id, %{page_size: 50}, prefix: schema)
+
+      assert [timeline_event] =
+               Enum.filter(timeline_items, &(&1.event_type == "ATTACHMENT_ATTACHED"))
+
+      # No Letflow.Identity.User row exists for uploaded_by in this test, so
+      # actor_display_name falls through Instances's own 4-level fallback
+      # (design §2) to "system" -- the render_description/3 clause under test
+      # (lib/letflow/instances.ex) still uses whatever actor name it's given,
+      # which this asserts, rather than duplicating that fallback's own
+      # resolution logic here.
+      assert timeline_event.description == "delivery-note.pdf attached by system"
+    end
+  end
+
+  describe "REQ-391 AC2 -- delete/2 records an ATTACHMENT_REMOVED history entry" do
+    test "produces a distinct history entry naming the file and removing actor, retained after the row is gone" do
+      %{schema_name: schema} = provisioned_tenant("req391-remove")
+      instance_id = Ecto.UUID.generate()
+      deleted_by = Ecto.UUID.generate()
+      seed_active_instance_projection!(schema, instance_id)
+
+      assert {:ok, attachment} =
+               Attachments.upload(
+                 upload_attrs(instance_id: instance_id, file_name: "signed-form.pdf"),
+                 prefix: schema
+               )
+
+      assert {:ok, _deleted} = Attachments.delete(attachment.id, deleted_by, prefix: schema)
+
+      # The attachment row itself is gone...
+      assert Attachments.get(attachment.id, prefix: schema) == {:error, :not_found}
+
+      # ...but the history entry naming its removal is retained.
+      assert {:ok, %{items: items}} =
+               Instances.history(instance_id, %{page_size: 50}, prefix: schema)
+
+      assert [attached_event] = Enum.filter(items, &(&1.event_type == "ATTACHMENT_ATTACHED"))
+      assert [removed_event] = Enum.filter(items, &(&1.event_type == "ATTACHMENT_REMOVED"))
+
+      assert attached_event.payload["attachment_id"] == attachment.id
+      assert removed_event.actor_id == deleted_by
+      assert removed_event.payload["attachment_id"] == attachment.id
+      assert removed_event.payload["file_name"] == "signed-form.pdf"
+    end
+  end
+
+  describe "REQ-391 -- event_type_registry seeding" do
+    test "ATTACHMENT_ATTACHED and ATTACHMENT_REMOVED are both seeded for a freshly-provisioned tenant" do
+      %{schema_name: schema} = provisioned_tenant("req391-seed")
+
+      names =
+        Letflow.EventStore.Registry.EventType
+        |> Repo.all(prefix: schema)
+        |> Enum.map(& &1.name)
+
+      assert "ATTACHMENT_ATTACHED" in names
+      assert "ATTACHMENT_REMOVED" in names
     end
   end
 end

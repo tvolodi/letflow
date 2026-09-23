@@ -1451,10 +1451,12 @@ defmodule Letflow.Routers.Instances do
     with {:ok, instance_id} <- cast_instance_id(raw_id),
          {:ok, _attachment} <-
            fetch_scoped_attachment_metadata(raw_attachment_id, instance_id, opts),
-         {:ok, _deleted} <- Attachments.delete(raw_attachment_id, opts) do
+         {:ok, actor_id} <- actor_id(conn),
+         {:ok, _deleted} <- Attachments.delete(raw_attachment_id, actor_id, opts) do
       Response.no_content(conn)
     else
       {:error, :not_found} -> Response.not_found(conn)
+      {:error, :missing_scope_or_actor} -> Response.internal_error(conn)
     end
   end
 

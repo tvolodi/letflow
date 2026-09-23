@@ -512,6 +512,93 @@ defmodule Letflow.EngineCompleteTaskTest do
     end
   end
 
+  # ---------------------------------------------------------------------------------
+  # REQ-391 §3/§4 -- TASK_COMPLETED's attachments_at_decision snapshot. Light
+  # inline coverage per ELIXIR-DEV's own handoff (TEST-DESIGNER writes the
+  # full AC coverage later in this pipeline) -- proves (c) a completed task's
+  # TASK_COMPLETED payload names an attachment present at decision time, and
+  # (d) that reference survives a SUBSEQUENT removal of the same attachment
+  # (the snapshot-not-reference decision, design §4).
+  # ---------------------------------------------------------------------------------
+
+  describe "REQ-391 -- attachments_at_decision snapshot on TASK_COMPLETED" do
+    test "names the attachment(s) present on the instance at completion time" do
+      %{schema_name: schema_name} = provisioned_tenant()
+
+      {instance_id, task} =
+        start_instance_with_pending_task!(schema_name, graph_human_task_end())
+
+      uploaded_by = Ecto.UUID.generate()
+
+      assert {:ok, attachment} =
+               Letflow.Repository.Attachments.upload(
+                 %{
+                   instance_id: instance_id,
+                   raw_bytes: "delivery note bytes",
+                   file_name: "delivery-note.pdf",
+                   content_type: "application/pdf",
+                   uploaded_by: uploaded_by
+                 },
+                 prefix: schema_name
+               )
+
+      attrs = complete_attrs(%{output_variables: %{"decision" => "approved"}})
+      assert {:ok, _result} = Engine.complete_task(task.id, attrs, prefix: schema_name)
+
+      assert [event] = task_completed_events(schema_name, instance_id)
+      assert [snapshot] = event.payload["attachments_at_decision"]
+      assert snapshot["attachment_id"] == attachment.id
+      assert snapshot["file_name"] == "delivery-note.pdf"
+      assert snapshot["content_type"] == "application/pdf"
+      assert snapshot["uploaded_by"] == uploaded_by
+    end
+
+    test "the snapshot survives a subsequent removal of that same attachment (design §4, AC4)" do
+      %{schema_name: schema_name} = provisioned_tenant()
+
+      {instance_id, task} =
+        start_instance_with_pending_task!(schema_name, graph_human_task_end())
+
+      assert {:ok, attachment} =
+               Letflow.Repository.Attachments.upload(
+                 %{
+                   instance_id: instance_id,
+                   raw_bytes: "signed form bytes",
+                   file_name: "signed-form.pdf",
+                   content_type: "application/pdf",
+                   uploaded_by: Ecto.UUID.generate()
+                 },
+                 prefix: schema_name
+               )
+
+      attrs = complete_attrs(%{output_variables: %{"decision" => "approved"}})
+      assert {:ok, _result} = Engine.complete_task(task.id, attrs, prefix: schema_name)
+
+      # Removal happens AFTER the decision was recorded.
+      assert {:ok, _deleted} =
+               Letflow.Repository.Attachments.delete(
+                 attachment.id,
+                 Ecto.UUID.generate(),
+                 prefix: schema_name
+               )
+
+      assert Letflow.Repository.Attachments.get(attachment.id, prefix: schema_name) ==
+               {:error, :not_found}
+
+      # Re-fetched via the existing history read path (Letflow.Instances.history/3),
+      # not by inspecting internal state directly.
+      assert {:ok, %{items: history_items}} =
+               Letflow.Instances.history(instance_id, %{page_size: 50}, prefix: schema_name)
+
+      assert [task_completed_event] =
+               Enum.filter(history_items, &(&1.event_type == "TASK_COMPLETED"))
+
+      assert [snapshot] = task_completed_event.payload["attachments_at_decision"]
+      assert snapshot["attachment_id"] == attachment.id
+      assert snapshot["file_name"] == "signed-form.pdf"
+    end
+  end
+
   describe "AC5 -- moduledoc states the S4 scope boundary for complete_task/3" do
     test "names both HTTP status-code mapping and IDN-03 assignee authorization as out of scope" do
       {:docs_v1, _anno, _lang, _format, %{"en" => moduledoc}, _meta, _docs} =

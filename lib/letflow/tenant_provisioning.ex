@@ -858,7 +858,7 @@ defmodule Letflow.TenantProvisioning do
     },
     %{
       name: "TASK_COMPLETED",
-      schema_version: 2,
+      schema_version: 3,
       description:
         "Emitted by Letflow.Engine.complete_task/3 (M9, EE-04) when a user task is completed. " <>
           "Bumped from schema_version 1 to 2 (REQ-292): merged_variable_events now also carries " <>
@@ -869,11 +869,21 @@ defmodule Letflow.TenantProvisioning do
           "moduledoc) whose \"required\" only still names \"event\" (the one key every kind " <>
           "shares); \"key\"/\"field\"/\"old_value\"/\"new_value\"/\"submitted_value\"/" <>
           "\"server_value\"/\"discarded_value\" are all declared but optional, since which ones " <>
-          "are present depends on which event kind a given array element is. KNOWN GAP, flagged " <>
-          "for REVIEWER, same shape as DEFINITION_PROMOTED's own schema_version 1->2 bump above: " <>
-          "this only widens the schema seeded into TENANTS PROVISIONED FROM THIS POINT ON -- a " <>
-          "tenant provisioned before this change keeps validating TASK_COMPLETED against version " <>
-          "1 (which would reject the two new event kinds outright) until something backfills it.",
+          "are present depends on which event kind a given array element is. Bumped from " <>
+          "schema_version 2 to 3 (REQ-391): the payload now also carries " <>
+          "\"attachments_at_decision\", a snapshot (not a live reference, see " <>
+          "lib/letflow/design/req391-attachment-history-approval-attribution.md §4) of every " <>
+          "instance_attachments row present on the instance at the moment this task was " <>
+          "completed -- attachment_id/file_name/content_type/byte_size/uploaded_by/created_at " <>
+          "per entry, mirroring merged_variable_events' own embed-not-reference precedent " <>
+          "(INV-EE48-5). Not added to \"required\" for the same forward-compatibility reason " <>
+          "merged_variable_events itself isn't required: a pre-bump schema_version 2 row must " <>
+          "still validate a TASK_COMPLETED payload appended against it during the rollout " <>
+          "window. KNOWN GAP, flagged for REVIEWER, same shape as DEFINITION_PROMOTED's own " <>
+          "schema_version 1->2 bump above: this only widens the schema seeded into TENANTS " <>
+          "PROVISIONED FROM THIS POINT ON -- a tenant provisioned before this change keeps " <>
+          "validating TASK_COMPLETED against an earlier version until something backfills it " <>
+          "(see mix letflow.backfill_event_type_versions).",
       json_schema: %{
         "type" => "object",
         "properties" => %{
@@ -904,7 +914,22 @@ defmodule Letflow.TenantProvisioning do
               "required" => ["event"]
             }
           },
-          "activated_nodes" => %{"type" => "array", "items" => %{"type" => "string"}}
+          "activated_nodes" => %{"type" => "array", "items" => %{"type" => "string"}},
+          "attachments_at_decision" => %{
+            "type" => "array",
+            "items" => %{
+              "type" => "object",
+              "properties" => %{
+                "attachment_id" => %{"type" => "string"},
+                "file_name" => %{"type" => "string"},
+                "content_type" => %{"type" => "string"},
+                "byte_size" => %{"type" => "integer"},
+                "uploaded_by" => %{"type" => "string"},
+                "created_at" => %{"type" => "string"}
+              },
+              "required" => ["attachment_id", "file_name"]
+            }
+          }
         },
         "required" => ["task_id", "node_id", "output_variables", "activated_nodes"]
       }
@@ -1152,6 +1177,41 @@ defmodule Letflow.TenantProvisioning do
           "oldest_pending_age_seconds" => %{"type" => ["integer", "null"]}
         },
         "required" => ["correlation_id", "lag", "oldest_pending_age_seconds"]
+      }
+    },
+    %{
+      name: "ATTACHMENT_ATTACHED",
+      schema_version: 1,
+      description:
+        "Emitted by Letflow.Repository.Attachments.upload/2 (REQ-391) when an " <>
+          "attachment is added to an instance.",
+      json_schema: %{
+        "type" => "object",
+        "properties" => %{
+          "attachment_id" => %{"type" => "string"},
+          "file_name" => %{"type" => "string"},
+          "content_type" => %{"type" => "string"},
+          "byte_size" => %{"type" => "integer"},
+          "description" => %{"type" => ["string", "null"]}
+        },
+        "required" => ["attachment_id", "file_name", "content_type", "byte_size"]
+      }
+    },
+    %{
+      name: "ATTACHMENT_REMOVED",
+      schema_version: 1,
+      description:
+        "Emitted by Letflow.Repository.Attachments.delete/2 (REQ-391) when an " <>
+          "attachment is removed from an instance.",
+      json_schema: %{
+        "type" => "object",
+        "properties" => %{
+          "attachment_id" => %{"type" => "string"},
+          "file_name" => %{"type" => "string"},
+          "content_type" => %{"type" => "string"},
+          "byte_size" => %{"type" => "integer"}
+        },
+        "required" => ["attachment_id", "file_name", "content_type", "byte_size"]
       }
     }
   ]

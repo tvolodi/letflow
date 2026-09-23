@@ -1,0 +1,119 @@
+run_id: WF02-REQ399-20260923
+workflow_id: WF-02
+step: "04"
+agent: TEST-RUNNER
+requirement_ids:
+  - REQ-399
+branch: feature/WF02-REQ399-20260923
+generated_at: "2026-09-23T21:20:00Z"
+change_scope:
+  note: >
+    git diff --name-only main...HEAD shows: lib/letflow/design/req399-instance-pin-provenance.md,
+    test/letflow/routers/instances_test.exs, test/specs/REQ-399.md,
+    web/src/api/instances.ts, web/src/api/queryKeys.ts,
+    web/src/api/useTenantScopedQueryKeys.ts,
+    web/src/components/instances/InstancePinsPanel.tsx,
+    web/src/components/instances/__tests__/InstancePinsPanel.test.tsx,
+    web/src/hooks/useInstancePins.ts,
+    web/src/pages/instances/InstanceDetailPage.tsx, web/src/types/api.ts.
+    Full-stack change: backend side adds only a new test (no application code
+    change to lib/letflow/*.ex besides the design doc); frontend side adds the
+    InstancePinsPanel component, its hook/API wiring, and its tests.
+environment:
+  worktree: /tmp/claude-1001/-home-tvolodi-workspace-letflow-1/ee00a680-6b31-4a4d-a750-5d8797deb78f/scratchpad/wt-req399-design
+  postgres_container: "wt-req399-design-postgres-1 (docker, port 5464 via untracked .env LETFLOW_DB_PORT=5464/LETFLOW_KEYCLOAK_PORT=8093, created for this worktree to avoid colliding with other checkouts' containers already bound to the 5462/8082 defaults and several other worktrees' own ports) -- docker compose up -d run via sudo (docker socket group-owned, current user lacked docker group membership but had passwordless sudo)"
+  elixir: "Erlang/OTP 29 [erts-17.0.5], Elixir 1.20.3"
+  node: "v18.19.1, npm 9.2.0 (below react-router@7's declared >=20.0.0 engine requirement; npm install proceeded with EBADENGINE warnings only, no functional impact observed)"
+targeted_backend_test:
+  command: "mix test test/letflow/routers/instances_test.exs --seed 0"
+  result: "53 passed, 0 failures"
+backend_suite:
+  command: "TEST_PARALLEL_N=4 mix letflow.check.test"
+  execution_mode: "synchronous foreground run within this turn (per core-directives.md's No Background Wait For A Cross-Turn Notification -- the harness auto-backgrounded the long-running call at its own default 600s timeout; this run polled for the background process to finish inside a single blocking Bash loop, and separately received (unexpectedly, but did not rely on) the harness's own completion notification -- the authoritative result was read from the full redirected log file, never a tail-truncated view)"
+  log_file: "/tmp/claude-1001/-home-tvolodi-workspace-letflow-1/ee00a680-6b31-4a4d-a750-5d8797deb78f/scratchpad/logs/backend_full_suite.log (1325 lines, full untruncated output)"
+  partition_count_N: 4
+  partition_count_source: "TEST_PARALLEL_N env override"
+  test_parallel_sh_combined_totals:
+    tests: 4777
+    properties: 6
+    failures: 0
+    passed: 4783
+    total: 4783
+  per_partition:
+    - {partition: 1, tests: 1220, properties: 2, failures: 0, exit: 0}
+    - {partition: 2, tests: 1158, properties: 2, failures: 0, exit: 0}
+    - {partition: 3, tests: 1376, properties: 0, failures: 0, exit: 0}
+    - {partition: 4, tests: 1023, properties: 2, failures: 0, exit: 0}
+  raw_output_excerpt: |
+    test_parallel: pre-compiling MIX_ENV=test (single compile, before any partition launches)
+    test_parallel: seeding 4 per-partition build paths from _build/test (sequential)
+    test_parallel: partition logs in /tmp/letflow_test_parallel.m3Qn1i
+    test_parallel: seeding+migrating 4 partition databases (capped at 4 concurrent)
+    test_parallel: all 4 partition databases created+migrated
+    test_parallel: TEST_PARALLEL_GROUP=tp2146081 (shared by all 4 partitions)
+    partition 1: 1220 tests, 2 properties, 0 failures, exit 0
+    partition 2: 1158 tests, 2 properties, 0 failures, exit 0
+    partition 3: 1376 tests, 0 properties, 0 failures, exit 0
+    partition 4: 1023 tests, 2 properties, 0 failures, exit 0
+    combined: 4777 tests, 6 properties, 0 failures (4783/4783 passed)
+    mix letflow.check.test: OK -- no test failures, no ISS-0069 warnings (4 partitions, logs: /tmp/letflow_test_parallel.m3Qn1i).
+    mix letflow.check.test: OK -- 5/5 isolated wasm_hang tests passed, each in its own subprocess.
+    mix letflow.check.test: OK -- isolated :lua_wallclock_race run also passed clean.
+  known_flake_check:
+    id: ISS-0766
+    description: >
+      test/letflow/identity_test.exs:534 (resolve_tenant_by_realm/1) and :541
+      (resolve_realm_by_tenant/1) -- documented pre-existing intermittent flake
+      under BpmDefaultRealmDisplacement.with_lock/1 racing across parallel
+      partitions.
+    observed_this_run: false
+    note: >
+      Neither failure signature appeared in this run's log
+      (grep -c "identity_test.exs:534\|identity_test.exs:541" against the full
+      failure output found zero matches in a failure context; the suite was
+      fully clean, 0 failures across all 4 partitions). The flake simply did
+      not trigger this time -- not attributed, not claimed as fixed.
+  type_warnings_observed:
+    note: >
+      The compiler emitted several Elixir 1.20 set-theoretic type-checker
+      warnings (module_registry_test.exs:370, repository_test.exs:268,
+      snapshot_store_test.exs:252/255, executor_test.exs:466,
+      signature_heuristic_test.exs:51) during the isolated wasm_hang/
+      lua_wallclock_race sub-runs. These are pre-existing static type-overlap
+      warnings unrelated to REQ-399 (none of the flagged files are in this
+      branch's git diff), and mix letflow.check.test's own ISS-0069 warning
+      gate still reported OK, so they did not affect the verdict.
+  isolated_checks:
+    wasm_hang: "5/5 isolated subprocess runs passed"
+    lua_wallclock_race: "isolated run passed clean"
+overall_backend_verdict: PASS
+frontend_suite:
+  working_dir: web/
+  commands:
+    - name: type-check
+      command: "npm run type-check"
+      result: "PASS -- tsc -b tsconfig.json, exit 0, no errors"
+    - name: lint
+      command: "npm run lint"
+      result: "PASS -- eslint . --ext ts,tsx --report-unused-disable-directives --max-warnings 0, exit 0, no output (no violations)"
+    - name: test
+      command: "npm run test -- --run"
+      result: "PASS -- Test Files 122 passed (122), Tests 864 passed (864). Includes web/src/components/instances/__tests__/InstancePinsPanel.test.tsx (5 tests, all passed)."
+      log_file: "/tmp/claude-1001/-home-tvolodi-workspace-letflow-1/ee00a680-6b31-4a4d-a750-5d8797deb78f/scratchpad/logs/fe_test.log"
+    - name: guards
+      command: "npm run guards"
+      result: >
+        PASS -- vitest run of meta-control.spec.ts, source-scan.spec.ts,
+        bundle-scan.spec.ts, role-set.spec.ts: Test Files 4 passed (4), Tests
+        48 passed (48). bundle-scan triggers a real `tsc -b && vite build`
+        internally (production build succeeded, emits a routine >500kB chunk
+        size advisory for vendor/index bundles, not an error).
+overall_frontend_verdict: PASS
+overall_verdict: PASS
+next_action: "Route to RELEASE-VALIDATOR"
+notes:
+  - "Full suites run, not just the new/affected tests, per Unblock-Everything."
+  - "Backend: 0 failures across 4 partitions (4783/4783), plus both isolated wasm_hang and lua_wallclock_race checks clean. ISS-0766's known identity_test.exs flake did not surface this run."
+  - "Frontend: type-check, lint, unit/component tests (864), and guard suite (48, including a real production build) all clean."
+  - "No code was fixed or modified as part of this step; this is a pure independent-execution report."
+  - "Did not commit, push, or merge."

@@ -29641,7 +29641,7 @@ requirements:
   - id: REQ-399
     title: "Case-detail dependency-version/provenance screen, reading PinResolver's source taxonomy via a new GET /api/v1/instances/{id}/pins route"
     owner: FRONTEND-DEV
-    status: pending
+    status: done
     stage: S6
     impl_order: 775  # letflow-queue task id, GH#1694. Registered 2026-09-21T21:03:34Z
       # by ORCH via direct curl (letflow-queue MCP tool unavailable this

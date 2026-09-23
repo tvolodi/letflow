@@ -1,0 +1,72 @@
+{
+  "handoff_id": "a1000000-0005-4000-8000-000000000005",
+  "run_id": "WF02-REQ386-20260923",
+  "workflow_id": "WF-02",
+  "step": "05",
+  "from_agent": "ORCH",
+  "to_agent": "RELEASE-VALIDATOR",
+  "file": "handoffs/WF02-REQ386-20260923/step-05-release-validator.json",
+  "created_at": "2026-09-23T05:00:00Z",
+  "started_at": "2026-09-23T05:00:00Z",
+  "completed_at": "2026-09-23T00:51:14Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S6",
+    "requirement_ids": ["REQ-386"],
+    "requirement_text": {
+      "REQ-386": "Time-limited, expiring signed URLs for instance-attachment byte content. Full text in docs/requirements.yaml, read directly (awk-scoped) for this run."
+    },
+    "related_handoff_ids": [
+      "handoffs/WF02-REQ386-20260923/step-01b-design-gate.json",
+      "handoffs/WF02-REQ386-20260923/step-02c-security-reviewer.json",
+      "handoffs/WF02-REQ386-20260923/step-02d-reviewer.json",
+      "handoffs/WF02-REQ386-20260923/step-03b-test-design-validator.json",
+      "handoffs/WF02-REQ386-20260923/step-04-test-runner.json"
+    ],
+    "artifacts_in": [
+      "lib/letflow/repository/attachment_links.ex",
+      "lib/letflow/routers/instances.ex",
+      "lib/letflow/api/error.ex",
+      "lib/letflow/api/response.ex",
+      "lib/letflow/api/authorization.ex",
+      "test/letflow/repository/attachment_links_test.exs",
+      "test/letflow/routers/req386_attachment_links_routes_test.exs",
+      "test/reports/report-20260923-WF02-REQ386-20260923.yaml"
+    ],
+    "owned_modules": []
+  },
+  "task": {
+    "description": "Perform WF-02 Step 5 (release validation, HARD GATE) for REQ-386 on branch feature/WF02-REQ386-20260923 per docs/agents/workflows/WF-02_requirement_implementation.md Step 5 and core-directives.md. Independently re-run scripts/test_parallel.sh (synchronous, foreground) rather than trusting TEST-RUNNER's Step 4 report; additionally independently run mix letflow.check.test (the stricter ISS-0069 gate). Re-check each of REQ-386's 6 acceptance criteria against the actual shipped code/tests, not against any prior step's summary. Confirm every hard-gate handoff (Step 1b/2c/2d/3b) is PASS on disk. Check docs/requirements.yaml and docs/status/requirement_status.v22.yaml for staleness.",
+    "acceptance_criteria": [
+      "scripts/test_parallel.sh re-run independently, synchronously, to completion, real output quoted",
+      "mix letflow.check.test re-run independently, synchronously, to completion, real output quoted",
+      "every failure structurally attributed per core-directives.md's Failure Attribution rule, never by count-matching",
+      "each of REQ-386's 6 acceptance criteria confirmed against actual code/tests",
+      "all 4 hard-gate handoffs (1b, 2c, 2d, 3b) confirmed PASS on disk",
+      "docs/requirements.yaml / requirement_status.v22.yaml checked for staleness"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "Independently re-ran the full suite TWICE (both required by this run's own instructions), never trusting TEST-RUNNER's Step 4 report alone.\n\nRUN 1 -- scripts/test_parallel.sh, foreground, synchronous (polled the harness's own auto-backgrounded output file to completion inside a blocking loop within this same turn, same pattern TEST-RUNNER's Step 4 used, never ending the turn to await a cross-turn notification): N=16 (source: nproc). Combined: 4740 tests, 6 properties, 2 failures (4744/4746 passed). 15 partitions exit 0; partition 14 exit 2, 2 failures, both test/letflow/identity_test.exs (Letflow.IdentityTest, REQ-019 AC1: resolve_tenant_by_realm/1 and resolve_realm_by_tenant/1 against the seeded bpm-default tenant).\n\nRUN 2 -- mix letflow.check.test (the stricter ISS-0069 gate this role is separately required to run; not merely scripts/test_parallel.sh or a targeted mix test), foreground, synchronous, fully captured to a local log (no tail truncation) and blocked on to completion via a PID-liveness loop in the same turn: main suite N=16 again -- identical partition-14 signature reproduced a second, independent time (partition 14: 239 tests, 0 properties, 2 failures, exit 2; every other partition 0 failures), same two named tests (resolve_tenant_by_realm/1 / resolve_realm_by_tenant/1, Letflow.IdentityTest). `mix letflow.check.test` raises on the runner's nonzero exit before ever reaching its own ISS-0069 substring check (confirmed by reading lib/mix/tasks/letflow.check.test.ex's check_main_suite_logs/2 ordering) -- grepped the full captured log directly regardless: zero occurrences of \"default values for the optional arguments\" anywhere. So this run's only failure, under both the plain parallel runner and the stricter check.test gate, is the identical pre-existing pair -- no ISS-0069-class regression, no new failure class.\n\nSTRUCTURAL ATTRIBUTION (re-derived independently, not inherited from TEST-RUNNER's claim): Route 1 -- `git diff --name-only main...HEAD` for this branch touches only lib/letflow/api/authorization.ex, lib/letflow/api/error.ex, lib/letflow/api/response.ex, lib/letflow/repository/attachment_links.ex, lib/letflow/routers/instances.ex, plus this run's own test/spec/design/handoff/status files -- grepped all five changed lib/ files myself for idp_realm_id/bpm-default/resolve_tenant_by_realm/resolve_realm_by_tenant: zero matches; none of test/letflow/identity_test.exs, test/support/bpm_default_realm_displacement.ex, or any Letflow.Identity/Tenant module is touched. Route 3 -- read docs/issues/ISS-0766.yaml in full myself: it already documents this exact failure signature (same file, same two test names, same mechanism -- an advisory-lock-scoped read racing a concurrent displace!/0 restoration under shared Postgres state across parallel partitions), and its own process_note (added 2026-09-21 by a prior RELEASE-VALIDATOR run) already records that this reproduces under scripts/test_parallel.sh's own partitioned method too, not just a non-partitioned run -- which is exactly what both of my independent runs (same partition-14 signature, twice) just re-confirmed as a live, demonstrated mechanism, not an assertion. Verdict: pre-existing, does not block this step's PASS, not routed back to ELIXIR-DEV/TEST-DESIGNER, not filed as a new issue (ISS-0766 already covers it exactly).\n\n`mix compile --warnings-as-errors`: ran independently, clean exit, zero output, zero warnings.\n\nACCEPTANCE CRITERIA (each re-checked against actual code/tests, not against any prior step's summary):\nAC1 -- read lib/letflow/routers/instances.ex's handle_issue_attachment_link/3 (L1244-1264) directly: :AttachmentsRead-scoped authz_post route, reuses fetch_scoped_attachment_metadata/3 to prove access before minting, calls AttachmentLinks.issue/3. Read lib/letflow/repository/attachment_links.ex's issue/3 (L91-117): stated, bounded 300-second expiry (@link_expiry_seconds via link_expiry_seconds/0), returns {:ok, %{token:, expires_at:}}. test/letflow/routers/req386_attachment_links_routes_test.exs's \"AC1: POST .../link\" describe block (read in full) has a passing test (\"the issued link is usable to fetch the document's bytes before expiry\") that issues a link then GETs it and asserts real byte content, content-type, and content-disposition -- confirmed via my own full-suite run (this file's tests are part of both runs above, zero failures in it).\nAC2 -- lib/letflow/api/error.ex's attachment_link_expired/0 (L221-229) is a zero-argument function; its detail string \"This link has expired or is no longer valid. Request a new link and try again.\" is a plain-language literal, no interpolation. Confirmed AC2's route-level test (\"AC2: ... expired token\" describe block) uses AttachmentLinks.issue/3's injected now: option (already-past DateTime) rather than a real sleep -- grepped the test file myself for Process.sleep: zero hits. The unit-level attachment_links_test.exs also injects now: directly into verify/3 per case (confirmed by reading it).\nAC3 -- req386_attachment_links_routes_test.exs's \"AC3: fresh link after a prior one expired\" test (read in full, L255-292) exercises stale-token-410 then a fresh POST (200) then a fresh GET (200, real bytes) in sequence, all against the same attachment_id.\nAC4 -- the hardest criterion, re-derived myself from lib/letflow/repository/attachment_links.ex's verify/3 (L133-155): traced all 8 branches of the with/else chain (malformed-shape split, two Base64 decode failures, guarded Jason.decode/1 shape failure, unknown tenant, wrong/unresolvable per-tenant signing key, HMAC mismatch via :crypto.hash_equals/2, expiry) -- every branch falls to the single `else _ -> {:error, :expired_or_invalid}` clause; confirmed the token payload carries no tenant field at all (only attachment_id/expires_at/key_id, L102-107/141-143) so verify/3 always resolves the signing key under the CALLER's own tenant_id, never one decoded from the token -- this is what makes a cross-tenant-presented token fail identically to a fabricated one. Read the AC4 test in req386_attachment_links_routes_test.exs (L301-389) directly: it mints a REAL, validly-signed, unexpired token for tenant_1 via AttachmentLinks.issue/3, then presents that genuine token as tenant_2's caller against (a) tenant_2's own real different attachment_id and (b) a wholly fabricated never-issued UUID -- a genuine cross-tenant construction, not two independently-invalid tokens. Asserts status, content-type header, AND full resp_body byte-for-byte equality between the two responses, with no normalization applied (both conns share the harness's fixed \"fixed-test-trace-id\", so there is nothing to normalize away) -- matches req212_attachments_routes_test.exs's own established byte-identical-comparison precedent.\nAC5 -- `git diff main...HEAD -- lib/letflow/routers/instances.ex` shows fetch_scoped_attachment_content/3 is not touched at all (confirmed by grepping the diff for its name: it appears only in a comment and as an unchanged call site in the new handler, never inside a `+`/`-` line touching its own definition); read its current body directly (L1175-1195) and it is byte-for-byte the same shape REQ-211/212 shipped. `git diff --stat main...HEAD -- test/letflow/routers/req212_attachments_routes_test.exs test/letflow/repository/attachments_test.exs` is empty (confirmed myself) -- both files untouched -- and both are part of the two independent full-suite runs above with zero failures.\nAC6 -- `mix compile --warnings-as-errors` (mine, this run): clean. Full-suite `mix test` coverage (via both scripts/test_parallel.sh and mix letflow.check.test, both mine, this run): 4744/4746 and 237/239-plus-rest passing respectively, with the only failures structurally pre-existing per ISS-0766 as derived above. SECURITY-REVIEWER sign-off: confirmed below.\n\nGATE CHAIN SANITY CHECK (independently opened and read every file, not inferred from this run's own narrative): handoffs/WF02-REQ386-20260923/step-01b-design-gate.json -- status: PASS (CODE-DESIGN-VALIDATOR). handoffs/WF02-REQ386-20260923/step-02c-security-reviewer.json -- status: PASS (SECURITY-REVIEWER), INV-1 through INV-9 each explicitly assessed APPLIES/NOT-APPLICABLE with reasoning (INV-3/INV-9 NOT APPLICABLE, correctly -- no scripting surface, no outbound HTTP; INV-1/2/4/5/6/7/8 APPLIES, SATISFIED with independent re-derivation of the AC4/INV-5 collapsing argument, not merely restating the design doc's claim). handoffs/WF02-REQ386-20260923/step-02d-reviewer.json -- status: PASS (REVIEWER), idiom/supervision(N/A, correctly)/type-safety/scope-creep all assessed, one non-blocking note recorded (single-resolve-call simplification, confirmed not a behavior change). handoffs/WF02-REQ386-20260923/step-03b-test-design-validator.json -- status: PASS (TEST-DESIGN-VALIDATOR), all 6 ACs mapped to runnable tests, AC4 test scrutinized as genuinely cross-tenant, AC2 clock-injection confirmed, own independent mix test run (23/23) quoted. No gate skipped, no gate self-certified.\n\nSTALENESS CHECK: docs/requirements.yaml's REQ-386 entry -- status: in_progress (correct; DOC-UPDATER/Step 6 has not run yet, done is NOT expected at this point). docs/status/requirement_status.index.yaml names v22 as the current volume; read it in full -- REQ-386 has exactly one event, a `started` event (2026-09-22T22:51:01Z, agent ELIXIR-DEV, branch/task-id noted correctly), no premature `done`/`verified` event. No staleness found.",
+    "artifacts_out": [
+      "handoffs/WF02-REQ386-20260923/step-05-release-validator.json"
+    ],
+    "next_action": "Route to DOC-UPDATER (Step 6)",
+    "issues": [
+      {
+        "type": "pre-existing-failure",
+        "tests": [
+          "test/letflow/identity_test.exs resolve_tenant_by_realm/1 and resolve_realm_by_tenant/1 (REQ-019 acceptance criterion 1) resolve_tenant_by_realm/1 resolves the seeded default tenant (bpm-default) by its idp_realm_id",
+          "test/letflow/identity_test.exs resolve_tenant_by_realm/1 and resolve_realm_by_tenant/1 (REQ-019 acceptance criterion 1) resolve_realm_by_tenant/1 resolves the seeded default tenant's (bpm-default) idp_realm_id by its tenant id"
+        ],
+        "attribution": "structural route 1 + route 3, independently re-derived (not inherited from TEST-RUNNER), see result.summary; reproduced twice by this step across two separate full-suite runs, both under scripts/test_parallel.sh's own partitioned method",
+        "existing_issue": "ISS-0766 (open)",
+        "action": "confirmed still open and still accurately describing the mechanism; not fixed here, not filed as a new issue"
+      }
+    ]
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

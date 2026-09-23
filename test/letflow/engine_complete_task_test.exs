@@ -504,7 +504,11 @@ defmodule Letflow.EngineCompleteTaskTest do
       assert entry.resource_id == instance_id
       assert entry.actor_id == attrs.actor_id
       assert entry.after_state["node_id"] == "task_b"
-      assert entry.after_state["reason"] == %{"code" => "not_well_formed", "path" => ["properties"]}
+
+      assert entry.after_state["reason"] == %{
+               "code" => "not_well_formed",
+               "path" => ["properties"]
+             }
     end
   end
 

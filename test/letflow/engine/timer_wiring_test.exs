@@ -945,6 +945,7 @@ defmodule Letflow.Engine.TimerWiringTest do
       assert entry.actor_id == EventStore.platform_actor_id()
       assert entry.before_state == nil
       assert entry.after_state["node_id"] == "task"
+
       assert entry.after_state["reason"] == %{
                "code" => "not_well_formed",
                "path" => ["properties"]

@@ -34,5 +34,15 @@
       "No implementation code"
     ]
   },
-  "result": null
+  "result": {
+    "status": "COMPLETED",
+    "completed_at": "2026-09-23T08:30:00Z",
+    "result": {
+      "status": "PASS",
+      "summary": "Design document written at lib/letflow/design/req390-storage-quota.md. Key decisions: (1) computed-on-read SUM(byte_size) from instance_attachments in the tenant schema — no drift risk, no counter to maintain, delete/2 unchanged; (2) storage_allowance_bytes :bigint NOT NULL DEFAULT 1_073_741_824 new column on the global tenants table — TenantSettings rejected (closed-vocab branding store), TenantProvisioning rejected (provisioning primitives, not operational limits); (3) get_storage_usage/1 placed in Letflow.Repository.Attachments (same module as upload/2, no new module needed); (4) check_storage_quota/3 runs after tenant_id_for_schema_name and before Repo.transaction so no DB rows are created on refusal; (5) {:error, :storage_quota_exceeded} is distinct from {:error, :file_too_large}. One REVIEWER-flagged open question: whether to access Letflow.Identity.Tenant directly from Attachments or delegate via Letflow.Identity.get_storage_allowance/1. Migration 20260923000001_add_storage_allowance_bytes_to_tenants.exs is global (not tenant-scoped). All 5 ACs mapped to design elements.",
+      "artifacts": [
+        "lib/letflow/design/req390-storage-quota.md"
+      ]
+    }
+  }
 }

@@ -5,7 +5,7 @@
   "step": "Step 4c (Test Runner)",
   "to_agent": "TEST-RUNNER",
   "from_agent": "ORCH",
-  "status": "PENDING",
+  "status": "COMPLETED",
   "created_at": "2026-09-23T05:11:08Z",
   "started_at": "2026-09-23T05:11:08Z",
   "context": {
@@ -26,5 +26,80 @@
       "No new failures introduced by this branch"
     ]
   },
-  "result": null
+  "completed_at": "2026-09-23T11:09:48Z",
+  "result": {
+    "status": "PASS",
+    "verdict": "PASS — ISS-0785 regression test passes (24/24); all 7 full-suite failures are pre-existing and not attributable to this branch.",
+    "targeted_test_run": {
+      "command": "mix test test/letflow/repository/attachments_test.exs",
+      "output_summary": "Finished in 24.5 seconds (0.00s async, 24.5s sync)\nResult: 24 passed",
+      "passed": 24,
+      "failed": 0
+    },
+    "full_suite_run": {
+      "command": "mix test",
+      "output_summary": "Finished in 3325.6 seconds (26.7s async, 3298.9s sync)\nResult: 4748/4755 passed (6/6 properties, 4742/4749 tests), 23 excluded\nFailed: 7 tests",
+      "passed": 4748,
+      "total": 4755,
+      "excluded": 23,
+      "failed": 7
+    },
+    "failures": [
+      {
+        "test": "test the only call site (AC1) Lua.new( appears exactly once under lib/, inside sandbox.ex",
+        "file": "test/letflow/engine/lua/sandbox_test.exs:31",
+        "module": "Letflow.Engine.Lua.SandboxTest",
+        "error": "** (ErlangError) Erlang error: :enoent — System.cmd(\"grep\", ...) — grep not available on Windows",
+        "attribution": "PRE-EXISTING — file not modified by this branch; Windows grep availability issue"
+      },
+      {
+        "test": "test REQ-288 AC1 -- Engine.Expr is now reachable from lib/letflow/definitions/",
+        "file": "test/letflow/definitions/graph_test.exs:1202",
+        "module": "Letflow.Definitions.GraphTest",
+        "error": "** (ErlangError) Erlang error: :enoent — System.cmd(\"grep\", ...) — grep not available on Windows",
+        "attribution": "PRE-EXISTING — file not modified by this branch; Windows grep availability issue"
+      },
+      {
+        "test": "test AC8: no host function calls Letflow.Repo with a guest-derived prefix structural grep",
+        "file": "test/letflow/engine/wasm/host_api_test.exs:557",
+        "module": "Letflow.Engine.Wasm.HostApiTest",
+        "error": "** (ErlangError) Erlang error: :enoent — System.cmd(\"grep\", ...) — grep not available on Windows",
+        "attribution": "PRE-EXISTING — file not modified by this branch; Windows grep availability issue"
+      },
+      {
+        "test": "test INV-1: caller-supplied tenant_id/schema/slug fields are ignored grep: no new FieldGrants call",
+        "file": "test/letflow/routers/req317_record_attachments_routes_test.exs:670",
+        "module": "Letflow.Routers.Req317RecordAttachmentsRoutesTest",
+        "error": "** (ErlangError) Erlang error: :enoent — System.cmd(\"grep\", ...) — grep not available on Windows",
+        "attribution": "PRE-EXISTING — file not modified by this branch; Windows grep availability issue"
+      },
+      {
+        "test": "test INV-1: caller-supplied tenant_id/schema/slug fields are ignored grep: no new direct Repo call",
+        "file": "test/letflow/routers/req317_record_attachments_routes_test.exs:655",
+        "module": "Letflow.Routers.Req317RecordAttachmentsRoutesTest",
+        "error": "** (ErlangError) Erlang error: :enoent — System.cmd(\"grep\", ...) — grep not available on Windows",
+        "attribution": "PRE-EXISTING — file not modified by this branch; Windows grep availability issue"
+      },
+      {
+        "test": "test resolve_tenant_by_realm/1 ... resolve_tenant_by_realm/1 resolves the seeded default tenant (bpm-default)",
+        "file": "test/letflow/identity_test.exs:534",
+        "module": "Letflow.IdentityTest",
+        "error": "** (Ecto.NoResultsError) expected at least one result but got none — bpm-default tenant not found",
+        "attribution": "PRE-EXISTING — file not modified by this branch"
+      },
+      {
+        "test": "test resolve_tenant_by_realm/1 ... resolve_realm_by_tenant/1 resolves the seeded default tenant's idp_realm_id",
+        "file": "test/letflow/identity_test.exs:541",
+        "module": "Letflow.IdentityTest",
+        "error": "** (Ecto.NoResultsError) expected at least one result but got none — bpm-default tenant not found",
+        "attribution": "PRE-EXISTING — file not modified by this branch"
+      }
+    ],
+    "branch_modified_files": [
+      "lib/letflow/repository/attachments.ex",
+      "lib/letflow/routers/instances.ex",
+      "test/letflow/repository/attachments_test.exs"
+    ],
+    "new_failures_attributable_to_branch": 0
+  }
 }

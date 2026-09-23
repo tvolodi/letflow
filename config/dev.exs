@@ -51,7 +51,12 @@ config :letflow, Letflow.Repo,
   port: db_port,
   stacktrace: true,
   show_sensitive_data_on_connection_error: true,
-  pool_size: 10,
+  # ISS-0786: 10 was thin against Letflow.Admission's derived global_cap
+  # (pool_size - reserved_headroom, default headroom 2 -> cap 8), causing
+  # intermittent {:error, :capacity} 503s under concurrent Playwright e2e
+  # load in dev mode. Raised to 30 (-> cap 28) for real headroom; no
+  # correctness dependency on the exact value elsewhere.
+  pool_size: 30,
   # See Letflow.Repo.init/2 -- letflow_dev is shared across every
   # concurrent workspace/host, unlike the partitioned test database.
   # Absent (and therefore false) in config/test.exs and config/prod.exs,

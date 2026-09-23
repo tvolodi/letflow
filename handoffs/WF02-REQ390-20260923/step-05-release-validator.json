@@ -5,7 +5,7 @@
   "step": "Step 5 (Release Validation)",
   "to_agent": "RELEASE-VALIDATOR",
   "from_agent": "ORCH",
-  "status": "PENDING",
+  "status": "COMPLETED",
   "created_at": "2026-09-23T09:29:01Z",
   "started_at": "2026-09-23T09:29:01Z",
   "context": {
@@ -30,5 +30,39 @@
       "Each REQ-390 AC independently verified against source + tests"
     ]
   },
-  "result": null
+  "result": {
+    "status": "PASS",
+    "completed_at": "2026-09-23T14:32:00Z",
+    "summary": "RELEASE-VALIDATOR independently re-verified REQ-390. All five ACs satisfied.",
+    "commands_run": [
+      {
+        "cmd": "git branch --show-current",
+        "output": "feature/WF02-REQ390-20260923",
+        "exit": 0
+      },
+      {
+        "cmd": "mix compile --warnings-as-errors",
+        "output": "(no output -- clean compile)",
+        "exit": 0
+      },
+      {
+        "cmd": "mix test test/letflow/repository/attachments_test.exs --no-color",
+        "output": "Finished in 35.3 seconds (0.00s async, 35.3s sync)\nResult: 28 passed",
+        "exit": 0
+      },
+      {
+        "cmd": "mix test test/letflow/repository/attachments_test.exs --no-color (fresh subprocess for ISS-0069 check)",
+        "output": "Finished in 32.8 seconds (0.00s async, 32.8s sync)\nResult: 28 passed\nISS-0069: no 'default values for the optional arguments' warning in subprocess output",
+        "exit": 0
+      }
+    ],
+    "ac_verification": {
+      "AC1": "PASS -- get_storage_usage/1 exists at attachments.ex:493, runs FROM instance_attachments SELECT coalesce(sum(a.byte_size), 0) in the tenant's own schema. Test 'get_storage_usage/1 returns correct byte count after upload and after delete (AC1, AC4)' asserts {:ok, 0} before upload, {:ok, byte_size(raw_bytes)} after upload. Test passes (28/28).",
+      "AC2": "PASS -- Test 'upload/2 refuses an upload that would exceed storage quota -- no DB rows created (AC2)' sets allowance to 1 byte, asserts return == {:error, :storage_quota_exceeded}, then asserts Repo.aggregate(Artifact, :count) == 0 AND Repo.aggregate(Attachment, :count) == 0. check_storage_quota/3 in attachments.ex is called before Repo.transaction, so no DB rows are written on refusal. Test passes.",
+      "AC3": "PASS -- Two independent tests: (1) 'storage_quota_exceeded triggers without hitting file_too_large (AC3)': 100-byte upload with 1-byte allowance returns {:error, :storage_quota_exceeded} (file is well under 25 MiB). (2) 'file_too_large triggers without triggering storage_quota (AC3)': 26_214_401-byte upload with default 1 GiB allowance returns {:error, :file_too_large} (file_too_large check at attachments.ex line ~205 fires before check_storage_quota). Both tests pass.",
+      "AC4": "PASS -- Same test as AC1: after delete/2, the test asserts {:ok, 0} = Attachments.get_storage_usage(prefix: schema). delete/2 removes the instance_attachments row, which reduces the SUM query result to 0 on next read. Test passes.",
+      "AC5": "PASS -- mix compile --warnings-as-errors exit 0 (independent run). mix test 28 passed, 0 failed, exit 0 (independent run). Fresh subprocess also 28 passed, no ISS-0069 dead-default-argument warning."
+    },
+    "iss_0069_check": "PASS -- fresh subprocess mix test run found no 'default values for the optional arguments' warning. mix letflow.check.test shells to scripts/test_parallel.sh (bash) which cannot run on Windows; ISS-0069 check performed manually via subprocess grep instead, consistent with the task's documented intent."
+  }
 }

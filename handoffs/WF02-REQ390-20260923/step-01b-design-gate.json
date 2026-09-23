@@ -1,0 +1,34 @@
+{
+  "handoff_id": "WF02-REQ390-20260923-step-01b",
+  "run_id": "WF02-REQ390-20260923",
+  "workflow": "WF-02",
+  "step": "Step 1b (Design Gate)",
+  "to_agent": "CODE-DESIGN-VALIDATOR",
+  "from_agent": "ORCH",
+  "status": "PENDING",
+  "created_at": "2026-09-23T08:12:38Z",
+  "started_at": "2026-09-23T08:12:38Z",
+  "context": {
+    "branch_name": "feature/WF02-REQ390-20260923",
+    "requirement_ids": ["REQ-390"],
+    "design_doc": "lib/letflow/design/req390-storage-quota.md",
+    "artifacts_in": [
+      "lib/letflow/design/req390-storage-quota.md",
+      "lib/letflow/repository/attachments.ex",
+      "handoffs/WF02-REQ390-20260923/step-01-code-designer.json"
+    ],
+    "designer_decisions": "Computed-on-read SUM (no drift), allowance stored as storage_allowance_bytes bigint DEFAULT 1GiB on tenants table, get_storage_usage/1 in Attachments module, check_storage_quota/3 before Repo.transaction in upload/2 with-chain, {:error, :storage_quota_exceeded} error tag, migration adds column. OQ-1: whether to access Tenant schema directly or via get_storage_allowance/1 function."
+  },
+  "task": {
+    "description": "Execute Step 1b (Design Gate -- HARD GATE) for REQ-390.\n\nWorkspace: c:\\Users\\tvolo\\dev\\ai-dala\\letflow\nBranch: feature/WF02-REQ390-20260923\n\nRead the design doc directly: lib/letflow/design/req390-storage-quota.md\nAlso read docs/requirements.yaml REQ-390 section and lib/letflow/repository/attachments.ex.\n\nCheck each acceptance criterion from REQ-390:\n1. Does a fully specified get_storage_usage/1 (or equivalent) function signature exist?\n2. Does upload/2's modified with-chain show the quota check BEFORE any Repo.insert and BEFORE the scan?\n3. Are the error tags distinct ({:error, :storage_quota_exceeded} vs {:error, :file_too_large})?\n4. Is the allowance storage location named with data type, table, and default value?\n5. Is there a migration sketch for the new column?\n6. Is the design decision (computed-on-read) stated with rationale?\n7. Does OQ-1 (Tenant schema access pattern) need to block this design, or can it be resolved in implementation?\n8. No implementation code?\n9. All REQ-390 ACs mapped to design elements?\n\nVerdict: PASS or FAIL.\n\nOutput:\n1. Write handoffs/WF02-REQ390-20260923/step-01b-design-gate.json with status COMPLETED, result.status PASS or FAIL\n2. git add handoffs/WF02-REQ390-20260923/step-01b-design-gate.json\n3. git commit -m 'feat(WF02-REQ390-20260923): Step 1b -- design gate [PASS/FAIL]'\n4. git push\n\nReport: PASS or FAIL with findings",
+    "acceptance_criteria": [
+      "All REQ-390 ACs mapped to design elements",
+      "Usage tracking decision stated with rationale",
+      "Allowance storage fully described",
+      "get_storage_usage signature and placement specified",
+      "upload/2 with-chain order correct (quota before DB writes)",
+      "No implementation code"
+    ]
+  },
+  "result": null
+}

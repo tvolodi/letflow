@@ -4,9 +4,10 @@
     "step":  "Step Final",
     "to_agent":  "ELIXIR-DEV",
     "from_agent":  "ORCH",
-    "status":  "PENDING",
+    "status":  "COMPLETED",
     "created_at":  "2026-09-23T06:12:38Z",
     "started_at":  "2026-09-23T06:12:38Z",
+    "completed_at":  "2026-09-23T07:59:14Z",
     "context":  {
                     "branch_name":  "feature/WF03-ISS0785-20260923",
                     "issue_id":  "ISS-0785",
@@ -30,5 +31,13 @@
                                              "Registry entry updated to COMPLETED"
                                          ]
              },
-    "result":  null
+    "result":  {
+                   "status":  "PASS",
+                   "pr_number":  1743,
+                   "merge_commit_sha":  "e2b8ce68",
+                   "targeted_test_result":  "24/24 passed (test/letflow/repository/attachments_test.exs)",
+                   "queue_release_status":  200,
+                   "queue_locked_by_after_release":  null,
+                   "summary":  "Rebase was already complete. Targeted test (attachments_test.exs) passed 24/24. Discovered and fixed two additional CI blockers during Step Final: (1) [H3] non-schema 'workflow' top-level keys in all 12 handoff JSON files -- removed; (2) cross-instance audit reason regression: get_content/3 now returns {:error,:not_found} before blob read, so router :not_found branch could not distinguish cross-instance vs cross-tenant for audit -- fixed with a cheap tenant-scoped Attachments.get/2 call in the :not_found branch to restore the distinction. REQ-388 audit test (req388_attachment_access_denial_audit_test.exs) verified 28/28 pass after fix. PollerTest REQ-218 AC3 flaked twice on CI under parallel partition load (pre-existing ISS-0453/ISS-0695/ISS-0707, unrelated to diff) -- passed on third attempt. PR #1743 merged as squash e2b8ce68. Queue task 784 released (HTTP 200, locked_by: null)."
+               }
 }

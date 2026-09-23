@@ -6847,16 +6847,16 @@
       "issue_id": "ISS-0785",
       "queue_task_id": 784,
       "github_issue_number": 1736,
-      "status": "IN_PROGRESS",
+      "status": "COMPLETED",
       "owned_modules": [
         "lib/letflow/repository/attachments.ex",
         "lib/letflow/routers/instances.ex"
       ],
       "started_at": "2026-09-23T03:56:46Z",
-      "lock_released_at": null,
-      "released_lock": false,
-      "last_known_step": "Step 00 dispatched to ELIXIR-DEV",
-      "note": "WF-03 for ISS-0785: timing side-channel in Attachments.get_content/2 -- cross-instance-same-tenant denial costs 2 Repo round-trips (reads full blob) vs 1 for cross-tenant/never-issued. Fix: reorder lookup so instance_id check precedes artifact blob read. Queue task 784 (GH#1736)."
+      "lock_released_at": "2026-09-23T07:59:14Z",
+      "released_lock": true,
+      "last_known_step": "Step Final COMPLETED PASS -- merged to main as e2b8ce68 (PR #1743), lock released",
+      "note": "WF-03 for ISS-0785: timing side-channel in Attachments.get_content/2 -- cross-instance-same-tenant denial costs 2 Repo round-trips (reads full blob) vs 1 for cross-tenant/never-issued. Fix: reorder lookup so instance_id check precedes artifact blob read. Queue task 784 (GH#1736). Additional fix during Step Final: restore cross-instance audit reason (ISS-0453 flaky PollerTest AC3 also encountered; confirmed pre-existing per ISS-0453/ISS-0695)."
     }
   ]
 }

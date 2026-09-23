@@ -157,6 +157,7 @@ defmodule Letflow.Engine.HumanTaskEscalationTest do
 
       # (a) original task is :cancelled.
       reloaded_orig = Repo.get!(EngineTask, orig_task.id, prefix: schema_name)
+
       assert reloaded_orig.status == :cancelled,
              "expected orig-task to be :cancelled, got #{inspect(reloaded_orig.status)}"
 

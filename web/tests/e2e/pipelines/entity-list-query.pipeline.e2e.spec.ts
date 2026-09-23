@@ -426,8 +426,9 @@ test.describe('Pipeline: entity-list-query (REQ-393)', () => {
 
     const pageSizeError = page.getByTestId('page-size-error')
     await expect(pageSizeError).toBeVisible({ timeout: 10_000 })
-    // The component renders: 'Page size is too large. Choose a smaller value.'
+    // The component renders: 'Page size is too large (maximum: 200). Choose a smaller value.'
     await expect(pageSizeError).toHaveText(/page size is too large/i)
+    await expect(pageSizeError).toContainText('200')
     // The query-error-banner must NOT show (400 → pageSizeError, not queryError)
     expect(page.getByTestId('query-error-banner')).toHaveCount(0)
   })

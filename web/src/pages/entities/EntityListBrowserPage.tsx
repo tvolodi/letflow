@@ -149,7 +149,7 @@ export function EntityListBrowserPage(): React.ReactElement {
     }
     const msg = extractMessage(recordsError)
     if (recordsError.status === 400) {
-      setPageSizeError('Page size is too large. Choose a smaller value.')
+      setPageSizeError('Page size is too large (maximum: 200). Choose a smaller value.')
       setQueryError(null)
     } else {
       setQueryError(msg)

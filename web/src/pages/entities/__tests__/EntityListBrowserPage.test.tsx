@@ -246,7 +246,9 @@ describe('REQ-393 — EntityListBrowserPage', () => {
 
     renderEntityListPage()
 
-    expect(screen.getByTestId('page-size-error')).toBeInTheDocument()
+    const pageSizeError = screen.getByTestId('page-size-error')
+    expect(pageSizeError).toBeInTheDocument()
+    expect(pageSizeError.textContent).toContain('200')
     expect(screen.queryByTestId('query-error-banner')).not.toBeInTheDocument()
   })
 

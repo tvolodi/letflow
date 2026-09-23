@@ -82,6 +82,18 @@
     "required_fixes": [
       "TC-ELBP-03: add an assertion on the text content of page-size-error, e.g. `expect(screen.getByTestId('page-size-error').textContent).toContain('200')`. The mock error already contains 'maximum is 200'; the test must assert this is surfaced.",
       "Playwright EO-005/AC3: add an assertion that the page-size-error banner text contains the limit value, e.g. `await expect(pageSizeError).toContainText('200')`. The injected mock error body already says 'maximum is 200'; the assertion must confirm the component renders it."
-    ]
+    ],
+    "rework_result": {
+      "attempt": 1,
+      "status": "PASS",
+      "verified_at": "2026-09-23T12:00:00Z",
+      "verified_by": "TEST-DESIGN-VALIDATOR",
+      "gap_resolution": {
+        "GAP-01": "RESOLVED — TC-ELBP-03 now asserts `expect(pageSizeError.textContent).toContain('200')` (line 251)",
+        "GAP-02": "RESOLVED — Playwright EO-005/AC3 now asserts `await expect(pageSizeError).toContainText('200')` (line 431)"
+      },
+      "component_verified": "EntityListBrowserPage.tsx line 152 renders 'Page size is too large (maximum: 200). Choose a smaller value.' — limit value 200 is present in the rendered message",
+      "final_verdict": "PASS"
+    }
   }
 }

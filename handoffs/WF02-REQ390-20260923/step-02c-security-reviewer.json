@@ -90,5 +90,41 @@
       }
     ],
     "routing": "FAIL — route back to ELIXIR-DEV to fix INV-8 in check_storage_quota/3 before re-submission to SECURITY-REVIEWER."
+  },
+  "rework_result": {
+    "rework_number": 1,
+    "run_at": "2026-09-23T08:55:00Z",
+    "trigger": "ELIXIR-DEV applied INV-8 fix (commit 7f95834f): bare struct match replaced with case/nil branch returning {:error, :tenant_not_found}",
+    "diff_verified": "git diff main...feature/WF02-REQ390-20260923 -- lib/letflow/repository/attachments.ex — confirms case Repo.get(Tenant, tenant_id) do / %Tenant{} -> ... / nil -> {:error, :tenant_not_found} end",
+    "invariants_rechecked": [
+      {
+        "id": "INV-1",
+        "verdict": "APPLIES — PASS",
+        "notes": "Unchanged from initial review. get_storage_usage/1 still uses Repo.one(..., prefix: prefix). No cross-tenant data leak."
+      },
+      {
+        "id": "INV-4",
+        "verdict": "APPLIES — PASS",
+        "notes": "Unchanged. New error atom {:error, :tenant_not_found} contains no secret material. No secrets in responses."
+      },
+      {
+        "id": "INV-7",
+        "verdict": "APPLIES — PASS",
+        "notes": "Unchanged. prefix passed as :prefix keyword option to Repo.one/2, not interpolated into SQL. PASS."
+      },
+      {
+        "id": "INV-8",
+        "verdict": "APPLIES — PASS (BLOCKER RESOLVED)",
+        "notes": "REWORK 1: INV-8 fix verified. case Repo.get(Tenant, tenant_id) do correctly handles nil branch with {:error, :tenant_not_found}. @spec for check_storage_quota/3 updated to :ok | {:error, :storage_quota_exceeded} | {:error, :tenant_not_found}. upload/2 @spec also extended. Error propagates via with chain in do_upload_after_scan/6. MatchError on nil is no longer possible."
+      },
+      {
+        "id": "INV-6",
+        "verdict": "APPLIES — PASS",
+        "notes": "This re-review handoff is the required proof artifact. All applicable invariants now satisfied."
+      }
+    ],
+    "status": "PASS",
+    "summary": "REWORK 1: INV-8 fix verified — bare struct match replaced with case/nil branch. All applicable invariants (INV-1, INV-4, INV-6, INV-7, INV-8) PASS. Overall security gate: PASS.",
+    "routing": "PASS — route to REVIEWER (Step 2d)."
   }
 }

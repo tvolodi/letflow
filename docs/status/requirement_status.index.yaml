@@ -4610,8 +4610,15 @@ volumes:
     path: docs/status/requirement_status.v22.yaml
     status: current
     opened: 2026-09-22
-    entries: 11
+    entries: 12
     note: >
+      Incremented to 12 by ELIXIR-DEV's WF02-REQ396-20260923 Step 00 started
+      event (2026-09-23T18:37:05Z). `grep -c "^  - req:"
+      docs/status/requirement_status.v22.yaml` = 12 on-disk entries after
+      rebase (REQ-394 done + REQ-396 started), recounted directly rather than
+      assumed. Well under the 1200-line/120000-byte roll ceiling, so no roll
+      triggered. Prior notes preserved below verbatim.
+
       Incremented to 11 by DOC-UPDATER's rebase of
       WF02-REQ394-20260923 onto origin/main (Step 6/7, resolving a merge
       conflict in this index and in requirement_status.v22.yaml caused by

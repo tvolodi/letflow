@@ -6893,6 +6893,25 @@
       "released_lock": true,
       "last_known_step": "Step Final COMPLETED PASS -- PR #1754 squash-merged as ac751a7d",
       "note": "WF-02 for REQ-393: Generic entity-list browse screen with filter builder, sort control, page-size control. FRONTEND-DEV task (Stage S8). Queue task 753 (GH#1641)."
+    },
+    {
+      "run_id": "WF02-REQ396-20260923",
+      "requirement_id": "REQ-396",
+      "issue_id": null,
+      "queue_task_id": 756,
+      "github_issue_number": 1644,
+      "status": "IN_PROGRESS",
+      "owned_modules": [
+        "lib/letflow/definitions/graph.ex",
+        "lib/letflow/engine/",
+        "lib/letflow/scheduler.ex",
+        "test/fixtures/simulation/swiftroute/process_route_approval.yaml"
+      ],
+      "started_at": "2026-09-23T18:35:00Z",
+      "lock_released_at": null,
+      "released_lock": false,
+      "last_known_step": "Step 00 dispatched to ELIXIR-DEV",
+      "note": "WF02-REQ396: Add HUMAN_TASK escalation_timer_duration to graph schema + wire SCH-04 escalation path. Stage S7. Queue task 756 (GH#1644)."
     }
   ]
 }

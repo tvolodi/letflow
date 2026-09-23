@@ -1,0 +1,132 @@
+{
+    "handoff_id":  "WF02-REQ390-20260923-step-02c",
+    "run_id":  "WF02-REQ390-20260923",
+    "step":  "Step 2c (Security Gate)",
+    "to_agent":  "SECURITY-REVIEWER",
+    "from_agent":  "ORCH",
+    "status":  "COMPLETED",
+    "created_at":  "2026-09-23T08:23:52Z",
+    "started_at":  "2026-09-23T08:23:52Z",
+    "context":  {
+                    "branch_name":  "feature/WF02-REQ390-20260923",
+                    "requirement_ids":  [
+                                            "REQ-390"
+                                        ],
+                    "stage":  "S6",
+                    "impl_summary":  "Added get_storage_usage/1 (SUM query), check_storage_quota/3, quota check in do_upload_after_scan/6 before DB writes. New migration adds storage_allowance_bytes bigint DEFAULT 1GiB to tenants. Identity.Tenant schema updated with new field.",
+                    "artifacts_in":  [
+                                         "lib/letflow/repository/attachments.ex",
+                                         "lib/letflow/identity/tenant.ex",
+                                         "priv/repo/migrations/20260923000001_add_storage_allowance_bytes_to_tenants.exs",
+                                         "docs/agents/instructions/security-invariants.md"
+                                     ]
+                },
+    "task":  {
+                 "description":  "Execute Step 2c (SECURITY GATE -- HARD GATE) for REQ-390.\n\nWorkspace: c:\\Users\\tvolo\\dev\\ai-dala\\letflow\nBranch: feature/WF02-REQ390-20260923\n\nRead security-invariants.md and the diff:\ngit diff main...feature/WF02-REQ390-20260923 -- lib/letflow/repository/attachments.ex lib/letflow/identity/tenant.ex priv/repo/migrations/\n\nCheck security invariants. Key concerns for this change:\n1. INV-1 (tenant isolation): does get_storage_usage/1 query correctly scope to the tenant\u0027s own prefix? No cross-tenant data leak?\n2. INV-3 (no cross-tenant data): the SUM query must only count the calling tenant\u0027s instance_attachments, not all tenants. Verify the prefix is used correctly.\n3. INV-5 (response shape): does {:error, :storage_quota_exceeded} reveal any information to the caller about other tenants? (No, it only says \u0027your tenant\u0027s quota is exceeded\u0027.)\n4. INV-4 (no secrets in responses): does the error response expose any sensitive data (e.g., the actual usage figure or another tenant\u0027s data)?\n5. INV-7 (no SQL injection): is the prefix passed to the SUM query safely as an Ecto option, not string-interpolated?\n6. Migration safety: does the migration add the column with a safe default? Does it risk any data exposure?\n7. Does the quota check happen BEFORE any DB write (no partial writes on quota refusal)?\n\nVerdict: PASS or FAIL.\n\nOutput:\n1. Write handoffs/WF02-REQ390-20260923/step-02c-security-reviewer.json status COMPLETED, result PASS or FAIL\n2. git add handoffs/WF02-REQ390-20260923/step-02c-security-reviewer.json\n3. git commit -m \u0027feat(WF02-REQ390-20260923): Step 2c -- security gate [PASS/FAIL]\u0027\n4. git push\n\nReport: PASS or FAIL with findings",
+                 "acceptance_criteria":  [
+                                             "get_storage_usage/1 scopes correctly to calling tenant only",
+                                             "No cross-tenant data leak via the quota mechanism",
+                                             "No SQL injection via prefix parameter",
+                                             "Error response does not expose other tenants\u0027 data",
+                                             "Migration is safe (has default, no data exposure)"
+                                         ]
+             },
+    "result":  {
+                   "status":  "FAIL",
+                   "completed_at":  "2026-09-23T08:35:00Z",
+                   "summary":  "INV-8 BLOCKER: bare struct match on Repo.get/2 output in check_storage_quota/3 can raise MatchError on nil. All other applicable invariants PASS. Route back to ELIXIR-DEV.",
+                   "invariants":  [
+                                      {
+                                          "id":  "INV-1",
+                                          "verdict":  "APPLIES — PASS",
+                                          "notes":  "get_storage_usage/1 uses Repo.one(..., prefix: prefix) — the :prefix keyword is Ecto\u0027s schema-per-tenant mechanism, routing the SUM query to exactly the calling tenant\u0027s Postgres schema. No cross-tenant data is readable. check_storage_quota/3 receives tenant_id from TenantProvisioning.tenant_id_for_schema_name/1 (derived from the prefix, not caller-supplied), satisfying 0003 addendum (c). Migration alters the shared public.tenants table correctly — not a tenant-scoped table, no isolation issue."
+                                      },
+                                      {
+                                          "id":  "INV-2",
+                                          "verdict":  "NOT-APPLICABLE",
+                                          "notes":  "S4 not started; no API response type or controller modified in this diff."
+                                      },
+                                      {
+                                          "id":  "INV-3",
+                                          "verdict":  "NOT-APPLICABLE",
+                                          "notes":  "S5 not started; no scripting/plugin surface touched."
+                                      },
+                                      {
+                                          "id":  "INV-4",
+                                          "verdict":  "APPLIES — PASS",
+                                          "notes":  "No hardcoded secrets introduced. Error return is the bare atom {:error, :storage_quota_exceeded} — no usage figures, no allowance values, no other-tenant data leaked. No secret-pattern matches found in new code."
+                                      },
+                                      {
+                                          "id":  "INV-5",
+                                          "verdict":  "NOT-APPLICABLE",
+                                          "notes":  "S4 not started; no lookup-by-ID endpoint added."
+                                      },
+                                      {
+                                          "id":  "INV-6",
+                                          "verdict":  "APPLIES — this review is the required proof artifact. Cannot be PASS given INV-8 FAIL."
+                                      },
+                                      {
+                                          "id":  "INV-7",
+                                          "verdict":  "APPLIES — PASS",
+                                          "notes":  "The SUM query uses Ecto\u0027s from/2 macro (parameterised by construction). The prefix value is passed as the :prefix keyword option to Repo.one/2 — a schema-routing option, not SQL string interpolation. No Repo.query raw SQL appears in the new code. PASS."
+                                      },
+                                      {
+                                          "id":  "INV-8",
+                                          "verdict":  "APPLIES — FAIL (BLOCKER)",
+                                          "notes":  "Two bare matches found in check_storage_quota/3: (1) {:ok, current_usage} = get_storage_usage(prefix: prefix) — matches INV-8 grep pattern; get_storage_usage/1 always returns {:ok, _} so this cannot crash on a bad tagged tuple, but the bare match pattern is still flagged. (2) %Tenant{storage_allowance_bytes: allowance} = Repo.get(Tenant, tenant_id) — BLOCKER: Repo.get/2 returns nil when the tenant record is not found (e.g. concurrent deletion race); a bare struct match against nil raises MatchError in a shared request process. Fix required: use case Repo.get(Tenant, tenant_id) do / nil -\u003e {:error, :storage_quota_exceeded} / %Tenant{...} -\u003e ... end, or Repo.get!/2 with explicit rescue."
+                                      },
+                                      {
+                                          "id":  "INV-9",
+                                          "verdict":  "NOT-APPLICABLE",
+                                          "notes":  "No outbound HTTP call using tenant-controlled URL added."
+                                      }
+                                  ],
+                   "issues":  [
+                                  {
+                                      "invariant":  "INV-8",
+                                      "severity":  "BLOCKER",
+                                      "location":  "lib/letflow/repository/attachments.ex, check_storage_quota/3",
+                                      "line":  "%Tenant{storage_allowance_bytes: allowance} = Repo.get(Tenant, tenant_id)",
+                                      "description":  "Repo.get/2 returns nil when the tenant is not found. The bare struct pattern match against nil raises MatchError. INV-8 requires typed-result handling for any path touching external I/O. Route back to ELIXIR-DEV. Fix: wrap in a case expression and return {:error, :tenant_not_found} (or another appropriate error atom) on the nil branch."
+                                  }
+                              ],
+                   "routing":  "FAIL — route back to ELIXIR-DEV to fix INV-8 in check_storage_quota/3 before re-submission to SECURITY-REVIEWER.",
+                   "rework_result":  {
+                                         "rework_number":  1,
+                                         "run_at":  "2026-09-23T08:55:00Z",
+                                         "trigger":  "ELIXIR-DEV applied INV-8 fix (commit 7f95834f): bare struct match replaced with case/nil branch returning {:error, :tenant_not_found}",
+                                         "diff_verified":  "git diff main...feature/WF02-REQ390-20260923 -- lib/letflow/repository/attachments.ex — confirms case Repo.get(Tenant, tenant_id) do / %Tenant{} -\u003e ... / nil -\u003e {:error, :tenant_not_found} end",
+                                         "invariants_rechecked":  [
+                                                                      {
+                                                                          "id":  "INV-1",
+                                                                          "verdict":  "APPLIES — PASS",
+                                                                          "notes":  "Unchanged from initial review. get_storage_usage/1 still uses Repo.one(..., prefix: prefix). No cross-tenant data leak."
+                                                                      },
+                                                                      {
+                                                                          "id":  "INV-4",
+                                                                          "verdict":  "APPLIES — PASS",
+                                                                          "notes":  "Unchanged. New error atom {:error, :tenant_not_found} contains no secret material. No secrets in responses."
+                                                                      },
+                                                                      {
+                                                                          "id":  "INV-7",
+                                                                          "verdict":  "APPLIES — PASS",
+                                                                          "notes":  "Unchanged. prefix passed as :prefix keyword option to Repo.one/2, not interpolated into SQL. PASS."
+                                                                      },
+                                                                      {
+                                                                          "id":  "INV-8",
+                                                                          "verdict":  "APPLIES — PASS (BLOCKER RESOLVED)",
+                                                                          "notes":  "REWORK 1: INV-8 fix verified. case Repo.get(Tenant, tenant_id) do correctly handles nil branch with {:error, :tenant_not_found}. @spec for check_storage_quota/3 updated to :ok | {:error, :storage_quota_exceeded} | {:error, :tenant_not_found}. upload/2 @spec also extended. Error propagates via with chain in do_upload_after_scan/6. MatchError on nil is no longer possible."
+                                                                      },
+                                                                      {
+                                                                          "id":  "INV-6",
+                                                                          "verdict":  "APPLIES — PASS",
+                                                                          "notes":  "This re-review handoff is the required proof artifact. All applicable invariants now satisfied."
+                                                                      }
+                                                                  ],
+                                         "status":  "PASS",
+                                         "summary":  "REWORK 1: INV-8 fix verified — bare struct match replaced with case/nil branch. All applicable invariants (INV-1, INV-4, INV-6, INV-7, INV-8) PASS. Overall security gate: PASS.",
+                                         "routing":  "PASS — route to REVIEWER (Step 2d)."
+                                     }
+               },
+    "workflow_id":  "WF-02"
+}

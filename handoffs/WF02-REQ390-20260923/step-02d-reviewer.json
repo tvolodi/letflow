@@ -1,0 +1,95 @@
+{
+    "handoff_id":  "WF02-REQ390-20260923-step-02d",
+    "run_id":  "WF02-REQ390-20260923",
+    "step":  "Step 2d (Idiom/OTP Review Gate)",
+    "to_agent":  "REVIEWER",
+    "from_agent":  "ORCH",
+    "status":  "COMPLETED",
+    "created_at":  "2026-09-23T08:30:37Z",
+    "started_at":  "2026-09-23T08:30:37Z",
+    "context":  {
+                    "branch_name":  "feature/WF02-REQ390-20260923",
+                    "requirement_ids":  [
+                                            "REQ-390"
+                                        ],
+                    "stage":  "S6",
+                    "prior_gates":  "CODE-DESIGN-VALIDATOR PASS, SECURITY-REVIEWER PASS (after 1 rework for INV-8 nil safety)",
+                    "design_decision_requiring_reviewer_sign_off":  "Computed-on-read SUM (vs maintained counter) -- flagged in design doc as needing REVIEWER sign-off",
+                    "artifacts_in":  [
+                                         "lib/letflow/repository/attachments.ex",
+                                         "lib/letflow/identity/tenant.ex",
+                                         "priv/repo/migrations/20260923000001_add_storage_allowance_bytes_to_tenants.exs",
+                                         "lib/letflow/design/req390-storage-quota.md"
+                                     ]
+                },
+    "task":  {
+                 "description":  "Execute Step 2d (REVIEWER -- HARD GATE) for REQ-390.\n\nWorkspace: c:\\Users\\tvolo\\dev\\ai-dala\\letflow\nBranch: feature/WF02-REQ390-20260923\n\nRead the diff: git diff main...feature/WF02-REQ390-20260923 -- lib/letflow/repository/attachments.ex lib/letflow/identity/tenant.ex priv/repo/migrations/\nAlso read the design doc: lib/letflow/design/req390-storage-quota.md\n\nCheck:\n1. OTP idiom: is the implementation idiomatic Elixir? with chains, case, function heads?\n2. No supervision-tree changes? (This should be pure function-level)\n3. Scope creep: does the diff touch ONLY files needed for REQ-390?\n4. Design decision sign-off (REQUIRED): computed-on-read SUM was flagged for REVIEWER review. Is this an acceptable design for this codebase? State your verdict explicitly.\n5. @spec completeness: all public functions have @spec?\n6. Migration correctness: is the Ecto migration idiomatic?\n7. Cross-module coupling (OQ-1): the implementation accesses Letflow.Identity.Tenant directly from Attachments. Is this acceptable per the project\u0027s module boundary conventions? Or does it create a concerning coupling?\n8. No scope creep into performance optimization (the design doc notes performance is acceptable for current scale; the implementation should not attempt premature optimization)\n\nVerdict: PASS or FAIL.\n\nOutput:\n1. Write handoffs/WF02-REQ390-20260923/step-02d-reviewer.json status COMPLETED, result PASS or FAIL\n2. git add handoffs/WF02-REQ390-20260923/step-02d-reviewer.json\n3. git commit -m \u0027feat(WF02-REQ390-20260923): Step 2d -- idiom review gate [PASS/FAIL]\u0027\n4. git push\n\nReport: PASS or FAIL with findings, especially the design-decision sign-off",
+                 "acceptance_criteria":  [
+                                             "OTP idiom correct",
+                                             "No supervision-tree changes",
+                                             "No scope creep",
+                                             "Computed-on-read design decision explicitly signed off by REVIEWER",
+                                             "Cross-module coupling (OQ-1) verdict stated"
+                                         ]
+             },
+    "completed_at":  "2026-09-23T08:52:00Z",
+    "result":  {
+                   "status":  "PASS",
+                   "verdict":  "PASS — all four gate checks clear; both flagged design decisions explicitly signed off below.",
+                   "findings":  {
+                                    "otp_idiom":  {
+                                                      "verdict":  "PASS",
+                                                      "notes":  [
+                                                                    "get_storage_usage/1: idiomatic Ecto query with raw table string and coalesce(sum(...), 0). Decimal normalization via case (nil | %Decimal{} | integer) is correct — Repo.one/2 on a raw-string aggregate returns Decimal because Ecto has no compile-time type info for the column.",
+                                                                    "check_storage_quota/3: case Repo.get(Tenant, tenant_id) with nil branch is standard Ecto pattern.",
+                                                                    "Bare match `{:ok, current_usage} = get_storage_usage(...)` inside check_storage_quota/3 is acceptable: the spec declares this call cannot return {:error, _}, so the match is an explicit invariant assertion rather than a missing error branch.",
+                                                                    "with-chain extension in do_upload_after_scan/6 is clean and correct; :ok propagates naturally."
+                                                                ]
+                                                  },
+                                    "supervision_tree":  {
+                                                             "verdict":  "PASS",
+                                                             "notes":  [
+                                                                           "No GenServer, Task.Supervisor, process spawn, or supervision-tree modification in the diff. Change is purely function-level."
+                                                                       ]
+                                                         },
+                                    "scope_creep":  {
+                                                        "verdict":  "PASS",
+                                                        "notes":  [
+                                                                      "Application-code diff is limited to attachments.ex, tenant.ex, and the migration. All other changed files are pipeline artifacts (handoffs/, docs/status/, docs/requirements.yaml). No abstractions, behaviours, or macros introduced ahead of requirement need."
+                                                                  ]
+                                                    },
+                                    "design_decision_computed_on_read":  {
+                                                                             "verdict":  "SIGNED OFF — ACCEPTABLE",
+                                                                             "sign_off":  "Computed-on-read SUM is acceptable for this project\u0027s current scale. The instance_attachments table has two indexes — (instance_id DESC created_at) and (content_hash) — neither covers byte_size. A per-upload SUM requires a full column scan of the tenant schema. At current scale (1 GiB allowance / 25 MiB per-file ceiling ≈ ~40 max-size attachments per tenant) this is a trivial sequential scan of a small table. Drift-free correctness outweighs the marginal per-upload cost, and the design\u0027s argument that delete/2 requires no change is sound.",
+                                                                             "oq2_index_deferral":  "ACCEPTABLE. The design correctly notes that a btree index on byte_size does not help a SUM unless Postgres can use an index-only scan (visibility-map dependent). Deferring this to \u0027if needed in future\u0027 is the right call at current scale. No blocking concern."
+                                                                         },
+                                    "cross_module_coupling_oq1":  {
+                                                                      "verdict":  "ACCEPTABLE — ESTABLISHED PATTERN",
+                                                                      "sign_off":  "Letflow.Repository.Attachments aliasing Letflow.Identity.Tenant for Repo.get is consistent with an established codebase-wide pattern. 17 other modules across different contexts (service_catalog.ex, exam/certificate.ex, tenant_onboarding.ex, plugs/tenant_status.ex, platform/migration_rollout.ex, public_read.ex, multiple routers) alias Letflow.Identity.Tenant directly. lib/letflow/repository/attachment_links.ex already aliases Letflow.Identity from the same context. No documented module boundary rule in docs/guides/backend_developer_guide.md prohibits this. The tenants table is reasonably treated as a shared global record across the codebase.",
+                                                                      "note":  "The absence of a prefix arg on Repo.get(Tenant, tenant_id) is correct — tenants lives in the global schema. The prefix param in check_storage_quota/3 is only forwarded to get_storage_usage/1 for the per-tenant schema SUM."
+                                                                  },
+                                    "spec_coverage":  {
+                                                          "verdict":  "PASS",
+                                                          "notes":  [
+                                                                        "get_storage_usage/1 (public): @spec present.",
+                                                                        "check_storage_quota/3 (private): @spec present.",
+                                                                        "upload/2 spec updated with {:error, :storage_quota_exceeded} and {:error, :tenant_not_found}."
+                                                                    ]
+                                                      },
+                                    "migration_idiom":  {
+                                                            "verdict":  "PASS",
+                                                            "notes":  [
+                                                                          "alter table(:tenants) inside change/0 with add :storage_allowance_bytes, :bigint, null: false, default: 1_073_741_824 is idiomatic and rollback-safe. Postgres applies the column default to all existing rows at add time; Ecto\u0027s auto-reversal in the down direction is remove, which drops the column cleanly."
+                                                                      ]
+                                                        },
+                                    "type_safety_gap":  {
+                                                            "verdict":  "OBSERVATION (non-blocking)",
+                                                            "notes":  [
+                                                                          "storage_allowance_bytes is :integer in the Ecto schema (Tenant.ex) but :bigint in the migration. Ecto maps both to Elixir integer, so no runtime issue, but the schema field type and migration column type are inconsistent in declared intent. Filed as an observation; does not block PASS — mismatch is cosmetic (no overflow risk: allowance values are sub-2^53 and well within :integer range)."
+                                                                      ]
+                                                        }
+                                },
+                   "next_step":  "TEST-DESIGNER (Step 2e)"
+               },
+    "workflow_id":  "WF-02"
+}

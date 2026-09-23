@@ -91,14 +91,21 @@ A new private helper carries the write:
         attachment_id :: String.t(),
         found_attachment :: Attachment.t() | nil,
         instance_id :: Ecto.UUID.t(),
+        opts :: keyword(),
         conn :: Plug.Conn.t()
       ) :: :ok
-defp record_attachment_access_denied_audit(attachment_id, found_attachment, instance_id, conn)
+defp record_attachment_access_denied_audit(attachment_id, found_attachment, instance_id, opts, conn)
 ```
 
+(Shipped arity is 5, not 4: `opts` is threaded through explicitly alongside `conn` so the
+helper can derive `prefix = Keyword.fetch!(opts, :prefix)` itself, rather than reaching
+into `conn.assigns.scoped_opts` a second time — `fetch_scoped_attachment_content/3`'s own
+`opts` argument is already the resolved value, and passing it straight through avoids a
+second, redundant assigns lookup inside the helper.)
+
 Called as:
-- fused-denied clause: `record_attachment_access_denied_audit(raw_attachment_id, nil, instance_id, conn)`
-- cross-instance clause: `record_attachment_access_denied_audit(attachment.id, attachment, instance_id, conn)`
+- fused-denied clause: `record_attachment_access_denied_audit(raw_attachment_id, nil, instance_id, opts, conn)`
+- cross-instance clause: `record_attachment_access_denied_audit(attachment.id, attachment, instance_id, opts, conn)`
 
 `fetch_scoped_attachment_content/3`'s own arity does not currently receive `conn` — it
 receives `(raw_attachment_id, instance_id, opts)`. This design widens its argument list
@@ -219,7 +226,7 @@ for SECURITY-REVIEWER rather than silently left unaddressed.** Reasoning:
   artifact blob read"). This design does not file that issue itself.
 
 **Confirmed: this design's own addition does not make the pre-existing asymmetry
-worse.** The audit write (§2's dispatch, §5's `record_attachment_access_denied_audit/4`)
+worse.** The audit write (§2's dispatch, §5's `record_attachment_access_denied_audit/5`)
 is only reached *after* `get_content/2` has already returned — the blob-read asymmetry
 above is fully resolved (one way or the other) before either audited branch calls the
 new helper. Checked directly against §5's `attrs` shape: both audited call sites build
@@ -258,7 +265,7 @@ defaulted into:
    - **Within the denied class** (cross-tenant vs. cross-instance-same-tenant vs.
      never-issued) — this is the comparison EO-001/EO-002 actually protect, since these
      are the cases a probing caller cannot already distinguish by status/body. §2's
-     dispatch table calls the **same** `record_attachment_access_denied_audit/4`
+     dispatch table calls the **same** `record_attachment_access_denied_audit/5`
      helper, doing the **same** shape of work (one `Audit.insert_entry/3` call, one
      insert, no additional `Repo` read beyond that), for **both** audited branches
      (fused-denied and cross-instance) — this design's own **added** work is

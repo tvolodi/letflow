@@ -28897,7 +28897,7 @@ requirements:
   - id: REQ-390
     title: "Per-tenant storage-quota tracking for instance attachments, with a queryable usage figure"
     owner: ELIXIR-DEV
-    status: in_progress
+    status: done
     stage: S6
     impl_order: 750  # letflow-queue task id, GH#1638. Registered 2026-09-20 by ORCH;
       # corrects a fabricated/self-assigned id (747) that was never a real

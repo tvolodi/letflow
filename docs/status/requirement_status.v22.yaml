@@ -303,3 +303,8 @@ history:
       to keep in sync. No docs/migration/stage-N-*.md or decisions/*.md
       file was named by this requirement's acceptance criteria. Merged via
       PR on feature/WF02-REQ387-20260923 (tip 88346cd6).
+  - req: REQ-390
+    event: started
+    agent: ELIXIR-DEV
+    at: 2026-09-23T08:05:32Z
+    note: "WF02-REQ390-20260923 started"

@@ -5,7 +5,7 @@
   "step": "Step 2d (Idiom Review Gate)",
   "to_agent": "REVIEWER",
   "from_agent": "ORCH",
-  "status": "PENDING",
+  "status": "COMPLETED",
   "created_at": "2026-09-23T19:42:04Z",
   "started_at": "2026-09-23T19:42:04Z",
   "context": {
@@ -31,5 +31,45 @@
       "@spec coverage adequate"
     ]
   },
-  "result": null
+  "completed_at": "2026-09-24T00:00:00Z",
+  "result": {
+    "verdict": "PASS",
+    "option_ab_signoff": "OPTION A CONFIRMED. Inline `escalation_timer_duration`/`escalation_role` attributes on :HUMAN_TASK are architecturally correct for this scope. The CHK-09/CHK-12 precedent is an exact match. Option B (:BOUNDARY_TIMER node) would require parallel-token racing semantics — cancelling one token when the other fires — a fundamentally new engine primitive with no precedent in the current codebase and no AC-driven payoff for this requirement. The 'invisible timer' drawback is real, documented in the design doc §2.2, and acceptable.",
+    "findings": [
+      {
+        "check": "OTP/Elixir idiom",
+        "result": "PASS",
+        "notes": "with chains throughout advance_after_escalation_timer_fired/3 and persist_escalation_timer_fired_advance/7. dispatch_escalation_timer_fired/4 uses two proper pattern-matched function clauses (first clause guards :HUMAN_TASK via %Node{node_type: :HUMAN_TASK} = node in the function head — not a case/cond doing type dispatch). cond in check_human_task_escalation/1 is idiomatic for the three-arm validation logic. Ecto.Multi usage correct and consistent with all existing persist_*_advance paths."
+      },
+      {
+        "check": "Supervision tree",
+        "result": "PASS",
+        "notes": "No GenServer.start_link, Task.Supervisor.start_child, spawn, or spawn_link in the diff. Scheduler.create/2's step_name: opt extension is purely additive and backward-compatible (Keyword.get with default :scheduler_timer)."
+      },
+      {
+        "check": "Scope creep",
+        "result": "PASS",
+        "notes": "Diff touches exactly: lib/letflow/definitions/graph.ex, lib/letflow/engine.ex, lib/letflow/engine/transition.ex, lib/letflow/scheduler.ex, test/fixtures/simulation/swiftroute/process_route_approval.yaml, plus design doc and handoff/docs files. No abstractions introduced ahead of their requirement."
+      },
+      {
+        "check": "Decision-record consistency",
+        "result": "PASS",
+        "notes": "advance_after_escalation_timer_fired/3 structure, do_fire/2 branching on timer_type, identity id_map for timer arms, and Scheduler.create/2 step_name: opt are all direct extensions of the REQ-187/stage-7 established patterns. Verified: the existing advance_after_timer_fired/3 path uses the same identity id_map at its timer arms Multi.merge step (engine.ex ~L2530), with an inline comment confirming the token IDs are already real persisted records by that point."
+      },
+      {
+        "check": "@spec coverage",
+        "result": "PASS",
+        "notes": "advance_after_escalation_timer_fired/3: @spec present. check_human_task_escalation/1: @spec present (graph.ex L904). dispatch_escalation_timer_fired/4: @spec present in transition.ex."
+      },
+      {
+        "check": "CHK-21 placement",
+        "result": "PASS",
+        "notes": "Correctly appended to the validate_node_attributes/1 check list after check_form_schema_expressions/1. Reuses valid_iso8601_duration?/1 already in graph.ex. Three new Violation.code() variants appended to the closed union @type."
+      }
+    ],
+    "observations_non_blocking": [
+      "cond in check_human_task_escalation/1 has an unreachable edge case: a non-binary non-nil escalation_timer_duration (e.g. integer) falls through the is_binary/1 guard on the first clause and may emit :missing_escalation_role instead of :invalid_escalation_timer. YAML always produces strings for attribute values; unreachable in normal operation.",
+      "cancel_original_task Multi.run uses raw string literals \"PENDING\"/\"CANCELLED\" in update_all where/set clauses against an Ecto.Enum field, bypassing Ecto cast validation. Works because those are the exact underlying stored strings. Note for future maintainers."
+    ]
+  }
 }

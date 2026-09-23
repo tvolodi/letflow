@@ -28961,7 +28961,7 @@ requirements:
   - id: REQ-391
     title: "Instance-attachment attach/remove events recorded on instance history with attribution, and approval records naming the attachment reviewed"
     owner: ELIXIR-DEV
-    status: pending
+    status: done
     stage: S6
     impl_order: 751  # letflow-queue task id, GH#1639. Registered 2026-09-20 by ORCH;
       # corrects a fabricated/self-assigned id (748) that was never a real

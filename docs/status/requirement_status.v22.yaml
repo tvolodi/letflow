@@ -328,3 +328,39 @@ history:
       Full pipeline (CODE-DESIGNER, SECURITY-REVIEWER, REVIEWER, TEST-DESIGNER,
       TEST-RUNNER, RELEASE-VALIDATOR) completed on
       feature/WF02-REQ390-20260923, merged via PR.
+  - req: REQ-391
+    event: done
+    agent: DOC-UPDATER
+    at: "2026-09-23T11:39:43Z"
+    note: >
+      WF02-REQ391-20260923 Step 6 -- includes a real merge-reconciliation
+      cycle with concurrently-landed REQ-390 (both requirements independently
+      modified lib/letflow/repository/attachments.ex; DOC-UPDATER flagged the
+      conflict rather than forcing it, ELIXIR-DEV reconciled it in merge
+      commit 91374d40, and SECURITY-REVIEWER/REVIEWER/TEST-RUNNER/
+      RELEASE-VALIDATOR all re-verified the reconciled code -- final verdict
+      PASS, mergeable, confirmed "Already up to date" against current
+      origin/main). Ships instance-attachment attach/remove history events
+      and approval-record attachment attribution: `upload/2` and `delete/2`
+      (the latter gaining a new `deleted_by` 3rd positional argument) each
+      record a history/timeline-visible event via the existing
+      `Letflow.EventStore.InstanceProjection` mechanism naming the action,
+      file_name, and actor; `Letflow.Engine.complete_task/3`'s
+      TASK_COMPLETED path snapshots the instance's currently-attached
+      attachment file_names onto the decision record (snapshot, not a live
+      reference -- justified in the design doc: a later removal must not
+      retroactively change what an approval record shows a document
+      reviewed). Design: lib/letflow/design/
+      req391-attachment-history-approval-attribution.md. Full pipeline --
+      CODE-DESIGNER, SECURITY-REVIEWER, REVIEWER, TEST-DESIGNER,
+      TEST-RUNNER (4765 test+property executions, only failure the
+      pre-existing known flake ISS-0766/identity_test.exs), RELEASE-VALIDATOR
+      (final verdict PASS, mergeable) -- on
+      feature/WF02-REQ391-20260923 (tip db13cda7), merged via PR #1639
+      (GH-1639). Status flipped in docs/requirements.yaml. REQ-390 confirmed
+      already `status: done` on origin/main before writing this entry
+      (merged earlier as PR #1749, a3156299). README.md not touched --
+      grepped for "attachment": zero hits, same pattern as REQ-386/387/388's
+      own notes recorded; no documented current-behavior surface to keep in
+      sync. No docs/migration/stage-N-*.md or decisions/*.md file was named
+      by this requirement's acceptance criteria.

@@ -289,6 +289,16 @@ defmodule Letflow.Instances do
     "Execution error (#{error_type}) reported by #{actor}"
   end
 
+  defp render_description(%Event{event_type: "ATTACHMENT_ATTACHED"}, actor, payload) do
+    file_name = Map.get(payload, "file_name")
+    "#{file_name} attached by #{actor}"
+  end
+
+  defp render_description(%Event{event_type: "ATTACHMENT_REMOVED"}, actor, payload) do
+    file_name = Map.get(payload, "file_name")
+    "#{file_name} removed by #{actor}"
+  end
+
   defp render_description(%Event{event_type: "TIMER_FIRED"}, _actor, payload) do
     # Deliberately does not name the actor -- it is always the platform
     # sentinel (design §1), so appending "by system" on every row would add

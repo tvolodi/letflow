@@ -9,12 +9,26 @@ defmodule Mix.Tasks.Letflow.BackfillEventTypeVersions do
   Backfills the DEFINITION_PROMOTED event type to schema_version 2 for all
   tenants provisioned before REQ-077 bumped the seed (ISS-0332).
 
-  Backfills the TASK_COMPLETED event type to schema_version 2 for all tenants
-  provisioned before REQ-292 bumped the seed (ISS-0583): `merged_variable_events`
-  now also carries the `computed_field_disagreement` and
+  Backfills the TASK_COMPLETED event type to schema_version 3 for all tenants
+  provisioned before REQ-292/REQ-391 bumped the seed (ISS-0583, then REQ-391):
+  `merged_variable_events` now also carries the `computed_field_disagreement` and
   `visible_when_false_value_discarded` event kinds alongside the original
-  `variable_overwritten`, and a v1-pinned tenant's `Registry.JsonSchema`
-  validation rejects them outright until backfilled.
+  `variable_overwritten` (v1->v2), and the payload now also carries
+  `attachments_at_decision`, a snapshot of the instance's attachments at
+  completion time (v2->v3, REQ-391). `Registry.register_type/2`'s own
+  strictly-greater-than-every-existing-version check (`registry.ex`) means a
+  tenant still pinned at v1 jumps straight to v3 here rather than needing two
+  separate backfill calls -- both bumps are additive/optional fields, so a v1
+  or v2 row validates identically against the wider v3 schema for every
+  payload either version already produced.
+
+  Backfills the two new REQ-391 event types, ATTACHMENT_ATTACHED and
+  ATTACHMENT_REMOVED (both schema_version 1), for all tenants provisioned
+  before REQ-391 added them to the seed list -- `Letflow.Repository.Attachments`
+  `upload/2`/`delete/2` calls append these types post-commit, best-effort;
+  without this backfill, an unbackfilled tenant simply never gets the history
+  entry (logged via `Logger.warning/2`, never a hard failure -- see
+  `lib/letflow/design/req391-attachment-history-approval-attribution.md` §2.3).
 
   Usage:
 
@@ -57,9 +71,9 @@ defmodule Mix.Tasks.Letflow.BackfillEventTypeVersions do
     }
   }
 
-  @task_completed_v2_attrs %{
+  @task_completed_v3_attrs %{
     name: "TASK_COMPLETED",
-    schema_version: 2,
+    schema_version: 3,
     description:
       "Emitted by Letflow.Engine.complete_task/3 (M9, EE-04) when a user task is completed. " <>
         "Bumped from schema_version 1 to 2 (REQ-292): merged_variable_events now also carries " <>
@@ -70,11 +84,14 @@ defmodule Mix.Tasks.Letflow.BackfillEventTypeVersions do
         "moduledoc) whose \"required\" only still names \"event\" (the one key every kind " <>
         "shares); \"key\"/\"field\"/\"old_value\"/\"new_value\"/\"submitted_value\"/" <>
         "\"server_value\"/\"discarded_value\" are all declared but optional, since which ones " <>
-        "are present depends on which event kind a given array element is. KNOWN GAP, flagged " <>
-        "for REVIEWER, same shape as DEFINITION_PROMOTED's own schema_version 1->2 bump above: " <>
-        "this only widens the schema seeded into TENANTS PROVISIONED FROM THIS POINT ON -- a " <>
-        "tenant provisioned before this change keeps validating TASK_COMPLETED against version " <>
-        "1 (which would reject the two new event kinds outright) until something backfills it.",
+        "are present depends on which event kind a given array element is. Bumped from " <>
+        "schema_version 2 to 3 (REQ-391): the payload now also carries " <>
+        "\"attachments_at_decision\", a snapshot of every instance_attachments row present on " <>
+        "the instance at completion time. KNOWN GAP, flagged for REVIEWER, same shape as " <>
+        "DEFINITION_PROMOTED's own schema_version 1->2 bump above: this only widens the schema " <>
+        "seeded into TENANTS PROVISIONED FROM THIS POINT ON -- a tenant provisioned before this " <>
+        "change keeps validating TASK_COMPLETED against an earlier version until something " <>
+        "backfills it.",
     json_schema: %{
       "type" => "object",
       "properties" => %{
@@ -105,13 +122,70 @@ defmodule Mix.Tasks.Letflow.BackfillEventTypeVersions do
             "required" => ["event"]
           }
         },
-        "activated_nodes" => %{"type" => "array", "items" => %{"type" => "string"}}
+        "activated_nodes" => %{"type" => "array", "items" => %{"type" => "string"}},
+        "attachments_at_decision" => %{
+          "type" => "array",
+          "items" => %{
+            "type" => "object",
+            "properties" => %{
+              "attachment_id" => %{"type" => "string"},
+              "file_name" => %{"type" => "string"},
+              "content_type" => %{"type" => "string"},
+              "byte_size" => %{"type" => "integer"},
+              "uploaded_by" => %{"type" => "string"},
+              "created_at" => %{"type" => "string"}
+            },
+            "required" => ["attachment_id", "file_name"]
+          }
+        }
       },
       "required" => ["task_id", "node_id", "output_variables", "activated_nodes"]
     }
   }
 
-  @event_type_backfills [@definition_promoted_v2_attrs, @task_completed_v2_attrs]
+  @attachment_attached_v1_attrs %{
+    name: "ATTACHMENT_ATTACHED",
+    schema_version: 1,
+    description:
+      "Emitted by Letflow.Repository.Attachments.upload/2 (REQ-391) when an " <>
+        "attachment is added to an instance.",
+    json_schema: %{
+      "type" => "object",
+      "properties" => %{
+        "attachment_id" => %{"type" => "string"},
+        "file_name" => %{"type" => "string"},
+        "content_type" => %{"type" => "string"},
+        "byte_size" => %{"type" => "integer"},
+        "description" => %{"type" => ["string", "null"]}
+      },
+      "required" => ["attachment_id", "file_name", "content_type", "byte_size"]
+    }
+  }
+
+  @attachment_removed_v1_attrs %{
+    name: "ATTACHMENT_REMOVED",
+    schema_version: 1,
+    description:
+      "Emitted by Letflow.Repository.Attachments.delete/2 (REQ-391) when an " <>
+        "attachment is removed from an instance.",
+    json_schema: %{
+      "type" => "object",
+      "properties" => %{
+        "attachment_id" => %{"type" => "string"},
+        "file_name" => %{"type" => "string"},
+        "content_type" => %{"type" => "string"},
+        "byte_size" => %{"type" => "integer"}
+      },
+      "required" => ["attachment_id", "file_name", "content_type", "byte_size"]
+    }
+  }
+
+  @event_type_backfills [
+    @definition_promoted_v2_attrs,
+    @task_completed_v3_attrs,
+    @attachment_attached_v1_attrs,
+    @attachment_removed_v1_attrs
+  ]
 
   @impl Mix.Task
   @spec run(argv :: [String.t()]) :: :ok

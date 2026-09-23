@@ -104,3 +104,28 @@ No shipment/instance was created and no attachment was uploaded against
 `https://qa.bizdala.com` during this review (there was no screen to create one
 through), so the scenario's own cleanup step (`cancel_open_instances`) has
 nothing to act on.
+
+## Status update (DOC-UPDATER, 2026-09-23)
+
+Three of the four requirements filed from this finding have shipped since
+this review was written; re-checked directly against `docs/requirements.yaml`
+on `main` before writing this note, not assumed from memory:
+
+- **REQ-389** (content-type allowlist) -- `status: pending`, not yet
+  implemented.
+- **REQ-390** (per-tenant storage-quota tracking) -- `status: done`, merged
+  as PR #1749 (a3156299).
+- **REQ-391** (attach/remove history events + approval-record attachment
+  attribution) -- `status: done` as of this note, merged via PR #1639
+  (GH-1639, tip db13cda7) on `feature/WF02-REQ391-20260923`. This cycle
+  included a real merge-reconciliation with the concurrently-landed REQ-390,
+  since both touched `lib/letflow/repository/attachments.ex` -- see
+  `docs/status/requirement_status.v22.yaml`'s REQ-391 `done` entry for the
+  full reconciliation detail.
+- **REQ-392** (frontend attach/remove/rejection/quota/history UI) --
+  `status: pending`, still blocked on REQ-389 per its own `depends_on`
+  (REQ-387, REQ-389, REQ-390, REQ-391) -- REQ-387/390/391 are now all done,
+  so REQ-392 is blocked on REQ-389 alone.
+
+The scenario file's own stale NOTE (ISS-0526) remains accurate and untouched
+for the same reason stated above: the frontend UI (REQ-392) has not shipped.

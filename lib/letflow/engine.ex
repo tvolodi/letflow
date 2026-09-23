@@ -365,6 +365,7 @@ defmodule Letflow.Engine do
   alias Letflow.EventStore
   alias Letflow.EventStore.InstanceProjection
   alias Letflow.Repo
+  alias Letflow.Repository.Attachments
   alias Letflow.Scheduler
   alias Letflow.Scheduler.Timer
   alias Letflow.ServiceCatalog.PinLookup
@@ -4089,9 +4090,22 @@ defmodule Letflow.Engine do
   # REQ-025). merge_events (VARIABLE_OVERWRITTEN outcomes) are embedded as
   # informational metadata inside this one event's payload, never appended
   # as their own separate rows (INV-EE48-5).
+  #
+  # REQ-391 §3.2 -- attachments_at_decision is read and embedded INSIDE this
+  # same Multi/transaction (unlike Letflow.Repository.Attachments' own
+  # post-commit, best-effort ATTACHMENT_ATTACHED/REMOVED events, §2.3):
+  # active_instance_guard already proved the instance is ACTIVE earlier in
+  # this same Multi, so there is no terminated-instance edge case to protect
+  # against here, and no reason to weaken the existing all-or-nothing
+  # completion guarantee.
   defp append_task_completed_event(changes, output_variables, actor_id, idempotency_key, prefix) do
     %{task: task, merge: %{merge_events: merge_events}, transition: final_instance_state} =
       changes
+
+    attachments_at_decision =
+      task.instance_id
+      |> Attachments.list_all_for_instance(prefix: prefix)
+      |> Enum.map(&attachment_snapshot/1)
 
     payload =
       Jason.encode!(%{
@@ -4099,7 +4113,8 @@ defmodule Letflow.Engine do
         node_id: task.node_id,
         output_variables: output_variables,
         merged_variable_events: encode_merge_events(merge_events),
-        activated_nodes: Enum.map(final_instance_state.tokens, & &1.node_id)
+        activated_nodes: Enum.map(final_instance_state.tokens, & &1.node_id),
+        attachments_at_decision: attachments_at_decision
       })
 
     event_attrs = %{
@@ -4114,6 +4129,25 @@ defmodule Letflow.Engine do
       {:ok, result} -> {:ok, result}
       {:error, reason} -> {:error, {:event_append_failed, reason}}
     end
+  end
+
+  # REQ-391 §3.3 -- field selection mirrors attachment_json/1's existing
+  # INV-2 allowlist (lib/letflow/routers/instances.ex) minus instance_id/
+  # description (redundant at this scope); content_hash is deliberately
+  # excluded, same reasoning as that allowlist's own comment ("never
+  # included"). Embedded directly into the immutable TASK_COMPLETED payload
+  # (design §4) -- a snapshot, not a bare attachment_id requiring a later
+  # lookup, so it survives a subsequent delete/2 call on the same attachment
+  # (delete/2 is a hard delete, no tombstone).
+  defp attachment_snapshot(%Letflow.Repository.Attachment{} = attachment) do
+    %{
+      attachment_id: attachment.id,
+      file_name: attachment.file_name,
+      content_type: attachment.content_type,
+      byte_size: attachment.byte_size,
+      uploaded_by: attachment.uploaded_by,
+      created_at: DateTime.to_iso8601(attachment.created_at)
+    }
   end
 
   # merge_events tuples ({:variable_overwritten, key, old, new}) aren't

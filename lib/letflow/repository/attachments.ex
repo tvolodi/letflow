@@ -95,6 +95,7 @@ defmodule Letflow.Repository.Attachments do
   require Logger
 
   alias Letflow.Api.Pagination
+  alias Letflow.EventStore
   alias Letflow.Repo
   alias Letflow.Repository
   alias Letflow.Identity.Tenant
@@ -273,9 +274,99 @@ defmodule Letflow.Repository.Attachments do
         end
       end)
       |> case do
-        {:ok, attachment} -> {:ok, attachment}
-        {:error, %Ecto.Changeset{} = changeset} -> {:error, changeset}
+        {:ok, attachment} ->
+          record_attachment_attached_event(attachment, prefix)
+          {:ok, attachment}
+
+        {:error, %Ecto.Changeset{} = changeset} ->
+          {:error, changeset}
       end
+    end
+  end
+
+  # ===========================================================================
+  # REQ-391 §2 -- instance-history recording for upload/2 and delete/2
+  # ===========================================================================
+
+  # REQ-391 design §2.3: fired AFTER the instance_attachments insert has
+  # already committed (mirrors Letflow.Engine.complete_task/3's own
+  # emit_task_completed_telemetry/3 placement) -- never inside the same
+  # transaction, because EventStore.append/2's active_instance_guard would
+  # reject this append (and, if nested and allowed to roll back the
+  # transaction, the attachment write itself) for an attachment
+  # attached/removed on a non-ACTIVE instance, which upload/2 and delete/2
+  # have always allowed (design §2.3). Best-effort: any failure is logged and
+  # swallowed, never changes upload/2's own return value.
+  @spec record_attachment_attached_event(Attachment.t(), prefix :: String.t()) :: :ok
+  defp record_attachment_attached_event(%Attachment{} = attachment, prefix) do
+    payload =
+      Jason.encode!(%{
+        attachment_id: attachment.id,
+        file_name: attachment.file_name,
+        content_type: attachment.content_type,
+        byte_size: attachment.byte_size,
+        description: attachment.description
+      })
+
+    event_attrs = %{
+      instance_id: attachment.instance_id,
+      event_type: "ATTACHMENT_ATTACHED",
+      payload: payload,
+      actor_id: attachment.uploaded_by,
+      idempotency_key: "attachment_attached:" <> attachment.id
+    }
+
+    case EventStore.append(event_attrs, prefix: prefix) do
+      {:ok, _result} ->
+        :ok
+
+      {:error, reason} ->
+        Logger.warning(
+          "attachment history event not recorded: ATTACHMENT_ATTACHED",
+          instance_id: attachment.instance_id,
+          attachment_id: attachment.id,
+          reason: inspect(reason)
+        )
+
+        :ok
+    end
+  end
+
+  @spec record_attachment_removed_event(
+          Attachment.t(),
+          deleted_by :: Ecto.UUID.t(),
+          prefix :: String.t()
+        ) :: :ok
+  defp record_attachment_removed_event(%Attachment{} = attachment, deleted_by, prefix) do
+    payload =
+      Jason.encode!(%{
+        attachment_id: attachment.id,
+        file_name: attachment.file_name,
+        content_type: attachment.content_type,
+        byte_size: attachment.byte_size
+      })
+
+    event_attrs = %{
+      instance_id: attachment.instance_id,
+      event_type: "ATTACHMENT_REMOVED",
+      payload: payload,
+      actor_id: deleted_by,
+      idempotency_key: "attachment_removed:" <> attachment.id
+    }
+
+    case EventStore.append(event_attrs, prefix: prefix) do
+      {:ok, _result} ->
+        :ok
+
+      {:error, reason} ->
+        Logger.warning(
+          "attachment history event not recorded: ATTACHMENT_REMOVED",
+          instance_id: attachment.instance_id,
+          attachment_id: attachment.id,
+          reason: inspect(reason)
+        )
+
+        :ok
     end
   end
 
@@ -468,14 +559,24 @@ defmodule Letflow.Repository.Attachments do
   calls `Repo.delete/2` (or any other mutation) against
   `Letflow.Repository.Artifact` (see moduledoc's metadata-only-delete
   rationale).
+
+  `deleted_by` (REQ-391 design §2.5, a breaking arity change to this
+  already-`done` REQ-211 function, flagged for REVIEWER) is the actor
+  performing the removal -- recorded as `actor_id` on the post-commit
+  `ATTACHMENT_REMOVED` history event (below), never independently validated
+  here (same posture `complete_task/3`'s `attrs[:actor_id]` already has,
+  plumbed straight through to `EventStore.append/2`'s own `fetch_uuid/3`
+  validation).
   """
-  @spec delete(id :: String.t(), opts()) ::
+  @spec delete(id :: String.t(), deleted_by :: Ecto.UUID.t(), opts()) ::
           {:ok, Attachment.t()} | {:error, :invalid_id | :not_found}
-  def delete(id, opts) when is_list(opts) do
+  def delete(id, deleted_by, opts) when is_list(opts) do
     prefix = Keyword.fetch!(opts, :prefix)
 
-    with {:ok, attachment} <- get(id, opts) do
-      Repo.delete(attachment, prefix: prefix)
+    with {:ok, attachment} <- get(id, opts),
+         {:ok, deleted} <- Repo.delete(attachment, prefix: prefix) do
+      record_attachment_removed_event(attachment, deleted_by, prefix)
+      {:ok, deleted}
     end
   end
 
@@ -529,6 +630,34 @@ defmodule Letflow.Repository.Attachments do
       nil ->
         {:error, :tenant_not_found}
     end
+  end
+
+  # ===========================================================================
+  # list_all_for_instance/2 (REQ-391 design §3.1)
+  # ===========================================================================
+
+  @doc """
+  Unpaginated fetch of every `instance_attachments` row currently on
+  `instance_id`, tenant-scoped via `opts[:prefix]` (INV-1). Not exposed over
+  HTTP -- internal-use only, called from `Letflow.Engine.complete_task/3`
+  (REQ-391 §3) to build the `TASK_COMPLETED` payload's
+  `attachments_at_decision` snapshot, same "context module exposes a read a
+  different context module needs directly" shape
+  `Letflow.ServiceCatalog.list_all/1` already established (REQ-191/192).
+
+  Deliberately not `list/2` (cursor-paginated, wrong shape for "every
+  attachment on this instance, in full"). Ordered `(created_at asc, id asc)`
+  -- oldest-first, since this snapshot is informational metadata, not a
+  paginated listing with a stable keyset contract.
+  """
+  @spec list_all_for_instance(instance_id :: Ecto.UUID.t(), opts()) :: [Attachment.t()]
+  def list_all_for_instance(instance_id, opts) when is_list(opts) do
+    prefix = Keyword.fetch!(opts, :prefix)
+
+    Attachment
+    |> where([a], a.instance_id == ^instance_id)
+    |> order_by([a], asc: a.created_at, asc: a.id)
+    |> Repo.all(prefix: prefix)
   end
 
   # ── list/2 private helpers ──────────────────────────────────────────────

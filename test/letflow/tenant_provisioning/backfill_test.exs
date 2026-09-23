@@ -338,6 +338,68 @@ defmodule Letflow.TenantProvisioning.BackfillTest do
     }
   end
 
+  # V3 attrs: exact copy of lib/letflow/tenant_provisioning.ex's current
+  # @platform_event_type_seed_attrs entry for "TASK_COMPLETED" (REQ-391:
+  # adds "attachments_at_decision", the snapshot-embedding requirement) --
+  # independently transcribed, not shared with the mix task's own
+  # @event_type_backfills, per design doc §5.1.
+  defp task_completed_v3_attrs do
+    %{
+      "name" => "TASK_COMPLETED",
+      "schema_version" => 3,
+      "description" => "REQ-391 v3 test fixture",
+      "json_schema" => %{
+        "type" => "object",
+        "properties" => %{
+          "task_id" => %{"type" => "string"},
+          "node_id" => %{"type" => "string"},
+          "output_variables" => %{"type" => "object"},
+          "merged_variable_events" => %{
+            "type" => "array",
+            "items" => %{
+              "type" => "object",
+              "properties" => %{
+                "event" => %{
+                  "type" => "string",
+                  "enum" => [
+                    "variable_overwritten",
+                    "computed_field_disagreement",
+                    "visible_when_false_value_discarded"
+                  ]
+                },
+                "key" => %{"type" => "string"},
+                "field" => %{"type" => "string"},
+                "old_value" => %{},
+                "new_value" => %{},
+                "submitted_value" => %{},
+                "server_value" => %{},
+                "discarded_value" => %{}
+              },
+              "required" => ["event"]
+            }
+          },
+          "activated_nodes" => %{"type" => "array", "items" => %{"type" => "string"}},
+          "attachments_at_decision" => %{
+            "type" => "array",
+            "items" => %{
+              "type" => "object",
+              "properties" => %{
+                "attachment_id" => %{"type" => "string"},
+                "file_name" => %{"type" => "string"},
+                "content_type" => %{"type" => "string"},
+                "byte_size" => %{"type" => "integer"},
+                "uploaded_by" => %{"type" => "string"},
+                "created_at" => %{"type" => "string"}
+              },
+              "required" => ["attachment_id", "file_name"]
+            }
+          }
+        },
+        "required" => ["task_id", "node_id", "output_variables", "activated_nodes"]
+      }
+    }
+  end
+
   # Removes all TASK_COMPLETED entries from the tenant's event_type_registry and
   # inserts a fresh v1 row, simulating a pre-REQ-292 provisioned tenant.
   defp downgrade_task_completed_to_v1!(schema_name) do
@@ -367,29 +429,31 @@ defmodule Letflow.TenantProvisioning.BackfillTest do
                Registry.get_type("TASK_COMPLETED", tenant_id)
     end
 
-    test "regression: ISS-0583 -- idempotent: already-v2 tenant is skipped, not errored" do
+    test "regression: ISS-0583 -- idempotent: already-current-version tenant is skipped, not errored" do
       # template: :replay -- the default :clone path clones from the cached
       # "tenant_template" schema (ISS-0427), which is only self-checked against
       # applied migration *versions*, not against event_type_registry seed
       # *content* (test/support/tenant_template.ex's self-check). A template
-      # built before REQ-292 landed would still carry TASK_COMPLETED at v1 even
-      # though current code seeds v2, which would make this specific assertion
-      # about provisioned_tenant!'s default seed state flaky against a stale
-      # cache. :replay drives the real TenantProvisioning.replay_migrations/1
-      # path, which always reflects the current in-code seed.
+      # built before REQ-292/REQ-391 landed would still carry TASK_COMPLETED at
+      # an older version even though current code seeds v3, which would make
+      # this specific assertion about provisioned_tenant!'s default seed state
+      # flaky against a stale cache. :replay drives the real
+      # TenantProvisioning.replay_migrations/1 path, which always reflects the
+      # current in-code seed.
       %{tenant_id: tenant_id} =
         TenantFixture.provisioned_tenant!(slug_prefix: "iss0583-ac3", template: :replay)
 
-      # provisioned_tenant! (via :replay) seeds TASK_COMPLETED at v2.
-      assert {:ok, %EventType{schema_version: 2}} =
+      # provisioned_tenant! (via :replay) seeds TASK_COMPLETED at v3 (REQ-391
+      # bumped the default seed from v2 to v3 -- see task_completed_v3_attrs/0).
+      assert {:ok, %EventType{schema_version: 3}} =
                Registry.get_type("TASK_COMPLETED", tenant_id)
 
       assert {:ok, %{updated: _updated, skipped: skipped}} =
-               Backfill.run(task_completed_v2_attrs())
+               Backfill.run(task_completed_v3_attrs())
 
       assert skipped >= 1
 
-      assert {:ok, %EventType{schema_version: 2}} =
+      assert {:ok, %EventType{schema_version: 3}} =
                Registry.get_type("TASK_COMPLETED", tenant_id)
     end
   end

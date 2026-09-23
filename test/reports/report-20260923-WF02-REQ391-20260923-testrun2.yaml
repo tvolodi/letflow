@@ -1,0 +1,70 @@
+run_id: WF02-REQ391-20260923-testrun2
+workflow_id: WF-02
+step: "04"
+agent: TEST-RUNNER
+requirement_ids:
+  - REQ-391
+branch: feature/WF02-REQ391-20260923
+head_commit: 9f29e11f
+generated_at: "2026-09-23T09:44:27Z"
+context: >
+  Second full-suite run for this branch. First run (see prior TEST-RUNNER
+  report) isolated one real failure: test/letflow/tenant_provisioning/backfill_test.exs
+  asserted against a stale v2 event_type_registry baseline for TASK_COMPLETED,
+  not accounting for REQ-391's own schema_version 2->3 bump
+  (attachments_at_decision). ELIXIR-DEV fixed the test's stale assertion
+  (commit 9f29e11f, "fix(REQ-391): update stale v2 baseline in ISS-0583
+  idempotent backfill test"); TEST-DESIGN-VALIDATOR re-approved in a second
+  round. This run re-verifies the fix landed and confirms no other
+  regression.
+worktree: wt-req391-testdesign (reused, already at HEAD 9f29e11f)
+environment:
+  postgres_container: "wt-req391-testdesign-postgres-1 (docker compose, host port 5493 per this worktree's untracked .env LETFLOW_DB_PORT=5493) -- started via sudo docker compose up -d (user not in docker group in this sandbox; docker socket required sudo)"
+  stale_schema_check: >
+    Confirmed a tenant_template schema was present in all 5 test databases
+    (letflow_test, letflow_test1..4) from prior runs. Rather than assume it
+    was safe to reuse, dropped all 5 letflow_test* databases outright so
+    scripts/test_parallel.sh's own ecto.create/ecto.migrate step recreated
+    and re-migrated them from scratch before this run -- eliminates any risk
+    of a stale schema_version baseline (the exact class of staleness that
+    caused the prior run's real failure) surviving into this run.
+command: "TEST_PARALLEL_N=4 mix letflow.check.test"
+execution_mode: "synchronous foreground run within this turn; the harness auto-backgrounded the long-running call at its own 600s default timeout, so this run polled the background task's own output file to completion inside a single blocking Bash loop (per core-directives.md's No Background Wait For A Cross-Turn Notification) rather than ending the turn or relying on the cross-turn notification to resume work. The notification did arrive afterward and was consistent with (not the source of) the independently-confirmed completion."
+gates:
+  main_suite:
+    partition_count_N: 4
+    partition_count_source: "env override (TEST_PARALLEL_N=4)"
+    per_partition:
+      - {partition: 1, tests: 1180, properties: 3, failures: 0, exit: 0}
+      - {partition: 2, tests: 1293, properties: 0, failures: 0, exit: 0}
+      - {partition: 3, tests: 1129, properties: 2, failures: 0, exit: 0}
+      - {partition: 4, tests: 1153, properties: 1, failures: 0, exit: 0}
+    combined_totals:
+      tests: 4755
+      properties: 6
+      failures: 0
+      passed: 4761
+      total: 4761
+    result: "OK -- no test failures, no ISS-0069 warnings (4 partitions)"
+  wasm_hang_isolated:
+    result: "OK -- 5/5 isolated wasm_hang tests passed, each in its own subprocess."
+  lua_wallclock_race_isolated:
+    result: "OK -- isolated :lua_wallclock_race run also passed clean."
+  format_compile: >
+    mix letflow.check.test performs a single pre-compile (MIX_ENV=test) before
+    launching partitions; no compile warnings/errors surfaced and the run
+    reached the partition-launch step cleanly, so the compile gate passed.
+    This task does not run a separate `mix format --check-formatted` step
+    (confirmed by reading lib/mix/tasks/letflow.check.test.ex in this
+    worktree) -- format is gated elsewhere in mix letflow.check's alias, not
+    part of this task's contract, so it is out of scope for this report.
+  overall_exit_code: 0
+backfill_test_regression_check:
+  file: "test/letflow/tenant_provisioning/backfill_test.exs"
+  verdict: "PASSES -- included in the 0-failure, 4761/4761-passed combined total above. No failure attributed to this file or any other file in this run's output (report_partition_failures/1 in letflow.check.test only prints partition logs containing a 'Failed:' line or missing a 'Result:' line; none triggered)."
+known_flake_classes_observed: []
+notes:
+  - "No occurrences of ISS-0766 (identity_test.exs), lua_wallclock_race failures, or Scheduler.PollerTest failures in this run -- all three known flake classes came back clean, not just tolerated."
+  - "Raw combined stdout/stderr captured in full (no truncating tail pipe) at /tmp/letflow_test_parallel.kIfl79 (preserved per TEST_PARALLEL_KEEP_LOGS=1, exit_code=0) and mirrored into this run's own full log used to produce this report."
+overall_verdict: PASS
+next_action: "Route to RELEASE-VALIDATOR"

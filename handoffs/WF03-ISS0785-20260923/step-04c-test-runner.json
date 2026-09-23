@@ -1,0 +1,30 @@
+{
+  "handoff_id": "WF03-ISS0785-20260923-step-04c",
+  "run_id": "WF03-ISS0785-20260923",
+  "workflow": "WF-03",
+  "step": "Step 4c (Test Runner)",
+  "to_agent": "TEST-RUNNER",
+  "from_agent": "ORCH",
+  "status": "PENDING",
+  "created_at": "2026-09-23T05:11:08Z",
+  "started_at": "2026-09-23T05:11:08Z",
+  "context": {
+    "branch_name": "feature/WF03-ISS0785-20260923",
+    "issue_id": "ISS-0785",
+    "test_file": "test/letflow/repository/attachments_test.exs",
+    "test_design_gate": "PASS",
+    "artifacts_in": [
+      "test/letflow/repository/attachments_test.exs",
+      "lib/letflow/repository/attachments.ex"
+    ]
+  },
+  "task": {
+    "description": "Execute Step 4c (TEST-RUNNER) for ISS-0785 per WF-03.\n\nWorkspace: c:\\Users\\tvolo\\dev\\ai-dala\\letflow\nBranch: feature/WF03-ISS0785-20260923\nMix binary: & 'C:/Program Files/Elixir/bin/mix'\n\n1. Run the full test suite: & 'C:/Program Files/Elixir/bin/mix' test\n2. Run the targeted test: & 'C:/Program Files/Elixir/bin/mix' test test/letflow/repository/attachments_test.exs\n3. Quote the actual output verbatim in your result.\n4. Attribute any failures structurally: are they pre-existing (not introduced by this branch) or new?\n   - Compare against pre-existing known failures if any\n   - If a failure is in a file this branch didn't touch, it's pre-existing\n\nVerdict: PASS if no new failures attributable to this branch.\n\nOutput:\n1. Write handoffs/WF03-ISS0785-20260923/step-04c-test-runner.json with status COMPLETED, result.status PASS or FAIL, actual test output quoted\n2. git add handoffs/WF03-ISS0785-20260923/step-04c-test-runner.json\n3. git commit -m 'fix(WF03-ISS0785-20260923): Step 4c -- test run [PASS/FAIL]'\n4. git push\n\nReport: PASS or FAIL with actual test counts",
+    "acceptance_criteria": [
+      "mix test exits 0 OR all failures are pre-existing and structurally attributed",
+      "New ISS-0785 regression test passes",
+      "No new failures introduced by this branch"
+    ]
+  },
+  "result": null
+}

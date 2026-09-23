@@ -1,0 +1,32 @@
+{
+  "handoff_id": "WF02-REQ393-20260923-step-03",
+  "run_id": "WF02-REQ393-20260923",
+  "workflow": "WF-02",
+  "step": "Step 3 (Test Design)",
+  "to_agent": "TEST-DESIGNER",
+  "from_agent": "ORCH",
+  "status": "PENDING",
+  "created_at": "2026-09-23T10:39:18Z",
+  "started_at": "2026-09-23T10:39:18Z",
+  "context": {
+    "branch_name": "feature/WF02-REQ393-20260923",
+    "requirement_ids": ["REQ-393"],
+    "stage": "S8",
+    "test_scope": "Vitest unit tests for the component + Playwright e2e spec. Both are required by REQ-393 AC5 (real Playwright spec). However, the Playwright spec must run against a live instance, which may not be available in this environment. Write both: the vitest tests now, and the Playwright spec file now (it must be a REAL spec, not a stub, even if we can't run it without a live instance).",
+    "artifacts_in": [
+      "web/src/pages/entities/EntityListBrowserPage.tsx",
+      "web/src/components/entities/EntityFilterBuilder.tsx",
+      "web/tests/e2e/pipelines/",
+      "docs/requirements.yaml (REQ-393 acceptance_criteria)"
+    ]
+  },
+  "task": {
+    "description": "Execute Step 3 (Test Design) for REQ-393.\n\nWorkspace: c:\\Users\\tvolo\\dev\\ai-dala\\letflow\nBranch: feature/WF02-REQ393-20260923\n\nTWO deliverables:\n\n### A. Vitest unit tests\n\nWrite unit tests for the components. Look at existing test patterns in web/tests/ for guidance.\n\nCoverage needed:\n- EntityFilterBuilder: renders empty state, adds a filter row, removes a filter row, calls onSubmit with correct filter clauses\n- EntityListBrowserPage: renders loading state, renders error state (field_not_allowed, page_size_too_large), renders table with results\n\nTest file: web/tests/unit/pages/entities/EntityListBrowserPage.test.tsx (or similar path following existing patterns)\n\nRun: `cd web && npx vitest run tests/unit/...` to verify\n\n### B. Playwright E2E spec\n\nWrite the REAL spec at: web/tests/e2e/pipelines/entity-list-query.pipeline.e2e.spec.ts\n\nThe spec MUST cover these 4 scenarios (REQ-393 AC5):\n1. Filter: add a filter clause (e.g. field=name, op=contains, value='test'), apply it, verify the returned list contains only matching items\n2. Sort-then-page: sort by a field, page to the second page, verify the sort order is preserved (server-driven)\n3. Non-searchable field rejection: attempt to filter on a field not in the queried allowlist, verify the error message names that specific field\n4. Over-limit page-size: request page_size > platform limit, verify the error message names the limit\n\nBase the spec on existing pipeline spec patterns in web/tests/e2e/pipelines/. The entity type to use is probably 'tag' (simplest BilimBaga type) -- check if it's available or choose the simplest available type.\n\nNOTE: The spec may not be runnable without a live instance in this environment. Write it as a complete, runnable spec anyway. If you cannot run it, state that explicitly in the handoff.\n\nAfter completing:\n1. Write handoffs/WF02-REQ393-20260923/step-03-test-designer.json COMPLETED PASS\n2. git add all test files + handoff\n3. git commit + push\n\nReport: what tests were written, vitest pass counts if run, and whether the Playwright spec was run",
+    "acceptance_criteria": [
+      "Vitest unit tests written and pass",
+      "Playwright e2e spec written (real, not stub) covering all 4 scenarios",
+      "npm run check still passes after adding tests"
+    ]
+  },
+  "result": null
+}

@@ -5,7 +5,7 @@
   "step": "Step 3b (Test Design Gate)",
   "to_agent": "TEST-DESIGN-VALIDATOR",
   "from_agent": "ORCH",
-  "status": "PENDING",
+  "status": "COMPLETED",
   "created_at": "2026-09-23T10:52:36Z",
   "started_at": "2026-09-23T10:52:36Z",
   "context": {
@@ -31,5 +31,57 @@
       "All 7 REQ-393 ACs mapped to coverage"
     ]
   },
-  "result": null
+  "completed_at": "2026-09-23T11:15:00Z",
+  "result": {
+    "verdict": "FAIL",
+    "summary": "AC3 is insufficiently covered. Both TC-ELBP-03 and Playwright EO-005/AC3 verify that the page-size-error code path fires, but neither test asserts that the rendered message contains the limit value (200). AC3 explicitly requires 'a clear, readable message naming the limit, verified by a test.' A component rendering 'Page size too large.' with no limit number would pass all tests as written.",
+    "gaps": [
+      {
+        "gap_id": "GAP-01",
+        "ac": "AC3",
+        "test": "TC-ELBP-03 (Vitest)",
+        "description": "Mock error contains 'maximum is 200' but the only assertion is `expect(screen.getByTestId('page-size-error')).toBeInTheDocument()`. No assertion that the rendered element text contains '200' (or any limit value). Must add: `expect(screen.getByTestId('page-size-error').textContent).toContain('200')`."
+      },
+      {
+        "gap_id": "GAP-02",
+        "ac": "AC3",
+        "test": "Playwright EO-005/AC3",
+        "description": "Direct API assertion only checks `status === 400` plus absence of 'internal server error' — the limit value '200' is not asserted in the API response body. UI assertion is `toHaveText(/page size is too large/i)` which does not require '200' to appear. Must add: `expect(bannerText).toContain('200')` (or `toMatch(/200/)`) to the UI assertion."
+      }
+    ],
+    "checks": {
+      "A_vitest_tests": {
+        "TC-EFB-01": "PASS — renders empty state, no filter rows, add button present",
+        "TC-EFB-02": "PASS — onChange called with one new row; id, field ('name'), value ('') all asserted",
+        "TC-EFB-03": "PASS — onChange called without the removed row; surviving row's id asserted",
+        "TC-EFB-04": "PASS — value change and op change both propagated and asserted individually",
+        "TC-ELBP-01": "PASS — loading state renders SkeletonLayout with aria-busy='true'",
+        "TC-ELBP-02": "PASS — 422 error: banner present AND banner.textContent.toContain('internal_note') asserted; page-size-error absent asserted",
+        "TC-ELBP-03": "FAIL (GAP-01) — 400 error: page-size-error element presence asserted, query-error-banner absence asserted, but NO assertion that the limit value '200' appears in the rendered text",
+        "TC-ELBP-04": "PASS — column headers ('name', 'description') and row cell values ('security', 'safety') both asserted by textContent"
+      },
+      "B_playwright_spec": {
+        "is_real_spec": "YES — uses test(), page.getByTestId(), page.route(), page.evaluate(), expect() assertions, beforeAll/afterAll with real API seeding/teardown. Not a stub.",
+        "scenario_1_filter": "PASS — seeds 3 records with 'req393-testitem'; asserts count >= 3 and every cell contains 'req393-testitem'",
+        "scenario_2_sort_then_page": "PASS — direct API calls with page_size=1 verify firstOnPage2.localeCompare(lastOnPage1) > 0 (server-driven cross-page sort); UI cursor advance also exercised",
+        "scenario_3_nonqueried_field": "PASS — uses field 'nonqueried_field_xyz'; direct API asserts 422 and errText contains 'nonqueried_field_xyz'; UI route-intercept asserts query-error-banner text contains the specific field name",
+        "scenario_4_over_limit": "FAIL (GAP-02) — direct API asserts 400 but limit value '200' not asserted in response body; UI assertion is /page size is too large/i which does not require '200' to appear in the rendered banner",
+        "unrun_blocker": "NOTED (not a FAIL cause by itself) — spec was not run against a live instance per AC5. Spec is structurally complete and would clearly pass/fail against a live stack. This is a noted gap (AC5 'quote the real run output' remains open) but is not the reason for this FAIL verdict."
+      },
+      "C_ac_coverage_table": [
+        { "ac": "AC1", "text": "filter builder drives end-to-end list match", "covered_by": ["TC-EFB-01..04 (Vitest)", "Playwright EO-001/AC1"], "status": "COVERED" },
+        { "ac": "AC2", "text": "server-driven sort preserved across 2+ pages", "covered_by": ["Playwright EO-002/AC2 (direct API cross-page sort assertion)"], "status": "COVERED" },
+        { "ac": "AC3", "text": "over-limit page size shows message NAMING THE LIMIT, verified by test", "covered_by": ["TC-ELBP-03 (presence only — GAP-01)", "Playwright EO-005/AC3 (text regex omits '200' — GAP-02)"], "status": "INSUFFICIENT — limit value not asserted in any test" },
+        { "ac": "AC4", "text": "non-searchable field rejection message names the specific field", "covered_by": ["TC-ELBP-02 (Vitest — asserts 'internal_note' in banner text)", "Playwright EO-003/AC4 (asserts 'nonqueried_field_xyz' in banner)"], "status": "COVERED" },
+        { "ac": "AC5", "text": "Playwright spec exists, is real, covers all 4 scenarios, passes against a running instance", "covered_by": ["entity-list-query.pipeline.e2e.spec.ts (real spec, all 4 scenarios present; NOT RUN against live instance)"], "status": "PARTIALLY COVERED — spec is structurally complete but live-run output not quoted (open gap; not the FAIL cause)" },
+        { "ac": "AC6", "text": "REQ-343 BilimBaga admin-CRUD screens not regressed", "covered_by": ["Existing REQ-343 test suite (pre-existing); no new test written for this AC"], "status": "COVERED BY EXISTING SUITE — acceptable; no new test required" },
+        { "ac": "AC7", "text": "mix compile, mix test, and frontend test/lint all pass", "covered_by": ["Runtime gate (CI); not a test-design obligation"], "status": "RUNTIME GATE — not a test-design gap" }
+      ]
+    },
+    "route_back_to": "TEST-DESIGNER",
+    "required_fixes": [
+      "TC-ELBP-03: add an assertion on the text content of page-size-error, e.g. `expect(screen.getByTestId('page-size-error').textContent).toContain('200')`. The mock error already contains 'maximum is 200'; the test must assert this is surfaced.",
+      "Playwright EO-005/AC3: add an assertion that the page-size-error banner text contains the limit value, e.g. `await expect(pageSizeError).toContainText('200')`. The injected mock error body already says 'maximum is 200'; the assertion must confirm the component renders it."
+    ]
+  }
 }

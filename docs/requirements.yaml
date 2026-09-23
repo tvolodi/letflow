@@ -29095,7 +29095,7 @@ requirements:
   - id: REQ-393
     title: "Generic, tenant-agnostic entity-list browse screen with user-facing filter builder, sort control, and page-size control, wired to the already-built POST /entities/query engine"
     owner: FRONTEND-DEV
-    status: in_progress
+    status: done
     stage: S8
     impl_order: 753  # letflow-queue task id, GH#1641. Registered 2026-09-20 by ORCH;
       # corrects a fabricated/self-assigned id (750) that was never a real

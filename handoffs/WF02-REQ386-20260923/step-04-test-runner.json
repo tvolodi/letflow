@@ -1,0 +1,62 @@
+{
+  "handoff_id": "a1000000-0004-4000-8000-000000000004",
+  "run_id": "WF02-REQ386-20260923",
+  "workflow_id": "WF-02",
+  "step": "04",
+  "from_agent": "ORCH",
+  "to_agent": "TEST-RUNNER",
+  "file": "handoffs/WF02-REQ386-20260923/step-04-test-runner.json",
+  "created_at": "2026-09-23T05:00:00Z",
+  "started_at": "2026-09-23T05:00:00Z",
+  "completed_at": "2026-09-23T05:20:00Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S6",
+    "requirement_ids": ["REQ-386"],
+    "requirement_text": {
+      "REQ-386": "Time-limited, expiring signed URLs for instance-attachment byte content. See handoffs/WF02-REQ386-20260923/step-03-test-designer.json's context.requirement_text for full text."
+    },
+    "related_handoff_ids": [
+      "handoffs/WF02-REQ386-20260923/step-03b-test-design-validator.json"
+    ],
+    "artifacts_in": [
+      "test/specs/REQ-386.md",
+      "test/letflow/repository/attachment_links_test.exs",
+      "test/letflow/routers/req386_attachment_links_routes_test.exs",
+      "lib/letflow/repository/attachment_links.ex"
+    ],
+    "owned_modules": []
+  },
+  "task": {
+    "description": "Perform WF-02 Step 4 (test run) for REQ-386 per docs/agents/workflows/WF-02_requirement_implementation.md Step 4. Run scripts/test_parallel.sh -- the FULL suite, not just the new tests. Per core-directives.md's 'No Background Wait For A Cross-Turn Notification': run this synchronously, to completion, in the same turn. Write test/reports/report-<date>-WF02-REQ386-20260923.yaml with actual output including derived partition count N, its source, and combined pass/fail totals. For ANY failure, attribute it structurally per core-directives.md's 'Failure Attribution Is Structural, Never By Count-Matching' -- name the exact route (1/2/3) and evidence, never by count-matching against a previous run. A failure attributable to this branch routes back to ELIXIR-DEV/TEST-DESIGNER for rework and fails this step. A failure structurally cleared as pre-existing is filed-and-forwarded (report to ORCH, do not call the queue/gh) and does not block PASS.",
+    "acceptance_criteria": [
+      "scripts/test_parallel.sh run to completion, foreground/synchronous, real output quoted",
+      "test/reports/report-<date>-WF02-REQ386-20260923.yaml written with partition count, source, combined totals",
+      "every failure structurally attributed per core-directives.md, not by count-matching",
+      "any failure attributable to this branch routes back for rework before this step can PASS"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "scripts/test_parallel.sh (N=16, source: nproc) ran to completion, foreground/synchronous -- the harness auto-backgrounded the long call at its own timeout, so the result was retrieved by polling the background task's own output file to completion inside a single blocking Bash loop within this same turn, never by ending the turn to await a cross-turn notification. Postgres: letflow-postgres-1 (docker, port 5462) already running and healthy; docker compose up not needed. Combined: 4740 tests, 6 properties, 2 failures (4744/4746 passed) across all 16 partitions; 15 partitions exit 0, partition 14 exit 2 with 2 failures, both in test/letflow/identity_test.exs (REQ-019 acceptance criterion 1, resolve_tenant_by_realm/1 and resolve_realm_by_tenant/1, Ecto.NoResultsError on bpm-default tenant lookup via test/support/bpm_default_realm_displacement.ex:118 with_lock/1).\n\nStructural attribution (route 1): git diff --name-only main...HEAD for this branch touches only lib/letflow/api/authorization.ex, lib/letflow/api/error.ex, lib/letflow/api/response.ex, lib/letflow/repository/attachment_links.ex, lib/letflow/routers/instances.ex, plus this branch's own test/spec/design/handoff/status files -- none of test/letflow/identity_test.exs, test/support/bpm_default_realm_displacement.ex, or any Letflow.Identity/Tenant module. Grepped all five changed lib/ files for idp_realm_id / bpm-default / resolve_tenant_by_realm / resolve_realm_by_tenant -- zero matches. Route 3: docs/issues/ISS-0766.yaml already documents this exact pair of test names/file/line/error/mechanism (advisory-lock-scoped read racing a concurrent displace!/0 restoration across parallel partitions sharing one Postgres instance); a prior WF-02 Step 4 run on an unrelated branch (WF02-REQ383-20260923) reproduced the identical two failures at the same call site. Verdict: pre-existing, filed-and-forwarded under the existing ISS-0766 record (no new issue needed), does not block this step's PASS and is not routed back to ELIXIR-DEV/TEST-DESIGNER.",
+    "artifacts_out": [
+      "test/reports/report-20260923-WF02-REQ386-20260923.yaml"
+    ],
+    "next_action": "Route to RELEASE-VALIDATOR",
+    "issues": [
+      {
+        "type": "pre-existing-failure",
+        "tests": [
+          "test/letflow/identity_test.exs:534 resolve_tenant_by_realm/1 resolves the seeded default tenant (bpm-default) by its idp_realm_id",
+          "test/letflow/identity_test.exs:541 resolve_realm_by_tenant/1 resolves the seeded default tenant's (bpm-default) idp_realm_id by its tenant id"
+        ],
+        "attribution": "structural route 1 + route 3, see result.summary",
+        "existing_issue": "ISS-0766 (open)",
+        "action": "reported to ORCH; not fixed here; not filed as a new issue since ISS-0766 already covers it exactly"
+      }
+    ]
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

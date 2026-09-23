@@ -1,0 +1,34 @@
+{
+  "handoff_id": "WF02-REQ396-20260923-step-01b",
+  "run_id": "WF02-REQ396-20260923",
+  "workflow": "WF-02",
+  "step": "Step 1b (Design Gate)",
+  "to_agent": "CODE-DESIGN-VALIDATOR",
+  "from_agent": "ORCH",
+  "status": "PENDING",
+  "created_at": "2026-09-23T18:48:24Z",
+  "started_at": "2026-09-23T18:48:24Z",
+  "context": {
+    "branch_name": "feature/WF02-REQ396-20260923",
+    "requirement_ids": ["REQ-396"],
+    "design_doc": "lib/letflow/design/req396-human-task-escalation-timer.md",
+    "designer_summary": "Option A (new attributes on :HUMAN_TASK): escalation_timer_duration (ISO-8601) + escalation_role (non-blank string), co-required. CHK-21 (check_human_task_escalation/1): 3 violation codes. Engine: dispatch_human_task/3 emits escalation_timer_armed event; do_fire/2 routes to advance_after_escalation_timer_fired/3; dispatch_escalation_timer_fired/4 uses default/fallback edge. Ecto.Multi enforces audit ordering (cancel_original_task before task_activation). YAML: ops-review gets both attributes, fallback-ops-review edge retargeted notify-requester → ceo-approval. REVIEWER flag: Option A vs B requires sign-off.",
+    "artifacts_in": [
+      "lib/letflow/design/req396-human-task-escalation-timer.md",
+      "lib/letflow/definitions/graph.ex",
+      "lib/letflow/scheduler.ex",
+      "docs/requirements.yaml (REQ-396 ACs)"
+    ]
+  },
+  "task": {
+    "description": "Execute Step 1b (HARD GATE) for REQ-396.\n\nWorkspace: c:\\Users\\tvolo\\dev\\ai-dala\\letflow\nBranch: feature/WF02-REQ396-20260923\n\nRead independently:\n1. lib/letflow/design/req396-human-task-escalation-timer.md\n2. docs/requirements.yaml REQ-396 acceptance_criteria\n3. lib/letflow/definitions/graph.ex (confirm CHK-21 placement makes sense)\n4. lib/letflow/scheduler.ex (confirm 'escalation' timer_type exists)\n\nCheck:\n1. All 6 ACs covered?\n2. Approach decision (Option A) stated with rationale?\n3. CHK-21 validator function signature specified with violation codes?\n4. Engine behavior on timer fire fully described (non-actionable status, new task, audit ordering)?\n5. REQ-185/REQ-188 blocker preamble cited?\n6. Co-required constraint (both escalation_timer_duration AND escalation_role, or neither) specified?\n7. No implementation code?\n8. process_route_approval.yaml update sketch present?\n\nVerdict: PASS or FAIL.\n\nOutput:\n1. Write handoffs/WF02-REQ396-20260923/step-01b-design-gate.json COMPLETED PASS or FAIL\n2. git add + commit + push\n\nReport: PASS or FAIL with findings",
+    "acceptance_criteria": [
+      "All 6 ACs mapped",
+      "Approach rationale present",
+      "CHK-21 fully specified",
+      "REQ-185/REQ-188 cited",
+      "No implementation code"
+    ]
+  },
+  "result": null
+}

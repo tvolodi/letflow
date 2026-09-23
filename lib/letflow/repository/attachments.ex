@@ -183,6 +183,7 @@ defmodule Letflow.Repository.Attachments do
           {:ok, Attachment.t()}
           | {:error, :file_too_large}
           | {:error, :storage_quota_exceeded}
+          | {:error, :tenant_not_found}
           | {:error, :infected, verdict :: String.t()}
           | {:error, :scan_unavailable}
           | {:error, Ecto.Changeset.t()}
@@ -513,15 +514,20 @@ defmodule Letflow.Repository.Attachments do
 
   # REQ-390 design §5 -- runs after tenant_id_for_schema_name, before Repo.transaction.
   @spec check_storage_quota(String.t(), Ecto.UUID.t(), non_neg_integer()) ::
-          :ok | {:error, :storage_quota_exceeded}
+          :ok | {:error, :storage_quota_exceeded} | {:error, :tenant_not_found}
   defp check_storage_quota(prefix, tenant_id, new_bytes) do
     {:ok, current_usage} = get_storage_usage(prefix: prefix)
-    %Tenant{storage_allowance_bytes: allowance} = Repo.get(Tenant, tenant_id)
 
-    if current_usage + new_bytes > allowance do
-      {:error, :storage_quota_exceeded}
-    else
-      :ok
+    case Repo.get(Tenant, tenant_id) do
+      %Tenant{storage_allowance_bytes: allowance} ->
+        if current_usage + new_bytes > allowance do
+          {:error, :storage_quota_exceeded}
+        else
+          :ok
+        end
+
+      nil ->
+        {:error, :tenant_not_found}
     end
   end
 

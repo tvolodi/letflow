@@ -1,0 +1,32 @@
+{
+  "handoff_id": "WF02-REQ393-20260923-step-02d",
+  "run_id": "WF02-REQ393-20260923",
+  "workflow": "WF-02",
+  "step": "Step 2d (Idiom Review Gate)",
+  "to_agent": "REVIEWER",
+  "from_agent": "ORCH",
+  "status": "PENDING",
+  "created_at": "2026-09-23T10:36:29Z",
+  "started_at": "2026-09-23T10:36:29Z",
+  "context": {
+    "branch_name": "feature/WF02-REQ393-20260923",
+    "requirement_ids": ["REQ-393"],
+    "prior_gates": "CODE-DESIGN-VALIDATOR PASS, SECURITY-REVIEWER PASS",
+    "artifacts_in": [
+      "web/src/pages/entities/EntityListBrowserPage.tsx",
+      "web/src/components/entities/EntityFilterBuilder.tsx",
+      "web/src/router.tsx"
+    ]
+  },
+  "task": {
+    "description": "Execute Step 2d (REVIEWER -- HARD GATE) for REQ-393.\n\nWorkspace: c:\\Users\\tvolo\\dev\\ai-dala\\letflow\nBranch: feature/WF02-REQ393-20260923\n\nRead the diff: git diff main...feature/WF02-REQ393-20260923 -- web/src/\nAlso read the design doc: lib/letflow/design/req393-entity-list-query-ui.md\n\nCheck (frontend-adapted idiom review):\n1. React/TypeScript idiom: are hooks used correctly? No side effects in render? No setState inside useMemo/useCallback?\n2. No supervision-tree changes (frontend only, no process spawning)\n3. Scope creep: does the diff only touch files needed for REQ-393?\n4. Design consistency: does the implementation match the approved design doc?\n5. DataTable columns correctly have sortable: false?\n6. SortClause uses 'dir' not 'direction'?\n7. No console.log or debug artifacts left in production code?\n8. Does the BilimBaga route (/admin/bilimbaga/:entityType) remain untouched?\n\nVerdict: PASS or FAIL.\n\nOutput:\n1. Write handoffs/WF02-REQ393-20260923/step-02d-reviewer.json COMPLETED PASS or FAIL\n2. git add + commit + push\n\nReport: PASS or FAIL with findings",
+    "acceptance_criteria": [
+      "React hooks correct",
+      "No scope creep",
+      "SortClause uses dir",
+      "BilimBaga route untouched",
+      "No debug artifacts"
+    ]
+  },
+  "result": null
+}

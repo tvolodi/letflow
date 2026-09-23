@@ -1,0 +1,49 @@
+run_id: WF02-REQ396-20260923
+step: "Step 4 (TEST-RUNNER)"
+agent: TEST-RUNNER
+requirement: REQ-396
+branch: feature/WF02-REQ396-20260923
+executed_at: "2026-09-23T20:06:59Z"
+
+compile:
+  command: "mix compile --warnings-as-errors"
+  exit_code: 0
+  result: CLEAN
+
+targeted_tests:
+  command: >
+    mix test
+      test/letflow/definitions/graph_test.exs
+      test/letflow/engine/human_task_escalation_test.exs
+      test/letflow/simulation/req206_swiftroute_test.exs
+  duration_seconds: 22.4
+  passed: 77
+  failed: 1
+  total: 78
+
+failures:
+  - test: >
+      test REQ-288 AC1 -- Engine.Expr is now reachable from lib/letflow/definitions/
+      grep for Engine.Expr under lib/letflow/definitions/ returns at least one hit
+      (was zero before REQ-288)
+    file: test/letflow/definitions/graph_test.exs
+    line: 1202
+    error: "** (ErlangError) Erlang error: :enoent — System.cmd(\"grep\", ...) — grep not in PATH on Windows"
+    attribution: PRE-EXISTING
+    introduced_by: "1ee87991 (REQ-288, PR #1122)"
+    new_failure_from_req396: false
+
+new_failures_from_req396: 0
+
+verdict: PASS
+
+notes: |
+  All REQ-396 acceptance-criteria tests passed:
+  - human_task_escalation_test.exs: escalation timer fire, ops-review escalation path
+  - req206_swiftroute_test.exs: SwiftRoute simulation
+  - graph_test.exs: CHK-21 and new REQ-396 graph tests
+
+  The single failure (line 1202) is a pre-existing Windows environment issue
+  introduced by REQ-288 commit 1ee87991. It calls System.cmd("grep", ...) which
+  fails with :enoent because grep is not in PATH on Windows.
+  This failure predates the REQ-396 branch and is unrelated to it.

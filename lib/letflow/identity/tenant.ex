@@ -70,7 +70,14 @@ defmodule Letflow.Identity.Tenant do
     field(:status, Ecto.Enum, values: [:active, :migrating, :inactive], default: :active)
     field(:idp_realm_id, :string)
     field(:settings, TenantSettings)
-    field(:storage_allowance_bytes, :integer)
+
+    # DB-defaulted (priv/repo/migrations/20260923000001_add_storage_allowance_bytes_to_tenants.exs,
+    # default 1_073_741_824), never cast in any changeset -- read_after_writes: true
+    # matches this codebase's established pattern for this exact shape (see
+    # PromotionAssertionRun.started_at, InstanceDefinitionSnapshot.snapshotted_at).
+    # Without it, Repo.insert!/1 returns a struct with this field nil instead of the
+    # real DB-assigned value (ISS pending, found via REQ-391's merge-reconciliation CI).
+    field(:storage_allowance_bytes, :integer, read_after_writes: true)
 
     timestamps()
   end

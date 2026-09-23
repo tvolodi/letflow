@@ -1,0 +1,75 @@
+id: ISS-0787
+title: >
+  storage_allowance_bytes missing read_after_writes -- Repo.insert!/1 returns
+  a tenant struct with the field nil instead of the real DB-assigned default
+discovered_by: DOC-UPDATER
+discovered_in_run: WF02-REQ391-20260923
+discovered_at: "2026-09-23T12:10:00Z"
+severity: MAJOR
+tags:
+  - backend
+  - ecto
+  - regression
+description: >
+  Found by DOC-UPDATER during REQ-391's final merge attempt: PR #1751's
+  backend CI gate was red 3/3 times, always on
+  `test/letflow/identity_test.exs:783`. Superficially resembled the known
+  ISS-0766 flake (same file), but is a completely different, deterministic
+  defect: `resolve_tenant_by_realm/1`/`resolve_realm_by_tenant/1` (ISS-0766's
+  actual scope) never failed here -- the failing test was
+  `safe_get_tenant_by_slug/2` (REQ-124 AC5).
+
+  Root cause: REQ-390's migration
+  (`priv/repo/migrations/20260923000001_add_storage_allowance_bytes_to_tenants.exs`)
+  added `storage_allowance_bytes bigint NOT NULL DEFAULT 1_073_741_824` at
+  the Postgres level, but `Letflow.Identity.Tenant`'s Ecto schema field
+  (`lib/letflow/identity/tenant.ex`) had no matching `:default` and no
+  `read_after_writes: true`, and the field is never cast in any changeset.
+  `Repo.insert!/1` (used without `returning:` by test helper
+  `insert_tenant!/2`) therefore returned an in-memory struct with
+  `storage_allowance_bytes: nil`, while the real DB row held
+  `1_073_741_824` -- a real, deterministic bug, not test flakiness.
+
+  Confirmed present on REQ-390's own original PR CI already merged to
+  `main` (a real prior process gap by whichever session merged REQ-390
+  with this check red), predating REQ-391's own diff but blocking REQ-391's
+  merge since REQ-391 is what next hit CI on top of it.
+affected_files:
+  - lib/letflow/identity/tenant.ex
+  - priv/repo/migrations/20260923000001_add_storage_allowance_bytes_to_tenants.exs
+  - test/letflow/identity_test.exs
+related_requirements:
+  - REQ-390
+  - REQ-391
+  - REQ-124
+severity_rationale: >
+  MAJOR -- deterministic, not flaky: any code path relying on a
+  freshly-inserted %Tenant{} struct's storage_allowance_bytes field
+  (without a following reload) observes nil instead of the real quota,
+  and it was blocking a required CI gate on main-bound work.
+suggested_fix: >
+  Add `read_after_writes: true` to the schema field, matching this
+  codebase's established convention for DB-defaulted, never-cast fields
+  (see PromotionAssertionRun.started_at, InstanceDefinitionSnapshot.snapshotted_at).
+queue_ref: "Q-786"
+# NOTE: letflow-queue's task 786 auto-titled itself "ISS-0786" from its own
+# atomically-allocated id, but the real on-disk filename is ISS-0787.yaml --
+# slot ISS-0786 was already taken by this same repo's dev.exs pool_size
+# issue. Established, recurring queue-id/filename divergence pattern for
+# this project; queue_ref/github_ref below are authoritative for this file.
+github_ref: "GH-1753"
+status: resolved
+resolved_in_run: WF02-REQ391-20260923
+resolved_at: "2026-09-23T12:45:00Z"
+resolution: >
+  Fixed directly by ORCH (urgent CI-blocking defect, minimal well-precedented
+  change -- same direct-action pattern as ISS-0786 and the handoff-lint fix)
+  on branch fix/ISS-0787-storage-allowance-read-after-writes, commit
+  2ab0b5e1, PR #1752. Added `read_after_writes: true` to
+  Tenant.storage_allowance_bytes. Verified: mix compile
+  --warnings-as-errors clean; test/letflow/identity_test.exs:783 passes
+  (was failing before); full identity_test.exs run leaves only the
+  pre-existing, unrelated ISS-0766 flake
+  (resolve_tenant_by_realm/1/resolve_realm_by_tenant/1, confirmed via two
+  isolated re-runs producing the identical two failures/error signature
+  both times); mix format --check-formatted clean.

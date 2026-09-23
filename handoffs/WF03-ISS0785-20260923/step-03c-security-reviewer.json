@@ -1,0 +1,34 @@
+{
+  "handoff_id": "WF03-ISS0785-20260923-step-03c",
+  "run_id": "WF03-ISS0785-20260923",
+  "workflow": "WF-03",
+  "step": "Step 3c (Security Gate)",
+  "to_agent": "SECURITY-REVIEWER",
+  "from_agent": "ORCH",
+  "status": "PENDING",
+  "created_at": "2026-09-23T04:28:36Z",
+  "started_at": "2026-09-23T04:28:36Z",
+  "context": {
+    "branch_name": "feature/WF03-ISS0785-20260923",
+    "issue_id": "ISS-0785",
+    "stage": "S6",
+    "fix_summary": "Added check_instance_match/2 guard in get_content/3 (attachments.ex) before the artifact blob read, threaded instance_id through from the router call site. Fix closes a timing side-channel where cross-instance-same-tenant denial cost 2 round-trips vs 1 for cross-tenant/never-issued.",
+    "artifacts_in": [
+      "lib/letflow/repository/attachments.ex",
+      "lib/letflow/routers/instances.ex",
+      "test/letflow/repository/attachments_test.exs",
+      "docs/issues/ISS-0785.yaml",
+      "docs/agents/instructions/security-invariants.md"
+    ]
+  },
+  "task": {
+    "description": "Execute Step 3c (SECURITY GATE -- HARD GATE) for ISS-0785 per WF-03.\n\nWorkspace: c:\\Users\\tvolo\\dev\\ai-dala\\letflow\nBranch: feature/WF03-ISS0785-20260923\n\nRead docs/agents/instructions/security-invariants.md in full. Then read the diff of this branch against main:\n  git diff main...feature/WF03-ISS0785-20260923 -- lib/letflow/repository/attachments.ex lib/letflow/routers/instances.ex\n\nCheck each security invariant in security-invariants.md against the changes. Pay particular attention to:\n- INV-1 through INV-8 for tenant-data path changes\n- INV-5: response-shape indistinguishability (all denied paths must return same shape/timing)\n- Whether the fix actually closes the timing side-channel (does the instance check provably precede the blob read?)\n- Whether the fix inadvertently opens any NEW timing distinguishers (e.g. check_instance_match success vs failure having different DB hit patterns beyond the intended 1-round-trip parity)\n- Backward-compatibility with REQ-211/212's cross-tenant isolation (get/2 still works for callers without instance_id)\n\nAlso check: does check_instance_match/2 use constant-time comparison? (It matches struct fields, not secrets, so constant-time is not required -- but confirm the analysis.)\n\nVerdict: PASS or FAIL with specific invariant numbers and findings.\n\nOutput:\n1. Write handoffs/WF03-ISS0785-20260923/step-03c-security-reviewer.json with status COMPLETED, result.status PASS or FAIL\n2. git add handoffs/WF03-ISS0785-20260923/step-03c-security-reviewer.json\n3. git commit -m 'fix(WF03-ISS0785-20260923): Step 3c -- security gate [PASS/FAIL]'\n4. git push\n\nReport: PASS or FAIL with key findings",
+    "acceptance_criteria": [
+      "All INV-1..INV-8 checked against this diff",
+      "INV-5 response-shape indistinguishability explicitly verified",
+      "No new timing distinguishers introduced by the fix",
+      "Cross-tenant isolation (get/2 without instance_id) still intact"
+    ]
+  },
+  "result": null
+}

@@ -5,7 +5,7 @@
   "step": "Step 3b (Test Design Gate)",
   "to_agent": "TEST-DESIGN-VALIDATOR",
   "from_agent": "ORCH",
-  "status": "PENDING",
+  "status": "COMPLETED",
   "created_at": "2026-09-23T20:01:05Z",
   "started_at": "2026-09-23T20:01:05Z",
   "context": {
@@ -33,5 +33,27 @@
       "AC5 correctly deferred"
     ]
   },
-  "result": null
+  "completed_at": "2026-09-23T20:04:17Z",
+  "result": {
+    "status": "COMPLETED",
+    "verdict": "PASS",
+    "ac_audit": {
+      "AC2": {
+        "verdict": "PASS",
+        "detail": "Exactly 4 CHK-21 tests present in graph_test.exs describe block 'validate_node_attributes/1 -- CHK-21: HUMAN_TASK escalation attributes (REQ-396 AC2)': (1) valid happy path both attrs present; (2) missing_escalation_role (duration present, role absent/nil/blank — 4 sub-cases in one test); (3) missing_escalation_timer_duration (role present, duration absent); (4) invalid ISO-8601 format 'NOT-ISO' -> :invalid_escalation_timer. All 4 are pure no-DB tests consistent with existing CHK-12 block shape."
+      },
+      "AC3": {
+        "verdict": "PASS",
+        "detail": "human_task_escalation_test.exs (new file, async: false, real Postgres): (a) force-fires escalation timer via Scheduler.fire_timer/2 and asserts reloaded_orig.status == :cancelled; (b) asserts length(new_tasks) == 1 and new_task.assignee_ref == 'role-escalation'; (c) ordering proved by DateTime.compare(reloaded_orig.cancelled_at, new_task.inserted_at) != :gt — comparing cancelled_at on the original task row against inserted_at on the new task row. Both are set in the same Ecto.Multi transaction; :cancel_original_task step runs before :task_activation step. Design doc §4 explicitly confirms no audit_entries insert is designed (audit_entries table does not exist in current schema); task-row timestamps are the correct mechanism. No @tag :skip. Self-contained fixture with TenantFixture.provisioned_tenant!/1."
+      },
+      "AC4": {
+        "verdict": "PASS",
+        "detail": "AC4-REQ396 describe block in req206_swiftroute_test.exs: creates @ops_escalation_graph definition, calls Engine.create/2 (instance :active, token at ops-review), finds the escalation timer (timer_type: 'escalation', node_id: 'ops-review'), calls Scheduler.fire_timer/2, asserts ops-review task :cancelled and exactly one ceo-approval task with assignee_ref 'role-ceo'. Uses inline graph (P0D, no SERVICE_TASKs) for the same reason the existing high-value-happy test does."
+      },
+      "AC5": {
+        "verdict": "DEFERRED_CORRECT",
+        "detail": "Test spec (test/specs/REQ-396.md) covers only AC2, AC3, AC4. AC5 is a UAT-RUNNER task whose own text makes it conditional on REQ-395 and ISS-0739 landing first. No ExUnit test is possible at this stage; omission from the spec is correct."
+      }
+    }
+  }
 }

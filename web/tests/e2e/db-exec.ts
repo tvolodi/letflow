@@ -430,3 +430,72 @@ export function insertTenantMembershipSql(
 export function deleteTenantMembershipSql(id: string): string {
   return `DELETE FROM tenant_memberships WHERE id = '${id}';`
 }
+
+/**
+ * REQ-387 fixture helper for `attachment-cross-tenant.pipeline.e2e.spec.ts` --
+ * binds a tenant row's `idp_realm_id` directly via `Letflow.Repo.update_all/2`,
+ * bypassing `Letflow.Identity.Tenant`'s own changeset entirely.
+ *
+ * Why this is needed at all, and why direct write is the only real option:
+ * confirmed by live investigation against a real running stack (not assumed
+ * from reading source alone) that `POST /api/v1/onboarding`
+ * (`Letflow.Routers.Onboarding.handle_create/1`) truly never provisions
+ * Keycloak for the tenant it creates -- no realm, no client, no admin user --
+ * exactly as that router's own moduledoc ("What is deliberately NOT ported")
+ * and `createActiveDefinitionInSchema`'s comment above already state.
+ * `Letflow.Identity.create_tenant/1` calls `Tenant.create_changeset/3` with
+ * `oidc_mode: :disabled` unconditionally, so a freshly onboarded tenant's
+ * `idp_realm_id` column is left NULL. Confirmed live: a tenant onboarded via
+ * `POST /api/v1/onboarding` has `idp_realm_id: nil` immediately afterward.
+ *
+ * Since `idp_realm_id` is "immutable after creation" by deliberate design
+ * (`Letflow.Identity.Tenant`'s own moduledoc -- `cast/3`'s field list simply
+ * omits `:idp_realm_id` from every changeset function), there is no HTTP
+ * write path, and never will be one via the normal changeset route, to bind
+ * a realm onto an already-created tenant. This is the exact same "no HTTP
+ * writer exists, and one is deliberately not coming" situation
+ * `insertTenantMembershipSql` above documents for `tenant_memberships` --
+ * direct write via the real `Letflow.Repo` (not raw psql -- reusing this
+ * file's already-established `mix run --no-start -e` technique, same as
+ * `createActiveDefinitionInSchema`) is the only real, non-mocked way to make
+ * `Letflow.Identity.resolve_tenant_by_realm/1` (called from
+ * `Letflow.Plugs.AuthPipeline`'s `resolve_tenant/1` step on every request)
+ * ever find this tenant by its newly-created Keycloak realm's name.
+ *
+ * Confirmed live end-to-end (not just that the UPDATE succeeds): after
+ * calling this with a realm this test itself created via the Keycloak Admin
+ * API (mirroring `priv/keycloak/realms/bpm-default.json`'s own
+ * `letflow-web` client + protocol-mapper shape) and creating a
+ * `PLATFORM_ADMIN`-mapped user in it, a real password-grant token from that
+ * realm was accepted by `GET /api/v1/definitions` on the real running
+ * backend (200, JIT-provisioned a real local user) -- proving
+ * `resolve_tenant_by_realm/1` -> `Letflow.Plugs.AuthPipeline`'s
+ * `guard_realm_ownership/2` -> JIT provisioning all complete successfully
+ * once this one column is bound.
+ */
+export function bindTenantIdpRealm(tenantId: string, realmSlug: string): void {
+  const elixirScript = `
+    {:ok, _} = Application.ensure_all_started(:postgrex)
+    {:ok, _} = Application.ensure_all_started(:ecto_sql)
+    {:ok, _} = Letflow.Repo.start_link()
+
+    import Ecto.Query
+
+    {1, nil} =
+      Letflow.Repo.update_all(
+        from(t in Letflow.Identity.Tenant, where: t.id == ^"${tenantId}"),
+        set: [idp_realm_id: "${realmSlug}"]
+      )
+
+    IO.puts("bindTenantIdpRealm: OK tenant_id=${tenantId} realm=${realmSlug}")
+  `
+
+  execFileSync('mix', ['run', '--no-start', '-e', elixirScript], {
+    cwd: REPO_ROOT,
+    // Same require_dev_db_confirmation escape hatch createActiveDefinitionInSchema
+    // above already documents -- this MUST land in the same letflow_dev
+    // database the real running BPM_TEST_URL backend reads tenants from.
+    env: { ...process.env, MIX_ENV: process.env.MIX_ENV ?? 'dev', LETFLOW_DEV_DB_CONFIRMED: '1' },
+    stdio: 'inherit',
+  })
+}

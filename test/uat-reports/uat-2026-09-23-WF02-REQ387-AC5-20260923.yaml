@@ -1,0 +1,115 @@
+run_id: WF02-REQ387-AC5-20260923
+date: "2026-09-23"
+agent: UAT-RUNNER
+requirement: REQ-387
+branch: feature/WF02-REQ387-20260923
+head_commit: 7fefd265eed87b3b302e28ef3951853713346a3b
+purpose: >
+  REQ-387 AC5 requires web/tests/e2e/pipelines/attachment-cross-tenant.pipeline.e2e.spec.ts
+  to exist, be a real Playwright spec, and pass against a real running instance.
+  TEST-DESIGN-VALIDATOR flagged this as REQUIRED, not deferrable. This run stands up a
+  real local instance (Postgres + Keycloak via docker compose in worktree
+  wt-req387-testdesign, real `mix run --no-halt` backend, real Vite dev server via
+  Playwright's webServer config, real Chromium) and executes the spec twice, fixing a
+  real environment-provisioning gap found on the first attempt.
+
+environment:
+  worktree: /tmp/claude-1001/.../scratchpad/wt-req387-testdesign (feature/WF02-REQ387-20260923 @ 7fefd265)
+  postgres: docker compose, worktree-scoped port 5492 (container wt-req387-testdesign-postgres-1, reused from a prior session, healthy)
+  keycloak: docker compose, worktree-scoped port 8099 (container wt-req387-testdesign-keycloak-1, reused, healthy), realm bpm-default
+  backend: mix run --no-halt, port 4000, GET /health -> 200 {"status":"ok"}
+  frontend: vite dev server spawned by playwright's webServer config, port 4173
+  playwright: 1.60.0, chromium 1223 (pre-installed)
+
+command_run: >
+  cd web && VITE_API_BASE_URL=http://127.0.0.1:4000 BPM_TEST_URL=http://127.0.0.1:4000
+  BPM_IDP_BASE_URL=http://localhost:8099 E2E_BASE_URL=http://127.0.0.1:4173
+  UAT_QA_ADMIN_PASSWORD=admin-pass
+  npx playwright test tests/e2e/pipelines/attachment-cross-tenant.pipeline.e2e.spec.ts --config=playwright.config.ts
+
+attempts:
+  - attempt: 1
+    verdict: FAIL
+    failing_step: "01: onboard SwiftRoute and Vortex, each a genuinely separate tenant"
+    observed_evidence: >
+      POST /api/v1/onboarding (real HTTP, real backend) returned 500. Backend log:
+      Postgrex.Error 42P01 undefined_table -- relation
+      "tenant_c5d69db588ed4f34a433896911ba751a.users" does not exist, raised inside
+      Letflow.Plugs.AuthPipeline.provision_user/3 while authenticating the bpm-default
+      admin-user's own request.
+    root_cause: >
+      ENVIRONMENT gap, not a REQ-387 or spec defect. This worktree's Postgres container
+      had been freshly re-created since the last session (its `tenants` table held zero
+      rows before `mix ecto.migrate` ran a seed migration inserting the bpm-default
+      tenant's row id c5d69db5-88ed-4f34-a433-896911ba751a) but the bpm-default tenant's
+      actual per-tenant Postgres schema (tenant_c5d69db588ed4f34a433896911ba751a, with
+      its `users` table) was never provisioned -- confirmed directly: `\dn` on the dev
+      database showed only the `public` schema, and `SELECT * FROM tenant_schemas`
+      returned 0 rows. `mix letflow.seed`'s own moduledoc (lib/mix/tasks/letflow.seed.ex)
+      confirms this exact gap by name (ISS-0276: "No code path creates this row
+      automatically on a fresh dev database") -- UAT-RUNNER had run `mix ecto.migrate`
+      but not `mix letflow.seed` before the first attempt.
+    fix_applied: >
+      Stopped the running backend (port conflict), ran
+      `LETFLOW_DEV_DB_CONFIRMED=1 mix letflow.seed` (idempotent, per its own moduledoc)
+      -- output: "mix letflow.seed: OK -- bpm-default tenant already present,
+      re-provisioned/re-verified (id c5d69db5-...), schema
+      tenant_c5d69db588ed4f34a433896911ba751a migrated and role-seeded." Confirmed via
+      direct SQL: `\dn` now lists tenant_c5d69db588ed4f34a433896911ba751a, and
+      `SELECT count(*) FROM tenant_c5d69db588ed4f34a433896911ba751a.users` returns 0
+      (table exists, empty). Restarted the backend, confirmed /health 200 again.
+
+  - attempt: 2
+    verdict: FAIL
+    failing_step: "01: onboard SwiftRoute and Vortex, each a genuinely separate tenant"
+    observed_evidence: >
+      POST /api/v1/onboarding now returns 201 (real backend, real HTTP) -- the 500 from
+      attempt 1 is gone, confirming that was purely the missing-schema environment gap.
+      But the spec's own onboardTenantWithAdminToken() helper then throws:
+      "onboarding req387-swiftroute-9fb823a6 response missing admin_user_id, needed for
+      password reset" -- the real response body has no such field.
+    root_cause: >
+      SPEC-AUTHORING BUG, not a REQ-387 implementation defect, and broader than the
+      disclosed "second Keycloak user" risk the handoff flagged. Read
+      lib/letflow/routers/onboarding.ex's handle_create/1 and provision_and_bind/3 (and
+      the onboarding_map/1 response allowlist, lines 244-256) directly: the real,
+      shipped POST /api/v1/onboarding response is exactly 5 keys -- id, tenant_id, slug,
+      hostname, created_at -- there is no admin_user_id and never has been (unmodified
+      by REQ-387's diff; `git diff --name-only main...HEAD` does not list
+      onboarding.ex, tenant_onboarding.ex, or identity.ex). Further: the request body's
+      admin_email/admin_username/admin_display_name fields are accepted by the create
+      schema validator but then discarded -- handle_create/1's create_attrs is built via
+      `Map.take(attrs, ["slug", "display_name"])`, dropping every admin_* field.
+      TenantOnboarding.provision_and_migrate/1 (the function actually invoked) only
+      provisions the tenant's Postgres schema, replays its migrations, and seeds
+      platform roles -- grepped for admin_email/admin_username/admin_user anywhere in
+      onboarding.ex, tenant_onboarding.ex, identity.ex: zero hits. The real onboarding
+      endpoint, as shipped, creates NO Keycloak user at all -- not the dispatcher, not
+      just the "second" ops user the handoff's disclosed risk was about. The spec's
+      design (and its inherited assumption from REQ-384's own design doc, restated in
+      this spec's own header comment: "REQ-384's onboarding path provisions exactly one
+      admin user per tenant") does not match the real, currently-shipped behavior.
+
+overall_verdict: FAIL -- spec-authoring bug, not a REQ-387 implementation defect
+recommended_action: >
+  Route back to TEST-DESIGNER/FRONTEND-DEV, not ELIXIR-DEV. The spec's
+  onboardTenantWithAdminToken() (attachment-cross-tenant.pipeline.e2e.spec.ts lines
+  102-157) needs to stop assuming onboarding returns admin_user_id or creates any
+  Keycloak user. Two fixes needed together: (1) after a successful onboarding POST,
+  create the FIRST/admin user directly via the Keycloak Admin API
+  (POST /admin/realms/:realm/users), the same technique the file's own
+  createSecondRealmUser() (lines 167-218) already uses and already disclosed as a
+  deviation for the second user -- it needs applying to the first user too, since no
+  HTTP route provisions any tenant user today; (2) drop the adminUserId-from-response
+  path and the reset-password-by-id call that depends on it, replacing it with the
+  create-then-set-password flow createSecondRealmUser() already established. This is a
+  real, live-verified finding (not the previously-disclosed risk, which was specifically
+  about the SECOND user -- the first user's assumption was independently wrong too, and
+  this run is what surfaced it), not something to route around by re-guessing a field
+  name. Once fixed, this same worktree's live stack (backend/Postgres/Keycloak all still
+  up and correctly seeded, per this run's fix) is ready for an immediate re-run.
+  REQ-387's own implementation files (AttachmentPanel, AttachmentViewerPage,
+  attachments.ts, client.ts) were never reached by either attempt and remain unverified
+  live by this run -- neither PASS nor a REQ-387-implementation-level FAIL can yet be
+  claimed for AC2-AC4's GUI behavior; only AC5's "spec exists and passes" is being
+  scored here, and it does not yet pass.

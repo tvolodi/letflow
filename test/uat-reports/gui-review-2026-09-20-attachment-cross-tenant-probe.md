@@ -150,3 +150,37 @@ GUI-layer half of EO-001/EO-002/EO-003/EO-004, and the stale NOTE
 on both REQ-386 and REQ-387 shipping, are all still open pending REQ-387.
 Do not read this note as the scenario being fully resolved — only the
 backend signed-link and audit-logging two-thirds of it are.
+
+## Closing note (2026-09-23, DOC-UPDATER) — FULL close, chain complete
+
+**REQ-387 is now `done`** too, shipped on `feature/WF02-REQ387-20260923`
+(tip `88346cd6`), merged to `main`. It built the frontend document-viewer
+screen this report's GUI-layer finding (EO-001/EO-002/EO-003/EO-004) called
+for: a typed API client (`web/src/api/attachments.ts`), an upload/list
+widget (`web/src/components/instances/AttachmentPanel.tsx`), and
+`web/src/pages/instances/AttachmentViewerPage.tsx` routing a foreign-tenant
+attachment reference and a never-issued one to byte-identical
+`AttachmentNotFoundScreen.tsx` markup, an expired link to a distinct
+`AttachmentLinkExpiredScreen.tsx` with a fresh-link affordance, and the
+success/error cases to `AttachmentSuccessView.tsx`/`AttachmentErrorScreen.tsx`
+— all calling REQ-386's signed-link endpoint. The permanent Playwright
+regression spec this scenario's own `pipeline_test` names,
+`web/tests/e2e/pipelines/attachment-cross-tenant.pipeline.e2e.spec.ts`, now
+exists and passes against a real running instance — an in-cycle fix
+(commit `7a643088`) corrected the spec never provisioning Keycloak, after
+which a fresh independent live e2e re-run confirmed PASS
+(RELEASE-VALIDATOR final verdict: PASS, mergeable). The stale NOTE
+(ISS-0527) has been removed from
+`test/fixtures/uat/scenarios/platform/attachment-cross-tenant-probe.yaml`,
+confirmed by diff against `origin/main`, now that the feature it warned
+about is real. Full pipeline history — CODE-DESIGNER, ELIXIR-DEV/
+FRONTEND-DEV equivalent (FRONTEND-DEV implemented), TEST-DESIGNER,
+RELEASE-VALIDATOR — is recorded in
+`docs/status/requirement_status.v22.yaml`'s REQ-387 `done` entry, not
+restated here.
+
+**All three requirements filed from this GUI-review finding are now
+`status: done`** in `docs/requirements.yaml`: REQ-386 (backend signed-link),
+REQ-387 (frontend document-viewer, this note), and REQ-388 (denied-access
+audit logging) — each independently confirmed `done` before writing this
+note. This scenario's GUI-review finding is fully resolved.

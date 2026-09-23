@@ -6882,16 +6882,16 @@
       "issue_id": null,
       "queue_task_id": 753,
       "github_issue_number": 1641,
-      "status": "IN_PROGRESS",
+      "status": "COMPLETED",
       "owned_modules": [
         "web/src/pages/entities/",
         "web/src/components/",
         "web/tests/e2e/pipelines/entity-list-query.pipeline.e2e.spec.ts"
       ],
       "started_at": "2026-09-23T10:13:00Z",
-      "lock_released_at": null,
-      "released_lock": false,
-      "last_known_step": "Step 00 dispatched to FRONTEND-DEV",
+      "lock_released_at": "2026-09-23T18:29:08Z",
+      "released_lock": true,
+      "last_known_step": "Step Final COMPLETED PASS -- PR #1754 squash-merged as ac751a7d",
       "note": "WF-02 for REQ-393: Generic entity-list browse screen with filter builder, sort control, page-size control. FRONTEND-DEV task (Stage S8). Queue task 753 (GH#1641)."
     }
   ]

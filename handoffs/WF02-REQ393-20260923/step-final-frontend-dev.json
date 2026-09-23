@@ -4,9 +4,10 @@
     "step":  "Step Final",
     "to_agent":  "FRONTEND-DEV",
     "from_agent":  "ORCH",
-    "status":  "PENDING",
+    "status":  "COMPLETED",
     "created_at":  "2026-09-23T17:12:29Z",
     "started_at":  "2026-09-23T17:12:29Z",
+    "completed_at":  "2026-09-23T18:29:08Z",
     "context":  {
                     "branch_name":  "feature/WF02-REQ393-20260923",
                     "requirement_ids":  [
@@ -28,5 +29,11 @@
                                              "Registry COMPLETED"
                                          ]
              },
-    "result":  null
+    "result":  {
+                   "verdict":  "PASS",
+                   "pr_number":  1754,
+                   "merge_sha":  "ac751a7d",
+                   "queue_release_http_status":  200,
+                   "summary":  "PR #1754 squash-merged as ac751a7d. Queue task 753 released (HTTP 200). Registry COMPLETED. Fixes applied during Step Final: (1) removed non-schema 'workflow' key from handoffs (letflow.lint_handoffs H3), (2) removed UTF-8 BOM introduced by PowerShell ConvertTo-Json, (3) promoted REQ-393 from pending_only_ids to allowed_ids in req207_vortex_test.exs (frontend client, no backend routes added)."
+               }
 }

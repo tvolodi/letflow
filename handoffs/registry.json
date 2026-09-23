@@ -6857,6 +6857,24 @@
       "released_lock": true,
       "last_known_step": "Step Final COMPLETED PASS -- merged to main as e2b8ce68 (PR #1743), lock released",
       "note": "WF-03 for ISS-0785: timing side-channel in Attachments.get_content/2 -- cross-instance-same-tenant denial costs 2 Repo round-trips (reads full blob) vs 1 for cross-tenant/never-issued. Fix: reorder lookup so instance_id check precedes artifact blob read. Queue task 784 (GH#1736). Additional fix during Step Final: restore cross-instance audit reason (ISS-0453 flaky PollerTest AC3 also encountered; confirmed pre-existing per ISS-0453/ISS-0695)."
+    },
+    {
+      "run_id": "WF02-REQ390-20260923",
+      "requirement_id": "REQ-390",
+      "issue_id": null,
+      "queue_task_id": 750,
+      "github_issue_number": 1638,
+      "status": "COMPLETED",
+      "owned_modules": [
+        "lib/letflow/repository/attachments.ex",
+        "lib/letflow/tenants/",
+        "priv/repo/migrations/"
+      ],
+      "started_at": "2026-09-23T08:04:03Z",
+      "lock_released_at": "2026-09-23T10:08:55Z",
+      "released_lock": true,
+      "last_known_step": "Step Final COMPLETED PASS -- PR #1749 squash-merged as a3156299",
+      "note": "WF-02 for REQ-390: per-tenant storage-quota tracking for instance attachments. Design decision required: computed-on-read sum vs maintained counter. Queue task 750 (GH#1638)."
     }
   ]
 }

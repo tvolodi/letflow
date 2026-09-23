@@ -2122,3 +2122,30 @@
 2026-09-23T06:11:31Z | DISPATCH | WF03-ISS0785-20260923 | step-05-issue-closer | ORCH → ISSUE-FIXER | PENDING
 2026-09-23T06:12:34Z | PASS | WF03-ISS0785-20260923 | step-05-issue-closer | ISSUE-FIXER → ORCH | PASS -- ISS-0785 resolved, GH#1736 closed
 2026-09-23T06:13:09Z | DISPATCH | WF03-ISS0785-20260923 | step-final-elixir-dev | ORCH → ELIXIR-DEV | PENDING
+2026-09-23T08:02:20Z | DONE | WF03-ISS0785-20260923 | step-final-elixir-dev | ELIXIR-DEV → ORCH | COMPLETED -- PR#1743 merged (e2b8ce68), bookkeeping PR#1748 (23473ab8), queue task 784 released
+2026-09-23T08:04:47Z | DISPATCH | WF02-REQ390-20260923 | step-00-git-setup | ORCH → ELIXIR-DEV | PENDING
+2026-09-23T08:06:32Z | PASS | WF02-REQ390-20260923 | step-00-git-setup | ELIXIR-DEV → ORCH | PASS -- branch created, REQ-390 in_progress, 7b07ef07
+2026-09-23T08:07:15Z | DISPATCH | WF02-REQ390-20260923 | step-01-code-designer | ORCH → CODE-DESIGNER | PENDING
+2026-09-23T08:12:32Z | PASS | WF02-REQ390-20260923 | step-01-code-designer | CODE-DESIGNER → ORCH | PASS -- design doc req390-storage-quota.md, computed-on-read, 1GiB default allowance
+2026-09-23T08:13:01Z | DISPATCH | WF02-REQ390-20260923 | step-01b-design-gate | ORCH → CODE-DESIGN-VALIDATOR | PENDING
+2026-09-23T08:15:42Z | PASS | WF02-REQ390-20260923 | step-01b-design-gate | CODE-DESIGN-VALIDATOR → ORCH | PASS -- all 8 criteria verified
+2026-09-23T08:16:19Z | DISPATCH | WF02-REQ390-20260923 | step-02a-elixir-dev | ORCH → ELIXIR-DEV | PENDING
+2026-09-23T08:23:48Z | PASS | WF02-REQ390-20260923 | step-02a-elixir-dev | ELIXIR-DEV → ORCH | PASS -- compile 0, 24/24 tests, 455decc7
+2026-09-23T08:24:19Z | DISPATCH | WF02-REQ390-20260923 | step-02c-security-reviewer | ORCH → SECURITY-REVIEWER | PENDING
+2026-09-23T08:27:57Z | FAIL | WF02-REQ390-20260923 | step-02c-security-reviewer | SECURITY-REVIEWER → ORCH | FAIL -- INV-8 BLOCKER: bare struct match on Repo.get can MatchError on nil (concurrent tenant deletion)
+2026-09-23T08:29:16Z | REWORK | WF02-REQ390-20260923 | step-02a-elixir-dev | ORCH → SECURITY-REVIEWER | REWORK 1 -- INV-8 fix applied (7f95834f), re-running security gate
+2026-09-23T08:30:32Z | PASS | WF02-REQ390-20260923 | step-02c-security-reviewer | SECURITY-REVIEWER → ORCH | PASS (REWORK 1) -- INV-8 fix verified
+2026-09-23T08:31:05Z | DISPATCH | WF02-REQ390-20260923 | step-02d-reviewer | ORCH → REVIEWER | PENDING
+2026-09-23T08:33:52Z | PASS | WF02-REQ390-20260923 | step-02d-reviewer | REVIEWER → ORCH | PASS -- computed-on-read signed off, cross-module coupling OK, non-blocking: :integer vs :bigint type mismatch in schema vs migration
+2026-09-23T08:34:48Z | DISPATCH | WF02-REQ390-20260923 | step-03-test-designer | ORCH → TEST-DESIGNER | PENDING
+2026-09-23T08:42:13Z | PASS | WF02-REQ390-20260923 | step-03-test-designer | TEST-DESIGNER → ORCH | PASS -- 4 new tests, 28/28 pass, c82425ba
+2026-09-23T08:42:39Z | DISPATCH | WF02-REQ390-20260923 | step-03b-test-design-gate | ORCH → TEST-DESIGN-VALIDATOR | PENDING
+2026-09-23T08:44:15Z | PASS | WF02-REQ390-20260923 | step-03b-test-design-gate | TEST-DESIGN-VALIDATOR → ORCH | PASS -- all 5 ACs covered
+2026-09-23T08:44:40Z | DISPATCH | WF02-REQ390-20260923 | step-04-test-runner | ORCH → TEST-RUNNER | PENDING
+2026-09-23T09:28:57Z | PASS | WF02-REQ390-20260923 | step-04-test-runner | TEST-RUNNER → ORCH | PASS -- 28/28 targeted, compile 0, 5abf9532
+2026-09-23T09:29:25Z | DISPATCH | WF02-REQ390-20260923 | step-05-release-validator | ORCH → RELEASE-VALIDATOR | PENDING
+2026-09-23T09:34:12Z | PASS | WF02-REQ390-20260923 | step-05-release-validator | RELEASE-VALIDATOR → ORCH | PASS -- all 5 ACs independently verified
+2026-09-23T09:34:44Z | DISPATCH | WF02-REQ390-20260923 | step-06-doc-updater | ORCH → DOC-UPDATER | PENDING
+2026-09-23T09:37:55Z | PASS | WF02-REQ390-20260923 | step-06-doc-updater | DOC-UPDATER → ORCH | PASS -- REQ-390 done, v22 events verified
+2026-09-23T09:38:29Z | DISPATCH | WF02-REQ390-20260923 | step-final-elixir-dev | ORCH → ELIXIR-DEV | PENDING
+2026-09-23T10:08:55Z | COMPLETED | WF02-REQ390-20260923 | step-final-elixir-dev | ELIXIR-DEV → COMPLETED | PR #1749 merged as a3156299 | queue task 750 released HTTP 200 | registry COMPLETED | admin override: signature_heuristic flake attributed route 2

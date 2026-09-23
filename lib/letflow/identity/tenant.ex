@@ -70,6 +70,7 @@ defmodule Letflow.Identity.Tenant do
     field(:status, Ecto.Enum, values: [:active, :migrating, :inactive], default: :active)
     field(:idp_realm_id, :string)
     field(:settings, TenantSettings)
+    field(:storage_allowance_bytes, :integer)
 
     timestamps()
   end

@@ -27,5 +27,14 @@
                                              "Registry COMPLETED"
                                          ]
              },
-    "result":  null
+    "result":  {
+        "status":  "PASS",
+        "pr_number":  1759,
+        "merge_sha":  "6fd04c2c4a10a17d322ed99feff152bdba5e07e5",
+        "queue_release_status":  200,
+        "ci_run_id":  35920337172,
+        "ci_conclusion":  "success",
+        "completed_at":  "2026-09-23T21:24:56Z",
+        "notes":  "Rebased twice (REQ-394+REQ-398 landed on main during Step Final). Resolved status-volume conflicts each time. compile --warnings-as-errors: clean. Targeted tests 77/78 (REQ-288 AC1 grep fails on Windows only, pre-existing). CI green. PR 1759 squash-merged, branch deleted, queue 756 released."
+    }
 }

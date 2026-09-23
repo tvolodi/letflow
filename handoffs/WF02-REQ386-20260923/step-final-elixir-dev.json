@@ -1,7 +1,6 @@
 {
   "handoff_id": "WF02-REQ386-20260923-step-final",
   "run_id": "WF02-REQ386-20260923",
-  "workflow": "WF-02",
   "step": "Step Final",
   "to_agent": "ELIXIR-DEV",
   "from_agent": "ORCH",
@@ -10,12 +9,14 @@
   "started_at": "2026-09-23T03:33:47Z",
   "context": {
     "branch_name": "feature/WF02-REQ386-20260923",
-    "requirement_ids": ["REQ-386"],
+    "requirement_ids": [
+      "REQ-386"
+    ],
     "stage": "S6",
     "run_summary": "WF-02 for REQ-386 (time-limited signed attachment URLs). All steps 00-06 completed PASS. Step Final merges to main.",
     "prior_steps_status": "All PASS: Step 00 (git setup), Step 01 (CODE-DESIGNER), Step 01b (CODE-DESIGN-VALIDATOR), Step 02a (ELIXIR-DEV impl), Step 02c (SECURITY-REVIEWER), Step 02d (REVIEWER), Step 03 (TEST-DESIGNER), Step 03b (TEST-DESIGN-VALIDATOR), Step 04 (TEST-RUNNER), Step 05 (RELEASE-VALIDATOR), Step 06 (DOC-UPDATER).",
     "uncommitted_files": [
-      "docs/requirements.yaml (cosmetic encoding normalization -- § chars, text reflow, already done in-content by Step 06 commit; these are tooling CRLF/encoding artifacts)",
+      "docs/requirements.yaml (cosmetic encoding normalization -- \u00a7 chars, text reflow, already done in-content by Step 06 commit; these are tooling CRLF/encoding artifacts)",
       "docs/status/requirement_status.index.yaml (same cosmetic artifacts)",
       "handoffs/registry.json (ORCH just added WF02-REQ386 registry entry)",
       "handoffs/WF02-REQ386-20260923/step-final-elixir-dev.json (this file)"
@@ -48,7 +49,9 @@
       "ci_checks": "all 3 green (backend: mix letflow.check, frontend: npm run check, detect-changed-paths)",
       "queue_release_status": 200
     },
-    "artifacts_out": ["branch: feature/WF02-REQ386-20260923 (squash-merged into main as a0a9a0d7, branch deleted)"],
+    "artifacts_out": [
+      "branch: feature/WF02-REQ386-20260923 (squash-merged into main as a0a9a0d7, branch deleted)"
+    ],
     "next_action": "ORCH marks run COMPLETED and releases owned_modules lock"
   }
 }

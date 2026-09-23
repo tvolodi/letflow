@@ -52,14 +52,21 @@ const mockUseAuth = vi.mocked(useAuth)
 
 // ── Fixtures ──────────────────────────────────────────────────────────────────
 
+// Synthetic, clearly-fake tenant slug -- not a real platform tenant, matching
+// AuthProvider.logout-clears-realm.test.tsx's FIXTURE_REALM_SLUG convention
+// (guards/source-scan.spec.ts's tenant-slug-in-source rule forbids real
+// tenant slug literals outside its allowlisted test directories, which this
+// directory is deliberately not part of).
+const FIXTURE_TENANT_SLUG = 'gui-review-fixture-tenant'
+
 const ADMIN_SESSION = {
   token: 'tok',
   display_name: 'Admin',
   roles: ['PLATFORM_ADMIN'],
   loginSource: null as null,
-  tenant_slug: 'acme',
-  tenant_display_name: 'Acme Co',
-  tenant_id: 'tid-acme',
+  tenant_slug: FIXTURE_TENANT_SLUG,
+  tenant_display_name: 'GUI Review Fixture Tenant',
+  tenant_id: `tid-${FIXTURE_TENANT_SLUG}`,
   tenant_type: 'production' as const,
   production_tenant_display_name: null,
 }

@@ -1346,6 +1346,41 @@ defmodule Letflow.Routers.EntitiesTest do
     )
   end
 
+  # REQ-394: entity-TYPE-level restriction/grant rows -- one layer above
+  # insert_field_restriction!/3 and insert_user_grant!/4 above, which
+  # operate on individual FIELDS within a visible record. Mirrors those two
+  # helpers' own shape exactly (design §1.2's tables reuse FieldGrants'
+  # table-pair convention verbatim).
+  defp insert_type_restriction!(ctx, entity_type) do
+    Repo.insert_all(
+      "entity_type_restrictions",
+      [
+        %{
+          id: Ecto.UUID.bingenerate(),
+          entity_type: entity_type,
+          inserted_at: NaiveDateTime.utc_now(),
+          updated_at: NaiveDateTime.utc_now()
+        }
+      ],
+      prefix: ctx.schema_name
+    )
+  end
+
+  defp insert_type_grant!(ctx, user_id, entity_type) do
+    Repo.insert_all(
+      "user_entity_type_grants",
+      [
+        %{
+          id: Ecto.UUID.bingenerate(),
+          user_id: Ecto.UUID.dump!(user_id),
+          entity_type: entity_type,
+          inserted_at: NaiveDateTime.utc_now()
+        }
+      ],
+      prefix: ctx.schema_name
+    )
+  end
+
   # The redaction sentinel as it appears ON THE WIRE. `FieldGrants`' sentinel
   # is the ATOM `:__field_redacted__` (deliberately an atom, so it cannot
   # collide with any JSON-decoded value -- that module's own moduledoc);
@@ -1763,10 +1798,11 @@ defmodule Letflow.Routers.EntitiesTest do
   # ═══════════════════════════════════════════════════════════════════════
 
   describe "REQ-311 AC5 -- compile_error() members map to design §4's statuses" do
-    test ":entity_type_not_found -> 404" do
+    test ":entity_type_not_found -> 200 {\"items\": [], \"next_cursor\": null} (REQ-394 -- deliberately no longer 404, see req394 design §2.2)" do
       ctx = tenant_ctx("req311-ce-404")
       conn = query(ctx, %{"entity_type" => "no-such-entity-type"})
-      assert conn.status == 404
+      assert conn.status == 200
+      assert Jason.decode!(conn.resp_body) == %{"items" => [], "next_cursor" => nil}
     end
 
     test "{:field_not_allowed, _} -> 422" do
@@ -2053,10 +2089,14 @@ defmodule Letflow.Routers.EntitiesTest do
       cross_tenant = query(ctx, %{"entity_type" => "hidden_type"}, trace_id: trace)
       nonexistent = query(ctx, %{"entity_type" => "absolutely_no_such_type"}, trace_id: trace)
 
-      assert cross_tenant.status == 404
+      # REQ-394 (design §2.2): :entity_type_not_found is no longer a 404 for
+      # this route -- it is the same 200 {"items": [], "next_cursor": null}
+      # envelope a genuinely-empty, visible type produces. Deliberate change
+      # from this test's original 404 assertion.
+      assert cross_tenant.status == 200
 
       # ONE assertion comparing the whole documents -- not two separate
-      # "both are 404" assertions, which would pass even if the bodies
+      # "both are 200" assertions, which would pass even if the bodies
       # differed and leaked existence.
       assert {cross_tenant.status, cross_tenant.resp_body} ==
                {nonexistent.status, nonexistent.resp_body}
@@ -2406,5 +2446,264 @@ defmodule Letflow.Routers.EntitiesTest do
     Letflow.Api.Pagination.encode_cursor(
       "#{prefix}#{mint_time_us}:#{Jason.encode!(resume_values)}"
     )
+  end
+
+  # ═══════════════════════════════════════════════════════════════════════
+  # REQ-394 -- per-entity-type record authorization, denial indistinguishable
+  # from a genuinely empty entity type. See
+  # lib/letflow/design/req394-per-entity-type-authorization.md for the
+  # design these tests cover. Written by TEST-DESIGNER at WF-02 Step 3.
+  # ═══════════════════════════════════════════════════════════════════════
+
+  describe "REQ-394 AC1 -- denied-type and genuinely-empty-authorized-type POST /entities/query responses are byte-identical" do
+    test "a user denied a restricted type and a user with access to a zero-row type of the same shape get byte-identical 200 envelopes" do
+      ctx = tenant_ctx("req394-ac1")
+      other = second_user_ctx(ctx)
+
+      create_active_definition!(ctx, %{
+        name: "restricted_type",
+        display_name: "Restricted Type",
+        fields: [%{name: "title", type: :string, queried: true}]
+      })
+
+      create_active_definition!(ctx, %{
+        name: "empty_type",
+        display_name: "Empty Type",
+        fields: [%{name: "title", type: :string, queried: true}]
+      })
+
+      # "restricted_type" genuinely HAS a row -- this is the load-bearing
+      # part of the test: it proves the denial actually filters a real
+      # record out, rather than merely happening to coincide with a type
+      # that would have been empty anyway (which would pass vacuously even
+      # if TypeAccess never ran at all -- see the fail-then-pass mutation
+      # check in this requirement's handoff report).
+      seed_record!(ctx, "restricted_type", %{"title" => "should never surface"})
+
+      insert_type_restriction!(ctx, "restricted_type")
+      # ctx.user_id (the first user) holds NO user_entity_type_grants row
+      # for "restricted_type" -- denied. `other` (the second user) never
+      # gets a grant either, but queries the unrestricted, genuinely-empty
+      # "empty_type" instead, which it is entitled to see in full.
+
+      # Pinned so the byte-comparison below is a genuine whole-document
+      # comparison -- x-trace-id is per-REQUEST correlation data (echoed
+      # from the caller's own x-trace-id header, Letflow.Api.Context's own
+      # contract), not per-RESOURCE information, so two DIFFERENT requests
+      # would otherwise differ in this one header even when everything
+      # this requirement cares about is identical. Same convention as the
+      # REQ-311 AC9 INV-5 test above.
+      trace = "req394-ac1-#{Ecto.UUID.generate()}"
+
+      denied = query(ctx, %{"entity_type" => "restricted_type"}, trace_id: trace)
+      empty_authorized = query(other, %{"entity_type" => "empty_type"}, trace_id: trace)
+
+      assert denied.status == 200
+      assert empty_authorized.status == 200
+      assert body_of(denied) == %{"items" => [], "next_cursor" => nil}
+
+      # ONE assertion comparing status + body + headers together -- not
+      # three separate assertions that could each pass independently while
+      # the responses actually differ (this file's own established
+      # convention, see the REQ-311 AC9 INV-5 test above).
+      assert {denied.status, denied.resp_body, Enum.sort(denied.resp_headers)} ==
+               {empty_authorized.status, empty_authorized.resp_body,
+                Enum.sort(empty_authorized.resp_headers)}
+    end
+  end
+
+  describe "REQ-394 AC2 -- denied-type and nonexistent-type responses are byte-identical on all three definitions-read routes" do
+    test "GET /entities/definitions/active/:name" do
+      ctx = tenant_ctx("req394-ac2-active")
+
+      create_active_definition!(ctx, %{
+        name: "restricted_def",
+        display_name: "Restricted Def",
+        fields: [%{name: "secret_field", type: :string, queried: true}]
+      })
+
+      insert_type_restriction!(ctx, "restricted_def")
+      # ctx.user_id holds no grant -- denied.
+
+      trace = "req394-ac2-active-#{Ecto.UUID.generate()}"
+
+      denied =
+        request(:get, "/api/v1/entities/definitions/active/restricted_def", ctx, nil,
+          trace_id: trace
+        )
+
+      nonexistent =
+        request(:get, "/api/v1/entities/definitions/active/absolutely-no-such-def", ctx, nil,
+          trace_id: trace
+        )
+
+      assert denied.status == 404
+      assert nonexistent.status == 404
+      assert {denied.status, denied.resp_body} == {nonexistent.status, nonexistent.resp_body}
+
+      # The field schema never leaked into the denied response's bytes.
+      refute denied.resp_body =~ "secret_field"
+    end
+
+    test "GET /entities/definitions/by-name/:name" do
+      ctx = tenant_ctx("req394-ac2-by-name")
+
+      create_active_definition!(ctx, %{
+        name: "restricted_def",
+        display_name: "Restricted Def",
+        fields: [%{name: "secret_field", type: :string, queried: true}]
+      })
+
+      insert_type_restriction!(ctx, "restricted_def")
+
+      trace = "req394-ac2-by-name-#{Ecto.UUID.generate()}"
+
+      denied =
+        request(:get, "/api/v1/entities/definitions/by-name/restricted_def", ctx, nil,
+          trace_id: trace
+        )
+
+      nonexistent =
+        request(:get, "/api/v1/entities/definitions/by-name/absolutely-no-such-def", ctx, nil,
+          trace_id: trace
+        )
+
+      assert denied.status == 404
+      assert {denied.status, denied.resp_body} == {nonexistent.status, nonexistent.resp_body}
+      refute denied.resp_body =~ "secret_field"
+    end
+
+    test "GET /entities/definitions/:id" do
+      ctx = tenant_ctx("req394-ac2-by-id")
+
+      activated =
+        create_active_definition!(ctx, %{
+          name: "restricted_def",
+          display_name: "Restricted Def",
+          fields: [%{name: "secret_by_id_field", type: :string, queried: true}]
+        })
+
+      insert_type_restriction!(ctx, "restricted_def")
+
+      trace = "req394-ac2-by-id-#{Ecto.UUID.generate()}"
+
+      denied =
+        request(:get, "/api/v1/entities/definitions/#{activated.id}", ctx, nil, trace_id: trace)
+
+      nonexistent =
+        request(:get, "/api/v1/entities/definitions/#{Ecto.UUID.generate()}", ctx, nil,
+          trace_id: trace
+        )
+
+      assert denied.status == 404
+      assert {denied.status, denied.resp_body} == {nonexistent.status, nonexistent.resp_body}
+      refute denied.resp_body =~ "secret_by_id_field"
+
+      # Guard the premise: `activated` really is the same definition being
+      # denied (i.e. this test exercises a REAL, existing definition, not
+      # one that happened to also not exist).
+      assert activated.name == "restricted_def"
+    end
+  end
+
+  describe "REQ-394 AC3 -- nonexistent type and existing-but-unauthorized type are indistinguishable to the same caller" do
+    test "POST /entities/query" do
+      ctx = tenant_ctx("req394-ac3-query")
+
+      create_active_definition!(ctx, %{
+        name: "restricted_type",
+        display_name: "Restricted Type",
+        fields: [%{name: "title", type: :string, queried: true}]
+      })
+
+      seed_record!(ctx, "restricted_type", %{"title" => "hidden from this caller"})
+      insert_type_restriction!(ctx, "restricted_type")
+
+      trace = "req394-ac3-query-#{Ecto.UUID.generate()}"
+
+      unauthorized = query(ctx, %{"entity_type" => "restricted_type"}, trace_id: trace)
+      nonexistent = query(ctx, %{"entity_type" => "totally-absent-type"}, trace_id: trace)
+
+      assert unauthorized.status == 200
+      assert body_of(unauthorized) == %{"items" => [], "next_cursor" => nil}
+
+      assert {unauthorized.status, unauthorized.resp_body, Enum.sort(unauthorized.resp_headers)} ==
+               {nonexistent.status, nonexistent.resp_body, Enum.sort(nonexistent.resp_headers)}
+    end
+
+    test "GET /entities/definitions/active/:name" do
+      ctx = tenant_ctx("req394-ac3-definitions")
+
+      create_active_definition!(ctx, %{
+        name: "restricted_def",
+        display_name: "Restricted Def",
+        fields: [%{name: "title", type: :string, queried: true}]
+      })
+
+      insert_type_restriction!(ctx, "restricted_def")
+
+      trace = "req394-ac3-definitions-#{Ecto.UUID.generate()}"
+
+      unauthorized =
+        request(:get, "/api/v1/entities/definitions/active/restricted_def", ctx, nil,
+          trace_id: trace
+        )
+
+      nonexistent =
+        request(:get, "/api/v1/entities/definitions/active/totally-absent-type", ctx, nil,
+          trace_id: trace
+        )
+
+      assert unauthorized.status == 404
+
+      assert {unauthorized.status, unauthorized.resp_body} ==
+               {nonexistent.status, nonexistent.resp_body}
+    end
+  end
+
+  describe "REQ-394 AC4 -- a caller with only the coarse route-level permission and no per-type restriction rows is completely unaffected" do
+    test "a tenant that never inserts an entity_type_restrictions row behaves exactly as before this requirement, on both route families" do
+      ctx = tenant_ctx("req394-ac4")
+      seed_queryable_widget!(ctx)
+      seed_record!(ctx, "widget", %{"title" => "unrestricted"})
+
+      # No insert_type_restriction!/2 call anywhere in this test -- the
+      # tenant's entity_type_restrictions table is genuinely empty.
+
+      query_conn = query(ctx, %{"entity_type" => "widget"})
+      assert query_conn.status == 200
+      assert [item] = body_of(query_conn)["items"]
+      assert item["field_values"]["title"] == "unrestricted"
+
+      def_conn = request(:get, "/api/v1/entities/definitions/active/widget", ctx)
+      assert def_conn.status == 200
+      assert body_of(def_conn)["name"] == "widget"
+    end
+  end
+
+  describe "REQ-394 -- a per-user grant restores full access to a restricted type, end to end through the real routes" do
+    test "a user holding a matching user_entity_type_grants row queries and reads the restricted type normally" do
+      ctx = tenant_ctx("req394-grant-restores-access")
+
+      create_active_definition!(ctx, %{
+        name: "restricted_type",
+        display_name: "Restricted Type",
+        fields: [%{name: "title", type: :string, queried: true}]
+      })
+
+      seed_record!(ctx, "restricted_type", %{"title" => "now visible"})
+
+      insert_type_restriction!(ctx, "restricted_type")
+      insert_type_grant!(ctx, ctx.user_id, "restricted_type")
+
+      query_conn = query(ctx, %{"entity_type" => "restricted_type"})
+      assert query_conn.status == 200
+      assert [item] = body_of(query_conn)["items"]
+      assert item["field_values"]["title"] == "now visible"
+
+      def_conn = request(:get, "/api/v1/entities/definitions/active/restricted_type", ctx)
+      assert def_conn.status == 200
+      assert body_of(def_conn)["name"] == "restricted_type"
+    end
   end
 end

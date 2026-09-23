@@ -29221,7 +29221,7 @@ requirements:
   - id: REQ-394
     title: "Per-entity-type record authorization, with denial indistinguishable from a genuinely empty entity type"
     owner: ELIXIR-DEV
-    status: pending
+    status: done
     stage: S6
     impl_order: 754  # letflow-queue task id, GH#1642. Registered 2026-09-20 by ORCH;
       # corrects a fabricated/self-assigned id (751) that was never a real

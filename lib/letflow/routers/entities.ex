@@ -229,6 +229,7 @@ defmodule Letflow.Routers.Entities do
   alias Letflow.Entities.Query.Types
   alias Letflow.Entities.Record.Latest
   alias Letflow.Entities.Records
+  alias Letflow.Entities.TypeAccess
   alias Letflow.EventStore.Registry.ValidationFailure
   alias Letflow.Repository.Artifact
   alias Letflow.Repository.EntityAttachment
@@ -778,6 +779,7 @@ defmodule Letflow.Routers.Entities do
   defp handle_get_active_definition_by_name(conn, name) do
     render_get_definition(
       conn,
+      conn.assigns.auth_context.user_id,
       Definitions.get_active_definition_by_name(name, prefix!(conn))
     )
   end
@@ -785,7 +787,11 @@ defmodule Letflow.Routers.Entities do
   # ══ GET /entities/definitions/by-name/:name ═══════════════════════════
 
   defp handle_get_definition_by_name(conn, name) do
-    render_get_definition(conn, Definitions.get_definition_by_name(name, prefix!(conn)))
+    render_get_definition(
+      conn,
+      conn.assigns.auth_context.user_id,
+      Definitions.get_definition_by_name(name, prefix!(conn))
+    )
   end
 
   # ══ GET /entities/definitions/:id ═════════════════════════════════════
@@ -802,19 +808,45 @@ defmodule Letflow.Routers.Entities do
 
   defp handle_get_definition(conn, raw_id) do
     case Ecto.UUID.cast(raw_id) do
-      {:ok, id} -> render_get_definition(conn, Definitions.get_definition(id, prefix!(conn)))
-      :error -> Response.not_found(conn)
+      {:ok, id} ->
+        render_get_definition(
+          conn,
+          conn.assigns.auth_context.user_id,
+          Definitions.get_definition(id, prefix!(conn))
+        )
+
+      :error ->
+        Response.not_found(conn)
     end
   end
 
-  # design §7, the three getters: {:error, :not_found} -> 404 (INV-5 -- a
+  # design §7/REQ-394 design §3.1: {:error, :not_found} -> 404 (INV-5 -- a
   # cross-tenant id and a nonexistent id are the SAME call producing the SAME
   # zero-detail bytes); {:error, :invalid_schema_name} -> 500 (unreachable).
-  defp render_get_definition(conn, {:ok, %EntityDefinition{} = definition}),
-    do: Response.ok(conn, definition_map(definition))
+  #
+  # REQ-394: the success clause gains a per-type authorization check
+  # (design §3.1). `{:ok, :denied}` renders EXACTLY what the
+  # `{:error, :not_found}` clause below already renders -- not a new
+  # response shape, the existing 404 this route already produces for a
+  # genuinely nonexistent name/id (design §3.2 explains why this route
+  # reuses 404 rather than the query path's 200-empty shape). The denied
+  # branch never reaches `definition_map/1`, so no field of the restricted
+  # definition -- including its schema -- is ever serialized (design §3.1's
+  # own AC2 note, INV-2).
+  @spec render_get_definition(Plug.Conn.t(), user_id :: String.t(), result) :: Plug.Conn.t()
+        when result: {:ok, EntityDefinition.t()} | {:error, :not_found | :invalid_schema_name}
+  defp render_get_definition(conn, user_id, {:ok, %EntityDefinition{name: name} = definition}) do
+    case TypeAccess.authorized?(user_id, name, prefix!(conn)) do
+      {:ok, :allowed} -> Response.ok(conn, definition_map(definition))
+      {:ok, :denied} -> Response.not_found(conn)
+      {:error, _common_error} -> Response.internal_error(conn)
+    end
+  end
 
-  defp render_get_definition(conn, {:error, :not_found}), do: Response.not_found(conn)
-  defp render_get_definition(conn, {:error, _common_error}), do: Response.internal_error(conn)
+  defp render_get_definition(conn, _user_id, {:error, :not_found}), do: Response.not_found(conn)
+
+  defp render_get_definition(conn, _user_id, {:error, _common_error}),
+    do: Response.internal_error(conn)
 
   # ══ GET /entities/definitions ═════════════════════════════════════════
   #
@@ -1582,7 +1614,16 @@ defmodule Letflow.Routers.Entities do
   # ⛔ `run_query/4`'s `with` chain IS the composition design §1 specifies,
   # and test/letflow/entities/query_cursor_field_grants_test.exs extracts
   # exactly this chain (comments stripped) to assert its order. Keep the
-  # four steps here, in this order.
+  # five steps here, in this order.
+  #
+  # REQ-394: `TypeAccess.authorized?/3` runs AFTER `Compiler.compile/2` has
+  # already confirmed the entity type exists (design §2.1) -- it is only
+  # ever asked about a real entity type, never a nonexistent one. Its
+  # `{:ok, :denied}` result does not match the `{:ok, :allowed}` pattern
+  # below, so it falls into this `with`'s implicit `else` as the bare value
+  # `{:ok, :denied}`, mapped by `render_query_error/2`'s own clause for it
+  # (design §2.2) to the same 200-empty envelope a genuinely-empty type
+  # produces -- deliberately indistinguishable, not a 403/404.
   #
   # `Allowlist.load/2` is called here even though `compile/2` loads one
   # internally, and that is DELIBERATE, not an oversight to optimise away.
@@ -1600,6 +1641,7 @@ defmodule Letflow.Routers.Entities do
     with {:ok, request} <- build_query_request(body),
          {:ok, opts} <- build_paginate_opts(body),
          {:ok, compiled} <- Compiler.compile(request, prefix),
+         {:ok, :allowed} <- TypeAccess.authorized?(user_id, request.entity_type, prefix),
          {:ok, allowlist} <- Allowlist.load(request.entity_type, prefix),
          {:ok, page} <- Cursor.paginate(request, compiled, allowlist, opts, prefix),
          {:ok, redacted} <- redact(page, request, user_id, prefix) do
@@ -1608,6 +1650,19 @@ defmodule Letflow.Routers.Entities do
         "next_cursor" => redacted.next_cursor
       })
     else
+      # REQ-394 (design §2.2): both "the type does not exist at all" and
+      # "the type exists but this caller is denied by TypeAccess" collapse
+      # to the SAME 200-empty envelope, on THIS route only. This is a
+      # local override of render_query_error/2's own :entity_type_not_found
+      # clause (which stays a 404 below, unchanged) -- render_query_error/2
+      # is shared with the aggregate (render_aggregate_error/2) and export
+      # (render_export_error/2) routes' own fallthrough clauses, and
+      # REQ-394's acceptance criteria name only POST /entities/query and the
+      # three definitions-read routes; changing the shared function's own
+      # :entity_type_not_found clause would silently change those two
+      # unrelated routes' already-shipped 404 behavior too.
+      {:ok, :denied} -> render_type_hidden(conn)
+      {:error, :entity_type_not_found} -> render_type_hidden(conn)
       {:error, reason} -> render_query_error(conn, reason)
     end
   end
@@ -2215,7 +2270,14 @@ defmodule Letflow.Routers.Entities do
   # in a logged, detail-free 500 catch-all (INV-8).
   #
   # compile_error(), all 15 members:
-  #   :entity_type_not_found              -> 404 (INV-5)
+  #   :entity_type_not_found              -> 404 (INV-5) via THIS clause, for every
+  #                                          caller of render_query_error/2 (aggregate,
+  #                                          export). REQ-394 (design §2.2) changes this
+  #                                          to 200 {"items":[],"next_cursor":null} for
+  #                                          POST /entities/query ONLY -- handled locally
+  #                                          in run_query/4's own `with`/`else`, before
+  #                                          this shared function is ever reached for that
+  #                                          reason on that route.
   #   {:unknown_operator, _}              -> 400 (pre-parsed above; mapped)
   #   {:unknown_sort_dir, _}              -> 400 (pre-parsed above; mapped)
   #   {:field_not_allowed, _}             -> 422
@@ -2230,6 +2292,12 @@ defmodule Letflow.Routers.Entities do
   #   {:duplicate_join_target, _}         -> 422
   #   {:relation_column_not_found, _, _}  -> 422
   #   :invalid_schema_name                -> 500 (unreachable, INV-1)
+  #
+  # TypeAccess.authorized?/3's `{:ok, :denied}` result (REQ-394 design
+  # §2.1/§2.2) is NOT a member of this union and never reaches this
+  # function -- it is handled locally in run_query/4's own `with`/`else`,
+  # mapped to the same 200 {"items":[],"next_cursor":null} envelope as
+  # :entity_type_not_found gets on that one route.
   #
   # Cursor.paginate/5's own union:
   #   :page_size_too_large / :invalid_cursor / :wrong_endpoint /
@@ -2247,6 +2315,12 @@ defmodule Letflow.Routers.Entities do
   defp render_query_error(conn, {:unknown_sort_dir, raw}),
     do: Response.bad_request(conn, "unknown sort direction: #{inspect(raw)}")
 
+  # NOTE (REQ-394): this clause stays a plain 404 -- render_query_error/2 is
+  # shared by render_aggregate_error/2 and render_export_error/2's own
+  # fallthrough clauses, and REQ-394's design only changes this reason's
+  # handling for POST /entities/query specifically (handled locally in
+  # run_query/4's own `with`/`else`, not here) -- see that function's
+  # comment for the full reasoning.
   defp render_query_error(conn, :entity_type_not_found), do: Response.not_found(conn)
 
   defp render_query_error(conn, {:field_not_allowed, field}),
@@ -2314,6 +2388,11 @@ defmodule Letflow.Routers.Entities do
     Logger.warning("entity query failed: #{inspect(reason)}")
     Response.internal_error(conn)
   end
+
+  # Shared by both render_query_error/2 clauses above so they cannot drift
+  # apart in body shape over time -- one function, two call sites (design
+  # §2.2).
+  defp render_type_hidden(conn), do: Response.ok(conn, %{"items" => [], "next_cursor" => nil})
 
   # ══ Query response allowlist (INV-2) ══════════════════════════════════
   #

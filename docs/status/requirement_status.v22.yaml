@@ -375,3 +375,42 @@ history:
     agent: DOC-UPDATER
     at: "2026-09-23T17:10:09Z"
     note: "WF02-REQ393-20260923 done -- generic entity-list browse screen (EntityListBrowserPage)"
+  - req: REQ-394
+    event: done
+    agent: DOC-UPDATER
+    at: "2026-09-23T17:54:56Z"
+    note: >
+      WF02-REQ394-20260923 Step 6 -- all gates passed (CODE-DESIGN-VALIDATOR,
+      SECURITY-REVIEWER, REVIEWER PASSed the design/implementation;
+      TEST-DESIGN-VALIDATOR, TEST-RUNNER, RELEASE-VALIDATOR PASSed the
+      implementation; final verdict MERGEABLE, no blocking defects). Ships a
+      new per-(user, entity_type) authorization layer,
+      `Letflow.Entities.TypeAccess`, backed by two new tenant-scoped tables
+      (`entity_type_restrictions`, `user_entity_type_grants`, migrations
+      20260923010001/20260923010002). `POST /entities/query` and the three
+      entity-definition-read routes now fold a caller lacking per-type
+      access into the exact same response as a genuinely empty/nonexistent
+      type -- 200 `{"items": [], "next_cursor": null}` for the query route,
+      and the equivalent not-found-shaped response for the definition-read
+      routes -- closing the existence-oracle gap named in this requirement's
+      description. This is a deliberate, tested behavior change from
+      REQ-311's prior `{:error, :entity_type_not_found}` -> plain 404
+      mapping for a query against a type absent from the tenant entirely:
+      that case is now folded into the same indistinguishable-empty-type
+      response rather than a distinguishable 404, and is documented and
+      covered directly in the design doc and test suite (test/specs/REQ-394.md,
+      test/letflow/entities/type_access_test.exs,
+      test/letflow/routers/entities_test.exs). The existing coarse
+      `:EntitiesQuery`/`:EntitiesDefinitionsRead` route-level permissions are
+      unchanged and still required to reach the query engine at all -- this
+      is an additional, finer-grained check layered on top. Design:
+      lib/letflow/design/req394-per-entity-type-authorization.md (status
+      line corrected from its stale "pending CODE-DESIGN-VALIDATOR" wording
+      to reflect the full passed pipeline, per RELEASE-VALIDATOR's non-
+      blocking flag). No docs/migration/stage-N-*.md or decisions/*.md file
+      was named by this requirement's acceptance criteria. README.md not
+      touched -- grepped for entity_type/EntitiesQuery/Entities-route
+      surface: zero hits, no documented current-behavior surface to keep in
+      sync. Status flipped in docs/requirements.yaml. Full pipeline on
+      feature/WF02-REQ394-20260923 (85514518 design, bd77a129
+      implementation, 252fbfe9 tests), merged via PR.

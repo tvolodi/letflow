@@ -118,3 +118,31 @@ No permanent Playwright spec was written — the feature it would exercise doesn
 yet (see REQ-387's own acceptance criteria, which is where that spec will be authored,
 against a real shipped feature, once REQ-386/387 land). The scenario's stale NOTE
 (ISS-0527) was left in place, since the feature it warns about is still not real.
+
+## Closing note (2026-09-23, DOC-UPDATER) — PARTIAL close, chain not yet complete
+
+**REQ-388 (EO-005's denied-read audit logging) is now `done`**, shipped on
+`feature/WF02-REQ388-20260923` (tip `f4a9b9c9`) and merged to `main`. It added
+the `Letflow.Audit` write this report found missing on the denied branches
+(cross-tenant and cross-instance-same-tenant) of
+`fetch_scoped_attachment_content/3` in `lib/letflow/routers/instances.ex`,
+without disturbing the existing byte-identical `Response.not_found(conn)`
+shape (EO-001) — the audit write fires strictly after the response tuple is
+decided. `web/src/pages/admin/AuditLogPage.tsx` needed no frontend change,
+per its own acceptance criteria and REQ-382's precedent for reusing the
+existing audit-log mechanism. Full pipeline history — CODE-DESIGNER,
+SECURITY-REVIEWER, REVIEWER, TEST-DESIGNER (found and fixed a design-doc
+arity mismatch), TEST-RUNNER, and RELEASE-VALIDATOR's independent
+re-verification (final verdict PASS, mergeable, architecturally sound) — is
+recorded in `docs/status/requirement_status.v22.yaml`'s REQ-388 `done` entry,
+not restated here.
+
+**This is only a partial close of the three-part chain this report filed.
+REQ-386 (signed, time-limited link issuance/expiry) and REQ-387 (the
+frontend document-viewer screen and its Playwright spec) both remain
+`status: pending`** in `docs/requirements.yaml` as of this note. EO-003/
+EO-004 (expiry mechanism) and the GUI-layer half of EO-001/EO-002, plus the
+stale NOTE (ISS-0527) removal that REQ-387's own acceptance criteria makes
+conditional on both REQ-386 and REQ-387 shipping, are all still open. Do not
+read this note as the scenario being fully resolved — only the audit-logging
+third of it is.

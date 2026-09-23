@@ -31,5 +31,30 @@
       "All tests pass"
     ]
   },
-  "result": null
+  "result": {
+    "status": "COMPLETED",
+    "outcome": "PASS",
+    "completed_at": "2026-09-24T01:05:00Z",
+    "summary": "Tests written for REQ-396 ACs 2, 3, and 4. Also fixed a production bug in engine.ex uncovered by the tests: `t.status == \"PENDING\"` and `status: \"CANCELLED\"` in persist_escalation_timer_fired_advance/7 used string literals against Ecto.Enum fields; changed to atoms (:pending / :cancelled).",
+    "artifacts_out": [
+      "test/specs/REQ-396.md",
+      "test/letflow/definitions/graph_test.exs (4 new CHK-21 tests added at end)",
+      "test/letflow/engine/human_task_escalation_test.exs (new file, 1 test)",
+      "test/letflow/simulation/req206_swiftroute_test.exs (1 new AC4 test added)",
+      "lib/letflow/engine.ex (bug fix: Ecto.Enum atom values in cancel_original_task Multi step)"
+    ],
+    "test_results": {
+      "command": "mix test test/letflow/definitions/graph_test.exs test/letflow/simulation/req206_swiftroute_test.exs test/letflow/engine/human_task_escalation_test.exs",
+      "passed": 77,
+      "total": 78,
+      "failed": 1,
+      "pre_existing_failures": [
+        "REQ-288 AC1: System.cmd(grep) -> :enoent (grep not in PATH on Windows; passes on Linux CI; test unmodified by this step)"
+      ],
+      "new_test_failures": 0
+    },
+    "check_test": "mix letflow.check.test cannot run on Windows (shells out to bash scripts/test_parallel.sh, which requires bash in PATH). ISS-0069 dead-default-argument check verified manually: create_attrs/2 in human_task_escalation_test.exs has `overrides \\\\ %{}` which IS exercised by the single call `create_attrs(definition)` — not a dead default. No other new helpers have default arguments.",
+    "engine_fix_rationale": "persist_escalation_timer_fired_advance/7's :cancel_original_task Multi step used `t.status == \"PENDING\"` in a where clause and `status: \"CANCELLED\"` in update_all set. Ecto.Enum.dump/2 cannot dump string literals; only atoms (:pending, :cancelled) are valid. REVIEWER noted this as non-blocking (correct stored values) but the test proved it throws Ecto.QueryError at runtime. Fixed to :pending / :cancelled.",
+    "pre_fix_mutant": "Mutant M1 (remove :cancel_original_task step from persist_escalation_timer_fired_advance/7): sub-AC (a) fails — task stays :pending. 1 test failed. Mutant reverted."
+  }
 }

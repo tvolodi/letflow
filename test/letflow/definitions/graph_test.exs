@@ -1342,4 +1342,108 @@ defmodule Letflow.Definitions.GraphTest do
       end
     end
   end
+
+  # ---------------------------------------------------------------------
+  # validate_node_attributes/1 -- CHK-21 (REQ-396): HUMAN_TASK optional
+  # escalation attributes (escalation_timer_duration + escalation_role).
+  # Co-required: both must be present or both absent. When present,
+  # escalation_timer_duration must be a valid ISO-8601 duration (same
+  # parser as CHK-12's duration_iso8601). See
+  # lib/letflow/design/req396-human-task-escalation-timer.md §3.2 and
+  # test/specs/REQ-396.md for the full test-design rationale.
+  # ---------------------------------------------------------------------
+
+  describe "validate_node_attributes/1 -- CHK-21: HUMAN_TASK escalation attributes (REQ-396 AC2)" do
+    test "valid: both escalation_timer_duration and escalation_role present and well-formed -> no violation" do
+      # Happy path -- CHK-21 is a pure check that fires only on malformed
+      # or partially-set escalation attrs; a well-formed pair must be
+      # completely silent, including when role is also present.
+      g =
+        graph(
+          [
+            attr_node("h1", :HUMAN_TASK, %{
+              "role" => "approver",
+              "escalation_timer_duration" => "PT1H",
+              "escalation_role" => "role-escalation"
+            })
+          ],
+          []
+        )
+
+      assert Graph.validate_node_attributes(g) == %{valid: true, violations: []}
+    end
+
+    test "invalid: escalation_timer_duration present but escalation_role absent or blank -> :missing_escalation_role" do
+      # Co-required constraint (design §3.2 item 3): duration without role
+      # is always an error, regardless of whether role is nil, missing, or
+      # blank. One collective assertion covers all three sub-cases so a
+      # regression on any sub-case fails without masking the others.
+      for attrs_override <- [
+            %{"escalation_timer_duration" => "PT1H"},
+            %{"escalation_timer_duration" => "PT1H", "escalation_role" => nil},
+            %{"escalation_timer_duration" => "PT1H", "escalation_role" => ""},
+            %{"escalation_timer_duration" => "PT1H", "escalation_role" => "   "}
+          ] do
+        g =
+          graph(
+            [attr_node("h1", :HUMAN_TASK, Map.put(attrs_override, "role", "approver"))],
+            []
+          )
+
+        result = Graph.validate_node_attributes(g)
+
+        assert codes(result) == [:missing_escalation_role],
+               "expected :missing_escalation_role for #{inspect(attrs_override)}, got #{inspect(codes(result))}"
+
+        [violation] = result.violations
+        assert violation.message =~ "h1"
+      end
+    end
+
+    test "invalid: escalation_role present but escalation_timer_duration absent -> :missing_escalation_timer_duration" do
+      # Co-required constraint (design §3.2 item 4): role without duration.
+      g =
+        graph(
+          [
+            attr_node("h1", :HUMAN_TASK, %{
+              "role" => "approver",
+              "escalation_role" => "role-escalation"
+            })
+          ],
+          []
+        )
+
+      result = Graph.validate_node_attributes(g)
+      assert result.valid == false
+      assert codes(result) == [:missing_escalation_timer_duration]
+
+      [violation] = result.violations
+      assert violation.message =~ "h1"
+    end
+
+    test "invalid: escalation_timer_duration has invalid ISO-8601 format -> :invalid_escalation_timer" do
+      # Design §3.2 item 2: the same parser CHK-12 uses for duration_iso8601
+      # on :TIMER nodes rejects malformed strings here too. REQ-396 AC2's
+      # explicit requirement: "NOT-ISO" must produce :invalid_escalation_timer.
+      g =
+        graph(
+          [
+            attr_node("h1", :HUMAN_TASK, %{
+              "role" => "approver",
+              "escalation_timer_duration" => "NOT-ISO",
+              "escalation_role" => "role-escalation"
+            })
+          ],
+          []
+        )
+
+      result = Graph.validate_node_attributes(g)
+      assert result.valid == false
+      assert codes(result) == [:invalid_escalation_timer]
+
+      [violation] = result.violations
+      assert violation.message =~ "h1"
+      assert violation.message =~ "NOT-ISO"
+    end
+  end
 end

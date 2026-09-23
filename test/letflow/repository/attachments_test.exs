@@ -613,4 +613,39 @@ defmodule Letflow.Repository.AttachmentsTest do
       assert function_exported?(Repository, :upsert_content, 6)
     end
   end
+
+  # ---------------------------------------------------------------------------------
+  # ISS-0785 regression -- cross-instance-same-tenant denial in get_content/3
+  # must return {:error, :not_found} before any artifact blob read.
+  #
+  # Pre-fix failure evidence: the old get_content/2 had no instance_id parameter at
+  # all; calling get_content/3 on pre-fix code raises UndefinedFunctionError at
+  # runtime (trivially satisfied). Per WF-03 procedure for the "code did not exist"
+  # case, a mutation of check_instance_match/2 is also reported in the handoff.
+  # ---------------------------------------------------------------------------------
+
+  describe "ISS-0785: cross-instance-same-tenant denial in get_content/3" do
+    test "returns {:error, :not_found} when the attachment belongs to a different instance in the same tenant" do
+      %{schema_name: schema} = provisioned_tenant("iss0785-cross-instance")
+
+      instance_a = Ecto.UUID.generate()
+      instance_b = Ecto.UUID.generate()
+
+      assert {:ok, attachment} =
+               Attachments.upload(
+                 upload_attrs(instance_id: instance_a),
+                 prefix: schema
+               )
+
+      # instance_b is a valid UUID in the same tenant schema but does not own
+      # this attachment -- check_instance_match/2 must fire before the blob read
+      # and return {:error, :not_found}.
+      assert Attachments.get_content(attachment.id, instance_b, prefix: schema) ==
+               {:error, :not_found}
+
+      # Confirm the owning instance (instance_a) can still retrieve the content.
+      assert {:ok, ^attachment, _artifact} =
+               Attachments.get_content(attachment.id, instance_a, prefix: schema)
+    end
+  end
 end

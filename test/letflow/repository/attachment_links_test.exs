@@ -114,6 +114,7 @@ defmodule Letflow.Repository.AttachmentLinksTest do
                AttachmentLinks.issue(attachment_id, tenant.tenant_id, now: fn -> @base_now end)
 
       past_expiry = DateTime.add(@base_now, 301, :second)
+
       assert {:error, :expired_or_invalid} =
                AttachmentLinks.verify(stale_token, tenant.tenant_id, now: fn -> past_expiry end)
 

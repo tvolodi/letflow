@@ -1,0 +1,37 @@
+{
+  "handoff_id": "WF03-ISS0785-20260923-step-01",
+  "run_id": "WF03-ISS0785-20260923",
+  "workflow": "WF-03",
+  "step": "Step 0.5 + Step 1",
+  "to_agent": "ISSUE-FIXER",
+  "from_agent": "ORCH",
+  "status": "PENDING",
+  "created_at": "2026-09-23T04:13:56Z",
+  "started_at": "2026-09-23T04:13:56Z",
+  "context": {
+    "branch_name": "feature/WF03-ISS0785-20260923",
+    "issue_id": "ISS-0785",
+    "issue_file": "docs/issues/ISS-0785.yaml",
+    "stage": "S6",
+    "issue_text": "Cross-instance-same-tenant attachment-content denial is timing-distinguishable from cross-tenant/never-issued denial via an unconditional artifact-blob read.\n\nFull detail in docs/issues/ISS-0785.yaml.\n\nSummary: Letflow.Repository.Attachments.get_content/2 (lib/letflow/repository/attachments.ex ~362-445) performs an unconditional Repo.get on the artifact blob whenever the attachment metadata row exists, regardless of instance_id. The instance_id check in fetch_scoped_attachment_content/4 (lib/letflow/routers/instances.ex ~1156) happens AFTER get_content/2 returns. This makes cross-instance-same-tenant denials cost 2 Repo round-trips (second reads the full artifact byte blob) vs 1 for cross-tenant/never-issued. This is a timing side-channel that distinguishes two classes of denial that REQ-211/212 explicitly intends to be indistinguishable.\n\nSuggested fix (from ISS-0785.yaml): Reorder get_content/2's lookup so instance_id check happens before the artifact blob read, OR thread instance_id into get_content/2 so it can fold the cross-instance case into the same single-round-trip nil path.",
+    "related_requirements": ["REQ-211", "REQ-212", "REQ-388"],
+    "affected_files": ["lib/letflow/repository/attachments.ex"],
+    "severity": "MINOR",
+    "artifacts_in": [
+      "docs/issues/ISS-0785.yaml",
+      "lib/letflow/repository/attachments.ex",
+      "lib/letflow/routers/instances.ex"
+    ]
+  },
+  "task": {
+    "description": "Execute Step 0.5 (Registry Lookup) and Step 1 (Diagnose) for ISS-0785 per docs/agents/workflows/WF-03_issue_resolving.md.\n\nWorkspace: c:\\Users\\tvolo\\dev\\ai-dala\\letflow\nBranch: feature/WF03-ISS0785-20260923\n\nSTEP 0.5 — REGISTRY LOOKUP:\n1. Scan docs/issues/*.yaml for resolved entries with similar symptoms (timing side-channel, attachment cross-instance, existence-probing, Attachments.get_content).\n2. Check if this exact issue has been fixed before (same root cause recurrence pattern?).\n3. Note findings in result.\n\nSTEP 1 — DIAGNOSE (No Speculation rule applies):\n1. Read the actual source files directly -- do NOT diagnose from the issue's prose alone.\n2. Read lib/letflow/repository/attachments.ex in full, especially get/2, get_content/2, check_scan_status_clean/1.\n3. Read lib/letflow/routers/instances.ex around fetch_scoped_attachment_content (search for that function).\n4. Trace the actual call chain: fetch_scoped_attachment_content/4 -> Attachments.get_content/2 -> get/2 -> check_scan_status_clean/1 -> Repo.get(Artifact, ...). Confirm the timing gap is real by reading the actual code, not the issue's description.\n5. Determine the precise fix: should instance_id be threaded into get_content/2, or should the caller (instances.ex) check instance_id BEFORE calling get_content/2?\n6. Write the diagnosis into result.summary: root cause (actual code lines), exact fix needed, what a fix must NOT break (REQ-211/212's existing cross-tenant isolation invariants).\n7. DO NOT implement the fix -- produce a diagnosis for CODE-DESIGNER.\n\nAfter completing both steps:\n1. Write handoffs/WF03-ISS0785-20260923/step-01-issue-fixer.json with status COMPLETED, result.status PASS, detailed summary.\n2. git add handoffs/WF03-ISS0785-20260923/step-01-issue-fixer.json\n3. git commit -m 'fix(WF03-ISS0785-20260923): Step 0.5 + Step 1 -- registry lookup + diagnosis'\n4. git push\n\nReport back: your diagnosis of the root cause and recommended fix approach.",
+    "acceptance_criteria": [
+      "Step 0.5: documented whether a prior match was found in docs/issues/*.yaml",
+      "Step 1: root cause confirmed by reading actual source (not just repeating issue description)",
+      "Exact lines/functions identified where the unconditional blob read occurs",
+      "Fix approach stated clearly (thread instance_id into get_content/2, OR check before calling)",
+      "No implementation -- diagnosis only"
+    ]
+  },
+  "result": null
+}

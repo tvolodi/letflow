@@ -1,0 +1,60 @@
+id: ISS-0786
+title: >
+  config/dev.exs's DB pool_size (10) is thin against Letflow.Plugs.Admission's
+  concurrency cap (8), causing intermittent 503s under concurrent Playwright
+  e2e load
+discovered_by: TEST-DESIGNER
+discovered_in_run: WF02-REQ387-20260923
+discovered_at: "2026-09-23T07:10:00Z"
+severity: MINOR
+tags:
+  - backend
+  - dev-environment
+  - test-infra
+description: >
+  Found while getting REQ-387's attachment-cross-tenant e2e spec to pass
+  live against a real dev-mode backend. The spec's concurrent request
+  pacing (multiple onboarding/upload/fetch calls in quick succession)
+  intermittently triggered 503 responses across unrelated endpoints --
+  confirmed via isolation this is not attachment-specific logic, not a
+  fixture bug in the REQ-387/REQ-386 code paths, and not a permanent
+  connection leak (idle traffic fully recovers).
+
+  Root cause: `config/dev.exs`'s Ecto pool_size is 10, while
+  `Letflow.Plugs.Admission`'s global concurrency cap is 8 -- thin
+  headroom against Playwright's request pacing under a real Keycloak
+  auth round-trip per request. `POOL_SIZE`-style env override doesn't
+  help here since `config/runtime.exs` only reads it under
+  `config_env() == :prod`, not `:dev`.
+
+  A temporary local pool_size:40 bump made the affected run fully green
+  (reverted before commit, not shipped). Documented in the affected e2e
+  spec's own header comment for future runs to recognize the symptom
+  quickly rather than re-diagnosing it as a real regression.
+affected_files:
+  - config/dev.exs
+  - lib/letflow/plugs/admission.ex
+related_requirements:
+  - REQ-387
+severity_rationale: >
+  MINOR -- dev-mode/test-infra concern only, not a production code defect.
+  Impact is intermittent e2e flakiness under concurrent load in this
+  specific dev/CI configuration, not a correctness or security issue.
+suggested_fix: >
+  Raise config/dev.exs's pool_size to comfortably exceed
+  Letflow.Plugs.Admission's concurrency cap (e.g. pool_size: 20-40), or
+  make the dev pool_size configurable via env var the same way prod
+  already is (extend config/runtime.exs's POOL_SIZE handling to also
+  apply under :dev, or add a dev-specific override). Small, likely
+  single-line config change -- probably sized for ORCH's direct-action
+  rule, no design doc needed, but worth confirming this doesn't affect
+  CI's own postgres sizing/parallelism assumptions (docs/anti-patterns.md
+  ISS-0219/ISS-0222) before changing.
+queue_ref: "Q-785"
+# NOTE: letflow-queue's task 785 auto-titled itself "ISS-0785" from its own
+# atomically-allocated id, but the real on-disk filename is ISS-0786.yaml --
+# slot ISS-0785 was already taken by this same session's timing-side-channel
+# issue. Established, recurring queue-id/filename divergence pattern for
+# this project; queue_ref/github_ref below are authoritative for this file.
+github_ref: "GH-1744"
+status: open

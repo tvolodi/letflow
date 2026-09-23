@@ -4610,8 +4610,16 @@ volumes:
     path: docs/status/requirement_status.v22.yaml
     status: current
     opened: 2026-09-22
-    entries: 11
+    entries: 12
     note: >
+      Incremented to 12 by DOC-UPDATER's REQ-398 done-event append
+      (WF02-REQ398-20260923, 2026-09-23T20:05:56Z -- frontend promotion-
+      review list/queue page + nav entry). `grep -c "^  - req:"
+      docs/status/requirement_status.v22.yaml` = 12 on-disk entries,
+      recounted directly rather than assumed. 453 lines / 26762 bytes,
+      well under the 1200-line/120000-byte roll ceiling, so no roll
+      triggered. Prior notes preserved below verbatim.
+
       Incremented to 11 by DOC-UPDATER's rebase of
       WF02-REQ394-20260923 onto origin/main (Step 6/7, resolving a merge
       conflict in this index and in requirement_status.v22.yaml caused by

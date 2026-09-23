@@ -29563,7 +29563,7 @@ requirements:
   - id: REQ-398
     title: "Frontend promotion-review list/queue page + nav entry, wired to REQ-397's list endpoint"
     owner: FRONTEND-DEV
-    status: pending
+    status: done
     stage: S8
     impl_order: 766  # letflow-queue task id, GH#1660. Registered 2026-09-21 by ORCH.
     description: >

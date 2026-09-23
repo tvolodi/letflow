@@ -93,6 +93,7 @@ export function useTenantScopedQueryKeys() {
     promotions: {
       all: () => queryKeys.promotions.all(tenantId),
       context: queryKeys.promotions.context.bind(null, tenantId),
+      list: queryKeys.promotions.list.bind(null, tenantId),
     },
     entities: {
       all: () => queryKeys.entities.all(tenantId),

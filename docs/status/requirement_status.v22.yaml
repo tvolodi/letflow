@@ -414,3 +414,40 @@ history:
       sync. Status flipped in docs/requirements.yaml. Full pipeline on
       feature/WF02-REQ394-20260923 (85514518 design, bd77a129
       implementation, 252fbfe9 tests), merged via PR.
+  - req: REQ-398
+    event: done
+    agent: DOC-UPDATER
+    at: "2026-09-23T20:05:56Z"
+    note: >
+      WF02-REQ398-20260923 Step 6 -- all gates passed (CODE-DESIGN-VALIDATOR,
+      REVIEWER, TEST-DESIGN-VALIDATOR, TEST-RUNNER, RELEASE-VALIDATOR; final
+      verdict MERGEABLE, no blocking defects). Ships the frontend promotion-
+      review list/queue page: a typed list client in web/src/api/promotions.ts
+      and corresponding hook in web/src/hooks/usePromotions.ts calling
+      REQ-397's GET /api/v1/promotions endpoint; a new routed list page
+      rendering status, def_type/def_id, requested_by and timestamps with a
+      status filter, each row linking to the existing
+      definitions/:id/promotions/:reviewId detail route; a new nav entry in
+      AppShell.tsx's NAV_ITEMS gated by the same client-side PLATFORM_ADMIN
+      check PromotionReviewPage.tsx already uses. The design doc explicitly
+      states this SUPERSEDES ISS-0730 design doc section 1's no-nav-entry
+      decision, made at a time no list endpoint existed -- now that REQ-397
+      ships that endpoint, the stated rationale no longer holds; this is a
+      deliberate, documented reversal, not a silent re-decision. ISS-0734's
+      fix_direction piece 2 (durable recording of submit-time conflict
+      refusals / ConflictRejectionAlert.tsx reshaping) remains explicitly
+      OUT OF SCOPE and open, cross-referenced in the design doc so a future
+      reader does not mistake this page's absence of refused-submission rows
+      for a bug this requirement was meant to fix. SECURITY-REVIEWER was
+      judged and confirmed not needed for this change -- pure frontend,
+      mirrors PromotionReviewPage.tsx's existing auth pattern, consumes an
+      already-security-reviewed endpoint (REQ-397). A real guard violation
+      (hardcoded tenant slug in a new test fixture) was found mid-cycle and
+      fixed (commit 17b8fcd3). Design: lib/letflow/design/
+      req398-promotion-review-list-page.md. No docs/migration/stage-N-*.md
+      or decisions/*.md file was named by this requirement's acceptance
+      criteria. README.md not touched -- grepped for "promotion": zero hits,
+      no documented current-behavior surface to keep in sync. Status flipped
+      in docs/requirements.yaml. Full pipeline on
+      feature/WF02-REQ398-20260923 (54d8e6a6 design, 17a5292c implementation,
+      a2a0b878 tests, 17b8fcd3 guard fix), merged via PR.

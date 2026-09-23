@@ -1,4 +1,5 @@
 import { client } from './client'
+import type { CursorPage } from '@/types/api'
 
 // ── Promotion Review types (PRM-02 – PRM-05) ──────────────────────────────────
 
@@ -163,6 +164,36 @@ function adaptPromotionContext(raw: RawPromotionContext): PromotionContext {
   }
 }
 
+/**
+ * REQ-398 §2.1 — `GET /api/v1/promotions` filters. `status` is deliberately
+ * a single value, not REQ-397's full comma-separated multi-status capability
+ * — see design doc §5.2 for why (AC3's wording names one selected status).
+ */
+export interface PromotionReviewListFilters {
+  status?: ReviewStatus
+  def_id?: string
+  def_type?: string
+  cursor?: string
+  page_size?: number
+}
+
+/**
+ * REQ-398 §2.1 — `GET /api/v1/promotions` response item. A direct,
+ * unadapted match to `Letflow.Routers.Promotions.promotion_review_list_item_map/1`'s
+ * live 7-key response allowlist — no `Raw*` interface/adapter needed, unlike
+ * `getContext` below (ISS-0731), because REQ-397's own AC5 named these exact
+ * field names and the router confirms them verbatim.
+ */
+export interface PromotionReviewListItem {
+  id: string
+  status: ReviewStatus
+  def_type: string
+  def_id: string
+  requested_by: string
+  inserted_at: string
+  updated_at: string
+}
+
 /** POST /api/v1/promotions/{id}/approve body */
 export interface ApprovePromotionRequest {
   plan_digest: string
@@ -211,4 +242,26 @@ export const promotionsApi = {
    */
   apply: (reviewId: string, body: ApplyPromotionRequest) =>
     client.post<void>(`/api/v1/promotions/${reviewId}/apply`, body),
+
+  /**
+   * GET /api/v1/promotions (REQ-397, PLATFORM_ADMIN-only)
+   * Lists promotion-review rows, filterable by status/def_id/def_type,
+   * cursor-paginated. `has_more` is client-derived — REQ-397's envelope is
+   * exactly `{items, next_cursor}` (design doc §2.2), same situation
+   * `auditApi.list` already handles.
+   */
+  list: (filters: PromotionReviewListFilters): Promise<CursorPage<PromotionReviewListItem>> =>
+    client
+      .get<{ items: PromotionReviewListItem[]; next_cursor: string | null }>('/api/v1/promotions', {
+        status: filters.status,
+        def_id: filters.def_id,
+        def_type: filters.def_type,
+        cursor: filters.cursor,
+        page_size: filters.page_size ? String(filters.page_size) : undefined,
+      })
+      .then((response) => ({
+        items: response.items,
+        next_cursor: response.next_cursor,
+        has_more: Boolean(response.next_cursor),
+      })),
 }

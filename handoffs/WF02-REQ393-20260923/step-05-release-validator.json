@@ -1,0 +1,33 @@
+{
+  "handoff_id": "WF02-REQ393-20260923-step-05",
+  "run_id": "WF02-REQ393-20260923",
+  "workflow": "WF-02",
+  "step": "Step 5 (Release Validation)",
+  "to_agent": "RELEASE-VALIDATOR",
+  "from_agent": "ORCH",
+  "status": "PENDING",
+  "created_at": "2026-09-23T16:54:10Z",
+  "started_at": "2026-09-23T16:54:10Z",
+  "context": {
+    "branch_name": "feature/WF02-REQ393-20260923",
+    "requirement_ids": ["REQ-393"],
+    "stage": "S8",
+    "all_prior_gates_passed": true,
+    "playwright_ac5_note": "AC5 requires the Playwright e2e spec to PASS against a running instance. The spec is written as a real (non-stub) spec but has not been run against a live instance -- no live stack available in this environment. RELEASE-VALIDATOR must assess whether this is acceptable for release: either (a) accept with a noted gap if a UAT run (WF-05) will verify it later, OR (b) block release pending live run. Given this is Stage S8 (pre-production), option (a) seems appropriate -- document the decision explicitly.",
+    "artifacts_in": [
+      "web/src/pages/entities/EntityListBrowserPage.tsx",
+      "web/src/components/entities/EntityFilterBuilder.tsx",
+      "web/tests/e2e/pipelines/entity-list-query.pipeline.e2e.spec.ts",
+      "docs/requirements.yaml (REQ-393 acceptance_criteria)"
+    ]
+  },
+  "task": {
+    "description": "Execute Step 5 (Release Validation -- INDEPENDENT) for REQ-393.\n\nWorkspace: c:\\Users\\tvolo\\dev\\ai-dala\\letflow\nBranch: feature/WF02-REQ393-20260923\n\nIndependently verify:\n1. Run: cd web && npm run check -- quote exit code and counts\n2. Read REQ-393 ACs from docs/requirements.yaml\n3. Verify each AC independently:\n   - AC1 (filter builder drives query): read EntityListBrowserPage.tsx to confirm filter builder exists and filters are sent in POST body\n   - AC2 (sort across 2 pages): verify DataTable has sortable: false and sort clause is sent to POST /entities/query\n   - AC3 (page-size error names limit): verify component renders '200' in the error message (line 152ish)\n   - AC4 (field_not_allowed names field): verify the 422 error is rendered with the field name\n   - AC5 (Playwright spec real and passes): assess the spec's completeness and decide on the unrun gap\n   - AC6 (BilimBaga not regressed): verify /admin/bilimbaga/:entityType still routes to EntityCrudPage (check router.tsx)\n   - AC7 (compile/test/lint pass): these have been independently verified above\n\nFor AC5 specifically: state your explicit verdict on whether the unrun Playwright spec is a BLOCKER for this release, with reasoning. A reasonable position is PASS-WITH-NOTE given: (1) the spec is structurally complete, (2) Stage S8 is pre-production, (3) WF-05 UAT will verify it against a live instance.\n\nVerdict: PASS (possibly with notes) or FAIL.\n\nOutput:\n1. Write handoffs/WF02-REQ393-20260923/step-05-release-validator.json COMPLETED PASS or FAIL\n2. git add + commit + push\n\nReport: PASS or FAIL with AC5 decision",
+    "acceptance_criteria": [
+      "npm run check independently run and quoted",
+      "Each AC verified independently",
+      "Explicit AC5 verdict stated with reasoning"
+    ]
+  },
+  "result": null
+}

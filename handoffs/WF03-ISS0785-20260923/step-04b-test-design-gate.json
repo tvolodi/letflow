@@ -1,0 +1,34 @@
+{
+  "handoff_id": "WF03-ISS0785-20260923-step-04b",
+  "run_id": "WF03-ISS0785-20260923",
+  "workflow": "WF-03",
+  "step": "Step 4b (Test Design Gate)",
+  "to_agent": "TEST-DESIGN-VALIDATOR",
+  "from_agent": "ORCH",
+  "status": "PENDING",
+  "created_at": "2026-09-23T05:05:50Z",
+  "started_at": "2026-09-23T05:05:50Z",
+  "context": {
+    "branch_name": "feature/WF03-ISS0785-20260923",
+    "issue_id": "ISS-0785",
+    "test_file": "test/letflow/repository/attachments_test.exs",
+    "test_summary_from_designer": "Added describe block 'ISS-0785: cross-instance-same-tenant denial in get_content/3' with test 'returns {:error, :not_found} when the attachment belongs to a different instance in the same tenant'. Fail-first proof (4 failures against pre-fix 2-arity), mutation proof (removed check_instance_match from with chain → 1 failure), post-fix 24/24.",
+    "artifacts_in": [
+      "test/letflow/repository/attachments_test.exs",
+      "docs/issues/ISS-0785.yaml",
+      "lib/letflow/repository/attachments.ex",
+      "handoffs/WF03-ISS0785-20260923/step-04-test-designer.json"
+    ]
+  },
+  "task": {
+    "description": "Execute Step 4b (TEST-DESIGN-VALIDATOR -- HARD GATE) for ISS-0785.\n\nWorkspace: c:\\Users\\tvolo\\dev\\ai-dala\\letflow\nBranch: feature/WF03-ISS0785-20260923\n\nYou are the independent validator. Read the test file directly -- do NOT trust TEST-DESIGNER's self-report.\n\n1. Read test/letflow/repository/attachments_test.exs in full. Find the new ISS-0785 test.\n2. Read docs/issues/ISS-0785.yaml. Check the acceptance criteria.\n3. Read the TEST-DESIGNER handoff (step-04-test-designer.json) for context on fail-first/mutation proof.\n\nCheck:\na. Does the new test exercise the cross-instance-same-tenant denial path in get_content/3? (not get/2, not a wrong-tenant test)\nb. Does the test assert exactly {:error, :not_found} (not a more generic assertion)?\nc. Is the fail-first proof credible? (The test calling get_content/3 against 2-arity code would fail with UndefinedFunctionError at compile/runtime -- that counts as a fail)\nd. Is the mutation proof credible? (Removing check_instance_match from with chain broke the test)\ne. Does the test also verify the positive case? (same-instance get_content/3 succeeds)\nf. Is the test well-isolated? (creates its own data, doesn't depend on external state)\ng. Does the test cover all acceptance criteria from docs/issues/ISS-0785.yaml that are testable at the unit level?\n\nVerdict: PASS or FAIL.\n\nOutput:\n1. Write handoffs/WF03-ISS0785-20260923/step-04b-test-design-gate.json with status COMPLETED, result.status PASS or FAIL\n2. git add handoffs/WF03-ISS0785-20260923/step-04b-test-design-gate.json\n3. git commit -m 'fix(WF03-ISS0785-20260923): Step 4b -- test design gate [PASS/FAIL]'\n4. git push\n\nReport: PASS or FAIL with findings",
+    "acceptance_criteria": [
+      "Cross-instance-same-tenant denial path confirmed tested",
+      "Fail-first proof assessed as credible",
+      "Mutation proof assessed as credible",
+      "Test assertion is specific (not just 'result != :ok')",
+      "All testable ACs from ISS-0785.yaml covered"
+    ]
+  },
+  "result": null
+}

@@ -1,0 +1,42 @@
+{
+  "handoff_id": "WF02-REQ386-20260923-step-final",
+  "run_id": "WF02-REQ386-20260923",
+  "workflow": "WF-02",
+  "step": "Step Final",
+  "to_agent": "ELIXIR-DEV",
+  "from_agent": "ORCH",
+  "status": "PENDING",
+  "created_at": "2026-09-23T03:33:47Z",
+  "started_at": "2026-09-23T03:33:47Z",
+  "context": {
+    "branch_name": "feature/WF02-REQ386-20260923",
+    "requirement_ids": ["REQ-386"],
+    "stage": "S6",
+    "run_summary": "WF-02 for REQ-386 (time-limited signed attachment URLs). All steps 00-06 completed PASS. Step Final merges to main.",
+    "prior_steps_status": "All PASS: Step 00 (git setup), Step 01 (CODE-DESIGNER), Step 01b (CODE-DESIGN-VALIDATOR), Step 02a (ELIXIR-DEV impl), Step 02c (SECURITY-REVIEWER), Step 02d (REVIEWER), Step 03 (TEST-DESIGNER), Step 03b (TEST-DESIGN-VALIDATOR), Step 04 (TEST-RUNNER), Step 05 (RELEASE-VALIDATOR), Step 06 (DOC-UPDATER).",
+    "uncommitted_files": [
+      "docs/requirements.yaml (cosmetic encoding normalization -- § chars, text reflow, already done in-content by Step 06 commit; these are tooling CRLF/encoding artifacts)",
+      "docs/status/requirement_status.index.yaml (same cosmetic artifacts)",
+      "handoffs/registry.json (ORCH just added WF02-REQ386 registry entry)",
+      "handoffs/WF02-REQ386-20260923/step-final-elixir-dev.json (this file)"
+    ],
+    "artifacts_in": [
+      "handoffs/WF02-REQ386-20260923/step-06-doc-updater.json (PASS)",
+      "handoffs/WF02-REQ386-20260923/step-05-release-validator.json (PASS)",
+      "handoffs/WF02-REQ386-20260923/step-04-test-runner.json (PASS)"
+    ]
+  },
+  "task": {
+    "description": "Execute Step Final (git merge) for WF02-REQ386-20260923 per docs/agents/protocols/GIT_MERGE.md.\n\nThe feature branch feature/WF02-REQ386-20260923 is ready to merge. All pipeline gates have passed.\n\nUncommitted files to stage and commit before rebase:\n- docs/requirements.yaml\n- docs/status/requirement_status.index.yaml\n- handoffs/registry.json\n- handoffs/WF02-REQ386-20260923/step-final-elixir-dev.json (this file, once you claim it)\n\nCommit message for these artifacts:\n  fix(WF02-REQ386-20260923): Step Final -- finalize artifacts, registry entry\n\n  Requirements: REQ-386\n  Handoff: WF02-REQ386-20260923\n\nThen follow GIT_MERGE.md procedure in full:\n1. Verify branch is feature/WF02-REQ386-20260923\n2. Stage + commit the uncommitted files above\n3. git fetch origin main\n4. git rebase origin/main (resolve any conflicts per GIT_MERGE.md rules)\n5. Verify compile: 'C:/Program Files/Elixir/bin/mix' compile --warnings-as-errors\n6. Verify tests: 'C:/Program Files/Elixir/bin/mix' test (no new failures attributable to this branch)\n7. git push -u origin feature/WF02-REQ386-20260923\n8. gh pr create --title 'REQ-386: time-limited signed attachment URLs' --body 'Implements REQ-386: signed, expiring attachment content URLs. All pipeline gates passed.'\n9. Wait for CI green (gh pr checks)\n10. gh pr merge --squash --delete-branch\n11. git checkout main && git pull --ff-only\n12. Release queue lock: POST https://queue-test.ai-dala.com/tasks/746/release with {\"agent_id\": \"orch-main\", \"status\": \"done\"} and Authorization: Bearer $QUEUE_AUTH_TOKEN (from .env)\n13. Complete handoff with PASS.",
+    "acceptance_criteria": [
+      "Branch rebased cleanly onto current origin/main",
+      "mix compile --warnings-as-errors exits 0",
+      "mix test produces no new failures attributable to this branch",
+      "PR opened and CI (backend + frontend jobs) reports green",
+      "PR merged via squash merge, branch deleted",
+      "Queue task 746 released as done",
+      "Registry entry for WF02-REQ386-20260923 updated to COMPLETED with released_lock: true"
+    ]
+  },
+  "result": null
+}

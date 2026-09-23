@@ -1,0 +1,96 @@
+{
+    "handoff_id":  "WF02-REQ393-20260923-step-05",
+    "run_id":  "WF02-REQ393-20260923",
+    "step":  "Step 5 (Release Validation)",
+    "to_agent":  "RELEASE-VALIDATOR",
+    "from_agent":  "ORCH",
+    "status":  "COMPLETED",
+    "created_at":  "2026-09-23T16:54:10Z",
+    "started_at":  "2026-09-23T16:54:10Z",
+    "context":  {
+                    "branch_name":  "feature/WF02-REQ393-20260923",
+                    "requirement_ids":  [
+                                            "REQ-393"
+                                        ],
+                    "stage":  "S8",
+                    "all_prior_gates_passed":  true,
+                    "playwright_ac5_note":  "AC5 requires the Playwright e2e spec to PASS against a running instance. The spec is written as a real (non-stub) spec but has not been run against a live instance -- no live stack available in this environment. RELEASE-VALIDATOR must assess whether this is acceptable for release: either (a) accept with a noted gap if a UAT run (WF-05) will verify it later, OR (b) block release pending live run. Given this is Stage S8 (pre-production), option (a) seems appropriate -- document the decision explicitly.",
+                    "artifacts_in":  [
+                                         "web/src/pages/entities/EntityListBrowserPage.tsx",
+                                         "web/src/components/entities/EntityFilterBuilder.tsx",
+                                         "web/tests/e2e/pipelines/entity-list-query.pipeline.e2e.spec.ts",
+                                         "docs/requirements.yaml (REQ-393 acceptance_criteria)"
+                                     ]
+                },
+    "task":  {
+                 "description":  "Execute Step 5 (Release Validation -- INDEPENDENT) for REQ-393.\n\nWorkspace: c:\\Users\\tvolo\\dev\\ai-dala\\letflow\nBranch: feature/WF02-REQ393-20260923\n\nIndependently verify:\n1. Run: cd web \u0026\u0026 npm run check -- quote exit code and counts\n2. Read REQ-393 ACs from docs/requirements.yaml\n3. Verify each AC independently:\n   - AC1 (filter builder drives query): read EntityListBrowserPage.tsx to confirm filter builder exists and filters are sent in POST body\n   - AC2 (sort across 2 pages): verify DataTable has sortable: false and sort clause is sent to POST /entities/query\n   - AC3 (page-size error names limit): verify component renders \u0027200\u0027 in the error message (line 152ish)\n   - AC4 (field_not_allowed names field): verify the 422 error is rendered with the field name\n   - AC5 (Playwright spec real and passes): assess the spec\u0027s completeness and decide on the unrun gap\n   - AC6 (BilimBaga not regressed): verify /admin/bilimbaga/:entityType still routes to EntityCrudPage (check router.tsx)\n   - AC7 (compile/test/lint pass): these have been independently verified above\n\nFor AC5 specifically: state your explicit verdict on whether the unrun Playwright spec is a BLOCKER for this release, with reasoning. A reasonable position is PASS-WITH-NOTE given: (1) the spec is structurally complete, (2) Stage S8 is pre-production, (3) WF-05 UAT will verify it against a live instance.\n\nVerdict: PASS (possibly with notes) or FAIL.\n\nOutput:\n1. Write handoffs/WF02-REQ393-20260923/step-05-release-validator.json COMPLETED PASS or FAIL\n2. git add + commit + push\n\nReport: PASS or FAIL with AC5 decision",
+                 "acceptance_criteria":  [
+                                             "npm run check independently run and quoted",
+                                             "Each AC verified independently",
+                                             "Explicit AC5 verdict stated with reasoning"
+                                         ]
+             },
+    "completed_at":  "2026-09-23T17:15:00Z",
+    "result":  {
+                   "status":  "COMPLETED",
+                   "verdict":  "FAIL",
+                   "npm_run_check":  {
+                                         "exit_code":  0,
+                                         "type_check":  "PASS — tsc -b tsconfig.json, 0 errors",
+                                         "lint":  "PASS — eslint 0 errors, 0 warnings (TS version advisory only)",
+                                         "test":  "PASS — 120 test files, 850/850 tests passed",
+                                         "guards":  "PASS — all guard specs passed"
+                                     },
+                   "ac_verdicts":  {
+                                       "AC1_filter_builder":  {
+                                                                  "result":  "PASS",
+                                                                  "evidence":  "EntityFilterBuilder component rendered at data-testid=filter-section. buildFilters() converts FilterRow[] to EntityQueryFilterClause[]. entitiesApi.queryRecords called with filters: committedFilters.length \u003e 0 ? committedFilters : undefined."
+                                                              },
+                                       "AC2_server_driven_sort":  {
+                                                                      "result":  "PASS",
+                                                                      "evidence":  "Sort selects at data-testid=sort-field and sort-dir. handleSearch() builds sortClauses from sort.field; sent as sort array to queryRecords. All DataTable columns defined with sortable: false — confirmed in columns useMemo (lines ~163-177)."
+                                                                  },
+                                       "AC3_page_size_error_names_limit":  {
+                                                                               "result":  "PASS",
+                                                                               "evidence":  "Line ~155: setPageSizeError(\u0027Page size is too large (maximum: 200). Choose a smaller value.\u0027) — literal 200 is in the string. Shown in data-testid=page-size-error span. TC-ELBP-03 verifies 400 → page-size-error contains \u0027200\u0027."
+                                                                           },
+                                       "AC4_422_names_field":  {
+                                                                   "result":  "FAIL",
+                                                                   "evidence":  "ROOT CAUSE: Backend returns RFC 9457 Problem Details for field_not_allowed: { title: \u0027Unprocessable Entity\u0027, detail: \u0027field is not queryable: \"some_field\"\u0027 }. client.ts maps body[\u0027title\u0027] → ApiError.message = \u0027Unprocessable Entity\u0027. Component\u0027s extractMessage() reads only err.message, so the query-error-banner shows \u0027Unprocessable Entity\u0027 — the field name does NOT appear. AC4 requires \u0027a clear, readable message naming that specific field\u0027. MASKED BY UNIT TEST: TC-ELBP-02 sets apiError.message = \"field \u0027internal_note\u0027 is not allowed in filters\" directly, bypassing client.ts error mapping. Test passes but does not prove real behavior. FIX NEEDED: either extractMessage should check (err as ApiError).details?.detail as a fallback, OR client.ts should use body[\u0027detail\u0027] ?? body[\u0027title\u0027] for message on 422s."
+                                                               },
+                                       "AC5_playwright_spec":  {
+                                                                   "result":  "PASS-WITH-NOTE",
+                                                                   "verdict_reasoning":  "The spec at web/tests/e2e/pipelines/entity-list-query.pipeline.e2e.spec.ts is structurally complete: 4 real scenarios (EO-001/AC1 filter, EO-002/AC2 sort-then-page, EO-003/AC4 non-searchable rejection, EO-005/AC3 over-limit page-size), beforeAll/afterAll fixtures, real Playwright assertions. NOT run against a live instance — no running stack available. This is NOT a blocker for this release because: (1) Stage S8 is pre-production with no real users; (2) the core mechanics (filter/sort/page-size error paths) are unit-tested by vitest; (3) WF-05 UAT will run the spec against a live instance before any production promotion. AC5 gap on live-run evidence is documented; recommend WF-05 UAT be required to exercise this spec before S8 is marked complete."
+                                                               },
+                                       "AC6_bilimbaga_not_regressed":  {
+                                                                           "result":  "PASS",
+                                                                           "evidence":  "web/src/router.tsx line 85: { path: \u0027admin/bilimbaga/:entityType\u0027, element: \u003cBilimBagaEntityRoute /\u003e }. BilimBagaEntityRoute renders \u003cEntityCrudPage entityType={entityType} /\u003e (line 33 of BilimBagaEntityRoute.tsx). Unchanged. BilimBaga test suites (BilimBagaEntityRoute.test.tsx 12 tests, BilimBagaAdminPage.test.tsx 3 tests) all pass."
+                                                                       },
+                                       "AC7_compile_test_lint":  {
+                                                                     "result":  "PASS",
+                                                                     "evidence":  "npm run check exit 0. type-check: 0 errors. lint: 0 warnings. test: 120 files, 850/850 passed. guards: all passed."
+                                                                 }
+                                   },
+                   "fail_reason":  "AC4 is not met. The query-error-banner shows \u0027Unprocessable Entity\u0027 (the RFC 9457 title) rather than the specific field name from the 422 rejection. The unit test TC-ELBP-02 masks this by directly setting ApiError.message to the field-specific string, bypassing the real client.ts mapping. RELEASE-VALIDATOR independently traced the full chain: render_query_error/2 → Response.unprocessable/2 → Error.unprocessable/1 → RFC 9457 body with title=\u0027Unprocessable Entity\u0027 and detail=\u0027field is not queryable: ...\u0027 → client.ts throwOnErrorResponse: message = body[\u0027title\u0027] = \u0027Unprocessable Entity\u0027 → extractMessage returns \u0027Unprocessable Entity\u0027 → banner does not name the field.",
+                   "recommended_fix":  "Option A (minimal): In EntityListBrowserPage.tsx, update extractMessage to: const detail = (err as ApiError).details?.detail; return (typeof detail === \u0027string\u0027 \u0026\u0026 detail.length \u003e 0) ? detail : String((err as ApiError).message). Option B (broader): In client.ts throwOnErrorResponse generic branch, use body[\u0027detail\u0027] ?? body[\u0027title\u0027] ?? body[\u0027message\u0027] ?? response.statusText for message. Also update TC-ELBP-02 mock to use the real RFC 9457 shape { title: \u0027Unprocessable Entity\u0027, detail: \"...\" } and assert bannerText contains the field-specific detail, not a hand-crafted message string.",
+                   "rework_result":  {
+                                         "attempt":  1,
+                                         "status":  "PASS",
+                                         "verified_at":  "2026-09-23T17:07:56Z",
+                                         "npm_run_check":  {
+                                                               "exit_code":  0,
+                                                               "type_check":  "PASS — tsc -b tsconfig.json, 0 errors",
+                                                               "lint":  "PASS — eslint 0 errors, 0 warnings (TS version advisory only)",
+                                                               "test":  "PASS — 120 test files, 850/850 tests passed",
+                                                               "guards":  "PASS — 4 guard files, 48/48 tests passed",
+                                                               "build":  "PASS — vite build succeeded, 2463 modules"
+                                                           },
+                                         "ac4_rework_evidence":  {
+                                                                     "extractMessage_reads_detail_first":  "CONFIRMED — EntityListBrowserPage.tsx line ~101: const detail = e.details?.[\"detail\"]; if (typeof detail === \u0027string\u0027 \u0026\u0026 detail.length \u003e 0) return detail; — RFC 9457 detail field read before message fallback.",
+                                                                     "tc_elbp02_uses_real_shape":  "CONFIRMED — TC-ELBP-02 apiError has message=\u0027Unprocessable Entity\u0027, details.detail=\u0027field is not queryable: \"internal_note\"\u0027, matching real client.ts RFC 9457 mapping.",
+                                                                     "tc_elbp02_asserts_field_name":  "CONFIRMED — expect(banner.textContent).toContain(\u0027internal_note\u0027) — banner text must include the field name from details.detail."
+                                                                 },
+                                         "all_acs":  "PASS — AC1/AC2/AC3/AC4/AC5/AC6/AC7 all verified; AC4 fix confirmed; AC5 gap on live Playwright run remains, accepted for pre-production S8 with WF-05 UAT required."
+                                     }
+               }
+}

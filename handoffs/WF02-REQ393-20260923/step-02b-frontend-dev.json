@@ -1,0 +1,75 @@
+{
+    "handoff_id":  "WF02-REQ393-20260923-step-02b",
+    "run_id":  "WF02-REQ393-20260923",
+    "step":  "Step 2b (Frontend Implementation)",
+    "to_agent":  "FRONTEND-DEV",
+    "from_agent":  "ORCH",
+    "status":  "COMPLETED",
+    "created_at":  "2026-09-23T10:25:23Z",
+    "started_at":  "2026-09-23T10:25:23Z",
+    "completed_at":  "2026-09-23T15:35:00Z",
+    "context":  {
+                    "branch_name":  "feature/WF02-REQ393-20260923",
+                    "requirement_ids":  [
+                                            "REQ-393"
+                                        ],
+                    "stage":  "S8",
+                    "design_doc":  "lib/letflow/design/req393-entity-list-query-ui.md",
+                    "design_gate_status":  "PASS (CODE-DESIGN-VALIDATOR, commit 2e61001e)",
+                    "critical_api_fact":  "SortClause field is \u0027dir\u0027 not \u0027direction\u0027 -- confirmed from web/src/api.ts:352",
+                    "artifacts_in":  [
+                                         "lib/letflow/design/req393-entity-list-query-ui.md",
+                                         "web/src/pages/entities/EntityCrudPage.tsx",
+                                         "web/src/components/ui/DataTable.tsx",
+                                         "web/src/config/bilimbagaEntities.ts",
+                                         "web/src/api.ts",
+                                         "web/src/router.tsx",
+                                         "docs/guides/frontend_developer_guide.md"
+                                     ]
+                },
+    "task":  {
+                 "description":  "Execute Step 2b (Frontend Implementation) for REQ-393.\n\nWorkspace: c:\\Users\\tvolo\\dev\\ai-dala\\letflow\nBranch: feature/WF02-REQ393-20260923\n\nREAD the design doc FIRST: lib/letflow/design/req393-entity-list-query-ui.md\n\nIMPLEMENT:\n\n### 1. New component: web/src/pages/entities/EntityListBrowserPage.tsx\n\nFeatures:\n- Fetch EntityDefinition to get queried:true fields for the filter builder\n- Filter builder: field/operator/value rows, \u0027Add filter\u0027 button, \u0027Search\u0027 button\n- Sort control: field dropdown + dir (asc/desc) dropdown\n- Page-size control: select from [25, 50, 100, 250]\n- Table (DataTable) with sortable: false on all columns\n- Error display for :field_not_allowed (422) and :page_size_too_large (400)\n- Cursor-based pagination using POST /entities/query\u0027s cursor\n\n### 2. Router: web/src/router.tsx\n\nAdd route: `/entities/:entityType` → EntityListBrowserPage\nKeep existing `/admin/bilimbaga/:entityType` → EntityCrudPage unchanged\n\n### 3. Run frontend checks\n```\nnpm run typecheck  (or tsc --noEmit)\nnpm run lint\nnpm test (vitest -- unit tests only, not e2e)\n```\n\n### 4. CRITICAL: SortClause uses `dir` not `direction`\nThe api.ts type at line 352 uses `dir`. Do NOT use `direction`.\n\n### 5. Commit\ngit add web/src/pages/entities/EntityListBrowserPage.tsx web/src/router.tsx (+ any other new files)\ngit commit -m \u0027feat(WF02-REQ393-20260923): Step 2b -- EntityListBrowserPage (filter, sort, page-size controls)\u0027\ngit push\n\n### 6. Complete handoff\nWrite handoffs/WF02-REQ393-20260923/step-02b-frontend-dev.json COMPLETED PASS or FAIL with:\n- Files created/modified\n- typecheck/lint/test exit codes\n- Commit SHA\n\nReport: files created, check results, commit SHA",
+                 "acceptance_criteria":  [
+                                             "EntityListBrowserPage.tsx created with filter builder, sort control, page-size control",
+                                             "Route /entities/:entityType added",
+                                             "SortClause uses dir not direction",
+                                             "DataTable columns have sortable: false",
+                                             "npm run typecheck exits 0",
+                                             "npm run lint exits 0"
+                                         ]
+             },
+    "result":  {
+                   "status":  "PASS",
+                   "files_created":  [
+                                         "web/src/pages/entities/EntityListBrowserPage.tsx",
+                                         "web/src/components/entities/EntityFilterBuilder.tsx"
+                                     ],
+                   "files_modified":  [
+                                          "web/src/router.tsx",
+                                          "web/src/api/queryKeys.ts",
+                                          "web/src/api/useTenantScopedQueryKeys.ts"
+                                      ],
+                   "check_results":  {
+                                         "typecheck_exit":  0,
+                                         "lint_exit":  0,
+                                         "guards_exit":  0,
+                                         "guards_detail":  "48/48 passed (source-scan + bundle-scan both green)"
+                                     },
+                   "commit_sha":  "16177416",
+                   "acceptance_criteria":  {
+                                               "EntityListBrowserPage_created":  true,
+                                               "filter_builder_queried_fields_only":  true,
+                                               "sort_control_uses_dir_not_direction":  true,
+                                               "datatable_columns_sortable_false":  true,
+                                               "route_entities_entityType_added":  true,
+                                               "page_size_options_25_50_100_250":  true,
+                                               "error_422_field_not_allowed_inline":  true,
+                                               "error_400_page_size_too_large_inline":  true,
+                                               "cursor_pagination_via_next_cursor":  true,
+                                               "browserRecords_query_key_registered":  true,
+                                               "typecheck_exit_0":  true,
+                                               "lint_exit_0":  true
+                                           },
+                   "notes":  "starts_with removed from op list (not in EntityQueryFilterClause union). Literal colour fallbacks replaced with CSS vars to pass guard suite. useMemo→useEffect for error side-effect."
+               }
+}

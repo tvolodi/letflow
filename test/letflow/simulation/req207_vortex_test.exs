@@ -1622,7 +1622,30 @@ defmodule Letflow.Simulation.Req207VortexTest do
           # BLOCKED_ON_DEPENDENCY, still on S8's :gui-dispatch stub
           # (Signal 5), nothing under lib/ or test/support/simulation/ left
           # for this scenario to wait on.
-          "REQ-355"
+          "REQ-355",
+          # REQ-393, promoted from pending_only_ids on 2026-09-23 after its
+          # status flipped to done and this tripwire fired exactly as armed.
+          # Same promotion shape as REQ-347/355: NOT waved through -- re-derived
+          # first. REQ-393 is owner FRONTEND-DEV, bucket C (client): it adds
+          # EntityListBrowserPage (a React component) and EntityFilterBuilder
+          # under web/src/pages/entities/ and web/src/components/entities/,
+          # a new queryKeys.entities.browserRecords key in web/src/api/queryKeys.ts,
+          # and an entities/:entityType route entry in web/src/router.tsx. None
+          # of those touches lib/letflow/routers/, lib/letflow/entities/,
+          # lib/letflow/api/, lib/letflow/plugs/api_pipeline.ex,
+          # lib/letflow/router.ex, or test/support/simulation/runner.ex.
+          # Signal 3''s route surface is unaffected: __authz_routes__/0 still
+          # returns exactly the same 17-route set (re-verified: no new backend
+          # route was added by REQ-393, confirmed via git diff --name-only).
+          # Signal 5's harness is unaffected: runner.ex's `:gui ->` clause is
+          # unmodified (REQ-393 adds no test/support/simulation/ file).
+          # REQ-393 is a consumer of the already-built POST /entities/query
+          # surface (REQ-311), not a change to it -- the same reasoning that put
+          # REQ-336/347 in allowed_ids. Disposition unchanged: still
+          # BLOCKED_ON_DEPENDENCY, still on S8's :gui-dispatch stub (Signal 5),
+          # nothing under lib/ or test/support/simulation/ left for this
+          # scenario to wait on.
+          "REQ-393"
         ])
 
       # SECOND-TIER ALLOWLIST -- admitted ONLY WHILE `status: pending`.
@@ -1787,7 +1810,6 @@ defmodule Letflow.Simulation.Req207VortexTest do
         "REQ-318",
         "REQ-319",
         "REQ-320",
-        "REQ-393",
         "REQ-394"
       ]
 

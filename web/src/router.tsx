@@ -38,6 +38,7 @@ import PlatformMigrationConsolePage from '@/pages/admin/platform-migrations/Plat
 import SolutionPackUpdateLauncherPage from '@/pages/solution-packs/SolutionPackUpdateLauncherPage'
 import SolutionPackUpdateReviewPage from '@/pages/solution-packs/SolutionPackUpdateReviewPage'
 import EventRetentionPage from '@/pages/admin/event-retention/EventRetentionPage'
+import EntityListBrowserPage from '@/pages/entities/EntityListBrowserPage'
 
 export const router = createBrowserRouter([
   {
@@ -104,6 +105,8 @@ export const router = createBrowserRouter([
       // requirement that implements the list. Do not depend on this exact
       // spelling as a settled contract.
       { path: 'exam/sessions/:sessionId/result', element: <ExamSessionResultPage /> },
+      // REQ-393: tenant-agnostic entity-list browse screen (filter/sort/page-size)
+      { path: 'entities/:entityType', element: <EntityListBrowserPage /> },
     ],
   },
 ])

@@ -1,0 +1,71 @@
+{
+    "handoff_id":  "WF02-REQ393-20260923-step-04",
+    "run_id":  "WF02-REQ393-20260923",
+    "step":  "Step 4 (Test Runner)",
+    "to_agent":  "TEST-RUNNER",
+    "from_agent":  "ORCH",
+    "status":  "COMPLETED",
+    "created_at":  "2026-09-23T16:50:47Z",
+    "started_at":  "2026-09-23T16:50:47Z",
+    "context":  {
+                    "branch_name":  "feature/WF02-REQ393-20260923",
+                    "requirement_ids":  [
+                                            "REQ-393"
+                                        ],
+                    "test_design_gate":  "PASS (after 1 rework for AC3)",
+                    "playwright_note":  "The Playwright e2e spec is a real spec but cannot be run without a live instance. TEST-RUNNER should run the vitest suite and note the Playwright spec gap.",
+                    "artifacts_in":  [
+                                         "web/src/pages/entities/__tests__/EntityListBrowserPage.test.tsx",
+                                         "web/tests/e2e/pipelines/entity-list-query.pipeline.e2e.spec.ts"
+                                     ]
+                },
+    "task":  {
+                 "description":  "Execute Step 4 (TEST-RUNNER) for REQ-393.\n\nWorkspace: c:\\Users\\tvolo\\dev\\ai-dala\\letflow\nBranch: feature/WF02-REQ393-20260923\n\n1. Verify branch: git branch --show-current\n2. Run frontend check (includes vitest): cd web \u0026\u0026 npm run check\n3. Quote actual output verbatim\n4. Note the Playwright e2e spec cannot run without a live instance -- this is a known gap, not a new failure\n5. Attribute any failures structurally\n\nVerdict: PASS if vitest passes and no new failures from this branch. The Playwright gap is noted but does not block (RELEASE-VALIDATOR will make the final call on AC5).\n\nOutput:\n1. Write handoffs/WF02-REQ393-20260923/step-04-test-runner.json COMPLETED PASS or FAIL\n2. git add + commit + push\n\nReport: vitest pass counts, any failures",
+                 "acceptance_criteria":  [
+                                             "npm run check exits 0 (tsc + lint + vitest)",
+                                             "No new failures from this branch",
+                                             "Playwright spec noted as unrun"
+                                         ]
+             },
+    "completed_at":  "2026-09-23T16:53:31Z",
+    "result":  {
+                   "verdict":  "PASS",
+                   "exit_code":  0,
+                   "phases":  {
+                                  "tsc":  "PASS (no errors)",
+                                  "lint":  "PASS (no errors, --max-warnings 0)",
+                                  "vitest_main":  {
+                                                      "result":  "PASS",
+                                                      "test_files":  120,
+                                                      "tests":  850,
+                                                      "failed":  0
+                                                  },
+                                  "vitest_guards":  {
+                                                        "result":  "PASS",
+                                                        "test_files":  4,
+                                                        "tests":  48,
+                                                        "failed":  0
+                                                    },
+                                  "build":  "PASS (vite build success, 2463 modules)"
+                              },
+                   "req393_new_tests":  {
+                                            "file":  "src/pages/entities/__tests__/EntityListBrowserPage.test.tsx",
+                                            "tests":  8,
+                                            "passed":  8,
+                                            "failed":  0,
+                                            "cases":  [
+                                                          "TC-EFB-01: renders empty state with Add filter button and no filter rows",
+                                                          "TC-EFB-02: Add filter button calls onChange with one new row appended",
+                                                          "TC-EFB-03: remove button calls onChange without the removed row",
+                                                          "TC-EFB-04: changing value and op on a row propagates the update via onChange",
+                                                          "TC-ELBP-01: definition loading state renders SkeletonLayout with aria-busy=true",
+                                                          "TC-ELBP-02: records 422 surfaces as query-error-banner; no page-size-error",
+                                                          "TC-ELBP-03: records 400 surfaces as page-size-error; query-error-banner absent",
+                                                          "TC-ELBP-04: successful query renders column headers and row data"
+                                                      ]
+                                        },
+                   "playwright_gap":  "tests/e2e/pipelines/entity-list-query.pipeline.e2e.spec.ts not run — requires live instance (known gap, per handoff; AC5 deferred to RELEASE-VALIDATOR / UAT-RUNNER)",
+                   "new_failures":  0,
+                   "notes":  "stdout stderr lines from DlqPage and AppShell.branding tests are pre-existing informational warnings (StatusBadge fallback, React javascript: URL warning) — not new, not test failures."
+               }
+}

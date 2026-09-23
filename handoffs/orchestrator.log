@@ -2149,3 +2149,31 @@
 2026-09-23T09:37:55Z | PASS | WF02-REQ390-20260923 | step-06-doc-updater | DOC-UPDATER → ORCH | PASS -- REQ-390 done, v22 events verified
 2026-09-23T09:38:29Z | DISPATCH | WF02-REQ390-20260923 | step-final-elixir-dev | ORCH → ELIXIR-DEV | PENDING
 2026-09-23T10:08:55Z | COMPLETED | WF02-REQ390-20260923 | step-final-elixir-dev | ELIXIR-DEV → COMPLETED | PR #1749 merged as a3156299 | queue task 750 released HTTP 200 | registry COMPLETED | admin override: signature_heuristic flake attributed route 2
+2026-09-23T10:12:25Z | DONE | WF02-REQ390-20260923 | step-final-elixir-dev | ELIXIR-DEV → ORCH | COMPLETED -- PR#1749 merged (a3156299), bookkeeping PR#1750, queue task 750 released
+2026-09-23T10:14:28Z | DISPATCH | WF02-REQ393-20260923 | step-00-git-setup | ORCH → FRONTEND-DEV | PENDING
+2026-09-23T10:16:43Z | PASS | WF02-REQ393-20260923 | step-00-git-setup | FRONTEND-DEV → ORCH | PASS -- branch created, REQ-393 in_progress
+2026-09-23T10:17:29Z | DISPATCH | WF02-REQ393-20260923 | step-01-code-designer | ORCH → CODE-DESIGNER | PENDING
+2026-09-23T10:21:41Z | PASS | WF02-REQ393-20260923 | step-01-code-designer | CODE-DESIGNER → ORCH | PASS -- EntityListBrowserPage.tsx design doc, dir not direction (critical)
+2026-09-23T10:22:14Z | DISPATCH | WF02-REQ393-20260923 | step-01b-design-gate | ORCH → CODE-DESIGN-VALIDATOR | PENDING
+2026-09-23T10:25:17Z | PASS | WF02-REQ393-20260923 | step-01b-design-gate | CODE-DESIGN-VALIDATOR → ORCH | PASS -- all 8 checks, OQ-2/3/4 non-blocking
+2026-09-23T10:25:54Z | DISPATCH | WF02-REQ393-20260923 | step-02b-frontend-dev | ORCH → FRONTEND-DEV | PENDING
+2026-09-23T10:32:48Z | PASS | WF02-REQ393-20260923 | step-02b-frontend-dev | FRONTEND-DEV → ORCH | PASS -- tsc 0, lint 0, guards 48/48, 16177416
+2026-09-23T10:33:27Z | DISPATCH | WF02-REQ393-20260923 | step-02c-security-reviewer | ORCH → SECURITY-REVIEWER | PENDING
+2026-09-23T10:36:24Z | PASS | WF02-REQ393-20260923 | step-02c-security-reviewer | SECURITY-REVIEWER → ORCH | PASS -- INV-1 tenant isolation OK, no XSS, route auth OK
+2026-09-23T10:36:54Z | DISPATCH | WF02-REQ393-20260923 | step-02d-reviewer | ORCH → REVIEWER | PENDING
+2026-09-23T10:39:09Z | PASS | WF02-REQ393-20260923 | step-02d-reviewer | REVIEWER → ORCH | PASS -- React idiom clean, no scope creep, dir used correctly
+2026-09-23T10:39:52Z | DISPATCH | WF02-REQ393-20260923 | step-03-test-designer | ORCH → TEST-DESIGNER | PENDING
+2026-09-23T10:52:31Z | PASS | WF02-REQ393-20260923 | step-03-test-designer | TEST-DESIGNER → ORCH | PASS -- 8/8 vitest, 850/850 total, Playwright spec written but not run (no live instance)
+2026-09-23T10:53:09Z | DISPATCH | WF02-REQ393-20260923 | step-03b-test-design-gate | ORCH → TEST-DESIGN-VALIDATOR | PENDING
+2026-09-23T10:56:48Z | FAIL | WF02-REQ393-20260923 | step-03b-test-design-gate | TEST-DESIGN-VALIDATOR → ORCH | FAIL -- AC3 gap: page-size-error tests don't assert limit value in text
+2026-09-23T11:04:58Z | REWORK | WF02-REQ393-20260923 | step-03-test-designer | ORCH → TEST-DESIGN-VALIDATOR | REWORK 1 -- AC3 limit value fix applied (53a87fca), re-running gate
+2026-09-23T16:50:32Z | PASS | WF02-REQ393-20260923 | step-03b-test-design-gate | TEST-DESIGN-VALIDATOR → ORCH | PASS (REWORK 1) -- AC3 limit value verified in component + both tests
+2026-09-23T16:51:08Z | DISPATCH | WF02-REQ393-20260923 | step-04-test-runner | ORCH → TEST-RUNNER | PENDING
+2026-09-23T16:54:06Z | PASS | WF02-REQ393-20260923 | step-04-test-runner | TEST-RUNNER → ORCH | PASS -- 850/850 vitest, build pass, 0 new failures. Playwright spec gap noted.
+2026-09-23T16:54:38Z | DISPATCH | WF02-REQ393-20260923 | step-05-release-validator | ORCH → RELEASE-VALIDATOR | PENDING
+2026-09-23T17:00:48Z | FAIL | WF02-REQ393-20260923 | step-05-release-validator | RELEASE-VALIDATOR → ORCH | FAIL -- AC4: extractMessage reads err.message not details.detail for 422 field_not_allowed
+2026-09-23T17:05:44Z | REWORK | WF02-REQ393-20260923 | step-05-release-validator | ORCH → RELEASE-VALIDATOR | REWORK 1 -- AC4 extractMessage fix applied (832ec01f), re-running release validation
+2026-09-23T17:08:36Z | PASS | WF02-REQ393-20260923 | step-05-release-validator | RELEASE-VALIDATOR → ORCH | PASS (REWORK 1) -- AC4 fix verified, AC5 Playwright noted (WF-05 UAT)
+2026-09-23T17:09:12Z | DISPATCH | WF02-REQ393-20260923 | step-06-doc-updater | ORCH → DOC-UPDATER | PENDING
+2026-09-23T17:12:23Z | PASS | WF02-REQ393-20260923 | step-06-doc-updater | DOC-UPDATER → ORCH | PASS -- REQ-393 done, v22 entries 9 verified
+2026-09-23T17:12:59Z | DISPATCH | WF02-REQ393-20260923 | step-final-frontend-dev | ORCH → FRONTEND-DEV | PENDING

@@ -180,6 +180,13 @@ export const queryKeys = {
       [...queryKeys.entities.all(tenantId), 'definition', entityType] as const,
     records: (tenantId: string, entityType: string, filters?: { cursor?: string; page_size?: number; filters?: unknown }) =>
       [...queryKeys.entities.all(tenantId), 'records', entityType, filters ?? {}] as const,
+    /** REQ-393 browser-query screen — separate from `records` to avoid cache
+     *  collisions with EntityCrudPage (different filter shape, no EXCLUDE_DELETED). */
+    browserRecords: (
+      tenantId: string,
+      entityType: string,
+      params?: { filters?: unknown; sort?: unknown; pageSize?: number; cursor?: string },
+    ) => [...queryKeys.entities.all(tenantId), 'browser', entityType, params ?? {}] as const,
   },
 
   modules: {

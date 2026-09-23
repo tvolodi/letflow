@@ -1,0 +1,45 @@
+{
+    "handoff_id":  "WF02-REQ393-20260923-step-01",
+    "run_id":  "WF02-REQ393-20260923",
+    "step":  "Step 1",
+    "to_agent":  "CODE-DESIGNER",
+    "from_agent":  "ORCH",
+    "status":  "COMPLETED",
+    "created_at":  "2026-09-23T10:16:48Z",
+    "started_at":  "2026-09-23T10:16:48Z",
+    "context":  {
+                    "branch_name":  "feature/WF02-REQ393-20260923",
+                    "requirement_ids":  [
+                                            "REQ-393"
+                                        ],
+                    "stage":  "S8",
+                    "requirement_text":  {
+                                             "REQ-393":  "Generic, tenant-agnostic entity-list browse screen with filter builder, sort control, and page-size control wired to POST /entities/query. WHAT EXISTS TODAY: EntityCrudPage.tsx (REQ-343) is BilimBaga-only, uses compile-time EXCLUDE_DELETED_FILTERS, client-side sort only, hardcoded PAGE_SIZE=25. WHAT IS NEEDED: Generic screen that (1) renders filter builder (field/operator/value, driven by EntityDefinition queried:true fields); (2) renders sort control (field+direction) sent as sort array to server; (3) renders page-size control surfacing :page_size_too_large 400 as readable message; (4) surfaces :field_not_allowed 422 as readable message; (5) writes real Playwright spec at web/tests/e2e/pipelines/entity-list-query.pipeline.e2e.spec.ts. OUT OF SCOPE: Vortex provisioning, REQ-394 authorization, BilimBaga regression."
+                                         },
+                    "artifacts_in":  [
+                                         "web/src/pages/entities/EntityCrudPage.tsx",
+                                         "web/src/components/ui/DataTable.tsx",
+                                         "web/src/config/bilimbagaEntities.ts",
+                                         "docs/guides/frontend_developer_guide.md",
+                                         "docs/frontend/"
+                                     ]
+                },
+    "task":  {
+                 "description":  "Execute Step 1 (Code Design) for REQ-393 per WF-02 Step 1 procedure.\n\nWorkspace: c:\\Users\\tvolo\\dev\\ai-dala\\letflow\nBranch: feature/WF02-REQ393-20260923\n\nDESIGN ONLY -- no implementation code.\n\nRead first:\n1. web/src/pages/entities/EntityCrudPage.tsx -- full file\n2. web/src/components/ui/DataTable.tsx -- understand current sort behavior\n3. web/src/config/bilimbagaEntities.ts -- understand existing entity type wiring\n4. docs/guides/frontend_developer_guide.md\n5. Check web/src/ structure for any existing filter/sort components\n6. Check lib/letflow/routers/entities.ex to understand POST /entities/query request shape and error responses\n\nDesign decisions to address:\n1. NEW COMPONENT vs EXTEND: Create a new generic EntityListPage.tsx vs extend EntityCrudPage.tsx. State your choice and rationale. The requirement says \u0027FRONTEND-DEV\u0027s own design call\u0027.\n2. FILTER BUILDER: How to implement the field/operator/value UI? What does the filter clause shape look like? How are the queried fields fetched from EntityDefinition?\n3. SORT CONTROL: How to disable DataTable\u0027s client-side sortable prop and wire server-driven sort? What does the sort clause shape look like?\n4. PAGE-SIZE CONTROL: Input, dropdown, or URL param? How is the :page_size_too_large error surfaced?\n5. FIELD_NOT_ALLOWED: How is the 422 response rendered as a named-field error message?\n6. ROUTING: What URL(s) does the new generic screen live at? How does BilimBaga\u0027s existing /admin/bilimbaga/:entityType route coexist?\n7. E2E SPEC: Sketch the Playwright spec structure (which steps correspond to which AC).\n\nWrite design doc at: lib/letflow/design/req393-entity-list-query-ui.md\n\nInclude:\n- Component structure decision (new vs extend)\n- TypeScript interface shapes for FilterClause, SortClause matching backend API\n- Props for the new/extended component\n- URL/route changes\n- How the spec will drive the 4 E2E scenarios\n- ACs traceability\n\nAfter:\n1. Write lib/letflow/design/req393-entity-list-query-ui.md\n2. Write handoffs/WF02-REQ393-20260923/step-01-code-designer.json COMPLETED PASS\n3. git add + commit + push\n\nReport: key design decisions",
+                 "acceptance_criteria":  [
+                                             "Component architecture decision stated",
+                                             "FilterClause and SortClause TypeScript shapes specified",
+                                             "Route/URL plan described",
+                                             "All ACs mapped to design elements",
+                                             "No implementation code"
+                                         ]
+             },
+    "result":  {
+                   "status":  "PASS",
+                   "completed_at":  "2026-09-23T10:30:00Z",
+                   "artifacts_out":  [
+                                         "lib/letflow/design/req393-entity-list-query-ui.md"
+                                     ],
+                   "summary":  "Design doc written. New component EntityListBrowserPage.tsx chosen (prevents BilimBaga regression). FilterClause/SortClause shapes confirmed from api.ts (dir field, not direction). Route: /entities/:entityType. FilterBar with queried-only fields. Sort via two dropdowns, columns non-sortable. Page-size select (25/50/100/250). field_not_allowed -\u003e inline banner; page_size_too_large -\u003e inline under control. E2E spec uses tag entity type, 4 scenarios mapped. 4 open questions documented (OQ-1 through OQ-4)."
+               }
+}

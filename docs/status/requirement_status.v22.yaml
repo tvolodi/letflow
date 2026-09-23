@@ -419,3 +419,15 @@ history:
     agent: ELIXIR-DEV
     at: "2026-09-23T18:37:05Z"
     note: "WF02-REQ396-20260923 started"
+  - req: REQ-396
+    event: done
+    agent: DOC-UPDATER
+    at: "2026-09-23T20:18:19Z"
+    note: >
+      WF02-REQ396-20260923 done -- HUMAN_TASK escalation_timer_duration added
+      to the graph schema and SCH-04's escalation half wired (timer fire ->
+      original task non-actionable, new task assigned to escalation role),
+      closing the deferral REQ-185/REQ-188 already named. HUMAN_TASK escalation
+      remains a HUMAN_TASK (CHK-21, engine wiring) per the release-validator
+      PASS report. README.md not touched -- zero "escalation" hits; no
+      documented current-behavior surface to keep in sync.

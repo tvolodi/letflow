@@ -5,9 +5,10 @@
   "step": "Step 2b (Frontend Implementation)",
   "to_agent": "FRONTEND-DEV",
   "from_agent": "ORCH",
-  "status": "PENDING",
+  "status": "COMPLETED",
   "created_at": "2026-09-23T10:25:23Z",
   "started_at": "2026-09-23T10:25:23Z",
+  "completed_at": "2026-09-23T15:35:00Z",
   "context": {
     "branch_name": "feature/WF02-REQ393-20260923",
     "requirement_ids": ["REQ-393"],
@@ -36,5 +37,38 @@
       "npm run lint exits 0"
     ]
   },
-  "result": null
+  "result": {
+    "status": "PASS",
+    "files_created": [
+      "web/src/pages/entities/EntityListBrowserPage.tsx",
+      "web/src/components/entities/EntityFilterBuilder.tsx"
+    ],
+    "files_modified": [
+      "web/src/router.tsx",
+      "web/src/api/queryKeys.ts",
+      "web/src/api/useTenantScopedQueryKeys.ts"
+    ],
+    "check_results": {
+      "typecheck_exit": 0,
+      "lint_exit": 0,
+      "guards_exit": 0,
+      "guards_detail": "48/48 passed (source-scan + bundle-scan both green)"
+    },
+    "commit_sha": "16177416",
+    "acceptance_criteria": {
+      "EntityListBrowserPage_created": true,
+      "filter_builder_queried_fields_only": true,
+      "sort_control_uses_dir_not_direction": true,
+      "datatable_columns_sortable_false": true,
+      "route_entities_entityType_added": true,
+      "page_size_options_25_50_100_250": true,
+      "error_422_field_not_allowed_inline": true,
+      "error_400_page_size_too_large_inline": true,
+      "cursor_pagination_via_next_cursor": true,
+      "browserRecords_query_key_registered": true,
+      "typecheck_exit_0": true,
+      "lint_exit_0": true
+    },
+    "notes": "starts_with removed from op list (not in EntityQueryFilterClause union). Literal colour fallbacks replaced with CSS vars to pass guard suite. useMemo→useEffect for error side-effect."
+  }
 }

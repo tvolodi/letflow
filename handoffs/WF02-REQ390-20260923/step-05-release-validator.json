@@ -1,0 +1,34 @@
+{
+  "handoff_id": "WF02-REQ390-20260923-step-05",
+  "run_id": "WF02-REQ390-20260923",
+  "workflow": "WF-02",
+  "step": "Step 5 (Release Validation)",
+  "to_agent": "RELEASE-VALIDATOR",
+  "from_agent": "ORCH",
+  "status": "PENDING",
+  "created_at": "2026-09-23T09:29:01Z",
+  "started_at": "2026-09-23T09:29:01Z",
+  "context": {
+    "branch_name": "feature/WF02-REQ390-20260923",
+    "requirement_ids": ["REQ-390"],
+    "stage": "S6",
+    "all_prior_gates_passed": true,
+    "gate_summary": "CODE-DESIGN-VALIDATOR PASS, SECURITY-REVIEWER PASS (1 rework for INV-8), REVIEWER PASS (design decisions signed off), TEST-DESIGN-VALIDATOR PASS (all 5 ACs covered), TEST-RUNNER PASS (28/28 targeted)",
+    "artifacts_in": [
+      "lib/letflow/repository/attachments.ex",
+      "lib/letflow/identity/tenant.ex",
+      "priv/repo/migrations/20260923000001_add_storage_allowance_bytes_to_tenants.exs",
+      "test/letflow/repository/attachments_test.exs",
+      "docs/requirements.yaml (REQ-390 acceptance_criteria)"
+    ]
+  },
+  "task": {
+    "description": "Execute Step 5 (Release Validation -- INDEPENDENT RE-VERIFICATION) for REQ-390.\n\nWorkspace: c:\\Users\\tvolo\\dev\\ai-dala\\letflow\nBranch: feature/WF02-REQ390-20260923\nMix: & 'C:/Program Files/Elixir/bin/mix'\n\nYou MUST independently re-derive your verdict. Do not trust the TEST-RUNNER's report alone.\n\n1. Run: & 'C:/Program Files/Elixir/bin/mix' compile --warnings-as-errors\n2. Run: & 'C:/Program Files/Elixir/bin/mix' test test/letflow/repository/attachments_test.exs\n3. Read REQ-390's acceptance_criteria from docs/requirements.yaml\n4. Verify EACH acceptance criterion against the actual implementation AND tests:\n   - Read lib/letflow/repository/attachments.ex to verify upload/2 checks quota before DB writes\n   - Run the test file and confirm all 4 REQ-390 tests pass\n   - Confirm {:error, :storage_quota_exceeded} is distinct from {:error, :file_too_large}\n\nVerdict: PASS if all ACs are independently satisfied.\n\nOutput:\n1. Write handoffs/WF02-REQ390-20260923/step-05-release-validator.json status COMPLETED, result PASS or FAIL with independent verification details\n2. git add handoffs/WF02-REQ390-20260923/step-05-release-validator.json\n3. git commit -m 'feat(WF02-REQ390-20260923): Step 5 -- release validation PASS'\n4. git push\n\nReport: PASS or FAIL with verification details",
+    "acceptance_criteria": [
+      "Independently ran mix compile --warnings-as-errors (not just cited TEST-RUNNER's result)",
+      "Independently ran targeted tests (not just cited)",
+      "Each REQ-390 AC independently verified against source + tests"
+    ]
+  },
+  "result": null
+}

@@ -5,7 +5,7 @@
   "step": "Step 2c (Security Gate)",
   "to_agent": "SECURITY-REVIEWER",
   "from_agent": "ORCH",
-  "status": "PENDING",
+  "status": "COMPLETED",
   "created_at": "2026-09-23T08:23:52Z",
   "started_at": "2026-09-23T08:23:52Z",
   "context": {
@@ -30,5 +30,65 @@
       "Migration is safe (has default, no data exposure)"
     ]
   },
-  "result": null
+  "result": {
+    "status": "FAIL",
+    "completed_at": "2026-09-23T08:35:00Z",
+    "summary": "INV-8 BLOCKER: bare struct match on Repo.get/2 output in check_storage_quota/3 can raise MatchError on nil. All other applicable invariants PASS. Route back to ELIXIR-DEV.",
+    "invariants": [
+      {
+        "id": "INV-1",
+        "verdict": "APPLIES — PASS",
+        "notes": "get_storage_usage/1 uses Repo.one(..., prefix: prefix) — the :prefix keyword is Ecto's schema-per-tenant mechanism, routing the SUM query to exactly the calling tenant's Postgres schema. No cross-tenant data is readable. check_storage_quota/3 receives tenant_id from TenantProvisioning.tenant_id_for_schema_name/1 (derived from the prefix, not caller-supplied), satisfying 0003 addendum (c). Migration alters the shared public.tenants table correctly — not a tenant-scoped table, no isolation issue."
+      },
+      {
+        "id": "INV-2",
+        "verdict": "NOT-APPLICABLE",
+        "notes": "S4 not started; no API response type or controller modified in this diff."
+      },
+      {
+        "id": "INV-3",
+        "verdict": "NOT-APPLICABLE",
+        "notes": "S5 not started; no scripting/plugin surface touched."
+      },
+      {
+        "id": "INV-4",
+        "verdict": "APPLIES — PASS",
+        "notes": "No hardcoded secrets introduced. Error return is the bare atom {:error, :storage_quota_exceeded} — no usage figures, no allowance values, no other-tenant data leaked. No secret-pattern matches found in new code."
+      },
+      {
+        "id": "INV-5",
+        "verdict": "NOT-APPLICABLE",
+        "notes": "S4 not started; no lookup-by-ID endpoint added."
+      },
+      {
+        "id": "INV-6",
+        "verdict": "APPLIES — this review is the required proof artifact. Cannot be PASS given INV-8 FAIL."
+      },
+      {
+        "id": "INV-7",
+        "verdict": "APPLIES — PASS",
+        "notes": "The SUM query uses Ecto's from/2 macro (parameterised by construction). The prefix value is passed as the :prefix keyword option to Repo.one/2 — a schema-routing option, not SQL string interpolation. No Repo.query raw SQL appears in the new code. PASS."
+      },
+      {
+        "id": "INV-8",
+        "verdict": "APPLIES — FAIL (BLOCKER)",
+        "notes": "Two bare matches found in check_storage_quota/3: (1) {:ok, current_usage} = get_storage_usage(prefix: prefix) — matches INV-8 grep pattern; get_storage_usage/1 always returns {:ok, _} so this cannot crash on a bad tagged tuple, but the bare match pattern is still flagged. (2) %Tenant{storage_allowance_bytes: allowance} = Repo.get(Tenant, tenant_id) — BLOCKER: Repo.get/2 returns nil when the tenant record is not found (e.g. concurrent deletion race); a bare struct match against nil raises MatchError in a shared request process. Fix required: use case Repo.get(Tenant, tenant_id) do / nil -> {:error, :storage_quota_exceeded} / %Tenant{...} -> ... end, or Repo.get!/2 with explicit rescue."
+      },
+      {
+        "id": "INV-9",
+        "verdict": "NOT-APPLICABLE",
+        "notes": "No outbound HTTP call using tenant-controlled URL added."
+      }
+    ],
+    "issues": [
+      {
+        "invariant": "INV-8",
+        "severity": "BLOCKER",
+        "location": "lib/letflow/repository/attachments.ex, check_storage_quota/3",
+        "line": "%Tenant{storage_allowance_bytes: allowance} = Repo.get(Tenant, tenant_id)",
+        "description": "Repo.get/2 returns nil when the tenant is not found. The bare struct pattern match against nil raises MatchError. INV-8 requires typed-result handling for any path touching external I/O. Route back to ELIXIR-DEV. Fix: wrap in a case expression and return {:error, :tenant_not_found} (or another appropriate error atom) on the nil branch."
+      }
+    ],
+    "routing": "FAIL — route back to ELIXIR-DEV to fix INV-8 in check_storage_quota/3 before re-submission to SECURITY-REVIEWER."
+  }
 }

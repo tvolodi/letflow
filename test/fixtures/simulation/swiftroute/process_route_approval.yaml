@@ -16,6 +16,8 @@ graph:
       node_type: HUMAN_TASK
       attributes:
         role: role-ops-manager
+        escalation_timer_duration: "PT2H"
+        escalation_role: role-ceo
     - id: ceo-approval-gate
       node_type: EXCLUSIVE_GATEWAY
     - id: ceo-approval
@@ -53,10 +55,10 @@ graph:
       source: ops-review
       target: notify-requester
       condition: "variables.ops_decision == 'reject'"
-    # fallback for ops-review (timeout path; escalate-to-ceo not in graph)
+    # fallback for ops-review (escalation path; timer fires -> direct ceo-approval)
     - id: fallback-ops-review
       source: ops-review
-      target: notify-requester
+      target: ceo-approval
     - id: e3
       source: ceo-approval-gate
       target: ceo-approval

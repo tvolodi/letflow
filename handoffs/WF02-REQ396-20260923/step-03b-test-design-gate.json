@@ -1,0 +1,60 @@
+{
+    "handoff_id":  "WF02-REQ396-20260923-step-03b",
+    "run_id":  "WF02-REQ396-20260923",
+    "step":  "Step 3b (Test Design Gate)",
+    "to_agent":  "TEST-DESIGN-VALIDATOR",
+    "from_agent":  "ORCH",
+    "status":  "COMPLETED",
+    "created_at":  "2026-09-23T20:01:05Z",
+    "started_at":  "2026-09-23T20:01:05Z",
+    "context":  {
+                    "branch_name":  "feature/WF02-REQ396-20260923",
+                    "requirement_ids":  [
+                                            "REQ-396"
+                                        ],
+                    "test_files":  [
+                                       "test/letflow/definitions/graph_test.exs (CHK-21 tests added)",
+                                       "test/letflow/engine/human_task_escalation_test.exs (new file)",
+                                       "test/letflow/simulation/req206_swiftroute_test.exs (ops-review escalation test added)"
+                                   ],
+                    "designer_note":  "TEST-DESIGNER also fixed an implementation bug: Ecto.Enum fields need atoms (:pending/:cancelled) not string literals -- found by tests throwing Ecto.QueryError at runtime.",
+                    "artifacts_in":  [
+                                         "test/letflow/definitions/graph_test.exs",
+                                         "test/letflow/engine/human_task_escalation_test.exs",
+                                         "test/letflow/simulation/req206_swiftroute_test.exs",
+                                         "docs/requirements.yaml (REQ-396 ACs)"
+                                     ]
+                },
+    "task":  {
+                 "description":  "Execute Step 3b (TEST-DESIGN-VALIDATOR HARD GATE) for REQ-396.\n\nWorkspace: c:\\Users\\tvolo\\dev\\ai-dala\\letflow\nBranch: feature/WF02-REQ396-20260923\n\nRead independently:\n1. All 3 test files above\n2. REQ-396 ACs from docs/requirements.yaml\n\nCheck each AC that has tests:\n\nAC2: Are there exactly 4 CHK-21 graph validation tests (valid, missing_role, missing_timer_duration, invalid_format)?\nAC3: Does human_task_escalation_test.exs prove (a) non-actionable, (b) one new task to escalation role, (c) audit ordering with timestamps?\nAC4: Does req206 test verify ops-review -\u003e ceo-approval escalation path end-to-end?\n\nAlso check:\n- Are AC2 tests using the no-DB pattern (unit-level) consistent with graph_test.exs existing tests?\n- Is AC3 test self-contained with its own fixture/setup?\n- Is AC5 (UAT re-run) correctly deferred (not required for this step)?\n\nVerdict: PASS or FAIL.\n\nOutput:\n1. Write handoffs/WF02-REQ396-20260923/step-03b-test-design-gate.json COMPLETED PASS or FAIL\n2. git add + commit + push\n\nReport: PASS or FAIL",
+                 "acceptance_criteria":  [
+                                             "AC2: 4 CHK-21 validation tests present",
+                                             "AC3: timer fire proves non-actionable + one new task + audit ordering",
+                                             "AC4: req206 escalation path test present",
+                                             "AC5 correctly deferred"
+                                         ]
+             },
+    "completed_at":  "2026-09-23T20:04:17Z",
+    "result":  {
+                   "status":  "COMPLETED",
+                   "verdict":  "PASS",
+                   "ac_audit":  {
+                                    "AC2":  {
+                                                "verdict":  "PASS",
+                                                "detail":  "Exactly 4 CHK-21 tests present in graph_test.exs describe block \u0027validate_node_attributes/1 -- CHK-21: HUMAN_TASK escalation attributes (REQ-396 AC2)\u0027: (1) valid happy path both attrs present; (2) missing_escalation_role (duration present, role absent/nil/blank — 4 sub-cases in one test); (3) missing_escalation_timer_duration (role present, duration absent); (4) invalid ISO-8601 format \u0027NOT-ISO\u0027 -\u003e :invalid_escalation_timer. All 4 are pure no-DB tests consistent with existing CHK-12 block shape."
+                                            },
+                                    "AC3":  {
+                                                "verdict":  "PASS",
+                                                "detail":  "human_task_escalation_test.exs (new file, async: false, real Postgres): (a) force-fires escalation timer via Scheduler.fire_timer/2 and asserts reloaded_orig.status == :cancelled; (b) asserts length(new_tasks) == 1 and new_task.assignee_ref == \u0027role-escalation\u0027; (c) ordering proved by DateTime.compare(reloaded_orig.cancelled_at, new_task.inserted_at) != :gt — comparing cancelled_at on the original task row against inserted_at on the new task row. Both are set in the same Ecto.Multi transaction; :cancel_original_task step runs before :task_activation step. Design doc §4 explicitly confirms no audit_entries insert is designed (audit_entries table does not exist in current schema); task-row timestamps are the correct mechanism. No @tag :skip. Self-contained fixture with TenantFixture.provisioned_tenant!/1."
+                                            },
+                                    "AC4":  {
+                                                "verdict":  "PASS",
+                                                "detail":  "AC4-REQ396 describe block in req206_swiftroute_test.exs: creates @ops_escalation_graph definition, calls Engine.create/2 (instance :active, token at ops-review), finds the escalation timer (timer_type: \u0027escalation\u0027, node_id: \u0027ops-review\u0027), calls Scheduler.fire_timer/2, asserts ops-review task :cancelled and exactly one ceo-approval task with assignee_ref \u0027role-ceo\u0027. Uses inline graph (P0D, no SERVICE_TASKs) for the same reason the existing high-value-happy test does."
+                                            },
+                                    "AC5":  {
+                                                "verdict":  "DEFERRED_CORRECT",
+                                                "detail":  "Test spec (test/specs/REQ-396.md) covers only AC2, AC3, AC4. AC5 is a UAT-RUNNER task whose own text makes it conditional on REQ-395 and ISS-0739 landing first. No ExUnit test is possible at this stage; omission from the spec is correct."
+                                            }
+                                }
+               }
+}

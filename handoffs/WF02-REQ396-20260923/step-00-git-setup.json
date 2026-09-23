@@ -1,0 +1,44 @@
+{
+    "handoff_id":  "WF02-REQ396-20260923-step-00",
+    "run_id":  "WF02-REQ396-20260923",
+    "step":  "Step 00",
+    "to_agent":  "ELIXIR-DEV",
+    "from_agent":  "ORCH",
+    "status":  "PENDING",
+    "created_at":  "2026-09-23T18:34:59Z",
+    "started_at":  "2026-09-23T18:34:59Z",
+    "context":  {
+                    "branch_name":  "feature/WF02-REQ396-20260923",
+                    "requirement_ids":  [
+                                            "REQ-396"
+                                        ],
+                    "stage":  "S7",
+                    "requirement_text":  {
+                                             "REQ-396":  "Add HUMAN_TASK.escalation_timer_duration to graph schema and wire SCH-04 escalation half (timer fire -\u003e original task non-actionable, new task assigned to escalation role), closing REQ-185/REQ-188 deferral. WHAT EXISTS: POST /instances/:id/advance-timer force-fires any pending TIMER node. Letflow.Definitions.Graph validates :TIMER nodes with duration_iso8601 (CHK-12). WHAT DOES NOT EXIST: No way to attach a timeout to a :HUMAN_TASK node to (a) race the human completing it, (b) firing first makes original task non-actionable, (c) creates new task assigned to escalation role. process_route_approval.yaml\u0027s ops-review node has no path to ceo-approval on timeout. SCOPE: (1) CODE-DESIGNER decides schema shape (escalation_timer_duration ISO-8601 + escalation_role attribute, or boundary-timer node alternative), produces design doc; (2) ELIXIR-DEV wires Engine/Scheduler: fired escalation timer marks original HUMAN_TASK non-actionable (audit event before escalation task), creates new task assigned to escalation role; (3) update process_route_approval.yaml ops-review node for timeout path to ceo-approval. NOT IN SCOPE: REQ-185/186/187/188 recurring-timer machinery; REQ-395 live deployment; ISS-0739 credential seeding. ACs: design doc with CODE-DESIGN-VALIDATOR sign-off citing REQ-185/REQ-188 blocker; Graph validates new attributes; ExUnit test proves timer fire -\u003e (a) non-actionable original task, (b) one new task to escalation role, (c) audit event ordering; process_route_approval.yaml updated with end-to-end test; UAT re-run (deferred to REQ-395+ISS-0739 landing); mix test + compile pass."
+                                         },
+                    "owned_modules":  [
+                                          "lib/letflow/definitions/graph.ex",
+                                          "lib/letflow/engine/",
+                                          "lib/letflow/scheduler.ex",
+                                          "test/fixtures/simulation/swiftroute/process_route_approval.yaml"
+                                      ],
+                    "artifacts_in":  [
+
+                                     ]
+                },
+    "task":  {
+                 "description":  "Execute Step 00 (GIT SETUP) for WF02-REQ396-20260923 per docs/agents/protocols/GIT_SETUP.md.\n\nBranch: feature/WF02-REQ396-20260923\n\nUncommitted files to stage:\n- handoffs/registry.json (REQ-396 entry)\n- handoffs/orchestrator.log\n- handoffs/WF02-REQ396-20260923/step-00-git-setup.json (this file)\n- docs/requirements.yaml (flip REQ-396 pending → in_progress)\n- docs/status/requirement_status.v22.yaml (append started event)\n- docs/status/requirement_status.index.yaml (increment entries)\n\nProcedure:\n1. git checkout main; git pull --ff-only\n2. Flip REQ-396 status to in_progress\n3. Append started event to current status volume\n4. git checkout -b feature/WF02-REQ396-20260923\n5. Stage ONLY above files (NOT scripts/fix_registry.py, web/tests/e2e/.pipeline-state/)\n6. Commit: \u0027feat(WF02-REQ396-20260923): Step 00 -- git setup, requirement started\u0027\n7. git push -u origin feature/WF02-REQ396-20260923\n8. Complete handoff PASS",
+                 "acceptance_criteria":  [
+                                             "Branch created and pushed",
+                                             "REQ-396 status in_progress",
+                                             "Started event appended"
+                                         ]
+             },
+    "result":  {
+                   "status":  "PASS",
+                   "commit_sha":  "4f1d294e",
+                   "branch":  "feature/WF02-REQ396-20260923",
+                   "completed_at":  "2026-09-23T18:37:05Z",
+                   "notes":  "Branch created and pushed. REQ-396 status set to in_progress. Started event appended to docs/status/requirement_status.v22.yaml (entry 11). 6 files staged by explicit name."
+               }
+}

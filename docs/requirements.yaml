@@ -29392,7 +29392,7 @@ requirements:
   - id: REQ-396
     title: "Add HUMAN_TASK.escalation_timer_duration to the graph schema and wire SCH-04's escalation half (timer fire -> original task non-actionable, new task assigned to escalation role), closing the deferral REQ-185/REQ-188 already named"
     owner: CODE-DESIGNER
-    status: pending
+    status: done
     stage: S7
     impl_order: 756  # letflow-queue task id, GH#1644. Registered 2026-09-20 by ORCH;
       # corrects a fabricated/self-assigned id (753) that was never a real

@@ -1,0 +1,51 @@
+{
+    "handoff_id":  "WF02-REQ396-20260923-step-01b",
+    "run_id":  "WF02-REQ396-20260923",
+    "step":  "Step 1b (Design Gate)",
+    "to_agent":  "CODE-DESIGN-VALIDATOR",
+    "from_agent":  "ORCH",
+    "status":  "COMPLETED",
+    "created_at":  "2026-09-23T18:48:24Z",
+    "started_at":  "2026-09-23T18:48:24Z",
+    "context":  {
+                    "branch_name":  "feature/WF02-REQ396-20260923",
+                    "requirement_ids":  [
+                                            "REQ-396"
+                                        ],
+                    "design_doc":  "lib/letflow/design/req396-human-task-escalation-timer.md",
+                    "designer_summary":  "Option A (new attributes on :HUMAN_TASK): escalation_timer_duration (ISO-8601) + escalation_role (non-blank string), co-required. CHK-21 (check_human_task_escalation/1): 3 violation codes. Engine: dispatch_human_task/3 emits escalation_timer_armed event; do_fire/2 routes to advance_after_escalation_timer_fired/3; dispatch_escalation_timer_fired/4 uses default/fallback edge. Ecto.Multi enforces audit ordering (cancel_original_task before task_activation). YAML: ops-review gets both attributes, fallback-ops-review edge retargeted notify-requester → ceo-approval. REVIEWER flag: Option A vs B requires sign-off.",
+                    "artifacts_in":  [
+                                         "lib/letflow/design/req396-human-task-escalation-timer.md",
+                                         "lib/letflow/definitions/graph.ex",
+                                         "lib/letflow/scheduler.ex",
+                                         "docs/requirements.yaml (REQ-396 ACs)"
+                                     ]
+                },
+    "task":  {
+                 "description":  "Execute Step 1b (HARD GATE) for REQ-396.\n\nWorkspace: c:\\Users\\tvolo\\dev\\ai-dala\\letflow\nBranch: feature/WF02-REQ396-20260923\n\nRead independently:\n1. lib/letflow/design/req396-human-task-escalation-timer.md\n2. docs/requirements.yaml REQ-396 acceptance_criteria\n3. lib/letflow/definitions/graph.ex (confirm CHK-21 placement makes sense)\n4. lib/letflow/scheduler.ex (confirm \u0027escalation\u0027 timer_type exists)\n\nCheck:\n1. All 6 ACs covered?\n2. Approach decision (Option A) stated with rationale?\n3. CHK-21 validator function signature specified with violation codes?\n4. Engine behavior on timer fire fully described (non-actionable status, new task, audit ordering)?\n5. REQ-185/REQ-188 blocker preamble cited?\n6. Co-required constraint (both escalation_timer_duration AND escalation_role, or neither) specified?\n7. No implementation code?\n8. process_route_approval.yaml update sketch present?\n\nVerdict: PASS or FAIL.\n\nOutput:\n1. Write handoffs/WF02-REQ396-20260923/step-01b-design-gate.json COMPLETED PASS or FAIL\n2. git add + commit + push\n\nReport: PASS or FAIL with findings",
+                 "acceptance_criteria":  [
+                                             "All 6 ACs mapped",
+                                             "Approach rationale present",
+                                             "CHK-21 fully specified",
+                                             "REQ-185/REQ-188 cited",
+                                             "No implementation code"
+                                         ]
+             },
+    "result":  {
+                   "status":  "COMPLETED",
+                   "verdict":  "PASS",
+                   "completed_at":  "2026-09-23T19:10:00Z",
+                   "agent":  "CODE-DESIGN-VALIDATOR",
+                   "checks":  {
+                                  "C1_all_6_acs_mapped":  "PASS -- Section 6 (AC Traceability) maps all 6 ACs to concrete design elements (§2 Option A for AC1, CHK-21 §3.2 for AC2, §4.3 Multi ordering for AC3, §5 YAML sketch for AC4, UAT scope note for AC5, implementation AC for AC6).",
+                                  "C2_approach_decision_with_rationale":  "PASS -- Option A (new HUMAN_TASK attributes) chosen and justified; Option B (boundary-timer node type) rejected with four named drawbacks: no parallel-token mechanism, new racing semantics primitive needed, new node_type union variant across all consumers, higher complexity with no AC-driven payoff.",
+                                  "C3_chk21_fully_specified":  "PASS -- Function name check_human_task_escalation/1, @spec check_human_task_escalation(t()) :: [Violation.t()], three violation codes (:invalid_escalation_timer, :missing_escalation_role, :missing_escalation_timer_duration) named, all four presence-combinations covered in logic items 1-5, co-required constraint explicit.",
+                                  "C4_engine_behavior_on_timer_fire":  "PASS -- Non-actionable status is :cancelled (existing atom; no new atom added). New task creation described via :task_activation Multi step at fallback target HUMAN_TASK node using that node\u0027s own role attribute as assignee_ref. Audit ordering enforced by Ecto.Multi sequential execution: :cancel_original_task step 1, :task_activation step 3.",
+                                  "C5_req185_req188_cited":  "PASS -- Section 7 (REQ-185 / REQ-188 Blocker Citation) quotes both preambles verbatim with approximate line references (docs/requirements.yaml ~L9736-9742 and ~L10113-10120).",
+                                  "C6_co_required_constraint":  "PASS -- Section 3.1: \u0027Both attributes are optional. Both must be present or both absent (co-required).\u0027 Section 3.2 logic items 1-5 handle all four presence combinations.",
+                                  "C7_no_implementation_code":  "PASS -- grep for \u0027def check_human_task_escalation\u0027, \u0027def advance_after_escalation\u0027, \u0027def dispatch_escalation\u0027 in design doc returned zero hits. Only @spec declarations, type union additions, YAML sketches, and pseudocode comments present.",
+                                  "C8_yaml_sketch_present":  "PASS -- Section 5 provides explicit YAML sketch: ops-review gains escalation_timer_duration: \u0027PT1H\u0027 and escalation_role: role-ceo; fallback-ops-review edge retargeted from notify-requester to ceo-approval."
+                              },
+                   "next_step":  "CODE-DESIGNER gate cleared; ORCH dispatches ELIXIR-DEV for Step 2 (implementation)."
+               }
+}

@@ -39,10 +39,15 @@ defmodule Letflow.Simulation.Req206SwiftrouteTest do
   import Ecto.Query, only: [from: 2]
 
   alias Ecto.Adapters.SQL.Sandbox
+  alias Letflow.Definitions
+  alias Letflow.Engine
+  alias Letflow.Engine.Task, as: EngineTask
   alias Letflow.Identity
   alias Letflow.Identity.OnboardingRecord
   alias Letflow.Identity.Tenant
   alias Letflow.Repo
+  alias Letflow.Scheduler
+  alias Letflow.Scheduler.Timer
   alias Letflow.Simulation.Runner
   alias Letflow.Simulation.ScenarioFixture
   alias Letflow.Simulation.Seed
@@ -114,6 +119,64 @@ defmodule Letflow.Simulation.Req206SwiftrouteTest do
         "condition" => "variables.ceo_decision == 'reject'"
       },
       # on_timeout fallback for ceo-approval
+      %{"id" => "timeout-ceo-approval", "source" => "ceo-approval", "target" => "end-rejected"}
+    ]
+  }
+
+  # REQ-396 AC4 -- ops-review escalation path. Mirrors @simple_approval_graph but adds
+  # escalation_timer_duration: "P0D" + escalation_role: "role-ceo" to ops-review, and
+  # uses the fallback-ops-review edge (already targeting ceo-approval) as the escalation
+  # path. No SERVICE_TASKs (avoiding the limitation documented in this file's moduledoc).
+  # P0D makes the escalation timer due immediately so fire_timer/2 can be called directly.
+  @ops_escalation_graph %{
+    "nodes" => [
+      %{"id" => "start", "node_type" => "START"},
+      %{
+        "id" => "ops-review",
+        "node_type" => "HUMAN_TASK",
+        "attributes" => %{
+          "role" => "role-ops-manager",
+          "escalation_timer_duration" => "P0D",
+          "escalation_role" => "role-ceo"
+        }
+      },
+      %{
+        "id" => "ceo-approval",
+        "node_type" => "HUMAN_TASK",
+        "attributes" => %{"role" => "role-ceo"}
+      },
+      %{"id" => "end-approved", "node_type" => "END"},
+      %{"id" => "end-rejected", "node_type" => "END"}
+    ],
+    "edges" => [
+      %{"id" => "e0", "source" => "start", "target" => "ops-review"},
+      %{
+        "id" => "e1",
+        "source" => "ops-review",
+        "target" => "end-rejected",
+        "condition" => "variables.ops_decision == 'approve'"
+      },
+      %{
+        "id" => "e2",
+        "source" => "ops-review",
+        "target" => "end-rejected",
+        "condition" => "variables.ops_decision == 'reject'"
+      },
+      # fallback / escalation path for ops-review -> ceo-approval
+      %{"id" => "fallback-ops-review", "source" => "ops-review", "target" => "ceo-approval"},
+      %{
+        "id" => "e5",
+        "source" => "ceo-approval",
+        "target" => "end-approved",
+        "condition" => "variables.ceo_decision == 'approve'"
+      },
+      %{
+        "id" => "e6",
+        "source" => "ceo-approval",
+        "target" => "end-rejected",
+        "condition" => "variables.ceo_decision == 'reject'"
+      },
+      # fallback for ceo-approval
       %{"id" => "timeout-ceo-approval", "source" => "ceo-approval", "target" => "end-rejected"}
     ]
   }
@@ -580,5 +643,94 @@ defmodule Letflow.Simulation.Req206SwiftrouteTest do
     # `lib/letflow/design/req212-instance-attachments-routes.md` and
     # `test/letflow/routers/req212_attachments_routes_test.exs` for the
     # route surface's own coverage.
+  end
+
+  # ─── AC4-REQ396: ops-review escalation timer fires -> ceo-approval task ──
+
+  describe "AC4-REQ396: ops-review escalation timer (P0D) fires -> ceo-approval HUMAN_TASK created" do
+    # Uses @ops_escalation_graph (no SERVICE_TASKs, P0D duration for immediate
+    # fire) rather than the full process_route_approval.yaml, for the same
+    # reason the high-value-happy test uses @simple_approval_graph: SERVICE_TASK
+    # nodes cause complete_task/3 to fail with :node_type_not_yet_implemented.
+    # The escalation path itself (ops-review timer fires -> ceo-approval task)
+    # does not involve any SERVICE_TASK, so this inline graph exercises the
+    # exact same code paths the full YAML would, without the unrelated limitation.
+    test "timer fire cancels ops-review task and creates ceo-approval task for role-ceo", %{
+      schema_name: schema_name
+    } do
+      # Create + activate the ops-escalation definition inline.
+      unique_defn_name =
+        "OpsEscalation-" <> to_string(System.unique_integer([:positive, :monotonic]))
+
+      {:ok, definition} =
+        Definitions.create(
+          %{
+            name: unique_defn_name,
+            version: "1.0",
+            description: "REQ-396 AC4 inline escalation graph",
+            graph: @ops_escalation_graph,
+            created_by: Ecto.UUID.generate()
+          },
+          prefix: schema_name
+        )
+
+      {:ok, %{definition: activated}} = Definitions.activate(definition.id, prefix: schema_name)
+
+      # Start an instance — token parks at ops-review, escalation timer armed.
+      assert {:ok, create_result} =
+               Engine.create(
+                 %{
+                   definition_id: activated.id,
+                   initial_variables: %{},
+                   actor_id: Ecto.UUID.generate(),
+                   idempotency_key:
+                     "req396-ac4-" <> to_string(System.unique_integer([:positive, :monotonic]))
+                 },
+                 prefix: schema_name
+               )
+
+      instance_id = create_result.instance_id
+
+      # Exactly one PENDING task: ops-review.
+      ops_tasks =
+        from(t in EngineTask,
+          where: t.instance_id == ^instance_id and t.node_id == "ops-review"
+        )
+        |> Repo.all(prefix: schema_name)
+
+      assert [%EngineTask{status: :pending} = ops_task] = ops_tasks
+
+      # Exactly one escalation timer (P0D, due immediately).
+      escalation_timers =
+        from(t in Timer,
+          where:
+            t.instance_id == ^instance_id and t.timer_type == "escalation" and
+              t.node_id == "ops-review"
+        )
+        |> Repo.all(prefix: schema_name)
+
+      assert [%Timer{status: "pending"} = escl_timer] = escalation_timers
+
+      # Force-fire the escalation timer.
+      assert {:ok, :fired} = Scheduler.fire_timer(escl_timer.id, schema_name)
+
+      # ops-review task must be :cancelled.
+      reloaded_ops = Repo.get!(EngineTask, ops_task.id, prefix: schema_name)
+
+      assert reloaded_ops.status == :cancelled,
+             "expected ops-review task to be :cancelled, got #{inspect(reloaded_ops.status)}"
+
+      # Exactly one new task for ceo-approval / role-ceo must be :pending.
+      ceo_tasks =
+        from(t in EngineTask,
+          where: t.instance_id == ^instance_id and t.node_id == "ceo-approval"
+        )
+        |> Repo.all(prefix: schema_name)
+
+      assert [%EngineTask{status: :pending} = ceo_task] = ceo_tasks,
+             "expected exactly one pending ceo-approval task, got: #{inspect(Enum.map(ceo_tasks, &{&1.node_id, &1.status}))}"
+
+      assert ceo_task.assignee_ref == "role-ceo"
+    end
   end
 end

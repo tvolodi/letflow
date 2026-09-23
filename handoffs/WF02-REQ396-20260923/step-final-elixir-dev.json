@@ -1,0 +1,31 @@
+{
+    "handoff_id":  "WF02-REQ396-20260923-step-final",
+    "run_id":  "WF02-REQ396-20260923",
+    "step":  "Step Final",
+    "to_agent":  "ELIXIR-DEV",
+    "from_agent":  "ORCH",
+    "status":  "PENDING",
+    "created_at":  "2026-09-23T20:19:25Z",
+    "started_at":  "2026-09-23T20:19:25Z",
+    "context":  {
+                    "branch_name":  "feature/WF02-REQ396-20260923",
+                    "requirement_ids":  [
+                                            "REQ-396"
+                                        ],
+                    "all_gates_passed":  true,
+                    "queue_task_id":  756,
+                    "queue_agent_id":  "orch-main",
+                    "queue_endpoint":  "https://queue-test.ai-dala.com",
+                    "queue_auth_token":  "8e88290747e5cd89cc94887ba3f887c72add7f2e2e06cd49cab6bcd307c5198f"
+                },
+    "task":  {
+                 "description":  "Execute Step Final for WF02-REQ396-20260923 per GIT_MERGE.md.\n\nWorkspace: c:\\Users\\tvolo\\dev\\ai-dala\\letflow\nBranch: feature/WF02-REQ396-20260923\nMix: \u0026 \u0027C:/Program Files/Elixir/bin/mix\u0027\nQUEUE_AUTH_TOKEN: 8e88290747e5cd89cc94887ba3f887c72add7f2e2e06cd49cab6bcd307c5198f\n\n1. Verify branch\n2. Stage any dirty ORCH files, commit\n3. git fetch origin main\n4. git rebase origin/main\n5. mix compile --warnings-as-errors\n6. mix test test/letflow/definitions/graph_test.exs test/letflow/engine/human_task_escalation_test.exs test/letflow/simulation/req206_swiftroute_test.exs\n7. git push --force-with-lease if rebased, else git push\n8. gh pr create --title \u0027REQ-396: HUMAN_TASK escalation timer (CHK-21, engine wiring, process_route_approval.yaml)\u0027 --body \u0027Implements REQ-396. Adds escalation_timer_duration + escalation_role attributes to :HUMAN_TASK nodes (CHK-21 validation). Engine wires escalation timer firing -\u003e original task cancelled + new task assigned to escalation role via Ecto.Multi. process_route_approval.yaml updated: ops-review timeout now reaches ceo-approval. AC5 (UAT re-run) deferred to REQ-395+ISS-0739.\u0027\n9. Wait for CI green\n10. gh pr merge --squash --delete-branch\n11. git checkout main; git pull --ff-only\n12. Release queue 756: POST https://queue-test.ai-dala.com/tasks/756/release {\"agent_id\":\"orch-main\",\"status\":\"done\"}\n13. Update registry WF02-REQ396-20260923: COMPLETED, released_lock true\n14. Complete handoff PASS + open bookkeeping PR\n\nReport: PR number, merge SHA, queue release",
+                 "acceptance_criteria":  [
+                                             "Rebased, compile clean, tests pass",
+                                             "PR merged, branch deleted",
+                                             "Queue 756 released",
+                                             "Registry COMPLETED"
+                                         ]
+             },
+    "result":  null
+}

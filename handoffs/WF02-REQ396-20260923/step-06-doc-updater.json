@@ -21,5 +21,15 @@
       "Pure appends"
     ]
   },
-  "result": null
+  "result": {
+    "status": "COMPLETED",
+    "verdict": "PASS",
+    "completed_at": "2026-09-23T20:18:19Z",
+    "artifacts_out": [
+      "docs/requirements.yaml",
+      "docs/status/requirement_status.v22.yaml",
+      "docs/status/requirement_status.index.yaml"
+    ],
+    "notes": "REQ-396 status flipped to done. Done event appended to requirement_status.v22.yaml (12 on-disk entries, 394 lines, 22937 bytes -- well under roll ceiling). Index entries incremented 11→12. README.md: zero 'escalation' hits, not touched."
+  }
 }

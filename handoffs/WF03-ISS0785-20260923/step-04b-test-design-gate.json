@@ -1,77 +1,75 @@
 {
-  "handoff_id": "WF03-ISS0785-20260923-step-04b",
-  "run_id": "WF03-ISS0785-20260923",
-  "workflow": "WF-03",
-  "step": "Step 4b (Test Design Gate)",
-  "to_agent": "TEST-DESIGN-VALIDATOR",
-  "from_agent": "ORCH",
-  "status": "PENDING",
-  "created_at": "2026-09-23T05:05:50Z",
-  "started_at": "2026-09-23T05:05:50Z",
-  "context": {
-    "branch_name": "feature/WF03-ISS0785-20260923",
-    "issue_id": "ISS-0785",
-    "test_file": "test/letflow/repository/attachments_test.exs",
-    "test_summary_from_designer": "Added describe block 'ISS-0785: cross-instance-same-tenant denial in get_content/3' with test 'returns {:error, :not_found} when the attachment belongs to a different instance in the same tenant'. Fail-first proof (4 failures against pre-fix 2-arity), mutation proof (removed check_instance_match from with chain → 1 failure), post-fix 24/24.",
-    "artifacts_in": [
-      "test/letflow/repository/attachments_test.exs",
-      "docs/issues/ISS-0785.yaml",
-      "lib/letflow/repository/attachments.ex",
-      "handoffs/WF03-ISS0785-20260923/step-04-test-designer.json"
-    ]
-  },
-  "task": {
-    "description": "Execute Step 4b (TEST-DESIGN-VALIDATOR -- HARD GATE) for ISS-0785.\n\nWorkspace: c:\\Users\\tvolo\\dev\\ai-dala\\letflow\nBranch: feature/WF03-ISS0785-20260923\n\nYou are the independent validator. Read the test file directly -- do NOT trust TEST-DESIGNER's self-report.\n\n1. Read test/letflow/repository/attachments_test.exs in full. Find the new ISS-0785 test.\n2. Read docs/issues/ISS-0785.yaml. Check the acceptance criteria.\n3. Read the TEST-DESIGNER handoff (step-04-test-designer.json) for context on fail-first/mutation proof.\n\nCheck:\na. Does the new test exercise the cross-instance-same-tenant denial path in get_content/3? (not get/2, not a wrong-tenant test)\nb. Does the test assert exactly {:error, :not_found} (not a more generic assertion)?\nc. Is the fail-first proof credible? (The test calling get_content/3 against 2-arity code would fail with UndefinedFunctionError at compile/runtime -- that counts as a fail)\nd. Is the mutation proof credible? (Removing check_instance_match from with chain broke the test)\ne. Does the test also verify the positive case? (same-instance get_content/3 succeeds)\nf. Is the test well-isolated? (creates its own data, doesn't depend on external state)\ng. Does the test cover all acceptance criteria from docs/issues/ISS-0785.yaml that are testable at the unit level?\n\nVerdict: PASS or FAIL.\n\nOutput:\n1. Write handoffs/WF03-ISS0785-20260923/step-04b-test-design-gate.json with status COMPLETED, result.status PASS or FAIL\n2. git add handoffs/WF03-ISS0785-20260923/step-04b-test-design-gate.json\n3. git commit -m 'fix(WF03-ISS0785-20260923): Step 4b -- test design gate [PASS/FAIL]'\n4. git push\n\nReport: PASS or FAIL with findings",
-    "acceptance_criteria": [
-      "Cross-instance-same-tenant denial path confirmed tested",
-      "Fail-first proof assessed as credible",
-      "Mutation proof assessed as credible",
-      "Test assertion is specific (not just 'result != :ok')",
-      "All testable ACs from ISS-0785.yaml covered"
-    ]
-  },
-  "completed_at": "2026-09-23T05:12:00Z",
-  "status": "COMPLETED",
-  "result": {
-    "status": "PASS",
-    "verdict": "PASS — all checks satisfied. Test is a genuine regression discriminator.",
-    "checks": {
-      "A_covers_right_scenario": {
-        "result": "PASS",
-        "detail": "Test calls Attachments.get_content/3 (3-arity: id, instance_b, prefix: schema). It uses a cross-instance-same-tenant scenario: attachment uploaded for instance_a, then called with instance_b in the SAME tenant schema. Not a cross-tenant scenario. Correct target."
-      },
-      "B_assertion_specific": {
-        "result": "PASS",
-        "detail": "Negative assertion: == {:error, :not_found} (exact match, not a generic 'not :ok' check). Positive case also tested: {:ok, ^attachment, _artifact} for the owning instance_a. Both arms exercised."
-      },
-      "C_fail_first_credibility": {
-        "result": "PASS",
-        "detail": "Pre-fix code has get_content/2 (no instance_id parameter). Calling get_content/3 raises UndefinedFunctionError at runtime — a genuine test failure (exit 1). TEST-DESIGNER reported 4/24 failures (all 4 tests calling get_content/3). Credible. Per WF-03 procedure for the 'code did not exist' case, an independent mutant was also required and is reported below."
-      },
-      "D_mutation_proof": {
-        "result": "PASS — independently verified by TEST-DESIGN-VALIDATOR",
-        "mutant_applied": "Removed :ok <- check_instance_match(attachment, instance_id) from get_content/3's with chain, leaving only get(id, opts) -> check_scan_status_clean -> Repo.get(Artifact, ...).",
-        "tdv_measured_result": "elixir -S mix test test/letflow/repository/attachments_test.exs --seed 0 exited 1. Result: 23/24 passed, Failed: 1 test. The 1 failure is test/letflow/repository/attachments_test.exs:643 — the ISS-0785 assertion. Actual: {:ok, attachment, artifact}; expected: {:error, :not_found}. The artifact WAS retrieved (content: 'hello attachment bytes' visible in diff output), confirming the mutation causes a real false-pass in the pre-mutant state.",
-        "revert_check": "git diff --stat lib/letflow/repository/attachments.ex produced no output (file exactly matches committed state). Post-revert run: 24/24 passed.",
-        "note": "TEST-DESIGNER's reported mutation counts (23/24, 1 failure) match TDV's independently measured counts exactly."
-      },
-      "E_acceptance_criteria_coverage": {
-        "result": "PASS",
-        "detail": "ISS-0785.yaml has no formal acceptance_criteria key. The issue's core requirement (described in 'description' and 'suggested_fix') is: cross-instance-same-tenant denial must happen before the artifact blob read, at 1 round-trip cost, returning {:error, :not_found}. The test covers: (1) cross-instance-same-tenant denial returns {:error, :not_found} [negative path], (2) owning-instance access succeeds [positive path / regression guard]. The timing/round-trip invariant is structural in the fix itself (check_instance_match in with chain before Repo.get(Artifact, ...)) and is implicitly validated by the passing negative path (if the blob read fired before the instance check, the test would pass only if the artifact lookup happened to fail — which it doesn't, as the mutation proof confirms). Full coverage of the issue's stated requirement."
-      },
-      "F_test_isolation": {
-        "result": "PASS",
-        "detail": "Test provisions its own tenant with unique slug 'iss0785-cross-instance'. Creates fresh UUIDs for instance_a and instance_b. Calls Attachments.upload/2 to create its own attachment row. No shared global state, no dependency on prior test runs. Self-contained."
-      },
-      "G_no_skip_tags": {
-        "result": "PASS",
-        "detail": "No @tag :skip on any ISS-0785 test. No 'TODO: implement test' left in spec."
-      },
-      "H_no_hardcoded_secrets": {
-        "result": "PASS",
-        "detail": "No hardcoded credentials or connection strings. Fixtures use Ecto.UUID.generate() and hardcoded benign test content ('hello attachment bytes')."
-      }
-    },
-    "summary": "The ISS-0785 regression test is correctly structured, specifically asserts {:error, :not_found} on cross-instance-same-tenant denial, also validates the positive path, is fully isolated, and is a genuine discriminator. TDV independently applied the check_instance_match mutant and measured 23/24 (1 failure at line 643) — confirming the test catches the exact defect it targets. Post-revert: 24/24 pass."
-  }
+    "handoff_id":  "WF03-ISS0785-20260923-step-04b",
+    "run_id":  "WF03-ISS0785-20260923",
+    "step":  "Step 4b (Test Design Gate)",
+    "to_agent":  "TEST-DESIGN-VALIDATOR",
+    "from_agent":  "ORCH",
+    "status":  "COMPLETED",
+    "created_at":  "2026-09-23T05:05:50Z",
+    "started_at":  "2026-09-23T05:05:50Z",
+    "context":  {
+                    "branch_name":  "feature/WF03-ISS0785-20260923",
+                    "issue_id":  "ISS-0785",
+                    "test_file":  "test/letflow/repository/attachments_test.exs",
+                    "test_summary_from_designer":  "Added describe block \u0027ISS-0785: cross-instance-same-tenant denial in get_content/3\u0027 with test \u0027returns {:error, :not_found} when the attachment belongs to a different instance in the same tenant\u0027. Fail-first proof (4 failures against pre-fix 2-arity), mutation proof (removed check_instance_match from with chain → 1 failure), post-fix 24/24.",
+                    "artifacts_in":  [
+                                         "test/letflow/repository/attachments_test.exs",
+                                         "docs/issues/ISS-0785.yaml",
+                                         "lib/letflow/repository/attachments.ex",
+                                         "handoffs/WF03-ISS0785-20260923/step-04-test-designer.json"
+                                     ]
+                },
+    "task":  {
+                 "description":  "Execute Step 4b (TEST-DESIGN-VALIDATOR -- HARD GATE) for ISS-0785.\n\nWorkspace: c:\\Users\\tvolo\\dev\\ai-dala\\letflow\nBranch: feature/WF03-ISS0785-20260923\n\nYou are the independent validator. Read the test file directly -- do NOT trust TEST-DESIGNER\u0027s self-report.\n\n1. Read test/letflow/repository/attachments_test.exs in full. Find the new ISS-0785 test.\n2. Read docs/issues/ISS-0785.yaml. Check the acceptance criteria.\n3. Read the TEST-DESIGNER handoff (step-04-test-designer.json) for context on fail-first/mutation proof.\n\nCheck:\na. Does the new test exercise the cross-instance-same-tenant denial path in get_content/3? (not get/2, not a wrong-tenant test)\nb. Does the test assert exactly {:error, :not_found} (not a more generic assertion)?\nc. Is the fail-first proof credible? (The test calling get_content/3 against 2-arity code would fail with UndefinedFunctionError at compile/runtime -- that counts as a fail)\nd. Is the mutation proof credible? (Removing check_instance_match from with chain broke the test)\ne. Does the test also verify the positive case? (same-instance get_content/3 succeeds)\nf. Is the test well-isolated? (creates its own data, doesn\u0027t depend on external state)\ng. Does the test cover all acceptance criteria from docs/issues/ISS-0785.yaml that are testable at the unit level?\n\nVerdict: PASS or FAIL.\n\nOutput:\n1. Write handoffs/WF03-ISS0785-20260923/step-04b-test-design-gate.json with status COMPLETED, result.status PASS or FAIL\n2. git add handoffs/WF03-ISS0785-20260923/step-04b-test-design-gate.json\n3. git commit -m \u0027fix(WF03-ISS0785-20260923): Step 4b -- test design gate [PASS/FAIL]\u0027\n4. git push\n\nReport: PASS or FAIL with findings",
+                 "acceptance_criteria":  [
+                                             "Cross-instance-same-tenant denial path confirmed tested",
+                                             "Fail-first proof assessed as credible",
+                                             "Mutation proof assessed as credible",
+                                             "Test assertion is specific (not just \u0027result != :ok\u0027)",
+                                             "All testable ACs from ISS-0785.yaml covered"
+                                         ]
+             },
+    "completed_at":  "2026-09-23T05:12:00Z",
+    "result":  {
+                   "status":  "PASS",
+                   "verdict":  "PASS — all checks satisfied. Test is a genuine regression discriminator.",
+                   "checks":  {
+                                  "A_covers_right_scenario":  {
+                                                                  "result":  "PASS",
+                                                                  "detail":  "Test calls Attachments.get_content/3 (3-arity: id, instance_b, prefix: schema). It uses a cross-instance-same-tenant scenario: attachment uploaded for instance_a, then called with instance_b in the SAME tenant schema. Not a cross-tenant scenario. Correct target."
+                                                              },
+                                  "B_assertion_specific":  {
+                                                               "result":  "PASS",
+                                                               "detail":  "Negative assertion: == {:error, :not_found} (exact match, not a generic \u0027not :ok\u0027 check). Positive case also tested: {:ok, ^attachment, _artifact} for the owning instance_a. Both arms exercised."
+                                                           },
+                                  "C_fail_first_credibility":  {
+                                                                   "result":  "PASS",
+                                                                   "detail":  "Pre-fix code has get_content/2 (no instance_id parameter). Calling get_content/3 raises UndefinedFunctionError at runtime — a genuine test failure (exit 1). TEST-DESIGNER reported 4/24 failures (all 4 tests calling get_content/3). Credible. Per WF-03 procedure for the \u0027code did not exist\u0027 case, an independent mutant was also required and is reported below."
+                                                               },
+                                  "D_mutation_proof":  {
+                                                           "result":  "PASS — independently verified by TEST-DESIGN-VALIDATOR",
+                                                           "mutant_applied":  "Removed :ok \u003c- check_instance_match(attachment, instance_id) from get_content/3\u0027s with chain, leaving only get(id, opts) -\u003e check_scan_status_clean -\u003e Repo.get(Artifact, ...).",
+                                                           "tdv_measured_result":  "elixir -S mix test test/letflow/repository/attachments_test.exs --seed 0 exited 1. Result: 23/24 passed, Failed: 1 test. The 1 failure is test/letflow/repository/attachments_test.exs:643 — the ISS-0785 assertion. Actual: {:ok, attachment, artifact}; expected: {:error, :not_found}. The artifact WAS retrieved (content: \u0027hello attachment bytes\u0027 visible in diff output), confirming the mutation causes a real false-pass in the pre-mutant state.",
+                                                           "revert_check":  "git diff --stat lib/letflow/repository/attachments.ex produced no output (file exactly matches committed state). Post-revert run: 24/24 passed.",
+                                                           "note":  "TEST-DESIGNER\u0027s reported mutation counts (23/24, 1 failure) match TDV\u0027s independently measured counts exactly."
+                                                       },
+                                  "E_acceptance_criteria_coverage":  {
+                                                                         "result":  "PASS",
+                                                                         "detail":  "ISS-0785.yaml has no formal acceptance_criteria key. The issue\u0027s core requirement (described in \u0027description\u0027 and \u0027suggested_fix\u0027) is: cross-instance-same-tenant denial must happen before the artifact blob read, at 1 round-trip cost, returning {:error, :not_found}. The test covers: (1) cross-instance-same-tenant denial returns {:error, :not_found} [negative path], (2) owning-instance access succeeds [positive path / regression guard]. The timing/round-trip invariant is structural in the fix itself (check_instance_match in with chain before Repo.get(Artifact, ...)) and is implicitly validated by the passing negative path (if the blob read fired before the instance check, the test would pass only if the artifact lookup happened to fail — which it doesn\u0027t, as the mutation proof confirms). Full coverage of the issue\u0027s stated requirement."
+                                                                     },
+                                  "F_test_isolation":  {
+                                                           "result":  "PASS",
+                                                           "detail":  "Test provisions its own tenant with unique slug \u0027iss0785-cross-instance\u0027. Creates fresh UUIDs for instance_a and instance_b. Calls Attachments.upload/2 to create its own attachment row. No shared global state, no dependency on prior test runs. Self-contained."
+                                                       },
+                                  "G_no_skip_tags":  {
+                                                         "result":  "PASS",
+                                                         "detail":  "No @tag :skip on any ISS-0785 test. No \u0027TODO: implement test\u0027 left in spec."
+                                                     },
+                                  "H_no_hardcoded_secrets":  {
+                                                                 "result":  "PASS",
+                                                                 "detail":  "No hardcoded credentials or connection strings. Fixtures use Ecto.UUID.generate() and hardcoded benign test content (\u0027hello attachment bytes\u0027)."
+                                                             }
+                              },
+                   "summary":  "The ISS-0785 regression test is correctly structured, specifically asserts {:error, :not_found} on cross-instance-same-tenant denial, also validates the positive path, is fully isolated, and is a genuine discriminator. TDV independently applied the check_instance_match mutant and measured 23/24 (1 failure at line 643) — confirming the test catches the exact defect it targets. Post-revert: 24/24 pass."
+               }
 }

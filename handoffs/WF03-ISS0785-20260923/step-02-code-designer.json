@@ -1,49 +1,55 @@
 {
-  "handoff_id": "WF03-ISS0785-20260923-step-02",
-  "run_id": "WF03-ISS0785-20260923",
-  "workflow": "WF-03",
-  "step": "Step 2 (Fix Design)",
-  "to_agent": "CODE-DESIGNER",
-  "from_agent": "ORCH",
-  "status": "COMPLETED",
-  "created_at": "2026-09-23T04:18:49Z",
-  "started_at": "2026-09-23T04:18:49Z",
-  "context": {
-    "branch_name": "feature/WF03-ISS0785-20260923",
-    "issue_id": "ISS-0785",
-    "stage": "S6",
-    "diagnosis_summary": "ISSUE-FIXER confirmed: get_content/2 (attachments.ex ~417-424) unconditionally reads the full artifact blob via Repo.get(Artifact, attachment.content_hash, ...) before any instance_id check. The instance_id check is in fetch_scoped_attachment_content/3 (instances.ex ~1175-1192) AFTER get_content/2 returns. Cross-instance-same-tenant denial costs 2 round-trips; cross-tenant/never-issued costs 1. Fix: Thread instance_id into get_content/2 and add check_instance_match/2 guard in the with chain BEFORE the blob read. Option A confirmed as the right approach.",
-    "issue_text": "ISS-0785: Cross-instance-same-tenant attachment-content denial is timing-distinguishable from cross-tenant/never-issued denial. get_content/2 reads artifact blob unconditionally regardless of instance_id. Full detail: docs/issues/ISS-0785.yaml",
-    "related_requirements": ["REQ-211", "REQ-212"],
-    "affected_files_primary": ["lib/letflow/repository/attachments.ex"],
-    "affected_files_call_site": ["lib/letflow/routers/instances.ex"],
-    "concurrent_run_note": "WF02-REQ388-20260923 is active and also modifies lib/letflow/routers/instances.ex (audit logging for denied attachment access). Design must NOT conflict with REQ-388's work. REQ-388 adds audit logging AFTER the access check -- this fix reorders BEFORE the blob read, so they are logically independent. ELIXIR-DEV will rebase onto main at Step Final and incorporate REQ-388's merged changes.",
-    "artifacts_in": [
-      "docs/issues/ISS-0785.yaml",
-      "lib/letflow/repository/attachments.ex",
-      "lib/letflow/routers/instances.ex",
-      "handoffs/WF03-ISS0785-20260923/step-01-issue-fixer.json"
-    ]
-  },
-  "task": {
-    "description": "Execute Step 2 (Fix Design) for ISS-0785 per docs/agents/workflows/WF-03_issue_resolving.md and docs/guides/backend_developer_guide.md.\n\nWorkspace: c:\\Users\\tvolo\\dev\\ai-dala\\letflow\nBranch: feature/WF03-ISS0785-20260923\n\nDESIGN ONLY -- no implementation code.\n\nRead the full context:\n1. docs/issues/ISS-0785.yaml (severity, constraints)\n2. lib/letflow/repository/attachments.ex in full\n3. lib/letflow/routers/instances.ex (specifically fetch_scoped_attachment_content and callers)\n4. docs/guides/backend_developer_guide.md\n\nDesign the fix using Option A (thread instance_id into get_content/2):\n\n1. ATTACHMENTS MODULE (lib/letflow/repository/attachments.ex):\n   - New `get_content/3` signature: `get_content(id, instance_id, opts)` where instance_id is the tenant-scoped instance UUID\n   - New private `check_instance_match/2` function: compares attachment.instance_id with the passed instance_id, returns :ok or {:error, :not_found}\n   - Updated `with` chain: get/2 → check_instance_match/2 (NEW, before scan gate) → check_scan_status_clean/1 → Repo.get blob\n   - Spec for the new parameter and check function\n   - The {:error, :not_found} response shape must be IDENTICAL to the existing not_found paths (EO-001/EO-002 preservation)\n\n2. INSTANCES ROUTER (lib/letflow/routers/instances.ex):\n   - Update call site: `Attachments.get_content(raw_attachment_id, instance_id, opts)` -- pass instance_id at the call\n   - The downstream pattern match on `{:ok, %Attachment{instance_id: ^instance_id} = attachment, artifact}` is no longer needed (the guard fires before get_content returns). Simplify the match or remove the now-redundant check. State in design whether to keep it as an additional defense-in-depth check or remove it.\n\n3. INVARIANTS TO PRESERVE:\n   - INV-5 (cross-tenant response shape): an expired token, wrong-tenant, wrong-instance, or never-issued ID must all return the SAME response shape -- no timing distinguisher\n   - REQ-211/212's existing cross-tenant isolation (instance_id=nil path must remain {:error, :not_found} same as before)\n   - The scan gate (check_scan_status_clean) must still fire for VALID same-instance accesses\n\n4. DESIGN DOCUMENT:\n   Write lib/letflow/design/iss0785-attachment-instance-check.md with:\n   - Function signatures for modified get_content/3 and new check_instance_match/2\n   - The with chain showing all steps in order\n   - The instances.ex call site change\n   - Whether to keep or remove the redundant pattern match in instances.ex\n   - Why this fix preserves INV-5 (both denied branches now cost 1 round-trip)\n   - Acceptance criteria traceability\n\nOutput:\n1. Write lib/letflow/design/iss0785-attachment-instance-check.md\n2. Write handoffs/WF03-ISS0785-20260923/step-02-code-designer.json with status COMPLETED, result.status PASS\n3. git add lib/letflow/design/iss0785-attachment-instance-check.md handoffs/WF03-ISS0785-20260923/step-02-code-designer.json\n4. git commit -m 'fix(WF03-ISS0785-20260923): Step 2 -- fix design (thread instance_id into get_content/2)'\n5. git push\n\nReport back: the design document path and a summary of the key design decisions.",
-    "acceptance_criteria": [
-      "get_content/3 signature fully specified with @spec-style types",
-      "check_instance_match/2 signature and return types specified",
-      "with chain order: get/2 → check_instance_match/2 → check_scan_status_clean/1 → Repo.get blob",
-      "instances.ex call site change described",
-      "decision on redundant pattern match documented",
-      "INV-5 preservation argument stated",
-      "No implementation code in design doc (signatures and shapes only)",
-      "Every AC from ISS-0785.yaml maps to a design element"
-    ]
-  },
-  "result": {
-    "status": "PASS",
-    "completed_at": "2026-09-23T04:35:00Z",
-    "summary": "Design complete. Key decisions: (1) get_content/2 becomes get_content/3 — new second parameter instance_id :: Ecto.UUID.t(). (2) New private check_instance_match/2 inserted between get/2 and check_scan_status_clean/1 in the with chain, eliminating the blob read for cross-instance denials — collapses cross-instance cost to 1 Repo round-trip (same as cross-tenant/never-issued). (3) Redundant pin-match in fetch_scoped_attachment_content/3 KEPT as defense-in-depth with explicit dead-branch annotation. (4) EntityAttachments.get_content/2 untouched. (5) Three existing test call sites need instance_id threaded in; one new cross-instance test needed. All ISS-0785 ACs mapped.",
-    "artifacts_out": [
-      "lib/letflow/design/iss0785-attachment-instance-check.md"
-    ]
-  }
+    "handoff_id":  "WF03-ISS0785-20260923-step-02",
+    "run_id":  "WF03-ISS0785-20260923",
+    "step":  "Step 2 (Fix Design)",
+    "to_agent":  "CODE-DESIGNER",
+    "from_agent":  "ORCH",
+    "status":  "COMPLETED",
+    "created_at":  "2026-09-23T04:18:49Z",
+    "started_at":  "2026-09-23T04:18:49Z",
+    "context":  {
+                    "branch_name":  "feature/WF03-ISS0785-20260923",
+                    "issue_id":  "ISS-0785",
+                    "stage":  "S6",
+                    "diagnosis_summary":  "ISSUE-FIXER confirmed: get_content/2 (attachments.ex ~417-424) unconditionally reads the full artifact blob via Repo.get(Artifact, attachment.content_hash, ...) before any instance_id check. The instance_id check is in fetch_scoped_attachment_content/3 (instances.ex ~1175-1192) AFTER get_content/2 returns. Cross-instance-same-tenant denial costs 2 round-trips; cross-tenant/never-issued costs 1. Fix: Thread instance_id into get_content/2 and add check_instance_match/2 guard in the with chain BEFORE the blob read. Option A confirmed as the right approach.",
+                    "issue_text":  "ISS-0785: Cross-instance-same-tenant attachment-content denial is timing-distinguishable from cross-tenant/never-issued denial. get_content/2 reads artifact blob unconditionally regardless of instance_id. Full detail: docs/issues/ISS-0785.yaml",
+                    "related_requirements":  [
+                                                 "REQ-211",
+                                                 "REQ-212"
+                                             ],
+                    "affected_files_primary":  [
+                                                   "lib/letflow/repository/attachments.ex"
+                                               ],
+                    "affected_files_call_site":  [
+                                                     "lib/letflow/routers/instances.ex"
+                                                 ],
+                    "concurrent_run_note":  "WF02-REQ388-20260923 is active and also modifies lib/letflow/routers/instances.ex (audit logging for denied attachment access). Design must NOT conflict with REQ-388\u0027s work. REQ-388 adds audit logging AFTER the access check -- this fix reorders BEFORE the blob read, so they are logically independent. ELIXIR-DEV will rebase onto main at Step Final and incorporate REQ-388\u0027s merged changes.",
+                    "artifacts_in":  [
+                                         "docs/issues/ISS-0785.yaml",
+                                         "lib/letflow/repository/attachments.ex",
+                                         "lib/letflow/routers/instances.ex",
+                                         "handoffs/WF03-ISS0785-20260923/step-01-issue-fixer.json"
+                                     ]
+                },
+    "task":  {
+                 "description":  "Execute Step 2 (Fix Design) for ISS-0785 per docs/agents/workflows/WF-03_issue_resolving.md and docs/guides/backend_developer_guide.md.\n\nWorkspace: c:\\Users\\tvolo\\dev\\ai-dala\\letflow\nBranch: feature/WF03-ISS0785-20260923\n\nDESIGN ONLY -- no implementation code.\n\nRead the full context:\n1. docs/issues/ISS-0785.yaml (severity, constraints)\n2. lib/letflow/repository/attachments.ex in full\n3. lib/letflow/routers/instances.ex (specifically fetch_scoped_attachment_content and callers)\n4. docs/guides/backend_developer_guide.md\n\nDesign the fix using Option A (thread instance_id into get_content/2):\n\n1. ATTACHMENTS MODULE (lib/letflow/repository/attachments.ex):\n   - New `get_content/3` signature: `get_content(id, instance_id, opts)` where instance_id is the tenant-scoped instance UUID\n   - New private `check_instance_match/2` function: compares attachment.instance_id with the passed instance_id, returns :ok or {:error, :not_found}\n   - Updated `with` chain: get/2 → check_instance_match/2 (NEW, before scan gate) → check_scan_status_clean/1 → Repo.get blob\n   - Spec for the new parameter and check function\n   - The {:error, :not_found} response shape must be IDENTICAL to the existing not_found paths (EO-001/EO-002 preservation)\n\n2. INSTANCES ROUTER (lib/letflow/routers/instances.ex):\n   - Update call site: `Attachments.get_content(raw_attachment_id, instance_id, opts)` -- pass instance_id at the call\n   - The downstream pattern match on `{:ok, %Attachment{instance_id: ^instance_id} = attachment, artifact}` is no longer needed (the guard fires before get_content returns). Simplify the match or remove the now-redundant check. State in design whether to keep it as an additional defense-in-depth check or remove it.\n\n3. INVARIANTS TO PRESERVE:\n   - INV-5 (cross-tenant response shape): an expired token, wrong-tenant, wrong-instance, or never-issued ID must all return the SAME response shape -- no timing distinguisher\n   - REQ-211/212\u0027s existing cross-tenant isolation (instance_id=nil path must remain {:error, :not_found} same as before)\n   - The scan gate (check_scan_status_clean) must still fire for VALID same-instance accesses\n\n4. DESIGN DOCUMENT:\n   Write lib/letflow/design/iss0785-attachment-instance-check.md with:\n   - Function signatures for modified get_content/3 and new check_instance_match/2\n   - The with chain showing all steps in order\n   - The instances.ex call site change\n   - Whether to keep or remove the redundant pattern match in instances.ex\n   - Why this fix preserves INV-5 (both denied branches now cost 1 round-trip)\n   - Acceptance criteria traceability\n\nOutput:\n1. Write lib/letflow/design/iss0785-attachment-instance-check.md\n2. Write handoffs/WF03-ISS0785-20260923/step-02-code-designer.json with status COMPLETED, result.status PASS\n3. git add lib/letflow/design/iss0785-attachment-instance-check.md handoffs/WF03-ISS0785-20260923/step-02-code-designer.json\n4. git commit -m \u0027fix(WF03-ISS0785-20260923): Step 2 -- fix design (thread instance_id into get_content/2)\u0027\n5. git push\n\nReport back: the design document path and a summary of the key design decisions.",
+                 "acceptance_criteria":  [
+                                             "get_content/3 signature fully specified with @spec-style types",
+                                             "check_instance_match/2 signature and return types specified",
+                                             "with chain order: get/2 → check_instance_match/2 → check_scan_status_clean/1 → Repo.get blob",
+                                             "instances.ex call site change described",
+                                             "decision on redundant pattern match documented",
+                                             "INV-5 preservation argument stated",
+                                             "No implementation code in design doc (signatures and shapes only)",
+                                             "Every AC from ISS-0785.yaml maps to a design element"
+                                         ]
+             },
+    "result":  {
+                   "status":  "PASS",
+                   "completed_at":  "2026-09-23T04:35:00Z",
+                   "summary":  "Design complete. Key decisions: (1) get_content/2 becomes get_content/3 — new second parameter instance_id :: Ecto.UUID.t(). (2) New private check_instance_match/2 inserted between get/2 and check_scan_status_clean/1 in the with chain, eliminating the blob read for cross-instance denials — collapses cross-instance cost to 1 Repo round-trip (same as cross-tenant/never-issued). (3) Redundant pin-match in fetch_scoped_attachment_content/3 KEPT as defense-in-depth with explicit dead-branch annotation. (4) EntityAttachments.get_content/2 untouched. (5) Three existing test call sites need instance_id threaded in; one new cross-instance test needed. All ISS-0785 ACs mapped.",
+                   "artifacts_out":  [
+                                         "lib/letflow/design/iss0785-attachment-instance-check.md"
+                                     ]
+               }
 }

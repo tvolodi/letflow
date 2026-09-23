@@ -6825,16 +6825,16 @@
       "issue_id": null,
       "queue_task_id": 746,
       "github_issue_number": 1634,
-      "status": "IN_PROGRESS",
+      "status": "COMPLETED",
       "owned_modules": [
         "lib/letflow/routers/instances.ex",
         "lib/letflow/repository/attachments.ex",
         "lib/letflow/design/req386-*.md"
       ],
       "started_at": "2026-09-22T22:51:01Z",
-      "lock_released_at": null,
-      "released_lock": false,
-      "last_known_step": "Step 06 DOC-UPDATER COMPLETED PASS -- dispatching Step Final to ELIXIR-DEV",
+      "lock_released_at": "2026-09-23T03:53:13Z",
+      "released_lock": true,
+      "last_known_step": "Step Final COMPLETED PASS -- merged to main, lock released",
       "note": "WF-02 implementation run for REQ-386 (time-limited signed attachment URLs). All steps 00-06 completed PASS. Registry entry retroactively added by ORCH at Step Final dispatch (2026-09-23T03:33:47Z) -- entry was never created at run start, a bookkeeping gap. Queue task 746 (GH#1634)."
     }
   ]

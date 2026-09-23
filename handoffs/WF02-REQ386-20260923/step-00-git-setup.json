@@ -1,0 +1,46 @@
+{
+  "handoff_id": "a1000000-0001-4000-8000-000000000001",
+  "run_id": "WF02-REQ386-20260923",
+  "workflow_id": "WF-02",
+  "step": "00",
+  "from_agent": "ORCH",
+  "to_agent": "ELIXIR-DEV",
+  "file": "handoffs/WF02-REQ386-20260923/step-00-git-setup.json",
+  "created_at": "2026-09-22T22:51:01Z",
+  "started_at": "2026-09-22T22:51:01Z",
+  "completed_at": "2026-09-22T22:51:30Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S6",
+    "requirement_ids": ["REQ-386"],
+    "requirement_text": {
+      "REQ-386": "Time-limited, expiring signed URLs for instance-attachment byte content, replacing direct unbounded authenticated GET. Filed from the GUI-review UAT run of test/fixtures/uat/scenarios/platform/attachment-cross-tenant-probe.yaml (PW-09) -- see test/uat-reports/gui-review-2026-09-20-attachment-cross-tenant-probe.md. First of three requirements from that finding (REQ-387 frontend, blocked on this one; REQ-388 audit logging, independent). WHAT EXISTS TODAY (confirmed by reading current source): REQ-211/212 (both done) built a fully working, tenant-isolated attachment store -- Letflow.Repository.Attachments.upload/2, list/2, get/2, delete/2, and GET/POST/DELETE /instances/:id/attachments[/:id] routes in lib/letflow/routers/instances.ex. Cross-tenant, cross-instance-same-tenant, malformed/never-issued-UUID, and genuinely-nonexistent-id all fold to the same {:error, :not_found} tuple in fetch_scoped_attachment_content/3 (around line 1156), rendered via the same Response.not_found(conn) call -- EO-001/EO-002 satisfied today at the API layer. WHAT DOES NOT EXIST: handle_get_attachment_content/3 serves raw byte content directly from a normal authenticated GET with no time bound at all -- no signed-URL concept anywhere in the codebase. THIS REQUIREMENT builds that mechanism, backend only: (1) a new endpoint (e.g. POST /instances/:id/attachments/:attachment_id/link), same :AttachmentsRead permission as the existing content route, issues a signed, time-limited token (HMAC over attachment_id + expiry timestamp + a server-held secret, or Phoenix.Token-style if already in use -- check before inventing a second signing scheme) and returns a URL/token plus its expiry. Choose and state a concrete, short expiry (minutes, not hours -- name the exact value and rationale in the design doc, flag for REVIEWER same as REQ-211's @max_upload_bytes precedent). (2) the existing content-serving route (or a new one keyed by the signed token instead of a bare id) verifies the token's signature and expiry before calling Attachments.get_content/2 -- an expired or invalid token returns a plain, explicit 'link expired, request a new one' response (EO-003) and never serves content, with no distinguishable difference between 'expired' and 'tampered/invalid' beyond what's needed for EO-003's own message -- must not reopen the existence-probing gap REQ-211/212 closed: an expired-token response for a foreign tenant's attachment id must remain indistinguishable from one for a never-issued id (EO-001). (3) requesting a fresh link for the same attachment after a prior one expired succeeds normally and serves the document (EO-004). OUT OF SCOPE: frontend document-viewer screen (REQ-387); any change to REQ-211/212's existing tenant/instance-scoping logic (must not weaken it); audit logging of denied attempts (REQ-388)."
+    },
+    "related_handoff_ids": [],
+    "artifacts_in": [],
+    "owned_modules": ["lib/letflow/routers/instances.ex", "lib/letflow/repository/attachments.ex", "lib/letflow/design/req386-*.md"]
+  },
+  "task": {
+    "description": "Perform WF-02 Step 00 (git setup) for REQ-386 per docs/agents/protocols/GIT_SETUP.md. This is the primary checkout (not a secondary worktree relative to main), so standard steps 1-8 apply: checkout main, pull --ff-only, branch feature/WF02-REQ386-20260923, push -u origin.",
+    "acceptance_criteria": [
+      "git pull --ff-only exited 0",
+      "git branch --show-current outputs feature/WF02-REQ386-20260923",
+      "git push -u origin feature/WF02-REQ386-20260923 exited 0"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "main was already up to date with origin/main (fast-forward pull no-op). No secondary-worktree hazard (git worktree list shows this checkout owns local main; two other worktrees exist for unrelated locked branches, feature/WF02-REQ373-20260921 already merged and a GUI-review worktree, neither overlapping owned_modules for this run). No stale local branch existed. Created feature/WF02-REQ386-20260923 from main and pushed with upstream tracking -- git branch --show-current confirms feature/WF02-REQ386-20260923. Requirement flipped to in_progress in docs/requirements.yaml; started event appended to docs/status/requirement_status.v22.yaml (index entries count incremented in the same change).",
+    "artifacts_out": [
+      "branch: feature/WF02-REQ386-20260923",
+      "docs/requirements.yaml",
+      "docs/status/requirement_status.v22.yaml",
+      "docs/status/requirement_status.index.yaml"
+    ],
+    "next_action": "Route to CODE-DESIGNER (Step 1)",
+    "issues": []
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

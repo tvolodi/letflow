@@ -1,37 +1,41 @@
 {
-  "handoff_id": "WF02-REQ390-20260923-step-00",
-  "run_id": "WF02-REQ390-20260923",
-  "workflow": "WF-02",
-  "step": "Step 00",
-  "to_agent": "ELIXIR-DEV",
-  "from_agent": "ORCH",
-  "status": "COMPLETED",
-  "created_at": "2026-09-23T08:04:03Z",
-  "started_at": "2026-09-23T08:04:03Z",
-  "context": {
-    "branch_name": "feature/WF02-REQ390-20260923",
-    "requirement_ids": ["REQ-390"],
-    "stage": "S6",
-    "requirement_text": {
-      "REQ-390": "Per-tenant storage-quota tracking for instance attachments, with a queryable usage figure. Filed from the GUI-review UAT run of test/fixtures/uat/scenarios/swiftroute/shipment-attach-delivery-note.yaml (PW-09). WHAT EXISTS TODAY: zero per-tenant storage accounting. upload/2 only checks @max_upload_bytes per-file. THIS REQUIREMENT builds: (1) a per-tenant storage-usage figure from instance_attachments/repository_artifacts (design decision: computed-on-read SUM vs maintained counter -- state and justify in design doc); (2) a per-tenant storage allowance (configured ceiling -- reuse TenantProvisioning or existing tenant-settings mechanism if applicable, else name a concrete default); (3) upload/2 refuses an upload that would push usage over allowance with {:error, :storage_quota_exceeded}, checked before any DB write; (4) a queryable usage function in a context module. OUT OF SCOPE: frontend display (REQ-392), route exposing it (REQ-392). ACCEPTANCE CRITERIA: (1) context-module function returns tenant's current total byte usage, correct after upload and delete in one test; (2) configured allowance exists, upload/2 refuses over-quota with distinct tag, no DB rows created for refused upload; (3) quota check and per-file check independently testable; (4) delete reflected in usage on next read; (5) mix compile --warnings-as-errors and mix test pass."
-    },
-    "owned_modules": [
-      "lib/letflow/repository/attachments.ex",
-      "lib/letflow/tenants/",
-      "priv/repo/migrations/"
-    ],
-    "artifacts_in": []
-  },
-  "task": {
-    "description": "Execute Step 00 (GIT SETUP) for WF02-REQ390-20260923 per docs/agents/protocols/GIT_SETUP.md.\n\nBranch: feature/WF02-REQ390-20260923\n\nUncommitted files to stage:\n- handoffs/registry.json (REQ-390 entry added by ORCH)\n- handoffs/orchestrator.log (ORCH dispatch log)\n- handoffs/WF02-REQ390-20260923/step-00-git-setup.json (this file)\n- docs/requirements.yaml (flip REQ-390 status from pending → in_progress)\n- docs/status/requirement_status.v22.yaml (append started event)\n- docs/status/requirement_status.index.yaml (increment entries count)\n\nOn PASS: ORCH will flip REQ-390 status to in_progress and append started event. But ORCH needs you to commit those files too as part of Step 00.\n\nProcedure:\n1. git checkout main\n2. git pull --ff-only origin main\n3. Flip REQ-390 status in docs/requirements.yaml: change 'status: pending' to 'status: in_progress'\n4. Append started event to the current requirement_status volume (check docs/status/requirement_status.index.yaml for the current volume). Follow existing event format exactly.\n5. git checkout -b feature/WF02-REQ390-20260923\n6. Stage ONLY: handoffs/registry.json, handoffs/orchestrator.log, handoffs/WF02-REQ390-20260923/step-00-git-setup.json, docs/requirements.yaml, docs/status/requirement_status.v22.yaml, docs/status/requirement_status.index.yaml\n   DO NOT stage: scripts/fix_registry.py, web/tests/e2e/.pipeline-state/\n7. Commit: 'feat(WF02-REQ390-20260923): Step 00 -- git setup, requirement started'\n8. git push -u origin feature/WF02-REQ390-20260923\n9. Complete handoff with PASS",
-    "acceptance_criteria": [
-      "Branch feature/WF02-REQ390-20260923 created and pushed",
-      "REQ-390 status flipped to in_progress in docs/requirements.yaml",
-      "Started event appended to requirement_status volume"
-    ]
-  },
-  "result": {
-    "status": "PASS",
-    "summary": "Branch feature/WF02-REQ390-20260923 created from main (already up to date). REQ-390 status flipped pending→in_progress in docs/requirements.yaml. Started event appended to docs/status/requirement_status.v22.yaml (entries 5→6). 6 files staged and committed (7b07ef07). Branch pushed to origin."
-  }
+    "handoff_id":  "WF02-REQ390-20260923-step-00",
+    "run_id":  "WF02-REQ390-20260923",
+    "step":  "Step 00",
+    "to_agent":  "ELIXIR-DEV",
+    "from_agent":  "ORCH",
+    "status":  "COMPLETED",
+    "created_at":  "2026-09-23T08:04:03Z",
+    "started_at":  "2026-09-23T08:04:03Z",
+    "context":  {
+                    "branch_name":  "feature/WF02-REQ390-20260923",
+                    "requirement_ids":  [
+                                            "REQ-390"
+                                        ],
+                    "stage":  "S6",
+                    "requirement_text":  {
+                                             "REQ-390":  "Per-tenant storage-quota tracking for instance attachments, with a queryable usage figure. Filed from the GUI-review UAT run of test/fixtures/uat/scenarios/swiftroute/shipment-attach-delivery-note.yaml (PW-09). WHAT EXISTS TODAY: zero per-tenant storage accounting. upload/2 only checks @max_upload_bytes per-file. THIS REQUIREMENT builds: (1) a per-tenant storage-usage figure from instance_attachments/repository_artifacts (design decision: computed-on-read SUM vs maintained counter -- state and justify in design doc); (2) a per-tenant storage allowance (configured ceiling -- reuse TenantProvisioning or existing tenant-settings mechanism if applicable, else name a concrete default); (3) upload/2 refuses an upload that would push usage over allowance with {:error, :storage_quota_exceeded}, checked before any DB write; (4) a queryable usage function in a context module. OUT OF SCOPE: frontend display (REQ-392), route exposing it (REQ-392). ACCEPTANCE CRITERIA: (1) context-module function returns tenant\u0027s current total byte usage, correct after upload and delete in one test; (2) configured allowance exists, upload/2 refuses over-quota with distinct tag, no DB rows created for refused upload; (3) quota check and per-file check independently testable; (4) delete reflected in usage on next read; (5) mix compile --warnings-as-errors and mix test pass."
+                                         },
+                    "owned_modules":  [
+                                          "lib/letflow/repository/attachments.ex",
+                                          "lib/letflow/tenants/",
+                                          "priv/repo/migrations/"
+                                      ],
+                    "artifacts_in":  [
+
+                                     ]
+                },
+    "task":  {
+                 "description":  "Execute Step 00 (GIT SETUP) for WF02-REQ390-20260923 per docs/agents/protocols/GIT_SETUP.md.\n\nBranch: feature/WF02-REQ390-20260923\n\nUncommitted files to stage:\n- handoffs/registry.json (REQ-390 entry added by ORCH)\n- handoffs/orchestrator.log (ORCH dispatch log)\n- handoffs/WF02-REQ390-20260923/step-00-git-setup.json (this file)\n- docs/requirements.yaml (flip REQ-390 status from pending → in_progress)\n- docs/status/requirement_status.v22.yaml (append started event)\n- docs/status/requirement_status.index.yaml (increment entries count)\n\nOn PASS: ORCH will flip REQ-390 status to in_progress and append started event. But ORCH needs you to commit those files too as part of Step 00.\n\nProcedure:\n1. git checkout main\n2. git pull --ff-only origin main\n3. Flip REQ-390 status in docs/requirements.yaml: change \u0027status: pending\u0027 to \u0027status: in_progress\u0027\n4. Append started event to the current requirement_status volume (check docs/status/requirement_status.index.yaml for the current volume). Follow existing event format exactly.\n5. git checkout -b feature/WF02-REQ390-20260923\n6. Stage ONLY: handoffs/registry.json, handoffs/orchestrator.log, handoffs/WF02-REQ390-20260923/step-00-git-setup.json, docs/requirements.yaml, docs/status/requirement_status.v22.yaml, docs/status/requirement_status.index.yaml\n   DO NOT stage: scripts/fix_registry.py, web/tests/e2e/.pipeline-state/\n7. Commit: \u0027feat(WF02-REQ390-20260923): Step 00 -- git setup, requirement started\u0027\n8. git push -u origin feature/WF02-REQ390-20260923\n9. Complete handoff with PASS",
+                 "acceptance_criteria":  [
+                                             "Branch feature/WF02-REQ390-20260923 created and pushed",
+                                             "REQ-390 status flipped to in_progress in docs/requirements.yaml",
+                                             "Started event appended to requirement_status volume"
+                                         ]
+             },
+    "result":  {
+                   "status":  "PASS",
+                   "summary":  "Branch feature/WF02-REQ390-20260923 created from main (already up to date). REQ-390 status flipped pending→in_progress in docs/requirements.yaml. Started event appended to docs/status/requirement_status.v22.yaml (entries 5→6). 6 files staged and committed (7b07ef07). Branch pushed to origin."
+               },
+    "workflow_id":  "WF-02"
 }

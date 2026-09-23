@@ -1,44 +1,46 @@
 {
-  "handoff_id": "WF02-REQ390-20260923-step-03b",
-  "run_id": "WF02-REQ390-20260923",
-  "workflow": "WF-02",
-  "step": "Step 3b (Test Design Gate)",
-  "to_agent": "TEST-DESIGN-VALIDATOR",
-  "from_agent": "ORCH",
-  "status": "COMPLETED",
-  "created_at": "2026-09-23T08:42:18Z",
-  "started_at": "2026-09-23T08:42:18Z",
-  "context": {
-    "branch_name": "feature/WF02-REQ390-20260923",
-    "requirement_ids": ["REQ-390"],
-    "test_file": "test/letflow/repository/attachments_test.exs",
-    "tests_written": "4 new tests: get_storage_usage correct after upload+delete (AC1+AC4), over-quota refusal with no DB rows (AC2), storage_quota_exceeded without file_too_large (AC3), file_too_large without storage_quota (AC3). 28/28 pass.",
-    "artifacts_in": [
-      "test/letflow/repository/attachments_test.exs",
-      "docs/requirements.yaml (REQ-390 acceptance_criteria)",
-      "lib/letflow/repository/attachments.ex"
-    ]
-  },
-  "task": {
-    "description": "Execute Step 3b (TEST-DESIGN-VALIDATOR -- HARD GATE) for REQ-390.\n\nWorkspace: c:\\Users\\tvolo\\dev\\ai-dala\\letflow\nBranch: feature/WF02-REQ390-20260923\n\nRead independently:\n1. test/letflow/repository/attachments_test.exs -- find the 4 new REQ-390 tests\n2. docs/requirements.yaml REQ-390 acceptance_criteria\n\nCheck each AC is covered by a test:\n- AC1: get_storage_usage after upload -- yes/no?\n- AC2: over-quota upload refused, no DB rows -- yes/no? Does the test actually assert no repository_artifacts/instance_attachments rows were created?\n- AC3a: storage_quota_exceeded without file_too_large -- yes/no?\n- AC3b: file_too_large without storage_quota -- yes/no?\n- AC4: delete reflected in usage -- yes/no? Is this in the same test as AC1?\n\nAlso check test isolation:\n- Do tests create their own data?\n- Is the per-tenant quota set up correctly (small allowance for quota tests)?\n\nVerdict: PASS or FAIL.\n\nOutput:\n1. Write handoffs/WF02-REQ390-20260923/step-03b-test-design-gate.json status COMPLETED, result PASS or FAIL\n2. git add handoffs/WF02-REQ390-20260923/step-03b-test-design-gate.json\n3. git commit -m 'feat(WF02-REQ390-20260923): Step 3b -- test design gate [PASS/FAIL]'\n4. git push\n\nReport: PASS or FAIL",
-    "acceptance_criteria": [
-      "All 4 ACs covered by tests",
-      "AC2 test asserts no DB rows for refused upload",
-      "AC3 tests exercise the two checks independently",
-      "Tests are isolated"
-    ]
-  },
-  "result": {
-    "status": "PASS",
-    "completed_at": "2026-09-23T08:55:00Z",
-    "verdict": "PASS",
-    "findings": {
-      "AC1": "COVERED — get_storage_usage/1 called after upload, asserts == byte_size(raw_bytes)",
-      "AC2": "COVERED — {:error, :storage_quota_exceeded} asserted; Repo.aggregate(Artifact,:count)==0 (repository_artifacts) and Repo.aggregate(Attachment,:count)==0 (instance_attachments) both asserted",
-      "AC3a": "COVERED — 100-byte upload against 1-byte allowance triggers :storage_quota_exceeded without hitting per-file ceiling",
-      "AC3b": "COVERED — 26_214_401-byte upload against 1 GiB allowance triggers :file_too_large without triggering quota",
-      "AC4": "COVERED — same test as AC1: after delete/2, get_storage_usage/1 returns {:ok, 0}",
-      "isolation": "PASS — each test uses provisioned_tenant/1 with a unique slug prefix; no shared state, no @tag :skip, no hardcoded secrets"
-    }
-  }
+    "handoff_id":  "WF02-REQ390-20260923-step-03b",
+    "run_id":  "WF02-REQ390-20260923",
+    "step":  "Step 3b (Test Design Gate)",
+    "to_agent":  "TEST-DESIGN-VALIDATOR",
+    "from_agent":  "ORCH",
+    "status":  "COMPLETED",
+    "created_at":  "2026-09-23T08:42:18Z",
+    "started_at":  "2026-09-23T08:42:18Z",
+    "context":  {
+                    "branch_name":  "feature/WF02-REQ390-20260923",
+                    "requirement_ids":  [
+                                            "REQ-390"
+                                        ],
+                    "test_file":  "test/letflow/repository/attachments_test.exs",
+                    "tests_written":  "4 new tests: get_storage_usage correct after upload+delete (AC1+AC4), over-quota refusal with no DB rows (AC2), storage_quota_exceeded without file_too_large (AC3), file_too_large without storage_quota (AC3). 28/28 pass.",
+                    "artifacts_in":  [
+                                         "test/letflow/repository/attachments_test.exs",
+                                         "docs/requirements.yaml (REQ-390 acceptance_criteria)",
+                                         "lib/letflow/repository/attachments.ex"
+                                     ]
+                },
+    "task":  {
+                 "description":  "Execute Step 3b (TEST-DESIGN-VALIDATOR -- HARD GATE) for REQ-390.\n\nWorkspace: c:\\Users\\tvolo\\dev\\ai-dala\\letflow\nBranch: feature/WF02-REQ390-20260923\n\nRead independently:\n1. test/letflow/repository/attachments_test.exs -- find the 4 new REQ-390 tests\n2. docs/requirements.yaml REQ-390 acceptance_criteria\n\nCheck each AC is covered by a test:\n- AC1: get_storage_usage after upload -- yes/no?\n- AC2: over-quota upload refused, no DB rows -- yes/no? Does the test actually assert no repository_artifacts/instance_attachments rows were created?\n- AC3a: storage_quota_exceeded without file_too_large -- yes/no?\n- AC3b: file_too_large without storage_quota -- yes/no?\n- AC4: delete reflected in usage -- yes/no? Is this in the same test as AC1?\n\nAlso check test isolation:\n- Do tests create their own data?\n- Is the per-tenant quota set up correctly (small allowance for quota tests)?\n\nVerdict: PASS or FAIL.\n\nOutput:\n1. Write handoffs/WF02-REQ390-20260923/step-03b-test-design-gate.json status COMPLETED, result PASS or FAIL\n2. git add handoffs/WF02-REQ390-20260923/step-03b-test-design-gate.json\n3. git commit -m \u0027feat(WF02-REQ390-20260923): Step 3b -- test design gate [PASS/FAIL]\u0027\n4. git push\n\nReport: PASS or FAIL",
+                 "acceptance_criteria":  [
+                                             "All 4 ACs covered by tests",
+                                             "AC2 test asserts no DB rows for refused upload",
+                                             "AC3 tests exercise the two checks independently",
+                                             "Tests are isolated"
+                                         ]
+             },
+    "result":  {
+                   "status":  "PASS",
+                   "completed_at":  "2026-09-23T08:55:00Z",
+                   "verdict":  "PASS",
+                   "findings":  {
+                                    "AC1":  "COVERED — get_storage_usage/1 called after upload, asserts == byte_size(raw_bytes)",
+                                    "AC2":  "COVERED — {:error, :storage_quota_exceeded} asserted; Repo.aggregate(Artifact,:count)==0 (repository_artifacts) and Repo.aggregate(Attachment,:count)==0 (instance_attachments) both asserted",
+                                    "AC3a":  "COVERED — 100-byte upload against 1-byte allowance triggers :storage_quota_exceeded without hitting per-file ceiling",
+                                    "AC3b":  "COVERED — 26_214_401-byte upload against 1 GiB allowance triggers :file_too_large without triggering quota",
+                                    "AC4":  "COVERED — same test as AC1: after delete/2, get_storage_usage/1 returns {:ok, 0}",
+                                    "isolation":  "PASS — each test uses provisioned_tenant/1 with a unique slug prefix; no shared state, no @tag :skip, no hardcoded secrets"
+                                }
+               },
+    "workflow_id":  "WF-02"
 }

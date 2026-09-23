@@ -1,68 +1,70 @@
 {
-  "handoff_id": "WF02-REQ390-20260923-step-05",
-  "run_id": "WF02-REQ390-20260923",
-  "workflow": "WF-02",
-  "step": "Step 5 (Release Validation)",
-  "to_agent": "RELEASE-VALIDATOR",
-  "from_agent": "ORCH",
-  "status": "COMPLETED",
-  "created_at": "2026-09-23T09:29:01Z",
-  "started_at": "2026-09-23T09:29:01Z",
-  "context": {
-    "branch_name": "feature/WF02-REQ390-20260923",
-    "requirement_ids": ["REQ-390"],
-    "stage": "S6",
-    "all_prior_gates_passed": true,
-    "gate_summary": "CODE-DESIGN-VALIDATOR PASS, SECURITY-REVIEWER PASS (1 rework for INV-8), REVIEWER PASS (design decisions signed off), TEST-DESIGN-VALIDATOR PASS (all 5 ACs covered), TEST-RUNNER PASS (28/28 targeted)",
-    "artifacts_in": [
-      "lib/letflow/repository/attachments.ex",
-      "lib/letflow/identity/tenant.ex",
-      "priv/repo/migrations/20260923000001_add_storage_allowance_bytes_to_tenants.exs",
-      "test/letflow/repository/attachments_test.exs",
-      "docs/requirements.yaml (REQ-390 acceptance_criteria)"
-    ]
-  },
-  "task": {
-    "description": "Execute Step 5 (Release Validation -- INDEPENDENT RE-VERIFICATION) for REQ-390.\n\nWorkspace: c:\\Users\\tvolo\\dev\\ai-dala\\letflow\nBranch: feature/WF02-REQ390-20260923\nMix: & 'C:/Program Files/Elixir/bin/mix'\n\nYou MUST independently re-derive your verdict. Do not trust the TEST-RUNNER's report alone.\n\n1. Run: & 'C:/Program Files/Elixir/bin/mix' compile --warnings-as-errors\n2. Run: & 'C:/Program Files/Elixir/bin/mix' test test/letflow/repository/attachments_test.exs\n3. Read REQ-390's acceptance_criteria from docs/requirements.yaml\n4. Verify EACH acceptance criterion against the actual implementation AND tests:\n   - Read lib/letflow/repository/attachments.ex to verify upload/2 checks quota before DB writes\n   - Run the test file and confirm all 4 REQ-390 tests pass\n   - Confirm {:error, :storage_quota_exceeded} is distinct from {:error, :file_too_large}\n\nVerdict: PASS if all ACs are independently satisfied.\n\nOutput:\n1. Write handoffs/WF02-REQ390-20260923/step-05-release-validator.json status COMPLETED, result PASS or FAIL with independent verification details\n2. git add handoffs/WF02-REQ390-20260923/step-05-release-validator.json\n3. git commit -m 'feat(WF02-REQ390-20260923): Step 5 -- release validation PASS'\n4. git push\n\nReport: PASS or FAIL with verification details",
-    "acceptance_criteria": [
-      "Independently ran mix compile --warnings-as-errors (not just cited TEST-RUNNER's result)",
-      "Independently ran targeted tests (not just cited)",
-      "Each REQ-390 AC independently verified against source + tests"
-    ]
-  },
-  "result": {
-    "status": "PASS",
-    "completed_at": "2026-09-23T14:32:00Z",
-    "summary": "RELEASE-VALIDATOR independently re-verified REQ-390. All five ACs satisfied.",
-    "commands_run": [
-      {
-        "cmd": "git branch --show-current",
-        "output": "feature/WF02-REQ390-20260923",
-        "exit": 0
-      },
-      {
-        "cmd": "mix compile --warnings-as-errors",
-        "output": "(no output -- clean compile)",
-        "exit": 0
-      },
-      {
-        "cmd": "mix test test/letflow/repository/attachments_test.exs --no-color",
-        "output": "Finished in 35.3 seconds (0.00s async, 35.3s sync)\nResult: 28 passed",
-        "exit": 0
-      },
-      {
-        "cmd": "mix test test/letflow/repository/attachments_test.exs --no-color (fresh subprocess for ISS-0069 check)",
-        "output": "Finished in 32.8 seconds (0.00s async, 32.8s sync)\nResult: 28 passed\nISS-0069: no 'default values for the optional arguments' warning in subprocess output",
-        "exit": 0
-      }
-    ],
-    "ac_verification": {
-      "AC1": "PASS -- get_storage_usage/1 exists at attachments.ex:493, runs FROM instance_attachments SELECT coalesce(sum(a.byte_size), 0) in the tenant's own schema. Test 'get_storage_usage/1 returns correct byte count after upload and after delete (AC1, AC4)' asserts {:ok, 0} before upload, {:ok, byte_size(raw_bytes)} after upload. Test passes (28/28).",
-      "AC2": "PASS -- Test 'upload/2 refuses an upload that would exceed storage quota -- no DB rows created (AC2)' sets allowance to 1 byte, asserts return == {:error, :storage_quota_exceeded}, then asserts Repo.aggregate(Artifact, :count) == 0 AND Repo.aggregate(Attachment, :count) == 0. check_storage_quota/3 in attachments.ex is called before Repo.transaction, so no DB rows are written on refusal. Test passes.",
-      "AC3": "PASS -- Two independent tests: (1) 'storage_quota_exceeded triggers without hitting file_too_large (AC3)': 100-byte upload with 1-byte allowance returns {:error, :storage_quota_exceeded} (file is well under 25 MiB). (2) 'file_too_large triggers without triggering storage_quota (AC3)': 26_214_401-byte upload with default 1 GiB allowance returns {:error, :file_too_large} (file_too_large check at attachments.ex line ~205 fires before check_storage_quota). Both tests pass.",
-      "AC4": "PASS -- Same test as AC1: after delete/2, the test asserts {:ok, 0} = Attachments.get_storage_usage(prefix: schema). delete/2 removes the instance_attachments row, which reduces the SUM query result to 0 on next read. Test passes.",
-      "AC5": "PASS -- mix compile --warnings-as-errors exit 0 (independent run). mix test 28 passed, 0 failed, exit 0 (independent run). Fresh subprocess also 28 passed, no ISS-0069 dead-default-argument warning."
-    },
-    "iss_0069_check": "PASS -- fresh subprocess mix test run found no 'default values for the optional arguments' warning. mix letflow.check.test shells to scripts/test_parallel.sh (bash) which cannot run on Windows; ISS-0069 check performed manually via subprocess grep instead, consistent with the task's documented intent."
-  }
+    "handoff_id":  "WF02-REQ390-20260923-step-05",
+    "run_id":  "WF02-REQ390-20260923",
+    "step":  "Step 5 (Release Validation)",
+    "to_agent":  "RELEASE-VALIDATOR",
+    "from_agent":  "ORCH",
+    "status":  "COMPLETED",
+    "created_at":  "2026-09-23T09:29:01Z",
+    "started_at":  "2026-09-23T09:29:01Z",
+    "context":  {
+                    "branch_name":  "feature/WF02-REQ390-20260923",
+                    "requirement_ids":  [
+                                            "REQ-390"
+                                        ],
+                    "stage":  "S6",
+                    "all_prior_gates_passed":  true,
+                    "gate_summary":  "CODE-DESIGN-VALIDATOR PASS, SECURITY-REVIEWER PASS (1 rework for INV-8), REVIEWER PASS (design decisions signed off), TEST-DESIGN-VALIDATOR PASS (all 5 ACs covered), TEST-RUNNER PASS (28/28 targeted)",
+                    "artifacts_in":  [
+                                         "lib/letflow/repository/attachments.ex",
+                                         "lib/letflow/identity/tenant.ex",
+                                         "priv/repo/migrations/20260923000001_add_storage_allowance_bytes_to_tenants.exs",
+                                         "test/letflow/repository/attachments_test.exs",
+                                         "docs/requirements.yaml (REQ-390 acceptance_criteria)"
+                                     ]
+                },
+    "task":  {
+                 "description":  "Execute Step 5 (Release Validation -- INDEPENDENT RE-VERIFICATION) for REQ-390.\n\nWorkspace: c:\\Users\\tvolo\\dev\\ai-dala\\letflow\nBranch: feature/WF02-REQ390-20260923\nMix: \u0026 \u0027C:/Program Files/Elixir/bin/mix\u0027\n\nYou MUST independently re-derive your verdict. Do not trust the TEST-RUNNER\u0027s report alone.\n\n1. Run: \u0026 \u0027C:/Program Files/Elixir/bin/mix\u0027 compile --warnings-as-errors\n2. Run: \u0026 \u0027C:/Program Files/Elixir/bin/mix\u0027 test test/letflow/repository/attachments_test.exs\n3. Read REQ-390\u0027s acceptance_criteria from docs/requirements.yaml\n4. Verify EACH acceptance criterion against the actual implementation AND tests:\n   - Read lib/letflow/repository/attachments.ex to verify upload/2 checks quota before DB writes\n   - Run the test file and confirm all 4 REQ-390 tests pass\n   - Confirm {:error, :storage_quota_exceeded} is distinct from {:error, :file_too_large}\n\nVerdict: PASS if all ACs are independently satisfied.\n\nOutput:\n1. Write handoffs/WF02-REQ390-20260923/step-05-release-validator.json status COMPLETED, result PASS or FAIL with independent verification details\n2. git add handoffs/WF02-REQ390-20260923/step-05-release-validator.json\n3. git commit -m \u0027feat(WF02-REQ390-20260923): Step 5 -- release validation PASS\u0027\n4. git push\n\nReport: PASS or FAIL with verification details",
+                 "acceptance_criteria":  [
+                                             "Independently ran mix compile --warnings-as-errors (not just cited TEST-RUNNER\u0027s result)",
+                                             "Independently ran targeted tests (not just cited)",
+                                             "Each REQ-390 AC independently verified against source + tests"
+                                         ]
+             },
+    "result":  {
+                   "status":  "PASS",
+                   "completed_at":  "2026-09-23T14:32:00Z",
+                   "summary":  "RELEASE-VALIDATOR independently re-verified REQ-390. All five ACs satisfied.",
+                   "commands_run":  [
+                                        {
+                                            "cmd":  "git branch --show-current",
+                                            "output":  "feature/WF02-REQ390-20260923",
+                                            "exit":  0
+                                        },
+                                        {
+                                            "cmd":  "mix compile --warnings-as-errors",
+                                            "output":  "(no output -- clean compile)",
+                                            "exit":  0
+                                        },
+                                        {
+                                            "cmd":  "mix test test/letflow/repository/attachments_test.exs --no-color",
+                                            "output":  "Finished in 35.3 seconds (0.00s async, 35.3s sync)\nResult: 28 passed",
+                                            "exit":  0
+                                        },
+                                        {
+                                            "cmd":  "mix test test/letflow/repository/attachments_test.exs --no-color (fresh subprocess for ISS-0069 check)",
+                                            "output":  "Finished in 32.8 seconds (0.00s async, 32.8s sync)\nResult: 28 passed\nISS-0069: no \u0027default values for the optional arguments\u0027 warning in subprocess output",
+                                            "exit":  0
+                                        }
+                                    ],
+                   "ac_verification":  {
+                                           "AC1":  "PASS -- get_storage_usage/1 exists at attachments.ex:493, runs FROM instance_attachments SELECT coalesce(sum(a.byte_size), 0) in the tenant\u0027s own schema. Test \u0027get_storage_usage/1 returns correct byte count after upload and after delete (AC1, AC4)\u0027 asserts {:ok, 0} before upload, {:ok, byte_size(raw_bytes)} after upload. Test passes (28/28).",
+                                           "AC2":  "PASS -- Test \u0027upload/2 refuses an upload that would exceed storage quota -- no DB rows created (AC2)\u0027 sets allowance to 1 byte, asserts return == {:error, :storage_quota_exceeded}, then asserts Repo.aggregate(Artifact, :count) == 0 AND Repo.aggregate(Attachment, :count) == 0. check_storage_quota/3 in attachments.ex is called before Repo.transaction, so no DB rows are written on refusal. Test passes.",
+                                           "AC3":  "PASS -- Two independent tests: (1) \u0027storage_quota_exceeded triggers without hitting file_too_large (AC3)\u0027: 100-byte upload with 1-byte allowance returns {:error, :storage_quota_exceeded} (file is well under 25 MiB). (2) \u0027file_too_large triggers without triggering storage_quota (AC3)\u0027: 26_214_401-byte upload with default 1 GiB allowance returns {:error, :file_too_large} (file_too_large check at attachments.ex line ~205 fires before check_storage_quota). Both tests pass.",
+                                           "AC4":  "PASS -- Same test as AC1: after delete/2, the test asserts {:ok, 0} = Attachments.get_storage_usage(prefix: schema). delete/2 removes the instance_attachments row, which reduces the SUM query result to 0 on next read. Test passes.",
+                                           "AC5":  "PASS -- mix compile --warnings-as-errors exit 0 (independent run). mix test 28 passed, 0 failed, exit 0 (independent run). Fresh subprocess also 28 passed, no ISS-0069 dead-default-argument warning."
+                                       },
+                   "iss_0069_check":  "PASS -- fresh subprocess mix test run found no \u0027default values for the optional arguments\u0027 warning. mix letflow.check.test shells to scripts/test_parallel.sh (bash) which cannot run on Windows; ISS-0069 check performed manually via subprocess grep instead, consistent with the task\u0027s documented intent."
+               },
+    "workflow_id":  "WF-02"
 }

@@ -1,54 +1,56 @@
 {
-  "handoff_id": "WF02-REQ390-20260923-step-02a",
-  "run_id": "WF02-REQ390-20260923",
-  "workflow": "WF-02",
-  "step": "Step 2a (Backend Implementation)",
-  "to_agent": "ELIXIR-DEV",
-  "from_agent": "ORCH",
-  "status": "COMPLETED",
-  "created_at": "2026-09-23T08:15:47Z",
-  "started_at": "2026-09-23T08:15:47Z",
-  "context": {
-    "branch_name": "feature/WF02-REQ390-20260923",
-    "requirement_ids": ["REQ-390"],
-    "stage": "S6",
-    "design_doc": "lib/letflow/design/req390-storage-quota.md",
-    "design_gate_status": "PASS (CODE-DESIGN-VALIDATOR, commit b386c9d8)",
-    "key_design_decisions": "Computed-on-read SUM (SELECT COALESCE(SUM(byte_size), 0) FROM tenant_schema.instance_attachments). Allowance stored as storage_allowance_bytes bigint NOT NULL DEFAULT 1073741824 on tenants table. get_storage_usage/1 in Attachments module. check_storage_quota/3 inserted in upload/2 with-chain BEFORE Repo.transaction. {:error, :storage_quota_exceeded} error tag.",
-    "artifacts_in": [
-      "lib/letflow/design/req390-storage-quota.md",
-      "lib/letflow/repository/attachments.ex",
-      "lib/letflow/tenant_provisioning.ex",
-      "priv/repo/migrations/",
-      "docs/guides/backend_developer_guide.md"
-    ]
-  },
-  "task": {
-    "description": "Execute Step 2a (Backend Implementation) for REQ-390 per the approved design.\n\nWorkspace: c:\\Users\\tvolo\\dev\\ai-dala\\letflow\nBranch: feature/WF02-REQ390-20260923\nMix: & 'C:/Program Files/Elixir/bin/mix'\n\nREAD the design doc FIRST: lib/letflow/design/req390-storage-quota.md\n\nIMPLEMENT:\n\n### 1. Migration: add storage_allowance_bytes to tenants\n\nCreate priv/repo/migrations/<timestamp>_add_storage_allowance_bytes_to_tenants.exs:\n- Use `mix ecto.gen.migration add_storage_allowance_bytes_to_tenants` or create manually\n- `alter table :tenants, add :storage_allowance_bytes, :bigint, default: 1_073_741_824, null: false`\n- This is a global (non-tenant-prefixed) migration on the main schema\n\n### 2. lib/letflow/repository/attachments.ex\n\na. Add `get_storage_usage/1`:\n   - Parameters: `prefix :: String.t()` (the tenant schema prefix)\n   - Returns: `non_neg_integer()` (bytes currently used)\n   - Query: `Repo.one(from a in \"instance_attachments\", prefix: prefix, select: coalesce(sum(a.byte_size), 0))`\n   - Add @spec\n\nb. Add private `check_storage_quota/3`:\n   - Parameters: `prefix :: String.t(), upload_bytes :: non_neg_integer(), allowance :: non_neg_integer()`\n   - Returns: `:ok` or `{:error, :storage_quota_exceeded}`\n   - Logic: get_storage_usage(prefix) + upload_bytes > allowance → {:error, :storage_quota_exceeded}\n\nc. Modify `upload/2`:\n   - After getting the `prefix` from opts and BEFORE the `Repo.transaction` block:\n   - Get the tenant's allowance: read storage_allowance_bytes from the tenant row (query by schema_name/prefix)\n     OQ-1 resolution: access Letflow.Identity.Tenant schema directly (simpler, Attachments already has a Repo reference)\n   - Call check_storage_quota(prefix, byte_size, allowance)\n   - If {:error, :storage_quota_exceeded} → return early with that error\n\n### 3. Update Letflow.Identity.Tenant schema (if needed)\n- If storage_allowance_bytes is not in the Tenant schema changeset, add it as a virtual or regular field\n- It must be readable via Repo.get_by or Repo.one\n\n### 4. Run & Verify\n```powershell\n& 'C:/Program Files/Elixir/bin/mix' ecto.migrate\n& 'C:/Program Files/Elixir/bin/mix' compile --warnings-as-errors\n& 'C:/Program Files/Elixir/bin/mix' test test/letflow/repository/attachments_test.exs\n```\n\nFix any compile errors or test failures. Some existing tests may need updating if they create tenants without the new column (the default handles that).\n\n### 5. Commit\n```powershell\ngit add lib/letflow/repository/attachments.ex priv/repo/migrations/<migration_file>.exs\n# add any other modified files\ngit commit -m 'feat(WF02-REQ390-20260923): Step 2a -- per-tenant storage quota tracking'\ngit push\n```\n\n### 6. Complete handoff\nWrite handoffs/WF02-REQ390-20260923/step-02a-elixir-dev.json status COMPLETED, result PASS or FAIL with actual compile/test output.\n\nReport back:\n- What files were changed\n- Migration file name\n- Compile exit code\n- Test output (pass/fail counts)\n- Commit SHA",
-    "acceptance_criteria": [
-      "get_storage_usage/1 added to Attachments module with @spec",
-      "check_storage_quota/3 private function added",
-      "upload/2 checks quota before Repo.transaction",
-      "Migration adds storage_allowance_bytes to tenants",
-      "mix ecto.migrate exits 0",
-      "mix compile --warnings-as-errors exits 0",
-      "mix test shows no new failures"
-    ]
-  },
-  "result": {
-    "status": "PASS",
-    "completed_at": "2026-09-23T13:23:30Z",
-    "commit_sha": "455decc7",
-    "files_changed": [
-      "priv/repo/migrations/20260923000001_add_storage_allowance_bytes_to_tenants.exs",
-      "lib/letflow/identity/tenant.ex",
-      "lib/letflow/repository/attachments.ex"
-    ],
-    "migration_name": "20260923000001_add_storage_allowance_bytes_to_tenants.exs",
-    "ecto_migrate_exit_code": 0,
-    "compile_exit_code": 0,
-    "compile_flags": "--warnings-as-errors",
-    "test_result": "24 passed, 0 failed",
-    "notes": "SUM aggregate on raw string table returns Decimal (type unknown at compile time); normalized via pattern match in get_storage_usage/1. @default_storage_allowance_bytes constant omitted (unused module attr warning would fail --warnings-as-errors; constant is documented in design doc §3 and enforced at DB level)."
-  }
+    "handoff_id":  "WF02-REQ390-20260923-step-02a",
+    "run_id":  "WF02-REQ390-20260923",
+    "step":  "Step 2a (Backend Implementation)",
+    "to_agent":  "ELIXIR-DEV",
+    "from_agent":  "ORCH",
+    "status":  "COMPLETED",
+    "created_at":  "2026-09-23T08:15:47Z",
+    "started_at":  "2026-09-23T08:15:47Z",
+    "context":  {
+                    "branch_name":  "feature/WF02-REQ390-20260923",
+                    "requirement_ids":  [
+                                            "REQ-390"
+                                        ],
+                    "stage":  "S6",
+                    "design_doc":  "lib/letflow/design/req390-storage-quota.md",
+                    "design_gate_status":  "PASS (CODE-DESIGN-VALIDATOR, commit b386c9d8)",
+                    "key_design_decisions":  "Computed-on-read SUM (SELECT COALESCE(SUM(byte_size), 0) FROM tenant_schema.instance_attachments). Allowance stored as storage_allowance_bytes bigint NOT NULL DEFAULT 1073741824 on tenants table. get_storage_usage/1 in Attachments module. check_storage_quota/3 inserted in upload/2 with-chain BEFORE Repo.transaction. {:error, :storage_quota_exceeded} error tag.",
+                    "artifacts_in":  [
+                                         "lib/letflow/design/req390-storage-quota.md",
+                                         "lib/letflow/repository/attachments.ex",
+                                         "lib/letflow/tenant_provisioning.ex",
+                                         "priv/repo/migrations/",
+                                         "docs/guides/backend_developer_guide.md"
+                                     ]
+                },
+    "task":  {
+                 "description":  "Execute Step 2a (Backend Implementation) for REQ-390 per the approved design.\n\nWorkspace: c:\\Users\\tvolo\\dev\\ai-dala\\letflow\nBranch: feature/WF02-REQ390-20260923\nMix: \u0026 \u0027C:/Program Files/Elixir/bin/mix\u0027\n\nREAD the design doc FIRST: lib/letflow/design/req390-storage-quota.md\n\nIMPLEMENT:\n\n### 1. Migration: add storage_allowance_bytes to tenants\n\nCreate priv/repo/migrations/\u003ctimestamp\u003e_add_storage_allowance_bytes_to_tenants.exs:\n- Use `mix ecto.gen.migration add_storage_allowance_bytes_to_tenants` or create manually\n- `alter table :tenants, add :storage_allowance_bytes, :bigint, default: 1_073_741_824, null: false`\n- This is a global (non-tenant-prefixed) migration on the main schema\n\n### 2. lib/letflow/repository/attachments.ex\n\na. Add `get_storage_usage/1`:\n   - Parameters: `prefix :: String.t()` (the tenant schema prefix)\n   - Returns: `non_neg_integer()` (bytes currently used)\n   - Query: `Repo.one(from a in \"instance_attachments\", prefix: prefix, select: coalesce(sum(a.byte_size), 0))`\n   - Add @spec\n\nb. Add private `check_storage_quota/3`:\n   - Parameters: `prefix :: String.t(), upload_bytes :: non_neg_integer(), allowance :: non_neg_integer()`\n   - Returns: `:ok` or `{:error, :storage_quota_exceeded}`\n   - Logic: get_storage_usage(prefix) + upload_bytes \u003e allowance → {:error, :storage_quota_exceeded}\n\nc. Modify `upload/2`:\n   - After getting the `prefix` from opts and BEFORE the `Repo.transaction` block:\n   - Get the tenant\u0027s allowance: read storage_allowance_bytes from the tenant row (query by schema_name/prefix)\n     OQ-1 resolution: access Letflow.Identity.Tenant schema directly (simpler, Attachments already has a Repo reference)\n   - Call check_storage_quota(prefix, byte_size, allowance)\n   - If {:error, :storage_quota_exceeded} → return early with that error\n\n### 3. Update Letflow.Identity.Tenant schema (if needed)\n- If storage_allowance_bytes is not in the Tenant schema changeset, add it as a virtual or regular field\n- It must be readable via Repo.get_by or Repo.one\n\n### 4. Run \u0026 Verify\n```powershell\n\u0026 \u0027C:/Program Files/Elixir/bin/mix\u0027 ecto.migrate\n\u0026 \u0027C:/Program Files/Elixir/bin/mix\u0027 compile --warnings-as-errors\n\u0026 \u0027C:/Program Files/Elixir/bin/mix\u0027 test test/letflow/repository/attachments_test.exs\n```\n\nFix any compile errors or test failures. Some existing tests may need updating if they create tenants without the new column (the default handles that).\n\n### 5. Commit\n```powershell\ngit add lib/letflow/repository/attachments.ex priv/repo/migrations/\u003cmigration_file\u003e.exs\n# add any other modified files\ngit commit -m \u0027feat(WF02-REQ390-20260923): Step 2a -- per-tenant storage quota tracking\u0027\ngit push\n```\n\n### 6. Complete handoff\nWrite handoffs/WF02-REQ390-20260923/step-02a-elixir-dev.json status COMPLETED, result PASS or FAIL with actual compile/test output.\n\nReport back:\n- What files were changed\n- Migration file name\n- Compile exit code\n- Test output (pass/fail counts)\n- Commit SHA",
+                 "acceptance_criteria":  [
+                                             "get_storage_usage/1 added to Attachments module with @spec",
+                                             "check_storage_quota/3 private function added",
+                                             "upload/2 checks quota before Repo.transaction",
+                                             "Migration adds storage_allowance_bytes to tenants",
+                                             "mix ecto.migrate exits 0",
+                                             "mix compile --warnings-as-errors exits 0",
+                                             "mix test shows no new failures"
+                                         ]
+             },
+    "result":  {
+                   "status":  "PASS",
+                   "completed_at":  "2026-09-23T13:23:30Z",
+                   "commit_sha":  "455decc7",
+                   "files_changed":  [
+                                         "priv/repo/migrations/20260923000001_add_storage_allowance_bytes_to_tenants.exs",
+                                         "lib/letflow/identity/tenant.ex",
+                                         "lib/letflow/repository/attachments.ex"
+                                     ],
+                   "migration_name":  "20260923000001_add_storage_allowance_bytes_to_tenants.exs",
+                   "ecto_migrate_exit_code":  0,
+                   "compile_exit_code":  0,
+                   "compile_flags":  "--warnings-as-errors",
+                   "test_result":  "24 passed, 0 failed",
+                   "notes":  "SUM aggregate on raw string table returns Decimal (type unknown at compile time); normalized via pattern match in get_storage_usage/1. @default_storage_allowance_bytes constant omitted (unused module attr warning would fail --warnings-as-errors; constant is documented in design doc §3 and enforced at DB level)."
+               },
+    "workflow_id":  "WF-02"
 }

@@ -1,48 +1,50 @@
 {
-  "handoff_id": "WF02-REQ390-20260923-step-01",
-  "run_id": "WF02-REQ390-20260923",
-  "workflow": "WF-02",
-  "step": "Step 1",
-  "to_agent": "CODE-DESIGNER",
-  "from_agent": "ORCH",
-  "status": "PENDING",
-  "created_at": "2026-09-23T08:06:37Z",
-  "started_at": "2026-09-23T08:06:37Z",
-  "context": {
-    "branch_name": "feature/WF02-REQ390-20260923",
-    "requirement_ids": ["REQ-390"],
-    "stage": "S6",
-    "requirement_text": {
-      "REQ-390": "Per-tenant storage-quota tracking for instance attachments, with a queryable usage figure. Filed from the GUI-review UAT run. WHAT EXISTS TODAY: zero per-tenant storage accounting. upload/2 only checks @max_upload_bytes per-file. THIS REQUIREMENT builds: (1) a per-tenant storage-usage figure from instance_attachments/repository_artifacts (design decision: computed-on-read SUM vs maintained counter -- state and justify in design doc); (2) a per-tenant storage allowance (configured ceiling -- reuse TenantProvisioning or existing tenant-settings mechanism if applicable, else name a concrete default); (3) upload/2 refuses an upload that would push usage over allowance with {:error, :storage_quota_exceeded}, checked before any DB write; (4) a queryable usage function in a context module. OUT OF SCOPE: frontend display (REQ-392), route exposing it (REQ-392). ACCEPTANCE CRITERIA: (1) context-module function returns tenant's current total byte usage, correct after upload and delete; (2) configured allowance exists, upload/2 refuses over-quota with distinct tag, no DB rows for refused upload; (3) quota check and per-file check independently testable; (4) delete reflected in usage on next read; (5) mix compile --warnings-as-errors and mix test pass."
-    },
-    "artifacts_in": [
-      "lib/letflow/repository/attachments.ex",
-      "lib/letflow/tenant_provisioning.ex",
-      "docs/guides/backend_developer_guide.md",
-      "docs/migration/stage-6-operational-cross-cutting.md"
-    ]
-  },
-  "task": {
-    "description": "Execute Step 1 (Code Design) for REQ-390 per WF-02 Step 1 procedure.\n\nWorkspace: c:\\Users\\tvolo\\dev\\ai-dala\\letflow\nBranch: feature/WF02-REQ390-20260923\n\nDESIGN ONLY -- no implementation code.\n\nRead first:\n1. lib/letflow/repository/attachments.ex -- especially upload/2, delete/2, and existing error return shapes\n2. lib/letflow/tenant_provisioning.ex (or wherever tenant settings/config lives) -- does it have a per-tenant numeric limit pattern already?\n3. priv/repo/migrations/ -- check the instance_attachments and repository_artifacts table structure to understand byte_size column availability\n4. docs/guides/backend_developer_guide.md\n\nDesign decisions to address EXPLICITLY:\n\n1. USAGE TRACKING APPROACH: computed-on-read SUM vs maintained counter?\n   - Computed-on-read: SELECT SUM(byte_size) FROM instance_attachments WHERE ... -- simple, no drift, but requires a DB query per upload to check quota\n   - Maintained counter: a new column (e.g. on tenants table or a new table) updated inside upload/2 and delete/2 -- cheaper to read repeatedly, but can drift if writes fail midway\n   DECIDE which approach, state the rationale, flag for REVIEWER review.\n\n2. WHERE IS THE ALLOWANCE STORED? Options:\n   - A new column on an existing tenants/tenant_config table\n   - A new config key in TenantProvisioning\n   - A module-level default in the Attachments module\n   State where, what the data type is, and what the default value is.\n\n3. QUOTA CHECK PLACEMENT: In upload/2's with chain, before the first Repo.insert/artifact write.\n\n4. USAGE FUNCTION: Where does it live (Attachments context? A new Storage module? Inline in TenantProvisioning)? What is its signature?\n\nWrite design document at: lib/letflow/design/req390-storage-quota.md\n\nInclude:\n- Signatures for: get_storage_usage/1 (or equivalent), the modified upload/2, and any new DB schema fields\n- The with-chain order in upload/2 showing where quota check goes relative to existing checks\n- The allowance storage location and default value\n- DB schema changes if any (table, column, type, constraint, index)\n- Decision on computed-on-read vs counter with rationale\n- How delete/2 updates usage if counter approach chosen\n- Acceptance criteria traceability\n\nAfter completing:\n1. Write lib/letflow/design/req390-storage-quota.md\n2. Write handoffs/WF02-REQ390-20260923/step-01-code-designer.json status COMPLETED, result PASS\n3. git add lib/letflow/design/req390-storage-quota.md handoffs/WF02-REQ390-20260923/step-01-code-designer.json\n4. git commit -m 'feat(WF02-REQ390-20260923): Step 1 -- code design (storage quota tracking)'\n5. git push\n\nReport: key design decisions made and design doc path",
-    "acceptance_criteria": [
-      "Every AC from REQ-390 maps to a design element",
-      "Design decision (computed-on-read vs counter) stated with rationale",
-      "Allowance storage location and default value named",
-      "get_storage_usage function signature fully specified",
-      "upload/2 with-chain order showing quota check placement",
-      "DB schema changes fully described if any",
-      "No implementation code"
-    ]
-  },
-  "result": {
-    "status": "COMPLETED",
-    "completed_at": "2026-09-23T08:30:00Z",
-    "result": {
-      "status": "PASS",
-      "summary": "Design document written at lib/letflow/design/req390-storage-quota.md. Key decisions: (1) computed-on-read SUM(byte_size) from instance_attachments in the tenant schema — no drift risk, no counter to maintain, delete/2 unchanged; (2) storage_allowance_bytes :bigint NOT NULL DEFAULT 1_073_741_824 new column on the global tenants table — TenantSettings rejected (closed-vocab branding store), TenantProvisioning rejected (provisioning primitives, not operational limits); (3) get_storage_usage/1 placed in Letflow.Repository.Attachments (same module as upload/2, no new module needed); (4) check_storage_quota/3 runs after tenant_id_for_schema_name and before Repo.transaction so no DB rows are created on refusal; (5) {:error, :storage_quota_exceeded} is distinct from {:error, :file_too_large}. One REVIEWER-flagged open question: whether to access Letflow.Identity.Tenant directly from Attachments or delegate via Letflow.Identity.get_storage_allowance/1. Migration 20260923000001_add_storage_allowance_bytes_to_tenants.exs is global (not tenant-scoped). All 5 ACs mapped to design elements.",
-      "artifacts": [
-        "lib/letflow/design/req390-storage-quota.md"
-      ]
-    }
-  }
+    "handoff_id":  "WF02-REQ390-20260923-step-01",
+    "run_id":  "WF02-REQ390-20260923",
+    "step":  "Step 1",
+    "to_agent":  "CODE-DESIGNER",
+    "from_agent":  "ORCH",
+    "status":  "PENDING",
+    "created_at":  "2026-09-23T08:06:37Z",
+    "started_at":  "2026-09-23T08:06:37Z",
+    "context":  {
+                    "branch_name":  "feature/WF02-REQ390-20260923",
+                    "requirement_ids":  [
+                                            "REQ-390"
+                                        ],
+                    "stage":  "S6",
+                    "requirement_text":  {
+                                             "REQ-390":  "Per-tenant storage-quota tracking for instance attachments, with a queryable usage figure. Filed from the GUI-review UAT run. WHAT EXISTS TODAY: zero per-tenant storage accounting. upload/2 only checks @max_upload_bytes per-file. THIS REQUIREMENT builds: (1) a per-tenant storage-usage figure from instance_attachments/repository_artifacts (design decision: computed-on-read SUM vs maintained counter -- state and justify in design doc); (2) a per-tenant storage allowance (configured ceiling -- reuse TenantProvisioning or existing tenant-settings mechanism if applicable, else name a concrete default); (3) upload/2 refuses an upload that would push usage over allowance with {:error, :storage_quota_exceeded}, checked before any DB write; (4) a queryable usage function in a context module. OUT OF SCOPE: frontend display (REQ-392), route exposing it (REQ-392). ACCEPTANCE CRITERIA: (1) context-module function returns tenant\u0027s current total byte usage, correct after upload and delete; (2) configured allowance exists, upload/2 refuses over-quota with distinct tag, no DB rows for refused upload; (3) quota check and per-file check independently testable; (4) delete reflected in usage on next read; (5) mix compile --warnings-as-errors and mix test pass."
+                                         },
+                    "artifacts_in":  [
+                                         "lib/letflow/repository/attachments.ex",
+                                         "lib/letflow/tenant_provisioning.ex",
+                                         "docs/guides/backend_developer_guide.md",
+                                         "docs/migration/stage-6-operational-cross-cutting.md"
+                                     ]
+                },
+    "task":  {
+                 "description":  "Execute Step 1 (Code Design) for REQ-390 per WF-02 Step 1 procedure.\n\nWorkspace: c:\\Users\\tvolo\\dev\\ai-dala\\letflow\nBranch: feature/WF02-REQ390-20260923\n\nDESIGN ONLY -- no implementation code.\n\nRead first:\n1. lib/letflow/repository/attachments.ex -- especially upload/2, delete/2, and existing error return shapes\n2. lib/letflow/tenant_provisioning.ex (or wherever tenant settings/config lives) -- does it have a per-tenant numeric limit pattern already?\n3. priv/repo/migrations/ -- check the instance_attachments and repository_artifacts table structure to understand byte_size column availability\n4. docs/guides/backend_developer_guide.md\n\nDesign decisions to address EXPLICITLY:\n\n1. USAGE TRACKING APPROACH: computed-on-read SUM vs maintained counter?\n   - Computed-on-read: SELECT SUM(byte_size) FROM instance_attachments WHERE ... -- simple, no drift, but requires a DB query per upload to check quota\n   - Maintained counter: a new column (e.g. on tenants table or a new table) updated inside upload/2 and delete/2 -- cheaper to read repeatedly, but can drift if writes fail midway\n   DECIDE which approach, state the rationale, flag for REVIEWER review.\n\n2. WHERE IS THE ALLOWANCE STORED? Options:\n   - A new column on an existing tenants/tenant_config table\n   - A new config key in TenantProvisioning\n   - A module-level default in the Attachments module\n   State where, what the data type is, and what the default value is.\n\n3. QUOTA CHECK PLACEMENT: In upload/2\u0027s with chain, before the first Repo.insert/artifact write.\n\n4. USAGE FUNCTION: Where does it live (Attachments context? A new Storage module? Inline in TenantProvisioning)? What is its signature?\n\nWrite design document at: lib/letflow/design/req390-storage-quota.md\n\nInclude:\n- Signatures for: get_storage_usage/1 (or equivalent), the modified upload/2, and any new DB schema fields\n- The with-chain order in upload/2 showing where quota check goes relative to existing checks\n- The allowance storage location and default value\n- DB schema changes if any (table, column, type, constraint, index)\n- Decision on computed-on-read vs counter with rationale\n- How delete/2 updates usage if counter approach chosen\n- Acceptance criteria traceability\n\nAfter completing:\n1. Write lib/letflow/design/req390-storage-quota.md\n2. Write handoffs/WF02-REQ390-20260923/step-01-code-designer.json status COMPLETED, result PASS\n3. git add lib/letflow/design/req390-storage-quota.md handoffs/WF02-REQ390-20260923/step-01-code-designer.json\n4. git commit -m \u0027feat(WF02-REQ390-20260923): Step 1 -- code design (storage quota tracking)\u0027\n5. git push\n\nReport: key design decisions made and design doc path",
+                 "acceptance_criteria":  [
+                                             "Every AC from REQ-390 maps to a design element",
+                                             "Design decision (computed-on-read vs counter) stated with rationale",
+                                             "Allowance storage location and default value named",
+                                             "get_storage_usage function signature fully specified",
+                                             "upload/2 with-chain order showing quota check placement",
+                                             "DB schema changes fully described if any",
+                                             "No implementation code"
+                                         ]
+             },
+    "result":  {
+                   "status":  "COMPLETED",
+                   "completed_at":  "2026-09-23T08:30:00Z",
+                   "result":  {
+                                  "status":  "PASS",
+                                  "summary":  "Design document written at lib/letflow/design/req390-storage-quota.md. Key decisions: (1) computed-on-read SUM(byte_size) from instance_attachments in the tenant schema — no drift risk, no counter to maintain, delete/2 unchanged; (2) storage_allowance_bytes :bigint NOT NULL DEFAULT 1_073_741_824 new column on the global tenants table — TenantSettings rejected (closed-vocab branding store), TenantProvisioning rejected (provisioning primitives, not operational limits); (3) get_storage_usage/1 placed in Letflow.Repository.Attachments (same module as upload/2, no new module needed); (4) check_storage_quota/3 runs after tenant_id_for_schema_name and before Repo.transaction so no DB rows are created on refusal; (5) {:error, :storage_quota_exceeded} is distinct from {:error, :file_too_large}. One REVIEWER-flagged open question: whether to access Letflow.Identity.Tenant directly from Attachments or delegate via Letflow.Identity.get_storage_allowance/1. Migration 20260923000001_add_storage_allowance_bytes_to_tenants.exs is global (not tenant-scoped). All 5 ACs mapped to design elements.",
+                                  "artifacts":  [
+                                                    "lib/letflow/design/req390-storage-quota.md"
+                                                ]
+                              }
+               },
+    "workflow_id":  "WF-02"
 }

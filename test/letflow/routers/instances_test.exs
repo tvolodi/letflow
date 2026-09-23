@@ -1016,6 +1016,89 @@ defmodule Letflow.Routers.InstancesTest do
     end
   end
 
+  # ══════════════════════════════════════════════════════════════════════
+  # REQ-399 -- GET /:id/pins issues no new catalog/module reads
+  # ══════════════════════════════════════════════════════════════════════
+
+  # ── AC2 -- pure read of the already-computed effective pin set ─────────
+  #
+  # Design doc (lib/letflow/design/req399-instance-pin-provenance.md §1.4)
+  # points at REQ-200's own AC7 telemetry test (below, "REQ-200 -- actor
+  # display name and description rendering" describe block,
+  # `handle_req200_users_query_telemetry/4`) as the precedent for this exact
+  # pattern: a named (not anonymous) `:telemetry.attach/4` handler on
+  # `[:letflow, :repo, :query]`, filtered to this test's own process and to
+  # the table names under test via `metadata.source`, detached in an
+  # `after` block around the dispatch call (this router test module already
+  # uses `Letflow.DataCase`'s real-Postgres sandbox, so no separate
+  # `on_exit` is needed beyond the `after`/`try` already used by the
+  # REQ-200 precedent).
+  #
+  # `PinResolver.reconstruct_effective_pins/2` accepts no `Lookup.t()`
+  # parameter at all (pin_resolver.ex moduledoc, design §0/§1.2) -- it reads
+  # only the instance's own event log via `Reconstruction.read_full_log/3`.
+  # This test proves that property holds for the route's actual request
+  # path, not just by reading the function signature: no `Repo` query
+  # fired during this request names `service_catalog`, its version table,
+  # or the variable-schema registration table.
+  describe "REQ-399 AC2 -- pins route issues no catalog/module reads" do
+    test "GET /:id/pins fires no Repo query against service_catalog or module/variable-schema tables" do
+      tenant = TenantFixture.provisioned_tenant!(slug_prefix: "req399-ac2a")
+      {instance_id, _def} = start_instance!(tenant.schema_name)
+
+      test_pid = self()
+      handler_id = {:req399_ac2_telemetry, make_ref()}
+
+      :telemetry.attach(
+        handler_id,
+        [:letflow, :repo, :query],
+        &__MODULE__.handle_req399_pins_query_telemetry/4,
+        test_pid
+      )
+
+      conn =
+        try do
+          build_conn("GET", "/#{instance_id}/pins", tenant, %{roles: ["PROCESS_OPERATOR"]})
+          |> dispatch()
+        after
+          :telemetry.detach(handler_id)
+        end
+
+      assert conn.status == 200
+      body = Jason.decode!(conn.resp_body)
+      assert body["instance_id"] == instance_id
+      assert [%{"kind" => "variable_schema", "source" => "resolved"}] = body["pins"]
+
+      catalog_or_module_sources =
+        Stream.repeatedly(fn ->
+          receive do
+            {:req399_pins_query_source, source} -> {:hit, source}
+          after
+            0 -> :done
+          end
+        end)
+        |> Enum.take_while(&(&1 != :done))
+        |> Enum.map(fn {:hit, source} -> source end)
+
+      assert catalog_or_module_sources == [],
+             "expected zero Repo queries against service_catalog/module tables for " <>
+               "GET /:id/pins, got queries against: #{inspect(catalog_or_module_sources)}"
+    end
+  end
+
+  # Named (not anonymous) telemetry handler, matching REQ-200's own
+  # `handle_req200_users_query_telemetry/4` precedent immediately below --
+  # `[:letflow, :repo, :query]` is a single node-global event name, so the
+  # handler filters to this test's own process before forwarding, and
+  # further filters to the catalog/module-registry table names this AC
+  # asserts are never queried by this route.
+  def handle_req399_pins_query_telemetry(_event, _measurements, metadata, test_pid) do
+    if self() == test_pid and
+         metadata.source in ["service_catalog", "service_catalog_versions", "variable_schemas"] do
+      send(test_pid, {:req399_pins_query_source, metadata.source})
+    end
+  end
+
   # ── REQ-080 test helpers ─────────────────────────────────────────────
 
   defp cancel_instance!(schema_name, instance_id) do

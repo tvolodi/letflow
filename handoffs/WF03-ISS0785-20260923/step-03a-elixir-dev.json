@@ -5,9 +5,10 @@
   "step": "Step 3 (Implement)",
   "to_agent": "ELIXIR-DEV",
   "from_agent": "ORCH",
-  "status": "PENDING",
+  "status": "COMPLETED",
   "created_at": "2026-09-23T04:24:15Z",
   "started_at": "2026-09-23T04:24:15Z",
+  "completed_at": "2026-09-23T04:40:00Z",
   "context": {
     "branch_name": "feature/WF03-ISS0785-20260923",
     "issue_id": "ISS-0785",
@@ -35,5 +36,18 @@
       "mix format clean"
     ]
   },
-  "result": null
+  "result": {
+    "status": "PASS",
+    "commit_sha": "da00869f",
+    "branch": "feature/WF03-ISS0785-20260923",
+    "files_changed": [
+      "lib/letflow/repository/attachments.ex",
+      "lib/letflow/routers/instances.ex",
+      "test/letflow/repository/attachments_test.exs"
+    ],
+    "compile": "mix compile --warnings-as-errors: exit 0 (clean)",
+    "tests": "mix test: exit 0 (full suite, no failures)",
+    "format": "mix format: exit 0 (clean)",
+    "summary": "Added check_instance_match/2 (two heads: matching instance_id returns :ok, mismatch returns {:error, :not_found}). Promoted get_content/2 to get_content/3 with instance_id as second parameter. with chain order: get/2 -> check_instance_match/2 -> check_scan_status_clean/1 -> Repo.get blob. Updated call site in instances.ex fetch_scoped_attachment_content/3 to pass instance_id; added defense-in-depth and dead-branch comments on existing pin-match. Updated 3 test call sites in attachments_test.exs to pass attachment.instance_id as second arg. Updated moduledoc and section comment references from get_content/2 to get_content/3. All acceptance criteria met."
+  }
 }

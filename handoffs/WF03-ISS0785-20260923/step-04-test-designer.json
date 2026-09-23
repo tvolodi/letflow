@@ -1,0 +1,35 @@
+{
+  "handoff_id": "WF03-ISS0785-20260923-step-04",
+  "run_id": "WF03-ISS0785-20260923",
+  "workflow": "WF-03",
+  "step": "Step 4 (Regression Test)",
+  "to_agent": "TEST-DESIGNER",
+  "from_agent": "ORCH",
+  "status": "PENDING",
+  "created_at": "2026-09-23T04:34:13Z",
+  "started_at": "2026-09-23T04:34:13Z",
+  "context": {
+    "branch_name": "feature/WF03-ISS0785-20260923",
+    "issue_id": "ISS-0785",
+    "stage": "S6",
+    "reviewer_note": "REVIEWER flagged that no dedicated test covers the ISS-0785 fix itself (cross-instance denial via get_content/3). The 3 existing test updates only re-stamp the arity change. Step 4 must add a test that fails BEFORE the fix and passes AFTER.",
+    "fix_summary": "get_content/3 now has check_instance_match/2 in its with chain (before blob read). Cross-instance-same-tenant denial now costs 1 round-trip and returns {:error, :not_found}.",
+    "artifacts_in": [
+      "lib/letflow/repository/attachments.ex",
+      "test/letflow/repository/attachments_test.exs",
+      "docs/issues/ISS-0785.yaml",
+      "lib/letflow/design/iss0785-attachment-instance-check.md"
+    ]
+  },
+  "task": {
+    "description": "Execute Step 4 (Regression Test) for ISS-0785 per WF-03.\n\nWorkspace: c:\\Users\\tvolo\\dev\\ai-dala\\letflow\nBranch: feature/WF03-ISS0785-20260923\nMix binary: & 'C:/Program Files/Elixir/bin/mix'\n\nWF-03 Step 4 requirement: THE TEST MUST BE SHOWN TO FAIL AGAINST PRE-FIX CODE AND PASS AGAINST POST-FIX CODE.\n\nTest to write (add to test/letflow/repository/attachments_test.exs):\n\nScenario: cross-instance-same-tenant denial in get_content/3\n- Create an attachment row in instance A\n- Call get_content(attachment.id, instance_b_id, opts) where instance_b_id is a DIFFERENT valid instance in the SAME tenant\n- Assert the result is {:error, :not_found}\n- This test should fail against old get_content/2 code (before the fix) because the old get_content/2 didn't check instance_id at all -- it would return {:ok, attachment, artifact} for a cross-instance call\n\nFor the fail-first proof:\n1. git stash (stash the implementation changes)\n2. Run the NEW test against the stashed (pre-fix) code -- it MUST fail\n3. git stash pop (restore the fix)\n4. Run the test again -- it MUST pass\n5. Report both outcomes in your handoff\n\nNote: The test requires DB access (needs two instances in the same tenant). Check how existing tests in attachments_test.exs create test data (likely using ExUnit's sandbox + factory functions).\n\nAlso run the full test suite to confirm no regressions:\n  & 'C:/Program Files/Elixir/bin/mix' test\n\nAfter completing:\n1. Write handoffs/WF03-ISS0785-20260923/step-04-test-designer.json with status COMPLETED, result.status PASS or FAIL. Include:\n   - The actual test code written\n   - Pre-fix test output (FAIL proof)\n   - Post-fix test output (PASS proof)\n2. git add test/letflow/repository/attachments_test.exs handoffs/WF03-ISS0785-20260923/step-04-test-designer.json\n3. git commit -m 'fix(WF03-ISS0785-20260923): Step 4 -- regression test for cross-instance denial in get_content/3'\n4. git push\n\nReport back: the test code, pre-fix failure output, post-fix pass output",
+    "acceptance_criteria": [
+      "New test covers cross-instance-same-tenant denial via get_content/3",
+      "Fail-first proof: test fails against pre-fix code (git stash → run → fail)",
+      "Post-fix proof: test passes with fix in place",
+      "mix test (full suite) passes after fix",
+      "Test is self-contained (no external dependencies beyond the test DB sandbox)"
+    ]
+  },
+  "result": null
+}

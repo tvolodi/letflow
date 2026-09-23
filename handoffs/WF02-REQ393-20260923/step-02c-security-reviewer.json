@@ -5,9 +5,10 @@
   "step": "Step 2c (Security Gate)",
   "to_agent": "SECURITY-REVIEWER",
   "from_agent": "ORCH",
-  "status": "PENDING",
+  "status": "COMPLETED",
   "created_at": "2026-09-23T10:32:57Z",
   "started_at": "2026-09-23T10:32:57Z",
+  "completed_at": "2026-09-23T10:45:00Z",
   "context": {
     "branch_name": "feature/WF02-REQ393-20260923",
     "requirement_ids": ["REQ-393"],
@@ -28,5 +29,78 @@
       "Frontend does not bypass backend authorization"
     ]
   },
-  "result": null
+  "result": {
+    "status": "PASS",
+    "summary": "Frontend-only change (EntityListBrowserPage.tsx, EntityFilterBuilder.tsx, router.tsx). Scope test: new tenant-scoped API call paths — full invariant check applies.",
+    "invariants": [
+      {
+        "id": "INV-1",
+        "verdict": "APPLIES — PASS",
+        "notes": "tenantId is resolved internally via useTenantScopedQueryKeys(), which reads useAuth().session.tenant_id from the OIDC auth session — server-controlled, not a URL param or caller-supplied prop. entityType from useParams is an entity type name, not a tenant identifier. No tenantId appears in the POST body or URL; backend scopes via Bearer token. useTenantScopedQueryKeys throws if called without an active session. Route is a child of the ProtectedRoute wrapper in router.tsx."
+      },
+      {
+        "id": "INV-2",
+        "verdict": "NOT-APPLICABLE",
+        "notes": "S4 not started; no multi-tenant API surface in Elixir yet. Frontend shows only fields with queried===true (server-supplied UX hint, not an authorization boundary — correct per INV-2's guidance)."
+      },
+      {
+        "id": "INV-3",
+        "verdict": "NOT-APPLICABLE",
+        "notes": "S5 not started. No Lua/WASM involved."
+      },
+      {
+        "id": "INV-4",
+        "verdict": "APPLIES — PASS",
+        "notes": "No hardcoded API keys, tokens, or credentials in either new file. grep for dangerouslySetInnerHTML|innerHTML|API_KEY|SECRET returned no matches in the diff. Error messages shown to users are static strings, not secret material."
+      },
+      {
+        "id": "INV-5",
+        "verdict": "NOT-APPLICABLE",
+        "notes": "S4 not started. entityType is a type name, not a lookup-by-ID path."
+      },
+      {
+        "id": "INV-6",
+        "verdict": "APPLIES — PASS",
+        "notes": "This handoff is the required proof. All applicable invariants assessed and recorded."
+      },
+      {
+        "id": "INV-7",
+        "verdict": "NOT-APPLICABLE",
+        "notes": "Frontend-only change. No Elixir or SQL code modified."
+      },
+      {
+        "id": "INV-8",
+        "verdict": "NOT-APPLICABLE",
+        "notes": "Frontend-only change. TypeScript/React; the Elixir bare-pattern-match concern does not apply."
+      },
+      {
+        "id": "INV-9",
+        "verdict": "NOT-APPLICABLE",
+        "notes": "No server-side outbound HTTP calls added. Frontend-only change."
+      }
+    ],
+    "additional_checks": [
+      {
+        "check": "XSS prevention",
+        "verdict": "PASS",
+        "notes": "No dangerouslySetInnerHTML, innerHTML, or HTML-string template literals in either file. Table cell values rendered via React JSX (escaped by default). Filter values sent to backend as typed JSON data in POST body, not interpolated into HTML. coerceSingle() converts user input to primitives or raw strings — no injection vector."
+      },
+      {
+        "check": "Filter field injection",
+        "verdict": "PASS",
+        "notes": "Field names in filter clauses originate from the server-supplied entity definition (queried===true allowlist). Client-side interpretation of field names is limited to UI rendering (option labels). Backend is the authoritative validation boundary."
+      },
+      {
+        "check": "Route authorization",
+        "verdict": "PASS",
+        "notes": "The entities/:entityType route is a child of path:'/' whose element is wrapped in <ProtectedRoute><AuthenticatedShellRoot />. All children inherit the auth guard. Consistent with all other protected routes."
+      },
+      {
+        "check": "Tenant ID source (no URL manipulation)",
+        "verdict": "PASS",
+        "notes": "Tenant ID is never a URL parameter, query string, or prop. useTenantScopedQueryKeys() is the sole source, structurally coupled to the authenticated session."
+      }
+    ],
+    "issues": []
+  }
 }

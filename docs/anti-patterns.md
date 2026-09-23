@@ -3267,3 +3267,63 @@ as designed, but the fabrication itself should not recur. Future dispatch
 prompts for any role reporting a commit/push should explicitly require
 pasting the real command output for the SHA comparison, not just a
 prose claim of having done it.
+
+## `test/support/tenant_template.ex`'s template-existence check has no staleness detection, so a locally-persisted `tenant_template` schema silently outlives new tenant-scoped migrations (2026-09-23, WF02-REQ394-20260923)
+
+TEST-DESIGNER ran a full `mix letflow.check.test` after REQ-394 added two
+new tenant-scoped tables (`entity_type_restrictions`,
+`user_entity_type_grants`) via new migrations correctly registered in
+`Letflow.TenantProvisioning`'s manifest (confirmed by both
+SECURITY-REVIEWER and REVIEWER). The run failed with ~290-1149 test
+failures, all with the identical root cause:
+`clone_tenant_schema!/1` raising `Postgrex.Error{code: :undefined_table,
+message: "relation \"tenant_template.entity_type_restrictions\" does not
+exist"}`. A second attempt that fully recreated and re-migrated all 4
+partition databases (`scripts/test_parallel.sh`'s own
+"seeding+migrating 4 partition databases" step) hit the exact same
+failure again, at the exact same table.
+
+Root cause, confirmed by reading `test/support/tenant_template.ex`
+directly: `ensure_template!/0` only builds the `tenant_template` schema
+if `template_built_in_db?/0` says it does not yet exist —
+`template_built_in_db?/0` (line ~254) is a bare `SELECT 1 FROM
+information_schema.schemata WHERE schema_name = $1` existence check,
+with no comparison against the current migration-version set or table
+list. `scripts/test_parallel.sh`'s partition-database
+recreation/migration step operates on the partition database's
+top-level `schema_migrations`, but does not drop the separately-named
+`tenant_template` schema living inside that same database — so a
+`tenant_template` schema built by ANY earlier test run on this
+developer's local Postgres instance (this session had run dozens of
+full-suite passes over many hours) survives indefinitely across
+unrelated runs, structurally unable to pick up a newly added
+tenant-scoped migration until something explicitly drops it.
+
+ORCH root-caused this directly (reading the module, not guessing) and
+fixed it by dropping the `tenant_template` schema in all five local test
+databases (`letflow_test`, `letflow_test1`-`letflow_test4`) via a
+one-off `Postgrex.start_link/1` + `DROP SCHEMA IF EXISTS "tenant_template"
+CASCADE` script run through `mix run --no-start` (a plain `mix ecto.*`
+task/psql was not available in this environment) — the next
+`ensure_template!/0` call then rebuilds it fresh from the real,
+current migration manifest.
+
+**Correct alternative for any agent hitting this exact
+`clone_tenant_schema!/1`/`undefined_table` signature after adding a new
+tenant-scoped migration:** do not assume it's a REQ-specific code defect
+and do not spend a cycle rewriting the new migration/manifest entry —
+first check whether the missing table is genuinely new (added by the
+current branch's own migrations) and, if so, drop the stale
+`tenant_template` schema in the affected local test database(s)
+directly, then re-run. This failure mode is invisible in CI (a fresh
+container never has a stale `tenant_template` to begin with) and is
+specific to long-lived local dev/test Postgres instances that
+accumulate state across many unrelated test-run sessions — exactly the
+shape of this project's shared, long-running local Postgres setup. A
+real fix to `template_built_in_db?/0` (e.g. comparing the template
+schema's own applied-migrations set against
+`TenantProvisioning.tenant_scoped_migrations()`, similar to the
+diff-based staleness check `build_template!/0`'s own comments describe
+using elsewhere in that module) would close this gap permanently, but
+was judged out of scope for REQ-394 itself — worth a small follow-up
+requirement if this recurs.

@@ -71,6 +71,25 @@
       }
     },
     "fail_reason": "AC4 is not met. The query-error-banner shows 'Unprocessable Entity' (the RFC 9457 title) rather than the specific field name from the 422 rejection. The unit test TC-ELBP-02 masks this by directly setting ApiError.message to the field-specific string, bypassing the real client.ts mapping. RELEASE-VALIDATOR independently traced the full chain: render_query_error/2 → Response.unprocessable/2 → Error.unprocessable/1 → RFC 9457 body with title='Unprocessable Entity' and detail='field is not queryable: ...' → client.ts throwOnErrorResponse: message = body['title'] = 'Unprocessable Entity' → extractMessage returns 'Unprocessable Entity' → banner does not name the field.",
-    "recommended_fix": "Option A (minimal): In EntityListBrowserPage.tsx, update extractMessage to: const detail = (err as ApiError).details?.detail; return (typeof detail === 'string' && detail.length > 0) ? detail : String((err as ApiError).message). Option B (broader): In client.ts throwOnErrorResponse generic branch, use body['detail'] ?? body['title'] ?? body['message'] ?? response.statusText for message. Also update TC-ELBP-02 mock to use the real RFC 9457 shape { title: 'Unprocessable Entity', detail: \"...\" } and assert bannerText contains the field-specific detail, not a hand-crafted message string."
+    "recommended_fix": "Option A (minimal): In EntityListBrowserPage.tsx, update extractMessage to: const detail = (err as ApiError).details?.detail; return (typeof detail === 'string' && detail.length > 0) ? detail : String((err as ApiError).message). Option B (broader): In client.ts throwOnErrorResponse generic branch, use body['detail'] ?? body['title'] ?? body['message'] ?? response.statusText for message. Also update TC-ELBP-02 mock to use the real RFC 9457 shape { title: 'Unprocessable Entity', detail: \"...\" } and assert bannerText contains the field-specific detail, not a hand-crafted message string.",
+    "rework_result": {
+      "attempt": 1,
+      "status": "PASS",
+      "verified_at": "2026-09-23T17:07:56Z",
+      "npm_run_check": {
+        "exit_code": 0,
+        "type_check": "PASS — tsc -b tsconfig.json, 0 errors",
+        "lint": "PASS — eslint 0 errors, 0 warnings (TS version advisory only)",
+        "test": "PASS — 120 test files, 850/850 tests passed",
+        "guards": "PASS — 4 guard files, 48/48 tests passed",
+        "build": "PASS — vite build succeeded, 2463 modules"
+      },
+      "ac4_rework_evidence": {
+        "extractMessage_reads_detail_first": "CONFIRMED — EntityListBrowserPage.tsx line ~101: const detail = e.details?.[\"detail\"]; if (typeof detail === 'string' && detail.length > 0) return detail; — RFC 9457 detail field read before message fallback.",
+        "tc_elbp02_uses_real_shape": "CONFIRMED — TC-ELBP-02 apiError has message='Unprocessable Entity', details.detail='field is not queryable: \"internal_note\"', matching real client.ts RFC 9457 mapping.",
+        "tc_elbp02_asserts_field_name": "CONFIRMED — expect(banner.textContent).toContain('internal_note') — banner text must include the field name from details.detail."
+      },
+      "all_acs": "PASS — AC1/AC2/AC3/AC4/AC5/AC6/AC7 all verified; AC4 fix confirmed; AC5 gap on live Playwright run remains, accepted for pre-production S8 with WF-05 UAT required."
+    }
   }
 }

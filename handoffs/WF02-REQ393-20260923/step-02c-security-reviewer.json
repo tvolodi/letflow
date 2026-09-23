@@ -1,0 +1,32 @@
+{
+  "handoff_id": "WF02-REQ393-20260923-step-02c",
+  "run_id": "WF02-REQ393-20260923",
+  "workflow": "WF-02",
+  "step": "Step 2c (Security Gate)",
+  "to_agent": "SECURITY-REVIEWER",
+  "from_agent": "ORCH",
+  "status": "PENDING",
+  "created_at": "2026-09-23T10:32:57Z",
+  "started_at": "2026-09-23T10:32:57Z",
+  "context": {
+    "branch_name": "feature/WF02-REQ393-20260923",
+    "requirement_ids": ["REQ-393"],
+    "impl_summary": "New EntityListBrowserPage.tsx with filter builder (EntityFilterBuilder.tsx), sort control, page-size control wired to POST /entities/query. New route /entities/:entityType. DataTable with sortable: false.",
+    "artifacts_in": [
+      "web/src/pages/entities/EntityListBrowserPage.tsx",
+      "web/src/components/entities/EntityFilterBuilder.tsx",
+      "web/src/router.tsx",
+      "docs/agents/instructions/security-invariants.md"
+    ]
+  },
+  "task": {
+    "description": "Execute Step 2c (SECURITY GATE -- HARD GATE) for REQ-393.\n\nWorkspace: c:\\Users\\tvolo\\dev\\ai-dala\\letflow\nBranch: feature/WF02-REQ393-20260923\n\nRead security-invariants.md and the diff:\ngit diff main...feature/WF02-REQ393-20260923 -- web/src/\n\nKey checks for this frontend change:\n1. INV-1 (tenant isolation): does the component only query the tenant's own data? Check the tenantId / auth context usage in the API call.\n2. Does the filter builder prevent XSS? User input values are sent to the backend as filter values -- they should be passed as data (not concatenated into HTML/SQL). Check how values are rendered in the table results.\n3. Does the page allow a user to query data for a different tenant by modifying the entityType or tenantId? (The backend already scopes this, but the frontend should not send a different tenant's id.)\n4. Are filter field names validated client-side or only server-side? (OK if only server-side -- the backend returns :field_not_allowed.)\n5. No hardcoded secrets, API keys, or credentials in the new code?\n\nVerdict: PASS or FAIL.\n\nOutput:\n1. Write handoffs/WF02-REQ393-20260923/step-02c-security-reviewer.json COMPLETED PASS or FAIL\n2. git add + commit + push\n\nReport: PASS or FAIL with findings",
+    "acceptance_criteria": [
+      "Tenant isolation in API calls verified",
+      "No XSS from user filter input",
+      "No hardcoded secrets",
+      "Frontend does not bypass backend authorization"
+    ]
+  },
+  "result": null
+}

@@ -4610,8 +4610,16 @@ volumes:
     path: docs/status/requirement_status.v22.yaml
     status: current
     opened: 2026-09-22
-    entries: 2
+    entries: 3
     note: >
+      Incremented to 3 during WF02-REQ386-20260923's own Step Final rebase
+      onto origin/main (second conflict, Step 6's own done-event append):
+      composed REQ-386's done event (2026-09-23T00:53:45Z) chronologically
+      before ISS-0784's SCOPE-CHANGE done event (2026-09-23T00:57:17Z).
+      `grep -c "^  - req:" docs/status/requirement_status.v22.yaml` = 3
+      on-disk entries after composition, recounted directly rather than
+      assumed. Prior notes preserved below verbatim.
+
       Incremented to 2 during WF02-REQ386-20260923's own Step Final rebase
       onto origin/main: composed REQ-386's started event (2026-09-22T22:51:01Z)
       chronologically before ISS-0784's SCOPE-CHANGE done event
@@ -4634,6 +4642,13 @@ volumes:
       this index's `roll_rule.on_exceed` procedure. `entries:` will be
       incremented in place as real events land -- this file currently
       contains only the header and an empty `history:` list.
+
+      Incremented to 2 by DOC-UPDATER's own REQ-386 done-event append
+      (WF02-REQ386-20260923, 2026-09-23T00:53:45Z -- time-limited signed
+      URLs for instance-attachment byte content) -- `grep -c "^  - req:"
+      docs/status/requirement_status.v22.yaml` = 2 on-disk entries. 204
+      lines / 11845 bytes, well under the 1200-line/120000-byte roll
+      ceiling, so no roll triggered.
 
   - volume: 20
     path: docs/status/requirement_status.v20.yaml

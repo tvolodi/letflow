@@ -180,6 +180,28 @@ history:
       Depends on REQ-211/REQ-212 (both done) -- extends
       fetch_scoped_attachment_content/3's not-found-folding coverage rather
       than replacing it.
+  - req: REQ-386
+    event: done
+    agent: DOC-UPDATER
+    at: 2026-09-23T00:53:45Z
+    note: >
+      WF02-REQ386-20260923 Step 6 -- all gates passed (design 1b, security 2c,
+      idiom 2d, test-design 3b PASS; test run 4744/4746 with 2 pre-existing
+      ISS-0766 failures; release validation Step 5 PASS, independently
+      re-verified all 6 acceptance criteria). Ships
+      POST /instances/:id/attachments/:attachment_id/link (issues a
+      300-second HMAC-signed link via lib/letflow/repository/attachment_links.ex)
+      and a token-gated content-serving path that folds expired/invalid/
+      cross-tenant tokens to the same attachment_link_expired response,
+      preserving REQ-211/212's existing not-found-folding untouched. Status
+      flipped in docs/requirements.yaml. README.md not touched -- it documents
+      no attachment API route surface at any granularity (grepped for
+      "attachment": zero hits), so there is nothing there to keep in sync.
+      docs/migration/stage-6-operational-cross-cutting.md not touched either:
+      its REQ-211/212 note records the introduction of a new subsystem
+      (closing GH#769/ISS-0390); REQ-386 extends that already-recorded
+      subsystem rather than adding a new one, so no new provenance note is
+      warranted for consistency with that doc's own pattern.
   - req: SCOPE-CHANGE
     event: done
     agent: DOC-UPDATER

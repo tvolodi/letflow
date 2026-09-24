@@ -137,7 +137,7 @@ export const queryKeys = {
     groupMembers: (tenantId: string, groupId: string) =>
       ['tenant', tenantId, 'admin', 'group-members', groupId] as const,
     tokens: (tenantId: string) => ['tenant', tenantId, 'admin', 'tokens'] as const,
-    users: (tenantId: string, filters?: { search?: string; status?: string; page?: number; page_size?: number }) =>
+    users: (tenantId: string, filters?: { search?: string; status?: string; cursor?: string; page_size?: number }) =>
       ['tenant', tenantId, 'admin', 'users', filters ?? {}] as const,
     userDetail: (tenantId: string, id: string) => ['tenant', tenantId, 'admin', 'user', id] as const,
     roles: (tenantId: string) => ['tenant', tenantId, 'admin', 'roles'] as const,

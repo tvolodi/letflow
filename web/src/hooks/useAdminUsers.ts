@@ -5,7 +5,7 @@ import { useTenantScopedQueryKeys } from '@/api/useTenantScopedQueryKeys'
 export type AdminUserFilters = {
   search: string
   status: 'ALL' | 'active' | 'inactive'
-  page: number
+  cursor?: string
   page_size: number
 }
 
@@ -17,7 +17,7 @@ export function useAdminUsers(filters: AdminUserFilters) {
       usersApi.list({
         search: filters.search || undefined,
         status: filters.status === 'ALL' ? undefined : filters.status,
-        page: filters.page,
+        cursor: filters.cursor,
         page_size: filters.page_size,
       }),
   })

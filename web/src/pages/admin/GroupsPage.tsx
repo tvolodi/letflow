@@ -65,6 +65,11 @@ export default function GroupsPage() {
     enabled: Boolean(activeGroup),
   })
 
+  // ISS-0823: 200 is the server's max page_size. When next_cursor is set the
+  // tenant has >200 users and the dropdown below is incomplete. We cannot
+  // silently drop users, so we show a visible warning in that case.
+  const userListTruncated = Boolean(users?.next_cursor)
+
   const createGroup = useMutation({
     mutationFn: (body: typeof form) => groupsApi.create(body),
     onSuccess: () => {
@@ -205,6 +210,11 @@ export default function GroupsPage() {
                     return <option key={id} value={id}>{formatUser(user)}</option>
                   })}
                 </select>
+                {userListTruncated && (
+                  <p role="note" data-testid="user-list-truncated-warning" style={{ margin: '.3rem 0 0', fontSize: 'var(--text-sm)', color: 'var(--color-warning-dark)' }}>
+                    This tenant has more than 200 users. The list above shows only the first 200 — some users may not appear.
+                  </p>
+                )}
               </label>
               <Button
                 variant="primary"

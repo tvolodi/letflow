@@ -8,14 +8,17 @@ import type {
   Role,
   ApiToken,
   IssuedToken,
-  PagedResponse,
+  CursorPage,
 } from '@/types/api'
 
 // ── Users ──────────────────────────────────────────────────────────────────────
 
 export const usersApi = {
-  list: (params?: { page?: number; page_size?: number; search?: string; status?: string }) =>
-    client.get<PagedResponse<User>>('/api/v1/identity/users', params as Record<string, unknown>),
+  // ISS-0823/ISS-0816: usersApi.list returns CursorPage<User> (Pagination.page_response
+  // emits {items, next_cursor, count}), not PagedResponse<User>.
+  // The page param is dead — handle_list/2 reads cursor, not page.
+  list: (params?: { cursor?: string; page_size?: number; search?: string; status?: string }) =>
+    client.get<CursorPage<User>>('/api/v1/identity/users', params as Record<string, unknown>),
 
   get: (id: string) =>
     client.get<User>(`/api/v1/identity/users/${id}`),
@@ -70,7 +73,7 @@ export const groupsApi = {
 
 export const rolesApi = {
   list: () =>
-    client.get<PagedResponse<Role>>('/api/v1/identity/roles'),
+    client.get<{ items: Role[] }>('/api/v1/identity/roles'),
 
   create: (body: { name: string; description?: string }) =>
     client.post<Role>('/api/v1/identity/roles', body),

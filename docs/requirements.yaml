@@ -202,6 +202,27 @@ stages:
     depends_on: [S4, S6, S8]
     detail_file: docs/migration/stage-10-bilimbaga-vertical.md
 
+  - id: S11
+    name: modular-platform
+    description: >
+      Introduce the application-module layer between the platform core
+      and a tenant (decision 0039): a Letflow.Modules.Module behaviour, a
+      compile-time Letflow.Modules.Catalog, a tenant-scoped tenant_modules
+      install list with a 404 gate on /api/v1/modules/<id>/..., a
+      :ModulesManage permission, Catalog-sourced module permissions and
+      role_grants, and CI-enforced code boundaries (mix
+      letflow.check_boundaries plus an ESLint rule) -- all proven with a
+      test-only fixture module (P1). Then extract BilimBaga's exam domain
+      out of the platform into the first module, exam (P2), and make a
+      solution a manifest of modules installable into a tenant, with
+      module settings validated against each module's declared
+      settings_schema (P3). One monolith throughout: one repository, one
+      OTP application, one release (0039 D2). No new business module is
+      built (0039 D8). Ports no R-Co source. See
+      docs/migration/decisions/0039-platform-module-solution-layering.md.
+    depends_on: [S10]
+    detail_file: docs/migration/stage-11-modular-platform.md
+
 requirements:
   # ---------------------------------------------------------------
   # S0 — foundation-and-scaffolding
@@ -29739,3 +29760,1040 @@ requirements:
       - "git diff confirms Letflow.Engine.PinResolver's resolution logic is unmodified by this requirement -- only a new route consuming its existing output was added"
       - "mix letflow.check passes and the frontend test suite passes, with real output quoted for both"
     depends_on: [REQ-373]
+
+  # ---------------------------------------------------------------
+  # S11 -- modular-platform (decision 0039, REVIEWER PASS 2026-09-24)
+  # Detail file: docs/migration/stage-11-modular-platform.md.
+  # P1 (REQ-400..407) builds the module mechanism and proves it with a
+  # test-only fixture module BEFORE any exam code moves. P2 (REQ-408..413)
+  # extracts exam. P3 (REQ-414..416) adds solutions and module settings.
+  # Every requirement cites 0039's D-numbers. Out of scope for every
+  # requirement here (stage file "Open items"): module uninstall,
+  # relocating the CANDIDATE role, tenant extension points/client
+  # scripts, a shared org module, and a dedicated module-upgrade flow.
+  # Terminology trap: web/src/api/modules.ts, ProcessModulesPage.tsx and
+  # /api/v1/admin/modules are the PLC *process-module catalog* (S5), not
+  # 0039's application modules. No S11 requirement reuses or renames them.
+  # ---------------------------------------------------------------
+
+  - id: REQ-400
+    title: "P1: Letflow.Modules.Module behaviour, Letflow.Modules.Catalog, manifest validation, and a test-only fixture module"
+    owner: ELIXIR-DEV
+    status: pending
+    stage: S11
+    impl_order: 789  # letflow-queue task id, GH#1774. Registered 2026-09-24T11:10:15Z by ORCH (WF-01 Step 3).
+    description: >
+      Phase P1 (module mechanism). Implements 0039 D3 (file-level
+      core/module split) and D4 (the module contract). No exam code moves
+      in this requirement or anywhere in P1.
+
+      BUILDS:
+
+      1. `lib/letflow/modules/module.ex` -- `Letflow.Modules.Module`, a
+      behaviour with the callbacks 0039 D4 lists: `manifest/0` (required;
+      returns `%{id, version, depends_on, pack, permissions, role_grants,
+      required_roles, settings_schema}` exactly as D4 types it, plus one
+      field ORCH added on 2026-09-24 (WF-01 rework 1): `route_policies`, a
+      list of `{method, path_pattern, permission_atom}` where
+      `path_pattern` is relative to the module's mount
+      `/api/v1/modules/<id>`, e.g. `{"GET", "/items/:id", :FixtureRead}`),
+      `router/0` (optional) and `on_install/2` (optional; receives the
+      tenant `prefix` per INV-1, runs inside the install transaction).
+      `required_roles` is advisory only, as 0029 section 2 keeps
+      `manifest.required_roles` advisory (0039 D4).
+
+      2. `lib/letflow/modules/catalog.ex` -- `Letflow.Modules.Catalog`, a
+      plain module (not a process; no supervision change, per 0039's
+      REVIEWER note on REQ-045) that reads the module list from
+      `config :letflow, :modules, [...]` via `Application.compile_env/3`
+      and exposes at least: the list of registered entry modules, lookup
+      by module id, the union of all modules' `permissions`, and the
+      `role_grants` lookup `Letflow.Api.Authorization` will call in
+      REQ-401. Per D4 this is the ONLY core file that may name module
+      modules; core never builds a module name from a string (D3's stated
+      xref limit).
+
+      3. Manifest validation, run over every Catalog module by a test
+      (D4 "a test fails otherwise"): every `role_grants` key is in
+      `Letflow.Api.Authorization.roles/0`; every granted atom is in that
+      same module's own `permissions`; no module `permissions` atom is
+      also in core's `Letflow.Api.Authorization.permissions/0` core list
+      (so a module cannot grant a core permission, D4); every
+      `depends_on` id is a registered module id; module ids are unique;
+      every `route_policies` permission atom is in that same module's own
+      `permissions`.
+
+      4. A test-only fixture module `Letflow.Modules.Fixture` under
+      `test/support/modules/fixture/` (compiled only in the test env via
+      `mix.exs`'s existing `elixirc_paths(:test)`), registered only in
+      `config/test.exs`. It declares one permission of its own granted to
+      one existing role via `role_grants`, a one-route `router/0` with a
+      matching `route_policies` entry for that route, a `settings_schema`
+      that forbids keys it does not declare (`additionalProperties: false`
+      or the validator's equivalent; REQ-414 relies on it), `pack: nil`, and an `on_install/2` that writes an
+      observable marker (e.g. returns `:ok` after a tenant-scoped insert
+      the test can read back). REQ-401..404 prove the mechanism against
+      it. `config/config.exs` registers `[]` in P1 -- no real module
+      exists until REQ-408.
+
+      Because the fixture is registered for the whole test env, any
+      existing exact-list assertion on `Authorization.permissions/0` in
+      `test/letflow/api/authorization_test.exs` will see the fixture's
+      atom once REQ-401 lands; that is REQ-401's concern, not this one's.
+
+      OUT OF SCOPE: authorization wiring (REQ-401), persistence (REQ-402),
+      HTTP (REQ-403/404), the boundary check (REQ-405), uninstall (stage
+      file open item).
+    acceptance_criteria:
+      - "`lib/letflow/modules/module.ex` defines `Letflow.Modules.Module` with `@callback manifest/0`, `@callback router/0` and `@callback on_install/2`, and `router/0` and `on_install/2` are listed in `@optional_callbacks`, verified by a test calling `Letflow.Modules.Module.behaviour_info(:callbacks)` and `behaviour_info(:optional_callbacks)`"
+      - "`Letflow.Modules.Catalog` returns `[Letflow.Modules.Fixture]` as its module list in the test env (REQ-402 and REQ-408 later append to this list and update this test's expectation) and looks the fixture up by its id string, proven by an ExUnit test; `git grep -n \"config :letflow, :modules\" config/config.exs` shows the list is `[]`"
+      - "a manifest-validation test fails with a named error for each of six deliberately bad inline manifests: a `role_grants` key not in `Authorization.roles/0`, a granted atom not in the module's own `permissions`, a `permissions` atom that is a core permission, a `depends_on` id not registered, a duplicate module id, and a `route_policies` entry whose permission atom is not in the module's own `permissions`; and the same validation returns `:ok` for every module the Catalog lists"
+      - "`git grep -n \"GenServer\\|Agent.start\\|Supervisor\" -- lib/letflow/modules/` returns no hits (the Catalog is a plain module, not a process)"
+      - "`mix letflow.check` passes, real output quoted"
+    depends_on: []
+
+  - id: REQ-401
+    title: "P1: Catalog-sourced module permissions and role_grants in Letflow.Api.Authorization, plus the new core :ModulesManage permission"
+    owner: ELIXIR-DEV
+    status: pending
+    stage: S11
+    impl_order: 790  # letflow-queue task id, GH#1775. Registered 2026-09-24T11:10:15Z by ORCH (WF-01 Step 3).
+    description: >
+      Phase P1. Implements 0039 D4 ("Permissions and who holds them") and
+      the permission half of D5 (`:ModulesManage`). Changes
+      `lib/letflow/api/authorization.ex` and its tests only. Exam atoms
+      STAY in core in this requirement; they move in REQ-408 (P2).
+
+      BUILDS:
+
+      1. `Letflow.Api.Authorization.permissions/0` returns core's
+      `@permissions` followed by every Catalog module's `permissions`
+      (via `Letflow.Modules.Catalog` from REQ-400). The core
+      `@type permission` stays the core union; module permissions are
+      typed `atom()` at the Catalog boundary (D4).
+
+      2. `role_allows?/2` keeps every existing core clause's result
+      unchanged, then falls back to the Catalog: `true` iff some
+      module's `role_grants[role]` contains the permission. Today every
+      role has its own catch-all `false` clause (e.g.
+      `role_allows?(:AGENT_RUNNER, _permission), do: false`), so the
+      fallback cannot simply be appended after them; the restructuring is
+      CODE-DESIGNER's call, but no existing role/permission pair may
+      change its answer. `PLATFORM_ADMIN`'s existing catch-all `true`
+      (authorization.ex:1005 as of 2026-09-24) stays and therefore also
+      covers module permissions (0039 REVIEWER R2 note).
+
+      3. A new core permission `:ModulesManage`, added to `@type
+      permission` and `@permissions`, granted to `PLATFORM_ADMIN` only --
+      same pattern as `:TenantsManage` (authorization.ex:349, :598). It
+      will gate module install (REQ-403), solution install (REQ-415) and
+      module-settings writes (REQ-414) per D5.
+
+      4. ROUTE POLICY FALLBACK (ORCH decision, WF-01 rework 1):
+      `Letflow.Api.Authorization.endpoint_policy_key/2` keeps every
+      existing core clause first, then, for a path of the form
+      `/modules/<id>/<rest>` (relative to `/api/v1`, the form the core
+      clauses already use), falls back to the Catalog: it returns the
+      permission atom of the entry in module `<id>`'s manifest
+      `route_policies` whose method matches and whose `path_pattern`
+      matches `/<rest>`. No match returns what an unmatched path returns
+      today.
+
+      5. `test/letflow/api/authorization_enforcement_test.exs` is extended
+      to enumerate every Catalog module that exports `router/0`, read that
+      router's `__authz_routes__/0`, prefix each route with
+      `/modules/<id>`, and assert each resolves through
+      `endpoint_policy_key/2` to a policy. No module route is added to its
+      `@allowlist`. The REQ-400 fixture module is the subject in P1.
+
+      6. Existing closed-set tests in
+      `test/letflow/api/authorization_test.exs` are updated only as far
+      as the new atoms require: the `permissions/0` exact-list test and
+      the "@doc's stated count equals length(permissions())" tests gain
+      `:ModulesManage` (and, in the test env, the REQ-400 fixture
+      module's permission atom, which a test must source through the
+      Catalog rather than hard-code a second time). The ISS-0646 test
+      "role_allows?/2 grants CANDIDATE exactly its six
+      ExamSession*/ExamCertificateIssue permissions, denying every other
+      live permission" (authorization_test.exs:1830) keeps asserting the
+      same six-atom set (D4: "must pass unchanged in meaning").
+
+      OUT OF SCOPE: moving the six exam atoms or removing the
+      `role_allows?(:CANDIDATE, ...)` clause (REQ-408); any route that
+      uses `:ModulesManage` (REQ-403+).
+    acceptance_criteria:
+      - "an ExUnit test asserts `Letflow.Api.Authorization.permissions/0` equals core's list (now including `:ModulesManage`) followed by `Letflow.Modules.Catalog`'s union of module permissions, and that the REQ-400 fixture module's permission atom is a member of it in the test env"
+      - "an ExUnit test asserts `role_allows?/2` returns `true` for the fixture module's permission and the one role its `role_grants` names, `false` for that permission and each of the other roles in `Authorization.roles/0` except `PLATFORM_ADMIN`, and `true` for `PLATFORM_ADMIN`"
+      - "an ExUnit test asserts `role_allows?(role, :ModulesManage)` is `true` only for `:PLATFORM_ADMIN`, iterating every role in `Authorization.roles/0`"
+      - "an ExUnit test asserts `endpoint_policy_key/2` returns the fixture's permission atom for the fixture route's method and `/modules/fixture/<route path>`, and returns the unmatched result for the same path under `/modules/does-not-exist/`; and every pre-existing core `endpoint_policy_key/2` clause returns the same atom as on main (a literal table captured from main)"
+      - "`mix test test/letflow/api/authorization_enforcement_test.exs` passes with the new module-router enumeration covering the fixture's route, `git diff` shows no entry added to that file's `@allowlist`, and temporarily deleting the fixture's `route_policies` entry makes the test fail (probe reverted, both runs quoted)"
+      - "an ExUnit test computes `role_allows?/2` over every pair of (role in `roles/0`) x (every permission in core `@permissions` as it stood on main before this change) and asserts each result equals a literal expected matrix captured from main before the change, i.e. no existing pair changed its answer"
+      - "`mix test test/letflow/api/authorization_test.exs` passes with the ISS-0646 CANDIDATE test at line 1830 still asserting exactly the six atoms `:ExamSessionStart, :ExamSessionRead, :ExamSessionSave, :ExamSessionSubmit, :ExamSessionReportEvent, :ExamCertificateIssue`, real output quoted"
+      - "`mix letflow.check` passes, real output quoted"
+    depends_on: [REQ-400]
+
+  - id: REQ-402
+    title: "P1: tenant-scoped tenant_modules table, Letflow.Modules.TenantModule schema and Letflow.Modules.Installs install/list context"
+    owner: ELIXIR-DEV
+    status: pending
+    stage: S11
+    impl_order: 791  # letflow-queue task id, GH#1776. Registered 2026-09-24T11:10:15Z by ORCH (WF-01 Step 3).
+    description: >
+      Phase P1. Implements the persistence and install logic of 0039 D5.
+      No HTTP in this requirement (REQ-403). No uninstall (D5; stage file
+      open item).
+
+      BUILDS:
+
+      1. A tenant-scoped migration under `priv/repo/migrations/` creating
+      `tenant_modules` (`module_id` string, unique; `version` string;
+      `installed_at` utc_datetime_usec; `settings` map/jsonb, default
+      `{}`), using the mandatory `if prefix() do` guard in the same shape
+      as `priv/repo/migrations/20260923010002_create_user_entity_type_grants.exs`,
+      added to `Letflow.TenantProvisioning.tenant_scoped_migrations/0`.
+      Per docs/anti-patterns.md, in the SAME change: add `tenant_modules`
+      to `test/support/tenant_fixture.ex`'s `@expected_tenant_tables` and
+      its paired count assertion; check index/constraint names stay under
+      Postgres's 63-byte limit; pick a migration version that collides with
+      no existing migration file or test-fixture version constant.
+
+      2. `lib/letflow/modules/tenant_module.ex` --
+      `Letflow.Modules.TenantModule` Ecto schema (D3 lists it as core
+      mechanism).
+
+      3. `lib/letflow/modules/installs.ex` -- `Letflow.Modules.Installs`
+      with at least `install(module_id, actor_id, opts)` and
+      `list_installed(opts)`. The tenant is identified ONLY by the
+      `prefix` in `opts` (INV-1, docs/agents/instructions/security-invariants.md);
+      no function in this module accepts a tenant id or schema name as a
+      separate argument. `install/3`, in ONE `Repo.transaction`:
+      rejects a module id the Catalog does not know; rejects a module
+      already installed; checks every `depends_on` id is already
+      installed (D5); if the manifest's `pack` is non-nil, reads that JSON
+      file and installs it through the EXISTING
+      `Letflow.Definitions.SolutionPack.install/3` (no second pack
+      installer); inserts the `tenant_modules` row with the manifest's
+      `version`; then calls the module's `on_install/2` if exported. Any
+      step failing rolls back every write, including the pack install.
+
+      OUT OF SCOPE: installing several modules in dependency order in one
+      request (that is solution install, REQ-415); settings writes
+      (REQ-414); uninstall.
+    acceptance_criteria:
+      - "after provisioning a fresh tenant through the real provisioning path, `tenant_modules` exists in that tenant's schema with columns module_id, version, installed_at, settings, and `test/support/tenant_fixture.ex`'s C6 oracle-rot guard test passes with `tenant_modules` in `@expected_tenant_tables`, real `mix test` output quoted"
+      - "`Letflow.Modules.Installs.install(\"fixture\", actor_id, prefix: p)` on a fresh tenant returns `{:ok, _}`, `list_installed(prefix: p)` then returns exactly one entry with the fixture's id and version, and the fixture's `on_install/2` marker is readable in the same tenant schema, proven by an ExUnit test"
+      - "installing into tenant A leaves tenant B's `tenant_modules` empty, proven by an ExUnit test with two provisioned tenants"
+      - "`install/3` returns an error and writes no row for each of: an unknown module id, a module already installed, and a module whose `depends_on` entry is not installed (the last using a second test-only fixture module that depends on the first), proven by ExUnit tests"
+      - "the second fixture module (e.g. `Letflow.Modules.FixtureDependent` under `test/support/modules/fixture_dependent/`, `depends_on: [\"fixture\"]`) is appended to `config/test.exs`'s `config :letflow, :modules` list, which becomes `[Letflow.Modules.Fixture, Letflow.Modules.FixtureDependent]`, and REQ-400's Catalog list test is updated to expect exactly that list; `git grep -n \"FixtureDependent\" config/test.exs` shows one hit"
+      - "when `on_install/2` returns an error, `list_installed/1` returns no row for that module afterwards (transaction rolled back), proven by an ExUnit test"
+      - "`git grep -nE \"def (install|list_installed)\\(\" lib/letflow/modules/installs.ex` shows no parameter named tenant_id or schema, and SECURITY-REVIEWER signs off against INV-1 before merge"
+      - "`mix letflow.check` passes, real output quoted"
+    depends_on: [REQ-400]
+
+  - id: REQ-403
+    title: "P1: module install route gated by :ModulesManage, and GET /api/v1/me/modules gated by the new core :MyModulesRead permission"
+    owner: ELIXIR-DEV
+    status: pending
+    stage: S11
+    impl_order: 792  # letflow-queue task id, GH#1777. Registered 2026-09-24T11:10:15Z by ORCH (WF-01 Step 3).
+    description: >
+      Phase P1. Implements the HTTP half of 0039 D5 for install and list.
+
+      BUILDS:
+
+      1. `POST /api/v1/tenant/modules` with body `{"module_id": "<id>"}`,
+      a new core router (e.g. `lib/letflow/routers/tenant_modules.ex`)
+      forwarded from `lib/letflow/plugs/api_pipeline.ex` next to the
+      existing `forward("/tenant/settings", ...)`. Gated by `:ModulesManage`
+      (REQ-401; PLATFORM_ADMIN only, D5). Calls
+      `Letflow.Modules.Installs.install/3` with the `prefix` taken from
+      `conn.assigns.scoped_opts` -- never from the request body, path or
+      query (INV-1). Any `tenant_id`/`tenant`/`prefix` key in the body is
+      ignored. Response 201 with `{module_id, version, installed_at}`;
+      unknown module id 404; already installed 409; missing dependency
+      422. The path is deliberately NOT under `/api/v1/modules/` so it
+      cannot collide with a module whose id is `install`.
+
+      2. A new core permission `:MyModulesRead` in
+      `lib/letflow/api/authorization.ex` (`@type permission`,
+      `@permissions`), granted to EVERY role in `Authorization.roles/0`
+      through ONE role-agnostic clause,
+      `def role_allows?(_role, :MyModulesRead), do: true`, placed before
+      every per-role `role_allows?/2` clause (ORCH, WF-01 rework 1). No
+      per-role clause names `:MyModulesRead`.
+      It gates exactly one route: `GET /api/v1/me/modules`, a new
+      `authz_get "/modules", :MyModulesRead` route in
+      `lib/letflow/routers/me.ex` (which today serves only
+      `GET /me/memberships`). It returns
+      `{"installed_modules": [{"module_id", "version"}]}` for the caller's
+      own tenant and nothing else (no settings, no installed_at), read
+      through `Letflow.Modules.Installs.list_installed/1` with the
+      `prefix` from `conn.assigns.scoped_opts` only (INV-1); no path,
+      query or header value can select another tenant. D5: "listing a
+      tenant's installed modules needs only an authenticated tenant
+      user"; the SPA builds routes and nav from this route (REQ-406/407).
+
+      DECIDED BY ORCH (2026-09-24), replacing this requirement's earlier
+      open question: the existing `:MembershipsRead` (which deliberately
+      excludes `CANDIDATE`, see `lib/letflow/routers/me.ex`'s moduledoc)
+      is NOT widened, no permission-less route is added, and no
+      `GET /api/v1/me` root route is added. Instead `CANDIDATE`'s ISS-0646
+      closed permission set grows by exactly one atom, `:MyModulesRead`.
+      The ISS-0646 test in `test/letflow/api/authorization_test.exs`
+      (line 1830, "role_allows?/2 grants CANDIDATE exactly its six
+      ExamSession*/ExamCertificateIssue permissions, denying every other
+      live permission") is updated to assert exactly those six atoms plus
+      `:MyModulesRead`, and renamed to say seven. The `permissions/0`
+      exact-list and "@doc count" tests gain `:MyModulesRead`. Every other
+      existing role/permission pair keeps its answer.
+
+      OUT OF SCOPE: the `/api/v1/modules/<id>/...` mount and its 404 gate
+      (REQ-404); settings writes (REQ-414); uninstall.
+    acceptance_criteria:
+      - "an HTTP-level ExUnit test through `Letflow.Router` shows `POST /api/v1/tenant/modules` with `{\"module_id\": \"fixture\"}` returns 201 for a PLATFORM_ADMIN token and 403 for a token of each of the other five roles in `Authorization.roles/0`, with no `tenant_modules` row written on the 403s"
+      - "an HTTP-level ExUnit test sends the install request as tenant A's PLATFORM_ADMIN with a body that also carries tenant B's id under the keys `tenant_id` and `tenant`, and asserts the row lands only in tenant A's schema and tenant B's `tenant_modules` stays empty (INV-1)"
+      - "HTTP-level ExUnit tests assert 404 for an unknown module id, 409 for a second install of the same module, and 422 for a module whose `depends_on` is not installed"
+      - "an HTTP-level ExUnit test asserts `GET /api/v1/me/modules` returns 200 with `installed_modules` equal to `[%{\"module_id\" => \"fixture\", \"version\" => <fixture version>}]` after install and `[]` before it, for a token of each of the six roles in `Authorization.roles/0`, explicitly including CANDIDATE and AGENT_RUNNER, and that each entry has exactly the keys module_id and version"
+      - "an ExUnit test asserts `role_allows?(role, :MyModulesRead)` is `true` for every role in `Authorization.roles/0`"
+      - "`git grep -n \"def role_allows?(_role, :MyModulesRead), do: true\" lib/letflow/api/authorization.ex` returns exactly one hit, its line number is lower than every `def role_allows?(:` line in that file, and `git grep -nF \":MyModulesRead\" lib/letflow/api/authorization.ex` lists no line containing `def role_allows?(:` (no per-role clause names it)"
+      - "`mix test test/letflow/api/authorization_test.exs` passes with the ISS-0646 CANDIDATE test asserting CANDIDATE holds exactly `:ExamSessionStart, :ExamSessionRead, :ExamSessionSave, :ExamSessionSubmit, :ExamSessionReportEvent, :ExamCertificateIssue, :MyModulesRead` and is denied every other live permission, real output quoted"
+      - "an HTTP-level ExUnit test with two tenants installs the fixture in tenant A only and asserts `GET /api/v1/me/modules` for each role's token in tenant B returns `installed_modules: []`, including when the request carries tenant A's id as a `tenant_id` query parameter and as an `x-tenant-id` header (never another tenant's modules, INV-1)"
+      - "`git grep -n 'authz_get \"/\"' lib/letflow/routers/me.ex` returns no hits (no `GET /api/v1/me` root route added), and `git diff` shows the `:MembershipsRead` grants in `lib/letflow/api/authorization.ex` unchanged"
+      - "SECURITY-REVIEWER signs off both routes against INV-1 before merge"
+      - "`mix letflow.check` passes, real output quoted"
+    depends_on: [REQ-401, REQ-402]
+
+  - id: REQ-404
+    title: "P1: mount each Catalog module's router under /api/v1/modules/<id>/ with a 404 gate for tenants that have not installed it"
+    owner: ELIXIR-DEV
+    status: pending
+    stage: S11
+    impl_order: 793  # letflow-queue task id, GH#1778. Registered 2026-09-24T11:10:15Z by ORCH (WF-01 Step 3).
+    description: >
+      Phase P1. Implements 0039 D4 (`router/0`, mounted under
+      `/api/v1/modules/<id>/...`) and D5's 404 rule ("a module's absence
+      is not information to leak").
+
+      BUILDS: a single `forward("/modules", ...)` in
+      `lib/letflow/plugs/api_pipeline.ex` to a core dispatcher (e.g.
+      `lib/letflow/routers/modules.ex`, `Letflow.Routers.Modules`) that,
+      for a request to `/api/v1/modules/<id>/<rest>`:
+      (1) responds 404 when `<id>` is not a Catalog module id, or is a
+      Catalog module the caller's tenant has no `tenant_modules` row for
+      (checked with the `prefix` from `conn.assigns.scoped_opts`, INV-1),
+      or is a module without `router/0`; this 404 is returned BEFORE any
+      permission check, so an uninstalled module yields 404 for every
+      role, never 403;
+      (2) otherwise dispatches `<rest>` to the module's `router/0` Plug
+      router, whose own `authz_*` routes enforce permissions as today.
+      The dispatcher reaches module routers only through
+      `Letflow.Modules.Catalog` (D3/D4); it names no module.
+
+      The REQ-400 fixture module's one route is the proof. This
+      requirement completes P1's backend "done when": the fixture module
+      installs (REQ-402/403), grants its permission (REQ-401) and is
+      404-gated for a tenant without it (here).
+
+      OUT OF SCOPE: moving exam routes (REQ-410).
+    acceptance_criteria:
+      - "an HTTP-level ExUnit test asserts a request to the fixture module's route under `/api/v1/modules/fixture/` returns 404 for a tenant without the fixture installed, for a token of every role in `Authorization.roles/0` including PLATFORM_ADMIN"
+      - "the same test, after installing the fixture into that tenant, asserts 200 for the role the fixture's `role_grants` names and 403 for a role it does not grant"
+      - "an HTTP-level ExUnit test asserts 404 for `/api/v1/modules/does-not-exist/anything` and that the response body is byte-identical to the uninstalled-module 404 body"
+      - "an HTTP-level ExUnit test with two tenants asserts installing the fixture in tenant A does not make its route reachable (still 404) for tenant B's users"
+      - "`git grep -nP 'Letflow\\.Modules\\.(?!(Catalog|Installs|TenantModule|Module)\\b)[A-Z]' -- lib/letflow/routers/modules.ex lib/letflow/plugs/api_pipeline.ex` returns no hits (only the core mechanism modules are named, never a module), and SECURITY-REVIEWER signs off before merge"
+      - "`mix letflow.check` passes, real output quoted"
+    depends_on: [REQ-401, REQ-402]
+
+  - id: REQ-405
+    title: "P1: mix letflow.check_boundaries (xref-based module boundary check) wired into mix letflow.check"
+    owner: ELIXIR-DEV
+    status: pending
+    stage: S11
+    impl_order: 794  # letflow-queue task id, GH#1779. Registered 2026-09-24T11:10:15Z by ORCH (WF-01 Step 3).
+    description: >
+      Phase P1. Implements 0039 D3's backend check, rule for rule. No new
+      hex dependency (stage hard constraint 3).
+
+      BUILDS `lib/mix/tasks/letflow.check_boundaries.ex`
+      (`mix letflow.check_boundaries`), built on
+      `mix xref graph --format plain` file-level edges. It exits non-zero
+      and prints each offending edge when:
+      (a) a file outside every `lib/letflow/modules/<id>/` directory
+      references a file inside one, EXCEPT
+      `lib/letflow/modules/catalog.ex`, the one sanctioned importer (D3).
+      The mechanism files directly in `lib/letflow/modules/*.ex` (one
+      level, no subdirectory) are core, not a module (D3);
+      (b) a file in `lib/letflow/modules/a/` references a file in
+      `lib/letflow/modules/b/` when `b` is not in module `a`'s manifest
+      `depends_on` (read through `Letflow.Modules.Catalog`).
+      Edge classification is a pure function over the parsed xref output
+      so it can be unit-tested with synthetic edge lists.
+
+      SCOPE OF FILES CHECKED (ambiguity resolved here, flagged for
+      REVIEWER): only edges whose SOURCE file is under `lib/`. Test code
+      under `test/support/` legitimately references module code in order
+      to test it, and `mix letflow.check` runs in the test env where
+      `test/support/` is compiled (`mix.exs` `elixirc_paths(:test)`), so
+      those edges are excluded.
+
+      Add `"letflow.check_boundaries"` to the `"letflow.check"` alias in
+      `mix.exs` after `"compile --warnings-as-errors"` (it needs compiled
+      code), updating any alias-ordering test (e.g. the T-ALIAS-SLOT test
+      referenced in mix.exs) to match. CI already runs
+      `mix letflow.check` (.github/workflows/ci.yml), so no workflow edit
+      is needed.
+
+      Known limit, accepted by D3: xref does not see `apply/3` or
+      string-built module names.
+
+      OUT OF SCOPE: the frontend ESLint rule (REQ-406).
+    acceptance_criteria:
+      - "unit tests feeding synthetic plain-format xref edges assert: a core `lib/letflow/routers/x.ex` -> `lib/letflow/modules/m/y.ex` edge is a violation; a `lib/letflow/modules/catalog.ex` -> `lib/letflow/modules/m/m.ex` edge is not; a `lib/letflow/modules/installs.ex` -> `lib/letflow/modules/catalog.ex` edge is not; a `lib/letflow/modules/a/x.ex` -> `lib/letflow/modules/b/y.ex` edge is a violation when `b` is absent from `a`'s depends_on and not a violation when present; a `test/support/z.ex` -> `lib/letflow/modules/m/y.ex` edge is not a violation"
+      - "`mix letflow.check_boundaries` exits 0 on the branch's tree, real output quoted"
+      - "temporarily adding a core file under `lib/letflow/` that calls a function in a file under a `lib/letflow/modules/<id>/` directory makes `mix letflow.check_boundaries` exit non-zero naming that edge; the probe file is removed before commit and the run output is quoted in the handoff"
+      - "`mix.exs`'s `\"letflow.check\"` alias contains `\"letflow.check_boundaries\"` after `\"compile --warnings-as-errors\"`, and `mix letflow.check` passes, real output quoted"
+      - "`git diff mix.exs mix.lock` adds no dependency"
+    depends_on: [REQ-400]
+
+  - id: REQ-406
+    title: "P1: web/src/modules/types.ts and registry.ts, installed-modules API client, and the ESLint module-boundary rule"
+    owner: FRONTEND-DEV
+    status: pending
+    stage: S11
+    impl_order: 795  # letflow-queue task id, GH#1780. Registered 2026-09-24T11:10:15Z by ORCH (WF-01 Step 3).
+    description: >
+      Phase P1. Implements the frontend half of 0039 D3 and the data side
+      of D5 ("the SPA reads the installed-module list from GET /me"; ORCH
+      decided 2026-09-24 that the route is `GET /api/v1/me/modules`, see
+      REQ-403).
+
+      BUILDS:
+
+      1. `web/src/modules/types.ts` -- the frontend module contract: a
+      module definition carries its `id`, its route objects (in the shape
+      `web/src/router.tsx` uses) and its nav items (in the shape of
+      `web/src/components/layout/AppShell.tsx`'s `NAV_ITEMS` entries,
+      including `roles`).
+
+      2. `web/src/modules/registry.ts` -- the ONE sanctioned importer of
+      module code (D3). It statically lists registered module definitions
+      (empty in P1; exam is added in REQ-412) and exports pure functions
+      that, given the installed-module list, return only the installed
+      modules' routes and nav items. The pure functions take the
+      registered-definitions list as a parameter so tests can pass an
+      inline fixture definition without creating a fixture module
+      directory.
+
+      3. A typed client for REQ-403's `GET /api/v1/me/modules` (e.g.
+      `web/src/api/me.ts`) and a TanStack Query hook (e.g.
+      `web/src/hooks/useInstalledModules.ts`), following the existing
+      `web/src/api/memberships.ts` / `web/src/hooks/useMemberships.ts`
+      conventions including tenant-scoped query keys
+      (`web/src/api/useTenantScopedQueryKeys.ts`).
+
+      4. An ESLint `no-restricted-imports` configuration in
+      `web/.eslintrc.json` (built-in rule; no new npm dependency, stage
+      hard constraint 3) enforcing D3's two frontend rules: (a) no file
+      outside `web/src/modules/<id>/` imports from a
+      `web/src/modules/<id>/` directory (alias `@/modules/<id>/...` or a
+      relative path), except `web/src/modules/registry.ts`; importing
+      `@/modules/types` and `@/modules/registry` stays allowed everywhere;
+      (b) a file in `web/src/modules/a/` may not import from
+      `web/src/modules/b/` unless `b` is in `a`'s declared depends_on
+      (encoded as per-module `overrides`; no module has dependencies yet).
+      `npm run check` already runs lint in CI (.github/workflows/ci.yml
+      "Frontend gate"), so no workflow edit is needed.
+
+      NOT TO BE CONFUSED WITH `web/src/api/modules.ts` and
+      `web/src/pages/admin/modules/ProcessModulesPage.tsx`, which are the
+      PLC process-module catalog; this requirement does not touch them.
+
+      OUT OF SCOPE: wiring the registry into `router.tsx`/`AppShell.tsx`
+      (REQ-407); moving exam screens (REQ-412).
+    acceptance_criteria:
+      - "a Vitest test passes an inline fixture module definition plus an installed list containing its id to the registry functions and asserts its routes and nav items are returned; with an installed list not containing its id, it asserts both results are empty arrays"
+      - "a Vitest test for the `GET /api/v1/me/modules` client/hook with a mocked response asserts the parsed `installed_modules` list, and that its query key is tenant-scoped the same way `useMemberships`'s is"
+      - "from `web/`, `echo \"import x from '@/modules/sample/index'\" | npx eslint --stdin --stdin-filename src/pages/BoundaryProbe.tsx` exits non-zero reporting `no-restricted-imports`, and the same input with `--stdin-filename src/modules/registry.ts` exits 0; both outputs quoted"
+      - "from `web/`, `echo \"import x from '@/modules/b/index'\" | npx eslint --stdin --stdin-filename src/modules/a/index.ts` exits non-zero reporting `no-restricted-imports`, output quoted"
+      - "`git diff web/package.json web/package-lock.json` adds no dependency, and `npm run check` passes in `web/`, real output quoted"
+    depends_on: [REQ-403]
+
+  - id: REQ-407
+    title: "P1: router.tsx and AppShell.tsx build module routes and nav from the installed-module list"
+    owner: FRONTEND-DEV
+    status: pending
+    stage: S11
+    impl_order: 796  # letflow-queue task id, GH#1781. Registered 2026-09-24T11:10:15Z by ORCH (WF-01 Step 3).
+    description: >
+      Phase P1. Implements 0039 D5's last rule: "the SPA reads the
+      installed-module list from GET /me [REQ-403 route:
+      `GET /api/v1/me/modules`] and builds its routes and
+      navigation from it; a module's screens are not reachable at all for
+      a tenant without it."
+
+      BUILDS: `web/src/router.tsx` and
+      `web/src/components/layout/AppShell.tsx` consume
+      `web/src/modules/registry.ts` (REQ-406) plus the installed-modules
+      hook, so that installed modules' routes are added to the router and
+      their nav items are appended to the nav (still filtered by each
+      item's `roles`, same as the existing `NAV_ITEMS`). A module route
+      path requested by a tenant that has not installed that module
+      renders the SPA's existing not-found handling, not the module's
+      screen. While the installed list is loading, module nav items are
+      not rendered and a deep link to a module path waits for the list
+      rather than rendering not-found prematurely (so a CANDIDATE
+      deep-linking to `/exam` after REQ-412 is not bounced).
+
+      No existing route or nav item is removed in P1 -- the registry has
+      no real module until REQ-412. P1's frontend proof uses an inline
+      fixture module definition injected in tests.
+
+      OUT OF SCOPE: moving exam screens or nav items (REQ-412).
+    acceptance_criteria:
+      - "a Vitest/RTL test renders the app shell with a registry holding one inline fixture module and a mocked `GET /api/v1/me/modules` listing it, and asserts the fixture's nav item is visible for a role in its `roles` and absent for a role not in them"
+      - "a Vitest/RTL test with the same registry and a mocked `GET /api/v1/me/modules` returning `installed_modules: []` asserts the fixture nav item is absent and navigating to the fixture route renders the existing not-found content, not the fixture screen"
+      - "a Vitest/RTL test asserts that navigating directly to the fixture route while the `GET /api/v1/me/modules` response is still pending does not render the not-found content, and renders the fixture screen once the mocked response resolves with the fixture installed"
+      - "every pre-existing test under `web/src/__tests__/` and `web/src/components/layout/` passes unchanged, and `npm run check` passes in `web/`, real output quoted"
+    depends_on: [REQ-406]
+
+  - id: REQ-408
+    title: "P2: exam entry module Letflow.Modules.Exam with the six exam permissions and CANDIDATE role_grants; remove them from Letflow.Api.Authorization"
+    owner: ELIXIR-DEV
+    status: pending
+    stage: S11
+    impl_order: 797  # letflow-queue task id, GH#1782. Registered 2026-09-24T11:10:15Z by ORCH (WF-01 Step 3).
+    description: >
+      Phase P2 (extract exam), first step. Requires all of P1 done (see
+      depends_on). Implements 0039 D4 "Applied to exam" and D8 (exam is
+      the first and only module S11 creates).
+
+      BUILDS:
+
+      1. `lib/letflow/modules/exam/exam.ex` -- `Letflow.Modules.Exam`
+      (entry module at `lib/letflow/modules/exam/exam.ex`, never
+      `lib/letflow/modules/exam.ex`, per D3) implementing
+      `Letflow.Modules.Module`. Manifest: `id: "exam"`, `version` equal to
+      the `"version"` in `priv/packs/bilimbaga/pack.json` ("1.0.0" on
+      2026-09-24), `depends_on: []`, `pack: nil` for now (REQ-411 sets
+      it), `permissions:` the six atoms `:ExamSessionStart`,
+      `:ExamSessionRead`, `:ExamSessionSave`, `:ExamSessionSubmit`,
+      `:ExamSessionReportEvent`, `:ExamCertificateIssue`,
+      `role_grants: %{CANDIDATE: [those six]}`, `settings_schema: nil`,
+      and `route_policies` carrying the eight exam route policies now in
+      core, with path patterns relative to the module mount:
+      `{"POST", "/exam-sessions", :ExamSessionStart}`,
+      `{"GET", "/exam-sessions/available", :ExamSessionStart}`,
+      `{"GET", "/exam-sessions/:id", :ExamSessionRead}`,
+      `{"PUT", "/exam-sessions/:id/answers/:question_id", :ExamSessionSave}`,
+      `{"POST", "/exam-sessions/:id/submit", :ExamSessionSubmit}`,
+      `{"POST", "/exam-sessions/:id/events", :ExamSessionReportEvent}`,
+      `{"POST", "/exam-sessions/:id/certificate", :ExamCertificateIssue}`,
+      `{"GET", "/exam-sessions/:id/certificate/download", :ExamCertificateIssue}`.
+      `router/0` returns the existing `Letflow.Routers.ExamSessions`
+      (a module -> core reference, allowed by D3), so REQ-401's
+      enumeration covers the exam routes at
+      `/modules/exam/exam-sessions/...` from this requirement on. The
+      core `forward("/exam-sessions", ...)` stays until REQ-410; while
+      both mounts exist, CODE-DESIGNER keeps the enforcement test covering
+      the transitional core mount by mapping it to the same module
+      policies, not by allowlisting it.
+      Registration APPENDS: `config/config.exs`'s
+      `config :letflow, :modules` becomes `[Letflow.Modules.Exam]`, and
+      `config/test.exs`'s existing list (REQ-402:
+      `[Letflow.Modules.Fixture, Letflow.Modules.FixtureDependent]`)
+      becomes `[Letflow.Modules.Fixture, Letflow.Modules.FixtureDependent,
+      Letflow.Modules.Exam]`, with REQ-400's Catalog list test updated to
+      that list.
+
+      2. In `lib/letflow/api/authorization.ex`, remove those six atoms
+      from CODE: both `@type` unions that list them (lines 257-262 and
+      312-317 on 2026-09-24), `@permissions` (364-369), every
+      `endpoint_policy_key/2` clause for `/exam-sessions` paths
+      (801-835, including `/exam-sessions/:id/certificate/download`),
+      which move to the exam manifest's `route_policies` above and are
+      resolved through REQ-401's Catalog fallback, and the
+      `role_allows?(:CANDIDATE, ...)` clause (1130-1139). That clause is
+      REMOVED, not kept above the Catalog fallback (0039 REVIEWER
+      re-review, R2). Removing it loses nothing: `CANDIDATE` keeps
+      `:MyModulesRead` through REQ-403's role-agnostic
+      `def role_allows?(_role, :MyModulesRead), do: true` clause, and the
+      six exam grants through the exam `role_grants`. `@moduledoc`/`@doc`/`#` comment text is excluded
+      from 0039 measurement 2 but should be updated to say the atoms now
+      come from the exam module.
+
+      3. KEPT in core, per 0039 "Consequences": the `CANDIDATE` role atom
+      in `@roles` and the `@type role` union, and
+      `role_from_string("CANDIDATE")` (authorization.ex:452). Moving the
+      role is a stage open item.
+
+      4. A new ExUnit test (e.g.
+      `test/letflow/modules/s11_measurements_test.exs`) that implements
+      0039 measurement 2: parse `lib/letflow/api/authorization.ex` with
+      `Code.string_to_quoted!/1` (which drops `#` comments), drop every
+      `@moduledoc` and `@doc` attribute node, and assert none of the six
+      atoms occurs anywhere in the remaining AST. REQ-413 re-runs it.
+
+      Behaviour must not change (stage hard constraint 1): the exam
+      routes still live at `/api/v1/exam-sessions` in this requirement,
+      and `CANDIDATE` still holds exactly the same permissions -- the six
+      exam grants, now through the Catalog fallback built in REQ-401, plus
+      the core `:MyModulesRead` added by REQ-403.
+
+      OUT OF SCOPE: moving any file under `lib/letflow/exam/` (REQ-410),
+      the backfill (REQ-409), the `CANDIDATE` role atom itself.
+    acceptance_criteria:
+      - "the measurement-2 ExUnit test described above passes, and a mutation check (temporarily re-adding `:ExamSessionRead` to `@permissions`) makes it fail; the probe is reverted before commit and both runs are quoted"
+      - "`mix test test/letflow/api/authorization_test.exs` passes with the ISS-0646 CANDIDATE test (as updated by REQ-403) asserting CANDIDATE holds exactly the six exam grants, now sourced from the exam module's `role_grants`, plus the core `:MyModulesRead`, and nothing else; and with `Authorization.permissions/0` still containing all six exam atoms as a set, real output quoted"
+      - "`git grep -n \"def role_allows?(:CANDIDATE\" lib/letflow/api/authorization.ex` returns no hits, and `git grep -n 'role_from_string(\"CANDIDATE\")' lib/letflow/api/authorization.ex` returns exactly one hit"
+      - "`git grep -n \"Letflow.Modules.Exam\" config/config.exs config/test.exs` shows it registered in both files, an ExUnit test asserts `Letflow.Modules.Catalog` resolves the id \"exam\" to `Letflow.Modules.Exam`, and REQ-400's manifest-validation test passes for it"
+      - "`mix test test/letflow/routers/exam_sessions_test.exs test/letflow/api/authorization_enforcement_test.exs` passes, real output quoted; the existing CANDIDATE and exam enforcement assertions keep their meaning (every exam route resolves to the same permission atom as before, now via the Catalog) though not necessarily their literal text, and `git diff test/letflow/api/authorization_enforcement_test.exs` adds no exam route to `@allowlist`"
+      - "`git grep -n 'exam-sessions' lib/letflow/api/authorization.ex` shows no `def endpoint_policy_key` line, and an ExUnit test asserts `endpoint_policy_key(\"GET\", \"/modules/exam/exam-sessions/:id/certificate/download\")` returns `:ExamCertificateIssue`"
+      - "`mix letflow.check` passes (including `mix letflow.check_boundaries`), real output quoted"
+    depends_on: [REQ-403, REQ-404, REQ-405, REQ-407]
+
+  - id: REQ-409
+    title: "P2: tenant-scoped migration backfilling a tenant_modules exam row for every tenant with a bilimbaga-question-bank pack install"
+    owner: ELIXIR-DEV
+    status: pending
+    stage: S11
+    impl_order: 798  # letflow-queue task id, GH#1783. Registered 2026-09-24T11:10:15Z by ORCH (WF-01 Step 3).
+    description: >
+      Phase P2. Implements 0039 "Consequences", "Existing tenants keep
+      working" (REVIEWER R3). Must merge BEFORE REQ-410 puts the exam
+      routes behind D5's 404 gate, or tenants that already run BilimBaga
+      are cut off (stage hard constraint 1).
+
+      BUILDS: a tenant-scoped migration under `priv/repo/migrations/`,
+      using the mandatory `if prefix() do` guard in the same shape as
+      `priv/repo/migrations/20260923010002_create_user_entity_type_grants.exs`,
+      added to `Letflow.TenantProvisioning.tenant_scoped_migrations/0`
+      after REQ-402's `tenant_modules` migration. For the tenant whose
+      schema is `prefix()`, it inserts one `tenant_modules` row
+      (`module_id: "exam"`, `version:` the exam manifest version from
+      REQ-408, `installed_at:` now, `settings: {}`) if and only if the
+      GLOBAL `solution_pack_installs` table
+      (lib/letflow/definitions/solution_pack_install.ex) has a row with
+      that tenant's `tenant_id` and `pack_id = 'bilimbaga-question-bank'`
+      -- the exact id at `priv/packs/bilimbaga/pack.json:742`. The tenant
+      id is derived from the schema name the way the codebase already
+      does (the `"tenant_" <> 32-hex` shape and
+      `tenant_id_for_schema_name/1`), never from an argument. The insert
+      is idempotent (`ON CONFLICT (module_id) DO NOTHING`). No
+      `on_install/2` runs: the pack and its field restrictions are already
+      installed in those tenants.
+
+      No new table, so `@expected_tenant_tables` does not change; pick a
+      version colliding with no migration file or test fixture constant
+      (docs/anti-patterns.md).
+
+      OUT OF SCOPE: tenants that install the bilimbaga pack through
+      `POST /api/v1/solution-packs/install` AFTER this migration has run
+      -- REQ-411 makes that route refuse the exam pack with 409
+      `module_owned_pack`, so such tenants cannot arise; module
+      uninstall.
+    acceptance_criteria:
+      - "an ExUnit test provisions tenant A, inserts a `solution_pack_installs` row with A's tenant_id and `pack_id` \"bilimbaga-question-bank\", runs the migration against A's schema, and asserts exactly one `tenant_modules` row with module_id \"exam\" and the exam manifest version"
+      - "the same test provisions tenant B with no such row (and tenant C with a `solution_pack_installs` row for a different pack_id), runs the migration against both, and asserts both have zero `tenant_modules` rows"
+      - "running the migration a second time against tenant A leaves exactly one exam row, proven by the same test"
+      - "`git grep -n \"bilimbaga-question-bank\" priv/repo/migrations/` shows the migration uses that exact literal, and the migration file contains `if prefix() do`"
+      - "SECURITY-REVIEWER signs off before merge (a migration writing tenant data), and `mix letflow.check` passes, real output quoted"
+    depends_on: [REQ-408]
+
+  - id: REQ-410
+    title: "P2: move lib/letflow/exam/ and Letflow.Routers.ExamSessions into lib/letflow/modules/exam/, served at /api/v1/modules/exam/exam-sessions"
+    owner: ELIXIR-DEV
+    status: pending
+    stage: S11
+    impl_order: 799  # letflow-queue task id, GH#1784. Registered 2026-09-24T11:10:15Z by ORCH (WF-01 Step 3).
+    description: >
+      Phase P2. Implements 0039 D1 (module code lives in
+      `lib/letflow/modules/<id>/`), D4 (`router/0`), D5 (404 gate) and
+      the 0022 amendment (bucket C lands in `lib/letflow/modules/exam/`).
+      A mechanical rename plus seam replacement ("Consequences").
+
+      MOVES (with `git mv`, so history follows):
+      - `lib/letflow/exam/*.ex` (anti_cheat, certificate,
+      certificate_document, certificate_public_projection,
+      question_set_resolver, scoring, session) ->
+      `lib/letflow/modules/exam/`, namespace `Letflow.Exam.*` ->
+      `Letflow.Modules.Exam.*`.
+      - `lib/letflow/routers/exam_sessions.ex` (`Letflow.Routers.ExamSessions`)
+      -> `lib/letflow/modules/exam/` as the router `Letflow.Modules.Exam`'s
+      `router/0` returns. URL NAMING (resolved here, flagged): the router
+      keeps its existing internal paths under an `exam-sessions`
+      segment, so `/api/v1/exam-sessions/<rest>` becomes
+      `/api/v1/modules/exam/exam-sessions/<rest>` -- the smallest
+      mechanical change, and one a single grep can verify.
+      - `test/letflow/exam/*_test.exs` -> `test/letflow/modules/exam/`,
+      `test/letflow/routers/exam_sessions_test.exs` ->
+      `test/letflow/modules/exam/`.
+
+      SEAMS: delete `forward("/exam-sessions", ...)` from
+      `lib/letflow/plugs/api_pipeline.ex` (REQ-404's `/modules` dispatcher
+      now serves exam), and remove REQ-408's transitional core-mount
+      coverage from `test/letflow/api/authorization_enforcement_test.exs`.
+      The exam manifest's `route_policies` (REQ-408) are unchanged: their
+      patterns are relative to the module mount, so every exam route
+      resolves at `/modules/exam/exam-sessions/...` through REQ-401's
+      Catalog fallback. `router/0` now returns the moved router module. `lib/letflow/exam/certificate.ex:202`'s alias of
+      `Letflow.Routers.TenantConfig` is an allowed module -> core edge
+      (D3), not a seam. `lib/letflow/packs/bilimbaga.ex` and the
+      `Letflow.Packs.Bilimbaga` call in `solution_pack.ex` stay in this
+      requirement (core -> core); REQ-411 moves them.
+
+      LIVE CALLERS UPDATED to the new URL and namespace in this
+      requirement (backend side of the 0039 "Consequences" list):
+      `test/` (at least `test/letflow/api/authorization_enforcement_test.exs`,
+      `test/letflow/routers/entities_answer_key_field_leak_test.exs`,
+      `test/letflow/simulation/req207_vortex_test.exs`,
+      `test/support/exam_fixtures.ex`,
+      `test/mix/tasks/letflow.seed.exam_fixtures_test.exs`,
+      `test/specs/REQ-345.md`), `test/fixtures/uat/` (at least
+      `test/fixtures/uat/scenarios/bilimbaga/candidate-timed-exam-autograde.yaml`),
+      and `lib/mix/tasks/letflow.seed.exam_fixtures.ex` (which dispatches
+      through `Letflow.Router.call/2` by URL and must also ensure its
+      tenant has the exam module installed). Doc-comment and moduledoc
+      mentions of the old module names in core `.ex` files (e.g.
+      `lib/letflow/routers/tenant_config.ex:290`,
+      `lib/letflow/routers/help.ex`, `lib/letflow/plugs/api_pipeline.ex`)
+      are updated to the new names, so the grep criterion below is not
+      tripped by prose (docs/anti-patterns.md, grep-shaped criteria).
+      Test fixtures that set up an
+      exam tenant (`test/support/exam_fixtures.ex`) install the exam
+      module (a `tenant_modules` row) so the 404 gate admits them.
+      Historical records (`test/uat-reports/`, `test/reports/`,
+      `lib/letflow/design/`) are left as written. `web/` callers are
+      REQ-412; agent docs are REQ-413.
+
+      The SPA calls the old URL until REQ-412 merges; CI does not run
+      Playwright, so ORCH should schedule REQ-412 in the same WF-02 run
+      as this requirement to keep the gap short.
+    acceptance_criteria:
+      - "`test ! -e lib/letflow/exam && test ! -e lib/letflow/routers/exam_sessions.ex && echo GONE` prints GONE, and `git grep -n \"Letflow\\.Exam\\.\\|Letflow\\.Routers\\.ExamSessions\" -- 'lib/**/*.ex' 'test/**/*.ex' 'test/**/*.exs'` returns no hits"
+      - "`git grep -nP '(?<!/modules/exam)/exam-sessions' -- test lib/mix/tasks/letflow.seed.exam_fixtures.ex ':!test/uat-reports' ':!test/reports'` returns no hits"
+      - "an HTTP-level ExUnit test asserts `POST /api/v1/modules/exam/exam-sessions` returns 404 for a tenant without an exam `tenant_modules` row for every role, and the moved exam-session tests pass against a tenant with the row, real output quoted"
+      - "an HTTP-level ExUnit test asserts `POST /api/v1/exam-sessions` now returns 404"
+      - "`mix test test/letflow/api/authorization_enforcement_test.exs` passes with every exam route enumerated under `/modules/exam/exam-sessions/...` and no transitional `/exam-sessions` core-mount entry left, real output quoted"
+      - "every moved test file passes with the same test count it had before the move (counts quoted from `mix test <file>` before and after)"
+      - "`mix letflow.check_boundaries` exits 0 and `mix letflow.check` passes, real output quoted; SECURITY-REVIEWER signs off before merge (tenant-data routes moved behind a new gate)"
+    depends_on: [REQ-409]
+
+  - id: REQ-411
+    title: "P2: Letflow.Packs.Bilimbaga becomes Letflow.Modules.Exam.on_install/2; priv/packs/bilimbaga/ moves to priv/modules/exam/"
+    owner: ELIXIR-DEV
+    status: pending
+    stage: S11
+    impl_order: 800  # letflow-queue task id, GH#1785. Registered 2026-09-24T11:10:15Z by ORCH (WF-01 Step 3).
+    description: >
+      Phase P2. Implements 0039 D4 ("the pack installer calls
+      `on_install/2` rather than `Letflow.Packs.Bilimbaga`") and D1
+      (`priv/modules/<id>/`).
+
+      MOVES AND SEAMS:
+      - `priv/packs/bilimbaga/` (pack.json, entity_definitions/,
+      generate_pack.exs, README.md) -> `priv/modules/exam/` with
+      `git mv`; the exam manifest's `pack` points at
+      `priv/modules/exam/pack.json`. The pack's `pack_id` stays
+      `"bilimbaga-question-bank"` (REQ-409 and
+      `solution_pack_installs` rows depend on it).
+      - `lib/letflow/packs/bilimbaga.ex`'s answer-key field-restriction
+      seeding becomes `Letflow.Modules.Exam.on_install/2` (or a module
+      file it calls under `lib/letflow/modules/exam/`), run by
+      `Letflow.Modules.Installs.install/3` inside the install transaction
+      after the pack is installed (D5). Delete
+      `lib/letflow/packs/bilimbaga.ex`.
+      - In `lib/letflow/definitions/solution_pack.ex`, remove
+      `alias Letflow.Packs.Bilimbaga` (line 184) and
+      `seed_pack_specific_field_restrictions/2` (1627-1643) and its call
+      (1377), leaving `install/3` fully generic. Comment and doc mentions
+      of `Letflow.Packs.Bilimbaga` in that file (e.g. line 453, and the
+      ISS-0647 comment block above the removed function) are removed or
+      reworded to point at the exam module's `on_install/2`.
+      - Update readers of the old path: `test/letflow/packs/*_test.exs`
+      (move to `test/letflow/modules/exam/`),
+      `test/letflow/definitions/solution_pack_bilimbaga_field_restrictions_test.exs`
+      (rewrite to assert the restrictions via module install), and the
+      path mentions in `lib/letflow/modules/exam/*.ex`,
+      `lib/mix/tasks/letflow.seed.exam_fixtures.ex` and the three
+      `web/src/components/entities/__tests__/EntityRecordForm.*.test.tsx`
+      doc comments (text only).
+
+      MODULE-OWNED PACK REFUSAL (decided by ORCH 2026-09-24, replacing
+      this requirement's earlier open question): after this change,
+      installing the exam pack document directly would skip `on_install/2`
+      (no answer-key field restrictions) and write no `tenant_modules`
+      row. So `POST /api/v1/solution-packs/install`
+      (`lib/letflow/routers/solution_packs.ex`) refuses, with HTTP 409 and
+      error code `module_owned_pack`, any pack document whose `pack_id`
+      equals the `pack_id` of the pack file named as `pack` by a module
+      registered in `Letflow.Modules.Catalog`. The check runs before any
+      write. Module-owned packs install only through module install
+      (`POST /api/v1/tenant/modules`) or solution install (REQ-415). The
+      refusal sits at the HTTP route, not inside
+      `Letflow.Definitions.SolutionPack.install/3`, because
+      `Letflow.Modules.Installs.install/3` calls `install/3` directly for
+      the same pack. The route learns module pack ids only through
+      `Letflow.Modules.Catalog` (0039 D3/D4).
+
+      OUT OF SCOPE: frontend (REQ-412); solution manifests (REQ-415).
+    acceptance_criteria:
+      - "`test ! -e lib/letflow/packs/bilimbaga.ex && test ! -e priv/packs/bilimbaga && test -f priv/modules/exam/pack.json && echo OK` prints OK, and `git grep -n \"Bilimbaga\\|seed_pack_specific_field_restrictions\" lib/letflow/definitions/solution_pack.ex` returns no hits"
+      - "an ExUnit test installs the exam module into a fresh tenant with `Letflow.Modules.Installs.install(\"exam\", actor_id, prefix: p)` and asserts the pack's entity definitions exist and the answer-key `entity_field_restrictions` rows that `Letflow.Packs.Bilimbaga.answer_key_fields/0` used to declare exist in that tenant's schema"
+      - "`test/letflow/routers/entities_answer_key_field_leak_test.exs` passes against a tenant set up through module install, real output quoted"
+      - "`grep -n '\"pack_id\"' priv/modules/exam/pack.json` shows `\"bilimbaga-question-bank\"`"
+      - "an HTTP-level ExUnit test posts the contents of `priv/modules/exam/pack.json` to `POST /api/v1/solution-packs/install` as PLATFORM_ADMIN and asserts HTTP 409 with error code `module_owned_pack`, and that afterwards the tenant has no `solution_pack_installs` row for `bilimbaga-question-bank`, no exam entity definitions and no exam `tenant_modules` row"
+      - "an HTTP-level ExUnit test asserts a pack document whose `pack_id` no Catalog module owns still installs through `POST /api/v1/solution-packs/install` with the same success status it returns on main today"
+      - "the module-install ExUnit test above (`Letflow.Modules.Installs.install(\"exam\", ...)`) succeeds for the same pack, proving the refusal does not block module install; SECURITY-REVIEWER signs off before merge"
+      - "`mix letflow.check` passes (including `mix letflow.check_boundaries`), real output quoted"
+    depends_on: [REQ-410]
+
+  - id: REQ-412
+    title: "P2: move exam screens into web/src/modules/exam/, register exam in registry.ts, and point web callers at /api/v1/modules/exam/exam-sessions"
+    owner: FRONTEND-DEV
+    status: pending
+    stage: S11
+    impl_order: 801  # letflow-queue task id, GH#1786. Registered 2026-09-24T11:10:15Z by ORCH (WF-01 Step 3).
+    description: >
+      Phase P2. Implements 0039 D1/D3 for the frontend, D5 (exam screens
+      reachable only for tenants with exam installed) and the web half of
+      "Consequences"' live-caller list.
+
+      MOVES (with `git mv`) into `web/src/modules/exam/`:
+      `web/src/pages/exam/` (ExamListPage, ExamResultView,
+      ExamSessionPage, ExamSessionResultPage, __tests__),
+      `web/src/pages/admin/bilimbaga/` (BilimBagaAdminPage,
+      BilimBagaEntityRoute, __tests__), `web/src/api/exam.ts` and
+      `web/src/api/__tests__/exam.test.ts`, `web/src/types/exam.ts`, and
+      `web/src/i18n/examMessages.ts`. A file outside
+      `web/src/modules/exam/` that still needs one of these is a boundary
+      violation to resolve (move it, or move the shared part to core),
+      not an ESLint exception.
+
+      REGISTRATION: `web/src/modules/exam/index.ts` exports the exam module
+      definition (REQ-406's `types.ts` shape) with the five routes now in
+      `web/src/router.tsx` lines 89-112 (`admin/bilimbaga`,
+      `admin/bilimbaga/:entityType`, `exam`, `exam/:examId/session`,
+      `exam/sessions/:sessionId/result` -- SPA paths unchanged) and the two
+      nav items now in `AppShell.tsx` (`/exam` for `CANDIDATE`, line 23;
+      `/admin/bilimbaga` for `PLATFORM_ADMIN`/`PROCESS_OPERATOR`, line 58).
+      `web/src/modules/registry.ts` registers it; the routes, imports and
+      nav items are removed from `router.tsx` and `AppShell.tsx`.
+
+      URL: every call to `/api/v1/exam-sessions...` in the moved code and
+      in `web/tests/e2e/` (at least `employee-portal.e2e.spec.ts`,
+      `exam-result-by-id.e2e.spec.ts`, `exam-result.e2e.spec.ts`,
+      `exam-taking.e2e.spec.ts`,
+      `pipelines/bilimbaga-candidate-timed-exam.pipeline.e2e.spec.ts`)
+      becomes `/api/v1/modules/exam/exam-sessions...` (REQ-410's naming).
+
+      OUT OF SCOPE: backend (REQ-410/411); agent docs (REQ-413).
+    acceptance_criteria:
+      - "`test ! -e web/src/pages/exam && test ! -e web/src/pages/admin/bilimbaga && test ! -e web/src/api/exam.ts && echo GONE` prints GONE"
+      - "`git grep -nE \"pages/exam|pages/admin/bilimbaga|@/api/exam|@/types/exam|i18n/examMessages\" -- web/src ':!web/src/modules/exam'` returns no hits, and `git grep -n \"'/exam'\\|admin/bilimbaga\" web/src/router.tsx web/src/components/layout/AppShell.tsx` returns no hits"
+      - "`git grep -nP '(?<!/modules/exam)/exam-sessions' -- web/src web/tests/e2e` returns no hits"
+      - "a Vitest/RTL test asserts that with a mocked `GET /api/v1/me/modules` listing exam, a CANDIDATE sees the `/exam` nav item and a PROCESS_OPERATOR sees `/admin/bilimbaga`; with `installed_modules: []`, neither nav item renders and navigating to `/exam` renders the not-found content"
+      - "every moved Vitest test passes with the same test count it had before the move, and `npm run check` passes in `web/` (lint includes REQ-406's boundary rule), real output quoted"
+    depends_on: [REQ-410]
+
+  - id: REQ-413
+    title: "P2 close-out: update remaining /exam-sessions agent-doc callers, record the exam module inventory, and verify 0039's three measurements plus the full suites"
+    owner: ELIXIR-DEV
+    status: pending
+    stage: S11
+    impl_order: 802  # letflow-queue task id, GH#1787. Registered 2026-09-24T11:10:15Z by ORCH (WF-01 Step 3).
+    description: >
+      Phase P2, final requirement. Proves the P2 "done when" in
+      docs/migration/stage-11-modular-platform.md: all three measurements
+      in 0039 "Consequences" hold, and the full backend suite and the S10
+      Playwright specs are green.
+
+      UPDATES:
+      - The agent docs 0039 "Consequences" names as live callers of the
+      old URL: `.claude/agents/ba-analyst.md`,
+      `.claude/agents/product-owner.md`,
+      `docs/agents/ba-personas/bilimbaga.yaml` -> new URL
+      `/api/v1/modules/exam/exam-sessions`. Historical records
+      (`test/uat-reports/`, `test/reports/`, `lib/letflow/design/`,
+      `docs/issues/`, `docs/status/`, `handoffs/`) are left as written.
+      - The stage file's "Module inventory" table: the `exam` row gets the
+      real line count of `lib/letflow/modules/exam/` and the measurement
+      date.
+
+      VERIFIES, running each and quoting real output:
+      1. 0039 measurement 1: `mix letflow.check_boundaries` passes (and CI
+      runs it through `mix letflow.check`).
+      2. 0039 measurement 2: REQ-408's AST test proves
+      `lib/letflow/api/authorization.ex` contains none of the six exam
+      permission atoms in code (typespecs, `@permissions`, function
+      clauses), with `@moduledoc`/`@doc`/`#` comment text excluded. The
+      only exam-specific item left in core is the `CANDIDATE` role atom in
+      `@roles` and `@type role` and `role_from_string("CANDIDATE")`.
+      3. 0039 measurement 3: `lib/letflow/exam/`,
+      `lib/letflow/packs/bilimbaga.ex`,
+      `lib/letflow/routers/exam_sessions.ex` and `web/src/pages/exam/` do
+      not exist.
+      Plus: the full backend suite, the frontend gate, and the S10
+      Playwright exam specs against a running local stack
+      (`docker compose` per README, seeded with
+      `mix letflow.seed.exam_fixtures`).
+
+      If any check fails, this requirement files the defect against the
+      responsible earlier S11 requirement rather than patching around it.
+    acceptance_criteria:
+      - "`git grep -nP '(?<!/modules/exam)/exam-sessions' -- web/src web/tests/e2e test lib/mix/tasks/letflow.seed.exam_fixtures.ex .claude/agents/ba-analyst.md .claude/agents/product-owner.md docs/agents/ba-personas/bilimbaga.yaml ':!test/uat-reports' ':!test/reports'` returns no hits (on 2026-09-24 the same command listed 22 files)"
+      - "0039 measurement 1: `mix letflow.check_boundaries` exits 0, real output quoted"
+      - "0039 measurement 2: `mix test test/letflow/modules/s11_measurements_test.exs` (REQ-408's AST test over `lib/letflow/api/authorization.ex` with moduledoc/doc/comments excluded) passes, and `git grep -c 'role_from_string(\"CANDIDATE\")' lib/letflow/api/authorization.ex` prints 1, real output quoted"
+      - "0039 measurement 3: `for p in lib/letflow/exam lib/letflow/packs/bilimbaga.ex lib/letflow/routers/exam_sessions.ex web/src/pages/exam; do test ! -e \"$p\" || echo \"STILL EXISTS: $p\"; done` prints nothing"
+      - "`mix letflow.check` passes and `npm run check` passes in `web/`, real output quoted"
+      - "from `web/`, `npx playwright test tests/e2e/exam-taking.e2e.spec.ts tests/e2e/exam-result.e2e.spec.ts tests/e2e/exam-result-by-id.e2e.spec.ts tests/e2e/exam-lifecycle.e2e.spec.ts tests/e2e/question-bank.e2e.spec.ts tests/e2e/employee-portal.e2e.spec.ts` passes against a running local stack, real output quoted"
+      - "`docs/migration/stage-11-modular-platform.md`'s Module inventory `exam` row shows a line count equal to `cat lib/letflow/modules/exam/*.ex | wc -l` on the merged tree, with the measurement date"
+    depends_on: [REQ-411, REQ-412]
+
+  - id: REQ-414
+    title: "P3: module settings write route validated against the module's declared settings_schema, gated by :ModulesManage"
+    owner: ELIXIR-DEV
+    status: pending
+    stage: S11
+    impl_order: 803  # letflow-queue task id, GH#1788. Registered 2026-09-24T11:10:15Z by ORCH (WF-01 Step 3).
+    description: >
+      Phase P3 (solutions), first step. Requires P2 done (see
+      depends_on). Implements 0039 D7: a tenant configures a module only
+      by setting values the module declared in `settings_schema`,
+      validated on write, never by editing the module's own definitions.
+
+      BUILDS:
+      1. `Letflow.Modules.Installs` gains a settings write (e.g.
+      `put_settings(module_id, settings, opts)`) that validates `settings`
+      against the module manifest's `settings_schema` and replaces
+      `tenant_modules.settings` for that module in the tenant named by
+      `opts[:prefix]` only (INV-1). A module whose `settings_schema` is
+      `nil` accepts only an empty map. Validation reuses an existing
+      JSON-Schema-shaped validator in `lib/letflow/definitions/` (e.g.
+      `lib/letflow/definitions/json_schema_shape.ex`) if one validates
+      values against a schema; otherwise CODE-DESIGNER specifies a
+      minimal validator. No new hex dependency.
+      2. `PUT /api/v1/tenant/modules/:module_id/settings` in REQ-403's
+      router, gated by `:ModulesManage` (D5), prefix from
+      `conn.assigns.scoped_opts`, returning 200 with the stored settings,
+      422 with field errors on validation failure, 404 when the module is
+      not installed in the caller's tenant.
+      3. The REQ-400 fixture module's `settings_schema`, which forbids
+      keys it does not declare, is the test subject; the validator must
+      reject extra keys when a schema forbids them.
+
+      OUT OF SCOPE: tenant extension points / client scripts (0039 D7;
+      stage open item); editing module definitions; any settings UI.
+    acceptance_criteria:
+      - "an HTTP-level ExUnit test asserts `PUT /api/v1/tenant/modules/fixture/settings` with a body valid against the fixture's `settings_schema` returns 200 for PLATFORM_ADMIN and `Letflow.Modules.Installs.list_installed/1` then shows those settings"
+      - "an HTTP-level ExUnit test asserts a body with a wrong type for a declared key returns 422 and leaves the stored settings unchanged"
+      - "an HTTP-level ExUnit test asserts a body carrying a key the fixture's `settings_schema` does not declare returns 422 and leaves the stored settings unchanged (the REQ-400 fixture schema forbids extra keys)"
+      - "HTTP-level ExUnit tests assert 403 for each of the other five roles, and 404 when the fixture is not installed in the caller's tenant"
+      - "an HTTP-level ExUnit test with two tenants asserts a settings write by tenant A's PLATFORM_ADMIN changes only tenant A's row, even when the body carries tenant B's id under `tenant_id`"
+      - "an ExUnit test asserts a module with `settings_schema: nil` (exam) accepts `%{}` and rejects a non-empty map"
+      - "SECURITY-REVIEWER signs off before merge (stage hard constraint 2), `git diff mix.exs mix.lock` adds no dependency, and `mix letflow.check` passes, real output quoted"
+    depends_on: [REQ-413]
+
+  - id: REQ-415
+    title: "P3: priv/solutions/<id>.json format, solution install in dependency order with default settings, priv/solutions/bilimbaga.json, and POST /api/v1/tenant/solutions"
+    owner: ELIXIR-DEV
+    status: pending
+    stage: S11
+    impl_order: 804  # letflow-queue task id, GH#1789. Registered 2026-09-24T11:10:15Z by ORCH (WF-01 Step 3).
+    description: >
+      Phase P3. Implements 0039 D1 (a solution is a manifest carrying no
+      content of its own) and D6 (installing a solution is installing its
+      modules in dependency order, then writing default settings; nothing
+      is stored about the solution itself afterwards).
+
+      BUILDS:
+      1. The `priv/solutions/<id>.json` format: `{"id", "modules": [{
+      "module_id", "version", "settings"}]}`. Loading validates that every
+      `module_id` is a Catalog module, every `version` equals that
+      module's manifest version, and every module's `depends_on` is
+      satisfied by the solution's own list or by modules already
+      installed in the tenant.
+      2. A solution-install function in the core mechanism layer (e.g.
+      `lib/letflow/modules/solutions.ex`, `Letflow.Modules.Solutions` --
+      a fifth file directly in `lib/letflow/modules/`, which D3 classes as
+      core; flagged so REVIEWER confirms) that, in ONE transaction,
+      installs each module through `Letflow.Modules.Installs.install/3` in
+      dependency (topological) order, then writes each module's default
+      `settings` through REQ-414's validated settings write. Any failure
+      rolls back everything. AMBIGUITY RESOLVED HERE, flagged: if any
+      listed module is already installed in the tenant, the whole solution
+      install is refused (409) rather than skipping it or overwriting its
+      settings, because D7 forbids silently replacing tenant configuration.
+      3. `priv/solutions/bilimbaga.json` = `[exam]` at the exam manifest
+      version, default settings `{}`.
+      4. `POST /api/v1/tenant/solutions` with `{"solution_id": "<id>"}`,
+      gated by `:ModulesManage` (D5), prefix from `conn.assigns.scoped_opts`
+      (INV-1). `solution_id` must match `^[a-z0-9_-]+$` and name an existing
+      file in `priv/solutions/`; anything else is 404 (no path traversal).
+      Response 201 listing installed modules.
+
+      No solution row or table is created (D6). Tests use a second
+      test-only solution file (e.g. under `test/support/solutions/`) over
+      the REQ-400/REQ-402 fixture modules to prove dependency ordering.
+
+      OUT OF SCOPE: uninstall; module upgrades (stage open items); the
+      fresh-tenant end-to-end proof (REQ-416).
+    acceptance_criteria:
+      - "an ExUnit test installs a test-only solution listing a dependent fixture module BEFORE the fixture it depends on, and asserts both are installed and the dependency's `installed_at` is not later than the dependent's (dependency order honoured)"
+      - "an ExUnit test asserts that when the second module's install fails, neither module has a `tenant_modules` row afterwards (single transaction)"
+      - "ExUnit tests assert loading rejects a solution naming an unknown module_id and one whose version differs from the manifest version"
+      - "HTTP-level ExUnit tests assert `POST /api/v1/tenant/solutions` returns 201 for PLATFORM_ADMIN with `{\"solution_id\": \"bilimbaga\"}`, 403 for each of the other five roles, 409 when exam is already installed, and 404 for `solution_id` values `\"../config\"`, `\"BILIMBAGA\"` and `\"nope\"`"
+      - "an HTTP-level ExUnit test with two tenants asserts a solution install by tenant A's PLATFORM_ADMIN writes `tenant_modules` rows only in tenant A's schema"
+      - "`git diff --name-only --diff-filter=A origin/main...HEAD -- priv/repo/migrations` prints nothing on this requirement's branch (no solution table, D6), and an ExUnit test asserts `priv/solutions/bilimbaga.json` parses and lists exactly one module, exam, at the exam manifest version"
+      - "SECURITY-REVIEWER signs off before merge, and `mix letflow.check` passes, real output quoted"
+    depends_on: [REQ-414]
+
+  - id: REQ-416
+    title: "P3 close-out: install the bilimbaga solution into a fresh tenant and verify a working exam tenant end-to-end"
+    owner: ELIXIR-DEV
+    status: pending
+    stage: S11
+    impl_order: 805  # letflow-queue task id, GH#1790. Registered 2026-09-24T11:10:15Z by ORCH (WF-01 Step 3).
+    description: >
+      Phase P3, final requirement. Proves the P3 "done when" in
+      docs/migration/stage-11-modular-platform.md: "Installing the
+      bilimbaga solution into a fresh tenant yields a working exam
+      tenant, verified end-to-end" (0039 D6).
+
+      BUILDS one HTTP-level ExUnit integration test (e.g.
+      `test/letflow/modules/bilimbaga_solution_e2e_test.exs`) that uses
+      only real routes through `Letflow.Router` and a real database, no
+      mocks:
+      1. provision a brand-new tenant through the real provisioning path;
+      2. as its PLATFORM_ADMIN, `POST /api/v1/tenant/solutions` with
+      `{"solution_id": "bilimbaga"}`;
+      3. assert `GET /api/v1/me/modules` lists exam, the exam pack's entity
+      definitions are present, and the answer-key field restrictions from
+      exam's `on_install/2` are present;
+      4. seed a question category, questions and one active exam through
+      the same record APIs `test/support/exam_fixtures.ex` uses (never
+      direct SQL);
+      5. as a `CANDIDATE` user of that tenant, run the whole candidate
+      path through `/api/v1/modules/exam/exam-sessions`: list available,
+      start, save an answer, submit, read the scored session, issue the
+      certificate;
+      6. assert answer-key redaction the way
+      `test/letflow/routers/entities_answer_key_field_leak_test.exs`
+      does: with a token carrying only `TASK_WORKER` in that tenant,
+      `POST /api/v1/entities/query` for the seeded question's answer
+      options returns the answer-key fields (`is_correct`,
+      `likert_weight`, `likert_polarity`, `explanation`) redacted, which
+      proves exam's `on_install/2` seeded the restrictions;
+      7. for a second fresh tenant WITHOUT the solution, assert the same
+      exam-session URLs return 404 for every role.
+
+      It then updates `docs/migration/stage-11-modular-platform.md`'s
+      Status line to record that P1-P3's requirements are filed and this
+      proof exists (status flips themselves stay with DOC-UPDATER).
+    acceptance_criteria:
+      - "`mix test test/letflow/modules/bilimbaga_solution_e2e_test.exs` passes, and the test performs steps 1-7 above in order, each step's assertion on the real HTTP status and body; real output quoted"
+      - "step 5 asserts HTTP 201/200 for start, save, submit and certificate issue, and a submitted session whose score fields match the seeded answer (a fully correct answer set yields `passed: true`)"
+      - "step 6 asserts that a TASK_WORKER-only token's `POST /api/v1/entities/query` response for the seeded answer options carries `is_correct`, `likert_weight`, `likert_polarity` and `explanation` redacted, using the same redaction assertion as `test/letflow/routers/entities_answer_key_field_leak_test.exs`"
+      - "step 7 asserts 404 for `POST /api/v1/modules/exam/exam-sessions` in the tenant without the solution for a token of every role in `Authorization.roles/0`"
+      - "`git grep -nE \"Repo\\.(insert_all|query)|Ecto\\.Adapters\\.SQL\\.query\" test/letflow/modules/bilimbaga_solution_e2e_test.exs` returns no hits (no direct SQL seeding)"
+      - "`mix letflow.check` passes and `npm run check` passes in `web/`, real output quoted"
+    depends_on: [REQ-415]

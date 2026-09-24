@@ -1,0 +1,171 @@
+{
+  "handoff_id": "WF03-ISS0765-20260924-step-03c",
+  "run_id": "WF03-ISS0765-20260924",
+  "workflow_id": "WF-03",
+  "step": "Step 3c",
+  "to_agent": "ORCH",
+  "from_agent": "SECURITY-REVIEWER",
+  "status": "COMPLETED",
+  "created_at": "2026-09-24T17:24:34Z",
+  "started_at": "2026-09-24T17:24:34Z",
+  "completed_at": "2026-09-24T17:31:00Z",
+  "context": {
+    "branch_name": "feature/WF03-ISS0765-20260924",
+    "issue_id": "ISS-0765",
+    "queue_ref": "Q-810",
+    "github_ref": "GH-1798",
+    "gated_commit": "bcddcebf652c23d46d5161584ef0f3443adb9025",
+    "handoff_gated": "handoffs/WF03-ISS0765-20260924/step-03-frontend-dev.json (317fcc75)",
+    "gated_against": "docs/agents/instructions/security-invariants.md INV-1..INV-9",
+    "artifacts_in": [
+      "docs/agents/instructions/security-invariants.md",
+      "docs/agents/instructions/core-directives.md",
+      "lib/letflow/design/iss-0765-groupsapi-route-prefix-audit.md",
+      "handoffs/WF03-ISS0765-20260924/step-03-frontend-dev.json",
+      "web/src/api/identity.ts",
+      "web/src/types/api.ts",
+      "web/src/pages/admin/GroupsPage.tsx",
+      "lib/letflow/routers/identity.ex",
+      "lib/letflow/api/authorized_router.ex",
+      "lib/letflow/plugs/api_pipeline.ex",
+      "lib/letflow/identity.ex",
+      "docs/issues/ISS-0812.yaml",
+      "docs/issues/ISS-0814.yaml"
+    ]
+  },
+  "task": {
+    "description": "WF-03 Step 3c -- gate implementation commit bcddcebf against INV-1..INV-8 (INV-9 also assessed). Frontend-only diff, but in scope because it changes which authorization-gated routes the admin client calls.",
+    "acceptance_criteria": [
+      "Scope test run explicitly, not assumed",
+      "Every INV assessed APPLIES / NOT-APPLICABLE against the actual diff, with PASS/FAIL for each APPLIES",
+      "The four named directed checks (route authorization, .members retype, .addMember body narrowing, .get/.update deletion) each independently re-derived from backend source",
+      "No secret/token/credential introduced; nothing newly logged",
+      "Handoff written, committed and pushed; no file modified outside handoffs/"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "verdict": "PASS",
+    "summary": {
+      "one_line": "Frontend-only diff; in scope and PASS. Every corrected URL lands on a real :GroupsManage-gated route, the .members retype declares exactly user_map/1's 8-key allowlist and nothing the server withholds, the {user_id} body is strictly narrower than the {user_ids:[...]} it replaces with identical authorization, and the deleted .get/.update had zero callers.",
+      "scope_test": "IN SCOPE. The diff touches no API route, no migration, no secret resolution, no server-side response-shaping code and no lookup-by-ID handler -- so four of the five scope-test triggers are negative. It is nonetheless in scope on the fifth reading given in the dispatch: it changes the set of authorization-gated tenant-scoped routes the admin client reaches. It is assessed as a client-side consumer of tenant-data paths, not as a producer of one.",
+      "files_in_diff": {
+        "elixir_source_changed": "none -- `git diff main...HEAD --name-only | grep -E '\\.exs?$'` is empty",
+        "migrations_changed": "none -- no path under priv/repo/migrations/",
+        "product_code_changed": [
+          "web/src/api/identity.ts",
+          "web/src/pages/admin/GroupsPage.tsx",
+          "web/src/types/api.ts"
+        ],
+        "non_product": [
+          "docs/issues/ISS-0811..0816.yaml",
+          "handoffs/WF03-ISS0765-20260924/*.json",
+          "handoffs/orchestrator.log",
+          "handoffs/registry.json",
+          "lib/letflow/design/iss-0765-groupsapi-route-prefix-audit.md (markdown design artefact, not code)"
+        ]
+      }
+    },
+    "invariant_assessment": [
+      {
+        "invariant": "INV-1",
+        "applicability": "APPLIES (indirectly)",
+        "verdict": "PASS",
+        "reasoning": "The diff itself adds/changes no Ecto schema, no migration and no query, so INV-1's (b) and (c) limbs have no subject. Its (a) limb is live, because this diff is what first makes six tenant-scoped data-access paths actually reachable from the Groups admin surface (the old /api/v1/admin/groups prefix matched no forward and 404'd). Re-derived (a) at source for each newly-reached handler rather than inheriting it: every one takes conn.assigns.scoped_opts and every downstream Identity function resolves the schema from it. lib/letflow/identity.ex:507 `prefix = Keyword.fetch!(opts, :prefix)` then `Repo.get(Group, group_id, prefix: prefix)` (:509) and `Repo.get(User, user_id, prefix: prefix)` (:514) for add_group_member/3; :534-539 `prefix = Keyword.fetch!(opts, :prefix)` then `Repo.all(query, prefix: prefix)` / `Repo.aggregate(Group, :count, prefix: prefix)` for list_groups/1. The prefix is server-resolved from the authenticated request, never from a request body or query param, so no client-supplied value in this diff can select a tenant. Limb (c): the add-member body carries only user_id; there is no tenant_id field anywhere in the three request bodies this diff sends.",
+        "limbs": {
+          "a_prefix_scoping": "CONFIRMED for the newly-reached paths (quoted above)",
+          "b_migration_placement": "N/A -- no migration in the diff",
+          "c_tenant_id_derived_not_supplied": "N/A for a write in this diff; separately confirmed that no request body the diff sends carries a tenant identifier"
+        }
+      },
+      {
+        "invariant": "INV-2",
+        "applicability": "APPLIES",
+        "verdict": "PASS",
+        "reasoning": "INV-2 is normally NOT-APPLICABLE pre-S4, but it names web/ by name and its whole point is that a client is never the authorization boundary -- and the .members retype is exactly a change to what the client reads off a response. Re-derived the server side rather than reading the FRONTEND-DEV handoff's claim: lib/letflow/routers/identity.ex:729-740 user_map/1 is a hand-built 8-key map (id, username, display_name, email, status, auth_source, inserted_at, updated_at) with an explicit comment that password_hash, external_id and external_realm are deliberately excluded -- an allowlist built before serialisation, never a Jason.Encoder derivation over %User{} and never a post-hoc redaction. handle_list_group_members/4 wraps `Enum.map(users, &user_map/1)` in Pagination.page_response/2, so no other shape reaches the wire. The new GroupMember interface declares exactly those 8 keys and no more; GroupMemberPage declares exactly the three keys Pagination.Page derives. The UI reads only user.id, user.display_name and user.email (GroupsPage.tsx:230, :234, :235). No field the backend intends to withhold is declared, read or rendered. A TypeScript interface cannot in any case widen what the server emits -- the retype narrows the client from the previous `User[]`, which declared fields (roles, created_at) user_map/1 never emits; that direction is safe and is the correction ISS-0815 exists for."
+      },
+      {
+        "invariant": "INV-3",
+        "applicability": "NOT-APPLICABLE",
+        "verdict": "n/a",
+        "reasoning": "No tenant-authored script, no Lua, no WASM, no host-capability surface. S5 has not started and this diff does not reach ahead into it."
+      },
+      {
+        "invariant": "INV-4",
+        "applicability": "APPLIES (always live)",
+        "verdict": "PASS",
+        "reasoning": "Ran the secret heuristic over every added line of the whole branch diff, not only web/: `git diff main...HEAD | grep '^+' | grep -niE '(password|secret|client_secret|token|api[_-]?key|bearer|credential)'`. Seven hits, every one manually resolved as a non-secret: five are prose naming `usersApi.resetPassword` / `tokensApi` / a test's setToken-clearToken fixture description in issue records and the design doc, and one is the literal string LETFLOW_SECRETS_MASTER_KEY in handoffs/WF03-ISS0765-20260924/step-01-issue-fixer.json:81 -- where the value is the placeholder `<generated>`, not plaintext. Since INV-4 names handoff files explicitly as a place a secret must never be serialised, that hit was opened and read rather than pattern-cleared. No hardcoded secret, no token, no credential is introduced anywhere in the diff. Separately checked that nothing newly logs or persists response data: `git diff main...HEAD -- web/ | grep '^+' | grep -iE 'console\\.|localStorage|sessionStorage|document\\.cookie'` returns nothing."
+      },
+      {
+        "invariant": "INV-5",
+        "applicability": "NOT-APPLICABLE",
+        "verdict": "n/a",
+        "reasoning": "No server-side lookup-by-ID code path is added or changed; a client-side URL correction cannot alter whether the backend's not-found and forbidden-cross-tenant responses are distinguishable. Noted for completeness that the routes this diff newly reaches already answer 404 uniformly for group-not-found and user-not-found (handle_add_member/3's two `Response.not_found(conn)` arms, identity.ex:513-517), but that is pre-existing behaviour this diff neither introduces nor weakens."
+      },
+      {
+        "invariant": "INV-6",
+        "applicability": "APPLIES",
+        "verdict": "PASS",
+        "reasoning": "INV-6 is the meta-invariant requiring that a change reaching a data-access path prove its scoping to this gate before merge. This handoff is that proof: it names every invariant assessed, states applicability, and re-derives each APPLIES verdict from backend source rather than from the FRONTEND-DEV handoff's self-report. Nothing here rests on 'type-check and the suite passed'."
+      },
+      {
+        "invariant": "INV-7",
+        "applicability": "NOT-APPLICABLE",
+        "verdict": "n/a",
+        "reasoning": "No SQL in the diff and no Elixir source file changed at all (the .ex/.exs filter over the changed-file list is empty). A repo-wide `grep -rn 'Repo.query'` would return only pre-existing hits outside this branch's changes and is not evidence about this diff, so it was not run as a substitute."
+      },
+      {
+        "invariant": "INV-8",
+        "applicability": "NOT-APPLICABLE",
+        "verdict": "n/a",
+        "reasoning": "No Elixir source changed, so there is no bare pattern match, no `with` chain and no shared-process crash surface in the diff. Noted in passing that the TypeScript equivalent of the concern is handled defensively -- GroupsPage.tsx:60 `useMemo(() => membersPage?.items ?? [], ...)` means an absent or errored response yields an empty list rather than a render-time throw, and the three downstream sites that previously carried `(members ?? [])` guards were simplified only because that single guard now covers them."
+      },
+      {
+        "invariant": "INV-9",
+        "applicability": "NOT-APPLICABLE",
+        "verdict": "n/a",
+        "reasoning": "No Letflow server process makes an outbound HTTP request as a result of this diff. The requests changed here are browser-originated fetches from web/ to Letflow's own API, with URLs that are compile-time literals in the client, not tenant-controlled input reaching :httpc. UrlValidator has no call site to gain."
+      }
+    ],
+    "directed_checks": [
+      {
+        "check": "1 -- every corrected URL targets a route that genuinely exists and is authorization-gated, with no downgrade in protection",
+        "verdict": "PASS",
+        "evidence": "Re-derived the route table from lib/letflow/routers/identity.ex:178-205 rather than accepting the dispatch's line reference: authz_post \"/groups\" :GroupsManage (:178), authz_get \"/groups\" :GroupsManage (:182), authz_delete \"/groups/:id\" :GroupsManage (:186), authz_post \"/groups/:id/members\" :GroupsManage (:190), authz_get \"/groups/:id/members\" :GroupsManage (:194), authz_delete \"/groups/:id/members/:user_id\" :GroupsManage (:198). All six carry the same policy key -- no call now reaches a route whose permission differs from what the Groups admin surface should require, and there is no mixed-policy route among them. Mount chain confirmed: lib/letflow/plugs/api_pipeline.ex:141 `forward(\"/identity\", to: Letflow.Routers.Identity)` under the /api/v1 pipeline, so /api/v1/identity/groups is the real path. Enforcement confirmed at the macro rather than assumed: lib/letflow/api/authorized_router.ex's __using__/1 installs `plug(:match)`, `plug(Letflow.Plugs.Authorize)`, `plug(:dispatch)` in that order for every router using it, and build_route/5 attaches `private: %{policy_key: ...}` at match time, so Authorize already holds the key when it runs -- its own moduledoc states there is no route shape in such a router that bypasses Authorize, and the macro body bears that out. No downgrade is possible here because the OLD prefix was not a less-protected route, it was no route at all: `grep -rn 'admin/groups' lib/ --include=*.ex` returns nothing, and api_pipeline.ex forwards only /admin/services under /admin. The previous calls were authenticated (AuthPipeline runs before :match on the pipeline) but unrouted, i.e. 404. The change therefore moves six calls from a dead path to an authorization-gated one -- strictly more protected, never less."
+      },
+      {
+        "check": "2 -- the .members retype surfaces no field the backend intends to withhold",
+        "verdict": "PASS",
+        "evidence": "See INV-2 above. user_map/1 (identity.ex:729-740) is an 8-key allowlist with password_hash, external_id and external_realm named as deliberate exclusions; GroupMember declares exactly those 8 keys; the page renders 2 of them. The response envelope is Pagination.page_response/2, whose encoder is derived `only: [:items, :next_cursor, :count]`, matching GroupMemberPage exactly. Allowlist discipline over a hand-built map is intact on the server and the client type is a subset of it, not a superset. Also checked the sibling shapes this diff added types for: group_map/1 (:749-755) emits id, name, display_name, description, created_at -- the client Group's member_count and is_system are declared optional and are never emitted (that is ISS-0811, not an over-disclosure), and member_result_map/3 (:829-831) emits exactly the three keys GroupMemberAddResult declares."
+      },
+      {
+        "check": "3 -- {user_id} cannot influence membership beyond a single id, and authorization is identical either way",
+        "verdict": "PASS",
+        "evidence": "resolve_member_user_id/1 (identity.ex router :525-531) has four clauses: `%{\"user_id\" => user_id} when is_binary` -> {:ok, user_id}; `%{\"user_ids\" => [first | _rest]} when is_binary(first)` -> {:ok, first}; `%{\"user_ids\" => list} when is_list` -> {:error, :user_id_invalid}; catch-all -> {:error, :user_id_required}. Both accepted shapes resolve to exactly ONE id and the array clause discards the tail, so the new single-id body is strictly narrower than the array body it replaces -- the old client's `{user_ids: [userId]}` was already only ever adding one member. The resolved id is then passed to Identity.add_group_member/3 once; there is no loop, no Enum.each, no multi-insert. Authorization is unaffected by body shape by construction: Letflow.Plugs.Authorize runs after :match and before :dispatch, so it has already evaluated :GroupsManage before handle_add_member/3 -- and therefore before Validation.validate/2 and resolve_member_user_id/1 -- ever see the body. The body also cannot widen tenant reach: add_group_member/3 takes the prefix from opts and requires both the group (Repo.get(Group, ..., prefix:)) and the user (Repo.get(User, ..., prefix:)) to exist in that schema, so a cross-tenant user id yields {:error, :user_not_found} -> 404, not a cross-schema write."
+      },
+      {
+        "check": "4 -- nothing security-relevant depended on .get/.update",
+        "verdict": "PASS",
+        "evidence": "`grep -rn 'groupsApi\\.(get|update|addMembers)' web/src web/tests` returns exactly one hit, and it is the replacement comment block in identity.ts:43 -- no production caller, no test caller. Independently confirmed the routes really are absent rather than merely mis-prefixed: `grep -rn 'authz_(get|patch|put) \"/groups' lib/ --include=*.ex` matches only `/groups` and `/groups/:id/members`, never `/groups/:id`. The deleted functions carried no authorization logic, no token handling, no cache invalidation and no permission gate -- they were thin client.get/client.patch wrappers pointed at a dead prefix, so their removal deletes client code only. The replacement comment records the absence and forbids re-adding without a backend route, which removes the re-introduction footgun rather than leaving it silent."
+      },
+      {
+        "check": "5 -- no secret, token or credential introduced; nothing newly logged",
+        "verdict": "PASS",
+        "evidence": "See INV-4 above. Both heuristics run over the diff; the single LETFLOW_SECRETS_MASTER_KEY hit manually opened and confirmed to be the placeholder `<generated>`."
+      }
+    ],
+    "already_filed_findings_commentary": {
+      "instruction": "The dispatch asked whether ISS-0812, ISS-0813 or ISS-0814 is security-relevant in a way its record understates. Each record was read in full before answering; none is re-reported as a finding of this run.",
+      "ISS-0814": "NO UNDERSTATEMENT -- and the record is more accurate than a quick reading suggests. Verified the fail direction at source rather than assuming it. Because UserDetailPage.tsx:34 seeds status from useState('ACTIVE') and not from the fetched user, opening a DEACTIVATED user's page and pressing Save sends status:'ACTIVE' plus is_active:true -- which would be a fail-OPEN reactivation if it landed. It does not land: @patch_schema (identity.ex:347-370) constrains status to allowed_values [\"active\",\"inactive\"], so the uppercase value fails validation and Response.send_problem/2 rejects the ENTIRE request (422) before Identity.update_user_profile/3 is called; and `is_active` is not a field the backend recognises at all (`grep -rn 'is_active' lib/letflow/routers/identity.ex lib/letflow/identity.ex lib/letflow/identity/user.ex` returns nothing), so it is inert even in isolation. The record's severity_rationale -- 'fails loudly (422) rather than corrupting data' -- is exactly right, and MAJOR is the correct tier. No security escalation warranted.",
+      "ISS-0812": "MILD UNDERSTATEMENT, worth one sentence added to the record -- not a blocker for this run and not a re-filing. The record correctly says every affected function has zero production callers and is therefore latent. What it does not say is WHICH operations are latent: usersApi.delete and usersApi.resetPassword are access-revocation and credential-reset operations. A dead read route degrades to an empty screen, but the first caller wired to a dead revoke route degrades to an operator who believes an account was disabled or a credential rotated when the request 404'd. That is a different consequence class from the rolesApi read/grant functions listed alongside them, and the record's flat 'nothing is broken for a user today' framing flattens it. RECOMMENDATION for ORCH: append a note to docs/issues/ISS-0812.yaml distinguishing the revocation-class functions, and require that whichever run fixes it wires the revoke-class calls first. Severity can stay MINOR -- the zero-caller fact is verified true today (`grep -rn 'usersApi\\.(delete|resetPassword)' web/src web/tests` is empty), so this is about the fix ordering and about what the next reader of the record understands, not about live exposure.",
+      "ISS-0813": "NO UNDERSTATEMENT of severity, but worth naming its character explicitly: it is the missing DETECTIVE CONTROL for a defect class that has now recurred four times in one file (ISS-0736, ISS-0782, ISS-0765, ISS-0812). Every instance so far has failed closed -- a dead client route 404s, it does not reach a less-protected route -- which is why no instance has been a vulnerability and why MINOR/MAJOR tiers have been right each time. The security-relevant point is the inverse risk the control would also cover: nothing today would catch a client literal that drifted onto a route carrying a DIFFERENT policy key rather than no route at all, which is the same class failing open instead of closed. That case has not occurred and this run's own check confirms all six group routes are uniformly :GroupsManage -- but it is the reason the guard is worth more than its four historical instances suggest. RECOMMENDATION for ORCH: when ISS-0813's guard is designed, require it to assert method+path+policy-key, not method+path alone."
+      },
+    "issues": [],
+    "new_findings": [],
+    "blocking": false,
+    "next_action": "ORCH: security gate PASS. Proceed to REVIEWER (the other Step 3b/3c gate) and then TEST-DESIGNER at Step 4. Two non-blocking record-quality recommendations are carried above (append a revocation-class note to ISS-0812; require method+path+policy-key in ISS-0813's guard) -- both are edits to already-filed issue records, not new issues, and neither gates this merge.",
+    "artifacts_out": [
+      "handoffs/WF03-ISS0765-20260924/step-03c-security-reviewer.json"
+    ]
+  }
+}

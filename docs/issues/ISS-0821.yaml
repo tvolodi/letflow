@@ -1,0 +1,54 @@
+id: ISS-0821
+title: >
+  Four web/ test fixtures hand-write has_more into mocks, so they would pass
+  identically against a server that never sends it
+discovered_by: ISSUE-FIXER
+discovered_in_run: WF03-ISS0816-20260925
+discovered_at: "2026-09-24T22:41:11Z"
+severity: MAJOR
+tags:
+  - frontend
+  - testing
+  - contract-drift
+description: >
+  Incidental finding from ISS-0816's Step 1 audit, filed and forwarded rather
+  than extending that run. This is the MECHANISM that kept the
+  CursorPage<T>.has_more defect alive through five separate written sightings.
+
+  Four test sites fabricate has_more into their mock responses:
+    * web/src/pages/dlq/__tests__/DlqPage.pagination.test.tsx:78-80
+    * web/src/pages/promotions/__tests__/PromotionReviewListPage.test.tsx:119, :270
+    * web/src/pages/tasks/__tests__/TaskInboxPage.test.tsx:134, :160
+    * web/tests/e2e/obs04.timeline.e2e.spec.ts:72
+
+  No Letflow route emits has_more. It is built internally by audit.ex and
+  dropped before routers/audit.ex's page_body/2 hand-builds the response. So
+  these fixtures assert against a wire shape the server has never produced,
+  and would pass unchanged against a server that never sends the field.
+
+  That is a self-confirming test: it validates the mock, not the contract.
+  It is the test-side counterpart of ISS-0813 -- nothing couples a fixture to
+  the real response shape, so a fixture can encode a fiction indefinitely and
+  the suite stays green while the product is wrong.
+affected_files:
+  - web/src/pages/dlq/__tests__/DlqPage.pagination.test.tsx
+  - web/src/pages/promotions/__tests__/PromotionReviewListPage.test.tsx
+  - web/src/pages/tasks/__tests__/TaskInboxPage.test.tsx
+  - web/tests/e2e/obs04.timeline.e2e.spec.ts
+related:
+  - ISS-0816  # the type defect these fixtures were masking
+  - ISS-0813  # the production-side counterpart of the same gap
+severity_rationale: >
+  MAJOR -- no production impact by itself, but it is demonstrably why a real
+  defect survived five sightings. A test that cannot fail against a wrong
+  server is worse than no test: it supplies false confidence. Judged on that
+  demonstrated effect, not on the size of the diff.
+fix_direction: >
+  Stop the four fixtures fabricating has_more; make each mock match a shape a
+  real route actually emits, asserting pagination via next_cursor instead.
+  Then close the class: generate fixtures from, or check them against, the
+  real response shape rather than hand-writing one per test. Land this with or
+  after ISS-0816's type fix, since both touch the same shape.
+queue_ref: "Q-821"
+github_ref: "GH-1812"
+status: open

@@ -1,0 +1,61 @@
+id: ISS-0822
+title: >
+  The whole /admin/modules SPA surface is built on Letflow.Routers.ProcessModules,
+  which does not exist -- every request from a live, reachable page 404s
+discovered_by: ISSUE-FIXER (independently verified by ORCH before filing)
+discovered_in_run: WF03-ISS0816-20260925
+discovered_at: "2026-09-24T22:41:35Z"
+severity: MAJOR
+tags:
+  - frontend
+  - api
+  - dead-route
+  - s5
+description: >
+  Incidental finding from ISS-0816's Step 1 audit. ORCH re-derived every claim
+  from source before filing.
+
+  web/src/api/modules.ts targets /api/v1/admin/modules and
+  /api/v1/admin/module-shares. Neither exists:
+    * there is no lib/letflow/routers/process_modules.ex file at all
+    * no forward for either path in api_pipeline.ex or router.ex
+    * router.ex:82 lists Letflow.Routers.ProcessModules in its own table of
+      routers still DEFERRED -- to S5, process-module packaging
+
+  The frontend was built ahead of the backend and nothing flagged it.
+
+  This is NOT dead code. web/src/router.tsx:88 routes path 'admin/modules' to
+  <ProcessModulesPage />, imported at router.tsx:5, with
+  web/src/hooks/useModules.ts built on top. An operator who navigates to
+  /admin/modules gets a page whose every request 404s.
+
+  Strictly wider than ISS-0765, which was six calls on one admin surface.
+  This is an entire page with no backend behind it.
+affected_files:
+  - web/src/api/modules.ts
+  - web/src/hooks/useModules.ts
+  - web/src/pages/admin/modules/ProcessModulesPage.tsx
+  - web/src/router.tsx
+  - lib/letflow/router.ex
+related:
+  - ISS-0816  # the audit that surfaced it
+  - ISS-0765  # same class, narrower -- six calls rather than a whole page
+  - ISS-0813  # the missing route-table coupling that would have caught both
+severity_rationale: >
+  MAJOR -- user-reachable and entirely non-functional, the same grounds
+  ISS-0765 was MAJOR on. Not BLOCKER: it is confined to one admin page, and
+  S5's own scope already records this router as not yet built, so this is a
+  frontend shipped early rather than a regression.
+fix_direction: >
+  Either implement and mount Letflow.Routers.ProcessModules so the surface
+  works, or remove the SPA route and page, or gate it behind an explicit
+  feature-unavailable state. A silently-404ing page is not an acceptable end
+  state. Record the decision against S5's own scope, since router.ex:82
+  already tracks the router as deferred -- do not re-decide it ad hoc. If the
+  surface is kept, audit every modules.ts call against the real mounted route
+  table the way ISS-0765 audited groupsApi. Finally, check the WHOLE of
+  router.ex:82's deferred table for other SPA routes pointing at routers that
+  do not exist -- the same mistake may have been made more than once.
+queue_ref: "Q-822"
+github_ref: "GH-1813"
+status: open

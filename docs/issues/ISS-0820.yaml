@@ -1,0 +1,43 @@
+id: ISS-0820
+title: >
+  definitionsApi.search sends dead limit/offset query params that
+  handle_search/1 never reads
+discovered_by: ISSUE-FIXER
+discovered_in_run: WF03-ISS0816-20260925
+discovered_at: "2026-09-24T22:41:11Z"
+severity: MINOR
+tags:
+  - frontend
+  - api
+  - contract-drift
+description: >
+  Incidental finding from ISS-0816's Step 1 audit, filed and forwarded rather
+  than extending that run.
+
+  web/src/api/definitions.ts's definitionsApi.search sends `limit` and
+  `offset` query parameters. lib/letflow/routers/definitions.ex's
+  handle_search/1 (:519-534) reads only `q`, `cursor` and `page_size`. The
+  extra params are silently ignored.
+
+  Live caller: web/src/hooks/useDefinitions.ts:94. So any caller believing it
+  is limiting or offsetting a definition search is not -- it gets the
+  backend's own default page regardless, with no error.
+affected_files:
+  - web/src/api/definitions.ts
+  - web/src/hooks/useDefinitions.ts
+  - lib/letflow/routers/definitions.ex
+related:
+  - ISS-0816  # the run this surfaced during
+  - ISS-0813  # same family: nothing couples client calls to the real contract
+severity_rationale: >
+  MINOR -- fails silently and benignly. The caller gets a valid default page
+  rather than an error or wrong data; nothing is corrupted. Latent rather than
+  live, since no current behaviour depends on the ignored params taking effect.
+fix_direction: >
+  Send only what handle_search/1 reads, or extend the backend to honour limit
+  and offset -- record which. Update useDefinitions.ts:94 to match, so any
+  pagination it believed it had is either real or gone. Add a test asserting
+  the exact query parameters the search call emits.
+queue_ref: "Q-820"
+github_ref: "GH-1811"
+status: open

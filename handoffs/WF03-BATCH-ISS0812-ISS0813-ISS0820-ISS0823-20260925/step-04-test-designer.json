@@ -1,0 +1,127 @@
+{
+  "run_id": "WF03-BATCH-ISS0812-ISS0813-ISS0820-ISS0823-20260925",
+  "step": "04-test-designer",
+  "agent": "TEST-DESIGNER",
+  "timestamp": "2026-09-25T04:52:00Z",
+  "verdict": "PASS",
+  "spec_file": "test/specs/ISS-0813-0812-0820-0823.md",
+
+  "baseline": {
+    "command": "cd web && npx vitest run tests/guards/source-scan.spec.ts tests/guards/meta-control.spec.ts src/api/__tests__/identity.iss0812.test.ts src/api/__tests__/definitionsSearch.iss0820.test.ts src/pages/admin/__tests__/GroupsPage.iss0823.test.tsx",
+    "result": "Test Files 5 passed (5) / Tests 60 passed (60)"
+  },
+
+  "mutation_evidence": [
+    {
+      "mutant_id": "ISS-0813-A",
+      "issue": "ISS-0813",
+      "description": "Guard offender: rolesApi.create URL changed to '/api/v1/admin/roles' (dead admin prefix)",
+      "file_mutated": "web/src/api/identity.ts",
+      "change": "client.post<Role>('/api/v1/identity/roles', body) → client.post<Role>('/api/v1/admin/roles', body)",
+      "target_command": "cd web && npx vitest run tests/guards/source-scan.spec.ts",
+      "result": "FAILED",
+      "failure_detail": "Source scan found 1 violation(s):\n  dead-admin-prefix @ web/src/api/identity.ts:79",
+      "tests_failed": 1,
+      "tests_passed": 0,
+      "revert_command": "git checkout -- web/src/api/identity.ts",
+      "post_revert_status": "empty",
+      "post_revert_verified": true
+    },
+    {
+      "mutant_id": "ISS-0813-B",
+      "issue": "ISS-0813",
+      "description": "Meta-control offender: deleted web/tests/guards/fixtures/offender/dead-admin-prefix.txt",
+      "file_mutated": "web/tests/guards/fixtures/offender/dead-admin-prefix.txt",
+      "change": "file deleted",
+      "target_command": "cd web && npx vitest run tests/guards/meta-control.spec.ts",
+      "result": "FAILED",
+      "failure_detail": "dead-admin-prefix > offender fixture exists: ENOENT no such file; dead-admin-prefix > regex matches offender: ENOENT",
+      "tests_failed": 2,
+      "tests_passed": 46,
+      "revert_command": "git checkout -- web/tests/guards/fixtures/offender/dead-admin-prefix.txt",
+      "post_revert_status": "empty (fixture is in web/tests/, not web/src/)",
+      "post_revert_verified": true
+    },
+    {
+      "mutant_id": "ISS-0812",
+      "issue": "ISS-0812",
+      "description": "Wrong path (not admin/, so guard does not catch it): rolesApi.create URL → '/api/v1/identity/roles-WRONG'",
+      "file_mutated": "web/src/api/identity.ts",
+      "change": "client.post<Role>('/api/v1/identity/roles', body) → client.post<Role>('/api/v1/identity/roles-WRONG', body)",
+      "target_command": "cd web && npx vitest run src/api/__tests__/identity.iss0812.test.ts",
+      "first_attempt": {
+        "result": "PASSED (all 4)",
+        "diagnosis": "Original assertion toContain('/api/v1/identity/roles') is satisfied by '/api/v1/identity/roles-WRONG' (substring match). Coverage gap identified."
+      },
+      "assertion_fix_applied": {
+        "file": "web/src/api/__tests__/identity.iss0812.test.ts",
+        "old": "expect(url).toContain('/api/v1/identity/roles')",
+        "new": "expect(new URL(url, 'http://localhost').pathname).toBe('/api/v1/identity/roles')"
+      },
+      "second_attempt": {
+        "result": "FAILED",
+        "failure_detail": "AssertionError: expected '/api/v1/identity/roles-WRONG' to be '/api/v1/identity/roles' // Object.is equality",
+        "tests_failed": 1,
+        "tests_passed": 3
+      },
+      "revert_command": "git checkout -- web/src/api/identity.ts",
+      "post_revert_status": "M web/src/api/__tests__/identity.iss0812.test.ts (intentional improvement only)",
+      "post_revert_verified": true,
+      "note": "identity.ts fully reverted; identity.iss0812.test.ts has intentional assertion strengthening retained as a fix"
+    },
+    {
+      "mutant_id": "ISS-0820",
+      "issue": "ISS-0820",
+      "description": "Search params reverted to { q: string; limit?: number; offset?: number }",
+      "file_mutated": "web/src/api/definitions.ts",
+      "change": "search: (params: { q: string; cursor?: string; page_size?: number }) → search: (params: { q: string; limit?: number; offset?: number })",
+      "target_command": "cd web && npx vitest run src/api/__tests__/definitionsSearch.iss0820.test.ts",
+      "result": "PASSED (all 4)",
+      "nature_of_mutation": "TypeScript type-signature-only change. TypeScript types are erased at runtime — params as Record<string, unknown> serializes whatever keys are passed regardless of the declared interface. Runtime Vitest tests cannot distinguish between the two signatures when called with only q (TC-ISS0820-01) or page_size (TC-ISS0820-02) etc.",
+      "type_check_evidence": {
+        "command": "cd web && npx tsc -b tsconfig.json",
+        "result": "FAILED with 3 mutation-specific TS2353 errors",
+        "errors": [
+          "src/api/__tests__/definitionsSearch.iss0820.test.ts(42,46): error TS2353: 'page_size' does not exist in type '{ q: string; limit?: number | undefined; offset?: number | undefined; }'",
+          "src/api/__tests__/definitionsSearch.iss0820.test.ts(51,46): error TS2353: 'cursor' does not exist in type '{ q: string; limit?: number | undefined; offset?: number | undefined; }'",
+          "src/hooks/useDefinitions.ts(93,54): error TS2353: 'page_size' does not exist in type '{ q: string; limit?: number | undefined; offset?: number | undefined; }'"
+        ],
+        "verdict": "Regression IS caught by npm run type-check (tsc -b). The npm run check pipeline runs type-check before vitest."
+      },
+      "revert_command": "git checkout -- web/src/api/definitions.ts",
+      "post_revert_status": "M web/src/api/__tests__/identity.iss0812.test.ts (intentional improvement only)",
+      "post_revert_verified": true
+    },
+    {
+      "mutant_id": "ISS-0823",
+      "issue": "ISS-0823",
+      "description": "Truncation warning block removed from GroupsPage.tsx",
+      "file_mutated": "web/src/pages/admin/GroupsPage.tsx",
+      "change": "Removed entire {userListTruncated && (<p role='note' data-testid='user-list-truncated-warning'>...)} block",
+      "target_command": "cd web && npx vitest run src/pages/admin/__tests__/GroupsPage.iss0823.test.tsx",
+      "result": "FAILED",
+      "failure_detail": "TC-ISS0823-01: getByTestId('user-list-truncated-warning') throws — element not found in DOM",
+      "tests_failed": 1,
+      "tests_passed": 2,
+      "revert_command": "git checkout -- web/src/pages/admin/GroupsPage.tsx",
+      "post_revert_status": "M web/src/api/__tests__/identity.iss0812.test.ts (intentional improvement only)",
+      "post_revert_verified": true
+    }
+  ],
+
+  "final_green_pass": {
+    "command": "cd web && npx vitest run tests/guards/source-scan.spec.ts tests/guards/meta-control.spec.ts src/api/__tests__/identity.iss0812.test.ts src/api/__tests__/definitionsSearch.iss0820.test.ts src/pages/admin/__tests__/GroupsPage.iss0823.test.tsx",
+    "result": "Test Files 5 passed (5) / Tests 60 passed (60)"
+  },
+
+  "files_changed": [
+    {
+      "file": "web/src/api/__tests__/identity.iss0812.test.ts",
+      "type": "test_improvement",
+      "description": "Assertion strengthened: rolesApi.create check changed from toContain('/api/v1/identity/roles') to exact pathname.toBe('/api/v1/identity/roles') — closes substring-match coverage gap discovered during ISS-0812 mutation analysis"
+    }
+  ],
+
+  "handoff_to": "TEST-DESIGN-VALIDATOR",
+  "next_action": "TEST-DESIGN-VALIDATOR must apply at least one of the reported mutants and reproduce the stated failure count independently. Recommended: ISS-0813-A (clearest, single-line change with deterministic failure) or ISS-0823 (removes a block, 1/3 fail). For ISS-0820, the type-check evidence (tsc -b) rather than runtime vitest output is the discriminating gate — validator may run tsc -b with the mutant applied instead of vitest."
+}

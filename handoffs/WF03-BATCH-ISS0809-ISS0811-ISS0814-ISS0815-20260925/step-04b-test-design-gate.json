@@ -1,0 +1,178 @@
+{
+  "run_id": "WF03-BATCH-ISS0809-ISS0811-ISS0814-ISS0815-20260925",
+  "step": "04b-test-design-gate",
+  "agent": "TEST-DESIGN-VALIDATOR",
+  "timestamp": "2026-09-25T04:52:00Z",
+  "workflow": "WF-03",
+  "issues": ["ISS-0815", "ISS-0814", "ISS-0811", "ISS-0809"],
+
+  "gate_decision": "PASS",
+
+  "pre_checks": {
+    "spec_file_read": "test/specs/ISS-0815-0814-0811-0809.md",
+    "test_designer_handoff_read": "handoffs/WF03-BATCH-ISS0809-ISS0811-ISS0814-ISS0815-20260925/step-04-test-designer.json",
+    "skip_scan": {
+      "files_checked": [
+        "web/src/types/__tests__/user-wire-shape.test.ts",
+        "web/src/pages/admin/__tests__/GroupsPage.iss0811.test.tsx",
+        "web/src/components/instances/__tests__/CancelInstanceDialog.iss0809.test.tsx"
+      ],
+      "patterns_searched": ["skip", "xit", "xdescribe", "it.skip", "test.skip", "TODO: implement"],
+      "result": "NONE FOUND"
+    },
+    "todo_stub_scan": "NONE FOUND",
+    "secrets_scan": "No hardcoded connection strings or real secrets — only test fixture data (fake IDs, email addresses, tokens)"
+  },
+
+  "baseline": {
+    "command": "cd web && npx vitest run src/types/__tests__/user-wire-shape.test.ts src/pages/admin/__tests__/GroupsPage.iss0811.test.tsx src/components/instances/__tests__/CancelInstanceDialog.iss0809.test.tsx",
+    "result": "12 passed (3 files)",
+    "exit_code": 0
+  },
+
+  "ac_coverage": {
+    "ISS-0815": {
+      "AC-ISS0815-1": "COVERED — TC-ISS0815-01: userMapPayload satisfies all 8 required User fields (compile-time + runtime assertions)",
+      "AC-ISS0815-2": "COVERED — TC-ISS0815-02: Object.keys(userMapPayload).sort() equals USER_MAP_KEYS exactly",
+      "AC-ISS0815-3": "COVERED — TC-ISS0815-03: hasOwnProperty check confirms roles absent at runtime; compile-time guard via _userWithoutRoles: User assignment",
+      "AC-ISS0815-4": "COVERED — TC-ISS0815-04: inserted_at present, created_at absent from userMapPayload"
+    },
+    "ISS-0814": {
+      "AC-ISS0814-1": "COVERED (with documented gap) — TC-ISS0814-01: compile-time assignments const _active: User['status'] = 'active' and const _inactive: User['status'] = 'inactive' pin literal values; gap: type-widening to string is caught by neither vitest nor tsc (confirmed independently below)",
+      "AC-ISS0814-2": "COVERED — TC-ISS0814-02: activePatch.status and inactivePatch.status asserted at runtime to be lowercase"
+    },
+    "ISS-0811": {
+      "AC-ISS0811-1": "COVERED — TC-ISS0811-01: queryByRole('columnheader', {name: /members/i}) asserts null",
+      "AC-ISS0811-2": "COVERED — TC-ISS0811-02: group name 'operators' and display_name 'Operators' render from wire-shape data",
+      "AC-ISS0811-3": "COVERED — TC-ISS0811-03: delete button data-testid='delete-group-g-1' present in document"
+    },
+    "ISS-0809": {
+      "AC-ISS0809-1": "COVERED (component isolation) — TC-ISS0809-01: instanceName='hire-process v1.0' renders correctly with no 'undefined' text",
+      "AC-ISS0809-2": "COVERED (component isolation) — TC-ISS0809-02: instanceName='—' renders as placeholder with no 'undefined' text",
+      "AC-ISS0809-3": "COVERED — TC-ISS0809-03: open=false renders no role='dialog' element"
+    }
+  },
+
+  "fixture_isolation": {
+    "ISS-0815": "userMapPayload and _userWithoutRoles are module-level const literals — pure values, no shared mutable state",
+    "ISS-0811": "afterEach(() => { cleanup(); vi.clearAllMocks() }) — full DOM cleanup and mock reset between tests; installQueryMock() called fresh in each test body",
+    "ISS-0809": "afterEach(() => cleanup()) — DOM cleanup between tests; each test creates its own rendered element",
+    "verdict": "PASS — no shared hardcoded state, tests are self-sufficient"
+  },
+
+  "independent_mutant_verification": [
+    {
+      "issue": "ISS-0815",
+      "mutant_applied": "web/src/types/api.ts — `roles?: string[]` → `roles: string[]` in User interface (legacy optional block, line ~452)",
+      "specificity_note": "Used surrounding context (user_id?: string, is_active?: boolean) to target the correct instance among two roles?: lines in the file",
+      "vitest_result": {
+        "command": "cd web && npx vitest run src/types/__tests__/user-wire-shape.test.ts",
+        "result": "6 passed",
+        "exit_code": 0,
+        "verdict": "VITEST DOES NOT CATCH — confirms TEST-DESIGNER's claim"
+      },
+      "tsc_result": {
+        "command": "cd web && npm run type-check",
+        "errors": [
+          "src/types/__tests__/user-wire-shape.test.ts(26,7): error TS2741: Property 'roles' is missing in type '{ id: string; username: string; display_name: string; email: string; status: \"active\"; auth_source: string; inserted_at: string; updated_at: string; }' but required in type 'User'.",
+          "src/types/__tests__/user-wire-shape.test.ts(39,7): error TS2741: Property 'roles' is missing in type '{ id: string; username: string; display_name: string; email: string; status: \"inactive\"; auth_source: string; inserted_at: string; updated_at: string; }' but required in type 'User'."
+        ],
+        "exit_code": 2,
+        "verdict": "CAUGHT BY TSC — TS2741 at lines 26 (userMapPayload) and 39 (_userWithoutRoles) exactly as TEST-DESIGNER documented"
+      },
+      "revert": "git checkout -- web/src/types/api.ts",
+      "git_status_after_revert": "(empty — verified: git status --porcelain web/src/types/api.ts returned no output)",
+      "post_revert_vitest": "6 passed (exit code 0)",
+      "validator_verdict": "INDEPENDENTLY CONFIRMED — tsc is the primary guard; vitest alone is insufficient"
+    },
+    {
+      "issue": "ISS-0814",
+      "mutant_applied": "web/src/types/api.ts — `status: 'active' | 'inactive'` → `status: string` in User interface",
+      "vitest_result": {
+        "command": "cd web && npx vitest run src/types/__tests__/user-wire-shape.test.ts",
+        "result": "6 passed",
+        "exit_code": 0,
+        "verdict": "VITEST DOES NOT CATCH"
+      },
+      "tsc_result": {
+        "command": "cd web && npx tsc --noEmit --skipLibCheck",
+        "errors": [],
+        "exit_code": 0,
+        "verdict": "TSC DOES NOT CATCH — widening string accepted by TypeScript; no assignment error on the test fixtures"
+      },
+      "revert": "git checkout -- web/src/types/api.ts",
+      "git_status_after_revert": "(empty — verified: git status --porcelain web/src/types/api.ts returned no output)",
+      "post_revert_vitest": "6 passed (exit code 0)",
+      "validator_verdict": "GAP INDEPENDENTLY CONFIRMED — neither vitest nor tsc catches the type-widening reversion. This is a documented gap, not a hidden one. The spec explicitly documents it in ISS-0814's Mutation Analysis section."
+    },
+    {
+      "issue": "ISS-0811",
+      "mutant_applied": "web/src/pages/admin/GroupsPage.tsx — re-inserted Members column: `{ id: 'members', header: 'Members', accessor: (g) => g.member_count ?? 0 }` after display_name column",
+      "vitest_result": {
+        "command": "cd web && npx vitest run src/pages/admin/__tests__/GroupsPage.iss0811.test.tsx",
+        "result": "1 failed (TC-ISS0811-01) | 2 passed",
+        "exit_code": 1,
+        "failing_test": "TC-ISS0811-01: the groups table has no Members column",
+        "failure_output": "expect(element).not.toBeInTheDocument() — found <th data-testid='datatable-header-members'>Members</th>",
+        "verdict": "CAUGHT — TC-ISS0811-01 fails exactly as TEST-DESIGNER documented"
+      },
+      "revert": "git checkout -- web/src/pages/admin/GroupsPage.tsx",
+      "git_status_after_revert": "(empty — verified: git status --porcelain web/src/pages/admin/GroupsPage.tsx returned no output)",
+      "post_revert_vitest": "3 passed (exit code 0)",
+      "validator_verdict": "INDEPENDENTLY CONFIRMED — vitest catches the Members column reversion via TC-ISS0811-01"
+    },
+    {
+      "issue": "ISS-0809",
+      "mutant_applied": "NOT INDEPENDENTLY APPLIED — ISS-0809 is documented as a pure integration gap: CancelInstanceDialog tests inject instanceName as a literal prop and never mount InstanceDetailPage. The mutant in InstanceDetailPage.tsx cannot be verified at component-isolation level. TEST-DESIGNER's report documents the gap clearly, and the gap type (isolation boundary) is verifiable from reading the test structure alone.",
+      "gap_verification_by_inspection": {
+        "test_mounts": "CancelInstanceDialog only — no InstanceDetailPage",
+        "prop_injection": "instanceName='hire-process v1.0' and instanceName='—' injected directly as literals",
+        "mutation_path_not_exercised": "InstanceDetailPage.tsx line containing `definition ? ... : '—'` is never executed by the test",
+        "validator_verdict": "Gap is genuine and undisputable from test structure. Additional mutant application would confirm only what is already structurally obvious. The gap is documented, not hidden."
+      },
+      "validator_verdict": "DOCUMENTED INTEGRATION GAP — acknowledged as non-blocking per gate criteria"
+    }
+  ],
+
+  "final_clean_tree_verification": {
+    "command": "git status --porcelain web/",
+    "result": "M web/src/api/__tests__/identity.iss0812.test.ts",
+    "note": "This modification is pre-existing in the repository (present in HEAD diff before TEST-DESIGN-VALIDATOR session began). It is NOT a mutant applied by this validator. All three mutants applied by TEST-DESIGN-VALIDATOR were reverted cleanly.",
+    "mutant_files_checked": [
+      {
+        "file": "web/src/types/api.ts",
+        "git_status": "(empty — clean)"
+      },
+      {
+        "file": "web/src/pages/admin/GroupsPage.tsx",
+        "git_status": "(empty — clean)"
+      }
+    ],
+    "final_suite_run": {
+      "command": "cd web && npx vitest run src/types/__tests__/user-wire-shape.test.ts src/pages/admin/__tests__/GroupsPage.iss0811.test.tsx src/components/instances/__tests__/CancelInstanceDialog.iss0809.test.tsx",
+      "result": "12 passed (3 files)",
+      "exit_code": 0
+    }
+  },
+
+  "gate_criteria_evaluation": {
+    "ISS-0815_tsc_guard_verified": "PASS — independently confirmed tsc catches roles required reversion (TS2741 at test lines 26 and 39); vitest does not; dual-tool guard correctly documented",
+    "ISS-0811_vitest_guard_verified": "PASS — independently confirmed TC-ISS0811-01 fails against Members column mutant with exact <th>Members</th> output",
+    "ISS-0814_gap_documented": "PASS — gap independently confirmed, not hidden; spec documents it explicitly; non-blocking per gate criteria",
+    "ISS-0809_gap_documented": "PASS — integration gap documented, not hidden; component-isolation boundary makes it structurally undisputable; non-blocking per gate criteria",
+    "all_mutants_reverted": "PASS — all applied mutants reverted; git status --porcelain on each mutant file confirmed empty; post-revert test runs all green",
+    "no_skips_on_must_tests": "PASS — no test.skip, xit, xdescribe, or equivalent patterns found in any test file",
+    "no_todo_stubs": "PASS — no 'TODO: implement test' found",
+    "fixture_isolation": "PASS — afterEach cleanup, no shared mutable state",
+    "no_hardcoded_secrets": "PASS — test data only"
+  },
+
+  "result": {
+    "status": "PASS",
+    "summary": "All four test designs meet the WF-03 standard. ISS-0815's tsc guard is independently verified (TS2741 at correct lines). ISS-0811's vitest guard is independently confirmed (TC-ISS0811-01 fails with exact DOM output). ISS-0814 and ISS-0809 integration gaps are documented explicitly in the spec and handoff — neither is hidden. All mutants cleanly reverted; post-revert suites green; working tree clean on all mutant files.",
+    "artifacts_out": [
+      "handoffs/WF03-BATCH-ISS0809-ISS0811-ISS0814-ISS0815-20260925/step-04b-test-design-gate.json"
+    ],
+    "next_action": "Route to TEST-RUNNER (Step 4c / Step 4)"
+  }
+}

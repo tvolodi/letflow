@@ -47,7 +47,9 @@ describe('ISS-0812/ISS-0813 — full identity.ts audit (ISS-0782 follow-up)', ()
       await rolesApi.create({ name: 'PROCESS_OPERATOR' })
 
       const [url, init] = spy.mock.calls[0] as [string, RequestInit]
-      expect(url).toContain('/api/v1/identity/roles')
+      // Use exact pathname check so a suffix-corrupted path (e.g. /roles-WRONG)
+      // is caught as well as an admin/ prefix regression.
+      expect(new URL(url, 'http://localhost').pathname).toBe('/api/v1/identity/roles')
       expect(url).not.toContain('/api/v1/admin/roles')
       expect(init).toEqual(expect.objectContaining({ method: 'POST' }))
     })

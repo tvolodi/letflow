@@ -58,6 +58,87 @@ fix_direction: >
   more memory headroom, or leaving this open as secondhand-report-only
   pending a future attempt. No CODE-DESIGNER routing performed --
   nothing to hand off without a confirmed root cause.
+
+  ISSUE-FIXER ATTEMPT 2 (2026-09-24, real documented runs on this same
+  host, this time with adequate memory headroom -- host state verified
+  before starting: ~1.0-1.3Gi free / 2.9-3.6Gi available, load average
+  ~0.5-1.4, no swap, no repeat of the prior attempt's OOM condition at
+  any point):
+
+  Step 1 -- clean single full-suite run, `TEST_PARALLEL_N=4 mix
+  letflow.check.test` (deps/_build symlinked into the worktree from the
+  main checkout to avoid a from-scratch `deps.get`/compile under
+  memory pressure): `Result: 1240/1242 passed, 1 excluded` / `Failed: 2
+  tests`. Both failures, read from the actual log, were
+  `Letflow.IdentityTest` "resolve_tenant_by_realm/1 and
+  resolve_realm_by_tenant/1 (REQ-019 acceptance criterion 1)" --
+  i.e. exactly the already-filed ISS-0766 flake, not either of this
+  issue's two target flakes. Neither `Letflow.Routers.HelpTest` nor
+  `Letflow.SandboxPoolTest` appears anywhere in the failure output;
+  full log at (session-local) scratchpad/logs/run1_full.log.
+
+  Step 2 -- targeted contention repro, since step 1's normal
+  partitioned load didn't surface either target flake (consistent with
+  a flake that needs real timing pressure, not just parallel
+  partitions). Rather than running two full concurrent
+  ecto.create/migrate suites again (the exact condition that OOM'd the
+  prior attempt), contention was generated directly around the two
+  target files: `mix test test/letflow/routers/help_test.exs
+  test/letflow/sandbox_pool_test.exs` run 15 times in a loop, with a
+  background pressure generator running throughout -- 6 CPU-bound busy
+  loops (host has 8 cores) plus one Python process holding ~700MB
+  resident, both well inside the ~2.7-3.6Gi available headroom
+  confirmed before and monitored (via /proc/meminfo) before every
+  iteration, with a 600MB-available abort floor per iteration (never
+  triggered -- available stayed 2766-2945MB throughout all 15
+  iterations). Result: 15/15 iterations green, `Result: 36 passed` each
+  time (540/540 total, 0 failures). Confirmed from the actual per-test
+  teardown log lines (not just the summary count) that the specific
+  `select_live_row/2` tie-break tests -- all four of them, including
+  "two tied live generic rows -- the most recently updated_at one
+  wins, deterministically" (the literal tie-break-under-timing test)
+  -- genuinely executed (not skipped/excluded) in every iteration, and
+  that SandboxPoolTest's full 23-test suite (which includes RT-2, the
+  ISS-0224-class waiter-timeout test) ran to completion every time,
+  since the 36-count only holds if all of it ran.
+
+  CONCLUSION. Neither flake reproduced under genuinely adequate host
+  conditions this time -- this is not another capacity-limited
+  invalidated attempt like attempt 1's runs 2-4; this is a real
+  negative result under real timing/CPU/memory contention. Two
+  candidate explanations, in order of likelihood: (a) ISS-0224's own
+  fix (2026-08-22) already addressed the SandboxPoolTest flake's root
+  cause -- RT-2 was rewritten from a `Process.sleep`-based timing probe
+  to a deterministic `{:claiming, label}` message barrier specifically
+  because the old timing-based version was itself flaky under
+  concurrent-suite load (see ISS-0224's own resolution_note, "A FLAKE
+  THIS RUN CAUGHT AND FIXED"), so a SandboxPoolTest flake surfacing
+  again post-fix would need to be a new failure mode, and 15/15 clean
+  under real contention is evidence against one currently existing; (b)
+  the original RELEASE-VALIDATOR report (WF02-REQ372-20260921) may
+  have caught a true rare flake that needs a still-different contention
+  shape (e.g. genuinely simultaneous DB provisioning across two live
+  suites, which this attempt deliberately avoided reproducing to stay
+  within this host's memory ceiling) or was itself a one-off
+  environmental artifact from that session (that run's own host state
+  is unknown to this investigation). Neither can be ruled out from here.
+  RECOMMENDATION: no fix cycle to route -- there is still no confirmed,
+  reproduced root cause to hand CODE-DESIGNER, and routing a design
+  change against unreproduced symptoms would be guessing. Do not close
+  outright either, since a real contention shape (two genuinely
+  concurrent full-suite runs) remains untested on this host for
+  capacity reasons, not because it was tried and passed. Reasonable
+  next steps, in preference order: (1) leave open at MINOR/low
+  priority and let it re-surface (or not) on a future full-suite run
+  the way ISS-0766 did, rather than spending more investigation budget
+  now; (2) if it recurs in a future RELEASE-VALIDATOR or TEST-RUNNER
+  report, capture that run's full failure output directly (assertion
+  message, seed, partition) before filing another secondhand entry --
+  that would give a concrete repro to chase instead of another
+  contention-simulation attempt; (3) only if memory headroom on some
+  future host attempt allows two genuine concurrent
+  ecto.create/migrate suites without OOM, retry the original literal
+  condition once more.
 queue_ref: Q-774  # letflow-queue task id 774, issue_ref ISS-0776 (local
   # filename diverges from the queue id -- 0774 was already taken
   # locally by the process-routing-role Authorization issue, and 0775

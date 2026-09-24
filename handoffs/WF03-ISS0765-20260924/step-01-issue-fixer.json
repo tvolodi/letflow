@@ -1,0 +1,318 @@
+{
+  "handoff_id": "WF03-ISS0765-20260924-step-01",
+  "run_id": "WF03-ISS0765-20260924",
+  "workflow_id": "WF-03",
+  "step": "Step 0.5 + Step 1",
+  "to_agent": "ISSUE-FIXER",
+  "from_agent": "ORCH",
+  "status": "COMPLETED",
+  "created_at": "2026-09-24T16:36:00Z",
+  "started_at": "2026-09-24T16:36:00Z",
+  "completed_at": "2026-09-24T16:48:00Z",
+  "context": {
+    "branch_name": "feature/WF03-ISS0765-20260924",
+    "issue_id": "ISS-0765",
+    "issue_file": "docs/issues/ISS-0765.yaml",
+    "queue_ref": "Q-810",
+    "github_ref": "GH-1798",
+    "severity_as_filed": "MAJOR",
+    "artifacts_in": [
+      "docs/issues/ISS-0765.yaml",
+      "docs/issues/ISS-0736.yaml",
+      "docs/issues/ISS-0782.yaml",
+      "web/src/api/identity.ts",
+      "web/src/api/client.ts",
+      "web/src/types/api.ts",
+      "web/src/pages/admin/GroupsPage.tsx",
+      "web/src/hooks/useAdminUsers.ts",
+      "web/src/api/__tests__/identity.removeMembers.test.ts",
+      "web/src/api/__tests__/identity.usersRoles.test.ts",
+      "lib/letflow/routers/identity.ex",
+      "lib/letflow/plugs/api_pipeline.ex",
+      "lib/letflow/api/authorized_router.ex",
+      "lib/letflow/api/pagination.ex",
+      "lib/letflow/api/response.ex",
+      "lib/letflow/identity.ex",
+      "lib/letflow/router.ex"
+    ]
+  },
+  "task": {
+    "description": "WF-03 Step 0.5 (registry lookup) + Step 1 (root-cause diagnosis) for ISS-0765. Establish the real mounted prefix of Letflow.Routers.Identity from source, build an exact per-function route table for groupsApi's 7 remaining functions, note response-shape mismatches, and map caller blast radius. Do NOT implement the fix.",
+    "acceptance_criteria": [
+      "Step 0.5: prior resolved entries with matching symptoms identified; recurrence assessed; severity flagged >= MAJOR if recurring",
+      "Real mount prefix of Letflow.Routers.Identity established from quoted source, not from the moduledoc",
+      "Per-function table: current URL+method, real backend route (or none), verdict CORRECT / WRONG-PREFIX / NO-BACKEND-ROUTE-EXISTS",
+      "Independent verification that GET /groups/:id and PATCH/PUT /groups/:id do not exist",
+      "Response-shape mismatches between TS return types and actual backend bodies recorded",
+      "Caller blast radius in web/src/ enumerated",
+      "No fix implemented"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": {
+      "step_0_5_registry_lookup": {
+        "prior_matches_found": true,
+        "search_method": "grep -ril 'admin/groups|removeMembers|groupsApi' docs/issues/ ; grep -rln 'admin/users|admin/roles|usersRoles' docs/issues/ ; plus reading the two shipped regression tests, each of which names its originating issue in its file header.",
+        "matches": [
+          {
+            "issue": "ISS-0736",
+            "status": "resolved",
+            "resolved_in_run": "WF03-ISS0736-20260921",
+            "what_it_corrected": "groupsApi.removeMembers ONLY. Corrected FROM 'DELETE /api/v1/admin/groups/:id/members' (with a discarded userIds array) TO 'DELETE /api/v1/identity/groups/${id}/members/${userId}'. Verified against web/src/api/identity.ts line 55 as it stands today and against web/src/api/__tests__/identity.removeMembers.test.ts.",
+            "significance": "This establishes the canonical correction target for the whole symptom class: /api/v1/admin/... -> /api/v1/identity/..."
+          },
+          {
+            "issue": "ISS-0782",
+            "status": "resolved",
+            "resolved_in_run": "WF03-ISS0782-20260923",
+            "what_it_corrected": "usersApi.list/.get/.create/.update (from '/api/v1/users' and '/api/v1/admin/users') and rolesApi.list (from '/api/v1/admin/roles'), all to '/api/v1/identity/...'. Regression test: web/src/api/__tests__/identity.usersRoles.test.ts.",
+            "significance": "NOT referenced by ISS-0765's own 'related:' block, because ISS-0782 was filed 2026-09-22, a day AFTER ISS-0765 was filed. Same root cause, same file, fixed one day before this run. ISS-0765's record does not know it exists."
+          }
+        ],
+        "recurrence_verdict": "YES. This is an incompletely-applied fix, now entering its THIRD partial pass over one file. web/src/api/identity.ts has already been corrected twice for the identical defect (a hardcoded '/api/v1/admin/...' or bare '/api/v1/...' path literal that is mounted nowhere), and each run corrected only the call sites inside its own immediate scope: ISS-0736 fixed 1 of 8 groupsApi functions; ISS-0782 fixed 5 of the users/roles call sites. Neither audited the file. The root cause was never removed -- only individual instances of it were.",
+        "severity_flag": "Confirmed MAJOR. WF-03 Step 0.5 requires at-least-MAJOR on a recurrence; the filed severity is already MAJOR so no change is needed. Deliberately NOT raised to BLOCKER, consistent with ISS-0765's own severity_rationale: confined to the Groups admin surface, not to authentication/authorization itself.",
+        "consequence_for_this_run": "The fix design should be a whole-file audit of web/src/api/identity.ts, not a 7-function patch. This diagnosis found further still-broken call sites outside ISS-0765's stated scope (see remaining_defects_outside_this_issues_scope). Patching only the 7 named functions makes this the third partial pass and leaves the class alive for a fourth."
+      },
+      "step_1_diagnosis": {
+        "reproduction_performed": [
+          {
+            "probe": "Backend route table, by runtime introspection of the compiled module -- not the moduledoc, not grep.",
+            "command": "LETFLOW_SECRETS_MASTER_KEY=<generated> MIX_ENV=dev mix run --no-start --no-compile -e 'Letflow.Routers.Identity.__authz_routes__() |> Enum.filter(fn {_m,p,_k} -> String.starts_with?(p, \"/groups\") end) |> Enum.sort() |> Enum.each(...)'",
+            "why_authoritative": "Letflow.Api.AuthorizedRouter's __before_compile__ injects a public __authz_routes__/0 accumulating one {method, path, policy_key} tuple per authz_* macro expansion (lib/letflow/api/authorized_router.ex:81-88; build_route/5 at :117-131). It IS the compiled route table, read back out of the BEAM module.",
+            "actual_output": [
+              "DELETE /api/v1/identity/groups/:id   policy=GroupsManage",
+              "DELETE /api/v1/identity/groups/:id/members/:user_id   policy=GroupsManage",
+              "GET /api/v1/identity/groups   policy=GroupsManage",
+              "GET /api/v1/identity/groups/:id/members   policy=GroupsManage",
+              "POST /api/v1/identity/groups   policy=GroupsManage",
+              "POST /api/v1/identity/groups/:id/members   policy=GroupsManage"
+            ],
+            "conclusion": "Exactly SIX group routes exist. There is NO 'GET /groups/:id' and NO 'PATCH' or 'PUT /groups/:id'. The handoff task's independently-observed list is CONFIRMED, by runtime measurement rather than by reading."
+          },
+          {
+            "probe": "Whole-codebase router sweep for any authz path containing 'admin' or 'group'.",
+            "command": "mix run --no-start -e ':code.all_available() |> filter Elixir.Letflow.Routers.* |> each: if function_exported?(m, :__authz_routes__, 0), print paths containing \"admin\" or \"group\"'",
+            "actual_output": "Six lines, ALL from Elixir.Letflow.Routers.Identity -- the same six /groups* paths. ZERO routers declare any authz path containing the substring 'admin'.",
+            "conclusion": "No '/admin/groups' route exists anywhere in the compiled application, at any mount."
+          },
+          {
+            "probe": "Frontend call-target capture with a real window.fetch spy (temporary probe, since deleted).",
+            "command": "cd web && npx vitest run src/api/__tests__/zz-iss0765-probe.test.ts   (copied in from scratch/iss0765-probe.test.ts because vitest's root is web/ and refuses to collect a file above it; DELETED afterwards and 'git status --porcelain web/ lib/ test/' verified EMPTY)",
+            "actual_output": [
+              "GET /api/v1/admin/groups",
+              "GET /api/v1/admin/groups/G1",
+              "POST /api/v1/admin/groups",
+              "PATCH /api/v1/admin/groups/G1",
+              "DELETE /api/v1/admin/groups/G1",
+              "POST /api/v1/admin/groups/G1/members",
+              "DELETE /api/v1/identity/groups/G1/members/U1",
+              "GET /api/v1/admin/groups/G1/members"
+            ],
+            "conclusion": "Seven of eight groupsApi functions emit the dead /api/v1/admin/groups prefix at runtime. Only .removeMembers (the ISS-0736 fix) emits a live path. ISS-0765's prose claim is CONFIRMED by observation, not inherited from the report."
+          }
+        ],
+        "root_cause": {
+          "statement": "web/src/api/identity.ts's groupsApi hardcodes URL path literals under '/api/v1/admin/groups'. Letflow.Plugs.ApiPipeline NEVER mounts '/admin/groups'. It mounts forward(\"/identity\", to: Letflow.Routers.Identity) at lib/letflow/plugs/api_pipeline.ex:141, and the ONLY /admin-prefixed forward in the entire pipeline is forward(\"/admin/services\", to: Letflow.Routers.AdminServices) at :154 -- Plug.Router forwards are prefix-exclusive, so it does not match '/admin/groups'. A request to /api/v1/admin/groups... therefore falls past every forward to ApiPipeline's own catch-all at lib/letflow/plugs/api_pipeline.ex:203-205 -- 'match _ do Letflow.Api.Response.not_found(conn) end' -- i.e. a hard HTTP 404 with an RFC 9457 problem body, AFTER successful authentication.",
+          "broken_invariant": "Every client-side path literal in web/src/api/*.ts must correspond to a route actually mounted in lib/letflow/plugs/api_pipeline.ex's forward table. Nothing enforces this: client.get/post/patch/delete take a plain `string`, so a nonexistent path is a perfectly well-typed program, and no build step, type, lint rule or test couples the two sides.",
+          "why_existing_tests_did_not_catch_it": "Both shipped regression tests (identity.removeMembers.test.ts, identity.usersRoles.test.ts) are per-function string assertions -- each asserts only the ONE function its own run fixed. Neither enumerates groupsApi, and nothing anywhere asserts the absence of the substring '/api/v1/admin/' across the module. GroupsPage.tsx's own component tests mock at the api-module / MSW layer, so they never exercise a real path. ISS-0782's suggested_fix names this exact gap in its own words: 'apparently none exists that runs against a real backend -- only mocked unit tests, which is exactly why this went undetected.'",
+          "runtime_effect": "web/src/api/client.ts throws an ApiError on any non-2xx; React Query surfaces it. In web/src/pages/admin/GroupsPage.tsx the primary groups list query (:47) therefore fails, rendererState resolves through classifyError(error) (:52), and the whole Groups admin screen renders its error state and never lists a group. The create (:67), add-member (:76) and delete (:97) mutations each 404 as well. This is the identical failure mode ISS-0782 observed live on the Users screen ('Something went wrong loading this content.')."
+        },
+        "route_table": {
+          "legend": "CORRECT = already hits a real mounted route. WRONG-PREFIX = a real route exists, only the prefix is wrong. NO-BACKEND-ROUTE-EXISTS = no route at ANY prefix; a prefix correction cannot fix it.",
+          "mount_chain_quoted_from_source": [
+            "lib/letflow/router.ex:130   ->   forward(\"/api/v1\", to: Letflow.Plugs.ApiPipeline)",
+            "lib/letflow/plugs/api_pipeline.ex:141   ->   forward(\"/identity\", to: Letflow.Routers.Identity)",
+            "=> every Letflow.Routers.Identity authz_* route is served at /api/v1/identity<path>",
+            "lib/letflow/plugs/api_pipeline.ex:154   ->   forward(\"/admin/services\", to: Letflow.Routers.AdminServices)   [the ONLY /admin/* mount; prefix-exclusive, never matches /admin/groups]",
+            "lib/letflow/plugs/api_pipeline.ex:203-205   ->   match _ do Letflow.Api.Response.not_found(conn) end"
+          ],
+          "rows": [
+            {
+              "fn": "groupsApi.list()",
+              "identity_ts_line": 37,
+              "currently_calls": "GET /api/v1/admin/groups",
+              "real_backend_route": "GET /api/v1/identity/groups   (authz_get \"/groups\", :GroupsManage -- lib/letflow/routers/identity.ex:182)",
+              "verdict": "WRONG-PREFIX",
+              "fix": "/api/v1/admin/groups -> /api/v1/identity/groups"
+            },
+            {
+              "fn": "groupsApi.get(id)",
+              "identity_ts_line": 40,
+              "currently_calls": "GET /api/v1/admin/groups/${id}",
+              "real_backend_route": "NONE. No 'GET /groups/:id' in __authz_routes__(). Even at the correct /identity prefix it would fall to Letflow.Routers.Identity's own 'match _ do Response.not_found(conn) end' (lib/letflow/routers/identity.ex:227-229). There is also no Letflow.Identity.get_group/2 context function -- grep of lib/letflow/identity.ex yields create_group/2 (:431), add_group_member/3 (:506), list_groups/1 (:533), delete_group/2 (:559), list_group_members/3 (:606), remove_group_member/3 (:652), and nothing else.",
+              "verdict": "NO-BACKEND-ROUTE-EXISTS",
+              "fix": "NOT fixable by a prefix correction. Zero production callers. Recommend DELETE the function. Adding GET /groups/:id is new backend behaviour = WF-01 requirement, out of WF-03 scope."
+            },
+            {
+              "fn": "groupsApi.create(body)",
+              "identity_ts_line": 43,
+              "currently_calls": "POST /api/v1/admin/groups",
+              "real_backend_route": "POST /api/v1/identity/groups   (authz_post \"/groups\", :GroupsManage -- lib/letflow/routers/identity.ex:178). Body contract matches: @create_group_schema (:427-450) requires \"name\", accepts optional \"display_name\" and \"description\".",
+              "verdict": "WRONG-PREFIX",
+              "fix": "/api/v1/admin/groups -> /api/v1/identity/groups"
+            },
+            {
+              "fn": "groupsApi.update(id, body)",
+              "identity_ts_line": 46,
+              "currently_calls": "PATCH /api/v1/admin/groups/${id}",
+              "real_backend_route": "NONE. No PATCH and no PUT on /groups/:id in __authz_routes__(). No Letflow.Identity.update_group/3 context function either.",
+              "verdict": "NO-BACKEND-ROUTE-EXISTS",
+              "fix": "NOT fixable by a prefix correction. Zero production callers. Recommend DELETE the function. Adding it is new backend behaviour = WF-01."
+            },
+            {
+              "fn": "groupsApi.delete(id)",
+              "identity_ts_line": 49,
+              "currently_calls": "DELETE /api/v1/admin/groups/${id}",
+              "real_backend_route": "DELETE /api/v1/identity/groups/:id   (authz_delete \"/groups/:id\", :GroupsManage -- lib/letflow/routers/identity.ex:186). Returns 204, or 404 on {:error, :not_found_or_has_members}.",
+              "verdict": "WRONG-PREFIX",
+              "fix": "/api/v1/admin/groups -> /api/v1/identity/groups"
+            },
+            {
+              "fn": "groupsApi.addMembers(id, userIds)",
+              "identity_ts_line": 52,
+              "currently_calls": "POST /api/v1/admin/groups/${id}/members  body {user_ids: [...]}",
+              "real_backend_route": "POST /api/v1/identity/groups/:id/members   (authz_post \"/groups/:id/members\", :GroupsManage -- lib/letflow/routers/identity.ex:190). Body contract: @add_member_schema (:491-494) accepts optional \"user_id\" OR optional \"user_ids\" array; resolve_member_user_id/1 (:525-535) takes ONLY the FIRST element of user_ids. Returns 201 when created, 200 when already a member.",
+              "verdict": "WRONG-PREFIX",
+              "fix": "/api/v1/admin/groups -> /api/v1/identity/groups. See caveat-3: the plural name is a promise the backend cannot honour."
+            },
+            {
+              "fn": "groupsApi.removeMembers(id, userId)",
+              "identity_ts_line": 55,
+              "currently_calls": "DELETE /api/v1/identity/groups/${id}/members/${userId}",
+              "real_backend_route": "DELETE /api/v1/identity/groups/:id/members/:user_id   (authz_delete, lib/letflow/routers/identity.ex:198)",
+              "verdict": "CORRECT (already fixed by ISS-0736 / REQ-378)",
+              "fix": "none -- do not touch. web/src/api/__tests__/identity.removeMembers.test.ts guards it."
+            },
+            {
+              "fn": "groupsApi.members(id)",
+              "identity_ts_line": 58,
+              "currently_calls": "GET /api/v1/admin/groups/${id}/members",
+              "real_backend_route": "GET /api/v1/identity/groups/:id/members   (authz_get \"/groups/:id/members\", :GroupsManage -- lib/letflow/routers/identity.ex:194)",
+              "verdict": "WRONG-PREFIX + RESPONSE-SHAPE MISMATCH -- see caveat-1: correcting the prefix ALONE converts a silent 404 into a thrown TypeError",
+              "fix": "/api/v1/admin/groups -> /api/v1/identity/groups AND fix the return type / the two GroupsPage consumers."
+            }
+          ],
+          "summary_counts": "8 functions: 1 already CORRECT, 5 WRONG-PREFIX (list, create, delete, addMembers, members), 2 NO-BACKEND-ROUTE-EXISTS (get, update).",
+          "answer_to_the_direct_question": "YES -- .get and .update have no backend route at all. Not at /admin, not at /identity, nowhere. They also have no backing Letflow.Identity context function, so they are not a route-registration oversight but functionality that was never built."
+        },
+        "response_shape_mismatches": [
+          {
+            "id": "caveat-1-members-is-the-dangerous-one",
+            "severity": "HIGH -- a naive prefix-only fix turns a silent 404 into an uncaught render-time TypeError",
+            "client_promises": "groupsApi.members(id): Promise<User[]> -- a bare array (web/src/api/identity.ts:58)",
+            "backend_actually_returns": "handle_list_group_members/3 (lib/letflow/routers/identity.ex:543-568) calls Pagination.page_response(Enum.map(users, &user_map/1), next_cursor), which builds %Letflow.Api.Pagination.Page{items:, next_cursor:, count:} (lib/letflow/api/pagination.ex:171-173; struct at :72-89) whose encoder is '@derive {Jason.Encoder, only: [:items, :next_cursor, :count]}'. The wire body is an OBJECT: {\"items\": [...], \"next_cursor\": ..., \"count\": N}. The route is cursor-paginated and also accepts 'page_size' and 'cursor' query params, which the client never sends.",
+            "consumer_impact": "web/src/pages/admin/GroupsPage.tsx consumes `members` as an array in three places: :103 '(members ?? []).map(...)', :223 '(members ?? []).length === 0', :227 '(members ?? []).map(...)'. Given an object, '.length' is undefined so the '=== 0' empty-state guard is FALSE, execution falls through to '.map', and 'members.map is not a function' throws during render -- the Manage-members dialog crashes. Today this is masked because the call 404s before any body is parsed. Fixing only the prefix UNMASKS it.",
+            "fix_needed": "Either retype to the Page shape (items + next_cursor + count) and read '.items' at the three GroupsPage sites, OR unwrap '.items' inside the api function and keep the User[] signature. CODE-DESIGNER chooses. Note that cursor pagination means an unwrap silently caps the member list at the default page_size of 50 (Pagination.default_page_size/0, lib/letflow/api/pagination.ex:98-99)."
+          },
+          {
+            "id": "caveat-2-list-overpromises",
+            "severity": "LOW (type-lie, currently benign)",
+            "client_promises": "groupsApi.list(): Promise<PagedResponse<Group>> where PagedResponse = {items, total, page, page_size} (web/src/types/api.ts:21-26)",
+            "backend_actually_returns": "handle_list_groups/2 (lib/letflow/routers/identity.ex:468-472) -> Response.ok(conn, %{\"items\" => [...], \"total\" => total}). 'page' and 'page_size' are NEVER emitted. The route takes no pagination params at all -- Identity.list_groups/1 takes opts only.",
+            "consumer_impact": "Both consumers read only '.items' (GroupsPage.tsx:50, useAdminUsers.ts:47 via useAdminGroups), so nothing breaks today. Any future code trusting data.page_size silently gets undefined with no type error.",
+            "fix_needed": "Optional. Narrow the return type to {items: Group[]; total: number}, or make page/page_size optional on PagedResponse. A decision for CODE-DESIGNER, not a requirement."
+          },
+          {
+            "id": "caveat-2b-group-item-shape",
+            "severity": "LOW",
+            "client_promises": "web/src/types/api.ts:444-452 'Group' declares id, name, display_name, is_system: boolean (REQUIRED), plus optional group_id and member_count.",
+            "backend_actually_returns": "group_map/1 (lib/letflow/routers/identity.ex:749-757) emits exactly {\"id\", \"name\", \"display_name\", \"description\", \"created_at\"}. NEITHER 'is_system' NOR 'member_count' is ever emitted.",
+            "consumer_impact": "GroupsPage.tsx:28-30 'groupMembers(g) { return g.member_count ?? 0 }' -- so the 'Members' column (:113) and the delete-confirmation member count (:123) will render 0 for every group regardless of real membership. GroupsPage re-declares both as optional on its local GroupRow type (:12-18), which is why this compiles.",
+            "fix_needed": "Out of scope for a routing fix, but it is a visibly-wrong number on the very screen this run makes reachable for the first time. Recommend ORCH file it separately rather than expanding this run."
+          },
+          {
+            "id": "caveat-3-addMembers-plural-is-unhonourable",
+            "severity": "MEDIUM (silent data loss the moment any caller passes more than one id)",
+            "client_promises": "addMembers(id, userIds: string[]) -- plural, implies bulk.",
+            "backend_actually_returns": "resolve_member_user_id/1 (lib/letflow/routers/identity.ex:525-535) matches '%{\"user_ids\" => [first | _rest]}' and returns ONLY first. Every element after the first is silently DISCARDED. This is a deliberate, explicitly-documented R-Co port decision (OQ-2 note at :484-489), not an oversight -- so it will not be changed on the backend side.",
+            "consumer_impact": "The single caller passes exactly one id ('groupsApi.addMembers(id, [userId])', GroupsPage.tsx:76), so no loss today. The NAME is the hazard. This is structurally the same trap ISS-0736 fixed on removeMembers, whose pre-fix signature also took an array the backend could not honour.",
+            "fix_needed": "Recommend renaming to addMember(id, userId: string) sending {user_id: userId}, mirroring the removeMembers correction exactly. One caller, trivial update. CODE-DESIGNER's call."
+          }
+        ],
+        "blast_radius": {
+          "method": "grep -rn 'groupsApi\\.' web/src/ --include=*.ts --include=*.tsx",
+          "production_call_sites": [
+            {
+              "fn": "list",
+              "callers": [
+                "web/src/pages/admin/GroupsPage.tsx:47 -- the page's primary list query; its failure is what blanks the entire screen",
+                "web/src/hooks/useAdminUsers.ts:47 -- exported as useAdminGroups"
+              ]
+            },
+            {"fn": "get", "callers": [], "note": "ZERO production callers. Dead code."},
+            {"fn": "create", "callers": ["web/src/pages/admin/GroupsPage.tsx:67 -- createGroup mutation"]},
+            {"fn": "update", "callers": [], "note": "ZERO production callers. Dead code."},
+            {"fn": "delete", "callers": ["web/src/pages/admin/GroupsPage.tsx:97 -- deleteGroup mutation"]},
+            {"fn": "addMembers", "callers": ["web/src/pages/admin/GroupsPage.tsx:76 -- addMember mutation, passes a single-element array"]},
+            {"fn": "removeMembers", "callers": ["web/src/pages/admin/GroupsPage.tsx:87"], "note": "already correct; leave alone"},
+            {"fn": "members", "callers": ["web/src/pages/admin/GroupsPage.tsx:56 (query), consumed as an array at :103, :223, :227"]}
+          ],
+          "consumers_of_useAdminGroups": "No consumer of useAdminGroups was found outside web/src/hooks/useAdminUsers.ts itself. CODE-DESIGNER should re-verify before treating it as dead.",
+          "files_needing_edit": [
+            "web/src/api/identity.ts -- the 5 WRONG-PREFIX literals; the fate of the 2 dead functions; the .members return type",
+            "web/src/pages/admin/GroupsPage.tsx -- ONLY if .members is retyped rather than unwrapped (sites :103, :223, :227)",
+            "web/src/api/__tests__/ -- new regression coverage, per ISS-0765's fix_direction, mirroring identity.removeMembers.test.ts"
+          ],
+          "backend_files_needing_edit": "NONE. The backend is correct and complete for all 5 fixable functions. This is a pure frontend routing defect, exactly as ISS-0782 concluded for the Users screen.",
+          "security_review_note": "These are tenant-data-path calls (:GroupsManage policy), so SECURITY-REVIEWER is in play at Step 3 per CLAUDE.md's roster. Note however that the change only redirects a client to an ALREADY-AUTHORIZED route -- it grants no new capability. Letflow.Plugs.Authorize plus the :GroupsManage policy key already gate all six routes server-side, independently of what the client asks for."
+        },
+        "remaining_defects_outside_this_issues_scope": {
+          "why_recorded_here": "core-directives.md 'No Issue Left Local-Only' plus 'Unblock-Everything' scope boundary: these are noticed, not blocking. Reported to ORCH for filing. ISSUE-FIXER does not call the queue or gh and does not allocate an issue id.",
+          "finding_1": {
+            "title": "usersApi.delete and usersApi.resetPassword call routes that exist at NO prefix -- ISS-0782's own fix was incomplete",
+            "evidence": "web/src/api/identity.ts:28 'POST /api/v1/users/${id}/reset-password' and :31 'DELETE /api/v1/users/${id}'. Runtime __authz_routes__() filtered to /users returns exactly five routes: POST /users, GET /users, GET /users/:id, PATCH /users/:id, POST /users/:id/status. There is no DELETE /users/:id and no reset-password route anywhere, at any prefix; and '/api/v1/users' is not a mounted forward at all (only /identity is). Zero production callers found in web/src.",
+            "severity_suggestion": "MINOR (dead code, no caller) -- but it is direct evidence that ISS-0782 closed while leaving the same defect class live in the same file."
+          },
+          "finding_2": {
+            "title": "rolesApi.get/.create/.update/.delete/.grantPermission/.revokePermission all call the dead /api/v1/admin/roles prefix",
+            "evidence": "web/src/api/identity.ts:70-84. Runtime __authz_routes__() filtered to /roles returns exactly TWO routes: POST /api/v1/identity/roles and GET /api/v1/identity/roles. So rolesApi.create is WRONG-PREFIX (fixable) and .get/.update/.delete/.grantPermission/.revokePermission are NO-BACKEND-ROUTE-EXISTS. ISS-0782 corrected rolesApi.list only. Zero production callers for the six.",
+            "severity_suggestion": "MINOR to MAJOR at ORCH's discretion -- currently uncalled so no live breakage, but the same latent trap.",
+            "note": "Findings 1 and 2 could instead be folded into THIS run by widening the fix to a whole-file audit of web/src/api/identity.ts. That would finally remove the root cause instead of its third instance. Recommended -- but it is ORCH's scope call, not ISSUE-FIXER's."
+          },
+          "finding_3": {
+            "title": "GroupsPage 'Members' column always renders 0",
+            "evidence": "See caveat-2b. group_map/1 never emits member_count; groupMembers/1 defaults to 0.",
+            "severity_suggestion": "MINOR"
+          },
+          "finding_4": {
+            "title": "Nothing mechanically couples client path literals to the mounted route table, so a fourth recurrence is unprevented",
+            "evidence": "Three separate WF-03 runs (ISS-0736, ISS-0782, ISS-0765) have now corrected path literals in web/src/api/identity.ts one call site at a time, each shipping a per-function string test that guards only its own function. A cheap durable guard exists: Letflow.Routers.*.__authz_routes__() is already a machine-readable route table (it is exactly what this diagnosis used) and lib/letflow/plugs/api_pipeline.ex's forwards supply the prefixes -- so a generated fixture plus one vitest asserting that every path literal in web/src/api/*.ts resolves against it would close the class outright. A far cheaper interim guard: a single test asserting the substring '/api/v1/admin/' appears in web/src/api/identity.ts ONLY for '/api/v1/admin/services'.",
+            "severity_suggestion": "MAJOR (process defect -- this is the thing that keeps costing whole pipeline runs)"
+          }
+        },
+        "what_the_fix_must_change": [
+          "1. web/src/api/identity.ts: replace the 5 live WRONG-PREFIX literals '/api/v1/admin/groups' -> '/api/v1/identity/groups' in .list, .create, .delete, .addMembers, .members. Leave .removeMembers untouched.",
+          "2. Decide the fate of .get and .update -- they have NO backend route at ANY prefix and NO Identity context function. Recommend deletion (zero callers). Do NOT 'correct' them to /api/v1/identity/groups/:id: that swaps a 404 at the pipeline catch-all for a 404 at Letflow.Routers.Identity's own 'match _', which is the same bug wearing a better prefix. This also means ISS-0765's fix_direction ('correct .get/.update to the real prefix') is not satisfiable as literally written.",
+          "3. Fix .members's response shape WITH the prefix change, not after it -- a prefix-only change makes GroupsPage.tsx:227 throw 'members.map is not a function'. Highest-risk item in the whole fix.",
+          "4. Recommended: rename .addMembers -> .addMember(id, userId: string) sending {user_id}, mirroring ISS-0736's removeMembers correction; the backend discards every id after the first.",
+          "5. Regression coverage (per ISS-0765's fix_direction): mirror web/src/api/__tests__/identity.removeMembers.test.ts. To close the class rather than add a third per-function guard, TEST-DESIGNER should write ONE table-driven test enumerating every groupsApi function, asserting its exact method+path and asserting that no emitted URL contains '/api/v1/admin/'. Per WF-03 Step 4 it must be shown to FAIL on the pre-fix commit -- it will, on 7 of 8 rows; the probe output recorded above IS the pre-fix measurement -- and PASS post-fix.",
+          "6. NO backend change. lib/ and priv/repo/migrations/ are untouched by this fix."
+        ],
+        "scope_discipline": "No fix implemented. No file outside handoffs/ was modified by this step. The temporary vitest probe was copied into web/src/api/__tests__/ (vitest's root is web/ and will not collect a file above it), run once, and DELETED; 'git status --porcelain web/ lib/ test/' returned EMPTY afterwards. The probe source is retained at scratch/iss0765-probe.test.ts, which is git-ignored, per core-directives' Scratch rule."
+      }
+    },
+    "issues": [
+      {
+        "severity": "MAJOR",
+        "description": "RECURRENCE. web/src/api/identity.ts has already been corrected for this identical defect class twice (ISS-0736 -> removeMembers; ISS-0782 -> usersApi.list/get/create/update + rolesApi.list), and the defect still remains in 14 further functions across groupsApi/rolesApi/usersApi. Neither prior run audited the file. ISS-0765's 'related:' block does not mention ISS-0782 at all, because ISS-0782 was filed a day after ISS-0765. Fixing only the 7 named groupsApi functions makes this the third partial pass and leaves finding_1 and finding_2 live."
+      },
+      {
+        "severity": "MAJOR",
+        "description": "A prefix-only correction of groupsApi.members converts a silent 404 into a thrown TypeError in GroupsPage.tsx's Manage-members dialog ('(members ?? []).map' over a {items,next_cursor,count} object). The fix design MUST handle the response shape, not just the URL. Flagged explicitly because a literal reading of ISS-0765's fix_direction ('correct ... to the real prefix') would miss it."
+      },
+      {
+        "severity": "MINOR",
+        "description": "groupsApi.get and groupsApi.update have no backend route at any prefix and no Letflow.Identity context function, so ISS-0765's fix_direction is not satisfiable as written for those two. CODE-DESIGNER must choose deletion, or a WF-01 requirement for new backend routes -- it cannot follow the issue's stated direction literally."
+      },
+      {
+        "severity": "MINOR",
+        "description": "Incidental findings 1-4 require ORCH to register issues; ISSUE-FIXER does not allocate ids or call the queue/gh, per core-directives 'No Issue Left Local-Only'."
+      }
+    ],
+    "artifacts_out": [
+      "scratch/iss0765-probe.test.ts (git-ignored diagnosis probe, retained for CODE-DESIGNER/TEST-DESIGNER to re-run the pre-fix measurement)"
+    ],
+    "next_action": "Route to CODE-DESIGNER for fix design (WF-03 Step 2). One scope decision is needed from ORCH first: patch the 7 named groupsApi functions only, or widen to a whole-file audit of web/src/api/identity.ts that removes the root cause -- the latter is recommended, see step_0_5_registry_lookup.consequence_for_this_run and remaining_defects_outside_this_issues_scope.finding_2.note."
+  }
+}

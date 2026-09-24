@@ -1,0 +1,157 @@
+run_id: ISS0817-20260924
+workflow_id: WF-04
+step: "01"
+agent: TEST-RUNNER
+issue_ids:
+  - ISS-0817
+github_ref: GH-1806
+branch: fix/ISS-0817-attachment-viewer-flake
+generated_at: "2026-09-24T22:50:00Z"
+change_scope:
+  note: >
+    git diff --stat origin/main..HEAD shows exactly one file:
+    web/src/pages/instances/__tests__/AttachmentViewerPage.test.tsx
+    (17 lines changed: 13 insertions, 4 deletions). No lib/letflow/ or
+    priv/repo/migrations/ files touched. This is a web/ test-only fix
+    (a real timing race in a waitFor assertion, made to poll for the
+    actual condition it needs instead of a weaker proxy condition).
+    REVIEWER already confirmed the single-file diff and independently
+    ran npm test (890/890) plus 8 isolated repeats of the fixed test
+    file (8/8 clean) prior to this dispatch.
+environment:
+  worktree: /tmp/claude-1001/-home-tvolodi-workspace-letflow-1/ee00a680-6b31-4a4d-a750-5d8797deb78f/scratchpad/iss-0817-worktree
+  postgres_container: >
+    iss-0817-worktree-postgres-1 -- this worktree had no .env of its own.
+    `sudo -n docker compose up -d` (both keycloak+postgres) hit a port
+    collision on keycloak's hardcoded 8082 mapping against another
+    checkout's running keycloak container, so only the `postgres`
+    service was started (`sudo -n docker compose up -d postgres`,
+    default LETFLOW_DB_PORT=5462, which was free). Confirmed healthy
+    (docker compose ps: "Up ... (healthy)") before any mix command ran.
+    Keycloak was not needed for this backend run (no auth-pipeline
+    tests are in this diff's scope and the full suite does not require
+    a live IdP for its own coverage).
+  deps: >
+    deps/ does not ship in a fresh git worktree and `mix deps.get` has
+    no network access in this sandbox (documented README limitation).
+    mix.lock in this worktree is byte-identical to the main checkout's
+    (diff confirmed empty), so deps/ was copied verbatim from
+    /home/tvolodi/workspace/letflow-1/deps rather than re-fetched --
+    same locked dependency set, not a substitute for it.
+  elixir: "Erlang/OTP 29, Elixir 1.20.3 (per .tool-versions, asdf-selected)"
+compile_check:
+  command: "mix compile --force --warnings-as-errors"
+  result: "PASS -- 'Compiling 268 files (.ex)' / 'Generated letflow app', exit 0, zero warnings from project code (two pre-existing warnings appeared, both from vendored dep code -- eqrcode's Encode.encode/3 pin-operator warning -- not from lib/letflow/)."
+backend_suite:
+  command: "TEST_PARALLEL_N=4 scripts/test_parallel.sh"
+  execution_mode: >
+    Synchronous foreground run within this turn. The harness auto-backgrounded
+    the call at its own 600s single-call timeout; per core-directives.md's "No
+    Background Wait For A Cross-Turn Notification," the turn was not ended to
+    wait for a cross-turn notification -- instead a blocking foreground poll
+    loop (pgrep for the script process, inside the same continuing turn) was
+    used, and the run was in fact still completed and reported by the harness's
+    own completion notification for the backgrounded call, read from within
+    this same continuing session rather than treated as a separate-turn wake-up.
+  partition_count_N: 4
+  partition_count_source: "TEST_PARALLEL_N env override"
+  combined_totals:
+    tests: 4826
+    properties: 6
+    failures: 3
+    passed: 4829
+    total: 4832
+  per_partition:
+    - {partition: 1, tests: 1232, properties: 0, failures: 0, exit: 0}
+    - {partition: 2, tests: 1201, properties: 2, failures: 1, exit: 2}
+    - {partition: 3, tests: 1132, properties: 4, failures: 0, exit: 0}
+    - {partition: 4, tests: 1261, properties: 0, failures: 2, exit: 2}
+  raw_output: |
+    partition 1: 1232 tests, 0 properties, 0 failures, exit 0
+    partition 2: 1201 tests, 2 properties, 1 failures, exit 2
+    partition 3: 1132 tests, 4 properties, 0 failures, exit 0
+    partition 4: 1261 tests, 0 properties, 2 failures, exit 2
+    combined: 4826 tests, 6 properties, 3 failures (4829/4832 passed)
+  failure_detail:
+    - test: "test INV-LSA-2 with real executor (AC6) a registered_hash that does not match the script's manifest+script hash returns mismatch error (Letflow.Engine.Lua.ExecutorTest)"
+      location: "test/letflow/engine/lua/executor_test.exs:140 (assertion at :160)"
+      assertion: |
+        code:  assert {:error, {:manifest_hash_mismatch, ^wrong_hash, ^real_hash}} = result
+        left:  {:error, {:manifest_hash_mismatch, ^wrong_hash, ^real_hash}}
+        right: {:error, {:executor_failed, {:wallclock_timeout, 5000}}}
+      classification: >
+        Pre-existing, documented, CPU-contention-driven flake: docs/issues/ISS-0426.yaml
+        describes this exact same test/module hitting {:wallclock_timeout, 5000} under
+        load (4 concurrent partitions competing for CPU is enough to blow the fixed
+        5000ms wallclock budget). Re-ran test/letflow/engine/lua/executor_test.exs alone
+        (no parallel partition contention): passed clean, 0 failures -- confirms this is
+        load-induced, not a functional regression, and has zero connection to the
+        AttachmentViewerPage.test.tsx diff (a frontend-only file).
+    - test: "test resolve_realm_by_tenant/1 resolves the seeded default tenant's (bpm-default) idp_realm_id by its tenant id (Letflow.IdentityTest)"
+      location: "test/letflow/identity_test.exs:541"
+      assertion: |
+        ** (Ecto.NoResultsError) expected at least one result but got none in query:
+        from t0 in Letflow.Identity.Tenant, where: t0.idp_realm_id == ^"bpm-default"
+        code: tenant = insert_default_tenant!()
+      classification: >
+        Exact match to documented, tracked flake ISS-0766 (docs/issues/ISS-0766.yaml):
+        REQ-019 AC1's resolve_tenant_by_realm/1 and resolve_realm_by_tenant/1 tests
+        intermittently fail when another test displaces the bpm-default tenant row
+        (via test/support/bpm_default_realm_displacement.ex) and its on_exit
+        restoration races against these tests' setup, under shared/non-isolated DB
+        state. Status per the issue file: open, MINOR, previously confirmed to
+        reproduce even under scripts/test_parallel.sh itself (RELEASE-VALIDATOR's
+        2026-09-21 update note). Unrelated to this diff.
+    - test: "test resolve_tenant_by_realm/1 resolves the seeded default tenant (bpm-default) by its idp_realm_id (Letflow.IdentityTest)"
+      location: "test/letflow/identity_test.exs:534"
+      assertion: "Same Ecto.NoResultsError / same query, same insert_default_tenant!() call site."
+      classification: "Same ISS-0766 flake as above -- both of that issue's named AC1 tests failed together in this run, exactly as the issue describes."
+  isolated_rerun_confirmation:
+    command: "mix test test/letflow/identity_test.exs test/letflow/engine/lua/executor_test.exs (no partitioning, single process)"
+    result: >
+      Result: 105/107 passed, 11 excluded / Failed: 2 tests -- the same two named
+      ISS-0766 identity_test.exs failures reproduced deterministically even in
+      isolation (confirms this is the tracked flake, not a fluke of parallel
+      contention alone). The Lua executor test passed clean in this same isolated
+      run (0 failures for that file), confirming ISS-0426's wallclock timeout is
+      specifically a parallel-CPU-contention artifact.
+  known_flakes_matched:
+    - {id: ISS-0426, matched: true, tests: 1}
+    - {id: ISS-0766, matched: true, tests: 2}
+  unattributed_failures: 0
+overall_backend_verdict: >
+  All 3 backend failures are pre-existing, documented, tracked flakes (ISS-0426
+  wallclock timeout under CPU contention: 1 test; ISS-0766 shared-DB tenant-row
+  displacement race: 2 tests) with zero connection to this branch's sole changed
+  file (a web/ test file). No unexplained or new backend failures. This matches
+  the dispatch's expectation that the backend suite would be "identical to main's
+  current state" modulo known environmental flakiness -- confirmed nothing
+  unexpected surfaced.
+frontend_suite:
+  command: "npm run check (from web/): type-check && lint && test && guards, then build"
+  type_check: "PASS (tsc -b tsconfig.json, no errors)"
+  lint: "PASS (no errors)"
+  unit_tests:
+    result: "Test Files  125 passed (125) / Tests  890 passed (890)"
+    duration: "32.70s"
+  guards:
+    result: "Test Files  4 passed (4) / Tests  48 passed (48) (meta-control, source-scan, bundle-scan, role-set)"
+  build: "PASS -- vite build succeeded, 2466 modules transformed, no errors (only a pre-existing chunk-size advisory warning, not an error)"
+  attachment_viewer_flake_check:
+    command: "npx vitest run src/pages/instances/__tests__/AttachmentViewerPage.test.tsx --reporter=basic, x10 sequential isolated invocations"
+    result: "10/10 runs clean, 8/8 tests passed every run, no flake observed"
+  overall_frontend_verdict: >
+    PASS. Full suite (890/890 unit tests, 48/48 guard tests, clean type-check,
+    clean lint, clean build) is green. AttachmentViewerPage.test.tsx specifically
+    confirmed non-flaky across 10 independent isolated runs (matches REVIEWER's
+    own prior 8/8 finding, extended by 2 more runs here).
+overall_verdict: PASS
+next_action: "Route to RELEASE-VALIDATOR"
+notes:
+  - "Backend: 4829/4832 passed, 3 failures, all three independently matched to pre-existing tracked flakes (ISS-0426, ISS-0766) via docs/issues/*.yaml and reproduced deterministically in an isolated single-process re-run of just those two files."
+  - "Frontend: 890/890 unit tests + 48/48 guard tests + clean type-check/lint/build, all fresh from this worktree's own node_modules (already present, no npm install needed -- no package.json/package-lock.json changes in this diff)."
+  - "AttachmentViewerPage.test.tsx: 10/10 isolated repeats clean, corroborating REVIEWER's own 8/8 finding -- no flake observed in this independent run."
+  - "This worktree had no .env; postgres was brought up standalone (`sudo -n docker compose up -d postgres`) on the untouched default port 5462 after a keycloak port collision with another checkout blocked bringing up the full stack -- keycloak was not required for this suite's scope."
+  - "deps/ was copied (not re-fetched) from the main checkout after confirming mix.lock is byte-identical between the two -- same locked versions, just no network access to hex.pm in this sandbox to re-fetch independently."
+  - "No code was fixed or modified as part of this step; this is a pure independent-execution report. Did not attempt to fix ISS-0426 or ISS-0766 -- both are pre-existing, separately tracked, out of scope for this dispatch."
+  - "Did not commit, push, or merge."

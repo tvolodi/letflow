@@ -94,11 +94,20 @@ describe('AttachmentViewerPage — ViewerStatus state machine', () => {
 
     renderPage()
 
-    await waitFor(() => {
-      expect(screen.getByTestId('attachment-content')).toBeInTheDocument()
+    // AttachmentSuccessView renders twice: an empty `attachment-content`
+    // placeholder while objectUrl is still null, then (after a second,
+    // inner useEffect calls URL.createObjectURL) the same testid containing
+    // the <iframe>. Waiting only for the container -- as the previous
+    // version of this test did -- can resolve on the placeholder render,
+    // racing the synchronous querySelector('iframe') assertion that used to
+    // follow it (ISS-0817). Wait for the iframe itself so the assertion
+    // can't observe the intermediate, iframe-less render.
+    const iframe = await waitFor(() => {
+      const content = screen.getByTestId('attachment-content')
+      const el = content.querySelector('iframe')
+      expect(el).not.toBeNull()
+      return el
     })
-    const iframe = screen.getByTestId('attachment-content').querySelector('iframe')
-    expect(iframe).not.toBeNull()
     const src = iframe!.getAttribute('src') ?? ''
     // D1: must be a same-origin blob: object URL created from the
     // authenticated fetch's bytes -- never a direct pointer at the backend

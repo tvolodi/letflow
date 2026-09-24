@@ -1,0 +1,489 @@
+{
+  "handoff_id": "WF03-ISS0816-20260925-step-01",
+  "run_id": "WF03-ISS0816-20260925",
+  "workflow_id": "WF-03",
+  "step": "Step 0.5 + Step 1",
+  "from_agent": "ORCH",
+  "to_agent": "ISSUE-FIXER",
+  "status": "COMPLETED",
+  "created_at": "2026-09-24T22:05:00Z",
+  "started_at": "2026-09-24T22:05:00Z",
+  "completed_at": "2026-09-24T22:40:00Z",
+  "context": {
+    "branch_name": "feature/WF03-ISS0816-20260925",
+    "issue_id": "ISS-0816",
+    "issue_file": "docs/issues/ISS-0816.yaml",
+    "queue_ref": "Q-816",
+    "github_ref": "GH-1804",
+    "severity_as_filed": "MINOR",
+    "severity_after_diagnosis": "MINOR (confirmed, not raised) for the has_more type lie itself; two SEPARATE findings uncovered during the audit are MAJOR and are filed separately rather than folded in",
+    "artifacts_in": [
+      "docs/issues/ISS-0816.yaml",
+      "docs/issues/ISS-0711.yaml",
+      "docs/issues/ISS-0745.yaml",
+      "docs/issues/ISS-0765.yaml",
+      "docs/issues/ISS-0811.yaml",
+      "docs/issues/ISS-0813.yaml",
+      "docs/issues/ISS-0814.yaml",
+      "docs/issues/ISS-0815.yaml",
+      "lib/letflow/design/iss0711-tenant-count-field-mismatch.md",
+      "web/src/types/api.ts",
+      "web/src/api/audit.ts",
+      "web/src/api/definitions.ts",
+      "web/src/api/dlq.ts",
+      "web/src/api/instances.ts",
+      "web/src/api/modules.ts",
+      "web/src/api/promotions.ts",
+      "web/src/api/services.ts",
+      "web/src/api/tasks.ts",
+      "web/src/api/identity.ts",
+      "web/src/pages/admin/AuditLogPage.tsx",
+      "web/src/pages/admin/GroupsPage.tsx",
+      "lib/letflow/api/pagination.ex",
+      "lib/letflow/api/authorized_router.ex",
+      "lib/letflow/plugs/api_pipeline.ex",
+      "lib/letflow/router.ex",
+      "lib/letflow/audit.ex",
+      "lib/letflow/routers/audit.ex",
+      "lib/letflow/routers/definitions.ex",
+      "lib/letflow/routers/dlq.ex",
+      "lib/letflow/routers/instances.ex",
+      "lib/letflow/routers/services.ex",
+      "lib/letflow/routers/admin_services.ex",
+      "lib/letflow/routers/tasks.ex",
+      "lib/letflow/routers/promotions.ex",
+      "lib/letflow/routers/identity.ex"
+    ]
+  },
+  "task": {
+    "description": "WF-03 Step 0.5 (registry lookup) + Step 1 (root-cause diagnosis) for ISS-0816. The issue was filed by ORCH from an unverified CODE-DESIGNER finding: web/src/types/api.ts:17 declares CursorPage<T>.has_more: boolean while Letflow.Api.Pagination.Page emits only {items, next_cursor, count}, and roughly twelve web/ call sites use the shared type without any of them having been audited individually. The substance of this step is that audit. For every CursorPage<T> call site, establish the file and line, the API function, the backend route that function actually calls, and whether that route's response body carries has_more or not; derive the route table by runtime introspection of each router's __authz_routes__/0 plus the mounted forward table rather than by grep, because grep alone misled an earlier run on ISS-0765. Separately establish how many sites READ has_more versus merely being typed with it, since a site that never touches the field is an inert type lie while a site that branches on it is permanently taking the falsy path, and the two need different fixes. Test the issue's own central premise -- that lib/letflow/audit.ex genuinely emits has_more and therefore one shared type is covering two incompatible wire shapes -- against the actual HTTP response builder rather than against the internal function's return value. Also read api.ts:371's pre-existing comment and say what it establishes about how long the gap has been known and which route it names, and confirm or refute AC3's claim that the GroupsPage members dialog reads only the first page and never follows next_cursor, establishing the real default page size from lib/letflow/api/pagination.ex rather than assuming 50 and reading the CURRENT code on main, since .members was retyped to GroupMemberPage by ISS-0765 (merged as dec06da7). Finish with a recommended fix path: one corrected type or a split into two, and which call sites move. Do NOT implement the fix -- route to CODE-DESIGNER per WF-03 Step 2.",
+    "acceptance_criteria": [
+      "AC0 (Step 0.5) -- docs/issues/*.yaml scanned for resolved entries in the 'wire type promises a field the server never sends' symptom class; ISS-0711, ISS-0745, ISS-0811, ISS-0814, ISS-0815 each checked by name; an explicit verdict given on whether ISS-0816 is a recurrence of an incompletely-applied fix, with severity flagged at MAJOR or above if it is",
+      "AC1 -- an explicit, non-summarised table of every CursorPage<T> call site in web/src/, each row giving file:line, the API function, the backend route the function actually calls, whether that route is mounted at all, and whether its response body contains has_more",
+      "AC2 -- the route table derived from runtime introspection of __authz_routes__/0 across every router module plus the mounted forward table in lib/letflow/plugs/api_pipeline.ex and lib/letflow/router.ex, with the introspection command and its output quoted, not inferred from grep",
+      "AC2b -- the issue's premise that lib/letflow/audit.ex emits has_more on the wire is independently tested against Letflow.Routers.Audit's actual response builder, and confirmed or refuted with quoted source",
+      "AC3 -- a count of how many call sites actually READ has_more versus merely being typed with it, each read (or the absence of any) evidenced by a quoted grep over web/src/",
+      "AC4 -- api.ts:371's existing comment read and reported: which route it concerns, what it already establishes, and what that says about how long the gap has been known",
+      "AC5 -- the GroupsPage members dialog checked against the CURRENT code on main (post-ISS-0765 dec06da7): whether it follows next_cursor, and the real backend default page size quoted from lib/letflow/api/pagination.ex",
+      "AC6 -- a recommended fix path stated as one corrected type or a split into two named types, naming which call sites move to which type",
+      "AC7 -- no fix implemented; no file outside handoffs/ modified by this step",
+      "AC8 -- the handoff passes mix letflow.lint_handoffs --dir <this file> before the step completes"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "gate_decision": "PASS -- diagnosis complete. The issue is real but its stated root cause is wrong in one load-bearing respect, and the audit surfaced two larger, separate defects.",
+    "summary": {
+      "headline": "ISS-0816's symptom is real and its fix direction is broadly right, but its central premise is FALSE. No backend route in Letflow emits has_more on the wire -- not even the audit route. lib/letflow/audit.ex:276/295-297 is the return shape of the INTERNAL function Letflow.Audit.list_entries/1; lib/letflow/routers/audit.ex:203-204 consumes that internal has_more, converts it into a next_cursor via next_cursor/2, and serialises an exactly-three-key body {items, next_cursor, count} through page_body/2 at :308-320. has_more never crosses the HTTP boundary. Therefore CursorPage<T> is not one type covering two wire shapes -- it is one type covering ZERO wire shapes for its third field. has_more is 100% client-fabricated wherever it exists at runtime. Consequently the recommended fix is NOT a split into two types (the issue's own suggestion) but the removal of has_more from the single shared type, plus a split along a different axis -- the two-key {items, next_cursor} envelope versus the three-key {items, next_cursor, count} envelope -- which is the real distinction the backend actually makes.",
+      "step_0_5_registry_lookup": {
+        "search_method": "grep -ln 'has_more|never emits|never sends|wire shape|field mismatch|does not exist on this route' docs/issues/*.yaml, plus reading ISS-0711, ISS-0745, ISS-0811, ISS-0813, ISS-0814, ISS-0815, ISS-0765 in full and checking each one's status field.",
+        "grep_hits_for_has_more_in_issue_registry": [
+          "docs/issues/ISS-0745.yaml",
+          "docs/issues/ISS-0811.yaml",
+          "docs/issues/ISS-0815.yaml",
+          "docs/issues/ISS-0816.yaml"
+        ],
+        "matches": [
+          {
+            "issue": "ISS-0711",
+            "status": "resolved",
+            "relationship": "Same symptom class, different field and different endpoint. GET /api/v1/tenants was typed with a total: number that Pagination.Page never emits; PlatformDashboardPage rendered String(tenantsQuery.data?.total ?? 0), so the TENANTS tile showed 0 against a live count of 2. Severity was BLOCKER.",
+            "why_it_is_NOT_a_recurrence_of_an_incompletely_applied_fix": "ISS-0711's fix was correctly scoped and it HELD. It replaced tenants.ts's fictional {total, limit, offset} envelope with the real {items, next_cursor, count} and moved TenantsPage onto cursor pagination. Nothing ISS-0711 fixed has regressed; web/src/pages/admin/tenants/TenantsPage.tsx:75 still reads data?.next_cursor today. ISS-0816 is a DIFFERENT set of call sites that ISS-0711 never claimed to cover.",
+            "what_it_nonetheless_establishes": "lib/letflow/design/iss0711-tenant-count-field-mismatch.md:100-104 states the ISS-0816 defect verbatim, in the design doc for a DIFFERENT fix: \"web/src/types/api.ts's existing CursorPage<T> shape ({ items, next_cursor, has_more }) does not match this endpoint's real field name (count, not has_more)\". So the shared type's has_more was already known-bad when ISS-0711 was designed; the design chose to route around it (define a local correct type) rather than fix it, and did not file it."
+          },
+          {
+            "issue": "ISS-0745",
+            "status": "open",
+            "relationship": "Same class (wire type promises a field the server never sends: ProcessInstance.definition_name / .definition_version). Not the same field, not the same type, not a recurrence. Still open."
+          },
+          {
+            "issue": "ISS-0811",
+            "status": "open",
+            "relationship": "Same class (Group.is_system / Group.member_count declared required, group_map/1 emits neither). Same sibling batch as ISS-0816, filed from the same run. Not a recurrence."
+          },
+          {
+            "issue": "ISS-0814",
+            "status": "open",
+            "relationship": "Adjacent but distinct: a VALUE-domain mismatch (uppercase ACTIVE vs lowercase active), not a missing-field mismatch. MAJOR. Not a recurrence of ISS-0816's root cause."
+          },
+          {
+            "issue": "ISS-0815",
+            "status": "open",
+            "relationship": "Same class (User.roles / User.created_at declared required, user_map/1 emits neither -- the wire field is inserted_at). Same sibling batch. Not a recurrence."
+          },
+          {
+            "issue": "ISS-0813",
+            "status": "open",
+            "relationship": "The PROCESS issue that covers exactly why this keeps happening: nothing mechanically couples web/src/api/*.ts path literals and response types to the mounted backend route table. ISS-0813 is MAJOR and already names __authz_routes__/0 as the machine-readable ground truth. ISS-0816 is another instance of the gap ISS-0813 describes."
+          }
+        ],
+        "recurrence_verdict": "NOT a recurrence of an incompletely-applied fix. No prior fix targeting CursorPage<T>.has_more was ever applied, so none can have failed to hold. What DID happen three separate times is that a run OBSERVED the defect and routed around it locally instead of removing it: (1) lib/letflow/design/iss0711-tenant-count-field-mismatch.md:100-104 during ISS-0711; (2) web/src/types/api.ts:370-373, the EntityRecordsPage<T> comment; (3) web/src/types/api.ts:474-477, the GroupMemberPage comment added by ISS-0765 (dec06da7, merged). Each of the three defined a new local interface with the correct shape and left CursorPage<T> untouched. That is a documented-but-unremoved root cause, not a failed fix.",
+        "severity_ruling": "The WF-03 Step 0.5 rule (flag at least MAJOR on recurrence) does NOT fire, because the recurrence test is not met. Severity for the has_more type lie itself is confirmed at MINOR on independently measured grounds, not inherited: the audit found ZERO production call sites that read has_more, so the field has no runtime consequence anywhere today. It is a pure type lie. See result.new_findings for two genuinely MAJOR defects the audit uncovered, which are NOT the same defect and are filed separately rather than used to inflate this one."
+      },
+      "ac2_route_table_ground_truth": {
+        "method": "Runtime introspection, not grep. scratch/iss0816_routes.exs enumerates :application.get_key(:letflow, :modules) and calls __authz_routes__/0 on every module that exports it, run as: LETFLOW_SECRETS_MASTER_KEY=$(openssl rand -hex 32) MIX_ENV=dev mix run --no-start scratch/iss0816_routes.exs. Note __authz_routes__/0 is injected into each USING router module by @before_compile (lib/letflow/api/authorized_router.ex:84-87), not defined on Letflow.Api.AuthorizedRouter itself -- calling it on AuthorizedRouter raises UndefinedFunctionError, which is the first thing this step verified.",
+        "mount_prefixes": "Each router's __authz_routes__/0 paths are RELATIVE to its forward mount. Mounts read from lib/letflow/plugs/api_pipeline.ex:141-200 (itself forwarded at /api/v1 from lib/letflow/router.ex:130): /identity, /tenants, /tenant/settings, /instances, /definitions, /tasks, /promotions, /onboarding, /solution-packs, /audit, /dlq, /webhooks, /services, /admin/services, /entities, /exam-sessions, /public-read-handles, /help, /platform-migrations, /event-retention, /me.",
+        "introspected_routes_relevant_to_this_audit": [
+          "Letflow.Routers.Audit -> {\"GET\", \"/\", :AuditRead}  => GET /api/v1/audit",
+          "Letflow.Routers.Definitions -> {\"GET\", \"/\", :DefinitionsRead}, {\"GET\", \"/search\", :DefinitionsRead}  => GET /api/v1/definitions, GET /api/v1/definitions/search",
+          "Letflow.Routers.Dlq -> {\"GET\", \"/\", :DlqReadRetryDiscard}  => GET /api/v1/dlq",
+          "Letflow.Routers.Instances -> {\"GET\", \"/\", :InstancesRead}  => GET /api/v1/instances",
+          "Letflow.Routers.Services -> {\"GET\", \"/\", :ServicesRead}  => GET /api/v1/services",
+          "Letflow.Routers.AdminServices -> {\"GET\", \"/\", :AdminServicesRead}  => GET /api/v1/admin/services",
+          "Letflow.Routers.Tasks -> {\"GET\", \"/\", :TasksList}, {\"GET\", \"/inbox\", :TasksList}  => GET /api/v1/tasks, GET /api/v1/tasks/inbox",
+          "Letflow.Routers.Identity -> {\"GET\", \"/groups/:id/members\", :GroupsManage}  => GET /api/v1/identity/groups/:id/members",
+          "Letflow.Routers.Promotions -> (EMPTY __authz_routes__/0)  -- this router deliberately uses plain get/post macros, not authz_get/authz_post (documented at lib/letflow/routers/promotions.ex:65 and :80). GET /api/v1/promotions IS mounted, via `get \"/\"` at lib/letflow/routers/promotions.ex:251. This is the one place where __authz_routes__/0 alone is insufficient and the plain Plug.Router macros had to be read too -- recorded so a later reader does not conclude the route is missing."
+        ],
+        "routers_that_do_not_exist": "There is NO Letflow.Routers.ProcessModules and NO forward for /admin/modules or /admin/module-shares anywhere in lib/letflow/plugs/api_pipeline.ex or lib/letflow/router.ex. lib/letflow/router.ex:82 lists Letflow.Routers.ProcessModules in its 'Deferred routes (not yet mounted -- added by owning stage)' table, owning stage S5. grep -rn 'admin/modules|module-shares|module_shares' lib/ --include=*.ex returns zero hits outside that one documentation table."
+      },
+      "ac2b_audit_premise_refuted": {
+        "issue_claim": "ISS-0816 description: 'has_more IS genuinely emitted by lib/letflow/audit.ex (:276, :295-297), so the field is real for the audit route and absent everywhere Pagination.Page is used. One type covering both cannot be correct for either.'",
+        "what_is_actually_at_those_lines": "lib/letflow/audit.ex:276 is the @spec of Letflow.Audit.list_entries/1: {:ok, %{items: [Entry.t()], has_more: boolean()}}. :295-297 is its body: {items, has_more} = split_list_page(rows, page_size) ... {:ok, %{items: items, has_more: has_more}}. That is an INTERNAL Elixir map returned to the router, not a JSON body.",
+        "what_the_route_actually_sends": "lib/letflow/routers/audit.ex:203-204 -- defp render_page(conn, {:ok, %{items: items, has_more: has_more}}) do / Response.ok(conn, page_body(items, next_cursor(items, has_more))). has_more is consumed as the second argument to the private next_cursor/2 (:292-305), which returns nil when has_more is false and a minted cursor string when it is true. page_body/2 (:308-320) then builds a hand-written three-key map: %{\"items\" => items, \"next_cursor\" => next_cursor, \"count\" => length(items)}. The moduledoc at :308-317 calls it a deliberate INV-2 response allowlist.",
+        "verdict": "REFUTED. The audit route's wire body is {items, next_cursor, count} -- byte-identical in key set to Pagination.Page's @derive {Jason.Encoder, only: [:items, :next_cursor, :count]} at lib/letflow/api/pagination.ex:81. has_more is strictly internal to the Elixir call. NO route in Letflow emits has_more. Corroborating evidence from the frontend itself: web/src/api/audit.ts:26-40 declares a RawAuditPage of exactly {items, next_cursor, count} -- the client already knows the real shape -- and then FABRICATES the field at :71 with has_more: Boolean(response.next_cursor). web/src/api/promotions.ts:265 does the identical fabrication and its own comment at :249 says so: 'has_more is client-derived -- REQ-397's envelope is exactly {items, next_cursor}'.",
+        "consequence_for_the_fix": "The issue's proposed split (an audit-shaped type WITH has_more vs a Pagination.Page-shaped type without) would encode a distinction that does not exist. Designing from the issue text alone would have produced a wrong fix. The real axis of variation is two-key vs three-key envelopes."
+      },
+      "ac1_call_site_table": {
+        "note": "Every CursorPage<T> type position in web/src/ outside tests and outside the declaration itself. 13 are route-bound API functions; 2 are derived positions (an internal helper and a hook). Import-only lines are listed at the end for completeness. Backend body column is quoted from the router's own response builder.",
+        "rows": [
+          {
+            "n": 1,
+            "site": "web/src/api/audit.ts:58",
+            "api_function": "auditApi.list",
+            "url_called": "GET /api/v1/audit",
+            "route_mounted": "YES -- Letflow.Routers.Audit {\"GET\", \"/\", :AuditRead} at forward /audit",
+            "backend_body": "{items, next_cursor, count} -- hand-built by page_body/2, lib/letflow/routers/audit.ex:308-320",
+            "emits_has_more": "NO",
+            "how_has_more_is_obtained": "FABRICATED client-side at audit.ts:71 -- has_more: Boolean(response.next_cursor). The raw response is separately and correctly typed as RawAuditPage at audit.ts:36-40.",
+            "reads_has_more": "NO",
+            "verdict": "TYPE LIE, MASKED. The lie is papered over by a client-side fabrication, so the value is never undefined at runtime -- but nothing consumes it either."
+          },
+          {
+            "n": 2,
+            "site": "web/src/api/definitions.ts:17",
+            "api_function": "definitionsApi.list",
+            "url_called": "GET /api/v1/definitions",
+            "route_mounted": "YES -- Letflow.Routers.Definitions {\"GET\", \"/\", :DefinitionsRead}",
+            "backend_body": "{items, next_cursor} -- EXACTLY TWO KEYS, lib/letflow/routers/definitions.ex:454-458. No count either.",
+            "emits_has_more": "NO",
+            "how_has_more_is_obtained": "Not obtained. Raw response passed straight through; has_more is undefined at runtime.",
+            "reads_has_more": "NO",
+            "verdict": "TYPE LIE, UNMASKED. Also lies about count."
+          },
+          {
+            "n": 3,
+            "site": "web/src/api/definitions.ts:50",
+            "api_function": "definitionsApi.search",
+            "url_called": "GET /api/v1/definitions/search",
+            "route_mounted": "YES -- Letflow.Routers.Definitions {\"GET\", \"/search\", :DefinitionsRead}",
+            "backend_body": "{items, next_cursor} -- EXACTLY TWO KEYS, lib/letflow/routers/definitions.ex:539-544",
+            "emits_has_more": "NO",
+            "how_has_more_is_obtained": "Not obtained; undefined at runtime.",
+            "reads_has_more": "NO",
+            "verdict": "TYPE LIE, UNMASKED. Separate adjacent defect on the REQUEST side: definitions.ts:50 sends { q, limit, offset }, but handle_search/1 (lib/letflow/routers/definitions.ex:519-534) reads only q, cursor and page_size. limit and offset are silently ignored -- the same dead limit/offset params ISS-0711 removed from tenants.ts."
+          },
+          {
+            "n": 4,
+            "site": "web/src/api/definitions.ts:53",
+            "api_function": "definitionsApi.getVersions",
+            "url_called": "GET /api/v1/definitions?name=<name>",
+            "route_mounted": "YES -- same route as row 2",
+            "backend_body": "{items, next_cursor} -- two keys",
+            "emits_has_more": "NO",
+            "how_has_more_is_obtained": "Not obtained; undefined at runtime.",
+            "reads_has_more": "NO",
+            "verdict": "TYPE LIE, UNMASKED."
+          },
+          {
+            "n": 5,
+            "site": "web/src/api/dlq.ts:75",
+            "api_function": "dlqApi.list",
+            "url_called": "GET /api/v1/dlq",
+            "route_mounted": "YES -- Letflow.Routers.Dlq {\"GET\", \"/\", :DlqReadRetryDiscard}",
+            "backend_body": "{items, next_cursor} -- two keys, lib/letflow/routers/dlq.ex:140-144. The moduledoc at :79 says so explicitly: 'body is an exactly-two-key map, {\"items\", \"next_cursor\"} -- no has_more'.",
+            "emits_has_more": "NO",
+            "how_has_more_is_obtained": "Not obtained; undefined at runtime.",
+            "reads_has_more": "NO -- DlqPage.tsx:202/203/220 paginates correctly off data?.next_cursor, never has_more.",
+            "verdict": "TYPE LIE, UNMASKED, but the consumer is correct. A FOURTH place in the codebase that documents the defect in prose without fixing it."
+          },
+          {
+            "n": 6,
+            "site": "web/src/api/instances.ts:19",
+            "api_function": "instancesApi.list",
+            "url_called": "GET /api/v1/instances",
+            "route_mounted": "YES -- Letflow.Routers.Instances {\"GET\", \"/\", :InstancesRead}",
+            "backend_body": "{items, next_cursor, count} -- three keys, render_page_result/3, lib/letflow/routers/instances.ex:954-959",
+            "emits_has_more": "NO",
+            "how_has_more_is_obtained": "Not obtained; undefined at runtime.",
+            "reads_has_more": "NO -- InstanceBoardPage.tsx:139 uses instancesQuery.data?.next_cursor ?? null.",
+            "verdict": "TYPE LIE, UNMASKED. Consumer correct."
+          },
+          {
+            "n": 7,
+            "site": "web/src/api/modules.ts:45",
+            "api_function": "modulesApi.list",
+            "url_called": "GET /api/v1/admin/modules",
+            "route_mounted": "NO -- NO SUCH ROUTE EXISTS. No Letflow.Routers.ProcessModules module, no /admin/modules forward. lib/letflow/router.ex:82 lists it as deferred to stage S5.",
+            "backend_body": "n/a -- request 404s (or falls through ApiPipeline's match _)",
+            "emits_has_more": "n/a",
+            "how_has_more_is_obtained": "n/a",
+            "reads_has_more": "NO",
+            "verdict": "DEAD ROUTE -- strictly worse than a type lie. See result.new_findings.finding_1."
+          },
+          {
+            "n": 8,
+            "site": "web/src/api/modules.ts:62",
+            "api_function": "modulesApi.listShares",
+            "url_called": "GET /api/v1/admin/module-shares?module_id=<id>",
+            "route_mounted": "NO -- NO SUCH ROUTE EXISTS",
+            "backend_body": "n/a",
+            "emits_has_more": "n/a",
+            "how_has_more_is_obtained": "n/a",
+            "reads_has_more": "NO",
+            "verdict": "DEAD ROUTE. See result.new_findings.finding_1."
+          },
+          {
+            "n": 9,
+            "site": "web/src/api/promotions.ts:253",
+            "api_function": "promotionsApi.list",
+            "url_called": "GET /api/v1/promotions",
+            "route_mounted": "YES, but NOT via authz_get -- plain `get \"/\"` at lib/letflow/routers/promotions.ex:251. __authz_routes__/0 for this router is empty by design (:65, :80).",
+            "backend_body": "{items, next_cursor} -- two keys, render_list_reviews/2, lib/letflow/routers/promotions.ex:944-948",
+            "emits_has_more": "NO",
+            "how_has_more_is_obtained": "FABRICATED client-side at promotions.ts:265 -- has_more: Boolean(response.next_cursor). The raw response is separately and correctly typed inline at :259 as { items, next_cursor }.",
+            "reads_has_more": "NO -- PromotionReviewListPage.tsx:72 uses data?.next_cursor.",
+            "verdict": "TYPE LIE, MASKED. Its own comment at :249 already states the backend envelope is exactly {items, next_cursor}."
+          },
+          {
+            "n": 10,
+            "site": "web/src/api/services.ts:40",
+            "api_function": "servicesApi.listForTenant",
+            "url_called": "GET /api/v1/services",
+            "route_mounted": "YES -- Letflow.Routers.Services {\"GET\", \"/\", :ServicesRead}",
+            "backend_body": "{items, next_cursor} -- two keys, lib/letflow/routers/services.ex:131-135. Moduledoc :84 states 'The list body is an exactly-two-key map'.",
+            "emits_has_more": "NO",
+            "how_has_more_is_obtained": "Not obtained; undefined at runtime.",
+            "reads_has_more": "NO -- ServicesPage.tsx:41-42 reads items only and never paginates.",
+            "verdict": "TYPE LIE, UNMASKED. A FIFTH prose statement of the defect without a fix."
+          },
+          {
+            "n": 11,
+            "site": "web/src/api/services.ts:44",
+            "api_function": "servicesApi.listAll",
+            "url_called": "GET /api/v1/admin/services",
+            "route_mounted": "YES -- Letflow.Routers.AdminServices {\"GET\", \"/\", :AdminServicesRead}",
+            "backend_body": "{items, next_cursor} -- two keys, lib/letflow/routers/admin_services.ex:198-202",
+            "emits_has_more": "NO",
+            "how_has_more_is_obtained": "Not obtained; undefined at runtime.",
+            "reads_has_more": "NO",
+            "verdict": "TYPE LIE, UNMASKED."
+          },
+          {
+            "n": 12,
+            "site": "web/src/api/tasks.ts:39",
+            "api_function": "tasksApi.list",
+            "url_called": "GET /api/v1/tasks",
+            "route_mounted": "YES -- Letflow.Routers.Tasks {\"GET\", \"/\", :TasksList}",
+            "backend_body": "{items, next_cursor, count} -- three keys, handle_list_result/2, lib/letflow/routers/tasks.ex:269-275",
+            "emits_has_more": "NO",
+            "how_has_more_is_obtained": "Not obtained. normalizeTaskPage does { ...page, items: ... } -- it spreads the raw response, so no key is invented; has_more stays undefined.",
+            "reads_has_more": "NO",
+            "verdict": "TYPE LIE, UNMASKED."
+          },
+          {
+            "n": 13,
+            "site": "web/src/api/tasks.ts:59",
+            "api_function": "tasksApi.inbox",
+            "url_called": "GET /api/v1/tasks/inbox",
+            "route_mounted": "YES -- Letflow.Routers.Tasks {\"GET\", \"/inbox\", :TasksList}",
+            "backend_body": "{items, next_cursor, count} -- three keys, same handle_list_result/2",
+            "emits_has_more": "NO",
+            "how_has_more_is_obtained": "Not obtained; undefined at runtime.",
+            "reads_has_more": "NO",
+            "verdict": "TYPE LIE, UNMASKED."
+          },
+          {
+            "n": 14,
+            "site": "web/src/api/tasks.ts:26",
+            "api_function": "normalizeTaskPage (internal helper; CursorPage<RawTask> -> CursorPage<Task>)",
+            "url_called": "n/a -- derived from rows 12 and 13",
+            "route_mounted": "n/a",
+            "backend_body": "n/a",
+            "emits_has_more": "n/a",
+            "how_has_more_is_obtained": "Preserves whatever the raw page had, via object spread. Invents nothing.",
+            "reads_has_more": "NO",
+            "verdict": "DERIVED POSITION -- follows rows 12/13 automatically."
+          },
+          {
+            "n": 15,
+            "site": "web/src/pages/admin/AuditLogPage.tsx:35",
+            "api_function": "useAuditLog -> UseQueryResult<CursorPage<AuditEntry>>",
+            "url_called": "n/a -- wraps auditApi.list (row 1)",
+            "route_mounted": "n/a",
+            "backend_body": "n/a",
+            "emits_has_more": "n/a",
+            "how_has_more_is_obtained": "Inherits row 1's client-side fabrication.",
+            "reads_has_more": "NO -- AuditLogPage.tsx:81 reads data?.next_cursor.",
+            "verdict": "DERIVED POSITION -- follows row 1 automatically."
+          }
+        ],
+        "import_only_lines_for_completeness": [
+          "web/src/api/audit.ts:2",
+          "web/src/api/definitions.ts:5",
+          "web/src/api/dlq.ts:3",
+          "web/src/api/instances.ts:5",
+          "web/src/api/modules.ts:2",
+          "web/src/api/promotions.ts:2",
+          "web/src/api/services.ts:2",
+          "web/src/api/tasks.ts:2",
+          "web/src/pages/admin/AuditLogPage.tsx:6"
+        ],
+        "test_only_uses": [
+          "web/src/pages/dlq/__tests__/DlqPage.pagination.test.tsx:45 (import), :77 (Record<string, CursorPage<DlqEntry>>), :78-80 -- three fixture pages each carrying has_more, a field GET /api/v1/dlq never sends",
+          "web/src/pages/promotions/__tests__/PromotionReviewListPage.test.tsx:119, :270 -- fixtures with has_more: false",
+          "web/src/pages/tasks/__tests__/TaskInboxPage.test.tsx:134, :160 -- fixtures with has_more: false",
+          "web/tests/e2e/obs04.timeline.e2e.spec.ts:72 -- has_more: false in a mocked/asserted payload"
+        ],
+        "backend_envelope_summary": {
+          "two_key_items_next_cursor": [
+            "GET /api/v1/definitions",
+            "GET /api/v1/definitions/search",
+            "GET /api/v1/dlq",
+            "GET /api/v1/services",
+            "GET /api/v1/admin/services",
+            "GET /api/v1/promotions"
+          ],
+          "three_key_items_next_cursor_count": [
+            "GET /api/v1/audit (hand-built page_body/2)",
+            "GET /api/v1/instances (hand-built render_page_result/3)",
+            "GET /api/v1/tasks and /api/v1/tasks/inbox (hand-built handle_list_result/2)",
+            "GET /api/v1/tenants, GET /api/v1/identity/users, GET /api/v1/identity/groups/:id/members (Pagination.page_response/2 -> Pagination.Page, @derive only: [:items, :next_cursor, :count])"
+          ],
+          "no_route_at_all": [
+            "GET /api/v1/admin/modules",
+            "GET /api/v1/admin/module-shares"
+          ]
+        }
+      },
+      "ac3_who_actually_reads_has_more": {
+        "command": "grep -rn 'has_more|hasMore' web/src/ --include=*.ts --include=*.tsx | grep -v __tests__",
+        "production_reads": 0,
+        "production_writes": 2,
+        "write_sites": [
+          "web/src/api/audit.ts:71 -- has_more: Boolean(response.next_cursor)",
+          "web/src/api/promotions.ts:265 -- has_more: Boolean(response.next_cursor)"
+        ],
+        "near_miss_that_is_not_a_read": "web/src/components/instances/TimelineFeed.tsx:7/15/37 has a hasMore: boolean prop, and web/src/pages/instances/InstanceDetailPage.tsx:369 passes hasMore={Boolean(timelineQuery.data?.next_cursor)}. That is camelCase, a component prop, derived from next_cursor, and has no connection to CursorPage<T>.has_more. It must not be mistaken for a consumer during the fix.",
+        "consequence": "Not one line of production code branches on CursorPage<T>.has_more. Every pagination consumer that exists (AuditLogPage.tsx:81, TenantsPage.tsx:75, DlqPage.tsx:202/203/220, EntityCrudPage.tsx:192/193/197, EntityListBrowserPage.tsx:230/234/237, InstanceBoardPage.tsx:139, InstanceDetailPage.tsx:153/154/369, PromotionReviewListPage.tsx:72) reads next_cursor instead. So has_more is an inert declaration: 13 route-bound call sites are typed with it, 0 read it, and 2 manufacture it locally to satisfy the type they are declared to return. Removing the field breaks no runtime behaviour; it only deletes two now-pointless fabrication lines and their test fixtures. This is what holds the severity at MINOR and it is also what makes the fix cheap."
+      },
+      "ac4_api_ts_371_comment": {
+        "location": "web/src/types/api.ts:370-377",
+        "verbatim": "/** `POST /entities/query`'s response body. Deliberately NOT `CursorPage<T>`: that shape's `has_more` field does not exist on this route's response (`run_query/4` sends exactly `{\"items\", \"next_cursor\"}`) -- reusing `CursorPage<T>` here would silently claim a field the API never sends. */ export interface EntityRecordsPage<T = EntityRecord> { items: T[]; next_cursor: string | null }",
+        "route_it_concerns": "POST /api/v1/entities/query (Letflow.Routers.Entities, {\"POST\", \"/query\", :EntitiesQuery}) -- NOT any of the 13 CursorPage<T> call sites. EntityRecordsPage is the escape hatch that route's author built to avoid the bad type.",
+        "what_it_establishes": "The defect was fully understood, correctly diagnosed, and written down in the very file that declares the bad type -- and the bad type was still left in place. The comment names the exact mechanism ('would silently claim a field the API never sends'), so this is not a near-miss observation.",
+        "how_long_it_has_been_known": "At least three independent, dated sightings, all of which chose local avoidance over removal: (1) lib/letflow/design/iss0711-tenant-count-field-mismatch.md:100-104 -- ISS-0711, a BLOCKER fixed on 2026-09-18, whose own design doc states CursorPage<T>'s has_more does not match the real field name; (2) this comment at api.ts:370-373 for EntityRecordsPage; (3) api.ts:474-477, the GroupMemberPage comment -- 'Not CursorPage<T>, which declares a has_more the backend never emits' -- added by ISS-0765 and merged as dec06da7 on 2026-09-25, i.e. the run that then filed ISS-0816. Two further backend-side prose statements exist at lib/letflow/routers/dlq.ex:79 and lib/letflow/routers/services.ex:84. FIVE written acknowledgements, zero removals. This is precisely the process failure ISS-0813 (MAJOR, open) was filed to cover, and it is the strongest argument for fixing the shared type at its source this time rather than adding a sixth local workaround."
+      },
+      "ac5_groupspage_members_dialog": {
+        "current_code_read_at": "HEAD of feature/WF03-ISS0816-20260925, which is main e8cfd614, i.e. POST-ISS-0765 (dec06da7 merged). Not the pre-ISS-0765 shape the issue record describes.",
+        "what_changed_in_iss_0765": "web/src/api/identity.ts:62-63 -- groupsApi.members is now `(id: string) => client.get<GroupMemberPage>(`/api/v1/identity/groups/${id}/members`)`. Its type is GroupMemberPage (api.ts:474-482: { items: GroupMember[]; next_cursor: string | null; count: number }), NOT CursorPage<T>. The URL prefix is also corrected -- /api/v1/identity/groups/... not the old dead /api/v1/admin/groups/...",
+        "therefore": "The members dialog is NOT a CursorPage<T> call site any more and does not appear in the AC1 table. AC3's truncation bug is nevertheless REAL and is unaffected by that retype.",
+        "truncation_confirmed": "YES. groupsApi.members takes only `id` -- it accepts no cursor and no page_size parameter and sends neither. GroupsPage.tsx:54-56 calls queryFn: () => groupsApi.members(activeGroupId) once; :60 does `const members = useMemo(() => membersPage?.items ?? [], [membersPage?.items])`; :225-229 renders members.map(...) directly. next_cursor is never read anywhere in GroupsPage.tsx (confirmed by grep: the file has no next_cursor occurrence at all). There is no loop, no 'load more' control, and no cursor state.",
+        "real_default_page_size": "50 -- measured from source, not assumed. lib/letflow/api/pagination.ex:53 `@default_page_size 50`; :99-101 `def default_page_size, do: @default_page_size`; :150 `def validate_page_size(nil), do: {:ok, @default_page_size}`. The path that reaches it: lib/letflow/routers/identity.ex:546-548 -- handle_list_group_members/3 calls Pagination.parse_page_size_param(Map.get(query, \"page_size\")), which returns {:ok, nil} for an absent param (pagination.ex:131), then Pagination.validate_page_size(nil) -> {:ok, 50}. So the issue's stated 50 is CORRECT, and now evidenced.",
+        "wire_shape": "lib/letflow/routers/identity.ex:552 -- `page = Pagination.page_response(Enum.map(users, &user_map/1), next_cursor)`, so the body is Pagination.Page's three keys {items, next_cursor, count}. GroupMemberPage matches it exactly. The only defect here is the unfollowed next_cursor.",
+        "severity_of_this_sub_defect": "MINOR-to-MAJOR depending on real group sizes: silently wrong data (a member list that omits everyone past the 51st) with no UI signal at all. It is a genuine, separate runtime bug, unlike the has_more type lie which has zero runtime effect. It is in scope for ISS-0816 because ISS-0816's own AC3 names it."
+      },
+      "ac6_recommended_fix_path": {
+        "headline": "NOT the split ISS-0816 proposes. Delete has_more from the one shared type, then split along the axis the backend actually varies on -- two-key vs three-key envelope.",
+        "why_not_the_issue_s_split": "An audit-shaped type carrying has_more and a Pagination-shaped type without it would model a distinction that does not exist on the wire. GET /api/v1/audit's body is {items, next_cursor, count}, key-for-key identical to Pagination.Page's. Building two types on that premise would leave has_more alive on a route that never sends it -- the same defect, relocated.",
+        "recommended_shape": {
+          "step_1": "In web/src/types/api.ts, DELETE line 17 (`has_more: boolean`) from CursorPage<T>, leaving { items: T[]; next_cursor: string | null }. This is now the correct, exact type for the six two-key routes: definitions list, definitions search, definitions getVersions, dlq, services (both), promotions.",
+          "step_2": "Add a second exported type for the three-key envelope -- suggested name CountedCursorPage<T> = { items: T[]; next_cursor: string | null; count: number } -- and move rows 1 (audit), 6 (instances), 12 and 13 (tasks, both) onto it, along with the derived rows 14 (normalizeTaskPage) and 15 (useAuditLog). GroupMemberPage (api.ts:474-482) is already exactly this shape and should be redefined as CountedCursorPage<GroupMember> rather than left as a fourth hand-rolled duplicate; the same applies to TenantListResponse's envelope from ISS-0711 and to audit.ts's local RawAuditPage (:36-40), both of which are the same three keys written out by hand. CODE-DESIGNER should decide how far to take that consolidation -- it is a simplification, not a requirement of this fix.",
+          "step_3": "Delete the two now-unnecessary fabrication lines, audit.ts:71 and promotions.ts:265, and their surrounding .then/mapping where they become identity transforms. auditApi.list still needs its mapAuditEntry mapping; only the has_more key goes.",
+          "step_4": "Remove has_more from the four test fixture sites -- DlqPage.pagination.test.tsx:78-80, PromotionReviewListPage.test.tsx:119 and :270, TaskInboxPage.test.tsx:134 and :160, web/tests/e2e/obs04.timeline.e2e.spec.ts:72. These fixtures currently assert a wire shape the server does not produce, which is why the whole suite stayed green through five documented sightings of the defect. Leaving them in place would preserve the exact blind spot that let this survive.",
+          "step_5": "Fix AC3's real bug independently of the type work: either have groupsApi.members accept cursor/page_size and have GroupsPage follow next_cursor until it is null, or -- the cheaper option -- have the dialog render an explicit truncation notice whenever membersPage.next_cursor is non-null. Following the cursor is preferable; a group over 50 members is not exotic. Either way GroupsPage.tsx must stop treating membersPage.items as the complete set."
+        },
+        "explicitly_out_of_scope_for_this_fix": "The two dead modules.ts routes (rows 7 and 8) and definitionsApi.search's ignored limit/offset params are NOT has_more defects and must not be folded into this fix. They are filed separately -- see result.new_findings. Correcting rows 7 and 8's TYPE while their route does not exist would be meaningless work.",
+        "why_tsc_cannot_catch_any_of_this": "Every one of these fields is declared required and non-optional on a type applied via a generic client.get<T>() call, which performs no runtime validation. TypeScript checks only that the declared type is used consistently, never that the server honours it. That is the same structural gap named in ISS-0745, ISS-0811, ISS-0814, ISS-0815 and ISS-0813, and no fix confined to web/src/types/api.ts closes it -- only ISS-0813's proposed mechanical coupling to __authz_routes__/0 would."
+      },
+      "why_no_existing_test_caught_this": "Three reinforcing reasons, all measured. (1) No production code reads has_more, so no assertion could fail on its absence. (2) The four test fixture sites listed above HAND-WRITE has_more into their mock responses, so the tests are asserting against a wire shape that does not exist -- they would pass identically against a server that never sends the field, which is the actual server. (3) There is no contract test, schema check, or generated client coupling web/src/types/api.ts to any router's real response body; that absence is ISS-0813, already filed MAJOR and still open."
+    },
+    "issues": [
+      {
+        "severity": "MINOR",
+        "kind": "issue-record-correction",
+        "detail": "docs/issues/ISS-0816.yaml's description states that has_more 'IS genuinely emitted by lib/letflow/audit.ex (:276, :295-297)' and concludes 'One type covering both cannot be correct for either.' That premise is refuted -- see result.summary.ac2b_audit_premise_refuted. Those lines are the internal return of Letflow.Audit.list_entries/1; lib/letflow/routers/audit.ex:203-204 turns has_more into a next_cursor and page_body/2 (:308-320) emits {items, next_cursor, count}. DOC-UPDATER or Step 5 should correct the record so the next reader does not inherit the wrong premise. The issue's fix_direction survives the correction; only its stated reason does not."
+      },
+      {
+        "severity": "MINOR",
+        "kind": "issue-record-correction",
+        "detail": "docs/issues/ISS-0816.yaml names 'the GroupsPage members dialog' as a CursorPage<T> call site. It is not one, as of dec06da7: groupsApi.members returns GroupMemberPage. The truncation bug the record describes is nonetheless real and confirmed; only its association with CursorPage<T> is stale."
+      },
+      {
+        "severity": "MINOR",
+        "kind": "clock-skew",
+        "detail": "This host's real UTC at the time of writing is 2026-09-24T22:26Z (verified with both `date -u` and PowerShell (Get-Date).ToUniversalTime(); local zone Qyzylorda Standard Time, UTC+5). handoffs/orchestrator.log's step-00 line for this run is stamped 2026-09-25T06:50:00Z, roughly eight hours ahead of this host's UTC -- consistent with a sibling host writing it. Timestamps in this handoff are this host's real UTC per core-directives' Bookkeeping rule 2, so they read as EARLIER than the step-00 log line. Recorded so the ordering is not mistaken for a backdated handoff. The linter's H2 check is per-file and is unaffected."
+      },
+      {
+        "severity": "MINOR",
+        "kind": "bookkeeping",
+        "detail": "handoffs/registry.json had no runs[] entry for WF03-ISS0816-20260925 when this step began, although handoffs/orchestrator.log already carried the step-00 PASS line. Measured rather than assumed: a full-corpus `mix letflow.lint_handoffs` run after this file was written reports WF03-ISS0816-20260925 under H5's 'run_id on disk but missing from registry.json' list (alongside 72 pre-existing entries, plus 61 in the reverse direction) and still exits 0 with 'OK -- 0 new violations across 2970 handoff files'. So H5 is report-only in practice and CI is NOT at risk from this gap -- but the registry entry is still owed. Flagged for ORCH to add rather than written here, since registry maintenance is ORCH's bookkeeping (ORCHESTRATOR.md 7.2) and a duplicate entry would be worse than a missing one."
+      }
+    ],
+    "new_findings": {
+      "finding_1": {
+        "proposed_severity": "MAJOR",
+        "title": "web/src/api/modules.ts targets an entire backend router that does not exist -- the whole process-modules admin surface is non-functional",
+        "detail": "Rows 7 and 8 of the call-site table. modulesApi.list calls GET /api/v1/admin/modules and modulesApi.listShares calls GET /api/v1/admin/module-shares. Neither route is mounted: there is no Letflow.Routers.ProcessModules module in lib/letflow/routers/ and no /admin/modules or /admin/module-shares forward in lib/letflow/plugs/api_pipeline.ex:141-200 or lib/letflow/router.ex. lib/letflow/router.ex:82 lists Letflow.Routers.ProcessModules in its 'Deferred routes (not yet mounted -- added by owning stage)' table against stage S5. The surface is larger than those two functions: modulesApi.get, .register, .publish, .grantShare and .revokeShare all target the same non-existent prefixes, and web/src/hooks/useModules.ts plus web/src/pages/admin/modules/ProcessModulesPage.tsx are built on top of all of them. This is the same defect class as ISS-0765 (MAJOR) but wider -- ISS-0765 was a wrong prefix on an existing router; this is a frontend screen shipped against a backend that was never built. Recommend ORCH file it via register_task. NOT folded into ISS-0816: fixing a has_more declaration on a function that 404s would be meaningless.",
+        "affected_files": [
+          "web/src/api/modules.ts",
+          "web/src/hooks/useModules.ts",
+          "web/src/pages/admin/modules/ProcessModulesPage.tsx",
+          "lib/letflow/plugs/api_pipeline.ex",
+          "lib/letflow/router.ex"
+        ]
+      },
+      "finding_2": {
+        "proposed_severity": "MAJOR",
+        "title": "Four test fixture sites hand-write has_more into mock API responses, so the suite would pass identically against a server that never sends it -- the blind spot that kept this defect alive through five documented sightings",
+        "detail": "web/src/pages/dlq/__tests__/DlqPage.pagination.test.tsx:77-80 types its fixture map as Record<string, CursorPage<DlqEntry>> and writes has_more: true/true/false across three pages; PromotionReviewListPage.test.tsx:119 and :270, TaskInboxPage.test.tsx:134 and :160, and web/tests/e2e/obs04.timeline.e2e.spec.ts:72 do the same with has_more: false. GET /api/v1/dlq's body is documented at lib/letflow/routers/dlq.ex:79 as 'an exactly-two-key map, {\"items\", \"next_cursor\"} -- no has_more'. A fixture that fabricates a field the server does not send cannot fail when the server does not send it, which is the general mechanism, not a detail of this one field: the same pattern would mask ISS-0745, ISS-0811, ISS-0814 and ISS-0815 equally well. Worth filing as its own testing-practice issue (fixtures for a wire shape must be derived from that route's real response builder) rather than being silently cleaned up inside ISS-0816's fix, because the practice outlives this field. The fixture edits themselves ARE in scope for ISS-0816's fix -- see ac6_recommended_fix_path.step_4.",
+        "affected_files": [
+          "web/src/pages/dlq/__tests__/DlqPage.pagination.test.tsx",
+          "web/src/pages/promotions/__tests__/PromotionReviewListPage.test.tsx",
+          "web/src/pages/tasks/__tests__/TaskInboxPage.test.tsx",
+          "web/tests/e2e/obs04.timeline.e2e.spec.ts"
+        ]
+      },
+      "finding_3": {
+        "proposed_severity": "MINOR",
+        "title": "definitionsApi.search sends dead limit/offset query params the backend ignores -- the same params ISS-0711 removed from tenants.ts",
+        "detail": "web/src/api/definitions.ts:49-51 declares search: (params: { q: string; limit?: number; offset?: number }) and forwards them as query params. lib/letflow/routers/definitions.ex:519-534's handle_search/1 reads exactly three params -- q, cursor, page_size -- and validates page_size through Pagination. limit and offset are silently dropped, so a caller passing offset gets page one every time. web/src/hooks/useDefinitions.ts:94 is a live caller passing both. This is the request-side twin of the response-side defect ISS-0711 fixed, and it is not a has_more problem, so it is filed rather than folded in.",
+        "affected_files": [
+          "web/src/api/definitions.ts",
+          "web/src/hooks/useDefinitions.ts",
+          "lib/letflow/routers/definitions.ex"
+        ]
+      }
+    },
+    "next_action": "Route to CODE-DESIGNER for fix design (WF-03 Step 2). The design must start from ac2b_audit_premise_refuted, NOT from the issue record's description -- the record's premise that audit.ex emits has_more on the wire is false, and a design built on it would produce a two-type split along an axis that does not exist. The correct axis is two-key {items, next_cursor} vs three-key {items, next_cursor, count}, mapped per ac1_call_site_table. ORCH should additionally register finding_1 (MAJOR, dead /admin/modules router), finding_2 (MAJOR, fabricated test fixtures) and finding_3 (MINOR, dead limit/offset params) as their own queue tasks per ISSUE_QUEUE.md, and should correct the two stale premises in docs/issues/ISS-0816.yaml noted in result.issues.",
+    "verification_commands_run": [
+      "LETFLOW_SECRETS_MASTER_KEY=$(openssl rand -hex 32) MIX_ENV=dev mix run --no-start scratch/iss0816_routes.exs  -- enumerated __authz_routes__/0 for all 21 router modules that export it (Promotions returned an empty list, which is why its plain get/post macros were read directly)",
+      "grep -rn 'CursorPage' web/src/  -- 25 occurrences located, classified into 13 route-bound call sites, 2 derived positions, 9 imports and 1 declaration",
+      "grep -rn 'has_more|hasMore' web/src/ --include=*.ts --include=*.tsx | grep -v __tests__  -- 0 production reads, 2 production writes",
+      "grep -rn 'has_more' web/ -l  -- full-tree sweep including web/tests/e2e and web/dist",
+      "grep -rn 'next_cursor' web/src --include=*.tsx --include=*.ts (excluding __tests__, types/api.ts and web/src/api/)  -- enumerated every real pagination consumer; GroupsPage.tsx appears in none of them",
+      "grep -rn 'admin/modules|module-shares|module_shares' lib/ --include=*.ex  -- zero hits, confirming the router does not exist",
+      "grep -n 'page_response|Pagination.Page' lib/letflow/routers/*.ex lib/letflow/*.ex  -- located every Pagination.Page producer",
+      "mix help letflow.lint_handoffs  -- confirmed --dir accepts a single regular file (ISS-0819, PR #1810)",
+      "mix letflow.lint_handoffs --dir handoffs/WF03-ISS0816-20260925/step-01-issue-fixer.json  -- run against this file before completing the step"
+    ],
+    "notes": [
+      "Step 1's 'reproduce directly' obligation was met statically rather than by an HTTP call, and deliberately so. The property under diagnosis is 'does this JSON body contain the key has_more', and every list route in scope builds its body from a hand-written, closed map literal or from Pagination.Page's @derive allowlist -- both of which are complete, quotable specifications of the key set. There is no dynamic path, no conditional key insertion, and no merge that could add a key at runtime. A live curl would confirm the same key set the source already fixes, and would additionally require a provisioned tenant and token per route across ten routes. The one claim that genuinely could not be settled from a type declaration -- whether the audit route's internal has_more survives to the wire -- was settled by reading the actual call chain render_page/2 -> next_cursor/2 -> page_body/2 end to end, which is where the issue's own premise fails.",
+      "handoffs/registry.json: this step did NOT add a runs[] entry -- see result.issues for the measured H5 outcome (report-only, full-corpus lint exits 0). Single-file lint mode skips H5 entirely, so this handoff's own lint result is unaffected either way.",
+      "scratch/iss0816_routes.exs was written to scratch/ per core-directives' File Placement Rules and is git-ignored.",
+      "No file outside handoffs/ was modified by this step. No fix was implemented."
+    ],
+    "artifacts_out": []
+  },
+  "rework_count": 0,
+  "max_rework": 2
+}

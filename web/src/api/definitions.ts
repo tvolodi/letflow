@@ -46,7 +46,9 @@ export const definitionsApi = {
   importJson: (body: unknown) =>
     client.post<ProcessDefinition>('/api/v1/definitions/import', body),
 
-  search: (params: { q: string; limit?: number; offset?: number }) =>
+  // ISS-0820: params corrected to match handle_search/1's actual reads (q, cursor, page_size).
+  // limit and offset were dead params the backend silently ignored.
+  search: (params: { q: string; cursor?: string; page_size?: number }) =>
     client.get<CursorPage<ProcessDefinition>>('/api/v1/definitions/search', params as Record<string, unknown>),
 
   getVersions: (name: string) =>

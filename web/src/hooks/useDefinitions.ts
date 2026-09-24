@@ -85,13 +85,12 @@ export function useRollbackDefinition() {
   })
 }
 
-export function useDefinitionSearch(query: string, options?: { limit?: number; offset?: number }) {
+// ISS-0820: limit/offset removed — handle_search/1 only reads q, cursor, page_size.
+export function useDefinitionSearch(query: string, options?: { page_size?: number; cursor?: string }) {
   const definitionKeys = useTenantScopedQueryKeys().definitions
-  const limit = options?.limit ?? 20
-  const offset = options?.offset ?? 0
   return useQuery({
-    queryKey: definitionKeys.search(query, limit, offset),
-    queryFn: () => definitionsApi.search({ q: query, limit, offset }),
+    queryKey: definitionKeys.search(query, options?.page_size, options?.cursor),
+    queryFn: () => definitionsApi.search({ q: query, page_size: options?.page_size, cursor: options?.cursor }),
     enabled: query.trim().length > 0,
   })
 }

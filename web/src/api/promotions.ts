@@ -252,7 +252,7 @@ export const promotionsApi = {
    */
   list: (filters: PromotionReviewListFilters): Promise<CursorPage<PromotionReviewListItem>> =>
     client
-      .get<{ items: PromotionReviewListItem[]; next_cursor: string | null; count: number }>('/api/v1/promotions', {
+      .get<{ items: PromotionReviewListItem[]; next_cursor: string | null }>('/api/v1/promotions', {
         status: filters.status,
         def_id: filters.def_id,
         def_type: filters.def_type,
@@ -262,6 +262,6 @@ export const promotionsApi = {
       .then((response) => ({
         items: response.items,
         next_cursor: response.next_cursor,
-        count: response.count,
+        // count not sent by render_list_reviews/2 (hand-built response, not Pagination.page_response)
       })),
 }

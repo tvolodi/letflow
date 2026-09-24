@@ -11,14 +11,15 @@ export interface ApiError {
 }
 
 /** Cursor-paginated list response (API-13).
- * Wire shape mirrors Letflow.Api.Pagination.Page:
- *   @derive {Jason.Encoder, only: [:items, :next_cursor, :count]}
+ * Wire shape: Letflow.Api.Pagination.Page emits {items, next_cursor, count}
+ * when routes use Pagination.page_response/2. Hand-built responses (e.g.
+ * definitions/search, dlq, promotions) emit only {items, next_cursor}.
  * The backend never emits has_more; pagination is driven by next_cursor !== null.
  */
 export interface CursorPage<T> {
   items: T[]
   next_cursor: string | null
-  count: number
+  count?: number
 }
 
 /** Offset-paginated list response for admin endpoints */

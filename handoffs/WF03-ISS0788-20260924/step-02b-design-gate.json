@@ -1,7 +1,7 @@
 {
   "handoff_id": "WF03-ISS0788-20260924-step-02b",
   "run_id": "WF03-ISS0788-20260924",
-  "workflow": "WF-03",
+  "workflow_id": "WF-03",
   "step": "Step 2b (Design Gate)",
   "to_agent": "CODE-DESIGN-VALIDATOR",
   "from_agent": "ORCH",

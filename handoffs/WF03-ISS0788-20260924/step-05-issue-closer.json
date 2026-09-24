@@ -1,15 +1,22 @@
 {
-  "step": "step-05-issue-closer",
-  "agent": "ISSUE-FIXER",
+  "handoff_id": "WF03-ISS0788-20260924-step-05",
   "run_id": "WF03-ISS0788-20260924",
+  "workflow_id": "WF-03",
+  "step": "Step 05",
+  "from_agent": "ISSUE-FIXER",
+  "to_agent": "ORCH",
+  "created_at": "2026-09-24T01:11:08Z",
+  "started_at": "2026-09-24T01:11:08Z",
+  "completed_at": "2026-09-24T01:11:08Z",
   "status": "COMPLETED",
-  "result": "PASS",
-  "timestamp": "2026-09-24T01:11:08Z",
-  "actions": [
-    "Updated docs/issues/ISS-0788.yaml: status -> resolved, resolved_in_run, resolved_at",
-    "Closed GitHub issue #1761 with resolution comment",
-    "Committed docs/issues/ISS-0788.yaml (96122c6b)"
-  ],
-  "github_issue": "tvolodi/letflow#1761 CLOSED",
-  "commit_sha": "96122c6b"
+  "result": {
+    "status": "PASS",
+    "actions": [
+      "Updated docs/issues/ISS-0788.yaml: status -> resolved, resolved_in_run, resolved_at",
+      "Closed GitHub issue #1761 with resolution comment",
+      "Committed docs/issues/ISS-0788.yaml (96122c6b)"
+    ],
+    "github_issue": "tvolodi/letflow#1761 CLOSED",
+    "commit_sha": "96122c6b"
+  }
 }

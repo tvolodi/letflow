@@ -1,7 +1,7 @@
 {
   "handoff_id": "WF03-ISS0788-20260924-step-final",
   "run_id": "WF03-ISS0788-20260924",
-  "workflow": "WF-03",
+  "workflow_id": "WF-03",
   "step": "Step Final",
   "to_agent": "ELIXIR-DEV",
   "from_agent": "ORCH",

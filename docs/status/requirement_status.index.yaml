@@ -4610,8 +4610,21 @@ volumes:
     path: docs/status/requirement_status.v22.yaml
     status: current
     opened: 2026-09-22
-    entries: 20
+    entries: 23
     note: >
+      Incremented to 23 by DOC-UPDATER's own ISS-0817 SCOPE-CHANGE done-event
+      append (fix/ISS-0817-attachment-viewer-flake, 2026-09-24T23:41:31Z --
+      D1 blob-URL/iframe assertion race in AttachmentViewerPage.test.tsx,
+      fixed by polling for the actual iframe instead of the container div).
+      `grep -c "^  - req:" docs/status/requirement_status.v22.yaml` = 23
+      on-disk entries, recounted directly rather than assumed (this count
+      had drifted to 22 on disk vs. a stale `entries: 20` recorded here after
+      WF03-ISS0765-20260924's own close-out commit (e8cfd614) appended two
+      SCOPE-CHANGE events without updating this field -- corrected forward
+      here rather than left to compound). 750 lines / 45442 bytes, well
+      under the 1200-line/120000-byte roll ceiling, so no roll triggered.
+      Prior notes preserved below verbatim.
+
       Incremented to 20 by DOC-UPDATER's own REQ-400 done-event append
       (WF02-REQ400-20260924, 2026-09-24T17:24:56Z -- first requirement of
       S11 modular-platform architecture: Letflow.Modules.Module behaviour

@@ -1,0 +1,105 @@
+{
+  "handoff_id": "WF03-BATCH-ISS0812-ISS0813-ISS0820-ISS0823-20260925-step-02b",
+  "run_id": "WF03-BATCH-ISS0812-ISS0813-ISS0820-ISS0823-20260925",
+  "workflow_id": "WF-03",
+  "step": "Step 2b (Design Gate)",
+  "to_agent": "ORCH",
+  "from_agent": "CODE-DESIGN-VALIDATOR",
+  "created_at": "2026-09-25T04:31:12Z",
+  "completed_at": "2026-09-25T04:35:00Z",
+  "design_artefact": "lib/letflow/design/iss-0813-0812-0820-0823-api-contract-corrections.md",
+  "result": {
+    "status": "PASS",
+    "next_action": "Route to FRONTEND-DEV (Step 2b implementation — all four fixes are purely frontend TypeScript changes; no backend implementation step needed per §6.2)",
+    "gate_verdict": "PASS — all 14 acceptance criteria covered; no implementation code present; ISS-0820 fix-frontend decision explicitly documented with rationale; ISS-0823 warning vs. drain explicitly reasoned with comparison table.",
+    "ac_evaluation": {
+      "ISS-0813": {
+        "AC1": {
+          "verdict": "COVERS",
+          "basis": "§1.3 documents the `dead-admin-prefix` guard in forbidlist.ts, wired to source-scan.spec.ts, which fails CI on any /api/v1/admin/ literal not followed by 'services'. AC3's explicit escape hatch ('cheaper interim guard is acceptable') authorises this approach in lieu of the full __authz_routes__/0 fixture. §6.1 records the full coupling as a deferred WF-01 item."
+        },
+        "AC2": {
+          "verdict": "COVERS",
+          "basis": "§1.3 appliesTo: 'source' causes the guard to scan all files under web/src/; the only non-test allowedPaths entry is web/src/api/services.ts (the one legitimate caller). Failure reporting (file + literal) is inherited from the existing source-scan.spec.ts infrastructure that the guard entry hooks into — no new reporting mechanism is needed and none is specified, which is correct for a guard-entry addition to existing infrastructure."
+        },
+        "AC3": {
+          "verdict": "COVERS",
+          "basis": "§1.3 regex `/\\/api\\/v1\\/admin\\/(?!services)/` is precisely this assertion: negative lookahead allows /admin/services, fires on all other /admin/ sub-paths."
+        },
+        "AC4": {
+          "verdict": "COVERS",
+          "basis": "§1.3 states the guard fires via the existing `web/tests/guards/source-scan.spec.ts` CI pipeline; the guard entry is in forbidlist.ts, the single source for all banned patterns, which is already wired to run without manual invocation."
+        }
+      },
+      "ISS-0812": {
+        "AC1": {
+          "verdict": "COVERS",
+          "basis": "§1.4 provides explicit tables of: (a) removed functions (rolesApi.get/update/delete/grantPermission/revokePermission, usersApi.delete) — no backend route at any prefix; (b) fixed functions (rolesApi.create, tokensApi.list/create/revoke, usersApi.resetPassword, modulesApi) — corrected to real prefixes; (c) inline tombstones for unimplemented-but-prefix-corrected functions (usersApi.resetPassword). Every function is accounted for in one of these three categories, audited against the mounted route table in §1.1."
+        },
+        "AC2": {
+          "verdict": "COVERS",
+          "basis": "§2.1 enumerates exactly which functions ISS-0782 missed (rolesApi.create, tokensApi.*, rolesApi.get/update/delete/grantPermission/revokePermission, usersApi.delete, usersApi.resetPassword partial), and §1.4 shows that all of those are now handled. No function in identity.ts is left pointing at a dead prefix after this run."
+        },
+        "AC3": {
+          "verdict": "COVERS",
+          "basis": "§2.2 provides a table of method+path assertions for every corrected or retained call (5 functions: rolesApi.list/create, tokensApi.list/create/revoke), mirroring the canonical removeMembers.test.ts pattern. The 'npm run type-check plus web test suite pass' clause is an implementation-outcome verification delegated to Step 4 (TEST-RUNNER) and Step 5 (RELEASE-VALIDATOR), not a design specification; the design's responsibility ends at specifying what the tests must assert."
+        }
+      },
+      "ISS-0820": {
+        "AC1": {
+          "verdict": "COVERS",
+          "basis": "§3.1 lists the three params handle_search/1 actually reads (q, cursor, page_size). §3.3 records the explicit decision to fix the frontend, not extend the backend, with four enumerated rationale points (cursor-only codebase, offset is a WF-01 feature, naming ambiguity, zero user-visible consequence of the bug). §3.4 shows the updated interface with only real params."
+        },
+        "AC2": {
+          "verdict": "COVERS",
+          "basis": "§3.4 specifies the updated useDefinitionSearch hook at useDefinitions.ts:94 with the corrected params (cursor, page_size replacing limit, offset), a corrected queryKey factory, and enabled guard. The pagination the caller believed it had is now real (cursor-based) rather than silently ignored (offset-based)."
+        },
+        "AC3": {
+          "verdict": "COVERS",
+          "basis": "§3.5 specifies two exact test cases in definitions.search.test.ts: spy on client.get, invoke search(), assert the exact query object passed — one without optional params, one with page_size and cursor — confirming no limit/offset are emitted."
+        }
+      },
+      "ISS-0823": {
+        "AC1": {
+          "verdict": "COVERS",
+          "basis": "§4.1 documents the decision to show a visible <p data-testid=\"user-list-truncated-warning\"> when users?.next_cursor !== null. The dropdown correctly represents the available single page; the warning states plainly that the list may be incomplete. Silent truncation is eliminated."
+        },
+        "AC2": {
+          "verdict": "COVERS",
+          "basis": "§4.1 explicitly rejects the drain approach with a rationale table (no safe upper bound; 10k-user tenants would drain 50 requests; arbitrary cap creates its own UX debt). No drain is used, so no drain cap is needed. The server-enforced ceiling of 200 (§4.2) is documented as the reason a larger single-page request is not possible, making the warning the provably correct response."
+        },
+        "AC3": {
+          "verdict": "COVERS",
+          "basis": "§4.5 quotes the availableUsers useMemo implementation and analyses both the truncated-users case and the truncated-members case. The filter is a strict set-membership check (not a count), so no double-counting or false-negative is possible for items present. The warning is identified as the correct disclosure for items absent. §4.3 also documents the CursorPage<User> return-type correction that makes users?.next_cursor statically accessible."
+        },
+        "AC4": {
+          "verdict": "COVERS",
+          "basis": "§5 (AC coverage map) maps ISS-0823 AC4 to the test asserting warning appearance when next_cursor is non-null — which is exactly the >200 users scenario (since @max_page_size 200 means next_cursor is only set when the tenant has >200 users, per §4.2). The test concept is sufficiently specified for FRONTEND-DEV to implement: mock a usersApi.list response with a non-null next_cursor, assert the truncation warning renders."
+        }
+      }
+    },
+    "implementation_code_check": {
+      "verdict": "PASS — no implementation code present",
+      "detail": "The design contains only: TypeScript function signatures and type shapes (no function bodies), guard entry data structures (not code), Elixir struct definitions copied as evidence from existing source (defstruct and @derive are schema declarations, not callable bodies), and test specification tables and assertions (specifying what to assert, not test implementation). No .ex/.exs function bodies are present. The availableUsers useMemo block in §4.5 is existing committed code quoted as a correctness-analysis exhibit, not a new implementation in the design."
+    },
+    "special_checks": {
+      "ISS_0820_decision_documented": {
+        "verdict": "PASS",
+        "detail": "§3.3 explicitly states 'Decision: fix the frontend, not the backend' with four enumerated rationale points: (1) cursor-only pagination model in the codebase, (2) offset pagination is a WF-01 feature not a bug fix, (3) naming ambiguity of limit vs. page_size alias, (4) zero user-visible consequence confirmed."
+      },
+      "ISS_0823_warning_vs_drain_reasoned": {
+        "verdict": "PASS",
+        "detail": "§4.1 includes an explicit Options Considered table with three rows (drain, server-side search, visible warning), each with a rejection/selection reason. The drain is rejected with a specific bounding argument (no safe upper bound; 10k-user example; arbitrary cap creates its own UX debt). The warning is selected with stated reasons (zero new requests, zero new backend surface, zero memory growth, correct disclosure semantics)."
+      },
+      "no_tbd_deferrals": {
+        "verdict": "PASS",
+        "detail": "No TBD, 'to be determined', or silent deferral language anywhere. All open items are explicitly named: §6.1 records the full __authz_routes__/0 fixture as a deferred WF-01 requirement (not silently assumed done). usersApi.resetPassword's unimplemented backend state is explicitly tombstoned."
+      },
+      "cross_module_dependencies": {
+        "verdict": "PASS",
+        "detail": "All cross-module dependencies are documented: forbidlist.ts → source-scan.spec.ts (§1.3); definitions.ts → useDefinitions.ts/useDefinitionSearch (§3.4); identity.ts → GroupsPage.tsx (§4.3, §4.5); lib/letflow/api/pagination.ex as evidence source for max_page_size and CursorPage shape (§4.2, §4.3)."
+      }
+    },
+    "retroactive_note": "This is a retroactive design artefact for implementations already committed to main (commits 5dc545be, d2613d7c, a34305f7, 58071889). The design accurately documents the as-committed interface decisions and provides the rationale audit record required for pipeline continuity. No discrepancy found between the design's claims and the prior art visible in the AC coverage map."
+  }
+}

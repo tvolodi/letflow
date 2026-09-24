@@ -43,10 +43,55 @@ fix_direction: >
   add regression coverage mirroring
   web/src/api/__tests__/identity.removeMembers.test.ts for each corrected
   call.
-status: open
+status: resolved
 queue_ref: "Q-810"
 # NOTE: letflow-queue allocated id 810 and auto-titled the task "ISS-0810",
 # which does not match this file's on-disk id ISS-0765 -- the established
 # queue-id/filename divergence for this project (see TASK_QUEUE.md).
 # queue_ref/github_ref here are authoritative.
 github_ref: "GH-1798"
+resolved_in_run: WF03-ISS0765-20260924
+resolved_at: "2026-09-24T18:47:00Z"
+resolution: >
+  Fixed. groupsApi's five wrong-prefix calls now target /api/v1/identity/groups
+  (.list, .create, .delete, .members, and the member-add call). .removeMembers
+  was already correct from ISS-0736 and is byte-unchanged (INV-C, verified).
+
+  Two of the seven functions could NOT be "corrected to the real prefix" as this
+  record's own fix_direction assumed: .get and .update have no backend route at
+  any prefix -- absent from Letflow.Api.AuthorizedRouter.__authz_routes__/0, and
+  lib/letflow/identity.ex has no get_group/2 and no update_group/3. They were
+  never built. Both were deleted (zero callers, verified three times) and
+  replaced with a comment recording them as unimplemented backend-side, which is
+  AC3's second disjunct.
+
+  Two changes beyond the prefix, both required rather than incidental:
+  .members was retyped to the real paginated envelope GroupMemberPage
+  ({items, next_cursor, count}) -- fixing the prefix alone would have converted
+  a silent 404 into a render-time TypeError, since GroupsPage consumed it as an
+  array. And .addMembers became .addMember(id, userId) sending {user_id},
+  mirroring ISS-0736's removeMembers correction; the backend's
+  resolve_member_user_id/1 only ever honoured one id.
+verification: >
+  type-check exit 0, lint exit 0 (--max-warnings 0), 890/890 tests across 125
+  files, 48/48 guards. Suite grew 124/874 -> 125/890: +1 file, +16 cases, no
+  pre-existing test changed state.
+
+  Fail-first evidence measured, not asserted: the new suite scores
+  14 failed | 2 passed against pre-fix main in a throwaway worktree. The two
+  passes are row 11 (INV-C enumeration) and row 10's removeMembers case, neither
+  offered as fail-first evidence.
+
+  The .members retype is a type-only change that no runtime assertion can
+  discriminate -- client.ts returns response.json() as Promise<T> with T erased
+  -- so it was proven by two mutants instead. TEST-DESIGN-VALIDATOR built M-1a
+  from the design's own table rather than TEST-DESIGNER's patch and reproduced
+  all five tsc diagnostics byte-for-byte, with npm test staying green, which is
+  the point: the runtime suite is blind to the retype, tsc is not.
+outstanding: >
+  NO END-TO-END EVIDENCE. Every check above runs against a vi.fn() spy whose
+  Response the test constructs; no HTTP left the process (a live probe of
+  localhost:4000 returned HTTP 000). The fix is sound by construction -- the
+  routes were read from __authz_routes__/0 and independently re-derived by
+  SECURITY-REVIEWER -- but construction is not execution. Tracked as ISS-0818;
+  this record closes on static evidence only because that one is open.

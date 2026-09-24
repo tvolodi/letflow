@@ -1,0 +1,65 @@
+id: ISS-0819
+title: >
+  The handoff schema is only enforced at CI, after a whole pipeline has run --
+  8 of 8 agents in one run produced violating handoffs
+discovered_by: ORCH
+discovered_in_run: WF03-ISS0765-20260924
+discovered_at: "2026-09-24T19:05:00Z"
+severity: MAJOR
+tags:
+  - process
+  - tooling
+  - handoffs
+description: >
+  Found at ISS-0765's Step Final, when the backend gate failed twice on a
+  branch whose only code change had already passed the frontend gate.
+
+  mix letflow.lint_handoffs enforces a real, machine-checkable contract --
+  HANDOFF_PROTOCOL.md §2's @schema_top_keys, the uppercase status enum,
+  ISS-0202's artifacts_out self-reference rule, and the 400-char H-SIZE-2
+  floor. But it runs only in the backend CI gate, i.e. after the entire
+  pipeline has already completed.
+
+  Measured on this one run: every one of the eight agents that wrote a handoff
+  produced at least one violation.
+
+    * 7 handoffs listed their own file in result.artifacts_out (ISS-0202)
+    * 3 wrote a lowercase status "completed" against an uppercase-only enum
+    * 3 put non-schema keys at top level -- rework_history, rework_iteration,
+      and gate_decision/issues/new_findings/artifacts_out/next_action
+    * 1 had a task block of 211 chars against the 400-char floor
+
+  Eight for eight is not one agent misreading the protocol. It is the contract
+  not being enforced where it is violated.
+
+  Cost observed: two full CI round-trips on an otherwise-green PR. Worse, the
+  first batch of violations MASKED the second -- the linter reported six, and
+  fixing exactly those six surfaced six more. Only re-validating every handoff
+  in the run against the linter's own rules ended it in one further pass.
+
+  Same shape as ISS-0813: a machine-checkable contract that nothing checks at
+  the point of authorship.
+affected_files:
+  - lib/mix/tasks/letflow.lint_handoffs.ex
+  - docs/agents/protocols/HANDOFF_PROTOCOL.md
+  - .github/workflows/
+related:
+  - ISS-0765  # the run this was found during
+  - ISS-0813  # same class -- a checkable contract nothing checks at authorship
+  - ISS-0202  # the artifacts_out rule most commonly violated here
+severity_rationale: >
+  MAJOR -- no production impact, but it taxes every pipeline run, and the
+  masking behaviour means the cost is repeated CI cycles rather than one. The
+  8-of-8 measurement makes it a systemic gap rather than an agent-quality
+  issue.
+fix_direction: >
+  Give agents a way to validate a handoff at the moment they write it, without
+  running the full backend gate -- a mix task taking a single file, or a
+  pre-commit hook scoped to handoffs/. It must report every violation in the
+  file rather than stopping at the first, so one pass clears it. Name the
+  command in HANDOFF_PROTOCOL.md and the role docs. Leave the CI gate
+  unchanged and authoritative: this adds an earlier check, it does not move
+  the enforcement point.
+queue_ref: "Q-819"
+github_ref: "GH-1809"
+status: open

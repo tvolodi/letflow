@@ -1,0 +1,166 @@
+{
+  "handoff_id": "WF03-ISS0765-20260924-step-04b",
+  "run_id": "WF03-ISS0765-20260924",
+  "workflow_id": "WF-03",
+  "step": "Step 4b",
+  "to_agent": "ORCH",
+  "from_agent": "TEST-DESIGN-VALIDATOR",
+  "status": "COMPLETED",
+  "created_at": "2026-09-24T18:02:00Z",
+  "started_at": "2026-09-24T17:50:02Z",
+  "completed_at": "2026-09-24T18:02:00Z",
+  "context": {
+    "branch_name": "feature/WF03-ISS0765-20260924",
+    "issue_id": "ISS-0765",
+    "queue_ref": "Q-810",
+    "github_ref": "GH-1798",
+    "head_at_start": "58bbf2af2e4b0c24f273c21a066cd55461bf2f97",
+    "head_at_start_note": "The dispatch named 08d76ebd. Actual HEAD on entry was 58bbf2af, which is ORCH's own 'TEST-DESIGNER PASS, dispatch test-design gate' commit sitting one above 08d76ebd. No code or test file differs between them; the dispatch hash was simply written before ORCH's own commit existed. Recorded, not silently absorbed.",
+    "test_deliverable_commit": "c4ab9442b4bcd8c9475ba2a8a7fa8c5873b00998",
+    "implementation_commit": "bcddcebf652c23d46d5161584ef0f3443adb9025",
+    "pre_fix_ref": "main = d28c3cf6d45d6eeac365bf6e22c0adfd049d0bb3",
+    "artifacts_in": [
+      "web/src/api/__tests__/identity.groupsApi.test.ts",
+      "test/specs/ISS-0765.md",
+      "handoffs/WF03-ISS0765-20260924/step-04-test-designer.json",
+      "lib/letflow/design/iss-0765-groupsapi-route-prefix-audit.md (sections 3.2, 6.1, 7, 7.1)",
+      "web/src/api/identity.ts",
+      "web/src/pages/admin/GroupsPage.tsx",
+      "web/tests/guards/forbidlist.ts",
+      "docs/issues/ISS-0765.yaml"
+    ]
+  },
+  "task": {
+    "description": "WF-03 Step 4b -- hard gate on TEST-DESIGNER. Independently APPLY at least one design-specified mutant (M-1a designated) and measure it; independently re-derive the pre-fix red measurement; verify AC coverage, row 10 scoping, row 7(ii) classification, guard compliance and fixture isolation; judge TEST-DESIGNER's characterisation of the unplanned M-1b observation.",
+    "acceptance_criteria": [
+      "M-1a applied by this gate itself and its tsc + npm test signature measured, not copied",
+      "CAVEAT N-1's missing :228 diagnostic confirmed genuine and not manufactured",
+      "pre-fix 14 failed | 2 passed (16) re-derived, with the identity of the two passes confirmed",
+      "row 7(ii) confirmed as a forward regression guard, not counted as a red row",
+      "every corrected groupsApi call has a row; no AC lacks runnable coverage; no skipped or vacuous row",
+      "row 10 scoped to groupsApi's own captured URLs, not whole-file",
+      "the literal raw-fetch token absent from the new file; no forbidlist entry weakened, no allowedPaths added",
+      "fixtures self-sufficient and order-independent",
+      "no mutant left in the tree; revert verified"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "TEST-DESIGNER's Step 4 deliverable is accepted. Every measurable claim this gate re-derived reproduced, most of them byte-for-byte. The designated mutant M-1a was applied by this gate from the design's own section 3.2 before/after table and produced exactly the reported tsc signature; the pre-fix red measurement reproduced exactly, including the identity of the two passing cases; CAVEAT N-1's absent :228 diagnostic is genuine and correctly reported. Coverage, row-10 scoping, guard compliance and fixture isolation all hold. One unattributed intermittent failure was observed in an unrelated test file during the M-1a run and is reported to ORCH for filing.",
+    "independent_mutant_measurement": {
+      "obligation": "WF-03:118-121. The pre-fix failure for decision (b)'s .members retype is not 'the code did not exist' but the structurally identical case of 'no runtime behaviour changed' -- a type-only change that no runtime row can discriminate. Accepting TEST-DESIGNER's counts would be copying a claim. This gate applied the mutant itself.",
+      "where_applied": "A throwaway `git worktree add --detach` at the session scratchpad (wt-tdv), with web/node_modules supplied as a directory junction to the working checkout's. The working checkout was NOT mutated for M-1a at any point.",
+      "M-1a": {
+        "how_constructed": "Derived independently from design section 3.2's before/after table, NOT copied from TEST-DESIGNER's patch. Worktree detached at 58bbf2af (the post-fix tree including the new test file). Six edits reverted by sed: (a) `const { data: membersPage } = useQuery({` -> `const { data: members } = useQuery({`; (b) the `const members = useMemo(() => membersPage?.items ?? [], [membersPage?.items])` line deleted; (c) `new Set(members.map((user) => user.id))` -> `new Set((members ?? []).map((user) => user.id ?? user.user_id ?? ''))`; (d) `{members.length === 0 ? (` -> `{(members ?? []).length === 0 ? (`; (e) `{members.map((user) => {` -> `{(members ?? []).map((user) => {`; (f) `const id = user.id` -> `const id = user.id ?? user.user_id ?? ''`. Decision (c)'s addMember caller rename at :76 deliberately KEPT, and section 3.1's GroupMember/GroupMemberPage and the retyped groupsApi.members deliberately KEPT.",
+        "mutant_fidelity_check": "`git diff d28c3cf6 -- web/src/pages/admin/GroupsPage.tsx` against the mutated file showed exactly two residual differences from the pre-fix text: the kept `groupsApi.addMember(id, userId)` caller rename, and one cosmetic extra blank line where the useMemo binding had been. That is precisely what TEST-DESIGNER described, and it is why the diagnostics land one line below the design's pre-fix prediction rather than at it.",
+        "tsc": {
+          "command": "npx tsc -b tsconfig.json --force",
+          "measured_exit": 2,
+          "measured_diagnostic_count": 5,
+          "measured_output_verbatim": "src/pages/admin/GroupsPage.tsx(104,47): error TS2339: Property 'map' does not exist on type 'GroupMemberPage | never[]'.\n  Property 'map' does not exist on type 'GroupMemberPage'.\nsrc/pages/admin/GroupsPage.tsx(104,52): error TS7006: Parameter 'user' implicitly has an 'any' type.\nsrc/pages/admin/GroupsPage.tsx(224,32): error TS2339: Property 'length' does not exist on type 'GroupMemberPage | never[]'.\n  Property 'length' does not exist on type 'GroupMemberPage'.\nsrc/pages/admin/GroupsPage.tsx(228,36): error TS2339: Property 'map' does not exist on type 'GroupMemberPage | never[]'.\n  Property 'map' does not exist on type 'GroupMemberPage'.\nsrc/pages/admin/GroupsPage.tsx(228,41): error TS7006: Parameter 'user' implicitly has an 'any' type.",
+          "reproduced": "YES -- byte-for-byte identical to the signature TEST-DESIGNER reported, including both column numbers on line 104 and both on line 228."
+        },
+        "npm_test": {
+          "command": "npm test",
+          "run_1": "Test Files  1 failed | 124 passed (125) / Tests  1 failed | 889 passed (890), exit 1",
+          "run_2": "Test Files  125 passed (125) / Tests  890 passed (890), exit 0",
+          "reproduced": "YES on run 2, exactly the reported 890 passed. Run 1's single failure is attributed below and is NOT a property of the mutant.",
+          "judgement_of_the_reasoning": "SOUND, and this gate agrees the green run is the point rather than a weakness. The argument is: request<T> (web/src/api/client.ts:158-169) ends in `return response.json() as Promise<T>` and T is erased at runtime, so client.get<User[]> and client.get<GroupMemberPage> are byte-identical against the same spy body. This gate verified that premise directly -- the pre-fix source at d28c3cf6:web/src/api/identity.ts:58-59 is `members: (id) => client.get<User[]>(...)`, verbatim pass-through with no unwrap, so no runtime assertion could ever discriminate it. The pairing of (tsc exit 2, five diagnostics) with (runtime suite green) is exactly the demonstration required: it shows the detector that decision (b) chose is real AND that the detector the suite would otherwise rely on is blind. A mutant that broke both would have proved far less, because it would not have isolated the type-only channel."
+        },
+        "caveat_N1_verdict": {
+          "finding": "CONFIRMED GENUINE. There is no diagnostic for the design's `:228` reasoning (`user.user_id` not existing on GroupMember). In the mutant's own numbering that site is line 229 (`const id = user.id ?? user.user_id ?? ''`), and tsc emits nothing there.",
+          "why_the_absence_is_correct_and_not_a_defect": "The `.map` on line 228 fails to resolve on `GroupMemberPage | never[]`, so its callback parameter `user` is never contextually typed and falls to implicit any -- reported as TS7006 at (228,41). A property access on `any` is not an error, so line 229 cannot produce a diagnostic. The design's prediction was contingent on the `.map` resolving, which it does not. This is the exact characteristic the Step 2b gate predicted when it flagged the predicted list as a FLOOR.",
+          "no_manufacture": "The mutant was NOT adjusted to produce a :228 diagnostic, and this gate would have FAILED the step had it been. Four distinct source positions and five diagnostics are well above the floor."
+        }
+      },
+      "M-1b": {
+        "status": "Also independently re-measured, in place in the working checkout and then reverted-and-verified. Only the tsc half was re-run; M-1b's `npm test` 890-passed claim was NOT independently re-measured, and this gate does not certify it -- it is redundant with M-1a's runtime half, which was measured.",
+        "how_constructed": "One-line revert of web/src/api/identity.ts:63, `client.get<GroupMemberPage>` -> `client.get<User[]>`, keeping section 3.2's GroupsPage.tsx edits. `git diff` confirmed that plus a BOM my editor added were the only changes.",
+        "tsc": {
+          "measured_exit": 2,
+          "measured_diagnostic_count": 8,
+          "measured_output_verbatim": "src/api/__tests__/identity.groupsApi.test.ts(212,19): error TS2339: Property 'items' does not exist on type 'User[]'.\nsrc/api/__tests__/identity.groupsApi.test.ts(213,19): error TS2339: Property 'count' does not exist on type 'User[]'.\nsrc/api/__tests__/identity.groupsApi.test.ts(214,19): error TS2339: Property 'next_cursor' does not exist on type 'User[]'.\nsrc/api/identity.ts(7,3): error TS6196: 'GroupMemberPage' is declared but never used.\nsrc/pages/admin/GroupsPage.tsx(60,46): error TS2339: Property 'items' does not exist on type 'User[]'.\nsrc/pages/admin/GroupsPage.tsx(60,73): error TS2339: Property 'items' does not exist on type 'User[]'.\nsrc/pages/admin/GroupsPage.tsx(105,44): error TS7006: Parameter 'user' implicitly has an 'any' type.\nsrc/pages/admin/GroupsPage.tsx(229,33): error TS7006: Parameter 'user' implicitly has an 'any' type.",
+          "reproduced": "YES -- byte-for-byte identical to TEST-DESIGNER's reported M-1b output."
+        },
+        "discrimination_verdict": "The two directions together do discriminate this specific trap rather than merely breaking something. M-1a breaks only at the consumer sites when the producer's type is kept; M-1b breaks only at the producer/consumer boundary when the producer's type is reverted; in neither direction does the runtime suite move. That is a matched pair, not one mutation that happens to break a build."
+      }
+    },
+    "judgement_on_the_unplanned_M1b_observation": {
+      "the_claim": "M-1b's first three diagnostics land inside the NEW TEST FILE ITSELF, at row 7(ii)'s result.items / result.count / result.next_cursor assertions, so row 7(ii) carries decision (b) as a COMPILE-TIME guard even though no runtime row can. Reported by TEST-DESIGNER as an observation, explicitly NOT as fail-first evidence.",
+      "verdict": "AGREE with the characterisation, and it is the correct call rather than a cautious one.",
+      "verification_performed": "The claim is factually correct and this gate confirmed it two ways. (1) Statically: lines 212, 213 and 214 of the committed web/src/api/__tests__/identity.groupsApi.test.ts are exactly `expect(result.items.length).toBe(1)`, `expect(result.count).toBe(1)` and `expect(result.next_cursor).toBeNull()`, and column 19 is the first character after `result.` on each. (2) By measurement: this gate's own M-1b run emitted those three diagnostics at those exact positions.",
+      "why_the_classification_is_right": "Fail-first evidence must come from the UNMODIFIED test run against the UNMODIFIED pre-fix code. This signal exists only because the shipped type was mutated, which puts it in the same category as M-1a's own diagnostics -- a mutation-derived detector, not a pre-fix red. Promoting it to fail-first evidence would also be wrong on a second ground: it detects drift in the DECLARED return type, not drift in the actual runtime shape, so a backend that changed its envelope while the TypeScript declaration stayed put would sail past it. Calling it 'an additional compile-time detector' is exactly as strong a claim as the evidence supports.",
+      "one_qualification": "It is slightly overstated to call the detector unanticipated in kind. Design section 7.1 already nominated tsc as the detector for decision (b) ('tsc -b tsconfig.json ... catches every one on every run'). What is genuinely new is that the TEST FILE participates in that detection surface, which neither the design nor the Step 2b gate said. Minor wording point; it does not change the verdict and needs no rework."
+    },
+    "verification_1_pre_fix_measurement": {
+      "method": "Not a spot-check -- the full pre-fix run was re-derived. Throwaway worktree detached at d28c3cf6 (main, pre-fix), node_modules junctioned, the committed test file copied in, `npx vitest run src/api/__tests__/identity.groupsApi.test.ts --reporter=verbose`.",
+      "measured_verbatim": " Test Files  1 failed (1)\n      Tests  14 failed | 2 passed (16)\n   Start at  22:51:32\n   Duration  2.70s",
+      "reproduced": "YES -- 14 failed | 2 passed (16), identical to TEST-DESIGNER's report.",
+      "identity_of_the_two_passes": "CONFIRMED to be exactly the two claimed, and nothing else. The verbose reporter marked green precisely: (a) `T-0765-NO-ADMIN-PREFIX: groupsApi.removeMembers does not dial /api/v1/admin/` -- row 10's removeMembers it.each case; and (b) `T-0765-REMOVE-UNCHANGED: removeMembers still hits the ISS-0736-corrected route` -- row 11. Neither is presented anywhere in the spec or the handoff as fail-first evidence; both are labelled enumeration rows in test/specs/ISS-0765.md's own table and in the source comments at the test file's rows 10 and 11.",
+      "row_10_split_confirmed": "5 FAIL / 1 PASS as reported. Measured messages: list `expected '/api/v1/admin/groups' not to contain '/api/v1/admin/'`; create the same; delete `expected '/api/v1/admin/groups/g-1' not to contain '/api/v1/admin/'`; addMember `TypeError: groupsApi.addMember is not a function`; members `expected '/api/v1/admin/groups/g-1/members' not to contain '/api/v1/admin/'`; removeMembers PASS.",
+      "per_row_messages_checked": "All eleven rows' observed messages were compared against TEST-DESIGNER's per_row table. Every one matched, including the exact `// Object.is equality` suffixes on rows 6 and 8 and the truncated array rendering on row 9 (`expected [ 'addMembers', 'create', …(6) ] to deeply equal [ 'addMember', 'create', …(4) ]`). No row's claimed failure mode differs from the measured one."
+    },
+    "verification_2_row_7ii": {
+      "claim_checked": "7(ii) is unobservable in its own block pre-fix because half (i) throws first, and was measured with a separate isolation probe; recorded as a forward regression guard and NOT counted as a red row.",
+      "verdict": "CONFIRMED CORRECT on all three counts.",
+      "unobservability": "Verified structurally: in the committed file, half (i)'s `expect(req.url).toContain('/api/v1/identity/groups/g-1/members')` sits above half (ii) in the same `it` body and throws pre-fix, so half (ii)'s five assertions are unreachable in that block. This gate's own verbose pre-fix run shows the block failing on exactly that half-(i) message.",
+      "independent_isolation_probe": "This gate did not take TEST-DESIGNER's probe result on trust. It wrote its own throwaway probe (src/api/__tests__/tdv.probe7ii.test.ts) in the pre-fix worktree at d28c3cf6, running half (ii)'s five assertions alone against the pre-fix `client.get<User[]>` .members. Measured: ' Test Files  1 passed (1) / Tests  1 passed (1)', exit 0. The probe file was deleted before the worktree was removed and is not part of any deliverable.",
+      "classification": "Green pre-fix AND post-fix, so it is correctly recorded as a forward regression guard. It is not counted among the 14 red cases -- the arithmetic closes without it (9 single red cases + 5 of row 10's 6 = 14), which this gate re-derived independently from its own verbose output rather than from TEST-DESIGNER's arithmetic_check string."
+    },
+    "verification_3_coverage_against_the_acs": {
+      "verdict": "PASS.",
+      "issue_fix_direction_coverage": "docs/issues/ISS-0765.yaml's fix_direction names addMembers, .list, .get, .update, .delete, .members and requires regression coverage 'for each corrected call'. Mapping, re-derived from the test source: list -> rows 1 and 10; create -> rows 2 and 10 (on the surface though not named in the issue text); delete -> rows 3 and 10; addMembers->addMember -> rows 4, 5, 6 and 10; members -> rows 7(i) and 10; get/update -> rows 8 and 9 (deleted rather than re-prefixed, and the deletion is pinned by name in row 8 and closed by row 9); removeMembers -> rows 11 and 10. Every corrected call has at least one row, and six of them have two.",
+      "design_ac_coverage": "AC1 (every call targets a served prefix) -> rows 1, 2, 3, 4, 7(i), 10. AC2 (regression coverage mirroring identity.removeMembers.test.ts) -> rows 5, 6, 7(ii), 11. AC3 (.get/.update removed or recorded, web suite green) -> rows 8, 9 plus the four web/ commands. No AC is left without runnable coverage.",
+      "no_skipped_or_vacuous_rows": "grep over the file for `.skip`, `.todo`, `.only` and `TODO` returns nothing. There are 11 `it`/`it.each` blocks expanding to 16 cases. No MUST-covering row is skipped and there is no 'TODO: implement test' anywhere in test/specs/ISS-0765.md. The two permanently-green cases (row 11 and row 10's removeMembers) are not vacuous -- they assert real, discriminating behaviour and would go red if ISS-0736's correction were undone -- and both are declared as enumeration rows rather than passed off as evidence.",
+      "block_that_can_never_be_red_check": "Row 7's block cannot sit permanently green: half (i) is red pre-fix, which is the exact reason design section 7 gives for keeping row 7's path assertion alongside row 10. Verified in this gate's own pre-fix run."
+    },
+    "verification_4_row_10_scoping": {
+      "verdict": "PASS -- correctly scoped, and it would NOT fail for the rolesApi reason.",
+      "evidence": "Row 10 is `it.each(surfaceRows)` where surfaceRows is an array of [name, thunk] pairs that INVOKE each function and then assert `expect(req.url).not.toContain('/api/v1/admin/')` on the URL the spy captured. It reads no file content at all -- there is no fs read, no import of identity.ts source text, and no bundle scan in the file.",
+      "premise_re_confirmed": "`/api/v1/admin/` does still legitimately appear in web/src/api/identity.ts in rolesApi (ISS-0812's scope). Because row 10 never looks at file content, that occurrence cannot make it red. A whole-file absence assertion would have been wrong and none was written.",
+      "note": "Row 10 also asserts `expect(req.url).toContain('/api/v1/identity/groups')`, which strengthens it from a pure absence check into a positive-target check -- a case could not pass by dialling some third wrong prefix."
+    },
+    "verification_5_guard_compliance": {
+      "verdict": "PASS.",
+      "raw_fetch_token": "`grep -c 'fetch(' web/src/api/__tests__/identity.groupsApi.test.ts` -> 0 matches, exit 1. `grep -n 'axios('` -> no output. The forbidlist's raw-fetch-outside-client regex is /\\bfetch\\(|\\baxios\\(/ applied to whole-file content, so a zero match is conclusive, comments included.",
+      "no_forbidlist_weakening": "`git diff --name-only main...HEAD -- web/tests/` returns EMPTY. No file under web/tests/ was touched anywhere on this branch, so forbidlist.ts cannot have been edited, no entry weakened or removed, and no allowedPaths entry added. Read directly to confirm the shipped state: raw-fetch-outside-client still carries `allowedPaths: ['web/src/api/client.ts']` and nothing else.",
+      "guards_run_independently": "`npm run guards` in the working checkout at the shipped tree: ' Test Files  4 passed (4) / Tests  48 passed (48)', exit 0. This gate ran it itself rather than accepting TEST-DESIGNER's quote."
+    },
+    "verification_6_fixtures": {
+      "verdict": "PASS -- self-sufficient and order-independent.",
+      "shared_state": "The only module-level values are WIRE_MEMBER, WIRE_MEMBER_PAGE and `originalFetch`. The first two are read-only literals used as response bodies; nothing mutates them. Row 7 compares `result` to WIRE_MEMBER_PAGE, but `result` is a fresh JSON round-trip object, so the comparison cannot alias or mutate the fixture.",
+      "isolation": "Each case calls installSpy() to build its OWN `vi.fn()` and assign it to window.fetch. beforeEach sets the token; afterEach restores the original window.fetch, clears the token and calls vi.restoreAllMocks(). No case reads state another case wrote.",
+      "ordering": "No case depends on another having run first. `captured()` asserts `toHaveBeenCalledTimes(1)` on that case's own fresh spy, which would itself go red if a leaked spy were reused across cases. Row 10's six it.each cases each install their own spy.",
+      "determinism_and_secrets": "No wall-clock or unseeded randomness -- every response body is a fixed literal the test constructs, and the two timestamps in WIRE_MEMBER are hardcoded strings. The only credential-shaped value is the literal 'test-token' passed to setToken; no real secret, no connection string, no host/port."
+    },
+    "revert_and_verify": {
+      "m1a": "Applied only inside the throwaway worktree; the working checkout was never mutated for it. After `git checkout -- web/src/pages/admin/GroupsPage.tsx` in that worktree: `git status --porcelain web/` EMPTY; `npx tsc -b tsconfig.json --force` TSC_EXIT=0 with no diagnostics; the test file re-ran ' Test Files  1 passed (1) / Tests  16 passed (16)'.",
+      "m1b": "Applied in place in the working checkout and reverted with `git checkout -- web/src/api/identity.ts`. After the revert: `git status --porcelain web/` EMPTY and `git status --porcelain` over the WHOLE tree EMPTY; `npx tsc -b tsconfig.json --force` TSC_EXIT=0 with no diagnostics; `npx vitest run src/api/__tests__/identity.groupsApi.test.ts` -> ' Test Files  1 passed (1) / Tests  16 passed (16)'.",
+      "worktree_disposal": "web/node_modules junction removed with `cmd /c rmdir` (link only). The working checkout's real node_modules was verified intact immediately afterwards -- 399 entries by Get-ChildItem, 396 by `ls | wc -l` (bash omits the three dot-entries), the same 396 measured before the junction was created. Then `git worktree remove --force`; `git worktree list` afterwards shows no wt-tdv entry, only the pre-existing repo worktree and three unrelated sibling-session worktrees that were present on entry and were not touched.",
+      "no_mutant_residue": "Final state of the working checkout: `git status --porcelain` empty, HEAD 58bbf2af. Only handoffs/WF03-ISS0765-20260924/step-04b-test-design-gate.json is added by this step."
+    },
+    "issues": [],
+    "new_findings": [
+      {
+        "id": null,
+        "severity": "MINOR",
+        "summary": "Intermittent failure in web/src/pages/instances/__tests__/AttachmentViewerPage.test.tsx, not covered by any existing issue record. Observed once during this gate's first `npm test` run under the M-1a mutant: 'Tests 1 failed | 889 passed (890)', failing at AttachmentViewerPage.test.tsx:101 `expect(iframe).not.toBeNull()` (the D1 same-origin blob: object-URL assertion). An immediate second `npm test` on the BYTE-IDENTICAL tree, mutant still applied, returned 890 passed (890) exit 0.",
+        "attribution": "Structurally cleared as not caused by the mutant (core-directives route 1). The M-1a mutant touches exactly one file, web/src/pages/admin/GroupsPage.tsx. AttachmentViewerPage.test.tsx imports only vitest, @testing-library/jest-dom/matchers, @testing-library/react, react-router-dom and @/pages/instances/AttachmentViewerPage; it contains no occurrence of the string 'group' at all, so neither GroupsPage.tsx nor groupsApi is on any path it exercises. The same-tree green re-run is a direct measurement of intermittency, not an assertion that one exists.",
+        "why_it_matters": "Two consequences for later steps. (1) It does not weaken TEST-DESIGNER's M-1a claim -- 890 passed reproduced on the clean re-run, and the mutant's discriminating signal is the tsc half, which reproduced byte-for-byte on the first try. (2) It does mean '890 passed' is not perfectly deterministic in this suite, so a later run reporting 889 must not be scored as a regression without reading which case failed. RELEASE-VALIDATOR should be aware of it.",
+        "grep_for_existing_record": "No file under docs/issues/ mentions AttachmentViewer, and docs/anti-patterns.md does not either. Per core-directives 'No Issue Left Local-Only', this is reported to ORCH for register_task allocation; this gate did not allocate an id and did not call the queue or gh."
+      },
+      {
+        "id": null,
+        "severity": "INFO",
+        "summary": "The dispatch for this step named HEAD as 08d76ebd, but actual HEAD on entry was 58bbf2af (ORCH's own 'TEST-DESIGNER PASS, dispatch test-design gate' commit, one above 08d76ebd). No code, test or spec file differs between the two. Recorded per core-directives' 'a handoff's factual premises are checkable' rather than silently absorbed; no action needed."
+      }
+    ],
+    "carried_gaps": [
+      "NO INTEGRATION EVIDENCE, unchanged and re-affirmed by this gate. Everything measured in Step 4 and Step 4b runs against a vi.fn() double whose Response the test constructs. No HTTP request left the process and no Letflow instance was dialled. It remains unproven BY EXECUTION that /api/v1/identity/groups, /api/v1/identity/groups/:id, /api/v1/identity/groups/:id/members and the { user_id } add-member body return 2xx against a running server with a real :GroupsManage token. Owner UAT-RUNNER. Step 5 must not close ISS-0765 claiming end-to-end evidence.",
+      "M-1b's `npm test` 890-passed claim was not independently re-measured by this gate (only its tsc half was). It is redundant with M-1a's runtime half, which was measured twice.",
+      "The members dialog remains capped at the first page (50 members) and GroupMemberPage.next_cursor is returned but unread -- design 3.3 / OQ-2. Pre-existing, deliberately untested."
+    ],
+    "artifacts_out": [],
+    "next_action": "ORCH: Step 4b gate is PASS. Proceed to Step 5 (RELEASE-VALIDATOR / TEST-RUNNER per WF-03). Two things to carry forward: (1) register the AttachmentViewerPage.test.tsx intermittent-failure finding above via register_task -- this gate allocated no id; (2) the NO INTEGRATION EVIDENCE gap must survive Step 5 rather than be closed out, and the 890-passed figure must not be treated as exactly deterministic."
+  }
+}

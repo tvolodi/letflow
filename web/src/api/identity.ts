@@ -2,6 +2,9 @@ import { client } from './client'
 import type {
   User,
   Group,
+  GroupListResponse,
+  GroupMemberAddResult,
+  GroupMemberPage,
   Role,
   RolePermission,
   ApiToken,
@@ -35,28 +38,29 @@ export const usersApi = {
 
 export const groupsApi = {
   list: () =>
-    client.get<PagedResponse<Group>>('/api/v1/admin/groups'),
+    client.get<GroupListResponse>('/api/v1/identity/groups'),
 
-  get: (id: string) =>
-    client.get<Group>(`/api/v1/admin/groups/${id}`),
+  // `groupsApi.get(id)` and `groupsApi.update(id, body)` were removed in ISS-0765
+  // (run `WF03-ISS0765-20260924`). `GET /groups/:id` and `PATCH|PUT /groups/:id` do not
+  // exist in `Letflow.Routers.Identity.__authz_routes__/0` at any prefix, and
+  // `lib/letflow/identity.ex` has no `get_group/2` or `update_group/3` — these are
+  // unimplemented operations, not mis-prefixed ones. Do not re-add a client function for
+  // either until a backend route exists; adding one is a WF-01 requirement.
 
   create: (body: { name: string; display_name: string; description?: string }) =>
-    client.post<Group>('/api/v1/admin/groups', body),
-
-  update: (id: string, body: Partial<{ display_name: string; description: string }>) =>
-    client.patch<Group>(`/api/v1/admin/groups/${id}`, body),
+    client.post<Group>('/api/v1/identity/groups', body),
 
   delete: (id: string) =>
-    client.delete<void>(`/api/v1/admin/groups/${id}`),
+    client.delete<void>(`/api/v1/identity/groups/${id}`),
 
-  addMembers: (id: string, userIds: string[]) =>
-    client.post<void>(`/api/v1/admin/groups/${id}/members`, { user_ids: userIds }),
+  addMember: (id: string, userId: string) =>
+    client.post<GroupMemberAddResult>(`/api/v1/identity/groups/${id}/members`, { user_id: userId }),
 
   removeMembers: (id: string, userId: string) =>
     client.delete<void>(`/api/v1/identity/groups/${id}/members/${userId}`),
 
   members: (id: string) =>
-    client.get<User[]>(`/api/v1/admin/groups/${id}/members`),
+    client.get<GroupMemberPage>(`/api/v1/identity/groups/${id}/members`),
 }
 
 // ── Roles ──────────────────────────────────────────────────────────────────────

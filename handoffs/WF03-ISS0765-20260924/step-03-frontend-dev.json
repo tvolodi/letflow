@@ -1,0 +1,187 @@
+{
+  "handoff_id": "WF03-ISS0765-20260924-step-03",
+  "run_id": "WF03-ISS0765-20260924",
+  "workflow_id": "WF-03",
+  "step": "Step 3",
+  "to_agent": "ORCH",
+  "from_agent": "FRONTEND-DEV",
+  "status": "COMPLETED",
+  "created_at": "2026-09-24T17:20:00Z",
+  "started_at": "2026-09-24T17:20:00Z",
+  "completed_at": "2026-09-24T17:20:00Z",
+  "context": {
+    "branch_name": "feature/WF03-ISS0765-20260924",
+    "issue_id": "ISS-0765",
+    "queue_ref": "Q-810",
+    "github_ref": "GH-1798",
+    "design_implemented": "lib/letflow/design/iss-0765-groupsapi-route-prefix-audit.md",
+    "design_commit": "1fca1613",
+    "design_gate_commit": "7154016d",
+    "base_commit": "f9d49481",
+    "implementation_commit": "bcddcebf",
+    "artifacts_in": [
+      "lib/letflow/design/iss-0765-groupsapi-route-prefix-audit.md",
+      "handoffs/WF03-ISS0765-20260924/step-02-code-designer.json",
+      "handoffs/WF03-ISS0765-20260924/step-02b-design-gate-rework1.json",
+      "docs/issues/ISS-0765.yaml",
+      "web/src/api/identity.ts",
+      "web/src/types/api.ts",
+      "web/src/pages/admin/GroupsPage.tsx",
+      "web/tests/guards/forbidlist.ts"
+    ]
+  },
+  "task": {
+    "description": "WF-03 Step 3 -- implement the ISS-0765 groupsApi route-prefix and response-shape correction exactly as designed. Implementation only; the new test file and the M-1a/M-1b mutant probes belong to Step 4/4b.",
+    "acceptance_criteria": [
+      "groupsApi .list/.create/.delete/.members and the member-add call use the /api/v1/identity/groups prefix; .removeMembers untouched",
+      ".get and .update deleted, with the design's recorded-rationale comment left in their place",
+      ".addMembers becomes addMember(id, userId: string) sending { user_id }",
+      ".members returns GroupMemberPage with no unwrapping shim, plus the six consequent GroupsPage.tsx edits",
+      ".list returns GroupListResponse; PagedResponse<T> unchanged",
+      "npm run type-check, npm run lint, npm test and npm run guards all pass with real quoted output",
+      "committed and pushed to origin/feature/WF03-ISS0765-20260924 with no divergence"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": {
+      "verdict": "IMPLEMENTED AS DESIGNED",
+      "files_changed": [
+        "web/src/api/identity.ts",
+        "web/src/types/api.ts",
+        "web/src/pages/admin/GroupsPage.tsx"
+      ],
+      "diffstat": "3 files changed, 73 insertions(+), 17 deletions(-)",
+      "files_deliberately_not_changed": [
+        "web/src/api/__tests__/identity.groupsApi.test.ts -- TEST-DESIGNER owns it at Step 4; not created here",
+        "web/src/api/__tests__/identity.removeMembers.test.ts -- byte-unchanged (INV-C)",
+        "web/tests/guards/forbidlist.ts -- no pattern weakened, no allowedPaths entry added (INV-F)",
+        "lib/, priv/repo/migrations/, test/ -- untouched (INV-E)"
+      ]
+    },
+    "groups_api_final_shape": {
+      "list": "list: () => client.get<GroupListResponse>('/api/v1/identity/groups')",
+      "removed_get_update": "a six-line comment block sits where .get and .update were, recording that GET /groups/:id and PATCH|PUT /groups/:id exist at no prefix and lib/letflow/identity.ex has no get_group/2 or update_group/3, and that re-adding a client function is a WF-01 requirement",
+      "create": "create: (body: { name: string; display_name: string; description?: string }) => client.post<Group>('/api/v1/identity/groups', body)",
+      "delete": "delete: (id: string) => client.delete<void>(`/api/v1/identity/groups/${id}`)",
+      "addMember": "addMember: (id: string, userId: string) => client.post<GroupMemberAddResult>(`/api/v1/identity/groups/${id}/members`, { user_id: userId })",
+      "removeMembers": "removeMembers: (id: string, userId: string) => client.delete<void>(`/api/v1/identity/groups/${id}/members/${userId}`)  [UNCHANGED from ISS-0736]",
+      "members": "members: (id: string) => client.get<GroupMemberPage>(`/api/v1/identity/groups/${id}/members`)",
+      "object_keys_sorted": [
+        "addMember",
+        "create",
+        "delete",
+        "list",
+        "members",
+        "removeMembers"
+      ],
+      "inv_a_check": "the substring /api/v1/admin/ no longer appears anywhere inside the groupsApi object literal. It still appears in rolesApi in the same file, which is ISS-0812's scope -- a whole-file absence assertion must not be written."
+    },
+    "types_added": {
+      "file": "web/src/types/api.ts",
+      "placement": "immediately after the existing Group interface, additive only",
+      "interfaces": [
+        "GroupMember { id, username, display_name, email, status: 'active'|'inactive', auth_source: 'internal'|'oidc', inserted_at, updated_at } -- lowercase unions, per user_map/1's Atom.to_string over Ecto.Enum",
+        "GroupMemberPage { items: GroupMember[]; next_cursor: string | null; count: number }",
+        "GroupListResponse { items: Group[]; total: number }",
+        "GroupMemberAddResult { group_id: string; user_id: string; created: boolean }"
+      ],
+      "not_modified": "PagedResponse<T>, CursorPage<T>, User, Group (INV-D)"
+    },
+    "groups_page_edits": [
+      {
+        "line_pre_fix": 54,
+        "before": "const { data: members } = useQuery({",
+        "after": "const { data: membersPage } = useQuery({"
+      },
+      {
+        "line_pre_fix": "new, after 58 (now line 60)",
+        "before": "-",
+        "after": "const members = useMemo(() => membersPage?.items ?? [], [membersPage?.items])"
+      },
+      {
+        "line_pre_fix": 76,
+        "before": "=> groupsApi.addMembers(id, [userId]),",
+        "after": "=> groupsApi.addMember(id, userId),"
+      },
+      {
+        "line_pre_fix": 103,
+        "before": "const memberIds = new Set((members ?? []).map((user) => user.id ?? user.user_id ?? ''))",
+        "after": "const memberIds = new Set(members.map((user) => user.id))"
+      },
+      {
+        "line_pre_fix": 223,
+        "before": "{(members ?? []).length === 0 ? (",
+        "after": "{members.length === 0 ? ("
+      },
+      {
+        "line_pre_fix": 227,
+        "before": "{(members ?? []).map((user) => {",
+        "after": "{members.map((user) => {"
+      },
+      {
+        "line_pre_fix": 228,
+        "before": "const id = user.id ?? user.user_id ?? ''",
+        "after": "const id = user.id"
+      }
+    ],
+    "groups_page_not_changed": "Line 108's dependency array [members, users?.items] is textually unchanged, as the design specified. groupMembers/1 (:28-30), the is_system guard (:129 pre-fix) and the member_count column (:113 pre-fix) are ISS-0811's scope and were not touched. No useMemo import change was needed -- useMemo is already imported at :1. No page_size query param was added (OQ-2).",
+    "verification": {
+      "run_from": "C:\\Users\\tvolo\\dev\\ai-dala\\letflow\\web",
+      "type_check": {
+        "command": "npm run type-check",
+        "exit": "0",
+        "output_verbatim": "> letflow-web@0.1.0 type-check\n> tsc -b tsconfig.json",
+        "note": "no diagnostics emitted; tsconfig.app.json includes only src/"
+      },
+      "lint": {
+        "command": "npm run lint",
+        "exit": "0",
+        "output_verbatim": "> letflow-web@0.1.0 lint\n> eslint . --ext ts,tsx --report-unused-disable-directives --max-warnings 0",
+        "note": "no warnings; --max-warnings 0 is in force"
+      },
+      "test": {
+        "command": "npm test",
+        "exit": "0",
+        "output_verbatim": " Test Files  124 passed (124)\n      Tests  874 passed (874)\n   Start at  22:18:30\n   Duration  29.70s (transform 18.91s, setup 0ms, collect 134.95s, tests 26.04s, environment 158.63s, prepare 38.92s)"
+      },
+      "guards": {
+        "command": "npm run guards",
+        "exit": "0",
+        "output_verbatim": " Test Files  4 passed (4)\n      Tests  48 passed (48)\n   Start at  22:19:05\n   Duration  17.58s (transform 100ms, setup 0ms, collect 292ms, tests 17.09s, environment 1ms, prepare 681ms)",
+        "note": "includes source-scan over web/src/**/*.{ts,tsx,css} and bundle-scan over a fresh vite build. No forbidlist entry was weakened, removed, or allowedPaths-exempted. The literal text 'fetch(' does not appear in anything added under web/src/, including inside the new comment block."
+      }
+    },
+    "browser_verification": {
+      "performed": false,
+      "reason": "No running Letflow instance was reachable from this session: a probe of http://localhost:4000/api/v1/identity/groups returned no connection (curl exit-level failure, HTTP code 000). The change is therefore verified by type-check/lint/test/guards only, not against real data. Per DIRECTIVE T-2 this is stated rather than claimed away. A real-backend check of the Groups admin surface -- list groups, open Manage members, add a member, remove a member, delete an empty group -- is the right scope for UAT-RUNNER once an instance is up, and is the only way the /api/v1/identity prefix correction gets end-to-end evidence."
+    },
+    "git": {
+      "commit": "bcddcebf652c23d46d5161584ef0f3443adb9025",
+      "commit_subject": "fix(ISS-0765): correct groupsApi to the real /api/v1/identity/groups routes",
+      "pushed": true,
+      "push_output": "To https://github.com/tvolodi/letflow.git\n   f9d49481..bcddcebf  feature/WF03-ISS0765-20260924 -> feature/WF03-ISS0765-20260924",
+      "divergence_check": "after git fetch, git rev-parse HEAD and origin/feature/WF03-ISS0765-20260924 both resolve to bcddcebf652c23d46d5161584ef0f3443adb9025; git status -sb shows '## feature/WF03-ISS0765-20260924...origin/feature/WF03-ISS0765-20260924' with no ahead/behind marker. Nothing is dangling locally.",
+      "working_tree_after_commit": "git status --porcelain is empty for the three changed files (all committed); no untracked artefacts left behind"
+    },
+    "scope_discipline": {
+      "not_touched_because_already_filed": [
+        "ISS-0811 -- Group.is_system / Group.member_count and the always-0 Members column",
+        "ISS-0812 -- usersApi and rolesApi dead /api/v1/admin/ routes",
+        "ISS-0813 -- generic route-table to client-literal coupling guard",
+        "ISS-0814 -- User.status uppercase vs lowercase wire value",
+        "ISS-0815 -- User.roles / User.created_at required but never emitted",
+        "ISS-0816 -- CursorPage<T>.has_more never emitted"
+      ],
+      "known_limitation_carried_forward": "The members dialog still shows at most the first page (50 members, Pagination.default_page_size/0) and GroupMemberPage.next_cursor is returned but unread. Design section 3.3 / OQ-2 -- pre-existing behaviour this fix makes reachable for the first time, deliberately not fixed here."
+    },
+    "new_findings": [],
+    "issues": [],
+    "artifacts_out": [
+      "web/src/api/identity.ts",
+      "web/src/types/api.ts",
+      "web/src/pages/admin/GroupsPage.tsx"
+    ],
+    "next_action": "ORCH: route to SECURITY-REVIEWER and REVIEWER (Step 3b gates), then TEST-DESIGNER at Step 4 for web/src/api/__tests__/identity.groupsApi.test.ts against design section 7's eleven-row matrix. Carry N-1 (M-1a's predicted tsc error sites are a floor, not an exact match -- do not manufacture a diagnostic at :228) and N-3 (Step 4b must apply at least one mutant itself) into the Step 4/4b handoffs, as the rework-1 design gate required. Step 4 must run the mutants against commit bcddcebf, which is the post-fix tree they assume."
+  }
+}

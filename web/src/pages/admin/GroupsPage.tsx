@@ -51,11 +51,13 @@ export default function GroupsPage() {
   const activeGroupId = groupId(activeGroup ?? ({} as GroupRow))
   const rendererState: RendererState = isLoading ? 'loading' : isError ? classifyError(error) : 'success'
 
-  const { data: members } = useQuery({
+  const { data: membersPage } = useQuery({
     queryKey: tenantKeys.admin.groupMembers(activeGroupId),
     queryFn: () => groupsApi.members(activeGroupId),
     enabled: Boolean(activeGroup),
   })
+
+  const members = useMemo(() => membersPage?.items ?? [], [membersPage?.items])
 
   const { data: users } = useQuery({
     queryKey: tenantKeys.admin.users({ page_size: 200 }),
@@ -73,7 +75,7 @@ export default function GroupsPage() {
   })
 
   const addMember = useMutation({
-    mutationFn: ({ groupId: id, userId }: { groupId: string; userId: string }) => groupsApi.addMembers(id, [userId]),
+    mutationFn: ({ groupId: id, userId }: { groupId: string; userId: string }) => groupsApi.addMember(id, userId),
     onSuccess: () => {
       if (activeGroup) {
         qc.invalidateQueries({ queryKey: tenantKeys.admin.groups() })
@@ -100,7 +102,7 @@ export default function GroupsPage() {
 
   const availableUsers = useMemo(() => {
     const list = users?.items ?? []
-    const memberIds = new Set((members ?? []).map((user) => user.id ?? user.user_id ?? ''))
+    const memberIds = new Set(members.map((user) => user.id))
     return list.filter((user) => {
       const id = user.id ?? user.user_id ?? ''
       return id !== '' && !memberIds.has(id)
@@ -220,12 +222,12 @@ export default function GroupsPage() {
 
             <div>
               <h4 style={{ margin: '0 0 .75rem' }}>Current members</h4>
-              {(members ?? []).length === 0 ? (
+              {members.length === 0 ? (
                 <p style={{ margin: 0, color: 'var(--text-secondary)' }}>No members in this group.</p>
               ) : (
                 <div style={{ display: 'grid', gap: '.5rem' }}>
-                  {(members ?? []).map((user) => {
-                    const id = user.id ?? user.user_id ?? ''
+                  {members.map((user) => {
+                    const id = user.id
                     return (
                       <div key={id} style={{ display: 'flex', justifyContent: 'space-between', gap: '1rem', alignItems: 'center', border: '1px solid var(--border-default)', borderRadius: '8px', padding: '.7rem .85rem' }}>
                         <div>

@@ -1,0 +1,124 @@
+{
+  "handoff_id": "WF03-ISS0765-20260924-step-02b-design-gate-rework1",
+  "run_id": "WF03-ISS0765-20260924",
+  "workflow_id": "WF-03",
+  "step": "2b",
+  "to_agent": "ORCH",
+  "from_agent": "CODE-DESIGN-VALIDATOR",
+  "status": "COMPLETED",
+  "created_at": "2026-09-24T17:14:08Z",
+  "started_at": "2026-09-24T17:14:08Z",
+  "completed_at": "2026-09-24T17:14:08Z",
+  "context": {
+    "branch_name": "feature/WF03-ISS0765-20260924",
+    "issue_id": "ISS-0765",
+    "queue_ref": "Q-810",
+    "github_ref": "GH-1798",
+    "design_under_gate": "lib/letflow/design/iss-0765-groupsapi-route-prefix-audit.md",
+    "design_commit_regated": "1fca1613",
+    "design_commit_previously_failed": "9c764785",
+    "prior_gate_artefact": "handoffs/WF03-ISS0765-20260924/step-02b-design-gate.json",
+    "prior_gate_commit": "6469739d",
+    "scope_of_this_gate": "NARROW RE-GATE. Sections 1-6, 8 and 9 and claims (a)-(f) were independently re-derived at the first gate and are NOT re-derived here, per ORCH's instruction. This gate verifies only that F-1 and F-2 are closed and that closing them introduced nothing new.",
+    "artifacts_in": [
+      "lib/letflow/design/iss-0765-groupsapi-route-prefix-audit.md",
+      "handoffs/WF03-ISS0765-20260924/step-02-code-designer.json",
+      "handoffs/WF03-ISS0765-20260924/step-02b-design-gate.json",
+      "docs/agents/workflows/WF-03_issue_resolving.md"
+    ]
+  },
+  "task": {
+    "description": "Re-gate CODE-DESIGNER's rework iteration 1 of the ISS-0765 fix design. Verify F-1 (false fail-first claim on the members shape row) and F-2 (ambiguous identity.ex citations) are actually closed, that the 12-to-11 row renumber dropped or double-counted nothing, that every AC-map cross-reference survived it, that the mutant substitution for decision (b)'s fail-first evidence is legitimate and discriminating in both directions and specified precisely enough for TEST-DESIGN-VALIDATOR to apply at Step 4b, and that the revert-and-verify obligation is binding.",
+    "acceptance_criteria": [
+      "F-1 closed: row 7 half (i) is genuinely red pre-fix, so half (ii) no longer sits alone in a block that can never fail",
+      "Section 7.1's FAILS/PASSES lists are complete and correct against the current pre-fix code, with no row dropped or double-counted in the 12-to-11 renumber",
+      "Every section 8 AC-map cross-reference still points at the row it means",
+      "The row 7(i) / row 10 overlap is stated, and row 10 still enumerates every function",
+      "The M-1a/M-1b mutant substitution is legitimate under WF-03's non-existence clause, discriminates in both directions, and is specified precisely enough to be applied by another agent",
+      "The revert-and-verify obligation is stated as binding",
+      "F-2 closed: no bare ambiguous identity.ex reference survives, and the added (:588) is correct"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": {
+      "verdict": "PASS",
+      "verdict_basis": "Both findings are closed on their merits, not papered over. F-1's fix is the stronger of the two options I offered and CODE-DESIGNER conceded the error in the artefact itself rather than quietly editing it away. The renumber is clean. The mutant substitution is legitimate and discriminates in both directions. One non-blocking precision caveat on M-1a's predicted error-site list is recorded as a binding forward instruction (N-1) -- it does not weaken the mutant's discriminating power and is self-correcting, because the design already requires the expected output to be quoted from an actual run.",
+      "f1_closed": {
+        "status": "CLOSED",
+        "option_taken": "FOLD (option (i) of the two I offered).",
+        "row_7_half_i_is_genuinely_red": "CONFIRMED. Pre-fix web/src/api/identity.ts:58-59 is client.get<User[]>(`/api/v1/admin/groups/${id}/members`). Half (i) asserts the captured URL contains /api/v1/identity/groups/g-1/members AND does not contain /api/v1/admin/. Pre-fix BOTH sub-assertions fail: the captured URL is `${BASE_URL}/api/v1/admin/groups/g-1/members`, which lacks the identity substring and carries the admin one, and BASE_URL cannot rescue either since it is a prefix. The block therefore goes red pre-fix on half (i) alone. F-1 is closed, not moved.",
+        "no_ordering_hazard": "Checked explicitly, since the fold's whole value depends on it. Within one it-block, a failure in EITHER half fails the block, so the halves' order does not matter. Nor can half (ii) abort the block before half (i) runs: pre-fix, awaiting groupsApi.members with the spy resolving 200 plus the envelope succeeds and all four of half (ii)'s assertions hold, so nothing throws ahead of half (i). The design lists (i) first regardless.",
+        "half_ii_relabelled_correctly": "CONFIRMED and correct. Section 7.1 re-labels half (ii) a FORWARD REGRESSION GUARD -- the assertion that goes red if a future change reintroduces an .items unwrap inside groupsApi.members, which INV-B forbids -- and states outright that it is not fail-first evidence and must not be reported as an eleventh red row. That is exactly the right characterisation of what the assertion is worth.",
+        "concession_recorded": "Section 7.1 opens by stating the earlier claim was wrong and that 'the error was mine, not TEST-DESIGNER's to discover.' The Step 2 handoff's rework_history carries the same, with accepted: true. The artefact now teaches the correct reasoning to its next reader instead of silently no longer being wrong -- which is what stops the same mistake recurring."
+      },
+      "renumber_integrity": {
+        "status": "CLEAN",
+        "mapping_verified": "Old 1-6 unchanged; old 7 (T-0765-MEMBERS-PATH) + old 8 (T-0765-MEMBERS-SHAPE) folded into new 7 (T-0765-MEMBERS) as halves (i) and (ii); old 9 -> new 8; old 10 -> new 9; old 11 -> new 10; old 12 -> new 11. Twelve rows became eleven via exactly one fold. Nothing dropped, nothing duplicated, no id reused for a different assertion.",
+        "section_7_1_lists_correct": "CONFIRMED against the current pre-fix code. FAILS list (1, 2, 3, 4, 5, 6, 7(i), 8, 9, 10) -- 1/2/3 fail on the /admin literals at identity.ts:38/44/50; 4/5/6 fail because groupsApi.addMember is undefined pre-fix (the function is addMembers at :52-53, posting {user_ids: userIds}); 7(i) as above; 8 fails because 'get' and 'update' are present at :40 and :46; 9 fails on the key set; 10 fails on 5 of its 6 it.each rows. PASSES list (7(ii), 11) -- 7(ii) because T is erased and client.ts returns response.json() verbatim, 11 because removeMembers at :55-56 already uses the /identity path. The two lists together account for all twelve row-parts across the eleven rows exactly once each: no part is listed twice and none is missing.",
+        "no_stale_row_references_elsewhere": "Grepped the whole document for row references. The only ones are in the section 7 matrix, the overlap paragraph beneath it, section 7.1 and the section 8 AC map -- all of which were updated. No stale number survives in sections 1-6, 9, 10 or 11."
+      },
+      "ac_map_cross_references": {
+        "status": "ALL SURVIVED",
+        "ac1": "'Tests: rows 1-5, 7(i), 10.' Was 'rows 1-5, 7, 11'. Old 7 (MEMBERS-PATH) correctly became 7(i) -- and naming the half rather than the row is the right precision, since only half (i) is prefix evidence. Old 11 (NO-ADMIN-PREFIX) correctly became 10. Correct.",
+        "ac2": "'list (1), create (2), delete (3), addMember (4, 5, 6), members (7) ... class guard (10) and the untouched-removeMembers row (11).' Every number correct post-renumber, and the added sentence pointing at M-1a/M-1b for the retype's fail-first evidence is accurate. AC2's 'each corrected call has coverage' still holds: no corrected call lacks a row.",
+        "ac3": "'Tests: rows 8, 9, plus section 7.1's M-1a.' Was 'rows 9, 10' = NO-GET-UPDATE + SURFACE, which are now 8 and 9. Correct.",
+        "observation_not_a_defect": "Row 9 (SURFACE) carries AC column '1, 3' in the matrix while section 8 cross-references it only under AC3. This asymmetry predates the rework (old row 10 had it identically) and I did not raise it at the first gate. It uncouples nothing: AC1's evidence is complete without it (rows 1-5 cover the four corrected prefixes, 7(i) covers members, 10 is the class guard). Recorded for completeness, not as a required change."
+      },
+      "overlap_and_enumeration": {
+        "status": "BOTH SATISFIED",
+        "overlap_stated": "CONFIRMED. The paragraph immediately beneath the matrix states that rows 7(i) and 10 both assert members avoids /api/v1/admin/, that this is deliberate rather than redundancy to trim, and gives the reason for each side: row 10 must enumerate every function to be a class guard, and row 7 needs a discriminating assertion of its own so its no-unwrap half does not sit alone in a block that can never be red. That is the correct justification and it names the exact hazard F-1 was about.",
+        "row_10_still_enumerates": "CONFIRMED. Row 10 is unchanged in substance: it.each over all six surviving functions (list, create, delete, addMember, removeMembers, members), one row per function so a failure names the function, pre-fix verdict 'FAILS on 5 of 6 (removeMembers passes)'. The count is correct -- five of the six emit /api/v1/admin/ pre-fix, and the addMember row fails as a TypeError on an undefined function rather than on a captured URL, which is still a failure."
+      },
+      "mutant_substitution": {
+        "legitimacy": "ACCEPTED. WF-03_issue_resolving.md:104-117 scopes the clause to 'when the pre-fix failure is the code under test does not exist', on the ground that a pre-fix failure carrying no information about whether the test discriminates correct from wrong cannot satisfy fail-first -- 'a suite can fail against a missing module and still be vacuous against a broken one.' A type-only change is the same situation a fortiori: there is no pre-fix failure AT ALL at runtime, not merely an uninformative one. So the design is not stretching the rule to escape it, it is applying the rule where its own rationale bites harder. The structural premise is one I verified independently at the first gate: web/src/api/client.ts:158-169 ends in `return response.json() as Promise<T>`, a verbatim pass-through, and `as Promise<T>` is erased at emit -- so client.get<User[]> and client.get<GroupMemberPage> are byte-identical at runtime on the same spy body. Section 7.1's claim that no runtime row can carry decision (b)'s fail-first evidence is correct, and saying so plainly is better design than manufacturing a row that appears to.",
+        "discrimination_both_directions": "ACCEPTED. The trap is the decoupling of the wire shape from its consumer, and the fix has two coupled halves: the retype of groupsApi.members (api side) and the six GroupsPage.tsx consumer edits (page side). M-1a breaks the page side while keeping the retype -- tsc must then reject the restored array-shaped reads, since `members ?? []` is GroupMemberPage | never[] and neither .map nor .length exists on it. M-1b breaks the api side while keeping the page edits -- tsc must then reject membersPage?.items over User[]. Each mutant fires on exactly one half, so together they show the probe tracks the coupling itself rather than merely breaking something. That is the discrimination WF-03's 'must target the specific traps the fix exists to handle' asks for.",
+        "npm_test_still_passes_under_m1a": "ACCEPTED, and it is the sharpest part of the argument. Verified independently: under M-1a the new test file exercises groupsApi only -- groupsApi.members still returns the envelope and still hits /identity -- so rows 1-11 all pass; vitest transpiles via esbuild without type-checking, so GroupsPage's tsc errors cannot fail npm test; and no GroupsPage component test exists to import the mutated file. The expectation is therefore correct as stated. More importantly the REASONING is sound: a green npm test under M-1a is a measurement that the runtime suite is blind to the retype, which converts 'we chose not to write a render test' from an unevidenced omission into a demonstrated claim about where the detector actually lives. I accept it.",
+        "specified_precisely_enough_for_step_4b": "YES, subject to N-1. Both mutants name the exact files and edits to revert (section 3.1's retype; section 3.2's six GroupsPage.tsx edits), the exact probe command (cd web && npm run type-check), the expected direction of failure, and the expected still-green command for M-1a. TEST-DESIGN-VALIDATOR can apply either without a further decision.",
+        "not_applied_here": "I did NOT apply either mutant. Applying at least one is TEST-DESIGN-VALIDATOR's obligation at Step 4b (WF-03:118-121), and this step is bound to modify no file outside handoffs/. What I am passing is the SPECIFICATION of the mutants, not a measured outcome -- Step 4b still owes the measurement, and accepting its reported counts without applying one would be copying a claim."
+      },
+      "revert_and_verify": {
+        "status": "BINDING AND CORRECTLY ADAPTED",
+        "detail": "Section 7.1's third bullet states 'Revert discipline is binding (WF-03 Step 4's mutant rule)' and gives both sanctioned techniques -- a throwaway git worktree of the branch, or in place followed by git checkout -- <path> -- then requires, before the handoff completes, quoting (a) git status --porcelain web/ empty and (b) npm run type-check AND npm test green against the restored tree. WF-03:134-146 requires git status --porcelain lib/ test/ empty plus the test file re-running green. The path substitution to web/ is correct, since M-1a/M-1b touch only web/, and requiring type-check green in addition to the suite is STRICTER than the workflow's floor, not looser."
+      },
+      "f2_closed": {
+        "status": "CLOSED",
+        "no_bare_reference_survives": "CONFIRMED by grep of the whole document for identity.ex excluding the two qualified forms. Exactly two hits remain, at lines 29 and 37, and both are the section 1 path-convention table's own prose where the ambiguity is the subject being explained ('a bare identity.ex is ambiguous between the first two', 'No bare identity.ex appears'). Every citation is now lib/letflow/routers/identity.ex:NNN or lib/letflow/identity.ex:NNN. The path table itself is a better fix than the minimum I asked for: it names all three identity files including web/src/api/identity.ts, and it records WHY the convention exists by quoting the concrete mis-landing (lib/letflow/identity.ex:483-489 is unrelated moduledoc prose).",
+        "section_1_3_footnote": "CONFIRMED. The table's bare :NNN values are now covered by an explicit footnote, 'Every bare :NNN in the table above is a line in lib/letflow/routers/identity.ex', with the first row fully qualified as the anchor. Unambiguous.",
+        "added_588_is_correct": "VERIFIED against source. lib/letflow/routers/identity.ex:586 is the `# DELETE /groups/:id/members/:user_id (design 3.6)` banner, :587 is blank, and :588 is `defp handle_remove_member(conn, group_id, user_id, opts) do`. The citation is exact, and it closes the one row of section 1.3 that previously carried a handler name with no line at all.",
+        "other_bare_basenames_are_unambiguous": "api_pipeline.ex, pagination.ex, user.ex, client.ts, GroupsPage.tsx remain partly bare in places. Each has exactly one file of that name in play, so none reproduces F-2's hazard. No change required."
+      },
+      "fold_in_decision_c_note": {
+        "status": "ACCURATE",
+        "detail": "Section 4 rationale 1 now carries: 'that comment's own stated premise -- no existing Letflow caller depends on the array shape either way -- is stale today, because GroupsPage.tsx:76 passes [userId]. Decision (c) does not contradict the comment; it makes the comment's premise true again by removing the one caller that had drifted from it.' Both halves check out. GroupsPage.tsx:76 does pass [userId] to groupsApi.addMembers today, and groupsApi.addMembers is the only client call that sends the user_ids array shape at all -- so after decision (c) sends { user_id: userId }, no caller depends on the array shape and the comment's premise holds again. 'Restores rather than contradicts' is the accurate characterisation, and it is the right way to record it: it removes the apparent tension between decision (c) and core-directives' 'don't silently re-decide what a decision record already settled' instead of leaving a later reader to rediscover it."
+      },
+      "nothing_new_introduced": "Diffed 9c764785..1fca1613 on the design artefact in full. Every change is attributable to F-1, F-2, or the decision-(c) fold-in. Sections 2, 3, 5, 6, 9, 10 and 11 are untouched except for citation qualification. The Step 2 handoff's test_matrix mirrors the amended document exactly -- same eleven ids, same verdicts, same half (i)/(ii) split -- so the handoff and the artefact cannot drift apart at Step 3. No invariant was weakened, no scope boundary moved, and no implementation code was introduced."
+    },
+    "issues": [
+      {
+        "id": "N-1",
+        "severity": "MINOR",
+        "title": "M-1a's predicted tsc error-site list should be read as a floor, not an exact-match assertion",
+        "detail": "M-1a expects tsc to error at the reverted GroupsPage.tsx :103, :223, :227 and :228, explained as '.map/.length do not exist on GroupMemberPage, and user_id does not exist on GroupMember'. The first three are certain: `members ?? []` is GroupMemberPage | never[], so .map at :103 and :227 and .length at :223 each raise TS2339. The :228 prediction is weaker. :228 is `user.id ?? user.user_id ?? ''` inside the callback of the :227 .map that has itself just failed to resolve -- when the callee errors, tsc types the call as any and the callback parameter as implicit any, so the diagnostic characteristically surfaces AT :227 (TS7006) rather than as a distinct :228 error, and the 'user_id does not exist on GroupMember' reasoning is unreachable because the element type is never computed. This is not a flaw in the mutant -- three certain errors on the page side under M-1a, and a certain error on the api side under M-1b, are more than enough to discriminate -- but a pre-committed exact site list invites a spurious mismatch at Step 4b, or worse, an attempt to adjust the mutant until a :228 diagnostic appears. The design already says the expected output is to be 'quoted verbatim in the test spec', i.e. from a real run, so this is self-correcting if the floor is understood.",
+        "required_change": "None to the design; PASS is not contingent on it. Binding forward instruction for Step 4/4b, which ORCH must carry into the TEST-DESIGNER and TEST-DESIGN-VALIDATOR handoffs: treat M-1a's expectation as 'tsc errors on GroupsPage.tsx at the reverted members-consumer sites, including at least :103, :223 and :227', record verbatim whatever tsc actually emits, and do NOT modify the mutant to manufacture a diagnostic at :228. A site set that differs from the design's prediction while still showing type-check red under M-1a and green after the revert satisfies the probe."
+      },
+      {
+        "id": "N-2",
+        "severity": "MINOR",
+        "title": "Revert verification scopes git status to web/",
+        "detail": "Section 7.1 requires `git status --porcelain web/` empty after reverting. That covers M-1a and M-1b as specified, since both touch only web/src/. A bare `git status --porcelain` over the whole tree would be strictly safer at no cost and would also catch an unintended stray elsewhere.",
+        "required_change": "None required. Optional hardening for Step 4b: run the unscoped form as well."
+      },
+      {
+        "id": "N-3",
+        "severity": "INFO",
+        "title": "Step 4b still owes the measurement this gate did not take",
+        "detail": "This gate accepted the mutants as SPECIFIED. It did not apply them -- correctly, since applying at least one is TEST-DESIGN-VALIDATOR's own obligation under WF-03:118-121 and this step may modify no file outside handoffs/. ORCH should ensure the Step 4b handoff carries that obligation explicitly, with N-1's floor reading and the revert-and-verify quotes as acceptance criteria. Accepting TEST-DESIGNER's reported mutant outcomes without applying one would be copying a claim rather than validating it.",
+        "required_change": "ORCH: carry N-1 and the apply-at-least-one-mutant obligation into the Step 4b handoff's acceptance criteria."
+      }
+    ],
+    "artifacts_out": [],
+    "next_action": "ORCH: design gate is GREEN at rework iteration 1. Advance to WF-03 Step 3 (FRONTEND-DEV) against lib/letflow/design/iss-0765-groupsapi-route-prefix-audit.md at commit 1fca1613. Carry N-1 and N-3 into the Step 4/4b handoffs as acceptance criteria. The five design findings forwarded at the first gate (F-4 there) still need id allocation; ISS-0814/0815/0816 were filed at 079d1ffd -- confirm they cover all five before closing the run.",
+    "rework_iteration": 1
+  }
+}

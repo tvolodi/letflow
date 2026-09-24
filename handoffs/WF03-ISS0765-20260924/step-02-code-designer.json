@@ -1,0 +1,302 @@
+{
+  "handoff_id": "WF03-ISS0765-20260924-step-02",
+  "run_id": "WF03-ISS0765-20260924",
+  "workflow_id": "WF-03",
+  "step": "Step 2",
+  "to_agent": "CODE-DESIGNER",
+  "from_agent": "ORCH",
+  "status": "COMPLETED",
+  "created_at": "2026-09-24T16:52:00Z",
+  "started_at": "2026-09-24T16:52:00Z",
+  "completed_at": "2026-09-24T17:09:33Z",
+  "context": {
+    "branch_name": "feature/WF03-ISS0765-20260924",
+    "issue_id": "ISS-0765",
+    "issue_file": "docs/issues/ISS-0765.yaml",
+    "queue_ref": "Q-810",
+    "github_ref": "GH-1798",
+    "severity_as_filed": "MAJOR",
+    "artifacts_in": [
+      "docs/issues/ISS-0765.yaml",
+      "handoffs/WF03-ISS0765-20260924/step-01-issue-fixer.json",
+      "docs/agents/instructions/core-directives.md",
+      "docs/agents/workflows/WF-03_issue_resolving.md",
+      "docs/agents/workflows/WF-02_requirement_implementation.md",
+      "docs/guides/frontend_developer_guide.md",
+      "docs/anti-patterns.md",
+      "web/src/api/identity.ts",
+      "web/src/api/client.ts",
+      "web/src/types/api.ts",
+      "web/src/pages/admin/GroupsPage.tsx",
+      "web/src/pages/admin/UserDetailPage.tsx",
+      "web/src/hooks/useAdminUsers.ts",
+      "web/src/api/__tests__/identity.removeMembers.test.ts",
+      "web/tests/guards/forbidlist.ts",
+      "web/tests/guards/source-scan.spec.ts",
+      "web/package.json",
+      "lib/letflow/routers/identity.ex",
+      "lib/letflow/identity/user.ex",
+      "lib/letflow/api/pagination.ex",
+      "docs/issues/ISS-0811.yaml",
+      "docs/issues/ISS-0812.yaml",
+      "docs/issues/ISS-0813.yaml"
+    ]
+  },
+  "task": {
+    "description": "WF-03 Step 2 (fix design) for ISS-0765. Design the correction of web/src/api/identity.ts's groupsApi against the real, runtime-verified backend route table, including the .members response-shape mismatch that a prefix-only fix would unmask. Design only -- interfaces, exact type shapes, exact before/after URL literals, and the test matrix. NO implementation code.",
+    "acceptance_criteria": [
+      "AC1: groupsApi's .addMembers/.list/.get/.update/.delete/.members each call a URL prefix a real backend route serves, audited against the actual route table rather than assumed",
+      "AC2: each corrected call has regression coverage mirroring web/src/api/__tests__/identity.removeMembers.test.ts",
+      "AC3: npm run type-check and the web test suite pass, and any groupsApi call with no corresponding backend route is either removed or explicitly recorded as unimplemented rather than left pointing at a dead prefix",
+      "Four named design decisions (a-d) each stated as a decision with justification, not as a list of options",
+      "Scope boundary held: groupsApi only; usersApi/rolesApi (ISS-0812), Group.is_system/member_count (ISS-0811) and the generic coupling guard (ISS-0813) untouched"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": {
+      "design_artefact": "lib/letflow/design/iss-0765-groupsapi-route-prefix-audit.md",
+      "decisions": {
+        "a_get_and_update": {
+          "decision": "DELETE both groupsApi.get and groupsApi.update, and leave a comment block in their place recording that GET /groups/:id and PATCH|PUT /groups/:id are unimplemented backend-side.",
+          "justification": "No route exists at any prefix and no Letflow.Identity get_group/update_group context function exists, so a prefix 'correction' only moves the 404 from ApiPipeline's catch-all (api_pipeline.ex:203-205) to Letflow.Routers.Identity's own match _ (identity.ex:227). Zero production callers. Adding the routes is new backend behaviour = WF-01, out of scope. AC3 permits removal; deletion PLUS the recorded comment satisfies both halves of AC3's disjunction and is what stops a fourth run re-adding them.",
+          "consequence_recorded": "ISS-0765's own fix_direction ('correct .get/.update to the real prefix') is NOT satisfiable as written. The design says so explicitly in §2 so Step 5 does not close the issue claiming a correction that was not made."
+        },
+        "b_members_shape": {
+          "decision": "RETYPE. groupsApi.members(id) returns Promise<GroupMemberPage> = { items: GroupMember[]; next_cursor: string | null; count: number } -- the backend envelope verbatim. The API client performs NO unwrapping. GroupsPage.tsx reads .items.",
+          "justification": "docs/guides/frontend_developer_guide.md §4 rule 1 forbids the alternative outright ('Do not add a shim or adapter inside web/ that normalises the mismatch'), so this is a recorded project rule rather than a preference. Second: the retype makes tsc the detector for the run's highest-risk item -- any call site still treating the value as an array becomes a type error, so `npm run type-check` (AC3) mechanically finds every one, whereas an unwrap would let type-check pass whether or not the shape was ever considered. Third: an unwrap discards next_cursor and hides that the route is cursor-paginated.",
+          "exact_type": "GroupMemberPage { items: GroupMember[]; next_cursor: string | null; count: number }; GroupMember { id: string; username: string; display_name: string; email: string; status: 'active' | 'inactive'; auth_source: 'internal' | 'oidc'; inserted_at: string; updated_at: string } -- user_map/1 (lib/letflow/routers/identity.ex:729-740) transcribed exactly.",
+          "groupspage_lines_changed": [
+            ":54 -- destructure `data: members` -> `data: membersPage`",
+            "new line after :58 -- `const members = useMemo(() => membersPage?.items ?? [], [membersPage?.items])`",
+            ":103 -- `new Set((members ?? []).map((user) => user.id ?? user.user_id ?? ''))` -> `new Set(members.map((user) => user.id))`",
+            ":223 -- `(members ?? []).length === 0` -> `members.length === 0`",
+            ":227 -- `(members ?? []).map((user) => {` -> `members.map((user) => {`",
+            ":228 -- `const id = user.id ?? user.user_id ?? ''` -> `const id = user.id`"
+          ],
+          "fail_first_evidence": "REWORK 1: the M-1a/M-1b type-check mutants in design section 7.1, NOT any runtime row. No vitest row can discriminate a TypeScript return-type change, because client.ts passes the body through verbatim and T is erased at runtime."
+        },
+        "c_addmembers": {
+          "decision": "RENAME to addMember(id: string, userId: string), body { user_id: userId }, return type GroupMemberAddResult { group_id: string; user_id: string; created: boolean }. Sole caller GroupsPage.tsx:76 becomes groupsApi.addMember(id, userId).",
+          "justification": "resolve_member_user_id/1 (lib/letflow/routers/identity.ex:525-537) matches %{\"user_ids\" => [first | _rest]} and returns only `first`; the comment at identity.ex:483-489 records this as a deliberate R-Co port decision, so under core-directives' 'Don't silently re-decide what a decision record already settled' the client is the side that must move. Its FIRST clause matches %{\"user_id\" => user_id}, so singular is the backend's primary shape. It mirrors the ISS-0736 removeMembers correction exactly -- the identical defect in the adjacent function. Against the scope boundary: groupsApi and its directly-consequent GroupsPage call sites are explicitly in scope, and the sole caller already passes [userId], a one-element array literal, so the change removes a wrapper and alters no behaviour.",
+          "stale_premise_note": "REWORK 1, folded in from the gate: the routers/identity.ex:483-489 comment's own premise (\"no existing Letflow caller depends on the array shape either way\") is stale today, because GroupsPage.tsx:76 passes [userId]. Decision (c) does not contradict the recorded backend decision -- it restores that premise by removing the one caller that had drifted from it. Recorded in design section 4 so a later reader does not re-litigate it."
+        },
+        "d_list_type": {
+          "decision": "CORRECT IT NOW. groupsApi.list() returns Promise<GroupListResponse> where GroupListResponse = { items: Group[]; total: number }. PagedResponse<T> itself is NOT modified.",
+          "justification": "handle_list_groups/2 (identity.ex:468-472) emits only items+total; PagedResponse<T> declares page and page_size as REQUIRED, so the type is false today and a future data.page_size read gets undefined with no type error -- the same silent-wrong-value class this run exists to remove. Verified zero call-site cost: all three consumers (GroupsPage.tsx:50, UserDetailPage.tsx:149, useAdminUsers.ts:47) read .items only and .total is read nowhere. PagedResponse<T> stays untouched because usersApi/rolesApi also use it and are out of scope (ISS-0812)."
+        }
+      },
+      "resulting_groupsapi_surface": [
+        "list()                       -> GET    /api/v1/identity/groups                            : Promise<GroupListResponse>",
+        "create(body)                 -> POST   /api/v1/identity/groups                            : Promise<Group>",
+        "delete(id)                   -> DELETE /api/v1/identity/groups/${id}                      : Promise<void>",
+        "addMember(id, userId)        -> POST   /api/v1/identity/groups/${id}/members              : Promise<GroupMemberAddResult>",
+        "removeMembers(id, userId)    -> DELETE /api/v1/identity/groups/${id}/members/${userId}    : Promise<void>   [UNCHANGED]",
+        "members(id)                  -> GET    /api/v1/identity/groups/${id}/members              : Promise<GroupMemberPage>",
+        "get(id) and update(id, body) -> DELETED"
+      ],
+      "test_matrix": {
+        "new_file": "web/src/api/__tests__/identity.groupsApi.test.ts",
+        "mirrors": "web/src/api/__tests__/identity.removeMembers.test.ts -- // @vitest-environment jsdom, a window.fetch spy assigned from vi.fn(), setToken/clearToken in beforeEach/afterEach, assertions on the exact method + path requested",
+        "guard_constraint": "web/tests/guards/source-scan.spec.ts scans web/src/**/*.{ts,tsx} INCLUDING __tests__/, and forbidlist.ts's raw-fetch-outside-client pattern (/\\bfetch\\(|\\baxios\\(/) allows only web/src/api/client.ts. Assign the spy (window.fetch = fetchSpy as unknown as typeof window.fetch); never write the literal text 'fetch('. Weakening the pattern is forbidden (INV-F).",
+        "rows": [
+          {
+            "id": "T-0765-LIST",
+            "assertion": "list() -> GET, URL contains /api/v1/identity/groups and NOT /api/v1/admin/groups",
+            "pre_fix": "FAILS",
+            "ac": "1,2"
+          },
+          {
+            "id": "T-0765-CREATE",
+            "assertion": "create({name,display_name,description}) -> POST /api/v1/identity/groups; parsed body deep-equals the passed object",
+            "pre_fix": "FAILS",
+            "ac": "1,2"
+          },
+          {
+            "id": "T-0765-DELETE",
+            "assertion": "delete('g-1') -> DELETE /api/v1/identity/groups/g-1",
+            "pre_fix": "FAILS",
+            "ac": "1,2"
+          },
+          {
+            "id": "T-0765-ADD-PATH",
+            "assertion": "addMember('g-1','u-1') -> POST /api/v1/identity/groups/g-1/members",
+            "pre_fix": "FAILS",
+            "ac": "1,2"
+          },
+          {
+            "id": "T-0765-ADD-BODY",
+            "assertion": "that request's parsed body deep-equals { user_id: 'u-1' } and 'user_ids' in body === false",
+            "pre_fix": "FAILS",
+            "ac": "1,2"
+          },
+          {
+            "id": "T-0765-ADD-ARITY",
+            "assertion": "typeof groupsApi.addMember === 'function', addMember.length === 2, 'addMembers' in groupsApi === false",
+            "pre_fix": "FAILS",
+            "ac": "1,2"
+          },
+          {
+            "id": "T-0765-MEMBERS",
+            "assertion": "ONE it block, both halves together. (i) path half: members('g-1') -> GET, captured URL contains /api/v1/identity/groups/g-1/members and NOT /api/v1/admin/. (ii) no-unwrap half: with the spy resolving {\"items\":[<one user_map object>],\"next_cursor\":null,\"count\":1}, the awaited value deep-equals it -- result.items.length === 1, result.count === 1, result.next_cursor === null, Array.isArray(result) === false. REWORK 1: merged from the former rows 7 and 8 so the block contains an assertion that can actually be red.",
+            "pre_fix": "FAILS on half (i) only -- the pre-fix literal is /api/v1/admin/groups/${id}/members. Half (ii) PASSES pre-fix and post-fix alike (see section 7.1); it is a forward regression guard against a future .items unwrap, NOT fail-first evidence.",
+            "ac": "1,2,3"
+          },
+          {
+            "id": "T-0765-NO-GET-UPDATE",
+            "assertion": "'get' in groupsApi === false AND 'update' in groupsApi === false",
+            "pre_fix": "FAILS",
+            "ac": "3"
+          },
+          {
+            "id": "T-0765-SURFACE",
+            "assertion": "Object.keys(groupsApi).sort() deep-equals ['addMember','create','delete','list','members','removeMembers']",
+            "pre_fix": "FAILS",
+            "ac": "1,3"
+          },
+          {
+            "id": "T-0765-NO-ADMIN-PREFIX",
+            "assertion": "it.each over all six surviving functions: invoke each, assert no captured URL contains /api/v1/admin/ -- one row per function so a failure names the function",
+            "pre_fix": "FAILS on 5 of 6 rows (removeMembers passes)",
+            "ac": "1,2"
+          },
+          {
+            "id": "T-0765-REMOVE-UNCHANGED",
+            "assertion": "removeMembers('g-1','u-1') still -> DELETE /api/v1/identity/groups/g-1/members/u-1",
+            "pre_fix": "PASSES -- enumeration row, NOT fail-first evidence; its job is to prove this run did not regress the ISS-0736 correction while rewriting the object around it.",
+            "ac": "2"
+          }
+        ],
+        "members_consumer_coverage": "Covered by `npm run type-check`, deliberately, not by a render test -- and M-1a is the recorded proof that the detector actually fires. After the retype, any call site treating GroupMemberPage as an array is a compile error, so tsc -b tsconfig.json (AC3, already inside npm run check) finds every one on every run. No GroupsPage component test exists to extend and adding the project's first one is UI-test scope this run does not carry. This is a decision, not an omitted test.",
+        "commands_step_4_must_run_and_quote": [
+          "cd web && npm run type-check",
+          "cd web && npm test",
+          "cd web && npm run guards"
+        ],
+        "fail_first_accounting": {
+          "added_in": "rework 1, design section 7.1",
+          "fails_pre_fix_under_npm_test": [
+            "T-0765-LIST",
+            "T-0765-CREATE",
+            "T-0765-DELETE",
+            "T-0765-ADD-PATH",
+            "T-0765-ADD-BODY",
+            "T-0765-ADD-ARITY",
+            "T-0765-MEMBERS (half i only)",
+            "T-0765-NO-GET-UPDATE",
+            "T-0765-SURFACE",
+            "T-0765-NO-ADMIN-PREFIX"
+          ],
+          "passes_pre_fix_by_design": [
+            "T-0765-MEMBERS (half ii) -- forward regression guard",
+            "T-0765-REMOVE-UNCHANGED -- enumeration row"
+          ],
+          "why_no_runtime_row_can_cover_the_retype": "request<T> (web/src/api/client.ts:158-169) ends in `return response.json() as Promise<T>` -- a verbatim pass-through -- and T is a TypeScript type parameter erased at runtime. Pre-fix client.get<User[]> and post-fix client.get<GroupMemberPage> therefore produce byte-identical runtime behaviour on the same spy body. Claiming a runtime row covers decision (b) is a design error, which is what the gate caught."
+        },
+        "mutants": {
+          "rationale": "WF-03 Step 4's clause for \"when the pre-fix failure is non-existence\" applied by analogy: a type-only change has no runtime failure to demonstrate, so the fail-first requirement is met by mutating the shipped change and recording what breaks. Specified here by design rather than left to TEST-DESIGNER.",
+          "M-1a": {
+            "what": "On the post-fix tree, keep section 3.1 GroupMemberPage/GroupMember and the retyped groupsApi.members; revert ONLY section 3.2's six GroupsPage.tsx edits to their pre-fix text.",
+            "probe": "cd web && npm run type-check",
+            "expected": "tsc errors on GroupsPage.tsx at the reverted :103, :223, :227, :228 -- .map/.length do not exist on GroupMemberPage, user_id does not exist on GroupMember. Quote verbatim.",
+            "and_also": "npm test still PASSES under M-1a. That is the point: it demonstrates the runtime suite is blind to the retype while type-check is not."
+          },
+          "M-1b": {
+            "what": "The opposite-direction control: revert section 3.1's retype to client.get<User[]> while keeping section 3.2's GroupsPage.tsx edits.",
+            "probe": "cd web && npm run type-check",
+            "expected": "tsc errors on membersPage?.items over User[]. Recording both directions is what shows the probe discriminates the specific trap rather than merely breaking something."
+          },
+          "revert_discipline": "Binding, per WF-03 Step 4's mutant rule. Apply in a throwaway git worktree of the branch, or in place then `git checkout -- <path>`; either way, before completing the handoff, quote BOTH (a) `git status --porcelain web/` empty and (b) `npm run type-check` and `npm test` green against the restored tree."
+        }
+      },
+      "acceptance_criteria_map": {
+        "AC1": "§1.1 mount chain + §1.2 six-route list, both re-derived from source in this step; §1.4 per-function verdicts; §6.1 exact before/after URL literals. .get/.update satisfied by §2's removal (no served prefix exists); the other four by the §6.1 substitutions. Tests: rows 1-5, 7(i), 10.",
+        "AC2": "Section 7: one row per corrected call -- list (1), create (2), delete (3), addMember (4,5,6), members (7) -- in a new file reusing the ISS-0736 file's jsdom + window.fetch-spy structure, plus the table-driven class guard (10) and the untouched-removeMembers row (11). Section 7.1's M-1a/M-1b mutants supply the fail-first evidence for the .members retype, which no runtime row can.",
+        "AC3": "§2 removes .get/.update AND leaves the recorded rationale comment (both halves of AC3's disjunction). §3's retype is what makes type-check a real detector rather than a formality; §5 removes the second type lie. §7 names the three commands whose actual output Step 4 must quote. Tests: rows 8, 9, plus section 7.1's M-1a -- the recorded proof that type-check actually fires on a missed .members consumer."
+      },
+      "invariants": [
+        "INV-A: every post-fix groupsApi URL literal resolves to one of the six routes in §1.2; no groupsApi literal contains /api/v1/admin/",
+        "INV-B: every declared return type in groupsApi is the wire body of its route -- no shim, no unwrap, no reshaping inside web/src/api/ (frontend_developer_guide.md §4 rule 1)",
+        "INV-C: groupsApi.removeMembers and identity.removeMembers.test.ts are byte-unchanged",
+        "INV-D: usersApi, rolesApi, tokensApi, PagedResponse<T>, CursorPage<T>, User and Group are unmodified; only additive interfaces are added to web/src/types/api.ts",
+        "INV-E: no file under lib/, priv/repo/migrations/ or test/ is modified",
+        "INV-F: no forbidlist.ts entry is weakened, removed or allowedPaths-exempted for the new test file"
+      ],
+      "open_questions": [
+        "OQ-1 (RESOLVED BY THE GATE, rework 1, in CODE-DESIGNER's favour): the scope boundary's two clauses overlap on Group -- \"member/Group TS types that misdescribe the wire shape\" is IN scope while is_system/member_count is OUT (ISS-0811), and Group.is_system is in both sets. CODE-DESIGN-VALIDATOR confirmed the ISS-0811 carve-out wins: Group stays untouched, GroupMember is new and additive, GroupListResponse changes only the envelope. No rework to section 3.1 or section 5 on that ground. The OQ is retained in the design as the record of how the overlap was resolved and by whom.",
+        "OQ-2: GroupMemberPage.next_cursor is typed and returned but never read -- the members dialog is capped at the first 50 (Pagination.default_page_size/0). Whether to page the dialog or send page_size=200 has no acceptance criterion in this run and is reported to ORCH rather than settled. FRONTEND-DEV must NOT add a page_size query param on its own initiative."
+      ],
+      "verification_note": "No implementation code was written, in the original pass or in rework 1. `git status --porcelain web/ lib/letflow/routers/ lib/letflow/identity* test/ priv/` is empty; the only files this step touches are the design artefact under lib/letflow/design/ and this handoff.",
+      "rework_1_note": "Two gate findings, both accepted in full and both fixed in this pass: F-1 (BLOCKING -- the T-0765-MEMBERS-SHAPE row could not fail pre-fix, and the section summary claiming rows 1-11 all failed was false) and F-2 (ambiguous bare identity.ex citations). Neither touched a decision: (a)-(d) all stand, and sections 1-6, 8 and 9 survived the validator's independent re-derivation unchanged."
+    },
+    "issues": [
+      {
+        "severity": "MINOR",
+        "description": "FACTUAL ERROR IN THE STEP 1 DIAGNOSIS, corrected here by re-derivation. step-01-issue-fixer.json's blast_radius.consumers_of_useAdminGroups says 'No consumer of useAdminGroups was found outside web/src/hooks/useAdminUsers.ts itself' and asked CODE-DESIGNER to re-verify. It is false: web/src/pages/admin/UserDetailPage.tsx:28 calls useAdminGroups() and reads groupsQuery.data?.items at :149. groupsApi.list has THREE consumers, not two. All three read .items only, so decision (d) still costs zero call-site changes -- but that is now a measured fact rather than an inherited one. No separate issue needed if ORCH notes it on ISS-0765."
+      },
+      {
+        "severity": "MAJOR",
+        "description": "NEW FINDING for ORCH to file (not covered by ISS-0811/0812/0813). User.status is declared uppercase but the wire emits lowercase. web/src/types/api.ts:435 declares status?: 'ACTIVE' | 'INACTIVE' and web/src/api/identity.ts:24 (usersApi.update) SENDS 'ACTIVE' | 'INACTIVE'. lib/letflow/identity/user.ex:41 is field(:status, Ecto.Enum, values: [:active, :inactive]) and user_map/1 (lib/letflow/routers/identity.ex:735) emits Atom.to_string(user.status) with no String.upcase anywhere in that router -- so the wire value is \"active\". Any user.status === 'ACTIVE' comparison in web/ is therefore always false, and the uppercase value usersApi.update sends may not validate. This is a live value-domain mismatch, not only a type lie. Out of scope here (User/usersApi is ISS-0812's surface). Suggested scope for the issue: 'every read and write of User.status in web/src/'."
+      },
+      {
+        "severity": "MINOR",
+        "description": "NEW FINDING for ORCH to file. User.roles and User.created_at are declared REQUIRED at web/src/types/api.ts:437,441, but user_map/1 (lib/letflow/routers/identity.ex:729-740) emits neither -- it emits inserted_at/updated_at and no roles at all. Affects every usersApi consumer. Same class as ISS-0811 but a different type and a different mapper, so not a duplicate. This is why the design introduces GroupMember rather than reusing User for group members."
+      },
+      {
+        "severity": "MINOR",
+        "description": "NEW FINDING for ORCH to file. CursorPage<T> (web/src/types/api.ts:14-18) declares has_more: boolean, which Letflow.Api.Pagination.Page never emits -- its @derive list (lib/letflow/api/pagination.ex:81) is [:items, :next_cursor, :count]. CursorPage<T> is used by ~12 call sites across web/src/api/ (audit, definitions, dlq, instances, modules, promotions, services, tasks). Whether every one of those routes actually uses Pagination.Page was NOT established in this step -- the finding is that it needs its own audit, not that all 12 are wrong. This is why the design adds GroupMemberPage rather than reusing CursorPage."
+      },
+      {
+        "severity": "MINOR",
+        "description": "NEW FINDING for ORCH to file. The group-members dialog shows at most the first 50 members (Pagination.default_page_size/0, lib/letflow/api/pagination.ex:99) and next_cursor is returned but unread. Pre-existing behaviour that this fix makes reachable for the first time rather than behaviour the fix introduces; paging the dialog is UI work with no acceptance criterion in this run. See the design's OQ-2."
+      }
+    ],
+    "artifacts_out": [
+      "lib/letflow/design/iss-0765-groupsapi-route-prefix-audit.md"
+    ],
+    "next_action": "Re-route to CODE-DESIGN-VALIDATOR for rework iteration 1 re-gate. The two blocking/rework findings F-1 and F-2 are addressed in design sections 7, 7.1, 8 and the new path-convention table in section 1; no decision (a)-(d) changed.",
+    "rework_history": [
+      {
+        "iteration": 1,
+        "gate_artefact": "handoffs/WF03-ISS0765-20260924/step-02b-design-gate.json",
+        "gate_commit": "6469739d",
+        "verdict_reworked_from": "FAIL",
+        "findings": [
+          {
+            "id": "F-1",
+            "severity": "BLOCKING",
+            "validator_statement": "Row 8 T-0765-MEMBERS-SHAPE cannot fail pre-fix. The mandated ISS-0736 harness installs a window.fetch spy whose Response the test itself defines, so no URL is dialled and there is no 404. client.ts:158-169 returns response.json() verbatim, and T is erased at runtime, so the pre-fix client.get<User[]> and the post-fix client.get<GroupMemberPage> behave identically on the same spy body. The row PASSES under npm test pre-fix, and the section summary \"rows 1-11, each of which fails against the pre-fix commit\" was false as written.",
+            "accepted": true,
+            "resolution": "ACCEPTED IN FULL -- the error was CODE-DESIGNER's, not TEST-DESIGNER's to discover. Option taken: FOLD, not re-classify. Old rows 7 (T-0765-MEMBERS-PATH) and 8 (T-0765-MEMBERS-SHAPE) are merged into a single row 7, T-0765-MEMBERS, whose one `it` block carries both a path half (i) and the no-unwrap half (ii). Half (i) fails pre-fix on the /api/v1/admin/ literal, so the row genuinely goes red. Half (ii) is explicitly re-classified in the design as a FORWARD REGRESSION GUARD against a future .items unwrap -- INV-B's guard -- and is stated NOT to be fail-first evidence. Rows 9-12 renumber to 8-11; every cross-reference in the AC map (section 8) was updated.",
+            "what_now_carries_decision_b_fail_first": "A new section 7.1 states plainly that NO runtime row can, because request<T> is a verbatim pass-through and T is erased at runtime -- so a type-only change has no runtime failure to demonstrate. WF-03 Step 4's \"when the pre-fix failure is non-existence, mutate\" clause is applied by analogy, and the mutants are specified in the design rather than left to TEST-DESIGNER: M-1a keeps the retype and reverts ONLY the six GroupsPage.tsx edits, then runs npm run type-check and must produce tsc errors at GroupsPage.tsx :103/:223/:227/:228 (and npm test must still pass under it -- that is the point: it shows the runtime suite is blind to the retype while type-check is not). M-1b is the opposite-direction control: revert the retype to client.get<User[]> while keeping the GroupsPage edits, and tsc must error on membersPage?.items over User[]. WF-03 Step 4's revert-and-verify discipline is restated as binding (throwaway worktree, or git checkout -- plus a quoted-empty git status --porcelain web/ and a green re-run).",
+            "section_summary_corrected": "The false sentence is gone. Section 7.1 replaces it with an explicit two-column table: FAILS pre-fix = rows 1, 2, 3, 4, 5, 6, 7(i), 8, 9, 10; PASSES pre-fix (enumeration / forward guard, never red either way) = rows 7(ii) and 11."
+          },
+          {
+            "id": "F-2",
+            "severity": "REWORK",
+            "validator_statement": "Sections 1.3, 2, 3.1 and 4 used a bare `identity.ex` for the ROUTER while section 1.2 used it for the CONTEXT. Following section 4's \"identity.ex:483-489\" literally lands in lib/letflow/identity.ex, where those lines are unrelated moduledoc prose; the real target is lib/letflow/routers/identity.ex.",
+            "accepted": true,
+            "resolution": "ACCEPTED IN FULL. A binding \"Path convention\" table was added at the head of section 1 naming all three identity files (router / context / API client) and stating that no bare identity.ex appears, with the 483-489 collision cited as the concrete reason. Every previously-bare citation was rewritten to lib/letflow/routers/identity.ex:NNN (:227-229, :468-472, :525-537, :483-489, :729-740, :735, :749-757, :829-831). Section 1.3's table, whose rows used bare :NNN, now carries an explicit footnote that every bare :NNN in it is a line in lib/letflow/routers/identity.ex, and its last row gained the previously-missing (:588)."
+          },
+          {
+            "id": "note-stale-premise",
+            "severity": "NOT-REWORK",
+            "validator_statement": "The routers/identity.ex:483-489 comment's own premise -- \"no existing Letflow caller depends on the array shape either way\" -- is already stale, since GroupsPage.tsx:76 passes [userId] today. Decision (c) makes that comment true rather than contradicting it.",
+            "accepted": true,
+            "resolution": "Folded into section 4 as a \"Note for a later reader\": decision (c) does not contradict the recorded backend decision, it restores the comment's premise by removing the one caller that had drifted from it. Costs one paragraph and forestalls a re-litigation."
+          },
+          {
+            "id": "OQ-1",
+            "severity": "RESOLVED-BY-GATE",
+            "validator_statement": "OQ-1 resolved CODE-DESIGNER's way: the ISS-0811 carve-out wins, Group stays untouched. No rework to section 3.1 or section 5 on that ground.",
+            "accepted": true,
+            "resolution": "No change required. OQ-1 is left in the design as the record of how the scope overlap was resolved and by whom."
+          }
+        ],
+        "sections_confirmed_unchanged_by_the_gate": "Sections 1-6, 8 and 9 survived the validator's independent re-derivation, and decisions (a)-(d) all stand on verified premises: frontend_developer_guide.md:83-88 confirmed verbatim, resolve_member_user_id/1's two clauses confirmed at lib/letflow/routers/identity.ex:525-531, the zero-callers grep reproduced, and the source-scan.spec.ts `fetch(` constraint confirmed real and whole-file. No decision was revisited in this rework.",
+        "downstream_issue_filed_from_this_step": "The section 11 User.status finding is now ISS-0814 (queue 814, GH #1802), verified against source by ORCH."
+      }
+    ]
+  },
+  "rework_count": 1
+}

@@ -1,0 +1,91 @@
+{
+  "handoff_id": "WF03-ISS0765-20260924-step-02b-design-gate",
+  "run_id": "WF03-ISS0765-20260924",
+  "workflow_id": "WF-03",
+  "step": "2b",
+  "to_agent": "ORCH",
+  "from_agent": "CODE-DESIGN-VALIDATOR",
+  "status": "COMPLETED",
+  "created_at": "2026-09-24T17:02:51Z",
+  "started_at": "2026-09-24T17:02:51Z",
+  "completed_at": "2026-09-24T17:04:18Z",
+  "context": {
+    "branch_name": "feature/WF03-ISS0765-20260924",
+    "issue_id": "ISS-0765",
+    "issue_file": "docs/issues/ISS-0765.yaml",
+    "queue_ref": "Q-810",
+    "github_ref": "GH-1798",
+    "design_under_gate": "lib/letflow/design/iss-0765-groupsapi-route-prefix-audit.md",
+    "design_commit": "9c764785",
+    "artifacts_in": [
+      "lib/letflow/design/iss-0765-groupsapi-route-prefix-audit.md",
+      "handoffs/WF03-ISS0765-20260924/step-01-issue-fixer.json",
+      "handoffs/WF03-ISS0765-20260924/step-02-code-designer.json",
+      "docs/issues/ISS-0765.yaml"
+    ]
+  },
+  "task": {
+    "description": "WF-03 Step 2b hard gate on CODE-DESIGNER's ISS-0765 fix design. Verify every acceptance criterion is covered by a design element, no implementation code is present, the design is unambiguous enough to build from without further decisions, and independently re-derive six named load-bearing claims (a-f) from source rather than accepting the design's assertion of them.",
+    "acceptance_criteria": [
+      "AC1: groupsApi's .addMembers/.list/.get/.update/.delete/.members each call a URL prefix a real backend route serves, audited against the actual route table",
+      "AC2: each corrected call has regression coverage mirroring web/src/api/__tests__/identity.removeMembers.test.ts",
+      "AC3: npm run type-check and the web test suite pass, and any groupsApi call with no corresponding backend route is either removed or explicitly recorded as unimplemented"
+    ]
+  },
+  "result": {
+    "status": "FAIL",
+    "summary": {
+      "verdict": "FAIL",
+      "verdict_basis": "One blocking defect: the section 7 test matrix's row 8 (T-0765-MEMBERS-SHAPE) states a pre-fix verdict of FAILS on a mechanism that cannot occur in the spy-based harness the same section mandates. The row in fact PASSES pre-fix under `npm test`. Everything else in the design was independently re-derived from source and found correct.",
+      "gate_checks": {
+        "ac_coverage": "PASS - section 8 maps every AC to concrete design elements; AC1 to 1.1/1.2/1.4/6.1, AC2 to section 7's per-call rows, AC3 to section 2's deletion-plus-record and section 7's named commands. Handoff AC4 (four named decisions a-d) and AC5 (scope boundary) are also met: sections 2/3/4/5 each state a decision with ordered justification rather than options, and the scope table plus INV-D hold usersApi, rolesApi, Group.is_system/member_count and the coupling guard out.",
+        "no_tbd_or_deferral": "PASS - the two OQs (section 10) are scoped as explicit non-decisions with a named fallback each, not deferred work items; 3.3 records a limitation as pre-existing, not as unfinished design.",
+        "signatures_fully_specified": "PASS - section 6 gives the complete post-fix surface with argument types, return types and URL literals; 3.1 and 6 define all three new interfaces field-by-field against the actual Elixir mappers. Error shape is unchanged client.ts ApiError behaviour and is correctly not re-specified.",
+        "cross_module_dependencies_listed": "PASS - section 1 mount chain, 1.3 wire bodies, the four-file scope table, and 3.2's exact GroupsPage.tsx consequence edits.",
+        "no_implementation_code": "PASS - TypeScript interface declarations and one-line before/after edit specifications only; no function bodies, no .ex/.exs code.",
+        "test_matrix_internal_consistency": "FAIL - see finding F-1."
+      },
+      "independent_verification": {
+        "a_route_set": "CONFIRMED. Re-derived from source: lib/letflow/router.ex:130 forwards /api/v1 to Letflow.Plugs.ApiPipeline; api_pipeline.ex:141 forwards /identity to Letflow.Routers.Identity; api_pipeline.ex:154's /admin/services is the only /admin/* mount; api_pipeline.ex:203-204 is `match _ -> Response.not_found`. lib/letflow/routers/identity.ex:178-198 declares exactly six group routes (POST /groups, GET /groups, DELETE /groups/:id, POST and GET /groups/:id/members, DELETE /groups/:id/members/:user_id), all :GroupsManage. No GET /groups/:id and no PATCH or PUT /groups/:id at any prefix. A repo-wide grep for get_group/update_group across lib/ returns only a PRIVATE get_group_member/3 (lib/letflow/identity.ex:1561) plus the design's own prose; lib/letflow/identity.ex's public group surface is create_group/2 (:431), add_group_member/3 (:506), list_groups/1 (:533), delete_group/2 (:559), list_group_members/3 (:606), remove_group_member/3 (:652). The deletion of .get/.update rests on a correct premise.",
+        "b_frontend_guide_rule": "CONFIRMED VERBATIM. docs/guides/frontend_developer_guide.md:83-88 (section 4 rule 1) reads: 'A contract gap is closed on the Letflow side. If `web/` expects a field, a status code, or a pagination cursor that Letflow's API doesn't produce, route it to CODE-DESIGNER -> ELIXIR-DEV. Do not add a shim or adapter inside `web/` that normalises the mismatch -- that hides the gap from every other client, including the mobile tier that will consume the same contract.' The design's quotation is exact. The section 7 self-review checklist (:134) restates it. The rule does forbid the alternative that decision (b) rejected.",
+        "c_resolve_member_user_id": "CONFIRMED, both halves, with one nuance. lib/letflow/routers/identity.ex:525-527 is the FIRST clause and matches %{\"user_id\" => user_id} when is_binary -- singular is the backend's primary accepted shape. :529-531 is %{\"user_ids\" => [first | _rest]} returning {:ok, first}, discarding the rest. The comment at :483-489 reads 'OQ-2 (ELIXIR-DEV's call, design flagged this explicitly): R-Co's dual \"user_id\"/\"user_ids\"[0] fallback is preserved verbatim, since no acceptance criterion calls for simplifying it and no existing Letflow caller depends on the array shape either way -- preserving costs nothing and stays closer to the source.' That is a recorded deliberate decision, so the design's application of 'don't silently re-decide what a decision record already settled' is sound. NUANCE (non-blocking): that comment's own premise 'no existing Letflow caller depends on the array shape either way' is stale -- GroupsPage.tsx:76 does pass an array today. Moving the client to the singular first clause makes the comment's premise true rather than contradicting it.",
+        "d_zero_callers": "CONFIRMED by independent grep. A grep for groupsApi across web/src/ returns exactly: identity.ts:36 (definition), the ISS-0736 test (lines 7/23/47/52/69/70, removeMembers only), useAdminUsers.ts:2,47 (list), GroupsPage.tsx:3,47,56,67,76,87,97. No groupsApi.get and no groupsApi.update call anywhere in web/src/, and no destructured import of either. The design's 1.5 caller table matches the grep line-for-line, and its 1.5 correction of the Step 1 handoff is also confirmed: UserDetailPage.tsx:5,28 imports and calls useAdminGroups, making groupsApi.list a three-consumer function. The AC3 disjunction claim holds: deletion satisfies 'removed', and the section 2 comment block satisfies 'explicitly recorded as unimplemented'.",
+        "e_source_scan_guard": "CONFIRMED - the constraint is real and would have bitten. web/tests/guards/source-scan.spec.ts globs 'src/**/*.{ts,tsx,css}' with cwd = web/, so web/src/api/__tests__/ IS scanned. web/tests/guards/forbidlist.ts:40-44 defines raw-fetch-outside-client as the regex on fetch-open-paren or axios-open-paren, appliesTo 'source', allowedPaths ['web/src/api/client.ts'] only. findViolationInFile tests whole-file content, so the literal text fetch-open-paren anywhere in the new test file -- including inside a comment -- trips it. The ISS-0736 mirror file contains zero occurrences of it (verified by grep -c), consistent with the design's instruction to assign the spy rather than call it. npm run guards does run source-scan.spec.ts.",
+        "f_test_matrix": "PARTIALLY CONFIRMED -- one row is wrong, see F-1. Verified correct: rows 1,2,3 fail pre-fix because identity.ts:38,44,50 emit '/api/v1/admin/groups'; rows 4,5,6 fail pre-fix because groupsApi.addMember is undefined (the function is addMembers at :52-53 and posts {user_ids: userIds}); row 7 fails pre-fix because :59 emits the /admin prefix; rows 9,10 fail pre-fix because 'get' and 'update' are present at :40 and :46; row 11's '5 of 6' count is correct (list/create/delete/addMember/members rows fail, removeMembers at :55-56 already uses /api/v1/identity and passes); row 12's PASSES-pre-fix verdict is correct and is correctly and explicitly flagged as enumeration rather than fail-first evidence. Row 10's expected sorted key array is correct. AC2's 'each corrected call has coverage' IS satisfied -- every corrected call has at least one row: list (1,11), create (2,11), delete (3,11), addMember (4,5,6,11), members (7,8,11). No corrected call lacks a row."
+      },
+      "incidental_verification_performed": "All cited line numbers spot-checked and found exact: identity.ts:37-59 per-function verdict table; GroupsPage.tsx:54/103/108/223/227/228 and the useMemo import at :1; types/api.ts CursorPage 14-18 (has_more present), PagedResponse 20-26 (page/page_size required), User 429-442 with status declared 'ACTIVE'|'INACTIVE' at :435; client.ts:163-165 (204 resolves undefined); pagination.ex:81 derives only [:items, :next_cursor, :count], :99 default_page_size 50, max 200; routers/identity.ex user_map/1 729-740, group_map/1 749-757, member_result_map/3 829-831, handle_list_groups/2 468-472 emitting only items+total, handle_list_group_members/3 :543 emitting Pagination.page_response/2, match _ at :227; identity/user.ex:41-42 Ecto.Enum [:active,:inactive] and [:internal,:oidc]; zero String.upcase in routers/identity.ex. Section 3.1's lowercase unions and section 11 finding 5's uppercase-vs-lowercase User.status mismatch are both correct. web/tsconfig.app.json has include: ['src'], so npm run type-check does cover web/src/api/__tests__/ and web/src/pages/ -- section 3 rationale 2's 'the compiler is the detector' claim is sound."
+    },
+    "issues": [
+      {
+        "id": "F-1",
+        "severity": "BLOCKER",
+        "title": "Section 7 row 8 (T-0765-MEMBERS-SHAPE): stated pre-fix verdict and its mechanism are both wrong; the row passes pre-fix",
+        "detail": "The row's Pre-fix column says 'FAILS -- the pre-fix call 404s, so client.ts throws ApiError before any body is read'. No 404 can occur: the same section 7 preamble mandates the ISS-0736 harness, which installs a window.fetch spy whose resolved Response the test itself defines -- there is no backend in the test at all. Pre-fix, groupsApi.members is client.get<User[]> and client.ts does no runtime reshaping (client.ts:158-169 returns response.json() verbatim), so awaiting it yields exactly the envelope object the spy resolved. Every assertion the row lists -- result.items.length === 1, result.count === 1, result.next_cursor === null, Array.isArray(result) === false -- therefore holds pre-fix. Under npm test (vitest, transpile-only via esbuild) the row PASSES against the pre-fix commit. The only pre-fix signal is a tsc error on .items over User[], which is npm run type-check failing, not the test failing -- a different column of the same matrix. Consequence: the design's own claim that 'WF-03 Step 4's fail-then-pass requirement is satisfied by rows 1-11, each of which fails against the pre-fix commit' is false, and row 8 is the design's only runtime assertion for decision (b), the highest-risk item in the fix. TEST-DESIGNER at Step 4 would either hit an unexpected fail-first violation or mis-report a passing row as fail-first evidence -- exactly the ambiguity this gate exists to stop before it reaches implementation.",
+        "required_change": "CODE-DESIGNER must resolve row 8 as a design decision, not leave it to TEST-DESIGNER. Either (i) make it genuinely fail-first by specifying that the envelope assertions and the URL assertion live in the SAME it-block (the pre-fix /api/v1/admin/ prefix then fails the row), and correct the Pre-fix cell's mechanism to say so; or (ii) re-classify row 8 as an enumeration row in the same explicit way row 12 is handled, state that its pre-fix status is PASS under npm test and FAIL under npm run type-check, and name row 7 plus type-check as decision (b)'s actual fail-first evidence. Whichever is chosen, the section 7 sentence 'rows 1-11, each of which fails against the pre-fix commit' must be corrected to match."
+      },
+      {
+        "id": "F-2",
+        "severity": "MINOR",
+        "title": "Bare 'identity.ex' citations are ambiguous between two real files",
+        "detail": "The repo has both lib/letflow/identity.ex (the context) and lib/letflow/routers/identity.ex (the router). Section 1.2 uses the fully-qualified lib/letflow/identity.ex for the context, but 1.3, 2, 3.1 and 4 then use a bare 'identity.ex' meaning the ROUTER (:452, :468-472, :476, :496, :543, :729-740, :749-757, :829-831, :483-489, :525-537, :227-229). Only section 11 finding 5 spells the path out. Following section 4's 'identity.ex:483-489' literally lands a reader in lib/letflow/identity.ex, where those lines are unrelated moduledoc prose about :user_not_found. The Step 2 handoff's own decisions.c text gets this right by writing lib/letflow/routers/identity.ex:525-537, so the design doc is the weaker artefact here. Not blocking on its own (FRONTEND-DEV makes no backend change and these citations are evidence, not instructions), but fix it in the same pass as F-1.",
+        "required_change": "Qualify all bare 'identity.ex' citations as lib/letflow/routers/identity.ex where that is what is meant."
+      },
+      {
+        "id": "F-3",
+        "severity": "MINOR",
+        "title": "OQ-1 resolved in the design's favour by this gate; OQ-2 accepted",
+        "detail": "OQ-1 asks whether the scope boundary's 'Group/member TS types that misdescribe the wire shape' clause should override the explicit ISS-0811 carve-out on Group.is_system/member_count. CODE-DESIGN-VALIDATOR reads it the SAME way the design does: the explicit carve-out wins, Group stays untouched, GroupMember is new and additive, GroupListResponse changes only the envelope. No rework of 3.1 or 5 is required on this ground. OQ-2 (next_cursor typed but unread, dialog capped at 50) is correctly recorded as out-of-scope with an explicit prohibition on FRONTEND-DEV adding page_size unilaterally -- accepted as written.",
+        "required_change": "None. Recorded so Step 3 does not re-open it."
+      },
+      {
+        "id": "F-4",
+        "severity": "MINOR",
+        "title": "Design section 11 reports five new findings that ORCH must register per 'No Issue Left Local-Only'",
+        "detail": "Items 1-5: User.roles and User.created_at required but never emitted; CursorPage<T>.has_more never emitted with ~12 consumers needing their own audit; the Step 1 handoff's wrong useAdminGroups caller claim; the 50-member dialog cap; and User.status uppercase-vs-lowercase, which item 5 correctly escalates to MAJOR-if-compared. Items 1, 2 and 5 were independently spot-checked against source in this gate and are correct as stated. They are CODE-DESIGNER's findings, not gate failures, and are forwarded to ORCH for id allocation.",
+        "required_change": "None for CODE-DESIGNER. ORCH: register items 1, 2, 4 and 5 via register_task; item 3 can be noted on ISS-0765 itself."
+      }
+    ],
+    "artifacts_out": [],
+    "next_action": "ORCH: route back to CODE-DESIGNER for rework of F-1 (blocking) and F-2 (fix in the same pass). No other section requires change -- sections 1 through 6, 8 and 9 were independently re-derived and are correct. After CODE-DESIGNER's revision, re-gate section 7 only. Do NOT advance to Step 3 (FRONTEND-DEV) until section 7's fail-first claim is true as written."
+  }
+}

@@ -1,0 +1,71 @@
+id: ISS-0814
+title: >
+  User.status value-domain mismatch -- the backend emits and accepts lowercase
+  active/inactive, while web/ declares, sends and compares uppercase
+  ACTIVE/INACTIVE
+discovered_by: CODE-DESIGNER (verified independently by ORCH before filing)
+discovered_in_run: WF03-ISS0765-20260924
+discovered_at: "2026-09-24T17:05:00Z"
+severity: MAJOR
+tags:
+  - frontend
+  - backend
+  - api
+  - type-safety
+description: >
+  Incidental finding from ISS-0765's Step 2 design, filed and forwarded per
+  ORCHESTRATOR.md's decision tree rather than extending that run. ORCH
+  re-derived every claim below from the source before filing.
+
+  This is a live value-domain mismatch, not merely a type lie.
+
+  Backend, all lowercase:
+    * lib/letflow/identity/user.ex:41 -- Ecto.Enum, values: [:active, :inactive]
+    * lib/letflow/routers/identity.ex:735 -- user_map/1 emits
+      Atom.to_string(user.status), so the wire value is "active"
+    * parse_status_param/1 (:315-318) accepts only "active"/"inactive",
+      returning :status_invalid -> 422 otherwise
+    * @status_schema (:394-401) allows only ["active", "inactive"]
+    * there is no String.upcase anywhere in routers/identity.ex or identity.ex
+
+  Frontend, all uppercase:
+    * web/src/types/api.ts:435 -- status?: 'ACTIVE' | 'INACTIVE'
+    * web/src/api/identity.ts:24 -- usersApi.update sends uppercase
+
+  Consequences:
+    * every `user.status === 'ACTIVE'` comparison in web/ is permanently false
+    * a list filter sending status=ACTIVE gets 422 status_invalid
+    * a status write sending "ACTIVE" is rejected by @status_schema. That schema
+      does at least stop String.to_existing_atom/1 at :414 from raising on an
+      unknown atom, so the 500 is averted -- but the write still fails.
+
+  Separately, and compounding it: web/src/pages/admin/UserDetailPage.tsx:34
+  seeds its status dropdown from useState<'ACTIVE'|'INACTIVE'>('ACTIVE') rather
+  than from the fetched user, so the control always reads ACTIVE regardless of
+  the user's real status, and :89 and :184 both branch on that local value.
+affected_files:
+  - web/src/types/api.ts
+  - web/src/api/identity.ts
+  - web/src/pages/admin/UserDetailPage.tsx
+  - lib/letflow/routers/identity.ex
+  - lib/letflow/identity/user.ex
+related:
+  - ISS-0765  # the run this was discovered during
+  - ISS-0813  # same underlying gap: nothing couples web/ to the real API contract
+  - ISS-0812
+severity_rationale: >
+  MAJOR -- unlike the sibling findings from this run, this one has live
+  production consequences on a surface that has callers today: status filtering
+  and status writes both fail, and the detail page misreports every user's
+  status. Not BLOCKER because it is confined to the Users admin surface and
+  fails loudly (422) rather than corrupting data.
+fix_direction: >
+  Pick one canonical casing, record it, and make web/ and the backend agree end
+  to end across list filter, detail read and status write. Correct
+  web/src/types/api.ts's User.status to the value the backend actually emits so
+  an === comparison against it can be true, and seed UserDetailPage's control
+  from the fetched user rather than a local default. Add a test asserting the
+  exact wire casing in both directions so the two cannot drift apart again.
+queue_ref: "Q-814"
+github_ref: "GH-1802"
+status: open

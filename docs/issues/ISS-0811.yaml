@@ -1,0 +1,43 @@
+id: ISS-0811
+title: >
+  GroupsPage Members column always renders 0 -- lib/letflow/identity.ex's
+  group_map/1 emits neither is_system nor member_count, but web/src/types/api.ts's
+  Group type declares both required
+discovered_by: ISSUE-FIXER
+discovered_in_run: WF03-ISS0765-20260924
+discovered_at: "2026-09-24T16:50:00Z"
+severity: MINOR
+tags:
+  - frontend
+  - type-safety
+  - groups
+description: >
+  Incidental finding from ISS-0765's Step 1 diagnosis, filed and forwarded per
+  ORCHESTRATOR.md's decision tree rather than extending that run.
+
+  web/src/types/api.ts's Group type declares is_system and member_count as
+  required, non-optional fields. lib/letflow/identity.ex's group_map/1 emits
+  neither, so web/src/pages/admin/GroupsPage.tsx's Members column renders 0 for
+  every group regardless of its real membership.
+
+  This is the same type-safety class as ISS-0745: the wire type promises fields
+  the server never sends, and neither tsc nor npm run type-check can catch it
+  because the fields are typed required rather than optional.
+affected_files:
+  - web/src/types/api.ts
+  - web/src/pages/admin/GroupsPage.tsx
+  - lib/letflow/identity.ex
+related:
+  - ISS-0765  # the run this was discovered during
+  - ISS-0745  # same "wire type promises a field the server never sends" class
+severity_rationale: >
+  MINOR -- cosmetic and read-only. The column shows a wrong number; nothing is
+  written, no authorization decision depends on it, and no action fails.
+fix_direction: >
+  Either have group_map/1 emit a real member_count (and is_system, if the concept
+  exists server-side), or drop the column and remove both fields from the Group
+  type. Whichever way, Group must match what group_map/1 actually emits -- no
+  required field the server never sends.
+queue_ref: "Q-811"
+github_ref: "GH-1799"
+status: open

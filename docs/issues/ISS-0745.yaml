@@ -75,6 +75,10 @@ severity_rationale: >
   exact same bug class as a fix that just landed on this same branch,
   discovered while independently re-deriving that fix's correctness per this
   gate's charter.
-queue_ref: null  # ORCH to assign via letflow-queue register_task
-github_ref: null  # ORCH to assign
+queue_ref: "Q-809"
+# NOTE: letflow-queue allocated id 809 and auto-titled the task "ISS-0809",
+# which does not match this file's on-disk id ISS-0745 -- the established
+# queue-id/filename divergence for this project (see TASK_QUEUE.md).
+# queue_ref/github_ref here are authoritative.
+github_ref: "GH-1797"
 status: open

@@ -44,3 +44,9 @@ fix_direction: >
   web/src/api/__tests__/identity.removeMembers.test.ts for each corrected
   call.
 status: open
+queue_ref: "Q-810"
+# NOTE: letflow-queue allocated id 810 and auto-titled the task "ISS-0810",
+# which does not match this file's on-disk id ISS-0765 -- the established
+# queue-id/filename divergence for this project (see TASK_QUEUE.md).
+# queue_ref/github_ref here are authoritative.
+github_ref: "GH-1798"

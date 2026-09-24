@@ -44,3 +44,9 @@ fix_direction: >
   consumer, so there is exactly one place that decides how role strings
   map to the PLATFORM_ADMIN role.
 status: open
+queue_ref: "Q-808"
+# NOTE: letflow-queue allocated id 808 and auto-titled the task "ISS-0808",
+# which does not match this file's on-disk id ISS-0764 -- the established
+# queue-id/filename divergence for this project (see TASK_QUEUE.md).
+# queue_ref/github_ref here are authoritative.
+github_ref: "GH-1796"

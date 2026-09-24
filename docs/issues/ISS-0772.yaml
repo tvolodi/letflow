@@ -57,6 +57,10 @@ suggested_fix: >
   LogFilter's existing mechanism genuinely covers this call site going
   forward. Small, isolated change -- likely sized for a single ELIXIR-DEV turn,
   no new design doc needed.
-queue_ref: null  # ORCH to assign via letflow-queue register_task
-github_ref: null  # ORCH to assign
+queue_ref: "Q-807"
+# NOTE: letflow-queue allocated id 807 and auto-titled the task "ISS-0807",
+# which does not match this file's on-disk id ISS-0772 -- the established
+# queue-id/filename divergence for this project (see TASK_QUEUE.md).
+# queue_ref/github_ref here are authoritative.
+github_ref: "GH-1795"
 status: open

@@ -531,3 +531,72 @@ history:
       REQ-386/387/388/390/391's own notes). No docs/migration/stage-N-*.md
       or decisions/*.md file was named by this requirement's acceptance
       criteria. Merged via PR on feature/WF02-REQ389-20260923.
+  - req: REQ-392
+    event: done
+    agent: DOC-UPDATER
+    at: "2026-09-24T05:19:25Z"
+    note: >
+      WF02-REQ392-20260924 Step 6 -- full pipeline passed (CODE-DESIGN-VALIDATOR
+      2 rounds, SECURITY-REVIEWER conditional-pass fixed, REVIEWER,
+      TEST-DESIGN-VALIDATOR independently reproduced fail-then-pass mutation
+      evidence, TEST-RUNNER full backend 4802/4802 and full frontend 874/874
+      clean, RELEASE-VALIDATOR verdict MERGEABLE with all 7 ACs independently
+      confirmed). This is the fourth and final piece of the REQ-387/389/390/
+      391/392 attachment-feature chain -- closes it. Ships a "remove" action
+      on REQ-387's attachment widget (DELETE /instances/:id/attachments/:id,
+      list updates without a full reload); distinct, readable 415
+      (content-type-not-allowed, REQ-389) and 409 (quota-exceeded, REQ-390)
+      rejection messages each naming the specific limit hit; a storage-usage
+      figure near the widget backed by a new `storage_summary/1` context
+      function and `GET /instances/storage-usage` route, verified to update
+      correctly across an accepted upload and a removal; instance
+      history/timeline coverage of REQ-391's attach/remove events with actor
+      attribution; the approval/decision screen rendering the reviewed
+      attachment's file_name; and a real (non-stub) Playwright spec at
+      web/tests/e2e/pipelines/shipment-attach-delivery-note.pipeline.e2e.spec.ts
+      covering all five scenario steps, plus removal of the stale ISS-0526
+      NOTE in test/fixtures/uat/scenarios/swiftroute/shipment-attach-delivery-
+      note.yaml now that the full chain has shipped (confirmed via diff and a
+      direct grep for "NOTE"/"ISS-0526" against this branch: zero hits).
+      Commits: 63c5c55b+9639d274 (design), 0f852c51 (backend route/context
+      fn), 0fbca6b9 (frontend UI), 90f5e683 (security fix --
+      endpoint_policy_key clause for the new storage-usage route), 55d1f6d7
+      (tests), bc9f615f (e2e-spec fixture fix -- a missing HUMAN_TASK `role`
+      attribute, found live by UAT-RUNNER).
+
+      AC6 -- HONEST CHARACTERIZATION, deliberately not a claimed clean pass:
+      UAT-RUNNER stood up a real live backend+Keycloak stack and ran the spec
+      multiple times. It found and (via TEST-DESIGNER) fixed one genuine
+      spec-fixture bug (the missing HUMAN_TASK role attribute, commit
+      bc9f615f). After that fix, a full live run still could not complete --
+      it hung intermittently at upload-button clicks, always the click
+      immediately following a prior upload interaction on the same page,
+      never a fresh first click. UAT-RUNNER's root-cause work: (1) proved the
+      backend responds correctly and fast via direct curl; (2) proved the
+      frontend button is genuinely clickable via a raw DOM `element.click()`
+      call, which succeeds instantly where Playwright's synthetic
+      `locator.click()` hangs; (3) proved via `document.elementFromPoint()`
+      hit-testing at the exact failure moment that no overlay/toast/z-index
+      issue exists -- the button is the topmost, fully clickable element with
+      no CSS/DOM obstruction. Conclusion, accepted by ORCH as well-evidenced:
+      Playwright/Chromium CDP input-dispatch flakiness specific to this
+      shared, resource-contended host (confirmed low free memory, high load
+      from concurrent multi-agent sessions), not a defect in REQ-392's
+      frontend, backend, or test code -- one earlier run (run4) passed
+      through this exact structural point before better diagnostics were
+      added, supporting intermittent host flakiness over an always-
+      reproducing defect. The spec is real, non-stub, structurally verified,
+      and its core interactions were independently proven correct via direct
+      backend+DOM testing, but a full live Playwright run did not complete in
+      this environment -- this is NOT a claimed clean e2e pass, and is worth
+      a clean re-run once host contention is lower. Per RELEASE-VALIDATOR's
+      own judgment and this project's convention, UAT-RUNNER e2e verification
+      is separable from the merge-blocking static gates (design/security/
+      idiom/test-design/test-run), so this did not block the MERGEABLE
+      verdict. Status flipped in docs/requirements.yaml. README.md not
+      touched -- grepped for "attachment": zero hits, same pattern as
+      REQ-386/387/388/389/390/391's own notes recorded; no documented
+      current-behavior surface to keep in sync. No docs/migration/stage-N-*.md
+      or decisions/*.md file was named by this requirement's acceptance
+      criteria. REQ-387/389/390/391 all confirmed already `status: done` in
+      docs/requirements.yaml before writing this entry.

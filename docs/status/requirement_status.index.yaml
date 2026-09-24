@@ -4610,8 +4610,17 @@ volumes:
     path: docs/status/requirement_status.v22.yaml
     status: current
     opened: 2026-09-22
-    entries: 16
+    entries: 17
     note: >
+      Incremented to 17 by DOC-UPDATER's own REQ-392 done-event append
+      (WF02-REQ392-20260924, 2026-09-24T05:19:25Z -- frontend attach/remove/
+      rejection/quota/history UI for instance attachments, the fourth and
+      final piece of the REQ-387/389/390/391/392 attachment-feature chain).
+      `grep -c "^  - req:" docs/status/requirement_status.v22.yaml` = 17
+      on-disk entries, recounted directly rather than assumed. 602 lines /
+      36208 bytes, well under the 1200-line/120000-byte roll ceiling, so no
+      roll triggered. Prior notes preserved below verbatim.
+
       Incremented to 16 by DOC-UPDATER's own REQ-389 done-event append
       (WF02-REQ389-20260923, 2026-09-24T01:36:56Z -- content-type allowlist
       enforcement for instance-attachment uploads, plus REVIEWER's separately

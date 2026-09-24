@@ -29028,7 +29028,7 @@ requirements:
   - id: REQ-392
     title: "Frontend attach/remove/rejection/quota/history UI for instance attachments on the task/instance detail and approval screens"
     owner: FRONTEND-DEV
-    status: pending
+    status: done
     stage: S8
     impl_order: 752  # letflow-queue task id, GH#1640. Registered 2026-09-20 by ORCH;
       # corrects a fabricated/self-assigned id (749) that was never a real

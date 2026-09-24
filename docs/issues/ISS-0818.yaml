@@ -7,7 +7,7 @@ superseded_by: ISS-0791
 discovered_by: REVIEWER (step-03d) and TEST-DESIGNER (step-04), filed by ORCH at ISS-0765's close
 discovered_in_run: WF03-ISS0765-20260924
 discovered_at: "2026-09-24T18:45:00Z"
-resolved_at: "2026-09-25T00:00:00Z"
+resolved_at: "2026-09-24T22:30:00Z"
 severity: MAJOR
 tags:
   - uat

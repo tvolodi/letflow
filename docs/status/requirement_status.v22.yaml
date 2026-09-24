@@ -665,7 +665,7 @@ history:
   - req: SCOPE-CHANGE
     event: done
     agent: ORCH
-    at: "2026-09-25T06:40:00Z"
+    at: "2026-09-24T22:31:00Z"
     note: >
       WF03-ISS0765-20260924 -- ISS-0765 (MAJOR) resolved and merged, PR #1808
       squash-merged as dec06da7. groupsApi's six remaining calls corrected off
@@ -689,7 +689,7 @@ history:
   - req: SCOPE-CHANGE
     event: done
     agent: ORCH
-    at: "2026-09-25T06:45:00Z"
+    at: "2026-09-24T22:32:00Z"
     note: >
       Queue reconciliation and issue-backlog registration, same session. Found
       seven open docs/issues/ records that had never been through

@@ -244,9 +244,19 @@ defmodule Letflow.Repository.AttachmentLinksTest do
     end
   end
 
+  # ISS-0789: flipping the LAST base64 character is unsafe -- for a
+  # fixed-length byte string (e.g. a 32-byte HMAC-SHA256 signature), the
+  # final base64 sextet only encodes a few significant bits, with the rest
+  # being unused padding bits. An A<->B flip there can land entirely within
+  # those padding bits and decode back to the identical byte value (~6.5%
+  # of the time, confirmed by simulation), making the "tampered" token not
+  # actually tampered. Flip a character well inside the string instead --
+  # every non-tail sextet's bits are all significant, so any single-character
+  # change there is guaranteed to change the decoded bytes.
   defp flip_last_char(str) do
-    {prefix, <<last>>} = String.split_at(str, byte_size(str) - 1)
-    flipped = if last == ?A, do: ?B, else: ?A
-    prefix <> <<flipped>>
+    flip_at = byte_size(str) - 8
+    {prefix, <<char, suffix::binary>>} = String.split_at(str, flip_at)
+    flipped = if char == ?A, do: ?B, else: ?A
+    prefix <> <<flipped>> <> suffix
   end
 end

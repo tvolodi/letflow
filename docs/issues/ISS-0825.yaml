@@ -1,0 +1,39 @@
+id: ISS-0825
+title: >
+  test/letflow/platform/migration_rollout_test.exs EO-004/EO-005 intermittently
+  fail under full parallel-suite contention, pass clean in isolation
+discovered_by: RELEASE-VALIDATOR
+discovered_in_run: WF03-ISS0817-20260924
+discovered_at: "2026-09-24T23:40:00Z"
+tags:
+  - backend
+  - test-flake
+  - platform
+severity: MINOR
+description: >
+  Found incidentally while independently re-verifying ISS-0817 (an
+  unrelated web/ test-timing fix) -- a fresh `scripts/test_parallel.sh
+  -N 4` run showed 4828/4832 passed, 4 failures: 2 matched the
+  already-tracked ISS-0766 identity_test.exs flake exactly, and 2 were
+  new: `Letflow.Platform.MigrationRolloutTest`'s EO-004 and EO-005
+  cases. Re-ran `test/letflow/platform/migration_rollout_test.exs` in
+  isolation immediately after: 12/12 passed clean, confirming this is a
+  CPU-contention-induced flake under full parallel-suite load, not a
+  regression from the (structurally unrelated, frontend-only) diff in
+  flight at the time.
+affected_files:
+  - test/letflow/platform/migration_rollout_test.exs
+related:
+  - ISS-0766  # same discovery run, same class of full-suite-contention-only flake
+severity_rationale: >
+  MINOR -- does not reproduce in isolation (12/12 clean), only manifests
+  under full parallel-suite CPU contention, same class as the
+  already-tracked ISS-0766. No production impact.
+fix_direction: >
+  Not yet investigated. Read EO-004/EO-005's setup in
+  test/letflow/platform/migration_rollout_test.exs for a timing
+  dependency (e.g. an unawaited async operation, a wallclock-sensitive
+  assertion) similar to ISS-0766's own root-cause class, or a resource
+  contention pattern (shared connection/schema) that only manifests
+  under parallel load.
+status: open

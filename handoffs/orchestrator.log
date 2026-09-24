@@ -2279,3 +2279,5 @@
 2026-09-24T16:36:00Z | PASS | WF03-ISS0765-20260924 | step-00-git-setup | ORCH(direct) → ORCH | PASS -- branch feature/WF03-ISS0765-20260924 pushed from main d28c3cf6
 2026-09-24T16:37:00Z | DISPATCH | WF03-ISS0765-20260924 | step-01-issue-fixer | ORCH → ISSUE-FIXER | PENDING
 2026-09-24T17:12:00Z | FAIL | WF03-ISS0765-20260924 | step-02b-design-gate | CODE-DESIGN-VALIDATOR → ORCH | FAIL -- F-1 row 8 T-0765-MEMBERS-SHAPE cannot fail pre-fix (fetch spy defines Response, no 404); F-2 ambiguous identity.ex paths. a-f all independently confirmed. Rework 1 dispatched.
+2026-09-24T17:25:00Z | PASS | WF03-ISS0765-20260924 | step-02b-design-gate-rework1 | CODE-DESIGN-VALIDATOR → ORCH | PASS -- F-1 closed (row 7(i) genuinely red pre-fix, renumber clean, AC-map intact), F-2 closed, mutant substitution M-1a/M-1b accepted as legitimate under WF-03:104-117 by analogy. N-1 caveat carried to Step 4/4b: M-1a's predicted tsc line list is a floor, :228 likely surfaces at :227 as TS7006.
+2026-09-24T17:26:00Z | DISPATCH | WF03-ISS0765-20260924 | step-03-frontend-dev | ORCH → FRONTEND-DEV | PENDING

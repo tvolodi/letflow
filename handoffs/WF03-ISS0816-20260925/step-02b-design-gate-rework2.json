@@ -1,0 +1,189 @@
+{
+  "handoff_id": "WF03-ISS0816-20260925-step-02b-rework2",
+  "run_id": "WF03-ISS0816-20260925",
+  "workflow_id": "WF-03",
+  "step": "Step 2b",
+  "from_agent": "CODE-DESIGN-VALIDATOR",
+  "to_agent": "ORCH",
+  "file": "handoffs/WF03-ISS0816-20260925/step-02b-design-gate-rework2.json",
+  "created_at": "2026-09-24T23:48:58Z",
+  "started_at": "2026-09-24T23:48:58Z",
+  "completed_at": "2026-09-24T23:56:55Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "rework_count": 2,
+  "max_rework": 3,
+  "context": {
+    "stage": "S8",
+    "requirement_ids": [],
+    "requirement_text": "ISS-0816 (queue task 816). CursorPage<T> declares a has_more field. The issue was filed on the premise that lib/letflow/audit.ex emits has_more on the wire, so one CursorPage<T> was covering two incompatible wire shapes. That premise was refuted by ISSUE-FIXER at Step 1 and the issue record docs/issues/ISS-0816.yaml carries the correction inline; the Step 1 audit, not the record, is authoritative. The real defect is that no Letflow route emits has_more at all, so CursorPage<T>.has_more covers zero wire shapes, and two frontend call sites fabricate the field client-side from Boolean(next_cursor). The fix is to delete the field, split the envelope along the axis the backend genuinely varies on (two-key {items, next_cursor} versus three-key {items, next_cursor, count}), retype every call site to the envelope its route actually emits, and record the route-to-shape mapping so it need not be re-derived.",
+    "source_text": "Final narrow re-gate of the amended design at commit bf4e7ded (revision 3, rework iteration 2) on branch feature/WF03-ISS0816-20260925. Iteration 1 failed on two blockers in the T7 guard specification, both since closed and confirmed closed by measurement. Iteration 2 failed on BLOCKER-3: the narrowed regex enumerated three code forms and missed ES6 shorthand, which this role exploited by reintroducing the exact ISS-0816 defect past both tsc and the guard. Revision 3 answers BLOCKER-3 with a five-alternative regex plus an A/B measurement, corrects the section 7 overclaim, rewrites section 6.3's asymmetry, extends T8's offender fixture and fixes section 8 item 8's file count.",
+    "artifacts_in": [
+      "lib/letflow/design/iss-0816-cursorpage-has-more-audit.md",
+      "handoffs/WF03-ISS0816-20260925/step-02-code-designer.json",
+      "handoffs/WF03-ISS0816-20260925/step-02b-design-gate-rework1.json",
+      "web/tests/guards/forbidlist.ts",
+      "web/tests/guards/source-scan.spec.ts",
+      "web/tests/guards/meta-control.spec.ts",
+      "web/src/api/__tests__/identity.groupsApi.test.ts"
+    ],
+    "related_handoff_ids": [
+      "WF03-ISS0816-20260925-step-02",
+      "WF03-ISS0816-20260925-step-02b",
+      "WF03-ISS0816-20260925-step-02b-rework1"
+    ],
+    "owned_modules": [
+      "handoffs/WF03-ISS0816-20260925/"
+    ]
+  },
+  "task": {
+    "description": "WF-03 Step 2b, rework iteration 2 — the narrowest re-gate of this run. Gate only BLOCKER-3's fix and the items attached to it; BLOCKER-1 and BLOCKER-2 were confirmed closed by measurement at the previous gate, decision (c)'s INV-D restatement was verified against lib/letflow/routers/identity.ex:829-831, and the three minor corrections were checked, so none of that is re-derived here. The fix under gate is a five-alternative regex for T7's forbidlist PATTERN, with alternatives 4 and 5 both present deliberately — 5 catches the defect at its declaration when the object literal is assembled out of sight, 4 catches a shorthand whose binding came from a destructure or a parameter — and with the exemption set unchanged at the two ISS-0821 fixtures. Eight things to verify. (1) Re-run the A/B independently in a throwaway worktree: with the shorthand defect written back into promotions.ts's .then callback, arm A using the three-alternative regex must reproduce the previous gate's finding with tsc at exit 0 and source-scan at zero violations, while arm B using the five-alternative regex and nothing else changed must make source-scan fail; this is the discriminating test for whether the guard does its job at the one position already established as beyond the type system's reach. (2) Try to break the five-alternative regex by adversarial probe rather than by review, since two enumerations have now each looked complete and been wrong and what caught the second was a probe; CODE-DESIGNER concedes two evading forms, a parameter binding typed only by inference and a key built by string concatenation, so confirm those and hunt for a third it has not named, then judge whether any survivor is realistic enough to block on given that widening further re-creates BLOCKER-1. (3) Verify the claim that alternative 4's \\s spans newlines and therefore catches the multi-line object literal, against source-scan.spec.ts's actual matching behaviour, since that is the commonest real spelling. (4) Assess false-positive risk on prose, alternative 4 being the one that could fire on ordinary English ending in a comma, and confirm the section 4 backtick rule still makes prose structurally safe and that no existing prose in the tree trips it. (5) Confirm section 7's withdrawal of the cannot-reappear overclaim is accurate and does not overclaim in a new direction, T7 now being described as a backstop rather than a proof of impossibility with the durable fix left to ISS-0813. (6) Confirm section 6.3, retitled to say only one of the two ISS-0765 tests will tell you so, now states what was actually measured: :229 goes red, :252-259 stays green and under-covers, and the row is added deliberately rather than in response to a failing test. (7) Confirm T8's offender fixture now exercises all five alternatives and confirm that meta-control mechanically pins alternative 4. (8) Confirm section 8 item 8 now reads 14 occurrences across 7 files and that surfaceRows is cited at :252-259 throughout. If this passes, say so plainly, because the design then goes to FRONTEND-DEV and a further round on stylistic grounds is not wanted; if it fails, the blocker must be something that would ship a real defect or lose real coverage, stated with the measurement that shows it. Write the verdict to handoffs/WF03-ISS0816-20260925/step-02b-design-gate-rework2.json, run the single-file handoff lint on it, commit and push, and modify nothing outside handoffs/. Work synchronously with no Monitor and no background wait, taking timestamps from date -u.",
+    "acceptance_criteria": [
+      "The A/B is re-run independently in a throwaway worktree, with both arms' real output quoted: arm A must reproduce BLOCKER-3 and arm B must catch the same reintroduced defect with nothing else changed.",
+      "The five-alternative regex is probed adversarially rather than reviewed; CODE-DESIGNER's two conceded evasions are confirmed and an active search is made for a survivor it has not named.",
+      "Any survivor found is judged explicitly for whether it is realistic enough to block on, weighing that widening the regex further re-creates BLOCKER-1.",
+      "Alternative 4's newline-spanning claim is verified against source-scan.spec.ts's real matching behaviour on an actual multi-line source file, not against the regex in isolation.",
+      "Prose false-positive risk from alternative 4 is measured, including backtick-then-comma and backtick-then-brace forms, and the clean tree is confirmed to contain no prose that trips it.",
+      "Section 7's backstop-not-proof wording is confirmed accurate and checked for a new overclaim in the other direction.",
+      "Section 6.3's asymmetry statement is confirmed to match what was measured at the previous gate: :229 red, :252-259 green and silently under-covering.",
+      "T8's offender fixture is confirmed to exercise all five alternatives, and the claim that meta-control mechanically pins alternative 4 is tested rather than assumed.",
+      "Section 8 item 8's corrected figures and the surfaceRows citation are confirmed against a measurement.",
+      "The verdict is PASS or FAIL; a PASS is stated plainly, and a FAIL names a defect that would ship or coverage that would be lost, with the measurement that shows it.",
+      "The working checkout is left clean, no file outside handoffs/ is modified, and the probe worktree is removed.",
+      "This handoff passes mix letflow.lint_handoffs --dir on its own file, and is committed and pushed on feature/WF03-ISS0816-20260925."
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "verdict": "PASS",
+    "summary": "PASS. Stated plainly, as asked: this design is ready for FRONTEND-DEV and I am not asking for another round. BLOCKER-3 is closed, and the A/B is what closes it. I re-ran both arms myself with the shorthand defect written back into promotions.ts's .then callback. Arm A, three alternatives: tsc -b --force exit 0 AND source-scan zero violations — BLOCKER-3 reproduced exactly, both gates passing a real reintroduction of the defect this run exists to remove. Arm B, five alternatives, nothing else changed: source-scan FAILS with 'has-more-wire-field @ web/src/api/promotions.ts:260', tsc still exit 0. The regex is the only thing that moved and it is the thing that now catches. I also confirmed the two alternatives are not redundant, which the design asserts but its own A/B does not actually show: in the reported form the violation fires on alternative 5 (the const line), because source-scan reports the first matching line, so I re-ran it with the binding taken from a destructure instead of a declaration and alternative 4 fired independently at :259. The multi-line claim holds too — a shorthand with its closing brace two lines below the field is caught, reported at line 1 because findViolationInFile falls back there when no single line matches. My 35-form battery found 0 misses and 0 false positives, including every backtick-then-colon, backtick-then-comma and backtick-then-brace prose form, and six TimelineFeed spellings. Clean tree: tsc exit 0, guards 4 files / 52 tests all passing with source-scan at zero violations, npm test 125 files / 890 tests. Section 8 item 8's corrected figure of 14 occurrences across 7 files is confirmed. Sections 6.3, 7 and T9 now say precisely what I measured, including the asymmetry. Four MINORs, none blocking and none of them a reason to hold the design. The one worth CODE-DESIGNER's attention is that section 7.1's justification for the extended offender fixture is factually wrong: it says the fixture means each alternative is 'mechanically pinned' so a future edit cannot 'silently drop it again', and it cannot do that. I dropped alternative 4 from the regex, left the fixture untouched, and meta-control passed 48/48 — its assertion is a whole-file boolean, so any one surviving alternative satisfies it. The fixture is still worth having and its specified contents are right; only the claimed guarantee is overstated. That is a sentence to correct, not a defect that ships, so it does not block. I also found three survivors beyond the two conceded, all in the same equals-or-comment family, and judged none of them realistic enough to block: no fabrication path is open through any of them.",
+    "measured_ab": {
+      "method": "git worktree add --detach to a scratchpad path at bf4e7ded, web/node_modules supplied by a directory junction, working checkout never touched. Full section 4 and section 5 shape applied by hand, then the shorthand defect written into promotions.ts's list via its .then callback: 'const has_more = Boolean(response.next_cursor)' followed by 'return { items: response.items, next_cursor: response.next_cursor, has_more }'. Only the forbidlist regex differs between arms.",
+      "arm_a_three_alternatives": "source-scan: 1 passed, ZERO violations. tsc -b --force: exit 0. Both gates pass the reintroduced defect — BLOCKER-3 reproduced.",
+      "arm_b_five_alternatives": "source-scan: FAILED — 'Source scan found 1 violation(s): has-more-wire-field @ web/src/api/promotions.ts:260'. tsc -b --force: exit 0, unchanged.",
+      "interpretation": "The tsc result being identical across both arms is the whole point and the design says so correctly: this return position is not excess-property-checked, which is the section 8 item 3 finding, so the type system cannot help in either arm. T7 is the only gate that moves, and it moves only under the corrected regex. CODE-DESIGNER reports the violation at :262 and I measure :260; that is an artifact of our docblock rewrites differing in length, not a discrepancy — same file, same pattern, same outcome.",
+      "alternative_4_isolated": "Because source-scan reports the FIRST matching line, the reported violation fires on alternative 5 (the const declaration), so the headline A/B does not by itself demonstrate alternative 4. Re-ran with the binding taken from a destructure instead — '.then(({ items, next_cursor, has_more }) => { return { items, next_cursor, has_more } })', where alternative 5 cannot fire — and source-scan FAILED at 'web/src/api/promotions.ts:259'. Alternative 4 fires independently on real source. The design's rationale for keeping both is therefore correct and now evidenced.",
+      "clean_tree_five_alternatives": "tsc -b --force exit 0; npm run guards (meta-control, source-scan, bundle-scan, role-set) 4 files / 52 tests all passed with source-scan at zero violations and all four has-more-wire-field fixture assertions green against the extended offender; npm test 125 files / 890 tests all passed. Matches section 8 item 14 exactly."
+    },
+    "independent_verification": [
+      {
+        "item": "(1) The A/B re-run",
+        "verdict": "CONFIRMED — both arms reproduce exactly as reported",
+        "evidence": "See result.measured_ab. Arm A reproduces BLOCKER-3 (tsc 0, source-scan 0 violations); arm B fails source-scan on the same defect with nothing else changed. This is the discriminating test and it discriminates."
+      },
+      {
+        "item": "(2) Adversarial probe of the five-alternative regex",
+        "verdict": "35-form battery: 0 missed, 0 false positives. Two conceded evasions CONFIRMED; three further survivors found, none blocking",
+        "evidence": "Battery: 21 must-match covering all five alternatives (property access, optional chain, non-null assertion, property assignment, type member, optional member, literal key, renamed destructure, newline-before-colon, both quote styles, shorthand in a literal, lone shorthand, shorthand mid-literal, destructure shorthand, parameter destructure, arrow-parameter destructure, multi-line literal, and const/let/var declarations) and 14 must-not covering all four real prose comments in the tree, both docblock sentences section 4 requires, backtick-then-colon, backtick-then-comma, backtick-then-brace and backtick-then-period prose, six TimelineFeed hasMore spellings including the const and shorthand forms that only alternatives 4 and 5 could have caught, and both clean envelope literals. All 35 correct. Conceded evasions confirmed: a key built by string concatenation (page['has' + '_more']) and a binding typed only by inference both evade. Three further survivors found, all sharing the shape 'has_more followed by = or by a comment': (a) destructuring with a default, 'const { has_more = false } = page' — note alternative 5 cannot fire because 'const' is followed by '{', not by the identifier; (b) a class field initializer, 'class P { has_more = false }'; (c) a multi-line shorthand that is the LAST property, with a trailing line comment and no trailing comma, 'has_more // derived' before the closing brace — the comma form 'has_more, // derived' IS caught, and the repo has no comma-dangle rule to force one. JUDGEMENT: none blocks. Every path by which the field can be FABRICATED into a returned object is covered — colon key by alternative 2, shorthand by 4, quoted key by 3, property assignment by 1, and the declaration that feeds a shorthand by 5. The three survivors are read-forms or initializers; (a) and (c) additionally require an any-typed or untyped source to compile at all, and none of them can put the field on a wire contract. Widening to catch them would mean adding an equals-family alternative, which buys little and moves back toward the prose-matching that caused BLOCKER-1. Recorded here so the enumeration is on file rather than rediscovered by a fourth gate."
+      },
+      {
+        "item": "(3) Alternative 4's \\s spanning newlines, against source-scan's real behaviour",
+        "verdict": "CONFIRMED on real source, with one reporting caveat worth a sentence in the design",
+        "evidence": "Tested on an actual file rather than the regex alone. Wrote a multi-line literal into promotions.ts with the field on its own line and the closing brace two lines below — 'return {\\n  items: r.items,\\n  next_cursor: r.next_cursor,\\n  has_more\\n}' — and source-scan FAILED, so detection works exactly as section 7.1 claims. The mechanism is the one the design names: findViolationInFile tests whole-file content first and only then walks lines to attach a number. The caveat is what happens at that second step — no single line matches, so the function falls through to its 'Multi-line pattern: no single line matches — report line 1' branch, and the violation was reported as 'web/src/api/promotions.ts:1'. Detection is correct and the build goes red with the pattern named, so nothing is missed; but a reader chasing line 1 of a 300-line file will be briefly confused. This is pre-existing source-scan behaviour shared with the missing-query-state-boundary pattern, not something this design introduced. Worth one sentence in section 7.1 so the next reader is not puzzled by a line-1 report."
+      },
+      {
+        "item": "(4) Prose false-positive risk from alternative 4",
+        "verdict": "CONFIRMED SAFE — structurally, and on the real tree",
+        "evidence": "The concern is well identified: alternative 4 is \\bhas_more\\s*[,}] and ordinary English can end a clause with a comma. The section 4 backtick rule forecloses it structurally, and the design's reasoning is right — the character immediately after a closing backtick is a backtick, which is neither whitespace nor a comma nor a brace, so \\s* cannot span it and [,}] is never reached. Measured on the three shapes that come closest: ' * Not `has_more`, which no route sends.' does NOT match; ' * `has_more`: never emitted by any route.' does NOT match; ' * The envelope is `{items, next_cursor}` -- no `has_more`}' does NOT match. On the real tree: with the full shape applied and the five-alternative regex installed, source-scan reported zero violations across web/src, with api.ts carrying section 4's required has_more prose and identity.groupsApi.test.ts:63 untouched and unexempted. No existing prose trips it."
+      },
+      {
+        "item": "(5) Section 7's withdrawal of the cannot-reappear overclaim",
+        "verdict": "CONFIRMED accurate, and it does not overclaim in a new direction",
+        "evidence": "The T7 row now reads 'Every realistic code spelling of a reintroduced has_more field is caught in production source, while prose naming the field stays legal. This is a backstop, not a proof of impossibility', pointing at section 7.1's 'What this guard does and does not prove'. That subsection names both conceded evasions, states plainly that widening to cover them would start matching prose again and re-create BLOCKER-1, and leaves the durable fix with ISS-0813's mechanical coupling. INV-A was updated in the same direction — T7 'backstops' the has_more instance rather than enforcing it. Checked the residual claim against my own probe: 'every realistic code spelling' is defensible because it is immediately hedged with 'Those are not how this defect has ever been written, here or in the five prior sightings', and my three extra survivors are all in the equals-or-comment family, none of which can fabricate the field. The new wording is weaker than the truth I measured rather than stronger, which is the right direction for a claim of this kind."
+      },
+      {
+        "item": "(6) Section 6.3's asymmetry",
+        "verdict": "CONFIRMED — it now says exactly what I measured",
+        "evidence": "The retitled subsection, 'two ISS-0765 tests must be extended, and only one of them will tell you so', matches my rework-1 measurement point for point. :229 T-0765-SURFACE is described as going red and I measured it red with 'expected [ addMember, create, ...(5) ] to deeply equal [ addMember, create, ...(4) ]'. :252-259 T-0765-NO-ADMIN-PREFIX is described as staying green and silently under-covering because it.each iterates a hand-maintained array rather than Object.keys(groupsApi), which is what I measured — all six cases stayed green. The 'suite goes from 16 to 16 green tests' figure is right: I measured 1 failed and 15 passed out of 16, so fixing only the red one returns 16 green with no new case. The instruction 'The row must be added deliberately, not in response to a failing test' is stated in bold, and the consequence of missing it is spelled out. The T9 row was rewritten in the same direction — 'still cover ... not merely still pass', with the two edits split and only the first marked as prompted by a red test. 'Applied as specified, the file goes 16 to 17 green' matches the 17 I measured. Nothing here overstates or understates what the tests do."
+      },
+      {
+        "item": "(7) T8's offender fixture and whether meta-control pins alternative 4",
+        "verdict": "Fixture contents CONFIRMED correct; the pinning claim is REFUTED — see MINOR-1",
+        "evidence": "The specified offender contents do exercise all five alternatives: an object-literal key, a property access, a const declaration, an ES6 shorthand literal and a renamed destructure. I built the fixture to that spec and meta-control's four has-more-wire-field assertions all passed, as did the bystander with its prose, backtick-comma and backtick-colon forms, clean literal and four TimelineFeed spellings. But the claim attached to it is false. Section 7.1 says the offender must exercise all five 'so that each one is mechanically pinned rather than merely present in this document', and that without a fixture form for alternative 4 'the next edit to this regex could silently drop it again'. Tested directly: I removed alternative 4 from the regex, left the offender fixture completely untouched, and ran meta-control. It passed 48 of 48, and source-scan stayed green on the clean tree. The reason is structural — meta-control asserts expect(pattern.regex.test(content)).toBe(true) over the WHOLE fixture file, so any single surviving alternative matching any line satisfies it. One offender file containing all five forms pins the pattern as a whole and pins no alternative individually. Per-alternative pinning would need a change to meta-control.spec.ts, which is GRD-UI-04's file and out of this run's scope. The fixture is still worth building exactly as specified — it documents the five forms and gives source-scan a genuine offender — so nothing about the instruction changes; only the stated guarantee is wrong."
+      },
+      {
+        "item": "(8) Section 8 item 8's figures and the surfaceRows citation",
+        "verdict": "CONFIRMED correct",
+        "evidence": "Re-measured at pristine bf4e7ded: grep over web/src with --include for .ts, .tsx and .css returns 14 occurrences across 7 files, matching the corrected text exactly. The paragraph also now explains the earlier error rather than just replacing the number — that the eight-file figure was web/src plus web/tests, whose only contributor is web/tests/e2e/obs04.timeline.e2e.spec.ts:72, outside src/** and therefore never scanned by source-scan — which is the right way to correct a measurement in a document whose credibility depends on its measurements. The original false claim remains struck through rather than deleted. surfaceRows is now cited as :252-259 in section 6.3, in the T9 row and in section 8's closing paragraph; I verified the array is at :252-259 with it.each at :261, and the :229 citation for T-0765-SURFACE is exact."
+      }
+    ],
+    "issues": [
+      {
+        "severity": "MINOR",
+        "description": "Section 7.1's justification for T8's extended offender fixture is factually wrong and should be corrected. It claims the fixture means each of the five alternatives is 'mechanically pinned rather than merely present in this document', and that without a fixture form for alternative 4 'the next edit to this regex could silently drop it again'. Measured: I removed alternative 4 from the regex, left the offender fixture untouched, and meta-control passed 48/48 with source-scan still green. meta-control asserts regex.test(content) over the whole fixture file, so any one surviving alternative satisfies it; a single offender file pins the pattern as a whole and no alternative individually. The fixture's specified contents are right and should be built as written — only the guarantee is overstated. Real per-alternative pinning would require changing meta-control.spec.ts (GRD-UI-04's file), which is outside this run's scope. Not blocking: nothing ships broken, and today's coverage is correct and measured.",
+        "affected_requirement": null
+      },
+      {
+        "severity": "MINOR",
+        "description": "Three survivors beyond the two the design concedes, recorded so a fourth gate does not rediscover them. All share the shape 'has_more followed by = or by a comment': (a) destructuring with a default, 'const { has_more = false } = page' — alternative 5 cannot fire because const is followed by a brace, not the identifier; (b) a class field initializer, 'class P { has_more = false }'; (c) a multi-line shorthand as the LAST property with a trailing line comment and no trailing comma, since the repo has no comma-dangle rule to force one (the comma form 'has_more, // derived' IS caught). Judged non-blocking: every path that could FABRICATE the field into a returned object is covered by alternatives 1 through 5, these are read-forms or initializers, (a) and (c) need an any-typed or untyped source to compile at all, and widening with an equals-family alternative buys little while moving back toward the prose matching that caused BLOCKER-1.",
+        "affected_requirement": null
+      },
+      {
+        "severity": "MINOR",
+        "description": "Worth one sentence in section 7.1 so the next reader is not puzzled. The multi-line shorthand IS detected, as the design claims, but source-scan reports it at line 1 of the file rather than at the field: findViolationInFile tests whole-file content, then walks lines to attach a number, and falls through to its 'no single line matches, report line 1' branch when the match spans lines. Measured: the multi-line variant failed source-scan as 'has-more-wire-field @ web/src/api/promotions.ts:1'. Pre-existing source-scan behaviour shared with missing-query-state-boundary, not introduced here, and detection is unaffected.",
+        "affected_requirement": null
+      },
+      {
+        "severity": "MINOR",
+        "description": "Line-number note on section 8 item 13's A/B, for the record rather than for correction. CODE-DESIGNER reports the arm B violation at promotions.ts:262; I measured :260. The difference is an artifact of our docblock rewrites differing in length — same file, same pattern, same outcome. Separately, in the reported spelling the violation fires on alternative 5 (the const line) because source-scan reports the first matching line, so the headline A/B does not by itself exercise alternative 4; I verified alternative 4 independently by taking the binding from a destructure instead, which failed source-scan at :259. The design's rationale for keeping both alternatives is correct, and section 8 item 13 could note which alternative its own arm B actually fires on.",
+        "affected_requirement": null
+      }
+    ],
+    "charter_checks": [
+      {
+        "check": "Every acceptance criterion has a corresponding concrete design element",
+        "verdict": "PASS",
+        "note": "Section 12 maps all four ACs of queue task 816 to concrete sections; AC3 now also carries section 6.3 and T9, and AC4 carries section 7.1. Verified at the previous two gates and unchanged by this revision."
+      },
+      {
+        "check": "No TBD or deferral language",
+        "verdict": "PASS",
+        "note": "Section 11's three open questions remain explicitly scoped as questions this fix deliberately does not resolve, and OQ-2 was narrowed in revision 2 to say the behaviour at the cap is no longer open. None blocks implementation."
+      },
+      {
+        "check": "Function signatures fully specified including error shape",
+        "verdict": "PASS",
+        "note": "Section 6.1's members/2 and listAllMembers/1 are complete, with the drain's five-point contract, the truncated boundary specified in both directions, and rejection on the first failed request."
+      },
+      {
+        "check": "No implementation code present",
+        "verdict": "PASS",
+        "note": "Type shapes, signatures, a regex specification and prose contracts only. The one TypeScript block added in revision 3 is the two-line defect reproduction quoted as evidence in section 7.1, not code to be written."
+      },
+      {
+        "check": "Unambiguous enough to build from",
+        "verdict": "PASS",
+        "note": "The contradiction that failed iteration 1 is gone and the enumeration gap that failed iteration 2 is closed and measured. Every instruction FRONTEND-DEV needs — the regex, the exemption set, both fixtures' required contents, the two T9 edits with the explicit warning that only one goes red — is concrete. The single inaccuracy left (MINOR-1) is in a justification, not an instruction: the fixture contents to build are unchanged by it."
+      },
+      {
+        "check": "Out-of-scope discipline",
+        "verdict": "PASS",
+        "note": "Section 10 still tabulates ISS-0811 through 0815 and 0820 through 0823 as filed-not-fixed. Revision 3 adds no new scope; T8's fixture is a required consequence of T7 under GRD-UI-04, and section 6.3 is a required consequence of section 6.1 rather than new work."
+      }
+    ],
+    "measurements_performed": [
+      "git worktree add --detach <scratchpad>/wt3 bf4e7ded, web/node_modules via a directory junction. Full section 4/5 shape applied by hand, plus section 7.1's PATTERNS entry and T8's two fixtures built to their specified contents.",
+      "35-form adversarial battery against the five-alternative regex: 21 must-match, 14 must-not — 0 misses, 0 false positives.",
+      "Survivor hunt, 9 candidate evasions: 2 conceded forms confirmed evading, 3 further survivors found (destructure-with-default, class field initializer, multi-line shorthand with trailing line comment and no trailing comma), 2 candidates confirmed caught (shorthand before a semicolon, shorthand before a closing paren).",
+      "A/B arm A (three alternatives, shorthand defect present in promotions.ts's .then): source-scan 1 passed / zero violations; tsc -b --force exit 0. BLOCKER-3 reproduced.",
+      "A/B arm B (five alternatives, same defect, nothing else changed): source-scan FAILED — 'has-more-wire-field @ web/src/api/promotions.ts:260'; tsc -b --force exit 0.",
+      "Alternative 4 in isolation (binding from a destructure so alternative 5 cannot fire): source-scan FAILED at 'web/src/api/promotions.ts:259'.",
+      "Multi-line variant (field on its own line, closing brace two lines below, no const): source-scan FAILED, reported at 'web/src/api/promotions.ts:1' via findViolationInFile's no-single-line-matches fallback.",
+      "meta-control pinning test: alternative 4 removed from the regex with the offender fixture left intact -> meta-control 48/48 PASSED and source-scan green, refuting section 7.1's mechanical-pinning claim.",
+      "Clean tree with the five-alternative regex: tsc -b --force exit 0; npm run guards 4 files / 52 tests all passed, source-scan zero violations, all four has-more-wire-field fixture assertions green; npm test 125 files / 890 tests all passed.",
+      "Section 8 item 8 re-measured at pristine bf4e7ded: 14 occurrences across 7 files in web/src (15 across 8 only when web/tests is included, which source-scan's src/** glob excludes).",
+      "Source reads for citation checks: web/src/api/__tests__/identity.groupsApi.test.ts (surfaceRows at :252-259, it.each at :261, T-0765-SURFACE at :229), web/tests/guards/{forbidlist.ts,source-scan.spec.ts,meta-control.spec.ts}, and .eslintrc.json (no comma-dangle rule).",
+      "Cleanup: node_modules junction removed with rmdir, git worktree remove --force, working checkout git status --porcelain empty. No file outside handoffs/ was modified at any point and no revert was needed."
+    ],
+    "artifacts_out": [],
+    "next_action": "ORCH advances WF-03 to Step 3 and dispatches FRONTEND-DEV against lib/letflow/design/iss-0816-cursorpage-has-more-audit.md at bf4e7ded. No rework round is requested and none should be run on this design's account. The four MINORs are documentation corrections, not build instructions, and all four can be folded into DOC-UPDATER's pass at Step Final rather than costing a fourth design round: correct section 7.1's mechanical-pinning claim (MINOR-1), record the three extra survivors alongside the two already conceded (MINOR-2), add the line-1 reporting note (MINOR-3), and note which alternative section 8 item 13's arm B actually fires on (MINOR-4). Two things FRONTEND-DEV should be pointed at explicitly in its dispatch, because both are places this run has already proven an agent can go wrong: T9's second edit never goes red, so the surfaceRows row at :252-259 must be added deliberately and its absence will not be caught by running the suite; and T7's regex must be transcribed exactly as section 7.1 gives it, since two earlier enumerations each looked complete and were not.",
+    "git_evidence": {
+      "branch": "feature/WF03-ISS0816-20260925",
+      "gated_commit": "bf4e7ded",
+      "previous_gate_commits": ["2da52436", "633a854d"],
+      "head_at_gate_end": "b2d2bd20",
+      "note": "git diff --name-only 633a854d bf4e7ded returns only handoffs/WF03-ISS0816-20260925/step-02-code-designer.json, handoffs/orchestrator.log and lib/letflow/design/iss-0816-cursorpage-has-more-audit.md — zero files under web/, confirming the branch still changes no application code. HEAD advanced to b2d2bd20 during the gate (ORCH logging rework 2 and dispatching this re-gate), which touches no file this verdict depends on.",
+      "working_tree": "clean at gate start and at gate end; all probing done in a throwaway worktree that has been removed"
+    }
+  }
+}

@@ -1,0 +1,46 @@
+{
+  "handoff_id": "WF03-ISS0788-20260924-step-03c",
+  "run_id": "WF03-ISS0788-20260924",
+  "workflow_id": "WF-03",
+  "step": "Step 3c+3d (Security + Idiom Gates)",
+  "to_agent": "SECURITY-REVIEWER",
+  "from_agent": "ORCH",
+  "status": "PENDING",
+  "created_at": "2026-09-24T00:37:01Z",
+  "started_at": "2026-09-24T00:37:01Z",
+  "context": {
+    "branch_name": "feature/WF03-ISS0788-20260924",
+    "issue_id": "ISS-0788",
+    "fix_summary": "Added 2 new private function heads to render_upload_attachment/2 in instances.ex: {:error, :storage_quota_exceeded} → Response.conflict(conn, ...) and {:error, :tenant_not_found} → Response.unprocessable(conn, ...).",
+    "artifacts_in": [
+      "lib/letflow/routers/instances.ex",
+      "docs/agents/instructions/security-invariants.md"
+    ]
+  },
+  "task": {
+    "description": "Execute Steps 3c (SECURITY GATE) and 3d (REVIEWER GATE) for ISS-0788.\n\nWorkspace: c:\\Users\\tvolo\\dev\\ai-dala\\letflow\nBranch: feature/WF03-ISS0788-20260924\n\nRead security-invariants.md and diff:\ngit diff main...feature/WF03-ISS0788-20260924 -- lib/letflow/routers/instances.ex\n\nSECURITY:\n- INV-1: does the new 409/422 response expose any tenant data beyond what's appropriate for the error condition? (It shouldn't -- just string literals)\n- INV-4: no hardcoded secrets in the new clauses?\n- INV-5: response-shape: is {:error, :storage_quota_exceeded} response distinguishable from other denial responses? (Yes, 409 vs 413/422 -- this is acceptable, they're different HTTP codes for different conditions)\n- The new clauses are pure pattern matches that return static string messages -- minimal security surface\n\nIDIOM (REVIEWER):\n- Is the function head order correct (catch-all %Ecto.Changeset{} still last)?\n- Are the clauses idiomatic Elixir? Proper private function heads?\n- No supervision tree changes? (This is route handler, no processes)\n- No scope creep? (Only instances.ex changed)\n\nWrite BOTH reviews in a single handoff file (combined step):\n1. Write handoffs/WF03-ISS0788-20260924/step-03c-security-reviewer.json COMPLETED PASS or FAIL\n2. Write handoffs/WF03-ISS0788-20260924/step-03d-reviewer.json COMPLETED PASS or FAIL\n3. git add both + commit + push\n\nReport: SECURITY PASS/FAIL and IDIOM PASS/FAIL",
+    "acceptance_criteria": [
+      "No security violations in new clauses",
+      "Idiom correct",
+      "No scope creep"
+    ]
+  },
+  "result": {
+    "status": "COMPLETED",
+    "verdict": "PASS",
+    "completed_at": "2026-09-24T01:05:00Z",
+    "scope_test": "APPLIES — render_upload_attachment/2 is response-shaping for a tenant-scoped entity (attachment uploads). Full invariant check executed.",
+    "invariants": {
+      "INV-1": "PASS — both new clauses return static string literals only; no tenant ID, schema name, or cross-tenant data embedded in either message",
+      "INV-2": "NOT-APPLICABLE — S4 not started; no new serialised struct fields introduced",
+      "INV-3": "NOT-APPLICABLE — S5 not started",
+      "INV-4": "PASS — no secret material in either clause; Response.conflict/2 and Response.unprocessable/2 receive plain string literals",
+      "INV-5": "NOT-APPLICABLE — S4 not started; no lookup-by-ID handler added",
+      "INV-6": "PASS — this review is the proof of scoping; no new data-access path opened; error response branches only",
+      "INV-7": "PASS — neither clause contains SQL or Repo.* calls",
+      "INV-8": "PASS — new clauses add typed pattern-match handlers, reducing unhandled-crash risk",
+      "INV-9": "PASS — no outbound HTTP calls in either clause"
+    },
+    "issues": []
+  }
+}

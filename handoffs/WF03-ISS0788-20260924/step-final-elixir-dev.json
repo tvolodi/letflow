@@ -1,0 +1,30 @@
+{
+  "handoff_id": "WF03-ISS0788-20260924-step-final",
+  "run_id": "WF03-ISS0788-20260924",
+  "workflow_id": "WF-03",
+  "step": "Step Final",
+  "to_agent": "ELIXIR-DEV",
+  "from_agent": "ORCH",
+  "status": "PENDING",
+  "created_at": "2026-09-24T01:12:14Z",
+  "started_at": "2026-09-24T01:12:14Z",
+  "context": {
+    "branch_name": "feature/WF03-ISS0788-20260924",
+    "issue_id": "ISS-0788",
+    "all_gates_passed": true,
+    "queue_task_id": 787,
+    "queue_agent_id": "orch-main",
+    "queue_endpoint": "https://queue-test.ai-dala.com",
+    "queue_auth_token": "8e88290747e5cd89cc94887ba3f887c72add7f2e2e06cd49cab6bcd307c5198f"
+  },
+  "task": {
+    "description": "Execute Step Final for WF03-ISS0788-20260924 per GIT_MERGE.md.\n\nWorkspace: c:\\Users\\tvolo\\dev\\ai-dala\\letflow\nBranch: feature/WF03-ISS0788-20260924\nMix: & 'C:/Program Files/Elixir/bin/mix'\nQUEUE_AUTH_TOKEN: 8e88290747e5cd89cc94887ba3f887c72add7f2e2e06cd49cab6bcd307c5198f\n\n1. Verify branch\n2. Stage dirty ORCH files if any, commit\n3. git fetch origin main; git rebase origin/main\n4. mix compile --warnings-as-errors\n5. mix test test/letflow/routers/instances_test.exs\n6. git push (--force-with-lease if rebased)\n7. gh pr create --title 'ISS-0788: render_upload_attachment/2 missing clauses for storage_quota_exceeded and tenant_not_found' --body 'Closes #1761. Adds 409 clause for storage_quota_exceeded and 422 clause for tenant_not_found in render_upload_attachment/2. Regression tests with fail-first proof.'\n8. Wait for CI; gh pr merge --squash --delete-branch\n9. git checkout main; git pull --ff-only\n10. Release queue 787: POST https://queue-test.ai-dala.com/tasks/787/release {\"agent_id\":\"orch-main\",\"status\":\"done\"}\n11. Update registry WF03-ISS0788-20260924: COMPLETED, released_lock true\n12. Complete handoff PASS + bookkeeping PR\n\nReport: PR number, merge SHA, queue release",
+    "acceptance_criteria": [
+      "Rebased, compile clean, tests pass",
+      "PR merged, branch deleted",
+      "Queue 787 released",
+      "Registry COMPLETED"
+    ]
+  },
+  "result": null
+}

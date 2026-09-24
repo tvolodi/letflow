@@ -1,0 +1,105 @@
+{
+  "handoff_id": "WF03-ISS0788-20260924-step-01",
+  "run_id": "WF03-ISS0788-20260924",
+  "workflow_id": "WF-03",
+  "step": "Step 0.5 + Step 1",
+  "to_agent": "ISSUE-FIXER",
+  "from_agent": "ORCH",
+  "status": "COMPLETED",
+  "created_at": "2026-09-24T00:22:12Z",
+  "started_at": "2026-09-24T00:22:12Z",
+  "context": {
+    "branch_name": "feature/WF03-ISS0788-20260924",
+    "issue_id": "ISS-0788",
+    "issue_file": "docs/issues/ISS-0788.yaml",
+    "issue_text": "render_upload_attachment/3 in lib/letflow/routers/instances.ex has no clause for {:error, :storage_quota_exceeded} or {:error, :tenant_not_found}. Either return from Attachments.upload/2 crashes the route with FunctionClauseError instead of a handled 4xx. REQ-390 implementation gap. Also: REQ-389 design doc §0 falsely claims the :storage_quota_exceeded clause already exists.",
+    "artifacts_in": [
+      "docs/issues/ISS-0788.yaml",
+      "lib/letflow/routers/instances.ex",
+      "lib/letflow/repository/attachments.ex",
+      "lib/letflow/design/req389-attachment-content-type-allowlist.md"
+    ]
+  },
+  "task": {
+    "description": "Execute Steps 0.5 and 1 for ISS-0788.\n\nStep 0.5: Check docs/issues/*.yaml for any prior resolved issue with matching symptoms (missing render_upload_attachment clauses, FunctionClauseError on upload route). No prior match expected.\n\nStep 1 (Diagnose -- NO SPECULATION, read actual source):\n1. Read lib/letflow/routers/instances.ex. Find render_upload_attachment/2 or /3. List all current clauses and what errors they handle.\n2. Read lib/letflow/repository/attachments.ex. Check upload/2's return contract -- what tags can it return?\n3. Confirm the gap: does render_upload_attachment/3 have clauses for {:error, :storage_quota_exceeded} and {:error, :tenant_not_found}? If not, this is a real FunctionClauseError waiting to happen.\n4. Read lib/letflow/design/req389-attachment-content-type-allowlist.md §0. Does it falsely claim the :storage_quota_exceeded clause already exists?\n5. Write diagnosis into result.summary: exact function, exact clauses present vs missing, exact false claim in design doc.\n6. State the fix: add 2 clauses + correct design doc. Suggest HTTP status codes (check admin_services.ex for tenant_not_found convention).\n\nDO NOT implement the fix. Complete with next_action: Route to CODE-DESIGNER.\n\nOutput:\n1. Write handoffs/WF03-ISS0788-20260924/step-01-issue-fixer.json COMPLETED PASS\n2. git add + commit + push\n\nReport: diagnosis summary",
+    "acceptance_criteria": [
+      "Step 0.5: prior match search documented",
+      "Step 1: actual source read, exact missing clauses identified",
+      "False claim in design doc confirmed",
+      "Fix approach stated (what clauses to add, which HTTP codes, which text to correct)"
+    ]
+  },
+  "status": "COMPLETED",
+  "completed_at": "2026-09-24T00:35:00Z",
+  "result": {
+    "status": "PASS",
+    "summary": {
+      "step_0_5_registry_lookup": {
+        "finding": "No prior resolved issue in docs/issues/*.yaml matches symptoms (missing render_upload_attachment clauses, FunctionClauseError on attachment upload route). ISS-0788 is the first entry for this symptom class. Not a recurrence.",
+        "files_scanned": "docs/issues/*.yaml (grep for render_upload_attachment, storage_quota_exceeded, FunctionClauseError.*upload)"
+      },
+      "step_1_diagnosis": {
+        "function_location": "lib/letflow/routers/instances.ex",
+        "function_arity": "render_upload_attachment/2 (private defp). Note: the clause for {:error, :infected, verdict} pattern-matches a 3-element tuple as the second argument but is still arity 2 by Elixir convention.",
+        "existing_clauses": [
+          "(conn, {:ok, attachment}) -> Response.created/2 (HTTP 201)",
+          "(conn, {:error, :file_too_large}) -> Response.payload_too_large/2 (HTTP 413)",
+          "(conn, {:error, :infected, verdict}) -> Response.unprocessable/2 (HTTP 422)",
+          "(conn, {:error, :scan_unavailable}) -> Response.service_unavailable/2 (HTTP 503)",
+          "(conn, {:error, %Ecto.Changeset{}}) -> Response.unprocessable/2 (HTTP 422)"
+        ],
+        "total_existing_clauses": 5,
+        "missing_clauses": [
+          "{:error, :storage_quota_exceeded}",
+          "{:error, :tenant_not_found}"
+        ],
+        "gap_confirmed": "Yes. Neither {:error, :storage_quota_exceeded} nor {:error, :tenant_not_found} has a matching render_upload_attachment/2 clause. Attachments.upload/2 (lib/letflow/repository/attachments.ex, @spec lines 183-190 and check_storage_quota/3 at lines 619-634) can return both. Any call hitting an over-quota tenant or an unknown-tenant prefix will reach render_upload_attachment/2 with an unhandled pattern and raise FunctionClauseError (HTTP 500), not a handled 4xx.",
+        "upload_spec": {
+          "function": "Attachments.upload/2",
+          "file": "lib/letflow/repository/attachments.ex",
+          "spec_lines": "183-190",
+          "returns": [
+            "{:ok, Attachment.t()}",
+            "{:error, :file_too_large}",
+            "{:error, :storage_quota_exceeded}",
+            "{:error, :tenant_not_found}",
+            "{:error, :infected, verdict :: String.t()}",
+            "{:error, :scan_unavailable}",
+            "{:error, Ecto.Changeset.t()}"
+          ],
+          "storage_quota_source": "check_storage_quota/3 (lines 619-634) inside do_upload_after_scan/6 — returns {:error, :storage_quota_exceeded} when current_usage + new_bytes > allowance, {:error, :tenant_not_found} when Repo.get(Tenant, tenant_id) == nil"
+        },
+        "design_doc_false_claim": {
+          "file": "lib/letflow/design/req389-attachment-content-type-allowlist.md",
+          "on_disk": false,
+          "reason": "REQ-389 (content-type allowlist) was blocked by the REVIEWER hard gate before the PR was merged. The design doc was referenced in that PR's working context but was never committed to any branch reachable from main. git log --all -- lib/letflow/design/req389-attachment-content-type-allowlist.md returns no commits.",
+          "false_claim_text": "\"{:error, :storage_quota_exceeded}` (REQ-390, confirmed present in `upload/2`'s current `@spec`) is rendered by an existing clause not reproduced above -- not touched by this design.\" (quoted from ISS-0788.yaml lines 18-20, which transcribed the claim verbatim from the reviewer's reading of the draft design doc)",
+          "why_false": "As confirmed by direct reading of lib/letflow/routers/instances.ex, no such clause exists in any committed version of render_upload_attachment/2."
+        },
+        "tenant_not_found_convention": {
+          "file": "lib/letflow/routers/admin_services.ex",
+          "line": 229,
+          "pattern": "{:error, :tenant_not_found} -> Response.unprocessable(conn, \"owner_tenant_id does not name an existing tenant\")",
+          "http_status": 422
+        },
+        "root_cause": "REQ-390 (per-tenant storage quota, status: done) added check_storage_quota/3 and both error atoms to upload/2's @spec and implementation but never added matching render_upload_attachment/2 clauses in the route layer. This is an REQ-390 implementation gap. REQ-389 subsequently added one new clause for {:error, :content_type_not_allowed} (not yet merged) and its draft design doc incorrectly described the gap as already filled.",
+        "fix_for_code_designer": {
+          "clause_1_to_add": {
+            "pattern": "(conn, {:error, :storage_quota_exceeded})",
+            "response": "Response.conflict(conn, \"storage quota exceeded for this tenant\")",
+            "http_status": 409,
+            "rationale": "Response.conflict/2 (lib/letflow/api/response.ex line 159) is available and semantically appropriate for quota exhaustion. It is distinct from 413/415/422/503 as ISS-0788 suggested_fix requires."
+          },
+          "clause_2_to_add": {
+            "pattern": "(conn, {:error, :tenant_not_found})",
+            "response": "Response.unprocessable(conn, \"tenant not found\")",
+            "http_status": 422,
+            "rationale": "Matches the existing tenant_not_found convention in admin_services.ex:229."
+          },
+          "design_doc_action": "Create lib/letflow/design/req389-attachment-content-type-allowlist.md (it does not yet exist). The §0 section must accurately state that {:error, :storage_quota_exceeded} and {:error, :tenant_not_found} are handled by the clauses added in ISS-0788 (this fix), not by a pre-existing clause. Do NOT repeat the false claim."
+        }
+      }
+    },
+    "next_action": "Route to CODE-DESIGNER for fix design"
+  }
+}

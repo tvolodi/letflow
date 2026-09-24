@@ -1,0 +1,34 @@
+{
+  "handoff_id": "WF03-ISS0808-20260925-step-02",
+  "run_id": "WF03-ISS0808-20260925",
+  "workflow_id": "WF-03",
+  "step": "Step 2",
+  "to_agent": "ORCH",
+  "from_agent": "CODE-DESIGNER",
+  "status": "COMPLETED",
+  "created_at": "2026-09-25T04:26:20Z",
+  "started_at": "2026-09-25T04:26:20Z",
+  "completed_at": "2026-09-25T04:30:00Z",
+  "context": {
+    "issue_id": "ISS-0808",
+    "issue_file": "docs/issues/ISS-0808.yaml",
+    "retroactive": true,
+    "implementation_commit": "97c50b5d",
+    "artifacts_in": [
+      "docs/issues/ISS-0808.yaml",
+      "lib/letflow/plugs/tenant_status.ex",
+      "test/letflow/plugs/tenant_status_test.exs",
+      "lib/letflow/api/authorization.ex"
+    ],
+    "artifacts_out": [
+      "lib/letflow/design/iss-0808-tenant-status-roles-normalization.md"
+    ]
+  },
+  "task": {
+    "description": "WF-03 Step 2 (retroactive) -- produce design artefact for ISS-0808 fix already committed at 97c50b5d. Document interface decisions and regression guard rationale for SECURITY-REVIEWER/REVIEWER."
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "Design artefact created. Key decisions documented: (1) The correction routes PLATFORM_ADMIN derivation through Authorization.roles_from_strings/1 — the single canonical string-to-atom converter — so all authorization consumers share one normalization path. (2) @platform_admin is an atom (:PLATFORM_ADMIN, not \"PLATFORM_ADMIN\"), which is the structural regression guard: an atom can never be a member of a [String.t()] list, so removing roles_from_strings/1 while keeping the atom constant always breaks the exemption and fails the ISS-0808 test suite. (3) The public Plug interface (init/1, call/2) is unchanged; only the internal roles derivation in check_tenant_status/2 changed. (4) No new public functions, no schema changes, no migrations. All three ISS-0808 acceptance criteria trace to concrete design elements."
+  }
+}

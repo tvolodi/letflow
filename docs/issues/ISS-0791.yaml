@@ -1,0 +1,69 @@
+id: ISS-0791
+title: >
+  UAT: the Groups admin surface has never been exercised against a real
+  instance -- ISS-0765's prefix fix has no end-to-end evidence
+discovered_by: ORCH
+discovered_in_run: WF03-ISS0765-20260924
+discovered_at: "2026-09-24T18:04:25Z"
+tags:
+  - uat
+  - frontend
+  - groups
+severity: MAJOR
+description: >
+  Filed by ORCH at ISS-0765's close, on conditions raised independently
+  by REVIEWER (step-03d) and TEST-DESIGNER (step-04) and left explicitly
+  open by both. ISS-0765 corrected six groupsApi calls from a dead
+  /api/v1/admin/groups/ prefix to the real /api/v1/identity/groups, and
+  every gate passed -- but every test in that run exercises a vi.fn()
+  spy whose Response the test itself constructs, so no HTTP ever left
+  the process. FRONTEND-DEV attempted a live probe of
+  http://localhost:4000/api/v1/identity/groups and got HTTP 000, no
+  connection. The fix is sound BY CONSTRUCTION -- the six routes were
+  read out of Letflow.Api.AuthorizedRouter.__authz_routes__/0, and
+  SECURITY-REVIEWER independently re-derived them -- but construction is
+  not execution. A route-macro-versus-actual-mount discrepancy is
+  invisible to every check that run performed. This matters more than
+  usual here: before ISS-0765 the entire Groups admin surface was
+  non-functional in production and nobody noticed, which is itself
+  evidence that nothing exercises it.
+affected_files:
+  - web/src/api/identity.ts
+related:
+  - ISS-0765  # this UAT gap was raised as an open condition during ISS-0765's own close
+  - ISS-0811
+  - ISS-0816
+related_requirements: []
+severity_rationale: >
+  MAJOR -- inherits ISS-0765's own severity: if the route-macro-vs-mount
+  assumption is wrong, the entire Groups admin surface (the thing
+  ISS-0765 claims to have fixed) is still non-functional in production,
+  and nothing in the current pipeline would catch it.
+fix_direction: >
+  Dispatch UAT-RUNNER against a real running instance with a real
+  Keycloak realm once ISS-0765's actual fix (PR #1808) is merged --
+  running this UAT before that merge would test the still-broken
+  backend and produce a false negative. Exercise: list groups, open
+  Manage members, add a member, remove a member, delete an empty group,
+  each verified by real HTTP and real database state. Confirm the
+  GET /api/v1/identity/groups/:id/members response is the paginated
+  envelope {items, next_cursor, count} ISS-0765 retyped GroupMemberPage
+  to, confirm each of the six group routes enforces :GroupsManage
+  against a token lacking that permission, and record whether ISS-0811's
+  (Members column reading 0) and ISS-0816's (members list truncating at
+  50) symptoms are visible on the live surface.
+status: open
+process_note: >
+  BLOCKED on PR #1808 (feature/WF03-ISS0765-20260924, ISS-0765's actual
+  fix) merging to main -- confirmed still OPEN with CI in progress as of
+  2026-09-24T18:25Z via `gh pr view 1808`. Do not run this UAT until
+  that PR is merged; the current main still has the dead
+  /api/v1/admin/groups/ prefix bug, so a UAT run now would just
+  reproduce the known-broken state, not test the fix.
+queue_ref: "Q-818"
+# NOTE: letflow-queue's own atomically-allocated id (818) auto-titled
+# itself "ISS-0818", which does not match this file's real on-disk id
+# ISS-0791 -- established, recurring queue-id/filename divergence
+# pattern for this project (see docs/agents/protocols/TASK_QUEUE.md).
+# queue_ref/github_ref below are authoritative for this file.
+github_ref: "GH-1807"

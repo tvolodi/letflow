@@ -1,0 +1,58 @@
+id: ISS-0824
+title: >
+  CancelInstanceDialog regression test only exercises the dialog component in isolation;
+  a reversion of InstanceDetailPage's dialog-prop expression would not be caught
+discovered_by: REVIEWER (in WF03-BATCH-ISS0809-ISS0811-ISS0814-ISS0815-20260925 Step 3d)
+discovered_in_run: WF03-BATCH-ISS0809-ISS0811-ISS0814-ISS0815-20260925
+discovered_at: "2026-09-25T04:34:58Z"
+severity: MINOR
+tags:
+  - type-safety
+  - test-coverage
+  - frontend
+description: >
+  web/src/components/instances/__tests__/CancelInstanceDialog.iss0809.test.tsx
+  (TC-ISS0809-01, TC-ISS0809-02, TC-ISS0809-03) tests CancelInstanceDialog
+  directly by passing a hard-coded instanceName prop ('hire-process v1.0' or '—').
+  It does not mount InstanceDetailPage and does not verify that the page derives
+  the instanceName prop from useDefinition() rather than from the deprecated
+  instance.definition_name / instance.definition_version fields.
+
+  Consequence: if InstanceDetailPage.tsx were reverted to the pre-ISS-0809 pattern
+  (reading instance.definition_name and instance.definition_version directly — both
+  now typed as optional, returning undefined at runtime), all three TC-ISS0809-*
+  tests would continue to pass because they bypass the page entirely.
+
+  The partial type-system guard: ProcessInstance.definition_name and
+  .definition_version are now declared optional (string | undefined), so TypeScript
+  would produce a type error at the template-literal call site if they were used
+  in a non-null context without a guard. This provides some protection but is not
+  a runtime regression gate.
+
+  The correct test would mount InstanceDetailPage with:
+    - a mocked useInstance() returning an instance without definition_name/version
+    - a mocked useDefinition() returning a definition object with name/version
+  and assert that:
+    - the Cancel button is clickable, opens the dialog
+    - the dialog renders the definition's name and version, not 'undefined'
+
+  This test lives at the InstanceDetailPage level (integration test), not at the
+  CancelInstanceDialog component level.
+affected_files:
+  - web/src/components/instances/__tests__/CancelInstanceDialog.iss0809.test.tsx
+  - web/src/pages/instances/InstanceDetailPage.tsx
+related:
+  - ISS-0809
+severity_rationale: >
+  MINOR — the type change (definition_name?: string) provides partial tsc protection;
+  the integration point is straightforward; the existing bug was already caught manually.
+  No immediate runtime risk, but the coverage gap means a future regression could reach
+  production undetected.
+fix_direction: >
+  Add an integration test for InstanceDetailPage that mocks useInstance and useDefinition,
+  opens the Cancel dialog, and asserts the instanceName shown matches the definition
+  (not a literal 'undefined'). This can be a new test file
+  web/src/pages/instances/__tests__/InstanceDetailPage.cancelDialog.test.tsx.
+queue_ref: null  # not yet registered in letflow-queue
+github_ref: null  # not yet mirrored to GitHub
+status: open

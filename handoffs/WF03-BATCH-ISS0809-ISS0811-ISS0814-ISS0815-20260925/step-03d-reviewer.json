@@ -1,0 +1,73 @@
+{
+  "handoff_id": "rev1ewer-0815-0814-0811-0809step03d",
+  "run_id": "WF03-BATCH-ISS0809-ISS0811-ISS0814-ISS0815-20260925",
+  "workflow_id": "WF-03",
+  "step": "03d",
+  "from_agent": "REVIEWER",
+  "to_agent": "TEST-DESIGNER",
+  "file": "handoffs/WF03-BATCH-ISS0809-ISS0811-ISS0814-ISS0815-20260925/step-03d-reviewer.json",
+  "created_at": "2026-09-25T04:34:58Z",
+  "status": "COMPLETED",
+  "result": {
+    "verdict": "PASS",
+    "summary": "All four frontend-only TypeScript corrections pass the idiom/scope gate. No OTP/Elixir code changed. No new public API surfaces, modules, or abstractions introduced. Decision-record consistency confirmed. One non-blocking type-safety observation filed to the issue queue (ISS-0824).",
+    "findings": [
+      {
+        "issue": "ISS-0815",
+        "verdict": "PASS",
+        "notes": [
+          "id and username promoted from optional (id?: string, username?: string) to required — correct: both are guaranteed by user_map/1. No callers construct partial User objects without these fields; search confirmed.",
+          "roles demoted from required to optional — correct: user_map/1 never emits it. No scope creep.",
+          "created_at removed; inserted_at added as required — matches the actual wire key. UsersPage.tsx Created column updated accordingly.",
+          "Wire-shape test discriminates at both compile time (structural assignment) and runtime (key-set assertion). A reversion adding roles back as required would fail tsc on _userWithoutRoles; a reversion restoring created_at would fail TC-ISS0815-02's key-set equality.",
+          "Legacy user_id?: string kept alongside id: string for backward-compat with callers that use both — documented in the interface comment. No abstraction introduced."
+        ]
+      },
+      {
+        "issue": "ISS-0814",
+        "verdict": "PASS",
+        "notes": [
+          "Pattern is idiomatic and clean: UI holds 'ACTIVE'/'INACTIVE' for display, wire always sends 'active'/'inactive' via status.toLowerCase() as 'active' | 'inactive' — explicit conversion at the submit boundary, not a silent coercion.",
+          "userStatus() bridge function (lines 15-20 UserDetailPage.tsx) is minimal, bounded, and documented. The is_active fallback is a defensive legacy guard explicitly noted as a secondary path; it does not introduce a new abstraction.",
+          "UsersPage.tsx status column correctly compares u.status === 'active' (lowercase). No is_active fallback in the read path — correct, is_active is not emitted by user_map/1.",
+          "No scope creep beyond the stated casing normalisation. AdminUserFilters corrected to send lowercase, matching backend @status_schema allowed list."
+        ]
+      },
+      {
+        "issue": "ISS-0811",
+        "verdict": "PASS",
+        "notes": [
+          "Delete button condition (!group.is_system && !group.member_count) was semantically dead code: group_map/1 never emits is_system or member_count, so both were undefined at runtime, making the condition permanently true. Removal is a no-op functionally and a cleanup idiomatically.",
+          "No security regression: the button was always rendered before the fix; removing the dead condition preserves that behavior. Backend-side deletion constraints remain the enforcement point. TC-ISS0811-03 pins this explicitly.",
+          "Members column removal is in scope (column was showing phantom 0s, not real data). The rationale (adding member_count to group_map/1 would require an aggregate query tracked as a separate requirement) is documented and correct.",
+          "TC-ISS0811-01 (no Members column header) discriminates: restoring the column would introduce a 'Members' columnheader and the test would fail."
+        ]
+      },
+      {
+        "issue": "ISS-0809",
+        "verdict": "PASS",
+        "notes": [
+          "Fix correctly applies the established useDefinition(instance?.definition_id) pattern from prior commit cb3c6c49. No new hook, no new abstraction — consistent with the existing approach.",
+          "ProcessInstance.definition_name and .definition_version correctly marked optional. The '—' em-dash placeholder while definition is loading is idiomatic React data-loading UX.",
+          "Type guard: since definition_name is now string | undefined (optional), tsc would produce an error if InstanceDetailPage used it in a required-string context without a null guard — partial protection against reversion.",
+          "Test coverage gap filed as ISS-0824 (non-blocking): TC-ISS0809-01/02/03 only exercise CancelInstanceDialog in component isolation. A reversion of InstanceDetailPage's dialog prop expression (back to instance.definition_name + instance.definition_version) would not be caught by these tests. The correct test is an integration test at the InstanceDetailPage level."
+        ]
+      }
+    ],
+    "scope_creep_check": "NONE — no new behaviours, abstractions, behaviours, or macros beyond what the stated fixes require. cursor-page-wire-shape.test.ts is ISS-0821/0816 coverage included in the commit trail but not authored in this batch.",
+    "supervision_check": "N/A — no Elixir/OTP code changed",
+    "idiomatic_otp_check": "N/A — frontend-only TypeScript changes",
+    "decision_record_conflicts": "NONE — no ADRs cover User.status casing, Group type shape, or ProcessInstance type contracts specifically. Design doc iss-0815-0814-0811-0809-frontend-type-corrections.md records the decisions with full backend trace. No conflict with docs/migration/decisions/.",
+    "anti_patterns_check": "No entries in docs/anti-patterns.md relevant to frontend wire-type corrections.",
+    "type_safety_observations": [
+      {
+        "observation": "TC-ISS0809-02 tests CancelInstanceDialog in component isolation and does not fail against a reversion of InstanceDetailPage's dialog prop expression. Filed as ISS-0824 (type-safety, test-coverage).",
+        "issue_filed": "ISS-0824",
+        "blocking": false
+      }
+    ],
+    "new_public_surfaces": "NONE — only existing interfaces modified. Test files added are test-only, not API surfaces.",
+    "issues_filed": ["ISS-0824"]
+  },
+  "next_action": "Route to TEST-DESIGNER (Step 03e)"
+}

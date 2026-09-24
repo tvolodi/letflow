@@ -1,0 +1,155 @@
+{
+  "handoff_id": "WF03-ISS0816-20260925-step-02",
+  "run_id": "WF03-ISS0816-20260925",
+  "workflow_id": "WF-03",
+  "step": "Step 2",
+  "from_agent": "ORCH",
+  "to_agent": "CODE-DESIGNER",
+  "file": "handoffs/WF03-ISS0816-20260925/step-02-code-designer.json",
+  "created_at": "2026-09-24T22:41:00Z",
+  "started_at": "2026-09-24T22:41:00Z",
+  "completed_at": "2026-09-24T22:56:00Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S8",
+    "requirement_ids": [],
+    "requirement_text": {},
+    "source_text": {
+      "docs/issues/ISS-0816.yaml": "CORRECTED 2026-09-24 by ISSUE-FIXER (WF03-ISS0816-20260925 Step 1). This record originally claimed: \"has_more IS genuinely emitted by lib/letflow/audit.ex (:276, :295-297), so the field is real for the audit route and absent everywhere Pagination.Page is used. One type covering both cannot be correct for either.\" **That is false, and it was the record's central premise.** audit.ex:276/295-297 is the INTERNAL return of Letflow.Audit.list_entries/1. lib/letflow/routers/audit.ex:203-204 consumes it, passes has_more to the private next_cursor/2, and then page_body/2 (:308-320) hand-builds %{\"items\", \"next_cursor\", \"count\"} as an explicit INV-2 allowlist. has_more never crosses the HTTP boundary. So NO route in Letflow emits has_more. CursorPage<T>.has_more covers zero wire shapes, not two."
+    },
+    "related_handoff_ids": [
+      "WF03-ISS0816-20260925-step-01"
+    ],
+    "artifacts_in": [
+      "handoffs/WF03-ISS0816-20260925/step-01-issue-fixer.json",
+      "docs/issues/ISS-0816.yaml",
+      "docs/issues/ISS-0821.yaml",
+      "web/src/types/api.ts",
+      "web/src/api/audit.ts",
+      "web/src/api/definitions.ts",
+      "web/src/api/dlq.ts",
+      "web/src/api/identity.ts",
+      "web/src/api/instances.ts",
+      "web/src/api/modules.ts",
+      "web/src/api/promotions.ts",
+      "web/src/api/services.ts",
+      "web/src/api/tasks.ts",
+      "web/src/api/tenants.ts",
+      "web/src/pages/admin/AuditLogPage.tsx",
+      "web/src/pages/admin/GroupsPage.tsx",
+      "web/src/pages/dlq/__tests__/DlqPage.pagination.test.tsx",
+      "web/tests/guards/forbidlist.ts",
+      "web/tests/guards/meta-control.spec.ts",
+      "web/tsconfig.app.json",
+      "lib/letflow/api/pagination.ex",
+      "lib/letflow/audit.ex",
+      "lib/letflow/routers/audit.ex",
+      "lib/letflow/routers/definitions.ex",
+      "lib/letflow/routers/dlq.ex",
+      "lib/letflow/routers/identity.ex",
+      "lib/letflow/routers/instances.ex",
+      "lib/letflow/routers/promotions.ex",
+      "lib/letflow/routers/services.ex",
+      "lib/letflow/routers/admin_services.ex",
+      "lib/letflow/routers/tasks.ex",
+      "docs/agents/instructions/core-directives.md"
+    ],
+    "owned_modules": [
+      "lib/letflow/design/"
+    ]
+  },
+  "task": {
+    "description": "WF-03 Step 2 (fix design) for ISS-0816, on branch feature/WF03-ISS0816-20260925. Produce lib/letflow/design/iss-0816-cursorpage-has-more-audit.md. Start from the refuted premise: ISS-0816 originally claimed lib/letflow/audit.ex emits has_more so one shared type covered two wire shapes; it does not. audit.ex:276/295-297 is the internal return of Letflow.Audit.list_entries/1, lib/letflow/routers/audit.ex:203-204 passes that has_more to a private next_cursor/2, and page_body/2 (:308-320) hand-builds an INV-2 allowlist of exactly {\"items\", \"next_cursor\", \"count\"}. No route in Letflow emits has_more, so CursorPage<T>.has_more covers zero wire shapes. ISSUE-FIXER has already tabulated all 15 CursorPage<T> call sites and derived the route table by runtime introspection of __authz_routes__/0; carry that table into the design and verify it by spot-check rather than redoing it. Adopt ISSUE-FIXER's recommended shape unless it can be shown wrong: delete has_more from the shared type, then split on the axis the backend actually varies on -- CursorPage<T> = {items, next_cursor} for the 7 two-key sites, and a new CountedCursorPage<T> = {items, next_cursor, count} for the rest. Four decisions must be stated and justified rather than surveyed: (a) whether the two client-side fabrication sites audit.ts:71 and promotions.ts:265, which compute has_more: Boolean(response.next_cursor) and have zero consumers, are deleted or kept under an honest name; (b) whether GroupMemberPage, RawAuditPage and ISS-0711's TenantListResponse collapse into CountedCursorPage<T> in this run or are left alone, given that collapsing is tidier but widens blast radius and GroupMemberPage was created only the day before by ISS-0765 (dec06da7); (c) whether AC3's GroupsPage members dialog should follow next_cursor or state the truncation in the UI, noting the real default page size is 50 (pagination.ex:53 @default_page_size via identity.ex:546-548) and that .members is now GroupMemberPage rather than CursorPage<T>, so AC3 is no longer coupled to the type change -- including whether it should stay in this run's scope at all; and (d) what TYPE rows 7 and 8 of the audit table (modulesApi.list, modulesApi.listShares) should carry, given they target /api/v1/admin/modules and /admin/module-shares, which do not exist -- Letflow.Routers.ProcessModules is listed at router.ex:82 as deferred to S5 and is filed separately as ISS-0822, so only the type question is in scope. Deliver exact type shapes, exact per-site before/after at file:line, and a test matrix. Design only: no implementation code, no function bodies. Out of scope and already filed, do not design fixes for: the dead limit/offset on definitionsApi.search (ISS-0820); the four test fixtures hand-writing has_more (ISS-0821); the nonexistent modules router (ISS-0822); ISS-0811, ISS-0812, ISS-0813, ISS-0814, ISS-0815. Trap flagged by ISSUE-FIXER: TimelineFeed.tsx's hasMore prop is camelCase, derived from next_cursor, and entirely unrelated -- do not touch it. Timestamps must come from date -u, not the session date. Commit and push the design and this handoff to origin/feature/WF03-ISS0816-20260925, and run mix letflow.lint_handoffs --dir on this file before finishing.",
+    "acceptance_criteria": [
+      "AC1 -- each CursorPage<T> call site is audited and mapped to the route it consumes, with a record of whether that route emits has_more. ISSUE-FIXER's 15-row table is carried into the design and its route-to-builder rows are spot-verified against the actual response builders rather than inherited unchecked.",
+      "AC2 -- the type or types are corrected so that no call site is promised a has_more the route never sends, with the exact target shape of every affected type given and an exact before/after for every affected site at file:line.",
+      "AC3 -- the GroupsPage members dialog either follows next_cursor or explicitly states that the list is truncated; whichever is chosen is justified, and the required API-layer signature change is specified.",
+      "AC4 -- npm run type-check passes under the designed shape, and the route-to-shape mapping is recorded durably enough that a later reader need not re-derive it.",
+      "AC5 -- decisions (a), (b), (c) and (d) are each stated as a decision with a justification, not surveyed as options; no open question is silently resolved by guessing.",
+      "AC6 -- the design contains no implementation code: type declarations and function signatures only, no function bodies and no .ex/.exs code blocks.",
+      "AC7 -- a test matrix is given in which every acceptance criterion maps to at least one runnable check, with the location of each new or changed test named.",
+      "AC8 -- the handoff passes mix letflow.lint_handoffs --dir <this file> before the step completes, and the design plus this handoff are committed and pushed to origin/feature/WF03-ISS0816-20260925."
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "Design written to lib/letflow/design/iss-0816-cursorpage-has-more-audit.md. ISSUE-FIXER's refutation was re-verified, not inherited: all eleven response builders named in its route table were re-read at HEAD and every key set confirmed (audit.ex:308-320, pagination.ex:81-82, definitions.ex:454-458 and :539-544, dlq.ex:140-144, services.ex:131-135, admin_services.ex:198-202, promotions.ex:944-948, instances.ex:954-959, tasks.ex:269-275, identity.ex:552). None emits has_more. Four decisions, each justified. (a) DELETE both fabrication sites rather than rename: zero consumers, and every real pagination consumer already derives next-page availability from next_cursor at the point of use, so a surviving derived boolean in the API layer would only re-create the ambiguity between wire data and manufactured data that is the defect itself; promotions.ts additionally loses its whole .then, which becomes an identity transform. (b) COLLAPSE GroupMemberPage (to an alias, exported name retained, so zero call-site churn) and RawAuditPage (module-private, deleted outright); LEAVE TenantListResponse alone. Rule applied: this fix edits what it falsifies and leaves alone what it does not -- GroupMemberPage's and RawAuditPage's docblocks assert has_more claims this fix makes false, so those lines must be rewritten regardless, whereas TenantListResponse's comment cites total/limit/offset and is untouched by the change. EntityRecordsPage is collapsed for the same reason (its entire documented rationale is has_more) and that is recorded as decision (e). (c) FOLLOW next_cursor, kept in scope, on a finding this step made that raises AC3 above display truncation: GroupsPage.tsx:103-110 computes availableUsers by subtracting the member id set from the user list, so a 50-member cutoff puts every member past the 50th back into the Add-member dropdown and the add mutation fires for a user already in the group. That is a wrong write path; a truncation notice does not stop it. Mechanism is a bounded drain in the API layer (groupsApi.listAllMembers/1, page_size 200, 20-request cap, truncated flag) rather than useInfiniteQuery, which appears nowhere in web/src. (d) KEEP CursorPage<T> for modulesApi.list and listShares, which after the narrowing means modules.ts needs no type edit at all, only a provenance comment naming ISS-0822: with no route there is no ground truth, and the two-key shape is the weakest claim, correct under either envelope S5 might ship, whereas CountedCursorPage<T> would assert a count nothing has ever sent. The design is backed by measurement rather than prediction: the full target shape was trial-applied in the working tree and reverted (git checkout -- web/, tree confirmed clean). Deleting api.ts:17 alone produces exactly four TS2353 errors -- audit.ts(71,7) and DlqPage.pagination.test.tsx(78,63)/(79,64)/(80,58) -- which is why one ISS-0821 fixture file is in scope while the other three are measurably not; promotions.ts:265 did NOT error, so its removal is a clarity edit, not a compile requirement. With the full shape applied, tsc -b --force exits 0, npm run test passes 890 tests across 125 files, and npm run guards passes 48 tests across 4 files. Collapsing TenantListResponse also type-checks clean, so leaving it is a scope choice and is recorded as such. The test matrix has eight rows: type-check, full suite, guards, two unit tests for the drain and its bound, one component test proving the re-add bug is gone, a new forbidlist PATTERNS entry locking has_more out of production source, and its two GRD-UI-04 fixtures -- with the bystander fixture deliberately containing TimelineFeed's camelCase hasMore so the guard can never catch that unrelated prop.",
+    "artifacts_out": [
+      "lib/letflow/design/iss-0816-cursorpage-has-more-audit.md"
+    ],
+    "issues": [
+      {
+        "severity": "MINOR",
+        "description": "New finding, adjacent to AC3 and NOT fixed by this design. web/src/pages/admin/GroupsPage.tsx:62-66 fetches usersApi.list({ page_size: 200 }) and never follows that response's next_cursor. 200 is the server maximum (lib/letflow/api/pagination.ex:50 @max_page_size 200), so a tenant with more than 200 users gets an Add-member dropdown silently missing everyone past the 200th. Same class as ISS-0816 AC3 but a different query and a different endpoint (GET /api/v1/identity/users), so it is outside ISS-0816's stated scope. Reported here for ORCH to allocate an id per ISSUE_QUEUE.md; this step did not file it and did not choose an id.",
+        "affected_requirement": null
+      },
+      {
+        "severity": "MINOR",
+        "description": "Scope note for CODE-DESIGN-VALIDATOR, recorded rather than resolved silently. The design puts web/src/pages/dlq/__tests__/DlqPage.pagination.test.tsx:78-80 in scope even though the four has_more fixtures are ISS-0821. Reason, measured rather than argued: tsconfig.app.json's include is [\"src\"], so src/**/__tests__ is inside npm run type-check, and those three literals are contextually typed by Record<string, CursorPage<DlqEntry>> at :77, producing TS2353 the moment has_more is deleted. The other three ISS-0821 sites were measured as non-breaking (two are cast through as unknown or fed to an untyped vi.fn(); the e2e file is outside include) and are left untouched.",
+        "affected_requirement": null
+      },
+      {
+        "severity": "MINOR",
+        "description": "The design widens slightly beyond the four decisions the dispatch named, by one type: EntityRecordsPage (web/src/types/api.ts:370-377) is collapsed to an alias of the narrowed CursorPage<T>. It is included under the same rule as decision (b) -- its docblock's entire stated reason for the type existing is that CursorPage<T> would claim a has_more the API never sends, which this fix makes false, leaving a structurally identical twin carrying a false rationale. The exported name and its EntityRecord default type argument are retained, so no call site changes, and the collapse was measured to type-check clean. Flagged so the widening is a visible decision rather than an unremarked one.",
+        "affected_requirement": null
+      }
+    ],
+    "git_evidence": {
+      "branch_name": "feature/WF03-ISS0816-20260925",
+      "commit_sha_list": [],
+      "remote_branch": "origin/feature/WF03-ISS0816-20260925",
+      "push_status": "ok",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": "Dispatch CODE-DESIGN-VALIDATOR (WF-03 Step 2 gate) against lib/letflow/design/iss-0816-cursorpage-has-more-audit.md. It should re-derive, not inherit: re-read the eleven response builders in the design's section 2.1 and confirm none emits has_more; confirm the design contains no implementation code (type declarations and signatures only); confirm every one of the four queue-task-816 acceptance criteria maps to a concrete element via section 12; and confirm that the measured claims in section 8 are reproducible -- in particular that deleting web/src/types/api.ts:17 alone yields exactly the four TS2353 errors listed, since that measurement is what justifies putting one ISS-0821 fixture file in scope. On PASS, dispatch FRONTEND-DEV for Step 3 implementation. ORCH should also allocate an issue id for the usersApi.list pagination finding in result.issues[0] before this run closes.",
+    "verification_performed": [
+      "Re-read all eleven response builders named in ISSUE-FIXER's route table at HEAD e512c53a and confirmed each key set; none emits has_more.",
+      "npx tsc -b tsconfig.json --force in web/ at baseline -> exit 0.",
+      "Deleted web/src/types/api.ts:17 in the working tree and re-ran tsc -b --force -> exit 2, exactly four TS2353 errors: src/api/audit.ts(71,7), src/pages/dlq/__tests__/DlqPage.pagination.test.tsx(78,63), (79,64), (80,58). promotions.ts:265 did not error.",
+      "Trial-applied the full designed shape (CountedCursorPage<T>; the 13 retyped sites; EntityRecordsPage and GroupMemberPage aliases; both fabrications deleted; the three DlqPage fixture keys removed) -> tsc -b --force exit 0, zero errors.",
+      "npm run test with the trial shape applied -> 125 test files, 890 tests, all passed (27.70 s).",
+      "npm run guards with the trial shape applied -> 4 files, 48 tests, all passed.",
+      "Trial-collapsed TenantListResponse into CountedCursorPage<Tenant> -> tsc -b --force exit 0, confirming decision (b)'s 'leave it alone' is a scope choice and not a technical constraint.",
+      "grep -rn has_more over web/src excluding __tests__ with the trial shape applied -> only three stale comments remained (promotions.ts:249, api.ts:376, api.ts:478), all of which the design requires rewriting.",
+      "Reverted the entire probe with git checkout -- web/ and confirmed git status --porcelain reported no modification to web/ before writing the design.",
+      "grep for useInfiniteQuery across web/src -> no occurrences, which is why the AC3 drain lives in the API layer rather than introducing a new react-query pattern.",
+      "Read web/tsconfig.app.json (include: [\"src\"]) to establish that src/**/__tests__ is inside npm run type-check and web/tests/e2e is not.",
+      "Read web/tests/guards/meta-control.spec.ts to establish that any new PATTERNS entry requires both an offender and a bystander fixture, which is why the test matrix has T8."
+    ],
+    "decisions": {
+      "a_fabrication_sites": "DELETE both audit.ts:71 and promotions.ts:265 outright; no renamed derived value. Zero consumers read has_more, and every real pagination consumer already derives next-page availability from next_cursor at the point of use, so any surviving API-layer boolean would just re-create the wire-data-versus-manufactured-data ambiguity that is the defect. audit.ts:71 becomes count: response.count, which the route genuinely sends; promotions.ts loses its whole .then, which becomes an identity transform.",
+      "b_collapse": "COLLAPSE GroupMemberPage (alias, exported name retained, zero call-site churn) and RawAuditPage (module-private, deleted). LEAVE TenantListResponse alone. Rule: edit what the fix falsifies, leave alone what it does not -- the first two carry docblocks asserting has_more claims this fix makes false and must be rewritten anyway; TenantListResponse's comment cites total/limit/offset and is untouched by the change, so collapsing it would be a cosmetic edit to a third file owned by an already-resolved issue. EntityRecordsPage collapses under the same rule (decision e). Recorded as a deliberate non-change so a later reader does not read TenantListResponse as an oversight; no issue filed, because it is not a defect.",
+      "c_groupspage": "FOLLOW next_cursor, and keep AC3 in this run's scope. Justification is a finding this step made: GroupsPage.tsx:103-110 derives availableUsers by subtracting the member id set from the user list, so a 50-member cutoff returns every member past the 50th to the Add-member dropdown and the add mutation fires for an existing member. That is a wrong write path, not a wrong display, and a truncation notice does not prevent it. Mechanism: a bounded drain in the API layer (groupsApi.listAllMembers/1, page_size 200, 20-request cap, truncated flag), not useInfiniteQuery, which appears nowhere in web/src. The truncated flag still satisfies AC3's 'states the list is truncated' branch on the pathological path.",
+      "d_modules_rows_7_8": "KEEP the narrowed CursorPage<T>, which means modules.ts needs no type edit at all -- only a provenance comment naming ISS-0822 and router.ex:82. With no route there is no ground truth, so the type is chosen rather than derived, and the two-key shape is the weakest claim: a consumer written against {items, next_cursor} stays correct under either envelope S5 might ship, whereas CountedCursorPage<T> would assert a count nothing has ever sent -- re-creating, on the only two routes with no server, exactly the defect this run removes.",
+      "e_entityrecordspage": "COLLAPSE to an alias of the narrowed CursorPage<T>, name and EntityRecord default type argument retained. Its docblock's entire stated reason for existing is that CursorPage<T> would claim a has_more the API never sends; once that field is gone the two types are structurally identical and the rationale is false. Same rule as decision (b). Measured to type-check clean."
+    },
+    "final_type_shapes": {
+      "CursorPage<T>": "{ items: T[]; next_cursor: string | null } -- the two-key envelope. 7 call sites: definitions.ts:17/50/53, dlq.ts:75, services.ts:40/44, promotions.ts:253. Plus modulesApi.list and listShares as the deliberate weakest claim (decision d). Docblock must state that no Letflow route emits has_more and name routers/audit.ex:308-320 as where the internal has_more is dropped.",
+      "CountedCursorPage<T>": "{ items: T[]; next_cursor: string | null; count: number } -- new, the three-key envelope. 6 call sites plus 2 derived: audit.ts:58/59, AuditLogPage.tsx:35, instances.ts:19, tasks.ts:26/39/59. Docblock must carry the count semantics currently stated only at tenants.ts:25 -- count is length(items) for the current page only, never a cross-page total.",
+      "EntityRecordsPage<T = EntityRecord>": "alias of CursorPage<T>. Name retained, zero call-site change.",
+      "GroupMemberPage": "alias of CountedCursorPage<GroupMember>. Name retained, zero call-site change; identity.ts:7 and :63 untouched by the type decision.",
+      "TenantListResponse": "unchanged -- remains a hand-written { items: Tenant[]; next_cursor: string | null; count: number } in web/src/api/tenants.ts. Deliberate non-change, decision (b).",
+      "groupsApi.members": "(id: string, params?: { cursor?: string; page_size?: number }) => Promise<GroupMemberPage> -- gains the two query params it never accepted.",
+      "groupsApi.listAllMembers": "(id: string) => Promise<{ items: GroupMember[]; truncated: boolean }> -- bounded drain, page_size 200, stops on a null next_cursor, hard cap of 20 requests reported as truncated: true, rejects on the first failed request."
+    },
+    "test_matrix": [
+      "T1 (AC2, AC4) -- npm run type-check (tsc -b tsconfig.json) exits 0. CI + local. Already measured green against the designed shape.",
+      "T2 (AC2) -- npm run test: the full vitest suite stays green; baseline is 125 files / 890 tests. Already measured green against the designed shape.",
+      "T3 (AC2) -- npm run guards stays green with the new forbidlist entry; baseline is 4 files / 48 tests.",
+      "T4 (AC3) -- new web/src/api/__tests__/identity.members.test.ts: stub client.get to return page 1 {items:[m1], next_cursor:'c2', count:1} then page 2 {items:[m2], next_cursor:null, count:1}; assert the drain returns {items:[m1,m2], truncated:false} and that the second request carried cursor 'c2'.",
+      "T5 (AC3) -- same file: stub client.get to always return a non-null next_cursor; assert exactly 20 requests are made and the result is truncated: true.",
+      "T6 (AC3) -- new web/src/pages/admin/__tests__/GroupsPage.members.test.tsx: mock groupsApi.listAllMembers to resolve a member set spanning two pages including u-51 and usersApi.list to include u-51; assert u-51 is NOT rendered as an option in the Add-member select. This is the test for the re-add bug that decision (c) rests on.",
+      "T7 (AC2, AC4) -- new PATTERNS entry in web/tests/guards/forbidlist.ts: name 'has-more-wire-field', a word-boundary regex on has_more, appliesTo 'source', rationale 'ISS-0816', allowedPaths listing only the two remaining ISS-0821 fixtures (PromotionReviewListPage.test.tsx, TaskInboxPage.test.tsx) with an inline comment saying the exemptions go when ISS-0821 lands.",
+      "T8 (AC2) -- the two GRD-UI-04 fixtures meta-control.spec.ts requires for T7: web/tests/guards/fixtures/offender/has-more-wire-field.txt containing has_more, and fixtures/bystander/has-more-wire-field.txt containing next_cursor and TimelineFeed's camelCase hasMore, which must NOT match. The bystander is load-bearing: it is the mechanical guarantee that the guard can never catch TimelineFeed.tsx's unrelated prop."
+    ],
+    "open_questions": [
+      "OQ-1 -- audit.ts:71 becomes count: response.count, a real wire field with no current consumer. Whether AuditLogPage should display a per-page count is a product question, not a defect; FRONTEND-DEV must not invent a UI for it in this run.",
+      "OQ-2 -- the drain's 20-request cap (4000 members) is a safety bound, not derived from any measured or specified maximum group size. If a maximum is ever specified, the constant should be re-derived from it.",
+      "OQ-3 -- section 2.2's route-to-envelope table is hand-maintained and will drift the moment a router changes its response builder. Closing that is ISS-0813's job, not this run's; noted so the mapping is not mistaken for a durable guarantee."
+    ]
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

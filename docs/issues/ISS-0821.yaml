@@ -1,0 +1,49 @@
+id: ISS-0821
+title: >
+  Four web/ test fixtures hand-write has_more into mocks, so they would pass
+  identically against a server that never sends it
+discovered_by: ISSUE-FIXER (in WF03-ISS0816-20260925 Step 1 audit)
+discovered_in_run: WF03-ISS0816-20260925
+discovered_at: "2026-09-24T22:40:11Z"
+severity: MINOR
+tags:
+  - frontend
+  - test-quality
+  - api-contract
+description: >
+  Four test sites fabricate has_more into their mock responses:
+  web/src/pages/dlq/__tests__/DlqPage.pagination.test.tsx:78-80,
+  web/src/pages/promotions/__tests__/PromotionReviewListPage.test.tsx:119 and :270,
+  web/src/pages/tasks/__tests__/TaskInboxPage.test.tsx:134 and :160, and
+  web/tests/e2e/obs04.timeline.e2e.spec.ts:72.
+
+  No Letflow route emits has_more -- it is built internally by audit.ex and dropped
+  before page_body/2 hand-builds the response. So these fixtures assert against a wire
+  shape the server has never produced, and would pass unchanged against a server that
+  never sends the field. This is a self-confirming test: it validates the mock, not
+  the contract.
+
+  Also: CursorPage<T> in web/src/types/api.ts had has_more: boolean as a required
+  field, contradicting Pagination.Page's @derive {Jason.Encoder, only: [:items,
+  :next_cursor, :count]}.
+affected_files:
+  - web/src/types/api.ts
+  - web/src/api/audit.ts
+  - web/src/api/promotions.ts
+  - web/src/pages/dlq/__tests__/DlqPage.pagination.test.tsx
+  - web/src/pages/promotions/__tests__/PromotionReviewListPage.test.tsx
+  - web/src/pages/tasks/__tests__/TaskInboxPage.test.tsx
+  - web/tests/e2e/obs04.timeline.e2e.spec.ts
+related:
+  - ISS-0816
+  - ISS-0813
+severity_rationale: >
+  MINOR -- no production bug; tests still exercise pagination logic. The risk is
+  false confidence: tests can't catch has_more-related regressions they're actively
+  fabricating.
+fix_direction: >
+  Fix CursorPage<T> to match the real wire shape {items, next_cursor, count?}. Remove
+  has_more from all four fixture sites. Add a wire-shape test for CursorPage<T>.
+queue_ref: "Q-821"
+github_ref: "GH-1812"
+status: open

@@ -1,0 +1,40 @@
+id: ISS-0809
+title: >
+  InstanceDetailPage CancelInstanceDialog renders 'undefined v undefined' --
+  reads nonexistent instance.definition_name/definition_version
+discovered_by: REVIEWER (in WF02-REQ371-20260919)
+discovered_in_run: WF02-REQ371-20260919
+discovered_at: "2026-09-24T16:34:08Z"
+severity: MINOR
+tags:
+  - frontend
+  - type-safety
+  - ux
+description: >
+  InstanceDetailPage.tsx:366 passes
+  instanceName={`${instance.definition_name} v${instance.definition_version}`}
+  to <CancelInstanceDialog>. GET /api/v1/instances/:id never sends those two fields
+  (only definition_id), so every operator opening the Cancel dialog sees the literal
+  text 'This will cancel instance undefined v undefined.'
+
+  Root cause is the same type-safety gap as ISS-0745/ISS-0815: ProcessInstance
+  .definition_name/definition_version in web/src/types/api.ts:106-107 are typed as
+  required non-optional string, so neither tsc nor npm run type-check catches either
+  call site. A prior fix (cb3c6c49) fixed the Definition detail row but missed the
+  Cancel dialog.
+affected_files:
+  - web/src/pages/instances/InstanceDetailPage.tsx
+  - web/src/types/api.ts
+related:
+  - ISS-0745
+  - ISS-0815
+severity_rationale: >
+  MINOR -- user-visible UI text is wrong but no data is corrupted; the cancel
+  action still works correctly.
+fix_direction: >
+  Source definition name and version from the separately-fetched useDefinition result
+  (same as cb3c6c49 did for the detail row). Mark ProcessInstance.definition_name/
+  definition_version as optional. Add a test covering the Cancel dialog's rendered text.
+queue_ref: "Q-809"
+github_ref: "GH-1797"
+status: open

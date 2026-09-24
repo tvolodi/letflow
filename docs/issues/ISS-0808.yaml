@@ -1,0 +1,38 @@
+id: ISS-0808
+title: >
+  TenantStatus plug reads auth_context.roles raw instead of
+  Authorization.roles_from_strings/1 for its PLATFORM_ADMIN exemption
+discovered_by: REVIEWER (in WF03-ISS0736-20260921, see docs/issues/ISS-0764.yaml)
+discovered_in_run: WF03-ISS0736-20260921
+discovered_at: "2026-09-24T16:34:06Z"
+severity: MINOR
+tags:
+  - backend
+  - security
+  - authorization
+description: >
+  lib/letflow/plugs/tenant_status.ex:92-95 decides 'is this actor PLATFORM_ADMIN'
+  with a raw string-list membership check on conn.assigns.auth_context.roles, rather
+  than routing through Letflow.Api.Authorization.roles_from_strings/1 like every other
+  authorization consumer.
+
+  SECURITY-REVIEWER's own disposition: not currently exploitable -- the two paths
+  agree on PLATFORM_ADMIN's representation today. The risk is silent divergence if
+  roles_from_strings/1's normalization ever changes (case handling, aliasing, a role
+  rename), with no test catching the stale raw check.
+affected_files:
+  - lib/letflow/plugs/tenant_status.ex
+  - test/letflow/plugs/tenant_status_test.exs
+related:
+  - ISS-0764
+severity_rationale: >
+  MINOR -- not currently exploitable; the two paths produce identical outcomes today.
+  Risk is future divergence on role-string normalization changes.
+fix_direction: >
+  Replace the raw @platform_admin "PLATFORM_ADMIN" string with the atom :PLATFORM_ADMIN,
+  and convert the roles list via Authorization.roles_from_strings/1 before the
+  PLATFORM_ADMIN cond check. Add regression tests that would fail if the plug reverted
+  to raw string comparison.
+queue_ref: "Q-808"
+github_ref: "GH-1796"
+status: open

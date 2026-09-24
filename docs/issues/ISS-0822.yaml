@@ -1,0 +1,43 @@
+id: ISS-0822
+title: >
+  The whole /admin/modules SPA surface is built on Letflow.Routers.ProcessModules,
+  which does not exist -- every call 404s
+discovered_by: ISSUE-FIXER (in WF03-ISS0816-20260925 Step 1 audit)
+discovered_in_run: WF03-ISS0816-20260925
+discovered_at: "2026-09-24T22:40:12Z"
+severity: MAJOR
+tags:
+  - frontend
+  - dead-code
+  - routing
+description: >
+  web/src/api/modules.ts targets /api/v1/admin/modules and
+  /api/v1/admin/module-shares. Neither route exists: there is no
+  lib/letflow/routers/process_modules.ex file at all, no forward for either path in
+  api_pipeline.ex or router.ex, and router.ex:82 lists Letflow.Routers.ProcessModules
+  in its table of routers still DEFERRED to S5 (process-module packaging).
+
+  This is reachable by a real user: web/src/router.tsx:88 routes path 'admin/modules'
+  to <ProcessModulesPage />, imported at router.tsx:5, with web/src/hooks/useModules.ts
+  built on top. So an operator who navigates to /admin/modules gets a page whose every
+  request 404s.
+
+  Strictly wider than ISS-0765, which was six calls on one admin surface -- this is an
+  entire page with no backend behind it.
+affected_files:
+  - web/src/router.tsx
+  - web/src/api/modules.ts
+  - lib/letflow/router.ex
+related:
+  - ISS-0765
+  - ISS-0813
+severity_rationale: >
+  MAJOR -- a real admin user reaches a fully non-functional page with no error
+  indication.
+fix_direction: >
+  Remove the admin/modules SPA route until S5 implements the backend. Update the
+  router.ex deferred table. Correct the modules.ts URL prefix from /api/v1/admin/
+  to the expected future prefix. Record the decision against S5's scope.
+queue_ref: "Q-822"
+github_ref: "GH-1813"
+status: open

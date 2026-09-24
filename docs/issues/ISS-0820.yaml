@@ -1,0 +1,37 @@
+id: ISS-0820
+title: >
+  definitionsApi.search sends dead limit/offset params that handle_search/1 never reads
+discovered_by: ISSUE-FIXER (in WF03-ISS0816-20260925 Step 1 audit)
+discovered_in_run: WF03-ISS0816-20260925
+discovered_at: "2026-09-24T22:40:10Z"
+severity: MINOR
+tags:
+  - frontend
+  - api-contract
+description: >
+  web/src/api/definitions.ts's definitionsApi.search sends limit and offset query
+  parameters, but lib/letflow/routers/definitions.ex's handle_search/1 (:519-534)
+  reads only q, cursor and page_size. The extra params are silently ignored by the
+  backend. Live caller at web/src/hooks/useDefinitions.ts:94.
+
+  Consequence: any caller believing it is limiting or offsetting a definition search is
+  not -- it gets the backend's own default page regardless. Same contract-drift family
+  as ISS-0813.
+affected_files:
+  - web/src/api/definitions.ts
+  - web/src/hooks/useDefinitions.ts
+  - web/src/pages/definitions/DefinitionListPage.tsx
+  - web/src/api/queryKeys.ts
+related:
+  - ISS-0813
+severity_rationale: >
+  MINOR -- no data corruption; search still works, just ignores the pagination params
+  the caller believed it was setting.
+fix_direction: >
+  Remove limit and offset from definitionsApi.search params; replace with cursor and
+  page_size which handle_search/1 actually reads. Update useDefinitions.ts and
+  DefinitionListPage.tsx callers. Add a test asserting the exact query parameters the
+  search call emits.
+queue_ref: "Q-820"
+github_ref: "GH-1811"
+status: open

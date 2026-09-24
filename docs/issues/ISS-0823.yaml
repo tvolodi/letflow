@@ -1,0 +1,44 @@
+id: ISS-0823
+title: >
+  GroupsPage fetches users at the server-max page_size 200 and never follows
+  next_cursor, so a tenant over 200 users gets a silently incomplete Add-member dropdown
+discovered_by: CODE-DESIGNER (in WF03-ISS0816-20260925 Step 2)
+discovered_in_run: WF03-ISS0816-20260925
+discovered_at: "2026-09-24T22:57:48Z"
+severity: MINOR
+tags:
+  - frontend
+  - pagination
+  - ux
+description: >
+  web/src/pages/admin/GroupsPage.tsx:62-66 calls usersApi.list({ page_size: 200 })
+  and reads only the first page -- next_cursor is never followed. 200 is not an
+  arbitrary large number, it is the server's hard ceiling: lib/letflow/api/pagination.ex:50
+  @max_page_size 200, enforced by validate_page_size (:142, rejects > 200).
+
+  So this is already the largest single request the API permits, and there is no larger
+  page to ask for: a tenant with more than 200 users silently gets an Add-member
+  dropdown missing everyone past the first 200, with no error and no indication.
+
+  Same class as ISS-0816's AC3 (the members list truncating at 50) but a different
+  endpoint, and the two COMPOUND: GroupsPage.tsx:103-110 computes availableUsers by
+  subtracting the member id set from the user list, so both inputs to that subtraction
+  are independently truncated.
+affected_files:
+  - web/src/pages/admin/GroupsPage.tsx
+  - web/src/api/identity.ts
+  - web/src/api/queryKeys.ts
+  - web/src/hooks/useAdminUsers.ts
+related:
+  - ISS-0816
+severity_rationale: >
+  MINOR -- affects tenants with >200 users only; the feature still works for smaller
+  tenants. Silently incomplete rather than broken.
+fix_direction: >
+  Either drain all pages (bounded by a cap, matching ISS-0816's mechanism for the
+  members side) or state plainly that the list is incomplete via a visible warning.
+  Correct the availableUsers subtraction to be safe with truncated inputs. Add a test
+  covering the >200 user scenario.
+queue_ref: "Q-823"
+github_ref: "GH-1814"
+status: open

@@ -1,0 +1,45 @@
+{
+  "handoff_id": "WF03-ISS0788-20260924-step-04b",
+  "run_id": "WF03-ISS0788-20260924",
+  "workflow_id": "WF-03",
+  "step": "Step 4b (Test Design Gate)",
+  "to_agent": "TEST-DESIGN-VALIDATOR",
+  "from_agent": "ORCH",
+  "status": "COMPLETED",
+  "created_at": "2026-09-24T01:04:09Z",
+  "started_at": "2026-09-24T01:04:09Z",
+  "context": {
+    "branch_name": "feature/WF03-ISS0788-20260924",
+    "issue_id": "ISS-0788",
+    "test_file": "test/letflow/routers/instances_test.exs",
+    "test_summary": "2 new tests with @tag :iss_0788: over-quota → 409, tenant_not_found → 422. Fail-first: FunctionClauseError on both pre-fix. Post-fix: 2/2 pass. Full suite 55/55.",
+    "artifacts_in": [
+      "test/letflow/routers/instances_test.exs",
+      "docs/issues/ISS-0788.yaml"
+    ]
+  },
+  "task": {
+    "description": "Execute Step 4b (TEST-DESIGN-VALIDATOR HARD GATE) for ISS-0788.\n\nRead independently:\n1. test/letflow/routers/instances_test.exs -- find the @tag :iss_0788 tests\n2. docs/issues/ISS-0788.yaml -- AC3 specifically\n\nCheck:\n- AC3: does the test drive through POST /instances/:id/attachments (route level)? Does it assert 4xx (not 500)? Does it cover BOTH atoms?\n- Fail-first credible? (FunctionClauseError on render_upload_attachment/2 when clause missing = real failure)\n- Tests are isolated? (each creates its own state)\n\nVerdict: PASS or FAIL.\n\nOutput:\n1. Write handoffs/WF03-ISS0788-20260924/step-04b-test-design-gate.json COMPLETED PASS or FAIL\n2. git add + commit + push\n\nReport: PASS or FAIL",
+    "acceptance_criteria": [
+      "AC3 covered (route-level, both error atoms, 4xx not 500)",
+      "Fail-first credible",
+      "Tests isolated"
+    ]
+  },
+  "result": {
+    "status": "COMPLETED",
+    "verdict": "PASS",
+    "completed_at": "2026-09-24T01:10:00Z",
+    "checks": {
+      "ac3_route_layer": "PASS -- dispatch_multipart -> dispatch/1 -> Letflow.Routers.Instances.call/2 (real Plug router, not direct render_upload_attachment call)",
+      "ac3_both_atoms": "PASS -- :storage_quota_exceeded -> 409, :tenant_not_found -> 422",
+      "ac3_4xx_not_5xx": "PASS -- conn.status == 409 and conn.status == 422 asserted in both tests",
+      "fail_first_credible": "PASS -- pre-fix failure is FunctionClauseError at render_upload_attachment/2:1058 (missing clause, existing function); in Plug router this becomes 500; test asserts 409/422 so fails pre-fix, passes post-fix; not UndefinedFunctionError so mandatory-mutant rule does not apply",
+      "test_isolation": "PASS -- each test provisions its own tenant (slug_prefix iss0788-quota / iss0788-norow); no shared hardcoded state",
+      "no_skip_tags": "PASS",
+      "no_todo_stubs": "PASS",
+      "no_hardcoded_secrets": "PASS"
+    },
+    "note": "Pre-fix failure type (FunctionClauseError on missing clause vs UndefinedFunctionError on missing function) is the key discriminator for whether mandatory mutant validation applies. This is missing-clause, not missing-function; fail-first is genuine."
+  }
+}

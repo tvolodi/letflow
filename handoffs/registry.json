@@ -6912,6 +6912,25 @@
       "released_lock": true,
       "last_known_step": "Step Final COMPLETED PASS",
       "note": "WF02-REQ396: Add HUMAN_TASK escalation_timer_duration to graph schema + wire SCH-04 escalation path. Stage S7. Queue task 756 (GH#1644). Merged PR #1759 (squash, SHA 6fd04c2c) to main 2026-09-23. CI green (run 35920337172). Queue 756 released 2026-09-23T21:24:56Z."
+    },
+    {
+      "run_id": "WF03-ISS0788-20260924",
+      "requirement_id": null,
+      "issue_id": "ISS-0788",
+      "queue_task_id": 787,
+      "github_issue_number": 1761,
+      "status": "COMPLETED",
+      "owned_modules": [
+        "lib/letflow/routers/instances.ex",
+        "lib/letflow/design/req389-attachment-content-type-allowlist.md"
+      ],
+      "started_at": "2026-09-24T00:20:19Z",
+      "lock_released_at": "2026-09-24T07:45:00Z",
+      "released_lock": true,
+      "last_known_step": "Step Final PASS",
+      "merge_sha": "9a224098",
+      "pr_number": 1763,
+      "note": "WF-03 for ISS-0788: render_upload_attachment/3 missing clauses for :storage_quota_exceeded and :tenant_not_found. REQ-390 implementation gap. Also: correct REQ-389 design doc §0 false claim. Queue task 787 (GH#1761). PR #1763 merged squash to main as 9a224098."
     }
   ]
 }

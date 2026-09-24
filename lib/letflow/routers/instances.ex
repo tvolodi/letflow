@@ -1093,6 +1093,14 @@ defmodule Letflow.Routers.Instances do
     Response.service_unavailable(conn, "content scan is temporarily unavailable, please retry")
   end
 
+  defp render_upload_attachment(conn, {:error, :storage_quota_exceeded}) do
+    Response.conflict(conn, "tenant storage quota has been reached")
+  end
+
+  defp render_upload_attachment(conn, {:error, :tenant_not_found}) do
+    Response.unprocessable(conn, "request tenant does not exist")
+  end
+
   # An Ecto.Changeset failure here means file_name exceeded 255 characters
   # (REQ-211 schema's only realistic changeset-rejection path via this
   # route's own construction) or another required_fields gap this route's

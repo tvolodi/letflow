@@ -1,0 +1,45 @@
+{
+  "handoff_id": "WF03-ISS0788-20260924-step-00",
+  "run_id": "WF03-ISS0788-20260924",
+  "workflow_id": "WF-03",
+  "step": "Step 00",
+  "to_agent": "ELIXIR-DEV",
+  "from_agent": "ORCH",
+  "status": "COMPLETED",
+  "result": "PASS",
+  "created_at": "2026-09-24T00:20:19Z",
+  "started_at": "2026-09-24T00:20:19Z",
+  "completed_at": "2026-09-24T00:22:00Z",
+  "context": {
+    "branch_name": "feature/WF03-ISS0788-20260924",
+    "issue_id": "ISS-0788",
+    "issue_file": "docs/issues/ISS-0788.yaml",
+    "stage": "S6",
+    "issue_text": "render_upload_attachment/3 in lib/letflow/routers/instances.ex has no clause for {:error, :storage_quota_exceeded} or {:error, :tenant_not_found}. Either return from Attachments.upload/2 crashes the route with FunctionClauseError instead of a handled 4xx. REQ-390 implementation gap. Also: lib/letflow/design/req389-attachment-content-type-allowlist.md §0 falsely claims the :storage_quota_exceeded clause already exists.",
+    "owned_modules": [
+      "lib/letflow/routers/instances.ex",
+      "lib/letflow/design/req389-attachment-content-type-allowlist.md"
+    ],
+    "artifacts_in": [
+      "docs/issues/ISS-0788.yaml"
+    ]
+  },
+  "task": {
+    "description": "Execute Step 00 (GIT SETUP) for WF03-ISS0788-20260924 per docs/agents/protocols/GIT_SETUP.md.\n\nBranch: feature/WF03-ISS0788-20260924\n\nUncommitted files to stage:\n- handoffs/registry.json (ISS-0788 entry added)\n- handoffs/orchestrator.log\n- handoffs/WF03-ISS0788-20260924/step-00-git-setup.json (this file)\n\nDO NOT stage scripts/fix_registry.py, web/tests/e2e/.pipeline-state/\n\nProcedure:\n1. git checkout main; git pull --ff-only\n2. git checkout -b feature/WF03-ISS0788-20260924\n3. Stage and commit above 3 files: 'fix(WF03-ISS0788-20260924): Step 00 git setup'\n4. git push -u origin feature/WF03-ISS0788-20260924\n5. Complete handoff PASS",
+    "acceptance_criteria": [
+      "Branch created and pushed",
+      "Registry entry committed"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "commit_sha": "6864b6ce",
+    "branch": "feature/WF03-ISS0788-20260924",
+    "files_staged": [
+      "handoffs/registry.json",
+      "handoffs/orchestrator.log",
+      "handoffs/WF03-ISS0788-20260924/step-00-git-setup.json"
+    ],
+    "notes": "Branch created and pushed; registry entry committed"
+  }
+}

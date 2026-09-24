@@ -44,6 +44,16 @@ severity_rationale: >
   MINOR rather than MAJOR -- unlike ISS-0765, every affected function has zero
   production callers, so nothing is broken for a user today. It is latent: the
   first caller wired to any of them gets a silent 404.
+
+  Added by SECURITY-REVIEWER (step-03c, WF03-ISS0765-20260924): not all of these
+  are latent in the same way, and the difference should drive fix order. Most are
+  read routes, where a dead prefix degrades to an empty screen. But
+  usersApi.delete and usersApi.resetPassword are access-revocation and
+  credential-reset. The first caller wired to a dead revoke route degrades to an
+  operator believing an account was disabled when the request actually 404'd --
+  a silent security-relevant false confirmation, not an empty screen. Fix the
+  revocation-class functions first. Severity stays MINOR: zero callers today is
+  independently verified.
 fix_direction: >
   Audit every usersApi and rolesApi function in web/src/api/identity.ts against
   __authz_routes__/0, and for each one either correct the URL, delete the

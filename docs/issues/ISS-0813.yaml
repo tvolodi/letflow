@@ -46,10 +46,21 @@ severity_rationale: >
   production-breaking defect (ISS-0765) and two others. Three independent
   recurrences in one file is evidence the class does not close by fixing
   instances.
+
+  Added by SECURITY-REVIEWER (step-03c, WF03-ISS0765-20260924): every instance
+  of this class so far -- ISS-0736, ISS-0782, ISS-0765, ISS-0812 -- has failed
+  CLOSED. A dead route 404s, so the damage is a broken screen. The inverse the
+  same guard would cover is a path literal drifting onto a route with a
+  DIFFERENT policy key, which is this class failing OPEN. That has not happened
+  yet, and this run confirmed all six group routes are uniformly :GroupsManage
+  -- but nothing prevents it, and it would be far quieter than a 404.
 fix_direction: >
   Generate a fixture from Letflow.Api.AuthorizedRouter.__authz_routes__/0 and add
   a vitest asserting every /api/v1 path literal in web/src/api/ resolves against
-  it, naming the offending literal and file on failure. Wire it into npm run
+  it, naming the offending literal and file on failure. Per SECURITY-REVIEWER's
+  step-03c note, assert METHOD + PATH + POLICY KEY, not just method and path --
+  method+path alone catches only the fail-closed half of the class, and
+  __authz_routes__/0 already carries the policy key. Wire it into npm run
   check or the guards suite so it runs unprompted. A cheap interim guard, if the
   full check is deferred: assert /api/v1/admin/ appears in web/src/api/ only for
   the genuinely-mounted /api/v1/admin/services route.

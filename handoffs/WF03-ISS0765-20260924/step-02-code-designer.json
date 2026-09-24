@@ -254,49 +254,49 @@
     "artifacts_out": [
       "lib/letflow/design/iss-0765-groupsapi-route-prefix-audit.md"
     ],
-    "next_action": "Re-route to CODE-DESIGN-VALIDATOR for rework iteration 1 re-gate. The two blocking/rework findings F-1 and F-2 are addressed in design sections 7, 7.1, 8 and the new path-convention table in section 1; no decision (a)-(d) changed."
+    "next_action": "Re-route to CODE-DESIGN-VALIDATOR for rework iteration 1 re-gate. The two blocking/rework findings F-1 and F-2 are addressed in design sections 7, 7.1, 8 and the new path-convention table in section 1; no decision (a)-(d) changed.",
+    "rework_history": [
+      {
+        "iteration": 1,
+        "gate_artefact": "handoffs/WF03-ISS0765-20260924/step-02b-design-gate.json",
+        "gate_commit": "6469739d",
+        "verdict_reworked_from": "FAIL",
+        "findings": [
+          {
+            "id": "F-1",
+            "severity": "BLOCKING",
+            "validator_statement": "Row 8 T-0765-MEMBERS-SHAPE cannot fail pre-fix. The mandated ISS-0736 harness installs a window.fetch spy whose Response the test itself defines, so no URL is dialled and there is no 404. client.ts:158-169 returns response.json() verbatim, and T is erased at runtime, so the pre-fix client.get<User[]> and the post-fix client.get<GroupMemberPage> behave identically on the same spy body. The row PASSES under npm test pre-fix, and the section summary \"rows 1-11, each of which fails against the pre-fix commit\" was false as written.",
+            "accepted": true,
+            "resolution": "ACCEPTED IN FULL -- the error was CODE-DESIGNER's, not TEST-DESIGNER's to discover. Option taken: FOLD, not re-classify. Old rows 7 (T-0765-MEMBERS-PATH) and 8 (T-0765-MEMBERS-SHAPE) are merged into a single row 7, T-0765-MEMBERS, whose one `it` block carries both a path half (i) and the no-unwrap half (ii). Half (i) fails pre-fix on the /api/v1/admin/ literal, so the row genuinely goes red. Half (ii) is explicitly re-classified in the design as a FORWARD REGRESSION GUARD against a future .items unwrap -- INV-B's guard -- and is stated NOT to be fail-first evidence. Rows 9-12 renumber to 8-11; every cross-reference in the AC map (section 8) was updated.",
+            "what_now_carries_decision_b_fail_first": "A new section 7.1 states plainly that NO runtime row can, because request<T> is a verbatim pass-through and T is erased at runtime -- so a type-only change has no runtime failure to demonstrate. WF-03 Step 4's \"when the pre-fix failure is non-existence, mutate\" clause is applied by analogy, and the mutants are specified in the design rather than left to TEST-DESIGNER: M-1a keeps the retype and reverts ONLY the six GroupsPage.tsx edits, then runs npm run type-check and must produce tsc errors at GroupsPage.tsx :103/:223/:227/:228 (and npm test must still pass under it -- that is the point: it shows the runtime suite is blind to the retype while type-check is not). M-1b is the opposite-direction control: revert the retype to client.get<User[]> while keeping the GroupsPage edits, and tsc must error on membersPage?.items over User[]. WF-03 Step 4's revert-and-verify discipline is restated as binding (throwaway worktree, or git checkout -- plus a quoted-empty git status --porcelain web/ and a green re-run).",
+            "section_summary_corrected": "The false sentence is gone. Section 7.1 replaces it with an explicit two-column table: FAILS pre-fix = rows 1, 2, 3, 4, 5, 6, 7(i), 8, 9, 10; PASSES pre-fix (enumeration / forward guard, never red either way) = rows 7(ii) and 11."
+          },
+          {
+            "id": "F-2",
+            "severity": "REWORK",
+            "validator_statement": "Sections 1.3, 2, 3.1 and 4 used a bare `identity.ex` for the ROUTER while section 1.2 used it for the CONTEXT. Following section 4's \"identity.ex:483-489\" literally lands in lib/letflow/identity.ex, where those lines are unrelated moduledoc prose; the real target is lib/letflow/routers/identity.ex.",
+            "accepted": true,
+            "resolution": "ACCEPTED IN FULL. A binding \"Path convention\" table was added at the head of section 1 naming all three identity files (router / context / API client) and stating that no bare identity.ex appears, with the 483-489 collision cited as the concrete reason. Every previously-bare citation was rewritten to lib/letflow/routers/identity.ex:NNN (:227-229, :468-472, :525-537, :483-489, :729-740, :735, :749-757, :829-831). Section 1.3's table, whose rows used bare :NNN, now carries an explicit footnote that every bare :NNN in it is a line in lib/letflow/routers/identity.ex, and its last row gained the previously-missing (:588)."
+          },
+          {
+            "id": "note-stale-premise",
+            "severity": "NOT-REWORK",
+            "validator_statement": "The routers/identity.ex:483-489 comment's own premise -- \"no existing Letflow caller depends on the array shape either way\" -- is already stale, since GroupsPage.tsx:76 passes [userId] today. Decision (c) makes that comment true rather than contradicting it.",
+            "accepted": true,
+            "resolution": "Folded into section 4 as a \"Note for a later reader\": decision (c) does not contradict the recorded backend decision, it restores the comment's premise by removing the one caller that had drifted from it. Costs one paragraph and forestalls a re-litigation."
+          },
+          {
+            "id": "OQ-1",
+            "severity": "RESOLVED-BY-GATE",
+            "validator_statement": "OQ-1 resolved CODE-DESIGNER's way: the ISS-0811 carve-out wins, Group stays untouched. No rework to section 3.1 or section 5 on that ground.",
+            "accepted": true,
+            "resolution": "No change required. OQ-1 is left in the design as the record of how the scope overlap was resolved and by whom."
+          }
+        ],
+        "sections_confirmed_unchanged_by_the_gate": "Sections 1-6, 8 and 9 survived the validator's independent re-derivation, and decisions (a)-(d) all stand on verified premises: frontend_developer_guide.md:83-88 confirmed verbatim, resolve_member_user_id/1's two clauses confirmed at lib/letflow/routers/identity.ex:525-531, the zero-callers grep reproduced, and the source-scan.spec.ts `fetch(` constraint confirmed real and whole-file. No decision was revisited in this rework.",
+        "downstream_issue_filed_from_this_step": "The section 11 User.status finding is now ISS-0814 (queue 814, GH #1802), verified against source by ORCH."
+      }
+    ]
   },
-  "rework_count": 1,
-  "rework_history": [
-    {
-      "iteration": 1,
-      "gate_artefact": "handoffs/WF03-ISS0765-20260924/step-02b-design-gate.json",
-      "gate_commit": "6469739d",
-      "verdict_reworked_from": "FAIL",
-      "findings": [
-        {
-          "id": "F-1",
-          "severity": "BLOCKING",
-          "validator_statement": "Row 8 T-0765-MEMBERS-SHAPE cannot fail pre-fix. The mandated ISS-0736 harness installs a window.fetch spy whose Response the test itself defines, so no URL is dialled and there is no 404. client.ts:158-169 returns response.json() verbatim, and T is erased at runtime, so the pre-fix client.get<User[]> and the post-fix client.get<GroupMemberPage> behave identically on the same spy body. The row PASSES under npm test pre-fix, and the section summary \"rows 1-11, each of which fails against the pre-fix commit\" was false as written.",
-          "accepted": true,
-          "resolution": "ACCEPTED IN FULL -- the error was CODE-DESIGNER's, not TEST-DESIGNER's to discover. Option taken: FOLD, not re-classify. Old rows 7 (T-0765-MEMBERS-PATH) and 8 (T-0765-MEMBERS-SHAPE) are merged into a single row 7, T-0765-MEMBERS, whose one `it` block carries both a path half (i) and the no-unwrap half (ii). Half (i) fails pre-fix on the /api/v1/admin/ literal, so the row genuinely goes red. Half (ii) is explicitly re-classified in the design as a FORWARD REGRESSION GUARD against a future .items unwrap -- INV-B's guard -- and is stated NOT to be fail-first evidence. Rows 9-12 renumber to 8-11; every cross-reference in the AC map (section 8) was updated.",
-          "what_now_carries_decision_b_fail_first": "A new section 7.1 states plainly that NO runtime row can, because request<T> is a verbatim pass-through and T is erased at runtime -- so a type-only change has no runtime failure to demonstrate. WF-03 Step 4's \"when the pre-fix failure is non-existence, mutate\" clause is applied by analogy, and the mutants are specified in the design rather than left to TEST-DESIGNER: M-1a keeps the retype and reverts ONLY the six GroupsPage.tsx edits, then runs npm run type-check and must produce tsc errors at GroupsPage.tsx :103/:223/:227/:228 (and npm test must still pass under it -- that is the point: it shows the runtime suite is blind to the retype while type-check is not). M-1b is the opposite-direction control: revert the retype to client.get<User[]> while keeping the GroupsPage edits, and tsc must error on membersPage?.items over User[]. WF-03 Step 4's revert-and-verify discipline is restated as binding (throwaway worktree, or git checkout -- plus a quoted-empty git status --porcelain web/ and a green re-run).",
-          "section_summary_corrected": "The false sentence is gone. Section 7.1 replaces it with an explicit two-column table: FAILS pre-fix = rows 1, 2, 3, 4, 5, 6, 7(i), 8, 9, 10; PASSES pre-fix (enumeration / forward guard, never red either way) = rows 7(ii) and 11."
-        },
-        {
-          "id": "F-2",
-          "severity": "REWORK",
-          "validator_statement": "Sections 1.3, 2, 3.1 and 4 used a bare `identity.ex` for the ROUTER while section 1.2 used it for the CONTEXT. Following section 4's \"identity.ex:483-489\" literally lands in lib/letflow/identity.ex, where those lines are unrelated moduledoc prose; the real target is lib/letflow/routers/identity.ex.",
-          "accepted": true,
-          "resolution": "ACCEPTED IN FULL. A binding \"Path convention\" table was added at the head of section 1 naming all three identity files (router / context / API client) and stating that no bare identity.ex appears, with the 483-489 collision cited as the concrete reason. Every previously-bare citation was rewritten to lib/letflow/routers/identity.ex:NNN (:227-229, :468-472, :525-537, :483-489, :729-740, :735, :749-757, :829-831). Section 1.3's table, whose rows used bare :NNN, now carries an explicit footnote that every bare :NNN in it is a line in lib/letflow/routers/identity.ex, and its last row gained the previously-missing (:588)."
-        },
-        {
-          "id": "note-stale-premise",
-          "severity": "NOT-REWORK",
-          "validator_statement": "The routers/identity.ex:483-489 comment's own premise -- \"no existing Letflow caller depends on the array shape either way\" -- is already stale, since GroupsPage.tsx:76 passes [userId] today. Decision (c) makes that comment true rather than contradicting it.",
-          "accepted": true,
-          "resolution": "Folded into section 4 as a \"Note for a later reader\": decision (c) does not contradict the recorded backend decision, it restores the comment's premise by removing the one caller that had drifted from it. Costs one paragraph and forestalls a re-litigation."
-        },
-        {
-          "id": "OQ-1",
-          "severity": "RESOLVED-BY-GATE",
-          "validator_statement": "OQ-1 resolved CODE-DESIGNER's way: the ISS-0811 carve-out wins, Group stays untouched. No rework to section 3.1 or section 5 on that ground.",
-          "accepted": true,
-          "resolution": "No change required. OQ-1 is left in the design as the record of how the scope overlap was resolved and by whom."
-        }
-      ],
-      "sections_confirmed_unchanged_by_the_gate": "Sections 1-6, 8 and 9 survived the validator's independent re-derivation, and decisions (a)-(d) all stand on verified premises: frontend_developer_guide.md:83-88 confirmed verbatim, resolve_member_user_id/1's two clauses confirmed at lib/letflow/routers/identity.ex:525-531, the zero-callers grep reproduced, and the source-scan.spec.ts `fetch(` constraint confirmed real and whole-file. No decision was revisited in this rework.",
-      "downstream_issue_filed_from_this_step": "The section 11 User.status finding is now ISS-0814 (queue 814, GH #1802), verified against source by ORCH."
-    }
-  ]
+  "rework_count": 1
 }

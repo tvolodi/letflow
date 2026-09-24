@@ -163,25 +163,23 @@
       "observed": "SECURITY-REVIEWER's Step 3c completed at 2026-09-24T17:31:00Z with verdict PASS while this gate was running. Its artefact was untracked in the working tree mid-review; ORCH then committed it as 6d6f8c2e and followed with e4bff8fb (sharpening ISS-0812/0813 per that gate), advancing HEAD from 317fcc75 to e4bff8fb while this review was in progress.",
       "decision": "Left both alone; this commit stages only handoffs/WF03-ISS0765-20260924/step-03d-reviewer.json. The concurrent commits were checked against this gate's subject rather than assumed harmless: git diff bcddcebf..HEAD -- web/ lib/ is EMPTY, so e4bff8fb and 6d6f8c2e touch only docs/issues/, handoffs/ and orchestrator.log. The gated code is byte-identical to the tree this verdict was derived from, and the verdict stands unchanged on the advanced HEAD.",
       "note_for_orch": "Both Step 3 gates are now PASS and independently reached that verdict on different grounds -- SECURITY-REVIEWER on authorization-surface narrowing, this gate on design conformance. Neither contradicts the other."
-    }
-  },
-  "gate_decision": {
-    "verdict": "PASS",
-    "blocking_findings": [],
-    "unblocks": "WF-03 Step 4 -- TEST-DESIGNER may now write web/src/api/__tests__/identity.groupsApi.test.ts against the design's eleven-row matrix.",
-    "conditions_carried_forward": [
-      "N-1 (from the design gate): M-1a's predicted tsc error sites are a FLOOR, not an exact-match assertion. Record verbatim whatever tsc emits; do NOT adjust the mutant to manufacture a diagnostic at :228.",
-      "N-3 (from the design gate): Step 4b must APPLY at least one mutant itself rather than accept TEST-DESIGNER's reported outcome.",
-      "The mutants assume the post-fix tree -- run them against bcddcebf or later, not against main.",
-      "Step 4 must not write a whole-file /api/v1/admin/ absence assertion over identity.ts: six rolesApi literals legitimately survive (verified this step) and such an assertion would fail for the wrong reason.",
-      "Integration evidence gap: no live-backend verification exists for this fix. Carry to UAT-RUNNER and do not let Step 5 close ISS-0765 claiming end-to-end proof.",
-      "ISS-0765's own fix_direction says to 'correct .get/.update to the real prefix', which is unsatisfiable -- design section 2 resolved it by deletion. DOC-UPDATER must record the divergence when closing, not claim a correction that was not made."
-    ]
-  },
-  "issues": [],
-  "new_findings": [],
-  "artifacts_out": [
-    "handoffs/WF03-ISS0765-20260924/step-03d-reviewer.json"
-  ],
-  "next_action": "ORCH: REVIEWER gate is GREEN. Both Step 3 gates (3c SECURITY-REVIEWER, 3d REVIEWER) now PASS. Advance to WF-03 Step 4 (TEST-DESIGNER), carrying N-1, N-3 and the four other conditions above into the Step 4/4b handoffs."
+    },
+    "gate_decision": {
+      "verdict": "PASS",
+      "blocking_findings": [],
+      "unblocks": "WF-03 Step 4 -- TEST-DESIGNER may now write web/src/api/__tests__/identity.groupsApi.test.ts against the design's eleven-row matrix.",
+      "conditions_carried_forward": [
+        "N-1 (from the design gate): M-1a's predicted tsc error sites are a FLOOR, not an exact-match assertion. Record verbatim whatever tsc emits; do NOT adjust the mutant to manufacture a diagnostic at :228.",
+        "N-3 (from the design gate): Step 4b must APPLY at least one mutant itself rather than accept TEST-DESIGNER's reported outcome.",
+        "The mutants assume the post-fix tree -- run them against bcddcebf or later, not against main.",
+        "Step 4 must not write a whole-file /api/v1/admin/ absence assertion over identity.ts: six rolesApi literals legitimately survive (verified this step) and such an assertion would fail for the wrong reason.",
+        "Integration evidence gap: no live-backend verification exists for this fix. Carry to UAT-RUNNER and do not let Step 5 close ISS-0765 claiming end-to-end proof.",
+        "ISS-0765's own fix_direction says to 'correct .get/.update to the real prefix', which is unsatisfiable -- design section 2 resolved it by deletion. DOC-UPDATER must record the divergence when closing, not claim a correction that was not made."
+      ]
+    },
+    "issues": [],
+    "new_findings": [],
+    "artifacts_out": [],
+    "next_action": "ORCH: REVIEWER gate is GREEN. Both Step 3 gates (3c SECURITY-REVIEWER, 3d REVIEWER) now PASS. Advance to WF-03 Step 4 (TEST-DESIGNER), carrying N-1, N-3 and the four other conditions above into the Step 4/4b handoffs."
+  }
 }

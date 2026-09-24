@@ -7,6 +7,13 @@
   "status": "COMPLETED",
   "created_at": "2026-09-24T08:46:30Z",
   "started_at": "2026-09-24T08:46:30Z",
+  "task": {
+    "description": "Security review for WF03-ISS0774-20260924 Step 3c. Scope check: is the one-line change to select_live_row/2 in lib/letflow/routers/help.ex in scope for INV-1 through INV-8? It is a private function body change with no new route, no authorization change, no tenant-data path modification.",
+    "acceptance_criteria": [
+      "Scope determination: in-scope or out-of-scope with reasoning",
+      "No hardcoded secrets or security invariant violations"
+    ]
+  },
   "result": {
     "status": "OUT_OF_SCOPE",
     "notes": "One-line change to a private function (select_live_row/2) in lib/letflow/routers/help.ex. No new route, no authorization change, no tenant-data path modification. Not in scope for INV-1 through INV-8.",

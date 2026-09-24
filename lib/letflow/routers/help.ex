@@ -180,7 +180,7 @@ defmodule Letflow.Routers.Help do
     case candidates do
       [] -> nil
       [single] -> single
-      many -> Enum.max_by(many, & &1.updated_at)
+      many -> Enum.max_by(many, &{DateTime.to_unix(&1.updated_at, :microsecond), &1.id})
     end
   end
 

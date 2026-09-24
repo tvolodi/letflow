@@ -49,7 +49,6 @@
     },
     "summary": "All five gate checks PASS. The new test 'when two live rows have the same process_definition_id, the row with the later updated_at wins regardless of microsecond position' is a genuine fail-first regression proof: it would have failed against the old Enum.max_by structural-comparison code and passes against the fixed integer-based comparison. AC1 satisfied."
   },
-  "next_action": "Route to TEST-RUNNER (Step 4c)",
   "rework_count": 0,
   "max_rework": 3
 }

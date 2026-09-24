@@ -1,0 +1,59 @@
+{
+  "run_id": "WF03-ISS0808-20260925",
+  "agent": "TEST-RUNNER",
+  "step": "04c",
+  "timestamp": "2026-09-25T04:45:00+05:00",
+  "status": "PASS",
+  "commands_run": [
+    "cd C:\\Users\\tvolo\\dev\\ai-dala\\letflow-2 && docker compose up -d postgres",
+    "cd C:\\Users\\tvolo\\dev\\ai-dala\\letflow-2 && mix deps.get",
+    "cd C:\\Users\\tvolo\\dev\\ai-dala\\letflow-2 && MIX_ENV=test mix test test/letflow/plugs/tenant_status_test.exs --trace"
+  ],
+  "environment": {
+    "elixir_version": "1.20.3 (compiled with Erlang/OTP 29)",
+    "mix_version": "Mix 1.20.3",
+    "postgres_container": "letflow-2-postgres-1 (healthy, port 5472)",
+    "fix_commit": "97c50b5d",
+    "LETFLOW_DB_PORT": "5472"
+  },
+  "output_summary": {
+    "total_tests": 20,
+    "passed": 20,
+    "failed": 0,
+    "skipped": 0,
+    "duration_seconds": 0.7,
+    "exunit_summary_line": "Result: 20 passed",
+    "seed": 616448,
+    "excluded_tags": ["keycloak", "wasm_hang", "lua_wallclock_race"]
+  },
+  "iss0808_tests_status": [
+    {
+      "describe_block": "ISS-0808 — PLATFORM_ADMIN check uses Authorization.roles_from_strings/1",
+      "test": "a PLATFORM_ADMIN caller (string role) is exempt via roles_from_strings normalization",
+      "line": 323,
+      "status": "PASS",
+      "duration_ms": 7.9
+    },
+    {
+      "describe_block": "ISS-0808 — PLATFORM_ADMIN check uses Authorization.roles_from_strings/1",
+      "test": "a non-PLATFORM_ADMIN caller is not exempt, even with valid roles",
+      "line": 335,
+      "status": "PASS",
+      "duration_ms": 6.0
+    },
+    {
+      "describe_block": "ISS-0808 — PLATFORM_ADMIN check uses Authorization.roles_from_strings/1",
+      "test": "an unknown role string is not exempt (roles_from_strings/1 filters out unknown strings)",
+      "line": 344,
+      "status": "PASS",
+      "duration_ms": 8.7
+    }
+  ],
+  "notes": [
+    "mix deps.get succeeded (network available in this environment); fetched earmark_parser 1.4.46, pdf 0.8.2, eqrcode 0.2.1.",
+    "All 3 ISS-0808 describe-block tests PASSED.",
+    "All 20 tests in tenant_status_test.exs PASSED with no failures.",
+    "The fix in lib/letflow/plugs/tenant_status.ex (commit 97c50b5d) correctly uses Authorization.roles_from_strings/1 and the atom @platform_admin (:PLATFORM_ADMIN) so the atom-vs-atom comparison in 'not in roles' works correctly.",
+    "Tests ran against real Postgres (sandboxed Ecto transactions, async: true, rolled back per test)."
+  ]
+}

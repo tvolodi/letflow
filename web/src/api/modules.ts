@@ -40,12 +40,18 @@ export interface ModuleShare {
   granted_by: string
 }
 
+// NOTE (ISS-0813): lib/letflow/plugs/api_pipeline.ex mounts no /modules or
+// /module-shares sub-router. These paths will 404 until the backend is
+// implemented. Only the /admin/services sub-router is mounted under /admin;
+// the prefix corrected here from the wrong /admin/modules form (ISS-0813).
+// Expected future prefix: /api/v1/modules.
+
 export const modulesApi = {
   list: (params?: { cursor?: string; page_size?: number }) =>
-    client.get<CursorPage<ProcessModuleCatalogEntry>>('/api/v1/admin/modules', params as Record<string, unknown>),
+    client.get<CursorPage<ProcessModuleCatalogEntry>>('/api/v1/modules', params as Record<string, unknown>),
 
   get: (moduleId: string, version: string) =>
-    client.get<ProcessModuleCatalogEntry>(`/api/v1/admin/modules/${moduleId}/${version}`),
+    client.get<ProcessModuleCatalogEntry>(`/api/v1/modules/${moduleId}/${version}`),
 
   register: (body: {
     module_id: string
@@ -53,20 +59,20 @@ export const modulesApi = {
     owning_definition_id: string
     interface_schema?: Record<string, unknown>
     exportable?: boolean
-  }) => client.post<ProcessModuleCatalogEntry>('/api/v1/admin/modules', body),
+  }) => client.post<ProcessModuleCatalogEntry>('/api/v1/modules', body),
 
   publish: (moduleId: string, version: string) =>
-    client.post<PublishModuleResult>(`/api/v1/admin/modules/${moduleId}/${version}/publish`, {}),
+    client.post<PublishModuleResult>(`/api/v1/modules/${moduleId}/${version}/publish`, {}),
 
   listShares: (moduleId: string) =>
-    client.get<CursorPage<ModuleShare>>(`/api/v1/admin/module-shares?module_id=${encodeURIComponent(moduleId)}`),
+    client.get<CursorPage<ModuleShare>>(`/api/v1/module-shares?module_id=${encodeURIComponent(moduleId)}`),
 
   grantShare: (body: {
     granting_tenant_id: string
     module_id: string
     receiving_tenant_id: string
-  }) => client.post<ModuleShare>('/api/v1/admin/module-shares', body),
+  }) => client.post<ModuleShare>('/api/v1/module-shares', body),
 
   revokeShare: (grantId: string) =>
-    client.delete<void>(`/api/v1/admin/module-shares/${grantId}`),
+    client.delete<void>(`/api/v1/module-shares/${grantId}`),
 }

@@ -6,7 +6,6 @@ import type {
   GroupMemberAddResult,
   GroupMemberPage,
   Role,
-  RolePermission,
   ApiToken,
   IssuedToken,
   PagedResponse,
@@ -28,10 +27,14 @@ export const usersApi = {
     client.patch<User>(`/api/v1/identity/users/${id}`, body),
 
   resetPassword: (id: string, newPassword: string) =>
-    client.post<void>(`/api/v1/users/${id}/reset-password`, { password: newPassword }),
+    // NOTE (ISS-0813): `POST /identity/users/:id/reset-password` does not exist in
+    // Letflow.Routers.Identity.__authz_routes__/0. This function is dead until the
+    // backend route is added. Prefix corrected from /api/v1/users/ (ISS-0782 gap).
+    client.post<void>(`/api/v1/identity/users/${id}/reset-password`, { password: newPassword }),
 
-  delete: (id: string) =>
-    client.delete<void>(`/api/v1/users/${id}`),
+  // `usersApi.delete` removed in ISS-0813.
+  // `DELETE /identity/users/:id` does not exist in Letflow.Routers.Identity.__authz_routes__/0
+  // at any prefix. Do not re-add until a backend route exists.
 }
 
 // ── Groups ─────────────────────────────────────────────────────────────────────
@@ -69,35 +72,27 @@ export const rolesApi = {
   list: () =>
     client.get<PagedResponse<Role>>('/api/v1/identity/roles'),
 
-  get: (id: string) =>
-    client.get<Role>(`/api/v1/admin/roles/${id}`),
-
   create: (body: { name: string; description?: string }) =>
-    client.post<Role>('/api/v1/admin/roles', body),
+    client.post<Role>('/api/v1/identity/roles', body),
 
-  update: (id: string, body: Partial<{ description: string }>) =>
-    client.patch<Role>(`/api/v1/admin/roles/${id}`, body),
-
-  delete: (id: string) =>
-    client.delete<void>(`/api/v1/admin/roles/${id}`),
-
-  grantPermission: (id: string, perm: Omit<RolePermission, 'id'>) =>
-    client.post<RolePermission>(`/api/v1/admin/roles/${id}/permissions`, perm),
-
-  revokePermission: (id: string, permId: string) =>
-    client.delete<void>(`/api/v1/admin/roles/${id}/permissions/${permId}`),
+  // rolesApi.get, rolesApi.update, rolesApi.delete, rolesApi.grantPermission, and
+  // rolesApi.revokePermission were removed in ISS-0813.
+  // `GET/PATCH/DELETE /roles/:id` and `POST/DELETE /roles/:id/permissions` do not
+  // exist in Letflow.Routers.Identity.__authz_routes__/0 at any prefix — these are
+  // unimplemented backend operations, not mis-prefixed ones.
+  // Do not re-add a client function until a backend route exists (WF-01 requirement).
 }
 
 // ── API Tokens ─────────────────────────────────────────────────────────────────
 
 export const tokensApi = {
   list: () =>
-    client.get<{ items: ApiToken[] }>('/api/v1/auth/tokens'),
+    client.get<{ items: ApiToken[] }>('/api/v1/identity/tokens'),
 
   /** Returns the raw token value once — store it immediately */
   create: (body: { user_id: string; roles: string[]; expires_at?: string }) =>
-    client.post<IssuedToken>('/api/v1/auth/tokens', body),
+    client.post<IssuedToken>('/api/v1/identity/tokens', body),
 
   revoke: (id: string) =>
-    client.delete<void>(`/api/v1/auth/tokens/${id}`),
+    client.delete<void>(`/api/v1/identity/tokens/${id}`),
 }

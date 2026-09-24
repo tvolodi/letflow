@@ -125,4 +125,20 @@ export const PATTERNS: GuardPattern[] = [
     allowedPaths: [],
     rationale: 'DIRECTIVE T-1',
   },
+  {
+    // ISS-0813: Only /api/v1/admin/services is mounted under the /admin prefix in
+    // lib/letflow/plugs/api_pipeline.ex. Any other /api/v1/admin/... path literal is
+    // a dead prefix — the same class of defect that produced ISS-0736, ISS-0782, and
+    // ISS-0765. This guard fires when /api/v1/admin/ appears NOT followed by "services".
+    name: 'dead-admin-prefix',
+    regex: /\/api\/v1\/admin\/(?!services)/,
+    appliesTo: 'source',
+    allowedPaths: [
+      // Only legitimate user of /api/v1/admin/ in web/src/api/
+      'web/src/api/services.ts',
+      // Test files document historical violations in comments and assertion strings
+      'web/src/api/__tests__/',
+    ],
+    rationale: 'ISS-0813',
+  },
 ]

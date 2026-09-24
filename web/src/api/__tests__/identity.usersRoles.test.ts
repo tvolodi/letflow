@@ -93,7 +93,7 @@ describe('ISS-0782 -- Users admin screen call sites hit the real, router-backed 
     const fetchSpy = vi.fn().mockImplementation(() => jsonResponse({ id: 'u-3' }))
     window.fetch = fetchSpy as unknown as typeof window.fetch
 
-    await usersApi.update('u-3', { status: 'INACTIVE', is_active: false })
+    await usersApi.update('u-3', { status: 'inactive', is_active: false })
 
     expect(fetchSpy).toHaveBeenCalledTimes(1)
     const [url, init] = fetchSpy.mock.calls[0] as [string, RequestInit]

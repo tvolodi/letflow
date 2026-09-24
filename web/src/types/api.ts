@@ -435,7 +435,8 @@ export interface User {
   username: string
   display_name: string
   email: string
-  status: string
+  // Lowercase "active"/"inactive" — matches Ecto.Enum [:active, :inactive] (ISS-0814)
+  status: 'active' | 'inactive'
   auth_source: string
   inserted_at: string
   updated_at: string

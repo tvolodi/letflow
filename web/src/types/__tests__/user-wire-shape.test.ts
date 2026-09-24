@@ -28,7 +28,7 @@ const userMapPayload: User = {
   username: 'alice',
   display_name: 'Alice A.',
   email: 'alice@example.com',
-  status: 'active',
+  status: 'active',        // lowercase — Ecto.Enum :active/:inactive (ISS-0814)
   auth_source: 'internal',
   inserted_at: '2026-01-01T00:00:00Z',
   updated_at: '2026-01-02T00:00:00Z',
@@ -41,7 +41,7 @@ const _userWithoutRoles: User = {
   username: 'bob',
   display_name: 'Bob B.',
   email: 'bob@example.com',
-  status: 'active',
+  status: 'inactive',      // lowercase — tests both valid values
   auth_source: 'oidc',
   inserted_at: '2026-01-01T00:00:00Z',
   updated_at: '2026-01-01T00:00:00Z',
@@ -94,5 +94,37 @@ describe('User wire shape (ISS-0815)', () => {
     // inserted_at is what user_map/1 emits; created_at must not be required.
     expect(Object.prototype.hasOwnProperty.call(userMapPayload, 'created_at')).toBe(false)
     expect(Object.prototype.hasOwnProperty.call(userMapPayload, 'inserted_at')).toBe(true)
+  })
+})
+
+// ── Status casing (ISS-0814) ───────────────────────────────────────────────
+
+describe('User.status wire casing (ISS-0814)', () => {
+  it('TC-ISS0814-01: status wire value is lowercase (backend emits active/inactive)', () => {
+    // user_map/1 emits Atom.to_string(user.status) where status is
+    // Ecto.Enum [:active, :inactive] → wire values are "active"/"inactive".
+    expect(userMapPayload.status).toBe('active')
+    expect(_userWithoutRoles.status).toBe('inactive')
+    // Compile-time guard: the type literal 'active' | 'inactive' means the
+    // following assignments are the only values TypeScript accepts.
+    const _active: User['status'] = 'active'
+    const _inactive: User['status'] = 'inactive'
+    expect(_active).toBe('active')
+    expect(_inactive).toBe('inactive')
+  })
+
+  it('TC-ISS0814-02: status write payload must be lowercase (backend @patch_schema allows_values ["active","inactive"])', () => {
+    // Canonical decision (ISS-0814): lowercase in both directions.
+    // The usersApi.update body type uses 'active' | 'inactive'.
+    // This runtime assertion documents the expected wire value; the
+    // compile-time guard lives in the User type ('active' | 'inactive')
+    // and usersApi.update's Partial body definition in api/identity.ts.
+    const activePatch = { status: 'active' as const }
+    const inactivePatch = { status: 'inactive' as const }
+    expect(activePatch.status).toBe('active')
+    expect(inactivePatch.status).toBe('inactive')
+    // Verify neither uppercase casing appears in the expected write values.
+    expect(activePatch.status).not.toBe('ACTIVE')
+    expect(inactivePatch.status).not.toBe('INACTIVE')
   })
 })

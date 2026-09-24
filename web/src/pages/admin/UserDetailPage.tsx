@@ -13,8 +13,8 @@ function userId(user: User): string {
 }
 
 function userStatus(user: User): 'ACTIVE' | 'INACTIVE' {
-  const up = user.status.toUpperCase()
-  if (up === 'ACTIVE' || up === 'INACTIVE') return up
+  if (user.status === 'active') return 'ACTIVE'
+  if (user.status === 'inactive') return 'INACTIVE'
   return user.is_active ? 'ACTIVE' : 'INACTIVE'
 }
 
@@ -86,7 +86,8 @@ export default function UserDetailPage() {
               {
                 display_name: displayName.trim(),
                 email: email.trim(),
-                status,
+                // Backend accepts only lowercase "active"/"inactive" (ISS-0814)
+                status: status.toLowerCase() as 'active' | 'inactive',
                 is_active: status === 'ACTIVE',
                 role_ids: selectedRoleIds,
                 group_ids: selectedGroupIds,

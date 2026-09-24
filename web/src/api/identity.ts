@@ -24,7 +24,7 @@ export const usersApi = {
   create: (body: { username: string; email: string; display_name: string; password: string; role_ids?: string[] }) =>
     client.post<User>('/api/v1/identity/users', body),
 
-  update: (id: string, body: Partial<{ display_name: string; email: string; status: 'ACTIVE' | 'INACTIVE'; is_active: boolean; role_ids: string[]; group_ids: string[] }>) =>
+  update: (id: string, body: Partial<{ display_name: string; email: string; status: 'active' | 'inactive'; is_active: boolean; role_ids: string[]; group_ids: string[] }>) =>
     client.patch<User>(`/api/v1/identity/users/${id}`, body),
 
   resetPassword: (id: string, newPassword: string) =>

@@ -4,7 +4,7 @@ import { useTenantScopedQueryKeys } from '@/api/useTenantScopedQueryKeys'
 
 export type AdminUserFilters = {
   search: string
-  status: 'ALL' | 'ACTIVE' | 'INACTIVE'
+  status: 'ALL' | 'active' | 'inactive'
   page: number
   page_size: number
 }
@@ -75,7 +75,7 @@ export function useDeactivateAdminUser(userId: string) {
   const queryClient = useQueryClient()
   const adminKeys = useTenantScopedQueryKeys().admin
   return useMutation({
-    mutationFn: () => usersApi.update(userId, { status: 'INACTIVE', is_active: false }),
+    mutationFn: () => usersApi.update(userId, { status: 'inactive', is_active: false }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: adminKeys.userDetail(userId) })
       queryClient.invalidateQueries({ queryKey: adminKeys.users() })

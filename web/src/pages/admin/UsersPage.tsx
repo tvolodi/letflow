@@ -85,8 +85,8 @@ export default function UsersPage() {
       id: 'status',
       header: 'Status',
       accessor: (u) => (
-        <span style={{ color: u.is_active ? 'var(--color-success-dark)' : 'var(--text-disabled)', fontWeight: 600, fontSize: 'var(--text-xs)' }}>
-          {u.is_active ? 'ACTIVE' : 'INACTIVE'}
+        <span style={{ color: u.status === 'active' ? 'var(--color-success-dark)' : 'var(--text-disabled)', fontWeight: 600, fontSize: 'var(--text-xs)' }}>
+          {u.status === 'active' ? 'ACTIVE' : 'INACTIVE'}
         </span>
       ),
     },

@@ -61,3 +61,15 @@ process_note: >
   Still orthogonal to REQ-397 (no file this PR touches is implicated), so
   not treated as a blocker there, but the frequency/severity assessment
   above may need revisiting by whoever picks this issue up next.
+
+  UPDATE 2026-09-24 (ORCH, PR #1794 merge): reproduced again, 2/2
+  identical, on PR #1794's CI backend gate (a one-line test-data-only
+  change to test/mix/tasks/letflow_check_deferral_staleness_test.exs,
+  nowhere near test/letflow/identity_test.exs or
+  test/support/bpm_default_realm_displacement.ex). Same two tests, same
+  Ecto.NoResultsError at bpm_default_realm_displacement.ex:118, both
+  reruns. Admin-merged past it per established precedent (RELEASE-
+  VALIDATOR's REQ-397/#1672 call above) since the diff cannot plausibly
+  be the cause. Reproduction rate now high enough across enough unrelated
+  PRs that this should be picked up and fixed rather than continuing to
+  be bypassed indefinitely -- consider raising severity from MINOR.

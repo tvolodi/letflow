@@ -1,0 +1,66 @@
+{
+  "handoff_id": "WF02-REQ395-20260924-step-03b",
+  "run_id": "WF02-REQ395-20260924",
+  "workflow_id": "WF-02",
+  "step": "Step 3b",
+  "to_agent": "TEST-DESIGN-VALIDATOR",
+  "from_agent": "ORCH",
+  "status": "COMPLETED",
+  "created_at": "2026-09-24T04:16:58Z",
+  "started_at": "2026-09-24T04:18:00Z",
+  "completed_at": "2026-09-24T04:19:00Z",
+  "context": {
+    "branch_name": "feature/WF02-REQ395-20260924",
+    "requirement_ids": ["REQ-395"],
+    "stage": "S7",
+    "requirement_text": {
+      "REQ-395": "Deploy SwiftRoute's sequential high-value shipment-approval ProcessDefinition as a live, browsable definition on a real tenant on QA.\nAC1: ProcessDefinition exists live on QA, confirmed via definitions-list API.\nAC2: Instance with declared_value: 750 → pending ops-review task, then pending ceo-approval task.\nAC3: Instance with declared_value: 400 → no ceo-approval task.\nAC4: [DEFERRED to after ISS-0739]"
+    },
+    "artifacts_in": [
+      "test/letflow/scripts/seed_swiftroute_definition_test.exs",
+      "test/specs/REQ-395.md",
+      "test/fixtures/qa/swiftroute_process_definition.json"
+    ]
+  },
+  "task": {
+    "description": "Execute Step 3b (Test Design Gate) for REQ-395. This is a HARD GATE.\n\nWorkspace: c:\\Users\\tvolo\\dev\\ai-dala\\letflow\nBranch: feature/WF02-REQ395-20260924\n\nRead independently:\n1. test/letflow/scripts/seed_swiftroute_definition_test.exs\n2. test/specs/REQ-395.md\n3. The requirement's acceptance criteria (in context above)\n\nDo NOT use TEST-DESIGNER's summary. Read the actual test file yourself.\n\nFor each MUST acceptance criterion, check:\n1. AC1 (definition exists on QA): Is there a test or documented procedure? (A CI unit test cannot verify live QA -- a manual procedure in test/specs/REQ-395.md is acceptable)\n2. AC2 (declared_value 750 → ceo-approval task): Is there a test or documented procedure?\n3. AC3 (declared_value 400 → no ceo-approval task): Is there a test or documented procedure?\n4. Payload drift guard (not an explicit AC but necessary for regression): Is there an automated test guarding against the seed script diverging from process_route_approval.yaml?\n\nIMPORTANT: ACs 1-3 cannot be run in CI (require live QA + credentials). A test spec (test/specs/REQ-395.md) documenting the manual procedure is acceptable coverage for these ACs, provided:\n- It is specific enough to be executed by anyone following it (not vague)\n- It references the correct script and endpoints\n- It names the specific commands to run for each AC\n\nCheck that the 5 unit tests in test/letflow/scripts/seed_swiftroute_definition_test.exs:\n- Are runnable (no compile errors visible from reading the file)\n- Cover the key structural assertions (node IDs, edge IDs, escalation, CEL condition, fallback target)\n- Use real file reads (not hardcoded strings)\n- Are properly isolated (async: true, no shared state)\n\nFAIL conditions:\n- Any MUST AC has neither an automated test nor a documented manual procedure\n- Tests have obvious compile errors\n- Tests hardcode the data they're supposed to verify from the fixture files\n\nComplete handoff (step-03b-test-design-gate.json): status COMPLETED, result.status PASS or FAIL, issues list any failures, next_action 'Route to TEST-RUNNER (Step 4)'.",
+    "acceptance_criteria": [
+      "AC1-AC3 each have a documented procedure in test/specs/REQ-395.md OR a runnable automated test",
+      "5 unit tests cover payload drift detection",
+      "Tests use real file reads not hardcoded data",
+      "No obvious compile errors in test file"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "issues": [],
+    "ac_verdicts": {
+      "AC1": "PASS — test/specs/REQ-395.md §AC1 documents exact command: `bash scripts/seed_swiftroute_definition.sh` + curl to `https://qa.bizdala.com/api/v1/definitions?name=Shipment+Approval&status=active`, pass condition `.items[0].status == \"ACTIVE\"`. Specific and executable.",
+      "AC2": "PASS — test/specs/REQ-395.md §AC2 documents exact curl commands to create instance with `declared_value:750`, check first pending task node_id == \"ops-review\", complete ops-review, check next task node_id == \"ceo-approval\". Specific and executable.",
+      "AC3": "PASS — test/specs/REQ-395.md §AC3 documents procedure (same as AC2 with `declared_value:400`), pass condition: next pending task is `release-shipment` or transition to `end-approved`, not `ceo-approval`. Acceptable specificity.",
+      "AC4": "DEFERRED — not in scope per requirement"
+    },
+    "unit_test_verdicts": {
+      "compile_errors": "NONE — syntax is valid Elixir; no missing aliases (ExUnit.Case, Jason, YamlElixir, MapSet all available; yaml_elixir present in deps/)",
+      "real_file_reads": "PASS — setup_all uses File.read!/1 + Jason.decode!/1 for JSON fixture and YamlElixir.read_from_file/1 for YAML fixture; no hardcoded payload data",
+      "async_safe": "PASS — async: true; no DB, no HTTP, no process state; setup_all returns plain map",
+      "no_skip_tags": "PASS — no @tag :skip in file",
+      "no_todo_placeholders": "PASS — no 'TODO: implement test' in file",
+      "no_hardcoded_secrets": "PASS",
+      "coverage": {
+        "TC-395-01": "node IDs — all YAML node IDs appear in JSON MapSet ✓",
+        "TC-395-02": "edge IDs — all YAML edge IDs appear in JSON MapSet ✓",
+        "TC-395-03": "escalation attributes — ops-review.attributes.escalation_timer_duration == PT2H, escalation_role == role-ceo ✓",
+        "TC-395-04": "CEL condition — edge e3 condition contains 'declared_value > 500' (JSON has 'variables.declared_value > 500'; substring match is correct) ✓",
+        "TC-395-05": "fallback target — fallback-ops-review.target == ceo-approval ✓"
+      }
+    },
+    "notes": [
+      "TEST-DESIGNER labeled the drift-guard unit tests 'AC4' in the test module and spec. The requirement's AC4 is actually DEFERRED (live instance automation per ISS-0739). This labeling is confusing but harmless: the drift tests are bonus regression guards that exceed the required AC coverage, not a failure condition.",
+      "AC3 manual procedure is brief ('Same as AC2 but declared_value: 400') but references a fully specified procedure and supplies the pass condition. Acceptable."
+    ]
+  },
+  "next_action": "Route to TEST-RUNNER (Step 4)"
+  "rework_count": 0,
+  "max_rework": 3
+}

@@ -6948,7 +6948,7 @@
       "started_at": "2026-09-24T03:52:29Z",
       "lock_released_at": null,
       "released_lock": false,
-      "last_known_step": "Step 00 PENDING",
+      "last_known_step": "Step 00 PASS commit 1081c29e",
       "merge_sha": null,
       "pr_number": null,
       "note": "WF-02 for REQ-395: deploy SwiftRoute sequential high-value shipment-approval process definition as live browsable definition on QA tenant. Queue task 755. ORCH stale lock force-released and reclaimed 2026-09-24."

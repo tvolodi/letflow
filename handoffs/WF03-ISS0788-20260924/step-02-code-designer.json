@@ -1,0 +1,32 @@
+{
+  "handoff_id": "WF03-ISS0788-20260924-step-02",
+  "run_id": "WF03-ISS0788-20260924",
+  "workflow": "WF-03",
+  "step": "Step 2 (Fix Design)",
+  "to_agent": "CODE-DESIGNER",
+  "from_agent": "ORCH",
+  "status": "PENDING",
+  "created_at": "2026-09-24T00:26:21Z",
+  "started_at": "2026-09-24T00:26:21Z",
+  "context": {
+    "branch_name": "feature/WF03-ISS0788-20260924",
+    "issue_id": "ISS-0788",
+    "diagnosis_summary": "render_upload_attachment/2 (private, instances.ex) has 5 clauses: {:ok, _}→201, :file_too_large→413, :infected→422, :scan_unavailable→503, %Ecto.Changeset{}→422. Missing: {:error, :storage_quota_exceeded} and {:error, :tenant_not_found}. Both atoms can be returned by upload/2 per its @spec. Design doc req389-attachment-content-type-allowlist.md does not exist on disk -- AC4 trivially satisfied. Fix: add 2 new function heads. Issue-fixer suggests 409 for storage_quota_exceeded (distinct from existing 413/415/422/503), 422 for tenant_not_found (matching admin_services.ex:229 convention).",
+    "artifacts_in": [
+      "lib/letflow/routers/instances.ex",
+      "lib/letflow/repository/attachments.ex",
+      "docs/issues/ISS-0788.yaml"
+    ]
+  },
+  "task": {
+    "description": "Execute Step 2 (Fix Design) for ISS-0788.\n\nWorkspace: c:\\Users\\tvolo\\dev\\ai-dala\\letflow\nBranch: feature/WF03-ISS0788-20260924\n\nDESIGN ONLY -- no implementation.\n\nRead:\n1. lib/letflow/routers/instances.ex -- render_upload_attachment/2 and its callers\n2. The Response module -- what does Response.conflict/2 return? Does it exist? What about Response.unprocessable/2? Find where these are defined.\n3. admin_services.ex around line 229 -- confirm tenant_not_found convention\n\nDesign document: lib/letflow/design/iss0788-render-upload-attachment-missing-clauses.md\n\nCover:\n1. The two new function head signatures for render_upload_attachment/2:\n   - render_upload_attachment(conn, {:error, :storage_quota_exceeded})\n   - render_upload_attachment(conn, {:error, :tenant_not_found})\n2. HTTP status codes and response body for each:\n   - :storage_quota_exceeded → what HTTP code (409? or another)? What response body convention (check existing clauses for pattern)?\n   - :tenant_not_found → confirm 422 matches admin_services convention\n3. Where in the clause order these new heads should appear (before or after existing ones)\n4. AC4: since req389 design doc doesn't exist on disk, state that this AC is satisfied (no false claim exists to correct)\n5. AC traceability for all 4 ACs\n\nAfter:\n1. Write lib/letflow/design/iss0788-render-upload-attachment-missing-clauses.md\n2. Write handoffs/WF03-ISS0788-20260924/step-02-code-designer.json COMPLETED PASS\n3. git add + commit + push\n\nReport: design decisions (HTTP codes for each error)",
+    "acceptance_criteria": [
+      "Both new function head signatures specified",
+      "HTTP codes and response body convention stated",
+      "Clause ordering addressed",
+      "AC4 disposition stated",
+      "No implementation code"
+    ]
+  },
+  "result": null
+}

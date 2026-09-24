@@ -1,0 +1,81 @@
+{
+  "run_id": "WF03-ISS0808-20260925",
+  "step": "3d",
+  "agent": "REVIEWER",
+  "commit_reviewed": "97c50b5d",
+  "files_reviewed": [
+    "lib/letflow/plugs/tenant_status.ex",
+    "test/letflow/plugs/tenant_status_test.exs",
+    "lib/letflow/design/iss-0808-tenant-status-roles-normalization.md"
+  ],
+  "decision_records_scanned": [
+    "docs/migration/decisions/0013-authorization-role-set.md",
+    "docs/migration/decisions/0001-web-framework.md",
+    "docs/migration/decisions/0028-unauthenticated-read-boundary.md",
+    "docs/migration/decisions/0038-tenant-membership-lookup-amendment.md",
+    "docs/migration/decisions/0039-platform-module-solution-layering.md"
+  ],
+  "verdict": "PASS",
+  "checks": [
+    {
+      "id": "OTP-IDIOM",
+      "description": "Plug structure and call-path correctness",
+      "outcome": "PASS",
+      "findings": [
+        "Module correctly implements @behaviour Plug with init/1 and call/2 — no deviation.",
+        "alias Letflow.Api.Authorization is appropriate: Authorization is a pure, no-I/O module (verified in its moduledoc and @spec). Adding an alias introduces zero runtime dependencies not already compiled.",
+        "roles_from_strings/1 call is placed correctly inside check_tenant_status/2, after the Repo.get/2 result pattern-matches to %Tenant{} — it runs exactly once per request on the happy path, consistent with the plug's linear-composition model.",
+        "No GenServer crutch, no bare spawn, no process-touching code introduced. The change is purely a pure-function call in a functional plug."
+      ]
+    },
+    {
+      "id": "SUPERVISION-INTEGRITY",
+      "description": "Impact on supervision tree and process isolation",
+      "outcome": "PASS",
+      "findings": [
+        "No processes are created, supervised, or destroyed by this change.",
+        "TenantStatus is a stateless Plug module — it runs in the Bandit request-handling process (Letflow.InstanceSupervisor's subtree), which is unchanged.",
+        "roles_from_strings/1 is specified as pure/no-I/O in Authorization's moduledoc — no message passing, no GenServer calls, no ETS reads. Supervision isolation is unaffected."
+      ]
+    },
+    {
+      "id": "SCOPE-CREEP",
+      "description": "Change bounded by ISS-0808 diagnosis",
+      "outcome": "PASS",
+      "findings": [
+        "The diff is exactly two lines added to check_tenant_status/2 (the raw_roles → roles conversion) plus the @platform_admin atom constant change and one alias declaration. No new public functions, no new behaviours, no new macro or generic plumbing.",
+        "ISS-0808 diagnosis was precisely: TenantStatus used a raw string membership check instead of the shared normalization path. The fix closes exactly that gap.",
+        "The :migrating write-pause check is explicitly left unchanged (design doc §9 calls it out-of-scope: no PLATFORM_ADMIN exemption on that check is intentional per the REQ-021 design).",
+        "roles_from_strings/1 itself is not modified. No new Authorization API surface is added.",
+        "No framework machinery introduced ahead of any stage boundary."
+      ]
+    },
+    {
+      "id": "DECISION-RECORD-CONSISTENCY",
+      "description": "Alignment with docs/migration/decisions/ entries",
+      "outcome": "PASS",
+      "findings": [
+        "0013-authorization-role-set.md establishes Letflow.Api.Authorization (with roles_from_strings/1) as the closed role-normalization contract. This change routes TenantStatus through that contract, aligning it with every other authorization consumer — exactly what 0013 requires.",
+        "0039-platform-module-solution-layering.md references roles_from_strings/1 at line 261 as the standard path. Consistent.",
+        "0028-unauthenticated-read-boundary.md and 0038-tenant-membership-lookup-amendment.md mention TenantStatus in pipeline-mount context only; neither touches role normalization or creates a constraint this change violates.",
+        "0001-web-framework.md notes TenantStatus as the plug name for tenant_status.zig's port — the @behaviour Plug structure remains intact, consistent with that decision.",
+        "No decision record covers the TenantStatus role-checking approach specifically. This change introduces no divergence from any existing decision; it corrects a gap that no decision record sanctioned."
+      ]
+    },
+    {
+      "id": "TEST-QUALITY",
+      "description": "ISS-0808 regression guard adequacy in tenant_status_test.exs",
+      "outcome": "PASS",
+      "findings": [
+        "Test 1 ('a PLATFORM_ADMIN caller (string role) is exempt via roles_from_strings normalization'): calls call_plug(:get, tenant.id, [\"PLATFORM_ADMIN\"]) against an :inactive tenant; asserts refute conn.halted. If roles_from_strings/1 is removed while @platform_admin remains :PLATFORM_ADMIN, the cond guard becomes :PLATFORM_ADMIN not in [\"PLATFORM_ADMIN\"] — always true — so the 403 branch fires and conn.halted becomes true, causing refute conn.halted to fail. This test is the definitive regression guard. ✓",
+        "Test 2 ('a non-PLATFORM_ADMIN caller is not exempt, even with valid roles'): passes [\"PROCESS_OPERATOR\"], expects 403. Validates correct non-admin rejection. Note: this test would NOT fail if roles_from_strings/1 were removed (non-admin actors are rejected by both the old and new code paths). It is not a standalone regression guard for the ISS-0808 fix, but it provides valid behavioral coverage.",
+        "Test 3 ('an unknown role string is not exempt — roles_from_strings/1 filters out unknown strings'): passes [\"PLATFORM_ADMIN_WANNABE\"], expects 403. Validates that roles_from_strings/1 correctly drops unrecognized strings (silently returns [] for unknown input, so no atom matches). This guards against future role-string widening. Note: same as test 2, this test passes under a revert of roles_from_strings/1 as long as the atom constant is kept (unknown string never matches the atom); its value is in proving the filter behavior, not the primary regression path.",
+        "Conclusion: test 1 alone is a sufficient and mechanically sound regression guard. Tests 2 and 3 add behavioral coverage. The three-test describe block as a whole is fit for purpose.",
+        "Pre-existing REQ-075 AC5 tests (the 'PLATFORM_ADMIN exempt' describe blocks) provide further supporting signal — they pass [\"PLATFORM_ADMIN\"] and assert refute conn.halted, so they would also fail under the regression scenario."
+      ]
+    }
+  ],
+  "type_safety_observations": [],
+  "blocking_findings": [],
+  "timestamp": "2026-09-25T04:30:37+05:00"
+}

@@ -608,6 +608,117 @@ defmodule Letflow.Routers.Req212AttachmentsRoutesTest do
   end
 
   # ══════════════════════════════════════════════════════════════════════
+  # REQ-389 -- content-type allowlist enforcement, route-level rendering
+  # (design §3.3): {:error, :content_type_not_allowed} -> 415, naming the
+  # rejected content_type and the allowed set, distinct in both status code
+  # and body text from :file_too_large (413) and :infected (422).
+  # ══════════════════════════════════════════════════════════════════════
+
+  describe "REQ-389: POST upload with a disallowed content_type" do
+    test "returns 415 naming the rejected type and the allowed set, distinct from file_too_large (413) and infected (422) bodies" do
+      tenant = provisioned_tenant("req389-disallowed")
+      instance_id = Ecto.UUID.generate()
+      boundary = "req389boundary1"
+
+      body = multipart_body(boundary, "clip.mp4", "video/mp4", "not-really-a-video")
+
+      conn =
+        dispatch_multipart(
+          :post,
+          "/#{instance_id}/attachments",
+          tenant,
+          ["PROCESS_OPERATOR"],
+          body,
+          boundary
+        )
+
+      assert conn.status == 415
+      resp = Jason.decode!(conn.resp_body)
+
+      assert resp["detail"] =~ "video/mp4"
+      assert resp["detail"] =~ "application/pdf"
+      assert resp["type"] =~ "unsupported-media-type"
+
+      # Nothing persisted.
+      {:ok, %{items: items}} =
+        Attachments.list(%{instance_id: instance_id, cursor: nil, page_size: 10},
+          prefix: tenant.schema_name
+        )
+
+      assert items == []
+
+      # Distinct from the existing :file_too_large (413) response, both in
+      # status code and in body text -- driven down the SAME route with a
+      # request that independently triggers the size ceiling instead, to
+      # compare actual response shapes rather than assuming distinctness
+      # from having read the source. Bypasses Plug.Parsers entirely (its
+      # own :length ceiling would otherwise raise RequestTooLargeError
+      # before upload/2's own @max_upload_bytes check is ever reached --
+      # same technique this file's own "an oversized upload that reaches
+      # upload/2 directly" test above uses).
+      oversized_path =
+        Path.join(
+          System.tmp_dir!(),
+          "req389_oversized_#{System.unique_integer([:positive])}.bin"
+        )
+
+      File.write!(oversized_path, :binary.copy("a", 26_214_401))
+      on_exit(fn -> File.rm(oversized_path) end)
+
+      too_large_conn =
+        build_conn(:post, "/#{instance_id}/attachments", tenant, roles: ["PROCESS_OPERATOR"])
+        |> Map.put(:body_params, %{
+          "file" => %Plug.Upload{
+            path: oversized_path,
+            filename: "big.bin",
+            content_type: "application/pdf"
+          }
+        })
+        |> dispatch()
+
+      assert too_large_conn.status == 413
+      too_large_resp = Jason.decode!(too_large_conn.resp_body)
+      refute too_large_resp["detail"] == resp["detail"]
+      refute too_large_resp["type"] == resp["type"]
+
+      # Distinct from the existing :infected (422) response, both in status
+      # code and body text.
+      previous_scanner = Application.get_env(:letflow, :attachment_scanner)
+
+      Application.put_env(
+        :letflow,
+        :attachment_scanner,
+        Letflow.Routers.Req212AttachmentsRoutesTest.AlwaysInfectedScanner
+      )
+
+      on_exit(fn ->
+        if previous_scanner do
+          Application.put_env(:letflow, :attachment_scanner, previous_scanner)
+        else
+          Application.delete_env(:letflow, :attachment_scanner)
+        end
+      end)
+
+      infected_body = multipart_body("req389boundary3", "note.txt", "text/plain", "bytes")
+
+      infected_conn =
+        dispatch_multipart(
+          :post,
+          "/#{instance_id}/attachments",
+          tenant,
+          ["PROCESS_OPERATOR"],
+          infected_body,
+          "req389boundary3"
+        )
+
+      assert infected_conn.status == 422
+      infected_resp = Jason.decode!(infected_conn.resp_body)
+      refute infected_resp["detail"] == resp["detail"]
+      refute infected_resp["type"] == resp["type"]
+    end
+  end
+
+  # ══════════════════════════════════════════════════════════════════════
   # ISS-0399 -- content-scanning pipeline, route-level error mapping (design
   # §7 OQ-4): {:error, :infected, _} -> 422, {:error, :scan_unavailable} ->
   # 503, {:error, :not_available} (get_content) -> 409.

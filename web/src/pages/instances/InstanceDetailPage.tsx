@@ -376,7 +376,7 @@ export default function InstanceDetailPage() {
       <CancelInstanceDialog
         open={showCancelDialog}
         instanceId={instance.instance_id}
-        instanceName={`${instance.definition_name} v${instance.definition_version}`}
+        instanceName={definition ? `${definition.name} v${definition.version}` : '—'}
         onConfirm={onCancelConfirm}
         onCancel={() => setShowCancelDialog(false)}
         isPending={cancel.isPending}

@@ -108,8 +108,9 @@ export interface Token {
 export interface ProcessInstance {
   instance_id: string
   definition_id: string
-  definition_name: string
-  definition_version: string
+  // definition_name and definition_version not emitted by GET /instances/:id (ISS-0809)
+  definition_name?: string
+  definition_version?: string
   correlation_key?: string
   status: InstanceStatus
   current_nodes: string[]

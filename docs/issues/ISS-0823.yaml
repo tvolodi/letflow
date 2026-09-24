@@ -1,0 +1,56 @@
+id: ISS-0823
+title: >
+  GroupsPage fetches users at the server-max page_size 200 and never follows
+  next_cursor, so a tenant over 200 users gets a silently incomplete
+  Add-member dropdown
+discovered_by: CODE-DESIGNER (verified by ORCH against source before filing)
+discovered_in_run: WF03-ISS0816-20260925
+discovered_at: "2026-09-24T22:58:04Z"
+severity: MINOR
+tags:
+  - frontend
+  - pagination
+  - groups
+description: >
+  Incidental finding from ISS-0816's Step 2 design, filed and forwarded rather
+  than extending that run.
+
+  web/src/pages/admin/GroupsPage.tsx:62-66 calls
+  usersApi.list({ page_size: 200 }) and reads only the first page.
+  next_cursor is never followed.
+
+  200 is not an arbitrary large number -- it is the server's hard ceiling:
+  lib/letflow/api/pagination.ex:50 `@max_page_size 200`, enforced by
+  validate_page_size (:142, which rejects anything above it). So this is
+  already the largest single request the API permits and there is no bigger
+  page to ask for. A tenant with more than 200 users silently gets an
+  Add-member dropdown missing everyone past the first 200, with no error and
+  no indication.
+
+  Same class as ISS-0816's AC3 (the members list truncating at 50) but a
+  different endpoint -- and the two COMPOUND. GroupsPage.tsx:103-110 computes
+  availableUsers by subtracting the member id set from the user list, so both
+  inputs to that subtraction can be independently truncated. ISS-0816's AC3
+  covers only the members side.
+affected_files:
+  - web/src/pages/admin/GroupsPage.tsx
+  - web/src/api/identity.ts
+related:
+  - ISS-0816  # fixes the members side of the same subtraction
+  - ISS-0765  # the run that first opened up this surface
+severity_rationale: >
+  MINOR -- read-path only, and it requires a tenant with more than 200 users
+  to manifest at all, which no current tenant is known to have. Not raised
+  higher on its own; but note that combined with ISS-0816's members-side
+  truncation it feeds a wrong WRITE path (re-adding an existing member), and
+  that combination is being fixed under ISS-0816.
+fix_direction: >
+  Make the dropdown reflect every user in the tenant, or say plainly that the
+  list is incomplete. If a drain is used, bound it with an explicit cap and
+  match whatever mechanism ISS-0816 lands for the members side rather than
+  inventing a second one. Make the availableUsers subtraction correct when
+  either input would have truncated. Cover it with a test using more than 200
+  users, so the ceiling is exercised rather than assumed.
+queue_ref: "Q-823"
+github_ref: "GH-1814"
+status: open

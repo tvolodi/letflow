@@ -134,7 +134,7 @@ document.
   confirm-before-destructive-action pattern for instance cancellation (focus-trapped modal,
   `Escape` to close). AC1 does **not** require a full modal — see §4's simpler two-click
   in-row confirm decision, justified there — but this file is the precedent if
-  CODE-DESIGN-VALIDATOR or REVIEWER prefers modal parity; flagged as an open question (§10).
+  CODE-DESIGN-VALIDATOR or REVIEWER prefers modal parity; flagged as an open question (§11).
 - `web/src/api/useTenantScopedQueryKeys.ts` + `web/src/api/queryKeys.ts` (relevant excerpts) —
   confirms the existing `instances.attachments(tenantId)` key-builder pattern to extend for a
   new `storageUsage` key (§5) and confirms every tenant-scoped hook already goes through this
@@ -306,7 +306,7 @@ export function useDeleteAttachment(instanceId: string): UseMutationResult<
   this over `CancelInstanceDialog`'s modal: removing one row from a list is a smaller-blast-
   radius destructive action than cancelling an entire running instance, and every other
   row-level action on this page (`View`) is already inline, not modal-launched — an in-row
-  confirm keeps that consistency. **Flagged as an open question (§10)** in case
+  confirm keeps that consistency. **Flagged as an open question (§11)** in case
   CODE-DESIGN-VALIDATOR or REVIEWER prefers modal parity with `CancelInstanceDialog` instead.
 - `loading`/`disabled` on the confirm button while `deleteAttachment.isPending`, matching the
   existing `upload.isPending` pattern already on the `Upload` button.
@@ -531,7 +531,82 @@ spec doesn't actually pass; sequence AC6 before AC7 within the same implementati
 
 ---
 
-## 10. Open questions (explicitly not resolved here — flag for REVIEWER/CODE-DESIGN-VALIDATOR)
+## 10. SECURITY-REVIEWER determination: REQUIRED
+
+**Yes, this requirement needs a SECURITY-REVIEWER pass**, for one concrete reason: §1 adds a
+brand-new tenant-scoped HTTP route (`GET /api/v1/instances/storage-usage`, backed by a new
+`Attachments.storage_summary/1` context function). Any new tenant-data-scoped route/response
+shape is exactly the class of change `docs/agents/instructions/security-invariants.md` gates on
+— same class as REQ-212's own four new attachment routes (`lib/letflow/design/
+req212-instance-attachments-routes.md` §7) and REQ-399's new `InstancePinsPanel` frontend
+surface consuming a tenant-scoped route (`lib/letflow/design/req399-instance-pin-provenance.md`
+§6, AC3's own mandatory gate). This is not a formality — nothing else in this design's 9
+preceding sections has independently secured this route, and it is new HTTP surface area this
+requirement, not an earlier one, introduces.
+
+### 10.1 INV-1 (tenant data isolation) — walked through, not asserted
+
+`Attachments.storage_summary/1` (§1.1) takes `opts()` — the same `[prefix: schema]` keyword
+list every other function in `Letflow.Repository.Attachments` already takes (`upload/2`,
+`delete/3`, `get_storage_usage/1`, `list_all_for_instance/2`) — and is called from the new
+route handler (§1.2) with `conn.assigns.scoped_opts`, the **exact same** conn assign every
+other handler in `lib/letflow/routers/instances.ex` already uses (confirmed at §0: `Attachments
+.upload(attrs, opts)` at `handle_upload_attachment/2`, `Attachments.delete(raw_attachment_id,
+actor_id, opts)` at `handle_delete_attachment/3`, both read `opts = conn.assigns.scoped_opts`
+as their first line). `scoped_opts` is itself assigned exactly once per request, by
+`Letflow.Plugs.Authorize` (§0's earlier reading of `lib/letflow/plugs/authorize.ex`), from
+`Context.scoped_repo_opts(conn)` — a value derived from the authenticated caller's own resolved
+tenant, never from a caller-supplied path/query/body parameter. **The new route's handler
+introduces no new way to obtain a `prefix`**: it has no `:id` path segment at all (§1.2 — this
+route takes no parameters), so there is no tenant-scoping input for a caller to manipulate in
+the first place, unlike the `:id`-bearing attachment routes REQ-212 had to defend against
+cross-tenant *id* probing (INV-5, §0's confirmation that `render_upload_attachment/3`'s
+`:tenant_not_found` clause is the same "unreachable but mapped" edge this design's
+`storage_summary/1` also maps at §1.1). The only way this route's response could ever reflect
+another tenant's data is if `conn.assigns.scoped_opts` itself were wrong — a fact about
+`Letflow.Plugs.Authorize`/`Context.scoped_repo_opts/1`, already reviewed and shipped
+infrastructure this design does not touch, not something this design's own new code could
+introduce a bug into. Inside `storage_summary/1` itself, both reads it composes
+(`get_storage_usage(opts)`'s `SUM(byte_size)` query and the `Tenant` lookup via
+`TenantProvisioning.tenant_id_for_schema_name(prefix)` → `Repo.get(Tenant, tenant_id)`, §1.1)
+derive the `tenant_id` they use for the `Tenant` lookup **from the same `prefix`**, not from any
+caller input, and the `SUM` query itself runs `Repo.one(..., prefix: prefix)` — Ecto's own
+schema-search-path mechanism, the same mechanism INV-1's own canonical enforcement point (every
+`Repo` call in this module already passes `prefix:` explicitly, confirmed at §0's reading of
+`lib/letflow/repository/attachments.ex`'s own moduledoc: *"Every `Repo` call passes it
+explicitly (INV-1)"*). There is no code path in this design where a Postgres query for one
+tenant's schema could return another tenant's `instance_attachments`/`tenants` row.
+
+### 10.2 Response-shape leak risk — confirmed clean
+
+The response body is exactly `{"used_bytes": <non_neg_integer>, "allowance_bytes": <integer>}`
+(§1.2). Both fields are scalar aggregates:
+
+- `used_bytes` is a `SUM()` over byte sizes — no `attachment_id`, `file_name`, `content_hash`,
+  `uploaded_by`, or any other per-document field is read, computed, or could leak through this
+  value. Unlike `attachment_json/1` (§0's confirmed INV-2 allowlist precedent for the *existing*
+  attachment routes), there is no allowlist to get wrong here because there is no per-record
+  field being selected at all — the query never selects individual `instance_attachments` rows,
+  only their aggregate sum (§1.1's `Repo.one(from(a in "instance_attachments", select:
+  coalesce(sum(a.byte_size), 0)), prefix: prefix)`, already-shipped code this design reuses
+  unchanged).
+- `allowance_bytes` is `Tenant.storage_allowance_bytes` — a single integer already stored
+  directly on the caller's own tenant row, not a value that names or describes any other
+  tenant, any other row, or any secret (it is a provisioning-time capacity number, not
+  credential- or PII-shaped). No other `Tenant` field is read or returned — `storage_summary/1`
+  pattern-matches `%Tenant{storage_allowance_bytes: allowance}` specifically (mirroring
+  `check_storage_quota/3`'s own existing identical match at §0), not `%Tenant{}` wholesale, so
+  there is no risk of a future `Tenant` schema field silently riding along in this response if
+  the schema grows.
+
+**Conclusion: nothing in this response requires redaction** — both fields are, by construction,
+scalar, caller-tenant-own, non-identifying aggregates. This is a materially smaller exposure
+surface than REQ-212's own `attachment_json/1`, which does need (and has) an explicit
+field-level allowlist because it returns per-document records.
+
+---
+
+## 11. Open questions (explicitly not resolved here — flag for REVIEWER/CODE-DESIGN-VALIDATOR)
 
 - **§4.2 in-row confirm vs. modal parity**: this design chooses an in-row two-click confirm over
   reusing `CancelInstanceDialog`'s modal pattern, for the reasons stated there. If
@@ -551,7 +626,7 @@ spec doesn't actually pass; sequence AC6 before AC7 within the same implementati
 
 ---
 
-## 11. Acceptance-criteria → section traceability
+## 12. Acceptance-criteria → section traceability
 
 | AC | Section |
 |---|---|

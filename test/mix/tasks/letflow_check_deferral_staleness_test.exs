@@ -969,11 +969,30 @@ defmodule Mix.Tasks.Letflow.CheckDeferralStalenessTest do
       # violations == 0. Test-data-only update; the detector in
       # lib/mix/tasks/letflow.check_deferral_staleness.ex is unchanged and
       # correct -- it caught this drift exactly as designed.
+      #
+      # UPDATE (S11 expansion, 2026-09-24): OQ-5's predicted event happened a
+      # sixth time -- S11 (modular-platform architecture) was expanded via
+      # WF-01 into REQ-400..REQ-416 (all `pending`) against
+      # docs/migration/decisions/0039-platform-module-solution-layering.md.
+      # Same rule as every prior stage's own expansion: `pending` does not
+      # confer activity (F-PENDING-NOT-ACTIVE), so S11 is present but
+      # :inactive, the same state every other stage passed through before its
+      # first non-pending requirement. `active` is unchanged; `inactive`
+      # moves from [] to ["S11"]. Re-derived, not guessed: `MIX_ENV=test mix
+      # run --no-start -e` calling
+      # File.read!("docs/requirements.yaml") |> Mix.Tasks.Letflow.CheckDeferralStaleness.audit()
+      # against the live corpus, returning
+      # active == ["S0","S1","S10","S2","S3","S4","S5","S6","S7","S8","S9"],
+      # inactive == ["S11"], violations == []. Test-data-only update; the
+      # detector in lib/mix/tasks/letflow.check_deferral_staleness.ex is
+      # unchanged and correct -- it caught this drift exactly as designed.
+      # S11 joins `active` the moment any of REQ-400..416 goes
+      # in_progress/done/blocked (expected to be REQ-400 itself, shortly).
       active = for s <- result.stages, s.activity == :active, do: s.stage
       inactive = for s <- result.stages, s.activity == :inactive, do: s.stage
 
       assert active == ["S0", "S1", "S10", "S2", "S3", "S4", "S5", "S6", "S7", "S8", "S9"]
-      assert inactive == []
+      assert inactive == ["S11"]
     end
 
     test "T-LIVE-DEFERRED-COUNT -- the staleness rule is now load-bearing, not vacuous",

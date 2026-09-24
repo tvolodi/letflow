@@ -93,5 +93,14 @@ outstanding: >
   Response the test constructs; no HTTP left the process (a live probe of
   localhost:4000 returned HTTP 000). The fix is sound by construction -- the
   routes were read from __authz_routes__/0 and independently re-derived by
-  SECURITY-REVIEWER -- but construction is not execution. Tracked as ISS-0818;
-  this record closes on static evidence only because that one is open.
+  SECURITY-REVIEWER -- but construction is not execution. Tracked as ISS-0791 (filed on this host as ISS-0818, now a duplicate
+  tombstone -- one queue task, two records, see that file). RESOLVED
+  2026-09-24: UAT-RUNNER ran a real end-to-end check against a live backend,
+  real Postgres and a real Keycloak realm after PR #1808 merged (dec06da7).
+  PASS on every criterion -- the old /api/v1/admin/groups/ prefix independently
+  confirmed 404, the members response confirmed to be the {items, next_cursor,
+  count} envelope this fix retyped to, add/remove/delete each confirmed by a
+  real row change in the tenant schema, and all six routes confirmed to 403 a
+  token lacking :GroupsManage. Report:
+  test/uat-reports/uat-2026-09-24-ISS0791-20260924.yaml. So this fix now HAS
+  end-to-end evidence; the caveat above describes the state at close, not now.

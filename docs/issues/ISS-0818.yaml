@@ -1,58 +1,44 @@
 id: ISS-0818
 title: >
-  UAT owed -- the Groups admin surface has never been exercised against a real
-  instance, so ISS-0765's prefix fix has no end-to-end evidence
+  DUPLICATE of ISS-0791 -- UAT gap on the Groups admin surface. Superseded;
+  see docs/issues/ISS-0791.yaml for the live record and its UAT evidence.
+status: duplicate
+superseded_by: ISS-0791
 discovered_by: REVIEWER (step-03d) and TEST-DESIGNER (step-04), filed by ORCH at ISS-0765's close
 discovered_in_run: WF03-ISS0765-20260924
 discovered_at: "2026-09-24T18:45:00Z"
+resolved_at: "2026-09-25T00:00:00Z"
 severity: MAJOR
 tags:
   - uat
-  - frontend
-  - groups
-  - verification-gap
+  - duplicate
+  - cross-host-collision
 description: >
-  Raised independently by two gates in ISS-0765's run and left explicitly open
-  by both, as a condition on that issue's close rather than a defect in its fix.
+  This file and docs/issues/ISS-0791.yaml describe the same finding AND point
+  at the same queue task and the same GitHub issue -- both were written with
+  queue_ref Q-818 / github_ref GH-1807. One task, two on-disk records, authored
+  concurrently on two hosts.
 
-  ISS-0765 corrected six groupsApi calls from a dead /api/v1/admin/groups/
-  prefix to the real /api/v1/identity/groups, and every gate passed. But every
-  test in that run exercises a vi.fn() spy whose Response the test itself
-  constructs, so no HTTP ever left the process. FRONTEND-DEV attempted a live
-  probe of http://localhost:4000/api/v1/identity/groups and got HTTP 000 -- no
-  connection, no instance running.
+  How it happened: this host (orch-main-20260924) registered the UAT gap as
+  queue task 818 at ISS-0765's close and named its record from the queue's own
+  issue_ref, per TASK_QUEUE.md's numbering schema -- giving ISS-0818. The
+  sibling host (ai-dala-orch) independently wrote a record for that same task
+  using its own local next-free number, giving ISS-0791, then carried the work
+  through: it ran the live UAT, resolved it, and merged it to main.
 
-  The fix is sound BY CONSTRUCTION: the six routes were read out of
-  Letflow.Api.AuthorizedRouter.__authz_routes__/0, and SECURITY-REVIEWER
-  re-derived them independently from lib/letflow/routers/identity.ex:178-198.
-  But construction is not execution. A route-macro-versus-actual-mount
-  discrepancy is invisible to every check that run performed.
+  ISS-0791 is the surviving record. It is not merely first-to-merge -- it holds
+  the actual evidence (a real end-to-end UAT-RUNNER pass against a live backend,
+  real Postgres, real Keycloak, no mocks) and is the id cited by the UAT report
+  at test/uat-reports/uat-2026-09-24-ISS0791-20260924.yaml and by ISS-0765's
+  own outstanding block.
 
-  This matters more here than the usual UAT gap: before ISS-0765, the entire
-  Groups admin surface was non-functional in production and nobody noticed for
-  long enough that the defect had to be found by a reviewer reading the file
-  for an unrelated reason. That is itself evidence that nothing exercises this
-  surface.
-affected_files:
-  - web/src/api/identity.ts
-  - web/src/pages/admin/GroupsPage.tsx
-  - lib/letflow/routers/identity.ex
+  This file is retained as a tombstone rather than deleted, because ISS-0765's
+  resolution text and this run's handoffs cite ISS-0818 by name, and a dangling
+  reference is worse than a redirect.
+
+  Deliberately NOT carrying queue_ref or github_ref: exactly one on-disk record
+  may claim Q-818 / GH-1807, and that is ISS-0791. See the anti-patterns entry
+  "Two hosts writing two differently-named issue records for one queue task".
 related:
-  - ISS-0765  # the fix this owes evidence for
-  - ISS-0811  # Members column always 0 -- a live run would confirm it
-  - ISS-0816  # members list truncating at 50 -- likewise
-severity_rationale: >
-  MAJOR -- not a known defect, but the missing verification for a MAJOR fix on
-  a surface with a demonstrated history of silent breakage. Closing ISS-0765 on
-  static evidence alone is defensible only because this record exists.
-fix_direction: >
-  Run WF-05 (or a scoped UAT-RUNNER pass) over the Groups admin surface against
-  a real instance with a real Keycloak realm: list, Manage members, add, remove,
-  delete an empty group. Confirm the members response really is the
-  {items, next_cursor, count} envelope ISS-0765 retyped to, and that all six
-  routes enforce :GroupsManage against a token lacking it. While there, record
-  whether ISS-0811's and ISS-0816's symptoms are visible, so those records carry
-  observation rather than inference.
-queue_ref: "Q-818"
-github_ref: "GH-1807"
-status: open
+  - ISS-0791  # the surviving record -- read that one
+  - ISS-0765  # the fix whose verification gap this was

@@ -3341,3 +3341,55 @@ requirement if this recurs.
 
 **Recovery:** Recovery PR #1773 cherry-picked the dangling fix commit to a new branch. Required two CI runs due to handoff lint violations in files committed by the bookkeeping push (H3 
 ext_action and H-SIZE-2 missing task blocks).
+
+## Two hosts writing two differently-named issue records for one queue task
+
+**Found:** 2026-09-25, during `WF03-ISS0765-20260924`'s post-merge reconciliation on
+`orch-main-20260924`.
+
+`docs/issues/ISS-0818.yaml` and `docs/issues/ISS-0791.yaml` both described the same
+finding and both carried `queue_ref: "Q-818"` and `github_ref: "GH-1807"` — one
+`letflow-queue` task and one GitHub issue, two on-disk records, authored concurrently on
+two hosts.
+
+Sequence: `orch-main-20260924` registered a UAT gap via `register_task`, got task id
+818, and named its record from the response's `issue_ref` — `ISS-0818` — which is
+exactly what `TASK_QUEUE.md`'s numbering schema prescribes. Meanwhile `ai-dala-orch`
+independently wrote a record for that *same task* using its own local next-free number,
+giving `ISS-0791`, and carried it through to a live UAT and a merge to `main`.
+
+**This is distinct from the two collision classes already documented above.** Those are
+*filename* collisions — two branches producing `docs/issues/ISS-0234.yaml` twice, or two
+migrations sharing a version prefix. Git sees those, or a guard test does. Here the two
+filenames differ, so **nothing collides at the filesystem or git level at all**: both
+files merge cleanly, `mix letflow.check` passes, and the only symptom is that two
+records silently claim one task. The existing no-duplicate-filename guard cannot see it
+by construction.
+
+**Why this is easy to miss:** the divergence is invisible from either host in isolation.
+Each did something locally correct — one followed the queue's `issue_ref`, the other
+followed its own local numbering (which the project's own history shows is common: 27
+records already diverge from their queue id, and `ISS-0790`/task 806 in this very
+session is another). Neither host can see the other's uncommitted record, and by the
+time both are on `main` the work is usually already done.
+
+**Correct alternative — two parts.**
+
+*Preventive:* when a finding is registered with `register_task`, the record's filename is
+the response's `issue_ref`, full stop — that id is allocated atomically by the service
+and is the only cross-host-unique name available. A host writing a record for a task it
+did **not** itself register must read that task's `issue_ref` from the queue and use it,
+rather than picking its own next-free local number.
+
+*Detective:* the real guard is a check that no two files under `docs/issues/` share a
+`queue_ref` or a `github_ref`, which is cheap and would have caught this immediately —
+the same shape as the existing `test/letflow/migration_filenames_test.exs` guard, but
+over record *contents* rather than filenames. Not yet written; write it when this
+recurs, or fold it into ISS-0813's route-table-coupling guard work, which is the same
+"machine-checkable contract nobody checks" family.
+
+*Resolving an instance:* keep whichever record holds the evidence and is cited by other
+artefacts — not simply the first to merge. Turn the other into a tombstone with
+`status: duplicate` and `superseded_by:`, and **strip its `queue_ref`/`github_ref`** so
+exactly one record claims the task. Do not delete it: other files and handoffs cite the
+dead id by name, and a redirect beats a dangling reference.

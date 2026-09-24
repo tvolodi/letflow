@@ -1,0 +1,54 @@
+id: ISS-0789
+title: >
+  test/letflow/repository/attachment_links_test.exs's "tampered token" test is
+  intermittently flaky -- flip_last_char's single-byte flip can land on a
+  base64 padding-bit boundary that decodes to byte-identical bytes
+discovered_by: DOC-UPDATER
+discovered_in_run: WF02-REQ392-20260924
+discovered_at: "2026-09-24T05:55:00Z"
+severity: MINOR
+tags:
+  - backend
+  - test-flake
+description: >
+  Found by DOC-UPDATER while merging REQ-392 (unrelated diff) -- CI's backend
+  gate failed twice on two different pre-existing flakes; the second was this
+  test, previously uncatalogued.
+
+  `test/letflow/repository/attachment_links_test.exs`'s "verify/3: tampered
+  token" test uses a `flip_last_char/1` helper that flips a single character
+  in a base64-encoded token's signature segment to prove tampering is
+  detected. Root-caused directly by DOC-UPDATER: a single-byte flip lands on
+  a base64 padding-bit boundary often enough that the flipped character
+  decodes to the SAME underlying bytes as the original ~6.5% of the time
+  (confirmed via a 5,000-trial simulation: 323/5000 no-op flips) -- when
+  this happens, the "tampered" token is not actually tampered, the signature
+  still verifies, and the test's assertion that verification fails no longer
+  holds.
+
+  This is a test-design defect (the helper doesn't guarantee its flip changes
+  the decoded byte value), not a production security bug -- the real
+  signature-verification logic is correct; the test's OWN tampering fixture
+  is occasionally a no-op.
+affected_files:
+  - test/letflow/repository/attachment_links_test.exs
+related_requirements: []
+severity_rationale: >
+  MINOR -- intermittent CI noise (~6.5% failure rate on this one test),
+  not a security defect or a regression risk. Costs CI reruns and can be
+  mistaken for a real regression if not documented.
+suggested_fix: >
+  Fix flip_last_char/1 (or add a verification step) so the flip is guaranteed
+  to change the decoded byte value -- e.g. flip a bit in the middle of a
+  base64 sextet rather than the last character (which is likelier to be a
+  padding/tail position), or assert post-flip that the decoded bytes
+  genuinely differ from the original before using the fixture, retrying the
+  flip position if they don't.
+queue_ref: "Q-788"
+# NOTE: letflow-queue's task 788 auto-titled itself "ISS-0788" from its own
+# atomically-allocated id, but the real on-disk filename is ISS-0789.yaml --
+# slot ISS-0788 was already taken by this same repo's render_upload_attachment
+# missing-clauses issue. Established, recurring queue-id/filename divergence
+# pattern for this project; queue_ref/github_ref below are authoritative.
+github_ref: "GH-1767"
+status: open

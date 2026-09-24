@@ -289,7 +289,7 @@
       "pushed_to": "origin/feature/WF03-ISS0765-20260924",
       "divergence_discipline": "git fetch was run at the start of this step; HEAD and origin/feature/WF03-ISS0765-20260924 both resolved to 4115494e with git status -sb showing no ahead/behind marker, so the prior run's dangling-commit hazard (docs/anti-patterns.md) was already clear on entry. The same check is re-run after the push and recorded below.",
       "handoff_amendment_commit": "6997fc282c59e5bccc21448784c2a0c84ef30e14",
-      "branch_tip_after_step_04": "6997fc282c59e5bccc21448784c2a0c84ef30e14"
+      "branch_tip_after_step_04": "Cannot be self-referenced by hash from inside the file it names. Step 4's deliverable commit is c4ab9442; it is followed only by handoff-hygiene commits on this same file (6997fc28, 35c668d7 and this one). The tip is whatever `git rev-parse origin/feature/WF03-ISS0765-20260924` reports; no code or test file changed after c4ab9442."
     },
     "new_findings": [
       {

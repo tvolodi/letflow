@@ -1,0 +1,32 @@
+{
+  "handoff_id": "WF03-ISS0788-20260924-step-04",
+  "run_id": "WF03-ISS0788-20260924",
+  "workflow": "WF-03",
+  "step": "Step 4 (Regression Test)",
+  "to_agent": "TEST-DESIGNER",
+  "from_agent": "ORCH",
+  "status": "PENDING",
+  "created_at": "2026-09-24T00:41:38Z",
+  "started_at": "2026-09-24T00:41:38Z",
+  "context": {
+    "branch_name": "feature/WF03-ISS0788-20260924",
+    "issue_id": "ISS-0788",
+    "fix_summary": "render_upload_attachment/2 now has clauses for {:error, :storage_quota_exceeded} (409) and {:error, :tenant_not_found} (422).",
+    "wf03_step4_requirement": "Test MUST be shown to FAIL against pre-fix code and PASS against post-fix code.",
+    "artifacts_in": [
+      "lib/letflow/routers/instances.ex",
+      "test/letflow/routers/instances_test.exs",
+      "docs/issues/ISS-0788.yaml"
+    ]
+  },
+  "task": {
+    "description": "Execute Step 4 (Regression Test) for ISS-0788 per WF-03.\n\nWorkspace: c:\\Users\\tvolo\\dev\\ai-dala\\letflow\nBranch: feature/WF03-ISS0788-20260924\nMix: & 'C:/Program Files/Elixir/bin/mix'\n\nISS-0788 AC3: route-level test drives both conditions through POST /instances/:id/attachments and asserts the handled 4xx, not a 500.\n\nRead test/letflow/routers/instances_test.exs to understand existing attachment upload test patterns.\n\nWrite TWO new tests:\n1. POST /instances/:id/attachments when over quota → assert 409 response with quota message in body\n2. POST /instances/:id/attachments when tenant not found → assert 422 response with tenant_not_found message in body\n\nFor each test: mock/stub Attachments.upload/2 to return the relevant error atom. Look at how existing tests mock upload or use fixtures.\n\nFail-first proof:\n1. git stash (stash the fix to instances.ex)\n2. Run new tests → must fail (FunctionClauseError or 500, not 4xx)\n3. git stash pop\n4. Run new tests again → must pass\n\nAlso run: & 'C:/Program Files/Elixir/bin/mix' test test/letflow/routers/instances_test.exs\n\nOutput:\n1. Write handoffs/WF03-ISS0788-20260924/step-04-test-designer.json COMPLETED PASS\n2. git add test file + handoff + commit + push\n\nReport: test code, fail-first proof, pass counts",
+    "acceptance_criteria": [
+      "Test for :storage_quota_exceeded → 409",
+      "Test for :tenant_not_found → 422",
+      "Fail-first proof demonstrated",
+      "Post-fix pass confirmed"
+    ]
+  },
+  "result": null
+}

@@ -688,6 +688,38 @@ defmodule Letflow.Repository.Attachments do
   end
 
   # ===========================================================================
+  # storage_summary/1 (REQ-392 design §1.1)
+  # ===========================================================================
+
+  @doc """
+  Composes `get_storage_usage/1` with a `Tenant` lookup to return the pair
+  `Letflow.Routers.Instances`'s new `GET /instances/storage-usage` route
+  (REQ-392) renders. Per-tenant, not per-instance -- takes no `instance_id`.
+
+  Mirrors `check_storage_quota/3`'s own existing tenant-lookup shape
+  (`TenantProvisioning.tenant_id_for_schema_name/1` then
+  `Repo.get(Tenant, tenant_id)`) rather than inventing a new one.
+  """
+  @spec storage_summary(opts()) ::
+          {:ok, %{used_bytes: non_neg_integer(), allowance_bytes: integer()}}
+          | {:error, :tenant_not_found}
+  def storage_summary(opts) when is_list(opts) do
+    prefix = Keyword.fetch!(opts, :prefix)
+
+    with {:ok, tenant_id} <- TenantProvisioning.tenant_id_for_schema_name(prefix),
+         %Tenant{storage_allowance_bytes: allowance} <- Repo.get(Tenant, tenant_id) do
+      {:ok, used_bytes} = get_storage_usage(prefix: prefix)
+      {:ok, %{used_bytes: used_bytes, allowance_bytes: allowance}}
+    else
+      # Both a schema name that fails to resolve to a tenant_id and a
+      # resolved tenant_id with no matching `tenants` row are the same
+      # theoretically-unreachable-but-mapped edge check_storage_quota/3
+      # already guards (design §1.1) -- collapse both to :tenant_not_found.
+      _ -> {:error, :tenant_not_found}
+    end
+  end
+
+  # ===========================================================================
   # list_all_for_instance/2 (REQ-391 design §3.1)
   # ===========================================================================
 

@@ -21,7 +21,7 @@
  */
 
 import { client } from './client'
-import type { Attachment, AttachmentsPage, AttachmentLink, AttachmentBlob } from '@/types/api'
+import type { Attachment, AttachmentsPage, AttachmentLink, AttachmentBlob, StorageUsage } from '@/types/api'
 
 export const attachmentsApi = {
   /** `POST /api/v1/instances/:id/attachments`, multipart. `file` required,
@@ -57,4 +57,9 @@ export const attachmentsApi = {
       `/api/v1/instances/${encodeURIComponent(instanceId)}/attachments/${encodeURIComponent(attachmentId)}/link-content`,
       { link_token: token },
     ),
+
+  /** `GET /api/v1/instances/storage-usage` -- REQ-392 §1.2. Tenant-wide, not
+   *  instance-scoped -- no `:id` path segment, matches
+   *  `Attachments.storage_summary/1`'s own per-tenant scope. */
+  storageUsage: (): Promise<StorageUsage> => client.get<StorageUsage>('/api/v1/instances/storage-usage'),
 }

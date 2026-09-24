@@ -6,7 +6,7 @@
  */
 import { useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { useAttachments, useUploadAttachment } from '@/hooks/useAttachments'
+import { useAttachments, useDeleteAttachment, useStorageUsage, useUploadAttachment } from '@/hooks/useAttachments'
 import { QueryStateBoundary } from '@/components/ui/QueryStateBoundary'
 import { DataTable, type DataTableColumn } from '@/components/ui/DataTable'
 import { Button } from '@/components/ui/Button'
@@ -14,7 +14,7 @@ import { useToast } from '@/hooks/useToast'
 import { classifyError, type RendererState } from '@/utils/classifyError'
 import { getRetryAfterSeconds } from '@/utils/getRetryAfterSeconds'
 import { formatDateTime } from '@/i18n/format'
-import type { Attachment } from '@/types/api'
+import type { ApiError, Attachment } from '@/types/api'
 
 interface AttachmentPanelProps {
   instanceId: string
@@ -23,6 +23,32 @@ interface AttachmentPanelProps {
 interface AttachmentRow {
   key: string
   attachment: Attachment
+}
+
+/** REQ-392 §3.2 — the three distinct rejection kinds AC2 must render, each
+ *  independently assertable via `data-error-kind`. */
+type UploadErrorKind = 'content-type' | 'quota' | 'other'
+
+interface UploadErrorState {
+  kind: UploadErrorKind
+  message: string
+}
+
+/** REQ-392 §3.1 — `upload/2`'s only two rejection paths that ever reach the
+ *  frontend as 409/415 are `:storage_quota_exceeded`/`:content_type_not_allowed`
+ *  respectively (confirmed against the shipped router source, design §0/§2) --
+ *  HTTP status alone disambiguates them for this one mutation. The readable
+ *  text is the RFC 9457 `detail` field, which `client.ts`'s
+ *  `throwOnErrorResponse` puts on `ApiError.details.detail` for both the
+ *  generic and the 409-specific branches (both spread the parsed body into
+ *  `details`) -- fall back to `error.message` (the `title` field) only if
+ *  `detail` is absent. */
+function classifyUploadError(error: ApiError): UploadErrorState {
+  const detail = typeof error.details?.detail === 'string' ? error.details.detail : undefined
+  const message = detail ?? error.message
+  if (error.status === 415) return { kind: 'content-type', message }
+  if (error.status === 409) return { kind: 'quota', message }
+  return { kind: 'other', message: 'Failed to upload attachment.' }
 }
 
 function formatByteSize(bytes: number): string {
@@ -41,9 +67,15 @@ function formatByteSize(bytes: number): string {
 export function AttachmentPanel({ instanceId }: AttachmentPanelProps) {
   const attachmentsQuery = useAttachments(instanceId)
   const upload = useUploadAttachment(instanceId)
+  const deleteAttachment = useDeleteAttachment(instanceId)
+  const storageUsageQuery = useStorageUsage()
   const toast = useToast()
   const fileInputRef = useRef<HTMLInputElement>(null)
   const [description, setDescription] = useState('')
+  const [uploadError, setUploadError] = useState<UploadErrorState | null>(null)
+  // REQ-392 §4.2 -- in-row two-click confirm, keyed by attachment id. Only
+  // one row's confirm affordance is ever shown at a time.
+  const [pendingRemoveId, setPendingRemoveId] = useState<string | null>(null)
 
   const rendererState: RendererState = attachmentsQuery.isLoading
     ? 'loading'
@@ -55,6 +87,8 @@ export function AttachmentPanel({ instanceId }: AttachmentPanelProps) {
     const file = fileInputRef.current?.files?.[0]
     if (!file) return
 
+    setUploadError(null)
+
     const formData = new FormData()
     formData.append('file', file)
     if (description.trim() !== '') {
@@ -65,10 +99,24 @@ export function AttachmentPanel({ instanceId }: AttachmentPanelProps) {
       onSuccess: () => {
         toast.success('Attachment uploaded.')
         setDescription('')
+        setUploadError(null)
         if (fileInputRef.current) fileInputRef.current.value = ''
       },
-      onError: () => {
+      onError: (error: ApiError) => {
+        setUploadError(classifyUploadError(error))
         toast.error('Failed to upload attachment.')
+      },
+    })
+  }
+
+  const onConfirmRemove = (attachmentId: string) => {
+    deleteAttachment.mutate(attachmentId, {
+      onSuccess: () => {
+        toast.success('Attachment removed.')
+        setPendingRemoveId(null)
+      },
+      onError: () => {
+        toast.error('Failed to remove attachment.')
       },
     })
   }
@@ -90,6 +138,49 @@ export function AttachmentPanel({ instanceId }: AttachmentPanelProps) {
         </Link>
       ),
     },
+    {
+      id: 'remove',
+      header: '',
+      accessor: (row) => {
+        const isPending = pendingRemoveId === row.attachment.id
+        const isDeleting = deleteAttachment.isPending && isPending
+        if (!isPending) {
+          return (
+            <Button
+              variant="danger"
+              size="sm"
+              data-testid="attachment-remove-button"
+              onClick={() => setPendingRemoveId(row.attachment.id)}
+            >
+              Remove
+            </Button>
+          )
+        }
+        return (
+          <div style={{ display: 'flex', gap: '.4rem' }}>
+            <Button
+              variant="danger"
+              size="sm"
+              data-testid="attachment-remove-confirm-button"
+              onClick={() => onConfirmRemove(row.attachment.id)}
+              loading={isDeleting}
+              disabled={isDeleting}
+            >
+              Confirm remove?
+            </Button>
+            <Button
+              variant="ghost"
+              size="sm"
+              data-testid="attachment-remove-cancel-button"
+              onClick={() => setPendingRemoveId(null)}
+              disabled={isDeleting}
+            >
+              Cancel
+            </Button>
+          </div>
+        )
+      },
+    },
   ]
 
   const rows: AttachmentRow[] = (attachmentsQuery.data?.items ?? []).map((attachment) => ({
@@ -99,6 +190,16 @@ export function AttachmentPanel({ instanceId }: AttachmentPanelProps) {
 
   return (
     <section data-testid="attachment-panel">
+      <div data-testid="attachment-storage-usage" style={{ fontSize: '.82rem', color: 'var(--color-neutral-700)', marginBottom: '.5rem' }}>
+        {storageUsageQuery.isLoading
+          ? 'Loading storage usage…'
+          : storageUsageQuery.isError
+            ? 'Storage usage unavailable'
+            : storageUsageQuery.data
+              ? `${formatByteSize(storageUsageQuery.data.used_bytes)} of ${formatByteSize(storageUsageQuery.data.allowance_bytes)} used`
+              : null}
+      </div>
+
       <div style={{ display: 'flex', gap: '.6rem', flexWrap: 'wrap', alignItems: 'end', marginBottom: '.85rem' }}>
         <label style={{ display: 'grid', gap: '.2rem', fontSize: '.82rem', color: 'var(--color-neutral-700)' }}>
           File
@@ -130,6 +231,17 @@ export function AttachmentPanel({ instanceId }: AttachmentPanelProps) {
           Upload
         </Button>
       </div>
+
+      {uploadError && (
+        <p
+          data-testid="attachment-upload-error"
+          data-error-kind={uploadError.kind}
+          role="alert"
+          style={{ color: 'var(--color-error-dark)', fontSize: '.85rem', marginBottom: '.85rem' }}
+        >
+          {uploadError.message}
+        </p>
+      )}
 
       <QueryStateBoundary
         state={rendererState}

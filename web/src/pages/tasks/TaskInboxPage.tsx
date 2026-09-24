@@ -1,6 +1,7 @@
 import { useState, useMemo } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { useTaskInbox, useCompleteTask, useTask, useClaimTask } from '@/hooks/useTasks'
+import { useTaskCompletionAttachments } from '@/hooks/useAttachments'
 import { useAuth } from '@/auth/AuthContext'
 import { QueryStateBoundary } from '@/components/ui/QueryStateBoundary'
 import { Button } from '@/components/ui/Button'
@@ -251,6 +252,13 @@ function TaskDetailPanel({ taskId, onClose }: { taskId: string; onClose: () => v
   const { session } = useAuth()
   const complete = useCompleteTask()
   const claim = useClaimTask()
+  // REQ-392 AC5 -- the reviewed attachment(s) named on the completed task's
+  // TASK_COMPLETED event snapshot. Only fetched once the task is COMPLETED.
+  const completionAttachments = useTaskCompletionAttachments(
+    task?.instance_id ?? '',
+    taskId,
+    task?.status === 'COMPLETED',
+  )
 
   // Form field values keyed by schema field name. Fed from each rendered
   // form-field-<name> input's onChange and sent as output_variables on
@@ -304,6 +312,18 @@ function TaskDetailPanel({ taskId, onClose }: { taskId: string; onClose: () => v
       <div style={{ marginBottom: '1.5rem' }}>
         <StatusBadge status={task.status} domain="task" />
       </div>
+
+      {/* REQ-392 AC5 -- reviewed attachment(s), completed tasks only. No
+          empty-state text for a zero-length snapshot (fetched successfully,
+          nothing was attached at decision time) -- this section simply does
+          not appear, matching this page's existing conditional-render
+          convention (e.g. correlation_key above). */}
+      {task.status === 'COMPLETED' && completionAttachments.data && completionAttachments.data.length > 0 && (
+        <div data-testid="task-decision-attachments" style={{ marginBottom: '1.5rem', fontSize: '.85rem', color: 'var(--text-secondary)' }}>
+          {completionAttachments.data.length === 1 ? 'Reviewed document: ' : 'Reviewed documents: '}
+          {completionAttachments.data.map((a) => a.file_name).join(', ')}
+        </div>
+      )}
 
       {/* Instance context */}
       <div

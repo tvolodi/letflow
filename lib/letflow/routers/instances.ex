@@ -410,6 +410,16 @@ defmodule Letflow.Routers.Instances do
     handle_get_attachment_link_content(conn, conn.params["id"], conn.params["attachment_id"])
   end
 
+  # REQ-392 design §1.2 -- tenant-wide storage-usage figure. No `:id` path
+  # segment at all, but MUST still precede the bare `authz_get "/:id"` below
+  # -- `/:id` matches any single path segment, including the literal string
+  # "storage-usage", so declaration order still decides which route wins
+  # (same ordering hazard class as /:id/rebind-pins etc. above; see
+  # moduledoc's "Route ordering" section).
+  authz_get "/storage-usage", :AttachmentsRead do
+    handle_storage_usage(conn)
+  end
+
   authz_get "/:id", :InstancesRead do
     handle_get_by_id(conn, conn.params["id"])
   end
@@ -1004,6 +1014,21 @@ defmodule Letflow.Routers.Instances do
       "version" => pin.version,
       "source" => Atom.to_string(pin.source)
     }
+  end
+
+  # ── GET /instances/storage-usage (REQ-392 design §1.2) ───────────────────
+
+  defp handle_storage_usage(conn) do
+    opts = conn.assigns.scoped_opts
+    render_storage_usage(conn, Attachments.storage_summary(opts))
+  end
+
+  defp render_storage_usage(conn, {:ok, %{used_bytes: used_bytes, allowance_bytes: allowance}}) do
+    Response.ok(conn, %{"used_bytes" => used_bytes, "allowance_bytes" => allowance})
+  end
+
+  defp render_storage_usage(conn, {:error, :tenant_not_found}) do
+    Response.unprocessable(conn, "request tenant does not exist")
   end
 
   # ── POST /instances/:id/attachments (REQ-212 design §5.4) ────────────────

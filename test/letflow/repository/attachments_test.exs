@@ -893,4 +893,115 @@ defmodule Letflow.Repository.AttachmentsTest do
       assert "ATTACHMENT_REMOVED" in names
     end
   end
+
+  describe "storage_summary/1 (REQ-392 design §1.1)" do
+    test "returns {:ok, %{used_bytes, allowance_bytes}} reflecting real uploads and the tenant's own allowance" do
+      %{schema_name: schema, tenant_id: tenant_id} = provisioned_tenant("req392-summary")
+      instance_id = Ecto.UUID.generate()
+      seed_active_instance_projection!(schema, instance_id)
+
+      set_storage_allowance!(tenant_id, 500_000)
+
+      assert {:ok, %{used_bytes: 0, allowance_bytes: 500_000}} =
+               Attachments.storage_summary(prefix: schema)
+
+      assert {:ok, _attachment} =
+               Attachments.upload(
+                 upload_attrs(
+                   instance_id: instance_id,
+                   file_name: "first.pdf",
+                   raw_bytes: :crypto.strong_rand_bytes(1_000)
+                 ),
+                 prefix: schema
+               )
+
+      assert {:ok, %{used_bytes: 1_000, allowance_bytes: 500_000}} =
+               Attachments.storage_summary(prefix: schema)
+
+      assert {:ok, _attachment2} =
+               Attachments.upload(
+                 upload_attrs(
+                   instance_id: instance_id,
+                   file_name: "second.pdf",
+                   raw_bytes: :crypto.strong_rand_bytes(2_500)
+                 ),
+                 prefix: schema
+               )
+
+      # AC3's own wording: the figure must rise correctly across an accepted
+      # upload -- 1_000 + 2_500 = 3_500, not e.g. only the latest upload's
+      # byte_size or a stale cached value.
+      assert {:ok, %{used_bytes: 3_500, allowance_bytes: 500_000}} =
+               Attachments.storage_summary(prefix: schema)
+    end
+
+    test "used_bytes falls after a removal (AC3's own 'and a removal' wording)" do
+      %{schema_name: schema} = provisioned_tenant("req392-summary-del")
+      instance_id = Ecto.UUID.generate()
+      seed_active_instance_projection!(schema, instance_id)
+      deleted_by = Ecto.UUID.generate()
+
+      assert {:ok, attachment} =
+               Attachments.upload(
+                 upload_attrs(
+                   instance_id: instance_id,
+                   file_name: "removable.pdf",
+                   raw_bytes: :crypto.strong_rand_bytes(4_096)
+                 ),
+                 prefix: schema
+               )
+
+      assert {:ok, %{used_bytes: 4_096}} = Attachments.storage_summary(prefix: schema)
+
+      assert {:ok, _deleted} = Attachments.delete(attachment.id, deleted_by, prefix: schema)
+
+      assert {:ok, %{used_bytes: 0}} = Attachments.storage_summary(prefix: schema)
+    end
+
+    test "is per-tenant, not per-instance -- takes no instance_id and does not mix two instances' usage in the same tenant" do
+      %{schema_name: schema} = provisioned_tenant("req392-summary-multi")
+      instance_a = Ecto.UUID.generate()
+      instance_b = Ecto.UUID.generate()
+      seed_active_instance_projection!(schema, instance_a)
+      seed_active_instance_projection!(schema, instance_b)
+
+      assert {:ok, _} =
+               Attachments.upload(
+                 upload_attrs(
+                   instance_id: instance_a,
+                   file_name: "a.pdf",
+                   raw_bytes: :crypto.strong_rand_bytes(600)
+                 ),
+                 prefix: schema
+               )
+
+      assert {:ok, _} =
+               Attachments.upload(
+                 upload_attrs(
+                   instance_id: instance_b,
+                   file_name: "b.pdf",
+                   raw_bytes: :crypto.strong_rand_bytes(400)
+                 ),
+                 prefix: schema
+               )
+
+      # storage_summary/1 has no instance_id parameter to pass at all -- this
+      # assertion is really "the function signature is per-tenant", proven
+      # by the fact that the returned figure is the SUM across both
+      # instances, not either instance's own subset.
+      assert {:ok, %{used_bytes: 1_000}} = Attachments.storage_summary(prefix: schema)
+    end
+
+    test "returns {:error, :tenant_not_found} when the tenant row is absent (same unreachable-but-mapped edge check_storage_quota/3 guards, ISS-0788 precedent)" do
+      %{schema_name: schema, tenant_id: tenant_id} = provisioned_tenant("req392-summary-norow")
+
+      Repo.delete_all(
+        from(r in Letflow.TenantProvisioning.Registration, where: r.tenant_id == ^tenant_id)
+      )
+
+      Repo.delete_all(from(t in Letflow.Identity.Tenant, where: t.id == ^tenant_id))
+
+      assert {:error, :tenant_not_found} = Attachments.storage_summary(prefix: schema)
+    end
+  end
 end

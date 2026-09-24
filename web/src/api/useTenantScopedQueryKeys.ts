@@ -49,6 +49,9 @@ export function useTenantScopedQueryKeys() {
       attachments: queryKeys.instances.attachments.bind(null, tenantId),
       pins: queryKeys.instances.pins.bind(null, tenantId),
     },
+    attachments: {
+      storageUsage: queryKeys.attachments.storageUsage.bind(null, tenantId),
+    },
     definitions: {
       all: () => queryKeys.definitions.all(tenantId),
       list: queryKeys.definitions.list.bind(null, tenantId),

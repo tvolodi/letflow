@@ -224,6 +224,14 @@ export interface AttachmentsPage {
   next_cursor: string | null
 }
 
+/** `GET /api/v1/instances/storage-usage` response — REQ-392 §1.2/§5.1. A
+ *  tenant-wide (not per-instance) figure, matching `attachment_json/1`'s own
+ *  field-naming convention (no camelCase translation layer). */
+export interface StorageUsage {
+  used_bytes: number
+  allowance_bytes: number
+}
+
 // ── Dependency-version/provenance (REQ-399, PinResolver.effective_pin()) ───────
 
 /** Mirrors `Letflow.Engine.PinResolver.source()` — exactly four values, no

@@ -104,6 +104,13 @@ export const queryKeys = {
       [...queryKeys.instances.all(tenantId), 'pins', instanceId] as const,
   },
 
+  /** REQ-392 §5.2 — tenant-wide (not instance-scoped) storage-usage figure.
+   *  A new top-level group, not nested under `instances`, since
+   *  `Attachments.storage_summary/1` takes no `instance_id`. */
+  attachments: {
+    storageUsage: (tenantId: string) => ['tenant', tenantId, 'attachments', 'storage-usage'] as const,
+  },
+
   definitions: {
     all: (tenantId: string) => ['tenant', tenantId, 'definitions'] as const,
     list: (tenantId: string, filters: DefinitionListFilters) =>

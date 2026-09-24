@@ -677,6 +677,12 @@ defmodule Letflow.Api.Authorization do
   def endpoint_policy_key("GET", "/instances/:id/attachments/:attachment_id/link-content"),
     do: :AttachmentsRead
 
+  # REQ-392 — tenant-wide storage-usage figure (Letflow.Routers.Instances),
+  # design lib/letflow/design/req392-attachment-management-ui.md §1.2. Reuses
+  # :AttachmentsRead (attachment-adjacent read, no new permission class) —
+  # same reasoning as the /link-content route above.
+  def endpoint_policy_key("GET", "/instances/storage-usage"), do: :AttachmentsRead
+
   # REQ-309 — entity-subsystem routes (the future `Letflow.Routers.Entities`,
   # mounted at `/entities`), per design
   # `lib/letflow/design/req308-entity-http-surface.md` §1's route table and §3's

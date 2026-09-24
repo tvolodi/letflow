@@ -5,7 +5,7 @@
   "step": "Step 4b (Test Design Gate)",
   "to_agent": "TEST-DESIGN-VALIDATOR",
   "from_agent": "ORCH",
-  "status": "PENDING",
+  "status": "COMPLETED",
   "created_at": "2026-09-24T01:04:09Z",
   "started_at": "2026-09-24T01:04:09Z",
   "context": {
@@ -26,5 +26,20 @@
       "Tests isolated"
     ]
   },
-  "result": null
+  "result": {
+    "status": "COMPLETED",
+    "verdict": "PASS",
+    "completed_at": "2026-09-24T01:10:00Z",
+    "checks": {
+      "ac3_route_layer": "PASS -- dispatch_multipart -> dispatch/1 -> Letflow.Routers.Instances.call/2 (real Plug router, not direct render_upload_attachment call)",
+      "ac3_both_atoms": "PASS -- :storage_quota_exceeded -> 409, :tenant_not_found -> 422",
+      "ac3_4xx_not_5xx": "PASS -- conn.status == 409 and conn.status == 422 asserted in both tests",
+      "fail_first_credible": "PASS -- pre-fix failure is FunctionClauseError at render_upload_attachment/2:1058 (missing clause, existing function); in Plug router this becomes 500; test asserts 409/422 so fails pre-fix, passes post-fix; not UndefinedFunctionError so mandatory-mutant rule does not apply",
+      "test_isolation": "PASS -- each test provisions its own tenant (slug_prefix iss0788-quota / iss0788-norow); no shared hardcoded state",
+      "no_skip_tags": "PASS",
+      "no_todo_stubs": "PASS",
+      "no_hardcoded_secrets": "PASS"
+    },
+    "note": "Pre-fix failure type (FunctionClauseError on missing clause vs UndefinedFunctionError on missing function) is the key discriminator for whether mandatory mutant validation applies. This is missing-clause, not missing-function; fail-first is genuine."
+  }
 }

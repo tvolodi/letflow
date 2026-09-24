@@ -28817,7 +28817,7 @@ requirements:
   - id: REQ-389
     title: "Content-type allowlist enforcement for instance-attachment uploads, refusing disallowed kinds with a plain limit explanation"
     owner: ELIXIR-DEV
-    status: pending
+    status: done
     stage: S6
     impl_order: 749  # letflow-queue task id, GH#1637. Registered 2026-09-20 by ORCH;
       # corrects a fabricated/self-assigned id (746) that was never a real

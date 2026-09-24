@@ -724,6 +724,55 @@ defmodule Letflow.Repository.AttachmentsTest do
     end
   end
 
+  # ---------------------------------------------------------------------------------
+  # REQ-389 -- content-type allowlist enforcement.
+  # AC1: a disallowed content_type is rejected before any persistence, checked before
+  #      the size ceiling, the malware scan, and the storage-quota check.
+  # AC3: application/pdf (already accepted before this change) continues to be accepted.
+  # ---------------------------------------------------------------------------------
+
+  describe "REQ-389: content-type allowlist" do
+    test "a disallowed content_type is rejected before any persistence, with neither row created (AC1)" do
+      %{schema_name: schema} = provisioned_tenant("req389-disallowed")
+
+      assert Attachments.upload(upload_attrs(content_type: "video/mp4"), prefix: schema) ==
+               {:error, :content_type_not_allowed}
+
+      assert Repo.aggregate(Artifact, :count, prefix: schema) == 0
+      assert Repo.aggregate(Attachment, :count, prefix: schema) == 0
+    end
+
+    test "content_type_not_allowed wins over file_too_large and storage_quota_exceeded when all three would independently fire (AC1 ordering)" do
+      %{schema_name: schema, tenant_id: tenant_id} = provisioned_tenant("req389-ordering")
+
+      # Both independently-failing conditions are present: an oversized body
+      # (would trigger :file_too_large on its own) and an exhausted storage
+      # allowance (would trigger :storage_quota_exceeded on its own) -- only
+      # the disallowed content_type should be observed, proving the new guard
+      # is the literal first check in upload/2 (design §3.1).
+      set_storage_allowance!(tenant_id, 1)
+      oversized = :binary.copy("a", 26_214_401)
+
+      assert Attachments.upload(
+               upload_attrs(content_type: "video/mp4", raw_bytes: oversized),
+               prefix: schema
+             ) == {:error, :content_type_not_allowed}
+
+      assert Repo.aggregate(Artifact, :count, prefix: schema) == 0
+      assert Repo.aggregate(Attachment, :count, prefix: schema) == 0
+    end
+
+    test "application/pdf continues to be accepted (AC3 regression, same fixture REQ-211/212's own tests use)" do
+      %{schema_name: schema} = provisioned_tenant("req389-pdf-regression")
+
+      assert {:ok, %Attachment{content_type: "application/pdf"}} =
+               Attachments.upload(
+                 upload_attrs(content_type: "application/pdf", raw_bytes: "PDF-BYTES-HERE"),
+                 prefix: schema
+               )
+    end
+  end
+
   describe "ISS-0785: cross-instance-same-tenant denial in get_content/3" do
     test "returns {:error, :not_found} when the attachment belongs to a different instance in the same tenant" do
       %{schema_name: schema} = provisioned_tenant("iss0785-cross-instance")

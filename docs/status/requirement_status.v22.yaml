@@ -497,3 +497,37 @@ history:
       the formal workflow script) -- its findings are recorded in full in
       this cycle's PR body instead. Merged via PR on
       feature/WF02-REQ399-20260923.
+  - req: REQ-389
+    event: done
+    agent: DOC-UPDATER
+    at: "2026-09-24T01:36:56Z"
+    note: >
+      WF02-REQ389-20260923 Step 6 -- full pipeline passed (CODE-DESIGN-VALIDATOR,
+      REVIEWER -- which also found and separately filed+merged ISS-0788, a
+      pre-existing unrelated defect, not blocking this requirement --
+      TEST-DESIGN-VALIDATOR, TEST-RUNNER, RELEASE-VALIDATOR verdict MERGEABLE,
+      all 5 acceptance criteria independently confirmed). Ships a module-level
+      content-type allowlist checked as the first guard in
+      `Letflow.Repository.Attachments.upload/2` -- before the size ceiling,
+      the malware scan, and any `repository_artifacts`/`instance_attachments`
+      write -- returning a new `{:error, :content_type_not_allowed}` tag on a
+      rejected declared content_type. The route layer
+      (`lib/letflow/routers/instances.ex`) renders this as a distinct 415
+      response naming the rejected type and the allowed set in plain
+      language, separate from the existing `:file_too_large`/`:infected`
+      bodies. A test confirms a rejected upload leaves neither a
+      `repository_artifacts` nor an `instance_attachments` row behind, and a
+      regression test confirms `application/pdf` (REQ-211/212's own fixture)
+      continues to be accepted. Design doc
+      (lib/letflow/design/req389-attachment-content-type-allowlist.md)
+      documents explicitly why this new check against the caller-declared
+      content_type does not contradict INV-a's existing no-MIME-sniffing
+      statement -- INV-a's scope (no byte-content sniffing) is unchanged;
+      this adds a coarser check against the declared string only. Commits:
+      4973aa90 (design), 27e004d3 (implementation), 8ad89658 (tests). Status
+      flipped in docs/requirements.yaml. README.md not touched -- grepped for
+      "attachment"/"content-type": no documented current-behavior surface
+      describing the attachment upload API to keep in sync (same pattern as
+      REQ-386/387/388/390/391's own notes). No docs/migration/stage-N-*.md
+      or decisions/*.md file was named by this requirement's acceptance
+      criteria. Merged via PR on feature/WF02-REQ389-20260923.

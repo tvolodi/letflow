@@ -4610,8 +4610,17 @@ volumes:
     path: docs/status/requirement_status.v22.yaml
     status: current
     opened: 2026-09-22
-    entries: 15
+    entries: 16
     note: >
+      Incremented to 16 by DOC-UPDATER's own REQ-389 done-event append
+      (WF02-REQ389-20260923, 2026-09-24T01:36:56Z -- content-type allowlist
+      enforcement for instance-attachment uploads, plus REVIEWER's separately
+      filed+merged side-finding ISS-0788). `grep -c "^  - req:"
+      docs/status/requirement_status.v22.yaml` = 16 on-disk entries,
+      recounted directly rather than assumed. 533 lines / 31469 bytes,
+      well under the 1200-line/120000-byte roll ceiling, so no roll
+      triggered. Prior notes preserved below verbatim.
+
       Incremented to 15 by DOC-UPDATER's own REQ-399 done-event append
       (WF02-REQ399-20260923, 2026-09-23T22:23:29Z -- case-detail dependency-
       version/provenance panel consuming REQ-080's already-shipped

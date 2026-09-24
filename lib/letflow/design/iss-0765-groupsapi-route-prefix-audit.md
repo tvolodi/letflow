@@ -9,7 +9,7 @@
 | File | Change class |
 |---|---|
 | `web/src/api/identity.ts` | `groupsApi` only — URL literals, two deletions, signatures, return types |
-| `web/src/types/api.ts` | three new exported interfaces, additive only |
+| `web/src/types/api.ts` | four new exported interfaces, additive only |
 | `web/src/pages/admin/GroupsPage.tsx` | consequence of §3's `.members` retype (5 edits + 1 added line) and §4's `addMember` rename (1 edit) |
 | `web/src/api/__tests__/identity.groupsApi.test.ts` | new file (§7 test matrix) |
 
@@ -250,7 +250,7 @@ is out of scope) — it is reported to ORCH as a new finding instead.
 one wrong envelope for another. `CursorPage<T>` has ~12 other users across `web/src/api/`
 and correcting it is a separate audit — reported to ORCH as a finding, not changed here.
 
-### 3.2 `GroupsPage.tsx` — the five lines that change
+### 3.2 `GroupsPage.tsx` — the six lines that change
 
 Line numbers are pre-fix, from the file as it stands at `c484800f`.
 

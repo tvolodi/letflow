@@ -1,0 +1,301 @@
+{
+  "handoff_id": "WF03-ISS0765-20260924-step-04",
+  "run_id": "WF03-ISS0765-20260924",
+  "workflow_id": "WF-03",
+  "step": "Step 4",
+  "to_agent": "ORCH",
+  "from_agent": "TEST-DESIGNER",
+  "status": "COMPLETED",
+  "created_at": "2026-09-24T17:44:20Z",
+  "started_at": "2026-09-24T17:30:00Z",
+  "completed_at": "2026-09-24T17:44:20Z",
+  "context": {
+    "branch_name": "feature/WF03-ISS0765-20260924",
+    "issue_id": "ISS-0765",
+    "queue_ref": "Q-810",
+    "github_ref": "GH-1798",
+    "design_authority": "lib/letflow/design/iss-0765-groupsapi-route-prefix-audit.md sections 7 and 7.1",
+    "implementation_commit": "bcddcebf652c23d46d5161584ef0f3443adb9025",
+    "pre_fix_ref": "main = d28c3cf6d45d6eeac365bf6e22c0adfd049d0bb3",
+    "head_at_start": "4115494ef3bbea9d5bb42ddd074cf69765294dca",
+    "gates_passed_upstream": [
+      "Step 3c SECURITY-REVIEWER -- PASS (6d6f8c2e)",
+      "Step 3d REVIEWER -- PASS (60884b54)"
+    ],
+    "artifacts_in": [
+      "lib/letflow/design/iss-0765-groupsapi-route-prefix-audit.md",
+      "handoffs/WF03-ISS0765-20260924/step-03-frontend-dev.json",
+      "handoffs/WF03-ISS0765-20260924/step-02b-design-gate-rework1.json",
+      "handoffs/WF03-ISS0765-20260924/step-03d-reviewer.json",
+      "web/src/api/__tests__/identity.removeMembers.test.ts",
+      "web/src/api/identity.ts",
+      "web/src/api/client.ts",
+      "web/tests/guards/source-scan.spec.ts",
+      "web/tests/guards/forbidlist.ts",
+      "docs/issues/ISS-0765.yaml"
+    ]
+  },
+  "task": {
+    "description": "WF-03 Step 4 -- write the ISS-0765 regression test to design section 7's eleven-row matrix, measure it red against the pre-fix code, apply and measure the two design-specified mutants M-1a/M-1b for the type-only .members retype, revert and verify, and correct two wording slips REVIEWER found in the design header.",
+    "acceptance_criteria": [
+      "web/src/api/__tests__/identity.groupsApi.test.ts implements the eleven-row matrix exactly as section 7/7.1 specify after the rework-1 fold",
+      "the literal raw-fetch token never appears in the new file; no forbidlist entry weakened, no allowedPaths entry added",
+      "row 10 is scoped to groupsApi's own captured URLs, not a whole-file absence assertion",
+      "rows 1-6, 7(i), 8, 9, 10 measured RED against the pre-fix tree; 7(ii) and 11 green pre-fix by design",
+      "M-1a and M-1b applied and measured, with whatever tsc actually emitted recorded verbatim",
+      "mutants reverted and the revert verified",
+      "npm run type-check, npm run lint, npm test, npm run guards green with real quoted output",
+      "committed and pushed to origin/feature/WF03-ISS0765-20260924 with no divergence"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "scope_test": {
+      "verdict": "IN SCOPE -- real executable surface",
+      "reasoning": "Step 3's artifacts_out are three application-logic TypeScript files under web/src/ (api client, types, a React page). Not docs-only, not build-config. A runtime regression test against the corrected URL literals and request bodies is meaningful, and was written."
+    },
+    "artifacts_out": [
+      "web/src/api/__tests__/identity.groupsApi.test.ts",
+      "test/specs/ISS-0765.md",
+      "lib/letflow/design/iss-0765-groupsapi-route-prefix-audit.md (two header wording corrections only)",
+      "handoffs/WF03-ISS0765-20260924/step-04-test-designer.json"
+    ],
+    "test_file": {
+      "path": "web/src/api/__tests__/identity.groupsApi.test.ts",
+      "design_rows": 11,
+      "vitest_cases": 16,
+      "why_16_not_11": "Row 10 is an it.each over the six surviving groupsApi functions, so it expands to six vitest cases. 10 other rows contribute one case each. Row 7 is a single it block carrying both halves, per the rework-1 fold that merged old rows 7 and 8.",
+      "harness": "Mirrors web/src/api/__tests__/identity.removeMembers.test.ts: // @vitest-environment jsdom, a window.fetch double ASSIGNED from vi.fn(), setToken/clearToken in beforeEach/afterEach, assertions on the exact method + path actually requested. No wall-clock dependency, no unseeded randomness -- every response body is a fixed literal the test constructs.",
+      "guard_constraint_honoured": "The literal eight-character token matched by forbidlist.ts:40-44's raw-fetch-outside-client pattern appears NOWHERE in the file, comments included -- verified by grep (exit 1, no match) before the guards run, and confirmed green by npm run guards. No forbidlist entry was weakened, removed or allowedPaths-exempted (design INV-F). The file also contains no '#' character at all, so the literal-colour pattern cannot fire on it.",
+      "row_10_scoping": "Row 10 asserts over groupsApi's OWN captured URLs via it.each, NOT over file content. A whole-file absence assertion would fail for the wrong reason: /api/v1/admin/ still legitimately appears at identity.ts:73-88 in rolesApi, which is ISS-0812's scope. This is the correctness note REVIEWER carried into Step 4, and it is honoured."
+    },
+    "fail_first_evidence": {
+      "method": "A throwaway `git worktree add --detach` at main (d28c3cf6, the pre-fix tree) in the session scratchpad, with web/node_modules supplied as a directory junction to the working checkout's. The new test file was copied in and run there. The working checkout at C:\\Users\\tvolo\\dev\\ai-dala\\letflow was NEVER mutated at any point in this step -- neither for the pre-fix measurement nor for either mutant.",
+      "pre_fix_summary_verbatim": "Test Files  1 failed (1)\n      Tests  14 failed | 2 passed (16)\n   Start at  22:36:31\n   Duration  918ms",
+      "post_fix_summary_verbatim": "Test Files  1 passed (1)\n      Tests  16 passed (16)\n   Start at  22:35:29\n   Duration  947ms",
+      "per_row": [
+        {
+          "row": 1,
+          "id": "T-0765-LIST",
+          "cases": 1,
+          "design_expectation": "FAILS",
+          "measured": "FAIL",
+          "observed_verbatim": "expected '/api/v1/admin/groups' to contain '/api/v1/identity/groups'"
+        },
+        {
+          "row": 2,
+          "id": "T-0765-CREATE",
+          "cases": 1,
+          "design_expectation": "FAILS",
+          "measured": "FAIL",
+          "observed_verbatim": "expected '/api/v1/admin/groups' to contain '/api/v1/identity/groups'"
+        },
+        {
+          "row": 3,
+          "id": "T-0765-DELETE",
+          "cases": 1,
+          "design_expectation": "FAILS",
+          "measured": "FAIL",
+          "observed_verbatim": "expected '/api/v1/admin/groups/g-1' to contain '/api/v1/identity/groups/g-1'"
+        },
+        {
+          "row": 4,
+          "id": "T-0765-ADD-PATH",
+          "cases": 1,
+          "design_expectation": "FAILS",
+          "measured": "FAIL",
+          "observed_verbatim": "groupsApi.addMember is not a function"
+        },
+        {
+          "row": 5,
+          "id": "T-0765-ADD-BODY",
+          "cases": 1,
+          "design_expectation": "FAILS",
+          "measured": "FAIL",
+          "observed_verbatim": "groupsApi.addMember is not a function"
+        },
+        {
+          "row": 6,
+          "id": "T-0765-ADD-ARITY",
+          "cases": 1,
+          "design_expectation": "FAILS",
+          "measured": "FAIL",
+          "observed_verbatim": "expected 'undefined' to be 'function' // Object.is equality"
+        },
+        {
+          "row": "7(i)",
+          "id": "T-0765-MEMBERS (path half)",
+          "cases": 1,
+          "design_expectation": "FAILS on half (i) only",
+          "measured": "FAIL",
+          "observed_verbatim": "expected '/api/v1/admin/groups/g-1/members' to contain '/api/v1/identity/groups/g-1/members'"
+        },
+        {
+          "row": "7(ii)",
+          "id": "T-0765-MEMBERS (no-unwrap envelope half)",
+          "cases": "same block as 7(i)",
+          "design_expectation": "PASSES pre-fix and post-fix alike -- forward regression guard, NOT fail-first evidence",
+          "measured": "PASS",
+          "how_measured": "Unobservable inside its own block pre-fix, because half (i) throws first. It was therefore measured separately with a throwaway probe file in the same pre-fix worktree that ran half (ii)'s five assertions in isolation against the pre-fix client.get<User[]> .members. Result verbatim: 'Test Files  1 passed (1) / Tests  1 passed (1)'. The probe file was deleted; it is not part of the deliverable.",
+          "recorded_as": "FORWARD REGRESSION GUARD. Explicitly NOT reported as an eleventh red row, per design section 7.1's instruction. It goes red if a future change reintroduces an .items unwrap inside groupsApi.members (design INV-B)."
+        },
+        {
+          "row": 8,
+          "id": "T-0765-NO-GET-UPDATE",
+          "cases": 1,
+          "design_expectation": "FAILS",
+          "measured": "FAIL",
+          "observed_verbatim": "expected true to be false // Object.is equality"
+        },
+        {
+          "row": 9,
+          "id": "T-0765-SURFACE",
+          "cases": 1,
+          "design_expectation": "FAILS",
+          "measured": "FAIL",
+          "observed_verbatim": "expected [ 'addMembers', 'create', \u2026(6) ] to deeply equal [ 'addMember', 'create', \u2026(4) ]"
+        },
+        {
+          "row": 10,
+          "id": "T-0765-NO-ADMIN-PREFIX",
+          "cases": 6,
+          "design_expectation": "FAILS on 5 of 6 rows (removeMembers passes)",
+          "measured": "5 FAIL, 1 PASS -- exactly as designed",
+          "observed_verbatim": {
+            "list": "expected '/api/v1/admin/groups' not to contain '/api/v1/admin/'",
+            "create": "expected '/api/v1/admin/groups' not to contain '/api/v1/admin/'",
+            "delete": "expected '/api/v1/admin/groups/g-1' not to contain '/api/v1/admin/'",
+            "addMember": "groupsApi.addMember is not a function",
+            "removeMembers": "PASS",
+            "members": "expected '/api/v1/admin/groups/g-1/members' not to contain '/api/v1/admin/'"
+          }
+        },
+        {
+          "row": 11,
+          "id": "T-0765-REMOVE-UNCHANGED",
+          "cases": 1,
+          "design_expectation": "PASSES pre-fix",
+          "measured": "PASS",
+          "recorded_as": "Enumeration row, not fail-first evidence. Proves this run did not regress the ISS-0736 correction while rewriting the object literal around it (design INV-C)."
+        }
+      ],
+      "arithmetic_check": "10 red design rows -> 9 single cases + 5 of row 10's 6 = 14 failing vitest cases. 2 green design rows -> row 11's case + row 10's removeMembers case = 2 passing. 14 + 2 = 16. Matches the measured 'Tests  14 failed | 2 passed (16)' exactly."
+    },
+    "mutants": {
+      "why_mutants_are_required": "Decision (b)'s .members retype is a TYPE-ONLY change. web/src/api/client.ts:158-169's request<T> ends in `return response.json() as Promise<T>` and T is erased at runtime, so client.get<User[]> and client.get<GroupMemberPage> are byte-identical against the same spy body. No runtime row can carry fail-first evidence for it. Both mutants were specified by the design (section 7.1), not improvised here.",
+      "applied_where": "The same throwaway worktree, re-detached at bcddcebf (the post-fix tree the mutants assume). Baseline in that worktree before any mutant: npx tsc -b tsconfig.json --force exit 0, and the new test file 16 passed (16).",
+      "M-1a": {
+        "definition": "Keep design section 3.1's GroupMember/GroupMemberPage and the retyped groupsApi.members; revert ONLY section 3.2's six GroupsPage.tsx edits to their pre-fix text. Decision (c)'s addMember caller rename at :76 was deliberately KEPT, since it belongs to section 4, not 3.2. Verified by `git diff main` on the mutated file, which showed only the addMember rename plus one cosmetic blank line as the residual difference from pre-fix.",
+        "probe_type_check": {
+          "command": "npx tsc -b tsconfig.json --force",
+          "exit": 2,
+          "diagnostic_count": 5,
+          "output_verbatim": "src/pages/admin/GroupsPage.tsx(104,47): error TS2339: Property 'map' does not exist on type 'GroupMemberPage | never[]'.\n  Property 'map' does not exist on type 'GroupMemberPage'.\nsrc/pages/admin/GroupsPage.tsx(104,52): error TS7006: Parameter 'user' implicitly has an 'any' type.\nsrc/pages/admin/GroupsPage.tsx(224,32): error TS2339: Property 'length' does not exist on type 'GroupMemberPage | never[]'.\n  Property 'length' does not exist on type 'GroupMemberPage'.\nsrc/pages/admin/GroupsPage.tsx(228,36): error TS2339: Property 'map' does not exist on type 'GroupMemberPage | never[]'.\n  Property 'map' does not exist on type 'GroupMemberPage'.\nsrc/pages/admin/GroupsPage.tsx(228,41): error TS7006: Parameter 'user' implicitly has an 'any' type."
+        },
+        "probe_npm_test": {
+          "command": "npm test",
+          "exit": 0,
+          "output_verbatim": " Test Files  125 passed (125)\n      Tests  890 passed (890)\n   Start at  22:38:24\n   Duration  26.51s",
+          "interpretation": "GREEN IS THE POINT, not a failure. The runtime suite is blind to the retype while type-check is not -- which is exactly why decision (b) chose the retype over an unwrap: it makes tsc the mechanical detector for a missed .members consumer, the highest-risk item in this fix."
+        },
+        "caveat_N1_outcome": {
+          "design_prediction": "tsc errors at the reverted :103, :223, :227, :228 sites -- explicitly flagged by the design gate as a FLOOR, not an exact expectation.",
+          "what_actually_happened": "Diagnostics landed at :104, :224 and :228 -- the design's :103/:223/:227 shifted by one line because the mutant removes the useMemo binding. There is NO diagnostic for the design's :228 reasoning (user.user_id not existing on GroupMember), because that line sits inside the callback of the .map at the line above that just failed to resolve; the diagnostic surfaces instead as TS7006 implicit-any on the callback parameter at (228,41). This is precisely the characteristic CAVEAT N-1 predicted.",
+          "action_taken": "NONE. The mutant was NOT adjusted to manufacture a :228 diagnostic. Four distinct source positions and five diagnostics clear the floor, and whatever tsc actually emitted is what is recorded -- here and in test/specs/ISS-0765.md."
+        }
+      },
+      "M-1b": {
+        "definition": "The opposite-direction control. With M-1a reverted, revert groupsApi.members to client.get<User[]> while KEEPING section 3.2's GroupsPage.tsx edits.",
+        "probe_type_check": {
+          "command": "npx tsc -b tsconfig.json --force",
+          "exit": 2,
+          "diagnostic_count": 8,
+          "output_verbatim": "src/api/__tests__/identity.groupsApi.test.ts(212,19): error TS2339: Property 'items' does not exist on type 'User[]'.\nsrc/api/__tests__/identity.groupsApi.test.ts(213,19): error TS2339: Property 'count' does not exist on type 'User[]'.\nsrc/api/__tests__/identity.groupsApi.test.ts(214,19): error TS2339: Property 'next_cursor' does not exist on type 'User[]'.\nsrc/api/identity.ts(7,3): error TS6196: 'GroupMemberPage' is declared but never used.\nsrc/pages/admin/GroupsPage.tsx(60,46): error TS2339: Property 'items' does not exist on type 'User[]'.\nsrc/pages/admin/GroupsPage.tsx(60,73): error TS2339: Property 'items' does not exist on type 'User[]'.\nsrc/pages/admin/GroupsPage.tsx(105,44): error TS7006: Parameter 'user' implicitly has an 'any' type.\nsrc/pages/admin/GroupsPage.tsx(229,33): error TS7006: Parameter 'user' implicitly has an 'any' type."
+        },
+        "design_prediction_met": "YES. The design predicted 'tsc errors on membersPage?.items over User[]'. GroupsPage.tsx(60,46) and (60,73) are exactly that -- the value read and the useMemo dependency read, both on line 60.",
+        "probe_npm_test": {
+          "command": "npm test",
+          "exit": 0,
+          "output_verbatim": " Test Files  125 passed (125)\n      Tests  890 passed (890)\n   Start at  22:39:24\n   Duration  27.01s",
+          "interpretation": "Confirms the symmetry: NEITHER direction of the type-only change is visible to the runtime suite, and BOTH are visible to tsc. That is what shows the probe discriminates this specific trap rather than merely breaking something."
+        },
+        "unplanned_observation": "M-1b's first three diagnostics land in the NEW TEST FILE ITSELF, at row 7(ii)'s result.items / result.count / result.next_cursor assertions. Row 7(ii) therefore does carry decision (b) -- not as a runtime red row, which section 7.1 correctly says is impossible, but as a COMPILE-TIME guard: if groupsApi.members's declared return type ever stops being the real envelope, the test file stops type-checking. Reported as an observation neither the design nor the gate anticipated. It is NOT claimed as fail-first evidence and does not change row 7(ii)'s recorded classification."
+      },
+      "revert_verification": {
+        "where_mutants_lived": "Throwaway git worktree only. The working checkout was never mutated, so the binding 'revert with git checkout --' path did not need to be exercised there.",
+        "worktree_after_reverting_both": {
+          "git_status_porcelain_web": "?? web/src/api/__tests__/identity.groupsApi.test.ts",
+          "note": "The single entry is the untracked deliverable copied in for the measurement. No tracked file under web/ is modified.",
+          "type_check_verbatim": "npx tsc -b tsconfig.json --force -> TSC_EXIT=0, no diagnostics",
+          "test_file_rerun_verbatim": " Test Files  1 passed (1)\n      Tests  16 passed (16)\n   Start at  22:40:09\n   Duration  1.49s"
+        },
+        "worktree_disposal": "web/node_modules junction removed with `cmd /c rmdir` (link only -- the working checkout's node_modules was verified intact at 396 entries afterwards), then `git worktree remove --force`. `git worktree list` afterwards shows no wt-prefix entry.",
+        "working_checkout_after": {
+          "git_diff_stat_HEAD_web": "(empty -- no tracked file under web/ differs from HEAD)",
+          "git_status_porcelain_before_commit": " M lib/letflow/design/iss-0765-groupsapi-route-prefix-audit.md\n?? test/specs/ISS-0765.md\n?? web/src/api/__tests__/identity.groupsApi.test.ts",
+          "interpretation": "The only modified tracked file is the design doc's two authorised wording corrections. The two untracked files are this step's deliverables. No mutant residue anywhere."
+        }
+      }
+    },
+    "verification": {
+      "run_from": "C:\\Users\\tvolo\\dev\\ai-dala\\letflow\\web",
+      "type_check": {
+        "command": "npm run type-check",
+        "exit": 0,
+        "output_verbatim": "> letflow-web@0.1.0 type-check\n> tsc -b tsconfig.json",
+        "additional": "Also re-run as `npx tsc -b tsconfig.json --force`, exit 0 with no diagnostics, so the result is a full rebuild and not a tsbuildinfo cache hit."
+      },
+      "lint": {
+        "command": "npm run lint",
+        "exit": 0,
+        "output_verbatim": "> letflow-web@0.1.0 lint\n> eslint . --ext ts,tsx --report-unused-disable-directives --max-warnings 0",
+        "note": "No output; --max-warnings 0 in force. The new test file is inside eslint's scope."
+      },
+      "test": {
+        "command": "npm test",
+        "exit": 0,
+        "output_verbatim": " Test Files  125 passed (125)\n      Tests  890 passed (890)\n   Start at  22:43:15\n   Duration  25.71s (transform 12.24s, setup 0ms, collect 113.78s, tests 25.64s, environment 155.71s, prepare 32.99s)",
+        "delta_from_step_3": "124 files / 874 tests -> 125 files / 890 tests. +1 file and +16 tests, exactly the new file's case count. No pre-existing test changed state."
+      },
+      "guards": {
+        "command": "npm run guards",
+        "exit": 0,
+        "output_verbatim": " Test Files  4 passed (4)\n      Tests  48 passed (48)\n   Start at  22:43:46\n   Duration  15.32s (transform 110ms, setup 0ms, collect 758ms, tests 14.68s, environment 1ms, prepare 563ms)",
+        "note": "source-scan globs src/**/*.{ts,tsx,css} and so covered the new file; it passed with no forbidlist entry weakened and no allowedPaths exemption. bundle-scan rebuilt the vite bundle from scratch and also passed."
+      },
+      "mix_letflow_check_test_not_run": "N/A and deliberately not run. This is a web/-only change: no file under lib/, priv/repo/migrations/ or test/letflow/ is touched, and no ExUnit test was written, so the Elixir warnings-as-errors recompile check (lib/mix/tasks/letflow.check.test.ex, ISS-0069's dead-default-argument detector) has nothing to act on. The equivalent for this change is the four web/ commands above, and the --force tsc rebuild is the analogous defence against a stale-cache green."
+    },
+    "design_doc_corrections": {
+      "authorised_by": "ORCH, on REVIEWER's step-03d observations O-1 and O-2. Wording only -- no normative content changed.",
+      "O-1": {
+        "before": "| `web/src/types/api.ts` | three new exported interfaces, additive only |",
+        "after": "| `web/src/types/api.ts` | four new exported interfaces, additive only |",
+        "why": "The body specifies four: GroupMember and GroupMemberPage (section 3.1), GroupListResponse (section 5), GroupMemberAddResult (section 6). Four were implemented. The header undercounted."
+      },
+      "O-2": {
+        "before": "### 3.2 `GroupsPage.tsx` — the five lines that change",
+        "after": "### 3.2 `GroupsPage.tsx` — the six lines that change",
+        "why": "Section 3.2's own table has six substantive rows (line 108 is listed as textually unchanged and is not one of them). Six plus section 4's one caller edit is the seven that were implemented."
+      },
+      "residual_not_changed": "Section 6 still introduces GroupMemberAddResult as 'Third new interface ... beside the other two', which reads oddly now that the header says four. It is loose prose rather than a count mismatch -- a reader following the enumeration (3.1 gives two, section 5 one, section 6 one) still arrives at four -- and REVIEWER did not flag it, so it was left alone rather than edited beyond the authorisation. Recorded here so a later audit does not treat it as a new discrepancy."
+    },
+    "git": {
+      "commit": "PENDING_AT_WRITE_TIME -- see commit_actual below",
+      "pushed_to": "origin/feature/WF03-ISS0765-20260924",
+      "divergence_discipline": "git fetch was run at the start of this step; HEAD and origin/feature/WF03-ISS0765-20260924 both resolved to 4115494e with git status -sb showing no ahead/behind marker, so the prior run's dangling-commit hazard (docs/anti-patterns.md) was already clear on entry. The same check is re-run after the push and recorded below."
+    },
+    "new_findings": [
+      {
+        "id": null,
+        "severity": "INFO",
+        "summary": "Row 7(ii) is additionally a compile-time guard on groupsApi.members's declared return type, not only the runtime forward-regression guard the design classified it as. Evidence: M-1b's tsc diagnostics at identity.groupsApi.test.ts(212-214). No action needed; recorded because it strengthens AC2's coverage argument beyond what the design claimed."
+      }
+    ],
+    "issues": [],
+    "carried_gaps": [
+      "NO INTEGRATION EVIDENCE. Every command in this step exercises the code against a vi.fn() double whose Response the test constructs. No HTTP request left the process and no Letflow instance was dialled (FRONTEND-DEV recorded HTTP 000 on a localhost:4000 probe; REVIEWER carried the gap forward). It is unproven BY EXECUTION that the six /api/v1/identity/groups routes return 2xx against a running server with a real :GroupsManage token. Owner: UAT-RUNNER -- list groups, open Manage members, add a member, remove a member, delete an empty group. Step 5 must not close ISS-0765 claiming end-to-end evidence.",
+      "The members dialog is still capped at the first page (50 members) and GroupMemberPage.next_cursor is returned but unread -- design section 3.3 / OQ-2. Pre-existing, made reachable by this fix, deliberately untested here."
+    ],
+    "next_action": "ORCH: route to TEST-DESIGN-VALIDATOR (Step 4b). Per the rework-1 design gate's note N-3, that gate must RE-APPLY at least one of the two mutants reported here itself rather than accept these measurements. M-1a is the recommended one: it is a pure revert of six GroupsPage.tsx lines whose exact before/after text is tabulated in design section 3.2, it needs no new judgement to reproduce, and its measured signature is unambiguous (tsc exit 2 with five diagnostics at :104/:224/:228, npm test green at 890). Carry CAVEAT N-1 into that gate: the design's predicted :228 diagnostic does not exist and must not be manufactured -- the correct reproduction is TS7006 implicit-any at (228,41)."
+  }
+}

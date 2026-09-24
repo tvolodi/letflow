@@ -33,6 +33,7 @@ in the historical citation, not a typo to silently work around.
 | S8 | Frontend integration & cutover | S7 | [stage-8-frontend-cutover.md](stage-8-frontend-cutover.md) |
 | S9 | Mobile tier | S4 | [stage-9-mobile.md](stage-9-mobile.md) |
 | S10 | BilimBaga vertical | S4, S6, S8 | [stage-10-bilimbaga-vertical.md](stage-10-bilimbaga-vertical.md) |
+| S11 | Modular platform | S10 | [stage-11-modular-platform.md](stage-11-modular-platform.md) |
 
 S5 branches off S3 in parallel with S4 (both only need the instance
 engine, not each other). S9 branches off S4 in parallel with S6-S8 (the

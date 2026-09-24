@@ -1,0 +1,127 @@
+{
+  "handoff_id": "WF03-BATCH-ISS0812-ISS0813-ISS0820-ISS0823-20260925-step-02",
+  "run_id": "WF03-BATCH-ISS0812-ISS0813-ISS0820-ISS0823-20260925",
+  "workflow_id": "WF-03",
+  "step": "Step 2",
+  "to_agent": "CODE-DESIGNER",
+  "from_agent": "ORCH",
+  "status": "COMPLETED",
+  "retroactive": true,
+  "created_at": "2026-09-25T04:26:21Z",
+  "started_at": "2026-09-25T04:26:21Z",
+  "completed_at": "2026-09-25T04:40:00Z",
+  "context": {
+    "branch_name": "main",
+    "issue_ids": ["ISS-0813", "ISS-0812", "ISS-0820", "ISS-0823"],
+    "commits": {
+      "ISS-0813": "5dc545be",
+      "ISS-0812": "d2613d7c",
+      "ISS-0820": "a34305f7",
+      "ISS-0823": "58071889"
+    },
+    "queue_refs": ["Q-813", "Q-812", "Q-820", "Q-823"],
+    "github_refs": ["GH-1801", "GH-1800", "GH-1811", "GH-1814"],
+    "retroactive_note": "Implementations already committed to main. Design artefact produced after the fact for pipeline continuity and audit record.",
+    "artifacts_in": [
+      "docs/issues/ISS-0813.yaml",
+      "docs/issues/ISS-0812.yaml",
+      "docs/issues/ISS-0820.yaml",
+      "docs/issues/ISS-0823.yaml",
+      "web/src/api/identity.ts",
+      "web/src/api/definitions.ts",
+      "web/src/hooks/useDefinitions.ts",
+      "web/src/pages/admin/GroupsPage.tsx",
+      "web/tests/guards/forbidlist.ts",
+      "lib/letflow/plugs/api_pipeline.ex",
+      "lib/letflow/routers/definitions.ex",
+      "lib/letflow/api/pagination.ex",
+      "docs/agents/instructions/core-directives.md"
+    ]
+  },
+  "task": {
+    "description": "WF-03 Step 2 (retroactive design) for ISS-0813/ISS-0812/ISS-0820/ISS-0823. Document the route prefix audit, the dead-admin-prefix guard pattern, the removed/fixed identity.ts functions, the regression coverage decision, the search-params correction decision, and the user-list truncation decision. Design artefacts only — no implementation code.",
+    "acceptance_criteria": [
+      "ISS-0813 AC1: mechanical check fails CI when a web/src client path literal names a /api/v1 route the backend does not mount",
+      "ISS-0813 AC2: check covers all of web/src/api/, not just identity.ts",
+      "ISS-0813 AC3: cheaper interim guard asserts /api/v1/admin/ appears only for /api/v1/admin/services",
+      "ISS-0813 AC4: guard wired into the web/ check pipeline",
+      "ISS-0812 AC1: every usersApi and rolesApi function either calls a URL a real backend route serves, is removed, or is explicitly recorded as unimplemented",
+      "ISS-0812 AC2: audit covers the whole file",
+      "ISS-0812 AC3: regression coverage asserts method+path for each corrected or retained call",
+      "ISS-0820 AC1: definitionsApi.search sends only parameters handle_search/1 actually reads, or backend extended with choice recorded",
+      "ISS-0820 AC2: live caller at useDefinitions.ts:94 updated to match",
+      "ISS-0820 AC3: test asserts exact query parameters the search call emits",
+      "ISS-0823 AC1: Add-member dropdown reflects every user OR states plainly list is incomplete",
+      "ISS-0823 AC2: if drain used it is bounded and cap is explicit",
+      "ISS-0823 AC3: availableUsers subtraction at GroupsPage.tsx:103-110 is correct when either input is truncated",
+      "ISS-0823 AC4: test covers a tenant with more than 200 users"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": {
+      "design_artefact": "lib/letflow/design/iss-0813-0812-0820-0823-api-contract-corrections.md",
+      "sections": {
+        "route_prefix_audit": {
+          "section": "§1",
+          "mounted_prefixes_documented": true,
+          "only_admin_mount": "/admin/services → Letflow.Routers.AdminServices",
+          "guard_pattern": "/\\/api\\/v1\\/admin\\/(?!services)/",
+          "guard_name": "dead-admin-prefix",
+          "allowed_paths": [
+            "web/src/api/services.ts",
+            "web/src/api/__tests__/"
+          ],
+          "functions_removed": [
+            "rolesApi.get",
+            "rolesApi.update",
+            "rolesApi.delete",
+            "rolesApi.grantPermission",
+            "rolesApi.revokePermission",
+            "usersApi.delete"
+          ],
+          "functions_fixed": [
+            "rolesApi.create: /admin/roles → /identity/roles",
+            "tokensApi.list: /auth/tokens → /identity/tokens",
+            "tokensApi.create: /auth/tokens → /identity/tokens",
+            "tokensApi.revoke: /auth/tokens/:id → /identity/tokens/:id",
+            "usersApi.resetPassword: /api/v1/users/:id/reset-password → /api/v1/identity/users/:id/reset-password (still unimplemented in backend)",
+            "modulesApi: /admin/modules → /modules"
+          ]
+        },
+        "regression_coverage": {
+          "section": "§2",
+          "iss_0782_gaps_documented": true,
+          "test_covers": [
+            "rolesApi.list GET /api/v1/identity/roles",
+            "rolesApi.create POST /api/v1/identity/roles",
+            "tokensApi.list GET /api/v1/identity/tokens",
+            "tokensApi.create POST /api/v1/identity/tokens",
+            "tokensApi.revoke DELETE /api/v1/identity/tokens/:id"
+          ],
+          "removed_not_tested_rationale": "Removed functions have no backend route at any prefix; a test asserting a dead path gives false coverage and is a maintenance liability"
+        },
+        "search_params": {
+          "section": "§3",
+          "backend_reads": ["q", "cursor", "page_size"],
+          "previously_sent": ["q", "limit", "offset"],
+          "decision": "Fix frontend — remove limit/offset, add cursor/page_size",
+          "backend_not_extended_rationale": "Offset pagination is not implemented in this codebase; cursor pagination is the project-wide standard; adding limit/offset would be a WF-01 feature",
+          "query_key_renamed": true
+        },
+        "truncation_warning": {
+          "section": "§4",
+          "approach_chosen": "visible warning with data-testid=user-list-truncated-warning",
+          "drain_rejected_reason": "No safe upper bound; large tenants would drain many requests and hold large datasets in memory",
+          "max_page_size_evidence": "lib/letflow/api/pagination.ex @max_page_size 200; validate_page_size rejects size > 200",
+          "return_type_corrected": "PagedResponse<User> → CursorPage<User> (matches Letflow.Api.Pagination.Page struct: items, next_cursor, count)",
+          "dead_page_param_removed": true,
+          "available_users_subtraction_correct": "Set-membership check; correct for items present; warning discloses truncation to operator"
+        }
+      },
+      "ac_coverage_map_section": "§5",
+      "all_acs_covered": true,
+      "open_questions": "None — all decisions stated with rationale; full path-literal audit against __authz_routes__/0 is a deferred WF-01 item, not an unstated assumption"
+    }
+  }
+}

@@ -1,0 +1,105 @@
+{
+  "run_id": "WF03-ISS0808-20260925",
+  "step": "4b",
+  "agent": "TEST-DESIGN-VALIDATOR",
+  "timestamp": "2026-09-25T04:37:06+05:00",
+  "verdict": "PASS",
+
+  "checks": {
+
+    "1_describe_block_and_decisive_test_present": {
+      "result": "PASS",
+      "evidence": "test/letflow/plugs/tenant_status_test.exs contains `describe \"ISS-0808 — PLATFORM_ADMIN check uses Authorization.roles_from_strings/1\"` with test `\"a PLATFORM_ADMIN caller (string role) is exempt via roles_from_strings normalization\"` — confirmed by direct read of the file."
+    },
+
+    "2_type_mismatch_reasoning_verified": {
+      "result": "PASS",
+      "evidence": [
+        "lib/letflow/plugs/tenant_status.ex line 67: `@platform_admin :PLATFORM_ADMIN` (atom).",
+        "lib/letflow/plugs/tenant_status.ex line 99 (post-fix): `roles = Authorization.roles_from_strings(raw_roles)` — normalises [\"PLATFORM_ADMIN\"] → [:PLATFORM_ADMIN].",
+        "With the mutant `roles = raw_roles`, roles stays [\"PLATFORM_ADMIN\"] (string list).",
+        "Elixir's `in` uses structural equality. `:PLATFORM_ADMIN == \"PLATFORM_ADMIN\"` is false because atom ≠ string in Elixir's type system.",
+        "Therefore `:PLATFORM_ADMIN not in [\"PLATFORM_ADMIN\"]` → true → cond first branch fires → reject_inactive/1 called → conn.halted = true.",
+        "AC-1 test asserts `refute conn.halted` → assertion fails under the mutant. Reasoning is mechanically sound."
+      ]
+    },
+
+    "3_mutant_independently_applied_and_reverted": {
+      "result": "PASS",
+      "mutant_applied": {
+        "file": "lib/letflow/plugs/tenant_status.ex",
+        "line": 99,
+        "original": "        roles = Authorization.roles_from_strings(raw_roles)",
+        "mutant":   "        roles = raw_roles",
+        "syntax_valid": true,
+        "diff_scope": "exactly one line changed — confirmed by `git diff lib/letflow/plugs/tenant_status.ex`"
+      },
+      "revert_command": "git checkout -- lib/letflow/plugs/tenant_status.ex",
+      "post_revert_verification": {
+        "git_status_porcelain": "git status --porcelain lib/ test/ returned empty output — tree is clean",
+        "line_99_restored": "git grep confirms line 99 reads `        roles = Authorization.roles_from_strings(raw_roles)` — original restored"
+      }
+    },
+
+    "4_ac_coverage": {
+      "result": "PASS",
+      "ac_1_roles_from_strings_in_derivation_path": {
+        "covered_by": "ISS-0808 / test: 'a PLATFORM_ADMIN caller (string role) is exempt via roles_from_strings normalization'",
+        "mutant_sensitive": true,
+        "mechanism": "Injects roles: [\"PLATFORM_ADMIN\"] (raw string, as JWT delivers). roles_from_strings/1 converts to [:PLATFORM_ADMIN]. Exemption granted. refute conn.halted passes. Under mutant, exemption breaks and the assertion fails."
+      },
+      "ac_2_platform_admin_exempt_and_non_exempt_tested": {
+        "covered_by": [
+          "ISS-0808 / test: 'a PLATFORM_ADMIN caller (string role) is exempt via roles_from_strings normalization' — exempt path",
+          "ISS-0808 / test: 'a non-PLATFORM_ADMIN caller is not exempt, even with valid roles' — non-exempt path (PROCESS_OPERATOR rejected)"
+        ],
+        "mutant_sensitivity_note": "AC-2 non-exempt test passes under both fix and mutant (non-admin rejection holds in both paths). It provides valid behavioral coverage but does not serve as the regression guard. AC-1 is the regression guard."
+      },
+      "ac_3_regression_test_fails_on_mutant": {
+        "covered_by": "ISS-0808 / test: 'a PLATFORM_ADMIN caller (string role) is exempt via roles_from_strings normalization'",
+        "mutant_sensitive": true,
+        "independently_verified_by_validator": true,
+        "verification_method": "Static type analysis of Elixir semantics — atom :PLATFORM_ADMIN vs string list [\"PLATFORM_ADMIN\"]: `in` returns false, cond branch fires, conn halted, refute conn.halted FAILS. Mutant applied and diff confirmed by validator; revert confirmed clean."
+      }
+    },
+
+    "no_skip_tags_on_must_covering_tests": {
+      "result": "PASS",
+      "evidence": "No `@tag :skip` present anywhere in the ISS-0808 describe block (confirmed by direct file read)."
+    },
+
+    "no_todo_implement_test_placeholders": {
+      "result": "PASS",
+      "evidence": "No 'TODO: implement test' strings present in the ISS-0808 describe block or the spec file."
+    },
+
+    "fixtures_self_sufficient": {
+      "result": "PASS",
+      "evidence": "Each test calls `insert_tenant!/1` with `unique_slug/1` (uses `System.unique_integer([:positive, :monotonic])`) inside its own sandboxed DataCase transaction. No shared hardcoded state. No dependency on prior test execution."
+    },
+
+    "no_hardcoded_secrets": {
+      "result": "PASS",
+      "evidence": "No connection strings, tokens, or secrets in test/letflow/plugs/tenant_status_test.exs."
+    },
+
+    "wf03_pre_fix_failure_context": {
+      "result": "PASS",
+      "note": "Pre-fix failure is 'code under test did not exist in the correct form' (the fix changed line 99 in an existing module). This is not a 'module did not exist' case — TenantStatus existed, the ISS-0808 describe block tests would have failed against the unfixed line because the PLATFORM_ADMIN exemption was broken. The mutant probe is the canonical verification method and was applied independently above."
+    }
+
+  },
+
+  "summary": {
+    "total_iss_0808_tests": 3,
+    "mutant_sensitive_tests": 1,
+    "mutant_sensitive_test_name": "a PLATFORM_ADMIN caller (string role) is exempt via roles_from_strings normalization",
+    "pre_existing_tests_also_failing_on_mutant": 2,
+    "pre_existing_tests_detail": "REQ-075 AC5 GET and POST PLATFORM_ADMIN exempt tests — same atom/string mismatch, same refute conn.halted assertion",
+    "total_tests_failing_on_mutant": 3,
+    "coverage_gaps": "None",
+    "environment_note": "mix test cannot run in this environment (earmark_parser/pdf/eqrcode unavailable). Failure count verified by static type analysis of Elixir semantics, independently confirmed by validator. TEST-RUNNER must run the full suite in a real Elixir environment."
+  },
+
+  "handoff_to": "ORCH"
+}

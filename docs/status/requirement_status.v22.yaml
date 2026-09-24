@@ -661,3 +661,51 @@ history:
       feature/WF02-REQ400-20260924 (efce259b implementation, 9fb81d75 fix,
       04f6df09 tests, rebased onto origin/main at d28c3cf6 to pick up
       4263be60/PR #1794 and c7632ecf before this entry).
+
+  - req: SCOPE-CHANGE
+    event: done
+    agent: ORCH
+    at: "2026-09-25T06:40:00Z"
+    note: >
+      WF03-ISS0765-20260924 -- ISS-0765 (MAJOR) resolved and merged, PR #1808
+      squash-merged as dec06da7. groupsApi's six remaining calls corrected off
+      the dead /api/v1/admin/groups/ prefix to /api/v1/identity/groups; .get
+      and .update DELETED rather than repointed, because neither exists at any
+      prefix (absent from __authz_routes__/0, and identity.ex has no
+      get_group/2 or update_group/3) -- the issue's own fix_direction was not
+      satisfiable as written for those two. .members retyped to the real
+      {items, next_cursor, count} envelope, which had to land WITH the prefix
+      or the fix would have converted a silent 404 into a render-time
+      TypeError. .addMembers narrowed to .addMember sending {user_id},
+      mirroring ISS-0736. .removeMembers byte-unchanged. Full pipeline:
+      ISSUE-FIXER, CODE-DESIGNER (one rework -- CODE-DESIGN-VALIDATOR FAILed
+      the first design on a matrix row that could not fail pre-fix),
+      FRONTEND-DEV, SECURITY-REVIEWER PASS, REVIEWER PASS, TEST-DESIGNER,
+      TEST-DESIGN-VALIDATOR PASS (independently rebuilt mutant M-1a from the
+      design's own table and reproduced all five tsc diagnostics byte-for-
+      byte). CI 3/3 green after two rounds of handoff-lint fixes. Queue task
+      810 released done. End-to-end evidence followed post-merge via
+      ai-dala-orch's live UAT under ISS-0791.
+  - req: SCOPE-CHANGE
+    event: done
+    agent: ORCH
+    at: "2026-09-25T06:45:00Z"
+    note: >
+      Queue reconciliation and issue-backlog registration, same session. Found
+      seven open docs/issues/ records that had never been through
+      register_task and were therefore invisible to get_next_task on every
+      host; registered four (ISS-0764/0765/0772/0745 -> tasks 807-810) and
+      deliberately held three back so issue-type LIFO priority would not
+      starve the S11 roadmap. The session then filed and registered nine
+      further findings surfaced by ISS-0765's own pipeline: ISS-0811 through
+      ISS-0819 (tasks 811-819, GH #1799-1809). Net effect on the shared queue:
+      0 eligible tasks at session start (everything either locked by
+      ai-dala-orch on REQ-400 or transitively blocked behind it) -> 13
+      eligible. Also reconciled a cross-host duplicate: ISS-0818 and ISS-0791
+      were one queue task (Q-818/GH-1807) with two on-disk records, authored
+      concurrently on two hosts; ISS-0791 kept as the record holding the UAT
+      evidence, ISS-0818 turned into a tombstone with its refs stripped, and
+      the collision class recorded in docs/anti-patterns.md as distinct from
+      the already-documented filename-collision class (the filenames differ,
+      so nothing collides at the git level and the existing guard cannot see
+      it).

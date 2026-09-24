@@ -7002,17 +7002,19 @@
       "issue_id": "ISS-0765",
       "queue_task_id": 810,
       "github_issue_number": 1798,
-      "status": "IN_PROGRESS",
+      "status": "COMPLETED",
       "owned_modules": [
         "web/src/api/identity.ts",
         "web/src/api/__tests__/",
         "web/src/types/api.ts"
       ],
       "started_at": "2026-09-24T16:36:00Z",
-      "released_lock": false,
-      "last_known_step": "Step Final IN PROGRESS -- PR #1808 open, frontend gate green, backend gate running after two handoff-lint fixes. Not yet merged, queue task 810 still locked by orch-main-20260924.",
+      "released_lock": true,
+      "last_known_step": "Step Final COMPLETED PASS -- PR #1808 squash-merged as dec06da7, CI 3/3, queue task 810 released done",
       "note": "WF-03 for ISS-0765 (MAJOR): groupsApi .list/.get/.create/.update/.delete/.addMembers/.members all call the dead /api/v1/admin/groups/ prefix. Queue task 810 (register_task allocated it this session; the record's on-disk id is ISS-0765). Sibling host ai-dala-orch holds queue task 789 (REQ-400) concurrently -- no file overlap with this run. | Steps 0.5-5 all PASS (design gate FAILed once, rework 1 PASSed). ISS-0765 marked resolved on static evidence only; integration gap tracked as ISS-0818. Run also filed ISS-0811/0812/0813/0814/0815/0816/0817/0818/0819, all registered in letflow-queue (tasks 811-819, GH #1799-1809).",
-      "pr_number": 1808
+      "pr_number": 1808,
+      "merge_sha": "dec06da7",
+      "lock_released_at": "2026-09-25T06:35:00Z"
     }
   ]
 }

@@ -1,0 +1,36 @@
+{
+  "handoff_id": "WF03-ISS0761-20260924-step-00",
+  "run_id": "WF03-ISS0761-20260924",
+  "workflow_id": "WF-03",
+  "step": "Step 00",
+  "to_agent": "ELIXIR-DEV",
+  "from_agent": "ORCH",
+  "status": "IN_PROGRESS",
+  "created_at": "2026-09-24T07:08:59Z",
+  "started_at": "2026-09-24T07:08:59Z",
+  "context": {
+    "branch_name": "feature/WF03-ISS0761-20260924",
+    "issue_id": "ISS-0761",
+    "issue_local_id": "ISS-0739",
+    "queue_task_id": 761,
+    "queue_agent_id": "orch-main",
+    "queue_endpoint": "https://queue-test.ai-dala.com",
+    "queue_auth_token": "8e88290747e5cd89cc94887ba3f887c72add7f2e2e06cd49cab6bcd307c5198f",
+    "issue_text": "No seeded QA login credentials for tenant-business persona actors (actor-swiftroute-lena/marco/alice and equivalents) -- blocks GUI-driven narrative UAT scenarios that need a tenant-specific human role. MAJOR severity. Discovered 2026-09-20. Related: REQ-395. Affected: ai-dala-infra/scripts/qa-login.sh, .claude/agents/uat-runner.md. Suggested fix: (a) seed stable QA users with correct role claims and add to qa-login.sh; or (b) give UAT-RUNNER a scripted way to provision ephemeral tenant-persona users. Note: ISS-0774 (now resolved) fixed Authorization.role_from_string/1's closed-set issue -- a user with TASK_WORKER platform role PLUS a process-routing role (role-ops-manager) can now authenticate and complete tasks.",
+    "artifacts_in": [
+      "docs/issues/ISS-0739.yaml",
+      ".claude/agents/uat-runner.md",
+      "test/fixtures/uat/scenarios/swiftroute/shipment-high-value-happy.yaml"
+    ]
+  },
+  "task": {
+    "description": "Execute Step 00 (GIT SETUP) for WF03-ISS0761-20260924 per docs/agents/protocols/GIT_SETUP.md.\n\nWorkspace: c:\\Users\\tvolo\\dev\\ai-dala\\letflow\nBranch: feature/WF03-ISS0761-20260924\n\nFiles to stage after branch creation:\n- handoffs/registry.json (WF03-ISS0761 entry appended by ORCH)\n- handoffs/orchestrator.log (appended by ORCH)\n- handoffs/WF03-ISS0761-20260924/step-00-git-setup.json (this file)\n\nProcedure:\n1. git checkout main; git pull --ff-only\n2. git checkout -b feature/WF03-ISS0761-20260924\n3. Stage ONLY the 3 files above\n4. git commit -m 'chore(WF03-ISS0761-20260924): Step 00 -- git setup for ISS-0761 fix'\n5. git push -u origin feature/WF03-ISS0761-20260924\n6. Complete handoff PASS with commit sha\n\nNote: ISS-0761 is the queue's issue_ref for the issue locally filed as ISS-0739 (queue_ref: Q-761).",
+    "acceptance_criteria": [
+      "Branch feature/WF03-ISS0761-20260924 created and pushed",
+      "Commit sha reported"
+    ]
+  },
+  "result": null,
+  "rework_count": 0,
+  "max_rework": 3
+}

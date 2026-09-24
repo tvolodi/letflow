@@ -4610,16 +4610,18 @@ volumes:
     path: docs/status/requirement_status.v22.yaml
     status: current
     opened: 2026-09-22
-    entries: 17
+    entries: 19
     note: >
-      Incremented to 17 by DOC-UPDATER's own REQ-392 done-event append
-      (WF02-REQ392-20260924, 2026-09-24T05:19:25Z -- frontend attach/remove/
-      rejection/quota/history UI for instance attachments, the fourth and
-      final piece of the REQ-387/389/390/391/392 attachment-feature chain).
-      `grep -c "^  - req:" docs/status/requirement_status.v22.yaml` = 17
-      on-disk entries, recounted directly rather than assumed. 602 lines /
-      36208 bytes, well under the 1200-line/120000-byte roll ceiling, so no
-      roll triggered. Prior notes preserved below verbatim.
+      Incremented to 19 by DOC-UPDATER's own REQ-395 done-event append
+      (WF02-REQ395-20260924, 2026-09-24T06:05:00Z -- CONDITIONAL_PASS: seed
+      script scripts/seed_swiftroute_definition.sh merged, 5 structural tests
+      pass, live QA execution blocked by ISS-0739+QA credentials, UAT re-run
+      deferred). `grep -c "^  - req:"
+      docs/status/requirement_status.v22.yaml` = 19 on-disk entries,
+      recounted directly rather than assumed. Also includes REQ-392 done
+      (WF02-REQ392-20260924, 2026-09-24T05:19:25Z) and REQ-395 started
+      merged with main before this entry. Well under the 1200-line/120000-byte
+      roll ceiling, so no roll triggered. Prior notes preserved below verbatim.
 
       Incremented to 16 by DOC-UPDATER's own REQ-389 done-event append
       (WF02-REQ389-20260923, 2026-09-24T01:36:56Z -- content-type allowlist

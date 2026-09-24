@@ -2,7 +2,9 @@ import { createBrowserRouter } from 'react-router-dom'
 import { ProtectedRoute } from '@/auth/ProtectedRoute'
 import OidcCallbackPage from '@/pages/OidcCallbackPage'
 import { AuthenticatedShellRoot } from '@/components/layout/AuthenticatedShellRoot'
-import ProcessModulesPage from '@/pages/admin/modules/ProcessModulesPage'
+// ISS-0822: ProcessModulesPage import removed — Letflow.Routers.ProcessModules is
+// deferred to S5 (process-module packaging); no backend is mounted and the page
+// would 404 on every request. Route removed until S5 is implemented.
 import TenantDashboardPage from '@/pages/dashboard/TenantDashboardPage'
 import PlatformDashboardPage from '@/pages/dashboard/PlatformDashboardPage'
 import DefinitionListPage from '@/pages/definitions/DefinitionListPage'
@@ -85,7 +87,9 @@ export const router = createBrowserRouter([
       { path: 'admin/tenants', element: <TenantsPage /> },
       { path: 'admin/tenants/:slug/edit', element: <EditTenantPage /> },
       { path: 'admin/services', element: <ServicesPage /> },
-      { path: 'admin/modules', element: <ProcessModulesPage /> },
+      // admin/modules route removed in ISS-0822: Letflow.Routers.ProcessModules is
+      // deferred to S5 — no backend exists, every API call 404s. Restore this route
+      // when S5's backend is implemented (see router.ex's deferred table).
       { path: 'admin/bilimbaga', element: <BilimBagaAdminPage /> },
       { path: 'admin/bilimbaga/:entityType', element: <BilimBagaEntityRoute /> },
       { path: 'admin/platform-migrations', element: <PlatformMigrationConsolePage /> },

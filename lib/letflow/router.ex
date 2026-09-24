@@ -72,17 +72,22 @@ defmodule Letflow.Router do
   ## Deferred routes (not yet mounted — added by owning stage)
 
   PROVENANCE (historical, not current decision authority):
+  Note: Letflow.Routers.Dlq, .Services, .PlatformMigrations, and .Webhooks were listed
+  here as deferred but are now mounted in api_pipeline.ex (S6 complete). This table
+  retains only those still genuinely deferred.
+
   | Letflow module (pending)            | R-Co source               | Owning stage                          |
   |-------------------------------------|---------------------------|---------------------------------------|
-  | `Letflow.Routers.Dlq`               | `dlq.zig`                 | S6 (dead-letter queue subsystem)      |
-  | `Letflow.Routers.Services`          | `services.zig`            | S6 (service catalog)                  |
-  | `Letflow.Routers.PlatformMigrations`| `platform_migrations.zig` | S6 (platform migration runner)        |
-  | `Letflow.Routers.Webhooks`          | `webhooks.zig`            | S6 (webhook dispatch subsystem)       |
   | `Letflow.Routers.SimulationTest`    | `simulation_test.zig`     | S7 (simulation harness)               |
   | `Letflow.Routers.ProcessModules`    | `process_modules.zig`     | S5 (process-module packaging)         |
   | `Letflow.Routers.AgentRequests`     | `agent_task_specs.zig`    | post-S6 (runtime-agent subsystem)     |
   | `Letflow.Routers.AgentResponses`    | `agent_sandboxes.zig`     | post-S6 (runtime-agent subsystem)     |
   | `Letflow.Routers.AgentEvents`       | `agent_artifacts.zig`     | post-S6 (runtime-agent subsystem)     |
+
+  Decision (ISS-0822): Letflow.Routers.ProcessModules is not mounted here and its
+  SPA route (/admin/modules → ProcessModulesPage) has been removed from web/src/router.tsx
+  until S5 is implemented. The frontend hooks/useModules.ts and api/modules.ts are
+  retained as S5 stubs but will 404 if called.
   """
 
   use Plug.Router

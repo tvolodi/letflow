@@ -4610,8 +4610,17 @@ volumes:
     path: docs/status/requirement_status.v22.yaml
     status: current
     opened: 2026-09-22
-    entries: 19
+    entries: 20
     note: >
+      Incremented to 20 by DOC-UPDATER's own REQ-400 done-event append
+      (WF02-REQ400-20260924, 2026-09-24T17:24:56Z -- first requirement of
+      S11 modular-platform architecture: Letflow.Modules.Module behaviour
+      + Letflow.Modules.Catalog). `grep -c "^  - req:"
+      docs/status/requirement_status.v22.yaml` = 20 on-disk entries,
+      recounted directly rather than assumed. 663 lines / 39988 bytes,
+      well under the 1200-line/120000-byte roll ceiling, so no roll
+      triggered. Prior notes preserved below verbatim.
+
       Incremented to 19 by DOC-UPDATER's own REQ-395 done-event append
       (WF02-REQ395-20260924, 2026-09-24T06:05:00Z -- CONDITIONAL_PASS: seed
       script scripts/seed_swiftroute_definition.sh merged, 5 structural tests

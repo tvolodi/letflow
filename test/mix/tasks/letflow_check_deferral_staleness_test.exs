@@ -988,11 +988,35 @@ defmodule Mix.Tasks.Letflow.CheckDeferralStalenessTest do
       # unchanged and correct -- it caught this drift exactly as designed.
       # S11 joins `active` the moment any of REQ-400..416 goes
       # in_progress/done/blocked (expected to be REQ-400 itself, shortly).
+      #
+      # UPDATE (2026-09-24, REQ-400 done): that predicted transition just
+      # happened -- REQ-400 (S11's first requirement) flipped to `done` in
+      # this same PR (#1805). Same rule as S10's own S10-joins-active update
+      # above: `active` gains "S11", `inactive` returns to []. Re-derived
+      # live in CI (not guessed): the assertion failure this produced
+      # quoted active == [..., "S10", "S11", "S2", ...] (String.< ordering
+      # puts "S11" between "S10" and "S2"), confirming S11 is now correctly
+      # :active per the detector -- which is unchanged and correct, exactly
+      # per this file's own established pattern.
       active = for s <- result.stages, s.activity == :active, do: s.stage
       inactive = for s <- result.stages, s.activity == :inactive, do: s.stage
 
-      assert active == ["S0", "S1", "S10", "S2", "S3", "S4", "S5", "S6", "S7", "S8", "S9"]
-      assert inactive == ["S11"]
+      assert active == [
+               "S0",
+               "S1",
+               "S10",
+               "S11",
+               "S2",
+               "S3",
+               "S4",
+               "S5",
+               "S6",
+               "S7",
+               "S8",
+               "S9"
+             ]
+
+      assert inactive == []
     end
 
     test "T-LIVE-DEFERRED-COUNT -- the staleness rule is now load-bearing, not vacuous",

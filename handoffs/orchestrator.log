@@ -2275,3 +2275,6 @@
 2026-09-24T07:45:00Z | DONE | WF03-ISS0761-20260924 | step-final-elixir-dev | ELIXIR-DEV → ORCH | COMPLETED -- PR#1771 (3b975e68), queue 761 released
 2026-09-24T08:23:00Z | DISPATCH | WF03-ISS0774-20260924 | step-00-git-setup | ORCH → ELIXIR-DEV | PENDING
 2026-09-24T09:00:00Z | DONE | WF03-ISS0774-20260924 | step-final-elixir-dev | ELIXIR-DEV → ORCH | COMPLETED -- PR#1772 (5cf911ec), CI 3/3 green, queue 774 released
+2026-09-24T09:32:00Z | NOTE | WF03-ISS0774-20260924 | recovery | ORCH | Recovery PR #1773 merged (13259209) -- actual DateTime.to_unix fix now on main. WF03-ISS0774 had a pipeline defect: Step Final committed only Step 00 bookkeeping to the remote feature branch; the actual fix commits were dangling locally. Filed in docs/anti-patterns.md for future sessions.
+2026-09-24T16:36:00Z | PASS | WF03-ISS0765-20260924 | step-00-git-setup | ORCH(direct) → ORCH | PASS -- branch feature/WF03-ISS0765-20260924 pushed from main d28c3cf6
+2026-09-24T16:37:00Z | DISPATCH | WF03-ISS0765-20260924 | step-01-issue-fixer | ORCH → ISSUE-FIXER | PENDING

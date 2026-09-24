@@ -6935,7 +6935,9 @@
     {
       "run_id": "WF02-REQ395-20260924",
       "workflow_id": "WF-02",
-      "requirement_ids": ["REQ-395"],
+      "requirement_ids": [
+        "REQ-395"
+      ],
       "issue_id": null,
       "queue_task_id": 755,
       "github_issue_number": 1643,
@@ -6992,6 +6994,24 @@
       "merge_sha": "5cf911ec",
       "pr_number": 1772,
       "note": "WF-03 for ISS-0774: HelpTest tie-break + SandboxPoolTest flakes. Root cause: Enum.max_by non-determinism in select_live_row/2. Fix: stable secondary sort by id. Queue task 774. CI: 3/3 green. 14/14 HelpTest pass. GH issue 1688 already closed. Queue released."
+    },
+    {
+      "run_id": "WF03-ISS0765-20260924",
+      "workflow_id": "WF-03",
+      "requirement_ids": [],
+      "issue_id": "ISS-0765",
+      "queue_task_id": 810,
+      "github_issue_number": 1798,
+      "status": "IN_PROGRESS",
+      "owned_modules": [
+        "web/src/api/identity.ts",
+        "web/src/api/__tests__/",
+        "web/src/types/api.ts"
+      ],
+      "started_at": "2026-09-24T16:36:00Z",
+      "released_lock": false,
+      "last_known_step": "Step 1 DISPATCHED -- ISSUE-FIXER diagnosing",
+      "note": "WF-03 for ISS-0765 (MAJOR): groupsApi .list/.get/.create/.update/.delete/.addMembers/.members all call the dead /api/v1/admin/groups/ prefix. Queue task 810 (register_task allocated it this session; the record's on-disk id is ISS-0765). Sibling host ai-dala-orch holds queue task 789 (REQ-400) concurrently -- no file overlap with this run."
     }
   ]
 }

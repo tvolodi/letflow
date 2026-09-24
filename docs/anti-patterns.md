@@ -3327,3 +3327,17 @@ diff-based staleness check `build_template!/0`'s own comments describe
 using elsewhere in that module) would close this gap permanently, but
 was judged out of scope for REQ-394 itself — worth a small follow-up
 requirement if this recurs.
+
+## ELIXIR-DEV Step Final: committed-but-unpushed local branch commits are lost on merge
+
+**Discovered:** WF03-ISS0774-20260924 (2026-09-24)
+**Symptom:** After WF03-ISS0774-20260924 completed Step Final, PR #1772 merged correctly but the actual fix (one-line change to lib/letflow/routers/help.ex) was NOT on main. Investigation showed the fix commits (dbd5fb44, 88649226) existed in the local git reflog but were dangling (not reachable from any branch).
+
+**Root cause:** ELIXIR-DEV's Step Final workflow staged and committed the ORCH bookkeeping files to the LOCAL feature branch (eature/WF03-ISS0774-20260924) with git add handoffs/WF03-ISS0774-20260924/ handoffs/registry.json -- this committed ALL handoff files including ones that were created locally but never pushed earlier in the run. But the ACTUAL implementation commits from Step 3 (dbd5fb44 -- the fix) had also been committed locally without being pushed to the remote feature branch. When Step Final ran git fetch origin main; git rebase origin/main, the rebase operated on origin/feature/WF03-ISS0774-20260924 which only had the Step 00 commit. The fix commits from Step 3 were on the local branch but never pushed. The PR was created from the remote branch (only Step 00 + bookkeeping), not the full local branch.
+
+**Why it happens:** ELIXIR-DEV (subagent) in Step 3 committed locally without verifying the push succeeded. The commit sha was reported as correct but the push step was skipped or assumed. When Step Final ran in a fresh subagent session, it saw the remote branch state (only Step 00) rather than the full local state.
+
+**Fix:** Step Final must always verify git log --oneline origin/<branch> shows ALL expected commits before pushing and creating the PR. If the remote branch is missing commits that are local (e.g., the fix commit), those must be pushed first with git push --force-with-lease before creating the PR.
+
+**Recovery:** Recovery PR #1773 cherry-picked the dangling fix commit to a new branch. Required two CI runs due to handoff lint violations in files committed by the bookkeeping push (H3 
+ext_action and H-SIZE-2 missing task blocks).

@@ -52,14 +52,38 @@ fix_direction: >
   against a token lacking that permission, and record whether ISS-0811's
   (Members column reading 0) and ISS-0816's (members list truncating at
   50) symptoms are visible on the live surface.
-status: open
-process_note: >
-  BLOCKED on PR #1808 (feature/WF03-ISS0765-20260924, ISS-0765's actual
-  fix) merging to main -- confirmed still OPEN with CI in progress as of
-  2026-09-24T18:25Z via `gh pr view 1808`. Do not run this UAT until
-  that PR is merged; the current main still has the dead
-  /api/v1/admin/groups/ prefix bug, so a UAT run now would just
-  reproduce the known-broken state, not test the fix.
+status: resolved
+resolution: >
+  PR #1808 merged (dec06da7, 2026-09-24T20:21:34Z), then UAT-RUNNER ran a
+  real, live end-to-end check against a real running instance (backend
+  on port 4000, real Postgres, real Keycloak realm bpm-default, real
+  password-grant tokens for admin-user/operator-user) -- no mocks.
+  Verdict: PASS on all acceptance criteria, each backed by real HTTP
+  and real DB evidence: list groups hits the real
+  GET /api/v1/identity/groups (old dead /api/v1/admin/groups/ prefix
+  independently confirmed 404); members envelope confirmed
+  {items, next_cursor, count}, not a bare array; add/remove member and
+  delete-empty-group each confirmed by a real response code AND a real
+  row appearing/disappearing in the tenant schema's group_members/groups
+  tables via direct psql query; all six routes confirmed to return 403
+  RFC 9457 problem+json for a real operator token lacking GroupsManage.
+  Full report: test/uat-reports/uat-2026-09-24-ISS0791-20260924.yaml.
+
+  Diagnostic byproduct (not this issue's own defect, left for ISS-0811/
+  ISS-0816 to carry): ISS-0811's is_system-missing symptom was live-
+  reconfirmed; ISS-0816's 50-row-truncation risk was reconfirmed by code
+  inspection (pagination.ex's default page size vs GroupsPage.tsx never
+  reading next_cursor) but not independently reproduced with 51+ real
+  members this run -- flagged as a caveat in the UAT report, not a gap
+  in this issue's own scope.
+
+  One honest gap: no real browser/Playwright session drove GroupsPage.tsx
+  itself this run (no UAT-scenario fixture exists for Groups yet) -- the
+  verification was real-HTTP-identical-to-what-the-SPA-issues, not a
+  literal GUI walkthrough. Left open for whoever builds a Groups UAT
+  fixture scenario, not blocking this issue's own resolution since the
+  underlying route-prefix defect (the actual subject of ISS-0765/0791)
+  is now conclusively proven fixed at the HTTP layer.
 queue_ref: "Q-818"
 # NOTE: letflow-queue's own atomically-allocated id (818) auto-titled
 # itself "ISS-0818", which does not match this file's real on-disk id

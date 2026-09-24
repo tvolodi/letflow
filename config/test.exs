@@ -246,3 +246,14 @@ config :letflow, :public_read_kinds, %{
   "public-read-fixture-mismatch" => Letflow.PublicReadFixtureSupport.Projection,
   "certificate" => Letflow.Exam.CertificatePublicProjection
 }
+
+# REQ-400 (design lib/letflow/design/req400-module-behaviour-catalog.md §4.3):
+# the test-only fixture module, registered ONLY here -- never in
+# config/config.exs (which registers [] in P1) or config/runtime.exs, so it
+# does not exist in any non-test environment. Letflow.Modules.Fixture lives
+# under test/support/modules/fixture/ (already compiled in :test via
+# mix.exs's existing elixirc_paths(:test), no mix.exs change needed).
+# REQ-401..404 prove the module mechanism (authorization wiring, persistence,
+# HTTP mounting) against it; REQ-400 itself only registers it and validates
+# its manifest.
+config :letflow, :modules, [Letflow.Modules.Fixture]

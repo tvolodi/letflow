@@ -1093,11 +1093,11 @@ defmodule Letflow.Routers.Instances do
     Response.service_unavailable(conn, "content scan is temporarily unavailable, please retry")
   end
 
-  defp render_upload_attachment(conn, {:error, :storage_quota_exceeded}) do
+  defp render_upload_attachment(conn, _attrs, {:error, :storage_quota_exceeded}) do
     Response.conflict(conn, "tenant storage quota has been reached")
   end
 
-  defp render_upload_attachment(conn, {:error, :tenant_not_found}) do
+  defp render_upload_attachment(conn, _attrs, {:error, :tenant_not_found}) do
     Response.unprocessable(conn, "request tenant does not exist")
   end
 

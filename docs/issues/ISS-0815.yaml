@@ -1,0 +1,49 @@
+id: ISS-0815
+title: >
+  web/src/types/api.ts's User declares roles and created_at as required, but
+  user_map/1 emits neither -- the wire field is inserted_at, not created_at
+discovered_by: CODE-DESIGNER (verified by ORCH against source before filing)
+discovered_in_run: WF03-ISS0765-20260924
+discovered_at: "2026-09-24T17:15:00Z"
+severity: MINOR
+tags:
+  - frontend
+  - type-safety
+description: >
+  Incidental finding from ISS-0765's Step 2 design, filed and forwarded rather
+  than extending that run.
+
+  web/src/types/api.ts:429-442 declares User.roles: string[] and
+  User.created_at: string as required, non-optional fields.
+  lib/letflow/routers/identity.ex:729-740's user_map/1 emits exactly id,
+  username, display_name, email, status, auth_source, inserted_at and
+  updated_at. So roles is never sent at all, and the timestamp field is named
+  inserted_at on the wire, not created_at.
+
+  Consequence: any web/ code reading user.roles gets undefined (and .map or
+  .length on it throws), and user.created_at is permanently undefined.
+
+  Same class as ISS-0745, ISS-0811 and ISS-0814: the wire type promises fields
+  the server never sends, typed required so neither tsc nor npm run type-check
+  can catch it.
+affected_files:
+  - web/src/types/api.ts
+  - lib/letflow/routers/identity.ex
+related:
+  - ISS-0765  # the run this was discovered during
+  - ISS-0814  # the User.status half of the same type's divergence
+  - ISS-0811
+  - ISS-0745
+  - ISS-0813  # the process gap that lets this class recur
+severity_rationale: >
+  MINOR -- no current caller reads either field, so nothing is broken for a
+  user today. Latent: the first caller wired to user.roles throws.
+fix_direction: >
+  Make User match what user_map/1 actually emits -- every required field one the
+  backend sends, everything else optional. Decide and record whether web/ reads
+  inserted_at or the backend starts emitting created_at. If anything genuinely
+  needs user.roles, have the backend emit it; otherwise drop the field. Add a
+  wire-shape test so the type and user_map/1 cannot drift apart again.
+queue_ref: "Q-815"
+github_ref: "GH-1803"
+status: open

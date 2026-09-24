@@ -1,0 +1,59 @@
+id: ISS-0816
+title: >
+  CursorPage<T>.has_more is never emitted by Letflow.Api.Pagination.Page --
+  roughly 12 web/ call sites use the type and none has been audited
+discovered_by: CODE-DESIGNER (partially verified by ORCH)
+discovered_in_run: WF03-ISS0765-20260924
+discovered_at: "2026-09-24T17:15:00Z"
+severity: MINOR
+tags:
+  - frontend
+  - api
+  - pagination
+  - type-safety
+description: >
+  Incidental finding from ISS-0765's Step 2 design, filed and forwarded rather
+  than extending that run. CODE-DESIGNER did not verify all 12 call sites
+  individually, so this needs its own audit rather than a blind edit -- that is
+  reflected in the acceptance criteria.
+
+  web/src/types/api.ts:17 declares CursorPage<T>.has_more: boolean, but
+  Letflow.Api.Pagination.Page emits only items, next_cursor and count. No
+  has_more.
+
+  The gap is already half-known: api.ts:371 carries a comment acknowledging
+  that "that shape's has_more field does not exist on this route's response",
+  and lib/letflow/design/iss0711-tenant-count-field-mismatch.md:102 records the
+  same family of mismatch for a different endpoint.
+
+  What makes a single shared type wrong here: has_more IS genuinely emitted by
+  lib/letflow/audit.ex (:276, :295-297), so the field is real for the audit
+  route and absent everywhere Pagination.Page is used. One type covering both
+  cannot be correct for either.
+
+  A named instance of the downstream cost: the GroupsPage members dialog reads
+  only the first page (page_size 50) and never follows next_cursor, so a group
+  with more than 50 members silently displays a truncated list.
+affected_files:
+  - web/src/types/api.ts
+  - web/src/pages/admin/GroupsPage.tsx
+  - lib/letflow/api/pagination.ex
+  - lib/letflow/audit.ex
+related:
+  - ISS-0765  # the run this was discovered during
+  - ISS-0711  # same family of wire-shape mismatch, different endpoint
+  - ISS-0813
+severity_rationale: >
+  MINOR -- has_more reads as undefined (falsy) rather than throwing, so the
+  visible symptom is a truncated list rather than a crash. Raised above trivial
+  because the truncation is silent and the type is shared across ~12 sites.
+fix_direction: >
+  Audit each CursorPage<T> call site and map it to the route it actually
+  consumes, recording whether that route emits has_more (audit.ex) or not
+  (Pagination.Page); split the type if that is the right answer. Make the
+  GroupsPage members dialog either follow next_cursor or say plainly that the
+  list is truncated. Record the route-to-shape mapping so a later reader does
+  not re-derive it.
+queue_ref: "Q-816"
+github_ref: "GH-1804"
+status: open

@@ -1,0 +1,166 @@
+{
+  "handoff_id": "WF03-ISS0761-20260924-step-01",
+  "run_id": "WF03-ISS0761-20260924",
+  "workflow_id": "WF-03",
+  "step": "Step 0.5+1",
+  "to_agent": "ISSUE-FIXER",
+  "from_agent": "ORCH",
+  "status": "COMPLETED",
+  "created_at": "2026-09-24T07:10:26Z",
+  "started_at": "2026-09-24T07:10:26Z",
+  "context": {
+    "branch_name": "feature/WF03-ISS0761-20260924",
+    "issue_id": "ISS-0761",
+    "issue_local_id": "ISS-0739",
+    "queue_task_id": 761,
+    "issue_text": "No seeded QA login credentials for tenant-business persona actors (actor-swiftroute-lena/marco/alice and equivalents) -- blocks GUI-driven narrative UAT scenarios that need a tenant-specific human role. Suggested fix: (a) seed stable QA users with correct role claims; or (b) scripted provisioning. Note: ISS-0774 resolved -- role_from_string now works; a user with TASK_WORKER + role-ops-manager CAN authenticate and complete tasks after ISS-0774's fix.",
+    "artifacts_in": [
+      "docs/issues/ISS-0739.yaml",
+      ".claude/agents/uat-runner.md",
+      "lib/letflow/api/authorization.ex",
+      "lib/letflow/identity/role_registry.ex",
+      "lib/letflow/identity.ex",
+      "docs/issues/ISS-0774.yaml",
+      "scripts/seed_swiftroute_definition.sh"
+    ]
+  },
+  "task": {
+    "description": "Execute Steps 0.5 and 1 (Registry Lookup + Diagnosis) for WF03-ISS0761-20260924.\n\nWorkspace: c:\\Users\\tvolo\\dev\\ai-dala\\letflow\nBranch: feature/WF03-ISS0761-20260924\n\n## STEP 0.5 — Registry Lookup\n\nSearch docs/issues/*.yaml for resolved entries with similar symptoms:\n- Look for any resolved issue about 'QA credentials', 'Keycloak provisioning', 'qa-login.sh', or 'persona actors'\n- Look for ISS-0739 specifically (the original filing)\n- Report any prior resolved issues that might indicate this is a recurrence\n\n## STEP 1 — Root Cause Diagnosis\n\nThe issue: no seeded QA login credentials for SwiftRoute persona actors (Lena/Marco/Alice with role-ops-manager/role-ceo). This blocks end-to-end UAT for REQ-395 and other SwiftRoute scenarios.\n\nContext:\n- ISS-0774 (now resolved): Authorization.role_from_string/1's closed set now allows process-routing-role-only users to get a proper 403 (they cannot authenticate for platform API without a platform role). The fix added a `kind` column to tenant_role.\n- After ISS-0774: a user needs BOTH a platform role (like TASK_WORKER) AND a process routing role (like role-ops-manager) to work as a SwiftRoute persona actor.\n- The current gap: no such combined-role users exist in the QA Keycloak realm.\n\nDiagnose:\n1. Read docs/issues/ISS-0739.yaml for the full issue description\n2. Read .claude/agents/uat-runner.md for how UAT-RUNNER resolves actors to credentials\n3. Read lib/letflow/api/authorization.ex lines around role_from_string/1 to confirm ISS-0774 fix is in place\n4. Understand what infrastructure is needed to provision a QA user with:\n   a. A Keycloak account (username/password)\n   b. Role claim 'TASK_WORKER' (platform role, for API authorization)\n   c. A tenant_role entry with `kind: :process_routing_role` for 'role-ops-manager' (for task routing)\n5. Determine the fix path -- specifically:\n   a. Is there already a QA provisioning mechanism in scripts/ (we just wrote scripts/seed_swiftroute_definition.sh -- look at what API it uses)\n   b. Does letflow expose any API for user/tenant management that could create these users programmatically?\n   c. What is the minimum scope change to unblock REQ-395's AC2/AC3 verification?\n\nKey question: Is the fix:\n- (A) An `ai-dala-infra` change (add users to qa-login.sh) -- EXTERNAL to this repo\n- (B) A letflow script that calls the QA API to create test users with the right roles\n- (C) A documentation update to .claude/agents/uat-runner.md documenting an alternative auth approach\n- (D) Some combination\n\nReport your diagnosis including:\n- Root cause (confirmed, with evidence)\n- Fix path recommendation with rationale\n- Which files need to change\n- Any open questions\n\nComplete your handoff (step-01-issue-fixer.json): status COMPLETED, result.status with your diagnosis.",
+    "acceptance_criteria": [
+      "Registry lookup completed (prior issues checked)",
+      "Root cause confirmed with evidence from source files",
+      "Fix path recommended with specific files to change",
+      "Cross-repo dependency (ai-dala-infra) assessed"
+    ]
+  },
+  "result": {
+    "completed_at": "2026-09-24T07:30:00Z",
+    "status": "COMPLETED",
+    "step_0_5_registry_lookup": {
+      "prior_resolved_matches": [
+        {
+          "id": "ISS-0768",
+          "status": "resolved",
+          "title": "RoleRegistry never threads tenant-schema prefix -- POST /roles always 500s",
+          "relevance": "Prerequisite: POST /identity/roles was completely broken until this fix. Without it, no tenant_role rows for process-routing roles could ever be created. This is a precondition fix, not the same root cause.",
+          "recurrence": false
+        },
+        {
+          "id": "ISS-0773",
+          "status": "resolved",
+          "title": "sync_role_claims_from_token/3 silently stamps role_claims_synced_at on zero-grant sync, permanently locking user out",
+          "relevance": "Related infrastructure: same bootstrap gap found on bpm-default/bilimbaga. Not the same root cause as ISS-0739 (which is absence of Keycloak accounts, not silent lockout). The ISS-0773 fix ensures a persona user whose role claims don't resolve on first login can retry on the next login, rather than being permanently locked.",
+          "recurrence": false
+        },
+        {
+          "id": "ISS-0774",
+          "status": "resolved",
+          "title": "process-routing role names never recognized by Authorization.role_from_string/1",
+          "relevance": "DIRECTLY AFFECTS this issue's fix path: post-fix, a persona actor (e.g. role-ops-manager only) correctly gets 403 on all platform API routes. This means every persona actor MUST also hold a platform role (TASK_WORKER) in addition to their process-routing role. Confirmed in place: lib/letflow/identity.ex:703 filters `where: tr.kind == :platform_role`.",
+          "recurrence": false
+        },
+        {
+          "id": "ISS-0778",
+          "status": "resolved",
+          "title": "No seeding of platform-role groups for newly provisioned tenants",
+          "relevance": "Prerequisite fixed: any tenant provisioned after ISS-0778's merge (2026-09-22, branch feature/WF03-ISS0778-20260922, tip babecb0f) will have the six platform-role groups+tenant_role rows auto-seeded via seed_default_platform_role_groups/1 in TenantOnboarding.provision_and_migrate/1. The swiftroute QA tenant's provisioning date relative to this merge is UNCONFIRMED and is an open question for the fix script (see OQ-1 below).",
+          "recurrence": false
+        }
+      ],
+      "recurrence_assessment": "ISS-0739 is NOT a recurrence of any prior resolved issue. It is the original, never-resolved credential-provisioning gap. The resolved issues above (ISS-0768, ISS-0773, ISS-0774, ISS-0778) collectively fixed the letflow-side infrastructure so that persona actors CAN work — but none of them seeded the actual QA Keycloak accounts or letflow group memberships that are ISS-0739's own scope."
+    },
+    "summary": {
+      "root_cause": "Tri-layer provisioning gap — all three layers required for a SwiftRoute persona actor to authenticate and receive tasks are absent. The root cause is not a code defect but missing QA data across two repositories (ai-dala-infra + letflow). Evidence from three source reads and four resolved sibling issues confirms this structural analysis.",
+      "layers": [
+        {
+          "layer": 1,
+          "domain": "Keycloak (ai-dala-infra)",
+          "description": "ai-dala-infra/scripts/qa-login.sh's ROLE_FOR map contains only the six platform-role users (admin-user, designer-user, operator-user, worker-user, candidate-user, bilimbaga-admin-user). No entries exist for swiftroute-lena (dispatcher), swiftroute-marco (ops manager), or swiftroute-alice (CEO). Without a Keycloak account + stable qa-login.sh entry, UAT-RUNNER has no credential_source resolution path for any actor-swiftroute-* actor. This is the primary blocking layer.",
+          "evidence": "docs/issues/ISS-0739.yaml description; .claude/agents/uat-runner.md 'Environment target' section documents credential_source as the authoritative source of seeded credentials; ISS-0739.yaml affected_files lists ai-dala-infra/scripts/qa-login.sh as the primary file."
+        },
+        {
+          "layer": 2,
+          "domain": "Letflow tenant_role rows (process-routing domain)",
+          "description": "The swiftroute tenant schema needs tenant_role rows with kind: :process_routing_role for 'role-ops-manager' and 'role-ceo', each bound to a group. These are NOT auto-created by definition deployment (seed_swiftroute_definition.sh only calls POST /definitions + POST /definitions/:id/activate — no role creation). RoleRegistry.resolve_role_in_tx/1 (role_registry.ex:210-220) only READs; if the row is absent it returns nil. The Engine uses this at task-assignment time — nil means the assigned-group is nil, causing the task to be unclaimable by anyone matching that role.",
+          "evidence": "lib/letflow/identity/role_registry.ex resolve_role_in_tx/1 (line ~210): pure read, never creates. scripts/seed_swiftroute_definition.sh lines 1-140: deploys definition only, zero POST /roles calls. upsert_role/4 (role_registry.ex) is the only write path for tenant_role rows, called exclusively via POST /identity/roles."
+        },
+        {
+          "layer": 3,
+          "domain": "Letflow group membership + platform role coverage",
+          "description": "After ISS-0774's fix (confirmed in place: identity.ex:703 `where: tr.kind == :platform_role`), list_effective_role_names/2 returns ONLY platform-role bindings for Authorization. A process-routing-role-only user gets 403 on all platform API routes by design. Therefore, each persona actor ALSO needs a TASK_WORKER platform role — either (a) present as a Keycloak claim (synced automatically on first login by sync_role_claims_from_token/3, which now correctly retries if zero grants resolved per ISS-0773's fix), or (b) added directly via POST /groups/:id/members. Additionally, each actor must be a member of their role's group (POST /groups/:id/members) so their task inbox resolves correctly. The OIDC sync path (resolve_group_ids_for_role_names) is filtered to kind == :platform_role only (ISS-0775 fix at identity.ex:832), so role-ops-manager group membership cannot be auto-synced from a token claim — it must be explicitly provisioned.",
+          "evidence": "lib/letflow/identity.ex:703 (list_effective_role_names kind filter, confirmed via grep), identity.ex:832 (resolve_group_ids_for_role_names kind filter for OIDC sync). ISS-0774 resolution confirms platform-role-only-user 403 is correct by design. ISS-0778 resolution confirms seed_default_platform_role_groups/1 is wired into TenantOnboarding.provision_and_migrate/1 for new tenants."
+        }
+      ],
+      "iss_0774_fix_confirmed": true,
+      "iss_0774_evidence": "lib/letflow/identity.ex line 703: `where: gm.user_id == ^user_id and tr.kind == :platform_role`. Confirmed via Select-String on main branch. role_from_string/1 (authorization.ex:447-453) unchanged — still a closed 6-element set — but this is correct post-ISS-0774: process-routing roles never pass through role_from_string/1.",
+      "open_questions": [
+        {
+          "id": "OQ-1",
+          "question": "Was the swiftroute QA tenant provisioned before or after ISS-0778 merged (2026-09-22, tip babecb0f)? If before, it may be missing the TASK_WORKER and other platform-role group+tenant_role rows that ISS-0778 seeds for new tenants. The provisioning script (Part B) must call seed_default_platform_role_groups/1 or its equivalent API calls defensively regardless.",
+          "impact": "If swiftroute QA tenant is pre-ISS-0778, TASK_WORKER sync will silently fail on first login (sync resolves zero groups). The fix script must ensure platform-role rows exist before adding persona actors.",
+          "resolution_path": "The fix script (Part B) should call GET /identity/roles to check what platform-role tenant_role rows exist, and call POST /roles for any missing ones before provisioning persona users. RoleRegistry.seed_default_platform_role_groups/1 via bin/letflow rpc is the letflow-side equivalent."
+        }
+      ]
+    },
+    "fix_path": {
+      "recommendation": "D — combination of ai-dala-infra change (Part A) + letflow QA provisioning script (Part B) + uat-runner.md update (Part C). All three are required; Parts A and B are independently releasable but only the combination unblocks end-to-end UAT.",
+      "parts": [
+        {
+          "id": "A",
+          "repo": "ai-dala-infra",
+          "file": "scripts/qa-login.sh",
+          "description": "Add stable QA users for the SwiftRoute persona trio to Keycloak and to qa-login.sh's ROLE_FOR/VAR_FOR maps. Each user needs a Keycloak account with: (1) username/password stable for QA, (2) TASK_WORKER role claim (for platform API authorization — required post-ISS-0774), (3) optionally role-ops-manager/role-ceo as a claim (harmless — won't be synced to group membership, but may help with future extensions). Minimum: swiftroute-lena (dispatcher, TASK_WORKER), swiftroute-marco (ops manager, TASK_WORKER), swiftroute-alice (CEO, TASK_WORKER). This is outside the letflow repo's scope — must be a separate ai-dala-infra task.",
+          "letflow_scope": false
+        },
+        {
+          "id": "B",
+          "repo": "letflow",
+          "file": "scripts/seed_swiftroute_persona_actors.sh (new file)",
+          "description": "A new idempotent shell script (matching seed_swiftroute_definition.sh's established pattern) that provisions the process-routing-role infrastructure and group memberships for SwiftRoute persona actors. Steps: (1) GET /identity/roles — check if role-ops-manager and role-ceo process_routing_role rows exist; create via POST /identity/roles with kind: process_routing_role if not. (2) GET /identity/roles — check TASK_WORKER platform_role row; create if not (covers pre-ISS-0778 swiftroute tenant). (3) For each persona user: GET /identity/users?username=swiftroute-marco — look up their user_id. (4) POST /groups/:id/members for each user+group pair (role-ops-manager group, role-ceo group, TASK_WORKER group). (5) Call GET /identity/groups/:id/members to verify membership. Prerequisites: QA_AUTH_TOKEN (PLATFORM_ADMIN for swiftroute tenant), QA_URL. Must be called AFTER seed_swiftroute_definition.sh (definition must exist so swiftroute tenant exists) and AFTER Part A (Keycloak accounts must exist so GET /identity/users resolves them).",
+          "letflow_scope": true,
+          "depends_on_part_A": true
+        },
+        {
+          "id": "C",
+          "repo": "letflow",
+          "file": ".claude/agents/uat-runner.md",
+          "description": "Update the 'Environment target' section to explicitly state that SwiftRoute/Vortex/Meridian tenant-persona actors (actor-swiftroute-lena, actor-swiftroute-marco, actor-swiftroute-alice, and their equivalents) are resolved via ai-dala-infra/scripts/qa-login.sh the same way platform-role actors are, and that their Keycloak accounts require both a TASK_WORKER platform claim AND membership in their respective process-routing-role group (provisioned via scripts/seed_swiftroute_persona_actors.sh). This documents the gap explicitly so it cannot be rediscovered for a fourth time.",
+          "letflow_scope": true
+        }
+      ],
+      "minimal_unblock_for_REQ_395_AC4": "Part A (ai-dala-infra Keycloak seeding) + Part B (letflow group membership provisioning) together. Part C is hygiene but not strictly blocking the specific UAT re-run. REQ-395's AC2/AC3 (instance submission + task-state verification) do NOT require persona actors — they can be exercised with any InstancesStart-capable token (PROCESS_OPERATOR or PLATFORM_ADMIN). REQ-395 is already status: done. The remaining gap is exclusively AC4 (re-run the scenario shipment-high-value-happy.yaml end-to-end with real sign-in as ops-manager/CEO actors), which blocks on ISS-0739's resolution."
+    },
+    "specific_api_calls_for_part_B": {
+      "note": "All calls use AUTH_HEADER=Authorization: Bearer <PLATFORM_ADMIN token for swiftroute tenant>. All routes are under /api/v1.",
+      "step_1_check_or_create_process_routing_roles": [
+        "GET /identity/roles (list existing; check for role-ops-manager kind:process_routing_role, role-ceo kind:process_routing_role)",
+        "POST /identity/groups body:{name:'role-ops-manager-group'} -> extract group_id",
+        "POST /identity/roles body:{name:'role-ops-manager', kind:'process_routing_role', group_id:'<id>'} (upsert, idempotent)",
+        "POST /identity/groups body:{name:'role-ceo-group'} -> extract group_id",
+        "POST /identity/roles body:{name:'role-ceo', kind:'process_routing_role', group_id:'<id>'}"
+      ],
+      "step_2_ensure_task_worker_platform_role_exists": [
+        "GET /identity/roles (check for TASK_WORKER kind:platform_role)",
+        "If absent (pre-ISS-0778 tenant): POST /identity/groups + POST /identity/roles with kind:platform_role and name:TASK_WORKER"
+      ],
+      "step_3_lookup_persona_user_ids": [
+        "GET /identity/users?search=swiftroute-lena -> extract id",
+        "GET /identity/users?search=swiftroute-marco -> extract id",
+        "GET /identity/users?search=swiftroute-alice -> extract id"
+      ],
+      "step_4_assign_group_memberships": [
+        "POST /identity/groups/<TASK_WORKER_group_id>/members body:{user_id:'<lena_id>'}",
+        "POST /identity/groups/<TASK_WORKER_group_id>/members body:{user_id:'<marco_id>'}",
+        "POST /identity/groups/<TASK_WORKER_group_id>/members body:{user_id:'<alice_id>'}",
+        "POST /identity/groups/<ops_manager_group_id>/members body:{user_id:'<marco_id>'}",
+        "POST /identity/groups/<ceo_group_id>/members body:{user_id:'<alice_id>'}"
+      ],
+      "step_5_verify": [
+        "GET /identity/groups/<ops_manager_group_id>/members -> confirm marco present",
+        "GET /identity/groups/<ceo_group_id>/members -> confirm alice present"
+      ]
+    }
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

@@ -1,0 +1,33 @@
+{
+  "handoff_id": "WF03-ISS0761-20260924-step-final",
+  "run_id": "WF03-ISS0761-20260924",
+  "workflow_id": "WF-03",
+  "step": "Step Final",
+  "to_agent": "ELIXIR-DEV",
+  "from_agent": "ORCH",
+  "status": "IN_PROGRESS",
+  "created_at": "2026-09-24T07:34:29Z",
+  "started_at": "2026-09-24T07:34:29Z",
+  "context": {
+    "branch_name": "feature/WF03-ISS0761-20260924",
+    "issue_id": "ISS-0761",
+    "all_gates_passed": true,
+    "queue_task_id": 761,
+    "queue_agent_id": "orch-main",
+    "queue_endpoint": "https://queue-test.ai-dala.com",
+    "queue_auth_token": "8e88290747e5cd89cc94887ba3f887c72add7f2e2e06cd49cab6bcd307c5198f"
+  },
+  "task": {
+    "description": "Execute Step Final for WF03-ISS0761-20260924 per docs/agents/protocols/GIT_MERGE.md.\n\nWorkspace: c:\\Users\\tvolo\\dev\\ai-dala\\letflow\nBranch: feature/WF03-ISS0761-20260924\nMix: & 'C:/Program Files/Elixir/bin/mix'\nQUEUE_AUTH_TOKEN: 8e88290747e5cd89cc94887ba3f887c72add7f2e2e06cd49cab6bcd307c5198f\n\n1. Verify branch: git branch --show-current must equal feature/WF03-ISS0761-20260924\n2. git status -- stage any uncommitted ORCH files\n3. git fetch origin main; git rebase origin/main\n4. mix compile --warnings-as-errors (quote exit code)\n5. mix test test/letflow/scripts/seed_swiftroute_persona_actors_test.exs (quote result)\n6. git push --force-with-lease if rebased\n7. gh pr create --title 'ISS-0761: seeding script for SwiftRoute persona actor roles + uat-runner.md credential docs' --body 'Delivers scripts/seed_swiftroute_persona_actors.sh (idempotent script to provision role-ops-manager/role-ceo groups and memberships for SwiftRoute persona actors on QA) and updates .claude/agents/uat-runner.md to document 3-layer credential setup. Part A (Keycloak account provisioning in ai-dala-infra) is a documented external prerequisite. 5 regression tests. Closes #1649.'\n8. Wait for CI green\n9. gh pr merge --squash --delete-branch\n10. git checkout main; git pull --ff-only\n11. Close GitHub issue 1649: gh issue close 1649 --comment 'Fixed in WF03-ISS0761-20260924. scripts/seed_swiftroute_persona_actors.sh delivers Parts B+C. Part A (ai-dala-infra Keycloak accounts) is a documented external prerequisite. See docs/issues/ISS-0739.yaml.'\n12. Release queue task 761: [System.IO.File]::WriteAllText(\"$env:TEMP\\\\release761.json\", '{\"agent_id\":\"orch-main\",\"status\":\"done\"}') ; curl.exe -s -X POST \"https://queue-test.ai-dala.com/tasks/761/release\" -H \"Authorization: Bearer 8e88290747e5cd89cc94887ba3f887c72add7f2e2e06cd49cab6bcd307c5198f\" -H \"Content-Type: application/json\" --data-ascii \"@$env:TEMP\\\\release761.json\"\n13. Update handoffs/registry.json: WF03-ISS0761-20260924 → COMPLETED, released_lock true\n14. Complete handoff PASS: PR number, merge SHA, queue release HTTP status",
+    "acceptance_criteria": [
+      "Rebased, compile clean, 5 tests pass",
+      "PR merged, branch deleted",
+      "GitHub issue 1649 closed with comment",
+      "Queue task 761 released",
+      "Registry COMPLETED"
+    ]
+  },
+  "result": null,
+  "rework_count": 0,
+  "max_rework": 3
+}

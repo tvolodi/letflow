@@ -1,0 +1,83 @@
+{
+  "handoff_id": "WF03-ISS0761-20260924-step-02b",
+  "run_id": "WF03-ISS0761-20260924",
+  "workflow_id": "WF-03",
+  "step": "Step 2b",
+  "to_agent": "CODE-DESIGN-VALIDATOR",
+  "from_agent": "ORCH",
+  "status": "COMPLETED",
+  "created_at": "2026-09-24T07:23:44Z",
+  "started_at": "2026-09-24T07:23:44Z",
+  "completed_at": "2026-09-24T07:30:00Z",
+  "context": {
+    "branch_name": "feature/WF03-ISS0761-20260924",
+    "issue_id": "ISS-0761",
+    "artifacts_in": [
+      "lib/letflow/design/iss-0761-swiftroute-persona-actor-provisioning.md"
+    ]
+  },
+  "task": {
+    "description": "Execute Step 2b (Design Gate) for WF03-ISS0761-20260924. HARD GATE.\n\nRead lib/letflow/design/iss-0761-swiftroute-persona-actor-provisioning.md independently.\n\nISSUE ACs from docs/issues/ISS-0739.yaml:\n- Persona actors (Lena/Marco/Alice) can sign in to QA and complete their respective tasks\n- UAT-RUNNER can resolve these actors to credentials\n- .claude/agents/uat-runner.md documents the credential resolution\n\nFor each AC, check: is there a concrete design element addressing it?\n- Are the API payloads fully specified?\n- Is the idempotency approach concrete?\n- Is the Part A dependency (ai-dala-infra) stated clearly?\n- Is any implementation code present? (FAIL if yes)\n\nComplete handoff (step-02b-design-gate.json): status COMPLETED, result.status PASS or FAIL.",
+    "acceptance_criteria": [
+      "All ACs addressed with concrete design elements",
+      "API payloads fully specified",
+      "Part A external dependency documented",
+      "No implementation code"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "validator": "CODE-DESIGN-VALIDATOR",
+    "validated_at": "2026-09-24T07:30:00Z",
+    "artifact_reviewed": "lib/letflow/design/iss-0761-swiftroute-persona-actor-provisioning.md",
+    "checks": {
+      "ac1_actors_can_sign_in_and_complete_tasks": {
+        "result": "PASS",
+        "note": "§1 scopes Part A (Keycloak accounts) as an explicit external dependency on ai-dala-infra — not deferred/TBD, but correctly bounded. §4 maps each actor to their required group memberships so that once Part A exists, they can sign in and execute their tasks. Part A's absence is a documented pre-condition, not a gap in the design."
+      },
+      "ac2_uat_runner_can_resolve_actors_to_credentials": {
+        "result": "PASS",
+        "note": "§5 provides the exact text to insert into .claude/agents/uat-runner.md, including what to check (GET /identity/users?search= empty items = Part A not done; GET /identity/roles missing role-ops-manager = Part B not run) and what action to take (BLOCKED/CREDENTIALS_MISSING, not a workaround)."
+      },
+      "ac3_uat_runner_md_documents_credential_resolution": {
+        "result": "PASS",
+        "note": "§5 specifies exact insertion location ('immediately after the last paragraph of the Environment target section, after the Bilimbaga realm note, before ## Forbidden') and provides the full verbatim text block to insert. No ambiguity on where or what."
+      },
+      "api_payloads_all_four_calls": {
+        "result": "PASS",
+        "calls_checked": [
+          {"call": "POST /identity/groups", "section": "§2.1", "body_shape": "SPECIFIED", "success_codes": "201", "idempotent_code": "409 (pre-check avoids)", "verdict": "PASS"},
+          {"call": "POST /identity/roles", "section": "§2.2", "body_shape": "SPECIFIED", "success_codes": "200 (upsert)", "idempotent_code": "upsert — no pre-check needed", "verdict": "PASS"},
+          {"call": "GET /identity/users?search=", "section": "§2.3", "response_shape": "SPECIFIED", "abort_condition": "SPECIFIED", "verdict": "PASS"},
+          {"call": "POST /identity/groups/:id/members", "section": "§2.4", "body_shape": "SPECIFIED", "success_codes": "201 (new) / 200 (already member)", "verdict": "PASS"}
+        ]
+      },
+      "persona_mapping_explicit": {
+        "result": "PASS",
+        "note": "§4 table is complete: lena→TASK_WORKER only; marco→TASK_WORKER+role-ops-manager; alice→TASK_WORKER+role-ceo. Rationale for each stated. TASK_WORKER group seeded-not-created constraint is explicit."
+      },
+      "part_a_dependency_stated": {
+        "result": "PASS",
+        "note": "§1 names the external owner (ai-dala-infra/scripts/qa-login.sh), marks it as not in scope, states execution order, and specifies the abort error message if Part A has not been done when Part B runs."
+      },
+      "uat_runner_md_update_location_and_text_specified": {
+        "result": "PASS",
+        "note": "See ac3 above — both location and verbatim text are present."
+      },
+      "no_implementation_code": {
+        "result": "PASS",
+        "note": "Code blocks in the design are: JSON request/response payload shapes (§2), jq filter patterns as algorithm specification (§3), and read-only curl verification commands (§6). No complete .sh script body, no .ex/.exs function implementations. §6 verification curls are presented as 'what the script should emit' (acceptance verification), not as implementation."
+      }
+    },
+    "open_questions_assessment": {
+      "OQ-1": "Pre-implementation verification step for ELIXIR-DEV (confirm exact Keycloak username format against ai-dala-infra). Not a design gap — the mechanism is fully specified; the check is a concrete pre-coding step with clear decision rule. PASS.",
+      "OQ-2": "ELIXIR-DEV judgment call on optional display_name/description fields. Suggested defaults provided. Not blocking. PASS.",
+      "OQ-3": "Non-blocking awareness note for REVIEWER. Script has a clean abort on mismatch. PASS.",
+      "OQ-4": "Non-blocking naming consistency note. Design recommends reusing QA_AUTH_TOKEN. PASS."
+    },
+    "summary": "Design is complete and ready for implementation. All four API calls have full body shapes and success/idempotent response codes. All three ISS-0739 ACs are addressed with concrete design elements. Part A external dependency is clearly bounded. uat-runner.md update specifies both exact location and verbatim text. No implementation code present."
+  },
+  "next_action": "Route to ELIXIR-DEV (Step 3a)",
+  "rework_count": 0,
+  "max_rework": 3
+}

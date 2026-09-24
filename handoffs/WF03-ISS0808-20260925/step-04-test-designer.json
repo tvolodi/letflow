@@ -1,0 +1,84 @@
+{
+  "run_id": "WF03-ISS0808-20260925",
+  "step": "4",
+  "agent": "TEST-DESIGNER",
+  "timestamp": "2026-09-25T04:33:11+05:00",
+  "fix_commit": "97c50b5d",
+
+  "test_file": "test/letflow/plugs/tenant_status_test.exs",
+  "spec_file": "test/specs/ISS-0808.md",
+
+  "iss_0808_describe_block": "ISS-0808 — PLATFORM_ADMIN check uses Authorization.roles_from_strings/1",
+  "iss_0808_tests": [
+    "a PLATFORM_ADMIN caller (string role) is exempt via roles_from_strings normalization",
+    "a non-PLATFORM_ADMIN caller is not exempt, even with valid roles",
+    "an unknown role string is not exempt (roles_from_strings/1 filters out unknown strings)"
+  ],
+
+  "mutant": {
+    "file": "lib/letflow/plugs/tenant_status.ex",
+    "line_approx": 99,
+    "original": "        roles = Authorization.roles_from_strings(raw_roles)",
+    "mutant":   "        roles = raw_roles",
+    "description": "Reverts the ISS-0808 fix by bypassing roles_from_strings/1, leaving `roles` as the raw string list from auth_context instead of the normalized atom list. Since @platform_admin is the atom :PLATFORM_ADMIN, the `in` comparison against a string list always fails: :PLATFORM_ADMIN not in [\"PLATFORM_ADMIN\"] is true, so every PLATFORM_ADMIN caller against an :inactive tenant receives 403."
+  },
+
+  "mutant_diff_confirmed": "git diff shows exactly one line changed; verified with `git diff lib/letflow/plugs/tenant_status.ex`",
+
+  "failure_analysis": {
+    "environment_note": "mix test cannot run in this environment — earmark_parser, pdf, eqrcode unavailable (confirmed: 'mix test' exits with \"Can't continue due to errors on dependencies\"). Failure counts are determined by static type analysis of Elixir's `in` operator semantics.",
+    "elixir_typing_basis": "Elixir's `in` operator uses `==` (structural equality). The atom :PLATFORM_ADMIN and the string \"PLATFORM_ADMIN\" are different types, so :PLATFORM_ADMIN == \"PLATFORM_ADMIN\" is false. With `roles = raw_roles = [\"PLATFORM_ADMIN\"]`, `:PLATFORM_ADMIN not in roles` evaluates to `true`, so `reject_inactive/1` fires and `conn.halted` becomes true.",
+    "tests_failing_on_mutant": [
+      {
+        "describe": "ISS-0808 — PLATFORM_ADMIN check uses Authorization.roles_from_strings/1",
+        "test": "a PLATFORM_ADMIN caller (string role) is exempt via roles_from_strings normalization",
+        "failing_assertion": "refute conn.halted",
+        "reason": "With mutant, roles = [\"PLATFORM_ADMIN\"] (string), @platform_admin = :PLATFORM_ADMIN (atom). :PLATFORM_ADMIN not in [\"PLATFORM_ADMIN\"] → true → reject_inactive fires → conn.halted = true → refute conn.halted FAILS."
+      },
+      {
+        "describe": "REQ-075 AC5 — a PLATFORM_ADMIN caller whose home tenant is :inactive is exempt",
+        "test": "GET against an :inactive tenant passes through unchanged for PLATFORM_ADMIN",
+        "failing_assertion": "refute conn.halted",
+        "reason": "Same atom/string mismatch as above — roles = [\"PLATFORM_ADMIN\"] under the mutant, PLATFORM_ADMIN exempt check breaks, 403 fires."
+      },
+      {
+        "describe": "REQ-075 AC5 — a PLATFORM_ADMIN caller whose home tenant is :inactive is exempt",
+        "test": "POST against an :inactive tenant passes through unchanged for PLATFORM_ADMIN",
+        "failing_assertion": "refute conn.halted",
+        "reason": "Same atom/string mismatch. POST against :inactive also hits the inactive cond branch before the write-method guard, so same 403 outcome."
+      }
+    ],
+    "failure_count_on_mutant": 3,
+    "tests_passing_on_mutant": [
+      {
+        "test": "a non-PLATFORM_ADMIN caller is not exempt, even with valid roles",
+        "reason": "PROCESS_OPERATOR is rejected under both mutant and fix — atom never matches a string of a different role name. No behavioral change for non-admins."
+      },
+      {
+        "test": "an unknown role string is not exempt (roles_from_strings/1 filters out unknown strings)",
+        "reason": "PLATFORM_ADMIN_WANNABE is rejected under both paths — the unknown string does not match the atom in either the string-list or atom-list form."
+      }
+    ]
+  },
+
+  "post_fix_pass": {
+    "mechanism": "roles_from_strings([\"PLATFORM_ADMIN\"]) → [:PLATFORM_ADMIN]. :PLATFORM_ADMIN not in [:PLATFORM_ADMIN] → false. Exemption granted. refute conn.halted passes.",
+    "pass_count": "all 3 ISS-0808 tests + all pre-existing REQ-075 AC5 PLATFORM_ADMIN exempt tests pass",
+    "environment_note": "Must be verified by TEST-RUNNER in a real Elixir environment with deps installed."
+  },
+
+  "mutant_revert_confirmed": {
+    "command": "git checkout -- lib/letflow/plugs/tenant_status.ex",
+    "post_revert_status": "git status --porcelain lib/ test/ returned empty output — tree is clean"
+  },
+
+  "coverage_gaps": "None identified. The three ISS-0808 tests cover (1) the primary regression path — mutant-sensitive and decisive, (2) non-admin rejection with a valid role, and (3) unknown-string filtering via roles_from_strings/1. Pre-existing REQ-075 AC5 PLATFORM_ADMIN exempt tests provide redundant signal on the same regression path.",
+
+  "additional_tests_recommended": [],
+
+  "handoff_to": "TEST-DESIGN-VALIDATOR",
+  "result": {
+    "status": "PASS",
+    "notes": "Spec written to test/specs/ISS-0808.md. Mutant applied, failure count determined by static analysis (3 failures), mutant reverted, tree clean. mix test cannot run in this environment — TEST-RUNNER must verify in a real Elixir environment with deps installed."
+  }
+}

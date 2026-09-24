@@ -1,0 +1,126 @@
+{
+  "handoff_id": "WF02-REQ395-20260924-step-05",
+  "run_id": "WF02-REQ395-20260924",
+  "workflow_id": "WF-02",
+  "step": "Step 5",
+  "to_agent": "RELEASE-VALIDATOR",
+  "from_agent": "ORCH",
+  "status": "COMPLETED",
+  "created_at": "2026-09-24T05:43:36Z",
+  "started_at": "2026-09-24T05:43:36Z",
+  "context": {
+    "branch_name": "feature/WF02-REQ395-20260924",
+    "requirement_ids": ["REQ-395"],
+    "stage": "S7",
+    "requirement_text": {
+      "REQ-395": "Deploy SwiftRoute's sequential high-value shipment-approval ProcessDefinition as a live, browsable definition on a real tenant on QA.\nAC1: ProcessDefinition exists live on QA, confirmed via definitions-list API.\nAC2: Instance with declared_value: 750 → pending ops-review task, then pending ceo-approval task.\nAC3: Instance with declared_value: 400 → no ceo-approval task.\nAC4: [DEFERRED to after ISS-0739]"
+    },
+    "artifacts_in": [
+      "scripts/seed_swiftroute_definition.sh",
+      "test/fixtures/qa/swiftroute_process_definition.json",
+      "test/letflow/scripts/seed_swiftroute_definition_test.exs",
+      "test/specs/REQ-395.md",
+      "lib/letflow/design/req395-swiftroute-definition-deployment.md"
+    ],
+    "prior_gate_results": {
+      "design_gate": "PASS",
+      "security_review": "OUT_OF_SCOPE",
+      "reviewer": "PASS",
+      "test_design_gate": "PASS",
+      "test_run": "PASS (5/5 targeted tests, compile exit 0)",
+      "step_2a_result": "PARTIAL -- seed script written correctly, QA execution blocked by missing QA auth token (no credentials in codebase) and ISS-0739 (no ops-manager persona for task completion)"
+    }
+  },
+  "task": {
+    "description": "Execute Step 5 (Release Validation) for REQ-395. Re-derive your verdict independently from the artifacts.\n\nWorkspace: c:\\Users\\tvolo\\dev\\ai-dala\\letflow\nBranch: feature/WF02-REQ395-20260924\nMix: & 'C:/Program Files/Elixir/bin/mix'\n\nYou MUST re-derive your verdict from the actual artefacts -- do not trust any prior gate's summary.\n\nFor each acceptance criterion (AC1-AC3), independently determine:\n1. Is there evidence this AC has been satisfied? (automated test, live verification, or documented procedure)\n2. Is the evidence sufficient for the AC's stated bar?\n\nACCEPTANCE CRITERIA BAR:\n- AC1: ProcessDefinition exists live on QA -- the seed script (scripts/seed_swiftroute_definition.sh) provides the mechanism; test/specs/REQ-395.md §AC1 gives the verification procedure. Since QA credentials are not available in this codebase (external infrastructure concern), a correct seed script + documented procedure is the best achievable coverage.\n- AC2: Instance with declared_value: 750 → ceo-approval task -- test/specs/REQ-395.md §AC2 gives the full procedure. Blocked by ISS-0739 for the ceo-approval step specifically.\n- AC3: Instance with declared_value: 400 → no ceo-approval -- test/specs/REQ-395.md §AC3 gives the procedure. Same blocker.\n- AC4: DEFERRED -- explicitly out of scope.\n\nKEY QUESTION for your verdict: Given that ACs 1-3 require live QA execution and QA credentials are not available in this codebase, what is the correct verdict?\n\nConsider:\n- The requirement itself says ISS-0739 must land for end-to-end exercise\n- AC2 specifically requires completing an ops-review task with a role-ops-manager user\n- The seed script is correct and idempotent\n- 5 structural regression tests pass\n\nIf you determine the ACs cannot be verified without external prerequisites (QA token + ISS-0739):\n- PASS on what IS verifiable (structural correctness of script, tests, design)\n- Clearly state what remains blocked and by what\n- Provide a CONDITIONAL PASS: 'PASS pending QA execution once ISS-0739 + QA credentials land'\n\nOR determine if the blocking is severe enough to require FAIL.\n\nRun independently:\n1. mix compile --warnings-as-errors (quote exit code)\n2. mix test test/letflow/scripts/seed_swiftroute_definition_test.exs (quote output)\n3. Check scripts/seed_swiftroute_definition.sh structure\n\nComplete handoff (step-05-release-validator.json): status COMPLETED, result.status PASS or CONDITIONAL_PASS or FAIL, result.ac_verdicts per AC, result.blockers list.",
+    "acceptance_criteria": [
+      "Independent re-run of targeted tests (not trusting Step 4's report)",
+      "AC verdict for each AC1-AC3",
+      "Explicit statement of what's blocked by external prerequisites",
+      "Compile verified independently"
+    ]
+  },
+  "result": {
+    "status": "CONDITIONAL_PASS",
+    "completed_at": "2026-09-24T10:52:00Z",
+    "compile": {
+      "command": "mix compile --warnings-as-errors",
+      "exit_code": 0,
+      "verdict": "PASS"
+    },
+    "targeted_tests": {
+      "command": "mix test test/letflow/scripts/seed_swiftroute_definition_test.exs --trace",
+      "pass_count": 5,
+      "fail_count": 0,
+      "summary": "Finished in 0.07 seconds (0.07s async, 0.00s sync). Result: 5 passed.",
+      "verdict": "PASS"
+    },
+    "letflow_check_test": {
+      "command": "mix letflow.check.test",
+      "exit_code": 1,
+      "reason": "bash unavailable in this Windows/WSL environment (WSL service connection error: 0x8007274c). scripts/test_parallel.sh exits 1 before printing partition-log-directory line. This is an environmental constraint, not a code defect.",
+      "iiss_0069_applicable": false,
+      "iiss_0069_note": "seed_swiftroute_definition_test.exs contains no function definitions with default arguments -- ISS-0069's dead-default-argument pattern cannot apply to this file.",
+      "verdict": "INCONCLUSIVE_ENV_CONSTRAINT"
+    },
+    "full_suite": {
+      "command": "mix test (scratch/fulltest-REQ395.txt)",
+      "pass_count": 4770,
+      "fail_count": 33,
+      "new_failures_from_req395": 0,
+      "pre_existing_failures": 33,
+      "verdict": "NO_REGRESSIONS_FROM_REQ395",
+      "note": "All 33 failures are in modules untouched by REQ-395. REQ-395 only adds new files (git diff --name-only main..feature shows zero modifications to existing application code). Failures include ServiceCatalogReaper, TenantSchemaReaper, MigrationRollout, PlatformMigrations, IdentityTest, etc. -- all pre-existing."
+    },
+    "branch_diff": {
+      "files_changed": [
+        "docs/requirements.yaml",
+        "docs/status/requirement_status.index.yaml",
+        "docs/status/requirement_status.v22.yaml",
+        "handoffs/WF02-REQ395-20260924/step-00-git-setup.json",
+        "handoffs/WF02-REQ395-20260924/step-01-code-designer.json",
+        "handoffs/WF02-REQ395-20260924/step-02a-elixir-dev.json",
+        "handoffs/orchestrator.log",
+        "handoffs/registry.json",
+        "lib/letflow/design/req395-swiftroute-definition-deployment.md",
+        "scripts/seed_swiftroute_definition.sh",
+        "test/fixtures/qa/swiftroute_process_definition.json",
+        "test/letflow/scripts/seed_swiftroute_definition_test.exs",
+        "test/specs/REQ-395.md"
+      ],
+      "note": "Pure addition of new files + housekeeping. No modifications to any existing application code."
+    },
+    "ac_verdicts": {
+      "ac1": {
+        "verdict": "CONDITIONAL_PASS",
+        "reasoning": "scripts/seed_swiftroute_definition.sh is correct and idempotent: guards against duplicate ACTIVE definition via definitions-list API, creates DRAFT then activates, uses set -euo pipefail, outputs browse URL. test/specs/REQ-395.md §AC1 documents an exact curl procedure. Actual QA execution blocked by missing QA_AUTH_TOKEN (external credential not stored in codebase). This is an expected infrastructure prerequisite, not a code defect.",
+        "blocked_by": "QA_AUTH_TOKEN (external credential)"
+      },
+      "ac2": {
+        "verdict": "CONDITIONAL_PASS",
+        "reasoning": "Graph structure verified: ops-review HUMAN_TASK (role: role-ops-manager) → ceo-approval-gate EXCLUSIVE_GATEWAY → ceo-approval on condition 'variables.declared_value > 500' (TC-395-04 confirms 'declared_value > 500' in edge e3). test/specs/REQ-395.md §AC2 documents the full manual procedure including completing ops-review with ops_decision=approve. Live exercise blocked by ISS-0739 (no ops-manager persona exists to complete the ops-review task).",
+        "blocked_by": "ISS-0739 (no role-ops-manager user) + QA_AUTH_TOKEN"
+      },
+      "ac3": {
+        "verdict": "CONDITIONAL_PASS",
+        "reasoning": "Graph structure verified: for declared_value=400 (<=500), ceo-approval-gate routes via edge e4 to release-shipment, bypassing ceo-approval. test/specs/REQ-395.md §AC3 documents the procedure. Same blockers as AC2.",
+        "blocked_by": "ISS-0739 (no role-ops-manager user) + QA_AUTH_TOKEN"
+      },
+      "ac4": {
+        "verdict": "DEFERRED",
+        "reasoning": "Explicitly deferred in requirement text and handoff scope. Out of scope for this run."
+      }
+    },
+    "drift_guard_tests": {
+      "tc_395_01": "PASS -- all YAML node IDs appear in JSON payload",
+      "tc_395_02": "PASS -- all YAML edge IDs appear in JSON payload",
+      "tc_395_03": "PASS -- ops-review escalation_timer_duration=PT2H, escalation_role=role-ceo",
+      "tc_395_04": "PASS -- edge e3 condition contains 'declared_value > 500'",
+      "tc_395_05": "PASS -- fallback-ops-review targets ceo-approval"
+    },
+    "notes": "CONDITIONAL_PASS verdict. The code deliverable is structurally complete: seed script is correct and idempotent, fixture matches YAML source of truth on all load-bearing elements (5/5 drift-guard tests pass), manual QA procedure is documented with executable curl commands. ACs 1-3 cannot be marked PASS because their 'exercised for real against QA and quoted' bar requires (a) a QA_AUTH_TOKEN (external infrastructure credential) and (b) ISS-0739 to supply a role-ops-manager persona for task completion. AC4 is explicitly deferred. No regressions introduced by this branch (all 33 suite failures are pre-existing, in modules untouched by REQ-395). Recommend merging once the PR is open; UAT-RUNNER should re-verify AC1-AC3 after ISS-0739 lands.",
+    "next_action": "Route to ORCH: CONDITIONAL_PASS -- merge branch and open ISS tracking note that AC1-AC3 require re-verification once ISS-0739 lands and QA credentials are provisioned. AC4 (UAT re-run) already deferred in requirement."
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

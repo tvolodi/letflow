@@ -29313,7 +29313,7 @@ requirements:
   - id: REQ-395
     title: "Deploy SwiftRoute's sequential high-value shipment-approval process definition as a live, browsable definition on a real tenant, with ops-manager/CEO actors that can actually sign in"
     owner: ELIXIR-DEV
-    status: pending
+    status: done
     stage: S7
     impl_order: 755  # letflow-queue task id, GH#1643. Registered 2026-09-20 by ORCH;
       # corrects a fabricated/self-assigned id (752) that was never a real

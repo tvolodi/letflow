@@ -1,0 +1,46 @@
+{
+  "handoff_id": "WF02-REQ395-20260924-step-00",
+  "run_id": "WF02-REQ395-20260924",
+  "workflow_id": "WF-02",
+  "step": "Step 00",
+  "to_agent": "ELIXIR-DEV",
+  "from_agent": "ORCH",
+  "status": "COMPLETED",
+  "created_at": "2026-09-24T03:52:29Z",
+  "started_at": "2026-09-24T03:52:29Z",
+  "context": {
+    "branch_name": "feature/WF02-REQ395-20260924",
+    "requirement_ids": ["REQ-395"],
+    "stage": "S7",
+    "queue_task_id": 755,
+    "queue_agent_id": "orch-main",
+    "queue_endpoint": "https://queue-test.ai-dala.com",
+    "queue_auth_token": "8e88290747e5cd89cc94887ba3f887c72add7f2e2e06cd49cab6bcd307c5198f",
+    "requirement_text": {
+      "REQ-395": "Deploy SwiftRoute's sequential high-value shipment-approval process definition as a live, browsable definition on a real tenant, with ops-manager/CEO actors that can actually sign in.\n\nWHAT EXISTS TODAY: The sequential HUMAN_TASK chain this scenario describes (dispatcher submits, ops manager reviews, and when declared_value > 500 the CEO must additionally co-sign before shipment releases) is a real, provable capability of Letflow.Engine: test/fixtures/simulation/swiftroute/process_route_approval.yaml ('Shipment Approval') is exactly this graph, and test/letflow/simulation/req206_swiftroute_test.exs already proves it end-to-end against a real Engine.create/2 call (REQ-206, done 2026-09-01). So the ENGINE capability is not the gap.\n\nWhat genuinely does not exist: this definition DEPLOYED anywhere a human (or an agent driving a real browser) could reach on https://qa.bizdala.com today. process_route_approval.yaml is consumed only as an in-memory fixture by Letflow.Simulation.Runner.run/1 during automated test/CI runs -- it is provisioned fresh (and torn down) inside that harness, never persisted as a live ProcessDefinition row for a real swiftroute tenant a person could open in the process-definition list screen or submit an instance against via the ordinary API/GUI.\n\nSEPARATELY, this scenario's actors (dispatcher Lena, ops manager Marco, CEO Alice -- actor-swiftroute-lena/marco/alice) have no real, seeded QA login. This is ISS-0739's scope; this requirement depends on ISS-0739's resolution to be exercisable end-to-end (AC4 is explicitly deferred to after ISS-0739 lands).\n\nSCOPE: (1) create (or script the creation of) a persistent, live ProcessDefinition for the swiftroute tenant on the QA instance, matching process_route_approval.yaml's graph (name may differ from the fixture's internal filename, but the node/edge/condition shape must match byte-for-byte in behavior); (2) confirm it is reachable and submittable through the ordinary web/ definition-list and instance-submission screens, not only via direct API calls a script makes; (3) explicitly out of scope is inventing new tenant-persona identities in Keycloak -- that is ISS-0739's scope.\n\nNOT IN SCOPE: REQ-396's escalation timer machinery (now done); ISS-0739's credential provisioning; new Keycloak identities.\n\nACCEPTANCE CRITERIA:\n1. A ProcessDefinition matching process_route_approval.yaml's graph exists as a live, active definition for a real tenant on the QA instance -- confirmed by fetching it through the ordinary definitions-list API/screen, not a direct DB query.\n2. Submitting an instance with declared_value: 750 against this live definition, via the ordinary API, produces a pending ops-review task followed by a pending ceo-approval task (not an auto-release) -- exercised for real against the QA instance and quoted.\n3. Submitting an instance with declared_value: 400 against the same live definition produces no ceo-approval task at all, proving the CEL branch is live, not hardcoded to always route through the CEO.\n4. The scenario test/fixtures/uat/scenarios/swiftroute/shipment-high-value-happy.yaml is re-run by UAT-RUNNER once this requirement and ISS-0739 both land, and its own gui-review report is updated from BLOCKED to a real pass/fail verdict with real screenshots. [DEFERRED TO AFTER ISS-0739]"
+    },
+    "owned_modules": [
+      "priv/repo/seeds/",
+      "scripts/",
+      "test/letflow/qa/"
+    ],
+    "artifacts_in": []
+  },
+  "task": {
+    "description": "Execute Step 00 (GIT SETUP) for WF02-REQ395-20260924 per docs/agents/protocols/GIT_SETUP.md.\n\nWorkspace: c:\\Users\\tvolo\\dev\\ai-dala\\letflow\nBranch: feature/WF02-REQ395-20260924\nMix: & 'C:/Program Files/Elixir/bin/mix'\n\nUncommitted files to stage:\n- handoffs/registry.json (REQ-395 entry appended by ORCH)\n- handoffs/orchestrator.log (appended by ORCH)\n- handoffs/WF02-REQ395-20260924/step-00-git-setup.json (this file)\n- docs/requirements.yaml (flip REQ-395 status pending → in_progress)\n- docs/status/requirement_status.v22.yaml (append started event)\n- docs/status/requirement_status.index.yaml (increment entries count)\n\nProcedure:\n1. git checkout main; git pull --ff-only\n2. Flip REQ-395 status to in_progress in docs/requirements.yaml\n3. Append started event to docs/status/requirement_status.v22.yaml (append-only):\n   - req: REQ-395\n   - event: started\n   - at: <real UTC now>\n   - run: WF02-REQ395-20260924\n   - note: WF-02 started, queue task 755\n4. Increment entries in docs/status/requirement_status.index.yaml volume 22 entry\n5. git checkout -b feature/WF02-REQ395-20260924\n6. Stage ONLY the files listed above\n7. Commit: 'feat(WF02-REQ395-20260924): Step 00 -- git setup, REQ-395 started'\n8. git push -u origin feature/WF02-REQ395-20260924\n9. Complete handoff PASS with commit sha and branch name",
+    "acceptance_criteria": [
+      "Branch feature/WF02-REQ395-20260924 created and pushed",
+      "REQ-395 status flipped to in_progress in docs/requirements.yaml",
+      "Started event appended to docs/status/requirement_status.v22.yaml",
+      "Commit sha reported"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "branch": "feature/WF02-REQ395-20260924",
+    "commit_sha": "1081c29e",
+    "completed_at": "2026-09-24T03:55:00Z"
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

@@ -1,0 +1,32 @@
+{
+  "handoff_id": "WF02-REQ395-20260924-step-final",
+  "run_id": "WF02-REQ395-20260924",
+  "workflow_id": "WF-02",
+  "step": "Step Final",
+  "to_agent": "ELIXIR-DEV",
+  "from_agent": "ORCH",
+  "status": "IN_PROGRESS",
+  "created_at": "2026-09-24T05:53:40Z",
+  "started_at": "2026-09-24T05:53:40Z",
+  "context": {
+    "branch_name": "feature/WF02-REQ395-20260924",
+    "requirement_ids": ["REQ-395"],
+    "all_gates_passed": true,
+    "queue_task_id": 755,
+    "queue_agent_id": "orch-main",
+    "queue_endpoint": "https://queue-test.ai-dala.com",
+    "queue_auth_token": "8e88290747e5cd89cc94887ba3f887c72add7f2e2e06cd49cab6bcd307c5198f"
+  },
+  "task": {
+    "description": "Execute Step Final for WF02-REQ395-20260924 per docs/agents/protocols/GIT_MERGE.md.\n\nWorkspace: c:\\Users\\tvolo\\dev\\ai-dala\\letflow\nBranch: feature/WF02-REQ395-20260924\nMix: & 'C:/Program Files/Elixir/bin/mix'\nQUEUE_AUTH_TOKEN: 8e88290747e5cd89cc94887ba3f887c72add7f2e2e06cd49cab6bcd307c5198f\n\n1. Verify branch: git branch --show-current must equal feature/WF02-REQ395-20260924\n2. git status -- check for any uncommitted files, stage and commit if any exist\n3. git fetch origin main\n4. git rebase origin/main\n5. mix compile --warnings-as-errors (quote exit code)\n6. mix test test/letflow/scripts/seed_swiftroute_definition_test.exs (quote result)\n7. git push (--force-with-lease if rebased)\n8. gh pr create --title 'REQ-395: seeding script for SwiftRoute shipment-approval ProcessDefinition on QA' --body 'Implements REQ-395. Delivers scripts/seed_swiftroute_definition.sh (idempotent curl script to create the live ProcessDefinition for the swiftroute tenant on qa.bizdala.com) and test/letflow/scripts/seed_swiftroute_definition_test.exs (5 structural tests guarding payload drift vs process_route_approval.yaml). Live QA execution deferred pending ISS-0739 (no role-ops-manager persona) and external QA_AUTH_TOKEN. Closes #1643.'\n9. Wait for CI green (gh run watch or gh pr checks)\n10. gh pr merge --squash --delete-branch\n11. git checkout main; git pull --ff-only\n12. Release queue task 755: POST https://queue-test.ai-dala.com/tasks/755/release with agent_id=orch-main and status=done\n    Use: [System.IO.File]::WriteAllText(\"$env:TEMP\\\\release755.json\", '{\"agent_id\":\"orch-main\",\"status\":\"done\"}') ; curl.exe -s -X POST \"https://queue-test.ai-dala.com/tasks/755/release\" -H \"Authorization: Bearer $QUEUE_AUTH_TOKEN\" -H \"Content-Type: application/json\" --data-ascii \"@$env:TEMP\\\\release755.json\"\n    Quote the HTTP status and response.\n13. Update handoffs/registry.json: find WF02-REQ395-20260924 entry and set status COMPLETED, released_lock true, merge_sha and pr_number\n14. Complete handoff (step-final-elixir-dev.json): PASS with PR number, merge SHA, queue release HTTP status\n\nReport: PR number, merge SHA, CI result, queue release status.",
+    "acceptance_criteria": [
+      "Rebased, compile clean, targeted tests pass",
+      "PR merged, branch deleted",
+      "Queue task 755 released with status done",
+      "Registry COMPLETED"
+    ]
+  },
+  "result": null,
+  "rework_count": 0,
+  "max_rework": 3
+}

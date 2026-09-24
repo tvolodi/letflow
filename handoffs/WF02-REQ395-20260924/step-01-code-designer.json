@@ -1,0 +1,48 @@
+{
+  "handoff_id": "WF02-REQ395-20260924-step-01",
+  "run_id": "WF02-REQ395-20260924",
+  "workflow_id": "WF-02",
+  "step": "Step 1",
+  "to_agent": "CODE-DESIGNER",
+  "from_agent": "ORCH",
+  "status": "COMPLETED",
+  "created_at": "2026-09-24T03:55:51Z",
+  "started_at": "2026-09-24T03:55:51Z",
+  "context": {
+    "branch_name": "feature/WF02-REQ395-20260924",
+    "requirement_ids": ["REQ-395"],
+    "stage": "S7",
+    "requirement_text": {
+      "REQ-395": "Deploy SwiftRoute's sequential high-value shipment-approval process definition as a live, browsable definition on a real tenant, with ops-manager/CEO actors that can actually sign in.\n\nWHAT EXISTS TODAY: The sequential HUMAN_TASK chain (dispatcher submits, ops manager reviews, when declared_value > 500 CEO must co-sign) is a proven Letflow.Engine capability: test/fixtures/simulation/swiftroute/process_route_approval.yaml ('Shipment Approval') is exactly this graph, proven end-to-end by test/letflow/simulation/req206_swiftroute_test.exs. The ENGINE capability is NOT the gap.\n\nWHAT DOES NOT EXIST: This definition deployed as a live, persistent ProcessDefinition row for a real swiftroute tenant on https://qa.bizdala.com. process_route_approval.yaml is only consumed as an in-memory fixture by Simulation.Runner -- never persisted to the DB.\n\nSEPARATELY: The actors (Lena/Marco/Alice) have no seeded QA logins -- that is ISS-0739's scope. AC4 is explicitly deferred to after ISS-0739 lands.\n\nSCOPE: (1) Create (or script the creation of) a persistent, live ProcessDefinition for the swiftroute tenant on the QA instance, matching process_route_approval.yaml's graph; (2) Confirm reachable and submittable via ordinary API (not only direct script calls); (3) Out of scope: new Keycloak identities.\n\nACCEPTANCE CRITERIA:\nAC1: A ProcessDefinition matching process_route_approval.yaml's graph exists as a live, active definition for a real tenant on the QA instance -- confirmed by fetching through the ordinary definitions-list API, not a direct DB query.\nAC2: Submitting an instance with declared_value: 750 against this live definition via the ordinary API produces a pending ops-review task followed by a pending ceo-approval task -- exercised for real against QA and quoted.\nAC3: Submitting an instance with declared_value: 400 against the same live definition produces no ceo-approval task at all.\nAC4: [DEFERRED] UAT-RUNNER re-runs the scenario once this requirement and ISS-0739 both land."
+    },
+    "artifacts_in": [
+      "test/fixtures/simulation/swiftroute/process_route_approval.yaml",
+      "lib/letflow/routers/definitions.ex",
+      "lib/letflow/definitions.ex",
+      "priv/repo/seeds/",
+      "scripts/",
+      "deploy/",
+      "docs/migration/stage-7-simulation-uat-parity.md",
+      "docs/guides/backend_developer_guide.md"
+    ]
+  },
+  "task": {
+    "description": "Execute Step 1 (Code Design) for REQ-395.\n\nWorkspace: c:\\Users\\tvolo\\dev\\ai-dala\\letflow\nBranch: feature/WF02-REQ395-20260924\n\nDESIGN ONLY -- no implementation code.\n\nREQ-395 is a DEPLOYMENT requirement: it is about creating a persistent, live ProcessDefinition for the swiftroute tenant on the QA instance (https://qa.bizdala.com), not adding new engine capabilities. The engine capability already exists and is proven by tests.\n\nRead FIRST:\n1. test/fixtures/simulation/swiftroute/process_route_approval.yaml -- the graph to deploy (node/edge/condition shape)\n2. lib/letflow/routers/definitions.ex -- the ProcessDefinition API routes (POST /definitions to create, GET /definitions to list) to understand the creation payload shape\n3. lib/letflow/definitions.ex -- the context module, how ProcessDefinitions are structured in the DB\n4. priv/repo/seeds/ -- check if any seeding patterns already exist\n5. scripts/ -- check if any deploy/seed scripts already exist\n6. deploy/ -- check if there's any QA deployment infrastructure\n7. docs/migration/stage-7-simulation-uat-parity.md -- stage context for what QA state is expected\n\nKEY DESIGN DECISIONS:\n\n1. DEPLOYMENT MECHANISM: How to create the live ProcessDefinition on QA? Options:\n   A. An Elixir mix task (mix letflow.seed_qa_definition) that calls the QA HTTP API\n   B. A shell script that calls the QA API via curl (scripts/seed_swiftroute_definition.sh)\n   C. A priv/repo/seeds file that uses Ecto directly (only works if DB is accessible, not via API)\n   D. Something else that already exists in the codebase\n   CHOOSE ONE. State the trade-offs. If a mechanism already exists in scripts/ or priv/repo/seeds/, prefer it. If not, Option B (curl script) is the most portable for a QA deploy without requiring Elixir on the deploy machine.\n\n2. QA TENANT: What tenant should this be deployed for? The description says 'swiftroute tenant'. Check if a 'swiftroute' tenant already exists on QA, or if one needs to be created. If tenant creation is required, note it as a prerequisite or include it in scope.\n\n3. VERIFICATION APPROACH: ACs 1-3 require verifying against the live QA API. How to satisfy these? Options:\n   A. Document the curl commands that prove each AC (a test script)\n   B. A mix test tagged @tag :qa that runs against QA\n   C. Both\n   The ACs say 'exercised for real against the QA instance and quoted' -- a documented verification script is required.\n\n4. NO NEW LIB CODE REQUIRED: This is a seeding/deployment task. Unless Letflow's API lacks a required endpoint (check lib/letflow/routers/definitions.ex carefully), no new lib/ code should be needed. If a missing endpoint is discovered, that is a separate defect to file, not in scope here.\n\nWrite ONE design doc: lib/letflow/design/req395-swiftroute-definition-deployment.md\n\nInclude:\n1. Chosen deployment mechanism with rationale\n2. The exact ProcessDefinition payload (derived from process_route_approval.yaml -- convert the YAML fixture to the API's JSON body format)\n3. QA tenant prerequisite check (does 'swiftroute' tenant exist? how to verify?)\n4. Verification procedure for each AC (what API calls, what responses prove it)\n5. AC traceability: which design element satisfies each AC\n6. Open questions (anything about QA state you cannot determine from the codebase alone)\n\nDo NOT write any implementation code (no .ex/.exs/.sh files, no actual code blocks -- only the design document with the payload shapes, API endpoint descriptions, and procedure steps).\n\nComplete your handoff: set status COMPLETED, result.status PASS or FAIL, artifacts_out listing the design doc path, next_action 'Route to CODE-DESIGN-VALIDATOR'.",
+    "acceptance_criteria": [
+      "Chosen deployment mechanism stated with rationale",
+      "ProcessDefinition payload specified (matching process_route_approval.yaml graph)",
+      "QA tenant prerequisite addressed",
+      "Verification procedure for AC1, AC2, AC3 specified",
+      "AC traceability complete",
+      "No implementation code in design doc"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "artifacts_out": ["lib/letflow/design/req395-swiftroute-definition-deployment.md"],
+    "next_action": "Route to CODE-DESIGN-VALIDATOR",
+    "notes": "Design complete. Key decisions: curl-based deployment script (two API calls: POST /definitions then activate); full JSON payload translated from process_route_approval.yaml (REQ-396 state); swiftroute tenant existence (OQ-1) and QA auth token source (OQ-2) flagged as open questions for ELIXIR-DEV to resolve before running the script."
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

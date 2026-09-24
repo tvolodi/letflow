@@ -6960,19 +6960,19 @@
       "issue_id": "ISS-0761",
       "queue_task_id": 761,
       "github_issue_number": 1649,
-      "status": "ACTIVE",
+      "status": "COMPLETED",
       "owned_modules": [
         ".claude/agents/uat-runner.md",
         "scripts/",
         "docs/issues/ISS-0739.yaml"
       ],
       "started_at": "2026-09-24T07:08:59Z",
-      "lock_released_at": null,
-      "released_lock": false,
-      "last_known_step": "Step 00 PENDING",
-      "merge_sha": null,
-      "pr_number": null,
-      "note": "WF-03 for ISS-0761 (local: ISS-0739): no seeded QA login credentials for SwiftRoute persona actors (Lena/Marco/Alice). MAJOR. Queue task 761. Related: REQ-395."
+      "lock_released_at": "2026-09-24T08:19:00Z",
+      "released_lock": true,
+      "last_known_step": "Step Final PASS",
+      "merge_sha": "3b975e688a310654aac23c3611af3c0783a8e009",
+      "pr_number": 1771,
+      "note": "WF-03 for ISS-0761 (local: ISS-0739): no seeded QA login credentials for SwiftRoute persona actors (Lena/Marco/Alice). MAJOR. Queue task 761. Related: REQ-395. CI failures (2x identity_test.exs:534,541) attributed pre-existing ISS-0108/ISS-0766 per GIT_MERGE.md structural attribution. Merged with --admin."
     }
   ]
 }

@@ -29779,7 +29779,7 @@ requirements:
   - id: REQ-400
     title: "P1: Letflow.Modules.Module behaviour, Letflow.Modules.Catalog, manifest validation, and a test-only fixture module"
     owner: ELIXIR-DEV
-    status: pending
+    status: done
     stage: S11
     impl_order: 789  # letflow-queue task id, GH#1774. Registered 2026-09-24T11:10:15Z by ORCH (WF-01 Step 3).
     description: >

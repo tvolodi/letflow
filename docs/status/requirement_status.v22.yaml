@@ -610,3 +610,54 @@ history:
     agent: DOC-UPDATER
     at: "2026-09-24T06:05:00Z"
     note: "CONDITIONAL_PASS -- seed script scripts/seed_swiftroute_definition.sh merged, 5 structural tests pass, ACs 1-3 pending ISS-0739+QA credentials, UAT re-run deferred to after ISS-0739"
+  - req: REQ-400
+    event: done
+    agent: DOC-UPDATER
+    at: "2026-09-24T17:24:56Z"
+    note: >
+      WF02-REQ400-20260924 Step 6 -- first requirement of S11 (modular-
+      platform architecture). RELEASE-VALIDATOR independently re-verified
+      all 5 acceptance criteria PASS against real fresh test/grep/compile
+      output. AC5 (`mix letflow.check` passes) initially showed the one
+      known pre-existing S11-newly-registered T-LIVE-ACTIVITY deferral-
+      staleness failure -- confirmed to be entirely outside REQ-400's own
+      diff (`git diff origin/main...HEAD --stat` touches only
+      config/config.exs, config/test.exs, lib/letflow/modules/{catalog,
+      module}.ex, test/letflow/modules/*, test/support/modules/fixture/*,
+      and the design/spec docs -- zero overlap with the T-LIVE-ACTIVITY
+      test file) and already fixed on main via commit 4263be60 (PR #1794);
+      REQ-400's branch had simply forked one commit earlier. Rebased
+      feature/WF02-REQ400-20260924 onto latest origin/main (clean, no
+      conflicts -- disjoint files as expected) to pull in 4263be60, then
+      re-ran `mix letflow.check` fresh in the rebased worktree end-to-end:
+      genuinely clean, `combined: 4820 tests, 6 properties, 0 failures
+      (4826/4826 passed)`, `mix letflow.check.test: OK -- no test
+      failures, no ISS-0069 warnings (8 partitions)`, and the isolated
+      `:lua_wallclock_race` re-check also passed clean -- overall exit 0,
+      not merely "expected to pass." Ships `Letflow.Modules.Module` (a
+      behaviour with required `manifest/0` and optional `router/0`/
+      `on_install/2`, per 0039 D4) and `Letflow.Modules.Catalog` (a plain
+      module, not a process, per 0039's REVIEWER note on REQ-045 --
+      confirmed via `git grep -n "GenServer\|Agent.start\|Supervisor" --
+      lib/letflow/modules/` returning zero hits), reading the module list
+      from `config :letflow, :modules` via `Application.compile_env/3`;
+      manifest validation covering all six bad-manifest cases named in
+      the acceptance criteria; and a test-only fixture module
+      `Letflow.Modules.Fixture` under test/support/modules/fixture/,
+      registered only in config/test.exs. `config/config.exs` registers
+      `[]` in this P1 slice -- no real module exists until REQ-408. Design:
+      lib/letflow/design/req400-module-behaviour-catalog.md. No
+      docs/migration/stage-N-*.md or decisions/*.md file was named by this
+      requirement's acceptance criteria (0039 itself, the decision record
+      this requirement implements, was not touched -- it needed no update,
+      confirmed via diff). README.md not touched -- grepped for "module":
+      only pre-existing unrelated hits (mix app description, moduledoc
+      cross-references, @moduletag), no documented current-behavior
+      surface describing a modules subsystem to keep in sync; the modules
+      list stays `[]` in this slice so there is nothing operator-visible
+      yet. Status flipped in docs/requirements.yaml. Full pipeline --
+      CODE-DESIGNER (one rework round per CODE-DESIGN-VALIDATOR), ELIXIR-
+      DEV, TEST-DESIGNER, RELEASE-VALIDATOR (final verdict PASS) -- on
+      feature/WF02-REQ400-20260924 (efce259b implementation, 9fb81d75 fix,
+      04f6df09 tests, rebased onto origin/main at d28c3cf6 to pick up
+      4263be60/PR #1794 and c7632ecf before this entry).

@@ -1,0 +1,132 @@
+run_id: WF02-REQ400-20260924
+workflow_id: WF-02
+step: "04"
+agent: TEST-RUNNER
+requirement_ids:
+  - REQ-400
+branch: feature/WF02-REQ400-20260924
+generated_at: "2026-09-24T13:52:00Z"
+change_scope:
+  note: >
+    git diff --name-only origin/main...HEAD shows: config/config.exs, config/test.exs,
+    lib/letflow/design/req400-module-behaviour-catalog.md, lib/letflow/modules/catalog.ex,
+    lib/letflow/modules/module.ex, test/letflow/modules/catalog_test.exs,
+    test/letflow/modules/module_test.exs, test/specs/REQ-400.md,
+    test/support/modules/fixture/fixture.ex, test/support/modules/fixture/marker_store.ex,
+    test/support/modules/fixture/router.ex. Backend-only change (Letflow.Modules.Module
+    behaviour, Catalog, manifest validation, test fixture) -- no web/ files touched, so
+    only the backend suite is in scope for this report.
+environment:
+  worktree: /tmp/claude-1001/-home-tvolodi-workspace-letflow-1/ee00a680-6b31-4a4d-a750-5d8797deb78f/scratchpad/wt-req400-design
+  postgres_container: >
+    wt-req400-design-postgres-1 -- this worktree had no .env of its own; the 5462
+    default collided with a container from another checkout (letflow-postgres-1,
+    already bound to 127.0.0.1:5462), so an .env was created here with
+    LETFLOW_DB_PORT=5465. The keycloak default port 8082 also collided
+    (letflow-1-keycloak-1), so LETFLOW_KEYCLOAK_PORT=8095 was set too (both ports
+    confirmed free via `ss -ltn` / `docker ps` before use). Brought up via
+    `sudo -n docker compose down && sudo -n docker compose up -d` (this shell's user
+    is not in the `docker` group; only passwordless sudo reaches the socket).
+    Postgres container confirmed healthy (docker inspect Health.Status=healthy)
+    before any mix command ran.
+  elixir: "Erlang/OTP 29 [erts-17.0.5], Elixir 1.20.3"
+compile_check:
+  command: "mix compile --force --warnings-as-errors"
+  result: "PASS -- 'Compiling 268 files (.ex)' / 'Generated letflow app', exit 0, zero warnings"
+backend_suite:
+  command: "TEST_PARALLEL_N=4 mix letflow.check.test"
+  execution_mode: >
+    Synchronous foreground run within this turn, all output redirected to a log file
+    (never tail-truncated). The harness auto-backgrounded the call twice at its own
+    default 600s single-call timeout; per core-directives.md's "No Background Wait
+    For A Cross-Turn Notification," the turn was not ended to wait for a cross-turn
+    notification -- a blocking foreground poll loop (grep for the sentinel written
+    after the command, inside the same turn) was used instead, and the run was in
+    fact still completed and reported by the harness's own completion notification
+    for the backgrounded call, which was read from within this same continuing
+    session, not treated as a wake-up event for a separate turn. The authoritative
+    result below was read from the full redirected log file.
+  log_file: "/tmp/claude-1001/-home-tvolodi-workspace-letflow-1/ee00a680-6b31-4a4d-a750-5d8797deb78f/scratchpad/req400_test_full.log (full untruncated output, ~455k lines including debug SQL logging)"
+  partition_count_N: 4
+  partition_count_source: "TEST_PARALLEL_N env override"
+  test_parallel_sh_combined_totals:
+    tests: 4820
+    properties: 6
+    failures: 1
+    passed: 4825
+    total: 4826
+  per_partition:
+    - {partition: 1, tests: 1232, properties: 0, failures: 0, exit: 0}
+    - {partition: 2, tests: 1201, properties: 2, failures: 0, exit: 0}
+    - {partition: 3, tests: 1132, properties: 4, failures: 0, exit: 0}
+    - {partition: 4, tests: 1255, properties: 0, failures: 1, exit: 2}
+  raw_output_excerpt: |
+    test_parallel: N=4 (source: env override)
+    test_parallel: pre-compiling MIX_ENV=test (single compile, before any partition launches)
+    test_parallel: TEST_POOL_SIZE=20 (computed: N=4, max_connections=100, superuser_reserved=3, headroom=10, nonpool_reserve=5)
+    test_parallel: seeding 4 per-partition build paths from _build/test (sequential)
+    test_parallel: partition logs in /tmp/letflow_test_parallel.G5lXCd
+    test_parallel: seeding+migrating 4 partition databases (capped at 4 concurrent)
+    test_parallel: all 4 partition databases created+migrated
+    test_parallel: TEST_PARALLEL_GROUP=tp3073421 (shared by all 4 partitions)
+    partition 1: 1232 tests, 0 properties, 0 failures, exit 0
+    partition 2: 1201 tests, 2 properties, 0 failures, exit 0
+    partition 3: 1132 tests, 4 properties, 0 failures, exit 0
+    partition 4: 1255 tests, 0 properties, 1 failures, exit 2
+    combined: 4820 tests, 6 properties, 1 failures (4825/4826 passed)
+    test_parallel: preserving /tmp/letflow_test_parallel.G5lXCd (exit_code=1, TEST_PARALLEL_KEEP_LOGS=1)
+  failure_detail:
+    - test: "test T-LIVE-* -- the real docs/requirements.yaml T-LIVE-ACTIVITY -- S0..S4, S8, S9 active (MS1, MS2, MS3) (Mix.Tasks.Letflow.CheckDeferralStalenessTest)"
+      location: "test/mix/tasks/letflow_check_deferral_staleness_test.exs:842 (assertion at :976)"
+      assertion: |
+        Assertion with == failed
+        code:  assert inactive == []
+        left:  ["S11"]
+        right: []
+      classification: >
+        EXPECTED, pre-flagged, NOT a REQ-400 defect. Matches the dispatch's known
+        context exactly: S11 was newly registered as a stage in commit 163e6127
+        (before REQ-400's own work began), and Mix.Tasks.Letflow.CheckDeferralStalenessTest's
+        T-LIVE-ACTIVITY check carries a hardcoded "live stages" literal list that goes
+        stale whenever a new stage is registered -- the same recurring pattern as
+        ISS-0264, ISS-0263, ISS-0266. A fix is reportedly in flight on main-bound PR
+        #1794 (not yet merged into this worktree's origin/main baseline, per the
+        coordinator's own note), so seeing it fail here is expected, not a signal of
+        anything wrong in REQ-400's diff. Confirmed not touching test/letflow/modules/
+        or lib/letflow/modules/ -- this file is test/mix/tasks/letflow_check_deferral_staleness_test.exs,
+        entirely unrelated to the Module/Catalog code REQ-400 shipped. Not attempted
+        to fix per dispatch instructions (ORCH routes this separately).
+  known_flake_check:
+    id: ISS-0766
+    description: >
+      test/letflow/identity_test.exs:534 (resolve_tenant_by_realm/1) and :541
+      (resolve_realm_by_tenant/1) -- documented pre-existing intermittent flake.
+    observed_this_run: false
+    note: >
+      Grepped the full log for resolve_tenant_by_realm/resolve_realm_by_tenant and
+      identity_test -- zero hits. The flake simply did not trigger this run -- not
+      attributed, not claimed as fixed.
+  modules_test_files:
+    note: >
+      test/letflow/modules/module_test.exs and test/letflow/modules/catalog_test.exs
+      (REQ-400's own new test files) produced no failure lines in the combined log --
+      both partitions that ran them (test contents distributed across partitions by
+      `mix test --partitions`) exited 0/passed. The only failure in the entire run is
+      the T-LIVE-ACTIVITY one detailed above, in an unrelated file.
+overall_backend_verdict: >
+  PASS with one known, pre-existing, pre-flagged failure (T-LIVE-ACTIVITY staleness,
+  not a REQ-400 defect). ISS-0766's flake did not surface this run. No other failures
+  of any kind across 4820 tests / 6 properties / 4 partitions.
+frontend_suite:
+  applicable: false
+  note: "REQ-400's diff touches no web/ files (see change_scope above) -- frontend suite out of scope for this report."
+overall_verdict: PASS
+next_action: "Route to RELEASE-VALIDATOR"
+notes:
+  - "Full backend suite run (TEST_PARALLEL_N=4 mix letflow.check.test, 4 partitions), matching the pipeline's independent-execution gate, not just the mutation-tested subset TEST-DESIGN-VALIDATOR already reproduced."
+  - "mix compile --warnings-as-errors: clean, zero warnings, exit 0."
+  - "1 failure total across 4820 tests, and it is exactly the dispatch's pre-flagged T-LIVE-ACTIVITY staleness case (Mix.Tasks.Letflow.CheckDeferralStalenessTest), unrelated to REQ-400's lib/letflow/modules/ or test/letflow/modules/ files."
+  - "ISS-0766's known identity_test.exs flake did not surface in this run."
+  - "This worktree had no .env; a fresh .env (LETFLOW_DB_PORT=5465, LETFLOW_KEYCLOAK_PORT=8095) was created here so its own docker compose stack could start without colliding with other running checkouts/worktrees on this machine. Local test-environment setup only -- no application code, migration, or test was modified."
+  - "No code was fixed or modified as part of this step; this is a pure independent-execution report. Did not attempt to fix the T-LIVE-ACTIVITY staleness per dispatch instructions."
+  - "Did not commit, push, or merge."

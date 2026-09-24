@@ -6939,18 +6939,18 @@
       "issue_id": null,
       "queue_task_id": 755,
       "github_issue_number": 1643,
-      "status": "ACTIVE",
+      "status": "COMPLETED",
       "owned_modules": [
         "priv/repo/seeds/",
         "scripts/",
         "test/letflow/qa/"
       ],
       "started_at": "2026-09-24T03:52:29Z",
-      "lock_released_at": null,
-      "released_lock": false,
-      "last_known_step": "Step 00 PASS commit 1081c29e",
-      "merge_sha": null,
-      "pr_number": null,
+      "lock_released_at": "2026-09-24T07:06:59Z",
+      "released_lock": true,
+      "last_known_step": "Step Final PASS",
+      "merge_sha": "7a9fe9c8",
+      "pr_number": 1766,
       "note": "WF-02 for REQ-395: deploy SwiftRoute sequential high-value shipment-approval process definition as live browsable definition on QA tenant. Queue task 755. ORCH stale lock force-released and reclaimed 2026-09-24."
     }
   ]

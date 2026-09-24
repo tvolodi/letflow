@@ -1,0 +1,39 @@
+{
+  "handoff_id": "WF03-ISS0808-20260925-step-01",
+  "run_id": "WF03-ISS0808-20260925",
+  "workflow_id": "WF-03",
+  "step": "Step 1",
+  "to_agent": "ORCH",
+  "from_agent": "ISSUE-FIXER",
+  "status": "COMPLETED",
+  "created_at": "2026-09-24T23:27:29Z",
+  "started_at": "2026-09-24T23:27:29Z",
+  "completed_at": "2026-09-24T23:28:45Z",
+  "context": {
+    "issue_id": "ISS-0808",
+    "issue_file": "docs/issues/ISS-0808.yaml",
+    "retroactive": true,
+    "implementation_commit": "97c50b5d"
+  },
+  "task": {
+    "description": "WF-03 Steps 0.5+1 (retroactive) -- registry lookup and root-cause diagnosis for ISS-0808.",
+    "acceptance_criteria": [
+      "registry lookup done, any prior related issue cited",
+      "root cause identified to specific line(s) in tenant_status.ex",
+      "explains why existing tests didn't catch it",
+      "does NOT implement the fix (already done in 97c50b5d)"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": {
+      "registry_lookup": "ISS-0764 is the direct prior entry with identical symptoms -- same file (lib/letflow/plugs/tenant_status.ex), same defect description (raw string-list membership check on conn.assigns.auth_context.roles instead of Authorization.roles_from_strings/1 for the PLATFORM_ADMIN exemption), same MINOR severity, same fix direction, filed by REVIEWER during WF03-ISS0736-20260921 on 2026-09-21. ISS-0764 was never resolved (status: open at filing); ISS-0808 was opened 2026-09-24 referencing ISS-0764 in its 'related' field, indicating the issue was re-triaged/re-queued rather than a recurrence of a previously shipped fix. No severity escalation required -- this is the same original open finding, not a recurrence after a fix that failed to hold. Additionally, ISS-0774 and ISS-0775 touch Authorization.roles_from_strings/1 and role-domain separation but concern entirely different code paths (tenant_role.kind filtering, OIDC claim write path) -- not the same root cause.",
+      "root_cause": "lib/letflow/plugs/tenant_status.ex, pre-fix state (parent of commit 97c50b5d): (1) Module attribute @platform_admin was declared as the string \"PLATFORM_ADMIN\" (line ~62 in pre-fix tree, confirmed via `git show 97c50b5d^`); (2) The PLATFORM_ADMIN exemption check at lines 92-95 read raw_roles directly from conn.assigns.auth_context.roles (a list of raw strings from the JWT/auth context) and tested `@platform_admin not in roles` -- a plain string-list membership check, never passing the roles through Authorization.roles_from_strings/1. Every other authorization consumer in the codebase (Letflow.Plugs.Authorize, policy evaluators) converts the raw-string roles list through Authorization.roles_from_strings/1 first, which maps recognized strings to a closed atom set (e.g. \"PLATFORM_ADMIN\" -> :PLATFORM_ADMIN). The plug's raw check happened to produce the same result today because roles_from_strings/1 uses a plain string-match clause (`role_from_string(\"PLATFORM_ADMIN\") -> :PLATFORM_ADMIN`) and the representation has not changed. The risk is silent future divergence: if roles_from_strings/1 ever changes normalization (case folding, aliasing, a role rename), the plug's hard-coded raw string comparison would go stale with no test or compiler guard catching it.",
+      "affected_files": [
+        "lib/letflow/plugs/tenant_status.ex"
+      ],
+      "why_tests_missed": "No test in test/letflow/plugs/tenant_status_test.exs exercised the PLATFORM_ADMIN exemption path in a way that discriminated between 'raw string comparison' and 'routed through roles_from_strings/1'. Both code paths produce the identical runtime result for the unmodified PLATFORM_ADMIN string representation -- a test passing the string \"PLATFORM_ADMIN\" as a role would pass whether the check used `@platform_admin not in roles` (string) or the atom `:PLATFORM_ADMIN not in roles` (atom, after conversion). The divergence is only detectable if the test uses a representation that roles_from_strings/1 normalizes but the raw string check would not recognize (e.g., a case-variant or an alias). No such test existed; the regression tests added in commit 97c50b5d (3 tests: PLATFORM_ADMIN exempt, PROCESS_OPERATOR rejected, unknown role rejected) were the first to structurally require roles_from_strings/1 to be called, because @platform_admin is now the atom :PLATFORM_ADMIN -- if the conversion is removed, PLATFORM_ADMIN callers get 403, which the 'PLATFORM_ADMIN exempt' test catches.",
+      "fix_needed": "Replace raw string comparison with Authorization.roles_from_strings/1 and use atom :PLATFORM_ADMIN -- already done in 97c50b5d"
+    }
+  }
+}

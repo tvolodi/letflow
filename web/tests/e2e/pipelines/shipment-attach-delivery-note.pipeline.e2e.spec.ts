@@ -386,7 +386,21 @@ test.describe('Pipeline: shipment-attach-delivery-note (PW-09)', () => {
                 id: 'n2',
                 node_type: 'HUMAN_TASK',
                 label: 'Shipment Approval',
-                attributes: { assignee_type: 'user', assignee_ref: s.opsUserId },
+                // CHK-09 (REQ-029, lib/letflow/definitions/graph.ex) requires
+                // every HUMAN_TASK node to carry a non-empty "role" string
+                // attribute. It is also the attribute
+                // Letflow.Engine.TaskActivation.resolve_assignee/1 actually
+                // reads for `assignee_ref` (`Map.get(attributes, "role")`,
+                // NOT the "assignee_ref" key below -- that key is
+                // unread/documentary only, kept for readability alongside
+                // "role", matching attachment-cross-tenant.pipeline.e2e.spec.ts's
+                // own `{ role: ..., assignee_type: 'user', assignee_ref: ... }`
+                // shape). Set to s.opsUserId (not a literal string like that
+                // sibling spec's 'admin-user') because step 10 below needs
+                // the resulting task's `assignee_ref` to equal Marco's own
+                // JWT `sub` for TaskDetailPanel's `isAssignedToMe` check to
+                // pass and render `task-complete-button` at all.
+                attributes: { role: s.opsUserId, assignee_type: 'user', assignee_ref: s.opsUserId },
               },
               { id: 'n3', node_type: 'END', label: 'End', attributes: null },
             ],

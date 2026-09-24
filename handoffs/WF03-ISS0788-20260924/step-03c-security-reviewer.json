@@ -25,5 +25,22 @@
       "No scope creep"
     ]
   },
-  "result": null
+  "result": {
+    "status": "COMPLETED",
+    "verdict": "PASS",
+    "completed_at": "2026-09-24T01:05:00Z",
+    "scope_test": "APPLIES — render_upload_attachment/2 is response-shaping for a tenant-scoped entity (attachment uploads). Full invariant check executed.",
+    "invariants": {
+      "INV-1": "PASS — both new clauses return static string literals only; no tenant ID, schema name, or cross-tenant data embedded in either message",
+      "INV-2": "NOT-APPLICABLE — S4 not started; no new serialised struct fields introduced",
+      "INV-3": "NOT-APPLICABLE — S5 not started",
+      "INV-4": "PASS — no secret material in either clause; Response.conflict/2 and Response.unprocessable/2 receive plain string literals",
+      "INV-5": "NOT-APPLICABLE — S4 not started; no lookup-by-ID handler added",
+      "INV-6": "PASS — this review is the proof of scoping; no new data-access path opened; error response branches only",
+      "INV-7": "PASS — neither clause contains SQL or Repo.* calls",
+      "INV-8": "PASS — new clauses add typed pattern-match handlers, reducing unhandled-crash risk",
+      "INV-9": "PASS — no outbound HTTP calls in either clause"
+    },
+    "issues": []
+  }
 }

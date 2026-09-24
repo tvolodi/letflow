@@ -153,7 +153,7 @@
           "cases": 1,
           "design_expectation": "FAILS",
           "measured": "FAIL",
-          "observed_verbatim": "expected [ 'addMembers', 'create', \u2026(6) ] to deeply equal [ 'addMember', 'create', \u2026(4) ]"
+          "observed_verbatim": "expected [ 'addMembers', 'create', …(6) ] to deeply equal [ 'addMember', 'create', …(4) ]"
         },
         {
           "row": 10,
@@ -284,11 +284,12 @@
       "commit_subject": "test(ISS-0765): regression coverage for the groupsApi route-prefix fix",
       "commit_diffstat": "4 files changed, 872 insertions(+), 2 deletions(-)",
       "pushed": true,
-      "push_output": "To https://github.com/tvolodi/letflow.git
-   4115494e..c4ab9442  feature/WF03-ISS0765-20260924 -> feature/WF03-ISS0765-20260924",
-      "post_push_divergence_check": "After git fetch, git rev-parse HEAD and origin/feature/WF03-ISS0765-20260924 both resolve to c4ab9442b4bcd8c9475ba2a8a7fa8c5873b00998; git status -sb shows '## feature/WF03-ISS0765-20260924...origin/feature/WF03-ISS0765-20260924' with no ahead/behind marker, and git status --porcelain is empty. Nothing dangling locally. NOTE: this JSON file itself was amended with the real commit id in a follow-up commit, so the hash recorded here is the hash of the commit that introduced the four Step 4 deliverables, not of the tip.",
+      "push_output": "To https://github.com/tvolodi/letflow.git // 4115494e..c4ab9442  feature/WF03-ISS0765-20260924 -> feature/WF03-ISS0765-20260924",
+      "post_push_divergence_check": "After git fetch, git rev-parse HEAD and origin/feature/WF03-ISS0765-20260924 both resolve to 6997fc282c59e5bccc21448784c2a0c84ef30e14, and git status --porcelain is empty. No ahead/behind marker on git status -sb. Nothing dangling locally (docs/anti-patterns.md). Three commits make up Step 4: c4ab9442 (the four deliverables), 6997fc28 (fills the real commit id into this handoff, which was written before its own commit existed), and a third correcting a raw newline this file's push_output string briefly carried, which made it transiently non-parseable as JSON on 6997fc28. Recorded rather than hidden.",
       "pushed_to": "origin/feature/WF03-ISS0765-20260924",
-      "divergence_discipline": "git fetch was run at the start of this step; HEAD and origin/feature/WF03-ISS0765-20260924 both resolved to 4115494e with git status -sb showing no ahead/behind marker, so the prior run's dangling-commit hazard (docs/anti-patterns.md) was already clear on entry. The same check is re-run after the push and recorded below."
+      "divergence_discipline": "git fetch was run at the start of this step; HEAD and origin/feature/WF03-ISS0765-20260924 both resolved to 4115494e with git status -sb showing no ahead/behind marker, so the prior run's dangling-commit hazard (docs/anti-patterns.md) was already clear on entry. The same check is re-run after the push and recorded below.",
+      "handoff_amendment_commit": "6997fc282c59e5bccc21448784c2a0c84ef30e14",
+      "branch_tip_after_step_04": "6997fc282c59e5bccc21448784c2a0c84ef30e14"
     },
     "new_findings": [
       {

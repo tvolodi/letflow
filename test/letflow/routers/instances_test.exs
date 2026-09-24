@@ -1556,4 +1556,73 @@ defmodule Letflow.Routers.InstancesTest do
       assert conn.resp_body =~ "tenant"
     end
   end
+
+  describe "GET /instances/storage-usage (REQ-392 design §1.2)" do
+    test "returns 200 {used_bytes, allowance_bytes} for the caller's own tenant" do
+      tenant = TenantFixture.provisioned_tenant!(slug_prefix: "req392-usage")
+
+      Repo.update_all(
+        from(t in Tenant, where: t.id == ^tenant.tenant_id),
+        set: [storage_allowance_bytes: 123_456]
+      )
+
+      conn =
+        build_conn(:get, "/storage-usage", tenant, %{roles: ["PROCESS_OPERATOR"]})
+        |> dispatch()
+
+      assert conn.status == 200
+      body = Jason.decode!(conn.resp_body)
+      assert body["used_bytes"] == 0
+      assert body["allowance_bytes"] == 123_456
+    end
+
+    test "used_bytes reflects a real upload for that tenant, tenant-scoped (not another tenant's usage)" do
+      tenant_a = TenantFixture.provisioned_tenant!(slug_prefix: "req392-usage-a")
+      tenant_b = TenantFixture.provisioned_tenant!(slug_prefix: "req392-usage-b")
+
+      upload_conn =
+        dispatch_multipart(
+          :post,
+          "/#{Ecto.UUID.generate()}/attachments",
+          tenant_a,
+          ["PROCESS_OPERATOR"],
+          multipart_file_body("req392u", "note.txt", "text/plain", "twelve bytes"),
+          "req392u"
+        )
+
+      assert upload_conn.status == 201
+
+      conn_a =
+        build_conn(:get, "/storage-usage", tenant_a, %{roles: ["PROCESS_OPERATOR"]})
+        |> dispatch()
+
+      assert conn_a.status == 200
+      body_a = Jason.decode!(conn_a.resp_body)
+      assert body_a["used_bytes"] == byte_size("twelve bytes")
+
+      # Tenant B, who uploaded nothing, must see its own (zero) usage --
+      # never tenant A's, confirming this route's tenant-scoping (INV-1).
+      conn_b =
+        build_conn(:get, "/storage-usage", tenant_b, %{roles: ["PROCESS_OPERATOR"]})
+        |> dispatch()
+
+      assert conn_b.status == 200
+      body_b = Jason.decode!(conn_b.resp_body)
+      assert body_b["used_bytes"] == 0
+    end
+
+    test "returns 422 tenant_not_found when the tenant row is absent (same unreachable-but-mapped edge as ISS-0788's upload path)" do
+      tenant = TenantFixture.provisioned_tenant!(slug_prefix: "req392-usage-norow")
+
+      Repo.delete_all(from(r in Registration, where: r.tenant_id == ^tenant.tenant_id))
+      Repo.delete_all(from(t in Tenant, where: t.id == ^tenant.tenant_id))
+
+      conn =
+        build_conn(:get, "/storage-usage", tenant, %{roles: ["PROCESS_OPERATOR"]})
+        |> dispatch()
+
+      assert conn.status == 422
+      assert conn.resp_body =~ "tenant"
+    end
+  end
 end

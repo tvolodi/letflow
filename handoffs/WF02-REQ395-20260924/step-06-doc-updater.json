@@ -5,7 +5,7 @@
   "step": "Step 6",
   "to_agent": "DOC-UPDATER",
   "from_agent": "ORCH",
-  "status": "IN_PROGRESS",
+  "status": "COMPLETED",
   "created_at": "2026-09-24T05:51:03Z",
   "started_at": "2026-09-24T05:51:03Z",
   "context": {
@@ -32,7 +32,16 @@
       "Commit sha reported"
     ]
   },
-  "result": null,
+  "result": {
+    "status": "PASS",
+    "commit_sha": "3e7323a5",
+    "changes_made": [
+      "docs/requirements.yaml: REQ-395 status flipped from in_progress to done",
+      "docs/status/requirement_status.v22.yaml: done event appended (18th entry)",
+      "docs/status/requirement_status.index.yaml: volume 22 entries incremented from 17 to 18",
+      "handoffs/WF02-REQ395-20260924/step-06-doc-updater.json: status set to COMPLETED"
+    ]
+  },
   "rework_count": 0,
   "max_rework": 3
 }

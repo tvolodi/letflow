@@ -11,10 +11,7 @@ import { getRetryAfterSeconds } from '@/utils/getRetryAfterSeconds'
 
 type GroupRow = Group & {
   group_id?: string
-  member_count?: number
-  display_name?: string
-  description?: string
-  is_system?: boolean
+  // is_system and member_count are not emitted by group_map/1 (ISS-0811) -- do not rely on them
 }
 
 function groupId(group: GroupRow): string {
@@ -23,10 +20,6 @@ function groupId(group: GroupRow): string {
 
 function groupTitle(group: GroupRow): string {
   return group.display_name?.trim() || group.name || groupId(group) || 'Unnamed group'
-}
-
-function groupMembers(group: GroupRow): number {
-  return group.member_count ?? 0
 }
 
 function formatUser(user: User): string {
@@ -117,7 +110,7 @@ export default function GroupsPage() {
   const columns: DataTableColumn<GroupRow>[] = [
     { id: 'name', header: 'Name', accessor: (g) => <span style={{ fontFamily: 'var(--font-mono)', fontSize: 'var(--text-sm)' }}>{g.name}</span> },
     { id: 'display_name', header: 'Display name', accessor: groupTitle },
-    { id: 'members', header: 'Members', accessor: (g) => groupMembers(g) },
+    // ISS-0811: Members column removed — group_map/1 does not emit member_count
     {
       id: 'description',
       header: 'Description',
@@ -127,17 +120,16 @@ export default function GroupsPage() {
       id: 'actions',
       header: 'Actions',
       accessor: (g) => {
-        const memberCount = groupMembers(g)
         return (
           <div style={{ display: 'flex', gap: '.5rem', flexWrap: 'wrap' }}>
             <Button variant="primary" size="sm" onClick={() => setActiveGroup(g)}>
               Manage members
             </Button>
-            {!g.is_system && memberCount === 0 && (
-              <Button variant="danger" size="sm" onClick={() => setPendingDelete(g)}>
-                Delete
-              </Button>
-            )}
+            {/* ISS-0811: is_system and member_count never sent by group_map/1;
+                Delete shown for all groups — backend enforces deletion constraints */}
+            <Button variant="danger" size="sm" data-testid={`delete-group-${g.id}`} onClick={() => setPendingDelete(g)}>
+              Delete
+            </Button>
           </div>
         )
       },

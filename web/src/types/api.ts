@@ -454,13 +454,16 @@ export interface User {
   last_login_at?: string
 }
 
+// Wire shape matches group_map/1 in lib/letflow/routers/identity.ex (ISS-0811).
 export interface Group {
-  group_id?: string
   id: string
   name: string
   display_name: string
   description?: string
-  is_system: boolean
+  created_at: string
+  // Legacy optional fields (not emitted by group_map/1)
+  group_id?: string
+  is_system?: boolean
   member_count?: number
 }
 

@@ -1,0 +1,36 @@
+{
+  "handoff_id": "WF03-ISS0774-20260924-step-00",
+  "run_id": "WF03-ISS0774-20260924",
+  "workflow_id": "WF-03",
+  "step": "Step 00",
+  "to_agent": "ELIXIR-DEV",
+  "from_agent": "ORCH",
+  "status": "IN_PROGRESS",
+  "created_at": "2026-09-24T08:23:00Z",
+  "started_at": "2026-09-24T08:23:00Z",
+  "context": {
+    "branch_name": "feature/WF03-ISS0774-20260924",
+    "issue_id": "ISS-0774",
+    "queue_task_id": 774,
+    "queue_agent_id": "orch-main",
+    "queue_endpoint": "https://queue-test.ai-dala.com",
+    "queue_auth_token": "8e88290747e5cd89cc94887ba3f887c72add7f2e2e06cd49cab6bcd307c5198f",
+    "issue_text": "Two pre-existing test flakes from WF02-REQ372-20260921: (1) HelpTest tie-break (select_live_row/2), (2) SandboxPoolTest/ISS-0224-class. Neither independently reproduced standalone. Filed on strength of RELEASE-VALIDATOR secondhand report. ACs: reproduce or rule out each, root cause if reproduced, fix or no-fix rationale.",
+    "artifacts_in": [
+      "test/letflow/routers/help_test.exs",
+      "test/letflow/sandbox_pool_test.exs",
+      "lib/letflow/routers/help.ex",
+      "docs/issues/ISS-0766.yaml"
+    ]
+  },
+  "task": {
+    "description": "Execute Step 00 (GIT SETUP) for WF03-ISS0774-20260924.\n\nWorkspace: c:\\Users\\tvolo\\dev\\ai-dala\\letflow\nBranch: feature/WF03-ISS0774-20260924\n\n1. git checkout main; git pull --ff-only\n2. git checkout -b feature/WF03-ISS0774-20260924\n3. Stage ONLY: handoffs/registry.json, handoffs/orchestrator.log, handoffs/WF03-ISS0774-20260924/step-00-git-setup.json\n4. git commit -m 'chore(WF03-ISS0774-20260924): Step 00 -- git setup for ISS-0774 test flakes'\n5. git push -u origin feature/WF03-ISS0774-20260924\n6. Complete handoff PASS with commit sha",
+    "acceptance_criteria": [
+      "Branch created and pushed",
+      "Commit sha reported"
+    ]
+  },
+  "result": null,
+  "rework_count": 0,
+  "max_rework": 3
+}

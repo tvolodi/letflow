@@ -58,6 +58,18 @@ suggested_fix: >
   to how REQ-205's Simulation.Runner harness already does this for its own,
   separate synthetic-fixture layer). Whichever path is chosen, update
   .claude/agents/uat-runner.md's "Environment target" section to state it
+status: resolved
+resolved_at: "2026-09-24T07:33:14Z"
+resolved_by: WF03-ISS0761-20260924
+resolution: >
+  Parts B and C delivered: scripts/seed_swiftroute_persona_actors.sh (idempotent
+  provisioning script for process-routing roles + group memberships for SwiftRoute
+  persona actors) and .claude/agents/uat-runner.md updated to document the 3-layer
+  credential setup. Part A (ai-dala-infra Keycloak account provisioning for
+  actor-swiftroute-lena/marco/alice) is an external prerequisite that must be
+  completed first. 5 regression tests at
+  test/letflow/scripts/seed_swiftroute_persona_actors_test.exs verify persona-role
+  mappings, Part A guard, and uat-runner.md reference.
   explicitly, since today's silence there is exactly why this gap was
   independently rediscovered three times in one day before being filed.
 severity_rationale: >
@@ -72,4 +84,4 @@ queue_ref: Q-761  # letflow-queue task id 761, issue_ref ISS-0761 (queue's own
   # numbering doesn't match this file's local ISS-0739 id -- see TASK_QUEUE.md's
   # "Never derive a set_lock target from a filename"). Registered 2026-09-20 by ORCH.
 github_ref: GH-1649
-status: open
+status: resolved

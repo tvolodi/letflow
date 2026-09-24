@@ -312,4 +312,44 @@ defmodule Letflow.Plugs.TenantStatusTest do
       assert Jason.decode!(conn.resp_body)["error"] == "tenant_migrating"
     end
   end
+
+  describe "ISS-0808 — PLATFORM_ADMIN check uses Authorization.roles_from_strings/1" do
+    # Regression guard: @platform_admin in tenant_status.ex is now the atom
+    # :PLATFORM_ADMIN (not the string "PLATFORM_ADMIN"). roles_from_strings/1
+    # normalises the raw string list in auth_context.roles to atoms. If
+    # roles_from_strings/1 is removed and @platform_admin reverts to a string,
+    # the atom-vs-string list comparison would break and the tests below would fail.
+
+    test "a PLATFORM_ADMIN caller (string role) is exempt via roles_from_strings normalization" do
+      tenant = insert_tenant!(:inactive)
+
+      # auth_context.roles carries the raw string "PLATFORM_ADMIN" (as JWT delivers it).
+      # roles_from_strings/1 converts it to [:PLATFORM_ADMIN]; the atom must match
+      # @platform_admin (:PLATFORM_ADMIN) in the cond guard.
+      conn = call_plug(:get, tenant.id, ["PLATFORM_ADMIN"])
+
+      refute conn.halted
+      assert conn.status == nil, "PLATFORM_ADMIN should be exempt from the :inactive 403"
+    end
+
+    test "a non-PLATFORM_ADMIN caller is not exempt, even with valid roles" do
+      tenant = insert_tenant!(:inactive)
+
+      conn = call_plug(:get, tenant.id, ["PROCESS_OPERATOR"])
+
+      assert conn.halted, "PROCESS_OPERATOR should be rejected for :inactive tenant"
+      assert conn.status == 403
+    end
+
+    test "an unknown role string is not exempt (roles_from_strings/1 filters out unknown strings)" do
+      tenant = insert_tenant!(:inactive)
+
+      # Gibberish that looks like an admin role but isn't known — roles_from_strings/1
+      # returns [] for unknown strings, so no exemption is granted.
+      conn = call_plug(:get, tenant.id, ["PLATFORM_ADMIN_WANNABE"])
+
+      assert conn.halted, "unrecognised role strings must not grant PLATFORM_ADMIN exemption"
+      assert conn.status == 403
+    end
+  end
 end

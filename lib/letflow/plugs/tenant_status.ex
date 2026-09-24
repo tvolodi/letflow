@@ -57,12 +57,14 @@ defmodule Letflow.Plugs.TenantStatus do
 
   import Plug.Conn
 
+  alias Letflow.Api.Authorization
   alias Letflow.Identity.Tenant
   alias Letflow.Repo
 
   @write_methods ~w(POST PUT PATCH DELETE)
   @retry_after_seconds "30"
-  @platform_admin "PLATFORM_ADMIN"
+  # ISS-0808: atom form so the comparison uses the same type as Authorization.roles_from_strings/1.
+  @platform_admin :PLATFORM_ADMIN
 
   @impl Plug
   def init(opts), do: opts
@@ -89,7 +91,12 @@ defmodule Letflow.Plugs.TenantStatus do
         conn
 
       %Tenant{} = tenant ->
-        roles = get_in(conn.assigns, [:auth_context, :roles]) || []
+        # ISS-0808: use Authorization.roles_from_strings/1 rather than a raw
+        # string-list check so this path shares the same normalization as every
+        # other authorization consumer. If roles_from_strings/1 ever changes its
+        # handling (case, aliasing, a role rename), this check moves with it.
+        raw_roles = get_in(conn.assigns, [:auth_context, :roles]) || []
+        roles = Authorization.roles_from_strings(raw_roles)
 
         cond do
           tenant.status == :inactive and @platform_admin not in roles ->

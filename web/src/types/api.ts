@@ -374,9 +374,9 @@ export interface EntityRecord {
 }
 
 /** `POST /entities/query`'s response body. Deliberately NOT `CursorPage<T>`:
- *  that shape's `has_more` field does not exist on this route's response
- *  (`run_query/4` sends exactly `{"items", "next_cursor"}`) -- reusing
- *  `CursorPage<T>` here would silently claim a field the API never sends. */
+ *  this route hand-builds its response as exactly `{"items", "next_cursor"}`
+ *  (no `count`) — reusing `CursorPage<T>` here would silently claim the
+ *  `count` field the API never sends on this endpoint. */
 export interface EntityRecordsPage<T = EntityRecord> {
   items: T[]
   next_cursor: string | null
@@ -489,8 +489,10 @@ export interface GroupMember {
 
 /**
  * `Letflow.Api.Pagination.Page`'s encoder shape (`lib/letflow/api/pagination.ex:81`,
- * `@derive {Jason.Encoder, only: [:items, :next_cursor, :count]}`). Not `CursorPage<T>`,
- * which declares a `has_more` the backend never emits.
+ * `@derive {Jason.Encoder, only: [:items, :next_cursor, :count]}`). Uses required
+ * `count: number` because `GET /groups/:id/members` goes through `Pagination.page_response/2`
+ * which always emits `count`. Unlike the generic `CursorPage<T>` where `count` is
+ * optional (some hand-built routes omit it), this endpoint always sends it.
  */
 export interface GroupMemberPage {
   items: GroupMember[]

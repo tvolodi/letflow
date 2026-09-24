@@ -246,9 +246,8 @@ export const promotionsApi = {
   /**
    * GET /api/v1/promotions (REQ-397, PLATFORM_ADMIN-only)
    * Lists promotion-review rows, filterable by status/def_id/def_type,
-   * cursor-paginated. `has_more` is client-derived — REQ-397's envelope is
-   * exactly `{items, next_cursor}` (design doc §2.2), same situation
-   * `auditApi.list` already handles.
+   * cursor-paginated. REQ-397's envelope is exactly `{items, next_cursor}`
+   * (design doc §2.2, hand-built response — no `count` field emitted).
    */
   list: (filters: PromotionReviewListFilters): Promise<CursorPage<PromotionReviewListItem>> =>
     client

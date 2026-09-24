@@ -1,0 +1,58 @@
+id: ISS-0813
+title: >
+  Nothing couples web/ client path literals to the mounted backend route table --
+  the same dead-prefix defect has now recurred three times in identity.ts
+discovered_by: ISSUE-FIXER
+discovered_in_run: WF03-ISS0765-20260924
+discovered_at: "2026-09-24T16:50:00Z"
+severity: MAJOR
+tags:
+  - frontend
+  - process
+  - tooling
+  - api
+description: >
+  Process defect found during ISS-0765's Step 1 diagnosis, filed and forwarded
+  per ORCHESTRATOR.md's decision tree rather than extending that run.
+
+  web/src/api/*.ts hardcodes URL path literals, and nothing mechanically checks
+  that any of them names a route the backend actually mounts. A wrong or dead
+  prefix is therefore caught only when a human clicks the screen -- or, as has
+  happened three times now, when a reviewer reads the file for an unrelated
+  reason.
+
+  Recurrence history, all in web/src/api/identity.ts:
+    * ISS-0736 -- groupsApi.removeMembers on a dead /api/v1/admin/ prefix
+    * ISS-0782 -- usersApi/rolesApi, itself incomplete (see ISS-0812)
+    * ISS-0765 -- the remaining six groupsApi calls; MAJOR, every
+      group-management admin action was non-functional in production
+
+  Each run fixed only its own call sites, because no tooling exists to audit the
+  rest. The data needed to close this class permanently already exists and is
+  already machine-readable: Letflow.Api.AuthorizedRouter injects a public
+  __authz_routes__/0 returning the compiled route table, which ISS-0765's
+  diagnosis used successfully for exactly this purpose.
+affected_files:
+  - web/src/api/identity.ts
+  - web/src/api/
+  - lib/letflow/api/authorized_router.ex
+related:
+  - ISS-0765
+  - ISS-0782
+  - ISS-0736
+  - ISS-0812
+severity_rationale: >
+  MAJOR -- not a defect in itself, but the demonstrated cause of a MAJOR
+  production-breaking defect (ISS-0765) and two others. Three independent
+  recurrences in one file is evidence the class does not close by fixing
+  instances.
+fix_direction: >
+  Generate a fixture from Letflow.Api.AuthorizedRouter.__authz_routes__/0 and add
+  a vitest asserting every /api/v1 path literal in web/src/api/ resolves against
+  it, naming the offending literal and file on failure. Wire it into npm run
+  check or the guards suite so it runs unprompted. A cheap interim guard, if the
+  full check is deferred: assert /api/v1/admin/ appears in web/src/api/ only for
+  the genuinely-mounted /api/v1/admin/services route.
+queue_ref: "Q-813"
+github_ref: "GH-1801"
+status: open

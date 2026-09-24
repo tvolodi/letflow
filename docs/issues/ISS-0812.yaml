@@ -1,0 +1,55 @@
+id: ISS-0812
+title: >
+  usersApi.delete/.resetPassword and most of rolesApi call routes that exist at
+  no prefix at all -- ISS-0782's fix audited only its own call sites
+discovered_by: ISSUE-FIXER
+discovered_in_run: WF03-ISS0765-20260924
+discovered_at: "2026-09-24T16:50:00Z"
+severity: MINOR
+tags:
+  - frontend
+  - api
+  - dead-route
+description: >
+  Incidental finding from ISS-0765's Step 1 diagnosis, filed and forwarded per
+  ORCHESTRATOR.md's decision tree rather than extending that run.
+
+  ISS-0782 corrected usersApi.list/.get/.create/.update and rolesApi.list to the
+  /api/v1/identity/ prefix, but audited only the calls it was looking at.
+  Verified here by runtime introspection of
+  Letflow.Api.AuthorizedRouter.__authz_routes__/0 (not grep):
+
+    * usersApi.delete (DELETE /api/v1/users/:id) -- no route at any prefix
+    * usersApi.resetPassword                     -- no route at any prefix
+    * rolesApi.get/.update/.delete/.grantPermission/.revokePermission
+                                                 -- no route at any prefix
+    * rolesApi.create                            -- wrong prefix
+
+  All have zero production callers today, which is the only reason nothing has
+  failed loudly.
+
+  This is the third recurrence of one defect class in a single file:
+  ISS-0736 fixed groupsApi.removeMembers, ISS-0782 fixed part of
+  usersApi/rolesApi, and ISS-0765 is fixing the remaining six groupsApi calls.
+  Each run patched only its own call sites because no tooling exists to audit
+  the rest -- see ISS-0813, filed alongside this one for that underlying gap.
+affected_files:
+  - web/src/api/identity.ts
+related:
+  - ISS-0765  # the run this was discovered during
+  - ISS-0782  # the incomplete fix this finding is the remainder of
+  - ISS-0736  # first occurrence of the class in this file
+  - ISS-0813  # the process gap that lets the class keep recurring
+severity_rationale: >
+  MINOR rather than MAJOR -- unlike ISS-0765, every affected function has zero
+  production callers, so nothing is broken for a user today. It is latent: the
+  first caller wired to any of them gets a silent 404.
+fix_direction: >
+  Audit every usersApi and rolesApi function in web/src/api/identity.ts against
+  __authz_routes__/0, and for each one either correct the URL, delete the
+  function, or record it explicitly as unimplemented. Cover the whole file so
+  nothing is left pointing at a dead prefix, and add method+path regression
+  coverage for each corrected or retained call.
+queue_ref: "Q-812"
+github_ref: "GH-1800"
+status: open

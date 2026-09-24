@@ -25,6 +25,21 @@ coupling guard (ISS-0813); `groupsApi.removeMembers` (already correct — ISS-07
 Every claim in this section was re-derived from source in this step, not inherited from
 the Step 1 handoff (`core-directives.md`, "a handoff's factual premises are checkable").
 
+**Path convention, binding for the whole document.** Three different files in this fix
+are called `identity`, and a bare `identity.ex` is ambiguous between the first two:
+
+| Path | What it is |
+|---|---|
+| `lib/letflow/routers/identity.ex` | the Plug router — routes, handlers, `group_map/1`, `user_map/1` |
+| `lib/letflow/identity.ex` | the Ecto context — `create_group/2`, `list_groups/1`, … |
+| `web/src/api/identity.ts` | the frontend API client — `groupsApi` |
+
+Every `file:line` citation below is fully qualified. **No bare `identity.ex` appears**,
+because following one literally lands in the wrong file — `lib/letflow/identity.ex:483-489`
+is unrelated moduledoc prose, while `lib/letflow/routers/identity.ex:483-489` is the
+`resolve_member_user_id/1` decision comment decision (c) turns on. (Raised by
+CODE-DESIGN-VALIDATOR as F-2, rework 1.)
+
 ### 1.1 Mount chain
 
 | Source | Effect |
@@ -61,17 +76,19 @@ layer; they are not a route-registration oversight.
 
 | Route | Handler | Wire body |
 |---|---|---|
-| `GET /groups` | `handle_list_groups/2` (`identity.ex:468-472`) | `{"items": [group_map…], "total": N}` — **no `page`, no `page_size`** |
+| `GET /groups` | `handle_list_groups/2` (`lib/letflow/routers/identity.ex:468-472`) | `{"items": [group_map…], "total": N}` — **no `page`, no `page_size`** |
 | `POST /groups` | `handle_create_group/2` (`:452`) | `201` + one `group_map/1` object |
 | `DELETE /groups/:id` | `handle_delete_group/3` (`:476`) | `204`, empty |
 | `POST /groups/:id/members` | `handle_add_member/3` (`:496`) | `201` (created) or `200` (already member) + `member_result_map/3` (`:829-831`) = `{"group_id": …, "user_id": …, "created": bool}` |
 | `GET /groups/:id/members` | `handle_list_group_members/3` (`:543`) | `Pagination.page_response/2` → `{"items": [user_map…], "next_cursor": string\|null, "count": N}` |
-| `DELETE /groups/:id/members/:user_id` | `handle_remove_member/4` | `204`, empty |
+| `DELETE /groups/:id/members/:user_id` | `handle_remove_member/4` (`:588`) | `204`, empty |
 
-`group_map/1` (`identity.ex:749-757`) emits exactly
+Every bare `:NNN` in the table above is a line in **`lib/letflow/routers/identity.ex`**.
+
+`group_map/1` (`lib/letflow/routers/identity.ex:749-757`) emits exactly
 `{"id", "name", "display_name", "description", "created_at"}`.
 
-`user_map/1` (`identity.ex:729-740`) emits exactly
+`user_map/1` (`lib/letflow/routers/identity.ex:729-740`) emits exactly
 `{"id", "username", "display_name", "email", "status", "auth_source", "inserted_at", "updated_at"}`.
 
 `Letflow.Api.Pagination.Page` (`lib/letflow/api/pagination.ex:81`) is
@@ -128,7 +145,7 @@ Rationale, in order of weight:
 1. There is no route at **any** prefix (§1.2) and no `Letflow.Identity` context
    function. "Correcting" the prefix moves the 404 from ApiPipeline's catch-all
    (`api_pipeline.ex:203-205`) to `Letflow.Routers.Identity`'s own `match _`
-   (`identity.ex:227-229`) — the same dead call wearing a better prefix, which is
+   (`lib/letflow/routers/identity.ex:227-229`) — the same dead call wearing a better prefix, which is
    precisely the defect AC3 forbids ("left pointing at a dead prefix").
 2. Zero production callers (§1.5), so deletion has no blast radius.
 3. Adding `GET /groups/:id` and `PATCH /groups/:id` is **new backend behaviour** — a
@@ -203,7 +220,7 @@ export interface GroupMemberPage {
 ```
 
 Field-by-field justification for `GroupMember` — it is `user_map/1`
-(`identity.ex:729-740`) transcribed exactly, every key present, no key absent, all
+(`lib/letflow/routers/identity.ex:729-740`) transcribed exactly, every key present, no key absent, all
 required because `user_map/1` emits every one unconditionally.
 
 **Both unions are LOWERCASE, and that is not a typo.** `user_map/1` emits
@@ -278,14 +295,19 @@ send `{ user_id: userId }`, and type the return as the real result object.**
 Rationale, in order of weight:
 
 1. **The backend's own recorded decision forbids the plural contract.**
-   `resolve_member_user_id/1` (`identity.ex:525-537`) matches
+   `resolve_member_user_id/1` (`lib/letflow/routers/identity.ex:525-537`) matches
    `%{"user_ids" => [first | _rest]}` and returns only `first`; everything after the
-   first element is silently discarded. The comment at `identity.ex:483-489` records
+   first element is silently discarded. The comment at `lib/letflow/routers/identity.ex:483-489` records
    this as a deliberate R-Co port decision (that comment's own "OQ-2", from REQ-073's
    design — not this document's OQ numbering), **not** an oversight — so it will not
    change, and a client function promising bulk add can never be honoured. Under
    `core-directives.md`'s "Don't silently re-decide what a decision record already
    settled", the client is the side that must move.
+   *Note for a later reader:* that comment's own stated premise — "no existing Letflow
+   caller depends on the array shape either way" — is **stale today**, because
+   `GroupsPage.tsx:76` passes `[userId]`. Decision (c) does not contradict the comment;
+   it makes the comment's premise true again by removing the one caller that had drifted
+   from it. (Observed by CODE-DESIGN-VALIDATOR, rework 1.)
 2. `resolve_member_user_id/1`'s **first** clause matches `%{"user_id" => user_id}`, so
    the singular body is the backend's primary accepted shape, not a fallback.
 3. **It mirrors the ISS-0736 correction exactly.** `removeMembers` had the identical
@@ -370,7 +392,7 @@ groupsApi.members(id: string)         => Promise<GroupMemberPage>
 ```
 
 Third new interface, in `web/src/types/api.ts` beside the other two — the exact shape of
-`member_result_map/3` (`identity.ex:829-831`):
+`member_result_map/3` (`lib/letflow/routers/identity.ex:829-831`):
 
 ```
 export interface GroupMemberAddResult {
@@ -428,29 +450,84 @@ never write the literal text `fetch(`. Weakening the pattern is forbidden.
 | 4 | `T-0765-ADD-PATH` | `addMember('g-1','u-1')` requests `POST` to `/api/v1/identity/groups/g-1/members` | **FAILS** — function is named `addMembers` and emits the `/admin` prefix | 1, 2 |
 | 5 | `T-0765-ADD-BODY` | that same request's parsed body deep-equals `{ user_id: 'u-1' }`, and `'user_ids' in body` is `false` | **FAILS** — body is `{user_ids:['u-1']}` | 1, 2 |
 | 6 | `T-0765-ADD-ARITY` | `typeof groupsApi.addMember === 'function'` and `groupsApi.addMember.length === 2`; `'addMembers' in groupsApi` is `false` | **FAILS** — `addMember` is undefined | 1, 2 |
-| 7 | `T-0765-MEMBERS-PATH` | `members('g-1')` requests `GET` to `/api/v1/identity/groups/g-1/members` | **FAILS** — wrong prefix | 1, 2 |
-| 8 | `T-0765-MEMBERS-SHAPE` | with the spy resolving the real wire body `{"items":[<one user_map object>],"next_cursor":null,"count":1}`, the awaited value deep-equals that object — i.e. `result.items` has length 1, `result.count === 1`, `result.next_cursor === null`, and `Array.isArray(result) === false`. This is the explicit no-unwrap assertion for decision (b) | **FAILS** — the pre-fix call 404s, so `client.ts` throws `ApiError` before any body is read | 1, 2, 3 |
-| 9 | `T-0765-NO-GET-UPDATE` | `'get' in groupsApi` is `false` **and** `'update' in groupsApi` is `false` | **FAILS** — both are present | 3 |
-| 10 | `T-0765-SURFACE` | `Object.keys(groupsApi).sort()` deep-equals `['addMember','create','delete','list','members','removeMembers']` | **FAILS** — pre-fix keys include `get`, `update`, `addMembers` | 1, 3 |
-| 11 | `T-0765-NO-ADMIN-PREFIX` | table-driven over all six surviving functions: invoke each with the spy, assert **no** captured URL contains `/api/v1/admin/`. One `it.each` row per function so a failure names the function | **FAILS** on 5 of 6 rows (`removeMembers` passes) | 1, 2 |
-| 12 | `T-0765-REMOVE-UNCHANGED` | `removeMembers('g-1','u-1')` still requests `DELETE /api/v1/identity/groups/g-1/members/u-1` | **PASSES** pre-fix — see the note below | 2 |
+| 7 | `T-0765-MEMBERS` | **one `it` block, both halves together.** (i) *path half* — `members('g-1')` requests `GET`, captured URL contains `/api/v1/identity/groups/g-1/members` and does **not** contain `/api/v1/admin/`. (ii) *no-unwrap half* — with the spy resolving the real wire body `{"items":[<one user_map object>],"next_cursor":null,"count":1}`, the awaited value deep-equals that object: `result.items.length === 1`, `result.count === 1`, `result.next_cursor === null`, `Array.isArray(result) === false` | **FAILS**, on half (i) only — the pre-fix literal is `/api/v1/admin/groups/${id}/members`. Half (ii) **passes pre-fix and post-fix alike**; see §7.1 | 1, 2, 3 |
+| 8 | `T-0765-NO-GET-UPDATE` | `'get' in groupsApi` is `false` **and** `'update' in groupsApi` is `false` | **FAILS** — both are present | 3 |
+| 9 | `T-0765-SURFACE` | `Object.keys(groupsApi).sort()` deep-equals `['addMember','create','delete','list','members','removeMembers']` | **FAILS** — pre-fix keys include `get`, `update`, `addMembers` | 1, 3 |
+| 10 | `T-0765-NO-ADMIN-PREFIX` | table-driven over all six surviving functions: invoke each with the spy, assert **no** captured URL contains `/api/v1/admin/`. One `it.each` row per function so a failure names the function | **FAILS** on 5 of 6 rows (`removeMembers` passes) | 1, 2 |
+| 11 | `T-0765-REMOVE-UNCHANGED` | `removeMembers('g-1','u-1')` still requests `DELETE /api/v1/identity/groups/g-1/members/u-1` | **PASSES** pre-fix — see §7.1 | 2 |
 
-**Row 12 is an enumeration row, not fail-first evidence.** It passes before and after the
-fix by design: its job is to prove this run did not regress the ISS-0736 correction while
-rewriting the object around it. WF-03 Step 4's fail-then-pass requirement is satisfied by
-rows 1-11, each of which fails against the pre-fix commit. TEST-DESIGNER must state row
-12's pre-fix PASS explicitly rather than letting it be read as a twelfth fail-first row.
-`identity.removeMembers.test.ts` must be left exactly as it is; row 12 duplicates its
-assertion deliberately so the `groupsApi` table is complete in one place.
+Rows 7(i) and 10 both assert that `members` avoids `/api/v1/admin/`. That is deliberate,
+not redundancy to trim: row 10 is the class guard that must enumerate **every** function,
+and row 7 needs a discriminating assertion of its own so that its no-unwrap half does not
+sit alone in a block that can never be red.
 
-**`.members`'s consumer change is covered by `npm run type-check`, not by a render
-test — deliberately.** The failure mode is `members.map is not a function` in
-`GroupsPage.tsx`'s members dialog. After §3's retype, any call site that treats
-`GroupMemberPage` as an array is a compile error, so `tsc -b tsconfig.json` (AC3,
-`web/package.json`'s `type-check` script, already inside `npm run check`) finds every
-one on every run — a stronger and more durable detector than one render test of one
-dialog. This is a decision, not an omitted test: no GroupsPage component test exists to
-extend, and adding the project's first one is UI-test scope this run does not carry.
+### 7.1 Fail-first accounting — what is red pre-fix, and what carries decision (b)
+
+**Corrected in rework 1 after CODE-DESIGN-VALIDATOR's F-1. The earlier draft of this
+section claimed the shape row failed pre-fix because "the call 404s". That was wrong, and
+the error was mine, not TEST-DESIGNER's to discover.** The §7 harness installs a
+`window.fetch` spy whose `Response` the test itself constructs — no URL is ever dialled,
+so there is no 404 to separate pre-fix from post-fix.
+
+Under `npm test` against the pre-fix commit:
+
+| Outcome | Rows |
+|---|---|
+| **FAILS** — genuine fail-first evidence | 1, 2, 3, 4, 5, 6, 7(i), 8, 9, 10 |
+| **PASSES** — enumeration / forward guard, never red either way | 7(ii), 11 |
+
+**No runtime row can carry fail-first evidence for decision (b)'s retype, and it would be
+a design error to claim one does.** The reason is structural:
+
+1. `request<T>` (`web/src/api/client.ts:158-169`) ends in
+   `return response.json() as Promise<T>` — verbatim pass-through, no reshaping.
+2. `T` is a TypeScript type parameter, **erased at runtime**. Pre-fix
+   `client.get<User[]>(…)` and post-fix `client.get<GroupMemberPage>(…)` produce
+   byte-identical runtime behaviour on the same spy body.
+
+So row 7(ii) is **not** fail-first evidence; it is a **forward regression guard** — the
+assertion that goes red if a future change reintroduces an `.items` unwrap inside
+`groupsApi.members`, which is exactly what INV-B forbids and decision (b) rejected.
+TEST-DESIGNER must record it as such, and must not report it as an eleventh red row.
+Row 11 is likewise an enumeration row: it passes before and after by design, and its job
+is to prove this run did not regress the ISS-0736 correction while rewriting the object
+around it. `identity.removeMembers.test.ts` is left exactly as it is; row 11 duplicates
+its assertion deliberately so the `groupsApi` table is complete in one place.
+
+**M-1 — the mutant probe that does carry decision (b)'s fail-first evidence.**
+WF-03 Step 4's clause for "when the pre-fix failure is non-existence" applies here by
+analogy: a type-only change has no runtime failure to demonstrate, so the fail-first
+requirement is met by mutating the shipped change and recording what breaks. The mutants
+are specified here, by design, rather than left to TEST-DESIGNER to improvise:
+
+- **M-1a — the retype is load-bearing.** On the post-fix tree, keep §3.1's
+  `GroupMemberPage`/`GroupMember` and the retyped `groupsApi.members`, and revert **only**
+  §3.2's six `GroupsPage.tsx` edits to their pre-fix text.
+  **Probe:** `cd web && npm run type-check`.
+  **Expected, and quoted verbatim in the test spec:** `tsc` errors on `GroupsPage.tsx` at
+  the reverted `:103`, `:223`, `:227`, `:228` sites — `.map`/`.length` do not exist on
+  `GroupMemberPage`, and `user_id` does not exist on `GroupMember`.
+  **`npm test` still passes under M-1a, and that is the point:** it demonstrates that the
+  runtime suite is blind to the retype while `type-check` is not.
+- **M-1b — the control, in the opposite direction.** Revert §3.1's retype to
+  `client.get<User[]>` while keeping §3.2's `GroupsPage.tsx` edits.
+  **Probe:** the same. **Expected:** `tsc` errors on `membersPage?.items` over `User[]`.
+  Recording both directions is what shows the probe discriminates the specific trap
+  rather than merely breaking something.
+- **Revert discipline is binding** (WF-03 Step 4's mutant rule). Apply the mutants in a
+  throwaway `git worktree` of the branch, or in place and then `git checkout -- <path>`;
+  either way, before completing the handoff, quote both (a) `git status --porcelain web/`
+  **empty** and (b) `npm run type-check` **and** `npm test` green against the restored
+  tree.
+
+**Why the `.members` consumer change gets no render test — a decision, not an omission.**
+The user-visible failure mode is `members.map is not a function` in `GroupsPage.tsx`'s
+members dialog. After §3's retype, any call site treating `GroupMemberPage` as an array
+is a compile error, so `tsc -b tsconfig.json` (AC3, `web/package.json`'s `type-check`
+script, already inside `npm run check`) catches every one on every run — a more durable
+detector than one render test of one dialog, and M-1a is the recorded proof that it
+actually fires. No GroupsPage component test exists to extend, and adding the project's
+first one is UI-test scope this run does not carry.
 
 **Commands Step 4 must run and quote actual output for (AC3):**
 
@@ -466,9 +543,9 @@ cd web && npm run guards
 
 | AC | Design element |
 |---|---|
-| **AC1** — `.addMembers/.list/.get/.update/.delete/.members` each call a URL prefix a real backend route serves, audited against the actual route table | §1.1 mount chain and §1.2 route list, both re-derived from source in this step; §1.4 per-function verdicts; §6.1 exact before/after URL literals. `.get`/`.update` are resolved by §2 (no route exists, so "calls a served prefix" is satisfied by their removal, not by a rewrite); the other four by the §6.1 substitutions. Tests: rows 1-5, 7, 11. |
-| **AC2** — each corrected call has regression coverage mirroring `identity.removeMembers.test.ts` | §7: one row per corrected call — `list` (1), `create` (2), `delete` (3), `addMember` (4, 5, 6), `members` (7, 8) — in a new file that reuses the ISS-0736 file's jsdom + `window.fetch`-spy structure, plus the table-driven class guard (11) and the untouched-`removeMembers` row (12). |
-| **AC3** — `npm run type-check` and the web test suite pass; any call with no backend route is removed or explicitly recorded as unimplemented | §2 removes `.get`/`.update` **and** leaves the recorded rationale comment (both halves of AC3's disjunction). §3's retype is what makes `type-check` a real detector rather than a formality; §5 removes the second type lie. §7 names the three commands whose actual output Step 4 must quote. Tests: rows 9, 10. |
+| **AC1** — `.addMembers/.list/.get/.update/.delete/.members` each call a URL prefix a real backend route serves, audited against the actual route table | §1.1 mount chain and §1.2 route list, both re-derived from source in this step; §1.4 per-function verdicts; §6.1 exact before/after URL literals. `.get`/`.update` are resolved by §2 (no route exists, so "calls a served prefix" is satisfied by their removal, not by a rewrite); the other four by the §6.1 substitutions. Tests: rows 1-5, 7(i), 10. |
+| **AC2** — each corrected call has regression coverage mirroring `identity.removeMembers.test.ts` | §7: one row per corrected call — `list` (1), `create` (2), `delete` (3), `addMember` (4, 5, 6), `members` (7) — in a new file that reuses the ISS-0736 file's jsdom + `window.fetch`-spy structure, plus the table-driven class guard (10) and the untouched-`removeMembers` row (11). §7.1's M-1a/M-1b mutants supply the fail-first evidence for the `.members` retype, which no runtime row can. |
+| **AC3** — `npm run type-check` and the web test suite pass; any call with no backend route is removed or explicitly recorded as unimplemented | §2 removes `.get`/`.update` **and** leaves the recorded rationale comment (both halves of AC3's disjunction). §3's retype is what makes `type-check` a real detector rather than a formality; §5 removes the second type lie. §7 names the three commands whose actual output Step 4 must quote. Tests: rows 8, 9, plus §7.1's M-1a — the recorded proof that `type-check` actually fires on a missed `.members` consumer. |
 
 ---
 
@@ -515,7 +592,7 @@ Each is new in this step and is **not** covered by ISS-0811/0812/0813. Reported 
 `core-directives.md`'s "No Issue Left Local-Only"; CODE-DESIGNER does not allocate ids.
 
 1. **`User.roles` and `User.created_at` are required but never emitted.**
-   `web/src/types/api.ts:437,441` vs `user_map/1` (`identity.ex:729-740`), which emits
+   `web/src/types/api.ts:437,441` vs `user_map/1` (`lib/letflow/routers/identity.ex:729-740`), which emits
    `inserted_at`/`updated_at` and no `roles`. Affects every `usersApi` consumer. Same
    class as ISS-0811 but a different type and a different mapper, so not a duplicate.
    Suggested severity: MINOR.

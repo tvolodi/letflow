@@ -1,0 +1,52 @@
+{
+    "handoff_id":  "WF03-ISS0761-20260924-step-02",
+    "run_id":  "WF03-ISS0761-20260924",
+    "workflow_id":  "WF-03",
+    "step":  "Step 2",
+    "to_agent":  "CODE-DESIGNER",
+    "from_agent":  "ORCH",
+    "status":  "COMPLETED",
+    "created_at":  "2026-09-24T07:16:23Z",
+    "started_at":  "2026-09-24T07:16:23Z",
+    "context":  {
+                    "branch_name":  "feature/WF03-ISS0761-20260924",
+                    "issue_id":  "ISS-0761",
+                    "issue_local_id":  "ISS-0739",
+                    "issue_text":  "No seeded QA login credentials for SwiftRoute persona actors (Lena/Marco/Alice with role-ops-manager/role-ceo). Tri-layer gap: (A) Keycloak accounts in ai-dala-infra [EXTERNAL], (B) process-routing tenant_role rows + group memberships in letflow, (C) uat-runner.md documentation.",
+                    "diagnosis":  {
+                                      "root_cause":  "Tri-layer provisioning gap: no Keycloak accounts for persona actors (ai-dala-infra, external), no process-routing tenant_role rows for swiftroute tenant, no platform-role group memberships. ISS-0774 fixed role_from_string/1 but no data was ever provisioned.",
+                                      "fix_parts":  {
+                                                        "A":  "ai-dala-infra/scripts/qa-login.sh -- EXTERNAL, out of scope for this run",
+                                                        "B":  "new scripts/seed_swiftroute_persona_actors.sh -- idempotent script creating role-ops-manager + role-ceo groups, tenant_role rows, user group memberships",
+                                                        "C":  ".claude/agents/uat-runner.md -- update Environment target section to document SwiftRoute persona credential resolution"
+                                                    }
+                                  },
+                    "artifacts_in":  [
+                                         "scripts/seed_swiftroute_definition.sh",
+                                         ".claude/agents/uat-runner.md",
+                                         "lib/letflow/routers/identity.ex",
+                                         "lib/letflow/identity/role_registry.ex"
+                                     ]
+                },
+    "task":  {
+                 "description":  "Execute Step 2 (Fix Design) for WF03-ISS0761-20260924.\n\nWorkspace: c:\\Users\\tvolo\\dev\\ai-dala\\letflow\nBranch: feature/WF03-ISS0761-20260924\n\nDESIGN ONLY -- no implementation code.\n\nThe fix has two letflow-in-scope parts:\n\nPART B: scripts/seed_swiftroute_persona_actors.sh\nAn idempotent bash script (following scripts/seed_swiftroute_definition.sh\u0027s pattern) that:\n1. Creates role-ops-manager group + tenant_role row (kind: process_routing_role) if not exists\n2. Creates role-ceo group + tenant_role row (kind: process_routing_role) if not exists\n3. Ensures TASK_WORKER platform-role row exists (defensive, ISS-0778 safety)\n4. Looks up QA user IDs for swiftroute-lena, swiftroute-marco, swiftroute-alice\n5. Adds each actor to their appropriate group (marco → role-ops-manager, alice → role-ceo, lena → no routing role but needs TASK_WORKER for basic ops)\n6. Verifies membership\n\nPART C: .claude/agents/uat-runner.md\nUpdate the Environment target / credential resolution section to document:\n- SwiftRoute persona actors (lena/marco/alice)\n- Required QA setup: ai-dala-infra (Keycloak accounts) + scripts/seed_swiftroute_persona_actors.sh (letflow roles)\n- How UAT-RUNNER resolves these actors to credentials\n\nREAD FIRST:\n1. scripts/seed_swiftroute_definition.sh -- to understand the API auth/request pattern\n2. lib/letflow/routers/identity.ex -- to find the actual API routes for groups and roles (POST /identity/groups, POST /identity/roles, POST /groups/:id/members, GET /identity/users?search=...)\n3. .claude/agents/uat-runner.md -- the current Environment target section\n4. lib/letflow/identity/role_registry.ex -- to understand the role upsert mechanism\n\nWrite: lib/letflow/design/iss-0761-swiftroute-persona-actor-provisioning.md\n\nInclude:\n§1 Scope: what this script does and what it depends on (ai-dala-infra Part A)\n§2 API calls: exact endpoints + body shapes for group creation, role creation, user lookup, member addition\n§3 Idempotency: how each step checks before creating\n§4 Personas: which roles each of Lena/Marco/Alice needs\n§5 .claude/agents/uat-runner.md update: what specific text to add/change\n§6 AC traceability: which design element satisfies the issue\u0027s acceptance criteria\n§7 Open questions: specifically OQ-1 (TASK_WORKER group existence timing relative to ISS-0778)\n\nCommit the design doc and complete handoff.",
+                 "acceptance_criteria":  [
+                                             "Exact API endpoints for group/role creation specified",
+                                             "Idempotency approach specified for each step",
+                                             "Persona→role mapping explicit (Lena/Marco/Alice → which roles)",
+                                             "uat-runner.md update specified",
+                                             "Dependency on ai-dala-infra Part A documented",
+                                             "No implementation code"
+                                         ]
+             },
+    "result":  {
+                   "status":  "PASS",
+                   "summary":  "Design doc written at lib/letflow/design/iss-0761-swiftroute-persona-actor-provisioning.md. All 6 acceptance criteria met: exact API endpoints for group/role creation specified (§2); idempotency approach for each step (§3); persona→role mapping explicit for Lena/Marco/Alice (§4); uat-runner.md update specified with exact text (§5); Part A dependency on ai-dala-infra documented (§1); no implementation code.",
+                   "artifacts_out":  [
+                                         "lib/letflow/design/iss-0761-swiftroute-persona-actor-provisioning.md"
+                                     ],
+                   "commit":  "bfeaf7ea"
+               },
+    "rework_count":  0,
+    "max_rework":  3
+}

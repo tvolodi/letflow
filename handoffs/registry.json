@@ -6952,6 +6952,27 @@
       "merge_sha": "7a9fe9c8",
       "pr_number": 1766,
       "note": "WF-02 for REQ-395: deploy SwiftRoute sequential high-value shipment-approval process definition as live browsable definition on QA tenant. Queue task 755. ORCH stale lock force-released and reclaimed 2026-09-24."
+    },
+    {
+      "run_id": "WF03-ISS0761-20260924",
+      "workflow_id": "WF-03",
+      "requirement_ids": [],
+      "issue_id": "ISS-0761",
+      "queue_task_id": 761,
+      "github_issue_number": 1649,
+      "status": "ACTIVE",
+      "owned_modules": [
+        ".claude/agents/uat-runner.md",
+        "scripts/",
+        "docs/issues/ISS-0739.yaml"
+      ],
+      "started_at": "2026-09-24T07:08:59Z",
+      "lock_released_at": null,
+      "released_lock": false,
+      "last_known_step": "Step 00 PENDING",
+      "merge_sha": null,
+      "pr_number": null,
+      "note": "WF-03 for ISS-0761 (local: ISS-0739): no seeded QA login credentials for SwiftRoute persona actors (Lena/Marco/Alice). MAJOR. Queue task 761. Related: REQ-395."
     }
   ]
 }

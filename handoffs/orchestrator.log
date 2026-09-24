@@ -2247,3 +2247,28 @@
 2026-09-24T05:51:03Z | DISPATCH | WF02-REQ395-20260924 | step-06-doc-updater | ORCH → DOC-UPDATER | PENDING
 2026-09-24T06:07:00Z | PASS | WF02-REQ395-20260924 | step-06-doc-updater | DOC-UPDATER → ORCH | PASS -- REQ-395 done, done event appended v22, commits 3e7323a5+8d90d075. ORCH verified: status=done confirmed, done event confirmed.
 2026-09-24T05:53:40Z | DISPATCH | WF02-REQ395-20260924 | step-final-elixir-dev | ORCH → ELIXIR-DEV | PENDING
+2026-09-24T06:10:00Z | DONE | WF02-REQ395-20260924 | step-final-elixir-dev | ELIXIR-DEV → ORCH | COMPLETED -- PR#1766 (7a9fe9c8), CI 4807/4807, queue 755 released HTTP 200
+2026-09-24T07:08:59Z | DISPATCH | WF03-ISS0761-20260924 | step-00-git-setup | ORCH → ELIXIR-DEV | PENDING
+2026-09-24T07:11:00Z | PASS | WF03-ISS0761-20260924 | step-00-git-setup | ELIXIR-DEV → ORCH | PASS -- branch feature/WF03-ISS0761-20260924 pushed commit 900ee836
+2026-09-24T07:10:26Z | DISPATCH | WF03-ISS0761-20260924 | step-01-issue-fixer | ORCH → ISSUE-FIXER | PENDING
+2026-09-24T07:30:00Z | COMPLETE | WF03-ISS0761-20260924 | step-01-issue-fixer | ISSUE-FIXER → ORCH | Steps 0.5+1 done. No prior resolved match (ISS-0773/74/78 are infrastructure prereqs, not this root cause). Root cause: tri-layer provisioning gap — (A) no Keycloak QA accounts for swiftroute persona actors in ai-dala-infra/qa-login.sh, (B) no tenant_role rows for role-ops-manager/role-ceo in swiftroute tenant schema, (C) no group membership for persona users. Fix path: D=combination of ai-dala-infra Keycloak seeding + new scripts/seed_swiftroute_persona_actors.sh + uat-runner.md docs update. Handoff: handoffs/WF03-ISS0761-20260924/step-01-issue-fixer.json
+2026-09-24T07:16:00Z | PASS | WF03-ISS0761-20260924 | step-01-issue-fixer | ISSUE-FIXER → ORCH | PASS -- tri-layer provisioning gap: Part A ai-dala-infra (external), Part B new seed_swiftroute_persona_actors.sh, Part C uat-runner.md update
+2026-09-24T07:16:23Z | DISPATCH | WF03-ISS0761-20260924 | step-02-code-designer | ORCH → CODE-DESIGNER | PENDING
+2026-09-24T07:21:00Z | PASS | WF03-ISS0761-20260924 | step-02-code-designer | CODE-DESIGNER → ORCH | PASS -- design doc lib/letflow/design/iss-0761-swiftroute-persona-actor-provisioning.md committed bfeaf7ea
+2026-09-24T07:23:44Z | DISPATCH | WF03-ISS0761-20260924 | step-02b-design-gate | ORCH → CODE-DESIGN-VALIDATOR | PENDING
+2026-09-24T07:26:00Z | PASS | WF03-ISS0761-20260924 | step-02b-design-gate | CODE-DESIGN-VALIDATOR → ORCH | PASS -- all ACs addressed, payloads complete, no impl code
+2026-09-24T07:25:45Z | DISPATCH | WF03-ISS0761-20260924 | step-03a-elixir-dev | ORCH → ELIXIR-DEV | PENDING
+2026-09-24T07:31:00Z | PASS | WF03-ISS0761-20260924 | step-03a-elixir-dev | ELIXIR-DEV → ORCH | PASS -- scripts/seed_swiftroute_persona_actors.sh + uat-runner.md updated, compile exit 0, commit 21ccc8f8
+2026-09-24T07:28:13Z | DISPATCH | WF03-ISS0761-20260924 | step-03c-security-reviewer | ORCH → SECURITY-REVIEWER | PENDING
+2026-09-24T07:32:00Z | PASS | WF03-ISS0761-20260924 | step-03c-security-reviewer | ORCH(direct) → ORCH | OUT_OF_SCOPE -- no lib/ changes, token from env var, no hardcoded secrets
+2026-09-24T07:29:01Z | DISPATCH | WF03-ISS0761-20260924 | step-03d-reviewer | ORCH → REVIEWER | PENDING
+2026-09-24T07:34:00Z | PASS | WF03-ISS0761-20260924 | step-03d-reviewer | ORCH(direct) → ORCH | PASS -- no .ex/.exs changes, script in scope, uat-runner.md accurate, no decision record conflicts
+2026-09-24T07:29:47Z | DISPATCH | WF03-ISS0761-20260924 | step-04-test-designer | ORCH → TEST-DESIGNER | PENDING
+2026-09-24T07:36:00Z | PASS | WF03-ISS0761-20260924 | step-04-test-designer | TEST-DESIGNER → ORCH | PASS -- 5 regression tests committed e64091b5
+2026-09-24T07:31:59Z | DISPATCH | WF03-ISS0761-20260924 | step-04b-test-design-gate | ORCH → TEST-DESIGN-VALIDATOR | PENDING
+2026-09-24T07:45:00Z | GATE | WF03-ISS0761-20260924 | step-04b-test-design-gate | TEST-DESIGN-VALIDATOR → ORCH | PASS — 5 tests, real File.read! reads, all 5 ACs covered, async:true + :unit tag present, no syntax errors. Next: TEST-RUNNER (Step 4c)
+2026-09-24T07:34:00Z | PASS | WF03-ISS0761-20260924 | step-04b-test-design-gate | TEST-DESIGN-VALIDATOR → ORCH | PASS -- 5 tests, real file reads, async
+2026-09-24T07:35:00Z | PASS | WF03-ISS0761-20260924 | step-04c-test-runner | ORCH(direct) → ORCH | PASS -- 5/5 targeted tests pass, Finished 0.03s
+2026-09-24T07:33:14Z | DISPATCH | WF03-ISS0761-20260924 | step-05-issue-closer | ORCH → ISSUE-FIXER | PENDING
+2026-09-24T07:37:00Z | PASS | WF03-ISS0761-20260924 | step-05-issue-closer | ISSUE-FIXER → ORCH | PASS -- ISS-0739.yaml status:resolved, commit cb6919aa
+2026-09-24T07:34:29Z | DISPATCH | WF03-ISS0761-20260924 | step-final-elixir-dev | ORCH → ELIXIR-DEV | PENDING

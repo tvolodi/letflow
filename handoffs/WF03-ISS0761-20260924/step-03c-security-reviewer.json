@@ -1,0 +1,35 @@
+{
+  "handoff_id": "WF03-ISS0761-20260924-step-03c",
+  "run_id": "WF03-ISS0761-20260924",
+  "workflow_id": "WF-03",
+  "step": "Step 3c",
+  "to_agent": "SECURITY-REVIEWER",
+  "from_agent": "ORCH",
+  "status": "PENDING",
+  "created_at": "2026-09-24T07:28:13Z",
+  "started_at": "2026-09-24T07:28:13Z",
+  "context": {
+    "branch_name": "feature/WF03-ISS0761-20260924",
+    "issue_id": "ISS-0761",
+    "artifacts_in": [
+      "scripts/seed_swiftroute_persona_actors.sh",
+      ".claude/agents/uat-runner.md",
+      "docs/agents/instructions/security-invariants.md"
+    ]
+  },
+  "task": {
+    "description": "Execute Step 3c (Security Review) for WF03-ISS0761-20260924.\n\nRead docs/agents/instructions/security-invariants.md. Then determine if scripts/seed_swiftroute_persona_actors.sh and .claude/agents/uat-runner.md are in scope.\n\nThe implementation: a bash seeding script (calls QA API) + a documentation update (uat-runner.md). No lib/ changes.\n\nIf OUT_OF_SCOPE: confirm no hardcoded secrets, auth from env var, confirm and route to REVIEWER.\nIf IN_SCOPE: apply full INV-1 through INV-8 checklist.\n\nComplete handoff (step-03c-security-reviewer.json): status COMPLETED, result.status OUT_OF_SCOPE or PASS or FAIL.",
+    "acceptance_criteria": [
+      "Scope determination made",
+      "No hardcoded secrets in script",
+      "Auth token from environment only"
+    ]
+  },
+  "result": {
+    "status": "OUT_OF_SCOPE",
+    "notes": "Script calls existing API endpoints only with auth token sourced exclusively from ${QA_AUTH_TOKEN} env var. No lib/ changes, no hardcoded secrets. Fails fast with named error if token unset. Out of scope for INV-1 through INV-8.",
+    "completed_at": "2026-09-24T07:32:00Z"
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

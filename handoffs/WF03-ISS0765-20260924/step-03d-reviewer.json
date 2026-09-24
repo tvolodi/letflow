@@ -29,7 +29,18 @@
     ]
   },
   "task": {
-    "description": "WF-03 Step 3d -- REVIEWER hard gate on implementation commit bcddcebf: does the implementation match the gated design exactly, no more and no less? Charter scope: idiom, scope creep, decision-record consistency."
+    "description": "WF-03 Step 3d -- REVIEWER hard gate on implementation commit bcddcebf (handoff 317fcc75), the ISS-0765 fix correcting web/src/api/identity.ts's groupsApi off the dead /api/v1/admin/groups/ prefix. Primary question: does the implementation match the gated design (lib/letflow/design/iss-0765-groupsapi-route-prefix-audit.md, commit 1fca1613, PASSED by CODE-DESIGN-VALIDATOR on rework 1) exactly -- no more and no less? Check both directions: design decisions not implemented, and changes made the design does not authorise. Charter scope is idiom, scope creep and decision-record consistency; the OTP/supervision half is expected to be inapplicable since nothing under lib/ changed, and REVIEWER should say so rather than stretch it. Scope creep is the main risk: six adjacent defects found during this run are deliberately OUT of scope and already filed separately as ISS-0811, ISS-0812, ISS-0813, ISS-0814, ISS-0815 and ISS-0816. FRONTEND-DEV reports type-check, lint, 874 tests and 48 guards all green, and states plainly it could NOT verify against a live backend (no listener on localhost:4000) -- static green is not integration evidence and the gap must be noted in the verdict, not silently accepted.",
+    "acceptance_criteria": [
+      "Every diff hunk traces to a design section authorising it, and every design decision (a)-(d) is implemented.",
+      "No out-of-scope change: Group.is_system/member_count (ISS-0811), usersApi/rolesApi routes (ISS-0812), User.status casing (ISS-0814), User.roles/created_at (ISS-0815), CursorPage<T>.has_more and the members dialog's 50-row truncation (ISS-0816) are all absent from the diff.",
+      "INV-C holds: web/src/api/__tests__/identity.removeMembers.test.ts and the removeMembers call are byte-unchanged.",
+      "Exactly the seven enumerated GroupsPage.tsx edits, no eighth, with :108's dependency array textually unchanged.",
+      "The useMemo added after :58 is a consumer-side convenience over an already-correctly-typed value, NOT the normalising shim decision (b) forbids per docs/guides/frontend_developer_guide.md:83-88.",
+      "The comment replacing .get/.update records them as unimplemented backend-side (AC3's second disjunct), not as a TODO to re-add.",
+      "Decision (c) restores rather than contradicts the premise recorded at lib/letflow/routers/identity.ex:483-489.",
+      "GroupMember's status/auth_source unions are lowercase, matching what user_map/1 actually emits -- the new code must not repeat the ISS-0814 mistake.",
+      "The absence of integration evidence is recorded in the verdict as a condition on Step 5, not treated as closed."
+    ]
   },
   "result": {
     "status": "PASS",

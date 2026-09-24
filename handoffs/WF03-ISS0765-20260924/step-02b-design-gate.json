@@ -85,9 +85,7 @@
         "required_change": "None for CODE-DESIGNER. ORCH: register items 1, 2, 4 and 5 via register_task; item 3 can be noted on ISS-0765 itself."
       }
     ],
-    "artifacts_out": [
-      "handoffs/WF03-ISS0765-20260924/step-02b-design-gate.json"
-    ],
+    "artifacts_out": [],
     "next_action": "ORCH: route back to CODE-DESIGNER for rework of F-1 (blocking) and F-2 (fix in the same pass). No other section requires change -- sections 1 through 6, 8 and 9 were independently re-derived and are correct. After CODE-DESIGNER's revision, re-gate section 7 only. Do NOT advance to Step 3 (FRONTEND-DEV) until section 7's fail-first claim is true as written."
   }
 }

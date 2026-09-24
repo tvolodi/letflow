@@ -47,7 +47,6 @@
   "result": {
     "status": "PASS",
     "summary": "TEST-DESIGNER's Step 4 deliverable is accepted. Every measurable claim this gate re-derived reproduced, most of them byte-for-byte. The designated mutant M-1a was applied by this gate from the design's own section 3.2 before/after table and produced exactly the reported tsc signature; the pre-fix red measurement reproduced exactly, including the identity of the two passing cases; CAVEAT N-1's absent :228 diagnostic is genuine and correctly reported. Coverage, row-10 scoping, guard compliance and fixture isolation all hold. One unattributed intermittent failure was observed in an unrelated test file during the M-1a run and is reported to ORCH for filing.",
-
     "independent_mutant_measurement": {
       "obligation": "WF-03:118-121. The pre-fix failure for decision (b)'s .members retype is not 'the code did not exist' but the structurally identical case of 'no runtime behaviour changed' -- a type-only change that no runtime row can discriminate. Accepting TEST-DESIGNER's counts would be copying a claim. This gate applied the mutant itself.",
       "where_applied": "A throwaway `git worktree add --detach` at the session scratchpad (wt-tdv), with web/node_modules supplied as a directory junction to the working checkout's. The working checkout was NOT mutated for M-1a at any point.",
@@ -86,7 +85,6 @@
         "discrimination_verdict": "The two directions together do discriminate this specific trap rather than merely breaking something. M-1a breaks only at the consumer sites when the producer's type is kept; M-1b breaks only at the producer/consumer boundary when the producer's type is reverted; in neither direction does the runtime suite move. That is a matched pair, not one mutation that happens to break a build."
       }
     },
-
     "judgement_on_the_unplanned_M1b_observation": {
       "the_claim": "M-1b's first three diagnostics land inside the NEW TEST FILE ITSELF, at row 7(ii)'s result.items / result.count / result.next_cursor assertions, so row 7(ii) carries decision (b) as a COMPILE-TIME guard even though no runtime row can. Reported by TEST-DESIGNER as an observation, explicitly NOT as fail-first evidence.",
       "verdict": "AGREE with the characterisation, and it is the correct call rather than a cautious one.",
@@ -94,7 +92,6 @@
       "why_the_classification_is_right": "Fail-first evidence must come from the UNMODIFIED test run against the UNMODIFIED pre-fix code. This signal exists only because the shipped type was mutated, which puts it in the same category as M-1a's own diagnostics -- a mutation-derived detector, not a pre-fix red. Promoting it to fail-first evidence would also be wrong on a second ground: it detects drift in the DECLARED return type, not drift in the actual runtime shape, so a backend that changed its envelope while the TypeScript declaration stayed put would sail past it. Calling it 'an additional compile-time detector' is exactly as strong a claim as the evidence supports.",
       "one_qualification": "It is slightly overstated to call the detector unanticipated in kind. Design section 7.1 already nominated tsc as the detector for decision (b) ('tsc -b tsconfig.json ... catches every one on every run'). What is genuinely new is that the TEST FILE participates in that detection surface, which neither the design nor the Step 2b gate said. Minor wording point; it does not change the verdict and needs no rework."
     },
-
     "verification_1_pre_fix_measurement": {
       "method": "Not a spot-check -- the full pre-fix run was re-derived. Throwaway worktree detached at d28c3cf6 (main, pre-fix), node_modules junctioned, the committed test file copied in, `npx vitest run src/api/__tests__/identity.groupsApi.test.ts --reporter=verbose`.",
       "measured_verbatim": " Test Files  1 failed (1)\n      Tests  14 failed | 2 passed (16)\n   Start at  22:51:32\n   Duration  2.70s",
@@ -103,7 +100,6 @@
       "row_10_split_confirmed": "5 FAIL / 1 PASS as reported. Measured messages: list `expected '/api/v1/admin/groups' not to contain '/api/v1/admin/'`; create the same; delete `expected '/api/v1/admin/groups/g-1' not to contain '/api/v1/admin/'`; addMember `TypeError: groupsApi.addMember is not a function`; members `expected '/api/v1/admin/groups/g-1/members' not to contain '/api/v1/admin/'`; removeMembers PASS.",
       "per_row_messages_checked": "All eleven rows' observed messages were compared against TEST-DESIGNER's per_row table. Every one matched, including the exact `// Object.is equality` suffixes on rows 6 and 8 and the truncated array rendering on row 9 (`expected [ 'addMembers', 'create', …(6) ] to deeply equal [ 'addMember', 'create', …(4) ]`). No row's claimed failure mode differs from the measured one."
     },
-
     "verification_2_row_7ii": {
       "claim_checked": "7(ii) is unobservable in its own block pre-fix because half (i) throws first, and was measured with a separate isolation probe; recorded as a forward regression guard and NOT counted as a red row.",
       "verdict": "CONFIRMED CORRECT on all three counts.",
@@ -111,7 +107,6 @@
       "independent_isolation_probe": "This gate did not take TEST-DESIGNER's probe result on trust. It wrote its own throwaway probe (src/api/__tests__/tdv.probe7ii.test.ts) in the pre-fix worktree at d28c3cf6, running half (ii)'s five assertions alone against the pre-fix `client.get<User[]>` .members. Measured: ' Test Files  1 passed (1) / Tests  1 passed (1)', exit 0. The probe file was deleted before the worktree was removed and is not part of any deliverable.",
       "classification": "Green pre-fix AND post-fix, so it is correctly recorded as a forward regression guard. It is not counted among the 14 red cases -- the arithmetic closes without it (9 single red cases + 5 of row 10's 6 = 14), which this gate re-derived independently from its own verbose output rather than from TEST-DESIGNER's arithmetic_check string."
     },
-
     "verification_3_coverage_against_the_acs": {
       "verdict": "PASS.",
       "issue_fix_direction_coverage": "docs/issues/ISS-0765.yaml's fix_direction names addMembers, .list, .get, .update, .delete, .members and requires regression coverage 'for each corrected call'. Mapping, re-derived from the test source: list -> rows 1 and 10; create -> rows 2 and 10 (on the surface though not named in the issue text); delete -> rows 3 and 10; addMembers->addMember -> rows 4, 5, 6 and 10; members -> rows 7(i) and 10; get/update -> rows 8 and 9 (deleted rather than re-prefixed, and the deletion is pinned by name in row 8 and closed by row 9); removeMembers -> rows 11 and 10. Every corrected call has at least one row, and six of them have two.",
@@ -119,21 +114,18 @@
       "no_skipped_or_vacuous_rows": "grep over the file for `.skip`, `.todo`, `.only` and `TODO` returns nothing. There are 11 `it`/`it.each` blocks expanding to 16 cases. No MUST-covering row is skipped and there is no 'TODO: implement test' anywhere in test/specs/ISS-0765.md. The two permanently-green cases (row 11 and row 10's removeMembers) are not vacuous -- they assert real, discriminating behaviour and would go red if ISS-0736's correction were undone -- and both are declared as enumeration rows rather than passed off as evidence.",
       "block_that_can_never_be_red_check": "Row 7's block cannot sit permanently green: half (i) is red pre-fix, which is the exact reason design section 7 gives for keeping row 7's path assertion alongside row 10. Verified in this gate's own pre-fix run."
     },
-
     "verification_4_row_10_scoping": {
       "verdict": "PASS -- correctly scoped, and it would NOT fail for the rolesApi reason.",
       "evidence": "Row 10 is `it.each(surfaceRows)` where surfaceRows is an array of [name, thunk] pairs that INVOKE each function and then assert `expect(req.url).not.toContain('/api/v1/admin/')` on the URL the spy captured. It reads no file content at all -- there is no fs read, no import of identity.ts source text, and no bundle scan in the file.",
       "premise_re_confirmed": "`/api/v1/admin/` does still legitimately appear in web/src/api/identity.ts in rolesApi (ISS-0812's scope). Because row 10 never looks at file content, that occurrence cannot make it red. A whole-file absence assertion would have been wrong and none was written.",
       "note": "Row 10 also asserts `expect(req.url).toContain('/api/v1/identity/groups')`, which strengthens it from a pure absence check into a positive-target check -- a case could not pass by dialling some third wrong prefix."
     },
-
     "verification_5_guard_compliance": {
       "verdict": "PASS.",
       "raw_fetch_token": "`grep -c 'fetch(' web/src/api/__tests__/identity.groupsApi.test.ts` -> 0 matches, exit 1. `grep -n 'axios('` -> no output. The forbidlist's raw-fetch-outside-client regex is /\\bfetch\\(|\\baxios\\(/ applied to whole-file content, so a zero match is conclusive, comments included.",
       "no_forbidlist_weakening": "`git diff --name-only main...HEAD -- web/tests/` returns EMPTY. No file under web/tests/ was touched anywhere on this branch, so forbidlist.ts cannot have been edited, no entry weakened or removed, and no allowedPaths entry added. Read directly to confirm the shipped state: raw-fetch-outside-client still carries `allowedPaths: ['web/src/api/client.ts']` and nothing else.",
       "guards_run_independently": "`npm run guards` in the working checkout at the shipped tree: ' Test Files  4 passed (4) / Tests  48 passed (48)', exit 0. This gate ran it itself rather than accepting TEST-DESIGNER's quote."
     },
-
     "verification_6_fixtures": {
       "verdict": "PASS -- self-sufficient and order-independent.",
       "shared_state": "The only module-level values are WIRE_MEMBER, WIRE_MEMBER_PAGE and `originalFetch`. The first two are read-only literals used as response bodies; nothing mutates them. Row 7 compares `result` to WIRE_MEMBER_PAGE, but `result` is a fresh JSON round-trip object, so the comparison cannot alias or mutate the fixture.",
@@ -141,16 +133,13 @@
       "ordering": "No case depends on another having run first. `captured()` asserts `toHaveBeenCalledTimes(1)` on that case's own fresh spy, which would itself go red if a leaked spy were reused across cases. Row 10's six it.each cases each install their own spy.",
       "determinism_and_secrets": "No wall-clock or unseeded randomness -- every response body is a fixed literal the test constructs, and the two timestamps in WIRE_MEMBER are hardcoded strings. The only credential-shaped value is the literal 'test-token' passed to setToken; no real secret, no connection string, no host/port."
     },
-
     "revert_and_verify": {
       "m1a": "Applied only inside the throwaway worktree; the working checkout was never mutated for it. After `git checkout -- web/src/pages/admin/GroupsPage.tsx` in that worktree: `git status --porcelain web/` EMPTY; `npx tsc -b tsconfig.json --force` TSC_EXIT=0 with no diagnostics; the test file re-ran ' Test Files  1 passed (1) / Tests  16 passed (16)'.",
       "m1b": "Applied in place in the working checkout and reverted with `git checkout -- web/src/api/identity.ts`. After the revert: `git status --porcelain web/` EMPTY and `git status --porcelain` over the WHOLE tree EMPTY; `npx tsc -b tsconfig.json --force` TSC_EXIT=0 with no diagnostics; `npx vitest run src/api/__tests__/identity.groupsApi.test.ts` -> ' Test Files  1 passed (1) / Tests  16 passed (16)'.",
       "worktree_disposal": "web/node_modules junction removed with `cmd /c rmdir` (link only). The working checkout's real node_modules was verified intact immediately afterwards -- 399 entries by Get-ChildItem, 396 by `ls | wc -l` (bash omits the three dot-entries), the same 396 measured before the junction was created. Then `git worktree remove --force`; `git worktree list` afterwards shows no wt-tdv entry, only the pre-existing repo worktree and three unrelated sibling-session worktrees that were present on entry and were not touched.",
       "no_mutant_residue": "Final state of the working checkout: `git status --porcelain` empty, HEAD 58bbf2af. Only handoffs/WF03-ISS0765-20260924/step-04b-test-design-gate.json is added by this step."
     },
-
     "issues": [],
-
     "new_findings": [
       {
         "id": null,
@@ -166,17 +155,12 @@
         "summary": "The dispatch for this step named HEAD as 08d76ebd, but actual HEAD on entry was 58bbf2af (ORCH's own 'TEST-DESIGNER PASS, dispatch test-design gate' commit, one above 08d76ebd). No code, test or spec file differs between the two. Recorded per core-directives' 'a handoff's factual premises are checkable' rather than silently absorbed; no action needed."
       }
     ],
-
     "carried_gaps": [
       "NO INTEGRATION EVIDENCE, unchanged and re-affirmed by this gate. Everything measured in Step 4 and Step 4b runs against a vi.fn() double whose Response the test constructs. No HTTP request left the process and no Letflow instance was dialled. It remains unproven BY EXECUTION that /api/v1/identity/groups, /api/v1/identity/groups/:id, /api/v1/identity/groups/:id/members and the { user_id } add-member body return 2xx against a running server with a real :GroupsManage token. Owner UAT-RUNNER. Step 5 must not close ISS-0765 claiming end-to-end evidence.",
       "M-1b's `npm test` 890-passed claim was not independently re-measured by this gate (only its tsc half was). It is redundant with M-1a's runtime half, which was measured twice.",
       "The members dialog remains capped at the first page (50 members) and GroupMemberPage.next_cursor is returned but unread -- design 3.3 / OQ-2. Pre-existing, deliberately untested."
     ],
-
-    "artifacts_out": [
-      "handoffs/WF03-ISS0765-20260924/step-04b-test-design-gate.json"
-    ],
-
+    "artifacts_out": [],
     "next_action": "ORCH: Step 4b gate is PASS. Proceed to Step 5 (RELEASE-VALIDATOR / TEST-RUNNER per WF-03). Two things to carry forward: (1) register the AttachmentViewerPage.test.tsx intermittent-failure finding above via register_task -- this gate allocated no id; (2) the NO INTEGRATION EVIDENCE gap must survive Step 5 rather than be closed out, and the 890-passed figure must not be treated as exactly deterministic."
   }
 }

@@ -57,8 +57,7 @@
     "artifacts_out": [
       "web/src/api/__tests__/identity.groupsApi.test.ts",
       "test/specs/ISS-0765.md",
-      "lib/letflow/design/iss-0765-groupsapi-route-prefix-audit.md (two header wording corrections only)",
-      "handoffs/WF03-ISS0765-20260924/step-04-test-designer.json"
+      "lib/letflow/design/iss-0765-groupsapi-route-prefix-audit.md (two header wording corrections only)"
     ],
     "test_file": {
       "path": "web/src/api/__tests__/identity.groupsApi.test.ts",

@@ -118,9 +118,7 @@
         "required_change": "ORCH: carry N-1 and the apply-at-least-one-mutant obligation into the Step 4b handoff's acceptance criteria."
       }
     ],
-    "artifacts_out": [
-      "handoffs/WF03-ISS0765-20260924/step-02b-design-gate-rework1.json"
-    ],
+    "artifacts_out": [],
     "next_action": "ORCH: design gate is GREEN at rework iteration 1. Advance to WF-03 Step 3 (FRONTEND-DEV) against lib/letflow/design/iss-0765-groupsapi-route-prefix-audit.md at commit 1fca1613. Carry N-1 and N-3 into the Step 4/4b handoffs as acceptance criteria. The five design findings forwarded at the first gate (F-4 there) still need id allocation; ISS-0814/0815/0816 were filed at 079d1ffd -- confirm they cover all five before closing the run."
   }
 }

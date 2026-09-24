@@ -180,8 +180,7 @@
     "artifacts_out": [
       "web/src/api/identity.ts",
       "web/src/types/api.ts",
-      "web/src/pages/admin/GroupsPage.tsx",
-      "handoffs/WF03-ISS0765-20260924/step-03-frontend-dev.json"
+      "web/src/pages/admin/GroupsPage.tsx"
     ],
     "next_action": "ORCH: route to SECURITY-REVIEWER and REVIEWER (Step 3b gates), then TEST-DESIGNER at Step 4 for web/src/api/__tests__/identity.groupsApi.test.ts against design section 7's eleven-row matrix. Carry N-1 (M-1a's predicted tsc error sites are a floor, not an exact match -- do not manufacture a diagnostic at :228) and N-3 (Step 4b must apply at least one mutant itself) into the Step 4/4b handoffs, as the rework-1 design gate required. Step 4 must run the mutants against commit bcddcebf, which is the post-fix tree they assume."
   }

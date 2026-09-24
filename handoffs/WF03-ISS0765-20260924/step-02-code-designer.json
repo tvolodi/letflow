@@ -252,8 +252,7 @@
       }
     ],
     "artifacts_out": [
-      "lib/letflow/design/iss-0765-groupsapi-route-prefix-audit.md",
-      "handoffs/WF03-ISS0765-20260924/step-02-code-designer.json"
+      "lib/letflow/design/iss-0765-groupsapi-route-prefix-audit.md"
     ],
     "next_action": "Re-route to CODE-DESIGN-VALIDATOR for rework iteration 1 re-gate. The two blocking/rework findings F-1 and F-2 are addressed in design sections 7, 7.1, 8 and the new path-convention table in section 1; no decision (a)-(d) changed."
   },

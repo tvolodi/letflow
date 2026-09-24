@@ -1,0 +1,89 @@
+{
+  "handoff_id": "WF03-BATCH-ISS0816-ISS0821-ISS0822-20260925-step-02",
+  "run_id": "WF03-BATCH-ISS0816-ISS0821-ISS0822-20260925",
+  "workflow_id": "WF-03",
+  "step": "Step 2",
+  "to_agent": "CODE-DESIGNER",
+  "from_agent": "ORCH",
+  "retroactive": true,
+  "status": "COMPLETED",
+  "created_at": "2026-09-25T04:26:21Z",
+  "started_at": "2026-09-25T04:26:21Z",
+  "completed_at": "2026-09-25T04:35:00Z",
+  "context": {
+    "run_id": "WF03-BATCH-ISS0816-ISS0821-ISS0822-20260925",
+    "issue_ids": ["ISS-0816", "ISS-0821", "ISS-0822"],
+    "issue_files": [
+      "docs/issues/ISS-0816.yaml",
+      "docs/issues/ISS-0821.yaml",
+      "docs/issues/ISS-0822.yaml"
+    ],
+    "commits": {
+      "ISS-0816_ISS-0821": ["d8fa8096", "a34305f7"],
+      "ISS-0822": "65312cd9"
+    },
+    "retroactive_note": "Implementations already committed to main. This step produces retroactive design artefacts documenting the interface decisions made during those commits.",
+    "artifacts_read": [
+      "web/src/types/api.ts",
+      "lib/letflow/api/pagination.ex",
+      "lib/letflow/routers/dlq.ex",
+      "lib/letflow/routers/promotions.ex",
+      "lib/letflow/router.ex",
+      "web/src/router.tsx",
+      "web/src/types/__tests__/cursor-page-wire-shape.test.ts",
+      "docs/issues/ISS-0816.yaml",
+      "docs/issues/ISS-0821.yaml",
+      "docs/issues/ISS-0822.yaml",
+      "docs/agents/instructions/core-directives.md"
+    ]
+  },
+  "task": {
+    "description": "WF-03 Step 2 (retroactive design) for ISS-0816/ISS-0821/ISS-0822. Document the CursorPage<T> wire shape decision (has_more removal, count optional), the test fixture integrity principle, and the /admin/modules route removal decision.",
+    "acceptance_criteria": {
+      "ISS-0816_ISS-0821": [
+        "AC1: The four fixtures no longer fabricate has_more; each mock matches a response shape some real route actually emits",
+        "AC2: Tests still meaningfully cover pagination via next_cursor",
+        "AC3: A mechanism makes this class harder to reintroduce: fixtures checked against real response shape",
+        "AC4: Lands with or after ISS-0816's type fix"
+      ],
+      "ISS-0822": [
+        "AC1: Either Letflow.Routers.ProcessModules is implemented and mounted so /admin/modules works, OR the SPA route/page are removed or explicitly gated behind unavailable-feature state",
+        "AC2: The decision is recorded against S5's scope",
+        "AC3: If surface is kept, every modules.ts call is audited against real mounted route table",
+        "AC4: No other SPA route is left pointing at a router from router.ex deferred table"
+      ]
+    }
+  },
+  "result": {
+    "status": "PASS",
+    "summary": {
+      "design_artefact": "lib/letflow/design/iss-0816-0821-0822-cursor-page-and-dead-route.md",
+      "decisions": {
+        "cursor_page_shape": {
+          "decision": "CursorPage<T> is {items, next_cursor, count?} — count is optional because Pagination.page_response/2 routes emit it but hand-built routes (definitions/search, dlq, promotions) do not. has_more is not a field; the backend never emits it.",
+          "source": "Pagination.Page @derive {Jason.Encoder, only: [:items, :next_cursor, :count]}"
+        },
+        "has_more_removal": {
+          "decision": "has_more removed from CursorPage<T>. audit.ts and promotions.ts were client-deriving Boolean(response.next_cursor) solely to satisfy the required field — a derivation that added no information and masked the wrong type.",
+          "canonical_check": "next_cursor !== null"
+        },
+        "fixture_integrity": {
+          "decision": "All four fixture sites updated to emit only keys a real route actually emits. cursor-page-wire-shape.test.ts (TC-ISS0821-03) uses Object.prototype.hasOwnProperty.call to assert has_more is absent as an own property — catches has_more: false as well as has_more: true.",
+          "prevention_mechanism": "Compile-time: structural typing causes tsc to reject re-introduction of has_more: boolean as a required field. Runtime: TC-ISS0821-03 catches it post-compile."
+        },
+        "modules_route_removal": {
+          "decision": "SPA route /admin/modules removed outright (not gated). Letflow.Routers.ProcessModules is deferred to S5. Frontend stubs (api/modules.ts, hooks/useModules.ts) retained as S5 stubs with no live callers.",
+          "s6_cleanup": "Dlq, Services, PlatformMigrations, Webhooks removed from router.ex deferred table — all four are now mounted in api_pipeline.ex (S6 complete).",
+          "remaining_deferred": [
+            "Letflow.Routers.SimulationTest (S7)",
+            "Letflow.Routers.ProcessModules (S5) — SPA route removed",
+            "Letflow.Routers.AgentRequests (post-S6) — no SPA route",
+            "Letflow.Routers.AgentResponses (post-S6) — no SPA route",
+            "Letflow.Routers.AgentEvents (post-S6) — no SPA route"
+          ]
+        }
+      },
+      "open_questions": "None."
+    }
+  }
+}

@@ -1,0 +1,98 @@
+{
+  "handoff_id": "c0de5190-0815-0814-0811-0809step02cd",
+  "run_id": "WF03-BATCH-ISS0809-ISS0811-ISS0814-ISS0815-20260925",
+  "workflow_id": "WF-03",
+  "step": "02",
+  "from_agent": "ISSUE-FIXER",
+  "to_agent": "CODE-DESIGNER",
+  "file": "handoffs/WF03-BATCH-ISS0809-ISS0811-ISS0814-ISS0815-20260925/step-02-code-designer.json",
+  "created_at": "2026-09-25T04:26:21Z",
+  "started_at": "2026-09-25T04:26:21Z",
+  "completed_at": "2026-09-25T04:40:00Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "retroactive": true,
+  "context": {
+    "stage": null,
+    "requirement_ids": [],
+    "issue_ids": ["ISS-0815", "ISS-0814", "ISS-0811", "ISS-0809"],
+    "requirement_text": {},
+    "related_handoff_ids": [],
+    "artifacts_in": [
+      "docs/issues/ISS-0815.yaml",
+      "docs/issues/ISS-0814.yaml",
+      "docs/issues/ISS-0811.yaml",
+      "docs/issues/ISS-0809.yaml",
+      "web/src/types/api.ts",
+      "web/src/pages/admin/UserDetailPage.tsx",
+      "web/src/pages/admin/UsersPage.tsx",
+      "web/src/pages/admin/GroupsPage.tsx",
+      "web/src/pages/instances/InstanceDetailPage.tsx",
+      "lib/letflow/routers/identity.ex",
+      "lib/letflow/routers/instances.ex"
+    ],
+    "owned_modules": [
+      "web/src/types/api.ts",
+      "web/src/pages/admin/UserDetailPage.tsx",
+      "web/src/pages/admin/UsersPage.tsx",
+      "web/src/pages/admin/GroupsPage.tsx",
+      "web/src/pages/instances/InstanceDetailPage.tsx"
+    ]
+  },
+  "task": {
+    "description": "Retroactive design artefact for WF-03 batch run covering ISS-0815, ISS-0814, ISS-0811, and ISS-0809. All four issues share the same defect class: TypeScript interfaces in web/src/types/api.ts declared required fields the backend never emits (or wrong value domains). Implementations were committed to main before this design step. Design documents the wire shape decisions, status casing canonical rule, Members column removal rationale, and Cancel dialog data-source fix so downstream validators have a design to evaluate.",
+    "acceptance_criteria": [
+      "User interface matches what user_map/1 actually emits; every required field is one the backend sends",
+      "Timestamp field web/ reads is inserted_at (matches what backend emits)",
+      "roles demoted to optional or backend emits it; documented decision",
+      "One canonical casing for user status chosen and recorded; web/ and backend agree end to end",
+      "User.status type matches value backend actually emits (lowercase)",
+      "UserDetailPage status control seeds from fetched user's real status",
+      "Members column shows real member count or column removed if backend not supplying it",
+      "Group type matches group_map/1; no required field the server never sends",
+      "Cancel dialog shows real definition name and version (not 'undefined v undefined')",
+      "ProcessInstance no longer promises definition_name/version as required non-optional strings"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "Design artefact written to lib/letflow/design/iss-0815-0814-0811-0809-frontend-type-corrections.md. Documents: (1) User wire shape — 8 required fields from user_map/1; roles demoted to optional (never emitted); created_at → inserted_at; (2) Status casing — lowercase is canonical (Ecto.Enum + Atom.to_string); UI renders ACTIVE/INACTIVE but wire always lowercase; (3) Group wire shape — 5 fields from group_map/1; is_system/member_count demoted to optional; Members column removed because backend does not supply member_count and showing 0 is a data lie; (4) Cancel dialog fix — useDefinition(instance?.definition_id) is the correct data source, same pattern as prior commit cb3c6c49; '—' placeholder while loading. Root cause documented in §6 (same class as ISS-0745). No open questions (§7).",
+    "artifacts_out": [
+      "lib/letflow/design/iss-0815-0814-0811-0809-frontend-type-corrections.md"
+    ],
+    "issues": [],
+    "implementation_commits": [
+      {
+        "issue": "ISS-0815",
+        "commit_sha": "a03230be",
+        "description": "Align User type with user_map/1 wire shape; demote roles to optional; replace created_at with inserted_at"
+      },
+      {
+        "issue": "ISS-0814",
+        "commit_sha": "36e584d3",
+        "description": "Normalise User.status to lowercase throughout web/; seed UserDetailPage from fetched user"
+      },
+      {
+        "issue": "ISS-0811",
+        "commit_sha": "8acde894",
+        "description": "Fix Group type to match group_map/1; remove Members column that always showed 0"
+      },
+      {
+        "issue": "ISS-0809",
+        "commit_sha": "4424a6a7",
+        "description": "Cancel dialog sources name/version from useDefinition; ProcessInstance.definition_name/version made optional"
+      }
+    ],
+    "git_evidence": {
+      "branch_name": "main",
+      "commit_sha_list": [],
+      "remote_branch": "origin/main",
+      "push_status": "pending",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": "Route to CODE-DESIGN-VALIDATOR (Step 3)"
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

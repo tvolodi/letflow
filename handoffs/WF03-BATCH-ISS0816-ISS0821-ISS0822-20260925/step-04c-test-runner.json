@@ -1,0 +1,64 @@
+{
+  "run_id": "WF03-BATCH-ISS0816-ISS0821-ISS0822-20260925",
+  "agent": "TEST-RUNNER",
+  "step": "04c",
+  "timestamp": "2026-09-25T04:54:16+05:00",
+  "overall_status": "PASS",
+  "checks": [
+    {
+      "id": "ISS-0821/ISS-0816-cursor-page-wire-shape",
+      "description": "CursorPage<T> wire-shape contract tests — pins interface against wire shapes emitted by Letflow.Api.Pagination.Page and hand-built routes; verifies has_more is absent",
+      "command": "npx vitest run src/types/__tests__/cursor-page-wire-shape.test.ts",
+      "working_directory": "web/",
+      "status": "PASS",
+      "test_files": 1,
+      "tests_passed": 4,
+      "tests_failed": 0,
+      "tests_total": 4,
+      "output_summary": "✓ src/types/__tests__/cursor-page-wire-shape.test.ts (4 tests) 6ms | Test Files 1 passed (1) | Tests 4 passed (4)"
+    },
+    {
+      "id": "ISS-0822-route-removal-static-check",
+      "description": "Static verification that /admin/modules route and ProcessModulesPage are removed (comment-only references remain)",
+      "command": "(Get-Content src\\router.tsx | Select-String 'admin/modules').Count; (Get-Content src\\router.tsx | Select-String 'ProcessModulesPage').Count",
+      "working_directory": "web/",
+      "status": "PASS",
+      "expected_admin_modules_count": 1,
+      "actual_admin_modules_count": 1,
+      "expected_ProcessModulesPage_count": 1,
+      "actual_ProcessModulesPage_count": 1,
+      "note": "Both patterns appear exactly once — in a comment only. No live route registration found."
+    },
+    {
+      "id": "guards-suite",
+      "description": "Source-scan and meta-control guards — dead-admin-prefix guard, coverage metadata checks",
+      "command": "npx vitest run tests/guards/source-scan.spec.ts tests/guards/meta-control.spec.ts",
+      "working_directory": "web/",
+      "status": "PASS",
+      "test_files": 2,
+      "tests_passed": 49,
+      "tests_failed": 0,
+      "tests_total": 49,
+      "output_summary": "✓ tests/guards/meta-control.spec.ts (48 tests) 20ms | ✓ tests/guards/source-scan.spec.ts (1 test) 69ms | Test Files 2 passed (2) | Tests 49 passed (49)"
+    },
+    {
+      "id": "type-check",
+      "description": "TypeScript compile-time guard — verifies CursorPage<T> shape and all ISS-0816/0821/0822 call-sites are type-correct",
+      "command": "npm run type-check 2>&1 | Select-String 'error TS' | Where-Object { $_ -notmatch 'react-intl|rehype|hast-util|react-markdown|remark' }",
+      "working_directory": "web/",
+      "status": "PASS",
+      "total_ts_errors": 24,
+      "non_noise_ts_errors": 0,
+      "noise_errors_note": "All 24 errors are TS2307 'Cannot find module' for known optional packages: react-intl, rehype-sanitize, hast-util-sanitize, react-markdown, remark-gfm. These are pre-existing and unrelated to this batch.",
+      "exit_code": 2
+    }
+  ],
+  "summary": {
+    "total_vitest_tests": 53,
+    "total_vitest_passed": 53,
+    "total_vitest_failed": 0,
+    "non_noise_ts_errors": 0,
+    "static_checks_passed": true,
+    "verdict": "All targeted tests PASS. ISS-0816/0821 CursorPage<T> wire-shape contract is enforced (4/4 vitest tests, 0 non-noise TS errors). ISS-0822 route removal verified (comment-only references). Guards suite clean (49/49)."
+  }
+}

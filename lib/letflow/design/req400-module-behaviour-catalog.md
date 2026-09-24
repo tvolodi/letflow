@@ -24,11 +24,9 @@ and pseudocode.
   end (module permissions typed `atom()` at the Catalog boundary is a known,
   accepted type-safety gap for this phase, filed as a future `docs/issues/` item once
   P1 lands — not this requirement's job to close).
-- `docs/requirements.yaml` REQ-400 entry in full (title, description, all 4
-  acceptance-criteria bullets — the file lists 4 checkable bullets under
-  `acceptance_criteria`; REQ-400's own text and this design both treat them as what
-  the task called "all 5 acceptance criteria" is sourced from — see §8 for the exact
-  mapping used) and REQ-401's entry (to confirm what REQ-401 does and does NOT expect
+- `docs/requirements.yaml` REQ-400 entry in full (title, description, all 5
+  acceptance-criteria bullets under `acceptance_criteria` — see §8 for the exact
+  AC1–AC5 mapping used) and REQ-401's entry (to confirm what REQ-401 does and does NOT expect
   from this requirement's `Catalog` surface — the `role_grants` lookup and the
   `permissions` union, both named explicitly in REQ-400's own BUILDS §2).
 - `lib/letflow/api/authorization.ex` lines 219–401 (full read of `@type role`,
@@ -36,7 +34,7 @@ and pseudocode.
   `def roles_from_strings/1`, `role_from_string/1` private clauses) — the exact core
   atom sets and functions the manifest-validation rules (§3) and `Catalog` (§2) read
   against. `@roles` today: `PLATFORM_ADMIN, PROCESS_DESIGNER, PROCESS_OPERATOR,
-  TASK_WORKER, AGENT_RUNNER, CANDIDATE`. `@permissions` today (40 atoms, includes the
+  TASK_WORKER, AGENT_RUNNER, CANDIDATE`. `@permissions` today (38 atoms, includes the
   six `Exam*`/`ExamCertificateIssue` atoms 0039 moves out in P2/REQ-408 — **not this
   requirement**, they stay in core `@permissions` here and therefore stay reachable
   as "core permissions" for §3 rule 3's collision check as of REQ-400).
@@ -237,8 +235,10 @@ is explicitly what REQ-400's own text calls for).
   `{:ok, entry_module}` or `{:error, :not_found}`. AC2 requires looking the fixture
   up "by its id string" — this is the function that satisfies that.
 - **`permissions/0`** — "the union of all modules' `permissions`" (requirement
-  text): `entry_modules/0 |> Enum.flat_map(&(&1.manifest().permissions))`, in prose.
-  This is the exact function REQ-401 calls to extend
+  text): the union, over every entry module returned by `entry_modules/0`, of that
+  module's own declared `permissions` list (each atom taken from calling that
+  module's `manifest/0` and reading its `permissions` field). This is the exact
+  function REQ-401 calls to extend
   `Letflow.Api.Authorization.permissions/0` — REQ-400 builds and tests this function
   standalone (its own manifest-validation test, §3, already exercises every module's
   `permissions`); REQ-400 does **not** wire it into `Authorization` (out of scope,

@@ -280,7 +280,13 @@
       "residual_not_changed": "Section 6 still introduces GroupMemberAddResult as 'Third new interface ... beside the other two', which reads oddly now that the header says four. It is loose prose rather than a count mismatch -- a reader following the enumeration (3.1 gives two, section 5 one, section 6 one) still arrives at four -- and REVIEWER did not flag it, so it was left alone rather than edited beyond the authorisation. Recorded here so a later audit does not treat it as a new discrepancy."
     },
     "git": {
-      "commit": "PENDING_AT_WRITE_TIME -- see commit_actual below",
+      "commit": "c4ab9442b4bcd8c9475ba2a8a7fa8c5873b00998",
+      "commit_subject": "test(ISS-0765): regression coverage for the groupsApi route-prefix fix",
+      "commit_diffstat": "4 files changed, 872 insertions(+), 2 deletions(-)",
+      "pushed": true,
+      "push_output": "To https://github.com/tvolodi/letflow.git
+   4115494e..c4ab9442  feature/WF03-ISS0765-20260924 -> feature/WF03-ISS0765-20260924",
+      "post_push_divergence_check": "After git fetch, git rev-parse HEAD and origin/feature/WF03-ISS0765-20260924 both resolve to c4ab9442b4bcd8c9475ba2a8a7fa8c5873b00998; git status -sb shows '## feature/WF03-ISS0765-20260924...origin/feature/WF03-ISS0765-20260924' with no ahead/behind marker, and git status --porcelain is empty. Nothing dangling locally. NOTE: this JSON file itself was amended with the real commit id in a follow-up commit, so the hash recorded here is the hash of the commit that introduced the four Step 4 deliverables, not of the tip.",
       "pushed_to": "origin/feature/WF03-ISS0765-20260924",
       "divergence_discipline": "git fetch was run at the start of this step; HEAD and origin/feature/WF03-ISS0765-20260924 both resolved to 4115494e with git status -sb showing no ahead/behind marker, so the prior run's dangling-commit hazard (docs/anti-patterns.md) was already clear on entry. The same check is re-run after the push and recorded below."
     },

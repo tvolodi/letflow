@@ -109,6 +109,17 @@ defmodule Mix.Tasks.Letflow.LintHandoffs do
   genuinely empty real `handoffs/` is a separate, pre-existing edge case,
   not a `--dir` misuse symptom.
 
+  `--dir` also accepts a **single regular file** in place of a directory
+  (ISS-0819) -- e.g. `mix letflow.lint_handoffs --dir
+  handoffs/<run_id>/step-04-agent.json`, so an agent can validate the one
+  handoff it just wrote before finishing its step, without waiting for the
+  full-corpus CI gate. Single-file mode runs every schema check exactly as
+  a directory scan would, except H5 (registry coverage), which is skipped
+  entirely -- it is a corpus-level, report-only check, not meaningful for
+  one file. The OK banner and H5 report section both name single-file mode
+  explicitly, so its output is never confused with a directory or
+  full-corpus result.
+
   ### `--autofix` (ISS-0440)
 
   Applies a closed, three-entry correction map to each file's top-level

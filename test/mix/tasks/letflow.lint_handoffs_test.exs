@@ -541,7 +541,8 @@ defmodule Mix.Tasks.Letflow.LintHandoffsTest do
       end
     end
 
-    test "F-NONEXISTENT-DIR-RAISES -- a --dir pointing at a directory that doesn't exist also raises" do
+    test "F-NONEXISTENT-DIR-RAISES -- a --dir pointing at a path that doesn't exist also raises, " <>
+           "naming the actual failure mode (ISS-0819)" do
       missing_dir =
         System.tmp_dir!()
         |> Path.join("letflow-iss0440-missing-#{System.unique_integer([:positive])}")
@@ -551,7 +552,10 @@ defmodule Mix.Tasks.Letflow.LintHandoffsTest do
       files = LintHandoffs.handoff_files(missing_dir)
       assert files == []
 
-      assert_raise Mix.Error, ~r/discovered 0 files/, fn ->
+      # ISS-0819 -- guard_empty_scope/2's reason-phrase precedence puts "does
+      # not exist" ahead of the generic "discovered 0 files" wording for any
+      # scan target (file or directory) that isn't on disk at all.
+      assert_raise Mix.Error, ~r/does not exist/, fn ->
         LintHandoffs.guard_empty_scope(missing_dir, files)
       end
     end

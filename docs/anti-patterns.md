@@ -3393,3 +3393,42 @@ artefacts — not simply the first to merge. Turn the other into a tombstone wit
 `status: duplicate` and `superseded_by:`, and **strip its `queue_ref`/`github_ref`** so
 exactly one record claims the task. Do not delete it: other files and handoffs cite the
 dead id by name, and a redirect beats a dangling reference.
+
+## Gathering a check's evidence under a narrower scope than the check itself runs in
+
+**Found:** 2026-09-24, during `WF03-ISS0816-20260925`'s Step 2b design gate.
+
+A design specified a new `forbidlist.ts` source-scan guard and claimed, in its evidence
+section, that the guard was "satisfiable with zero exemptions outside `__tests__`". The
+grep backing that claim had been filtered with `grep -v __tests__`. The guard's own
+`appliesTo` is `'source'`, and `source-scan.spec.ts` globs `src/**/*.{ts,tsx,css}` with
+no `__tests__` exclusion — so the evidence was gathered over a strictly smaller set than
+the thing it was evidence about, and the claim was false as written. Running the real
+guard produced two violations the design had not accounted for, one of them in a file
+the design never touched.
+
+The same design also required a docblock containing the very token its guard banned, so
+following both of its own sections literally would have failed its own test. **Both
+defects were one root cause**: the check was specified against an imagined scope rather
+than the scope the tooling actually uses.
+
+**Why this is easy to miss:** the filtered grep looks like ordinary hygiene — excluding
+test files from a survey of "real" code is a reasonable-sounding instinct, and in most
+contexts it is. It is wrong specifically when the survey is evidence *for a check whose
+own scope includes those files*. Nothing about the grep command looks suspicious in
+isolation; the error only exists relative to the guard's `appliesTo`. Note the same
+design had already reasoned correctly elsewhere that `src/**/__tests__` is inside tsc's
+scope — the knowledge was present and simply not carried across to the guard.
+
+**Correct alternative:** when the evidence for a claim is "this check will pass", gather
+it by **running the check**, not by approximating its scope with a grep. Where the check
+does not exist yet, reproduce its exact scope — same glob, same include/exclude set,
+same `appliesTo` — and say which you did. If a filter is applied to an evidence command,
+state why that filter matches the checked scope. This is an instance of
+`core-directives.md`'s "No speculation": a grep over a different file set is a prediction
+about the check's result, not a measurement of it.
+
+The rework that closed this is worth copying as the pattern: the fix was validated first
+against 20 hand-built strings (10 must-match covering every real code form, 10 must-not
+covering the actual prose in the tree), and only then by running the real guard over the
+real tree. Cheap discriminating cases first, then the genuine end-to-end run.

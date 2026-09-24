@@ -7,6 +7,16 @@ verified audit), spot-re-verified here (§2.1). `docs/issues/ISS-0816.yaml` is t
 its original central premise is false and is marked so inline.
 **Design only.** No implementation code. Type shapes and function signatures only.
 
+**Revision 2 (rework iteration 1, 2026-09-24T23:11Z).** CODE-DESIGN-VALIDATOR returned FAIL on
+gate artefact `handoffs/WF03-ISS0816-20260925/step-02b-design-gate.json` (commit `2da52436`). Two
+blockers, both about T7's guard regex, both closed by one change — see §7.1. The validator
+reproduced §8 items 2 and 3 to the character in its own worktree and upheld decision (c) as
+justified; decisions (a), (b), (d), (e) and the §2 route table were confirmed unchanged. Four
+non-blocking corrections were also applied: decision (c)'s justification now rests on INV-D rather
+than on write corruption (§3(c)); `@default_page_size` is at `pagination.ex:51`, not `:53`; the
+drain's behaviour at exactly the cap is now specified (§6.1); and §10's formerly unfiled row is
+**ISS-0823**. A previously unstated consequence of §6.1 was also found and is now §6.3 and T9.
+
 ---
 
 ## 1. The refuted premise, stated first
@@ -132,7 +142,7 @@ side and its docblock change.
 
 `groupsApi.members(id)` accepts no `cursor` and no `page_size`; `GroupsPage.tsx:54-56` calls it
 once, `:60` reads `membersPage?.items ?? []`, and `next_cursor` appears nowhere in the file. The
-backend default page size is **50** — `lib/letflow/api/pagination.ex:53 @default_page_size 50`,
+backend default page size is **50** — `lib/letflow/api/pagination.ex:51 @default_page_size 50`,
 reached via `identity.ex:546-548` → `parse_page_size_param(nil)` → `validate_page_size(nil)`.
 
 A truncation notice alone is **rejected**, on a finding this step made that raises AC3 above
@@ -140,12 +150,22 @@ cosmetic display truncation:
 
 > `GroupsPage.tsx:103-110` computes `availableUsers` by subtracting the member id set from the
 > user list. If `members` stops at 50, every member from the 51st on is **absent from that set**,
-> so they are offered in the "Add member" dropdown (`:203-206`) and the add mutation fires for a
-> user who is already in the group.
+> so they are offered in the "Add member" dropdown (`:203-206`) as if they were not members.
 
-That is a wrong write path, not a wrong display. A notice telling the operator the list is
-truncated does not stop the dropdown offering a duplicate. The page must hold the complete member
-set, so the cursor must be followed.
+The dropdown is a **different control from the member list**, and it is *derived* from the
+truncated set rather than merely displaying it. That is what a truncation notice cannot repair: a
+notice placed over the member list tells the operator that list is incomplete, while the dropdown
+beside it silently presents the missing members as addable. The page must therefore hold the
+complete member set, and the cursor must be followed. This is INV-D (§9).
+
+**Deliberately *not* claimed: state corruption.** `GroupMemberAddResult` carries
+`created: boolean` (`web/src/types/api.ts:498-502`, `member_result_map/3` at
+`lib/letflow/routers/identity.ex:829-831`), so the backend add is idempotent — re-adding an
+existing member returns `created: false` and changes nothing. An earlier revision of this design
+called the defect "a wrong write path, not a wrong display"; that framing is stronger than the
+evidence supports and is withdrawn. The conclusion is unchanged, because it never depended on
+corruption: a set difference computed from a truncated set is simply wrong, and it misleads the
+operator at a control the notice does not cover.
 
 `.members` is `GroupMemberPage`, not `CursorPage<T>`, so AC3 is independent of §4's type change
 and could in principle be deferred. It is **kept in this run's scope** because ISS-0816's own AC3
@@ -208,6 +228,14 @@ Required docblock content (prose; exact wording at FRONTEND-DEV's discretion):
 - On `CountedCursorPage<T>`: the exact three-key envelope; the seven routes of §2.2; and — carried
   over from `tenants.ts:25`, where it is currently stated for one route only — that `count` is
   `length(items)` **for the current page only, never a cross-page total**.
+
+**This prose is compatible with T7's guard, by construction.** T7 (§7.1) matches only the *code*
+forms of the token — an object-literal or type-member key, a property access, or a string-literal
+key — precisely so that a docblock may name the field in order to say it does not exist. The
+authoring rule that keeps it that way: **in prose, write the token inside backticks and never
+immediately followed by a colon.** `` no Letflow route emits `has_more` `` is clean;
+`has_more: never emitted` would be caught, because it is indistinguishable from a key. Verified by
+measurement — §8 item 9.
 
 Aliases, exported names retained so no call site changes:
 
@@ -322,9 +350,16 @@ listAllMembers: (
     largest value the server accepts, so the fewest round trips).
   - Feeds each response's `next_cursor` into the next request's `cursor`.
   - Stops when `next_cursor` is `null`, concatenating every page's `items` in request order.
-  - Stops early after **20 requests** (a 4 000-member ceiling) and returns `truncated: true`.
-    `truncated` is `false` on every normal termination. The cap exists so a malformed or
-    non-advancing cursor cannot spin the browser; it is a safety bound, not the expected path.
+  - Never issues more than **20 requests** (a 4 000-member ceiling). The cap exists so a malformed
+    or non-advancing cursor cannot spin the browser; it is a safety bound, not the expected path.
+  - **`truncated` at exactly the cap.** `truncated` reports *whether members were left unfetched*,
+    not whether the cap was reached. So after the 20th response: if its `next_cursor` is `null`,
+    the drain terminated normally on its last permitted request and `truncated` is **`false`** —
+    a group of exactly 4 000 members is complete, not truncated. `truncated` is **`true`** only
+    when the 20th response's `next_cursor` is non-null, i.e. the server had more to give and the
+    cap stopped the drain asking. A 21st request is never issued in either case. On every
+    termination before the cap, `truncated` is `false`. T5 asserts the `true` branch; T5b asserts
+    the boundary case.
   - Rejects on the first failed request, so `useQuery`'s existing error handling is unchanged.
 
 `GroupMember` must be imported into `identity.ts` if it is not already.
@@ -345,15 +380,40 @@ pattern is introduced.
 `usersApi.list({ page_size: 200 })` and never follows that response's `next_cursor` either. A
 tenant with more than 200 users gets an "Add member" dropdown missing everyone past the 200th.
 That is the same class as AC3 but a different query, a different endpoint, and outside ISS-0816's
-stated scope. Per `core-directives.md` "No Issue Left Local-Only", it is reported in this step's
-handoff `result.issues` for ORCH to allocate an id; it is not filed or fixed by this step.
+stated scope. It has since been filed as **ISS-0823** (queue task 823, GH #1814, commit
+`ea1a43a4`); it is not fixed by this run.
+
+### 6.3 `web/src/api/__tests__/identity.groupsApi.test.ts` — two ISS-0765 tests must be extended
+
+Adding `listAllMembers` to `groupsApi` is a **seventh** key on that object, and ISS-0765 left two
+assertions that pin the surface at six. Both are read directly from the file, not inferred:
+
+- `:229` **T-0765-SURFACE** asserts
+  `expect(Object.keys(groupsApi).sort()).toEqual(['addMember','create','delete','list','members','removeMembers'])`
+  — an exact-equality assertion, so a seventh key fails it. `'listAllMembers'` is inserted in sort
+  order, between `'list'` and `'members'`.
+- `:251-258` **T-0765-NO-ADMIN-PREFIX** drives an `it.each` over a hand-maintained `surfaceRows`
+  array whose own comment states it "must enumerate EVERY surviving function, so that adding a
+  seventh one with a bad prefix is caught without anyone remembering to write a bespoke row for
+  it." Honouring that intent requires a row
+  `['listAllMembers', () => groupsApi.listAllMembers('g-1')]`. The existing spy returns a page
+  whose `next_cursor` is `null`, so the drain terminates after one request and the row's URL
+  assertions apply unchanged.
+
+Neither is a defect; both are ISS-0765's guards working as designed. They are named here so
+FRONTEND-DEV does not meet them as a surprise mid-build — this is T9.
+
+`:63` of the same file carries the prose comment ``No `has_more` — Pagination.Page never emits
+one.`` It is **truthful, in scope for T7's glob, and deliberately left untouched.** It is the
+concrete case that proved T7's original bare-token regex wrong; see §7.1.
 
 ---
 
 ## 7. Test matrix
 
-Every row is runnable under `web/`. T1-T3 are the gate for AC4; T4-T6 cover AC3; T7-T8 close the
-recurrence class that let this defect survive five written sightings.
+Every row is runnable under `web/`. T1-T3 are the gate for AC4; T4, T5, T5b and T6 cover AC3's new
+behaviour and T9 keeps ISS-0765's surface guards green alongside it; T7-T8 close the recurrence
+class that let this defect survive five written sightings.
 
 | ID | AC | What it proves | How | Location |
 |---|---|---|---|---|
@@ -363,15 +423,78 @@ recurrence class that let this defect survive five written sightings.
 | **T4** | AC3 | `listAllMembers` concatenates across pages and forwards the cursor | Unit test: stub `client.get` to return page 1 `{items:[m1], next_cursor:'c2', count:1}` then page 2 `{items:[m2], next_cursor:null, count:1}`; assert the result is `{items:[m1,m2], truncated:false}` and that the second request carried `cursor: 'c2'` | new `web/src/api/__tests__/identity.members.test.ts` |
 | **T5** | AC3 | The drain's bound holds and reports itself | Unit test: stub `client.get` to always return a non-null `next_cursor`; assert exactly 20 requests are made and the result is `truncated: true` | same file as T4 |
 | **T6** | AC3 | The re-add bug is gone — a second-page member is excluded from the dropdown | Component test on `GroupsPage`: mock `groupsApi.listAllMembers` to resolve a member set spanning two pages including user `u-51`, mock `usersApi.list` to include `u-51`; assert `u-51` is **not** rendered as an `<option>` in the "Add member" select | new `web/src/pages/admin/__tests__/GroupsPage.members.test.tsx` |
-| **T7** | AC2, AC4 | `has_more` cannot reappear in production source | New `PATTERNS` entry in `web/tests/guards/forbidlist.ts`: `name: 'has-more-wire-field'`, a regex matching the bare token `has_more` on word boundaries, `appliesTo: 'source'`, `rationale: 'ISS-0816'`, `allowedPaths: ['web/src/pages/promotions/__tests__/PromotionReviewListPage.test.tsx', 'web/src/pages/tasks/__tests__/TaskInboxPage.test.tsx']` — the two ISS-0821 fixtures, with an inline comment saying the exemptions are removed when ISS-0821 lands | `web/tests/guards/forbidlist.ts` |
-| **T8** | AC2 | T7's pattern is itself two-sided, per GRD-UI-04 | `web/tests/guards/meta-control.spec.ts` iterates every `PATTERNS` entry and requires both fixtures, so T7 requires `fixtures/offender/has-more-wire-field.txt` (contains `has_more`) and `fixtures/bystander/has-more-wire-field.txt` (contains `next_cursor` and the camelCase `hasMore` prop, and must **not** match) | `web/tests/guards/fixtures/{offender,bystander}/has-more-wire-field.txt` |
+| **T5b** | AC3 | The cap boundary reports honestly | Unit test: stub `client.get` so the 20th response has `next_cursor: null`; assert exactly 20 requests and `truncated: false` — reaching the cap is not by itself truncation (§6.1) | same file as T4 |
+| **T7** | AC2, AC4 | `has_more` cannot reappear **as a field** in production source, while prose naming it stays legal | New `PATTERNS` entry in `web/tests/guards/forbidlist.ts` — full spec in §7.1 | `web/tests/guards/forbidlist.ts` |
+| **T8** | AC2 | T7's pattern is itself two-sided, per GRD-UI-04 | `web/tests/guards/meta-control.spec.ts` iterates every `PATTERNS` entry and requires both fixtures — full spec in §7.1 | `web/tests/guards/fixtures/{offender,bystander}/has-more-wire-field.txt` |
+| **T9** | AC3 | ISS-0765's surface guards still pass with a seventh `groupsApi` function | Extend `identity.groupsApi.test.ts:229`'s exact-equality key list with `'listAllMembers'` (sort order: between `'list'` and `'members'`) and add a `surfaceRows` entry at `:251-258`, per §6.3 | `web/src/api/__tests__/identity.groupsApi.test.ts` |
 
-**T8's bystander is load-bearing.** `web/src/components/instances/TimelineFeed.tsx:7/15/37` has a
-camelCase `hasMore: boolean` prop, passed from `InstanceDetailPage.tsx:369` as
-`hasMore={Boolean(timelineQuery.data?.next_cursor)}`. It is a component prop derived from
-`next_cursor`, entirely unrelated to `CursorPage<T>.has_more`. **It must not be touched, and T7's
-regex must not match it** — hence the word-boundary form and a bystander fixture that contains
-`hasMore` explicitly.
+### 7.1 T7 — the guard pattern, corrected (rework iteration 1)
+
+**What was wrong.** Revision 1 specified T7 as a **bare-token** match on `has_more`. That produced
+two defects the gate caught, both real:
+
+1. **It contradicted §4.** §4 requires the `CursorPage<T>` docblock in `web/src/types/api.ts` to
+   state that no route emits `has_more`. A bare-token guard forbids writing that sentence.
+   FRONTEND-DEV following both sections literally would write the docblock and then fail
+   `npm run guards`.
+2. **Its exemption list was incomplete.** `web/src/api/__tests__/identity.groupsApi.test.ts:63`
+   carries the truthful prose comment ``No `has_more` — Pagination.Page never emits one.`` It is
+   inside `source-scan.spec.ts`'s glob (`web/src/**/*.{ts,tsx,css}` — there is **no** `__tests__`
+   exclusion), it is never edited by §5, and it was not exempted. §8 item 8 missed it because that
+   grep was filtered with `grep -v __tests__` while T7 is `appliesTo: 'source'`; §5.6 had already
+   reasoned correctly that `src/**/__tests__` is inside tsc's scope but did not carry the same
+   reasoning across to the guard.
+
+**The correction: match the code form, not the token.** One change closes both, because both
+defects are the same mistake — banning a *word* when the invariant is about a *field*.
+
+```
+name:        'has-more-wire-field'
+regex:       /\.has_more\b|\bhas_more\s*\??\s*:|["']has_more["']/
+appliesTo:   'source'
+rationale:   'ISS-0816'
+allowedPaths: [
+  'web/src/pages/promotions/__tests__/PromotionReviewListPage.test.tsx',
+  'web/src/pages/tasks/__tests__/TaskInboxPage.test.tsx',
+]
+```
+
+Three alternatives, one per way the field can actually be written in TypeScript: a property access
+(`response.has_more`), an object-literal or type-member key (`has_more: false`, `has_more: boolean`,
+`has_more?: boolean`), and a string-literal key (`page['has_more']`, `"has_more"`). Prose is
+unaffected because a comment names the field inside backticks, and a closing backtick is neither
+whitespace nor a colon.
+
+**Final exemption set: exactly the two ISS-0821 files above, unchanged from revision 1.** Both
+still fabricate `has_more: false`, which is a code form, so both still need exempting. `api.ts` and
+`identity.groupsApi.test.ts` need **no** exemption under the narrowed regex — that is the whole
+point of the narrowing. The `allowedPaths` entry carries an inline comment saying the two
+exemptions are deleted when ISS-0821 lands.
+
+**The cost of narrowing, stated rather than hidden.** A bare `has_more` in prose *outside*
+backticks and not followed by a colon — for instance "the internal has_more never reaches HTTP" —
+is no longer caught. That is accepted: it is prose, it cannot make a request or type a response,
+and the invariant T7 defends (INV-A) is about declared and accessed fields. A guard that also
+policed prose is what created BLOCKER-1.
+
+**T8's two fixtures**, required by GRD-UI-04 (`meta-control.spec.ts` demands an offender and a
+bystander for every `PATTERNS` entry, and asserts the regex matches the first and not the second):
+
+- `fixtures/offender/has-more-wire-field.txt` — must contain both code forms that occur in the
+  real defect: an object-literal key (`has_more: false`) and a property access (`page.has_more`).
+- `fixtures/bystander/has-more-wire-field.txt` — must contain **all three** things the guard must
+  never catch: the prose form inside backticks, a clean `{ items, next_cursor, count }` literal,
+  and `TimelineFeed`'s camelCase `hasMore` prop both as a type member and as a JSX attribute.
+
+**The bystander's `hasMore` content is load-bearing.**
+`web/src/components/instances/TimelineFeed.tsx:7/15/37` has a camelCase `hasMore: boolean` prop,
+passed from `InstanceDetailPage.tsx:369` as
+`hasMore={Boolean(timelineQuery.data?.next_cursor)}`. It is derived from `next_cursor` and is
+entirely unrelated to `CursorPage<T>.has_more`. **It must not be touched, and T7's regex must not
+match it.** The bystander fixture is the mechanical, permanent guarantee of that — not a comment
+asking the next agent to be careful.
+
+Measured green end to end — §8 items 9, 10 and 11.
 
 **No backend test changes.** Nothing in `lib/` changes under this design; §2.1 is verification of
 existing behaviour, not a change to it.
@@ -397,34 +520,69 @@ probe is committed. Results, on `feature/WF03-ISS0816-20260925` @ `e512c53a`:
    `EntityRecordsPage` and `GroupMemberPage` aliases; both fabrications deleted; the three DlqPage
    fixture keys removed) → `tsc -b --force` exit **0**, zero errors.
 5. **`npm run test` with that shape applied** → **125 test files, 890 tests, all passed**, 27.70 s.
-6. **`npm run guards` with that shape applied** → **4 files, 48 tests, all passed**.
+6. **`npm run guards` with that shape applied** → **4 files, 48 tests, all passed** (this is the
+   pre-T7 baseline; with T7 and its two fixtures added the count becomes 52 — item 10).
 7. **Collapsing `TenantListResponse` into `CountedCursorPage<Tenant>` also type-checks clean** — so
    decision (b)'s "leave it alone" is a scope choice, not a technical constraint. Stated explicitly
    so the next reader knows it was tried, not merely skipped.
-8. **`grep -rn has_more web/src --include=*.ts --include=*.tsx | grep -v __tests__` with the shape
-   applied** returned only three stale comments (`promotions.ts:249`, `api.ts:376`, `api.ts:478`),
-   all three of which §5 requires rewriting — so T7's guard is satisfiable with zero exemptions
-   outside `__tests__`.
+8. ~~**`grep -rn has_more web/src … | grep -v __tests__`** returned only three stale comments, so
+   T7's guard is satisfiable with zero exemptions outside `__tests__`.~~ **WITHDRAWN — this claim
+   was false, and the gate proved it.** The `grep -v __tests__` filter was the error: it excluded
+   files that T7, being `appliesTo: 'source'`, does scan, because `source-scan.spec.ts`'s glob is
+   `web/src/**/*.{ts,tsx,css}` with no `__tests__` exclusion. The unfiltered grep over `web/src`
+   returns **fourteen** occurrences across eight files. With §5's edits applied, the ones that
+   survive are: the new `api.ts` docblock prose (required by §4), `identity.groupsApi.test.ts:63`'s
+   truthful prose comment, and the four ISS-0821 fixture literals in two files. Under revision 1's
+   bare-token regex the validator measured **two** source-scan violations —
+   `web/src/types/api.ts:14` and `web/src/api/__tests__/identity.groupsApi.test.ts:63`. Under the
+   narrowed regex of §7.1, both are clean and the correct exemption set is the two ISS-0821 files
+   only — item 10.
 
-The probe did **not** include §6 (the GroupsPage drain), which is new behaviour rather than a
-retype; T4-T6 are its evidence and FRONTEND-DEV must produce them.
+**Rework iteration 1 added the following measurements.** The probe was re-applied with §4's real
+docblock prose, §5's full edit set, §7.1's narrowed `PATTERNS` entry and T8's two fixtures, then
+reverted (`git checkout -- web/`, `git clean -fd web/tests/guards/fixtures`; tree confirmed clean).
+
+9. **The narrowed regex was checked against 20 hand-built strings before being wired in** — 10 that
+   must match and 10 that must not. All 20 behaved correctly. The must-match set covers
+   `has_more: boolean`, `has_more?: boolean`, `has_more: Boolean(...)`, three real fixture
+   literals, `response.has_more`, `page['has_more']`, `if (page.has_more)` and `"has_more" =>`.
+   The must-not set covers all four real prose comments in the tree, the two docblock sentences
+   §4 requires, a backtick-then-colon prose form, and three `hasMore` forms from `TimelineFeed`.
+10. **`npm run guards` with the narrowed T7, its fixtures and §5 applied → 4 files, 52 tests, all
+    passed** (up from 48; the 4 new ones are T8's fixture assertions). `source-scan` reported
+    **zero** violations with `api.ts` carrying §4's required `has_more` prose and
+    `identity.groupsApi.test.ts:63` untouched and unexempted. This is the direct proof that
+    BLOCKER-1 and BLOCKER-2 are both closed by the single narrowing.
+11. **`tsc -b --force` → exit 0 and `npm run test` → 125 files / 890 tests passed** on that same
+    probe, which also carried the fuller `promotions.ts` restructure of §5.4 (the whole `.then`
+    and its inline anonymous response type removed, not just the `has_more` key).
+
+The probe did **not** include §6 (the GroupsPage drain and the `groupsApi` surface), which is new
+behaviour rather than a retype; T4, T5, T5b, T6 and T9 are its evidence and FRONTEND-DEV must
+produce them. §6.3's two assertions are read verbatim from
+`web/src/api/__tests__/identity.groupsApi.test.ts` at `:229` and `:251-258` rather than measured,
+and are stated as such.
 
 ---
 
 ## 9. Invariants
 
-- **INV-A.** No frontend type may declare a field that no `lib/letflow/routers/*.ex` response
-  builder emits. This is the invariant ISS-0816 violated; T7 enforces the `has_more` instance of
-  it. The general mechanism remains missing and is ISS-0813 (MAJOR, open) — this design does not
-  close it and does not claim to.
+- **INV-A.** No frontend type may declare, and no frontend code may read, a field that no
+  `lib/letflow/routers/*.ex` response builder emits. This is the invariant ISS-0816 violated; T7
+  enforces the `has_more` instance of it, and §7.1's narrowing is what keeps T7 aimed at declared
+  and accessed fields rather than at prose that merely names one. The general mechanism remains
+  missing and is ISS-0813 (MAJOR, open) — this design does not close it and does not claim to.
 - **INV-B.** `count` is `length(items)` for the current page. It is never a cross-page total and
   must never be rendered as one — that is exactly what ISS-0711 was. `CountedCursorPage<T>`'s
   docblock carries this.
 - **INV-C.** Next-page availability is derived from `next_cursor !== null` at the point of use.
   No API-layer function may return a pre-derived boolean for it.
-- **INV-D.** A list dialog that computes a set difference against a fetched collection (such as
-  `GroupsPage.availableUsers`) must hold the **complete** collection, not one page of it. A
-  truncation notice does not satisfy this — decision (c).
+- **INV-D.** A control that is *derived* from a fetched collection — a set difference, a count, an
+  availability check, such as `GroupsPage.availableUsers` — must be derived from the **complete**
+  collection, not from one page of it. A truncation notice does not satisfy this: the notice sits
+  on the list, while the wrong value is presented at a different control the notice says nothing
+  about. This is the whole of decision (c)'s justification; it does not depend on any claim about
+  corrupted writes, and the backend add is in fact idempotent (`GroupMemberAddResult.created`).
 - **INV-E (INV-2, backend, unchanged).** Response bodies stay hand-built allowlists. Nothing in
   this design touches `lib/`.
 
@@ -439,7 +597,7 @@ retype; T4-T6 are its evidence and FRONTEND-DEV must produce them.
 | **ISS-0822** | `Letflow.Routers.ProcessModules` does not exist; `modulesApi.list`/`listShares` call routes with no server |
 | **ISS-0813** | No mechanism couples `web/src/types/api.ts` to real router response bodies |
 | ISS-0811, ISS-0812, ISS-0814, ISS-0815 | Same symptom class, separate endpoints |
-| *(unfiled)* | `GroupsPage.tsx:62-66` `usersApi.list({page_size: 200})` never follows `next_cursor` — §6.2. Reported to ORCH in this step's handoff for id allocation |
+| **ISS-0823** | `GroupsPage.tsx:62-66` `usersApi.list({page_size: 200})` never follows `next_cursor`, so the Add-member dropdown omits everyone past the 200th user — §6.2. Found by this step, filed mid-gate (queue task 823, GH #1814, commit `ea1a43a4`). Same INV-D class as decision (c), different query and endpoint |
 
 ---
 
@@ -454,7 +612,9 @@ not a defect. Recorded rather than silently decided.
 **OQ-2 — the drain's 20-request cap.** 20 × 200 = 4 000 members is chosen as a safety bound, not
 derived from any measured group size; no requirement states a maximum group size. If a real
 deployment exceeds it, the dialog degrades to a truncation notice rather than failing. If a
-maximum group size is ever specified, this constant should be re-derived from it.
+maximum group size is ever specified, this constant should be re-derived from it. The *behaviour*
+at the cap is not an open question — §6.1 specifies it exactly, including the boundary case where
+the 20th response is the last one, and T5b tests it.
 
 **OQ-3 — should the two-key/three-key split be generated rather than hand-maintained?** §2.2's
 table is correct today and will drift the moment a router changes its response builder. Closing
@@ -469,8 +629,8 @@ guarantee.
 |---|---|---|
 | **AC1** — every `CursorPage<T>` call site audited and mapped to the route it consumes, recording whether that route emits `has_more` | §2.1, §2.2, §5.2, §5.3 | 15 sites carried forward from ISSUE-FIXER's table; all 11 response builders re-read and confirmed here; per-site before/after given at file:line |
 | **AC2** — the type or types corrected so no call site is promised a `has_more` the route never sends | §3(a), §4, §5.1-§5.6 | `has_more` deleted from `CursorPage<T>`; `CountedCursorPage<T>` added; 13 sites retyped; both fabrications removed; measured exit-0 in §8 item 4 |
-| **AC3** — the GroupsPage members dialog either follows `next_cursor` or explicitly states the list is truncated | §3(c), §6 | `groupsApi.members/2` gains `cursor`/`page_size`; `groupsApi.listAllMembers/1` drains; GroupsPage consumes the drain; explicit truncation notice on the bounded-cap path; T4-T6 |
-| **AC4** — `npm run type-check` passes and the route-to-shape mapping is recorded so a later reader need not re-derive it | §2.2, §4, §7 T1, §8 | Mapping recorded as a table in this document **and** in the `CursorPage<T>`/`CountedCursorPage<T>` docblocks required by §4; `tsc -b` measured exit 0 in §8 item 4 |
+| **AC3** — the GroupsPage members dialog either follows `next_cursor` or explicitly states the list is truncated | §3(c), §6, §6.3 | `groupsApi.members/2` gains `cursor`/`page_size`; `groupsApi.listAllMembers/1` drains; GroupsPage consumes the drain; explicit truncation notice on the bounded-cap path, with the boundary case specified in §6.1; T4, T5, T5b, T6, T9 |
+| **AC4** — `npm run type-check` passes and the route-to-shape mapping is recorded so a later reader need not re-derive it | §2.2, §4, §7 T1, §7.1, §8 | Mapping recorded as a table in this document **and** in the `CursorPage<T>`/`CountedCursorPage<T>` docblocks required by §4 — which §7.1's narrowed guard is specifically shaped to permit; `tsc -b` measured exit 0 in §8 items 4 and 11 |
 
 No element of this design is TBD. Every open question in §11 is a question this fix deliberately
 does *not* resolve, with the reason stated — none of them blocks implementation.

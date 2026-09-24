@@ -1,0 +1,158 @@
+{
+  "run_id": "WF03-BATCH-ISS0809-ISS0811-ISS0814-ISS0815-20260925",
+  "step": "04-test-designer",
+  "agent": "TEST-DESIGNER",
+  "timestamp": "2026-09-25T04:45:00Z",
+  "workflow": "WF-03",
+  "issues": ["ISS-0815", "ISS-0814", "ISS-0811", "ISS-0809"],
+  "spec_file": "test/specs/ISS-0815-0814-0811-0809.md",
+
+  "baseline": {
+    "command": "cd web && npx vitest run src/types/__tests__/user-wire-shape.test.ts src/pages/admin/__tests__/GroupsPage.iss0811.test.tsx src/components/instances/__tests__/CancelInstanceDialog.iss0809.test.tsx",
+    "result": "12 passed (3 files)",
+    "exit_code": 0
+  },
+
+  "mutation_table": [
+    {
+      "issue": "ISS-0815",
+      "description": "User.roles made required (remove `?`)",
+      "mutant_file": "web/src/types/api.ts",
+      "mutant_change": "roles?: string[]  →  roles: string[]  (in User interface, legacy optional block)",
+      "target_tests": [
+        "web/src/types/__tests__/user-wire-shape.test.ts :: TC-ISS0815-03"
+      ],
+      "vitest_result": {
+        "summary": "6 passed — vitest does NOT detect the mutation",
+        "explanation": "Vitest transpiles TypeScript without type-checking. The compile-time guard (const _userWithoutRoles: User = { ... }) is not enforced at runtime. TC-ISS0815-03's hasOwnProperty assertion still passes because the object was constructed without roles regardless of the type annotation.",
+        "exit_code": 0
+      },
+      "tsc_result": {
+        "command": "cd web && npm run type-check",
+        "errors": [
+          "src/types/__tests__/user-wire-shape.test.ts(26,7): error TS2741: Property 'roles' is missing in type '{ id: string; ... }' but required in type 'User'.",
+          "src/types/__tests__/user-wire-shape.test.ts(39,7): error TS2741: Property 'roles' is missing in type '{ id: string; ... }' but required in type 'User'."
+        ],
+        "exit_code": 2,
+        "verdict": "CAUGHT — tsc fails with 2 errors on the test file's compile-time assignments (userMapPayload at line 26, _userWithoutRoles at line 39)"
+      },
+      "primary_guard": "compile-time (tsc), NOT vitest runtime",
+      "revert": "git checkout -- web/src/types/api.ts",
+      "git_status_after_revert": "(empty — verified clean)",
+      "post_revert_tests": "12 passed"
+    },
+    {
+      "issue": "ISS-0814",
+      "description": "User.status widened from 'active' | 'inactive' to string",
+      "mutant_file": "web/src/types/api.ts",
+      "mutant_change": "status: 'active' | 'inactive'  →  status: string  (in User interface)",
+      "target_tests": [
+        "web/src/types/__tests__/user-wire-shape.test.ts :: TC-ISS0814-01"
+      ],
+      "vitest_result": {
+        "summary": "6 passed — TC-ISS0814-01 STILL PASSES",
+        "explanation": "Value-domain mutation. The narrowing type is removed, but the runtime values ('active', 'inactive') are still valid strings. TC-ISS0814-01's assertions (expect(userMapPayload.status).toBe('active'), expect(_userWithoutRoles.status).toBe('inactive')) hold because the test fixtures hardcode correct lowercase values. The compile-time assignments (const _active: User['status'] = 'active') also compile fine because 'active' is a valid string.",
+        "exit_code": 0
+      },
+      "tsc_result": {
+        "command": "cd web && npx tsc --noEmit --skipLibCheck",
+        "errors": [],
+        "exit_code": 0,
+        "verdict": "NOT CAUGHT by tsc either — widening string → 'active' | 'inactive' creates no assignment errors on the test fixtures"
+      },
+      "coverage_gap": {
+        "description": "No vitest test currently catches a reversion of User.status to `string`. The type narrowing only protects callers that assign something other than 'active'/'inactive' — not the wire-shape tests, which always supply the correct values.",
+        "alternative_mutant_investigated": {
+          "file": "web/src/pages/admin/UsersPage.tsx",
+          "change": "u.status === 'active'  →  u.status === 'ACTIVE' (lines 88-89)",
+          "target_tests": "None — no UsersPage vitest test exists that covers the status column rendering",
+          "verdict": "GAP CONFIRMED: no direct vitest currently catches the casing reversion on UsersPage status column. The only compile-time guard is the User type narrowing itself ('active' | 'inactive'), which is invisible to vitest. A future UsersPage integration test should assert the status badge renders 'ACTIVE' (uppercase display label) when u.status === 'active' (lowercase wire value), confirming the comparison is lowercase-to-lowercase."
+        }
+      },
+      "revert": "git checkout -- web/src/types/api.ts",
+      "git_status_after_revert": "(empty — verified clean)",
+      "post_revert_tests": "12 passed"
+    },
+    {
+      "issue": "ISS-0811",
+      "description": "Members column re-added to GroupsPage columns array",
+      "mutant_file": "web/src/pages/admin/GroupsPage.tsx",
+      "mutant_change": "Added `{ id: 'members', header: 'Members', accessor: (g) => g.member_count ?? 0 }` after the display_name column",
+      "target_tests": [
+        "web/src/pages/admin/__tests__/GroupsPage.iss0811.test.tsx :: TC-ISS0811-01"
+      ],
+      "vitest_result": {
+        "summary": "1 failed (TC-ISS0811-01) | 2 passed",
+        "failing_test": "TC-ISS0811-01: the groups table has no Members column",
+        "failure_detail": "expect(element).not.toBeInTheDocument() — found <th data-testid='datatable-header-members'>Members</th> in the DOM. The queryByRole('columnheader', { name: /members/i }) returned a non-null element, violating the .not.toBeInTheDocument() assertion.",
+        "exit_code": 1,
+        "verdict": "CAUGHT — TC-ISS0811-01 fails exactly as expected"
+      },
+      "revert": "git checkout -- web/src/pages/admin/GroupsPage.tsx",
+      "git_status_after_revert": "(empty — verified clean)",
+      "post_revert_tests": "12 passed"
+    },
+    {
+      "issue": "ISS-0809",
+      "description": "InstanceDetailPage instanceName prop reverted to use instance.definition_name/version instead of definition?.name/version",
+      "mutant_file": "web/src/pages/instances/InstanceDetailPage.tsx",
+      "mutant_change": "instanceName={definition ? `${definition.name} v${definition.version}` : '—'}  →  instanceName={`${instance.definition_name} v${instance.definition_version}`}",
+      "target_tests": [
+        "web/src/components/instances/__tests__/CancelInstanceDialog.iss0809.test.tsx :: TC-ISS0809-01",
+        "web/src/components/instances/__tests__/CancelInstanceDialog.iss0809.test.tsx :: TC-ISS0809-02",
+        "web/src/components/instances/__tests__/CancelInstanceDialog.iss0809.test.tsx :: TC-ISS0809-03"
+      ],
+      "vitest_result": {
+        "summary": "3 passed — ALL tests STILL PASS despite the mutant",
+        "explanation": "The CancelInstanceDialog tests operate at component isolation level. They pass instanceName as a literal prop directly to CancelInstanceDialog (e.g. 'hire-process v1.0' or '—'). They never mount InstanceDetailPage. Therefore, the mutation in InstanceDetailPage's prop-building expression is completely invisible to these tests — the tests never exercise the `${instance.definition_name} v${instance.definition_version}` code path.",
+        "exit_code": 0,
+        "verdict": "NOT CAUGHT at component-isolation level"
+      },
+      "integration_gap": {
+        "description": "The mutant produces 'undefined v undefined' when ProcessInstance.definition_name and definition_version are absent (which is the normal case — GET /api/v1/instances/:id does not emit these fields). This regression is NOT detectable by CancelInstanceDialog component-isolation tests.",
+        "what_would_catch_it": "An integration test that: (1) mounts InstanceDetailPage with a mocked instance that lacks definition_name/definition_version, (2) mocks useDefinition to return null/undefined to simulate a loading state, (3) opens the cancel dialog via a button click, (4) asserts the dialog does not contain 'undefined'. Such a test would fail against the mutant (TC-ISS0809-02's not.toContain('undefined') assertion) and pass against the fix.",
+        "tc_iss0809_02_behavior": "TC-ISS0809-02 asserts `screen.queryByText(/undefined/).not.toBeInTheDocument()` on a dialog rendered with instanceName='—'. Against the mutant (which produces 'undefined v undefined' in InstanceDetailPage), TC-ISS0809-02 would FAIL if the test went through InstanceDetailPage. Because it doesn't, TC-ISS0809-02 only validates that CancelInstanceDialog itself doesn't inject 'undefined' when given a placeholder '—' — which is a weaker but still valid safety check."
+      },
+      "revert": "git checkout -- web/src/pages/instances/InstanceDetailPage.tsx",
+      "git_status_after_revert": "(empty — verified clean)",
+      "post_revert_tests": "12 passed"
+    }
+  ],
+
+  "final_verification": {
+    "command": "cd web && npx vitest run src/types/__tests__/user-wire-shape.test.ts src/pages/admin/__tests__/GroupsPage.iss0811.test.tsx src/components/instances/__tests__/CancelInstanceDialog.iss0809.test.tsx",
+    "result": "12 passed (3 files)",
+    "exit_code": 0,
+    "git_status": "(empty — all mutants reverted, working tree clean)"
+  },
+
+  "summary": {
+    "ISS-0815": {
+      "caught_by": "tsc (TS2741 on both test-file compile-time assignments)",
+      "NOT_caught_by": "vitest runtime",
+      "verdict": "PASS — compile-time guard in test file is the primary protection"
+    },
+    "ISS-0814": {
+      "caught_by": "neither vitest nor tsc for the primary (type-widening) mutant",
+      "verdict": "DOCUMENTED GAP — value-domain mutation is not detected by existing tests; the only protection is the type narrowing itself, which vitest bypasses. No UsersPage integration test covers the status column casing logic."
+    },
+    "ISS-0811": {
+      "caught_by": "vitest (TC-ISS0811-01 fails: Members column header found in DOM)",
+      "failing_test": "TC-ISS0811-01",
+      "verdict": "PASS — test correctly fails against the pre-fix code shape"
+    },
+    "ISS-0809": {
+      "caught_by": "neither vitest nor tsc for the InstanceDetailPage-level mutant",
+      "verdict": "DOCUMENTED GAP — CancelInstanceDialog component-isolation tests cannot detect a reversion in InstanceDetailPage's prop expression. An InstanceDetailPage integration test is needed to fully protect this fix."
+    }
+  },
+
+  "next_action": "Route to TEST-DESIGN-VALIDATOR (Step 4b)",
+  "result": {
+    "status": "PASS",
+    "artifacts_out": [
+      "handoffs/WF03-BATCH-ISS0809-ISS0811-ISS0814-ISS0815-20260925/step-04-test-designer.json",
+      "test/specs/ISS-0815-0814-0811-0809.md"
+    ]
+  }
+}

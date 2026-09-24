@@ -1,0 +1,31 @@
+{
+  "handoff_id": "WF03-ISS0788-20260924-step-02b",
+  "run_id": "WF03-ISS0788-20260924",
+  "workflow": "WF-03",
+  "step": "Step 2b (Design Gate)",
+  "to_agent": "CODE-DESIGN-VALIDATOR",
+  "from_agent": "ORCH",
+  "status": "PENDING",
+  "created_at": "2026-09-24T00:29:38Z",
+  "started_at": "2026-09-24T00:29:38Z",
+  "context": {
+    "branch_name": "feature/WF03-ISS0788-20260924",
+    "issue_id": "ISS-0788",
+    "design_doc": "lib/letflow/design/iss0788-render-upload-attachment-missing-clauses.md",
+    "artifacts_in": [
+      "lib/letflow/design/iss0788-render-upload-attachment-missing-clauses.md",
+      "lib/letflow/routers/instances.ex",
+      "docs/issues/ISS-0788.yaml"
+    ]
+  },
+  "task": {
+    "description": "Execute Step 2b (CODE-DESIGN-VALIDATOR HARD GATE) for ISS-0788.\n\nRead the design doc directly: lib/letflow/design/iss0788-render-upload-attachment-missing-clauses.md\nAlso read docs/issues/ISS-0788.yaml (4 ACs) and lib/letflow/routers/instances.ex.\n\nCheck:\n1. Both new function head signatures specified?\n2. HTTP status codes clearly stated (409 for storage_quota_exceeded, 422 for tenant_not_found)?\n3. Response body/text format specified following existing pattern?\n4. Clause ordering stated?\n5. AC4 disposition documented?\n6. All 4 ACs mapped to design elements?\n7. No implementation code?\n\nVerdict: PASS or FAIL.\n\nOutput:\n1. Write handoffs/WF03-ISS0788-20260924/step-02b-design-gate.json COMPLETED PASS or FAIL\n2. git add + commit + push\n\nReport: PASS or FAIL",
+    "acceptance_criteria": [
+      "All 4 ACs mapped",
+      "Both function head signatures specified",
+      "HTTP codes stated",
+      "No implementation code"
+    ]
+  },
+  "result": null
+}

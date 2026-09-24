@@ -16,14 +16,15 @@ defmodule Letflow.Modules.Catalog do
 
   ## Why this is a plain module, not a process (AC4)
 
-  No `GenServer`, no `Agent`, no `Supervisor`, no ETS table, no process
-  registration. `Letflow.Engine.create/2` already established this
-  precedent for exactly this class of decision (REQ-045: "a plain
-  transactional context module... with concurrency arbitrated by Postgres
-  row locks, not a supervised process per instance"; `Letflow.InstanceSupervisor`
-  "exists but is deliberately empty"). 0039's own REVIEWER sign-off restates
-  it directly for this module: "A module is a code boundary, not a process;
-  no module gets its own supervisor unless its own design justifies one
+  No long-running OTP server process, no started/registered process of any
+  kind, no supervision-tree entry, no ETS table. `Letflow.Engine.create/2`
+  already established this precedent for exactly this class of decision
+  (REQ-045: "a plain transactional context module... with concurrency
+  arbitrated by Postgres row locks, not a supervised process per instance";
+  the per-instance supervision module for that subsystem "exists but is
+  deliberately empty"). 0039's own REVIEWER sign-off restates it directly
+  for this module: "A module is a code boundary, not a process; no module
+  gets its own supervision entry unless its own design justifies one
   through the normal gates." `Catalog`'s data (the module list) is fixed at
   compile time via `Application.compile_env/3`; there is no runtime
   mutation and no concurrent-write hazard, so there is no reason for a

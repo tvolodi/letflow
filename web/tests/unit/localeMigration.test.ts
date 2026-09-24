@@ -85,7 +85,8 @@ describe("REQ-285 AC5 — the hardcoded 'en-US' locale argument is gone", () => 
   it("web/src/pages/admin/UsersPage.tsx no longer hardcodes toLocaleDateString('en-US')", () => {
     const content = readFileSync(join(SRC_ROOT, 'pages/admin/UsersPage.tsx'), 'utf-8')
     expect(content).not.toContain("toLocaleDateString('en-US')")
-    expect(content).toContain('formatDate(u.created_at)')
+    // ISS-0815: timestamp field renamed from created_at → inserted_at to match user_map/1
+    expect(content).toContain('formatDate(u.inserted_at)')
   })
 })
 

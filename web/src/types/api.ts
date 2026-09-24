@@ -426,19 +426,26 @@ export interface UserSession {
   production_tenant_display_name: string | null
 }
 
+// Wire shape matches user_map/1 in lib/letflow/routers/identity.ex (ISS-0815).
+// Required fields are exactly what user_map/1 emits; legacy optional fields are
+// kept for backward-compat with callers that may set them on create/update.
 export interface User {
-  id?: string
-  user_id?: string
-  username?: string
-  email: string
+  // Required fields emitted by user_map/1
+  id: string
+  username: string
   display_name: string
-  status?: 'ACTIVE' | 'INACTIVE'
+  email: string
+  status: string
+  auth_source: string
+  inserted_at: string
+  updated_at: string
+  // Optional legacy / caller-set fields (not emitted by user_map/1)
+  user_id?: string
   is_active?: boolean
-  roles: string[]
+  roles?: string[]
   role_ids?: string[]
   group_ids?: string[]
   last_login_at?: string
-  created_at: string
 }
 
 export interface Group {

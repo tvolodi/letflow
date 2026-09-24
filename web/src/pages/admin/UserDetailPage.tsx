@@ -9,11 +9,12 @@ import { Button } from '@/components/ui/Button'
 import { classifyError, type RendererState } from '@/utils/classifyError'
 
 function userId(user: User): string {
-  return user.user_id ?? user.id ?? ''
+  return user.user_id ?? user.id
 }
 
 function userStatus(user: User): 'ACTIVE' | 'INACTIVE' {
-  if (user.status) return user.status
+  const up = user.status.toUpperCase()
+  if (up === 'ACTIVE' || up === 'INACTIVE') return up
   return user.is_active ? 'ACTIVE' : 'INACTIVE'
 }
 

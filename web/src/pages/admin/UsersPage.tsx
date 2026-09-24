@@ -90,7 +90,7 @@ export default function UsersPage() {
         </span>
       ),
     },
-    { id: 'created', header: 'Created', accessor: (u) => formatDate(u.created_at) },
+    { id: 'created', header: 'Created', accessor: (u) => formatDate(u.inserted_at) },
   ]
 
   return (

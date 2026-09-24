@@ -17,6 +17,21 @@ than on write corruption (§3(c)); `@default_page_size` is at `pagination.ex:51`
 drain's behaviour at exactly the cap is now specified (§6.1); and §10's formerly unfiled row is
 **ISS-0823**. A previously unstated consequence of §6.1 was also found and is now §6.3 and T9.
 
+**Revision 3 (rework iteration 2, 2026-09-24T23:37Z).** CODE-DESIGN-VALIDATOR returned FAIL a
+second time, narrowly, on `handoffs/WF03-ISS0816-20260925/step-02b-design-gate-rework1.json`
+(commit `633a854d`). **Both original blockers are confirmed closed by measurement**, BLOCKER-2 in
+the stronger way — `identity.groupsApi.test.ts:63` passes untouched *and* unexempted — and
+decision (c)'s INV-D restatement was verified against `identity.ex:829-831`. **BLOCKER-3: the
+word-versus-field diagnosis of revision 2 was right but did not go far enough.** Revision 2's regex
+enumerated three ways to write the field and missed a fourth, ES6 shorthand, which is the
+*commoner* spelling — with the tell that the renamed destructure `{ has_more: hasMore }` was caught
+only because it happens to contain a colon. The gap is exploitable and was exploited: the exact
+ISS-0816 defect, rewritten with shorthand, passes both gates. §7.1 now carries a five-alternative
+regex and the A/B measurement that discriminates it; §7's "cannot reappear" overclaim is corrected;
+§6.3 now states that the second ISS-0765 guard stays **green** and under-covers silently; T8's
+offender fixture gains shorthand forms; and §8 item 8's count is corrected to 14 occurrences across
+7 files.
+
 ---
 
 ## 1. The refuted premise, stated first
@@ -383,25 +398,42 @@ That is the same class as AC3 but a different query, a different endpoint, and o
 stated scope. It has since been filed as **ISS-0823** (queue task 823, GH #1814, commit
 `ea1a43a4`); it is not fixed by this run.
 
-### 6.3 `web/src/api/__tests__/identity.groupsApi.test.ts` — two ISS-0765 tests must be extended
+### 6.3 `web/src/api/__tests__/identity.groupsApi.test.ts` — two ISS-0765 tests must be extended, and **only one of them will tell you so**
 
-Adding `listAllMembers` to `groupsApi` is a **seventh** key on that object, and ISS-0765 left two
-assertions that pin the surface at six. Both are read directly from the file, not inferred:
+Adding `listAllMembers` to `groupsApi` is a **seventh** key on that object. Two ISS-0765 tests are
+affected, and **they behave differently — that asymmetry is the whole point of this subsection.**
+Both are read directly from the file, not inferred.
 
-- `:229` **T-0765-SURFACE** asserts
-  `expect(Object.keys(groupsApi).sort()).toEqual(['addMember','create','delete','list','members','removeMembers'])`
-  — an exact-equality assertion, so a seventh key fails it. `'listAllMembers'` is inserted in sort
-  order, between `'list'` and `'members'`.
-- `:251-258` **T-0765-NO-ADMIN-PREFIX** drives an `it.each` over a hand-maintained `surfaceRows`
-  array whose own comment states it "must enumerate EVERY surviving function, so that adding a
-  seventh one with a bad prefix is caught without anyone remembering to write a bespoke row for
-  it." Honouring that intent requires a row
-  `['listAllMembers', () => groupsApi.listAllMembers('g-1')]`. The existing spy returns a page
-  whose `next_cursor` is `null`, so the drain terminates after one request and the row's URL
-  assertions apply unchanged.
+**1. `:229` T-0765-SURFACE — goes RED. You cannot miss it.**
 
-Neither is a defect; both are ISS-0765's guards working as designed. They are named here so
-FRONTEND-DEV does not meet them as a surprise mid-build — this is T9.
+```
+expect(Object.keys(groupsApi).sort()).toEqual(
+  ['addMember','create','delete','list','members','removeMembers'])
+```
+
+An exact-equality assertion over the live object's keys, so a seventh key fails it immediately.
+Fix: insert `'listAllMembers'` in sort order, **between `'list'` and `'members'`**.
+
+**2. `:252-259` T-0765-NO-ADMIN-PREFIX — stays GREEN, and silently under-covers.**
+
+It drives `it.each(surfaceRows)` over a **hand-maintained array**, not over `Object.keys(groupsApi)`.
+A seventh function on the object therefore never produces a seventh case: the suite goes from 16 to
+16 green tests, nothing turns red, and the new function is simply never checked for the
+`/api/v1/admin/` prefix. **The row must be added deliberately, not in response to a failing test.**
+An implementer who fixes only the one assertion that went red ships a `groupsApi` function outside
+ISS-0765's prefix guard with no signal anywhere that coverage was lost — which is precisely the
+quiet-degradation failure mode this run exists to stop.
+
+The array's own comment states the intent it cannot itself enforce: it "must enumerate EVERY
+surviving function, so that adding a seventh one with a bad prefix is caught without anyone
+remembering to write a bespoke row for it." Honouring it requires
+`['listAllMembers', () => groupsApi.listAllMembers('g-1')]`. That row works unmodified: the shared
+spy returns `WIRE_MEMBER_PAGE`, whose `next_cursor` is `null`, so the drain terminates after a
+single request and the row's two URL assertions apply exactly as they do for `members`.
+
+Neither test is a defect; both are ISS-0765's guards behaving as written. They are named here so
+FRONTEND-DEV does not meet the red one as a surprise **and does not miss the green one entirely** —
+this is T9. Applied as specified, the file goes 16 → 17 green.
 
 `:63` of the same file carries the prose comment ``No `has_more` — Pagination.Page never emits
 one.`` It is **truthful, in scope for T7's glob, and deliberately left untouched.** It is the
@@ -424,9 +456,9 @@ class that let this defect survive five written sightings.
 | **T5** | AC3 | The drain's bound holds and reports itself | Unit test: stub `client.get` to always return a non-null `next_cursor`; assert exactly 20 requests are made and the result is `truncated: true` | same file as T4 |
 | **T6** | AC3 | The re-add bug is gone — a second-page member is excluded from the dropdown | Component test on `GroupsPage`: mock `groupsApi.listAllMembers` to resolve a member set spanning two pages including user `u-51`, mock `usersApi.list` to include `u-51`; assert `u-51` is **not** rendered as an `<option>` in the "Add member" select | new `web/src/pages/admin/__tests__/GroupsPage.members.test.tsx` |
 | **T5b** | AC3 | The cap boundary reports honestly | Unit test: stub `client.get` so the 20th response has `next_cursor: null`; assert exactly 20 requests and `truncated: false` — reaching the cap is not by itself truncation (§6.1) | same file as T4 |
-| **T7** | AC2, AC4 | `has_more` cannot reappear **as a field** in production source, while prose naming it stays legal | New `PATTERNS` entry in `web/tests/guards/forbidlist.ts` — full spec in §7.1 | `web/tests/guards/forbidlist.ts` |
+| **T7** | AC2, AC4 | Every realistic *code* spelling of a reintroduced `has_more` field is caught in production source, while prose naming the field stays legal. **This is a backstop, not a proof of impossibility** — see §7.1's "What this guard does and does not prove" | New `PATTERNS` entry in `web/tests/guards/forbidlist.ts` — full spec in §7.1 | `web/tests/guards/forbidlist.ts` |
 | **T8** | AC2 | T7's pattern is itself two-sided, per GRD-UI-04 | `web/tests/guards/meta-control.spec.ts` iterates every `PATTERNS` entry and requires both fixtures — full spec in §7.1 | `web/tests/guards/fixtures/{offender,bystander}/has-more-wire-field.txt` |
-| **T9** | AC3 | ISS-0765's surface guards still pass with a seventh `groupsApi` function | Extend `identity.groupsApi.test.ts:229`'s exact-equality key list with `'listAllMembers'` (sort order: between `'list'` and `'members'`) and add a `surfaceRows` entry at `:251-258`, per §6.3 | `web/src/api/__tests__/identity.groupsApi.test.ts` |
+| **T9** | AC3 | ISS-0765's surface guards still *cover* a seventh `groupsApi` function — not merely still pass | Two edits, and **only the first is prompted by a red test**: (i) extend `identity.groupsApi.test.ts:229`'s exact-equality key list with `'listAllMembers'`, in sort order between `'list'` and `'members'` — this one goes red on its own; (ii) add `['listAllMembers', () => groupsApi.listAllMembers('g-1')]` to the hand-maintained `surfaceRows` array at `:252-259` — **this one never goes red**, because `it.each` iterates the array, not the object, so omitting it silently drops the new function from ISS-0765's `/api/v1/admin/` prefix coverage. Per §6.3. Applied as specified: 16 → 17 green | `web/src/api/__tests__/identity.groupsApi.test.ts` |
 
 ### 7.1 T7 — the guard pattern, corrected (rework iteration 1)
 
@@ -448,9 +480,29 @@ two defects the gate caught, both real:
 **The correction: match the code form, not the token.** One change closes both, because both
 defects are the same mistake — banning a *word* when the invariant is about a *field*.
 
+**What revision 2 then got wrong (BLOCKER-3), and why it mattered.** Revision 2 applied that
+correction but enumerated only *three* code forms. ES6 **shorthand** is a fourth, and it is the
+commoner spelling of the two. The asymmetry gives the gap away: the *renamed* destructure
+`{ has_more: hasMore }` was caught, but only incidentally, because it happens to contain a colon —
+while plain `{ ..., has_more }` was not. That is not a theoretical hole. The exact ISS-0816 defect,
+respelled with shorthand in the very `.then` callback §5.4 removes, **passes both gates**:
+
+```ts
+const has_more = Boolean(response.next_cursor)
+return { items: response.items, next_cursor: response.next_cursor, has_more }
+```
+
+Measured independently by this step, not inherited — §8 item 12. Under revision 2's regex,
+`source-scan` reported **zero** violations and `tsc -b --force` exited **0**. The `tsc` half is not
+a surprise: it is the same behaviour §8 item 3 already recorded, that this return position is not
+freshness-checked. **T7 is therefore the only guard standing at the one spot where the type system
+provably cannot help, and as written it did not fire there.**
+
+**The corrected pattern — five alternatives:**
+
 ```
 name:        'has-more-wire-field'
-regex:       /\.has_more\b|\bhas_more\s*\??\s*:|["']has_more["']/
+regex:       /\.has_more\b|\bhas_more\s*\??\s*:|["']has_more["']|\bhas_more\s*[,}]|\b(?:const|let|var)\s+has_more\b/
 appliesTo:   'source'
 rationale:   'ISS-0816'
 allowedPaths: [
@@ -459,11 +511,35 @@ allowedPaths: [
 ]
 ```
 
-Three alternatives, one per way the field can actually be written in TypeScript: a property access
-(`response.has_more`), an object-literal or type-member key (`has_more: false`, `has_more: boolean`,
-`has_more?: boolean`), and a string-literal key (`page['has_more']`, `"has_more"`). Prose is
-unaffected because a comment names the field inside backticks, and a closing backtick is neither
-whitespace nor a colon.
+One alternative per way TypeScript can write the field:
+
+| # | Alternative | Catches |
+|---|---|---|
+| 1 | `\.has_more\b` | property access — `response.has_more`, `page?.has_more` |
+| 2 | `\bhas_more\s*\??\s*:` | object-literal key, type member, optional member, renamed destructure — `has_more: false`, `has_more: boolean`, `has_more?: boolean`, `{ has_more: hasMore }` |
+| 3 | `["']has_more["']` | string-literal key — `page['has_more']`, `"has_more"` |
+| 4 | `\bhas_more\s*[,}]` | **ES6 shorthand** — `{ items, next_cursor, has_more }`, `{ has_more }`, `const { has_more } = page`, `function f({ has_more })`, and the multi-line form where the closing brace is on a later line (`\s` spans newlines, and `source-scan` tests whole-file content before locating a line) |
+| 5 | `\b(?:const\|let\|var)\s+has_more\b` | a local binding of that name, which is how shorthand gets something to be shorthand *for* |
+
+Alternatives 4 and 5 are deliberately both present rather than either alone: 5 catches the defect at
+its declaration even when the literal is built somewhere the other four cannot see, and 4 catches a
+shorthand whose binding came from a destructure or a parameter rather than a declaration.
+
+**Prose stays unaffected, by construction.** A comment names the field inside backticks, and the
+character after a closing backtick is a backtick — which is neither whitespace, nor a colon, nor a
+comma, nor a brace. `` Not `has_more`, which no route sends `` and `` `has_more`: never emitted ``
+are both clean; verified as explicit cases in §8 item 12's must-not set.
+
+**What this guard does and does not prove.** It catches every realistic code spelling of the field
+— that is what §8 item 12's 42-form battery and item 13's A/B reintroduction measure. It is **not**
+a proof that the field can never reappear: a binding obtained from a function parameter typed only
+by inference, or a key assembled by string concatenation, would evade it. Those are not how this
+defect has ever been written, here or in the five prior sightings, and widening the regex far
+enough to cover them would start matching prose again — which is what caused BLOCKER-1. T7 is a
+backstop against recurrence, and the durable fix for the class remains ISS-0813's mechanical
+coupling of `web/src/types/api.ts` to the routers' real response bodies. Revision 2's claim that
+T7 shows `has_more` "cannot reappear as a field in production source" was an overclaim and is
+withdrawn; §7's T7 row now states the weaker, true thing.
 
 **Final exemption set: exactly the two ISS-0821 files above, unchanged from revision 1.** Both
 still fabricate `has_more: false`, which is a code form, so both still need exempting. `api.ts` and
@@ -472,19 +548,26 @@ point of the narrowing. The `allowedPaths` entry carries an inline comment sayin
 exemptions are deleted when ISS-0821 lands.
 
 **The cost of narrowing, stated rather than hidden.** A bare `has_more` in prose *outside*
-backticks and not followed by a colon — for instance "the internal has_more never reaches HTTP" —
-is no longer caught. That is accepted: it is prose, it cannot make a request or type a response,
+backticks and not followed by `:`, `,` or `}` — for instance "the internal has_more never reaches
+HTTP" — is not caught. That is accepted: it is prose, it cannot make a request or type a response,
 and the invariant T7 defends (INV-A) is about declared and accessed fields. A guard that also
 policed prose is what created BLOCKER-1.
 
 **T8's two fixtures**, required by GRD-UI-04 (`meta-control.spec.ts` demands an offender and a
 bystander for every `PATTERNS` entry, and asserts the regex matches the first and not the second):
 
-- `fixtures/offender/has-more-wire-field.txt` — must contain both code forms that occur in the
-  real defect: an object-literal key (`has_more: false`) and a property access (`page.has_more`).
-- `fixtures/bystander/has-more-wire-field.txt` — must contain **all three** things the guard must
-  never catch: the prose form inside backticks, a clean `{ items, next_cursor, count }` literal,
-  and `TimelineFeed`'s camelCase `hasMore` prop both as a type member and as a JSX attribute.
+- `fixtures/offender/has-more-wire-field.txt` — must exercise **all five** alternatives, so that
+  each one is mechanically pinned rather than merely present in this document. Required contents:
+  an object-literal key (`has_more: false`), a property access (`page.has_more`), a `const`
+  declaration, an **ES6 shorthand** literal (`{ items, next_cursor, has_more }`), and a renamed
+  destructure (`const { has_more: renamed } = body`). Alternative 4 is the one BLOCKER-3 was about;
+  without a fixture form for it, it would be the only alternative no test protects, and the next
+  edit to this regex could silently drop it again.
+- `fixtures/bystander/has-more-wire-field.txt` — must contain everything the guard must never
+  catch: the prose form inside backticks, prose with a backtick immediately followed by a comma and
+  by a colon (the two forms alternatives 2 and 4 come closest to mis-firing on), a clean
+  `{ items, next_cursor, count }` literal, and `TimelineFeed`'s camelCase `hasMore` as a type
+  member, as a bare `const`, as an object shorthand and as a JSX attribute.
 
 **The bystander's `hasMore` content is load-bearing.**
 `web/src/components/instances/TimelineFeed.tsx:7/15/37` has a camelCase `hasMore: boolean` prop,
@@ -492,9 +575,12 @@ passed from `InstanceDetailPage.tsx:369` as
 `hasMore={Boolean(timelineQuery.data?.next_cursor)}`. It is derived from `next_cursor` and is
 entirely unrelated to `CursorPage<T>.has_more`. **It must not be touched, and T7's regex must not
 match it.** The bystander fixture is the mechanical, permanent guarantee of that — not a comment
-asking the next agent to be careful.
+asking the next agent to be careful. Note that under the five-alternative regex this fixture now
+also has to survive alternatives 4 and 5, which is why it carries `const hasMore = …` and
+`{ items, hasMore }` as well as the type member and the JSX attribute.
 
-Measured green end to end — §8 items 9, 10 and 11.
+Measured green end to end — §8 items 9 and 10 (revision 2's three-alternative form) and items 12,
+13 and 14 (this revision's five-alternative form, including the A/B that discriminates them).
 
 **No backend test changes.** Nothing in `lib/` changes under this design; §2.1 is verification of
 existing behaviour, not a change to it.
@@ -529,8 +615,13 @@ probe is committed. Results, on `feature/WF03-ISS0816-20260925` @ `e512c53a`:
    T7's guard is satisfiable with zero exemptions outside `__tests__`.~~ **WITHDRAWN — this claim
    was false, and the gate proved it.** The `grep -v __tests__` filter was the error: it excluded
    files that T7, being `appliesTo: 'source'`, does scan, because `source-scan.spec.ts`'s glob is
-   `web/src/**/*.{ts,tsx,css}` with no `__tests__` exclusion. The unfiltered grep over `web/src`
-   returns **fourteen** occurrences across eight files. With §5's edits applied, the ones that
+   `web/src/**/*.{ts,tsx,css}` with no `__tests__` exclusion. The unfiltered grep over `web/src` —
+   T7's actual scope, and nothing wider — returns **14 occurrences across 7 files**, re-counted in
+   rework 2 after the gate found the figure still slightly off. (Revision 2 said "eight files";
+   that was `web/src` **plus** `web/tests`, whose only contributor is
+   `web/tests/e2e/obs04.timeline.e2e.spec.ts:72` — outside `src/**` and therefore never scanned by
+   `source-scan`. Mixing the two scopes in the paragraph whose whole job is to replace a bad
+   measurement was worth correcting.) With §5's edits applied, the ones that
    survive are: the new `api.ts` docblock prose (required by §4), `identity.groupsApi.test.ts:63`'s
    truthful prose comment, and the four ISS-0821 fixture literals in two files. Under revision 1's
    bare-token regex the validator measured **two** source-scan violations —
@@ -557,21 +648,60 @@ reverted (`git checkout -- web/`, `git clean -fd web/tests/guards/fixtures`; tre
     probe, which also carried the fuller `promotions.ts` restructure of §5.4 (the whole `.then`
     and its inline anonymous response type removed, not just the `has_more` key).
 
+**Rework iteration 2 re-measured the regex from scratch rather than inheriting the gate's numbers,
+and added the A/B that discriminates the two versions.** Same probe discipline: applied, measured,
+reverted with `git checkout -- web/` plus `git clean -fdq web/tests/guards/fixtures`, tree confirmed
+clean before this revision was written.
+
+12. **The five-alternative regex was checked against a 42-form battery** — 27 must-match, 15
+    must-not. **0 missed, 0 false positives.** The must-match set covers all five alternatives
+    explicitly, including eight shorthand and declaration forms revision 2's regex would have let
+    through (`{ items, next_cursor, has_more }`, `{ has_more }`, `return {has_more}`,
+    `const { has_more } = page`, `function f({ has_more })`, `const`/`let`/`var` declarations, and
+    the multi-line literal where the closing brace is two lines below the field). The must-not set
+    covers all four real prose comments in the tree, the two docblock sentences §4 requires,
+    backtick-then-colon **and** backtick-then-comma **and** backtick-then-brace prose forms — the
+    three shapes alternatives 2 and 4 come closest to mis-firing on — and six `TimelineFeed`
+    `hasMore` forms including the shorthand and `const` spellings that only alternatives 4 and 5
+    could have caught.
+13. **The A/B reintroduction — the discriminating measurement.** The exact ISS-0816 defect was
+    written back into `promotions.ts`'s `list`, in the `.then` callback §5.4 removes, spelled with
+    shorthand (`const has_more = Boolean(response.next_cursor)` then
+    `return { items: …, next_cursor: …, has_more }`).
+    - **A — revision 2's three-alternative regex:** `tsc -b --force` exit **0** *and* `source-scan`
+      **0 violations**. Both gates pass the reintroduced defect. BLOCKER-3 reproduced exactly.
+    - **B — this revision's five-alternative regex, same defect, nothing else changed:**
+      `source-scan` **FAILS** — `Source scan found 1 violation(s): has-more-wire-field @
+      web/src/api/promotions.ts:262` — while `tsc -b --force` still exits **0**.
+
+    The `tsc` result being identical in both arms is the point, not an aside: it is the same
+    non-freshness-checked return position §8 item 3 already recorded, so the type system cannot
+    help here in either arm. T7 is the only gate that moves, and only under the corrected regex.
+14. **Clean tree under the corrected regex** (defect removed, everything else as in B):
+    `tsc -b --force` exit **0**; `npm run guards` → **4 files, 52 tests, all passed** with
+    `source-scan` at **zero** violations and all four `has-more-wire-field` fixture assertions
+    green against the extended offender; `npm run test` → **125 files, 890 tests, all passed**.
+
 The probe did **not** include §6 (the GroupsPage drain and the `groupsApi` surface), which is new
 behaviour rather than a retype; T4, T5, T5b, T6 and T9 are its evidence and FRONTEND-DEV must
 produce them. §6.3's two assertions are read verbatim from
-`web/src/api/__tests__/identity.groupsApi.test.ts` at `:229` and `:251-258` rather than measured,
-and are stated as such.
+`web/src/api/__tests__/identity.groupsApi.test.ts` at `:229` and `:252-259` rather than measured,
+and are stated as such — including the claim that the second one stays green, which follows from
+`it.each` iterating `surfaceRows` rather than `Object.keys(groupsApi)`, visible at `:261`.
 
 ---
 
 ## 9. Invariants
 
 - **INV-A.** No frontend type may declare, and no frontend code may read, a field that no
-  `lib/letflow/routers/*.ex` response builder emits. This is the invariant ISS-0816 violated; T7
-  enforces the `has_more` instance of it, and §7.1's narrowing is what keeps T7 aimed at declared
-  and accessed fields rather than at prose that merely names one. The general mechanism remains
-  missing and is ISS-0813 (MAJOR, open) — this design does not close it and does not claim to.
+  `lib/letflow/routers/*.ex` response builder emits. This is the invariant ISS-0816 violated. T7
+  **backstops** the `has_more` instance of it, across every realistic code spelling (§7.1); §7.1's
+  narrowing is what keeps T7 aimed at declared, bound and accessed fields rather than at prose that
+  merely names one, and §7.1's "what this guard does and does not prove" states where the backstop
+  ends. The general mechanism remains missing and is ISS-0813 (MAJOR, open) — this design does not
+  close it and does not claim to. BLOCKER-3 is the evidence for why that distinction matters: a
+  guard is only as good as its enumeration of the forms it scans for, and enumeration is exactly
+  what a generated client would not need.
 - **INV-B.** `count` is `length(items)` for the current page. It is never a cross-page total and
   must never be rendered as one — that is exactly what ISS-0711 was. `CountedCursorPage<T>`'s
   docblock carries this.

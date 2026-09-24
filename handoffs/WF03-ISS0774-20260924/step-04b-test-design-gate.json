@@ -1,0 +1,55 @@
+{
+  "handoff_id": "WF03-ISS0774-20260924-step-04b",
+  "run_id": "WF03-ISS0774-20260924",
+  "step": "Step 4b",
+  "to_agent": "TEST-DESIGN-VALIDATOR",
+  "from_agent": "ORCH",
+  "status": "COMPLETED",
+  "created_at": "2026-09-24T08:47:03Z",
+  "started_at": "2026-09-24T08:47:03Z",
+  "completed_at": "2026-09-24T09:15:00Z",
+  "context": {
+    "branch_name": "feature/WF03-ISS0774-20260924",
+    "issue_id": "ISS-0774",
+    "artifacts_in": [
+      "test/letflow/routers/help_test.exs"
+    ]
+  },
+  "task": {
+    "description": "Step 4b (Test Design Gate) for WF03-ISS0774-20260924. HARD GATE.\nRead test/letflow/routers/help_test.exs, specifically the new test added in the tie-break describe.\nThe new test must: (1) create two rows with timestamps straddling a second boundary, (2) assert the fresher wall-clock row is returned (which the old code would fail ~1% of the time), (3) be the fail-first proof.\nCheck: test uses real DB rows (not mocks), asserts the correct row, is a genuine regression test for the Erlang structural comparison bug.\nComplete handoff (step-04b-test-design-gate.json): COMPLETED, PASS or FAIL.",
+    "acceptance_criteria": [
+      "New regression test exists for the second-boundary case",
+      "Test asserts correct (fresher) row is returned",
+      "Fail-first proof: old code would fail this"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "checks": {
+      "timestamps_straddle_second_boundary": {
+        "pass": true,
+        "evidence": "stale updated_at set to ~U[2024-01-01 00:00:05.999000Z] (second=5, microsecond=999000); fresh updated_at set to ~U[2024-01-01 00:00:06.000001Z] (second=6, microsecond=1). Canonical straddle: higher microsecond on the older second."
+      },
+      "asserts_fresh_row_returned": {
+        "pass": true,
+        "evidence": "Line 285: assert json(conn)[\"id\"] == fresh.id -- asserts the later wall-clock row (second=6) is returned."
+      },
+      "genuine_fail_first": {
+        "pass": true,
+        "evidence": "Old code was Enum.max_by(many, & &1.updated_at) which uses Erlang structural map comparison. DateTime atoms sorted lexicographically: 'microsecond' < 'second', so microsecond is the first differentiating field. stale.microsecond={999000,6} > fresh.microsecond={1,6}, so old code picks stale. Test asserts fresh -- old code fails. New code Enum.max_by(many, &{DateTime.to_unix(&1.updated_at, :microsecond), &1.id}) converts to integer before comparison: fresh unix_us (6_000_001) > stale unix_us (5_999_000), picks fresh correctly."
+      },
+      "real_db_rows_not_mocks": {
+        "pass": true,
+        "evidence": "Uses live!() + Repo.update!(prefix: schema_name) to write real rows; dispatches real HTTP request via build_conn |> dispatch(). No mocks or stubs."
+      },
+      "test_count_now_14": {
+        "pass": true,
+        "evidence": "grep found exactly 14 'test \"' lines in help_test.exs. New test is test #9 in file order; total went from 13 to 14."
+      }
+    },
+    "summary": "All five gate checks PASS. The new test 'when two live rows have the same process_definition_id, the row with the later updated_at wins regardless of microsecond position' is a genuine fail-first regression proof: it would have failed against the old Enum.max_by structural-comparison code and passes against the fixed integer-based comparison. AC1 satisfied."
+  },
+  "next_action": "Route to TEST-RUNNER (Step 4c)",
+  "rework_count": 0,
+  "max_rework": 3
+}

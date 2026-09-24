@@ -1,0 +1,57 @@
+{
+  "handoff_id": "WF03-ISS0774-20260924-step-02b",
+  "run_id": "WF03-ISS0774-20260924",
+  "workflow_id": "WF-03",
+  "step": "Step 2b",
+  "to_agent": "CODE-DESIGN-VALIDATOR",
+  "from_agent": "ORCH",
+  "status": "COMPLETED",
+  "created_at": "2026-09-24T08:39:34Z",
+  "started_at": "2026-09-24T08:39:34Z",
+  "completed_at": "2026-09-24T09:10:00Z",
+  "context": {
+    "branch_name": "feature/WF03-ISS0774-20260924",
+    "issue_id": "ISS-0774",
+    "artifacts_in": [
+      "lib/letflow/design/iss-0774-select-live-row-determinism.md"
+    ]
+  },
+  "task": {
+    "description": "Step 2b (Design Gate) for WF03-ISS0774-20260924. HARD GATE.\nRead lib/letflow/design/iss-0774-select-live-row-determinism.md independently.\nCheck: root cause stated precisely with evidence, fix specified as exact one-line code change, regression test design specified (fail-first proof), AC traceability complete, no implementation code.\nComplete handoff (step-02b-design-gate.json): status COMPLETED, result.status PASS or FAIL.",
+    "acceptance_criteria": [
+      "Root cause analytically justified (not just asserted)",
+      "Exact fix specified (function name, arguments)",
+      "Regression test design: fail-first proof described",
+      "No implementation code"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "checks": {
+      "root_cause_justified": {
+        "verdict": "PASS",
+        "notes": "Erlang sorted atom key order proven: ':microsecond' < ':minute' < ':second' < ':year'. First differing key for second-boundary timestamps is ':microsecond', so tuple {999000,6} > {1,6} despite representing an earlier wall-clock instant. Concrete table with example pair provided. Analytically sound."
+      },
+      "fix_specified": {
+        "verdict": "PASS",
+        "notes": "Exact one-line change: Enum.max_by(many, &{DateTime.to_unix(&1.updated_at, :microsecond), &1.id}). File and location specified. DateTime.to_unix/2 with :microsecond is a valid stdlib call returning a plain integer. Secondary id key handles true-tie case. No ambiguity."
+      },
+      "fail_first_proof": {
+        "verdict": "PASS",
+        "notes": "Boundary pair explicit: stale ~U[2024-01-01 00:00:05.999000Z] (µs=999000) vs fresh ~U[2024-01-01 00:00:06.000001Z] (µs=1). Old code: Erlang struct comparison picks stale (bug demonstrated). New code: integer comparison picks fresh. Assertion json_response(conn, 200)[\"id\"] == fresh.id fails with old code, passes with new."
+      },
+      "ac_traceability": {
+        "verdict": "PASS",
+        "notes": "AC1 (flake fix), AC2 (no_defect for SandboxPoolTest), AC3 (root cause), AC4 (rationale) — all mapped in §4 with clear reasoning."
+      },
+      "no_implementation_code": {
+        "verdict": "PASS",
+        "notes": "§2 shows a one-line old/new diff as specification. §3 shows a test skeleton as test design. No module body or full function implementation present."
+      }
+    },
+    "summary": "All five checks PASS. Design is analytically complete and unambiguous. Safe to route to ELIXIR-DEV."
+  },
+  "next_action": "Route to ELIXIR-DEV (Step 3)",
+  "rework_count": 0,
+  "max_rework": 3
+}

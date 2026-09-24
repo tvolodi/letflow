@@ -1,0 +1,89 @@
+{
+  "handoff_id": "WF03-ISS0774-20260924-step-01",
+  "run_id": "WF03-ISS0774-20260924",
+  "workflow_id": "WF-03",
+  "step": "Step 0.5+1",
+  "to_agent": "ISSUE-FIXER",
+  "from_agent": "ORCH",
+  "status": "COMPLETED",
+  "created_at": "2026-09-24T08:32:43Z",
+  "started_at": "2026-09-24T08:32:43Z",
+  "context": {
+    "branch_name": "feature/WF03-ISS0774-20260924",
+    "issue_id": "ISS-0774",
+    "queue_task_id": 774,
+    "issue_text": "Two pre-existing test flakes from WF02-REQ372-20260921: (1) HelpTest tie-break (select_live_row/2), (2) SandboxPoolTest/ISS-0224-class. Neither independently reproduced. Filed on secondhand RELEASE-VALIDATOR report.",
+    "orch_preliminary_findings": {
+      "helptest_standalone": "13/13 passed - not reproducible standalone",
+      "sandboxpooltest_standalone": "23/23 passed - ruled out",
+      "root_cause_hypothesis": "lib/letflow/routers/help.ex select_live_row/2 uses Enum.max_by(many, & &1.updated_at) -- non-deterministic when multiple candidates have equal updated_at timestamps under parallel test load",
+      "fix_hypothesis": "Use stable secondary sort: Enum.max_by(many, &{&1.updated_at, &1.id}) to break ties deterministically by ID"
+    },
+    "artifacts_in": [
+      "lib/letflow/routers/help.ex",
+      "test/letflow/routers/help_test.exs",
+      "docs/issues/ISS-0766.yaml"
+    ]
+  },
+  "task": {
+    "description": "Execute Steps 0.5 and 1 (Registry Lookup + Diagnosis) for WF03-ISS0774-20260924.\n\nWorkspace: c:\\Users\\tvolo\\dev\\ai-dala\\letflow\nBranch: feature/WF03-ISS0774-20260924\n\nORCH has already done preliminary investigation. Confirm or refute:\n\n## STEP 0.5 — Registry Lookup\n\nSearch docs/issues/*.yaml for resolved entries with: HelpTest, select_live_row, tie-break, Enum.max_by\nReport any prior resolved matches.\n\n## STEP 1 — Diagnosis\n\n1. Read lib/letflow/routers/help.ex specifically the select_live_row/2 function (around line 163-184)\n2. Confirm: does `Enum.max_by(many, & &1.updated_at)` have a determinism problem when timestamps are equal?\n3. Read test/letflow/routers/help_test.exs specifically the tie-break describe block (around line 169)\n4. Confirm: is the test's correctness assumption based on PROCESS-DEFINITION-ID priority (specific > generic), not on timestamp ordering?\n5. Read docs/issues/ISS-0766.yaml for the precedent flake pattern\n6. For SandboxPoolTest flake: look at the original ISS-0224 issue (docs/issues/ISS-0224.yaml) to understand the pattern, and assess whether the new flake is the same class\n\nDiagnosis report:\n- Root cause of HelpTest flake (confirmed or refuted)\n- Root cause of SandboxPoolTest flake (if real) or explicit no-defect ruling\n- Fix recommendation: what exact change fixes the HelpTest flake (if real)\n- Whether `no_defect` or `instrumented` is appropriate for SandboxPoolTest\n\nComplete handoff (step-01-issue-fixer.json): COMPLETED, result with full diagnosis.",
+    "acceptance_criteria": [
+      "select_live_row/2 determinism analysis completed",
+      "SandboxPoolTest flake assessed (real or ruled out)",
+      "Fix recommendation for HelpTest flake"
+    ]
+  },
+  "result": {
+    "status": "COMPLETED",
+    "completed_at": "2026-09-24T08:45:00Z",
+
+    "step_0_5_registry_lookup": {
+      "query_terms": ["HelpTest", "select_live_row", "tie-break", "Enum.max_by"],
+      "match": "docs/issues/ISS-0776.yaml",
+      "match_note": "ISS-0776.yaml IS this issue -- queue_ref Q-774, github_ref GH-1688. The local filename diverges from the queue id (ISS-0774 was already taken locally by the process-routing-role Authorization issue; file is ISS-0776). Status: open. Contains two prior ISSUE-FIXER attempts (2026-09-21 and 2026-09-24). Second attempt ran 15 targeted iterations under CPU+memory pressure: 15/15 green, all four tie-break tests confirmed executed, no flake reproduced. Recommendation at time of filing: no fix cycle to route -- no confirmed root cause.",
+      "prior_fix": null,
+      "prior_no_defect_ruling": false
+    },
+
+    "step_1_diagnosis": {
+      "select_live_row_determinism": {
+        "verdict": "REAL_CODE_DEFECT",
+        "confidence": "HIGH",
+        "explanation": "Enum.max_by(many, & &1.updated_at) uses Erlang structural map comparison for DateTime structs, NOT DateTime.compare/2. Erlang compares maps by key-value pairs in sorted atom key order. For DateTime structs the keys compare as: __struct__ < calendar < day < hour < microsecond < minute < month < second < std_offset < time_zone < utc_offset < year < zone_abbr. The :microsecond field is compared BEFORE :minute, :month, :second, :year. Consequence: if older.updated_at has a larger :microsecond value (e.g. {999900, 6}) than newer.updated_at (e.g. {9900, 6}) because the newer timestamp crossed a second boundary, the structural comparison evaluates older > newer INCORRECTLY -- the function returns the older row. This is a real defect, not a phantom.",
+        "reproduction_rate": "RARE (~1% per run): the 10ms Process.sleep(10) window only straddles a second boundary when older.updated_at is within the last 10ms of its second (microsecond > 990000). Under targeted 15-iteration load test in ISS-0776 attempt 2, this condition was not hit by chance, which is expected at ~1% probability over 15 iterations.",
+        "when_many_branch_triggered": "Only when candidates has > 1 element. In the test suite, only the test 'two tied live generic rows -- the most recently updated_at one wins, deterministically' triggers it: creates two live generic rows (process_definition_id nil), no process_definition_id in the request, so matching=[], candidates=[older, newer]. The 'specific outranks generic' test does NOT trigger it: matching=[specific], candidates=[specific], returns [single] branch.",
+        "cross_contamination_ruled_out": "Yes. Per-tenant-schema isolation (each test calls TenantFixture.provisioned_tenant!) means schemas are independent. Another test's rows cannot contaminate this test's candidates list.",
+        "pre_assertion_guard": "The test asserts DateTime.compare(newer.updated_at, older.updated_at) == :gt BEFORE the HTTP call, confirming DB-stored timestamps are ordered. But this does not protect against Enum.max_by using structural comparison -- DateTime.compare uses semantic logic that Enum.max_by does not."
+      },
+
+      "fix_recommendation": {
+        "proposed_fix_in_handoff": "Enum.max_by(many, &{&1.updated_at, &1.id})",
+        "proposed_fix_verdict": "INSUFFICIENT",
+        "proposed_fix_reason": "Still uses structural DateTime comparison for the first tuple element. Tuples compare element-by-element; the DateTime comparison bug applies equally to {updated_at, id} as to updated_at alone. The :id secondary sort key only helps for truly equal timestamps, not for the second-boundary inversion case.",
+        "correct_fix": "Enum.max_by(many, &{DateTime.to_unix(&1.updated_at, :microsecond), &1.id})",
+        "correct_fix_reason": "DateTime.to_unix/2 with :microsecond precision converts to a plain integer (microseconds since Unix epoch). Integer comparison is always correct regardless of second/minute/hour/day boundaries. The secondary &1.id tiebreaker provides full determinism for truly simultaneous timestamps. This is a one-line change at line ~183 of lib/letflow/routers/help.ex.",
+        "alternative_fix": "Enum.sort_by(many, &{DateTime.to_unix(&1.updated_at, :microsecond), &1.id}, :desc) |> hd() -- equivalent correctness, but Enum.max_by with the integer conversion is simpler and O(n) vs O(n log n) for sort.",
+        "file": "lib/letflow/routers/help.ex",
+        "line_approx": 183,
+        "old_code": "many -> Enum.max_by(many, & &1.updated_at)",
+        "new_code": "many -> Enum.max_by(many, &{DateTime.to_unix(&1.updated_at, :microsecond), &1.id})"
+      },
+
+      "sandbox_pool_test_flake": {
+        "verdict": "NO_DEFECT",
+        "confidence": "HIGH",
+        "explanation": "ISS-0224 is RESOLVED (resolved_in_run: WF03-ISS0224-20260822). ISS-0224's resolution note explicitly states that test RT-2 was rewritten from a Process.sleep-based timing probe to a deterministic {:claiming, label} message barrier 'specifically because the old timing-based version was itself flaky under concurrent-suite load'. ISS-0776's ISSUE-FIXER attempt 2 ran 15 iterations of both target files under real CPU+memory contention: 23/23 SandboxPoolTest passed every iteration, 540/540 total. No reproduction in documented real conditions. The original RELEASE-VALIDATOR sighting (WF02-REQ372-20260921) was a secondhand report from a full-suite run whose host state is unknown; no subsequent attempt has reproduced it. Ruling: no current defect. If it resurfaces, capture the full failure output (assertion message, seed, partition) before re-filing.",
+        "action": "No fix cycle warranted."
+      }
+    },
+
+    "route_recommendation": {
+      "helptest_fix": "Route to CODE-DESIGNER for a single one-line change: lib/letflow/routers/help.ex line ~183, replace Enum.max_by(many, & &1.updated_at) with Enum.max_by(many, &{DateTime.to_unix(&1.updated_at, :microsecond), &1.id}). This is the correct fix for the structural DateTime comparison bug. It is a tiny targeted change with well-understood correctness properties.",
+      "sandboxpool_fix": "None. Mark ISS-0774's SandboxPoolTest component as no_defect / already covered by ISS-0224's resolution."
+    },
+
+    "iss_0776_update_needed": "Yes -- append a process_note to docs/issues/ISS-0776.yaml: the structural DateTime comparison bug is now confirmed analytically (root cause identified), a correct fix is specified, and ORCH is routing a fix cycle. Update its status to 'in_progress' or leave open pending CODE-DESIGNER output."
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

@@ -1,0 +1,176 @@
+{
+  "handoff_id": "WF03-ISS0765-20260924-step-03d",
+  "run_id": "WF03-ISS0765-20260924",
+  "workflow_id": "WF-03",
+  "step": "Step 3d",
+  "from_agent": "REVIEWER",
+  "to_agent": "ORCH",
+  "status": "COMPLETED",
+  "created_at": "2026-09-24T17:26:18Z",
+  "started_at": "2026-09-24T17:26:18Z",
+  "completed_at": "2026-09-24T17:33:00Z",
+  "context": {
+    "branch_name": "feature/WF03-ISS0765-20260924",
+    "issue_id": "ISS-0765",
+    "queue_ref": "Q-810",
+    "github_ref": "GH-1798",
+    "gated_commit": "bcddcebf",
+    "handoff_commit": "317fcc75",
+    "design_authority": "lib/letflow/design/iss-0765-groupsapi-route-prefix-audit.md @ 1fca1613",
+    "design_gate": "handoffs/WF03-ISS0765-20260924/step-02b-design-gate-rework1.json (PASS, rework 1)",
+    "artifacts_in": [
+      "docs/issues/ISS-0765.yaml",
+      "lib/letflow/design/iss-0765-groupsapi-route-prefix-audit.md",
+      "handoffs/WF03-ISS0765-20260924/step-02b-design-gate-rework1.json",
+      "handoffs/WF03-ISS0765-20260924/step-03-frontend-dev.json",
+      "web/src/api/identity.ts",
+      "web/src/types/api.ts",
+      "web/src/pages/admin/GroupsPage.tsx"
+    ]
+  },
+  "task": {
+    "description": "WF-03 Step 3d -- REVIEWER hard gate on implementation commit bcddcebf: does the implementation match the gated design exactly, no more and no less? Charter scope: idiom, scope creep, decision-record consistency."
+  },
+  "result": {
+    "status": "PASS",
+    "summary": {
+      "verdict": "PASS -- implementation matches the gated design in both directions",
+      "one_line": "Every design decision (a)-(d) is implemented, nothing beyond them is, all four new interfaces were re-derived field-for-field from the live backend source rather than inherited from the design, and the seven GroupsPage.tsx edits are exactly the enumerated set with no eighth.",
+      "charter_applicability": "The OTP/supervision half of the REVIEWER charter is INAPPLICABLE to this diff and was not stretched to fit. Nothing under lib/ changed, no gen_statem callback, supervision tree or process lifecycle is touched, and Letflow.InstanceSupervisor is not in the blast radius. Charter items 1 (gen_statem idiom) and 2 (supervision isolation) are recorded as N/A. Items 3 (type-safety) and 4 (scope creep), plus decision-record consistency, are the live half and are where this gate's work went."
+    },
+    "design_conformance": {
+      "method": "Both directions checked: (i) every normative element of the design searched for in the diff, (ii) every hunk of the diff traced back to the design section authorising it. No hunk is unattributed.",
+      "decision_a_get_update_deleted": {
+        "verdict": "IMPLEMENTED",
+        "detail": "groupsApi.get and groupsApi.update are gone from web/src/api/identity.ts. A six-line comment block sits at :43-48 where .get was. Its text is the design section 2 replacement text verbatim.",
+        "ac3_second_disjunct_check": "SATISFIED, and it does NOT read as a TODO. The comment states the operations do not exist in Letflow.Routers.Identity.__authz_routes__/0 at any prefix and that lib/letflow/identity.ex has no get_group/2 or update_group/3 -- i.e. it records an unimplemented BACKEND capability, not deferred frontend work. Its closing sentence is prohibitive rather than aspirational: 'Do not re-add a client function for either until a backend route exists; adding one is a WF-01 requirement.' A reader looking for work to pick up is told not to, and told which workflow owns it if the capability is ever wanted.",
+        "minor_note": "The design said the text should sit 'where lines 40-41 and 46-47 are today', i.e. at both removal sites, but supplied ONE text block covering both functions. The implementation placed one consolidated block at the .get site and none at the .update site. That is the natural reading of a single block naming both functions; splitting it would have duplicated the prose. Not a deviation."
+      },
+      "decision_b_members_retype": {
+        "verdict": "IMPLEMENTED",
+        "detail": "members: (id) => client.get<GroupMemberPage>(`/api/v1/identity/groups/${id}/members`). The envelope is returned verbatim; no .items unwrap, no reshaping, no default-filling anywhere inside web/src/api/. INV-B holds."
+      },
+      "decision_c_addmember": {
+        "verdict": "IMPLEMENTED",
+        "detail": "addMember(id: string, userId: string) => client.post<GroupMemberAddResult>(`/api/v1/identity/groups/${id}/members`, { user_id: userId }). Arity 2, singular body. The sole caller at GroupsPage.tsx:78 (pre-fix :76) passes userId unwrapped."
+      },
+      "decision_d_list_return_type": {
+        "verdict": "IMPLEMENTED",
+        "detail": "list() => client.get<GroupListResponse>('/api/v1/identity/groups'). PagedResponse<T> itself is unmodified and still imported and used by usersApi.list (:19) and rolesApi.list (:70)."
+      },
+      "url_literals": {
+        "verdict": "ALL SIX MATCH section 6.1",
+        "inv_a_verified_independently": "Re-derived from source, not from the design. lib/letflow/router.ex:130 forwards /api/v1 to ApiPipeline; lib/letflow/plugs/api_pipeline.ex:141 forwards /identity to Letflow.Routers.Identity; :154's /admin/services is the only /admin/* mount. lib/letflow/routers/identity.ex:178-204 registers exactly the six :GroupsManage routes the design enumerates -- and no GET /groups/:id and no PATCH/PUT /groups/:id. Every post-fix groupsApi literal resolves to one of those six. grep over web/src/ finds zero remaining /api/v1/admin/groups occurrences outside identity.removeMembers.test.ts, where both hits are that test's own deliberate negative assertions.",
+        "admin_prefix_elsewhere_still_present": "CONFIRMED, as the design predicted: /api/v1/admin/roles survives at identity.ts:73,76,79,82,85,88 (rolesApi, ISS-0812's scope). The design's instruction that TEST-DESIGNER must not write a whole-file absence assertion therefore rests on a true premise and remains binding at Step 4."
+      },
+      "groups_page_edit_count": {
+        "verdict": "EXACTLY SEVEN, NO EIGHTH",
+        "enumerated": [
+          ":54 -> data: members renamed to data: membersPage",
+          "new line after :58 -> const members = useMemo(() => membersPage?.items ?? [], [membersPage?.items])",
+          ":76 -> groupsApi.addMembers(id, [userId]) becomes groupsApi.addMember(id, userId)",
+          ":103 -> new Set(members.map((user) => user.id))",
+          ":223 -> members.length === 0",
+          ":227 -> members.map((user) => {",
+          ":228 -> const id = user.id"
+        ],
+        "line_108_dependency_array": "TEXTUALLY UNCHANGED. The array [members, users?.items] does not appear in the diff at all and reads identically post-fix at :113.",
+        "no_eighth_edit": "The GroupsPage.tsx diff is four hunks totalling 7 added and 7 removed lines, and every one maps to a row above. Specifically NOT touched, as the design required: groupMembers/1 at :28-30, the is_system guard, the member_count column, the useMemo import at :1 (already present), and the defensive id fallback at :111 inside availableUsers' filter -- that one operates on `users` (type User), not on members, so leaving it is correct and touching it would have been ISS-0812/0815 creep."
+      }
+    },
+    "shim_question_decision_b": {
+      "verdict": "NOT A SHIM -- consumer-side convenience over an already-truthful value. Decision (b) is honoured.",
+      "reasoning": [
+        "The prohibition in docs/guides/frontend_developer_guide.md:83-88 is specifically against normalising a MISMATCH: 'If web/ expects a field, a status code, or a pagination cursor that Letflow's API doesn't produce ... do not add a shim or adapter inside web/ that normalises the mismatch.' Here there is no mismatch left to normalise -- GroupMemberPage is a field-for-field transcription of what the server actually emits, verified against source below.",
+        "The useMemo invents no field, renames no field, and supplies no default for any wire value. It selects .items, which the server does produce, and substitutes [] only for React Query's undefined -- the query is created with enabled: Boolean(activeGroup), so undefined is a client-side not-yet-fetched state, not a server response. Defaulting a loading state is not defaulting a wire shape.",
+        "Nothing is discarded or hidden. membersPage stays in scope at the call site with next_cursor and count intact and reachable -- which is exactly the visibility decision (b) rationale 3 was protecting. An unwrap inside groupsApi.members would have destroyed them for every future consumer including the mobile tier; this does not.",
+        "INV-B scopes the prohibition to web/src/api/. The derivation lives in the page component, one layer below the contract boundary, and is invisible to any other client.",
+        "The compiler-as-detector property that decision (b) rationale 2 was bought for is intact: any OTHER consumer of groupsApi.members would still receive GroupMemberPage and still be a type error if it treated the value as an array. The useMemo narrows one call site's local binding, it does not weaken the exported type."
+      ],
+      "counterfactual_that_would_have_failed": "Had the same expression been written inside groupsApi.members -- client.get<GroupMemberPage>(...).then(r => r.items) -- that WOULD be the forbidden shim: the declared return type would no longer be the wire body, next_cursor would be unreachable from every consumer, and INV-B would break. It is not what was written."
+    },
+    "new_types_reverified_against_source": {
+      "method": "Re-derived from the Elixir source in this step rather than accepted from the design (anti-patterns.md:617, 'Inheriting a claim from a record instead of re-deriving it from the source').",
+      "GroupMember": "MATCHES lib/letflow/routers/identity.ex:729-740 exactly -- id, username, display_name, email, status, auth_source, inserted_at, updated_at. Eight keys, all emitted unconditionally, all required in the interface. No key added, none omitted.",
+      "GroupMemberPage": "MATCHES lib/letflow/api/pagination.ex:81, @derive {Jason.Encoder, only: [:items, :next_cursor, :count]}. No has_more -- the ISS-0816 defect is NOT reproduced in new code.",
+      "GroupListResponse": "MATCHES handle_list_groups/2 at lib/letflow/routers/identity.ex:468-472, which sends items + total -- no page, no page_size. The PagedResponse<T> lie is not reproduced.",
+      "GroupMemberAddResult": "MATCHES member_result_map/3 at lib/letflow/routers/identity.ex:829-831 -- group_id, user_id, created.",
+      "lowercase_union_check_iss_0814_not_repeated": {
+        "verdict": "CORRECT -- lowercase is right and the ISS-0814 mistake is NOT repeated in new code",
+        "evidence": "lib/letflow/identity/user.ex:41-42 declares field(:status, Ecto.Enum, values: [:active, :inactive], default: :active) and field(:auth_source, Ecto.Enum, values: [:internal, :oidc], default: :internal). user_map/1 emits Atom.to_string(user.status) and Atom.to_string(user.auth_source). grep for 'upcase' across lib/letflow/routers/identity.ex returns NONE. The wire values are therefore active/inactive and internal/oidc, and GroupMember's unions are exact.",
+        "note": "This is the one place the diff could have copied User.status?: 'ACTIVE' | 'INACTIVE' (types/api.ts:435) into new code and did not. The interface's own JSDoc records why, at the point of use."
+      }
+    },
+    "scope_creep_check": {
+      "verdict": "NONE FOUND -- all six carve-outs verified clean",
+      "commit_footprint": "bcddcebf touches exactly three files: web/src/api/identity.ts, web/src/pages/admin/GroupsPage.tsx, web/src/types/api.ts. 73 insertions, 17 deletions. INV-E holds -- nothing under lib/, priv/repo/migrations/ or test/ is in the commit (the design artefact under lib/letflow/design/ predates it, at 1fca1613).",
+      "iss_0811_group_is_system_member_count": "CLEAN. The Group interface (types/api.ts:444-452) is byte-unchanged -- the types/api.ts diff is a single additive hunk inserted AFTER Group's closing brace. The Members column and the is_system guard in GroupsPage.tsx do not appear in the diff.",
+      "iss_0812_usersapi_rolesapi": "CLEAN. usersApi (identity.ts:17-34) and rolesApi (:69-89) are untouched; the six /api/v1/admin/roles literals are still there, correctly left for ISS-0812.",
+      "iss_0814_user_status_casing": "CLEAN. User.status?: 'ACTIVE' | 'INACTIVE' is untouched at types/api.ts:435, and usersApi.update still sends the uppercase value. Correctly left alone.",
+      "iss_0815_user_roles_created_at": "CLEAN. User is byte-unchanged. The design's stated reason for a separate GroupMember rather than reusing User is exactly this, and it was followed instead of shortcut.",
+      "iss_0816_cursorpage_has_more_and_50_row_truncation": "CLEAN on both halves. CursorPage<T> (types/api.ts:14-18) is untouched and GroupMemberPage was written as a separate interface rather than reusing it. No page_size query param was added and next_cursor is left unread -- OQ-2's explicit instruction to FRONTEND-DEV was honoured.",
+      "frontend_dev_claim_verified": "FRONTEND-DEV's report that PagedResponse<T>, CursorPage<T>, User and Group are untouched and the new interfaces purely additive is CONFIRMED against the actual diff, not accepted on assertion. INV-D holds.",
+      "guards_untouched": "INV-F holds. git diff main...HEAD --stat over web/tests/ and web/package.json is empty -- no forbidlist pattern weakened, removed or allowedPaths-exempted.",
+      "the_one_judgement_call": "The four new interfaces carry JSDoc blocks the design did not literally specify (it gave bare interface bodies). This is NOT scope creep: the comments are attached to the exact elements the design authorised, add no code, and record the source citation and the lowercase-union rationale at the point a future reader will hit it. Given that ISS-0814 exists precisely because that rationale was not written down anywhere, documenting it in new code is the opposite of creep."
+    },
+    "inv_c_removemembers": {
+      "verdict": "BYTE-UNCHANGED -- CONFIRMED",
+      "evidence": "git diff main...HEAD -- web/src/api/__tests__/identity.removeMembers.test.ts produces EMPTY output. In identity.ts the removeMembers line appears in the diff only as unchanged context. Its name was not harmonised to removeMember for symmetry with addMember, which the design explicitly did not authorise. The asymmetric pair addMember/removeMembers is therefore deliberate and correct for this run; a later run that unifies them must also update identity.removeMembers.test.ts."
+    },
+    "decision_record_consistency": {
+      "verdict": "NO CONTRADICTION -- decision (c) restores the backend comment's premise rather than contradicting it",
+      "backend_comment_verified": "Read at lib/letflow/routers/identity.ex:483-489. It records the dual user_id/user_ids[0] fallback as a deliberate R-Co port decision: 'R-Co's dual user_id/user_ids[0] fallback is preserved verbatim, since no acceptance criterion calls for simplifying it and no existing Letflow caller depends on the array shape either way.'",
+      "premise_restored_not_broken": "That comment's stated premise -- no caller depends on the array shape -- was stale, because GroupsPage.tsx:76 passed [userId]. After this fix, grep over web/src/ for user_ids and addMembers returns zero hits outside identity.removeMembers.test.ts's historical prose. The premise is true again. The client moved; the recorded decision did not.",
+      "backend_unchanged_and_still_tolerant": "resolve_member_user_id/1 at :525-537 still matches user_id as its FIRST clause, so { user_id } is the backend's primary accepted shape, not a fallback the client is now leaning on. The user_ids clauses remain, so the change is backwards-compatible and the port decision is untouched. No backend change was needed and none was made.",
+      "other_records_checked": "docs/migration/decisions/0011-frontend-ownership.md governs web/ ownership and is satisfied -- FRONTEND-DEV owned the change. No decision record bears on route prefixes or response envelope shape. Nothing in this diff re-decides anything on record, and I have no decision-record disagreement to register."
+    },
+    "type_safety_observations": {
+      "note": "Charter item 3. Non-blocking by definition, and in this case the diff MOVES IN THE RIGHT DIRECTION -- it removes two type lies (PagedResponse<Group> on .list, User[] on .members) and adds none.",
+      "new_filings_required": "NONE. Every residual gap I found is already a filed, claimable issue: the absence of any mechanical coupling between the backend route table and the frontend URL literals is ISS-0813 (and is the structural reason ISS-0765 existed at all); User's field and casing lies are ISS-0814/0815; CursorPage<T>.has_more is ISS-0816; Group's is_system is ISS-0811. Per the charter I would otherwise have filed under docs/issues/ tagged type-safety, but filing a duplicate would pollute the queue, and this step is bound to modify no file outside handoffs/.",
+      "watch_item": "GroupsPage.tsx now contains two adjacent idioms for the same concept: members.map over the truthful GroupMember at :104, and a two-level optional-id fallback over the over-optional User at :111, seven lines apart. The contrast is instructive rather than harmful today, but it is the second place in this file where User's optional-everything shape forces a defensive fallback. Worth watching when ISS-0812/0815 give usersApi its own pass -- the right end state is that the User-side fallback disappears the same way the members-side one just did."
+    },
+    "verification_independently_reproduced": {
+      "policy": "Per core-directives, FRONTEND-DEV's green claims are not themselves evidence. All four commands were re-run in this step from C:\\Users\\tvolo\\dev\\ai-dala\\letflow\\web against the checked-out tree at 317fcc75 (the three source files exactly as committed at bcddcebf; ORCH advanced HEAD to e4bff8fb mid-review without touching web/ or lib/, so the measured tree and the final tree are identical in the gated files).",
+      "type_check": "npx tsc -b tsconfig.json --force -- exit 0, no diagnostics. Run with --force deliberately, so the result is a full rebuild and not a tsbuildinfo cache hit.",
+      "lint": "npm run lint -- exit 0, eslint --max-warnings 0, no output.",
+      "test": "npm test -- Test Files 124 passed (124), Tests 874 passed (874), Duration 25.61s. Matches FRONTEND-DEV's reported 874/124 exactly.",
+      "guards": "npm run guards -- Test Files 4 passed (4), Tests 48 passed (48), Duration 17.14s. Matches the reported 48."
+    },
+    "integration_evidence_gap": {
+      "severity": "RECORDED, NOT BLOCKING at this gate",
+      "statement": "Static green is NOT integration evidence and is not counted as such here. Every command above type-checks, lints or exercises the code against a vi.fn() spy whose Response the test itself constructs -- no HTTP request leaves the process and no Letflow instance was dialled. FRONTEND-DEV's own report states plainly that a probe of http://localhost:4000/api/v1/identity/groups got no connection (HTTP 000), and that statement is accepted as honest rather than claimed away.",
+      "what_is_therefore_unproven": "That /api/v1/identity/groups, /api/v1/identity/groups/:id, /api/v1/identity/groups/:id/members and the { user_id } add-member body actually return 2xx against a running server with a real :GroupsManage-bearing token. The route table was read from source and the six routes demonstrably exist, so the prefix correction is sound BY CONSTRUCTION -- but construction is not execution. The specific thing no test in this run can catch is a discrepancy between the route macros as written and the pipeline as actually mounted at runtime.",
+      "who_owns_closing_it": "UAT-RUNNER, once an instance is up. Scope: list groups, open Manage members, add a member, remove a member, delete an empty group -- the scope FRONTEND-DEV itself nominated, which I endorse. This gap must be carried into the run's closing handoff so Step 5 does not close ISS-0765 claiming end-to-end evidence it does not have."
+    },
+    "design_artefact_observations": {
+      "note": "Two internal wording slips in the gated design. Neither is an implementation defect and neither affects this verdict -- recorded so Step 4 and Step 5 are not tripped by an apparent count mismatch.",
+      "O-1": "The file-scope table at the top of the design says web/src/types/api.ts gets 'three new exported interfaces', but the normative body specifies FOUR: GroupMember and GroupMemberPage (section 3.1), GroupListResponse (section 5), GroupMemberAddResult (section 6). Four were implemented, matching the body. The header undercounts; the implementation is right.",
+      "O-2": "Section 3.2's heading says 'the five lines that change' while its own table has six substantive rows. The top table's '5 edits + 1 added line' plus section 4's one caller edit yields seven, which is what was implemented. Heading slip only.",
+      "consequence": "If a later step audits the implementation against the design's HEADER counts rather than its tables, it will report a spurious mismatch. It should not."
+    },
+    "sibling_session_state": {
+      "observed": "SECURITY-REVIEWER's Step 3c completed at 2026-09-24T17:31:00Z with verdict PASS while this gate was running. Its artefact was untracked in the working tree mid-review; ORCH then committed it as 6d6f8c2e and followed with e4bff8fb (sharpening ISS-0812/0813 per that gate), advancing HEAD from 317fcc75 to e4bff8fb while this review was in progress.",
+      "decision": "Left both alone; this commit stages only handoffs/WF03-ISS0765-20260924/step-03d-reviewer.json. The concurrent commits were checked against this gate's subject rather than assumed harmless: git diff bcddcebf..HEAD -- web/ lib/ is EMPTY, so e4bff8fb and 6d6f8c2e touch only docs/issues/, handoffs/ and orchestrator.log. The gated code is byte-identical to the tree this verdict was derived from, and the verdict stands unchanged on the advanced HEAD.",
+      "note_for_orch": "Both Step 3 gates are now PASS and independently reached that verdict on different grounds -- SECURITY-REVIEWER on authorization-surface narrowing, this gate on design conformance. Neither contradicts the other."
+    }
+  },
+  "gate_decision": {
+    "verdict": "PASS",
+    "blocking_findings": [],
+    "unblocks": "WF-03 Step 4 -- TEST-DESIGNER may now write web/src/api/__tests__/identity.groupsApi.test.ts against the design's eleven-row matrix.",
+    "conditions_carried_forward": [
+      "N-1 (from the design gate): M-1a's predicted tsc error sites are a FLOOR, not an exact-match assertion. Record verbatim whatever tsc emits; do NOT adjust the mutant to manufacture a diagnostic at :228.",
+      "N-3 (from the design gate): Step 4b must APPLY at least one mutant itself rather than accept TEST-DESIGNER's reported outcome.",
+      "The mutants assume the post-fix tree -- run them against bcddcebf or later, not against main.",
+      "Step 4 must not write a whole-file /api/v1/admin/ absence assertion over identity.ts: six rolesApi literals legitimately survive (verified this step) and such an assertion would fail for the wrong reason.",
+      "Integration evidence gap: no live-backend verification exists for this fix. Carry to UAT-RUNNER and do not let Step 5 close ISS-0765 claiming end-to-end proof.",
+      "ISS-0765's own fix_direction says to 'correct .get/.update to the real prefix', which is unsatisfiable -- design section 2 resolved it by deletion. DOC-UPDATER must record the divergence when closing, not claim a correction that was not made."
+    ]
+  },
+  "issues": [],
+  "new_findings": [],
+  "artifacts_out": [
+    "handoffs/WF03-ISS0765-20260924/step-03d-reviewer.json"
+  ],
+  "next_action": "ORCH: REVIEWER gate is GREEN. Both Step 3 gates (3c SECURITY-REVIEWER, 3d REVIEWER) now PASS. Advance to WF-03 Step 4 (TEST-DESIGNER), carrying N-1, N-3 and the four other conditions above into the Step 4/4b handoffs."
+}

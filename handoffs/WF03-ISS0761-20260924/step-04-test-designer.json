@@ -1,0 +1,32 @@
+{
+  "handoff_id": "WF03-ISS0761-20260924-step-04",
+  "run_id": "WF03-ISS0761-20260924",
+  "workflow_id": "WF-03",
+  "step": "Step 4",
+  "to_agent": "TEST-DESIGNER",
+  "from_agent": "ORCH",
+  "status": "IN_PROGRESS",
+  "created_at": "2026-09-24T07:29:47Z",
+  "started_at": "2026-09-24T07:29:47Z",
+  "context": {
+    "branch_name": "feature/WF03-ISS0761-20260924",
+    "issue_id": "ISS-0761",
+    "artifacts_in": [
+      "scripts/seed_swiftroute_persona_actors.sh",
+      ".claude/agents/uat-runner.md",
+      "lib/letflow/design/iss-0761-swiftroute-persona-actor-provisioning.md"
+    ]
+  },
+  "task": {
+    "description": "Execute Step 4 (Regression Test Design) for WF03-ISS0761-20260924.\n\nWorkspace: c:\\Users\\tvolo\\dev\\ai-dala\\letflow\nBranch: feature/WF03-ISS0761-20260924\n\nWF-03 regression test purpose: a test that FAILS against pre-fix code and PASSES post-fix. For ISS-0761, there is no Elixir defect to write a before/after unit test for -- this is a provisioning gap (missing QA data). The regression test for this issue is a STRUCTURAL test: verify that scripts/seed_swiftroute_persona_actors.sh's API call payload shapes are correct and consistent with the existing identity API contracts.\n\nWrite test/letflow/scripts/seed_swiftroute_persona_actors_test.exs with tests that:\n1. Verify the persona-to-role mapping in the script (read the script, parse the role/group assignments, assert Lena→TASK_WORKER, Marco→TASK_WORKER+role-ops-manager, Alice→TASK_WORKER+role-ceo)\n2. Verify the script has the Part A prerequisite guard (exits with named error if Part A not done -- check the 'ERROR: Keycloak' or similar guard text)\n3. Verify .claude/agents/uat-runner.md now contains a SwiftRoute credentials section (read the file, assert the section exists)\n4. These can be source-level assertions (read the file as text, check for key strings) -- no need to execute the script\n\nTag: @moduletag :unit\nAsync: true\n\nCommit and complete handoff (step-04-test-designer.json): status COMPLETED, result.status PASS, artifacts_out, next_action 'Route to TEST-DESIGN-VALIDATOR (Step 4b)'.",
+    "acceptance_criteria": [
+      "Tests verify persona-role mapping in the script",
+      "Test verifies Part A prerequisite guard present",
+      "Test verifies uat-runner.md contains SwiftRoute credentials section",
+      "Source-level assertions (no script execution needed)"
+    ]
+  },
+  "result": null,
+  "rework_count": 0,
+  "max_rework": 3
+}

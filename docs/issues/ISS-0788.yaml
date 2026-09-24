@@ -1,0 +1,82 @@
+id: ISS-0788
+title: >
+  render_upload_attachment/3 has no clause for {:error, :storage_quota_exceeded}
+  or {:error, :tenant_not_found} -- either return crashes the route with a
+  FunctionClauseError instead of a handled 4xx
+discovered_by: REVIEWER
+discovered_in_run: WF02-REQ389-20260923
+discovered_at: "2026-09-24T00:20:00Z"
+severity: MAJOR
+tags:
+  - backend
+  - plug
+  - regression
+description: >
+  Found while gating REQ-389 (content-type allowlist, commit 27e004d3) as the
+  REVIEWER hard gate. REQ-389's own design doc
+  (`lib/letflow/design/req389-attachment-content-type-allowlist.md` §0) claims:
+  "`{:error, :storage_quota_exceeded}` (REQ-390, confirmed present in
+  `upload/2`'s current `@spec`) is rendered by an existing clause not
+  reproduced above -- not touched by this design." That claim is false as of
+  this review: reading `lib/letflow/routers/instances.ex` directly (both
+  before and after REQ-389's diff) shows `render_upload_attachment/2` (now
+  `/3`) has clauses only for `{:ok, _}`, `{:error, :file_too_large}`,
+  `{:error, :infected, _}`, `{:error, :scan_unavailable}`, and
+  `{:error, %Ecto.Changeset{}}` -- REQ-389 added a sixth for
+  `{:error, :content_type_not_allowed}`. No clause anywhere renders
+  `{:error, :storage_quota_exceeded}` or `{:error, :tenant_not_found}`, even
+  though `Letflow.Repository.Attachments.upload/2`'s own `@spec` and
+  implementation (`lib/letflow/repository/attachments.ex`,
+  `check_storage_quota/3` inside `do_upload_after_scan/6`) can return both.
+
+  Confirmed by grep across `lib/` and `test/`: `storage_quota_exceeded` and
+  `tenant_not_found` are asserted only at the `Attachments.upload/2` context-
+  module level (`test/letflow/repository/attachments_test.exs`) -- no route-
+  level test exists driving `POST /instances/:id/attachments` to a real
+  over-quota or unknown-tenant condition, which is presumably how this has
+  gone unnoticed: nothing exercises `render_upload_attachment` with either
+  tag through the route layer.
+
+  Root cause and scope: this predates REQ-389 entirely. REQ-390 (per-tenant
+  storage quota, `status: done`) added `check_storage_quota/3` and the
+  `:storage_quota_exceeded`/`:tenant_not_found` tags to `upload/2`'s return
+  contract but never added a matching route-rendering clause in
+  `lib/letflow/routers/instances.ex` -- an REQ-390 implementation gap, not
+  something REQ-389 introduced or is required to fix (REQ-389's own diff
+  only adds one new clause and does not touch, remove, or reorder any of the
+  existing ones). ELIXIR-DEV flagged the design doc's inaccurate §0 claim
+  during REQ-389's implementation but correctly declined to fix it as
+  out-of-scope; this issue exists so it becomes claimable work instead of
+  being lost as an observation.
+affected_files:
+  - lib/letflow/routers/instances.ex
+  - lib/letflow/repository/attachments.ex
+  - lib/letflow/design/req389-attachment-content-type-allowlist.md
+related_requirements:
+  - REQ-389
+  - REQ-390
+severity_rationale: >
+  MAJOR, not CRITICAL -- requires a real over-quota tenant or a real unknown-
+  tenant condition to hit via the live route, both narrower windows than a
+  simple bad request. But when hit, an actionable 4xx becomes an unhandled
+  500 (Plug's default FunctionClauseError handling), which is a real
+  regression in the user-facing contract REQ-390 is supposed to provide at
+  the API boundary, not merely at the context-module boundary.
+suggested_fix: >
+  Add two more `render_upload_attachment/3` clauses in
+  `lib/letflow/routers/instances.ex`, matching the existing pattern: a 4xx
+  (409 Conflict, or another suitable Problem-Details status distinct from
+  413/415/422/503) for `{:error, :storage_quota_exceeded}` naming the quota
+  condition in plain language, and one for `{:error, :tenant_not_found}`
+  (likely 404 or 422, matching this router's existing tenant-not-found
+  convention elsewhere, e.g. `lib/letflow/routers/admin_services.ex:229`).
+  Also correct REQ-389's design doc §0, which currently asserts the
+  `:storage_quota_exceeded` clause already exists -- it does not.
+queue_ref: "Q-787"
+# NOTE: letflow-queue's task 787 auto-titled itself "ISS-0787" from its own
+# atomically-allocated id, but the real on-disk filename is ISS-0788.yaml --
+# slot ISS-0787 was already taken by this same repo's storage_allowance_bytes
+# fix. Established, recurring queue-id/filename divergence pattern for this
+# project; queue_ref/github_ref below are authoritative for this file.
+github_ref: "GH-1761"
+status: open

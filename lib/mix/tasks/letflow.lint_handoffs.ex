@@ -1066,7 +1066,22 @@ defmodule Mix.Tasks.Letflow.LintHandoffs do
         []
       end
 
-    ac_len = Enum.reduce(acs, 0, fn ac, acc -> acc + String.length(to_string(ac)) end)
+    # ISS-0825-adjacent hardening (2026-09-25): a handoff's `acceptance_criteria`
+    # must be a list per HANDOFF_PROTOCOL.md's schema, but a malformed handoff
+    # (e.g. a map grouping criteria by issue id) previously crashed this entire
+    # full-corpus scan via `to_string/1` on a `{key, value}` tuple from
+    # `Enum.reduce` over a map -- one bad file took down every PR's backend
+    # gate. Treat a non-list shape as zero-length for this advisory-only length
+    # heuristic rather than raising; the malformed shape itself is a real
+    # authoring defect but is not this check's job to catch or crash on.
+    ac_len =
+      case acs do
+        list when is_list(list) ->
+          Enum.reduce(list, 0, fn ac, acc -> acc + String.length(to_string(ac)) end)
+
+        _ ->
+          0
+      end
 
     h_size_2 =
       if String.length(desc) + ac_len < @under_specified_threshold do

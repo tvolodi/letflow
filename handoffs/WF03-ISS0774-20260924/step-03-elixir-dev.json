@@ -1,0 +1,33 @@
+{
+  "handoff_id": "WF03-ISS0774-20260924-step-03",
+  "run_id": "WF03-ISS0774-20260924",
+  "workflow_id": "WF-03",
+  "step": "Step 3",
+  "to_agent": "ELIXIR-DEV",
+  "from_agent": "ORCH",
+  "status": "IN_PROGRESS",
+  "created_at": "2026-09-24T08:41:20Z",
+  "started_at": "2026-09-24T08:41:20Z",
+  "context": {
+    "branch_name": "feature/WF03-ISS0774-20260924",
+    "issue_id": "ISS-0774",
+    "artifacts_in": [
+      "lib/letflow/design/iss-0774-select-live-row-determinism.md",
+      "lib/letflow/routers/help.ex",
+      "test/letflow/routers/help_test.exs"
+    ]
+  },
+  "task": {
+    "description": "Execute Step 3 (Implementation) for WF03-ISS0774-20260924.\n\nWorkspace: c:\\Users\\tvolo\\dev\\ai-dala\\letflow\nBranch: feature/WF03-ISS0774-20260924\nMix: & 'C:/Program Files/Elixir/bin/mix'\n\nRead the design doc: lib/letflow/design/iss-0774-select-live-row-determinism.md\n\nPART A: Fix lib/letflow/routers/help.ex\nIn select_live_row/2, find the line:\n  many -> Enum.max_by(many, & &1.updated_at)\nChange it to:\n  many -> Enum.max_by(many, &{DateTime.to_unix(&1.updated_at, :microsecond), &1.id})\n\nPART B: Add regression test to test/letflow/routers/help_test.exs\nIn the 'GET /resolved -- select_live_row/2 tie-break' describe block, add a new test:\n'when two live rows have the same process_definition_id, the row with the later updated_at wins regardless of microsecond position'\nThe test should create TWO rows with the same screen_id AND process_definition_id (both live), where one has updated_at straddling a second boundary (microsecond > 999000) and the other has later wall-clock time but lower microsecond. Assert the endpoint returns the row with the LATER wall-clock time.\nThis is the fail-first proof: old code would pick the wrong row; new code picks the right one.\n\nAFTER:\n1. mix compile --warnings-as-errors (quote exit code)\n2. mix test test/letflow/routers/help_test.exs (quote result -- must be all passing including the new test)\n3. git add lib/letflow/routers/help.ex test/letflow/routers/help_test.exs handoffs/WF03-ISS0774-20260924/step-03-elixir-dev.json\n4. git commit -m 'fix(ISS-0774): use DateTime.to_unix for deterministic select_live_row/2 tie-break'\n\nComplete handoff (step-03-elixir-dev.json): COMPLETED, PASS or FAIL, compile_exit, test result (pass count), commit_sha.",
+    "acceptance_criteria": [
+      "One-line fix applied to lib/letflow/routers/help.ex",
+      "New regression test added proving fail-first",
+      "mix compile --warnings-as-errors exits 0",
+      "All HelpTest tests pass including new regression test",
+      "Committed to branch"
+    ]
+  },
+  "result": null,
+  "rework_count": 0,
+  "max_rework": 3
+}

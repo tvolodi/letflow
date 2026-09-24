@@ -248,6 +248,35 @@ defmodule Letflow.Routers.HelpTest do
       assert conn.status == 200
       assert json(conn)["id"] == newer.id
     end
+
+    test "when two live rows have the same process_definition_id, the row with the later updated_at wins regardless of microsecond position" do
+      %{tenant_id: tenant_id, schema_name: schema_name} =
+        TenantFixture.provisioned_tenant!(slug_prefix: "req366-router")
+
+      screen_id = unique_screen_id()
+      definition = create_process_definition!(schema_name)
+
+      # stale: second=5, microsecond=999000 — old struct comparison picks this (wrong)
+      stale = live!(schema_name, %{screen_id: screen_id, process_definition_id: definition.id})
+      stale_ts = ~U[2024-01-01 00:00:05.999000Z]
+      Ecto.Changeset.change(stale, updated_at: stale_ts) |> Repo.update!(prefix: schema_name)
+
+      # fresh: second=6, microsecond=1 — later wall-clock, correct answer
+      fresh = live!(schema_name, %{screen_id: screen_id, process_definition_id: definition.id})
+      fresh_ts = ~U[2024-01-01 00:00:06.000001Z]
+      fresh = Ecto.Changeset.change(fresh, updated_at: fresh_ts) |> Repo.update!(prefix: schema_name)
+
+      conn =
+        build_conn(
+          :get,
+          "/resolved?screen_id=#{screen_id}&process_definition_id=#{definition.id}",
+          %{tenant_id: tenant_id}
+        )
+        |> dispatch()
+
+      assert conn.status == 200
+      assert json(conn)["id"] == fresh.id
+    end
   end
 
   # ---------------------------------------------------------------------------------

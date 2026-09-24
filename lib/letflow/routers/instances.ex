@@ -1014,7 +1014,7 @@ defmodule Letflow.Routers.Instances do
     with {:ok, instance_id} <- cast_instance_id(raw_id),
          {:ok, actor_id} <- actor_id(conn),
          {:ok, attrs} <- upload_attrs_from_conn(conn, instance_id, actor_id) do
-      render_upload_attachment(conn, Attachments.upload(attrs, opts))
+      render_upload_attachment(conn, attrs, Attachments.upload(attrs, opts))
     else
       {:error, :invalid_instance_id} ->
         Response.unprocessable(conn, "instance_id is not a valid UUID")
@@ -1055,24 +1055,41 @@ defmodule Letflow.Routers.Instances do
   defp attachment_description(value) when is_binary(value) and byte_size(value) > 0, do: value
   defp attachment_description(_absent_or_empty), do: nil
 
-  defp render_upload_attachment(conn, {:ok, attachment}) do
+  defp render_upload_attachment(conn, _attrs, {:ok, attachment}) do
     Response.created(conn, attachment_json(attachment))
   end
 
-  defp render_upload_attachment(conn, {:error, :file_too_large}) do
+  # REQ-389 design §3.3 -- distinct in status code (415, vs. 413/422/503)
+  # and body text (names the rejected content_type and the allowed set)
+  # from every other clause here. content_type is read from the same
+  # already-extracted attrs map the caller passed to Attachments.upload/2,
+  # never re-derived.
+  defp render_upload_attachment(conn, attrs, {:error, :content_type_not_allowed}) do
+    allowed =
+      Attachments.allowed_content_types()
+      |> Enum.sort()
+      |> Enum.join(", ")
+
+    Response.unsupported_media_type(
+      conn,
+      "content type \"#{attrs.content_type}\" is not allowed for attachments; allowed types are: #{allowed}"
+    )
+  end
+
+  defp render_upload_attachment(conn, _attrs, {:error, :file_too_large}) do
     Response.payload_too_large(conn, "uploaded file exceeds the maximum allowed size")
   end
 
   # ISS-0399 design §7 OQ-4 -- infected content is a caller-actionable
   # rejection (4xx), never a 500.
-  defp render_upload_attachment(conn, {:error, :infected, verdict}) do
+  defp render_upload_attachment(conn, _attrs, {:error, :infected, verdict}) do
     Response.unprocessable(conn, "uploaded file failed a content scan (#{verdict})")
   end
 
   # ISS-0399 design §7 OQ-4 -- the scanner adapter itself was unavailable
   # (e.g. a future external-AV call timed out); this is an infrastructure
   # failure, not a rejection of the file itself, and is retry-able.
-  defp render_upload_attachment(conn, {:error, :scan_unavailable}) do
+  defp render_upload_attachment(conn, _attrs, {:error, :scan_unavailable}) do
     Response.service_unavailable(conn, "content scan is temporarily unavailable, please retry")
   end
 
@@ -1082,7 +1099,7 @@ defmodule Letflow.Routers.Instances do
   # own construction should make unreachable -- mapped anyway for
   # completeness, matching render_create/2's own "unreachable but mapped"
   # discipline above.
-  defp render_upload_attachment(conn, {:error, %Ecto.Changeset{}}) do
+  defp render_upload_attachment(conn, _attrs, {:error, %Ecto.Changeset{}}) do
     Response.unprocessable(conn, "request failed validation")
   end
 

@@ -30,6 +30,12 @@ defmodule Letflow.Repository.Attachments do
   consumer that needs a *trusted* content-type determination must not read
   this field as if it were one.
 
+  REQ-389 adds a check of the declared `content_type` string against a fixed
+  allowlist (`@allowed_content_types`); this is a check of the caller's own
+  assertion, not of the underlying bytes, and does not weaken this invariant
+  -- a caller can still declare any allowlisted type for any actual byte
+  content, exactly as before.
+
   ## INV-b -- `byte_size` is independently measured, never caller-trusted
   ## (design §4.0 item 4)
 
@@ -121,6 +127,34 @@ defmodule Letflow.Repository.Attachments do
   # number with no requirement-stated value (design §4.4).
   @max_upload_bytes 26_214_400
 
+  # REQ-389 design §2.1 -- a fixed, compile-time content-type allowlist for
+  # instance attachments, checked before every other guard in upload/2
+  # (§3.1). Video/audio MIME types are deliberately excluded (requirement
+  # text). FLAGGED FOR REVIEWER, same posture as @max_upload_bytes above:
+  # this is a judgement call with no requirement-stated value beyond
+  # `application/pdf` and the "common image/office-document types" phrase --
+  # the office/image entries are this design's own reading of that phrase,
+  # and text/plain, text/csv, application/json, and application/octet-stream
+  # are kept allowed deliberately so no pre-existing REQ-211/212/386/388/391
+  # test fixture needs an edit (design §2.1/§2.3).
+  @allowed_content_types MapSet.new([
+                           "application/pdf",
+                           "image/jpeg",
+                           "image/png",
+                           "image/gif",
+                           "image/webp",
+                           "application/msword",
+                           "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+                           "application/vnd.ms-excel",
+                           "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                           "application/vnd.oasis.opendocument.text",
+                           "application/vnd.oasis.opendocument.spreadsheet",
+                           "text/plain",
+                           "text/csv",
+                           "application/json",
+                           "application/octet-stream"
+                         ])
+
   # ISS-0399 design §3.1 -- resolved fresh on every call (not a compile-time
   # attribute value), same safe-default shape as
   # lib/letflow/engine/lua/platform.ex:774's lua_platform_service_caller.
@@ -146,8 +180,14 @@ defmodule Letflow.Repository.Attachments do
   (creating or reusing it, including the real bytes into its `content`
   column), and inserts one `instance_attachments` row referencing it.
 
-  Steps (design §4.1, revised by ISS-0399 design §2):
+  Steps (design §4.1, revised by ISS-0399 design §2, then by REQ-389 design
+  §3.1):
 
+    0. Checks the caller-declared `content_type` against
+       `@allowed_content_types` (REQ-389). If it is not a member, returns
+       `{:error, :content_type_not_allowed}` immediately -- before
+       `raw_bytes` is even measured, so this check always wins over every
+       other guard below when more than one would independently fail.
     1. Computes `byte_size = byte_size(raw_bytes)` -- never a caller-supplied
        field. If it exceeds `#{@max_upload_bytes}` bytes (25 MiB,
        `@max_upload_bytes`), returns `{:error, :file_too_large}`
@@ -182,6 +222,7 @@ defmodule Letflow.Repository.Attachments do
   """
   @spec upload(upload_attrs(), opts()) ::
           {:ok, Attachment.t()}
+          | {:error, :content_type_not_allowed}
           | {:error, :file_too_large}
           | {:error, :storage_quota_exceeded}
           | {:error, :tenant_not_found}
@@ -189,36 +230,50 @@ defmodule Letflow.Repository.Attachments do
           | {:error, :scan_unavailable}
           | {:error, Ecto.Changeset.t()}
   def upload(attrs, opts) when is_map(attrs) and is_list(opts) do
-    prefix = Keyword.fetch!(opts, :prefix)
-    raw_bytes = Map.fetch!(attrs, :raw_bytes)
-    measured_byte_size = byte_size(raw_bytes)
+    content_type = Map.fetch!(attrs, :content_type)
 
-    if measured_byte_size > @max_upload_bytes do
-      {:error, :file_too_large}
+    if not MapSet.member?(@allowed_content_types, content_type) do
+      {:error, :content_type_not_allowed}
     else
-      content_hash = :crypto.hash(:sha256, raw_bytes)
-      content_type = Map.fetch!(attrs, :content_type)
+      prefix = Keyword.fetch!(opts, :prefix)
+      raw_bytes = Map.fetch!(attrs, :raw_bytes)
+      measured_byte_size = byte_size(raw_bytes)
 
-      case run_attachment_scan(raw_bytes, content_type) do
-        {:ok, :clean} ->
-          do_upload_after_scan(
-            attrs,
-            prefix,
-            raw_bytes,
-            content_hash,
-            content_type,
-            measured_byte_size
-          )
+      if measured_byte_size > @max_upload_bytes do
+        {:error, :file_too_large}
+      else
+        content_hash = :crypto.hash(:sha256, raw_bytes)
 
-        {:ok, :infected, verdict} ->
-          log_infected_upload_attempt(attrs, prefix, content_hash)
-          {:error, :infected, verdict}
+        case run_attachment_scan(raw_bytes, content_type) do
+          {:ok, :clean} ->
+            do_upload_after_scan(
+              attrs,
+              prefix,
+              raw_bytes,
+              content_hash,
+              content_type,
+              measured_byte_size
+            )
 
-        {:error, _reason} ->
-          {:error, :scan_unavailable}
+          {:ok, :infected, verdict} ->
+            log_infected_upload_attempt(attrs, prefix, content_hash)
+            {:error, :infected, verdict}
+
+          {:error, _reason} ->
+            {:error, :scan_unavailable}
+        end
       end
     end
   end
+
+  @doc """
+  Returns the fixed set of `content_type` values `upload/2` accepts
+  (`@allowed_content_types`, REQ-389 design §2.1) -- exposed so the route
+  layer can name the allowed set in a rejection response body without
+  duplicating this list (design §3.2).
+  """
+  @spec allowed_content_types() :: MapSet.t(String.t())
+  def allowed_content_types, do: @allowed_content_types
 
   # ISS-0399 design §2 step 3 / §6 INV-8 -- the adapter call is wrapped so a
   # raised exception from a future non-default adapter can never crash

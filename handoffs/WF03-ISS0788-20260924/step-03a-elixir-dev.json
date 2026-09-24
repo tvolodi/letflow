@@ -1,0 +1,31 @@
+{
+  "handoff_id": "WF03-ISS0788-20260924-step-03a",
+  "run_id": "WF03-ISS0788-20260924",
+  "workflow": "WF-03",
+  "step": "Step 3 (Implement)",
+  "to_agent": "ELIXIR-DEV",
+  "from_agent": "ORCH",
+  "status": "PENDING",
+  "created_at": "2026-09-24T00:32:19Z",
+  "started_at": "2026-09-24T00:32:19Z",
+  "context": {
+    "branch_name": "feature/WF03-ISS0788-20260924",
+    "issue_id": "ISS-0788",
+    "design_doc": "lib/letflow/design/iss0788-render-upload-attachment-missing-clauses.md",
+    "design_gate_status": "PASS (CODE-DESIGN-VALIDATOR)",
+    "fix_summary": "Add 2 new private function heads to render_upload_attachment/2 in instances.ex: {:error, :storage_quota_exceeded} → Response.conflict/2 with 409, {:error, :tenant_not_found} → Response.unprocessable/2 with 422. Clause position: after :scan_unavailable, before %Ecto.Changeset{}.",
+    "artifacts_in": [
+      "lib/letflow/design/iss0788-render-upload-attachment-missing-clauses.md",
+      "lib/letflow/routers/instances.ex"
+    ]
+  },
+  "task": {
+    "description": "Execute Step 3 (Implement) for ISS-0788 per the approved design.\n\nWorkspace: c:\\Users\\tvolo\\dev\\ai-dala\\letflow\nBranch: feature/WF03-ISS0788-20260924\nMix: & 'C:/Program Files/Elixir/bin/mix'\n\nREAD design doc FIRST: lib/letflow/design/iss0788-render-upload-attachment-missing-clauses.md\n\nIMPLEMENT:\n1. In lib/letflow/routers/instances.ex, find render_upload_attachment/2 (private).\n2. Add two new function heads in the position stated by the design doc (after :scan_unavailable, before %Ecto.Changeset{}):\n   - defp render_upload_attachment(conn, {:error, :storage_quota_exceeded}) → Response.conflict(conn, \"tenant storage quota has been reached\")\n   - defp render_upload_attachment(conn, {:error, :tenant_not_found}) → Response.unprocessable(conn, \"request tenant does not exist\")\n3. Verify: & 'C:/Program Files/Elixir/bin/mix' compile --warnings-as-errors\n4. Format: & 'C:/Program Files/Elixir/bin/mix' format lib/letflow/routers/instances.ex\n5. Commit: git add lib/letflow/routers/instances.ex; git commit -m 'fix(WF03-ISS0788-20260924): Step 3 -- add render_upload_attachment/2 clauses for storage_quota_exceeded and tenant_not_found'\n6. git push\n7. Write handoffs/WF03-ISS0788-20260924/step-03a-elixir-dev.json COMPLETED PASS with compile output\n\nReport: commit SHA, compile exit code",
+    "acceptance_criteria": [
+      "Two new clauses added to render_upload_attachment/2",
+      "Positioned after :scan_unavailable, before %Ecto.Changeset{}",
+      "mix compile --warnings-as-errors exits 0"
+    ]
+  },
+  "result": null
+}

@@ -15,16 +15,26 @@ defmodule Letflow.Routers.InstancesTest do
 
   import Plug.Test
   import Plug.Conn
-  import Ecto.Query, only: [where: 3, select: 3]
+  import Ecto.Query, only: [where: 3, select: 3, from: 2]
 
   alias Letflow.Definitions
   alias Letflow.Engine
   alias Letflow.EventStore.InstanceProjection
   alias Letflow.Scheduler
   alias Letflow.Scheduler.Timer
+  alias Letflow.Identity.Tenant
   alias Letflow.TenantFixture
+  alias Letflow.TenantProvisioning.Registration
 
   @opts Letflow.Routers.Instances.init([])
+
+  # Same Plug.Parsers config as Letflow.Plugs.ApiPipeline -- needed by the
+  # ISS-0788 multipart dispatch helpers below.
+  @parsers_opts Plug.Parsers.init(
+                  parsers: [:json, {:multipart, length: 26_214_400}],
+                  json_decoder: Jason,
+                  length: 2_097_152
+                )
 
   defp build_conn(method, path, tenant, fields) do
     roles = Map.get(fields, :roles, [])
@@ -1461,6 +1471,89 @@ defmodule Letflow.Routers.InstancesTest do
   def handle_req200_users_query_telemetry(_event, _measurements, metadata, test_pid) do
     if self() == test_pid and metadata.source == "users" do
       send(test_pid, :req200_user_query)
+    end
+  end
+
+  # ── ISS-0788 regression ──────────────────────────────────────────────────────
+  # render_upload_attachment/2 had no clause for {:error, :storage_quota_exceeded}
+  # or {:error, :tenant_not_found}, so both crashed to a FunctionClauseError
+  # 500 instead of a handled 4xx. These tests drive both paths through
+  # POST /instances/:id/attachments end-to-end (real multipart parse, real
+  # Plug.Parsers, real Attachments.upload/2), then assert the route returns the
+  # correct 4xx rather than a 500.
+
+  defp dispatch_multipart(method, path, tenant, roles, body, boundary) do
+    conn(method, path, body)
+    |> put_req_header("content-type", "multipart/form-data; boundary=#{boundary}")
+    |> Plug.Parsers.call(@parsers_opts)
+    |> assign(:auth_context, %{
+      user_id: Ecto.UUID.generate(),
+      tenant_id: tenant.tenant_id,
+      roles: roles
+    })
+    |> assign(:trace_id, "fixed-test-trace-id")
+    |> dispatch()
+  end
+
+  defp multipart_file_body(boundary, file_name, content_type, file_bytes) do
+    "--#{boundary}\r\n" <>
+      "Content-Disposition: form-data; name=\"file\"; filename=\"#{file_name}\"\r\n" <>
+      "Content-Type: #{content_type}\r\n\r\n" <>
+      file_bytes <>
+      "\r\n" <>
+      "--#{boundary}--\r\n"
+  end
+
+  describe "ISS-0788 regression: unhandled upload/2 error atoms must not crash to 500" do
+    @tag :iss_0788
+    test "over-quota upload returns 409, not FunctionClauseError 500" do
+      tenant = TenantFixture.provisioned_tenant!(slug_prefix: "iss0788-quota")
+
+      # Set a 1-byte quota -- any upload will exceed it, triggering
+      # Attachments.upload/2 to return {:error, :storage_quota_exceeded}.
+      Repo.update_all(
+        from(t in Tenant, where: t.id == ^tenant.tenant_id),
+        set: [storage_allowance_bytes: 1]
+      )
+
+      conn =
+        dispatch_multipart(
+          :post,
+          "/#{Ecto.UUID.generate()}/attachments",
+          tenant,
+          ["PROCESS_OPERATOR"],
+          multipart_file_body("iss0788q", "doc.txt", "text/plain", "hello"),
+          "iss0788q"
+        )
+
+      assert conn.status == 409
+      assert conn.resp_body =~ "quota"
+    end
+
+    @tag :iss_0788
+    test "upload when tenant row is absent returns 422, not FunctionClauseError 500" do
+      tenant = TenantFixture.provisioned_tenant!(slug_prefix: "iss0788-norow")
+
+      # Delete the Tenant row so check_storage_quota's Repo.get(Tenant, id)
+      # returns nil, triggering {:error, :tenant_not_found} from upload/2.
+      # Registration (tenant_schemas) must go first to satisfy its FK constraint.
+      # The physical schema remains (DDL is not rolled back), so get_storage_usage
+      # still executes normally before the nil lookup fires.
+      Repo.delete_all(from(r in Registration, where: r.tenant_id == ^tenant.tenant_id))
+      Repo.delete_all(from(t in Tenant, where: t.id == ^tenant.tenant_id))
+
+      conn =
+        dispatch_multipart(
+          :post,
+          "/#{Ecto.UUID.generate()}/attachments",
+          tenant,
+          ["PROCESS_OPERATOR"],
+          multipart_file_body("iss0788nt", "doc.txt", "text/plain", "hello"),
+          "iss0788nt"
+        )
+
+      assert conn.status == 422
+      assert conn.resp_body =~ "tenant"
     end
   end
 end

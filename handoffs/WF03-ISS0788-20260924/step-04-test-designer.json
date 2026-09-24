@@ -5,7 +5,7 @@
   "step": "Step 4 (Regression Test)",
   "to_agent": "TEST-DESIGNER",
   "from_agent": "ORCH",
-  "status": "PENDING",
+  "status": "COMPLETED",
   "created_at": "2026-09-24T00:41:38Z",
   "started_at": "2026-09-24T00:41:38Z",
   "context": {
@@ -28,5 +28,36 @@
       "Post-fix pass confirmed"
     ]
   },
-  "result": null
+  "status": "COMPLETED",
+  "completed_at": "2026-09-24T01:10:00Z",
+  "result": {
+    "outcome": "PASS",
+    "spec_file": "test/specs/ISS-0788.md",
+    "test_file": "test/letflow/routers/instances_test.exs",
+    "describe_block": "ISS-0788 regression: unhandled upload/2 error atoms must not crash to 500",
+    "tag": "iss_0788",
+    "tests_written": [
+      "over-quota upload returns 409, not FunctionClauseError 500",
+      "upload when tenant row is absent returns 422, not FunctionClauseError 500"
+    ],
+    "pre_fix_evidence": {
+      "base_commit": "fb128f80^",
+      "command": "mix test test/letflow/routers/instances_test.exs --only iss_0788",
+      "result": "Result: 0/2 passed, 53 excluded -- Failed: 2 tests",
+      "failure_mode": "FunctionClauseError at render_upload_attachment/2 in lib/letflow/routers/instances.ex:1058 for both {:error, :storage_quota_exceeded} and {:error, :tenant_not_found}"
+    },
+    "post_fix_evidence": {
+      "command": "mix test test/letflow/routers/instances_test.exs --only iss_0788",
+      "result": "Result: 2 passed, 53 excluded"
+    },
+    "full_suite_evidence": {
+      "command": "mix test test/letflow/routers/instances_test.exs",
+      "result": "Result: 55 passed"
+    },
+    "iss_0069_gate": {
+      "command": "MIX_ENV=test mix compile --force --warnings-as-errors",
+      "exit_code": 0,
+      "note": "No dead-default warnings. mix letflow.check.test failed due to known Windows/WSL bash connectivity constraint (same as WF03-ISS0785); compile gate is substitute evidence on this host."
+    }
+  }
 }

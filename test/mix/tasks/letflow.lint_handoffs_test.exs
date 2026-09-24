@@ -788,6 +788,210 @@ defmodule Mix.Tasks.Letflow.LintHandoffsTest do
   end
 
   # ==================================================================
+  # ISS-0819 -- --dir accepts a single regular file (single-file mode)
+  # (regression, WF03-ISS0819-20260924, GH-1809)
+  #
+  # Spec: test/specs/ISS-0819.md.
+  # Test under: `lib/mix/tasks/letflow.lint_handoffs.ex` -- `handoff_files/1`
+  # (existing function, gains a `File.regular?` branch ahead of its existing
+  # `File.dir?` branch), `guard_empty_scope/2` (existing function, its raised
+  # message now delegates to the new `empty_scope_reason/1` instead of one
+  # hardcoded phrase), `check_registry_coverage/2` (existing PRIVATE
+  # function, gains a `File.regular?` short-circuit ahead of its existing
+  # corpus-scan body -- see the note on its coverage below), and `run/1`'s OK
+  # banner (existing `mode_phrase` construction). All FOUR are changes to
+  # EXISTING functions, not a wholly new module -- so per WF-03's ordinary
+  # rule (not the "code under test does not exist" clause), fail-first
+  # evidence is the pre-fix commit itself (`27644677`, the parent of this
+  # fix's first implementation commit `01c33f17`), checked out in a
+  # disposable `git worktree`, not a mutant. See this test-designer's
+  # handoff `result.summary` for the quoted FAIL (at `27644677`) and PASS
+  # (this branch) output.
+  #
+  # `check_registry_coverage/2` is `defp` (private) -- unlike every other
+  # function this suite calls directly (`handoff_files/1`, `lint_file/2`,
+  # `guard_empty_scope/2`, `run_autofix/1`, etc., which are all public
+  # `def`s), it has no public entry point to call directly, matching this
+  # file's existing convention of only unit-testing public functions.
+  # Its single-file short-circuit is instead proved at the `run/1` level by
+  # two complementary tests below: T-FILE-OK shows the returned pair is
+  # forced-empty (`[]`/`[]`) even though the real `handoffs/registry.json`
+  # has 334 `runs[]` entries -- if `do_check_registry_coverage/2` had
+  # actually run against a lone tmp fixture, `missing_on_disk` could not
+  # possibly be empty -- while T-DIR-MODE-H5-RUNS-AND-READS-REGISTRY shows
+  # the SAME registry file genuinely consulted (and a real mismatch
+  # reported) the moment the scan target is a directory instead of a file.
+  # Together they discriminate the short-circuit exactly as directly as a
+  # unit test on the private function would.
+  # ==================================================================
+
+  describe "ISS-0819 -- handoff_files/1 and guard_empty_scope/2 for a single-file scan target" do
+    test "F-FILE-DISCOVERED -- handoff_files/1 given a real regular file returns exactly that file, unfiltered" do
+      # handoffs/registry.json is a real, permanent, non-"step*"-named file
+      # that a DIRECTORY scan would normally exclude via registry_file/1's
+      # own rejection. Naming it directly must still return it -- proving
+      # single-file mode is genuinely unfiltered against both the step*.*
+      # glob and the registry.json exclusion (design's "open design point").
+      path = "handoffs/registry.json"
+      assert LintHandoffs.handoff_files(path) == [path]
+    end
+
+    test "F-FILE-MISSING-RAISES-DOES-NOT-EXIST -- a nonexistent single-file-shaped path raises 'does not exist' (ISS-0819)" do
+      missing_file =
+        System.tmp_dir!()
+        |> Path.join("letflow-iss0819-missing-#{System.unique_integer([:positive])}.json")
+        |> Path.expand()
+
+      refute File.exists?(missing_file)
+      files = LintHandoffs.handoff_files(missing_file)
+      assert files == []
+
+      # Same precedence rule F-NONEXISTENT-DIR-RAISES already proves for a
+      # nonexistent DIRECTORY-shaped path (empty_scope_reason/1's
+      # `File.exists?` check fires ahead of both the file/directory-kind
+      # check and the generic "discovered 0 files" fallback) -- this test
+      # proves the same precedence for a nonexistent FILE-shaped path,
+      # confirming the rule applies uniformly regardless of the target's
+      # (nonexistent) shape.
+      assert_raise Mix.Error, ~r/does not exist/, fn ->
+        LintHandoffs.guard_empty_scope(missing_file, files)
+      end
+    end
+  end
+
+  describe "ISS-0819 -- run/1 single-file mode, isolated tmp fixture" do
+    setup do
+      dir =
+        System.tmp_dir!()
+        |> Path.join("letflow-iss0819-run-#{System.unique_integer([:positive])}")
+        |> Path.expand()
+
+      File.mkdir_p!(dir)
+      on_exit(fn -> File.rm_rf!(dir) end)
+      %{dir: dir}
+    end
+
+    test "T-FILE-OK -- a valid single handoff file: OK banner names single-file mode, H5 shows the skip-note, registry pair is forced-empty",
+         %{dir: dir} do
+      path = Path.join(dir, "step-01-agent.json")
+
+      File.write!(path, ~s({
+        "status": "COMPLETED",
+        "started_at": "2026-09-24T07:00:00Z",
+        "completed_at": "2026-09-24T07:05:00Z",
+        "context": {},
+        "task": {},
+        "result": {}
+      }))
+
+      io =
+        capture_io(fn ->
+          assert LintHandoffs.run(["--dir", path]) == :ok
+        end)
+
+      # OK banner names single-file mode explicitly -- "the single handoff
+      # file", never "N handoff files" -- the exact wording run/1's
+      # mode_phrase produces only when File.regular?(dir) is true, so a
+      # single-file run's output is never confused with a --dir <directory>
+      # run that happened to contain exactly one file.
+      assert io =~ "OK -- 0 new violations across the single handoff file"
+      refute io =~ "1 handoff files"
+      assert io =~ inspect(path)
+
+      # H5 explicitly names itself skipped, rather than silently reporting
+      # an empty-but-genuinely-scanned corpus.
+      assert io =~ "skipped: H5 is a corpus-level check, not applicable to a single-file scan"
+
+      # See the describe-block header comment above for why an empty pair
+      # here is positive evidence registry.json was never read, not just
+      # that this fixture happens to match the real corpus.
+      assert io =~ "run_id on disk but missing from registry.json: []"
+      assert io =~ "run_id in registry.json but missing on disk: []"
+    end
+
+    test "T-FILE-MISSING-RUN-RAISES-DOES-NOT-EXIST -- run/1 with a nonexistent single-file-shaped --dir raises 'does not exist', not a clean OK" do
+      missing_file =
+        System.tmp_dir!()
+        |> Path.join("letflow-iss0819-run-missing-#{System.unique_integer([:positive])}.json")
+        |> Path.expand()
+
+      refute File.exists?(missing_file)
+
+      io =
+        capture_io(fn ->
+          assert_raise Mix.Error, ~r/does not exist/, fn ->
+            LintHandoffs.run(["--dir", missing_file])
+          end
+        end)
+
+      refute io =~ "OK --"
+    end
+
+    test "T-FILE-VIOLATIONS-LINTED-DIRECTLY -- a single-file target with real hard violations is linted, not silently filtered to an empty scope" do
+      # handoffs/registry.json is a real file that is NOT step*-shaped and
+      # would normally be excluded by a DIRECTORY scan's own
+      # registry_file/1 rejection. Naming it directly as --dir's target
+      # must not be silently filtered to an empty scope (which
+      # guard_empty_scope/2 would otherwise reject with a DIFFERENT
+      # message, "discovered 0 files" or "does not exist") -- it must be
+      # linted as the named target and its real top-level-schema violations
+      # reported: no top-level "status" key (H1), and its two top-level
+      # keys ("_comment", "runs") are not in @schema_top_keys (H3).
+      path = "handoffs/registry.json"
+
+      io =
+        capture_io(fn ->
+          assert_raise Mix.Error, ~r/found \d+ new violation/, fn ->
+            LintHandoffs.run(["--dir", path])
+          end
+        end)
+
+      assert io =~ "NEW HARD VIOLATIONS"
+      assert io =~ "[H1] #{path}"
+      assert io =~ "[H3] #{path}"
+      refute io =~ "does not exist"
+      refute io =~ "discovered 0 files"
+    end
+  end
+
+  describe "ISS-0819 -- directory mode is unchanged: H5 still runs fully, registry.json IS read" do
+    setup do
+      dir =
+        System.tmp_dir!()
+        |> Path.join("letflow-iss0819-dirmode-#{System.unique_integer([:positive])}")
+        |> Path.expand()
+
+      File.mkdir_p!(dir)
+      on_exit(fn -> File.rm_rf!(dir) end)
+      %{dir: dir}
+    end
+
+    test "T-DIR-MODE-H5-RUNS-AND-READS-REGISTRY -- a directory scan's H5 section is never the single-file skip-note, and it names a real registry mismatch",
+         %{dir: dir} do
+      # A flat file directly inside `dir` (no run_id subdirectory) makes
+      # do_check_registry_coverage/2 derive its own basename as the
+      # "run_id" (Path.relative_to(dir) |> Path.split() |> hd()) -- a value
+      # guaranteed absent from the real handoffs/registry.json's 334
+      # runs[] entries. Its appearance in "missing from registry.json" is
+      # therefore direct, positive evidence the real registry.json WAS read
+      # in directory mode -- contrast with T-FILE-OK's forced-empty pair.
+      path = Path.join(dir, "step-01-agent.json")
+      File.write!(path, ~s({"status": "COMPLETED", "context": {}, "task": {}, "result": {}}))
+
+      io =
+        capture_io(fn ->
+          assert LintHandoffs.run(["--dir", dir]) == :ok
+        end)
+
+      assert io =~ "across 1 handoff files"
+      refute io =~ "the single handoff file"
+      refute io =~ "skipped: H5 is a corpus-level check"
+
+      assert io =~ "run_id on disk but missing from registry.json: [\"step-01-agent.json\"]"
+    end
+  end
+
+  # ==================================================================
   # ISS-0442 -- minimal-diff `--autofix` rewrite (regression, WF03-ISS0442-20260904)
   #
   # Spec: test/specs/ISS-0442.md. Design:

@@ -1,0 +1,47 @@
+id: ISS-0817
+title: >
+  web/ test flake -- AttachmentViewerPage.test.tsx:101's blob-URL iframe
+  assertion failed once, then passed on a byte-identical tree
+discovered_by: TEST-DESIGN-VALIDATOR
+discovered_in_run: WF03-ISS0765-20260924
+discovered_at: "2026-09-24T18:40:00Z"
+severity: MINOR
+tags:
+  - frontend
+  - test-flake
+description: >
+  Observed during ISS-0765's Step 4b mutant measurement, filed and forwarded
+  per ORCHESTRATOR.md's decision tree rather than extending that run.
+
+  web/src/pages/instances/__tests__/AttachmentViewerPage.test.tsx:101 -- the D1
+  blob-URL assertion expect(iframe).not.toBeNull() -- failed on one `npm test`
+  run, then passed on an immediate re-run against a byte-identical tree with
+  the same mutant still applied (890 passed, exit 0).
+
+  Structurally cleared of that run's mutant: M-1a touched only
+  web/src/pages/admin/GroupsPage.tsx, while this test file imports only its own
+  page component and contains no occurrence of "group". So this is pre-existing
+  flakiness that the run happened to surface, not something it introduced.
+
+  Not re-diagnosed there (out of scope for a mutant-measurement gate).
+affected_files:
+  - web/src/pages/instances/__tests__/AttachmentViewerPage.test.tsx
+related:
+  - ISS-0765  # the run this surfaced during
+severity_rationale: >
+  MINOR -- test-infrastructure flakiness with a loud failure mode (a test
+  failure, not a silent defect). No production behaviour implicated.
+operational_note: >
+  Recorded by TEST-DESIGN-VALIDATOR and worth carrying: the web suite's 890
+  count is NOT perfectly deterministic. An 889 must not be scored as a
+  regression without first reading which case failed.
+fix_direction: >
+  Reproduce it, or establish its non-reproducibility over a stated number of
+  runs rather than from the single observation. Identify what the blob-URL
+  iframe assertion races against and why it is not awaited, make it
+  deterministic, and show it green over repeated consecutive runs. If the same
+  timing pattern exists at other blob-URL or object-URL assertions in web/,
+  name them.
+queue_ref: "Q-817"
+github_ref: "GH-1806"
+status: open

@@ -1,0 +1,58 @@
+id: ISS-0818
+title: >
+  UAT owed -- the Groups admin surface has never been exercised against a real
+  instance, so ISS-0765's prefix fix has no end-to-end evidence
+discovered_by: REVIEWER (step-03d) and TEST-DESIGNER (step-04), filed by ORCH at ISS-0765's close
+discovered_in_run: WF03-ISS0765-20260924
+discovered_at: "2026-09-24T18:45:00Z"
+severity: MAJOR
+tags:
+  - uat
+  - frontend
+  - groups
+  - verification-gap
+description: >
+  Raised independently by two gates in ISS-0765's run and left explicitly open
+  by both, as a condition on that issue's close rather than a defect in its fix.
+
+  ISS-0765 corrected six groupsApi calls from a dead /api/v1/admin/groups/
+  prefix to the real /api/v1/identity/groups, and every gate passed. But every
+  test in that run exercises a vi.fn() spy whose Response the test itself
+  constructs, so no HTTP ever left the process. FRONTEND-DEV attempted a live
+  probe of http://localhost:4000/api/v1/identity/groups and got HTTP 000 -- no
+  connection, no instance running.
+
+  The fix is sound BY CONSTRUCTION: the six routes were read out of
+  Letflow.Api.AuthorizedRouter.__authz_routes__/0, and SECURITY-REVIEWER
+  re-derived them independently from lib/letflow/routers/identity.ex:178-198.
+  But construction is not execution. A route-macro-versus-actual-mount
+  discrepancy is invisible to every check that run performed.
+
+  This matters more here than the usual UAT gap: before ISS-0765, the entire
+  Groups admin surface was non-functional in production and nobody noticed for
+  long enough that the defect had to be found by a reviewer reading the file
+  for an unrelated reason. That is itself evidence that nothing exercises this
+  surface.
+affected_files:
+  - web/src/api/identity.ts
+  - web/src/pages/admin/GroupsPage.tsx
+  - lib/letflow/routers/identity.ex
+related:
+  - ISS-0765  # the fix this owes evidence for
+  - ISS-0811  # Members column always 0 -- a live run would confirm it
+  - ISS-0816  # members list truncating at 50 -- likewise
+severity_rationale: >
+  MAJOR -- not a known defect, but the missing verification for a MAJOR fix on
+  a surface with a demonstrated history of silent breakage. Closing ISS-0765 on
+  static evidence alone is defensible only because this record exists.
+fix_direction: >
+  Run WF-05 (or a scoped UAT-RUNNER pass) over the Groups admin surface against
+  a real instance with a real Keycloak realm: list, Manage members, add, remove,
+  delete an empty group. Confirm the members response really is the
+  {items, next_cursor, count} envelope ISS-0765 retyped to, and that all six
+  routes enforce :GroupsManage against a token lacking it. While there, record
+  whether ISS-0811's and ISS-0816's symptoms are visible, so those records carry
+  observation rather than inference.
+queue_ref: "Q-818"
+github_ref: "GH-1807"
+status: open

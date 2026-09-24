@@ -1,0 +1,100 @@
+{
+  "run_id": "WF03-BATCH-ISS0809-ISS0811-ISS0814-ISS0815-20260925",
+  "agent": "RELEASE-VALIDATOR",
+  "timestamp": "2026-09-25T04:57:04+05:00",
+  "verdict": "PASS",
+  "note": "All ACs independently re-verified from source; all 12 targeted tests pass; type-check errors are pre-existing missing-dependency noise in unrelated files (react-intl, react-markdown, rehype-sanitize, remark-gfm) — no ISS batch commit touched those files.",
+
+  "iss_0815": {
+    "verdict": "PASS",
+    "ac1_user_map_8_keys": {
+      "result": "PASS",
+      "evidence": "lib/letflow/routers/identity.ex user_map/1 (lines ~724-736) emits exactly 8 keys: id, username, display_name, email, status, auth_source, inserted_at, updated_at. web/src/types/api.ts User interface declares exactly those 8 as required fields. No extra required fields, no missing required fields."
+    },
+    "ac2_inserted_at_not_created_at": {
+      "result": "PASS",
+      "evidence": "User.inserted_at: string is required in api.ts. 'created_at' does not appear in the required section of User. TC-ISS0815-04 asserts hasOwnProperty('created_at') === false and hasOwnProperty('inserted_at') === true on the minimal wire payload."
+    },
+    "ac3_roles_optional_and_used_safely": {
+      "result": "PASS",
+      "evidence": "User.roles?: string[] is optional in api.ts. UsersPage.tsx's roleList() guard: 'Array.isArray(user.roles) ? user.roles : []' — roles is never accessed directly without the array guard. TC-ISS0815-03 asserts a User with no roles property is valid."
+    },
+    "ac4_type_check_and_tests": {
+      "result": "PASS",
+      "evidence": "npm run type-check exits non-zero only due to pre-existing missing-module errors (react-intl, react-markdown, rehype-sanitize, remark-gfm) in files entirely unrelated to this batch. No new errors introduced. user-wire-shape.test.ts (TC-ISS0815-01 through TC-ISS0815-04) all pass. Test suite: 6/6 in user-wire-shape.test.ts.",
+      "preexisting_errors_confirmed_by": "None of the error-bearing files (EntityRecordForm.tsx, HelpMarkdown.tsx, ExamListPage.tsx, ExamSessionPage.tsx, etc.) were touched by any commit in this batch. Confirmed by git show --stat for commits a03230be, 36e584d3, 8acde894, 4424a6a7."
+    }
+  },
+
+  "iss_0814": {
+    "verdict": "PASS",
+    "ac1_canonical_casing_end_to_end": {
+      "result": "PASS",
+      "evidence": "Backend: identity.ex user_map/1 emits 'status' => Atom.to_string(user.status) where status is Ecto.Enum [:active, :inactive] — wire values are lowercase 'active'/'inactive'. Type: User.status: 'active' | 'inactive' in api.ts. Write path: UserDetailPage.tsx line 'status: status.toLowerCase() as active | inactive' before usersApi.update call."
+    },
+    "ac2_user_status_matches_wire_value": {
+      "result": "PASS",
+      "evidence": "User.status is 'active' | 'inactive' (lowercase) matching the Atom.to_string output exactly."
+    },
+    "ac3_userdetailpage_seeds_from_userstatus": {
+      "result": "PASS",
+      "evidence": "UserDetailPage.tsx userStatus() function: if (user.status === 'active') return 'ACTIVE'; if (user.status === 'inactive') return 'INACTIVE'; fallback to user.is_active. Called in useEffect to seed the status state. On submit: status.toLowerCase() converts back to wire value."
+    },
+    "ac4_tests_assert_wire_casing": {
+      "result": "PASS",
+      "evidence": "TC-ISS0814-01 in user-wire-shape.test.ts asserts userMapPayload.status === 'active' and _userWithoutRoles.status === 'inactive'. TC-ISS0814-02 asserts write payloads are lowercase and explicitly verifies they do not equal 'ACTIVE'/'INACTIVE'. Both pass."
+    }
+  },
+
+  "iss_0811": {
+    "verdict": "PASS",
+    "ac1_members_column_absent_and_group_map_verified": {
+      "result": "PASS",
+      "evidence": "lib/letflow/routers/identity.ex group_map/1 (lines ~748-756) emits: id, name, display_name, description, created_at. No member_count field. GroupsPage.tsx columns array: id:'name', id:'display_name', id:'description', id:'actions'. No 'members' column. Comment in source: '// ISS-0811: Members column removed — group_map/1 does not emit member_count'."
+    },
+    "ac2_group_type_required_fields_match_group_map": {
+      "result": "PASS",
+      "evidence": "api.ts Group interface required fields: id, name, display_name, created_at. Optional: description?, group_id?, is_system?, member_count?. Exactly matches group_map/1's output (description can be nil so optional is correct; group_map/1 emits it but backend Description can be null). No phantom required fields."
+    },
+    "ac3_test_passes": {
+      "result": "PASS",
+      "evidence": "GroupsPage.iss0811.test.tsx exists. TC-ISS0811-01 asserts no 'Members' column header. TC-ISS0811-02 asserts wire-shape data renders correctly. TC-ISS0811-03 asserts Delete button visible. All 3 tests pass (3/3)."
+    }
+  },
+
+  "iss_0809": {
+    "verdict": "PASS",
+    "ac1_instancename_from_definition_not_instance": {
+      "result": "PASS",
+      "evidence": "InstanceDetailPage.tsx CancelInstanceDialog prop: instanceName={definition ? `${definition.name} v${definition.version}` : '—'}. This reads from the separately-fetched definition (via useDefinition), not from instance.definition_name/instance.definition_version. Verified by grep: single match, exactly this pattern."
+    },
+    "ac2_definition_name_version_optional": {
+      "result": "PASS",
+      "evidence": "api.ts ProcessInstance: 'definition_name?: string' and 'definition_version?: string' (both marked optional with ?:). Comment: '// definition_name and definition_version not emitted by GET /instances/:id (ISS-0809)'."
+    },
+    "ac3_test_asserts_no_undefined": {
+      "result": "PASS",
+      "evidence": "CancelInstanceDialog.iss0809.test.tsx TC-ISS0809-02: renders instanceName='—' and asserts queryByText(/undefined/) returns null (not.toBeInTheDocument()). TC-ISS0809-01 asserts real name renders. TC-ISS0809-03 asserts dialog absent when open=false. All 3 tests pass (3/3)."
+    }
+  },
+
+  "test_run": {
+    "command": "npx vitest run src/types/__tests__/user-wire-shape.test.ts src/pages/admin/__tests__/GroupsPage.iss0811.test.tsx src/components/instances/__tests__/CancelInstanceDialog.iss0809.test.tsx",
+    "working_directory": "web/",
+    "result": "PASS",
+    "summary": "Test Files: 3 passed (3) | Tests: 12 passed (12)",
+    "duration": "1.70s",
+    "raw_output": " ✓ src/types/__tests__/user-wire-shape.test.ts (6 tests) 5ms\n ✓ src/components/instances/__tests__/CancelInstanceDialog.iss0809.test.tsx (3 tests) 51ms\n ✓ src/pages/admin/__tests__/GroupsPage.iss0811.test.tsx (3 tests) 86ms"
+  },
+
+  "type_check": {
+    "command": "npm run type-check",
+    "working_directory": "web/",
+    "result": "PRE_EXISTING_ERRORS_ONLY",
+    "new_errors_from_batch": 0,
+    "pre_existing_errors": 24,
+    "pre_existing_error_pattern": "Cannot find module 'react-intl' | 'react-markdown' | 'rehype-sanitize' | 'hast-util-sanitize' | 'remark-gfm' — packages not installed in node_modules",
+    "affected_files_in_batch": "NONE — EntityRecordForm.tsx, HelpMarkdown.tsx, ExamListPage.tsx, ExamSessionPage.tsx, etc. were not touched by any commit in this batch",
+    "evidence": "git show --stat for a03230be (ISS-0815), 36e584d3 (ISS-0814), 8acde894 (ISS-0811), 4424a6a7 (ISS-0809) — none touch the erroring files"
+  }
+}

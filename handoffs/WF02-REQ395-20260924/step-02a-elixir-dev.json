@@ -54,7 +54,6 @@
     "commit_sha": "81d645e3",
     "compile": "mix compile --warnings-as-errors exit 0 — no Elixir source changed"
   },
-  "next_action": "Route to SECURITY-REVIEWER (Step 2c)",
   "rework_count": 0,
   "max_rework": 3
 }

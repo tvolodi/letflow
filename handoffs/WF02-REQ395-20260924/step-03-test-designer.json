@@ -58,7 +58,6 @@
     ],
     "ac1_ac3_note": "Not auto-executable in CI (live QA credentials required, blocked by ISS-0739). Manual verification procedure documented in test/specs/REQ-395.md."
   },
-  "next_action": "Route to TEST-DESIGN-VALIDATOR (Step 3b)",
   "rework_count": 0,
   "max_rework": 3
 }

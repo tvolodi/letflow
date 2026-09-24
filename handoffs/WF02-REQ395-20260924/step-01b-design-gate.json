@@ -54,7 +54,6 @@
       "open_questions_listed": "PASS — OQ-1 through OQ-4 with resolution paths"
     }
   },
-  "next_action": "Route to ELIXIR-DEV (Step 2a)",
   "rework_count": 0,
   "max_rework": 3
 }

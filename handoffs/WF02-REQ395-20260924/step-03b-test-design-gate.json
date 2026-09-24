@@ -60,7 +60,6 @@
       "AC3 manual procedure is brief ('Same as AC2 but declared_value: 400') but references a fully specified procedure and supplies the pass condition. Acceptable."
     ]
   },
-  "next_action": "Route to TEST-RUNNER (Step 4)"
   "rework_count": 0,
   "max_rework": 3
 }

@@ -11,110 +11,117 @@
   "completed_at": "2026-09-25T04:32:00Z",
   "status": "COMPLETED",
   "priority": "NORMAL",
-  "retroactive": true,
-  "design_artefact": "lib/letflow/design/iss-0815-0814-0811-0809-frontend-type-corrections.md",
-  "issue_ids": ["ISS-0815", "ISS-0814", "ISS-0811", "ISS-0809"],
-  "checks": {
-    "ac_coverage": {
-      "ISS-0815": {
-        "AC1_user_matches_user_map": {
-          "verdict": "COVERS",
-          "evidence": "§1.3 required fields (id, username, display_name, email, status, auth_source, inserted_at, updated_at) = exactly 8 keys from §1.1 user_map/1 source-of-truth quote."
-        },
-        "AC2_timestamp_field_decision": {
-          "verdict": "COVERS",
-          "evidence": "§1.3 uses inserted_at: string in required section. Decision recorded in §1.3: backend has no created_at key, no migration planned, UsersPage.tsx Created column now reads u.inserted_at."
-        },
-        "AC3_roles_field": {
-          "verdict": "COVERS",
-          "evidence": "§1.3 roles?: string[] (optional). Decision rationale: write-path callers use role_ids; keeping roles optional avoids cascading rename; explicitly noted backend does not emit it."
-        },
-        "AC4_type_check_and_wire_shape_test": {
-          "verdict": "COVERS",
-          "evidence": "§1.4 maps to web/src/api/__tests__/identity.wire-shape.test.ts added in commit a03230be. npm run type-check coverage noted (removal of required-missing fields eliminates phantom errors)."
-        }
-      },
-      "ISS-0814": {
-        "AC1_canonical_casing_all_paths": {
-          "verdict": "COVERS",
-          "evidence": "§2.1 lowercase canonical with full Ecto.Enum → Atom.to_string → parse_status_param/1 trace. §2.2 covers list/filter path, §2.3 covers write path (status.toLowerCase()), §2.4 covers detail read (userStatus bridge)."
-        },
-        "AC2_user_status_matches_wire_value": {
-          "verdict": "COVERS",
-          "evidence": "§1.3: status: 'active' | 'inactive' (lowercase)."
-        },
-        "AC3_userdetailpage_seeds_real_status": {
-          "verdict": "COVERS",
-          "evidence": "§2.4: useEffect seeds from userStatus(user) bridge function; seeds from user.status field, not a local default."
-        },
-        "AC4_wire_casing_test": {
-          "verdict": "COVERS",
-          "evidence": "§2.6 references identity.wire-shape.test.ts in commit 36e584d3."
-        }
-      },
-      "ISS-0811": {
-        "AC1_members_column_real_count_or_removed": {
-          "verdict": "COVERS",
-          "evidence": "§3.4: column removed. Rationale documented: backend never sends member_count; always-0 is a data lie; real member list available via GET /api/v1/identity/groups/:id/members; adding member_count to group_map/1 would require a non-trivial aggregate query tracked as a separate requirement."
-        },
-        "AC2_group_type_matches_group_map": {
-          "verdict": "COVERS",
-          "evidence": "§3.3 required fields (id, name, display_name, description?, created_at) match exactly the 5 keys from §3.1 group_map/1. is_system and member_count demoted to optional."
-        },
-        "AC3_member_count_regression_test": {
-          "verdict": "COVERS",
-          "evidence": "§3.6 references regression test in commit 8acde894."
-        }
-      },
-      "ISS-0809": {
-        "AC1_cancel_dialog_real_name_version": {
-          "verdict": "COVERS",
-          "evidence": "§4.4: useDefinition(instance?.definition_id) is the correct data source; em-dash placeholder while loading. Same pattern as prior commit cb3c6c49 for the detail row."
-        },
-        "AC2_processinstance_no_longer_required": {
-          "verdict": "COVERS",
-          "evidence": "§4.3: definition_name?: string and definition_version?: string (both optional). Field annotated with comment that they are NOT in instance_map/1."
-        },
-        "AC3_type_check_and_cancel_dialog_test": {
-          "verdict": "COVERS",
-          "evidence": "§4.5 references test covering Cancel dialog rendered instance name in commit 4424a6a7."
-        }
-      }
-    },
-    "no_tbd_deferrals": {
-      "verdict": "PASS",
-      "evidence": "§7 'Open Questions' explicitly states 'None'."
-    },
-    "function_signatures_fully_specified": {
-      "verdict": "PASS",
-      "evidence": "All TypeScript interfaces in §1.3, §3.3, §4.3 specify field names and types. §5 provides a consolidated TypeScript signature summary. Elixir @spec annotations referenced for backend functions."
-    },
-    "error_handling_shape": {
-      "verdict": "N/A",
-      "evidence": "All four issues are frontend-only type corrections. No new Elixir error-returning functions are being designed. Backend wire shapes are read-only source-of-truth references."
-    },
-    "cross_module_dependencies": {
-      "verdict": "PASS",
-      "evidence": "§4.4 documents useDefinition hook dependency; §2.5 documents AdminUserFilters filter-write path; §3.4 documents GET /api/v1/identity/groups/:id/members as alternative data source; §0 table lists all affected files across all four issues."
-    },
-    "no_implementation_code": {
-      "verdict": "PASS",
-      "evidence": "Document is explicitly labeled retroactive (header §0). Elixir function bodies in §1.1 and §3.1 are existing backend code quoted verbatim to establish the wire shape as source of truth — CODE-DESIGNER did not author these bodies. TypeScript snippets in §2.3, §2.4, §4.4 document already-committed patterns from named commits. No new implementation code was written by CODE-DESIGNER; all code traces to specific implementation commits (a03230be, 36e584d3, 8acde894, 4424a6a7). Spirit of the gate (preventing CODE-DESIGNER from doing ELIXIR-DEV/FRONTEND-DEV's work) is not violated."
-    },
-    "wire_shape_decisions_unambiguous": {
-      "verdict": "PASS",
-      "evidence": "§1.1 user_map/1 key set = 8 keys, file and line range given. §3.1 group_map/1 key set = 5 keys, file and line range given. §4.1 instance_map/1 key set = 9 keys derived from routers/instances.ex. All three are labeled 'Backend source of truth'. Exact key names used in corrected interfaces."
-    },
-    "status_casing_decision_recorded": {
-      "verdict": "PASS",
-      "evidence": "§2.1 provides full rationale: Ecto.Enum [:active, :inactive] → Atom.to_string → 'active'/'inactive'; parse_status_param/1 accepts only lowercase; @status_schema allows only lowercase. No String.upcase anywhere in the backend path."
-    }
-  },
   "result": {
     "status": "PASS",
     "verdict": "PASS",
     "summary": "All 11 acceptance criteria across ISS-0815, ISS-0814, ISS-0811, and ISS-0809 are COVERED. No TBD or deferrals (§7 None). Wire shapes unambiguously derived from backend source of truth with key sets and file/line references. Status casing rationale is complete and traceable. No new implementation code authored by CODE-DESIGNER — all code blocks in the document quote or reference already-committed code in named commits. Implementation code check PASS for retroactive artefact.",
     "issues": [],
-    "next_action": "Route to FRONTEND-DEV (Step 2b) — all four issues are frontend-only changes. No ELIXIR-DEV (Step 2a) step required as no backend changes are in scope."
+    "next_action": "Route to FRONTEND-DEV (Step 2b) — all four issues are frontend-only changes. No ELIXIR-DEV (Step 2a) step required as no backend changes are in scope.",
+    "extra": {
+      "retroactive": true,
+      "design_artefact": "lib/letflow/design/iss-0815-0814-0811-0809-frontend-type-corrections.md",
+      "issue_ids": [
+        "ISS-0815",
+        "ISS-0814",
+        "ISS-0811",
+        "ISS-0809"
+      ],
+      "checks": {
+        "ac_coverage": {
+          "ISS-0815": {
+            "AC1_user_matches_user_map": {
+              "verdict": "COVERS",
+              "evidence": "§1.3 required fields (id, username, display_name, email, status, auth_source, inserted_at, updated_at) = exactly 8 keys from §1.1 user_map/1 source-of-truth quote."
+            },
+            "AC2_timestamp_field_decision": {
+              "verdict": "COVERS",
+              "evidence": "§1.3 uses inserted_at: string in required section. Decision recorded in §1.3: backend has no created_at key, no migration planned, UsersPage.tsx Created column now reads u.inserted_at."
+            },
+            "AC3_roles_field": {
+              "verdict": "COVERS",
+              "evidence": "§1.3 roles?: string[] (optional). Decision rationale: write-path callers use role_ids; keeping roles optional avoids cascading rename; explicitly noted backend does not emit it."
+            },
+            "AC4_type_check_and_wire_shape_test": {
+              "verdict": "COVERS",
+              "evidence": "§1.4 maps to web/src/api/__tests__/identity.wire-shape.test.ts added in commit a03230be. npm run type-check coverage noted (removal of required-missing fields eliminates phantom errors)."
+            }
+          },
+          "ISS-0814": {
+            "AC1_canonical_casing_all_paths": {
+              "verdict": "COVERS",
+              "evidence": "§2.1 lowercase canonical with full Ecto.Enum → Atom.to_string → parse_status_param/1 trace. §2.2 covers list/filter path, §2.3 covers write path (status.toLowerCase()), §2.4 covers detail read (userStatus bridge)."
+            },
+            "AC2_user_status_matches_wire_value": {
+              "verdict": "COVERS",
+              "evidence": "§1.3: status: 'active' | 'inactive' (lowercase)."
+            },
+            "AC3_userdetailpage_seeds_real_status": {
+              "verdict": "COVERS",
+              "evidence": "§2.4: useEffect seeds from userStatus(user) bridge function; seeds from user.status field, not a local default."
+            },
+            "AC4_wire_casing_test": {
+              "verdict": "COVERS",
+              "evidence": "§2.6 references identity.wire-shape.test.ts in commit 36e584d3."
+            }
+          },
+          "ISS-0811": {
+            "AC1_members_column_real_count_or_removed": {
+              "verdict": "COVERS",
+              "evidence": "§3.4: column removed. Rationale documented: backend never sends member_count; always-0 is a data lie; real member list available via GET /api/v1/identity/groups/:id/members; adding member_count to group_map/1 would require a non-trivial aggregate query tracked as a separate requirement."
+            },
+            "AC2_group_type_matches_group_map": {
+              "verdict": "COVERS",
+              "evidence": "§3.3 required fields (id, name, display_name, description?, created_at) match exactly the 5 keys from §3.1 group_map/1. is_system and member_count demoted to optional."
+            },
+            "AC3_member_count_regression_test": {
+              "verdict": "COVERS",
+              "evidence": "§3.6 references regression test in commit 8acde894."
+            }
+          },
+          "ISS-0809": {
+            "AC1_cancel_dialog_real_name_version": {
+              "verdict": "COVERS",
+              "evidence": "§4.4: useDefinition(instance?.definition_id) is the correct data source; em-dash placeholder while loading. Same pattern as prior commit cb3c6c49 for the detail row."
+            },
+            "AC2_processinstance_no_longer_required": {
+              "verdict": "COVERS",
+              "evidence": "§4.3: definition_name?: string and definition_version?: string (both optional). Field annotated with comment that they are NOT in instance_map/1."
+            },
+            "AC3_type_check_and_cancel_dialog_test": {
+              "verdict": "COVERS",
+              "evidence": "§4.5 references test covering Cancel dialog rendered instance name in commit 4424a6a7."
+            }
+          }
+        },
+        "no_tbd_deferrals": {
+          "verdict": "PASS",
+          "evidence": "§7 'Open Questions' explicitly states 'None'."
+        },
+        "function_signatures_fully_specified": {
+          "verdict": "PASS",
+          "evidence": "All TypeScript interfaces in §1.3, §3.3, §4.3 specify field names and types. §5 provides a consolidated TypeScript signature summary. Elixir @spec annotations referenced for backend functions."
+        },
+        "error_handling_shape": {
+          "verdict": "N/A",
+          "evidence": "All four issues are frontend-only type corrections. No new Elixir error-returning functions are being designed. Backend wire shapes are read-only source-of-truth references."
+        },
+        "cross_module_dependencies": {
+          "verdict": "PASS",
+          "evidence": "§4.4 documents useDefinition hook dependency; §2.5 documents AdminUserFilters filter-write path; §3.4 documents GET /api/v1/identity/groups/:id/members as alternative data source; §0 table lists all affected files across all four issues."
+        },
+        "no_implementation_code": {
+          "verdict": "PASS",
+          "evidence": "Document is explicitly labeled retroactive (header §0). Elixir function bodies in §1.1 and §3.1 are existing backend code quoted verbatim to establish the wire shape as source of truth — CODE-DESIGNER did not author these bodies. TypeScript snippets in §2.3, §2.4, §4.4 document already-committed patterns from named commits. No new implementation code was written by CODE-DESIGNER; all code traces to specific implementation commits (a03230be, 36e584d3, 8acde894, 4424a6a7). Spirit of the gate (preventing CODE-DESIGNER from doing ELIXIR-DEV/FRONTEND-DEV's work) is not violated."
+        },
+        "wire_shape_decisions_unambiguous": {
+          "verdict": "PASS",
+          "evidence": "§1.1 user_map/1 key set = 8 keys, file and line range given. §3.1 group_map/1 key set = 5 keys, file and line range given. §4.1 instance_map/1 key set = 9 keys derived from routers/instances.ex. All three are labeled 'Backend source of truth'. Exact key names used in corrected interfaces."
+        },
+        "status_casing_decision_recorded": {
+          "verdict": "PASS",
+          "evidence": "§2.1 provides full rationale: Ecto.Enum [:active, :inactive] → Atom.to_string → 'active'/'inactive'; parse_status_param/1 accepts only lowercase; @status_schema allows only lowercase. No String.upcase anywhere in the backend path."
+        }
+      }
+    }
   }
 }

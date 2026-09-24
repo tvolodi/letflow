@@ -10,74 +10,80 @@
   "completed_at": "2026-09-24T23:30:55Z",
   "context": {
     "run_id": "WF03-BATCH-ISS0816-ISS0821-ISS0822-20260925",
-    "issue_ids": ["ISS-0816", "ISS-0821", "ISS-0822"],
+    "issue_ids": [
+      "ISS-0816",
+      "ISS-0821",
+      "ISS-0822"
+    ],
     "design_artefact": "lib/letflow/design/iss-0816-0821-0822-cursor-page-and-dead-route.md",
     "retroactive": true
-  },
-  "ac_coverage": {
-    "ISS_0816_ISS_0821": {
-      "AC1_fixtures_no_has_more": {
-        "verdict": "COVERS",
-        "evidence": "§2.1 enumerates all four fixture sites with file paths and line numbers. Each is documented to match the real route shape ({items, next_cursor} for hand-built routes; {items, next_cursor, count} for Pagination.page_response/2 routes)."
-      },
-      "AC2_pagination_via_next_cursor": {
-        "verdict": "COVERS",
-        "evidence": "§2.2 explicitly documents next_cursor !== null as the retained discriminating check in all four tests. TC-ISS0821-04 pins this as the canonical 'no more pages' signal."
-      },
-      "AC3_prevention_mechanism": {
-        "verdict": "COVERS",
-        "evidence": "§2.3 specifies cursor-page-wire-shape.test.ts: compile-time guard via TypeScript structural typing on CursorPage<T> (re-introducing has_more: boolean as required would fail tsc); runtime guard TC-ISS0821-03 uses Object.prototype.hasOwnProperty.call to assert has_more is absent as an own property — catches has_more: false as well as has_more: true."
-      },
-      "AC4_lands_with_or_after_type_fix": {
-        "verdict": "COVERS",
-        "evidence": "§4 AC table documents commit a34305f7 (type fix, ISS-0816) as preceding/accompanying d8fa8096 (fixtures, ISS-0821)."
-      }
-    },
-    "ISS_0822": {
-      "AC1_route_removed_or_gated": {
-        "verdict": "COVERS",
-        "evidence": "§3.1 selects Option A (remove outright). Rationale: a 404-on-every-request route is indistinguishable from a broken deployment; removal is the minimum change that eliminates the confusion. Silent-404 is explicitly declared unacceptable."
-      },
-      "AC2_decision_recorded_against_S5": {
-        "verdict": "COVERS",
-        "evidence": "§3.4 is a standalone decision record stating deferral to S5, naming the retained frontend stubs and their rationale, and documenting that the decision is recorded in router.ex's moduledoc."
-      },
-      "AC3_modules_ts_audited": {
-        "verdict": "COVERS",
-        "evidence": "Surface is removed, not kept. §3.1/§3.4 document that api/modules.ts and hooks/useModules.ts have no live callers and no mounted route exists for their URL prefixes — audit result is stated definitively."
-      },
-      "AC4_no_other_spa_route_points_at_deferred": {
-        "verdict": "COVERS",
-        "evidence": "§3.3 provides a table of all remaining deferred routers and their SPA route status. States explicitly: 'No other SPA route in web/src/router.tsx points at a router in the deferred table — this was verified by cross-referencing every path: entry in router.tsx against the current api_pipeline.ex forward table.'"
-      }
-    }
-  },
-  "gate_checks": {
-    "no_implementation_code": {
-      "verdict": "PASS",
-      "notes": "No .ex/.exs function bodies present. @derive annotation and defstruct are quoted as source evidence, not implementations. TypeScript block is an interface declaration (type shape only). No function bodies anywhere in the document."
-    },
-    "count_optional_rationale_clear": {
-      "verdict": "PASS",
-      "notes": "§1.2–1.3 are unambiguous: Pagination.page_response/2 routes always emit count; three named hand-built route families (definitions/search, dlq, promotions) do not. Optionality fully justified with named files and route contexts. Sufficient to implement from."
-    },
-    "admin_modules_decision_unambiguous": {
-      "verdict": "PASS",
-      "notes": "§3.1 names all three options considered, selects A with clear rationale. §3.4 is a self-contained decision record. No TBD or deferred language."
-    },
-    "no_tbd_or_deferrals": {
-      "verdict": "PASS",
-      "notes": "§5 Open Questions: None. All design decisions stated definitively including the audit.ex has_more internal usage (lines :276, :295-297) confirmed as not emitted on the wire."
-    },
-    "cross_module_dependencies_listed": {
-      "verdict": "PASS",
-      "notes": "Affected files named: web/src/types/api.ts (CursorPage<T> interface), web/src/api/audit.ts and promotions.ts (has_more derivation removal), web/src/types/__tests__/cursor-page-wire-shape.test.ts (prevention), web/src/router.tsx (/admin/modules removal), lib/letflow/router.ex (deferred table update), lib/letflow/api/pagination.ex (authoritative backend shape)."
-    }
   },
   "result": {
     "status": "PASS",
     "verdict": "PASS — all 8 acceptance criteria covered; no implementation code; no TBD/deferrals; count? rationale clear; ISS-0822 decision and S5 scope recording unambiguous.",
     "next_action": "Route to ELIXIR-DEV (Step 2a) and/or FRONTEND-DEV (Step 2b). This is a retroactive WF-03 run — implementations are already committed; downstream steps verify the committed code against the design.",
-    "issues": []
+    "issues": [],
+    "extra": {
+      "ac_coverage": {
+        "ISS_0816_ISS_0821": {
+          "AC1_fixtures_no_has_more": {
+            "verdict": "COVERS",
+            "evidence": "§2.1 enumerates all four fixture sites with file paths and line numbers. Each is documented to match the real route shape ({items, next_cursor} for hand-built routes; {items, next_cursor, count} for Pagination.page_response/2 routes)."
+          },
+          "AC2_pagination_via_next_cursor": {
+            "verdict": "COVERS",
+            "evidence": "§2.2 explicitly documents next_cursor !== null as the retained discriminating check in all four tests. TC-ISS0821-04 pins this as the canonical 'no more pages' signal."
+          },
+          "AC3_prevention_mechanism": {
+            "verdict": "COVERS",
+            "evidence": "§2.3 specifies cursor-page-wire-shape.test.ts: compile-time guard via TypeScript structural typing on CursorPage<T> (re-introducing has_more: boolean as required would fail tsc); runtime guard TC-ISS0821-03 uses Object.prototype.hasOwnProperty.call to assert has_more is absent as an own property — catches has_more: false as well as has_more: true."
+          },
+          "AC4_lands_with_or_after_type_fix": {
+            "verdict": "COVERS",
+            "evidence": "§4 AC table documents commit a34305f7 (type fix, ISS-0816) as preceding/accompanying d8fa8096 (fixtures, ISS-0821)."
+          }
+        },
+        "ISS_0822": {
+          "AC1_route_removed_or_gated": {
+            "verdict": "COVERS",
+            "evidence": "§3.1 selects Option A (remove outright). Rationale: a 404-on-every-request route is indistinguishable from a broken deployment; removal is the minimum change that eliminates the confusion. Silent-404 is explicitly declared unacceptable."
+          },
+          "AC2_decision_recorded_against_S5": {
+            "verdict": "COVERS",
+            "evidence": "§3.4 is a standalone decision record stating deferral to S5, naming the retained frontend stubs and their rationale, and documenting that the decision is recorded in router.ex's moduledoc."
+          },
+          "AC3_modules_ts_audited": {
+            "verdict": "COVERS",
+            "evidence": "Surface is removed, not kept. §3.1/§3.4 document that api/modules.ts and hooks/useModules.ts have no live callers and no mounted route exists for their URL prefixes — audit result is stated definitively."
+          },
+          "AC4_no_other_spa_route_points_at_deferred": {
+            "verdict": "COVERS",
+            "evidence": "§3.3 provides a table of all remaining deferred routers and their SPA route status. States explicitly: 'No other SPA route in web/src/router.tsx points at a router in the deferred table — this was verified by cross-referencing every path: entry in router.tsx against the current api_pipeline.ex forward table.'"
+          }
+        }
+      },
+      "gate_checks": {
+        "no_implementation_code": {
+          "verdict": "PASS",
+          "notes": "No .ex/.exs function bodies present. @derive annotation and defstruct are quoted as source evidence, not implementations. TypeScript block is an interface declaration (type shape only). No function bodies anywhere in the document."
+        },
+        "count_optional_rationale_clear": {
+          "verdict": "PASS",
+          "notes": "§1.2–1.3 are unambiguous: Pagination.page_response/2 routes always emit count; three named hand-built route families (definitions/search, dlq, promotions) do not. Optionality fully justified with named files and route contexts. Sufficient to implement from."
+        },
+        "admin_modules_decision_unambiguous": {
+          "verdict": "PASS",
+          "notes": "§3.1 names all three options considered, selects A with clear rationale. §3.4 is a self-contained decision record. No TBD or deferred language."
+        },
+        "no_tbd_or_deferrals": {
+          "verdict": "PASS",
+          "notes": "§5 Open Questions: None. All design decisions stated definitively including the audit.ex has_more internal usage (lines :276, :295-297) confirmed as not emitted on the wire."
+        },
+        "cross_module_dependencies_listed": {
+          "verdict": "PASS",
+          "notes": "Affected files named: web/src/types/api.ts (CursorPage<T> interface), web/src/api/audit.ts and promotions.ts (has_more derivation removal), web/src/types/__tests__/cursor-page-wire-shape.test.ts (prevention), web/src/router.tsx (/admin/modules removal), lib/letflow/router.ex (deferred table update), lib/letflow/api/pagination.ex (authoritative backend shape)."
+        }
+      }
+    }
   }
 }

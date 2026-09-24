@@ -1,63 +1,79 @@
 {
-  "agent": "TEST-RUNNER",
   "run_id": "WF03-BATCH-ISS0809-ISS0811-ISS0814-ISS0815-20260925",
   "step": "04c",
-  "timestamp": "2026-09-25T04:54:16+05:00",
-  "overall_status": "PASS",
-  "commands": [
-    {
-      "label": "ISS-0815 / ISS-0814 wire-shape tests",
-      "command": "npx vitest run src/types/__tests__/user-wire-shape.test.ts",
-      "cwd": "web/",
-      "status": "PASS",
-      "test_files": 1,
-      "tests_passed": 6,
-      "tests_failed": 0
-    },
-    {
-      "label": "ISS-0811 GroupsPage tests",
-      "command": "npx vitest run src/pages/admin/__tests__/GroupsPage.iss0811.test.tsx",
-      "cwd": "web/",
-      "status": "PASS",
-      "test_files": 1,
-      "tests_passed": 3,
-      "tests_failed": 0
-    },
-    {
-      "label": "ISS-0809 CancelInstanceDialog tests",
-      "command": "npx vitest run src/components/instances/__tests__/CancelInstanceDialog.iss0809.test.tsx",
-      "cwd": "web/",
-      "status": "PASS",
-      "test_files": 1,
-      "tests_passed": 3,
-      "tests_failed": 0
-    },
-    {
-      "label": "ISS-0814 identity.usersRoles + locale migration tests",
-      "command": "npx vitest run src/api/__tests__/identity.usersRoles.test.ts tests/unit/localeMigration.test.ts",
-      "cwd": "web/",
-      "status": "PASS",
-      "test_files": 2,
-      "tests_passed": 10,
-      "tests_failed": 0,
-      "breakdown": {
-        "identity.usersRoles.test.ts": { "passed": 5, "failed": 0 },
-        "localeMigration.test.ts": { "passed": 5, "failed": 0 }
-      }
-    },
-    {
-      "label": "ISS-0815 type-check (compile-time guard)",
-      "command": "npm run type-check 2>&1 | grep 'error TS' | grep -v 'react-intl|rehype|hast-util|react-markdown|remark'",
-      "cwd": "web/",
-      "status": "PASS",
-      "notes": "tsc exited 2 due to pre-existing missing-package errors (react-intl, rehype-sanitize, hast-util-sanitize, react-markdown, remark-gfm — all excluded). Zero project-owned TS errors after filtering."
+  "status": "COMPLETED",
+  "result": {
+    "extra": {
+      "agent": "TEST-RUNNER",
+      "timestamp": "2026-09-25T04:54:16+05:00",
+      "overall_status": "PASS",
+      "commands": [
+        {
+          "label": "ISS-0815 / ISS-0814 wire-shape tests",
+          "command": "npx vitest run src/types/__tests__/user-wire-shape.test.ts",
+          "cwd": "web/",
+          "status": "PASS",
+          "test_files": 1,
+          "tests_passed": 6,
+          "tests_failed": 0
+        },
+        {
+          "label": "ISS-0811 GroupsPage tests",
+          "command": "npx vitest run src/pages/admin/__tests__/GroupsPage.iss0811.test.tsx",
+          "cwd": "web/",
+          "status": "PASS",
+          "test_files": 1,
+          "tests_passed": 3,
+          "tests_failed": 0
+        },
+        {
+          "label": "ISS-0809 CancelInstanceDialog tests",
+          "command": "npx vitest run src/components/instances/__tests__/CancelInstanceDialog.iss0809.test.tsx",
+          "cwd": "web/",
+          "status": "PASS",
+          "test_files": 1,
+          "tests_passed": 3,
+          "tests_failed": 0
+        },
+        {
+          "label": "ISS-0814 identity.usersRoles + locale migration tests",
+          "command": "npx vitest run src/api/__tests__/identity.usersRoles.test.ts tests/unit/localeMigration.test.ts",
+          "cwd": "web/",
+          "status": "PASS",
+          "test_files": 2,
+          "tests_passed": 10,
+          "tests_failed": 0,
+          "breakdown": {
+            "identity.usersRoles.test.ts": {
+              "passed": 5,
+              "failed": 0
+            },
+            "localeMigration.test.ts": {
+              "passed": 5,
+              "failed": 0
+            }
+          }
+        },
+        {
+          "label": "ISS-0815 type-check (compile-time guard)",
+          "command": "npm run type-check 2>&1 | grep 'error TS' | grep -v 'react-intl|rehype|hast-util|react-markdown|remark'",
+          "cwd": "web/",
+          "status": "PASS",
+          "notes": "tsc exited 2 due to pre-existing missing-package errors (react-intl, rehype-sanitize, hast-util-sanitize, react-markdown, remark-gfm — all excluded). Zero project-owned TS errors after filtering."
+        }
+      ],
+      "summary": {
+        "total_test_files": 5,
+        "total_tests_passed": 22,
+        "total_tests_failed": 0,
+        "type_check_project_errors": 0
+      },
+      "issues_covered": [
+        "ISS-0809",
+        "ISS-0811",
+        "ISS-0814",
+        "ISS-0815"
+      ]
     }
-  ],
-  "summary": {
-    "total_test_files": 5,
-    "total_tests_passed": 22,
-    "total_tests_failed": 0,
-    "type_check_project_errors": 0
-  },
-  "issues_covered": ["ISS-0809", "ISS-0811", "ISS-0814", "ISS-0815"]
+  }
 }

@@ -67,7 +67,11 @@
       }
     ],
     "new_public_surfaces": "NONE — only existing interfaces modified. Test files added are test-only, not API surfaces.",
-    "issues_filed": ["ISS-0824"]
-  },
-  "next_action": "Route to TEST-DESIGNER (Step 03e)"
+    "issues_filed": [
+      "ISS-0824"
+    ],
+    "extra": {
+      "next_action": "Route to TEST-DESIGNER (Step 03e)"
+    }
+  }
 }

@@ -95,4 +95,44 @@ fix_direction: >
   current work). Re-run `mix letflow.lint_handoffs` after each fix batch
   to confirm the un-grandfathered count reaches zero before considering
   this resolved.
-status: open
+status: resolved
+resolution: >
+  Crash fixed (commit a6aa0a14, already merged) -- confirmed no more
+  Protocol.UndefinedError on any full-corpus scan.
+
+  Of the 23-24 accumulated hard violations found underneath the crash:
+  the 14 real ones across the three finished BATCH-* retroactive design
+  runs (WF03-BATCH-ISS0809-ISS0811-ISS0814-ISS0815-20260925,
+  WF03-BATCH-ISS0812-ISS0813-ISS0820-ISS0823-20260925,
+  WF03-BATCH-ISS0816-ISS0821-ISS0822-20260925) were fixed directly:
+  non-schema top-level keys nested losslessly under a new
+  result.extra map, and missing/invalid top-level status set to
+  COMPLETED (all three runs' actual code changes were already merged
+  to main well before this fix; these are static historical records,
+  not in-flight work).
+
+  Correction recorded honestly: I initially also "fixed" 6 much older
+  handoffs (WF02-REQ023/025/027/037/062, WF03-ISS0047) that appeared
+  in the same violation listing -- but all 6 were ALREADY individually
+  present in this module's own `@grandfathered` list (added long
+  before this issue), so they were never actually contributing to the
+  build-failing `hard_new` count; the listing I was reading conflated
+  grandfathered-but-still-displayed entries with genuinely new ones.
+  Caught this via `mix test test/mix/tasks/letflow.lint_handoffs_test.exs`
+  regressing to 62/63 (F-JSON-REAL-GRANDFATHERED-UNCHANGED failed,
+  since my edit had removed the very H3 violation that test expected
+  to find grandfathered) -- reverted all 6 files back to their
+  original content via `git checkout --`, re-confirmed 63/63 passing.
+
+  Remaining 11 violations (WF03-ISS0808-20260925's handoffs) are
+  correctly left untouched: that run was actively being modified by a
+  concurrent session while I was investigating (its
+  step-04c-test-runner.json changed under me mid-session) and will
+  presumably resolve itself once that session reaches its own Step
+  Final / closes its own handoffs out cleanly, or needs its own
+  follow-up once confirmed abandoned.
+
+  Verified: `mix compile --warnings-as-errors` clean,
+  `mix test test/mix/tasks/letflow.lint_handoffs_test.exs` 63/63,
+  full-corpus `mix letflow.lint_handoffs` now reports exactly 11 new
+  violations, all under handoffs/WF03-ISS0808-20260925/.

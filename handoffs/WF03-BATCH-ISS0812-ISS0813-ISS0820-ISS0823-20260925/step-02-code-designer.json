@@ -6,21 +6,35 @@
   "to_agent": "CODE-DESIGNER",
   "from_agent": "ORCH",
   "status": "COMPLETED",
-  "retroactive": true,
   "created_at": "2026-09-25T04:26:21Z",
   "started_at": "2026-09-25T04:26:21Z",
   "completed_at": "2026-09-25T04:40:00Z",
   "context": {
     "branch_name": "main",
-    "issue_ids": ["ISS-0813", "ISS-0812", "ISS-0820", "ISS-0823"],
+    "issue_ids": [
+      "ISS-0813",
+      "ISS-0812",
+      "ISS-0820",
+      "ISS-0823"
+    ],
     "commits": {
       "ISS-0813": "5dc545be",
       "ISS-0812": "d2613d7c",
       "ISS-0820": "a34305f7",
       "ISS-0823": "58071889"
     },
-    "queue_refs": ["Q-813", "Q-812", "Q-820", "Q-823"],
-    "github_refs": ["GH-1801", "GH-1800", "GH-1811", "GH-1814"],
+    "queue_refs": [
+      "Q-813",
+      "Q-812",
+      "Q-820",
+      "Q-823"
+    ],
+    "github_refs": [
+      "GH-1801",
+      "GH-1800",
+      "GH-1811",
+      "GH-1814"
+    ],
     "retroactive_note": "Implementations already committed to main. Design artefact produced after the fact for pipeline continuity and audit record.",
     "artifacts_in": [
       "docs/issues/ISS-0813.yaml",
@@ -103,8 +117,16 @@
         },
         "search_params": {
           "section": "§3",
-          "backend_reads": ["q", "cursor", "page_size"],
-          "previously_sent": ["q", "limit", "offset"],
+          "backend_reads": [
+            "q",
+            "cursor",
+            "page_size"
+          ],
+          "previously_sent": [
+            "q",
+            "limit",
+            "offset"
+          ],
           "decision": "Fix frontend — remove limit/offset, add cursor/page_size",
           "backend_not_extended_rationale": "Offset pagination is not implemented in this codebase; cursor pagination is the project-wide standard; adding limit/offset would be a WF-01 feature",
           "query_key_renamed": true
@@ -122,6 +144,9 @@
       "ac_coverage_map_section": "§5",
       "all_acs_covered": true,
       "open_questions": "None — all decisions stated with rationale; full path-literal audit against __authz_routes__/0 is a deferred WF-01 item, not an unstated assumption"
+    },
+    "extra": {
+      "retroactive": true
     }
   }
 }

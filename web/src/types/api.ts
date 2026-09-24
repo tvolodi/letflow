@@ -451,6 +451,56 @@ export interface Group {
   member_count?: number
 }
 
+/**
+ * A single member of a group, exactly as `user_map/1`
+ * (`lib/letflow/routers/identity.ex:729-740`) emits it on
+ * `GET /api/v1/identity/groups/:id/members`. Deliberately NOT `User`: `User` declares
+ * `roles` and `created_at` as required and `user_map/1` emits neither. The `status` and
+ * `auth_source` unions are lowercase because `user_map/1` emits
+ * `Atom.to_string(...)` over `Ecto.Enum` values and the router applies no upcasing.
+ */
+export interface GroupMember {
+  id: string
+  username: string
+  display_name: string
+  email: string
+  status: 'active' | 'inactive'
+  auth_source: 'internal' | 'oidc'
+  inserted_at: string
+  updated_at: string
+}
+
+/**
+ * `Letflow.Api.Pagination.Page`'s encoder shape (`lib/letflow/api/pagination.ex:81`,
+ * `@derive {Jason.Encoder, only: [:items, :next_cursor, :count]}`). Not `CursorPage<T>`,
+ * which declares a `has_more` the backend never emits.
+ */
+export interface GroupMemberPage {
+  items: GroupMember[]
+  next_cursor: string | null
+  count: number
+}
+
+/**
+ * `handle_list_groups/2`'s wire body (`lib/letflow/routers/identity.ex:468-472`):
+ * items + total, with no `page` or `page_size`. Not `PagedResponse<Group>`, which
+ * declares both as required.
+ */
+export interface GroupListResponse {
+  items: Group[]
+  total: number
+}
+
+/**
+ * `member_result_map/3`'s wire body (`lib/letflow/routers/identity.ex:829-831`) returned
+ * by `POST /api/v1/identity/groups/:id/members`.
+ */
+export interface GroupMemberAddResult {
+  group_id: string
+  user_id: string
+  created: boolean
+}
+
 export interface Role {
   id: string
   name: string

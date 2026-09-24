@@ -1,0 +1,128 @@
+{
+  "run_id": "WF03-BATCH-ISS0812-ISS0813-ISS0820-ISS0823-20260925",
+  "gate": "REVIEWER",
+  "verdict": "PASS",
+  "commits_reviewed": [
+    { "sha": "5dc545be", "issue": "ISS-0813", "description": "dead-admin-prefix guard; identity.ts/modules.ts prefix corrections" },
+    { "sha": "d2613d7c", "issue": "ISS-0812", "description": "identity.iss0812.test.ts regression coverage" },
+    { "sha": "a34305f7", "issue": "ISS-0820", "description": "definitionsApi.search params corrected; CursorPage.count optional; promotions.ts reverted" },
+    { "sha": "58071889", "issue": "ISS-0823", "description": "GroupsPage truncation warning; usersApi.list type CursorPage<User>; AdminUserFilters.page→cursor" }
+  ],
+  "checks": {
+    "idiomatic_otp": {
+      "result": "NOT_APPLICABLE",
+      "notes": "All four commits are purely frontend TypeScript. No Elixir gen_statem, GenServer, or OTP process code was added or modified. No OTP idiom concern."
+    },
+    "supervision": {
+      "result": "NOT_APPLICABLE",
+      "notes": "No backend processes, supervisors, or spawn calls touched. The lib/letflow/router.ex change (ISS-0823 batch note: actually ISS-0822, separate batch) is a moduledoc update only — out of scope here."
+    },
+    "type_safety_gaps": {
+      "result": "OBSERVATION_FILED",
+      "observations": [
+        {
+          "location": "web/src/pages/admin/GroupsPage.tsx — availableUsers subtraction",
+          "pattern": "user.id ?? user.user_id ?? ''",
+          "note": "Dual-key lookup (id falling back to user_id) suggests the User type allows both shapes. This is pre-existing code, not introduced in these commits, but if the User interface were tightened to a single authoritative id field the ?? user.user_id branch becomes unreachable and the guard unneeded. Tagging as type-safety observation, not a blocker.",
+          "tag": "type-safety",
+          "action": "Observation only — filing for claimable work tracking; does not affect this PASS."
+        },
+        {
+          "location": "web/src/api/__tests__/identity.iss0812.test.ts",
+          "pattern": "usersApi.resetPassword prefix correction not regression-tested",
+          "note": "ISS-0813 corrected usersApi.resetPassword from /api/v1/users/ to /api/v1/identity/users/. The prefix change is correct and the function is tombstoned as unimplemented (no backend route). The design doc §2.2 coverage table does not include it, so the test is consistent with the design. However, the correction has no pinning test — a future change could silently revert it. Low risk while the backend route remains absent. Worth capturing as a test-gap issue.",
+          "tag": "api-contract",
+          "action": "Observation only — does not block this PASS. Recommend adding resetPassword to identity.iss0812.test.ts when/if the backend route is implemented."
+        }
+      ]
+    },
+    "scope_creep": {
+      "result": "PASS",
+      "findings": [
+        {
+          "item": "ISS-0820: CursorPage<T>.count made optional (api.ts)",
+          "in_scope": true,
+          "rationale": "Required by the same ISS-0820 fix: definitionsApi.search (a hand-built response route) does not emit count. Making count optional is the minimum change that makes the corrected search() typecheck against CursorPage<T>. The design doc §3.3 explicitly documents that hand-built routes omit count and Pagination.page_response routes include it. This is not a speculative abstraction — it is demanded by the ISS-0820 correction itself."
+        },
+        {
+          "item": "ISS-0820: promotions.ts reverted to not send count",
+          "in_scope": true,
+          "rationale": "A prior commit had promotions.ts asserting count in the CursorPage shape it constructs. The revert aligns with the count? finding: promotions responses are hand-built (render_list_reviews/2 does not use Pagination.page_response), so count is not emitted. The revert is the correct cleanup for the same root cause. The tombstone comment in promotions.ts ('count not sent by render_list_reviews/2 — hand-built response, not Pagination.page_response') is adequate documentation."
+        },
+        {
+          "item": "ISS-0823: usersApi.list return type PagedResponse<User> → CursorPage<User>",
+          "in_scope": true,
+          "rationale": "The GroupsPage truncation warning reads users?.next_cursor — a field on CursorPage<User> absent from PagedResponse<User>. The type correction is what makes the truncation check statically type-safe. Design doc §4.3 documents the backend evidence (page_response/2 struct emits items/next_cursor/count). Without this type correction the ISS-0823 feature would be unsound."
+        },
+        {
+          "item": "ISS-0813: dead-admin-prefix guard added to forbidlist.ts",
+          "in_scope": true,
+          "rationale": "Guard added to the existing mechanism (forbidlist.ts is the GRD-UI-01 single source of truth for banned patterns). No new module, behaviour, or abstraction layer created. The guard's allowedPaths are minimal and documented. Described in the design doc as 'interim' — the full coupling is deferred to WF-01, consistent with not building framework machinery ahead of the stage that needs it."
+        },
+        {
+          "item": "ISS-0813: rolesApi.get/update/delete/grantPermission/revokePermission removed; usersApi.delete removed",
+          "in_scope": true,
+          "rationale": "Removals are clearly documented in identity.ts tombstones explaining: (a) no backend route exists at any prefix; (b) these are unimplemented operations, not mis-prefixed ones; (c) re-adding requires a WF-01 requirement and a real backend route. The design doc §1.4 and §2.3 document why removal is correct over testing. No function was removed that had a live caller or a real backend route."
+        }
+      ]
+    },
+    "decision_record_consistency": {
+      "result": "PASS",
+      "findings": [
+        {
+          "item": "dead-admin-prefix guard — mechanical API path enforcement",
+          "status": "No decision record exists for how API path correctness must be enforced. The guard is an interim measure; design doc §6.1 acknowledges this and records the full coupling as a WF-01 open item. No existing decision record is contradicted or quietly bypassed."
+        },
+        {
+          "item": "usersApi.list CursorPage<User> — pagination shape",
+          "status": "No decision record mandates PagedResponse<User> for the users list endpoint. The correction to CursorPage<User> is grounded in direct backend evidence (page_response/2 struct). Cursor-based pagination is the project standard (see design doc §3.3: 'Offset pagination is explicitly not implemented — there is no OFFSET in any list query in this codebase'). No decision record conflict."
+        },
+        {
+          "item": "0020-frontend-architecture.md and other decisions",
+          "status": "Scanned all 39 decision records. None address CursorPage vs PagedResponse shapes, API path enforcement mechanisms, or any of the specific changes made in these four commits. No record contradicted or quietly circumvented."
+        }
+      ]
+    },
+    "test_quality": {
+      "result": "PASS",
+      "findings": [
+        {
+          "test": "dead-admin-prefix fixtures (offender/dead-admin-prefix.txt, bystander/dead-admin-prefix.txt)",
+          "result": "PASS",
+          "notes": "Offender: 'client.get(\\'/api/v1/admin/roles\\')' — matches regex (admin/ not followed by 'services'). Bystander: 'client.get(\\'/api/v1/admin/services\\')' — passes negative lookahead. Fixtures correctly discriminate."
+        },
+        {
+          "test": "identity.iss0812.test.ts — method+path assertions",
+          "result": "PASS",
+          "notes": "Four tests: rolesApi.create (POST), tokensApi.list (GET), tokensApi.create (POST), tokensApi.revoke (DELETE). Each spies on window.fetch, invokes the API function, asserts URL contains the correct /identity/ path AND does NOT contain the old /admin/ or /auth/ path, and checks the HTTP method. These are fail-first assertions: if the prefix regresses, the not.toContain assertion fails immediately. Canonical pattern matches identity.removeMembers.test.ts."
+        },
+        {
+          "test": "GroupsPage.iss0823.test.tsx — TC-ISS0823-01 truncation warning",
+          "result": "PASS",
+          "notes": "TC-ISS0823-01 passes next_cursor: 'cursor-page-2' via installQueryMock, clicks 'Manage members', then waitFor asserts data-testid='user-list-truncated-warning' is in the document with text containing 'more than 200 users' and 'first 200'. This test fails without the warning element — the assertion is load-bearing."
+        },
+        {
+          "test": "definitionsSearch.iss0820.test.ts — TC-ISS0820-01 exact params",
+          "result": "PASS",
+          "notes": "TC-ISS0820-01 stubs fetch, calls search({q:'onboarding'}), asserts URL contains q=onboarding and does NOT contain limit= or offset=. This test fails if limit/offset are sent — the not.toContain assertions are the fail-first mechanism. Minor note: test stubs global fetch rather than spying on client.get (unlike identity.iss0812.test.ts). Both approaches work given client.ts uses native fetch; the global stub is slightly more brittle but not incorrect. Acceptable."
+        }
+      ]
+    },
+    "no_new_public_abstractions": {
+      "result": "PASS",
+      "notes": "No new behaviours, macros, generic modules, or framework plumbing introduced. dead-admin-prefix guard entry added to existing forbidlist.ts (GRD-UI-01 single source of truth). queryKeys.ts search factory signature updated (existing entry). useAdminUsers.ts: AdminUserFilters.page removed, cursor added (interface correction, not new abstraction). All changes are corrections to existing interfaces."
+    }
+  },
+  "note_on_security_review": "No step-03c (SECURITY-REVIEWER) artefact found in this handoff directory. All four commits are purely frontend TypeScript (no new Elixir routes, no new data paths, no secrets, no tenant-data boundary changes). The one router.ex touch in this batch note (moduledoc only) is in the ISS-0822 batch (separate run). SECURITY-REVIEWER's absence is consistent with the change surface.",
+  "issues_to_file": [
+    {
+      "file_as": "type-safety observation — User.id dual-key pattern in GroupsPage",
+      "location": "web/src/pages/admin/GroupsPage.tsx",
+      "code_pattern": "user.id ?? user.user_id ?? ''",
+      "description": "The User type apparently allows both .id and .user_id as possible id fields, requiring a dual-key lookup. If the User interface were tightened to a single authoritative id field (or a discriminated union), this ?? chain becomes unrepresentable and the code simpler. Pre-existing defect, not introduced by ISS-0823.",
+      "tag": "type-safety",
+      "severity": "observation"
+    }
+  ],
+  "summary": "PASS. All four commits are idiomatic corrections to frontend API contracts with no scope creep, no decision-record conflicts, and discriminating fail-first tests. The CursorPage.count? change and promotions.ts revert (in ISS-0820's commit) are within scope — they are demanded by the same root cause the commit addresses. The removals in ISS-0813 are tombstoned clearly enough to prevent accidental re-addition. One type-safety observation filed (GroupsPage dual-key user.id pattern, pre-existing). TEST-DESIGNER may proceed."
+}

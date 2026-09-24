@@ -173,6 +173,36 @@ wrong realm and reject a valid bilimbaga candidate credential. A dispatch missin
 param for a bilimbaga scenario against `qa.bizdala.com` should be treated the same as a
 missing required field above.
 
+**SwiftRoute persona actors — three-layer credential setup required.** The SwiftRoute
+narrative UAT corpus (`test/fixtures/uat/scenarios/swiftroute/*.yaml`) uses three named
+persona actors — `actor-swiftroute-lena` (Dispatcher), `actor-swiftroute-marco` (Ops
+Manager), `actor-swiftroute-alice` (CEO) — that are **not** present in
+`ai-dala-infra/scripts/qa-login.sh`'s generic platform-role user set. Resolving these
+actors to credentials requires **all three** of the following to have been completed
+against the target QA instance, in order:
+
+1. **Part A (external):** `ai-dala-infra/scripts/qa-login.sh` — Keycloak account
+   creation for `actor-swiftroute-lena`, `actor-swiftroute-marco`,
+   `actor-swiftroute-alice` in the `swiftroute` realm. This is owned by the
+   `ai-dala-infra` repository; letflow has no control over it.
+
+2. **Part B:** `scripts/seed_swiftroute_persona_actors.sh` — idempotent letflow-side
+   provisioning: creates the `role-ops-manager` and `role-ceo` process-routing role
+   groups and tenant_role bindings, then adds each actor to their appropriate group(s).
+   Run this against the same QA instance (export `QA_AUTH_TOKEN` first — a PLATFORM_ADMIN
+   token for the swiftroute tenant, same pattern as
+   `scripts/seed_swiftroute_definition.sh`).
+
+3. **Part C (this note):** documented here so UAT-RUNNER knows where to look.
+
+If a WF-05 dispatch targets a SwiftRoute persona scenario and these steps have not all
+been completed, record the affected `gui:` steps BLOCKED/CREDENTIALS_MISSING rather than
+substituting a different actor or inventing a workaround — the gap is real and tracked
+(ISS-0739/ISS-0761). Specifically: if
+`GET /api/v1/identity/users?search=actor-swiftroute-lena` returns an empty `items`
+array against the target instance, Part A is not done; if the actor is resolvable but
+`GET /api/v1/identity/roles` has no `role-ops-manager` row, Part B has not been run.
+
 ## Forbidden
 
 Don't mock the backend or intercept HTTP calls — the whole point is exercising the real

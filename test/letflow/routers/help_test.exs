@@ -264,7 +264,9 @@ defmodule Letflow.Routers.HelpTest do
       # fresh: second=6, microsecond=1 — later wall-clock, correct answer
       fresh = live!(schema_name, %{screen_id: screen_id, process_definition_id: definition.id})
       fresh_ts = ~U[2024-01-01 00:00:06.000001Z]
-      fresh = Ecto.Changeset.change(fresh, updated_at: fresh_ts) |> Repo.update!(prefix: schema_name)
+
+      fresh =
+        Ecto.Changeset.change(fresh, updated_at: fresh_ts) |> Repo.update!(prefix: schema_name)
 
       conn =
         build_conn(

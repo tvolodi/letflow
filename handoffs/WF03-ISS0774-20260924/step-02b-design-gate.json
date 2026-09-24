@@ -51,7 +51,6 @@
     },
     "summary": "All five checks PASS. Design is analytically complete and unambiguous. Safe to route to ELIXIR-DEV."
   },
-  "next_action": "Route to ELIXIR-DEV (Step 3)",
   "rework_count": 0,
   "max_rework": 3
 }

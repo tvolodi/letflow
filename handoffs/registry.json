@@ -6931,6 +6931,27 @@
       "merge_sha": "9a224098",
       "pr_number": 1763,
       "note": "WF-03 for ISS-0788: render_upload_attachment/3 missing clauses for :storage_quota_exceeded and :tenant_not_found. REQ-390 implementation gap. Also: correct REQ-389 design doc §0 false claim. Queue task 787 (GH#1761). PR #1763 merged squash to main as 9a224098."
+    },
+    {
+      "run_id": "WF02-REQ395-20260924",
+      "workflow_id": "WF-02",
+      "requirement_ids": ["REQ-395"],
+      "issue_id": null,
+      "queue_task_id": 755,
+      "github_issue_number": 1643,
+      "status": "ACTIVE",
+      "owned_modules": [
+        "priv/repo/seeds/",
+        "scripts/",
+        "test/letflow/qa/"
+      ],
+      "started_at": "2026-09-24T03:52:29Z",
+      "lock_released_at": null,
+      "released_lock": false,
+      "last_known_step": "Step 00 PENDING",
+      "merge_sha": null,
+      "pr_number": null,
+      "note": "WF-02 for REQ-395: deploy SwiftRoute sequential high-value shipment-approval process definition as live browsable definition on QA tenant. Queue task 755. ORCH stale lock force-released and reclaimed 2026-09-24."
     }
   ]
 }

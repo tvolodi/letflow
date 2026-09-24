@@ -600,3 +600,8 @@ history:
       or decisions/*.md file was named by this requirement's acceptance
       criteria. REQ-387/389/390/391 all confirmed already `status: done` in
       docs/requirements.yaml before writing this entry.
+  - req: REQ-395
+    event: started
+    at: "2026-09-24T03:52:29Z"
+    run: WF02-REQ395-20260924
+    note: WF-02 started, queue task 755

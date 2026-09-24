@@ -602,11 +602,11 @@ history:
       docs/requirements.yaml before writing this entry.
   - req: REQ-395
     event: started
+    agent: ORCH
     at: "2026-09-24T03:52:29Z"
-    run: WF02-REQ395-20260924
     note: WF-02 started, queue task 755
   - req: REQ-395
     event: done
+    agent: DOC-UPDATER
     at: "2026-09-24T06:05:00Z"
-    run: WF02-REQ395-20260924
     note: "CONDITIONAL_PASS -- seed script scripts/seed_swiftroute_definition.sh merged, 5 structural tests pass, ACs 1-3 pending ISS-0739+QA credentials, UAT re-run deferred to after ISS-0739"

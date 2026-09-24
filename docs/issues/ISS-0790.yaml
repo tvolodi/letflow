@@ -1,0 +1,54 @@
+id: ISS-0790
+title: >
+  Module permissions/role_grants atoms are untyped atom() at the
+  Letflow.Modules.Catalog boundary -- no compile-time check that a
+  role_grants atom is in permissions
+discovered_by: REVIEWER (WF02-REQ400-20260924)
+discovered_in_run: WF02-REQ400-20260924
+discovered_at: "2026-09-24T13:05:00Z"
+tags:
+  - type-safety
+  - modules
+severity: MINOR
+description: >
+  Found by REVIEWER while gating REQ-400 (Letflow.Modules.Module behaviour +
+  Letflow.Modules.Catalog, the S11 modular-platform architecture's first
+  requirement). This gap was already named as an outstanding open item in
+  decision record docs/migration/decisions/0039-platform-module-solution-layering.md
+  (lines ~333-337): "module permissions are typed atom() at the Catalog
+  boundary... When P1's code lands, REVIEWER should file it under
+  docs/issues/ tagged type-safety."
+
+  Letflow.Modules.Module's @callback manifest/0 return type declares
+  `permissions` and `role_grants` as plain atom()/[atom()] with no
+  Dialyzer-checkable or compile-time relationship enforced between the two
+  -- a module could, in principle, declare a role_grants entry naming a
+  permission atom that never appears in its own permissions list, and
+  nothing at compile time would catch it (only the runtime
+  Letflow.Modules.Catalog.validate/1 six-rule check, exercised by tests,
+  currently catches this -- correctly, but only at test/runtime, not
+  compile time).
+affected_files:
+  - lib/letflow/modules/module.ex
+  - lib/letflow/modules/catalog.ex
+related_requirements:
+  - REQ-400
+severity_rationale: >
+  MINOR -- the runtime validate/1 check already catches this class of
+  error and REQ-400's own test suite exercises it; this is a
+  defense-in-depth/earlier-feedback improvement, not a live correctness
+  gap. No production behavior is currently wrong.
+suggested_fix: >
+  Per decision 0039's own suggestion: a compile-time check (e.g. a
+  Dialyzer type refinement, or a macro-based manifest DSL that can
+  validate role_grants keys against permissions at compile time) that
+  every role_grants atom is in permissions, catching the error at module
+  compile time rather than only when Catalog.validate/1 is called.
+queue_ref: "Q-806"
+# NOTE: letflow-queue's own atomically-allocated id (806) auto-titled
+# itself "ISS-0806", which does not match this file's real on-disk id
+# ISS-0790 -- established, recurring queue-id/filename divergence pattern
+# for this project (see docs/agents/protocols/TASK_QUEUE.md). queue_ref/
+# github_ref below are authoritative for this file.
+github_ref: "GH-1792"
+status: open

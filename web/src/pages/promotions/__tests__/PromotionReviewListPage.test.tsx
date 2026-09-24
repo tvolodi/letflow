@@ -116,7 +116,7 @@ function installUseQueryMock(items: PromotionReviewListItem[]): void {
     const filters = (queryKey[queryKey.length - 1] ?? {}) as { status?: string }
     requestedStatuses.push(filters.status)
     return {
-      data: { items, next_cursor: null, has_more: false },
+      data: { items, next_cursor: null, count: items.length },
       isLoading: false,
       isError: false,
       error: null,
@@ -267,7 +267,7 @@ describe('REQ-398 AC6 — empty vs fetch-failure state', () => {
 import { AppShell } from '@/components/layout/AppShell'
 
 vi.mock('@/api/dlq', () => ({
-  dlqApi: { list: vi.fn(() => Promise.resolve({ items: [], next_cursor: null, has_more: false })) },
+  dlqApi: { list: vi.fn(() => Promise.resolve({ items: [], next_cursor: null, count: 0 })) },
 }))
 
 vi.mock('@/theming/BrandingContext', () => ({

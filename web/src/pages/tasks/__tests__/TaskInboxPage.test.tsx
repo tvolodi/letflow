@@ -131,7 +131,7 @@ afterEach(() => {
 
 describe('TaskDetailPanel — AC5 reviewed-attachment file_name on a COMPLETED task', () => {
   it('renders the reviewed attachment file_name for a COMPLETED task, sourced from attachments_at_decision', async () => {
-    inbox.mockResolvedValue({ items: [taskRow('COMPLETED')], next_cursor: null, has_more: false })
+    inbox.mockResolvedValue({ items: [taskRow('COMPLETED')], next_cursor: null, count: 1 })
     getTask.mockResolvedValue(taskRow('COMPLETED'))
     events.mockResolvedValue({
       items: [taskCompletedEvent([{ attachment_id: 'att-9', file_name: 'delivery-note-hamburg-signed-corrected.pdf' }])],
@@ -157,7 +157,7 @@ describe('TaskDetailPanel — AC5 reviewed-attachment file_name on a COMPLETED t
   })
 
   it('renders nothing for a PENDING task (no decision yet, no premature fetch of the completion snapshot)', async () => {
-    inbox.mockResolvedValue({ items: [taskRow('PENDING')], next_cursor: null, has_more: false })
+    inbox.mockResolvedValue({ items: [taskRow('PENDING')], next_cursor: null, count: 1 })
     getTask.mockResolvedValue(taskRow('PENDING'))
 
     renderPage()

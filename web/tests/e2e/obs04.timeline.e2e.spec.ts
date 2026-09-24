@@ -69,7 +69,7 @@ test.beforeEach(async ({ page }) => {
         body: JSON.stringify({
           items: [mockInstance],
           next_cursor: null,
-          has_more: false,
+          count: 1,
         }),
       })
       return

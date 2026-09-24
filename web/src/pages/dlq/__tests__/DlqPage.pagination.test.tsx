@@ -74,10 +74,11 @@ function entry(id: string): DlqEntry {
 
 // Three server "pages", keyed by the cursor that must be sent to fetch them.
 // undefined = page 1 (no cursor yet), 'cursor-2' = page 2, 'cursor-3' = page 3.
+// count = items in this page (Pagination.Page wire shape: {items, next_cursor, count}).
 const PAGES: Record<string, CursorPage<DlqEntry>> = {
-  __page1__: { items: [entry('e1')], next_cursor: 'cursor-2', has_more: true },
-  'cursor-2': { items: [entry('e2')], next_cursor: 'cursor-3', has_more: true },
-  'cursor-3': { items: [entry('e3')], next_cursor: null, has_more: false },
+  __page1__: { items: [entry('e1')], next_cursor: 'cursor-2', count: 1 },
+  'cursor-2': { items: [entry('e2')], next_cursor: 'cursor-3', count: 1 },
+  'cursor-3': { items: [entry('e3')], next_cursor: null, count: 1 },
 }
 
 /** Records every cursor value DlqPage's useQuery call requested, in call order. */

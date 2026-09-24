@@ -68,7 +68,7 @@ export const auditApi = {
     return {
       items: response.items.map(mapAuditEntry),
       next_cursor: response.next_cursor,
-      has_more: Boolean(response.next_cursor),
+      count: response.count,
     }
   },
 }

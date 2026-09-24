@@ -1,0 +1,49 @@
+{
+  "handoff_id": "WF03-ISS0808-20260925-step-02b",
+  "run_id": "WF03-ISS0808-20260925",
+  "workflow_id": "WF-03",
+  "step": "Step 2b (Design Gate)",
+  "to_agent": "ORCH",
+  "from_agent": "CODE-DESIGN-VALIDATOR",
+  "status": "COMPLETED",
+  "created_at": "2026-09-25T04:28:43Z",
+  "context": {
+    "issue_id": "ISS-0808",
+    "design_artefact": "lib/letflow/design/iss-0808-tenant-status-roles-normalization.md",
+    "implementation_commit": "97c50b5d"
+  },
+  "verdict": "PASS",
+  "acceptance_criteria": [
+    {
+      "id": "AC1",
+      "text": "lib/letflow/plugs/tenant_status.ex derives PLATFORM_ADMIN via Letflow.Api.Authorization.roles_from_strings/1, so exactly one code path maps role strings to the PLATFORM_ADMIN role",
+      "status": "COVERS",
+      "evidence": "§2 shows the @spec and before/after derivation comments for check_tenant_status/2. §5 pseudocode shows Authorization.roles_from_strings(raw_roles) called before the cond guard. §7 cross-module dependency table names the full @spec roles_from_strings([String.t()]) :: [role()] and its location in lib/letflow/api/authorization.ex. The atom :PLATFORM_ADMIN is compared against the [role()] list, making roles_from_strings/1 structurally required."
+    },
+    {
+      "id": "AC2",
+      "text": "the tenant-inactive-403 exemption behavior for PLATFORM_ADMIN is unchanged, proven by a test exercising both an exempt PLATFORM_ADMIN and a non-exempt actor against an inactive tenant",
+      "status": "COVERS",
+      "evidence": "§5 pseudocode shows the cond semantics are identical to pre-fix (only the roles derivation line changes). §6.1 test table specifies: (row 1) call_plug(:get, tenant.id, [\"PLATFORM_ADMIN\"]) → refute conn.halted (exempt); (row 2) call_plug(:get, tenant.id, [\"PROCESS_OPERATOR\"]) → conn.status == 403 (non-exempt). Both test cases target the inactive-tenant path. Test file location is named: test/letflow/plugs/tenant_status_test.exs, describe block 'ISS-0808 — PLATFORM_ADMIN check uses Authorization.roles_from_strings/1'."
+    },
+    {
+      "id": "AC3",
+      "text": "a regression test would fail if the plug reverted to the raw string comparison",
+      "status": "COVERS",
+      "evidence": "§4 (Atom-vs-String Design: Structural Regression Guard) gives a complete failure-mode walkthrough: atom :PLATFORM_ADMIN can never be a member of a [String.t()] list, so removing roles_from_strings/1 while keeping the atom constant means the exemption never fires → 403 always returned → 'refute conn.halted' in AC2 test fails. §6.1 table row 1 names the specific test and failure mode explicitly."
+    }
+  ],
+  "implementation_code_check": {
+    "result": "PASS",
+    "notes": "Design contains only @spec annotations, @module_attribute declarations (before/after constant values), # comment lines, and explicitly-labeled pseudocode (§5). No def/defp function bodies, no do/end executable blocks. All code-fence content is either @spec signatures, attribute declarations, or non-Elixir pseudocode."
+  },
+  "tbd_deferral_check": {
+    "result": "PASS",
+    "notes": "§8 Open Questions states 'None.' explicitly. §9 Out of Scope is tightly bounded with rationale. No deferred items in any section."
+  },
+  "ambiguity_check": {
+    "result": "PASS",
+    "notes": "Function to change is named (check_tenant_status/2), module is named (Letflow.Plugs.TenantStatus), dependency is named with file location (Authorization.roles_from_strings/1, lib/letflow/api/authorization.ex ~line 435), test file and describe block are named, attribute before/after values are explicit. An implementer can build from this without guessing."
+  },
+  "issues": []
+}

@@ -1,0 +1,120 @@
+{
+  "run_id": "WF03-BATCH-ISS0816-ISS0821-ISS0822-20260925",
+  "step": "04-TEST-DESIGNER",
+  "agent": "TEST-DESIGNER",
+  "status": "PASS",
+  "issues": ["ISS-0816", "ISS-0821", "ISS-0822"],
+  "commits": ["d8fa8096", "a34305f7", "65312cd9"],
+
+  "baseline": {
+    "command": "cd web && npx vitest run src/types/__tests__/cursor-page-wire-shape.test.ts",
+    "result": "4/4 PASS",
+    "note": "All 4 tests pass against clean post-fix code (TC-ISS0821-01 through TC-ISS0821-04)"
+  },
+
+  "mutant_analysis": {
+    "issue": "ISS-0821/ISS-0816",
+    "test_file": "web/src/types/__tests__/cursor-page-wire-shape.test.ts",
+    "subject_file": "web/src/types/api.ts",
+
+    "mutant_1": {
+      "description": "Add `has_more: boolean` back as a required field to CursorPage<T>",
+      "diff": "+  has_more: boolean",
+      "applied_via": "PowerShell [System.IO.File]::WriteAllText (no-BOM UTF-8, LF line endings)",
+      "git_diff_confirmed": true,
+
+      "vitest_result": {
+        "command": "cd web && npx vitest run src/types/__tests__/cursor-page-wire-shape.test.ts",
+        "exit_code": 0,
+        "outcome": "4/4 PASS",
+        "explanation": "vitest uses esbuild transpilation which strips TypeScript types — no compile-time checking occurs at test-run time. The runtime objects (cursorPageNoCount, cursorPageWithCount) are plain object literals that never had 'has_more' set. TC-ISS0821-03 asserts Object.prototype.hasOwnProperty.call(cursorPageNoCount, 'has_more') === false, which is still true because the runtime value has no such key. All 4 assertions pass at runtime."
+      },
+
+      "tsc_result": {
+        "command": "cd web && npx tsc --noEmit --project tsconfig.app.json",
+        "exit_code": 2,
+        "total_errors": 33,
+        "relevant_errors": [
+          "src/types/__tests__/cursor-page-wire-shape.test.ts(24,7): error TS2741: Property 'has_more' is missing in type '{ items: { id: string; }[]; next_cursor: null; }' but required in type 'CursorPage<SampleItem>'.",
+          "src/types/__tests__/cursor-page-wire-shape.test.ts(30,7): error TS2741: Property 'has_more' is missing in type '{ items: { id: string; }[]; next_cursor: string; count: number; }' but required in type 'CursorPage<SampleItem>'.",
+          "src/api/audit.ts(68,5): error TS2741: Property 'has_more' is missing in type '{ items: AuditEntry[]; next_cursor: string | null; count: number; }' but required in type 'CursorPage<AuditEntry>'.",
+          "src/api/promotions.ts(253,5): error TS2322: ... Property 'has_more' is missing ... but required in type 'CursorPage<PromotionReviewListItem>'.",
+          "src/pages/dlq/__tests__/DlqPage.pagination.test.tsx(79,3): error TS2741: Property 'has_more' is missing in type '{ items: DlqEntry[]; next_cursor: string; count: number; }' but required in type 'CursorPage<DlqEntry>'.",
+          "src/pages/dlq/__tests__/DlqPage.pagination.test.tsx(80,3): error TS2741: Property 'has_more' is missing (same shape)",
+          "src/pages/dlq/__tests__/DlqPage.pagination.test.tsx(81,3): error TS2741: Property 'has_more' is missing (next_cursor: null variant)"
+        ],
+        "outcome": "COMPILE-TIME FAIL — the typed fixture assignments `const cursorPageNoCount: CursorPage<SampleItem>` and `const cursorPageWithCount: CursorPage<SampleItem>` at lines 24 and 30 of the test file produce TS2741. TypeScript rejects them because `has_more` is now required but absent."
+      },
+
+      "verdict": "FAIL (compile-time) — tsc exits 2 with TS2741 at cursor-page-wire-shape.test.ts:24 and :30. vitest runtime passes (expected: esbuild strips types). The typed fixture declarations are the operative coverage for this mutant.",
+
+      "revert_cmd": "git checkout -- web/src/types/api.ts",
+      "git_status_porcelain_after_revert": "",
+      "post_revert_vitest": "4/4 PASS"
+    },
+
+    "mutant_2": {
+      "description": "Change `count?: number` back to `count: number` (required, remove optional marker)",
+      "diff": "-  count?: number\n+  count: number",
+      "applied_via": "PowerShell [System.IO.File]::WriteAllText (no-BOM UTF-8, LF line endings)",
+      "git_diff_confirmed": true,
+
+      "vitest_result": {
+        "command": "cd web && npx vitest run src/types/__tests__/cursor-page-wire-shape.test.ts",
+        "exit_code": 0,
+        "outcome": "4/4 PASS",
+        "explanation": "TC-ISS0821-01 asserts `expect(cursorPageNoCount.count).toBeUndefined()`. At runtime, cursorPageNoCount = { items: [...], next_cursor: null } — no `count` key is present, so `.count` evaluates to `undefined`. `toBeUndefined()` passes. TypeScript would reject the fixture at compile time, but vitest's esbuild pass does not type-check."
+      },
+
+      "tsc_result": {
+        "command": "cd web && npx tsc --noEmit --project tsconfig.app.json",
+        "exit_code": 2,
+        "total_errors": 28,
+        "relevant_errors": [
+          "src/types/__tests__/cursor-page-wire-shape.test.ts(24,7): error TS2741: Property 'count' is missing in type '{ items: { id: string; }[]; next_cursor: null; }' but required in type 'CursorPage<SampleItem>'.",
+          "src/api/promotions.ts: error TS2322: ... Property 'count' is missing ... but required in type 'CursorPage<PromotionReviewListItem>'."
+        ],
+        "outcome": "COMPILE-TIME FAIL — the cursorPageNoCount fixture at test line 24 does not include `count`, so assigning it to `CursorPage<SampleItem>` with `count: number` required gives TS2741."
+      },
+
+      "verdict": "FAIL (compile-time) — tsc exits 2 with TS2741 at cursor-page-wire-shape.test.ts:24. The typed fixture `const cursorPageNoCount: CursorPage<SampleItem>` without `count` is rejected when `count` is required. TC-ISS0821-01 documents the intent (count is optional) and this mutant proves the type annotation enforces it.",
+
+      "revert_cmd": "git checkout -- web/src/types/api.ts",
+      "git_status_porcelain_after_revert": "",
+      "post_revert_vitest": "4/4 PASS"
+    },
+
+    "coverage_note": "Both mutants are caught at the TypeScript compile-time level via the typed fixture declarations in the test file. vitest runtime does not catch either mutant because: (1) esbuild strips types at transpile time; (2) the runtime objects are plain literals that never contained `has_more`, and `count` is absent from cursorPageNoCount so `.count` is `undefined` regardless. The TypeScript type annotations on the fixture constants act as the compile-time specification — they would be caught by a `tsc --noEmit` CI gate (or equivalent `mix letflow.check.test` front-end type check step if one exists).",
+
+    "gap_identified": "TC-ISS0821-03 uses `Object.prototype.hasOwnProperty.call(cursorPageNoCount, 'has_more')` to check that `has_more` is absent at runtime. This assertion would only fail if the fixture was constructed WITH `has_more` set (e.g. if a future developer writes `{ items, next_cursor, has_more: false }`). The deeper compile-time guarantee is provided by the `expectTypeOf` pattern (vitest built-in), which would be a stronger upgrade. Current coverage relies on TypeScript's structural assignment check on the typed fixture, which is caught by tsc but transparent to vitest runtime."
+  },
+
+  "iss_0822_static_analysis": {
+    "issue": "ISS-0822",
+    "file": "web/src/router.tsx",
+    "checks": [
+      {
+        "pattern": "admin/modules",
+        "expected_count": 1,
+        "actual_count": 1,
+        "matching_line": "      // admin/modules route removed in ISS-0822: Letflow.Routers.ProcessModules is",
+        "verdict": "PASS — only the explanatory comment, no active route declaration"
+      },
+      {
+        "pattern": "ProcessModulesPage",
+        "expected_count": 1,
+        "actual_count": 1,
+        "matching_line": "// ISS-0822: ProcessModulesPage import removed — Letflow.Routers.ProcessModules is",
+        "verdict": "PASS — only the explanatory comment, no import or JSX usage"
+      }
+    ],
+    "rationale": "The ISS-0822 regression is structural: the SPA route `{ path: 'admin/modules', element: <ProcessModulesPage /> }` was active while the backend router was never mounted. The fix is removal of that route. Static analysis confirming the route is gone (not just hidden) is the appropriate coverage form — a vitest test asserting router structure would be fragile and need updating on every route change. The two checks above confirm: (1) no route declaration matching 'admin/modules' exists; (2) ProcessModulesPage is not imported as a live symbol. Both matches are comments-only (explanatory tombstones for the removed code)."
+  },
+
+  "final_git_state": {
+    "git_status_porcelain_web_src_types_api": "",
+    "note": "Both mutants reverted via `git checkout -- web/src/types/api.ts`; git status --porcelain shows empty for that file after each revert. Post-revert vitest: 4/4 PASS."
+  },
+
+  "next_action": "Route to TEST-DESIGN-VALIDATOR for independent gate check. TEST-DESIGN-VALIDATOR should apply mutant_1 (add `has_more: boolean` to CursorPage<T>) and run `npx tsc --noEmit --project tsconfig.app.json` to verify TS2741 at cursor-page-wire-shape.test.ts:24 and :30; then revert and confirm green."
+}

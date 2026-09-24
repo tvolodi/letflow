@@ -621,6 +621,20 @@ small enough that the full read is actually executable. If a full read of the cu
 volume is ever refused or truncated, that is a defect in the roll rule: stop and file it
 (ISS-0119 is the precedent), do not substitute a partial read and append anyway.
 
+**4. Lint your own handoff before finishing.** Before your step is done, run
+
+```
+mix letflow.lint_handoffs --dir <path to the handoff file you just wrote>
+```
+
+against the file you are about to hand off (ISS-0819). This is scoped to your one file
+— it is not a substitute for the full-corpus `mix letflow.lint_handoffs` that already
+runs, unconditionally and unchanged, as part of `mix letflow.check` at the CI gate (see
+`HANDOFF_PROTOCOL.md`'s Enforcement note). It exists so a schema violation is caught and
+fixed at the moment of authorship, not discovered — possibly stacked with several other
+agents' violations in the same run, masking each other — only when the CI gate runs
+after the whole pipeline has already completed.
+
 ---
 
 ## ⛔ Never Satisfy a Gate by Editing What It Measures

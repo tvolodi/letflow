@@ -62,4 +62,27 @@ fix_direction: >
   the enforcement point.
 queue_ref: "Q-819"
 github_ref: "GH-1809"
-status: open
+status: resolved
+resolution: >
+  Single-file invocation mode shipped for mix letflow.lint_handoffs:
+  `mix letflow.lint_handoffs --dir <path>` validates one handoff file (or a
+  directory of them) standalone, so an agent can check its own handoff the
+  moment it writes it instead of waiting for the backend CI gate. Implemented
+  in lib/mix/tasks/letflow.lint_handoffs.ex; the pre-existing multi-violation
+  behaviour (report every violation in a run, not just the first) was
+  confirmed intact under the new mode, so a single pass still clears a file
+  the way the fix_direction required. Both docs/agents/shared/HANDOFF_PROTOCOL.md
+  and docs/agents/instructions/core-directives.md now name the exact command
+  agents should run. The CI gate itself is unchanged: mix.exs's
+  "letflow.check" alias still runs the unscoped, full-corpus
+  `mix letflow.lint_handoffs` unconditionally as the authoritative check --
+  this adds an earlier, narrower check, it does not move the enforcement
+  point, matching fix_direction's explicit constraint.
+
+  RELEASE-VALIDATOR independently re-verified all four fix_direction bullets
+  (single-file mode works standalone; multi-violation reporting confirmed
+  pre-existing/intact; docs name the exact command; CI gate/default path
+  unchanged) and separately ran the full mix letflow.check.test suite clean:
+  exit 0, main 8-partition suite plus the wasm_hang and lua_wallclock_race
+  isolation runs all OK, zero failures.
+

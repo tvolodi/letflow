@@ -109,6 +109,17 @@ defmodule Mix.Tasks.Letflow.LintHandoffs do
   genuinely empty real `handoffs/` is a separate, pre-existing edge case,
   not a `--dir` misuse symptom.
 
+  `--dir` also accepts a **single regular file** in place of a directory
+  (ISS-0819) -- e.g. `mix letflow.lint_handoffs --dir
+  handoffs/<run_id>/step-04-agent.json`, so an agent can validate the one
+  handoff it just wrote before finishing its step, without waiting for the
+  full-corpus CI gate. Single-file mode runs every schema check exactly as
+  a directory scan would, except H5 (registry coverage), which is skipped
+  entirely -- it is a corpus-level, report-only check, not meaningful for
+  one file. The OK banner and H5 report section both name single-file mode
+  explicitly, so its output is never confused with a directory or
+  full-corpus result.
+
   ### `--autofix` (ISS-0440)
 
   Applies a closed, three-entry correction map to each file's top-level
@@ -302,7 +313,7 @@ defmodule Mix.Tasks.Letflow.LintHandoffs do
     print_hard_violations(results)
     print_autofix_refused(refused)
     print_advisory(results)
-    print_registry(registry_result)
+    print_registry(registry_result, dir)
 
     hard_new = Enum.flat_map(results, & &1.hard_new)
 
@@ -328,8 +339,19 @@ defmodule Mix.Tasks.Letflow.LintHandoffs do
       # scanned, on every run including this healthy one, so a scoped
       # (--dir) run's output is never visually indistinguishable from a
       # genuine full-corpus clean result.
+      # ISS-0819 -- single-file mode names the scan mode explicitly ("the
+      # single handoff file") rather than "1 handoff files", so a
+      # single-file run's OK banner is never visually confused with a
+      # --dir <directory> run that happened to contain exactly one file.
+      mode_phrase =
+        if File.regular?(dir) do
+          "the single handoff file"
+        else
+          "#{length(files)} handoff files"
+        end
+
       IO.puts(
-        "letflow.lint_handoffs: OK -- 0 new violations across #{length(files)} handoff files " <>
+        "letflow.lint_handoffs: OK -- 0 new violations across #{mode_phrase} " <>
           "under #{inspect(dir)} (#{grandfathered_count} pre-existing grandfathered, " <>
           "traced to ISS-0190)."
       )
@@ -409,15 +431,31 @@ defmodule Mix.Tasks.Letflow.LintHandoffs do
   # (i.e. no --dir was given at all) -- a genuinely empty real handoffs/ is
   # a separate, pre-existing edge case of handoff_files/1's own default
   # behaviour, not a --dir misuse symptom, and is out of scope here.
-  @spec guard_empty_scope(dir :: String.t(), files :: [String.t()]) :: :ok | no_return()
-  def guard_empty_scope(dir, files) do
-    if files == [] and dir != @handoffs_dir do
+  @spec guard_empty_scope(scan_target :: String.t(), files :: [String.t()]) :: :ok | no_return()
+  def guard_empty_scope(scan_target, files) do
+    if files == [] and scan_target != @handoffs_dir do
       Mix.raise(
-        "letflow.lint_handoffs: --dir #{inspect(dir)} discovered 0 files -- refusing to " <>
-          "report success for an empty or non-existent scan target"
+        "letflow.lint_handoffs: --dir #{inspect(scan_target)} #{empty_scope_reason(scan_target)} " <>
+          "-- refusing to report success for an empty or non-existent scan target"
       )
     else
       :ok
+    end
+  end
+
+  # ISS-0819 -- reason phrase for guard_empty_scope/2's message, selected by
+  # this precedence (first match wins). The regular-file branch is
+  # defensive only: per handoff_files/1 above, a regular file always
+  # yields a one-element list, so guard_empty_scope/2's failure branch is
+  # never reached for a valid single-file target -- this exists only so
+  # the function stays defined and non-crashing if that invariant is ever
+  # violated by a future change.
+  @spec empty_scope_reason(String.t()) :: String.t()
+  defp empty_scope_reason(scan_target) do
+    cond do
+      not File.exists?(scan_target) -> "does not exist"
+      File.regular?(scan_target) -> "is a file lint_handoffs could not read"
+      true -> "discovered 0 files"
     end
   end
 
@@ -709,12 +747,34 @@ defmodule Mix.Tasks.Letflow.LintHandoffs do
 
   # -- discovery ----------------------------------------------------------
 
-  @spec handoff_files(dir :: String.t()) :: [String.t()]
-  def handoff_files(dir \\ @handoffs_dir) do
-    Path.wildcard(Path.join(dir, "**/step*.*"))
-    |> Enum.filter(&File.regular?/1)
-    |> Enum.reject(&(&1 == registry_file(dir)))
-    |> Enum.sort()
+  # ISS-0819 -- `scan_target` is either a directory (existing behavior,
+  # unchanged) or a single regular file. A single file is returned as its
+  # own one-element list, with NO filtering against the "**/step*.*" glob
+  # or the registry_file/1 exclusion: those two filters exist only to keep
+  # a *directory* scan from picking up registry.json or other non-handoff
+  # files it stumbles across, and a file the caller named explicitly has no
+  # such ambiguity -- see design doc §2's "open design point" for the full
+  # rationale (e.g. `--dir handoffs/registry.json` is linted, not silently
+  # filtered to []). Anything that is neither a regular file nor a
+  # directory (does not exist, or is some other filesystem object) falls
+  # through to the empty list, unchanged from today's wildcard-based
+  # behavior for a bad --dir path -- handoff_files/1 stays a pure "what did
+  # I find" query; guard_empty_scope/2 is what turns [] into a failure.
+  @spec handoff_files(scan_target :: String.t()) :: [String.t()]
+  def handoff_files(scan_target \\ @handoffs_dir) do
+    cond do
+      File.regular?(scan_target) ->
+        [scan_target]
+
+      File.dir?(scan_target) ->
+        Path.wildcard(Path.join(scan_target, "**/step*.*"))
+        |> Enum.filter(&File.regular?/1)
+        |> Enum.reject(&(&1 == registry_file(scan_target)))
+        |> Enum.sort()
+
+      true ->
+        []
+    end
   end
 
   @spec registry_file(dir :: String.t()) :: String.t()
@@ -1096,7 +1156,23 @@ defmodule Mix.Tasks.Letflow.LintHandoffs do
   # nonsense run_ids when `files` came from a --dir scratch fixture, since
   # H5 registry-coverage reporting was never meant to run against anything
   # but the directory that was actually scanned.
-  defp check_registry_coverage(files, dir) do
+  # ISS-0819 -- H5 is skipped entirely in single-file mode (`scan_target` a
+  # regular file): the run_id derivation below assumes `scan_target` is the
+  # immediate parent directory of `<run_id>/`, which a single file's own
+  # calling convention does not guarantee, and what H5 verifies (two-way
+  # coverage between handoffs/<run_id>/ directories and registry.json) is
+  # inherently a corpus-level property, not a per-file one. See design doc
+  # §4 for the full rationale. registry.json is not read at all in this
+  # branch.
+  defp check_registry_coverage(files, scan_target) do
+    if File.regular?(scan_target) do
+      %{missing_from_registry: [], missing_on_disk: []}
+    else
+      do_check_registry_coverage(files, scan_target)
+    end
+  end
+
+  defp do_check_registry_coverage(files, dir) do
     disk_run_ids =
       files
       |> Enum.map(&(&1 |> Path.relative_to(dir) |> Path.split() |> hd()))
@@ -1186,9 +1262,16 @@ defmodule Mix.Tasks.Letflow.LintHandoffs do
     )
   end
 
-  defp print_registry(%{missing_from_registry: mfr, missing_on_disk: mod}) do
+  defp print_registry(%{missing_from_registry: mfr, missing_on_disk: mod}, scan_target) do
     IO.puts(@rule)
     IO.puts("H5 REGISTRY COVERAGE:")
+
+    # ISS-0819 -- disambiguate an empty pair caused by "H5 didn't run" (single-
+    # file mode) from an empty pair caused by "H5 ran and found nothing."
+    if File.regular?(scan_target) do
+      IO.puts("  skipped: H5 is a corpus-level check, not applicable to a single-file scan")
+    end
+
     IO.puts("  run_id on disk but missing from registry.json: #{inspect(mfr)}")
     IO.puts("  run_id in registry.json but missing on disk: #{inspect(mod)}")
   end

@@ -1361,6 +1361,19 @@ being written down.
 mix letflow.lint_handoffs
 ```
 
+**Run it against a single handoff, before finishing your own step** (ISS-0819):
+
+```
+mix letflow.lint_handoffs --dir handoffs/<run-id>/<your-step-file>.json
+```
+
+Same schema checks as the full-corpus run, scoped to the one file. H5 (registry
+coverage) is skipped in this mode — it is a corpus-level check, not a per-file one; the
+full-corpus run at CI time still covers it. This does not replace the CI gate (which
+still runs the unscoped, full-corpus `mix letflow.lint_handoffs` unconditionally as
+part of `mix letflow.check`) — it is an earlier, optional, local check that lets you
+catch and fix your own handoff's schema violations before they reach that gate.
+
 A plain `Mix.Task` (`lib/mix/tasks/letflow.lint_handoffs.ex`), following the existing
 precedent of `mix letflow.check_toolchain`. It validates every file under `handoffs/`
 against this document's §2 schema, §4.1(b)'s `not_agent_attested` member set (read live

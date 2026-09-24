@@ -1,0 +1,30 @@
+{
+  "handoff_id": "WF03-ISS0788-20260924-step-04b",
+  "run_id": "WF03-ISS0788-20260924",
+  "workflow": "WF-03",
+  "step": "Step 4b (Test Design Gate)",
+  "to_agent": "TEST-DESIGN-VALIDATOR",
+  "from_agent": "ORCH",
+  "status": "PENDING",
+  "created_at": "2026-09-24T01:04:09Z",
+  "started_at": "2026-09-24T01:04:09Z",
+  "context": {
+    "branch_name": "feature/WF03-ISS0788-20260924",
+    "issue_id": "ISS-0788",
+    "test_file": "test/letflow/routers/instances_test.exs",
+    "test_summary": "2 new tests with @tag :iss_0788: over-quota → 409, tenant_not_found → 422. Fail-first: FunctionClauseError on both pre-fix. Post-fix: 2/2 pass. Full suite 55/55.",
+    "artifacts_in": [
+      "test/letflow/routers/instances_test.exs",
+      "docs/issues/ISS-0788.yaml"
+    ]
+  },
+  "task": {
+    "description": "Execute Step 4b (TEST-DESIGN-VALIDATOR HARD GATE) for ISS-0788.\n\nRead independently:\n1. test/letflow/routers/instances_test.exs -- find the @tag :iss_0788 tests\n2. docs/issues/ISS-0788.yaml -- AC3 specifically\n\nCheck:\n- AC3: does the test drive through POST /instances/:id/attachments (route level)? Does it assert 4xx (not 500)? Does it cover BOTH atoms?\n- Fail-first credible? (FunctionClauseError on render_upload_attachment/2 when clause missing = real failure)\n- Tests are isolated? (each creates its own state)\n\nVerdict: PASS or FAIL.\n\nOutput:\n1. Write handoffs/WF03-ISS0788-20260924/step-04b-test-design-gate.json COMPLETED PASS or FAIL\n2. git add + commit + push\n\nReport: PASS or FAIL",
+    "acceptance_criteria": [
+      "AC3 covered (route-level, both error atoms, 4xx not 500)",
+      "Fail-first credible",
+      "Tests isolated"
+    ]
+  },
+  "result": null
+}

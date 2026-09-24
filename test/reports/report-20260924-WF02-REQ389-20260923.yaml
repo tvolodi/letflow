@@ -1,0 +1,112 @@
+run_id: WF02-REQ389-20260923
+workflow_id: WF-02
+step: "04"
+agent: TEST-RUNNER
+requirement_ids:
+  - REQ-389
+branch: feature/WF02-REQ389-20260923
+generated_at: "2026-09-24T01:11:34Z"
+change_scope:
+  note: >
+    git diff --name-only main...HEAD shows: lib/letflow/design/req389-attachment-content-type-allowlist.md,
+    lib/letflow/repository/attachments.ex, lib/letflow/routers/instances.ex,
+    test/letflow/repository/attachments_test.exs,
+    test/letflow/routers/req212_attachments_routes_test.exs, test/specs/REQ-389.md.
+    Backend-only change (content-type allowlist enforcement for instance-attachment
+    uploads); no web/ files touched, so no frontend suite run.
+environment:
+  worktree: /tmp/claude-1001/-home-tvolodi-workspace-letflow-1/ee00a680-6b31-4a4d-a750-5d8797deb78f/scratchpad/wt-req389-design
+  postgres_container: >
+    letflow-1-postgres-1 (already running, shared with the main checkout
+    /home/tvolodi/workspace/letflow-1, per that checkout's untracked .env ->
+    LETFLOW_DB_PORT=5463). This worktree had no .env of its own; `docker compose up`
+    was deliberately NOT run here to avoid disturbing the shared container --
+    LETFLOW_DB_PORT=5463 was exported directly for `mix deps.get`/`mix compile`/
+    `mix letflow.check.test` instead, matching README's "environment variable of
+    the same name takes precedence over .env" precedence rule.
+  elixir: "Erlang/OTP 29 [erts-17.0.5], Elixir 1.20.3"
+compile_check:
+  command: "mix compile --warnings-as-errors --force"
+  result: "PASS -- 'Compiling 266 files (.ex)' / 'Generated letflow app', exit 0, zero warnings"
+backend_suite:
+  command: "TEST_PARALLEL_N=4 mix letflow.check.test"
+  execution_mode: >
+    Synchronous foreground run within this turn. The harness auto-backgrounded the
+    long-running call at its own default 600s tool timeout; per core-directives.md's
+    "No Background Wait For A Cross-Turn Notification," this run did not end its turn
+    to wait for a cross-turn notification -- it polled the redirected log file for
+    completion inside blocking Bash loops within the same turn, and separately
+    received (but did not rely on) the harness's own background-task-completion
+    notification once it landed. The authoritative result was read from the full
+    redirected log file, never a tail-truncated view.
+  log_file: "/tmp/claude-1001/-home-tvolodi-workspace-letflow-1/ee00a680-6b31-4a4d-a750-5d8797deb78f/scratchpad/full_test_run.log (1037 lines, full untruncated output; process exit code confirmed 0 via trailing 'EXIT CODE: 0' line)"
+  partition_count_N: 4
+  partition_count_source: "TEST_PARALLEL_N env override"
+  test_parallel_sh_combined_totals:
+    tests: 4787
+    properties: 6
+    failures: 0
+    passed: 4793
+    total: 4793
+  per_partition:
+    - {partition: 1, tests: 1162, properties: 2, failures: 0, exit: 0}
+    - {partition: 2, tests: 1207, properties: 2, failures: 0, exit: 0}
+    - {partition: 3, tests: 1176, properties: 2, failures: 0, exit: 0}
+    - {partition: 4, tests: 1242, properties: 0, failures: 0, exit: 0}
+  raw_output_excerpt: |
+    test_parallel: N=4 (source: env override)
+    test_parallel: pre-compiling MIX_ENV=test (single compile, before any partition launches)
+    test_parallel: TEST_POOL_SIZE=20 (computed: N=4, max_connections=100, superuser_reserved=3, headroom=10, nonpool_reserve=5)
+    test_parallel: seeding 4 per-partition build paths from _build/test (sequential)
+    test_parallel: partition logs in /tmp/letflow_test_parallel.5X7DGq
+    test_parallel: seeding+migrating 4 partition databases (capped at 4 concurrent)
+    test_parallel: all 4 partition databases created+migrated
+    test_parallel: TEST_PARALLEL_GROUP=tp24913 (shared by all 4 partitions)
+    partition 1: 1162 tests, 2 properties, 0 failures, exit 0
+    partition 2: 1207 tests, 2 properties, 0 failures, exit 0
+    partition 3: 1176 tests, 2 properties, 0 failures, exit 0
+    partition 4: 1242 tests, 0 properties, 0 failures, exit 0
+    combined: 4787 tests, 6 properties, 0 failures (4793/4793 passed)
+    mix letflow.check.test: OK -- no test failures, no ISS-0069 warnings (4 partitions, logs: /tmp/letflow_test_parallel.5X7DGq).
+    mix letflow.check.test: OK -- 5/5 isolated wasm_hang tests passed, each in its own subprocess.
+    mix letflow.check.test: OK -- isolated :lua_wallclock_race run also passed clean.
+    EXIT CODE: 0
+  known_flake_check:
+    id: ISS-0766
+    description: >
+      test/letflow/identity_test.exs:534 (resolve_tenant_by_realm/1) and :541
+      (resolve_realm_by_tenant/1) -- documented pre-existing intermittent flake.
+    observed_this_run: false
+    note: >
+      Grep for "identity_test.exs:534" / "identity_test.exs:541" and for
+      "Failed:" / numbered failure headers against the full log found zero
+      matches -- the suite was fully clean, 0 failures across all 4 partitions
+      plus both isolated checks. The flake simply did not trigger this run --
+      not attributed, not claimed as fixed.
+  stale_tenant_template_check:
+    id: ISS-0766-context (this run's specific known-context item, not a numbered issue)
+    description: >
+      Earlier same-branch TEST-DESIGNER runs today hit a stale `tenant_template`
+      Postgres schema (clone_tenant_schema!/Postgrex.Error{code: :undefined_table}
+      on entity_type_restrictions) causing ~225 spurious failures. ORCH reported
+      dropping the stale tenant_template schema across all local test DBs before
+      this run.
+    observed_this_run: false
+    note: >
+      Grep for "undefined_table", "entity_type_restrictions", and
+      "clone_tenant_schema" against the full log found zero matches in a failure
+      context. The suite ran fully clean; no recurrence of this signature.
+  isolated_checks:
+    wasm_hang: "5/5 isolated subprocess runs passed"
+    lua_wallclock_race: "isolated run passed clean"
+overall_backend_verdict: PASS
+frontend_suite:
+  note: "Not run -- change scope is backend-only (see change_scope above), no web/ files in the diff."
+overall_verdict: PASS
+next_action: "Route to RELEASE-VALIDATOR"
+notes:
+  - "Full suite run (mix letflow.check.test), not just the 54 targeted tests TEST-DESIGN-VALIDATOR already reproduced."
+  - "0 failures across all 4 partitions (4793/4793), plus both isolated wasm_hang and lua_wallclock_race checks clean."
+  - "ISS-0766's known identity_test.exs flake did not surface this run. The previously-reported stale tenant_template schema issue also did not recur."
+  - "No code was fixed or modified as part of this step; this is a pure independent-execution report."
+  - "Did not commit, push, or merge."

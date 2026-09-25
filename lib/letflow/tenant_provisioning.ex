@@ -637,7 +637,9 @@ defmodule Letflow.TenantProvisioning do
     {20_260_923_010_002, Letflow.Repo.Migrations.CreateUserEntityTypeGrants,
      "20260923010002_create_user_entity_type_grants.exs"},
     {20_260_925_000_001, Letflow.Repo.Migrations.CreateTenantModules,
-     "20260925000001_create_tenant_modules.exs"}
+     "20260925000001_create_tenant_modules.exs"},
+    {20_260_926_010_001, Letflow.Repo.Migrations.BackfillExamTenantModules,
+     "20260926010001_backfill_exam_tenant_modules.exs"}
   ]
 
   @doc """
@@ -678,7 +680,12 @@ defmodule Letflow.TenantProvisioning do
   `event_payload_store`'s composite FK away from the renamed-aside
   `events_pre_partition_20260922` table -- migration 4's table rename does
   not retarget a pre-existing FK, since Postgres binds FKs by OID, not name
-  (decision 0037's third correction has the full incident writeup) —
+  (decision 0037's third correction has the full incident writeup),
+  REQ-402 one more: `tenant_modules`
+  (`lib/letflow/design/req402-tenant-modules-install-context.md` §1.2), and
+  REQ-409 one more: `backfill_exam_tenant_modules` (the P2 data backfill that
+  inserts an exam `tenant_modules` row for any tenant with a
+  `bilimbaga-question-bank` pack install) —
   entries in total (see `@tenant_scoped_migration_manifest` itself for the
   authoritative, up-to-date count), ordered by version. Every future tenant-scoped migration must append its
   own entry to `@tenant_scoped_migration_manifest`, in addition to following the

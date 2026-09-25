@@ -1,0 +1,77 @@
+{
+  "handoff_id": "WF02-REQ405-20260925-step-01b",
+  "run_id": "WF02-REQ405-20260925",
+  "workflow_id": "WF-02",
+  "step": "01b",
+  "from_agent": "CODE-DESIGN-VALIDATOR",
+  "to_agent": "ELIXIR-DEV",
+  "file": "handoffs/WF02-REQ405-20260925/step-01b-design-gate.json",
+  "created_at": "2026-09-25T08:26:05Z",
+  "started_at": "2026-09-25T08:26:05Z",
+  "completed_at": "2026-09-25T08:31:00Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S11",
+    "requirement_ids": ["REQ-405"],
+    "design_artefact": "lib/letflow/design/req405-check-boundaries.md"
+  },
+  "task": {
+    "description": "Gate the REQ-405 design artefact. For each AC, verify a corresponding design element exists; no TBD/deferral; signatures fully specified with error shapes; no implementation code.",
+    "acceptance_criteria": [
+      "AC1: Unit tests with synthetic xref edges assert all 5 edge cases",
+      "AC2: mix letflow.check_boundaries exits 0 on current tree",
+      "AC3: Probe test: bad edge → non-zero exit",
+      "AC4: mix.exs alias updated; mix letflow.check passes",
+      "AC5: git diff mix.exs mix.lock adds no dependency"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "verdict": "PASS",
+    "ac_verdicts": {
+      "AC1": {
+        "verdict": "COVERS",
+        "evidence": "§2.3 provides a 6-row classification table (5 edge cases + scope gate) with correct :ok / {:violation, _} outcomes for each rule. §5.2 maps each row to a named test in describe 'classify_edge/2' with exact {source, target} pairs, depends_on_map values, and expected results. The 5 required cases (Rules 0, 1, 3, 4, 5) are present plus the scope-gate case (§2.1) and an intra-module guard (§2.4). parse_xref_output/1 unit tests are also specified."
+      },
+      "AC2": {
+        "verdict": "COVERS",
+        "evidence": "§1.2 specifies run/1 returns :ok (exit 0) when no violations and prints OK summary. §5.3 provides the system invocation test (System.cmd/mix/letflow.check_boundaries, assert exit_code == 0, assert output =~ 'OK'). Design correctly notes ELIXIR-DEV must quote real output in the implementation handoff."
+      },
+      "AC3": {
+        "verdict": "COVERS",
+        "evidence": "§5.4 specifies the 4-step probe procedure unambiguously: (1) create lib/letflow/probe_boundary_violation.ex calling into a module subdir; (2) create lib/letflow/modules/probe/probe.ex (since no subdir currently exists on branch); (3) run mix letflow.check_boundaries and confirm non-zero exit with offending edge named; (4) delete both files before commit. Probe is documented as a non-persisted procedure, not a committed test, which is correct."
+      },
+      "AC4": {
+        "verdict": "COVERS",
+        "evidence": "§4.1 specifies the exact insertion slot (after 'compile --warnings-as-errors', before 'letflow.check.test') with verbatim before/after alias code. Verified against current mix.exs (line ~190): the 'compile --warnings-as-errors' → 'letflow.check.test' sequence is confirmed present and unmodified. §4.2 provides the T-ALIAS-WIRED and T-ALIAS-SLOT assertions with exact Elixir code, the at. helper definition, and the aliases derivation — matching the ISS-0258 T-ALIAS-SLOT pattern in letflow_check_deferral_staleness_test.exs."
+      },
+      "AC5": {
+        "verdict": "COVERS",
+        "evidence": "§6 identifies all three dependencies used: (1) mix xref — built-in Mix task, no hex package; (2) System.cmd/3 — Erlang/OTP stdlib; (3) Letflow.Modules.Catalog.all_manifests/0 — existing project module (confirmed in lib/letflow/modules/catalog.ex:139). No new :deps entry in mix.exs, no mix.lock change."
+      }
+    },
+    "implementation_code_check": {
+      "verdict": "PASS",
+      "notes": "Design contains only @spec annotations and prose descriptions for the implementation module. Function bodies for lib/mix/tasks/letflow.check_boundaries.ex are absent — §1.2 and §1.3 show spec lines and plain-English behaviour descriptions only. Test code snippets in §5 are test specification examples (what the test bodies should look like), not production module implementations; this is consistent with CODE-DESIGNER precedent (ISS-0258 design). No implementation bodies present."
+    },
+    "classify_edge_ambiguity_check": {
+      "verdict": "UNAMBIGUOUS",
+      "notes": "§2.2 states 'applied in order, first match wins' for Rules 0–5. Each rule has a non-overlapping condition and a single outcome. Scope gate (§2.1) is applied before the rule chain. Rule ordering: (0) target not in module subdir → :ok; (1) source == catalog.ex → :ok; (2) same-module → :ok; (3) authorized cross-module → :ok; (4) unauthorized cross-module → {:violation,...}; (5) outsider → {:violation,...}. A ELIXIR-DEV can implement this as a cond/case chain in strict order without guessing. §2.3 table cross-checks all 6 cases against the rule set."
+    },
+    "t_alias_slot_check": {
+      "verdict": "UNAMBIGUOUS",
+      "notes": "§4.2 provides the describe block name, T-ALIAS-WIRED assert, both T-ALIAS-SLOT assert ordering lines, the at. helper lambda, and the aliases extraction. The pattern is identical in structure to the ISS-0258 precedent (letflow_check_deferral_staleness_test.exs lines 1270–1293). No guessing required."
+    },
+    "probe_procedure_check": {
+      "verdict": "UNAMBIGUOUS",
+      "notes": "§5.4 documents the non-persisted probe with 4 explicit steps. The design proactively notes that no lib/letflow/modules/<id>/ subdir currently exists on the branch and requires ELIXIR-DEV to create a synthetic one (lib/letflow/modules/probe/probe.ex) as part of the probe and remove it before committing. Both the probe caller and the synthetic module dir must be removed. Output quoting requirement is stated."
+    },
+    "open_questions": [],
+    "issues": [],
+    "summary": "All 5 ACs covered. All signatures fully specified with error shapes. Cross-module dependencies identified and verified against existing source. No implementation code in design doc. classify_edge/2 first-match rule chain is unambiguous. T-ALIAS-SLOT test spec is unambiguous and consistent with project precedent. Probe procedure is unambiguous. No open questions remain. Gate: PASS — route to ELIXIR-DEV (Step 2a)."
+  },
+  "next_action": "Route to ELIXIR-DEV (Step 2a): implement lib/mix/tasks/letflow.check_boundaries.ex and test/mix/tasks/letflow.check_boundaries_test.exs per lib/letflow/design/req405-check-boundaries.md",
+  "rework_count": 0,
+  "max_rework": 3
+}

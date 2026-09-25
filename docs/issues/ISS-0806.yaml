@@ -36,4 +36,6 @@ fix_direction: >
   Existing runtime validate/1 behavior must remain unchanged.
 queue_ref: "Q-806"
 github_ref: "GH-1792"
-status: open
+status: resolved
+resolved_in_run: WF03-ISS0806-20260925
+resolved_at: "2026-09-25T07:36:00Z"

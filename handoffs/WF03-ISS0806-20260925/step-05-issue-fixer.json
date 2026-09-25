@@ -1,0 +1,25 @@
+{
+  "step": "05-issue-fixer",
+  "run_id": "WF03-ISS0806-20260925",
+  "agent": "ISSUE-FIXER",
+  "timestamp": "2026-09-25T08:10:06Z",
+  "status": "COMPLETED",
+  "result": {
+    "summary": "All gates passed (RELEASE-VALIDATOR committed). Closed both issue YAML files and GH-1792.",
+    "actions": [
+      {
+        "file": "docs/issues/ISS-0790.yaml",
+        "change": "status → resolved, resolved_in_run: WF03-ISS0806-20260925, resolved_at: 2026-09-25T07:36:00Z"
+      },
+      {
+        "file": "docs/issues/ISS-0806.yaml",
+        "change": "status → resolved, resolved_in_run: WF03-ISS0806-20260925, resolved_at: 2026-09-25T07:36:00Z"
+      },
+      {
+        "action": "gh issue close 1792",
+        "comment": "Fixed in WF03-ISS0806-20260925. defmanifest/1 macro added to lib/letflow/modules/module.ex — raises CompileError at expansion time when any role_grants value atom is absent from permissions. Runtime Catalog.validate/1 behavior unchanged (AC2). Test: test/letflow/modules/defmanifest_test.exs (4 tests, all PASS). See lib/letflow/design/iss-0806-defmanifest-compile-check.md."
+      }
+    ],
+    "issues_closed": ["ISS-0790", "ISS-0806", "GH-1792"]
+  }
+}

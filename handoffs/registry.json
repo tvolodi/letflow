@@ -7259,6 +7259,19 @@
                      "completed_at":  "2026-09-25T05:18:00Z",
                      "last_known_step":  "Step 5 COMPLETED PASS -- 3 issues resolved. GH-1812/1813/ISS-0816 closed. 53/53 frontend tests. REVIEWER D noted stale has_more comments -- fixed separately.",
                      "note":  "Retroactive WF-03 batch. CursorPage\u003cT\u003e wire shape (has_more removed, count optional), 4 fixture corrections, /admin/modules SPA route removed."
+                 },
+                 {
+                     "run_id":  "WF03-ISS0806-20260925",
+                     "workflow_id":  "WF-03",
+                     "status":  "COMPLETED",
+                     "issues":  [
+                                    "ISS-0806",
+                                    "ISS-0790"
+                                ],
+                     "started_at":  "2026-09-25T05:26:00Z",
+                     "completed_at":  "2026-09-25T07:36:00Z",
+                     "last_known_step":  "Step 5 COMPLETED PASS -- ISS-0806/ISS-0790 resolved. GH-1792 closed. 17/17 Elixir tests. Commit 2b954e78.",
+                     "note":  "defmanifest/1 macro: compile-time check that role_grants atoms are in permissions. REVIEWER F1 (doc clarification) and F3 (unique module names) addressed."
                  }
              ]
 }

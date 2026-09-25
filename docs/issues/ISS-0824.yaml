@@ -1,0 +1,68 @@
+id: ISS-0824
+title: >
+  GroupsPage member dialog spins the event loop forever under a real
+  react-query provider in jsdom -- pre-existing, and blocks any real-provider
+  test of that page
+discovered_by: FRONTEND-DEV
+discovered_in_run: WF03-ISS0816-20260925
+discovered_at: "2026-09-25T01:04:51Z"
+severity: MAJOR
+tags:
+  - frontend
+  - testing
+  - react-query
+  - unconfirmed-in-browser
+description: >
+  Found while writing test T6 for ISS-0816, filed and forwarded rather than
+  extending that run.
+
+  WHAT WAS MEASURED: rendering GroupsPage with real @tanstack/react-query and
+  a real QueryClientProvider, then opening the member dialog, renders
+  correctly and then spins the event loop indefinitely at roughly 110% of a
+  core. setTimeout never fires, so --testTimeout cannot interrupt it either.
+  It reproduces with both dialog queries stubbed to never-resolving promises.
+
+  ATTRIBUTION IS SOLID. FRONTEND-DEV checked out the UNMODIFIED
+  GroupsPage.tsx from HEAD and re-ran the same probe with groupsApi.members
+  mocked -- identical hang. This predates ISS-0816 and none of its changes
+  cause it.
+
+  WHAT IS NOT ESTABLISHED: whether this is a live production render loop or an
+  artifact of jsdom plus never-resolving promises. No live browser check was
+  possible in that run -- localhost:4000 and :5173 were unreachable and the
+  docker daemon was not running -- so the behaviour has only ever been
+  observed under jsdom. The two possibilities have very different severities,
+  and settling which it is should be the first step of any fix rather than an
+  afterthought.
+
+  IMMEDIATE COST, either way: no test of GroupsPage can use a real query
+  provider. ISS-0816's T6 had to be rewritten on the repo's mocked-useQuery
+  pattern (the EntityCrudPage precedent, 121ms), with the useQuery double
+  invoking the page's own queryFn so a spy still proves the page calls
+  listAllMembers and never members. That works, but it cannot exercise real
+  query behaviour.
+affected_files:
+  - web/src/pages/admin/GroupsPage.tsx
+  - web/src/pages/admin/__tests__/
+related:
+  - ISS-0816  # the run that surfaced it
+  - ISS-0823  # same page, the users-side truncation
+severity_rationale: >
+  MAJOR provisionally, and deliberately so while the browser question is open.
+  If it is a real render loop it is a live defect on an admin page that pegs a
+  core. If it is a jsdom artifact it is a testing-infrastructure gap that
+  blocks real-provider coverage of a page this project has already had to fix
+  twice (ISS-0765, ISS-0816). Either reading supports MAJOR; the reading
+  determines the fix, not the priority.
+fix_direction: >
+  Settle the browser question FIRST -- open the Groups admin page against a
+  running instance and watch for the same spin. If it is a real loop, identify
+  the unstable dependency or setState-during-render driving it, fix it, and add
+  a test that would fail if it returned. If it is a harness artifact, record
+  that in the test file and here so the next author does not re-investigate,
+  and document the real-provider constraint where a test author will meet it.
+  Either way, the end state is that GroupsPage can be rendered with a real
+  QueryClientProvider without hanging, or the reason it cannot is written down.
+queue_ref: "Q-824"
+github_ref: "GH-1817"
+status: open

@@ -52,6 +52,10 @@ export default function GroupsPage() {
 
   const members = useMemo(() => membersPage?.items ?? [], [membersPage?.items])
 
+  // ISS-0816/ISS-0828: @default_page_size 50 applies to members. When next_cursor is set
+  // the group has >50 members and the current-members list is incomplete.
+  const membersListTruncated = Boolean(membersPage?.next_cursor)
+
   const { data: users } = useQuery({
     queryKey: tenantKeys.admin.users({ page_size: 200 }),
     queryFn: () => usersApi.list({ page_size: 200 }),
@@ -224,6 +228,11 @@ export default function GroupsPage() {
 
             <div>
               <h4 style={{ margin: '0 0 .75rem' }}>Current members</h4>
+              {membersListTruncated && (
+                <p role="note" data-testid="members-list-truncated-warning" style={{ margin: '0 0 .5rem', fontSize: 'var(--text-sm)', color: 'var(--color-warning-dark)' }}>
+                  This group has more than 50 members. The list below shows only the first 50 — some members may not appear.
+                </p>
+              )}
               {members.length === 0 ? (
                 <p style={{ margin: 0, color: 'var(--text-secondary)' }}>No members in this group.</p>
               ) : (

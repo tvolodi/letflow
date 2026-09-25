@@ -101,7 +101,7 @@ function makeUser(i: number) {
 }
 
 /** Install useQuery mock that returns controlled data per queryKey prefix */
-function installQueryMock(usersNextCursor: string | null) {
+function installQueryMock(usersNextCursor: string | null, membersNextCursor: string | null = null) {
   mockUseQuery.mockImplementation((opts: unknown) => {
     const { queryKey } = opts as { queryKey: unknown[] }
     if (Array.isArray(queryKey) && queryKey[0] === 'groups') {
@@ -115,7 +115,7 @@ function installQueryMock(usersNextCursor: string | null) {
     }
     if (Array.isArray(queryKey) && queryKey[0] === 'groupMembers') {
       return {
-        data: { items: [], next_cursor: null, count: 0 },
+        data: { items: [], next_cursor: membersNextCursor, count: membersNextCursor ? 51 : 0 },
         isLoading: false,
         isError: false,
         error: null,
@@ -187,6 +187,36 @@ describe('ISS-0823 — GroupsPage Add-member user list truncation warning', () =
       expect(select).toBeInTheDocument()
       // At least the placeholder option exists; the 3 fixture users are options too
       expect(select.querySelectorAll('option').length).toBeGreaterThanOrEqual(1)
+    })
+  })
+})
+
+describe('ISS-0816/ISS-0828 — GroupsPage members list truncation warning (AC3)', () => {
+  it('TC-ISS0816-01: shows truncation warning when groupsApi.members returns next_cursor (>50 members)', async () => {
+    installQueryMock(null, 'cursor-members-2')
+    render(React.createElement(GroupsPage))
+
+    const user = userEvent.setup()
+    await waitFor(() => screen.getByText('Manage members'))
+    await user.click(screen.getByText('Manage members'))
+
+    await waitFor(() => {
+      expect(screen.getByTestId('members-list-truncated-warning')).toBeInTheDocument()
+    })
+    expect(screen.getByTestId('members-list-truncated-warning')).toHaveTextContent('more than 50 members')
+    expect(screen.getByTestId('members-list-truncated-warning')).toHaveTextContent('first 50')
+  })
+
+  it('TC-ISS0816-02: no members truncation warning when next_cursor is null (≤50 members)', async () => {
+    installQueryMock(null, null)
+    render(React.createElement(GroupsPage))
+
+    const user = userEvent.setup()
+    await waitFor(() => screen.getByText('Manage members'))
+    await user.click(screen.getByText('Manage members'))
+
+    await waitFor(() => {
+      expect(screen.queryByTestId('members-list-truncated-warning')).not.toBeInTheDocument()
     })
   })
 })

@@ -30354,7 +30354,7 @@ requirements:
   - id: REQ-409
     title: "P2: tenant-scoped migration backfilling a tenant_modules exam row for every tenant with a bilimbaga-question-bank pack install"
     owner: ELIXIR-DEV
-    status: pending
+    status: done
     stage: S11
     impl_order: 798  # letflow-queue task id, GH#1783. Registered 2026-09-24T11:10:15Z by ORCH (WF-01 Step 3).
     description: >

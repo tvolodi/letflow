@@ -1107,3 +1107,20 @@ history:
       design, 6ec93834 design fix, 31fc03d6 implementation, 02eb13e9
       INV-5 design amendment, 027493c9 INV-5 code fix, e7dbd36a test
       report).
+
+  - req: REQ-409
+    status: done
+    timestamp: 2026-09-26T00:10:00Z
+    run_id: WF02-REQ409-20260926
+    agent: ELIXIR-DEV
+    summary: >
+      Tenant-scoped migration 20260926010001 backfills one tenant_modules row
+      (module_id: "exam", version: "0.1.0") for every tenant whose
+      solution_pack_installs table has a pack_id = 'bilimbaga-question-bank' row.
+      Uses ON CONFLICT (module_id) DO NOTHING for idempotency. Tenant UUID
+      derived from schema name via tenant_id_for_schema_name/1; no SQL
+      string interpolation of tenant-controlled data (INV-7). Added to
+      tenant_scoped_migrations/0 after 20260925000001. 4/4 tests pass (tenant
+      with pack gets exam row, tenant without gets nothing, different pack gets
+      nothing, idempotency confirmed). SECURITY-REVIEWER PASS (all INV-1..INV-8
+      satisfied). Status flipped in docs/requirements.yaml. Commit: 64e76394.

@@ -77,4 +77,84 @@ defmodule Letflow.Modules.Module do
   @callback on_install(prefix :: String.t(), settings :: map()) :: :ok | {:error, term()}
 
   @optional_callbacks router: 0, on_install: 2
+
+  @doc """
+  Compile-time manifest declaration macro — opt-in syntactic sugar that
+  generates `def manifest/0` **and** checks at compile time that every
+  atom appearing in `role_grants` values is also declared in `permissions`.
+
+  ## Usage
+
+      import Letflow.Modules.Module, only: [defmanifest: 1]
+
+      defmanifest(
+        id: "my_module",
+        version: "0.1.0",
+        depends_on: [],
+        pack: nil,
+        permissions: [:MyRead, :MyWrite],
+        role_grants: %{TASK_WORKER: [:MyRead]},
+        required_roles: [],
+        settings_schema: nil,
+        route_policies: [{"GET", "/items/:id", :MyRead}]
+      )
+
+  This is exactly equivalent to writing `def manifest/0` by hand, except
+  that any atom listed in `role_grants` but absent from `permissions` raises
+  a `CompileError` at the call site during compilation rather than failing
+  at test-time in `Catalog.validate/1`.
+
+  ## Argument contract
+
+  `fields` must be a keyword list **literal** at the call site. Required
+  keys and their expected value shapes mirror `t:manifest/0`:
+
+  | Key | Expected literal type |
+  |---|---|
+  | `:id` | `String.t()` literal |
+  | `:version` | `String.t()` literal |
+  | `:depends_on` | `[String.t()]` literal list |
+  | `:pack` | `String.t()` literal or `nil` |
+  | `:permissions` | `[atom()]` literal list |
+  | `:role_grants` | `%{atom() => [atom()]}` literal map |
+  | `:required_roles` | `[String.t()]` literal list |
+  | `:settings_schema` | `map()` literal or `nil` |
+  | `:route_policies` | `[{String.t(), String.t(), atom()}]` literal list |
+
+  If any `role_grants` value atom is absent from `permissions`, a
+  `CompileError` is raised at the call site during compilation. Non-literal
+  values are silently passed through to `manifest/0` (no compile-time check
+  is possible for them; use `Catalog.validate/1` at test time).
+
+  Modules that cannot use compile-time literals for all fields must continue
+  to implement `def manifest/0` directly — `defmanifest` is additive and
+  does not replace the `@callback` contract.
+  """
+  defmacro defmanifest(fields) do
+    caller = __CALLER__
+
+    # Evaluate all compile-time literal values from the keyword list AST to
+    # obtain actual Elixir values for the permissions check.  This works
+    # because defmanifest requires literal values at the call site.
+    {kw, _bindings} = Code.eval_quoted(fields, [], caller)
+
+    permissions = Keyword.get(kw, :permissions, [])
+    role_grants = Keyword.get(kw, :role_grants, %{})
+
+    for {_role, perms} <- role_grants, perm <- perms do
+      unless perm in permissions do
+        raise CompileError,
+          file: caller.file,
+          line: caller.line,
+          description:
+            "role_grants atom :#{perm} is not declared in permissions for module #{inspect(caller.module)}"
+      end
+    end
+
+    manifest_map = Map.new(kw)
+
+    quote do
+      def manifest(), do: unquote(Macro.escape(manifest_map))
+    end
+  end
 end

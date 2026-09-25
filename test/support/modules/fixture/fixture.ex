@@ -11,29 +11,29 @@ defmodule Letflow.Modules.Fixture do
 
   @behaviour Letflow.Modules.Module
 
+  import Letflow.Modules.Module, only: [defmanifest: 1]
+
   alias Letflow.Modules.Fixture.MarkerStore
   alias Letflow.Modules.Fixture.Router
 
   @impl true
-  def manifest do
-    %{
-      id: "fixture",
-      version: "0.1.0",
-      depends_on: [],
-      pack: nil,
-      permissions: [:FixtureRead],
-      role_grants: %{TASK_WORKER: [:FixtureRead]},
-      required_roles: [],
-      settings_schema: %{
-        "type" => "object",
-        "properties" => %{
-          "greeting" => %{"type" => "string"}
-        },
-        "additionalProperties" => false
+  defmanifest(
+    id: "fixture",
+    version: "0.1.0",
+    depends_on: [],
+    pack: nil,
+    permissions: [:FixtureRead],
+    role_grants: %{TASK_WORKER: [:FixtureRead]},
+    required_roles: [],
+    settings_schema: %{
+      "type" => "object",
+      "properties" => %{
+        "greeting" => %{"type" => "string"}
       },
-      route_policies: [{"GET", "/items/:id", :FixtureRead}]
-    }
-  end
+      "additionalProperties" => false
+    },
+    route_policies: [{"GET", "/items/:id", :FixtureRead}]
+  )
 
   @impl true
   def router, do: Router

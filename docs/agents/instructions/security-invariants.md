@@ -259,6 +259,19 @@ schema, or migration — SECURITY-REVIEWER's scope test (see its role file) dete
 applicability per diff, same mechanism as always, but INV-1 is now a live invariant to
 run that test against, not a default skip. INV-1, INV-4, INV-7, INV-8 apply today. INV-9 applies now (REQ-204 shipped).
 
+## Rate limiting — current position (ISS-0826/GH#1819)
+
+**There is no per-actor rate limit on authenticated routes.** `Letflow.Plugs.PublicReadRateLimit`
+is mounted only on `Letflow.Routers.PublicRead` (unauthenticated traffic). Authenticated
+traffic is bounded by `Letflow.Plugs.Admission` (concurrency, not rate).
+
+This is a deliberate, recorded decision — see
+`docs/migration/decisions/0040-authenticated-route-rate-limiting.md` for the full
+rationale and the S4 plan. Per-actor rate limiting (`Letflow.Plugs.RateLimit`) is
+explicitly deferred to S4. A SECURITY-REVIEWER assessing a change that could
+amplify sequential request volume should cite decision 0040 rather than treating the
+current absence as unexamined.
+
 ---
 
 ## INV-9 — Tenant-controlled outbound URL validation

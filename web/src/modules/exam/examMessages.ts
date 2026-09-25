@@ -99,12 +99,12 @@ export const examMessages: Record<ExamUiLocale, Record<string, string>> = {
     'exam.result.backToList': 'Back to exam list',
 
     // Result-by-id screen (REQ-351) -- loading/error states specific to
-    // opening an EXISTING session by id via GET /exam-sessions/:id, rather
+    // opening an EXISTING session by id via GET /modules/exam/exam-sessions/:id, rather
     // than the live start->answer->submit flow.
     'exam.result.byId.loading': 'Loading your result…',
     'exam.result.byId.notFound': 'This exam session could not be found.',
     'exam.result.byId.scoreUnavailable':
-      'This session has been submitted, but GET /exam-sessions/:id does not yet return score data -- see REQ-351\'s close-out for the tracked gap. Open the exam again from the exam list to see your score at submit time.',
+      'This session has been submitted, but GET /modules/exam/exam-sessions/:id does not yet return score data -- see REQ-351\'s close-out for the tracked gap. Open the exam again from the exam list to see your score at submit time.',
   },
   ru: {
     'exam.list.title': 'Доступные экзамены',
@@ -153,7 +153,7 @@ export const examMessages: Record<ExamUiLocale, Record<string, string>> = {
     'exam.result.byId.loading': 'Загрузка результата…',
     'exam.result.byId.notFound': 'Эта экзаменационная сессия не найдена.',
     'exam.result.byId.scoreUnavailable':
-      'Эта сессия отправлена, но GET /exam-sessions/:id пока не возвращает данные о баллах -- см. отчёт REQ-351 об этом пробеле. Откройте экзамен заново из списка экзаменов, чтобы увидеть свой результат в момент отправки.',
+      'Эта сессия отправлена, но GET /modules/exam/exam-sessions/:id пока не возвращает данные о баллах -- см. отчёт REQ-351 об этом пробеле. Откройте экзамен заново из списка экзаменов, чтобы увидеть свой результат в момент отправки.',
   },
   kk: {
     'exam.list.title': 'Қолжетімді емтихандар',
@@ -202,6 +202,6 @@ export const examMessages: Record<ExamUiLocale, Record<string, string>> = {
     'exam.result.byId.loading': 'Нәтиже жүктелуде…',
     'exam.result.byId.notFound': 'Бұл емтихан сессиясы табылмады.',
     'exam.result.byId.scoreUnavailable':
-      'Бұл сессия жіберілді, бірақ GET /exam-sessions/:id әлі балл деректерін қайтармайды -- осы олқылық туралы REQ-351 есебін қараңыз. Жіберу сәтіндегі нәтижеңізді көру үшін емтиханды тізімнен қайта ашыңыз.',
+      'Бұл сессия жіберілді, бірақ GET /modules/exam/exam-sessions/:id әлі балл деректерін қайтармайды -- осы олқылық туралы REQ-351 есебін қараңыз. Жіберу сәтіндегі нәтижеңізді көру үшін емтиханды тізімнен қайта ашыңыз.',
   },
 }

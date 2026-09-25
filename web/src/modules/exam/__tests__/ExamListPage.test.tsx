@@ -28,7 +28,7 @@ vi.mock('@tanstack/react-query', () => ({
   })),
 }))
 
-vi.mock('@/api/exam', () => ({
+vi.mock('../exam.api', () => ({
   examApi: {
     listAvailableExams: vi.fn(),
   },
@@ -55,8 +55,8 @@ vi.mock('@/auth/AuthContext', () => ({
   }),
 }))
 
-import ExamListPage from '@/pages/exam/ExamListPage'
-import { examMessages } from '@/i18n/examMessages'
+import ExamListPage from '../ExamListPage'
+import { examMessages } from '../examMessages'
 
 beforeEach(() => {
   vi.clearAllMocks()
@@ -119,11 +119,11 @@ describe('ISS-0728 -- localized exam title resolution', () => {
         isError: false,
       })),
     }))
-    vi.doMock('@/api/exam', () => ({
+    vi.doMock('../exam.api', () => ({
       examApi: { listAvailableExams: vi.fn() },
     }))
 
-    const { default: ExamListPageFresh } = await import('@/pages/exam/ExamListPage')
+    const { default: ExamListPageFresh } = await import('../ExamListPage')
 
     render(
       <MemoryRouter>

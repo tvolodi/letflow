@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 /**
  * REQ-342 -- the entity-localized-text widget, proven against real
- * `:localized_text` field shapes from priv/packs/bilimbaga/entity_definitions/.
+ * `:localized_text` field shapes from priv/modules/exam/entity_definitions/.
  *
  * CHECK FOR EXISTING COVERAGE (per REQ-342's own instruction, run before any
  * widget code was written for this requirement):
@@ -20,11 +20,11 @@
  *
  * The three field shapes below are taken verbatim from the actual committed
  * definition documents (not invented):
- *   - priv/packs/bilimbaga/entity_definitions/question.json:
+ *   - priv/modules/exam/entity_definitions/question.json:
  *       stem: :localized_text, locales ["kk","ru","en"], required
- *   - priv/packs/bilimbaga/entity_definitions/category.json:
+ *   - priv/modules/exam/entity_definitions/category.json:
  *       name: :localized_text, locales ["kk","ru","en"], required
- *   - priv/packs/bilimbaga/entity_definitions/exam_section.json:
+ *   - priv/modules/exam/entity_definitions/exam_section.json:
  *       title: :localized_text, locales ["kk","ru","en"], NOT required
  */
 import { describe, it, expect, vi, afterEach } from 'vitest'

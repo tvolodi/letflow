@@ -22,7 +22,7 @@
  *  `web/src/router.tsx` should be read as fixing `/exam/sessions/:sessionId/
  *  result` as a permanent contract.
  *
- *  SCORE RENDERING (ISS-0674, closed). `GET /exam-sessions/:id`
+ *  SCORE RENDERING (ISS-0674, closed). `GET /modules/exam/exam-sessions/:id`
  *  (`Letflow.Exam.Session.get_session_state_for_user/3`, wrapped by
  *  `examApi.getSessionState`) now returns `score_pct`/`passed` on the
  *  `session` object (`session_view/1`, lib/letflow/exam/session.ex, and
@@ -41,12 +41,12 @@
 import { useEffect, useState } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { useIntl } from 'react-intl'
-import { examApi } from '@/api/exam'
+import { examApi } from './exam.api'
 import { PageLayout } from '@/components/ui/PageLayout'
 import { Button } from '@/components/ui/Button'
-import { ExamIntlProvider } from '@/i18n/ExamIntlProvider'
+import { ExamIntlProvider } from './ExamIntlProvider'
 import { ExamResultView } from './ExamResultView'
-import type { ExamSessionStateResponse, ExamSubmissionOutcome } from '@/types/exam'
+import type { ExamSessionStateResponse, ExamSubmissionOutcome } from './exam.types'
 
 type LoadState =
   | { kind: 'loading' }

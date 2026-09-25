@@ -67,6 +67,39 @@ defmodule Letflow.Modules.Catalog do
     end
   end
 
+  @doc """
+  The set of `pack_id` values owned by registered modules (REQ-411).
+
+  Used by `POST /api/v1/solution-packs/install` to refuse direct installation
+  of a pack that is owned by a registered module (the caller must use the
+  module-install route instead).  Returns a `MapSet.t(String.t())`.
+
+  Reads each module's pack.json at call time; modules with `pack: nil` in
+  their manifest contribute nothing.  One file-read per module that declares
+  a pack — negligible on the admin-only install path.
+  """
+  @spec module_pack_ids() :: MapSet.t(String.t())
+  def module_pack_ids do
+    entry_modules()
+    |> Enum.flat_map(fn entry_module ->
+      case entry_module.manifest().pack do
+        nil ->
+          []
+
+        pack_path ->
+          full_path = Path.join(Application.app_dir(:letflow, "priv"), pack_path)
+
+          with {:ok, contents} <- File.read(full_path),
+               {:ok, %{"pack_id" => pack_id}} <- Jason.decode(contents) do
+            [pack_id]
+          else
+            _ -> []
+          end
+      end
+    end)
+    |> MapSet.new()
+  end
+
   @doc "The union of every registered module's own declared `:permissions`."
   @spec permissions() :: [atom()]
   def permissions do

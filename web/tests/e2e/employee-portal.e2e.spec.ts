@@ -90,7 +90,7 @@ function findExamByTitle(exams: ExamRecord[], titleEn: string): string {
 
 /** Submits every still-open (in_progress) session against the given exam, via
  *  the same raw HTTP route ExamSessionPage's own "Submit exam" button calls
- *  (`POST /exam-sessions/:id/submit`) — never touching the exam-result UI
+ *  (`POST /modules/exam/exam-sessions/:id/submit`) — never touching the exam-result UI
  *  itself (that is REQ-349's scope). This is cleanup, not a covered
  *  behaviour: `lib/letflow/exam/session.ex`'s `check_no_open_session/1`
  *  blocks a second `create/3` call for the same (candidate, exam) pair while
@@ -111,7 +111,7 @@ async function submitOpenSessionsForExam(request: APIRequestContext, token: stri
   if (!res.ok()) return
   const body = (await res.json()) as { items: Array<{ record_id: string }> }
   for (const item of body.items) {
-    await request.post(`/api/v1/exam-sessions/${item.record_id}/submit`, {
+    await request.post(`/api/v1/modules/exam/exam-sessions/${item.record_id}/submit`, {
       headers: { Authorization: `Bearer ${token}` },
     })
   }

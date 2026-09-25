@@ -1,24 +1,24 @@
 /** exam session API client — REQ-338
  *
  *  Follows web/src/api/definitions.ts's own shape: a plain object of named
- *  functions wrapping client.get/post/put, typed against web/src/types/exam.ts.
+ *  functions wrapping client.get/post/put, typed against exam.types.ts.
  *  Wraps REQ-335's ACTUAL route table
  *  (lib/letflow/routers/exam_sessions.ex's own moduledoc "Route table"),
  *  re-verified directly against that router's source, not the speculative
- *  paths this requirement's own description guessed at before REQ-335 landed:
+ *  paths this requirement's own description guessed at before REQ-335 landed.
+ *  REQ-410 moved the router to /api/v1/modules/exam/exam-sessions:
  *
- *    | Handler             | Method/path                                       |
- *    |----------------------|---------------------------------------------------|
- *    | start_session        | POST   /exam-sessions                              |
- *    | get_session_state    | GET    /exam-sessions/:id                          |
- *    | autosave_answer      | PUT    /exam-sessions/:id/answers/:question_id     |
- *    | submit_session       | POST   /exam-sessions/:id/submit                   |
- *    | report_event         | POST   /exam-sessions/:id/events                   |
+ *    | Handler             | Method/path                                               |
+ *    |---------------------|-----------------------------------------------------------|
+ *    | start_session        | POST   /modules/exam/exam-sessions                       |
+ *    | get_session_state    | GET    /modules/exam/exam-sessions/:id                    |
+ *    | autosave_answer      | PUT    /modules/exam/exam-sessions/:id/answers/:q_id      |
+ *    | submit_session       | POST   /modules/exam/exam-sessions/:id/submit             |
+ *    | report_event         | POST   /modules/exam/exam-sessions/:id/events             |
  *
- *  Mounted at `/exam-sessions` under the normal authenticated `/api/v1`
- *  forward (NOT decision 0028's unauthenticated capability-handle pattern),
- *  so every path below is `/api/v1/exam-sessions...`, matching
- *  web/src/api/definitions.ts's own `/api/v1/definitions` prefix convention.
+ *  Mounted at `/modules/exam/exam-sessions` under the authenticated `/api/v1`
+ *  forward (REQ-410's naming), so every path below is
+ *  `/api/v1/modules/exam/exam-sessions...`.
  *
  *  Five named operations, matching this requirement's own description
  *  exactly (startSession, saveAnswer, submitSession, getSessionState,
@@ -31,7 +31,7 @@
  *  CANDIDATE cannot reach that route — `:EntitiesQuery` is outside
  *  CANDIDATE's ISS-0646 closed permission set, so every CANDIDATE call was a
  *  guaranteed 403. `listAvailableExams` instead calls the new, dedicated
- *  `GET /exam-sessions/available` route (added by ISS-0718's fix, gated on
+ *  `GET /modules/exam/exam-sessions/available` route (added by ISS-0718's fix, gated on
  *  CANDIDATE's existing `:ExamSessionStart` permission — no new grant), which
  *  hardcodes `entity_type: "exam"` and `status: active` server-side rather
  *  than accepting caller-supplied filters. See
@@ -40,7 +40,7 @@
  *  route returns the identical response shape the old one did.
  */
 
-import { client } from './client'
+import { client } from '@/api/client'
 import type {
   AntiCheatSignalOutcome,
   AntiCheatSignalType,
@@ -48,11 +48,11 @@ import type {
   ExamSessionStateResponse,
   ExamSubmissionOutcome,
   SaveAnswerBody,
-} from '@/types/exam'
+} from './exam.types'
 
-const BASE = '/api/v1/exam-sessions'
+const BASE = '/api/v1/modules/exam/exam-sessions'
 
-/** One `exam` record as returned by `GET /exam-sessions/available`
+/** One `exam` record as returned by `GET /modules/exam/exam-sessions/available`
  *  (identical shape to the old `POST /entities/query` route's
  *  `entity_row_map/1`-style rendering — ISS-0718 §1.4). */
 export interface ExamRecord {
@@ -63,23 +63,23 @@ export interface ExamRecord {
   last_event_global_seq: number
 }
 
-/** `GET /exam-sessions/available`'s response body. */
+/** `GET /modules/exam/exam-sessions/available`'s response body. */
 export interface ExamRecordsPage {
   items: ExamRecord[]
   next_cursor: string | null
 }
 
 export const examApi = {
-  /** `POST /exam-sessions` — `candidate_id` is always the caller's own
+  /** `POST /modules/exam/exam-sessions` — `candidate_id` is always the caller's own
    *  identity server-side; only `exam_id` is supplied here. */
   startSession: (examId: string) =>
     client.post<ExamSessionStateResponse>(BASE, { exam_id: examId }),
 
-  /** `GET /exam-sessions/:id`. */
+  /** `GET /modules/exam/exam-sessions/:id`. */
   getSessionState: (sessionId: string) =>
     client.get<ExamSessionStateResponse>(`${BASE}/${encodeURIComponent(sessionId)}`),
 
-  /** `PUT /exam-sessions/:id/answers/:question_id` — `question_id` is a PATH
+  /** `PUT /modules/exam/exam-sessions/:id/answers/:question_id` — `question_id` is a PATH
    *  segment, never a body field, matching the router's own shape. */
   saveAnswer: (sessionId: string, questionId: string, answer: SaveAnswerBody) =>
     client.put<ExamAutosaveResponse>(
@@ -87,18 +87,18 @@ export const examApi = {
       answer,
     ),
 
-  /** `POST /exam-sessions/:id/submit`. */
+  /** `POST /modules/exam/exam-sessions/:id/submit`. */
   submitSession: (sessionId: string) =>
     client.post<ExamSubmissionOutcome>(`${BASE}/${encodeURIComponent(sessionId)}/submit`),
 
-  /** `POST /exam-sessions/:id/events` — `type` is one of
+  /** `POST /modules/exam/exam-sessions/:id/events` — `type` is one of
    *  tab_switch | blur | fullscreen_exit (REQ-333's three accepted signal
    *  types); `action_taken` is never sent by the caller (the router has no
    *  such field in its own request schema). */
   reportEvent: (sessionId: string, type: AntiCheatSignalType) =>
     client.post<AntiCheatSignalOutcome>(`${BASE}/${encodeURIComponent(sessionId)}/events`, { type }),
 
-  /** `GET /exam-sessions/available` — lists exams a CANDIDATE may currently
+  /** `GET /modules/exam/exam-sessions/available` — lists exams a CANDIDATE may currently
    *  start a session against (status=active, exam_id filtering is
    *  server-side and NOT caller-controlled — see
    *  lib/letflow/design/iss0718-candidate-exam-list-route.md §1). Replaces

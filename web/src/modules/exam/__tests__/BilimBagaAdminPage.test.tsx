@@ -18,7 +18,7 @@ import { render, screen, cleanup } from '@testing-library/react'
 import { MemoryRouter } from 'react-router-dom'
 expect.extend(jestDomMatchers)
 
-import BilimBagaAdminPage from '@/pages/admin/bilimbaga/BilimBagaAdminPage'
+import BilimBagaAdminPage from '../BilimBagaAdminPage'
 import { BILIMBAGA_ENTITY_TYPES } from '@/config/bilimbagaEntities'
 
 afterEach(() => cleanup())

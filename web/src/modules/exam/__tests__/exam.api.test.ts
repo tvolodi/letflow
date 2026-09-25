@@ -1,26 +1,26 @@
 // @vitest-environment jsdom
 /**
- * REQ-338 AC1 — web/src/api/exam.ts exposes the five named operations
+ * REQ-338 AC1 — exam.api.ts exposes the five named operations
  * (startSession, saveAnswer, submitSession, getSessionState, reportEvent)
- * and each hits REQ-335's real route
+ * and each hits REQ-335's real route remounted under REQ-410's module path
  * (lib/letflow/routers/exam_sessions.ex's own "Route table"):
  *
- *   POST   /api/v1/exam-sessions
- *   GET    /api/v1/exam-sessions/:id
- *   PUT    /api/v1/exam-sessions/:id/answers/:question_id
- *   POST   /api/v1/exam-sessions/:id/submit
- *   POST   /api/v1/exam-sessions/:id/events
+ *   POST   /api/v1/modules/exam/exam-sessions
+ *   GET    /api/v1/modules/exam/exam-sessions/:id
+ *   PUT    /api/v1/modules/exam/exam-sessions/:id/answers/:question_id
+ *   POST   /api/v1/modules/exam/exam-sessions/:id/submit
+ *   POST   /api/v1/modules/exam/exam-sessions/:id/events
  *
  * Plus `listAvailableExams` (ISS-0718), which replaced this file's original
  * `queryExamRecords` wrapper around the generic `POST /entities/query` route:
  * CANDIDATE cannot reach that route (`:EntitiesQuery` is outside CANDIDATE's
  * ISS-0646 closed permission set), so the exam list screen now calls the
- * dedicated `GET /exam-sessions/available` route instead; see
- * web/src/api/exam.ts's own moduledoc comment.
+ * dedicated `GET /modules/exam/exam-sessions/available` route instead; see
+ * exam.api.ts's own moduledoc comment.
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
-import { examApi } from '../exam'
-import { setToken, clearToken } from '../client'
+import { examApi } from '../exam.api'
+import { setToken, clearToken } from '@/api/client'
 
 const originalFetch = window.fetch
 
@@ -60,40 +60,40 @@ describe('REQ-338 AC1 — examApi shape', () => {
 })
 
 describe('REQ-338 AC1 — examApi hits REQ-335s real route table', () => {
-  it('startSession -> POST /api/v1/exam-sessions with exam_id in the body', async () => {
+  it('startSession -> POST /api/v1/modules/exam/exam-sessions with exam_id in the body', async () => {
     const fetchSpy = vi.fn().mockImplementation(() => jsonResponse({ session: {}, remaining_seconds: 0, questions: [], answers: {} }))
     window.fetch = fetchSpy as unknown as typeof window.fetch
 
     await examApi.startSession('exam-1')
 
     expect(fetchSpy).toHaveBeenCalledWith(
-      expect.stringContaining('/api/v1/exam-sessions'),
+      expect.stringContaining('/api/v1/modules/exam/exam-sessions'),
       expect.objectContaining({ method: 'POST' }),
     )
     const [, init] = fetchSpy.mock.calls[0] as [string, RequestInit]
     expect(JSON.parse(init.body as string)).toEqual({ exam_id: 'exam-1' })
   })
 
-  it('getSessionState -> GET /api/v1/exam-sessions/:id', async () => {
+  it('getSessionState -> GET /api/v1/modules/exam/exam-sessions/:id', async () => {
     const fetchSpy = vi.fn().mockImplementation(() => jsonResponse({ session: {}, remaining_seconds: 0, questions: [], answers: {} }))
     window.fetch = fetchSpy as unknown as typeof window.fetch
 
     await examApi.getSessionState('session-1')
 
     expect(fetchSpy).toHaveBeenCalledWith(
-      expect.stringContaining('/api/v1/exam-sessions/session-1'),
+      expect.stringContaining('/api/v1/modules/exam/exam-sessions/session-1'),
       expect.objectContaining({}),
     )
   })
 
-  it('saveAnswer -> PUT /api/v1/exam-sessions/:id/answers/:question_id', async () => {
+  it('saveAnswer -> PUT /api/v1/modules/exam/exam-sessions/:id/answers/:question_id', async () => {
     const fetchSpy = vi.fn().mockImplementation(() => jsonResponse({ remaining_seconds: 42 }))
     window.fetch = fetchSpy as unknown as typeof window.fetch
 
     await examApi.saveAnswer('session-1', 'question-1', { selected_option_ids: ['opt-1'], time_spent_seconds: 5 })
 
     expect(fetchSpy).toHaveBeenCalledWith(
-      expect.stringContaining('/api/v1/exam-sessions/session-1/answers/question-1'),
+      expect.stringContaining('/api/v1/modules/exam/exam-sessions/session-1/answers/question-1'),
       expect.objectContaining({ method: 'PUT' }),
     )
     const [, init] = fetchSpy.mock.calls[0] as [string, RequestInit]
@@ -118,26 +118,26 @@ describe('REQ-338 AC1 — examApi hits REQ-335s real route table', () => {
     })
   })
 
-  it('submitSession -> POST /api/v1/exam-sessions/:id/submit', async () => {
+  it('submitSession -> POST /api/v1/modules/exam/exam-sessions/:id/submit', async () => {
     const fetchSpy = vi.fn().mockImplementation(() => jsonResponse({ status: 'submitted', total_score: 1, total_max_score: 1, percentage: 100, passed: true }))
     window.fetch = fetchSpy as unknown as typeof window.fetch
 
     await examApi.submitSession('session-1')
 
     expect(fetchSpy).toHaveBeenCalledWith(
-      expect.stringContaining('/api/v1/exam-sessions/session-1/submit'),
+      expect.stringContaining('/api/v1/modules/exam/exam-sessions/session-1/submit'),
       expect.objectContaining({ method: 'POST' }),
     )
   })
 
-  it('reportEvent -> POST /api/v1/exam-sessions/:id/events with type in the body', async () => {
+  it('reportEvent -> POST /api/v1/modules/exam/exam-sessions/:id/events with type in the body', async () => {
     const fetchSpy = vi.fn().mockImplementation(() => jsonResponse({ action_taken: 'log', event_count: 1, warning: false, submission: null }))
     window.fetch = fetchSpy as unknown as typeof window.fetch
 
     await examApi.reportEvent('session-1', 'tab_switch')
 
     expect(fetchSpy).toHaveBeenCalledWith(
-      expect.stringContaining('/api/v1/exam-sessions/session-1/events'),
+      expect.stringContaining('/api/v1/modules/exam/exam-sessions/session-1/events'),
       expect.objectContaining({ method: 'POST' }),
     )
     const [, init] = fetchSpy.mock.calls[0] as [string, RequestInit]

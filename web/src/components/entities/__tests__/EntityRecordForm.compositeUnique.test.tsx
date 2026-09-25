@@ -21,7 +21,7 @@
  * arity, it just joins whatever `fields` list the constraint declared.
  *
  * Two of REQ-326/REQ-327's real composite constraints are exercised, per
- * priv/packs/bilimbaga/entity_definitions/:
+ * priv/modules/exam/entity_definitions/:
  *   - question_tag.json: uq_question_tag_question_id_tag_id, unique over
  *     ["question_id", "tag_id"]
  *   - exam_section.json: uq_exam_section_exam_id_sort_order, unique over

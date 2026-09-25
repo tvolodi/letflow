@@ -24,6 +24,10 @@ vi.mock('@/auth/AuthContext', () => ({
   useAuth: vi.fn(),
 }))
 
+vi.mock('@/hooks/useInstalledModules', () => ({
+  useInstalledModules: vi.fn(),
+}))
+
 vi.mock('@/api/client', () => ({
   client: { get: vi.fn(() => Promise.resolve({ items: [] })) },
 }))
@@ -51,6 +55,7 @@ async function renderAppShellAs(roles: string[]) {
   vi.resetModules()
 
   const { useAuth } = await import('@/auth/AuthContext')
+  const { useInstalledModules } = await import('@/hooks/useInstalledModules')
   vi.mocked(useAuth).mockReturnValue({
     session: sessionWithRoles(roles),
     isAuthenticated: true,
@@ -62,6 +67,11 @@ async function renderAppShellAs(roles: string[]) {
     switchTenant: vi.fn(),
     switchingToTenantSlug: null,
   })
+  // Install the exam module so Question Bank nav item appears.
+  vi.mocked(useInstalledModules).mockReturnValue({
+    data: [{ module_id: 'exam', version: '1.0.0' }],
+    isLoading: false,
+  } as never)
 
   const { BrandingProvider } = await import('@/theming/BrandingProvider')
   const { AppShell } = await import('../AppShell')

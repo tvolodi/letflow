@@ -37,8 +37,8 @@ const GAP_PATTERN = /parent_id|exam_assignment/i
 const FILES_TO_CHECK = [
   'config/bilimbagaEntities.ts',
   'pages/entities/EntityCrudPage.tsx',
-  'pages/admin/bilimbaga/BilimBagaAdminPage.tsx',
-  'pages/admin/bilimbaga/BilimBagaEntityRoute.tsx',
+  'modules/exam/BilimBagaAdminPage.tsx',
+  'modules/exam/BilimBagaEntityRoute.tsx',
   'i18n/entitiesMessages.ts',
   'router.tsx',
   'components/layout/AppShell.tsx',

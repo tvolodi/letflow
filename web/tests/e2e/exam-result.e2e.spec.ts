@@ -66,7 +66,7 @@
  *      This is exactly the "result-by-id view" the scope-fence text above
  *      names: `GetSessionResult` is "not routed here for the same reason"
  *      as the results-list views, and no route in `web/src/router.tsx`
- *      opens a session by id. `GET /exam-sessions/:id` does return a
+ *      opens a session by id. `GET /modules/exam/exam-sessions/:id` does return a
  *      submitted session's own state at the HTTP level, but no screen
  *      renders it, and this requirement's own text is explicit that
  *      driving to a *fresh* result via the live flow (blocks 01/02/03
@@ -134,7 +134,7 @@
  * SESSION-PER-EXAM CONSTRAINT, same reasoning as
  * `exam-taking.e2e.spec.ts`'s own doc comment:
  * `lib/letflow/exam/session.ex`'s `check_no_open_session/1` rejects a
- * second `POST /exam-sessions` for the same (candidate, exam) pair while
+ * second `POST /modules/exam/exam-sessions` for the same (candidate, exam) pair while
  * one is still `in_progress`. The scoreable exam needs two full live
  * sessions in this file (one passing, one failing); each describe block
  * below closes its own session in `afterAll` (defensively, in case a test
@@ -211,7 +211,7 @@ async function submitOpenSessionsForExam(request: APIRequestContext, token: stri
   if (!res.ok()) return
   const body = (await res.json()) as { items: Array<{ record_id: string }> }
   for (const item of body.items) {
-    await request.post(`/api/v1/exam-sessions/${item.record_id}/submit`, {
+    await request.post(`/api/v1/modules/exam/exam-sessions/${item.record_id}/submit`, {
       headers: { Authorization: `Bearer ${token}` },
     })
   }

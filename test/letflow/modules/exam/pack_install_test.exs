@@ -1,7 +1,7 @@
-defmodule Letflow.Packs.BilimbagaPackInstallTest do
+defmodule Letflow.Modules.Exam.PackInstallTest do
   @moduledoc """
   REQ-328 -- performs a REAL `Letflow.Definitions.SolutionPack.install/3` of
-  `priv/packs/bilimbaga/pack.json` against a real provisioned tenant, then
+  `priv/modules/exam/pack.json` against a real provisioned tenant, then
   activates, writes real records, and reads them back.
 
   This is the test that makes S10 phase P2's exit condition ("a tenant with a
@@ -28,12 +28,10 @@ defmodule Letflow.Packs.BilimbagaPackInstallTest do
   table for an entity type whose FK target table does not exist yet emits
   `REFERENCES` against a missing table and fails as an opaque Postgres 42P01.
   `@activation_order` below is the FK DAG's topological order; see
-  `priv/packs/bilimbaga/README.md`.
+  `priv/modules/exam/README.md`.
 
-  ## No production module is modified by this requirement
-
-  This file is a test. It reads `priv/packs/bilimbaga/pack.json` and calls
-  existing, already-gated public API.
+  REQ-411: moved from `test/letflow/packs/bilimbaga_pack_install_test.exs`;
+  paths updated to `priv/modules/exam/`.
   """
 
   use Letflow.DataCase, async: false
@@ -52,9 +50,9 @@ defmodule Letflow.Packs.BilimbagaPackInstallTest do
   alias Letflow.TenantProvisioning
   alias Letflow.TenantProvisioning.ColumnPromotion
 
-  @pack_path Path.join([File.cwd!(), "priv", "packs", "bilimbaga", "pack.json"])
-  @definitions_dir Path.join([File.cwd!(), "priv", "packs", "bilimbaga", "entity_definitions"])
-  @generator_path Path.join([File.cwd!(), "priv", "packs", "bilimbaga", "generate_pack.exs"])
+  @pack_path Path.join([File.cwd!(), "priv", "modules", "exam", "pack.json"])
+  @definitions_dir Path.join([File.cwd!(), "priv", "modules", "exam", "entity_definitions"])
+  @generator_path Path.join([File.cwd!(), "priv", "modules", "exam", "generate_pack.exs"])
 
   @entity_types ~w(
     category tag question answer_option question_tag
@@ -203,8 +201,8 @@ defmodule Letflow.Packs.BilimbagaPackInstallTest do
 
         assert packed["definition_json"] == source,
                "pack.json's embedded #{packed["name"]} definition_json has drifted from " <>
-                 "priv/packs/bilimbaga/entity_definitions/#{packed["name"]}.json -- " <>
-                 "regenerate with: mix run priv/packs/bilimbaga/generate_pack.exs"
+                 "priv/modules/exam/entity_definitions/#{packed["name"]}.json -- " <>
+                 "regenerate with: mix run priv/modules/exam/generate_pack.exs"
       end
     end
 

@@ -20,8 +20,8 @@
  *  would leave nine other acceptance criteria undone unnecessarily.
  *
  *  ISS-0718: this screen now reads via the dedicated
- *  `GET /exam-sessions/available` route (`examApi.listAvailableExams` in
- *  web/src/api/exam.ts), gated by CANDIDATE's existing `:ExamSessionStart`
+ *  `GET /modules/exam/exam-sessions/available` route (`examApi.listAvailableExams`),
+ *  gated by CANDIDATE's existing `:ExamSessionStart`
  *  permission. Added specifically because the generic `POST /entities/query`
  *  route this screen previously called (via `examApi.queryExamRecords`) is
  *  outside CANDIDATE's ISS-0646 closed permission set — every CANDIDATE call
@@ -44,19 +44,19 @@ import { useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { useIntl } from 'react-intl'
-import { examApi, type ExamRecord } from '@/api/exam'
+import { examApi, type ExamRecord } from './exam.api'
 import { useTenantScopedQueryKeys } from '@/api/useTenantScopedQueryKeys'
 import { PageLayout } from '@/components/ui/PageLayout'
 import { Button } from '@/components/ui/Button'
 import { QueryStateBoundary } from '@/components/ui/QueryStateBoundary'
 import { classifyError, type RendererState } from '@/utils/classifyError'
-import { ExamIntlProvider } from '@/i18n/ExamIntlProvider'
+import { ExamIntlProvider } from './ExamIntlProvider'
 import { HelpTrigger } from '@/components/help/HelpTrigger'
 import { resolveUiLocale } from '@/i18n/entitiesMessages'
-import type { LocalizedText } from '@/types/exam'
+import type { LocalizedText } from './exam.types'
 
 /** ISS-0728: `field_values.title`/`.name` come back from
- *  `GET /exam-sessions/available` as the raw entity field value -- a
+ *  `GET /modules/exam/exam-sessions/available` as the raw entity field value -- a
  *  `:localized_text` field renders as a `LocalizedText` object (e.g.
  *  `{en, kk, ru}`), NOT a plain string, so `String(value)` on it produced
  *  the literal text "[object Object]" for every real exam. Mirrors

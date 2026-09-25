@@ -35,7 +35,7 @@ import path from 'node:path'
 import { BILIMBAGA_ENTITY_TYPES, isBilimBagaEntityType } from '@/config/bilimbagaEntities'
 
 // web/src/config/__tests__ -> web/src/config -> web/src -> web -> repo root
-const PACK_DIR = path.resolve(__dirname, '../../../../priv/packs/bilimbaga/entity_definitions')
+const PACK_DIR = path.resolve(__dirname, '../../../../priv/modules/exam/entity_definitions')
 
 // Entity types with no admin-authoring path, for two distinct reasons:
 // (a) runtime-state types written by lib/letflow/exam/session.ex's engine as

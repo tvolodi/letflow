@@ -1,7 +1,7 @@
-defmodule Letflow.Packs.BilimbagaExamDefinitionsTest do
+defmodule Letflow.Modules.Exam.ExamDefinitionsTest do
   @moduledoc """
   Runs the five exam-configuration entity-definition documents REQ-327 authors
-  under `priv/packs/bilimbaga/entity_definitions/` through the real
+  under `priv/modules/exam/entity_definitions/` through the real
   `Letflow.Entities.Definition.Validator.validate/1`, and asserts their relational
   shape and naming conventions mechanically.
 
@@ -20,6 +20,9 @@ defmodule Letflow.Packs.BilimbagaExamDefinitionsTest do
   solution_pack.ex"` below guards the mirror against drift by asserting that every
   key these documents actually use is one the production whitelists accept, via a
   real `SolutionPack` parse of a wrapped document.
+
+  REQ-411: moved from `test/letflow/packs/bilimbaga_exam_definitions_test.exs`;
+  paths updated to `priv/modules/exam/entity_definitions/`.
   """
 
   use ExUnit.Case, async: true
@@ -422,7 +425,7 @@ defmodule Letflow.Packs.BilimbagaExamDefinitionsTest do
   # --- helpers ----------------------------------------------------------------
 
   defp definitions_dir do
-    Path.join(Application.app_dir(:letflow, "priv"), "packs/bilimbaga/entity_definitions")
+    Path.join(Application.app_dir(:letflow, "priv"), "modules/exam/entity_definitions")
   end
 
   defp load_raw(name) do

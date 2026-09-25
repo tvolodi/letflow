@@ -14,10 +14,9 @@ defmodule Letflow.Routers.EntitiesAnswerKeyFieldLeakTest do
 
   ## Part 1 (fact-finding) -- empirically confirms the leak existed
 
-  Before ISS-0647's fix (`Letflow.Packs.Bilimbaga.
-  seed_answer_key_field_restrictions!/1`), a tenant with the real bilimbaga
+  Before ISS-0647's fix, a tenant with the real bilimbaga
   `question`/`answer_option` shape and NO field-restriction rows configured
-  -- exactly `priv/packs/bilimbaga/entity_definitions/answer_option.json`'s
+  -- exactly `priv/modules/exam/entity_definitions/answer_option.json`'s
   own documented state before this issue ("This pack does not configure a
   field grant") -- returns `is_correct`/`likert_weight`/`likert_polarity`/
   `explanation` in clear to a TASK_WORKER-scoped caller via the generic
@@ -28,13 +27,16 @@ defmodule Letflow.Routers.EntitiesAnswerKeyFieldLeakTest do
   ## Part 2 (regression) -- proves the fix closes it, without breaking
   legitimate TASK_WORKER use of `:EntitiesQuery` against other fields/types
 
-  Calling `Letflow.Packs.Bilimbaga.seed_answer_key_field_restrictions!/1`
-  against the SAME tenant makes every one of those four fields redact to
+  Calling `Letflow.Modules.Exam.on_install/2` against the SAME tenant makes
+  every one of those four fields redact to
   `Letflow.Entities.Query.FieldGrants`'s sentinel for the SAME TASK_WORKER
   caller and the SAME request -- while an unrestricted field on the SAME
   record (`answer_option.text`) and an unrelated entity type/role-holder
   remain fully readable, proving the fix is scoped to exactly the four
   answer-key fields and does not silently over-redact.
+
+  REQ-411: Part 2 now calls `Letflow.Modules.Exam.on_install/2` instead of
+  the deleted `Letflow.Packs.Bilimbaga.seed_answer_key_field_restrictions!/1`.
   """
 
   use Letflow.DataCase, async: false
@@ -48,7 +50,7 @@ defmodule Letflow.Routers.EntitiesAnswerKeyFieldLeakTest do
   alias Letflow.Entities.Records
   alias Letflow.Identity
   alias Letflow.Identity.User
-  alias Letflow.Packs.Bilimbaga
+  alias Letflow.Modules.Exam
   alias Letflow.TenantFixture
 
   # ── Full-pipeline dispatch (mirrors test/letflow/routers/entities_test.exs) ──
@@ -273,11 +275,11 @@ defmodule Letflow.Routers.EntitiesAnswerKeyFieldLeakTest do
   # PART 2 -- regression: the fix closes it, without over-redacting.
   # ═══════════════════════════════════════════════════════════════════════
 
-  describe "ISS-0647 regression -- Bilimbaga.seed_answer_key_field_restrictions!/1 closes the leak" do
+  describe "ISS-0647 regression -- Exam.on_install/2 closes the leak" do
     test "is_correct/likert_weight/likert_polarity/explanation redact to the FieldGrants sentinel for the SAME TASK_WORKER caller, while an unrestricted field on the SAME record stays visible" do
       ctx = tenant_ctx("iss0647-fixed-answer-option", ["TASK_WORKER"])
       seed_bilimbaga_shape!(ctx)
-      :ok = Bilimbaga.seed_answer_key_field_restrictions!(ctx.schema_name)
+      :ok = Exam.on_install(ctx.schema_name, %{})
 
       question =
         seed_record!(ctx, "question", %{"stem" => "2 + 2 = ?", "explanation" => "Basic addition."})
@@ -316,7 +318,7 @@ defmodule Letflow.Routers.EntitiesAnswerKeyFieldLeakTest do
     test "the aggregate route now rejects filtering by is_correct with 403, instead of leaking it" do
       ctx = tenant_ctx("iss0647-fixed-aggregate", ["TASK_WORKER"])
       seed_bilimbaga_shape!(ctx)
-      :ok = Bilimbaga.seed_answer_key_field_restrictions!(ctx.schema_name)
+      :ok = Exam.on_install(ctx.schema_name, %{})
 
       question = seed_record!(ctx, "question", %{"stem" => "2 + 2 = ?"})
 
@@ -355,14 +357,14 @@ defmodule Letflow.Routers.EntitiesAnswerKeyFieldLeakTest do
       ctx = tenant_ctx("iss0647-idempotent", ["TASK_WORKER"])
       seed_bilimbaga_shape!(ctx)
 
-      assert :ok = Bilimbaga.seed_answer_key_field_restrictions!(ctx.schema_name)
-      assert :ok = Bilimbaga.seed_answer_key_field_restrictions!(ctx.schema_name)
+      assert :ok = Exam.on_install(ctx.schema_name, %{})
+      assert :ok = Exam.on_install(ctx.schema_name, %{})
     end
 
     test "does not break legitimate TASK_WORKER use of :EntitiesQuery against an unrelated entity type" do
       ctx = tenant_ctx("iss0647-unrelated-entity", ["TASK_WORKER"])
       seed_bilimbaga_shape!(ctx)
-      :ok = Bilimbaga.seed_answer_key_field_restrictions!(ctx.schema_name)
+      :ok = Exam.on_install(ctx.schema_name, %{})
 
       create_active_definition!(ctx, %{
         name: "widget",

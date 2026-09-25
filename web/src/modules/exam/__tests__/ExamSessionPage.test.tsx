@@ -23,7 +23,7 @@ import { render, screen, cleanup, fireEvent, waitFor } from '@testing-library/re
 import { MemoryRouter, Route, Routes } from 'react-router-dom'
 expect.extend(jestDomMatchers)
 
-vi.mock('@/api/exam', () => ({
+vi.mock('../exam.api', () => ({
   examApi: {
     startSession: vi.fn(),
     getSessionState: vi.fn(),
@@ -33,9 +33,9 @@ vi.mock('@/api/exam', () => ({
   },
 }))
 
-import { examApi } from '@/api/exam'
-import ExamSessionPage from '@/pages/exam/ExamSessionPage'
-import type { ExamSessionStateResponse } from '@/types/exam'
+import { examApi } from '../exam.api'
+import ExamSessionPage from '../ExamSessionPage'
+import type { ExamSessionStateResponse } from '../exam.types'
 
 const mockedExamApi = vi.mocked(examApi, true)
 

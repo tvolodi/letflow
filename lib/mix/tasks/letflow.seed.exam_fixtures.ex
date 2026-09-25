@@ -78,7 +78,7 @@ defmodule Mix.Tasks.Letflow.Seed.ExamFixtures do
     before calling POST /modules/exam/exam-sessions at all, and skips straight to reporting
     its already-persisted outcome if one is found).
 
-    QUESTION TYPE ENUM, VERIFIED: priv/packs/bilimbaga/entity_definitions/
+    QUESTION TYPE ENUM, VERIFIED: priv/modules/exam/entity_definitions/
     question.json's `type` field enum is
     ["single","multiple","truefalse","likert","shorttext"] — all five of
     BilimBaga's original five question types carry over unchanged; NONE of the

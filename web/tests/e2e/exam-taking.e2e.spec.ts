@@ -11,7 +11,7 @@
  * at-a-time screen: sequential Previous/Next paging (no jump grid), no flag
  * feature, Likert renders through the exact same generic radio-option markup
  * as single-choice/true-false (no distinct widget), and clicking "Submit
- * exam" (`exam-submit-action`) calls `POST /exam-sessions/:id/submit`
+ * exam" (`exam-submit-action`) calls `POST /modules/exam/exam-sessions/:id/submit`
  * directly — there is no review screen and no confirm modal to test a
  * cancel path on.
  *
@@ -67,7 +67,7 @@
  * `lib/mix/tasks/letflow.seed.exam_fixtures.ex`'s own moduledoc: "there is no
  * branch ... that loads an existing session by id"), and
  * `lib/letflow/exam/session.ex`'s `check_no_open_session/1` rejects a second
- * `POST /exam-sessions` for the same (candidate, exam) pair while one is
+ * `POST /modules/exam/exam-sessions` for the same (candidate, exam) pair while one is
  * still `in_progress`. Starting a fresh session per `test()` would therefore
  * either collide with the still-open session from the previous test, or
  * (once each is closed to avoid that) exhaust "REQ-345 E2E Mixed
@@ -144,7 +144,7 @@ async function submitOpenSessionsForExam(request: APIRequestContext, token: stri
   if (!res.ok()) return
   const body = (await res.json()) as { items: Array<{ record_id: string }> }
   for (const item of body.items) {
-    await request.post(`/api/v1/exam-sessions/${item.record_id}/submit`, {
+    await request.post(`/api/v1/modules/exam/exam-sessions/${item.record_id}/submit`, {
       headers: { Authorization: `Bearer ${token}` },
     })
   }
@@ -316,7 +316,7 @@ test.describe.serial('Exam Taking (REQ-346 port onto /exam/:examId/session)', ()
 
   test('11 — a tab-switch signal is reported; this exam\'s on_tab_switch:"log" config renders no warning and no dialog', async () => {
     const eventsResponse = page.waitForResponse(
-      (res) => res.url().includes('/exam-sessions/') && res.url().includes('/events') && res.request().method() === 'POST',
+      (res) => res.url().includes('/modules/exam/exam-sessions/') && res.url().includes('/events') && res.request().method() === 'POST',
     )
 
     await page.evaluate(() => {

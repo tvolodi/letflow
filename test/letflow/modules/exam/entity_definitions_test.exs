@@ -1,7 +1,7 @@
-defmodule Letflow.Packs.BilimbagaEntityDefinitionsTest do
+defmodule Letflow.Modules.Exam.EntityDefinitionsTest do
   @moduledoc """
   Verifies the ten bucket-A entity-definition documents authored under
-  `priv/packs/bilimbaga/entity_definitions/` -- REQ-326's five, and REQ-329's
+  `priv/modules/exam/entity_definitions/` -- REQ-326's five, and REQ-329's
   five live-session documents (session, session_question, session_answer,
   session_event, session_question_score) -- against the real
   `Letflow.Entities.Definition.Validator.validate/1` -- not a re-implemented
@@ -15,8 +15,11 @@ defmodule Letflow.Packs.BilimbagaEntityDefinitionsTest do
   REQ-327's five exam-configuration documents (exam, exam_section,
   exam_question_rule, exam_question_rule_tag, exam_manual_question) are
   deliberately NOT covered here -- they already have their own dedicated
-  coverage in `test/letflow/packs/bilimbaga_exam_definitions_test.exs`, and
+  coverage in `test/letflow/modules/exam/exam_definitions_test.exs`, and
   duplicating that here would be redundant.
+
+  REQ-411: moved from `test/letflow/packs/bilimbaga_entity_definitions_test.exs`;
+  paths updated to `priv/modules/exam/entity_definitions/`.
 
   Pure module, no `Letflow.Repo`/`Ecto.Sandbox` dependency -- `async: true`.
   """
@@ -25,7 +28,7 @@ defmodule Letflow.Packs.BilimbagaEntityDefinitionsTest do
 
   alias Letflow.Entities.Definition.Validator
 
-  @entity_definitions_dir Application.app_dir(:letflow, "priv/packs/bilimbaga/entity_definitions")
+  @entity_definitions_dir Application.app_dir(:letflow, "priv/modules/exam/entity_definitions")
 
   @entity_files %{
     "category" => "category.json",

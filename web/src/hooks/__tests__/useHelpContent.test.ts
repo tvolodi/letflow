@@ -10,7 +10,7 @@
  * TC-REQ366-04: data present -> { status: 'ready', content }
  *
  * `useQuery` itself is mocked (this codebase's own test convention — see
- * src/pages/exam/__tests__/ExamListPage.test.tsx) so this test exercises
+ * src/modules/exam/__tests__/ExamListPage.test.tsx) so this test exercises
  * useHelpContent's own branching logic in isolation, not TanStack Query's
  * internals.
  */

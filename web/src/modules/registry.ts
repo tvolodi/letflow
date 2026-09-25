@@ -1,4 +1,7 @@
 import type { InstalledModule, ModuleDefinition, ModuleNavItem, ModuleRoute } from './types'
+import { examModuleDefinition } from './exam/index'
+import { EXAM_ROUTE_OBJECTS } from './examRoutes'
+import type { RouteObject } from 'react-router-dom'
 
 export const REGISTERED_MODULES: ModuleDefinition[] = [
   {
@@ -7,6 +10,15 @@ export const REGISTERED_MODULES: ModuleDefinition[] = [
     routes: [{ path: '/sample', element: 'SamplePage' }],
     navItems: [{ to: '/sample', label: 'Sample', roles: ['CANDIDATE'] }],
   },
+  examModuleDefinition,
+]
+
+/** All registered module RouteObjects for inclusion in the static router.
+ *  Each top-level entry wraps its children in ModuleGuard so routes only
+ *  render when the module is installed. Router.tsx spreads this array into
+ *  the authenticated route's children. */
+export const REGISTERED_MODULE_ROUTE_OBJECTS: RouteObject[] = [
+  ...EXAM_ROUTE_OBJECTS,
 ]
 
 export function getInstalledModuleDefinitions(

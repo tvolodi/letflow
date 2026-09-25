@@ -32,16 +32,13 @@ import OnboardingResultPage from '@/pages/admin/onboarding/OnboardingResultPage'
 import TenantsPage from '@/pages/admin/tenants/TenantsPage'
 import EditTenantPage from '@/pages/admin/tenants/EditTenantPage'
 import ServicesPage from '@/pages/admin/services/ServicesPage'
-import ExamListPage from '@/pages/exam/ExamListPage'
-import ExamSessionPage from '@/pages/exam/ExamSessionPage'
-import ExamSessionResultPage from '@/pages/exam/ExamSessionResultPage'
-import BilimBagaAdminPage from '@/pages/admin/bilimbaga/BilimBagaAdminPage'
-import BilimBagaEntityRoute from '@/pages/admin/bilimbaga/BilimBagaEntityRoute'
 import PlatformMigrationConsolePage from '@/pages/admin/platform-migrations/PlatformMigrationConsolePage'
 import SolutionPackUpdateLauncherPage from '@/pages/solution-packs/SolutionPackUpdateLauncherPage'
 import SolutionPackUpdateReviewPage from '@/pages/solution-packs/SolutionPackUpdateReviewPage'
 import EventRetentionPage from '@/pages/admin/event-retention/EventRetentionPage'
 import EntityListBrowserPage from '@/pages/entities/EntityListBrowserPage'
+import { NotFoundPage } from '@/pages/NotFoundPage'
+import { REGISTERED_MODULE_ROUTE_OBJECTS } from '@/modules/registry'
 
 export const router = createBrowserRouter([
   {
@@ -90,8 +87,6 @@ export const router = createBrowserRouter([
       // admin/modules route removed in ISS-0822: Letflow.Routers.ProcessModules is
       // deferred to S5 — no backend exists, every API call 404s. Restore this route
       // when S5's backend is implemented (see router.ex's deferred table).
-      { path: 'admin/bilimbaga', element: <BilimBagaAdminPage /> },
-      { path: 'admin/bilimbaga/:entityType', element: <BilimBagaEntityRoute /> },
       { path: 'admin/platform-migrations', element: <PlatformMigrationConsolePage /> },
       // REQ-381: solution-pack update review screen. `/solution-packs` IS
       // the minimal "company's pack screen" entry point (design §4.1, no
@@ -104,18 +99,14 @@ export const router = createBrowserRouter([
       { path: 'admin/event-retention', element: <EventRetentionPage /> },
       { path: 'dlq', element: <DlqPage /> },
       { path: 'webhooks', element: <WebhooksPage /> },
-      { path: 'exam', element: <ExamListPage /> },
-      { path: 'exam/:examId/session', element: <ExamSessionPage /> },
-      // REQ-351: opens an EXISTING session by id (getSessionState only,
-      // never startSession). URL is PROVISIONAL -- see
-      // ExamSessionResultPage.tsx's own doc comment: REQ-350 may later
-      // decide Letflow serves a results-list, in which case this becomes
-      // that list's detail view and its URL may be renamed by the
-      // requirement that implements the list. Do not depend on this exact
-      // spelling as a settled contract.
-      { path: 'exam/sessions/:sessionId/result', element: <ExamSessionResultPage /> },
       // REQ-393: tenant-agnostic entity-list browse screen (filter/sort/page-size)
       { path: 'entities/:entityType', element: <EntityListBrowserPage /> },
+      // REQ-412: module-provided routes (exam etc.). Each entry is wrapped in
+      // ModuleGuard so paths only render when the module is installed;
+      // uninstalled routes fall through to the catch-all below.
+      ...REGISTERED_MODULE_ROUTE_OBJECTS,
+      // Catch-all: any path not matched above renders the not-found page.
+      { path: '*', element: <NotFoundPage /> },
     ],
   },
 ])

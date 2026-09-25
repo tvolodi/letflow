@@ -30,8 +30,8 @@
  */
 
 import { useEffect, useRef } from 'react'
-import { examApi } from '@/api/exam'
-import type { AntiCheatSignalOutcome, AntiCheatSignalType } from '@/types/exam'
+import { examApi } from './exam.api'
+import type { AntiCheatSignalOutcome, AntiCheatSignalType } from './exam.types'
 
 export function useAntiCheatSignals(
   sessionId: string | null,

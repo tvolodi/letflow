@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 /**
  * REQ-342 -- the entity-fk-reference widget, proven against real foreign-key
- * field shapes from priv/packs/bilimbaga/entity_definitions/. Fetch is
+ * field shapes from priv/modules/exam/entity_definitions/. Fetch is
  * mocked at the transport boundary only (window.fetch), exactly as
  * web/src/api/__tests__/entities.test.ts already does for entitiesApi
  * itself -- every call below goes through the REAL entitiesApi.queryRecords
@@ -26,11 +26,11 @@
  *
  * The three foreign-key fields below are taken verbatim from the actual
  * committed definition documents (not invented):
- *   - priv/packs/bilimbaga/entity_definitions/question.json:
+ *   - priv/modules/exam/entity_definitions/question.json:
  *       category_id -> fk_question_category_id -> references_entity "category"
- *   - priv/packs/bilimbaga/entity_definitions/exam_section.json:
+ *   - priv/modules/exam/entity_definitions/exam_section.json:
  *       exam_id -> fk_exam_section_exam_id -> references_entity "exam"
- *   - priv/packs/bilimbaga/entity_definitions/exam_question_rule_tag.json:
+ *   - priv/modules/exam/entity_definitions/exam_question_rule_tag.json:
  *       tag_id -> fk_exam_question_rule_tag_tag_id -> references_entity "tag"
  *
  * The referenced entities' own real field shapes drive the resolved label:

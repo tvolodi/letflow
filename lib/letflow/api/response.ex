@@ -158,6 +158,10 @@ defmodule Letflow.Api.Response do
   @spec conflict(Plug.Conn.t(), String.t()) :: Plug.Conn.t()
   def conflict(conn, detail), do: send_problem(conn, Error.conflict(detail))
 
+  @doc "HTTP 409 — Pack Is Owned by a Module (REQ-411). See `Letflow.Api.Error.module_owned_pack/0`."
+  @spec module_owned_pack(Plug.Conn.t()) :: Plug.Conn.t()
+  def module_owned_pack(conn), do: send_problem(conn, Error.module_owned_pack())
+
   @doc """
   HTTP 413 — Content Too Large. See `Letflow.Api.Error.payload_too_large/1`
   (REQ-068) for why this has no R-Co source counterpart.

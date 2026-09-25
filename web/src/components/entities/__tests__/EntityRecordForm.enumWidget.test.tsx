@@ -30,11 +30,11 @@
  *
  * The three field shapes below are taken verbatim from the actual committed
  * definition documents (not invented):
- *   - priv/packs/bilimbaga/entity_definitions/question.json:
+ *   - priv/modules/exam/entity_definitions/question.json:
  *       difficulty: enum_values ["easy","medium","hard"]
- *   - priv/packs/bilimbaga/entity_definitions/exam.json:
+ *   - priv/modules/exam/entity_definitions/exam.json:
  *       show_answers: enum_values ["never","after_completion","after_all_attempts"]
- *   - priv/packs/bilimbaga/entity_definitions/exam_question_rule.json:
+ *   - priv/modules/exam/entity_definitions/exam_question_rule.json:
  *       mode: enum_values ["manual","random"]
  */
 import { describe, it, expect, vi, afterEach } from 'vitest'

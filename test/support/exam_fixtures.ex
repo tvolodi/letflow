@@ -27,13 +27,14 @@ defmodule Letflow.ExamFixtures do
   alias Letflow.Entities.Definitions
   alias Letflow.Entities.Records
   alias Letflow.Identity.Tenant
-  alias Letflow.Modules.Installs
+  alias Letflow.Modules.Exam
+  alias Letflow.Modules.TenantModule
   alias Letflow.Repo
   alias Letflow.TenantProvisioning
   alias Letflow.TenantProvisioning.ColumnPromotion
   alias Letflow.TenantProvisioning.Registration
 
-  @definitions_dir Path.join([File.cwd!(), "priv", "packs", "bilimbaga", "entity_definitions"])
+  @definitions_dir Path.join([File.cwd!(), "priv", "modules", "exam", "entity_definitions"])
 
   @entity_types ~w(exam question answer_option exam_question_rule exam_manual_question
                     session session_question session_answer session_question_score
@@ -107,14 +108,24 @@ defmodule Letflow.ExamFixtures do
 
     activate_exam_definitions!(schema_name)
 
-    # REQ-410: install the exam module so the D5 gate in
-    # Letflow.Routers.Modules admits /modules/exam/exam-sessions/... requests
-    # for this tenant. Uses a fixture actor_id -- the install call only
-    # records the installer's id in the tenant_modules row; no
-    # authorization check is performed here (this is a test fixture path,
-    # not a user-facing HTTP call).
-    fixture_actor_id = Ecto.UUID.generate()
-    {:ok, _} = Installs.install("exam", fixture_actor_id, prefix: schema_name)
+    # REQ-411: insert the tenant_modules row for the exam module directly,
+    # bypassing `Letflow.Modules.Installs.install/3`'s pack-install step.
+    # After REQ-411 the exam manifest's `pack` field is set, so `Installs.install/3`
+    # would also attempt `SolutionPack.install` — which conflicts with the
+    # entity definitions activate_exam_definitions!/1 just created inline
+    # (different logical_shape_version due to FK-stripping). This fixture's
+    # purpose is lightweight exam-session testing, not pack-install testing;
+    # the restriction seeding was already done by activate_exam_definitions!/1
+    # (via Exam.on_install/2). Inserting the TenantModule row directly gives
+    # the D5 gate the row it needs without a redundant pack install.
+    %TenantModule{}
+    |> TenantModule.insert_changeset(%{
+      module_id: "exam",
+      version: Exam.manifest().version,
+      installed_at: DateTime.truncate(DateTime.utc_now(), :microsecond),
+      settings: %{}
+    })
+    |> Repo.insert!(prefix: schema_name)
 
     %{tenant_id: tenant.id, schema_name: schema_name}
   end
@@ -174,7 +185,7 @@ defmodule Letflow.ExamFixtures do
   `insert_tenant!/1` can produce -- both mint a fixture-generated unique
   slug), so it cannot use `provisioned_tenant_with_exam_definitions/1`
   wholesale but still needs the exact same real
-  `priv/packs/bilimbaga/entity_definitions/*.json` definitions activated
+  `priv/modules/exam/entity_definitions/*.json` definitions activated
   before `Mix.Tasks.Letflow.Seed.ExamFixtures.run/1` can write any exam
   content -- `mix letflow.seed` alone provisions the tenant schema and
   replays its migrations only; it installs no entity definition at all
@@ -190,16 +201,13 @@ defmodule Letflow.ExamFixtures do
       create_active_definition!(schema_name, load_definition!(entity_type))
     end
 
-    # ISS-0647: this is the one place in this codebase that stands up the
-    # real bilimbaga `question`/`answer_option` entity definitions for
-    # actual use -- so this is where the pack's answer-key field
-    # restrictions get seeded too, per
-    # `Letflow.Packs.Bilimbaga`'s own moduledoc "Callers" section. Without
-    # this, every exam-suite test built on this fixture would exercise a
-    # tenant where `is_correct`/`likert_weight`/`likert_polarity`/
-    # `explanation` are reachable in clear via the generic
-    # `POST /entities/query` route for any TASK_WORKER-scoped caller.
-    :ok = Letflow.Packs.Bilimbaga.seed_answer_key_field_restrictions!(schema_name)
+    # ISS-0647 / REQ-411: seed the answer-key field restrictions via the
+    # exam module's on_install/2 callback. Without this, every exam-suite
+    # test built on this fixture would exercise a tenant where
+    # `is_correct`/`likert_weight`/`likert_polarity`/`explanation` are
+    # reachable in clear via the generic `POST /entities/query` route for
+    # any TASK_WORKER-scoped caller.
+    :ok = Exam.on_install(schema_name, %{})
 
     :ok
   end

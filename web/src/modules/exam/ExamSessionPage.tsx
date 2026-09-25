@@ -65,12 +65,12 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { useIntl } from 'react-intl'
-import { examApi } from '@/api/exam'
+import { examApi } from './exam.api'
 import { classifyStartError, isDeadlinePassedError, type ExamEligibilityErrorKind } from '@/utils/examErrors'
-import { useAntiCheatSignals } from '@/hooks/useAntiCheatSignals'
+import { useAntiCheatSignals } from './useAntiCheatSignals'
 import { PageLayout } from '@/components/ui/PageLayout'
 import { Button } from '@/components/ui/Button'
-import { ExamIntlProvider } from '@/i18n/ExamIntlProvider'
+import { ExamIntlProvider } from './ExamIntlProvider'
 import { resolveUiLocale } from '@/i18n/entitiesMessages'
 import { ExamResultView } from './ExamResultView'
 import type {
@@ -80,7 +80,7 @@ import type {
   ExamSessionStateResponse,
   ExamSubmissionOutcome,
   LocalizedText,
-} from '@/types/exam'
+} from './exam.types'
 
 type Phase =
   | { kind: 'starting' }

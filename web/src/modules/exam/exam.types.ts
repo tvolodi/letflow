@@ -57,7 +57,7 @@ export interface ExamAnswerState {
   saved_at: string | null
 }
 
-/** `GET /exam-sessions/:id` and the 201 body of `POST /exam-sessions`. */
+/** `GET /modules/exam/exam-sessions/:id` and the 201 body of `POST /modules/exam/exam-sessions`. */
 export interface ExamSessionStateResponse {
   session: ExamSessionView
   remaining_seconds: number
@@ -65,12 +65,12 @@ export interface ExamSessionStateResponse {
   answers: Record<string, ExamAnswerState>
 }
 
-/** `PUT /exam-sessions/:id/answers/:question_id`'s 200 body. */
+/** `PUT /modules/exam/exam-sessions/:id/answers/:question_id`'s 200 body. */
 export interface ExamAutosaveResponse {
   remaining_seconds: number
 }
 
-/** `POST /exam-sessions/:id/submit`'s 200 body, and the `submission` field of
+/** `POST /modules/exam/exam-sessions/:id/submit`'s 200 body, and the `submission` field of
  *  a `submit`-branch anti-cheat outcome. */
 export interface ExamSubmissionOutcome {
   status: 'submitted' | 'grading_pending' | 'auto_submitted'
@@ -83,7 +83,7 @@ export interface ExamSubmissionOutcome {
 export type AntiCheatSignalType = 'tab_switch' | 'blur' | 'fullscreen_exit'
 export type AntiCheatActionTaken = 'log' | 'warn' | 'submit'
 
-/** `POST /exam-sessions/:id/events`'s 200 body. */
+/** `POST /modules/exam/exam-sessions/:id/events`'s 200 body. */
 export interface AntiCheatSignalOutcome {
   action_taken: AntiCheatActionTaken
   event_count: number

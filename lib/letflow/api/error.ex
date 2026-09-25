@@ -239,6 +239,25 @@ defmodule Letflow.Api.Error do
     }
   end
 
+  @doc """
+  HTTP 409 — Pack Is Owned by a Module (REQ-411).
+
+  Returned when a caller posts a pack document to
+  `POST /api/v1/solution-packs/install` whose `pack_id` matches the
+  `pack_id` of a pack owned by a registered module in
+  `Letflow.Modules.Catalog`.  The caller must install the owning module
+  instead (via the module-install route).
+  """
+  @spec module_owned_pack() :: t()
+  def module_owned_pack do
+    %__MODULE__{
+      type: @problems_base <> "module-owned-pack",
+      title: "Pack Is Owned by a Module",
+      status: 409,
+      detail: "this pack is managed by a registered module; install the module instead"
+    }
+  end
+
   @doc "HTTP 415 — Unsupported Media Type."
   @spec unsupported_media_type(String.t()) :: t()
   def unsupported_media_type(detail) do

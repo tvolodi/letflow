@@ -150,6 +150,7 @@ defmodule Letflow.Routers.SolutionPacks do
   alias Letflow.Api.Validation.FieldError
   alias Letflow.Definitions
   alias Letflow.Definitions.SolutionPack
+  alias Letflow.Modules.Catalog
   alias Letflow.TenantProvisioning
 
   # REQ-131: endpoint_policy_key/2 has no clause for either route (see
@@ -269,15 +270,26 @@ defmodule Letflow.Routers.SolutionPacks do
   end
 
   defp install_document(conn, document) do
-    case actor_id(conn) do
-      actor_id when is_binary(actor_id) ->
-        render_install(conn, SolutionPack.install(document, actor_id, conn.assigns.scoped_opts))
+    # REQ-411: refuse a pack whose pack_id is owned by a registered module
+    # (the caller must install the owning module instead). Runs before any
+    # write. The check learns module pack ids only through Catalog.module_pack_ids/0
+    # (D3/D4 — never by naming a concrete module directly).
+    pack_id = Map.get(document, "pack_id")
+    module_pack_ids = Catalog.module_pack_ids()
 
-      # No user id on the auth context -- not a caller error, it means this
-      # route was reached without `Letflow.Plugs.AuthPipeline` having done
-      # its job. Never falls through to an unscoped write.
-      nil ->
-        Response.internal_error(conn)
+    if is_binary(pack_id) and MapSet.member?(module_pack_ids, pack_id) do
+      Response.module_owned_pack(conn)
+    else
+      case actor_id(conn) do
+        actor_id when is_binary(actor_id) ->
+          render_install(conn, SolutionPack.install(document, actor_id, conn.assigns.scoped_opts))
+
+        # No user id on the auth context -- not a caller error, it means this
+        # route was reached without `Letflow.Plugs.AuthPipeline` having done
+        # its job. Never falls through to an unscoped write.
+        nil ->
+          Response.internal_error(conn)
+      end
     end
   end
 

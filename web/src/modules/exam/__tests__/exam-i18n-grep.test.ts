@@ -4,24 +4,26 @@
  * test IS the grep the acceptance criterion names, run programmatically:
  *
  *   grep -nE ">[A-Za-z][A-Za-z '.-]{2,}<" \
- *     web/src/pages/exam/ExamListPage.tsx \
- *     web/src/pages/exam/ExamSessionPage.tsx \
- *     web/src/i18n/ExamIntlProvider.tsx
+ *     web/src/modules/exam/ExamListPage.tsx \
+ *     web/src/modules/exam/ExamSessionPage.tsx \
+ *     web/src/modules/exam/ExamIntlProvider.tsx
  *
- * (web/src/i18n/examMessages.ts is deliberately excluded -- it IS the source
+ * (web/src/modules/exam/examMessages.ts is deliberately excluded -- it IS the source
  * of the strings, not a hit.)
  */
 import { describe, it, expect } from 'vitest'
 import { readFileSync } from 'node:fs'
 import path from 'node:path'
-import { EXAM_UI_LOCALES, examMessages } from '@/i18n/examMessages'
+import { EXAM_UI_LOCALES, examMessages } from '../examMessages'
 
-const SRC_ROOT = path.resolve(__dirname, '..')
+// This test file is at web/src/modules/exam/__tests__/, so three levels up
+// reaches web/src/
+const SRC_ROOT = path.resolve(__dirname, '../../..')
 
 const JSX_FILES_TO_CHECK = [
-  'pages/exam/ExamListPage.tsx',
-  'pages/exam/ExamSessionPage.tsx',
-  'i18n/ExamIntlProvider.tsx',
+  'modules/exam/ExamListPage.tsx',
+  'modules/exam/ExamSessionPage.tsx',
+  'modules/exam/ExamIntlProvider.tsx',
 ]
 
 const JSX_TEXT_NODE = />[A-Za-z][A-Za-z '.-]{2,}</g

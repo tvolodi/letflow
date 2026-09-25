@@ -1,40 +1,34 @@
 defmodule Letflow.Definitions.SolutionPackBilimbagaFieldRestrictionsTest do
   @moduledoc """
-  ISS-0647 rework -- SECURITY-REVIEWER's finding: `Letflow.Packs.Bilimbaga.
-  seed_answer_key_field_restrictions!/1` was real and correct in isolation,
-  but its only caller anywhere in the tree was
-  `test/support/exam_fixtures.ex`, a TEST helper. A real tenant installing
-  the bilimbaga pack through the REAL production path --
-  `POST /solution-packs/install` -> `Letflow.Definitions.SolutionPack.
-  install/3` -- got zero protection: `entity_field_restrictions` was never
-  seeded there.
+  ISS-0647 rework (updated for REQ-411) -- proves that the answer-key
+  `entity_field_restrictions` rows are seeded correctly via the REAL module-
+  install path.
 
-  This test proves the gap is closed by exercising the REAL production path
-  end-to-end, with NO test-only seeding call anywhere in it:
+  REQ-411 moved the seeding logic from the deleted `Letflow.Packs.Bilimbaga`
+  module (and from `SolutionPack.install/3`'s now-deleted
+  `seed_pack_specific_field_restrictions/2` hook) into
+  `Letflow.Modules.Exam.on_install/2`, called inside the
+  `Letflow.Modules.Installs.install/3` transaction (D5).
 
-    1. A real `SolutionPack.install/3` of the real, committed
-       `priv/packs/bilimbaga/pack.json` (the same document
-       `test/letflow/packs/bilimbaga_pack_install_test.exs` installs) --
-       `Letflow.Packs.Bilimbaga.seed_answer_key_field_restrictions!/1` is
-       NEVER called directly here. If `install/3`'s own
-       `seed_pack_specific_field_restrictions/2` hook is missing or broken,
-       this test fails the same way
-       `entities_answer_key_field_leak_test.exs`'s Part 1 (fact-finding)
-       tests failed before ISS-0647's first fix.
-    2. Real activation (`category`, `question`, `answer_option` -- the FK
-       chain answer-key data sits on).
+  This test proves the gap is closed by exercising the real module-install
+  path end-to-end, with NO test-only seeding call anywhere in it:
+
+    1. A real `Letflow.Modules.Installs.install("exam", ...)` of the real
+       registered exam module -- `on_install/2` is NEVER called directly here.
+       If `install/3`'s transaction does not call `on_install/2`, or if
+       `on_install/2`'s seeding logic is missing or broken, this test fails
+       the same way `entities_answer_key_field_leak_test.exs`'s Part 1
+       (fact-finding) tests failed before ISS-0647's first fix.
+    2. Real activation of the FK chain the answer-key data sits on.
     3. Real records written through `Letflow.Entities.Records.create_record/2`.
     4. A real, unmocked `POST /entities/query` dispatched through the full
        `Letflow.Router`/`Letflow.Plugs.ApiPipeline` stack, with a real API
-       token scoped to `TASK_WORKER` only -- this codebase's only
-       non-privileged, ordinary-tenant-user role, and the exact role
-       ISS-0647's original finding is about.
+       token scoped to `TASK_WORKER` only.
 
-  Mirrors `test/letflow/packs/bilimbaga_pack_install_test.exs`'s real-install
+  Mirrors `test/letflow/modules/exam/pack_install_test.exs`'s real-install
   fixture pattern and
   `test/letflow/routers/entities_answer_key_field_leak_test.exs`'s real-HTTP
-  dispatch pattern, combined -- neither file alone proves this, which is
-  exactly why this is a new file rather than an addition to either.
+  dispatch pattern, combined.
   """
 
   use Letflow.DataCase, async: false
@@ -43,7 +37,6 @@ defmodule Letflow.Definitions.SolutionPackBilimbagaFieldRestrictionsTest do
   import Plug.Test
   import Plug.Conn
 
-  alias Letflow.Definitions.SolutionPack
   alias Letflow.Definitions.SolutionPackArtefactBase
   alias Letflow.Definitions.SolutionPackInstall
   alias Letflow.Entities.Definitions
@@ -53,13 +46,10 @@ defmodule Letflow.Definitions.SolutionPackBilimbagaFieldRestrictionsTest do
   alias Letflow.Entities.Records
   alias Letflow.Identity
   alias Letflow.Identity.User
+  alias Letflow.Modules.Installs
   alias Letflow.Repo
   alias Letflow.TenantFixture
   alias Letflow.TenantProvisioning.ColumnPromotion
-
-  @pack_path Path.join([File.cwd!(), "priv", "packs", "bilimbaga", "pack.json"])
-
-  defp pack_document, do: @pack_path |> File.read!() |> Jason.decode!()
 
   defp dispatch(conn), do: Letflow.Router.call(conn, Letflow.Router.init([]))
 
@@ -91,16 +81,10 @@ defmodule Letflow.Definitions.SolutionPackBilimbagaFieldRestrictionsTest do
   defp tenant_ctx do
     fixture =
       TenantFixture.provisioned_tenant!(
-        slug_prefix: "iss0647-e2e-install",
-        display_name: "ISS-0647 Real-Install Test Tenant"
+        slug_prefix: "iss0647-e2e-modinst",
+        display_name: "ISS-0647 Module-Install Test Tenant"
       )
 
-    # Global tables with an FK to `tenants` -- same reasoning as
-    # bilimbaga_pack_install_test.exs's `tenant/0`: without deleting these
-    # first, TenantFixture's own on_exit (deleting the tenant row) raises a
-    # foreign_key_violation AFTER an otherwise-passing test. Registered
-    # after TenantFixture's own on_exit so ExUnit runs this one first
-    # (callbacks run in reverse registration order).
     on_exit(fn ->
       Repo.delete_all(from(i in SolutionPackInstall, where: i.tenant_id == ^fixture.tenant_id))
 
@@ -143,19 +127,17 @@ defmodule Letflow.Definitions.SolutionPackBilimbagaFieldRestrictionsTest do
     record
   end
 
-  describe "the REAL install path (no test-only seeding call anywhere)" do
-    test "real install/3 + activate + write, then TASK_WORKER POST /entities/query redacts the answer-key fields" do
+  describe "the REAL module-install path (no test-only seeding call anywhere)" do
+    test "Installs.install/3 + activate + write, then TASK_WORKER POST /entities/query redacts the answer-key fields" do
       ctx = tenant_ctx()
       actor_id = ctx.user_id
 
-      # ---- 1. THE REAL PRODUCTION INSTALL --------------------------------
-      # `Letflow.Packs.Bilimbaga.seed_answer_key_field_restrictions!/1` is
-      # NOT called anywhere in this test file. If it happens at all, it
-      # happens because `SolutionPack.install/3` itself calls it.
-      assert {:ok, install_result} =
-               SolutionPack.install(pack_document(), actor_id, prefix: ctx.schema_name)
-
-      assert install_result.pack_id == "bilimbaga-question-bank"
+      # ---- 1. THE REAL MODULE INSTALL ------------------------------------
+      # `Letflow.Modules.Exam.on_install/2` is NOT called anywhere in this
+      # test file. If it happens at all, it happens because
+      # `Installs.install/3`'s own transaction calls it (D5).
+      assert {:ok, tenant_module} = Installs.install("exam", actor_id, prefix: ctx.schema_name)
+      assert tenant_module.module_id == "exam"
 
       # ---- 2. ACTIVATE just the FK chain the answer-key data sits on ----
       for entity_type <- ~w(category question answer_option) do
@@ -221,8 +203,7 @@ defmodule Letflow.Definitions.SolutionPackBilimbagaFieldRestrictionsTest do
       assert [answer_item] = body_of(answer_conn)["items"]
       answer_fields = answer_item["field_values"]
 
-      # THE ANSWER-KEY FIELDS ARE REDACTED -- the exact gap SECURITY-REVIEWER
-      # found: with no hook in install/3, these would come back in clear.
+      # THE ANSWER-KEY FIELDS ARE REDACTED -- seeded by on_install/2.
       assert answer_fields["is_correct"] == wire_sentinel()
       assert answer_fields["likert_weight"] == wire_sentinel()
       assert answer_fields["likert_polarity"] == wire_sentinel()

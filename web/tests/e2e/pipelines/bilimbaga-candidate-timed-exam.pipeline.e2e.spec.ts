@@ -69,7 +69,7 @@
  * `ai-dala-infra/scripts/qa-login.sh candidate-user` for how to fetch it.
  *
  * CLEANUP / RE-RUN SAFETY. `Letflow.Exam.Session.check_no_open_session/1`
- * rejects a second `POST /exam-sessions` while one for this
+ * rejects a second `POST /modules/exam/exam-sessions` while one for this
  * (candidate, exam) pair is still `in_progress`, and `max_attempts` is
  * finite. `CANDIDATE` holds no `EntitiesQuery` permission (ISS-0718's own
  * design note), so there is no candidate-safe way to list-and-clean up a

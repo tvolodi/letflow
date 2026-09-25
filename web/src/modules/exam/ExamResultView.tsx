@@ -20,7 +20,7 @@
 import { useIntl } from 'react-intl'
 import { PageLayout } from '@/components/ui/PageLayout'
 import { Button } from '@/components/ui/Button'
-import type { ExamSubmissionOutcome } from '@/types/exam'
+import type { ExamSubmissionOutcome } from './exam.types'
 
 export interface ExamResultViewProps {
   outcome: ExamSubmissionOutcome

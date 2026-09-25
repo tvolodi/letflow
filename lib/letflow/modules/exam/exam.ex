@@ -8,18 +8,41 @@ defmodule Letflow.Modules.Exam do
   co-located under `lib/letflow/modules/exam/`, served at
   `/api/v1/modules/exam/exam-sessions/…` via the D4/D5 gate in
   `Letflow.Routers.Modules` (REQ-404).
+
+  REQ-411 moves the bilimbaga pack from `priv/packs/bilimbaga/` to
+  `priv/modules/exam/` (the exam module owns it) and ports the answer-key
+  `entity_field_restrictions` seeding that previously lived in the deleted
+  `Letflow.Packs.Bilimbaga` module into `on_install/2` here.  The pack's
+  `pack_id` is `"bilimbaga-question-bank"` (unchanged); see
+  `priv/modules/exam/pack.json`.
   """
 
   @behaviour Letflow.Modules.Module
 
   import Letflow.Modules.Module, only: [defmanifest: 1]
 
+  alias Letflow.Repo
+
+  # The four `(entity_type, field_name)` pairs whose values a TASK_WORKER-
+  # scoped caller must never read in clear via the generic
+  # POST /entities/query or POST /entities/query/aggregate routes.
+  # Mirrors the list that used to live in `Letflow.Packs.Bilimbaga`
+  # (deleted in REQ-411).  `Letflow.Modules.Exam.Session.get_session_state_for_user/3`'s
+  # own hand-assembled response allowlist is kept as complementary defense-
+  # in-depth (see its moduledoc); these rows guard the GENERIC routes.
+  @answer_key_fields [
+    {"question", "explanation"},
+    {"answer_option", "is_correct"},
+    {"answer_option", "likert_weight"},
+    {"answer_option", "likert_polarity"}
+  ]
+
   @impl true
   defmanifest(
     id: "exam",
     version: "0.1.0",
     depends_on: [],
-    pack: nil,
+    pack: "modules/exam/pack.json",
     permissions: [
       :ExamSessionStart,
       :ExamSessionRead,
@@ -54,4 +77,49 @@ defmodule Letflow.Modules.Exam do
 
   @impl true
   def router, do: Letflow.Modules.Exam.Router
+
+  @doc """
+  Seeds the `entity_field_restrictions` rows that prevent TASK_WORKER-scoped
+  callers from reading answer-key fields via the generic
+  `POST /entities/query` / `POST /entities/query/aggregate` routes (ISS-0647,
+  REQ-411).
+
+  Idempotent: `on_conflict: :nothing` against
+  `entity_field_restrictions_entity_type_field_name_idx`, so calling this
+  more than once against the same tenant schema is a safe no-op for rows
+  that already exist.
+
+  This callback is invoked by `Letflow.Modules.Installs.install/3` inside
+  the install transaction, after the pack is installed (D5).
+  """
+  @impl true
+  @spec on_install(prefix :: String.t(), settings :: map()) :: :ok
+  def on_install(prefix, _settings) when is_binary(prefix) do
+    now = NaiveDateTime.utc_now()
+
+    rows =
+      Enum.map(@answer_key_fields, fn {entity_type, field_name} ->
+        %{
+          id: Ecto.UUID.bingenerate(),
+          entity_type: entity_type,
+          field_name: field_name,
+          inserted_at: now,
+          updated_at: now
+        }
+      end)
+
+    Repo.insert_all(
+      "entity_field_restrictions",
+      rows,
+      prefix: prefix,
+      on_conflict: :nothing,
+      conflict_target: [:entity_type, :field_name]
+    )
+
+    :ok
+  end
+
+  @doc "The `(entity_type, field_name)` pairs this module restricts — exposed for tests."
+  @spec answer_key_fields() :: [{String.t(), String.t()}]
+  def answer_key_fields, do: @answer_key_fields
 end

@@ -105,7 +105,9 @@ describe('AppShell installed-module nav', () => {
 
   it('hides a module nav item when the tenant has not installed it', async () => {
     await renderAppShellAs(['CANDIDATE'], [])
-    await waitFor(() => expect(screen.getByText('Exams')).toBeInTheDocument())
+    await waitFor(() => expect(screen.getByTestId('logout-button')).toBeInTheDocument())
+    // With no installed modules, neither module-provided nav item appears.
     expect(screen.queryByText('Sample')).not.toBeInTheDocument()
+    expect(screen.queryByText('Exams')).not.toBeInTheDocument()
   })
 })

@@ -14,7 +14,7 @@
  * session, (3) a not-owner request not receiving another candidate's session
  * content. All three are implemented below and PASS for real, verified live.
  *
- * Scenario (1) landed later than (2)/(3): `GET /exam-sessions/:id`
+ * Scenario (1) landed later than (2)/(3): `GET /modules/exam/exam-sessions/:id`
  * originally never returned `total_score`/`total_max_score`/`percentage`/
  * `passed` on a loaded session -- see ISS-0674
  * (`lib/letflow/design/iss0674-session-view-score-fields.md`), which added
@@ -105,7 +105,7 @@ async function submitOpenSessionsForExam(request: APIRequestContext, token: stri
   if (!res.ok()) return
   const body = (await res.json()) as { items: Array<{ record_id: string }> }
   for (const item of body.items) {
-    await request.post(`/api/v1/exam-sessions/${item.record_id}/submit`, {
+    await request.post(`/api/v1/modules/exam/exam-sessions/${item.record_id}/submit`, {
       headers: { Authorization: `Bearer ${token}` },
     })
   }
@@ -135,7 +135,7 @@ async function querySessionsForExam(request: APIRequestContext, token: string, e
  *  the session-ownership key). Cleans up after itself immediately. */
 async function discoverOwnCandidateId(request: APIRequestContext, token: string, examId: string): Promise<string> {
   await submitOpenSessionsForExam(request, token, examId)
-  const startRes = await request.post('/api/v1/exam-sessions', {
+  const startRes = await request.post('/api/v1/modules/exam/exam-sessions', {
     headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
     data: { exam_id: examId },
   })
@@ -143,7 +143,7 @@ async function discoverOwnCandidateId(request: APIRequestContext, token: string,
     throw new Error(`probe startSession failed: ${startRes.status()} ${await startRes.text()}`)
   }
   const body = (await startRes.json()) as { session: { id: string; candidate_id: string } }
-  await request.post(`/api/v1/exam-sessions/${body.session.id}/submit`, {
+  await request.post(`/api/v1/modules/exam/exam-sessions/${body.session.id}/submit`, {
     headers: { Authorization: `Bearer ${token}` },
   })
   return body.session.candidate_id
@@ -201,7 +201,7 @@ test.describe.serial('Exam Result by id — score (scoreable exam, ISS-0674)', (
 
   test('starting, answering every question correctly, submitting, then navigating to the by-id route in the SAME browser session renders exam-result-score (Passed) from the LOADED session', async () => {
     const startResponse = page.waitForResponse(
-      (res) => res.url().includes('/api/v1/exam-sessions') && !res.url().includes('/answers/') && res.request().method() === 'POST',
+      (res) => res.url().includes('/api/v1/modules/exam/exam-sessions') && !res.url().includes('/answers/') && res.request().method() === 'POST',
     )
     await page.goto(`/exam/${scoreableExamId}/session`, { waitUntil: 'domcontentloaded' })
     await expect(page.getByTestId('exam-session-page')).toBeVisible({ timeout: 15_000 })
@@ -276,7 +276,7 @@ test.describe.serial('Exam Result by id — pending (mixed exam, REQ-351)', () =
 
   test('starting, submitting, then navigating to the by-id route in the SAME browser session renders exam-result-pending from the LOADED session, never exam-result-score', async () => {
     const startResponse = page.waitForResponse(
-      (res) => res.url().includes('/api/v1/exam-sessions') && !res.url().includes('/answers/') && res.request().method() === 'POST',
+      (res) => res.url().includes('/api/v1/modules/exam/exam-sessions') && !res.url().includes('/answers/') && res.request().method() === 'POST',
     )
     await page.goto(`/exam/${mixedExamId}/session`, { waitUntil: 'domcontentloaded' })
     await expect(page.getByTestId('exam-session-page')).toBeVisible({ timeout: 15_000 })
@@ -339,10 +339,10 @@ test.describe('Exam Result by id — not owner (REQ-351)', () => {
     // isolation" doc comment says renders through the exact same
     // Response.not_found/1 call as a genuinely-missing session (no
     // distinguishing body, by design) -- observed status: 404.
-    const rawRes = await request.get(`/api/v1/exam-sessions/${foreignSession.record_id}`, {
+    const rawRes = await request.get(`/api/v1/modules/exam/exam-sessions/${foreignSession.record_id}`, {
       headers: { Authorization: `Bearer ${token}` },
     })
-    expect(rawRes.status(), 'GET /exam-sessions/:id on a session owned by another candidate must not return 200').toBe(404)
+    expect(rawRes.status(), 'GET /modules/exam/exam-sessions/:id on a session owned by another candidate must not return 200').toBe(404)
 
     // 2) Same check through the real UI: the by-id screen must not render
     // that session's content, only its own not-found state.

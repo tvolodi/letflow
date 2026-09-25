@@ -26,7 +26,7 @@ vi.mock('@/pages/entities/EntityCrudPage', () => ({
   ),
 }))
 
-import BilimBagaEntityRoute from '@/pages/admin/bilimbaga/BilimBagaEntityRoute'
+import BilimBagaEntityRoute from '../BilimBagaEntityRoute'
 import { BILIMBAGA_ENTITY_TYPES } from '@/config/bilimbagaEntities'
 
 afterEach(() => cleanup())

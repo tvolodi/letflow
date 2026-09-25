@@ -148,6 +148,16 @@ defmodule Letflow.Plugs.ApiPipeline do
   # mount) -- so this route can never collide with a future module whose
   # catalog id happens to be literally "install".
   forward("/tenant/modules", to: Letflow.Routers.TenantModules)
+
+  # REQ-404 (design lib/letflow/design/req404-module-router-mount.md) -- the
+  # per-module dispatch mount 0039 D4/D5 and REQ-403's own comment above
+  # named as "REQ-404's future per-module mount". Distinct prefix from
+  # /tenant/modules, no collision. Letflow.Routers.Modules is a plain Plug
+  # (NOT AuthorizedRouter-based) -- it runs the D5 install-gate 404 check
+  # BEFORE any permission evaluation, then forwards to the module's own
+  # router/0, which performs the real Authorize-driven permission check.
+  forward("/modules", to: Letflow.Routers.Modules)
+
   forward("/instances", to: Letflow.Routers.Instances)
   forward("/definitions", to: Letflow.Routers.Definitions)
   forward("/tasks", to: Letflow.Routers.Tasks)

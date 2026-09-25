@@ -87,7 +87,14 @@ defmodule Letflow.Api.AuthorizationEnforcementTest do
     # "automatic coverage" was false until this router was actually
     # registered here -- see
     # handoffs/WF02-REQ382-20260922/step-02c-security-reviewer.json.
-    Letflow.Routers.TenantSettings
+    Letflow.Routers.TenantSettings,
+    # REQ-404 -- Letflow.Modules.Fixture.Router's one route
+    # (authz_get "/items/:id", :FixtureRead, added by REQ-404 §0.1) declares
+    # :FixtureRead, backed by the REQ-401 endpoint_policy_key/2 fallback
+    # clause (module_route_permission/3) once mounted at /modules/fixture,
+    # so it resolves through the normal path above and is not (and may not
+    # be) added to @allowlist.
+    Letflow.Modules.Fixture.Router
   ]
 
   # `Letflow.Plugs.ApiPipeline`'s own `forward/2` mount prefix per router
@@ -122,7 +129,8 @@ defmodule Letflow.Api.AuthorizationEnforcementTest do
     Letflow.Routers.ExamSessions => "/exam-sessions",
     Letflow.Routers.Help => "/help",
     Letflow.Routers.Me => "/me",
-    Letflow.Routers.TenantSettings => "/tenant/settings"
+    Letflow.Routers.TenantSettings => "/tenant/settings",
+    Letflow.Modules.Fixture.Router => "/modules/fixture"
   }
 
   # {method, path_template, reason} -- a route whose declared policy key is
@@ -217,12 +225,16 @@ defmodule Letflow.Api.AuthorizationEnforcementTest do
   # REQ-401 AC5 — every Catalog module's own route_policies resolves through
   # Authorization.endpoint_policy_key/2's new /modules/<id>/<rest> fallback.
   # Keyed on Letflow.Modules.Catalog.entry_modules/0, NOT on @routers above --
-  # a module's router (the fixture's Router) is a plain Plug.Router, not an
-  # Letflow.Api.AuthorizedRouter user, so it has no __authz_routes__/0 at all;
-  # manifest().route_policies is the actual source of truth for a module's
-  # routes (design lib/letflow/design/req401-catalog-sourced-permissions.md
-  # §5). No entry is added to @allowlist for a module route -- a module route
-  # that fails to resolve is a real failure, not an allowlist candidate.
+  # a module route's ground truth is its manifest().route_policies (design
+  # lib/letflow/design/req401-catalog-sourced-permissions.md §5), independent
+  # of whether the module's own router/0 happens to use
+  # Letflow.Api.AuthorizedRouter. (REQ-404 §0.1 converted the fixture's
+  # Router to AuthorizedRouter, so it is ALSO covered by @routers above via
+  # its own __authz_routes__/0 -- this block still runs for it too, as a
+  # second, independent check keyed on the manifest rather than the compiled
+  # route table.) No entry is added to @allowlist for a module route -- a
+  # module route that fails to resolve is a real failure, not an allowlist
+  # candidate.
   # ==========================================================================
 
   describe "REQ-401 AC5 — every registered Catalog module's route_policies resolves" do

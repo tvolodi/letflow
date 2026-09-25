@@ -87,6 +87,26 @@ defmodule Letflow.Modules.Installs do
     end
   end
 
+  @doc """
+  Whether `module_id` is installed for the tenant identified by
+  `opts[:prefix]` (REQ-404, design
+  `lib/letflow/design/req404-module-router-mount.md` §2) -- backs
+  `Letflow.Routers.Modules`' D5 install gate. Raises if `:prefix` is
+  missing from `opts`, the same "programmer error, not a runtime
+  `{:error, ...}` case" convention `list_installed/1` already uses.
+
+  A single indexed-lookup `Repo.exists?/2` query, the same shape
+  `install/3`'s own internal dependency check already uses (see
+  `module_installed?/2` below) -- not `list_installed/1` + membership check,
+  which would load every installed row just to answer a boolean.
+  """
+  @spec installed?(module_id :: String.t(), opts()) :: boolean()
+  def installed?(module_id, opts) do
+    prefix = Keyword.fetch!(opts, :prefix)
+
+    module_installed?(module_id, prefix)
+  end
+
   defp fetch_module(module_id) do
     case Catalog.fetch(module_id) do
       {:ok, entry_module} -> {:ok, entry_module}
@@ -103,15 +123,19 @@ defmodule Letflow.Modules.Installs do
 
   defp check_dependencies_installed(entry_module, prefix) do
     entry_module.manifest().depends_on
-    |> Enum.find(fn dep_id -> not dependency_installed?(dep_id, prefix) end)
+    |> Enum.find(fn dep_id -> not module_installed?(dep_id, prefix) end)
     |> case do
       nil -> :ok
       missing_dep_id -> {:error, {:dependency_not_installed, missing_dep_id}}
     end
   end
 
-  defp dependency_installed?(dep_id, prefix) do
-    Repo.exists?(from(m in TenantModule, where: m.module_id == ^dep_id), prefix: prefix)
+  # Shared by check_dependencies_installed/2 (install/3's own dependency
+  # check) and the public installed?/2 above -- both ask the identical
+  # question ("does a tenant_modules row for this module_id exist in this
+  # tenant's schema?"), so both share this one query shape.
+  defp module_installed?(module_id, prefix) do
+    Repo.exists?(from(m in TenantModule, where: m.module_id == ^module_id), prefix: prefix)
   end
 
   defp maybe_install_pack(entry_module, actor_id, opts) do

@@ -90,14 +90,28 @@ contract makes "the UI filters it" a doubly wrong answer — a field the server 
 not emit would have to be independently suppressed in TypeScript *and* in Dart, and one
 of them will eventually miss it.
 
-**Reference.** None yet — no multi-tenant API surface exists (S4 not started).
+**Reference.** Updated 2026-09-25 (ISS-0830) — S4 landed and this is now the
+established, load-bearing convention across nearly every tenant-data router, not a
+future concern: `lib/letflow/routers/audit.ex`'s `page_body/2`/`audit_item/1`,
+`lib/letflow/routers/identity.ex`'s `user_map/1`/`group_map/1`,
+`lib/letflow/routers/tenant_config.ex`, `lib/letflow/routers/webhooks.ex`'s
+`subscription_json/1`, `lib/letflow/routers/dlq.ex`'s `dlq_entry_json/1`,
+`lib/letflow/routers/definitions.ex`'s `definition_map/1`,
+`lib/letflow/routers/tenants.ex`, `lib/letflow/routers/services.ex`,
+`lib/letflow/routers/admin_services.ex`, `lib/letflow/routers/solution_packs.ex`,
+`lib/letflow/routers/promotions.ex`, `lib/letflow/routers/mobile_tenant_config.ex`,
+`lib/letflow/routers/onboarding.ex` — all hand-build an explicit allowlist map
+(never a bare `Jason.Encoder` derive or `Map.from_struct` pass-through) and most cite
+`INV-2` by name in a `# ── Response allowlist (INV-2) ──`-style comment.
 
-**How to verify.** Manual, once applicable: for any new or changed API response type
-touching tenant-scoped data, trace the controller/plug function and confirm field
-selection happens before serialisation (`Jason.Encoder` derivation, view module, or
-explicit map-building), never as a post-hoc redaction on a client-visible struct.
+**How to verify.** For any new or changed API response type touching tenant-scoped
+data, trace the controller/plug function and confirm field selection happens before
+serialisation (an explicit map-building function like the ones cited above), never as
+a post-hoc redaction on a client-visible struct. `grep -rn "INV-2" lib/letflow/routers/`
+finds the established convention's own citations as a starting point for what "correct"
+looks like on this codebase.
 
-**Severity.** BLOCKER (once S4 lands).
+**Severity.** BLOCKER.
 
 ---
 
@@ -108,14 +122,22 @@ only inside a sandbox gated by an explicit host-capability allowlist. No ambient
 network or filesystem access; no host function reachable unless the script's granted
 capability set names it.
 
-**Reference.** None yet — S5 (scripting/plugins) has not started, and per
-`docs/migration/stage-5-scripting-plugins.md` needs its own build-vs-bind decision
-record before this invariant becomes concrete (NIF/Port capability boundaries look
-different from R-Co's in-process Zig sandbox).
+**Reference.** Updated 2026-09-25 (ISS-0830) — S5 landed (28 requirements, 27 `done`,
+1 `cancelled`, 0 pending as of this update) with exactly the capability-gated model
+this invariant describes: `lib/letflow/engine/lua/capabilities.ex` (REQ-157) gates
+every `platform.*` host function a Lua service-task script can call before doing any
+work; `lib/letflow/engine/wasm/capability_gate.ex` (REQ-167) enforces an import
+allowlist where a guest importing anything outside it fails at **instantiation**, not
+at call time; `lib/letflow/engine/wasm/host_api.ex` (REQ-172) is the bound host-API
+surface itself. `docs/migration/stage-5-scripting-plugins.md`'s own header text is
+separately stale in the same way and should be corrected alongside this file.
 
-**How to verify.** Deferred until S5's decision record exists.
+**How to verify.** For any new Lua/WASM host function or capability, confirm it is
+unreachable unless the script's granted capability set names it (trace the call
+through `capabilities.ex`/`capability_gate.ex`'s allowlist check) — no ambient access
+path that bypasses the gate.
 
-**Severity.** BLOCKER (once S5 lands).
+**Severity.** BLOCKER.
 
 ---
 
@@ -158,16 +180,30 @@ tenant) returns a response indistinguishable from probing a resource that never
 existed — same status code, same body shape, no timing signal that lets a prober
 distinguish "exists, not yours" from "never existed."
 
-**Reference.** None yet — no multi-tenant lookup-by-ID endpoints exist (S4 not
-started).
+**Reference.** Updated 2026-09-25 (ISS-0830) — S4 landed, and this invariant is not
+merely applicable but structurally discharged once, at the source, rather than
+re-implemented per handler: REQ-072 ("tenant-scoped request context and the
+cross-tenant 404 mechanism," `status: done`) derives the Ecto `:prefix` server-side
+from `conn.assigns[:auth_context][:tenant_id]`, never from caller-supplied input, so a
+cross-tenant lookup finds nothing in the caller's own schema by construction — the
+same 404 a never-existed resource would produce. Concrete call sites:
+`lib/letflow/instances.ex:338` `ensure_instance_exists/2`, `lib/letflow/tasks.ex:249`
+`get_task/2`, `lib/letflow/routers/entities.ex`'s `## INV-5 — not-found and
+cross-tenant are the same bytes` section, `lib/letflow/routers/exam_sessions.ex`'s
+`:session_not_found`/`:not_owner` collapse, and the same `## Cross-tenant-404 (AC3,
+INV-5)` convention repeated in `dlq.ex`, `webhooks.ex`, `solution_packs.ex`,
+`onboarding.ex`, `help.ex`, `tenant_config.ex`. `lib/letflow/api/pagination.ex` and
+`lib/letflow/entities/query/cursor.ex` also cite it as a structural (opaque-cursor)
+guarantee.
 
-**How to verify.** Deferred until S4. Once applicable: SECURITY-REVIEWER confirms, for
-any lookup-by-ID endpoint resolving tenant-scoped resources, that the not-found and
-forbidden-cross-tenant code paths return byte-identical responses and take a comparable
-number of DB round-trips (a cross-tenant existence check that short-circuits earlier
-than an equivalent not-found check is itself a timing signal).
+**How to verify.** For any new lookup-by-ID endpoint resolving tenant-scoped
+resources, confirm the query's tenant scoping is server-derived (never caller-supplied)
+and that the not-found and forbidden-cross-tenant code paths return byte-identical
+responses with a comparable number of DB round-trips (a cross-tenant existence check
+that short-circuits earlier than an equivalent not-found check is itself a timing
+signal). `grep -rn "INV-5" lib/letflow/` surfaces the established convention.
 
-**Severity.** BLOCKER (once S4 lands).
+**Severity.** BLOCKER.
 
 ---
 
@@ -221,18 +257,26 @@ rather than string-built SQL. **Applies now** — Ecto is already in use.
 or `with` chains) for any path that touches external I/O, tenant-controlled data, or
 network input. A bare pattern match that can raise on realistic input (e.g. matching
 `{:ok, x} = some_external_call()` where the call can legitimately fail) is a defect on
-a multi-tenant platform — one tenant's malformed input crashing a shared process
-(unless deliberately isolated, per `Letflow.ProcessInstance`'s one-process-per-instance
-model) can degrade other tenants' in-flight work. Where OTP's own let-it-crash
-philosophy is the deliberate choice (a supervised, per-instance process that should
-restart clean on genuinely unexpected state), that is not a violation of this invariant
-— the distinction is between "let a doomed process crash and restart under supervision"
-(fine, idiomatic) and "let an unhandled crash inside a shared process take down
-unrelated tenants' work" (not fine).
+a multi-tenant platform — one tenant's malformed input crashing a shared process can
+degrade other tenants' in-flight work. Where OTP's own let-it-crash philosophy is the
+deliberate choice for a genuinely isolated, supervised process, that is not a
+violation of this invariant — the distinction is between "let a doomed, isolated
+process crash and restart under supervision" (fine, idiomatic) and "let an unhandled
+crash inside a shared process take down unrelated tenants' work" (not fine).
 
-**Reference.** `lib/letflow/process_instance.ex`'s per-instance `:gen_statem` isolation
-is the existing architectural answer to this for engine state — REVIEWER already checks
-supervision integrity for this reason (see `.claude/agents/reviewer.md`).
+**Reference.** Updated 2026-09-25 (ISS-0830) — this previously cited
+`lib/letflow/process_instance.ex`, a module that no longer exists: REQ-045/046
+explicitly retired the per-instance supervised-process model in favor of
+`Letflow.Engine.create/2`, a transactional context module with Postgres row-locking as
+the actual isolation mechanism (see `Letflow.Engine`'s own moduledoc, "Process-vs-row
+decision," and CLAUDE.md's summary of the same). `Letflow.InstanceSupervisor` exists
+but is deliberately empty — there is no per-instance process to isolate a crash to.
+The real architectural answer for this invariant today is row-level locking plus typed
+error handling at each transactional boundary, verified by
+`test/letflow/engine_concurrency_test.exs` (REQ-055) — a crash inside one tenant's
+`Engine.create/2` call rolls back that transaction without taking down a shared
+process another tenant depends on, because there is no long-lived shared process in
+the request path to take down.
 
 **How to verify.**
 ```bash
@@ -250,14 +294,25 @@ validated).
 ## Applicability note
 
 **Updated 2026-08-17 (ISS-0026/GH#84) — INV-1 moved from "not yet applicable" to "live
-now."** INV-2, INV-3, INV-5 are still written for stages (S4, S5) that have not
-started — they exist now so the language is settled before the first requirement that
-needs them, per this file's opening rationale, and remain automatically NOT-APPLICABLE
-until those stages begin. INV-1 no longer belongs in that group: S1 is done and S2
-migrations exist, so it is checkable on any diff touching a tenant-scoped table,
-schema, or migration — SECURITY-REVIEWER's scope test (see its role file) determines
-applicability per diff, same mechanism as always, but INV-1 is now a live invariant to
-run that test against, not a default skip. INV-1, INV-4, INV-7, INV-8 apply today. INV-9 applies now (REQ-204 shipped).
+now."** At that time INV-2, INV-3, INV-5 were still correctly NOT-APPLICABLE — S4/S5
+genuinely had not started — and INV-1 was checked out of that group because S1/S2 had
+already landed.
+
+**Updated 2026-09-25 (ISS-0830) — INV-2, INV-3, INV-5 also moved out of the
+NOT-APPLICABLE group; there is no invariant left in it.** S4 and S5 have both since
+landed (S4: REQ-065/070/071/072/078/084 `done`; S5: 27 of 28 requirements `done`, one
+`cancelled`, zero `pending`), and the stale "not started" text on INV-2/3/5 was not
+merely cosmetic — a reviewer following this file literally would have skipped all
+three on exactly the tenant-data-path and scripting/plugin changes they exist to
+cover. Do not assume a NOT-APPLICABLE grouping is still accurate without checking
+`docs/requirements.yaml` for the stage it names — this is the second time this exact
+staleness shape has recurred (first INV-1 in 2026-08-17, now three more invariants at
+once); check every invariant's Reference against real requirement/stage status before
+trusting it, rather than assuming this file stays current on its own.
+
+INV-1, INV-2, INV-4, INV-5, INV-7, INV-8 apply today, checkable per-diff via
+SECURITY-REVIEWER's scope test (see its role file). INV-3 applies today for any
+Lua/WASM host-capability change. INV-9 applies now (REQ-204 shipped).
 
 ## Rate limiting — current position (ISS-0826/GH#1819)
 

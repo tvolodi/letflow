@@ -1,8 +1,8 @@
 # Stage 5 — Scripting & plugins
 
-Status: decision made, requirements not yet expanded. Depends on: S3
-(runs in parallel with S4 — both only need the instance engine, not
-each other). Requirements: none expanded yet.
+Status: done (updated 2026-09-25, ISS-0830 — 27 of 28 expanded requirements
+`status: done`, one `cancelled`, zero `pending`). Depends on: S3 (ran in
+parallel with S4 — both only needed the instance engine, not each other).
 
 ## Scope
 

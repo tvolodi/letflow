@@ -54,7 +54,39 @@ fix_direction: >
      check, the change itself should go through a SECURITY-REVIEWER
      pass (or equivalent scrutiny) before landing, not just a docs
      commit.
-status: open
+status: resolved
+resolution: >
+  Corrected docs/agents/instructions/security-invariants.md: INV-2, INV-3,
+  INV-5 moved from "None yet -- stage not started" / auto-NOT-APPLICABLE
+  to live, each with a real citation list of shipped implementations
+  (INV-2: ~13 router files' hand-built response-allowlist maps; INV-3:
+  lib/letflow/engine/lua/capabilities.ex + wasm/capability_gate.ex's
+  capability-gate model; INV-5: REQ-072's server-derived-prefix
+  cross-tenant-404 mechanism plus per-router citations). Also fixed
+  INV-8's stale Reference, which named a deleted module
+  (lib/letflow/process_instance.ex) and a superseded architecture --
+  repointed to Letflow.Engine's row-locking discipline (REQ-045/046) and
+  its concurrency test (REQ-055). Rewrote the "Applicability note"
+  section to record this is the second time this staleness shape has
+  recurred and to tell future updates to check docs/requirements.yaml
+  directly rather than trusting this file's own prose. Also corrected
+  docs/migration/stage-5-scripting-plugins.md's stale "requirements not
+  yet expanded" header (same root cause, same pass).
+
+  SECURITY-REVIEWER independently verified every citation for all 4
+  corrected invariants (spot-checked 6 of 13 INV-2 router files, both
+  INV-3 files, INV-5's REQ-072 entry plus 2 call sites, confirmed
+  process_instance.ex's non-existence and the replacement reference's
+  accuracy, independently re-confirmed the S4/S5 requirement counts
+  against docs/requirements.yaml) -- CONDITIONAL-PASS, with the one
+  condition (an unrelated concurrent session's own uncommitted working-
+  tree file must not be bundled into this commit) satisfied before
+  committing: only docs/agents/instructions/security-invariants.md and
+  docs/migration/stage-5-scripting-plugins.md are included.
+
+  AC3 (check every other invariant for the same staleness) was performed
+  by ISSUE-FIXER as part of the diagnosis pass, not as a separate step --
+  INV-1/4/7/9 confirmed accurate, INV-6 confirmed timeless/process-based.
 queue_ref: "Q-825"
 # NOTE: letflow-queue's own atomically-allocated id (825) auto-titled
 # itself "ISS-0825", which collides with this project's already-used

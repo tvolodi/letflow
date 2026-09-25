@@ -1,0 +1,66 @@
+id: ISS-0830
+title: >
+  security-invariants.md still says no multi-tenant API surface exists
+  (S4 not started), which marks INV-2 and INV-5 auto-NOT-APPLICABLE for
+  every security gate
+discovered_by: SECURITY-REVIEWER (WF03-ISS0816-20260925 Step 3c)
+discovered_in_run: WF03-ISS0816-20260925
+discovered_at: "2026-09-25T01:17:52Z"
+severity: MAJOR
+tags:
+  - security
+  - documentation
+  - process
+description: >
+  Found by SECURITY-REVIEWER during WF03-ISS0816-20260925 Step 3c, which
+  applied INV-2 as live anyway and flagged rather than resolving it
+  silently. docs/agents/instructions/security-invariants.md gives INV-2's
+  Reference as "None yet -- no multi-tenant API surface exists (S4 not
+  started)" and groups it with INV-3 and INV-5 as automatically
+  NOT-APPLICABLE. S4 plainly landed: lib/letflow/audit.ex:306 literally
+  carries the comment "-- Response allowlist (INV-2) --", and hand-built
+  allowlist maps (user_map/1, group_map/1, page_body/2) are the
+  established convention across the tenant-data routers.
+
+  This is a live risk, not a cosmetic staleness: security-invariants.md
+  is the charter SECURITY-REVIEWER gates against, so a reviewer following
+  it literally would skip INV-2 -- the response-allowlist invariant --
+  on exactly the tenant-data-path changes it exists to cover. The text
+  survives from before the surface existed. Same staleness shape as the
+  pre-ISS-0026 INV-1 text. INV-5 (lookup-by-ID handlers) very likely
+  needs the same treatment and should be re-derived rather than assumed.
+affected_files:
+  - docs/agents/instructions/security-invariants.md
+related: []
+severity_rationale: >
+  MAJOR -- a stale charter document that tells the security gate to skip
+  a real, currently-applicable invariant is a systemic risk across every
+  future SECURITY-REVIEWER dispatch, not a one-off defect. Caught this
+  time only because the reviewer applied the invariant anyway and flagged
+  the staleness rather than following the doc literally.
+fix_direction: >
+  1. Correct INV-2's Reference to name the real response-allowlist
+     implementations that exist today (lib/letflow/audit.ex,
+     user_map/1, group_map/1, page_body/2, and any other tenant-data
+     router convention), and remove it from the auto-NOT-APPLICABLE
+     grouping.
+  2. Independently re-derive INV-5's (lookup-by-ID handlers) applicability
+     against the current codebase from evidence -- don't assume it's
+     fine just because it was grouped with INV-2.
+  3. Check every other invariant's applicability line in the same pass
+     for the same pre-S4 staleness pattern, so this is fixed as a class
+     of defect rather than patched one entry at a time.
+  4. Since this changes what future SECURITY-REVIEWER gates are told to
+     check, the change itself should go through a SECURITY-REVIEWER
+     pass (or equivalent scrutiny) before landing, not just a docs
+     commit.
+status: open
+queue_ref: "Q-825"
+# NOTE: letflow-queue's own atomically-allocated id (825) auto-titled
+# itself "ISS-0825", which collides with this project's already-used
+# real on-disk id ISS-0825 (the MigrationRolloutTest EO-004/EO-005
+# contention flake) -- established, recurring queue-id/filename
+# divergence pattern for this project (see
+# docs/agents/protocols/TASK_QUEUE.md). queue_ref/github_ref below are
+# authoritative for this file.
+github_ref: "GH-1818"

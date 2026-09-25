@@ -1,0 +1,86 @@
+{
+  "wf_run": "WF02-REQ405-20260925",
+  "step": "2c",
+  "agent": "SECURITY-REVIEWER",
+  "reviewed_commit": "40630a6c624e80e4130ad501b39a9f29318cfddb",
+  "timestamp": "2026-09-25T08:35:01.929+05:00",
+  "status": "PASS",
+
+  "scope_test": {
+    "verdict": "out of scope — no tenant-data path touched",
+    "rationale": [
+      "No API route added or modified — this is a development-time Mix.Task, not mounted in any router or Plug pipeline.",
+      "No migration added or modified — no priv/repo/migrations/ file is touched.",
+      "No secret resolution — no System.get_env/1 call, no config/runtime.exs reference, no token/key materialised in any return value or struct field. System.cmd/3 shells out to `mix xref graph` (a built-in Mix command) purely to obtain compile-graph output, not to read credentials.",
+      "No response-shaping code for a tenant-scoped entity — the task writes only to IO.puts/Mix.raise, never to a Plug conn.",
+      "No lookup-by-ID handler — the task operates on file-path strings parsed from xref output, not on tenant data identifiers."
+    ]
+  },
+
+  "invariant_assessment": [
+    {
+      "id": "INV-1",
+      "title": "Tenant data isolation",
+      "verdict": "NOT-APPLICABLE",
+      "reason": "No Ecto schema, no migration, no business table, and no Repo call anywhere in the diff. Letflow.Modules.Catalog.all_manifests/0 returns code-level module manifests (id, depends_on), not tenant business data, and is not prefixed/scoped in the schema-per-tenant sense."
+    },
+    {
+      "id": "INV-2",
+      "title": "Server-side field authorisation",
+      "verdict": "NOT-APPLICABLE",
+      "reason": "No API response serialised. The task produces CLI output only (IO.puts / Mix.raise), never a Plug conn response or Jason-encoded payload."
+    },
+    {
+      "id": "INV-3",
+      "title": "Untrusted runtime sandboxing",
+      "verdict": "NOT-APPLICABLE",
+      "reason": "No Lua/WASM host function or capability surface added or changed."
+    },
+    {
+      "id": "INV-4",
+      "title": "Secrets by reference only",
+      "verdict": "APPLIES — PASS",
+      "checks_run": [
+        "grep -rniE '(password|secret|client_secret|token)\\s*(=|:)\\s*\"[^\"]{8,}\"' lib/mix/tasks/letflow.check_boundaries.ex — 0 matches",
+        "Manual review of full file: no System.get_env/1, no hardcoded credential, no token literal, no field that could serialise a secret. System.cmd/3 passes only the string arguments [\"xref\", \"graph\", \"--format\", \"plain\"] to mix — no secret material in any argument."
+      ],
+      "reason": "No secret is resolved, materialised, logged, or threaded through any value in the diff."
+    },
+    {
+      "id": "INV-5",
+      "title": "Not-found/forbidden indistinguishability",
+      "verdict": "NOT-APPLICABLE",
+      "reason": "No lookup-by-ID endpoint; no cross-tenant resource access pattern. The task resolves only local file-path strings."
+    },
+    {
+      "id": "INV-6",
+      "title": "New data-access paths prove their scoping",
+      "verdict": "APPLIES — PASS",
+      "reason": "This handoff is the required SECURITY-REVIEWER artefact. All applicable invariants (INV-4, INV-8) are explicitly assessed and found PASS; all others are NOT-APPLICABLE with recorded rationale. The meta-invariant is satisfied by the existence of this document."
+    },
+    {
+      "id": "INV-7",
+      "title": "No SQL string interpolation",
+      "verdict": "NOT-APPLICABLE",
+      "reason": "No Ecto query, no Repo call, no raw SQL of any kind in the diff."
+    },
+    {
+      "id": "INV-8",
+      "title": "No unhandled crashes on realistic failure paths",
+      "verdict": "APPLIES — PASS",
+      "checks_run": [
+        "grep pattern '^\\s*{:ok, .*} = ' in lib/mix/tasks/letflow.check_boundaries.ex — 0 matches",
+        "Manual review: System.cmd/3 is matched as {output, _exit_code} — the standard two-tuple return; exit_code is intentionally discarded (task classifies violations from parsed output, not exit code). If mix is absent the ErlangError would crash the Mix task process, but Mix tasks run in a dedicated, isolated OTP process — a crash does not affect any production tenant workload. The let-it-crash exception in INV-8 applies: 'a doomed, isolated process crash and restart' is fine; this is dev/CI time only."
+      ],
+      "reason": "No bare {:ok, x} = pattern on an external-I/O call. The one external call (System.cmd) is matched correctly. The task runs outside production supervision and cannot degrade tenant in-flight work."
+    },
+    {
+      "id": "INV-9",
+      "title": "Tenant-controlled outbound URL validation",
+      "verdict": "NOT-APPLICABLE",
+      "reason": "No outbound HTTP/HTTPS request to any URL, tenant-controlled or otherwise. System.cmd spawns a local subprocess, not an HTTP client."
+    }
+  ],
+
+  "summary": "All 9 invariants assessed. INV-4, INV-6, INV-8 APPLY and each is PASS. INV-1, INV-2, INV-3, INV-5, INV-7, INV-9 are NOT-APPLICABLE. The diff introduces a development-time Mix.Task with no production data-path, no secret handling, no migration, and no API surface. No blocking issues found."
+}

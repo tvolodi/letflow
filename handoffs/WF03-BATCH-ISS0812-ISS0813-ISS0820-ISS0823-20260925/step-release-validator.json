@@ -1,0 +1,111 @@
+{
+  "run_id": "WF03-BATCH-ISS0812-ISS0813-ISS0820-ISS0823-20260925",
+  "agent": "RELEASE-VALIDATOR",
+  "timestamp": "2026-09-25T05:21:00.000+05:00",
+  "verdict": "PASS",
+  "methodology": "Independent re-derivation from source. Tests re-run directly — not copied from TEST-RUNNER reports. mix letflow.check.test not applicable (frontend-only batch; no Elixir modules changed).",
+  "test_run_results": {
+    "tests/guards/source-scan.spec.ts + tests/guards/meta-control.spec.ts": {
+      "exit_code": 0,
+      "tests_passed": 49,
+      "tests_failed": 0
+    },
+    "src/api/__tests__/identity.iss0812.test.ts": {
+      "exit_code": 0,
+      "tests_passed": 4,
+      "tests_failed": 0
+    },
+    "src/api/__tests__/definitionsSearch.iss0820.test.ts": {
+      "exit_code": 0,
+      "tests_passed": 4,
+      "tests_failed": 0
+    },
+    "src/pages/admin/__tests__/GroupsPage.iss0823.test.tsx": {
+      "exit_code": 0,
+      "tests_passed": 3,
+      "tests_failed": 0
+    }
+  },
+  "issues": {
+    "ISS-0813": {
+      "overall": "PASS",
+      "acceptance_criteria": {
+        "AC1": {
+          "verdict": "PASS",
+          "description": "dead-admin-prefix guard exists in web/tests/guards/forbidlist.ts and fires on real violations",
+          "evidence": "Pattern named 'dead-admin-prefix' found at end of PATTERNS array in forbidlist.ts. regex: /\\/api\\/v1\\/admin\\/(?!services)/. Offender fixture 'client.get('/api/v1/admin/roles')' matches; bystander 'client.get('/api/v1/admin/services')' does not. meta-control.spec.ts 48/48 tests pass, including the 4 fixture tests for dead-admin-prefix."
+        },
+        "AC2": {
+          "verdict": "PASS",
+          "description": "appliesTo: 'source' with allowedPaths only for services.ts and __tests__/",
+          "evidence": "In forbidlist.ts dead-admin-prefix entry: appliesTo: 'source', allowedPaths: ['web/src/api/services.ts', 'web/src/api/__tests__/']. Exactly two entries, both as specified."
+        },
+        "AC3": {
+          "verdict": "PASS",
+          "description": "Regex is /\\/api\\/v1\\/admin\\/(?!services)/ — asserts /api/v1/admin/ only for /admin/services",
+          "evidence": "Confirmed in forbidlist.ts: regex: /\\/api\\/v1\\/admin\\/(?!services)/. Negative lookahead ensures /api/v1/admin/services is NOT flagged while all other /api/v1/admin/* paths are."
+        },
+        "AC4": {
+          "verdict": "PASS",
+          "description": "Wired into pipeline — source-scan.spec.ts runs this pattern",
+          "evidence": "source-scan.spec.ts evaluates PATTERNS.filter(p => p.appliesTo === 'source' || p.appliesTo === 'both') against all web/src/**/*.{ts,tsx,css}. dead-admin-prefix has appliesTo:'source', so it is included. Test passed (1/1). The scan also ran clean — no /api/v1/admin/ violations outside the two exempted paths."
+        }
+      }
+    },
+    "ISS-0812": {
+      "overall": "PASS",
+      "acceptance_criteria": {
+        "AC1": {
+          "verdict": "PASS",
+          "description": "Every usersApi/rolesApi function either calls a real route or is removed/tombstoned",
+          "evidence": "Verified web/src/api/identity.ts directly. Tombstone comments: usersApi.delete — '`DELETE /identity/users/:id` does not exist in Letflow.Routers.Identity.__authz_routes__/0 at any prefix'; rolesApi.get/update/delete/grantPermission/revokePermission — 'do not exist in Letflow.Routers.Identity.__authz_routes__/0 at any prefix'. Retained functions: usersApi.list/get/create/update use /api/v1/identity/users; rolesApi.list/create use /api/v1/identity/roles; tokensApi.list/create/revoke use /api/v1/identity/tokens. All confirmed."
+        },
+        "AC2": {
+          "verdict": "PASS",
+          "description": "Regression coverage uses exact pathname assertion (toBe not just toContain)",
+          "evidence": "identity.iss0812.test.ts rolesApi.create test: expect(new URL(url, 'http://localhost').pathname).toBe('/api/v1/identity/roles') — exact pathname with toBe. tokensApi tests additionally use not.toContain to reject old /api/v1/auth/ prefix. 4/4 tests pass."
+        }
+      }
+    },
+    "ISS-0820": {
+      "overall": "PASS",
+      "acceptance_criteria": {
+        "AC1": {
+          "verdict": "PASS",
+          "description": "definitionsApi.search sends only {q, cursor?, page_size?}",
+          "evidence": "web/src/api/definitions.ts: search: (params: { q: string; cursor?: string; page_size?: number }) => client.get<CursorPage<ProcessDefinition>>('/api/v1/definitions/search', params as Record<string, unknown>). No limit or offset in the type signature or call."
+        },
+        "AC2": {
+          "verdict": "PASS",
+          "description": "useDefinitions.ts caller updated — useDefinitionSearch uses {q, page_size?, cursor?}",
+          "evidence": "web/src/hooks/useDefinitions.ts: export function useDefinitionSearch(query: string, options?: { page_size?: number; cursor?: string }) calls definitionsApi.search({ q: query, page_size: options?.page_size, cursor: options?.cursor }). No limit/offset referenced."
+        },
+        "AC3": {
+          "verdict": "PASS",
+          "description": "TC-ISS0820-01 asserts not.toContain('limit=') and not.toContain('offset=')",
+          "evidence": "definitionsSearch.iss0820.test.ts TC-ISS0820-01 (line: 'sends q and no limit/offset'): expect(calledUrl).not.toContain('limit=') and expect(calledUrl).not.toContain('offset='). Both assertions present. 4/4 tests pass."
+        }
+      }
+    },
+    "ISS-0823": {
+      "overall": "PASS",
+      "acceptance_criteria": {
+        "AC1": {
+          "verdict": "PASS",
+          "description": "data-testid='user-list-truncated-warning' shown when users?.next_cursor !== null",
+          "evidence": "GroupsPage.tsx: const userListTruncated = Boolean(users?.next_cursor). Renders <p role='note' data-testid='user-list-truncated-warning' ...> when {userListTruncated && (...)}. TC-ISS0823-01 passes: getByTestId('user-list-truncated-warning') is in document when next_cursor='cursor-page-2'."
+        },
+        "AC2": {
+          "verdict": "PASS",
+          "description": "Warning message says 'more than 200 users' and 'first 200'",
+          "evidence": "GroupsPage.tsx warning text: 'This tenant has more than 200 users. The list above shows only the first 200 — some users may not appear.' Contains both required phrases. TC-ISS0823-01 asserts toHaveTextContent('more than 200 users') and toHaveTextContent('first 200') — both pass."
+        },
+        "AC3": {
+          "verdict": "PASS",
+          "description": "availableUsers subtraction uses member id set subtraction, not is_active/member_count",
+          "evidence": "GroupsPage.tsx: const memberIds = new Set(members.map((user) => user.id)); return list.filter((user) => { const id = user.id ?? user.user_id ?? ''; return id !== '' && !memberIds.has(id); }). Pure set subtraction on id field. No is_active or member_count reference. TC-ISS0823-03 passes (no crash, combobox renders with options)."
+        }
+      }
+    }
+  }
+}

@@ -30550,7 +30550,7 @@ requirements:
   - id: REQ-412
     title: "P2: move exam screens into web/src/modules/exam/, register exam in registry.ts, and point web callers at /api/v1/modules/exam/exam-sessions"
     owner: FRONTEND-DEV
-    status: pending
+    status: done
     stage: S11
     impl_order: 801  # letflow-queue task id, GH#1786. Registered 2026-09-24T11:10:15Z by ORCH (WF-01 Step 3).
     description: >

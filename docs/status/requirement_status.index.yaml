@@ -4610,8 +4610,12 @@ volumes:
     path: docs/status/requirement_status.v22.yaml
     status: current
     opened: 2026-09-22
-    entries: 31
+    entries: 32
     note: >
+      Incremented to 32 by ORCH's REQ-412 done-event append
+      (2026-09-26T02:00:00Z -- frontend exam module relocation, S11's
+      eighth requirement). Prior note preserved below.
+
       Incremented to 31 by ORCH's REQ-410 done-event append
       (2026-09-26T01:20:00Z -- exam module relocation, S11's seventh
       requirement). 1143 lines / 71611 bytes.

@@ -1141,3 +1141,17 @@ history:
       HTTP-level tests pass (404 without row, 200 with), authorization_enforcement
       passes with new paths, 147 moved tests pass. mix letflow.check_boundaries 0
       violations. SECURITY-REVIEWER PASS. Commit: 24eab9a5.
+  - req: REQ-412
+    status: done
+    timestamp: 2026-09-26T02:00:00Z
+    run_id: WF02-REQ412-20260926
+    agent: FRONTEND-DEV
+    summary: >
+      Moved web/src/pages/exam/ and web/src/pages/admin/bilimbaga/ into
+      web/src/modules/exam/ (git mv). Moved exam.ts, types/exam.ts,
+      examMessages.ts, useAntiCheatSignals.ts. Created modules/exam/index.ts
+      with ModuleDefinition (5 routes, 2 nav items). Created ModuleGuard.tsx
+      for 404-gate at route level. Updated all /exam-sessions URLs to
+      /modules/exam/exam-sessions. Removed exam routes/nav from router.tsx and
+      AppShell.tsx. Updated e2e tests. npm run check: 930 tests pass, 0
+      boundary violations. All 5 ACs pass. Commit: be729822.

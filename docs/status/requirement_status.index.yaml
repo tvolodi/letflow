@@ -4610,8 +4610,13 @@ volumes:
     path: docs/status/requirement_status.v22.yaml
     status: current
     opened: 2026-09-22
-    entries: 36
+    entries: 37
     note: >
+      Incremented to 37 by ORCH's REQ-416 done-event append
+      (2026-09-26T06:00:00Z -- P3 close-out bilimbaga e2e, S11's
+      thirteenth and final requirement; REQ-400..416 all done). Prior note
+      preserved below.
+
       Incremented to 36 by ORCH's REQ-415 done-event append
       (2026-09-26T05:10:00Z -- solution install, S11's twelfth requirement).
       Prior note preserved below.

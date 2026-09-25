@@ -30750,7 +30750,7 @@ requirements:
   - id: REQ-416
     title: "P3 close-out: install the bilimbaga solution into a fresh tenant and verify a working exam tenant end-to-end"
     owner: ELIXIR-DEV
-    status: pending
+    status: done
     stage: S11
     impl_order: 805  # letflow-queue task id, GH#1790. Registered 2026-09-24T11:10:15Z by ORCH (WF-01 Step 3).
     description: >

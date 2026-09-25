@@ -1216,3 +1216,20 @@ history:
       17 new tests all pass: topo-order, atomicity, load validation, role
       gate, two-tenant isolation, no migration created (D6). SECURITY-
       REVIEWER PASS (all INV-1..INV-5 verified). Commit: be133e54.
+  - req: REQ-416
+    status: done
+    timestamp: 2026-09-26T06:00:00Z
+    run_id: WF02-REQ416-20260926
+    agent: ELIXIR-DEV
+    summary: >
+      Created bilimbaga_solution_e2e_test.exs: 7-step integration test
+      through real routes, no mocks. Step 1: fresh tenant provision.
+      Step 2: POST /tenant/solutions -> 201. Step 3: GET /me/modules lists
+      exam; entity defs and on_install/2 field restrictions verified.
+      Step 4: exam data seeded via ExamFixtures (no SQL). Step 5: CANDIDATE
+      full exam path (list/start/save/submit/score/certificate) all pass,
+      passed: true. Step 6: TASK_WORKER query answer_option -> answer-key
+      fields redacted. Step 7: second tenant without solution -> 404 for
+      all 6 roles. All 6 ACs pass. mix letflow.check passes. Updated
+      stage-11-modular-platform.md status to P1-P3 done. Commit: 29513e28.
+      S11 (REQ-400..416) is fully complete.

@@ -1,0 +1,64 @@
+{
+  "handoff_id": "WF02-REQ405-20260925-step-01",
+  "run_id": "WF02-REQ405-20260925",
+  "workflow_id": "WF-02",
+  "step": "01",
+  "from_agent": "CODE-DESIGNER",
+  "to_agent": "CODE-DESIGN-VALIDATOR",
+  "file": "handoffs/WF02-REQ405-20260925/step-01-code-designer.json",
+  "created_at": "2026-09-25T03:20:33Z",
+  "started_at": "2026-09-25T03:20:33Z",
+  "completed_at": "2026-09-25T03:25:10Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S11",
+    "requirement_ids": ["REQ-405"],
+    "requirement_text": {
+      "REQ-405": "P1. Implements 0039 D3's backend check. No new hex dependency.\n\nBUILDS `lib/mix/tasks/letflow.check_boundaries.ex` (`mix letflow.check_boundaries`), built on `mix xref graph --format plain` file-level edges. It exits non-zero and prints each offending edge when:\n(a) a file outside every `lib/letflow/modules/<id>/` directory references a file inside one, EXCEPT `lib/letflow/modules/catalog.ex`, the one sanctioned importer (D3). The mechanism files directly in `lib/letflow/modules/*.ex` (one level, no subdirectory) are core, not a module (D3).\n(b) a file in `lib/letflow/modules/a/` references a file in `lib/letflow/modules/b/` when `b` is not in module `a`'s manifest `depends_on` (read through `Letflow.Modules.Catalog`).\n\nEdge classification is a pure function over the parsed xref output so it can be unit-tested with synthetic edge lists.\n\nSCOPE: only edges whose SOURCE file is under `lib/`. Test code under `test/support/` is excluded.\n\nAdd `\"letflow.check_boundaries\"` to the `\"letflow.check\"` alias in `mix.exs` after `\"compile --warnings-as-errors\"`. CI already runs `mix letflow.check`.\n\nKnown limit: xref does not see `apply/3` or string-built module names.\n\nOUT OF SCOPE: the frontend ESLint rule (REQ-406)."
+    },
+    "related_handoff_ids": [],
+    "artifacts_in": [
+      "lib/letflow/modules/catalog.ex",
+      "lib/letflow/modules/module.ex",
+      "docs/migration/decisions/0039-platform-module-solution-layering.md",
+      "mix.exs",
+      "lib/mix/tasks/letflow.lint_handoffs.ex",
+      "docs/agents/shared/HANDOFF_PROTOCOL.md"
+    ],
+    "owned_modules": [
+      "lib/mix/tasks/letflow.check_boundaries.ex",
+      "test/mix/tasks/letflow.check_boundaries_test.exs"
+    ]
+  },
+  "task": {
+    "description": "Design `mix letflow.check_boundaries` (REQ-405): the xref-based module boundary check wired into `mix letflow.check`. Write `lib/letflow/design/req405-check-boundaries.md` covering the task module structure, the pure `classify_edge/2` function and its 6 classification cases, @spec annotations, mix.exs alias slot and T-ALIAS-SLOT test update, test structure for AC1–AC5, and the no-new-dependency proof. Design only — no implementation code.",
+    "acceptance_criteria": [
+      "Module structure for lib/mix/tasks/letflow.check_boundaries.ex specified (run/1, classify_edge/2, parse_xref_output/1, build_depends_on_map/1 with full @spec annotations)",
+      "All 5 AC1 edge cases (plus scope exclusion rule) documented in classification table §2.3 with correct :ok / {:violation, reason} verdicts",
+      "mix.exs alias insertion slot identified (after compile --warnings-as-errors, before letflow.check.test) with T-ALIAS-SLOT test assertions specified",
+      "Test structure documented for AC1 (unit), AC2 (system), AC3 (probe procedure), AC4 (alias wiring), AC5 (no-dep proof)",
+      "No implementation code in design doc (signatures and type shapes only)",
+      "Open questions: none"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "Design complete. Key decisions: (1) `classify_edge/2` is a pure two-argument function taking `{source, target}` and a `depends_on_map` built from `Catalog.all_manifests/0`; scope gate filters out non-lib/ sources and test/support/ sources before classification. (2) Six classification rules in first-match order: Rule 0 (target not in module subdir → OK), Rule 1 (catalog.ex sanctioned importer → OK), Rules 2/3 (intra-module or authorized cross-module → OK), Rule 4 (unauthorized cross-module → VIOLATION), Rule 5 (outsider imports module → VIOLATION). (3) Alias slot: after `compile --warnings-as-errors`, before `letflow.check.test`; T-ALIAS-SLOT test asserts both ordering constraints. (4) No new dependency: `mix xref` is built-in, `System.cmd/3` is stdlib, `Catalog.all_manifests/0` is existing code. (5) AC3 probe procedure documented in §5.4: since no lib/letflow/modules/<id>/ subdir currently exists, ELIXIR-DEV must create a synthetic one plus a caller probe, run the check, then remove both before committing. Open questions: none.",
+    "artifacts_out": [
+      "lib/letflow/design/req405-check-boundaries.md"
+    ],
+    "issues": [],
+    "git_evidence": {
+      "branch_name": "feature/WF02-REQ405-20260925",
+      "commit_sha_list": [],
+      "remote_branch": null,
+      "push_status": "skipped",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": "Route to CODE-DESIGN-VALIDATOR"
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

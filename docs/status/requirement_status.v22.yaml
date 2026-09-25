@@ -854,3 +854,22 @@ history:
       CODE-DESIGNER, SECURITY-REVIEWER, REVIEWER, TEST-DESIGNER,
       RELEASE-VALIDATOR -- on feature/WF02-REQ401-20260925, rebased onto
       origin/main (2a97b3f3) before this entry.
+
+  - req: REQ-405
+    event: doc-correction
+    timestamp: 2026-09-25T03:39:10Z
+    agent: DOC-UPDATER
+    workflow: WF02-REQ405-20260925
+    note: >
+      REVIEWER flagged an inaccuracy in lib/letflow/design/req405-check-boundaries.md
+      §1.2: the parse_xref_output Format contract prose incorrectly stated "Lines
+      indented by one or more spaces are target paths", when the actual format emitted
+      by `mix xref graph --format plain` uses tree characters (`|-- ` / ``-- ``),
+      not space-indentation. The implementation in
+      lib/mix/tasks/letflow.check_boundaries.ex correctly handles both tree characters
+      (primary) and space-indented lines (compatibility fallback), but the design doc
+      only described the fallback. Corrected §1.2 to: describe the tree-character
+      format as primary with a sample block; note the space-indented fallback
+      explicitly; confirm that `(compile)`/`(runtime)` suffix annotations are stripped.
+      No status flip (REQ-405 was already done before this correction). No README.md
+      change needed. One file touched: lib/letflow/design/req405-check-boundaries.md.

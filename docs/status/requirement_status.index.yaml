@@ -4610,8 +4610,15 @@ volumes:
     path: docs/status/requirement_status.v22.yaml
     status: current
     opened: 2026-09-22
-    entries: 25
+    entries: 26
     note: >
+      Incremented to 26 by DOC-UPDATER's own REQ-405 doc-correction append
+      (WF02-REQ405-20260925, 2026-09-25T03:39:10Z -- corrected §1.2 of
+      lib/letflow/design/req405-check-boundaries.md: tree-character format
+      description for parse_xref_output, space-indented fallback, annotation
+      stripping). `grep -c "^  - req:" docs/status/requirement_status.v22.yaml`
+      = 26 on-disk entries. Prior notes preserved below verbatim.
+
       Incremented to 25 by DOC-UPDATER's own REQ-401 done-event append
       (feature/WF02-REQ401-20260925, 2026-09-25T03:06:46Z -- catalog-sourced
       module permissions/role_grants in Letflow.Api.Authorization, plus the

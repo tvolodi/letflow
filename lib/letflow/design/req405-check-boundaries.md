@@ -35,7 +35,15 @@ Implements `Mix.Task`. Entry point called by `mix letflow.check_boundaries`.
 @spec parse_xref_output(String.t()) :: [{String.t(), String.t()}]
 ```
 Pure. Parses the plain-text tree emitted by `mix xref graph --format plain` into a flat list of `{source, target}` pairs.  
-**Format contract:** Each non-indented line is a source file path. Lines indented by one or more spaces are target paths that source references (may carry a suffix annotation like `" (compile)"` or `" (runtime)"` — strip everything from the first `" ("` to end when present). A line that is entirely whitespace is skipped.  
+**Format contract:** `mix xref graph --format plain` emits a tree-character format where non-prefixed lines are source file paths and lines prefixed with `|-- ` or `` `-- `` are target paths for the most recent source:
+
+```
+lib/a.ex
+|-- lib/b.ex (compile)
+`-- lib/c.ex
+```
+
+The parser also accepts a space-indented format (lines with one or more leading spaces) as a compatibility fallback. Suffix annotations like `" (compile)"` or `" (runtime)"` are stripped from target paths. A line that is entirely whitespace is skipped.  
 Returns `[]` on empty or blank input; never raises.
 
 ```

@@ -213,6 +213,46 @@ defmodule Letflow.Api.AuthorizationEnforcementTest do
     end
   end
 
+  # ==========================================================================
+  # REQ-401 AC5 — every Catalog module's own route_policies resolves through
+  # Authorization.endpoint_policy_key/2's new /modules/<id>/<rest> fallback.
+  # Keyed on Letflow.Modules.Catalog.entry_modules/0, NOT on @routers above --
+  # a module's router (the fixture's Router) is a plain Plug.Router, not an
+  # Letflow.Api.AuthorizedRouter user, so it has no __authz_routes__/0 at all;
+  # manifest().route_policies is the actual source of truth for a module's
+  # routes (design lib/letflow/design/req401-catalog-sourced-permissions.md
+  # §5). No entry is added to @allowlist for a module route -- a module route
+  # that fails to resolve is a real failure, not an allowlist candidate.
+  # ==========================================================================
+
+  describe "REQ-401 AC5 — every registered Catalog module's route_policies resolves" do
+    test "every module exporting router/0 has every route_policies entry resolve to a real, non-:Unknown policy key" do
+      for entry_module <- Letflow.Modules.Catalog.entry_modules(),
+          # function_exported?/3 only inspects already-loaded modules -- it
+          # will NOT force-load one, unlike an ordinary remote call. Without
+          # this, a module untouched so far in the test process would be
+          # (falsely) reported as not exporting router/0, silently skipping
+          # every one of its routes rather than checking them.
+          Code.ensure_loaded?(entry_module),
+          function_exported?(entry_module, :router, 0) do
+        manifest = entry_module.manifest()
+
+        assert manifest.route_policies != [],
+               "expected #{inspect(manifest.id)}'s manifest to declare at least one route_policies entry"
+
+        for {method, path_pattern, _permission} <- manifest.route_policies do
+          full_path = "/modules/#{manifest.id}#{path_pattern}"
+          real_key = Authorization.endpoint_policy_key(method, full_path)
+
+          refute real_key == :Unknown,
+                 "#{inspect(manifest.id)}: route #{method} #{full_path} (route_policies pattern " <>
+                   "#{inspect(path_pattern)}) resolved to :Unknown through " <>
+                   "Authorization.endpoint_policy_key/2"
+        end
+      end
+    end
+  end
+
   test "Letflow.Routers.Promotions declares zero authz_*-macro routes (all ten REQ-077 routes are :Unknown-gated via the plain get/post macros instead, see that router's own moduledoc)" do
     assert Letflow.Routers.Promotions.__authz_routes__() == []
   end

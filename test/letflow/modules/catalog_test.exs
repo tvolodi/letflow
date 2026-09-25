@@ -111,5 +111,19 @@ defmodule Letflow.Modules.CatalogTest do
                "expected #{inspect(manifest.id)}'s manifest to pass validation"
       end
     end
+
+    # REQ-401 §1a regression: Authorization.permissions/0 now folds every
+    # registered module's own permissions (including the manifest under
+    # test) into its result, so validate_no_core_permission_collision/1 was
+    # repointed to Authorization.core_permissions/0 -- a closed, core-only
+    # list that never contains a module's own atoms. This proves the check
+    # still catches a GENUINE core collision after being repointed, not just
+    # that it stopped false-flagging every module against itself.
+    test "still rejects a permissions atom that collides with a real core permission, after the core_permissions/0 repoint" do
+      manifest = %{valid_manifest() | permissions: [:DefinitionsRead], role_grants: %{}}
+
+      assert Catalog.validate(manifest) ==
+               {:error, {:core_permission_collision, :DefinitionsRead}}
+    end
   end
 end

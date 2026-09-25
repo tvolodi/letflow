@@ -30,47 +30,62 @@ defmodule Letflow.Api.AuthorizationTest do
              ]
     end
 
-    test "permissions/0 returns exactly R-Co's fourteen Permission values plus REQ-075's :TenantsManage, REQ-076's :RolesManage, REQ-212's :AttachmentsManage/:AttachmentsRead, ISS-0389's :InstancesAdvanceTimer, REQ-309's four Entities* permissions, REQ-315's :EntitiesAggregate, REQ-318's three entity-record export/import permissions, REQ-317's :EntitiesAttachmentsManage/:EntitiesAttachmentsRead, REQ-335's five ExamSession* permissions, REQ-355's :ExamCertificateIssue, REQ-352's :PublicReadHandlesIssue, REQ-366's :HelpRead, and REQ-384's :MembershipsRead" do
-      assert Authorization.permissions() == [
-               :DefinitionsWrite,
-               :DefinitionsRead,
-               :InstancesStart,
-               :InstancesCancel,
-               :InstancesRead,
-               :TasksRead,
-               :TasksComplete,
-               :TasksAssign,
-               :UsersGroupsRolesManage,
-               :TokensManage,
-               :AuditRead,
-               :DlqOperate,
-               :MetricsRead,
-               :WebhooksManage,
-               :TenantsManage,
-               :RolesManage,
-               :AttachmentsManage,
-               :AttachmentsRead,
-               :InstancesAdvanceTimer,
-               :EntitiesDefinitionsRead,
-               :EntitiesDefinitionsWrite,
-               :EntitiesRecordsWrite,
-               :EntitiesQuery,
-               :EntitiesAggregate,
-               :EntitiesRecordsExport,
-               :EntitiesRecordsExportUnredacted,
-               :EntitiesRecordsImport,
-               :EntitiesAttachmentsManage,
-               :EntitiesAttachmentsRead,
-               :ExamSessionStart,
-               :ExamSessionRead,
-               :ExamSessionSave,
-               :ExamSessionSubmit,
-               :ExamSessionReportEvent,
-               :ExamCertificateIssue,
-               :PublicReadHandlesIssue,
-               :HelpRead,
-               :MembershipsRead
-             ]
+    # REQ-401 — the core, closed-set literal, now including :ModulesManage as
+    # its 39th/last entry. This is what core_permissions/0 must return exactly.
+    @core_permissions [
+      :DefinitionsWrite,
+      :DefinitionsRead,
+      :InstancesStart,
+      :InstancesCancel,
+      :InstancesRead,
+      :TasksRead,
+      :TasksComplete,
+      :TasksAssign,
+      :UsersGroupsRolesManage,
+      :TokensManage,
+      :AuditRead,
+      :DlqOperate,
+      :MetricsRead,
+      :WebhooksManage,
+      :TenantsManage,
+      :RolesManage,
+      :AttachmentsManage,
+      :AttachmentsRead,
+      :InstancesAdvanceTimer,
+      :EntitiesDefinitionsRead,
+      :EntitiesDefinitionsWrite,
+      :EntitiesRecordsWrite,
+      :EntitiesQuery,
+      :EntitiesAggregate,
+      :EntitiesRecordsExport,
+      :EntitiesRecordsExportUnredacted,
+      :EntitiesRecordsImport,
+      :EntitiesAttachmentsManage,
+      :EntitiesAttachmentsRead,
+      :ExamSessionStart,
+      :ExamSessionRead,
+      :ExamSessionSave,
+      :ExamSessionSubmit,
+      :ExamSessionReportEvent,
+      :ExamCertificateIssue,
+      :PublicReadHandlesIssue,
+      :HelpRead,
+      :MembershipsRead,
+      :ModulesManage
+    ]
+
+    test "core_permissions/0 returns the closed core list through REQ-401's :ModulesManage, no Catalog atoms" do
+      assert Authorization.core_permissions() == @core_permissions
+    end
+
+    test "permissions/0 (REQ-401) is core_permissions/0 ++ Letflow.Modules.Catalog.permissions/0" do
+      assert Authorization.permissions() ==
+               Authorization.core_permissions() ++ Letflow.Modules.Catalog.permissions()
+    end
+
+    test "permissions/0 includes the REQ-400 fixture module's own permission atom in the test env" do
+      assert Letflow.Modules.Fixture.manifest().permissions == [:FixtureRead]
+      assert :FixtureRead in Authorization.permissions()
     end
   end
 
@@ -364,14 +379,14 @@ defmodule Letflow.Api.AuthorizationTest do
 
       permissions_doc =
         Enum.find_value(fn_docs, fn
-          {{:function, :permissions, 0}, _anno, _sig, %{"en" => doc}, _meta} -> doc
+          {{:function, :core_permissions, 0}, _anno, _sig, %{"en" => doc}, _meta} -> doc
           _ -> nil
         end)
 
       assert is_binary(permissions_doc),
              "expected permissions/0 to carry a @doc string"
 
-      actual_count = length(Authorization.permissions())
+      actual_count = length(Authorization.core_permissions())
 
       spelled =
         %{
@@ -399,7 +414,8 @@ defmodule Letflow.Api.AuthorizationTest do
           35 => "thirty-five",
           36 => "thirty-six",
           37 => "thirty-seven",
-          38 => "thirty-eight"
+          38 => "thirty-eight",
+          39 => "thirty-nine"
         }
         |> Map.get(actual_count)
 
@@ -408,11 +424,11 @@ defmodule Letflow.Api.AuthorizationTest do
                "number-word table -- extend the table (and the @doc) rather than deleting " <>
                "this assertion"
 
-      assert permissions_doc =~ "All #{spelled} `Permission` values",
+      assert permissions_doc =~ "All #{spelled} core `Permission` values",
              """
              permissions/0's @doc does not state the live count.
              permissions/0 currently returns #{actual_count} entries, so the @doc must \
-             open with "All #{spelled} `Permission` values". Actual @doc:
+             open with "All #{spelled} core `Permission` values". Actual @doc:
 
              #{permissions_doc}
              """
@@ -902,11 +918,11 @@ defmodule Letflow.Api.AuthorizationTest do
 
       permissions_doc =
         Enum.find_value(fn_docs, fn
-          {{:function, :permissions, 0}, _anno, _sig, %{"en" => doc}, _meta} -> doc
+          {{:function, :core_permissions, 0}, _anno, _sig, %{"en" => doc}, _meta} -> doc
           _ -> nil
         end)
 
-      actual_count = length(Authorization.permissions())
+      actual_count = length(Authorization.core_permissions())
 
       spelled =
         %{
@@ -928,7 +944,8 @@ defmodule Letflow.Api.AuthorizationTest do
           35 => "thirty-five",
           36 => "thirty-six",
           37 => "thirty-seven",
-          38 => "thirty-eight"
+          38 => "thirty-eight",
+          39 => "thirty-nine"
         }
         |> Map.get(actual_count)
 
@@ -937,11 +954,11 @@ defmodule Letflow.Api.AuthorizationTest do
                "number-word table -- extend the table (and the @doc) rather than deleting " <>
                "this assertion"
 
-      assert permissions_doc =~ "All #{spelled} `Permission` values",
+      assert permissions_doc =~ "All #{spelled} core `Permission` values",
              """
              permissions/0's @doc does not state the live count.
              permissions/0 currently returns #{actual_count} entries, so the @doc must \
-             open with "All #{spelled} `Permission` values". Actual @doc:
+             open with "All #{spelled} core `Permission` values". Actual @doc:
 
              #{permissions_doc}
              """
@@ -1369,11 +1386,11 @@ defmodule Letflow.Api.AuthorizationTest do
 
       permissions_doc =
         Enum.find_value(fn_docs, fn
-          {{:function, :permissions, 0}, _anno, _sig, %{"en" => doc}, _meta} -> doc
+          {{:function, :core_permissions, 0}, _anno, _sig, %{"en" => doc}, _meta} -> doc
           _ -> nil
         end)
 
-      actual_count = length(Authorization.permissions())
+      actual_count = length(Authorization.core_permissions())
 
       spelled =
         %{
@@ -1391,7 +1408,8 @@ defmodule Letflow.Api.AuthorizationTest do
           35 => "thirty-five",
           36 => "thirty-six",
           37 => "thirty-seven",
-          38 => "thirty-eight"
+          38 => "thirty-eight",
+          39 => "thirty-nine"
         }
         |> Map.get(actual_count)
 
@@ -1400,11 +1418,11 @@ defmodule Letflow.Api.AuthorizationTest do
                "number-word table -- extend the table (and the @doc) rather than deleting " <>
                "this assertion"
 
-      assert permissions_doc =~ "All #{spelled} `Permission` values",
+      assert permissions_doc =~ "All #{spelled} core `Permission` values",
              """
              permissions/0's @doc does not state the live count.
              permissions/0 currently returns #{actual_count} entries, so the @doc must \
-             open with "All #{spelled} `Permission` values". Actual @doc:
+             open with "All #{spelled} core `Permission` values". Actual @doc:
 
              #{permissions_doc}
              """
@@ -1795,6 +1813,328 @@ defmodule Letflow.Api.AuthorizationTest do
                "GET",
                "/entities/records/:entity_type/:record_id/attachments/:attachment_id/extra"
              ) == :Unknown
+    end
+  end
+
+  # ==========================================================================
+  # REQ-401 — Catalog-sourced module permissions/role_grants in
+  # Letflow.Api.Authorization, plus the new core :ModulesManage permission.
+  # Design: lib/letflow/design/req401-catalog-sourced-permissions.md.
+  # ==========================================================================
+
+  describe "REQ-401 AC2 — fixture module permission grant" do
+    test "role_allows?/2 -- :FixtureRead granted to TASK_WORKER + PLATFORM_ADMIN only" do
+      fixture_role_grants = Letflow.Modules.Fixture.manifest().role_grants
+      # Source the granted role/permission pair from the fixture's own
+      # manifest rather than hardcoding it a second time, so this test does
+      # not silently drift if the fixture manifest ever changes.
+      assert Map.keys(fixture_role_grants) == [:TASK_WORKER]
+      assert Map.fetch!(fixture_role_grants, :TASK_WORKER) == [:FixtureRead]
+
+      assert Authorization.role_allows?(:TASK_WORKER, :FixtureRead)
+      assert Authorization.role_allows?(:PLATFORM_ADMIN, :FixtureRead)
+
+      for role <- Authorization.roles(), role not in [:TASK_WORKER, :PLATFORM_ADMIN] do
+        refute Authorization.role_allows?(role, :FixtureRead),
+               "expected #{inspect(role)} to be denied :FixtureRead (only :TASK_WORKER and " <>
+                 ":PLATFORM_ADMIN should hold it)"
+      end
+    end
+  end
+
+  describe "REQ-401 AC3 — :ModulesManage grant" do
+    test "role_allows?(role, :ModulesManage) == (role == :PLATFORM_ADMIN), for every role" do
+      for role <- Authorization.roles() do
+        expected = role == :PLATFORM_ADMIN
+        actual = Authorization.role_allows?(role, :ModulesManage)
+
+        assert actual == expected,
+               "role_allows?(#{inspect(role)}, :ModulesManage) returned #{inspect(actual)}, " <>
+                 "expected #{inspect(expected)}"
+      end
+    end
+  end
+
+  describe "REQ-401 AC4 — module route fallback" do
+    test "resolves the fixture's own route, :Unknown for an unregistered module id" do
+      assert Authorization.endpoint_policy_key("GET", "/modules/fixture/items/:id") ==
+               :FixtureRead
+
+      assert Authorization.endpoint_policy_key("GET", "/modules/does-not-exist/items/:id") ==
+               :Unknown
+    end
+
+    test "no matching route_policies entry, and a bare /modules/<id> with no rest, both :Unknown" do
+      assert Authorization.endpoint_policy_key("POST", "/modules/fixture/items/:id") == :Unknown
+      assert Authorization.endpoint_policy_key("GET", "/modules/fixture") == :Unknown
+    end
+
+    # AC4's second half: a literal table of {method, path, expected_atom}
+    # triples, transcribed BY HAND from every endpoint_policy_key/2 clause as
+    # it stands on main (before REQ-401's insertion) -- one representative
+    # sample per distinct clause/guard, not derived from calling the function
+    # itself (that would be circular). Proves the new /modules/... clause was
+    # inserted purely additively, immediately before the final catch-all,
+    # with no existing clause's position or body disturbed.
+    test "every pre-existing core endpoint_policy_key/2 clause returns the same atom as on main" do
+      expected = [
+        {"POST", "/definitions", :DefinitionsCreate},
+        {"PUT", "/definitions/:id", :DefinitionsUpdate},
+        {"PATCH", "/definitions/:id", :DefinitionsPatch},
+        {"POST", "/definitions/:id/activate", :DefinitionsActivate},
+        {"POST", "/definitions/:id/deprecate", :DefinitionsDeprecate},
+        {"POST", "/definitions/:id/archive", :DefinitionsArchive},
+        {"DELETE", "/definitions/:id", :DefinitionsDelete},
+        {"POST", "/definitions/import", :DefinitionsImport},
+        {"GET", "/definitions", :DefinitionsRead},
+        {"GET", "/definitions/active/:name", :DefinitionsRead},
+        {"GET", "/definitions/search", :DefinitionsRead},
+        {"GET", "/definitions/:id/export", :DefinitionsRead},
+        {"GET", "/definitions/delta", :DefinitionsRead},
+        {"POST", "/instances", :InstancesStart},
+        {"POST", "/instances/:id/cancel", :InstancesCancel},
+        {"POST", "/instances/:id/advance-timer", :InstancesAdvanceTimer},
+        {"GET", "/instances", :InstancesRead},
+        {"GET", "/instances/:id/history", :InstancesRead},
+        {"GET", "/instances/:id/timeline", :InstancesRead},
+        {"GET", "/instances/:id/pins", :InstancesRead},
+        {"GET", "/tasks", :TasksList},
+        {"GET", "/tasks/inbox", :TasksList},
+        {"GET", "/tasks/:id", :TasksGetById},
+        {"POST", "/tasks/:id/complete", :TasksComplete},
+        {"POST", "/tasks/:id/claim", :TasksComplete},
+        {"POST", "/tasks/:id/assign", :TasksAssign},
+        {"POST", "/tasks/:id/reassign", :TasksReassign},
+        {"POST", "/users", :UsersManage},
+        {"GET", "/users", :UsersManage},
+        {"GET", "/users/:id", :UsersManage},
+        {"PATCH", "/users/:id", :UsersManage},
+        {"POST", "/users/:id/status", :UsersManage},
+        {"GET", "/groups", :GroupsManage},
+        {"POST", "/groups", :GroupsManage},
+        {"DELETE", "/groups/:id", :GroupsManage},
+        {"GET", "/tokens", :TokensManage},
+        {"POST", "/tokens", :TokensManage},
+        {"DELETE", "/tokens/:id", :TokensManage},
+        {"GET", "/audit", :AuditRead},
+        {"GET", "/dlq", :DlqReadRetryDiscard},
+        {"POST", "/dlq/:id/retry", :DlqReadRetryDiscard},
+        {"GET", "/metrics", :MetricsRead},
+        {"GET", "/webhooks/subscriptions", :WebhookSubscriptionsManage},
+        {"POST", "/webhooks/subscriptions", :WebhookSubscriptionsManage},
+        {"GET", "/webhooks/subscriptions/:id/deliveries", :WebhookSubscriptionsManage},
+        {"PATCH", "/webhooks/subscriptions/:id", :WebhookSubscriptionsManage},
+        {"DELETE", "/webhooks/subscriptions/:id", :WebhookSubscriptionsManage},
+        {"GET", "/services", :ServicesRead},
+        {"GET", "/admin/services", :AdminServicesRead},
+        {"POST", "/admin/services", :AdminServicesManage},
+        {"PATCH", "/admin/services/:id", :AdminServicesManage},
+        {"DELETE", "/admin/services/:id", :AdminServicesManage},
+        {"POST", "/tenants", :TenantsManage},
+        {"GET", "/tenants", :TenantsManage},
+        {"GET", "/tenants/:slug", :TenantsManage},
+        {"PATCH", "/tenants/:slug", :TenantsManage},
+        {"POST", "/tenants/:slug/deactivate", :TenantsManage},
+        {"POST", "/tenants/:slug/reactivate", :TenantsManage},
+        {"PATCH", "/tenant/settings", :TenantsManage},
+        {"POST", "/onboarding", :TenantsManage},
+        {"GET", "/onboarding/:id", :TenantsManage},
+        {"GET", "/onboarding", :TenantsManage},
+        {"POST", "/platform-migrations/rollouts", :TenantsManage},
+        {"GET", "/platform-migrations/rollouts/:id", :TenantsManage},
+        {"POST", "/platform-migrations/rollouts/:id/resume", :TenantsManage},
+        {"GET", "/event-retention/summary", :TenantsManage},
+        {"POST", "/event-retention/retirements", :TenantsManage},
+        {"GET", "/event-retention/retirements/:id", :TenantsManage},
+        {"GET", "/roles", :RolesManage},
+        {"POST", "/roles", :RolesManage},
+        {"POST", "/instances/:id/attachments", :AttachmentsManage},
+        {"DELETE", "/instances/:id/attachments/:attachment_id", :AttachmentsManage},
+        {"GET", "/instances/:id/attachments", :AttachmentsRead},
+        {"GET", "/instances/:id/attachments/:attachment_id", :AttachmentsRead},
+        {"POST", "/instances/:id/attachments/:attachment_id/link", :AttachmentsRead},
+        {"GET", "/instances/:id/attachments/:attachment_id/link-content", :AttachmentsRead},
+        {"GET", "/instances/storage-usage", :AttachmentsRead},
+        {"GET", "/entities/definitions", :EntitiesDefinitionsRead},
+        {"GET", "/entities/definitions/:id", :EntitiesDefinitionsRead},
+        {"GET", "/entities/definitions/active/:name", :EntitiesDefinitionsRead},
+        {"GET", "/entities/definitions/by-name/:name", :EntitiesDefinitionsRead},
+        {"POST", "/entities/definitions", :EntitiesDefinitionsWrite},
+        {"POST", "/entities/definitions/:name/activate", :EntitiesDefinitionsWrite},
+        {"POST", "/entities/records/:entity_type", :EntitiesRecordsWrite},
+        {"PUT", "/entities/records/:entity_type/:record_id", :EntitiesRecordsWrite},
+        {"DELETE", "/entities/records/:entity_type/:record_id", :EntitiesRecordsWrite},
+        {"POST", "/entities/query", :EntitiesQuery},
+        {"POST", "/entities/query/aggregate", :EntitiesAggregate},
+        {"POST", "/entities/records/:entity_type/export", :EntitiesRecordsExport},
+        {"POST", "/entities/records/:entity_type/import", :EntitiesRecordsImport},
+        {"POST", "/entities/records/:entity_type/:record_id/attachments",
+         :EntitiesAttachmentsManage},
+        {"GET", "/entities/records/:entity_type/:record_id/attachments",
+         :EntitiesAttachmentsRead},
+        {"GET", "/entities/records/:entity_type/:record_id/attachments/:attachment_id",
+         :EntitiesAttachmentsRead},
+        {"DELETE", "/entities/records/:entity_type/:record_id/attachments/:attachment_id",
+         :EntitiesAttachmentsManage},
+        {"POST", "/exam-sessions", :ExamSessionStart},
+        {"GET", "/exam-sessions/available", :ExamSessionStart},
+        {"GET", "/exam-sessions/:id", :ExamSessionRead},
+        {"PUT", "/exam-sessions/:id/answers/:question_id", :ExamSessionSave},
+        {"POST", "/exam-sessions/:id/submit", :ExamSessionSubmit},
+        {"POST", "/exam-sessions/:id/events", :ExamSessionReportEvent},
+        {"POST", "/exam-sessions/:id/certificate", :ExamCertificateIssue},
+        {"GET", "/exam-sessions/:id/certificate/download", :ExamCertificateIssue},
+        {"POST", "/public-read-handles", :PublicReadHandlesIssue},
+        {"GET", "/help/resolved", :HelpRead},
+        {"GET", "/me/memberships", :MembershipsRead},
+        {"POST", "/definitions/:id/validate", :Unknown},
+        {"POST", "/instances/:id/rebind-pins", :Unknown},
+        {"GET", "/nope", :Unknown}
+      ]
+
+      for {method, path, key} <- expected do
+        assert Authorization.endpoint_policy_key(method, path) == key,
+               "REGRESSION: endpoint_policy_key(#{inspect(method)}, #{inspect(path)}) changed " <>
+                 "after REQ-401's /modules/<id>/<rest> clause was inserted"
+      end
+    end
+  end
+
+  describe "REQ-401 AC6 — full regression grid" do
+    # Every one of the thirty-eight permissions that existed immediately
+    # before REQ-401 (before :ModulesManage was appended), crossed with all
+    # six roles: 228 pairs, each expected value transcribed by hand from
+    # `lib/letflow/api/authorization.ex` as it stood on main before this
+    # change -- NOT derived from role_allows?/2, permissions/0, or any other
+    # part of the module under test.
+    @pre_req401_permissions [
+      :DefinitionsWrite,
+      :DefinitionsRead,
+      :InstancesStart,
+      :InstancesCancel,
+      :InstancesRead,
+      :TasksRead,
+      :TasksComplete,
+      :TasksAssign,
+      :UsersGroupsRolesManage,
+      :TokensManage,
+      :AuditRead,
+      :DlqOperate,
+      :MetricsRead,
+      :WebhooksManage,
+      :TenantsManage,
+      :RolesManage,
+      :AttachmentsManage,
+      :AttachmentsRead,
+      :InstancesAdvanceTimer,
+      :EntitiesDefinitionsRead,
+      :EntitiesDefinitionsWrite,
+      :EntitiesRecordsWrite,
+      :EntitiesQuery,
+      :EntitiesAggregate,
+      :EntitiesRecordsExport,
+      :EntitiesRecordsExportUnredacted,
+      :EntitiesRecordsImport,
+      :EntitiesAttachmentsManage,
+      :EntitiesAttachmentsRead,
+      :ExamSessionStart,
+      :ExamSessionRead,
+      :ExamSessionSave,
+      :ExamSessionSubmit,
+      :ExamSessionReportEvent,
+      :ExamCertificateIssue,
+      :PublicReadHandlesIssue,
+      :HelpRead,
+      :MembershipsRead
+    ]
+
+    @pre_req401_allowed %{
+      PLATFORM_ADMIN: @pre_req401_permissions,
+      PROCESS_DESIGNER: [
+        :DefinitionsWrite,
+        :DefinitionsRead,
+        :InstancesStart,
+        :InstancesRead,
+        :TasksRead,
+        :RolesManage,
+        :AttachmentsRead,
+        :EntitiesDefinitionsRead,
+        :EntitiesDefinitionsWrite,
+        :EntitiesQuery,
+        :EntitiesAggregate,
+        :EntitiesAttachmentsRead,
+        :HelpRead,
+        :MembershipsRead
+      ],
+      PROCESS_OPERATOR: [
+        :DefinitionsRead,
+        :InstancesStart,
+        :InstancesCancel,
+        :InstancesRead,
+        :TasksRead,
+        :TasksComplete,
+        :TasksAssign,
+        :AuditRead,
+        :DlqOperate,
+        :MetricsRead,
+        :WebhooksManage,
+        :AttachmentsManage,
+        :AttachmentsRead,
+        :InstancesAdvanceTimer,
+        :EntitiesDefinitionsRead,
+        :EntitiesRecordsWrite,
+        :EntitiesQuery,
+        :EntitiesAggregate,
+        :EntitiesAttachmentsManage,
+        :EntitiesAttachmentsRead,
+        :HelpRead,
+        :MembershipsRead
+      ],
+      TASK_WORKER: [
+        :DefinitionsRead,
+        :InstancesRead,
+        :TasksRead,
+        :TasksComplete,
+        :AttachmentsRead,
+        :EntitiesDefinitionsRead,
+        :EntitiesQuery,
+        :EntitiesAggregate,
+        :EntitiesAttachmentsRead,
+        :HelpRead,
+        :MembershipsRead
+      ],
+      AGENT_RUNNER: [:HelpRead, :MembershipsRead],
+      CANDIDATE: [
+        :ExamSessionStart,
+        :ExamSessionRead,
+        :ExamSessionSave,
+        :ExamSessionSubmit,
+        :ExamSessionReportEvent,
+        :ExamCertificateIssue
+      ]
+    }
+
+    test "the regression grid is complete: 6 roles x 38 pre-existing core permissions = 228 pairs" do
+      assert length(@pre_req401_permissions) == 38
+      assert Enum.sort(Map.keys(@pre_req401_allowed)) == Enum.sort(Authorization.roles())
+
+      assert Authorization.core_permissions() == @pre_req401_permissions ++ [:ModulesManage]
+
+      pair_count = length(Authorization.roles()) * length(@pre_req401_permissions)
+      assert pair_count == 228
+    end
+
+    test "all 228 pre-existing (role, permission) pairs return exactly what they returned before REQ-401" do
+      for role <- Authorization.roles(), permission <- @pre_req401_permissions do
+        expected = permission in Map.fetch!(@pre_req401_allowed, role)
+        actual = Authorization.role_allows?(role, permission)
+
+        assert actual == expected,
+               "REGRESSION: role_allows?(#{inspect(role)}, #{inspect(permission)}) is now " <>
+                 "#{inspect(actual)} but was #{inspect(expected)} before REQ-401. This " <>
+                 "change must be purely additive -- no existing role/permission pair may " <>
+                 "change hands."
+      end
     end
   end
 

@@ -164,7 +164,12 @@ defmodule Letflow.Modules.Catalog do
   end
 
   defp validate_no_core_permission_collision(manifest) do
-    core_permissions = Authorization.permissions()
+    # REQ-401: Authorization.permissions/0 now includes every registered
+    # module's own permissions (this module's own permissions/0 union folded
+    # in); this check must compare against core's permissions alone
+    # (Authorization.core_permissions/0), or every module would trivially
+    # collide with itself.
+    core_permissions = Authorization.core_permissions()
 
     manifest.permissions
     |> Enum.find(fn permission -> permission in core_permissions end)

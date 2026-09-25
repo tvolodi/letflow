@@ -1,0 +1,226 @@
+{
+  "handoff_id": "WF03-ISS0816-20260925-step-03",
+  "run_id": "WF03-ISS0816-20260925",
+  "workflow_id": "WF-03",
+  "step": "Step 3",
+  "from_agent": "FRONTEND-DEV",
+  "to_agent": "ORCH",
+  "file": "handoffs/WF03-ISS0816-20260925/step-03-frontend-dev.json",
+  "created_at": "2026-09-25T00:19:37Z",
+  "started_at": "2026-09-25T00:19:37Z",
+  "completed_at": "2026-09-25T01:05:00Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "rework_count": 0,
+  "max_rework": 2,
+  "context": {
+    "stage": "S8",
+    "issue_id": "ISS-0816",
+    "queue_ref": "Q-816",
+    "github_ref": "GH-1804",
+    "requirement_ids": [],
+    "branch_name": "feature/WF03-ISS0816-20260925",
+    "base_commit": "688f29cf",
+    "implementation_commit": "64b87055d3556b2d5776cfe7a29848c61e09c006",
+    "requirement_text": "ISS-0816 (queue task 816). CursorPage<T> declared a has_more field. No Letflow route emits has_more on the wire -- the issue's original premise that lib/letflow/audit.ex does was refuted by ISSUE-FIXER at Step 1, and docs/issues/ISS-0816.yaml carries the correction inline. The field therefore covered zero wire shapes, and two frontend call sites fabricated it client-side from Boolean(next_cursor) purely to satisfy the type they were declared to return. The fix is to delete the field, split the envelope along the axis the backend genuinely varies on (two-key {items, next_cursor} versus three-key {items, next_cursor, count}), retype every call site to the envelope its route actually emits, record the route-to-shape mapping so a later reader need not re-derive it, and close AC3's GroupsPage member-list truncation.",
+    "design_authority": "lib/letflow/design/iss-0816-cursorpage-has-more-audit.md at commit bf4e7ded (revision 3), PASSED by CODE-DESIGN-VALIDATOR at commit 01467558 after two rejections. Implemented as specified; no design decision re-litigated.",
+    "artifacts_in": [
+      "lib/letflow/design/iss-0816-cursorpage-has-more-audit.md",
+      "handoffs/WF03-ISS0816-20260925/step-01-issue-fixer.json",
+      "handoffs/WF03-ISS0816-20260925/step-02b-design-gate-rework2.json",
+      "docs/issues/ISS-0816.yaml",
+      "web/src/types/api.ts",
+      "web/src/api/audit.ts",
+      "web/src/api/identity.ts",
+      "web/src/api/instances.ts",
+      "web/src/api/modules.ts",
+      "web/src/api/promotions.ts",
+      "web/src/api/tasks.ts",
+      "web/src/pages/admin/AuditLogPage.tsx",
+      "web/src/pages/admin/GroupsPage.tsx",
+      "web/src/api/__tests__/identity.groupsApi.test.ts",
+      "web/src/pages/dlq/__tests__/DlqPage.pagination.test.tsx",
+      "web/tests/guards/forbidlist.ts",
+      "web/tests/guards/meta-control.spec.ts",
+      "web/tests/guards/source-scan.spec.ts"
+    ]
+  },
+  "task": {
+    "description": "WF-03 Step 3 (implement) for ISS-0816, building exactly what lib/letflow/design/iss-0816-cursorpage-has-more-audit.md specifies after that design passed a hard CODE-DESIGN-VALIDATOR gate on rework iteration 2. The work has five separable parts and one explicit anti-goal. Part one is the type correction: delete the fabricated field from CursorPage<T> so it becomes the exact two-key envelope {items, next_cursor}; add CountedCursorPage<T> as the three-key envelope {items, next_cursor, count}; give both docblocks the route-to-shape mapping of design section 2.2 so AC4's recording obligation is met in the type file and not only in the design document; collapse EntityRecordsPage and GroupMemberPage to aliases with their exported names retained so no call site churns; and leave TenantListResponse alone as a recorded deliberate non-change. Part two is the call-site retype: move audit, instances and both tasks routes to CountedCursorPage<T>, delete audit.ts's module-private RawAuditPage, and delete both client-side fabrication sites (audit.ts and promotions.ts), taking promotions.ts's whole now-identity .then mapping with them. Part three is modules.ts, which gets a provenance comment only and no type change, because /admin/modules and /admin/module-shares have no server at all (ISS-0822) and CursorPage<T> is the deliberate weakest claim there. Part four is AC3: groupsApi.members gains optional cursor/page_size, a new groupsApi.listAllMembers drains next_cursor under a bounded cap of 20 requests at 200 per page and reports truncated only when members were genuinely left unfetched, and GroupsPage consumes the drain so availableUsers -- a set difference, design INV-D -- is computed from the complete member set rather than page one of it. Part five is the recurrence backstop: a new T7 forbidlist entry named has-more-wire-field whose five-alternative regex matches the code forms of the field only, so a docblock may still name it in order to say it does not exist, plus T8's two GRD-UI-04 fixtures. The anti-goal: nothing outside this scope is touched -- not TimelineFeed's unrelated camelCase hasMore prop, not the other three ISS-0821 fixtures, not meta-control.spec.ts, and no existing forbidlist pattern or ISS-0765 assertion is weakened in any way to make anything pass.",
+    "acceptance_criteria": [
+      "AC1 -- every CursorPage<T> call site is mapped to the envelope its route actually emits, and that mapping is recorded where a later reader will find it: the CursorPage<T> and CountedCursorPage<T> docblocks in web/src/types/api.ts each list their routes with the response builder's file:line, so AC4's recording obligation is satisfied in the type file itself and not only in the design document",
+      "AC2 -- no call site is promised a field the route never sends: the field is deleted from CursorPage<T>, CountedCursorPage<T> is added, the thirteen sites of design section 5.2 are retyped, audit.ts's module-private RawAuditPage is deleted, and both client-side fabrication sites (audit.ts:71 and promotions.ts:265) are removed along with promotions.ts's whole now-identity .then callback and its inline anonymous response type",
+      "AC3 -- the GroupsPage members dialog follows next_cursor: groupsApi.members accepts cursor/page_size, groupsApi.listAllMembers drains to exhaustion under a 20-request/200-per-page bound, reports truncated ONLY when the cap stopped it with a non-null cursor outstanding (reaching the cap on a final null cursor is completion, not truncation), rejects on the first failed request, and GroupsPage consumes the drain so availableUsers is a set difference over the COMPLETE member set; the truncation notice covers only the pathological capped case",
+      "AC4 -- npm run type-check passes with real quoted output, and all four verification commands (type-check, lint, test, guards) are run from web/ and quoted verbatim, never asserted",
+      "AC5 -- T7's forbidlist entry is transcribed character-for-character from design section 7.1 with all five alternatives, appliesTo 'source', and allowedPaths of exactly the two ISS-0821 fixtures; web/src/types/api.ts and web/src/api/__tests__/identity.groupsApi.test.ts both pass UNEXEMPTED; no existing forbidlist pattern is weakened and no allowedPaths entry is added beyond those two",
+      "AC6 -- T8's offender and bystander fixtures exist with the contents design section 7.1 specifies, and GRD-UI-04's meta-control passes for the new pattern in both directions",
+      "AC7 -- T9: BOTH ISS-0765 surface guards are EXTENDED, never relaxed -- T-0765-SURFACE's exact-equality key list gains listAllMembers in sort order, and the hand-maintained surfaceRows array at :252-259 gains its own row DELIBERATELY even though it never goes red; the file goes 16 to 17 green",
+      "AC8 -- scope: no ISS-0811/0812/0813/0814/0815/0820/0822/0823 fix, no ISS-0821 fixture edit beyond DlqPage.pagination.test.tsx (a hard compile blocker), no change to meta-control.spec.ts, no change to TimelineFeed.tsx, nothing under lib/",
+      "AC9 -- committed AND pushed to origin/feature/WF03-ISS0816-20260925 with no divergence, and this handoff passes mix letflow.lint_handoffs single-file mode before the step completes"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "gate_decision": "PASS -- the design is implemented as written. All four verification commands are green and quoted from real runs. Two findings are reported rather than fixed: one pre-existing GroupsPage render loop under real react-query (measured against the UNMODIFIED page), and the absence of a running instance for live browser verification.",
+    "summary": {
+      "headline": "The fabricated field is gone from web/. CursorPage<T> is now exactly {items, next_cursor}; CountedCursorPage<T> is exactly {items, next_cursor, count}; both carry the route-to-shape mapping in their docblocks. Both fabrication sites are deleted. groupsApi.listAllMembers drains the member cursor so GroupsPage's Add-member dropdown is derived from the complete member set. T7's guard is in place and fires on all five code spellings while leaving the required prose legal.",
+      "verification_commands": {
+        "note": "All four run from web/ on commit 64b87055 with the final tree, after the T6 rewrite described in result.findings.finding_1. Output quoted verbatim.",
+        "type_check": {
+          "command": "npm run type-check",
+          "output": "> letflow-web@0.1.0 type-check\n> tsc -b tsconfig.json",
+          "exit_code": 0
+        },
+        "lint": {
+          "command": "npm run lint",
+          "output": "> letflow-web@0.1.0 lint\n> eslint . --ext ts,tsx --report-unused-disable-directives --max-warnings 0",
+          "exit_code": 0
+        },
+        "test": {
+          "command": "npm test",
+          "output": " Test Files  127 passed (127)\n      Tests  901 passed (901)\n   Start at  05:56:28\n   Duration  16.42s (transform 6.95s, setup 0ms, collect 61.10s, tests 19.54s, environment 111.17s, prepare 20.01s)",
+          "exit_code": 0,
+          "delta_from_baseline": "125 files / 890 tests at the design's measured baseline -> 127 files / 901 tests. +2 files (identity.members.test.ts, GroupsPage.members.test.tsx) and +11 tests: 6 drain tests (T4, T4b, T5, T5b, T5c, error propagation), 4 GroupsPage tests (T6 and its three companions), and 1 from T9's seventh surfaceRows case."
+        },
+        "guards": {
+          "command": "npm run guards",
+          "output": " Test Files  4 passed (4)\n      Tests  52 passed (52)\n   Start at  05:57:08\n   Duration  11.39s (transform 122ms, setup 0ms, collect 263ms, tests 11.07s, environment 1ms, prepare 373ms)",
+          "exit_code": 0,
+          "source_scan": "0 violations. The assertion 'web/src/**/*.{ts,tsx,css} has no guard violations' passed with web/src/types/api.ts carrying the required docblock prose naming the field and web/src/api/__tests__/identity.groupsApi.test.ts:63 untouched and UNEXEMPTED. Exactly the 4 files / 52 tests the design measured (48 pre-T7 plus 4 new has-more-wire-field fixture assertions)."
+        }
+      },
+      "final_type_shapes": {
+        "CursorPage": "export interface CursorPage<T> { items: T[]; next_cursor: string | null } -- web/src/types/api.ts:13-38. Docblock lists all seven two-key call sites (definitions, definitions/search, dlq, services, admin/services, promotions, entities/query) each with its response builder at file:line, states that no Letflow route emits the field and names lib/letflow/routers/audit.ex:308-320 as where the internal one is dropped, and restates INV-C.",
+        "CountedCursorPage": "export interface CountedCursorPage<T> { items: T[]; next_cursor: string | null; count: number } -- web/src/types/api.ts:40-63. Docblock lists all seven three-key routes (audit, instances, tasks, tasks/inbox, tenants, identity/users, identity/groups/:id/members) with their builders, and carries INV-B: count is length(items) for the current page only, never a cross-page total.",
+        "EntityRecordsPage": "export type EntityRecordsPage<T = EntityRecord> = CursorPage<T> -- alias, exported name and default type argument retained, zero call-site churn. The docblock's old rationale replaced with the two-key statement.",
+        "GroupMemberPage": "export type GroupMemberPage = CountedCursorPage<GroupMember> -- alias, exported name retained, so identity.ts:7 and its call sites are untouched. Docblock keeps the pagination.ex:81 @derive citation and drops the obsolete sentence.",
+        "TenantListResponse": "UNCHANGED, deliberately (design decision (b)). Recorded here so a future reader does not read it as an oversight."
+      },
+      "final_groupsApi_shape": {
+        "functions_in_sort_order": [
+          "addMember",
+          "create",
+          "delete",
+          "list",
+          "listAllMembers",
+          "members",
+          "removeMembers"
+        ],
+        "members": "members: (id: string, params?: { cursor?: string; page_size?: number }) => Promise<GroupMemberPage> -- the faithful single-page wire call, envelope returned unreshaped (ISS-0765 INV-B, no .items unwrap). params forwarded as the query object in usersApi.list's style. Existing callers passing only id keep compiling.",
+        "listAllMembers": "listAllMembers: (id: string) => Promise<{ items: GroupMember[]; truncated: boolean }> -- the bounded drain. page_size 200 (MEMBER_DRAIN_PAGE_SIZE, pagination.ex:50 @max_page_size), at most 20 requests (MEMBER_DRAIN_MAX_REQUESTS, a 4000-member ceiling), feeds each next_cursor into the next request's cursor, concatenates in request order, returns truncated:false the moment a response carries a null next_cursor -- including on the 20th, so a group of exactly 4000 is complete rather than truncated -- and truncated:true only when the 20th response still advertised more. A 21st request is never issued. Rejects on the first failed request, leaving useQuery's error handling unchanged.",
+        "both_constants": "Declared as named module-level constants with their backend citation, not inline magic numbers."
+      },
+      "surfaceRows_confirmation": "CONFIRMED AND DELIBERATE. Both ISS-0765 guards were EXTENDED; neither was relaxed. (i) T-0765-SURFACE at web/src/api/__tests__/identity.groupsApi.test.ts:229 went RED on its own the moment groupsApi had a seventh key, exactly as the design predicted; listAllMembers was inserted in sort order between list and members. (ii) T-0765-NO-ADMIN-PREFIX's hand-maintained surfaceRows array at :252-259 STAYED GREEN and would have gone on passing at 16/16 while silently leaving listAllMembers unchecked for the /api/v1/admin/ prefix, because it.each iterates the array and not Object.keys(groupsApi). The row ['listAllMembers', () => groupsApi.listAllMembers('g-1')] was added deliberately, not in response to any failing test. It works unmodified: the shared spy resolves WIRE_MEMBER_PAGE, whose next_cursor is null, so the drain terminates after exactly one request and captured()'s single-call expectation holds. A block comment above the array records why the row had to be added by hand. Measured: the file went 16 -> 17 green.",
+      "t7_entry_as_written": {
+        "file": "web/tests/guards/forbidlist.ts",
+        "name": "has-more-wire-field",
+        "regex_source": "/\\.has_more\\b|\\bhas_more\\s*\\??\\s*:|[\"']has_more[\"']|\\bhas_more\\s*[,}]|\\b(?:const|let|var)\\s+has_more\\b/",
+        "appliesTo": "source",
+        "allowedPaths": [
+          "web/src/pages/promotions/__tests__/PromotionReviewListPage.test.tsx",
+          "web/src/pages/tasks/__tests__/TaskInboxPage.test.tsx"
+        ],
+        "rationale": "ISS-0816",
+        "transcription_note": "Five alternatives, transcribed character-for-character from design section 7.1: property access; object-literal/type-member/optional-member/renamed-destructure key; string-literal key; ES6 shorthand; and a const/let/var binding of the name. Verified byte-identical against the design text before running anything.",
+        "exemption_note": "Exactly the two ISS-0821 fixtures, with an inline comment saying both entries are deleted when ISS-0821 lands. web/src/types/api.ts and web/src/api/__tests__/identity.groupsApi.test.ts are NOT exempted and both pass -- that they do is the fix. No existing pattern was weakened and no other allowedPaths entry was added.",
+        "docblock_authoring_rule_applied": "Every prose mention of the token in the new api.ts docblocks is inside backticks and is never immediately followed by a colon, comma or brace. Confirmed by source-scan reporting zero violations with those docblocks in place."
+      },
+      "per_site_changes": {
+        "web/src/types/api.ts": "The field deleted from CursorPage<T>; CountedCursorPage<T> added with the section-4 docblock; EntityRecordsPage and GroupMemberPage collapsed to aliases; TenantListResponse untouched.",
+        "web/src/api/audit.ts": "import switched to CountedCursorPage; module-private RawAuditPage interface deleted; auditApi.list returns Promise<CountedCursorPage<AuditEntry>> and calls client.get<CountedCursorPage<RawAuditEntry>>; the fabrication at :71 replaced by count: response.count. Per OQ-1, no UI was invented for count.",
+        "web/src/pages/admin/AuditLogPage.tsx": "import and useAuditLog's UseQueryResult<...> moved to CountedCursorPage<AuditEntry>.",
+        "web/src/api/instances.ts": "import block entry and client.get type argument moved to CountedCursorPage<ProcessInstance>.",
+        "web/src/api/tasks.ts": "import, normalizeTaskPage's parameter and return type, and both client.get type arguments moved to CountedCursorPage. The object-spread shape is unchanged, so count propagates without a new field reference.",
+        "web/src/api/promotions.ts": "docblock rewritten to state the exact two-key envelope with its builder at file:line and that CursorPage<T> now models it exactly; the inline anonymous response type, the .then and its callback all removed; client.get<CursorPage<PromotionReviewListItem>> returned directly with the same query-param object.",
+        "web/src/api/modules.ts": "no type change. Two provenance comments added, one above modulesApi.list and one above modulesApi.listShares, recording that the routes have no server (router.ex:82, deferred to S5, ISS-0822) and that CursorPage<T> here is the deliberate weakest claim rather than a verified shape.",
+        "web/src/api/identity.ts": "GroupMember added to the type import; MEMBER_DRAIN_PAGE_SIZE and MEMBER_DRAIN_MAX_REQUESTS declared with their backend citations; members/2 gained its params argument; listAllMembers/1 added.",
+        "web/src/pages/admin/GroupsPage.tsx": "the members useQuery's queryFn moved to groupsApi.listAllMembers; membersTruncated derived from the drain result; a role=status notice rendered above the member list only when truncated is true. Query key tenantKeys.admin.groupMembers(activeGroupId) unchanged; no new react-query pattern introduced; availableUsers itself untouched, and now correct because members is complete.",
+        "web/src/pages/dlq/__tests__/DlqPage.pagination.test.tsx": "three fixture pages drop their obsolete key. This is the hard compile blocker of design section 5.6, not the ISS-0821 fix; the other three ISS-0821 sites were left alone as the design requires.",
+        "web/src/api/__tests__/identity.groupsApi.test.ts": "T9's two edits, described in result.summary.surfaceRows_confirmation.",
+        "web/tests/guards/forbidlist.ts": "the T7 entry, inserted before test-only-or-skip. No other entry touched.",
+        "web/tests/guards/fixtures/offender/has-more-wire-field.txt": "new. Carries a form for each of the five alternatives: object-literal key and type member, property access, string-literal key, a const declaration, an ES6 shorthand literal, and a renamed destructure. Its header states plainly that meta-control tests the whole file so these forms document rather than individually pin the coverage -- see finding_3.",
+        "web/tests/guards/fixtures/bystander/has-more-wire-field.txt": "new. Carries the prose form inside backticks including the backtick-then-colon, backtick-then-comma and backtick-then-brace near misses; the clean {items, next_cursor} and {items, next_cursor, count} literals; and TimelineFeed's camelCase hasMore as a type member, a bare const, an object shorthand and a JSX attribute.",
+        "web/src/api/__tests__/identity.members.test.ts": "new. T4, T4b, T5, T5b, T5c and error propagation.",
+        "web/src/pages/admin/__tests__/GroupsPage.members.test.tsx": "new. T6 plus the drain-not-single-page assertion and both branches of the truncation notice."
+      },
+      "scope_discipline": {
+        "not_touched": "TimelineFeed.tsx (unrelated camelCase hasMore; the bystander fixture makes its immunity mechanical). meta-control.spec.ts (out of scope per the dispatch and per the gate's own MINOR). PromotionReviewListPage.test.tsx and TaskInboxPage.test.tsx (ISS-0821, exempted not edited). obs04.timeline.e2e.spec.ts (outside src/**). TenantListResponse (deliberate non-change). Nothing under lib/. No ISS-0811/0812/0813/0814/0815/0820/0822/0823 work.",
+        "forbidlist_integrity": "No existing pattern's regex, appliesTo or allowedPaths was modified. The only change to forbidlist.ts is the insertion of one new entry.",
+        "iss_0765_integrity": "No ISS-0765 assertion was loosened. Both guards were extended in the strengthening direction."
+      }
+    },
+    "findings": {
+      "finding_1": {
+        "severity": "MINOR",
+        "kind": "pre-existing-defect-found-while-testing",
+        "title": "GroupsPage's member dialog spins the event loop indefinitely under real @tanstack/react-query in jsdom -- measured against the UNMODIFIED page, so it predates ISS-0816",
+        "detail": "T6 was first written with a real QueryClientProvider and the API module mocked (the InstancePinsPanel.test.tsx precedent), because that exercises the actual query the page issues. Rendering the page is fine; clicking Manage members opens the dialog correctly -- the select element is present in the DOM immediately after the click -- and then the event loop never yields again: a setTimeout(50) after the click never fires, --testTimeout cannot fire either, and the worker was measured burning roughly 110 percent of one core (node PID CPU 20s -> 28.8s over an 8-second window). It reproduces with the dialog's two queries stubbed to never-resolving promises, so it is not the drain resolving and not react-query refetching. DECISIVE MEASUREMENT: I checked out the UNMODIFIED web/src/pages/admin/GroupsPage.tsx from HEAD, re-ran the same probe with groupsApi.members mocked instead, and it hung identically. The loop therefore predates this run and is not caused by listAllMembers or by the truncation notice. It has no existing test coverage because there was no GroupsPage component test before this one. NOT FIXED HERE -- diagnosing a render loop in a page whose only in-scope change is one queryFn and one conditional notice is outside ISS-0816's scope, and the design does not authorise it. T6 was rewritten on the repo's other established pattern (useQuery/useMutation/useQueryClient mocked, as EntityCrudPage.test.tsx and DlqPage.pagination.test.tsx do), which renders the dialog in 121ms and still carries the assertion that matters: the useQuery double invokes the page's own queryFn, so a spy proves the page calls groupsApi.listAllMembers and never groupsApi.members. The new test file carries a header note recording all of this for the next agent. Recommend ORCH file it.",
+        "affected_files": [
+          "web/src/pages/admin/GroupsPage.tsx"
+        ]
+      },
+      "finding_2": {
+        "severity": "MINOR",
+        "kind": "verification-limitation",
+        "title": "No live browser verification was possible -- no running instance on this host",
+        "detail": "frontend-dev.md requires a browser check for integration-touching work, and listAllMembers is integration-touching. Measured rather than assumed: curl to http://localhost:4000/health and http://localhost:5173/ both returned no connection, and docker ps failed with 'failed to connect to the docker API at npipe:////./pipe/dockerDesktopLinuxEngine' -- the Docker daemon is not running, so Postgres and the API cannot be brought up without starting a machine-level application. Stated explicitly per the No Speculation directive rather than claimed as done or quietly skipped. What IS evidenced: the drain's request sequence, cursor forwarding, cap, truncated semantics at and below the cap, and error propagation are all measured against a real window.fetch double capturing real URLs (web/src/api/__tests__/identity.members.test.ts), including that every drained URL carries page_size=200, that page two carries cursor=c2, and that none dials /api/v1/admin/. Live verification against a real backend belongs to UAT-RUNNER."
+      },
+      "finding_3": {
+        "severity": "INFO",
+        "kind": "design-text-correction-observed-not-fixed",
+        "title": "Design section 7.1's 'mechanically pinned' sentence is false, as the gate already recorded",
+        "detail": "Section 7.1 claims the extended offender fixture pins each of T7's five alternatives so a future edit cannot silently drop one. It does not: meta-control asserts regex.test(content) over the whole fixture file, so any one surviving alternative satisfies it. The gate measured this by deleting alternative 4 and watching meta-control still pass 48/48. The fixture's specified CONTENTS are correct and were built exactly as written; only the guarantee is overstated. The offender fixture's own header now says so in plain terms, so the next reader of the fixture is not misled by the design text. meta-control.spec.ts was NOT edited -- out of scope, and ORCH has routed the sentence to DOC-UPDATER."
+      }
+    },
+    "acceptance_criteria_coverage": {
+      "AC1": "MET -- both docblocks carry the route-to-shape mapping with builders at file:line. Verified present in the committed web/src/types/api.ts.",
+      "AC2": "MET -- measured: tsc -b exit 0 with the field deleted, 13 sites retyped, RawAuditPage gone and both fabrications removed.",
+      "AC3": "MET -- T4/T4b/T5/T5b/T5c and the error-propagation case all green against a real fetch double; T6 green proving the dropdown excludes a second-page member and that the page calls the drain, not members.",
+      "AC4": "MET -- all four commands run from web/ and quoted verbatim in result.summary.verification_commands, with exit codes.",
+      "AC5": "MET -- regex transcribed character-for-character, five alternatives, appliesTo source, two exemptions only; source-scan 0 violations with api.ts and identity.groupsApi.test.ts both unexempted.",
+      "AC6": "MET -- guards report 52 tests including all four has-more-wire-field fixture assertions (offender exists, bystander exists, matches offender, does NOT match bystander).",
+      "AC7": "MET -- both guards extended, surfaceRows row added deliberately, 16 -> 17 green. See result.summary.surfaceRows_confirmation.",
+      "AC8": "MET -- see result.summary.scope_discipline. git show --stat on 64b87055 touches 16 files, all under web/, all named in the design.",
+      "AC9": "MET -- commit 64b87055 pushed to origin/feature/WF03-ISS0816-20260925; git status -sb reports no ahead/behind divergence. Handoff linted in single-file mode before completion."
+    },
+    "verification_commands_run": [
+      "cd web && npm run type-check  -- exit 0",
+      "cd web && npm run lint  -- exit 0",
+      "cd web && npm test  -- 127 files / 901 tests passed, exit 0",
+      "cd web && npm run guards  -- 4 files / 52 tests passed, source-scan 0 violations, exit 0",
+      "cd web && npx vitest run src/api/__tests__/identity.members.test.ts src/api/__tests__/identity.groupsApi.test.ts  -- 23 tests passed, confirming the groupsApi surface file at 17",
+      "node -e regex check of T7 against both fixtures before wiring it in  -- offender true, bystander false",
+      "curl -s -m 5 http://localhost:4000/health and http://localhost:5173/  -- both unreachable (finding_2)",
+      "docker ps  -- daemon not running (finding_2)",
+      "git checkout of the UNMODIFIED GroupsPage.tsx plus the same probe  -- reproduced the render loop, proving it predates this run (finding_1)",
+      "git push origin feature/WF03-ISS0816-20260925 followed by git status -sb  -- no divergence",
+      "mix letflow.lint_handoffs --dir handoffs/WF03-ISS0816-20260925/step-03-frontend-dev.json  -- run against this file before completing the step"
+    ],
+    "next_action": "Route to SECURITY-REVIEWER, then REVIEWER, per WF-03. This change touches tenant-data-path response shaping (envelope types across eleven routes) and adds a new multi-request drain against a tenant-scoped identity endpoint, so SECURITY-REVIEWER is not optional. REVIEWER should gate on scope creep against result.summary.scope_discipline and on the forbidlist and ISS-0765 integrity claims, both checkable directly from the diff. ORCH should additionally file finding_1 (pre-existing GroupsPage render loop under real react-query) as its own issue, and note that finding_3's design-text correction is already routed to DOC-UPDATER.",
+    "notes": [
+      "The design was implemented as written. No decision in it was re-litigated, and no element was deferred.",
+      "OQ-1 respected: count is now carried faithfully by auditApi.list but no UI was invented for it.",
+      "OQ-2 respected: the 20-request cap is a named constant with its rationale recorded at the declaration.",
+      "Timestamps in this file are this host's real UTC from date -u, not the session date. This host reads roughly eight hours behind the orchestrator log lines written by a sibling host, as ISSUE-FIXER already recorded for this run; the ordering is genuine, not backdated.",
+      "No file outside web/ and handoffs/ was modified by this step. Nothing under lib/ changed."
+    ],
+    "artifacts_out": [
+      "web/src/types/api.ts",
+      "web/src/api/audit.ts",
+      "web/src/api/identity.ts",
+      "web/src/api/instances.ts",
+      "web/src/api/modules.ts",
+      "web/src/api/promotions.ts",
+      "web/src/api/tasks.ts",
+      "web/src/pages/admin/AuditLogPage.tsx",
+      "web/src/pages/admin/GroupsPage.tsx",
+      "web/src/api/__tests__/identity.groupsApi.test.ts",
+      "web/src/api/__tests__/identity.members.test.ts",
+      "web/src/pages/admin/__tests__/GroupsPage.members.test.tsx",
+      "web/src/pages/dlq/__tests__/DlqPage.pagination.test.tsx",
+      "web/tests/guards/forbidlist.ts",
+      "web/tests/guards/fixtures/offender/has-more-wire-field.txt",
+      "web/tests/guards/fixtures/bystander/has-more-wire-field.txt"
+    ]
+  }
+}

@@ -748,3 +748,51 @@ history:
       `resolved` in docs/issues/ISS-0817.yaml. No docs/migration/stage-N-*.md
       or decisions/*.md file was named by this issue's fix_direction. Merged
       via PR on fix/ISS-0817-attachment-viewer-flake.
+  - req: SCOPE-CHANGE
+    event: done
+    agent: DOC-UPDATER
+    at: "2026-09-25T00:40:32Z"
+    note: >
+      ISS-0772 (MINOR, queue task 807, GH-1795 -- Letflow.Secrets.LogFilter
+      only redacted Logger metadata, never message-interpolated content, but
+      the ISS-0771 design doc and MigrationReplayBoot's own moduledoc
+      falsely claimed full coverage) resolved and merged, PR #1816 merged
+      as e2298ea9. Fixed per suggested_fix option (b): converted the three
+      Logger calls in migration_replay_boot.ex to pass tenant_id/
+      schema_name/reason as Logger metadata instead of string-interpolating
+      them, so LogFilter's existing metadata-only redaction genuinely
+      covers this call site. Corrected both docs' overclaim in two stages:
+      an initial pass, then a narrower follow-up fix after SECURITY-REVIEWER
+      caught that the first correction was itself still a partial overclaim.
+      Added 2 regression tests confirming the converted calls pass values as
+      metadata, not interpolated into the message. Validation chain, all
+      independently confirmed: SECURITY-REVIEWER (CONDITIONAL-PASS, one
+      doc-overclaim finding, fixed in the same run), REVIEWER (PASS),
+      TEST-DESIGN-VALIDATOR (PASS, real mutation-reproduction on 2 mutants),
+      TEST-RUNNER (full suite 4835/4837, the 2 failures independently
+      root-caused to a genuinely new, unrelated pre-existing bug filed
+      separately as ISS-0827 -- test/letflow/router_test.exs's stale
+      REQ-070 AC5 deferred-route count), RELEASE-VALIDATOR (PASS on all 3
+      acceptance criteria, own fresh mutation-reproduction). DOC-UPDATER
+      rebased the branch onto origin/main and ran `mix letflow.check`
+      fresh: the only failure was `letflow.lint_handoffs`, 33 new
+      violations under handoffs/WF03-BATCH-*-20260925/,
+      handoffs/WF03-ISS0806-20260925/, and handoffs/WF03-ISS0808-20260925/
+      -- wider than the 11-violation, WF03-ISS0808-only count ISS-0826's
+      own resolution had recorded, since concurrent sessions kept landing
+      new handoffs and the original ISS-0826 fix commit had missed each
+      BATCH-* run's own step-05-issue-fixer.json/step-release-validator.json.
+      Confirmed same class/root cause as ISS-0826 (no test failures, no
+      compile errors, nothing touching this branch's own files) and updated
+      ISS-0826 (commit 4a6016ba, pushed directly to main) to record the
+      growth and clarify its `resolved` means "as investigated at the
+      time," not "count is zero" -- an expected, self-refilling condition
+      until concurrent sessions finish cleanly or adopt ISS-0819's
+      single-file lint mode. ORCH then admin-merged PR #1816 after
+      independently confirming CI's sole failure was exactly that same
+      known lint_handoffs-only backlog (35 violations at merge time, same
+      class). Status flipped to `resolved` in docs/issues/ISS-0772.yaml. No
+      docs/migration/stage-N-*.md or decisions/*.md file was named by this
+      issue's suggested_fix. README.md not touched -- no documented
+      current-behavior surface describing LogFilter/MigrationReplayBoot
+      logging to keep in sync. Queue task 807 released done.

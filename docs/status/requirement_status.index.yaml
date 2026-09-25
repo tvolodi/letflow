@@ -4610,8 +4610,18 @@ volumes:
     path: docs/status/requirement_status.v22.yaml
     status: current
     opened: 2026-09-22
-    entries: 23
+    entries: 24
     note: >
+      Incremented to 24 by DOC-UPDATER's own ISS-0772 SCOPE-CHANGE done-event
+      append (fix/ISS-0772-logfilter-metadata, 2026-09-25T00:40:32Z --
+      LogFilter metadata-only redaction fix + two-stage doc correction,
+      merged as e2298ea9/PR #1816; also updated ISS-0826, commit 4a6016ba,
+      to record its backlog had grown since its own last count). `grep -c
+      "^  - req:" docs/status/requirement_status.v22.yaml` = 24 on-disk
+      entries, recounted directly rather than assumed. 798 lines / 48644
+      bytes, well under the 1200-line/120000-byte roll ceiling, so no roll
+      triggered. Prior notes preserved below verbatim.
+
       Incremented to 23 by DOC-UPDATER's own ISS-0817 SCOPE-CHANGE done-event
       append (fix/ISS-0817-attachment-viewer-flake, 2026-09-24T23:41:31Z --
       D1 blob-URL/iframe assertion race in AttachmentViewerPage.test.tsx,

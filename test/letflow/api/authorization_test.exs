@@ -2209,7 +2209,6 @@ defmodule Letflow.Api.AuthorizationTest do
         assert actual == expected,
                "role_allows?(:CANDIDATE, #{inspect(permission)}) returned #{inspect(actual)}, " <>
                  "expected #{inspect(expected)} -- CANDIDATE must hold exactly its seven " <>
-<<<<<<< HEAD
                  "ExamSession*/ExamCertificateIssue/MyModulesRead permissions and nothing else " <>
                  "(ISS-0646, decision 0013 addendum; REQ-355 added :ExamCertificateIssue, " <>
                  "REQ-403 added :MyModulesRead to this set)"

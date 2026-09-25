@@ -48,4 +48,35 @@ defmodule Letflow.Secrets.LogFilterTest do
     assert log =~ "req-123"
     refute log =~ "[REDACTED]"
   end
+
+  # ISS-0772 regression: LogFilter.filter/2 redacts only `log_event.meta` --
+  # never `log_event.msg` -- so a value interpolated into the message string
+  # is NOT redacted, even under a sensitive-looking name. This confirms the
+  # existing (narrower-than-docs-once-claimed) behavior is unchanged, and is
+  # exactly why `Letflow.TenantProvisioning.MigrationReplayBoot` was changed
+  # (ISS-0772 fix) to pass its variable data as metadata rather than
+  # interpolating it into the message.
+  test "a value interpolated into the message string is NOT redacted, even if secret-shaped" do
+    secret = "sh-do-not-leak-me"
+
+    log =
+      capture_log([metadata: :all], fn ->
+        Logger.info("webhook signing key resolved: secret=#{secret}")
+      end)
+
+    assert log =~ secret
+    refute log =~ "[REDACTED]"
+  end
+
+  test "passing the same value as metadata instead of interpolating it IS redacted" do
+    secret = "sh-do-not-leak-me"
+
+    log =
+      capture_log([metadata: :all], fn ->
+        Logger.info("webhook signing key resolved", secret: secret)
+      end)
+
+    assert log =~ "[REDACTED]"
+    refute log =~ secret
+  end
 end

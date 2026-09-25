@@ -68,4 +68,6 @@ fix_direction: >
   exact wire casing in both directions so the two cannot drift apart again.
 queue_ref: "Q-814"
 github_ref: "GH-1802"
-status: open
+status: resolved
+resolved_in_run: WF03-BATCH-ISS0809-ISS0811-ISS0814-ISS0815-20260925
+resolved_at: "2026-09-25T00:01:40Z"

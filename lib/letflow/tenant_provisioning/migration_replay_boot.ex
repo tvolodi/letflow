@@ -29,10 +29,23 @@ defmodule Letflow.TenantProvisioning.MigrationReplayBoot do
   fast, safe no-op every time.
 
   Logs one line per failing tenant (`tenant_id`, `schema_name`, `reason`)
-  plus one always-logged summary line after the loop completes (`"N ok, M
-  failed"`), including the healthy `0 failed` case -- a boot-time step this
+  plus one always-logged summary line after the loop completes (ok/error
+  counts), including the healthy `0 failed` case -- a boot-time step this
   significant logging nothing on the healthy path is exactly the kind of gap
   that let ISS-0771 ship invisibly the first time.
+
+  ISS-0772: `tenant_id`, `schema_name`, and `reason` (and the rescue clause's
+  formatted exception) are passed as `Logger` **metadata**, not interpolated
+  into the message string. `Letflow.Secrets.LogFilter` (registered in
+  `Letflow.Application.start/2`) redacts only `log_event.meta` -- it never
+  inspects `log_event.msg` -- so a value baked into the message string via
+  interpolation is never covered by that filter, regardless of whether it is
+  secret-shaped. None of the values this module logs are secret-shaped today
+  (`tenant_id`, `schema_name`, and the tagged reason shapes
+  `Letflow.TenantProvisioning.replay_all_pending/0` returns), so this was not
+  an exploitable gap -- but passing them as metadata means `LogFilter`'s
+  existing redaction mechanism now genuinely applies to this call site going
+  forward, rather than relying on a claim that it already did.
   """
 
   require Logger
@@ -56,9 +69,12 @@ defmodule Letflow.TenantProvisioning.MigrationReplayBoot do
       run_replay()
     rescue
       exception ->
+        # ISS-0772: variable data (the formatted exception) now passed as Logger
+        # metadata, not interpolated into the message string -- see moduledoc
+        # note below and `Letflow.Secrets.LogFilter` for why this matters.
         Logger.error(
-          "tenant migration replay: boot hook raised unexpectedly, ignoring: " <>
-            Exception.format(:error, exception, __STACKTRACE__)
+          "tenant migration replay: boot hook raised unexpectedly, ignoring",
+          reason: Exception.format(:error, exception, __STACKTRACE__)
         )
     end
 
@@ -81,11 +97,21 @@ defmodule Letflow.TenantProvisioning.MigrationReplayBoot do
           :error -> "unknown"
         end
 
+      # ISS-0772: tenant_id/schema_name/reason passed as Logger metadata (not
+      # string-interpolated) so `Letflow.Secrets.LogFilter`'s existing
+      # metadata-redaction mechanism genuinely covers this call site.
       Logger.warning(
-        "tenant migration replay failed: tenant_id=#{tenant_id} schema_name=#{schema_name} reason=#{inspect(reason)}"
+        "tenant migration replay failed",
+        tenant_id: tenant_id,
+        schema_name: schema_name,
+        reason: reason
       )
     end)
 
-    Logger.info("tenant migration replay: #{length(ok)} ok, #{length(error)} failed")
+    Logger.info(
+      "tenant migration replay: summary",
+      ok_count: length(ok),
+      error_count: length(error)
+    )
   end
 end

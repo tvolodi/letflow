@@ -31,8 +31,13 @@ defmodule Letflow.TenantProvisioning.MigrationReplayBootTest do
       # any other currently-provisioned tenant.
       Repo.query!(~s(DROP SCHEMA IF EXISTS "#{broken.schema_name}" CASCADE))
 
+      # ISS-0772: tenant_id/schema_name/reason are now passed as Logger metadata
+      # rather than interpolated into the message string, so `metadata: :all` is
+      # required here to make them visible in captured output at all -- see
+      # `Letflow.Secrets.LogFilterTest` for why this matters (LogFilter only
+      # redacts `log_event.meta`, never `log_event.msg`).
       log =
-        capture_log(fn ->
+        capture_log([metadata: :all], fn ->
           # The core assertion this test exists for (design doc §2.2/§2.3, and the
           # property mutant 2 in test/specs/ISS-0771.md directly targets): start_link/1
           # must return :ignore -- never {:error, _}, never raise -- regardless of how
@@ -42,7 +47,7 @@ defmodule Letflow.TenantProvisioning.MigrationReplayBootTest do
           assert :ignore = MigrationReplayBoot.start_link(nil)
         end)
 
-      assert log =~ "tenant migration replay failed:"
+      assert log =~ "tenant migration replay failed"
       assert log =~ "tenant_id=#{broken.tenant_id}"
       assert log =~ "schema_name=#{broken.schema_name}"
 
@@ -50,9 +55,7 @@ defmodule Letflow.TenantProvisioning.MigrationReplayBootTest do
       # summary line ... after the loop completes, always") must show at least this
       # one failure.
       assert [[failed_count_str]] =
-               Regex.scan(~r/tenant migration replay: \d+ ok, (\d+) failed/, log,
-                 capture: :all_but_first
-               )
+               Regex.scan(~r/error_count=(\d+)/, log, capture: :all_but_first)
 
       assert String.to_integer(failed_count_str) >= 1
     end
@@ -67,12 +70,12 @@ defmodule Letflow.TenantProvisioning.MigrationReplayBootTest do
       TenantFixture.provisioned_tenant!(slug_prefix: "iss0771-boot-healthy")
 
       log =
-        capture_log(fn ->
+        capture_log([metadata: :all], fn ->
           assert :ignore = MigrationReplayBoot.start_link(nil)
         end)
 
-      assert log =~ ~r/tenant migration replay: \d+ ok, 0 failed/
-      refute log =~ "tenant migration replay failed:"
+      assert log =~ ~r/error_count=0/
+      refute log =~ "tenant migration replay failed"
     end
   end
 end

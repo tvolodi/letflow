@@ -351,10 +351,21 @@ INV-8) plus INV-6 (the meta-invariant, always in scope for a new data-access pat
   (an `Exception.t()` or an atom-tagged tuple) — none of which are secret-shaped.
   `Letflow.Secrets.LogFilter`'s primary filter (registered first in
   `Letflow.Application.start/2`, before any supervision-tree child, including this
-  one, ever starts) already redacts any secret-shaped metadata regardless, per
-  REQ-190 §6.2 — this design does not need its own redaction, it inherits the
-  existing filter by construction (it starts strictly after the filter is
-  registered).
+  one, ever starts) redacts `log_event.meta` (Logger metadata) only — it never
+  inspects `log_event.msg`, so a value baked into a log call's message string via
+  interpolation is not covered by it regardless of shape (see ISS-0772). Per
+  ISS-0772's fix to `MigrationReplayBoot`, `tenant_id`, `schema_name`, and `reason`
+  are now passed as `Logger` metadata rather than interpolated into the message
+  string, so `LogFilter`'s mechanism scans them — but none of `tenant_id`,
+  `schema_name`, or `reason` are on `Letflow.Secrets.Redaction`'s sensitive-key
+  list (`@sensitive_exact_keys`/`@sensitive_suffixes`), so `LogFilter` would not
+  actually redact them if any of these ever became secret-shaped. Safety here
+  rests entirely on these values being non-secret-shaped by construction today —
+  not on `LogFilter` redacting them if that changed. A future change that logs a
+  genuinely secret-shaped value through this call site (metadata or message
+  string alike) would not be caught by `LogFilter` unless it also used a
+  sensitive key name, so the metadata-passing convention above
+  should be preserved for any new logging added here.
 - **INV-6 (new data-access paths prove their scoping) — applies; this document is
   the proof artefact.** No new data-access *mechanism* is introduced (INV-1 above);
   the new "data-access path" here is narrowly a new *caller* — an automatic,

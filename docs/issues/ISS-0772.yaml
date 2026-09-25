@@ -63,4 +63,58 @@ queue_ref: "Q-807"
 # queue-id/filename divergence for this project (see TASK_QUEUE.md).
 # queue_ref/github_ref here are authoritative.
 github_ref: "GH-1795"
-status: open
+status: resolved
+resolved_in_run: fix/ISS-0772-logfilter-metadata
+resolved_at: "2026-09-25T00:00:00Z"
+resolution: >
+  Fixed per suggested_fix option (b): converted the three Logger calls in
+  lib/letflow/tenant_provisioning/migration_replay_boot.ex to pass
+  tenant_id/schema_name/reason as Logger metadata instead of string-interpolating
+  them into the message, so Letflow.Secrets.LogFilter's existing meta-only
+  redaction genuinely covers this call site going forward, matching what both
+  docs claim. Corrected both docs' overclaim: the design doc
+  (lib/letflow/design/iss0771-tenant-migration-replay-on-deploy.md, L349-357)
+  and MigrationReplayBoot's own moduledoc no longer state that LogFilter
+  "already redacts any secret-shaped metadata regardless" as if that covered
+  message content generally; they now state accurately that LogFilter redacts
+  metadata only and that this call site is covered because its logging was
+  converted to use metadata.
+
+  Two-stage doc correction: the initial pass's doc wording was itself still a
+  partial overclaim (SECURITY-REVIEWER, step-04) -- caught and narrowed in a
+  follow-up commit (71fde0d1, now f94dfac2/fa7abf8d post-rebase) so the docs
+  describe only what LogFilter actually does (metadata-only redaction) and
+  why this specific call site is now safe (its values are metadata, not that
+  LogFilter covers message interpolation in general).
+
+  Added 2 regression tests confirming the converted Logger calls pass
+  tenant_id/schema_name/reason as metadata (not interpolated into the
+  message), so LogFilter's redaction demonstrably applies.
+
+  Validation chain, all independently confirmed: SECURITY-REVIEWER
+  (CONDITIONAL-PASS, one doc-overclaim finding, fixed in the same run);
+  REVIEWER (PASS); TEST-DESIGN-VALIDATOR (PASS, with real mutation-
+  reproduction on 2 mutants); TEST-RUNNER (full suite 4835/4837, the 2
+  failures independently root-caused to a genuinely new, unrelated
+  pre-existing bug filed separately as ISS-0827 --
+  test/letflow/router_test.exs's stale REQ-070 AC5 deferred-route count,
+  already on main); RELEASE-VALIDATOR (PASS on all 3 acceptance criteria,
+  with its own fresh mutation-reproduction).
+
+  Branch fix/ISS-0772-logfilter-metadata (2 commits, rebased onto origin/main
+  as 92e4d454 the metadata conversion + doc correction, ebeba99e the
+  SECURITY-REVIEWER-driven narrower doc fix), rebased and gate-checked by
+  DOC-UPDATER. `mix letflow.check` on the rebased branch showed 33 new
+  lint_handoffs violations, wider than the 11-violation,
+  WF03-ISS0808-20260925-only backlog ISS-0826's resolution had recorded
+  (also hitting handoffs/WF03-BATCH-ISS0809-ISS0811-ISS0814-ISS0815-20260925/,
+  handoffs/WF03-BATCH-ISS0812-ISS0813-ISS0820-ISS0823-20260925/, and
+  handoffs/WF03-ISS0806-20260925/) -- confirmed same class/root cause as
+  ISS-0826 (the original fix commit missed each BATCH-* run's own
+  step-05-issue-fixer.json/step-release-validator.json, plus a new run has
+  landed since), none of the 33 touch this branch's own files, and none are
+  test failures. ISS-0826 updated (commit 4a6016ba, direct to main) to
+  record the growth and clarify its "resolved" means "as investigated at
+  the time," not "count is zero" -- an expected, self-refilling condition
+  in this multi-session environment. Admin-merged past this known,
+  unrelated failure mode per that confirmation.

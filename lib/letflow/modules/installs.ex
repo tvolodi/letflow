@@ -1,0 +1,163 @@
+defmodule Letflow.Modules.Installs do
+  @moduledoc """
+  Per-tenant module install/list context (REQ-402, design
+  `lib/letflow/design/req402-tenant-modules-install-context.md` §3;
+  `docs/migration/decisions/0039-platform-module-solution-layering.md` D5).
+
+  ## File placement (D3)
+
+  `lib/letflow/modules/installs.ex`, one level, no subdirectory — core
+  mechanism file, named explicitly in decision 0039 D3.
+
+  ## Tenant scoping (INV-1)
+
+  The tenant is identified ONLY by `opts[:prefix]` — no function here
+  accepts a tenant id or schema name as a separate argument
+  (`docs/agents/instructions/security-invariants.md` INV-1; AC7's literal
+  grep contract: `git grep -nE "def (install|list_installed)\\(" lib/letflow/modules/installs.ex`
+  must show no parameter named `tenant_id` or `schema`).
+
+  ## Scope
+
+  `install/3` rejects an unknown module id, a module already installed, and
+  a module whose `depends_on` is not fully satisfied; if the manifest names
+  a `pack`, installs it through the EXISTING
+  `Letflow.Definitions.SolutionPack.install/3` (no second pack installer);
+  inserts the `tenant_modules` row; then calls the module's `on_install/2`
+  if exported. All of this happens in ONE `Repo.transaction/1` — any step
+  failing rolls back every write, including the pack install (design §3.4).
+
+  OUT OF SCOPE (0039 D5, REQ-402's own BUILDS): installing several modules
+  in dependency order in one request (solution install, REQ-415); settings
+  writes to an already-installed module (REQ-414); uninstall.
+  """
+
+  import Ecto.Query, only: [from: 2]
+
+  alias Letflow.Definitions.SolutionPack
+  alias Letflow.Modules.Catalog
+  alias Letflow.Modules.TenantModule
+  alias Letflow.Repo
+
+  @type opts :: [prefix: String.t()]
+
+  @type install_error ::
+          {:error, :unknown_module}
+          | {:error, :already_installed}
+          | {:error, {:dependency_not_installed, module_id :: String.t()}}
+          | {:error, {:pack_install_failed, SolutionPack.install_error()}}
+          | {:error, {:on_install_failed, term()}}
+          | {:error, Ecto.Changeset.t()}
+
+  @doc """
+  Every module currently installed in the tenant identified by
+  `opts[:prefix]`, ordered by `installed_at` ascending. Raises if `:prefix`
+  is missing from `opts` — a tenant-scoped call with no prefix is a
+  programmer error, not a runtime `{:error, ...}` case.
+  """
+  @spec list_installed(opts()) :: [TenantModule.t()]
+  def list_installed(opts) do
+    prefix = Keyword.fetch!(opts, :prefix)
+
+    Repo.all(from(m in TenantModule, order_by: [asc: m.installed_at]), prefix: prefix)
+  end
+
+  @doc """
+  Installs `module_id` into the tenant identified by `opts[:prefix]`, as
+  `actor_id`. See moduledoc and design §3.3/§3.4 for the full transaction
+  structure and rollback semantics.
+  """
+  @spec install(module_id :: String.t(), actor_id :: Ecto.UUID.t(), opts()) ::
+          {:ok, TenantModule.t()} | install_error()
+  def install(module_id, actor_id, opts) do
+    prefix = Keyword.fetch!(opts, :prefix)
+
+    with {:ok, entry_module} <- fetch_module(module_id) do
+      Repo.transaction(fn ->
+        with :ok <- check_not_already_installed(module_id, prefix),
+             :ok <- check_dependencies_installed(entry_module, prefix),
+             :ok <- maybe_install_pack(entry_module, actor_id, opts),
+             {:ok, tenant_module} <- insert_tenant_module(entry_module, prefix),
+             :ok <- maybe_run_on_install(entry_module, prefix, tenant_module.settings) do
+          tenant_module
+        else
+          {:error, reason} -> Repo.rollback(reason)
+        end
+      end)
+    end
+  end
+
+  defp fetch_module(module_id) do
+    case Catalog.fetch(module_id) do
+      {:ok, entry_module} -> {:ok, entry_module}
+      {:error, :not_found} -> {:error, :unknown_module}
+    end
+  end
+
+  defp check_not_already_installed(module_id, prefix) do
+    case Repo.get_by(TenantModule, [module_id: module_id], prefix: prefix) do
+      nil -> :ok
+      %TenantModule{} -> {:error, :already_installed}
+    end
+  end
+
+  defp check_dependencies_installed(entry_module, prefix) do
+    entry_module.manifest().depends_on
+    |> Enum.find(fn dep_id -> not dependency_installed?(dep_id, prefix) end)
+    |> case do
+      nil -> :ok
+      missing_dep_id -> {:error, {:dependency_not_installed, missing_dep_id}}
+    end
+  end
+
+  defp dependency_installed?(dep_id, prefix) do
+    Repo.exists?(from(m in TenantModule, where: m.module_id == ^dep_id), prefix: prefix)
+  end
+
+  defp maybe_install_pack(entry_module, actor_id, opts) do
+    case entry_module.manifest().pack do
+      nil ->
+        :ok
+
+      pack_path ->
+        with {:ok, document} <- read_pack_document(pack_path),
+             {:ok, _install_result} <- SolutionPack.install(document, actor_id, opts) do
+          :ok
+        else
+          {:error, reason} -> {:error, {:pack_install_failed, reason}}
+        end
+    end
+  end
+
+  defp read_pack_document(pack_path) do
+    path = Path.join(Application.app_dir(:letflow, "priv"), pack_path)
+
+    with {:ok, contents} <- File.read(path) do
+      Jason.decode(contents)
+    end
+  end
+
+  defp insert_tenant_module(entry_module, prefix) do
+    attrs = %{
+      module_id: entry_module.manifest().id,
+      version: entry_module.manifest().version,
+      installed_at: DateTime.truncate(DateTime.utc_now(), :microsecond),
+      settings: %{}
+    }
+
+    %TenantModule{}
+    |> TenantModule.insert_changeset(attrs)
+    |> Repo.insert(prefix: prefix)
+  end
+
+  defp maybe_run_on_install(entry_module, prefix, settings) do
+    if function_exported?(entry_module, :on_install, 2) do
+      case entry_module.on_install(prefix, settings) do
+        :ok -> :ok
+        {:error, reason} -> {:error, {:on_install_failed, reason}}
+      end
+    else
+      :ok
+    end
+  end
+end

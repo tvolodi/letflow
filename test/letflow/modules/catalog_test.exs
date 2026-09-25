@@ -32,8 +32,17 @@ defmodule Letflow.Modules.CatalogTest do
   end
 
   describe "REQ-400 AC2 — Catalog module list and lookup" do
-    test "entry_modules/0 returns [Letflow.Modules.Fixture] in the test env" do
-      assert Catalog.entry_modules() == [Letflow.Modules.Fixture]
+    test "entry_modules/0 returns the registered test-only fixtures, in config order" do
+      # REQ-402 design §4.2/§9: appends FixtureDependent (depends_on
+      # rejection coverage) and FixtureFailingInstall (on_install/2
+      # rollback coverage, design §9 open question 1 option (a)) to
+      # config/test.exs's :modules list, alongside REQ-400's original
+      # Fixture entry.
+      assert Catalog.entry_modules() == [
+               Letflow.Modules.Fixture,
+               Letflow.Modules.FixtureDependent,
+               Letflow.Modules.FixtureFailingInstall
+             ]
     end
 
     test "fetch/1 looks the fixture up by its id string" do

@@ -635,7 +635,9 @@ defmodule Letflow.TenantProvisioning do
     {20_260_923_010_001, Letflow.Repo.Migrations.CreateEntityTypeRestrictions,
      "20260923010001_create_entity_type_restrictions.exs"},
     {20_260_923_010_002, Letflow.Repo.Migrations.CreateUserEntityTypeGrants,
-     "20260923010002_create_user_entity_type_grants.exs"}
+     "20260923010002_create_user_entity_type_grants.exs"},
+    {20_260_925_000_001, Letflow.Repo.Migrations.CreateTenantModules,
+     "20260925000001_create_tenant_modules.exs"}
   ]
 
   @doc """

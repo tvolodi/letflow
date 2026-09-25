@@ -56,7 +56,7 @@ most 4 requirements (`ORCHESTRATOR.md`).
 
 | Module | Backend lines (`lib/letflow/modules/<id>/`) | Measured |
 |---|---|---|
-| `exam` | — (not yet extracted; `lib/letflow/exam/` is 2,998 lines) | 2026-09-24 |
+| `exam` | 3,530 lines (`lib/letflow/modules/exam/`) | 2026-09-26 |
 
 ## REVIEWER sign-off
 

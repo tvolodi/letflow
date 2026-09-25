@@ -246,7 +246,7 @@ R-Co's `contains_technical_leak()`), applied here to `release_rationale`,
 prose field):
 
 > "REQ-360's UAT run (uat-2026-09-17-WF05REQ360.yaml) passed 14/15 scenarios;
-> `session_test.exs:142` failed with a 500 from `POST /api/v1/exam-sessions/
+> `session_test.exs:142` failed with a 500 from `POST /api/v1/modules/exam/exam-sessions/
 > {id}/submit`; ba-signoff-bilimbaga-WF05REQ360.yaml's domain_verdict was FAIL."
 
 ## What you do NOT decide

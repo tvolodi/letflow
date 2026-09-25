@@ -31,7 +31,7 @@ defmodule Letflow.Api.AuthorizationTest do
     end
 
     # REQ-403 — the core, closed-set literal, now including :MyModulesRead as
-    # its 40th/last entry. This is what core_permissions/0 must return exactly.
+    # its 34th/last entry. This is what core_permissions/0 must return exactly.
     @core_permissions [
       :DefinitionsWrite,
       :DefinitionsRead,
@@ -62,12 +62,6 @@ defmodule Letflow.Api.AuthorizationTest do
       :EntitiesRecordsImport,
       :EntitiesAttachmentsManage,
       :EntitiesAttachmentsRead,
-      :ExamSessionStart,
-      :ExamSessionRead,
-      :ExamSessionSave,
-      :ExamSessionSubmit,
-      :ExamSessionReportEvent,
-      :ExamCertificateIssue,
       :PublicReadHandlesIssue,
       :HelpRead,
       :MembershipsRead,
@@ -2019,12 +2013,17 @@ defmodule Letflow.Api.AuthorizationTest do
   end
 
   describe "REQ-401 AC6 — full regression grid" do
-    # Every one of the thirty-eight permissions that existed immediately
+    # Every one of the thirty-two permissions that existed immediately
     # before REQ-401 (before :ModulesManage was appended), crossed with all
-    # six roles: 228 pairs, each expected value transcribed by hand from
+    # six roles: 192 pairs, each expected value transcribed by hand from
     # `lib/letflow/api/authorization.ex` as it stood on main before this
     # change -- NOT derived from role_allows?/2, permissions/0, or any other
-    # part of the module under test.
+    # part of the module under test. NOTE: The six exam atoms
+    # (:ExamSessionStart, :ExamSessionRead, :ExamSessionSave,
+    # :ExamSessionSubmit, :ExamSessionReportEvent, :ExamCertificateIssue)
+    # are no longer core permissions as of REQ-413 (moved to
+    # Letflow.Modules.Exam's manifest role_grants) and are therefore absent
+    # from this pre-REQ-401 core snapshot.
     @pre_req401_permissions [
       :DefinitionsWrite,
       :DefinitionsRead,
@@ -2055,12 +2054,6 @@ defmodule Letflow.Api.AuthorizationTest do
       :EntitiesRecordsImport,
       :EntitiesAttachmentsManage,
       :EntitiesAttachmentsRead,
-      :ExamSessionStart,
-      :ExamSessionRead,
-      :ExamSessionSave,
-      :ExamSessionSubmit,
-      :ExamSessionReportEvent,
-      :ExamCertificateIssue,
       :PublicReadHandlesIssue,
       :HelpRead,
       :MembershipsRead
@@ -2122,25 +2115,23 @@ defmodule Letflow.Api.AuthorizationTest do
         :MembershipsRead
       ],
       AGENT_RUNNER: [:HelpRead, :MembershipsRead],
-      CANDIDATE: [
-        :ExamSessionStart,
-        :ExamSessionRead,
-        :ExamSessionSave,
-        :ExamSessionSubmit,
-        :ExamSessionReportEvent,
-        :ExamCertificateIssue
-      ]
+      # REQ-413: CANDIDATE's six exam grants are now provided by
+      # Letflow.Modules.Exam's manifest role_grants (via the Catalog
+      # fallback in role_allows?/2), not by core_role_allows?/2. Since
+      # none of the six exam atoms appear in @pre_req401_permissions, this
+      # row is correctly empty here.
+      CANDIDATE: []
     }
 
-    test "the regression grid is complete: 6 roles x 38 pre-existing core permissions = 228 pairs" do
-      assert length(@pre_req401_permissions) == 38
+    test "the regression grid is complete: 6 roles x 32 pre-existing core permissions = 192 pairs" do
+      assert length(@pre_req401_permissions) == 32
       assert Enum.sort(Map.keys(@pre_req401_allowed)) == Enum.sort(Authorization.roles())
 
       assert Authorization.core_permissions() ==
                @pre_req401_permissions ++ [:ModulesManage, :MyModulesRead]
 
       pair_count = length(Authorization.roles()) * length(@pre_req401_permissions)
-      assert pair_count == 228
+      assert pair_count == 192
     end
 
     test "all 228 pre-existing (role, permission) pairs return exactly what they returned before REQ-401" do

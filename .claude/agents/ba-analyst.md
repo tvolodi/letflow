@@ -187,7 +187,7 @@ for enforcement, don't assume it's already expected.
 **Forbidden example** (what must never appear in a sign-off artefact or an
 authored scenario's prose fields):
 
-> "POST /api/v1/exam-sessions/{id}/submit returned 200; session_test.exs:142's
+> "POST /api/v1/modules/exam/exam-sessions/{id}/submit returned 200; session_test.exs:142's
 > `test_auto_grade/1` passed; `score_pct` was read from `exam_sessions.score_pct`
 > via `session_view/1`."
 

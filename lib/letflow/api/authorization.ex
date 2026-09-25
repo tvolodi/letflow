@@ -300,12 +300,6 @@ defmodule Letflow.Api.Authorization do
           | :EntitiesRecordsImport
           | :EntitiesAttachmentsManage
           | :EntitiesAttachmentsRead
-          | :ExamSessionStart
-          | :ExamSessionRead
-          | :ExamSessionSave
-          | :ExamSessionSubmit
-          | :ExamSessionReportEvent
-          | :ExamCertificateIssue
           | :PublicReadHandlesIssue
           | :HelpRead
           | :MembershipsRead
@@ -357,12 +351,6 @@ defmodule Letflow.Api.Authorization do
           | :EntitiesRecordsImport
           | :EntitiesAttachmentsManage
           | :EntitiesAttachmentsRead
-          | :ExamSessionStart
-          | :ExamSessionRead
-          | :ExamSessionSave
-          | :ExamSessionSubmit
-          | :ExamSessionReportEvent
-          | :ExamCertificateIssue
           | :PublicReadHandlesIssue
           | :HelpRead
           | :MembershipsRead
@@ -411,12 +399,6 @@ defmodule Letflow.Api.Authorization do
     :EntitiesRecordsImport,
     :EntitiesAttachmentsManage,
     :EntitiesAttachmentsRead,
-    :ExamSessionStart,
-    :ExamSessionRead,
-    :ExamSessionSave,
-    :ExamSessionSubmit,
-    :ExamSessionReportEvent,
-    :ExamCertificateIssue,
     :PublicReadHandlesIssue,
     :HelpRead,
     :MembershipsRead,
@@ -429,7 +411,7 @@ defmodule Letflow.Api.Authorization do
   def roles, do: @roles
 
   @doc """
-  All forty core `Permission` values — R-Co's fourteen, plus REQ-075's
+  All thirty-four core `Permission` values — R-Co's fourteen, plus REQ-075's
   `:TenantsManage`, plus REQ-076's `:RolesManage`, plus REQ-212's
   `:AttachmentsManage`/`:AttachmentsRead`, plus ISS-0389's
   `:InstancesAdvanceTimer`, plus REQ-309's four entity-subsystem permissions
@@ -438,10 +420,7 @@ defmodule Letflow.Api.Authorization do
   `:EntitiesAggregate`, plus REQ-318's three entity-record export/import
   permissions (`:EntitiesRecordsExport`, `:EntitiesRecordsExportUnredacted`,
   `:EntitiesRecordsImport`), plus REQ-317's `:EntitiesAttachmentsManage`/
-  `:EntitiesAttachmentsRead`, plus REQ-335's five exam-session-route
-  permissions (`:ExamSessionStart`, `:ExamSessionRead`, `:ExamSessionSave`,
-  `:ExamSessionSubmit`, `:ExamSessionReportEvent`), plus REQ-355's
-  `:ExamCertificateIssue`, plus REQ-352's `:PublicReadHandlesIssue`, plus
+  `:EntitiesAttachmentsRead`, plus REQ-352's `:PublicReadHandlesIssue`, plus
   REQ-366's `:HelpRead`, plus REQ-384's `:MembershipsRead`, plus REQ-401's
   `:ModulesManage`, plus REQ-403's `:MyModulesRead`.
 
@@ -454,7 +433,7 @@ defmodule Letflow.Api.Authorization do
   def core_permissions, do: @permissions
 
   @doc """
-  Every permission the platform recognizes: the forty core
+  Every permission the platform recognizes: the thirty-four core
   `Permission` values above (`core_permissions/0`), followed by every
   registered module's own declared permissions
   (`Letflow.Modules.Catalog.permissions/0`, REQ-400/REQ-401, D4) — computed,
@@ -859,52 +838,6 @@ defmodule Letflow.Api.Authorization do
       ),
       do: :EntitiesAttachmentsManage
 
-  # REQ-335/REQ-410 — Letflow.Modules.Exam.Router's eight routes, now mounted
-  # at /modules/exam/exam-sessions (Letflow.Routers.Modules D4/D5 gate).
-  # The explicit clauses below remain for historical completeness and
-  # backwards-compatibility (the module_route_permission/3 fallback at line
-  # ~932 is the authoritative lookup path for the new /modules/exam/... URLs).
-  # Each atom is candidate-reachable (this module's moduledoc "ExamSession*"
-  # section states why) and each delegate additionally re-checks ownership
-  # inside Letflow.Modules.Exam.Session/Letflow.Modules.Exam.AntiCheat
-  # themselves — this matrix only answers "may this role reach this route,"
-  # never "is this the caller's own session."
-  def endpoint_policy_key("POST", "/exam-sessions"), do: :ExamSessionStart
-
-  # ISS-0718 -- the candidate-facing available-exams list route. Reuses the
-  # EXISTING :ExamSessionStart atom (no new permission minted): "which exams
-  # are currently startable" is the same capability as "may start a session
-  # against a given exam," applied to a list instead of one exam_id (design
-  # doc iss0718-candidate-exam-list-route.md §0.1). CANDIDATE's
-  # role_allows?/2 six-member list and the ISS-0646 closed-set invariant
-  # test are both unchanged by this clause.
-  def endpoint_policy_key("GET", "/exam-sessions/available"), do: :ExamSessionStart
-
-  def endpoint_policy_key("GET", "/exam-sessions/:id"), do: :ExamSessionRead
-
-  def endpoint_policy_key("PUT", "/exam-sessions/:id/answers/:question_id"),
-    do: :ExamSessionSave
-
-  def endpoint_policy_key("POST", "/exam-sessions/:id/submit"), do: :ExamSessionSubmit
-
-  def endpoint_policy_key("POST", "/exam-sessions/:id/events"),
-    do: :ExamSessionReportEvent
-
-  # REQ-355 -- idempotent certificate issuance, same shape as the five
-  # REQ-335 clauses above.
-  def endpoint_policy_key("POST", "/exam-sessions/:id/certificate"),
-    do: :ExamCertificateIssue
-
-  # REQ-356 -- the authenticated certificate PDF download route. Reuses
-  # :ExamCertificateIssue rather than a new atom: this route's own
-  # eligibility/ownership check is the identical
-  # Letflow.Modules.Exam.Certificate.issue_or_get_for_user/3 call the POST route
-  # above makes (see lib/letflow/routers/exam_sessions.ex's own route
-  # comment) -- no new authorization semantics exist to justify a new
-  # permission for a rendering-only requirement's own scope.
-  def endpoint_policy_key("GET", "/exam-sessions/:id/certificate/download"),
-    do: :ExamCertificateIssue
-
   # REQ-352 — the generic, kind-agnostic authenticated issue route
   # (Letflow.Routers.PublicReadHandles), mounted at /public-read-handles.
   # See design lib/letflow/design/req352-unauthenticated-read-platform.md §13.1.
@@ -1085,15 +1018,6 @@ defmodule Letflow.Api.Authorization do
   # §4, same shape as :AttachmentsManage/:AttachmentsRead above.
   def required_permission(:EntitiesAttachmentsManage), do: :EntitiesAttachmentsManage
   def required_permission(:EntitiesAttachmentsRead), do: :EntitiesAttachmentsRead
-
-  # REQ-335 — identity clauses (policy-key name == permission name), same
-  # shape as Entities* above.
-  def required_permission(:ExamSessionStart), do: :ExamSessionStart
-  def required_permission(:ExamSessionRead), do: :ExamSessionRead
-  def required_permission(:ExamSessionSave), do: :ExamSessionSave
-  def required_permission(:ExamSessionSubmit), do: :ExamSessionSubmit
-  def required_permission(:ExamSessionReportEvent), do: :ExamSessionReportEvent
-  def required_permission(:ExamCertificateIssue), do: :ExamCertificateIssue
 
   # REQ-352 — identity clause (policy-key name == permission name), same
   # shape as Entities*/ExamSession* above.
@@ -1297,20 +1221,12 @@ defmodule Letflow.Api.Authorization do
   defp core_role_allows?(:AGENT_RUNNER, :MembershipsRead), do: true
   defp core_role_allows?(:AGENT_RUNNER, _permission), do: false
 
-  # ISS-0646 (decision 0013 addendum): CANDIDATE is a dedicated role for
-  # external exam candidates, holding exactly REQ-335's five exam-session
-  # route permissions and nothing else. TASK_WORKER no longer holds these
-  # (see this module's moduledoc "ExamSession*" section) -- ownership of the
-  # specific session is still enforced inside Letflow.Modules.Exam.Session/
-  # Letflow.Modules.Exam.AntiCheat themselves, never by this role grant.
-  defp core_role_allows?(:CANDIDATE, permission),
-    do:
-      permission in [
-        :ExamSessionStart,
-        :ExamSessionRead,
-        :ExamSessionSave,
-        :ExamSessionSubmit,
-        :ExamSessionReportEvent,
-        :ExamCertificateIssue
-      ]
+  # REQ-413 — CANDIDATE's six exam-session grants (ExamSessionStart,
+  # ExamSessionRead, ExamSessionSave, ExamSessionSubmit,
+  # ExamSessionReportEvent, ExamCertificateIssue) moved out of core to
+  # Letflow.Modules.Exam's manifest role_grants. The fallback in
+  # role_allows?/2 (`permission in Letflow.Modules.Catalog.role_grants(role)`)
+  # now supplies them, so core_role_allows?(:CANDIDATE, _) is uniformly
+  # false — the Catalog side handles the grant.
+  defp core_role_allows?(:CANDIDATE, _permission), do: false
 end

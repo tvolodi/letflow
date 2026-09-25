@@ -16,7 +16,7 @@ domain_vocabulary:
   - business_term: "auto-graded score"
     maps_to: >
       The session's score_pct/passed fields, computed by Letflow.Exam.Scoring
-      and surfaced by GET /exam-sessions/:id (per ISS-0674's now-resolved fix)
+      and surfaced by GET /modules/exam/exam-sessions/:id (per ISS-0674's now-resolved fix)
       and in the candidate-facing result screen.
   - business_term: "timed exam"
     maps_to: >

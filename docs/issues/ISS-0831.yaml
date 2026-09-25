@@ -1,0 +1,58 @@
+id: ISS-0831
+title: >
+  mix letflow.check_boundaries silently reports OK when mix xref itself
+  exits non-zero (exit_code discarded)
+discovered_by: REVIEWER (WF02-REQ405-20260925 Step 02d)
+discovered_in_run: WF02-REQ405-20260925
+discovered_at: "2026-09-25T08:35:00Z"
+severity: MINOR
+tags:
+  - robustness
+  - mix-task
+  - false-negative
+description: >
+  In Mix.Tasks.Letflow.CheckBoundaries.run/1, System.cmd/3 is called as:
+
+    {output, _exit_code} =
+      System.cmd("mix", ["xref", "graph", "--format", "plain"], stderr_to_stdout: false)
+
+  The exit code is discarded. If mix xref itself exits non-zero (transient
+  failure, internal xref error, or an unexpected code path), run/1 will
+  silently parse empty or error-prefixed output, find 0 edges, and print
+  "mix letflow.check_boundaries: OK -- 0 edges checked, 0 violations" --
+  a false negative at the gate.
+
+  In normal use the letflow.check alias runs this task after
+  "compile --warnings-as-errors", so a broken compile is caught before
+  xref runs, which substantially limits the risk window. However, the task
+  can also be invoked directly (mix letflow.check_boundaries) without the
+  alias guard, and xref could conceivably fail for reasons unrelated to
+  compilation (e.g., file-descriptor or temp-file errors). The silent-OK
+  shape is dangerous for a gate task whose whole purpose is to detect
+  violations.
+affected_files:
+  - lib/mix/tasks/letflow.check_boundaries.ex
+related: ["REQ-405"]
+severity_rationale: >
+  MINOR -- the risk is low in practice (the alias always runs compile first;
+  xref failures are rare), but the false-negative failure mode on a gate
+  task warrants tracking. Not MAJOR because there is no known trigger in
+  production use and the alias ordering provides a partial guard.
+fix_direction: >
+  In run/1, capture exit_code and raise (or Mix.raise) when it is non-zero,
+  before attempting to parse output. A clean fix:
+
+    {output, exit_code} =
+      System.cmd("mix", ["xref", "graph", "--format", "plain"], stderr_to_stdout: false)
+
+    if exit_code != 0 do
+      Mix.raise(
+        "mix letflow.check_boundaries: mix xref exited #{exit_code} -- " <>
+        "cannot check boundaries without a valid xref graph.\n#{output}"
+      )
+    end
+
+  This ensures any xref failure is loud rather than silently swallowed.
+status: open
+queue_ref: ~
+github_ref: ~

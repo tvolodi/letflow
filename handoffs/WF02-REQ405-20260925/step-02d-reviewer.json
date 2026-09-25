@@ -1,0 +1,66 @@
+{
+  "handoff_id": "WF02-REQ405-20260925-step-02d",
+  "run_id": "WF02-REQ405-20260925",
+  "workflow_id": "WF-02",
+  "step": "02d",
+  "from_agent": "REVIEWER",
+  "to_agent": "TEST-DESIGNER",
+  "file": "handoffs/WF02-REQ405-20260925/step-02d-reviewer.json",
+  "created_at": "2026-09-25T08:35:00Z",
+  "commit_reviewed": "40630a6c",
+  "status": "PASS",
+  "result": {
+    "verdict": "PASS",
+    "summary": "All four gate questions clear. One robustness gap filed as ISS-0831 (non-blocking). Design doc stale on parser format — noted for DOC-UPDATER, not a gate condition.",
+    "findings": [
+      {
+        "area": "OTP idiom",
+        "verdict": "IDIOMATIC",
+        "detail": "System.cmd(\"mix\", [\"xref\", \"graph\", \"--format\", \"plain\"]) from a Mix.Task is the standard approach for shelling out to a built-in Mix command from another task. No OTP process, no supervision entry, no ETS — correct for a pure-tooling check that runs at build time. classify_edge/2 is properly stateless and separated from the I/O in run/1. No gen_statem or GenServer misuse — this isn't a state machine at all, which is correct."
+      },
+      {
+        "area": "Supervision",
+        "verdict": "IDIOMATIC",
+        "detail": "No processes started, no supervised trees touched, no singleton, no unsupervised spawn. The task is pure function composition + one System.cmd call + one IO.puts/Mix.raise. Nothing to supervise."
+      },
+      {
+        "area": "Scope creep",
+        "verdict": "CLEAN",
+        "detail": "Commit touches exactly the three files specified by the requirement (lib/mix/tasks/letflow.check_boundaries.ex, test/mix/tasks/letflow.check_boundaries_test.exs, mix.exs) plus the ELIXIR-DEV handoff artefact. The mix.exs change is exactly one alias step (\"letflow.check_boundaries\") inserted between \"compile --warnings-as-errors\" and \"letflow.check.test\", with an explanatory comment. deps[] and mix.lock are unchanged. No new abstractions, no behaviour or macro plumbing introduced ahead of need."
+      },
+      {
+        "area": "Decision-record consistency (0039 D3)",
+        "verdict": "CONSISTENT",
+        "detail": "D3 specifies exactly two violation classes: (1) any file outside lib/letflow/modules/<id>/ references a file inside one, except lib/letflow/modules/catalog.ex; (2) a file in lib/letflow/modules/a/ references lib/letflow/modules/b/ when b is not in a's depends_on. The implementation decomposes these into Rules 0–5 in first-match order, which is equivalent: Rule 0 (target not in module subdir → OK) and Rule 1 (catalog.ex sanctioned importer) are the explicit exception from D3; Rules 2–3 (intra-module, authorized cross-module) are the non-violation cases implied by D3's second class; Rule 4 is D3's second violation class; Rule 5 is D3's first violation class. No deviation from D3 intent, no extra rule invented. The sanctioned-importer exception is encoded as an exact path equality check on \"lib/letflow/modules/catalog.ex\", matching D3's literal wording."
+      },
+      {
+        "area": "Test quality",
+        "verdict": "ADEQUATE",
+        "detail": "classify_edge/2 has one test per case from design §2.3 (all 7 cases including the intra-module non-violation). All use synthetic edges — no live xref output, no DB, no process. The reason-string tests (two) assert that violation messages name the module IDs and the catalog.ex exception, giving regression protection on message format. parse_xref_output/1 covers blank input, both tree-char prefixes (|-- and `--), space-indented fallback, annotation stripping (compile/runtime), multi-source/multi-target, and orphan-target graceful skip. build_depends_on_map/1 covered for empty and populated cases. System test (AC2) uses System.cmd against the real project tree and asserts exit 0 + \"OK\" substring. T-ALIAS-WIRED and T-ALIAS-SLOT tests assert ordering invariant. No test creates a temp file that isn't cleaned up — the AC3 probe was an ELIXIR-DEV procedure, not a persisted test, consistent with design §5.4."
+      },
+      {
+        "area": "Parser format deviation (design artefact vs. actual xref output)",
+        "verdict": "NOTED — NOT BLOCKING",
+        "detail": "The design artefact (req405-check-boundaries.md §1.2) describes target lines as 'Lines indented by one or more spaces'. The actual mix xref graph --format plain emits tree characters (|-- and `--) as target-line prefixes, not plain spaces. ELIXIR-DEV caught and handled this during implementation — the parser handles both tree-char and space-indented forms. The code's own @moduledoc and parse_xref_output/1 @doc correctly describe the actual format. The ELIXIR-DEV handoff records the deviation. Not a D3 consistency issue; the boundary classification logic is unaffected. Routing to DOC-UPDATER to correct §1.2 of the design artefact."
+      },
+      {
+        "area": "Catalog.all_manifests/0 called without app.start",
+        "verdict": "CORRECT",
+        "detail": "Letflow.Modules.Catalog.all_manifests/0 calls entry_modules/0 which returns @modules, a module attribute baked at compile time via Application.compile_env(:letflow, :modules, []). No runtime Application.get_env call, no ETS, no process lookup. Calling this from a Mix.Task that does not start the OTP application is safe and correct. This is confirmed by catalog.ex's own @moduledoc ('Read once at compile time via Application.compile_env/3 (not Application.get_env/3)') and by the design artefact §1.4 ('No app.start requirement needed — its data is compile_env-baked')."
+      },
+      {
+        "area": "Exit-code discarded from System.cmd (robustness gap)",
+        "verdict": "FILED AS ISS-0831 — NOT BLOCKING",
+        "detail": "run/1 binds the System.cmd result as {output, _exit_code}, discarding the exit code. If mix xref itself exits non-zero (e.g., a transient xref failure, an unexpected internal error), the task will silently parse empty or error output, find 0 edges, and print 'OK -- 0 edges checked, 0 violations' — a false negative. In normal use the alias runs after compile --warnings-as-errors, so a broken compile is already caught before xref runs. The risk is low but the silent-OK shape is dangerous for a gate task. Filed as ISS-0831 (robustness, non-blocking) per the review procedure."
+      }
+    ],
+    "type_safety_observations": [],
+    "issues_filed": ["ISS-0831"]
+  },
+  "gate": {
+    "OTP_idiom": "PASS",
+    "supervision_integrity": "PASS",
+    "scope_creep": "PASS",
+    "decision_record_consistency": "PASS"
+  }
+}

@@ -386,3 +386,134 @@ No change to `Letflow.Modules.Catalog`, `Letflow.Modules.Module`, `Letflow.Modul
    route). Left as a note for a future module's own design, not resolved here — an
    unmatched sub-path today would surface whatever `Plug.Router`'s own default behavior is
    for a router with no `match _`, unchanged by this requirement.
+
+---
+
+## 9. INV-5 timing-parity fix (post-SECURITY-REVIEWER amendment)
+
+**Status:** design, closes a real SECURITY-REVIEWER BLOCKER on the already-implemented
+`lib/letflow/routers/modules.ex` (commit `31fc03d6`). This section amends §1.3/§1.4 only —
+every other section of this design (§0, §2–§8) stands unchanged, and §1.1/§1.2/§1.5/§1.6's
+non-timing content (plain-`Plug` shape, mount, D3 compliance, response-body minimality)
+is unaffected.
+
+### 9.1 The finding, restated precisely
+
+SECURITY-REVIEWER's BLOCKER: the shipped `gate/2` (a `with`-chain) short-circuits — for an
+unknown `module_id`, `Catalog.fetch/1` (in-memory `Enum.find/2`, zero DB round trips) fails
+first and the chain never reaches `Installs.installed?/2` (one `Repo.exists?/2` round
+trip). For a known-but-uninstalled `module_id`, `Catalog.fetch/1` and
+`function_exported?/3` both clear (still zero round trips), and only then does
+`Installs.installed?/2` run and fail. Both branches return the byte-identical
+`Response.not_found(conn)` body (§1.3's own "same zero-argument call" guarantee still
+holds for body content), but they differ in wall-clock cost by exactly one DB round trip —
+a timing side channel `docs/agents/instructions/security-invariants.md` INV-5 (D5)
+forbids, distinguishing "never registered" from "registered but not installed for you."
+
+Contrast with `lib/letflow/routers/entities.ex`'s own INV-5 section (cited by
+SECURITY-REVIEWER, see that file's "not-found and cross-tenant are the same bytes"
+comment): there, the genuinely-absent and cross-tenant cases run through the SAME single
+prefix-scoped query, so cost parity holds by construction, not by convention.
+`Letflow.Routers.Modules` cannot use that exact trick (there is no single query spanning
+"is this id in the compiled catalog" and "is it installed for this tenant" — one is a
+compile-time list, the other a per-tenant DB table), so parity here must instead be
+achieved by making the DB round trip unconditional rather than by unifying the query.
+
+### 9.2 The fix — `Installs.installed?/2` runs unconditionally, every request
+
+For every request that reaches step 2 of §1.3's table (i.e. `scoped_opts` resolved
+successfully — the `internal_error` branch is unaffected, it is a programmer-error case
+with no DB touch on any branch, timing-symmetric already), the dispatcher now performs
+**all three checks — catalog membership, router-callback presence, install status —
+before making the admit/reject decision**, instead of short-circuiting the DB check
+behind the first two. `Installs.installed?/2`'s underlying `Repo.exists?/2` query is
+valid and cheap to run even when `module_id` names nothing in the catalog: it is a plain
+indexed equality lookup on `tenant_modules.module_id`, unrelated to whether the catalog
+recognizes the id, and returns `false` harmlessly for an unknown id (confirmed by reading
+`lib/letflow/modules/installs.ex`'s `module_installed?/2` — the query has no dependency on
+`Catalog` at all). So computing it unconditionally introduces no new error case and no new
+DB-shape variance — the round trip is the exact same one-query shape on every request,
+whether or not the id is in the catalog, whether or not it has a `router/0`, and whether
+or not it is installed.
+
+### 9.3 Revised `call/2` decision shape (`@spec`-only, replaces §1.4's `gate/2` shape)
+
+```elixir
+@spec gate(Plug.Conn.t(), module_id :: String.t(), rest :: [String.t()]) :: Plug.Conn.t()
+defp gate(conn, module_id, rest)
+
+@spec resolve(module_id :: String.t(), scoped_opts :: keyword()) ::
+        {:ok, entry_module :: module(), router :: module()} | :reject
+defp resolve(module_id, scoped_opts)
+```
+
+`gate/2`'s revised responsibility (replaces the single `with...else` chain in the current
+implementation for steps 3–6 of §1.3's table; step 2's `scoped_opts` resolution and its
+`internal_error` branch are unchanged and still run first, short-circuiting, since that
+case has no DB-cost asymmetry to fix):
+
+1. Resolve `scoped_opts` (§1.3 step 2, unchanged).
+2. Call `resolve(module_id, scoped_opts)` (new helper, §9.3 above). `resolve/2`'s own body
+   (prose, not code — the point of this fix is precisely that these three sub-checks must
+   NOT be wired as a short-circuiting `with`-chain against each other):
+   - Compute `installed? = Letflow.Modules.Installs.installed?(module_id, scoped_opts)` —
+     unconditionally, not inside an `if`/`with` guarded by the catalog lookup below. This
+     is the one required DB round trip and it must execute regardless of what the catalog
+     lookup finds.
+   - Independently compute `catalog_result = Letflow.Modules.Catalog.fetch(module_id)`
+     (in-memory, free) and, only if `catalog_result` is `{:ok, entry_module}`,
+     `has_router? = function_exported?(entry_module, :router, 0)` (also free) — these two
+     may still short-circuit against each other (both are zero-cost, so no timing
+     asymmetry exists between "unknown id" and "id has no router" — SECURITY-REVIEWER's
+     finding was specifically about the DB-touching check, not the in-memory ones).
+   - Admit iff `catalog_result` is `{:ok, entry_module}` AND `has_router?` is `true` AND
+     `installed?` is `true`. On admit, return `{:ok, entry_module, entry_module.router()}`.
+     Otherwise (any of the three false/absent, in any combination) return `:reject` — a
+     single, undifferentiated outcome; `resolve/2`'s caller cannot and must not observe
+     *which* of the three sub-checks failed.
+3. `gate/2` on `{:ok, _entry_module, router}` dispatches exactly as §1.3 step 6 already
+   specifies (`Plug.forward(conn, rest, router, router.init([]))`). On `:reject`, calls
+   `Letflow.Api.Response.not_found(conn)` — same zero-argument call as every other 404
+   branch, preserving §1.3's body-identity guarantee.
+
+### 9.4 Why "unconditional" must mean unconditional, not "reordered but still gated"
+
+A fix that merely reorders the existing `with`-chain to put `Installs.installed?/2` FIRST
+would not close the finding — it would just move the asymmetry onto the *other* two
+branches (a request whose `scoped_opts` fails, or whose install check fails, would then
+skip the catalog/router lookups, which are free today but are not guaranteed to stay free
+forever). The requirement is specifically that the ONE DB-touching check is decoupled from
+short-circuit evaluation entirely, not that it moves to a different position in a chain
+that still short-circuits. §9.3's `resolve/2` shape enforces this: `installed?` is always
+computed, unconditionally, in every call to `resolve/2`, independent of `catalog_result`.
+
+### 9.5 No change to `Letflow.Modules.Installs`, `Letflow.Modules.Catalog`, or any migration
+
+`Installs.installed?/2`'s existing `@spec` (§2) and behavior are unchanged — this fix
+changes only how and when `Letflow.Routers.Modules` calls it, not the function itself.
+`Catalog.fetch/1` is unchanged. No new index needed (§2's existing
+`tenant_modules_module_id_idx` reasoning already covers an unconditional per-request call
+at the same frequency — this fix does not increase query volume for a request that would
+already have reached this dispatcher; it only removes the case where that query was
+skipped).
+
+### 9.6 Acceptance-criteria / invariant traceability for this amendment
+
+| Requirement | How §9 satisfies it |
+|---|---|
+| INV-5 / D5 (timing parity, SECURITY-REVIEWER BLOCKER) | §9.2/§9.3: `installed?/2`'s DB round trip runs unconditionally for every request past `scoped_opts` resolution — identical query shape and count regardless of whether `module_id` is unknown, known-but-no-router, or known-and-uninstalled. |
+| AC3 (byte-identical 404 body, §1.3/§7 original) | §9.3 step 3: `resolve/2` collapses all three sub-check outcomes into one `:reject` atom before `gate/2` ever calls `Response.not_found/1` — the existing zero-argument call, unchanged. |
+| D3 (module boundary, §1.5) | §9.3 references only `Letflow.Modules.Catalog`, `Letflow.Modules.Installs`, and the runtime `entry_module` value — same four-name allowlist as §1.5, no new module reference introduced. |
+| INV-1 (tenant scoping, §1.3 step 2 / §5) | Unchanged — `resolve/2` receives the same `scoped_opts` already derived exclusively from `conn.assigns.auth_context.tenant_id` in step 2; no new tenant-identifying input. |
+
+### 9.7 Open question carried by this amendment
+
+Whether Elixir/BEAM's evaluation could still let a sufficiently aggressive future
+refactor reintroduce short-circuiting between `installed?/2` and the catalog checks
+without anyone noticing (e.g. someone "simplifies" `resolve/2` back into a `with`-chain
+during an unrelated change). Not resolved here — no automated check enforces "this DB call
+runs unconditionally" the way `mix letflow.check_boundaries` enforces D3. Left as a note
+for TEST-DESIGNER: a test asserting call-count/round-trip parity (e.g. via
+`Ecto.Adapters.SQL.Sandbox` query telemetry or an equivalent count-based assertion) across
+the three branches (unknown id, known-uninstalled, known-installed-no-router) would give
+this invariant a regression guard that plain response-body assertions cannot.

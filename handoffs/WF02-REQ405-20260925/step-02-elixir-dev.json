@@ -1,0 +1,35 @@
+{
+  "handoff_id": "WF02-REQ405-20260925-step-02",
+  "run_id": "WF02-REQ405-20260925",
+  "workflow_id": "WF-02",
+  "step": "02",
+  "from_agent": "ELIXIR-DEV",
+  "to_agent": "SECURITY-REVIEWER",
+  "file": "handoffs/WF02-REQ405-20260925/step-02-elixir-dev.json",
+  "created_at": "2026-09-25T08:33:00Z",
+  "started_at": "2026-09-25T08:28:52Z",
+  "completed_at": "2026-09-25T08:33:50Z",
+  "status": "COMPLETED",
+  "result": {
+    "status": "PASS",
+    "summary": "Implemented REQ-405: mix letflow.check_boundaries.\n\n## Files changed\n- NEW: lib/mix/tasks/letflow.check_boundaries.ex -- Mix.Tasks.Letflow.CheckBoundaries with run/1, classify_edge/2, classify_edges/2, parse_xref_output/1, build_depends_on_map/1, plus private helpers path_in_module_subdir?/1, module_id_from_path/1, strip_annotation/1\n- NEW: test/mix/tasks/letflow.check_boundaries_test.exs -- 24 tests across Mix.Tasks.Letflow.CheckBoundariesTest (pure, async: true) and Mix.Tasks.Letflow.CheckBoundariesTaskTest (system, async: false)\n- MODIFIED: mix.exs -- added 'letflow.check_boundaries' after 'compile --warnings-as-errors' and before 'letflow.check.test' in the letflow.check alias\n\n## Test output (AC1, AC2, AC4)\n```\nFinished in 1.3 seconds (0.05s async, 1.3s sync)\nResult: 24 passed\n```\n\n## AC2 -- mix letflow.check_boundaries on clean tree\n```\nmix letflow.check_boundaries: OK -- 815 edges checked, 0 violations\nEXIT: 0\n```\n\n## AC3 -- probe test (violation detected, files removed)\nCreated lib/letflow/modules/probe_boundary_test/probe.ex and lib/letflow/core_probe.ex.\nViolation run output:\n```\nVIOLATION: lib/letflow/core_probe.ex -> lib/letflow/modules/probe_boundary_test/probe.ex (boundary violation: lib/letflow/core_probe.ex \u2192 lib/letflow/modules/probe_boundary_test/probe.ex (only lib/letflow/modules/catalog.ex may reference module-subdir files))\n** (Mix) mix letflow.check_boundaries: FAILED -- 1 violation(s) found\nEXIT: 1\n```\nBoth probe files deleted. git status --porcelain lib/letflow/modules/probe_boundary_test/ lib/letflow/core_probe.ex returned empty (clean).\nClean re-run after removal:\n```\nmix letflow.check_boundaries: OK -- 815 edges checked, 0 violations\nEXIT: 0\n```\n\n## Parser format note\nmix xref graph --format plain emits tree characters (|-- and `--) as target-line prefixes, not simple indented spaces. The parser handles both forms (tree characters and space-indented) for robustness. Tests updated accordingly.\n\n## AC5 -- no new dependency\nmix.lock is unchanged. mix xref is built-in, System.cmd/3 is stdlib, Letflow.Modules.Catalog is existing code.\n\n## Self-review\n- No state machine or process changes -- nothing to update in README.md state diagram.\n- No process_instance.ex changes.\n- No migration added.\n- mix compile passes clean (MIX_ENV=test mix compile: exit 0).\n- Probe files deleted; git status confirms clean tree."
+  },
+  "context": {
+    "stage": "S11",
+    "requirement_ids": ["REQ-405"],
+    "artifacts_out": [
+      "lib/mix/tasks/letflow.check_boundaries.ex",
+      "test/mix/tasks/letflow.check_boundaries_test.exs",
+      "mix.exs"
+    ]
+  },
+  "task": {
+    "acceptance_criteria": [
+      "AC1: unit tests for all 6 classify_edge/2 cases (plus scope exclusion rule) with synthetic edges -- PASS (19 unit tests in async module)",
+      "AC2: mix letflow.check_boundaries exits 0 on current branch tree -- PASS (815 edges checked, 0 violations)",
+      "AC3: probe test -- bad edge detected (exit 1, violation named), probe files removed, git status clean -- PASS",
+      "AC4: mix.exs alias updated, T-ALIAS-WIRED and T-ALIAS-SLOT tests pass -- PASS",
+      "AC5: mix.lock unchanged, no new dependency -- PASS"
+    ]
+  }
+}

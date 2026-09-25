@@ -187,6 +187,10 @@ defmodule Letflow.MixProject do
         "letflow.check_uat_scenario_schema",
         "format --check-formatted",
         "compile --warnings-as-errors",
+        # REQ-405: D3 backend boundary check (xref-based module boundary enforcement).
+        # Must run after compile (xref needs fully compiled call graph) and before
+        # check.test (fail fast on boundary violations without waiting for the test run).
+        "letflow.check_boundaries",
         "letflow.check.test"
       ]
     ]

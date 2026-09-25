@@ -214,6 +214,30 @@ defmodule Letflow.Api.Authorization do
   switching tenants was not named by any of REQ-384's acceptance criteria
   either. Flagged the same way as `HelpRead`'s section above, not silently
   narrowed.
+
+  ## `:ModulesManage` (REQ-401) — same non-pattern as `:TenantsManage`
+
+  One new core permission, added by REQ-401 to implement
+  `docs/migration/decisions/0039-platform-module-solution-layering.md` D5.
+  It will gate module install (REQ-403), solution install (REQ-415), and
+  module-settings writes (REQ-414) — none of which exist yet, so **no**
+  `endpoint_policy_key/2` clause or `required_permission/1` identity clause
+  is added for it in this requirement. Granted only via `PLATFORM_ADMIN`'s
+  existing unconditional `true` clause — there is no explicit
+  `role_allows?(some_role, :ModulesManage)` clause anywhere, exactly the way
+  `:TenantsManage` is granted (its own total absence from every other role's
+  clause, not a positive grant to imitate).
+
+  ## Catalog-sourced permissions and role grants (REQ-401, D4)
+
+  `permissions/0` and `role_allows?/2` are both widened by REQ-401 to also
+  recognize permissions declared by `Letflow.Modules.Catalog`'s registered
+  modules (REQ-400) — atoms typed `atom()` at that boundary, never members
+  of this module's own closed `permission()` union. `core_permissions/0`
+  keeps returning the closed, core-only list `permissions/0` itself used to
+  return before this requirement. See `core_permissions/0`, `permissions/0`,
+  and the public `role_allows?/2` (which delegates to the renamed private
+  `core_role_allows?/2`) below for the mechanics.
   """
 
   @type role ::
@@ -263,6 +287,7 @@ defmodule Letflow.Api.Authorization do
           | :PublicReadHandlesIssue
           | :HelpRead
           | :MembershipsRead
+          | :ModulesManage
 
   @type access_decision_kind :: :Allow | :Deny403 | :AllowWithRowFilter
 
@@ -369,7 +394,8 @@ defmodule Letflow.Api.Authorization do
     :ExamCertificateIssue,
     :PublicReadHandlesIssue,
     :HelpRead,
-    :MembershipsRead
+    :MembershipsRead,
+    :ModulesManage
   ]
 
   @doc "All six `Role` values, R-Co's exact names plus ISS-0646's `CANDIDATE`. See `roles_from_strings/1` for untrusted-input conversion."
@@ -377,7 +403,7 @@ defmodule Letflow.Api.Authorization do
   def roles, do: @roles
 
   @doc """
-  All thirty-eight `Permission` values — R-Co's fourteen, plus REQ-075's
+  All thirty-nine core `Permission` values — R-Co's fourteen, plus REQ-075's
   `:TenantsManage`, plus REQ-076's `:RolesManage`, plus REQ-212's
   `:AttachmentsManage`/`:AttachmentsRead`, plus ISS-0389's
   `:InstancesAdvanceTimer`, plus REQ-309's four entity-subsystem permissions
@@ -390,15 +416,31 @@ defmodule Letflow.Api.Authorization do
   permissions (`:ExamSessionStart`, `:ExamSessionRead`, `:ExamSessionSave`,
   `:ExamSessionSubmit`, `:ExamSessionReportEvent`), plus REQ-355's
   `:ExamCertificateIssue`, plus REQ-352's `:PublicReadHandlesIssue`, plus
-  REQ-366's `:HelpRead`, plus REQ-384's `:MembershipsRead`.
+  REQ-366's `:HelpRead`, plus REQ-384's `:MembershipsRead`, plus REQ-401's
+  `:ModulesManage`.
 
-  The stated count is asserted against `length(permissions())` by
+  The stated core count is asserted against `length(core_permissions())` by
   `test/letflow/api/authorization_test.exs` (REQ-309 AC1), computed rather than
   hardcoded, so it cannot go stale again the way "eighteen" did (the list held
   nineteen entries before REQ-309).
   """
-  @spec permissions() :: [permission()]
-  def permissions, do: @permissions
+  @spec core_permissions() :: [permission()]
+  def core_permissions, do: @permissions
+
+  @doc """
+  Every permission the platform recognizes: the thirty-nine core
+  `Permission` values above (`core_permissions/0`), followed by every
+  registered module's own declared permissions
+  (`Letflow.Modules.Catalog.permissions/0`, REQ-400/REQ-401, D4) — computed,
+  not a second hardcoded list. A module's own permission atoms are typed
+  `atom()` at the Catalog boundary, never members of this module's closed
+  `permission()` union, hence the widened `@spec`. No dedup is performed
+  between the two halves here — `Letflow.Modules.Catalog.validate/1`'s
+  `{:core_permission_collision, _}` rule (checked against
+  `core_permissions/0`, not this function) is what keeps them disjoint.
+  """
+  @spec permissions() :: [permission() | atom()]
+  def permissions, do: core_permissions() ++ Letflow.Modules.Catalog.permissions()
 
   defmodule AccessContext do
     # PROVENANCE (historical, not current decision authority):
@@ -458,7 +500,7 @@ defmodule Letflow.Api.Authorization do
   `endpointPolicyKey/2` (authorization.zig L77-112) exactly, including the
   SVC-04 service-catalog entries.
   """
-  @spec endpoint_policy_key(String.t(), String.t()) :: endpoint_policy_key()
+  @spec endpoint_policy_key(String.t(), String.t()) :: endpoint_policy_key() | atom()
   def endpoint_policy_key(method, path_template)
 
   def endpoint_policy_key("POST", "/definitions"), do: :DefinitionsCreate
@@ -850,7 +892,40 @@ defmodule Letflow.Api.Authorization do
   # section.
   def endpoint_policy_key("GET", "/me/memberships"), do: :MembershipsRead
 
+  # REQ-401 §4 — the Catalog-module route fallback. Every module route is
+  # mounted at `/modules/<id>/<rest>` (relative to `/api/v1`, same convention
+  # every clause above uses). Resolves to the permission atom the module's
+  # own manifest `route_policies` declares for `(method, "/" <> rest)`, or
+  # `:Unknown` if the module id is unregistered or no route_policies entry
+  # matches — see `module_route_permission/3` below. Inserted immediately
+  # before the final catch-all; every clause above keeps its exact position
+  # and body, so no existing (method, path) pair's result changes.
+  def endpoint_policy_key(method, "/modules/" <> rest) do
+    case String.split(rest, "/", parts: 2) do
+      [module_id, sub_path] -> module_route_permission(method, module_id, "/" <> sub_path)
+      [_module_id] -> :Unknown
+    end
+  end
+
   def endpoint_policy_key(_method, _path), do: :Unknown
+
+  @spec module_route_permission(String.t(), String.t(), String.t()) :: atom()
+  defp module_route_permission(method, module_id, sub_path) do
+    case Letflow.Modules.Catalog.fetch(module_id) do
+      {:error, :not_found} ->
+        :Unknown
+
+      {:ok, entry_module} ->
+        entry_module.manifest().route_policies
+        |> Enum.find(fn {route_method, path_pattern, _permission} ->
+          route_method == method and path_pattern == sub_path
+        end)
+        |> case do
+          nil -> :Unknown
+          {_method, _path_pattern, permission} -> permission
+        end
+    end
+  end
 
   @doc """
   PROVENANCE (historical, not current decision authority):
@@ -998,13 +1073,39 @@ defmodule Letflow.Api.Authorization do
     target in roles
   end
 
-  @doc "Ports `roleAllows/2` (L185-222) exactly, the full 5-role permission matrix."
-  @spec role_allows?(role(), permission()) :: boolean()
-  def role_allows?(role, permission)
+  @doc """
+  Ports `roleAllows/2` (L185-222) exactly, the full 6-role permission matrix,
+  then (REQ-401, D4) falls back to `Letflow.Modules.Catalog.role_grants/1`
+  for any permission the core matrix itself denies. `or` short-circuits on a
+  truthy left side, so:
 
-  def role_allows?(:PLATFORM_ADMIN, _permission), do: true
+    * every pair `core_role_allows?/2` already answers `true` for (in
+      particular every `PLATFORM_ADMIN` pair, via its unconditional `true`
+      clause) is unaffected by the Catalog side — `PLATFORM_ADMIN`'s
+      existing catch-all therefore also covers module permissions;
+    * every pair `core_role_allows?/2` answers `false` for falls through to
+      `permission in Letflow.Modules.Catalog.role_grants(role)` — this can
+      only ever flip a pair from `false` to `true` for a permission atom a
+      registered module actually grants that role, never for a core
+      permission (`Letflow.Modules.Catalog.validate/1`'s
+      `{:core_permission_collision, _}` rule keeps the two atom sets
+      disjoint, checked against `core_permissions/0`).
 
-  def role_allows?(:PROCESS_DESIGNER, permission),
+  A Catalog-granted permission is typed `atom()` at the Catalog boundary
+  (D4), not a member of the closed `permission()` union, hence the widened
+  `@spec`.
+  """
+  @spec role_allows?(role(), permission() | atom()) :: boolean()
+  def role_allows?(role, permission) do
+    core_role_allows?(role, permission) or permission in Letflow.Modules.Catalog.role_grants(role)
+  end
+
+  @spec core_role_allows?(role(), permission()) :: boolean()
+  defp core_role_allows?(role, permission)
+
+  defp core_role_allows?(:PLATFORM_ADMIN, _permission), do: true
+
+  defp core_role_allows?(:PROCESS_DESIGNER, permission),
     do:
       permission in [
         :DefinitionsWrite,
@@ -1042,7 +1143,7 @@ defmodule Letflow.Api.Authorization do
         :MembershipsRead
       ]
 
-  def role_allows?(:PROCESS_OPERATOR, permission),
+  defp core_role_allows?(:PROCESS_OPERATOR, permission),
     do:
       permission in [
         :DefinitionsRead,
@@ -1082,7 +1183,7 @@ defmodule Letflow.Api.Authorization do
         :MembershipsRead
       ]
 
-  def role_allows?(:TASK_WORKER, permission),
+  defp core_role_allows?(:TASK_WORKER, permission),
     do:
       permission in [
         :DefinitionsRead,
@@ -1114,12 +1215,12 @@ defmodule Letflow.Api.Authorization do
   # AGENT_RUNNER has no ISS-0646-style closed-set invariant blocking it the
   # way CANDIDATE does (see this module's moduledoc "HelpRead" section for
   # why CANDIDATE is deliberately excluded instead).
-  def role_allows?(:AGENT_RUNNER, :HelpRead), do: true
+  defp core_role_allows?(:AGENT_RUNNER, :HelpRead), do: true
   # REQ-384: see this module's moduledoc "MembershipsRead" section -- same
   # "assist every authenticated user regardless of role" exception as
   # :HelpRead above.
-  def role_allows?(:AGENT_RUNNER, :MembershipsRead), do: true
-  def role_allows?(:AGENT_RUNNER, _permission), do: false
+  defp core_role_allows?(:AGENT_RUNNER, :MembershipsRead), do: true
+  defp core_role_allows?(:AGENT_RUNNER, _permission), do: false
 
   # ISS-0646 (decision 0013 addendum): CANDIDATE is a dedicated role for
   # external exam candidates, holding exactly REQ-335's five exam-session
@@ -1127,7 +1228,7 @@ defmodule Letflow.Api.Authorization do
   # (see this module's moduledoc "ExamSession*" section) -- ownership of the
   # specific session is still enforced inside Letflow.Exam.Session/
   # Letflow.Exam.AntiCheat themselves, never by this role grant.
-  def role_allows?(:CANDIDATE, permission),
+  defp core_role_allows?(:CANDIDATE, permission),
     do:
       permission in [
         :ExamSessionStart,

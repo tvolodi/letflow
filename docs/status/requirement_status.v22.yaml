@@ -796,3 +796,61 @@ history:
       issue's suggested_fix. README.md not touched -- no documented
       current-behavior surface describing LogFilter/MigrationReplayBoot
       logging to keep in sync. Queue task 807 released done.
+  - req: REQ-401
+    event: done
+    agent: DOC-UPDATER
+    at: "2026-09-25T03:06:46Z"
+    note: >
+      WF02-REQ401-20260925 Step 6 -- second requirement of S11 (modular-
+      platform architecture), implementing 0039 D4 ("Permissions and who
+      holds them") and the permission half of D5 (`:ModulesManage`). Full
+      validation chain, all independently confirmed: SECURITY-REVIEWER PASS
+      (rigorous hand-traced authorization answer-preservation proof),
+      REVIEWER PASS (idiom/scope/decision-record), TEST-DESIGN-VALIDATOR
+      PASS (3 real mutation-reproduction proofs), RELEASE-VALIDATOR PASS
+      on all 8 acceptance criteria with rigorous evidence including live-
+      fail probes for AC4/AC5 (temporarily emptied the fixture's
+      route_policies, confirmed the enforcement tests genuinely fail,
+      reverted, reconfirmed pass). Ships `Letflow.Api.Authorization.
+      permissions/0` returning core's `@permissions` followed by every
+      Catalog module's permissions via `Letflow.Modules.Catalog`;
+      `role_allows?/2` falling back to the Catalog after every existing
+      core clause's result is preserved unchanged (`PLATFORM_ADMIN`'s
+      existing catch-all `true` at authorization.ex:1005 stays and
+      therefore also covers module permissions, per 0039 REVIEWER R2); a
+      new core permission `:ModulesManage` granted to `PLATFORM_ADMIN`
+      only, same pattern as `:TenantsManage`; and `endpoint_policy_key/2`
+      falling back, for `/modules/<id>/<rest>` paths, to the matching
+      module's manifest `route_policies` entry. The ISS-0646 CANDIDATE
+      test (authorization_test.exs:1830) still asserts exactly its
+      original six exam-permission atoms unchanged -- the exam atoms stay
+      in core in this requirement, moving only in REQ-408 (P2). DOC-UPDATER
+      rebased feature/WF02-REQ401-20260925 onto latest origin/main (clean,
+      1 commit behind, docs-only commit, no conflicts) and re-ran the
+      diff-related suite fresh in the rebased worktree:
+      `mix test test/letflow/api/authorization_test.exs
+      test/letflow/api/authorization_enforcement_test.exs
+      test/letflow/modules/catalog_test.exs` -> 143 passed, 0 failures.
+      Host load was low at check time (loadavg ~1.25), so this fresh
+      targeted run was taken in addition to, not instead of, RELEASE-
+      VALIDATOR's own prior 143/143-twice confirmation; a full
+      `mix letflow.check.test` was contention-poisoned earlier in the day
+      per RELEASE-VALIDATOR's own report (host load spiked to 185,
+      DBConnection timeouts in all 8 partitions) with zero failures
+      touching lib/letflow/api/authorization.ex, lib/letflow/modules/
+      catalog.ex, or their test files -- the only failures matched
+      already-filed, unrelated issues (ISS-0827's stale router_test.exs
+      count, ISS-0826's self-refilling handoff-lint backlog). Design:
+      lib/letflow/design/req401-catalog-sourced-permissions.md. No
+      docs/migration/stage-N-*.md or decisions/*.md file was named by this
+      requirement's acceptance criteria (0039 itself, the decision record
+      this requirement implements, was not touched by the implementation --
+      confirmed via diff -- and needed none, since it already documented
+      D4/D5 as forward-looking design). README.md not touched -- grepped
+      for "ModulesManage"/"module permission"/"role_grants": zero hits
+      outside docs/migration/decisions/0039-platform-module-solution-
+      layering.md, no documented current-behavior surface to keep in sync.
+      Status flipped in docs/requirements.yaml. Full pipeline --
+      CODE-DESIGNER, SECURITY-REVIEWER, REVIEWER, TEST-DESIGNER,
+      RELEASE-VALIDATOR -- on feature/WF02-REQ401-20260925, rebased onto
+      origin/main (2a97b3f3) before this entry.

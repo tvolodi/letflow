@@ -29993,7 +29993,7 @@ requirements:
   - id: REQ-403
     title: "P1: module install route gated by :ModulesManage, and GET /api/v1/me/modules gated by the new core :MyModulesRead permission"
     owner: ELIXIR-DEV
-    status: pending
+    status: done
     stage: S11
     impl_order: 792  # letflow-queue task id, GH#1777. Registered 2026-09-24T11:10:15Z by ORCH (WF-01 Step 3).
     description: >

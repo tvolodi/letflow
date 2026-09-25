@@ -1,0 +1,75 @@
+{
+  "run_id": "WF03-ISS0806-20260925",
+  "step": "02-code-designer",
+  "agent": "CODE-DESIGNER",
+  "timestamp": "2026-09-25T05:31:44Z",
+  "status": "COMPLETE",
+
+  "context": {
+    "requirement_text": "ISS-0790 / ISS-0806: module permissions/role_grants are typed as plain atom() — no compile-time check that a role_grants value atom is in permissions.",
+    "issue_canonical": "docs/issues/ISS-0790.yaml",
+    "run_id": "WF03-ISS0806-20260925",
+    "prior_step": "handoffs/WF03-ISS0806-20260925/step-01-issue-fixer.json",
+    "artifacts_in": [
+      "lib/letflow/modules/module.ex",
+      "lib/letflow/modules/catalog.ex",
+      "test/support/modules/fixture/fixture.ex",
+      "docs/migration/decisions/0039-platform-module-solution-layering.md"
+    ]
+  },
+
+  "task": {
+    "acceptance_criteria": [
+      "AC1: A compile-time mechanism catches a role_grants atom not present in permissions",
+      "AC2: Existing runtime validate/1 behaviour unchanged"
+    ],
+    "design_artefact": "lib/letflow/design/iss-0806-defmanifest-compile-check.md"
+  },
+
+  "design_summary": {
+    "approach": "defmanifest/1 macro in Letflow.Modules.Module",
+    "macro_signature": "defmanifest(fields) where fields is a keyword list literal",
+    "expansion": "def manifest/0 returning the manifest map from fields — satisfies @callback manifest/0",
+    "compile_time_check": "At macro expansion: for each {role, perms} in role_grants, each perm atom must be in permissions. CompileError raised if violated.",
+    "error_message": "role_grants atom :<ATOM> is not declared in permissions for module Elixir.<CallerModule>",
+    "callback_kept": true,
+    "callback_kept_reason": "Existing modules implementing def manifest/0 directly still satisfy the @behaviour; defmanifest is opt-in syntactic sugar",
+    "catalog_validate_unchanged": true,
+    "six_rules_unchanged": true
+  },
+
+  "affected_files": [
+    {
+      "path": "lib/letflow/modules/module.ex",
+      "change": "Add defmacro defmanifest/1 with @doc describing argument contract and CompileError condition. No existing declaration modified or removed."
+    },
+    {
+      "path": "test/support/modules/fixture/fixture.ex",
+      "change": "Switch def manifest/0 to defmanifest(...) using the same literal field values, demonstrating valid usage and exercising compile-time check positively."
+    },
+    {
+      "path": "lib/letflow/modules/catalog.ex",
+      "change": "NO CHANGE — AC2 requirement."
+    }
+  ],
+
+  "test_strategy": {
+    "AC1_negative": "Code.compile_string/1 compiling a defmanifest with role_grants atom not in permissions must raise CompileError with the prescribed message",
+    "AC1_positive": "Fixture module compiles cleanly after switching to defmanifest (known-valid manifest)",
+    "AC2": "All existing CatalogTest cases pass unchanged; validate/1 and six-rule helpers are not modified"
+  },
+
+  "open_questions": [],
+
+  "result": {
+    "status": "PASS",
+    "summary": "Design artefact produced at lib/letflow/design/iss-0806-defmanifest-compile-check.md. All six sections complete; every acceptance criterion maps to a concrete design element; no open questions; no implementation code present. Ready for CODE-DESIGN-VALIDATOR.",
+    "issues": [],
+    "next_action": "Route to CODE-DESIGN-VALIDATOR for gate check",
+    "next_agent": "CODE-DESIGN-VALIDATOR",
+    "artifacts_out": [
+      "lib/letflow/design/iss-0806-defmanifest-compile-check.md",
+      "handoffs/WF03-ISS0806-20260925/step-02-code-designer.json"
+    ]
+  }
+}

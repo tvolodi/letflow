@@ -1,0 +1,136 @@
+{
+  "handoff_id": "WF03-ISS0816-20260925-step-03d",
+  "run_id": "WF03-ISS0816-20260925",
+  "workflow_id": "WF-03",
+  "step": "Step 3d",
+  "from_agent": "REVIEWER",
+  "to_agent": "ORCH",
+  "file": "handoffs/WF03-ISS0816-20260925/step-03d-reviewer.json",
+  "created_at": "2026-09-25T01:10:14Z",
+  "started_at": "2026-09-25T01:10:14Z",
+  "completed_at": "2026-09-25T01:16:00Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "rework_count": 0,
+  "max_rework": 3,
+  "context": {
+    "stage": "S8",
+    "issue_id": "ISS-0816",
+    "queue_ref": "Q-816",
+    "github_ref": "GH-1804",
+    "requirement_ids": [],
+    "branch_name": "feature/WF03-ISS0816-20260925",
+    "implementation_commit": "64b87055",
+    "handoff_commit_reviewed": "131f4a01",
+    "head_at_review": "697d0820",
+    "design_authority": "lib/letflow/design/iss-0816-cursorpage-has-more-audit.md (revision 3, gated PASS at handoffs/WF03-ISS0816-20260925/step-02b-design-gate-rework2.json)",
+    "artifacts_in": [
+      "docs/issues/ISS-0816.yaml",
+      "docs/issues/ISS-0824.yaml",
+      "lib/letflow/design/iss-0816-cursorpage-has-more-audit.md",
+      "handoffs/WF03-ISS0816-20260925/step-02b-design-gate-rework2.json",
+      "handoffs/WF03-ISS0816-20260925/step-03-frontend-dev.json"
+    ],
+    "related_handoff_ids": [
+      "WF03-ISS0816-20260925-step-01",
+      "WF03-ISS0816-20260925-step-02",
+      "WF03-ISS0816-20260925-step-02b-rework2",
+      "WF03-ISS0816-20260925-step-03"
+    ]
+  },
+  "task": {
+    "description": "WF-03 Step 3d, the REVIEWER hard gate on ISS-0816's implementation, sitting between FRONTEND-DEV's Step 3 delivery and TEST-DESIGNER. Gate commit 64b87055 (the fix) as carried by handoff commit 131f4a01 against the REVIEWER charter: idiomatic usage, supervision integrity, scope creep, and decision-record consistency. The change is confined to web/ (Letflow's React/TypeScript SPA) and to lib/letflow/design/, so the OTP and supervision half of the charter is structurally inapplicable here and is reported as such rather than stretched to fit. The primary question posed by ORCH is bidirectional equivalence: does the implementation match the gated design exactly, no more and no less. That question carries weight for this particular artefact because the design cleared its hard gate only on its third revision, having failed twice on the same T7 guard-regex enumeration -- two earlier enumerations each looked complete and each let the exact ISS-0816 defect through when respelled. Specific checks assigned: (1) scope creep against the ten separately filed out-of-scope issues ISS-0811, ISS-0812, ISS-0813, ISS-0814, ISS-0815, ISS-0820, ISS-0821, ISS-0822, ISS-0823 and ISS-0824, including confirmation that TenantListResponse is untouched as a deliberate non-change and that TimelineFeed's unrelated camelCase hasMore prop is untouched; (2) byte-for-byte identity of T7's five-alternative regex with the gated design's form, with the exemption list exactly the two ISS-0821 fixtures, no forbidlist entry weakened and no other allowedPaths added; (3) that the two ISS-0765 surface guards were EXTENDED rather than loosened to accommodate a seventh groupsApi function, which is the quiet-degradation risk this step exists to catch; (4) that web/tests/guards/meta-control.spec.ts is unmodified despite the design's section 7.1 containing a false claim about per-alternative fixture pinning; (5) the bounded drain's semantics at and around the 20-request cap, including the specified boundary case at exactly 20; (6) decision-record consistency and independent verification that the docblocks' route-to-builder mapping matches the real Elixir response builders rather than the design's description of them; (7) AC4 placement accuracy. FRONTEND-DEV declared two honest gaps: no live backend or browser (docker daemon down), and ISS-0824, under which GroupsPage cannot be rendered with a real query provider without hanging, forcing T6 onto the repo's mocked-useQuery pattern. ORCH directed that mocked green must not be treated as integration evidence and that the verdict state what remains unproven, and additionally asked whether T6 in its rewritten form still discriminates the behaviour it exists to prove.",
+    "acceptance_criteria": [
+      "AC-R1 -- Bidirectional design conformance. Every edit the gated design specifies is present in the diff, and every edit present in the diff is specified by the gated design. Checked per design sections 5.1 through 5.6 and section 6, in both directions, against git diff origin/main...HEAD -- web/.",
+      "AC-R2 -- Scope creep. No change in web/ belongs to ISS-0811, ISS-0812, ISS-0813, ISS-0814, ISS-0815, ISS-0820, ISS-0821 (beyond the single DlqPage.pagination.test.tsx fixture edit the design admits as a hard compile blocker), ISS-0822 (provenance comment only, no type change), ISS-0823 or ISS-0824. TenantListResponse and TimelineFeed.tsx confirmed untouched.",
+      "AC-R3 -- T7 guard integrity. The has-more-wire-field regex in web/tests/guards/forbidlist.ts is character-identical to the design's five-alternative form; allowedPaths is exactly the two ISS-0821 fixtures; no pre-existing forbidlist entry was weakened; no other allowedPaths entry was added; web/src/types/api.ts and web/src/api/__tests__/identity.groupsApi.test.ts both pass source-scan UNEXEMPTED.",
+      "AC-R4 -- ISS-0765 guards extended, never weakened. T-0765-SURFACE remains an exact-equality assertion over Object.keys(groupsApi).sort() with listAllMembers inserted in sort order; T-0765-NO-ADMIN-PREFIX's it.each body is unchanged and its hand-maintained surfaceRows array gained the seventh row; the file reports 17 green, up from 16.",
+      "AC-R5 -- meta-control.spec.ts unmodified. Confirmed by name-only diff against origin/main. The design's false per-alternative-pinning claim was handled by documenting the real behaviour in the offender fixture rather than by editing the spec.",
+      "AC-R6 -- Bounded drain semantics. truncated is false the moment a response carries a null next_cursor including on the twentieth request; truncated is true only when the twentieth response still advertised more; no twenty-first request is ever issued; the drain rejects on the first failed request. Verified by reading the code and by mutation-testing the boundary in an isolated worktree.",
+      "AC-R7 -- Decision-record consistency and AC4 accuracy. Nothing in the change contradicts any record in docs/migration/decisions/. The route-to-builder mapping recorded in the CursorPage and CountedCursorPage docblocks was re-derived independently from the Elixir response builders at the cited file:line positions and found accurate.",
+      "AC-R8 -- Independent verification, not report-trust. FRONTEND-DEV's reported numbers (type-check 0, lint 0, 901 tests across 127 files, 52 guards, source-scan 0 violations) were re-run by this gate rather than accepted, and the verdict names what the absence of a live backend and a real query provider leaves unproven.",
+      "AC-R9 -- Type-safety observations, if any, are filed under docs/issues tagged type-safety rather than recorded only in this summary; if none is filed, that decision is stated with its reason."
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "gate_decision": "PASS",
+    "verdict": "PASS -- no blockers. The implementation matches the gated design in both directions. Four non-blocking observations are recorded for TEST-DESIGNER and ORCH.",
+    "charter_applicability": {
+      "otp_idiom_and_supervision": "INAPPLICABLE, stated rather than stretched. The diff touches web/ (React/TypeScript) and lib/letflow/design/ only. No .ex file changes, no gen_statem, no supervision tree, no Letflow.InstanceSupervisor surface. The Elixir side appears in this review only as READ-ONLY ground truth: the response builders whose emitted key sets the new frontend types claim to mirror. Charter questions 1 and 2 have no subject here and are not reported on.",
+      "applied_charter_questions": "Question 3 (type-safety gaps), question 4 (scope creep) and the run-specific additions (decision-record consistency, design conformance, guard integrity) are the ones with a subject in this diff."
+    },
+    "independent_verification": {
+      "note": "Every number below was re-run by this gate from web/ at HEAD 697d0820, not taken from FRONTEND-DEV's report. All four reproduce exactly.",
+      "type_check": "npm run type-check -> tsc -b tsconfig.json, exit 0, no output.",
+      "lint": "npm run lint -> eslint . --ext ts,tsx --report-unused-disable-directives --max-warnings 0, exit 0, no output.",
+      "test": "npm run test -> Test Files 127 passed (127); Tests 901 passed (901); 16.48s.",
+      "guards": "npm run guards -> Test Files 4 passed (4); Tests 52 passed (52); the source-scan assertion for web/src has no guard violations PASSED.",
+      "targeted": "npx vitest run on the three affected test files -> identity.groupsApi.test.ts 17 tests, identity.members.test.ts 6 tests, GroupsPage.members.test.tsx 4 tests; 27 passed. The 17 confirms the design's predicted 16 -> 17."
+    },
+    "check_results": {
+      "AC-R1_bidirectional_conformance": "PASS. Sixteen files changed under web/. Every one is named by the design: the api.ts type split and the two aliases (5.1); the thirteen retype rows (5.2); the promotions.ts docblock and .then removal (5.4); the modules.ts provenance comments (5.5); the DlqPage fixture (5.6); identity.ts members/2 plus listAllMembers/1 (6.1); GroupsPage.tsx (6.2); the two ISS-0765 guard edits (6.3 / T9); forbidlist.ts T7 (7.1); the two T8 fixtures; and the two new test files carrying T4/T5/T5b and T6. Nothing in the diff is unspecified. In the other direction, the sections the design says produce NO edit produced none: definitions.ts, dlq.ts and services.ts are absent from the diff, as section 5.3 (narrowing only) requires.",
+      "AC-R2_scope_creep": "PASS -- none found. Verified by git diff origin/main...HEAD --name-only. ISS-0811/0812/0813/0814/0815: no file touched. ISS-0820: definitions.ts is absent from the diff, so definitionsApi.search's dead limit/offset params are untouched. ISS-0821: DlqPage.pagination.test.tsx is the only fixture edited, and only its three has_more keys (3 lines changed); PromotionReviewListPage.test.tsx, TaskInboxPage.test.tsx and web/tests/e2e/obs04.timeline.e2e.spec.ts are all absent from the diff. ISS-0822: modules.ts is 18 insertions and 0 deletions -- comment only, no type change, CursorPage retained per decision (d). ISS-0823: GroupsPage.tsx's usersApi.list page_size 200 query appears in the diff only as unchanged context. ISS-0824: filed as docs/issues/ISS-0824.yaml in a later docs-only commit (697d0820, 68 insertions, no code) -- the mandated reporting route for a discovered gap, not scope creep. TenantListResponse: web/src/types/tenants.ts is absent from the diff, so decision (b)'s deliberate non-change held. TimelineFeed: web/src/components/instances/TimelineFeed.tsx is absent from the diff, so its camelCase hasMore prop is untouched, and the T8 bystander fixture now pins it mechanically against alternatives 4 and 5 as well.",
+      "AC-R3_T7_regex": "PASS, and byte-verified rather than eyeballed. A script extracted the regex line from the design's section 7.1 and from web/tests/guards/forbidlist.ts and compared the raw strings: IDENTICAL. All five alternatives are present, including alternative 4 (ES6 shorthand), which is the one BLOCKER-3 was about. allowedPaths is exactly the two ISS-0821 fixtures with the inline delete-when-ISS-0821-lands note. git diff on forbidlist.ts is 29 insertions and 0 deletions, so no pre-existing entry was weakened and no other allowedPaths was added; grepping every deletion line in that file's diff returns nothing. Both files the narrowing was supposed to rescue pass UNEXEMPTED: source-scan reports 0 violations with web/src/types/api.ts carrying the required docblock prose naming the field and identity.groupsApi.test.ts:63 still carrying its truthful comment that Pagination.Page never emits one.",
+      "AC-R4_ISS0765_guards": "PASS -- both extended, neither loosened, and the asymmetry the design warned about was honoured. (i) T-0765-SURFACE at :229 is still expect(Object.keys(groupsApi).sort()).toEqual([...]) -- an exact-equality assertion, not a superset or contains relaxation -- with listAllMembers inserted between list and members, which is correct sort order. The only other change is the test TITLE, from exactly the six functions to exactly the functions. (ii) T-0765-NO-ADMIN-PREFIX's it.each body at :261-271 is byte-unchanged: both assertions (url not.toContain /api/v1/admin/ and url toContain /api/v1/identity/groups) survive verbatim, and captured(spy)'s single-call expectation is untouched. The hand-maintained surfaceRows array gained the listAllMembers row -- the one that never goes red on its own. The file runs 17 tests green, confirming 16 -> 17. No exemption was added for either file and no guard was relaxed to make room for the seventh function.",
+      "AC-R5_meta_control_untouched": "PASS. web/tests/guards/meta-control.spec.ts is absent from git diff origin/main...HEAD --name-only. FRONTEND-DEV handled the design's false section-7.1 claim correctly: rather than editing the spec, it wrote the true behaviour into the offender fixture's header, stating that meta-control tests the regex against the whole file so a single surviving alternative satisfies it and the listed forms document intended coverage rather than individually pinning it. I verified that statement against the spec itself: meta-control.spec.ts:34-44 runs exactly one regex.test over the whole offender content and one over the whole bystander content per pattern. The fixture's note is accurate and the design's per-alternative-pinning claim is the thing that is wrong. See OBS-2.",
+      "AC-R6_drain_semantics": "PASS, and mutation-tested rather than read-only. The loop is bounded by request < MEMBER_DRAIN_MAX_REQUESTS with the null-cursor early return INSIDE the loop body after the items push, so a twentieth response carrying next_cursor null returns truncated false -- the specified boundary -- and only falling out of the loop with a live cursor returns truncated true. No twenty-first request is structurally possible. Errors propagate: there is no try/catch, so client.get's rejection is the drain's rejection on first failure. To confirm the tests genuinely pin this rather than merely accompanying it, I applied three mutations in a detached worktree in the session scratchpad (the repo working tree was never modified): M2, cap off-by-one to <=, killed T5 and T5c; M3, suppressing the boundary so the cap always reports truncated true, killed T5b and nothing else; M1, reverting GroupsPage's queryFn to groupsApi.members, killed exactly one T6 case (see OBS-1). The boundary is genuinely pinned. I also confirmed against the backend that page_size 200 is ACCEPTED rather than rejected: Pagination.validate_page_size/1 at lib/letflow/api/pagination.ex:155-161 rejects only size greater than max_page_size, and max_page_size is 200 at :50 -- so the drain's chosen page size is the largest legal one, not one past it. That is a live-backend behaviour the mocked tests could not have caught and it checks out by source.",
+      "AC-R7_decision_records_and_AC4": "PASS. No decision record is contradicted: the change introduces no framework or library choice, touches no backend, and records 0001 (web framework), 0004 (humanless pipeline), 0011 (frontend ownership) and 0012 (mobile tier) are all unimplicated. On AC4 accuracy I did not take the design's word for the mapping -- I re-read every response builder the docblocks cite, at the cited line numbers, at HEAD. All ten check out and emit exactly the key sets claimed: definitions.ex:454-458 and :539-544 emit items and next_cursor; dlq.ex:140-144, services.ex:131-135, admin_services.ex:198-202 and promotions.ex:944-948 emit items and next_cursor; audit.ex:308-320 page_body/2 hand-builds items, next_cursor and count and demonstrably drops the internal has_more; instances.ex:954-959 and tasks.ex:269-275 emit items, next_cursor and count; pagination.ex:81 carries the Jason.Encoder derive over items, next_cursor and count. I additionally verified the two rows the docblocks assert without a line citation: entities.ex:1648-1650 run_query/4 emits exactly items and next_cursor (two-key, correct), and tenants.ex:280, identity.ex:298 and identity.ex:552 all route through Pagination.page_response/2 at :171-173, which always sets count as length(items) (three-key, correct). The mapping in the docblocks describes reality, not the design's description of reality.",
+      "AC-R8_mocked_green_is_not_integration": "PASS as a gate, with the limitation stated. See result.what_remains_unproven.",
+      "AC-R9_type_safety_filings": "No issue filed, and here is why. The one candidate is that the drain's null check is strict (page.next_cursor === null), so a response that OMITTED next_cursor rather than sending null would not terminate the drain -- it would re-request page one twenty times and return truncated true over duplicated items. That state is unreachable against the real backend: every builder above emits the key unconditionally, hand-built or derived, and the TypeScript type already declares string or null, so TS treats the check as exhaustive. The residual risk is wire-versus-type divergence, which is precisely the already-filed ISS-0813 (MAJOR, open: no mechanism couples web/src/types/api.ts to the routers' real response bodies). Filing a second record for the same class would duplicate it. Recorded here and in OBS-4 rather than filed."
+    },
+    "t6_discrimination_assessment": {
+      "question_from_orch": "Does T6, in its rewritten mocked-useQuery form, still discriminate the behaviour it exists to prove -- that the page calls listAllMembers and never members?",
+      "answer": "YES, but the discrimination lives in ONE of its four cases, and not the one the design nominated. Measured, not reasoned: in an isolated worktree I reverted GroupsPage.tsx's queryFn to groupsApi.members(activeGroupId) -- the pre-fix behaviour -- and re-ran the file. Result: 1 failed, 3 passed. The single failure is the case titled the page queries the drain, never the single-page members call, which FRONTEND-DEV added on its own initiative; it works because the useQuery double invokes the page's real queryFn for the group-members key, so a spy on the mocked identity module observes which function the page actually dials.",
+      "the_case_that_does_not_discriminate": "The design's own nominated T6 assertion -- a second-page member is not offered in the Add member dropdown -- PASSES against the unfixed page. That is inherent to the mocked-useQuery pattern ISS-0824 forced: the member data is handed to the component by the test rather than produced by the API, so the assertion exercises GroupsPage's availableUsers set-difference logic (which this fix did not change) over a complete set that the test supplies. It is a correct and worthwhile assertion about the set difference; it is not evidence that the page now obtains a complete set.",
+      "consequence": "The behavioural claim rests entirely on the second case. That is enough for this gate to PASS -- the claim IS pinned -- but the case must not later be deleted as redundant-looking boilerplate. Flagged to TEST-DESIGNER as OBS-1."
+    },
+    "what_remains_unproven": {
+      "preamble": "Mocked green is not integration evidence and is not treated as such here. FRONTEND-DEV's two declared gaps are accurate and neither was overstated. What they leave open:",
+      "items": [
+        "No live backend (docker daemon down). The drain has never spoken to lib/letflow/routers/identity.ex:552. What IS covered: T4, T5, T5b, T5c and the error-propagation case run against the REAL web/src/api/client.ts with only window.fetch doubled, so URL construction, query-param serialization (page_size=200 present, cursor absent on page one, cursor=c2 on page two) and the cursor round-trip through the real client are genuinely exercised. What is NOT covered by execution: that the server accepts page_size 200 and returns the envelope assumed -- mitigated by source verification (validate_page_size accepts exactly 200; page_response always emits the three keys) but not run.",
+        "No browser and no real query provider (ISS-0824). GroupsPage has never been rendered against a real react-query QueryClientProvider in this run -- the page hangs, which FRONTEND-DEV measured against the UNMODIFIED page too, so it predates ISS-0816. Unproven as a result: the queryKey, enabled and refetch wiring around the drain under real react-query semantics (retry, suspense boundaries, refetch on focus), the QueryStateBoundary interaction, and the truncation notice's rendering in a real tree rather than a mocked one.",
+        "No e2e or UAT coverage of the Add-member dropdown. The INV-D defect this fix exists to close -- a member past page one being offered as addable -- has been demonstrated fixed only at unit and mocked-component level. There is no scenario evidence against a real tenant with more than fifty group members.",
+        "The truncated-true branch has never been reached against a real server. Reaching it needs a group of more than 4000 members, so it is a bound rather than a path -- but the notice's copy and placement are proven only under a mocked truncated flag."
+      ],
+      "gate_position": "None of these is a reason to FAIL. They are the correct residue of a frontend-only change made while the backend cannot be started, and they were declared by FRONTEND-DEV rather than concealed. They are recorded here so TEST-DESIGNER scopes to them and so no later step reads 901 green as integration evidence."
+    },
+    "observations_non_blocking": [
+      {
+        "id": "OBS-1",
+        "for": "TEST-DESIGNER",
+        "text": "T6's load-bearing case is the one titled the page queries the drain, never the single-page members call, in web/src/pages/admin/__tests__/GroupsPage.members.test.tsx -- not the headline second-page-member assertion. Mutation-measured: reverting the page to groupsApi.members leaves 3 of 4 T6 cases green. Do not let that case be deleted or merged as redundant, and if ISS-0824 is ever fixed, promote T6 to a real query provider so the headline assertion becomes discriminating on its own."
+      },
+      {
+        "id": "OBS-2",
+        "for": "ORCH",
+        "text": "The gated design's section 7.1 still asserts that the offender fixture pins each of T7's five alternatives mechanically. It does not: meta-control.spec.ts:34-44 runs one regex.test over the whole file, so any single surviving alternative satisfies it. FRONTEND-DEV documented the truth in the fixture header, correctly declining to edit the spec. The design text now knowingly carries a false claim that a later reader will hit. Worth a one-line correction to the design doc, or a small issue -- the same class of stale-premise problem ISS-0816's own record had."
+      },
+      {
+        "id": "OBS-3",
+        "for": "record",
+        "text": "T-0765-SURFACE's title lost its count (exactly the six functions became exactly the functions). The assertion itself still carries the full enumeration, so nothing is weakened, but the title no longer states the expected arity. Cosmetic; noted only so a future reader does not read the change as a relaxation."
+      },
+      {
+        "id": "OBS-4",
+        "for": "record",
+        "text": "Second sighting of a pattern worth watching as the API surface grows: the drain's return is an inline anonymous type rather than a named exported envelope, sitting one line away from the named envelope types this very fix introduced. The design specified it that way and it is correct today; if a second drain appears, name the shape. Related, and NOT filed separately because it is already ISS-0813's scope: the strict null check would not terminate on a response that omitted next_cursor, which is a wire-versus-type divergence risk rather than a defect in this code."
+      }
+    ],
+    "idiom_notes": {
+      "idiomatic": "The drain is a plain bounded for-loop with named module-level constants carrying their backend citation (MEMBER_DRAIN_PAGE_SIZE, MEMBER_DRAIN_MAX_REQUESTS) rather than inline magic numbers. members/2 stays the faithful single-page wire call and the drain is built on top of it rather than duplicating the request, so ISS-0765's no-unwrap-inside-web/src/api rule is preserved and the new function inherits its route -- which is also why the added surfaceRows row passes unmodified. The params cast in members/2 matches the existing house style in instances.ts, tasks.ts and modules.ts rather than inventing a new one. useInfiniteQuery was correctly NOT introduced: it appears nowhere in web/src and would have added a pagination pattern for one dialog.",
+      "no_crutches_found": "No abstraction appears ahead of need -- no generic pagination helper, no drain factory, no behaviour-style indirection. The one deliberate weakest-claim decision (modules.ts keeping CursorPage with a provenance comment rather than asserting a count no server has ever sent) is the right call and is the opposite of speculative machinery.",
+      "supervision": "Not applicable -- see result.charter_applicability."
+    },
+    "next_action": "Proceed to TEST-DESIGNER (WF-03 Step 4). Both hard gates ahead of it are now green. TEST-DESIGNER should scope to result.what_remains_unproven and to OBS-1, and should NOT re-derive the route-to-shape mapping -- it is recorded in the docblocks and independently re-verified by this gate.",
+    "artifacts_out": [],
+    "git_evidence": {
+      "branch": "feature/WF03-ISS0816-20260925",
+      "head_at_review": "697d0820",
+      "implementation_commit": "64b87055",
+      "diff_command": "git diff origin/main...HEAD -- web/",
+      "web_diffstat": "16 files changed, 733 insertions(+), 58 deletions(-)",
+      "working_tree": "clean before and after review; the three mutation probes ran in a detached git worktree under the session scratchpad, which was removed afterwards. No file outside handoffs/ was modified by this gate."
+    }
+  }
+}

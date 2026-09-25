@@ -1,12 +1,17 @@
 // @vitest-environment jsdom
 /**
  * ISS-0823: GroupsPage Add-member dropdown truncation warning.
+ * ISS-0816/ISS-0828: GroupsPage members list truncation warning.
  *
- * When usersApi.list responds with next_cursor !== null (meaning the tenant
- * has more than 200 users — the server's hard max page_size), the "Manage
- * members" panel must show a visible warning that the user list is incomplete.
- *
- * When next_cursor === null (≤200 users or exactly 200), no warning is shown.
+ * NOTE (ISS-0824/GH-1817): GroupsPage CANNOT be tested with a real
+ * QueryClientProvider in jsdom. When the members or users query is backed by
+ * a never-resolving promise (the natural state of an unresolved mock), real
+ * react-query's retry logic spins the jsdom event loop indefinitely.
+ * This is a jsdom harness artifact, NOT a production render loop:
+ *   - Production: queries resolve (or fail with HTTP errors) normally
+ *   - jsdom: never-resolving promises cause react-query to retry forever
+ * All GroupsPage tests must use the mocked-useQuery pattern (vi.mock
+ * '@tanstack/react-query') and NEVER use a real QueryClientProvider.
  */
 
 import { describe, it, expect, vi, afterEach } from 'vitest'

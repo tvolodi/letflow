@@ -141,6 +141,13 @@ defmodule Letflow.Plugs.ApiPipeline do
   forward("/identity", to: Letflow.Routers.Identity)
   forward("/tenants", to: Letflow.Routers.Tenants)
   forward("/tenant/settings", to: Letflow.Routers.TenantSettings)
+
+  # REQ-403 (design lib/letflow/design/req403-module-install-route.md §4) --
+  # the HTTP install path onto 0039 D5. Mounted at /tenant/modules,
+  # deliberately NOT under /api/v1/modules/ (REQ-404's future per-module
+  # mount) -- so this route can never collide with a future module whose
+  # catalog id happens to be literally "install".
+  forward("/tenant/modules", to: Letflow.Routers.TenantModules)
   forward("/instances", to: Letflow.Routers.Instances)
   forward("/definitions", to: Letflow.Routers.Definitions)
   forward("/tasks", to: Letflow.Routers.Tasks)

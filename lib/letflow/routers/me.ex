@@ -12,6 +12,22 @@ defmodule Letflow.Routers.Me do
   | Handler | Method/path | Delegates to | Permission | Response |
   |---|---|---|---|---|
   | handle_list_memberships | `GET /me/memberships` | `Letflow.Identity.list_memberships_for_subject/1` | `:MembershipsRead` | 200 |
+  | handle_list_modules | `GET /me/modules` | `Letflow.Modules.Installs.list_installed/1` | `:MyModulesRead` | 200 |
+
+  ## `GET /me/modules` (REQ-403)
+
+  Granted to every role, including `CANDIDATE` and `AGENT_RUNNER` — unlike
+  `:MembershipsRead` above, this route deliberately does NOT widen
+  `CANDIDATE`'s ISS-0646 closed permission set; instead it grows that set
+  by exactly one new atom, `:MyModulesRead`, via a role-agnostic
+  `role_allows?/2` clause. See `lib/letflow/api/authorization.ex`'s
+  `role_allows?/2` and
+  `lib/letflow/design/req403-module-install-route.md` §1/§5.2 for the full
+  reasoning (decided by ORCH 2026-09-24, not re-opened here). `prefix` is
+  resolved only from `conn.assigns.scoped_opts` (INV-1) — no path/query/
+  header value is read for tenant selection. Response body:
+  `{"installed_modules": [{"module_id", "version"}, ...]}` — exactly those
+  two keys per entry, no `installed_at`, no `settings`, no `id`.
 
   ## `:MembershipsRead` permission — CANDIDATE deliberately excluded
 
@@ -52,9 +68,15 @@ defmodule Letflow.Routers.Me do
   alias Letflow.Identity.Tenant
   alias Letflow.Identity.TenantMembership
   alias Letflow.Identity.User
+  alias Letflow.Modules.Installs
+  alias Letflow.Modules.TenantModule
 
   authz_get "/memberships", :MembershipsRead do
     handle_list_memberships(conn)
+  end
+
+  authz_get "/modules", :MyModulesRead do
+    handle_list_modules(conn)
   end
 
   match _ do
@@ -119,5 +141,23 @@ defmodule Letflow.Routers.Me do
       "tenant_display_name" => tenant.display_name,
       "display_label" => display_label
     }
+  end
+
+  # ── GET /me/modules (REQ-403 design §3) ─────────────────────────────────
+
+  @spec handle_list_modules(Plug.Conn.t()) :: Plug.Conn.t()
+  defp handle_list_modules(conn) do
+    prefix = Keyword.fetch!(conn.assigns.scoped_opts, :prefix)
+
+    installed_modules =
+      Installs.list_installed(prefix: prefix)
+      |> Enum.map(&installed_module_json/1)
+
+    Response.ok(conn, %{"installed_modules" => installed_modules})
+  end
+
+  @spec installed_module_json(TenantModule.t()) :: map()
+  defp installed_module_json(%TenantModule{} = tenant_module) do
+    %{"module_id" => tenant_module.module_id, "version" => tenant_module.version}
   end
 end

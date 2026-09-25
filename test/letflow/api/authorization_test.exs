@@ -30,8 +30,8 @@ defmodule Letflow.Api.AuthorizationTest do
              ]
     end
 
-    # REQ-401 — the core, closed-set literal, now including :ModulesManage as
-    # its 39th/last entry. This is what core_permissions/0 must return exactly.
+    # REQ-403 — the core, closed-set literal, now including :MyModulesRead as
+    # its 40th/last entry. This is what core_permissions/0 must return exactly.
     @core_permissions [
       :DefinitionsWrite,
       :DefinitionsRead,
@@ -71,10 +71,11 @@ defmodule Letflow.Api.AuthorizationTest do
       :PublicReadHandlesIssue,
       :HelpRead,
       :MembershipsRead,
-      :ModulesManage
+      :ModulesManage,
+      :MyModulesRead
     ]
 
-    test "core_permissions/0 returns the closed core list through REQ-401's :ModulesManage, no Catalog atoms" do
+    test "core_permissions/0 returns the closed core list through REQ-403's :MyModulesRead, no Catalog atoms" do
       assert Authorization.core_permissions() == @core_permissions
     end
 
@@ -415,7 +416,8 @@ defmodule Letflow.Api.AuthorizationTest do
           36 => "thirty-six",
           37 => "thirty-seven",
           38 => "thirty-eight",
-          39 => "thirty-nine"
+          39 => "thirty-nine",
+          40 => "forty"
         }
         |> Map.get(actual_count)
 
@@ -945,7 +947,8 @@ defmodule Letflow.Api.AuthorizationTest do
           36 => "thirty-six",
           37 => "thirty-seven",
           38 => "thirty-eight",
-          39 => "thirty-nine"
+          39 => "thirty-nine",
+          40 => "forty"
         }
         |> Map.get(actual_count)
 
@@ -1409,7 +1412,8 @@ defmodule Letflow.Api.AuthorizationTest do
           36 => "thirty-six",
           37 => "thirty-seven",
           38 => "thirty-eight",
-          39 => "thirty-nine"
+          39 => "thirty-nine",
+          40 => "forty"
         }
         |> Map.get(actual_count)
 
@@ -2118,7 +2122,8 @@ defmodule Letflow.Api.AuthorizationTest do
       assert length(@pre_req401_permissions) == 38
       assert Enum.sort(Map.keys(@pre_req401_allowed)) == Enum.sort(Authorization.roles())
 
-      assert Authorization.core_permissions() == @pre_req401_permissions ++ [:ModulesManage]
+      assert Authorization.core_permissions() ==
+               @pre_req401_permissions ++ [:ModulesManage, :MyModulesRead]
 
       pair_count = length(Authorization.roles()) * length(@pre_req401_permissions)
       assert pair_count == 228
@@ -2157,20 +2162,25 @@ defmodule Letflow.Api.AuthorizationTest do
   # EntitiesAggregate, AttachmentsRead, EntitiesDefinitionsRead).
   # ==========================================================================
 
-  describe "ISS-0646 — CANDIDATE denied every permission outside its five ExamSession* grants" do
+  describe "ISS-0646 — CANDIDATE denied every permission outside its seven grants" do
     @candidate_permissions [
       :ExamSessionStart,
       :ExamSessionRead,
       :ExamSessionSave,
       :ExamSessionSubmit,
       :ExamSessionReportEvent,
-      :ExamCertificateIssue
+      :ExamCertificateIssue,
+      # REQ-403 — the one deliberate widening of CANDIDATE's closed set,
+      # decided by ORCH 2026-09-24, granted via the role-agnostic
+      # `def role_allows?(_role, :MyModulesRead), do: true` clause (never a
+      # CANDIDATE-specific one).
+      :MyModulesRead
     ]
 
-    test "role_allows?/2 grants CANDIDATE exactly its six ExamSession*/ExamCertificateIssue permissions, denying every other live permission" do
+    test "role_allows?/2 grants CANDIDATE exactly its seven permissions, denying every other live permission" do
       all_permissions = Authorization.permissions()
 
-      # Sanity: the six atoms are themselves real, live permissions -- if
+      # Sanity: the seven atoms are themselves real, live permissions -- if
       # this ever failed, the denial loop below would be vacuously true for
       # them.
       for permission <- @candidate_permissions do
@@ -2184,13 +2194,14 @@ defmodule Letflow.Api.AuthorizationTest do
 
         assert actual == expected,
                "role_allows?(:CANDIDATE, #{inspect(permission)}) returned #{inspect(actual)}, " <>
-                 "expected #{inspect(expected)} -- CANDIDATE must hold exactly its six " <>
-                 "ExamSession*/ExamCertificateIssue permissions and nothing else (ISS-0646, " <>
-                 "decision 0013 addendum; REQ-355 added :ExamCertificateIssue to this set)"
+                 "expected #{inspect(expected)} -- CANDIDATE must hold exactly its seven " <>
+                 "ExamSession*/ExamCertificateIssue/MyModulesRead permissions and nothing else " <>
+                 "(ISS-0646, decision 0013 addendum; REQ-355 added :ExamCertificateIssue, " <>
+                 "REQ-403 added :MyModulesRead to this set)"
       end
     end
 
-    test "evaluate_access/2 agrees: CANDIDATE gets Allow for all six ExamSession*/ExamCertificateIssue policy keys" do
+    test "evaluate_access/2 agrees: CANDIDATE gets Allow for all seven ExamSession*/ExamCertificateIssue/MyModulesRead policy keys" do
       # evaluate_access/2's second argument is an endpoint POLICY KEY (what
       # endpoint_policy_key/2 returns), not a raw Permission atom -- the two
       # only coincide where required_permission/1 has an identity clause, as
@@ -2275,6 +2286,72 @@ defmodule Letflow.Api.AuthorizationTest do
         refute Authorization.role_allows?(:CANDIDATE, permission),
                "ISS-0646 regression: CANDIDATE must not hold #{inspect(permission)}"
       end
+    end
+  end
+
+  # ==========================================================================
+  # REQ-403 — :MyModulesRead, role-agnostic grant for GET /me/modules.
+  # Design: lib/letflow/design/req403-module-install-route.md §5.2.
+  # ==========================================================================
+
+  describe "REQ-403 AC5 -- :MyModulesRead granted to every role" do
+    test "role_allows?(role, :MyModulesRead) is true for every role in roles/0" do
+      for role <- Authorization.roles() do
+        assert Authorization.role_allows?(role, :MyModulesRead),
+               "expected role_allows?(#{inspect(role)}, :MyModulesRead) to be true"
+      end
+    end
+
+    test "endpoint_policy_key/2 resolves GET /me/modules to :MyModulesRead, and required_permission/1 is the identity clause" do
+      assert Authorization.endpoint_policy_key("GET", "/me/modules") == :MyModulesRead
+      assert Authorization.required_permission(:MyModulesRead) == :MyModulesRead
+    end
+
+    test "endpoint_policy_key/2 resolves POST /tenant/modules to :ModulesManage, and required_permission/1 is the identity clause" do
+      assert Authorization.endpoint_policy_key("POST", "/tenant/modules") == :ModulesManage
+      assert Authorization.required_permission(:ModulesManage) == :ModulesManage
+    end
+  end
+
+  describe "REQ-403 AC6 -- role_allows?/2 :MyModulesRead clause placement (grep contract)" do
+    test "the clause exists exactly once, and no def role_allows?(: line mentions :MyModulesRead" do
+      path = Path.join([File.cwd!(), "lib", "letflow", "api", "authorization.ex"])
+      source = File.read!(path)
+      lines = String.split(source, "\n")
+
+      matching_lines =
+        for {line, idx} <- Enum.with_index(lines, 1),
+            line =~ "def role_allows?(_role, :MyModulesRead), do: true",
+            do: idx
+
+      assert length(matching_lines) == 1,
+             "expected exactly one line matching the literal clause, got #{length(matching_lines)}: #{inspect(matching_lines)}"
+
+      [clause_line] = matching_lines
+
+      other_role_allows_lines =
+        for {line, idx} <- Enum.with_index(lines, 1),
+            line =~ "def role_allows?(",
+            idx != clause_line,
+            do: idx
+
+      assert other_role_allows_lines != [],
+             "expected at least one other def role_allows?/2 clause to compare against"
+
+      assert Enum.all?(other_role_allows_lines, &(clause_line < &1)),
+             "expected the :MyModulesRead clause (line #{clause_line}) to be the FIRST " <>
+               "def role_allows?/2 clause, but found an earlier one among " <>
+               "#{inspect(other_role_allows_lines)}"
+
+      per_role_lines_mentioning_it =
+        for {line, idx} <- Enum.with_index(lines, 1),
+            line =~ "def role_allows?(:",
+            line =~ ":MyModulesRead",
+            do: idx
+
+      assert per_role_lines_mentioning_it == [],
+             "expected no `def role_allows?(:` line to mention :MyModulesRead, found: " <>
+               "#{inspect(per_role_lines_mentioning_it)}"
     end
   end
 end

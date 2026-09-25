@@ -1,0 +1,68 @@
+{
+  "run_id": "WF03-ISS0806-20260925",
+  "step": "03c",
+  "agent": "SECURITY-REVIEWER",
+  "timestamp": "2026-09-25T05:43:31.982+05:00",
+  "commit_reviewed": "2b954e78",
+  "status": "PASS",
+
+  "scope_test": {
+    "verdict": "OUT OF SCOPE — no tenant-data path touched",
+    "reasoning": [
+      "No API route added or modified.",
+      "No migration file (priv/repo/migrations/*.exs) added or modified.",
+      "No secret resolution (System.get_env, config, env var, token) added or modified.",
+      "No response-shaping code for a tenant-scoped entity added or modified.",
+      "No lookup-by-ID handler added or modified.",
+      "The change is purely a compile-time macro (defmanifest/1) in a module behaviour file, a test-support fixture conversion to that macro, and a new ExUnit test file. All three files operate entirely at compile time or in test isolation."
+    ],
+    "files_reviewed": [
+      "lib/letflow/modules/module.ex",
+      "test/support/modules/fixture/fixture.ex",
+      "test/letflow/modules/defmanifest_test.exs"
+    ]
+  },
+
+  "invariant_assessment": {
+    "INV-1": {
+      "verdict": "NOT-APPLICABLE",
+      "reason": "No Ecto schema, no migration, and no database query is added or modified. The defmanifest/1 macro generates only a compile-time static manifest/0 function returning a plain map. No tenant-scoped table is touched."
+    },
+    "INV-2": {
+      "verdict": "NOT-APPLICABLE",
+      "reason": "No API response type or response-shaping code is changed. S4 (multi-tenant API surface) has not started."
+    },
+    "INV-3": {
+      "verdict": "NOT-APPLICABLE",
+      "reason": "No scripting or plugin sandbox code is added. S5 (scripting/plugins) has not started."
+    },
+    "INV-4": {
+      "verdict": "NOT-APPLICABLE",
+      "reason": "No secret material of any kind (API keys, webhook signing keys, OIDC client secrets, database URLs, bearer tokens) is present in the diff. The manifest fields are compile-time module metadata literals (id, version, permissions, role_grants, etc.) — not credentials. No System.get_env or config secret resolution is introduced. Hardcoded-secret grep would find nothing relevant in these three files."
+    },
+    "INV-5": {
+      "verdict": "NOT-APPLICABLE",
+      "reason": "No lookup-by-ID endpoint is added. S4 has not started."
+    },
+    "INV-6": {
+      "verdict": "NOT-APPLICABLE",
+      "reason": "defmanifest/1 introduces no new data-access path. The generated manifest/0 function returns a static compile-time map; it does not read from or write to any external store, network, or tenant-scoped resource. No new data-access surface is opened."
+    },
+    "INV-7": {
+      "verdict": "NOT-APPLICABLE",
+      "reason": "No SQL of any form is present in the diff. The macro uses only compile-time Elixir AST evaluation (Code.eval_quoted/3) and quote/unquote — no Ecto queries, no Repo.query, no raw SQL strings."
+    },
+    "INV-8": {
+      "verdict": "NOT-APPLICABLE",
+      "reason": "INV-8 targets runtime paths reachable from external I/O, tenant-controlled data, or network input. defmanifest/1 is a compile-time macro; it runs during compilation, not at runtime. The bare pattern match `{kw, _bindings} = Code.eval_quoted(fields, [], caller)` is inside a defmacro body — Code.eval_quoted/3 raises on failure rather than returning an error tuple (the Elixir contract for that function), so the match is exhaustive. No runtime path reachable from tenant or network input is introduced."
+    },
+    "INV-9": {
+      "verdict": "NOT-APPLICABLE",
+      "reason": "No outbound HTTP request is made. No tenant-controlled URL is introduced. defmanifest/1 has no network interaction."
+    }
+  },
+
+  "summary": "All nine invariants assessed as NOT-APPLICABLE. The diff is purely a compile-time syntactic macro, a test-support fixture migration to that macro, and an accompanying ExUnit test file. No tenant-data path, migration, secret resolution, response-shaping code, or lookup-by-ID handler is touched. PASS — no blocker; handoff to TEST-DESIGNER (step 04) is clear.",
+
+  "next_step": "TEST-DESIGNER (step 04)"
+}

@@ -1,0 +1,56 @@
+id: ISS-0832
+title: >
+  CheckBoundariesTaskTest AC2 fails under partitioned test runs -- shells out
+  to a subprocess without setting MIX_ENV, a latent bug in REQ-405's own test
+discovered_by: TEST-RUNNER (WF02-REQ403-20260925)
+discovered_in_run: WF02-REQ403-20260925
+discovered_at: "2026-09-25T16:40:00Z"
+severity: MINOR
+tags:
+  - test
+  - process
+description: >
+  Found by TEST-RUNNER while running the full suite for REQ-403
+  (scripts/test_parallel.sh, N=8 partitions). The failure reproduces
+  identically on an unmodified `main` checkout with none of REQ-403's code
+  present, and the affected file (CheckBoundariesTaskTest, from REQ-405) is
+  byte-identical between the REQ-403 branch and main -- confirming this is a
+  pre-existing defect in REQ-405's own test, not a regression caused by any
+  concurrent work.
+
+  Root cause (as diagnosed by TEST-RUNNER): the AC2 test shells out to a
+  subprocess (likely via System.cmd or Mix.Task.run in a spawned process)
+  without explicitly setting MIX_ENV/MIX_TEST_PARTITION on the child process's
+  environment. Under a normal single-partition `mix test` run the parent
+  process's env is inherited correctly by accident; under
+  `scripts/test_parallel.sh --partitions N`, each partition sets its own
+  MIX_TEST_PARTITION, and the subprocess either inherits the wrong partition
+  value or fails to see it at all, causing the check to run against the wrong
+  database/environment and fail.
+affected_files:
+  - test/letflow/mix/tasks/check_boundaries_test.exs
+related:
+  - ISS-0826
+severity_rationale: >
+  MINOR -- deterministic once triggered, but only triggers under partitioned
+  full-suite runs (not the common single-shard `mix test` path most agents
+  use locally), and doesn't touch production code or mask a real boundary
+  violation; it is a false negative in a lint-adjacent test's own env
+  plumbing, not a security or correctness defect in the boundaries check
+  itself.
+fix_direction: >
+  1. In the AC2 test (or its subprocess-invocation helper), explicitly pass
+     through/set MIX_ENV and MIX_TEST_PARTITION on the spawned subprocess's
+     environment rather than relying on inheritance, matching whatever
+     pattern other partition-safe subprocess-invoking tests in this codebase
+     already use (grep for existing System.cmd calls that pass `env:`
+     explicitly).
+  2. Add a regression note/comment referencing this issue so a future
+     partition-count change doesn't silently reintroduce the same class of
+     bug.
+  3. Confirm fixed by running scripts/test_parallel.sh with N>=2 partitions
+     and checking CheckBoundariesTaskTest AC2 passes on every partition it
+     lands on, not just N=1.
+status: open
+queue_ref: "Q-832"
+github_ref: null

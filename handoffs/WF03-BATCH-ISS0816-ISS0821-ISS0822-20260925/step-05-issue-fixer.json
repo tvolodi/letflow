@@ -1,0 +1,41 @@
+{
+  "run_id": "WF03-BATCH-ISS0816-ISS0821-ISS0822-20260925",
+  "step": "05",
+  "agent": "ISSUE-FIXER",
+  "completed_at": "2026-09-25T05:22:00Z",
+  "action": "close-issues",
+  "issues": [
+    {
+      "id": "ISS-0816",
+      "github_ref": "GH-1804",
+      "github_issue_number": 1804,
+      "yaml_updated": true,
+      "status_set_to": "resolved",
+      "github_closed": true,
+      "note": "ISS-0816.yaml existed and was updated. GH-1804 was open and is now closed."
+    },
+    {
+      "id": "ISS-0821",
+      "github_ref": "GH-1812",
+      "github_issue_number": 1812,
+      "yaml_updated": true,
+      "status_set_to": "resolved",
+      "github_closed": true,
+      "note": "GH-1812 was already closed prior to this step (closed by an earlier agent in the run). YAML updated to resolved."
+    },
+    {
+      "id": "ISS-0822",
+      "github_ref": "GH-1813",
+      "github_issue_number": 1813,
+      "yaml_updated": true,
+      "status_set_to": "resolved",
+      "github_closed": true,
+      "note": "GH-1813 was already closed prior to this step (closed by an earlier agent in the run). YAML updated to resolved."
+    }
+  ],
+  "resolved_in_run": "WF03-BATCH-ISS0816-ISS0821-ISS0822-20260925",
+  "resolved_at": "2026-09-25T05:18:00Z",
+  "result": {
+    "summary": "All three issues marked resolved in their YAML files. GitHub issues GH-1804, GH-1812, and GH-1813 are closed. Step 5 complete."
+  }
+}

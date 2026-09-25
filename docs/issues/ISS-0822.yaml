@@ -40,4 +40,6 @@ fix_direction: >
   to the expected future prefix. Record the decision against S5's scope.
 queue_ref: "Q-822"
 github_ref: "GH-1813"
-status: open
+status: resolved
+resolved_in_run: WF03-BATCH-ISS0816-ISS0821-ISS0822-20260925
+resolved_at: "2026-09-25T05:18:00Z"

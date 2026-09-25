@@ -46,4 +46,6 @@ fix_direction: >
   has_more from all four fixture sites. Add a wire-shape test for CursorPage<T>.
 queue_ref: "Q-821"
 github_ref: "GH-1812"
-status: open
+status: resolved
+resolved_in_run: WF03-BATCH-ISS0816-ISS0821-ISS0822-20260925
+resolved_at: "2026-09-25T05:18:00Z"

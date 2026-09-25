@@ -1,0 +1,80 @@
+id: ISS-0828
+title: >
+  ISS-0816 was closed with AC3 unmet and AC1 unverified, on a
+  RELEASE-VALIDATOR sign-off that wrongly treated it as subsumed by ISS-0821
+discovered_by: ORCH (orch-main-20260925)
+discovered_in_run: WF03-ISS0816-20260925
+discovered_at: "2026-09-25T02:58:20Z"
+severity: MAJOR
+tags:
+  - process
+  - validation-gap
+  - frontend
+  - groups
+description: >
+  Found while reconciling a concurrent duplicate run. The sibling host's run
+  WF03-BATCH-ISS0816-ISS0821-ISS0822-20260925 marked ISS-0816 resolved at
+  2026-09-25T05:18Z.
+
+  Its RELEASE-VALIDATOR handoff (commit bbc04507) records verdict PASS with
+  this justification, verbatim:
+
+    "ISS-0816": "PASS -- subsumed by ISS-0821 fix; no has_more in any mock
+    data confirmed by global grep."
+
+  ISS-0816 is not subsumed by ISS-0821. ISS-0821 is about four TEST FIXTURES
+  fabricating has_more into mocks. ISS-0816 had four acceptance criteria, and
+  the grep cited verifies none of them.
+
+  WHAT SHIPPED: has_more removed from CursorPage<T>, count made optional, and
+  a corrected docblock. That covers AC2, and it is a sound fix.
+
+  WHAT DID NOT SHIP: AC3 -- "the GroupsPage members dialog either follows
+  next_cursor or explicitly states the list is truncated". On current main,
+  web/src/pages/admin/GroupsPage.tsx:49 still calls
+  groupsApi.members(activeGroupId): one unpaginated request, no next_cursor
+  handling, no members-side truncation notice. The default page size is 50
+  (pagination.ex @default_page_size), so a group with more than 50 members
+  still silently truncates -- and because GroupsPage derives its Add-member
+  dropdown as a SET DIFFERENCE from that truncated member list, existing
+  members past the 50th still reappear as addable.
+
+  A trap worth naming: the SAME run correctly fixed the USERS side (ISS-0823,
+  a userListTruncated warning at GroupsPage.tsx:64 and :206). A quick read of
+  that file now shows truncation handling and looks covered. The members side
+  is the one still missing.
+
+  AC1 (audit every CursorPage<T> call site, record the route-to-shape mapping)
+  is also unverified by that sign-off, though a partial mapping did land in
+  the type docblock.
+affected_files:
+  - docs/issues/ISS-0816.yaml
+  - web/src/pages/admin/GroupsPage.tsx
+  - web/src/api/identity.ts
+  - handoffs/WF03-BATCH-ISS0816-ISS0821-ISS0822-20260925/step-release-validator.json
+related:
+  - ISS-0816  # the issue closed prematurely
+  - ISS-0821  # the issue it was wrongly treated as subsumed by
+  - ISS-0823  # the users-side fix that makes the members-side omission easy to miss
+severity_rationale: >
+  MAJOR -- a live defect remains in an admin surface (members past the 50th
+  reappear as addable), and it is recorded as fixed, which is worse than
+  recorded as open: nothing will route work to it again. The independent
+  verification step exists precisely so a producing agent's claim is not
+  self-certifying, and here the validator substituted another issue's evidence
+  for this one's and the gate passed anyway.
+fix_direction: >
+  Satisfy AC3 for real: the members dialog follows next_cursor to completion
+  or states plainly that the list is truncated, and the Add-member set
+  difference is correct when the member list would have truncated. A gated,
+  mutation-tested implementation of exactly this already exists on the
+  abandoned branch feature/WF03-ISS0816-20260925 (groupsApi.listAllMembers, a
+  bounded drain at 200 per page and max 20 requests returning
+  {items, truncated}) -- port it rather than redesigning. Satisfy or
+  explicitly re-scope AC1. Correct ISS-0816's record so it does not claim a
+  resolution it did not deliver. Then address the sign-off pattern itself: a
+  RELEASE-VALIDATOR verdict that justifies one issue by citing another
+  issue's evidence should not be able to pass.
+queue_ref: "Q-828"
+github_ref: "GH-1822"
+status: open

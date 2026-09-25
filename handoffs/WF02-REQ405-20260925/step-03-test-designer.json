@@ -1,0 +1,105 @@
+{
+  "wf_run": "WF02-REQ405-20260925",
+  "step": "03-test-designer",
+  "agent": "TEST-DESIGNER",
+  "timestamp": "2026-09-25T08:42:00+05:00",
+  "req_ids": ["REQ-405"],
+  "impl_commit": "40630a6c",
+  "next_step": "TEST-DESIGN-VALIDATOR",
+
+  "scope_assessment": {
+    "verdict": "in_scope",
+    "executable_surface": [
+      "lib/mix/tasks/letflow.check_boundaries.ex — Mix task with pure functions classify_edge/2, parse_xref_output/1, build_depends_on_map/1 and run/1 (I/O-producing entry point)",
+      "mix.exs — letflow.check alias wiring (Mix.Project config, runtime-testable via Mix.Project.config()[:aliases])"
+    ]
+  },
+
+  "test_file": "test/mix/tasks/letflow.check_boundaries_test.exs",
+  "spec_file": "test/specs/REQ-405.md",
+  "total_tests": 24,
+
+  "baseline": {
+    "command": "MIX_ENV=test mix test test/mix/tasks/letflow.check_boundaries_test.exs --trace",
+    "result": "24 tests, 0 failures",
+    "exit_code": 0
+  },
+
+  "mix_letflow_check_test": {
+    "status": "unavailable_on_host",
+    "reason": "scripts/test_parallel.sh is a bash script; exits 2 immediately on Windows. mix test used instead.",
+    "raw_output": "** (Mix) mix letflow.check.test: FAILED -- scripts/test_parallel.sh exited 2 before ever printing its partition-log-directory line (the most common cause is a `mix compile` failure in the runner's own pre-compile step -- check the streamed output above for the real error)."
+  },
+
+  "mutant_A": {
+    "name": "Rule 5 disabled in classify_edge/2",
+    "file": "lib/mix/tasks/letflow.check_boundaries.ex",
+    "description": "Replaced the Rule 5 `true -> {:violation, ...}` clause with `true -> :ok`",
+    "patch_summary": "Commented out Rule 5 violation body; replaced with bare `:ok`",
+    "command": "MIX_ENV=test mix test test/mix/tasks/letflow.check_boundaries_test.exs --trace",
+    "result": "22/24 passed, 2 FAILED",
+    "failed_tests": [
+      {
+        "test": "classify_edge/2 VIOLATION: core file outside modules imports module-subdir file",
+        "line": 21,
+        "failure": "match (=) failed: assert {:violation, _} = CB.classify_edge(edge, %{})\n  left: {:violation, _}\n  right: :ok"
+      },
+      {
+        "test": "classify_edge/2 violation reason names source and target (Rule 5)",
+        "line": 78,
+        "failure": "Pattern match {:violation, reason} = CB.classify_edge(edge, %{}) failed — function returned :ok under mutant"
+      }
+    ],
+    "revert_command": "git checkout -- lib/mix/tasks/letflow.check_boundaries.ex",
+    "post_revert_porcelain_lib_test": "M lib/letflow/design/req405-check-boundaries.md\n(note: pre-existing uncommitted change, unrelated to mutation; lib/mix/tasks/letflow.check_boundaries.ex and test/ both clean — confirmed by git status --porcelain lib/mix/ test/ returning empty)",
+    "post_revert_test_result": "24 tests, 0 failures"
+  },
+
+  "mutant_B": {
+    "name": "letflow.check_boundaries removed from letflow.check alias",
+    "file": "mix.exs",
+    "description": "Removed `\"letflow.check_boundaries\"` from the `\"letflow.check\"` alias step list in mix.exs",
+    "command": "MIX_ENV=test mix test test/mix/tasks/letflow.check_boundaries_test.exs --trace",
+    "result": "22/24 passed, 2 FAILED",
+    "failed_tests": [
+      {
+        "test": "T-ALIAS-WIRED -- letflow.check_boundaries is a step of `mix letflow.check`",
+        "line": 214,
+        "failure": "Assertion with `in` failed: assert \"letflow.check_boundaries\" in aliases\n  left: \"letflow.check_boundaries\"\n  right: [\"letflow.check_toolchain\", \"letflow.check_requirements_registration\", \"letflow.check_req_id_collision\", \"letflow.check_deferral_staleness\", \"letflow.lint_handoffs\", \"letflow.check_async_sandbox_reachability\", \"letflow.check_issue_refs\", \"letflow.check_uat_scenario_schema\", \"format --check-formatted\", \"compile --warnings-as-errors\", \"letflow.check.test\"]"
+      },
+      {
+        "test": "T-ALIAS-SLOT -- runs after compile --warnings-as-errors and before letflow.check.test",
+        "line": 220,
+        "failure": "expected `letflow.check_boundaries` to come before `letflow.check.test`\n  code: assert at.(\"letflow.check_boundaries\") < at.(\"letflow.check.test\")"
+      }
+    ],
+    "revert_command": "git checkout -- mix.exs",
+    "post_revert_porcelain_lib_test": "M lib/letflow/design/req405-check-boundaries.md\n(note: same pre-existing change; mix.exs reverted cleanly — confirmed by git status --porcelain lib/mix/ test/ returning empty)",
+    "post_revert_test_result": "24 tests, 0 failures"
+  },
+
+  "iss_0831_gap": {
+    "description": "run/1 discards _exit_code from System.cmd/3 when shelling out to mix xref. If mix xref exits non-zero (e.g. compile error), the task silently parses empty/partial output and reports '0 violations OK' — a false negative.",
+    "severity": "non_blocking",
+    "source": "REVIEWER flag",
+    "impact_on_tests": "none — the system test (AC2) only verifies exit 0 on a clean tree where mix xref succeeds; the false-negative path is not covered by any current test"
+  },
+
+  "acceptance_criteria_coverage": {
+    "AC1": { "tests": 10, "description": "All six classify_edge rule branches + reason-string content assertions" },
+    "AC2": { "tests": 1, "description": "End-to-end system invocation; exit 0 on live codebase" },
+    "AC3": { "tests": 9, "description": "All four xref format variants + edge cases (blank, orphaned target, multiple sources)" },
+    "AC4": { "tests": 2, "description": "T-ALIAS-WIRED and T-ALIAS-SLOT" },
+    "build_depends_on_map": { "tests": 2, "description": "Empty and populated manifest lists" }
+  },
+
+  "handoff_to": "TEST-DESIGN-VALIDATOR",
+  "handoff_status": "READY",
+  "handoff_notes": [
+    "All 24 tests pass on baseline and after each mutant revert.",
+    "Mutant A falsifies 2 Rule-5 tests (L#21, L#78); Mutant B falsifies 2 alias-wiring tests (L#214, L#220).",
+    "TEST-DESIGN-VALIDATOR should re-apply one of the reported mutants independently to verify the reported counts.",
+    "mix letflow.check.test is unavailable on this Windows host; targeted mix test run used instead.",
+    "ISS-0831 gap (false-negative when xref exits non-zero) noted in spec; non-blocking."
+  ]
+}

@@ -873,3 +873,64 @@ history:
       explicitly; confirm that `(compile)`/`(runtime)` suffix annotations are stripped.
       No status flip (REQ-405 was already done before this correction). No README.md
       change needed. One file touched: lib/letflow/design/req405-check-boundaries.md.
+  - req: REQ-402
+    event: done
+    agent: DOC-UPDATER
+    at: "2026-09-25T14:59:41Z"
+    note: >
+      WF02-REQ402-20260925 Step 6 -- third requirement of S11 (modular-
+      platform architecture), implementing the persistence/install half of
+      0039 D5. Full validation chain, all independently confirmed:
+      CODE-DESIGN-VALIDATOR FAILed once (uncommitted design doc + real code
+      disguised as pseudocode) then re-PASSed after fix; SECURITY-REVIEWER
+      PASS (INV-1 cross-schema isolation verified, install/list/opts contract
+      is prefix-only, no tenant_id/schema parameter, `git grep`-confirmed);
+      REVIEWER PASS (idiom matches SolutionPack.install/3's existing
+      transaction shape, third fixture module FixtureFailingInstall
+      design-authorized, not scope creep); TEST-DESIGN-VALIDATOR PASS (4
+      independent mutations reproduced fail-then-pass: dropped prefix,
+      depends_on bypass, on_install rollback bypass, tenant_id param leak);
+      TEST-RUNNER first pass showed 124 failures, root-caused to a since-fixed
+      host-wide orphaned-docker-stacks RAM leak unrelated to this branch (see
+      docs/anti-patterns.md's "git worktree remove never tears down the
+      worktree's own docker-compose stack" entry), clean re-run 4875/4885
+      passed, remaining 10 failures all confirmed pre-existing/unrelated;
+      RELEASE-VALIDATOR PASS, independently re-ran and verified all 8
+      acceptance criteria itself rather than trusting reports -- AC1-AC7
+      directly re-executed and passing, AC8 (`mix letflow.check`) fails only
+      on the pre-existing, already-documented ISS-0826 handoff-lint backlog
+      (58 violations, confined to handoffs/ paths this branch's diff does not
+      touch, confirmed via `git diff main...HEAD --stat`); the one open item,
+      test/letflow/identity_test.exs REQ-019 AC1, was confirmed to be the
+      known ISS-0766 flake by reproducing the identical failure on a clean
+      main checkout with zero REQ-402 code present. Ships a tenant-scoped
+      `tenant_modules` table (migration
+      priv/repo/migrations/20260925000001_create_tenant_modules.exs, added to
+      `Letflow.TenantProvisioning.tenant_scoped_migrations/0`, and to
+      `test/support/tenant_fixture.ex`'s `@expected_tenant_tables`
+      oracle-rot guard), `Letflow.Modules.TenantModule` (Ecto schema), and
+      `Letflow.Modules.Installs` with `install/3`/`list_installed/1`
+      (prefix-only tenant identification per INV-1; one `Repo.transaction`
+      rejecting an unknown module id, an already-installed module, or an
+      unmet `depends_on`; installs the manifest's `pack` through the existing
+      `Letflow.Definitions.SolutionPack.install/3` when non-nil; calls
+      `on_install/2` if exported; any step failing rolls back every write).
+      Two new test-only fixture modules,
+      `Letflow.Modules.FixtureDependent` and
+      `Letflow.Modules.FixtureFailingInstall`, registered only in
+      `config/test.exs`. DOC-UPDATER rebased feature/WF02-REQ402-20260925
+      onto latest origin/main (one commit behind, a docs-only anti-patterns
+      commit, clean rebase, no conflicts) before this entry. No
+      docs/migration/stage-N-*.md or decisions/*.md file was named by this
+      requirement's acceptance criteria (0039 itself, the decision record
+      this requirement implements, was not touched -- confirmed via diff --
+      and needed no update, since it already documented D5 as forward-
+      looking design). README.md not touched -- grepped for
+      "tenant_modules"/"modules install"/"ModulesManage"/"tenant-scoped
+      module": zero hits, no documented current-behavior surface to keep in
+      sync, same pattern as REQ-400/REQ-401's own notes recorded. Status
+      flipped in docs/requirements.yaml. Full pipeline -- CODE-DESIGNER,
+      CODE-DESIGN-VALIDATOR, ELIXIR-DEV, SECURITY-REVIEWER, REVIEWER,
+      TEST-DESIGNER, TEST-DESIGN-VALIDATOR, TEST-RUNNER, RELEASE-VALIDATOR --
+      on feature/WF02-REQ402-20260925 (0d13aece design, 58932ec0
+      implementation after rebase onto 93f02a90).

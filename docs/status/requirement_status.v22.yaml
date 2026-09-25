@@ -934,3 +934,83 @@ history:
       TEST-DESIGNER, TEST-DESIGN-VALIDATOR, TEST-RUNNER, RELEASE-VALIDATOR --
       on feature/WF02-REQ402-20260925 (0d13aece design, 58932ec0
       implementation after rebase onto 93f02a90).
+  - req: REQ-403
+    event: done
+    agent: DOC-UPDATER
+    at: "2026-09-25T16:55:44Z"
+    note: >
+      WF02-REQ403-20260925 Step 6 -- fourth requirement of S11 (modular-
+      platform architecture), implementing the HTTP half of 0039 D5 for
+      install and list. Full validation chain, all independently
+      confirmed: CODE-DESIGN-VALIDATOR PASS (all 11 ACs traced, no
+      embedded code -- DOC-UPDATER fixed a trivial AC10/AC11 table-
+      numbering nit directly after the PASS, commit 2db7da72);
+      SECURITY-REVIEWER PASS (INV-1 server-derived prefix confirmed on
+      both routes -- neither `install/3` nor `list_installed/1` accepts
+      a caller-supplied tenant_id/tenant/prefix, INV-2 response
+      allowlist exactly module_id+version on the list route, the
+      existing platform-admin gate on install is unweakened, and the
+      new `:MyModulesRead` role-agnostic grant clause is structurally
+      incapable of fail-opening any other permission); REVIEWER PASS
+      (idiom matches the TenantSettings router precedent exactly, zero
+      scope creep -- touches exactly 7 non-test files, D5 decision-
+      record consistency confirmed against
+      docs/migration/decisions/0039-platform-module-solution-layering.md,
+      the ISS-0646 CANDIDATE test in authorization_test.exs correctly
+      asserts exactly seven permissions via strict equality); TEST-
+      DESIGN-VALIDATOR PASS (4 independent mutations reproduced
+      fail-then-pass: prefix-spoofing bypass via body params, deletion
+      of the `:MyModulesRead` grant clause, a response-field leak
+      -- extra `installed_at` key on the list route -- and an
+      error-status mapping change from 409 to 201 on re-install, each
+      correctly caught by its corresponding AC test); TEST-RUNNER (full
+      suite 4890/4898, all 8 failures independently classified
+      pre-existing/unrelated: 3 RequirementStatusInvariantsTest, 1
+      ISS-0831-class CheckIssueRefsTest, 1 ISS-0819-class
+      LintHandoffsTest, 2 ISS-0827-class RouterTest stale deferred-route
+      count, and 1 newly-identified-but-unrelated CheckBoundariesTaskTest
+      AC2 bug confirmed identical on a clean main checkout and in
+      REQ-405's own test, unrelated to this branch's diff; AC11
+      `mix letflow.check` fails only on the pre-existing ISS-0826-class
+      handoff-lint backlog, 58 violations, zero REQ-403 references);
+      RELEASE-VALIDATOR PASS, independently re-ran everything itself
+      rather than trusting reports (128/128 targeted tests, full suite
+      reproducing the identical 8 known-unrelated failures on two
+      separate runs), confirmed AC1-AC11 all hold against the real diff,
+      and committed the test report file
+      (test/reports/report-20260925-WF02-REQ403-20260925.yaml, tip
+      6707f441). Ships `POST /api/v1/tenant/modules` (new
+      `lib/letflow/routers/tenant_modules.ex`, forwarded from
+      `lib/letflow/plugs/api_pipeline.ex`, gated by `:ModulesManage`,
+      calling `Letflow.Modules.Installs.install/3` with a
+      server-derived `prefix` from `conn.assigns.scoped_opts` only --
+      201/404/409/422 per the requirement's response contract) and a new
+      core permission `:MyModulesRead` in
+      `lib/letflow/api/authorization.ex` granted to every role through
+      one role-agnostic clause placed before all per-role clauses,
+      gating a new `GET /api/v1/me/modules` route in
+      `lib/letflow/routers/me.ex` that reads
+      `Letflow.Modules.Installs.list_installed/1` (server-derived prefix
+      only) and returns exactly `{module_id, version}` per entry. No
+      `GET /api/v1/me` root route added; `:MembershipsRead` grants
+      unchanged (confirmed via diff, per the requirement's own
+      acceptance criteria). Branch feature/WF02-REQ403-20260925 was
+      already ahead of origin/main by these 4 commits with no newer
+      commits on origin/main to rebase onto at Step 6 time (checked via
+      `git fetch origin && git log --oneline HEAD..origin/main`: empty).
+      Design: lib/letflow/design/req403-module-install-route.md. No
+      docs/migration/stage-N-*.md or decisions/*.md file was named by
+      this requirement's acceptance criteria (0039 itself, the decision
+      record this requirement implements, was not touched -- confirmed
+      via diff -- and needed no update, since it already documented D5
+      as forward-looking design). README.md not touched -- grepped for
+      "module"/"me/modules"/"me/memberships": only pre-existing
+      unrelated hits, no documented current-behavior surface describing
+      a modules or /me API to keep in sync, same pattern as
+      REQ-400/401/402's own notes recorded. Status flipped in
+      docs/requirements.yaml. Full pipeline -- CODE-DESIGNER,
+      CODE-DESIGN-VALIDATOR, ELIXIR-DEV, SECURITY-REVIEWER, REVIEWER,
+      TEST-DESIGNER, TEST-DESIGN-VALIDATOR, TEST-RUNNER,
+      RELEASE-VALIDATOR -- on feature/WF02-REQ403-20260925 (66261e87
+      design, 2db7da72 design fix, 7109d456 implementation, 6707f441
+      test report).

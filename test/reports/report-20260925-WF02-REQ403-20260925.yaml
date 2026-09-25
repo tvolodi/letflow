@@ -1,0 +1,260 @@
+run_id: WF02-REQ403-20260925
+workflow_id: WF-02
+step: "04"
+agent: TEST-RUNNER
+requirement_ids:
+  - REQ-403
+branch: feature/WF02-REQ403-20260925
+head_sha_verified: >
+  7109d456 -- confirmed via `git log --oneline -5` in the assigned
+  worktree, matching the dispatch's stated commit exactly. Top of branch:
+  "feat(REQ-403): module install route gated by :ModulesManage, GET
+  /me/modules gated by :MyModulesRead".
+generated_at: "2026-09-25T16:35:00Z"
+change_scope:
+  note: >
+    Branch history on top of origin/main (e052d2ef, REQ-402 tenant-scoped
+    module install context): 66261e87 (design docs), 2db7da72 (docs
+    split), 7109d456 (feat: module install/list HTTP routes). New
+    migration: priv/repo/migrations/20260925000001_create_tenant_modules.exs.
+    All prior gates (CODE-DESIGN-VALIDATOR, SECURITY-REVIEWER, REVIEWER,
+    TEST-DESIGN-VALIDATOR with 4 real mutations confirmed caught) already
+    PASSed per dispatch.
+environment:
+  worktree: /tmp/claude-1001/-home-tvolodi-workspace-letflow-1/ee00a680-6b31-4a4d-a750-5d8797deb78f/scratchpad/wt-req403
+  host_health_check: >
+    `free -h`: 15Gi total, 7.2Gi used, 2.1Gi free, 7.1Gi buff/cache, 8.1Gi
+    available -- healthy, no near-zero-available signature of the
+    2026-09-25 docker-worktree-leak incident. `sudo -n docker ps -a`
+    (invoking user has no docker group membership but passwordless sudo
+    works) showed only long-lived, legitimately-named stacks
+    (letflow-1-postgres-1, letflow-postgres-1, letflow-2-postgres-1
+    [exited], letflow-dev, letflow-queue-test, letflow-1-keycloak-1, plus
+    unrelated other-project containers) -- zero `wt-*`-prefixed containers,
+    so no recurrence of the 13-orphaned-stack leak from earlier this
+    session. Did not need to run `docker compose up` in this worktree at
+    all: no untracked `.env` present, so `docker-compose.yml`'s default
+    LETFLOW_DB_PORT=5462 applies, which the primary checkout's existing
+    `letflow-postgres-1` container already serves (healthy, up 4 weeks) --
+    per docs/anti-patterns.md's "Running docker compose up from a
+    secondary worktree checkout" entry, reused that container rather than
+    starting a competing one.
+  tenant_template_staleness_check: >
+    This branch adds a new tenant-scoped migration
+    (20260925000001_create_tenant_modules.exs) -- exactly the trigger
+    condition documented in docs/anti-patterns.md's "Stale tenant_template
+    schema surviving a migration-adding commit" entry. Proactively listed
+    all letflow_test* databases on the shared letflow-postgres-1 container
+    (`SELECT datname FROM pg_database WHERE datname LIKE 'letflow_test%'`
+    -- found 12: letflow_test1-8, letflow_test, letflow_test381,
+    letflow_test388validate, letflow_test403) and dropped every one before
+    running anything, so `ecto.create`/`ecto.migrate --quiet` and
+    tenant_template.ex's `ensure_template!/0` rebuilt everything fresh
+    against this branch's actual migration set.
+  concurrent_sessions_check: >
+    `ps aux | grep -E "mix test|test_parallel"` immediately before the run
+    showed no other test process active on this host -- ELIXIR-DEV's
+    earlier ~1188-failure report (attributed to concurrent multi-session
+    Postgres contention plus stale tenant_template) does not apply to this
+    run's conditions.
+  toolchain: "local mix/Elixir 1.20.3 (Erlang/OTP 29) toolchain, Linux host"
+  test_parallel_n: "8 (default, derived from nproc; not overridden)"
+command: "LETFLOW_DB_PORT=5462 scripts/test_parallel.sh"
+full_output_capture: >
+  /tmp/claude-1001/-home-tvolodi-workspace-letflow-1/ee00a680-6b31-4a4d-a750-5d8797deb78f/scratchpad/req403-fullsuite-run1.log
+  (summary) plus full per-partition logs preserved at
+  /tmp/letflow_test_parallel.Hw3XBx/partition-{1..8}.log (script
+  auto-preserved these because exit_code=1). Ran as a normal blocking
+  foreground call; the harness's own 120s soft-timeout auto-moved it to a
+  tracked background task ID, which was polled to completion via a
+  foreground `while`-loop inside this same turn (no cross-turn
+  notification relied upon, no Monitor tool used, per core-directives'
+  "No Background Wait For A Cross-Turn Notification").
+runs_performed: 1
+run_1:
+  combined_totals:
+    tests: 4892
+    properties: 6
+    failures: 8
+    passed: 4890
+    passed_over_total: "4890/4898"
+  per_partition:
+    - {partition: 1, tests: 564, properties: 1, failures: 4, exit: 2}
+    - {partition: 2, tests: 629, properties: 0, failures: 0, exit: 0}
+    - {partition: 3, tests: 603, properties: 2, failures: 1, exit: 2}
+    - {partition: 4, tests: 576, properties: 0, failures: 1, exit: 2}
+    - {partition: 5, tests: 643, properties: 2, failures: 0, exit: 0}
+    - {partition: 6, tests: 565, properties: 1, failures: 0, exit: 0}
+    - {partition: 7, tests: 618, properties: 0, failures: 2, exit: 2}
+    - {partition: 8, tests: 694, properties: 0, failures: 0, exit: 0}
+  duration_seconds_max_partition: 583.5
+failure_classification:
+  - test: "A5: the on-disk vocabulary-anomaly set equals the index's declared set exactly, and every declared record cites a closed, pinned, warranted volume"
+    module: Letflow.Docs.RequirementStatusInvariantsTest
+    partition: 1
+    classification: PRE_EXISTING_UNRELATED
+    detail: >
+      Fires on an undeclared "doc-correction" event value at
+      docs/status/requirement_status.v22.yaml:859 (REQ-405 entry, agent
+      DOC-UPDATER, workflow WF02-REQ405-20260925). Confirmed byte-identical
+      on origin/main at this branch's base commit (e052d2ef) via `git show
+      origin/main:docs/status/requirement_status.v22.yaml | sed -n
+      '855,862p'` -- REQ-403 never touches this file. Not on the dispatch's
+      known-class list; flagging as a new-but-clearly-pre-existing docs
+      drift for DOC-UPDATER/ORCH, not a REQ-403 defect.
+  - test: "A4a: every entry in every volume uses the documented req/event vocabulary"
+    module: Letflow.Docs.RequirementStatusInvariantsTest
+    partition: 1
+    classification: PRE_EXISTING_UNRELATED
+    detail: "Same root cause as the A5 failure above (same undeclared doc-correction entry)."
+  - test: "A4b: the on-disk shape-violation set equals known_shape_anomalies:, and every record cites a closed, pinned volume"
+    module: Letflow.Docs.RequirementStatusInvariantsTest
+    partition: 1
+    classification: PRE_EXISTING_UNRELATED
+    detail: "Same root cause as the A5 failure above (same undeclared doc-correction entry)."
+  - test: "T-LIVE-* -- the real docs/issues/ corpus T-LIVE-CLEAN -- the tree itself satisfies every rule"
+    module: Mix.Tasks.Letflow.CheckIssueRefsTest
+    partition: 1
+    classification: KNOWN_ISS_0831
+    detail: >
+      docs/issues/ISS-0831.yaml has `queue_ref: ~` / `github_ref: ~`
+      (YAML null) where the schema expects `Q-<n>`/`GH-<n>` or the string
+      `null`. `git diff origin/main...HEAD -- docs/issues/ISS-0831.yaml`
+      is empty -- byte-identical to main, confirming this is ISS-0831
+      itself (named in the dispatch's known-class list), not a REQ-403
+      regression.
+  - test: "system invocation (AC2) exits 0 on the current branch tree (AC2)"
+    module: Mix.Tasks.Letflow.CheckBoundariesTaskTest
+    partition: 3
+    classification: NEW_UNCLASSIFIED
+    detail: >
+      test/mix/tasks/letflow.check_boundaries_test.exs:190 shells out via
+      `System.cmd("mix", ["letflow.check_boundaries"], ...)` without
+      setting MIX_ENV or unsetting MIX_TEST_PARTITION, so under
+      test_parallel.sh the child process inherits MIX_TEST_PARTITION=3
+      with MIX_ENV defaulting to "dev", which
+      lib/letflow/repo.ex's/config's own guard rejects
+      ("MIX_TEST_PARTITION is set, but MIX_ENV is dev -- only
+      config/test.exs reads this variable..."), so the subprocess exits 1
+      instead of 0. File and task confirmed pre-existing on origin/main
+      (introduced by 40630a6c, REQ-405) and untouched by REQ-403 (`git
+      diff origin/main...HEAD --stat` for both files is empty) -- not
+      caused by this branch's code, but NOT on the dispatch's known-class
+      list either (ISS-0826/0827/0766/0831 do not match this symptom).
+      Flagging as new/unclassified: this is a real latent test-harness bug
+      in REQ-405's own test (only manifests under `--partitions`
+      execution, not plain `mix test`), worth its own issue ticket, but
+      not attributable to REQ-403.
+  - test: "ISS-0819 -- run/1 single-file mode, isolated tmp fixture T-FILE-VIOLATIONS-LINTED-DIRECTLY -- a single-file target with real hard violations is linted, not silently filtered to an empty scope"
+    module: Mix.Tasks.Letflow.LintHandoffsTest
+    partition: 4
+    classification: PRE_EXISTING_UNRELATED
+    detail: >
+      Task's full-corpus pass chokes on handoffs/registry.json (a
+      UTF-8-BOM-prefixed JSON file that Jason cannot decode), producing a
+      `[PARSE] handoffs/registry.json: could not read/decode` violation
+      instead of the test's expected `[H1] <tmp fixture path>` line.
+      Confirmed handoffs/registry.json is byte-identical between this
+      branch and origin/main (same BOM prefix `efbb bf` at offset 0 in
+      both). Not on the dispatch's known-class list under this exact
+      description, but distinct in mechanism from ISS-0826 (which was a
+      map-shaped acceptance_criteria crash, already fixed) -- this is a
+      separate, still-open pre-existing BOM-decode defect in the same
+      task family, unrelated to REQ-403's diff.
+  - test: "REQ-070 AC5: router.ex names all 9 deferred routes and states readiness not-ported -- the deferred table holds exactly 9 rows, no more"
+    module: Letflow.RouterTest
+    partition: 7
+    classification: KNOWN_ISS_0827
+    detail: >
+      Test expects 9 deferred rows, finds 5 (router.ex has since grown
+      real routes for what were deferred entries) -- exactly ISS-0827's
+      documented stale deferred-route count, named in the dispatch.
+  - test: "REQ-070 AC5: router.ex names all 9 deferred routes and states readiness not-ported -- all 9 deferred sub-router module names are listed"
+    module: Letflow.RouterTest
+    partition: 7
+    classification: KNOWN_ISS_0827
+    detail: "Same root cause as the row-count failure above (router.ex missing deferred route Letflow.Routers.Services from the test's stale hardcoded list)."
+classification_summary:
+  known_iss_0827: 2
+  known_iss_0831: 1
+  pre_existing_unrelated_confirmed_identical_on_main: 4
+  new_unclassified: 1
+  attributable_to_req_403: 0
+overall_verdict: >
+  PASS for REQ-403 specifically -- zero of the 8 failures trace to
+  REQ-403's diff (module install/list HTTP routes, tenant_modules
+  migration). 7 of 8 are confirmed byte-identical to origin/main (either
+  cited by name in the dispatch's known-issue list, or independently
+  verified via `git diff origin/main...HEAD` returning empty for the
+  implicated file). The 8th (CheckBoundariesTaskTest AC2, partition 3) is
+  new to this report's known-class list but is also confirmed
+  file-identical to origin/main and unrelated to REQ-403's own files --
+  a latent REQ-405 test-harness bug that only surfaces under
+  `--partitions` execution. None of the 8 failing tests are in
+  REQ-403's own test files.
+  Combined: 4890/4898 passed, 8 failed -- within the documented ~8-10
+  pre-existing-failure baseline for this repo state.
+ac11_letflow_check:
+  command: "MIX_ENV=dev mix letflow.check"
+  exit_status: "FAIL (non-zero)"
+  gate_that_failed: "mix letflow.lint_handoffs: FAIL -- 58 new (un-grandfathered) violation(s)"
+  preceding_gates: >
+    letflow.check_toolchain: OK. letflow.check_requirements_registration:
+    OK (383 entries = 381 registered + 2 deferred + 0 neither + 0
+    unclassified). letflow.check_req_id_collision: OK -- no REQ-NNN id
+    collision with origin/main. letflow.check_deferral_staleness: OK (2
+    deferred of 383 entries; 0 stale). All four of these passed clean.
+  violation_scope: >
+    All 58 [H1]/[H3]/[ARTIFACTS_OUT_SELF_REF]/[H-SIZE-1]/[H-SIZE-2]
+    violations are in handoffs/WF02-REQ405-20260925/,
+    handoffs/WF03-BATCH-ISS0816-ISS0821-ISS0822-20260925/,
+    handoffs/WF03-ISS0703-20260917/, handoffs/WF03-ISS0720-20260919/,
+    handoffs/WF03-ISS0721-20260919/, handoffs/WF03-ISS0724-20260919/,
+    handoffs/WF03-ISS0732-20260921/, handoffs/WF03-ISS0733-20260921/,
+    handoffs/WF03-ISS0736-20260921/, handoffs/WF03-ISS0768-20260921/,
+    handoffs/WF03-ISS0771-20260921/, handoffs/WF03-ISS0774-20260924/,
+    handoffs/WF03-ISS0788-20260924/, handoffs/WF03-ISS0806-20260925/,
+    handoffs/WF03-ISS0808-20260925/ -- grepped the full log for
+    "REQ403"/"REQ-403": zero matches. No handoffs/WF02-REQ403-20260925/*
+    file appears among the 58 violations.
+  classification: KNOWN_ISS_0826_CLASS
+  detail: >
+    This matches the self-refilling handoff-lint backlog class the
+    dispatch named as ISS-0826 -- the backend gate (`mix letflow.check`)
+    is currently un-mergeable on main for anyone until that repo-wide
+    backlog of pre-existing malformed handoffs (from many other sessions'
+    prior runs) is cleared, independent of what any individual branch's
+    diff contains. REQ-403's own handoffs are clean and not part of the 58.
+  ac11_status_for_req_403: >
+    REQ-403's own change does not introduce any new lint_handoffs
+    violation. The command's real overall exit code is non-zero (FAIL) due
+    to this pre-existing, already-tracked, repo-wide backlog -- reporting
+    the raw result per the no-speculation rule rather than characterizing
+    it as a pass. RELEASE-VALIDATOR/DOC-UPDATER should treat this as
+    "AC11 mechanically FAILs today for every branch on this host until
+    ISS-0826's backlog is cleared," not as a REQ-403-specific gap.
+notes:
+  - >
+    Dropped 12 stale letflow_test* databases proactively before running
+    anything, given this branch adds a tenant-scoped migration -- exact
+    trigger condition from the tenant_template staleness anti-pattern.
+    This preemptive cleanup is believed to be why this run's failure count
+    (8) matches the documented healthy baseline rather than showing
+    resource-starvation or template-staleness symptoms.
+  - >
+    Did not reproduce ELIXIR-DEV's earlier ~1188-failure report under
+    these conditions (clean host, no concurrent sessions, fresh
+    tenant_template) -- consistent with that report's own attribution to
+    transient multi-session contention plus stale template, both absent
+    here.
+  - >
+    Full per-partition logs preserved under
+    /tmp/letflow_test_parallel.Hw3XBx/ (script's own preservation policy
+    on non-zero exit) for RELEASE-VALIDATOR's independent inspection if
+    needed, in addition to this worktree's own scratchpad copy.
+next_action: >
+  REQ-403's implementation and its own tests are clean. Route to
+  RELEASE-VALIDATOR for independent re-verification. The
+  CheckBoundariesTaskTest AC2 latent partition-mode bug (new/unclassified
+  above) is worth filing as its own issue (REQ-405's test file, not
+  REQ-403's) but does not block this requirement.

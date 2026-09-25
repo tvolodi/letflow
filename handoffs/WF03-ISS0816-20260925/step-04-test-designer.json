@@ -1,0 +1,230 @@
+{
+  "handoff_id": "WF03-ISS0816-20260925-step-04",
+  "run_id": "WF03-ISS0816-20260925",
+  "workflow_id": "WF-03",
+  "step": "Step 4",
+  "from_agent": "TEST-DESIGNER",
+  "to_agent": "TEST-DESIGN-VALIDATOR",
+  "file": "handoffs/WF03-ISS0816-20260925/step-04-test-designer.json",
+  "created_at": "2026-09-25T01:16:30Z",
+  "started_at": "2026-09-25T01:16:30Z",
+  "completed_at": "2026-09-25T01:34:00Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "rework_count": 0,
+  "max_rework": 3,
+  "context": {
+    "stage": "S8",
+    "issue_id": "ISS-0816",
+    "queue_ref": "Q-816",
+    "github_ref": "GH-1804",
+    "requirement_ids": [],
+    "branch_name": "feature/WF03-ISS0816-20260925",
+    "implementation_commit": "64b87055",
+    "handoff_commit_implemented": "131f4a01",
+    "head_at_step_start": "0059711e",
+    "base_commit": "688f29cf",
+    "origin_main_at_step": "b068cb3b",
+    "design_authority": "lib/letflow/design/iss-0816-cursorpage-has-more-audit.md revision 3, section 7 (test matrix) and section 7.1 (T7 regex), gated PASS at handoffs/WF03-ISS0816-20260925/step-02b-design-gate-rework2.json",
+    "gates_already_green": [
+      "SECURITY-REVIEWER PASS at commit 33f38c1a",
+      "REVIEWER PASS at commit 9d615627"
+    ],
+    "artifacts_in": [
+      "lib/letflow/design/iss-0816-cursorpage-has-more-audit.md",
+      "handoffs/WF03-ISS0816-20260925/step-03-frontend-dev.json",
+      "handoffs/WF03-ISS0816-20260925/step-03c-security-reviewer.json",
+      "handoffs/WF03-ISS0816-20260925/step-03d-reviewer.json",
+      "docs/agents/workflows/WF-03_issue_resolving.md",
+      "docs/issues/ISS-0824.yaml"
+    ],
+    "related_handoff_ids": [
+      "WF03-ISS0816-20260925-step-01",
+      "WF03-ISS0816-20260925-step-02",
+      "WF03-ISS0816-20260925-step-02b-rework2",
+      "WF03-ISS0816-20260925-step-03",
+      "WF03-ISS0816-20260925-step-03c",
+      "WF03-ISS0816-20260925-step-03d"
+    ]
+  },
+  "task": {
+    "description": "WF-03 Step 4 for ISS-0816, the regression-test step, entered with an unusual precondition: FRONTEND-DEV had already written the tests as part of Step 3, so T4, T5, T5b, T5c, T6, T8's two fixtures and T9's two guard extensions were all present in the tree and the suite was green at 901 tests across 127 files before this step began. The job was therefore NOT to author coverage from scratch but to answer the question Step 3 structurally cannot answer about its own work: do those tests actually DISCRIMINATE a correct implementation from a wrong one, or do they merely accompany one. Three distinct obligations follow from that framing. First, REVIEWER's OBS-1 recorded a measured coverage hole: reverting GroupsPage.tsx's queryFn from groupsApi.listAllMembers to groupsApi.members leaves three of T6's four cases green, and the single case that goes red is one FRONTEND-DEV added on its own initiative rather than the assertion the design nominated in its section 7 matrix. The design's nominated headline assertion -- that a second-page member is not offered in the Add-member dropdown -- passed against the unfixed page, because the mocked useQuery pattern hands the component its member data directly, so the assertion exercised GroupsPage's availableUsers set-difference logic (untouched by this fix) rather than the thing ISS-0816 actually fixed, which is that the page OBTAINS a complete member set. That measurement had to be independently reproduced before anything was changed, then the nominated assertion had to be made genuinely discriminating without removing the ISS-0824 constraint that forbids rendering GroupsPage under a real QueryClientProvider, and the one case that already discriminated had to be protected against later deletion as redundant-looking boilerplate. Second, WF-03's non-existence clause applies to the whole drain group: pre-fix groupsApi.listAllMembers did not exist, so every case in identity.members.test.ts fails with a module error, which proves the module is new and nothing whatever about correctness. The clause is satisfied only by mutating the shipped logic and recording which cases fail per mutant, reproducing the two mutants REVIEWER already measured and adding at least one more aimed at a trap the design names. Third, two further pieces of fail-first evidence were required that no ordinary test run produces: T9's hand-added surfaceRows row never goes red on its own because it.each iterates a hand-maintained array rather than Object.keys(groupsApi), so its value is demonstrable only by mutation; and T7's five-alternative forbidlist regex needed its ES6-shorthand alternative shown to fire in isolation, which the rework-2 gate noted is masked whenever an alternative-5 const declaration appears earlier in the same file, since source-scan reports only the first matching line. All mutation was to be done in a throwaway git worktree, never in the working checkout, with revert verified rather than asserted.",
+    "acceptance_criteria": [
+      "AC-T1 -- OBS-1 reproduced before any change. REVIEWER's measurement that reverting GroupsPage.tsx's queryFn to groupsApi.members leaves 3 of T6's 4 cases green is independently re-measured in an isolated worktree and the result stated as confirmed or refuted, with the name of the case that fails.",
+      "AC-T2 -- The design's nominated T6 assertion discriminates. Either the section 7 row T6 assertion ('a second-page member is not offered in the Add member dropdown') is made to go red against the pre-fix page and that is measured, or it is stated with evidence why it cannot under the mocked-useQuery constraint and the load-bearing case is made explicit and protected instead. ISS-0824 is NOT to be fixed and T6 is NOT to be switched to a real QueryClientProvider.",
+      "AC-T3 -- The case that already discriminated is protected. The case titled 'the page queries the drain, never the single-page members call' carries, at minimum, an in-file comment naming what it proves and stating that the other cases do not, so it cannot later be deleted as boilerplate.",
+      "AC-T4 -- Drain group fail-first by mutation. At least four mutants of web/src/api/identity.ts are applied and the failing case set recorded per mutant: REVIEWER's cap off-by-one and boundary-suppression mutants reproduced, plus at least one new mutant targeting a trap the design names by name (stale cursor forwarding, or a missing next_cursor treated as non-null).",
+      "AC-T5 -- T9's hand-added surfaceRows row shown load-bearing. A mutant pointing listAllMembers' URL at /api/v1/admin/ makes exactly that row's case fail, and the counterfactual is measured too: with the same mutant live and the row deleted, the ISS-0765 guard file must be shown fully green, since that is the only way to demonstrate the row is not decorative.",
+      "AC-T6 -- T7's shorthand alternative shown to fire in isolation. The ISS-0816 defect is written back into web/src/api/promotions.ts in a form carrying no const/let/var binding of the field, so alternative 4 is the only alternative that can match, and source-scan is shown to catch it. The A/B that removes alternative 4 while leaving the defect present is run as the control.",
+      "AC-T7 -- Revert verified, not asserted. Every mutant is reverted and the revert verified by quoting git status --porcelain empty and a green re-run. No mutant is left in either tree. meta-control.spec.ts is not modified and no ISS-0765 assertion is weakened.",
+      "AC-T8 -- The four web/ commands are run on the restored working checkout and their real output quoted: npm run type-check, npm run lint, npm test, npm run guards.",
+      "AC-T9 -- A test spec is written at test/specs/ISS-0816.md recording the criterion, the cases proving it, why each exists, and the full per-mutant fail-first accounting, and the handoff passes mix letflow.lint_handoffs in single-file mode."
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "All nine acceptance criteria met. OBS-1 reproduced exactly (1 failed / 3 passed). T6 rewritten so the design's own nominated assertion now goes red against the pre-fix page -- 2 of 4 cases discriminate, up from 1 of 4 -- without touching ISS-0824's constraint. Seven mutants measured across four groups, all in a throwaway worktree, all reverted with git status --porcelain empty. Four verification commands green: type-check exit 0, lint exit 0, 127 files / 901 tests, 4 files / 52 guard tests. One unrelated but serious finding is reported: web/node_modules in the working checkout was EMPTY at step start and had to be restored before anything under web/ could run at all.",
+    "ac_t1_obs1_reproduction": {
+      "verdict": "CONFIRMED, exactly as REVIEWER reported.",
+      "method": "Throwaway worktree detached at 0059711e under the session scratchpad, with a real robocopy of node_modules (never a junction). Baseline in that worktree first: the three affected test files ran 27 passed (3 files). Then GroupsPage.tsx:63 queryFn reverted from groupsApi.listAllMembers(activeGroupId) to groupsApi.members(activeGroupId) -- the exact pre-fix page -- and T6 re-run.",
+      "measured": "Tests 1 failed | 3 passed (4).",
+      "the_one_red_case": "'the page queries the drain, never the single-page members call' -- AssertionError: expected \"spy\" to be called with arguments: [ 'g-1' ]; Received: Number of calls: 0, at GroupsPage.members.test.tsx:217.",
+      "the_three_green_cases": "The design's nominated headline case ('a second-page member is not offered in the Add member dropdown'), plus the two truncation-notice cases. REVIEWER's diagnosis of WHY is also confirmed by inspection: the original installUseQuery handed the component a ready-made complete member list, so the headline case asserted availableUsers' set difference over test-supplied data rather than over data the page fetched."
+    },
+    "ac_t2_t6_now_discriminates": {
+      "what_changed": "web/src/pages/admin/__tests__/GroupsPage.members.test.tsx rewritten. The ISS-0824 constraint is untouched: useQuery is still mocked, no real QueryClientProvider is introduced, and ISS-0824 is not fixed. What changed is where the member data comes from.",
+      "mechanism": [
+        "1. @/api/identity is no longer module-mocked with hand-written stubs. It is the REAL module with vi.spyOn applied per case. This is the enabling fact: groupsApi.listAllMembers reaches its page fetch THROUGH groupsApi.members (web/src/api/identity.ts:114), so doubling that one property lets the real drain run against a stubbed wire.",
+        "2. The headline case stubs only the wire. groupsApi.members returns the first fifty members with next_cursor 'cursor-page-2' on a cursorless request, and u-51 with next_cursor null on a cursored one.",
+        "3. The dialog renders TWICE, the way react-query itself resolves a query. Pass one lets the page run its own queryFn and captures the promise it returns; pass two feeds back exactly the value that queryFn produced as the query's data. The member set under assertion is therefore whatever the PAGE fetched, never whatever the test supplied.",
+        "4. The nominated assertion is placed FIRST among the substantive checks in that case, deliberately, so it is the assertion that fires against a pre-fix page rather than one of the mechanism checks that follow it."
+      ],
+      "why_this_discriminates": "A page that dials groupsApi.members once holds 50 members and offers u-51 as addable; a page that dials the drain holds 51 and does not. The difference is produced by the page, not by the test.",
+      "measured_before": "Original T6 under M1: 1 failed | 3 passed. Nominated assertion GREEN.",
+      "measured_after": "Rewritten T6 under M1: 2 failed | 2 passed. The nominated assertion is now among the red ones, failing with 'expected [ \\'\\', \\'u-51\\', \\'u-99\\' ] to not include \\'u-51\\'' -- i.e. the pre-fix page really does offer the second-page member as addable, and the test really does catch it.",
+      "the_two_still_green_under_m1": "The truncation-notice pair, non-discriminating by construction: the pre-fix page has no truncated flag to report, so they assert the notice's own wiring rather than the fix. Both are now labelled as such in place, so no later reader mistakes them for regression coverage.",
+      "hygiene": "All four cases now stub the wire, so no case in this file can reach window.fetch under any mutation of the page. In the first M1 run of the rewritten file two cases produced unhandled fetch rejections; that is fixed and the final M1 run is clean.",
+      "post_fix_state": "4 passed (4) on the working checkout."
+    },
+    "ac_t3_protection_of_the_load_bearing_case": "Done at two levels. The case 'the page queries the drain, never the single-page members call' now carries an in-file comment stating that it was the ONLY case in this file that went red against the pre-fix page before this step (with the 1-failed/3-passed figure), that it is not boilerplate and not redundant with the headline case -- one pins WHICH function the page dials, the other pins the CONSEQUENCE of dialing the right one -- and that deleting either leaves ISS-0816's behavioural claim resting on a single assertion. It cites REVIEWER OBS-1 by handoff path. The file header carries the same warning at greater length, explains why the mocked-useQuery pattern makes a data-in-data-out assertion non-discriminating, and records the instruction to promote the file to a real QueryClientProvider if ISS-0824 is ever fixed.",
+    "ac_t4_drain_mutants": {
+      "target": "web/src/api/identity.ts listAllMembers. Test file web/src/api/__tests__/identity.members.test.ts, 6 cases, baseline 6 passed.",
+      "mutants": [
+        {
+          "id": "M2",
+          "reproduces": "REVIEWER AC-R6",
+          "change": "cap off-by-one: 'request < MEMBER_DRAIN_MAX_REQUESTS' -> 'request <= MEMBER_DRAIN_MAX_REQUESTS'",
+          "failed_cases": ["T5", "T5c"],
+          "counts": "2 failed | 4 passed (6)"
+        },
+        {
+          "id": "M3",
+          "reproduces": "REVIEWER AC-R6",
+          "change": "suppress the exactly-20 boundary: the null-cursor early return gated on 'request < MEMBER_DRAIN_MAX_REQUESTS - 1', so reaching the cap always reports truncated true",
+          "failed_cases": ["T5b"],
+          "counts": "1 failed | 5 passed (6)"
+        },
+        {
+          "id": "M4",
+          "reproduces": "NEW -- targets design section 6.1's 'feeds each response's next_cursor into the next request's cursor'",
+          "change": "stale cursor: the 'cursor = page.next_cursor' advance is deleted, so every request repeats page one's (absent) cursor",
+          "failed_cases": ["T4", "rejects on the first failed request"],
+          "counts": "2 failed | 4 passed (6)",
+          "why_it_matters": "This is the mutant that makes T4's expect(urls[1]).toContain('cursor=c2') load-bearing rather than decorative. Without the cursor advance, T4's 'concatenates across pages' half still passes, because the stub returns page two by call index; only the URL assertion catches it."
+        },
+        {
+          "id": "M5",
+          "reproduces": "NEW -- targets the trap REVIEWER named in its own OBS-4",
+          "change": "a missing next_cursor treated as non-null: 'page.next_cursor === null' -> 'page.next_cursor === undefined', so a null cursor no longer terminates the drain",
+          "failed_cases": ["T4", "T4b", "T5b"],
+          "counts": "3 failed | 3 passed (6)"
+        }
+      ],
+      "note": "M2 and M3 reproduce REVIEWER's figures exactly, case for case. Together the four mutants show the drain's coverage is sensitive to each of the four distinct behaviours design section 6.1 specifies: the cap's arity, the cap's truncation semantics at the boundary, cursor forwarding, and the termination condition."
+    },
+    "ac_t5_t9_row_is_load_bearing": {
+      "M6": {
+        "change": "listAllMembers dials client.get('/api/v1/admin/groups/:id/members') directly instead of delegating to groupsApi.members",
+        "result": "1 failed | 16 passed (17). The single failure is 'T-0765-NO-ADMIN-PREFIX: groupsApi.listAllMembers does not dial /api/v1/admin/' -- exactly the hand-added row, and no other ISS-0765 case."
+      },
+      "M6b": {
+        "change": "M6 still applied; the ['listAllMembers', ...] row deleted from surfaceRows, with the T-0765-SURFACE key list left intact so only the hand-added row is removed",
+        "result": "16 passed (16). The file is FULLY GREEN with the admin-prefix defect live.",
+        "conclusion": "This is the proof, and it is the reason the counterfactual was run rather than just M6. Without the hand-added row, a groupsApi function dialing /api/v1/admin/ produces no red test anywhere in ISS-0765's guard file. That is the quiet-degradation failure mode design section 6.3 predicted, reproduced on this branch."
+      }
+    },
+    "ac_t6_t7_shorthand_alternative": {
+      "arms": [
+        {
+          "id": "T7-A",
+          "defect": "design section 8 item 13 verbatim, in web/src/api/promotions.ts's list: 'const has_more = Boolean(response.next_cursor)' then 'return { items: ..., next_cursor: ..., has_more }'",
+          "source_scan": "FAILS -- 'Source scan found 1 violation(s): has-more-wire-field @ web/src/api/promotions.ts:262'",
+          "tsc": "npx tsc -b tsconfig.json --force exit 0 -- independently reconfirms design section 8 item 3, that this return position is not freshness-checked, so the type system cannot help and T7 is the only gate that moves",
+          "limitation": "Line 262 is the const line, so alternative 5 fired. This arm does NOT show alternative 4 doing anything, because source-scan reports only the first matching line per file."
+        },
+        {
+          "id": "T7-B",
+          "defect": "pure ES6 shorthand with NO const/let/var binding of the field anywhere in the file, using a parameter destructure: '.then(({ items, next_cursor, has_more }) => ({ items, next_cursor, has_more }))'",
+          "source_scan": "FAILS -- 'has-more-wire-field @ web/src/api/promotions.ts:261', the shorthand line itself",
+          "significance": "Alternative 4 (\\bhas_more\\s*[,}]) is the only alternative that can match this form, and it does. This is the arm the run's dispatch asked for and the one the rework-2 gate's note about first-line-only reporting makes necessary."
+        },
+        {
+          "id": "T7-C",
+          "defect": "T7-B's defect left in place; alternative 4 alone removed from the regex in web/tests/guards/forbidlist.ts",
+          "source_scan": "PASSES -- source-scan.spec.ts and meta-control.spec.ts together, 49 passed (49), with the defect live",
+          "significance": "The control. Alternative 4 is uniquely load-bearing for the commonest spelling of the field, exactly as design section 7.1's BLOCKER-3 analysis claimed -- now measured on this branch rather than inherited from the design document. It also re-demonstrates section 7.1's CORRECTED note that the offender fixture does not pin alternatives individually: meta-control stayed green with alternative 4 gone."
+        }
+      ],
+      "constraints_honoured": "web/tests/guards/meta-control.spec.ts was not modified in any arm. No ISS-0765 assertion was weakened anywhere. No forbidlist allowedPaths entry was added."
+    },
+    "ac_t7_revert_verification": {
+      "isolation": "Every one of the seven mutants ran in a detached git worktree at 0059711e under the session scratchpad. The working checkout was never mutated by any mutant.",
+      "node_modules_discipline": "The worktree's node_modules was a REAL robocopy copy (/E /MT:32, 6.4 s, 194 MB, 20035 files), never a junction -- chosen deliberately because the working checkout had already been damaged by what looks like exactly that hazard (see environment_finding below). At 6.4 s there is no reason to use a junction for this purpose again.",
+      "after_each_mutant": "git checkout -- web/ in the worktree, then git status --porcelain, which printed empty every time.",
+      "final_worktree_state": "git status --porcelain EMPTY (printed 'WORKTREE-CLEAN' with no preceding lines).",
+      "final_working_checkout_state": "git status --porcelain shows only this step's intended artefacts: M web/src/pages/admin/__tests__/GroupsPage.members.test.tsx, plus the new test/specs/ISS-0816.md and this handoff. No file under web/src/api/, web/src/pages/admin/GroupsPage.tsx, web/tests/guards/ or lib/ is modified.",
+      "green_rerun": "All four verification commands re-run green on the restored working checkout -- see verification_commands."
+    },
+    "verification_commands": {
+      "cwd": "C:/Users/tvolo/dev/ai-dala/letflow/web",
+      "type_check": "npm run type-check -> tsc -b tsconfig.json, exit 0, no output.",
+      "lint": "npm run lint -> eslint . --ext ts,tsx --report-unused-disable-directives --max-warnings 0, exit 0, no output.",
+      "test": "npm test -> Test Files 127 passed (127); Tests 901 passed (901); Duration 16.77s.",
+      "guards": "npm run guards -> Test Files 4 passed (4); Tests 52 passed (52); 'source-scan > web/src/**/*.{ts,tsx,css} has no guard violations' PASSED.",
+      "count_note": "901 is unchanged from the Step 3 baseline because T6 was REWRITTEN IN PLACE, not added to. It remains four cases; two of them now discriminate instead of one."
+    },
+    "environment_finding": {
+      "severity": "Reported to ORCH -- not fixed as part of ISS-0816, and not a defect in any Letflow source file.",
+      "what": "web/node_modules in the working checkout contained ZERO entries when this step began. Nothing under web/ could be run at all. The directory existed and was a real directory, not a reparse point (Attributes: Directory, Target: empty).",
+      "evidence_it_was_content_loss_not_a_dependency_change": "A full real copy -- 398 top-level entries, 20035 files, 194.2 MB -- survived in an unrelated worktree, .claude/worktrees/agent-a46167727a1e72911/web/node_modules, whose package-lock.json is byte-identical to the working checkout's (SHA256 D79728DFB93FC96BD92656FE5C64D84C6767407D0FA4FB538AA903EECEF75EED for both).",
+      "most_probable_cause": "The exact hazard this run's dispatch warned about: a prior step junctioned node_modules into a throwaway worktree and then removed that worktree with a recursive delete that traversed the link, emptying the real directory through it. REVIEWER's own step-03d handoff records that it ran three mutation probes in a detached worktree in the session scratchpad and removed it afterwards. This is a hypothesis about mechanism, stated as such; what is measured is that the directory was empty and the lockfile unchanged.",
+      "remediation": "npm ci --no-audit --no-fund in web/ -> 'added 607 packages in 8s'. Back to 398 top-level entries. package-lock.json unchanged (git status clean). The npm registry was reachable; this is an ordinary project dependency install, not a system-wide one.",
+      "why_it_is_worth_a_line_in_the_handoff": "It is a silent, cross-step, destructive failure mode that no test in this repo would ever catch, and it would have presented to the next agent as an inexplicable wall of module-resolution errors rather than as a missing install."
+    },
+    "scope_discipline": {
+      "not_fixed": "ISS-0811, ISS-0812, ISS-0813, ISS-0814, ISS-0815, ISS-0820, ISS-0821, ISS-0822, ISS-0823, ISS-0824, ISS-0825, ISS-0826 -- none touched.",
+      "not_modified": "web/tests/guards/meta-control.spec.ts, web/tests/guards/forbidlist.ts, web/src/api/identity.ts, web/src/api/promotions.ts, web/src/pages/admin/GroupsPage.tsx, web/src/api/__tests__/identity.groupsApi.test.ts, web/src/api/__tests__/identity.members.test.ts. Every mutation of these files was worktree-only and reverted.",
+      "iss_0824_untouched": "T6 still mocks useQuery. No real QueryClientProvider was introduced and no attempt was made to fix the event-loop hang.",
+      "single_source_file_changed": "web/src/pages/admin/__tests__/GroupsPage.members.test.tsx is the only file under web/ this step modified."
+    },
+    "what_remains_unproven": {
+      "preamble": "REVIEWER's what_remains_unproven is carried forward unchanged and is NOT closed by this step. Mocked green is still not integration evidence.",
+      "items": [
+        "No live backend (docker daemon down). The drain has never spoken to lib/letflow/routers/identity.ex:552. T4/T5/T5b/T5c do exercise the real web/src/api/client.ts with only window.fetch doubled, so URL construction, query-param serialization and the cursor round-trip are genuinely run -- but that the server accepts page_size=200 and returns the assumed envelope is verified by source reading only.",
+        "No real query provider (ISS-0824). T6's two-pass helper reproduces react-query's resolve-then-render sequence faithfully enough to make the assertion discriminate, but it is not react-query. queryKey/enabled/refetch wiring, retry and refetch-on-focus semantics, QueryStateBoundary interaction, and the notice's rendering in a real tree remain unproven.",
+        "No e2e or UAT coverage of the Add-member dropdown against a real tenant with more than fifty group members.",
+        "The truncated-true branch has never been reached against a real server -- it needs a group of more than 4000 members, so it is a bound rather than a path."
+      ],
+      "one_item_is_now_narrower": "The claim 'the page obtains a complete member set' was pinned by a single assertion at the end of Step 3d. It is now pinned by two, one of which derives its data from the page's own fetch rather than from the test."
+    },
+    "for_the_validator": {
+      "mandatory": "WF-03's non-existence clause requires TEST-DESIGN-VALIDATOR to independently APPLY at least one of the mutants reported above and run it, rather than accepting these counts. Seven are reported with exact changes and exact expected failing-case sets.",
+      "recommended_pick": "M4 (stale cursor) or M5 (missing next_cursor treated as non-null) -- the two NEW mutants, since M2 and M3 have now been measured twice (REVIEWER and this step) and a third reproduction adds least. M6b is also worth re-running: it is the only measurement in this run that demonstrates something by a test suite staying GREEN.",
+      "worktree_warning": "Do NOT junction web/node_modules into a worktree. Copy it (robocopy /E /MT:32 took 6.4 s for 194 MB) or run mutations against a fresh npm ci. The working checkout's node_modules was found empty at this step's start, most probably destroyed through exactly such a junction by an earlier step in this run.",
+      "reproduction_commands": [
+        "git worktree add --detach <scratch>/mut-wt HEAD",
+        "robocopy <repo>/web/node_modules <scratch>/mut-wt/web/node_modules /E /MT:32 /NFL /NDL /NJH /NJS /NP",
+        "cd <scratch>/mut-wt/web && npx vitest run src/api/__tests__/identity.members.test.ts --reporter=verbose   # baseline 6 passed",
+        "# M4: delete the line 'cursor = page.next_cursor' in web/src/api/identity.ts, re-run -> expect T4 and the error-propagation case red",
+        "# M5: change 'page.next_cursor === null' to 'page.next_cursor === undefined', re-run -> expect T4, T4b, T5b red",
+        "git checkout -- web/ && git status --porcelain   # must be empty"
+      ]
+    },
+    "next_action": "Route to TEST-DESIGN-VALIDATOR (WF-03 Step 4 gate). It must re-apply at least one reported mutant itself. On PASS, route to TEST-RUNNER, then ISSUE-FIXER for Step 5 issue closure. ORCH should additionally note environment_finding -- the node_modules destruction is a pipeline hazard, not an ISS-0816 matter, and may warrant its own issue since the same junction pattern is described in more than one agent's worktree procedure.",
+    "artifacts_out": [
+      "test/specs/ISS-0816.md",
+      "web/src/pages/admin/__tests__/GroupsPage.members.test.tsx"
+    ],
+    "git_evidence": {
+      "branch": "feature/WF03-ISS0816-20260925",
+      "head_at_step_start": "0059711e",
+      "mutation_worktree": "detached at 0059711e under the session scratchpad, node_modules a real copy; removed after the final revert was verified",
+      "working_tree_before_step": "clean",
+      "files_changed_by_this_step": [
+        "web/src/pages/admin/__tests__/GroupsPage.members.test.tsx (modified)",
+        "test/specs/ISS-0816.md (new)",
+        "handoffs/WF03-ISS0816-20260925/step-04-test-designer.json (new)"
+      ]
+    }
+  }
+}

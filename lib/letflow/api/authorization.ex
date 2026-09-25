@@ -862,6 +862,11 @@ defmodule Letflow.Api.Authorization do
   # REQ-414 — settings write for an installed module.
   def endpoint_policy_key("PUT", "/tenant/modules/:module_id/settings"), do: :ModulesManage
 
+  # REQ-415 — solution install: one atomic call installs a bundle of modules
+  # in dependency order. Same :ModulesManage gate as the per-module install
+  # route above (PLATFORM_ADMIN-only, per REQ-401/D5).
+  def endpoint_policy_key("POST", "/tenant/solutions"), do: :ModulesManage
+
   # REQ-403 — Letflow.Routers.Me's new route, mounted at /me (full path
   # /api/v1/me/modules). See this module's moduledoc "MyModulesRead" section
   # and lib/letflow/design/req403-module-install-route.md §5.3.

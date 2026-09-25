@@ -1,0 +1,6 @@
+{
+  "id": "bilimbaga",
+  "modules": [
+    {"module_id": "exam", "version": "0.1.0", "settings": {}}
+  ]
+}

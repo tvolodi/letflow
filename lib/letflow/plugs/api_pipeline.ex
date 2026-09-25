@@ -149,6 +149,13 @@ defmodule Letflow.Plugs.ApiPipeline do
   # catalog id happens to be literally "install".
   forward("/tenant/modules", to: Letflow.Routers.TenantModules)
 
+  # REQ-415 -- solution install: POST /api/v1/tenant/solutions. Mounted at
+  # /tenant/solutions (a sibling prefix to /tenant/modules, not a sub-path
+  # of it) so the route collision the modules mount guards against doesn't
+  # apply here, and both paths stay under the common /tenant/ prefix that
+  # communicates "this operates on the authenticated caller's own tenant."
+  forward("/tenant/solutions", to: Letflow.Routers.TenantSolutions)
+
   # REQ-404 (design lib/letflow/design/req404-module-router-mount.md) -- the
   # per-module dispatch mount 0039 D4/D5 and REQ-403's own comment above
   # named as "REQ-404's future per-module mount". Distinct prefix from

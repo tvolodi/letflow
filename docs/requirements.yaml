@@ -30066,7 +30066,7 @@ requirements:
   - id: REQ-404
     title: "P1: mount each Catalog module's router under /api/v1/modules/<id>/ with a 404 gate for tenants that have not installed it"
     owner: ELIXIR-DEV
-    status: pending
+    status: done
     stage: S11
     impl_order: 793  # letflow-queue task id, GH#1778. Registered 2026-09-24T11:10:15Z by ORCH (WF-01 Step 3).
     description: >

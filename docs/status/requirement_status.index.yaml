@@ -4610,8 +4610,18 @@ volumes:
     path: docs/status/requirement_status.v22.yaml
     status: current
     opened: 2026-09-22
-    entries: 28
+    entries: 29
     note: >
+      Incremented to 29 by DOC-UPDATER's own REQ-404 done-event append
+      (feature/WF02-REQ404-20260925, 2026-09-25T18:56:16Z -- module-
+      router dispatch mount with 404-before-403 install gate, S11's
+      fifth requirement; includes a real SECURITY-REVIEWER-found-and-
+      fixed INV-5 timing side-channel BLOCKER). `grep -c "^  - req:"
+      docs/status/requirement_status.v22.yaml` = 29 on-disk entries,
+      recounted directly rather than assumed. 1109 lines / 68609 bytes,
+      well under the 1200-line/120000-byte roll ceiling, so no roll
+      triggered. Prior notes preserved below verbatim.
+
       Incremented to 28 by DOC-UPDATER's own REQ-403 done-event append
       (feature/WF02-REQ403-20260925, 2026-09-25T16:55:44Z -- module
       install route gated by :ModulesManage and GET /api/v1/me/modules
@@ -4620,7 +4630,7 @@ volumes:
       docs/status/requirement_status.v22.yaml` = 28 on-disk entries,
       recounted directly rather than assumed. 1016 lines / 62676 bytes,
       well under the 1200-line/120000-byte roll ceiling, so no roll
-      triggered. Prior notes preserved below verbatim.
+      triggered.
 
       Incremented to 27 by DOC-UPDATER's own REQ-402 done-event append
       (feature/WF02-REQ402-20260925, 2026-09-25T14:59:41Z -- tenant-scoped

@@ -1014,3 +1014,96 @@ history:
       RELEASE-VALIDATOR -- on feature/WF02-REQ403-20260925 (66261e87
       design, 2db7da72 design fix, 7109d456 implementation, 6707f441
       test report).
+  - req: REQ-404
+    event: done
+    agent: DOC-UPDATER
+    at: "2026-09-25T18:56:16Z"
+    note: >
+      WF02-REQ404-20260925 Step 6 -- fifth requirement of S11 (modular-
+      platform architecture), implementing 0039 D4's router-dispatch
+      half and D5's 404-before-403 rule. SECURITY-REVIEWER FOUND AND
+      REQUIRED A FIX FOR A REAL BLOCKER, worth flagging prominently: a
+      genuine INV-5 timing side-channel in the first implementation --
+      an unknown module id short-circuited with 0 DB round trips while a
+      known-but-uninstalled module id cost 1 (the `Installs.installed?/2`
+      lookup), leaking exactly the "does this module exist at all" vs
+      "have you installed it" distinction D5 exists to hide, observable
+      to any caller via response timing even though both cases returned
+      byte-identical 404 bodies. Fixed via a design amendment (req404
+      design doc §9) plus a code patch (commit 027493c9) moving
+      `Installs.installed?/2` to run unconditionally as the first
+      statement of `resolve/2`, before the module-id-exists branch, so
+      both paths now cost the same DB round trip regardless of outcome.
+      SECURITY-REVIEWER re-verified PASS after the fix, tracing all 4
+      code paths (unknown id, known-uninstalled, known-installed-no-
+      router, known-installed-with-router) itself against the patched
+      code. REVIEWER PASS (idiom, zero scope creep, D4/D5 decision-
+      record consistency, the new `required_permission/1` fallback
+      clause in `lib/letflow/api/authorization.ex` correctly placed
+      after existing core clauses). TEST-DESIGN-VALIDATOR PASS -- 4
+      independent mutations reproduced fail-then-pass, including
+      reintroducing the EXACT original INV-5 bug, caught by a new
+      telemetry-based regression test asserting equal DB query counts
+      across both 404 paths with concrete query-count evidence.
+      TEST-RUNNER: full suite 4896/4904, all 8 failures independently
+      classified pre-existing/unrelated (2 ISS-0827-class RouterTest
+      stale deferred-route count, 1 ISS-0832-class
+      CheckBoundariesTaskTest AC2 partition-env bug, 1 ISS-0831-class
+      CheckIssueRefsTest, 3 newly-identified-but-unrelated
+      RequirementStatusInvariantsTest failures tracing to REQ-405's own
+      malformed status-volume entry -- see this same volume's
+      `event: doc-correction` REQ-405 entry above, a pre-existing known
+      anomaly, not introduced by this branch -- and 1
+      newly-identified-but-unrelated failure from a BOM-corrupted
+      handoffs/registry.json; none touch
+      lib/letflow/routers/modules.ex, lib/letflow/plugs/api_pipeline.ex,
+      lib/letflow/modules/installs.ex, lib/letflow/api/authorization.ex,
+      or test/support/modules/fixture/router.ex). RELEASE-VALIDATOR
+      PASS -- independently re-derived all 6 acceptance criteria,
+      re-traced the INV-5 fix itself by reading the actual code and
+      watching live telemetry output rather than trusting the report,
+      re-ran the full suite and reproduced the identical 4896/4904
+      result, and confirmed the test report file
+      (test/reports/report-20260925-WF02-REQ404-20260925.yaml) is
+      committed. One flagged, non-blocking caveat: AC6's literal
+      wording ("mix letflow.check passes") is technically false only
+      because of the pre-existing, unrelated ISS-0826-class
+      handoff-lint backlog (58 violations, zero REQ-404 references) --
+      same precedent as REQ-400/401/402/403's own merges, not a REQ-404
+      defect. Ships `lib/letflow/routers/modules.ex`
+      (`Letflow.Routers.Modules`, a plain Plug dispatcher forwarded from
+      `lib/letflow/plugs/api_pipeline.ex` under `/modules`), gating
+      every `/api/v1/modules/<id>/<rest>` request on
+      `Letflow.Modules.Installs.installed?/2` (server-derived `prefix`
+      from `conn.assigns.scoped_opts`, INV-1) before any permission
+      check runs, so an uninstalled or nonexistent module id yields 404
+      for every role including PLATFORM_ADMIN, never 403; installed
+      modules dispatch `<rest>` to the module's own `router/0` Plug,
+      whose `authz_*` routes enforce permissions as today via the new
+      `required_permission/1` fallback clause in
+      `lib/letflow/api/authorization.ex`. `test/support/modules/fixture/
+      router.ex` converted to an `AuthorizedRouter` to prove the
+      dispatch end-to-end. Branch feature/WF02-REQ404-20260925 confirmed
+      NOT behind origin/main at Step 6 time (`git fetch origin &&
+      git log --oneline HEAD..origin/main`: empty) -- no rebase needed.
+      Design: lib/letflow/design/req404-module-router-mount.md (one
+      CODE-DESIGN-VALIDATOR rework round pre-implementation, false
+      precedent citation removed; §9 INV-5 timing-parity amendment
+      added post-SECURITY-REVIEWER finding). No docs/migration/
+      stage-N-*.md or decisions/*.md file was named by this
+      requirement's acceptance criteria (0039 itself, the decision
+      record this requirement implements, was not touched -- confirmed
+      via diff -- and needed no update, since it already documented
+      D4/D5 as forward-looking design). README.md not touched --
+      grepped for "module": only pre-existing unrelated hits (mix app
+      description, moduledoc cross-references), no documented
+      current-behavior surface describing a modules-router API to keep
+      in sync, same pattern as REQ-400/401/402/403's own notes
+      recorded. Status flipped in docs/requirements.yaml. Full pipeline
+      -- CODE-DESIGNER, CODE-DESIGN-VALIDATOR, ELIXIR-DEV,
+      SECURITY-REVIEWER (found+required the INV-5 fix above),
+      REVIEWER, TEST-DESIGNER, TEST-DESIGN-VALIDATOR, TEST-RUNNER,
+      RELEASE-VALIDATOR -- on feature/WF02-REQ404-20260925 (f7d99ec6
+      design, 6ec93834 design fix, 31fc03d6 implementation, 02eb13e9
+      INV-5 design amendment, 027493c9 INV-5 code fix, e7dbd36a test
+      report).

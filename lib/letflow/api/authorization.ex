@@ -1008,8 +1008,14 @@ defmodule Letflow.Api.Authorization do
       not has_role?(roles, :PROCESS_OPERATOR)
   end
 
-  @doc "Ports `requiredPermission/1` (L148-169) exactly, including the SVC-04 entries."
-  @spec required_permission(endpoint_policy_key()) :: permission()
+  @doc """
+  Ports `requiredPermission/1` (L148-169) exactly, including the SVC-04
+  entries. REQ-404 broadened the domain/range beyond the closed
+  `endpoint_policy_key()`/`permission()` sets: the final clause (see below)
+  is an identity fallback for any Catalog-sourced permission atom (e.g.
+  `:FixtureRead`) not already matched by a clause above it.
+  """
+  @spec required_permission(endpoint_policy_key() | atom()) :: permission() | atom()
   def required_permission(endpoint)
 
   def required_permission(key)
@@ -1101,6 +1107,22 @@ defmodule Letflow.Api.Authorization do
   def required_permission(:MyModulesRead), do: :MyModulesRead
 
   def required_permission(:Unknown), do: :MetricsRead
+
+  # REQ-404 (design lib/letflow/design/req404-module-router-mount.md §0.2) --
+  # identity fallback for a Catalog-sourced permission atom (e.g.
+  # :FixtureRead), the first requirement to actually mount a module's own
+  # router/0 behind Letflow.Plugs.Authorize. Placed last, after every
+  # existing identity/core clause above (none of which change position or
+  # body), so this only ever resolves an atom no clause above already
+  # matched. Safe because Letflow.Modules.Catalog.validate/1's
+  # {:core_permission_collision, _} rule (REQ-400/401) guarantees a module's
+  # own declared permissions never intersect Authorization.core_permissions/0
+  # -- so this fallback can never accidentally resolve a core permission
+  # atom via the wrong path; it only ever resolves a genuinely
+  # Catalog-sourced atom to itself, the same "policy-key name == permission
+  # name" identity-clause pattern already used above for :EntitiesQuery,
+  # :HelpRead, :ModulesManage, etc.
+  def required_permission(endpoint), do: endpoint
 
   @doc "Ports `hasPermission/2` (L171-176) exactly."
   @spec has_permission?([role()], permission()) :: boolean()

@@ -29935,7 +29935,7 @@ requirements:
   - id: REQ-402
     title: "P1: tenant-scoped tenant_modules table, Letflow.Modules.TenantModule schema and Letflow.Modules.Installs install/list context"
     owner: ELIXIR-DEV
-    status: pending
+    status: done
     stage: S11
     impl_order: 791  # letflow-queue task id, GH#1776. Registered 2026-09-24T11:10:15Z by ORCH (WF-01 Step 3).
     description: >

@@ -256,4 +256,16 @@ config :letflow, :public_read_kinds, %{
 # REQ-401..404 prove the module mechanism (authorization wiring, persistence,
 # HTTP mounting) against it; REQ-400 itself only registers it and validates
 # its manifest.
-config :letflow, :modules, [Letflow.Modules.Fixture]
+#
+# REQ-402 (design lib/letflow/design/req402-tenant-modules-install-context.md
+# §4/§9) appends two more test-only fixtures: FixtureDependent
+# (test/support/modules/fixture_dependent/, depends_on: ["fixture"], proves
+# Installs.install/3's depends_on rejection) and FixtureFailingInstall
+# (test/support/modules/fixture_failing_install/, on_install/2 always
+# {:error, :boom}, proves Installs.install/3's AC6 whole-transaction
+# rollback -- design §9 open question 1, option (a), its own recommendation).
+config :letflow, :modules, [
+  Letflow.Modules.Fixture,
+  Letflow.Modules.FixtureDependent,
+  Letflow.Modules.FixtureFailingInstall
+]

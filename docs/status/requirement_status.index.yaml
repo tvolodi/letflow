@@ -4610,8 +4610,18 @@ volumes:
     path: docs/status/requirement_status.v22.yaml
     status: current
     opened: 2026-09-22
-    entries: 26
+    entries: 27
     note: >
+      Incremented to 27 by DOC-UPDATER's own REQ-402 done-event append
+      (feature/WF02-REQ402-20260925, 2026-09-25T14:59:41Z -- tenant-scoped
+      tenant_modules table, Letflow.Modules.TenantModule schema and
+      Letflow.Modules.Installs install/list context, S11's third
+      requirement). `grep -c "^  - req:"
+      docs/status/requirement_status.v22.yaml` = 27 on-disk entries,
+      recounted directly rather than assumed. 936 lines / 57647 bytes, well
+      under the 1200-line/120000-byte roll ceiling, so no roll triggered.
+      Prior notes preserved below verbatim.
+
       Incremented to 26 by DOC-UPDATER's own REQ-405 doc-correction append
       (WF02-REQ405-20260925, 2026-09-25T03:39:10Z -- corrected §1.2 of
       lib/letflow/design/req405-check-boundaries.md: tree-character format

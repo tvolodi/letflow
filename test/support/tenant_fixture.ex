@@ -116,7 +116,7 @@ defmodule Letflow.TenantFixture do
   @phase_incomplete_schema "incomplete_schema"
 
   # The tables the @tenant_scoped_migration_manifest's `create table(..., prefix:
-  # prefix())` migrations produce (47 as of REQ-394 -- see
+  # prefix())` migrations produce (48 as of REQ-402 -- see
   # test/letflow/support/tenant_fixture_test.exs's own running count comment
   # for the bump history; this list, not that count, is authoritative).
   # `schema_migrations` is deliberately NOT here: it is
@@ -162,6 +162,7 @@ defmodule Letflow.TenantFixture do
     "repository_artifacts",
     "service_task_dispatches",
     "tasks",
+    "tenant_modules",
     "tenant_role",
     "timers",
     "tokens",

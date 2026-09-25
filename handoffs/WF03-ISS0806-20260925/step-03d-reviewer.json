@@ -1,0 +1,80 @@
+{
+  "run_id": "WF03-ISS0806-20260925",
+  "step": "03d-reviewer",
+  "agent": "REVIEWER",
+  "commit_reviewed": "2b954e78",
+  "timestamp": "2026-09-25T05:43:31+05:00",
+  "verdict": "PASS",
+  "findings": [
+    {
+      "id": "F1",
+      "category": "otp_idiom",
+      "severity": "non_blocking",
+      "label": "Code.eval_quoted — correct tool, but @doc misrepresents non-literal behaviour",
+      "detail": "For a manifest keyword list whose values are all compile-time literals, Code.eval_quoted/3 is the appropriate mechanism. Manually pattern-matching the quoted AST for arbitrarily nested maps and lists would be substantially more complex and no more idiomatic. Passing __CALLER__ (a Macro.Env struct) as the third argument is correct — it scopes the evaluation context to the calling module. No safety concern for trusted source code compiled in a controlled environment.\n\nHowever, the @doc states: 'Non-literal values are silently passed through to manifest/0 (no compile-time check is possible for them; use Catalog.validate/1 at test time).' This is factually wrong. Code.eval_quoted/3 with an empty binding list [] will raise CompileError when it encounters an unbound variable; for compile-time function calls it will *execute* them rather than pass them through. The correct description is: 'Fields containing non-literal expressions (variables, computed values) cannot be checked at expansion time; if present, Code.eval_quoted may raise an uninformative CompileError. Modules with non-literal manifest fields must implement def manifest/0 directly.' This does not affect any call site in the current codebase (all callers use literals), but it is a documentation bug that will mislead future authors."
+    },
+    {
+      "id": "F2",
+      "category": "macro_hygiene",
+      "severity": "observation",
+      "label": "@impl true placed before a macro call rather than before a def",
+      "detail": "fixture.ex uses '@impl true' immediately before 'defmanifest(...)'. Elixir's @impl attribute is consumed by the next def/defp emitted into the module. Since defmanifest expands to 'def manifest/0', the attribute is correctly attributed — confirmed by the clean compile. However, this pattern is unusual: nothing in the source visually connects the attribute to the generated function, and a reader unfamiliar with the macro may not realise the attribute applies to the generated def. The expansion is correct and Dialyzer will accept it. Noted as a readability concern, not a defect."
+    },
+    {
+      "id": "F3",
+      "category": "test_hygiene",
+      "severity": "observation",
+      "label": "Two tests both compile @bad_module_source, redefining the same module name",
+      "detail": "defmanifest_test.exs has two separate tests (test 1: raises CompileError; test 2: error message names caller module) that each call Code.compile_string(@bad_module_source). @bad_module_source defines 'Letflow.Test.BadManifestModule'. With async: true these tests can run concurrently, potentially triggering Elixir's 'redefining module' warning or a race condition on the atom. The tests are sound (both assert the compile fails, so the module is never actually defined), but the duplication is unnecessary. Consider extracting the single assert_raise + message check into one test, or giving each string a unique module name."
+    }
+  ],
+  "check_results": {
+    "otp_idiom": {
+      "verdict": "PASS",
+      "notes": "defmacro is the correct mechanism for a compile-time code-generation + validation macro. No gen_statem crutch, no GenServer hand-rolled state machine, no unsupervised spawn. Code.eval_quoted is appropriate for extracting actual Elixir values from a literal keyword list AST. See F1 for the @doc inaccuracy."
+    },
+    "supervision": {
+      "verdict": "PASS",
+      "notes": "No process, no supervision change. This is a pure compile-time macro; it produces a def manifest/0 function definition. No impact on InstanceSupervisor or any process tree."
+    },
+    "type_safety_gaps": {
+      "verdict": "PASS — no new gaps; existing gap closed",
+      "notes": "Decision 0039 lines 333-337 explicitly named this compile-time check as the 'candidate fix' for the atom() type-safety gap. This change is that fix. No new unrepresentable-by-type gap was introduced. No issue filing needed."
+    },
+    "scope_creep": {
+      "verdict": "PASS",
+      "notes": "@callback manifest/0, @type manifest(), @type route_policy(), @optional_callbacks — all untouched (confirmed by diff). catalog.ex — untouched (0 lines in commit diff). The macro is placed after @optional_callbacks exactly as the design specified. No behaviours, generic plumbing, or ahead-of-stage abstractions introduced."
+    },
+    "decision_record_consistency": {
+      "verdict": "PASS",
+      "notes": "Decision 0039 ~line 334 reads: 'Candidate fix: a compile-time check that every role_grants atom is in permissions.' This change implements exactly that. The opt-in framing (existing def manifest/0 implementations unchanged, @callback retained) is consistent with 0039's own language. No deviation from any recorded decision."
+    },
+    "test_quality": {
+      "verdict": "PASS",
+      "notes": "The compile-time failure path is tested via Code.compile_string + assert_raise CompileError: if the check were removed, Code.compile_string would succeed and the assert_raise would fail. The positive compile test and fixture correctness assertions are present. See F3 for the minor test-hygiene observation about module-name reuse."
+    },
+    "code_eval_quoted_safety": {
+      "verdict": "PASS",
+      "notes": "Input is caller-provided literal keyword list in trusted source code compiled in the project build. All executions occur at compile time, not at runtime. No production-runtime code-execution risk. Inherent compile-time evaluation is the same risk present in all Elixir macro expansion."
+    }
+  },
+  "routing": {
+    "next_step": "TEST-DESIGNER",
+    "gate_status": "OPEN",
+    "fix_required_before_proceeding": false,
+    "recommended_follow_up": [
+      {
+        "issue": "F1 — @doc wording correction",
+        "suggested_owner": "ELIXIR-DEV",
+        "priority": "low",
+        "action": "Correct the @doc for defmanifest/1 to say: fields containing non-literal expressions cause Code.eval_quoted to raise; such modules must implement def manifest/0 directly."
+      },
+      {
+        "issue": "F3 — test module-name reuse",
+        "suggested_owner": "TEST-DESIGNER",
+        "priority": "low",
+        "action": "Merge the two bad-manifest CompileError assertions into a single test, or give each compile_string call a unique module name to prevent async test race conditions."
+      }
+    ]
+  }
+}

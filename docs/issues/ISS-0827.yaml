@@ -1,0 +1,67 @@
+id: ISS-0827
+title: >
+  Junctioning web/node_modules into a throwaway worktree can silently destroy
+  the real one -- it happened, and it halts every subsequent web/ step
+discovered_by: TEST-DESIGNER
+discovered_in_run: WF03-ISS0816-20260925
+discovered_at: "2026-09-25T01:38:33Z"
+severity: MAJOR
+tags:
+  - tooling
+  - process
+  - windows
+  - destructive
+description: >
+  At ISS-0816's Step 4, the working checkout's web/node_modules contained
+  ZERO entries at step start. Nothing under web/ could run.
+
+  This was content loss, not a dependency change: a full real copy (398
+  entries, 20035 files, 194 MB) survived in an unrelated worktree with a
+  byte-identical package-lock.json, same SHA256.
+
+  Most probable cause is a prior step junctioning web/node_modules into a
+  throwaway git worktree and then removing that worktree with a recursive
+  delete that traversed the link instead of unlinking it. Several steps in
+  this run used that technique for mutation probes.
+
+  Why it matters beyond one incident:
+    * SILENT -- nothing reports it when it happens
+    * CROSS-STEP -- the agent that causes it is not the one that suffers it
+    * DESTRUCTIVE -- the content is gone, not merely unreachable
+
+  It presents to the next agent as an inexplicable wall of module-resolution
+  errors with no obvious cause. On a pipeline with no human reviewer, that is
+  an expensive dead end.
+
+  Recovery was npm ci --no-audit --no-fund -- 607 packages in 8s, lockfile
+  unchanged. The better fix is to stop linking: TEST-DESIGNER copied instead,
+  robocopy /E /MT:32 putting a real 194 MB node_modules into its worktree in
+  6.4 seconds. At that cost there is no reason to junction.
+
+  Note the junction-and-rmdir technique was propagated in ORCH's own dispatch
+  text during this run, inherited from an earlier agent's report. This is a
+  documented-practice defect, not one agent's mistake, which is why the fix
+  has to reach the guidance and not just the next agent.
+affected_files:
+  - docs/agents/instructions/core-directives.md
+  - docs/agents/workflows/WF-03_issue_resolving.md
+  - web/package.json
+related:
+  - ISS-0816  # the run this was found in
+severity_rationale: >
+  MAJOR -- no production impact, but it silently halts an entire arm of the
+  pipeline and destroys 194 MB of state that only an unrelated worktree
+  happened to preserve. The cross-step, no-signal failure mode is what makes
+  it MAJOR rather than an annoyance.
+fix_direction: >
+  Tell agents to COPY node_modules into a throwaway worktree (robocopy
+  /E /MT:32 or equivalent) and never to junction it, recording the measured
+  6.4s cost so the advice is obviously affordable. Remove any remaining
+  junction-and-rmdir instruction from agent docs and dispatch templates --
+  that is where this propagated from. Add a cheap detection so the next agent
+  is not left guessing: a web/ step that fails fast with a clear message when
+  node_modules is missing or empty. State the general hazard too, not just
+  this instance: a recursive delete over a Windows junction traverses it.
+queue_ref: "Q-827"
+github_ref: "GH-1820"
+status: open

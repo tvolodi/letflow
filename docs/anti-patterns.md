@@ -3432,3 +3432,41 @@ The rework that closed this is worth copying as the pattern: the fix was validat
 against 20 hand-built strings (10 must-match covering every real code form, 10 must-not
 covering the actual prose in the tree), and only then by running the real guard over the
 real tree. Cheap discriminating cases first, then the genuine end-to-end run.
+
+## Junctioning `node_modules` into a throwaway worktree, then deleting the worktree
+
+**Found:** 2026-09-24, during `WF03-ISS0816-20260925`'s Step 4, by `TEST-DESIGNER`.
+
+The working checkout's `web/node_modules` contained **zero entries** at step start.
+Nothing under `web/` could run — no `tsc`, no vitest, no guards.
+
+It was content loss, not a dependency change: a full real copy (398 entries, 20 035
+files, 194 MB) survived in an unrelated worktree with a **byte-identical**
+`package-lock.json`. The cause is almost certainly a prior step creating a throwaway
+`git worktree` for a mutation probe, junctioning `web/node_modules` into it so the probe
+could run, and then removing the worktree with a **recursive delete that traversed the
+junction** rather than unlinking it. Several steps in that run used the technique.
+
+**Why this is easy to miss, and expensive:** it is *silent* — nothing reports it when it
+happens; *cross-step* — the agent that causes it is not the agent that suffers it, so
+neither sees both halves; and *destructive* — the content is gone, not merely
+unreachable. To the next agent it presents as an inexplicable wall of module-resolution
+errors with no plausible cause in its own diff. With no human reviewer in the pipeline,
+that is a long dead end.
+
+Note also how it spread: the junction-and-`cmd /c rmdir` technique was repeated in ORCH's
+own dispatch text, inherited from an earlier agent's report of having done it safely. It
+propagated as documented practice, which is why fixing one agent's habit would not have
+closed it.
+
+**Correct alternative: copy, do not link.** `robocopy /E /MT:32` put a real 194 MB
+`node_modules` into a worktree in **6.4 seconds** — measured, in that same step. At that
+cost there is no reason to junction at all, and a copy cannot take the original with it
+however the worktree is torn down. If a link is genuinely unavoidable, remove it with an
+*unlink* (`cmd /c rmdir <link>` on the link itself, never a recursive delete of a parent
+directory that contains it) and verify the real directory's entry count afterwards before
+reporting the step complete.
+
+The general rule this is an instance of: **a recursive delete over a Windows junction
+traverses it.** Any agent creating a junction owns the hazard for every later step, not
+just its own.

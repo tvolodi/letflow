@@ -35,6 +35,7 @@ defmodule Letflow.Modules.Installs do
   import Ecto.Query, only: [from: 2]
 
   alias Letflow.Definitions.SolutionPack
+  alias Letflow.EventStore.Registry.JsonSchema
   alias Letflow.Modules.Catalog
   alias Letflow.Modules.TenantModule
   alias Letflow.Repo
@@ -105,6 +106,66 @@ defmodule Letflow.Modules.Installs do
     prefix = Keyword.fetch!(opts, :prefix)
 
     module_installed?(module_id, prefix)
+  end
+
+  @doc """
+  Updates the `settings` of the installed module identified by `module_id`
+  in the tenant identified by `opts[:prefix]` (REQ-414).
+
+  Validation order:
+  1. Module must be known to `Catalog` — if not, `{:error, {:module_not_installed, module_id}}`.
+  2. `settings` must conform to the manifest's `settings_schema`:
+     - If `settings_schema` is `nil`, only `%{}` (an empty map) is accepted;
+       any non-empty map returns `{:error, {:settings_validation_failed, :no_schema}}`.
+     - If `settings_schema` is a map, validates with the existing
+       `Letflow.EventStore.Registry.JsonSchema.validate/2`; any violations
+       return `{:error, {:settings_validation_failed, violations}}`.
+  3. A `tenant_modules` row must exist for `module_id` in the tenant schema —
+     if not, `{:error, {:module_not_installed, module_id}}`.
+  4. The row's `settings` field is updated.
+
+  Schema source: `opts[:prefix]` only (INV-1) — never a body field.
+  """
+  @spec put_settings(String.t(), map(), opts()) ::
+          {:ok, TenantModule.t()}
+          | {:error, {:module_not_installed, String.t()}}
+          | {:error, {:settings_validation_failed, term()}}
+  def put_settings(module_id, settings, opts \\ []) do
+    prefix = Keyword.fetch!(opts, :prefix)
+
+    with {:ok, entry_module} <- fetch_module_for_settings(module_id),
+         :ok <- validate_settings(settings, entry_module.manifest().settings_schema),
+         {:ok, tenant_module} <- fetch_tenant_module_row(module_id, prefix) do
+      tenant_module
+      |> TenantModule.settings_changeset(%{settings: settings})
+      |> Repo.update(prefix: prefix)
+    end
+  end
+
+  defp fetch_module_for_settings(module_id) do
+    case Catalog.fetch(module_id) do
+      {:ok, entry_module} -> {:ok, entry_module}
+      {:error, :not_found} -> {:error, {:module_not_installed, module_id}}
+    end
+  end
+
+  # nil schema: only accept an empty settings map.
+  defp validate_settings(settings, nil) when map_size(settings) == 0, do: :ok
+  defp validate_settings(_settings, nil), do: {:error, {:settings_validation_failed, :no_schema}}
+
+  # Non-nil schema: delegate to the existing JSON Schema validator.
+  defp validate_settings(settings, schema) do
+    case JsonSchema.validate(settings, schema) do
+      [] -> :ok
+      failures -> {:error, {:settings_validation_failed, failures}}
+    end
+  end
+
+  defp fetch_tenant_module_row(module_id, prefix) do
+    case Repo.get_by(TenantModule, [module_id: module_id], prefix: prefix) do
+      nil -> {:error, {:module_not_installed, module_id}}
+      %TenantModule{} = tm -> {:ok, tm}
+    end
   end
 
   defp fetch_module(module_id) do

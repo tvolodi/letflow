@@ -54,4 +54,16 @@ defmodule Letflow.Modules.TenantModule do
     |> validate_required([:module_id, :version, :installed_at])
     |> unique_constraint(:module_id, name: :tenant_modules_module_id_idx)
   end
+
+  @doc """
+  Changeset for updating the `settings` field on an already-installed row
+  (REQ-414). Casts and requires `:settings` only — `:module_id`, `:version`,
+  and `:installed_at` are immutable after insert and are not touched here.
+  """
+  @spec settings_changeset(%__MODULE__{}, attrs :: map()) :: Ecto.Changeset.t()
+  def settings_changeset(tenant_module, attrs) do
+    tenant_module
+    |> cast(attrs, [:settings])
+    |> validate_required([:settings])
+  end
 end

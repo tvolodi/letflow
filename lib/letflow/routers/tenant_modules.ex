@@ -41,6 +41,10 @@ defmodule Letflow.Routers.TenantModules do
     handle_install(conn)
   end
 
+  authz_put "/:module_id/settings", :ModulesManage do
+    handle_put_settings(conn, conn.params["module_id"])
+  end
+
   match _ do
     Response.not_found(conn)
   end
@@ -99,4 +103,39 @@ defmodule Letflow.Routers.TenantModules do
       messages -> Enum.join(messages, "; ")
     end
   end
+
+  # ── PUT /:module_id/settings (REQ-414) ──────────────────────────────────
+
+  @spec handle_put_settings(Plug.Conn.t(), String.t()) :: Plug.Conn.t()
+  defp handle_put_settings(conn, module_id) when is_binary(module_id) do
+    prefix = Keyword.fetch!(conn.assigns.scoped_opts, :prefix)
+    settings = conn.body_params
+
+    case Installs.put_settings(module_id, settings, prefix: prefix) do
+      {:ok, tenant_module} ->
+        Response.ok(conn, %{"settings" => tenant_module.settings})
+
+      {:error, {:module_not_installed, _}} ->
+        Response.not_found(conn)
+
+      {:error, {:settings_validation_failed, failures}} ->
+        Response.unprocessable(conn, format_validation_failures(failures))
+    end
+  end
+
+  defp handle_put_settings(conn, _module_id) do
+    Response.not_found(conn)
+  end
+
+  @spec format_validation_failures(term()) :: String.t()
+  defp format_validation_failures(:no_schema),
+    do: "module has no settings_schema; only an empty settings map is accepted"
+
+  defp format_validation_failures(failures) when is_list(failures) do
+    failures
+    |> Enum.map(fn f -> "#{f.field_path}: #{f.constraint}" end)
+    |> Enum.join("; ")
+  end
+
+  defp format_validation_failures(other), do: inspect(other)
 end

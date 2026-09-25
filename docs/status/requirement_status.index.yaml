@@ -4610,8 +4610,12 @@ volumes:
     path: docs/status/requirement_status.v22.yaml
     status: current
     opened: 2026-09-22
-    entries: 30
+    entries: 31
     note: >
+      Incremented to 31 by ORCH's REQ-410 done-event append
+      (2026-09-26T01:20:00Z -- exam module relocation, S11's seventh
+      requirement). 1143 lines / 71611 bytes.
+
       Incremented to 30 by ORCH's REQ-409 done-event append
       (2026-09-26T00:10:00Z -- tenant-scoped exam backfill migration,
       S11's sixth requirement). 1126 lines / 70618 bytes.

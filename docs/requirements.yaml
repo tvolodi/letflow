@@ -30402,7 +30402,7 @@ requirements:
   - id: REQ-410
     title: "P2: move lib/letflow/exam/ and Letflow.Routers.ExamSessions into lib/letflow/modules/exam/, served at /api/v1/modules/exam/exam-sessions"
     owner: ELIXIR-DEV
-    status: pending
+    status: done
     stage: S11
     impl_order: 799  # letflow-queue task id, GH#1784. Registered 2026-09-24T11:10:15Z by ORCH (WF-01 Step 3).
     description: >

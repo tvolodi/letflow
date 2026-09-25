@@ -1124,3 +1124,20 @@ history:
       with pack gets exam row, tenant without gets nothing, different pack gets
       nothing, idempotency confirmed). SECURITY-REVIEWER PASS (all INV-1..INV-8
       satisfied). Status flipped in docs/requirements.yaml. Commit: 64e76394.
+  - req: REQ-410
+    status: done
+    timestamp: 2026-09-26T01:20:00Z
+    run_id: WF02-REQ410-20260926
+    agent: ELIXIR-DEV
+    summary: >
+      Moved lib/letflow/exam/*.ex -> lib/letflow/modules/exam/ (namespace
+      Letflow.Exam.* -> Letflow.Modules.Exam.*), lib/letflow/routers/exam_sessions.ex
+      -> lib/letflow/modules/exam/router.ex (Letflow.Routers.ExamSessions ->
+      Letflow.Modules.Exam.Router). Moved test files. Updated exam.ex router/0 to
+      return Letflow.Modules.Exam.Router. Removed forward('/exam-sessions', ...) from
+      api_pipeline.ex. Updated all live callers (enforcement test, exam_fixtures.ex,
+      seed task, UAT scenarios). Exam routes now served at
+      /api/v1/modules/exam/exam-sessions/*. All 7 AC pass: old paths gone, new
+      HTTP-level tests pass (404 without row, 200 with), authorization_enforcement
+      passes with new paths, 147 moved tests pass. mix letflow.check_boundaries 0
+      violations. SECURITY-REVIEWER PASS. Commit: 24eab9a5.

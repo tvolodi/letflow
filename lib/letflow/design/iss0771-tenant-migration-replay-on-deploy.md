@@ -353,15 +353,18 @@ INV-8) plus INV-6 (the meta-invariant, always in scope for a new data-access pat
   `Letflow.Application.start/2`, before any supervision-tree child, including this
   one, ever starts) redacts `log_event.meta` (Logger metadata) only — it never
   inspects `log_event.msg`, so a value baked into a log call's message string via
-  interpolation is not covered by it regardless of shape (see ISS-0772). This is
-  satisfied for two independent reasons: (1) `tenant_id`, `schema_name`, and
-  `reason` are, in fact, passed as `Logger` metadata rather than interpolated into
-  the message string (per ISS-0772's fix to `MigrationReplayBoot`), so
-  `LogFilter`'s existing mechanism genuinely does cover them; and (2) even setting
-  that aside, none of these values are secret-shaped today. Point (2) alone is not
-  a substitute for point (1) — a future change that logs a genuinely
-  secret-shaped value through message-string interpolation at this call site
-  would not be caught by `LogFilter`, so the metadata-passing convention above
+  interpolation is not covered by it regardless of shape (see ISS-0772). Per
+  ISS-0772's fix to `MigrationReplayBoot`, `tenant_id`, `schema_name`, and `reason`
+  are now passed as `Logger` metadata rather than interpolated into the message
+  string, so `LogFilter`'s mechanism scans them — but none of `tenant_id`,
+  `schema_name`, or `reason` are on `Letflow.Secrets.Redaction`'s sensitive-key
+  list (`@sensitive_exact_keys`/`@sensitive_suffixes`), so `LogFilter` would not
+  actually redact them if any of these ever became secret-shaped. Safety here
+  rests entirely on these values being non-secret-shaped by construction today —
+  not on `LogFilter` redacting them if that changed. A future change that logs a
+  genuinely secret-shaped value through this call site (metadata or message
+  string alike) would not be caught by `LogFilter` unless it also used a
+  sensitive key name, so the metadata-passing convention above
   should be preserved for any new logging added here.
 - **INV-6 (new data-access paths prove their scoping) — applies; this document is
   the proof artefact.** No new data-access *mechanism* is introduced (INV-1 above);

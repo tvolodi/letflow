@@ -1,0 +1,69 @@
+id: ISS-0835
+title: >
+  REQ-406 AC3's second sub-probe exits 1, not the literal-claimed 0, because
+  of an unrelated pre-existing @typescript-eslint/no-unused-vars hit, not a
+  no-restricted-imports failure
+discovered_by: FRONTEND-DEV / REVIEWER / TEST-DESIGN-VALIDATOR / TEST-RUNNER
+  (independently, all four gates), confirmed by RELEASE-VALIDATOR's own
+  re-derivation (WF02-REQ406-20260925)
+discovered_in_run: WF02-REQ406-20260925
+discovered_at: "2026-09-25T19:55:00Z"
+severity: MINOR
+tags:
+  - requirements
+  - docs
+  - eslint
+  - frontend
+description: >
+  docs/requirements.yaml's REQ-406 acceptance_criteria[2] (AC3) reads:
+
+    "from `web/`, `echo \"import x from '@/modules/sample/index'\" | npx
+    eslint --stdin --stdin-filename src/pages/BoundaryProbe.tsx` exits
+    non-zero reporting `no-restricted-imports`, and the same input with
+    `--stdin-filename src/modules/registry.ts` exits 0; both outputs quoted"
+
+  The second sub-probe's literal claim ("exits 0") is false as written. When
+  run for real, `npx eslint --stdin --stdin-filename src/modules/registry.ts`
+  against that exact input exits 1 -- but NOT because `no-restricted-imports`
+  fires on registry.ts (it correctly does not; registry.ts is the one
+  sanctioned importer of module code per decision 0039 D3 and IS exempted in
+  web/.eslintrc.json's overrides). It exits 1 solely because the probe's own
+  import statement, `import x from '@/modules/sample/index'`, binds `x` and
+  never uses it, which trips the separate, unrelated, always-on
+  `@typescript-eslint/no-unused-vars` rule -- a rule that fires on ANY file
+  given this exact stdin, registry.ts included, independent of the
+  `no-restricted-imports` exemption under test.
+
+  So the property AC3's second sub-probe is actually testing (does
+  `no-restricted-imports` exempt registry.ts?) is genuinely TRUE and was
+  independently re-confirmed true by all four gates plus RELEASE-VALIDATOR --
+  this is a defect in the requirement's own acceptance-criteria TEXT, not in
+  the shipped implementation, and did not block REQ-406 (closed via the
+  gates' shared, independently-reached non-blocking characterization).
+affected_files:
+  - docs/requirements.yaml
+related:
+  - REQ-406
+severity_rationale: >
+  MINOR -- an acceptance-criteria wording defect that could mislead a future
+  reader (or a weak model naively re-running the literal probe) into
+  believing a merged implementation is broken when it isn't; not a
+  correctness or security defect in shipped code. Already worked around by
+  four independent gates in this cycle without blocking delivery.
+fix_direction: >
+  A REQ-ANALYST pass should correct REQ-406's AC3 wording using one of:
+  (a) change the probe's own import statement so it has no unused binding,
+  e.g. `import '@/modules/sample/index'` (a bare side-effect import binds
+  nothing, so `@typescript-eslint/no-unused-vars` has nothing to flag), and
+  keep the exit-code assertion as-is; or
+  (b) keep the import as `import x from '@/modules/sample/index'` but change
+  the assertion to check the lint OUTPUT for the ABSENCE of the
+  `no-restricted-imports` rule name (rather than checking the process exit
+  code, which conflates two independent rules), while separately allowing/
+  expecting the `@typescript-eslint/no-unused-vars` finding.
+  Option (a) is simpler and keeps the exit-code assertion meaningful; prefer
+  it unless a reason emerges to also exercise unused-vars behavior here.
+  Confirm the fix by literally running the corrected probe from `web/` and
+  quoting real output before closing this issue.
+status: open
+queue_ref: "Q-835"

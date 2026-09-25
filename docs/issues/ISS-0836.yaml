@@ -1,0 +1,137 @@
+id: ISS-0836
+title: >
+  REQ-406's own deliverables (web/src/modules/types.ts, registry.ts,
+  web/src/api/me.ts, useInstalledModules.ts, queryKeys.ts,
+  useTenantScopedQueryKeys.ts, web/.eslintrc.json) were independently
+  built and merged to main under commit b6a45852, labeled REQ-404 --
+  two incompatible implementations of the same frontend module contract
+  now exist, one on main and one on the still-open REQ-406 branch
+discovered_by: DOC-UPDATER (WF02-REQ406-20260925 Step 6, while rebasing
+  feature/WF02-REQ406-20260925 onto origin/main)
+discovered_in_run: WF02-REQ406-20260925
+discovered_at: "2026-09-25T19:47:00Z"
+severity: MAJOR
+tags:
+  - requirements
+  - process
+  - frontend
+  - modules
+  - scope-collision
+description: >
+  Rebasing feature/WF02-REQ406-20260925 (branch tip b323039b, all pipeline
+  gates independently PASSed for REQ-406: CODE-DESIGN-VALIDATOR,
+  REVIEWER, TEST-DESIGN-VALIDATOR, TEST-RUNNER, RELEASE-VALIDATOR) onto
+  origin/main produced conflicts in every one of REQ-406's core deliverable
+  files: web/.eslintrc.json, web/src/api/me.ts, web/src/api/queryKeys.ts,
+  web/src/api/useTenantScopedQueryKeys.ts, web/src/hooks/useInstalledModules.ts,
+  web/src/modules/registry.ts, web/src/modules/types.ts, and
+  web/src/modules/__tests__/registry.test.ts (add/add or content conflicts
+  on all eight).
+
+  Root cause: main's commit b6a45852 ("feat(REQ-404): module dispatch
+  router with 404 gate for tenant-uninstalled modules", already merged,
+  docs/requirements.yaml REQ-404 status: done) is a single non-merge commit
+  whose diff (53 files, +3038/-2579) bundles far more than REQ-404's own
+  stated scope (a backend-only dispatcher per its own requirement
+  description and commit-message "Core changes" list). Its diff also
+  creates web/src/modules/types.ts, web/src/modules/registry.ts,
+  web/src/api/me.ts, web/src/hooks/useInstalledModules.ts, modifies
+  web/src/api/queryKeys.ts and web/src/api/useTenantScopedQueryKeys.ts and
+  web/.eslintrc.json, wires them into
+  web/src/components/layout/AppShell.tsx (NAV_ITEMS via
+  getInstalledModuleNavItems), and additionally carries unrelated content
+  (lib/letflow/modules/exam/exam.ex, test/letflow/modules/s11_measurements_test.exs,
+  33 handoffs/ schema-migration files, docs/issues/ISS-0831.yaml) -- none
+  of which REQ-404's own requirement text or commit message describes.
+
+  The two implementations are NOT equivalent -- confirmed by direct diff,
+  not assumed:
+    - main's registry.ts pre-populates REGISTERED_MODULES with a live
+      'sample' module wired to routes/navItems; REQ-406's own spec
+      (docs/requirements.yaml) explicitly requires P1's registry to be
+      EMPTY ("empty in P1; exam is added in REQ-412").
+    - main's registry.ts exports getInstalledModuleDefinitions/
+      getInstalledModuleRoutes/getInstalledModuleNavItems (three functions,
+      an internal InstalledModule[]-shaped 2nd param) vs. REQ-406 branch's
+      installedModuleRoutes/installedModuleNavItems (two functions, a
+      string[]-shaped installedModuleIds param).
+    - main's types.ts ModuleRole omits 'AGENT_RUNNER' (REQ-406 branch's
+      design doc explicitly adds it per REQ-403's role enumeration); main's
+      ModuleRoute/ModuleNavItem/InstalledModule names differ from REQ-406
+      branch's ModuleRouteDefinition/ModuleNavItemDefinition (no
+      InstalledModule export at all -- main's me.ts still exports it).
+    - main's api/me.ts exports `meApi.listInstalledModules()`; REQ-406
+      branch's exports `meModulesApi.list()`.
+    - main's useInstalledModules.ts reads `meKeys.modules()`; REQ-406
+      branch's reads `tenantKeys.me.installedModules()`.
+    - main's AppShell.tsx already imports and calls main's
+      getInstalledModuleNavItems -- merging REQ-406's branch as-is would
+      break that already-shipped, already-tested wiring (and
+      web/src/components/layout/__tests__/AppShell.module-nav.test.tsx,
+      also already on main).
+
+  This means: (1) REQ-404's merged commit shipped material, unscoped,
+  undocumented frontend work that should have been its own requirement
+  (effectively REQ-406 and part of REQ-407's "wire the registry into
+  AppShell.tsx" scope) without going through REQ-406/407's own design,
+  security, or test-design gates under those requirements' own identities;
+  (2) REQ-406's fully-gated, independently-PASSed branch cannot be merged
+  as-is without reverting or breaking main's already-shipped,
+  already-tested AppShell.tsx wiring and exam.ex references; (3) neither
+  implementation can be assumed authoritative without a design-level
+  reconciliation pass -- this is not a mechanical rebase conflict.
+
+  DOC-UPDATER did not attempt to resolve this by picking a side (out of
+  scope for the role, and a real design judgment call), did not flip
+  REQ-406's status, and did not merge. REQ-406's branch
+  (feature/WF02-REQ406-20260925, tip b323039b) is left as-is, unmerged,
+  pending this issue's resolution.
+affected_files:
+  - web/src/modules/types.ts
+  - web/src/modules/registry.ts
+  - web/src/api/me.ts
+  - web/src/hooks/useInstalledModules.ts
+  - web/src/api/queryKeys.ts
+  - web/src/api/useTenantScopedQueryKeys.ts
+  - web/.eslintrc.json
+  - web/src/components/layout/AppShell.tsx
+  - docs/requirements.yaml
+related:
+  - REQ-404
+  - REQ-406
+  - REQ-407
+severity_rationale: >
+  MAJOR -- not a live production defect (nothing user-facing is broken;
+  main's shipped version is internally self-consistent and its own tests
+  pass), but it is a genuine content-level collision between two
+  independently-gated pipeline runs, it left REQ-406's fully-PASSed branch
+  unmergeable without a design decision, and it indicates a process gap
+  (a requirement's commit shipping materially more than its own scope,
+  unreviewed under the correct requirement identity) that could recur.
+fix_direction: >
+  Needs a CODE-DESIGNER or ISSUE-FIXER pass (not DOC-UPDATER) to decide,
+  with REVIEWER sign-off, one of:
+  (a) Treat REQ-404's already-shipped frontend work as the de facto
+  implementation of REQ-406 (and part of REQ-407): formally re-scope
+  REQ-406 to "superseded by REQ-404" in docs/requirements.yaml, verify
+  REQ-406's own acceptance criteria against main's ACTUAL shipped
+  registry.ts/types.ts/me.ts/useInstalledModules.ts (note: as shipped,
+  main's registry.ts already contains a non-empty 'sample' module wired to
+  live routes, which does not match REQ-406's explicit "empty in P1"
+  requirement text -- that gap needs its own resolution, e.g. removing the
+  sample entry or re-justifying it), then close out REQ-406 referencing
+  REQ-404's commit rather than merging its own branch; discard or archive
+  feature/WF02-REQ406-20260925.
+  OR
+  (b) Reconcile properly: bring REQ-406's branch content (cleaner P1-empty
+  registry, AGENT_RUNNER role, REQ-406's own naming) to main, and update
+  every already-landed dependent (AppShell.tsx's
+  getInstalledModuleNavItems call and its own test, exam.ex if it
+  references these names, REQ-409's backfill migration/test if relevant)
+  to the reconciled names/shapes, re-running the full suite before merge.
+  Either direction should also examine WHY b6a45852 bundled unrelated
+  handoffs/, docs/issues/, and exam.ex changes under a REQ-404-labeled
+  commit, and whether that indicates a squash/rebase mechanism defect
+  worth its own follow-up (possibly a process anti-pattern entry).
+status: open
+queue_ref: "Q-836"

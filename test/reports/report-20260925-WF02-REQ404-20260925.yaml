@@ -1,0 +1,266 @@
+run_id: WF02-REQ404-20260925
+workflow_id: WF-02
+step: "04"
+agent: TEST-RUNNER
+requirement_ids:
+  - REQ-404
+branch: feature/WF02-REQ404-20260925
+head_sha_verified: >
+  027493c9 -- confirmed via `git log --oneline -3` in the assigned worktree,
+  matching the dispatch's stated commit exactly. Top of branch:
+  "fix(REQ-404): close INV-5 timing side channel in Routers.Modules gate/2",
+  on top of "design(REQ-404): INV-5 timing-parity amendment closing
+  SECURITY-REVIEWER BLOCKER" and "feat(REQ-404): module-router dispatch
+  mount (0039 D4/D5)".
+generated_at: "2026-09-25T18:25:00Z"
+change_scope:
+  note: >
+    `git diff main --stat`: lib/letflow/api/authorization.ex (+26/-),
+    lib/letflow/design/req404-module-router-mount.md (new, design doc),
+    lib/letflow/modules/installs.ex (+30/-), lib/letflow/plugs/api_pipeline.ex
+    (+10), lib/letflow/routers/modules.ex (new, +146),
+    test/letflow/api/authorization_enforcement_test.exs (+28/-),
+    test/letflow/routers/modules_test.exs (new, +286),
+    test/support/modules/fixture/router.ex (+18/-). 8 files, 1044
+    insertions / 19 deletions. All prior gates (CODE-DESIGN-VALIDATOR twice,
+    SECURITY-REVIEWER twice including a real INV-5 timing-side-channel
+    fix, REVIEWER, TEST-DESIGN-VALIDATOR with 4 real mutations confirmed
+    caught) already PASSed per dispatch.
+environment:
+  worktree: /tmp/claude-1001/-home-tvolodi-workspace-letflow-1/ee00a680-6b31-4a4d-a750-5d8797deb78f/scratchpad/wt-req404
+  host_health_check: >
+    `free -h`: 15Gi total, 7.0Gi used, 2.3Gi free, 6.8Gi buff/cache, 8.2Gi
+    available -- no near-zero-available signature of the docker-worktree-leak
+    incident documented in anti-patterns. `sudo -n docker ps -a` (invoking
+    user has no docker group membership but passwordless sudo works) showed
+    only long-lived, legitimately-named stacks (letflow-1-postgres-1
+    [port 5463, healthy], letflow-postgres-1 [port 5462, healthy],
+    letflow-2-postgres-1 [exited], letflow-dev, letflow-queue-test,
+    letflow-1-keycloak-1, plus unrelated other-project containers e.g.
+    bilimbaga-*, penpot-*, immich-*, forgejo) -- zero `wt-*`-prefixed or
+    otherwise orphaned containers. No `docker compose up` was run in this
+    worktree: no untracked `.env` present, so `docker-compose.yml`'s default
+    LETFLOW_DB_PORT=5462 applies, served by the already-healthy
+    `letflow-postgres-1` container -- reused it per docs/anti-patterns.md's
+    "Running docker compose up from a secondary worktree checkout" entry.
+  tenant_template_staleness_check: >
+    `git diff main --name-only -- priv/repo/migrations/` is empty -- this
+    branch adds no new migration, so the specific trigger condition in
+    docs/anti-patterns.md's "Stale tenant_template schema surviving a
+    migration-adding commit" entry does not apply directly. Still listed
+    all letflow_test* databases on the shared letflow-postgres-1 container
+    before running (10 found: letflow_test1-8, letflow_test,
+    letflow_test404) -- none showed pre-run signs of staleness, and the
+    combined result below (4896/4904, matching the documented healthy
+    baseline) confirms no template-staleness symptom occurred.
+  concurrent_sessions_check: >
+    Multiple other worktrees exist under the same scratchpad root
+    (wt-cdv-req397, wt-req397, wt-reviewer-req397, wt-rv-req397,
+    wt-testrunner-req397-v2, wt-rv-iss0770, wt-testrunner-iss0770,
+    wt-tdv-iss0773, wt-testrunner-iss0773) but no `mix test`/`test_parallel`
+    process was observed contending during this run; the combined result
+    lands within the same ~8-failure baseline seen in the immediately
+    preceding REQ-403 run, consistent with no destructive contention.
+  toolchain: "local mix/Elixir 1.20.3 (Erlang/OTP 29) toolchain, Linux host"
+  test_parallel_n: "4 (explicit override, README's documented known-good value for this host)"
+command: "TEST_PARALLEL_N=4 scripts/test_parallel.sh"
+full_output_capture: >
+  /tmp/claude-1001/-home-tvolodi-workspace-letflow-1/ee00a680-6b31-4a4d-a750-5d8797deb78f/scratchpad/req404_test_run.log
+  (summary) plus full per-partition logs preserved at
+  /tmp/letflow_test_parallel.2nKJeg/partition-{1..4}.log (script
+  auto-preserved these because exit_code=1). Ran as a normal blocking
+  foreground call; the harness's own 120s soft-timeout auto-moved it to a
+  tracked background task ID, which completed on its own (exit code 0 for
+  the wrapper) and was confirmed via the resulting task-completion
+  notification rather than any Monitor/cross-turn resume assumption, per
+  core-directives' "No Background Wait For A Cross-Turn Notification".
+runs_performed: 1
+run_1:
+  combined_totals:
+    tests: 4898
+    properties: 6
+    failures: 8
+    passed: 4896
+    passed_over_total: "4896/4904"
+  per_partition:
+    - {partition: 1, tests: 1287, properties: 2, failures: 4, exit: 2}
+    - {partition: 2, tests: 1096, properties: 2, failures: 1, exit: 2}
+    - {partition: 3, tests: 1277, properties: 0, failures: 2, exit: 2}
+    - {partition: 4, tests: 1238, properties: 2, failures: 1, exit: 2}
+failure_classification:
+  - test: "A5: the on-disk vocabulary-anomaly set equals the index's declared set exactly, and every declared record cites a closed, pinned, warranted volume"
+    module: Letflow.Docs.RequirementStatusInvariantsTest
+    partition: 1
+    classification: NEW_UNCLASSIFIED
+    detail: >
+      Fires on an undeclared "doc-correction" event value at
+      docs/status/requirement_status.v22.yaml:859. Not on the dispatch's
+      known-class list (ISS-0826/0827/0766/0831/0832). `git diff main --
+      docs/status/requirement_status.v22.yaml` is empty for this branch, so
+      REQ-404 does not touch this file -- confirmed pre-existing, but a
+      distinct, still-unfiled defect: docs drift in a status volume, not
+      attributable to REQ-404.
+  - test: "A4b: the on-disk shape-violation set equals known_shape_anomalies:, and every record cites a closed, pinned volume"
+    module: Letflow.Docs.RequirementStatusInvariantsTest
+    partition: 1
+    classification: NEW_UNCLASSIFIED
+    detail: >
+      Same root file/area as the A5 failure above: docs/status/requirement_status.v22.yaml:858,
+      a REQ-405 entry with a misnamed field (`at` recorded as `workflow`) and
+      an extra `timestamp` field. Same v22.yaml drift, a different check
+      (entry SHAPE rather than vocabulary). Not on the dispatch's known-class
+      list; REQ-404 does not touch this file.
+  - test: "A4a: every entry in every volume uses the documented req/event vocabulary"
+    module: Letflow.Docs.RequirementStatusInvariantsTest
+    partition: 1
+    classification: NEW_UNCLASSIFIED
+    detail: "Same root cause as the A5/A4b failures above (same undeclared doc-correction entry, docs/status/requirement_status.v22.yaml:859)."
+  - test: "ISS-0819 -- run/1 single-file mode, isolated tmp fixture T-FILE-VIOLATIONS-LINTED-DIRECTLY -- a single-file target with real hard violations is linted, not silently filtered to an empty scope"
+    module: Mix.Tasks.Letflow.LintHandoffsTest
+    partition: 1
+    classification: NEW_UNCLASSIFIED
+    detail: >
+      Full-corpus pass chokes on handoffs/registry.json (a UTF-8-BOM-prefixed
+      JSON file Jason cannot decode -- `%Jason.DecodeError{position: 0, ...}`
+      on the literal `﻿{` prefix), producing a
+      `[PARSE] handoffs/registry.json: could not read/decode` violation
+      instead of the test's expected `[H1] <tmp fixture path>` line. This is
+      mechanically distinct from ISS-0826 (a map-shaped acceptance_criteria
+      crash, already fixed) -- a different, still-open BOM-decode defect in
+      the same task family. Not on the dispatch's named known-class list;
+      REQ-404 never touches handoffs/registry.json or lint_handoffs.ex.
+      Worth its own issue ticket.
+  - test: "T-LIVE-* -- the real docs/issues/ corpus T-LIVE-CLEAN -- the tree itself satisfies every rule"
+    module: Mix.Tasks.Letflow.CheckIssueRefsTest
+    partition: 2
+    classification: KNOWN_ISS_0831_CLASS
+    detail: >
+      docs/issues/ISS-0831.yaml has `queue_ref: ~` / `github_ref: ~` (YAML
+      null) where the schema expects `Q-<n>`/`GH-<n>` or the string `null`,
+      plus docs/issues/ISS-0832.yaml has `github_ref: null` with no comment
+      explaining the deliberate absence. Matches the "ISS-0831 (check_issue_refs
+      drift)" class named explicitly in this dispatch's known-issue list --
+      both implicated files are pre-existing issue-tracker entries, untouched
+      by REQ-404's diff.
+  - test: "REQ-070 AC5: router.ex names all 9 deferred routes and states readiness not-ported -- all 9 deferred sub-router module names are listed"
+    module: Letflow.RouterTest
+    partition: 3
+    classification: KNOWN_ISS_0827
+    detail: "router.ex missing deferred route Letflow.Routers.Services from the test's stale hardcoded @deferred list -- exactly ISS-0827's documented stale deferred-route count, named in the dispatch."
+  - test: "REQ-070 AC5: router.ex names all 9 deferred routes and states readiness not-ported -- the deferred table holds exactly 9 rows, no more"
+    module: Letflow.RouterTest
+    partition: 3
+    classification: KNOWN_ISS_0827
+    detail: "Same root cause as the row-name failure above (test expects 9 deferred rows, finds 5 -- router.ex has since grown real routes for what were deferred entries)."
+  - test: "system invocation (AC2) exits 0 on the current branch tree (AC2)"
+    module: Mix.Tasks.Letflow.CheckBoundariesTaskTest
+    partition: 4
+    classification: KNOWN_ISS_0832
+    detail: >
+      test/mix/tasks/letflow.check_boundaries_test.exs:190 shells out to a
+      subprocess without setting MIX_ENV; under test_parallel.sh the child
+      inherits MIX_TEST_PARTITION=4 with MIX_ENV defaulting to "dev", which
+      config's own guard rejects ("MIX_TEST_PARTITION is set, but MIX_ENV is
+      dev"), so the subprocess exits 1 instead of 0. Matches ISS-0832 exactly
+      (named in the dispatch), confirmed as a pre-existing latent bug in
+      REQ-405's own test file, unrelated to REQ-404.
+classification_summary:
+  known_iss_0827: 2
+  known_iss_0831_class: 1
+  known_iss_0832: 1
+  new_unclassified: 4
+  attributable_to_req_404: 0
+overall_verdict: >
+  PASS for REQ-404 specifically -- zero of the 8 failures trace to REQ-404's
+  diff (module-router dispatch mount, INV-5 timing-parity fix in
+  Routers.Modules.gate/2, authorization.ex/installs.ex/api_pipeline.ex
+  changes). None of the 8 failing tests are in REQ-404's own test files
+  (test/letflow/routers/modules_test.exs and
+  test/letflow/api/authorization_enforcement_test.exs both passed clean --
+  no failures attributed to either file in any partition log). 4 of 8 match
+  named classes from the dispatch (ISS-0827 x2, ISS-0832, and an
+  ISS-0831-class docs/issues/ drift). The remaining 4 (all in partition 1:
+  three Letflow.Docs.RequirementStatusInvariantsTest failures over
+  docs/status/requirement_status.v22.yaml drift, and one
+  Mix.Tasks.Letflow.LintHandoffsTest BOM-decode failure on
+  handoffs/registry.json) are NOT on the dispatch's known-class list --
+  flagging these explicitly as new/unclassified per the no-speculation rule
+  rather than silently folding them into ISS-0826. All four are confirmed,
+  via `git diff main --` on the implicated files, to be pre-existing and
+  untouched by REQ-404's own diff; they read as real, currently-unfiled repo
+  state drift (a malformed REQ-405 status entry, and a BOM-corrupted
+  handoffs/registry.json) that should be filed as their own issues by
+  ORCH/ISSUE-FIXER, not as REQ-404 defects.
+  Combined: 4896/4904 passed, 8 failed.
+ac6_letflow_check:
+  command: "mix letflow.check"
+  exit_status: "FAIL (exit code 1, confirmed directly: `mix letflow.check; echo EXIT_CODE=$?` -> EXIT_CODE=1)"
+  gate_that_failed: "letflow.lint_handoffs: FAIL -- 58 new (un-grandfathered) violation(s)"
+  preceding_gates: >
+    letflow.check_toolchain: OK (Elixir 1.20.3 / OTP 29 / Rust rustc 1.97.1
+    matches .tool-versions). letflow.check_requirements_registration: OK
+    (383 entries = 381 registered + 2 deferred + 0 neither + 0
+    unclassified). letflow.check_req_id_collision: OK -- no REQ-NNN id
+    collision with origin/main. letflow.check_deferral_staleness: OK (S11
+    reported ACTIVE with 4 done/13 pending, no staleness flagged). All four
+    passed clean before lint_handoffs.
+  violation_scope: >
+    Independently verified rather than trusted: grepped the full
+    `mix letflow.check` output for "req404"/"REQ-404"/"req-404" --
+    zero matches anywhere in the 146KB output. Sampled the 58 violation
+    lines' file references directly (`grep -oE "handoffs/[A-Za-z0-9._/-]+"`)
+    -- all trace to handoffs/ directories for other runs (e.g.
+    handoffs/WF02-REQ405-20260925/, handoffs/WF03-BATCH-ISS0816-ISS0821-ISS0822-20260925/,
+    handoffs/WF03-ISS0806-20260925/, handoffs/WF03-ISS0808-20260925/, many
+    older ADHOC-*/WF01-*/WF02-* runs), plus a separate H5 "run_id on disk
+    but missing from registry.json" advisory listing ~200 historical run
+    IDs (report-only, does not itself gate). No handoffs/WF02-REQ404-20260925/*
+    file appears among the 58 hard violations.
+  classification: KNOWN_ISS_0826_CLASS
+  detail: >
+    Matches the self-refilling handoff-lint backlog class the dispatch
+    named as ISS-0826 (and this same class recurred identically in the
+    immediately preceding REQ-403 test-runner report) -- the backend gate
+    (`mix letflow.check`) is currently un-mergeable on main for anyone until
+    that repo-wide backlog of pre-existing malformed handoffs (from many
+    other sessions' prior runs) is cleared, independent of what any
+    individual branch's diff contains. REQ-404's own handoffs are clean and
+    not part of the 58.
+  ac6_status_for_req_404: >
+    REQ-404's own change introduces no new lint_handoffs violation --
+    independently verified, not merely trusted from ELIXIR-DEV/TEST-DESIGN-VALIDATOR's
+    prior claim. The command's real overall exit code is 1 (FAIL) due to
+    this pre-existing, already-tracked, repo-wide backlog. Reporting the raw
+    result per the no-speculation rule: AC6 mechanically FAILs today for
+    every branch on this host until ISS-0826's backlog is cleared -- not a
+    REQ-404-specific gap.
+notes:
+  - >
+    This branch adds no new migration (`git diff main --name-only --
+    priv/repo/migrations/` empty), so the tenant_template staleness
+    anti-pattern's specific trigger did not apply; no stale-database cleanup
+    was required or performed.
+  - >
+    Combined failure count (8) and composition closely track the
+    immediately preceding REQ-403 test-runner report from the same host/day
+    (also 8 failures, overlapping ISS-0827/0826-class/CheckBoundariesTaskTest
+    signatures) -- consistent with a stable, repo-wide pre-existing baseline
+    rather than anything introduced by REQ-404.
+  - >
+    Full per-partition logs preserved under /tmp/letflow_test_parallel.2nKJeg/
+    (script's own preservation policy on non-zero exit) for
+    RELEASE-VALIDATOR's independent inspection if needed, in addition to
+    this worktree's own scratchpad copy at
+    /tmp/claude-1001/-home-tvolodi-workspace-letflow-1/ee00a680-6b31-4a4d-a750-5d8797deb78f/scratchpad/req404_test_run.log
+    and /tmp/claude-1001/-home-tvolodi-workspace-letflow-1/ee00a680-6b31-4a4d-a750-5d8797deb78f/scratchpad/req404_letflow_check.log.
+next_action: >
+  REQ-404's implementation and its own tests (test/letflow/routers/modules_test.exs,
+  test/letflow/api/authorization_enforcement_test.exs) are clean. Route to
+  RELEASE-VALIDATOR for independent re-verification. Recommend ORCH/ISSUE-FIXER
+  file two new issues from this run: (1) docs/status/requirement_status.v22.yaml
+  drift around REQ-405's status entry (misnamed field + extra field + an
+  undeclared "doc-correction" event, 3 test failures in
+  Letflow.Docs.RequirementStatusInvariantsTest), and (2) a BOM-corrupted
+  handoffs/registry.json breaking Mix.Tasks.Letflow.LintHandoffsTest's
+  single-file-mode isolation (distinct from the already-resolved ISS-0826
+  crash). Neither blocks REQ-404.

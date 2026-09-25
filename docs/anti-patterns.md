@@ -3451,3 +3451,55 @@ CODE-DESIGN-VALIDATOR/SECURITY-REVIEWER PASS as final, `git log --oneline -- lib
 inside the actual feature-branch worktree — if it returns nothing, the artefact isn't
 committed yet regardless of how many gates "passed" it. Copy it in and commit it (with a
 `docs(...)` commit citing which gate depended on it) before merging.
+
+---
+
+## `git worktree remove` never tears down the worktree's own docker-compose stack — 13 orphaned Postgres/Keycloak stacks accumulated over one session, consuming 6.7GB of host RAM and degrading every full-suite run's reliability (2026-09-25, ORCH)
+
+**What happened:** a worktree used for a requirement/issue (e.g. `wt-req400-design`,
+`wt-iss0819`, `iss-0817-worktree`) typically has its own `docker compose up -d
+postgres [keycloak]` stack, named after the worktree directory via Docker Compose's
+default `<directory-basename>-<service>-1` naming. When the requirement/issue merges
+and `git worktree remove <path>` is run to clean up, that call only removes the git
+worktree's checkout and administrative files — it has no knowledge of, and does not
+touch, any docker containers that happen to share the directory's name. The compose
+stack keeps running indefinitely, invisible from that point on (nothing references
+the removed directory anymore, so nothing prompts anyone to look for it).
+
+Over the course of one multi-hour, multi-requirement session, this happened
+repeatedly and silently: 13 separate orphaned Postgres/Keycloak container pairs (ages
+ranging from 2 hours to 3 days at discovery) accumulated, none reachable from any
+existing worktree, none doing any useful work, collectively consuming **6.7GB of the
+host's 15GB RAM** (`free -h` showed only 303MB available before cleanup, 8.2GB after).
+This was only discovered because a TEST-RUNNER full-suite run degraded from a normal
+~9 pre-existing/unrelated failures to **124 failures**, all bearing the classic
+resource-starvation signature (`ExUnit.TimeoutError`, `DBConnection.ConnectionError`
+checkout timeouts, one partition's setup query taking 47-69 seconds) — investigating
+*why* led to `free -h` and then `docker ps`, not the other way around. In hindsight,
+this same memory pressure had almost certainly been degrading test-run reliability
+for other concurrent sessions and other requirements' gates for hours before it was
+caught, manifesting as unexplained flakes that got attributed to "host contention"
+generically rather than this specific, fixable cause.
+
+**Fix going forward:**
+
+*Preventive:* whenever `git worktree remove <path>` is run as part of closing out a
+requirement/issue (DOC-UPDATER's own cleanup step, or ORCH doing it directly), also
+tear down that worktree's own docker stack FIRST, before removing the directory —
+`cd <path> && sudo docker compose down` (or `docker compose -p <project-name> down`
+if compose files are inconsistent) while the directory still exists and the compose
+file is still reachable. If the directory has already been removed and the compose
+file is gone, stop+remove the orphaned containers directly by name
+(`sudo docker ps -a --format "{{.Names}}" | grep "^<worktree-basename>-"`, then
+`docker stop`/`docker rm` each).
+
+*Detective:* periodically (and whenever a full-suite run shows an unusually high or
+unexplained failure count under real resource-starvation symptoms, not assertion
+mismatches), run `sudo docker ps --format "table {{.Names}}\t{{.Status}}"` and check
+each `wt-*`/`*-worktree-*`-prefixed container against whether that worktree directory
+still exists under the scratchpad path — any container whose worktree is gone is a
+pure resource leak, safe to stop and remove (the data is throwaway per-worktree
+scratch state, not anything to preserve). `free -h`'s `available` column is the
+cheapest single signal that this has happened again: if it's near zero on a host
+that should have headroom, check for orphaned worktree stacks before assuming the
+suite itself is flaky.

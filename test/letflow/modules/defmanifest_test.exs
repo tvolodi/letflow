@@ -9,8 +9,30 @@ defmodule Letflow.Modules.DefmanifestTest do
 
   use ExUnit.Case, async: true
 
-  @bad_module_source """
-  defmodule Letflow.Test.BadManifestModule do
+  # F3 fix (ISS-0806 WF03-ISS0806-20260925): each negative-path compile_string
+  # call now uses a distinct module name to eliminate the async: true race on
+  # shared module-name redefinition that REVIEWER flagged.
+  @bad_module_source_raises """
+  defmodule Letflow.Test.BadManifestModule1 do
+    @behaviour Letflow.Modules.Module
+    import Letflow.Modules.Module, only: [defmanifest: 1]
+
+    defmanifest(
+      id: "bad",
+      version: "0.0.1",
+      depends_on: [],
+      pack: nil,
+      permissions: [:DeclaredPerm],
+      role_grants: %{TASK_WORKER: [:UndeclaredPerm]},
+      required_roles: [],
+      settings_schema: nil,
+      route_policies: []
+    )
+  end
+  """
+
+  @bad_module_source_names_caller """
+  defmodule Letflow.Test.BadManifestModule2 do
     @behaviour Letflow.Modules.Module
     import Letflow.Modules.Module, only: [defmanifest: 1]
 
@@ -51,7 +73,7 @@ defmodule Letflow.Modules.DefmanifestTest do
     test "raises CompileError when a role_grants atom is absent from permissions" do
       error =
         assert_raise CompileError, fn ->
-          Code.compile_string(@bad_module_source)
+          Code.compile_string(@bad_module_source_raises)
         end
 
       assert error.description =~
@@ -61,10 +83,10 @@ defmodule Letflow.Modules.DefmanifestTest do
     test "CompileError message names the caller module" do
       error =
         assert_raise CompileError, fn ->
-          Code.compile_string(@bad_module_source)
+          Code.compile_string(@bad_module_source_names_caller)
         end
 
-      assert error.description =~ "Letflow.Test.BadManifestModule"
+      assert error.description =~ "Letflow.Test.BadManifestModule2"
     end
 
     test "compiles cleanly when all role_grants atoms are in permissions" do

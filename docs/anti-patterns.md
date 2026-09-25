@@ -3393,3 +3393,42 @@ artefacts — not simply the first to merge. Turn the other into a tombstone wit
 `status: duplicate` and `superseded_by:`, and **strip its `queue_ref`/`github_ref`** so
 exactly one record claims the task. Do not delete it: other files and handoffs cite the
 dead id by name, and a redirect beats a dangling reference.
+
+## CODE-DESIGNER writes its design doc to the shared main-repo checkout instead of the feature-branch worktree, so it never gets committed (2026-09-24/25, ISS-0819 and REQ-401, both same session)
+
+**What happened, twice in one session:** a CODE-DESIGNER dispatch is told "produce a design
+doc under `lib/letflow/design/`" without an explicit absolute path, and the agent — running
+in a fresh context with no memory of which of several concurrent worktrees is "the" one for
+this run — writes it relative to `/home/tvolodi/workspace/letflow-1` (the shared checkout
+every ORCH `Bash` call defaults to) rather than into the actual feature-branch worktree
+(e.g. `/tmp/.../scratchpad/wt-req401`). Every downstream agent (CODE-DESIGN-VALIDATOR,
+ELIXIR-DEV, REVIEWER, SECURITY-REVIEWER) can still *read* the file fine — it's sitting right
+there on disk, just as an **untracked** file in the wrong repo — so nobody notices until
+someone runs `git log`/`find` inside the actual worktree looking for it and comes up empty.
+ISS-0819's ELIXIR-DEV and REQ-401's SECURITY-REVIEWER both independently caught this only
+because they happened to check provenance; two prior gate-passes on each design (twice for
+REQ-401 after a rework) went by without anyone noticing the doc backing a security-critical
+sign-off wasn't actually in git history at all.
+
+**Why it's dangerous, not just untidy:** if the shared checkout is later reset, cleaned, or
+another concurrent session's `git checkout`/`git stash` touches the same untracked path, the
+design doc — the artefact every gate PASS verdict was checking against — silently vanishes
+with no trace it ever existed. A "PASSed twice" security sign-off would then rest on nothing
+recoverable. It also risks collision: two concurrent CODE-DESIGNER runs writing to the same
+shared-checkout filename would clobber each other with no git conflict to surface it (no repo
+is tracking the file yet).
+
+**Fix, both parts:**
+
+*Preventive:* every CODE-DESIGNER dispatch prompt must state the absolute worktree path the
+design doc is to be written into (e.g. "write to
+`/tmp/.../scratchpad/wt-req401/lib/letflow/design/<name>.md`, not
+`/home/tvolodi/workspace/letflow-1/...`"), not just a repo-relative path — the same
+discipline this project already applies to every ELIXIR-DEV/FRONTEND-DEV dispatch's worktree
+instruction, just missed for the design step specifically.
+
+*Detective, cheap and worth doing on every gate dispatch from now on:* before treating any
+CODE-DESIGN-VALIDATOR/SECURITY-REVIEWER PASS as final, `git log --oneline -- lib/letflow/design/<name>.md`
+inside the actual feature-branch worktree — if it returns nothing, the artefact isn't
+committed yet regardless of how many gates "passed" it. Copy it in and commit it (with a
+`docs(...)` commit citing which gate depended on it) before merging.

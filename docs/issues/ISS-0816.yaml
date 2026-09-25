@@ -89,4 +89,75 @@ fix_direction: >
   not re-derive it.
 queue_ref: "Q-816"
 github_ref: "GH-1804"
-status: open
+status: resolved
+resolved_in_run: WF03-ISS0816-20260925
+resolved_at: "2026-09-25T02:53:37Z"
+resolution: >
+  Fixed -- though not in the way this record originally proposed, because its
+  central premise was false and was refuted at Step 1 (see the CORRECTED block
+  in the description above).
+
+  No Letflow route emits has_more. audit.ex's is internal to list_entries/1
+  and is dropped before routers/audit.ex's page_body/2 hand-builds the
+  response. So CursorPage<T>.has_more covered ZERO wire shapes, not two, and
+  the proposed "split, preserving has_more on the audit branch" would have
+  been wrong.
+
+  What shipped instead: has_more deleted outright, and the type split on the
+  axis the backend actually varies on -- CursorPage<T> = {items, next_cursor}
+  and CountedCursorPage<T> = {items, next_cursor, count}. GroupMemberPage,
+  RawAuditPage and EntityRecordsPage collapsed into them; TenantListResponse
+  deliberately left alone, recorded as a non-change rather than an oversight.
+  Both client-side fabrication sites deleted. A has-more-wire-field forbidlist
+  guard added so the field cannot return as a code form.
+
+  AC3's GroupsPage truncation was fixed by a bounded drain
+  (groupsApi.listAllMembers, 200 per page, max 20 requests, returning
+  {items, truncated}) rather than by a truncation notice. The notice option
+  was genuinely unavailable: GroupsPage derives its Add-member dropdown as a
+  set difference from the member list, so a truncated member set puts existing
+  members back in the dropdown, and a notice would sit on a different control
+  from the one that is wrong. The earlier framing of this as a "wrong write
+  path" was withdrawn during review -- GroupMemberAddResult.created shows the
+  backend add is idempotent, so nothing is corrupted.
+verification: >
+  type-check exit 0, lint exit 0 (--max-warnings 0), 901 tests across 127
+  files, 52 guards, source-scan 0 violations.
+
+  Fail-first evidence was measured per group, not asserted, and
+  TEST-DESIGN-VALIDATOR independently reproduced every figure case for case:
+
+  Drain -- four mutants. Cap off-by-one kills T5 and T5c; suppressing the
+  exactly-20 boundary kills T5b alone; deleting the cursor forward kills T4's
+  URL assertion specifically, since the concatenation half still passes, which
+  is what makes that URL assertion load-bearing; null to undefined kills T4,
+  T4b and T5b.
+
+  T9 -- the hand-added surfaceRows row is proven load-bearing by M6b, a proof
+  that works by a suite STAYING GREEN: with the /api/v1/admin/ defect live and
+  that one row deleted, the file runs 16/16 fully green. The validator A/B'd
+  it, re-inserting the row to get 17-with-1-red, isolating the row as the only
+  variable, and grep-confirmed the defect was live before the run.
+
+  T7 -- alternative 4 (ES6 shorthand) fires alone on a parameter destructure
+  with no const/let/var present, and removing it leaves the live defect
+  passing 49/49. Uniquely load-bearing for the commonest spelling.
+
+  T6 -- rewritten after REVIEWER measured it barely discriminated. It now runs
+  the REAL drain against a stubbed wire, so the member set asserted on is what
+  the page fetched rather than what the test supplied. 1-of-4 red became
+  2-of-4, with the design's nominated assertion now among the red.
+outstanding: >
+  No end-to-end evidence. Every check runs against a window.fetch double --
+  localhost:4000 and :5173 were unreachable and the docker daemon was down, so
+  the drain has never spoken to a real Postgres cursor. Worst case if a real
+  server cursor fails to advance is 20 duplicate pages and truncated: true;
+  availableUsers builds a Set, so the set difference stays correct.
+  Degradation, not exposure -- SECURITY-REVIEWER's assessment.
+
+  GroupsPage also still cannot be rendered under a real QueryClientProvider
+  without hanging the event loop: ISS-0824, pre-existing and independently
+  attributed to unmodified code.
+
+  Filed by this run and not fixed here: ISS-0820, ISS-0821, ISS-0822,
+  ISS-0823, ISS-0824, ISS-0825, ISS-0826, ISS-0827.

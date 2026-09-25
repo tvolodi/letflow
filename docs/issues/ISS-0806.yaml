@@ -1,0 +1,39 @@
+id: ISS-0806
+title: >
+  Module permissions/role_grants untyped at Catalog boundary -- no
+  compile-time check that a role_grants atom is in permissions
+discovered_by: REVIEWER (WF02-REQ400-20260924) — filed under ISS-0790
+discovered_in_run: WF02-REQ400-20260924
+discovered_at: "2026-09-24T13:05:00Z"
+severity: MINOR
+tags:
+  - type-safety
+  - modules
+  - backend
+description: >
+  See docs/issues/ISS-0790.yaml (the authoritative filing). Queue assigned
+  this id 806 / title ISS-0806; the on-disk authoritative file is ISS-0790.
+  This file is a queue-id alias only.
+
+  Letflow.Modules.Module's @callback manifest/0 return type declares
+  permissions and role_grants as plain atom()/[atom()] with no
+  Dialyzer-checkable or compile-time relationship enforced between the two.
+  A module could declare a role_grants entry naming a permission atom that
+  never appears in its own permissions list, and nothing at compile time
+  would catch it. Only the runtime Letflow.Modules.Catalog.validate/1
+  six-rule check currently catches this.
+affected_files:
+  - lib/letflow/modules/module.ex
+  - lib/letflow/modules/catalog.ex
+related:
+  - ISS-0790
+severity_rationale: >
+  MINOR -- runtime validate/1 already catches this; this is a
+  defense-in-depth improvement, not a live correctness gap.
+fix_direction: >
+  A compile-time mechanism (Dialyzer type refinement, or a validate-at-compile
+  macro) that every role_grants atom is present in permissions.
+  Existing runtime validate/1 behavior must remain unchanged.
+queue_ref: "Q-806"
+github_ref: "GH-1792"
+status: open

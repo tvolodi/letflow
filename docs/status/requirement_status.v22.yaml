@@ -1187,3 +1187,18 @@ history:
       role_from_string CANDIDATE count=1. AC4: all 4 old paths absent. AC5: mix
       letflow.check passes, npm run check passes. AC6: Playwright deferred (no
       running stack). AC7: inventory updated. Commit: 74f106ff.
+  - req: REQ-414
+    status: done
+    timestamp: 2026-09-26T04:00:00Z
+    run_id: WF02-REQ414-20260926
+    agent: ELIXIR-DEV
+    summary: >
+      Added Installs.put_settings/3 validating settings against manifest
+      settings_schema (uses existing JsonSchema.validate/2, no new dep).
+      Added TenantModule.settings_changeset/2. Added PUT /api/v1/tenant/
+      modules/:module_id/settings gated by :ModulesManage returning 200/
+      422/404. Added endpoint_policy_key clause. 15 tests pass: 200 for
+      valid body, 422 for type error, 422 for extra key (additionalProperties),
+      403 for 5 roles, 404 uninstalled, two-tenant isolation. nil-schema
+      accepts only empty map. SECURITY-REVIEWER PASS (INV-1..INV-5 verified).
+      No new hex dep. Commit: 73e7102e.

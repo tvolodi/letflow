@@ -110,6 +110,7 @@ defmodule Letflow.Routers.SolutionPacksModuleOwnedPackTest do
 
       # No exam entity definitions created.
       entity_defs = Repo.all(EntityDefinition, prefix: tenant.schema_name)
+
       assert entity_defs == [],
              "expected no entity definitions after refused install, got #{inspect(Enum.map(entity_defs, & &1.name))}"
 

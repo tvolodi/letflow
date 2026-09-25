@@ -106,7 +106,9 @@ defmodule Letflow.Modules.Exam.OnInstallTest do
       actor_id = Ecto.UUID.generate()
 
       assert {:ok, _} = Installs.install("exam", actor_id, prefix: ctx.schema_name)
-      assert {:error, :already_installed} = Installs.install("exam", actor_id, prefix: ctx.schema_name)
+
+      assert {:error, :already_installed} =
+               Installs.install("exam", actor_id, prefix: ctx.schema_name)
     end
   end
 end

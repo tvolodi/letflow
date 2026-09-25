@@ -35,8 +35,12 @@ not grant" would be impossible to satisfy, because nothing in the router evaluat
 `role_grants` at all.
 
 **Fix, in scope for this requirement (fixture is test support, not production module
-content — same class of change REQ-402/403 already made to
-`test/support/modules/fixture_dependent/` and `fixture_failing_install/`):**
+content; necessary, not merely convenient — without it, every installed-tenant caller
+gets `200` regardless of role and AC2's 403-branch is structurally untestable.
+CODE-DESIGN-VALIDATOR flagged an earlier draft of this section for citing a false
+precedent — `fixture_dependent/` and `fixture_failing_install/` (REQ-402/403) have no
+`router/0` and no route at all, so no such conversion happened there; this fix's
+justification rests solely on AC2's own testability requirement, not any precedent):**
 `test/support/modules/fixture/router.ex` changes from `use Plug.Router` to
 `use Letflow.Api.AuthorizedRouter`, and its one route changes from the plain
 `get "/items/:id" do ... end` to `authz_get "/items/:id", :FixtureRead do ... end` —

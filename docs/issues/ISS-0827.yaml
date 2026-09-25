@@ -1,0 +1,39 @@
+id: ISS-0827
+title: >
+  test/letflow/router_test.exs's REQ-070 AC5 "9 deferred routes" assertion
+  is stale -- commit 65312cd9 removed 4 rows from router.ex's deferred-routes
+  table but never updated the test's hardcoded count
+discovered_by: TEST-RUNNER
+discovered_in_run: WF03-ISS0772-20260925
+discovered_at: "2026-09-25T00:30:00Z"
+severity: MINOR
+tags:
+  - backend
+  - test-flake
+  - router
+description: >
+  Found while running the full independent suite for an unrelated fix
+  (ISS-0772, a Logger-metadata/LogFilter change). A fresh
+  `TEST_PARALLEL_N=4 scripts/test_parallel.sh` run showed 2 failures,
+  both in test/letflow/router_test.exs (REQ-070 AC5), unrelated to the
+  branch under test. Root-caused: commit 65312cd9 (already on main,
+  part of ISS-0822's dead-route removal) removed 4 rows from
+  lib/letflow/router.ex's deferred-routes table but never updated
+  router_test.exs's hardcoded `@deferred` list / "exactly 9 rows"
+  assertion, so the test now asserts a stale count against the real,
+  smaller table.
+affected_files:
+  - test/letflow/router_test.exs
+  - lib/letflow/router.ex
+related: []
+severity_rationale: >
+  MINOR -- a real, deterministic (not flaky) test failure, but purely a
+  stale test-data assertion following an already-merged, intentional
+  route-table change (ISS-0822). No production behavior is wrong; the
+  test itself is just out of date.
+fix_direction: >
+  Update test/letflow/router_test.exs's REQ-070 AC5 assertion (the
+  hardcoded @deferred list and/or "exactly 9 rows" expectation) to match
+  the current, smaller deferred-routes table in lib/letflow/router.ex
+  after ISS-0822's removal of 4 dead routes.
+status: open

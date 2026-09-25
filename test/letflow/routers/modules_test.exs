@@ -102,6 +102,46 @@ defmodule Letflow.Routers.ModulesTest do
     ctx
   end
 
+  # Attaches a `:telemetry` handler to Ecto's own `[:letflow, :repo, :query]`
+  # event (same attach convention as
+  # `test/letflow/plugs/http_metrics_test.exs`) and counts how many queries
+  # against the `tenant_modules` table `fun.()` triggers -- used by the
+  # INV-5 timing-parity regression test below to assert
+  # `Installs.installed?/2` actually ran, not merely that the response body
+  # looks right.
+  defp count_tenant_modules_queries(fun) do
+    test_pid = self()
+    handler_id = "req404-inv5-query-count-#{System.unique_integer([:positive, :monotonic])}"
+
+    :telemetry.attach(
+      handler_id,
+      [:letflow, :repo, :query],
+      fn _event, _measurements, metadata, _config ->
+        if metadata.source == "tenant_modules" do
+          send(test_pid, :tenant_modules_query)
+        end
+      end,
+      nil
+    )
+
+    result = fun.()
+    Process.sleep(20)
+    :telemetry.detach(handler_id)
+
+    count =
+      Stream.repeatedly(fn ->
+        receive do
+          :tenant_modules_query -> :hit
+        after
+          0 -> nil
+        end
+      end)
+      |> Enum.take_while(&(&1 != nil))
+      |> length()
+
+    {result, count}
+  end
+
   # ═══════════════════════════════════════════════════════════════════════
   # AC1 — 404 for every role, including PLATFORM_ADMIN, when not installed
   # ═══════════════════════════════════════════════════════════════════════
@@ -190,6 +230,57 @@ defmodule Letflow.Routers.ModulesTest do
       conn = request(:get, "/api/v1/modules/fixture/items/42", role_ctx_b)
 
       assert conn.status == 404
+    end
+  end
+
+  # ═══════════════════════════════════════════════════════════════════════
+  # INV-5 timing-parity regression guard (design §9.7 -- amendment closing
+  # a SECURITY-REVIEWER BLOCKER, commit 31fc03d6 -> follow-up fix).
+  #
+  # Plain response-body/status assertions (AC1/AC3 above) cannot catch a
+  # regression back to a short-circuiting `with`-chain: both the fixed and
+  # the broken code return byte-identical 404s for these two requests, the
+  # ONLY observable difference is whether Installs.installed?/2's
+  # `tenant_modules` query actually ran. This asserts on that directly, via
+  # `:telemetry.attach/4` on Ecto's own `[:letflow, :repo, :query]` event
+  # (same test-handler-attach convention as
+  # `test/letflow/plugs/http_metrics_test.exs`) -- counting query events
+  # whose `metadata.source == "tenant_modules"` for BOTH an unknown module
+  # id and a known-but-uninstalled module id. If `gate/2`'s `resolve/2`
+  # ever regresses to short-circuiting the DB check behind the free
+  # catalog/router-export checks (design §9.4), the unknown-module-id case
+  # would drop to zero `tenant_modules` queries while the known-uninstalled
+  # case stays at one -- this test fails on that asymmetry even though
+  # both requests would still return the same 404 body.
+  # ═══════════════════════════════════════════════════════════════════════
+
+  describe "INV-5 timing parity -- Installs.installed?/2 runs unconditionally, not short-circuited by the free catalog checks" do
+    test "an unknown module id still pays exactly one tenant_modules query, same as a known-uninstalled id" do
+      ctx = tenant_ctx("req404-inv5")
+      role_ctx = token_for(ctx, :PLATFORM_ADMIN)
+
+      {unknown_conn, unknown_count} =
+        count_tenant_modules_queries(fn ->
+          request(:get, "/api/v1/modules/does-not-exist/anything", role_ctx)
+        end)
+
+      {uninstalled_conn, uninstalled_count} =
+        count_tenant_modules_queries(fn ->
+          request(:get, "/api/v1/modules/fixture/items/42", role_ctx)
+        end)
+
+      assert unknown_conn.status == 404
+      assert uninstalled_conn.status == 404
+
+      assert unknown_count == 1,
+             "expected exactly 1 tenant_modules query for an unknown module id " <>
+               "(Installs.installed?/2 must run unconditionally, design §9.2/§9.3), got #{unknown_count}"
+
+      assert uninstalled_count == 1,
+             "expected exactly 1 tenant_modules query for a known-uninstalled module id, got #{uninstalled_count}"
+
+      assert unknown_count == uninstalled_count,
+             "DB round-trip count must be identical across both branches (INV-5 timing parity)"
     end
   end
 end

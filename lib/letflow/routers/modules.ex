@@ -48,6 +48,22 @@ defmodule Letflow.Routers.Modules do
   one of `Letflow.Modules.Catalog`, `Letflow.Modules.Installs`, or a
   runtime value (`entry_module`) obtained from `Catalog.fetch/1` — never a
   literal `Letflow.Modules.<id>` name.
+
+  ## INV-5 timing parity (design §9, post-SECURITY-REVIEWER amendment)
+
+  `resolve/2` below computes `Installs.installed?/2`'s DB round trip
+  UNCONDITIONALLY, independent of the free in-memory catalog/router-export
+  checks — never behind a short-circuiting `with`-chain gated on those
+  checks. Every request that reaches `resolve/2` pays exactly one DB round
+  trip, whether `module_id` is unknown to the catalog, known but has no
+  `router/0`, or known-and-installed. This closes a real timing side
+  channel: a `with`-chain that fails the free catalog check first (0 DB
+  round trips) versus one that clears it and only then fails the DB-backed
+  install check (1 DB round trip) lets a caller distinguish "module never
+  registered" from "registered but not installed for you" purely by
+  latency — forbidden by INV-5/D5. See design §9.1–§9.4 for the full
+  analysis, including why reordering the chain (instead of decoupling the
+  DB check from short-circuit evaluation entirely) does not fix it.
   """
 
   @behaviour Plug
@@ -73,30 +89,58 @@ defmodule Letflow.Routers.Modules do
     end
   end
 
-  # Folds design §1.3 steps 2-6 into one with-chain.
+  # Design §9.3: step 2's scoped_opts resolution is unchanged and still
+  # short-circuits first (no DB-cost asymmetry to fix there). Steps 3-6 are
+  # then delegated to resolve/2, which must NOT be wired as a
+  # short-circuiting with-chain against Installs.installed?/2 (see moduledoc
+  # "INV-5 timing parity").
+  @spec gate(Plug.Conn.t(), module_id :: String.t(), rest :: [String.t()]) ::
+          Plug.Conn.t()
   defp gate(conn, module_id, rest) do
-    with {:ok, scoped_opts} <- Context.scoped_repo_opts(conn),
-         conn <- Plug.Conn.assign(conn, :scoped_opts, scoped_opts),
-         {:ok, entry_module} <- fetch_module(module_id),
-         {:ok, router} <- fetch_router(entry_module),
-         true <- Installs.installed?(module_id, scoped_opts) do
-      Plug.forward(conn, rest, router, router.init([]))
-    else
-      {:error, :missing_auth_context} -> Response.internal_error(conn)
-      {:error, :invalid_tenant_id} -> Response.internal_error(conn)
-      {:error, :not_found} -> Response.not_found(conn)
-      :no_router -> Response.not_found(conn)
-      false -> Response.not_found(conn)
+    case Context.scoped_repo_opts(conn) do
+      {:ok, scoped_opts} ->
+        conn = Plug.Conn.assign(conn, :scoped_opts, scoped_opts)
+
+        case resolve(module_id, scoped_opts) do
+          {:ok, _entry_module, router} -> Plug.forward(conn, rest, router, router.init([]))
+          :reject -> Response.not_found(conn)
+        end
+
+      {:error, :missing_auth_context} ->
+        Response.internal_error(conn)
+
+      {:error, :invalid_tenant_id} ->
+        Response.internal_error(conn)
     end
   end
 
-  defp fetch_module(module_id), do: Catalog.fetch(module_id)
+  # Design §9.3/§9.4: `installed?` is computed UNCONDITIONALLY, in every
+  # call, independent of catalog_result/has_router? -- never nested inside
+  # an `if`/`with` guarded by either of those free checks. The catalog
+  # lookup and function_exported?/3 check remain free/in-memory and may
+  # still short-circuit against EACH OTHER (no timing asymmetry exists
+  # between "unknown id" and "id has no router", since both are zero-cost);
+  # only the DB-touching check must never be skipped. The three outcomes
+  # collapse into a single undifferentiated :reject -- the caller cannot
+  # observe which sub-check failed, preserving AC3's byte-identical 404
+  # body.
+  @spec resolve(module_id :: String.t(), scoped_opts :: keyword()) ::
+          {:ok, entry_module :: module(), router :: module()} | :reject
+  defp resolve(module_id, scoped_opts) do
+    installed? = Installs.installed?(module_id, scoped_opts)
 
-  defp fetch_router(entry_module) do
-    if function_exported?(entry_module, :router, 0) do
-      {:ok, entry_module.router()}
-    else
-      :no_router
+    case Catalog.fetch(module_id) do
+      {:ok, entry_module} ->
+        has_router? = function_exported?(entry_module, :router, 0)
+
+        if has_router? and installed? do
+          {:ok, entry_module, entry_module.router()}
+        else
+          :reject
+        end
+
+      {:error, :not_found} ->
+        :reject
     end
   end
 end

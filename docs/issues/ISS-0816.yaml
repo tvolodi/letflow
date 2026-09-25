@@ -56,7 +56,9 @@ fix_direction: >
   not re-derive it.
 queue_ref: "Q-816"
 github_ref: "GH-1804"
-status: open
+status: resolved
+resolved_in_run: WF03-ISS0828-20260925
+resolved_at: "2026-09-25T08:14:00Z"
 reopened_by: WF03-ISS0828-20260925
 reopened_at: "2026-09-25T08:12:00Z"
-reopened_reason: "AC3 (members truncation) was not delivered. Reopening for AC3 fix."
+reopened_reason: "AC3 (members truncation) was not delivered. Reopened for AC3 fix."

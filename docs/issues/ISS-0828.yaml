@@ -77,4 +77,6 @@ fix_direction: >
   issue's evidence should not be able to pass.
 queue_ref: "Q-828"
 github_ref: "GH-1822"
-status: open
+status: resolved
+resolved_in_run: WF03-ISS0828-20260925
+resolved_at: "2026-09-25T08:14:00Z"

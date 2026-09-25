@@ -1,0 +1,288 @@
+{
+  "handoff_id": "WF03-ISS0816-20260925-step-03c",
+  "run_id": "WF03-ISS0816-20260925",
+  "workflow_id": "WF-03",
+  "step": "Step 3c",
+  "from_agent": "SECURITY-REVIEWER",
+  "to_agent": "ORCH",
+  "file": "handoffs/WF03-ISS0816-20260925/step-03c-security-reviewer.json",
+  "created_at": "2026-09-25T01:08:48Z",
+  "started_at": "2026-09-25T01:08:48Z",
+  "completed_at": "2026-09-25T01:12:48Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "rework_count": 0,
+  "max_rework": 2,
+  "context": {
+    "stage": "S8",
+    "issue_id": "ISS-0816",
+    "requirement_ids": [],
+    "branch_name": "feature/WF03-ISS0816-20260925",
+    "gated_commit": "131f4a01",
+    "implementation_commit": "64b87055d3556b2d5776cfe7a29848c61e09c006",
+    "diff_range": "origin/main...HEAD",
+    "requirement_text": "ISS-0816 deleted has_more from CursorPage<T> (no Letflow route emits it on the wire), split the envelope into CursorPage<T> = {items, next_cursor} and CountedCursorPage<T> = {items, next_cursor, count}, collapsed GroupMemberPage / RawAuditPage / EntityRecordsPage into those two, deleted two client-side has_more fabrication sites (auditApi.list, promotionsApi.list), added a bounded-drain groupsApi.listAllMembers, fixed GroupsPage's availableUsers set difference to draw on the complete member set, and added a has-more-wire-field forbidlist guard. No backend source file changed.",
+    "artifacts_in": [
+      "lib/letflow/design/iss-0816-cursorpage-has-more-audit.md",
+      "handoffs/WF03-ISS0816-20260925/step-03-frontend-dev.json",
+      "docs/agents/instructions/security-invariants.md",
+      "docs/agents/instructions/core-directives.md",
+      "docs/agents/workflows/WF-02_requirement_implementation.md",
+      "docs/issues/ISS-0824.yaml",
+      "web/src/api/identity.ts",
+      "web/src/api/client.ts",
+      "web/src/api/audit.ts",
+      "web/src/api/promotions.ts",
+      "web/src/api/tasks.ts",
+      "web/src/api/instances.ts",
+      "web/src/api/modules.ts",
+      "web/src/api/queryKeys.ts",
+      "web/src/api/useTenantScopedQueryKeys.ts",
+      "web/src/types/api.ts",
+      "web/src/pages/admin/GroupsPage.tsx",
+      "web/src/pages/admin/AuditLogPage.tsx",
+      "web/src/main.tsx",
+      "web/tests/guards/forbidlist.ts",
+      "lib/letflow/api/pagination.ex",
+      "lib/letflow/routers/identity.ex",
+      "lib/letflow/routers/audit.ex",
+      "lib/letflow/routers/promotions.ex",
+      "lib/letflow/plugs/api_pipeline.ex",
+      "lib/letflow/plugs/admission.ex",
+      "lib/letflow/routers/public_read.ex"
+    ],
+    "related_handoff_ids": [
+      "WF03-ISS0816-20260925-step-01",
+      "WF03-ISS0816-20260925-step-02",
+      "WF03-ISS0816-20260925-step-02b-rework2",
+      "WF03-ISS0816-20260925-step-03"
+    ]
+  },
+  "task": {
+    "description": "WF-03 Step 3c, the SECURITY-REVIEWER hard gate, run against implementation commit 131f4a01 on branch feature/WF03-ISS0816-20260925 and assessed invariant-by-invariant against docs/agents/instructions/security-invariants.md INV-1 through INV-9. The change under gate is frontend-only in its executable surface -- git diff --name-only origin/main...HEAD lists no file under lib/ other than the markdown design artefact lib/letflow/design/iss-0816-cursorpage-has-more-audit.md, and no file under priv/repo/migrations/ at all -- so the gate's job was to establish whether a frontend-only diff nevertheless reaches a tenant-data path rather than to assume it does not. Five targeted questions were posed by the dispatching agent and each was answered from source rather than from the producing agent's self-report: (1) whether the new bounded drain groupsApi.listAllMembers can have its 20-request cap bypassed or made unbounded by a crafted next_cursor, whether a constant or self-referential server cursor terminates it, whether it constitutes a request amplifier against the backend from one user action, and whether 200 x 20 = 4000 records per UI interaction is an acceptable client-initiated load that is rate-limited anywhere; (2) whether the client ever constructs, decodes, mutates or infers a pagination cursor rather than forwarding the server-minted opaque token verbatim, given that Letflow.Api.Pagination.decode_cursor/4 treats cursors as opaque server-minted tokens and a client that manufactured one could reach rows it should not; (3) whether the type collapse of GroupMemberPage into CountedCursorPage<GroupMember> and EntityRecordsPage into CursorPage<T> newly surfaces to the UI any field the backend intends to withhold, checked against the hand-built server-side allowlist maps user_map/1, group_map/1 and page_body/2 per INV-2; (4) whether GroupsPage's repaired availableUsers set difference, now drawing on a fully drained member list, can leak the membership of a group the actor may not view or produce a dropdown whose contents exceed what the actor is authorised to see; and (5) whether any secret, token or credential is introduced by the diff and whether anything is logged that should not be. Two honest gaps declared by FRONTEND-DEV had to be weighed rather than accepted as green: no live backend or browser was reachable during implementation because the docker daemon was down, so every implementation-side check ran against a window.fetch double; and ISS-0824 records that GroupsPage cannot currently be rendered in a test with a real @tanstack/react-query provider without spinning the event loop indefinitely under jsdom. Ten already-filed issues (ISS-0811 through ISS-0815 and ISS-0820 through ISS-0824) were excluded from re-reporting, but each was to be checked for security relevance that its own record understates.",
+    "acceptance_criteria": [
+      "AC1 -- The scope test in .claude/agents/security-reviewer.md is actually run against the real diff (git diff origin/main...HEAD) rather than skipped on the ground that the change is frontend-only, and the resulting in-scope / out-of-scope determination is stated explicitly with the reason.",
+      "AC2 -- Every one of INV-1, INV-2, INV-3, INV-4, INV-5, INV-6, INV-7, INV-8 and INV-9 carries an explicit APPLIES or NOT-APPLICABLE verdict against this specific diff, and every APPLIES verdict carries the result of that invariant's own documented How-to-verify procedure, quoted or described concretely. A single FAIL on an applicable invariant terminates the gate with status FAIL; there is no partial credit, since every invariant is BLOCKER severity.",
+      "AC3 -- The 20-request cap on groupsApi.listAllMembers is shown to be unbypassable by response content, by an argument from the loop's own control flow and not merely by citing the producing agent's passing tests, and the request-amplification question is answered with the concrete per-user-action ceiling, the concurrency shape of the drain, the authorisation capability required to reach the route at all, and whatever rate limiting or admission control does or does not cover the route.",
+      "AC4 -- Cursor handling is confirmed verbatim: the client's only operation on next_cursor is assignment and forwarding, no construction, decoding, mutation or inference occurs anywhere on the drain path, and the first request of a drain carries no cursor parameter at all.",
+      "AC5 -- The INV-2 field-authorisation question is answered by reading the server's own hand-built response builders (user_map/1, page_body/2, audit_item/1, render_list_reviews/2) and comparing them field-by-field against the collapsed TypeScript envelopes, establishing whether any field is newly surfaced that the server intends to withhold.",
+      "AC6 -- The two declared gaps are weighed explicitly: for each of the no-live-backend gap and the ISS-0824 real-provider gap, the handoff states which specific conclusions it does and does not materially limit, rather than treating the producing agent's green result as proof.",
+      "AC7 -- The handoff is written to handoffs/WF03-ISS0816-20260925/step-03c-security-reviewer.json, passes the single-file lint (mix letflow.lint_handoffs --dir <that file>), lists no file outside handoffs/ as modified by this step, does not list its own file in result.artifacts_out, and is committed and pushed."
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "verdict": "PASS",
+    "gate_decision": "PASS -- in scope, and every applicable invariant satisfied",
+    "summary": {
+      "headline": "In scope, and it passes. The diff has no backend source change, but it does modify response-shaping code for tenant-scoped entities and adds a new client-side read path over tenant-scoped data (group membership), so it is not out of scope. INV-1, INV-2, INV-4, INV-6 and INV-8 apply and all pass; INV-3, INV-5, INV-7 and INV-9 are not applicable. The 20-request cap is structurally unbypassable, the cursor is forwarded verbatim, and the type collapse is field-for-field identical to what the server's own hand-built allowlists already emit -- the diff only ever removes a client-side field, never adds one.",
+      "direction_of_the_change": "Security-positive on net. The two deleted fabrication sites were client-side rebuilds of the response envelope. In promotionsApi.list the rebuild was acting as a de-facto client-side key filter, which is precisely the pattern INV-2 forbids relying on; deleting it and returning the server's body unreshaped moves the boundary back to where INV-2 says it belongs. It is safe to do so here because render_list_reviews/2 hand-builds exactly two keys."
+    },
+    "scope_test": {
+      "procedure": ".claude/agents/security-reviewer.md scope test, run against git diff --name-only origin/main...HEAD (33 files).",
+      "adds_or_modifies_an_api_route": "NO. No file under lib/letflow/routers/ is in the diff. The only lib/ path present is lib/letflow/design/iss-0816-cursorpage-has-more-audit.md, a markdown design artefact.",
+      "adds_or_modifies_a_migration": "NO. No priv/repo/migrations/*.exs file is in the diff.",
+      "adds_or_modifies_secret_resolution": "NO config/ or env/token-resolution file is in the diff, but INV-4 is assessed anyway because it applies to every diff.",
+      "adds_or_modifies_response_shaping_for_a_tenant_scoped_entity": "YES. web/src/types/api.ts redefines the envelope types for audit entries, process instances, tasks, group members and entity records; web/src/api/audit.ts, promotions.ts, tasks.ts and instances.ts change how those envelopes are consumed and re-emitted to the UI.",
+      "adds_or_modifies_a_lookup_by_id_handler": "NO new lookup-by-ID handler. groupsApi.listAllMembers(id) is a list-by-parent-id drain over an existing route, not a new resolution path.",
+      "determination": "IN SCOPE. Explicitly not recorded as 'out of scope -- no tenant-data path touched': group membership is tenant-scoped business data, and this diff adds a new client-side path that reads all of it for a group in one user action."
+    },
+    "invariant_assessment": {
+      "INV-1": {
+        "verdict": "APPLIES (client-side read path over tenant-scoped data) -- PASS",
+        "reasoning": "The invariant's own (a)/(b)/(c) sub-checks are all about Ecto and migrations, and none of the three has a subject in this diff: (a) no Ecto query is added or changed anywhere, so there is no query to check for :prefix scoping -- the drained route's scoping is unchanged and remains server-side, Letflow.Routers.Identity's authz_get \"/groups/:id/members\" handler passing conn.assigns.scoped_opts straight into Identity.list_group_members/3 (lib/letflow/routers/identity.ex:194-195, 543-551); (b) no migration, so nothing can be silently left in public; (c) no tenant_id is written anywhere by this diff, so the 0003 addendum's caller-supplied-vs-derived attribution defect has no surface here. The client-side analogue I did check, because the diff genuinely touches it, is cache-key tenant scoping: GroupsPage's members query keys on tenantKeys.admin.groupMembers(activeGroupId), which resolves to ['tenant', <tenant_id>, 'admin', 'group-members', <groupId>] (web/src/api/queryKeys.ts:137-138) with tenant_id taken from useAuth().session.tenant_id (web/src/api/useTenantScopedQueryKeys.ts:36-40). A drained 4000-member result therefore cannot be served from cache into a different tenant's session. That key is unchanged by this diff, but the drain makes the amount of tenant data sitting behind it much larger, so it was worth confirming rather than assuming.",
+        "recorded_per_the_role_file": "This is recorded as APPLIES rather than the pre-ISS-0026 default skip. It is NOT a forced check against code that does not exist: the check that applied was the third one above, and it was run."
+      },
+      "INV-2": {
+        "verdict": "APPLIES -- PASS",
+        "how_verified": "The invariant's own procedure ('trace the controller/plug function and confirm field selection happens before serialisation ... never as a post-hoc redaction on a client-visible struct') was run against each server response builder behind a changed envelope, reading the Elixir source rather than trusting the design doc's citation of it.",
+        "field_by_field": {
+          "GroupMemberPage -> CountedCursorPage<GroupMember>": "Server side: Pagination.page_response(Enum.map(users, &user_map/1), next_cursor) at lib/letflow/routers/identity.ex:552, encoded by Page's @derive {Jason.Encoder, only: [:items, :next_cursor, :count]} (lib/letflow/api/pagination.ex:81). user_map/1 (identity.ex:729-740) is a hand-built allowlist of exactly eight keys: id, username, display_name, email, status, auth_source, inserted_at, updated_at. The TypeScript GroupMember interface (web/src/types/api.ts:506-515) declares exactly those eight and nothing more. Pre-collapse GroupMemberPage was {items: GroupMember[], next_cursor, count}; post-collapse CountedCursorPage<GroupMember> is {items: T[], next_cursor, count}. Identical. Nothing newly surfaced.",
+          "EntityRecordsPage -> CursorPage<T>": "Pre-collapse the hand-rolled type was {items: T[], next_cursor: string | null}. Post-collapse CursorPage<T> is exactly {items: T[], next_cursor: string | null}, has_more having been deleted from it in the same commit. Identical, and strictly narrower than the old CursorPage<T> it is now an alias of.",
+          "RawAuditPage -> CountedCursorPage<RawAuditEntry>": "Server side: page_body/2 at lib/letflow/routers/audit.ex:308-320, commented in-source as the INV-2 response allowlist, builds exactly {items, next_cursor, count}. The deleted RawAuditPage interface declared exactly those three. Identical. The item-level allowlist audit_item/1 immediately below it is unchanged by this diff and still structurally excludes tenant_id, chain_hash, prev_chain_hash and trace_id.",
+          "promotionsApi.list": "Server side: render_list_reviews/2 at lib/letflow/routers/promotions.ex:944-948 hand-builds exactly {\"items\", \"next_cursor\"}, items mapped through promotion_review_list_item_map/1. The client previously rebuilt {items, next_cursor, has_more} and now returns the parsed body unreshaped. Because the server's envelope is a two-key hand-built literal, no key exists for the removed rebuild to have been hiding. This is the one place in the diff where a client-side filter was removed, and it was checked specifically for that reason."
+        },
+        "count_is_newly_surfaced_and_that_is_fine": "auditApi.list now returns count where it previously returned a fabricated has_more. count is inside the server's own allowlist at audit.ex:308-320 and is documented there as length(items), not a cross-page total. AuditLogPage does not render it -- grep of web/src/pages/admin/AuditLogPage.tsx for count/next_cursor/has_more returns a single line, const nextCursor = data?.next_cursor at :81 -- so the ISS-0711 render-count-as-total defect class is not reintroduced.",
+        "no_client_became_the_authorisation_boundary": "Confirmed in the strong direction: this diff removes client-side envelope reshaping in two places and adds none. No field is suppressed in TypeScript that the server still emits."
+      },
+      "INV-3": {
+        "verdict": "NOT-APPLICABLE",
+        "reasoning": "No tenant-authored script, Lua service task, WASM plugin or host-capability surface appears anywhere in the diff. S5 has not started and this diff does not reach ahead into it."
+      },
+      "INV-4": {
+        "verdict": "APPLIES -- PASS",
+        "how_verified": "Both documented greps were run. grep -rn \"System.get_env\" config/ lib/ --include=*.ex --include=*.exs confirms env-sourced resolution is the existing pattern (config/runtime.exs:30 reads LETFLOW_SECRETS_MASTER_KEY from the environment, config/db_port.exs:38 and config/keycloak_port.exs:41 likewise). The heuristic second grep for a quoted 8-plus-character literal assigned to a password/secret/client_secret/token key returned no hit inside anything this diff adds. Separately, every added line under web/ was grepped case-insensitively for console., localStorage, sessionStorage, token, secret, password, api_key and bearer.",
+        "hits_manually_cleared": "Three hits, all synthetic test material and none a credential: web/src/api/__tests__/identity.members.test.ts imports setToken/clearToken and calls setToken('test-token') in beforeEach; web/src/pages/admin/__tests__/GroupsPage.members.test.tsx mocks a session object containing token: 't'; web/tests/guards/forbidlist.ts uses the English word token in a comment about writing a field name inside backticks. No real key, no real bearer token, no connection string.",
+        "no_new_logging": "Zero console.* calls are added by the diff. groupsApi.listAllMembers logs nothing; it rejects and lets the caller's error handling see the ApiError. The token storage model is untouched -- web/src/api/client.ts still holds the bearer token in a module-scoped variable and never in localStorage or sessionStorage (FNFR-06), and this diff adds no new reader of it.",
+        "handoff_file_itself": "This handoff contains no secret material."
+      },
+      "INV-5": {
+        "verdict": "NOT-APPLICABLE",
+        "reasoning": "No lookup-by-ID endpoint is added or changed -- no backend route file is in the diff at all -- so there is no not-found-versus-forbidden code path pair whose responses or round-trip counts could have diverged. The drain reuses GET /api/v1/identity/groups/:id/members unchanged, whose group_not_found branch (identity.ex:557-558) returns Response.not_found and is not touched."
+      },
+      "INV-6": {
+        "verdict": "APPLIES -- PASS",
+        "reasoning": "The meta-invariant. This handoff is the artefact it requires: it exists for the change, carries status PASS, and lists an explicit applies-or-not verdict plus the reason for every one of INV-1 through INV-9. The new data-access path introduced by the change -- groupsApi.listAllMembers -- has its scoping demonstrated rather than assumed: it reaches tenant data only through GET /api/v1/identity/groups/:id/members, which is mounted behind authz_get with the :GroupsManage capability (lib/letflow/routers/identity.ex:194) and whose handler scopes through conn.assigns.scoped_opts. The drain adds no new route, no new capability, and no new query."
+      },
+      "INV-7": {
+        "verdict": "NOT-APPLICABLE",
+        "reasoning": "No SQL of any kind is in the diff. git diff origin/main...HEAD piped to grep -n \"Repo.query\" returns nothing, and no .ex or migration .exs file is present to contain an Ecto query or a raw-SQL escape hatch."
+      },
+      "INV-8": {
+        "verdict": "APPLIES (by analogy -- the new drain is a network-facing I/O loop) -- PASS",
+        "reasoning": "The invariant is written for BEAM processes and the shared-process blast radius it protects does not exist in a browser tab, so it is applied here in its spirit: does the new external-I/O path have a realistic input that produces an unhandled failure? The drain is async/await with no bare destructuring of the response. Its one throw site is items.push(...page.items), which raises a TypeError if a response body arrives without an items array. That throw occurs inside an async function, so it rejects the returned promise rather than escaping -- and the drain's error contract is tested: identity.members.test.ts's last case drives a 500 on the second page and asserts the promise rejects after exactly two requests, which I re-ran and watched pass. Rejection lands in useQuery's error state. No Letflow server process is involved and no other tenant's work can be affected.",
+        "observation_not_a_failure": "GroupsPage destructures only { data: membersPage } from that useQuery and renders no error state for it, so a rejected drain silently yields members = [] and membersTruncated = false, at which point availableUsers offers every user including existing members. This is the pre-existing shape of that call site -- groupsApi.members had identical behaviour on rejection before this commit -- so it is not introduced here, and it is not a security failure (re-adding an existing member is an idempotent server-side operation returning GroupMemberAddResult.created, not a privilege escalation or a data exposure). It is recorded in result.issues as OBS-2 for ORCH because the drain's fail-fast semantics give that path more opportunities to be reached than a single request did."
+      },
+      "INV-9": {
+        "verdict": "NOT-APPLICABLE",
+        "reasoning": "INV-9 governs outbound HTTP made by a Letflow SERVER process to a tenant-controlled URL. Nothing in this diff causes a server process to make an outbound request; the only requests added are same-origin browser fetches to relative /api/v1/ paths built from a literal template. Letflow.Webhooks.UrlValidator has no new call site to require because there is no new :httpc call site."
+      }
+    },
+    "targeted_checks": {
+      "1_drain_bound_and_amplification": {
+        "verdict": "PASS",
+        "cap_cannot_be_bypassed_by_a_crafted_cursor": "Established structurally from the loop's control flow, not from the producing agent's tests. web/src/api/identity.ts's drain is a for-loop of the form 'for (let request = 0; request < MEMBER_DRAIN_MAX_REQUESTS; request += 1)' where MEMBER_DRAIN_MAX_REQUESTS is a module-level const literal 20. Inside the body: one awaited call, one items.push, one strict-equality test on page.next_cursor, one assignment to cursor. The loop counter is written in exactly one place -- the header's increment. There is no continue, no reset of request, no recursion, no nested loop, and no read of any response field into the bound. Response content therefore cannot influence the iteration count. Maximum requests per invocation is 20, unconditionally.",
+        "constant_or_self_referential_cursor_terminates": "Yes, and the reason is that the drain never inspects cursor identity at all -- it branches only on page.next_cursor === null. Any stream of non-null cursors, whether advancing, constant, or pointing back at itself, is the same code path, and that path is bounded by the counter above. This is measured, not only argued: test T5 in web/src/api/__tests__/identity.members.test.ts drives a never-null cursor stream and asserts exactly 20 requests; T5c asserts a 21st is never issued. I re-ran both myself (see measurements_performed) rather than reading the producing agent's report.",
+        "is_it_a_request_amplifier": "No, in the sense that matters. One user action (opening the Manage members dialog for one group) costs at most 20 requests, and they are strictly sequential -- each iteration awaits its response before the next is issued -- so the drain holds at most one in-flight request at any moment. There is no fan-out, no Promise.all, and no per-item request. The ceiling is a fixed 20x on a single user gesture, not an unbounded or self-multiplying factor.",
+        "is_4000_records_acceptable": "Yes, with the qualifications below stated rather than glossed. (i) The realistic path is one request: page_size is 200, which is Pagination.max_page_size (lib/letflow/api/pagination.ex:50), so any group under 200 members drains in a single round trip and the 20-request ceiling is a safety bound, not the expected cost. (ii) Reaching the route at all requires the :GroupsManage capability (authz_get at lib/letflow/routers/identity.ex:194), so this is not an unauthenticated or low-privilege amplifier. (iii) The result is cached: the query key is stable and web/src/main.tsx:22 sets staleTime: 30_000, so repeatedly reopening the same group's dialog within 30 seconds costs zero further requests.",
+        "rate_limiting_answered_honestly": "The route is NOT covered by a request-rate limiter. Letflow.Plugs.PublicReadRateLimit is mounted only as the first plug of Letflow.Routers.PublicRead (lib/letflow/routers/public_read.ex:55) and does not cover authenticated /api/v1/identity routes. What does cover them is admission control, not rate limiting: Letflow.Plugs.Admission is mounted twice in Letflow.Plugs.ApiPipeline -- pool: :global as the very first plug (lib/letflow/plugs/api_pipeline.ex:88) and pool: :tenant after the auth pipeline -- which bounds CONCURRENT in-flight requests per tenant and globally. Because the drain is sequential it consumes at most one concurrency slot, so it cannot exhaust that pool by itself. The absence of a per-actor request-rate limiter on authenticated list routes is a pre-existing platform property, equally true of every existing list endpoint, and is not introduced by this diff; it is recorded as OBS-3 for ORCH rather than as a gate failure."
+      },
+      "2_cursor_handling": {
+        "verdict": "PASS -- forwarded verbatim, never constructed, decoded, mutated or inferred",
+        "every_operation_on_a_cursor_in_the_diff": "There are exactly two. 'cursor = page.next_cursor' (a plain assignment of the string the server sent) and '{ cursor, page_size: MEMBER_DRAIN_PAGE_SIZE }' passed as the params object. No base64 decode, no atob, no split, no slice, no concatenation, no template interpolation, no comparison against a previous cursor, no parsing of any kind. web/src/api/client.ts's get places it into a URLSearchParams, which percent-encodes it; nothing else happens to it.",
+        "first_request_carries_no_cursor": "Confirmed. cursor is declared 'let cursor: string | undefined' with no initialiser, and client.get filters params by 'v !== undefined && v !== null && v !== '''  (web/src/api/client.ts:188-191), so the first URL has no cursor= parameter. Test T4 asserts exactly this (expect(urls[0]).not.toContain('cursor=')) and I re-ran it.",
+        "why_this_matters_and_is_satisfied": "Letflow.Api.Pagination.decode_cursor/4 validates a base64url payload for an endpoint prefix and a 24h expiry (lib/letflow/api/pagination.ex:220-264), and the identity route supplies the hardcoded literal prefix \"G:\" via parse_group_members_cursor_param/1 (identity.ex:541, 570-584). A client that manufactured a payload would be attempting to steer a server-side seek key. Nothing in this diff gives the client the means or the intent to do so: it round-trips an opaque token it never looks inside. The Cursor struct itself has no tenant_id, schema or prefix field, so even a forged cursor has no slot through which to widen tenant scope -- that structural property is documented in the module's own moduledoc and is unchanged here."
+      },
+      "3_type_collapse_field_exposure": {
+        "verdict": "PASS -- no field newly surfaced that the backend withholds",
+        "detail": "See invariant_assessment.INV-2.field_by_field, which carries the field-by-field comparison against user_map/1, page_body/2, audit_item/1 and render_list_reviews/2. group_map/1 (identity.ex:749-757) was read as instructed; no envelope in this diff consumes it -- GroupListResponse is untouched -- so it is a NOT-AFFECTED allowlist rather than a passing one. Summary of the direction: three collapses (GroupMemberPage, RawAuditPage, EntityRecordsPage) are field-for-field identical to the interfaces they replace, and the one deleted field (has_more) was never on the wire, so the client's declared read is strictly narrower after this commit than before it."
+      },
+      "4_groupspage_availableusers": {
+        "verdict": "PASS -- no membership leak, and the dropdown remains bounded by the actor's authorisation",
+        "can_it_leak_membership_of_an_unviewable_group": "No. The member set comes exclusively from GET /api/v1/identity/groups/:id/members for the id of the group the actor selected from the group list they were already served, and that route is behind :GroupsManage and scoped by conn.assigns.scoped_opts. The drain changes how MANY pages of that one authorised group are read, never WHICH group is read: activeGroupId is the only argument, and there is no path by which a next_cursor could redirect the drain to a different group -- the URL's group segment is re-interpolated from the same id on every iteration, and the cursor is carried in the query string, validated server-side against the \"G:\" prefix. An actor who cannot view the group gets not_found from the first request and the drain rejects rather than iterating.",
+        "is_the_dropdown_still_bounded_by_authorisation": "Yes, and the drain can only ever SHRINK it. availableUsers (GroupsPage.tsx:111-118) is users?.items minus the member id set. The candidate pool is the users query, which is unchanged by this diff and separately authorised; subtracting a larger member set removes options, it never adds one. So the fix cannot widen what the actor is offered. That is the whole shape of the repair: pre-fix the set difference was computed from page one of fifty and therefore offered members 51 and beyond as addable, which is a correctness defect, not an exposure.",
+        "membership_data_volume": "The dialog now holds up to 4000 GroupMember records in client memory for the selected group. Each is the eight-key user_map/1 projection, which contains no secret, no token hash and no tenant_id. The cache entry is tenant-keyed, per INV-1 above."
+      },
+      "5_secrets_and_logging": {
+        "verdict": "PASS",
+        "detail": "See invariant_assessment.INV-4. No secret, token or credential is introduced; the three matches on the word token are two synthetic test fixtures and one comment. Nothing is logged -- the diff adds no console call, and the drain emits no diagnostic output at all."
+      }
+    },
+    "declared_gaps_weighed": {
+      "gap_1_no_live_backend_or_browser_fetch_double_only": {
+        "materially_limits": "One thing, and it should be said plainly: nobody has observed this drain against a real Postgres-backed cursor. What is unverified is server-side behaviour, specifically that the identity route's next_cursor actually advances under real paging.",
+        "does_not_materially_limit": "The three security questions this gate turns on. (a) The 20-request bound is decidable from the source text alone -- it is a lexical constant in a for-header with no data-dependent control flow -- and a fetch double is in fact the BETTER instrument for it, because it can synthesise the never-null cursor stream a healthy server would never produce. A live backend could not have exercised T5 at all. (b) Cursor verbatim-ness is decidable the same way, and the double observes the exact URL built. (c) The INV-2 field questions were answered by reading the server's own hand-built response builders in lib/letflow/routers/, which is literally the evidence class INV-2's How-to-verify prescribes ('trace the controller/plug function'), not by observing the wire.",
+        "worst_case_if_the_unverified_server_behaviour_is_wrong": "Reasoned through rather than left open: if the server's cursor failed to advance, the drain would issue 20 requests returning duplicate pages and return truncated: true with duplicate member ids. availableUsers builds a Set from those ids, so duplicates collapse and the set difference is still correct. The degradation is 19 wasted requests and a spurious truncation notice -- not an exposure and not a hang."
+      },
+      "gap_2_iss_0824_no_real_provider_render_of_groupspage": {
+        "materially_limits": "T6's proof that the page calls the drain rests on a mocked useQuery that manually invokes the page's own queryFn, so it is a test of the queryFn the page supplies, not of react-query actually calling it. I did not accept that as sufficient and read the wiring directly: web/src/pages/admin/GroupsPage.tsx:61-65 is useQuery({ queryKey: tenantKeys.admin.groupMembers(activeGroupId), queryFn: () => groupsApi.listAllMembers(activeGroupId), enabled: Boolean(activeGroup) }). The wiring is plain in the source, so the gap does not limit the security conclusion.",
+        "does_not_materially_limit": "Anything in INV-1 through INV-9. Nothing in this gate depends on the page rendering under a real provider.",
+        "where_it_does_leave_a_hole": "End-to-end behaviour of the dialog -- ordering, loading states, refetch-on-focus -- is unverified under a real provider. That is REVIEWER and TEST territory, and ISS-0824 already owns it."
+      },
+      "iss_0824_is_security_relevant_in_a_way_its_record_understates": {
+        "severity_of_the_observation": "MINOR -- an addendum to an existing record, not a new issue",
+        "what_the_record_says": "ISS-0824 flags as unresolved whether the spin is a live production render loop or a jsdom artefact, and correctly calls that the first thing a fix should settle.",
+        "what_it_does_not_say": "It was written before groupsApi.listAllMembers landed on that same page and does not mention it. If the loop turns out to be real in a browser, the cost per re-trigger of the members query on that page is now up to 20 backend requests rather than 1. staleTime: 30_000 and react-query's stable query key mean a render loop alone would not refetch on every frame -- so this is a multiplier on any refetch the loop does provoke, not a new unbounded amplifier -- but the pairing deserves one sentence in ISS-0824 so whoever settles the live-versus-jsdom question knows to measure request volume and not just CPU. Recorded here for ORCH; not filed as a separate issue and not re-reported as an ISS-0816 finding."
+      },
+      "the_other_nine_excluded_issues": "ISS-0811 through ISS-0815 and ISS-0820 through ISS-0823 were checked for understated security relevance and none was found. ISS-0821 is the closest to this gate's subject -- it owns the two remaining test fixtures that still hand-write has_more: false, which the new forbidlist entry exempts by path -- and its record is accurate: those are mock response objects in test files, they reach no production code path, and the exemption comment in web/tests/guards/forbidlist.ts names both files and instructs that both entries be deleted when ISS-0821 lands. ISS-0822 (no server for /api/v1/admin/modules) is correctly characterised; the CursorPage<T> annotations modulesApi now carries are type-only claims about a route that does not exist and can expose nothing."
+    },
+    "issues": [
+      {
+        "id": "OBS-1",
+        "severity": "MINOR",
+        "type": "stale-documentation",
+        "title": "security-invariants.md still describes INV-2 as awaiting S4, which is stale in the same way INV-1's text was before ISS-0026",
+        "detail": "INV-2's Reference field reads 'None yet -- no multi-tenant API surface exists (S4 not started)', its Severity reads 'BLOCKER (once S4 lands)', and the Applicability note near the end of the file groups INV-2 with INV-3 and INV-5 as automatically NOT-APPLICABLE until those stages begin. S4 has plainly landed: lib/letflow/routers/ contains identity.ex, audit.ex, promotions.ex, instances.ex, tasks.ex and more, several of which carry in-source comments naming INV-2 as the reason their response maps are hand-built (audit.ex:306, 'Response allowlist (INV-2)'; identity.ex:743-747, 'INV-2-equivalent'). This gate applied INV-2 as live, both because the dispatching task explicitly directed it and because the invariant is checkable today. Flagging rather than resolving silently, per core-directives' 'Never resolve a conflict silently'. The fix is the same shape as the 2026-08-17 INV-1 correction: update INV-2's Reference, Severity and the Applicability note to say it is live, and name the concrete enforcement sites. INV-5 likely needs the same treatment and was not assessed for it here.",
+        "blocking": false,
+        "routed_to": "ORCH"
+      },
+      {
+        "id": "OBS-2",
+        "severity": "MINOR",
+        "type": "robustness",
+        "title": "A rejected member drain leaves GroupsPage silently offering existing members again, with no error surfaced",
+        "detail": "GroupsPage.tsx:61-65 destructures only { data: membersPage }. On rejection membersPage is undefined, so members becomes [] and membersTruncated becomes false, and availableUsers then offers every user in the directory -- including every existing member -- with no error state rendered. This is the exact user-visible symptom ISS-0816 AC3 set out to remove, reappearing on the error path. It is NOT introduced by this commit: groupsApi.members had identical rejection behaviour at this call site before it. It is raised now because the drain's fail-fast contract (reject on the first failed request, of up to twenty) gives the path more chances to be reached than one request did. Not a security failure -- adding an existing member is idempotent server-side and returns GroupMemberAddResult.created -- so it does not block this gate.",
+        "blocking": false,
+        "routed_to": "ORCH"
+      },
+      {
+        "id": "OBS-3",
+        "severity": "MINOR",
+        "type": "observation",
+        "title": "Authenticated list routes have admission control but no per-actor request-rate limit",
+        "detail": "Raised because the dispatching task asked directly whether the 20-request drain is rate-limited anywhere, and the honest answer is that it is not -- only admission-controlled. Letflow.Plugs.PublicReadRateLimit is mounted solely on Letflow.Routers.PublicRead (public_read.ex:55). Authenticated /api/v1/ traffic passes through Letflow.Plugs.Admission at pool: :global and pool: :tenant, which bound CONCURRENCY, not request rate. The drain is sequential so it occupies one slot and cannot exhaust either pool on its own, and reaching the route requires :GroupsManage, so this is not a finding against ISS-0816. Recorded so the answer to the question is on the record rather than implied, and so ORCH can decide whether a per-actor rate limit on authenticated list routes is worth its own issue.",
+        "blocking": false,
+        "routed_to": "ORCH"
+      },
+      {
+        "id": "OBS-4",
+        "severity": "MINOR",
+        "type": "pre-existing-pattern",
+        "title": "Group id is interpolated into the members path without encodeURIComponent",
+        "detail": "groupsApi.members builds the path /api/v1/identity/groups/${id}/members with no encoding of id, and listAllMembers inherits that by delegating to it. Pre-existing and unchanged -- addMember, removeMembers and the original members call all did the same before this commit -- and the ids in play are server-minted UUIDs taken from the group list response, never free text. Noted only because modulesApi.listShares in the same diff does use encodeURIComponent, so the codebase is inconsistent about it. No exposure identified; not blocking.",
+        "blocking": false,
+        "routed_to": "ORCH"
+      }
+    ],
+    "independent_verification": {
+      "what_was_re_derived_rather_than_trusted": [
+        "The 20-request bound: read from web/src/api/identity.ts's loop directly and argued from its control flow, not accepted from step-03's summary.",
+        "Every INV-2 field claim: each server response builder opened and read in lib/letflow/routers/ (identity.ex:729-740 user_map/1, identity.ex:749-757 group_map/1, audit.ex:308-320 page_body/2, audit.ex:322-325 audit_item/1's allowlist comment, promotions.ex:944-948 render_list_reviews/2) rather than taking the design doc's or the docblocks' citations of them.",
+        "The 200 page-size claim: confirmed against @max_page_size 200 at lib/letflow/api/pagination.ex:50.",
+        "The count-is-not-a-total claim: confirmed against page_response/2 at pagination.ex:171-173, count: length(items).",
+        "The cursor-opacity claim: decode_cursor/4 and check_prefix/2 read at pagination.ex:220-264, and the route's hardcoded \"G:\" prefix at identity.ex:541.",
+        "Tenant cache-key scoping: queryKeys.ts:137-138 and useTenantScopedQueryKeys.ts:36-40.",
+        "staleTime: web/src/main.tsx:22.",
+        "Rate limiting: public_read.ex:55 and api_pipeline.ex:88 read directly; no per-actor rate limiter found on the authenticated pipeline.",
+        "That no production has_more remains: grep -rn has_more web/src/ returns eight lines -- two exempted test fixtures, four docblock prose lines in types/api.ts, one docblock line in identity.groupsApi.test.ts and one forbidlist comment. No production code path."
+      ],
+      "why_a_test_rerun_was_not_the_primary_evidence": "Per core-directives' 're-derive under the conditions the property is actually about': the cap's correctness is a property of the loop, decidable from the source, and a passing test is weaker evidence than the control-flow argument because a test only samples the cursor streams it happens to construct. The re-run below is corroboration, not the basis of the verdict."
+    },
+    "measurements_performed": [
+      {
+        "command": "git diff --stat origin/main...HEAD ; git diff --name-only origin/main...HEAD",
+        "result": "33 files, 3372 insertions, 74 deletions. No file under priv/repo/migrations/. The only lib/ entry is lib/letflow/design/iss-0816-cursorpage-has-more-audit.md. Confirms the handoff's 'no backend file changed' premise rather than inheriting it."
+      },
+      {
+        "command": "cd web && npx vitest run src/api/__tests__/identity.members.test.ts src/pages/admin/__tests__/GroupsPage.members.test.tsx",
+        "result": "Test Files 2 passed (2) / Tests 10 passed (10) / Duration 1.24s. Independently re-run on this host at the gated commit; covers T4, T4b, T5 (20-request cap under a never-null cursor stream), T5b, T5c (no 21st request), drain error propagation, and the four GroupsPage T6 cases.",
+        "exit_code": 0
+      },
+      {
+        "command": "grep -rn \"System.get_env\" config/ lib/ --include=*.ex --include=*.exs",
+        "result": "Env-sourced secret resolution confirmed as the existing pattern (config/runtime.exs:30 LETFLOW_SECRETS_MASTER_KEY, config/db_port.exs:38, config/keycloak_port.exs:41). INV-4 first grep."
+      },
+      {
+        "command": "INV-4 second grep: case-insensitive extended regex for password|secret|client_secret|token followed by = or : and a quoted 8-plus-character literal, over the diff's added content",
+        "result": "No hardcoded secret."
+      },
+      {
+        "command": "git diff origin/main...HEAD -- web/ | grep -E \"^\\+\" | grep -iE \"console\\.|localStorage|sessionStorage|token|secret|password|api_key|bearer\"",
+        "result": "Three hits, all cleared manually: setToken('test-token') and the clearToken import in identity.members.test.ts, token: 't' in a mocked session in GroupsPage.members.test.tsx, and the English word token in a forbidlist comment. No console call added."
+      },
+      {
+        "command": "git diff origin/main...HEAD | grep -n \"Repo.query\"",
+        "result": "No output. INV-7 has no subject in this diff."
+      },
+      {
+        "command": "grep -rn \"has_more\" web/src/",
+        "result": "Eight lines, none in a production code path -- detailed in independent_verification above."
+      }
+    ],
+    "acceptance_criteria_coverage": {
+      "AC1": "MET -- scope_test above runs all five scope questions against the real diff and states IN SCOPE with the reason.",
+      "AC2": "MET -- invariant_assessment carries all nine verdicts; the five APPLIES verdicts each carry their How-to-verify result.",
+      "AC3": "MET -- targeted_checks.1, argued from the loop's control flow and corroborated by a re-run of T5/T5c, with the amplification ceiling, sequential shape, :GroupsManage gate, 30s cache and the admission-not-rate-limit answer all stated.",
+      "AC4": "MET -- targeted_checks.2 enumerates every cursor operation in the diff (two, both assignment) and confirms the first request carries none.",
+      "AC5": "MET -- invariant_assessment.INV-2.field_by_field, derived from the Elixir response builders.",
+      "AC6": "MET -- declared_gaps_weighed states for each gap what it does and does not limit, plus the worst-case reasoning for the unverified server behaviour.",
+      "AC7": "MET -- file written to the required path, single-file lint run, no file outside handoffs/ modified, own file absent from artifacts_out, committed and pushed."
+    },
+    "notes": {
+      "on_not_defaulting_to_out_of_scope": "A frontend-only diff was the tempting skip here, and it would have been wrong. The change edits response-shaping code for five tenant-scoped entity types and adds a new read path that pulls up to 4000 membership records in one gesture. The scope test was run rather than assumed, per the role file's explicit prohibition.",
+      "on_what_this_gate_does_not_cover": "Idiomatic quality, scope creep and decision-record consistency belong to REVIEWER; test coverage belongs to TEST-DESIGN-VALIDATOR. Nothing here should be read as a sign-off on those."
+    },
+    "next_action": "Route to REVIEWER (Step 3d). Carry OBS-1 (INV-2's stale applicability text in security-invariants.md), OBS-2, OBS-3 and OBS-4 to ORCH for filing at its discretion, and the ISS-0824 addendum in declared_gaps_weighed to whoever picks that issue up.",
+    "artifacts_out": []
+  }
+}

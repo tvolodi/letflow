@@ -1,6 +1,6 @@
-defmodule Letflow.Exam.AntiCheatTest do
+defmodule Letflow.Modules.Exam.AntiCheatTest do
   @moduledoc """
-  REQ-333 -- integration tests for `Letflow.Exam.AntiCheat` against a real
+  REQ-333 -- integration tests for `Letflow.Modules.Exam.AntiCheat` against a real
   provisioned tenant (DIRECTIVE T-1: no mocked database). Self-contained via
   `Letflow.ExamFixtures` (DIRECTIVE T-4), mirroring
   `test/letflow/exam/session_test.exs`'s own hand-rolled tenant-fixture
@@ -10,8 +10,8 @@ defmodule Letflow.Exam.AntiCheatTest do
   use Letflow.DataCase, async: false
 
   alias Letflow.Entities.Record.Latest
-  alias Letflow.Exam.AntiCheat
-  alias Letflow.Exam.Session
+  alias Letflow.Modules.Exam.AntiCheat
+  alias Letflow.Modules.Exam.Session
   alias Letflow.ExamFixtures
   alias Letflow.Repo
 
@@ -147,8 +147,8 @@ defmodule Letflow.Exam.AntiCheatTest do
     candidate_id = Ecto.UUID.generate()
 
     # FINDING (flagged for REVIEWER/ORCH, not fixed here -- out of REQ-333's
-    # authorized scope, which is `Letflow.Exam.AntiCheat` only):
-    # `Letflow.Exam.Session.session_view/1` calls
+    # authorized scope, which is `Letflow.Modules.Exam.AntiCheat` only):
+    # `Letflow.Modules.Exam.Session.session_view/1` calls
     # `String.to_existing_atom(fv(session, "status"))`, and `:in_progress` is
     # the ONE status value that appears nowhere else in `lib/letflow/` as a
     # literal atom (unlike `:submitted`/`:auto_submitted`/`:grading_pending`,
@@ -161,9 +161,9 @@ defmodule Letflow.Exam.AntiCheatTest do
     # that literal -- `Session.create/3` raises `ArgumentError` here, before
     # `AntiCheat.record_signal/4` is ever reached. This line interns the atom
     # so THIS test is deterministic regardless of partition; it does not fix
-    # the underlying fragility in already-merged `Letflow.Exam.Session`
+    # the underlying fragility in already-merged `Letflow.Modules.Exam.Session`
     # (REQ-332), which should get its own literal-atom-bearing status mapper
-    # (the same `question_type_atom/1`-style idiom `Letflow.Exam.Session`
+    # (the same `question_type_atom/1`-style idiom `Letflow.Modules.Exam.Session`
     # already uses for question types) as a follow-up.
     _ = String.to_atom("in_progress")
 

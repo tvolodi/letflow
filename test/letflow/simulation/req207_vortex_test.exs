@@ -1652,17 +1652,17 @@ defmodule Letflow.Simulation.Req207VortexTest do
           # waved through -- re-derived first. `git show --stat 1fd89bb1`
           # (REQ-355's merge commit) touches
           # docs/migration/stage-10-bilimbaga-vertical.md,
-          # lib/letflow/api/authorization.ex, lib/letflow/exam/certificate.ex,
-          # lib/letflow/routers/exam_sessions.ex,
+          # lib/letflow/api/authorization.ex, lib/letflow/modules/exam/certificate.ex,
+          # lib/letflow/modules/exam/router.ex,
           # lib/letflow/routers/tenant_config.ex,
           # priv/packs/bilimbaga/entity_definitions/certificate.json, and
           # their tests -- no lib/letflow/routers/entities.ex, no
           # lib/letflow/entities/, and -- the part that actually matters for
           # THIS scenario's disposition -- no test/support/simulation/
           # runner.ex. REQ-355 is a certificate-issuance context module and
-          # route wired onto Letflow.Routers.ExamSessions (its own commit
+          # route wired onto Letflow.Modules.Exam.Router (its own commit
           # message: "Wires an authenticated POST
-          # /exam-sessions/:id/certificate route"), a DIFFERENT router from
+          # /modules/exam/exam-sessions/:id/certificate route"), a DIFFERENT router from
           # Letflow.Routers.Entities that Signal 3''/3''' watch; it does not
           # touch Signal 3''s route surface (re-verified live this session:
           # Letflow.Routers.Entities.__authz_routes__/0 still returns exactly
@@ -1821,7 +1821,7 @@ defmodule Letflow.Simulation.Req207VortexTest do
       # entity definition". It has SINCE flipped to `status: done`
       # (2026-09-15, merge commit 1fd89bb1), this tripwire fired exactly as
       # armed, and the re-derivation it demanded is complete: REQ-355 shipped
-      # a context module and route under Letflow.Routers.ExamSessions that
+      # a context module and route under Letflow.Modules.Exam.Router that
       # touches neither the Letflow.Routers.Entities route surface (Signal
       # 3''/3''') nor the harness (Signal 5), so it was promoted to
       # allowed_ids above with the full account of why. See that entry for

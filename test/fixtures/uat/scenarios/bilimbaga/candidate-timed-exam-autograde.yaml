@@ -4,7 +4,7 @@
 # territory, per REQ-344..349) -- this is a fresh, business-authored scenario
 # grounded in the real, currently-working bilimbaga vertical (P0-P5 done,
 # lib/letflow/exam/* + web/src/pages/exam/*, ISS-0674 resolved as of
-# 2026-09-14 so the score is genuinely returned on GET /exam-sessions/:id).
+# 2026-09-14 so the score is genuinely returned on GET /modules/exam/exam-sessions/:id).
 ---
 id: bilimbaga-candidate-timed-exam-autograde
 scope: bilimbaga

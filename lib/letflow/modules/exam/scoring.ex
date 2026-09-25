@@ -1,9 +1,9 @@
-defmodule Letflow.Exam.Scoring do
+defmodule Letflow.Modules.Exam.Scoring do
   @moduledoc """
   REQ-332 -- per-question and total session scoring, ported exactly from
   `backend/internal/sessions/grading.go` (FR-BB311/roadmap 3.11). Authorized
   by `lib/letflow/design/req330-exam-live-session.md` §7's rule-2 module
-  table, `Letflow.Exam.Scoring` row -- read that document, and decision
+  table, `Letflow.Modules.Exam.Scoring` row -- read that document, and decision
   `docs/migration/decisions/0030-exam-session-p3-bucket-verdicts.md`'s
   Finding 1, before changing this module's responsibilities.
 
@@ -25,7 +25,7 @@ defmodule Letflow.Exam.Scoring do
 
   ## Unanswered = wrong, not skipped
 
-  `score_session/3`'s caller (`Letflow.Exam.Session`) builds
+  `score_session/3`'s caller (`Letflow.Modules.Exam.Session`) builds
   `answers_by_question_id` as a full outer join over `questions` -- a
   question absent from that map is passed to `score_question/2` as `answer
   = nil`, scored exactly like an empty selection. This is the Elixir-side

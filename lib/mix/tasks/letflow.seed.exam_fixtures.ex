@@ -40,8 +40,8 @@ defmodule Mix.Tasks.Letflow.Seed.ExamFixtures do
       Both Passed and Failed are therefore reachable against this exam.
 
     * One session against Exam 1 (the mixed exam), created via
-      POST /exam-sessions and finished via POST /exam-sessions/:id/submit —
-      Letflow.Routers.ExamSessions, REQ-335's real route table — dispatched
+      POST /modules/exam/exam-sessions and finished via POST /modules/exam/exam-sessions/:id/submit —
+      Letflow.Modules.Exam.Router, REQ-335's real route table — dispatched
       in-process through Letflow.Router.call/2 (the exact same full Plug
       pipeline test/letflow/routers/exam_sessions_test.exs itself dispatches
       through), authenticated as a dedicated seed candidate user
@@ -61,7 +61,7 @@ defmodule Mix.Tasks.Letflow.Seed.ExamFixtures do
     assigned. Seeding a workaround record would misrepresent a gap as solved.
 
     ASSERTABLE ONLY OVER RAW HTTP. The seeded session can be asserted via
-    GET /exam-sessions/:id only. web/src/pages/exam/ExamSessionPage.tsx:112-127's
+    GET /modules/exam/exam-sessions/:id only. web/src/pages/exam/ExamSessionPage.tsx:112-127's
     mount effect calls examApi.startSession(examId) UNCONDITIONALLY (guarded
     only by a startedRef ref, not by "does a session already exist") — there is
     no branch in that component, or anywhere in web/src/router.tsx's exam
@@ -75,7 +75,7 @@ defmodule Mix.Tasks.Letflow.Seed.ExamFixtures do
     Letflow.Entities.Records.create_record/2 returns the ORIGINAL record for a
     repeated key — design doc req228, AC3) and creates zero new sessions (the
     task queries for an existing session against Exam 1 for the seed candidate
-    before calling POST /exam-sessions at all, and skips straight to reporting
+    before calling POST /modules/exam/exam-sessions at all, and skips straight to reporting
     its already-persisted outcome if one is found).
 
     QUESTION TYPE ENUM, VERIFIED: priv/packs/bilimbaga/entity_definitions/
@@ -87,7 +87,7 @@ defmodule Mix.Tasks.Letflow.Seed.ExamFixtures do
     question_type_atom/1 maps it to the :short_text atom, which is what
     scoring.ex:255 tests against — this task asserts on the pack's "shorttext"
     spelling when WRITING question records, and on the :short_text atom only
-    when reading back Letflow.Exam.Session/Scoring's own in-memory shapes —
+    when reading back Letflow.Modules.Exam.Session/Scoring's own in-memory shapes —
     never on a fabricated ":shorttext" atom.)
 
   ## Task-shape decision
@@ -126,6 +126,7 @@ defmodule Mix.Tasks.Letflow.Seed.ExamFixtures do
   alias Letflow.Entities.Query.Compiler
   alias Letflow.Identity
   alias Letflow.Identity.User
+  alias Letflow.Modules.Installs
   alias Letflow.Repo
   alias Letflow.TenantProvisioning
 
@@ -173,6 +174,22 @@ defmodule Mix.Tasks.Letflow.Seed.ExamFixtures do
 
     {mixed_exam_id, mixed_questions} = seed_mixed_exam!(prefix, candidate.id)
     {scoreable_exam_id, scoreable_questions} = seed_scoreable_exam!(prefix, candidate.id)
+
+    # REQ-410: ensure the exam module is installed for the bpm-default tenant
+    # so the D5 gate in Letflow.Routers.Modules passes /modules/exam/exam-sessions
+    # requests. Idempotent: already_installed is silently accepted.
+    case Installs.install("exam", candidate.id, prefix: prefix) do
+      {:ok, _} ->
+        Mix.shell().info("exam module installed for tenant #{prefix}")
+
+      {:error, :already_installed} ->
+        Mix.shell().info("exam module already installed for tenant #{prefix}")
+
+      {:error, reason} ->
+        Mix.raise(
+          "mix letflow.seed.exam_fixtures: FAILED -- install exam module: #{inspect(reason)}"
+        )
+    end
 
     {session_id, submit_body} =
       seed_session!(prefix, candidate.id, mixed_exam_id, token_plaintext)
@@ -604,7 +621,7 @@ defmodule Mix.Tasks.Letflow.Seed.ExamFixtures do
 
   defp start_session_via_http!(prefix, exam_id, token_plaintext) do
     conn =
-      conn(:post, "/api/v1/exam-sessions", Jason.encode!(%{"exam_id" => exam_id}))
+      conn(:post, "/api/v1/modules/exam/exam-sessions", Jason.encode!(%{"exam_id" => exam_id}))
       |> put_req_header("content-type", "application/json")
       |> put_req_header("authorization", "Bearer " <> token_plaintext)
       |> put_req_header("x-tenant-slug", @tenant_realm)
@@ -612,12 +629,14 @@ defmodule Mix.Tasks.Letflow.Seed.ExamFixtures do
 
     unless conn.status == 201 do
       Mix.raise(
-        "mix letflow.seed.exam_fixtures: FAILED -- POST /exam-sessions returned " <>
+        "mix letflow.seed.exam_fixtures: FAILED -- POST /modules/exam/exam-sessions returned " <>
           "#{conn.status}: #{conn.resp_body}"
       )
     end
 
-    Mix.shell().info("POST /api/v1/exam-sessions (tenant #{prefix}) -> 201: #{conn.resp_body}")
+    Mix.shell().info(
+      "POST /api/v1/modules/exam/exam-sessions (tenant #{prefix}) -> 201: #{conn.resp_body}"
+    )
 
     %{"session" => %{"id" => session_id}} = Jason.decode!(conn.resp_body)
     session_id
@@ -625,19 +644,21 @@ defmodule Mix.Tasks.Letflow.Seed.ExamFixtures do
 
   defp submit_session_via_http!(_prefix, session_id, token_plaintext) do
     conn =
-      conn(:post, "/api/v1/exam-sessions/#{session_id}/submit")
+      conn(:post, "/api/v1/modules/exam/exam-sessions/#{session_id}/submit")
       |> put_req_header("authorization", "Bearer " <> token_plaintext)
       |> put_req_header("x-tenant-slug", @tenant_realm)
       |> dispatch()
 
     unless conn.status == 200 do
       Mix.raise(
-        "mix letflow.seed.exam_fixtures: FAILED -- POST /exam-sessions/#{session_id}/submit " <>
+        "mix letflow.seed.exam_fixtures: FAILED -- POST /modules/exam/exam-sessions/#{session_id}/submit " <>
           "returned #{conn.status}: #{conn.resp_body}"
       )
     end
 
-    Mix.shell().info("POST /api/v1/exam-sessions/#{session_id}/submit -> 200: #{conn.resp_body}")
+    Mix.shell().info(
+      "POST /api/v1/modules/exam/exam-sessions/#{session_id}/submit -> 200: #{conn.resp_body}"
+    )
 
     conn.resp_body
   end

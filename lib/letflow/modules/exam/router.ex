@@ -1,17 +1,18 @@
-defmodule Letflow.Routers.ExamSessions do
+defmodule Letflow.Modules.Exam.Router do
   @moduledoc """
   REQ-335 -- the candidate-facing exam-session HTTP surface REQ-332
-  (`Letflow.Exam.Session`) and REQ-333 (`Letflow.Exam.AntiCheat`) explicitly
+  (`Letflow.Modules.Exam.Session`) and REQ-333 (`Letflow.Modules.Exam.AntiCheat`) explicitly
   left unbuilt. A thin composition layer, no execution semantics of its
   own: every route below delegates its actual eligibility/ownership/
   deadline/debounce logic to those two already-authorized runtime modules
   (REQ-330's rule-2 bucket-C justifications for both are unchanged by this
-  requirement -- see each module's own moduledoc). Mounted at
-  `/exam-sessions` by `Letflow.Plugs.ApiPipeline`, the normal authenticated
-  `/api/v1` forward every other tenant-scoped sub-router uses -- NOT decision
-  `0028`'s unauthenticated capability-handle pattern (that is for
-  certificate verification, REQ-323, still unimplemented; a candidate
-  sitting an exam is an authenticated tenant user).
+  requirement -- see each module's own moduledoc). Moved to
+  `lib/letflow/modules/exam/router.ex` by REQ-410 and mounted at
+  `/api/v1/modules/exam/exam-sessions` via `Letflow.Routers.Modules`'s D4/D5
+  gate (REQ-404), replacing the previous direct core-mount at `/exam-sessions`
+  in `Letflow.Plugs.ApiPipeline`. A candidate sitting an exam is an
+  authenticated tenant user -- NOT decision `0028`'s unauthenticated
+  capability-handle pattern.
 
   Reference source: `backend/internal/sessions/handler.go`
   (`CreateSession`/`SaveAnswer`/`ReportEvent`/`SubmitSession`/
@@ -25,20 +26,20 @@ defmodule Letflow.Routers.ExamSessions do
 
   | Handler | Method/path | Delegate | Permission | Response |
   |---|---|---|---|---|
-  | start_session | `POST /exam-sessions` | `Letflow.Exam.Session.create/3`, then `Letflow.Exam.Session.get_session_state_for_user/3` for the 201 body | `ExamSessionStart` | 201 / 400 / 403 / 409 / 422 |
-  | list_available_exams | `GET /exam-sessions/available` (ISS-0718) | `Letflow.Exam.Session.list_available_exams/2` | `ExamSessionStart` | 200 / 400 / 403 |
-  | get_session_state | `GET /exam-sessions/:id` | `Letflow.Exam.Session.get_session_state_for_user/3` | `ExamSessionRead` | 200 / 404 |
-  | autosave_answer | `PUT /exam-sessions/:id/answers/:question_id` | `Letflow.Exam.Session.autosave_answer/4` | `ExamSessionSave` | 200 / 400 / 404 / 422 |
-  | submit_session | `POST /exam-sessions/:id/submit` | `Letflow.Exam.Session.submit/3` | `ExamSessionSubmit` | 200 / 404 |
-  | report_event | `POST /exam-sessions/:id/events` | `Letflow.Exam.AntiCheat.record_signal/4` | `ExamSessionReportEvent` | 200 / 400 / 404 / 422 |
-  | issue_certificate | `POST /exam-sessions/:id/certificate` | `Letflow.Exam.Certificate.issue_or_get_for_user/3` (REQ-355) | `ExamCertificateIssue` | 200 / 404 / 409 |
-  | download_certificate | `GET /exam-sessions/:id/certificate/download` | `Letflow.Exam.Certificate.issue_or_get_for_user/3` + `Letflow.Exam.CertificateDocument.render/2` (REQ-356) | `ExamCertificateIssue` | 200 (`application/pdf`) / 404 / 409 |
+  | start_session | `POST /exam-sessions` | `Letflow.Modules.Exam.Session.create/3`, then `Letflow.Modules.Exam.Session.get_session_state_for_user/3` for the 201 body | `ExamSessionStart` | 201 / 400 / 403 / 409 / 422 |
+  | list_available_exams | `GET /exam-sessions/available` (ISS-0718) | `Letflow.Modules.Exam.Session.list_available_exams/2` | `ExamSessionStart` | 200 / 400 / 403 |
+  | get_session_state | `GET /exam-sessions/:id` | `Letflow.Modules.Exam.Session.get_session_state_for_user/3` | `ExamSessionRead` | 200 / 404 |
+  | autosave_answer | `PUT /exam-sessions/:id/answers/:question_id` | `Letflow.Modules.Exam.Session.autosave_answer/4` | `ExamSessionSave` | 200 / 400 / 404 / 422 |
+  | submit_session | `POST /exam-sessions/:id/submit` | `Letflow.Modules.Exam.Session.submit/3` | `ExamSessionSubmit` | 200 / 404 |
+  | report_event | `POST /exam-sessions/:id/events` | `Letflow.Modules.Exam.AntiCheat.record_signal/4` | `ExamSessionReportEvent` | 200 / 400 / 404 / 422 |
+  | issue_certificate | `POST /exam-sessions/:id/certificate` | `Letflow.Modules.Exam.Certificate.issue_or_get_for_user/3` (REQ-355) | `ExamCertificateIssue` | 200 / 404 / 409 |
+  | download_certificate | `GET /exam-sessions/:id/certificate/download` | `Letflow.Modules.Exam.Certificate.issue_or_get_for_user/3` + `Letflow.Modules.Exam.CertificateDocument.render/2` (REQ-356) | `ExamCertificateIssue` | 200 (`application/pdf`) / 404 / 409 |
 
   ## Deliberately NOT routed here, and why (REQ-335's own scope fence)
 
     * **Manual short-text grading queue** (`HandleListGradingQueue`/
       `HandleGetGradingDetail`/`HandleGradeAnswer`, FR-BB42) -- no admin
-      grading-queue runtime exists; `Letflow.Exam.Scoring` (REQ-332) marks a
+      grading-queue runtime exists; `Letflow.Modules.Exam.Scoring` (REQ-332) marks a
       short-text answer `pending_manual` and stops there. Building the
       runtime is not this requirement's job.
     * **Adaptive next-question selection** (`GetNextQuestion`, FR-BB72) --
@@ -80,7 +81,7 @@ defmodule Letflow.Routers.ExamSessions do
   (`Letflow.Plugs.Authorize`'s own resolution), exactly as
   `Letflow.Routers.Entities` does; this router performs no `Repo` call of
   any kind. Every session-scoped delegate call passes straight through to
-  `Letflow.Exam.Session`'s/`Letflow.Exam.AntiCheat`'s own
+  `Letflow.Modules.Exam.Session`'s/`Letflow.Modules.Exam.AntiCheat`'s own
   `(:session_not_found | :not_owner)` ownership guard, and BOTH outcomes
   render through the exact same `Letflow.Api.Response.not_found/1` call --
   no detail, no distinguishing body -- so a candidate probing another
@@ -103,7 +104,7 @@ defmodule Letflow.Routers.ExamSessions do
   (from `question`, which narrates the correct answer). The mitigation
   chosen is **hand-assembly, not a `Letflow.Entities.Query`-module
   field-redaction restriction** -- implemented one layer down, in
-  `Letflow.Exam.Session.get_session_state_for_user/3` (that function's own
+  `Letflow.Modules.Exam.Session.get_session_state_for_user/3` (that function's own
   `@doc` states the full reasoning: this response joins four entity types
   with no single `Letflow.Entities.Query.Compiler` result page for
   `FieldGrants` to redact, and this pack's `answer_option.json` itself
@@ -124,15 +125,15 @@ defmodule Letflow.Routers.ExamSessions do
   alias Letflow.Api.Validation
   alias Letflow.Api.Validation.FieldConstraint
   alias Letflow.Entities.Record.Latest
-  alias Letflow.Exam.AntiCheat
-  alias Letflow.Exam.Certificate
-  alias Letflow.Exam.CertificateDocument
-  alias Letflow.Exam.Session
+  alias Letflow.Modules.Exam.AntiCheat
+  alias Letflow.Modules.Exam.Certificate
+  alias Letflow.Modules.Exam.CertificateDocument
+  alias Letflow.Modules.Exam.Session
   alias Letflow.PublicRead
 
   # ── Start session ───────────────────────────────────────────────────────
 
-  authz_post "/", :ExamSessionStart do
+  authz_post "/exam-sessions", :ExamSessionStart do
     handle_start_session(conn)
   end
 
@@ -146,7 +147,7 @@ defmodule Letflow.Routers.ExamSessions do
   # a literal "/available" segment always wins over the "/:id" wildcard in
   # Plug.Router's compiled matcher regardless of declaration order.
 
-  authz_get "/available", :ExamSessionStart do
+  authz_get "/exam-sessions/available", :ExamSessionStart do
     handle_list_available_exams(conn)
   end
 
@@ -157,7 +158,7 @@ defmodule Letflow.Routers.ExamSessions do
   # tables, and "/:id" (1 segment) cannot collide with "/:id/answers/:qid"
   # or "/:id/submit"/"/:id/events" (2-3 segments) regardless of order.
 
-  authz_get "/:id", :ExamSessionRead do
+  authz_get "/exam-sessions/:id", :ExamSessionRead do
     handle_get_session_state(conn, conn.params["id"])
   end
 
@@ -167,19 +168,19 @@ defmodule Letflow.Routers.ExamSessions do
   # (`PUT .../sessions/:id/answers/:questionId`) -- re-verified against that
   # reference, not the POST this requirement's own description inferred.
 
-  authz_put "/:id/answers/:question_id", :ExamSessionSave do
+  authz_put "/exam-sessions/:id/answers/:question_id", :ExamSessionSave do
     handle_autosave_answer(conn, conn.params["id"], conn.params["question_id"])
   end
 
   # ── Submit ───────────────────────────────────────────────────────────────
 
-  authz_post "/:id/submit", :ExamSessionSubmit do
+  authz_post "/exam-sessions/:id/submit", :ExamSessionSubmit do
     handle_submit_session(conn, conn.params["id"])
   end
 
   # ── Anti-cheat signal report ─────────────────────────────────────────────
 
-  authz_post "/:id/events", :ExamSessionReportEvent do
+  authz_post "/exam-sessions/:id/events", :ExamSessionReportEvent do
     handle_report_event(conn, conn.params["id"])
   end
 
@@ -188,11 +189,11 @@ defmodule Letflow.Routers.ExamSessions do
   # Idempotent issue-on-first-request: the first call for an eligible
   # session creates the certificate, every later call for the SAME session
   # returns the identical, already-issued record. See
-  # Letflow.Exam.Certificate's own moduledoc for the full guard order and
+  # Letflow.Modules.Exam.Certificate's own moduledoc for the full guard order and
   # idempotency guarantee -- this route is a thin composition layer over it,
   # same shape as every other route in this module.
 
-  authz_post "/:id/certificate", :ExamCertificateIssue do
+  authz_post "/exam-sessions/:id/certificate", :ExamCertificateIssue do
     handle_issue_certificate(conn, conn.params["id"])
   end
 
@@ -200,14 +201,14 @@ defmodule Letflow.Routers.ExamSessions do
   #
   # Reuses `:ExamCertificateIssue` rather than minting a new permission atom:
   # this route's own eligibility/ownership check IS
-  # `Letflow.Exam.Certificate.issue_or_get_for_user/3` (the identical
+  # `Letflow.Modules.Exam.Certificate.issue_or_get_for_user/3` (the identical
   # idempotent issue-or-fetch call the issuance route above makes -- a
   # candidate who can download a certificate is, by definition, exactly a
   # candidate who could issue/fetch one), so no new authorization semantics
   # exist here that would justify growing `Letflow.Api.Authorization`'s
   # permission matrix for a rendering-only requirement's own scope.
 
-  authz_get "/:id/certificate/download", :ExamCertificateIssue do
+  authz_get "/exam-sessions/:id/certificate/download", :ExamCertificateIssue do
     handle_download_certificate(conn, conn.params["id"])
   end
 
@@ -528,7 +529,7 @@ defmodule Letflow.Routers.ExamSessions do
   # mint a Letflow.PublicRead capability handle for this certificate and
   # return the one-time plaintext to the candidate as "public_handle" on
   # the AUTHENTICATED response. `resource_id` MUST be `record.id` (the
-  # Ecto primary key `Letflow.Exam.CertificatePublicProjection.schema/0`'s
+  # Ecto primary key `Letflow.Modules.Exam.CertificatePublicProjection.schema/0`'s
   # `Repo.get/3` matches against), never `record.record_id` -- see the
   # design's §2.2/§5.2. `tenant_id` comes from `conn.assigns.auth_context`,
   # same as every other tenant-scoped write in this router -- never
@@ -568,7 +569,7 @@ defmodule Letflow.Routers.ExamSessions do
   defp render_issue_certificate(conn, {:error, :session_not_found}), do: Response.not_found(conn)
   defp render_issue_certificate(conn, {:error, :not_owner}), do: Response.not_found(conn)
 
-  # Three DISTINCT 409 messages -- see Letflow.Exam.Certificate's own
+  # Three DISTINCT 409 messages -- see Letflow.Modules.Exam.Certificate's own
   # moduledoc "grading_pending is not a passed: false refusal" for why
   # :grading_pending gets its own honest message rather than reusing
   # :session_not_passed's.
@@ -592,7 +593,7 @@ defmodule Letflow.Routers.ExamSessions do
   end
 
   # ISS-0676 -- this catch-all is a deliberate, accepted idiom, not an
-  # oversight. `Letflow.Exam.Certificate.issue_error/0`
+  # oversight. `Letflow.Modules.Exam.Certificate.issue_error/0`
   # (certificate.ex:205-...) is a `@type` union, and Elixir/Dialyzer give no
   # compile-time exhaustiveness check of this clause set against it -- a
   # real `mix dialyzer` run performed for this issue confirmed adding an
@@ -600,7 +601,7 @@ defmodule Letflow.Routers.ExamSessions do
   # function naming the type) produces zero warnings, because this very
   # catch-all widens the accepted type to `term()`. `render_autosave/2` and
   # `render_submit/2` above use the identical catch-all-plus-`Logger.warning`
-  # shape against `Letflow.Exam.Session`'s own error unions
+  # shape against `Letflow.Modules.Exam.Session`'s own error unions
   # (session.ex:129-146) -- this is that established, REVIEWER-accepted
   # precedent, not a one-off.
   #
@@ -620,7 +621,7 @@ defmodule Letflow.Routers.ExamSessions do
   #
   # REQ-356. Issues-or-fetches (idempotent, same as the POST route above),
   # then renders PDF bytes FRESH on every request via
-  # `Letflow.Exam.CertificateDocument.render/2` -- nothing is read from or
+  # `Letflow.Modules.Exam.CertificateDocument.render/2` -- nothing is read from or
   # written to any attachment store; see that module's own moduledoc
   # "Storage" section for the full regenerate-vs-persist statement.
 

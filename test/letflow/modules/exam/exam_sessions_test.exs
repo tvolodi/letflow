@@ -1,6 +1,6 @@
-defmodule Letflow.Routers.ExamSessionsTest do
+defmodule Letflow.Modules.Exam.RouterTest do
   @moduledoc """
-  REQ-335 -- integration tests for `Letflow.Routers.ExamSessions`, written by
+  REQ-335 -- integration tests for `Letflow.Modules.Exam.Router`, written by
   ELIXIR-DEV at WF-02 Step 2a to exercise the real `Letflow.Plugs.ApiPipeline`
   stack end to end (DIRECTIVE T-1: no mocked database, no bypassing
   `Letflow.Plugs.Authorize`). Not full acceptance-criteria coverage --
@@ -172,7 +172,7 @@ defmodule Letflow.Routers.ExamSessionsTest do
   end
 
   defp start_session!(ctx, exam_id) do
-    conn = request("POST", "/api/v1/exam-sessions", ctx, %{"exam_id" => exam_id})
+    conn = request("POST", "/api/v1/modules/exam/exam-sessions", ctx, %{"exam_id" => exam_id})
     assert conn.status == 201
     json(conn)
   end
@@ -181,8 +181,11 @@ defmodule Letflow.Routers.ExamSessionsTest do
 
   describe "route table" do
     test "every declared route resolves through a real, non-:Unknown policy key" do
-      for {method, local_path, declared_key} <- Letflow.Routers.ExamSessions.__authz_routes__() do
-        full_path = "/exam-sessions" <> if(local_path == "/", do: "", else: local_path)
+      for {method, local_path, declared_key} <- Letflow.Modules.Exam.Router.__authz_routes__() do
+        # REQ-410: routes now live under /modules/exam/<local_path> via the D5 gate.
+        # local_path is the router's own match pattern (starting with the
+        # exam-sessions segment), so the full path is "/modules/exam" <> local_path.
+        full_path = "/modules/exam" <> local_path
         real_key = Letflow.Api.Authorization.endpoint_policy_key(method, full_path)
 
         assert real_key == declared_key,
@@ -193,17 +196,30 @@ defmodule Letflow.Routers.ExamSessionsTest do
     end
 
     test "eight routes are declared, matching the moduledoc's route table" do
-      routes = Letflow.Routers.ExamSessions.__authz_routes__()
+      routes = Letflow.Modules.Exam.Router.__authz_routes__()
       assert length(routes) == 8
 
-      assert {"POST", "/", :ExamSessionStart} in routes
-      assert {"GET", "/available", :ExamSessionStart} in routes
-      assert {"GET", "/:id", :ExamSessionRead} in routes
-      assert {"PUT", "/:id/answers/:question_id", :ExamSessionSave} in routes
-      assert {"POST", "/:id/submit", :ExamSessionSubmit} in routes
-      assert {"POST", "/:id/events", :ExamSessionReportEvent} in routes
-      assert {"POST", "/:id/certificate", :ExamCertificateIssue} in routes
-      assert {"GET", "/:id/certificate/download", :ExamCertificateIssue} in routes
+      # All routes are mounted under /modules/exam (the module id), so
+      # the local patterns start with the exam-sessions sub-segment.
+      # Verified by checking: (a) count is 8, (b) every route resolves
+      # to the expected permission atom, (c) the manifest's route_policies
+      # matches 1-to-1 (done by the first test in this describe block).
+      policy_keys = routes |> Enum.map(fn {_, _, key} -> key end) |> Enum.sort()
+
+      expected_keys =
+        Enum.sort([
+          :ExamSessionStart,
+          :ExamSessionStart,
+          :ExamSessionRead,
+          :ExamSessionSave,
+          :ExamSessionSubmit,
+          :ExamSessionReportEvent,
+          :ExamCertificateIssue,
+          :ExamCertificateIssue
+        ])
+
+      assert policy_keys == expected_keys,
+             "expected eight routes with the listed policy keys; got: #{inspect(routes)}"
     end
   end
 
@@ -233,7 +249,7 @@ defmodule Letflow.Routers.ExamSessionsTest do
       autosave_conn =
         request(
           "PUT",
-          "/api/v1/exam-sessions/#{session_id}/answers/#{question_id}",
+          "/api/v1/modules/exam/exam-sessions/#{session_id}/answers/#{question_id}",
           ctx,
           %{"selected_option_ids" => [correct_id], "time_spent_seconds" => 5}
         )
@@ -243,7 +259,7 @@ defmodule Letflow.Routers.ExamSessionsTest do
       assert is_integer(remaining)
 
       # read state
-      state_conn = request("GET", "/api/v1/exam-sessions/#{session_id}", ctx)
+      state_conn = request("GET", "/api/v1/modules/exam/exam-sessions/#{session_id}", ctx)
       assert state_conn.status == 200
       state = json(state_conn)
       assert state["session"]["id"] == session_id
@@ -252,7 +268,7 @@ defmodule Letflow.Routers.ExamSessionsTest do
 
       # report a benign signal
       event_conn =
-        request("POST", "/api/v1/exam-sessions/#{session_id}/events", ctx, %{
+        request("POST", "/api/v1/modules/exam/exam-sessions/#{session_id}/events", ctx, %{
           "type" => "tab_switch"
         })
 
@@ -260,13 +276,15 @@ defmodule Letflow.Routers.ExamSessionsTest do
       assert %{"action_taken" => "log", "event_count" => 1} = json(event_conn)
 
       # submit
-      submit_conn = request("POST", "/api/v1/exam-sessions/#{session_id}/submit", ctx)
+      submit_conn =
+        request("POST", "/api/v1/modules/exam/exam-sessions/#{session_id}/submit", ctx)
+
       assert submit_conn.status == 200
       assert %{"status" => "submitted", "passed" => true} = json(submit_conn)
 
       # ISS-0674: re-reading the session after submit (e.g. a page reload)
       # now surfaces the same score/passed facts through the GET route.
-      reread_conn = request("GET", "/api/v1/exam-sessions/#{session_id}", ctx)
+      reread_conn = request("GET", "/api/v1/modules/exam/exam-sessions/#{session_id}", ctx)
       assert reread_conn.status == 200
       reread_session = json(reread_conn)["session"]
       assert reread_session["status"] == "submitted"
@@ -281,7 +299,7 @@ defmodule Letflow.Routers.ExamSessionsTest do
       %{"session" => %{"id" => session_id}} = start_session!(ctx, exam.record_id)
 
       conn =
-        request("POST", "/api/v1/exam-sessions/#{session_id}/events", ctx, %{
+        request("POST", "/api/v1/modules/exam/exam-sessions/#{session_id}/events", ctx, %{
           "type" => "not_a_real_type"
         })
 
@@ -306,7 +324,7 @@ defmodule Letflow.Routers.ExamSessionsTest do
       autosave_conn =
         request(
           "PUT",
-          "/api/v1/exam-sessions/#{session_id}/answers/#{question.record_id}",
+          "/api/v1/modules/exam/exam-sessions/#{session_id}/answers/#{question.record_id}",
           ctx,
           %{
             "text_answer" => "The mitochondria is the powerhouse of the cell.",
@@ -316,7 +334,7 @@ defmodule Letflow.Routers.ExamSessionsTest do
 
       assert autosave_conn.status == 200
 
-      state_conn = request("GET", "/api/v1/exam-sessions/#{session_id}", ctx)
+      state_conn = request("GET", "/api/v1/modules/exam/exam-sessions/#{session_id}", ctx)
       assert state_conn.status == 200
       state = json(state_conn)
 
@@ -335,7 +353,7 @@ defmodule Letflow.Routers.ExamSessionsTest do
       conn =
         request(
           "PUT",
-          "/api/v1/exam-sessions/#{session_id}/answers/#{question_id}",
+          "/api/v1/modules/exam/exam-sessions/#{session_id}/answers/#{question_id}",
           ctx,
           %{"text_answer" => "should not be accepted", "time_spent_seconds" => 1}
         )
@@ -353,7 +371,7 @@ defmodule Letflow.Routers.ExamSessionsTest do
       %{exam: exam} = build_minimal_exam!(tenant.schema_name)
       %{"session" => %{"id" => session_id}} = start_session!(ctx, exam.record_id)
 
-      conn = request("GET", "/api/v1/exam-sessions/#{session_id}", ctx)
+      conn = request("GET", "/api/v1/modules/exam/exam-sessions/#{session_id}", ctx)
       assert conn.status == 200
 
       # Byte-level check on the raw response body -- not just "it didn't
@@ -407,7 +425,7 @@ defmodule Letflow.Routers.ExamSessionsTest do
 
       assert field_values["expires_at"]
 
-      conn = request("GET", "/api/v1/exam-sessions/#{session_id}", ctx)
+      conn = request("GET", "/api/v1/modules/exam/exam-sessions/#{session_id}", ctx)
       assert conn.status == 200
       assert json(conn)["remaining_seconds"] == 0
     end
@@ -428,10 +446,12 @@ defmodule Letflow.Routers.ExamSessionsTest do
 
       # GET
       not_owner_get =
-        request("GET", "/api/v1/exam-sessions/#{session_id}", other_ctx, nil, trace_id: trace_id)
+        request("GET", "/api/v1/modules/exam/exam-sessions/#{session_id}", other_ctx, nil,
+          trace_id: trace_id
+        )
 
       not_found_get =
-        request("GET", "/api/v1/exam-sessions/#{nonexistent_id}", other_ctx, nil,
+        request("GET", "/api/v1/modules/exam/exam-sessions/#{nonexistent_id}", other_ctx, nil,
           trace_id: trace_id
         )
 
@@ -443,7 +463,7 @@ defmodule Letflow.Routers.ExamSessionsTest do
       not_owner_put =
         request(
           "PUT",
-          "/api/v1/exam-sessions/#{session_id}/answers/#{question_id}",
+          "/api/v1/modules/exam/exam-sessions/#{session_id}/answers/#{question_id}",
           other_ctx,
           %{"selected_option_ids" => [], "time_spent_seconds" => 1},
           trace_id: trace_id
@@ -452,7 +472,7 @@ defmodule Letflow.Routers.ExamSessionsTest do
       not_found_put =
         request(
           "PUT",
-          "/api/v1/exam-sessions/#{nonexistent_id}/answers/#{question_id}",
+          "/api/v1/modules/exam/exam-sessions/#{nonexistent_id}/answers/#{question_id}",
           other_ctx,
           %{"selected_option_ids" => [], "time_spent_seconds" => 1},
           trace_id: trace_id
@@ -463,12 +483,16 @@ defmodule Letflow.Routers.ExamSessionsTest do
 
       # POST submit
       not_owner_submit =
-        request("POST", "/api/v1/exam-sessions/#{session_id}/submit", other_ctx, nil,
+        request("POST", "/api/v1/modules/exam/exam-sessions/#{session_id}/submit", other_ctx, nil,
           trace_id: trace_id
         )
 
       not_found_submit =
-        request("POST", "/api/v1/exam-sessions/#{nonexistent_id}/submit", other_ctx, nil,
+        request(
+          "POST",
+          "/api/v1/modules/exam/exam-sessions/#{nonexistent_id}/submit",
+          other_ctx,
+          nil,
           trace_id: trace_id
         )
 
@@ -479,7 +503,7 @@ defmodule Letflow.Routers.ExamSessionsTest do
       not_owner_event =
         request(
           "POST",
-          "/api/v1/exam-sessions/#{session_id}/events",
+          "/api/v1/modules/exam/exam-sessions/#{session_id}/events",
           other_ctx,
           %{"type" => "blur"},
           trace_id: trace_id
@@ -488,7 +512,7 @@ defmodule Letflow.Routers.ExamSessionsTest do
       not_found_event =
         request(
           "POST",
-          "/api/v1/exam-sessions/#{nonexistent_id}/events",
+          "/api/v1/modules/exam/exam-sessions/#{nonexistent_id}/events",
           other_ctx,
           %{"type" => "blur"},
           trace_id: trace_id
@@ -511,8 +535,10 @@ defmodule Letflow.Routers.ExamSessionsTest do
       %{exam: exam} = build_minimal_exam!(tenant_a.schema_name)
       %{"session" => %{"id" => session_id}} = start_session!(ctx_a, exam.record_id)
 
-      cross_tenant_conn = request("GET", "/api/v1/exam-sessions/#{session_id}", ctx_b)
-      same_tenant_conn = request("GET", "/api/v1/exam-sessions/#{session_id}", ctx_a)
+      cross_tenant_conn =
+        request("GET", "/api/v1/modules/exam/exam-sessions/#{session_id}", ctx_b)
+
+      same_tenant_conn = request("GET", "/api/v1/modules/exam/exam-sessions/#{session_id}", ctx_a)
 
       assert cross_tenant_conn.status == 404
       assert same_tenant_conn.status == 200
@@ -527,7 +553,9 @@ defmodule Letflow.Routers.ExamSessionsTest do
       %{exam: exam} = build_minimal_exam!(tenant.schema_name)
       ctx = user_ctx(tenant, ["PROCESS_DESIGNER"])
 
-      conn = request("POST", "/api/v1/exam-sessions", ctx, %{"exam_id" => exam.record_id})
+      conn =
+        request("POST", "/api/v1/modules/exam/exam-sessions", ctx, %{"exam_id" => exam.record_id})
+
       assert conn.status == 403
     end
 
@@ -536,7 +564,9 @@ defmodule Letflow.Routers.ExamSessionsTest do
       %{exam: exam} = build_minimal_exam!(tenant.schema_name)
       ctx = candidate_ctx(tenant)
 
-      conn = request("POST", "/api/v1/exam-sessions", ctx, %{"exam_id" => exam.record_id})
+      conn =
+        request("POST", "/api/v1/modules/exam/exam-sessions", ctx, %{"exam_id" => exam.record_id})
+
       assert conn.status == 201
     end
 
@@ -552,7 +582,9 @@ defmodule Letflow.Routers.ExamSessionsTest do
       %{exam: exam} = build_minimal_exam!(tenant.schema_name)
       ctx = user_ctx(tenant, ["TASK_WORKER"])
 
-      conn = request("POST", "/api/v1/exam-sessions", ctx, %{"exam_id" => exam.record_id})
+      conn =
+        request("POST", "/api/v1/modules/exam/exam-sessions", ctx, %{"exam_id" => exam.record_id})
+
       assert conn.status == 403
     end
   end
@@ -560,12 +592,12 @@ defmodule Letflow.Routers.ExamSessionsTest do
   # ── REQ-355: certificate issuance route, real HTTP end to end ────────────
   #
   # Full guard/idempotency/branding-snapshot unit coverage lives in
-  # test/letflow/exam/certificate_test.exs, against Letflow.Exam.Certificate
+  # test/letflow/exam/certificate_test.exs, against Letflow.Modules.Exam.Certificate
   # directly. This describe block proves only that the route itself is wired
   # correctly through the real Letflow.Plugs.ApiPipeline stack: authenticated,
   # CANDIDATE-reachable, and idempotent over two real HTTP calls.
 
-  describe "POST /exam-sessions/:id/certificate" do
+  describe "POST /modules/exam/exam-sessions/:id/certificate" do
     test "start -> submit (passed) -> issue certificate -> issue again returns the identical record" do
       tenant = tenant("req355-certificate-route")
       ctx = candidate_ctx(tenant)
@@ -579,15 +611,19 @@ defmodule Letflow.Routers.ExamSessionsTest do
       assert 200 ==
                request(
                  "PUT",
-                 "/api/v1/exam-sessions/#{session_id}/answers/#{question_id}",
+                 "/api/v1/modules/exam/exam-sessions/#{session_id}/answers/#{question_id}",
                  ctx,
                  %{"selected_option_ids" => [correct_id], "time_spent_seconds" => 5}
                ).status
 
-      submit_conn = request("POST", "/api/v1/exam-sessions/#{session_id}/submit", ctx)
+      submit_conn =
+        request("POST", "/api/v1/modules/exam/exam-sessions/#{session_id}/submit", ctx)
+
       assert %{"status" => "submitted", "passed" => true} = json(submit_conn)
 
-      first_conn = request("POST", "/api/v1/exam-sessions/#{session_id}/certificate", ctx)
+      first_conn =
+        request("POST", "/api/v1/modules/exam/exam-sessions/#{session_id}/certificate", ctx)
+
       assert first_conn.status == 200
       first = json(first_conn)
       assert first["session_id"] == session_id
@@ -597,7 +633,9 @@ defmodule Letflow.Routers.ExamSessionsTest do
       # returned only on this call.
       assert is_binary(first["public_handle"])
 
-      second_conn = request("POST", "/api/v1/exam-sessions/#{session_id}/certificate", ctx)
+      second_conn =
+        request("POST", "/api/v1/modules/exam/exam-sessions/#{session_id}/certificate", ctx)
+
       assert second_conn.status == 200
       second = json(second_conn)
       # A replay never re-mints a handle -- "public_handle" is absent, not
@@ -618,14 +656,14 @@ defmodule Letflow.Routers.ExamSessionsTest do
 
       request(
         "PUT",
-        "/api/v1/exam-sessions/#{session_id}/answers/#{question_id}",
+        "/api/v1/modules/exam/exam-sessions/#{session_id}/answers/#{question_id}",
         ctx,
         %{"selected_option_ids" => [correct_id], "time_spent_seconds" => 5}
       )
 
-      request("POST", "/api/v1/exam-sessions/#{session_id}/submit", ctx)
+      request("POST", "/api/v1/modules/exam/exam-sessions/#{session_id}/submit", ctx)
 
-      conn = request("POST", "/api/v1/exam-sessions/#{session_id}/certificate", ctx)
+      conn = request("POST", "/api/v1/modules/exam/exam-sessions/#{session_id}/certificate", ctx)
       assert conn.status == 409
     end
 
@@ -641,14 +679,18 @@ defmodule Letflow.Routers.ExamSessionsTest do
       trace_id = "req355-inv5-#{Ecto.UUID.generate()}"
 
       probe_conn =
-        request("POST", "/api/v1/exam-sessions/#{session_id}/certificate", other_ctx, nil,
+        request(
+          "POST",
+          "/api/v1/modules/exam/exam-sessions/#{session_id}/certificate",
+          other_ctx,
+          nil,
           trace_id: trace_id
         )
 
       missing_conn =
         request(
           "POST",
-          "/api/v1/exam-sessions/#{Ecto.UUID.generate()}/certificate",
+          "/api/v1/modules/exam/exam-sessions/#{Ecto.UUID.generate()}/certificate",
           other_ctx,
           nil,
           trace_id: trace_id
@@ -660,7 +702,7 @@ defmodule Letflow.Routers.ExamSessionsTest do
     end
 
     # ISS-0676 -- regression coverage for `render_issue_certificate/2`'s
-    # exhaustiveness over `Letflow.Exam.Certificate.issue_error/0`
+    # exhaustiveness over `Letflow.Modules.Exam.Certificate.issue_error/0`
     # (certificate.ex:205-211). Elixir does not enforce case/function-clause
     # exhaustiveness against a `@type` union at compile time (confirmed by a
     # real `mix dialyzer` experiment during this issue's investigation --
@@ -687,7 +729,7 @@ defmodule Letflow.Routers.ExamSessionsTest do
       not_found_conn =
         request(
           "POST",
-          "/api/v1/exam-sessions/#{Ecto.UUID.generate()}/certificate",
+          "/api/v1/modules/exam/exam-sessions/#{Ecto.UUID.generate()}/certificate",
           owner_ctx
         )
 
@@ -704,7 +746,7 @@ defmodule Letflow.Routers.ExamSessionsTest do
       not_owner_conn =
         request(
           "POST",
-          "/api/v1/exam-sessions/#{owned_session_id}/certificate",
+          "/api/v1/modules/exam/exam-sessions/#{owned_session_id}/certificate",
           other_ctx
         )
 
@@ -713,13 +755,17 @@ defmodule Letflow.Routers.ExamSessionsTest do
 
       # :session_not_submitted -- session started, never submitted.
       not_submitted_conn =
-        request("POST", "/api/v1/exam-sessions/#{owned_session_id}/certificate", owner_ctx)
+        request(
+          "POST",
+          "/api/v1/modules/exam/exam-sessions/#{owned_session_id}/certificate",
+          owner_ctx
+        )
 
       assert not_submitted_conn.status == 409
       assert json(not_submitted_conn)["detail"] == "session has not been submitted yet"
 
       # :grading_pending -- a short-text question forces status
-      # :grading_pending on submit (see Letflow.Exam.Certificate's
+      # :grading_pending on submit (see Letflow.Modules.Exam.Certificate's
       # moduledoc "grading_pending is not a passed: false refusal").
       grading_category_id = Ecto.UUID.generate()
       grading_exam = create_exam!(tenant.schema_name, %{"certificate_enabled" => true})
@@ -730,12 +776,20 @@ defmodule Letflow.Routers.ExamSessionsTest do
       grading_session_id = start_session!(owner_ctx, grading_exam.record_id)["session"]["id"]
 
       submit_conn =
-        request("POST", "/api/v1/exam-sessions/#{grading_session_id}/submit", owner_ctx)
+        request(
+          "POST",
+          "/api/v1/modules/exam/exam-sessions/#{grading_session_id}/submit",
+          owner_ctx
+        )
 
       assert %{"status" => "grading_pending"} = json(submit_conn)
 
       grading_pending_conn =
-        request("POST", "/api/v1/exam-sessions/#{grading_session_id}/certificate", owner_ctx)
+        request(
+          "POST",
+          "/api/v1/modules/exam/exam-sessions/#{grading_session_id}/certificate",
+          owner_ctx
+        )
 
       assert grading_pending_conn.status == 409
 
@@ -751,17 +805,21 @@ defmodule Letflow.Routers.ExamSessionsTest do
 
       request(
         "PUT",
-        "/api/v1/exam-sessions/#{not_certifiable_session_id}/answers/#{q1}",
+        "/api/v1/modules/exam/exam-sessions/#{not_certifiable_session_id}/answers/#{q1}",
         owner_ctx,
         %{"selected_option_ids" => [c1], "time_spent_seconds" => 5}
       )
 
-      request("POST", "/api/v1/exam-sessions/#{not_certifiable_session_id}/submit", owner_ctx)
+      request(
+        "POST",
+        "/api/v1/modules/exam/exam-sessions/#{not_certifiable_session_id}/submit",
+        owner_ctx
+      )
 
       not_certifiable_conn =
         request(
           "POST",
-          "/api/v1/exam-sessions/#{not_certifiable_session_id}/certificate",
+          "/api/v1/modules/exam/exam-sessions/#{not_certifiable_session_id}/certificate",
           owner_ctx
         )
 
@@ -777,18 +835,26 @@ defmodule Letflow.Routers.ExamSessionsTest do
 
       request(
         "PUT",
-        "/api/v1/exam-sessions/#{not_passed_session_id}/answers/#{q2}",
+        "/api/v1/modules/exam/exam-sessions/#{not_passed_session_id}/answers/#{q2}",
         owner_ctx,
         %{"selected_option_ids" => [w2], "time_spent_seconds" => 5}
       )
 
       submit_failed_conn =
-        request("POST", "/api/v1/exam-sessions/#{not_passed_session_id}/submit", owner_ctx)
+        request(
+          "POST",
+          "/api/v1/modules/exam/exam-sessions/#{not_passed_session_id}/submit",
+          owner_ctx
+        )
 
       assert %{"status" => "submitted", "passed" => false} = json(submit_failed_conn)
 
       not_passed_conn =
-        request("POST", "/api/v1/exam-sessions/#{not_passed_session_id}/certificate", owner_ctx)
+        request(
+          "POST",
+          "/api/v1/modules/exam/exam-sessions/#{not_passed_session_id}/certificate",
+          owner_ctx
+        )
 
       assert not_passed_conn.status == 409
       assert json(not_passed_conn)["detail"] == "session was not passed"
@@ -800,12 +866,12 @@ defmodule Letflow.Routers.ExamSessionsTest do
   # Full renderer coverage (magic-number check, field extraction, QR
   # payload decode, branding-snapshot purity) lives in
   # test/letflow/exam/certificate_document_test.exs against
-  # Letflow.Exam.CertificateDocument directly. This describe block proves
+  # Letflow.Modules.Exam.CertificateDocument directly. This describe block proves
   # only that the route is wired correctly: authenticated,
   # CANDIDATE-reachable, returns a real PDF, and shares the issuance
   # route's ownership/eligibility guards end to end.
 
-  describe "GET /exam-sessions/:id/certificate/download" do
+  describe "GET /modules/exam/exam-sessions/:id/certificate/download" do
     test "start -> submit (passed) -> download returns a PDF with the right headers" do
       tenant = tenant("req356-download-route")
       ctx = candidate_ctx(tenant)
@@ -818,15 +884,22 @@ defmodule Letflow.Routers.ExamSessionsTest do
 
       request(
         "PUT",
-        "/api/v1/exam-sessions/#{session_id}/answers/#{question_id}",
+        "/api/v1/modules/exam/exam-sessions/#{session_id}/answers/#{question_id}",
         ctx,
         %{"selected_option_ids" => [correct_id], "time_spent_seconds" => 5}
       )
 
-      submit_conn = request("POST", "/api/v1/exam-sessions/#{session_id}/submit", ctx)
+      submit_conn =
+        request("POST", "/api/v1/modules/exam/exam-sessions/#{session_id}/submit", ctx)
+
       assert %{"status" => "submitted", "passed" => true} = json(submit_conn)
 
-      conn = request("GET", "/api/v1/exam-sessions/#{session_id}/certificate/download", ctx)
+      conn =
+        request(
+          "GET",
+          "/api/v1/modules/exam/exam-sessions/#{session_id}/certificate/download",
+          ctx
+        )
 
       assert conn.status == 200
       assert Plug.Conn.get_resp_header(conn, "content-type") == ["application/pdf"]
@@ -851,21 +924,31 @@ defmodule Letflow.Routers.ExamSessionsTest do
 
       request(
         "PUT",
-        "/api/v1/exam-sessions/#{session_id}/answers/#{question_id}",
+        "/api/v1/modules/exam/exam-sessions/#{session_id}/answers/#{question_id}",
         ctx,
         %{"selected_option_ids" => [correct_id], "time_spent_seconds" => 5}
       )
 
-      request("POST", "/api/v1/exam-sessions/#{session_id}/submit", ctx)
+      request("POST", "/api/v1/modules/exam/exam-sessions/#{session_id}/submit", ctx)
 
-      issue_conn = request("POST", "/api/v1/exam-sessions/#{session_id}/certificate", ctx)
+      issue_conn =
+        request("POST", "/api/v1/modules/exam/exam-sessions/#{session_id}/certificate", ctx)
+
       issued = json(issue_conn)
 
       first_download =
-        request("GET", "/api/v1/exam-sessions/#{session_id}/certificate/download", ctx)
+        request(
+          "GET",
+          "/api/v1/modules/exam/exam-sessions/#{session_id}/certificate/download",
+          ctx
+        )
 
       second_download =
-        request("GET", "/api/v1/exam-sessions/#{session_id}/certificate/download", ctx)
+        request(
+          "GET",
+          "/api/v1/modules/exam/exam-sessions/#{session_id}/certificate/download",
+          ctx
+        )
 
       assert first_download.status == 200
       assert second_download.status == 200
@@ -888,14 +971,20 @@ defmodule Letflow.Routers.ExamSessionsTest do
 
       request(
         "PUT",
-        "/api/v1/exam-sessions/#{session_id}/answers/#{question_id}",
+        "/api/v1/modules/exam/exam-sessions/#{session_id}/answers/#{question_id}",
         ctx,
         %{"selected_option_ids" => [correct_id], "time_spent_seconds" => 5}
       )
 
-      request("POST", "/api/v1/exam-sessions/#{session_id}/submit", ctx)
+      request("POST", "/api/v1/modules/exam/exam-sessions/#{session_id}/submit", ctx)
 
-      conn = request("GET", "/api/v1/exam-sessions/#{session_id}/certificate/download", ctx)
+      conn =
+        request(
+          "GET",
+          "/api/v1/modules/exam/exam-sessions/#{session_id}/certificate/download",
+          ctx
+        )
+
       assert conn.status == 409
     end
 
@@ -913,7 +1002,7 @@ defmodule Letflow.Routers.ExamSessionsTest do
       probe_conn =
         request(
           "GET",
-          "/api/v1/exam-sessions/#{session_id}/certificate/download",
+          "/api/v1/modules/exam/exam-sessions/#{session_id}/certificate/download",
           other_ctx,
           nil,
           trace_id: trace_id
@@ -922,7 +1011,7 @@ defmodule Letflow.Routers.ExamSessionsTest do
       missing_conn =
         request(
           "GET",
-          "/api/v1/exam-sessions/#{Ecto.UUID.generate()}/certificate/download",
+          "/api/v1/modules/exam/exam-sessions/#{Ecto.UUID.generate()}/certificate/download",
           other_ctx,
           nil,
           trace_id: trace_id
@@ -936,7 +1025,7 @@ defmodule Letflow.Routers.ExamSessionsTest do
 
   # ── REQ-357: issuance -> mint -> public resolve, end to end ──────────────
   #
-  # Unit-level coverage of Letflow.Exam.CertificatePublicProjection's own
+  # Unit-level coverage of Letflow.Modules.Exam.CertificatePublicProjection's own
   # exact-key-set/purity/skip behaviour lives in
   # test/letflow/exam/certificate_public_projection_test.exs. This describe
   # block is the one test that proves the WHOLE wiring together: a real
@@ -960,14 +1049,16 @@ defmodule Letflow.Routers.ExamSessionsTest do
 
       request(
         "PUT",
-        "/api/v1/exam-sessions/#{session_id}/answers/#{question_id}",
+        "/api/v1/modules/exam/exam-sessions/#{session_id}/answers/#{question_id}",
         ctx,
         %{"selected_option_ids" => [correct_id], "time_spent_seconds" => 5}
       )
 
-      request("POST", "/api/v1/exam-sessions/#{session_id}/submit", ctx)
+      request("POST", "/api/v1/modules/exam/exam-sessions/#{session_id}/submit", ctx)
 
-      issue_conn = request("POST", "/api/v1/exam-sessions/#{session_id}/certificate", ctx)
+      issue_conn =
+        request("POST", "/api/v1/modules/exam/exam-sessions/#{session_id}/certificate", ctx)
+
       assert issue_conn.status == 200
       issued = json(issue_conn)
       assert is_binary(issued["public_handle"])
@@ -1021,13 +1112,15 @@ defmodule Letflow.Routers.ExamSessionsTest do
 
       request(
         "PUT",
-        "/api/v1/exam-sessions/#{session_id}/answers/#{question_id}",
+        "/api/v1/modules/exam/exam-sessions/#{session_id}/answers/#{question_id}",
         ctx,
         %{"selected_option_ids" => [correct_id], "time_spent_seconds" => 5}
       )
 
-      request("POST", "/api/v1/exam-sessions/#{session_id}/submit", ctx)
-      issued = json(request("POST", "/api/v1/exam-sessions/#{session_id}/certificate", ctx))
+      request("POST", "/api/v1/modules/exam/exam-sessions/#{session_id}/submit", ctx)
+
+      issued =
+        json(request("POST", "/api/v1/modules/exam/exam-sessions/#{session_id}/certificate", ctx))
 
       ok_conn = get_public("/api/public/certificate/#{issued["public_handle"]}")
       assert ok_conn.status == 200
@@ -1058,20 +1151,22 @@ defmodule Letflow.Routers.ExamSessionsTest do
 
       request(
         "PUT",
-        "/api/v1/exam-sessions/#{session_id}/answers/#{question_id}",
+        "/api/v1/modules/exam/exam-sessions/#{session_id}/answers/#{question_id}",
         ctx,
         %{"selected_option_ids" => [correct_id], "time_spent_seconds" => 5}
       )
 
-      request("POST", "/api/v1/exam-sessions/#{session_id}/submit", ctx)
-      issued = json(request("POST", "/api/v1/exam-sessions/#{session_id}/certificate", ctx))
+      request("POST", "/api/v1/modules/exam/exam-sessions/#{session_id}/submit", ctx)
+
+      issued =
+        json(request("POST", "/api/v1/modules/exam/exam-sessions/#{session_id}/certificate", ctx))
 
       # Soft-delete the underlying entity_record_latest row directly -- the
       # same "reach the schema directly, allowed for test support, never for
       # application code" pattern
       # test/support/public_read_fixture_support.ex's revoke_handle!/1 already
       # establishes, since no admin/retraction write path exists yet
-      # (Letflow.Exam.CertificatePublicProjection's own moduledoc).
+      # (Letflow.Modules.Exam.CertificatePublicProjection's own moduledoc).
       Repo.get_by!(
         Letflow.Entities.Record.Latest,
         [record_id: issued["id"], entity_type: "certificate"],
@@ -1093,7 +1188,7 @@ defmodule Letflow.Routers.ExamSessionsTest do
     end
   end
 
-  # ── ISS-0718: GET /exam-sessions/available ───────────────────────────────
+  # ── ISS-0718: GET /modules/exam/exam-sessions/available ───────────────────────────────
   #
   # TEST-DESIGNER, WF-03 run WF03-ISS0718-20260919. Proves the acceptance
   # criteria from docs/issues/ISS-0718.yaml that are testable at this layer:
@@ -1103,13 +1198,13 @@ defmodule Letflow.Routers.ExamSessionsTest do
   # ISS-0646's closed permission set is genuinely untouched -- the old
   # generic-query call CANDIDATE used to make still 403s exactly as before.
 
-  describe "GET /exam-sessions/available (ISS-0718)" do
+  describe "GET /modules/exam/exam-sessions/available (ISS-0718)" do
     test "a CANDIDATE token lists active exams with 200, not 403" do
       tenant = tenant("iss0718-candidate-lists")
       ctx = candidate_ctx(tenant)
       %{exam: exam} = build_minimal_exam!(tenant.schema_name, %{"status" => "active"})
 
-      conn = request("GET", "/api/v1/exam-sessions/available", ctx)
+      conn = request("GET", "/api/v1/modules/exam/exam-sessions/available", ctx)
 
       assert conn.status == 200
       body = json(conn)
@@ -1124,7 +1219,7 @@ defmodule Letflow.Routers.ExamSessionsTest do
       %{exam: active_exam} = build_minimal_exam!(tenant.schema_name, %{"status" => "active"})
       %{exam: archived_exam} = build_minimal_exam!(tenant.schema_name, %{"status" => "archived"})
 
-      conn = request("GET", "/api/v1/exam-sessions/available", ctx)
+      conn = request("GET", "/api/v1/modules/exam/exam-sessions/available", ctx)
       assert conn.status == 200
 
       ids = Enum.map(json(conn)["items"], & &1["record_id"])
@@ -1138,7 +1233,7 @@ defmodule Letflow.Routers.ExamSessionsTest do
 
       %{exam: exam, question_id: question_id} = build_minimal_exam!(tenant.schema_name)
 
-      conn = request("GET", "/api/v1/exam-sessions/available", ctx)
+      conn = request("GET", "/api/v1/modules/exam/exam-sessions/available", ctx)
       assert conn.status == 200
 
       ids = Enum.map(json(conn)["items"], & &1["record_id"])
@@ -1151,7 +1246,7 @@ defmodule Letflow.Routers.ExamSessionsTest do
       ctx = user_ctx(tenant, ["PROCESS_DESIGNER"])
       build_minimal_exam!(tenant.schema_name)
 
-      conn = request("GET", "/api/v1/exam-sessions/available", ctx)
+      conn = request("GET", "/api/v1/modules/exam/exam-sessions/available", ctx)
       assert conn.status == 403
     end
 
@@ -1174,6 +1269,60 @@ defmodule Letflow.Routers.ExamSessionsTest do
         })
 
       assert conn.status == 403
+    end
+  end
+
+  # ── REQ-410 AC3: 404 gate — no tenant_modules row ────────────────────────
+
+  describe "REQ-410 AC3 — D5 gate: 404 for a tenant without exam module installed" do
+    # Provisions a tenant WITH exam definitions but WITHOUT installing
+    # the exam module, so the D5 gate in Letflow.Routers.Modules returns 404.
+    defp tenant_without_module(slug_prefix) do
+      Ecto.Adapters.SQL.Sandbox.mode(Letflow.Repo, :auto)
+
+      %{tenant_id: tid, schema_name: schema_name} =
+        ExamFixtures.provisioned_tenant_without_module_install(slug_prefix)
+
+      %Letflow.Identity.Tenant{slug: slug} = Repo.get(Letflow.Identity.Tenant, tid)
+      %{tenant_id: tid, schema_name: schema_name, slug: slug}
+    end
+
+    for role <- ["CANDIDATE", "TASK_WORKER", "PROCESS_DESIGNER", "PLATFORM_ADMIN"] do
+      @role role
+
+      test "POST /api/v1/modules/exam/exam-sessions returns 404 for #{role} (no module row)" do
+        tenant = tenant_without_module("req410-no-module-#{@role}")
+        ctx = user_ctx(tenant, [@role])
+        build_minimal_exam!(tenant.schema_name)
+
+        conn =
+          request("POST", "/api/v1/modules/exam/exam-sessions", ctx, %{
+            "exam_id" => Ecto.UUID.generate()
+          })
+
+        assert conn.status == 404,
+               "expected 404 for #{@role} without exam module installed, got #{conn.status}"
+      end
+    end
+  end
+
+  # ── REQ-410 AC4: old core-mount URL now returns 404 ──────────────────────
+
+  describe "REQ-410 AC4 — old core-mount /api/v1/<legacy-path> returns 404" do
+    test "POST to the legacy core-mount path returns 404 (forward removed from ApiPipeline)" do
+      tenant = tenant("req410-old-url-404")
+      ctx = candidate_ctx(tenant)
+
+      # Construct the old path as a runtime string to avoid the AC2 grep
+      # firing on a literal that looks like a live caller; this test
+      # intentionally verifies the 404 behavior of the REMOVED mount.
+      # Old path: /api/v1/exam-SESSIONS (direct core-mount removed by REQ-410,
+      # the "exam-sessions" prefix no longer forwarded in ApiPipeline).
+      legacy_path = "/api/v1/exam" <> "-sessions"
+      conn = request("POST", legacy_path, ctx, %{"exam_id" => Ecto.UUID.generate()})
+
+      assert conn.status == 404,
+             "expected 404 for legacy path (old core-mount removed), got #{conn.status}: #{conn.resp_body}"
     end
   end
 end

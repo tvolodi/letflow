@@ -1,10 +1,10 @@
-defmodule Letflow.Exam.QuestionSetResolver do
+defmodule Letflow.Modules.Exam.QuestionSetResolver do
   @moduledoc """
   REQ-332 -- resolves a seeded, reproducible question subset from a
   configured pool/rule set (ported from `backend/internal/sessions/service.go`'s
   `CreateSession`, FR-BB35/roadmap 3.5). Authorized by
   `lib/letflow/design/req330-exam-live-session.md` §7's rule-2 module table,
-  `Letflow.Exam.QuestionSetResolver` row -- read that document before
+  `Letflow.Modules.Exam.QuestionSetResolver` row -- read that document before
   changing this module's responsibilities.
 
   ## Rule-2 justification (verbatim from the design doc's table, REQ-330/0022 rule 2)

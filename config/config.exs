@@ -13,7 +13,7 @@ config :letflow, ecto_repos: [Letflow.Repo]
 # Letflow.Exam.CertificatePublicProjection. Do not add a further vertical
 # kind here without its own design/registration entry.
 config :letflow, :public_read_kinds, %{
-  "certificate" => Letflow.Exam.CertificatePublicProjection
+  "certificate" => Letflow.Modules.Exam.CertificatePublicProjection
 }
 
 # REQ-154: default instruction budget for tenant-supplied Lua scripts.

@@ -1,6 +1,6 @@
-defmodule Letflow.Exam.SessionTest do
+defmodule Letflow.Modules.Exam.SessionTest do
   @moduledoc """
-  REQ-332 -- integration tests for `Letflow.Exam.Session` against a real
+  REQ-332 -- integration tests for `Letflow.Modules.Exam.Session` against a real
   provisioned tenant (DIRECTIVE T-1: no mocked database). Self-contained via
   `Letflow.ExamFixtures` (DIRECTIVE T-4), mirroring
   `test/letflow/entities/query_joins_test.exs`'s own hand-rolled
@@ -9,7 +9,7 @@ defmodule Letflow.Exam.SessionTest do
 
   use Letflow.DataCase, async: false
 
-  alias Letflow.Exam.Session
+  alias Letflow.Modules.Exam.Session
   alias Letflow.ExamFixtures
   alias Letflow.Repo
 
@@ -277,7 +277,7 @@ defmodule Letflow.Exam.SessionTest do
 
       # No assignment of any kind was ever created for this candidate, yet
       # create/3 succeeds -- proving, rather than merely asserting in prose,
-      # that :not_assigned is currently unreachable. See Letflow.Exam.Session's
+      # that :not_assigned is currently unreachable. See Letflow.Modules.Exam.Session's
       # moduledoc "FINDING" section for the full reasoning and REQ-332's
       # close-out for the escalation to ORCH/REQ-ANALYST this represents.
       assert {:ok, _session_view} = Session.create(Ecto.UUID.generate(), exam.record_id, schema)
@@ -1108,7 +1108,7 @@ defmodule Letflow.Exam.SessionTest do
     # ISS-0650: end-to-end proof that the candidate's actual submitted text
     # is what a human grader would see, not a hardcoded nil -- autosave a
     # real text_answer, submit (which routes the short_text question
-    # through `Letflow.Exam.Scoring`'s `pending_manual` path), then read
+    # through `Letflow.Modules.Exam.Scoring`'s `pending_manual` path), then read
     # the session's own `session_answer` state back via
     # `get_session_state_for_user/3` and confirm the exact text survived
     # the whole write -> score -> read round trip untouched.
@@ -1379,7 +1379,7 @@ defmodule Letflow.Exam.SessionTest do
       # and asserting neither unsafe conversion appears anywhere proves the
       # structural change directly, which is *why* the load-order dependency
       # is gone -- not a stylistic lint.
-      source = File.read!(Path.join(File.cwd!(), "lib/letflow/exam/session.ex"))
+      source = File.read!(Path.join(File.cwd!(), "lib/letflow/modules/exam/session.ex"))
 
       refute source =~ "to_existing_atom"
       refute source =~ "to_atom("
@@ -1455,8 +1455,8 @@ defmodule Letflow.Exam.SessionTest do
 
   # ---------------------------------------------------------------------
   # ISS-0674: session_view/1 exposes score_pct/passed across all four
-  # statuses, so GET /exam-sessions/:id can render a candidate's own
-  # already-computed result on a later reload (see
+  # statuses, so GET /modules/exam/exam-sessions/:id can render a candidate's
+  # own already-computed result on a later reload (see
   # lib/letflow/design/iss0674-session-view-score-fields.md).
   # ---------------------------------------------------------------------
 

@@ -21,8 +21,8 @@ defmodule Letflow.Packs.Bilimbaga do
   description documents this as a KNOWN, DELIBERATE gap: "This pack does
   not configure a field grant; it only ensures is_correct is a first-class
   promoted field on its own record, so that redaction is expressible at
-  all." `Letflow.Routers.ExamSessions`'s moduledoc and
-  `Letflow.Exam.Session.get_session_state_for_user/3`'s own doc reach the
+  all." `Letflow.Modules.Exam.Router`'s moduledoc and
+  `Letflow.Modules.Exam.Session.get_session_state_for_user/3`'s own doc reach the
   same conclusion and compensate with a hand-assembled response allowlist
   on the dedicated `GET /exam-sessions/:id` route.
 
@@ -79,7 +79,7 @@ defmodule Letflow.Packs.Bilimbaga do
 
   # `question.explanation` (a worked-solution/rationale field) and
   # `answer_option.is_correct`/`likert_weight`/`likert_polarity` -- exactly
-  # the four fields `Letflow.Exam.Session.get_session_state_for_user/3`'s own
+  # the four fields `Letflow.Modules.Exam.Session.get_session_state_for_user/3`'s own
   # moduledoc names as the ones its hand-assembled response excludes.
   @answer_key_fields [
     {"question", "explanation"},

@@ -287,7 +287,7 @@ defmodule Letflow.Routers.TenantConfig do
   defp branding_map(nil), do: branding_from_settings(nil)
 
   @doc """
-  REQ-355 -- made `def` (was `defp`) so `Letflow.Exam.Certificate` can read
+  REQ-355 -- made `def` (was `defp`) so `Letflow.Modules.Exam.Certificate` can read
   the exact same three-key branding map this router's own `config/2` route
   exposes, rather than re-deriving branding from `Tenant.settings` a second
   way. Still the same allowlist-by-construction read this module's own

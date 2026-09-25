@@ -1,11 +1,11 @@
-defmodule Letflow.Exam.ScoringTest do
+defmodule Letflow.Modules.Exam.ScoringTest do
   @moduledoc """
-  REQ-332 -- pure unit tests for `Letflow.Exam.Scoring`. No database.
+  REQ-332 -- pure unit tests for `Letflow.Modules.Exam.Scoring`. No database.
   """
 
   use ExUnit.Case, async: true
 
-  alias Letflow.Exam.Scoring
+  alias Letflow.Modules.Exam.Scoring
 
   describe "single / true_false" do
     test "single correct scores 1.0" do
@@ -109,7 +109,7 @@ defmodule Letflow.Exam.ScoringTest do
       assert score2 == 0.0
     end
 
-    # ISS-0650: before this fix, `Letflow.Exam.Session.upsert_answer/6`
+    # ISS-0650: before this fix, `Letflow.Modules.Exam.Session.upsert_answer/6`
     # never wrote `text_answer` anywhere, so no caller of
     # `score_question/2` could ever observe anything but a hardcoded `nil`
     # for it -- there was nothing for a human grader to grade. This proves

@@ -190,6 +190,7 @@ defmodule Letflow.Migrations.BackfillExamTenantModulesTest do
       assert {:ok, [@migration_version]} = run_backfill!(tid_a)
 
       rows = list_tenant_modules(schema_a)
+
       assert length(rows) == 1,
              "expected exactly 1 tenant_modules row after second run, got #{length(rows)}"
 

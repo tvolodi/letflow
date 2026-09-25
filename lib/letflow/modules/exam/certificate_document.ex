@@ -1,6 +1,6 @@
-defmodule Letflow.Exam.CertificateDocument do
+defmodule Letflow.Modules.Exam.CertificateDocument do
   @moduledoc """
-  REQ-356 -- renders a `Letflow.Exam.Certificate` record's `certificate_view()`
+  REQ-356 -- renders a `Letflow.Modules.Exam.Certificate` record's `certificate_view()`
   into PDF bytes, with an embedded QR code (plus readable verification URL)
   in the footer. Ported for LAYOUT AND CONTENT ONLY from
   `backend/internal/certificates/pdf.go`'s `GeneratePDF`
@@ -50,7 +50,7 @@ defmodule Letflow.Exam.CertificateDocument do
   binaries and this module preserves that shape rather than reopening it:
   every call to `render/2` produces a fresh binary from the caller-supplied
   certificate view and verification input, and the caller
-  (`Letflow.Routers.ExamSessions`'s download route) discards it after
+  (`Letflow.Modules.Exam.Router`'s download route) discards it after
   sending the HTTP response. Nothing under `lib/letflow/exam/` or
   `lib/letflow/routers/` ever writes a certificate PDF to disk, an
   attachment record, or any other persistence layer. See this
@@ -60,7 +60,7 @@ defmodule Letflow.Exam.CertificateDocument do
   ## Branding -- read from the SNAPSHOT only, never re-derived (REQ-355's own guarantee, preserved here)
 
   `render/2` takes the certificate's OWN `branding_snapshot` field (captured
-  once, at first issuance, by `Letflow.Exam.Certificate.capture_branding_snapshot/1`)
+  once, at first issuance, by `Letflow.Modules.Exam.Certificate.capture_branding_snapshot/1`)
   as plain input data -- this module makes no `Letflow.Repo` call and reads
   no live `Letflow.Identity.Tenant` row, so a branding change made after
   issuance cannot affect a re-rendered document. This is the same property
@@ -94,7 +94,7 @@ defmodule Letflow.Exam.CertificateDocument do
 
   ## Verification code -- explicit caller input, not a persisted field (REQ-356/REQ-357 boundary)
 
-  `Letflow.Exam.Certificate`'s entity definition deliberately has NO
+  `Letflow.Modules.Exam.Certificate`'s entity definition deliberately has NO
   `verification_code` field (REQ-355's own scope fence: minting a real,
   non-guessable capability handle per decision `0028` is REQ-357's job, via
   REQ-352's authenticated writer). This module therefore takes the
@@ -103,7 +103,7 @@ defmodule Letflow.Exam.CertificateDocument do
   decision `0033` section 4 leaves the renderer's own function signature to
   this requirement, and this is the shape chosen so `render/2` needs no
   change when REQ-357 lands a real handle. Until REQ-357 exists, the ONLY
-  caller (`Letflow.Routers.ExamSessions`'s download route) passes the
+  caller (`Letflow.Modules.Exam.Router`'s download route) passes the
   certificate's own `id` (its `Letflow.Entities.Records` record id) as an
   interim code -- see that route's own comment for why, and why this is
   flagged rather than silently treated as the final shape.
@@ -135,7 +135,7 @@ defmodule Letflow.Exam.CertificateDocument do
   @type verification :: %{base_url: String.t(), code: String.t()}
 
   @doc """
-  Renders `certificate` (a `Letflow.Exam.Certificate.certificate_view()`, or
+  Renders `certificate` (a `Letflow.Modules.Exam.Certificate.certificate_view()`, or
   any map carrying the same keys) into PDF bytes, embedding a QR code (and
   matching readable text) that encodes `verification.base_url <> "/verify/"
   <> verification.code`.

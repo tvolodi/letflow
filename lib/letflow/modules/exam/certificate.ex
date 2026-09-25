@@ -1,4 +1,4 @@
-defmodule Letflow.Exam.Certificate do
+defmodule Letflow.Modules.Exam.Certificate do
   @moduledoc """
   REQ-355 -- idempotent issue-on-first-request certificate issuance. Ported
   from `backend/internal/certificates/service.go`'s `GetOrCreate`
@@ -27,7 +27,7 @@ defmodule Letflow.Exam.Certificate do
   sessions (0022 rule 1), and the ordered-guard-then-idempotent-write
   sequence is a multi-step `with`-chain with no execution semantics an
   entity definition alone can express -- the same shape
-  `Letflow.Exam.Session`'s own rule-2 table already established for this
+  `Letflow.Modules.Exam.Session`'s own rule-2 table already established for this
   vertical. This module does NOT self-certify that answer as sufficient;
   it is recorded here only so REVIEWER's sign-off (to be written into
   `docs/migration/stage-10-bilimbaga-vertical.md`'s "## REVIEWER sign-off"
@@ -37,7 +37,7 @@ defmodule Letflow.Exam.Certificate do
   ## Data lives in bucket A -- no migration, no Ecto schema here
 
   Every read and write goes through `Letflow.Entities.Records` (create) and
-  `Letflow.Exam.Session.get_session_for_user/3` (session read, which already
+  `Letflow.Modules.Exam.Session.get_session_for_user/3` (session read, which already
   owns ownership/not-found semantics -- reused here rather than
   re-implemented) and `Letflow.Entities.Record.Latest` (the `exam` read).
   `certificate` (REQ-355) is the only entity type this module writes; extra
@@ -51,7 +51,7 @@ defmodule Letflow.Exam.Certificate do
      issuance for their own session," not an admin route, so there is no
      caller today that could ever pass `is_admin: true`. Rather than carry
      an unreachable parameter no route calls (the shape
-     `Letflow.Exam.Session`'s own `:not_assigned` no-op takes for a
+     `Letflow.Modules.Exam.Session`'s own `:not_assigned` no-op takes for a
      genuinely-blocked check), this function's ownership check is simply
      unconditional -- `Session.get_session_for_user/3`'s own
      `:not_owner`/`:session_not_found` pair, already indistinguishable per
@@ -97,7 +97,7 @@ defmodule Letflow.Exam.Certificate do
   atom -- distinct from both `:session_not_submitted` (an honest "not
   submitted yet, come back after you finish/submit") and
   `:session_not_passed` (an honest "you did not meet the passing score").
-  `Letflow.Routers.ExamSessions`' certificate route renders three different
+  `Letflow.Modules.Exam.Router`' certificate route renders three different
   messages for these three atoms; see that router's own render clause.
 
   ## Idempotency -- what the source expresses and what this module expresses instead
@@ -127,7 +127,7 @@ defmodule Letflow.Exam.Certificate do
   `Letflow.Entities.Records.create_record/2` with a DETERMINISTIC
   `idempotency_key` -- `"certificate:issue:" <> session_id` -- rather than
   the fresh `Ecto.UUID.generate()` every OTHER write in this vertical
-  (`Letflow.Exam.Session`'s own `write_record/4`) uses for its one-time
+  (`Letflow.Modules.Exam.Session`'s own `write_record/4`) uses for its one-time
   writes. `Letflow.EventStore`'s own idempotency mechanism
   (`claim_idempotency/3`, `lib/letflow/event_store.ex:641-691`) is a REAL,
   ALREADY-UNIQUE-INDEXED Postgres constraint (`uq_event_idempotency_key`
@@ -186,7 +186,7 @@ defmodule Letflow.Exam.Certificate do
   own `is_duplicate` flag through as `first_issuance` (`not is_duplicate`)
   instead of discarding it, and `certificate_view/2` carries it plus
   `public_read_resource_id` (the record's own `id` -- the Ecto primary key,
-  NOT `record_id`) so `Letflow.Routers.ExamSessions` can mint a
+  NOT `record_id`) so `Letflow.Modules.Exam.Router` can mint a
   `Letflow.PublicRead` handle exactly once per certificate, on first
   issuance only. Both fields are internal wiring, never part of the
   authenticated JSON response -- see
@@ -195,7 +195,7 @@ defmodule Letflow.Exam.Certificate do
 
   alias Letflow.Entities.Record.Latest
   alias Letflow.Entities.Records
-  alias Letflow.Exam.Session
+  alias Letflow.Modules.Exam.Session
   alias Letflow.Identity
   alias Letflow.Identity.Tenant
   alias Letflow.Repo
@@ -203,7 +203,7 @@ defmodule Letflow.Exam.Certificate do
   alias Letflow.TenantProvisioning
 
   # ISS-0676 -- exhaustiveness over this union is NOT compiler-enforced.
-  # `Letflow.Routers.ExamSessions.render_issue_certificate/2` has one clause
+  # `Letflow.Modules.Exam.Router.render_issue_certificate/2` has one clause
   # per atom below, plus a catch-all clause (that router's own comment
   # above it explains why). Elixir's `@type` unions carry no case/function-
   # clause exhaustiveness check the way a real sum type would, and Dialyzer
@@ -212,7 +212,7 @@ defmodule Letflow.Exam.Certificate do
   # (with and without an explicit `@spec` on the router function naming
   # this type) produced ZERO new warnings, because the router's catch-all
   # clause widens the accepted type to `term()`, so Dialyzer's success
-  # typing sees no contract violation to report. `Letflow.Exam.Session`'s
+  # typing sees no contract violation to report. `Letflow.Modules.Exam.Session`'s
   # own `eligibility_error`/`autosave_error`/`submit_error` unions
   # (session.ex:129-146) are the same shape for the same reason -- REVIEWER
   # already accepted this as an established, non-blocking precedent for
@@ -251,9 +251,9 @@ defmodule Letflow.Exam.Certificate do
   returns the already-issued one -- see this module's moduledoc for the
   full guard order and idempotency guarantee. `candidate_id` is always the
   AUTHENTICATED CALLER's own id (never a caller-supplied identity, matching
-  every other `Letflow.Exam.Session`/`Letflow.Exam.AntiCheat` entry point
+  every other `Letflow.Modules.Exam.Session`/`Letflow.Modules.Exam.AntiCheat` entry point
   in this vertical) -- ownership is enforced by delegating the session read
-  itself to `Letflow.Exam.Session.get_session_for_user/3`.
+  itself to `Letflow.Modules.Exam.Session.get_session_for_user/3`.
   """
   @spec issue_or_get_for_user(
           candidate_id :: String.t(),
@@ -393,7 +393,7 @@ defmodule Letflow.Exam.Certificate do
   end
 
   # -----------------------------------------------------------------------
-  # Small helpers -- same idioms as `Letflow.Exam.Session`'s own private
+  # Small helpers -- same idioms as `Letflow.Modules.Exam.Session`'s own private
   # helpers of the same name (no shared module extracted for two callers).
   # -----------------------------------------------------------------------
 

@@ -1,6 +1,6 @@
-defmodule Letflow.Exam.CertificatePublicProjectionTest do
+defmodule Letflow.Modules.Exam.CertificatePublicProjectionTest do
   @moduledoc """
-  REQ-357 -- unit coverage for `Letflow.Exam.CertificatePublicProjection`
+  REQ-357 -- unit coverage for `Letflow.Modules.Exam.CertificatePublicProjection`
   (`test/specs/REQ-357.md`) directly against the `Letflow.PublicRead.Projection`
   behaviour contract, with no HTTP round trip and no real tenant provisioning
   in the way. The end-to-end issuance -> mint -> resolve wiring (AC-6) lives
@@ -13,7 +13,7 @@ defmodule Letflow.Exam.CertificatePublicProjectionTest do
   use ExUnit.Case, async: true
 
   alias Letflow.Entities.Record.Latest
-  alias Letflow.Exam.CertificatePublicProjection, as: Projection
+  alias Letflow.Modules.Exam.CertificatePublicProjection, as: Projection
 
   defp record(field_values, attrs \\ %{}) do
     struct(
@@ -129,7 +129,7 @@ defmodule Letflow.Exam.CertificatePublicProjectionTest do
   # source, not merely cited.
   describe "purity (documented grep, no runtime test -- see rationale above)" do
     test "the module's CODE (moduledoc excluded) contains no Letflow.Repo / Ecto.Query reference" do
-      source = File.read!("lib/letflow/exam/certificate_public_projection.ex")
+      source = File.read!("lib/letflow/modules/exam/certificate_public_projection.ex")
 
       # The moduledoc legitimately DISCUSSES `Repo.get/3` in prose (explaining
       # why schema/0's return value is only correct in combination with

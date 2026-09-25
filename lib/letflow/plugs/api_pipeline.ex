@@ -171,13 +171,10 @@ defmodule Letflow.Plugs.ApiPipeline do
   forward("/admin/services", to: Letflow.Routers.AdminServices)
   forward("/entities", to: Letflow.Routers.Entities)
 
-  # REQ-335 -- the candidate-facing exam-session HTTP surface REQ-332/REQ-333
-  # left unbuilt. Mounted the same way as every other authenticated
-  # tenant-scoped sub-router above -- NOT a public/unauthenticated route
-  # (decision 0028's capability-handle pattern does not apply here: a
-  # candidate sitting an exam is an authenticated tenant user). See
-  # Letflow.Routers.ExamSessions' own moduledoc for the route table.
-  forward("/exam-sessions", to: Letflow.Routers.ExamSessions)
+  # REQ-335 -- the candidate-facing exam-session HTTP surface is now served
+  # via REQ-404's Letflow.Routers.Modules D4/D5 gate at
+  # /api/v1/modules/exam/exam-sessions (REQ-410 moved Letflow.Modules.Exam.Router
+  # here). The direct core-mount was removed by REQ-410.
 
   # REQ-352 -- the generic, kind-agnostic authenticated issue path for
   # Letflow.PublicRead.issue_handle/4 (design §13.2). Mounted the same way
@@ -194,11 +191,6 @@ defmodule Letflow.Plugs.ApiPipeline do
   # design (lib/letflow/design/req366-help-display-panel.md) this
   # implements.
   forward("/help", to: Letflow.Routers.Help)
-
-  # REQ-404 -- tenant-installed module router namespace, mounted under the
-  # module id itself. The nested router resolves the module id and checks the
-  # tenant's install row before dispatching to the module's own router.
-  forward("/modules", to: Letflow.Routers.Modules)
 
   # REQ-374 -- the platform-wide tenant-migration fanout runner. Mounted
   # the same way as `/tenants`/`/onboarding` above: a top-level,

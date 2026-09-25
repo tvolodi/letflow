@@ -1,6 +1,6 @@
-defmodule Letflow.Exam.CertificateDocumentTest do
+defmodule Letflow.Modules.Exam.CertificateDocumentTest do
   @moduledoc """
-  REQ-356 -- unit coverage for `Letflow.Exam.CertificateDocument.render/2`
+  REQ-356 -- unit coverage for `Letflow.Modules.Exam.CertificateDocument.render/2`
   against a fixture certificate view (no database, no tenant provisioning --
   this module is a pure function of its input, see its own moduledoc).
   HTTP-level route wiring (the authenticated download route) lives in
@@ -10,7 +10,7 @@ defmodule Letflow.Exam.CertificateDocumentTest do
 
   use ExUnit.Case, async: true
 
-  alias Letflow.Exam.CertificateDocument
+  alias Letflow.Modules.Exam.CertificateDocument
 
   defp fixture_certificate(overrides \\ %{}) do
     Map.merge(

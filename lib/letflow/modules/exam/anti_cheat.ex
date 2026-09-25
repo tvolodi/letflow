@@ -1,11 +1,11 @@
-defmodule Letflow.Exam.AntiCheat do
+defmodule Letflow.Modules.Exam.AntiCheat do
   @moduledoc """
   REQ-333 -- anti-cheat signal capture and the `on_tab_switch` policy branch,
   the 4th and last bucket-C module `lib/letflow/exam/` is authorised to
   contain. Ported from `backend/internal/sessions/service.go`'s
   `ReportEvent` (FR-BB38, roadmap 3.8). Authorized by
   `lib/letflow/design/req330-exam-live-session.md` §7's rule-2 module table,
-  `Letflow.Exam.AntiCheat` row -- read that document in full (§5 and §7) and
+  `Letflow.Modules.Exam.AntiCheat` row -- read that document in full (§5 and §7) and
   decision `0030-exam-session-p3-bucket-verdicts.md` §"Finding 2" before
   changing this module's responsibilities.
 
@@ -16,7 +16,7 @@ defmodule Letflow.Exam.AntiCheat do
   `action_taken` from the exam's `on_tab_switch` config (never from caller
   input), applies a per-session write-rate debounce, and branches
   `log`/`warn`/`submit` -- a live conditional with a side effect (in the
-  `submit` branch, triggering `Letflow.Exam.Session.submit/3`), which an
+  `submit` branch, triggering `Letflow.Modules.Exam.Session.submit/3`), which an
   entity definition cannot express.
 
   **Why not B (a generic platform capability).** Stating this generically
@@ -44,7 +44,7 @@ defmodule Letflow.Exam.AntiCheat do
   `lib/letflow/exam/` (this requirement's own acceptance criterion) returns
   zero hits, including in prose -- not just zero real usages. This is a
   plain module with ordinary functions over `Letflow.Entities.Records`/
-  `Letflow.Entities.Query`, exactly like `Letflow.Exam.Session`'s own
+  `Letflow.Entities.Query`, exactly like `Letflow.Modules.Exam.Session`'s own
   "Process-vs-row decision" framing.
 
   ## `action_taken` is derived from config, never from the caller (service.go AC-10)
@@ -83,7 +83,7 @@ defmodule Letflow.Exam.AntiCheat do
   alias Letflow.Entities.Query.Compiler
   alias Letflow.Entities.Record.Latest
   alias Letflow.Entities.Records
-  alias Letflow.Exam.Session
+  alias Letflow.Modules.Exam.Session
   alias Letflow.Repo
 
   @type signal_type :: :tab_switch | :blur | :fullscreen_exit
@@ -163,7 +163,7 @@ defmodule Letflow.Exam.AntiCheat do
   end
 
   # Server-side deadline enforcement, identical idiom to
-  # `Letflow.Exam.Session`'s own `check_deadline/1` -- compares
+  # `Letflow.Modules.Exam.Session`'s own `check_deadline/1` -- compares
   # `DateTime.utc_now()` against the session's OWN STORED `expires_at`. No
   # client-supplied timestamp appears anywhere in this function.
   defp check_deadline(session) do
@@ -291,7 +291,7 @@ defmodule Letflow.Exam.AntiCheat do
   end
 
   # =======================================================================
-  # Shared plumbing (same idiom as `Letflow.Exam.Session`)
+  # Shared plumbing (same idiom as `Letflow.Modules.Exam.Session`)
   # =======================================================================
 
   defp fv(%{field_values: field_values}, key), do: Map.get(field_values, key)

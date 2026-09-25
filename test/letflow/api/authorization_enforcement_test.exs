@@ -65,11 +65,14 @@ defmodule Letflow.Api.AuthorizationEnforcementTest do
     # absent from either is simply never walked and the suite stays green
     # while the surface goes unverified.
     Letflow.Routers.Entities,
-    # REQ-335 -- Letflow.Routers.ExamSessions' five routes each declare a
-    # policy key REQ-335 itself backed with a real endpoint_policy_key/2
-    # clause, so every one resolves through the normal path above and none
-    # is (or may be) added to @allowlist.
-    Letflow.Routers.ExamSessions,
+    # REQ-335/REQ-410 -- the exam-session HTTP surface moved from a direct
+    # core-mount (REQ-335/REQ-408) to the D4/D5 gate at
+    # /modules/exam/exam-sessions (REQ-410). Letflow.Modules.Exam.Router's
+    # eight routes each declare a policy key backed by the module fallback
+    # in Authorization.endpoint_policy_key/2 (REQ-401's module_route_permission/3),
+    # so every one resolves through the normal path above and none is (or may
+    # be) added to @allowlist.
+    Letflow.Modules.Exam.Router,
     # REQ-366 §1 -- Letflow.Routers.Help's single route declares :HelpRead,
     # backed by a real endpoint_policy_key/2 clause, so it resolves through
     # the normal path above and is not (and may not be) added to @allowlist.
@@ -126,7 +129,7 @@ defmodule Letflow.Api.AuthorizationEnforcementTest do
     Letflow.Routers.Services => "/services",
     Letflow.Routers.AdminServices => "/admin/services",
     Letflow.Routers.Entities => "/entities",
-    Letflow.Routers.ExamSessions => "/exam-sessions",
+    Letflow.Modules.Exam.Router => "/modules/exam",
     Letflow.Routers.Help => "/help",
     Letflow.Routers.Me => "/me",
     Letflow.Routers.TenantSettings => "/tenant/settings",

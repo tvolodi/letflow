@@ -1,6 +1,6 @@
-defmodule Letflow.Exam.CertificateTest do
+defmodule Letflow.Modules.Exam.CertificateTest do
   @moduledoc """
-  REQ-355 -- unit coverage for `Letflow.Exam.Certificate` against a real
+  REQ-355 -- unit coverage for `Letflow.Modules.Exam.Certificate` against a real
   provisioned tenant (`Letflow.ExamFixtures`), no mocked database, mirroring
   `test/letflow/exam/session_test.exs`'s own fixture conventions. HTTP-level
   route wiring (auth, 404/409 status mapping) lives in
@@ -13,8 +13,8 @@ defmodule Letflow.Exam.CertificateTest do
   use Letflow.DataCase, async: false
 
   alias Letflow.Entities.Record.Latest
-  alias Letflow.Exam.Certificate
-  alias Letflow.Exam.Session
+  alias Letflow.Modules.Exam.Certificate
+  alias Letflow.Modules.Exam.Session
   alias Letflow.ExamFixtures
   alias Letflow.Identity
   alias Letflow.Identity.Tenant

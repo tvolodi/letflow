@@ -1,8 +1,8 @@
-defmodule Letflow.Exam.CertificatePublicProjection do
+defmodule Letflow.Modules.Exam.CertificatePublicProjection do
   @moduledoc """
   REQ-357 -- the `Letflow.PublicRead.Projection` for the `"certificate"`
   kind (design `lib/letflow/design/req357-certificate-public-projection.md`
-  §2). Colocated with the rest of `Letflow.Exam.*` deliberately (per that
+  §2). Colocated with the rest of `Letflow.Modules.Exam.*` deliberately (per that
   design's §2.1) -- `Letflow.PublicRead.*` is REQ-323/0028's own
   vocabulary-neutral platform namespace and must stay free of
   vertical-specific modules.
@@ -10,14 +10,14 @@ defmodule Letflow.Exam.CertificatePublicProjection do
   ## `schema/0` and the `resource_id`/primary-key substitution (design §2.2)
 
   Returns `Letflow.Entities.Record.Latest` -- the bucket-A current-state
-  table `Letflow.Exam.Certificate` (REQ-355) writes `certificate` entity
+  table `Letflow.Modules.Exam.Certificate` (REQ-355) writes `certificate` entity
   records into. This is only correct because `Letflow.PublicRead.resolve/2`
   calls `Repo.get(schema(), handle.resource_id, prefix: prefix)`, and
   `Repo.get/3` matches on the Ecto PRIMARY KEY -- `Letflow.Entities.
   Record.Latest`'s own `id`, NOT its `record_id` column (a distinct,
   non-key field every OTHER surface in this vertical uses instead, e.g.
-  `Letflow.Exam.Certificate.certificate_view/1`'s own `"id"` field). The
-  wiring in `Letflow.Exam.Certificate`/`Letflow.Routers.ExamSessions` MUST
+  `Letflow.Modules.Exam.Certificate.certificate_view/1`'s own `"id"` field). The
+  wiring in `Letflow.Modules.Exam.Certificate`/`Letflow.Modules.Exam.Router` MUST
   pass `record.id` -- never `record.record_id` -- as `issue_handle/4`'s
   `resource_id` argument, or resolution silently 404s forever. See the
   design doc for the full reasoning (this module does not re-derive it).
@@ -25,7 +25,7 @@ defmodule Letflow.Exam.CertificatePublicProjection do
   ## Purity (behaviour contract, `Letflow.PublicRead.Projection`)
 
   `project/2` reads only `resource.field_values` (already captured in full
-  at issuance time by `Letflow.Exam.Certificate`) and literal constants --
+  at issuance time by `Letflow.Modules.Exam.Certificate`) and literal constants --
   no `Repo` call, no `Application` read, no clock read. Nothing here needs
   a second lookup of anything.
 

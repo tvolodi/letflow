@@ -5,8 +5,8 @@ defmodule Letflow.ExamFixtures do
   `question`, `answer_option`, `exam_question_rule`, `exam_manual_question`,
   `session`, `session_question`, `session_answer`, `session_question_score`,
   `session_event`) for
-  `Letflow.Exam.Session`/`Letflow.Exam.QuestionSetResolver`/
-  `Letflow.Exam.Scoring`/`Letflow.Exam.AntiCheat` integration tests, without a full
+  `Letflow.Modules.Exam.Session`/`Letflow.Modules.Exam.QuestionSetResolver`/
+  `Letflow.Modules.Exam.Scoring`/`Letflow.Modules.Exam.AntiCheat` integration tests, without a full
   `Letflow.Definitions.SolutionPack.install/3` (no column promotion, no
   per-type table -- every field this suite filters on is already
   `queried: true` in the real `priv/packs/bilimbaga/entity_definitions/*.json`
@@ -14,6 +14,10 @@ defmodule Letflow.ExamFixtures do
   `entity_record_latest`'s JSONB `field_values`). Mirrors
   `test/letflow/entities/query_joins_test.exs`'s own hand-rolled
   tenant-fixture pattern (DIRECTIVE T-4).
+
+  REQ-410: `provisioned_tenant_with_exam_definitions/1` also installs the
+  `"exam"` module (`Letflow.Modules.Installs.install/3`) so the D5 gate in
+  `Letflow.Routers.Modules` admits exam-session requests for this tenant.
   """
 
   import ExUnit.Assertions
@@ -23,6 +27,7 @@ defmodule Letflow.ExamFixtures do
   alias Letflow.Entities.Definitions
   alias Letflow.Entities.Records
   alias Letflow.Identity.Tenant
+  alias Letflow.Modules.Installs
   alias Letflow.Repo
   alias Letflow.TenantProvisioning
   alias Letflow.TenantProvisioning.ColumnPromotion
@@ -101,6 +106,56 @@ defmodule Letflow.ExamFixtures do
     assert {:ok, _seed_result} = Letflow.Entities.EventTypes.seed!(schema_name)
 
     activate_exam_definitions!(schema_name)
+
+    # REQ-410: install the exam module so the D5 gate in
+    # Letflow.Routers.Modules admits /modules/exam/exam-sessions/... requests
+    # for this tenant. Uses a fixture actor_id -- the install call only
+    # records the installer's id in the tenant_modules row; no
+    # authorization check is performed here (this is a test fixture path,
+    # not a user-facing HTTP call).
+    fixture_actor_id = Ecto.UUID.generate()
+    {:ok, _} = Installs.install("exam", fixture_actor_id, prefix: schema_name)
+
+    %{tenant_id: tenant.id, schema_name: schema_name}
+  end
+
+  @doc """
+  REQ-410 AC3 fixture: provisions a fresh tenant schema with exam definitions
+  but WITHOUT installing the exam module. Use this to test that the D5 gate
+  in `Letflow.Routers.Modules` returns 404 for requests when no
+  `tenant_modules` row for the exam module exists.
+  """
+  @spec provisioned_tenant_without_module_install(slug_prefix :: String.t()) :: %{
+          tenant_id: Ecto.UUID.t(),
+          schema_name: String.t()
+        }
+  def provisioned_tenant_without_module_install(slug_prefix) do
+    Ecto.Adapters.SQL.Sandbox.mode(Letflow.Repo, :auto)
+
+    tenant = insert_tenant!(slug_prefix)
+
+    on_exit(fn ->
+      case TenantProvisioning.schema_name_for_tenant(tenant.id) do
+        {:ok, schema_name} -> drop_schema!(schema_name)
+        {:error, :invalid_tenant_id} -> :ok
+      end
+
+      Repo.delete_all(from(r in Registration, where: r.tenant_id == ^tenant.id))
+      Repo.delete_all(from(cp in ColumnPromotion, where: cp.tenant_id == ^tenant.id))
+      Repo.delete_all(from(t in Tenant, where: t.id == ^tenant.id))
+    end)
+
+    assert {:ok, %Registration{schema_name: schema_name}} =
+             TenantProvisioning.provision_tenant_schema(tenant.id)
+
+    assert {:ok, _applied_versions} = TenantProvisioning.replay_migrations(tenant.id)
+    assert {:ok, _seed_result} = Letflow.Entities.EventTypes.seed!(schema_name)
+
+    activate_exam_definitions!(schema_name)
+
+    # Deliberately do NOT install the exam module here -- this fixture is
+    # specifically for testing the D5 gate's 404 response when no
+    # tenant_modules row exists.
 
     %{tenant_id: tenant.id, schema_name: schema_name}
   end

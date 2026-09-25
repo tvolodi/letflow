@@ -4,7 +4,7 @@ defmodule Letflow.Routers.EntitiesAnswerKeyFieldLeakTest do
   (this codebase's only non-privileged, ordinary-tenant-user role, and the
   role REQ-335 grants every exam-session permission to) already held
   `:EntitiesQuery`/`:EntitiesAggregate` BEFORE REQ-335 existed. REQ-335's own
-  `GET /exam-sessions/:id` route hand-assembles its response to exclude
+  `GET /modules/exam/exam-sessions/:id` route hand-assembles its response to exclude
   `question.explanation` and `answer_option.is_correct`/`likert_weight`/
   `likert_polarity` -- but that redaction only ever protected THAT route. If
   the GENERIC `POST /entities/query`/`POST /entities/query/aggregate` routes
@@ -214,7 +214,7 @@ defmodule Letflow.Routers.EntitiesAnswerKeyFieldLeakTest do
         "likert_polarity" => "positive"
       })
 
-      # The exact route REQ-335's hand-redacted GET /exam-sessions/:id was
+      # The exact route REQ-335's hand-redacted GET /modules/exam/exam-sessions/:id was
       # never meant to be the only guard for -- a TASK_WORKER caller hits it
       # directly, no exam-session machinery involved at all.
       conn = query(ctx, %{"entity_type" => "answer_option"})

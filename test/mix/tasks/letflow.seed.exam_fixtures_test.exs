@@ -38,12 +38,12 @@ defmodule Mix.Tasks.Letflow.Seed.ExamFixturesTest do
   the same `entity_record_latest` table `Letflow.Entities.Records.create_record/2`
   itself writes to -- rather than through the compiled `POST /entities/query`
   route surface, since that route requires a second authenticated HTTP round
-  trip this file has no other reason to set up. `Letflow.Exam.Session.submit/3`
+  trip this file has no other reason to set up. `Letflow.Modules.Exam.Session.submit/3`
   IS called directly for the session-outcome assertions (see AC4 in the spec)
   because the claim under test -- "status grading_pending, passed nil" -- is a
   property of `submit/3`'s own return value, not of the raw persisted row (the
   persisted `field_values["passed"]` is `false`, never `nil` --
-  `lib/letflow/exam/session.ex:1068` -- so asserting on the raw row would not
+  `lib/letflow/modules/exam/session.ex:1068` -- so asserting on the raw row would not
   actually prove the claim REQ-345 makes).
 
   ## IMPLEMENTATION FINDING (flagged, not fixed here -- see handoff)
@@ -77,7 +77,7 @@ defmodule Mix.Tasks.Letflow.Seed.ExamFixturesTest do
   alias Letflow.Entities.Definitions
   alias Letflow.Entities.EventTypes
   alias Letflow.Entities.Record.Latest
-  alias Letflow.Exam.Session
+  alias Letflow.Modules.Exam.Session
   alias Letflow.Identity
   alias Letflow.Identity.Tenant
   alias Letflow.Identity.User

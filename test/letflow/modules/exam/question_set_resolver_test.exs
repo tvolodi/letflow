@@ -1,13 +1,13 @@
-defmodule Letflow.Exam.QuestionSetResolverTest do
+defmodule Letflow.Modules.Exam.QuestionSetResolverTest do
   @moduledoc """
-  REQ-332 -- pure unit tests for `Letflow.Exam.QuestionSetResolver`. No
+  REQ-332 -- pure unit tests for `Letflow.Modules.Exam.QuestionSetResolver`. No
   database, no tenant -- `resolve/5` is a pure function over its arguments
   plus the seeded `:rand` state.
   """
 
   use ExUnit.Case, async: true
 
-  alias Letflow.Exam.QuestionSetResolver
+  alias Letflow.Modules.Exam.QuestionSetResolver
 
   defp pool do
     %{

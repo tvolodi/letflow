@@ -2,8 +2,12 @@ defmodule Letflow.Modules.Exam do
   @moduledoc """
   The first real tenant-installable module extracted from the platform's exam
   domain, added in REQ-408. It owns the candidate-facing exam-session grant
-  set and the route-policy mapping for the exam endpoints while leaving the
-  actual exam runtime logic in `lib/letflow/exam/*` untouched until REQ-410.
+  set and the route-policy mapping for the exam endpoints.
+
+  REQ-410 completes the extraction: the runtime logic and HTTP router are now
+  co-located under `lib/letflow/modules/exam/`, served at
+  `/api/v1/modules/exam/exam-sessions/…` via the D4/D5 gate in
+  `Letflow.Routers.Modules` (REQ-404).
   """
 
   @behaviour Letflow.Modules.Module
@@ -47,4 +51,7 @@ defmodule Letflow.Modules.Exam do
       {"GET", "/exam-sessions/:id/certificate/download", :ExamCertificateIssue}
     ]
   )
+
+  @impl true
+  def router, do: Letflow.Modules.Exam.Router
 end

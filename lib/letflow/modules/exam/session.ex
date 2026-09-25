@@ -1,11 +1,11 @@
-defmodule Letflow.Exam.Session do
+defmodule Letflow.Modules.Exam.Session do
   @moduledoc """
   REQ-332 -- live exam-session runtime: start, autosave, submit, and the
   system-triggered auto-finalize path. Ported from
   `backend/internal/sessions/service.go`'s `CreateSession`/`SaveAnswer`/
   `SubmitSession` (FR-BB35/FR-BB37/FR-BB39, roadmap 3.5/3.7/3.9). Authorized
   by `lib/letflow/design/req330-exam-live-session.md` §7's rule-2 module
-  table, `Letflow.Exam.Session` row -- read that document in full before
+  table, `Letflow.Modules.Exam.Session` row -- read that document in full before
   changing this module's responsibilities.
 
   ## Rule-2 justification (verbatim from the design doc's table, REQ-330/0022 rule 2)
@@ -107,7 +107,7 @@ defmodule Letflow.Exam.Session do
   ## REQ-335 addition -- `get_session_state_for_user/3`
 
   REQ-335 (the HTTP route surface REQ-332/REQ-333 left unbuilt) added this
-  one read-composition function so `Letflow.Routers.ExamSessions`' session-
+  one read-composition function so `Letflow.Modules.Exam.Router`' session-
   state route stays a thin composition layer with no execution semantics of
   its own, matching that requirement's own scope note. No new bucket-C
   reasoning is added by it -- it reuses this module's own private
@@ -123,8 +123,8 @@ defmodule Letflow.Exam.Session do
   alias Letflow.Entities.Query.Cursor
   alias Letflow.Entities.Record.Latest
   alias Letflow.Entities.Records
-  alias Letflow.Exam.QuestionSetResolver
-  alias Letflow.Exam.Scoring
+  alias Letflow.Modules.Exam.QuestionSetResolver
+  alias Letflow.Modules.Exam.Scoring
   alias Letflow.Repo
   alias Letflow.TenantProvisioning
 
@@ -346,7 +346,7 @@ defmodule Letflow.Exam.Session do
         }
 
   @doc """
-  REQ-335 -- `Letflow.Routers.ExamSessions`' session-state read route calls
+  REQ-335 -- `Letflow.Modules.Exam.Router`' session-state read route calls
   this, not `get_session_for_user/3` alone, because a candidate resuming a
   session needs the materialised question set to render it, not just the
   session envelope. Ownership is delegated entirely to

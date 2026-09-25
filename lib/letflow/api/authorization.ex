@@ -133,7 +133,7 @@ defmodule Letflow.Api.Authorization do
 
   ## `ExamSession*` (REQ-335) — genuinely new, not pre-ported, and CANDIDATE-reachable
 
-  Five new atoms for `Letflow.Routers.ExamSessions`'s five routes
+  Five new atoms for `Letflow.Modules.Exam.Router`'s five routes
   (`:ExamSessionStart`, `:ExamSessionRead`, `:ExamSessionSave`,
   `:ExamSessionSubmit`, `:ExamSessionReportEvent`), each with a real
   `endpoint_policy_key/2` clause and an identity `required_permission/1`
@@ -144,7 +144,7 @@ defmodule Letflow.Api.Authorization do
   `TASK_WORKER` no longer holds them. A candidate sitting an exam is an
   ordinary authenticated tenant user reaching their OWN session (every
   delegate call is additionally ownership-checked inside
-  `Letflow.Exam.Session`/`Letflow.Exam.AntiCheat` themselves, ownership never
+  `Letflow.Modules.Exam.Session`/`Letflow.Modules.Exam.AntiCheat` themselves, ownership never
   being a function of role). `:PROCESS_DESIGNER`/`:PROCESS_OPERATOR`
   continue to not hold them, for the same reason as before — sitting an exam
   is not part of either role's existing grant shape; `PLATFORM_ADMIN`'s
@@ -859,13 +859,16 @@ defmodule Letflow.Api.Authorization do
       ),
       do: :EntitiesAttachmentsManage
 
-  # REQ-335 — Letflow.Routers.ExamSessions' five routes, mounted at
-  # /exam-sessions (Letflow.Plugs.ApiPipeline). Each atom is candidate-
-  # reachable (this module's moduledoc "ExamSession*" section states why) and
-  # each delegate additionally re-checks ownership inside
-  # Letflow.Exam.Session/Letflow.Exam.AntiCheat themselves — this matrix only
-  # answers "may this role reach this route," never "is this the caller's own
-  # session."
+  # REQ-335/REQ-410 — Letflow.Modules.Exam.Router's eight routes, now mounted
+  # at /modules/exam/exam-sessions (Letflow.Routers.Modules D4/D5 gate).
+  # The explicit clauses below remain for historical completeness and
+  # backwards-compatibility (the module_route_permission/3 fallback at line
+  # ~932 is the authoritative lookup path for the new /modules/exam/... URLs).
+  # Each atom is candidate-reachable (this module's moduledoc "ExamSession*"
+  # section states why) and each delegate additionally re-checks ownership
+  # inside Letflow.Modules.Exam.Session/Letflow.Modules.Exam.AntiCheat
+  # themselves — this matrix only answers "may this role reach this route,"
+  # never "is this the caller's own session."
   def endpoint_policy_key("POST", "/exam-sessions"), do: :ExamSessionStart
 
   # ISS-0718 -- the candidate-facing available-exams list route. Reuses the
@@ -895,7 +898,7 @@ defmodule Letflow.Api.Authorization do
   # REQ-356 -- the authenticated certificate PDF download route. Reuses
   # :ExamCertificateIssue rather than a new atom: this route's own
   # eligibility/ownership check is the identical
-  # Letflow.Exam.Certificate.issue_or_get_for_user/3 call the POST route
+  # Letflow.Modules.Exam.Certificate.issue_or_get_for_user/3 call the POST route
   # above makes (see lib/letflow/routers/exam_sessions.ex's own route
   # comment) -- no new authorization semantics exist to justify a new
   # permission for a rendering-only requirement's own scope.
@@ -1298,8 +1301,8 @@ defmodule Letflow.Api.Authorization do
   # external exam candidates, holding exactly REQ-335's five exam-session
   # route permissions and nothing else. TASK_WORKER no longer holds these
   # (see this module's moduledoc "ExamSession*" section) -- ownership of the
-  # specific session is still enforced inside Letflow.Exam.Session/
-  # Letflow.Exam.AntiCheat themselves, never by this role grant.
+  # specific session is still enforced inside Letflow.Modules.Exam.Session/
+  # Letflow.Modules.Exam.AntiCheat themselves, never by this role grant.
   defp core_role_allows?(:CANDIDATE, permission),
     do:
       permission in [

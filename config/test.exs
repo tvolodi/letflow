@@ -244,7 +244,7 @@ config :letflow, activation_test_hooks_enabled?: true
 config :letflow, :public_read_kinds, %{
   "public-read-fixture" => Letflow.PublicReadFixtureSupport.Projection,
   "public-read-fixture-mismatch" => Letflow.PublicReadFixtureSupport.Projection,
-  "certificate" => Letflow.Exam.CertificatePublicProjection
+  "certificate" => Letflow.Modules.Exam.CertificatePublicProjection
 }
 
 # REQ-400 (design lib/letflow/design/req400-module-behaviour-catalog.md §4.3):
@@ -265,6 +265,7 @@ config :letflow, :public_read_kinds, %{
 # {:error, :boom}, proves Installs.install/3's AC6 whole-transaction
 # rollback -- design §9 open question 1, option (a), its own recommendation).
 config :letflow, :modules, [
+  Letflow.Modules.Exam,
   Letflow.Modules.Fixture,
   Letflow.Modules.FixtureDependent,
   Letflow.Modules.FixtureFailingInstall

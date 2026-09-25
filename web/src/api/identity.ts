@@ -3,6 +3,7 @@ import type {
   User,
   Group,
   GroupListResponse,
+  GroupMember,
   GroupMemberAddResult,
   GroupMemberPage,
   Role,
@@ -11,6 +12,15 @@ import type {
   IssuedToken,
   PagedResponse,
 } from '@/types/api'
+
+/** `@max_page_size` (`lib/letflow/api/pagination.ex:50`) — the largest page the
+ *  server accepts, so `groupsApi.listAllMembers` makes the fewest round trips. */
+const MEMBER_DRAIN_PAGE_SIZE = 200
+
+/** Safety bound on `groupsApi.listAllMembers`: 20 x 200 = 4 000 members. Chosen
+ *  as a bound, not derived from any measured group size (ISS-0816 OQ-2); it
+ *  exists so a malformed or non-advancing cursor cannot spin the browser. */
+const MEMBER_DRAIN_MAX_REQUESTS = 20
 
 // ── Users ──────────────────────────────────────────────────────────────────────
 
@@ -59,8 +69,64 @@ export const groupsApi = {
   removeMembers: (id: string, userId: string) =>
     client.delete<void>(`/api/v1/identity/groups/${id}/members/${userId}`),
 
-  members: (id: string) =>
-    client.get<GroupMemberPage>(`/api/v1/identity/groups/${id}/members`),
+  /** One page of `GET /api/v1/identity/groups/:id/members`, faithfully. The
+   *  envelope is `Pagination.Page`'s three keys (`GroupMemberPage`), returned
+   *  unreshaped — no `.items` unwrap inside web/src/api/ (ISS-0765 INV-B).
+   *  `params` is forwarded as the query object, same style as `usersApi.list`. */
+  members: (id: string, params?: { cursor?: string; page_size?: number }) =>
+    client.get<GroupMemberPage>(
+      `/api/v1/identity/groups/${id}/members`,
+      params as Record<string, unknown> | undefined,
+    ),
+
+  /**
+   * ISS-0816 AC3 — the bounded drain. Follows `next_cursor` until it is null and
+   * concatenates every page's items in request order, so callers hold the
+   * COMPLETE member set.
+   *
+   * Why this exists rather than a truncation notice: `GroupsPage` derives its
+   * "Add member" dropdown by subtracting the member id set from the user list.
+   * A set difference computed from one page of 50 offers every member past the
+   * 50th as if they were not members — and a notice placed on the member list
+   * says nothing about that separate control (design INV-D).
+   *
+   * Bounds, stated as a contract:
+   *   - `page_size: MEMBER_DRAIN_PAGE_SIZE` (200) — `@max_page_size` at
+   *     `lib/letflow/api/pagination.ex:50`, the largest the server accepts, so
+   *     the fewest round trips.
+   *   - never more than `MEMBER_DRAIN_MAX_REQUESTS` (20) requests — a 4 000-member
+   *     ceiling. A safety bound against a malformed or non-advancing cursor
+   *     spinning the browser, not the expected path.
+   *   - `truncated` reports whether members were left UNFETCHED, not whether the
+   *     cap was reached. After the 20th response: `next_cursor === null` means the
+   *     drain terminated normally on its last permitted request, so `truncated` is
+   *     `false` (a group of exactly 4 000 is complete, not truncated); a non-null
+   *     `next_cursor` means the server had more and the cap stopped the asking, so
+   *     `truncated` is `true`. A 21st request is never issued either way.
+   *   - rejects on the first failed request, leaving `useQuery`'s error handling
+   *     unchanged.
+   */
+  listAllMembers: async (id: string): Promise<{ items: GroupMember[]; truncated: boolean }> => {
+    const items: GroupMember[] = []
+    let cursor: string | undefined
+
+    for (let request = 0; request < MEMBER_DRAIN_MAX_REQUESTS; request += 1) {
+      const page = await groupsApi.members(id, {
+        cursor,
+        page_size: MEMBER_DRAIN_PAGE_SIZE,
+      })
+      items.push(...page.items)
+
+      if (page.next_cursor === null) {
+        return { items, truncated: false }
+      }
+      cursor = page.next_cursor
+    }
+
+    // Cap reached with a non-null cursor still outstanding: the server had more
+    // to give and this drain stopped asking.
+    return { items, truncated: true }
+  },
 }
 
 // ── Roles ──────────────────────────────────────────────────────────────────────

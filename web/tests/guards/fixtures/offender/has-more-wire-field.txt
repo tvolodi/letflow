@@ -1,0 +1,39 @@
+// ISS-0816 T8 offender fixture. Every one of T7's five alternatives has a form
+// here. Note (design §7.1, corrected by the gate): meta-control asserts
+// regex.test(content) over this WHOLE file, so a single surviving alternative
+// satisfies it -- these forms document the intended coverage, they do not
+// individually pin it.
+
+// Alternative 2 -- object-literal key, and a type member.
+interface FakePage {
+  items: string[]
+  next_cursor: string | null
+  has_more: boolean
+}
+
+const fabricated = {
+  items: response.items,
+  next_cursor: response.next_cursor,
+  has_more: false,
+}
+
+// Alternative 1 -- property access.
+if (page.has_more) {
+  loadNextPage()
+}
+
+// Alternative 3 -- string-literal key.
+const viaIndex = page['has_more']
+
+// Alternative 5 -- a local binding of the name, which is what shorthand is
+// shorthand FOR.
+const has_more = Boolean(response.next_cursor)
+
+// Alternative 4 -- ES6 shorthand, the commoner spelling and the one BLOCKER-3
+// was about.
+return { items, next_cursor, has_more }
+
+// Alternative 2 again -- renamed destructure. Caught only incidentally, because
+// it happens to contain a colon; that incidental catch is what gave the
+// shorthand gap away.
+const { has_more: renamed } = body

@@ -226,12 +226,17 @@ describe('ISS-0765 — groupsApi calls the real /api/v1/identity/groups routes',
   })
 
   // ── Row 9 ────────────────────────────────────────────────────────────────
-  it('T-0765-SURFACE: the exported surface is exactly the six functions with a real route', () => {
+  it('T-0765-SURFACE: the exported surface is exactly the functions with a real route', () => {
+    // ISS-0816 T9(i): `listAllMembers` is the seventh function — the bounded
+    // drain over the SAME route `members` dials. This assertion is exact
+    // equality over the live object's keys, so it went red the moment the
+    // function was added; extending it is the correction, never relaxing it.
     expect(Object.keys(groupsApi).sort()).toEqual([
       'addMember',
       'create',
       'delete',
       'list',
+      'listAllMembers',
       'members',
       'removeMembers',
     ])
@@ -249,6 +254,16 @@ describe('ISS-0765 — groupsApi calls the real /api/v1/identity/groups routes',
   // legitimately appears there in `rolesApi` (identity.ts:73-88), which is
   // ISS-0812's scope, not this run's — such an assertion would go red for a
   // reason that has nothing to do with this fix.
+  //
+  // ISS-0816 T9(ii): this array is HAND-MAINTAINED — `it.each` iterates it, not
+  // `Object.keys(groupsApi)`. A seventh function on the object therefore never
+  // produces a seventh case on its own: the suite would have stayed green and
+  // silently left `listAllMembers` unchecked for the `/api/v1/admin/` prefix.
+  // The `listAllMembers` row below was added DELIBERATELY, not in response to a
+  // failing test, honouring the intent stated above that this array cannot
+  // itself enforce. The row works unmodified: the shared spy resolves
+  // WIRE_MEMBER_PAGE, whose `next_cursor` is null, so the drain terminates after
+  // exactly one request and `captured()`'s single-call expectation holds.
   const surfaceRows: Array<[string, () => Promise<unknown>]> = [
     ['list', () => groupsApi.list()],
     ['create', () => groupsApi.create({ name: 'ops', display_name: 'Ops' })],
@@ -256,6 +271,7 @@ describe('ISS-0765 — groupsApi calls the real /api/v1/identity/groups routes',
     ['addMember', () => groupsApi.addMember('g-1', 'u-1')],
     ['removeMembers', () => groupsApi.removeMembers('g-1', 'u-1')],
     ['members', () => groupsApi.members('g-1')],
+    ['listAllMembers', () => groupsApi.listAllMembers('g-1')],
   ]
 
   it.each(surfaceRows)(

@@ -119,6 +119,35 @@ export const PATTERNS: GuardPattern[] = [
     rationale: 'GRD-UI-02',
   },
   {
+    // ISS-0816 T7. No Letflow route emits a `has_more` field on the wire: the
+    // audit route's internal one is dropped by page_body/2
+    // (lib/letflow/routers/audit.ex:308-320), and every other list body is
+    // {items, next_cursor} or {items, next_cursor, count}. This entry matches
+    // the CODE forms of the field — property access, object-literal/type-member
+    // key, string-literal key, ES6 shorthand, and a local binding of the name —
+    // so that a docblock may still NAME the field in order to say it does not
+    // exist. Authoring rule for such prose: write the token inside backticks and
+    // never immediately followed by a colon, comma or brace.
+    //
+    // A backstop, not a proof of impossibility (design §7.1): a binding taken
+    // from an inference-typed parameter, or a key assembled by concatenation,
+    // would evade it. The durable fix for the class is ISS-0813's mechanical
+    // coupling of web/src/types/api.ts to the routers' real response bodies.
+    name: 'has-more-wire-field',
+    regex: /\.has_more\b|\bhas_more\s*\??\s*:|["']has_more["']|\bhas_more\s*[,}]|\b(?:const|let|var)\s+has_more\b/,
+    appliesTo: 'source',
+    // Exactly the two ISS-0821 fixtures that still hand-write `has_more: false`
+    // into a mock response. DELETE BOTH ENTRIES WHEN ISS-0821 LANDS. No other
+    // exemption belongs here: web/src/types/api.ts and
+    // web/src/api/__tests__/identity.groupsApi.test.ts both carry truthful prose
+    // naming the field and both pass UNEXEMPTED — that they do is the fix.
+    allowedPaths: [
+      'web/src/pages/promotions/__tests__/PromotionReviewListPage.test.tsx',
+      'web/src/pages/tasks/__tests__/TaskInboxPage.test.tsx',
+    ],
+    rationale: 'ISS-0816',
+  },
+  {
     name: 'test-only-or-skip',
     regex: /\bit\.only\s*\(|\btest\.only\s*\(|\bdescribe\.only\s*\(|\bit\.skip\s*\(|\btest\.skip\s*\(/,
     appliesTo: 'source',

@@ -246,22 +246,17 @@ export const promotionsApi = {
   /**
    * GET /api/v1/promotions (REQ-397, PLATFORM_ADMIN-only)
    * Lists promotion-review rows, filterable by status/def_id/def_type,
-   * cursor-paginated. `has_more` is client-derived — REQ-397's envelope is
-   * exactly `{items, next_cursor}` (design doc §2.2), same situation
-   * `auditApi.list` already handles.
+   * cursor-paginated. REQ-397's envelope is exactly `{items, next_cursor}`
+   * (`render_list_reviews/2`, `lib/letflow/routers/promotions.ex:944-948`), which
+   * is precisely what `CursorPage<T>` models since ISS-0816 — so the response is
+   * returned unreshaped, with no client-side mapping at all.
    */
   list: (filters: PromotionReviewListFilters): Promise<CursorPage<PromotionReviewListItem>> =>
-    client
-      .get<{ items: PromotionReviewListItem[]; next_cursor: string | null }>('/api/v1/promotions', {
-        status: filters.status,
-        def_id: filters.def_id,
-        def_type: filters.def_type,
-        cursor: filters.cursor,
-        page_size: filters.page_size ? String(filters.page_size) : undefined,
-      })
-      .then((response) => ({
-        items: response.items,
-        next_cursor: response.next_cursor,
-        has_more: Boolean(response.next_cursor),
-      })),
+    client.get<CursorPage<PromotionReviewListItem>>('/api/v1/promotions', {
+      status: filters.status,
+      def_id: filters.def_id,
+      def_type: filters.def_type,
+      cursor: filters.cursor,
+      page_size: filters.page_size ? String(filters.page_size) : undefined,
+    }),
 }

@@ -1,5 +1,5 @@
 import { client } from './client'
-import type { CursorPage } from '@/types/api'
+import type { CountedCursorPage } from '@/types/api'
 
 export interface AuditLogFilters {
   actor?: string
@@ -34,12 +34,6 @@ interface RawAuditEntry {
   after_state?: Record<string, unknown> | null
 }
 
-interface RawAuditPage {
-  items: RawAuditEntry[]
-  next_cursor: string | null
-  count: number
-}
-
 function mapAuditEntry(raw: RawAuditEntry): AuditEntry {
   return {
     id: raw.audit_id,
@@ -55,8 +49,8 @@ function mapAuditEntry(raw: RawAuditEntry): AuditEntry {
 }
 
 export const auditApi = {
-  list: async (filters: AuditLogFilters): Promise<CursorPage<AuditEntry>> => {
-    const response = await client.get<RawAuditPage>('/api/v1/audit', {
+  list: async (filters: AuditLogFilters): Promise<CountedCursorPage<AuditEntry>> => {
+    const response = await client.get<CountedCursorPage<RawAuditEntry>>('/api/v1/audit', {
       actor_id: filters.actor,
       resource_type: filters.resource_type,
       from: filters.from,
@@ -68,7 +62,7 @@ export const auditApi = {
     return {
       items: response.items.map(mapAuditEntry),
       next_cursor: response.next_cursor,
-      has_more: Boolean(response.next_cursor),
+      count: response.count,
     }
   },
 }

@@ -1,5 +1,5 @@
 import { client } from './client'
-import type { Task, CompleteTaskRequest, CursorPage, TaskStatus } from '@/types/api'
+import type { Task, CompleteTaskRequest, CountedCursorPage, TaskStatus } from '@/types/api'
 
 // Backend sends `task_id` but the frontend Task type uses `id`.
 // Normalize at the API boundary so all callers can use task.id safely.
@@ -23,7 +23,7 @@ function normalizeTask(raw: RawTask): Task {
   return { ...(raw as unknown as Task), id, created_at, updated_at }
 }
 
-function normalizeTaskPage(page: CursorPage<RawTask>): CursorPage<Task> {
+function normalizeTaskPage(page: CountedCursorPage<RawTask>): CountedCursorPage<Task> {
   return { ...page, items: page.items.map(normalizeTask) }
 }
 
@@ -36,7 +36,7 @@ export const tasksApi = {
     page_size?: number
   }) =>
     client
-      .get<CursorPage<RawTask>>('/api/v1/tasks', params as Record<string, unknown>)
+      .get<CountedCursorPage<RawTask>>('/api/v1/tasks', params as Record<string, unknown>)
       .then(normalizeTaskPage),
 
   get: (id: string) =>
@@ -56,6 +56,6 @@ export const tasksApi = {
   /** Inbox: pending tasks for the calling user */
   inbox: (params?: { cursor?: string; page_size?: number }) =>
     client
-      .get<CursorPage<RawTask>>('/api/v1/tasks/inbox', params as Record<string, unknown>)
+      .get<CountedCursorPage<RawTask>>('/api/v1/tasks/inbox', params as Record<string, unknown>)
       .then(normalizeTaskPage),
 }

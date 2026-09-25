@@ -1,0 +1,34 @@
+// ISS-0816 T8 bystander fixture. Everything T7 must NEVER catch.
+
+// 1. Prose naming the field in order to say it does not exist. This is exactly
+// what web/src/types/api.ts's CursorPage<T> docblock is required to say, and
+// what web/src/api/__tests__/identity.groupsApi.test.ts:63 already says.
+// No Letflow route emits `has_more` on the wire -- not one.
+// Not `has_more`, which no route sends.
+// `has_more`: never emitted -- the backtick-then-colon form, the shape
+// alternative 2 comes closest to mis-firing on.
+// `has_more`, dropped by page_body/2 -- the backtick-then-comma form,
+// alternative 4's near miss.
+// `has_more` } -- backtick-then-brace, the other near miss.
+
+// 2. The real, clean envelopes. These are what the wire actually carries.
+const twoKey = { items, next_cursor }
+const threeKey = { items, next_cursor, count }
+
+// 3. TimelineFeed's camelCase `hasMore`
+// (web/src/components/instances/TimelineFeed.tsx:7/15/37). It is a component
+// prop derived from next_cursor and has NO connection to the deleted wire
+// field. It must not be touched and the guard must not match it -- this fixture
+// is the mechanical, permanent guarantee of that, not a comment asking the next
+// agent to be careful. Under the five-alternative regex it has to survive
+// alternatives 4 and 5 too, hence the bare const and the shorthand below.
+interface TimelineFeedProps {
+  events: EventRecord[]
+  hasMore: boolean
+}
+
+const hasMore = Boolean(timelineQuery.data?.next_cursor)
+
+const feedProps = { items, hasMore }
+
+const rendered = <TimelineFeed events={events} hasMore={hasMore} />

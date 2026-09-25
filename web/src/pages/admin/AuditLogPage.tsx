@@ -3,7 +3,7 @@ import { Navigate } from 'react-router-dom'
 import { useQuery, type UseQueryResult } from '@tanstack/react-query'
 import { useTenantScopedQueryKeys } from '@/api/useTenantScopedQueryKeys'
 import { auditApi, type AuditEntry, type AuditLogFilters } from '@/api/audit'
-import type { CursorPage } from '@/types/api'
+import type { CountedCursorPage } from '@/types/api'
 import { JsonDiffView } from '@/components/ui/JsonDiffView'
 import { useAuth } from '@/auth/AuthContext'
 import { QueryStateBoundary } from '@/components/ui/QueryStateBoundary'
@@ -32,7 +32,7 @@ function isFilterRangeValid(from?: string, to?: string): boolean {
   return new Date(from).getTime() <= new Date(to).getTime()
 }
 
-export function useAuditLog(filters: AuditLogFilters): UseQueryResult<CursorPage<AuditEntry>> {
+export function useAuditLog(filters: AuditLogFilters): UseQueryResult<CountedCursorPage<AuditEntry>> {
   const adminKeys = useTenantScopedQueryKeys().admin
   return useQuery({
     queryKey: adminKeys.audit(filters),

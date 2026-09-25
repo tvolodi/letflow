@@ -51,13 +51,21 @@ export default function GroupsPage() {
   const activeGroupId = groupId(activeGroup ?? ({} as GroupRow))
   const rendererState: RendererState = isLoading ? 'loading' : isError ? classifyError(error) : 'success'
 
+  // ISS-0816 AC3: the dialog must hold the COMPLETE member set, not page one of
+  // it. `availableUsers` below subtracts this set from the user list, so a
+  // truncated set would offer existing members in the "Add member" dropdown as
+  // if they were not members (design INV-D) — a control a truncation notice on
+  // the member list says nothing about. `listAllMembers` follows `next_cursor`
+  // to exhaustion under a bounded cap and reports `truncated` when that cap
+  // stopped it; the notice below covers only that pathological case.
   const { data: membersPage } = useQuery({
     queryKey: tenantKeys.admin.groupMembers(activeGroupId),
-    queryFn: () => groupsApi.members(activeGroupId),
+    queryFn: () => groupsApi.listAllMembers(activeGroupId),
     enabled: Boolean(activeGroup),
   })
 
   const members = useMemo(() => membersPage?.items ?? [], [membersPage?.items])
+  const membersTruncated = membersPage?.truncated ?? false
 
   const { data: users } = useQuery({
     queryKey: tenantKeys.admin.users({ page_size: 200 }),
@@ -222,6 +230,16 @@ export default function GroupsPage() {
 
             <div>
               <h4 style={{ margin: '0 0 .75rem' }}>Current members</h4>
+              {membersTruncated && (
+                <p
+                  role="status"
+                  style={{ margin: '0 0 .75rem', color: 'var(--text-secondary)', fontSize: '.875rem' }}
+                >
+                  This list is capped: showing the first {members.length} members. This group has more
+                  members than this dialog fetches, so the &ldquo;Add member&rdquo; list may still offer
+                  someone who is already a member.
+                </p>
+              )}
               {members.length === 0 ? (
                 <p style={{ margin: 0, color: 'var(--text-secondary)' }}>No members in this group.</p>
               ) : (

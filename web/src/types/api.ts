@@ -10,11 +10,57 @@ export interface ApiError {
   details?: Record<string, unknown>
 }
 
-/** Cursor-paginated list response (API-13) */
+/**
+ * Cursor-paginated list response (API-13) — the **two-key** envelope, exactly
+ * `{items, next_cursor}` and nothing else.
+ *
+ * Routes that emit this shape (ISS-0816 design §2.2, each re-read from its own
+ * response builder):
+ *   - `GET /api/v1/definitions`        (`lib/letflow/routers/definitions.ex:454-458`)
+ *   - `GET /api/v1/definitions/search` (`lib/letflow/routers/definitions.ex:539-544`)
+ *   - `GET /api/v1/dlq`                (`lib/letflow/routers/dlq.ex:140-144`)
+ *   - `GET /api/v1/services`           (`lib/letflow/routers/services.ex:131-135`)
+ *   - `GET /api/v1/admin/services`     (`lib/letflow/routers/admin_services.ex:198-202`)
+ *   - `GET /api/v1/promotions`         (`lib/letflow/routers/promotions.ex:944-948`)
+ *   - `POST /api/v1/entities/query`    (`run_query/4`; aliased below as `EntityRecordsPage`)
+ *
+ * ISS-0816: **no Letflow route emits `has_more` on the wire — not one.** The
+ * field used to be declared here and covered zero wire shapes. The only place a
+ * `has_more` exists at all is *inside* Elixir: `Letflow.Audit.list_entries/1`
+ * returns one, and `lib/letflow/routers/audit.ex:308-320` (`page_body/2`) drops
+ * it, converting it into a cursor and hand-building an INV-2 allowlist of
+ * `"items"`, `"next_cursor"` and `"count"`. Next-page availability is derived
+ * from `next_cursor !== null` at the point of use (INV-C); no API-layer function
+ * may return a pre-derived boolean for it. Do not re-file this.
+ */
 export interface CursorPage<T> {
   items: T[]
   next_cursor: string | null
-  has_more: boolean
+}
+
+/**
+ * The **three-key** envelope, exactly `{items, next_cursor, count}`.
+ *
+ * Routes that emit this shape (ISS-0816 design §2.2):
+ *   - `GET /api/v1/audit`     (hand-built, `lib/letflow/routers/audit.ex:308-320`)
+ *   - `GET /api/v1/instances` (hand-built, `lib/letflow/routers/instances.ex:954-959`)
+ *   - `GET /api/v1/tasks`     (hand-built, `lib/letflow/routers/tasks.ex:269-275`)
+ *   - `GET /api/v1/tasks/inbox` (same builder)
+ *   - `GET /api/v1/tenants`, `GET /api/v1/identity/users`,
+ *     `GET /api/v1/identity/groups/:id/members` — all via
+ *     `Pagination.page_response/2` and `Letflow.Api.Pagination.Page`'s
+ *     `@derive {Jason.Encoder, only: [:items, :next_cursor, :count]}`
+ *     (`lib/letflow/api/pagination.ex:81`).
+ *
+ * INV-B: `count` is `length(items)` **for the current page only, never a
+ * cross-page total**, and must never be rendered as one — rendering it as a
+ * total is exactly what ISS-0711 was. Like `CursorPage<T>`, this envelope
+ * carries no `has_more` field; see that type's note for why.
+ */
+export interface CountedCursorPage<T> {
+  items: T[]
+  next_cursor: string | null
+  count: number
 }
 
 /** Offset-paginated list response for admin endpoints */
@@ -367,14 +413,12 @@ export interface EntityRecord {
   last_event_global_seq: number
 }
 
-/** `POST /entities/query`'s response body. Deliberately NOT `CursorPage<T>`:
- *  that shape's `has_more` field does not exist on this route's response
- *  (`run_query/4` sends exactly `{"items", "next_cursor"}`) -- reusing
- *  `CursorPage<T>` here would silently claim a field the API never sends. */
-export interface EntityRecordsPage<T = EntityRecord> {
-  items: T[]
-  next_cursor: string | null
-}
+/** `POST /entities/query`'s response body. `run_query/4` sends exactly
+ *  `{"items", "next_cursor"}`, which is the two-key envelope `CursorPage<T>`
+ *  now models precisely, so this is an alias rather than a hand-rolled twin
+ *  (ISS-0816 decision (e)). The exported name and its `EntityRecord` default
+ *  type argument are retained, so no call site changes. */
+export type EntityRecordsPage<T = EntityRecord> = CursorPage<T>
 
 export interface EntityQueryFilterClause {
   field: string
@@ -472,14 +516,12 @@ export interface GroupMember {
 
 /**
  * `Letflow.Api.Pagination.Page`'s encoder shape (`lib/letflow/api/pagination.ex:81`,
- * `@derive {Jason.Encoder, only: [:items, :next_cursor, :count]}`). Not `CursorPage<T>`,
- * which declares a `has_more` the backend never emits.
+ * `@derive {Jason.Encoder, only: [:items, :next_cursor, :count]}`) — i.e. the
+ * three-key envelope `CountedCursorPage<T>` models. ISS-0765 hand-rolled this
+ * declaration; ISS-0816 collapses it to an alias, keeping the exported name so
+ * every call site is untouched.
  */
-export interface GroupMemberPage {
-  items: GroupMember[]
-  next_cursor: string | null
-  count: number
-}
+export type GroupMemberPage = CountedCursorPage<GroupMember>
 
 /**
  * `handle_list_groups/2`'s wire body (`lib/letflow/routers/identity.ex:468-472`):

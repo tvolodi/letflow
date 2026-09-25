@@ -2,7 +2,7 @@ import { client } from './client'
 import type {
   ProcessInstance,
   StartInstanceRequest,
-  CursorPage,
+  CountedCursorPage,
   InstanceStatus,
   EventRecord,
   TimelinePage,
@@ -16,7 +16,7 @@ export const instancesApi = {
     cursor?: string
     page_size?: number
   }) =>
-    client.get<CursorPage<ProcessInstance>>('/api/v1/instances', {
+    client.get<CountedCursorPage<ProcessInstance>>('/api/v1/instances', {
       ...params,
       status: params?.status?.join(','),
     } as Record<string, unknown>),

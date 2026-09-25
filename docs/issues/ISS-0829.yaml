@@ -1,0 +1,80 @@
+id: ISS-0829
+title: >
+  Junctioning web/node_modules into a throwaway worktree can silently
+  destroy the real one -- it happened, and it halts every subsequent
+  web/ step
+discovered_by: TEST-DESIGNER (WF03-ISS0816-20260925 Step 4)
+discovered_in_run: WF03-ISS0816-20260925
+discovered_at: "2026-09-25T01:38:01Z"
+severity: MAJOR
+tags:
+  - process
+  - tooling
+  - web
+description: >
+  Found by TEST-DESIGNER at WF03-ISS0816-20260925 Step 4: the working
+  checkout's web/node_modules contained ZERO entries at step start, so
+  nothing under web/ could run. This was content loss, not a dependency
+  change -- a full real copy (398 entries, 20035 files, 194 MB) survived
+  in an unrelated worktree with a byte-identical package-lock.json (same
+  SHA256). Most probable cause is a prior step junctioning
+  web/node_modules into a throwaway git worktree and then removing that
+  worktree with a recursive delete that traversed the link instead of
+  unlinking it. Several steps in this run used that technique for
+  mutation probes.
+
+  Why this matters beyond one incident: it is silent (nothing reports it
+  at the time), cross-step (the agent that causes it is not the one that
+  suffers it), and destructive (the content is gone, not merely
+  unreachable). It presents to the next agent as an inexplicable wall of
+  module-resolution errors with no obvious cause, and on a pipeline with
+  no human reviewer that is an expensive dead end.
+
+  Recovery here was `npm ci --no-audit --no-fund`, 607 packages in 8s,
+  lockfile unchanged. The better fix is to stop linking: TEST-DESIGNER
+  copied instead, `robocopy /E /MT:32` putting a real 194 MB
+  node_modules into its worktree in 6.4 seconds. At that cost there is
+  no reason to junction. Note the guidance to junction-and-rmdir was
+  propagated in ORCH's own dispatches in this run, inherited from an
+  earlier agent's report -- so this is a documented-practice defect, not
+  one agent's mistake.
+affected_files:
+  - docs/agents/instructions/core-directives.md
+  - docs/agents/ORCHESTRATOR.md
+related: []
+severity_rationale: >
+  MAJOR -- silent, cross-step, destructive, and (per the discovery note)
+  already propagated into ORCH's own dispatch templates, meaning it will
+  recur across multiple future runs until removed from the guidance
+  agents are actually reading.
+fix_direction: >
+  1. Update agent guidance (docs/agents/instructions/core-directives.md
+     and/or docs/agents/ORCHESTRATOR.md, wherever the junction-and-rmdir
+     instruction currently lives) to instruct COPYING node_modules into
+     a throwaway worktree (e.g. `robocopy /E /MT:32` on Windows, or the
+     equivalent recursive copy elsewhere), never junctioning/symlinking
+     it -- record the measured cost (6.4s for 194MB) so the guidance is
+     obviously affordable and nobody reverts to junctioning for
+     "performance."
+  2. Remove any remaining junction-and-rmdir instruction from agent docs
+     and dispatch templates -- grep for it, since this run shows it was
+     propagated forward into at least one ORCH dispatch already.
+  3. Add a cheap fail-fast detection for a `web/` step: if node_modules
+     is missing or empty at step start, fail immediately with a clear
+     message pointing at this issue, rather than surfacing as a wall of
+     opaque module-resolution errors.
+  4. Generalize the guidance beyond node_modules specifically: a
+     recursive delete over ANY filesystem junction/symlink traverses it
+     and can destroy the real target, not just this one case.
+status: open
+queue_ref: "Q-827"
+# NOTE: letflow-queue's own atomically-allocated id (827) auto-titled
+# itself "ISS-0827", which collides with this project's already-used
+# real on-disk id ISS-0827 (the stale router_test.exs REQ-070
+# deferred-route count). This file was also initially misfiled as
+# ISS-0828, which a concurrent session claimed for a different issue in
+# the same window -- established, recurring queue-id/filename
+# divergence pattern for this project (see
+# docs/agents/protocols/TASK_QUEUE.md). queue_ref/github_ref below are
+# authoritative for this file.
+github_ref: "GH-1820"

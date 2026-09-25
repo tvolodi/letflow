@@ -1,0 +1,126 @@
+{
+  "run_id": "WF03-ISS0806-20260925",
+  "agent": "TEST-RUNNER",
+  "step": "WF-03 Step 4c",
+  "timestamp": "2026-09-25T07:39:00+05:00",
+  "status": "PASS",
+  "fix_commit": "2b954e78",
+  "fix_description": "defmanifest/1 macro in lib/letflow/modules/module.ex — compile-time role_grants ⊆ permissions check (ISS-0806)",
+  "environment": {
+    "postgres_container": "letflow-2-postgres-1",
+    "db_port": 5472,
+    "mix_env": "test"
+  },
+  "step1_targeted_tests": {
+    "command": "MIX_ENV=test mix test test/letflow/modules/ --trace",
+    "files_exercised": [
+      "test/letflow/modules/defmanifest_test.exs",
+      "test/letflow/modules/catalog_test.exs",
+      "test/letflow/modules/module_test.exs"
+    ],
+    "result": "17 passed, 0 failed",
+    "duration_seconds": 0.05,
+    "seed": 274238
+  },
+  "step2_ac2_catalog_tests": {
+    "command": "MIX_ENV=test mix test test/letflow/modules/ --trace (catalog included)",
+    "note": "catalog_test.exs was included in Step 1 run; all catalog tests passed",
+    "result": "11 passed (all catalog tests in run), 0 failed"
+  },
+  "iss_0806_tests": {
+    "file": "test/letflow/modules/defmanifest_test.exs",
+    "count": 4,
+    "all_pass": true,
+    "tests": [
+      {
+        "name": "raises CompileError when a role_grants atom is absent from permissions",
+        "line": 73,
+        "status": "PASS",
+        "duration_ms": 6.9
+      },
+      {
+        "name": "CompileError message names the caller module",
+        "line": 83,
+        "status": "PASS",
+        "duration_ms": 1.0
+      },
+      {
+        "name": "compiles cleanly when all role_grants atoms are in permissions",
+        "line": 92,
+        "status": "PASS",
+        "duration_ms": 5.4
+      },
+      {
+        "name": "Letflow.Modules.Fixture (uses defmanifest) satisfies @behaviour and returns correct manifest",
+        "line": 98,
+        "status": "PASS",
+        "duration_ms": 3.2
+      }
+    ]
+  },
+  "catalog_tests_ac2": {
+    "file": "test/letflow/modules/catalog_test.exs",
+    "count": 11,
+    "all_pass": true,
+    "ac2_tests": [
+      {
+        "name": "entry_modules/0 returns [Letflow.Modules.Fixture] in the test env",
+        "status": "PASS"
+      },
+      {
+        "name": "fetch/1 looks the fixture up by its id string",
+        "status": "PASS"
+      },
+      {
+        "name": "fetch/1 returns {:error, :not_found} for an unregistered id",
+        "status": "PASS"
+      },
+      {
+        "name": "config/config.exs registers an empty module list",
+        "status": "PASS"
+      }
+    ],
+    "ac3_tests": [
+      {
+        "name": "rejects a role_grants key not in Authorization.roles/0",
+        "status": "PASS"
+      },
+      {
+        "name": "rejects a role_grants value not in the module's own permissions",
+        "status": "PASS"
+      },
+      {
+        "name": "rejects a permissions atom that collides with a core permission",
+        "status": "PASS"
+      },
+      {
+        "name": "rejects a depends_on id that is not registered",
+        "status": "PASS"
+      },
+      {
+        "name": "rejects a duplicate module id",
+        "status": "PASS"
+      },
+      {
+        "name": "rejects a route_policies entry whose permission is undeclared",
+        "status": "PASS"
+      },
+      {
+        "name": "returns :ok for every module the real Catalog lists",
+        "status": "PASS"
+      }
+    ]
+  },
+  "module_tests": {
+    "file": "test/letflow/modules/module_test.exs",
+    "count": 2,
+    "all_pass": true
+  },
+  "totals": {
+    "passed": 17,
+    "failed": 0,
+    "skipped": 0,
+    "excluded_tags": ["keycloak", "wasm_hang", "lua_wallclock_race"]
+  },
+  "verdict": "All ISS-0806 AC1 tests (4/4) PASS. All AC2 catalog tests PASS. No regressions. Suite clean."
+}

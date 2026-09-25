@@ -66,7 +66,43 @@ fix_direction: >
   4. Generalize the guidance beyond node_modules specifically: a
      recursive delete over ANY filesystem junction/symlink traverses it
      and can destroy the real target, not just this one case.
-status: open
+status: resolved
+resolution: >
+  AC1 (guidance says copy, records the affordable cost) and AC2 (remove
+  any remaining junction-and-rmdir instruction from committed agent
+  docs/dispatch templates) and AC4 (generalize beyond node_modules)
+  addressed: added an explicit "never junction/symlink a large
+  dependency directory into a throwaway worktree" rule to
+  docs/agents/instructions/core-directives.md's "File Placement Rules"
+  section (on every agent's mandatory-reading list), citing the
+  measured 6.4s/194MB copy cost and covering node_modules/deps/_build
+  generally, not just this one case. Appended a third-recurrence note
+  to docs/anti-patterns.md's existing entry on this exact hazard
+  (already documented twice before this incident) rather than creating
+  a fourth near-duplicate entry, explaining why the anti-patterns.md
+  record alone didn't prevent recurrence (the bad advice was
+  propagating through ephemeral ORCH dispatch-prompt text, not a
+  committed doc) and pointing future dispatches at the new
+  core-directives.md rule instead.
+
+  Grepped docs/, .claude/agents/*.md for any committed "junction"
+  instruction to remove per AC2 -- found none; the only prior committed
+  references were the existing anti-patterns.md lessons (which already
+  say "never junction," not "do junction"), confirming the propagation
+  vector was ephemeral dispatch text, not a file, so there was nothing
+  further to delete.
+
+  AC3 (a cheap fail-fast detection in a web/ step for missing/empty
+  node_modules) is NOT implemented -- deliberately deferred rather than
+  bolted on: baking a presence check into web/package.json's npm
+  scripts is a real toolchain change warranting its own
+  design/review/test cycle, out of proportion for this docs-focused
+  fix. The new core-directives.md rule's closing sentence ("if a step
+  fails with a wall of module-resolution/compile errors that don't
+  match your own diff, check whether node_modules/deps is unexpectedly
+  empty") gives agents the diagnostic heuristic in the meantime. Left
+  open as a smaller, separate follow-up if this recurs a fourth time
+  despite the guidance fix.
 queue_ref: "Q-827"
 # NOTE: letflow-queue's own atomically-allocated id (827) auto-titled
 # itself "ISS-0827", which collides with this project's already-used

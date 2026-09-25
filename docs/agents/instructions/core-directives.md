@@ -583,6 +583,21 @@ outside `mix.exs`, `mix.lock`, `README.md`, `CLAUDE.md`, `docker-compose.yml`,
 `lib/letflow/design/`, `docs/issues/`, `docs/status/` are the audit trail. Commit them
 at the end of the step that produces or modifies them, not just at Step Final.
 
+**Never junction or symlink a large dependency directory** (`node_modules`, `deps`,
+`_build`) into a throwaway `git worktree` to speed up setup, even for a quick mutation
+probe you plan to discard. A junction is not treated as an opaque pointer by a recursive
+delete on every platform — `git worktree remove` (or an agent's own cleanup `rm -rf`)
+can follow the link and delete the real target's contents, not just the junction, taking
+down every other worktree and the main checkout sharing that directory (ISS-0262,
+ISS-0273's own `deps`/`_build` incident; ISS-0829's `node_modules` recurrence of the
+same class three separate times — see `docs/anti-patterns.md`'s two prior entries on
+this exact hazard before repeating it a fourth). **Always copy instead**: a real
+recursive copy (`robocopy /E /MT:32` on Windows, `cp -r`/`rsync -a` elsewhere) of even a
+~200MB `node_modules` completes in single-digit seconds — there is no performance case
+for linking. If a `web/` or backend step fails with a wall of module-resolution/compile
+errors that don't match anything in your own diff, check whether `node_modules`/`deps`
+is unexpectedly empty before assuming a code regression.
+
 ---
 
 ## ⛔ Bookkeeping Is Not Optional

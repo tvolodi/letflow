@@ -1510,6 +1510,25 @@ directory's corruption is invisible to `git status`; verify the linked-into dire
 still has real contents (e.g. re-run the actual test suite) before declaring cleanup
 verified.
 
+**Second recurrence (ISS-0829, WF03-ISS0816-20260925, TEST-DESIGNER):** happened a
+third time, in a run using several throwaway worktrees for mutation probes. Same
+symptom (`web/node_modules` at 0 entries, byte-identical `package-lock.json` confirmed
+via SHA256 in a sibling worktree that still had a real copy), same recovery
+(`npm ci --no-audit --no-fund`, 607 packages in 8s). New, more important finding this
+time: **the bad advice had propagated into ORCH's own dispatch prompts** for this run —
+an agent inherited "junction-and-rmdir" guidance from an earlier report and repeated it
+in later dispatches, meaning this entry existing in `docs/anti-patterns.md` did not
+stop the practice from being actively re-taught session-to-session through dispatch
+text, which nobody greps before writing a new prompt. TEST-DESIGNER's own fix in that
+run copied instead (`robocopy /E /MT:32`, a real 194MB `node_modules` in 6.4 seconds) —
+recorded here as the concrete "this is affordable" data point: at that cost there has
+never been a real performance case for linking. A general "never junction/symlink a
+throwaway worktree's shared directory" rule is now also in
+`docs/agents/instructions/core-directives.md` (§"File Placement Rules"), which is on
+every agent's mandatory-reading list — cite that file's rule directly in a dispatch
+prompt if this technique's temptation comes up again, rather than re-deriving the
+lesson from this anti-patterns entry each time.
+
 ---
 
 ## Probing a write endpoint with a real POST creates real state

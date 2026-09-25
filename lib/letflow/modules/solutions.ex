@@ -179,8 +179,7 @@ defmodule Letflow.Modules.Solutions do
             if expected_version == given_version do
               {:cont, :ok}
             else
-              {:halt,
-               {:error, {:version_mismatch, module_id, expected_version, given_version}}}
+              {:halt, {:error, {:version_mismatch, module_id, expected_version, given_version}}}
             end
         end
 

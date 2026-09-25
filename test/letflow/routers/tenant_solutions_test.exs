@@ -56,7 +56,8 @@ defmodule Letflow.Routers.TenantSolutionsTest do
         TenantFixture.provisioned_tenant!(slug_prefix: "req415-ac4-role")
 
       for role <- Authorization.roles(), role != :PLATFORM_ADMIN do
-        conn = install_solution(tenant_id, [Atom.to_string(role)], %{"solution_id" => "fixture-bundle"})
+        conn =
+          install_solution(tenant_id, [Atom.to_string(role)], %{"solution_id" => "fixture-bundle"})
 
         assert conn.status == 403,
                "expected 403 for role #{inspect(role)}, got #{conn.status}"
@@ -146,7 +147,9 @@ defmodule Letflow.Routers.TenantSolutionsTest do
       %{schema_name: prefix_b} =
         TenantFixture.provisioned_tenant!(slug_prefix: "req415-ac5-b")
 
-      conn = install_solution(tenant_id_a, ["PLATFORM_ADMIN"], %{"solution_id" => "fixture-bundle"})
+      conn =
+        install_solution(tenant_id_a, ["PLATFORM_ADMIN"], %{"solution_id" => "fixture-bundle"})
+
       assert conn.status == 201
 
       installed_a = Installs.list_installed(prefix: prefix_a)

@@ -136,3 +136,40 @@ resolution: >
   `mix test test/mix/tasks/letflow.lint_handoffs_test.exs` 63/63,
   full-corpus `mix letflow.lint_handoffs` now reports exactly 11 new
   violations, all under handoffs/WF03-ISS0808-20260925/.
+
+  UPDATE 2026-09-25 (DOC-UPDATER, while gate-checking the unrelated
+  ISS-0772 fix): the backlog has grown since the count above was taken.
+  A fresh `mix letflow.check` on a clean rebase onto current origin/main
+  now shows 33 new violations, not 11. Root cause of the discrepancy:
+  the original fix commit (b234d624) nested non-schema keys/fixed status
+  only in each BATCH-* run's step-02-code-designer.json /
+  step-02b-design-gate.json / step-03d-reviewer.json /
+  step-04-test-designer.json / (step-04b/04c where present) files -- it
+  never touched each run's own step-05-issue-fixer.json or
+  step-release-validator.json, which carry the same class of violation
+  and were still un-grandfathered all along. On top of that, a new run
+  not listed anywhere in this issue -- handoffs/WF03-ISS0806-20260925/
+  (step-01-issue-fixer.json) -- has landed with its own un-grandfathered
+  H1/H3 violations. Concurrent sessions are producing new handoff runs
+  faster than any single pass can chase down; this is expected given the
+  multi-session environment this project runs in, not a regression
+  either fix commit caused.
+
+  Read `status: resolved` above as "resolved as of the state
+  investigated at the time (2026-09-24/25, crash fixed, 14 of the
+  then-current violations closed)", NOT as "the backlog is now zero" --
+  it is not, and is not expected to stay at zero. This is a self-
+  refilling condition: it will keep growing as long as concurrent
+  sessions land handoffs without checking them, until either (a) every
+  currently active session finishes cleanly and its own handoffs get
+  swept, or (b) sessions adopt ISS-0819's single-file
+  `mix letflow.lint_handoffs --dir <path>` mode to self-check before
+  finishing, so new handoffs stop contributing to the backlog in the
+  first place. A PR touching none of these handoff paths hitting only
+  this failure mode (`letflow.lint_handoffs`, no test failures, no
+  compile errors) remains the same known, pre-existing,
+  unrelated-to-that-PR condition this issue documents -- just a larger
+  instance of it than the count on disk here currently states. Nobody
+  should re-close this issue by chasing the count to zero and declaring
+  victory; it should stay open/monitored, or be re-scoped as an ongoing
+  process item, until (a) or (b) above actually holds.

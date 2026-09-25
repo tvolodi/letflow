@@ -1,0 +1,61 @@
+id: ISS-0834
+title: >
+  handoffs/registry.json has a UTF-8 BOM prefix, breaking LintHandoffsTest's
+  ISS-0819 single-file-mode regression test
+discovered_by: TEST-RUNNER / RELEASE-VALIDATOR (WF02-REQ404-20260925)
+discovered_in_run: WF02-REQ404-20260925
+discovered_at: "2026-09-25T18:20:00Z"
+severity: MINOR
+tags:
+  - test
+  - tooling
+  - handoffs
+description: >
+  Found by TEST-RUNNER and independently confirmed by RELEASE-VALIDATOR while
+  running the full suite for REQ-404. Mix.Tasks.Letflow.LintHandoffsTest's
+  ISS-0819 single-file-mode regression test fails: handoffs/registry.json now
+  has a UTF-8 byte-order-mark (BOM) prefix that Jason can't decode, causing a
+  JSON parse error.
+
+  This is mechanically distinct from the already-resolved ISS-0826 (which
+  covers the self-refilling new-violation-count backlog) and from ISS-0819
+  itself (which this very test regression-guards against -- ISS-0819 was
+  about a different BOM-adjacent decode failure in a handoff artifact, not
+  the shared registry.json). Confirmed pre-existing and unrelated to REQ-404:
+  reproduces identically on an unmodified `main` checkout, and no file this
+  test touches was changed by REQ-404's diff.
+
+  Likely cause: some tool or editor in this multi-session environment wrote
+  handoffs/registry.json with a BOM (Windows-originated tooling commonly
+  does this), and nothing in the write path strips it before the file is
+  read back by Jason.decode!/1 (which does not tolerate a BOM).
+affected_files:
+  - handoffs/registry.json
+related:
+  - ISS-0819
+  - ISS-0826
+severity_rationale: >
+  MINOR -- a single shared file with a byte-order-mark corruption, not a
+  security or correctness defect in production code. It breaks one
+  regression test's mode of the handoff-lint tooling but doesn't block
+  legitimate handoff registration in the common case (most write paths
+  likely don't add a BOM).
+fix_direction: >
+  1. Confirm the BOM directly: `head -c 3 handoffs/registry.json | xxd` (EF
+     BB BF = UTF-8 BOM).
+  2. Strip the BOM from the committed file (re-save as BOM-less UTF-8, or
+     write a small one-off script that reads the raw bytes, strips a leading
+     EF BB BF if present, and rewrites the file).
+  3. Harden the read path: wherever handoffs/registry.json is read (the
+     mix letflow.lint_handoffs task, and any other consumer), strip a
+     leading BOM before calling Jason.decode!/1, so this can't silently
+     recur if some future write reintroduces one -- this is the same
+     defensive fix ISS-0819 already applied to a different handoff file,
+     consider whether a single shared helper should do this everywhere
+     handoff JSON is read rather than fixing each call site separately.
+  4. Confirm fixed by re-running
+     test/mix/tasks/letflow.lint_handoffs_test.exs (the ISS-0819
+     single-file-mode test specifically).
+status: open
+queue_ref: "Q-834"
+github_ref: null

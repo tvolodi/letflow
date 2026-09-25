@@ -1,0 +1,55 @@
+id: ISS-0833
+title: >
+  A malformed REQ-405 entry in docs/status/requirement_status.v22.yaml breaks
+  RequirementStatusInvariantsTest (A4a, A4b, A5)
+discovered_by: TEST-RUNNER / RELEASE-VALIDATOR (WF02-REQ404-20260925)
+discovered_in_run: WF02-REQ404-20260925
+discovered_at: "2026-09-25T18:20:00Z"
+severity: MINOR
+tags:
+  - test
+  - docs
+  - status-tracking
+description: >
+  Found by TEST-RUNNER and independently confirmed by RELEASE-VALIDATOR while
+  running the full suite for REQ-404. Three tests in
+  test/letflow/docs/requirement_status_invariants_test.exs (A5, A4a, A4b) fail
+  because a REQ-405 entry appended to
+  docs/status/requirement_status.v22.yaml by a concurrent WF02-REQ405 session
+  is malformed: it has a misnamed field, an extra undeclared field, and/or an
+  undeclared "doc-correction" event value that the invariants schema doesn't
+  recognize.
+
+  Confirmed pre-existing and unrelated to REQ-404: reproduces identically on
+  an unmodified `main` checkout, and the file
+  test/letflow/docs/requirement_status_invariants_test.exs is untouched by
+  REQ-404's diff. Root cause is entirely inside the REQ-405 status-volume
+  entry's own shape, written by a different (concurrent or since-completed)
+  WF02-REQ405 session.
+affected_files:
+  - docs/status/requirement_status.v22.yaml
+related:
+  - ISS-0826
+severity_rationale: >
+  MINOR -- a schema/shape drift in one append-only status entry, not a
+  correctness or security defect. It blocks a clean full-suite run (adds
+  noise on top of the already-known ISS-0826 backlog) but doesn't affect any
+  production code path or mask a real regression.
+fix_direction: >
+  1. Locate the REQ-405 entry in docs/status/requirement_status.v22.yaml
+     (grep for "req: REQ-405") and diff its field names/values against the
+     schema requirement_status_invariants_test.exs actually enforces (A4a/A4b
+     field-shape checks, A5 declared-event-value check).
+  2. Correct the entry in place (rename the misnamed field, remove the extra
+     field, or add "doc-correction" to the declared event-value enum if that
+     value is actually meant to be valid and the test's enum is what's
+     stale -- check both directions before assuming the data is wrong).
+  3. Confirm fixed by re-running
+     test/letflow/docs/requirement_status_invariants_test.exs standalone.
+  4. If REQ-405 itself is still in-flight when this is picked up, coordinate
+     rather than editing a concurrent session's own in-progress append (same
+     caution this project already applies to handoffs/ files) -- check
+     docs/requirements.yaml REQ-405's own status first.
+status: open
+queue_ref: "Q-833"
+github_ref: null

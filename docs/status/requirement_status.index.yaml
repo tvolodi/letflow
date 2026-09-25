@@ -4610,8 +4610,12 @@ volumes:
     path: docs/status/requirement_status.v22.yaml
     status: current
     opened: 2026-09-22
-    entries: 35
+    entries: 36
     note: >
+      Incremented to 36 by ORCH's REQ-415 done-event append
+      (2026-09-26T05:10:00Z -- solution install, S11's twelfth requirement).
+      Prior note preserved below.
+
       Incremented to 35 by ORCH's REQ-414 done-event append
       (2026-09-26T04:00:00Z -- module settings write with JSON Schema
       validation, S11's eleventh requirement). Prior note preserved below.

@@ -1202,3 +1202,17 @@ history:
       403 for 5 roles, 404 uninstalled, two-tenant isolation. nil-schema
       accepts only empty map. SECURITY-REVIEWER PASS (INV-1..INV-5 verified).
       No new hex dep. Commit: 73e7102e.
+  - req: REQ-415
+    status: done
+    timestamp: 2026-09-26T05:10:00Z
+    run_id: WF02-REQ415-20260926
+    agent: ELIXIR-DEV
+    summary: >
+      Created priv/solutions/bilimbaga.json (exam module at 0.1.0).
+      Created lib/letflow/modules/solutions.ex (5th D3 core file) with
+      load/1 (path-traversal prevention, version validation) and install/3
+      (single transaction, topological ordering, pre-check for already-
+      installed). Created POST /api/v1/tenant/solutions (201/403/404/409).
+      17 new tests all pass: topo-order, atomicity, load validation, role
+      gate, two-tenant isolation, no migration created (D6). SECURITY-
+      REVIEWER PASS (all INV-1..INV-5 verified). Commit: be133e54.

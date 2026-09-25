@@ -30696,7 +30696,7 @@ requirements:
   - id: REQ-415
     title: "P3: priv/solutions/<id>.json format, solution install in dependency order with default settings, priv/solutions/bilimbaga.json, and POST /api/v1/tenant/solutions"
     owner: ELIXIR-DEV
-    status: pending
+    status: done
     stage: S11
     impl_order: 804  # letflow-queue task id, GH#1789. Registered 2026-09-24T11:10:15Z by ORCH (WF-01 Step 3).
     description: >
